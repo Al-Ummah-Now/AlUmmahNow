@@ -31,46 +31,39 @@ let videoId: string | undefined;
 async function resolveVideoId(): Promise<string> {
   if (process.env.E2E_VIDEO_ID) return process.env.E2E_VIDEO_ID;
   if (videoId) return videoId;
-  // limit=1 can return an empty first page (visibility filtering happens after
-  // the page is cut), so ask for a few and take the first ready one.
-  const response = await fetch(`${API_URL}/api/videos?limit=20`);
+  // The first "QA Lecture" seed (landscape, like the other watch specs): a portrait video
+  // gives a narrow player that hides the volume slider by design. limit=1 can return an
+  // empty first page (visibility filtering happens after the page is cut), so ask for more.
+  const response = await fetch(`${API_URL}/api/videos?limit=100`);
   expect(response.ok, `GET ${API_URL}/api/videos`).toBeTruthy();
-  const body = (await response.json()) as { data?: Array<{ id: string; uploadStatus?: string }> };
-  const video = body.data?.find((v) => !v.uploadStatus || v.uploadStatus === 'ready') ?? body.data?.[0];
+  const body = (await response.json()) as { data?: Array<{ id: string; title: string; uploadStatus?: string }> };
+  const ready = (body.data ?? []).filter((v) => !v.uploadStatus || v.uploadStatus === 'ready');
+  const lectures = ready.filter((v) => v.title.startsWith('QA Lecture')).sort((x, y) => x.title.localeCompare(y.title));
+  const video = lectures[0] ?? ready[0] ?? body.data?.[0];
   expect(video, 'at least one video in the API').toBeTruthy();
   videoId = video!.id;
   return videoId;
 }
 
-/** Load the watch page and wait for the player. Returns false when the browser can't play the stream. */
-async function openWatchPage(page: Page, locale: 'en' | 'ar'): Promise<boolean> {
+/**
+ * Load the watch page and wait until the player is ready: initialised with its
+ * media metadata loaded (or on its error screen). Returns false when the browser
+ * can't play the stream.
+ *
+ * The control bar stays hidden until playback has started once (only the big
+ * play button shows before), so `controls: true` also plays and pauses, leaving
+ * the bar up for tests that need its buttons.
+ */
+async function openWatchPage(page: Page, locale: 'en' | 'ar', opts: { controls?: boolean } = {}): Promise<boolean> {
   const id = await resolveVideoId();
   await page.goto(`/${locale}/video/${id}`, { waitUntil: 'domcontentloaded' });
-  // Either the Video.js control bar becomes visible, or the player reports an
-  // error (Video.js error state / the app's ErrorDisplay replacing the player).
-  const state = await page.waitForFunction(() => {
-    const bar = document.querySelector<HTMLElement>('.video-js .vjs-control-bar');
-    const media = document.querySelector<HTMLVideoElement>('.video-js video');
-    // The control bar renders before the source is probed, so also require
-    // loaded metadata - a codec failure only surfaces after that point.
-    if (bar && bar.offsetParent !== null && getComputedStyle(bar).visibility !== 'hidden'
-      && media && media.readyState >= 1 && !document.querySelector('.video-js.vjs-error')) {
-      return 'playable';
-    }
-    const container = document.querySelector('.custom-video-player');
-    if (document.querySelector('.video-js.vjs-error') || (container && !container.querySelector('.video-js'))) {
-      return 'error';
-    }
-    return false;
-  }, undefined, { timeout: 45000 });
-  if ((await state.jsonValue()) !== 'playable') {
-    // Let the app settle on its error screen before any page-level scan
-    await page.waitForTimeout(2000);
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  if ((await waitForPlayer(page)) !== 'playable') {
+    // Scan the error screen the viewer sees, not a half-rendered player
+    await expect(page.getByTestId('video-error')).toBeVisible();
     return false;
   }
-  // Keep the (auto-hiding) control bar visible for the scan
-  await page.evaluate(() => document.querySelector('.video-js')?.classList.remove('vjs-user-inactive'));
-  await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => undefined);
+  if (opts.controls) await startThenPause(page);
   return true;
 }
 
@@ -100,14 +93,30 @@ for (const colorScheme of ['light', 'dark'] as const) {
         expect(results.violations, formatViolations(results.violations)).toEqual([]);
       });
 
-      test('axe: player controls and open quality/caption menu have zero violations', async ({ page }) => {
-        const playable = await openWatchPage(page, locale);
+      test('axe: player controls and the open settings menu have zero violations', async ({ page }) => {
+        const playable = await openWatchPage(page, locale, { controls: true });
         test.skip(!playable, 'browser cannot decode the HLS stream - set A11Y_CHROME_CHANNEL=chrome');
 
-        const menuButton = page.locator('.video-js .vjs-quality-selector .vjs-menu-button').first();
-        if (await menuButton.isVisible()) await menuButton.click();
-        const results = await new AxeBuilder({ page }).include('.video-js').withTags(WCAG_TAGS).analyze();
-        expect(results.violations, formatViolations(results.violations)).toEqual([]);
+        // The bar on its own, then with the settings menu open (quality, speed, captions, shortcuts)
+        const bar = await new AxeBuilder({ page }).include('.video-js').withTags(WCAG_TAGS).analyze();
+        expect(bar.violations, formatViolations(bar.violations)).toEqual([]);
+
+        await page.locator('.video-js .vjs-fanous-settings').click();
+        const menu = page.getByTestId('player-settings-menu');
+        await expect(menu).toBeVisible();
+        const open = await new AxeBuilder({ page })
+          .include('.video-js')
+          .include('[data-testid="player-settings-menu"]')
+          .withTags(WCAG_TAGS)
+          .analyze();
+        expect(open.violations, formatViolations(open.violations)).toEqual([]);
+
+        // A submenu (quality where the stream exposes renditions, else speed)
+        const row = menu.locator('[data-row="quality"], [data-row="speed"]').first();
+        await row.click();
+        await expect(menu.locator('[role="menuitemradio"]').first()).toBeVisible();
+        const sub = await new AxeBuilder({ page }).include('[data-testid="player-settings-menu"]').withTags(WCAG_TAGS).analyze();
+        expect(sub.violations, formatViolations(sub.violations)).toEqual([]);
       });
     });
   }
@@ -135,45 +144,56 @@ test.describe('keyboard navigation (story 1.4)', () => {
   test('every player control is reachable by Tab, in visual order, with a visible focus indicator', async ({ page, isMobile, browserName }) => {
     const TAB = tabKey(browserName);
     test.skip(isMobile, 'Touch devices have no hardware keyboard / Tab navigation');
-    const playable = await openWatchPage(page, 'en');
+    const playable = await openWatchPage(page, 'en', { controls: true });
     test.skip(!playable, 'browser cannot decode the HLS stream - set A11Y_CHROME_CHANNEL=chrome');
 
     await page.locator('#video-player .video-js').focus();
-    const visited: Array<{ cls: string; x: number; outline: string }> = [];
-    for (let i = 0; i < 15; i++) {
+    type Stop = { i: number; cls: string; x: number; row: number; ring: string };
+    const visited: Stop[] = [];
+    for (let i = 0; i < 20; i++) {
       await page.keyboard.press(TAB);
-      const info = await page.evaluate(() => {
+      const info = await page.evaluate((i) => {
         const el = document.activeElement as HTMLElement | null;
         if (!el || !el.closest('.video-js')) return { left: true };
         if (!el.closest('.vjs-control-bar')) return { skip: true }; // e.g. big play button
-        const style = getComputedStyle(el);
         const rect = el.getBoundingClientRect();
-        return { cls: el.className.toString(), x: rect.left, outline: `${style.outlineStyle} ${style.outlineWidth}` };
-      });
+        el.setAttribute('data-a11y-stop', String(i));
+        // The ring is drawn on the control itself (outline / box-shadow) or on its ::before fill
+        const own = getComputedStyle(el);
+        const ring = `${own.outlineStyle} ${own.outlineWidth} | ${own.boxShadow} | ${getComputedStyle(el, '::before').boxShadow}`;
+        return { i, cls: el.className.toString(), x: rect.left, row: Math.round((rect.top + rect.height / 2) / 24), ring };
+      }, i);
       if ('left' in info) break;
       if ('skip' in info) continue;
-      visited.push(info as { cls: string; x: number; outline: string });
+      visited.push(info as Stop);
     }
 
     const has = (c: string) => visited.some((v) => v.cls.includes(c));
-    expect(has('vjs-play-control'), JSON.stringify(visited)).toBeTruthy();
+    expect(has('vjs-progress-holder'), JSON.stringify(visited)).toBeTruthy();
+    expect(has('vjs-play-control')).toBeTruthy();
     expect(has('vjs-mute-control')).toBeTruthy();
     expect(has('vjs-volume-bar')).toBeTruthy();
-    expect(has('vjs-progress-holder')).toBeTruthy();
-    expect(has('vjs-keyboard-help-button')).toBeTruthy();
+    expect(has('vjs-fanous-settings')).toBeTruthy();
     expect(has('vjs-fullscreen-control')).toBeTruthy();
 
-    // Focus order follows the visual left-to-right order of the control bar
-    const xs = visited.map((v) => v.x);
-    expect([...xs].sort((a, b) => a - b)).toEqual(xs);
+    // Focus order follows the visual order of the bar: the progress row, then each row left to right
+    const order = visited.map((v) => v.cls);
+    const visual = [...visited].sort((a, b) => a.row - b.row || a.x - b.x).map((v) => v.cls);
+    expect(order).toEqual(visual);
 
+    // Each stop draws a ring it does not have unfocused
+    await page.locator('body').focus();
     for (const v of visited) {
-      expect(v.outline.startsWith('none'), `focus indicator on ${v.cls}`).toBeFalsy();
+      const resting = await page.locator(`[data-a11y-stop="${v.i}"]`).evaluate((el) => {
+        const own = getComputedStyle(el);
+        return `${own.outlineStyle} ${own.outlineWidth} | ${own.boxShadow} | ${getComputedStyle(el, '::before').boxShadow}`;
+      });
+      expect(v.ring, `focus indicator on ${v.cls}`).not.toBe(resting);
     }
   });
 
   test('Space on the focused play button toggles playback exactly once', async ({ page }) => {
-    const playable = await openWatchPage(page, 'en');
+    const playable = await openWatchPage(page, 'en', { controls: true });
     test.skip(!playable, 'browser cannot decode the HLS stream - set A11Y_CHROME_CHANNEL=chrome');
 
     const play = page.locator('.video-js .vjs-play-control');
@@ -228,7 +248,7 @@ test.describe('mobile touch targets (story 1.5)', () => {
 
   for (const locale of ['en', 'ar'] as const) {
     test(`all visible player controls are >= 44x44px and do not overlap (${locale})`, async ({ page }) => {
-      const playable = await openWatchPage(page, locale);
+      const playable = await openWatchPage(page, locale, { controls: true });
       test.skip(!playable, 'browser cannot decode the HLS stream - set A11Y_CHROME_CHANNEL=chrome');
 
       const targets = await page.evaluate(() => {
@@ -278,7 +298,7 @@ test.describe('mobile touch targets (story 1.5)', () => {
   }
 
   test('tapping a control shows pressed feedback', async ({ page }) => {
-    const playable = await openWatchPage(page, 'en');
+    const playable = await openWatchPage(page, 'en', { controls: true });
     test.skip(!playable, 'browser cannot decode the HLS stream - set A11Y_CHROME_CHANNEL=chrome');
     const play = page.locator('.video-js .vjs-play-control');
     const box = (await play.boundingBox())!;

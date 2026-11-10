@@ -38,10 +38,14 @@ if (process.env.A11Y_CHROME_CHANNEL) {
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
 const NO_CODEC = 'bundled Chromium has no H.264 decoder for the HLS stream (covered by PLAYER-002); run with webkit or A11Y_CHROME_CHANNEL=chrome';
 
+/**
+ * Opens the watch page once the player is ready (media metadata loaded) and shows its bar:
+ * the redesigned bar stays hidden until playback has started once, so this plays and pauses.
+ */
 async function openPlayable(page: Page, video: QaVideo, locale: 'en' | 'ar' = 'en') {
   await page.goto(watchUrl(video.id, locale));
   expect(await waitForPlayer(page)).toBe('playable');
-  await keepControlsVisible(page);
+  await startThenPause(page);
 }
 
 /** A seed lecture that has no subtitle tracks / chapters right now (QA data changes) */
@@ -167,95 +171,82 @@ test.describe('player controls', () => {
     }).toBeLessThan(30);
   });
 
-  test('PLAYER-013 quality menu opens on click only, lists the renditions and selects one (hidden when the browser exposes none)', async ({ page, request, browserName }, testInfo) => {
+  test('PLAYER-013 settings menu opens on click only, lists the renditions and selects one (no Quality row when the browser exposes none)', async ({ page, request, browserName }, testInfo) => {
     skipWithoutCodec(browserName, testInfo);
-    const video = await qaLecture(request, 1);
-    await openPlayable(page, video);
+    await openPlayable(page, await qaLecture(request, 1));
 
-    if (browserName === 'webkit') {
-      // Native HLS exposes no renditions: no empty quality menu is offered
-      await expect(page.locator('.video-js')).toHaveClass(/vjs-no-quality-levels/);
-      await expect(page.locator('.video-js .vjs-quality-selector')).toBeHidden();
-      return;
-    }
-    const button = page.locator('.video-js .vjs-quality-selector .vjs-menu-button');
-    const menu = page.locator('.video-js .vjs-quality-selector .vjs-menu');
+    const gear = page.locator('.video-js .vjs-fanous-settings');
+    const menu = page.getByTestId('player-settings-menu');
     const tech = page.locator('.video-js .vjs-tech');
-    await expect(button).toBeVisible();
-    await expect(button).toHaveAttribute('aria-haspopup', /true|menu/);
+    await expect(gear).toBeVisible();
+    await expect(gear).toHaveAttribute('aria-haspopup', 'menu');
 
-    // Hover never opens the menu (it closed again on the way up over the video)
-    await button.hover();
-    await page.waitForTimeout(400);
-    await expect(menu).toBeHidden();
-    await expect(button).toHaveAttribute('aria-expanded', 'false');
+    // Hover never opens the menu
+    await gear.hover();
+    await expect(menu).toHaveCount(0);
+    await expect(gear).toHaveAttribute('aria-expanded', 'false');
 
-    // A click opens it, and it stays open while the pointer moves over the video
-    await button.click();
+    // A click opens it with focus on the first row, and it stays open while the pointer moves over the video
+    await gear.click();
     await expect(menu).toBeVisible();
-    await expect(button).toHaveAttribute('aria-expanded', 'true');
-    await expect(page.locator('.video-js')).toHaveClass(/vjs-menu-open/);
+    await expect(gear).toHaveAttribute('aria-expanded', 'true');
+    await expect(menu.locator('[role="menuitem"]').first()).toBeFocused();
     const box = (await tech.boundingBox())!;
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 3, { steps: 5 });
     await page.mouse.move(box.x + 20, box.y + 20, { steps: 5 });
-    await page.waitForTimeout(2500); // past the 2s inactivity timeout
+    // The open menu holds the bar up: Video.js's inactivity timer never hides it
+    await expect(page.locator('.video-js')).not.toHaveClass(/vjs-user-inactive/, { timeout: 3000 });
     await expect(menu).toBeVisible();
     await expect(page.locator('.video-js .vjs-control-bar')).toHaveCSS('opacity', '1');
-    // The bottom scrim behind the controls is drawn and stays while the menu is open
-    const scrim = await page.evaluate(() => {
-      const el = document.querySelector('.video-js')!;
-      const style = getComputedStyle(el, '::after');
-      return { image: style.backgroundImage, opacity: style.opacity, height: parseFloat(style.height), player: el.getBoundingClientRect().height };
-    });
-    expect(scrim.image).toContain('linear-gradient');
-    expect(scrim.opacity).toBe('1');
-    expect(scrim.height).toBeGreaterThan(64);
-    expect(scrim.height).toBeGreaterThanOrEqual(scrim.player * 0.29);
 
-    // A second click on the button closes it; Escape closes it and returns focus
-    await button.click();
-    await expect(menu).toBeHidden();
-    await button.click();
+    // A second click on the gear closes it; Escape closes it and returns focus to the gear
+    await gear.click();
+    await expect(menu).toHaveCount(0);
+    await gear.click();
     await expect(menu).toBeVisible();
     await page.keyboard.press('Escape');
-    await expect(menu).toBeHidden();
-    await expect(button).toBeFocused();
+    await expect(menu).toHaveCount(0);
+    await expect(gear).toBeFocused();
 
     // A click on the video only dismisses the menu (playback state is unchanged)
-    await button.click();
+    await gear.click();
     await expect(menu).toBeVisible();
     const pausedBefore = (await mediaState(page)).paused;
     await page.mouse.click(box.x + box.width / 2, box.y + box.height / 3);
-    await expect(menu).toBeHidden();
+    await expect(menu).toHaveCount(0);
     expect((await mediaState(page)).paused).toBe(pausedBefore);
 
     await keepControlsVisible(page);
-    await button.click();
-    const items = page.locator('.video-js .vjs-quality-selector .vjs-menu-item');
+    await gear.click();
+    const qualityRow = menu.locator('[data-row="quality"]');
+    if (browserName === 'webkit') {
+      // Native HLS exposes no renditions: no empty Quality submenu is offered
+      await expect(menu.locator('[data-row="speed"]')).toBeVisible();
+      await expect(qualityRow).toHaveCount(0);
+      return;
+    }
+    await qualityRow.click();
+    const items = menu.locator('[role="menuitemradio"]');
     await expect(items.filter({ hasText: /auto/i })).toHaveCount(1);
     await expect.poll(() => items.count(), { message: 'Auto + at least one rendition' }).toBeGreaterThan(1);
 
-    // Regression: the list existed in the DOM but was clipped to nothing (the
-    // menu box kept Video.js's height: 0 and the control bar paint-contained
-    // it), so the menu "did not open". Assert the item is really painted on top.
-    // The lowest rendition (240p on the QA/prod ladders)
-    const rendition = items.filter({ hasText: /\d+p/ }).first();
-    await expect.poll(() => rendition.evaluate((li) => {
-      const menu = li.closest('.vjs-menu')!.getBoundingClientRect();
-      const r = li.getBoundingClientRect();
+    // The lowest rendition (240p on the QA/prod ladders), painted and receiving clicks
+    const rendition = items.filter({ hasText: /\d+p/ }).last();
+    await expect.poll(() => rendition.evaluate((el) => {
+      const r = el.getBoundingClientRect();
       const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
-      return menu.height > 0 && !!hit && li.contains(hit);
-    }), { message: 'quality menu item is painted and receives clicks' }).toBe(true);
+      return r.height > 0 && !!hit && el.contains(hit);
+    }), { message: 'quality option is painted and receives clicks' }).toBe(true);
 
     const label = (await rendition.innerText()).trim();
     const height = Number(label.match(/(\d+)p/)![1]);
-    await expect(rendition).toHaveAttribute('role', 'menuitemradio');
     await rendition.click();
-    await expect(rendition).toHaveAttribute('aria-checked', 'true');
-    // Choosing a rendition closes the menu
-    await expect(menu).toBeHidden();
-    await expect(button).toHaveAttribute('aria-expanded', 'false');
-    await expect(page.locator('.video-js .vjs-quality-selector')).toContainText(label.replace(/\s.*$/, ''));
+    // Choosing a rendition goes back to the root list, which shows it on the Quality row
+    await expect(qualityRow).toBeVisible();
+    await expect(qualityRow).toContainText(`${height}p`);
+    await qualityRow.click();
+    await expect(menu.locator(`[role="menuitemradio"][data-row="${height}"]`)).toHaveAttribute('aria-checked', 'true');
+    await page.keyboard.press('Escape');
     // Switching really restricts playback to that rendition
     await expect.poll(() => page.evaluate((h) => {
       type Levels = { length: number; [i: number]: { height: number; enabled: boolean } };
@@ -266,13 +257,18 @@ test.describe('player controls', () => {
     }, height)).toBe(true);
   });
 
-  test('PLAYER-014 captions button is hidden without tracks and lists subtitle tracks when present', async ({ page, request, browserName }, testInfo) => {
+  test('PLAYER-014 captions button is hidden without tracks; with a track it toggles captions and the settings menu lists it', async ({ page, request, browserName }, testInfo) => {
     skipWithoutCodec(browserName, testInfo);
     const video = await lectureWithout(request, 'subtitles');
 
-    // No subtitle tracks: the button is hidden
+    // No subtitle tracks: the button is hidden and the settings menu has no Captions row
     await openPlayable(page, video);
-    await expect(page.locator('.video-js .vjs-control-bar > .vjs-subs-caps-button')).toHaveClass(/vjs-hidden/);
+    const caps = page.locator('.video-js .vjs-control-bar > .vjs-fanous-captions');
+    await expect(caps).toHaveClass(/vjs-hidden/);
+    const menu = page.getByTestId('player-settings-menu');
+    await page.locator('.video-js .vjs-fanous-settings').click();
+    await expect(menu).toBeVisible();
+    await expect(menu.locator('[data-row="captions"]')).toHaveCount(0);
 
     // With a track (served by the browser-side subtitles fetch) the menu offers it
     await page.route(`${API_URL}/api/videos/${video.id}/subtitles`, (route) =>
@@ -281,10 +277,18 @@ test.describe('player controls', () => {
       route.fulfill({ contentType: 'text/vtt', body: 'WEBVTT\n\n00:00.000 --> 00:30.000\nE2E caption line\n' }));
     await openPlayable(page, video);
 
-    const caps = page.locator('.video-js .vjs-control-bar > .vjs-subs-caps-button');
     await expect(caps).not.toHaveClass(/vjs-hidden/);
-    await caps.locator('button').first().click();
-    await expect(caps.locator('.vjs-menu-item').filter({ hasText: 'English' })).toHaveCount(1);
+    await expect(caps).toHaveAttribute('aria-pressed', /true|false/);
+    const before = await caps.getAttribute('aria-pressed');
+    await caps.click();
+    await expect(caps).toHaveAttribute('aria-pressed', before === 'true' ? 'false' : 'true');
+
+    await keepControlsVisible(page);
+    await page.locator('.video-js .vjs-fanous-settings').click();
+    const row = menu.locator('[data-row="captions"]');
+    await expect(row).toBeVisible();
+    await row.click();
+    await expect(menu.locator('[role="menuitemradio"]').filter({ hasText: 'English' })).toHaveCount(1);
   });
 
   for (const [locale, title, close] of [
@@ -293,8 +297,8 @@ test.describe('player controls', () => {
   ] as const) {
     test(`PLAYER-015 keyboard help dialog opens from the settings menu and closes with Escape (${locale})`, async ({ page, request, browserName }, testInfo) => {
       skipWithoutCodec(browserName, testInfo);
+      // openPlayable has started and paused playback, so the bar and its settings button show
       await openPlayable(page, await qaLecture(request, 1), locale);
-      await startThenPause(page);
 
       // The redesigned bar has no shortcuts button: the help is the last row of the settings menu
       await page.locator('.video-js .vjs-fanous-settings').click();
@@ -333,7 +337,7 @@ test.describe('player controls', () => {
     await expect(page.locator('.video-js .vjs-play-control')).toHaveAccessibleName('تشغيل الفيديو');
     await expect(page.locator('.video-js .vjs-fullscreen-control')).toHaveAccessibleName(/ملء الشاشة/);
     await expect(page.locator('.video-js .vjs-mute-control')).toHaveAccessibleName(/كتم الصوت/);
-    await expect(page.locator('.video-js .vjs-keyboard-help-button')).toHaveAttribute('aria-label', 'عرض اختصارات لوحة المفاتيح');
+    await expect(page.locator('.video-js .vjs-fanous-settings')).toHaveAccessibleName('الإعدادات');
   });
 });
 
@@ -363,13 +367,13 @@ test.describe('player chapters', () => {
       await openPlayable(page, video, locale);
 
       // One marker per chapter after 0:00, inside the real seek bar
-      await expect(page.locator('.video-js .vjs-progress-holder button')).toHaveCount(2);
+      await expect(page.locator('.video-js .vjs-progress-holder .vjs-fanous-chapter-mark')).toHaveCount(2);
 
       const toggle = page.locator('button[aria-controls="video-chapter-list"]');
       await expect(toggle).toHaveAccessibleName(`${show} 3`);
       await toggle.click();
       await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-      const list = page.getByRole('navigation', { name: locale === 'en' ? 'Chapter List' : /الفصول/ });
+      const list = page.getByRole('navigation', { name: locale === 'en' ? 'Chapter List' : 'قائمة الفصول', exact: true });
       await expect(list).toBeVisible();
       await expect(list.locator('[data-chapter-item]')).toHaveCount(3);
 
@@ -383,6 +387,6 @@ test.describe('player chapters', () => {
     skipWithoutCodec(browserName, testInfo);
     await openPlayable(page, await lectureWithout(request, 'chapters'));
     await expect(page.locator('button[aria-controls="video-chapter-list"]')).toHaveCount(0);
-    await expect(page.locator('.video-js .vjs-progress-holder button')).toHaveCount(0);
+    await expect(page.locator('.video-js .vjs-progress-holder .vjs-fanous-chapter-mark')).toHaveCount(0);
   });
 });
