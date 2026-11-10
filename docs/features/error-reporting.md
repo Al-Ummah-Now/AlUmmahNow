@@ -145,7 +145,9 @@ Retry specs run only in admin-api (`apps/admin-api/src/lib/errors-actions.ts`),
 and only what is registered there:
 
 - `{ kind: 'builtin', handler, args }` — a handler in `BUILTIN_RETRIES`
-  (today: `contact-email` re-sends the contact mail that failed).
+  (today: `contact-email` queues a Contact us email that failed for good
+  again; `lib/contact-mail-queue.ts` raises that item when the mail queue gives
+  up, and the inbox's own Retry closes it).
 - `{ kind: 'service', service, path, body }` — POST with the internal API key
   to an allowlisted path of a Worker admin-api has a service binding to
   (`SERVICE_RETRIES`; today: `processor` `/dlq/replay`).
