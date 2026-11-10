@@ -57,7 +57,9 @@ export interface AdminBindings {
   /** Worker secret: that client's secret (set by AlUmmahNowAuth rotate-client-secret.ts) */
   AUTH_MODERATION_CLIENT_SECRET?: string | { get(): Promise<string> };
   /** auth-moderation-requests[-env]: sends and status reads to auth, with retries (lib/authModerationQueue.ts) */
-  AUTH_REQUESTS_QUEUE?: Queue<import('../lib/authModerationQueue').AuthRequestMessage>;
+  AUTH_REQUESTS_QUEUE?: Queue<import('../lib/authModerationQueue').AuthRequestMessage | import('../lib/invites').InviteMessage>;
+  /** Videos web origin for invite links' sign-in (docs/admin/INVITES.md); default: the admin host with admin. → videos. */
+  VIDEOS_WEB_URL?: string;
 
   // WebSocket integration
   WEBSOCKET_URL?: string;

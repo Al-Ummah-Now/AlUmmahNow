@@ -16,6 +16,7 @@
  * timeout never files the request twice in auth.
  */
 import { logger } from './logger';
+import { deadLetterInvite, processInvite, type AuthInviteClient, type InviteMessage, type InviteQueueEnv } from './invites';
 import type { D1Database } from './types';
 import {
   AuthApiError,
@@ -188,11 +189,36 @@ export function isDeadLetterQueue(name: string): boolean {
   return /-dlq(-[a-z]+)?$/.test(name);
 }
 
-export async function handleAuthRequestBatch(batch: MessageBatch<AuthRequestMessage>, env: QueueEnv, client?: AuthModerationClient): Promise<void> {
+const isInviteMessage = (body: unknown): body is InviteMessage =>
+  !!body && typeof body === 'object' && (body as { type?: unknown }).type === 'invite' && typeof (body as { id?: unknown }).id === 'string';
+
+export async function handleAuthRequestBatch(
+  batch: MessageBatch<AuthRequestMessage | InviteMessage>,
+  env: QueueEnv,
+  client?: AuthModerationClient,
+  inviteClient?: AuthInviteClient
+): Promise<void> {
   // auth-moderation-requests-dlq, -dlq-stage, -dlq-qa
   const dlq = isDeadLetterQueue(batch.queue);
   for (const msg of batch.messages) {
     const body = msg.body;
+    // Invites (lib/invites.ts) share this queue and client
+    if (isInviteMessage(body)) {
+      try {
+        if (dlq) {
+          await deadLetterInvite(env as unknown as InviteQueueEnv, body);
+          msg.ack();
+          continue;
+        }
+        const outcome = await processInvite(env as unknown as InviteQueueEnv, body, msg.attempts, inviteClient);
+        if (outcome === 'retry') msg.retry({ delaySeconds: retryDelaySeconds(msg.attempts) });
+        else msg.ack();
+      } catch (error) {
+        logger.error('[Invites] queue handler error', { id: body.id, op: body.op, error: errorText(error) });
+        msg.retry({ delaySeconds: retryDelaySeconds(msg.attempts) });
+      }
+      continue;
+    }
     if (!body || !['send', 'sync', 'info'].includes(body.type) || !body.id) {
       msg.ack();
       continue;
