@@ -5,6 +5,7 @@
  */
 
 import { createLogger } from '@al-ummah/logger';
+import { forwardLoggedError } from '@/lib/errors/reporter';
 
 // Server-side logger instance (only works on server)
 const serverLogger = typeof window === 'undefined'
@@ -42,6 +43,8 @@ export const logger = {
       serverLogger.error(message, data);
     } else {
       console.error(`[ERROR] ${message}`, data || '');
+      // Browser: also to the admin Errors page (lib/errors/reporter.ts)
+      forwardLoggedError(message, data);
     }
   },
 

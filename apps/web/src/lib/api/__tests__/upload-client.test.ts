@@ -51,7 +51,7 @@ describe('upload-client (plain API calls, no Server Actions)', () => {
   it('does not retry 4xx', async () => {
     const fetchImpl = jest.fn().mockResolvedValue(json(400, { success: false, error: 'bad title' }));
     const res = await callUploadApi({ method: 'POST', path: '/x', channelId: 'c', retries: 3 }, 'fail', fetchImpl);
-    expect(res).toEqual({ success: false, error: 'bad title' });
+    expect(res).toEqual({ success: false, error: 'bad title', status: 400 });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 

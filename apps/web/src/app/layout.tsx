@@ -34,6 +34,19 @@ import SkipLinks from "@/components/SkipLinks";
 import { EMBED_REQUEST_HEADER } from "@/lib/embed/routes";
 import { getSiteTheme } from "@/lib/theme/site-theme";
 import { VersionSkewProvider } from "@/lib/version-skew/VersionSkewProvider";
+import { ErrorReportingProvider } from "@/lib/errors/ErrorReportingProvider";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
+
+/** Worker version id and environment for client error reports (admin Errors page). */
+async function errorReportingContext(): Promise<{ workerVersion?: string; environment?: string }> {
+  try {
+    const { env } = await getCloudflareContext({ async: true });
+    const e = env as unknown as { CF_VERSION_METADATA?: { id?: string }; NEXTJS_ENV?: string };
+    return { workerVersion: e.CF_VERSION_METADATA?.id, environment: e.NEXTJS_ENV || process.env.NEXTJS_ENV };
+  } catch {
+    return { environment: process.env.NEXTJS_ENV };
+  }
+}
 
 export const metadata: Metadata = {
   title: 'Al Ummah Now',
@@ -121,6 +134,8 @@ function EmbedDocument({ locale, nonce, theme, themeCss, children }: { locale: s
         <RuntimeConfigScript nonce={nonce} />
       </head>
       <body className="font-inter">
+        {/* Embed errors are reported too, never as the viewer (no user id) */}
+        <ErrorReportingProvider />
         <VersionSkewProvider />
         <QueryProvider>{children}</QueryProvider>
       </body>
@@ -143,6 +158,7 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
 
   const subject = await authenticated()
   const user = subject ? subject.properties : null;
+  const reporting = await errorReportingContext();
 
   return (
     <html lang={locale} dir={getTextDirection(locale)} data-theme={theme} suppressHydrationWarning>
@@ -160,6 +176,8 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
       </head>
       <body className="font-inter">
         <SecurityBootstrap />
+        {/* Every client-side error reaches the admin Errors page (lib/errors/reporter.ts) */}
+        <ErrorReportingProvider userId={user?.id} workerVersion={reporting.workerVersion} environment={reporting.environment} />
         {/* A deploy while this page is open: notice + reload, never mid-upload */}
         <VersionSkewProvider />
         <RuntimeConfigBootstrap config={serverRuntimeConfig()} />

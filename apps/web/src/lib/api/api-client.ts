@@ -16,6 +16,22 @@ import {
   logApiSuccess,
   logApiAuth
 } from "./logger";
+import { reportError } from "@/lib/errors/reporter";
+
+/**
+ * A failed API call made from the browser → admin Errors page (kind "fetch"),
+ * with the endpoint name, status and the API's own reference. 401 (the token
+ * refresh handles it) and 404 (a normal answer) are not errors.
+ */
+function reportApiFailure(functionName: string, method: string, error: unknown, status: number | null, serverRef?: string | null): void {
+  if (typeof window === 'undefined' || status === 401 || status === 404) return;
+  const err = error instanceof Error ? error : Object.assign(new Error(`${method} ${functionName} failed${status ? ` (HTTP ${status})` : ''}`), { name: 'ApiError' });
+  reportError(err, {
+    kind: 'fetch',
+    ...(status ? { status } : {}),
+    extra: { endpoint: functionName, method, ...(serverRef ? { serverRef } : {}) },
+  });
+}
 
 export interface ApiRequestOptions {
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -133,6 +149,7 @@ async function sendApiRequest<T>(
       } catch {
         errorBody = undefined;
       }
+      reportApiFailure(functionName, method, null, response.status, response.headers.get('X-Error-Ref'));
       return { data: null, status: response.status, errorBody };
     }
 
@@ -153,6 +170,7 @@ async function sendApiRequest<T>(
   } catch (error) {
     logApiError(functionName, 'Exception caught', error);
     logApiEnd(functionName, false);
+    reportApiFailure(functionName, method, error, null);
     return { data: null, status: null };
   }
 }

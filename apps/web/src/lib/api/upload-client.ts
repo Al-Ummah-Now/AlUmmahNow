@@ -18,7 +18,8 @@ import { getApiUrl } from '@/lib/runtime-config';
 import { logger } from '@/lib/logger-client';
 import type { UploadFingerprint } from '@/lib/upload/fingerprint';
 
-type ApiResult<T> = { success: boolean; result?: T; error?: string };
+/** status and serverRef are set on failures (for the admin Errors page report). */
+type ApiResult<T> = { success: boolean; result?: T; error?: string; status?: number; serverRef?: string };
 
 interface CallOptions {
   method: 'GET' | 'POST' | 'PUT';
@@ -59,7 +60,8 @@ export async function callUploadApi<T>(opts: CallOptions, fallbackError: string,
       }
       if (res.ok && json) return { ...json, accessToken: auth.accessToken };
       lastError = json?.error || fallbackError;
-      if (res.status < 500 || attempt >= retries) return { success: false, error: lastError };
+      const serverRef = res.headers?.get?.('X-Error-Ref') || (json as { reference?: string } | null)?.reference || undefined;
+      if (res.status < 500 || attempt >= retries) return { success: false, error: lastError, status: res.status, ...(serverRef ? { serverRef } : {}) };
     } catch (error) {
       logger.warn('[upload-client] request failed', { path: opts.path, attempt, error });
       if (attempt >= retries) return { success: false, error: lastError };
@@ -151,12 +153,12 @@ export async function initiateBatchUpload(
   videos: Array<{ title: string; description?: string; fileSize: number; mimeType: string; isPublic: boolean; tags?: string; fingerprint?: UploadFingerprint }>,
   channelId: string,
   sharedMetadata?: { channelId?: string; category?: string; isPublic?: boolean }
-): Promise<BatchUploadInitiateResponse> {
+): Promise<BatchUploadInitiateResponse & { status?: number; serverRef?: string }> {
   const { accessToken: _token, ...res } = await callUploadApi<BatchUploadInitiateResponse['result']>(
     { method: 'POST', path: '/api/videos/upload/batch/initiate', channelId, body: { videos, sharedMetadata }, retries: videos.every((v) => v.fingerprint) ? 3 : 0 },
     'Failed to initiate batch upload'
   );
-  return res as BatchUploadInitiateResponse;
+  return res as BatchUploadInitiateResponse & { status?: number; serverRef?: string };
 }
 
 /** Schedules the publish of a just-uploaded video (the upload form's last step). */

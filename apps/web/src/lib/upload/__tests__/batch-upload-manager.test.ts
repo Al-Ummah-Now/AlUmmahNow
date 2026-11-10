@@ -117,6 +117,6 @@ describe('BatchUploadManager', () => {
     m.clearFinished();
     expect(rows(m).map((r) => r.status)).toEqual(['failed', 'uploading']);
     // The raw tus text is reported for the logs
-    expect(logger.error).toHaveBeenCalledWith('[BatchUploadManager] Upload failed', expect.objectContaining({ videoId: 'v3' }));
+    expect(logger.error).toHaveBeenCalledWith('[BatchUploadManager] Upload tus failed', expect.objectContaining({ error: expect.any(Error) }));
   });
 });

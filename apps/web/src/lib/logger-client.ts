@@ -3,6 +3,8 @@
  * Console wrapper with consistent formatting and level filtering
  */
 
+import { forwardLoggedError } from '@/lib/errors/reporter';
+
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 const LOG_LEVELS: Record<LogLevel, number> = {
@@ -49,10 +51,12 @@ export const logger = {
     }
   },
 
+  /** Also reported to the admin Errors page (browser only; lib/errors/reporter.ts). */
   error: (message: string, data?: unknown) => {
     if (shouldLog('error')) {
       console.error(`[ERROR] ${message}`, data !== undefined ? data : '');
     }
+    forwardLoggedError(message, data);
   },
 
   debug: (message: string, data?: unknown) => {
