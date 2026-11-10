@@ -116,7 +116,10 @@ export default async function ContactInboxPage({ searchParams }: PageProps) {
                       )}
                     </td>
                     <td className="px-4 sm:px-6 py-4 align-top">
-                      <ContactStatusChip status={m.status} label={translateDynamic(t, 'contactStatus', m.status)} />
+                      <span className="flex flex-wrap gap-1">
+                        <ContactStatusChip status={m.status} label={translateDynamic(t, 'contactStatus', m.status)} />
+                        {m.send_failed_at && <ContactStatusChip status="send_failed" label={t('contact.sendFailed')} />}
+                      </span>
                     </td>
                     <td className="px-4 sm:px-6 py-4 align-top text-fg-muted text-sm whitespace-nowrap font-normal">
                       <time dateTime={m.created_at}>{formatDate(m.created_at, locale, true)}</time>

@@ -2,7 +2,7 @@
  * Contact messages and their staff thread in D1 (REPORTS_DB, migration 0008).
  * Uses only prepare/bind/first/all/run/batch, so tests run it on node:sqlite.
  */
-import type { D1Database } from './types';
+import type { D1Database, D1PreparedStatement } from './types';
 import type { ContactInput, ContactRateLimits, ContactStatus, ContactTopic } from './contact';
 
 export interface ContactMessageRow {
@@ -20,6 +20,9 @@ export interface ContactMessageRow {
   assignee_email: string | null;
   notify_status: string | null;
   ack_status: string | null;
+  /** Set while a delivery of this message has finally failed (migration 0010) */
+  send_failed_at: string | null;
+  delivery_error: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -35,6 +38,7 @@ export interface ContactNoteRow {
   email_subject: string | null;
   email_status: string | null;
   email_id: string | null;
+  email_error?: string | null;
   created_at: string;
 }
 
@@ -43,7 +47,7 @@ const changes = (meta: unknown) => Number((meta as { changes?: number } | undefi
 
 /** Every column except ip_hash, which never leaves the database. */
 const MESSAGE_COLUMNS =
-  'id, status, topic, name, email, message, user_id, locale, page_url, user_agent, assignee_id, assignee_email, notify_status, ack_status, created_at, updated_at';
+  'id, status, topic, name, email, message, user_id, locale, page_url, user_agent, assignee_id, assignee_email, notify_status, ack_status, send_failed_at, delivery_error, created_at, updated_at';
 
 export interface NewContactMessage extends ContactInput {
   id: string;
@@ -64,8 +68,8 @@ export async function insertContactMessage(db: D1Database, m: NewContactMessage,
   const dayAgo = new Date(m.now.getTime() - 86400_000).toISOString();
   const result = await db
     .prepare(
-      `INSERT INTO contact_messages (id, status, topic, name, email, message, user_id, locale, page_url, user_agent, ip_hash, created_at, updated_at)
-       SELECT ?, 'new', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      `INSERT INTO contact_messages (id, status, topic, name, email, message, user_id, locale, page_url, user_agent, ip_hash, notify_status, ack_status, created_at, updated_at)
+       SELECT ?, 'new', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', 'queued', ?, ?
        WHERE (SELECT COUNT(*) FROM contact_messages WHERE ip_hash = ? AND created_at > ?) < ?
          AND (SELECT COUNT(*) FROM contact_messages WHERE ip_hash = ? AND created_at > ?) < ?
          AND (? IS NULL OR (SELECT COUNT(*) FROM contact_messages WHERE user_id = ? AND created_at > ?) < ?)
@@ -88,7 +92,8 @@ export async function setDeliveryStatus(db: D1Database, id: string, field: 'noti
 }
 
 export interface ContactListFilters {
-  status?: ContactStatus;
+  /** A status, or send_failed: messages with a finally failed delivery */
+  status?: ContactStatus | 'send_failed';
   topic?: ContactTopic;
   /** YYYY-MM-DD, inclusive, UTC */
   from?: string;
@@ -111,7 +116,9 @@ export function likePattern(q: string): string {
 export async function listContactMessages(db: D1Database, f: ContactListFilters): Promise<{ messages: ContactMessageRow[]; total: number }> {
   const where: string[] = [];
   const args: unknown[] = [];
-  if (f.status) {
+  if (f.status === 'send_failed') {
+    where.push('send_failed_at IS NOT NULL');
+  } else if (f.status) {
     where.push('status = ?');
     args.push(f.status);
   }
@@ -149,11 +156,17 @@ export async function listContactMessages(db: D1Database, f: ContactListFilters)
   };
 }
 
-/** Counts for the admin nav badge and the inbox header. */
-export async function contactCounts(db: D1Database): Promise<Record<ContactStatus, number>> {
-  const { results } = await db.prepare('SELECT status, COUNT(*) AS n FROM contact_messages GROUP BY status').all<{ status: ContactStatus; n: number }>();
-  const counts: Record<ContactStatus, number> = { new: 0, open: 0, replied: 0, closed: 0, spam: 0 };
-  for (const row of results ?? []) counts[row.status] = Number(row.n);
+export type ContactCounts = Record<ContactStatus | 'send_failed', number>;
+
+/** Counts for the admin nav badge and the inbox header; send_failed needs an admin's action. */
+export async function contactCounts(db: D1Database): Promise<ContactCounts> {
+  const [byStatus, failed] = await db.batch([
+    db.prepare('SELECT status, COUNT(*) AS n FROM contact_messages GROUP BY status'),
+    db.prepare('SELECT COUNT(*) AS n FROM contact_messages WHERE send_failed_at IS NOT NULL'),
+  ]);
+  const counts: ContactCounts = { new: 0, open: 0, replied: 0, closed: 0, spam: 0, send_failed: 0 };
+  for (const row of (byStatus.results ?? []) as { status: ContactStatus; n: number }[]) counts[row.status] = Number(row.n);
+  counts.send_failed = Number((failed.results?.[0] as { n?: number } | undefined)?.n ?? 0);
   return counts;
 }
 
@@ -191,6 +204,55 @@ export async function updateContactMessage(db: D1Database, id: string, patch: Co
   args.push(now.toISOString());
   const result = await db.prepare(`UPDATE contact_messages SET ${sets.join(', ')} WHERE id = ?`).bind(...args, id).run();
   return changes(result.meta) > 0;
+}
+
+export type MailKind = 'notify' | 'ack' | 'reply';
+
+/** Current delivery state of one email of a message (reply: the note's). */
+export async function deliveryStatus(db: D1Database, messageId: string, kind: MailKind, noteId?: string): Promise<string | null | undefined> {
+  if (kind === 'reply') {
+    const note = await db.prepare('SELECT email_status FROM contact_notes WHERE id = ? AND message_id = ?').bind(noteId ?? '', messageId).first<{ email_status: string | null }>();
+    return note ? note.email_status : undefined;
+  }
+  const row = await db.prepare(`SELECT ${kind === 'notify' ? 'notify_status' : 'ack_status'} AS s FROM contact_messages WHERE id = ?`).bind(messageId).first<{ s: string | null }>();
+  return row ? row.s : undefined;
+}
+
+/** SQL that sets send_failed_at while any delivery of the message is failed, and clears it otherwise. */
+const REFRESH_SEND_FAILED = `UPDATE contact_messages SET send_failed_at = CASE
+    WHEN notify_status = 'failed' OR ack_status = 'failed'
+      OR EXISTS (SELECT 1 FROM contact_notes WHERE message_id = contact_messages.id AND email_status = 'failed')
+    THEN COALESCE(send_failed_at, ?) ELSE NULL END,
+  delivery_error = CASE
+    WHEN notify_status = 'failed' OR ack_status = 'failed'
+      OR EXISTS (SELECT 1 FROM contact_notes WHERE message_id = contact_messages.id AND email_status = 'failed')
+    THEN COALESCE(?, delivery_error) ELSE NULL END
+  WHERE id = ?`;
+
+/**
+ * Records a delivery outcome and refreshes the message's failure flag in one
+ * batch. A sent reply also marks the message replied (unless it is spam).
+ */
+export async function recordDelivery(
+  db: D1Database,
+  d: { messageId: string; kind: MailKind; noteId?: string; status: string; providerId?: string | null; error?: string | null; now: Date },
+): Promise<void> {
+  const now = d.now.toISOString();
+  const error = d.status === 'failed' ? (d.error ?? 'unknown error').slice(0, 500) : null;
+  const statements: D1PreparedStatement[] = [];
+  if (d.kind === 'reply') {
+    statements.push(
+      db.prepare('UPDATE contact_notes SET email_status = ?, email_id = COALESCE(?, email_id), email_error = ? WHERE id = ? AND message_id = ?')
+        .bind(d.status, d.providerId ?? null, error, d.noteId ?? '', d.messageId),
+    );
+    if (d.status === 'sent' || d.status === 'sunk') {
+      statements.push(db.prepare("UPDATE contact_messages SET status = 'replied', updated_at = ? WHERE id = ? AND status <> 'spam'").bind(now, d.messageId));
+    }
+  } else {
+    statements.push(db.prepare(`UPDATE contact_messages SET ${d.kind === 'notify' ? 'notify_status' : 'ack_status'} = ? WHERE id = ?`).bind(d.status, d.messageId));
+  }
+  statements.push(db.prepare(REFRESH_SEND_FAILED).bind(now, error, d.messageId));
+  await db.batch(statements);
 }
 
 export async function insertContactNote(db: D1Database, note: ContactNoteRow): Promise<void> {

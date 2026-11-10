@@ -17,9 +17,12 @@ import {
   listContactMessages,
   listContactNotes,
   updateContactMessage,
+  deliveryStatus,
+  recordDelivery,
   type ContactNoteRow,
 } from '../../lib/contact-store';
-import { renderReply, sendContactEmail } from '../../lib/contact-email';
+import { renderReply } from '../../lib/contact-email';
+import { enqueueContactMail, reportContactMailFailure } from '../../lib/contact-mail-queue';
 
 const TAGS = ['Contact'];
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -41,7 +44,7 @@ export class ContactList extends ContactRoute {
     description: 'Newest first. Filters: status, topic, created date range (UTC days), search in name/email/message, assignee. Needs contact:read.',
     request: {
       query: z.object({
-        status: z.enum(CONTACT_STATUSES).optional(),
+        status: z.enum([...CONTACT_STATUSES, 'send_failed']).optional(),
         topic: z.enum(CONTACT_TOPICS).optional(),
         from: z.string().regex(DAY).optional(),
         to: z.string().regex(DAY).optional(),
@@ -172,10 +175,10 @@ export class ContactReply extends ContactRoute {
     tags: TAGS,
     summary: 'Reply to the sender by email',
     description:
-      "Emails the reply (in the message's language, original quoted) from the platform sender, records it in the thread and marks the message replied. Spam cannot be replied to. Needs contact:manage.",
+      "Records the reply in the thread and queues the email (in the message's language, original quoted, from the platform sender). The mail queue retries; a reply that finally fails is flagged on the message for a retry. Spam cannot be replied to. Needs contact:manage.",
     request: { params: IdParams, body: { content: { 'application/json': { schema: ReplyBody } } } },
     responses: {
-      '200': { description: 'The recorded reply; note.email_status says whether it was delivered' },
+      '200': { description: 'The recorded reply; note.email_status is queued (or failed if it could not be queued)' },
       '404': { description: 'Not found' },
       '409': { description: 'The message is marked as spam' },
     },
@@ -192,11 +195,6 @@ export class ContactReply extends ContactRoute {
 
     const auth = this.getAuth(c);
     const id = crypto.randomUUID();
-    const email = renderReply(message, body.body, { replyTo: c.env.CONTACT_INBOX || undefined, environment: c.env.ENVIRONMENT });
-    const delivery = await sendContactEmail(c.env, email, { idempotencyKey: `contact-reply-${id}` });
-    if (delivery.status === 'failed' || delivery.status === 'skipped') {
-      logger.error('[Contact] Reply email not delivered', { id: params.id, status: delivery.status, error: delivery.error });
-    }
     const now = new Date();
     const note: ContactNoteRow = {
       id,
@@ -206,17 +204,60 @@ export class ContactReply extends ContactRoute {
       author_id: auth.userId,
       author_email: auth.email || null,
       email_to: message.email,
-      email_subject: email.subject,
-      email_status: delivery.status,
-      email_id: delivery.id ?? null,
+      email_subject: renderReply(message, body.body, { environment: c.env.ENVIRONMENT }).subject,
+      email_status: 'queued',
+      email_id: null,
       created_at: now.toISOString(),
     };
     await insertContactNote(db, note);
-    if (delivery.status === 'sent' || delivery.status === 'sunk') {
-      await updateContactMessage(db, params.id, { status: 'replied' }, now);
+    // Sent by the queue consumer, never on this request
+    if (!(await enqueueContactMail(c.env, [{ v: 1, kind: 'reply', messageId: params.id, noteId: id }]))) {
+      await recordDelivery(db, { messageId: params.id, kind: 'reply', noteId: id, status: 'failed', error: 'could not queue the email', now });
+      await reportContactMailFailure(c.env, { v: 1, kind: 'reply', messageId: params.id, noteId: id }, 'could not queue the email', 0);
     }
-    logger.info('[Contact] Reply recorded', { id: params.id, status: delivery.status, by: auth.userId });
-    return { success: true, result: { note, message: await getContactMessage(db, params.id) } };
+    logger.info('[Contact] Reply queued', { id: params.id, noteId: id, by: auth.userId });
+    const notes = await listContactNotes(db, params.id);
+    return { success: true, result: { note: notes.find((n) => n.id === id) ?? note, message: await getContactMessage(db, params.id) } };
+  }
+}
+
+export class ContactRetryDelivery extends ContactRoute {
+  schema = addAuthToSchema({
+    tags: TAGS,
+    summary: 'Retry an email that failed to send',
+    description: 'kind: notify (support inbox), ack (acknowledgement) or reply (with noteId). Only a failed delivery can be retried; it is queued again. Needs contact:manage.',
+    request: {
+      params: IdParams,
+      body: {
+        content: {
+          'application/json': {
+            schema: z
+              .object({ kind: z.enum(['notify', 'ack', 'reply']), noteId: z.string().min(1).max(64).optional() })
+              .refine((b) => b.kind !== 'reply' || !!b.noteId, 'noteId is required for a reply'),
+          },
+        },
+      },
+    },
+    responses: { '200': { description: 'Queued again' }, '404': { description: 'Not found' }, '409': { description: 'That email has not failed' } },
+  });
+
+  async handle(c: AppContext) {
+    const denied = this.deny(c, 'contact:manage');
+    if (denied) return denied;
+    const { params, body } = await this.getValidatedData<typeof this.schema>();
+    const db = c.env.REPORTS_DB;
+    const current = await deliveryStatus(db, params.id, body.kind, body.noteId);
+    if (current === undefined) return c.json({ success: false, error: 'Message not found' }, 404);
+    if (current !== 'failed') return c.json({ success: false, error: 'That email has not failed' }, 409);
+    const now = new Date();
+    await recordDelivery(db, { messageId: params.id, kind: body.kind, noteId: body.noteId, status: 'queued', now });
+    const job = { v: 1 as const, kind: body.kind, messageId: params.id, ...(body.noteId ? { noteId: body.noteId } : {}) };
+    if (!(await enqueueContactMail(c.env, [job]))) {
+      await recordDelivery(db, { messageId: params.id, kind: body.kind, noteId: body.noteId, status: 'failed', error: 'could not queue the email', now });
+      return c.json({ success: false, error: 'Could not queue the email' }, 503);
+    }
+    logger.info('[Contact] Delivery retried', { id: params.id, kind: body.kind, noteId: body.noteId, by: this.getUserId(c) });
+    return { success: true, result: { message: await getContactMessage(db, params.id), notes: await listContactNotes(db, params.id) } };
   }
 }
 

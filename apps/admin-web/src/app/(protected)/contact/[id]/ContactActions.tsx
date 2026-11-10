@@ -152,9 +152,8 @@ export function ContactActions({ id, status, locale, assignedToMe, hasAssignee }
             if (!body) return;
             await run('reply', () => replyToContactMessage(id, body), (data) => {
               setReply('');
-              const delivered = data.note.email_status === 'sent' || data.note.email_status === 'sunk';
-              if (!delivered) setError(t('contact.replyNotDelivered', { status: translateDynamic(t, 'delivery', data.note.email_status ?? 'failed') }));
-              else setNextStatus('replied');
+              // The email is sent by the mail queue; only a failure to queue it shows here
+              if (data.note.email_status === 'failed') setError(t('contact.replyNotDelivered'));
             });
           }}
         >

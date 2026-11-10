@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { translateDynamic } from '@/i18n/translate';
 import { fieldClass, linkClass } from '@/components/ui';
-import { CONTACT_STATUSES, CONTACT_TOPICS, type ContactInboxFilters } from './filters';
+import { CONTACT_STATUSES, CONTACT_TOPICS, SEND_FAILED, type ContactInboxFilters } from './filters';
 
 /** GET form: filters live in the URL. Selects submit on change; text and dates on Apply. */
 export function ContactFilterBar({ filters, active }: { filters: ContactInboxFilters; active: boolean }) {
@@ -40,6 +40,7 @@ export function ContactFilterBar({ filters, active }: { filters: ContactInboxFil
               {translateDynamic(t, 'contactStatus', s)}
             </option>
           ))}
+          <option value={SEND_FAILED}>{t('contact.sendFailed')}</option>
         </select>
       </div>
       <div className="flex flex-col gap-1">

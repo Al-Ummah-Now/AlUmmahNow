@@ -58,6 +58,20 @@
       {
         "binding": "queue",
         "queue": "al-ummah-now-videos-qa"
+      },
+      // Contact us mail jobs (lib/contact-mail-queue.ts), consumed below
+      { "binding": "CONTACT_MAIL_QUEUE", "queue": "al-ummah-now-contact-mail-qa" },
+      // Final mail failures → platform DLQ (processor stores them in dead_letters)
+      { "binding": "ERRORS_DLQ", "queue": "al-ummah-now-dlq-qa" }
+    ],
+    "consumers": [
+      {
+        // Retries back off in code (msg.retry delaySeconds); keep max_retries = MAX_ATTEMPTS - 1
+        "queue": "al-ummah-now-contact-mail-qa",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 5,
+        "dead_letter_queue": "al-ummah-now-dlq-qa"
       }
     ]
   },
