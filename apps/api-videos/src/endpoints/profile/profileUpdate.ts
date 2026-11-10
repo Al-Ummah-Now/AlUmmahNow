@@ -77,17 +77,20 @@ export class ProfileUpdate extends AuthenticatedRoute {
             }, 404);
         }
 
-        // Update the profile with new values
-        const updatedProfile = {
-            ...existingProfile,
-            ...profileUpdateInput,
-            dateModified: new Date().toISOString(),
-            // Preserve localized fields if provided
-            displayNameLocalized: profileUpdateInput.displayNameLocalized ?? existingProfile.displayNameLocalized,
-            bioLocalized: profileUpdateInput.bioLocalized ?? existingProfile.bioLocalized,
-        };
-
-        await repository.putObject(userId, updatedProfile);
+        // Update the profile on the fresh copy with a conditional write
+        // (SCALABILITY-AUDIT AV-6), so a concurrent change (watch history,
+        // consent, another device) is not overwritten
+        const updatedProfile = await repository.updateObject(userId, (fresh) => {
+            Object.assign(fresh, profileUpdateInput, {
+                dateModified: new Date().toISOString(),
+                // Preserve localized fields if provided
+                displayNameLocalized: profileUpdateInput.displayNameLocalized ?? fresh.displayNameLocalized,
+                bioLocalized: profileUpdateInput.bioLocalized ?? fresh.bioLocalized,
+            });
+        });
+        if (!updatedProfile) {
+            return c.json({ success: false, error: "Profile not found" }, 404);
+        }
 
         // Send queue message for profile update
         const queue = new Queue(c.env.queue);

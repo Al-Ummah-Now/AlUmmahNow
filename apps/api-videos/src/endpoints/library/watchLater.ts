@@ -121,12 +121,18 @@ export class WatchLaterAdd extends AuthenticatedRoute {
 			return c.json({ success: false, error: "Video not found" }, 404);
 		}
 
-		const playlist = (await loadWatchLater(c, userId)) || newWatchLater(userId, headers.channelId || undefined);
-		const { added, full } = addToWatchLater(playlist, body.videoId);
-		if (full) {
+		// Conditional write on the fresh list (SCALABILITY-AUDIT AV-19): saving
+		// several videos at once keeps all of them; the list is created once.
+		let added = false;
+		const { data: playlist, rejected } = await repo(c).updateObjectOrReject<"full">(watchLaterId(userId), (fresh) => {
+			const outcome = addToWatchLater(fresh, body.videoId);
+			added = outcome.added;
+			if (outcome.full) return { reject: "full" };
+			return outcome.added;
+		}, { initial: () => newWatchLater(userId, headers.channelId || undefined) });
+		if (rejected === "full") {
 			return c.json({ success: false, error: "watch_later_full", limit: WATCH_LATER_MAX_ITEMS }, 409);
 		}
-		if (added) await repo(c).putObject(playlist.id, playlist);
 
 		logger.info("[WatchLater] Add", { userId, videoId: body.videoId, added });
 		return { success: true, result: { videoId: body.videoId, saved: true, added, total: playlist.videos.length } };
@@ -144,9 +150,12 @@ export class WatchLaterRemove extends AuthenticatedRoute {
 	async handle(c: AppContext) {
 		const { params } = await this.getValidatedData<typeof this.schema>();
 		const userId = this.getUserId(c);
-		const playlist = await loadWatchLater(c, userId);
-		const removed = playlist ? removeFromWatchLater(playlist, params.videoId) : false;
-		if (playlist && removed) await repo(c).putObject(playlist.id, playlist);
+		// Conditional write on the fresh list (SCALABILITY-AUDIT AV-19)
+		let removed = false;
+		const playlist = await repo(c).updateObject(watchLaterId(userId), (fresh) => {
+			removed = removeFromWatchLater(fresh, params.videoId);
+			return removed;
+		});
 
 		logger.info("[WatchLater] Remove", { userId, videoId: params.videoId, removed });
 		return { success: true, result: { videoId: params.videoId, saved: false, removed, total: playlist?.videos?.length || 0 } };
@@ -171,15 +180,16 @@ export class WatchLaterReorder extends AuthenticatedRoute {
 	async handle(c: AppContext) {
 		const { body } = await this.getValidatedData<typeof this.schema>();
 		const userId = this.getUserId(c);
-		const playlist = await loadWatchLater(c, userId);
-		const current = playlist?.videos || [];
-		if (!isSameVideoSet(current, body.videoIds)) {
+		// Checked and written on the fresh list (SCALABILITY-AUDIT AV-19), so a
+		// video saved meanwhile is not dropped by an order that lacks it
+		const { data: playlist, rejected } = await repo(c).updateObjectOrReject<true>(watchLaterId(userId), (fresh) => {
+			if (!isSameVideoSet(fresh.videos || [], body.videoIds)) return { reject: true };
+			fresh.videos = [...body.videoIds];
+			fresh.dateModified = new Date().toISOString();
+			return true;
+		});
+		if (rejected || (!playlist && body.videoIds.length > 0)) {
 			return c.json({ success: false, error: "videoIds must contain exactly the videos in Watch later" }, 400);
-		}
-		if (playlist) {
-			playlist.videos = [...body.videoIds];
-			playlist.dateModified = new Date().toISOString();
-			await repo(c).putObject(playlist.id, playlist);
 		}
 		logger.info("[WatchLater] Reordered", { userId, count: body.videoIds.length });
 		return { success: true, result: { videoIds: body.videoIds } };

@@ -125,29 +125,37 @@ export class RecordWatchHistory extends AuthenticatedRoute {
       const percentageWatched = percentageOf(progress, duration);
       const completed = percentageWatched >= 95;
 
-      let watchEntry: WatchHistoryEntry;
+      // The channel name is looked up once, outside the write loop (entries
+      // recorded before #294 have none)
+      const channelName = existingEntry?.channelName && existingEntry.channelName !== UNKNOWN_CHANNEL_NAME
+        ? undefined
+        : await resolveVideoChannelName(c.env.channels, video);
 
-      if (existingEntry) {
-        // Update existing entry
-        watchEntry = {
-          ...existingEntry,
-          // Entries recorded before #294 have no channel name
-          ...(existingEntry.channelName && existingEntry.channelName !== UNKNOWN_CHANNEL_NAME
-            ? {}
-            : { channelName: await resolveVideoChannelName(c.env.channels, video) }),
-          lastWatchedAt: now,
-          watchCount: existingEntry.watchCount + 1,
-          progress,
-          percentageWatched,
-          completed: completed || existingEntry.completed,
-          videoDuration: duration, // Update in case duration changed
-          // Watch-state sync (9.9): web writes take part in last-writer-wins at server time
-          stateUpdatedAt: now,
-        };
-        delete watchEntry.stateDeviceId;
-      } else {
-        // Create new entry
-        watchEntry = {
+      // Conditional write (SCALABILITY-AUDIT AV-7): the same key is written by
+      // watch-state sync and progress beacons from other tabs/devices, so the
+      // change is applied to the fresh entry instead of overwriting it.
+      let created = false;
+      const watchEntry = await watchHistoryRepo.updateObject(entryId, (entry) => {
+        if (created) {
+          // This attempt creates the entry from `initial` below, as is
+          created = false;
+          return true;
+        }
+        if (channelName && (!entry.channelName || entry.channelName === UNKNOWN_CHANNEL_NAME)) entry.channelName = channelName;
+        entry.lastWatchedAt = now;
+        entry.watchCount = (entry.watchCount || 0) + 1;
+        entry.progress = progress;
+        entry.percentageWatched = percentageWatched;
+        entry.completed = completed || entry.completed;
+        entry.videoDuration = duration; // Update in case duration changed
+        // Watch-state sync (9.9): web writes take part in last-writer-wins at server time
+        entry.stateUpdatedAt = now;
+        delete entry.stateDeviceId;
+        return true;
+      }, {
+        initial: () => {
+          created = true;
+          return {
           id: entryId,
           userId: effectiveUserId,
           videoId,
@@ -156,7 +164,7 @@ export class RecordWatchHistory extends AuthenticatedRoute {
           videoDuration: duration,
           channelId: video.channelId || "",
           // Channel uploads carry only channelId; legacy imports carry `channel`
-          channelName: await resolveVideoChannelName(c.env.channels, video),
+          channelName: channelName ?? UNKNOWN_CHANNEL_NAME,
           firstWatchedAt: now,
           lastWatchedAt: now,
           watchCount: 1,
@@ -164,11 +172,9 @@ export class RecordWatchHistory extends AuthenticatedRoute {
           completed,
           percentageWatched,
           stateUpdatedAt: now,
-        };
-      }
-
-      // Save watch history entry
-      await watchHistoryRepo.putObject(entryId, watchEntry);
+          };
+        },
+      });
 
       // Queue analytics event
       const event: WatchHistoryEvent = {

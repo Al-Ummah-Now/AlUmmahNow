@@ -130,20 +130,21 @@ export class UpdateWatchProgress extends AuthenticatedRoute {
       const percentageWatched = percentageOf(progress, duration);
       const completed = percentageWatched >= 95;
 
-      // Update the entry
-      const updatedEntry: WatchHistoryEntry = {
-        ...existingEntry,
-        progress,
-        percentageWatched,
-        completed: completed || existingEntry.completed,
-        lastWatchedAt: now,
-        videoDuration: duration, // Update in case duration changed
+      // Update the fresh entry with a conditional write (SCALABILITY-AUDIT
+      // AV-7): beacons from other tabs and watch-state sync are not overwritten
+      const updatedEntry = await watchHistoryRepo.updateObject(entryId, (entry) => {
+        entry.progress = progress;
+        entry.percentageWatched = percentageWatched;
+        entry.completed = completed || entry.completed;
+        entry.lastWatchedAt = now;
+        entry.videoDuration = duration; // Update in case duration changed
         // Watch-state sync (9.9): web writes take part in last-writer-wins at server time
-        stateUpdatedAt: now,
-      };
-      delete updatedEntry.stateDeviceId;
-
-      await watchHistoryRepo.putObject(entryId, updatedEntry);
+        entry.stateUpdatedAt = now;
+        delete entry.stateDeviceId;
+      });
+      if (!updatedEntry) {
+        return c.json({ error: "Watch history entry not found. Create one first by recording a watch." }, 404);
+      }
 
       // Queue progress event
       const event: WatchHistoryEvent = {
