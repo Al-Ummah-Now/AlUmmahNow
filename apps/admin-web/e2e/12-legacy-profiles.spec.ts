@@ -6,13 +6,16 @@
  *
  * Seeding writes R2 objects directly (no API writes legacy keys), so it needs
  * Cloudflare credentials: CLOUDFLARE_API_TOKEN, or locally `wrangler login`.
- * Without them the spec skips. It runs in one project only: the restore job
- * covers the whole bucket, so two copies at once would see each other's seed.
+ * Without them the spec skips. It runs only in the shared-state project (one
+ * copy per CI run, under a cross-run lock): the restore job covers the whole
+ * bucket, so two copies at once would see each other's seed. It pairs the seed
+ * with the seeded QA viewer even in run mode, because the restore needs an
+ * existing profile with that verified email.
  */
 import crypto from 'node:crypto';
 import { test, expect } from './support/fixtures';
 import { adminApi } from './support/api';
-import { accounts } from './support/env';
+import { SEED_VIEWER_EMAIL } from './support/env';
 import { expectDirection, setPreferences } from './support/ui';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -66,14 +69,13 @@ const state: { profileId?: string; backupKeys: string[] } = { backupKeys: [] };
 test.describe.configure({ mode: 'serial' });
 
 test.describe('restore legacy profile fields', () => {
-  test.beforeEach(({}, testInfo) => {
+  test.beforeEach(() => {
     test.skip(!token, 'No Cloudflare credentials (CLOUDFLARE_API_TOKEN or wrangler login): cannot seed a legacy profile');
-    test.skip(testInfo.project.name !== 'chromium', 'One project only: the job covers the whole bucket');
   });
 
   test.beforeAll(async () => {
     if (!token) return;
-    const seeded = await r2('PUT', PROFILES, LEGACY_ID, { id: LEGACY_ID, email: accounts.nonadmin.email, bioLocalized: { fr: MARKER } });
+    const seeded = await r2('PUT', PROFILES, LEGACY_ID, { id: LEGACY_ID, email: SEED_VIEWER_EMAIL, bioLocalized: { fr: MARKER } });
     expect(seeded.ok, 'seed the legacy profile').toBe(true);
   });
 

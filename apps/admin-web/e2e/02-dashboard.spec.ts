@@ -26,10 +26,23 @@ test.describe('dashboard', () => {
       resolved: await statValue(page, 'resolved'),
       dismissed: await statValue(page, 'dismissed'),
     };
-    const api = await getStats();
-    // Other workers create/close reports concurrently: compare loosely and
-    // check the internal consistency of what the page rendered.
-    expect(Math.abs(ui.total - api.total)).toBeLessThanOrEqual(25);
+    // Other workers and concurrent CI jobs file reports while this runs (each
+    // job's setup files 21 at once), and the total only grows: the page's
+    // total must lie between admin-api's before the page and after it, give or
+    // take what the stats cache may lag. A burst between the reads gets one
+    // more try.
+    let inRange = false;
+    let reading = '';
+    for (let attempt = 0; attempt < 2 && !inRange; attempt++) {
+      const before = (await getStats()).total;
+      await page.reload();
+      const shown = await statValue(page, 'total');
+      const after = (await getStats()).total;
+      inRange = shown >= before - 25 && shown <= after + 25;
+      reading = `page ${shown}, admin-api ${before} before and ${after} after`;
+    }
+    expect(inRange, reading).toBe(true);
+    // The first render must be internally consistent
     expect(ui.pending + ui.resolved + ui.dismissed).toBeLessThanOrEqual(ui.total);
     expect(ui.pending).toBeGreaterThanOrEqual(0);
   });

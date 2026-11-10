@@ -20,6 +20,17 @@ const ALL_BROWSERS = /(anonymous-console|realtime-toasts|admin-content|studio-[\
  * as playwright.player.config.ts does.
  */
 const BAR_ROW = /player-(bar-row|track)\.player\.spec\.ts$/;
+/**
+ * Specs that change state no run owns: errors.spec.ts reopens, resolves and
+ * deletes the shared test error group; site-theme.spec.ts switches the global
+ * site theme. CI (release-e2e.yml) runs the suite with E2E_SHARED_STATE=skip,
+ * then these alone with E2E_SHARED_STATE=only under the cross-run qa-global lock
+ * (scripts/ci/qa-lock.ts), so concurrent PR runs never collide on them. Unset
+ * (local runs): everything in one go, as before.
+ */
+const SHARED_STATE = /\/(errors|site-theme)\.spec\.ts$/;
+const SHARED_MODE = process.env.E2E_SHARED_STATE;
+const OUTPUT_SUFFIX = /^[a-z0-9-]{1,32}$/.test(process.env.E2E_OUTPUT_SUFFIX ?? '') ? `-${process.env.E2E_OUTPUT_SUFFIX}` : '';
 const EXTRA_BROWSERS = (process.env.RELEASE_PLAYER_BROWSERS ?? '').split(',').map((b) => b.trim()).filter(Boolean);
 const EXTRA_DEVICES = {
   firefox: process.env.PLAYER_FIREFOX_PATH
@@ -40,17 +51,19 @@ export default defineConfig({
   workers: 4,
   timeout: 180000,
   expect: { timeout: 20000 },
-  reporter: process.env.CI ? [['github'], ['list'], ['html', { outputFolder: 'release-report', open: 'never' }]] : [['list']],
+  // A second invocation in the same job (the shared-state specs) writes next to the first one's output
+  outputDir: `test-results${OUTPUT_SUFFIX}`,
+  reporter: process.env.CI ? [['github'], ['list'], ['html', { outputFolder: `release-report${OUTPUT_SUFFIX}`, open: 'never' }]] : [['list']],
   use: {
     actionTimeout: 15000,
     navigationTimeout: 30000,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
-  projects: [
+  projects: SHARED_MODE === 'only' ? [{ name: 'shared-state', testMatch: SHARED_STATE, use: { ...devices['Desktop Chrome'] } }] : [
     {
       name: 'auth-flows',
-      testIgnore: [PLAYER, ALL_BROWSERS],
+      testIgnore: SHARED_MODE === 'skip' ? [PLAYER, ALL_BROWSERS, SHARED_STATE] : [PLAYER, ALL_BROWSERS],
       use: { ...devices['Desktop Chrome'] },
     },
     {

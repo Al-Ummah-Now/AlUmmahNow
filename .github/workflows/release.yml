@@ -313,6 +313,10 @@ jobs:
   stage-e2e:
     name: Stage E2E
     needs: stage
+    # release-e2e.yml takes the stage-global lock (a git ref) for its shared-state specs
+    permissions:
+      contents: write
+      actions: read
     uses: ./.github/workflows/release-e2e.yml
     with:
       env: stage

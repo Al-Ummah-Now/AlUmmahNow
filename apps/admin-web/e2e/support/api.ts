@@ -9,7 +9,7 @@
  */
 import fs from 'node:fs';
 import crypto from 'node:crypto';
-import { ADMIN_API_URL, E2E_DESCRIPTION_TAG, E2E_ENTITY_PREFIX, TOKENS_PATH, VIDEOS_API_URL } from './env';
+import { ADMIN_API_URL, E2E_DESCRIPTION_TAG, E2E_ENTITY_PREFIX, E2E_ENTITY_ROOT, TOKENS_PATH, VIDEOS_API_URL } from './env';
 
 export interface Tokens {
   admin: string;
@@ -143,13 +143,30 @@ export async function dismissReport(id: string, notes = `${E2E_DESCRIPTION_TAG} 
   return status;
 }
 
-/** Dismiss every still-open report the suite created (by entity id prefix). */
+/**
+ * Longer than any admin E2E job runs: an e2e report this old belongs to a job
+ * that died before its teardown, so any job may close it.
+ */
+const ABANDONED_REPORT_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * Whether this job's setup/teardown may dismiss `report`: its own (by entity
+ * id prefix), and abandoned e2e reports of any run. Never a recent report of
+ * another job, which may be mid-test on it.
+ */
+function closable(report: AdminReport, now: number): boolean {
+  if (report.entity_id.startsWith(E2E_ENTITY_PREFIX)) return true;
+  return report.entity_id.startsWith(E2E_ENTITY_ROOT) && now - Date.parse(report.created_at) > ABANDONED_REPORT_MS;
+}
+
+/** Dismiss every still-open report this job created, and abandoned e2e ones. */
 export async function closeOpenE2eReports(): Promise<number> {
   let closed = 0;
+  const now = Date.now();
   for (const status of ['pending', 'reviewing']) {
     for (let offset = 0; ; offset += 100) {
       const page = await listReports(`status=${status}&limit=100&offset=${offset}`);
-      const mine = page.reports.filter((r) => r.entity_id.startsWith(E2E_ENTITY_PREFIX));
+      const mine = page.reports.filter((r) => closable(r, now));
       let closedHere = 0;
       for (const report of mine) {
         if ((await dismissReport(report.id)) === 200) closedHere++;

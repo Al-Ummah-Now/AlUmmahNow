@@ -30,6 +30,13 @@ permissions:
   pull-requests: read  # the superseded check reads the PR's current head
   checks: write  # EnricoMi/publish-unit-test-result-action creates the JUnit check runs
 
+# A newer push to a PR cancels that PR's older run (its accounts are its own and
+# its teardown still runs); runs of different PRs, and of main, never cancel or
+# replace each other.
+concurrency:
+  group: e2e-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   OPENAUTH_URL: https://auth.qa.alummahnow.net
   WEB_APP_URL: https://videos.qa.alummahnow.net
@@ -37,35 +44,46 @@ env:
   OPENAUTH_CLIENT_ID: e0de3c30-0304-4ac4-86d6-1e185dec0439
 
 jobs:
-  # Every UI spec on every browser/device project. One job per project, each
-  # with its own pinned QA users (E2E_USERS_TIMESTAMP): the specs mutate their
-  # users' channels, subscriptions and videos, so jobs running in parallel must
-  # never share accounts. Users are registered on first use and reused after.
+  # Every UI spec on every browser/device project. Each job registers its own
+  # accounts (e2e+<run>-<attempt>-web-<project>-<role>@e2e.alummahnow.net,
+  # apps/web/e2e/test-utils/run-users.ts) and deletes them when it ends (the
+  # always() teardown steps below), so jobs of this run, other PRs' runs and
+  # nightly runs never share users and need no queue. There is no job-level
+  # concurrency group: GitHub kept only one pending job per group, so every
+  # newly queued PR run cancelled the one waiting before it.
   #
-  # The pinned users are global, not per run, so runs from different PRs or
-  # branches would share them too (one run's temp channels and setting changes
-  # then broke the other's specs). The job-level concurrency group queues a
-  # project's job until the previous run's job on the same users has finished.
-  # GitHub keeps one pending job per group: a newer queued run replaces an
-  # older one that has not started yet. A running job is never cancelled, as
-  # that would stop specs halfway through changing (and restoring) shared data.
+  # The few specs that touch state no run owns (seed-video likes and comments,
+  # the global site theme: playwright.config.ts SHARED_STATE_SPECS) run once per
+  # run, in the chromium job, under the cross-run qa-global lock
+  # (scripts/ci/qa-lock.ts), which waits its turn instead of replacing anyone.
   e2e:
     name: E2E - ${{ matrix.project }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 110
-    concurrency:
-      group: e2e-qa-users-${{ matrix.users }}
-      cancel-in-progress: false
+    timeout-minutes: 150
+    permissions:
+      contents: write  # only the qa-lock steps get the token (a git ref is the lock)
+      actions: read  # qa-lock: is the lock's holder run still going?
+      packages: read
+      pull-requests: read
+      checks: write
 
     # Pull requests: chromium only. Everything else: the full matrix.
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(github.event_name == 'pull_request' && '[{"project":"chromium","users":"1795000000001"}]' || '[{"project":"chromium","users":"1795000000001"},{"project":"firefox","users":"1795000000002"},{"project":"webkit","users":"1795000000003"},{"project":"Mobile Chrome","users":"1795000000004"},{"project":"Mobile Safari","users":"1795000000005"}]') }}
+        include: ${{ fromJSON(github.event_name == 'pull_request' && '[{"project":"chromium","slug":"chromium"}]' || '[{"project":"chromium","slug":"chromium"},{"project":"firefox","slug":"firefox"},{"project":"webkit","slug":"webkit"},{"project":"Mobile Chrome","slug":"mobile-chrome"},{"project":"Mobile Safari","slug":"mobile-safari"}]') }}
+
+    env:
+      # Run mode: this job's own accounts (auth.setup.ts, run-users.ts)
+      E2E_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+      E2E_PROJECT: ${{ matrix.slug }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          # The job token can write refs (the lock): keep it out of .git/config
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -76,6 +94,11 @@ jobs:
         uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b # v2
         with:
           version: 9.15.4
+
+      # Every account this job generates is listed here before it is registered,
+      # so the teardown deletes it even when the job is cancelled half-way
+      - name: Run accounts file
+        run: echo "E2E_RUN_USERS_FILE=$RUNNER_TEMP/run-users.txt" >> "$GITHUB_ENV"
 
       - name: Get pnpm store directory
         id: pnpm-cache
@@ -117,10 +140,10 @@ jobs:
         id: e2e-start
         run: echo "at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
 
-      # A pull request run waits in the pinned users' queue (job concurrency
-      # above) and may start after the PR got a newer push: it then tests an
-      # outdated commit and only adds uploads to the Bunny library QA and stage
-      # share. Skip the specs; the newer push's run tests the PR.
+      # The PR-level concurrency group cancels a run once a newer push starts
+      # one; this catches a run that started just before that push. Skip the
+      # specs: the newer push's run tests the PR (and its uploads would only add
+      # Bunny encodes to the library QA and stage share).
       - name: Superseded?
         id: superseded
         if: github.event_name == 'pull_request'
@@ -141,7 +164,7 @@ jobs:
         id: uploads-before
         if: steps.superseded.outputs.skip != 'true'
         continue-on-error: true
-        run: node --experimental-strip-types --no-warnings scripts/release/upload-budget.ts --env qa --emails "test-%-${{ matrix.users }}@e2e.alummahnow.net" --snapshot "$RUNNER_TEMP/uploads-before.json"
+        run: node --experimental-strip-types --no-warnings scripts/release/upload-budget.ts --env qa --emails "e2e+${{ github.run_id }}-${{ github.run_attempt }}-web-${{ matrix.slug }}-%@e2e.alummahnow.net" --snapshot "$RUNNER_TEMP/uploads-before.json"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -152,7 +175,6 @@ jobs:
         run: pnpm exec playwright test --project="${{ matrix.project }}"
         env:
           CI: true
-          E2E_USERS_TIMESTAMP: ${{ matrix.users }}
           # Pull requests: the upload transport/UI specs are covered by the release
           # suite on every PR; they run nightly and after every Release, in chromium
           # only (playwright.config.ts UPLOAD_SPECS)
@@ -164,6 +186,63 @@ jobs:
           # auth.setup has a promoted QA admin give the channel-owning users the Creator tier
           TEST_PROMOTE_SECRET: ${{ secrets.TEST_PROMOTE_SECRET_QA }}
 
+      # The global-state specs (SHARED_STATE_SPECS), once per run, one run at a
+      # time across the repository: the qa-global lock waits for its turn (it is
+      # never replaced or cancelled by another run). Same users, no new setup.
+      - name: Acquire the qa-global lock
+        id: lock
+        if: steps.superseded.outputs.skip != 'true' && matrix.project == 'chromium' && !cancelled()
+        timeout-minutes: 90
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node --experimental-strip-types --no-warnings scripts/ci/qa-lock.ts acquire qa-global --ttl-min 45 --max-wait-min 85
+
+      - name: Run shared-state specs
+        if: steps.lock.outputs.holder != '' && !cancelled()
+        working-directory: apps/web
+        timeout-minutes: 40
+        run: pnpm exec playwright test --project=shared-state
+        env:
+          CI: true
+          SKIP_AUTH_SETUP: 'true'
+          E2E_OUTPUT_SUFFIX: shared-state
+          E2E_GLOBAL_TIMEOUT_MINUTES: '35'
+          E2E_MAX_FAILURES: '20'
+          E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET_QA }}
+          E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
+          TEST_PROMOTE_SECRET: ${{ secrets.TEST_PROMOTE_SECRET_QA }}
+
+      - name: Release the qa-global lock
+        if: always() && steps.lock.outputs.holder != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node --experimental-strip-types --no-warnings scripts/ci/qa-lock.ts release qa-global --holder "${{ steps.lock.outputs.holder }}"
+
+      # Teardown, pass, fail or cancelled: everything the run accounts own goes
+      # (videos with their Bunny media, then the GDPR erase of profile, channels,
+      # playlists, history...), then the accounts themselves (auth soft delete +
+      # immediate purge, QA-only route). Anything left by a killed runner is
+      # removed by e2e-run-users-sweep.yml after 24 hours.
+      - name: Erase the run accounts' content
+        if: always()
+        continue-on-error: true
+        run: |
+          if [ ! -s "$E2E_RUN_USERS_FILE" ]; then echo "No run accounts were generated"; exit 0; fi
+          pnpm exec tsx apps/web/e2e/cleanup-test-content.ts --run-users
+        env:
+          E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET_QA }}
+          E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
+
+      - name: Delete the run accounts
+        if: always()
+        continue-on-error: true
+        run: >-
+          node --experimental-strip-types --no-warnings scripts/e2e/teardown-run-users.ts
+          --auth-url "$OPENAUTH_URL" --file "$E2E_RUN_USERS_FILE"
+        env:
+          E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET_QA }}
+          TEST_PROMOTE_SECRET: ${{ secrets.TEST_PROMOTE_SECRET_QA }}
+
       # Budget: a PR run sends ~9 uploads with bytes (+ record-only disposables);
       # chromium in the full matrix adds the upload specs. Over it: a warning.
       - name: Upload budget (QA)
@@ -171,7 +250,7 @@ jobs:
         continue-on-error: true
         run: >-
           node --experimental-strip-types --no-warnings scripts/release/upload-budget.ts --env qa
-          --emails "test-%-${{ matrix.users }}@e2e.alummahnow.net" --baseline "$RUNNER_TEMP/uploads-before.json"
+          --emails "e2e+${{ github.run_id }}-${{ github.run_attempt }}-web-${{ matrix.slug }}-%@e2e.alummahnow.net" --baseline "$RUNNER_TEMP/uploads-before.json"
           --label "${{ matrix.project }}" --max ${{ github.event_name != 'pull_request' && matrix.project == 'chromium' && '90' || '45' }}
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -206,14 +285,16 @@ jobs:
         run: >-
           python3 scripts/ci/scan-artifacts-for-secrets.py
           --env E2E_CODE_SINK_SECRET --env E2E_USER_PASSWORD --env TEST_PROMOTE_SECRET --env CLOUDFLARE_API_TOKEN
-          --remove apps/web/playwright-report apps/web/test-results
+          --remove apps/web/playwright-report apps/web/test-results apps/web/playwright-report-shared-state apps/web/test-results-shared-state
 
       - name: Upload HTML report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-${{ steps.art.outputs.name }}
-          path: apps/web/playwright-report/
+          path: |
+            apps/web/playwright-report/
+            apps/web/playwright-report-shared-state/
           retention-days: 30
 
       - name: Upload traces, screenshots and videos
@@ -221,14 +302,18 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results-${{ steps.art.outputs.name }}
-          path: apps/web/test-results/
+          path: |
+            apps/web/test-results/
+            apps/web/test-results-shared-state/
           retention-days: 14
 
       - name: Publish JUnit results
         if: always()
         uses: EnricoMi/publish-unit-test-result-action@da5b7be67623cd59bbbd1a0ce4f022050a55605f # v2
         with:
-          files: apps/web/test-results/junit.xml
+          files: |
+            apps/web/test-results/junit.xml
+            apps/web/test-results-shared-state/junit.xml
           check_name: E2E Results (${{ matrix.project }})
           comment_mode: off
 
@@ -237,11 +322,21 @@ jobs:
   # Each job registers its own users in Playwright's global setup: storage
   # state (live QA session cookies) is never passed between jobs as an
   # artifact, since anyone signed in to GitHub can download artifacts here.
+  #
+  # Both read the global site theme, so the whole project runs under the
+  # qa-global lock (nightly / after a Release only, never on pull requests).
   dedicated:
     name: E2E - ${{ matrix.project }}
     if: ${{ github.event_name != 'pull_request' && !inputs.update_snapshots }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 140
+    permissions:
+      contents: write  # only the qa-lock steps get the token
+      actions: read
+      packages: read
+    env:
+      E2E_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+      E2E_PROJECT: ${{ matrix.project }}
 
     strategy:
       fail-fast: false
@@ -251,6 +346,11 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Run accounts file
+        run: echo "E2E_RUN_USERS_FILE=$RUNNER_TEMP/run-users.txt" >> "$GITHUB_ENV"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -277,7 +377,15 @@ jobs:
         working-directory: apps/web
         run: pnpm exec playwright install --with-deps chromium
 
+      - name: Acquire the qa-global lock
+        id: lock
+        timeout-minutes: 90
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node --experimental-strip-types --no-warnings scripts/ci/qa-lock.ts acquire qa-global --ttl-min 50 --max-wait-min 85
+
       - name: Run ${{ matrix.project }} project
+        timeout-minutes: 45
         working-directory: apps/web
         run: pnpm exec playwright test --project=${{ matrix.project }}
         env:
@@ -286,6 +394,32 @@ jobs:
           E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET_QA }}
           E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
           # auth.setup has a promoted QA admin give the channel-owning users the Creator tier
+          TEST_PROMOTE_SECRET: ${{ secrets.TEST_PROMOTE_SECRET_QA }}
+
+      - name: Release the qa-global lock
+        if: always() && steps.lock.outputs.holder != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node --experimental-strip-types --no-warnings scripts/ci/qa-lock.ts release qa-global --holder "${{ steps.lock.outputs.holder }}"
+
+      - name: Erase the run accounts' content
+        if: always()
+        continue-on-error: true
+        run: |
+          if [ ! -s "$E2E_RUN_USERS_FILE" ]; then echo "No run accounts were generated"; exit 0; fi
+          pnpm exec tsx apps/web/e2e/cleanup-test-content.ts --run-users
+        env:
+          E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET_QA }}
+          E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
+
+      - name: Delete the run accounts
+        if: always()
+        continue-on-error: true
+        run: >-
+          node --experimental-strip-types --no-warnings scripts/e2e/teardown-run-users.ts
+          --auth-url "$OPENAUTH_URL" --file "$E2E_RUN_USERS_FILE"
+        env:
+          E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET_QA }}
           TEST_PROMOTE_SECRET: ${{ secrets.TEST_PROMOTE_SECRET_QA }}
 
       - name: Scan test output for secrets

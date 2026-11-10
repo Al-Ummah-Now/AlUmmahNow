@@ -7,10 +7,11 @@
  * approved delete removes it again, so nothing is left behind.
  */
 import crypto from 'node:crypto';
-import { request as playwrightRequest, type Page } from '@playwright/test';
+import { request as playwrightRequest, type Browser, type Page } from '@playwright/test';
 import { test, expect } from './support/fixtures';
-import { ADMIN_WEB_URL, ADMIN_API_URL, OPENAUTH_URL, accounts } from './support/env';
+import { ADMIN_API_URL, OPENAUTH_URL, RUN_ID, accounts, runAccountName, runUserEmail } from './support/env';
 import { fillSecret } from './support/secret-fill';
+import { registerSinkUser } from './support/run-accounts';
 
 // Types passwords and test secrets: no traces for this file
 test.use({ trace: 'off' });
@@ -29,47 +30,19 @@ async function authRequestsDeployed(): Promise<boolean> {
   }
 }
 
-async function sinkCode(email: string): Promise<string> {
-  for (let i = 0; i < 40; i++) {
-    const res = await fetch(`${OPENAUTH_URL}/test/email/${encodeURIComponent(email)}?consume=1`, { headers: { 'X-E2E-Secret': SINK_SECRET } });
-    if (res.ok) {
-      const { code } = (await res.json()) as { code?: string };
-      if (code) return code;
-    } else if (res.status !== 404) {
-      throw new Error(`E2E code sink answered ${res.status}`);
-    }
-    await new Promise((r) => setTimeout(r, 500));
-  }
-  throw new Error(`No sign-up code for ${email}`);
-}
+let modreqCount = 0;
 
-/** Registers a fresh auth user (no admin role) in its own context; returns its auth user id. */
-async function registerTestUser(browser: import('@playwright/test').Browser): Promise<{ id: string; email: string }> {
-  const email = `modreq-${Date.now()}-${crypto.randomBytes(3).toString('hex')}@e2e.alummahnow.net`;
+/**
+ * Registers a fresh auth user (no admin role); returns its auth user id. Run
+ * mode uses a recorded run address, so the workflow's teardown deletes it even
+ * when the approved delete below never happens.
+ */
+async function registerTestUser(browser: Browser): Promise<{ id: string; email: string }> {
+  const email = RUN_ID
+    ? runUserEmail(runAccountName(`modreq-${++modreqCount}`))
+    : `modreq-${Date.now()}-${crypto.randomBytes(3).toString('hex')}@e2e.alummahnow.net`;
   const password = `Mr-${crypto.randomBytes(12).toString('base64url')}-1!`;
-  const context = await browser.newContext({ baseURL: ADMIN_WEB_URL, storageState: { cookies: [], origins: [] } });
-  try {
-    const page = await context.newPage();
-    await page.goto('/login');
-    await page.waitForURL((url) => url.href.startsWith(OPENAUTH_URL));
-    await page.click('a:has-text("Register")');
-    await page.locator('input[name="email"]').fill(email);
-    await fillSecret(page.locator('input[name="password"]'), password);
-    await fillSecret(page.locator('input[name="repeat"]'), password);
-    await page.locator('button[data-component="button"]').click();
-    await expect(page.locator('input[name="code"]')).toBeVisible({ timeout: 20_000 });
-    await fillSecret(page.locator('input[name="code"]'), await sinkCode(email));
-    await page.locator('button[data-component="button"]').click();
-    // Not an admin: admin-web refuses, but the auth account and session exist
-    await page.waitForURL((url) => url.pathname === '/access-denied', { timeout: 45_000 });
-    const res = await page.request.get(`${OPENAUTH_URL}/session/accounts`);
-    const { accounts: signedIn } = (await res.json()) as { accounts: Array<{ userId: string; email: string }> };
-    const me = signedIn.find((a) => a.email.toLowerCase() === email);
-    if (!me) throw new Error('The new user has no auth session');
-    return { id: me.userId, email };
-  } finally {
-    await context.close();
-  }
+  return registerSinkUser(browser, email, password);
 }
 
 /**
@@ -116,7 +89,11 @@ async function sendRequest(page: Page, userId: string, action: string, reason: s
   return { id, authId };
 }
 
-/** Opens the request in the auth admin dashboard as the QA admin (SSO, or the password form). */
+/**
+ * Opens the request in the auth admin dashboard as the suite's admin (SSO, or
+ * the password form). In run mode that is the run admin: /test/promote gives
+ * it auth's role_admin, which the auth admin's moderation pages accept.
+ */
 async function openInAuthAdmin(page: Page, authRequestId: string) {
   const requestId = authRequestId;
   await page.goto(`${AUTH_ADMIN_URL}/moderation/${requestId}`);

@@ -64,6 +64,7 @@ describe('accountKind', () => {
 	it('pins only the current CI user timestamps (the old delivered.resend.dev users are retired)', () => {
 		assert.equal(accountKind('test-single-1795000000001@delivered.resend.dev'), 'throwaway');
 		assert.equal(accountKind('test-single-1795000000006@e2e.alummahnow.net'), 'throwaway');
+		assert.equal(accountKind('e2e+42887909300-1-web-chromium-single@e2e.alummahnow.net'), 'throwaway');
 	});
 
 	it('matches the users pinned in .github/workflows/e2e-tests.yml', () => {

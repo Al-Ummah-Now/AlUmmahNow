@@ -1,11 +1,21 @@
 import { defineConfig, devices } from '@playwright/test';
-import { ADMIN_WEB_URL, storageStatePath } from './e2e/support/env';
+import { ADMIN_WEB_URL, SHARED_STATE_PROJECT, storageStatePath } from './e2e/support/env';
+
+/**
+ * Specs that change state shared by every run and every reader of QA (the
+ * translation file, the public site theme, the profiles bucket the legacy
+ * restore scans). They run once, in the shared-state project, which CI runs
+ * under a cross-run lock; every other spec only touches this job's own
+ * accounts and reports, so the device projects run concurrently with other runs.
+ */
+const SHARED_STATE_SPECS = /(06-translations-save|11-site-theme|12-legacy-profiles)\.spec\.ts$/;
 
 /**
  * admin-web UI suite. Runs against a deployed environment (QA by default,
  * override with ADMIN_WEB_URL). Projects: desktop Chromium, desktop WebKit,
- * and a mobile (Pixel 5) viewport. Specs use the admin storage state unless
- * they opt into another role with test.use({ storageState }).
+ * a mobile (Pixel 5) viewport, and shared-state (see SHARED_STATE_SPECS).
+ * Specs use the admin storage state unless they opt into another role with
+ * test.use({ storageState }).
  */
 export default defineConfig({
   testDir: './e2e',
@@ -34,8 +44,9 @@ export default defineConfig({
     navigationTimeout: 45_000,
   },
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-    { name: 'webkit', use: { ...devices['Desktop Safari'] } },
-    { name: 'mobile', use: { ...devices['Pixel 5'] } },
+    { name: 'chromium', testIgnore: SHARED_STATE_SPECS, use: { ...devices['Desktop Chrome'] } },
+    { name: 'webkit', testIgnore: SHARED_STATE_SPECS, use: { ...devices['Desktop Safari'] } },
+    { name: 'mobile', testIgnore: SHARED_STATE_SPECS, use: { ...devices['Pixel 5'] } },
+    { name: SHARED_STATE_PROJECT, testMatch: SHARED_STATE_SPECS, use: { ...devices['Desktop Chrome'] } },
   ],
 });

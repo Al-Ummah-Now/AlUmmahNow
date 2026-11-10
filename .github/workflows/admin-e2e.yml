@@ -2,8 +2,18 @@ name: Admin Web E2E (QA)
 
 # Playwright UI suite for apps/admin-web, run against the deployed QA
 # environment (admin.qa.alummahnow.net + admin.api.qa.alummahnow.net).
-# The suite files and dismisses its own moderation reports and edits/reverts
-# one translation key, so runs are serialised across the repository.
+#
+# Each job registers its own accounts (e2e+<run>-<attempt>-admin-<project>-<role>:
+# a promoted admin and a viewer; apps/admin-web/e2e/support/env.ts) and files
+# moderation reports under its own prefix, so jobs and runs do not share data and
+# run in parallel. The teardown deletes the accounts when the job ends. The
+# moderator role still signs in as the seed qa-moderator (no test route grants
+# it); it only acts on the job's own reports.
+#
+# The three specs that change global state (the shared translations, the site
+# theme, the legacy-profile restore) run once per run in the shared-state job,
+# under the cross-run qa-global lock (scripts/ci/qa-lock.ts), which waits its
+# turn instead of replacing a queued run the way a concurrency group did.
 
 on:
   workflow_dispatch:
@@ -25,9 +35,10 @@ permissions:
   contents: read
   packages: read
 
+# A newer push to a PR cancels that PR's older run only (its teardown still runs)
 concurrency:
-  group: admin-e2e-qa
-  cancel-in-progress: false
+  group: admin-e2e-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   admin-e2e:
@@ -37,10 +48,16 @@ jobs:
     # Forks do not receive secrets; the suite cannot log in without them
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
 
+    permissions:
+      contents: write  # only the qa-lock steps (shared-state) get the token
+      actions: read
+      packages: read
+
     strategy:
       fail-fast: false
       matrix:
-        project: [chromium, webkit, mobile]
+        # shared-state: the global-state specs, under the qa-global lock
+        project: [chromium, webkit, mobile, shared-state]
 
     env:
       CI: true
@@ -48,13 +65,30 @@ jobs:
       ADMIN_API_URL: https://admin.api.qa.alummahnow.net
       VIDEOS_API_URL: https://videos.api.qa.alummahnow.net
       OPENAUTH_URL: https://auth.qa.alummahnow.net
+      OPENAUTH_ISSUER_URL: https://auth.qa.alummahnow.net
+      # qa-moderator (seed) still signs in with it
       QA_SEED_PASSWORD: ${{ secrets.QA_SEED_PASSWORD }}
-      # 12-auth-requests.spec.ts registers a test user; its sign-up code comes from auth's E2E sink
+      # Run accounts register through auth's E2E code sink; the admin is promoted with TEST_PROMOTE_SECRET
       E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET_QA }}
+      TEST_PROMOTE_SECRET: ${{ secrets.TEST_PROMOTE_SECRET_QA }}
+      E2E_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+      E2E_ADMIN_PROJECT: ${{ matrix.project }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          # The job token can write refs (the lock): keep it out of .git/config
+          persist-credentials: false
+
+      # The run accounts' password (random per job, masked) and the file every
+      # generated account is listed in before it is registered
+      - name: Run accounts
+        run: |
+          pw="Adm-$(openssl rand -base64 18 | tr '+/' '-_' | tr -d '=')-1!"
+          echo "::add-mask::$pw"
+          echo "E2E_RUN_USER_PASSWORD=$pw" >> "$GITHUB_ENV"
+          echo "E2E_RUN_USERS_FILE=$RUNNER_TEMP/run-users.txt" >> "$GITHUB_ENV"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -92,10 +126,20 @@ jobs:
 
       - name: Check QA credentials
         run: |
-          if [ -z "$QA_SEED_PASSWORD" ]; then
-            echo "::error::QA_SEED_PASSWORD secret is not available to this run"
-            exit 1
-          fi
+          for name in QA_SEED_PASSWORD E2E_CODE_SINK_SECRET TEST_PROMOTE_SECRET; do
+            if [ -z "${!name}" ]; then
+              echo "::error::$name secret is not available to this run"
+              exit 1
+            fi
+          done
+
+      - name: Acquire the qa-global lock
+        id: lock
+        if: matrix.project == 'shared-state'
+        timeout-minutes: 90
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node --experimental-strip-types --no-warnings scripts/ci/qa-lock.ts acquire qa-global --ttl-min 50 --max-wait-min 85
 
       - name: Install Playwright browsers
         working-directory: apps/admin-web
@@ -109,7 +153,25 @@ jobs:
 
       - name: Run admin-web E2E suite
         working-directory: apps/admin-web
+        timeout-minutes: 45
+        # No Cloudflare token here (PR code runs in this step): 12-legacy-profiles skips, as before
         run: pnpm exec playwright test --project=${{ matrix.project }}
+
+      - name: Release the qa-global lock
+        if: always() && steps.lock.outputs.holder != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node --experimental-strip-types --no-warnings scripts/ci/qa-lock.ts release qa-global --holder "${{ steps.lock.outputs.holder }}"
+
+      # Pass, fail or cancelled: delete this job's accounts from the auth server
+      # (soft delete + immediate purge, QA-only route). Its reports were closed
+      # by the suite's global teardown.
+      - name: Delete the run accounts
+        if: always()
+        continue-on-error: true
+        run: >-
+          node --experimental-strip-types --no-warnings scripts/e2e/teardown-run-users.ts
+          --auth-url "$OPENAUTH_ISSUER_URL" --file "$E2E_RUN_USERS_FILE"
 
       # Artifacts of this public repo are downloadable by anyone signed in to
       # GitHub: drop any output that holds the seed password or a storage state,
@@ -120,6 +182,8 @@ jobs:
           python3 scripts/ci/scan-artifacts-for-secrets.py
           --env QA_SEED_PASSWORD
           --env E2E_CODE_SINK_SECRET
+          --env TEST_PROMOTE_SECRET
+          --env E2E_RUN_USER_PASSWORD
           --remove apps/admin-web/playwright-report apps/admin-web/test-results
 
       - name: Upload HTML report

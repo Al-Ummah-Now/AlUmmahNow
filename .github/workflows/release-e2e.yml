@@ -54,10 +54,20 @@ jobs:
   release-e2e:
     name: Release regressions (${{ inputs.env || 'qa' }})
     runs-on: ubuntu-24.04
-    timeout-minutes: 45  # 163 tests on 4 workers took ~25 min with slow Bunny encodes (v2026.11.10.11)
+    # 163 tests on 4 workers took ~25 min with slow Bunny encodes (v2026.11.10.11);
+    # plus up to 40 min waiting for the shared-state lock
+    timeout-minutes: 100
+    permissions:
+      contents: write  # only the trusted qa-lock steps get the token (a git ref is the lock)
+      actions: read  # qa-lock: is the lock's holder run still going?
     env:
       E2E_ENV: ${{ inputs.env || 'qa' }}
       PLAYWRIGHT_VERSION: 1.56.1  # keep in step with apps/web/package.json
+      # Run mode: every account the specs register is e2e+<run>-<attempt>-rel-…,
+      # recorded before it exists and deleted by the teardown step below
+      # (apps/web/e2e/test-utils/run-users.ts)
+      E2E_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+      AUTH_URL: ${{ (inputs.env || 'qa') == 'stage' && 'https://auth.stage.alummahnow.net' || 'https://auth.qa.alummahnow.net' }}
     steps:
       - name: Check target
         run: |
@@ -69,6 +79,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref || '' }}
+          # The job token can write refs (the lock): keep it out of .git/config
+          persist-credentials: false
 
       # The artifact scanner comes from this workflow's own commit, never from
       # inputs.ref: it runs with the secrets in its env.
@@ -79,7 +91,12 @@ jobs:
           sparse-checkout: |
             scripts/ci
             scripts/release
+            scripts/e2e
+            apps/web/e2e/test-utils
           persist-credentials: false
+
+      - name: Run accounts file
+        run: echo "E2E_RUN_USERS_FILE=$RUNNER_TEMP/run-users.txt" >> "$GITHUB_ENV"
 
       - uses: actions/setup-node@v6
         with:
@@ -92,7 +109,7 @@ jobs:
           SUITE="$RUNNER_TEMP/release-e2e"
           mkdir -p "$SUITE/e2e/test-utils"
           cp -R apps/web/e2e/release apps/web/e2e/test-fixtures "$SUITE/e2e/"
-          cp apps/web/e2e/test-utils/code-sink.ts "$SUITE/e2e/test-utils/"
+          cp apps/web/e2e/test-utils/code-sink.ts apps/web/e2e/test-utils/run-users.ts "$SUITE/e2e/test-utils/"
           cp apps/web/playwright.release.config.ts "$SUITE/"
           cd "$SUITE"
           npm init -y > /dev/null
@@ -121,7 +138,54 @@ jobs:
           TEST_PROMOTE_SECRET: ${{ secrets.TEST_PROMOTE_SECRET || (inputs.env == 'stage' && secrets.TEST_PROMOTE_SECRET_STAGE) || secrets.TEST_PROMOTE_SECRET_QA }}
           # In every throwaway user's email (targets.ts sinkEmail): the upload budget finds this run's users
           E2E_RUN_TAG: g${{ github.run_id }}a${{ github.run_attempt }}
+          # The shared-state specs run below, under the lock
+          E2E_SHARED_STATE: skip
         run: npx playwright test -c playwright.release.config.ts
+
+      # errors.spec.ts and site-theme.spec.ts change state no run owns (the shared
+      # test error group, the global site theme): one run at a time per
+      # environment. The lock waits its turn; nobody is replaced or cancelled.
+      # Trusted copy: it runs with the write token.
+      - name: Acquire the ${{ env.E2E_ENV }}-global lock
+        id: lock
+        if: '!cancelled()'
+        timeout-minutes: 45
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node --experimental-strip-types --no-warnings "$GITHUB_WORKSPACE/.ci-trusted/scripts/ci/qa-lock.ts" acquire "$E2E_ENV-global" --ttl-min 30 --max-wait-min 40
+
+      - name: Run shared-state specs
+        if: steps.lock.outputs.holder != '' && !cancelled()
+        working-directory: ${{ env.SUITE }}
+        timeout-minutes: 25
+        env:
+          CI: 'true'
+          E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET || (inputs.env == 'stage' && secrets.E2E_CODE_SINK_SECRET_STAGE) || secrets.E2E_CODE_SINK_SECRET_QA }}
+          TEST_PROMOTE_SECRET: ${{ secrets.TEST_PROMOTE_SECRET || (inputs.env == 'stage' && secrets.TEST_PROMOTE_SECRET_STAGE) || secrets.TEST_PROMOTE_SECRET_QA }}
+          E2E_RUN_TAG: g${{ github.run_id }}a${{ github.run_attempt }}
+          E2E_SHARED_STATE: only
+          E2E_OUTPUT_SUFFIX: shared-state
+        run: npx playwright test -c playwright.release.config.ts
+
+      - name: Release the ${{ env.E2E_ENV }}-global lock
+        if: always() && steps.lock.outputs.holder != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node --experimental-strip-types --no-warnings "$GITHUB_WORKSPACE/.ci-trusted/scripts/ci/qa-lock.ts" release "$E2E_ENV-global" --holder "${{ steps.lock.outputs.holder }}"
+
+      # Pass, fail or cancelled: the run's accounts are deleted from the auth
+      # server (soft delete + immediate purge, QA/stage-only route). Content they
+      # left ("Release E2E …", their channels) goes with the QA cleanup.
+      # Trusted copy: it runs with the secrets.
+      - name: Delete the run accounts
+        if: always()
+        continue-on-error: true
+        env:
+          E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET || (inputs.env == 'stage' && secrets.E2E_CODE_SINK_SECRET_STAGE) || secrets.E2E_CODE_SINK_SECRET_QA }}
+          TEST_PROMOTE_SECRET: ${{ secrets.TEST_PROMOTE_SECRET || (inputs.env == 'stage' && secrets.TEST_PROMOTE_SECRET_STAGE) || secrets.TEST_PROMOTE_SECRET_QA }}
+        run: >-
+          node --experimental-strip-types --no-warnings "$GITHUB_WORKSPACE/.ci-trusted/scripts/e2e/teardown-run-users.ts"
+          --auth-url "$AUTH_URL" --file "$E2E_RUN_USERS_FILE"
 
       # Uploads this run sent (its own users, by E2E_RUN_TAG): every upload with
       # bytes is a Bunny encode in the library QA and stage share. Informational
@@ -132,7 +196,7 @@ jobs:
         continue-on-error: true
         run: >-
           node --experimental-strip-types --no-warnings "$GITHUB_WORKSPACE/.ci-trusted/scripts/release/upload-budget.ts"
-          --env "$E2E_ENV" --emails "%-g${{ github.run_id }}a${{ github.run_attempt }}-%" --label "release run" --max 30
+          --env "$E2E_ENV" --emails "e2e+${{ github.run_id }}-${{ github.run_attempt }}-%" --label "release run" --max 30
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -149,7 +213,7 @@ jobs:
         # workspace), so nothing from inputs.ref runs with these secrets.
         run: >-
           python3 -I - --env E2E_TEST_PASSWORD --env E2E_CODE_SINK_SECRET --env TEST_PROMOTE_SECRET
-          --remove "$SUITE/release-report" "$SUITE/test-results"
+          --remove "$SUITE/release-report" "$SUITE/test-results" "$SUITE/release-report-shared-state" "$SUITE/test-results-shared-state"
           < "$GITHUB_WORKSPACE/.ci-trusted/scripts/ci/scan-artifacts-for-secrets.py"
 
       - uses: actions/upload-artifact@v4
@@ -159,4 +223,6 @@ jobs:
           path: |
             ${{ env.SUITE }}/release-report/
             ${{ env.SUITE }}/test-results/
+            ${{ env.SUITE }}/release-report-shared-state/
+            ${{ env.SUITE }}/test-results-shared-state/
           retention-days: 14
