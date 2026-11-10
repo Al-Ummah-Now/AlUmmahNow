@@ -20,7 +20,6 @@ import { target } from './targets';
 import { apiFetch, createProfile, signUpOnWeb, type WebUser } from './web-session';
 import { grantCreatorTier } from './creator-tier';
 import { playFor, watchUrl } from './videos';
-import { waitForReadyOrEncoderOutage } from './bunny-outage';
 
 // Signs in through the auth server: traces would hold the password and code
 test.use({ trace: 'off' });
@@ -110,23 +109,13 @@ test.describe('Release: upload processing', () => {
         test.info().annotations.push({ type: 'note', description: 'Encoded before the first check; the processing state was not observable' });
       }
 
-      const outage = await waitForReadyOrEncoderOutage(
-        () =>
-          expect
-            .poll(async () => (await videoState(user, videoId)).uploadStatus, {
-              message: 'the video did not become ready by itself (processing-check loop)',
-              timeout: READY_TIMEOUT_MS,
-              intervals: [5_000],
-            })
-            .toBe('ready'),
-        async () => ((await videoState(user, videoId)).uploadStatus === 'ready' ? [] : [videoId]),
-        user,
-        channelId,
-      );
-      if (outage) {
-        test.info().annotations.push({ type: 'bunny-outage', description: outage });
-        test.skip(true, outage);
-      }
+      await expect
+        .poll(async () => (await videoState(user, videoId)).uploadStatus, {
+          message: 'the video did not become ready by itself (processing-check loop)',
+          timeout: READY_TIMEOUT_MS,
+          intervals: [5_000],
+        })
+        .toBe('ready');
       // Reported for the incident follow-up: upload complete → ready (first playable resolution)
       const readyAfter = Math.round((Date.now() - uploadedAt) / 1000);
       test.info().annotations.push({ type: 'ready-after-upload', description: `${readyAfter}s` });
