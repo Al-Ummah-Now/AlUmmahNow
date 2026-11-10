@@ -17,6 +17,7 @@ import { linkClass } from '@/components/ui';
 import { ActionFeedback, useContentAction } from './actions';
 import { Chip, SectionCard, smallButtonClass } from './parts';
 import { canRetryJob, isActiveJob, jobTargetHref, jobTone } from './job-helpers';
+import { JOB_KIND_LABEL } from '@/lib/admin-jobs';
 
 /** How often a page with a running job re-reads it. */
 const REFRESH_MS = 3000;
@@ -64,7 +65,7 @@ export function JobsPanel({ jobs, permissions }: { jobs: AdminJob[] | null; perm
           {jobs.map((job) => (
             <li key={job.id} className="border border-border rounded p-3 bg-surface-2" data-testid="job-item" data-job-id={job.id} data-job-kind={job.kind} data-job-status={job.status}>
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="font-medium text-fg">{t(`jobs.kinds.${job.kind}` as MessageKey)}</span>
+                <span className="font-medium text-fg">{t(JOB_KIND_LABEL[job.kind])}</span>
                 <JobStatusChip job={job} />
               </div>
               <p className="mt-1 text-xs text-fg-muted">
@@ -139,7 +140,7 @@ export function JobsTable({ jobs, permissions, testId = 'jobs-table' }: { jobs: 
             {jobs.map((job) => (
               <tr key={job.id} className="border-b border-border last:border-0" data-testid="job-row" data-job-id={job.id} data-job-kind={job.kind} data-job-status={job.status}>
                 <td className={td}>
-                  <span className="block font-medium text-fg">{t(`jobs.kinds.${job.kind}` as MessageKey)}</span>
+                  <span className="block font-medium text-fg">{t(JOB_KIND_LABEL[job.kind])}</span>
                   <Link href={jobTargetHref(job)} className={`${linkClass} text-xs`}>
                     {t(`jobs.targets.${job.targetKind}` as MessageKey)} <span className="font-mono" dir="ltr">{job.targetId.length > 24 ? `${job.targetId.slice(0, 24)}…` : job.targetId}</span>
                   </Link>

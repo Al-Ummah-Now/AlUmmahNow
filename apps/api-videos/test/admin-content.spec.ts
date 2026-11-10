@@ -93,7 +93,7 @@ function channel(id: string, overrides: Record<string, unknown> = {}) {
 }
 
 /** A wrapped env (writes update the indexes) with complete ownership passes. */
-async function setup(seed: { profiles?: Record<string, unknown>; channels?: Record<string, unknown>; videos?: Record<string, unknown> } = {}) {
+async function setup(seed: { profiles?: Record<string, unknown>; channels?: Record<string, unknown>; videos?: Record<string, unknown>; playlists?: Record<string, unknown> } = {}) {
 	const db = new SqliteD1();
 	const pending: Promise<unknown>[] = [];
 	const raw = {
@@ -107,7 +107,7 @@ async function setup(seed: { profiles?: Record<string, unknown>; channels?: Reco
 				legacy: videoFixture({ id: 'legacy', title: 'Old upload', userId: 'placeholder', channelId: null }),
 			},
 		),
-		playlists: new MemoryBucket(),
+		playlists: new MemoryBucket(seed.playlists ?? {}),
 		community_posts: new MemoryBucket(),
 		watch_history: new MemoryBucket(),
 		channel_tabs: new MemoryBucket(),
@@ -393,6 +393,42 @@ describe('channel actions', () => {
 		assert.equal((await call('GET', '/channels')).body.result.total, 0);
 		assert.equal(raw.queue.messages.filter((m: any) => m.type === MessageType.VideoDelete).length, 2, 'one VideoDelete per erased video');
 		assert.ok(bunny.calls.includes('DELETE /library/7/videos/v1') && bunny.calls.includes('DELETE /library/7/videos/v2'), 'media erased from Bunny');
+	});
+	it('purge scans the playlists in bounded steps and soft-deletes only the channel\'s, however many there are', async () => {
+		// 1,200 playlists (more than two scan steps), three of them ch1's, spread across the steps
+		const playlists: Record<string, unknown> = {};
+		for (let i = 0; i < 1200; i++) {
+			const id = `pl${String(i).padStart(4, '0')}`;
+			playlists[id] = { id, title: id, userId: OTHER, channelId: [5, 600, 1199].includes(i) ? 'ch1' : 'ch-other', videos: [] };
+		}
+		const { raw, call } = await setup({ playlists });
+		const res = await call('DELETE', '/channels/ch1');
+		assert.equal(res.status, 200);
+		const jobs = (await call('GET', '/jobs?targetId=ch1')).body.result.items;
+		const purge = jobs.find((j: any) => j.kind === 'channel.purge');
+		assert.equal(purge.status, 'succeeded');
+		assert.equal(purge.result.playlists, 3);
+		assert.equal(purge.result.scanned, 1200, 'every playlist object scanned, none cut off');
+		for (const id of ['pl0005', 'pl0600', 'pl1199']) assert.equal(JSON.parse(raw.playlists.store.get(id)!).isDeleted, true, id);
+		assert.equal(JSON.parse(raw.playlists.store.get('pl0006')!).isDeleted, undefined, 'other channels\' playlists untouched');
+		assert.equal(raw.queue.messages.filter((m: any) => m.type === MessageType.ChannelDelete).length, 1, 'ChannelDelete sent once, at the end');
+	});
+
+	it('a failed playlist write retries its own step, then the purge finishes', async () => {
+		const playlists: Record<string, unknown> = { a: { id: 'a', title: 'a', channelId: 'ch1', videos: [] }, b: { id: 'b', title: 'b', channelId: 'ch1', videos: [] } };
+		const { raw, call } = await setup({ playlists });
+		const put = raw.playlists.put.bind(raw.playlists);
+		let failOnce = true;
+		raw.playlists.put = (async (key: string, ...rest: unknown[]) => {
+			if (key === 'b' && failOnce) { failOnce = false; throw new Error('R2 write failed'); }
+			return (put as any)(key, ...rest);
+		}) as any;
+		await call('DELETE', '/channels/ch1');
+		const purge = (await call('GET', '/jobs?targetId=ch1')).body.result.items.find((j: any) => j.kind === 'channel.purge');
+		assert.equal(purge.status, 'succeeded');
+		assert.ok(purge.attempts >= 2, 'the failed step was retried');
+		assert.equal(JSON.parse(raw.playlists.store.get('a')!).isDeleted, true);
+		assert.equal(JSON.parse(raw.playlists.store.get('b')!).isDeleted, true);
 	});
 });
 

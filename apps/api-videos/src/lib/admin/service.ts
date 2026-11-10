@@ -27,7 +27,7 @@ import R2Repository from '../r2Repo';
 import { logger } from '../logger';
 import Queue, { MessageType } from '../queue';
 import { claimHandle, handleKey, normalizeHandleInput, releaseHandle, releaseReplacedHandle } from '../channelHandles';
-import { pickNewMainChannel, removeChannelContent, type OwnedChannelSummary } from '../channelDeletion';
+import { pickNewMainChannel, removeChannelPostsAndSections, softDeleteChannelObjectsStep, type OwnedChannelSummary } from '../channelDeletion';
 import { findStoredComment, removeStoredComment, type StoredComment } from '../comments';
 import { subscriberCounts, subscribedChannelIds } from '../subscription-store';
 import { eraseUserData } from '../privacy/user-data';
@@ -480,28 +480,46 @@ export async function deleteChannel(env: AdminServiceEnv, id: string, actorId: s
 	return { job: await createJob(env, { kind: 'channel.purge', targetKind: 'channel', targetId: id, actorId, params: { userId: channel.userId ?? null } }) };
 }
 
-/** Job channel.purge: erases a deleted channel's videos and content. Idempotent (erased items are simply gone). */
+/** Playlist objects scanned per channel.purge step (playlists have no per-channel index). */
+const PLAYLIST_SCAN_STEP = 500;
+
+/**
+ * Job channel.purge: erases a deleted channel's videos and content, in steps.
+ * Step 1 erases the videos (found through the ownership index) and the posts
+ * and sections (prefix deletes). Then the playlists bucket is scanned in
+ * bounded steps, each a fresh job delivery, so no single run is long and a
+ * large bucket is never cut off. Idempotent: a retried step redoes only itself.
+ */
 async function purgeChannel(env: AdminServiceEnv, job: AdminJob): Promise<JobOutcome> {
 	const id = job.targetId;
-	const userId = (job.params.userId as string | null) ?? null;
-	const channel = await repo(env.channels).getObject(id);
-	if (channel && channel.isDeleted !== true) return { done: true, result: { skipped: 'channel_not_deleted' } };
-	const videoIds = await idsOf(env, 'video', { channelId: id });
-	const b = await bunny(env);
-	let failed = 0;
-	await eachLimited(videoIds, 6, async (videoId) => {
-		try {
-			await purgeVideo(env, videoId, { userId, channelId: id }, b);
-		} catch (error) {
-			failed++;
-			logger.warn('[Admin] Video purge failed', { videoId, error: error instanceof Error ? error.message : String(error) });
-		}
-	});
-	if (failed > 0) return finish({ videos: videoIds.length - failed }, failed);
-	// Playlists (soft), posts and sections, like an owner's delete
-	await removeChannelContent({ videos: env.videos, playlists: env.playlists, community_posts: env.community_posts, channel_sections: env.channel_sections }, id);
+	const p = job.params;
+	const userId = (p.userId as string | null) ?? null;
+	if (p.stage !== 'playlists') {
+		const channel = await repo(env.channels).getObject(id);
+		if (channel && channel.isDeleted !== true) return { done: true, result: { skipped: 'channel_not_deleted' } };
+		const videoIds = await idsOf(env, 'video', { channelId: id });
+		const b = await bunny(env);
+		let failed = 0;
+		await eachLimited(videoIds, 6, async (videoId) => {
+			try {
+				await purgeVideo(env, videoId, { userId, channelId: id }, b);
+			} catch (error) {
+				failed++;
+				logger.warn('[Admin] Video purge failed', { videoId, error: error instanceof Error ? error.message : String(error) });
+			}
+		});
+		if (failed > 0) return finish({ videos: videoIds.length - failed }, failed);
+		const { posts, sections } = await removeChannelPostsAndSections(env, id);
+		const result = { videos: videoIds.length, posts, sections };
+		return { done: false, params: { ...p, stage: 'playlists', ...result, playlists: 0, scanned: 0 }, result };
+	}
+	const step = await softDeleteChannelObjectsStep(env.playlists, id, { cursor: p.cursor as string | undefined, budget: PLAYLIST_SCAN_STEP });
+	// A failed write retries this step (from its own cursor), never skips it
+	if (step.failed > 0) return finish({ playlists: p.playlists, cursor: p.cursor ?? null }, step.failed);
+	const result = { videos: p.videos, posts: p.posts, sections: p.sections, playlists: Number(p.playlists ?? 0) + step.removed, scanned: Number(p.scanned ?? 0) + step.scanned };
+	if (step.cursor) return { done: false, params: { ...p, ...result, cursor: step.cursor }, result };
 	await send(env, MessageType.ChannelDelete, { channelId: id, userId, reason: 'admin' });
-	return { done: true, result: { videos: videoIds.length } };
+	return { done: true, result };
 }
 
 // ---------------------------------------------------------------------------
