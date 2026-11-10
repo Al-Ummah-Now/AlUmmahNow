@@ -38,7 +38,7 @@ async function step(jar: CookieJar, url: string, init: RequestInit = {}): Promis
   return response;
 }
 
-export async function getAccessToken(account: Account): Promise<string> {
+async function signInOnce(account: Account): Promise<string> {
   const jar = new CookieJar();
   const pkce = pkcePair();
   const state = randomBytes(16).toString('hex');
@@ -94,4 +94,20 @@ export async function getAccessToken(account: Account): Promise<string> {
   const body = (await tokenResponse.json()) as { access_token?: string };
   if (!body.access_token) throw new Error(`No access token for ${account.email}`);
   return body.access_token;
+}
+
+/**
+ * The whole sign-in, again from the start on a network error (fetch failed, ECONNRESET under the
+ * parallel setup). Codes are single-use, so a retry never reuses one; auth answers (4xx) are not retried.
+ */
+export async function getAccessToken(account: Account, attempts = 3): Promise<string> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await signInOnce(account);
+    } catch (error) {
+      const network = error instanceof TypeError && /fetch failed/i.test(error.message);
+      if (!network || attempt >= attempts) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+    }
+  }
 }
