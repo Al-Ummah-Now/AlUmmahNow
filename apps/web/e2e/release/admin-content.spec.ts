@@ -25,14 +25,14 @@ const QUEUED_NOTICE = 'Queued. It runs in the background';
 
 async function signInAsAdmin(page: Page, prefix: string): Promise<void> {
   const email = sinkEmail(prefix);
-  await page.goto(`${target().adminWeb}/login`);
+  await gotoDom(page, `${target().adminWeb}/login`);
   await expect(page).toHaveURL(new RegExp(`^${target().auth}`), { timeout: 30000 });
   await completeRegistration(page, email);
   await expect(page).toHaveURL(`${target().adminWeb}/access-denied`, { timeout: 30000 });
   await promoteToAdmin(email);
   // New tokens carry the role: drop every session and sign in from scratch
   await page.context().clearCookies();
-  await page.goto(`${target().adminWeb}/login`);
+  await gotoDom(page, `${target().adminWeb}/login`);
   await expect(page).toHaveURL(new RegExp(`^${target().auth}`), { timeout: 30000 });
   await page.fill('input[name="email"]', email);
   await fillSecret(page.locator('input[name="password"]'), TEST_PASSWORD);
@@ -84,7 +84,8 @@ async function jobsIdle(page: Page): Promise<void> {
  * page.goto that waits for the DOM only and survives the app navigating on its own: the page
  * being left can still hard-navigate (a jobs panel refreshing a just-purged record), and the
  * session refresh redirects through /api/auth/refresh back to the same URL. WebKit reports
- * either as an interrupted navigation (Chromium folds them in); settle and go again.
+ * either as an interrupted navigation, Firefox as NS_BINDING_ABORTED (Chromium folds them in);
+ * settle and go again.
  */
 async function gotoDom(page: Page, url: string): Promise<void> {
   for (let attempt = 1; ; attempt++) {
@@ -92,7 +93,7 @@ async function gotoDom(page: Page, url: string): Promise<void> {
       await page.goto(url, { waitUntil: 'domcontentloaded' });
       return;
     } catch (error) {
-      if (attempt >= 3 || !/interrupted by another navigation/.test(String(error))) throw error;
+      if (attempt >= 3 || !/interrupted by another navigation|NS_BINDING_ABORTED/.test(String(error))) throw error;
       await page.waitForLoadState('domcontentloaded').catch(() => undefined);
     }
   }
