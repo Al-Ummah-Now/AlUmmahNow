@@ -6,6 +6,9 @@ import { canUseContactInbox, canUseProcessing } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
 import { formatDate, translateDynamic } from '@/i18n/translate';
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
+import { getContentPermissions, listJobs } from '@/lib/api/content';
+import type { AdminContentPermission, AdminJob } from '@/lib/api/content-types';
+import { JobsTable } from '@/components/content/jobs';
 import { logger } from '@/lib/logger';
 import { ISSUE_LABEL, ourStatusLabel } from '../processing/labels';
 
@@ -19,7 +22,8 @@ const tdClass = 'px-4 py-3 align-top text-sm';
  * re-upload, stalled) and processing checks that dead-lettered after their
  * retries (each links to Processing health, where it can be synced, retried
  * or marked failed), and Contact us emails that failed after the mail queue's
- * retries (each links to the message, where it can be retried).
+ * retries (each links to the message, where it can be retried), and admin
+ * jobs (heavy content actions) that failed after their retries, with Retry.
  */
 export default async function ErrorsPage() {
   const { t, locale } = await getI18n();
@@ -43,6 +47,15 @@ export default async function ErrorsPage() {
     } catch (e) {
       logger.error('[errors] Failed to load contact mail failures', { error: e instanceof Error ? e.message : String(e) });
     }
+  }
+
+  // Admin jobs (channel/video/user deletes, cascades, transfers, moves) that failed after retries
+  let failedJobs: AdminJob[] | null = null;
+  let jobPermissions: AdminContentPermission[] = [];
+  try {
+    [failedJobs, jobPermissions] = await Promise.all([listJobs({ status: 'failed', limit: 20 }), getContentPermissions()]);
+  } catch (e) {
+    logger.error('[errors] Failed to load failed admin jobs', { error: e instanceof Error ? e.message : String(e) });
   }
 
   return (
@@ -170,6 +183,19 @@ export default async function ErrorsPage() {
           )}
         </section>
       )}
+      <section aria-labelledby="errors-jobs" data-testid="errors-jobs-section">
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 id="errors-jobs" className="text-xl font-semibold text-fg">{t('jobs.errorsTitle')}</h2>
+          <Link href="/jobs" className={linkClass}>{t('jobs.openAll')}</Link>
+        </div>
+        {!failedJobs ? (
+          <ErrorAlert testId="errors-jobs-error">{t('jobs.panelUnknown')}</ErrorAlert>
+        ) : failedJobs.length === 0 ? (
+          <div className={`${cardClass} text-center text-fg-muted`} data-testid="errors-jobs-empty">{t('jobs.emptyFailed')}</div>
+        ) : (
+          <JobsTable jobs={failedJobs} permissions={jobPermissions} testId="errors-jobs" />
+        )}
+      </section>
     </div>
   );
 }

@@ -17,6 +17,9 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   transpilePackages: ['@al-ummah/shared-types'],
 
+  // Channel avatars/covers and video thumbnails (up to 5 MB) go through server actions
+  experimental: { serverActions: { bodySizeLimit: '6mb' } },
+
   // Empty turbopack config to silence Next.js 16 warning
   turbopack: {
     resolveAlias: { jose: path.relative(process.cwd(), joseWebCrypto) },
