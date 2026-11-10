@@ -6,7 +6,6 @@ import { getLocalizedValue } from '@al-ummah/shared-types';
 import { pickLanguage } from '@/lib/format/pick-language';
 import { useLanguage } from '@/hooks/useLanguage';
 import { SectionHeader } from './SectionHeader';
-import { OwnerSectionNote } from './OwnerSectionNote';
 import { VideoShelf } from './shelves/VideoShelf';
 import { PlaylistShelf } from './shelves/PlaylistShelf';
 import { LiveShelf } from './shelves/LiveShelf';
@@ -38,22 +37,22 @@ const SECTION_KIND: Record<PopulatedChannelSection['type'], string> = {
 
 /**
  * One Home tab section, drawn from the content the API populated. Nothing is
- * fetched here. A section without content only reaches people who can edit
- * the channel; they see why it's hidden instead of a shelf.
+ * fetched here. A section without content renders nothing, for owners too:
+ * the channel page looks the same to everyone (owner, 2026-11-10). The
+ * section manager marks empty sections and says why.
  */
 export function ChannelSectionRenderer({ section, channelId }: ChannelSectionRendererProps) {
   const { t, locale } = useLanguage();
   const content = section.populatedContent ?? {};
   const tabHref = (tab: string) => `/${locale}/channels/${channelId}?tab=${tab}`;
 
-  const showNote = !!section.canEdit && (section.isEmpty || !!section.emptyHint);
   const fallbackTitle =
     section.type === 'single_playlist' && content.playlist
       ? pickLanguage(content.playlist.name || content.playlist.title || '', locale)
       : t.channelSections.labels[sectionLabelKey(section)];
   const title = resolveSectionTitle(getLocalizedValue(section.titleLocalized, section.title, locale), fallbackTitle);
 
-  if (section.type === 'channel_spotlight' && !showNote) {
+  if (section.type === 'channel_spotlight') {
     return (
       <SpotlightSection
         channelId={channelId}
@@ -107,8 +106,8 @@ export function ChannelSectionRenderer({ section, channelId }: ChannelSectionRen
       break;
   }
 
-  // Nothing to draw and no note: a type this build doesn't know, or stale data
-  if (!body && !showNote) return null;
+  // Nothing to draw: an empty section, a type this build doesn't know, or stale data
+  if (!body) return null;
 
   return (
     <section
@@ -119,7 +118,6 @@ export function ChannelSectionRenderer({ section, channelId }: ChannelSectionRen
       className="space-y-4"
     >
       <SectionHeader title={title} viewAllHref={body ? viewAllHref : undefined} viewAllLabel={viewAllLabel} />
-      {showNote && <OwnerSectionNote section={section} channelId={channelId} />}
       {body}
     </section>
   );

@@ -100,7 +100,6 @@ describe('ChannelSectionRenderer: every type renders its populated content', () 
     const { container } = render(<ChannelSectionRenderer section={section(type, FILLED[type])} channelId={CHANNEL} />);
     const root = container.querySelector('section');
     expect(root).toHaveAttribute('data-section', KIND[type]);
-    expect(screen.queryByTestId('section-owner-note')).toBeNull();
     // Default title (the stored "<type> section" counts as unset), except the spotlight and single playlist
     if (type === 'single_playlist') expect(screen.getByRole('heading', { name: 'Tafsir course' })).toBeInTheDocument();
     else if (type !== 'channel_spotlight') {
@@ -151,21 +150,14 @@ describe('ChannelSectionRenderer: empty sections', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it.each(CHANNEL_SECTION_TYPES)('%s shows editors why it is hidden', (type) => {
-    render(<ChannelSectionRenderer section={section(type, {}, { isEmpty: true, emptyHint: 'noContent', canEdit: true })} channelId={CHANNEL} />);
-    const note = screen.getByTestId('section-owner-note');
-    expect(note).toHaveTextContent(EN_TRANSLATIONS.channelSections.emptyHints.noContent);
-    expect(note).toHaveTextContent(EN_TRANSLATIONS.channelSections.emptyDetails[type]);
-    expect(screen.getByRole('link', { name: 'Edit sections' })).toHaveAttribute('href', '/en/settings/channel/c1/sections');
-  });
-
-  it('explains missing consent and a hidden Community tab', () => {
-    const { rerender } = render(
-      <ChannelSectionRenderer section={section('liked_videos', {}, { isEmpty: true, emptyHint: 'consentMissing', canEdit: true })} channelId={CHANNEL} />
-    );
-    expect(screen.getByTestId('section-owner-note')).toHaveAttribute('data-empty-hint', 'consentMissing');
-    rerender(<ChannelSectionRenderer section={section('community_posts', {}, { isEmpty: true, emptyHint: 'communityTabHidden', canEdit: true })} channelId={CHANNEL} />);
-    expect(screen.getByTestId('section-owner-note')).toHaveTextContent(EN_TRANSLATIONS.channelSections.emptyHints.communityTabHidden);
+  it.each(CHANNEL_SECTION_TYPES)('%s renders nothing for the owner either: the page looks the same to everyone', (type) => {
+    for (const emptyHint of ['noContent', 'consentMissing', 'communityTabHidden', 'loadFailed'] as const) {
+      const { container, unmount } = render(
+        <ChannelSectionRenderer section={section(type, {}, { isEmpty: true, emptyHint, canEdit: true })} channelId={CHANNEL} />
+      );
+      expect(container).toBeEmptyDOMElement();
+      unmount();
+    }
   });
 });
 

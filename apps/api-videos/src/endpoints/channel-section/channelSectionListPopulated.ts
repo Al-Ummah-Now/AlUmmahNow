@@ -185,13 +185,15 @@ export class ChannelSectionsListPopulated extends OptionalAuthRoute {
     const sections = await listChannelSections<ChannelSection>(c.env.channel_sections, channelId);
     const ordered = applySectionOrder(sections, await readSectionOrder(c.env.channel_sections, channelId));
     let filteredSections = ordered.filter((s) => !s.isDeleted && !s.isHidden);
+    // Upload sections include Shorts unless a visible Shorts section lists them
+    const hasShortsSection = filteredSections.some((s) => s.type === 'shorts');
     if (type) filteredSections = filteredSections.filter((s) => s.type === type);
     filteredSections = filteredSections.slice(0, limit);
 
     let sectionViews: any[];
     if (populate) {
       // Sections populate in parallel; a failing one comes back empty (loadFailed), never a 500
-      const populated = await Promise.all(filteredSections.map((section) => transformChannelSectionWithContent(section, c.env, channel)));
+      const populated = await Promise.all(filteredSections.map((section) => transformChannelSectionWithContent(section, c.env, channel, { hasShortsSection })));
       sectionViews = canEdit
         ? populated.map((view) => ({ ...view, canEdit: true }))
         : populated.filter((view) => !view.isEmpty).map(({ emptyHint: _hint, ...view }) => view);

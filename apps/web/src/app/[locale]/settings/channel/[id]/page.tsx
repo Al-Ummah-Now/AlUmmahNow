@@ -7,6 +7,13 @@ import Link from 'next/link';
 import Image from 'next/image';
 import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
 
+// One icon tile for every card, from the theme's own tokens: an accent glyph
+// on a faint accent wash with a ring, legible in every theme. Raw Tailwind
+// hues (bg-indigo-100…) are remapped by themes and came out accent-on-accent.
+const ICON_TILE =
+  'shrink-0 p-3 rounded-lg bg-[color-mix(in_srgb,var(--fanous-color-primary)_14%,transparent)] ring-1 ring-inset ring-[color-mix(in_srgb,var(--fanous-color-primary)_45%,transparent)]';
+const ICON_GLYPH = 'w-6 h-6 text-[var(--fanous-color-primary)]';
+
 interface ChannelSettingsPageProps {
   params: Promise<{
     locale: string;
@@ -77,9 +84,9 @@ export default async function ChannelSettingsPage({ params }: ChannelSettingsPag
               className="block p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg hover:shadow-lg transition-shadow"
             >
               <div className={`flex items-start gap-4`}>
-                <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                <div className={ICON_TILE}>
                   <svg
-                    className="w-6 h-6 text-blue-600 dark:text-blue-400"
+                    className={ICON_GLYPH}
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -117,9 +124,9 @@ export default async function ChannelSettingsPage({ params }: ChannelSettingsPag
               className="block p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg hover:shadow-lg transition-shadow"
             >
               <div className={`flex items-start gap-4`}>
-                <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-lg">
+                <div className={ICON_TILE}>
                   <svg
-                    className="w-6 h-6 text-red-600 dark:text-red-400"
+                    className={ICON_GLYPH}
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -151,9 +158,9 @@ export default async function ChannelSettingsPage({ params }: ChannelSettingsPag
               className="block p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg hover:shadow-lg transition-shadow"
             >
               <div className={`flex items-start gap-4`}>
-                <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
+                <div className={ICON_TILE}>
                   <svg
-                    className="w-6 h-6 text-indigo-600 dark:text-indigo-400"
+                    className={ICON_GLYPH}
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -185,9 +192,9 @@ export default async function ChannelSettingsPage({ params }: ChannelSettingsPag
               className="block p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg hover:shadow-lg transition-shadow"
             >
               <div className={`flex items-start gap-4`}>
-                <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                <div className={ICON_TILE}>
                   <svg
-                    className="w-6 h-6 text-purple-600 dark:text-purple-400"
+                    className={ICON_GLYPH}
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -219,9 +226,9 @@ export default async function ChannelSettingsPage({ params }: ChannelSettingsPag
               className="block p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg hover:shadow-lg transition-shadow"
             >
               <div className={`flex items-start gap-4`}>
-                <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                <div className={ICON_TILE}>
                   <svg
-                    className="w-6 h-6 text-green-600 dark:text-green-400"
+                    className={ICON_GLYPH}
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -253,9 +260,9 @@ export default async function ChannelSettingsPage({ params }: ChannelSettingsPag
               className="block p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg hover:shadow-lg transition-shadow"
             >
               <div className={`flex items-start gap-4`}>
-                <div className="p-3 bg-brand-soft dark:bg-brand-soft rounded-lg">
+                <div className={ICON_TILE}>
                   <svg
-                    className="w-6 h-6 text-brand-ink dark:text-brand-ink"
+                    className={ICON_GLYPH}
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -287,8 +294,8 @@ export default async function ChannelSettingsPage({ params }: ChannelSettingsPag
             className="block p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg hover:shadow-lg transition-shadow"
           >
             <div className={`flex items-start gap-4`}>
-              <div className="p-3 bg-[color-mix(in_srgb,var(--fanous-color-primary)_26%,var(--fanous-color-surface))] rounded-lg">
-                <svg className="w-6 h-6 text-[var(--fanous-color-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <div className={ICON_TILE}>
+                <svg className={ICON_GLYPH} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                 </svg>
               </div>

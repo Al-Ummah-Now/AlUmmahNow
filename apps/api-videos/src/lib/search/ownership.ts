@@ -198,6 +198,8 @@ export interface ChannelVideoQuery {
   isPublic?: boolean;
   /** Only live streams. */
   liveOnly?: boolean;
+  /** Exclude live streams, keep long-form and Shorts (channel Home sections without a Shorts section). */
+  notLive?: boolean;
 }
 
 /**
@@ -229,6 +231,7 @@ export function channelVideoIds(
       where.push('is_live = 0', 'is_short = 1');
     }
     if (query.liveOnly) where.push('is_live = 1');
+    if (query.notLive) where.push('is_live = 0');
     if (query.isPublic !== undefined) where.push(query.isPublic ? 'is_public = 1' : 'is_public = 0');
     if (typeof query.privateFor === 'string') {
       where.push('(is_public = 1 OR owner_id = ?)');

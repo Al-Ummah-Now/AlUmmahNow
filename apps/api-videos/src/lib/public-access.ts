@@ -1,6 +1,5 @@
-/** Role names as issued by auth ("Admin", "Super Admin"), compared case-insensitively. */
-const ADMIN_ROLES = new Set(['admin', 'super admin', 'super_admin', 'superadmin']);
-
+import { isAdmin } from '@al-ummah/shared-types';
+/** Admin or Super Admin (the shared role check, packages/shared-types roles.ts). */
 export function isAdminRole(roles: readonly string[] | undefined | null): boolean {
-	return Array.isArray(roles) && roles.some((r) => ADMIN_ROLES.has(String(r).trim().toLowerCase()));
+	return isAdmin(roles);
 }

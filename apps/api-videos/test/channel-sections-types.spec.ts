@@ -164,13 +164,24 @@ describe('channel section types: content per type', () => {
     assert.equal((await add(env(), { type: 'featured_videos', videoIds: ['v-priv'] })).body.code, 'invalid_video');
   });
 
-  it('recent_uploads and popular_uploads: long-form public ready videos, newest / most viewed first', async () => {
+  it('recent_uploads and popular_uploads: every public ready upload, Shorts included, newest / most viewed first', async () => {
     const e = env();
     const recent = await addAndRead(e, { type: 'recent_uploads' });
-    assert.deepEqual(recent.asVisitor.populatedContent.videos.map((v: any) => v.id), ['v-long2', 'v-wide', 'v-long1']);
+    assert.deepEqual(recent.asVisitor.populatedContent.videos.map((v: any) => v.id), ['s1', 'v-long2', 'v-wide', 's2', 'v-long1']);
     const popular = await addAndRead(e, { type: 'popular_uploads' });
-    assert.deepEqual(popular.asVisitor.populatedContent.videos.map((v: any) => v.id), ['v-long2', 'v-long1', 'v-wide']);
+    assert.deepEqual(popular.asVisitor.populatedContent.videos.map((v: any) => v.id), ['v-long2', 's2', 'v-long1', 'v-wide', 's1']);
     assert.ok(recent.asVisitor.populatedContent.videos.every((v: any) => Array.isArray(v.comments) && v.comments.length === 0), 'shelf videos carry no comment list');
+  });
+
+  it('recent_uploads and popular_uploads: long-form only when the channel has a Shorts section (nothing listed twice)', async () => {
+    const e = env();
+    const recent = await addAndRead(e, { type: 'recent_uploads' });
+    const popular = await addAndRead(e, { type: 'popular_uploads' });
+    await addAndRead(e, { type: 'shorts' });
+    const sections = await populated(e, visitorApp);
+    const ids = (id: string) => sections.find((s: any) => s.id === id).populatedContent.videos.map((v: any) => v.id);
+    assert.deepEqual(ids(recent.id), ['v-long2', 'v-wide', 'v-long1']);
+    assert.deepEqual(ids(popular.id), ['v-long2', 'v-long1', 'v-wide']);
   });
 
   it('shorts: Shorts only, by sort; one section per sort', async () => {

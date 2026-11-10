@@ -647,26 +647,19 @@ test.describe('Each section type: add, render, remove', () => {
 
               // Home tab, as the owner
               await openHome(page, locale);
-              const ownSection = homeSection(page, c);
-              await expect(ownSection.first()).toBeVisible();
-              const note = page.locator(`[data-testid="channel-section-${c.type}"]`).getByTestId('section-owner-note');
-              if (c.expect === 'empty') {
-                await expect(note).toBeVisible();
-                await expect(note).toHaveAttribute('data-empty-hint', 'noContent');
-                await expect(note.getByRole('link')).toHaveAttribute('href', `/${locale}/settings/channel/${channelId()}/sections`);
-              }
+              // The owner sees the page as visitors do: an empty section isn't drawn (the manager marks it Hidden)
+              if (c.expect === 'empty') await expect(homeSection(page, c)).toHaveCount(0);
               if (c.expect === 'content') {
-                await expect(note).toHaveCount(0);
+                const ownSection = homeSection(page, c);
+                await expect(ownSection.first()).toBeVisible();
                 await c.content?.(ownSection.first(), f, locale);
               }
-              const ownerSeesNote = (await note.count()) > 0;
 
-              // Home tab, as a signed-out visitor: never the note; the section only with content
+              // Home tab, as a signed-out visitor: the section only with content
               await expect(async () => {
                 await openHome(visitor, locale);
-                await expect(visitor.getByTestId('section-owner-note')).toHaveCount(0);
                 const visible = homeSection(visitor, c);
-                if (c.expect === 'empty' || ownerSeesNote) await expect(visible).toHaveCount(0);
+                if (c.expect === 'empty') await expect(visible).toHaveCount(0);
                 else {
                   await expect(visible.first()).toBeVisible({ timeout: 5000 });
                   await c.content?.(visible.first(), f, locale);

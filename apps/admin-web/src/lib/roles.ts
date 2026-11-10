@@ -1,3 +1,5 @@
+import { normalizeRole as sharedNormalizeRole } from '@al-ummah/shared-types';
+
 /**
  * System role names that are protected from modification/deletion
  * These roles are provided by the auth server
@@ -22,7 +24,7 @@ export const ADMIN_ROLES: SystemRole[] = ['super_admin', 'admin', 'moderator'];
  * "Moderator"); internally we use snake_case ids ("super_admin", ...).
  */
 export function normalizeRole(role?: string): string {
-  return (role ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  return sharedNormalizeRole(role);
 }
 
 /**

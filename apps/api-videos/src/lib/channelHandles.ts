@@ -1,3 +1,4 @@
+import { isSuperAdmin } from '@al-ummah/shared-types';
 /**
  * Channel @handles (Story 29.1)
  *
@@ -45,10 +46,9 @@ export const OFFICIAL_HANDLES: ReadonlySet<string> = new Set([
 ]);
 
 /** Roles (as issued by auth) that may claim OFFICIAL_HANDLES. */
-const OFFICIAL_HANDLE_ROLES = new Set(['super admin', 'super_admin', 'superadmin']);
-
+/** Super admins only (the shared role check, packages/shared-types roles.ts). */
 export function canClaimOfficialHandles(roles: readonly string[] | undefined | null): boolean {
-	return Array.isArray(roles) && roles.some((r) => OFFICIAL_HANDLE_ROLES.has(String(r).trim().toLowerCase()));
+	return isSuperAdmin(roles);
 }
 
 export interface HandleClaimOptions {
