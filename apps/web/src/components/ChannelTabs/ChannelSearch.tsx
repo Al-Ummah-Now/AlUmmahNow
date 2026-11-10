@@ -78,7 +78,7 @@ export function ChannelSearch({ channelId }: { channelId: string }) {
   if (!open) {
     return (
       <button type="button" onClick={() => setOpen(true)} aria-label={a.searchChannel} data-testid="channel-search-open"
-        className="ms-2 grid h-9 w-9 shrink-0 place-items-center rounded-full text-[var(--fanous-color-text-secondary)] hover:bg-[var(--m-hover,#0000000d)] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand">
+        className="ms-2 grid h-9 w-9 shrink-0 place-items-center rounded-full text-[var(--fanous-color-text-secondary)] hover:bg-[var(--m-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand">
         <Search className="h-[18px] w-[18px]" aria-hidden="true" />
       </button>
     );
@@ -124,7 +124,7 @@ export function ChannelSearch({ channelId }: { channelId: string }) {
         inputClassName="h-9 w-full border-b border-[var(--fanous-color-divider)] bg-transparent px-1 text-sm text-[var(--fanous-color-text-primary)] placeholder:text-[var(--fanous-color-text-muted)] focus:border-brand focus:outline-none [&::-webkit-search-cancel-button]:hidden"
       />
       <button type="button" onClick={() => { setDraft(''); setOpen(false); }} aria-label={a.closeSearch} data-testid="channel-search-close"
-        className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[var(--fanous-color-text-secondary)] hover:bg-[var(--m-hover,#0000000d)] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand">
+        className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[var(--fanous-color-text-secondary)] hover:bg-[var(--m-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand">
         <X className="h-4 w-4" aria-hidden="true" />
       </button>
     </form>
