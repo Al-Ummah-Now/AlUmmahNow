@@ -150,11 +150,11 @@ function Thumbnail({ option }: { option: AutocompleteOption }) {
     return (
       // eslint-disable-next-line @next/next/no-img-element -- tiny remote thumbnails from several CDNs
       <img src={option.thumbnailUrl} alt="" loading="lazy" decoding="async" onError={() => setFailed(true)}
-        className={`${size} shrink-0 bg-[var(--fanous-color-surface-raised,#0001)] object-cover`} />
+        className={`${size} shrink-0 bg-[var(--fanous-color-surface-raised)] object-cover`} />
     );
   }
   if (option.icon) return <span className="grid h-8 w-8 shrink-0 place-items-center text-[var(--fanous-color-text-muted)]" aria-hidden="true">{option.icon}</span>;
-  if (option.thumbnailShape) return <span className={`${size} shrink-0 bg-[var(--fanous-color-surface-raised,#0001)]`} aria-hidden="true" />;
+  if (option.thumbnailShape) return <span className={`${size} shrink-0 bg-[var(--fanous-color-surface-raised)]`} aria-hidden="true" />;
   return null;
 }
 
@@ -397,7 +397,7 @@ export function Autocomplete(props: AutocompleteProps) {
                 data-testid={optionTestId?.(option) ?? 'autocomplete-option'}
                 data-option-id={option.id}
                 data-active={isActive || undefined}
-                className={`ac-option flex min-w-0 flex-1 cursor-pointer items-center gap-3 px-3 py-2 text-sm ${isActive ? 'bg-[var(--m-hover,#0000000d)]' : ''} ${option.disabled ? 'cursor-not-allowed opacity-50' : ''}`}
+                className={`ac-option flex min-w-0 flex-1 cursor-pointer items-center gap-3 px-3 py-2 text-sm ${isActive ? 'bg-[var(--m-hover)]' : ''} ${option.disabled ? 'cursor-not-allowed opacity-50' : ''}`}
                 onPointerDown={(event) => event.preventDefault()}
                 onMouseMove={() => { if (!isActive) setActive(index); }}
                 onClick={() => choose(option)}
@@ -422,7 +422,7 @@ export function Autocomplete(props: AutocompleteProps) {
                   data-testid={removeTestId ?? 'autocomplete-remove'}
                   onPointerDown={(event) => event.preventDefault()}
                   onClick={() => remove(option)}
-                  className="me-2 rounded-full p-1 text-[var(--fanous-color-text-muted)] hover:bg-[var(--m-hover,#0000000d)] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                  className="me-2 rounded-full p-1 text-[var(--fanous-color-text-muted)] hover:bg-[var(--m-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                 >
                   <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
                 </button>

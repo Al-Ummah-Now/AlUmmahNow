@@ -67,14 +67,14 @@ export function FilterCombobox({
       inputProps={{ type: 'search', placeholder: placeholder ?? label, enterKeyHint: 'search' }}
       inputClassName={inputClassName}
     >
-      {icon ?? <Search className="pointer-events-none absolute start-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" aria-hidden="true" />}
+      {icon ?? <Search className="pointer-events-none absolute start-3 top-1/2 h-5 w-5 -translate-y-1/2 text-[var(--fanous-color-text-muted)]" aria-hidden="true" />}
       {value && (
         <button
           type="button"
           onClick={() => onValueChange('')}
           data-testid={clearTestId}
           aria-label={clearLabel ?? t.search.clear}
-          className="absolute end-3 top-1/2 -translate-y-1/2 text-gray-400 transition-colors hover:text-gray-600 dark:hover:text-gray-300"
+          className="absolute end-3 top-1/2 -translate-y-1/2 text-[var(--fanous-color-text-muted)] transition-colors hover:text-[var(--fanous-color-text-primary)]"
         >
           <X size={18} aria-hidden="true" />
         </button>
