@@ -113,11 +113,14 @@ describe('/api/uploads/stale', () => {
     assert.deepEqual(calls[0].body, { action: 'start', dryRun: true, resume: false, actor: 'admin@example.com' });
     assert.equal((await req('/api/uploads/stale/test-library-purge', post({ action: 'start', dryRun: false, resume: true }))).status, 200);
     assert.deepEqual(calls[1].body, { action: 'start', dryRun: false, resume: true, actor: 'admin@example.com' });
+    // Wipe tuning is forwarded (numbers only; api-videos clamps it)
+    assert.equal((await req('/api/uploads/stale/test-library-purge', post({ action: 'start', dryRun: false, minAgeMinutes: 10, concurrency: 40, pageSize: 100, extra: 1, concurrencyX: 'no' }))).status, 200);
+    assert.deepEqual(calls[2].body, { action: 'start', dryRun: false, resume: false, minAgeMinutes: 10, concurrency: 40, pageSize: 100, actor: 'admin@example.com' });
     const rows = await audit();
-    assert.equal(rows.length, 2);
+    assert.equal(rows.length, 3);
     assert.ok(rows.every((r: any) => r.key === TEST_LIBRARY_PURGE_AUDIT_KEY));
     assert.equal((await req('/api/uploads/stale/test-library-purge')).status, 200);
-    assert.equal(calls[2].method, 'GET');
+    assert.equal(calls[3].method, 'GET');
   });
 
   it('test-library purge: a refusal from api-videos (production) drops the audit row', async () => {

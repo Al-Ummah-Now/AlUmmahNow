@@ -11,7 +11,7 @@
  *   POST /internal/uploads/retry   { ids, actor } restart the check loop (a failed item, a kept one)
  *   POST /internal/uploads/mode    { mode, actor } dry-run | live
  *   GET  /internal/uploads/test-library-purge      QA/stage purge state (lib/uploads/testLibraryPurge.ts)
- *   POST /internal/uploads/test-library-purge      { action: start|stop, dryRun?, resume?, actor }
+ *   POST /internal/uploads/test-library-purge      { action: start|stop, dryRun?, resume?, minAgeMinutes? (10-1440), concurrency? (1-50), pageSize? (10-100), actor }
  *
  * See lib/uploads/reaper.ts for the loop and its rules.
  */
@@ -143,13 +143,13 @@ export function createUploadsInternalRouter() {
 	);
 
 	app.post('/test-library-purge', async (c) => {
-		const body = (await c.req.json().catch(() => ({}))) as { action?: unknown; dryRun?: unknown; resume?: unknown };
+		const body = (await c.req.json().catch(() => ({}))) as { action?: unknown; dryRun?: unknown; resume?: unknown; minAgeMinutes?: unknown; concurrency?: unknown; pageSize?: unknown };
 		const actor = actorOf(body);
 		if (!purgeAllowed(c.env)) return c.json({ success: false, error: 'The test-library purge runs only on QA / stage' }, 403);
 		if (body.action === 'stop') return c.json({ success: true, result: { state: await stopPurge(c.env, actor) } });
 		if (body.action !== 'start') return c.json({ success: false, error: 'action must be start or stop' }, 400);
 		try {
-			const state = await startPurge(c.env, { actor, dryRun: body.dryRun !== false, resume: body.resume === true });
+			const state = await startPurge(c.env, { actor, dryRun: body.dryRun !== false, resume: body.resume === true, minAgeMinutes: body.minAgeMinutes, concurrency: body.concurrency, pageSize: body.pageSize });
 			return c.json({ success: true, result: { state } });
 		} catch (error) {
 			return c.json({ success: false, error: error instanceof Error ? error.message : String(error) }, 409);
