@@ -508,6 +508,9 @@ jobs:
   rollback-dry-run:
     name: Rollback dry run (production)
     needs: production
+    # Runs whenever production was promoted, including releases that used the
+    # RELEASE_SKIP_STAGE_E2E override (a failed stage E2E upstream would otherwise skip it)
+    if: always() && needs.production.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
