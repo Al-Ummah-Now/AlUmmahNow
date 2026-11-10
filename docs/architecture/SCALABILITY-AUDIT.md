@@ -177,22 +177,22 @@ Severity is the reported impact at scale. The status column links the fix.
 | WS-4 | websocket-server | low/medium | broadcast loops over every subscriber and `JSON.stringify`s the message once per socket. With one global… | fixed in [#507](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/507) |
 | WS-5 | websocket-server | low | per-session rate limit is in-memory: it resets on every hibernation/eviction (WS-1) and is per-session, not per-user/IP, so a client can open many… | fixed in [#507](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/507) |
 | WS-6 | websocket-server | low | `webSocketError` deletes the connection but not `sessionToWebSocket`, `rateLimits`, or presence, so the KV presence entry lingers until TTL and… | fixed in [#507](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/507) |
-| AA-1 | admin-api | high | moderator remove/warn/ban is a blind read-modify-write of the whole video/channel/playlist document | open |
-| AA-2 | admin-api | high | reviewer hide/restore of a comment rewrites the entire video JSON (comments embedded) | open |
-| AA-3 | admin-api | medium | verification is a blind RMW of the channel doc; a concurrent owner channel edit through api-videos either drops `isVerified` or reverts the… | open |
-| AA-4 | admin-api | medium | index rebuild lists the whole videos bucket and does one GET per object (up to 50 × 100 = 5000), inside `waitUntil` | open |
-| AA-5 | admin-api | low | translations merge and metadata.json are blind RMW. Two admins saving different locales at once: the second metadata.json write drops the first… | open |
-| SC-1 | scheduler | high | publish is a blind RMW of the whole video document | open |
-| SC-2 | scheduler | medium | every minute the cron lists 72 hourly prefixes (+1 debug `list({limit:100})`) and GETs every object found, plus GETs every object of the current hour | open |
-| SC-3 | scheduler | medium | permanently failed entries are re-processed every minute for 72 h | open |
-| SC-4 | scheduler | low | `daily_metrics` KV RMW from up to 10 parallel promises in one run (index.ts:105-184) and from overlapping cron runs. Counts are lost and KV's 1… | open |
-| WEB-1 | web | medium | refresh single-flight and rotation memory are per isolate, and they hold per-user secrets (access + refresh tokens of up to 500 users, 60 s) | open |
-| WEB-2 | web | low | unauthenticated POST that appends to `process.cwd()/logs/app.log` with `fs.appendFile`. On Workers the bundle filesystem is read-only/virtual and… | open |
-| WEB-3 | web | low | `kvIncrementalCache` is configured without a `NEXT_INC_CACHE_KV` binding, and no tag cache / revalidation queue is configured. Fetch caching… | open |
-| AW-1 | admin-web | low/medium | no single-flight at all for refresh: parallel admin requests (page + RSC prefetches) in different isolates each spend the same refresh token. Same… | open |
-| AU-1 | auth | critical | One KV key is the token rate limit for every first-party user (hot key, global lockout, fails open) | open |
-| AU-2 | auth | critical | No attempt limit on the 6-digit email code; password-reset brute force leads to account takeover | open |
-| AU-3 | auth | high | The KV user record is read-modify-written on every login and overwrites admin changes | open |
+| AA-1 | admin-api | high | moderator remove/warn/ban is a blind read-modify-write of the whole video/channel/playlist document | fixed in [#517](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/517) |
+| AA-2 | admin-api | high | reviewer hide/restore of a comment rewrites the entire video JSON (comments embedded) | fixed in [#517](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/517) |
+| AA-3 | admin-api | medium | verification is a blind RMW of the channel doc; a concurrent owner channel edit through api-videos either drops `isVerified` or reverts the… | fixed in [#517](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/517) |
+| AA-4 | admin-api | medium | index rebuild lists the whole videos bucket and does one GET per object (up to 50 × 100 = 5000), inside `waitUntil` | fixed in [#517](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/517) |
+| AA-5 | admin-api | low | translations merge and metadata.json are blind RMW. Two admins saving different locales at once: the second metadata.json write drops the first… | fixed in [#517](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/517) |
+| SC-1 | scheduler | high | publish is a blind RMW of the whole video document | fixed in [#519](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/519) |
+| SC-2 | scheduler | medium | every minute the cron lists 72 hourly prefixes (+1 debug `list({limit:100})`) and GETs every object found, plus GETs every object of the current hour | fixed in [#519](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/519) |
+| SC-3 | scheduler | medium | permanently failed entries are re-processed every minute for 72 h | fixed in [#519](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/519) |
+| SC-4 | scheduler | low | `daily_metrics` KV RMW from up to 10 parallel promises in one run (index.ts:105-184) and from overlapping cron runs. Counts are lost and KV's 1… | fixed in [#519](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/519) |
+| WEB-1 | web | medium | refresh single-flight and rotation memory are per isolate, and they hold per-user secrets (access + refresh tokens of up to 500 users, 60 s) | fixed in [#541](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/541) |
+| WEB-2 | web | low | unauthenticated POST that appends to `process.cwd()/logs/app.log` with `fs.appendFile`. On Workers the bundle filesystem is read-only/virtual and… | fixed in [#541](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/541) |
+| WEB-3 | web | low | `kvIncrementalCache` is configured without a `NEXT_INC_CACHE_KV` binding, and no tag cache / revalidation queue is configured. Fetch caching… | fixed in [#541](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/541) |
+| AW-1 | admin-web | low/medium | no single-flight at all for refresh: parallel admin requests (page + RSC prefetches) in different isolates each spend the same refresh token. Same… | fixed in [#541](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/541) |
+| AU-1 | auth | critical | One KV key is the token rate limit for every first-party user (hot key, global lockout, fails open) | fixed in [AlUmmahNowAuth#268](https://github.com/Al-Ummah-Now/AlUmmahNowAuth/pull/268), in prod |
+| AU-2 | auth | critical | No attempt limit on the 6-digit email code; password-reset brute force leads to account takeover | fixed in [AlUmmahNowAuth#264](https://github.com/Al-Ummah-Now/AlUmmahNowAuth/pull/264), in prod |
+| AU-3 | auth | high | The KV user record is read-modify-written on every login and overwrites admin changes | fixed in [AlUmmahNowAuth#273](https://github.com/Al-Ummah-Now/AlUmmahNowAuth/pull/273), in prod |
 | AU-4 | auth | medium | Revocation and sign-out take up to about 60 s per PoP (KV propagation and negative caching) | open |
 | AU-5 | auth | low-medium | The `RESEND_API_KEY` secret is cached forever per isolate | open |
 | AU-6 | auth | low-medium | D1 session writes are multi-statement and non-atomic, with check-then-insert races | open |
@@ -202,33 +202,33 @@ Severity is the reported impact at scale. The status column links the fix.
 | PF-2 | profile | low | Logout takes effect only per PoP (tombstone in KV) | open |
 | AD-1 | auth admin | medium-high | Same refresh race as PF-1 | open |
 | AD-2 | auth admin | low | Every cold isolate fetches its own M2M token | open |
-| OA-1 | openauth fork | high | The authorization code is not single-use across isolates or PoPs | open |
-| OA-2 | openauth fork | medium-high | Refresh-token rotation and reuse detection run on KV | open |
-| OA-3 | openauth fork | medium | A signing or encryption key generation race produces two different keys under the same `kid` | open |
-| OA-4 | openauth fork | high (TV sign-in) | The device flow poll overwrites the approval (whole-record read-modify-write on KV) | open |
-| OA-5 | openauth fork | low-medium | The flow-record provider state prefers a stale KV copy over the newer cookie | open |
-| OA-6 | openauth fork | low-medium | Every request lists KV for the legacy signing keys (fan-out and cost) | open |
-| OA-7 | openauth fork | medium | RBAC permission-cache invalidation fans out to every user in a role | open |
-| OA-8 | openauth fork | low | Latent in-memory and KV rate limiters (not used by the app today) | open |
-| OA-9 | openauth fork | low | The default-tenant cache is per isolate with a 1-hour TTL and local-only invalidation | open |
-| UI-1 | UI (www) | medium | unbounded video fan-out per home / videos page render | open |
-| UI-2 | UI (www) | low-medium | stale-while-revalidate stampede (no single-flight across isolates) | open |
-| UI-3 | UI (www) | low | KV snapshot write is check-then-put; isolates race on the same key | open |
-| CMS-1 | CMS | medium | admin media uploads keep the client's file name, so a second upload overwrites the first in R2 | open |
-| CMS-2 | CMS | low | first SSO sign-in upsert is SELECT-then-INSERT; two concurrent callbacks for a new user fail one | open |
-| CMS-3 | CMS | low | content edits are last-writer-wins with no version check | open |
-| CMS-4 | CMS | low on its own, medium together with ui-1 | no cap on curated rows returned to www (feeds UI-1) | open |
-| CORE-1 | Core | low | no cross-process lock on the sync and upload stores | open |
-| TOOLS-1 | Tools | high | two imports of the same folder (or an import plus a Resume) upload everything twice and create duplicate video records | open |
-| TOOLS-2 | Tools | medium | `ImportVideos` lookups ignore the session, so concurrent or repeated sessions update each other's rows | open |
-| TOOLS-3 | Tools | medium | Resume marks videos Uploaded without writing their R2 record | open |
-| TOOLS-4 | Tools | high | storage keys collide across channels and folders, and blind PUTs overwrite silently | open |
-| TOOLS-5 | Tools | high | file watches are owned by a scoped service, so they stop immediately and can't be stopped later | open |
-| TOOLS-6 | Tools | medium | duplicate approvals and lost counters from overlapping file events | open |
-| TOOLS-7 | Tools | medium | scan progress handler uses the scan engine's DbContext concurrently | open |
-| TOOLS-8 | Tools | low now, high once the real upload lands | import status claims are not atomic (ImportWorker vs UI vs a second worker) | open |
-| TOOLS-9 | Tools | medium | FilterPresetService deadlocks on its own lock | open |
-| TOOLS-10 | Tools | low | per-process rate limit and retry policy against Bunny | open |
+| OA-1 | openauth fork | high | The authorization code is not single-use across isolates or PoPs | fixed in [openauth#24](https://github.com/Al-Ummah-Now/openauth/pull/24) (fork 1.0.42), in prod via [AlUmmahNowAuth#266](https://github.com/Al-Ummah-Now/AlUmmahNowAuth/pull/266) |
+| OA-2 | openauth fork | medium-high | Refresh-token rotation and reuse detection run on KV | fixed in [openauth#30](https://github.com/Al-Ummah-Now/openauth/pull/30) (fork 1.0.42), in prod via [AlUmmahNowAuth#266](https://github.com/Al-Ummah-Now/AlUmmahNowAuth/pull/266) |
+| OA-3 | openauth fork | medium | A signing or encryption key generation race produces two different keys under the same `kid` | fixed in [openauth#31](https://github.com/Al-Ummah-Now/openauth/pull/31) (fork 1.0.42), in prod via [AlUmmahNowAuth#266](https://github.com/Al-Ummah-Now/AlUmmahNowAuth/pull/266) |
+| OA-4 | openauth fork | high (TV sign-in) | The device flow poll overwrites the approval (whole-record read-modify-write on KV) | fixed in [openauth#29](https://github.com/Al-Ummah-Now/openauth/pull/29) (fork 1.0.42), in prod via [AlUmmahNowAuth#266](https://github.com/Al-Ummah-Now/AlUmmahNowAuth/pull/266) |
+| OA-5 | openauth fork | low-medium | The flow-record provider state prefers a stale KV copy over the newer cookie | fixed in [openauth#34](https://github.com/Al-Ummah-Now/openauth/pull/34) (fork 1.0.42), in prod via [AlUmmahNowAuth#266](https://github.com/Al-Ummah-Now/AlUmmahNowAuth/pull/266) |
+| OA-6 | openauth fork | low-medium | Every request lists KV for the legacy signing keys (fan-out and cost) | fixed in [openauth#33](https://github.com/Al-Ummah-Now/openauth/pull/33) (fork 1.0.42), in prod via [AlUmmahNowAuth#266](https://github.com/Al-Ummah-Now/AlUmmahNowAuth/pull/266) |
+| OA-7 | openauth fork | medium | RBAC permission-cache invalidation fans out to every user in a role | fixed in [openauth#32](https://github.com/Al-Ummah-Now/openauth/pull/32) (fork 1.0.42), in prod via [AlUmmahNowAuth#266](https://github.com/Al-Ummah-Now/AlUmmahNowAuth/pull/266) |
+| OA-8 | openauth fork | low | Latent in-memory and KV rate limiters (not used by the app today) | fixed in [openauth#35](https://github.com/Al-Ummah-Now/openauth/pull/35) (fork 1.0.42), in prod via [AlUmmahNowAuth#266](https://github.com/Al-Ummah-Now/AlUmmahNowAuth/pull/266) |
+| OA-9 | openauth fork | low | The default-tenant cache is per isolate with a 1-hour TTL and local-only invalidation | fixed in [openauth#36](https://github.com/Al-Ummah-Now/openauth/pull/36) (fork 1.0.42), in prod via [AlUmmahNowAuth#266](https://github.com/Al-Ummah-Now/AlUmmahNowAuth/pull/266) |
+| UI-1 | UI (www) | medium | unbounded video fan-out per home / videos page render | fixed in [AlUmmahNowUI#18](https://github.com/Al-Ummah-Now/AlUmmahNowUI/pull/18) and [AlUmmahNowCMS#28](https://github.com/Al-Ummah-Now/AlUmmahNowCMS/pull/28) |
+| UI-2 | UI (www) | low-medium | stale-while-revalidate stampede (no single-flight across isolates) | fixed in [AlUmmahNowUI#19](https://github.com/Al-Ummah-Now/AlUmmahNowUI/pull/19) |
+| UI-3 | UI (www) | low | KV snapshot write is check-then-put; isolates race on the same key | fixed in [AlUmmahNowUI#20](https://github.com/Al-Ummah-Now/AlUmmahNowUI/pull/20) |
+| CMS-1 | CMS | medium | admin media uploads keep the client's file name, so a second upload overwrites the first in R2 | fixed in [AlUmmahNowCMS#27](https://github.com/Al-Ummah-Now/AlUmmahNowCMS/pull/27) |
+| CMS-2 | CMS | low | first SSO sign-in upsert is SELECT-then-INSERT; two concurrent callbacks for a new user fail one | fixed in [AlUmmahNowCMS#23](https://github.com/Al-Ummah-Now/AlUmmahNowCMS/pull/23) |
+| CMS-3 | CMS | low | content edits are last-writer-wins with no version check | fixed in [AlUmmahNowCMS#26](https://github.com/Al-Ummah-Now/AlUmmahNowCMS/pull/26) |
+| CMS-4 | CMS | low on its own, medium together with ui-1 | no cap on curated rows returned to www (feeds UI-1) | fixed in [AlUmmahNowCMS#24](https://github.com/Al-Ummah-Now/AlUmmahNowCMS/pull/24) |
+| CORE-1 | Core | low | no cross-process lock on the sync and upload stores | fixed in [AlUmmahNowCore#23](https://github.com/Al-Ummah-Now/AlUmmahNowCore/pull/23) |
+| TOOLS-1 | Tools | high | two imports of the same folder (or an import plus a Resume) upload everything twice and create duplicate video records | fixed in [AlUmmahNowTools#34](https://github.com/Al-Ummah-Now/AlUmmahNowTools/pull/34) |
+| TOOLS-2 | Tools | medium | `ImportVideos` lookups ignore the session, so concurrent or repeated sessions update each other's rows | fixed in [AlUmmahNowTools#31](https://github.com/Al-Ummah-Now/AlUmmahNowTools/pull/31) |
+| TOOLS-3 | Tools | medium | Resume marks videos Uploaded without writing their R2 record | fixed in [AlUmmahNowTools#33](https://github.com/Al-Ummah-Now/AlUmmahNowTools/pull/33) |
+| TOOLS-4 | Tools | high | storage keys collide across channels and folders, and blind PUTs overwrite silently | fixed in [AlUmmahNowTools#30](https://github.com/Al-Ummah-Now/AlUmmahNowTools/pull/30) |
+| TOOLS-5 | Tools | high | file watches are owned by a scoped service, so they stop immediately and can't be stopped later | fixed in [AlUmmahNowTools#32](https://github.com/Al-Ummah-Now/AlUmmahNowTools/pull/32) |
+| TOOLS-6 | Tools | medium | duplicate approvals and lost counters from overlapping file events | fixed in [AlUmmahNowTools#36](https://github.com/Al-Ummah-Now/AlUmmahNowTools/pull/36) |
+| TOOLS-7 | Tools | medium | scan progress handler uses the scan engine's DbContext concurrently | fixed in [AlUmmahNowTools#35](https://github.com/Al-Ummah-Now/AlUmmahNowTools/pull/35) |
+| TOOLS-8 | Tools | low now, high once the real upload lands | import status claims are not atomic (ImportWorker vs UI vs a second worker) | fixed in [AlUmmahNowTools#37](https://github.com/Al-Ummah-Now/AlUmmahNowTools/pull/37) |
+| TOOLS-9 | Tools | medium | FilterPresetService deadlocks on its own lock | fixed in [AlUmmahNowTools#38](https://github.com/Al-Ummah-Now/AlUmmahNowTools/pull/38) |
+| TOOLS-10 | Tools | low | per-process rate limit and retry policy against Bunny | fixed in [AlUmmahNowTools#39](https://github.com/Al-Ummah-Now/AlUmmahNowTools/pull/39) |
 
 The per-app data maps, full scenarios and the "OK" lists follow, one section per repo.
 
