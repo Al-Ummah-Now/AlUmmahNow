@@ -1,47 +1,42 @@
 'use client';
 
 /**
- * Channel playlist management (channel settings): create, edit and delete
- * the channel's playlists.
+ * Manage Playlists (channel settings): the channel's playlists. Each one
+ * opens its editor (details, order, videos); "New playlist" opens the create
+ * form with the video picker. Delete stays here.
  */
 
 import { pickLanguage } from '@/lib/format/pick-language';
 import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Edit, ExternalLink, ListVideo, Lock, Plus, Trash2 } from 'lucide-react';
+import { AlertTriangle, ArrowDownUp, ExternalLink, ListVideo, Lock, Pencil, Plus, Trash2 } from 'lucide-react';
+import { playlistSortOf } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
-import { logger } from '@/lib/logger-client';
+import { reportError } from '@/lib/errors/reporter';
 import { PlaylistCover } from '@/components/PlaylistCover';
-import {
-  createPlaylist,
-  deletePlaylist,
-  listPlaylists,
-  updatePlaylist,
-  type PlaylistWithVideos,
-} from '@/lib/api/playlists';
-import { getPlaylistHref, normalizePlaylistTitle } from '@/lib/playlists/playlist-utils';
+import { deletePlaylist, listPlaylists, type PlaylistWithVideos } from '@/lib/api/playlists';
+import { getPlaylistHref } from '@/lib/playlists/playlist-utils';
+import { directionLabels, fieldLabel } from '@/components/playlists/PlaylistDetailsFields';
+import { counted, fill } from '@/components/playlists/text';
+import { DIVIDE, MUTED, NOTICE, TEXT } from '@/components/playlists/styles';
 
 interface PlaylistManagerProps {
   channelId: string;
 }
 
-interface FormState {
-  id: string | null; // null = creating
-  title: string;
-  description: string;
-  isPublic: boolean;
-}
-
-const EMPTY_FORM: FormState = { id: null, title: '', description: '', isPublic: true };
 const MAX_PLAYLISTS = 100;
+
+export function managePlaylistsHref(lang: string, channelId: string, playlistId?: string): string {
+  const base = `/${lang}/settings/channel/${channelId}/playlists`;
+  return playlistId ? `${base}/${encodeURIComponent(playlistId)}` : base;
+}
 
 export default function PlaylistManager({ channelId }: PlaylistManagerProps) {
   const { t, lang, isRTL } = useLanguage();
+  const p = t.playlistTools;
   const [playlists, setPlaylists] = useState<PlaylistWithVideos[]>([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState<FormState | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ message: string; ref?: string } | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -50,264 +45,123 @@ export default function PlaylistManager({ channelId }: PlaylistManagerProps) {
     try {
       const result = await listPlaylists({ channelId, limit: MAX_PLAYLISTS });
       if (!result) {
-        setError(t.playlist.loadFailed);
+        setError({ message: t.playlist.loadFailed, ref: reportError(new Error('Listing channel playlists failed'), { shown: true, extra: { step: 'playlist-manager-load', channelId } }) });
       }
       setPlaylists(result?.data || []);
-    } catch (err) {
-      logger.error('[PlaylistManager] Failed to load playlists', { channelId, error: err });
-      setError(t.playlist.loadFailed);
+    } catch (caught) {
+      setError({ message: t.playlist.loadFailed, ref: reportError(caught, { shown: true, extra: { step: 'playlist-manager-load', channelId } }) });
     } finally {
       setLoading(false);
     }
   }, [channelId, t]);
 
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
 
-  const startCreate = () => {
-    setError(null);
-    setForm({ ...EMPTY_FORM });
-  };
-
-  const startEdit = (playlist: PlaylistWithVideos) => {
-    setError(null);
-    setForm({
-      id: playlist.id,
-      title: playlist.name || playlist.title || '',
-      description: playlist.description || '',
-      isPublic: playlist.isPublic !== false,
-    });
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form || saving) return;
-
-    const title = normalizePlaylistTitle(form.title);
-    if (!title) {
-      setError(t.playlist.nameRequired);
-      return;
-    }
-
-    setSaving(true);
-    setError(null);
-    const description = form.description.trim();
-
-    if (form.id) {
-      const result = await updatePlaylist(form.id, { title, description, isPublic: form.isPublic }, { channelId });
-      setSaving(false);
-      if (!result?.success) {
-        logger.error('[PlaylistManager] Update failed', { playlistId: form.id, error: result?.error });
-        setError(t.playlist.updateFailed);
-        return;
-      }
-      setPlaylists((prev) => prev.map((p) => p.id === form.id
-        ? { ...p, title, name: title, description, isPublic: form.isPublic }
-        : p));
-      logger.debug('[PlaylistManager] Playlist updated', { playlistId: form.id });
-    } else {
-      const result = await createPlaylist({ name: title, description, isPublic: form.isPublic }, { channelId });
-      setSaving(false);
-      const created = result?.result?.playlist;
-      if (!result?.success || !created) {
-        logger.error('[PlaylistManager] Create failed', { channelId, error: result?.error });
-        setError(t.playlist.createFailed);
-        return;
-      }
-      setPlaylists((prev) => [{ ...created, name: created.name || title, videos: [] }, ...prev]);
-      logger.debug('[PlaylistManager] Playlist created', { playlistId: created.id });
-    }
-
-    setForm(null);
-  };
-
   const handleDelete = async (playlist: PlaylistWithVideos) => {
-    const title = playlist.name || playlist.title;
+    const title = pickLanguage(playlist.name || playlist.title || '', lang);
     if (!window.confirm(t.playlist.confirmDelete.replace('{title}', title))) return;
-
     setDeletingId(playlist.id);
     setError(null);
-    const result = await deletePlaylist(playlist.id, { channelId });
-    setDeletingId(null);
-
-    if (!result?.success) {
-      logger.error('[PlaylistManager] Delete failed', { playlistId: playlist.id });
-      setError(t.playlist.deleteFailed);
-      return;
+    try {
+      const result = await deletePlaylist(playlist.id, { channelId });
+      if (!result?.success) {
+        setError({ message: t.playlist.deleteFailed, ref: reportError(new Error('Deleting a playlist failed'), { shown: true, extra: { step: 'playlist-delete', playlistId: playlist.id } }) });
+        return;
+      }
+      setPlaylists((prev) => prev.filter((item) => item.id !== playlist.id));
+    } catch (caught) {
+      setError({ message: t.playlist.deleteFailed, ref: reportError(caught, { shown: true, extra: { step: 'playlist-delete', playlistId: playlist.id } }) });
+    } finally {
+      setDeletingId(null);
     }
-    setPlaylists((prev) => prev.filter((p) => p.id !== playlist.id));
-    if (form?.id === playlist.id) setForm(null);
   };
 
   return (
     <div className="space-y-6" dir={isRTL ? 'rtl' : 'ltr'}>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t.playlist.managePlaylists}</h1>
-          <p className="text-gray-600 dark:text-gray-400">{t.playlist.managePlaylistsDescription}</p>
+          <h1 className={`text-2xl font-bold ${TEXT}`}>{t.playlist.managePlaylists}</h1>
+          <p className={MUTED}>{t.playlist.managePlaylistsDescription}</p>
         </div>
-        {!form && (
-          <button
-            type="button"
-            onClick={startCreate}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium"
-          >
-            <Plus className="w-4 h-4" />
-            {t.playlist.newPlaylist}
-          </button>
-        )}
+        <Link href={`${managePlaylistsHref(lang, channelId)}/new`} className="b b-primary" data-testid="new-playlist-link">
+          <Plus className="h-4 w-4" aria-hidden="true" />
+          {t.playlist.newPlaylist}
+        </Link>
       </div>
 
       {error && (
-        <div role="alert" className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-sm">
-          {error}
+        <div role="alert" className={`flex items-start gap-3 rounded-[var(--r-md)] px-4 py-3 text-sm ${NOTICE.error}`}>
+          <AlertTriangle className="h-5 w-5 flex-none" aria-hidden="true" />
+          <div className="min-w-0 flex-1 space-y-1">
+            <p className="font-medium">{error.message}</p>
+            {error.ref && <p className="text-xs">{fill(p.errorRef, { ref: error.ref })}</p>}
+          </div>
+          <button type="button" className="b b-secondary b-sm flex-none" onClick={() => void load()}>{p.tryAgain}</button>
         </div>
-      )}
-
-      {form && (
-        <form
-          onSubmit={handleSubmit}
-          className="p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg space-y-4"
-        >
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            {form.id ? t.playlist.editPlaylist : t.playlist.createPlaylist}
-          </h2>
-
-          <div>
-            <label htmlFor="playlist-title" className="block text-sm font-medium mb-1 dark:text-white">
-              {t.playlist.nameLabel}
-            </label>
-            <input
-              id="playlist-title"
-              type="text"
-              value={form.title}
-              maxLength={150}
-              required
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
-              placeholder={t.playlist.namePlaceholder}
-              className="w-full px-4 py-2 border dark:border-gray-600 rounded-lg dark:bg-gray-800 dark:text-white"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="playlist-description" className="block text-sm font-medium mb-1 dark:text-white">
-              {t.playlist.descriptionLabel}
-            </label>
-            <textarea
-              id="playlist-description"
-              value={form.description}
-              rows={3}
-              maxLength={5000}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              placeholder={t.playlist.descriptionPlaceholder}
-              className="w-full px-4 py-2 border dark:border-gray-600 rounded-lg dark:bg-gray-800 dark:text-white resize-none"
-            />
-          </div>
-
-          <fieldset>
-            <legend className="block text-sm font-medium mb-2 dark:text-white">{t.playlist.visibilityLabel}</legend>
-            <div className="grid sm:grid-cols-2 gap-2">
-              {[true, false].map((isPublic) => (
-                <label
-                  key={String(isPublic)}
-                  className="flex items-start gap-3 p-3 border dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
-                >
-                  <input
-                    type="radio"
-                    name="playlist-visibility"
-                    checked={form.isPublic === isPublic}
-                    onChange={() => setForm({ ...form, isPublic })}
-                    className="mt-1"
-                  />
-                  <span>
-                    <span className="block font-medium dark:text-white">
-                      {isPublic ? t.playlist.publicLabel : t.playlist.privateLabel}
-                    </span>
-                    <span className="block text-sm text-gray-600 dark:text-gray-400">
-                      {isPublic ? t.playlist.publicDescription : t.playlist.privateDescription}
-                    </span>
-                  </span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
-
-          <div className="flex gap-3">
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-6 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium disabled:opacity-50"
-            >
-              {saving ? t.common.saving : t.common.save}
-            </button>
-            <button
-              type="button"
-              onClick={() => setForm(null)}
-              disabled={saving}
-              className="px-6 py-2 rounded-lg border dark:border-gray-600 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-800"
-            >
-              {t.common.cancel}
-            </button>
-          </div>
-        </form>
       )}
 
       {loading ? (
-        <p className="text-gray-600 dark:text-gray-400">{t.common.loading}</p>
-      ) : playlists.length === 0 ? (
-        <div className="p-8 text-center bg-gray-50 dark:bg-gray-800/50 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-700">
-          <ListVideo className="w-10 h-10 mx-auto text-gray-400 mb-2" />
-          <p className="text-gray-600 dark:text-gray-400">{t.playlist.noPlaylists}</p>
+        <ul className="c !p-0" aria-busy="true" aria-label={t.common.loading}>
+          {Array.from({ length: 3 }, (_, i) => (
+            <li key={i} className="flex items-center gap-4 p-4"><span className="sk h-16 w-28 flex-none" /><span className="sk h-4 flex-1" /></li>
+          ))}
+        </ul>
+      ) : playlists.length === 0 && !error ? (
+        <div className="empty c">
+          <ListVideo className="h-10 w-10" aria-hidden="true" />
+          <p>{t.playlist.noPlaylists}</p>
         </div>
       ) : (
-        <ul className="divide-y divide-gray-200 dark:divide-gray-800 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg">
+        <ul className={`c !p-0 ${DIVIDE}`} data-testid="playlist-manager-list">
           {playlists.map((playlist) => {
             const title = pickLanguage(playlist.name || playlist.title || '', lang);
             const count = playlist.videos?.length ?? playlist.videosCount ?? 0;
+            const sort = playlistSortOf(playlist);
+            const editHref = managePlaylistsHref(lang, channelId, playlist.id);
             return (
-              <li key={playlist.id} className="flex items-center gap-4 p-4">
-                <div className="w-28 flex-shrink-0 rounded overflow-hidden">
-                  <PlaylistCover playlist={playlist} alt={title} sizes="112px" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-medium text-gray-900 dark:text-white truncate">{title}</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
-                    <span>{t.playlist.videoCount.replace('{count}', String(count))}</span>
+              <li key={playlist.id} className="flex flex-wrap items-center gap-4 p-4 sm:flex-nowrap">
+                <Link href={editHref} className="w-28 flex-none overflow-hidden rounded-[var(--r-sm)]" tabIndex={-1} aria-hidden="true">
+                  <PlaylistCover playlist={playlist} alt="" sizes="112px" />
+                </Link>
+                <div className="min-w-0 flex-1">
+                  <h3 className={`truncate font-semibold ${TEXT}`}>
+                    <Link href={editHref} className="hover:underline">{title}</Link>
+                  </h3>
+                  <p className={`mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm ${MUTED}`}>
+                    <span>{counted(count, p.countOne, p.countOther)}</span>
                     <span aria-hidden="true">•</span>
                     <span className="inline-flex items-center gap-1">
-                      {playlist.isPublic === false && <Lock className="w-3.5 h-3.5" />}
+                      {playlist.isPublic === false && <Lock className="h-3.5 w-3.5" aria-hidden="true" />}
                       {playlist.isPublic === false ? t.playlist.privateLabel : t.playlist.publicLabel}
+                    </span>
+                    <span aria-hidden="true">•</span>
+                    <span className="inline-flex items-center gap-1" data-testid="playlist-sort-summary">
+                      <ArrowDownUp className="h-3.5 w-3.5" aria-hidden="true" />
+                      {sort.sortMode === 'auto'
+                        ? `${fieldLabel(sort.sortField, t)} · ${directionLabels(sort.sortField, t)[sort.sortDirection]}`
+                        : p.sortManual}
                     </span>
                   </p>
                 </div>
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  <Link
-                    href={getPlaylistHref(lang, playlist.id)}
-                    className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800 dark:text-white"
-                    aria-label={t.playlist.viewPlaylist}
-                    title={t.playlist.viewPlaylist}
-                  >
-                    <ExternalLink className="w-4 h-4" />
+                <div className="flex flex-none items-center gap-1">
+                  <Link href={editHref} className="b b-secondary b-sm" aria-label={`${t.playlist.editPlaylist}: ${title}`} title={t.playlist.editPlaylist}>
+                    <Pencil className="h-4 w-4" aria-hidden="true" />
+                    <span className="hidden sm:inline">{t.playlist.editPlaylist}</span>
+                  </Link>
+                  <Link href={getPlaylistHref(lang, playlist.id)} className="b b-ghost b-icon" aria-label={t.playlist.viewPlaylist} title={t.playlist.viewPlaylist}>
+                    <ExternalLink className="h-4 w-4" aria-hidden="true" />
                   </Link>
                   <button
                     type="button"
-                    onClick={() => startEdit(playlist)}
-                    className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800 dark:text-white"
-                    aria-label={t.playlist.editPlaylist}
-                    title={t.playlist.editPlaylist}
-                  >
-                    <Edit className="w-4 h-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(playlist)}
+                    onClick={() => void handleDelete(playlist)}
                     disabled={deletingId === playlist.id}
-                    className="p-2 rounded text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 disabled:opacity-40"
+                    className="b b-ghost b-icon text-[var(--fanous-color-error-text)] disabled:opacity-40"
                     aria-label={t.playlist.deletePlaylist}
                     title={t.playlist.deletePlaylist}
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
                   </button>
                 </div>
               </li>

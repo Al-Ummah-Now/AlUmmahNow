@@ -10,14 +10,14 @@ import {
   PaginationResponse
 } from "./types";
 import { apiRequestServer, apiRequestServerResult, buildApiUrl } from "./api-client";
-import type { PlaylistAddJobStatus, PlaylistBulkAddResult, PlaylistManageItem } from "@al-ummah/shared-types";
+import type { PlaylistAddJobStatus, PlaylistBulkAddResult, PlaylistManageItem, PlaylistSort } from "@al-ummah/shared-types";
 import { getServerAuthContext } from "./server-auth";
 
 /**
  * Playlist as returned by the API: stored fields plus `name` (alias of
  * `title`), the ordered `videos` ID list and, when requested, `videoItems`.
  */
-export type PlaylistWithVideos = Playlist & {
+export type PlaylistWithVideos = Playlist & Partial<PlaylistSort> & {
   videos: string[];
   videoItems?: VideoObject[];
 };
@@ -35,7 +35,7 @@ type PlaylistMutationResponse = {
  */
 export type PlaylistCallResult<T> = { ok: true; data: T } | { ok: false; status: number | null };
 
-async function managed<T>(options: { method: 'GET' | 'POST' | 'PUT'; path: string; body?: unknown; functionName: string }, channelId: string): Promise<PlaylistCallResult<T>> {
+async function managed<T>(options: { method: 'GET' | 'POST' | 'PUT' | 'PATCH'; path: string; body?: unknown; functionName: string }, channelId: string): Promise<PlaylistCallResult<T>> {
   const result = await apiRequestServerResult<{ success?: boolean; result?: T }>({
     method: options.method,
     url: buildApiUrl(options.path),
@@ -105,24 +105,46 @@ export async function getPlaylistById(
  * POST /api/playlists
  */
 export async function createPlaylist(
-  data: PlaylistCreateRequest & { title?: string; videoIds?: string[] },
+  data: NewPlaylistRequest,
   headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<PlaylistMutationResponse | null> {
   return apiRequestServer<PlaylistMutationResponse>({
     method: 'POST',
     url: buildApiUrl('/api/playlists'),
-    // The API stores the playlist name as `title`
-    body: {
-      title: data.title || data.name,
-      description: data.description,
-      thumbnailUrl: data.thumbnailUrl,
-      isPublic: data.isPublic,
-      // The chosen videos, in order: validated and added by the API in the
-      // same request (the answer's `add` says what happened)
-      ...(data.videoIds?.length ? { videos: data.videoIds } : {}),
-    },
+    body: createBody(data),
     functionName: 'createPlaylist',
   }, () => requiredAuth(headers.channelId), true);
+}
+
+export type NewPlaylistRequest = PlaylistCreateRequest & Partial<PlaylistSort> & { title?: string; videoIds?: string[] };
+
+function createBody(data: NewPlaylistRequest) {
+  return {
+    // The API stores the playlist name as `title`
+    title: data.title || data.name,
+    description: data.description,
+    thumbnailUrl: data.thumbnailUrl,
+    isPublic: data.isPublic,
+    // The order (manual when left out)
+    ...(data.sortMode ? { sortMode: data.sortMode } : {}),
+    ...(data.sortField ? { sortField: data.sortField } : {}),
+    ...(data.sortDirection ? { sortDirection: data.sortDirection } : {}),
+    // The chosen videos, in order: validated and added by the API in the
+    // same request (the answer's `add` says what happened)
+    ...(data.videoIds?.length ? { videos: data.videoIds } : {}),
+  };
+}
+
+/**
+ * Create a playlist with its videos in one request, answering the status on
+ * failure (Manage Playlists and "Add to playlist" pick a friendly message).
+ * POST /api/playlists
+ */
+export async function createManagedPlaylist(
+  data: NewPlaylistRequest,
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
+): Promise<PlaylistCallResult<{ playlist: PlaylistWithVideos; add?: PlaylistBulkAddResult }>> {
+  return managed({ method: 'POST', path: '/api/playlists', body: createBody(data), functionName: 'createManagedPlaylist' }, headers.channelId);
 }
 
 /**
@@ -131,9 +153,25 @@ export async function createPlaylist(
  */
 export async function updatePlaylist(
   id: string,
-  data: PlaylistUpdateRequest & { title?: string; videos?: string[] },
+  data: PlaylistPatch,
   headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<PlaylistMutationResponse | null> {
+  return apiRequestServer<PlaylistMutationResponse>({
+    method: 'PATCH',
+    url: buildApiUrl(`/api/playlists/${encodeURIComponent(id)}`),
+    body: patchBody(data),
+    functionName: 'updatePlaylist',
+  }, () => requiredAuth(headers.channelId), true);
+}
+
+export type PlaylistPatch = PlaylistUpdateRequest & Partial<PlaylistSort> & {
+  title?: string;
+  videos?: string[];
+  /** A video of the playlist shown as its cover; null: automatic (the first video) */
+  coverVideoId?: string | null;
+};
+
+function patchBody(data: PlaylistPatch): Record<string, unknown> {
   const body: Record<string, unknown> = {};
   const title = data.title ?? data.name;
   if (title !== undefined) body.title = title;
@@ -141,13 +179,24 @@ export async function updatePlaylist(
   if (data.thumbnailUrl !== undefined) body.thumbnailUrl = data.thumbnailUrl;
   if (data.isPublic !== undefined) body.isPublic = data.isPublic;
   if (data.videos !== undefined) body.videos = data.videos;
+  if (data.sortMode !== undefined) body.sortMode = data.sortMode;
+  if (data.sortField !== undefined) body.sortField = data.sortField;
+  if (data.sortDirection !== undefined) body.sortDirection = data.sortDirection;
+  if (data.coverVideoId !== undefined) body.coverVideoId = data.coverVideoId;
+  return body;
+}
 
-  return apiRequestServer<PlaylistMutationResponse>({
-    method: 'PATCH',
-    url: buildApiUrl(`/api/playlists/${encodeURIComponent(id)}`),
-    body,
-    functionName: 'updatePlaylist',
-  }, () => requiredAuth(headers.channelId), true);
+/**
+ * Save a playlist's details or order, answering the status on failure (409:
+ * the videos of an automatic playlist cannot be reordered by hand).
+ * PATCH /api/playlists/{id}
+ */
+export async function savePlaylist(
+  id: string,
+  data: PlaylistPatch,
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
+): Promise<PlaylistCallResult<{ playlist: PlaylistWithVideos }>> {
+  return managed({ method: 'PATCH', path: `/api/playlists/${encodeURIComponent(id)}`, body: patchBody(data), functionName: 'savePlaylist' }, headers.channelId);
 }
 
 /**
@@ -255,7 +304,7 @@ export async function reorderPlaylistVideos(
 }
 
 export interface PlaylistManagePage {
-  playlist: { id: string; title: string; description?: string; isPublic: boolean; thumbnailUrl?: string; channelId: string; videosCount: number };
+  playlist: PlaylistSort & { id: string; title: string; description?: string; isPublic: boolean; thumbnailUrl?: string; coverVideoId?: string; channelId: string; videosCount: number };
   items: PlaylistManageItem[];
   nextOffset: number | null;
 }

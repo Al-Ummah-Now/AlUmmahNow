@@ -1649,6 +1649,8 @@ export interface AppTranslations {
     unselect: string;
     inPlaylist: string;
     pageLabel: string;
+    /** Name of the picker's page navigation (screen readers) */
+    pagerLabel: string;
     previousPage: string;
     nextPage: string;
     noMatches: string;
@@ -1677,6 +1679,7 @@ export interface AppTranslations {
     addJobFailed: string;
     addFailed: string;
     addForbidden: string;
+    createdPlaylist: string;
     createdAddFailed: string;
     retry: string;
     errorRef: string;
