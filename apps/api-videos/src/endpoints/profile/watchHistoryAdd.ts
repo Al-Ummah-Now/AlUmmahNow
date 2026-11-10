@@ -21,8 +21,6 @@ export class WatchHistoryAdd extends AuthenticatedRoute {
 		summary: "Add Video to Watch History",
 		description: "🔒 **Authentication Required**: Add a video to the user's watch history.",
 		request: {
-			headers: z.object({
-        }),
         body: {
 				content: {
 					"application/json": {
@@ -99,24 +97,7 @@ export class WatchHistoryAdd extends AuthenticatedRoute {
 		const bucket = c.env.profiles;
 		type ProfileType = z.infer<typeof BusinessProfile>;
 		const repository = new R2Repository<ProfileType>(bucket);
-		let profile = await repository.getObject(userId);
-
-		// Create profile if it doesn't exist
-		if (!profile) {
-			const auth = c.get('auth');
-			profile = {
-				id: userId,
-				email: auth?.email || "unknown",
-				dateCreated: new Date().toISOString(),
-				dateModified: new Date().toISOString(),
-				watchHistory: [],
-			} as ProfileType;
-		}
-
-		// Initialize watch history if it doesn't exist
-		if (!profile.watchHistory) {
-			profile.watchHistory = [];
-		}
+		const auth = c.get('auth');
 
 		// Create watch history entry
 		const historyEntry = {
@@ -128,20 +109,25 @@ export class WatchHistoryAdd extends AuthenticatedRoute {
 			completed: completed || false,
 		};
 
-		// Remove any existing entry for this video (to update position in history)
-		profile.watchHistory = profile.watchHistory.filter((entry: any) => entry.videoId !== videoId);
-
-		// Add new entry at the beginning (most recent first)
-		profile.watchHistory.unshift(historyEntry);
-
-		// Limit watch history to last 1000 entries
-		if (profile.watchHistory.length > 1000) {
-			profile.watchHistory = profile.watchHistory.slice(0, 1000);
-		}
-
-		// Update profile
-		profile.dateModified = new Date().toISOString();
-		await repository.putObject(userId, profile);
+		// Conditional write on the fresh profile (SCALABILITY-AUDIT AV-6): a
+		// subscribe, profile edit or "pause history" from another device at the
+		// same time is not overwritten. A missing profile is created (create-only).
+		const profile = await repository.updateObject(userId, (fresh) => {
+			// Remove any existing entry for this video (to update position in history),
+			// add the new one first (most recent first), keep the last 1000
+			const history = (fresh.watchHistory || []).filter((entry: any) => entry.videoId !== videoId);
+			history.unshift(historyEntry);
+			fresh.watchHistory = history.slice(0, 1000);
+			fresh.dateModified = new Date().toISOString();
+		}, {
+			initial: () => ({
+				id: userId,
+				email: auth?.email || "unknown",
+				dateCreated: new Date().toISOString(),
+				dateModified: new Date().toISOString(),
+				watchHistory: [],
+			} as ProfileType),
+		});
 
 		// Send analytics event
 		const queue = new Queue(c.env.queue);

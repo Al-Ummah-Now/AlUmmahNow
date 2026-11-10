@@ -60,8 +60,15 @@ const handleCoverUpdate = async (c: AppContext) => {
         }
 
         //Update the profile's cover URL
-        profile.coverUrl = `https://images.alummahnow.net${path}`;
-        await repository.putObject(userId, profile);
+        // Conditional write on the fresh profile (SCALABILITY-AUDIT AV-6)
+        const coverUrl = `https://images.alummahnow.net${path}`;
+        const saved = await repository.updateObject(userId, (fresh) => {
+            fresh.coverUrl = coverUrl;
+        });
+        if (!saved) {
+            return c.json({ success: false, error: "Profile not found" }, 404);
+        }
+        Object.assign(profile, saved);
 
         // Send queue message for cover update
         const queue = new Queue(c.env.queue);

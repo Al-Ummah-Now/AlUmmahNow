@@ -92,23 +92,21 @@ export class PlaylistRemoveVideo extends AuthenticatedRoute {
             }, 403);
         }
 
-        // Check if video is in playlist
-        if (!playlist.videos.includes(videoId)) {
-            return c.json({
-                success: false,
-                error: "Video is not in this playlist",
-            }, 404);
+        // Remove on the fresh playlist with a conditional write (SCALABILITY-AUDIT AV-19)
+        const { data: updatedPlaylist, rejected } = await repository.updateObjectOrReject<{ status: 403 | 404; error: string }>(id, (fresh) => {
+            if (fresh.userId !== userId) return { reject: { status: 403, error: "Unauthorized - you can only modify your own playlists" } };
+            const videos = fresh.videos || [];
+            if (!videos.includes(videoId)) return { reject: { status: 404, error: "Video is not in this playlist" } };
+            fresh.videos = videos.filter(vid => vid !== videoId);
+            fresh.dateModified = new Date().toISOString();
+            return true;
+        });
+        if (!updatedPlaylist) {
+            return c.json({ success: false, error: "Playlist not found" }, 404);
         }
-
-        // Remove video from playlist
-        const updatedPlaylist = {
-            ...playlist,
-            videos: playlist.videos.filter(vid => vid !== videoId),
-            dateModified: new Date().toISOString(),
-        };
-
-        // Save updated playlist
-        await repository.putObject(id, updatedPlaylist);
+        if (rejected) {
+            return c.json({ success: false, error: rejected.error }, rejected.status);
+        }
 
         // Send queue message for playlist remove
         const queue = new Queue(c.env.queue);
