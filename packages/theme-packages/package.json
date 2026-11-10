@@ -1,0 +1,29 @@
+{
+  "name": "@al-ummah/theme-packages",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Theme packages: format v1 schema, validator, compiler to CSS, zip import/export, and the built-in themes",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "type-check": "tsc -p tsconfig.json --noEmit",
+    "test": "node --experimental-strip-types --no-warnings --test test/*.test.ts",
+    "themes:build": "node --experimental-strip-types --no-warnings scripts/build-themes.ts",
+    "themes:check": "node --experimental-strip-types --no-warnings scripts/build-themes.ts --check",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}

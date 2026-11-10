@@ -1,7 +1,8 @@
 # Design intent
 
 Each theme is a material, not a palette. Components use shared structure and take depth from
-`apps/web/src/theme/materials/<theme>.css` (prototype location).
+each theme package's `materials` and `components.*.style` (`packages/theme-packages/themes/<theme>/theme.json`,
+format in `docs/themes/README.md`), compiled into `apps/web/src/theme/materials.css`.
 
 ## Materials
 

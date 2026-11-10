@@ -595,6 +595,12 @@ importers:
         specifier: ^13.0.0
         version: 13.0.0
 
+  packages/theme-packages:
+    devDependencies:
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
 packages:
 
   '@adobe/css-tools@4.4.4':

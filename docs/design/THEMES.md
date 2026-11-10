@@ -6,6 +6,11 @@ same in every theme.
 
 Status: spec, 2026-11-08. Lantern is the first theme and the one deployed.
 
+> **Videos site, 2026-11-09:** the web themes are now theme packages (`docs/themes/README.md`):
+> `packages/theme-packages/themes/<id>/` compiles to the stylesheets the site imports, and the site
+> theme switches at runtime from the admin. The fanous-tokens themes below remain the source for
+> the native platforms; a test keeps the two equal.
+
 ## Decisions
 
 | Topic | Decision |

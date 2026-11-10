@@ -75,6 +75,11 @@ jobs:
           pnpm check:tokens
           pnpm check:theme-colors
 
+      - name: Theme packages (schema, validator, compiler, parity with the pre-package CSS)
+        run: |
+          pnpm test:themes
+          pnpm themes:check
+
       - name: Wrangler config check
         run: pnpm check:config
 
