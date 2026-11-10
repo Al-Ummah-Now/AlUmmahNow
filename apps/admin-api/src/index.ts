@@ -12,6 +12,8 @@ import contentRouter from './routers/content.router';
 import suggestRouter from './routers/suggest.router';
 import processingRouter from './routers/processing.router';
 import staleUploadsRouter from './routers/staleUploads.router';
+import trashRouter from './routers/trash.router';
+import { isHourlyTick, runTrashCleanup } from './lib/trash';
 import type { AdminBindings } from './base/types';
 import { contactSubmit } from './endpoints/contact/ContactSubmit';
 import { contactMailConsumer, type ContactMailJob, type QueueMessageLike } from './lib/contact-mail-queue';
@@ -170,6 +172,9 @@ app.route('/api/processing', processingRouter);
 // Stale uploads (abandoned placeholders, Bunny orphans): permission-checked, audited proxy to api-videos
 app.route('/api/uploads/stale', staleUploadsRouter as never);
 
+// Recently deleted (contact messages, themes, creator tiers): restore, delete permanently now
+app.route('/api/trash', trashRouter as never);
+
 // ==========================================
 // HEALTH CHECK
 // ==========================================
@@ -192,6 +197,8 @@ app.get('/health', (c) => {
  * Cron (wrangler triggers.crons):
  *   - every 5 minutes: queue status reads of open requests to auth (lib/authModerationQueue.ts)
  *   - 03:17 UTC daily: retention of error data and old source maps (lib/errors-retention.ts)
+ *   - hourly (the 5-minute tick at the top of each UTC hour): soft-delete cleanup, the only hard
+ *     delete of contact messages, themes and creator tiers (lib/trash.ts)
  */
 async function scheduled(controller: ScheduledController, env: AdminBindings, ctx: ExecutionContext): Promise<void> {
   if (controller.cron === '17 3 * * *') {
@@ -199,6 +206,7 @@ async function scheduled(controller: ScheduledController, env: AdminBindings, ct
     return;
   }
   ctx.waitUntil(scheduleSyncs(env).catch((error) => logger.error('[AuthRequests] scheduled status reads failed', { error: String(error) })));
+  if (isHourlyTick(controller.scheduledTime)) ctx.waitUntil(runTrashCleanup(env as never).then(() => undefined));
 }
 
 /**

@@ -56,7 +56,7 @@ export class SiteThemePut extends AdminRoute {
     } else {
       if (!body.version) return c.json({ success: false, error: 'A custom theme needs its published version' }, 400);
       const published = await c.env.REPORTS_DB
-        .prepare('SELECT version FROM theme_package_versions WHERE theme_id = ? AND version = ?')
+        .prepare('SELECT v.version FROM theme_package_versions v JOIN theme_packages t ON t.id = v.theme_id AND t.deleted_at IS NULL WHERE v.theme_id = ? AND v.version = ?')
         .bind(body.theme, body.version)
         .first<{ version: string }>();
       if (!published) return c.json({ success: false, error: `${body.theme}@${body.version} is not a published theme` }, 404);

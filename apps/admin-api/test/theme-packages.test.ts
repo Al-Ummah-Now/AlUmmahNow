@@ -7,6 +7,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
+import { fileURLToPath } from 'node:url';
 import { Hono } from 'hono';
 import { fromHono } from 'chanfana';
 import { duplicatePackage, packageToZip, zipToPackage, type ThemePackage } from '@al-ummah/theme-packages';
@@ -82,7 +83,7 @@ function setup() {
   return { call, db, sqlite, bucket };
 }
 
-const fawanees = () => loadPackageDir(new URL('../../../packages/theme-packages/themes/fawanees', import.meta.url).pathname);
+const fawanees = () => loadPackageDir(fileURLToPath(new URL('../../../packages/theme-packages/themes/fawanees', import.meta.url)));
 const SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" fill="#f4ae3a"/></svg>';
 
 async function importCopy(call: ReturnType<typeof setup>['call'], id = 'eid-lights') {
@@ -162,11 +163,26 @@ describe('theme builder API', () => {
     // The active theme cannot be deleted
     assert.equal((await call('/api/themes/eid-lights', { method: 'DELETE' })).status, 409);
     await call('/api/site-settings/theme', { method: 'PUT', body: JSON.stringify({ theme: 'fawanees' }), headers: { 'content-type': 'application/json' } });
-    assert.equal((await call('/api/themes/eid-lights', { method: 'DELETE' })).status, 200);
-    assert.equal([...bucket.objects.keys()].filter((k) => k.startsWith('themes/eid-lights/')).length, 0);
-    assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM theme_package_versions').get()!.n, 0);
+    const files = [...bucket.objects.keys()].filter((k) => k.startsWith('themes/eid-lights/')).length;
+    assert.equal((await call('/api/themes/eid-lights', { method: 'DELETE', body: JSON.stringify({ reason: 'Eid is over' }), headers: { 'content-type': 'application/json' } })).status, 200);
+
+    // Soft delete: hidden from the list, the editor, the public files and the site theme picker; files and rows stay
+    const listed = (await (await call('/api/themes')).json()) as { result: { themes: { id: string }[] } };
+    assert.equal(listed.result.themes.some((t) => t.id === 'eid-lights'), false);
+    assert.equal((await call('/api/themes/eid-lights')).status, 404);
+    assert.equal((await call('/api/themes/eid-lights/export')).status, 404);
+    assert.equal((await call('/public/themes/eid-lights/1.0.0/theme.css', { roles: '' })).status, 404);
+    assert.equal((await call('/api/site-settings/theme', { method: 'PUT', body: JSON.stringify({ theme: 'eid-lights', version: '1.0.0' }), headers: { 'content-type': 'application/json' } })).status, 404);
+    assert.equal((await call('/api/themes/eid-lights', { method: 'DELETE' })).status, 404);
+    assert.equal((await importCopy(call)).status, 409, 'its id stays taken while it can be restored');
+    assert.equal([...bucket.objects.keys()].filter((k) => k.startsWith('themes/eid-lights/')).length, files);
+    assert.equal(sqlite.prepare('SELECT COUNT(*) AS n FROM theme_package_versions').get()!.n, 2);
+    const row = sqlite.prepare("SELECT deleted_by, delete_reason FROM theme_packages WHERE id = 'eid-lights'").get();
+    assert.deepEqual({ ...row }, { deleted_by: 'admin-1', delete_reason: 'Eid is over' });
     const log = sqlite.prepare("SELECT new_value FROM site_settings_log WHERE key = 'theme.package' ORDER BY rowid").all().map((r) => r.new_value);
     assert.deepEqual(log, ['create eid-lights from fawanees@1.0.0', 'publish eid-lights@1.0.0', 'publish eid-lights@1.1.0', 'delete eid-lights']);
+    const trash = sqlite.prepare("SELECT new_value FROM site_settings_log WHERE key = 'trash:theme:eid-lights'").all().map((r) => r.new_value);
+    assert.deepEqual(trash, [JSON.stringify({ action: 'delete', reason: 'Eid is over' })]);
   });
 
   it('built-in themes cannot be deleted; a missing published version falls back to the default', async () => {

@@ -3,12 +3,13 @@
 // Binary bodies (zip, asset files) are plain Hono routes rather than OpenAPI schemas.
 import { Hono, type Context } from 'hono';
 import { BUILT_IN_THEMES, DEFAULT_THEME, validatePackage, type ThemePackage } from '@al-ummah/theme-packages';
-import { parseSiteThemeValue, SITE_THEME_SETTING_KEY } from '@al-ummah/shared-types';
+import { cleanTrashReason, parseSiteThemeValue, SITE_THEME_SETTING_KEY } from '@al-ummah/shared-types';
 import type { AdminBindings } from '../base/types';
 import type { AuthContext } from '../middleware/auth';
 import { hasAdminRole } from '../lib/roles';
 import { logger } from '../lib/logger';
 import { ThemeError, ThemeStore } from '../lib/themePackages';
+import { writeTrashAudit } from '../lib/trash-audit';
 
 type Env = { Bindings: AdminBindings };
 const app = new Hono<Env>();
@@ -121,7 +122,9 @@ app.get('/:id/draft/assets/*', async (c) => {
   try {
     const id = c.req.param('id');
     const path = c.req.path.slice(c.req.path.indexOf('/draft/') + '/draft/'.length);
-    const obj = await store(c).getObject(id, 'draft', decodeURIComponent(path));
+    const s = store(c);
+    // A soft-deleted theme's files stay in R2 until the cleanup purges them, but are not served
+    const obj = (await s.isLive(id)) ? await s.getObject(id, 'draft', decodeURIComponent(path)) : null;
     if (!obj) return c.json({ success: false, error: 'Not found' }, 404);
     return new Response(obj.body, { headers: { 'Content-Type': obj.httpMetadata?.contentType ?? 'application/octet-stream', 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'" } });
   } catch (e) { return fail(c, e); }
@@ -163,18 +166,28 @@ app.get('/:id/export', async (c) => {
     const id = c.req.param('id');
     const version = c.req.query('version') || 'draft';
     if (version !== 'draft' && !/^\d+\.\d+\.\d+$/.test(version)) return c.json({ success: false, error: 'version must be draft or x.y.z' }, 400);
-    const zip = await store(c).exportZip(id, version);
+    const s = store(c);
+    const zip = (await s.isLive(id)) ? await s.exportZip(id, version) : null;
     if (!zip) return c.json({ success: false, error: `No ${version} of ${id}` }, 404);
     const name = `${id}${version === 'draft' ? '-draft' : `-${version}`}.zip`;
     return new Response(zip, { headers: { 'Content-Type': 'application/zip', 'Content-Disposition': `attachment; filename="${name}"`, 'Cache-Control': 'private, no-store' } });
   } catch (e) { return fail(c, e); }
 });
 
+/**
+ * Soft delete: the theme leaves every list, the editor and the public files, and can be restored for
+ * 30 days (/api/trash); the hourly cleanup then removes its files. Optional JSON body { reason }.
+ */
 app.delete('/:id', async (c) => {
   const denied = requireAdmin(c); if (denied) return denied;
   try {
-    await store(c).remove(c.req.param('id'), actor(c), now());
-    logger.info('[Themes] Deleted', { id: c.req.param('id'), actor: actor(c) });
+    const id = c.req.param('id');
+    const input = (await c.req.json().catch(() => null)) as { reason?: unknown } | null;
+    const reason = cleanTrashReason(input?.reason);
+    const at = new Date();
+    await store(c).remove(id, actor(c), at.toISOString(), reason);
+    await writeTrashAudit(c.env.REPORTS_DB, { kind: 'theme', id, action: 'delete', actorId: actor(c), reason }, at);
+    logger.info('[Themes] Deleted (restorable for 30 days)', { id, actor: actor(c) });
     return c.json({ success: true });
   } catch (e) { return fail(c, e); }
 });
@@ -189,7 +202,9 @@ publicThemes.get('/:id/:version/*', async (c) => {
   if (!/^[a-z][a-z0-9-]{1,39}$/.test(id) || !/^\d+\.\d+\.\d+$/.test(version)) return c.text('Not found', 404);
   const rest = decodeURIComponent(c.req.path.slice(`/public/themes/${id}/${version}/`.length));
   if (!(rest === 'theme.css' || rest === 'theme.json' || /^assets\/(?!.*\.\.)[A-Za-z0-9_-][A-Za-z0-9._/-]*$/.test(rest))) return c.text('Not found', 404);
-  const obj = await new ThemeStore(c.env.REPORTS_DB, c.env.theme_packages).getObject(id, version, rest);
+  const themes = new ThemeStore(c.env.REPORTS_DB, c.env.theme_packages);
+  // A soft-deleted theme is never the site theme (refused on delete), so it stops being served
+  const obj = (await themes.isLive(id)) ? await themes.getObject(id, version, rest) : null;
   if (!obj) return c.text('Not found', 404, { 'Cache-Control': 'public, max-age=30' });
   return new Response(obj.body, {
     headers: {

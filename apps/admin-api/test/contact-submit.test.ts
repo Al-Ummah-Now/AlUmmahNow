@@ -6,7 +6,7 @@ import { getContactMessage, listContactMessages } from '../src/lib/contact-store
 import { sqliteD1 } from './d1-sqlite';
 
 function setup(environment = 'qa') {
-  const db = sqliteD1(['0008_contact_messages.sql', '0010_contact_mail_failures.sql']);
+  const db = sqliteD1(['0008_contact_messages.sql', '0009_theme_packages.sql', '0010_contact_mail_failures.sql', '0013_admin_soft_delete.sql']);
   const queued: unknown[] = [];
   const reports: unknown[] = [];
   const queue = { failing: false };

@@ -62,7 +62,7 @@ export async function publicSiteTheme(db: Db, adminApiOrigin: string): Promise<P
   const { theme, version } = await readSiteTheme(db);
   if (!version) return { theme };
   const published = await db
-    .prepare('SELECT version FROM theme_package_versions WHERE theme_id = ? AND version = ?')
+    .prepare('SELECT v.version FROM theme_package_versions v JOIN theme_packages t ON t.id = v.theme_id AND t.deleted_at IS NULL WHERE v.theme_id = ? AND v.version = ?')
     .bind(theme, version)
     .first<{ version: string }>()
     .catch(() => null);

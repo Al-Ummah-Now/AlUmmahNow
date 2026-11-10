@@ -15,8 +15,12 @@ import { hasPermission, permissionsFor } from '../src/lib/roles';
 import { renderAcknowledgement, renderInboxNotification, renderReply, sendContactEmail, quoteText } from '../src/lib/contact-email';
 import {
   contactCounts,
-  deleteContactMessage,
   getContactMessage,
+  listDeletedContactMessages,
+  purgeContactMessages,
+  requestContactPurge,
+  restoreContactMessage,
+  softDeleteContactMessage,
   insertContactMessage,
   insertContactNote,
   listContactMessages,
@@ -201,7 +205,7 @@ function newMessage(id: string, over: Partial<Parameters<typeof insertContactMes
 }
 
 describe('contact store (D1)', () => {
-  const MIGRATION = ['0008_contact_messages.sql', '0010_contact_mail_failures.sql'];
+  const MIGRATION = ['0008_contact_messages.sql', '0009_theme_packages.sql', '0010_contact_mail_failures.sql', '0013_admin_soft_delete.sql'];
   const limits = { perIpHour: 2, perIpDay: 3, perUserHour: 1, perUserDay: 5 };
 
   it('rate-limits per IP per hour and per day', async () => {
@@ -254,8 +258,39 @@ describe('contact store (D1)', () => {
     await insertContactNote(db, { id: 'n2', message_id: 'm2', kind: 'reply', body: 'done', author_id: 'adm', author_email: null, email_to: 'bilal@example.org', email_subject: 's', email_status: 'sunk', email_id: null, created_at: '2026-11-09T10:01:00Z' });
     assert.deepEqual((await listContactNotes(db, 'm2')).map((n) => n.id), ['n1', 'n2']);
 
-    assert.equal(await deleteContactMessage(db, 'm2'), true);
-    assert.equal(await deleteContactMessage(db, 'm2'), false);
+    // Delete is soft: hidden from the list, the counts and the detail; the thread stays until the purge
+    const deletedAt = new Date('2026-11-10T08:00:00Z');
+    assert.equal(await softDeleteContactMessage(db, 'm2', { actorId: 'adm', reason: 'spam', now: deletedAt }), true);
+    assert.equal(await softDeleteContactMessage(db, 'm2', { actorId: 'adm', reason: null, now: deletedAt }), false);
+    assert.equal(await getContactMessage(db, 'm2'), null);
+    assert.equal((await listContactMessages(db, { limit: 20, offset: 0 })).total, 2);
+    assert.equal((await listContactMessages(db, { q: 'bilal', limit: 20, offset: 0 })).total, 0);
+    assert.deepEqual(await contactCounts(db), { new: 2, open: 0, replied: 0, closed: 0, spam: 0, send_failed: 0 });
+    assert.equal(await updateContactMessage(db, 'm2', { status: 'closed' }, new Date()), false, 'a deleted message cannot be changed');
+    assert.deepEqual((await listDeletedContactMessages(db)).map((r) => [r.id, r.deleted_by, r.delete_reason, r.purge_requested_at]), [['m2', 'adm', 'spam', null]]);
+    assert.equal((await listContactNotes(db, 'm2')).length, 2);
+
+    // Restore brings it back with its thread
+    assert.equal(await restoreContactMessage(db, 'm2'), true);
+    assert.equal(await restoreContactMessage(db, 'm2'), false);
+    assert.equal((await getContactMessage(db, 'm2'))?.id, 'm2');
+    assert.deepEqual(await listDeletedContactMessages(db), []);
+
+    // The purge (cleanup only): not before 30 days unless queued; queuing alone deletes nothing
+    await softDeleteContactMessage(db, 'm2', { actorId: 'adm', reason: null, now: deletedAt });
+    assert.deepEqual(await purgeContactMessages(db, '2026-11-01T00:00:00.000Z', 10), []);
+    assert.equal(await requestContactPurge(db, 'm1', { actorId: 'adm', now: deletedAt }), false, 'only a deleted message can be queued');
+    assert.equal(await requestContactPurge(db, 'm2', { actorId: 'adm2', now: deletedAt }), true);
+    assert.equal((await listDeletedContactMessages(db))[0].purge_requested_by, 'adm2');
+    assert.equal((await listContactNotes(db, 'm2')).length, 2);
+    assert.deepEqual(await purgeContactMessages(db, '2026-11-01T00:00:00.000Z', 10), ['m2']);
     assert.deepEqual(await listContactNotes(db, 'm2'), []);
+    assert.deepEqual(await listDeletedContactMessages(db), []);
+    assert.deepEqual(await purgeContactMessages(db, '2026-11-01T00:00:00.000Z', 10), [], 'idempotent');
+
+    // 30 days after the delete it goes without being queued; live messages never do
+    await softDeleteContactMessage(db, 'm3', { actorId: 'adm', reason: null, now: deletedAt });
+    assert.deepEqual(await purgeContactMessages(db, '2026-12-10T08:00:00.000Z', 10), ['m3']);
+    assert.equal((await getContactMessage(db, 'm1'))?.id, 'm1');
   });
 });
