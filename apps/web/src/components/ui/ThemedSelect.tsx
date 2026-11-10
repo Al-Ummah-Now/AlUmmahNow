@@ -31,9 +31,10 @@ export function ThemedSelect({ label, value, options, onChange, icon, dir, testI
   const current = options.find((o) => o.value === value)?.label ?? '';
   return (
     <Menu.Root dir={dir}>
-      <Menu.Trigger className="ts-trigger" data-testid={testId} aria-label={`${label}: ${current}`}>
+      {/* Named by its visible text ("Sort comments Newest first"): an aria-label
+          that differs from what is shown fails WCAG 2.5.3 (label in name) */}
+      <Menu.Trigger className="ts-trigger" data-testid={testId}>
         {icon}
-        {/* The space keeps the visible text "label value" inside the accessible name "label: value" */}
         <span>{label}</span>{' '}
         <span className="ts-value">{current}</span>
       </Menu.Trigger>

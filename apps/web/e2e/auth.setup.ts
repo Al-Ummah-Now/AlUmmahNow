@@ -2,9 +2,10 @@ import { chromium, type Browser, type BrowserContext, type FullConfig, type Page
 import { readSinkCode, SINK_DOMAIN } from './test-utils/code-sink';
 import { ApiClient } from './seed/seed-api';
 import { extractSession, loginOnPage } from './seed/seed-auth';
+import { signInWebSession } from './test-utils/session-login';
 import { fillSecret } from './release/secret-fill';
 import { e2eUserPassword } from './test-utils/user-password';
-import { ensureChannels, ensureProfile, purgeDisposableChannels, type UserChannelSpec } from './seed/seed-users';
+import { ensureChannels, ensureNoProfile, ensureProfile, purgeDisposableChannels, type UserChannelSpec } from './seed/seed-users';
 import { consentCookie } from './test-utils/consent';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -38,34 +39,13 @@ export interface TestUser {
   storageStatePath: string;
   /** Channels the user must own; [] means profile only (no channels) */
   channels: UserChannelSpec[];
+  /** false: the user must have NO profile (the profile-create page's user) */
+  profile?: false;
   /**
    * Leftover throwaway channels younger than this are kept (a concurrent local
    * run may still be using them). Default 0: delete every leftover.
    */
   disposableChannelGraceMs?: number;
-}
-
-interface SessionCookieChannel {
-  id: string;
-  isMain?: boolean;
-}
-
-interface SessionCookieData {
-  activeUserId: string;
-  activeChannelId: string | null;
-  accounts: Record<string, { channels?: SessionCookieChannel[]; activeChannelId?: string | null }>;
-}
-
-const SESSION_COOKIE = 'al_ummah_session';
-
-function parseSessionCookie(value: string): SessionCookieData {
-  let raw = value;
-  try {
-    raw = decodeURIComponent(value);
-  } catch {
-    // not URI-encoded
-  }
-  return JSON.parse(raw) as SessionCookieData;
 }
 
 /**
@@ -83,7 +63,9 @@ async function provisionAndRefreshSession(
   const api = new ApiClient(cfg.apiUrl);
   const session = await extractSession(page, { webUrl: cfg.webAppUrl });
 
-  const profileCreated = await ensureProfile(api, session, { email: user.email, displayName: user.name });
+  const profileCreated = user.profile === false
+    ? !(await ensureNoProfile(api, session))
+    : await ensureProfile(api, session, { email: user.email, displayName: user.name });
   // Throwaway channels left by a cancelled or crashed run would otherwise show
   // up in this user's menu, profile and active channel for every later run.
   const purged = await purgeDisposableChannels(api, session, {
@@ -103,62 +85,7 @@ async function provisionAndRefreshSession(
   }
 
   // Fresh context: the callback's addAccount() loads profile + channels into the cookie.
-  const refreshed = await browser.newContext({ baseURL: cfg.webAppUrl });
-  await refreshed.addCookies([consentCookie(cfg.webAppUrl)]);
-  const refreshPage = await refreshed.newPage();
-  const login = await loginOnPage(
-    refreshPage,
-    { issuerUrl: cfg.openAuthUrl, webUrl: cfg.webAppUrl, clientId: cfg.clientId },
-    user.email,
-    user.password,
-  );
-  if (!login.ok) {
-    await refreshed.close();
-    throw new Error(`Re-login to refresh the web session failed for ${user.email}: ${login.message}`);
-  }
-  await refreshPage.waitForLoadState('networkidle').catch(() => undefined);
-
-  // Verify the cookie caches the channels. SessionManager.loadUserChannels calls
-  // GET /api/channels with the default page size, which can miss the user's
-  // channels once the environment has many channels; in that case patch the
-  // cookie with the channels we just verified via the API.
-  const cookies = await refreshed.cookies(cfg.webAppUrl);
-  const cookie = cookies.find((c) => c.name === SESSION_COOKIE);
-  if (!cookie) {
-    await refreshed.close();
-    throw new Error(`Refreshed session for ${user.email} has no ${SESSION_COOKIE} cookie`);
-  }
-  const data = parseSessionCookie(cookie.value);
-  const account = data.accounts[data.activeUserId];
-  if (account) {
-    // The stored session must describe exactly the user's fixed channels with
-    // the main one active: specs read it (readSession/userApi) to know which
-    // channel to use, and must not pick up a channel another run created.
-    const cached = account.channels || [];
-    const cachedIds = new Set(cached.map((c) => c.id));
-    const expectedIds = new Set(channels.map((c) => c.id));
-    const missing = channels.filter((c) => !cachedIds.has(c.id));
-    const unexpected = cached.filter((c) => !expectedIds.has(c.id));
-    if (missing.length > 0 || unexpected.length > 0) {
-      ciLogger.warn(`[Setup] Web session for ${user.email} does not match its channels; patching the cookie`, {
-        cached: cachedIds.size,
-        expected: channels.length,
-        missing: missing.length,
-        unexpected: unexpected.length,
-      });
-    }
-    account.channels = [...cached.filter((c) => expectedIds.has(c.id)), ...missing];
-    const main = account.channels.find((c) => c.isMain) || account.channels[0];
-    const activeChannelId = main?.id ?? null;
-    const changed = account.activeChannelId !== activeChannelId || data.activeChannelId !== activeChannelId;
-    account.activeChannelId = activeChannelId;
-    data.activeChannelId = activeChannelId;
-    if (missing.length > 0 || unexpected.length > 0 || changed) {
-      await refreshed.addCookies([{ ...cookie, value: encodeURIComponent(JSON.stringify(data)) }]);
-    }
-  }
-  ciLogger.info(`[Setup] Web session for ${user.email} caches ${account?.channels?.length ?? 0} channel(s)`);
-  return refreshed;
+  return signInWebSession(browser, user, channels, cfg, ciLogger.info);
 }
 
 /**
@@ -282,6 +209,18 @@ async function globalSetup(_config: FullConfig) {
       storageStatePath: path.join(authDir, 'user-scratch.json'),
       channels: [{ name: 'E2E Scratch Channel', description: 'E2E test channel (throwaway-channel user)', isMain: true }],
       disposableChannelGraceMs: 30 * 60 * 1000,
+    },
+    {
+      // Signed in without a profile, as a newly registered user is: the only
+      // user ProfileGuard leaves on /profile/create. Specs must not create its
+      // profile (setup deletes it again anyway). E2E_FRESH_EMAIL points it at
+      // another existing account (local runs that cannot register users).
+      email: process.env.E2E_FRESH_EMAIL || `test-fresh-${timestamp}@${SINK_DOMAIN}`,
+      password: e2eUserPassword(),
+      name: 'No Profile User',
+      storageStatePath: path.join(authDir, 'user-fresh.json'),
+      channels: [],
+      profile: false,
     },
   ];
 

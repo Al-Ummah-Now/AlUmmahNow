@@ -11,6 +11,7 @@ import {
   type E2EVideo,
 } from './test-utils/e2e-videos';
 import { ARABIC, expectDarkSurface, getSchedule, scheduleVideoApi } from './test-utils/upload-studio';
+import { chooseThemedOption, themedTrigger } from './test-utils/themed-select';
 
 /**
  * Video edit page (/[locale]/video/[id]/edit): the Schedule Publication
@@ -133,7 +134,7 @@ test.describe('Edit schedule - private video', () => {
 
   test('EDIT-101 saves the category chosen on the edit page', async ({ page }) => {
     await openEditor(page, video!);
-    await page.getByLabel('Video Category').selectOption('fiqh');
+    await chooseThemedOption(page.getByLabel('Video Category'), 'fiqh');
     await expect(page.getByTestId('video-edit-unsaved')).toBeVisible();
     await page.getByTestId('video-edit-save').click();
     await expect(page.getByTestId('video-edit-error')).toHaveCount(0);
@@ -177,7 +178,7 @@ test.describe('Edit page - theme, locale and access', () => {
   test('EDIT-103 shows Arabic labels and right-to-left fields (ar)', async ({ page }) => {
     await openEditor(page, seed[SEED_TITLES.singleVideo], 'ar');
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
-    await expect(page.getByTestId('category-select')).toHaveAccessibleName(ARABIC);
+    await expect(themedTrigger(page.getByTestId('category-select'))).toHaveAccessibleName(ARABIC);
     await expect(page.getByTestId('chapter-mode-manual')).toContainText(ARABIC);
     await expect(page.getByTestId('video-edit-save')).toHaveText(ARABIC);
   });

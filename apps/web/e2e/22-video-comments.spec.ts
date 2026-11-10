@@ -114,9 +114,20 @@ test.describe('Video comments - viewer', () => {
     await page.goto(`/en/video/${video.get().id}`);
     // Comments load after hydration; selecting earlier would be reset by React
     await expect(page.getByTestId('comment').first()).toBeVisible();
-    await page.getByTestId('comments-sort').selectOption('top');
+    // The themed sort menu: its trigger shows (and is named by) the chosen order
+    const sort = page.getByTestId('comments-sort');
+    await sort.click();
+    const top = page.getByTestId('comments-sort-top');
+    const topLabel = ((await top.textContent()) ?? '').trim();
+    await top.click();
+    await expect(sort).toHaveAccessibleName(new RegExp(`${topLabel}$`));
     await expect(page.getByTestId('comment').first()).toContainText(liked);
-    await page.getByTestId('comments-sort').selectOption('newest');
+    await sort.click();
+    await expect(top).toHaveAttribute('aria-checked', 'true');
+    const newest = page.getByTestId('comments-sort-newest');
+    const newestLabel = ((await newest.textContent()) ?? '').trim();
+    await newest.click();
+    await expect(sort).toHaveAccessibleName(new RegExp(`${newestLabel}$`));
     await expect(page.getByTestId('comment').first()).not.toContainText(liked);
   });
 
@@ -134,7 +145,11 @@ test.describe('Video comments - viewer', () => {
     await page.goto(`/ar/video/${video.get().id}`);
     const section = page.getByTestId('comments-section');
     await expect(section).toHaveAttribute('dir', 'rtl');
-    await expect(section.getByTestId('comments-sort').locator('option[value="top"]')).toHaveText('أبرز التعليقات');
+    const sort = section.getByTestId('comments-sort');
+    await expect(sort).toHaveAccessibleName(/[\u0600-\u06FF]/);
+    await sort.click();
+    await expect(page.getByRole('menu')).toHaveCSS('direction', 'rtl');
+    await expect(page.getByTestId('comments-sort-top')).toHaveText('أبرز التعليقات');
   });
 });
 

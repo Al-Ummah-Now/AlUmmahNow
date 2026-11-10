@@ -169,7 +169,9 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
   const accounts: AccountInfo[] = useMemo(() => mergeAccounts(localAccounts, authAccounts), [localAccounts, authAccounts]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const loadingRef = useRef(false);
+  // The session load running now, and one more queued behind it
+  const loadInFlightRef = useRef<Promise<void> | null>(null);
+  const reloadQueuedRef = useRef<Promise<void> | null>(null);
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -264,106 +266,120 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [applySessionUser]);
 
-  // Load initial session data
-  const loadSessionData = useCallback(async () => {
-    // Prevent concurrent loads
-    if (loadingRef.current) {
-      logger.info('[MultiAccountProvider] Already loading, skipping duplicate call');
-      return;
+  // Load the session data. A call made while a load runs gets one more load
+  // after it (shared by every such call), never nothing: the running load may
+  // have read the session before the caller changed it (a channel or account
+  // switch right after the page loaded), and skipping left the menu showing
+  // the previous channel or account until the next full reload.
+  const loadSessionData = useCallback((): Promise<void> => {
+    if (loadInFlightRef.current) {
+      if (!reloadQueuedRef.current) {
+        logger.info('[MultiAccountProvider] Already loading, loading again after it');
+        reloadQueuedRef.current = loadInFlightRef.current.then(() => {
+          reloadQueuedRef.current = null;
+          return loadSessionData();
+        });
+      }
+      return reloadQueuedRef.current;
     }
+    const run = runSessionLoad().finally(() => {
+      loadInFlightRef.current = null;
+    });
+    loadInFlightRef.current = run;
+    return run;
 
-    try {
-      loadingRef.current = true;
-      if (mountedRef.current) {
-        setLoading(true);
-        setError(null);
-      }
+    async function runSessionLoad() {
+      try {
+        if (mountedRef.current) {
+          setLoading(true);
+          setError(null);
+        }
 
-      logger.info('[MultiAccountProvider] Fetching session info...');
-      const authOrigin = getAuthUrl();
-      const sessionInfo = await getActiveSessionInfo();
-      logger.info('[MultiAccountProvider] Session info received:', sessionInfo ? 'Has data' : 'No data');
+        logger.info('[MultiAccountProvider] Fetching session info...');
+        const authOrigin = getAuthUrl();
+        const sessionInfo = await getActiveSessionInfo();
+        logger.info('[MultiAccountProvider] Session info received:', sessionInfo ? 'Has data' : 'No data');
 
-      if (!mountedRef.current) {
-        logger.info('[MultiAccountProvider] Component unmounted, aborting');
-        return;
-      }
+        if (!mountedRef.current) {
+          logger.info('[MultiAccountProvider] Component unmounted, aborting');
+          return;
+        }
 
-      if (!sessionInfo) {
-        // Client probe: signed in on another app (CMS, profile, ...)? Then sign
-        // in here too, silently. Once per tab, never on a loop.
-        if (shouldProbe({ hasAppSession: false, flagSet: tabStorage.has(PROBE_FLAG), pathname: window.location.pathname, authOrigin })) {
-          tabStorage.set(PROBE_FLAG);
-          // Anonymous visitors ask the auth server once per tab, no more
-          if (probeOutcome(await fetchAuthAccounts(authOrigin)) === 'sign-in') {
-            logger.info('[MultiAccountProvider] Signed in on the auth server, signing in here silently');
-            silentSignIn();
-            return;
+        if (!sessionInfo) {
+          // Client probe: signed in on another app (CMS, profile, ...)? Then sign
+          // in here too, silently. Once per tab, never on a loop.
+          if (shouldProbe({ hasAppSession: false, flagSet: tabStorage.has(PROBE_FLAG), pathname: window.location.pathname, authOrigin })) {
+            tabStorage.set(PROBE_FLAG);
+            // Anonymous visitors ask the auth server once per tab, no more
+            if (probeOutcome(await fetchAuthAccounts(authOrigin)) === 'sign-in') {
+              logger.info('[MultiAccountProvider] Signed in on the auth server, signing in here silently');
+              silentSignIn();
+              return;
+            }
+          }
+          setAuthAccounts(null);
+        } else {
+          const browserAccounts = await fetchAuthAccounts(authOrigin);
+          if (!mountedRef.current) return;
+          setAuthAccounts(browserAccounts);
+
+          // Follow an account switch made in another app
+          const follow = decideFollow({
+            authAccounts: browserAccounts,
+            localActiveUserId: sessionInfo.user?.id ?? null,
+            localUserIds: sessionInfo.accounts.map((a) => a.userId),
+            alreadyFollowed: (id) => tabStorage.has(followKey(id)),
+          });
+          if (follow.kind !== 'none') {
+            tabStorage.set(followKey(follow.userId));
+            logger.info('[MultiAccountProvider] Following the active account of the auth server', { how: follow.kind });
+            if (follow.kind === 'silent-sign-in') {
+              silentSignIn();
+              return;
+            }
+            await switchUserAccount(follow.userId, window.location.pathname);
+            const switched = await getActiveSessionInfo();
+            if (switched && mountedRef.current) {
+              applySessionUser(switched.user);
+              setAccounts(switched.accounts);
+              router.refresh();
+              return;
+            }
           }
         }
-        setAuthAccounts(null);
-      } else {
-        const browserAccounts = await fetchAuthAccounts(authOrigin);
-        if (!mountedRef.current) return;
-        setAuthAccounts(browserAccounts);
 
-        // Follow an account switch made in another app
-        const follow = decideFollow({
-          authAccounts: browserAccounts,
-          localActiveUserId: sessionInfo.user?.id ?? null,
-          localUserIds: sessionInfo.accounts.map((a) => a.userId),
-          alreadyFollowed: (id) => tabStorage.has(followKey(id)),
-        });
-        if (follow.kind !== 'none') {
-          tabStorage.set(followKey(follow.userId));
-          logger.info('[MultiAccountProvider] Following the active account of the auth server', { how: follow.kind });
-          if (follow.kind === 'silent-sign-in') {
-            silentSignIn();
-            return;
-          }
-          await switchUserAccount(follow.userId, window.location.pathname);
-          const switched = await getActiveSessionInfo();
-          if (switched && mountedRef.current) {
-            applySessionUser(switched.user);
-            setAccounts(switched.accounts);
-            router.refresh();
-            return;
-          }
-        }
-      }
-
-      if (sessionInfo) {
-        applySessionUser(sessionInfo.user);
-        setAccounts(sessionInfo.accounts);
-        // The live list replaces the cookie's first-paint cache
-        void refreshLiveChannels(true);
-        logger.info('[MultiAccountProvider] Session loaded successfully:', {
+        if (sessionInfo) {
+          applySessionUser(sessionInfo.user);
+          setAccounts(sessionInfo.accounts);
+          // The live list replaces the cookie's first-paint cache
+          void refreshLiveChannels(true);
+          logger.info('[MultiAccountProvider] Session loaded successfully:', {
           
-          email: sessionInfo.user?.email,
-          accountsCount: sessionInfo.accounts.length
-        });
-      } else {
+            email: sessionInfo.user?.email,
+            accountsCount: sessionInfo.accounts.length
+          });
+        } else {
+          applySessionUser(null);
+          setAccounts([]);
+          logger.info('[MultiAccountProvider] No session found');
+        }
+
+        // Dispatch event to notify other components (like CookieSizeMonitor)
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('session-updated'));
+        }
+      } catch (err) {
+        if (!mountedRef.current) return;
+        logger.error('[MultiAccountProvider] Failed to load session:', err);
         applySessionUser(null);
         setAccounts([]);
-        logger.info('[MultiAccountProvider] No session found');
+        setError(err instanceof Error ? err.message : 'Failed to load session data');
+      } finally {
+        if (mountedRef.current) {
+          setLoading(false);
+        }
+        logger.info('[MultiAccountProvider] Loading complete, loading state set to false');
       }
-
-      // Dispatch event to notify other components (like CookieSizeMonitor)
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('session-updated'));
-      }
-    } catch (err) {
-      if (!mountedRef.current) return;
-      logger.error('[MultiAccountProvider] Failed to load session:', err);
-      applySessionUser(null);
-      setAccounts([]);
-      setError(err instanceof Error ? err.message : 'Failed to load session data');
-    } finally {
-      loadingRef.current = false;
-      if (mountedRef.current) {
-        setLoading(false);
-      }
-      logger.info('[MultiAccountProvider] Loading complete, loading state set to false');
     }
     // router is stable from useRouter()
     // eslint-disable-next-line react-hooks/exhaustive-deps

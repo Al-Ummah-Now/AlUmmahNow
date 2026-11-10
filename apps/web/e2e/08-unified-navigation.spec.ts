@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures';
 import { AUTH_STATE, ANONYMOUS_STATE, readAccount } from './test-utils/auth-state';
-import { menuTrigger, openAccountMenu, openSideDrawer, showMenuView } from './test-utils/navigation';
+import { closeSideDrawer, menuTrigger, openAccountMenu, openSideDrawer, showMenuView } from './test-utils/navigation';
 
 /**
  * Unified Navigation (header account menu + side drawer)
@@ -40,7 +40,8 @@ test.describe('Unified Navigation - anonymous', () => {
     await page.goto('/ar');
     const menu = await openAccountMenu(page);
 
-    await expect(menu).toHaveAttribute('dir', 'rtl');
+    // One direction-aware menu: it lays out right-to-left inside the Arabic page
+    await expect(menu).toHaveCSS('direction', 'rtl');
     await expect(menu.getByRole('menuitem', { name: 'تسجيل الدخول' })).toBeVisible();
   });
 });
@@ -104,7 +105,9 @@ test.describe('Unified Navigation - English (LTR)', () => {
     const { channels } = readAccount('single');
     const menu = await openAccountMenu(page);
 
-    await expect(menu.getByText(/^ACCOUNTS/)).toBeVisible();
+    // The account list is a submenu behind "Switch Account"
+    await expect(menu.getByTestId('nav-switch-account')).toHaveText('Switch Account');
+    await expect(menu.getByTestId('nav-switch-account')).toHaveAttribute('aria-haspopup', 'menu');
     await showMenuView(menu, 'account');
     await expect(menu.getByTestId('nav-account')).toHaveCount(1);
     await showMenuView(menu, 'account');
@@ -195,7 +198,7 @@ test.describe('Unified Navigation - Arabic (RTL)', () => {
     const { email } = readAccount('single');
     const menu = await openAccountMenu(page);
 
-    await expect(menu).toHaveAttribute('dir', 'rtl');
+    await expect(menu).toHaveCSS('direction', 'rtl');
     await showMenuView(menu, 'main');
     await expect(menu.getByTestId('nav-active-context')).toContainText(email);
   });
@@ -203,7 +206,8 @@ test.describe('Unified Navigation - Arabic (RTL)', () => {
   test('shows Arabic navigation links', async ({ page }) => {
     const menu = await openAccountMenu(page);
 
-    await expect(menu.getByText('التنقل', { exact: true })).toBeVisible();
+    await expect(menu.getByTestId('nav-switch-channel')).toHaveText('تبديل القناة');
+    await expect(menu.getByTestId('nav-switch-account')).toHaveText('تبديل الحساب');
     await expect(menu.getByRole('menuitem', { name: 'فيديوهاتي' })).toHaveAttribute('href', '/ar/dashboard/videos');
     await showMenuView(menu, 'main');
     await expect(menu.locator('a[role="menuitem"][href="/ar/settings"]')).toBeVisible();
@@ -244,12 +248,13 @@ test.describe('Side drawer - theme and language', () => {
     const toggle = drawer.getByTestId('theme-toggle');
     const wasDark = ((await html.getAttribute('class')) || '').includes('dark');
     await toggle.click();
+    // The button is named for what it does next
     if (wasDark) {
       await expect(html).not.toHaveClass(/\bdark\b/);
-      await expect(toggle).toHaveAccessibleName('Dark Mode');
+      await expect(toggle).toHaveAccessibleName('Switch to dark mode');
     } else {
       await expect(html).toHaveClass(/\bdark\b/);
-      await expect(toggle).toHaveAccessibleName('Light Mode');
+      await expect(toggle).toHaveAccessibleName('Switch to light mode');
     }
   });
 
@@ -258,7 +263,7 @@ test.describe('Side drawer - theme and language', () => {
     const drawer = await openSideDrawer(page);
 
     const toggle = drawer.getByTestId('language-toggle');
-    await expect(toggle).toHaveAccessibleName('Switch to العربية');
+    await expect(toggle).toHaveAccessibleName('التبديل إلى العربية');
     await toggle.click();
 
     await expect(page).toHaveURL(/\/ar\/?$/);
@@ -271,7 +276,7 @@ test.describe('Side drawer - theme and language', () => {
     const drawer = await openSideDrawer(page);
 
     const toggle = drawer.getByTestId('language-toggle');
-    await expect(toggle).toHaveAccessibleName('التبديل إلى English');
+    await expect(toggle).toHaveAccessibleName('Switch to English');
     await toggle.click();
 
     await expect(page).toHaveURL(/\/en\/?$/);
@@ -283,20 +288,22 @@ test.describe('Side drawer - theme and language', () => {
     const drawer = await openSideDrawer(page);
 
     await expect(drawer.getByRole('link', { name: 'Home' })).toHaveAttribute('href', /^\/en\/?$/);
-    // Anonymous users (no active channel) don't get the Upload link
-    await expect(drawer.getByRole('link', { name: 'Upload' })).toHaveCount(0);
+    // Upload lives in the top bar, never in the drawer
+    await expect(drawer.getByRole('link', { name: /Upload/ })).toHaveCount(0);
 
-    await drawer.getByTestId('nav-drawer-close').click();
-    await expect(drawer).toBeHidden();
+    await closeSideDrawer(page);
   });
 });
 
 test.describe('Side drawer - channel owner', () => {
   test.use({ storageState: AUTH_STATE.single });
 
-  test('includes the Upload link', async ({ page }) => {
+  test('Upload is in the top bar, not in the drawer', async ({ page }) => {
     await page.goto('/en');
     const drawer = await openSideDrawer(page);
-    await expect(drawer.getByRole('link', { name: 'Upload' })).toHaveAttribute('href', '/en/upload');
+    await expect(drawer.getByRole('link', { name: /Upload/ })).toHaveCount(0);
+    const upload = page.getByRole('banner').getByTestId('header-upload');
+    await expect(upload).toHaveAttribute('href', '/en/upload');
+    await expect(upload).toHaveAttribute('data-state', 'ready');
   });
 });

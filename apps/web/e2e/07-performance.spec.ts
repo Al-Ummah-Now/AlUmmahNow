@@ -57,21 +57,23 @@ test.describe('Performance - Resource Loading', () => {
     await page.goto('/en/');
     await expect(page.getByTestId('video-card').first()).toBeVisible();
 
-    for (const img of await page.locator('img').all()) {
-      expect(await img.getAttribute('src')).toBeTruthy();
-      expect(await img.getAttribute('alt')).not.toBeNull();
-    }
+    // One pass (the feed re-renders cards while it loads)
+    const broken = await page.locator('img').evaluateAll((els) =>
+      els.filter((el) => !el.getAttribute('src') || !el.hasAttribute('alt')).map((el) => el.outerHTML.slice(0, 200)),
+    );
+    expect(broken).toEqual([]);
   });
 
   test('next/image thumbnails are lazy loaded', async ({ page }) => {
     await page.goto('/en/');
     await expect(page.getByTestId('video-card').first()).toBeVisible();
 
+    await page.waitForLoadState('networkidle').catch(() => undefined);
     const thumbs = page.getByTestId('video-card').locator('img');
-    const count = await thumbs.count();
-    for (let i = 0; i < count; i++) {
-      await expect(thumbs.nth(i)).toHaveAttribute('loading', 'lazy');
-    }
+    expect(await thumbs.count()).toBeGreaterThan(0);
+    // One pass (the feed re-renders cards while it loads)
+    const eager = await thumbs.evaluateAll((els) => els.filter((el) => el.getAttribute('loading') !== 'lazy').map((el) => el.outerHTML.slice(0, 200)));
+    expect(eager).toEqual([]);
   });
 });
 

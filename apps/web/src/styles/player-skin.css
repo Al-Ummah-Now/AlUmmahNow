@@ -1730,8 +1730,9 @@
     display: none;
   }
 
-  .video-js.vjs-fanous .vjs-control-bar .vjs-picture-in-picture-control,
-  .video-js.vjs-fanous .vjs-control-bar .vjs-fanous-theatre {
+  /* As specific as the button rule (display: grid), which otherwise kept them shown */
+  .video-js.vjs-fanous .vjs-control-bar .vjs-control.vjs-button.vjs-picture-in-picture-control,
+  .video-js.vjs-fanous .vjs-control-bar .vjs-control.vjs-button.vjs-fanous-theatre {
     display: none;
   }
 
@@ -1747,7 +1748,7 @@
 }
 
 @container fanous-player (max-width: 359px) {
-  .video-js.vjs-fanous .vjs-control-bar .vjs-fanous-next {
+  .video-js.vjs-fanous .vjs-control-bar .vjs-control.vjs-button.vjs-fanous-next {
     display: none;
   }
 }

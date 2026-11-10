@@ -1,6 +1,7 @@
 import { test, expect } from './fixtures';
 import type { Page } from '@playwright/test';
 import { ANONYMOUS_STATE, AUTH_STATE } from './test-utils/auth-state';
+import { watchSignInRedirect } from './test-utils/sign-in-redirect';
 import {
   centerX,
   channelsOf,
@@ -81,8 +82,10 @@ test.describe('Channel header', () => {
   test('CHTAB-003 anonymous subscribe sends the visitor to login and back', async ({ page }) => {
     await openChannel(page, 'en', lectures.id);
     const button = page.getByTestId('channel-subscribe-button');
-    await clickUntil(button, async () => expect(page).toHaveURL(/\/en\/login/, { timeout: 5000 }));
-    expect(decodeURIComponent(page.url())).toContain(`redirect=/en/channels/${lectures.id}`);
+    const signIn = watchSignInRedirect(page, { locale: 'en', returnPath: `/en/channels/${lectures.id}` });
+    // Retried: a click before hydration has no handler yet
+    await clickUntil(button, async () => expect(signIn.requested()).toBe(true));
+    await signIn.verify();
   });
 
   test('CHTAB-004 unknown channel id renders the not-found page', async ({ page }) => {

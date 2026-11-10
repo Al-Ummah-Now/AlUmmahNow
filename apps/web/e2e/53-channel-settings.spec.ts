@@ -183,7 +183,8 @@ test.describe('Channel videos', () => {
     const seed = page.getByRole('heading', { level: 3, name: SEED_TITLES.singleVideo, exact: true });
     await expect(seed).toBeVisible();
 
-    await fillStable(page.getByPlaceholder(/^Search videos/), SEED_TITLES.singlePrivate);
+    // The page's own search box (the header search is a combobox)
+    await fillStable(page.getByRole('textbox', { name: /^Search videos/ }), SEED_TITLES.singlePrivate);
     await expect(page.getByRole('heading', { level: 3, name: SEED_TITLES.singlePrivate, exact: true })).toBeVisible();
     await expect(seed).toHaveCount(0);
   });

@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures';
-import type { Locator, Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { ANONYMOUS_STATE, AUTH_STATE } from './test-utils/auth-state';
-import { apiGet, channelsOf, findQaLecturesChannel, expectRtl, clickUntil, fillStable } from './test-utils/channel-content';
+import { apiGet, channelsOf, expectRtl, clickUntil, fillStable, type PublicChannel } from './test-utils/channel-content';
 
 /**
  * Channel directory (/[locale]/channels) and the "Create channel" dialog of
@@ -14,16 +14,22 @@ import { apiGet, channelsOf, findQaLecturesChannel, expectRtl, clickUntil, fillS
 
 const PAGE_SIZE = 24;
 
-/** Clicks "Load More" page by page until `target` is rendered (or there are no more pages) */
-async function loadUntilPresent(page: Page, target: Locator, loadMoreName: RegExp) {
-  const tiles = page.getByTestId('channel-tile');
-  const loadMore = page.getByRole('button', { name: loadMoreName });
-  for (let i = 0; i < 20 && (await target.count()) === 0; i++) {
-    if (!(await loadMore.isVisible())) break;
-    const before = await tiles.count();
-    await loadMore.click();
-    await expect.poll(() => tiles.count()).toBeGreaterThan(before);
-  }
+/**
+ * The directory lists GET /api/channels?scope=all page by page, newest first.
+ * QA holds thousands of channels (every E2E sign-up adds some), so a given
+ * seed channel can be dozens of pages in: the first page is compared with the
+ * same API page instead, each tile named in the page's language
+ * (nameLocalized[locale], else the name). Retried with a reload, as parallel
+ * runs create channels between the API read and the page load.
+ */
+async function expectFirstPageMatchesApi(page: Page, locale: 'en' | 'ar') {
+  await expect(async () => {
+    await openDirectory(page, locale);
+    const shown = await page.getByTestId('channel-tile').getByRole('heading').allInnerTexts();
+    const api = await apiGet<{ data: PublicChannel[] }>(`/api/channels?limit=${PAGE_SIZE}&scope=all`);
+    const expected = api.data.map((c) => c.nameLocalized?.[locale] || c.name);
+    expect(shown.map((n) => n.trim())).toEqual(expected.map((n) => n.trim()));
+  }).toPass({ timeout: 90000 });
 }
 
 async function openDirectory(page: Page, locale: 'en' | 'ar') {
@@ -35,7 +41,6 @@ test.describe('Channels directory', () => {
   test.use({ storageState: ANONYMOUS_STATE });
 
   test('CHL-001 lists public channels as tiles linking to channel pages (en)', async ({ page }) => {
-    const lectures = await findQaLecturesChannel();
     await openDirectory(page, 'en');
 
     await expect(page).toHaveTitle(/Channels/);
@@ -54,11 +59,8 @@ test.describe('Channels directory', () => {
     await expect(tiles.first()).toContainText(/subscriber/i);
     await expect(tiles.first()).toContainText(/video/i);
 
-    // The seed channel is reachable (it may be on a later page)
-    const tile = page.getByTestId('channel-tile').filter({ has: page.getByRole('heading', { name: lectures.name, exact: true }) });
-    await loadUntilPresent(page, tile, /^Load More$/);
-    await expect(tile).toBeVisible();
-    await expect(tile.getByRole('heading')).toHaveText(lectures.name);
+    // The tiles are the directory's first page, in order, with English names
+    await expectFirstPageMatchesApi(page, 'en');
   });
 
   test('CHL-002 "Load More" appends the next page without duplicates', async ({ page }) => {
@@ -92,7 +94,6 @@ test.describe('Channels directory', () => {
   });
 
   test('CHL-004 Arabic directory is RTL with Arabic copy and localized names', async ({ page }) => {
-    const lectures = await findQaLecturesChannel();
     await openDirectory(page, 'ar');
     await expectRtl(page);
 
@@ -103,11 +104,8 @@ test.describe('Channels directory', () => {
       expect(href).toMatch(/^\/ar\/(channels\/|@)/);
     }
 
-    const arName = lectures.nameLocalized?.ar ?? lectures.name;
-    const tile = page.getByTestId('channel-tile').filter({ has: page.getByRole('heading', { name: arName, exact: true }) });
-    await loadUntilPresent(page, tile, /^تحميل المزيد/);
-    // The seed channel has an Arabic name, which the Arabic directory shows
-    await expect(tile.getByRole('heading')).toHaveText(lectures.nameLocalized?.ar ?? lectures.name);
+    // Channels with an Arabic name show it in the Arabic directory
+    await expectFirstPageMatchesApi(page, 'ar');
   });
 
   test.describe('dark theme', () => {

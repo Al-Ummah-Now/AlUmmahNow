@@ -135,8 +135,18 @@ test.describe('Home - dark theme', () => {
     await expect(page.locator('html')).toHaveClass(/\bdark\b/);
     await expect(page.getByTestId('video-card').first()).toBeVisible();
     const heading = page.getByRole('heading', { level: 1 });
-    // Light text on the dark page
-    await expect(heading).toHaveCSS('color', 'rgb(255, 255, 255)');
+    // Light text on the dark page: the dark theme's primary text colour
+    const themeText = await page.evaluate(() => {
+      const probe = document.createElement('span');
+      probe.style.color = 'var(--fanous-color-text-primary)';
+      document.body.appendChild(probe);
+      const color = getComputedStyle(probe).color;
+      probe.remove();
+      return color;
+    });
+    await expect(heading).toHaveCSS('color', themeText);
+    const [r, g, b] = (themeText.match(/\d+/g) ?? []).map(Number);
+    expect(0.2126 * r + 0.7152 * g + 0.0722 * b, `${themeText} is a light colour`).toBeGreaterThan(200);
   });
 });
 

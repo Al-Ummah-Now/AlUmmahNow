@@ -4,6 +4,7 @@ import { AUTH_STATE, ANONYMOUS_STATE } from './test-utils/auth-state';
 import { getVideo, userApi, type E2EVideo } from './test-utils/e2e-videos';
 import { deleteVideos, expectUploadSuccess, gotoUpload, selectVideo, trackUploads, uploadUi } from './test-utils/upload';
 import { ARABIC, expectDarkSurface, expectLightSurface, expectNoHorizontalScroll } from './test-utils/upload-studio';
+import { chooseThemedOption, themedNative, themedTrigger } from './test-utils/themed-select';
 
 /**
  * Upload page (/[locale]/upload): the single-upload metadata form and its
@@ -50,11 +51,11 @@ test.describe('Upload form - metadata', () => {
     await expect(page.getByTestId('upload-mode-single')).toHaveAttribute('aria-selected', 'true');
 
     await selectVideo(page, await helpers.createTestVideo('upl-001.mp4', 16));
-    // Selects are reachable by their visible labels
+    // Dropdowns are reachable by their visible labels (the themed trigger)
     await expect(page.getByLabel('Upload Template')).toBeVisible();
-    await expect(page.getByLabel('Upload Template')).toHaveValue('');
+    await expect(themedNative(page.getByLabel('Upload Template'))).toHaveValue('');
     await expect(page.getByLabel('Video Category')).toBeVisible();
-    await expect(page.getByLabel('Video Category').locator('option')).not.toHaveCount(0);
+    await expect(themedNative(page.getByLabel('Video Category')).locator('option')).not.toHaveCount(0);
     await expect(uploadUi(page).isPublic).toBeChecked();
     await expect(page.getByTestId('upload-schedule-now')).toBeChecked();
   });
@@ -78,10 +79,10 @@ test.describe('Upload form - metadata', () => {
     await selectVideo(page, await helpers.createTestVideo('upl-002.mp4', 16));
 
     const category = page.getByTestId('category-select');
-    await expect(category).toHaveAccessibleName(ARABIC);
+    await expect(themedTrigger(category)).toHaveAccessibleName(ARABIC);
     await expect(category).toHaveAttribute('dir', 'rtl');
     await expect(category.locator('option').nth(1)).toHaveText(ARABIC);
-    await expect(page.getByTestId('upload-template-select')).toHaveAccessibleName(ARABIC);
+    await expect(themedTrigger(page.getByTestId('upload-template-select'))).toHaveAccessibleName(ARABIC);
     await expect(page.getByTestId('upload-thumbnail-section').getByRole('heading').first()).toHaveText(ARABIC);
     await expect(page.getByTestId('upload-schedule')).toContainText(ARABIC);
   });
@@ -91,10 +92,9 @@ test.describe('Upload form - metadata', () => {
     await selectVideo(page, await helpers.createTestVideo('upl-003.mp4', 16));
     const category = page.getByTestId('category-select');
 
-    await category.selectOption('quran_tafsir');
-    await expect(category).toHaveValue('quran_tafsir');
+    await chooseThemedOption(category, 'quran_tafsir');
     await expect(page.getByText('Category helps viewers find your content')).toBeVisible();
-    await category.selectOption('');
+    await chooseThemedOption(category, '');
     await expect(page.getByText('Category helps viewers find your content')).toHaveCount(0);
   });
 

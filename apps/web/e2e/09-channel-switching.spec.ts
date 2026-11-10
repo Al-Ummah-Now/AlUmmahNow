@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures';
 import type { Locator, Page } from '@playwright/test';
 import { AUTH_STATE, readAccount } from './test-utils/auth-state';
-import { menuTrigger, openAccountMenu, showMenuView } from './test-utils/navigation';
+import { menuTrigger, openAccountMenu, showMenuView, waitForSessionSwitch } from './test-utils/navigation';
 
 /**
  * Channel switching via the header account menu.
@@ -31,12 +31,11 @@ async function switchTo(page: Page, channelId: string | null) {
   await showMenuView(menu, 'channel');
   const target = channelId ? option(menu, channelId) : menu.getByTestId('nav-channel-option-none');
   await target.click();
-  // Switching refreshes the page data; the menu can close while that happens,
-  // so reopen it if needed before checking the selection
-  await expect(async () => {
-    if (!(await menu.isVisible())) await menuTrigger(page).click();
-    await expect(target).toHaveAttribute('aria-checked', 'true', { timeout: 5000 });
-  }).toPass();
+  // Switching reloads the session, which remounts the menu closed: wait for
+  // that, then check the selection in the reopened channel list
+  await waitForSessionSwitch(page, { channelId });
+  await showMenuView(menu, 'channel');
+  await expect(target).toHaveAttribute('aria-checked', 'true');
   return menu;
 }
 
@@ -69,6 +68,10 @@ async function createChannelViaMenu(page: Page, name: string, placeholder: strin
   }).toPass({ timeout: 20000 });
   await create.click();
 
+  // Creating reloads the session too (the menu remounts closed): the new
+  // channel is then listed in the reopened channel list
+  await expect(input).toBeHidden();
+  await page.waitForLoadState('networkidle').catch(() => undefined);
   await showMenuView(menu, 'channel');
   const created = menu.getByTestId('nav-channel-option').filter({ hasText: name });
   await expect(created).toBeVisible();
@@ -85,16 +88,16 @@ test.describe('Channel Switching - English', () => {
     await page.goto('/en');
   });
 
-  test('shows the active channel in the menu button on desktop', async ({ page }) => {
+  test('shows the active channel in the account menu', async ({ page }) => {
     const { main } = multiChannels();
     const trigger = menuTrigger(page);
     await expect(trigger).toBeVisible();
-    if ((page.viewportSize()?.width ?? 0) >= 768) {
-      await expect(trigger).toContainText(main.name!);
-    } else {
-      // The name/channel block is hidden on small screens
-      await expect(trigger.getByText(main.name!)).toBeHidden();
-    }
+    // The trigger is the avatar and chevron only (the name block stays hidden
+    // at every width); the active channel shows in the opened menu
+    await expect(trigger.getByText(main.name!)).toBeHidden();
+    const menu = await openAccountMenu(page);
+    await expect(menu.getByTestId('nav-active-channel')).toContainText(main.name!);
+    await expect(menu.getByTestId('nav-active-channel')).toHaveAttribute('href', `/en/channels/${main.id}`);
   });
 
   test('lists both channels with the main channel active and crowned', async ({ page }) => {
@@ -170,7 +173,7 @@ test.describe('Channel Switching - Arabic', () => {
 
   test('switches to "No Channel" mode (RTL)', async ({ page }) => {
     const menu = await switchTo(page, null);
-    await expect(menu).toHaveAttribute('dir', 'rtl');
+    await expect(menu).toHaveCSS('direction', 'rtl');
     await showMenuView(menu, 'main');
     await expect(menu.getByTestId('nav-no-active-channel')).toHaveText(/لا توجد قناة نشطة/);
   });

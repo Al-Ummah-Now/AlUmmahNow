@@ -34,6 +34,8 @@ async function typeQuery(page: Page, text: string) {
 }
 
 async function expectResults(page: Page) {
+  // One search page once the navigation settles (the outgoing render can linger a moment)
+  await expect(page.getByTestId('search-page')).toHaveCount(1);
   await expect(page.getByTestId('search-page')).toBeVisible();
   await expect(results(page).first()).toBeVisible();
 }

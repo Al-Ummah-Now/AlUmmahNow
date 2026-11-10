@@ -1,4 +1,5 @@
-import { test, expect, devices, type Page } from '@playwright/test';
+import { devices, type Page } from '@playwright/test';
+import { test, expect, consentCookie } from './fixtures';
 import { AxeBuilder } from '@axe-core/playwright';
 import { startThenPause, waitForPlayer } from './test-utils/watch-page';
 
@@ -87,7 +88,10 @@ for (const colorScheme of ['light', 'dark'] as const) {
     test.describe(`watch page a11y - ${colorScheme} theme, ${locale}`, () => {
       test.use({ colorScheme });
 
-      test('axe: zero WCAG 2.1 AA violations (incl. colour contrast)', async ({ page }) => {
+      test('axe: zero WCAG 2.1 AA violations (incl. colour contrast)', async ({ page, context, baseURL }) => {
+        // A first visit: the scan covers the cookie banner too (the other tests
+        // start with a saved choice, so the banner does not cover the controls)
+        await context.clearCookies({ name: consentCookie(baseURL!).name });
         await openWatchPage(page, locale);
         const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
         expect(results.violations, formatViolations(results.violations)).toEqual([]);
@@ -125,8 +129,11 @@ for (const colorScheme of ['light', 'dark'] as const) {
 test.describe('keyboard navigation (story 1.4)', () => {
   test('skip links are the first tab stop, visible on focus, and reach main content / player', async ({ page, browserName }) => {
     const TAB = tabKey(browserName);
-    const playable = await openWatchPage(page, 'en');
-    await page.locator('body').focus();
+    // A fresh load, as a keyboard user arrives: starting playback first (as
+    // openWatchPage may) clicks into the player, and Tab would continue from there
+    await page.goto(`/en/video/${await resolveVideoId()}`, { waitUntil: 'domcontentloaded' });
+    const playable = (await waitForPlayer(page)) === 'playable';
+    await expect(page.locator('body')).toBeFocused();
     await page.keyboard.press(TAB);
     const skip = page.getByRole('link', { name: 'Skip to main content' });
     await expect(skip).toBeFocused();
@@ -172,9 +179,11 @@ test.describe('keyboard navigation (story 1.4)', () => {
     expect(has('vjs-progress-holder'), JSON.stringify(visited)).toBeTruthy();
     expect(has('vjs-play-control')).toBeTruthy();
     expect(has('vjs-mute-control')).toBeTruthy();
-    expect(has('vjs-volume-bar')).toBeTruthy();
+    // Keyboard help lives in the settings menu (and on "?")
     expect(has('vjs-fanous-settings')).toBeTruthy();
     expect(has('vjs-fullscreen-control')).toBeTruthy();
+    // The volume slider shows on players 480px and wider; then it is a tab stop too
+    if (await page.locator('.video-js .vjs-volume-control').isVisible()) expect(has('vjs-volume-bar')).toBeTruthy();
 
     // Focus order follows the visual order of the bar: the progress row, then each row left to right
     const order = visited.map((v) => v.cls);
@@ -276,17 +285,42 @@ test.describe('mobile touch targets (story 1.5)', () => {
         expect(Math.round(t.h), `${t.cls} height`).toBeGreaterThanOrEqual(MIN_TARGET);
       }
 
-      // Adequate spacing: control-bar targets must not overlap each other
+      // Adequate spacing: control-bar buttons must not overlap each other
       const bar = targets.filter((t) => !t.cls.includes('big-play'));
-      for (let i = 0; i < bar.length; i++) {
-        for (let j = i + 1; j < bar.length; j++) {
-          const a = bar[i];
-          const b = bar[j];
+      const buttons = bar.filter((t) => !t.cls.includes('vjs-progress-control') && !t.cls.includes('vjs-volume-control'));
+      for (let i = 0; i < buttons.length; i++) {
+        for (let j = i + 1; j < buttons.length; j++) {
+          const a = buttons[i];
+          const b = buttons[j];
           const overlapX = Math.min(a.right, b.right) - Math.max(a.left, b.left);
           const overlapY = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
           expect(overlapX > 1 && overlapY > 1, `${a.cls} overlaps ${b.cls}`).toBeFalsy();
         }
       }
+      // Narrow players hide the volume slider and picture in picture
+      // (VIDEO-PLAYER.md), so the buttons fit one row under the progress bar
+      const tops = new Set(buttons.map((b) => Math.round(b.top)));
+      expect(tops.size, `button rows: ${JSON.stringify(buttons.map((b) => [b.cls, Math.round(b.top)]))}`).toBe(1);
+      await expect(page.locator('.video-js .vjs-picture-in-picture-control')).toBeHidden();
+
+      // The progress bar's 44px touch area reaches into the bar's padding
+      // (VIDEO-PLAYER.md): a tap anywhere on a button's own 44x44 area must
+      // still reach that button, never seek
+      const missed = await page.evaluate((inset) => {
+        const out: string[] = [];
+        for (const el of Array.from(document.querySelectorAll<HTMLElement>('.video-js .vjs-control-bar button'))) {
+          const r = el.getBoundingClientRect();
+          if (getComputedStyle(el).display === 'none' || r.width === 0) continue;
+          const cx = r.left + r.width / 2;
+          const cy = r.top + r.height / 2;
+          for (const [x, y] of [[cx, cy], [cx, r.top + inset], [cx, r.bottom - inset], [r.left + inset, cy], [r.right - inset, cy]]) {
+            const hit = document.elementFromPoint(x, y);
+            if (!hit || !el.contains(hit)) out.push(`${el.className.toString().slice(0, 40)} at ${Math.round(x)},${Math.round(y)} -> ${hit?.className.toString().slice(0, 40)}`);
+          }
+        }
+        return out;
+      }, 4);
+      expect(missed).toEqual([]);
 
       // Control bar fits the viewport - no control pushed off-screen
       const viewport = page.viewportSize()!;
