@@ -18,6 +18,7 @@ import { refreshCreatorAccess } from "@/hooks/useCreatorAccess";
 import { useHoldReloadWhile } from "@/lib/version-skew/VersionSkewProvider";
 import { VideoFormatChoice, type VideoFormatChoiceValue } from "@/components/videoFormat/VideoFormatChoice";
 import { useLanguage } from "@/hooks/useLanguage";
+import { useLeaveGuard } from "@/hooks/useLeaveGuard";
 import { UploadButton } from "@/components/UploadButton";
 import { ThumbnailUploadSection, ThumbnailData } from "./ThumbnailUploadSection";
 import { CategorySelector } from "./CategorySelector";
@@ -146,20 +147,12 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
     setCategoryState((prev) => applySuggestion(prev, categorySuggestion));
   }, [categorySuggestion]);
 
-  // Ask for confirmation before leaving while a transfer or processing is in
+  // Ask in-app before following a link while a transfer or processing is in
   // progress (leaving would abandon the upload)
   const uploadInFlight = uploadProgress?.state === 'uploading' || uploadProgress?.state === 'processing';
   // A deploy while this runs must not reload the page under the upload
   useHoldReloadWhile(uploadInFlight);
-  useEffect(() => {
-    if (!uploadInFlight) return;
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = '';
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [uploadInFlight]);
+  const leaveDialog = useLeaveGuard(uploadInFlight, t.confirmDialog.uploadLeaveBody);
 
   // File validation
   const validateFile = (file: File): string | null => {
@@ -695,6 +688,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
         className={`bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg ${className}`}
         data-testid="upload-details"
       >
+        {leaveDialog}
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
             {t.upload.videoDetails}
@@ -1063,6 +1057,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
 
   return (
     <div className={className}>
+      {leaveDialog}
       <div
         className={`relative border-2 border-dashed rounded-lg p-12 text-center transition-colors ${
           isDragOver

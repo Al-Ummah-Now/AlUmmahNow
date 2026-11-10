@@ -27,6 +27,7 @@ import { cacheChannels, toSessionChannel } from '@/lib/channels/session-cache';
 import { sameChannelList } from '@/lib/channels/menu';
 import { logger } from '@/lib/logger-client';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { getAuthUrl } from '@/lib/runtime-config';
 import {
   decideAfterSignOut,
@@ -161,6 +162,7 @@ function silentSignIn(): void {
 export function MultiAccountProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { t, lang } = useLanguage();
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const [user, setUser] = useState<UserInfo | null>(null);
   // This site's own sessions (tokens held here) and the browser's accounts on
   // the auth server; the switcher shows both, merged
@@ -515,9 +517,12 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       const account = accounts.find(a => a.userId === userId);
       if (!account) return;
 
-      const confirmed = window.confirm(
-        t.navigation.removeAccountConfirm.replace('{email}', account.email)
-      );
+      const confirmed = await confirm({
+        title: t.confirmDialog.removeAccountTitle,
+        description: t.navigation.removeAccountConfirm.replace('{email}', account.email),
+        confirmLabel: t.navigation.removeAccount,
+        testId: 'remove-account-dialog',
+      });
 
       if (!confirmed) return;
 
@@ -532,7 +537,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       logger.error('[MultiAccountProvider] Failed to remove account:', err);
       setError(t.errors.failedToDelete);
     }
-  }, [accounts, loadSessionData, router, t]);
+  }, [accounts, confirm, loadSessionData, router, t]);
 
   // Switch to a different channel
   const switchToChannel = useCallback(async (channelId: string | null) => {
@@ -704,6 +709,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
   return (
     <MultiAccountContext.Provider value={value}>
       {children}
+      {confirmDialog}
     </MultiAccountContext.Provider>
   );
 }

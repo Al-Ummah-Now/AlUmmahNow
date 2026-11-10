@@ -591,7 +591,7 @@ export class VideoAnalytics {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify(batch),
-          keepalive: true  // Important for beforeunload
+          keepalive: true  // Lets the request finish after pagehide
         });
 
         if (!response.ok) {
@@ -638,7 +638,7 @@ export class VideoAnalytics {
    * Setup handler to flush on page unload and visibility change
    */
   private setupUnloadHandler(): void {
-    // Flush on page unload
+    // Flush when the page is left (pagehide; beforeunload is never used)
     this.unloadHandler = () => {
       void this.flush();
     };
@@ -651,7 +651,7 @@ export class VideoAnalytics {
     };
 
     if (typeof window !== 'undefined') {
-      window.addEventListener('beforeunload', this.unloadHandler);
+      window.addEventListener('pagehide', this.unloadHandler);
       document.addEventListener('visibilitychange', this.visibilityHandler);
     }
   }
@@ -695,7 +695,7 @@ export class VideoAnalytics {
     // Remove event handlers
     if (typeof window !== 'undefined') {
       if (this.unloadHandler) {
-        window.removeEventListener('beforeunload', this.unloadHandler);
+        window.removeEventListener('pagehide', this.unloadHandler);
         this.unloadHandler = undefined;
       }
       if (this.visibilityHandler) {

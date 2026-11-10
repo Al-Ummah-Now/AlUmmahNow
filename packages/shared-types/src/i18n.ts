@@ -2266,6 +2266,48 @@ export interface AppTranslations {
     moreVideoActions: string;
     watchingNow: string;
   };
+
+  /**
+   * In-app confirmation dialogs (destructive actions, leaving with unsaved work)
+   */
+  confirmDialog: {
+    /** Label of the type-to-confirm field; {value} is the text to type */
+    typeToConfirm: string;
+    /** Word typed to confirm a bulk delete */
+    deleteWord: string;
+    leaveTitle: string;
+    stay: string;
+    leave: string;
+    unsavedLeaveBody: string;
+    uploadLeaveBody: string;
+    deleteVideoTitle: string;
+    deleteVideosTitle: string;
+    clearHistoryTitle: string;
+    deleteCommentTitle: string;
+    deleteCommentBody: string;
+    deleteTemplateTitle: string;
+    deleteTemplateFailed: string;
+    setDefaultTemplateFailed: string;
+    cancelScheduleTitle: string;
+    publishNowTitle: string;
+    deletePlaylistTitle: string;
+    removeAccountTitle: string;
+    deleteFailed: string;
+    remove: string;
+    removeImageTitle: string;
+    removeImageBody: string;
+    unsubscribe: string;
+    unsubscribeTitle: string;
+    unsubscribeBody: string;
+    removeFromPlaylistTitle: string;
+    /** {title}: the video's title */
+    removeFromPlaylistBody: string;
+    clearDeviceTitle: string;
+    clearDeviceBody: string;
+    clear: string;
+    deleteNotificationTitle: string;
+    deleteNotificationBody: string;
+  };
 }
 
 /**

@@ -1844,6 +1844,20 @@ const ar: Messages = {
     previous: 'السابق',
     next: 'التالي',
   },
+  confirmDialog: {
+    deleteWord: 'حذف',
+    thumbsFixTitle: 'إصلاح الصور المصغّرة؟',
+    contactDeleteTitle: 'حذف الرسالة؟',
+    themeDeleteTitle: 'حذف المظهر؟',
+    goLiveTitle: 'تشغيل الحذف التلقائي؟',
+    staleDeleteTitle: 'حذف الرفعات المتروكة؟',
+    errorTestGroupTitle: 'حذف مجموعة الاختبار؟',
+    errorTestGroupBody: 'ستُحذف مجموعة أخطاء الاختبار هذه وتكراراتها.',
+    themeAssetTitle: 'حذف الملف؟',
+    themeAssetBody: 'حذف {path} من مسودة هذا المظهر؟ ستفقد الأجزاء التي تستخدمه الصورة.',
+    signOutAllTitle: 'تسجيل الخروج من كل الحسابات؟',
+    signOutAllBody: 'سيُسجَّل خروج كل حساب في هذا المتصفح، في كل تطبيقات الأمة الآن.',
+  },
 };
 
 export default ar;

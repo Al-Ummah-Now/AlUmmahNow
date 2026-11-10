@@ -12,6 +12,7 @@ import { channelPath } from '@/lib/channel-url';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
 import { logger } from '@/lib/logger-client';
 import { can } from '@al-ummah/shared-types';
@@ -32,6 +33,7 @@ interface ChannelData {
 
 function ChannelEditPage() {
   const { t } = useLanguage();
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const params = useParams();
   const locale = params.locale as string;
   const channelId = params.id as string;
@@ -194,6 +196,13 @@ function ChannelEditPage() {
 
   const removePhoto = async (type: 'avatar' | 'cover') => {
     if (!channelId) return;
+    const confirmed = await confirm({
+      title: t.confirmDialog.removeImageTitle,
+      description: t.confirmDialog.removeImageBody,
+      confirmLabel: t.confirmDialog.remove,
+      testId: 'channel-image-remove-dialog',
+    });
+    if (!confirmed) return;
     const key = field(type);
     setPhotoBusy(type);
     setError(null);
@@ -241,6 +250,7 @@ function ChannelEditPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {confirmDialog}
       <div className="max-w-6xl mx-auto">
         {/* Channel banner: the current cover as a preview, with Change/Remove */}
         <EditableCover

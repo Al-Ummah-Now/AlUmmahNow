@@ -5,7 +5,7 @@
  * error (from the admin-api error code), refresh the page on success, and a
  * confirm dialog for destructive or user-visible changes.
  */
-import { useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ActionResult } from '@/lib/api/errors';
 import { useLanguage } from '@/i18n/I18nProvider';
@@ -75,9 +75,7 @@ export function ActionFeedback({ error, message }: { error: string | null; messa
   );
 }
 
-interface ConfirmProps {
-  /** Opens the dialog. */
-  label: string;
+interface ConfirmDialogContent {
   title: string;
   body: string;
   confirmLabel: string;
@@ -86,90 +84,171 @@ interface ConfirmProps {
   /** The exact text the admin must type to enable the confirm button. */
   typeToConfirm?: string;
   danger?: boolean;
-  disabled?: boolean;
-  busy?: boolean;
   testId: string;
-  onConfirm: (reason: string) => Promise<unknown> | unknown;
 }
 
-/** A button that opens a modal <dialog> to confirm (and optionally explain) a change. */
-export function ConfirmButton({ label, title, body, confirmLabel, withReason, typeToConfirm, danger, disabled, busy, testId, onConfirm }: ConfirmProps) {
+interface ConfirmDialogProps extends ConfirmDialogContent {
+  open: boolean;
+  /** Esc, the backdrop and Cancel all call this. */
+  onCancel: () => void;
+  onConfirm: (reason: string) => void;
+}
+
+/** True when the typed text matches the required value (surrounding spaces ignored). */
+export function typedMatches(typed: string, required: string | undefined): boolean {
+  return !required || typed.trim() === required.trim();
+}
+
+/**
+ * Modal <dialog> (showModal: focus trap, Escape cancels) to confirm a change.
+ * Focus starts on Cancel, or on the reason / type-to-confirm field when there is one.
+ * Never use window.confirm/alert/prompt instead.
+ */
+export function ConfirmDialog({ open, onCancel, onConfirm, title, body, confirmLabel, withReason, typeToConfirm, danger, testId }: ConfirmDialogProps) {
   const { t } = useLanguage();
   const ref = useRef<HTMLDialogElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
   const ids = useId();
   const [reason, setReason] = useState('');
   const [typed, setTyped] = useState('');
-  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
-    if (open && !dialog.open) dialog.showModal();
+    if (open && !dialog.open) {
+      dialog.showModal();
+      if (!withReason && !typeToConfirm) cancelRef.current?.focus();
+    }
     if (!open && dialog.open) dialog.close();
-  }, [open]);
+  }, [open, withReason, typeToConfirm]);
 
-  const ready = !typeToConfirm || typed.trim() === typeToConfirm;
+  const ready = typedMatches(typed, typeToConfirm);
+  const reset = () => {
+    setReason('');
+    setTyped('');
+  };
+  const cancel = () => {
+    reset();
+    onCancel();
+  };
+
+  return (
+    <dialog
+      ref={ref}
+      onClose={() => open && cancel()}
+      onClick={(e) => {
+        // A click on the backdrop (outside the form) cancels
+        if (e.target === e.currentTarget) cancel();
+      }}
+      aria-labelledby={`${ids}-title`}
+      aria-describedby={`${ids}-body`}
+      className="bg-surface text-fg border border-border rounded-lg p-0 w-[min(32rem,calc(100vw-2rem))] backdrop:bg-fg/50"
+      data-testid={`${testId}-dialog`}
+    >
+      <form
+        method="dialog"
+        className="p-6 space-y-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!ready) return;
+          const text = reason.trim();
+          reset();
+          onConfirm(text);
+        }}
+      >
+        <h2 id={`${ids}-title`} className="text-lg font-semibold">
+          {title}
+        </h2>
+        <p id={`${ids}-body`} className="text-fg-muted text-sm">
+          {body}
+        </p>
+        {withReason && (
+          <div className="flex flex-col gap-1">
+            <label htmlFor={`${ids}-reason`} className="text-sm text-fg-muted">
+              {t('content.reason')}
+            </label>
+            <textarea id={`${ids}-reason`} value={reason} onChange={(e) => setReason(e.target.value)} rows={3} maxLength={1000} dir="auto" className={`${fieldClass} w-full`} data-testid={`${testId}-reason`} />
+            <span className="text-xs text-fg-subtle">{t('content.reasonHint')}</span>
+          </div>
+        )}
+        {typeToConfirm && (
+          <div className="flex flex-col gap-1">
+            <label htmlFor={`${ids}-typed`} className="text-sm text-fg-muted">
+              {t('content.typeToConfirm', { value: typeToConfirm })}
+            </label>
+            <input id={`${ids}-typed`} value={typed} onChange={(e) => setTyped(e.target.value)} dir="auto" autoComplete="off" className={`${fieldClass} w-full`} data-testid={`${testId}-typed`} data-confirm={typeToConfirm} />
+          </div>
+        )}
+        <div className="flex flex-wrap justify-end gap-2 pt-2">
+          <button ref={cancelRef} type="button" className={smallButtonClass} onClick={cancel} data-testid={`${testId}-cancel`}>
+            {t('content.cancel')}
+          </button>
+          <button type="submit" className={danger ? dangerButtonClass : smallButtonClass} disabled={!ready} data-testid={`${testId}-confirm`}>
+            {confirmLabel}
+          </button>
+        </div>
+      </form>
+    </dialog>
+  );
+}
+
+interface ConfirmProps extends ConfirmDialogContent {
+  /** Opens the dialog. */
+  label: string;
+  disabled?: boolean;
+  busy?: boolean;
+  onConfirm: (reason: string) => Promise<unknown> | unknown;
+}
+
+/** A button that opens a modal <dialog> to confirm (and optionally explain) a change. */
+export function ConfirmButton({ label, disabled, busy, onConfirm, ...dialog }: ConfirmProps) {
+  const { t } = useLanguage();
+  const [open, setOpen] = useState(false);
 
   return (
     <>
-      <button type="button" className={danger ? dangerButtonClass : smallButtonClass} disabled={disabled || busy} onClick={() => setOpen(true)} data-testid={testId}>
+      <button type="button" className={dialog.danger ? dangerButtonClass : smallButtonClass} disabled={disabled || busy} onClick={() => setOpen(true)} data-testid={dialog.testId}>
         {busy ? t('content.working') : label}
       </button>
-      <dialog
-        ref={ref}
-        onClose={() => setOpen(false)}
-        aria-labelledby={`${ids}-title`}
-        aria-describedby={`${ids}-body`}
-        className="bg-surface text-fg border border-border rounded-lg p-0 w-[min(32rem,calc(100vw-2rem))] backdrop:bg-fg/50"
-        data-testid={`${testId}-dialog`}
-      >
-        <form
-          method="dialog"
-          className="p-6 space-y-4"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            if (!ready) return;
-            setOpen(false);
-            await onConfirm(reason.trim());
-            setReason('');
-            setTyped('');
-          }}
-        >
-          <h2 id={`${ids}-title`} className="text-lg font-semibold">
-            {title}
-          </h2>
-          <p id={`${ids}-body`} className="text-fg-muted text-sm">
-            {body}
-          </p>
-          {withReason && (
-            <div className="flex flex-col gap-1">
-              <label htmlFor={`${ids}-reason`} className="text-sm text-fg-muted">
-                {t('content.reason')}
-              </label>
-              <textarea id={`${ids}-reason`} value={reason} onChange={(e) => setReason(e.target.value)} rows={3} maxLength={1000} dir="auto" className={`${fieldClass} w-full`} data-testid={`${testId}-reason`} />
-              <span className="text-xs text-fg-subtle">{t('content.reasonHint')}</span>
-            </div>
-          )}
-          {typeToConfirm && (
-            <div className="flex flex-col gap-1">
-              <label htmlFor={`${ids}-typed`} className="text-sm text-fg-muted">
-                {t('content.typeToConfirm', { value: typeToConfirm })}
-              </label>
-              <input id={`${ids}-typed`} value={typed} onChange={(e) => setTyped(e.target.value)} dir="ltr" autoComplete="off" className={`${fieldClass} w-full`} data-testid={`${testId}-typed`} data-confirm={typeToConfirm} />
-            </div>
-          )}
-          <div className="flex flex-wrap justify-end gap-2 pt-2">
-            <button type="button" className={smallButtonClass} onClick={() => setOpen(false)}>
-              {t('content.cancel')}
-            </button>
-            <button type="submit" className={danger ? dangerButtonClass : smallButtonClass} disabled={!ready} data-testid={`${testId}-confirm`}>
-              {confirmLabel}
-            </button>
-          </div>
-        </form>
-      </dialog>
+      <ConfirmDialog
+        {...dialog}
+        open={open}
+        onCancel={() => setOpen(false)}
+        onConfirm={(reason) => {
+          setOpen(false);
+          void onConfirm(reason);
+        }}
+      />
     </>
   );
+}
+
+/**
+ * Imperative confirm for handlers that are not a single button:
+ * `if (!(await confirm({...}))) return;`. Render `dialog` once in the component.
+ */
+export function useConfirm() {
+  const [content, setContent] = useState<ConfirmDialogContent | null>(null);
+  const resolver = useRef<((confirmed: boolean) => void) | null>(null);
+
+  const confirm = useCallback((next: ConfirmDialogContent) => {
+    // A second request while one is open cancels the first
+    resolver.current?.(false);
+    setContent(next);
+    return new Promise<boolean>((resolve) => {
+      resolver.current = resolve;
+    });
+  }, []);
+
+  const settle = useCallback((confirmed: boolean) => {
+    const resolve = resolver.current;
+    resolver.current = null;
+    setContent(null);
+    resolve?.(confirmed);
+  }, []);
+
+  const dialog = content ? <ConfirmDialog {...content} open onCancel={() => settle(false)} onConfirm={() => settle(true)} /> : null;
+  return { confirm, dialog };
 }
 
 /** Delete button for a list row (comment, playlist, post): confirm, delete, refresh. */

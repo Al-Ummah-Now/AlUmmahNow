@@ -156,13 +156,13 @@ test.describe('Upload templates - settings page', () => {
 
       // Dismissing the confirmation keeps it
       await openMenu(c);
-      page.once('dialog', (d) => d.dismiss());
       await c.getByRole('menuitem', { name: 'Delete' }).click();
+      await page.getByTestId('template-delete-dialog-cancel').click();
       await expect(c).toBeVisible();
 
       await openMenu(c);
-      page.once('dialog', (d) => d.accept());
       await c.getByRole('menuitem', { name: 'Delete' }).click();
+      await page.getByTestId('template-delete-dialog-confirm').click();
       await expect(c).toHaveCount(0);
       expect((await listTemplates(USER)).some((t) => t.id === template.id)).toBe(false);
     } finally {

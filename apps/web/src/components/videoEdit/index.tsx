@@ -4,6 +4,7 @@ import { logger } from '@/lib/logger-client';
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, Plus, FileText, Edit3 } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { VideoObject } from '@/interfaces';
 import type { VideoCommentSettings as CommentSettings, VideoCategory } from '@al-ummah/shared-types';
 import { updateVideo } from '@/lib/api/videos';
@@ -60,6 +61,7 @@ export default function VideoEdit({
   className = '',
 }: VideoEditProps) {
   const { t, isRTL } = useLanguage();
+  const { confirm: confirmDiscard, dialog: discardDialog } = useConfirm();
   const [activeTab, setActiveTab] = useState<'en' | 'ar'>('en');
   const [isSaving, setIsSaving] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -245,20 +247,25 @@ export default function VideoEdit({
     }
   };
 
-  const handleCancel = () => {
+  const handleCancel = async () => {
     if (hasUnsavedChanges) {
-      if (confirm(t.video.unsavedChangesMessage)) {
-        onCancel?.();
-      }
-    } else {
-      onCancel?.();
+      const discard = await confirmDiscard({
+        title: t.video.discardChanges ?? t.confirmDialog.leaveTitle,
+        description: t.video.unsavedChangesMessage ?? t.confirmDialog.unsavedLeaveBody,
+        confirmLabel: t.video.discardChanges ?? t.confirmDialog.leave,
+        cancelLabel: t.confirmDialog.stay,
+        testId: 'video-edit-discard',
+      });
+      if (!discard) return;
     }
+    onCancel?.();
   };
 
   const VideoPreviewComponent = isRTL ? VideoPreviewRTL : VideoPreview;
 
   return (
     <div data-testid="video-edit-form" className={`bg-white dark:bg-gray-900 rounded-lg shadow-lg ${className}`}>
+      {discardDialog}
       {/* Header */}
       <div className="border-b dark:border-gray-700 p-6">
         <div className="flex items-center justify-between">

@@ -10,6 +10,7 @@
  * state back from the admin inbox, so the support inbox never gets test mail.
  */
 import { test, expect, type Page } from '@playwright/test';
+import { adminConfirm, confirmInApp } from './in-app-confirm';
 import { promoteToAdmin } from './sink';
 import { sinkEmail, target, TEST_PASSWORD } from './targets';
 import { completeRegistration, createProfile, signUpOnWeb, type Locale } from './web-session';
@@ -148,6 +149,7 @@ test.describe('Release: Contact us', () => {
       for (const id of ids) {
         await page.goto(`${target().adminWeb}/contact/${id}`);
         await page.getByTestId('contact-delete').click();
+        await confirmInApp(page, adminConfirm('contact-delete-confirm'));
         await expect(page).toHaveURL(new RegExp(`${target().adminWeb}/contact(\\?|$)`), { timeout: 30000 });
       }
     }
@@ -172,6 +174,7 @@ async function sweepLeftovers(page: Page): Promise<void> {
   for (const id of stale.slice(0, 20)) {
     await page.goto(`${target().adminWeb}/contact/${id}`);
     await page.getByTestId('contact-delete').click();
+    await confirmInApp(page, adminConfirm('contact-delete-confirm'));
     await expect(page).toHaveURL(new RegExp(`${target().adminWeb}/contact(\\?|$)`), { timeout: 30000 });
   }
 }

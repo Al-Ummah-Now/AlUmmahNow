@@ -10,6 +10,7 @@
  * test groups are also pruned after a day and never send alert mail).
  */
 import { test, expect, type Page } from '@playwright/test';
+import { adminConfirm, confirmInApp } from './in-app-confirm';
 import { promoteToAdmin } from './sink';
 import { releaseEnv, sinkEmail, target, TEST_PASSWORD } from './targets';
 import { completeRegistration } from './web-session';
@@ -89,6 +90,7 @@ test.describe('Release: friendly errors and the admin Errors page', () => {
       await expect(page.getByTestId('error-status')).toHaveAttribute('data-status', 'resolved', { timeout: 15000 });
 
       await page.getByTestId('error-delete-test-group').click();
+      await confirmInApp(page, adminConfirm('error-delete-test-group-confirm'));
       await expect(page).toHaveURL(new RegExp(`${target().adminWeb}/errors(\\?|$)`), { timeout: 15000 });
       await page.goto(`${target().adminWeb}/errors?q=${encodeURIComponent(ref)}`);
       await expect(page.getByTestId('error-event-ref').filter({ hasText: ref })).toHaveCount(0);

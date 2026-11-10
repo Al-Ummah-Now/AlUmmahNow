@@ -357,12 +357,12 @@ describe('VideoAnalytics', () => {
   });
 
   describe('Unload Handling', () => {
-    it('should setup beforeunload handler', () => {
+    it('should flush on pagehide (never beforeunload)', () => {
       const addEventListener = jest.spyOn(window, 'addEventListener');
 
       const analytics = new VideoAnalytics('video-1');
 
-      expect(addEventListener).toHaveBeenCalledWith('beforeunload', expect.any(Function));
+      expect(addEventListener).toHaveBeenCalledWith('pagehide', expect.any(Function));
 
       analytics.destroy();
       addEventListener.mockRestore();
@@ -409,7 +409,7 @@ describe('VideoAnalytics', () => {
       const analytics = new VideoAnalytics('video-1');
       analytics.destroy();
 
-      expect(removeEventListener).toHaveBeenCalledWith('beforeunload', expect.any(Function));
+      expect(removeEventListener).toHaveBeenCalledWith('pagehide', expect.any(Function));
 
       removeEventListener.mockRestore();
     });

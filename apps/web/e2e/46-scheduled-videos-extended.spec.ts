@@ -64,13 +64,13 @@ test.describe('Scheduled list - actions', () => {
     await waitForItem(page, video!);
     const row = item(page, video!);
 
-    page.once('dialog', (d) => d.dismiss());
     await row.getByTestId('scheduled-video-cancel').click();
+    await page.getByTestId('cancel-schedule-dialog-cancel').click();
     await expect(row).toBeVisible();
     expect((await getSchedule('single', video!))?.status).toBe('scheduled');
 
-    page.once('dialog', (d) => d.accept());
     await row.getByTestId('scheduled-video-cancel').click();
+    await page.getByTestId('cancel-schedule-dialog-confirm').click();
     await expect(row).toHaveCount(0, { timeout: 30000 });
     await expect.poll(async () => (await getSchedule('single', video!))?.status ?? 'none', { timeout: 60000 }).not.toBe('scheduled');
   });
@@ -79,8 +79,8 @@ test.describe('Scheduled list - actions', () => {
     await openList(page);
     await waitForItem(page, video!);
     const row = item(page, video!);
-    page.once('dialog', (d) => d.accept());
     await row.getByTestId('scheduled-video-publish-now').click();
+    await page.getByTestId('publish-now-dialog-confirm').click();
 
     await expect(row).toHaveCount(0, { timeout: 30000 });
     await expect.poll(async () => (await getVideo(userApi('single'), video!.id))?.isPublic, { timeout: 60000 }).toBe(true);

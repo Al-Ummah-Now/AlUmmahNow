@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { ArrowDown, ArrowUp, ListVideo, Lock, Play, Trash2 } from 'lucide-react';
 import { getLocalizedValue } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { logger } from '@/lib/logger-client';
 import { removeUnwantedChars } from '@/lib/utility';
@@ -31,6 +32,7 @@ interface PlaylistViewProps {
 
 export default function PlaylistView({ playlistId }: PlaylistViewProps) {
   const { t, lang, isRTL } = useLanguage();
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const { user } = useAuth();
   const [playlist, setPlaylist] = useState<PlaylistWithVideos | null>(null);
   const [videos, setVideos] = useState<VideoObject[]>([]);
@@ -93,6 +95,14 @@ export default function PlaylistView({ playlistId }: PlaylistViewProps) {
 
   const handleRemove = async (videoId: string) => {
     if (!playlist || busy) return;
+    const video = videos.find((v) => v.id === videoId);
+    const confirmed = await confirm({
+      title: t.confirmDialog.removeFromPlaylistTitle,
+      description: t.confirmDialog.removeFromPlaylistBody.replace('{title}', video ? pickLanguage(video.title, lang) : ''),
+      confirmLabel: t.confirmDialog.remove,
+      testId: 'playlist-remove-video-dialog',
+    });
+    if (!confirmed) return;
     setActionError(null);
     setBusy(true);
     const result = await removeVideoFromPlaylist(playlist.id, videoId, { channelId: playlist.channelId });
@@ -140,6 +150,7 @@ export default function PlaylistView({ playlistId }: PlaylistViewProps) {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8" dir={isRTL ? 'rtl' : 'ltr'}>
+      {confirmDialog}
       <div className="flex flex-col md:flex-row gap-6">
         {/* Playlist info */}
         <aside className="md:w-80 flex-shrink-0">

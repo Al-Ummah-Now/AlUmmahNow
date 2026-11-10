@@ -93,6 +93,9 @@ it('remove takes the video out (unavailable ones too)', async () => {
   await renderEditor();
   (removeVideosFromPlaylist as jest.Mock).mockResolvedValue({ ok: true, data: { removed: 1, videosCount: 2 } });
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Remove Video unavailable from the playlist' })); });
+  // The in-app confirm dialog asks first
+  expect(removeVideosFromPlaylist).not.toHaveBeenCalled();
+  await act(async () => { fireEvent.click(screen.getByTestId('playlist-editor-remove-dialog-confirm')); });
   expect(removeVideosFromPlaylist).toHaveBeenCalledWith('pl', ['gone'], { channelId: 'ch' });
   expect(order()).toEqual(['a', 'b']);
 });

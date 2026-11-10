@@ -19,6 +19,7 @@ import {
   unpinPostComment,
 } from '@/lib/api/post-comments';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 
 interface CommentProps {
   comment: PostComment;
@@ -83,6 +84,7 @@ export default function Comment({
   onReplyCreated,
 }: CommentProps) {
   const { t } = useLanguage();
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const [liked, setLiked] = useState(Boolean(comment.isLikedByViewer));
   const [likes, setLikes] = useState(comment.likes);
   const [showReplyForm, setShowReplyForm] = useState(false);
@@ -202,7 +204,13 @@ export default function Comment({
 
   const handleDelete = async () => {
     if (!channelId || !userId) return;
-    if (!confirm(isRTL ? 'هل تريد حذف هذا التعليق؟' : 'Delete this comment?')) return;
+    const confirmed = await confirm({
+      title: t.confirmDialog.deleteCommentTitle,
+      description: t.confirmDialog.deleteCommentBody,
+      confirmLabel: t.common.delete,
+      testId: 'post-comment-delete-dialog',
+    });
+    if (!confirmed) return;
 
     try {
       const result = await deletePostComment(postChannelId, postId, comment.id, { channelId });
@@ -259,6 +267,7 @@ export default function Comment({
 
   return (
     <div className={cn('flex gap-3', isRTL && 'flex-row-reverse')}>
+      {confirmDialog}
       {/* Avatar */}
       <div className="relative w-10 h-10 flex-shrink-0">
         {comment.userAvatarUrl && !comment.deletedAt ? (

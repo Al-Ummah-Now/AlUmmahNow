@@ -39,6 +39,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, ExternalLink, Film, GripVertical, ListPlus, Trash2, X } from 'lucide-react';
 import type { PlaylistBulkAddResult, PlaylistManageItem } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import {
   addVideosToPlaylist,
   getPlaylistManageItems,
@@ -189,6 +190,7 @@ function PlaylistItemRow({ item, index, total, manual, busy, onMove, onRemove }:
 
 export default function PlaylistEditor({ channelId, playlistId, initialJobId }: Props) {
   const { t, lang, isRTL } = useLanguage();
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const p = t.playlistTools;
   const [meta, setMeta] = useState<Meta | null>(null);
   const [items, setItems] = useState<PlaylistManageItem[]>([]);
@@ -373,6 +375,13 @@ export default function PlaylistEditor({ channelId, playlistId, initialJobId }: 
   const remove = async (item: PlaylistManageItem) => {
     const previous = items;
     const title = titleOf(item);
+    const confirmed = await confirm({
+      title: t.confirmDialog.removeFromPlaylistTitle,
+      description: t.confirmDialog.removeFromPlaylistBody.replace('{title}', title),
+      confirmLabel: t.confirmDialog.remove,
+      testId: 'playlist-editor-remove-dialog',
+    });
+    if (!confirmed) return;
     setItems(items.filter((entry) => entry.id !== item.id));
     setBusy(true);
     try {
@@ -454,6 +463,7 @@ export default function PlaylistEditor({ channelId, playlistId, initialJobId }: 
 
   return (
     <div className="space-y-6" dir={isRTL ? 'rtl' : 'ltr'} data-testid="playlist-editor">
+      {confirmDialog}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <Link href={allHref} className="b b-ghost b-sm -ms-3 mb-1"><Back className="h-4 w-4" aria-hidden="true" />{p.allPlaylists}</Link>

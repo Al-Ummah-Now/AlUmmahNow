@@ -140,8 +140,8 @@ test.describe('Video Edit - read only', () => {
     await openEditor(page, video);
     await page.getByTestId('video-edit-title-en').fill('Unsaved title');
 
-    page.once('dialog', (dialog) => dialog.dismiss());
     await page.getByTestId('video-edit-cancel').click();
+    await page.getByTestId('video-edit-discard-cancel').click();
     await expect(page).toHaveURL(new RegExp(`/video/${video.id}/edit`));
     await expect(page.getByTestId('video-edit-title-en')).toHaveValue('Unsaved title');
   });
@@ -151,8 +151,8 @@ test.describe('Video Edit - read only', () => {
     await openEditor(page, video);
     await page.getByTestId('video-edit-title-en').fill('Unsaved title');
 
-    page.once('dialog', (dialog) => dialog.accept());
     await page.getByTestId('video-edit-cancel').click();
+    await page.getByTestId('video-edit-discard-confirm').click();
     await expect(page).toHaveURL(new RegExp(`/en/video\\?vid=${video.id}`));
 
     const stored = await getVideo(userApi('single'), video.id);
@@ -163,14 +163,9 @@ test.describe('Video Edit - read only', () => {
     const video = seed[SEED_TITLES.singleVideo];
     await openEditor(page, video);
 
-    let prompted = false;
-    page.once('dialog', (dialog) => {
-      prompted = true;
-      return dialog.dismiss();
-    });
     await page.getByTestId('video-edit-cancel').click();
     await expect(page).toHaveURL(new RegExp(`/en/video\\?vid=${video.id}`));
-    expect(prompted).toBe(false);
+    await expect(page.getByTestId('video-edit-discard')).toHaveCount(0);
   });
 
   test('should show an error when the save request fails', async ({ page }) => {

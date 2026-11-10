@@ -504,14 +504,4 @@ self.addEventListener('message', (event) => {
   }
 });
 
-/**
- * Clean up on service worker termination
- */
-self.addEventListener('beforeunload', () => {
-  if (cleanupIntervalId) {
-    clearInterval(cleanupIntervalId);
-    cleanupIntervalId = null;
-  }
-});
-
 swLog('[SW] Service Worker loaded with security controls');

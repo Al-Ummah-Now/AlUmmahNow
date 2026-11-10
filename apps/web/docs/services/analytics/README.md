@@ -191,7 +191,7 @@ Events are queued and sent in batches to reduce network overhead:
 
 ### Automatic Flushing
 Events are automatically flushed on:
-- Page unload (`beforeunload` event)
+- Page hide / leave (`pagehide` event; `beforeunload` is never used)
 - Tab hidden (`visibilitychange` event)
 - Timer interval (every 30 seconds)
 - Batch size reached (20 events)

@@ -91,11 +91,9 @@ test.describe('Playlist manager', () => {
       await expect(renamedRow.getByRole('link', { name: 'View playlist' })).toHaveAttribute('href', /^\/en\/playlist\/[\w-]+$/);
 
       // Delete (confirm dialog)
-      page.once('dialog', (dialog) => {
-        expect(dialog.message()).toBe(`Delete "${renamed}"? This cannot be undone.`);
-        void dialog.accept();
-      });
       await renamedRow.getByRole('button', { name: 'Delete playlist' }).click();
+      await expect(page.getByTestId('playlist-delete-dialog')).toContainText(`Delete "${renamed}"? This cannot be undone.`);
+      await page.getByTestId('playlist-delete-dialog-confirm').click();
       await expect(renamedRow).toHaveCount(0);
       await expect
         .poll(async () => {
@@ -122,8 +120,8 @@ test.describe('Playlist manager', () => {
       await expect(page.getByText('Loading...')).toHaveCount(0);
 
       const row = managedRow(page, title);
-      page.once('dialog', (dialog) => void dialog.dismiss());
       await row.getByRole('button', { name: 'Delete playlist' }).click();
+      await page.getByTestId('playlist-delete-dialog-cancel').click();
       await expect(row).toBeVisible();
       expect((await listChannelPlaylists(channelId())).some((p) => p.id === id)).toBe(true);
     } finally {
@@ -222,6 +220,7 @@ test.describe('Playlist page - owner', () => {
         .toEqual([videos[1].id, videos[0].id]);
 
       await list.getByRole('listitem').first().getByRole('button', { name: 'Remove from playlist' }).click();
+      await page.getByTestId('playlist-remove-video-dialog-confirm').click();
       await expect.poll(titles).toEqual([videos[0].title]);
       await expect(page.getByText('1 videos')).toBeVisible();
       await expect.poll(async () => (await apiGet<{ videos: string[] }>(`/api/playlists/${id}`)).videos).toEqual([videos[0].id]);

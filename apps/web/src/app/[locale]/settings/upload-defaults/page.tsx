@@ -23,6 +23,8 @@ import { UploadTemplate, VIDEO_CATEGORIES } from '@al-ummah/shared-types';
 import { listTemplates, deleteTemplate, setDefaultTemplate } from '@/lib/api/upload-defaults';
 import { TemplateEditorModal } from '@/components/settings/TemplateEditorModal';
 import { parseTemplateListResponse } from '@/lib/upload/template-list';
+import { useConfirm } from '@/components/ui/confirm-dialog';
+import { logger } from '@/lib/logger-client';
 
 export default function UploadDefaultsPage() {
   const { t, isRTL } = useLanguage();
@@ -36,6 +38,9 @@ export default function UploadDefaultsPage() {
   const [editingTemplate, setEditingTemplate] = useState<UploadTemplate | undefined>(undefined);
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  // Failure of a delete / set-default action, shown inline
+  const [actionError, setActionError] = useState<string | null>(null);
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   // Load templates
   const loadTemplates = useCallback(async () => {
@@ -83,32 +88,35 @@ export default function UploadDefaultsPage() {
   };
 
   // Handle delete template
-  const handleDelete = async (templateId: string) => {
+  const handleDelete = async (template: UploadTemplate) => {
     // Close the actions menu first; it stayed open through the reload otherwise
     setActiveMenu(null);
-    const confirmed = confirm(
-      isRTL
-        ? 'هل أنت متأكد من حذف هذا القالب؟'
-        : 'Are you sure you want to delete this template?'
-    );
-
+    setActionError(null);
+    const confirmed = await confirm({
+      title: t.confirmDialog.deleteTemplateTitle,
+      description: t.uploadDefaults?.confirmDelete,
+      confirmLabel: t.common.delete,
+      testId: 'template-delete-dialog',
+    });
     if (!confirmed) return;
 
     try {
-      const result = await deleteTemplate(templateId);
+      const result = await deleteTemplate(template.id);
       if (result?.success) {
         await loadTemplates();
       } else {
-        alert(isRTL ? 'فشل في حذف القالب' : 'Failed to delete template');
+        setActionError(t.confirmDialog.deleteTemplateFailed);
       }
-    } catch (_err) {
-      alert(isRTL ? 'حدث خطأ أثناء الحذف' : 'An error occurred while deleting');
+    } catch (err) {
+      logger.error('[UploadDefaults] Delete template failed', { templateId: template.id, error: err });
+      setActionError(t.confirmDialog.deleteTemplateFailed);
     }
   };
 
   // Handle set as default
   const handleSetDefault = async (templateId: string) => {
     setActiveMenu(null);
+    setActionError(null);
     try {
       const result = await setDefaultTemplate(templateId);
       if (result?.success) {
@@ -116,10 +124,11 @@ export default function UploadDefaultsPage() {
         setDefaultTemplateId(templateId);
         await loadTemplates();
       } else {
-        alert(isRTL ? 'فشل في تعيين القالب الافتراضي' : 'Failed to set default template');
+        setActionError(t.confirmDialog.setDefaultTemplateFailed);
       }
-    } catch (_err) {
-      alert(isRTL ? 'حدث خطأ' : 'An error occurred');
+    } catch (err) {
+      logger.error('[UploadDefaults] Set default template failed', { templateId, error: err });
+      setActionError(t.confirmDialog.setDefaultTemplateFailed);
     }
     setActiveMenu(null);
   };
@@ -176,6 +185,15 @@ export default function UploadDefaultsPage() {
         {loading && (
           <div className="flex items-center justify-center py-12" role="status" aria-label={t.common.loading} data-testid="templates-loading">
             <Loader2 className="w-8 h-8 text-primary animate-spin" />
+          </div>
+        )}
+
+        {confirmDialog}
+
+        {actionError && (
+          <div role="alert" data-testid="templates-action-error" className="mb-6 flex items-center gap-2 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+            <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
+            <p className="text-sm text-red-600 dark:text-red-400">{actionError}</p>
           </div>
         )}
 
@@ -420,7 +438,7 @@ export default function UploadDefaultsPage() {
                                 type="button"
                                 role="menuitem"
                                 data-testid="template-delete"
-                                onClick={() => handleDelete(template.id)}
+                                onClick={() => handleDelete(template)}
                                 className="
                                   w-full
                                   flex

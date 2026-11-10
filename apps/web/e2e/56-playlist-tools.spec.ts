@@ -147,6 +147,7 @@ test.describe('Playlist tools', () => {
 
       // Remove one
       await page.getByTestId('playlist-item').first().getByTestId('playlist-item-remove').click();
+      await page.getByTestId('playlist-editor-remove-dialog-confirm').click();
       await expect(page.getByTestId('playlist-item')).toHaveCount(2);
       await expect.poll(async () => (await stored(id)).videos).toEqual(byTitle.slice(1));
     } finally {

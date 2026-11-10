@@ -9,12 +9,14 @@ import ImageCropDialog from "@/components/ImageCropDialog";
 import { useMultiAccount } from "@/hooks/useMultiAccount";
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { getBrowserTimezone, COMMON_TIMEZONES, localizedTimezoneLabel, localizedTimezoneRegion, getTimezoneDisplayName, isListedTimezone } from '@/utils/timezoneUtils';
 import SaveButton, { SaveButtonState } from '@/components/SaveButton';
 import { SignInPrompt } from '@/components/common/SignInPrompt';
 
 const ProfileEditPage = () => {
   const { t, lang: locale } = useLanguage();
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [activeTab, setActiveTab] = useState<'en' | 'ar'>('en');
   const [firstNameEn, setFirstNameEn] = useState('');
@@ -125,6 +127,13 @@ const ProfileEditPage = () => {
 
   const removePhoto = async (type: 'profilePhoto' | 'coverPhoto') => {
     if (!profile) return;
+    const confirmed = await confirm({
+      title: t.confirmDialog.removeImageTitle,
+      description: t.confirmDialog.removeImageBody,
+      confirmLabel: t.confirmDialog.remove,
+      testId: 'profile-image-remove-dialog',
+    });
+    if (!confirmed) return;
     setPhotoBusy(type);
     setPhotoError('');
     try {
@@ -170,6 +179,7 @@ const ProfileEditPage = () => {
 
   return (
     <div className="profile-edit-page flex flex-col flex-1 bg-gray-100 dark:bg-gray-900">
+      {confirmDialog}
       <main className="flex-1 p-6 max-w-4xl mx-auto w-full">
         {/* Name Section */}
         <section id="name" className="section mb-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">

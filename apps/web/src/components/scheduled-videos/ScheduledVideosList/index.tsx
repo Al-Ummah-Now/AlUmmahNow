@@ -11,6 +11,7 @@ import { logger } from '@/lib/logger-client';
 
 import React, { useState } from 'react';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { cancelSchedule, publishNow } from '@/lib/api/scheduling';
 import type { VideoObject } from '@/interfaces';
@@ -43,6 +44,9 @@ export function ScheduledVideosList({
   const auth = useAuth();
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<ScheduledPublishStatus | 'all'>('all');
+  // A failed cancel / publish-now, shown inline
+  const [actionError, setActionError] = useState<string | null>(null);
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   // Filter videos by status
   const filteredVideos = React.useMemo(() => {
@@ -59,7 +63,14 @@ export function ScheduledVideosList({
   // Handle cancel schedule
   const handleCancelSchedule = async (videoId: string) => {
     if (!auth.user) return;
-    if (!confirm(t.schedule?.confirmCancelSchedule ?? 'Are you sure?')) return;
+    setActionError(null);
+    const confirmed = await confirm({
+      title: t.confirmDialog.cancelScheduleTitle,
+      description: t.schedule?.confirmCancelSchedule,
+      confirmLabel: t.schedule?.cancelSchedule ?? t.common.confirm,
+      testId: 'cancel-schedule-dialog',
+    });
+    if (!confirmed) return;
 
     // Find the video to get its channel ID
     const video = videos.find(v => v.id === videoId);
@@ -76,11 +87,11 @@ export function ScheduledVideosList({
         // Refresh the list
         onRefresh?.();
       } else {
-        alert(result?.error || t.schedule?.scheduleFailed || 'Schedule operation failed');
+        setActionError(t.schedule?.scheduleFailed || t.errors.genericError);
       }
     } catch (err) {
       logger.error('Error canceling schedule:', err);
-      alert(t.errors.genericError);
+      setActionError(t.errors.genericError);
     } finally {
       setActionLoading(null);
     }
@@ -89,7 +100,15 @@ export function ScheduledVideosList({
   // Handle publish now
   const handlePublishNow = async (videoId: string) => {
     if (!auth.user) return;
-    if (!confirm(t.schedule?.confirmPublishNow ?? 'Are you sure?')) return;
+    setActionError(null);
+    const confirmed = await confirm({
+      title: t.confirmDialog.publishNowTitle,
+      description: t.schedule?.confirmPublishNow,
+      confirmLabel: t.schedule?.publishNow ?? t.common.confirm,
+      danger: false,
+      testId: 'publish-now-dialog',
+    });
+    if (!confirmed) return;
 
     // Find the video to get its channel ID
     const video = videos.find(v => v.id === videoId);
@@ -106,11 +125,11 @@ export function ScheduledVideosList({
         // Refresh the list
         onRefresh?.();
       } else {
-        alert(result?.error || t.errors.genericError);
+        setActionError(t.errors.genericError);
       }
     } catch (err) {
       logger.error('Error publishing video:', err);
-      alert(t.errors.genericError);
+      setActionError(t.errors.genericError);
     } finally {
       setActionLoading(null);
     }
@@ -153,6 +172,12 @@ export function ScheduledVideosList({
 
   return (
     <div className={className}>
+      {confirmDialog}
+      {actionError && (
+        <p role="alert" data-testid="scheduled-videos-action-error" className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200">
+          {actionError}
+        </p>
+      )}
       {/* Filters */}
       <div className="mb-6 flex items-center gap-4">
         <label htmlFor="scheduled-status-filter" className="text-sm font-medium text-gray-700 dark:text-gray-300">

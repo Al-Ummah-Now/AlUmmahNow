@@ -162,6 +162,7 @@ test.describe('Feed and subscriptions - with a subscription', () => {
     const unsubscribe = item.getByRole('button', { name: `Unsubscribe from ${name}` });
     await expect(unsubscribe).toBeVisible();
     await unsubscribe.click();
+    await page.getByTestId('unsubscribe-dialog-confirm').click();
     await expect(item).toHaveCount(0);
     await expect.poll(() => isSubscribed(channel.id)).toBe(false);
   });

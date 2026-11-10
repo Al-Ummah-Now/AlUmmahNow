@@ -180,7 +180,7 @@ Provide creators with a clear, guided multi-step process for setting up live str
 ### Browser Actions
 - **Back button**: Prompts "Leave without saving?"
 - **Refresh**: Prompts draft recovery
-- **Tab close**: Triggers beforeunload warning if dirty
+- **Leaving while dirty**: in-app links open the leave dialog; tab close is not intercepted (no browser prompts)
 
 ### Rapid Interactions
 - Disable Next button after click (prevent double-submit)

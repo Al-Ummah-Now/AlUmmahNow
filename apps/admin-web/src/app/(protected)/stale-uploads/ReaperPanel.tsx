@@ -6,6 +6,7 @@ import { scanStaleUploads, setReaperMode } from '@/lib/api/admin';
 import type { ReaperMode, ReaperSweep } from '@/lib/api/types';
 import type { Locale } from '@/i18n/config';
 import { useLanguage } from '@/i18n/I18nProvider';
+import { useConfirm } from '@/components/content/actions';
 import { formatDate } from '@/i18n/translate';
 import { ErrorAlert, cardClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
@@ -25,6 +26,7 @@ export function ReaperPanel({
 }) {
   const router = useRouter();
   const { t } = useLanguage();
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const [busy, setBusy] = useState<'mode' | 'scan' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -32,7 +34,16 @@ export function ReaperPanel({
 
   async function changeMode() {
     const next: ReaperMode = live ? 'dry-run' : 'live';
-    if (next === 'live' && !window.confirm(t('staleUploads.confirmGoLive'))) return;
+    if (next === 'live') {
+      const confirmed = await confirm({
+        title: t('confirmDialog.goLiveTitle'),
+        body: t('staleUploads.confirmGoLive'),
+        confirmLabel: t('staleUploads.goLive'),
+        danger: true,
+        testId: 'reaper-live-confirm',
+      });
+      if (!confirmed) return;
+    }
     setBusy('mode');
     setError(null);
     setNotice(null);
@@ -68,6 +79,7 @@ export function ReaperPanel({
 
   return (
     <section aria-labelledby="reaper-title" className={`${cardClass} grid gap-6 lg:grid-cols-[1fr_auto]`} data-testid="reaper-panel" data-mode={config.mode}>
+      {confirmDialog}
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-3">
           <h2 id="reaper-title" className="text-xl font-semibold text-fg">{t('staleUploads.reaperTitle')}</h2>

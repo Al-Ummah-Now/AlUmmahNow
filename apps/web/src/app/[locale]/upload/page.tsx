@@ -1,7 +1,7 @@
 'use client';
 
 import { logger } from '@/lib/logger-client';
-import React, { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import React, { useState, useCallback, useRef, useMemo } from "react";
 import { VideoObject } from "@/interfaces";
 import VideoUpload from "@/components/videoUpload";
 import { BatchUploadQueue } from "@/components/videoUpload/BatchUploadQueue";
@@ -10,6 +10,7 @@ import { AlertCircle, Upload, FileStack, ShieldAlert } from "lucide-react";
 import { UploadModeTabs, UPLOAD_MODE_PANEL_ID, UPLOAD_MODE_TAB_ID, type UploadMode } from "@/components/videoUpload/UploadModeTabs";
 import { VIDEO_UPLOAD_CONFIG } from "@/lib/constants/uploadConfig";
 import { useLanguage } from "@/hooks/useLanguage";
+import { useLeaveGuard } from "@/hooks/useLeaveGuard";
 import { useBatchUpload } from "@/hooks/useBatchUpload";
 import { useBatchCategories } from "@/hooks/useBatchCategories";
 import { CategorySelector } from "@/components/videoUpload/CategorySelector";
@@ -144,15 +145,8 @@ const UploadPage: React.FC = () => {
   // Leaving while batch files still upload from this tab would pause them
   const notice = uploadMode === 'batch' ? batchNotice(files, processingPhases, isUploading) : null;
   const batchBytesInFlight = notice === 'keepOpen';
-  useEffect(() => {
-    if (!batchBytesInFlight) return;
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = '';
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [batchBytesInFlight]);
+  // An in-app link would stop them: ask first (closing the tab is not intercepted)
+  const leaveDialog = useLeaveGuard(batchBytesInFlight, t.confirmDialog.uploadLeaveBody);
 
   const { rows: categoryRows, pick: pickRowCategory } = useBatchCategories(files, batchCategory, uploadChannelId);
   const renderRowCategory = (file: UploadQueueItem) => {
@@ -710,6 +704,7 @@ const UploadPage: React.FC = () => {
           </div>
         )}
       </div>
+      {leaveDialog}
     </main>
   );
 };

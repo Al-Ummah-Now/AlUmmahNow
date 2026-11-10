@@ -10,6 +10,7 @@ import { toPicked, type PickedVideo } from '@/components/playlists/VideoPicker';
 import { formatViews } from '@/lib/format/videoMeta';
 import { RelativeDate } from '@/components/RelativeDate';
 import { useLanguage } from '@/hooks/useLanguage';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { VideoObject } from '@/interfaces';
@@ -783,28 +784,16 @@ export default function VideoDashboardPage() {
         </AlertDialog>
 
         {/* Bulk Delete Dialog */}
-        <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>{t.video?.confirmDeleteMultipleTitle || 'Delete Multiple Videos?'}</AlertDialogTitle>
-              <AlertDialogDescription>
-                {t.video?.confirmDeleteMultiple?.replace('{count}', selectedVideos.size.toString()) ||
-                  `Are you sure you want to delete ${selectedVideos.size} video${selectedVideos.size > 1 ? 's' : ''}? This action cannot be undone.`}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setBulkDeleteDialogOpen(false)}>
-                {t.common?.cancel || 'Cancel'}
-              </AlertDialogCancel>
-              <AlertDialogAction
-                onClick={confirmBulkDelete}
-                className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
-              >
-                {t.common?.delete || 'Delete'}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        {/* Bulk delete is high impact: the user types the delete word first */}
+        <ConfirmDialog
+          open={bulkDeleteDialogOpen}
+          onResult={(confirmed) => (confirmed ? void confirmBulkDelete() : setBulkDeleteDialogOpen(false))}
+          title={t.confirmDialog.deleteVideosTitle.replace('{count}', selectedVideos.size.toString())}
+          description={t.video?.confirmDeleteMultiple?.replace('{count}', selectedVideos.size.toString())}
+          confirmLabel={t.common.delete}
+          typeToConfirm={t.confirmDialog.deleteWord}
+          testId="dashboard-bulk-delete-dialog"
+        />
       </div>
     </div>
   );

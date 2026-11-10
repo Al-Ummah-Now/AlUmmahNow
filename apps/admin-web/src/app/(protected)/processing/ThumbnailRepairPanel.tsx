@@ -7,6 +7,7 @@ import type { ActionResult } from '@/lib/api/errors';
 import type { ThumbnailRun } from '@/lib/api/types';
 import type { Locale } from '@/i18n/config';
 import { useLanguage } from '@/i18n/I18nProvider';
+import { useConfirm } from '@/components/content/actions';
 import { formatDate } from '@/i18n/translate';
 import { ErrorAlert, cardClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
@@ -25,6 +26,7 @@ const tdClass = 'px-3 py-2 align-top text-sm';
 export function ThumbnailRepairPanel({ runs, locale }: { runs: ThumbnailRun[] | null; locale: Locale }) {
   const router = useRouter();
   const { t } = useLanguage();
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -52,8 +54,14 @@ export function ThumbnailRepairPanel({ runs, locale }: { runs: ThumbnailRun[] | 
     router.refresh();
   }
 
-  const fix = () => {
-    if (!window.confirm(t('processing.thumbsFixConfirm'))) return;
+  const fix = async () => {
+    const confirmed = await confirm({
+      title: t('confirmDialog.thumbsFixTitle'),
+      body: t('processing.thumbsFixConfirm'),
+      confirmLabel: t('processing.thumbsFix'),
+      testId: 'thumbnail-fix-confirm',
+    });
+    if (!confirmed) return;
     void run('fix', () => startThumbnailRepair(false), t('processing.thumbsQueued'));
   };
 
@@ -62,6 +70,7 @@ export function ThumbnailRepairPanel({ runs, locale }: { runs: ThumbnailRun[] | 
 
   return (
     <section className={`${cardClass} mb-6`} data-testid="thumbnail-repair" aria-labelledby="thumbs-title">
+      {confirmDialog}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="max-w-2xl">
           <h2 id="thumbs-title" className="text-lg font-semibold text-fg mb-1">{t('processing.thumbsTitle')}</h2>
