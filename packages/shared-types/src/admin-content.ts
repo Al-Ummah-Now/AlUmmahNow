@@ -382,6 +382,12 @@ export const ADMIN_JOB_KINDS = [
    * fields an admin approved in the dry run; pre-change copy backed up first).
    */
   'profiles.restore-legacy',
+  /**
+   * Check every video's thumbnail against its shape (Bunny's width/height) and
+   * replace auto frames captured at the wrong aspect, in resumable steps
+   * (api-videos lib/thumbnail/repair.ts). Target id 'thumbnail-repair'.
+   */
+  'videos.repair-thumbnails',
 ] as const;
 
 export type AdminJobKind = (typeof ADMIN_JOB_KINDS)[number];
@@ -415,6 +421,7 @@ export const ADMIN_JOB_PERMISSIONS: Readonly<Record<AdminJobKind, readonly Admin
   'user.sync-holds': ['users:manage'],
   'user.delete-data': ['users:manage', 'content:delete'],
   'profiles.restore-legacy': ['users:manage'],
+  'videos.repair-thumbnails': ['videos:manage'],
 };
 
 // ---------------------------------------------------------------------------

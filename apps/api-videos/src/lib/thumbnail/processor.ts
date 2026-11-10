@@ -15,12 +15,29 @@ export interface ThumbnailSize {
   quality: number;
 }
 
+/**
+ * Size variants by width. `height` is the 16:9 reference only: the variant
+ * URLs ask for a width and keep the image's own aspect ratio, so a vertical
+ * or square thumbnail is never cropped or squashed to 16:9 (2026-11-10).
+ */
 export const THUMBNAIL_SIZES: ThumbnailSize[] = [
   { name: 'hd', width: 1280, height: 720, quality: 90 },
   { name: 'sd', width: 640, height: 360, quality: 85 },
   { name: 'mobile', width: 320, height: 180, quality: 80 },
   { name: 'thumb', width: 120, height: 90, quality: 75 },
 ];
+
+/** Image Optimizer query for one size: width and quality, aspect ratio kept. */
+export function sizeQuery(size: ThumbnailSize): string {
+  return `?width=${size.width}&quality=${size.quality}`;
+}
+
+/** hd/sd/mobile/thumb variant URLs of one stored image. */
+export function thumbnailSizeUrls(baseUrl: string): Record<string, string> {
+  const urls: Record<string, string> = {};
+  for (const size of THUMBNAIL_SIZES) urls[size.name] = `${baseUrl}${sizeQuery(size)}`;
+  return urls;
+}
 
 export interface ProcessedThumbnail {
   original: ArrayBuffer;
@@ -67,15 +84,10 @@ export class ThumbnailProcessor {
    * Generate Bunny.net CDN URLs with Image Optimizer parameters
    * Bunny.net can resize images on-the-fly using query parameters
    *
-   * Format: https://cdn.bunny.net/path/to/image.jpg?width=640&height=360&quality=85
+   * Format: https://cdn.bunny.net/path/to/image.jpg?width=640&quality=85 (aspect ratio kept)
    */
   generateBunnyUrls(baseUrl: string): Record<string, string> {
-    const urls: Record<string, string> = {};
-
-    for (const size of THUMBNAIL_SIZES) {
-      // Bunny.net Image Optimizer URL format
-      urls[size.name] = `${baseUrl}?width=${size.width}&height=${size.height}&quality=${size.quality}&aspect_ratio=16:9`;
-    }
+    const urls = thumbnailSizeUrls(baseUrl);
 
     // Also include original URL
     urls.original = baseUrl;
@@ -88,13 +100,8 @@ export class ThumbnailProcessor {
    * When using R2, we store the original and use Bunny.net as CDN with Image Optimizer
    */
   generateR2Urls(r2BaseUrl: string, videoId: string): Record<string, string> {
-    const urls: Record<string, string> = {};
     const baseUrl = `${r2BaseUrl}/thumbnails/${videoId}/original.jpg`;
-
-    // Generate URLs with Image Optimizer parameters
-    for (const size of THUMBNAIL_SIZES) {
-      urls[size.name] = `${baseUrl}?width=${size.width}&height=${size.height}&quality=${size.quality}&aspect_ratio=16:9`;
-    }
+    const urls = thumbnailSizeUrls(baseUrl);
 
     urls.original = baseUrl;
 

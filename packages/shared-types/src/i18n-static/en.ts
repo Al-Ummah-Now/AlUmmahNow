@@ -779,7 +779,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     orUploadCustomThumbnail: 'Or Upload Custom Thumbnail',
     thumbnailClickOrDrag: 'Click to upload or drag and drop',
     thumbnailDropHere: 'Drop image here',
-    thumbnailFormats: 'PNG, JPEG, or WebP • Max 2MB • Recommended: 1280x720px',
+    thumbnailFormats: 'PNG, JPEG, or WebP • Max 2MB • Same shape as the video (1280x720 for 16:9, 720x1280 for vertical)',
     selectedThumbnail: 'Selected Thumbnail',
     thumbnailSelectedBadge: 'Selected',
     clearThumbnailSelection: 'Clear selection',

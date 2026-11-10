@@ -16,6 +16,8 @@ import { chooseThemedOption, themedNative, themedTrigger } from './test-utils/th
 
 const THUMBNAIL_JPG = path.join(__dirname, 'test-fixtures', 'e2e-thumbnail.jpg');
 const SAMPLE_WEBM = path.join(__dirname, 'test-fixtures', 'e2e-sample.webm');
+/** 360x640 (9:16) VP8 clip with a centred circle */
+const VERTICAL_WEBM = path.join(__dirname, 'test-fixtures', 'e2e-sample-vertical-9x16.webm');
 
 /** datetime-local value for a date `ms` from now (local time) */
 function localDateTime(ms: number): string {
@@ -169,6 +171,35 @@ test.describe('Upload form - thumbnail section', () => {
     await expect(frames.nth(2)).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('[data-testid="upload-thumbnail-frame"][aria-pressed="true"]')).toHaveCount(1);
     await expect(page.getByTestId('upload-thumbnail-preview')).toHaveAttribute('data-type', 'auto');
+  });
+
+  test('THUMB-105 frames of a vertical video keep its 9:16 shape and are never stretched', async ({ page, browserName }) => {
+    test.skip(browserName === 'webkit', 'Playwright WebKit cannot decode the sample clips for frame extraction');
+    test.skip(browserName !== 'chromium' && browserName !== 'firefox', 'VP8 clip');
+    await gotoUpload(page, 'en');
+    await selectVideo(page, VERTICAL_WEBM);
+
+    const frames = page.getByTestId('upload-thumbnail-frame');
+    await expect(frames).toHaveCount(5, { timeout: 30000 });
+    // Each extracted frame is 720x1280, not a squashed 1280x720
+    const sizes = await frames.locator('img[data-testid="thumbnail-image"]').evaluateAll((imgs) =>
+      (imgs as HTMLImageElement[]).map((i) => [i.naturalWidth, i.naturalHeight]),
+    );
+    expect(sizes).toHaveLength(5);
+    for (const [w, h] of sizes) expect(w / h).toBeCloseTo(9 / 16, 2);
+    // Shown whole in the 16:9 tiles
+    await expect(frames.first().locator('img[data-testid="thumbnail-image"]')).toHaveAttribute('data-fit', 'contain');
+
+    await frames.nth(2).click();
+    const preview = page.getByTestId('upload-thumbnail-preview').locator('img');
+    await expect(preview).toBeVisible();
+    const box = await preview.evaluate((i: HTMLImageElement) => {
+      const r = i.getBoundingClientRect();
+      return { natural: i.naturalWidth / i.naturalHeight, rendered: r.width / r.height };
+    });
+    expect(box.natural).toBeCloseTo(9 / 16, 2);
+    // The preview is drawn at the image's own shape (no distortion)
+    expect(Math.abs(box.rendered - box.natural)).toBeLessThan(0.02);
   });
 
   test('THUMB-102 rejects a non-image file with a localized error (ar)', async ({ page }) => {

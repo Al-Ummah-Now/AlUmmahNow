@@ -10,7 +10,7 @@ import { VideoObject } from '@/interfaces';
 import { listVideos, deleteVideo } from '@/lib/api/videos';
 import { channelAllows } from '@/lib/channel-utils';
 import { getChannelById } from '@/lib/api/channels';
-import Image from 'next/image';
+import { FitImage } from '@/components/VideoThumbnail/FitImage';
 import Link from 'next/link';
 import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
 import { logger } from '@/lib/logger-client';
@@ -347,15 +347,14 @@ export default function ChannelVideosPage() {
                   />
 
                   {/* Thumbnail */}
-                  <div className="relative w-full aspect-video bg-gray-200 dark:bg-gray-700">
+                  <div className="relative w-full aspect-video overflow-hidden bg-gray-200 dark:bg-gray-700">
                     {video.thumbnailUrl ? (
-                      <Image
+                      <FitImage
                         src={video.thumbnailUrl}
                         alt={video.title}
-                        fill
-                        className="object-cover"
                         sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
-                        unoptimized
+                        videoWidth={video.width}
+                        videoHeight={video.height}
                       />
                     ) : (
                       <div className="absolute inset-0 flex items-center justify-center">

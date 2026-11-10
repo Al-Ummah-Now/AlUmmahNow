@@ -14,8 +14,8 @@ import { VideoObject } from '@/interfaces';
 import { searchVideos, bulkDeleteVideos, bulkUpdateVideos } from '@/lib/api/videos';
 import { BulkEditDialog } from '@/components/bulkEdit/BulkEditDialog';
 import { applyChangesLocally, type BulkVideoChanges } from '@/lib/dashboard/bulk-edit';
-import Image from 'next/image';
 import { ProcessingProgress } from '@/components/video/ProcessingProgress';
+import VideoThumbnail from '@/components/VideoThumbnail';
 import Link from 'next/link';
 import { compareDashboardVideos, type DashboardSort } from '@/lib/dashboard/sort-videos';
 import { needsReupload, reuploadHref } from '@/lib/dashboard/reupload';
@@ -567,42 +567,15 @@ export default function VideoDashboardPage() {
                     className="absolute top-3 start-3 w-5 h-5 z-10 cursor-pointer"
                   />
 
-                  {/* Thumbnail Image */}
-                  {video.thumbnailUrl && video.thumbnailUrl.trim() !== '' ? (
-                    <Image
-                      src={video.thumbnailUrl}
-                      alt={video.title}
-                      fill
-                      className="object-cover"
-                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
-                      unoptimized
-                      onError={(e) => {
-                        e.currentTarget.style.display = 'none';
-                        const placeholder = e.currentTarget.nextElementSibling as HTMLElement;
-                        if (placeholder) placeholder.style.display = 'flex';
-                      }}
-                    />
-                  ) : null}
-                  
-                  {/* Placeholder */}
-                  <div
-                    className="absolute inset-0 flex items-center justify-center bg-gray-200 dark:bg-gray-700"
-                    style={{ display: video.thumbnailUrl && video.thumbnailUrl.trim() !== '' ? 'none' : 'flex' }}
-                  >
-                    <svg
-                      className="w-16 h-16 text-gray-400 dark:text-gray-500"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={1.5}
-                        d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
-                      />
-                    </svg>
-                  </div>
+                  {/* Thumbnail: never stretched; vertical/square videos letterbox (FitImage) */}
+                  <VideoThumbnail
+                    src={video.thumbnailUrl}
+                    alt={video.title}
+                    className="h-full"
+                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
+                    videoWidth={video.width}
+                    videoHeight={video.height}
+                  />
                 </div>
 
                 {/* Video Details - Matching VideoCard style */}

@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { FitImage } from '@/components/VideoThumbnail/FitImage';
 import Link from 'next/link';
 import { History, Trash2, X, RefreshCw, PauseCircle, PlayCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -29,8 +30,7 @@ export function WatchHistoryEntry({ entry, lang, t, onRemove }: WatchHistoryEntr
       {/* Same target as the title link: hidden from assistive tech and the tab order */}
       <Link href={`/${lang}/video/${entry.videoId}`} aria-hidden="true" tabIndex={-1} className="relative flex-shrink-0 w-40 h-24 bg-gray-200 dark:bg-gray-700 rounded-md overflow-hidden">
         {entry.videoThumbnail && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={resolveUrl(entry.videoThumbnail)} alt="" className="w-full h-full object-cover" />
+          <FitImage src={resolveUrl(entry.videoThumbnail)} alt="" sizes="160px" />
         )}
         <span className="absolute bottom-0 left-0 h-1 bg-red-600" style={{ width: `${percent}%` }} aria-hidden="true" />
       </Link>

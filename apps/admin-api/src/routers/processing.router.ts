@@ -6,7 +6,8 @@
  * data and the work live in api-videos (VIDEOS service binding): "Sync from
  * Bunny" previews synchronously (read only) and applies by queueing each
  * video's processing-check loop; "Retry processing" queues the same loop;
- * "Mark failed" flags the video for re-upload and tells the uploader.
+ * "Mark failed" flags the video for re-upload and tells the uploader;
+ * "Check thumbnails" queues the thumbnail aspect repair job (dry run first).
  *
  * Every change writes its audit row (site_settings_log, key
  * `processing:video:<id>`) before calling api-videos and removes it again if
@@ -153,6 +154,44 @@ app.post('/mark-failed', async (c) => {
   const reason = typeof input.reason === 'string' ? input.reason.trim().slice(0, 300) : '';
   const result = await audited(c, ids, 'mark_failed', reason ? { reason } : {}, () =>
     callProcessing(c.env, '/mark-failed', { method: 'POST', json: { ids, ...(reason ? { reason } : {}) } }),
+  );
+  return c.json({ success: true, result });
+});
+
+/** Thumbnail aspect repair runs (admin jobs in api-videos), newest first. */
+app.get('/thumbnails', async (c) => {
+  const result = await callProcessing(c.env, '/thumbnails');
+  return c.json({ success: true, result });
+});
+
+/**
+ * Check thumbnails: queues the repair job over every video (or `ids`). A dry
+ * run (default) only reports; applying replaces auto frames captured at the
+ * wrong shape with Bunny's own thumbnail. Audited under the fixed key
+ * processing:video:thumbnail-repair.
+ */
+app.post('/thumbnails', async (c) => {
+  const input = await body(c);
+  const ids = input.ids === undefined ? undefined : parseIds(input);
+  if (ids === null) return badIds(c);
+  const dryRun = input.dryRun !== false;
+  const json = { dryRun, actorId: actorOf(c), ...(ids ? { ids } : {}) };
+  if (dryRun) {
+    const result = await callProcessing(c.env, '/thumbnails', { method: 'POST', json });
+    return c.json({ success: true, result }, 202);
+  }
+  const result = await audited(c, ['thumbnail-repair'], 'repair_thumbnails', { scope: ids ? ids.length : 'all' }, () =>
+    callProcessing(c.env, '/thumbnails', { method: 'POST', json }),
+  );
+  return c.json({ success: true, result }, 202);
+});
+
+/** Retry a failed thumbnail run: it resumes where it stopped. */
+app.post('/thumbnails/:jobId/retry', async (c) => {
+  const jobId = c.req.param('jobId');
+  if (!/^[0-9a-f-]{36}$/.test(jobId)) return c.json({ success: false, code: 'bad_request', error: 'Unknown run' }, 400);
+  const result = await audited(c, ['thumbnail-repair'], 'retry_thumbnail_repair', { jobId }, () =>
+    callProcessing(c.env, `/thumbnails/${jobId}/retry`, { method: 'POST' }),
   );
   return c.json({ success: true, result });
 });

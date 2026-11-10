@@ -17,7 +17,7 @@ import type { VideoObject } from '@/interfaces';
 import type { ScheduledPublishStatus } from '@al-ummah/shared-types';
 import { Calendar, Clock, Edit, Trash2, PlayCircle, AlertCircle, Loader } from 'lucide-react';
 import Link from 'next/link';
-import Image from 'next/image';
+import { FitImage } from '@/components/VideoThumbnail/FitImage';
 import { usePathname } from 'next/navigation';
 
 export interface ScheduledVideosListProps {
@@ -229,11 +229,12 @@ export function ScheduledVideosList({
                   <div className="flex-shrink-0">
                     <div className="relative w-full md:w-64 aspect-video bg-gray-200 dark:bg-gray-700 rounded-md overflow-hidden">
                       {video.thumbnailUrl ? (
-                        <Image
+                        <FitImage
                           src={video.thumbnailUrl}
                           alt={video.title}
-                          fill
-                          className="object-cover"
+                          sizes="256px"
+                          videoWidth={video.width}
+                          videoHeight={video.height}
                         />
                       ) : (
                         <div className="flex items-center justify-center h-full">

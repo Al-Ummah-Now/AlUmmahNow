@@ -28,7 +28,7 @@ const VideoCardRTL: React.FC<VideoObject> = (video) => {
         >
           {/* Thumbnail */}
           <ProcessingBadge uploadStatus={video.uploadStatus} />
-          <VideoThumbnail src={video.thumbnailUrl} alt={title.replace(/⧸/g, ".")} className="h-48" />
+          <VideoThumbnail src={video.thumbnailUrl} alt={title.replace(/⧸/g, ".")} className="h-48" videoWidth={video.width} videoHeight={video.height} />
 
           {/* Video Details */}
           <div className="p-4 pe-12">

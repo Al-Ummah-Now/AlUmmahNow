@@ -332,7 +332,8 @@ html[data-rail=open] .nv{font-size:14px;line-height:20px}html[data-rail=open] .n
 .video-card button[aria-haspopup],.video-card [aria-haspopup=menu],[data-testid*=history] button[class*="rounded-full"]{background:transparent!important;color:var(--fanous-color-text-secondary)!important;box-shadow:none!important;border:0!important}
 @media(hover:hover){.video-card button[aria-haspopup]:hover{background:var(--m-hover)!important}}
 /* Non-16:9 thumbnails fill the frame */
-.video-card img,.vc-t img{object-fit:cover!important}
+/* Letterboxed thumbnails (vertical/square/4:3, FitImage data-fit=contain) stay whole */
+.video-card img:not([data-fit=contain]),.vc-t img:not([data-fit=contain]){object-fit:cover!important}
 /* Settings row chevrons centred */
 a.group svg.lucide-chevron-right{align-self:center}
 

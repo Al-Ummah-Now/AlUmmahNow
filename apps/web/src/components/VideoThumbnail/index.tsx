@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useState, type CSSProperties } from "react";
-import Image from "next/image";
 import { resolveUrl } from "@/lib/utility";
+import { FitImage } from "./FitImage";
 
 export interface VideoThumbnailProps {
   /** Thumbnail URL; empty/undefined renders the placeholder */
@@ -13,6 +13,9 @@ export interface VideoThumbnailProps {
   placeholder?: React.ReactNode;
   /** Inline style of the wrapper, e.g. THUMBNAIL_16_9 */
   style?: CSSProperties;
+  /** The video's size (Bunny's width/height): vertical and square videos letterbox from the first paint */
+  videoWidth?: number | null;
+  videoHeight?: number | null;
   children?: React.ReactNode;
 }
 
@@ -25,6 +28,10 @@ export const THUMBNAIL_16_9 = { aspectRatio: "16 / 9" } as const;
  * Videos without a thumbnail (still processing, failed uploads, test data)
  * or whose image fails to load show a muted play icon on a light-gray
  * (light theme) / black (dark theme) background instead of a blank box.
+ *
+ * Never distorts: a vertical, square or 4:3 thumbnail is shown whole over a
+ * blurred copy of itself instead of being cropped to a centre strip
+ * (FitImage, lib/video/aspect.ts).
  */
 const VideoThumbnail: React.FC<VideoThumbnailProps> = ({
   src,
@@ -33,6 +40,8 @@ const VideoThumbnail: React.FC<VideoThumbnailProps> = ({
   className = "",
   placeholder,
   style,
+  videoWidth,
+  videoHeight,
   children,
 }) => {
   const [failed, setFailed] = useState(false);
@@ -47,12 +56,12 @@ const VideoThumbnail: React.FC<VideoThumbnailProps> = ({
   return (
     <div className={`relative w-full overflow-hidden bg-gray-200 dark:bg-black ${className}`} style={style}>
       {showImage ? (
-        <Image
+        <FitImage
           src={resolveUrl(src as string)}
           alt={alt}
           sizes={sizes}
-          fill
-          className="object-cover"
+          videoWidth={videoWidth}
+          videoHeight={videoHeight}
           onError={() => setFailed(true)}
         />
       ) : (

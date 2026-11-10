@@ -192,8 +192,9 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
               data-testid="embed-facade"
             >
               {video.poster && (
+                // contain, not cover: a vertical or square poster is letterboxed like the player shows it
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={video.poster} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                <img src={video.poster} alt="" className="absolute inset-0 w-full h-full object-contain" />
               )}
               <span className="absolute inset-0 bg-gradient-to-b from-black/70 via-transparent to-black/40" aria-hidden="true" />
               <span className="absolute inset-0 flex items-center justify-center" aria-hidden="true">
@@ -290,7 +291,7 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
                       <span className="w-5 shrink-0 text-center text-xs text-gray-400">{i === index ? '▶' : i + 1}</span>
                       {item.poster && (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={item.poster} alt="" className="h-9 w-16 shrink-0 rounded object-cover" loading="lazy" />
+                        <img src={item.poster} alt="" className="h-9 w-16 shrink-0 rounded object-contain" loading="lazy" />
                       )}
                       <span className="line-clamp-2 text-xs">{titleOf(item, lang)}</span>
                     </button>

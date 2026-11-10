@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import en from '../src/i18n/messages/en';
 import ar from '../src/i18n/messages/ar';
 import { createTranslator } from '../src/i18n/translate';
-import { bunnyLabel, checkLabel, ourStatusLabel, parseFilter } from '../src/app/(protected)/processing/labels';
+import { bunnyLabel, checkLabel, ourStatusLabel, parseFilter, thumbCounts } from '../src/app/(protected)/processing/labels';
 import { canUseProcessing } from '../src/lib/roles';
 
 const ARABIC = /[؀-ۿ]/;
@@ -47,5 +47,12 @@ describe('processing health', () => {
     assert.equal(canUseProcessing('Admin'), true);
     assert.equal(canUseProcessing('Super Admin'), true);
     assert.equal(canUseProcessing('moderator'), false);
+  });
+  it('summarises thumbnail check counts in a fixed order, skipping zeros', () => {
+    const t = createTranslator('en');
+    assert.equal(thumbCounts(t, { ok: 10, would_replace: 2, flagged: 1, error: 0 }), 'Would replace 2 · Needs a new thumbnail 1 · Matches 10');
+    assert.equal(thumbCounts(t, {}), '');
+    assert.equal(thumbCounts(t, undefined), '');
+    assert.match(thumbCounts(createTranslator('ar'), { replaced: 1 }), ARABIC);
   });
 });

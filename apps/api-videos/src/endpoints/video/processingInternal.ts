@@ -5,7 +5,10 @@
  * endpoints/processing). Not part of the public contract.
  *
  *   GET  /internal/processing/videos?status=stuck|processing|failed|all&bunny=1&limit=
- *   GET  /internal/processing/errors       failed/flagged videos + dead-lettered checks
+ *   GET  /internal/processing/errors       failed/flagged videos + dead-lettered checks + failed thumbnail runs
+ *   GET  /internal/processing/thumbnails   recent thumbnail aspect repair runs (admin jobs)
+ *   POST /internal/processing/thumbnails   { ids?: string[], dryRun?: boolean, actorId } → queued run (dry run by default)
+ *   POST /internal/processing/thumbnails/:jobId/retry  resume a failed run
  *   POST /internal/processing/sync         { ids: string[], dryRun?: boolean } (apply = queue the check now)
  *   POST /internal/processing/retry        { ids: string[] }
  *   POST /internal/processing/mark-failed  { ids: string[], reason?: string }
@@ -23,6 +26,8 @@ import {
 	syncVideoFromBunny,
 } from '../../lib/processing/loop';
 import { announceAndRecordProcessingResult, pendingProcessingResult } from '../../lib/notification-events';
+import { createJob, getJob, listJobs, retryJob, type JobEnv } from '../../lib/admin/jobs';
+import { THUMBNAIL_REPAIR_JOB, THUMBNAIL_REPAIR_TARGET } from '../../lib/thumbnail/repair';
 
 const MAX_IDS = 100;
 
@@ -69,6 +74,17 @@ function matches(video: HealthVideo, status: string): boolean {
 		default:
 			// stuck: anything not ready, or flagged
 			return !!notReady || !!video.processingIssue;
+	}
+}
+
+/** Failed thumbnail repair runs, for the Errors page (an unreadable jobs table is logged, not fatal). */
+async function failedThumbnailRuns(env: JobEnv) {
+	try {
+		const runs = await listJobs(env, { targetKind: 'video', targetId: THUMBNAIL_REPAIR_TARGET, limit: 20 });
+		return runs.filter((run) => run.status === 'failed');
+	} catch (error) {
+		logger.warn('[ProcessingAdmin] Thumbnail runs unavailable', { error: error instanceof Error ? error.message : String(error) });
+		return [];
 	}
 }
 
@@ -215,9 +231,41 @@ export function createProcessingInternalRouter() {
 				})),
 				deadLetters,
 				erasureDeadLetters,
+				thumbnailRuns: await failedThumbnailRuns(c.env as unknown as JobEnv),
 				reconciler: await readSweepStats(c.env),
 			},
 		});
+	});
+
+	// Thumbnail aspect repair (lib/thumbnail/repair.ts): an admin job, dry run first
+	app.get('/thumbnails', async (c) => {
+		const runs = await listJobs(c.env as unknown as JobEnv, { targetKind: 'video', targetId: THUMBNAIL_REPAIR_TARGET, limit: 10 });
+		return c.json({ success: true, result: { runs } });
+	});
+
+	app.post('/thumbnails', async (c) => {
+		const body = ((await c.req.json().catch(() => null)) ?? {}) as { ids?: unknown; dryRun?: unknown; actorId?: unknown };
+		const ids = body.ids === undefined ? undefined : parseIds(body);
+		if (ids === null) return c.json({ success: false, error: `ids must be 1-${MAX_IDS} video ids (omit for every video)` }, 400);
+		const dryRun = body.dryRun !== false;
+		const actorId = typeof body.actorId === 'string' && body.actorId ? body.actorId.slice(0, 128) : 'admin';
+		const job = await createJob(c.env as unknown as JobEnv, {
+			kind: THUMBNAIL_REPAIR_JOB,
+			targetKind: 'video',
+			targetId: THUMBNAIL_REPAIR_TARGET,
+			params: { dryRun, ...(ids ? { ids } : {}) },
+			actorId,
+		});
+		logger.info('[ProcessingAdmin] Thumbnail repair queued', { jobId: job.id, dryRun, scope: ids ? ids.length : 'all', status: job.status });
+		return c.json({ success: true, result: { job } }, 202);
+	});
+
+	app.post('/thumbnails/:jobId/retry', async (c) => {
+		const env = c.env as unknown as JobEnv;
+		const existing = await getJob(env, c.req.param('jobId'));
+		if (!existing || existing.kind !== THUMBNAIL_REPAIR_JOB) return c.json({ success: false, error: 'Unknown thumbnail run' }, 404);
+		if (existing.status !== 'failed') return c.json({ success: false, error: 'Only a failed run can be retried' }, 409);
+		return c.json({ success: true, result: { job: await retryJob(env, existing.id) } });
 	});
 
 	app.post('/retry', async (c) => {

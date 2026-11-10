@@ -1,5 +1,5 @@
 import type { MessageKey } from '@/i18n/translate';
-import type { BunnyState, ProcessingCheckState, ProcessingIssueKind } from '@/lib/api/types';
+import type { BunnyState, ProcessingCheckState, ProcessingIssueKind, ThumbnailOutcome, ThumbnailRun } from '@/lib/api/types';
 
 type T = (key: MessageKey, params?: Record<string, string | number>) => string;
 
@@ -60,4 +60,30 @@ export function checkLabel(t: T, check: ProcessingCheckState | null, format: (d:
   if (!check) return t('processing.checkNone');
   if (check.finishedAt) return t('processing.checkDone', { outcome: check.outcome && OUTCOME_LABEL[check.outcome] ? t(OUTCOME_LABEL[check.outcome]) : check.outcome ?? '' });
   return t('processing.checkActive', { attempt: check.attempt + 1, date: check.nextCheckAt ? format(check.nextCheckAt) : '' });
+}
+
+export const RUN_STATUS_LABEL: Record<ThumbnailRun['status'], MessageKey> = {
+  queued: 'processing.runQueued',
+  running: 'processing.runRunning',
+  retrying: 'processing.runRetrying',
+  succeeded: 'processing.runSucceeded',
+  failed: 'processing.runFailed',
+};
+
+export const THUMB_OUTCOME_LABEL: Record<ThumbnailOutcome, MessageKey> = {
+  ok: 'processing.thumbOk',
+  replaced: 'processing.thumbReplaced',
+  would_replace: 'processing.thumbWouldReplace',
+  flagged: 'processing.thumbFlagged',
+  skipped: 'processing.thumbSkipped',
+  error: 'processing.thumbError',
+};
+
+/** Outcome counts in a fixed order, skipping zeros: "Would replace 3 · Needs a new thumbnail 1". */
+export function thumbCounts(t: T, counts: Partial<Record<ThumbnailOutcome, number>> | undefined): string {
+  const order: ThumbnailOutcome[] = ['replaced', 'would_replace', 'flagged', 'error', 'skipped', 'ok'];
+  return order
+    .filter((o) => (counts?.[o] ?? 0) > 0)
+    .map((o) => `${t(THUMB_OUTCOME_LABEL[o])} ${counts?.[o]}`)
+    .join(' · ');
 }

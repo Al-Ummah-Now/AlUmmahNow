@@ -105,6 +105,11 @@ export interface CustomVideoPlayerProps {
     type: string;
   }>;
   poster?: string;
+  /**
+   * The video is vertical (Bunny's stored height > width): the frame starts
+   * portrait so the poster is not shown in a 16:9 box until metadata loads
+   */
+  initialPortrait?: boolean;
   controls?: boolean;
   autoplay?: boolean;
   enableAnalytics?: boolean;
@@ -140,6 +145,7 @@ export default function CustomVideoPlayer({
   authToken,
   sources,
   poster,
+  initialPortrait = false,
   controls = true,
   autoplay = false,
   enableAnalytics = true,
@@ -178,7 +184,7 @@ export default function CustomVideoPlayer({
   const [isRetrying, setIsRetrying] = useState(false);
   const [ended, setEnded] = useState(false);
   const [mini, setMini] = useState(false);
-  const [portrait, setPortrait] = useState(false);
+  const [portrait, setPortrait] = useState(initialPortrait);
   const miniDismissedRef = useRef(false);
   const frameRef = useRef<HTMLDivElement | null>(null);
   const playerUi = useSyncExternalStore(subscribePlayerUi, getPlayerUi, getPlayerUi);

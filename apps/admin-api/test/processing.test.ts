@@ -91,4 +91,33 @@ describe('/api/processing', () => {
     assert.equal(res.result.entries[0].action, 'retry_processing');
     assert.equal(res.result.entries[0].videoId, ID);
   });
+  it('thumbnail check: dry run is unaudited, applying is audited under one key', async () => {
+    const { req, calls, audit } = setup(['admin']);
+    const dry = await req('/api/processing/thumbnails', post({}));
+    assert.equal(dry.status, 202);
+    assert.equal(calls[0].path, '/internal/processing/thumbnails');
+    assert.deepEqual(calls[0].body, { dryRun: true, actorId: 'admin-1' });
+    assert.equal((await audit()).length, 0);
+
+    await req('/api/processing/thumbnails', post({ dryRun: false, ids: [ID] }));
+    assert.deepEqual(calls[1].body, { dryRun: false, actorId: 'admin-1', ids: [ID] });
+    const rows = await audit();
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].key, `${PROCESSING_AUDIT_PREFIX}thumbnail-repair`);
+    assert.equal(JSON.parse(rows[0].new_value).action, 'repair_thumbnails');
+    assert.equal((await req('/api/processing/thumbnails', post({ ids: ['../x'] }))).status, 400);
+  });
+
+  it('thumbnail runs list and retry go through to api-videos; moderators are refused', async () => {
+    const { req, calls, audit } = setup(['admin']);
+    assert.equal((await req('/api/processing/thumbnails')).status, 200);
+    assert.equal(calls[0].path, '/internal/processing/thumbnails');
+    const job = '0b6c1f9e-1c2d-4e5f-8a9b-0c1d2e3f4a5b';
+    assert.equal((await req(`/api/processing/thumbnails/${job}/retry`, { method: 'POST' })).status, 200);
+    assert.equal(calls[1].path, `/internal/processing/thumbnails/${job}/retry`);
+    assert.equal(JSON.parse((await audit())[0].new_value).action, 'retry_thumbnail_repair');
+    assert.equal((await req('/api/processing/thumbnails/nope/retry', { method: 'POST' })).status, 400);
+    const mod = setup(['moderator']);
+    assert.equal((await mod.req('/api/processing/thumbnails', post({}))).status, 403);
+  });
 });
