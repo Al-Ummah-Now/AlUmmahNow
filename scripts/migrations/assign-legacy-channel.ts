@@ -30,6 +30,10 @@
  * from production (read-only) into the QA buckets with archived views, so the
  * migration can be proven on QA first. Fixture videos carry `qaFixture: "issue-245"`.
  *
+ * `--archive-prefixes 2025-11,2026-03` limits the archive scan to those key
+ * prefixes (the QA archive holds over a million E2E messages; prod's is small,
+ * so prod scans it all, the default).
+ *
  * Credentials: CLOUDFLARE_API_TOKEN (R2 + D1 edit) or the `wrangler login` token.
  * Requests are paced and retried on 429, since the token's API quota is shared.
  */
@@ -303,9 +307,13 @@ async function rebuildRollups(
 	videoIds: Set<string>,
 	channelId: string,
 	apply: boolean,
+	archivePrefixes: string[],
 ): Promise<{ archived: number; deltas: CounterRow[] }> {
 	const notifications = restD1(api, t.notificationsDb);
-	const all = await api.r2List(t.messages);
+	const all: { key: string; custom_metadata?: Record<string, string> }[] = [];
+	for (const prefix of ['analytics/rollups/', ...(archivePrefixes.length ? archivePrefixes : [''])]) {
+		for (const o of await api.r2List(t.messages, prefix)) if (prefix || !o.key.startsWith('analytics/rollups/')) all.push(o);
+	}
 	const wanted = new Set(['VideoView', 'VideoWatchTime']);
 	const archiveKeys = all.filter((o) => ARCHIVE_KEY.test(o.key) && (!o.custom_metadata?.messageType || wanted.has(o.custom_metadata.messageType)));
 	const archiveRows: CounterRow[] = [];
@@ -435,6 +443,8 @@ async function main(): Promise<void> {
 	const ownerId = String(args.owner ?? '');
 	if (!/^usr_[0-9a-f]{32}$/.test(ownerId)) throw new Error('--owner <auth user id usr_…> is required');
 	const apply = args.apply === true;
+	// Archive keys start with the UTC date (YYYY-MM-DDT…). Default: the whole archive.
+	const archivePrefixes = typeof args['archive-prefixes'] === 'string' ? args['archive-prefixes'].split(',').map((p) => p.trim()).filter(Boolean) : [];
 	const runId = new Date().toISOString().replace(/[:.]/g, '-');
 	const backupDir = resolve(String(args['backup-dir'] ?? join('.migration-backups', 'issue-245', env, runId)));
 	console.log(`${apply ? 'APPLY' : 'DRY RUN'} on ${env}: videos of "${match.channelName}" (owner ${match.legacyUserId}) -> owner ${ownerId}`);
@@ -467,7 +477,7 @@ async function main(): Promise<void> {
 
 	if (!apply) {
 		const ids = new Set([...candidates, ...migrated].map((v) => v.key));
-		const { archived, deltas } = await rebuildRollups(api, t, ids, channel ? String(channel.id) : '', false);
+		const { archived, deltas } = await rebuildRollups(api, t, ids, channel ? String(channel.id) : '', false, archivePrefixes);
 		console.log(`Rollups: ${archived} archived view/watch-time messages for these videos; ${deltas.length} counter rows would be added`);
 		for (const d of deltas.slice(0, 20)) console.log(`  + ${d.entityType} ${d.entityId.slice(0, 8)} ${d.day} ${d.metric}${d.dim ? `/${d.dim}` : ''} ${d.value}`);
 		console.log(`Dry run only (${api.requests} API requests). Re-run with --apply to write.`);
@@ -525,7 +535,7 @@ async function main(): Promise<void> {
 
 	// 4. Rollups
 	const ids = new Set([...candidates, ...migrated].map((v) => v.key));
-	const { archived, deltas } = await rebuildRollups(api, t, ids, target.channelId, true);
+	const { archived, deltas } = await rebuildRollups(api, t, ids, target.channelId, true, archivePrefixes);
 	console.log(`Rollups: ${archived} archived messages; added ${deltas.length} counter rows (${deltas.filter((d) => d.entityType === 'channel').length} channel)`);
 
 	// Verification
