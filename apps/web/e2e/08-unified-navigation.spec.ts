@@ -1,5 +1,6 @@
 import { test, expect } from './fixtures';
 import { AUTH_STATE, ANONYMOUS_STATE, readAccount } from './test-utils/auth-state';
+import { webAuthConfig } from './test-utils/session-login';
 import { closeSideDrawer, menuTrigger, openAccountMenu, openSideDrawer, showMenuView } from './test-utils/navigation';
 
 /**
@@ -20,6 +21,25 @@ test.describe('Unified Navigation - anonymous', () => {
     await expect(menu.getByRole('menuitem', { name: /sign in/i })).toBeVisible();
     await showMenuView(menu, 'main');
     await expect(menu.getByTestId('nav-active-context')).toHaveCount(0);
+  });
+
+  test('Sign In in the menu takes the visitor to the auth server', async ({ page }) => {
+    await page.goto('/en');
+    const menu = await openAccountMenu(page);
+    const signIn = menu.getByRole('menuitem', { name: /sign in/i });
+
+    // Nothing covers the menu: the click-away layer stays under it whatever
+    // stacking context the theme wraps the page in
+    const covering = await signIn.evaluate((button) => {
+      const r = button.getBoundingClientRect();
+      const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+      return top && button.contains(top) ? null : top?.getAttribute('data-testid') || top?.tagName || 'nothing';
+    });
+    expect(covering, 'the element on top of Sign In').toBeNull();
+
+    await signIn.click();
+    const authOrigin = new URL(webAuthConfig().openAuthUrl).origin;
+    await expect.poll(() => new URL(page.url()).origin, { timeout: 30_000 }).toBe(authOrigin);
   });
 
   test('menu closes on Escape and on backdrop click', async ({ page }) => {
