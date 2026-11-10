@@ -43,3 +43,13 @@ export function writeEdgeCache(url: string, value: unknown, ttlSeconds: number, 
     });
   waitUntil?.(write);
 }
+
+/** Drops a cached entry in this colo (other colos expire on their TTL). Fails open. */
+export function deleteEdgeCache(url: string, waitUntil: WaitUntil): void {
+  const cache = edgeCache();
+  if (!cache) return;
+  const removal = cache.delete(url).catch(error => {
+    logger.warn('[EdgeCache] Delete failed', { url, error: error instanceof Error ? error.message : String(error) });
+  });
+  waitUntil?.(removal);
+}

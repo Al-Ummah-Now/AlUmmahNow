@@ -220,12 +220,12 @@ No migration is needed. Sections without the new fields read with defaults (`sor
 
 | Method and path | Change |
 |---|---|
-| `POST /api/channels/:id/sections` | New types and fields. Per-type validation (§4) runs in `validateSectionContent`, including "video or playlist belongs to this channel". Limits: 12 total (400 `section_limit`), per type (409 `section_type_limit`). Consent rules (§6). Errors return a stable `code` plus an i18n `error`, never a raw message |
+| `POST /api/channels/:id/sections` | New types and fields. Per-type validation (§4) runs in `validateSectionContent`, including "video or playlist belongs to this channel". Limits: 12 total (400 `section_limit`), per type (409 `section_type_limit`). Consent rules (§6). Errors return a stable `code` (and an English `error` for logs). The web shows localized text for the code, never the raw message |
 | `PATCH /api/channels/:id/sections/:sectionId` | Same fields. `type` can't change. `consent: false` removes consent. A channel admin editing a consent type gets 403 |
 | `PATCH /api/channels/:id/sections/reorder` | Spotlight is moved first |
 | `DELETE …/:sectionId` | Unchanged |
 | `GET /api/channels/:id/sections` | Unchanged. Returns the raw config for the manager |
-| `GET /api/channels/:id/sections/populated` | Populates **every** type server-side (§8.3). Each section gets `populatedContent` and `isEmpty`. Empty sections are dropped unless the caller can edit the channel, who also gets `emptyHint` and `canEdit: true` |
+| `GET /api/channels/:id/sections/populated` | Populates **every** type server-side (§8.3). Each section gets `populatedContent` and `isEmpty`. `consented` reports whether an opt-in type's consent is valid. Empty sections are dropped unless the caller can edit the channel, who also gets `emptyHint` and `canEdit: true` |
 
 `populatedContent` shape:
 
