@@ -84,6 +84,53 @@ were lost.
 - **Check script.** `pnpm check:rollup-import --env qa|stage|production` is read-only. It exits 1
   if a document stays un-imported, or imported but not deleted, for more than 48 h.
 
+### Realtime (WS-1..WS-6), [#507](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/507) and [#PRNUM](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/PRNUM)
+
+The old server kept every socket in one global Durable Object, with all state in instance fields
+under the Hibernation API, so a hibernated object lost track of every open socket.
+
+- **Hibernation (WS-1).** Each socket's state (session, user, token expiry, channels, rate-limit
+  window, shard name) lives in its attachment (`serializeAttachment`, under 2 KiB, so at most 12
+  channels per socket). The in-memory indexes are only a cache, rebuilt from
+  `ctx.getWebSockets('socket')` whenever the runtime constructs the object again.
+- **Socket shards (WS-2).** A socket lands on a random shard among `SOCKET_SHARDS` (default 8, max
+  64) objects named `sockets:<n>`. A full shard (`MAX_CONNECTIONS_PER_DO`) answers 503, and the
+  Worker tries the next one. The client protocol is unchanged: one socket, subscribe by message. Web,
+  Apple, Android and Desktop need no change.
+- **Topic router (WS-2).** Each channel has a directory object `topic:<channel>` that lists the
+  shards holding a subscriber, with one storage key per shard. Before a shard confirms its first
+  local subscription to a channel (and the `user:<id>` channel at sign-in), it joins the directory,
+  retrying with backoff. A broadcast goes to the channel's directory, which forwards it to those
+  shards only. A user notification costs two hops, where it used to cost one per shard. A shard that
+  no longer holds the channel says so in its answer, and the directory drops it, unless the shard
+  has joined again meanwhile (each join writes a fresh generation, and the drop compares it).
+- **When every shard takes a broadcast.** In three cases a broadcast goes to every shard in one
+  request per shard, as before: a batch with more channels than shards (cheaper), a directory that
+  does not answer (it delivered nothing), and directories that are not yet trusted. They are trusted
+  once every shard answers the readiness probe (`/topic/ready`). The probe is cached for 30 s per
+  isolate, and for 10 s while the answer is no. A shard vouches only after joining every local
+  channel, and stops vouching after a failed join. A shard still on older code during a rollout
+  answers the probe with an error, so a rollout never loses messages.
+  `GET /stats` reports `routing: "topic"` once every shard vouches, and `"all-shards"` until
+  then. Use it after a deploy to see whether every shard runs the new code.
+- **Presence (WS-3).** The KV session list is gone. `GET /presence/:userId` (internal) counts the
+  user's signed-in sockets on every shard. The sockets are the single source of truth, so there is
+  no read-modify-write.
+- **Serialise once (WS-4).** The Worker serialises a broadcast once for all shards, a directory once
+  for its shards, and a shard once for all its subscribers.
+- **Rate limits (WS-5).** The per-socket message window is in the attachment, so hibernation does
+  not reset it. Workers Rate Limiting caps socket opens per IP (`WS_CONNECT_LIMITER`, 120/min) and
+  messages per user, or per IP before sign-in (`WS_MESSAGE_LIMITER`, 600/min). Opening more sockets
+  therefore buys no extra messages.
+- **Cleanup (WS-6).** Close and error share one cleanup path.
+- **One class.** Directories and shards run in the existing `WebSocketDurableObject` class, like the
+  view counter, because releases use `wrangler versions upload`, which cannot add classes.
+- **Tests.** `apps/websocket-server/test/shards.test.ts` runs 400 sockets over 4 shards with
+  parallel broadcasts and random hibernation. `test/topic-router.test.ts` covers the narrowed fan-out,
+  stale-entry cleanup, the rollout fallback with a shard on old code, an unreachable directory, big
+  batches, failed joins, a spoofed shard header, subscribe/unsubscribe churn racing broadcasts, and
+  the rejoin-while-dropping race.
+
 ## Defect list
 
 Severity is the reported impact at scale. The status column links the fix.
@@ -124,12 +171,12 @@ Severity is the reported impact at scale. The status column links the fix.
 | PR-8 | processor | medium | SearchIndexSync applies the object snapshot carried in the message with no ordering guard | fixed in [#514](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/514) |
 | PR-9 | processor | low | daily neuron cap is check-then-act (`SUM` then call AI then record). With autoscaled consumers (5 msgs × up to 250 invocations) the cap overshoots… | fixed in [#521](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/521) |
 | PR-10 | processor | low | at-least-once interaction: fan-out insert succeeds, then the invocation fails before pushes/enqueue; the retry's `INSERT OR IGNORE` returns zero… | fixed in [#513](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/513) |
-| WS-1 | websocket-server | critical | Hibernation API (`ctx.acceptWebSocket`) used, but all connection state lives only in instance fields | open |
-| WS-2 | websocket-server | critical at scale | every socket, every broadcast and every stats call go to ONE global DO (`idFromName('websocket-instance')`) | open |
-| WS-3 | websocket-server | medium | presence session list is a KV read-modify-write without any conditional write | open |
-| WS-4 | websocket-server | low/medium | broadcast loops over every subscriber and `JSON.stringify`s the message once per socket. With one global… | open |
-| WS-5 | websocket-server | low | per-session rate limit is in-memory: it resets on every hibernation/eviction (WS-1) and is per-session, not per-user/IP, so a client can open many… | open |
-| WS-6 | websocket-server | low | `webSocketError` deletes the connection but not `sessionToWebSocket`, `rateLimits`, or presence, so the KV presence entry lingers until TTL and… | open |
+| WS-1 | websocket-server | critical | Hibernation API (`ctx.acceptWebSocket`) used, but all connection state lives only in instance fields | fixed in [#507](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/507) |
+| WS-2 | websocket-server | critical at scale | every socket, every broadcast and every stats call go to ONE global DO (`idFromName('websocket-instance')`) | fixed in [#507](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/507) (shards) and [#PRNUM](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/PRNUM) (topic router) |
+| WS-3 | websocket-server | medium | presence session list is a KV read-modify-write without any conditional write | fixed in [#507](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/507) |
+| WS-4 | websocket-server | low/medium | broadcast loops over every subscriber and `JSON.stringify`s the message once per socket. With one global… | fixed in [#507](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/507) |
+| WS-5 | websocket-server | low | per-session rate limit is in-memory: it resets on every hibernation/eviction (WS-1) and is per-session, not per-user/IP, so a client can open many… | fixed in [#507](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/507) |
+| WS-6 | websocket-server | low | `webSocketError` deletes the connection but not `sessionToWebSocket`, `rateLimits`, or presence, so the KV presence entry lingers until TTL and… | fixed in [#507](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/507) |
 | AA-1 | admin-api | high | moderator remove/warn/ban is a blind read-modify-write of the whole video/channel/playlist document | open |
 | AA-2 | admin-api | high | reviewer hide/restore of a comment rewrites the entire video JSON (comments embedded) | open |
 | AA-3 | admin-api | medium | verification is a blind RMW of the channel doc; a concurrent owner channel edit through api-videos either drops `isVerified` or reverts the… | open |

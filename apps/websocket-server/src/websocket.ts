@@ -8,8 +8,10 @@
  * rebuilt from `ctx.getWebSockets()` whenever the runtime constructs the
  * object again (after hibernation, eviction or a code update).
  *
- * Socket objects are sharded (`sockets:<n>`, see shards.ts); the same class
- * hosts the view counter (`views:<videoId>:<shard>`, see view-counter.ts).
+ * Socket objects are sharded (`sockets:<n>`, see shards.ts). The same class
+ * hosts the per-channel directories of the topic router (`topic:<channel>`,
+ * see shards.ts) and the view counter (`views:<videoId>:<shard>`, see
+ * view-counter.ts).
  */
 
 import { DurableObject } from "cloudflare:workers";
@@ -18,7 +20,7 @@ import { ClientMessageSchema, ServerMessage } from './messages';
 import { logger } from './lib/logger';
 import { ViewCounter, type CounterStorage, type VideoBucket } from './view-counter';
 import { PostViewCounter, type CounterDb, type PostCounterStorage } from './post-view-counter';
-import { broadcastToShards, type BroadcastItem } from './shards';
+import { SHARD_HEADER, isSocketShardName, routeBroadcast, shardRequest, topicName, type BroadcastItem, type FanOutResult } from './shards';
 
 /** Tag on every accepted socket, so its state can be found again after hibernation. */
 const SOCKET_TAG = 'socket';
@@ -27,6 +29,11 @@ export const MAX_ATTACHMENT_BYTES = 2048;
 export const MAX_CHANNELS_PER_SOCKET = 12;
 /** Most broadcast items one internal request may carry. */
 export const MAX_BROADCAST_ITEMS = 1000;
+/** Shard storage: set once every local channel is in its directory (see shards.ts topicRoutingReady). */
+const TOPICS_JOINED_KEY = 'topics-joined';
+/** Directory storage: one key per shard holding the channel, valued with the join's generation. */
+const TOPIC_SHARD_PREFIX = 's:';
+const JOIN_RETRY_DELAYS_MS = [50, 250, 1000];
 
 /** Per-socket state, stored in the socket's attachment. */
 export interface SocketState {
@@ -38,6 +45,8 @@ export interface SocketState {
   connectedAt: number;
   /** Client IP, the rate-limit key until the socket signs in. */
   ip?: string;
+  /** Name of the shard holding the socket (`sockets:<n>`), for directory joins. */
+  shard?: string;
   channels: string[];
   /** Fixed-window message counter: survives hibernation with the attachment. */
   rl: { count: number; resetAt: number };
@@ -56,6 +65,10 @@ export class WebSocketDurableObject extends DurableObject {
   private subscribers: Map<string, Set<WebSocket>> = new Map();
   private viewCounter?: ViewCounter;
   private postViewCounter?: PostViewCounter;
+  /** Directory joins in flight, shared by sockets subscribing to the same channel meanwhile. */
+  private joining: Map<string, Promise<boolean>> = new Map();
+  /** Bumped on every failed join, so a readiness probe running meanwhile does not vouch for it. */
+  private joinFailures = 0;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -128,6 +141,18 @@ export class WebSocketDurableObject extends DurableObject {
       return this.handleStatsRequest();
     }
 
+    if (url.pathname === '/topic/join' && request.method === 'POST') {
+      return await this.handleTopicJoin(request);
+    }
+
+    if (url.pathname === '/topic/route' && request.method === 'POST') {
+      return await this.handleTopicRoute(request);
+    }
+
+    if (url.pathname === '/topic/ready' && request.method === 'GET') {
+      return await this.handleTopicReady(request);
+    }
+
     if (url.pathname === '/presence' && request.method === 'GET') {
       return Response.json({ sessions: this.userSessionCount(url.searchParams.get('userId') ?? '') });
     }
@@ -155,6 +180,7 @@ export class WebSocketDurableObject extends DurableObject {
       authenticated: false,
       connectedAt: Date.now(),
       ip: request.headers.get('CF-Connecting-IP') ?? undefined,
+      shard: shardNameOf(request),
       channels: [],
       rl: { count: 0, resetAt: 0 },
     };
@@ -214,7 +240,7 @@ export class WebSocketDurableObject extends DurableObject {
           await this.handleAuthentication(ws, clientMessage.token);
           break;
         case 'subscribe':
-          this.handleSubscribe(ws, clientMessage.channel);
+          await this.handleSubscribe(ws, clientMessage.channel);
           break;
         case 'unsubscribe':
           this.handleUnsubscribe(ws, clientMessage.channel);
@@ -315,8 +341,11 @@ export class WebSocketDurableObject extends DurableObject {
       state.userId = authPayload.sub;
       state.authExpiresAt = authPayload.exp;
       // Auto-subscribe to the user's notification channel
-      this.addChannel(ws, state, `user:${authPayload.sub}`);
+      const userChannel = `user:${authPayload.sub}`;
+      const join = this.needsJoin(userChannel);
+      this.addChannel(ws, state, userChannel);
       this.save(ws, state);
+      if (join) await this.joinTopic(userChannel, state.shard);
 
       this.sendMessage(ws, { type: 'authenticated', userId: authPayload.sub, sessionId: state.sessionId });
     } catch (error) {
@@ -337,7 +366,7 @@ export class WebSocketDurableObject extends DurableObject {
     return true;
   }
 
-  private handleSubscribe(ws: WebSocket, channel: string): void {
+  private async handleSubscribe(ws: WebSocket, channel: string): Promise<void> {
     const state = this.sockets.get(ws);
     if (!state) return;
 
@@ -353,11 +382,14 @@ export class WebSocketDurableObject extends DurableObject {
       return;
     }
 
+    const join = this.needsJoin(channel);
     if (!this.addChannel(ws, state, channel)) {
       this.sendMessage(ws, { type: 'error', error: 'Too many channels on this connection', code: 'SUBSCRIBE_FAILED' });
       return;
     }
     this.save(ws, state);
+    // Confirmed only once the channel's directory routes its broadcasts here
+    if (join) await this.joinTopic(channel, state.shard);
     this.sendMessage(ws, { type: 'subscribed', channel });
   }
 
@@ -390,9 +422,9 @@ export class WebSocketDurableObject extends DurableObject {
     const message: ServerMessage = { type: 'message', channel, data, from: state.userId, timestamp: Date.now() };
     const env = this.env as SocketEnv;
     if (env.WEBSOCKET_DO) {
-      // Every shard (this one included) delivers to its own subscribers
+      // Every shard holding the channel (this one included) delivers to its own subscribers
       this.ctx.waitUntil(
-        broadcastToShards(env.WEBSOCKET_DO, env, [{ channel, message }]).catch((error) =>
+        routeBroadcast(env.WEBSOCKET_DO, env, [{ channel, message }]).catch((error) =>
           logger.error('Client message fan-out failed', error),
         ),
       );
@@ -552,7 +584,7 @@ export class WebSocketDurableObject extends DurableObject {
     const env = this.env as Env;
     const channel = `video:${videoId}`;
     const message = { type: 'view_count_updated', channel, timestamp: Date.now(), data: { type: 'view_count_updated', videoId, viewCount } };
-    const result = await broadcastToShards(env.WEBSOCKET_DO, env, [{ channel, message }]);
+    const result = await routeBroadcast(env.WEBSOCKET_DO, env, [{ channel, message }]);
     if (result.failed > 0) throw new Error(`view count push failed on ${result.failed} of ${result.shards} shards`);
   }
 
@@ -570,7 +602,145 @@ export class WebSocketDurableObject extends DurableObject {
     }
     let delivered = 0;
     for (const item of items) delivered += this.deliver(item.channel, item.message);
-    return Response.json({ success: true, delivered });
+    // Which of these channels still have a subscriber here (a directory drops this shard otherwise)
+    const held = [...new Set(items.map((i) => i.channel))].filter((c) => this.subscriberCount(c) > 0);
+    return Response.json({ success: true, delivered, held });
+  }
+
+  // ---- Topic router: shard side ----
+
+  /** A channel needs a directory join when this shard has no subscriber of it yet (or a join is in flight). */
+  private needsJoin(channel: string): boolean {
+    return this.subscriberCount(channel) === 0 || this.joining.has(channel);
+  }
+
+  /**
+   * Adds this shard to the channel's directory. Sockets subscribing while a
+   * join is in flight wait for the same one. The subscription stands even if
+   * the join fails: the shard then stops vouching for the directories, so
+   * broadcasts reach every shard until the next readiness probe has joined
+   * all its channels again.
+   */
+  private async joinTopic(channel: string, shard: string | undefined): Promise<void> {
+    const env = this.env as SocketEnv;
+    if (!env.WEBSOCKET_DO) return; // no router (a lone object)
+    let join = this.joining.get(channel);
+    if (!join) {
+      join = shard ? this.postJoin(channel, shard) : Promise.resolve(false);
+      this.joining.set(channel, join);
+      void join.finally(() => {
+        if (this.joining.get(channel) === join) this.joining.delete(channel);
+      });
+    }
+    if (await join) return;
+    this.joinFailures++;
+    try {
+      await this.ctx.storage.delete(TOPICS_JOINED_KEY);
+    } catch (error) {
+      logger.error('Failed to clear the topics-joined flag', error);
+    }
+  }
+
+  /**
+   * One join, retried with backoff: a directory that stays down also fails
+   * the broadcasts routed to it, and those fall back to every shard.
+   */
+  private async postJoin(channel: string, shard: string): Promise<boolean> {
+    const env = this.env as SocketEnv;
+    for (let attempt = 0; attempt < JOIN_RETRY_DELAYS_MS.length + 1; attempt++) {
+      if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, JOIN_RETRY_DELAYS_MS[attempt - 1]));
+      try {
+        const res = await env.WEBSOCKET_DO.get(env.WEBSOCKET_DO.idFromName(topicName(channel))).fetch(
+          new Request('http://internal/topic/join', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ shard }),
+          }),
+        );
+        if (res.ok) return true;
+        logger.warn('Topic join refused', { channel, shard, status: res.status, attempt });
+      } catch (error) {
+        logger.warn('Topic join failed', { channel, shard, error: String(error), attempt });
+      }
+    }
+    logger.error('Topic join gave up; broadcasts go to every shard until the shard joins again', { channel, shard });
+    return false;
+  }
+
+  /**
+   * Readiness probe (shards.ts topicRoutingReady). The first time, and after
+   * any failed join, joins every local channel's directory before vouching.
+   */
+  private async handleTopicReady(request: Request): Promise<Response> {
+    const shard = shardNameOf(request);
+    if (!shard) return Response.json({ error: 'Unknown shard' }, { status: 400 });
+    if (await this.ctx.storage.get(TOPICS_JOINED_KEY)) return Response.json({ ready: true });
+    const failuresBefore = this.joinFailures;
+    const joined = await Promise.all([...this.subscribers.keys()].map((channel) => this.postJoin(channel, shard)));
+    const ready = joined.every(Boolean) && this.joinFailures === failuresBefore;
+    if (ready) await this.ctx.storage.put(TOPICS_JOINED_KEY, true);
+    return Response.json({ ready });
+  }
+
+  // ---- Topic router: directory side (objects named topic:<channel>) ----
+
+  private async handleTopicJoin(request: Request): Promise<Response> {
+    let shard: unknown;
+    try {
+      ({ shard } = (await request.json()) as { shard?: unknown });
+    } catch {
+      return Response.json({ error: 'Invalid JSON' }, { status: 400 });
+    }
+    if (typeof shard !== 'string' || !isSocketShardName(shard)) {
+      return Response.json({ error: 'Invalid shard' }, { status: 400 });
+    }
+    // A fresh generation, so a concurrent route that saw the shard empty does not drop this join
+    await this.ctx.storage.put(TOPIC_SHARD_PREFIX + shard, crypto.randomUUID());
+    return Response.json({ success: true });
+  }
+
+  /** Forwards a channel's broadcast items to the shards holding it. Serialised once for all of them. */
+  private async handleTopicRoute(request: Request): Promise<Response> {
+    let channel: unknown;
+    let items: BroadcastItem[];
+    try {
+      const body = (await request.json()) as { channel?: unknown; items?: BroadcastItem[] };
+      channel = body.channel;
+      items = Array.isArray(body.items) ? body.items : [];
+    } catch {
+      return Response.json({ error: 'Invalid JSON' }, { status: 400 });
+    }
+    if (typeof channel !== 'string' || !channel || items.length === 0 || items.length > MAX_BROADCAST_ITEMS
+      || items.some((i) => !i || i.channel !== channel || !i.message)) {
+      return Response.json({ error: 'Missing channel or message' }, { status: 400 });
+    }
+    const env = this.env as SocketEnv;
+    const holders = await this.ctx.storage.list<string>({ prefix: TOPIC_SHARD_PREFIX });
+    const body = JSON.stringify({ items });
+    const results = await Promise.allSettled(
+      [...holders].map(async ([key, generation]) => {
+        const shard = key.slice(TOPIC_SHARD_PREFIX.length);
+        const res = await env.WEBSOCKET_DO.get(env.WEBSOCKET_DO.idFromName(shard)).fetch(
+          shardRequest(shard, '/broadcast', { method: 'POST', body }),
+        );
+        if (!res.ok) throw new Error(`shard ${shard}: ${res.status}`);
+        const json = (await res.json()) as { delivered?: number; held?: string[] };
+        if (Array.isArray(json.held) && !json.held.includes(channel as string)) {
+          // The shard no longer holds the channel; drop it unless it joined again meanwhile
+          if ((await this.ctx.storage.get<string>(key)) === generation) await this.ctx.storage.delete(key);
+        }
+        return json.delivered ?? 0;
+      }),
+    );
+    const out: FanOutResult = { shards: holders.size, failed: 0, delivered: 0 };
+    for (const r of results) {
+      if (r.status === 'fulfilled') out.delivered += r.value;
+      else {
+        out.failed++;
+        logger.error('Topic fan-out to a shard failed', { channel, error: String(r.reason) });
+      }
+    }
+    return Response.json(out);
   }
 
   private handleStatsRequest(): Response {
@@ -585,4 +755,10 @@ export class WebSocketDurableObject extends DurableObject {
       channelDetails,
     });
   }
+}
+
+/** The shard name the Worker put on an internal or upgrade request. */
+function shardNameOf(request: Request): string | undefined {
+  const name = request.headers.get(SHARD_HEADER);
+  return name && isSocketShardName(name) ? name : undefined;
 }

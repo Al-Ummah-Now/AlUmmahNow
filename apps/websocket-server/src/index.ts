@@ -6,7 +6,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { WebSocketDurableObject, MAX_BROADCAST_ITEMS } from './websocket';
-import { broadcastToShards, readAllShards, shardsInRandomOrder, type BroadcastItem } from './shards';
+import { SHARD_HEADER, readAllShards, routeBroadcast, shardsInRandomOrder, topicRoutingReady, type BroadcastItem } from './shards';
 import { logger } from './lib/logger';
 import { reportServerError, requestIdOf, type ErrorReporterEnv, type ExecutionContextLike } from '@al-ummah/shared-types';
 
@@ -96,7 +96,10 @@ app.get('/ws', async (c) => {
     let last: Response | undefined;
     for (const name of shardsInRandomOrder(c.env)) {
       const stub = c.env.WEBSOCKET_DO.get(c.env.WEBSOCKET_DO.idFromName(name));
-      last = await stub.fetch(c.req.raw);
+      // The shard learns its name from the Worker (it joins channel directories under it); a client's header is overwritten
+      const forward = new Request(c.req.raw);
+      forward.headers.set(SHARD_HEADER, name);
+      last = await stub.fetch(forward);
       if (last.status !== 503) return last;
     }
     return last ?? c.json({ error: 'Connection limit reached' }, 503);
@@ -149,8 +152,8 @@ app.post('/broadcast', async (c) => {
       }, 400);
     }
 
-    // Every socket shard delivers to its own subscribers
-    const result = await broadcastToShards(c.env.WEBSOCKET_DO, c.env, items);
+    // Each channel's directory forwards to the shards holding it (or every shard takes it, see shards.ts)
+    const result = await routeBroadcast(c.env.WEBSOCKET_DO, c.env, items);
     if (result.failed === 0) {
       return c.json({ success: true, delivered: result.delivered });
     }
@@ -191,6 +194,8 @@ app.get('/stats', async (c) => {
       channelDetails,
       shards: bodies.length + failed,
       unavailableShards: failed,
+      // 'topic' once every shard runs the topic router and vouches for its directory joins
+      routing: (await topicRoutingReady(c.env.WEBSOCKET_DO, c.env)) ? 'topic' : 'all-shards',
     });
   } catch (error) {
     logger.error('Error getting stats', error);
