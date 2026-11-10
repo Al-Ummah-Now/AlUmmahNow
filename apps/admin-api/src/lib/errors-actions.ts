@@ -30,6 +30,8 @@ type Fetcher = { fetch(input: string, init?: RequestInit): Promise<Response> };
 export const SERVICE_RETRIES: Record<string, { binding: keyof AdminBindings; paths: readonly string[] }> = {
   processor: { binding: 'PROCESSOR', paths: ['/dlq/replay'] },
   scheduler: { binding: 'SCHEDULER', paths: ['/failed/retry'] },
+  // A new upload that could not be added to its playlist (api-videos lib/playlistUploadAdds.ts)
+  'api-videos': { binding: 'VIDEOS', paths: ['/internal/playlist-adds/retry'] },
 };
 
 export const BUILTIN_RETRIES: Record<string, (env: AdminBindings, args: Record<string, string>, attempt: string) => Promise<RetryOutcome>> = {

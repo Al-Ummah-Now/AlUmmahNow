@@ -6,6 +6,7 @@ import { transformPlaylistToView } from "../../lib/transformations";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from "../../base";
+import { canManagePlaylist } from "../../lib/channelAccess";
 
 export class PlaylistRemoveVideo extends AuthenticatedRoute {
     schema = {
@@ -83,18 +84,19 @@ export class PlaylistRemoveVideo extends AuthenticatedRoute {
             }, 404);
         }
 
-        // Verify ownership by user (the channelId header is optional, so it
-        // cannot be the ownership check on its own)
-        if (playlist.userId !== userId) {
+        // Its owner, or a channel role that manages playlists (the channelId
+        // header is optional, so it cannot be the check on its own)
+        if (!(await canManagePlaylist(c.env as never, playlist, userId))) {
             return c.json({
                 success: false,
-                error: "Unauthorized - you can only modify your own playlists",
+                error: "Unauthorized - you cannot modify this playlist",
             }, 403);
         }
 
         // Remove on the fresh playlist with a conditional write (SCALABILITY-AUDIT AV-19)
         const { data: updatedPlaylist, rejected } = await repository.updateObjectOrReject<{ status: 403 | 404; error: string }>(id, (fresh) => {
-            if (fresh.userId !== userId) return { reject: { status: 403, error: "Unauthorized - you can only modify your own playlists" } };
+            // The playlist changed hands meanwhile: check again on the next request
+            if (fresh.userId !== playlist.userId || fresh.channelId !== playlist.channelId) return { reject: { status: 403, error: "Unauthorized - you can only modify your own playlists" } };
             const videos = fresh.videos || [];
             if (!videos.includes(videoId)) return { reject: { status: 404, error: "Video is not in this playlist" } };
             fresh.videos = videos.filter(vid => vid !== videoId);

@@ -259,6 +259,25 @@ describe('dead letters flag the admin Errors page', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('stores a playlist-add dead letter without a second item (api-videos flags it with its own Retry)', async () => {
+    const fetchMock = jest.fn(async () => new Response(null, { status: 202 }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const pending: Promise<unknown>[] = [];
+    const ctx = { waitUntil: (p: Promise<unknown>) => void pending.push(p) };
+    const db = createSqliteD1();
+    const e = {
+      NOTIFICATIONS_DB: db,
+      ENVIRONMENT: 'qa',
+      LOG_LEVEL: 'error',
+      INTERNAL_API_KEY: 'secret',
+      ERRORS_INGEST_URL: 'https://admin.api.qa.example/internal/errors',
+    } as unknown as QueueEnvironment;
+    const body = { kind: 'playlist-add', videoId: 'v1', playlistId: 'p1', loopId: 'l1' };
+    await worker.queue({ queue: 'al-ummah-now-dlq-qa', messages: [queueMessage('q-pa1', body as never, 6)] } as never, e, ctx);
+    await Promise.all(pending);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('answers a crash of the fetch handler with a reference, not the error', async () => {
     global.fetch = jest.fn(async () => new Response(null, { status: 202 })) as typeof fetch;
     const res = await worker.fetch(new Request('https://p/health'), null as unknown as QueueEnvironment, { waitUntil: () => undefined });

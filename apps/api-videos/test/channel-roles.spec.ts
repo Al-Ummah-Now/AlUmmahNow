@@ -34,7 +34,7 @@ import { SqliteD1 } from './search-sqlite-d1';
 
 const ALL_CAPABILITIES: ChannelCapability[] = [
 	'channel.view_private', 'channel.edit', 'channel.handle', 'channel.delete', 'channel.speak',
-	'video.upload', 'video.view_private', 'video.edit', 'video.delete', 'video.schedule', 'post.manage',
+	'video.upload', 'video.view_private', 'video.edit', 'video.delete', 'video.schedule', 'post.manage', 'playlist.manage',
 	'comment.moderate', 'live.manage', 'live.moderate', 'analytics.view',
 	'members.view', 'members.manage', 'members.manage_admins',
 ];
@@ -52,6 +52,7 @@ const MATRIX: Record<ChannelCapability, [boolean, boolean, boolean, boolean]> = 
 	'video.delete': [true, true, true, false],
 	'video.schedule': [true, true, true, false],
 	'post.manage': [true, true, true, false],
+	'playlist.manage': [true, true, true, false],
 	'comment.moderate': [true, true, false, true],
 	'live.manage': [true, true, false, false],
 	'live.moderate': [true, true, false, true],
@@ -329,9 +330,12 @@ describe('acting as a channel with a role', () => {
 		assert.equal(memberMayActAs('admin', 'PUT', '/api/channels/team'), true);
 		assert.equal(memberMayActAs('moderator', 'POST', '/api/videos/v1/comments/c1/approve'), true);
 		assert.equal(memberMayActAs('moderator', 'POST', '/api/videos/v1/likes'), true);
-		// Not listed: live streams, playlists, posts, channel delete
+		// Not listed: live streams, editing or deleting a playlist, posts, channel delete
 		assert.equal(memberMayActAs('admin', 'POST', '/api/live-streams'), false);
-		assert.equal(memberMayActAs('admin', 'POST', '/api/playlists'), false);
+		assert.equal(memberMayActAs('admin', 'PATCH', '/api/playlists/p1'), false);
+		// Creating a playlist and adding videos need playlist.manage
+		assert.equal(memberMayActAs('admin', 'POST', '/api/playlists'), true);
+		assert.equal(memberMayActAs('moderator', 'POST', '/api/playlists'), false);
 		assert.equal(memberMayActAs('admin', 'DELETE', '/api/channels/team'), false);
 		assert.equal(memberMayActAs(null, 'GET', '/api/videos'), false);
 		assert.equal(memberMayActAs('owner', 'POST', '/api/live-streams'), true);

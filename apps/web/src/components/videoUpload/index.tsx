@@ -23,6 +23,9 @@ import { ThumbnailUploadSection, ThumbnailData } from "./ThumbnailUploadSection"
 import { CategorySelector } from "./CategorySelector";
 import { TemplateSelector } from "./TemplateSelector";
 import { ScheduleDateTimeSelector, ScheduleData } from "./ScheduleDateTimeSelector";
+import { PlaylistPicker } from "./PlaylistPicker";
+import type { PlaylistWithVideos } from "@/lib/api/playlists";
+import type { NewPlaylistInput } from "@/lib/api/upload-playlists-client";
 import { applySuggestion, formText, isKnownCategory, newDraftKey, pickCategory, type CategoryFormState } from "@/lib/category-suggestion/form";
 import { useCategorySuggestion } from "@/hooks/useCategorySuggestion";
 import type { ProcessedMetadata } from "@/lib/upload/template-variables";
@@ -40,6 +43,15 @@ interface VideoUploadProps {
   resumeVideoId?: string;
   /** Title of that video, prefilled (its metadata is kept as it is). */
   resumeTitle?: string;
+  /** The channel's playlists (the page loads them once for both upload modes); no picker without them */
+  playlists?: {
+    list: PlaylistWithVideos[];
+    loading: boolean;
+    failed: boolean;
+    create: (input: NewPlaylistInput) => Promise<PlaylistWithVideos | null>;
+  };
+  /** The video record exists (initiate answered): the page queues its playlist adds */
+  onVideoReady?: (videoId: string, playlistIds: string[]) => void;
 }
 
 interface VideoMetadata {
@@ -75,6 +87,8 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
   className = "",
   resumeVideoId,
   resumeTitle,
+  playlists,
+  onVideoReady,
 }) => {
   const { t, lang } = useLanguage();
 
@@ -100,6 +114,9 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
   // Category: AI suggests (preselected when confident), the uploader confirms or changes it
   const [categoryState, setCategoryState] = useState<CategoryFormState>({ aiApplied: false, touched: false });
   const [categoryDraftKey, setCategoryDraftKey] = useState(() => newDraftKey('upload'));
+  // Playlists the new video is added to as soon as its record exists
+  const [selectedPlaylists, setSelectedPlaylists] = useState<string[]>([]);
+  const [playlistsRequested, setPlaylistsRequested] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const tusUploadRef = useRef<ResilientUpload | null>(null);
@@ -391,6 +408,11 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
         rememberUpload(selectedFile, channelId, videoId);
       }
       videoIdRef.current = videoId;
+      // The record exists: queue its playlist adds now (never blocks or fails the upload)
+      if (selectedPlaylists.length > 0 && !resumeVideoId) {
+        onVideoReady?.(videoId, selectedPlaylists);
+        setPlaylistsRequested(true);
+      }
 
       // Step 2: Create TUS upload using secure proxy endpoint
       uploadStartTimeRef.current = Date.now();
@@ -631,6 +653,8 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
     setScheduleError(null);
     setCategoryState({ aiApplied: false, touched: false });
     setCategoryDraftKey(newDraftKey('upload'));
+    setSelectedPlaylists([]);
+    setPlaylistsRequested(false);
     setMetadata({
       title: '',
       titleEn: '',
@@ -877,6 +901,24 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
             suggesting={categorySuggesting}
             disabled={uploadProgress?.state === 'uploading'}
           />
+
+          {/* Playlists: picked or created here, added once the video record exists */}
+          {playlists && !resumeVideoId && (
+            <PlaylistPicker
+              id="upload-playlists"
+              testId="upload-playlists"
+              label={t.playlist.upload.label}
+              hint={t.playlist.upload.hint}
+              playlists={playlists.list}
+              loading={playlists.loading}
+              failed={playlists.failed}
+              selected={selectedPlaylists}
+              onChange={setSelectedPlaylists}
+              onCreate={playlists.create}
+              disabled={uploadProgress?.state === 'uploading'}
+              locked={playlistsRequested}
+            />
+          )}
 
           {/* Upload as Short / as video (wins over detection) */}
           <VideoFormatChoice

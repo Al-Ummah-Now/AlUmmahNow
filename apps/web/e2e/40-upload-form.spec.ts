@@ -2,9 +2,10 @@ import * as path from 'path';
 import { test, expect, helpers } from './fixtures';
 import { AUTH_STATE, ANONYMOUS_STATE } from './test-utils/auth-state';
 import { getVideo, userApi, type E2EVideo } from './test-utils/e2e-videos';
-import { deleteVideos, expectUploadSuccess, gotoUpload, selectVideo, trackUploads, uploadUi } from './test-utils/upload';
+import { deleteVideos, expectUploadSuccess, gotoUpload, selectVideo, trackUploads, uploadPlaylistsDeployed, uploadUi } from './test-utils/upload';
 import { ARABIC, expectDarkSurface, expectLightSurface, expectNoHorizontalScroll } from './test-utils/upload-studio';
 import { chooseThemedOption, themedNative, themedTrigger } from './test-utils/themed-select';
+import { apiAs, channelsOf, createPlaylist, deletePlaylistsTitled, tempName } from './test-utils/channel-content';
 
 /**
  * Upload page (/[locale]/upload): the single-upload metadata form and its
@@ -341,6 +342,69 @@ test.describe('Upload form - real uploads', () => {
         return { title: v?.titleLocalized?.ar, description: v?.descriptionLocalized?.ar, category: v?.category };
       }, { timeout: 60000 })
       .toEqual({ title: 'رفع ثنائي اللغة', description: 'وصف عربي', category: 'islamic_lectures' });
+  });
+});
+
+test.describe('Upload form - playlists', () => {
+  test.use({ storageState: AUTH_STATE.single });
+  test.beforeEach(async () => {
+    test.skip(!(await uploadPlaylistsDeployed()), 'Upload playlists are not deployed on the target yet (they land with the PR that adds them)');
+  });
+
+  let tracker: ReturnType<typeof trackUploads>;
+  let prefix = '';
+  const channelId = () => channelsOf('single').main.id;
+  test.beforeEach(async ({ page }) => {
+    tracker = trackUploads(page);
+    prefix = tempName('upl-playlist');
+  });
+  test.afterEach(async ({ page }) => {
+    await deleteVideos(page, tracker.videoIds);
+    await deletePlaylistsTitled('single', channelId(), prefix);
+  });
+
+  test('UPL-PL-001 picks an existing playlist, creates one inline, and the new video is added to both (en)', async ({ page }) => {
+    const existing = await createPlaylist('single', channelId(), { title: `${prefix} existing` });
+    await gotoUpload(page, 'en');
+    const ui = uploadUi(page);
+    await selectVideo(page, await helpers.createTestVideo('upl-pl-001.mp4', 64));
+    await ui.titleEn.fill(`${prefix} video`);
+
+    const picker = page.getByTestId('upload-playlists');
+    await picker.getByTestId('upload-playlists-toggle').click();
+    await picker.getByTestId('upload-playlists-search').fill(`${prefix} exi`);
+    await picker.getByLabel(`${prefix} existing`).check();
+    await picker.getByTestId('upload-playlists-new').click();
+    await picker.getByTestId('upload-playlists-name').fill(`${prefix} created`);
+    await picker.getByTestId('upload-playlists-visibility-private').check();
+    await picker.getByTestId('upload-playlists-description').fill('Made while uploading');
+    await picker.getByTestId('upload-playlists-create').click();
+    await expect(picker.getByTestId('upload-playlists-message')).toContainText(`Created "${prefix} created" and selected it`);
+    await expect(picker.getByTestId('upload-playlists-chip')).toHaveCount(2);
+
+    await ui.submit.click();
+    await expectUploadSuccess(page, `${prefix} video`);
+    const [videoId] = [...tracker.videoIds];
+    const created = (await apiAs<{ data?: Array<{ id: string; title: string; isPublic?: boolean; description?: string }> }>('single', 'GET', `/api/playlists?channelId=${channelId()}&limit=100`))
+      .body.data?.find((p) => p.title === `${prefix} created`);
+    expect(created).toMatchObject({ isPublic: false, description: 'Made while uploading' });
+    for (const id of [existing.id, created!.id]) {
+      await expect
+        .poll(async () => (await apiAs<{ videos?: string[] }>('single', 'GET', `/api/playlists/${id}`)).body.videos ?? [], { timeout: 90000 })
+        .toEqual([videoId]);
+    }
+    await expect(page.getByTestId('playlist-add-notice')).toHaveCount(0);
+  });
+
+  test('UPL-PL-002 shows the playlist picker right-to-left in Arabic', async ({ page }) => {
+    await gotoUpload(page, 'ar');
+    await selectVideo(page, await helpers.createTestVideo('upl-pl-002.mp4', 16));
+    const picker = page.getByTestId('upload-playlists');
+    await expect(picker).toHaveAttribute('dir', 'rtl');
+    await expect(picker).toContainText(ARABIC);
+    await picker.getByTestId('upload-playlists-toggle').click();
+    await expect(picker.getByTestId('upload-playlists-search')).toHaveAttribute('placeholder', 'ابحث في قوائم التشغيل');
+    await expectNoHorizontalScroll(page);
   });
 });
 

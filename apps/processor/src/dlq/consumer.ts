@@ -25,6 +25,9 @@ export function flagDeadLetter(env: ErrorReporterEnv, ctx: ExecutionContextLike 
   // A Contact us email that failed for good: admin-api already flags it with a
   // Retry that queues the email again (lib/contact-mail-queue.ts); a Replay here could not send it
   if (record.type_name === 'contact_mail') return;
+  // A new upload's playlist add: api-videos flags it with a Retry that queues the add again
+  // (lib/playlistUploadAdds.ts); a Replay here could not run it
+  if (record.body_json.includes('"kind":"playlist-add"')) return;
   reportNeedsAction('processor', env, ctx, {
     key: `dlq:${record.id}`.slice(0, 160),
     source: 'dlq',

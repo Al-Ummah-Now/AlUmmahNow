@@ -36,6 +36,7 @@ export type ChannelCapability =
   | 'video.delete'
   | 'video.schedule'
   | 'post.manage'
+  | 'playlist.manage'
   | 'comment.moderate'
   | 'live.manage'
   | 'live.moderate'
@@ -51,19 +52,19 @@ export type ChannelCapability =
 const MATRIX: Readonly<Record<ChannelRole, ReadonlySet<ChannelCapability>>> = {
   owner: new Set<ChannelCapability>([
     'channel.view_private', 'channel.edit', 'channel.handle', 'channel.delete', 'channel.speak',
-    'video.upload', 'video.view_private', 'video.edit', 'video.delete', 'video.schedule', 'post.manage',
+    'video.upload', 'video.view_private', 'video.edit', 'video.delete', 'video.schedule', 'post.manage', 'playlist.manage',
     'comment.moderate', 'live.manage', 'live.moderate', 'analytics.view',
     'members.view', 'members.manage', 'members.manage_admins',
   ]),
   admin: new Set<ChannelCapability>([
     'channel.view_private', 'channel.edit', 'channel.speak',
-    'video.upload', 'video.view_private', 'video.edit', 'video.delete', 'video.schedule', 'post.manage',
+    'video.upload', 'video.view_private', 'video.edit', 'video.delete', 'video.schedule', 'post.manage', 'playlist.manage',
     'comment.moderate', 'live.manage', 'live.moderate', 'analytics.view',
     'members.view', 'members.manage',
   ]),
   editor: new Set<ChannelCapability>([
     'channel.speak',
-    'video.upload', 'video.view_private', 'video.edit', 'video.delete', 'video.schedule', 'post.manage',
+    'video.upload', 'video.view_private', 'video.edit', 'video.delete', 'video.schedule', 'post.manage', 'playlist.manage',
   ]),
   moderator: new Set<ChannelCapability>([
     'channel.speak', 'comment.moderate', 'live.moderate',

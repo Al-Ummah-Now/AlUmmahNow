@@ -7,6 +7,8 @@ import { transformPlaylistToView, createEntityDefaults } from "../../lib/transfo
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from "../../base";
+import { uploadIdentity } from "../../lib/channelAccess";
+import { PLAYLIST_DESCRIPTION_MAX, PLAYLIST_TITLE_MAX } from "../../lib/playlists";
 
 export class PlaylistCreate extends AuthenticatedRoute {
     schema = {
@@ -69,12 +71,22 @@ export class PlaylistCreate extends AuthenticatedRoute {
         // Create business playlist object
         const entityDefaults = createEntityDefaults();
         
+        const title = (playlistInput.title || '').trim();
+        if (!title) {
+            return c.json({ success: false, error: "Playlist title is required" }, 400);
+        }
+
+        // A channel member (playlist.manage) creates it for the channel: it
+        // belongs to the channel's owner, like the videos they upload
+        const { ownerId, uploadedBy } = uploadIdentity(c, userId);
+
         const businessPlaylist = {
             ...entityDefaults,
-            title: playlistInput.title,
-            description: playlistInput.description,
+            title: title.slice(0, PLAYLIST_TITLE_MAX),
+            description: playlistInput.description?.slice(0, PLAYLIST_DESCRIPTION_MAX),
             thumbnailUrl: playlistInput.thumbnailUrl,
-            userId: userId,
+            userId: ownerId,
+            ...(uploadedBy ? { createdBy: uploadedBy } : {}),
             channelId: channelId,
             videos: playlistInput.videos || [],
             isPublic: playlistInput.isPublic ?? true,

@@ -9,6 +9,10 @@ import { Playlist as BusinessPlaylist, Video as BusinessVideo } from "./types";
 export type PlaylistType = z.infer<typeof BusinessPlaylist>;
 export type VideoType = z.infer<typeof BusinessVideo>;
 
+/** Longest stored playlist title / description (the web form uses the same limits). */
+export const PLAYLIST_TITLE_MAX = 150;
+export const PLAYLIST_DESCRIPTION_MAX = 5000;
+
 /**
  * Public playlist shape returned by list/fetch.
  *
@@ -17,8 +21,10 @@ export type VideoType = z.infer<typeof BusinessVideo>;
  * `videosCount` so web components can use either naming.
  */
 export function toPlaylistResponse(playlist: PlaylistType) {
+    // The upload order of queued adds (lib/playlistUploadAdds.ts) is internal
+    const { uploadOrder: _uploadOrder, ...stored } = playlist as PlaylistType & { uploadOrder?: unknown };
     return {
-        ...playlist,
+        ...stored,
         name: playlist.title,
         videos: playlist.videos || [],
         videosCount: playlist.videos?.length || 0,

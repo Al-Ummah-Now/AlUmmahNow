@@ -2,8 +2,9 @@ import type { Page } from '@playwright/test';
 import { test, expect } from './fixtures';
 import { AUTH_STATE } from './test-utils/auth-state';
 import { listOwnVideos, userApi } from './test-utils/e2e-videos';
-import { createTestFile, gotoUpload, removeTestFiles } from './test-utils/upload';
+import { createTestFile, gotoUpload, removeTestFiles, uploadPlaylistsDeployed } from './test-utils/upload';
 import { ARABIC, deleteVideosTitled, expectDarkSurface, tempName } from './test-utils/upload-studio';
+import { apiAs, channelsOf, createPlaylist, deletePlaylistsTitled } from './test-utils/channel-content';
 
 /**
  * Batch upload mode on /[locale]/upload (BatchUploadQueue / FileQueueItem /
@@ -191,6 +192,62 @@ test.describe('Batch upload - more files after a finished batch', () => {
       await expect(items(page)).toHaveAttribute('data-status', 'pending');
     });
   }
+});
+
+test.describe('Batch upload - playlists', () => {
+  test.beforeEach(async () => {
+    test.skip(!(await uploadPlaylistsDeployed()), 'Upload playlists are not deployed on the target yet (they land with the PR that adds them)');
+  });
+  const channelId = () => channelsOf('single').main.id;
+  test.afterEach(async () => {
+    await deletePlaylistsTitled('single', channelId(), prefix);
+  });
+
+  const playlistVideos = async (id: string) => (await apiAs<{ videos?: string[] }>('single', 'GET', `/api/playlists/${id}`)).body.videos ?? [];
+
+  test('BATCH-PL-001 adds every video to the batch playlists in upload order, a row to its own, and creates one inline', async ({ page }) => {
+    test.setTimeout(300000);
+    const forAll = await createPlaylist('single', channelId(), { title: `${prefix} all` });
+    const own = await createPlaylist('single', channelId(), { title: `${prefix} own` });
+    await openBatch(page);
+
+    // Playlists for all videos: one picked, one created inline (selected at once)
+    const defaults = page.getByTestId('batch-playlists-default');
+    await defaults.getByTestId('batch-playlists-default-toggle').click();
+    await defaults.getByTestId('batch-playlists-default-search').fill(`${prefix} all`);
+    await defaults.getByLabel(`${prefix} all`).check();
+    await defaults.getByTestId('batch-playlists-default-new').click();
+    await defaults.getByTestId('batch-playlists-default-name').fill(`${prefix} created`);
+    await defaults.getByTestId('batch-playlists-default-create').click();
+    await expect(defaults.getByTestId('batch-playlists-default-chip')).toHaveCount(2);
+
+    await page.getByTestId('batch-file-input').setInputFiles(batchFiles(3, 32));
+    await expect(items(page)).toHaveCount(3);
+
+    // The second video goes to its own playlist only
+    const second = items(page).filter({ hasText: `${prefix} 2` });
+    const row = second.getByTestId('batch-row-playlists');
+    await expect(row).toHaveAttribute('data-mode', 'batch');
+    await row.getByTestId('batch-row-playlists-mode').click();
+    await expect(row).toHaveAttribute('data-mode', 'own');
+    for (const chip of await row.getByTestId('batch-row-playlist-picker-chip').all()) await chip.getByRole('button').click();
+    await row.getByTestId('batch-row-playlist-picker-toggle').click();
+    await row.getByTestId('batch-row-playlist-picker-search').fill(`${prefix} own`);
+    await row.getByLabel(`${prefix} own`).check();
+
+    await page.getByTestId('batch-start').click();
+    await expect(row).toHaveAttribute('data-mode', 'locked');
+    await expect(page.getByTestId('batch-queue')).toHaveAttribute('data-completed', '3', { timeout: 120000 });
+    const ids = await Promise.all([1, 2, 3].map((n) => items(page).filter({ hasText: `${prefix} ${n}` }).getAttribute('data-video-id')));
+
+    const created = (await apiAs<{ data?: Array<{ id: string; title: string }> }>('single', 'GET', `/api/playlists?channelId=${channelId()}&limit=100`))
+      .body.data?.find((p) => p.title === `${prefix} created`);
+    expect(created).toBeTruthy();
+    await expect.poll(() => playlistVideos(forAll.id), { timeout: 90000 }).toEqual([ids[0], ids[2]]);
+    await expect.poll(() => playlistVideos(created!.id), { timeout: 90000 }).toEqual([ids[0], ids[2]]);
+    await expect.poll(() => playlistVideos(own.id), { timeout: 90000 }).toEqual([ids[1]]);
+    await expect(page.getByTestId('playlist-add-notice')).toHaveCount(0);
+  });
 });
 
 test.describe('Batch upload - localization and theme', () => {

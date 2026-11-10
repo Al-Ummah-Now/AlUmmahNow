@@ -15390,6 +15390,286 @@
         }
       }
     },
+    "/api/v1/playlists/upload-adds": {
+      "get": {
+        "tags": [
+          "Playlists"
+        ],
+        "summary": "Status of the playlist adds of new uploads",
+        "operationId": "get_PlaylistUploadAddsStatus",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated video ids (at most 50)"
+            },
+            "required": true,
+            "description": "Comma-separated video ids (at most 50)",
+            "name": "videoIds",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One item per requested add",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "result": {
+                      "type": "object",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "videoId": {
+                                "type": "string"
+                              },
+                              "playlistId": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "pending",
+                                  "added",
+                                  "retrying",
+                                  "failed"
+                                ]
+                              },
+                              "refusal": {
+                                "type": "string",
+                                "enum": [
+                                  "playlist_not_found",
+                                  "other_channel",
+                                  "forbidden",
+                                  "video_gone"
+                                ]
+                              },
+                              "attempts": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "videoId",
+                              "playlistId",
+                              "status",
+                              "attempts"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "items"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "result"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Playlists"
+        ],
+        "summary": "Queue adding a new upload to playlists",
+        "description": "Called by the upload page once the video record exists. Each add is queued (retried with backoff, flagged for an admin when it keeps failing). A playlist the caller may not change is answered failed with the reason.",
+        "operationId": "post_PlaylistUploadAddsCreate",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Channel the upload belongs to"
+            },
+            "required": true,
+            "description": "Channel the upload belongs to",
+            "name": "channelId",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "videoId": {
+                    "type": "string",
+                    "description": "The uploaded video"
+                  },
+                  "playlistIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "minItems": 1,
+                    "maxItems": 20
+                  },
+                  "orderKey": {
+                    "type": "string",
+                    "description": "Upload position (batch id + index): keeps the batch's videos in upload order"
+                  }
+                },
+                "required": [
+                  "videoId",
+                  "playlistIds",
+                  "orderKey"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Adds queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "result": {
+                      "type": "object",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "playlistId": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "pending",
+                                  "added",
+                                  "retrying",
+                                  "failed"
+                                ]
+                              },
+                              "refusal": {
+                                "type": "string",
+                                "enum": [
+                                  "playlist_not_found",
+                                  "other_channel",
+                                  "forbidden",
+                                  "video_gone"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "playlistId",
+                              "status"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "items"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "result"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The video belongs to another channel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Video not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/playlists/{id}": {
       "get": {
         "tags": [
