@@ -1,6 +1,9 @@
+import { withPostViews } from '../../lib/post-views';
+import R2Repository from '../../lib/r2Repo';
 import { z } from 'zod';
 import {
   CommunityPost,
+  PostStatus,
   PostVisibility,
   UpdateCommunityPostRequest,
 } from '@al-ummah/shared-types';
@@ -126,27 +129,33 @@ export class UpdateCommunityPost extends AuthenticatedRoute {
         return c.json({ error: validation.error }, 400);
       }
 
-      // Update allowed fields
-      if (body.content !== undefined) {
-        post.content = body.content;
+      // Apply the allowed fields to the fresh post with a conditional write
+      // (SCALABILITY-AUDIT AV-9): a concurrent comment, like or poll count is
+      // kept, and a post deleted meanwhile is not brought back
+      const { data: saved, rejected } = await new R2Repository<CommunityPost>(c.env.community_posts).updateObjectOrReject<'deleted'>(postKey, (fresh) => {
+        if (fresh.status === PostStatus.DELETED) return { reject: 'deleted' };
+        if (body.content !== undefined) {
+          fresh.content = body.content;
+        }
+        if (body.visibility !== undefined) {
+          fresh.visibility = body.visibility;
+        }
+        if (body.commentsEnabled !== undefined) {
+          fresh.commentsEnabled = body.commentsEnabled;
+        }
+        if (body.scheduledAt !== undefined) {
+          fresh.scheduledAt = body.scheduledAt;
+        }
+        if (body.pinned !== undefined) {
+          fresh.pinned = body.pinned;
+        }
+        fresh.updatedAt = new Date().toISOString();
+        return true;
+      });
+      if (!saved || rejected) {
+        return c.json({ error: 'Post not found' }, 404);
       }
-      if (body.visibility !== undefined) {
-        post.visibility = body.visibility;
-      }
-      if (body.commentsEnabled !== undefined) {
-        post.commentsEnabled = body.commentsEnabled;
-      }
-      if (body.scheduledAt !== undefined) {
-        post.scheduledAt = body.scheduledAt;
-      }
-      if (body.pinned !== undefined) {
-        post.pinned = body.pinned;
-      }
-
-      post.updatedAt = new Date().toISOString();
-
-      // Save updated post
-      await c.env.community_posts.put(postKey, JSON.stringify(post));
+      Object.assign(post, saved);
 
       // Send queue event
       const queue = new Queue(c.env.queue);
@@ -167,6 +176,7 @@ export class UpdateCommunityPost extends AuthenticatedRoute {
 
       // Like / vote totals live in D1 (the document's may be stale)
       await withPostCounts(c.env.NOTIFICATIONS_DB, [post]);
+      await withPostViews(c.env.NOTIFICATIONS_DB, [post]);
       return c.json({ success: true, post });
     } catch (error) {
       logger.error('Error updating community post:', error);

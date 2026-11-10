@@ -1,3 +1,4 @@
+import { recordPostView, withPostViews } from '../../lib/post-views';
 import { z } from 'zod';
 import { CommunityPost, PostStatus } from '@al-ummah/shared-types';
 import { OptionalAuthRoute, AppContext } from '../../base';
@@ -63,11 +64,11 @@ export class GetCommunityPost extends OptionalAuthRoute {
         }
       }
 
-      // Increment view count
-      post.views = (post.views || 0) + 1;
-
-      // Save updated view count (async, don't wait)
-      c.env.community_posts.put(postKey, JSON.stringify(post));
+      // Count the view atomically in D1 (SCALABILITY-AUDIT AV-8). Reads never
+      // write the post JSON: a stale copy written back here used to undo
+      // deletes, edits and the like / comment / poll counters.
+      await recordPostView(c.env.NOTIFICATIONS_DB, post.id || postId);
+      await withPostViews(c.env.NOTIFICATIONS_DB, [post]);
 
       // Like / vote totals live in D1 (the processor no longer writes them into the document)
       await withPostCounts(c.env.NOTIFICATIONS_DB, [post]);

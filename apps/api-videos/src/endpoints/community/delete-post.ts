@@ -82,11 +82,18 @@ export class DeleteCommunityPost extends AuthenticatedRoute {
         return c.json({ error: 'You can only delete your own posts' }, 403);
       }
 
-      // Soft delete - mark as deleted but preserve data
-      post.status = PostStatus.DELETED;
-      post.updatedAt = new Date().toISOString();
-
-      await c.env.community_posts.put(postKey, JSON.stringify(post));
+      // Soft delete - mark as deleted but preserve data. Conditional write on
+      // the fresh post (SCALABILITY-AUDIT AV-9) so no concurrent writer's
+      // stale copy can bring it back, and nothing they stored is lost.
+      const deleted = await new R2Repository<CommunityPost>(c.env.community_posts).updateObject(postKey, (fresh) => {
+        if (fresh.status === PostStatus.DELETED) return false;
+        fresh.status = PostStatus.DELETED;
+        fresh.updatedAt = new Date().toISOString();
+        return true;
+      });
+      if (!deleted) {
+        return c.json({ error: 'Post not found' }, 404);
+      }
 
       // Remove from channel index
       await this.removeFromChannelIndex(c, postChannelId, postId);
