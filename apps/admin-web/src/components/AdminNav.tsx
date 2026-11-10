@@ -22,6 +22,8 @@ interface AdminNavProps {
   canManageUsers?: boolean;
   /** Shows Stale uploads (the user has videos:uploads). */
   canStaleUploads?: boolean;
+  /** New error groups plus open needs-action items; null hides Errors (no errors:read). */
+  errorsBadge?: number | null;
 }
 
 const NAV_ITEMS: { href: string; label: MessageKey }[] = [
@@ -48,17 +50,17 @@ const NAV_ITEMS: { href: string; label: MessageKey }[] = [
   { href: '/video-formats', label: 'nav.videoFormats' },
 ];
 
-const PROCESSING_ITEMS = new Set(['/processing', '/errors']);
-
-export function AdminNav({ userEmail, authIssuer, contactNew = null, canProcess = false, canManageUsers = false, canStaleUploads = false }: AdminNavProps) {
+export function AdminNav({ userEmail, authIssuer, contactNew = null, canProcess = false, canManageUsers = false, canStaleUploads = false, errorsBadge = null }: AdminNavProps) {
   const pathname = usePathname();
   const { t } = useLanguage();
+  // Errors is one hub: error groups (errors:read) and failed uploads/processing (videos:processing).
   // contact:read and videos:format are admin-only: contactNew is null for moderators
   const items = NAV_ITEMS.filter(
     (i) =>
       (i.href !== '/contact' || contactNew !== null) &&
       (i.href !== '/video-formats' || contactNew !== null) &&
-      (!PROCESSING_ITEMS.has(i.href) || canProcess) &&
+      (i.href !== '/processing' || canProcess) &&
+      (i.href !== '/errors' || canProcess || errorsBadge !== null) &&
       (i.href !== '/legacy-profiles' || canManageUsers) &&
       (i.href !== '/stale-uploads' || canStaleUploads),
   );
@@ -105,6 +107,16 @@ export function AdminNav({ userEmail, authIssuer, contactNew = null, canProcess 
                       >
                         <span aria-hidden="true">{contactNew > 99 ? '99+' : contactNew}</span>
                         <span className="sr-only">{t('contact.navBadge', { count: contactNew })}</span>
+                      </span>
+                    )}
+                    {item.href === '/errors' && !!errorsBadge && errorsBadge > 0 && (
+                      <span
+                        data-testid="errors-nav-badge"
+                        data-count={errorsBadge}
+                        className="ms-2 inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-accent px-1.5 text-xs font-semibold text-on-accent align-middle"
+                      >
+                        <span aria-hidden="true">{errorsBadge > 99 ? '99+' : errorsBadge}</span>
+                        <span className="sr-only">{t('errorsPage.navBadge', { count: errorsBadge })}</span>
                       </span>
                     )}
                   </Link>

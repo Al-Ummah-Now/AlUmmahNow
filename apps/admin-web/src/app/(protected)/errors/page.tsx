@@ -1,288 +1,228 @@
 import Link from 'next/link';
-import { getProcessingErrors, listContactMessages, listFlaggedVideoFormats } from '@/lib/api/admin';
-import type { ContactListResponse, FlaggedVideoList, ProcessingErrorsResponse } from '@/lib/api/types';
+import { redirect } from 'next/navigation';
+import { findErrorRef, getErrorCounts, getErrorFacets, listErrorGroups } from '@/lib/api/admin';
+import type { ErrorCounts, ErrorFacets, ErrorGroupList } from '@/lib/api/error-groups-types';
 import { getAdminSession } from '@/lib/auth';
-import { canUseContactInbox, canUseProcessing } from '@/lib/roles';
+import { canReadErrors, canUseProcessing } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
-import { formatDate, translateDynamic } from '@/i18n/translate';
-import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
-import { getContentPermissions, listJobs } from '@/lib/api/content';
-import type { AdminContentPermission, AdminJob } from '@/lib/api/content-types';
-import { JobsTable } from '@/components/content/jobs';
+import { formatDate, formatNumber, translateDynamic } from '@/i18n/translate';
+import { ErrorAlert, linkClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
-import { ISSUE_LABEL, ourStatusLabel } from '../processing/labels';
+import { ErrorFilterBar } from './ErrorFilterBar';
+import { FailuresSections, hasFailures, loadFailures } from './FailuresSections';
+import { ERRORS_PAGE_SIZE, errorGroupsQuery, errorsHref, hasErrorFilters, parseErrorFilters, searchedRef } from './filters';
+import { ErrorStatusChip, Sparkline, TestChip, errorTitle } from './ui';
 
 export const dynamic = 'force-dynamic';
 
-const thClass = 'text-start px-4 py-3 text-fg-muted font-medium whitespace-nowrap';
-const tdClass = 'px-4 py-3 align-top text-sm';
+interface PageProps {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
 
-/**
- * Failures that need an admin: uploads that failed or were flagged (needs
- * re-upload, stalled) and processing checks that dead-lettered after their
- * retries (each links to Processing health, where it can be synced, retried
- * or marked failed), and Contact us emails that failed after the mail queue's
- * retries (each links to the message, where it can be retried), and admin
- * jobs (heavy content actions) that failed after their retries, with Retry.
- */
-export default async function ErrorsPage() {
+const thClass = 'text-start px-4 py-3 text-fg-muted font-medium whitespace-nowrap';
+const pagerClass =
+  'px-4 py-2 bg-surface border border-border text-fg rounded hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-focus';
+const tabClass = 'inline-flex items-center gap-2 px-4 py-2 -mb-px border-b-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus rounded-t';
+
+const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+export default async function ErrorsPage({ searchParams }: PageProps) {
+  const filters = parseErrorFilters(await searchParams);
   const { t, locale } = await getI18n();
   const session = await getAdminSession();
-  if (!canUseProcessing(session?.user.role)) {
+
+  const role = session?.user.role;
+  const readErrors = canReadErrors(role);
+  if (!readErrors && !canUseProcessing(role)) {
     return <ErrorAlert testId="errors-no-access">{t('errorsPage.noAccess')}</ErrorAlert>;
   }
 
-  let data: ProcessingErrorsResponse | null = null;
-  try {
-    data = await getProcessingErrors();
-  } catch (e) {
-    logger.error('[errors] Failed to load', { error: e instanceof Error ? e.message : String(e) });
+  // Without errors:read (videos:processing only) the page is just the failed uploads and processing checks
+  if (!readErrors) {
+    const failures = await loadFailures(role);
+    return (
+      <div className="space-y-8">
+        <div>
+          <h1 className="text-3xl font-bold text-fg">{t('errorsPage.title')}</h1>
+          <p className="text-fg-muted mt-1">{t('errorsPage.subtitle')}</p>
+        </div>
+        <FailuresSections failures={failures} t={t} locale={locale} />
+      </div>
+    );
   }
 
-  // Videos Bunny cannot describe (no length or size): a Short/video decision is needed (videos:format, admins)
-  let formatFlagged: FlaggedVideoList | null = null;
-  try {
-    formatFlagged = await listFlaggedVideoFormats(20, 0);
-  } catch (e) {
-    logger.error('[errors] Failed to load unclassified videos', { error: e instanceof Error ? e.message : String(e) });
-  }
-
-  // Contact us emails that finally failed (contact mail queue); admins and super admins
-  let contactFailed: ContactListResponse | null = null;
-  if (canUseContactInbox(session?.user.role)) {
+  // A pasted reference (ERR-XXXX-XXXX) jumps straight to its group
+  const ref = searchedRef(filters);
+  let refMissing = false;
+  if (ref) {
+    let groupId: string | null = null;
     try {
-      contactFailed = await listContactMessages({ status: 'send_failed', limit: 20 });
+      groupId = await findErrorRef(ref);
     } catch (e) {
-      logger.error('[errors] Failed to load contact mail failures', { error: e instanceof Error ? e.message : String(e) });
+      logger.warn('[errors] Reference lookup failed', { ref, error: errText(e) });
     }
+    if (groupId) redirect(`/errors/${encodeURIComponent(groupId)}?ref=${encodeURIComponent(ref)}`);
+    refMissing = true;
   }
 
-  // Admin jobs (channel/video/user deletes, cascades, transfers, moves) that failed after retries
-  let failedJobs: AdminJob[] | null = null;
-  let jobPermissions: AdminContentPermission[] = [];
-  try {
-    [failedJobs, jobPermissions] = await Promise.all([listJobs({ status: 'failed', limit: 20 }), getContentPermissions()]);
-  } catch (e) {
-    logger.error('[errors] Failed to load failed admin jobs', { error: e instanceof Error ? e.message : String(e) });
-  }
+  const [data, counts, facets, failures] = await Promise.all([
+    listErrorGroups(errorGroupsQuery(filters)).catch((e): ErrorGroupList | null => {
+      logger.error('[errors] Failed to load groups', { error: errText(e) });
+      return null;
+    }),
+    getErrorCounts().catch((): ErrorCounts | null => null),
+    getErrorFacets().catch((): ErrorFacets | null => null),
+    // Needs action also lists failed uploads, processing checks and Contact us emails
+    filters.needsAction ? loadFailures(role) : Promise.resolve(null),
+  ]);
+  const otherFailures = !!failures && hasFailures(failures);
+  const totalPages = data ? Math.max(1, Math.ceil(data.total / ERRORS_PAGE_SIZE)) : 0;
+  const openActions = counts?.openActions ?? 0;
 
   return (
-    <div className="space-y-8">
-      <div>
+    <div>
+      <div className="mb-6">
         <h1 className="text-3xl font-bold text-fg">{t('errorsPage.title')}</h1>
-        <p className="text-fg-muted mt-1">{t('errorsPage.subtitle')}</p>
+        <p className="text-fg-muted mt-1">
+          {t('errorsPage.subtitle')}
+          {data && (
+            <span data-testid="errors-total" data-total={data.total}>
+              {' · '}
+              {t('errorsPage.totalCount', { count: data.total })}
+            </span>
+          )}
+        </p>
       </div>
+
+      <nav aria-label={t('errorsPage.tabsLabel')} className="flex gap-2 border-b border-border mb-6">
+        <Link
+          href={errorsHref({ ...filters, needsAction: false, page: 1 })}
+          aria-current={!filters.needsAction ? 'page' : undefined}
+          className={`${tabClass} ${!filters.needsAction ? 'border-accent text-fg font-medium' : 'border-transparent text-fg-muted hover:text-fg'}`}
+          data-testid="errors-tab-all"
+        >
+          {t('errorsPage.tabAll')}
+          {counts && counts.new > 0 && <span className="text-xs rounded-full bg-surface-2 border border-border px-2">{formatNumber(counts.new, locale)}</span>}
+        </Link>
+        <Link
+          href={errorsHref({ ...filters, needsAction: true, page: 1 })}
+          aria-current={filters.needsAction ? 'page' : undefined}
+          className={`${tabClass} ${filters.needsAction ? 'border-accent text-fg font-medium' : 'border-transparent text-fg-muted hover:text-fg'}`}
+          data-testid="errors-tab-needs-action"
+          data-count={openActions}
+        >
+          {t('errorsPage.tabNeedsAction')}
+          {openActions > 0 && <span className="text-xs rounded-full bg-accent text-on-accent px-2">{formatNumber(openActions, locale)}</span>}
+        </Link>
+      </nav>
+
+      <div className="mb-6">
+        <ErrorFilterBar filters={filters} facets={facets} active={hasErrorFilters(filters)} />
+      </div>
+
+      {refMissing && ref && (
+        <div role="status" className="bg-surface-2 border border-border text-fg px-4 py-3 rounded mb-6" data-testid="errors-ref-missing">
+          {t('errorsPage.refNotFound', { ref })}
+        </div>
+      )}
+
       {!data && <ErrorAlert testId="errors-error">{t('errorsPage.loadFailed')}</ErrorAlert>}
 
-      {data && (
-        <section aria-labelledby="errors-videos">
-          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-            <h2 id="errors-videos" className="text-xl font-semibold text-fg">{t('errorsPage.videosTitle')}</h2>
-            <Link href="/processing?status=failed" className={linkClass}>{t('errorsPage.openProcessing')}</Link>
-          </div>
-          {data.videos.length === 0 ? (
-            <div className={`${cardClass} text-center text-fg-muted`} data-testid="errors-videos-empty">{t('errorsPage.videosEmpty')}</div>
-          ) : (
-            <div className="bg-surface border border-border rounded-lg overflow-x-auto">
-              <table className="w-full" data-testid="errors-videos">
-                <caption className="sr-only">{t('errorsPage.videosTitle')}</caption>
-                <thead className="border-b border-border">
-                  <tr>
-                    <th className={thClass} scope="col">{t('errorsPage.colWhen')}</th>
-                    <th className={thClass} scope="col">{t('errorsPage.colVideo')}</th>
-                    <th className={thClass} scope="col">{t('processing.colOurs')}</th>
-                    <th className={thClass} scope="col">{t('errorsPage.colReason')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.videos.map((v) => {
-                    const when = v.processingIssue?.at || v.dateModified;
-                    return (
-                      <tr key={v.id} className="border-b border-border last:border-0" data-video-id={v.id}>
-                        <td className={tdClass}>{when ? formatDate(when, locale, true) : '—'}</td>
-                        <td className={tdClass}>
-                          <div className="font-medium text-fg">{v.title || v.id}</div>
-                          <div className="text-fg-muted text-xs" dir="ltr">{v.id}</div>
-                        </td>
-                        <td className={tdClass}>
-                          {v.processingIssue ? t(ISSUE_LABEL[v.processingIssue.kind]) : ourStatusLabel(t, v.uploadStatus)}
-                        </td>
-                        <td className={tdClass}>{v.processingIssue?.reason || t('errorsPage.noReason')}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-      )}
-
-      {data && (
-        <section aria-labelledby="errors-dead">
-          <h2 id="errors-dead" className="text-xl font-semibold text-fg mb-3">{t('errorsPage.deadTitle')}</h2>
-          {data.deadLetters.length === 0 ? (
-            <div className={`${cardClass} text-center text-fg-muted`} data-testid="errors-dead-empty">{t('errorsPage.deadEmpty')}</div>
-          ) : (
-            <div className="bg-surface border border-border rounded-lg overflow-x-auto">
-              <table className="w-full" data-testid="errors-dead">
-                <caption className="sr-only">{t('errorsPage.deadCaption')}</caption>
-                <thead className="border-b border-border">
-                  <tr>
-                    <th className={thClass} scope="col">{t('errorsPage.colWhen')}</th>
-                    <th className={thClass} scope="col">{t('errorsPage.colVideo')}</th>
-                    <th className={thClass} scope="col">{t('errorsPage.colReason')}</th>
-                    <th className={thClass} scope="col">{t('errorsPage.colAttempts')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.deadLetters.map((d) => (
-                    <tr key={d.id} className="border-b border-border last:border-0">
-                      <td className={tdClass}>{formatDate(d.receivedAt, locale, true)}</td>
-                      <td className={tdClass} dir="ltr">{d.videoId ?? '—'}</td>
-                      <td className={tdClass}>{d.failureReason || t('errorsPage.noReason')}</td>
-                      <td className={tdClass}>{d.attempts}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-      )}
-
-      {data && (
-        <section aria-labelledby="errors-erasure">
-          <h2 id="errors-erasure" className="text-xl font-semibold text-fg mb-1">{t('errorsPage.erasureTitle')}</h2>
-          <p className="text-fg-muted text-sm mb-3">{t('errorsPage.erasureHint')}</p>
-          {(data.erasureDeadLetters ?? []).length === 0 ? (
-            <div className={`${cardClass} text-center text-fg-muted`} data-testid="errors-erasure-empty">{t('errorsPage.erasureEmpty')}</div>
-          ) : (
-            <div className="bg-surface border border-border rounded-lg overflow-x-auto">
-              <table className="w-full" data-testid="errors-erasure">
-                <caption className="sr-only">{t('errorsPage.erasureTitle')}</caption>
-                <thead className="border-b border-border">
-                  <tr>
-                    <th className={thClass} scope="col">{t('errorsPage.colWhen')}</th>
-                    <th className={thClass} scope="col">{t('errorsPage.colAccount')}</th>
-                    <th className={thClass} scope="col">{t('errorsPage.colStep')}</th>
-                    <th className={thClass} scope="col">{t('errorsPage.colReason')}</th>
-                    <th className={thClass} scope="col">{t('errorsPage.colAttempts')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(data.erasureDeadLetters ?? []).map((d) => (
-                    <tr key={d.id} className="border-b border-border last:border-0" data-dead-letter-id={d.id}>
-                      <td className={tdClass}>{formatDate(d.receivedAt, locale, true)}</td>
-                      <td className={tdClass}>
-                        {d.userId ? (
-                          <Link href={`/users/${encodeURIComponent(d.userId)}`} className={linkClass} dir="ltr">{d.userId}</Link>
-                        ) : (
-                          '—'
-                        )}
-                      </td>
-                      <td className={tdClass}>{t(d.step === 'ContactDataErase' ? 'errorsPage.stepContact' : 'errorsPage.stepAccount')}</td>
-                      <td className={`${tdClass} break-words`}>{d.failureReason || t('errorsPage.noReason')}</td>
-                      <td className={tdClass}>{d.attempts}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-      )}
-
-      {formatFlagged && (
-        <section aria-labelledby="errors-format">
-          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-            <h2 id="errors-format" className="text-xl font-semibold text-fg">{t('errorsPage.formatTitle')}</h2>
-            <Link href="/video-formats" className={linkClass}>{t('errorsPage.openFormats')}</Link>
-          </div>
-          {formatFlagged.items.length === 0 ? (
-            <div className={`${cardClass} text-center text-fg-muted`} data-testid="errors-format-empty">{t('errorsPage.formatEmpty')}</div>
-          ) : (
-            <div className="bg-surface border border-border rounded-lg overflow-x-auto">
-              <table className="w-full" data-testid="errors-format">
-                <caption className="sr-only">{t('errorsPage.formatTitle')}</caption>
-                <thead className="border-b border-border">
-                  <tr>
-                    <th className={thClass} scope="col">{t('errorsPage.colWhen')}</th>
-                    <th className={thClass} scope="col">{t('errorsPage.colVideo')}</th>
-                    <th className={thClass} scope="col">{t('errorsPage.colReason')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {formatFlagged.items.map((v) => (
-                    <tr key={v.id} className="border-b border-border last:border-0" data-video-id={v.id}>
-                      <td className={tdClass}>{v.formatIssue?.at ? formatDate(v.formatIssue.at, locale, true) : '—'}</td>
-                      <td className={tdClass}>
-                        <div className="font-medium text-fg">{v.title || v.id}</div>
-                        <div className="text-fg-muted text-xs" dir="ltr">{v.id}</div>
-                      </td>
-                      <td className={tdClass}>{v.formatIssue?.reason || t('errorsPage.noReason')}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-      )}
-
-      {contactFailed && (
-        <section aria-labelledby="errors-contact">
-          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-            <h2 id="errors-contact" className="text-xl font-semibold text-fg">{t('errorsPage.contactTitle')}</h2>
-            <Link href="/contact?status=send_failed" className={linkClass}>{t('errorsPage.openContact')}</Link>
-          </div>
-          {contactFailed.messages.length === 0 ? (
-            <div className={`${cardClass} text-center text-fg-muted`} data-testid="errors-contact-empty">{t('errorsPage.contactEmpty')}</div>
-          ) : (
-            <div className="bg-surface border border-border rounded-lg overflow-x-auto">
-              <table className="w-full" data-testid="errors-contact">
-                <caption className="sr-only">{t('errorsPage.contactTitle')}</caption>
-                <thead className="border-b border-border">
-                  <tr>
-                    <th className={thClass} scope="col">{t('errorsPage.colWhen')}</th>
-                    <th className={thClass} scope="col">{t('contact.colFrom')}</th>
-                    <th className={thClass} scope="col">{t('contact.colTopic')}</th>
-                    <th className={thClass} scope="col">{t('errorsPage.colReason')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {contactFailed.messages.map((m) => (
-                    <tr key={m.id} className="border-b border-border last:border-0" data-message-id={m.id}>
-                      <td className={tdClass}>{formatDate(m.send_failed_at ?? m.updated_at, locale, true)}</td>
-                      <td className={tdClass}>
-                        <Link href={`/contact/${encodeURIComponent(m.id)}`} className={linkClass} aria-label={t('contact.openMessage', { name: m.name })}>
-                          <span dir="auto">{m.name}</span>
-                        </Link>
-                        <div className="text-fg-muted text-xs" dir="ltr">{m.email}</div>
-                      </td>
-                      <td className={tdClass}>{translateDynamic(t, 'contactTopic', m.topic)}</td>
-                      <td className={`${tdClass} break-words`}>{m.delivery_error || t('errorsPage.noReason')}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-      )}
-      <section aria-labelledby="errors-jobs" data-testid="errors-jobs-section">
-        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-          <h2 id="errors-jobs" className="text-xl font-semibold text-fg">{t('jobs.errorsTitle')}</h2>
-          <Link href="/jobs" className={linkClass}>{t('jobs.openAll')}</Link>
+      {data && data.groups.length === 0 && !(filters.needsAction && otherFailures && !hasErrorFilters(filters)) && (
+        <div className="bg-surface border border-border rounded-lg p-8 text-center text-fg-muted" data-testid="errors-empty">
+          {filters.needsAction && !hasErrorFilters(filters) ? t('errorsPage.emptyNeedsAction') : t('errorsPage.empty')}
         </div>
-        {!failedJobs ? (
-          <ErrorAlert testId="errors-jobs-error">{t('jobs.panelUnknown')}</ErrorAlert>
-        ) : failedJobs.length === 0 ? (
-          <div className={`${cardClass} text-center text-fg-muted`} data-testid="errors-jobs-empty">{t('jobs.emptyFailed')}</div>
-        ) : (
-          <JobsTable jobs={failedJobs} permissions={jobPermissions} testId="errors-jobs" />
-        )}
-      </section>
+      )}
+
+      {data && data.groups.length > 0 && (
+        <>
+          <div className="bg-surface border border-border rounded-lg overflow-x-auto">
+            <table className="w-full" data-testid="errors-table">
+              <caption className="sr-only">{t('errorsPage.tableCaption')}</caption>
+              <thead className="bg-surface-2">
+                <tr>
+                  <th scope="col" className={thClass}>{t('errorsPage.colError')}</th>
+                  <th scope="col" className={thClass}>{t('errorsPage.colTrend')}</th>
+                  <th scope="col" className={thClass}>{t('errorsPage.colStatus')}</th>
+                  <th scope="col" className={`${thClass} text-end`}>{t('errorsPage.colEvents')}</th>
+                  <th scope="col" className={`${thClass} text-end`}>{t('errorsPage.colUsers')}</th>
+                  <th scope="col" className={thClass}>{t('errorsPage.colSeen')}</th>
+                  <th scope="col" className={thClass}>{t('errorsPage.colRelease')}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {data.groups.map((g) => {
+                  const total14 = g.daily.reduce((a, b) => a + b, 0);
+                  return (
+                    <tr key={g.id} className="hover:bg-surface-hover" data-testid="errors-row" data-group-id={g.id} data-status={g.status}>
+                      <td className="px-4 py-4 align-top max-w-md">
+                        <Link href={`/errors/${encodeURIComponent(g.id)}`} className={`${linkClass} font-medium`} aria-label={t('errorsPage.openGroup', { message: g.message })} data-testid="error-group-row">
+                          <span className="block truncate" dir="ltr">
+                            {errorTitle(g)}
+                          </span>
+                        </Link>
+                        <span className="flex flex-wrap gap-x-2 gap-y-1 text-xs text-fg-subtle mt-1">
+                          <span className="font-mono" dir="ltr">{g.app}</span>
+                          <span dir="ltr">{g.environment}</span>
+                          {g.culprit && (
+                            <span className="font-mono truncate max-w-xs" dir="ltr">
+                              {g.culprit}
+                            </span>
+                          )}
+                          {g.open_actions > 0 && (
+                            <span className="text-danger-fg font-medium" data-testid="errors-row-open-actions">
+                              {t('errorsPage.openItems', { count: g.open_actions })}
+                            </span>
+                          )}
+                          {!!g.test && <TestChip label={t('errorsPage.test')} />}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 align-top">
+                        <Sparkline values={g.daily} label={t('errorsPage.sparkline', { count: total14 })} />
+                      </td>
+                      <td className="px-4 py-4 align-top">
+                        <ErrorStatusChip status={g.status} label={translateDynamic(t, 'errorStatus', g.status)} />
+                      </td>
+                      <td className="px-4 py-4 align-top text-end tabular-nums">{formatNumber(g.occurrences, locale)}</td>
+                      <td className="px-4 py-4 align-top text-end tabular-nums">{formatNumber(g.users, locale)}</td>
+                      <td className="px-4 py-4 align-top text-sm text-fg-muted whitespace-nowrap">
+                        <time dateTime={g.first_seen} className="block">{formatDate(g.first_seen, locale, true)}</time>
+                        <time dateTime={g.last_seen} className="block text-fg">{formatDate(g.last_seen, locale, true)}</time>
+                      </td>
+                      <td className="px-4 py-4 align-top text-sm font-mono text-fg-muted" dir="ltr">
+                        {g.last_release ?? '—'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {totalPages > 1 && (
+            <nav aria-label={t('errorsPage.paginationLabel')} className="flex justify-center items-center gap-2 mt-6">
+              {filters.page > 1 && (
+                <Link href={errorsHref({ ...filters, page: filters.page - 1 })} className={pagerClass} rel="prev">
+                  {t('errorsPage.previous')}
+                </Link>
+              )}
+              <span className="px-4 py-2 text-fg-muted" aria-current="page">
+                {t('errorsPage.pageOf', { page: filters.page, total: totalPages })}
+              </span>
+              {filters.page < totalPages && (
+                <Link href={errorsHref({ ...filters, page: filters.page + 1 })} className={pagerClass} rel="next">
+                  {t('errorsPage.next')}
+                </Link>
+              )}
+            </nav>
+          )}
+        </>
+      )}
+      {failures && (
+        <div className="space-y-8 mt-8">
+          <FailuresSections failures={failures} t={t} locale={locale} />
+        </div>
+      )}
     </div>
   );
 }

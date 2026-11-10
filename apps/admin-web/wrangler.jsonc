@@ -34,6 +34,7 @@
     "ADMIN_API_URL": "http://127.0.0.1:3090",
     "NEXT_PUBLIC_API_URL": "http://127.0.0.1:3086",
     "NEXT_PUBLIC_BASE_URL": "http://localhost:3091",
+    "ERRORS_INGEST_URL": "http://127.0.0.1:3090/internal/errors",
     "ClientId": "a24e39de-601d-463b-b50d-37a0a94e986b"
   },
   "dev": {

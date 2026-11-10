@@ -78,10 +78,18 @@ export const APPS: AppRule[] = [
 				ADMIN_API_URL: 'https://admin.api.alummahnow.net',
 				NEXT_PUBLIC_API_URL: VIDEOS_API,
 				NEXT_PUBLIC_BASE_URL: 'https://admin.alummahnow.net',
+				ERRORS_INGEST_URL: 'https://admin.api.alummahnow.net/internal/errors',
 			},
+			// INTERNAL_API_KEY: browser and SSR error reports to admin-api /internal/errors
+			requiredBindings: [INTERNAL_API_KEY],
 			...PROD_GUARDS,
 		},
-		stage: stageRule({ name: 'al-ummah-admin-web-stage', requireRoutes: true, vars: { Issuer: STAGE_AUTH, OPENAUTH_ISSUER: STAGE_AUTH, API_URL: STAGE_API, ADMIN_API_URL: 'https://admin.api.stage.alummahnow.net', NEXT_PUBLIC_BASE_URL: 'https://admin.stage.alummahnow.net' } }),
+		stage: stageRule({
+			name: 'al-ummah-admin-web-stage',
+			requireRoutes: true,
+			vars: { Issuer: STAGE_AUTH, OPENAUTH_ISSUER: STAGE_AUTH, API_URL: STAGE_API, ADMIN_API_URL: 'https://admin.api.stage.alummahnow.net', NEXT_PUBLIC_BASE_URL: 'https://admin.stage.alummahnow.net', ERRORS_INGEST_URL: 'https://admin.api.stage.alummahnow.net/internal/errors' },
+			requiredBindings: [INTERNAL_API_KEY],
+		}),
 	},
 	{
 		app: 'api-videos',
