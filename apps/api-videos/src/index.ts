@@ -19,6 +19,8 @@ import type { AppBindings } from './base';
 import { enforceRetention } from './lib/privacy/retention';
 import { DEFAULT_OPERATION_BUDGET, OperationBudget } from './lib/privacy/scan';
 import { withSearchSync } from './lib/search/sync';
+import { handleAdminJobBatch, type JobMessage } from './lib/admin/jobs';
+import { ADMIN_JOB_HANDLERS } from './lib/admin/service';
 import { reconcileSearchIndex } from './lib/search/backfill';
 import { reconcileOwnershipIndex } from './lib/search/ownership';
 import { API_VERSION_HEADER, deprecationHeaders, findDeprecation, resolveApiVersion, unsupportedVersionResponse } from './lib/api-version';
@@ -487,11 +489,17 @@ async function handleFetch(request: Request, env: AppBindings, ctx: ExecutionCon
 }
 
 /**
- * Queue consumer: the per-video processing-check loop (PROCESSING_CHECK_QUEUE).
- * R2 writes go through the search-sync wrapper so a video that becomes ready
- * reaches the search index and ownership rows like any API write.
+ * Queue consumers, by queue name (prod name, or with its -stage / -qa suffix):
+ * - al-ummah-now-admin-jobs*: heavy admin actions (lib/admin/jobs.ts).
+ * - otherwise the per-video processing-check loop (PROCESSING_CHECK_QUEUE).
+ * R2 writes go through the search-sync wrapper so changes reach the search
+ * index and ownership rows like any API write.
  */
 async function queue(batch: MessageBatch<unknown>, env: AppBindings, ctx: ExecutionContext): Promise<void> {
+	if (batch.queue.startsWith('al-ummah-now-admin-jobs')) {
+		await handleAdminJobBatch(batch as unknown as { messages: readonly JobMessage[] }, withSearchSync(env, ctx) as never, ADMIN_JOB_HANDLERS);
+		return;
+	}
 	await handleProcessingCheckBatch(batch, withSearchSync(env, ctx) as never);
 }
 

@@ -128,6 +128,9 @@ export enum MessageType {
   // AI-assisted moderation (Epic 28). Explicit value in its own reserved range (230-239).
   // Sent by api-videos to the dedicated moderation queue (payload: ModerationScanPayload).
   ModerationScan = 230,
+
+  // Admin content job (api-videos lib/admin/jobs.ts), on the admin-jobs queue. Payload: { jobId }.
+  AdminJob = 240,
 }
 
 /** Payload of MessageType.VideoWatchTime. */

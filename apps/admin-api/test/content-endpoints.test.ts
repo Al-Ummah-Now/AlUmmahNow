@@ -210,14 +210,76 @@ describe('content endpoints: audit log', () => {
     assert.equal(log.length, 0);
   });
 
-  it('a resumed user data delete is audited too', async () => {
+  it('a user data delete queues one job and is audited once', async () => {
     const { db, log } = fakeDb();
-    const { fetcher, calls } = fakeVideos();
+    const job = { id: 'job_1', kind: 'user.delete-data', targetKind: 'user', targetId: 'usr_1', status: 'queued' };
+    const { fetcher, calls } = fakeVideos({ 'POST /users/usr_1/delete-data': () => ({ body: { success: true, result: { job } } }) });
     const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
-    await call('/api/content/users/usr_1/delete-data', { method: 'POST', roles: 'super_admin', json: {} });
-    await call('/api/content/users/usr_1/delete-data', { method: 'POST', roles: 'super_admin', json: { resumeToken: 'tok' } });
-    assert.deepEqual(log.map((r) => JSON.parse(r.new_value).action), ['delete-data', 'delete-data:resume']);
-    assert.deepEqual(calls.map((c) => c.body), [{}, { resumeToken: 'tok' }]);
+    const res = (await (await call('/api/content/users/usr_1/delete-data', { method: 'POST', roles: 'super_admin', json: { resumeToken: 'ignored' } })).json()) as { result: { job: { id: string } } };
+    assert.equal(res.result.job.id, 'job_1', 'the job comes back for the UI to follow');
+    assert.deepEqual(log.map((r) => JSON.parse(r.new_value).action), ['delete-data']);
+    assert.deepEqual(calls.map((c) => c.body), [{}], 'no resume token is passed on');
+  });
+});
+
+describe('content endpoints: admin jobs', () => {
+  const job = (kind: string, targetKind: string, targetId: string) => ({ id: 'job_9', kind, targetKind, targetId, status: 'failed', lastError: 'Bunny down' });
+
+  it('retrying a failed job needs the permissions of the action it runs, and is audited on the item', async () => {
+    const { db, log } = fakeDb();
+    let current = job('video.purge', 'video', 'v_1');
+    const { fetcher, calls } = fakeVideos({
+      'GET /jobs/job_9': () => ({ body: { success: true, result: current } }),
+      'POST /jobs/job_9/retry': () => ({ body: { success: true, result: { ...current, status: 'queued' } } }),
+    });
+    const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
+    assert.equal((await call('/api/content/jobs/job_9/retry', { method: 'POST', roles: 'moderator' })).status, 403);
+    const retried = await call('/api/content/jobs/job_9/retry', { method: 'POST', roles: 'admin', user: 'actor-3' });
+    assert.equal(retried.status, 200);
+    assert.equal(((await retried.json()) as { result: { status: string } }).result.status, 'queued');
+    assert.deepEqual(log.map((r) => [r.key, JSON.parse(r.new_value).action, JSON.parse(r.new_value).details.jobKind]), [['content:video:v_1', 'job-retry', 'video.purge']]);
+    assert.equal(calls.filter((c) => c.method === 'POST').length, 1);
+
+    current = job('channel.transfer', 'channel', 'ch_1');
+    assert.equal((await call('/api/content/jobs/job_9/retry', { method: 'POST', roles: 'admin' })).status, 403, 'only a super admin re-runs a transfer');
+    assert.equal((await call('/api/content/jobs/job_9/retry', { method: 'POST', roles: 'super_admin' })).status, 200);
+  });
+
+  it('a refused retry leaves no audit row', async () => {
+    const { db, log } = fakeDb();
+    const { fetcher } = fakeVideos({
+      'GET /jobs/job_9': () => ({ body: { success: true, result: job('video.move', 'video', 'v_1') } }),
+      'POST /jobs/job_9/retry': () => ({ status: 409, body: { success: false, code: 'job_not_failed', error: 'Only failed jobs can be retried' } }),
+    });
+    const res = await appFor({ REPORTS_DB: db, VIDEOS: fetcher })('/api/content/jobs/job_9/retry', { method: 'POST', roles: 'admin' });
+    assert.equal(res.status, 409);
+    assert.equal(log.length, 0);
+  });
+
+  it('job lists and the failed count are readable by every admin role', async () => {
+    const { fetcher, calls } = fakeVideos({ 'GET /jobs/counts': () => ({ body: { success: true, result: { failed: 2, retrying: 1 } } }) });
+    const call = appFor({ REPORTS_DB: fakeDb().db, VIDEOS: fetcher });
+    assert.equal((await call('/api/content/jobs?status=failed', { roles: 'moderator' })).status, 200);
+    assert.equal(calls[0].search, '?status=failed');
+    const counts = (await (await call('/api/content/jobs/counts', { roles: 'moderator' })).json()) as { result: { failed: number } };
+    assert.equal(counts.result.failed, 2);
+  });
+
+  it('a detail page carries the item\'s latest jobs; when they cannot be read it says unknown, not none', async () => {
+    const jobs = [job('channel.sync-holds', 'channel', 'ch_1')];
+    let fail = false;
+    const { fetcher, calls } = fakeVideos({
+      'GET /channels/ch_1': () => ({ body: { success: true, result: channelDetail } }),
+      'GET /jobs': () => (fail ? { status: 500, body: { success: false, code: 'internal_error' } } : { body: { success: true, result: { items: jobs } } }),
+    });
+    const call = appFor({ REPORTS_DB: fakeDb().db, VIDEOS: fetcher });
+    const detail = (await (await call('/api/content/channels/ch_1', { roles: 'moderator' })).json()) as { result: { jobs: unknown[] | null } };
+    assert.deepEqual(detail.result.jobs, jobs);
+    const params = new URLSearchParams(calls.find((c) => c.path === '/jobs')!.search);
+    assert.deepEqual([params.get('targetKind'), params.get('targetId')], ['channel', 'ch_1']);
+    fail = true;
+    const unknown = (await (await call('/api/content/channels/ch_1', { roles: 'moderator' })).json()) as { result: { jobs: unknown[] | null } };
+    assert.equal(unknown.result.jobs, null);
   });
 });
 

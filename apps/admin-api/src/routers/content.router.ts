@@ -14,10 +14,12 @@
  */
 import { Hono, type Context } from 'hono';
 import {
+  ADMIN_JOB_PERMISSIONS,
   contentPermissionsFor,
   hasContentPermission,
   type AdminChannelDetail,
   type AdminChannelRow,
+  type AdminJob,
   type AdminContentPermission,
   type AdminPage,
   type AdminUserDetail,
@@ -109,6 +111,20 @@ async function withReportCounts<T extends { id: string; openReports?: number }>(
   return { ...page, items: page.items.map((i) => ({ ...i, openReports: counts.get(i.id) ?? 0 })) };
 }
 
+/**
+ * The item's latest admin jobs (heavy actions run as queued jobs in api-videos),
+ * so its page shows "running" or "failed — Retry". A failure to read them is
+ * logged and shown as unknown (null), never as "no jobs".
+ */
+async function jobsFor(c: C, targetKind: AdminJob['targetKind'], targetId: string): Promise<AdminJob[] | null> {
+  try {
+    return (await videos<{ items: AdminJob[] }>(c, '/jobs', { query: { targetKind, targetId, limit: '5' } })).items;
+  } catch (error) {
+    logger.warn('[Content] Could not read the item\'s jobs', { targetKind, targetId, error: error instanceof Error ? error.message : String(error) });
+    return null;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Who may do what (admin-web shows only the controls a role may use)
 // ---------------------------------------------------------------------------
@@ -135,12 +151,13 @@ app.get('/channels', async (c) => {
 app.get('/channels/:id', async (c) => {
   const id = c.req.param('id');
   const channel = await videos<AdminChannelDetail>(c, `/channels/${encodeURIComponent(id)}`);
-  const [counts, reports, audit] = await Promise.all([
+  const [counts, reports, audit, jobs] = await Promise.all([
     openReportCounts(c.env.REPORTS_DB, 'channel', [id]),
     recentReports(c.env.REPORTS_DB, [{ type: 'channel', ids: [id] }]),
     readAudit(c.env.REPORTS_DB, { kind: 'channel', id, limit: 20 }),
+    jobsFor(c, 'channel', id),
   ]);
-  return ok(c, { ...channel, openReports: counts.get(id) ?? 0, reports, audit });
+  return ok(c, { ...channel, openReports: counts.get(id) ?? 0, reports, audit, jobs });
 });
 
 app.patch('/channels/:id', async (c) => {
@@ -205,12 +222,13 @@ app.get('/videos', async (c) => {
 app.get('/videos/:id', async (c) => {
   const id = c.req.param('id');
   const video = await videos<AdminVideoDetail>(c, `/videos/${encodeURIComponent(id)}`);
-  const [counts, reports, audit] = await Promise.all([
+  const [counts, reports, audit, jobs] = await Promise.all([
     openReportCounts(c.env.REPORTS_DB, 'video', [id]),
     recentReports(c.env.REPORTS_DB, [{ type: 'video', ids: [id] }]),
     readAudit(c.env.REPORTS_DB, { kind: 'video', id, limit: 20 }),
+    jobsFor(c, 'video', id),
   ]);
-  return ok(c, { ...video, openReports: counts.get(id) ?? 0, reports, audit });
+  return ok(c, { ...video, openReports: counts.get(id) ?? 0, reports, audit, jobs });
 });
 
 app.patch('/videos/:id', async (c) => {
@@ -296,14 +314,15 @@ app.get('/users/:id', async (c) => {
   const id = c.req.param('id');
   const user = await videos<AdminUserDetail>(c, `/users/${encodeURIComponent(id)}`);
   const owned = await videos<AdminPage<AdminVideoRow>>(c, '/videos', { query: { ownerId: id, pageSize: 100 } });
-  const [reports, audit] = await Promise.all([
+  const [reports, audit, jobs] = await Promise.all([
     recentReports(c.env.REPORTS_DB, [
       { type: 'channel', ids: user.channels.map((ch) => ch.id) },
       { type: 'video', ids: owned.items.map((v) => v.id) },
     ]),
     readAudit(c.env.REPORTS_DB, { kind: 'user', id, limit: 20 }),
+    jobsFor(c, 'user', id),
   ]);
-  return ok(c, { ...user, reports, audit });
+  return ok(c, { ...user, reports, audit, jobs });
 });
 
 app.patch('/users/:id', async (c) => {
@@ -334,11 +353,27 @@ app.post('/users/:id/delete-data', async (c) => {
   need(c, 'users:manage');
   need(c, 'content:delete');
   const id = c.req.param('id');
-  const { resumeToken } = await body(c);
-  // Every call is audited, resumed ones too: each one deletes data
-  const action = typeof resumeToken === 'string' && resumeToken ? 'delete-data:resume' : 'delete-data';
-  return ok(c, await audited(c, { kind: 'user', id, action }, () =>
-    videos(c, `/users/${encodeURIComponent(id)}/delete-data`, { method: 'POST', json: action === 'delete-data:resume' ? { resumeToken } : {} })));
+  // Queues the erase job (it resumes itself in api-videos); audited once here
+  return ok(c, await audited(c, { kind: 'user', id, action: 'delete-data' }, () =>
+    videos(c, `/users/${encodeURIComponent(id)}/delete-data`, { method: 'POST', json: {} })));
+});
+
+// ---------------------------------------------------------------------------
+// Admin jobs: heavy actions (deletes, suspend/ban cascades, transfers, moves)
+// run from a queue in api-videos. Failed ones flag the admin here, with Retry.
+// ---------------------------------------------------------------------------
+
+app.get('/jobs', async (c) => ok(c, await videos(c, '/jobs', { query: c.req.query() })));
+app.get('/jobs/counts', async (c) => ok(c, await videos(c, '/jobs/counts')));
+app.get('/jobs/:id', async (c) => ok(c, await videos(c, `/jobs/${encodeURIComponent(c.req.param('id'))}`)));
+
+app.post('/jobs/:id/retry', async (c) => {
+  const jobId = c.req.param('id');
+  const job = await videos<AdminJob>(c, `/jobs/${encodeURIComponent(jobId)}`);
+  // Retrying runs the action again: it needs the permissions the action itself needs
+  for (const permission of ADMIN_JOB_PERMISSIONS[job.kind] ?? ['content:delete']) need(c, permission);
+  return ok(c, await audited(c, { kind: job.targetKind, id: job.targetId, action: 'job-retry', details: { jobId, jobKind: job.kind } }, () =>
+    videos(c, `/jobs/${encodeURIComponent(jobId)}/retry`, { method: 'POST' })));
 });
 
 export default app;

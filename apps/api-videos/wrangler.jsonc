@@ -171,6 +171,14 @@
 				"max_batch_timeout": 5,
 				"max_retries": 5,
 				"dead_letter_queue": "al-ummah-now-dlq"
+			},
+			{
+				// Heavy admin actions (lib/admin/jobs.ts). One job per invocation: each gets the full subrequest budget.
+				"queue": "al-ummah-now-admin-jobs",
+				"max_batch_size": 1,
+				"max_batch_timeout": 5,
+				"max_retries": 5,
+				"dead_letter_queue": "al-ummah-now-dlq"
 			}
 		],
 		"producers": [
@@ -185,6 +193,10 @@
 			{
 				"queue": "al-ummah-now-moderation",
 				"binding": "MODERATION_QUEUE"
+			},
+			{
+				"queue": "al-ummah-now-admin-jobs",
+				"binding": "ADMIN_JOBS_QUEUE"
 			}
 		]
 	},
@@ -375,6 +387,14 @@
 						"max_batch_timeout": 5,
 						"max_retries": 5,
 						"dead_letter_queue": "al-ummah-now-dlq-stage"
+					},
+					{
+						// Heavy admin actions (lib/admin/jobs.ts). One job per invocation: each gets the full subrequest budget.
+						"queue": "al-ummah-now-admin-jobs-stage",
+						"max_batch_size": 1,
+						"max_batch_timeout": 5,
+						"max_retries": 5,
+						"dead_letter_queue": "al-ummah-now-dlq-stage"
 					}
 				],
 				"producers": [
@@ -389,6 +409,10 @@
 					{
 						"queue": "al-ummah-now-moderation-stage",
 						"binding": "MODERATION_QUEUE"
+					},
+					{
+						"queue": "al-ummah-now-admin-jobs-stage",
+						"binding": "ADMIN_JOBS_QUEUE"
 					}
 				]
 			},

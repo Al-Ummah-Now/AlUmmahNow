@@ -25,7 +25,8 @@ export interface DeadLetterRecord {
   message_id: string | null;
   message_type: number | null;
   type_name: string;
-  source: 'videos' | 'moderation';
+  /** 'admin-jobs' dead letters are retried from admin (the job's Retry), never replayed here. */
+  source: 'videos' | 'moderation' | 'admin-jobs';
   dlq: string;
   attempts: number;
   failure_reason: string | null;
@@ -54,7 +55,7 @@ export function toDeadLetterRecord(input: DeadLetterInput, now: number): DeadLet
     message_id: typeof message.id === 'string' ? message.id : null,
     message_type: type,
     type_name: type !== null ? (MessageType[type] ?? String(type)) : typeof message.type === 'string' ? message.type : 'unknown',
-    source: type === MessageType.ModerationScan ? 'moderation' : 'videos',
+    source: type === MessageType.ModerationScan ? 'moderation' : type === MessageType.AdminJob ? 'admin-jobs' : 'videos',
     dlq: input.dlq,
     attempts: input.attempts,
     failure_reason: typeof message.failureReason === 'string' ? message.failureReason.slice(0, 1000) : null,
