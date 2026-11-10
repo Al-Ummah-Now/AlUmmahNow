@@ -106,7 +106,7 @@ Severity is the reported impact at scale. The status column links the fix.
 | AV-14 | api-videos | high | KV upload rate limiter is racy, eventually consistent and fails open | fixed in [#522](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/522) |
 | AV-15 | api-videos | high | Section indexes: stale-index stampede, each rebuild exceeds the subrequest budget, and rebuilds race | fixed in [#554](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/554) |
 | AV-16 | api-videos | high for videosearch/subscriptionfeed/channel lists/about | Request-path full-bucket scans (fan-out beyond 1000 subrequests / memory) | fixed in [#554](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/554) |
-| AV-17 | api-videos | high | D1 write amplification on the view path (and every content write) | fixed in [#547](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/547) |
+| AV-17 | api-videos | high | D1 write amplification on the view path (and every content write) | fixed in [#547](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/547), [#673](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/673) |
 | AV-18 | api-videos | low-med | Search index can end up older than R2 (cross-request ordering) | fixed in [#514](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/514) |
 | AV-19 | api-videos | low-med | Playlists and watch-later written blind | fixed in [#520](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/520) |
 | AV-20 | api-videos | low | Channel sections / tab config / upload templates: multi-key RMW without conditions | fixed in [#537](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/537) |
@@ -409,6 +409,7 @@ Each of these does `getObject(videoId)` → mutate → `putObject(videoId, …)`
 - **Category:** D1 write hot spot.
 - **Scenario:** Each video view (AV-1) and each community post view (AV-8) costs 1 R2 put + 1 D1 ownership write (on the response path) + 1 D1 read + a 3-statement D1 write batch with FTS rewrite. D1 is a single-writer SQLite database; at a few hundred views/s the search DB saturates, ownership writes start failing, which calls `invalidateOwnership` (2 more writes to the single `search_meta` row each time) and flips all readers to R2 scans (AV-16). Also `scheduleOwnershipHeal` on every fallback request does a lease UPSERT on the single lease row (`acquireHealLease`, ownership.ts:379) — one hot row written per fallback request.
 - **Severity:** high.
+- **Fixed:** #547 made counter-only search writes a single guarded UPDATE and the heal lease read-first; #673 batches community post views through a per-post Durable Object shard (`postviews:<postId>:<shard>`) that flushes a max-merged daily total into `analytics_daily` at most every 10 s, instead of one D1 upsert per GET.
 - **Fix:** take views out of the video/post JSON (AV-1/AV-8) so view traffic never reaches the sync wrapper; exclude `views` from the search hash (update views in D1 in periodic batches); skip the ownership UPSERT when the projected ownership row is unchanged (compare before writing, or have the caller pass the previous object); in `scheduleOwnershipHeal`, check the lease with a cheap read (or an in-isolate "last attempted" timestamp) before writing.
 
 #### AV-18 — Search index can end up older than R2 (cross-request ordering)
