@@ -11,8 +11,14 @@
  *
  * Videos and channels also update the ownership index (content_ownership,
  * every object including private ones) that api-videos uses for owner and
- * channel listings. An ownership write that fails marks that index
- * incomplete, so api-videos scans R2 until its next rebuild pass.
+ * channel listings.
+ *
+ * A write that fails is one object's problem: it is recorded in index_repairs
+ * and the api-videos repair job (lib/search/repairs.ts; its 10-minute cron
+ * starts it) re-reads the object from R2 and rewrites it, with backoff and an
+ * Errors page entry with Retry. When D1 refuses that record too, the handler
+ * throws, so this queue retries the message and finally dead-letters it
+ * (Errors page, Replay). The index is never marked incomplete.
  */
 
 import {
@@ -21,14 +27,16 @@ import {
   SearchEntityType,
   SearchIndexSyncPayload,
   applyOwnershipModeration,
-  invalidateOwnership,
   loadVideoCategories,
   ownershipKindFor,
+  recordIndexRepair,
   removeSearchDocument,
-  syncOwnershipSafely,
+  syncOwnership,
   syncSearchDocument,
   channelSubscriberCount,
   refreshChannelSubscribers,
+  type IndexRepairEntity,
+  type IndexRepairReason,
 } from '@al-ummah/shared-types';
 import type { Logger } from '@al-ummah/logger';
 import type { AlUmmahMessage, QueueEnvironment } from '../types';
@@ -45,6 +53,30 @@ function searchDb(env: QueueEnvironment): SearchDb | null {
   return (env.SEARCH_DB as unknown as SearchDb | undefined) ?? null;
 }
 
+/**
+ * Hand a failed index write to the repair job. Throws `error` when it cannot be
+ * recorded, so the queue retries the message (then DLQ).
+ */
+export async function repairOrThrow(
+  db: SearchDb,
+  input: { entity: IndexRepairEntity; id: string; key?: string; reason: IndexRepairReason },
+  error: unknown,
+  logger: Logger,
+): Promise<void> {
+  const message = error instanceof Error ? error.message : String(error);
+  try {
+    await recordIndexRepair(db, { ...input, error: message });
+  } catch (recordError) {
+    logger.warn('Index write failed and could not be queued for repair; retrying the message', {
+      ...input,
+      error: message,
+      recordError: recordError instanceof Error ? recordError.message : String(recordError),
+    });
+    throw error;
+  }
+  logger.warn('Index write failed; object queued for repair', { ...input, error: message });
+}
+
 export async function handleSearchIndexSync(message: AlUmmahMessage, env: QueueEnvironment, logger: Logger): Promise<void> {
   const { entity, id, object, version: sent } = message.payload as unknown as SearchIndexSyncPayload;
   // Order guard (SCALABILITY-AUDIT PR-8): the version of the snapshot (its R2
@@ -59,21 +91,26 @@ export async function handleSearchIndexSync(message: AlUmmahMessage, env: QueueE
     return;
   }
   const kind = ownershipKindFor(entity);
+  // Community posts are stored at posts/<channelId>/<id>.json
+  const channelId = (object as { channelId?: unknown } | null | undefined)?.channelId;
+  const key = entity === 'post' && typeof channelId === 'string' ? `posts/${channelId}/${id}.json` : id;
   if (kind) {
-    const ownership = await syncOwnershipSafely(db, kind, id, object ?? null, Date.now(), version);
-    if (ownership.ok === false) {
-      // Retried by the queue (then the dead-letter queue): the durable way to get this write in.
-      // The row is also marked for re-sync when the mark could be written.
-      logger.warn('Ownership index write failed; retrying through the queue', { entity, id, error: ownership.error, marked: ownership.invalidated });
-      throw new Error(`Ownership index write failed for ${entity} ${id}: ${ownership.error}`);
+    try {
+      await syncOwnership(db, kind, id, object ?? null, Date.now(), version);
+    } catch (error) {
+      await repairOrThrow(db, { entity: kind, id, key, reason: 'ownership-write' }, error, logger);
     }
   }
   // Category labels in the index text come from the admin-managed list
   await loadVideoCategories(db);
-  // A channel carries its live subscriber count (D1), never the frozen one on the R2 object (#1633)
-  const subscribers = entity === 'channel' && object ? await channelSubscriberCount(env.NOTIFICATIONS_DB, id) : undefined;
-  const result = await syncSearchDocument(db, entity, id, object ?? null, { version, ...(subscribers !== undefined ? { subscribers } : {}) });
-  logger.debug('Search index synced', { entity, id, version, result });
+  try {
+    // A channel carries its live subscriber count (D1), never the frozen one on the R2 object (#1633)
+    const subscribers = entity === 'channel' && object ? await channelSubscriberCount(env.NOTIFICATIONS_DB, id) : undefined;
+    const result = await syncSearchDocument(db, entity, id, object ?? null, { version, ...(subscribers !== undefined ? { subscribers } : {}) });
+    logger.debug('Search index synced', { entity, id, version, result });
+  } catch (error) {
+    await repairOrThrow(db, { entity, id, key, reason: 'search-write' }, error, logger);
+  }
 }
 
 /**
@@ -105,14 +142,14 @@ export async function applyModerationToSearchIndex(
     try {
       await applyOwnershipModeration(db, kind, payload.entityId, { hidden: true, deleted: payload.action === 'deleted' });
     } catch (error) {
-      logger.warn('Ownership moderation update failed; row marked for re-sync', {
-        kind,
-        id: payload.entityId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      await invalidateOwnership(db, kind, Date.now(), payload.entityId).catch(() => undefined);
+      // The repair job re-reads the moderated object (flags already in R2) and rewrites its row
+      await repairOrThrow(db, { entity: kind, id: payload.entityId, reason: 'moderation' }, error, logger);
     }
   }
-  const result = await removeSearchDocument(db, type, payload.entityId);
-  logger.debug('Moderated content removed from search index', { type, id: payload.entityId, result });
+  try {
+    const result = await removeSearchDocument(db, type, payload.entityId);
+    logger.debug('Moderated content removed from search index', { type, id: payload.entityId, result });
+  } catch (error) {
+    await repairOrThrow(db, { entity: type, id: payload.entityId, reason: 'moderation' }, error, logger);
+  }
 }

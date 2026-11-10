@@ -608,6 +608,21 @@ export const ADMIN_JOB_KINDS = [
    * Target 'video' / 'discovery-rails'.
    */
   'discovery.rank',
+  /**
+   * Re-read objects whose index write failed (index_repairs) from R2 and
+   * rewrite their ownership and search rows, with backoff; objects that keep
+   * failing are listed on the Errors page with Retry (api-videos
+   * lib/search/repairs.ts). One job at a time, target 'index-repairs'.
+   */
+  'search.repair-objects',
+  /**
+   * One full reconcile pass of a search table (search_videos, …) against its
+   * bucket, in queued steps of 2000 objects: refreshes rows, queues objects it
+   * could not index for repair, prunes rows of objects gone from R2 and sets
+   * or clears the search drift flag (api-videos lib/search/backfill.ts).
+   * Target 'search-index:<entity>'.
+   */
+  'search.reconcile',
 ] as const;
 
 export type AdminJobKind = (typeof ADMIN_JOB_KINDS)[number];
@@ -659,6 +674,8 @@ export const ADMIN_JOB_PERMISSIONS: Readonly<Record<AdminJobKind, readonly Admin
   'billing.refund': ['billing:refund'],
   'billing.reconcile': ['billing:manage'],
   'discovery.rank': ['videos:manage'],
+  'search.repair-objects': ['videos:manage'],
+  'search.reconcile': ['videos:manage'],
 };
 
 // ---------------------------------------------------------------------------

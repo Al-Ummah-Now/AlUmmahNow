@@ -62,6 +62,8 @@ import { OWNER_DELETED_HOLD } from '../videoTrashMarks';
 import { runThumbnailRepairStep, type ThumbnailRepairEnv } from '../thumbnail/repair';
 import { runOwnershipRebuildStep, type OwnershipRebuildEnv } from '../search/ownershipRebuild';
 import { runDiscoveryRankJob, type DiscoveryEnv } from '../ranking/job';
+import { runIndexRepairStep, type RepairJobEnv } from '../search/repairs';
+import { runSearchReconcileStep, type SearchReconcileEnv } from '../search/backfill';
 import { runPlaylistAddStep, type PlaylistEnv } from '../playlistBulk';
 import { runImportAttach, type AttachEnv } from './importAttach';
 import {
@@ -1721,5 +1723,9 @@ export const ADMIN_JOB_HANDLERS: Record<AdminJobKind, JobHandler> = {
 	'billing.reconcile': (env, job) => runReconcileJob(env as never, job),
 	// Discovery ranking (lib/ranking/job.ts): hourly from the cron, or "Run now" in the videos admin
 	'discovery.rank': (env, job) => runDiscoveryRankJob(env as DiscoveryEnv, job),
+	// Objects whose index write failed, rewritten one by one from R2 (lib/search/repairs.ts)
+	'search.repair-objects': (env, job) => runIndexRepairStep(env as RepairJobEnv, job),
+	// A full search-table reconcile pass in queued steps (lib/search/backfill.ts), daily and from the Errors page
+	'search.reconcile': (env, job) => runSearchReconcileStep(env as SearchReconcileEnv, job),
 };
 

@@ -48,6 +48,7 @@
 --   apps/api-videos/migrations/search/0066_tier_hidden.sql
 --   apps/api-videos/migrations/search/0067_remove_paddle.sql
 --   apps/api-videos/migrations/search/0068_discovery_ranking.sql
+--   apps/api-videos/migrations/search/0069_index_repairs.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
@@ -91,6 +92,7 @@ CREATE TABLE discovery_pins (id TEXT PRIMARY KEY, rail TEXT NOT NULL, kind TEXT 
 CREATE TABLE discovery_rail_items (rail TEXT NOT NULL, scope TEXT NOT NULL, position INTEGER NOT NULL, video_id TEXT NOT NULL, score REAL NOT NULL DEFAULT 0, reason TEXT NOT NULL, PRIMARY KEY (rail, scope, position)) WITHOUT ROWID;
 CREATE TABLE discovery_rails (rail TEXT NOT NULL, scope TEXT NOT NULL, mode TEXT NOT NULL, label TEXT NOT NULL, items INTEGER NOT NULL DEFAULT 0, signal_items INTEGER NOT NULL DEFAULT 0, hash TEXT NOT NULL, computed_at INTEGER NOT NULL, PRIMARY KEY (rail, scope)) WITHOUT ROWID;
 CREATE TABLE image_owners (path TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK (kind IN ('profile_avatar', 'profile_cover', 'channel_avatar', 'channel_cover', 'post_image', 'video_thumbnail')), owner_id TEXT, channel_id TEXT, created_at TEXT NOT NULL) WITHOUT ROWID;
+CREATE TABLE index_repairs (entity TEXT NOT NULL, id TEXT NOT NULL, r2_key TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', attempts INTEGER NOT NULL DEFAULT 0, reason TEXT NOT NULL, last_error TEXT, next_attempt_at INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY (entity, id)) WITHOUT ROWID;
 CREATE TABLE indexnow_pending (video_id TEXT PRIMARY KEY, is_short INTEGER NOT NULL DEFAULT 0, queued_at REAL NOT NULL) WITHOUT ROWID;
 CREATE TABLE inline_translation_usage (user_id TEXT NOT NULL, day TEXT NOT NULL, items INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, day)) WITHOUT ROWID;
 CREATE TABLE live_channel_overrides (channel_id TEXT PRIMARY KEY, provider TEXT NOT NULL CHECK (provider IN ('bunny', 'selfhosted')), note TEXT, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL) WITHOUT ROWID;
@@ -247,6 +249,7 @@ CREATE INDEX idx_creator_tier_changes_user ON creator_tier_changes (user_id, cre
 CREATE INDEX idx_creator_tiers_deleted ON creator_tiers (deleted_at) WHERE deleted_at IS NOT NULL;
 CREATE INDEX idx_discovery_pins_rail ON discovery_pins (rail, position);
 CREATE INDEX idx_image_owners_owner ON image_owners (owner_id);
+CREATE INDEX idx_index_repairs_due ON index_repairs (status, next_attempt_at);
 CREATE INDEX idx_indexnow_pending_queued ON indexnow_pending (queued_at);
 CREATE INDEX idx_live_events_kind ON live_events (kind, at);
 CREATE INDEX idx_live_events_session ON live_events (session_id, at);

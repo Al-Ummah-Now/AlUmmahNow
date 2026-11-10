@@ -136,4 +136,29 @@ describe('/api/processing', () => {
     const mod = setup(['moderator']);
     assert.equal((await mod.req('/api/processing/index-rebuild', post({ kind: 'video' }))).status, 403);
   });
+
+  it('a search table rebuild goes through with its search:<entity> kind', async () => {
+    const { req, calls } = setup(['admin']);
+    assert.equal((await req('/api/processing/index-rebuild', post({ kind: 'search:playlist' }))).status, 202);
+    assert.deepEqual(calls[0].body, { kind: 'search:playlist', actorId: 'admin-1' });
+    assert.equal((await req('/api/processing/index-rebuild', post({ kind: 'search:profile' }))).status, 400);
+  });
+
+  it('index repair retry (one or all) is audited and goes through; bad targets and moderators are refused', async () => {
+    const { req, calls, audit } = setup(['admin']);
+    assert.equal((await req('/api/processing/index-repairs/retry', post({ entity: 'video', id: 'abc12345' }))).status, 200);
+    assert.equal(calls[0].path, '/internal/processing/index-repairs/retry');
+    assert.deepEqual(calls[0].body, { entity: 'video', id: 'abc12345' });
+    assert.equal((await req('/api/processing/index-repairs/retry', post({}))).status, 200);
+    assert.deepEqual(calls[1].body, {});
+    const rows = await audit();
+    assert.equal(rows.length, 2);
+    assert.equal(rows[0].key, `${PROCESSING_AUDIT_PREFIX}index-repairs`);
+    assert.equal(JSON.parse(rows[0].new_value).action, 'retry_index_repairs');
+    assert.equal((await req('/api/processing/index-repairs/retry', post({ entity: 'comment', id: 'x' }))).status, 400);
+    assert.equal((await req('/api/processing/index-repairs/retry', post({ entity: 'video' }))).status, 400);
+    assert.equal(calls.length, 2);
+    const mod = setup(['moderator']);
+    assert.equal((await mod.req('/api/processing/index-repairs/retry', post({}))).status, 403);
+  });
 });

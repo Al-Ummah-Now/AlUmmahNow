@@ -81,8 +81,8 @@ import { withSearchSync } from './lib/search/sync';
 import { handleAdminJobBatch, type JobMessage } from './lib/admin/jobs';
 import { ADMIN_JOB_HANDLERS, purgeDeletion } from './lib/admin/service';
 import { runDeletionCleanup } from './lib/admin/deletions';
-import { reconcileSearchIndex } from './lib/search/backfill';
-import { reconcileOwnershipIndex } from './lib/search/ownership';
+import { startIndexReconcile } from './lib/search/reconcileJobs';
+import { kickRepairJobIfPending } from './lib/search/repairs';
 import { API_VERSION_HEADER, deprecationHeaders, findDeprecation, resolveApiVersion, unsupportedVersionResponse } from './lib/api-version';
 import { buildContractDocument } from './lib/api-contract';
 
@@ -680,6 +680,12 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 		// QA / stage only: erase the videos data (profile, channels, videos and their Bunny media) of
 		// E2E run accounts the auth server has deleted (lib/e2e/runUserSweep.ts)
 		ctx.waitUntil(sweepRunUsers(withSearchSync(rawEnv, ctx) as never).then(() => undefined));
+		// Safety net for per-object index repairs (lib/search/repairs.ts): a lost job message
+		ctx.waitUntil(
+			kickRepairJobIfPending(rawEnv as never).catch((error) =>
+				logger.error('[IndexRepair] Could not start the repair job', { error: error instanceof Error ? error.message : String(error) }),
+			),
+		);
 		return;
 	}
 	if (controller?.cron === SUBSCRIPTION_IMPORT_CRON) {
@@ -779,18 +785,12 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 	ctx.waitUntil(
 		(async () => {
 			try {
-				// Story 29.9: daily reconciliation of the search index with R2 (a few pages per type per run).
-				await reconcileSearchIndex(rawEnv as never);
+				// Search and ownership indexes: one queued reconcile job per kind, each walking its whole
+				// bucket in steps through the admin-jobs queue (lib/search/reconcileJobs.ts)
+				await startIndexReconcile(rawEnv as never);
 			} catch (error) {
-				logger.error('[SearchReconcile] Sweep failed', { error: error instanceof Error ? error.message : String(error) });
-				reportJobFailure(rawEnv, ctx, 'search-reconcile', error);
-			}
-			try {
-				// Ownership index: advance (and when finished, prune and mark complete) the full pass of videos and channels.
-				await reconcileOwnershipIndex(rawEnv as never);
-			} catch (error) {
-				logger.error('[Ownership] Reconcile failed', { error: error instanceof Error ? error.message : String(error) });
-				reportJobFailure(rawEnv, ctx, 'ownership-reconcile', error);
+				logger.error('[IndexMaintenance] Could not queue the daily passes', { error: error instanceof Error ? error.message : String(error) });
+				reportJobFailure(rawEnv, ctx, 'index-reconcile', error);
 			}
 			try {
 				// Kept originals past their retention (lib/media/originals.ts)
