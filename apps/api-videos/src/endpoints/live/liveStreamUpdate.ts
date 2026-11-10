@@ -10,6 +10,8 @@ import Queue, { MessageType } from "../../lib/queue";
 import { logger } from '../../lib/logger';
 import { inBackground } from "../../lib/websocket-notify";
 import { announceLiveStarted } from "../../lib/notification-events";
+import { CHANNEL_SUSPENDED_CODE } from "../../middleware/auth";
+import { hasSuspensionHolds, liveStreamIsFrozen } from "../../lib/admin/frozen";
 
 export class LiveStreamUpdate extends AuthenticatedRoute {
 	schema = addAuthToSchema({
@@ -125,11 +127,24 @@ export class LiveStreamUpdate extends AuthenticatedRoute {
 				);
 			}
 
+			// A stream held by an admin (suspended channel, banned owner) cannot be
+			// updated or started, whatever headers the request carries
+			if (await liveStreamIsFrozen(c.env, existingStream as Record<string, unknown>)) {
+				return c.json(
+					{
+						success: false,
+						code: CHANNEL_SUSPENDED_CODE,
+						error: "This channel is suspended on Al Ummah Now videos",
+					},
+					403
+				);
+			}
+
 			// Update the stream on the fresh copy with a conditional write
 			// (SCALABILITY-AUDIT AV-3)
 			let previousStatus = existingStream.status;
 			const { data: updatedStream, rejected } = await repository.updateObjectOrReject<true>(`livestream:${id}`, (fresh) => {
-				if (fresh.userId !== userId) return { reject: true };
+				if (fresh.userId !== userId || hasSuspensionHolds(fresh as Record<string, unknown>)) return { reject: true };
 				previousStatus = fresh.status;
 				Object.assign(fresh, updateData, { dateModified: new Date().toISOString() });
 

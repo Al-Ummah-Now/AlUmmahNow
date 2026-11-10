@@ -23,6 +23,7 @@ import { errorHandler } from '../src/middleware/error-handler';
 import { channelIdMiddleware, channelRefusesWrite } from '../src/middleware/auth';
 import { CreateCommunityPost } from '../src/endpoints/community/create-post';
 import { LiveStreamsList } from '../src/endpoints/live/liveStreamsList';
+import { LiveStreamUpdate } from '../src/endpoints/live/liveStreamUpdate';
 import { MemoryBucket, MemoryQueue, commentFixture, videoFixture } from './helpers';
 import { SqliteD1 } from './search-sqlite-d1';
 
@@ -207,13 +208,17 @@ describe('channel actions', () => {
 
 		assert.equal((await asChannel('POST', '/api/videos/upload/initiate')).status, 200);
 		await (env as any).videos.put('livestream:ls1', JSON.stringify({ id: 'ls1', channelId: 'ch1', userId: OWNER, title: 'Live dars', status: 'live', isPrivate: false }));
+		let liveRequest: (method: string, path: string, body: unknown) => Promise<Response> = async () => new Response(null, { status: 500 });
 		const liveApp = (userId: string | null) => {
 			const live = new Hono();
 			live.use('*', async (c, next) => {
 				if (userId) c.set('auth' as never, { userId, payload: {} } as never);
 				await next();
 			});
-			fromHono(live).get('/api/live-streams', LiveStreamsList);
+			const liveRouter = fromHono(live);
+			liveRouter.get('/api/live-streams', LiveStreamsList);
+			liveRouter.patch('/api/live-streams/:id', LiveStreamUpdate);
+			liveRequest = (method, path, body) => live.request(path, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }, env as never);
 			return async () => (await live.request('/api/live-streams', {}, env as never)).json();
 		};
 		const liveIds = async (userId: string | null) => JSON.stringify(await liveApp(userId)());
@@ -222,6 +227,10 @@ describe('channel actions', () => {
 		assert.doesNotMatch(await liveIds(null), /ls1/, 'the suspended channel\'s live stream is hidden from the public');
 		assert.match(await liveIds(OWNER), /ls1/, 'its owner still sees it');
 		assert.equal((await asChannel('PATCH', '/api/live-streams/ls1')).status, 403);
+		liveApp(OWNER);
+		const direct = await liveRequest('PATCH', '/api/live-streams/ls1', { status: 'live' });
+		assert.equal(direct.status, 403, 'going live is refused without the channel header too');
+		assert.equal(((await direct.json()) as any).code, 'channel_suspended');
 
 		const upload = await asChannel('POST', '/api/videos/upload/initiate');
 		assert.equal(upload.status, 403);
