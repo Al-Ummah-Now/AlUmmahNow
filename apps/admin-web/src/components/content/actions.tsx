@@ -13,6 +13,7 @@ import type { MessageKey } from '@/i18n/translate';
 import { fieldClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
 import { dangerButtonClass, smallButtonClass } from './parts';
+import { confirmMatches } from './userPickerModel';
 
 export function useContentAction() {
   const router = useRouter();
@@ -58,9 +59,20 @@ export function useContentAction() {
   return { run, busy, error, message, setError, setMessage };
 }
 
-export function ActionFeedback({ error, message }: { error: string | null; message: string | null }) {
+/**
+ * The outcome of the last change. It scrolls itself into view when it changes:
+ * a result shown above the fold (the button was further down) reads as
+ * "nothing happened".
+ */
+export function ActionFeedback({ error, message, testId }: { error: string | null; message: string | null; testId?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!error && !message) return;
+    const el = ref.current;
+    if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ block: 'nearest' });
+  }, [error, message]);
   return (
-    <div aria-live="polite">
+    <div aria-live="polite" ref={ref} data-testid={testId}>
       {error && (
         <p role="alert" data-testid="content-action-error" className="bg-danger-bg border border-danger-border text-danger-fg px-3 py-2 rounded text-sm mb-3">
           {error}
@@ -82,7 +94,10 @@ interface ConfirmDialogContent {
   /** Asks for a reason (sent with the change). */
   withReason?: boolean;
   /** The exact text the admin must type to enable the confirm button. */
-  typeToConfirm?: string;
+  /** The text the admin must type to enable the confirm button; with several, any one of them (emails ignore case). */
+  typeToConfirm?: string | readonly string[];
+  /** Label of the type-to-confirm field (default: "Type {value} to confirm"). */
+  typeToConfirmLabel?: string;
   danger?: boolean;
   testId: string;
 }
@@ -95,8 +110,15 @@ interface ConfirmDialogProps extends ConfirmDialogContent {
 }
 
 /** True when the typed text matches the required value (surrounding spaces ignored). */
-export function typedMatches(typed: string, required: string | undefined): boolean {
-  return !required || typed.trim() === required.trim();
+export function typedMatches(typed: string, required: string | readonly string[] | undefined): boolean {
+  const values = confirmValuesOf(required);
+  return values.length === 0 || confirmMatches(typed, values);
+}
+
+/** The accepted type-to-confirm values (none when nothing has to be typed). */
+function confirmValuesOf(required: string | readonly string[] | undefined): string[] {
+  if (required === undefined) return [];
+  return (typeof required === 'string' ? [required] : [...required]).map((v) => v.trim()).filter(Boolean);
 }
 
 /**
@@ -104,10 +126,11 @@ export function typedMatches(typed: string, required: string | undefined): boole
  * Focus starts on Cancel, or on the reason / type-to-confirm field when there is one.
  * Never use window.confirm/alert/prompt instead.
  */
-export function ConfirmDialog({ open, onCancel, onConfirm, title, body, confirmLabel, withReason, typeToConfirm, danger, testId }: ConfirmDialogProps) {
+export function ConfirmDialog({ open, onCancel, onConfirm, title, body, confirmLabel, withReason, typeToConfirm, typeToConfirmLabel, danger, testId }: ConfirmDialogProps) {
   const { t } = useLanguage();
   const ref = useRef<HTMLDialogElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
+  const confirmValues = confirmValuesOf(typeToConfirm);
   const ids = useId();
   const [reason, setReason] = useState('');
   const [typed, setTyped] = useState('');
@@ -117,10 +140,10 @@ export function ConfirmDialog({ open, onCancel, onConfirm, title, body, confirmL
     if (!dialog) return;
     if (open && !dialog.open) {
       dialog.showModal();
-      if (!withReason && !typeToConfirm) cancelRef.current?.focus();
+      if (!withReason && confirmValues.length === 0) cancelRef.current?.focus();
     }
     if (!open && dialog.open) dialog.close();
-  }, [open, withReason, typeToConfirm]);
+  }, [open, withReason, confirmValues.length]);
 
   const ready = typedMatches(typed, typeToConfirm);
   const reset = () => {
@@ -171,12 +194,12 @@ export function ConfirmDialog({ open, onCancel, onConfirm, title, body, confirmL
             <span className="text-xs text-fg-subtle">{t('content.reasonHint')}</span>
           </div>
         )}
-        {typeToConfirm && (
+        {confirmValues.length > 0 && (
           <div className="flex flex-col gap-1">
             <label htmlFor={`${ids}-typed`} className="text-sm text-fg-muted">
-              {t('content.typeToConfirm', { value: typeToConfirm })}
+              {typeToConfirmLabel ?? t('content.typeToConfirm', { value: confirmValues[0] })}
             </label>
-            <input id={`${ids}-typed`} value={typed} onChange={(e) => setTyped(e.target.value)} dir="auto" autoComplete="off" className={`${fieldClass} w-full`} data-testid={`${testId}-typed`} data-confirm={typeToConfirm} />
+            <input id={`${ids}-typed`} value={typed} onChange={(e) => setTyped(e.target.value)} dir="auto" autoComplete="off" className={`${fieldClass} w-full`} data-testid={`${testId}-typed`} data-confirm={confirmValues[0]} />
           </div>
         )}
         <div className="flex flex-wrap justify-end gap-2 pt-2">

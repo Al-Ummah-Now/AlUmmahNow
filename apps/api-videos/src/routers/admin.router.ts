@@ -18,6 +18,7 @@ import {
 	MAX_BULK_CREATOR_TIER,
 } from '@al-ummah/shared-types';
 import { listChannels, listComments, listUsers, listVideos } from '../lib/admin/directory';
+import { searchUsers } from '../lib/admin/userSearch';
 import * as admin from '../lib/admin/service';
 import { checkImage, checkThumbnailShapeFor, storeImage } from '../lib/admin/images';
 import { countJobs, getJob, listJobs, retryJob } from '../lib/admin/jobs';
@@ -71,6 +72,16 @@ const UserQuery = z.object({
 	sort: z.enum(ADMIN_USER_SORTS as [string, ...string[]]).optional(),
 	...page,
 });
+
+const UserSearchQuery = z.object({
+	q: z.string().max(200).default(''),
+	exclude: ids,
+	channelId: z.string().max(200).optional(),
+	limit: z.coerce.number().int().min(1).max(20).optional(),
+});
+
+/** A usr_ id (what the transfer moves a channel to); an email or @handle is refused with a clear code. */
+const USER_ID = /^[A-Za-z0-9_-]{1,200}$/;
 
 const CommentQuery = z.object({
 	q: z.string().max(200).optional(),
@@ -153,7 +164,8 @@ app.post('/channels/:id/images/:kind', async (c) => {
 app.post('/channels/:id/suspend', async (c) => ok(c, await admin.suspendChannel(c.env, c.req.param('id'), actor(c), parse(Reason, await body(c)).reason)));
 app.post('/channels/:id/unsuspend', async (c) => ok(c, await admin.unsuspendChannel(c.env, c.req.param('id'), actor(c))));
 app.post('/channels/:id/transfer', async (c) => {
-	const { newOwnerId } = parse(z.object({ newOwnerId: z.string().min(1).max(200) }), await body(c));
+	const { newOwnerId } = parse(z.object({ newOwnerId: z.string().trim().min(1).max(200) }), await body(c));
+	if (!USER_ID.test(newOwnerId)) throw new admin.AdminError(400, 'invalid_new_owner');
 	return ok(c, await admin.transferChannel(c.env, c.req.param('id'), newOwnerId, actor(c)));
 });
 app.delete('/channels/:id', async (c) => ok(c, await admin.deleteChannel(c.env, c.req.param('id'), actor(c))));
@@ -197,6 +209,7 @@ app.delete('/posts/:channelId/:postId', async (c) => {
 
 // Users (videos profiles)
 app.get('/users', async (c) => ok(c, await listUsers(c.env, parse(UserQuery, c.req.query()) as never)));
+app.get('/users/search', async (c) => ok(c, await searchUsers(c.env, parse(UserSearchQuery, c.req.query()) as never)));
 app.get('/users/:id', async (c) => ok(c, await admin.userDetail(c.env, c.req.param('id'))));
 app.patch('/users/:id', async (c) => ok(c, await admin.updateUser(c.env, c.req.param('id'), parse(UserEdit, await body(c)))));
 app.post('/users/:id/ban', async (c) => ok(c, await admin.banUser(c.env, c.req.param('id'), actor(c), parse(Reason, await body(c)).reason)));

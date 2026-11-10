@@ -314,6 +314,28 @@ export interface AdminUserRow {
   profileDeleted?: boolean;
 }
 
+/** User search for pickers (channel ownership transfer): 2+ characters, a few best matches. */
+export const ADMIN_USER_SEARCH_MIN_LENGTH = 2;
+export const ADMIN_USER_SEARCH_MAX_RESULTS = 8;
+
+export interface AdminUserSearchQuery {
+  /** Email, display name, @handle (user or channel handle) or usr_ id. */
+  q: string;
+  /** Leave these users out (the channel's current owner). */
+  exclude?: string[];
+  /** Report each user's role on this channel. */
+  channelId?: string;
+  limit?: number;
+}
+
+/** One picker result: the user, how many channels they own, and their role on the channel in question. */
+export interface AdminUserSearchItem extends AdminUserRow {
+  /** Channels the user owns (not deleted). */
+  channelCount: number;
+  /** The user's member role on `channelId` ('admin' | 'editor' | 'moderator'), if any. */
+  channelRole: string | null;
+}
+
 export interface VideosBan {
   userId: string;
   reason: string | null;

@@ -169,6 +169,30 @@ describe('content endpoints: permissions', () => {
     assert.deepEqual(JSON.parse(log[0].old_value!), { ownerId: 'usr_owner' });
   });
 
+  it('a transfer without a user id is refused before anything is audited', async () => {
+    const { db, log } = fakeDb();
+    const { fetcher, calls } = fakeVideos();
+    const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
+    const res = await call('/api/content/channels/ch_1/transfer', { method: 'POST', roles: 'super_admin', json: { newOwnerId: '  ' } });
+    assert.equal(res.status, 400);
+    assert.equal(((await res.json()) as { code: string }).code, 'invalid_new_owner');
+    assert.equal(calls.length, 0);
+    assert.equal(log.length, 0);
+  });
+
+  it('the transfer user search is for super admins and passes the query through', async () => {
+    const { fetcher, calls } = fakeVideos({ 'GET /users/search': () => ({ body: { success: true, result: { items: [{ id: 'usr_2' }] } } }) });
+    const call = appFor({ REPORTS_DB: fakeDb().db, VIDEOS: fetcher });
+    assert.equal((await call('/api/content/users/search?q=amina', { roles: 'admin' })).status, 403);
+    assert.equal((await call('/api/content/users/search?q=amina', { roles: 'moderator' })).status, 403);
+    assert.equal(calls.length, 0);
+    const res = await call('/api/content/users/search?q=%40amina&exclude=usr_owner&channelId=ch_1&other=x', { roles: 'super_admin' });
+    assert.equal(res.status, 200);
+    assert.deepEqual(((await res.json()) as { result: { items: unknown[] } }).result.items, [{ id: 'usr_2' }]);
+    const params = new URLSearchParams(calls[0].search);
+    assert.deepEqual(Object.fromEntries(params), { q: '@amina', exclude: 'usr_owner', channelId: 'ch_1' });
+  });
+
   it('the permissions endpoint lists what the caller may do', async () => {
     const call = appFor({ REPORTS_DB: fakeDb().db, VIDEOS: fakeVideos().fetcher });
     const read = async (roles: string) => ((await (await call('/api/content/permissions', { roles })).json()) as { result: { permissions: string[] } }).result.permissions;

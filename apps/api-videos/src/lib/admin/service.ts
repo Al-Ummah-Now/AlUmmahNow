@@ -351,8 +351,10 @@ export async function transferChannel(env: AdminServiceEnv, id: string, newOwner
 	if (!channel || channel.isDeleted) throw new AdminError(404, 'channel_not_found');
 	if (channel.userId === newOwnerId) throw new AdminError(409, 'already_owner');
 	const target = await repo(env.profiles).getObject(newOwnerId);
-	if (!target) throw new AdminError(404, 'new_owner_not_found');
+	if (!target || target.isDeleted === true) throw new AdminError(404, 'new_owner_not_found');
+	// A banned (suspended) videos user cannot receive a channel
 	if (env.SEARCH_DB && (await readBan(env.SEARCH_DB, newOwnerId))) throw new AdminError(409, 'new_owner_banned');
+	logger.info('[Admin] Channel transfer queued', { channelId: id, newOwnerId, previousOwnerId: channel.userId ?? null, actorId });
 	// Decided now, so a retried job does not re-decide from a half-moved state
 	const makeMain = (await idsOf(env, 'channel', { ownerId: newOwnerId })).length === 0;
 	return {

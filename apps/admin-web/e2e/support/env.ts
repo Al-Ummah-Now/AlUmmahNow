@@ -14,7 +14,7 @@ export const ADMIN_CLIENT_ID = process.env.ADMIN_OPENAUTH_CLIENT_ID || 'b24e39de
 export const CALLBACK_URL = `${ADMIN_WEB_URL}/api/callback`;
 
 export interface Account {
-  role: 'admin' | 'moderator' | 'nonadmin';
+  role: 'superadmin' | 'admin' | 'moderator' | 'nonadmin';
   email: string;
   password: string;
 }
@@ -28,6 +28,10 @@ function seedPassword(): string {
 }
 
 export const accounts = {
+  /** Seeded QA super admin (seed-qa.ts): super-admin-only flows such as channel transfer. */
+  get superadmin(): Account {
+    return { role: 'superadmin', email: process.env.QA_SUPERADMIN_EMAIL || 'qa-superadmin@delivered.resend.dev', password: seedPassword() };
+  },
   get admin(): Account {
     return { role: 'admin', email: process.env.QA_ADMIN_EMAIL || 'qa-admin@delivered.resend.dev', password: seedPassword() };
   },

@@ -131,7 +131,18 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
           </section>
 
           <ChannelActions
-            channel={{ id: ch.id, name: ch.name, handle: ch.handle, description: ch.description, isVerified: ch.isVerified, isSuspended: ch.isSuspended, isDeleted: ch.isDeleted }}
+            channel={{
+              id: ch.id,
+              name: ch.name,
+              handle: ch.handle,
+              description: ch.description,
+              isVerified: ch.isVerified,
+              isSuspended: ch.isSuspended,
+              isDeleted: ch.isDeleted,
+              ownerId: ch.ownerId,
+              videos: ch.stats.videos,
+              playlists: ch.stats.playlists,
+            }}
             permissions={permissions}
           />
         </div>

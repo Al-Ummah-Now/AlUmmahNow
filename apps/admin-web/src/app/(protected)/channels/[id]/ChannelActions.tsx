@@ -5,7 +5,6 @@ import {
   deleteChannel,
   setChannelVerified,
   suspendChannel,
-  transferChannel,
   unsuspendChannel,
   updateChannel,
   uploadChannelImage,
@@ -15,9 +14,21 @@ import { useLanguage } from '@/i18n/I18nProvider';
 import { fieldClass, primaryButtonClass } from '@/components/ui';
 import { ActionFeedback, ConfirmButton, useContentAction } from '@/components/content/actions';
 import { Notice, SectionCard, smallButtonClass } from '@/components/content/parts';
+import { ChannelTransfer } from './ChannelTransfer';
 
 interface Props {
-  channel: { id: string; name: string; handle: string | null; description: string; isVerified: boolean; isSuspended: boolean; isDeleted: boolean };
+  channel: {
+    id: string;
+    name: string;
+    handle: string | null;
+    description: string;
+    isVerified: boolean;
+    isSuspended: boolean;
+    isDeleted: boolean;
+    ownerId: string | null;
+    videos: number;
+    playlists: number;
+  };
   permissions: AdminContentPermission[];
 }
 
@@ -29,7 +40,6 @@ export function ChannelActions({ channel, permissions }: Props) {
   const [name, setName] = useState(channel.name);
   const [handle, setHandle] = useState(channel.handle ?? '');
   const [description, setDescription] = useState(channel.description);
-  const [newOwner, setNewOwner] = useState('');
 
   const can = (p: AdminContentPermission) => permissions.includes(p);
   const canManage = can('channels:manage');
@@ -137,27 +147,9 @@ export function ChannelActions({ channel, permissions }: Props) {
       )}
 
       {can('channels:transfer') && (
-        <SectionCard title={t('channels.transferTitle')} id={`${ids}-transfer`} testId="channel-transfer">
-          <p className="text-sm text-fg-muted mb-3">{t('channels.transferHint')}</p>
-          <div className="flex flex-col sm:flex-row sm:items-end gap-2">
-            <div className="flex flex-col gap-1 flex-1">
-              <label htmlFor={`${ids}-owner`} className="text-sm text-fg-muted">{t('channels.newOwnerId')}</label>
-              <input id={`${ids}-owner`} value={newOwner} onChange={(e) => setNewOwner(e.target.value)} dir="ltr" maxLength={200} className={fieldClass} data-testid="channel-transfer-owner" />
-            </div>
-            <ConfirmButton
-              label={t('channels.transfer')}
-              title={t('channels.transferConfirm', { owner: newOwner.trim() })}
-              body={t('channels.transferHint')}
-              confirmLabel={t('channels.transfer')}
-              disabled={!!busy || !newOwner.trim()}
-              busy={busy === 'transfer'}
-              testId="channel-transfer-submit"
-              onConfirm={async () => {
-                if (await run('transfer', () => transferChannel(channel.id, newOwner.trim()), { success: t('content.queued') })) setNewOwner('');
-              }}
-            />
-          </div>
-        </SectionCard>
+        <ChannelTransfer
+          channel={{ id: channel.id, name: channel.name, handle: channel.handle, ownerId: channel.ownerId, videos: channel.videos, playlists: channel.playlists }}
+        />
       )}
 
       {can('content:delete') && (

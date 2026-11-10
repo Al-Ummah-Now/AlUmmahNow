@@ -201,7 +201,9 @@ app.post('/channels/:id/unsuspend', async (c) => {
 app.post('/channels/:id/transfer', async (c) => {
   need(c, 'channels:transfer');
   const id = c.req.param('id');
-  const { newOwnerId } = await body(c);
+  const raw = (await body(c)).newOwnerId;
+  const newOwnerId = typeof raw === 'string' ? raw.trim() : '';
+  if (!newOwnerId) return c.json({ success: false, code: 'invalid_new_owner', error: 'newOwnerId (a user id) is required' }, 400);
   const current = await videos<AdminChannelDetail>(c, `/channels/${encodeURIComponent(id)}`);
   return ok(c, await audited(c, { kind: 'channel', id, action: 'transfer', details: { newOwnerId }, previous: { ownerId: current.ownerId } }, () =>
     videos(c, `/channels/${encodeURIComponent(id)}/transfer`, { method: 'POST', json: { newOwnerId } })));
@@ -314,6 +316,13 @@ app.delete('/posts/:channelId/:postId', async (c) => {
 // ---------------------------------------------------------------------------
 
 app.get('/users', async (c) => ok(c, await videos(c, '/users', { query: c.req.query() })));
+
+/** The new-owner picker of a channel transfer: a few users by email, name, @handle or id. */
+app.get('/users/search', async (c) => {
+  need(c, 'channels:transfer');
+  const { q = '', exclude, channelId } = c.req.query();
+  return ok(c, await videos(c, '/users/search', { query: { q, ...(exclude ? { exclude } : {}), ...(channelId ? { channelId } : {}) } }));
+});
 
 app.get('/users/:id', async (c) => {
   const id = c.req.param('id');
