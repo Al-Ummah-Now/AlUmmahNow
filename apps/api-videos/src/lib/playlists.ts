@@ -22,9 +22,9 @@ export const PLAYLIST_DESCRIPTION_MAX = 5000;
  * `videosCount` so web components can use either naming.
  */
 export function toPlaylistResponse(playlist: PlaylistType) {
-    // Internal: the upload order of queued adds (lib/playlistUploadAdds.ts) and
-    // the add dates behind the server-side "date added" order
-    const { uploadOrder: _uploadOrder, videoAddedAt: _addedAt, ...stored } = playlist as PlaylistType & { uploadOrder?: unknown };
+    // Internal: the upload order of queued adds (lib/playlistUploadAdds.ts),
+    // and the add dates and refresh time behind the server-side order
+    const { uploadOrder: _uploadOrder, videoAddedAt: _addedAt, orderRefreshedAt: _refreshedAt, ...stored } = playlist as PlaylistType & { uploadOrder?: unknown };
     return {
         ...stored,
         name: playlist.title,

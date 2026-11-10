@@ -190,6 +190,8 @@ export const Playlist = z.object({
     sortDirection: z.enum(PLAYLIST_SORT_DIRECTIONS).optional(),
     /** When each video was added (ISO), for the "date added" order */
     videoAddedAt: z.record(z.string()).optional(),
+    /** When the automatic order was last sorted from fresh video data (ISO) */
+    orderRefreshedAt: Str().optional(),
     // Soft delete and moderation fields
     ...SoftDeleteFields,
     ...ModerationFields,

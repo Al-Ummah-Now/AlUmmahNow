@@ -537,12 +537,25 @@ describe('playlist order: manual or automatic', () => {
 		assert.deepEqual(seen, expected);
 	});
 
-	it('views order follows fresh view counts on read', async () => {
+	it('views order: the stored order serves reads for 10 minutes, then a read re-sorts from fresh counts', async () => {
 		const env = sortEnv(3);
 		const res = await call(env, OWNER, 'POST', '/api/playlists', { title: 'Popular', sortMode: 'auto', sortField: 'views', sortDirection: 'desc', videos: all(3) }, { channelId: 'ch' });
 		const id = res.body.result.playlist.id;
+		const before = env.playlists.read(id).videos;
+		assert.ok(env.playlists.read(id).orderRefreshedAt, 'sorting records when it ran');
 		const v = env.videos.read('s0');
 		env.videos.store.set('s0', JSON.stringify({ ...v, views: 10_000 }));
+
+		// Within the window: the stored order, without loading the videos
+		const reads = env.videos.calls;
+		const recent = await call(env, 'mallory', 'GET', `/api/playlists/${id}`);
+		assert.deepEqual(recent.body.videos, before);
+		assert.ok(env.videos.calls - reads <= 3, `an anonymous read loads at most the cover (${env.videos.calls - reads} reads)`);
+		assert.equal(recent.body.orderRefreshedAt, undefined, 'internal');
+
+		// Stale: the next read re-sorts
+		const stored = env.playlists.read(id);
+		env.playlists.store.set(id, JSON.stringify({ ...stored, orderRefreshedAt: '2026-01-01T00:00:00.000Z' }));
 		const fetched = await call(env, OWNER, 'GET', `/api/playlists/${id}`);
 		assert.equal(fetched.body.videos[0], 's0');
 	});
@@ -596,5 +609,33 @@ describe('playlist order: manual or automatic', () => {
 		env.playlists.store.set('pl', JSON.stringify(playlist('pl')));
 		assert.equal((await call(env, OWNER, 'PATCH', '/api/playlists/pl', { sortMode: 'auto', sortField: 'likes' }, { channelId: 'ch' })).status, 400);
 		assert.equal((await call(env, OWNER, 'POST', '/api/playlists', { title: 'x', sortDirection: 'up' }, { channelId: 'ch' })).status, 400);
+	});
+});
+
+describe('access edges', () => {
+	it('a channel role never reaches the owner\'s system playlist (Watch later)', async () => {
+		const env = setup({ playlists: { 'watch-later-owner': playlist('watch-later-owner', { systemType: 'watch_later', isPublic: false, videos: ['v0001'] }) } });
+		for (const userId of ['ed', 'adm']) {
+			assert.equal((await call(env, userId, 'GET', '/api/playlists/watch-later-owner/items')).status, 404, userId);
+			assert.equal((await call(env, userId, 'POST', '/api/playlists/watch-later-owner/videos/bulk', { videoIds: ['v0002'] })).status, 404, userId);
+			assert.equal((await call(env, userId, 'GET', '/api/playlists/watch-later-owner')).status, 404, userId);
+		}
+		assert.equal((await call(env, OWNER, 'GET', '/api/playlists/watch-later-owner/items')).status, 200);
+	});
+
+	it('another channel\'s private video shows as unavailable and cannot be added one by one', async () => {
+		const env = setup({
+			playlists: { pl: playlist('pl', { videos: ['theirs', 'v0001'] }) },
+			extraVideos: {
+				theirs: videoFixture({ id: 'theirs', title: 'Secret draft', userId: 'someone', channelId: 'other', isPublic: false }),
+				public: videoFixture({ id: 'public', title: 'Their public talk', userId: 'someone', channelId: 'other' }),
+			},
+		});
+		const items = await call(env, 'ed', 'GET', '/api/playlists/pl/items');
+		assert.equal(items.body.result.items[0].video, null, 'no private metadata of another channel');
+		assert.equal(JSON.stringify(items.body).includes('Secret draft'), false);
+		assert.equal((await call(env, 'ed', 'POST', '/api/playlists/pl/videos', { videoId: 'theirs' }, { channelId: 'ch' })).status, 404);
+		// A public video of another channel can still be saved from its watch page
+		assert.equal((await call(env, 'ed', 'POST', '/api/playlists/pl/videos', { videoId: 'public' }, { channelId: 'ch' })).status, 200);
 	});
 });

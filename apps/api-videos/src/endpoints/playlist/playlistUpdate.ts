@@ -135,6 +135,7 @@ export class PlaylistUpdate extends AuthenticatedRoute {
             if (sortChange) {
                 if (target.sortMode === 'auto') fresh.videos = orderOf(fresh, known, target);
                 else if (freshBefore.sortMode === 'auto') fresh.videos = orderOf(fresh, known, freshBefore);
+                if (target.sortMode === 'auto') fresh.orderRefreshedAt = new Date().toISOString();
                 fresh.sortMode = target.sortMode;
                 fresh.sortField = target.sortField;
                 fresh.sortDirection = target.sortDirection;
