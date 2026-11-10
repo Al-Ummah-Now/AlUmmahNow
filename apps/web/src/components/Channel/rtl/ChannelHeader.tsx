@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { ChannelBellMenu } from '@/components/notifications/ChannelBellMenu';
 import { ChannelOwnerActions } from '@/components/Channel/ChannelOwnerActions';
 import { formatHandle } from '@/lib/channel-url';
+import { loginRoutePath } from '@/lib/auth/silent-sign-in';
 
 interface ChannelHeaderProps {
   channel: Channel;
@@ -44,7 +45,7 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
   const handleSubscribe = async () => {
     if (!user) {
       logger.warn('[ChannelHeader RTL] Subscribe clicked but user not logged in');
-      window.location.href = `/${locale}/login?redirect=${encodeURIComponent(window.location.pathname)}`;
+      window.location.href = loginRoutePath(window.location.pathname, locale);
       return;
     }
     const ok = await toggle();

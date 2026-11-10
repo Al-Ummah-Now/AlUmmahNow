@@ -16,6 +16,7 @@ import { useLanguage } from "@/hooks/useLanguage";
 import { useMultiAccount } from "@/hooks/useMultiAccount";
 import { User } from "@/interfaces";
 import { formatRelativeTime } from '@/lib/format/videoMeta';
+import { loginRoutePath } from '@/lib/auth/silent-sign-in';
 
 export interface CommentsSectionProps {
   videoId: string;
@@ -344,7 +345,7 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
           </p>
           <Button
             size="sm"
-            onClick={() => window.location.href = `/${lang}/login?redirect=${encodeURIComponent(window.location.pathname)}`}
+            onClick={() => window.location.href = loginRoutePath(window.location.pathname, lang)}
           >
             {t.comments.signIn}
           </Button>

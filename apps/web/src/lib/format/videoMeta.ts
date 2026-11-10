@@ -24,7 +24,24 @@ export function formatViews(count: number | string | null | undefined, lang: Met
   return n === 1 ? '1 view' : `${compact(n, lang)} views`;
 }
 
-const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
+/** "No subscribers", "1 subscriber", "1.2K subscribers", or the Arabic equivalent. */
+export function formatSubscribers(count: number | string | null | undefined, lang: MetaLang): string {
+  const n = Math.max(0, Math.floor(Number(count) || 0));
+  if (lang === 'ar') {
+    if (n === 0) return 'لا يوجد مشتركون';
+    switch (new Intl.PluralRules('ar').select(n)) {
+      case 'one': return 'مشترك واحد';
+      case 'two': return 'مشتركان';
+      case 'few': return `${compact(n, lang)} مشتركين`;
+      case 'many': return `${compact(n, lang)} مشتركًا`;
+      default: return `${compact(n, lang)} مشترك`;
+    }
+  }
+  if (n === 0) return 'No subscribers';
+  return n === 1 ? '1 subscriber' : `${compact(n, lang)} subscribers`;
+}
+
+const UNITS:[Intl.RelativeTimeFormatUnit, number][] = [
   ['year', 31536000],
   ['month', 2592000],
   ['week', 604800],
