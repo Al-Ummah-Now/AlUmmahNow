@@ -8,6 +8,7 @@ import { IndexManager, INDEX_STALENESS_THRESHOLD } from "../../lib/indexManager"
 import { processTrendingVideos, processTimeWindowTrendingVideos, processCategoryTrendingVideos } from "../../lib/trendingAlgorithm";
 import { logger } from "../../lib/logger";
 import { emptyShelf } from "../../lib/shelf";
+import { sectionFromIndex, decodeOffset, encodeOffset } from "../../lib/sections/sectionIndex";
 
 const TrendingMetadataSchema = z.object({
   rank: z.number(),
@@ -119,12 +120,48 @@ export class TrendingVideosSection extends PublicRoute {
       const indexManager = new IndexManager(videoBucket);
       const videoRepo = new R2Repository<VideoObject>(videoBucket);
 
-      // Try to get from index first
+      // From the D1 search index when it is bound (SCALABILITY-AUDIT AV-15)
+      const page = await sectionFromIndex(c.env, {
+        sort: 'trending',
+        algorithm,
+        limit,
+        offset: decodeOffset(cursor),
+        category,
+        since: timeWindow !== '24h' ? Date.now() - timeWindowHours * 60 * 60 * 1000 : undefined,
+      });
+      if (page) {
+        return c.json({
+          success: true,
+          data: page.videos.map((video) => {
+            const t = page.trending?.get(video.id);
+            return transformTrendingVideoForResponse({
+              ...video,
+              trendingMetadata: t && {
+                rank: t.rank,
+                score: t.score,
+                viewsVelocity: t.viewsVelocity,
+                percentageIncrease: t.viewsVelocity > 0 ? Math.min(100, Math.round(t.viewsVelocity * 10)) : 0,
+                peakTime: undefined,
+              },
+            });
+          }),
+          cursor: page.nextOffset !== undefined ? encodeOffset(page.nextOffset) : undefined,
+          metadata: {
+            algorithmVersion: "1.0.0",
+            lastCalculated: new Date().toISOString(),
+            nextUpdate: new Date(Date.now() + INDEX_STALENESS_THRESHOLD.trending * 60 * 1000).toISOString(),
+            fromIndex: true,
+          },
+        });
+      }
+
+      // Without it: the stored R2 index even when stale, else one page of the bucket;
+      // never a rebuild on the request path
       const trendingIndex = await indexManager.getTrendingVideosIndex();
       let trendingVideos: any[] = [];
       let fromIndex = false;
 
-      if (trendingIndex && !indexManager.isIndexStale(trendingIndex.lastUpdated, INDEX_STALENESS_THRESHOLD.trending)) {
+      if (trendingIndex) {
         // Use index data
         logger.info("Using trending videos index", { algorithm: trendingIndex.algorithm, indexVideos: trendingIndex.videos.length });
         fromIndex = true;
@@ -193,7 +230,7 @@ export class TrendingVideosSection extends PublicRoute {
         let fetchCursor: string | undefined;
         let iterations = 0;
 
-        while (iterations < 10) { // Limit iterations
+        while (iterations < 1) { // One page: a bounded fallback while the search index is unavailable
           const result = await videoRepo.listObjects(100, fetchCursor);
           allVideos.push(...(result.items || []));
 
@@ -231,12 +268,6 @@ export class TrendingVideosSection extends PublicRoute {
           })
         ).then(results => results.filter(v => isVideoPubliclyVisible(v)));
 
-        // Trigger index rebuild in background (fire and forget)
-        c.executionCtx.waitUntil(
-          rebuildTrendingIndex(videoBucket, allVideos, algorithm).catch(err =>
-            logger.error("Failed to rebuild trending index", { error: err })
-          )
-        );
 
         const nextUpdateTime = new Date(Date.now() + INDEX_STALENESS_THRESHOLD.trending * 60 * 1000).toISOString();
 
@@ -294,40 +325,4 @@ function transformTrendingVideoForResponse(video: any) {
     isPublic: video.isPublic !== false,
     trendingMetadata: video.trendingMetadata,
   };
-}
-
-/**
- * Rebuild trending videos index
- */
-async function rebuildTrendingIndex(
-  videoBucket: R2Bucket,
-  videos: VideoObject[],
-  algorithm: 'velocity' | 'engagement' | 'hybrid'
-): Promise<void> {
-  logger.info("Starting trending index rebuild", { algorithm });
-
-  const indexManager = new IndexManager(videoBucket);
-  const trendingData = processTrendingVideos(videos, algorithm, 100);
-
-  // Convert to index format
-  const index = {
-    id: 'index:trending-videos' as const,
-    lastUpdated: new Date().toISOString(),
-    algorithm,
-    videos: trendingData.map(t => ({
-      videoId: t.videoId,
-      trendingScore: t.trendingScore,
-      viewsVelocity: t.viewsVelocity,
-      engagementVelocity: t.engagementVelocity,
-      dateCreated: t.dateCreated,
-      title: t.title,
-      thumbnailUrl: t.thumbnailUrl,
-      channelId: t.channelId,
-      views: t.views,
-      likesCount: t.likesCount,
-    })),
-  };
-
-  await indexManager.saveIndex(index);
-  logger.info("Trending index rebuilt", { totalVideos: trendingData.length });
 }
