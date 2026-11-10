@@ -191,9 +191,14 @@ export function SettingsMenu({ player, lang, onShowShortcuts }: SettingsMenuProp
       const inset = over || frame.width < 360 ? 8 : 12;
       menu.style.width = `${over ? Math.max(0, frame.width - 16) : Math.max(160, Math.min(280, frame.width - 16))}px`;
       menu.style.right = `${viewportW - frame.right + inset}px`;
-      const room = over ? Math.max(0, frame.height - 16) : above;
+      // The panel is fixed to the viewport: when the top of the frame is scrolled out of view it
+      // only gets the room on screen above its anchor (8px clear of the viewport's top edge).
+      // Sized to the frame, its top rows sat above the viewport, out of reach, and a click on one
+      // scrolled the page, which moved the panel again, so it never settled.
+      const anchor = (over ? frame.bottom : frame.bottom - barH) - 8;
+      const room = Math.max(0, Math.min(over ? frame.height - 16 : above, anchor - 8));
       menu.toggleAttribute('data-over-bar', over);
-      menu.style.bottom = `${viewportH - (over ? frame.bottom : frame.bottom - barH) + 8}px`;
+      menu.style.bottom = `${viewportH - anchor}px`;
       menu.style.maxHeight = `${room}px`;
       // A small player's panel is the whole frame whatever the view holds (Safari, playing HLS
       // natively, has no Quality row), so it never leaves a strip of controls showing above it

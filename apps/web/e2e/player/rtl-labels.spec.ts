@@ -98,6 +98,11 @@ for (const theme of PLAYER_THEMES) {
           await page.evaluate(() => Promise.all(document.getAnimations()
             .filter((a) => Number.isFinite(Number(a.effect?.getComputedTiming().endTime)))
             .map((a) => a.finished.catch(() => undefined))));
+          // The fixed panel never reaches past the viewport, so every row stays in reach
+          const panel = page.getByTestId('player-settings-menu');
+          if ((await panel.count()) > 0) {
+            expect((await panel.boundingBox())!.y, `${where}: settings panel top on screen`).toBeGreaterThanOrEqual(0);
+          }
           const found = await overflows(page);
           const body = await page.screenshot();
           await info.attach(`${theme}-${lang}-${size.name}-${where}`, { body, contentType: 'image/png' });
