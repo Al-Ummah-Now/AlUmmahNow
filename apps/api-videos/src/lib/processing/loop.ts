@@ -20,6 +20,7 @@
 import { logger } from '../logger';
 import R2Repository from '../r2Repo';
 import { getSecret, requireSecret } from '../env-helpers';
+import { isOwnershipComplete } from '../search/ownership';
 import { bunnyFileToken, tokenExpiry } from '../bunny-signing';
 import { announceAndRecordProcessingResult, pendingProcessingResult, ProcessingResult } from '../notification-events';
 import {
@@ -385,6 +386,8 @@ export interface SweepStats {
 	flagged: { needsReupload: number; stalled: number; failed: number };
 	errors: number;
 	durationMs: number;
+	/** Where the candidates came from: the ownership index or a full R2 scan */
+	source?: 'index' | 'scan';
 }
 
 /**
@@ -392,11 +395,65 @@ export interface SweepStats {
  * that has none (e.g. uploads from before the loop existed, or a lost
  * message). Capped per run; records the run for the admin health view.
  */
+const NOT_FINISHED = ['initiated', 'uploading', 'processing', 'failed'];
+
+/**
+ * Records the sweep has to look at: from the ownership index (one D1 query
+ * for videos not ready yet) when it is complete; otherwise every video object
+ * in R2, read in parallel batches. The R2-only sweep read objects one by one
+ * (210 s for 400 videos on prod, 2026-11-10), so stuck uploads waited minutes
+ * for their loop.
+ */
+async function sweepCandidates(env: ProcessingEnv): Promise<{ videos: LoopVideo[]; scanned: number; source: 'index' | 'scan' }> {
+	const load = async (keys: string[]) => {
+		const out: LoopVideo[] = [];
+		for (let i = 0; i < keys.length; i += 25) {
+			const batch = await Promise.all(
+				keys.slice(i, i + 25).map(async (key) => {
+					try {
+						return (await (await env.videos.get(key))?.json<LoopVideo>()) ?? null;
+					} catch {
+						return null;
+					}
+				}),
+			);
+			for (const v of batch) if (v?.id) out.push(v);
+		}
+		return out;
+	};
+	const db = env.SEARCH_DB;
+	if (db) {
+		try {
+			if (await isOwnershipComplete(db as never, 'video')) {
+				const placeholders = NOT_FINISHED.map(() => '?').join(', ');
+				const { results } = await db
+					.prepare(`SELECT id FROM content_ownership WHERE kind = 'video' AND upload_status IN (${placeholders})`)
+					.bind(...NOT_FINISHED)
+					.all<{ id: string }>();
+				const ids = (results ?? []).map((r) => r.id);
+				return { videos: await load(ids), scanned: ids.length, source: 'index' };
+			}
+		} catch (error) {
+			logger.warn('[ProcessingSweep] Index query failed; scanning R2', { error: error instanceof Error ? error.message : String(error) });
+		}
+	}
+	const keys: string[] = [];
+	let cursor: string | undefined;
+	do {
+		const page = await env.videos.list({ cursor, limit: 1000 });
+		cursor = page.truncated ? page.cursor : undefined;
+		for (const object of page.objects) if (!object.key.includes('/') && !object.key.includes(':')) keys.push(object.key);
+	} while (cursor);
+	return { videos: await load(keys), scanned: keys.length, source: 'scan' };
+}
+
 export async function sweepProcessingVideos(env: ProcessingEnv, opts: { now?: Date; maxStarts?: number; minAgeMs?: number } = {}): Promise<SweepStats> {
 	const started = Date.now();
 	const now = opts.now ?? new Date();
 	const maxStarts = opts.maxStarts ?? 50;
-	const minAge = opts.minAgeMs ?? 10 * 60 * 1000;
+	// Upload complete starts a loop itself; the sweep only catches gaps (uploads
+	// finished before a deploy, lost messages), so it need not wait long
+	const minAge = opts.minAgeMs ?? 2 * 60 * 1000;
 	const stats: SweepStats = {
 		lastRunAt: now.toISOString(),
 		scanned: 0,
@@ -407,20 +464,11 @@ export async function sweepProcessingVideos(env: ProcessingEnv, opts: { now?: Da
 		errors: 0,
 		durationMs: 0,
 	};
-	let cursor: string | undefined;
-	do {
-		const page = await env.videos.list({ cursor, limit: 500 });
-		cursor = page.truncated ? page.cursor : undefined;
-		for (const object of page.objects) {
-			if (object.key.includes('/') || object.key.includes(':')) continue;
-			stats.scanned++;
-			let video: LoopVideo | null = null;
-			try {
-				video = (await (await env.videos.get(object.key))?.json<LoopVideo>()) ?? null;
-			} catch {
-				continue;
-			}
-			if (!video?.id) continue;
+	const candidates = await sweepCandidates(env);
+	stats.scanned = candidates.scanned;
+	stats.source = candidates.source;
+	{
+		for (const video of candidates.videos) {
 			if (video.processingIssue?.kind === 'needs_reupload') stats.flagged.needsReupload++;
 			else if (video.processingIssue?.kind === 'stalled') stats.flagged.stalled++;
 			else if (video.uploadStatus === 'failed') stats.flagged.failed++;
@@ -452,7 +500,7 @@ export async function sweepProcessingVideos(env: ProcessingEnv, opts: { now?: Da
 				logger.error('[ProcessingSweep] Could not start loop', { videoId: video.id, error: error instanceof Error ? error.message : String(error) });
 			}
 		}
-	} while (cursor);
+	}
 	stats.durationMs = Date.now() - started;
 	if (env.global_settings) {
 		try {
