@@ -17,7 +17,7 @@ const HeaderRTL: React.FC<HeaderProps> = ({ toggleCollapse, isNavOpen = false })
     // after hydration, which must not push the page content down (layout shift)
     <header className="header flex items-center justify-between px-2 h-14 bg-[#093041] text-white " dir="rtl">
       {/* Menu Section */}
-      <div className="flex-1 flex items-center justify-start space-x-reverse space-x-4 ">
+      <div className="flex-none sm:flex-1 flex items-center justify-start space-x-reverse space-x-4 ">
         <IcoButton
           style="fa-bars"
           size="text-lg"
@@ -31,19 +31,19 @@ const HeaderRTL: React.FC<HeaderProps> = ({ toggleCollapse, isNavOpen = false })
       </div>
 
       {/* Logo Section */}
-      <div className="flex-1 flex justify-center items-center space-x-2">
-        <Link href={`/${locale}/`} className="flex rounded-4xl p-1 cursor-pointer justify-center items-center" aria-label={t.a11y.goToHomePage}>
+      <div className="flex-1 min-w-0 flex justify-center items-center space-x-2">
+        <Link href={`/${locale}/`} className="flex min-w-0 rounded-4xl p-1 cursor-pointer justify-center items-center" aria-label={t.a11y.goToHomePage}>
           {/* <div className="relative left-0 w-13 h-13 rounded-full overflow-hidden">
             <Image src="/logo.png" alt="Logo" sizes="10vw" fill />
           </div> */}
-          <div className="relative left-0 w-30 h-13 overflow-hidden">
-            <Image src="/Al Ummah Now Name.png" alt={t.common.appName} sizes="10vw" fill />
+          <div className="relative left-0 w-30 max-w-full h-13 overflow-hidden">
+            <Image src="/Al Ummah Now Name.png" alt={t.common.appName} sizes="10vw" fill style={{ objectFit: 'contain' }} />
           </div>
         </Link>
       </div>
 
       {/* Unified Navigation and Upload Button */}
-      <div className="flex-1 flex items-center justify-end gap-2">
+      <div className="flex-none sm:flex-1 flex items-center justify-end gap-2">
         <HeaderSearch />
         <NotificationBell dir="rtl" />
         <UnifiedNavigationRTL />

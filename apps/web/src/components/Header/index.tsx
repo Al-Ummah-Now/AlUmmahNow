@@ -17,7 +17,7 @@ const Header: React.FC<HeaderProps> = ({ toggleCollapse, isNavOpen = false }) =>
     // after hydration, which must not push the page content down (layout shift)
     <header className="header flex items-center justify-between px-2 h-14 bg-[#093041] text-white ">
       {/* Menu Section */}
-      <div className="flex-1 flex items-center justify-start space-x-4">
+      <div className="flex-none sm:flex-1 flex items-center justify-start space-x-4">
         <IcoButton
           style="fa-bars"
           size="text-lg"
@@ -31,19 +31,19 @@ const Header: React.FC<HeaderProps> = ({ toggleCollapse, isNavOpen = false }) =>
       </div>
 
       {/* Logo Section */}
-      <div className="flex-1 flex justify-center items-center space-x-2">
-        <Link href={`/${locale}/`} className="flex rounded-4xl p-1 cursor-pointer justify-center items-center" aria-label={t.a11y.goToHomePage}>
+      <div className="flex-1 min-w-0 flex justify-center items-center space-x-2">
+        <Link href={`/${locale}/`} className="flex min-w-0 rounded-4xl p-1 cursor-pointer justify-center items-center" aria-label={t.a11y.goToHomePage}>
           {/* <div className="relative left-0 w-13 h-13 rounded-full overflow-hidden">
             <Image src="/logo.png" alt="Logo" sizes="10vw" fill />
           </div> */}
-          <h2 className="text-lg font-semibold text-[var(--fanous-color-accent)] cursor-pointer">
+          <h2 className="truncate text-lg font-semibold text-[var(--fanous-color-accent)] cursor-pointer">
             {t.common.appName}
           </h2>
         </Link>
       </div>
 
       {/* Unified Navigation and Upload Button */}
-      <div className="flex-1 flex items-center justify-end gap-2">
+      <div className="flex-none sm:flex-1 flex items-center justify-end gap-2">
         <HeaderSearch />
         <NotificationBell dir="ltr" />
         <UnifiedNavigation />
