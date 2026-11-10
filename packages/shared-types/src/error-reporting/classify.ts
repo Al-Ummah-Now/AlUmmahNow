@@ -11,7 +11,7 @@ export function isVersionSkewError(error: unknown): boolean {
     /Server Action "[^"]*" was not found on the server/i.test(msg) ||
     /failed-to-find-server-action/i.test(msg) ||
     /Failed to find Server Action/i.test(msg) ||
-    /deployment.*(mismatch|skew)/i.test(msg)
+    (/deployment/i.test(msg) && /mismatch|skew/i.test(msg.slice(msg.toLowerCase().indexOf('deployment'))))
   );
 }
 
@@ -62,6 +62,7 @@ export function messageOf(error: unknown): string {
 /** "Chrome 131" / "Safari 18" / "Firefox 133" and "macOS" / "iOS 18" / "Android 15" / "Windows". */
 export function parseUserAgent(ua: string | undefined | null): { browser: string; os: string } {
   if (!ua) return { browser: '', os: '' };
+  ua = ua.slice(0, 512);
   const pick = (re: RegExp) => re.exec(ua)?.[1]?.split('.')[0];
   let browser = '';
   let v: string | undefined;
@@ -70,7 +71,7 @@ export function parseUserAgent(ua: string | undefined | null): { browser: string
   else if ((v = pick(/OPR\/([\d.]+)/))) browser = `Opera ${v}`;
   else if ((v = pick(/(?:Firefox|FxiOS)\/([\d.]+)/))) browser = `Firefox ${v}`;
   else if ((v = pick(/(?:Chrome|CriOS)\/([\d.]+)/))) browser = `Chrome ${v}`;
-  else if ((v = pick(/Version\/([\d.]+).*Safari/))) browser = `Safari ${v}`;
+  else if (ua.includes('Safari') && (v = pick(/Version\/([\d.]+)/))) browser = `Safari ${v}`;
   else if (/bot|crawler|spider|HeadlessChrome/i.test(ua)) browser = 'Bot';
   if (/HeadlessChrome/.test(ua)) browser = `Headless ${browser || 'Chrome'}`;
 

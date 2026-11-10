@@ -75,22 +75,60 @@ export interface StackFrame {
   column?: number;
 }
 
-const V8_FRAME = /^\s*at (?:(.+?) )?\(?((?:[a-z-]+:\/\/|\/|[A-Za-z]:\\|webpack|node:)[^\s)]*?|<anonymous>|native)(?::(\d+))?(?::(\d+))?\)?\s*$/;
-const GECKO_FRAME = /^\s*(.*?)@(.+?)(?::(\d+))?(?::(\d+))?\s*$/;
+const V8_LOCATION = /^(?:[a-z-]+:\/\/|\/|[A-Za-z]:\\|webpack|node:)/;
+
+/** "file:12:34" → file, line, column; split from the end (no backtracking regex on untrusted input). */
+function splitLocation(loc: string): { file: string; line?: number; column?: number } {
+  const nums: number[] = [];
+  let file = loc;
+  for (let i = 0; i < 2; i++) {
+    const at = file.lastIndexOf(':');
+    const tail = at >= 0 ? file.slice(at + 1) : '';
+    if (!tail || tail.length > 9 || !/^\d+$/.test(tail)) break;
+    nums.unshift(Number(tail));
+    file = file.slice(0, at);
+  }
+  return { file, line: nums[0], column: nums[1] };
+}
+
+function parseFrameLine(raw: string): StackFrame | null {
+  const line = raw.trim();
+  return (line.startsWith('at ') ? parseV8Frame(line) : null) ?? parseGeckoFrame(line);
+}
+
+/** V8: "at fn (location)" or "at location" */
+function parseV8Frame(line: string): StackFrame | null {
+  let rest = line.slice(3).trim();
+  let fn = '';
+  const open = rest.endsWith(')') ? rest.lastIndexOf(' (') : -1;
+  if (open >= 0) {
+    fn = rest.slice(0, open);
+    rest = rest.slice(open + 2, -1);
+  } else if (rest.startsWith('(') && rest.endsWith(')')) {
+    rest = rest.slice(1, -1);
+  }
+  if (rest === '<anonymous>' || rest === 'native') return { fn: fn.trim() || '<anonymous>', file: rest };
+  if (!V8_LOCATION.test(rest) || /[\s)]/.test(rest)) return null; // no location, or a form we do not know
+  return { fn: fn.trim() || '<anonymous>', ...splitLocation(rest) };
+}
+
+/** Gecko / WebKit: "fn@location" */
+function parseGeckoFrame(line: string): StackFrame | null {
+  const at = line.indexOf('@');
+  if (at < 0) return null;
+  const loc = splitLocation(line.slice(at + 1));
+  if (!loc.file) return null;
+  return { fn: line.slice(0, at).replace(/^at /, '').trim() || '<anonymous>', ...loc };
+}
 
 /** Parses V8 ("at fn (file:1:2)") and Gecko/WebKit ("fn@file:1:2") stack lines. */
 export function parseStack(stack: string | undefined): StackFrame[] {
   if (!stack) return [];
   const frames: StackFrame[] = [];
   for (const line of stack.split('\n')) {
-    const m = V8_FRAME.exec(line) ?? (line.includes('@') ? GECKO_FRAME.exec(line) : null);
-    if (!m) continue;
-    frames.push({
-      fn: (m[1] || '').trim().replace(/^at /, '') || '<anonymous>',
-      file: m[2] || '',
-      line: m[3] ? Number(m[3]) : undefined,
-      column: m[4] ? Number(m[4]) : undefined,
-    });
+    const frame = parseFrameLine(line.slice(0, 1000));
+    if (!frame) continue;
+    frames.push(frame);
     if (frames.length >= 50) break;
   }
   return frames;
@@ -98,7 +136,8 @@ export function parseStack(stack: string | undefined): StackFrame[] {
 
 /** File name without origin, query or build hashes: ".../chunks/app/page-3f2a9c1b.js" → "chunks/app/page.js". */
 export function stableFile(file: string): string {
-  const path = file.replace(/^[a-z-]+:\/\/[^/]+/i, '').replace(/[?#].*$/, '');
+  const cut = file.search(/[?#]/);
+  const path = (cut >= 0 ? file.slice(0, cut) : file).replace(/^[a-z-]+:\/\/[^/]+/i, '');
   const parts = path.split('/').filter(Boolean).slice(-3);
   return parts
     .map((p) => p.replace(/[.-][0-9a-f]{8,}(?=\.|$)/gi, '').replace(/^[0-9a-f]{8,}(?=\.)/i, '<h>'))
