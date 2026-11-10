@@ -1,5 +1,7 @@
 import { Num, Str } from "../../lib/chanfana-params";
 import { scanFill } from "../../lib/listFill";
+import { playlistListIds, scheduleOwnershipHeal, waitUntilOf } from "../../lib/search/ownership";
+import { isIndexPageCursor, pageFromIndex } from "../../lib/search/indexPage";
 import { string, z } from "zod";
 import { Playlist as BusinessPlaylist, Channel as BusinessChannel, PaginationResponse, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
@@ -132,30 +134,54 @@ export class ChannelPlaylistsList extends OptionalAuthRoute {
 			type PlaylistType = z.infer<typeof BusinessPlaylist>;
 			const repository = new R2Repository<PlaylistType>(bucket);
 
-			// Bounded scan that keeps reading until the page is full (lib/listFill.ts):
-			// filtering after cutting an R2 slice returned short or empty pages.
 			const isOwner = Boolean(userId && channel.userId === userId);
-			const scan = await scanFill<PlaylistType>({
-				bucket,
+			const isListed = (playlist: PlaylistType | null): playlist is PlaylistType => Boolean(playlist)
+				&& playlist.channelId === channelId
+				// Watch later is the user's, never a channel's playlist
+				&& !isSystemPlaylist(playlist)
+				// Soft-deleted and moderation-hidden playlists are never listed
+				&& !playlist.isDeleted
+				&& !playlist.isHidden
+				// Private playlists (isPublic === false) only for the channel owner
+				&& (playlist.isPublic !== false || isOwner);
+
+			// Newest first, one keyset page of the ownership index (kind 'playlist'). The bucket
+			// scan read every playlist of the site to find one channel's.
+			const indexed = await pageFromIndex<PlaylistType>({
 				cursor,
+				sort: 'latest',
 				limit,
-				load: key => repository.getObject(key),
-				isListed: (playlist): playlist is PlaylistType => Boolean(playlist)
-					&& playlist.channelId === channelId
-					// Watch later is the user's, never a channel's playlist
-					&& !isSystemPlaylist(playlist)
-					// Soft-deleted and moderation-hidden playlists are never listed
-					&& !playlist.isDeleted
-					&& !playlist.isHidden
-					// Private playlists (isPublic === false) only for the channel owner
-					&& (playlist.isPublic !== false || isOwner),
-				label: 'ChannelPlaylistsList',
+				fetch: (after, pageLimit, offset) => playlistListIds(c.env as never, { channelId, sort: 'latest', limit: pageLimit, after, offset, privateFor: isOwner }),
+				load: (id) => repository.getObject(id),
+				isListed,
 			});
 
-			// Sort by latest first
-			const limitedPlaylists = scan.items.sort((a, b) =>
-				new Date(b.dateCreated || 0).getTime() - new Date(a.dateCreated || 0).getTime());
-			const nextCursor = scan.cursor;
+			let limitedPlaylists: PlaylistType[];
+			let nextCursor: string;
+			let scanned = 0;
+			if (indexed) {
+				limitedPlaylists = indexed.items;
+				nextCursor = indexed.cursor;
+				scanned = indexed.examined;
+			} else {
+				// Index unavailable: a bounded scan that keeps reading until the page is full
+				// (lib/listFill.ts); the index rebuild is queued, never run here
+				if (!cursor) scheduleOwnershipHeal(c.env as never, waitUntilOf(c as never), 'playlist');
+				const scan = await scanFill<PlaylistType>({
+					bucket,
+					// An index cursor (the index became unusable mid-scroll) cannot resume a scan: start over
+					cursor: isIndexPageCursor(cursor) ? null : cursor,
+					limit,
+					load: key => repository.getObject(key),
+					isListed,
+					label: 'ChannelPlaylistsList',
+				});
+				// Sort by latest first
+				limitedPlaylists = scan.items.sort((a, b) =>
+					new Date(b.dateCreated || 0).getTime() - new Date(a.dateCreated || 0).getTime());
+				nextCursor = scan.cursor;
+				scanned = scan.scanned;
+			}
 			const hasMore = Boolean(nextCursor);
 
 			const response = {
@@ -168,7 +194,8 @@ export class ChannelPlaylistsList extends OptionalAuthRoute {
 			logger.debug('Successfully fetched channel playlists', {
 				channelId,
 				playlistsCount: limitedPlaylists.length,
-				scanned: scan.scanned,
+				scanned,
+				source: indexed ? 'index' : 'scan',
 				hasMore,
 				duration
 			});

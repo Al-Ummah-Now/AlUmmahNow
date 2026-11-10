@@ -9,7 +9,7 @@ import R2Repository from "../../lib/r2Repo";
 import { logger } from '../../lib/logger';
 import { OptionalAuthRoute, AppContext } from "../../base";
 import { waitUntilOf } from "../../lib/search/ownership";
-import { channelVideosFromIndex } from "../../lib/search/channelVideoIndex";
+import { channelVideosFromIndex, isIndexCursor } from "../../lib/search/channelVideoIndex";
 import { scanFill } from "../../lib/listFill";
 import { PUBLIC_DISLIKES_COUNT } from "../../lib/reactions";
 import { channelNameFields } from '../../lib/channelName';
@@ -175,7 +175,8 @@ export class ChannelShortsList extends OptionalAuthRoute {
 				// the page (lib/listFill.ts); the helper above schedules an index heal.
 				const scan = await scanFill<VideoType>({
 					bucket: c.env.videos,
-					cursor,
+					// An index cursor (the index became unusable mid-scroll) cannot resume a scan: start over
+					cursor: isIndexCursor(cursor) ? null : cursor,
 					limit,
 					load: key => repository.getObject(key),
 					isListed,

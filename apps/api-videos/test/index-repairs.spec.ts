@@ -157,7 +157,7 @@ describe('queued reconcile passes (finish in minutes, not days)', () => {
 		assert.equal(otherDay.queued.length, 0, 'other days only kick the repair job (none pending here)');
 		const sunday = Date.parse('2026-11-22T03:00:00Z');
 		const first = await startIndexReconcile(env as never, sunday);
-		assert.equal(first.queued.length, 7, '3 ownership kinds + 4 search tables');
+		assert.equal(first.queued.length, 9, '5 ownership kinds (video, channel, profile, playlist, stream) + 4 search tables');
 		const again = await startIndexReconcile(env as never, sunday);
 		assert.deepEqual(again.queued.map((j) => j.id).sort(), first.queued.map((j) => j.id).sort(), 'active jobs are reused');
 		await drainJobs(env as never);

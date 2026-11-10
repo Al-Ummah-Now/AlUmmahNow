@@ -7,6 +7,8 @@ import { LiveStreamView } from "../../lib/model/view";
 import R2Repository from "../../lib/r2Repo";
 import { logger } from '../../lib/logger';
 import { scanFill } from '../../lib/listFill';
+import { scheduleOwnershipHeal, streamListIds, waitUntilOf } from '../../lib/search/ownership';
+import { isIndexPageCursor, pageFromIndex } from '../../lib/search/indexPage';
 import { PUBLIC_DISLIKES_COUNT } from "../../lib/reactions";
 import { can } from "@al-ummah/shared-types";
 import { roleOnChannel } from "../../lib/channelAccess";
@@ -98,23 +100,54 @@ export class LiveStreamsList extends OptionalAuthRoute {
 				if (!isOwner && liveRecordingWithheld(stream as never)) return false;
 				return true;
 			};
-			const scan = await scanFill<LiveStreamType>({
-				bucket,
+			// Live first, then newest: one keyset page of the ownership index (kind 'stream').
+			// Visibility is filtered in SQL and re-checked on each loaded stream (isListed).
+			const indexed = await pageFromIndex<LiveStreamType>({
 				cursor,
+				sort: 'live-first',
 				limit,
-				prefix: "livestream:",
-				load: async key => {
+				fetch: (after, pageLimit, offset) => streamListIds(c.env as never, {
+					channelId: channelId || null, status, limit: pageLimit, after, offset,
+					viewerId: auth?.userId ?? null, manageChannel: channelManager,
+				}),
+				load: async id => {
 					try {
-						return await repository.getObject(key);
+						return await repository.getObject(`livestream:${id}`);
 					} catch (error) {
-						logger.error(`Error loading stream ${key}:`, error);
+						logger.error(`Error loading stream ${id}:`, error);
 						return null;
 					}
 				},
 				isListed,
-				label: 'LiveStreamsList',
 			});
-			const streams = scan.items;
+			let streams: LiveStreamType[];
+			let nextCursor: string;
+			if (indexed) {
+				streams = indexed.items;
+				nextCursor = indexed.cursor;
+			} else {
+				// Index unavailable: the filled bucket scan; the index rebuild is queued, never run here
+				if (!cursor) scheduleOwnershipHeal(c.env as never, waitUntilOf(c as never), 'stream');
+				const scan = await scanFill<LiveStreamType>({
+					bucket,
+					// An index cursor (the index became unusable mid-scroll) cannot resume a scan: start over
+					cursor: isIndexPageCursor(cursor) ? null : cursor,
+					limit,
+					prefix: "livestream:",
+					load: async key => {
+						try {
+							return await repository.getObject(key);
+						} catch (error) {
+							logger.error(`Error loading stream ${key}:`, error);
+							return null;
+						}
+					},
+					isListed,
+					label: 'LiveStreamsList',
+				});
+				streams = scan.items;
+				nextCursor = scan.cursor;
+			}
 
 			// Transform to view models
 			const streamViews = streams.map(({ review, reviewShadow: _rs, reviewSessionId: _ri, liveAgainSessionId: _la, createdBy, ...stream }: LiveStreamType & { review?: unknown; reviewShadow?: unknown; reviewSessionId?: unknown; liveAgainSessionId?: unknown; createdBy?: string }) => ({
@@ -149,7 +182,7 @@ export class LiveStreamsList extends OptionalAuthRoute {
 			return {
 				success: true,
 				result: {
-					cursor: scan.cursor,
+					cursor: nextCursor,
 					limit,
 					data: streamViews,
 				},

@@ -49,6 +49,7 @@
 --   apps/api-videos/migrations/search/0067_remove_paddle.sql
 --   apps/api-videos/migrations/search/0068_discovery_ranking.sql
 --   apps/api-videos/migrations/search/0069_index_repairs.sql
+--   apps/api-videos/migrations/search/0070_list_indexes.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
@@ -80,7 +81,7 @@ CREATE TABLE channel_comments_index_state (channel_id TEXT PRIMARY KEY, indexed_
 CREATE TABLE channel_invites (id TEXT PRIMARY KEY, channel_id TEXT NOT NULL, role TEXT NOT NULL CHECK (role IN ('admin', 'editor', 'moderator')), invitee_user_id TEXT, invitee_email TEXT, by_email INTEGER NOT NULL DEFAULT 0, invited_by TEXT NOT NULL, status TEXT NOT NULL CHECK (status IN ('pending', 'claimed', 'accepted', 'declined', 'cancelled', 'expired')), created_at TEXT NOT NULL, expires_at TEXT NOT NULL, responded_at TEXT);
 CREATE TABLE channel_quran_translations (channel_id TEXT NOT NULL, lang TEXT NOT NULL, qf_translation_id INTEGER NOT NULL, name TEXT NOT NULL, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (channel_id, lang)) WITHOUT ROWID;
 CREATE TABLE channel_translation_settings (channel_id TEXT PRIMARY KEY, viewer_titles INTEGER NOT NULL DEFAULT 1, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL) WITHOUT ROWID;
-CREATE TABLE content_ownership (kind TEXT NOT NULL, id TEXT NOT NULL, owner_id TEXT, channel_id TEXT, is_public INTEGER NOT NULL DEFAULT 1, is_hidden INTEGER NOT NULL DEFAULT 0, is_deleted INTEGER NOT NULL DEFAULT 0, is_live INTEGER NOT NULL DEFAULT 0, duration REAL, schedule_status TEXT, upload_status TEXT, views INTEGER NOT NULL DEFAULT 0, created_at INTEGER, updated_at INTEGER, indexed_at INTEGER NOT NULL DEFAULT 0, studio_status TEXT, title TEXT, category TEXT, language TEXT, source_version INTEGER NOT NULL DEFAULT 0, admin_title TEXT, handle TEXT, email TEXT, is_verified INTEGER NOT NULL DEFAULT 0, is_suspended INTEGER NOT NULL DEFAULT 0, subscribers INTEGER NOT NULL DEFAULT 0, admin_cols INTEGER NOT NULL DEFAULT 0, is_short INTEGER NOT NULL DEFAULT 0, needs_format INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (kind, id));
+CREATE TABLE content_ownership (kind TEXT NOT NULL, id TEXT NOT NULL, owner_id TEXT, channel_id TEXT, is_public INTEGER NOT NULL DEFAULT 1, is_hidden INTEGER NOT NULL DEFAULT 0, is_deleted INTEGER NOT NULL DEFAULT 0, is_live INTEGER NOT NULL DEFAULT 0, duration REAL, schedule_status TEXT, upload_status TEXT, views INTEGER NOT NULL DEFAULT 0, created_at INTEGER, updated_at INTEGER, indexed_at INTEGER NOT NULL DEFAULT 0, studio_status TEXT, title TEXT, category TEXT, language TEXT, source_version INTEGER NOT NULL DEFAULT 0, admin_title TEXT, handle TEXT, email TEXT, is_verified INTEGER NOT NULL DEFAULT 0, is_suspended INTEGER NOT NULL DEFAULT 0, subscribers INTEGER NOT NULL DEFAULT 0, admin_cols INTEGER NOT NULL DEFAULT 0, is_short INTEGER NOT NULL DEFAULT 0, needs_format INTEGER NOT NULL DEFAULT 0, status TEXT, PRIMARY KEY (kind, id));
 CREATE TABLE creator_tier_assignments (user_id TEXT PRIMARY KEY, tier_id TEXT NOT NULL, source TEXT NOT NULL DEFAULT 'admin' CHECK (source IN ('admin', 'subscription')), assigned_by TEXT NOT NULL, assigned_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE creator_tier_changes (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, reason TEXT NOT NULL CHECK (reason IN ('request', 'admin', 'subscription')), from_tier_id TEXT, to_tier_id TEXT NOT NULL, request_id TEXT, created_at TEXT NOT NULL, notified_at TEXT, email_status TEXT, email_error TEXT) WITHOUT ROWID;
 CREATE TABLE creator_tier_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_by TEXT, updated_at TEXT) WITHOUT ROWID;
@@ -236,14 +237,21 @@ CREATE INDEX idx_channel_invites_inviter ON channel_invites (invited_by, created
 CREATE UNIQUE INDEX idx_channel_invites_user ON channel_invites (channel_id, invitee_user_id) WHERE status = 'pending' AND invitee_user_id IS NOT NULL AND by_email = 0;
 CREATE INDEX idx_content_ownership_admin_cols ON content_ownership (kind, admin_cols);
 CREATE INDEX idx_content_ownership_channel ON content_ownership (kind, channel_id, created_at);
+CREATE INDEX idx_content_ownership_channel_feed ON content_ownership (kind, channel_id, COALESCE(created_at, 0), id);
+CREATE INDEX idx_content_ownership_channel_live ON content_ownership (kind, channel_id, is_live, COALESCE(created_at, 0), id);
 CREATE INDEX idx_content_ownership_channel_short ON content_ownership (kind, channel_id, is_short, created_at);
 CREATE INDEX idx_content_ownership_channel_status ON content_ownership (kind, channel_id, studio_status, created_at);
+CREATE INDEX idx_content_ownership_channel_updated ON content_ownership (kind, channel_id, COALESCE(updated_at, 0), id);
+CREATE INDEX idx_content_ownership_channel_views ON content_ownership (kind, channel_id, views, id);
 CREATE INDEX idx_content_ownership_created ON content_ownership (kind, created_at);
 CREATE INDEX idx_content_ownership_email_lower ON content_ownership (kind, lower(email));
 CREATE INDEX idx_content_ownership_handle_lower ON content_ownership (kind, lower(handle));
 CREATE INDEX idx_content_ownership_indexed ON content_ownership (kind, indexed_at);
+CREATE INDEX idx_content_ownership_kind_created ON content_ownership (kind, COALESCE(created_at, 0), id);
+CREATE INDEX idx_content_ownership_live ON content_ownership (kind, is_live, COALESCE(created_at, 0), id);
 CREATE INDEX idx_content_ownership_needs_format ON content_ownership (kind, needs_format, created_at);
 CREATE INDEX idx_content_ownership_owner ON content_ownership (kind, owner_id);
+CREATE INDEX idx_content_ownership_upload ON content_ownership (kind, upload_status, id);
 CREATE INDEX idx_creator_tier_assignments_tier ON creator_tier_assignments (tier_id);
 CREATE INDEX idx_creator_tier_changes_user ON creator_tier_changes (user_id, created_at);
 CREATE INDEX idx_creator_tiers_deleted ON creator_tiers (deleted_at) WHERE deleted_at IS NOT NULL;

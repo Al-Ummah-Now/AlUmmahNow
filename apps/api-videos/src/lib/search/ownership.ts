@@ -45,11 +45,14 @@ import {
   StudioVideoStatus,
   indexRepairStatement,
   pendingRepairCount,
+  OWNERSHIP_SOURCES,
+  ALL_OWNERSHIP_KINDS,
 } from '@al-ummah/shared-types';
 import { logger } from '../logger';
 import { syncCommentIndex } from '../admin/commentIndex';
 
-const BUCKET_FOR_KIND: Record<OwnershipKind, string> = { video: 'videos', channel: 'channels', profile: 'profiles' };
+/** R2 binding of each kind (live streams share the videos bucket under `livestream:`). */
+const BUCKET_FOR_KIND = Object.fromEntries(Object.entries(OWNERSHIP_SOURCES).map(([kind, source]) => [kind, source.bucket])) as Record<OwnershipKind, string>;
 const INTERNAL_VIDEO_PREFIXES = ['index:', 'metadata:', 'livestream:'];
 
 export const OWNERSHIP_PAGE_SIZE = 100;
@@ -73,6 +76,11 @@ function errorText(error: unknown): string {
 
 /** Entity id stored under an R2 key, or null for nested/internal keys. */
 export function ownershipIdForKey(kind: OwnershipKind, key: string): string | null {
+  const prefix = OWNERSHIP_SOURCES[kind].prefix;
+  if (prefix) {
+    if (!key?.startsWith(prefix)) return null;
+    key = key.slice(prefix.length);
+  }
   if (!key || key.includes('/') || key.includes(':')) return null;
   if (kind === 'video' && INTERNAL_VIDEO_PREFIXES.some(prefix => key.startsWith(prefix))) return null;
   return key;
@@ -155,6 +163,109 @@ async function whenComplete<T>(env: OwnershipEnv, kind: OwnershipKind, query: (d
     logger.warn('[Ownership] Index query failed, falling back to R2 scan', { kind, error: errorText(error) });
     return null;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Keyset pages
+// ---------------------------------------------------------------------------
+
+/**
+ * List orders. Every column is descending (or every one ascending), so a
+ * page is one seek in the matching index of migration 0070, however deep.
+ */
+export type OwnershipSort = 'latest' | 'oldest' | 'popular' | 'updated' | 'live-first';
+
+const SORT_COLUMNS: Record<OwnershipSort, { columns: string[]; direction: 'DESC' | 'ASC' }> = {
+  latest: { columns: ['COALESCE(created_at, 0)', 'id'], direction: 'DESC' },
+  oldest: { columns: ['COALESCE(created_at, 0)', 'id'], direction: 'ASC' },
+  popular: { columns: ['views', 'id'], direction: 'DESC' },
+  updated: { columns: ['COALESCE(updated_at, 0)', 'id'], direction: 'DESC' },
+  'live-first': { columns: ['is_live', 'COALESCE(created_at, 0)', 'id'], direction: 'DESC' },
+};
+
+/** Where a page ended: the sort key values of its last row (the id last). */
+export interface KeysetPosition {
+  sort: OwnershipSort;
+  values: Array<number | string>;
+}
+
+export const KEYSET_CURSOR_PREFIX = 'ks:';
+
+/** Opaque, URL-safe cursor of a keyset position. */
+export function encodeKeysetCursor(position: KeysetPosition): string {
+  const bytes = new TextEncoder().encode(JSON.stringify([position.sort, ...position.values]));
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return KEYSET_CURSOR_PREFIX + btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+/** The position of a keyset cursor for `sort`, or null (absent, malformed, or of another order). */
+export function decodeKeysetCursor(cursor: string | null | undefined, sort: OwnershipSort): KeysetPosition | null {
+  if (!cursor?.startsWith(KEYSET_CURSOR_PREFIX)) return null;
+  try {
+    const b64 = cursor.slice(KEYSET_CURSOR_PREFIX.length).replace(/-/g, '+').replace(/_/g, '/');
+    const binary = atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4));
+    const parsed = JSON.parse(new TextDecoder().decode(Uint8Array.from(binary, ch => ch.charCodeAt(0)))) as unknown;
+    if (!Array.isArray(parsed) || parsed[0] !== sort) return null;
+    const values = parsed.slice(1);
+    const expected = SORT_COLUMNS[sort].columns.length;
+    if (values.length !== expected) return null;
+    if (typeof values[expected - 1] !== 'string') return null;
+    if (!values.slice(0, -1).every(v => typeof v === 'number' && Number.isFinite(v))) return null;
+    return { sort, values };
+  } catch {
+    return null;
+  }
+}
+
+/** One keyset page: ids in order, each row's position (continue after any of them), the last one. */
+export interface KeysetPage {
+  ids: string[];
+  positions: KeysetPosition[];
+  last: KeysetPosition | null;
+  hasMore: boolean;
+}
+
+export interface KeysetPageQuery {
+  kind: OwnershipKind;
+  sort: OwnershipSort;
+  limit: number;
+  /** Continue after this position (null: the first page). */
+  after?: KeysetPosition | null;
+  /** Legacy offset cursors (`idx:<n>`) issued before keyset paging. */
+  offset?: number;
+  /** Extra conditions (AND-ed) and their parameters. */
+  where: string[];
+  params: unknown[];
+}
+
+/**
+ * One page of rows in `sort` order after `after`. Fetches `limit + 1` so the
+ * caller knows if more exist. Rows inserted meanwhile before the position are
+ * not repeated, and none after it is skipped.
+ */
+export async function keysetPage(db: SearchDb, q: KeysetPageQuery): Promise<KeysetPage> {
+  const { columns, direction } = SORT_COLUMNS[q.sort];
+  const where = [`kind = ?`, ...q.where];
+  const params: unknown[] = [q.kind, ...q.params];
+  if (q.after && q.after.sort === q.sort) {
+    // Row-value comparison: SQLite seeks the index to the position
+    where.push(`(${columns.join(', ')}) ${direction === 'DESC' ? '<' : '>'} (${columns.map(() => '?').join(', ')})`);
+    params.push(...q.after.values);
+  }
+  const select = columns.map((c, i) => `${c} AS k${i}`).join(', ');
+  const offset = !q.after && q.offset ? ` OFFSET ${Math.max(0, Math.floor(q.offset))}` : '';
+  const { results } = await db.prepare(
+    `SELECT ${select} FROM ${OWNERSHIP_TABLE} WHERE ${where.join(' AND ')} ORDER BY ${columns.map(c => `${c} ${direction}`).join(', ')} LIMIT ?${offset}`,
+  ).bind(...params, q.limit + 1).all<Record<string, number | string>>();
+  const rows = (results ?? []).slice(0, q.limit);
+  const positions = rows.map(row => ({ sort: q.sort, values: columns.map((_, i) => (i === columns.length - 1 ? String(row[`k${i}`]) : Number(row[`k${i}`]))) }));
+  return {
+    ids: rows.map(r => String(r[`k${columns.length - 1}`])),
+    positions,
+    last: positions[positions.length - 1] ?? null,
+    hasMore: (results ?? []).length > q.limit,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -262,7 +373,10 @@ const CHANNEL_VIDEO_ORDER: Record<ChannelVideoSort, string> = {
 
 export interface ChannelVideoQuery {
   sort: ChannelVideoSort;
-  offset: number;
+  /** Legacy offset (`idx:<n>` cursors); ignored when `after` is set. */
+  offset?: number;
+  /** Continue after this keyset position. */
+  after?: KeysetPosition | null;
   limit: number;
   /**
    * Which private videos are included: `true` all of them (channel owner),
@@ -290,6 +404,53 @@ export interface ChannelVideoQuery {
 export const READY_SQL = "(upload_status IS NULL OR upload_status = 'ready')";
 
 /**
+ * The index form of lib/visibility.ts isVideoListedFor plus the list filters:
+ * never deleted or hidden; private, scheduled and not-ready videos only for
+ * `privateFor` (see ChannelVideoQuery).
+ */
+function videoListFilters(channelId: string, query: ChannelVideoQuery): { where: string[]; params: unknown[] } {
+  const where = ['channel_id = ?', 'is_deleted = 0', 'is_hidden = 0'];
+  const params: unknown[] = [channelId];
+  if (query.longFormOnly) where.push('is_live = 0', 'is_short = 0');
+  if (query.shortsOnly) where.push('is_live = 0', 'is_short = 1');
+  if (query.notShort) where.push('is_short = 0');
+  if (query.liveOnly) where.push('is_live = 1');
+  if (query.notLive) where.push('is_live = 0');
+  if (query.isPublic !== undefined) where.push(query.isPublic ? 'is_public = 1' : 'is_public = 0');
+  // Public, ready and not waiting for a scheduled publish, unless the viewer may see it
+  const PUBLIC = `(is_public = 1 AND ${READY_SQL} AND (schedule_status IS NULL OR schedule_status NOT IN ('scheduled', 'publishing')))`;
+  if (typeof query.privateFor === 'string') {
+    where.push(`(${PUBLIC} OR owner_id = ?)`);
+    params.push(query.privateFor);
+  } else if (!query.privateFor) {
+    where.push(PUBLIC);
+  }
+  return { where, params };
+}
+
+/**
+ * One page of one channel's videos from the index, by keyset position.
+ * Fetches `limit + 1` ids so the caller knows if more exist; `last` is the
+ * keyset position to continue after. The catalogue-wide list (no channel)
+ * keeps channelVideoIds: the home feed and trending belong to discovery
+ * (lib/ranking, discovery rails), which has its own keyset feeds.
+ */
+export function videoListIds(
+  env: OwnershipEnv,
+  channelId: string,
+  query: ChannelVideoQuery,
+): Promise<KeysetPage | null> {
+  if (!(query.limit >= 1) || !((query.offset ?? 0) >= 0)) {
+    return Promise.reject(new Error(`videoListIds: invalid page (limit ${query.limit}, offset ${query.offset})`));
+  }
+  const sort: OwnershipSort = query.sort === 'popular' ? 'popular' : query.sort === 'oldest' ? 'oldest' : 'latest';
+  return whenComplete(env, 'video', async db => {
+    const { where, params } = videoListFilters(channelId, query);
+    return keysetPage(db, { kind: 'video', sort, limit: query.limit, after: query.after, offset: query.offset, where, params });
+  });
+}
+
+/**
  * One page of a channel's videos from the index (never deleted or hidden), or
  * of every channel's when `channelId` is null (the catalogue-wide list).
  * Fetches `limit + 1` ids so the caller knows if more exist.
@@ -299,7 +460,7 @@ export function channelVideoIds(
   channelId: string | null,
   query: ChannelVideoQuery,
 ): Promise<{ ids: string[]; hasMore: boolean } | null> {
-  if (!(query.limit >= 1) || !(query.offset >= 0)) {
+  if (!(query.limit >= 1) || !((query.offset ?? 0) >= 0)) {
     return Promise.reject(new Error(`channelVideoIds: invalid page (limit ${query.limit}, offset ${query.offset})`));
   }
   return whenComplete(env, 'video', async db => {
@@ -336,9 +497,78 @@ export function channelVideoIds(
     }
     const { results } = await db.prepare(
       `SELECT id FROM ${OWNERSHIP_TABLE} WHERE ${where.join(' AND ')} ORDER BY ${order} LIMIT ? OFFSET ?`,
-    ).bind(...params, query.limit + 1, query.offset).all<{ id: string }>();
+    ).bind(...params, query.limit + 1, query.offset ?? 0).all<{ id: string }>();
     const ids = (results ?? []).map(r => r.id);
     return { ids: ids.slice(0, query.limit), hasMore: ids.length > query.limit };
+  });
+}
+
+export interface PlaylistListQuery {
+  /** One channel's playlists, or every channel's (null). */
+  channelId: string | null;
+  sort: 'latest' | 'updated';
+  limit: number;
+  after?: KeysetPosition | null;
+  /** Legacy offset cursor (first read only) */
+  offset?: number;
+  /** Private playlists: `true` every one (the channel's managers), a user id only theirs, null none. */
+  privateFor: boolean | string | null;
+}
+
+/** One page of playlists from the index (never deleted, hidden or system playlists such as Watch later). */
+export function playlistListIds(env: OwnershipEnv, query: PlaylistListQuery): Promise<KeysetPage | null> {
+  return whenComplete(env, 'playlist', async db => {
+    const where = ['is_deleted = 0', 'is_hidden = 0', "(status IS NULL OR status <> 'system')"];
+    const params: unknown[] = [];
+    if (query.channelId) {
+      where.unshift('channel_id = ?');
+      params.push(query.channelId);
+    }
+    if (typeof query.privateFor === 'string') {
+      where.push('(is_public = 1 OR owner_id = ?)');
+      params.push(query.privateFor);
+    } else if (!query.privateFor) {
+      where.push('is_public = 1');
+    }
+    return keysetPage(db, { kind: 'playlist', sort: query.sort, limit: query.limit, after: query.after, offset: query.offset, where, params });
+  });
+}
+
+export interface StreamListQuery {
+  channelId: string | null;
+  status?: string;
+  limit: number;
+  after?: KeysetPosition | null;
+  /** Legacy offset cursor (first read only) */
+  offset?: number;
+  /** Private and moderation-hidden streams are listed to their owner only (null: none). */
+  viewerId: string | null;
+  /** The viewer holds live.manage on `channelId`: every stream of that channel, as its owner sees them. */
+  manageChannel?: boolean;
+}
+
+/** One page of live streams, live ones first, then newest (the order the Live list always had). */
+export function streamListIds(env: OwnershipEnv, query: StreamListQuery): Promise<KeysetPage | null> {
+  return whenComplete(env, 'stream', async db => {
+    const where = ['is_deleted = 0'];
+    const params: unknown[] = [];
+    if (query.channelId) {
+      where.unshift('channel_id = ?');
+      params.push(query.channelId);
+    }
+    if (query.status) {
+      where.push('status = ?');
+      params.push(query.status);
+    }
+    if (query.manageChannel && query.channelId) {
+      // A channel manager (docs/specs/CHANNEL-ROLES.md) sees the channel's streams as the owner does
+    } else if (query.viewerId) {
+      where.push('((is_public = 1 AND is_hidden = 0) OR owner_id = ?)');
+      params.push(query.viewerId);
+    } else {
+      where.push('is_public = 1', 'is_hidden = 0');
+    }
+    return keysetPage(db, { kind: 'stream', sort: 'live-first', limit: query.limit, after: query.after, offset: query.offset, where, params });
   });
 }
 
@@ -376,8 +606,11 @@ export function channelFormatCountsFromIndex(env: OwnershipEnv, channelId: strin
 
 /**
  * Public published video count and view sum of a channel (same rules as
- * computeChannelTotals). Views are those stored on the video objects as of
- * their last write (every view increment is such a write).
+ * computeChannelTotals). Views are the rows' `views`: written from the video
+ * object on every write of it, and raised between writes by the view counter
+ * after each flush (websocket-server view-counter.ts syncs the index). View
+ * increments are not object writes that pass through here: before that sync
+ * the sum lagged until the video was next edited or reconciled.
  */
 export function channelTotalsFromIndex(env: OwnershipEnv, channelId: string): Promise<{ totalViews: number; videosCount: number; partial: boolean } | null> {
   return whenComplete(env, 'video', async db => {
@@ -470,7 +703,8 @@ export async function backfillOwnershipPage(
   if (!db || !bucket) throw new Error(`Ownership backfill unavailable: missing ${db ? BUCKET_FOR_KIND[kind] : 'SEARCH_DB'} binding`);
   const now = options.now ?? Date.now();
   const limit = Math.min(Math.max(Math.floor(options.limit ?? OWNERSHIP_PAGE_SIZE), 1), 1000);
-  const page = await bucket.list({ limit, ...(options.cursor ? { cursor: options.cursor } : {}) });
+  const prefix = OWNERSHIP_SOURCES[kind].prefix;
+  const page = await bucket.list({ limit, ...(prefix ? { prefix } : {}), ...(options.cursor ? { cursor: options.cursor } : {}) });
 
   let scanned = 0;
   let failed = 0;
@@ -782,7 +1016,7 @@ export async function reconcileOwnershipIndex(
   const summary = {} as Record<OwnershipKind, OwnershipPassResult>;
   const db = dbOf(env);
   // Profiles are indexed for the admin's user list (0005_admin_content.sql)
-  for (const kind of ['channel', 'video', 'profile'] as OwnershipKind[]) {
+  for (const kind of ['channel', ...ALL_OWNERSHIP_KINDS.filter(k => k !== 'channel')] as OwnershipKind[]) {
     summary[kind] = { kind, pages: 0, scanned: 0, done: false, complete: false };
     if (!db || !env[BUCKET_FOR_KIND[kind]]) continue;
     // Share the self-heal lease so the cron and a heal never walk the same cursor at once.
@@ -935,7 +1169,7 @@ export async function ownershipStats(db: SearchDb): Promise<Record<OwnershipKind
     `SELECT kind, COUNT(*) AS rows FROM ${OWNERSHIP_TABLE} GROUP BY kind`,
   ).all<{ kind: OwnershipKind; rows: number }>();
   const stats = {} as Record<OwnershipKind, { rows: number; complete: boolean }>;
-  for (const kind of ['video', 'channel', 'profile'] as OwnershipKind[]) {
+  for (const kind of ALL_OWNERSHIP_KINDS) {
     stats[kind] = {
       rows: Number((results ?? []).find(r => r.kind === kind)?.rows) || 0,
       complete: await isOwnershipComplete(db, kind),

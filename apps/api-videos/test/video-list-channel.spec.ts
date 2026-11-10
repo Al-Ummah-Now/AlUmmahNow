@@ -67,15 +67,18 @@ describe('GET /api/videos?channelId= (ownership index)', () => {
 		assert.deepEqual(page.ids, ['z-new', 'z-mid', 'z-old', 'z-live']);
 	});
 
-	it('pages with offset cursors in sort order without gaps', async () => {
+	it('pages with keyset cursors in sort order without gaps (and still accepts offset cursors)', async () => {
 		const env = await indexedEnv();
 		const app = buildApp(routes, null);
 		const p1 = await ids(app, `/api/videos?channelId=${CHANNEL}&limit=2&sort=views`, env);
 		assert.deepEqual(p1.ids, ['z-old', 'z-new']);
-		assert.equal(p1.cursor, 'idx:2');
+		assert.match(p1.cursor, /^ks:/);
 		const p2 = await ids(app, `/api/videos?channelId=${CHANNEL}&limit=2&sort=views&cursor=${p1.cursor}`, env);
 		assert.deepEqual(p2.ids, ['z-mid', 'z-live']);
 		assert.equal(p2.cursor, '');
+		// A client mid-scroll from before keyset paging
+		const legacy = await ids(app, `/api/videos?channelId=${CHANNEL}&limit=2&sort=views&cursor=idx:2`, env);
+		assert.deepEqual(legacy.ids, ['z-mid', 'z-live']);
 	});
 
 	it('sorts by title and likes across the whole channel', async () => {
@@ -109,7 +112,7 @@ describe('GET /api/videos?channelId= (ownership index)', () => {
 		for (const limit of [0, -5]) {
 			const page = await ids(app, `/api/videos?channelId=${CHANNEL}&limit=${limit}`, env);
 			assert.deepEqual(page.ids, ['z-new'], `limit=${limit}`);
-			assert.equal(page.cursor, 'idx:1');
+			assert.match(page.cursor, /^ks:/);
 		}
 		const big = await ids(app, `/api/videos?channelId=${CHANNEL}&limit=100000&sort=title`, env);
 		assert.deepEqual(big.ids, ['z-mid', 'z-old', 'z-new', 'z-live']);
