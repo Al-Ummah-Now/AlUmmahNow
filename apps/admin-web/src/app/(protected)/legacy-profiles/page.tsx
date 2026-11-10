@@ -81,7 +81,14 @@ export default async function LegacyProfilesPage() {
                       {plan.items.flatMap((item) =>
                         item.changes.map((change, i) => (
                           <tr key={`${item.id}-${change.field}`} className="border-b border-border last:border-0" data-profile-id={item.id} data-field={change.field}>
-                            <td className={tdClass} dir="ltr">{i === 0 ? item.id : ''}</td>
+                            <td className={tdClass} dir="ltr">
+                              {i === 0 && (
+                                <>
+                                  <div>{item.id}</div>
+                                  <div className="text-fg-muted text-xs" data-testid="legacy-plan-email">{item.email}</div>
+                                </>
+                              )}
+                            </td>
                             <td className={tdClass} dir="ltr">{i === 0 ? item.legacyId : ''}</td>
                             <td className={tdClass} dir="ltr"><code>{change.field}</code></td>
                             <td className={`${tdClass} text-fg-muted break-all`} dir="auto">{show(change.from) || t('legacyProfiles.empty')}</td>

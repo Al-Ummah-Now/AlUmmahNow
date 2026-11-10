@@ -63,6 +63,14 @@ const blank = (v: unknown): boolean => typeof v !== 'string' || v.trim() === '';
  */
 const PLACEHOLDER_AVATARS = new Set(['/avatar.png']);
 
+/**
+ * Photos are only restored from the first-party image host (any environment).
+ * The legacy record's email was user-editable and no other system records who
+ * owned a legacy id, so a legacy URL elsewhere is never copied into a profile.
+ */
+const FIRST_PARTY_IMAGE = /^https:\/\/images(\.(qa|stage))?\.alummahnow\.net\/+[^/]/i;
+export const isFirstPartyImage = (url: string): boolean => FIRST_PARTY_IMAGE.test(url.trim());
+
 /** `https://host//key` → `https://host/key`; anything else unchanged. */
 export function normalizeImageUrl(url: string): string {
 	return url.replace(/^(https?:\/\/[^/]+)\/{2,}/i, '$1/');
@@ -115,7 +123,7 @@ export function planProfile(current: StoredProfile, legacy?: StoredProfile, opti
 
 		for (const field of ['avatarUrl', 'coverUrl'] as const) {
 			const value = legacy[field];
-			if (blank(value) || !allowed(field)) continue;
+			if (blank(value) || !allowed(field) || !isFirstPartyImage(value as string)) continue;
 			const own = next[field];
 			if (blank(own) || (field === 'avatarUrl' && PLACEHOLDER_AVATARS.has((own as string).trim()))) {
 				const to = normalizeImageUrl((value as string).trim());

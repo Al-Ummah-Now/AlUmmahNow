@@ -97,7 +97,7 @@ describe('restore legacy profile fields: dry run', () => {
 		assert.deepEqual(res.body.result, {
 			legacyCount: 1,
 			pairedCount: 1,
-			items: [{ id: USR, legacyId: LEGACY, changes: [
+			items: [{ id: USR, legacyId: LEGACY, email: 'owner@example.com', changes: [
 				{ field: 'firstNameLocalized.ar', from: '', to: 'محمود' },
 				{ field: 'lastNameLocalized.ar', from: '', to: 'درويش' },
 			] }],
@@ -173,7 +173,7 @@ describe('restore legacy profile fields: run', () => {
 	});
 
 	it('an admin cannot approve a field the rules would not fill', () => {
-		const plan = { legacyCount: 1, pairedCount: 1, unmatched: [], ambiguousCount: 0, items: [{ id: USR, legacyId: LEGACY, changes: [{ field: 'firstNameLocalized.ar', from: '', to: 'x' }] }] };
+		const plan = { legacyCount: 1, pairedCount: 1, unmatched: [], ambiguousCount: 0, items: [{ id: USR, legacyId: LEGACY, email: 'owner@example.com', changes: [{ field: 'firstNameLocalized.ar', from: '', to: 'x' }] }] };
 		assert.deepEqual(approvedFromPlan(plan, [{ id: USR, legacyId: LEGACY, fields: ['firstNameLocalized.ar', 'avatarUrl', 'email'] }]), [{ id: USR, legacyId: LEGACY, fields: ['firstNameLocalized.ar'] }]);
 		assert.deepEqual(approvedFromPlan(plan, [{ id: USR, legacyId: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', fields: ['firstNameLocalized.ar'] }]), []);
 		assert.deepEqual(approvedFromPlan(plan, [{ id: INTRUDER, legacyId: LEGACY, fields: ['firstNameLocalized.ar'] }]), []);

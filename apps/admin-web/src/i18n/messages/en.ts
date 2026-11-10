@@ -500,7 +500,7 @@ const en = {
     noAccess: 'You need the videos users permission to open this page.',
     loadFailed: 'Could not load the dry run. Try again.',
     dryRunTitle: 'Dry run',
-    dryRunNote: 'Nothing has been written. Each old profile is matched to an account by the email the person verified at sign-in, never by the email typed into a profile.',
+    dryRunNote: 'Nothing has been written. Each old profile is matched to an account by the email the person verified at sign-in, never by the email typed into a profile. Old profiles stored an email the person could edit, so check each account below is the same person before you run it. Photos are only restored from our image host.',
     summary: '{legacy} old profiles found, {paired} matched to an account, {profiles} profiles to fill ({fields} fields).',
     unmatched: '{count} old profiles have no matching account and are left alone.',
     ambiguous: '{count} emails match several profiles and are left alone.',

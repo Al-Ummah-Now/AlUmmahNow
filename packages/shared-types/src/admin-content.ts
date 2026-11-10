@@ -424,6 +424,11 @@ export interface LegacyRestoreItem {
   id: string;
   /** The legacy (pre-SSO, 32-hex) record it is filled from */
   legacyId: string;
+  /**
+   * The account's verified email (auth service) the pairing rests on. Shown so
+   * the admin confirms the person: no system records who owned a legacy id.
+   */
+  email: string;
   /** Field paths (`firstNameLocalized.ar`, `coverUrl`) with the value now and the value it would get */
   changes: { field: string; from: unknown; to: unknown }[];
 }

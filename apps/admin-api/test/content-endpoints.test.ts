@@ -331,7 +331,7 @@ describe('content endpoints: restore legacy profile fields', () => {
     pairedCount: 2,
     items: [
       { id: USR, legacyId: '4b623aeb45eb610c8c72cca719e0f6c7', changes: [{ field: 'firstNameLocalized.ar', from: '', to: 'محمود' }, { field: 'lastNameLocalized.ar', from: null, to: 'درويش' }] },
-      { id: USR2, legacyId: 'cccccccccccccccccccccccccccccccc', changes: [{ field: 'bioLocalized.ar', from: '', to: 'نبذة' }] },
+      { id: USR2, legacyId: 'cccccccccccccccccccccccccccccccc', email: 'b@example.com', changes: [{ field: 'bioLocalized.ar', from: '', to: 'نبذة' }] },
     ],
     unmatched: [],
     ambiguousCount: 0,
