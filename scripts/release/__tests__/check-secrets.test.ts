@@ -113,7 +113,7 @@ describe('declaredInConfig', () => {
 		const web = (env: 'production' | 'stage' | 'qa') => SECRETS_MANIFEST.find((e) => e.app === 'web' && e.env === env)!;
 		assert.deepEqual(declaredInConfig(web('production'), 'INTERNAL_API_KEY', root)?.secret_name, 'internal-api-key');
 		assert.deepEqual(declaredInConfig(web('stage'), 'INTERNAL_API_KEY', root)?.secret_name, 'internal-api-key-stage');
-		assert.equal(declaredInConfig(web('qa'), 'INTERNAL_API_KEY', root), null);
+		assert.equal(declaredInConfig(web('qa'), 'INTERNAL_API_KEY', root)?.secret_name, 'internal-api-key-qa');
 		const admin = SECRETS_MANIFEST.find((e) => e.app === 'admin-api' && e.env === 'production')!;
 		assert.equal(declaredInConfig(admin, 'RESEND_API_KEY', root)?.secret_name, 'RESEND_API_KEY');
 		assert.equal(declaredInConfig(admin, 'NOPE', root), null);
