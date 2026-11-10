@@ -82,11 +82,12 @@ export function AppShell() {
       <header className="ah">
         <div className="ah-start">
           <button type="button" className="ic" aria-label={open ? c.close : c.menu} aria-expanded={open} data-testid="nav-drawer-toggle" onClick={() => setOpen(!open)}><Menu aria-hidden="true" /></button>
-          <UploadAction />
           <Link href={`${base}/`} className="ah-brand" aria-label={t.a11y.goToHomePage}>
             <BrandLogo className="ah-logo" />
             <span>{t.common.appName}</span>
           </Link>
+          {/* Upload follows the logo, before the search box (mirrored in RTL) */}
+          <UploadAction />
         </div>
         <HeaderSearch />
         <div className="ah-end">

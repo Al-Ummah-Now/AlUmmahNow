@@ -1,6 +1,6 @@
 /**
  * Release regression: the redesigned page frame (#525). The top bar holds the
- * menu button with Upload right beside it, the logo, the header search (#475)
+ * menu button, the logo with Upload right after it, the header search (#475)
  * and the account menu; desktop has a sidebar the menu button widens, phones
  * have a drawer and a bottom tab bar. Upload is a link for signed-out visitors
  * (the upload page asks them to sign in), disabled for a signed-in user with
@@ -28,14 +28,23 @@ async function expectNoSidewaysScroll(page: Page): Promise<void> {
   expect(overflow, 'page scrolls sideways').toBeLessThanOrEqual(0);
 }
 
-/** Upload sits directly after the menu button on the reading side: right of it in English, left in Arabic. */
-async function expectUploadBesideMenu(page: Page, locale: Locale): Promise<void> {
-  const menu = (await page.getByTestId('nav-drawer-toggle').boundingBox())!;
-  const upload = (await page.getByTestId('header-upload').boundingBox())!;
-  const gap = locale === 'ar' ? menu.x - (upload.x + upload.width) : upload.x - (menu.x + menu.width);
-  expect(gap, `Upload is not beside the menu button (gap ${gap}px)`).toBeGreaterThanOrEqual(0);
-  expect(gap, `Upload is not beside the menu button (gap ${gap}px)`).toBeLessThanOrEqual(24);
-  expect(Math.abs(upload.y + upload.height / 2 - (menu.y + menu.height / 2)), 'Upload and the menu button are not on one line').toBeLessThanOrEqual(2);
+/**
+ * Upload sits directly after the logo and before the search (the search button on
+ * phones), on the reading side: right of the logo in English, left of it in Arabic.
+ */
+async function expectUploadAfterLogo(page: Page, locale: Locale): Promise<void> {
+  const header = page.locator('header.ah');
+  const logo = (await header.locator('.ah-brand').boundingBox())!;
+  const upload = (await header.getByTestId('header-upload').boundingBox())!;
+  const input = header.getByTestId('header-search-input');
+  const search = (await ((await input.isVisible()) ? header.locator('.ah-search-wrap .ah-search') : header.getByTestId('header-search-open')).boundingBox())!;
+  const rtl = locale === 'ar';
+  const gap = rtl ? logo.x - (upload.x + upload.width) : upload.x - (logo.x + logo.width);
+  expect(gap, `Upload does not follow the logo (gap ${gap}px)`).toBeGreaterThanOrEqual(0);
+  expect(gap, `Upload is not beside the logo (gap ${gap}px)`).toBeLessThanOrEqual(24);
+  const toSearch = rtl ? upload.x - (search.x + search.width) : search.x - (upload.x + upload.width);
+  expect(toSearch, `Search does not follow Upload (gap ${toSearch}px)`).toBeGreaterThanOrEqual(0);
+  expect(Math.abs(upload.y + upload.height / 2 - (logo.y + logo.height / 2)), 'Upload and the logo are not on one line').toBeLessThanOrEqual(2);
 }
 
 test.describe('Release: page frame', () => {
@@ -55,7 +64,7 @@ test.describe('Release: page frame', () => {
         const upload = header.getByTestId('header-upload');
         await expect(toggle).toBeVisible();
         await expect(upload).toBeVisible();
-        await expectUploadBesideMenu(page, locale);
+        await expectUploadAfterLogo(page, locale);
         // Labelled on desktop, and a link to the upload page for a signed-out visitor
         await expect(upload).toHaveAttribute('data-state', 'signed-out');
         await expect(upload).toHaveAttribute('href', `/${locale}/upload`);
@@ -112,7 +121,7 @@ test.describe('Release: page frame', () => {
         const toggle = page.getByTestId('nav-drawer-toggle');
         const upload = page.getByTestId('header-upload');
         await expect(upload).toBeVisible();
-        await expectUploadBesideMenu(page, locale);
+        await expectUploadAfterLogo(page, locale);
         // An icon button on phones: 44px, its label kept for screen readers only
         const box = (await upload.boundingBox())!;
         expect(`${Math.round(box.width)}x${Math.round(box.height)}`).toBe('44x44');

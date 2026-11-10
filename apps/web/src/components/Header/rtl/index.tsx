@@ -27,12 +27,11 @@ const HeaderRTL: React.FC<HeaderProps> = ({ toggleCollapse, isNavOpen = false })
           ariaExpanded={isNavOpen}
           testId="nav-drawer-toggle"
         />
-        <UploadAction />
       </div>
 
-      {/* Logo Section */}
-      <div className="flex-1 min-w-0 flex justify-center items-center space-x-2">
-        <Link href={`/${locale}/`} className="flex min-w-0 rounded-4xl p-1 cursor-pointer justify-center items-center" aria-label={t.a11y.goToHomePage}>
+      {/* Logo and Upload, at the start */}
+      <div className="flex-1 min-w-0 flex justify-start items-center gap-2">
+        <Link href={`/${locale}/`} className="flex min-w-0 rounded-4xl p-1 cursor-pointer justify-start items-center" aria-label={t.a11y.goToHomePage}>
           {/* <div className="relative left-0 w-13 h-13 rounded-full overflow-hidden">
             <Image src="/logo.png" alt="Logo" sizes="10vw" fill />
           </div> */}
@@ -40,9 +39,11 @@ const HeaderRTL: React.FC<HeaderProps> = ({ toggleCollapse, isNavOpen = false })
             <Image src="/Al Ummah Now Name.png" alt={t.common.appName} sizes="10vw" fill style={{ objectFit: 'contain' }} />
           </div>
         </Link>
+        {/* Upload follows the logo, before the search box */}
+        <UploadAction />
       </div>
 
-      {/* Unified Navigation and Upload Button */}
+      {/* Search, notifications and account */}
       <div className="flex-none sm:flex-1 flex items-center justify-end gap-2">
         <HeaderSearch />
         <NotificationBell dir="rtl" />

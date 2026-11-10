@@ -433,7 +433,7 @@
   }
 }
 
-/* Upload: one action in the top bar beside the menu button, outlined, in the upload part tokens.
+/* Upload: one action in the top bar after the logo, before the search box, outlined, in the upload part tokens.
    A 44px icon button on phones; the label stays its accessible name. */
 .upload-action {
   display: inline-flex;

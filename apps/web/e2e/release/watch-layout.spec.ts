@@ -87,15 +87,15 @@ async function expectHeader(page: Page, locale: Locale, width: number): Promise<
     const end = header?.querySelector('.ah-end');
     const named: Array<[string, Element | null]> = [
       ['menu', document.querySelector('[data-testid="nav-drawer-toggle"]')],
-      ['upload', document.querySelector('[data-testid="header-upload"]')],
       ['logo', header?.querySelector('.ah-brand') ?? null],
+      ['upload', document.querySelector('[data-testid="header-upload"]')],
       ['search', header?.querySelector('.ah-search-wrap .ah-search, [data-testid="header-search-open"]') ?? null],
       ...[...(end?.children ?? [])].map((c, i) => [`end-${i}`, c] as [string, Element]),
     ];
     return named.map(([name, el]) => ({ name, box: box(el) })).filter((i) => i.box);
   });
   const names = items.map((i) => i.name);
-  for (const required of ['menu', 'upload', 'logo', 'search']) expect(names, `${where}: ${required} is shown`).toContain(required);
+  for (const required of ['menu', 'logo', 'upload', 'search']) expect(names, `${where}: ${required} is shown`).toContain(required);
 
   for (let i = 0; i < items.length; i++) {
     const a = items[i].box!;
@@ -106,7 +106,7 @@ async function expectHeader(page: Page, locale: Locale, width: number): Promise<
     }
   }
 
-  // Reading order: menu, upload, logo, search, then the end group; mirrored in RTL
+  // Reading order: menu, logo, upload, search, then the end group; mirrored in RTL
   const xs = items.map((i) => i.box!.x + i.box!.width / 2);
   const ordered = locale === 'en' ? xs.every((x, i) => i === 0 || x > xs[i - 1]) : xs.every((x, i) => i === 0 || x < xs[i - 1]);
   expect(ordered, `${where}: items in reading order (${names.join(', ')})`).toBe(true);
