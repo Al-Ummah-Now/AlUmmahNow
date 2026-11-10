@@ -9,7 +9,6 @@ import { tryFileFingerprint } from "@/lib/upload/fingerprint";
 import { fetchClientAuthToken, getClientAuthHeaders } from "@/lib/auth/client-token";
 import { VideoObject } from "@/interfaces";
 import { useAuth } from "@/components/AuthProvider/authContext";
-import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { VIDEO_UPLOAD_CONFIG, VIDEO_UPLOAD_ERRORS } from "@/lib/constants/uploadConfig";
 import { Upload, X, AlertCircle, Pause, Play, RotateCcw } from "lucide-react";
 import { initiateVideoUpload, completeVideoUpload, scheduleUploadedVideo } from "@/lib/api/upload-client";
@@ -53,6 +52,19 @@ interface VideoUploadProps {
   };
   /** The video record exists (initiate answered): the page queues its playlist adds */
   onVideoReady?: (videoId: string, playlistIds: string[]) => void;
+  /**
+   * The channel the video goes to: the upload page's channel picker (the one
+   * source of truth). The page remounts this form when it changes.
+   */
+  channel: UploadDestination | null;
+  /** Whether a file is chosen and whether its upload has started, for the page's channel picker */
+  onWorkChange?: (work: { hasFile: boolean; busy: boolean }) => void;
+}
+
+export interface UploadDestination {
+  id: string;
+  name: string;
+  avatarUrl?: string;
 }
 
 interface VideoMetadata {
@@ -90,6 +102,8 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
   resumeTitle,
   playlists,
   onVideoReady,
+  channel,
+  onWorkChange,
 }) => {
   const { t, lang } = useLanguage();
 
@@ -129,8 +143,8 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
   const thumbnailUrlRef = useRef<string>('');
 
   const auth = useAuth();
-  const { user: multiAccountUser } = useMultiAccount();
-  const activeChannel = multiAccountUser?.channel;
+  // The page's channel picker decides where the video goes, never the session
+  const activeChannel = channel;
 
   const categoryText = useMemo(
     () => formText({ titleEn: metadata.titleEn, titleAr: metadata.titleAr, descriptionEn: metadata.descriptionEn, descriptionAr: metadata.descriptionAr, tags: metadata.tags }),
@@ -153,6 +167,13 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
   // A deploy while this runs must not reload the page under the upload
   useHoldReloadWhile(uploadInFlight);
   const leaveDialog = useLeaveGuard(uploadInFlight, t.confirmDialog.uploadLeaveBody);
+
+  // The page's channel picker locks once bytes go to a video on this channel
+  const workBusy = !!uploadProgress && uploadProgress.state !== 'idle';
+  const workHasFile = !!selectedFile;
+  useEffect(() => {
+    onWorkChange?.({ hasFile: workHasFile, busy: workBusy });
+  }, [onWorkChange, workHasFile, workBusy]);
 
   // File validation
   const validateFile = (file: File): string | null => {
@@ -788,7 +809,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
           {/* Template Selector */}
           <TemplateSelector
             onTemplateApply={handleTemplateApply}
-            channelName={auth.user?.channelName || auth.user?.email}
+            channelName={activeChannel?.name || auth.user?.channelName || auth.user?.email}
             uploaderName={auth.user?.name || auth.user?.email}
           />
 

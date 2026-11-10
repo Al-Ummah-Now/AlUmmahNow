@@ -67,3 +67,20 @@ it('a refused add is shown as not added', async () => {
   act(() => result.current.queue('v1', ['p1'], 'b:000000'));
   await waitFor(() => expect(result.current.notices).toEqual([{ playlistId: 'p1', kind: 'failed', count: 1 }]));
 });
+
+it('keeps each video on the channel it was uploaded to after the page switches channel', async () => {
+  requestPlaylistAdds.mockResolvedValue([{ playlistId: 'p1', status: 'pending' }]);
+  getPlaylistAddStatus.mockResolvedValue([]);
+  const { result, rerender } = renderHook(({ channel }) => usePlaylistAdds(channel), { initialProps: { channel: 'ch1' } });
+  act(() => result.current.queue('v1', ['p1'], 'b:000000'));
+  await waitFor(() => expect(result.current.items[0].status).toBe('pending'));
+  rerender({ channel: 'ch2' });
+  act(() => result.current.queue('v2', ['p1'], 'b:000001'));
+  expect(requestPlaylistAdds).toHaveBeenNthCalledWith(1, 'ch1', 'v1', ['p1'], 'b:000000');
+  expect(requestPlaylistAdds).toHaveBeenNthCalledWith(2, 'ch2', 'v2', ['p1'], 'b:000001');
+  await waitFor(() => expect(result.current.items.map((i) => i.status)).toEqual(['pending', 'pending']));
+  await act(async () => { jest.advanceTimersByTime(5000); });
+  await waitFor(() => expect(getPlaylistAddStatus).toHaveBeenCalledTimes(2));
+  expect(getPlaylistAddStatus).toHaveBeenCalledWith('ch1', ['v1']);
+  expect(getPlaylistAddStatus).toHaveBeenCalledWith('ch2', ['v2']);
+});
