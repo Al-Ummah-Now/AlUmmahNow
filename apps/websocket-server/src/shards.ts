@@ -150,6 +150,8 @@ export async function topicRoutingReady(
 	env: { SOCKET_SHARDS?: number | string },
 	now = Date.now(),
 ): Promise<boolean> {
+	// No namespace bound (a worker without the binding, or a unit test): never topic routing
+	if (!ns || typeof ns !== 'object') return false;
 	const shards = socketShardCount(env);
 	const cached = readiness.get(ns);
 	if (cached && cached.shards === shards) {
