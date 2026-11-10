@@ -114,7 +114,8 @@ export function likePattern(q: string): string {
 }
 
 export async function listContactMessages(db: D1Database, f: ContactListFilters): Promise<{ messages: ContactMessageRow[]; total: number }> {
-  const where: string[] = [];
+  // Soft-deleted messages are only in the "Recently deleted" view (listDeletedContactMessages)
+  const where: string[] = ['deleted_at IS NULL'];
   const args: unknown[] = [];
   if (f.status === 'send_failed') {
     where.push('send_failed_at IS NOT NULL');
@@ -145,7 +146,7 @@ export async function listContactMessages(db: D1Database, f: ContactListFilters)
   } else if (f.assignee === 'unassigned') {
     where.push('assignee_id IS NULL');
   }
-  const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const clause = `WHERE ${where.join(' AND ')}`;
   const [rows, count] = await db.batch([
     db.prepare(`SELECT ${MESSAGE_COLUMNS} FROM contact_messages ${clause} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`).bind(...args, f.limit, f.offset),
     db.prepare(`SELECT COUNT(*) AS total FROM contact_messages ${clause}`).bind(...args),
@@ -161,8 +162,8 @@ export type ContactCounts = Record<ContactStatus | 'send_failed', number>;
 /** Counts for the admin nav badge and the inbox header; send_failed needs an admin's action. */
 export async function contactCounts(db: D1Database): Promise<ContactCounts> {
   const [byStatus, failed] = await db.batch([
-    db.prepare('SELECT status, COUNT(*) AS n FROM contact_messages GROUP BY status'),
-    db.prepare('SELECT COUNT(*) AS n FROM contact_messages WHERE send_failed_at IS NOT NULL'),
+    db.prepare('SELECT status, COUNT(*) AS n FROM contact_messages WHERE deleted_at IS NULL GROUP BY status'),
+    db.prepare('SELECT COUNT(*) AS n FROM contact_messages WHERE send_failed_at IS NOT NULL AND deleted_at IS NULL'),
   ]);
   const counts: ContactCounts = { new: 0, open: 0, replied: 0, closed: 0, spam: 0, send_failed: 0 };
   for (const row of (byStatus.results ?? []) as { status: ContactStatus; n: number }[]) counts[row.status] = Number(row.n);
@@ -170,8 +171,9 @@ export async function contactCounts(db: D1Database): Promise<ContactCounts> {
   return counts;
 }
 
+/** A message that is not soft-deleted, or null. */
 export async function getContactMessage(db: D1Database, id: string): Promise<ContactMessageRow | null> {
-  return db.prepare(`SELECT ${MESSAGE_COLUMNS} FROM contact_messages WHERE id = ?`).bind(id).first<ContactMessageRow>();
+  return db.prepare(`SELECT ${MESSAGE_COLUMNS} FROM contact_messages WHERE id = ? AND deleted_at IS NULL`).bind(id).first<ContactMessageRow>();
 }
 
 export async function listContactNotes(db: D1Database, messageId: string): Promise<ContactNoteRow[]> {
@@ -202,7 +204,7 @@ export async function updateContactMessage(db: D1Database, id: string, patch: Co
   }
   sets.push('updated_at = ?');
   args.push(now.toISOString());
-  const result = await db.prepare(`UPDATE contact_messages SET ${sets.join(', ')} WHERE id = ?`).bind(...args, id).run();
+  const result = await db.prepare(`UPDATE contact_messages SET ${sets.join(', ')} WHERE id = ? AND deleted_at IS NULL`).bind(...args, id).run();
   return changes(result.meta) > 0;
 }
 
@@ -265,11 +267,86 @@ export async function insertContactNote(db: D1Database, note: ContactNoteRow): P
     .run();
 }
 
-/** Deletes the message and its thread; false when it did not exist. */
-export async function deleteContactMessage(db: D1Database, id: string): Promise<boolean> {
-  const [, removed] = await db.batch([
-    db.prepare('DELETE FROM contact_notes WHERE message_id = ?').bind(id),
-    db.prepare('DELETE FROM contact_messages WHERE id = ?').bind(id),
-  ]);
-  return changes(removed.meta) > 0;
+/** A soft-deleted message as the "Recently deleted" view lists it. */
+export interface DeletedContactRow {
+  id: string;
+  name: string;
+  email: string;
+  topic: ContactTopic;
+  created_at: string;
+  deleted_at: string;
+  deleted_by: string | null;
+  delete_reason: string | null;
+  purge_requested_at: string | null;
+  purge_requested_by: string | null;
+}
+
+/**
+ * Admin delete: marks the message (and so its thread) deleted. It leaves every
+ * list, count and detail view, and stays restorable until the cleanup purges
+ * it (purgeContactMessages). False when there is no such live message.
+ */
+export async function softDeleteContactMessage(db: D1Database, id: string, by: { actorId: string; reason: string | null; now: Date }): Promise<boolean> {
+  const result = await db
+    .prepare('UPDATE contact_messages SET deleted_at = ?, deleted_by = ?, delete_reason = ?, purge_requested_at = NULL, purge_requested_by = NULL WHERE id = ? AND deleted_at IS NULL')
+    .bind(by.now.toISOString(), by.actorId, by.reason, id)
+    .run();
+  return changes(result.meta) > 0;
+}
+
+/** Brings a soft-deleted message back, also when it was queued for permanent deletion. False when it is not deleted (or already purged). */
+export async function restoreContactMessage(db: D1Database, id: string): Promise<boolean> {
+  const result = await db
+    .prepare('UPDATE contact_messages SET deleted_at = NULL, deleted_by = NULL, delete_reason = NULL, purge_requested_at = NULL, purge_requested_by = NULL WHERE id = ? AND deleted_at IS NOT NULL')
+    .bind(id)
+    .run();
+  return changes(result.meta) > 0;
+}
+
+/** "Delete permanently now": queues a soft-deleted message for the next cleanup. False when it is not deleted. */
+export async function requestContactPurge(db: D1Database, id: string, by: { actorId: string; now: Date }): Promise<boolean> {
+  const result = await db
+    .prepare('UPDATE contact_messages SET purge_requested_at = COALESCE(purge_requested_at, ?), purge_requested_by = COALESCE(purge_requested_by, ?) WHERE id = ? AND deleted_at IS NOT NULL')
+    .bind(by.now.toISOString(), by.actorId, id)
+    .run();
+  return changes(result.meta) > 0;
+}
+
+/** Soft-deleted messages, most recently deleted first. */
+export async function listDeletedContactMessages(db: D1Database, limit = 100): Promise<DeletedContactRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT id, name, email, topic, created_at, deleted_at, deleted_by, delete_reason, purge_requested_at, purge_requested_by
+       FROM contact_messages WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC, id DESC LIMIT ?`,
+    )
+    .bind(limit)
+    .all<DeletedContactRow>();
+  return results ?? [];
+}
+
+/**
+ * The cleanup's purge, the only code that removes contact messages: deletes
+ * up to `limit` soft-deleted messages (with their thread) that were deleted
+ * at or before `cutoff` or were queued for permanent deletion. Each DELETE
+ * re-checks that the row is still deleted, so a restore that lands first wins.
+ * Returns the purged ids.
+ */
+export async function purgeContactMessages(db: D1Database, cutoff: string, limit: number): Promise<string[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT id FROM contact_messages WHERE deleted_at IS NOT NULL AND (deleted_at <= ? OR purge_requested_at IS NOT NULL)
+       ORDER BY deleted_at LIMIT ?`,
+    )
+    .bind(cutoff, limit)
+    .all<{ id: string }>();
+  const purged: string[] = [];
+  for (const { id } of results ?? []) {
+    const guard = 'SELECT 1 FROM contact_messages WHERE id = ? AND deleted_at IS NOT NULL AND (deleted_at <= ? OR purge_requested_at IS NOT NULL)';
+    const [, removed] = await db.batch([
+      db.prepare(`DELETE FROM contact_notes WHERE message_id = ? AND EXISTS (${guard})`).bind(id, id, cutoff),
+      db.prepare('DELETE FROM contact_messages WHERE id = ? AND deleted_at IS NOT NULL AND (deleted_at <= ? OR purge_requested_at IS NOT NULL)').bind(id, cutoff),
+    ]);
+    if (changes(removed.meta) > 0) purged.push(id);
+  }
+  return purged;
 }

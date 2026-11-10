@@ -22,7 +22,7 @@ afterEach(() => {
 });
 
 async function setup(email = 'amina@example.org', environment = 'production') {
-  const db = sqliteD1(['0008_contact_messages.sql', '0010_contact_mail_failures.sql']);
+  const db = sqliteD1(['0008_contact_messages.sql', '0009_theme_packages.sql', '0010_contact_mail_failures.sql', '0013_admin_soft_delete.sql']);
   await insertContactMessage(db, { id: 'm1', name: 'Amina', email, topic: 'general', message: 'A message long enough.', locale: 'ar', pageUrl: null, userId: null, userAgent: null, ipHash: 'ip', now: new Date('2026-11-09T10:00:00Z') }, roomy);
   const reports: Record<string, unknown>[] = [];
   const env = {

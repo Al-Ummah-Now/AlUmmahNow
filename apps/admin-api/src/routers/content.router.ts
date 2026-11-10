@@ -33,6 +33,7 @@ import {
   creatorTierOrigin,
   type CreatorTierAssignment,
   type CreatorTierBulkResult,
+  cleanTrashReason,
 } from '@al-ummah/shared-types';
 import { callVideos, VideosError, type VideosCall, type VideosClientEnv } from '../lib/content/videosClient';
 import { dropAudit, readAudit, writeAudit, type AuditAction, type ContentKind } from '../lib/content/audit';
@@ -496,11 +497,13 @@ app.put('/creator-tiers/:id', async (c) => {
     videos(c, `/creator-tiers/${encodeURIComponent(id)}`, { method: 'PUT', json: input })));
 });
 
+/** Soft delete: restorable for 30 days in Recently deleted (/api/trash), then purged by the hourly cleanup. */
 app.delete('/creator-tiers/:id', async (c) => {
   need(c, 'creators:manage');
   const id = c.req.param('id');
-  return ok(c, await audited(c, { kind: 'creator-tier', id, action: 'delete' }, () =>
-    videos(c, `/creator-tiers/${encodeURIComponent(id)}`, { method: 'DELETE' })));
+  const reason = cleanTrashReason((await body(c)).reason);
+  return ok(c, await audited(c, { kind: 'creator-tier', id, action: 'delete', details: reason ? { reason } : undefined }, () =>
+    videos(c, `/creator-tiers/${encodeURIComponent(id)}`, { method: 'DELETE', json: { reason } })));
 });
 
 app.get('/users/:id/creator-tier', async (c) => {

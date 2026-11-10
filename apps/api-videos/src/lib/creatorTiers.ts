@@ -75,7 +75,8 @@ function toTier(row: TierRow): CreatorTier {
 export async function readTiers(db: D1Database): Promise<CreatorTier[]> {
 	let rows: TierRow[] = [];
 	try {
-		rows = (await db.prepare('SELECT * FROM creator_tiers ORDER BY unlimited, name').all<TierRow>()).results ?? [];
+		// A soft-deleted tier (migration 0016) is neither listed nor assignable; it is in the admin's Recently deleted
+		rows = (await db.prepare('SELECT * FROM creator_tiers WHERE deleted_at IS NULL ORDER BY unlimited, name').all<TierRow>()).results ?? [];
 	} catch {
 		rows = [];
 	}
@@ -269,6 +270,10 @@ export async function saveTier(
 	if (!/^[a-z0-9][a-z0-9-]{1,39}$/.test(id)) throw new CreatorTierError(400, 'invalid_tier', 'id must be 2 to 40 lowercase letters, digits or dashes');
 	const previous = await readTier(db, id);
 	if (opts.create && previous) throw new CreatorTierError(409, 'tier_exists');
+	// The upsert below must never bring a soft-deleted tier back silently: that is a restore
+	if (opts.create && (await db.prepare('SELECT 1 AS n FROM creator_tiers WHERE id = ? AND deleted_at IS NOT NULL').bind(id).first())) {
+		throw new CreatorTierError(409, 'tier_deleted', 'A deleted tier with this id is in Recently deleted; restore it or choose another id');
+	}
 	if (!opts.create && !previous) throw new CreatorTierError(404, 'tier_not_found');
 	const tier = { ...validateTier(id, input, previous), updatedAt: now, updatedBy: actorId };
 	await db
@@ -284,15 +289,134 @@ export async function saveTier(
 	return { previous, tier };
 }
 
-/** Deletes a tier nobody holds (shipped tiers stay). */
-export async function deleteTier(db: D1Database, id: string): Promise<{ previous: CreatorTier }> {
+/**
+ * Admin delete of a tier nobody holds (shipped tiers stay): a soft delete. The
+ * tier leaves the tier list and cannot be assigned; it can be restored for 30
+ * days, then the admin-api cleanup purges it (purgeTiers).
+ */
+export async function deleteTier(
+	db: D1Database,
+	id: string,
+	by: { actorId: string; reason?: string | null } = { actorId: 'unknown' },
+	now = new Date().toISOString(),
+): Promise<{ previous: CreatorTier }> {
 	if (id === DEFAULT_CREATOR_TIER.id || id === DEFAULT_UNLIMITED_TIER.id) throw new CreatorTierError(409, 'tier_shipped', 'The Creator and Unlimited tiers cannot be deleted');
 	const previous = await readTier(db, id);
 	if (!previous) throw new CreatorTierError(404, 'tier_not_found');
 	const held = await db.prepare('SELECT COUNT(*) AS n FROM creator_tier_assignments WHERE tier_id = ?').bind(id).first<{ n: number }>();
 	if (Number(held?.n) > 0) throw new CreatorTierError(409, 'tier_in_use', `${held?.n} users hold this tier; assign them another tier first`);
-	await db.prepare('DELETE FROM creator_tiers WHERE id = ?').bind(id).run();
+	await db
+		.prepare(
+			`UPDATE creator_tiers SET deleted_at = ?, deleted_by = ?, delete_reason = ?, purge_requested_at = NULL, purge_requested_by = NULL
+			 WHERE id = ? AND deleted_at IS NULL`,
+		)
+		.bind(now, by.actorId, by.reason ?? null, id)
+		.run();
 	return { previous };
+}
+
+/** A soft-deleted tier as the admin's Recently deleted view lists it. */
+export interface DeletedTier {
+	id: string;
+	name: string;
+	deletedAt: string;
+	deletedBy: string | null;
+	reason: string | null;
+	purgeRequestedAt: string | null;
+	purgeRequestedBy: string | null;
+}
+
+interface DeletedTierRow {
+	id: string;
+	name: string;
+	deleted_at: string;
+	deleted_by: string | null;
+	delete_reason: string | null;
+	purge_requested_at: string | null;
+	purge_requested_by: string | null;
+}
+
+export async function readDeletedTiers(db: D1Database, limit = 100): Promise<DeletedTier[]> {
+	const { results } = await db
+		.prepare(
+			`SELECT id, name, deleted_at, deleted_by, delete_reason, purge_requested_at, purge_requested_by
+			 FROM creator_tiers WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC, id LIMIT ?`,
+		)
+		.bind(limit)
+		.all<DeletedTierRow>();
+	return (results ?? []).map((r) => ({
+		id: r.id,
+		name: r.name,
+		deletedAt: r.deleted_at,
+		deletedBy: r.deleted_by,
+		reason: r.delete_reason,
+		purgeRequestedAt: r.purge_requested_at,
+		purgeRequestedBy: r.purge_requested_by,
+	}));
+}
+
+/** Brings a soft-deleted tier back (also when queued for permanent deletion). */
+export async function restoreTier(db: D1Database, id: string): Promise<{ tier: CreatorTier }> {
+	const result = await db
+		.prepare(
+			`UPDATE creator_tiers SET deleted_at = NULL, deleted_by = NULL, delete_reason = NULL, purge_requested_at = NULL, purge_requested_by = NULL
+			 WHERE id = ? AND deleted_at IS NOT NULL`,
+		)
+		.bind(id)
+		.run();
+	if (!((result.meta?.changes ?? 0) > 0)) throw new CreatorTierError(404, 'tier_not_deleted', 'No deleted tier with this id');
+	const tier = await readTier(db, id);
+	if (!tier) throw new CreatorTierError(404, 'tier_not_found');
+	return { tier };
+}
+
+/** "Delete permanently now": queues a soft-deleted tier for the next cleanup (nothing is deleted here). */
+export async function requestTierPurge(db: D1Database, id: string, actorId: string, now = new Date().toISOString()): Promise<{ id: string; purgeRequestedAt: string }> {
+	const result = await db
+		.prepare(
+			`UPDATE creator_tiers SET purge_requested_at = COALESCE(purge_requested_at, ?), purge_requested_by = COALESCE(purge_requested_by, ?)
+			 WHERE id = ? AND deleted_at IS NOT NULL`,
+		)
+		.bind(now, actorId, id)
+		.run();
+	if (!((result.meta?.changes ?? 0) > 0)) throw new CreatorTierError(404, 'tier_not_deleted', 'No deleted tier with this id');
+	const row = await db.prepare('SELECT purge_requested_at FROM creator_tiers WHERE id = ?').bind(id).first<{ purge_requested_at: string }>();
+	return { id, purgeRequestedAt: row?.purge_requested_at ?? now };
+}
+
+/**
+ * The cleanup's purge (called by the admin-api cleanup), the only code that
+ * deletes a tier row: up to `limit` soft-deleted tiers deleted at or before
+ * `cutoff` or queued for permanent deletion. A tier that somebody holds is
+ * never removed (reported as failed). Each DELETE re-checks its condition, so
+ * a restore that lands first wins.
+ */
+export async function purgeTiers(db: D1Database, cutoff: string, limit = 100): Promise<{ purged: string[]; failed: { id: string; error: string }[] }> {
+	const { results } = await db
+		.prepare(
+			`SELECT id FROM creator_tiers WHERE deleted_at IS NOT NULL AND (deleted_at <= ? OR purge_requested_at IS NOT NULL)
+			 ORDER BY deleted_at LIMIT ?`,
+		)
+		.bind(cutoff, limit)
+		.all<{ id: string }>();
+	const purged: string[] = [];
+	const failed: { id: string; error: string }[] = [];
+	for (const { id } of results ?? []) {
+		if (id === DEFAULT_CREATOR_TIER.id || id === DEFAULT_UNLIMITED_TIER.id) {
+			failed.push({ id, error: 'shipped tier' });
+			continue;
+		}
+		const result = await db
+			.prepare(
+				`DELETE FROM creator_tiers WHERE id = ? AND deleted_at IS NOT NULL AND (deleted_at <= ? OR purge_requested_at IS NOT NULL)
+				 AND NOT EXISTS (SELECT 1 FROM creator_tier_assignments WHERE tier_id = ?)`,
+			)
+			.bind(id, cutoff, id)
+			.run();
+		if ((result.meta?.changes ?? 0) > 0) purged.push(id);
+		else failed.push({ id, error: 'held by users or restored' });
+	}
+	return { purged, failed };
 }
 
 /**

@@ -11,7 +11,7 @@ import { hasPermission, type Permission } from '../../lib/roles';
 import { CONTACT_LIMITS, CONTACT_STATUSES, CONTACT_TOPICS } from '../../lib/contact';
 import {
   contactCounts,
-  deleteContactMessage,
+  softDeleteContactMessage,
   getContactMessage,
   insertContactNote,
   listContactMessages,
@@ -22,6 +22,8 @@ import {
   type ContactNoteRow,
 } from '../../lib/contact-store';
 import { renderReply } from '../../lib/contact-email';
+import { cleanTrashReason } from '@al-ummah/shared-types';
+import { writeTrashAudit } from '../../lib/trash-audit';
 import { enqueueContactMail, reportContactMailFailure, resolveContactMailItem } from '../../lib/contact-mail-queue';
 
 const TAGS = ['Contact'];
@@ -265,18 +267,25 @@ export class ContactRetryDelivery extends ContactRoute {
 export class ContactDelete extends ContactRoute {
   schema = addAuthToSchema({
     tags: TAGS,
-    summary: 'Delete a contact message and its thread',
-    description: 'For spam and erasure requests. Needs contact:manage.',
+    summary: 'Delete a contact message and its thread (soft delete)',
+    description:
+      'For spam and erasure requests. The message is hidden at once and can be restored for 30 days (/api/trash); the hourly cleanup then deletes it for good. Optional body { reason }. Needs contact:manage.',
+    // The optional JSON body { reason } (up to TRASH_REASON_MAX characters) is read by hand: a DELETE may have no body
     request: { params: IdParams },
-    responses: { '200': { description: 'Deleted' }, '404': { description: 'Not found' } },
+    responses: { '200': { description: 'Deleted (restorable)' }, '404': { description: 'Not found' } },
   });
 
   async handle(c: AppContext) {
     const denied = this.deny(c, 'contact:manage');
     if (denied) return denied;
     const { params } = await this.getValidatedData<typeof this.schema>();
-    if (!(await deleteContactMessage(c.env.REPORTS_DB, params.id))) return c.json({ success: false, error: 'Message not found' }, 404);
-    logger.info('[Contact] Message deleted', { id: params.id, by: this.getUserId(c) });
+    const input = (await c.req.json().catch(() => null)) as { reason?: unknown } | null;
+    const reason = cleanTrashReason(input?.reason);
+    const actorId = this.getUserId(c);
+    const now = new Date();
+    if (!(await softDeleteContactMessage(c.env.REPORTS_DB, params.id, { actorId, reason, now }))) return c.json({ success: false, error: 'Message not found' }, 404);
+    await writeTrashAudit(c.env.REPORTS_DB, { kind: 'contact-message', id: params.id, action: 'delete', actorId, reason }, now);
+    logger.info('[Contact] Message deleted (restorable for 30 days)', { id: params.id, by: actorId });
     return { success: true, result: { deleted: params.id } };
   }
 }

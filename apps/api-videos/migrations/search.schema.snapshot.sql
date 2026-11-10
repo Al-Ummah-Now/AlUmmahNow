@@ -12,6 +12,7 @@
 --   apps/api-videos/migrations/search/0010_video_format_issues.sql
 --   apps/api-videos/migrations/search/0011_creator_tiers.sql
 --   apps/api-videos/migrations/search/0015_admin_deletions.sql
+--   apps/api-videos/migrations/search/0016_creator_tier_soft_delete.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
@@ -21,7 +22,7 @@ CREATE TABLE category_suggestions (subject_id TEXT PRIMARY KEY, subject_type TEX
 CREATE TABLE channel_access (channel_id TEXT NOT NULL, user_id TEXT NOT NULL, role TEXT NOT NULL, source_version INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (channel_id, user_id));
 CREATE TABLE content_ownership (kind TEXT NOT NULL, id TEXT NOT NULL, owner_id TEXT, channel_id TEXT, is_public INTEGER NOT NULL DEFAULT 1, is_hidden INTEGER NOT NULL DEFAULT 0, is_deleted INTEGER NOT NULL DEFAULT 0, is_live INTEGER NOT NULL DEFAULT 0, duration REAL, schedule_status TEXT, upload_status TEXT, views INTEGER NOT NULL DEFAULT 0, created_at INTEGER, updated_at INTEGER, indexed_at INTEGER NOT NULL DEFAULT 0, source_version INTEGER NOT NULL DEFAULT 0, admin_title TEXT, handle TEXT, email TEXT, is_verified INTEGER NOT NULL DEFAULT 0, is_suspended INTEGER NOT NULL DEFAULT 0, subscribers INTEGER NOT NULL DEFAULT 0, admin_cols INTEGER NOT NULL DEFAULT 0, is_short INTEGER NOT NULL DEFAULT 0, needs_format INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (kind, id));
 CREATE TABLE creator_tier_assignments (user_id TEXT PRIMARY KEY, tier_id TEXT NOT NULL, source TEXT NOT NULL DEFAULT 'admin' CHECK (source IN ('admin', 'subscription')), assigned_by TEXT NOT NULL, assigned_at TEXT NOT NULL) WITHOUT ROWID;
-CREATE TABLE creator_tiers (id TEXT PRIMARY KEY, name TEXT NOT NULL, unlimited INTEGER NOT NULL DEFAULT 0, per_hour INTEGER NOT NULL, per_day INTEGER NOT NULL, max_concurrent INTEGER NOT NULL, max_channels INTEGER, updated_at TEXT, updated_by TEXT) WITHOUT ROWID;
+CREATE TABLE creator_tiers (id TEXT PRIMARY KEY, name TEXT NOT NULL, unlimited INTEGER NOT NULL DEFAULT 0, per_hour INTEGER NOT NULL, per_day INTEGER NOT NULL, max_concurrent INTEGER NOT NULL, max_channels INTEGER, updated_at TEXT, updated_by TEXT, deleted_at TEXT, deleted_by TEXT, delete_reason TEXT, purge_requested_at TEXT, purge_requested_by TEXT) WITHOUT ROWID;
 CREATE TABLE search_channels (rowid INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE, channel_id TEXT, visible INTEGER NOT NULL DEFAULT 1, language TEXT, category TEXT, duration INTEGER, is_verified INTEGER NOT NULL DEFAULT 0, is_live INTEGER NOT NULL DEFAULT 0, views INTEGER NOT NULL DEFAULT 0, created_at INTEGER, popularity REAL NOT NULL DEFAULT 0, payload TEXT NOT NULL, content_hash TEXT, indexed_at INTEGER NOT NULL DEFAULT 0, source_version INTEGER NOT NULL DEFAULT 0, is_short INTEGER NOT NULL DEFAULT 0);
 CREATE VIRTUAL TABLE search_channels_fts USING fts5 (title, body, tokenize = 'unicode61 remove_diacritics 2', prefix = '2 3');
 CREATE TABLE 'search_channels_fts_config'(k PRIMARY KEY, v) WITHOUT ROWID;
@@ -76,6 +77,7 @@ CREATE INDEX idx_content_ownership_indexed ON content_ownership (kind, indexed_a
 CREATE INDEX idx_content_ownership_needs_format ON content_ownership (kind, needs_format, created_at);
 CREATE INDEX idx_content_ownership_owner ON content_ownership (kind, owner_id);
 CREATE INDEX idx_creator_tier_assignments_tier ON creator_tier_assignments (tier_id);
+CREATE INDEX idx_creator_tiers_deleted ON creator_tiers (deleted_at) WHERE deleted_at IS NOT NULL;
 CREATE INDEX idx_search_channels_created ON search_channels (visible, created_at);
 CREATE INDEX idx_search_channels_indexed ON search_channels (indexed_at);
 CREATE INDEX idx_search_playlists_channel ON search_playlists (channel_id);

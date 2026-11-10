@@ -83,3 +83,5 @@ export * from './playlist-bulk';
 export * from './creator-tiers';
 export * from './thumbnail-crop';
 export * from './roles';
+// Soft delete of admin-managed configuration (contact messages, themes, creator tiers)
+export * from './admin-trash';

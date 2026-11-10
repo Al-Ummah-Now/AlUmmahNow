@@ -4,7 +4,10 @@
 //   themes/<id>/draft/theme.json, themes/<id>/draft/assets/...      the editable draft
 //   themes/<id>/<version>/theme.json, assets/..., theme.css         a published version, never changed
 // D1 (REPORTS_DB): theme_packages and theme_package_versions hold the metadata the lists read.
-// Every create, import, publish and delete appends a row to site_settings_log (key theme.package).
+// Every create, import, publish, delete, restore and purge appends a row to site_settings_log (key theme.package).
+// Delete is a soft delete (migration 0013): the theme leaves every list, the editor, the public files and the
+// site theme picker, and can be restored for 30 days. purge() (run only by the cleanup, lib/trash.ts) is the
+// only code that removes its R2 files and rows.
 import {
   BUILT_IN_IDS,
   ID_PATTERN,
@@ -46,6 +49,12 @@ export interface ThemeRow {
   draft_updated_at: string;
   created_by: string;
   created_at: string;
+  deleted_at?: string | null;
+  deleted_by?: string | null;
+  delete_reason?: string | null;
+  purge_requested_at?: string | null;
+  purge_requested_by?: string | null;
+  purge_started_at?: string | null;
 }
 export interface VersionRow { theme_id: string; version: string; size_bytes: number; published_by: string; published_at: string }
 
@@ -62,16 +71,27 @@ export class ThemeStore {
   constructor(private readonly db: Db, private readonly bucket: R2Bucket) {}
 
   async list(): Promise<(ThemeRow & { versions: VersionRow[] })[]> {
-    const { results: themes } = await this.db.prepare('SELECT * FROM theme_packages ORDER BY created_at, id').all<ThemeRow>();
+    const { results: themes } = await this.db.prepare('SELECT * FROM theme_packages WHERE deleted_at IS NULL ORDER BY created_at, id').all<ThemeRow>();
     const { results: versions } = await this.db.prepare('SELECT * FROM theme_package_versions ORDER BY published_at DESC').all<VersionRow>();
     return themes.map((t) => ({ ...t, versions: versions.filter((v) => v.theme_id === t.id) }));
   }
 
+  /** A theme that is not soft-deleted, with its versions, or null. */
   async get(id: string): Promise<(ThemeRow & { versions: VersionRow[] }) | null> {
-    const row = await this.db.prepare('SELECT * FROM theme_packages WHERE id = ?').bind(id).first<ThemeRow>();
+    const row = await this.db.prepare('SELECT * FROM theme_packages WHERE id = ? AND deleted_at IS NULL').bind(id).first<ThemeRow>();
     if (!row) return null;
     const { results } = await this.db.prepare('SELECT * FROM theme_package_versions WHERE theme_id = ? ORDER BY published_at DESC').bind(id).all<VersionRow>();
     return { ...row, versions: results };
+  }
+
+  /** The theme's row, deleted or not. */
+  private async row(id: string): Promise<ThemeRow | null> {
+    return this.db.prepare('SELECT * FROM theme_packages WHERE id = ?').bind(id).first<ThemeRow>();
+  }
+
+  /** True when the theme exists and is not soft-deleted (public files of a deleted theme are not served). */
+  async isLive(id: string): Promise<boolean> {
+    return !!(await this.db.prepare('SELECT 1 AS ok FROM theme_packages WHERE id = ? AND deleted_at IS NULL').bind(id).first<{ ok: number }>());
   }
 
   async version(id: string, version: string): Promise<VersionRow | null> {
@@ -145,7 +165,9 @@ export class ThemeStore {
     const { theme } = files;
     if (typeof theme?.id !== 'string' || !ID_PATTERN.test(theme.id)) throw new ThemeError(400, 'id must be 2-40 lowercase letters, digits or dashes, starting with a letter');
     if (BUILT_IN_IDS.includes(theme.id)) throw new ThemeError(409, `${theme.id} is a built-in theme; choose another id`);
-    if (await this.get(theme.id)) throw new ThemeError(409, `A theme with id ${theme.id} already exists`);
+    const existing = await this.row(theme.id);
+    if (existing?.deleted_at) throw new ThemeError(409, `A deleted theme with id ${theme.id} is in Recently deleted; restore it or choose another id`);
+    if (existing) throw new ThemeError(409, `A theme with id ${theme.id} already exists`);
     for (const path of Object.keys(files.assets)) if (!ASSET_PATH.test(path)) throw new ThemeError(400, `${path} is not an allowed asset path`);
     const draft: ThemePackage = { ...theme, kind: 'custom' };
     const validation = validatePackage(draft, { assets: files.assets });
@@ -235,19 +257,94 @@ export class ThemeStore {
     return { id: files.theme.id, validation };
   }
 
-  /** Removes a custom theme, its versions and files. Never a built-in or the active theme. */
-  async remove(id: string, actor: string, now: string): Promise<void> {
+  /** The site theme's id, from site_settings. */
+  private async activeId(): Promise<string | null> {
+    const active = await this.db.prepare('SELECT value FROM site_settings WHERE key = ?').bind(SITE_THEME_SETTING_KEY).first<{ value: string }>();
+    return active ? parseSiteThemeValue(active.value).id : null;
+  }
+
+  /**
+   * Admin delete (soft): hides a custom theme everywhere and keeps its files and rows for 30 days.
+   * Never a built-in or the site theme (the site would lose its styling).
+   */
+  async remove(id: string, actor: string, now: string, reason: string | null = null): Promise<void> {
     if (BUILT_IN_IDS.includes(id)) throw new ThemeError(403, 'Built-in themes cannot be deleted');
     if (!(await this.get(id))) throw new ThemeError(404, `No custom theme ${id}`);
-    const active = await this.db.prepare('SELECT value FROM site_settings WHERE key = ?').bind(SITE_THEME_SETTING_KEY).first<{ value: string }>();
-    if (active && parseSiteThemeValue(active.value).id === id) throw new ThemeError(409, `${id} is the site theme; choose another site theme first`);
-    const keys = await this.keys(`themes/${id}/`);
-    for (let i = 0; i < keys.length; i += 1000) await this.bucket.delete(keys.slice(i, i + 1000));
+    if ((await this.activeId()) === id) throw new ThemeError(409, `${id} is the site theme; choose another site theme first`);
     await this.db.batch([
-      this.db.prepare('DELETE FROM theme_package_versions WHERE theme_id = ?').bind(id),
-      this.db.prepare('DELETE FROM theme_packages WHERE id = ?').bind(id),
+      this.db
+        .prepare('UPDATE theme_packages SET deleted_at = ?, deleted_by = ?, delete_reason = ?, purge_requested_at = NULL, purge_requested_by = NULL WHERE id = ? AND deleted_at IS NULL')
+        .bind(now, actor, reason, id),
       this.log(id, `delete ${id}`, actor, now),
     ]);
+  }
+
+  /** Soft-deleted themes, most recently deleted first. */
+  async listDeleted(limit = 100): Promise<ThemeRow[]> {
+    const { results } = await this.db.prepare('SELECT * FROM theme_packages WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC, id LIMIT ?').bind(limit).all<ThemeRow>();
+    return results ?? [];
+  }
+
+  /** Brings a soft-deleted theme back (also when queued for permanent deletion). */
+  async restore(id: string, actor: string, now: string): Promise<void> {
+    const row = await this.row(id);
+    if (!row?.deleted_at) throw new ThemeError(404, `No deleted theme ${id}`);
+    if (row.purge_started_at) throw new ThemeError(409, `${id} is being deleted permanently and can no longer be restored`);
+    await this.db.batch([
+      this.db
+        .prepare('UPDATE theme_packages SET deleted_at = NULL, deleted_by = NULL, delete_reason = NULL, purge_requested_at = NULL, purge_requested_by = NULL WHERE id = ? AND deleted_at IS NOT NULL AND purge_started_at IS NULL')
+        .bind(id),
+      this.log(id, `restore ${id}`, actor, now),
+    ]);
+  }
+
+  /** "Delete permanently now": queues a soft-deleted theme for the next cleanup; nothing is removed here. */
+  async requestPurge(id: string, actor: string, now: string): Promise<void> {
+    const row = await this.row(id);
+    if (!row?.deleted_at) throw new ThemeError(404, `No deleted theme ${id}`);
+    await this.db
+      .prepare('UPDATE theme_packages SET purge_requested_at = COALESCE(purge_requested_at, ?), purge_requested_by = COALESCE(purge_requested_by, ?) WHERE id = ? AND deleted_at IS NOT NULL')
+      .bind(now, actor, id)
+      .run();
+  }
+
+  /**
+   * The cleanup's purge, the only code that removes a custom theme: for up to `limit` soft-deleted
+   * themes deleted at or before `cutoff` or queued for permanent deletion (or whose purge started),
+   * claims the row (purge_started_at: no restore from here on), deletes the R2 files
+   * (themes/<id>/...) and then the rows. Idempotent: an interrupted purge keeps its claimed row and
+   * the next run finishes it. A theme that is somehow the site theme is skipped.
+   */
+  async purge(cutoff: string, actor: string, now: string, limit: number): Promise<{ purged: string[]; failed: { id: string; error: string }[] }> {
+    const { results } = await this.db
+      .prepare('SELECT id FROM theme_packages WHERE deleted_at IS NOT NULL AND (deleted_at <= ? OR purge_requested_at IS NOT NULL OR purge_started_at IS NOT NULL) ORDER BY deleted_at LIMIT ?')
+      .bind(cutoff, limit)
+      .all<{ id: string }>();
+    const purged: string[] = [];
+    const failed: { id: string; error: string }[] = [];
+    const active = await this.activeId();
+    for (const { id } of results ?? []) {
+      if (id === active || BUILT_IN_IDS.includes(id)) {
+        failed.push({ id, error: 'is the site theme' });
+        continue;
+      }
+      try {
+        await this.db.prepare('UPDATE theme_packages SET purge_started_at = COALESCE(purge_started_at, ?) WHERE id = ? AND deleted_at IS NOT NULL').bind(now, id).run();
+        const claimed = await this.row(id);
+        if (!claimed?.deleted_at || !claimed.purge_started_at) continue;
+        const keys = await this.keys(`themes/${id}/`);
+        for (let i = 0; i < keys.length; i += 1000) await this.bucket.delete(keys.slice(i, i + 1000));
+        await this.db.batch([
+          this.db.prepare('DELETE FROM theme_package_versions WHERE theme_id = ? AND EXISTS (SELECT 1 FROM theme_packages WHERE id = ? AND deleted_at IS NOT NULL)').bind(id, id),
+          this.db.prepare('DELETE FROM theme_packages WHERE id = ? AND deleted_at IS NOT NULL').bind(id),
+          this.log(id, `purge ${id}`, actor, now),
+        ]);
+        purged.push(id);
+      } catch (error) {
+        failed.push({ id, error: error instanceof Error ? error.message : String(error) });
+      }
+    }
+    return { purged, failed };
   }
 }
 

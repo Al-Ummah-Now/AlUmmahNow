@@ -26,7 +26,7 @@ import { LegacyRestoreError } from '../lib/admin/legacy-restore';
 import { isDeletionKind, listDeletions } from '../lib/admin/deletions';
 import { logger } from '../lib/logger';
 import { bulkAssignTier, limitHitsSince, listCreators, tierCounts } from '../lib/admin/creators';
-import { assignTier, CreatorTierError, deleteTier, readAssignment, readTiers, saveTier } from '../lib/creatorTiers';
+import { assignTier, CreatorTierError, deleteTier, purgeTiers, readAssignment, readDeletedTiers, readTiers, requestTierPurge, restoreTier, saveTier } from '../lib/creatorTiers';
 
 type Env = { Bindings: admin.AdminServiceEnv & Record<string, unknown> };
 
@@ -290,7 +290,20 @@ app.post('/creator-tiers', async (c) => {
 	return ok(c, await saveTier(searchDb(c), input.id, input, actor(c), { create: true }));
 });
 app.put('/creator-tiers/:id', async (c) => ok(c, await saveTier(searchDb(c), c.req.param('id'), parse(TierBody, await body(c)), actor(c))));
-app.delete('/creator-tiers/:id', async (c) => ok(c, await deleteTier(searchDb(c), c.req.param('id'))));
+// Soft delete (restorable for 30 days); the admin-api cleanup purges through POST /creator-tiers/purge
+const TierDelete = z.object({ reason: z.string().max(500).nullable().optional() }).strict();
+app.delete('/creator-tiers/:id', async (c) => {
+	const input = parse(TierDelete, (await c.req.json().catch(() => null)) ?? {});
+	return ok(c, await deleteTier(searchDb(c), c.req.param('id'), { actorId: actor(c), reason: input.reason?.trim() || null }));
+});
+app.get('/creator-tiers/deleted', async (c) => ok(c, { items: await readDeletedTiers(searchDb(c)) }));
+app.post('/creator-tiers/:id/restore', async (c) => ok(c, await restoreTier(searchDb(c), c.req.param('id'))));
+app.post('/creator-tiers/:id/purge-request', async (c) => ok(c, await requestTierPurge(searchDb(c), c.req.param('id'), actor(c))));
+const TierPurge = z.object({ cutoff: z.string().datetime(), limit: z.number().int().min(1).max(500).optional() }).strict();
+app.post('/creator-tiers/purge', async (c) => {
+	const input = parse(TierPurge, await body(c));
+	return ok(c, await purgeTiers(searchDb(c), input.cutoff, input.limit));
+});
 app.get('/users/:id/creator-tier', async (c) => ok(c, { assignment: await readAssignment(searchDb(c), c.req.param('id')) }));
 app.put('/users/:id/creator-tier', async (c) => {
 	const input = parse(TierAssign, await body(c));
