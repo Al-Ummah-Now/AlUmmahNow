@@ -295,7 +295,7 @@ const UploadPage: React.FC = () => {
         <div
           role="tabpanel"
           id={UPLOAD_MODE_PANEL_ID[uploadMode]}
-          aria-labelledby={UPLOAD_MODE_TAB_ID[uploadMode]}
+          aria-labelledby={`${UPLOAD_MODE_TAB_ID[uploadMode]}-label`}
           className="upload-mode-panel"
           data-testid="upload-mode-panel"
         >
