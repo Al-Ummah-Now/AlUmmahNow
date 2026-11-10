@@ -5,12 +5,17 @@
  * This allows environment-specific values without rebuilding.
  */
 
+import { deriveCmsUrl, deriveWwwUrl } from './scholars/sites';
+
 export interface RuntimeConfig {
   API_URL?: string;
   WEBSOCKET_URL?: string;
   AUTH_PROFILE_URL?: string;
   /** Auth server origin: the page asks it for the browser's accounts. */
   AUTH_URL?: string;
+  /** The CMS (scholars write articles there) and www (scholar pages). '' = links hidden. */
+  CMS_URL?: string;
+  WWW_URL?: string;
 }
 
 declare global {
@@ -56,6 +61,8 @@ export function getRuntimeConfig(): RuntimeConfig {
         process.env.AUTH_PROFILE_URL
       ),
       AUTH_URL: authOrigin(process.env.OPENAUTH_ISSUER || process.env.Issuer),
+      CMS_URL: deriveCmsUrl(process.env.OPENAUTH_ISSUER || process.env.Issuer, process.env.CMS_URL),
+      WWW_URL: deriveWwwUrl(process.env.OPENAUTH_ISSUER || process.env.Issuer, process.env.WWW_URL),
     };
   }
 
@@ -69,6 +76,14 @@ export function getRuntimeConfig(): RuntimeConfig {
 
 export function getApiUrl(): string {
   return getRuntimeConfig().API_URL || '';
+}
+
+export function getCmsUrl(): string {
+  return getRuntimeConfig().CMS_URL || '';
+}
+
+export function getWwwUrl(): string {
+  return getRuntimeConfig().WWW_URL || '';
 }
 
 export function getWebSocketUrl(): string {

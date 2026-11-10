@@ -128,6 +128,10 @@ export async function validateCreatePost(data: any, user: any) {
 }
 
 export async function validateUpdatePost(data: any, existingPost: any, user: any) {
+  // A scholar's article is written in the CMS and synced from there (lib/scholar-articles.ts).
+  if (existingPost.type === PostType.ARTICLE) {
+    return { valid: false, error: 'article_managed_in_cms' };
+  }
   // Check ownership
   if (existingPost.channelId !== user.channelId) {
     return { valid: false, error: 'You can only edit your own posts' };

@@ -50,7 +50,8 @@ const POST_TYPE_LABELS = {
   [PostType.POLL]: { en: 'Poll', ar: 'استطلاع' },
   [PostType.QUIZ]: { en: 'Quiz', ar: 'اختبار' },
   [PostType.VIDEO]: { en: 'Video', ar: 'فيديو' },
-  [PostType.GIF]: { en: 'GIF', ar: 'GIF' }
+  [PostType.GIF]: { en: 'GIF', ar: 'GIF' },
+  [PostType.ARTICLE]: { en: 'Article', ar: 'مقال' }
 };
 
 const STATUS_LABELS = {

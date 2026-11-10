@@ -90,6 +90,9 @@ export const EN_TRANSLATIONS: AppTranslations = {
   },
 
   navigation: {
+    writeArticle: 'Write article',
+    myArticles: 'My articles',
+    scholarPage: 'Scholar page',
     navigationMenu: 'Navigation menu',
     navigation: 'NAVIGATION',
     accounts: 'ACCOUNTS',
@@ -1345,6 +1348,10 @@ export const EN_TRANSLATIONS: AppTranslations = {
   },
 
   community: {
+    article: 'Article',
+    readArticle: 'Read the article',
+    articleOpensSite: 'Opens on Al Ummah Now',
+    articleManagedInCms: 'This article is edited in the CMS.',
     community: 'Community',
     managePosts: 'Manage Posts',
     newPost: 'New Post',

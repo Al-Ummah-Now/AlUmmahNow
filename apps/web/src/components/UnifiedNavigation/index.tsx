@@ -33,8 +33,13 @@ import {
   ChevronRight,
   ArrowLeft,
   Users,
+  PenLine,
+  FileText,
 } from 'lucide-react';
 import { ACCOUNT_MENU_PATHS } from '@/lib/navigation/destinations';
+import { useOptionalAuth } from '@/components/AuthProvider/authContext';
+import { getCmsUrl } from '@/lib/runtime-config';
+import { cmsLinks, isScholar } from '@/lib/scholars/sites';
 import { buildChannelMenu } from '@/lib/channels/menu';
 import type { ChannelRole } from '@al-ummah/shared-types';
 
@@ -46,6 +51,7 @@ const ROW_ICON = 'h-[18px] w-[18px] flex-shrink-0 text-gray-500 dark:text-gray-4
 export function UnifiedNavigation() {
   // Get language context and translations
   const { t, lang } = useLanguage();
+  const { user: authUser } = useOptionalAuth();
 
   const {
     user,
@@ -253,7 +259,13 @@ export function UnifiedNavigation() {
     void refreshCreatorAccess();
   };
 
+  // Scholars write articles in the CMS (SSO: no second sign-in), AlUmmahNowCMS docs/SCHOLARS.md
+  const cms = isScholar(authUser?.roles) ? cmsLinks(getCmsUrl(), lang) : null;
   const navItems = [
+    ...(cms ? [
+      { label: t.navigation.writeArticle, icon: PenLine, href: cms.write },
+      { label: t.navigation.myArticles, icon: FileText, href: cms.articles },
+    ] : []),
     ...(channels.length > 0 ? [
       { label: t.video.myVideos || 'My Videos', icon: Video, href: `/${lang}${ACCOUNT_MENU_PATHS.myVideos}` },
       { label: t.schedule?.scheduledVideos || 'Scheduled Videos', icon: Calendar, href: `/${lang}${ACCOUNT_MENU_PATHS.scheduled}` },
