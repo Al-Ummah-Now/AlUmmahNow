@@ -124,4 +124,19 @@ describe('VideoMetricsDisplay reactions', () => {
     expect(like).toHaveAttribute('aria-pressed', 'true');
     expect(like).toHaveTextContent('1');
   });
+
+  it('pairs thumbs up with thumbs down in one group, and the comment count is a link to the comments', () => {
+    render(<VideoMetricsDisplay videoId="v1" initialLikesCount={1} initialCommentsCount={4} />);
+    const group = screen.getByTestId('video-reactions');
+    const like = screen.getByTestId('video-like-button');
+    const dislike = screen.getByTestId('video-dislike-button');
+    expect(group).toContainElement(like);
+    expect(group).toContainElement(dislike);
+    expect(like.querySelector('svg')).toHaveClass('lucide-thumbs-up');
+    expect(dislike.querySelector('svg')).toHaveClass('lucide-thumbs-down');
+    const comments = screen.getByTestId('video-comments-count');
+    expect(comments.tagName).toBe('A');
+    expect(comments).toHaveAttribute('href', '#comments');
+    expect(comments).toHaveTextContent('4');
+  });
 });

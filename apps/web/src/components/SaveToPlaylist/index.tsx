@@ -179,10 +179,11 @@ export default function SaveToPlaylist({ videoId, className = '' }: SaveToPlayli
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="dialog"
         aria-expanded={open}
+        title={t.playlist.saveToPlaylist}
         className="inline-flex items-center gap-2 px-4 py-2 border dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors dark:text-white"
       >
         <ListPlus size={20} />
-        <span>{t.playlist.saveToPlaylist}</span>
+        <span className="wa-label">{t.playlist.saveToPlaylist}</span>
       </button>
 
       {open && (

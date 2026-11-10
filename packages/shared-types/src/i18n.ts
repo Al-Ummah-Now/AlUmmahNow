@@ -2017,6 +2017,7 @@ export interface AppTranslations {
     dislikeVideo: string;
     removeDislike: string;
     signInToReact: string;
+    moreVideoActions: string;
     watchingNow: string;
   };
 }

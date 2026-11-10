@@ -6,7 +6,7 @@ import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore }
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Player } from "video.js";
 import Link from "next/link";
-import { Edit, VideoOff } from "lucide-react";
+import { Edit, Flag, MoreHorizontal, VideoOff } from "lucide-react";
 import { logger } from '@/lib/logger-client';
 import VideoPlayer from "@/components/VideoPagePlayer/index";
 import VideoPlayerRTL from "@/components/VideoPagePlayer/rtl/index";
@@ -21,6 +21,8 @@ import SaveToPlaylist from "@/components/SaveToPlaylist";
 import SaveToPlaylistRTL from "@/components/SaveToPlaylist/rtl";
 import { WatchLaterButton } from "@/components/library/WatchLaterButton";
 import ShareDialog from "@/components/video/ShareDialog";
+import { MenuButton } from "@/components/common/MenuButton";
+import { useActionRowFit } from "@/hooks/useActionRowFit";
 import { parseTime } from "@/lib/embed/params";
 import { VideoInfo } from "@/interfaces";
 import { PlayerOptions } from "@/components/VideoPagePlayer/interface";
@@ -77,7 +79,9 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
   // a new router or related-array identity must not republish it (each publish re-renders this page)
   const routerRef = useRef(router);
   routerRef.current = router;
-  const reportRef = useRef<HTMLDivElement | null>(null);
+  // Report lives in the action row's "more" menu; its dialog is opened from there or from the player's settings
+  const [reportOpen, setReportOpen] = useState(false);
+  const actionsRef = useRef<HTMLDivElement | null>(null);
   const { theatre } = useSyncExternalStore(subscribePlayerUi, getPlayerUi, getPlayerUi);
   useEffect(() => enableWatchPageFeatures(), []);
   const next = related[0];
@@ -99,11 +103,7 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
   }, [nextId, nextTitle, nextChannel, nextThumbnail, lang]);
   useEffect(() => {
     updatePlayerUi({
-      reportProblem: () => {
-        const button = reportRef.current?.querySelector<HTMLElement>('button');
-        reportRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        button?.click();
-      },
+      reportProblem: () => setReportOpen(true),
     });
   }, []);
   const renderRelated = (keyPrefix: string) =>
@@ -146,6 +146,11 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
     };
   }, [videoId, relatedAttempt]);
 
+  const videoDetails = state.status === 'ready' ? state.video : null;
+  const isOwnVideo = !!user && !!videoDetails?.userId && videoDetails.userId === user.id;
+  // One line of actions at every width: labels drop to icons, then the comment pill goes
+  useActionRowFit(actionsRef, [videoDetails?.id, !!user, isOwnVideo, lang]);
+
   if (state.status === 'notFound') {
     return (
       <main
@@ -165,9 +170,6 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
       </main>
     );
   }
-
-  const videoDetails = state.status === 'ready' ? state.video : null;
-  const isOwnVideo = !!user && !!videoDetails?.userId && videoDetails.userId === user.id;
 
   return (
     // Below lg the related list stacks under the video (never beside it: at
@@ -189,7 +191,7 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
                 />
               </section>
 
-              <div className="watch-actions">
+              <div className="watch-actions" ref={actionsRef} data-testid="watch-actions">
                 <VideoMetricsDisplay
                   key={videoDetails.id}
                   videoId={videoId}
@@ -216,18 +218,38 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
                     <Link
                       href={`/${lang}/video/${videoId}/edit`}
                       data-testid="video-owner-edit-link"
-                      className="inline-flex items-center gap-2 px-4 py-2 border dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors dark:text-white"
+                      title={t.video.editVideo}
                     >
                       <Edit size={20} aria-hidden="true" />
-                      <span>{t.video.editVideo}</span>
+                      <span className="wa-label">{t.video.editVideo}</span>
                     </Link>
                   )}
-                  {!isOwnVideo && <div ref={reportRef} data-report-content><ReportContentButton
-                    contentType="video"
-                    contentId={videoId}
-                    contentTitle={getLocalizedValue(videoDetails.titleLocalized, videoDetails.title, lang)}
-                  /></div>}
+                  {user && !isOwnVideo && (
+                    <MenuButton
+                      label={t.a11y.moreVideoActions}
+                      testId="watch-more-button"
+                      items={[{
+                        id: 'report',
+                        label: t.reportContent.report,
+                        icon: <Flag className="h-4 w-4" />,
+                        testId: 'watch-more-report',
+                        onSelect: () => setReportOpen(true),
+                      }]}
+                    >
+                      <MoreHorizontal aria-hidden="true" />
+                    </MenuButton>
+                  )}
               </div>
+              {!isOwnVideo && (
+                <ReportContentButton
+                  hideTrigger
+                  open={reportOpen}
+                  onOpenChange={setReportOpen}
+                  contentType="video"
+                  contentId={videoId}
+                  contentTitle={getLocalizedValue(videoDetails.titleLocalized, videoDetails.title, lang)}
+                />
+              )}
               <details className="watch-desc" open={false}>
                 <summary><span>{formatViews(videoDetails.views, lang)}</span> <RelativeDate value={videoDetails.dateCreated} lang={lang} /></summary>
                 {videoDetails.description && <p>{videoDetails.description}</p>}

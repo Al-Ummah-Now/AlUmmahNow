@@ -54,11 +54,12 @@ export function WatchLaterButton({ videoId, className = '' }: WatchLaterButtonPr
         disabled={busy}
         aria-pressed={saved}
         data-testid="watch-later-button"
+        title={saved ? texts.removeFromWatchLater : texts.saveToWatchLater}
         data-saved={saved ? 'true' : 'false'}
         className={`inline-flex items-center gap-2 rounded-full bg-gray-100 px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-200 disabled:opacity-60 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${className}`}
       >
         <Icon className="h-4 w-4" aria-hidden="true" />
-        {saved ? texts.removeFromWatchLater : texts.saveToWatchLater}
+        <span className="wa-label">{saved ? texts.removeFromWatchLater : texts.saveToWatchLater}</span>
       </button>
       <span className="sr-only" role="status" aria-live="polite">{message}</span>
     </>

@@ -19,6 +19,11 @@ interface ReportContentButtonProps {
   /** Render a compact icon-only trigger (e.g. inside a comment) */
   compact?: boolean;
   children?: React.ReactNode;
+  /** Controlled dialog state, for opening the report from elsewhere (e.g. a "more" menu) */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Render only the dialog; the caller provides the trigger */
+  hideTrigger?: boolean;
 }
 
 const REASONS: ReportReason[] = ['inappropriate', 'spam', 'harassment', 'copyright', 'misinformation', 'other'];
@@ -29,10 +34,18 @@ const ReportContentButton: React.FC<ReportContentButtonProps> = ({
   contentTitle,
   className = "",
   compact = false,
-  children
+  children,
+  open,
+  onOpenChange,
+  hideTrigger = false,
 }) => {
   const { t, isRTL } = useLanguage();
-  const [isOpen, setIsOpen] = useState(false);
+  const [openState, setOpenState] = useState(false);
+  const isOpen = open ?? openState;
+  const setIsOpen = (value: boolean) => {
+    if (open === undefined) setOpenState(value);
+    onOpenChange?.(value);
+  };
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -118,7 +131,7 @@ const ReportContentButton: React.FC<ReportContentButtonProps> = ({
 
   return (
     <>
-      {compact ? (
+      {hideTrigger ? null : compact ? (
         <button
           type="button"
           onClick={() => setIsOpen(true)}
