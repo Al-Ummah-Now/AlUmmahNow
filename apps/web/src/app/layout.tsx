@@ -36,6 +36,7 @@ import { getSiteTheme } from "@/lib/theme/site-theme";
 import { VersionSkewProvider } from "@/lib/version-skew/VersionSkewProvider";
 import { ErrorReportingProvider } from "@/lib/errors/ErrorReportingProvider";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { appIcons } from "@/lib/favicon";
 
 /** Worker version id and environment for client error reports (admin Errors page). */
 async function errorReportingContext(): Promise<{ workerVersion?: string; environment?: string }> {
@@ -48,7 +49,7 @@ async function errorReportingContext(): Promise<{ workerVersion?: string; enviro
   }
 }
 
-export const metadata: Metadata = {
+const metadata: Metadata = {
   title: 'Al Ummah Now',
   description: 'Excerpts from scholars\' clips about the state of the nation today',
   keywords: 'Al Ummah Now, Islamic, Videos, Clips',
@@ -69,18 +70,17 @@ export const metadata: Metadata = {
     site: '@alummahnow',
     creator: '@alummahnow',
   },
-  icons: {
-    icon: [
-      { url: '/favicon.ico', sizes: 'any', type: 'image/x-icon' },
-      { url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
-      { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
-    ],
-    apple: '/apple-touch-icon.png',
-  },
+  manifest: '/site.webmanifest',
   other: {
     referrer: 'origin',
   },
 };
+
+/** Per request: the tab icon marks QA and stage (same build as production, so read at runtime). */
+export async function generateMetadata(): Promise<Metadata> {
+  const { environment } = await errorReportingContext();
+  return { ...metadata, icons: appIcons(environment) };
+}
 
 export const viewport: Viewport = {
   width: 'device-width',
