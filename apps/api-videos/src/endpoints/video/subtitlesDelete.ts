@@ -2,6 +2,7 @@
  * Delete subtitle track
  */
 
+import { canOnVideo } from "../../lib/channelAccess";
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { Str } from 'chanfana';
 import { z } from 'zod';
@@ -115,7 +116,7 @@ export class SubtitlesDelete extends AuthenticatedRoute {
       }
 
       // Check ownership
-      if (video.userId !== userId) {
+      if (!(await canOnVideo(c.env as never, video, userId, 'video.edit'))) {
         return c.json(
           {
             success: false,
@@ -161,7 +162,7 @@ export class SubtitlesDelete extends AuthenticatedRoute {
         hasSubtitles: metadata.tracks.length > 0,
         subtitleLanguages: metadata.tracks.map((t) => t.language),
         dateModified: new Date().toISOString(),
-      }, { ownerId: userId });
+      }, { ownerId: video.userId });
 
       // Send queue message for subtitle deletion
       const queue = new Queue(c.env.queue);

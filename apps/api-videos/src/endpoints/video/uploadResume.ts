@@ -1,3 +1,4 @@
+import { canOnVideo } from "../../lib/channelAccess";
 import { OpenAPIRoute, Str } from "chanfana";
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { z } from "zod";
@@ -118,7 +119,7 @@ export class UploadResumeEndpoint extends AuthenticatedRoute {
 			}
 
 			// Check ownership
-			if (video.userId !== userId) {
+			if (!(await canOnVideo(c.env as never, video, userId, 'video.upload'))) {
 				return c.json({
 					success: false,
 					error: "Forbidden - you can only resume uploads for your own videos",
@@ -176,7 +177,7 @@ export class UploadResumeEndpoint extends AuthenticatedRoute {
 				// A re-upload of a flagged video reopens it (back to uploading,
 				// needs_reupload cleared); it is flagged again if this attempt fails.
 				await repository.updateObject(videoId, (fresh) => {
-					if (fresh.userId !== userId || fresh.uploadStatus === 'ready' || fresh.uploadStatus === 'processing') return false;
+					if (fresh.userId !== video.userId || fresh.uploadStatus === 'ready' || fresh.uploadStatus === 'processing') return false;
 					reopenForReupload(fresh as UploadVideo);
 					Object.assign(fresh, { dateModified: resumedAt, lastResumeAt: resumedAt });
 					return true;

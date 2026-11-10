@@ -33,6 +33,8 @@ import {
   Users,
 } from 'lucide-react';
 import { ACCOUNT_MENU_PATHS } from '@/lib/navigation/destinations';
+import { buildChannelMenu } from '@/lib/channels/menu';
+import type { ChannelRole } from '@al-ummah/shared-types';
 
 type MenuView = 'main' | 'channels' | 'accounts';
 const ROW = 'flex items-center gap-3 w-full min-h-10 px-3 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-start';
@@ -267,6 +269,23 @@ export function UnifiedNavigation() {
     { label: t.header.settings, icon: Settings, href: `/${lang}${ACCOUNT_MENU_PATHS.settings}` },
   ];
 
+  // Owned channels first, then channels where this account holds a channel
+  // role (live list from /api/channels/access via useMultiAccount)
+  const channelSections = user ? buildChannelMenu(channels, user.id) : [];
+  const activeRole: ChannelRole | undefined = channel
+    ? (channel.role ?? (!channel.userId || channel.userId === user?.id ? 'owner' : undefined))
+    : undefined;
+  const roleBadge = (role: ChannelRole) => (
+    <span
+      data-testid="nav-channel-role"
+      title={t.channelRoles.yourRole.replace('{role}', t.channelRoles.roles[role])}
+      className="flex-shrink-0 rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-medium text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
+    >
+      <span className="sr-only">{t.channelRoles.yourRole.replace('{role}', '')}</span>
+      {t.channelRoles.roles[role]}
+    </span>
+  );
+
   const displayName = getDisplayName();
   const backRow = (title: string) => (
     <button type="button" autoFocus onClick={() => { setView('main'); setIsCreatingChannel(false); }} data-testid="nav-menu-back" className={`${ROW} font-semibold`} role="menuitem">
@@ -404,6 +423,7 @@ export function UnifiedNavigation() {
                   <span className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate flex-1">
                     {getChannelName(channel.name, channel.nameLocalized)}
                   </span>
+                  {activeRole && activeRole !== 'owner' && roleBadge(activeRole)}
                 </Link>
               ) : (
                 <div data-testid="nav-no-active-channel" className="flex items-center gap-2 px-3 py-2 bg-white/60 dark:bg-gray-800/60 rounded-md">
@@ -503,20 +523,28 @@ export function UnifiedNavigation() {
             {view === 'channels' && (
               <div className="p-2" role="group" aria-label={t.navigation.switchChannel}>
                 {backRow(t.navigation.switchChannel)}
-                {channels.filter((ch) => ch.userId === user.id || !ch.userId).map((ch) => (
-                  <button key={ch.id} type="button" onClick={() => switchToChannel(ch.id)} data-testid="nav-channel-option" data-channel-id={ch.id} aria-checked={channel?.id === ch.id} className={ROW} role="menuitemradio">
-                    <span className="relative flex-shrink-0">
-                      {ch.avatarUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={ch.avatarUrl} alt="" className="h-7 w-7 rounded-full object-cover" />
-                      ) : (
-                        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-purple-500 text-xs font-semibold text-white">{getChannelName(ch.name, ch.nameLocalized)[0].toUpperCase()}</span>
-                      )}
-                      {ch.isMain && <Crown className="absolute -bottom-0.5 -end-0.5 h-2.5 w-2.5 rounded-full bg-white text-brand-ink dark:bg-gray-900" />}
-                    </span>
-                    <span className={`${ROW_TEXT} flex-1 min-w-0 truncate`}>{getChannelName(ch.name, ch.nameLocalized)}</span>
-                    {channel?.id === ch.id && <Check className={ROW_ICON} aria-hidden="true" />}
-                  </button>
+                {channelSections.map((section) => (
+                  <div key={section.key} role="group" aria-labelledby={`nav-channels-${section.key}`} data-testid={`nav-channel-group-${section.key}`}>
+                    <p id={`nav-channels-${section.key}`} className="px-3 pt-2 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                      {section.key === 'owned' ? t.channelRoles.yourChannels : t.channelRoles.channelsYouManage}
+                    </p>
+                    {section.items.map((ch) => (
+                      <button key={ch.id} type="button" onClick={() => switchToChannel(ch.id)} data-testid="nav-channel-option" data-channel-id={ch.id} data-role={ch.role} aria-checked={channel?.id === ch.id} className={ROW} role="menuitemradio">
+                        <span className="relative flex-shrink-0">
+                          {ch.avatarUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={ch.avatarUrl} alt="" className="h-7 w-7 rounded-full object-cover" />
+                          ) : (
+                            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-purple-500 text-xs font-semibold text-white">{getChannelName(ch.name, ch.nameLocalized)[0].toUpperCase()}</span>
+                          )}
+                          {ch.isMain && ch.role === 'owner' && <Crown className="absolute -bottom-0.5 -end-0.5 h-2.5 w-2.5 rounded-full bg-white text-brand-ink dark:bg-gray-900" />}
+                        </span>
+                        <span className={`${ROW_TEXT} flex-1 min-w-0 truncate`}>{getChannelName(ch.name, ch.nameLocalized)}</span>
+                        {ch.role !== 'owner' && roleBadge(ch.role)}
+                        {channel?.id === ch.id && <Check className={ROW_ICON} aria-hidden="true" />}
+                      </button>
+                    ))}
+                  </div>
                 ))}
                 <button type="button" onClick={() => switchToChannel(null)} data-testid="nav-channel-option-none" aria-checked={!channel} className={ROW} role="menuitemradio">
                   <Tv className={`${ROW_ICON} mx-[5px]`} aria-hidden="true" />

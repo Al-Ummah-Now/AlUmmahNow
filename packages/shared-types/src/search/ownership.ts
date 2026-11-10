@@ -17,6 +17,7 @@
 import { NOT_TOMBSTONED, type SearchDb, type SearchStatement } from './store';
 import type { SearchEntityType } from './documents';
 import { isShort, type VideoFormatInput } from '../video-format';
+import { channelMembersOf } from '../channel-roles';
 
 export type OwnershipKind = 'video' | 'channel' | 'profile';
 
@@ -229,6 +230,37 @@ export function ownershipDeleteStatement(db: SearchDb, kind: OwnershipKind, id: 
   return db.prepare(`DELETE FROM ${OWNERSHIP_TABLE} WHERE kind = ? AND id = ?`).bind(kind, id);
 }
 
+/** Index of per-channel roles (migrations/search/0008_channel_access.sql). */
+export const CHANNEL_ACCESS_TABLE = 'channel_access';
+
+/**
+ * Statements that bring a channel's access rows in line with its record
+ * (`members`; null = the channel is gone). Run them after the channel's
+ * ownership upsert in the same batch: they share its version guard, so an
+ * older copy of the channel arriving late changes nothing.
+ */
+export function channelAccessStatements(db: SearchDb, channelId: string, raw: unknown, version: number): SearchStatement[] {
+  if (raw == null) {
+    return [db.prepare(`DELETE FROM ${CHANNEL_ACCESS_TABLE} WHERE channel_id = ?`).bind(channelId)];
+  }
+  const members = channelMembersOf(raw as { userId?: string | null; members?: unknown });
+  const statements: SearchStatement[] = [
+    // Rows from this or an older copy that the new copy no longer lists
+    db.prepare(`DELETE FROM ${CHANNEL_ACCESS_TABLE} WHERE channel_id = ? AND source_version <= ?`).bind(channelId, version),
+  ];
+  for (const member of members) {
+    statements.push(db.prepare(
+      `INSERT INTO ${CHANNEL_ACCESS_TABLE} (channel_id, user_id, role, source_version)
+       SELECT ?, ?, ?, ?
+       WHERE NOT EXISTS (SELECT 1 FROM ${OWNERSHIP_TABLE} WHERE kind = 'channel' AND id = ? AND source_version > ?)
+         AND ${NOT_TOMBSTONED}
+       ON CONFLICT(channel_id, user_id) DO UPDATE SET role = excluded.role, source_version = excluded.source_version
+       WHERE excluded.source_version >= ${CHANNEL_ACCESS_TABLE}.source_version`,
+    ).bind(channelId, member.userId, member.role, version, channelId, version, ownershipTombstone('channel'), channelId, version));
+  }
+  return statements;
+}
+
 /**
  * Bring one ownership row in line with the stored object (null = deleted).
  * Objects that are not this entity (see projectOwnership) are left alone.
@@ -250,11 +282,17 @@ export async function syncOwnership(
          ON CONFLICT(entity, id) DO UPDATE SET version = max(version, excluded.version)`,
       ).bind(kind, id, version, ownershipTombstone(kind)),
       ownershipDeleteStatement(db, kind, id),
+      ...(kind === 'channel' ? channelAccessStatements(db, id, null, version) : []),
     ]);
     return 'removed';
   }
   const row = projectOwnership(kind, id, object);
   if (!row) return 'skipped';
+  if (kind === 'channel') {
+    // The channel's role rows move with it, in one batch
+    await db.batch([ownershipUpsertStatement(db, row, now, version), ...channelAccessStatements(db, id, object, version)]);
+    return 'upserted';
+  }
   await ownershipUpsertStatement(db, row, now, version).run();
   return 'upserted';
 }

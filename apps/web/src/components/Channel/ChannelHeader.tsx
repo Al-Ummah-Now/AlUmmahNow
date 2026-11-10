@@ -1,7 +1,7 @@
 'use client';
 
 import { VerifiedBadge } from '@/components/VerifiedBadge';
-import { Channel } from '@al-ummah/shared-types';
+import { Channel, type ChannelRole } from '@al-ummah/shared-types';
 import Image from 'next/image';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { useChannelSubscription } from '@/hooks/useChannelSubscription';
@@ -25,6 +25,8 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
   const { user, loading: authLoading } = useMultiAccount();
   // Server-side ownership plus a client fallback (e.g. right after switching accounts)
   const owner = isOwner || (!!user && user.id === channel.userId);
+  // Manage buttons follow the viewer's channel role (owner, or a role they hold)
+  const manageRole: ChannelRole | undefined = owner ? 'owner' : user?.channels?.find((c) => c.id === channel.id)?.role;
   const t = getTranslations(locale as 'en' | 'ar');
   const displayName = channel.nameLocalized?.[locale] || channel.name;
   const displayDescription = channel.descriptionLocalized?.[locale] || channel.description;
@@ -179,9 +181,10 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
               </p>
             )}
 
-            {owner && (
+            {manageRole && (
               <ChannelOwnerActions
                 channel={{ id: channel.id, name: channel.name, nameLocalized: channel.nameLocalized, isMain: channel.isMain }}
+                role={manageRole}
                 className="mt-2"
               />
             )}

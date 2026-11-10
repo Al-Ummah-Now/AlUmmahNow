@@ -1,3 +1,5 @@
+import { can, channelRoleOf } from "@al-ummah/shared-types";
+import { canOnVideo, loadChannelRecord } from "../../lib/channelAccess";
 import { Num, Str } from "chanfana";
 import { z } from "zod";
 import { AuthenticatedRoute, AppContext } from "../../base";
@@ -75,18 +77,25 @@ async function loadScope(c: AppContext, userId: string, channelId?: string): Pro
   const lookup: OwnershipLookup = { env: c.env as never, waitUntil: waitUntilOf(c as never) };
   const owned = await loadOwnedChannels(c.env.channels, userId, lookup);
   let channels = owned;
+  // Whose content the scope reads: the caller's, or the owner's of a channel the caller is a channel admin of
+  let ownerId = userId;
   if (channelId) {
-    const match = owned.find(ch => ch.id === channelId);
+    let match = owned.find(ch => ch.id === channelId);
     if (!match) {
-      const exists = await c.env.channels.head(channelId);
-      return exists
-        ? { ok: false, status: 403, error: "You can only view analytics for channels you own", channels: [], videos: [] }
-        : { ok: false, status: 404, error: "Channel not found", channels: [], videos: [] };
+      const record = await loadChannelRecord(c.env as never, channelId);
+      if (!record || record.isDeleted) return { ok: false, status: 404, error: "Channel not found", channels: [], videos: [] };
+      // The overview stays owned channels only; one channel's analytics also show to its channel admins
+      if (!can(channelRoleOf(record, userId), 'analytics.view') || !record.userId) {
+        return { ok: false, status: 403, error: "You can only view analytics for channels you own", channels: [], videos: [] };
+      }
+      ownerId = record.userId;
+      match = (await loadOwnedChannels(c.env.channels, ownerId, lookup)).find(ch => ch.id === channelId);
+      if (!match) return { ok: false, status: 404, error: "Channel not found", channels: [], videos: [] };
     }
     channels = [match];
   }
   const videos = channels.length
-    ? await loadOwnedVideos(c.env.videos, userId, new Set(channels.map(ch => ch.id)), undefined, lookup)
+    ? await loadOwnedVideos(c.env.videos, ownerId, new Set(channels.map(ch => ch.id)), undefined, lookup)
     : [];
   return { ok: true, channels, videos };
 }
@@ -231,7 +240,7 @@ export class AnalyticsVideoGet extends AuthenticatedRoute {
       const object = await c.env.videos.get(params.videoId);
       const video = object ? await object.json<AnalyticsVideo>() : null;
       if (!video || video.isDeleted) return c.json({ success: false, error: "Video not found" }, 404);
-      if (video.userId !== userId) {
+      if (!(await canOnVideo(c.env as never, video as never, userId, 'analytics.view'))) {
         return c.json({ success: false, error: "You can only view analytics for your own videos" }, 403);
       }
       const range = parseRange(query.dateFrom, query.dateTo);

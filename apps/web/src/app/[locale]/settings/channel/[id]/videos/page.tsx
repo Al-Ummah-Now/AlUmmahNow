@@ -8,7 +8,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { VideoObject } from '@/interfaces';
 import { listVideos, deleteVideo } from '@/lib/api/videos';
-import { isChannelOwner } from '@/lib/channel-utils';
+import { channelAllows } from '@/lib/channel-utils';
 import { getChannelById } from '@/lib/api/channels';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -45,7 +45,8 @@ export default function ChannelVideosPage() {
   // Check channel ownership
   useEffect(() => {
     const checkOwnership = async () => {
-      const ownershipCheck = await isChannelOwner(channelId);
+      // The owner, a channel admin or an editor manages the channel's videos
+      const ownershipCheck = await channelAllows(channelId, 'video.edit');
       setIsOwner(ownershipCheck);
 
       if (!ownershipCheck) {

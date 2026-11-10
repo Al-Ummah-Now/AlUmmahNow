@@ -1,3 +1,4 @@
+import { canOnVideo } from "../../lib/channelAccess";
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { Str, Bool } from 'chanfana';
 import { z } from 'zod';
@@ -172,9 +173,13 @@ export class VideoScheduleCreate extends AuthenticatedRoute {
       // re-read, and two schedule requests cannot both pass the checks.
       type Refusal = { status: 403 | 404 | 409; error: string; code: string };
       const videoRepo = new R2Repository<VideoObject>(c.env.videos);
+      // The owner, or a channel member allowed to schedule (lib/channelAccess.ts);
+      // the write below re-checks the video still has the owner checked here
+      const current = await videoRepo.getObject(videoId);
+      const allowedOwner = current && (await canOnVideo(c.env as never, current, userId, 'video.schedule')) ? current.userId : null;
       const { data: video, rejected } = await videoRepo.updateObjectOrReject<Refusal>(videoId, (fresh) => {
-        // Check if user owns the video
-        if (fresh.userId !== userId) {
+        // Check the caller may schedule this video
+        if (!allowedOwner || fresh.userId !== allowedOwner) {
           return { reject: { status: 403, error: 'Forbidden - you do not own this video', code: 'SCH003' } };
         }
         // Check if video is already published

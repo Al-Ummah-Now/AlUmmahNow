@@ -1,9 +1,11 @@
 'use client';
 
 /**
- * Owner actions on the channel page header and channel cards (Story 29.1):
+ * Manage actions on the channel page header and channel cards (Story 29.1):
  * "Customize channel", "Manage videos" and an overflow menu with
- * "Channel settings" and "Delete channel". Direction-aware (LTR/RTL).
+ * "Channel settings" and "Delete channel". Each follows the viewer's channel
+ * role: a channel admin customizes and manages videos, an editor manages
+ * videos, and only the owner deletes. Direction-aware (LTR/RTL).
  */
 
 import React, { useState } from 'react';
@@ -19,9 +21,12 @@ import {
 import { useLanguage } from '@/hooks/useLanguage';
 import { DeleteChannelDialog, type DeletableChannel } from '@/components/channelManagement/DeleteChannelDialog';
 import { cn } from '@/lib/utils';
+import { can, type ChannelRole } from '@al-ummah/shared-types';
 
 interface ChannelOwnerActionsProps {
   channel: DeletableChannel;
+  /** The viewer's role on the channel (default owner) */
+  role?: ChannelRole;
   /** `header`: full buttons; `compact`: a "Manage" link plus the overflow menu (cards) */
   variant?: 'header' | 'compact';
   className?: string;
@@ -35,33 +40,41 @@ const buttonClass =
   'bg-white dark:bg-gray-800 text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700 ' +
   'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2';
 
-export function ChannelOwnerActions({ channel, variant = 'header', className, onDeleted, redirectAfterDelete }: ChannelOwnerActionsProps) {
+export function ChannelOwnerActions({ channel, role = 'owner', variant = 'header', className, onDeleted, redirectAfterDelete }: ChannelOwnerActionsProps) {
   const { t, lang, isRTL, dir } = useLanguage();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const base = `/${lang}/settings/channel/${channel.id}`;
   const channelName = channel.nameLocalized?.[lang] || channel.name;
+  const canCustomize = can(role, 'channel.edit');
+  const canManageVideos = can(role, 'video.edit');
+  const canDelete = can(role, 'channel.delete');
 
   return (
     <div
       className={cn('flex flex-wrap items-center gap-2', className)}
       dir={dir}
       data-testid={variant === 'header' ? 'channel-owner-actions' : 'channel-card-owner-actions'}
+      data-role={role}
       onClick={(e) => e.stopPropagation()}
     >
       {variant === 'header' ? (
         <>
-          <Link href={`${base}/edit`} className={buttonClass} data-testid="channel-customize">
-            <Pencil className="w-4 h-4" aria-hidden="true" />
-            {t.channel.customizeChannel}
-          </Link>
-          <Link href={`${base}/videos`} className={buttonClass} data-testid="channel-manage-videos">
-            <Video className="w-4 h-4" aria-hidden="true" />
-            {t.channel.manageVideos}
-          </Link>
+          {canCustomize && (
+            <Link href={`${base}/edit`} className={buttonClass} data-testid="channel-customize">
+              <Pencil className="w-4 h-4" aria-hidden="true" />
+              {t.channel.customizeChannel}
+            </Link>
+          )}
+          {canManageVideos && (
+            <Link href={`${base}/videos`} className={buttonClass} data-testid="channel-manage-videos">
+              <Video className="w-4 h-4" aria-hidden="true" />
+              {t.channel.manageVideos}
+            </Link>
+          )}
         </>
       ) : (
         <Link
-          href={`${base}/edit`}
+          href={canCustomize ? `${base}/edit` : base}
           className={buttonClass}
           aria-label={`${t.channel.manage}: ${channelName}`}
           data-testid="channel-card-manage"
@@ -89,25 +102,31 @@ export function ChannelOwnerActions({ channel, variant = 'header', className, on
               {t.channel.channelSettings}
             </Link>
           </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            className="flex items-center gap-2 text-red-600 dark:text-red-400 focus:text-red-700 cursor-pointer"
-            onSelect={() => setDeleteOpen(true)}
-            data-testid="channel-delete-action"
-          >
-            <Trash2 className="w-4 h-4" aria-hidden="true" />
-            {t.channel.deleteChannel}
-          </DropdownMenuItem>
+          {canDelete && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="flex items-center gap-2 text-red-600 dark:text-red-400 focus:text-red-700 cursor-pointer"
+                onSelect={() => setDeleteOpen(true)}
+                data-testid="channel-delete-action"
+              >
+                <Trash2 className="w-4 h-4" aria-hidden="true" />
+                {t.channel.deleteChannel}
+              </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <DeleteChannelDialog
-        channel={channel}
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-        redirectTo={redirectAfterDelete}
-        onDeleted={onDeleted ? ({ channelId }) => onDeleted(channelId) : undefined}
-      />
+      {canDelete && (
+        <DeleteChannelDialog
+          channel={channel}
+          open={deleteOpen}
+          onOpenChange={setDeleteOpen}
+          redirectTo={redirectAfterDelete}
+          onDeleted={onDeleted ? ({ channelId }) => onDeleted(channelId) : undefined}
+        />
+      )}
     </div>
   );
 }

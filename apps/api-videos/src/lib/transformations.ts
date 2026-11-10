@@ -50,11 +50,14 @@ export function transformVideoToView(
 
 // Transform a business channel to a view model
 export function transformChannelToView(channel: z.infer<typeof BusinessChannel>): z.infer<typeof ChannelView> {
-    // Admin bookkeeping stays out of every view (who suspended it, the holds)
-    const { suspension, suspensionHolds: _holds, hiddenBeforeSuspension: _before, ...rest } = channel as typeof channel & {
+    // Admin bookkeeping stays out of every view (who suspended it, the holds),
+    // and so does the channel team: it is read through GET /:id/members, which
+    // checks members.view
+    const { suspension, suspensionHolds: _holds, hiddenBeforeSuspension: _before, members: _members, ...rest } = channel as typeof channel & {
         suspension?: { at?: string; reason?: string; by?: string };
         suspensionHolds?: unknown;
         hiddenBeforeSuspension?: unknown;
+        members?: unknown;
     };
     return {
         ...(rest as typeof channel),

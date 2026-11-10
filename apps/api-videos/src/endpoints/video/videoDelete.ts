@@ -1,3 +1,4 @@
+import { canOnVideo } from "../../lib/channelAccess";
 import { Bool, Str } from "chanfana";
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
@@ -89,7 +90,7 @@ export class VideoDelete extends AuthenticatedRoute {
 		}
 
 		// Only the owner may delete a video
-		if (video.userId !== userId) {
+		if (!(await canOnVideo(c.env as never, video, userId, 'video.delete'))) {
 			return c.json({
 				success: false,
 				error: "Forbidden - you can only delete your own videos",

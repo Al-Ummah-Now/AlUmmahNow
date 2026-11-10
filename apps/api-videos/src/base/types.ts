@@ -85,5 +85,9 @@ export type AppContext = Context<{
     auth?: AuthContext;
     userId?: string;
     channelId?: string;
+    /** Caller's role on the channelId header's channel (channelIdMiddleware) */
+    channelRole?: import('@al-ummah/shared-types').ChannelRole | null;
+    /** Owner of the channelId header's channel: new videos belong to them */
+    channelOwnerId?: string;
   };
 }>;

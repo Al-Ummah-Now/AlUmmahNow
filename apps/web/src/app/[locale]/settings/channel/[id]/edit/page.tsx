@@ -14,6 +14,7 @@ import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { useLanguage } from '@/hooks/useLanguage';
 import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
 import { logger } from '@/lib/logger-client';
+import { can } from '@al-ummah/shared-types';
 
 interface ChannelData {
   id: string;
@@ -37,7 +38,10 @@ function ChannelEditPage() {
 
   const { user } = useAuth();
   // Session channels feed the navigation avatar; refresh them after changes
-  const { reloadChannels } = useMultiAccount();
+  const { reloadChannels, user: sessionUser } = useMultiAccount();
+  // Only the owner changes the handle; a channel admin edits everything else
+  const myRole = sessionUser?.channels?.find((c) => c.id === channelId)?.role;
+  const handleLocked = !!myRole && !can(myRole, 'channel.handle');
   const [channel, setChannel] = useState<ChannelData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -129,7 +133,7 @@ function ChannelEditPage() {
           ar: formData.descriptionAr || ''
         },
         // Only send the handle when it changed (an empty field keeps the current one)
-        ...(about.handle.trim() && about.handle.trim().replace(/^@+/, '') !== (channel?.handle || '') ? { handle: about.handle.trim() } : {}),
+        ...(!handleLocked && about.handle.trim() && about.handle.trim().replace(/^@+/, '') !== (channel?.handle || '') ? { handle: about.handle.trim() } : {}),
         links: about.links.filter((l) => l.title.trim() || l.url.trim()).map((l) => ({ title: l.title.trim(), url: l.url.trim() })),
         contactEmail: about.contactEmail.trim(),
         location: about.location.trim(),
@@ -434,6 +438,7 @@ function ChannelEditPage() {
               onChange={setAbout}
               onHandleStatusChange={setHandleStatus}
               disabled={isSaving}
+              handleLocked={handleLocked}
             />
 
             {/* Buttons */}

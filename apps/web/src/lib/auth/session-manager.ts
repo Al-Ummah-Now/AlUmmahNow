@@ -10,7 +10,7 @@
  */
 
 import { cookies } from 'next/headers';
-import type { Channel, User } from '@al-ummah/shared-types';
+import type { AccessibleChannel, User } from '@al-ummah/shared-types';
 import { getOpenAuthClient } from "./openauth-client";
 import { subjects } from '../auth';
 import { logger } from '@/lib/logger-server';
@@ -42,28 +42,9 @@ const COOKIE_SIZE_MAX = 4096; // 4KB: one cookie; bigger sessions are split into
 /** Chunks the session may take (10 accounts take about 4) */
 const MAX_SESSION_CHUNKS = 12;
 
-/**
- * Reduces an API channel record to the fields the UI reads from the session.
- * The channel list endpoint returns full records (descriptions plus embedded
- * playlist/video/subscriber arrays); caching those in the cookie overflowed
- * the 4KB limit for accounts with ~4 channels, which made login fail.
- */
-export function toSessionChannel(channel: Channel): Channel {
-  return {
-    id: channel.id,
-    userId: channel.userId,
-    name: channel.name,
-    nameLocalized: channel.nameLocalized,
-    avatarUrl: channel.avatarUrl,
-    isMain: channel.isMain,
-    isVerified: channel.isVerified,
-    isPrivate: channel.isPrivate,
-    subscribersCount: channel.subscribersCount,
-    videosCount: channel.videosCount,
-    dateCreated: channel.dateCreated,
-    dateModified: channel.dateModified,
-  } as Channel;
-}
+// First-paint channel cache (pure, shared with the client's live list)
+export { MAX_CACHED_CHANNELS, cacheChannels, isCacheableChannel, toSessionChannel, type SessionChannel } from '../channels/session-cache';
+import { cacheChannels, isCacheableChannel, toSessionChannel, type SessionChannel } from '../channels/session-cache';
 
 // Types
 export interface AuthTokens {
@@ -89,7 +70,8 @@ export interface UserSession {
    * Its tokens are never sent; getActiveSession() treats it as signed out.
    */
   needsSignIn?: boolean;
-  channels: Channel[];
+  /** First-paint cache of the account's channels (cacheChannels), not the live list */
+  channels: SessionChannel[];
   activeChannelId: string | null;
   lastActivity: number;
 }
@@ -114,11 +96,11 @@ export interface SessionContext {
   // Active channel info (if selected)
   channelId?: string;
   channelName?: string;
-  channel?: Channel;
+  channel?: SessionChannel;
 
-  // Available accounts and channels
+  // Available accounts and the first-paint channel cache
   availableAccounts: AccountInfo[];
-  availableChannels: Channel[];
+  availableChannels: SessionChannel[];
 }
 
 export interface AccountInfo {
@@ -548,9 +530,15 @@ export class SessionManager {
       throw new Error('Active account not found');
     }
 
-    // Verify channel belongs to user
-    if (channelId && !activeAccount.channels.find(c => c.id === channelId)) {
-      throw new Error('Channel does not belong to user');
+    // The channel must be one the account owns or holds a role on, per the
+    // live list (the cache may not hold it, or may be stale after a revoke)
+    if (channelId) {
+      const live = await this.fetchAccessibleChannels(activeAccount);
+      const target = live?.find(c => c.id === channelId);
+      if (!target) {
+        throw new Error('Channel is not available to this account');
+      }
+      activeAccount.channels = cacheChannels(live!.map(toSessionChannel), activeAccount.userId, channelId);
     }
 
     activeAccount.activeChannelId = channelId;
@@ -592,7 +580,7 @@ export class SessionManager {
     let sessionNeedsUpdate = false;
 
     Object.values(sessionData.accounts).forEach(account => {
-      const accountChannels = account.channels.filter(c => c.userId === account.userId);
+      const accountChannels = account.channels.filter(c => isCacheableChannel(c, account.userId));
 
       if (accountChannels.length !== account.channels.length) {
         logger.debug('[SessionManager] Cleaning channels for user:', {
@@ -637,7 +625,7 @@ export class SessionManager {
     // Build account info for all accounts
     // IMPORTANT: Filter channels for each account to ensure counts are accurate
     const availableAccounts: AccountInfo[] = Object.values(sessionData.accounts).map(account => {
-      // Filter channels to only those belonging to this account
+      // Owned channels in the cache (the switcher's count is the account's own channels)
       const accountChannels = account.channels.filter(c => c.userId === account.userId);
 
       return {
@@ -701,9 +689,35 @@ export class SessionManager {
   }
 
   /**
-   * Load channels for a user
+   * The channels an account owns or holds a channel role on, live from
+   * GET /api/channels/access (with that account's token), or null when the
+   * API could not be reached.
    */
-  static async loadUserChannels(userId: string): Promise<Channel[]> {
+  private static async fetchAccessibleChannels(account: UserSession): Promise<AccessibleChannel[] | null> {
+    // Imported dynamically to avoid a circular dependency
+    const { apiRequestServer, buildApiUrl } = await import('../api/api-client');
+    const response = await apiRequestServer<{ success?: boolean; data?: AccessibleChannel[] }>(
+      {
+        method: 'GET',
+        url: buildApiUrl('/api/channels/access'),
+        functionName: 'SessionManager.fetchAccessibleChannels',
+      },
+      async () => ({
+        userId: account.userId,
+        accessToken: account.accessToken, // This account's token, not the active one's
+      }),
+      false, // The token is provided explicitly
+    );
+    return Array.isArray(response?.data) ? response!.data : null;
+  }
+
+  /**
+   * Refresh an account's first-paint channel cache from the live list (at
+   * sign-in, after creating a channel, or when the menu's live list differs
+   * from the cache). Picks the main owned channel when none is active, and
+   * clears an active channel the account can no longer use.
+   */
+  static async loadUserChannels(userId: string): Promise<SessionChannel[]> {
     const sessionData = await this.getSessionData();
     if (!sessionData || !sessionData.accounts[userId]) {
       throw new Error('User session not found');
@@ -712,52 +726,28 @@ export class SessionManager {
     const account = sessionData.accounts[userId];
 
     try {
-      // Import dynamically to avoid circular dependency
-      const { apiRequestServer, buildApiUrl, buildQueryParams } = await import('../api/api-client');
+      const live = await this.fetchAccessibleChannels(account);
+      if (live) {
+        const channels = live.map(toSessionChannel);
 
-      // Fetch channels for this specific user using their own access token
-      const queryString = buildQueryParams({ });
-      const response = await apiRequestServer<{ data: Channel[]; cursor: string; limit: number }>(
-        {
-          method: 'GET',
-          url: buildApiUrl(`/api/channels${queryString}`),
-          functionName: 'SessionManager.loadUserChannels'
-        },
-        async () => ({
-          userId: account.userId,
-          accessToken: account.accessToken,  // Use this user's token, not active user's token
-        }),
-        false  // Don't require auth (we're providing the token explicitly)
-      );
-
-      if (response?.data) {
-        account.channels = Array.isArray(response.data) ? response.data.map(toSessionChannel) : [];
-
-        // Set first channel as active if none selected AND channels exist
-        // Clear active channel if no channels exist
-        if (account.channels.length > 0) {
-          if (account.activeChannelId && !account.channels.some(c => c.id === account.activeChannelId)) {
-            account.activeChannelId = null;
-          }
-          if (!account.activeChannelId) {
-            const mainChannel = account.channels.find(c => c.isMain) || account.channels[0];
-            account.activeChannelId = mainChannel.id;
-
-            if (sessionData.activeUserId === userId) {
-              sessionData.activeChannelId = mainChannel.id;
-            }
-          }
-        } else {
-          // No channels - clear active channel ID
+        if (account.activeChannelId && !channels.some(c => c.id === account.activeChannelId)) {
           account.activeChannelId = null;
-          if (sessionData.activeUserId === userId) {
-            sessionData.activeChannelId = null;
-          }
         }
+        if (!account.activeChannelId && channels.length > 0) {
+          // Default: the main owned channel, then any owned one, then the first managed one
+          const owned = channels.filter(c => c.role === 'owner' || c.userId === userId);
+          const preferred = owned.find(c => c.isMain) || owned[0] || channels[0];
+          account.activeChannelId = preferred.id;
+        }
+        if (sessionData.activeUserId === userId) {
+          sessionData.activeChannelId = account.activeChannelId;
+        }
+        account.channels = cacheChannels(channels, userId, account.activeChannelId);
 
         await this.setSessionData(sessionData);
-        return account.channels;
+        return channels;
       }
+      logger.warn('[SessionManager] Channel list unavailable; keeping the cached channels', { userId });
     } catch (error) {
       logger.error('[SessionManager] Failed to load channels:', error);
     }

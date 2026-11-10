@@ -1,3 +1,4 @@
+import { canOnVideo } from "../../lib/channelAccess";
 import { Str } from "chanfana";
 import { date, z } from "zod";
 import { Video, ResponseError } from "../../lib/types";
@@ -71,7 +72,7 @@ export class CommentDelete extends AuthenticatedRoute {
 		}
 
 		// Check privacy permissions
-		if (video.isPublic === false && (!userId || video.userId !== userId)) {
+		if (video.isPublic === false && !(await canOnVideo(c.env as never, video, userId, 'video.view_private')) && !(await canOnVideo(c.env as never, video, userId, 'comment.moderate'))) {
 			return c.json({
 				success: false,
 				error: "Video not found", // Don't reveal that private video exists
@@ -87,8 +88,9 @@ export class CommentDelete extends AuthenticatedRoute {
 			}, 404);
 		}
 
-		// The comment author or the video owner may delete a comment
-		if (comment.userId !== userId && video.userId !== userId) {
+		// The comment author, or the video's owner or a channel admin or moderator (comment.moderate)
+		const moderates = await canOnVideo(c.env as never, video, userId, 'comment.moderate');
+		if (comment.userId !== userId && !moderates) {
 			return c.json({
 				success: false,
 				error: "Forbidden",
@@ -100,7 +102,7 @@ export class CommentDelete extends AuthenticatedRoute {
 		const { data: saved, rejected } = await repository.updateObjectOrReject<{ status: 403 | 404; error: string }>(id, (fresh) => {
 			const target = findStoredComment(fresh.comments as unknown as StoredComment[], cid);
 			if (!target) return { reject: { status: 404, error: "Comment not found" } };
-			if (target.comment.userId !== userId && fresh.userId !== userId) return { reject: { status: 403, error: "Forbidden" } };
+			if (target.comment.userId !== userId && !(moderates && fresh.userId === video.userId)) return { reject: { status: 403, error: "Forbidden" } };
 			fresh.comments = removeStoredComment(fresh.comments as unknown as StoredComment[], cid).comments as unknown as typeof fresh.comments;
 			return true;
 		});

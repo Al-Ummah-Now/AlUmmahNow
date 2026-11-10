@@ -1,3 +1,4 @@
+import { canOnVideo } from "../../lib/channelAccess";
 import { OptionalAuthRoute, AppContext } from '../../base';
 import { Str } from 'chanfana';
 import { z } from 'zod';
@@ -104,7 +105,7 @@ export class VideoScheduleFetch extends OptionalAuthRoute {
       }
 
       // Check if user owns the video
-      if (video.userId !== userId) {
+      if (!(await canOnVideo(c.env as never, video, userId, 'video.view_private'))) {
         return c.json(
           {
             success: false,

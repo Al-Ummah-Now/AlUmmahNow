@@ -3,6 +3,8 @@
 import { getServerAuthContext } from './api/server-auth';
 import { getChannelById } from './api/channels';
 import { logger } from '@/lib/logger-server';
+import { apiRequestServer, buildApiUrl } from './api/api-client';
+import { can, type AccessibleChannel, type ChannelCapability, type ChannelRole } from '@al-ummah/shared-types';
 
 
 /**
@@ -46,6 +48,41 @@ export async function isChannelOwner(channelId: string): Promise<boolean> {
     });
     return false;
   }
+}
+
+/**
+ * The signed-in user's role on a channel (owner, or a channel role they were
+ * given), from the live "my channels" list (GET /api/channels/access). Null
+ * when signed out, when they hold no role, or when the list can't be read
+ * (fail closed: the API enforces the same rules on every write anyway).
+ * A site admin holds no channel role.
+ */
+export async function getChannelRole(channelId: string): Promise<ChannelRole | null> {
+  try {
+    const authContext = await getServerAuthContext();
+    if (!authContext?.userId) return null;
+    const response = await apiRequestServer<{ data?: AccessibleChannel[] }>(
+      { method: 'GET', url: buildApiUrl('/api/channels/access'), functionName: 'getChannelRole' },
+      async () => authContext,
+      true,
+    );
+    if (!Array.isArray(response?.data)) {
+      logger.warn('[getChannelRole] Channel list unavailable; no role assumed', { channelId });
+      return null;
+    }
+    return response.data.find(c => c.id === channelId)?.role ?? null;
+  } catch (error) {
+    logger.error('[getChannelRole] Error reading the channel list', {
+      channelId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
+}
+
+/** Whether the signed-in user's channel role grants `capability` on this channel. */
+export async function channelAllows(channelId: string, capability: ChannelCapability): Promise<boolean> {
+  return can(await getChannelRole(channelId), capability);
 }
 
 /**

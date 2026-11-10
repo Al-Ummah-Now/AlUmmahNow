@@ -1,3 +1,4 @@
+import { uploadIdentity } from "../../lib/channelAccess";
 import { OpenAPIRoute, Str } from "chanfana";
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { z } from "zod";
@@ -168,13 +169,16 @@ export class VideoUpload extends AuthenticatedRoute {
 
             const videoId = crypto.randomUUID();
             const channelId = c.req.header('channelId') || userId;
+            // A channel member's upload belongs to the channel's owner (lib/channelAccess.ts)
+            const { ownerId, uploadedBy } = uploadIdentity(c, userId);
 
             // Create video metadata
             const video = {
                 id: videoId,
                 title,
                 description,
-                userId,
+                userId: ownerId,
+                ...(uploadedBy ? { uploadedBy } : {}),
                 channelId,
                 dateCreated: new Date().toISOString(),
                 dateModified: new Date().toISOString(),

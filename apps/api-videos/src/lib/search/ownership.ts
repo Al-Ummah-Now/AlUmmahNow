@@ -16,8 +16,10 @@
  */
 
 import {
+  CHANNEL_ACCESS_TABLE,
   OWNERSHIP_TABLE,
   OwnershipKind,
+  channelAccessStatements,
   SearchDb,
   SearchStatement,
   ownershipCompleteKey,
@@ -110,6 +112,21 @@ export function ownedChannelIds(env: OwnershipEnv, userId: string): Promise<stri
       `SELECT id FROM ${OWNERSHIP_TABLE} WHERE kind = 'channel' AND owner_id = ? AND is_deleted = 0 AND (is_hidden = 0 OR is_suspended = 1) ORDER BY id`,
     ).bind(userId).all<{ id: string }>();
     return (results ?? []).map(r => r.id);
+  });
+}
+
+/**
+ * Channels where the user holds a per-channel role (admin, editor,
+ * moderator), from the channel_access index, by channel id. Callers re-check
+ * the role on the R2 record. Same trust rule as the ownership rows: null
+ * (scan R2) until the channel pass is complete or when the query fails.
+ */
+export function memberChannelRoles(env: OwnershipEnv, userId: string): Promise<Array<{ channelId: string; role: string }> | null> {
+  return whenComplete(env, 'channel', async db => {
+    const { results } = await db.prepare(
+      `SELECT channel_id, role FROM ${CHANNEL_ACCESS_TABLE} WHERE user_id = ? ORDER BY channel_id`,
+    ).bind(userId).all<{ channel_id: string; role: string }>();
+    return (results ?? []).map(r => ({ channelId: r.channel_id, role: r.role }));
   });
 }
 
@@ -330,12 +347,15 @@ export async function backfillOwnershipPage(
       if (!value) {
         // Gone between list and get: a delete as of now (PR-8 order guard)
         statements.push(tombstoneStatement(db, ownershipTombstone(kind), id, now), ownershipDeleteStatement(db, kind, id, now));
+        if (kind === 'channel') statements.push(...channelAccessStatements(db, id, null, now));
         removed++;
         return;
       }
       const row = projectOwnership(kind, id, value);
       // Version = when this copy was written, so a newer write made meanwhile is kept
       if (row) statements.push(ownershipUpsertStatement(db, row, now, r2Version(stored) ?? 0));
+      // The channel's role rows (channel_access) are rebuilt with it
+      if (row && kind === 'channel') statements.push(...channelAccessStatements(db, id, value, r2Version(stored) ?? 0));
       // Admin comment list: rewritten only when the video's comments changed
       if (row && kind === 'video') await syncCommentIndex(db, id, value);
     } catch (error) {
@@ -421,6 +441,12 @@ export async function runOwnershipPass(
     db.prepare(`DELETE FROM ${OWNERSHIP_TABLE} WHERE kind = ? AND indexed_at < ?`).bind(kind, state.startedAt),
     db.prepare('DELETE FROM search_meta WHERE key = ?').bind(passKey(kind)),
   ];
+  // Role rows of channels the pass pruned (removed without going through api-videos)
+  if (kind === 'channel') {
+    statements.splice(1, 0, db.prepare(
+      `DELETE FROM ${CHANNEL_ACCESS_TABLE} WHERE channel_id NOT IN (SELECT id FROM ${OWNERSHIP_TABLE} WHERE kind = 'channel')`,
+    ));
+  }
   if (trustworthy) {
     statements.push(db.prepare(
       `INSERT INTO search_meta (key, value, updated_at) VALUES (?, ?, ?)

@@ -1,3 +1,4 @@
+import { can, channelRoleOf } from "@al-ummah/shared-types";
 import { Bool, Str } from "chanfana";
 import { z } from "zod";
 import {
@@ -110,7 +111,7 @@ export class ChannelTabsUpdate extends AuthenticatedRoute {
 		}
 
 		// Verify ownership
-		if (channel.userId !== userId) {
+		if (!can(channelRoleOf(channel, userId), 'channel.edit')) {
 			return c.json({
 				success: false,
 				error: "You can only update tabs for your own channel",

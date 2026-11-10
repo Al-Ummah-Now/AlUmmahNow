@@ -1,3 +1,4 @@
+import { canOnVideo } from "../../lib/channelAccess";
 import { Num, Str } from "chanfana";
 import { z } from "zod";
 import { Video, ResponseError } from "../../lib/types";
@@ -73,7 +74,8 @@ export class CommentRepliesList extends OptionalAuthRoute {
 			return c.json({ success: false, error: "Object not found" }, 404);
 		}
 
-		const viewer: CommentViewer = { userId, isVideoOwner: !!userId && video.userId === userId };
+		// Held comments show to the video's owner and to channel admins and moderators
+		const viewer: CommentViewer = { userId, isVideoOwner: await canOnVideo(c.env as never, video, userId, 'comment.moderate') };
 		const parent = ((video.comments || []) as unknown as StoredComment[]).find((cm) => cm.id === cid);
 		if (getCommentSettings(video) === 'off' || !parent || !isCommentVisible(parent, viewer)) {
 			return c.json({ success: false, error: "Object not found" }, 404);

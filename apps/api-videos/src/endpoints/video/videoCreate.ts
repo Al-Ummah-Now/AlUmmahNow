@@ -1,3 +1,4 @@
+import { uploadIdentity } from "../../lib/channelAccess";
 import { Bool, Str } from "chanfana";
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
@@ -80,11 +81,15 @@ export class VideoCreate extends AuthenticatedRoute {
 		// Get authenticated user ID
 		const effectiveUserId = this.getUserId(c);
 
+		// A channel member's video belongs to the channel's owner (lib/channelAccess.ts)
+		const { ownerId, uploadedBy } = uploadIdentity(c, effectiveUserId);
+
 		// Create the business video object
 		const video = {
 			...inputVideo,
 			id: crypto.randomUUID(), // Generate a unique ID for the video
-			userId: effectiveUserId,
+			userId: ownerId,
+			...(uploadedBy ? { uploadedBy } : {}),
 			channelId,
 			dateCreated: new Date().toISOString(),
 			dateModified: new Date().toISOString(),

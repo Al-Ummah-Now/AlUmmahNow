@@ -1,3 +1,4 @@
+import { canOnVideo } from "../../lib/channelAccess";
 import { Str } from "chanfana";
 import { z } from "zod";
 import { Video, ResponseError } from "../../lib/types";
@@ -44,7 +45,8 @@ export class CommentApprove extends AuthenticatedRoute {
 		if (!video || isVideoRemoved(video)) {
 			return c.json({ success: false, error: "Object not found" }, 404);
 		}
-		if (video.userId !== userId) {
+		// The video's owner, or a channel admin or moderator (comment.moderate)
+		if (!(await canOnVideo(c.env as never, video, userId, 'comment.moderate'))) {
 			return c.json({ success: false, error: "Forbidden" }, 403);
 		}
 

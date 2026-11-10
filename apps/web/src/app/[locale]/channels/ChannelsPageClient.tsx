@@ -82,16 +82,18 @@ export function ChannelsPageClient() {
         ) : (
           <ChannelTileGrid
             channels={channels}
-            renderActions={(channel) =>
-              user && channel.userId === user.id ? (
+            renderActions={(channel) => {
+              const role = !user ? undefined : channel.userId === user.id ? 'owner' as const : user.channels?.find((c) => c.id === channel.id)?.role;
+              return role ? (
                 <ChannelOwnerActions
                   variant="compact"
+                  role={role}
                   channel={{ id: channel.id, name: channel.name, nameLocalized: channel.nameLocalized, isMain: channel.isMain }}
                   className="justify-center"
                   onDeleted={(deletedId) => setChannels((prev) => prev.filter((c) => c.id !== deletedId))}
                 />
-              ) : null
-            }
+              ) : null;
+            }}
           />
         )}
 

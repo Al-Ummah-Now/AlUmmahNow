@@ -1,3 +1,4 @@
+import { canOnVideo } from "../../lib/channelAccess";
 import { OpenAPIRoute, Str } from "chanfana";
 import { OptionalAuthRoute, AppContext } from '../../base';
 import { z } from "zod";
@@ -124,7 +125,7 @@ export class VideoUploadStatus extends OptionalAuthRoute {
 		}
 
 		// Check ownership - user must own the video to check status
-		if (video.userId !== effectiveUserId) {
+		if (!(await canOnVideo(c.env as never, video, effectiveUserId, 'video.view_private'))) {
 			return c.json({
 				success: false,
 				error: "Forbidden - you can only check status of your own videos",

@@ -1,4 +1,4 @@
-import { isShort } from "@al-ummah/shared-types";
+import { can, isShort } from "@al-ummah/shared-types";
 import { Num, Str } from "chanfana";
 import { publicVideoFields } from '../../lib/transformations';
 import { string, z } from "zod";
@@ -109,6 +109,14 @@ export class VideosList extends OptionalAuthRoute {
 		type VideoType = z.infer<typeof BusinessVideo>;
 		const repository = new R2Repository<VideoType>(bucket);
 		
+		// Whose private videos this caller sees: their own, or, while acting as the
+		// filtered channel with a role allowing it (channelIdMiddleware resolved
+		// it from the channel record), that channel owner's
+		const actingRole = c.get('channelRole');
+		const privateOwnerId: string | null = filterChannelId && channelId === filterChannelId && actingRole && actingRole !== 'owner' && can(actingRole, 'video.view_private')
+			? (c.get('channelOwnerId') ?? null)
+			: (userId || null);
+
 		// Filter videos based on privacy settings, user context, and filters
 		const isVisible = (video: VideoType) => {
 			// Internal records (section indexes, live streams) share the bucket
@@ -141,9 +149,10 @@ export class VideosList extends OptionalAuthRoute {
 			if (filter === "private" && video.isPublic !== false) return false;
 			if (filter === "live" && !video.isLive) return false;
 
-			// One listing rule (lib/visibility.ts): public + ready for everyone,
-			// the owner also sees their own private and processing videos
-			return isVideoListedFor(video, userId);
+			// One listing rule (lib/visibility.ts): public + ready for everyone;
+			// the owner (or a channel member acting with video.view_private, as
+			// that owner) also sees their private and processing videos
+			return isVideoListedFor(video, privateOwnerId);
 		};
 
 		const compareVideos = (a: VideoType, b: VideoType) => {
@@ -173,7 +182,7 @@ export class VideosList extends OptionalAuthRoute {
 				limit,
 				query: {
 					sort: INDEX_SORT[sort as VideoSort],
-					privateFor: userId || null,
+					privateFor: privateOwnerId,
 					...INDEX_FILTER[(filter || "all") as VideoFilter],
 				},
 				load: id => repository.getObject(id),

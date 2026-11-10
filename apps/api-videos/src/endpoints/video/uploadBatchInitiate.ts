@@ -1,3 +1,4 @@
+import { uploadIdentity } from "../../lib/channelAccess";
 import { Str, Num } from "chanfana";
 import { createUploadRecord } from '../../lib/upload/uploadRecord';
 import { AuthenticatedRoute, AppContext } from '../../base';
@@ -120,6 +121,8 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 				return c.json({ success: false, error: "sharedMetadata.channelId must match the channelId header" }, 400);
 			}
 			const channelId = headerChannelId || userId;
+			// A channel member's uploads belong to the channel's owner (lib/channelAccess.ts)
+			const { ownerId, uploadedBy } = uploadIdentity(c, userId);
 
 			const bunnyKey = await requireSecret(c.env["bunny-stream-key"], 'bunny-stream-key');
 			const libraryIdRaw = await requireSecret(c.env.bunny_stream_library_id, 'bunny_stream_library_id');
@@ -153,7 +156,8 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 					videoId,
 					title: videoData.title,
 					description: videoData.description,
-					userId,
+					userId: ownerId,
+					uploadedBy,
 					channelId,
 					isPublic: videoData.isPublic ?? sharedMetadata?.isPublic ?? true,
 					tags: videoData.tags,

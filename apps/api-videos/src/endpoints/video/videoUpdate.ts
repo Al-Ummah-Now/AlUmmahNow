@@ -1,3 +1,4 @@
+import { canOnVideo } from "../../lib/channelAccess";
 import { Bool, Str } from "chanfana";
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
@@ -119,7 +120,7 @@ export class VideoUpdate extends AuthenticatedRoute {
 		}
 
 		// Check ownership - user must own the video to update it
-		if (existingVideo.userId !== effectiveUserId) {
+		if (!(await canOnVideo(c.env as never, existingVideo, effectiveUserId, 'video.edit'))) {
 			return c.json(
 				{
 					success: false,
@@ -178,7 +179,7 @@ export class VideoUpdate extends AuthenticatedRoute {
 		// concurrent comment, like or view flush is not overwritten
 		let previous = existingVideo;
 		const { data: updatedVideo, rejected } = await repository.updateObjectOrReject<true>(id, (fresh) => {
-			if (fresh.userId !== effectiveUserId) return { reject: true };
+			if (fresh.userId !== existingVideo.userId) return { reject: true };
 			previous = { ...fresh };
 			Object.assign(fresh, applyUpdate(fresh));
 			return true;

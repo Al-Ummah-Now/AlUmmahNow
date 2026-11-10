@@ -53,6 +53,7 @@ export * from './i18n-bulk-edit';
 export * from './i18n-community-guidelines';
 export * from './i18n-contact';
 export * from './i18n-upload-status';
+export * from './i18n-channel-roles';
 
 // Static en/ar UI translations (web fallback + api-videos translation seed)
 export { EN_TRANSLATIONS } from './i18n-static/en';
@@ -70,3 +71,5 @@ export * from './admin-content';
 export * from './error-reporting';
 // Legacy (pre-SSO) profile restore planning (admin job + CLI)
 export * from './legacy-profiles';
+// Per-channel roles (owner/admin/editor/moderator), separate from site roles
+export * from './channel-roles';

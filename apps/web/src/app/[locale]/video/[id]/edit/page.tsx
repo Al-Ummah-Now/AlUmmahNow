@@ -10,6 +10,8 @@ import { VideoObject } from '@/interfaces';
 import { getVideoById } from '@/lib/api/videos';
 import VideoEdit from '@/components/videoEdit/index';
 import Link from 'next/link';
+import { can } from '@al-ummah/shared-types';
+import { fetchChannelAccess } from '@/lib/channels/access';
 
 export default function VideoEditPage() {
   const { t, lang } = useLanguage();
@@ -53,10 +55,24 @@ export default function VideoEditPage() {
           return;
         }
 
-        // Check if user owns this video
+        // The video's owner edits it; so does anyone whose role on the
+        // video's channel grants video.edit (channel admin, editor). The live
+        // list is read only when needed, and a failure refuses (fail closed).
         if (videoData.userId !== userId) {
-          setError('forbidden');
-          return;
+          let allowed = false;
+          if (videoData.channelId) {
+            try {
+              const access = await fetchChannelAccess(userId);
+              allowed = can(access.find((c) => c.id === videoData.channelId)?.role, 'video.edit');
+            } catch {
+              allowed = false; // already reported by fetchChannelAccess
+            }
+          }
+          if (cancelled) return;
+          if (!allowed) {
+            setError('forbidden');
+            return;
+          }
         }
 
         setVideo(videoData);

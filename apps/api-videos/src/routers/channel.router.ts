@@ -9,6 +9,7 @@ import { ChannelOwnerFetch } from '../endpoints/channel/channelOwnerFetch';
 import { ChannelUpdate } from '../endpoints/channel/channelUpdate';
 import { ChannelDelete } from '../endpoints/channel/channelDelete';
 import { ChannelAbout, ChannelByHandleFetch, ChannelHandleAvailability } from '../endpoints/channel/channelHandle';
+import { ChannelAccessList, ChannelMemberAdd, ChannelMemberRemove, ChannelMemberUpdate, ChannelMembersList } from '../endpoints/channel/channelMembers';
 
 // Channel content endpoints
 import { ChannelVideosList } from '../endpoints/channel/channelVideosList';
@@ -56,6 +57,8 @@ channelRouter.post('/', ChannelCreate);
 
 // @handle lookups (registered before /:id so the static segments win)
 channelRouter.get('/handles/:handle/availability', ChannelHandleAvailability);
+// My channels with my role on each (owned + channel roles); before '/:id'
+channelRouter.get('/access', ChannelAccessList);
 channelRouter.get('/by-handle/:handle', ChannelByHandleFetch);
 
 // Get channel by ID (public)
@@ -101,6 +104,12 @@ channelRouter.delete('/:id/subscriptions', SubscriptionDelete);
 
 // Subscription status for the current viewer (public; isSubscribed=false when unauthenticated)
 channelRouter.get('/:id/subscriptions/status', SubscriptionStatus);
+
+// Channel members (per-channel roles, never site roles)
+channelRouter.get('/:id/members', ChannelMembersList);
+channelRouter.post('/:id/members', ChannelMemberAdd);
+channelRouter.put('/:id/members/:userId', ChannelMemberUpdate);
+channelRouter.delete('/:id/members/:userId', ChannelMemberRemove);
 
 // ============================================================================
 // TABS

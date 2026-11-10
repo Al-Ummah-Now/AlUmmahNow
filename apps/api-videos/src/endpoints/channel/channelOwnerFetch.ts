@@ -8,8 +8,9 @@ import { transformChannelToView } from "../../lib/transformations";
 import { isAdminRole } from "../../lib/public-access";
 import R2Repository from "../../lib/r2Repo";
 import { AuthenticatedRoute, AppContext } from "../../base";
+import { can, channelRoleOf } from "@al-ummah/shared-types";
 
-/** The full channel record, for its owner or an admin (channel settings). */
+/** The full channel record, for its owner, a channel admin, or a site admin (channel settings). */
 export class ChannelOwnerFetch extends AuthenticatedRoute {
 	schema = {
 		tags: ["Channels"],
@@ -36,7 +37,7 @@ export class ChannelOwnerFetch extends AuthenticatedRoute {
 		if (!channel || channel.isDeleted || (channel.isHidden && !isAdmin && !ownerSeesSuspendedChannel(channel as never, auth.userId))) {
 			return c.json({ success: false, error: "Channel not found" }, 404);
 		}
-		if (channel.userId !== auth.userId && !isAdmin) {
+		if (!can(channelRoleOf(channel, auth.userId), 'channel.view_private') && !isAdmin) {
 			return c.json({ success: false, error: "You do not have permission to view this channel's private fields" }, 403);
 		}
 

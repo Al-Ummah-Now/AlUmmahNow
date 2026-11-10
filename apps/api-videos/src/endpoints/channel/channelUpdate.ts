@@ -1,3 +1,4 @@
+import { can, channelRoleOf } from "@al-ummah/shared-types";
 import { Bool, Str } from "chanfana";
 import { z } from "zod";
 import { Channel as BusinessChannel, ResponseError } from "../../lib/types";
@@ -110,15 +111,24 @@ export class ChannelUpdate extends AuthenticatedRoute {
             }, 404);
         }
 
-        // Verify user owns this channel
-        if (existingChannel.userId !== userId) {
+        // The owner, or a channel admin (channel.edit). Channel roles come from the record, not the token.
+        const role = channelRoleOf(existingChannel, userId);
+        if (!can(role, 'channel.edit')) {
             return c.json({
                 success: false,
                 error: "You do not have permission to update this channel",
             }, 403);
         }
 
-        const { handle: requestedHandle, contactEmail, location, ...restInput } = channelUpdateInput;
+        const { handle: requestedHandle, contactEmail, location, isMain: requestedIsMain, ...restInput } = channelUpdateInput;
+        // The @handle and which channel is the owner's main one are the owner's alone
+        const changesHandle = requestedHandle !== undefined && normalizeHandleInput(requestedHandle) !== (existingChannel.handle || '');
+        if ((changesHandle && !can(role, 'channel.handle')) || (requestedIsMain !== undefined && role !== 'owner' && requestedIsMain !== (existingChannel.isMain === true))) {
+            return c.json({
+                success: false,
+                error: "Only the channel owner can change this",
+            }, 403);
+        }
 
         // @handle claim/change (case-only changes keep the same index entry)
         let claimed: string | undefined;
@@ -144,6 +154,7 @@ export class ChannelUpdate extends AuthenticatedRoute {
         // write (SCALABILITY-AUDIT AV-5), so concurrent changes are not overwritten
         const saved = await patchOwnedRecord(repository, id, (fresh) => ({
             ...restInput,
+            ...(requestedIsMain !== undefined && role === 'owner' ? { isMain: requestedIsMain } : {}),
             // Without a handle change keep the fresh one: a concurrent change must not be reverted
             handle: claimed ?? fresh.handle,
             // Empty strings clear optional About fields
@@ -153,7 +164,7 @@ export class ChannelUpdate extends AuthenticatedRoute {
             // Preserve localized fields if provided
             nameLocalized: channelUpdateInput.nameLocalized ?? fresh.nameLocalized,
             descriptionLocalized: channelUpdateInput.descriptionLocalized ?? fresh.descriptionLocalized,
-        }), { ownerId: userId });
+        }), { ownerId: existingChannel.userId });
         // SCALABILITY-AUDIT AV-13: of concurrent handle changes the last write
         // stands; each frees the handle its write replaced, so no claim is left over
         if (claimed) {

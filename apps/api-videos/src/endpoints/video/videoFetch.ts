@@ -1,3 +1,4 @@
+import { canOnVideo } from "../../lib/channelAccess";
 import { Str } from "chanfana";
 import { z } from "zod";
 import { Video as BusinessVideo, Channel as BusinessChannel, ResponseError } from "../../lib/types";
@@ -106,7 +107,8 @@ export class VideoFetch extends OptionalAuthRoute {
 		}
 
 		// Check privacy permissions
-		if (video.isPublic === false && (!userId || video.userId !== userId)) {
+		// Private videos: the owner, or a channel member allowed to see them (lib/channelAccess.ts)
+		if (video.isPublic === false && !(await canOnVideo(c.env as never, video, userId, 'video.view_private'))) {
 			return c.json(
 				{
 					success: false,

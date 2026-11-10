@@ -7,6 +7,7 @@
  * profile/channel avatars and covers, and the video's thumbnailUrl is updated.
  */
 
+import { canOnVideo } from "../../lib/channelAccess";
 import { Str } from "chanfana";
 import { z } from "zod";
 import { AuthenticatedRoute, AppContext } from '../../base';
@@ -79,7 +80,7 @@ export class VideoThumbnailUpload extends AuthenticatedRoute {
 				return c.json({ success: false, error: "Video not found" }, 404);
 			}
 
-			if (video.userId !== userId) {
+			if (!(await canOnVideo(c.env as never, video, userId, 'video.edit'))) {
 				return c.json({ success: false, error: "Forbidden - you can only update your own videos" }, 403);
 			}
 
@@ -130,7 +131,7 @@ export class VideoThumbnailUpload extends AuthenticatedRoute {
 				thumbnailType: 'custom' as const,
 				thumbnailSizes,
 				dateModified: new Date().toISOString(),
-			}, { ownerId: userId });
+			}, { ownerId: video.userId });
 			if (saved.status === 'forbidden') {
 				return c.json({ success: false, error: "Forbidden - you can only update your own videos" }, 403);
 			}

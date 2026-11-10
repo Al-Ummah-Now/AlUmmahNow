@@ -6,7 +6,8 @@ import { ChannelTabConfig } from '@al-ummah/shared-types';
 import TabManagement from '@/components/TabManagement';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { getChannelTabConfig, updateChannelTabConfig, verifyChannelOwnership } from '@/lib/api/channel-tabs';
+import { getChannelTabConfig, updateChannelTabConfig } from '@/lib/api/channel-tabs';
+import { channelAllows } from '@/lib/channel-utils';
 import { getChannelById } from '@/lib/api/channels';
 import { useLanguage } from '@/hooks/useLanguage';
 import { logger } from '@/lib/logger-client';
@@ -45,8 +46,8 @@ export default function ChannelTabsSettingsPage() {
 
         setChannelName(channel.name || '');
 
-        // Verify ownership (P1 fix)
-        const isChannelOwner = await verifyChannelOwnership(channelId);
+        // The owner or a channel admin (channel.edit) manages tabs
+        const isChannelOwner = await channelAllows(channelId, 'channel.edit');
         setIsOwner(isChannelOwner);
 
         if (!isChannelOwner) {

@@ -1,3 +1,4 @@
+import { canOnVideo } from "../../lib/channelAccess";
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { Str } from 'chanfana';
 import { z } from 'zod';
@@ -101,7 +102,7 @@ export class VideoSchedulePublishNow extends AuthenticatedRoute {
       }
 
       // Authorization check - user must own the video
-      if (video.userId !== userId) {
+      if (!(await canOnVideo(c.env as never, video, userId, 'video.schedule'))) {
         logger.warn('[VideoSchedulePublishNow] Unauthorized - user does not own video', {
           videoId: id,
           videoOwner: video.userId,
@@ -132,7 +133,7 @@ export class VideoSchedulePublishNow extends AuthenticatedRoute {
       const now = new Date().toISOString();
       let previousStatus = video.scheduledPublishStatus;
       const { data: updatedVideo, rejected } = await videoRepository.updateObjectOrReject<{ status: 403 | 409; error: string }>(id, (fresh) => {
-        if (fresh.userId !== userId) return { reject: { status: 403, error: 'Not authorized to publish this video' } };
+        if (fresh.userId !== video.userId) return { reject: { status: 403, error: 'Not authorized to publish this video' } };
         if (fresh.isPublic === true) return { reject: { status: 409, error: 'Video is already public' } };
         previousStatus = fresh.scheduledPublishStatus;
         fresh.isPublic = true;
