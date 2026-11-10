@@ -33,6 +33,7 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 							titleLocalized: z.record(z.string()).optional().describe("Multi-language titles, e.g. {en, ar}"),
 							descriptionLocalized: z.record(z.string()).optional().describe("Multi-language descriptions, e.g. {en, ar}"),
 							category: z.nativeEnum(VideoCategory).optional().describe("Video category"),
+							format: z.enum(['short', 'video', 'auto']).optional().describe("Upload as a Short or as a video; 'auto' (default) detects it from length and shape"),
 							thumbnail: z.object({
 								type: z.enum(['auto', 'custom']).describe("Thumbnail type: auto-generated or custom"),
 								data: z.string().optional().describe("Base64 encoded image data for custom thumbnails"),
@@ -102,7 +103,7 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 		try {
 			// Get validated data
 			const request = await this.getValidatedData<typeof this.schema>();
-			const { title, description, fileSize, mimeType, isPublic, tags, thumbnail, titleLocalized, descriptionLocalized, category } = request.body;
+			const { title, description, fileSize, mimeType, isPublic, tags, thumbnail, titleLocalized, descriptionLocalized, category, format } = request.body;
 
 			// Validate required fields
 			if (!fileSize || fileSize <= 0) {
@@ -298,6 +299,7 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 				...(titleLocalized && { titleLocalized }),
 				...(descriptionLocalized && { descriptionLocalized }),
 				...(category && { category }),
+				...(format && format !== 'auto' && { format }),
 				uploadStatus: 'uploading' as const,
 				fileSize: fileSize,  // Store file size directly
 				originalFormat: mimeType,  // Store MIME type as original format

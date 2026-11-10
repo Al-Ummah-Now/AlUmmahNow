@@ -97,7 +97,7 @@ test.describe('Release: periodic watch progress', () => {
   });
 
   test('a watched video reopens at the saved time with Start from beginning (#242)', async ({ page }) => {
-    const video = await findPlayableVideo(RESUME_MIN_VIDEO_SECONDS);
+    const video = await findPlayableVideo(RESUME_MIN_VIDEO_SECONDS, { excludeShorts: true });
     test.skip(!video, NO_PLAYABLE_VIDEO);
     await skipIfResumeUiNotDeployedOnPr(page, video!.id);
 
@@ -133,7 +133,7 @@ test.describe('Release: periodic watch progress', () => {
   });
 
   test('a video that was opened but never played has no Start from beginning (#242)', async ({ page }) => {
-    const video = await findPlayableVideo(RESUME_MIN_VIDEO_SECONDS);
+    const video = await findPlayableVideo(RESUME_MIN_VIDEO_SECONDS, { excludeShorts: true });
     test.skip(!video, NO_PLAYABLE_VIDEO);
     await skipIfResumeUiNotDeployedOnPr(page, video!.id);
 

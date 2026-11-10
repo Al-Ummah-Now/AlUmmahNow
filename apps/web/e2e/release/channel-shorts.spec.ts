@@ -19,6 +19,8 @@ interface ListedVideo {
   title?: string;
   channelId?: string;
   duration?: number;
+  /** Shared rule (≤ 3 min and vertical/square, or the uploader's choice), computed by the API */
+  isShort?: boolean;
   isLive?: boolean;
   isPublic?: boolean;
   isDeleted?: boolean;
@@ -34,7 +36,7 @@ const TEMPORARY_TITLE = /^(E2E Temp|Release E2E)\b/;
 const STABLE_AGE_MS = 15 * 60 * 1000;
 
 function isPublicShort(v: ListedVideo | null): v is ListedVideo {
-  return !!v && !!v.channelId && (v.duration ?? 0) > 0 && (v.duration ?? 0) < 60
+  return !!v && !!v.channelId && v.isShort === true
     && !v.isLive && v.isPublic !== false && !v.isDeleted && !v.isHidden;
 }
 
@@ -86,7 +88,7 @@ async function shortsTabIds(channelId: string): Promise<string[]> {
 test.describe('Release: channel shorts', () => {
   test('a public short is listed on its channel\'s Shorts tab (API)', async () => {
     const candidates = await candidateShorts();
-    test.skip(candidates.length === 0, 'no public short (under 60 s) in this environment');
+    test.skip(candidates.length === 0, 'no public Short in this environment');
 
     const vanished: string[] = [];
     for (const candidate of candidates) {

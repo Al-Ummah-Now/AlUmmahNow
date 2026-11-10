@@ -574,6 +574,14 @@ export const EN_TRANSLATIONS: AppTranslations = {
     shortVideos: 'Short (≤3 min)',
     standardVideos: 'Standard (3-20 min)',
     longVideos: 'Long (>20 min)',
+    formatLabel: 'Short or video',
+    formatHelp: 'Shorts are up to 3 minutes and vertical or square. They appear under Shorts instead of Videos.',
+    formatAuto: 'Decide automatically',
+    formatAutoHint: 'Short if it is 3 minutes or less and vertical or square',
+    formatShort: 'Upload as Short',
+    formatShortHint: 'Always show it under Shorts',
+    formatVideo: 'Upload as video',
+    formatVideoHint: 'Always show it under Videos',
   },
 
   search: {

@@ -17,6 +17,7 @@ import SubtitleUploadSection from './SubtitleUploadSection';
 import ChapterEditor from './ChapterEditor';
 import ChapterUpload from './ChapterUpload';
 import ScheduleSection from './ScheduleSection';
+import { VideoFormatChoice, formatChoiceOf, type VideoFormatChoiceValue } from '@/components/videoFormat/VideoFormatChoice';
 
 interface VideoEditProps {
   video: VideoObject;
@@ -38,6 +39,7 @@ type EditFormData = {
   isPublic: boolean;
   thumbnailUrl: string;
   commentSettings: CommentSettings;
+  format: VideoFormatChoiceValue;
 };
 
 const COMMENT_SETTING_OPTIONS: CommentSettings[] = ['on', 'held', 'off'];
@@ -78,6 +80,7 @@ export default function VideoEdit({
     isPublic: video.isPublic !== false,
     thumbnailUrl: video.thumbnailUrl,
     commentSettings: initialCommentSettings(video as { commentSettings?: unknown }),
+    format: formatChoiceOf(video),
   });
 
   // Load existing chapters so the editor starts from the saved state
@@ -110,6 +113,7 @@ export default function VideoEdit({
       formData.isPublic !== (video.isPublic !== false) ||
       formData.commentSettings !== initialCommentSettings(video as { commentSettings?: unknown }) ||
       formData.category !== original.category ||
+      formData.format !== formatChoiceOf(video) ||
       haveTagsChanged(original.tags, formData.tags);
 
     setHasUnsavedChanges(hasChanges);
@@ -169,6 +173,8 @@ export default function VideoEdit({
         // null clears a previously set category
         category: formData.category || null,
         commentSettings: formData.commentSettings,
+        // Uploader's Short / video choice; 'auto' clears it
+        format: formData.format,
       };
 
       const result = await updateVideo(video.id, updateData, { channelId: video.channelId || channelId });
@@ -452,6 +458,14 @@ export default function VideoEdit({
             ))}
           </div>
         </fieldset>
+
+        {/* Upload as Short / as video (wins over detection) */}
+        <VideoFormatChoice
+          value={formData.format}
+          onChange={(format) => setFormData((prev) => ({ ...prev, format }))}
+          name="videoEditFormat"
+          testIdPrefix="video-edit-format"
+        />
 
         {/* Schedule Publication Section */}
         <ScheduleSection

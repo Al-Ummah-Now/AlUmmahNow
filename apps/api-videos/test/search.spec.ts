@@ -221,6 +221,22 @@ describe('searchIndex (D1 FTS5)', () => {
 		assert.deepEqual(new Set(ids(await searchIndex(db, { q: 'seerah', channelId: 'ch-en' }, { now: NOW }))), new Set(['v-seerah', 'v-seerah2', 'pl-seerah', 'post-1']));
 	});
 
+	it('filters Shorts and videos by the shared rule (format=short|video)', async () => {
+		const db = seededDb();
+		await seed(db);
+		await syncSearchDocument(db, 'video', 'v-short', videoFixture({ id: 'v-short', title: 'Dua reminder', channelId: 'ch-en', duration: 45, width: 1080, height: 1920 }), { now: NOW });
+		await syncSearchDocument(db, 'video', 'v-square', videoFixture({ id: 'v-square', title: 'Square clip', channelId: 'ch-en', duration: 180, width: 1080, height: 1080 }), { now: NOW });
+		await syncSearchDocument(db, 'video', 'v-forced', videoFixture({ id: 'v-forced', title: 'Long but a Short', channelId: 'ch-en', duration: 900, format: 'short' }), { now: NOW });
+		assert.deepEqual(new Set(ids(await searchIndex(db, { format: 'short' }, { now: NOW }))), new Set(['v-short', 'v-square', 'v-forced']));
+		const videos = new Set(ids(await searchIndex(db, { format: 'video' }, { now: NOW })));
+		assert.ok(videos.has('v-salah'), 'a 2-minute video with unknown shape is a video');
+		assert.ok(!videos.has('v-short') && !videos.has('v-forced'));
+		assert.ok(![...videos].some(id => !id.startsWith('v-')), 'the format filter returns videos only');
+		// The flag also rides in the payload for the web
+		const hit = (await searchIndex(db, { format: 'short', q: 'dua' }, { now: NOW })).results[0] as any;
+		assert.equal(hit.video.isShort, true);
+	});
+
 	it('sorts by date or popularity and pages with a cursor', async () => {
 		const db = seededDb();
 		await seed(db);

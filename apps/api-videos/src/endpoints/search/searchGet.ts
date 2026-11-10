@@ -26,6 +26,7 @@ export const SearchQuerySchema = z.object({
   q: Str({ description: "Search text (Arabic and English; diacritics, alef/hamza forms, taa marbuta and digits are normalised)" }).max(200).optional(),
   type: z.enum(["video", "channel", "playlist", "post"]).optional().describe("Restrict to one result type (default: all types)"),
   duration: z.enum(["short", "medium", "long"]).optional().describe("Videos only: short < 4 min, medium 4-20 min, long > 20 min"),
+  format: z.enum(["short", "video"]).optional().describe("Videos only: Shorts (≤ 3 min and vertical or square, or chosen by the uploader) or long-form videos"),
   date: z.enum(["hour", "today", "week", "month", "year"]).optional().describe("Published within the period"),
   language: Str({ description: "Content language code, e.g. en or ar" }).regex(/^[a-z]{2,3}$/).optional(),
   category: Str({ description: "Video/channel category value (VideoCategory, e.g. quran_tafsir)" }).regex(/^[a-z0-9_]{1,40}$/).optional(),
@@ -41,6 +42,7 @@ export function toSearchQuery(query: z.infer<typeof SearchQuerySchema>): SearchQ
     q: query.q?.trim() || undefined,
     type: query.type,
     duration: query.duration,
+    format: query.format,
     date: query.date,
     language: query.language,
     category: query.category,
@@ -60,7 +62,7 @@ export class SearchGet extends OptionalAuthRoute {
   schema = {
     tags: ["Search"],
     summary: "Search (v2)",
-    description: "🔓 Public. Ranked search across videos, channels, playlists and community posts using the search index. Filters: type, duration, date, language, category, verified, channelId (search within a channel). Without `q`, returns the newest items matching the filters. When no result contains every word, results containing any word are returned with `relaxed: true`.",
+    description: "🔓 Public. Ranked search across videos, channels, playlists and community posts using the search index. Filters: type, duration, format (short | video), date, language, category, verified, channelId (search within a channel). Without `q`, returns the newest items matching the filters. When no result contains every word, results containing any word are returned with `relaxed: true`.",
     request: { query: SearchQuerySchema },
     responses: {
       "200": {
@@ -95,7 +97,7 @@ export class SearchGet extends OptionalAuthRoute {
       logger.error("[Search] SEARCH_DB binding missing");
       return c.json({ success: false, error: "search_unavailable", message: "Search index is not configured" }, 503);
     }
-    const hasFilter = !!(search.type || search.duration || search.date || search.language || search.category || search.verified || search.channelId);
+    const hasFilter = !!(search.type || search.duration || search.format || search.date || search.language || search.category || search.verified || search.channelId);
     if (!search.q && !hasFilter) {
       return c.json({ success: false, error: "query_required", message: "Provide q or at least one filter" }, 400);
     }
@@ -107,7 +109,7 @@ export class SearchGet extends OptionalAuthRoute {
       logger.info("[Search] Served search", {
         q: search.q,
         type: search.type ?? "all",
-        filters: { duration: search.duration, date: search.date, language: search.language, category: search.category, verified: search.verified, channelId: search.channelId },
+        filters: { duration: search.duration, format: search.format, date: search.date, language: search.language, category: search.category, verified: search.verified, channelId: search.channelId },
         count: result.results.length,
         relaxed: result.relaxed,
         searchTime,

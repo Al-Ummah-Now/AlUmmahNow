@@ -7,7 +7,7 @@
  * the same entity is harmless.
  */
 
-import { MessageType, SHORT_VIDEO_MAX_SECONDS } from '@al-ummah/shared-types';
+import { isShort, MessageType, type VideoFormatInput } from '@al-ummah/shared-types';
 import R2Repository from './r2Repo';
 import { logger } from './logger';
 import { enqueueFanout, NotificationsEnv } from './notifications';
@@ -19,6 +19,9 @@ interface PublishableVideo {
 	channelId?: string;
 	title?: string;
 	duration?: number;
+	width?: number;
+	height?: number;
+	format?: 'short' | 'video';
 	isPublic?: boolean;
 	isHidden?: boolean;
 	isDeleted?: boolean;
@@ -37,9 +40,9 @@ export function isAnnounceable(video: PublishableVideo | null | undefined): bool
 	return video.scheduledPublishStatus !== 'scheduled' && video.scheduledPublishStatus !== 'publishing';
 }
 
-/** Long-form uploads are highlights; Lamahat/shorts (<= 60 s) only reach bell = all. */
-export function isHighlightVideo(video: { duration?: number }): boolean {
-	return !(typeof video.duration === 'number' && video.duration > 0 && video.duration <= SHORT_VIDEO_MAX_SECONDS);
+/** Long-form uploads are highlights; Shorts (Lamahat, shared rule) only reach bell = all. */
+export function isHighlightVideo(video: VideoFormatInput): boolean {
+	return !isShort(video);
 }
 
 async function channelName(env: EventsEnv, channelId: string): Promise<string> {

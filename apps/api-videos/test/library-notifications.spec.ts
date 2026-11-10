@@ -308,12 +308,15 @@ describe('notification producers', () => {
 		assert.equal(isAnnounceable({ id: 'v', channelId: 'c', isPublic: false }), false);
 		assert.equal(isAnnounceable({ id: 'v', channelId: 'c', uploadStatus: 'processing' }), false);
 		assert.equal(isAnnounceable({ id: 'v', channelId: 'c', scheduledPublishStatus: 'scheduled' }), false);
-		assert.equal(isHighlightVideo({ duration: 45 }), false);
+		assert.equal(isHighlightVideo({ duration: 45, width: 1080, height: 1920 }), false);
+		assert.equal(isHighlightVideo({ duration: 45, width: 1920, height: 1080 }), true, 'landscape clips are highlights');
+		assert.equal(isHighlightVideo({ duration: 45 }), true, 'unknown shape: a video until detected');
+		assert.equal(isHighlightVideo({ duration: 600, format: 'short' }), false, 'the uploader chose Short');
 		assert.equal(isHighlightVideo({ duration: 600 }), true);
 		assert.equal(isHighlightVideo({}), true);
 
 		const e = env({ channels: new MemoryBucket({ c: { id: 'c', name: 'Chan' } }) });
-		assert.equal(await announceNewVideo(e, { id: 'v', channelId: 'c', userId: 'owner', title: 'Hi', duration: 30, uploadStatus: 'ready' }), true);
+		assert.equal(await announceNewVideo(e, { id: 'v', channelId: 'c', userId: 'owner', title: 'Hi', duration: 30, width: 720, height: 1280, uploadStatus: 'ready' }), true);
 		await announceLiveStarted(e, { id: 'l1', channelId: 'c', userId: 'owner', title: 'Live' });
 		const [video, live] = e.queue.messages;
 		assert.equal(video.type, MessageType.NotificationFanout);

@@ -63,6 +63,7 @@ const VideoPlayerRTL: React.FC<WatchPlayerProps> = ({ options, startTime, onPlay
             enableAnalytics={true}
             enableWebSocket={false}
             isLive={false}
+            isShort={options.isShort === true}
             lang="ar"
             className="w-full"
             ariaLabel={t.a11y.videoPlayerFor.replace('{title}', removeUnwantedChars(title))}

@@ -40,6 +40,7 @@ interface IndexRow {
 /** Which entity types a filter applies to; other types are dropped when it is set. */
 const FILTER_TYPES = {
   duration: ['video'],
+  format: ['video'],
   category: ['video', 'channel'],
   channelId: ['video', 'playlist', 'post'],
 } as const satisfies Record<string, ReadonlyArray<SearchEntityType>>;
@@ -47,6 +48,7 @@ const FILTER_TYPES = {
 export function searchTypesFor(query: SearchQuery): SearchEntityType[] {
   let types: SearchEntityType[] = query.type ? [query.type] : [...SEARCH_ENTITY_TYPES];
   if (query.duration) types = types.filter(t => (FILTER_TYPES.duration as ReadonlyArray<string>).includes(t));
+  if (query.format) types = types.filter(t => (FILTER_TYPES.format as ReadonlyArray<string>).includes(t));
   if (query.category) types = types.filter(t => (FILTER_TYPES.category as ReadonlyArray<string>).includes(t));
   if (query.channelId) types = types.filter(t => (FILTER_TYPES.channelId as ReadonlyArray<string>).includes(t));
   return types;
@@ -123,6 +125,10 @@ export function buildTypeStatement(
       where.push('d.duration < ?');
       binds.push(bounds.max);
     }
+  }
+  if (query.format && type === 'video') {
+    // Shorts are never live; live streams are not long-form uploads either
+    where.push(query.format === 'short' ? 'd.is_short = 1' : '(d.is_short = 0 AND d.is_live = 0)');
   }
   if (query.date) {
     where.push('d.created_at >= ?');

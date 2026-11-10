@@ -20,6 +20,11 @@ export interface PlayerOptions {
   type: string;
   width?: number;
   height?: number;
+  duration?: number;
+  /** Uploader's choice of Short or video; absent = detected */
+  format?: 'short' | 'video';
+  /** Short by the shared rule (shared-types video-format.ts) */
+  isShort?: boolean;
   availableResolutions?: string[];
   dateCreated: Date;
   likesCount?: number;

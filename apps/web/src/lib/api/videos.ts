@@ -15,7 +15,7 @@ import {
   SearchSuggestion,
   RecommendationRequest
 } from "./types";
-import type { BatchUploadInitiateResponse } from "@al-ummah/shared-types";
+import { isShort, type BatchUploadInitiateResponse } from "@al-ummah/shared-types";
 import { apiRequestServer, buildApiUrl } from "./api-client";
 import { getServerAuthContext } from "./server-auth";
 import { logger } from '@/lib/logger-server';
@@ -862,6 +862,8 @@ export async function initiateVideoUploadApi(
     descriptionLocalized?: Record<string, string>;
     isPublic?: boolean;
     tags?: string;
+    /** Upload as Short / as video; 'auto' detects it */
+    format?: 'auto' | 'short' | 'video';
     fileSize: number;
     mimeType: string;
   },
@@ -1070,6 +1072,10 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions | undef
             type: "video/mp4",
             width: video.width,
             height: video.height,
+            duration: video.duration,
+            format: video.format,
+            // The API computes it with the shared rule; derive it for older responses
+            isShort: typeof video.isShort === 'boolean' ? video.isShort : isShort(video),
             availableResolutions: video.availableResolutions,
             likesCount: video.likesCount,
             dislikesCount: video.dislikesCount,

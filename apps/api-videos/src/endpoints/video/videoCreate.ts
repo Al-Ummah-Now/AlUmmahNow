@@ -75,7 +75,7 @@ export class VideoCreate extends AuthenticatedRoute {
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		const { channelId } = request.headers;
-		const inputVideo = request.body;
+		const { format, ...inputVideo } = request.body;
 
 		// Get authenticated user ID
 		const effectiveUserId = this.getUserId(c);
@@ -98,6 +98,8 @@ export class VideoCreate extends AuthenticatedRoute {
 			// Ensure localized fields are stored
 			titleLocalized: inputVideo.titleLocalized,
 			descriptionLocalized: inputVideo.descriptionLocalized,
+			// Upload as Short / as video; 'auto' (or absent) leaves it to detection
+			...(format === 'short' || format === 'video' ? { format } : {}),
 		};
 
 		// create the video in Bunny Stream

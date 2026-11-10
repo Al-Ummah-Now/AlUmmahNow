@@ -23,6 +23,7 @@ export const VideoInput = z.object({
     category: z.nativeEnum(VideoCategory).optional().describe("Video category (e.g., 'quran_recitation', 'hadith_studies')"),
     tags: z.array(z.string()).optional().describe("Video tags for search and categorization"),
     language: z.enum(['en', 'ar', 'ur', 'fr']).optional().describe("Primary language of the video content"),
+    format: z.enum(['short', 'video', 'auto']).optional().describe("Publish as a Short or as a video; 'auto' (default) detects it"),
 });
 
 export const PlaylistInput = z.object({
@@ -76,6 +77,7 @@ export const VideoUpdateInput = z.object({
     tags: z.array(z.string().trim().min(1).max(50)).max(30).optional().describe("Video tags for search and categorization (replaces existing tags)"),
     language: z.enum(['en', 'ar', 'ur', 'fr']).optional().describe("Primary language of the video content"),
     commentSettings: z.enum(['on', 'held', 'off']).optional().describe("Comments: on, held for the owner's review, or off"),
+    format: z.enum(['short', 'video', 'auto']).optional().describe("Publish as a Short or as a video; 'auto' detects it (≤ 3 min and vertical or square = Short)"),
 });
 
 export const PlaylistUpdateInput = z.object({

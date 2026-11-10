@@ -11,6 +11,7 @@ import { VIDEO_UPLOAD_CONFIG, VIDEO_UPLOAD_ERRORS } from "@/lib/constants/upload
 import { Upload, X, AlertCircle, Pause, Play, RotateCcw } from "lucide-react";
 import { initiateVideoUpload, completeVideoUpload, getVideoUploadStatus, scheduleUploadedVideo } from "@/lib/api/upload-client";
 import { useHoldReloadWhile } from "@/lib/version-skew/VersionSkewProvider";
+import { VideoFormatChoice, type VideoFormatChoiceValue } from "@/components/videoFormat/VideoFormatChoice";
 import { useLanguage } from "@/hooks/useLanguage";
 import { UploadButton } from "@/components/UploadButton";
 import { ThumbnailUploadSection, ThumbnailData } from "./ThumbnailUploadSection";
@@ -45,6 +46,8 @@ interface VideoMetadata {
   tags?: string[];
   category?: VideoCategory;
   isPublic: boolean;
+  /** Upload as Short / as video; 'auto' detects it from length and shape */
+  format: VideoFormatChoiceValue;
 }
 
 type UploadState = 'idle' | 'uploading' | 'paused' | 'processing' | 'complete' | 'error';
@@ -81,7 +84,8 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
     descriptionEn: '',
     descriptionAr: '',
     tags: [],
-    isPublic: true
+    isPublic: true,
+    format: 'auto',
   });
   const [showMetadataForm, setShowMetadataForm] = useState(false);
   const [activeTab, setActiveTab] = useState<'en' | 'ar'>('en');
@@ -287,6 +291,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
             isPublic: scheduleData ? false : metadata.isPublic,
             tags: tagsString,
             category: metadata.category,
+            format: metadata.format,
             fileSize: selectedFile.size,
             mimeType: selectedFile.type,
             thumbnail: selectedThumbnail ? {
@@ -589,7 +594,8 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
       descriptionEn: '',
       descriptionAr: '',
       tags: [],
-      isPublic: true
+      isPublic: true,
+      format: 'auto',
     });
   };
 
@@ -817,6 +823,15 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
           <CategorySelector
             value={metadata.category}
             onChange={(category) => setMetadata(prev => ({ ...prev, category }))}
+            disabled={uploadProgress?.state === 'uploading'}
+          />
+
+          {/* Upload as Short / as video (wins over detection) */}
+          <VideoFormatChoice
+            value={metadata.format}
+            onChange={(format) => setMetadata(prev => ({ ...prev, format }))}
+            name="videoUploadFormat"
+            testIdPrefix="video-upload-format"
             disabled={uploadProgress?.state === 'uploading'}
           />
 

@@ -1,3 +1,4 @@
+import { isShort } from "@al-ummah/shared-types";
 import { Num, Str } from "chanfana";
 import { FALLBACK_SCAN_OBJECTS } from "../../lib/scanBudget";
 import { string, z } from "zod";
@@ -163,6 +164,7 @@ export class ChannelLiveList extends OptionalAuthRoute {
 				channelAvatarUrl: channel.avatarUrl || undefined,
 				likesCount: video.likes?.length || 0,
 				dislikesCount: video.dislikes?.length || 0,
+				isShort: isShort(video),
 				commentsCount: video.comments?.length || 0,
 			});
 

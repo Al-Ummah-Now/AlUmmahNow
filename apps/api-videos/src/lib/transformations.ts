@@ -4,6 +4,7 @@
 import { z } from "zod";
 import { Video as BusinessVideo, Channel as BusinessChannel, Profile as BusinessProfile, Playlist as BusinessPlaylist, Comment as BusinessComment } from "./types";
 import { VideoView, ChannelView, ProfileView, PlaylistView, CommentView } from "./model/view";
+import { isShort } from "@al-ummah/shared-types";
 import { getCommentSettings, isCommentVisible, StoredComment } from './comments';
 
 // Transform a business video to a view model
@@ -31,6 +32,7 @@ export function transformVideoToView(
         likesCount: video.likes?.length || 0,
         dislikesCount: video.dislikes?.length || 0,
         commentsCount: publicComments.length,
+        isShort: isShort(video),
     };
 }
 
