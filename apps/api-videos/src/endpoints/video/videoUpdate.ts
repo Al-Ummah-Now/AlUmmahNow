@@ -185,7 +185,13 @@ export class VideoUpdate extends AuthenticatedRoute {
 		const { data: updatedVideo, rejected } = await repository.updateObjectOrReject<true>(id, (fresh) => {
 			if (fresh.userId !== existingVideo.userId) return { reject: true };
 			previous = { ...fresh };
-			Object.assign(fresh, applyUpdate(fresh));
+			const next = applyUpdate(fresh);
+			// Fields the update removed (format 'auto' clears the uploader's
+			// choice) must go from the stored copy too: Object.assign only adds
+			for (const key of Object.keys(fresh)) {
+				if (!(key in next)) delete (fresh as Record<string, unknown>)[key];
+			}
+			Object.assign(fresh, next);
 			return true;
 		});
 		if (!updatedVideo) {

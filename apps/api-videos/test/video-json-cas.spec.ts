@@ -170,6 +170,19 @@ describe('video JSON: parallel writers never drop each other’s change', () => 
 	});
 });
 
+describe('video edit: format', () => {
+	it("'short'/'video' is stored and 'auto' removes it again (detection decides)", async () => {
+		const videos = new MemoryBucket({ v1: videoFixture({ duration: 4, width: 240, height: 426 }) });
+		const e = env(videos);
+		const owner = as('owner');
+		assert.equal((await owner.request('/api/videos/v1', send('PUT', { format: 'video' }, 'owner-ch'), e)).status, 200);
+		assert.equal(videos.read('v1').format, 'video');
+		assert.equal((await owner.request('/api/videos/v1', send('PUT', { format: 'auto' }, 'owner-ch'), e)).status, 200);
+		assert.equal('format' in videos.read('v1'), false, 'format auto must clear the stored choice');
+		assert.equal(videos.read('v1').width, 240, 'other fields are kept');
+	});
+});
+
 describe('R2Repository.updateObject', () => {
 	it('loses no increment with 200 parallel writers', async () => {
 		const bucket = new SlowBucket({ k: { n: 0 } });
