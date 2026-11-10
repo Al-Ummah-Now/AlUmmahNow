@@ -1,5 +1,6 @@
 import { test, expect, devices, type Page } from '@playwright/test';
 import { AxeBuilder } from '@axe-core/playwright';
+import { startThenPause, waitForPlayer } from './test-utils/watch-page';
 
 /**
  * Epic 1 accessibility (stories 1.1 colour contrast, 1.4 keyboard navigation,
@@ -186,12 +187,15 @@ test.describe('keyboard navigation (story 1.4)', () => {
 
   test('"?" opens the shortcut help dialog; Escape closes it and restores focus', async ({ page, isMobile }) => {
     test.skip(isMobile, 'Touch devices have no hardware keyboard / Tab navigation');
-    const playable = await openWatchPage(page, 'en');
-    test.skip(!playable, 'browser cannot decode the HLS stream - set A11Y_CHROME_CHANNEL=chrome');
+    await page.goto(`/en/video/${await resolveVideoId()}`, { waitUntil: 'domcontentloaded' });
+    test.skip((await waitForPlayer(page)) !== 'playable', 'browser cannot decode the HLS stream - set A11Y_CHROME_CHANNEL=chrome');
+    // The settings button appears once playback has started
+    await startThenPause(page);
 
-    const help = page.getByRole('button', { name: 'Show keyboard shortcuts' });
-    await help.focus();
-    await page.keyboard.press('Enter');
+    // "?" on the focused player opens the help; the redesigned bar has no shortcuts button
+    const player = page.locator('#video-player .video-js');
+    await player.focus();
+    await page.keyboard.press('Shift+Slash');
     const dialog = page.getByRole('dialog', { name: 'Keyboard Shortcuts' });
     await expect(dialog).toBeVisible();
     await expect(dialog.getByRole('button', { name: 'Close' }).first()).toBeFocused();
@@ -199,11 +203,18 @@ test.describe('keyboard navigation (story 1.4)', () => {
     expect(axe.violations, formatViolations(axe.violations)).toEqual([]);
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
-    await expect(help).toBeFocused();
+    await expect(player).toBeFocused();
 
-    await page.locator('#video-player .video-js').focus();
-    await page.keyboard.press('Shift+Slash');
+    // The settings menu's "Keyboard shortcuts" row opens the same dialog from the keyboard
+    const settings = page.locator('#video-player .vjs-fanous-settings');
+    await settings.focus();
+    await page.keyboard.press('Enter');
+    const row = page.getByTestId('player-settings-menu').locator('[data-row="shortcuts"]');
+    await row.focus();
+    await page.keyboard.press('Enter');
     await expect(dialog).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
   });
 });
 

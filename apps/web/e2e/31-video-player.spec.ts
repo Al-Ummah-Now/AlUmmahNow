@@ -9,6 +9,7 @@ import {
   mediaState,
   qaLecture,
   qaLectures,
+  startThenPause,
   waitForPlayer,
   watchUrl,
   type QaVideo,
@@ -290,17 +291,16 @@ test.describe('player controls', () => {
     ['en', 'Keyboard Shortcuts', 'Close'],
     ['ar', 'اختصارات لوحة المفاتيح', 'إغلاق'],
   ] as const) {
-    test(`PLAYER-015 keyboard help dialog opens from its button and closes with Escape (${locale})`, async ({ page, request, browserName, isMobile }, testInfo) => {
+    test(`PLAYER-015 keyboard help dialog opens from the settings menu and closes with Escape (${locale})`, async ({ page, request, browserName }, testInfo) => {
       skipWithoutCodec(browserName, testInfo);
       await openPlayable(page, await qaLecture(request, 1), locale);
+      await startThenPause(page);
 
-      const help = page.locator('.video-js .vjs-keyboard-help-button');
-      if (isMobile) {
-        // Touch devices have no keyboard: the shortcuts button is hidden to give the progress bar room
-        await expect(help).toBeHidden();
-        return;
-      }
-      await help.click();
+      // The redesigned bar has no shortcuts button: the help is the last row of the settings menu
+      await page.locator('.video-js .vjs-fanous-settings').click();
+      const menu = page.getByTestId('player-settings-menu');
+      await expect(menu).toBeVisible();
+      await menu.locator('[data-row="shortcuts"]').click();
       const dialog = page.getByRole('dialog', { name: title });
       await expect(dialog).toBeVisible();
       await expect(dialog.getByRole('button', { name: close }).first()).toBeVisible();

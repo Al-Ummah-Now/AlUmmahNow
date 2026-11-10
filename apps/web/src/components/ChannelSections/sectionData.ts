@@ -1,6 +1,7 @@
 import type { Channel, ChannelSection, LiveStream } from '@al-ummah/shared-types';
 import { getChannelById } from '@/lib/api/channels';
 import { logger } from '@/lib/logger-client';
+import { BRAND_LOGO_LARGE } from '@/components/brand/BrandLogo';
 
 /**
  * Public-facing channel fields needed to render a channel tile.
@@ -154,7 +155,7 @@ export function extractLiveStreams(response: unknown): ApiLiveStream[] {
   return [];
 }
 
-const FALLBACK_THUMBNAIL = '/logo.png';
+const FALLBACK_THUMBNAIL = BRAND_LOGO_LARGE;
 
 function toDate(value?: string): Date | undefined {
   if (!value) return undefined;
