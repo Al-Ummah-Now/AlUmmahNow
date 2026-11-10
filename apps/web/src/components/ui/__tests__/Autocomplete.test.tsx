@@ -189,6 +189,23 @@ describe('Autocomplete', () => {
   });
 });
 
+describe('Autocomplete popupHost', () => {
+  it('renders the popup into the host and still picks with a pointer there', () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const onSelect = jest.fn();
+    render(<Harness popupHost={host} onSelect={onSelect} />);
+    fireEvent.change(input(), { target: { value: 'seerah' } });
+    const option = within(host).getAllByRole('option')[0];
+    fireEvent.pointerDown(option);
+    fireEvent.click(option);
+    // The channel's @seerah handle is an exact match, so it ranks first
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'c1' }));
+    expect(input()).toHaveAttribute('aria-controls', within(host).getByRole('listbox').id);
+    host.remove();
+  });
+});
+
 describe('Highlight', () => {
   it('marks the matched words of the original text', () => {
     const { container } = render(<Highlight text="École normale" query="ecole" />);

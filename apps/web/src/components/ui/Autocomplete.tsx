@@ -22,6 +22,7 @@
  */
 
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState, type InputHTMLAttributes, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { Check } from 'lucide-react';
 import { rankSuggestions, splitHighlight } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -111,6 +112,13 @@ export interface AutocompleteProps {
   removeTestId?: string;
   inputRef?: React.Ref<HTMLInputElement>;
   inputProps?: NativeInputProps;
+  /**
+   * Render the popup into this element instead of under the input (overlay
+   * mode), when the input sits in a container that clips or restyles its
+   * children (the header's pill-shaped search form). The element should be
+   * absolutely positionable below the input.
+   */
+  popupHost?: HTMLElement | null;
   /** Rendered next to the input inside the wrapper (icons, clear buttons) */
   children?: ReactNode;
   /** Extra content at the end of an option row (e.g. a Plus icon) */
@@ -160,7 +168,7 @@ export function Autocomplete(props: AutocompleteProps) {
     value, onValueChange, onSelect, onSubmit, options, load, loadKey, emptyOptions, emptyHeader, emptyFooter,
     emptyText, groups, decorate, queryOf, debounceMs = DEFAULT_DEBOUNCE_MS, maxOptions = 12, keepOpenOnSelect, onRemove,
     hideNoMatches, mode = 'overlay', label, listLabel, inputId, inputClassName, className, popupClassName,
-    testId, popupTestId, optionTestId, removeTestId, inputRef, inputProps, children, renderTrailing,
+    testId, popupTestId, optionTestId, removeTestId, inputRef, inputProps, children, renderTrailing, popupHost,
   } = props;
   const minChars = props.minChars ?? (load ? 2 : 1);
   const { t } = useLanguage();
@@ -169,6 +177,8 @@ export function Autocomplete(props: AutocompleteProps) {
   const listId = `${baseId}-list`;
   const statusId = `${baseId}-status`;
   const containerRef = useRef<HTMLDivElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const isInside = (node: Node | null) => !!node && (!!containerRef.current?.contains(node) || !!popupRef.current?.contains(node));
   const ownInputRef = useRef<HTMLInputElement | null>(null);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
@@ -271,7 +281,7 @@ export function Autocomplete(props: AutocompleteProps) {
   useEffect(() => {
     if (inline) return;
     const onPointer = (event: PointerEvent) => {
-      if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
+      if (!isInside(event.target as Node)) setOpen(false);
     };
     document.addEventListener('pointerdown', onPointer);
     return () => document.removeEventListener('pointerdown', onPointer);
@@ -394,11 +404,11 @@ export function Autocomplete(props: AutocompleteProps) {
               >
                 <Thumbnail option={option} />
                 <span className="min-w-0 flex-1">
-                  <span dir="auto" className="block truncate text-[var(--fanous-color-text-primary)]">
+                  <span dir="auto" className="block truncate text-[var(--fanous-color-text-primary)] [text-align:match-parent]">
                     <Highlight text={option.label} query={query} />
                   </span>
                   {option.subtitle && (
-                    <span dir="auto" className="block truncate text-xs text-[var(--fanous-color-text-secondary)]">{option.subtitle}</span>
+                    <span dir="auto" className="block truncate text-xs text-[var(--fanous-color-text-secondary)] [text-align:match-parent]">{option.subtitle}</span>
                   )}
                 </span>
                 {option.selected && <Check className="h-4 w-4 shrink-0 text-brand" aria-label={a.selected} />}
@@ -432,10 +442,32 @@ export function Autocomplete(props: AutocompleteProps) {
     </ul>
   );
 
+  // The listbox stays in the DOM (hidden) so aria-controls always points at it
+  const popupNode = (
+    <div
+      ref={popupRef}
+      data-testid={popupTestId ?? 'autocomplete-popup'}
+      hidden={!expanded}
+      className={inline
+        ? `mt-2 overflow-hidden rounded-md border border-border ${popupClassName ?? ''}`
+        : `search-dd absolute inset-x-0 top-full z-[var(--z-popover,1000)] mt-1 overflow-hidden text-start ${popupClassName ?? ''}`}
+    >
+      {!query && emptyHeader}
+      {!query && ordered.length === 0 && emptyText && <p className="px-4 pb-3 pt-1 text-sm text-[var(--fanous-color-text-secondary)]">{emptyText}</p>}
+      {list}
+      {showNoMatches && (
+        <p className="px-4 py-3 text-sm text-[var(--fanous-color-text-secondary)]" data-testid="autocomplete-no-matches">
+          {a.noMatches.replace('{query}', query)}
+        </p>
+      )}
+      {!query && emptyFooter}
+    </div>
+  );
+
   return (
     <div ref={containerRef} className={`relative ${className ?? ''}`}
       onBlur={(event) => {
-        if (!inline && !containerRef.current?.contains(event.relatedTarget as Node | null)) setOpen(false);
+        if (!inline && !isInside(event.relatedTarget as Node | null)) setOpen(false);
       }}>
       <input
         autoComplete="off"
@@ -477,24 +509,7 @@ export function Autocomplete(props: AutocompleteProps) {
       />
       {children}
       <div id={statusId} role="status" aria-live="polite" aria-atomic="true" className="sr-only" data-testid="autocomplete-status">{status}</div>
-      {/* The listbox stays in the DOM (hidden) so aria-controls always points at it */}
-      <div
-        data-testid={popupTestId ?? 'autocomplete-popup'}
-        hidden={!expanded}
-        className={inline
-          ? `mt-2 overflow-hidden rounded-md border border-border ${popupClassName ?? ''}`
-          : `search-dd absolute inset-x-0 top-full z-[var(--z-popover,1000)] mt-1 overflow-hidden text-start ${popupClassName ?? ''}`}
-      >
-        {!query && emptyHeader}
-        {!query && ordered.length === 0 && emptyText && <p className="px-4 pb-3 pt-1 text-sm text-[var(--fanous-color-text-secondary)]">{emptyText}</p>}
-        {list}
-        {showNoMatches && (
-          <p className="px-4 py-3 text-sm text-[var(--fanous-color-text-secondary)]" data-testid="autocomplete-no-matches">
-            {a.noMatches.replace('{query}', query)}
-          </p>
-        )}
-        {!query && emptyFooter}
-      </div>
+      {popupHost && !inline ? createPortal(popupNode, popupHost) : popupNode}
     </div>
   );
 }
