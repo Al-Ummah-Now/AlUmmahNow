@@ -19,7 +19,8 @@ import { ChannelShortsList } from '../src/endpoints/channel/channelShortsList';
 import { createUploadRecord } from '../src/lib/upload/uploadRecord';
 import { isVideoListedFor, isVideoPubliclyVisible } from '../src/lib/visibility';
 import { isDiscoverable } from '../src/lib/discovery';
-import { publicVideoFields } from '../src/lib/transformations';
+import { publicVideoFields, uploaderProcessingIssue } from '../src/lib/transformations';
+import { VideoSearch } from '../src/endpoints/video/videoSearch';
 import { MemoryBucket, MemoryQueue, buildApp, videoFixture } from './helpers';
 
 const HOST = 'vz-215a1ffd-a5a.b-cdn.net';
@@ -193,4 +194,83 @@ describe('one listing rule', () => {
 		await e.videos.put('p1', JSON.stringify({ ...processing, uploadStatus: 'ready' }));
 		assert.deepEqual(await ids(visitor, `/api/channels/${CHANNEL}/shorts`, e), ['p1']);
 	});
+});
+
+/**
+ * #612 regression: lists dropped processingIssue for everyone, so the owner's
+ * dashboard showed Re-upload without the reason. The reason goes to the owner
+ * and channel members who may upload; visitors get only processingIssueKind.
+ */
+describe('upload failure reason: owner and uploaders only', () => {
+	const REASON = 'Bunny could not encode this file (unsupported codec)';
+	const EDITOR = 'editor-user';
+	const MODERATOR = 'moderator-user';
+	// Failed upload: only the owner (and uploaders) list it
+	const failed = videoFixture({ id: 'f1', userId: OWNER, channelId: CHANNEL, uploadStatus: 'failed', processingIssue: { kind: 'needs_reupload', reason: REASON, at: '2026-11-10T05:00:00.000Z' }, processingCheck: { loopId: 'x' } });
+	// Public and ready, but flagged: visitors list it too, never with the reason
+	const flaggedReady = videoFixture({ id: 'g1', userId: OWNER, channelId: CHANNEL, uploadStatus: 'ready', duration: 300, processingIssue: { kind: 'stalled', reason: 'raw check-loop text', at: '2026-11-10T05:00:00.000Z' } });
+	const channel = { id: CHANNEL, userId: OWNER, members: [
+		{ userId: EDITOR, role: 'editor', addedBy: OWNER, addedAt: '2026-11-01T00:00:00.000Z' },
+		{ userId: MODERATOR, role: 'moderator', addedBy: OWNER, addedAt: '2026-11-01T00:00:00.000Z' },
+	] };
+
+	it('helper: owner and members who may upload get the reason; moderators and visitors do not', () => {
+		assert.deepEqual(uploaderProcessingIssue(failed as any, channel, OWNER), { processingIssue: { kind: 'needs_reupload', reason: REASON, at: '2026-11-10T05:00:00.000Z' } });
+		assert.equal(uploaderProcessingIssue(failed as any, channel, EDITOR).processingIssue?.reason, REASON);
+		assert.deepEqual(uploaderProcessingIssue(failed as any, channel, MODERATOR), {});
+		assert.deepEqual(uploaderProcessingIssue(failed as any, channel, 'someone-else'), {});
+		assert.deepEqual(uploaderProcessingIssue(failed as any, channel, null), {});
+		assert.deepEqual(uploaderProcessingIssue(videoFixture({ userId: OWNER }) as any, channel, OWNER), {});
+	});
+
+	function envWith() {
+		const e = env();
+		e.channels = new MemoryBucket({ [CHANNEL]: channel });
+		return e;
+	}
+
+	async function byId(app: any, path: string, e: any) {
+		const res = await app.request(path, {}, e);
+		assert.equal(res.status, 200, path);
+		const body = (await res.json()) as any;
+		return new Map<string, any>((body.data ?? []).map((v: any) => [v.id, v]));
+	}
+
+	for (const [label, list, route, path] of [
+		['owner dashboard (GET /api/videos/search?isOwner)', VideoSearch, '/api/videos/search', `/api/videos/search?isOwner=true&channelIds=${CHANNEL}&limit=50`],
+		['channel videos', ChannelVideosList, '/api/channels/:id/videos', `/api/channels/${CHANNEL}/videos?limit=50`],
+		['latest (GET /api/videos)', VideosList, '/api/videos', '/api/videos?limit=50'],
+	] as const) {
+		it(`${label}: the owner's list carries the reason`, async () => {
+			const e = envWith();
+			for (const v of [failed, flaggedReady]) await e.videos.put(v.id, JSON.stringify(v));
+			const owner = buildApp((r) => r.get(route, list), { userId: OWNER });
+			const mine = await byId(owner, path, e);
+			assert.deepEqual(mine.get('f1')?.processingIssue, { kind: 'needs_reupload', reason: REASON, at: '2026-11-10T05:00:00.000Z' });
+			assert.equal(mine.get('f1')?.processingIssueKind, 'needs_reupload');
+			assert.equal(mine.get('f1')?.processingCheck, undefined);
+			assert.equal(mine.get('g1')?.processingIssue?.reason, 'raw check-loop text');
+		});
+	}
+
+	for (const [label, list, route, path] of [
+		['channel videos', ChannelVideosList, '/api/channels/:id/videos', `/api/channels/${CHANNEL}/videos?limit=50`],
+		['latest (GET /api/videos)', VideosList, '/api/videos', '/api/videos?limit=50'],
+		['search', VideoSearch, '/api/videos/search', `/api/videos/search?channelIds=${CHANNEL}&limit=50`],
+	] as const) {
+		it(`${label}: a visitor's list never carries the reason`, async () => {
+			const e = envWith();
+			for (const v of [failed, flaggedReady]) await e.videos.put(v.id, JSON.stringify(v));
+			for (const auth of [null, { userId: 'someone-else' }, { userId: MODERATOR }]) {
+				const viewer = buildApp((r) => r.get(route, list), auth);
+				const seen = await byId(viewer, path, e);
+				const g1 = seen.get('g1');
+				assert.ok(g1, `${label} lists the public ready video to ${auth?.userId ?? 'anonymous'}`);
+				assert.equal(g1.processingIssue, undefined);
+				assert.equal(g1.processingIssueKind, 'stalled');
+				assert.ok(!JSON.stringify([...seen.values()]).includes('raw check-loop text'));
+				assert.ok(!JSON.stringify([...seen.values()]).includes(REASON));
+			}
+		});
+	}
 });

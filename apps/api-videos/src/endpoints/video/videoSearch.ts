@@ -1,6 +1,6 @@
 import { isShort } from "@al-ummah/shared-types";
 import { Num, OpenAPIRoute, Str } from "chanfana";
-import { publicVideoFields } from '../../lib/transformations';
+import { publicVideoFields, uploaderProcessingIssue } from '../../lib/transformations';
 import { OptionalAuthRoute, AppContext } from '../../base';
 import { string, z } from "zod";
 import { Video as BusinessVideo, Channel as BusinessChannel, PaginationResponse, ResponseError } from "../../lib/types";
@@ -343,6 +343,7 @@ export class VideoSearch extends OptionalAuthRoute {
 			const channel = video.channelId ? channelMap.get(video.channelId) : undefined;
 			return {
 				...publicVideoFields(video),
+				...uploaderProcessingIssue(video, channel, userId),
 				channelName: channel?.name || "",
 				channelAvatarUrl: channel?.avatarUrl,
 				likesCount: video.likes?.length || 0,

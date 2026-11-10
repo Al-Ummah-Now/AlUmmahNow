@@ -1,5 +1,5 @@
 import { test, expect } from './support/fixtures';
-import { bodyBackground, isDark, setPreferences } from './support/ui';
+import { bodyBackground, chooseTheme, isDark, setPreferences } from './support/ui';
 
 test.describe('theme', () => {
   test.describe('system preference: dark', () => {
@@ -14,7 +14,7 @@ test.describe('theme', () => {
 
     test('THEME-02 an explicit light choice overrides the OS and persists', async ({ page }) => {
       await page.goto('/dashboard');
-      await page.getByTestId('theme-select').selectOption('light');
+      await chooseTheme(page, 'light');
       await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
       await expect.poll(async () => isDark(await bodyBackground(page))).toBe(false);
       await page.reload();
@@ -33,7 +33,7 @@ test.describe('theme', () => {
 
     test('THEME-04 an explicit dark choice applies everywhere', async ({ page }) => {
       await page.goto('/moderation');
-      await page.getByTestId('theme-select').selectOption('dark');
+      await chooseTheme(page, 'dark');
       await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
       await expect.poll(async () => isDark(await bodyBackground(page))).toBe(true);
       for (const path of ['/dashboard', '/translations', '/indices']) {
@@ -45,7 +45,7 @@ test.describe('theme', () => {
     test('THEME-05 back to system removes the override', async ({ page }) => {
       await setPreferences(page, { theme: 'dark' });
       await page.goto('/dashboard');
-      await page.getByTestId('theme-select').selectOption('system');
+      await chooseTheme(page, 'system');
       await expect(page.locator('html')).not.toHaveAttribute('data-theme', /.+/);
       await expect.poll(async () => isDark(await bodyBackground(page))).toBe(false);
     });

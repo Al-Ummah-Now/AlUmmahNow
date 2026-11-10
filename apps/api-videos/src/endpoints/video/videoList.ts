@@ -1,6 +1,6 @@
 import { can, isShort } from "@al-ummah/shared-types";
 import { Num, Str } from "chanfana";
-import { publicVideoFields } from '../../lib/transformations';
+import { publicVideoFields, uploaderProcessingIssue } from '../../lib/transformations';
 import { string, z } from "zod";
 import { Video as BusinessVideo, PaginationResponse, ResponseError } from "../../lib/types";
 import { VideoView } from "../../lib/model/view";
@@ -245,6 +245,7 @@ export class VideosList extends OptionalAuthRoute {
 			const channel = video.channelId ? channelMap.get(video.channelId) : undefined;
 			return {
 				...publicVideoFields(video),
+				...uploaderProcessingIssue(video, channel, userId),
 				channelName: channel?.name || "",
 				channelAvatarUrl: channel?.avatarUrl,
 				likesCount: video.likes?.length || 0,
