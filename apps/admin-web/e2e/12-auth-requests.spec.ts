@@ -81,7 +81,9 @@ async function sendRequest(page: Page, userId: string, action: string, reason: s
   await page.goto(`/auth-requests/users/${encodeURIComponent(userId)}`);
   const panel = page.getByTestId('auth-requests-panel');
   await expect(panel).toBeVisible();
-  const before = await panel.getByTestId('auth-request-row').count();
+  // The rows load after the panel renders: count only once the list has loaded (#712)
+  await expect(panel.getByText('Loading...', { exact: true })).toHaveCount(0, { timeout: 30_000 });
+  const before = new Set(await panel.getByTestId('auth-request-row').evaluateAll((rows) => rows.map((r) => r.getAttribute('data-request-id') ?? '')));
   await page.getByTestId('auth-request-open').click();
   const dialog = page.getByTestId('auth-request-dialog');
   await expect(dialog).toBeVisible();
@@ -92,8 +94,16 @@ async function sendRequest(page: Page, userId: string, action: string, reason: s
   await expect(dialog.getByTestId('auth-request-evidence')).toContainText('user page');
   await dialog.getByTestId('auth-request-submit').click();
   await expect(page.getByTestId('auth-request-notice')).toBeVisible();
-  await expect(panel.getByTestId('auth-request-row')).toHaveCount(before + 1);
-  const row = panel.getByTestId('auth-request-row').first();
+  // The new row is the one whose id was not there before (another run's leftovers don't count)
+  let newId = '';
+  await expect
+    .poll(async () => {
+      const ids = await panel.getByTestId('auth-request-row').evaluateAll((rows) => rows.map((r) => r.getAttribute('data-request-id') ?? ''));
+      newId = ids.find((x) => x && !before.has(x)) ?? '';
+      return newId;
+    }, { timeout: 30_000 })
+    .not.toBe('');
+  const row = panel.locator(`[data-testid="auth-request-row"][data-request-id="${newId}"]`);
   // Queued: "Sending…" until admin-api's queue delivers it, then auth's "Pending"
   await expect(row).toHaveAttribute('data-delivery', /sending|sent/);
   await expect(row).toHaveAttribute('data-delivery', 'sent', { timeout: 60_000 });
