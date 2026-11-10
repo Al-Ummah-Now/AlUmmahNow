@@ -27,6 +27,10 @@
   "r2_buckets": [
     { "binding": "VIDEOS", "bucket_name": "videos-qa" }
   ],
+  // Community post view counters (src/post-view-counter.ts flushes into analytics_daily)
+  "d1_databases": [
+    { "binding": "NOTIFICATIONS_DB", "database_name": "al-ummah-now-notifications-qa", "database_id": "61a2966a-66c2-4ae2-a98f-6e2e8cf6b880" }
+  ],
   "kv_namespaces": [
 			// Token revocation list written by the auth worker (#437)
 			{ "binding": "TOKEN_REVOCATIONS", "id": "e6e662fc9cd9420797ddfa8060eb6956" }

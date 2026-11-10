@@ -9,6 +9,8 @@ interface Env {
 	WEBSOCKET_DO: DurableObjectNamespace;
 	// Video JSON objects; the view counter flushes counts into them (view-counter.ts)
 	VIDEOS?: R2Bucket;
+	// Community post view counters (analytics_daily); the post view counter flushes into it (post-view-counter.ts)
+	NOTIFICATIONS_DB?: D1Database;
 	TOKEN_REVOCATIONS?: KVNamespace;
 
 	// Auth environment variables (from secrets/environment)

@@ -17,6 +17,7 @@ import { authenticateToken, canPublish, canSubscribe, canSubscribeAnonymously } 
 import { ClientMessageSchema, ServerMessage } from './messages';
 import { logger } from './lib/logger';
 import { ViewCounter, type CounterStorage, type VideoBucket } from './view-counter';
+import { PostViewCounter, type CounterDb, type PostCounterStorage } from './post-view-counter';
 import { broadcastToShards, type BroadcastItem } from './shards';
 
 /** Tag on every accepted socket, so its state can be found again after hibernation. */
@@ -54,6 +55,7 @@ export class WebSocketDurableObject extends DurableObject {
   /** channel -> sockets subscribed to it. */
   private subscribers: Map<string, Set<WebSocket>> = new Map();
   private viewCounter?: ViewCounter;
+  private postViewCounter?: PostViewCounter;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -112,6 +114,10 @@ export class WebSocketDurableObject extends DurableObject {
     // Reachable only through the DO binding: index.ts never forwards this path.
     if (url.pathname === '/views/increment' && request.method === 'POST') {
       return await this.handleViewIncrement(request);
+    }
+    // Post view counter role (objects named postviews:<postId>:<shard>, see post-view-counter.ts)
+    if (url.pathname === '/post-views/increment' && request.method === 'POST') {
+      return await this.handlePostViewIncrement(request);
     }
 
     if (url.pathname === '/broadcast' && request.method === 'POST') {
@@ -467,9 +473,46 @@ export class WebSocketDurableObject extends DurableObject {
     return n;
   }
 
-  /** Only view-counter objects ever set an alarm. */
+  /** Only view-counter objects (video or post) ever set an alarm. */
   async alarm(): Promise<void> {
+    const posts = this.getPostViewCounter();
+    if (await posts.active()) {
+      await posts.alarm();
+      return;
+    }
     await this.getViewCounter().alarm();
+  }
+
+  private getPostViewCounter(): PostViewCounter {
+    if (!this.postViewCounter) {
+      const env = this.env as Env;
+      this.postViewCounter = new PostViewCounter(
+        this.ctx.storage as unknown as PostCounterStorage,
+        env.NOTIFICATIONS_DB as unknown as CounterDb | undefined,
+        { logger },
+      );
+    }
+    return this.postViewCounter;
+  }
+
+  private async handlePostViewIncrement(request: Request): Promise<Response> {
+    let body: { postId?: unknown; shard?: unknown };
+    try {
+      body = await request.json();
+    } catch {
+      return Response.json({ error: 'Invalid JSON' }, { status: 400 });
+    }
+    const postId = typeof body.postId === 'string' ? body.postId : '';
+    const shard = typeof body.shard === 'number' || typeof body.shard === 'string' ? String(body.shard) : '';
+    if (!postId || postId.length > 200 || !/^\d{1,3}$/.test(shard)) {
+      return Response.json({ error: 'postId and shard are required' }, { status: 400 });
+    }
+    try {
+      return Response.json(await this.getPostViewCounter().increment(postId, shard));
+    } catch (error) {
+      logger.error('Post view counter increment failed', { postId, shard, error: String(error) });
+      return Response.json({ error: 'View not counted' }, { status: 500 });
+    }
   }
 
   private getViewCounter(): ViewCounter {
