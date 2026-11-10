@@ -34,7 +34,7 @@ export default async function ChannelSettingsPage({ params }: ChannelSettingsPag
   const displayName = channel.nameLocalized?.[locale] || channel.name;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+    <div className="min-h-screen">
       {/* Header */}
       <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
         <div className="container mx-auto px-4 py-6">
@@ -51,10 +51,10 @@ export default async function ChannelSettingsPage({ params }: ChannelSettingsPag
               </div>
             )}
             <div className={isRTL ? 'text-right' : ''}>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+              <h1 className="text-2xl font-bold text-[var(--fanous-color-text-primary)]">
                 {t.channel.channelSettings}
               </h1>
-              <p className="text-gray-600 dark:text-gray-400">{displayName}</p>
+              <p className="text-[var(--fanous-color-text-secondary)] dark:text-[var(--fanous-color-text-muted)]">{displayName}</p>
             </div>
           </div>
         </div>
@@ -99,10 +99,10 @@ export default async function ChannelSettingsPage({ params }: ChannelSettingsPag
                   </svg>
                 </div>
                 <div className={isRTL ? 'text-right' : ''}>
-                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                  <h2 className="text-lg font-semibold text-[var(--fanous-color-text-primary)] mb-2">
                     {t.channel.generalSettings}
                   </h2>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <p className="text-sm text-[var(--fanous-color-text-secondary)] dark:text-[var(--fanous-color-text-muted)]">
                     {t.channel.editChannelDetails}
                   </p>
                 </div>
@@ -133,10 +133,10 @@ export default async function ChannelSettingsPage({ params }: ChannelSettingsPag
                   </svg>
                 </div>
                 <div className={isRTL ? 'text-right' : ''}>
-                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                  <h2 className="text-lg font-semibold text-[var(--fanous-color-text-primary)] mb-2">
                     {t.video.videoManagement}
                   </h2>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <p className="text-sm text-[var(--fanous-color-text-secondary)] dark:text-[var(--fanous-color-text-muted)]">
                     {t.video.manageVideosDescription || 'Manage your channel videos'}
                   </p>
                 </div>
@@ -167,10 +167,10 @@ export default async function ChannelSettingsPage({ params }: ChannelSettingsPag
                   </svg>
                 </div>
                 <div className={isRTL ? 'text-right' : ''}>
-                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                  <h2 className="text-lg font-semibold text-[var(--fanous-color-text-primary)] mb-2">
                     {t.playlist.managePlaylists}
                   </h2>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <p className="text-sm text-[var(--fanous-color-text-secondary)] dark:text-[var(--fanous-color-text-muted)]">
                     {t.playlist.managePlaylistsDescription}
                   </p>
                 </div>
@@ -201,10 +201,10 @@ export default async function ChannelSettingsPage({ params }: ChannelSettingsPag
                   </svg>
                 </div>
                 <div className={isRTL ? 'text-right' : ''}>
-                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                  <h2 className="text-lg font-semibold text-[var(--fanous-color-text-primary)] mb-2">
                     {t.channel.tabs?.manage_tabs || 'Manage Tabs'}
                   </h2>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <p className="text-sm text-[var(--fanous-color-text-secondary)] dark:text-[var(--fanous-color-text-muted)]">
                     {t.channel.tabs?.manage_tabs_description || 'Customize channel tabs'}
                   </p>
                 </div>
@@ -235,10 +235,10 @@ export default async function ChannelSettingsPage({ params }: ChannelSettingsPag
                   </svg>
                 </div>
                 <div className={isRTL ? 'text-right' : ''}>
-                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                  <h2 className="text-lg font-semibold text-[var(--fanous-color-text-primary)] mb-2">
                     {t.channel.manageSections || 'Manage Sections'}
                   </h2>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <p className="text-sm text-[var(--fanous-color-text-secondary)] dark:text-[var(--fanous-color-text-muted)]">
                     {t.channel.customizeChannelLayout || 'Customize layout'}
                   </p>
                 </div>
@@ -269,10 +269,10 @@ export default async function ChannelSettingsPage({ params }: ChannelSettingsPag
                   </svg>
                 </div>
                 <div className={isRTL ? 'text-right' : ''}>
-                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                  <h2 className="text-lg font-semibold text-[var(--fanous-color-text-primary)] mb-2">
                     {t.channel.communitySettings || 'Community'}
                   </h2>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <p className="text-sm text-[var(--fanous-color-text-secondary)] dark:text-[var(--fanous-color-text-muted)]">
                     {t.channel.manageCommunityPosts || 'Manage posts'}
                   </p>
                 </div>
@@ -287,16 +287,16 @@ export default async function ChannelSettingsPage({ params }: ChannelSettingsPag
             className="block p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg hover:shadow-lg transition-shadow"
           >
             <div className={`flex items-start gap-4`}>
-              <div className="p-3 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
-                <svg className="w-6 h-6 text-amber-700 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <div className="p-3 bg-[color-mix(in_srgb,var(--fanous-color-primary)_26%,var(--fanous-color-surface))] rounded-lg">
+                <svg className="w-6 h-6 text-[var(--fanous-color-primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                 </svg>
               </div>
               <div className={isRTL ? 'text-right' : ''}>
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                <h2 className="text-lg font-semibold text-[var(--fanous-color-text-primary)] mb-2">
                   {t.channelRoles.team}
                 </h2>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
+                <p className="text-sm text-[var(--fanous-color-text-secondary)] dark:text-[var(--fanous-color-text-muted)]">
                   {role === 'owner' ? t.channelRoles.teamDescription : t.channelRoles.yourRole.replace('{role}', t.channelRoles.roles[role])}
                 </p>
               </div>
@@ -308,7 +308,7 @@ export default async function ChannelSettingsPage({ params }: ChannelSettingsPag
         <div className="mt-8">
           <Link
             href={`/${locale}/channels/${id}`}
-            className="inline-flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:underline"
+            className="inline-flex items-center gap-2 text-[var(--fanous-c-link-text)] hover:underline"
           >
             <svg
               className={`w-5 h-5 ${isRTL ? 'rotate-180' : ''}`}

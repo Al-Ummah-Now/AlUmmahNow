@@ -279,7 +279,7 @@ export function UnifiedNavigation() {
     <span
       data-testid="nav-channel-role"
       title={t.channelRoles.yourRole.replace('{role}', t.channelRoles.roles[role])}
-      className="flex-shrink-0 rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-medium text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
+      className="c flex-shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium text-[var(--fanous-color-text-secondary)]"
     >
       <span className="sr-only">{t.channelRoles.yourRole.replace('{role}', '')}</span>
       {t.channelRoles.roles[role]}
@@ -525,7 +525,7 @@ export function UnifiedNavigation() {
                 {backRow(t.navigation.switchChannel)}
                 {channelSections.map((section) => (
                   <div key={section.key} role="group" aria-labelledby={`nav-channels-${section.key}`} data-testid={`nav-channel-group-${section.key}`}>
-                    <p id={`nav-channels-${section.key}`} className="px-3 pt-2 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    <p id={`nav-channels-${section.key}`} className="px-3 pt-2 pb-1 text-xs font-semibold uppercase tracking-wide text-[var(--fanous-color-text-muted)]">
                       {section.key === 'owned' ? t.channelRoles.yourChannels : t.channelRoles.channelsYouManage}
                     </p>
                     {section.items.map((ch) => (
@@ -535,7 +535,7 @@ export function UnifiedNavigation() {
                             // eslint-disable-next-line @next/next/no-img-element
                             <img src={ch.avatarUrl} alt="" className="h-7 w-7 rounded-full object-cover" />
                           ) : (
-                            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-purple-500 text-xs font-semibold text-white">{getChannelName(ch.name, ch.nameLocalized)[0].toUpperCase()}</span>
+                            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--fanous-c-button-primary-bg)] text-xs font-semibold text-[var(--fanous-c-button-primary-text)]">{getChannelName(ch.name, ch.nameLocalized)[0].toUpperCase()}</span>
                           )}
                           {ch.isMain && ch.role === 'owner' && <Crown className="absolute -bottom-0.5 -end-0.5 h-2.5 w-2.5 rounded-full bg-white text-brand-ink dark:bg-gray-900" />}
                         </span>

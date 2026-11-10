@@ -250,7 +250,7 @@ const UploadPage: React.FC = () => {
               </Link>
               <Link
                 href={`/${locale}`}
-                className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors font-medium"
+                className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-[var(--fanous-color-divider)] dark:bg-[var(--fanous-color-surface-raised)] text-[var(--fanous-color-text-primary)] rounded-lg hover:bg-[var(--fanous-color-divider)] dark:hover:bg-[var(--fanous-color-outline)] transition-colors font-medium"
               >
                 {t.upload.goHome}
               </Link>
@@ -264,15 +264,15 @@ const UploadPage: React.FC = () => {
   // The active channel is one the user manages with a role that can't upload
   if (roleCannotUpload) {
     return (
-      <main className="flex flex-col p-4 md:p-6 lg:p-8 w-full min-h-screen bg-gray-50 dark:bg-gray-900">
+      <main className="flex flex-col p-4 md:p-6 lg:p-8 w-full min-h-screen">
         <div className="max-w-2xl mx-auto w-full">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 md:p-12 text-center" data-testid="upload-role-forbidden" data-role={uploadRole}>
-            <ShieldAlert size={64} className="mx-auto mb-6 text-amber-500" aria-hidden="true" />
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">{t.channelRoles.cannotUpload}</h1>
-            <p className="text-gray-600 dark:text-gray-400 mb-8">{t.channelRoles.cannotUploadHint}</p>
+          <div className="c p-8 md:p-12 text-center" data-testid="upload-role-forbidden" data-role={uploadRole}>
+            <ShieldAlert size={64} className="mx-auto mb-6 text-[var(--fanous-color-primary)]" aria-hidden="true" />
+            <h1 className="text-2xl font-bold text-[var(--fanous-color-text-primary)] mb-4">{t.channelRoles.cannotUpload}</h1>
+            <p className="text-[var(--fanous-color-text-secondary)] dark:text-[var(--fanous-color-text-muted)] mb-8">{t.channelRoles.cannotUploadHint}</p>
             <Link
               href={`/${locale}`}
-              className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors font-medium"
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-[var(--fanous-color-divider)] dark:bg-[var(--fanous-color-surface-raised)] text-[var(--fanous-color-text-primary)] rounded-lg hover:bg-[var(--fanous-color-divider)] dark:hover:bg-[var(--fanous-color-outline)] transition-colors font-medium"
             >
               {t.upload.goHome}
             </Link>

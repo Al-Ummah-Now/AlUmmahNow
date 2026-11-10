@@ -24,11 +24,11 @@ export default async function ChannelTeamPage({ params }: ChannelTeamPageProps) 
   const displayName = channel.nameLocalized?.[locale] || channel.name;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+    <div className="min-h-screen">
       <div className="container mx-auto max-w-3xl px-4 py-8">
         <ChannelSettingsBreadcrumb channelId={id} channelName={displayName} locale={locale} currentPage="team" className="mb-6" />
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t.channelRoles.team}</h1>
-        <p className="mt-1 mb-6 text-gray-600 dark:text-gray-400">{t.channelRoles.teamDescription}</p>
+        <h1 className="text-2xl font-bold text-[var(--fanous-color-text-primary)]">{t.channelRoles.team}</h1>
+        <p className="mt-1 mb-6 text-[var(--fanous-color-text-secondary)] dark:text-[var(--fanous-color-text-muted)]">{t.channelRoles.teamDescription}</p>
         <ChannelTeam channelId={id} role={role} locale={locale} />
       </div>
     </div>
