@@ -377,22 +377,16 @@ function ChannelEditPage() {
               <button
                 type="button"
                 onClick={() => setActiveTab('en')}
-                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'en'
-                    ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
-                    : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                }`}
+                className="tab-item"
+                data-active={activeTab === 'en'}
               >
                 {t.languages.english}
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab('ar')}
-                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'ar'
-                    ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
-                    : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                }`}
+                className="tab-item"
+                data-active={activeTab === 'ar'}
               >
                 {t.languages.arabic}
               </button>

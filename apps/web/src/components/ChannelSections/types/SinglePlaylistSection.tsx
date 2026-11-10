@@ -56,7 +56,7 @@ export function SinglePlaylistSection({ playlistId }: SinglePlaylistSectionProps
   }
 
   return (
-    <section className="space-y-4">
+    <section data-section="playlist" className="space-y-4">
       <SectionHeader
         title={playlist?.name ? pickLanguage(playlist.name, locale) : t.channel.playlist}
         viewAllHref={playlist ? `/${locale}/playlist/${playlist.id}` : undefined}

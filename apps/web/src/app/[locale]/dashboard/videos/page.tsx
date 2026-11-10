@@ -1,5 +1,6 @@
 'use client';
 
+import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import { logger } from '@/lib/logger-client';
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -423,7 +424,7 @@ export default function VideoDashboardPage() {
 
             {/* Filters Row */}
             <div className="flex flex-wrap gap-4">
-              <select
+              <ThemedSelectField
                 data-testid="dashboard-filter-status"
                 aria-label={t.video.allStatus}
                 value={statusFilter}
@@ -435,9 +436,9 @@ export default function VideoDashboardPage() {
                 <option value="processing">{t.video.processing}</option>
                 <option value="uploading">{t.video.uploading}</option>
                 <option value="failed">{t.video.failed}</option>
-              </select>
+              </ThemedSelectField>
 
-              <select
+              <ThemedSelectField
                 data-testid="dashboard-filter-privacy"
                 aria-label={t.video.filterByPrivacy}
                 value={privacyFilter}
@@ -447,9 +448,9 @@ export default function VideoDashboardPage() {
                 <option value="all">{t.video.filterByPrivacy}</option>
                 <option value="public">{t.video.public}</option>
                 <option value="private">{t.video.private}</option>
-              </select>
+              </ThemedSelectField>
 
-              <select
+              <ThemedSelectField
                 data-testid="dashboard-filter-duration"
                 aria-label={t.video.allVideos}
                 value={durationFilter}
@@ -460,9 +461,9 @@ export default function VideoDashboardPage() {
                 <option value="short">{t.video.shortVideos || 'Short (≤3 min)'}</option>
                 <option value="standard">{t.video.standardVideos || 'Standard (3-20 min)'}</option>
                 <option value="long">{t.video.longVideos || 'Long (>20 min)'}</option>
-              </select>
+              </ThemedSelectField>
 
-              <select
+              <ThemedSelectField
                 data-testid="dashboard-sort"
                 aria-label={t.search.sortBy}
                 value={sortBy}
@@ -472,7 +473,7 @@ export default function VideoDashboardPage() {
                 <option value="date">{t.video.sortByDate}</option>
                 <option value="views">{t.video.sortByViews}</option>
                 <option value="title">{t.video.sortByTitle}</option>
-              </select>
+              </ThemedSelectField>
             </div>
 
             {/* Bulk Actions */}

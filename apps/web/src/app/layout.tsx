@@ -7,6 +7,13 @@ import { headers } from "next/headers";
 import { DEFAULT_LOCALE, LOCALE_REQUEST_HEADER } from "@/lib/i18n/locales";
 import { getTextDirection, isLocaleSupported } from "@/lib/i18n/utils";
 import "./globals.css";
+import "@/theme/fonts.css";
+import "@/theme/materials.css";
+import "@/theme/bridge.css";
+import "@/theme/demo-motion.css";
+import "@/theme/system.css";
+import "@/theme/pages.css";
+import backdrops from "@/theme/demo-backdrops.json";
 import Navigation from "@/components/navigation";
 import AuthProvider from "@/components/AuthProvider";
 import { WebSocketProvider } from "@/lib/websocket/WebSocketProvider";
@@ -161,7 +168,8 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
                   <ActiveChannelWrapper>
                     <WebSocketProvider user={user}>
                       <TranslationSyncProvider>
-                        <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900">
+                        <div className="theme-bg" aria-hidden="true" dangerouslySetInnerHTML={{ __html: backdrops[theme as keyof typeof backdrops] ?? "" }} />
+                        <div className="demo-layer flex flex-col min-h-screen bg-white dark:bg-gray-900">
                           {/* Skip links must be the first focusable elements (WCAG 2.4.1) */}
                           <SkipLinks />
                           {/* Header */}

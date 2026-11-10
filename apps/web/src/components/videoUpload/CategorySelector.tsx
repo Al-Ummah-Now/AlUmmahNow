@@ -7,6 +7,7 @@
  * Displays Islamic-specific categories for content organization.
  */
 
+import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import { useLanguage } from '@/hooks/useLanguage';
 import { Folder, ChevronDown } from 'lucide-react';
 import { VideoCategory, VIDEO_CATEGORIES } from '@al-ummah/shared-types';
@@ -44,7 +45,7 @@ export function CategorySelector({
       </label>
 
       <div className="relative">
-        <select
+        <ThemedSelectField
           id={id}
           data-testid="category-select"
           value={value || ''}
@@ -83,7 +84,7 @@ export function CategorySelector({
               {isRTL ? category.label.ar : category.label.en}
             </option>
           ))}
-        </select>
+        </ThemedSelectField>
 
         <ChevronDown className="absolute right-3 rtl:left-3 rtl:right-auto top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
       </div>

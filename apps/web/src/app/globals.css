@@ -271,6 +271,48 @@
   text-decoration: underline;
 }
 
+/*
+ * Tab rows. Fixed height, and the bar is an inset shadow, so nothing moves in
+ * any state. Selected and hover are one rule, so a tab can only show one bar.
+ */
+.tab-item {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  height: 3rem;
+  padding: 0 1.5rem;
+  border: 0;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  background: transparent;
+  color: var(--fanous-c-tabs-text, var(--fanous-color-text-secondary));
+  transition: background-color 120ms, box-shadow 120ms, color 120ms;
+}
+.tab-item[aria-selected='true'],
+.tab-item[data-state='active'],
+.tab-item[data-active='true'] {
+  box-shadow: inset 0 -2px 0 var(--fanous-c-tabs-indicator, var(--fanous-color-primary));
+  background-color: color-mix(in srgb, var(--fanous-c-tabs-indicator, var(--fanous-color-primary)) 12%, transparent);
+  color: var(--fanous-c-tabs-active-text, var(--fanous-color-text-primary));
+}
+@media (hover: hover) {
+  .tab-item:hover:not(:disabled) {
+    box-shadow: inset 0 -2px 0 var(--fanous-c-tabs-indicator, var(--fanous-color-primary));
+    background-color: color-mix(in srgb, var(--fanous-c-tabs-indicator, var(--fanous-color-primary)) 12%, transparent);
+    color: var(--fanous-c-tabs-active-text, var(--fanous-color-text-primary));
+  }
+}
+.tab-item:focus-visible {
+  outline: 2px solid var(--fanous-color-focus-ring, currentColor);
+  outline-offset: -2px;
+}
+
 /* Upload: one action in the top bar beside the menu button, outlined, in the upload part tokens.
    A 44px icon button on phones; the label stays its accessible name. */
 .upload-action {

@@ -6,6 +6,7 @@
 
 'use client';
 
+import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import React from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -44,7 +45,7 @@ export function CalendarControlsRTL({
       {/* Right Section: View Type + Calendar Type */}
       <div className="flex flex-wrap items-center gap-3">
         {/* Calendar Type Selector */}
-        <select
+        <ThemedSelectField
           value={calendarType}
           onChange={(e) => onCalendarTypeChange(e.target.value as CalendarType)}
           className="px-3 py-1.5 text-sm font-medium bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -52,7 +53,7 @@ export function CalendarControlsRTL({
         >
           <option value="gregorian">{(t.schedule?.calendar?.gregorian) ?? "Gregorian"}</option>
           <option value="hijri">{(t.schedule?.calendar?.hijri) ?? "Hijri"}</option>
-        </select>
+        </ThemedSelectField>
 
         {/* View Type Selector */}
         <div className="inline-flex rounded-lg border border-gray-300 dark:border-gray-600">

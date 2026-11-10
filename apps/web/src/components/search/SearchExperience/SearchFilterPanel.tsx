@@ -6,6 +6,8 @@
  * chips for active filters. Changes apply immediately (URL state).
  */
 
+import { BodyPortal } from '@/components/ui/BodyPortal';
+import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import React, { useEffect, useId, useRef } from 'react';
 import { SlidersHorizontal, X } from 'lucide-react';
 import type { SearchEntityType } from '@al-ummah/shared-types';
@@ -45,12 +47,12 @@ function Chip({ selected, onClick, children, testId }: ChipProps) {
 export function SearchTypeChips({ state, onChange }: { state: SearchUrlState; onChange: (type?: SearchEntityType) => void }) {
   const { t } = useLanguage();
   return (
-    <div role="group" aria-label={t.search.resultType} className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 [scrollbar-width:none]">
-      <Chip selected={!state.type} onClick={() => onChange(undefined)} testId="search-type-all">{typeLabel(t.search, undefined)}</Chip>
+    <div role="group" aria-label={t.search.resultType} className="flex overflow-x-auto [scrollbar-width:none] border-b border-gray-200 dark:border-gray-700">
+      <button type="button" className="tab-item" aria-pressed={!state.type} data-active={!state.type} onClick={() => onChange(undefined)} data-testid="search-type-all">{typeLabel(t.search, undefined)}</button>
       {SEARCH_TYPES.map(type => (
-        <Chip key={type} selected={state.type === type} onClick={() => onChange(type)} testId={`search-type-${type}`}>
+        <button type="button" key={type} className="tab-item" aria-pressed={state.type === type} data-active={state.type === type} onClick={() => onChange(type)} data-testid={`search-type-${type}`}>
           {typeLabel(t.search, type)}
-        </Chip>
+        </button>
       ))}
     </div>
   );
@@ -116,7 +118,7 @@ export function SearchFilterPanel({ state, open, onOpenChange, onChange, onClear
   return (
     <>
       <div className="fixed inset-0 z-40 bg-black/40 md:hidden" aria-hidden="true" onClick={() => onOpenChange(false)} />
-      <div
+      <BodyPortal><div
         id="search-filter-panel"
         ref={panelRef}
         tabIndex={-1}
@@ -171,7 +173,7 @@ export function SearchFilterPanel({ state, open, onOpenChange, onChange, onClear
 
           <div className="space-y-2">
             <label htmlFor={categoryId} className="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{t.search.category}</label>
-            <select
+            <ThemedSelectField
               id={categoryId}
               data-testid="search-filter-category"
               value={state.category ?? ''}
@@ -182,7 +184,7 @@ export function SearchFilterPanel({ state, open, onOpenChange, onChange, onClear
               {VIDEO_CATEGORIES.map(category => (
                 <option key={category.value} value={category.value}>{categoryLabel(category.value, lang, category.value)}</option>
               ))}
-            </select>
+            </ThemedSelectField>
           </div>
 
           <FilterGroup title={t.search.sortBy}>
@@ -220,7 +222,7 @@ export function SearchFilterPanel({ state, open, onOpenChange, onChange, onClear
             {t.search.showResults}
           </button>
         </div>
-      </div>
+      </div></BodyPortal>
     </>
   );
 }

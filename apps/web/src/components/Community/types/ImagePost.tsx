@@ -1,5 +1,6 @@
 'use client';
 
+import { BodyPortal } from '@/components/ui/BodyPortal';
 import { CommunityPost } from '@al-ummah/shared-types';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
@@ -76,7 +77,7 @@ export default function ImagePost({ post, isRTL = false }: ImagePostProps) {
 
       {/* Lightbox Modal */}
       {selectedImage !== null && (
-        <div
+        <BodyPortal><div
           className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
           onClick={() => setSelectedImage(null)}
         >
@@ -123,7 +124,7 @@ export default function ImagePost({ post, isRTL = false }: ImagePostProps) {
               )}
             </div>
           )}
-        </div>
+        </div></BodyPortal>
       )}
     </div>
   );

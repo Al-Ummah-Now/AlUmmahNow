@@ -7,6 +7,8 @@
  * Pre-fills metadata fields when a template is selected.
  */
 
+import { BodyPortal } from '@/components/ui/BodyPortal';
+import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { FileText, ChevronDown, AlertCircle } from 'lucide-react';
@@ -194,7 +196,7 @@ export function TemplateSelector({
         </label>
 
         <div className="relative">
-          <select
+          <ThemedSelectField
             id="upload-template-select"
             data-testid="upload-template-select"
             value={selectedTemplateId}
@@ -235,7 +237,7 @@ export function TemplateSelector({
                 {template.id === defaultTemplateId && ` ${isRTL ? '(افتراضي)' : '(Default)'}`}
               </option>
             ))}
-          </select>
+          </ThemedSelectField>
 
           <ChevronDown className="absolute right-3 rtl:left-3 rtl:right-auto top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
         </div>
@@ -261,7 +263,7 @@ export function TemplateSelector({
 
       {/* Variable Input Modal */}
       {showVariablePrompt && pendingTemplate && (
-        <div
+        <BodyPortal><div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
@@ -433,7 +435,7 @@ export function TemplateSelector({
               </button>
             </div>
           </div>
-        </div>
+        </div></BodyPortal>
       )}
     </>
   );
