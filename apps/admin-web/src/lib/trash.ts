@@ -12,6 +12,7 @@ export const TRASH_HOME: Record<TrashKind, string> = {
   'contact-message': '/contact',
   theme: '/site-theme',
   'creator-tier': '/creators/tiers',
+  invite: '/users/invites',
 };
 
 export const trashHref = (kind: TrashKind) => `/recently-deleted/${kind}`;

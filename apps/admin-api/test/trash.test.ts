@@ -173,6 +173,7 @@ describe('cleanup (the only hard delete)', () => {
       'contact-message': { purged: 2, failed: 0 },
       theme: { purged: 2, failed: 0 },
       'creator-tier': { purged: 1, failed: 1 },
+      invite: { purged: 0, failed: 0 },
     });
     assert.deepEqual((await db.prepare('SELECT id FROM contact_messages ORDER BY id').all<{ id: string }>()).results.map((r) => r.id), ['live', 'recent']);
     assert.equal(await count('SELECT COUNT(*) AS n FROM contact_notes'), 0);

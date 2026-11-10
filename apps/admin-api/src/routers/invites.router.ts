@@ -32,6 +32,9 @@ import {
   newInviteId,
   newLinkToken,
   newUserId,
+  requestInvitePurge,
+  restoreInvite,
+  InviteStateError,
   normalizeEmail,
   recentInviteActions,
   setPendingOp,
@@ -68,9 +71,11 @@ const videos = <T>(c: C, path: string, call: VideosCall = {}) => callVideos<T>(c
 const body = async (c: C) => (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
 const str = (v: unknown, max: number) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
 const queueEnv = (c: C) => c.env as unknown as InviteQueueEnv;
+const actorRef = (c: C) => ({ id: actorOf(c), email: auth(c)?.email ?? null });
 
 app.onError((error, c) => {
   if (error instanceof HttpError) return c.json({ success: false, code: error.code, error: error.message, ...(error.extra ?? {}) }, error.status);
+  if (error instanceof InviteStateError) return c.json({ success: false, code: error.code, error: error.message, ...(error.invite ? { invite: error.invite } : {}) }, error.status);
   if (error instanceof VideosError) return c.json({ success: false, code: error.code, error: error.message }, error.status as 400);
   logger.error('[Invites] Request failed', { path: c.req.path, error: error instanceof Error ? error.message : String(error) });
   return c.json({ success: false, code: 'internal_error', error: 'Internal error' }, 500);
@@ -292,21 +297,12 @@ app.post('/:id/restore', async (c) => {
   await limit(c);
   const row = await requireInvite(c);
   if (!row.deleted_at) return ok(c, toView(row));
-  const other = await liveInviteForEmail(c.env.REPORTS_DB, row.email);
-  if (other) throw new HttpError(409, 'email_taken', 'Another open invite uses this email', { invite: toView(other) });
-  const now = new Date().toISOString();
-  await c.env.REPORTS_DB.prepare('UPDATE creator_invites SET deleted_at = NULL, deleted_by = NULL, deleted_reason = NULL, purge_requested_at = NULL, updated_at = ? WHERE id = ?').bind(now, row.id).run();
-  if (row.delivery_status === 'sent') await queueOp(c, row, 'restore', {});
-  else {
-    // Revoked before auth had it: make it now
-    await c.env.REPORTS_DB.prepare("UPDATE creator_invites SET delivery_status = 'sending', delivery_error = NULL WHERE id = ?").bind(row.id).run();
-    await enqueue(queueEnv(c), row.id, 'create');
-  }
+  await restoreInvite(queueEnv(c), row, actorRef(c));
   await record(c, 'restored', row);
   return ok(c, toView((await getInvite(c.env.REPORTS_DB, row.id))!));
 });
 
-/** "Delete permanently now": type the email to confirm; only queues it for auth's cleanup. */
+/** "Delete permanently now": type the email to confirm; only queues it for the cleanups. */
 app.post('/:id/purge', async (c) => {
   need(c, 'users:manage');
   await limit(c);
@@ -314,9 +310,7 @@ app.post('/:id/purge', async (c) => {
   if (!row.deleted_at) throw new HttpError(409, 'not_revoked', 'Revoke the invite first');
   const confirm = normalizeEmail(String((await body(c)).confirm ?? ''));
   if (confirm !== row.email) throw new HttpError(400, 'confirm_mismatch', 'Type the invite email to confirm');
-  const now = new Date().toISOString();
-  await c.env.REPORTS_DB.prepare('UPDATE creator_invites SET purge_requested_at = ?, updated_at = ? WHERE id = ?').bind(now, now, row.id).run();
-  if (row.delivery_status === 'sent') await queueOp(c, row, 'purge', { confirm: row.email });
+  await requestInvitePurge(queueEnv(c), row, actorRef(c));
   await record(c, 'purge_requested', row);
   return ok(c, toView((await getInvite(c.env.REPORTS_DB, row.id))!));
 });

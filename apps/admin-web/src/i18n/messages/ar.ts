@@ -2108,6 +2108,7 @@ const ar: Messages = {
       'contact-message': 'رسائل التواصل',
       theme: 'المظاهر',
       'creator-tier': 'فئات صنّاع المحتوى',
+      invite: 'الدعوات',
     },
   },
 };

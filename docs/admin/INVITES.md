@@ -106,9 +106,20 @@ the invite stay with that user id until the purge. The revoke dialog says so:
 transfer them first if they should go to someone else. The videos-side profile
 is not purged automatically yet (#716).
 
+## Recently deleted
+
+Revoked invites are an admin soft delete in the shared framework: the trash
+kind `invite` (packages/shared-types `TRASH_KINDS`). They are listed on
+**Recently deleted → Invites** with Restore and "Delete permanently now",
+alongside contact messages, themes and creator tiers. The hourly trash cleanup
+(`runTrashCleanup`) drops an invite's mirror row 30 days after the revoke, or
+once auth has received a "Delete permanently now" request. Auth's own cleanup
+removes the account itself; on the auth side the account is an
+`admin_deletions` row, so it also appears in the Auth admin's Recently deleted.
+
 ## Tables
 
-`creator_invites` (REPORTS_DB, migration `0013`, additive) is the mirror of
-the invite: delivery state, auth status, pending change, and the soft-delete
-fields `deleted_at`, `deleted_by`, `deleted_reason` and `purge_requested_at`.
-These are the same fields as the admin soft-delete framework.
+`creator_invites` (REPORTS_DB, migration `0014`, additive; `0013` is the admin
+soft delete) is the mirror of the invite: delivery state, auth status, pending
+change, and the soft-delete fields `deleted_at`, `deleted_by`,
+`deleted_reason` and `purge_requested_at`.

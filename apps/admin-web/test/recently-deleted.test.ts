@@ -34,13 +34,13 @@ describe('Recently deleted access (mirrors admin-api /api/trash)', () => {
     assert.equal(canManageTrash(undefined), false);
   });
 
-  it('accepts only the three kinds and links each back to its page', () => {
-    assert.deepEqual([...TRASH_KINDS], ['contact-message', 'theme', 'creator-tier']);
+  it('accepts only the four kinds and links each back to its page', () => {
+    assert.deepEqual([...TRASH_KINDS], ['contact-message', 'theme', 'creator-tier', 'invite']);
     assert.equal(parseTrashKind('theme'), 'theme');
     assert.equal(parseTrashKind('videos'), null);
     assert.equal(parseTrashKind(['theme']), null);
     assert.equal(trashHref('creator-tier'), '/recently-deleted/creator-tier');
-    assert.deepEqual(TRASH_HOME, { 'contact-message': '/contact', theme: '/site-theme', 'creator-tier': '/creators/tiers' });
+    assert.deepEqual(TRASH_HOME, { 'contact-message': '/contact', theme: '/site-theme', 'creator-tier': '/creators/tiers', invite: '/users/invites' });
   });
 });
 

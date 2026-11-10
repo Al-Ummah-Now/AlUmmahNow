@@ -13,6 +13,7 @@ import contentRouter from '../src/routers/content.router';
 import { handleAuthRequestBatch } from '../src/lib/authModerationQueue';
 import { AuthInviteClient, INVITE_ACTIONS_PER_HOUR, scheduleInviteSyncs, sha256Hex, signInUrl, type InviteMessage } from '../src/lib/invites';
 import { sqliteD1 } from './d1-sqlite';
+import { listTrash, requestTrashPurge, restoreTrash, runTrashCleanup } from '../src/lib/trash';
 
 interface Call { method: string; path: string; body: any }
 
@@ -335,6 +336,38 @@ describe('resend, copy link, revoke, restore, purge', () => {
     await t.call('POST', `/api/invites/${inv.id}/restore`);
     await t.drain();
     assert.equal(t.auth.invites.size, 1);
+  });
+});
+
+describe('Recently deleted (admin soft-delete framework)', () => {
+  it('lists revoked invites, restores and queues them like any deleted item; the cleanup drops the mirror', async () => {
+    const t = setup();
+    const inv = (await t.call('POST', '/api/invites', invite())).body.result.invite;
+    await t.drain();
+    await t.call('POST', `/api/invites/${inv.id}/revoke`, { reason: 'Typo in the address' });
+    await t.drain();
+    const env = t.env as never;
+    const items = await listTrash(env, 'invite');
+    assert.deepEqual(items.map((i) => [i.id, i.title, i.reason]), [[inv.id, 'New Creator (new.creator@example.com)', 'Typo in the address']]);
+
+    await restoreTrash(env, 'invite', inv.id, 'usr_admin');
+    await t.drain();
+    assert.equal((await listTrash(env, 'invite')).length, 0);
+    assert.equal(t.auth.invites.get(inv.id).status, 'invited');
+    await assert.rejects(restoreTrash(env, 'invite', inv.id, 'usr_admin'), /No revoked invite/);
+
+    await t.call('POST', `/api/invites/${inv.id}/revoke`, {});
+    await t.drain();
+    await requestTrashPurge(env, 'invite', inv.id, 'usr_admin');
+    assert.ok((await listTrash(env, 'invite'))[0].purgeRequestedAt);
+    // Not yet: auth still has to get the purge request
+    let result = await runTrashCleanup(env);
+    assert.equal(result.invite.purged, 0);
+    await t.drain();
+    assert.ok(t.auth.calls.some((c) => c.path.endsWith(`/${inv.id}/purge`)));
+    result = await runTrashCleanup(env);
+    assert.equal(result.invite.purged, 1);
+    assert.equal((await t.call('GET', `/api/invites/${inv.id}`)).status, 404);
   });
 });
 

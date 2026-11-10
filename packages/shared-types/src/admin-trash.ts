@@ -10,7 +10,7 @@
 import { SOFT_DELETE_RETENTION_DAYS } from './admin-content';
 
 /** The kinds the admin "Recently deleted" views and the cleanup handle. */
-export const TRASH_KINDS = ['contact-message', 'theme', 'creator-tier'] as const;
+export const TRASH_KINDS = ['contact-message', 'theme', 'creator-tier', 'invite'] as const;
 export type TrashKind = (typeof TRASH_KINDS)[number];
 
 export const isTrashKind = (value: unknown): value is TrashKind => typeof value === 'string' && (TRASH_KINDS as readonly string[]).includes(value);
