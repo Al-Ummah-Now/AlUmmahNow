@@ -120,7 +120,13 @@ export class PostViewCounter {
 		const day = utcDay(this.now());
 		state.days[day] = (state.days[day] ?? 0) + 1;
 		await this.storage.put(POST_STATE_KEY, structuredClone(state));
-		if ((await this.storage.getAlarm()) === null) await this.storage.setAlarm(this.now() + POST_FLUSH_DELAY_MS);
+		// The view is counted once stored: an error from here on would make the
+		// API count it again directly. A missed alarm is set by the next view.
+		try {
+			if ((await this.storage.getAlarm()) === null) await this.storage.setAlarm(this.now() + POST_FLUSH_DELAY_MS);
+		} catch (error) {
+			this.opts.logger?.warn('post view counter: could not schedule the flush', { postId, shard, error: String(error) });
+		}
 		return { unflushed: unflushed(state) };
 	}
 
