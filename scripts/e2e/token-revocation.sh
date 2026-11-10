@@ -23,6 +23,22 @@ BOUND_S=${BOUND_S:-180}
 # WORKDIR keeps the throwaway credentials (mode 700) so a failed run can be cleaned up
 W=${WORKDIR:-$(mktemp -d)}; mkdir -p $W; chmod 700 $W
 fail=0
+# Production: every account this run registers is listed in $W/accounts and hard-deleted
+# from every store on exit, pass or fail (DELETE /account only marks it deleted).
+# scripts/release/delete-test-user.ts needs Cloudflare credentials, so check them first.
+REPO=${0:A:h:h:h}
+cleanup_prod() {
+  [ -s $W/accounts ] || return 0
+  echo "== cleanup: deleting $(wc -l < $W/accounts | tr -d ' ') production test account(s)"
+  node --experimental-strip-types --no-warnings $REPO/scripts/release/delete-test-user.ts $W/accounts \
+    && node --experimental-strip-types --no-warnings $REPO/scripts/release/check-prod-test-data.ts \
+    || { echo "  FAIL cleanup: production test data left behind (see above)"; exit 1; }
+}
+if [ $ENVNAME = prod ]; then
+  node --experimental-strip-types --no-warnings -e 'import("'$REPO'/scripts/release/cf-api.ts").then(m => { if (!m.cfToken()) process.exit(1) })' \
+    || { echo "prod needs CLOUDFLARE_API_TOKEN or a wrangler login to delete its test accounts afterwards"; exit 2; }
+  trap cleanup_prod EXIT
+fi
 enc() { python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1],safe=""))' "$1"; }
 field() { python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get(sys.argv[2],""))' "$1" "$2"; }
 check() { if [ "$2" = "$3" ]; then echo "  ok   $1 ($2)"; else echo "  FAIL $1: got $2, want $3"; fail=1; fi; }
@@ -47,7 +63,7 @@ finish_flow() {
     --data-urlencode "redirect_uri=$RED" --data-urlencode "client_id=$CID" --data-urlencode "code_verifier=$(cat $d.ver)" > $d.tok
 }
 register() {
-  local d=$W/$1; local email="test-rev-$1-$(date +%s)@delivered.resend.dev"; print -rn -- $email > $d.email
+  local d=$W/$1; local email="test-rev-$1-$(date +%s)@delivered.resend.dev"; print -rn -- $email > $d.email; print -r -- $email >> $W/accounts
   openssl rand -base64 18 | tr -d '\n/+=' > $d.pw
   start_flow $1; local flow=$(cat $d.flow)
   curl -s -c $d.jar -b $d.jar -o /dev/null "$ISS/password/register?auth_flow=$flow"

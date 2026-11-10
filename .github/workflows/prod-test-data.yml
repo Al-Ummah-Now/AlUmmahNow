@@ -1,0 +1,41 @@
+name: Production test data guard
+
+# Fails when production holds anything a test account created (auth users and KV
+# entries of test-*@delivered.resend.dev / *@e2e.alummahnow.net addresses, their
+# videos profiles, channels, watch history and search rows), from any source:
+# the release's signed-in check, prod-signed-in.yml, or a probe run by hand.
+# It deletes what it finds (scripts/release/check-prod-test-data.ts --delete) and
+# still fails, so every leak is seen. Accounts under an hour old are left to the
+# run that is using them. The same check runs after every production test run.
+
+on:
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never alongside a prod signed-in check: it may be using a test account right now
+concurrency:
+  group: prod-signed-in
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    name: Production holds no test data
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Check (and delete) production test data
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node --experimental-strip-types --no-warnings scripts/release/check-prod-test-data.ts --delete

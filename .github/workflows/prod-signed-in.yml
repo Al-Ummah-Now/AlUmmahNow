@@ -7,7 +7,8 @@ name: Production signed-in check
 # Users are throwaway test-release-*@delivered.resend.dev accounts: the specs list
 # each address in PROD_USER_FILE before creating it, read its email code through
 # the Resend API (RESEND_API_KEY), and the last step deletes every listed account
-# and its videos profile, pass or fail (scripts/release/delete-test-user.ts).
+# from every store, pass or fail (scripts/release/delete-test-user.ts); the next step
+# fails the run if any test data is left on production (check-prod-test-data.ts).
 # By hand only, from main (e.g. after a production release).
 
 on:
@@ -84,6 +85,15 @@ jobs:
           else
             echo "no production test accounts were created"
           fi
+
+      # Guard: nothing a test account created may stay on production, from this run or any
+      # other (a probe run by hand included). Deletes what it finds, then still fails the job.
+      - name: Production holds no test data
+        if: always()
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node --experimental-strip-types --no-warnings scripts/release/check-prod-test-data.ts --delete
 
       # Artifacts of this public repo are downloadable by anyone signed in to GitHub
       - name: Scan test output for secrets
