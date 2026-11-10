@@ -87,6 +87,22 @@ export function isMissingWorker(message: string): boolean {
 	return /does not exist on your account|code: 10007/i.test(message);
 }
 
+/**
+ * What to show from a failed wrangler run: its [ERROR] blocks first (bundler
+ * warnings can fill the tail and push the real error out), then the tail.
+ */
+export function wranglerFailureDetail(output: string, max = 2000): string {
+	const text = output.replace(/\x1b\[[0-9;]*m/g, '').trim();
+	const lines = text.split('\n');
+	const errors: string[] = [];
+	for (let i = 0; i < lines.length; i++) {
+		if (/\[ERROR\]/.test(lines[i])) errors.push(lines.slice(i, i + 6).join('\n'));
+	}
+	const head = errors.join('\n').slice(0, max);
+	const tail = text.slice(-800);
+	return head ? `${head}\n…\n${tail}` : tail;
+}
+
 export type Runner = (cwd: string, args: string[]) => string;
 
 const runWrangler: Runner = (cwd, args) => {
@@ -100,7 +116,7 @@ const runWrangler: Runner = (cwd, args) => {
 		});
 	} catch (error) {
 		const e = error as { stderr?: string; stdout?: string; message: string };
-		throw new Error(`wrangler ${args.slice(0, 2).join(' ')} failed: ${(e.stderr || e.stdout || e.message).trim().slice(-800)}`);
+		throw new Error(`wrangler ${args.slice(0, 2).join(' ')} failed: ${wranglerFailureDetail(e.stderr || e.stdout || e.message)}`);
 	}
 };
 

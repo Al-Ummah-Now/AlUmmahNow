@@ -399,3 +399,11 @@ describe('promote: skew protection check', () => {
 		assert.ok(lines.some((l) => l.includes('could not snapshot')));
 	});
 });
+
+it('wranglerFailureDetail keeps the [ERROR] block that warnings would push out of the tail', async () => {
+	const { wranglerFailureDetail } = await import('../promote.ts');
+	const out = `\x1b[31m✘ [ERROR]\x1b[0m Build failed with 1 error:\n  ✘ [ERROR] Could not resolve "@al-ummah/logger"\n${'▲ [WARNING] Duplicate key "options"\n'.repeat(200)}`;
+	const detail = wranglerFailureDetail(out);
+	assert.match(detail, /Could not resolve "@al-ummah\/logger"/);
+	assert.match(detail, /Duplicate key/);
+});
