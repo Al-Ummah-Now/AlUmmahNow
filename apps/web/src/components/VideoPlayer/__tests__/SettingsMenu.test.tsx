@@ -83,6 +83,22 @@ describe('SettingsMenu', () => {
     expect(screen.getByText('Normal')).toBeInTheDocument();
   });
 
+  it('stays on screen when the top of the frame is scrolled out of view', () => {
+    const f = fakePlayer();
+    // A 1280x720 frame whose top is 500px above a 900px viewport; its bar is 100px tall
+    const rect = (x: number, y: number, w: number, h: number) => ({ x, y, left: x, top: y, width: w, height: h, right: x + w, bottom: y + h, toJSON: () => ({}) }) as DOMRect;
+    f.el.getBoundingClientRect = () => rect(80, -500, 1280, 720);
+    const bar = f.el.querySelector<HTMLElement>('.vjs-control-bar')!;
+    Object.defineProperty(bar, 'offsetHeight', { value: 100 });
+    Object.defineProperty(window, 'innerHeight', { value: 900, configurable: true });
+    render(<SettingsMenu player={f.player as unknown as Player} lang="en" onShowShortcuts={jest.fn()} />);
+    const menu = openMenu(f);
+    // Anchored 8px above the bar (bar top at 120px), with only the 104px on screen above that to fill
+    expect(menu.style.bottom).toBe(`${900 - 112}px`);
+    expect(menu.style.maxHeight).toBe('104px');
+    expect(parseFloat(menu.style.height)).toBeLessThanOrEqual(104);
+  });
+
   it('opens a submenu with a back row and check marks, applies the choice and returns', () => {
     const f = fakePlayer();
     render(<SettingsMenu player={f.player as unknown as Player} lang="en" onShowShortcuts={jest.fn()} />);
