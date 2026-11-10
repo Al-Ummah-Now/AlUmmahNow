@@ -304,3 +304,69 @@ export interface StaleUploadsResponse {
 export interface StaleUploadActionResult {
   results: { videoId: string; started?: boolean; kept?: boolean; why?: string }[];
 }
+
+// ---------- AI category suggestions (admin-api /api/category-suggestions) ----------
+
+export type CategorySuggestionQueue = 'review' | 'needs_category' | 'flagged' | 'reviewed' | 'all';
+
+export interface CategorySuggestionItem {
+  videoId: string;
+  status: 'pending' | 'done' | 'failed' | 'budget' | 'disabled' | 'empty';
+  reason: string;
+  category: string | null;
+  confidence: number | null;
+  options: Array<{ category: string; confidence: number }>;
+  model: string | null;
+  applied: boolean;
+  outcome: 'pending' | 'accepted' | 'changed' | 'none';
+  finalCategory: string | null;
+  reviewedBy: string | null;
+  attempts: number;
+  lastError: string | null;
+  updatedAt: number;
+  video: { title: string | null; thumbnailUrl: string | null; channelName: string | null; channelId: string | null; isPublic: boolean | null; category: string | null; categorySource: string | null } | null;
+}
+
+export interface CategorySuggestionList {
+  items: CategorySuggestionItem[];
+  total: number;
+  limit: number;
+  offset: number;
+  canEdit: boolean;
+}
+
+export interface CategorizeConfigView {
+  enabled: boolean;
+  dailyNeuronCap: number;
+  threshold: number;
+  updatedAt?: string | null;
+  updatedBy?: string | null;
+}
+
+export interface CategorySuggestionStats {
+  views: Record<CategorySuggestionQueue, number>;
+  byStatus: Record<string, number>;
+  byCategory: Array<{ category: string; videos: number; aiUnreviewed: number }>;
+  publicUncategorized: number;
+  config: CategorizeConfigView;
+  usage: { day: string; calls: number; neurons: number; usd: number };
+  canEdit: boolean;
+}
+
+export interface CategoryBulkResult {
+  videoId: string;
+  ok: boolean;
+  error?: string;
+  category?: string | null;
+}
+
+export interface CategoryBackfillPage {
+  dryRun: boolean;
+  scanned: number;
+  candidates: number;
+  queued: number;
+  alreadyHandled: number;
+  withCategory: number;
+  nextCursor: string | null;
+  done: boolean;
+}

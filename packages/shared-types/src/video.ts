@@ -83,6 +83,8 @@ export interface VideoObject extends Timestamps, SoftDelete, Moderation {
   // SEO and categorization
   tags?: string[];
   category?: VideoCategory;
+  /** Who set `category` (see category-suggestion.ts); absent with a category = the uploader */
+  categorySource?: 'uploader' | 'ai' | 'admin';
   language?: string;
 
   // Chapter support

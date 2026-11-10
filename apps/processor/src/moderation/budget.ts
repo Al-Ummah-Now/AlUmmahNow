@@ -36,7 +36,7 @@ export function estimateScanNeurons(text: string, opts: { arabic: boolean; latin
  * under `cap` (null = no cap; the reservation is still recorded so a cap set
  * later in the day sees the day's spend). Returns false when the cap is reached.
  */
-export async function reserveBudget(db: D1Database, cap: number | null, estimate: number, now: number = Date.now()): Promise<boolean> {
+export async function reserveBudget(db: D1Database, cap: number | null, estimate: number, now: number = Date.now(), feature: string = USAGE_FEATURE): Promise<boolean> {
 	const day = utcDay(now);
 	const [, claim] = await db.batch<{ reserved: number }>([
 		db
@@ -44,22 +44,22 @@ export async function reserveBudget(db: D1Database, cap: number | null, estimate
 				`INSERT OR IGNORE INTO ai_budget_daily (day, feature, reserved)
 				 VALUES (?1, ?2, (SELECT COALESCE(SUM(neurons), 0) FROM ai_usage_daily WHERE day = ?1 AND feature = ?2))`,
 			)
-			.bind(day, USAGE_FEATURE),
+			.bind(day, feature),
 		db
 			.prepare(
 				`UPDATE ai_budget_daily SET reserved = reserved + ?3
 				 WHERE day = ?1 AND feature = ?2 AND (?4 IS NULL OR reserved < ?4)
 				 RETURNING reserved`,
 			)
-			.bind(day, USAGE_FEATURE, estimate, cap),
+			.bind(day, feature, estimate, cap),
 	]);
 	return (claim?.results?.length ?? 0) > 0;
 }
 
 /** Replaces a reservation with what the scan really spent. */
-export async function settleBudget(db: D1Database, estimate: number, spent: number, now: number = Date.now()): Promise<void> {
+export async function settleBudget(db: D1Database, estimate: number, spent: number, now: number = Date.now(), feature: string = USAGE_FEATURE): Promise<void> {
 	await db
 		.prepare('UPDATE ai_budget_daily SET reserved = max(0, reserved + ? - ?) WHERE day = ? AND feature = ?')
-		.bind(spent, estimate, utcDay(now), USAGE_FEATURE)
+		.bind(spent, estimate, utcDay(now), feature)
 		.run();
 }

@@ -4,6 +4,7 @@ import { VideoCategory } from "@al-ummah/shared-types";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
+import { recordOwnerCategory } from "../../lib/categorySuggestions";
 import { logger } from '../../lib/logger';
 import { inBackground } from "../../lib/websocket-notify";
 import { announceNewVideo } from "../../lib/notification-events";
@@ -103,6 +104,7 @@ export class VideoBulkUpdate extends AuthenticatedRoute {
 					inBackground(c, 'video-published', () => announceNewVideo(c.env, { ...video, id: videoId }));
 				}
 				await queue.send(MessageType.VideoEdit, { videoId, userId, channelId: headers.channelId ?? video.channelId, timestamp: now });
+				if (changes.category !== undefined) recordOwnerCategory(c, videoId, changes.category ?? null, userId);
 				return { videoId, success: true, changed: true };
 			} catch (error) {
 				logger.error('[VideoBulkUpdate] Video update failed', { videoId, error: error instanceof Error ? error.message : String(error) });

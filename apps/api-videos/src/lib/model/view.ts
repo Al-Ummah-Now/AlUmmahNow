@@ -96,6 +96,7 @@ export const VideoView = z.object({
     thumbnailSizes: z.record(z.string()).optional(),
     tags: z.array(z.string()).optional(),
     category: z.string().optional(),
+    categorySource: z.enum(['uploader', 'ai', 'admin']).optional().describe("Who set the category; 'ai' = an AI suggestion the owner has not confirmed"),
     language: z.string().optional(),
     duration: z.number().optional(),
     // Upload processing: anything but "ready" shows the "Processing, ready soon" state

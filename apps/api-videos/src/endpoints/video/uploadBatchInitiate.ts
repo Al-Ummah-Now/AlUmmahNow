@@ -13,6 +13,7 @@ import { fingerprintKey, initiateOnce, UploadClaimBusyError, UploadFingerprintSc
 import { checkReusable, issueTusSession, reuseFields, type PlaceholderRecord } from "../../lib/uploads/placeholder";
 import { patchVideo } from "../../lib/videoWrites";
 import { addAuthToSchema } from "../../lib/openapi-auth";
+import { requestVideoSuggestion } from '../../lib/categorySuggestions';
 import { logger } from '../../lib/logger';
 
 const MAX_BATCH_SIZE = 15;
@@ -166,7 +167,7 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 					description: videoData.description || '',
 					isPublic: videoData.isPublic ?? sharedMetadata?.isPublic ?? true,
 					tags: videoData.tags ? videoData.tags.split(',').map(tag => tag.trim()).filter(Boolean) : [],
-					...(sharedMetadata?.category ? { category: sharedMetadata.category } : {}),
+					...(sharedMetadata?.category ? { category: sharedMetadata.category, categorySource: 'uploader' as const } : {}),
 					...(videoData.format && videoData.format !== 'auto' ? { format: videoData.format } : {}),
 					fileSize: videoData.fileSize,
 					originalFormat: videoData.mimeType,
@@ -193,6 +194,7 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 							tags: videoData.tags,
 							category: sharedMetadata?.category,
 							format: videoData.format,
+							...(sharedMetadata?.category ? { categorySource: 'uploader' as const } : {}),
 							fileSize: videoData.fileSize,
 							mimeType: videoData.mimeType,
 							bunnyHostname: c.env.bunny_hostname,
@@ -202,6 +204,8 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 					};
 
 					await repository.putObject(videoId, video);
+					// No category chosen for the batch: AI suggests one per video (queued)
+					if (!sharedMetadata?.category) requestVideoSuggestion(c, { videoId, userId, channelId, reason: 'upload' });
 
 					await queue.send(MessageType.VideoUploadStarted, {
 						videoId,

@@ -19,6 +19,7 @@ export interface BulkVideoChanges {
 interface Editable {
   isPublic?: boolean;
   category?: string;
+  categorySource?: 'uploader' | 'ai' | 'admin';
   tags?: string[];
   dateModified?: string;
   scheduledPublishStatus?: string;
@@ -65,11 +66,16 @@ export function applyBulkChanges<T extends Editable>(
 
   const next: T = { ...video };
   if (changes.isPublic !== undefined) next.isPublic = changes.isPublic;
-  if (changes.category !== undefined) next.category = changes.category ?? undefined;
+  if (changes.category !== undefined) {
+    // The owner chose it: no longer an AI suggestion (null clears both)
+    next.category = changes.category ?? undefined;
+    next.categorySource = changes.category ? 'uploader' : undefined;
+  }
   if (changes.addTags?.length || changes.removeTags?.length) next.tags = tags;
 
   const changed = next.isPublic !== video.isPublic
     || next.category !== video.category
+    || next.categorySource !== video.categorySource
     || JSON.stringify(next.tags ?? []) !== JSON.stringify(current);
   if (changed) next.dateModified = now;
   return { ok: true, video: next, changed };

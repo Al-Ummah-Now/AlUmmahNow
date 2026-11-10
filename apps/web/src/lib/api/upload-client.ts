@@ -79,6 +79,8 @@ export interface InitiateMetadata {
   category?: string;
   /** Upload as Short / as video; 'auto' detects it */
   format?: 'auto' | 'short' | 'video';
+  /** draftKey of the form's AI category suggestion: the video adopts it and records whether it was kept */
+  categorySuggestionKey?: string;
   fileSize: number;
   mimeType: string;
   thumbnail?: { type: 'auto' | 'custom'; data?: string; position?: number; filename?: string };

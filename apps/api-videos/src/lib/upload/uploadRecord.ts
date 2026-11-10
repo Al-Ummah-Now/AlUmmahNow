@@ -29,6 +29,8 @@ export interface UploadRecordInput {
 	titleLocalized?: Record<string, string>;
 	descriptionLocalized?: Record<string, string>;
 	category?: VideoRecord['category'];
+	/** Who chose the category ('uploader' when the form sent one; AI suggestions are set later) */
+	categorySource?: 'uploader';
 	/** Uploader's choice: 'short' or 'video'; 'auto' (or unset) leaves it to the Short rule at ready */
 	format?: string;
 	fileSize?: number;
@@ -67,6 +69,7 @@ export function createUploadRecord(input: UploadRecordInput): VideoRecord {
 		...(input.titleLocalized ? { titleLocalized: input.titleLocalized } : {}),
 		...(input.descriptionLocalized ? { descriptionLocalized: input.descriptionLocalized } : {}),
 		...(input.category ? { category: input.category } : {}),
+		...(input.category && input.categorySource ? { categorySource: input.categorySource } : {}),
 		...(input.format && input.format !== 'auto' ? { format: input.format } : {}),
 		uploadStatus: 'uploading',
 		...(input.fileSize ? { fileSize: input.fileSize } : {}),

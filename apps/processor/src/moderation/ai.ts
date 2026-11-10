@@ -26,6 +26,8 @@ export interface AiContext {
   spent: number;
   /** Scan clock, so usage lands on the same UTC day the budget check read. Defaults to Date.now(). */
   now?: number | undefined;
+  /** Usage feature the calls are recorded under (default 'moderation'). */
+  feature?: string | undefined;
 }
 
 interface UsageField {
@@ -33,13 +35,13 @@ interface UsageField {
   completion_tokens?: number | undefined;
 }
 
-async function runModel(ctx: AiContext, model: string, input: Record<string, unknown>, estimateIn: number, estimateOut: (result: unknown) => number): Promise<unknown> {
+export async function runModel(ctx: AiContext, model: string, input: Record<string, unknown>, estimateIn: number, estimateOut: (result: unknown) => number): Promise<unknown> {
   const options = ctx.gatewayId ? { gateway: { id: ctx.gatewayId } } : undefined;
   const result = await ctx.ai.run(model, input, options);
   const usage = (result as { usage?: UsageField } | null)?.usage;
   const inputTokens = usage?.prompt_tokens ?? estimateIn;
   const outputTokens = usage?.completion_tokens ?? estimateOut(result);
-  ctx.spent += await recordUsage(ctx.db, ctx.logger, { model, inputTokens, outputTokens, surface: ctx.surface }, ctx.now);
+  ctx.spent += await recordUsage(ctx.db, ctx.logger, { model, inputTokens, outputTokens, surface: ctx.surface, feature: ctx.feature }, ctx.now);
   return result;
 }
 

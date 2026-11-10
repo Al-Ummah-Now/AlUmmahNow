@@ -6,6 +6,7 @@ import siteSettingsRouter from './siteSettings.router';
 import contactRouter from './contact.router';
 import authRequestsRouter from './authRequests.router';
 import errorsRouter from './errors.router';
+import categorySuggestionsRouter from './categorySuggestions.router';
 
 /**
  * Register all feature routers with the main OpenAPI instance.
@@ -34,4 +35,7 @@ export function registerAllRouters(openapi: any) {
 
   // Errors page at /api/errors
   openapi.route('/api/errors', errorsRouter);
+
+  // AI category suggestions (review, backfill, settings) at /api/category-suggestions
+  openapi.route('/api/category-suggestions', categorySuggestionsRouter);
 }

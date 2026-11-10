@@ -43,6 +43,18 @@
 			"bucket_name": "community-posts",
 			"preview_bucket_name": "community-posts-preview",
 			"remote": true
+		},
+		{
+			// AI category suggestions (src/categorize): read video text, write `category` (conditional writes)
+			"binding": "videos",
+			"bucket_name": "videos",
+			"remote": true
+		},
+		{
+			// Captions read for category suggestions
+			"binding": "subtitles",
+			"bucket_name": "subtitles",
+			"remote": true
 		}
 	],
 
@@ -86,7 +98,12 @@
 		// Epic 28: env kill switch ("false" = no AI calls) and default daily cap; D1 moderation_config
 		// must ALSO enable it (off until an Admin turns it on in admin-web).
 		"AI_MODERATION_ENABLED": "true",
-		"AI_MODERATION_DAILY_NEURON_CAP": "100000"
+		"AI_MODERATION_DAILY_NEURON_CAP": "100000",
+		// AI category suggestions: env kill switch and default daily cap (admin-web overrides the cap)
+		"AI_CATEGORIZE_ENABLED": "true",
+		"AI_CATEGORIZE_DAILY_NEURON_CAP": "20000",
+		// QA/stage release E2E hook; must stay "false" here (pinned by pnpm check:config)
+		"CATEGORY_AI_TEST_HOOK": "false"
 	},
 
 	// Workers AI (Epic 28 moderation)
@@ -134,6 +151,14 @@
 				{
 					"binding": "community_posts",
 					"bucket_name": "community-posts-stage"
+				},
+				{
+					"binding": "videos",
+					"bucket_name": "videos-stage"
+				},
+				{
+					"binding": "subtitles",
+					"bucket_name": "subtitles-stage"
 				}
 			],
 			"queues": {
@@ -170,7 +195,11 @@
 				"LOG_LEVEL": "info",
 				"WEBSOCKET_URL": "https://realtime.stage.alummahnow.net",
 				"AI_MODERATION_ENABLED": "true",
-				"AI_MODERATION_DAILY_NEURON_CAP": "10000"
+				"AI_MODERATION_DAILY_NEURON_CAP": "10000",
+				"AI_CATEGORIZE_ENABLED": "true",
+				"AI_CATEGORIZE_DAILY_NEURON_CAP": "20000",
+				// Release E2E: [e2e-category:<value>] in a title is answered without a model call. Never in production.
+				"CATEGORY_AI_TEST_HOOK": "true"
 			},
 			"ai": { "binding": "AI" },
 			"secrets_store_secrets": [

@@ -7,6 +7,8 @@ import type { Logger } from '@al-ummah/logger';
 import { neuronsFor, usdFor } from './pricing';
 
 export const USAGE_FEATURE = 'moderation';
+/** AI category suggestions (src/categorize): same tables, their own budget row and cap. */
+export const CATEGORIZE_FEATURE = 'categorize';
 
 export function utcDay(now: number = Date.now()): string {
   return new Date(now).toISOString().slice(0, 10);
@@ -25,13 +27,16 @@ export interface UsageRecord {
   inputTokens: number;
   outputTokens: number;
   surface?: string | undefined;
+  /** Budget/usage feature (default 'moderation'). */
+  feature?: string | undefined;
 }
 
 export async function recordUsage(db: D1Database, logger: Logger, usage: UsageRecord, now: number = Date.now()): Promise<number> {
   const neurons = neuronsFor(usage.model, usage.inputTokens, usage.outputTokens);
   const usd = usdFor(neurons);
+  const feature = usage.feature ?? USAGE_FEATURE;
   logger.info('[AI_USAGE]', {
-    feature: USAGE_FEATURE,
+    feature,
     model: usage.model,
     surface: usage.surface,
     inputTokens: usage.inputTokens,
@@ -50,7 +55,7 @@ export async function recordUsage(db: D1Database, logger: Logger, usage: UsageRe
          neurons = neurons + excluded.neurons,
          usd = usd + excluded.usd`
     )
-    .bind(utcDay(now), usage.model, USAGE_FEATURE, usage.inputTokens, usage.outputTokens, neurons, usd)
+    .bind(utcDay(now), usage.model, feature, usage.inputTokens, usage.outputTokens, neurons, usd)
     .run();
   return neurons;
 }

@@ -16,7 +16,7 @@ export class ExploreGet extends OptionalAuthRoute {
   schema = {
     tags: ["Search"],
     summary: "Explore page data",
-    description: "🔓 Public. Returns every video category with its number of public videos (optionally in one language), the newest public channels, and seasonal rails that are active now. Seasonal rails are configured in the global_settings bucket at `explore/seasonal.json` (array of `{ id, title: {en, ar}, subtitle?, startsAt, endsAt, category?, query?, limit?, enabled? }`).",
+    description: "🔓 Public. Returns the video categories that have at least one public, ready video (optionally in one language) with their counts; empty categories are left out, the newest public channels, and seasonal rails that are active now. Seasonal rails are configured in the global_settings bucket at `explore/seasonal.json` (array of `{ id, title: {en, ar}, subtitle?, startsAt, endsAt, category?, query?, limit?, enabled? }`).",
     request: {
       query: z.object({
         language: Str({ description: "Content language code for category counts and seasonal rails" }).regex(/^[a-z]{2,3}$/).optional(),

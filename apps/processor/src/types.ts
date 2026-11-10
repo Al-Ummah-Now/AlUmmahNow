@@ -105,4 +105,14 @@ export interface QueueEnvironment {
   AI_MODERATION_DAILY_NEURON_CAP?: string;
   /** AI Gateway id; when set every Workers AI call goes through it. */
   AI_GATEWAY_ID?: string;
+  /** Video JSON (api-videos' bucket): AI category suggestions read the text and write `category` (src/categorize). */
+  videos?: unknown;
+  /** Caption WebVTT files (api-videos' bucket), read for category suggestions. */
+  subtitles?: unknown;
+  /** Env kill switch for AI category suggestions ("false" = off). */
+  AI_CATEGORIZE_ENABLED?: string;
+  /** Default daily neuron cap for category suggestions (D1 moderation_config 'categorize' overrides). */
+  AI_CATEGORIZE_DAILY_NEURON_CAP?: string;
+  /** "true" on QA/stage only: E2E texts with [e2e-category:<value>] are answered without a model call. */
+  CATEGORY_AI_TEST_HOOK?: string;
 }

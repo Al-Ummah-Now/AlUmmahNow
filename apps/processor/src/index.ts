@@ -14,6 +14,9 @@ import { getApiKey } from './lib/websocket-notify';
 import { reportServerError, resolveNeedsAction, withErrorReporting, type ExecutionContextLike } from '@al-ummah/shared-types';
 import { importLegacyRollups } from './lib/analytics-rollup';
 import { resumeStalledImports } from './lib/post-counters';
+import { isCategorizeMessage, processCategorizeMessages, sweepCategorySuggestions, type CategorizeQueueMessage } from './categorize/queue';
+import type { CategorizeEnv } from './categorize/job';
+import type { SearchDb } from '@al-ummah/shared-types';
 
 interface QueueMessage<T> {
   /** Queue message id (Cloudflare Queues). */
@@ -182,6 +185,20 @@ export async function runRollupImport(env: QueueEnvironment, now = Date.now()) {
   }
 }
 
+/** AI category suggestions: hourly re-send of stale pending rows; daily re-send of budget-skipped rows + draft purge. */
+export async function runCategorizeSweep(env: QueueEnvironment, budget: boolean, now = Date.now()) {
+  const logger = createLogger('processor', {
+    logLevel: (env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error') || 'info',
+    forceHttpLogging: true,
+  });
+  try {
+    return await sweepCategorySuggestions(env.SEARCH_DB as unknown as SearchDb | undefined, env.MESSAGE_QUEUE, logger, { budget, now });
+  } catch (error) {
+    logger.error('[Categorize] Sweep failed', error);
+    return null;
+  }
+}
+
 export async function runScheduled(env: QueueEnvironment, now = Date.now()): Promise<number> {
   const logger = createLogger('processor', {
     logLevel: (env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error') || 'info',
@@ -217,9 +234,11 @@ export default {
   async scheduled(controller: { cron?: string } | undefined, env: QueueEnvironment, ctx: { waitUntil(p: Promise<unknown>): void }): Promise<void> {
     if (controller?.cron === ROLLUP_IMPORT_CRON) {
       ctx.waitUntil(runRollupImport(env));
+      ctx.waitUntil(runCategorizeSweep(env, false));
       return;
     }
     ctx.waitUntil(runScheduled(env));
+    ctx.waitUntil(runCategorizeSweep(env, true));
   },
 
   async queue(batch: MessageBatch<AlUmmahMessage>, env: QueueEnvironment, ctx?: ExecutionContextLike): Promise<void> {
@@ -245,6 +264,14 @@ async function handleQueue(batch: MessageBatch<AlUmmahMessage>, env: QueueEnviro
   if (isDeadLetterQueue(batch.queue)) {
     await processDeadLetterBatch(batch, env, logger, Date.now(), ctx);
     return;
+  }
+  // AI category suggestions ride on both the moderation queue (api-videos) and the
+  // videos queue (admin-api, DLQ replays): routed by message type, never by queue
+  const categorize = batch.messages.filter(isCategorizeMessage);
+  if (categorize.length) {
+    await processCategorizeMessages(categorize as unknown as CategorizeQueueMessage[], env as unknown as CategorizeEnv, logger);
+    batch = { ...batch, messages: batch.messages.filter((m) => !isCategorizeMessage(m)) };
+    if (batch.messages.length === 0) return;
   }
   if (batch.queue?.includes('moderation')) {
     await processModerationBatch(batch, env, logger);

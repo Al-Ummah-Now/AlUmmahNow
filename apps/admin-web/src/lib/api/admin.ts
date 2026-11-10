@@ -27,6 +27,11 @@ import type {
   ReaperSweep,
   StaleUploadActionResult,
   StaleUploadsResponse,
+  CategorySuggestionList,
+  CategorySuggestionStats,
+  CategoryBulkResult,
+  CategoryBackfillPage,
+  CategorizeConfigView,
 } from './types';
 
 export async function listReports(params?: ListReportsParams): Promise<ListReportsResponse> {
@@ -333,4 +338,37 @@ export async function retryStaleUploads(ids: string[]): Promise<ActionResult<Sta
 
 export async function setReaperMode(mode: ReaperMode): Promise<ActionResult<{ mode: ReaperMode }>> {
   return mutate('/api/uploads/stale/mode', 'POST', { mode });
+}
+
+// ---------- AI category suggestions ----------
+
+export async function listCategorySuggestions(params: { view?: string; category?: string; videoId?: string; limit?: number; offset?: number } = {}): Promise<CategorySuggestionList> {
+  const q = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) if (value !== undefined && value !== '') q.set(key, String(value));
+  const query = q.toString();
+  return fetchAdmin<CategorySuggestionList>(`/api/category-suggestions${query ? `?${query}` : ''}`);
+}
+
+export async function getCategorySuggestionStats(): Promise<CategorySuggestionStats> {
+  return fetchAdmin<CategorySuggestionStats>('/api/category-suggestions/stats');
+}
+
+export async function acceptCategorySuggestions(videoIds: string[]): Promise<ActionResult<{ results: CategoryBulkResult[] }>> {
+  return mutate('/api/category-suggestions/accept', 'POST', { videoIds });
+}
+
+export async function setVideoCategories(videoIds: string[], category: string): Promise<ActionResult<{ results: CategoryBulkResult[] }>> {
+  return mutate('/api/category-suggestions/set', 'POST', { videoIds, category });
+}
+
+export async function retryCategorySuggestions(videoIds: string[]): Promise<ActionResult<{ results: CategoryBulkResult[] }>> {
+  return mutate('/api/category-suggestions/retry', 'POST', { videoIds });
+}
+
+export async function runCategoryBackfill(params: { dryRun: boolean; cursor?: string }): Promise<ActionResult<CategoryBackfillPage>> {
+  return mutate('/api/category-suggestions/backfill', 'POST', params);
+}
+
+export async function updateCategorizeConfig(patch: Partial<CategorizeConfigView>): Promise<ActionResult<CategorizeConfigView>> {
+  return mutate('/api/category-suggestions/config', 'PUT', patch);
 }

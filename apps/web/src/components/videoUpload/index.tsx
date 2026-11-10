@@ -1,6 +1,6 @@
 'use client';
 import { logger } from '@/lib/logger-client';
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { ResilientUpload, grantedUploadUrl, reportUploadFailure, requestUploadResume, tusEndpointFor, type ReauthoriseResult } from "@/lib/upload/resilient-tus";
 import { findRememberedUpload, forgetUpload, rememberUpload } from "@/lib/upload/resume-store";
 import { tryFileFingerprint } from "@/lib/upload/fingerprint";
@@ -19,7 +19,8 @@ import { ThumbnailUploadSection, ThumbnailData } from "./ThumbnailUploadSection"
 import { CategorySelector } from "./CategorySelector";
 import { TemplateSelector } from "./TemplateSelector";
 import { ScheduleDateTimeSelector, ScheduleData } from "./ScheduleDateTimeSelector";
-import { VideoCategory } from "@al-ummah/shared-types";
+import { applySuggestion, formText, isKnownCategory, newDraftKey, pickCategory, type CategoryFormState } from "@/lib/category-suggestion/form";
+import { useCategorySuggestion } from "@/hooks/useCategorySuggestion";
 import type { ProcessedMetadata } from "@/lib/upload/template-variables";
 import { getApiUrl } from "@/lib/runtime-config";
 
@@ -45,7 +46,6 @@ interface VideoMetadata {
   descriptionEn?: string;
   descriptionAr?: string;
   tags?: string[];
-  category?: VideoCategory;
   isPublic: boolean;
   /** Upload as Short / as video; 'auto' detects it from length and shape */
   format: VideoFormatChoiceValue;
@@ -93,6 +93,9 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
   const [selectedThumbnail, setSelectedThumbnail] = useState<ThumbnailData | null>(null);
   const [scheduleData, setScheduleData] = useState<ScheduleData | null>(null);
   const [scheduleError, setScheduleError] = useState<string | null>(null);
+  // Category: AI suggests (preselected when confident), the uploader confirms or changes it
+  const [categoryState, setCategoryState] = useState<CategoryFormState>({ aiApplied: false, touched: false });
+  const [categoryDraftKey, setCategoryDraftKey] = useState(() => newDraftKey('upload'));
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const tusUploadRef = useRef<ResilientUpload | null>(null);
@@ -106,6 +109,21 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
   const auth = useAuth();
   const { user: multiAccountUser } = useMultiAccount();
   const activeChannel = multiAccountUser?.channel;
+
+  const categoryText = useMemo(
+    () => formText({ titleEn: metadata.titleEn, titleAr: metadata.titleAr, descriptionEn: metadata.descriptionEn, descriptionAr: metadata.descriptionAr, tags: metadata.tags }),
+    [metadata.titleEn, metadata.titleAr, metadata.descriptionEn, metadata.descriptionAr, metadata.tags],
+  );
+  // Never blocks the upload: suggestions are only asked for while the form is being filled in
+  const { suggestion: categorySuggestion, loading: categorySuggesting } = useCategorySuggestion({
+    draftKey: categoryDraftKey,
+    text: categoryText,
+    enabled: showMetadataForm && !!selectedFile && !uploadProgress && !categoryState.touched,
+    channelId: activeChannel?.id,
+  });
+  useEffect(() => {
+    setCategoryState((prev) => applySuggestion(prev, categorySuggestion));
+  }, [categorySuggestion]);
 
   // Ask for confirmation before leaving while a transfer or processing is in
   // progress (leaving would abandon the upload)
@@ -294,7 +312,9 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
             // When scheduling is enabled, video must be private until scheduled publish date
             isPublic: scheduleData ? false : metadata.isPublic,
             tags: tagsString,
-            category: metadata.category,
+            category: categoryState.category,
+            // The video adopts this form's suggestion and records whether the uploader kept it
+            categorySuggestionKey: categoryDraftKey,
             format: metadata.format,
             fileSize: selectedFile.size,
             mimeType: selectedFile.type,
@@ -573,6 +593,8 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
     setSelectedThumbnail(null);
     setScheduleData(null);
     setScheduleError(null);
+    setCategoryState({ aiApplied: false, touched: false });
+    setCategoryDraftKey(newDraftKey('upload'));
     setMetadata({
       title: '',
       titleEn: '',
@@ -598,9 +620,13 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
       descriptionAr: processedMetadata.descriptionLocalized?.ar || prev.descriptionAr,
       description: processedMetadata.description || prev.description,
       tags: processedMetadata.tags || prev.tags,
-      category: processedMetadata.category || prev.category,
       isPublic: processedMetadata.visibility === 'public' ? true : processedMetadata.visibility === 'private' ? false : prev.isPublic,
     }));
+    // A template's category is the uploader's choice
+    if (isKnownCategory(processedMetadata.category)) {
+      const category = processedMetadata.category;
+      setCategoryState(pickCategory(category));
+    }
   }, []);
 
   if (showMetadataForm && selectedFile) {
@@ -808,8 +834,11 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
 
           {/* Category Selector */}
           <CategorySelector
-            value={metadata.category}
-            onChange={(category) => setMetadata(prev => ({ ...prev, category }))}
+            value={categoryState.category}
+            onChange={(category) => setCategoryState(pickCategory(category))}
+            suggestion={categorySuggestion}
+            aiSelected={categoryState.aiApplied}
+            suggesting={categorySuggesting}
             disabled={uploadProgress?.state === 'uploading'}
           />
 

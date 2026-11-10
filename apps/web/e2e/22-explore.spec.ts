@@ -27,8 +27,10 @@ test.describe('Explore - English (LTR)', () => {
     const tafsir = page.locator('[data-testid="explore-category"][data-category="quran_tafsir"]');
     await expect(tafsir).toBeVisible();
     await expect(tafsir).toContainText('Quran Tafsir');
-    await expect(page.locator('[data-testid="explore-category"][data-category="islamic_nasheed"]')).toBeVisible();
-    await expect(page.locator('[data-testid="explore-category"][data-category="islamic_kids"]')).toBeVisible();
+    // Only categories with videos are shown (never an empty tile)
+    for (const count of await page.getByTestId('explore-category').evaluateAll((tiles) => tiles.map((t) => Number(t.getAttribute('data-count'))))) {
+      expect(count).toBeGreaterThan(0);
+    }
 
     await clickAndWaitForURL(page, tafsir, /\/en\/search\?type=video&category=quran_tafsir/);
     await expect(page.getByTestId('active-filter-category')).toContainText('Quran Tafsir');
