@@ -86,18 +86,25 @@ async function uploadOnPage(page: Page, user: WebUser, channelId: string, file: 
 }
 
 interface StatusBody {
-  result?: { status?: string };
+  result?: { status?: string; encodingStatus?: { isProcessing?: boolean } };
   status?: string;
 }
 
-/** Poll the owner's upload status (which stores Bunny's duration and resolution) until encoded. */
+/**
+ * Poll the owner's upload status (which stores Bunny's duration and resolution)
+ * until Bunny has finished encoding. "ready" alone is not enough: a video is
+ * ready (watchable) at its first encoded resolution, while Short detection
+ * reads the duration and resolution Bunny reports when processing completes
+ * (shared-types video-format.ts); until then it counts as a video.
+ */
 async function waitEncoded(user: WebUser, channelId: string, videoId: string): Promise<'ready' | 'failed' | 'timeout'> {
   const deadline = Date.now() + ENCODE_TIMEOUT_MS;
   while (Date.now() < deadline) {
     const res = await apiFetch(user, `/api/videos/${videoId}/upload-status`, { headers: { channelId } });
     const body = (await res.json().catch(() => ({}))) as StatusBody;
     const status = body.result?.status ?? body.status;
-    if (status === 'ready' || status === 'failed') return status;
+    if (status === 'failed') return status;
+    if (status === 'ready' && body.result?.encodingStatus?.isProcessing !== true) return status;
     await new Promise((r) => setTimeout(r, 10000));
   }
   return 'timeout';
