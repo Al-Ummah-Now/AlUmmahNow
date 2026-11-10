@@ -1,5 +1,6 @@
 "use client";
-import React from 'react';
+import React, { Suspense } from 'react';
+import { SettingsBreadcrumb } from '@/components/settings/SettingsBreadcrumb';
 import { useProfile } from '@/hooks/useProfile';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useRouter, useParams } from 'next/navigation';
@@ -59,6 +60,9 @@ const ProfilePageClient = ({ initialProfile, initialChannels }: ProfilePageClien
 
   return (
     <div className="profile-page flex flex-col min-h-screen bg-gray-100 dark:bg-gray-900">
+      <Suspense fallback={null}>
+        <SettingsBreadcrumb />
+      </Suspense>
       {/* Main Content */}
       <main className="main-content flex-1 p-6">
         {isLoading ? (

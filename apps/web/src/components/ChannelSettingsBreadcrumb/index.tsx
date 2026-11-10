@@ -1,116 +1,60 @@
 'use client';
 
-import Link from 'next/link';
 import { useLanguage } from '@/hooks/useLanguage';
-import { ChevronRight, Home, Settings, FileEdit, Video, LayoutGrid, Users, Layers, ListVideo } from 'lucide-react';
+import { BreadcrumbTrail, type Crumb } from '@/components/settings/SettingsBreadcrumb';
 
-interface BreadcrumbItem {
-  label: string;
-  href?: string;
-  icon?: React.ReactNode;
-}
+export type ChannelSettingsPage = 'overview' | 'edit' | 'videos' | 'tabs' | 'sections' | 'community' | 'communityNew' | 'playlists';
 
 interface ChannelSettingsBreadcrumbProps {
   channelId: string;
-  channelName: string;
+  /** Empty while loading or where the page does not load the channel: the trail then ends at Channel Settings. */
+  channelName?: string;
   locale: string;
-  currentPage: 'overview' | 'edit' | 'videos' | 'tabs' | 'sections' | 'community' | 'playlists';
+  currentPage: ChannelSettingsPage;
   className?: string;
 }
 
+/**
+ * Settings › Channel Settings › <channel> › <page>, with a back arrow to the
+ * parent page (the channel's settings overview, or Settings from the overview).
+ */
 export default function ChannelSettingsBreadcrumb({
   channelId,
   channelName,
   locale,
   currentPage,
-  className = '',
+  className,
 }: ChannelSettingsBreadcrumbProps) {
-  const { t, isRTL } = useLanguage();
+  const { t } = useLanguage();
+  const overview = `/${locale}/settings/channel/${channelId}`;
 
-  const pageIcons = {
-    overview: <Settings className="w-4 h-4" />,
-    edit: <FileEdit className="w-4 h-4" />,
-    videos: <Video className="w-4 h-4" />,
-    tabs: <Layers className="w-4 h-4" />,
-    sections: <LayoutGrid className="w-4 h-4" />,
-    community: <Users className="w-4 h-4" />,
-    playlists: <ListVideo className="w-4 h-4" />,
-  };
-
-  const pageLabels = {
-    overview: t.channel.channelSettings,
-    edit: t.channel.editChannel,
-    videos: t.video.videoManagement,
+  const pageLabels: Record<Exclude<ChannelSettingsPage, 'overview' | 'communityNew'>, string> = {
+    edit: t.channel.editChannel || 'Edit Channel',
+    videos: t.video.videoManagement || 'Video Management',
     tabs: t.channel.tabs?.manage_tabs || 'Manage Tabs',
     sections: t.channel.manageSections || 'Manage Sections',
     community: t.channel.communitySettings || 'Community',
     playlists: t.playlist.managePlaylists,
   };
 
-  const breadcrumbs: BreadcrumbItem[] = [
-    {
-      label: channelName,
-      href: `/${locale}/channels/${channelId}`,
-      icon: <Home className="w-4 h-4" />,
-    },
-    {
-      label: t.channel.channelSettings,
-      href: currentPage === 'overview' ? undefined : `/${locale}/settings/channel/${channelId}`,
-      icon: <Settings className="w-4 h-4" />,
-    },
-  ];
-
-  if (currentPage !== 'overview') {
-    breadcrumbs.push({
-      label: pageLabels[currentPage] || '',
-      icon: pageIcons[currentPage],
-    });
+  const trail: Crumb[] = [{ label: t.header?.settings || 'Settings', href: `/${locale}/settings` }];
+  if (channelName) {
+    trail.push({ label: t.channel.channelSettings }, { label: channelName, href: overview });
+  } else {
+    trail.push({ label: t.channel.channelSettings, href: overview });
+  }
+  if (currentPage === 'communityNew') {
+    trail.push({ label: pageLabels.community, href: `${overview}/community` }, { label: t.community.newPost });
+  } else if (currentPage !== 'overview') {
+    trail.push({ label: pageLabels[currentPage] });
   }
 
-  const Separator = () => (
-    <ChevronRight
-      className={`w-4 h-4 text-gray-400 dark:text-gray-600 mx-2 ${isRTL ? 'rotate-180' : ''}`}
-    />
-  );
-
   return (
-    <nav
-      aria-label={t.channelManage.breadcrumb}
-      data-testid="channel-settings-breadcrumb"
-      className={`flex items-center text-sm ${className}`}
-    >
-      <ol className="flex items-center flex-wrap">
-        {breadcrumbs.map((crumb, index) => {
-          const isLast = index === breadcrumbs.length - 1;
-
-          return (
-            <li key={index} className="flex items-center">
-              {index > 0 && <Separator />}
-              {crumb.href ? (
-                <Link
-                  href={crumb.href}
-                  className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline transition-colors"
-                >
-                  {crumb.icon}
-                  <span>{crumb.label}</span>
-                </Link>
-              ) : (
-                <span
-                  className={`flex items-center gap-1.5 ${
-                    isLast
-                      ? 'text-gray-900 dark:text-white font-medium'
-                      : 'text-gray-600 dark:text-gray-400'
-                  }`}
-                  aria-current={isLast ? 'page' : undefined}
-                >
-                  {crumb.icon}
-                  <span>{crumb.label}</span>
-                </span>
-              )}
-            </li>
-          );
-        })}
-      </ol>
-    </nav>
+    <BreadcrumbTrail
+      trail={trail}
+      label={t.channelManage.breadcrumb}
+      testId="channel-settings-breadcrumb"
+      className={className}
+    />
   );
 }

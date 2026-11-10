@@ -17,7 +17,6 @@ import {
   Video,
   Tv,
   User,
-  FileText,
   ChevronRight,
   Shield,
   Mail,
@@ -57,7 +56,7 @@ export default function SettingsPage() {
       title: t.settings?.profileSettings || 'Profile Settings',
       description: t.settings?.profileSettingsDesc || 'Update your profile information and preferences',
       icon: User,
-      href: `/${lang}/profile`,
+      href: `/${lang}/profile?from=settings`,
       available: true,
     },
     {
@@ -154,21 +153,6 @@ export default function SettingsPage() {
 
         {/* Notification categories (Story 29.10) */}
         <NotificationSettingsPanel />
-
-        {/* Quick Actions */}
-        <div className="mt-8 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-6 border border-blue-200 dark:border-blue-800">
-          <div className="flex items-start gap-3">
-            <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
-            <div>
-              <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-1">
-                {t.settings?.needHelp || 'Need Help?'}
-              </h3>
-              <p className="text-xs text-blue-700 dark:text-blue-300">
-                {t.settings?.needHelpDesc || 'Visit our documentation or contact support for assistance with your settings.'}
-              </p>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );

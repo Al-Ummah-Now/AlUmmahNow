@@ -60,8 +60,10 @@ test.describe('Section manager', () => {
 
     const crumbs = page.getByTestId('channel-settings-breadcrumb');
     await expect(crumbs).toHaveAttribute('aria-label', 'Breadcrumb');
-    await expect(crumbs.getByRole('link', { name: channelsOf(owner).main.name })).toHaveAttribute('href', `/en/channels/${channelId()}`);
-    await expect(crumbs.getByRole('link', { name: 'Channel Settings' })).toHaveAttribute('href', `/en/settings/channel/${channelId()}`);
+    // Settings › Channel Settings › <channel> › Manage Sections; the arrow goes back to the channel's settings
+    await expect(crumbs.getByRole('link', { name: 'Settings', exact: true })).toHaveAttribute('href', '/en/settings');
+    await expect(crumbs.getByRole('link', { name: channelsOf(owner).main.name })).toHaveAttribute('href', `/en/settings/channel/${channelId()}`);
+    await expect(crumbs.getByTestId('settings-back')).toHaveAttribute('href', `/en/settings/channel/${channelId()}`);
     await expect(crumbs.locator('[aria-current="page"]')).toHaveText('Manage Sections');
   });
 
@@ -232,7 +234,7 @@ test.describe('Section manager', () => {
   test('SECT-008 breadcrumb runs right-to-left in Arabic', async ({ page }) => {
     await openManager(page, 'ar');
     const items = page.getByTestId('channel-settings-breadcrumb').getByRole('listitem');
-    await expect(items).toHaveCount(3);
+    await expect(items).toHaveCount(4);
     const boxes = await items.evaluateAll((els) =>
       els.map((e) => {
         const r = e.getBoundingClientRect();
@@ -240,7 +242,7 @@ test.describe('Section manager', () => {
       })
     );
     const listRight = await page.getByTestId('channel-settings-breadcrumb').getByRole('list').evaluate((e) => e.getBoundingClientRect().right);
-    // The first crumb (channel) starts at the inline start, i.e. the right edge
+    // The first crumb (Settings) starts at the inline start, i.e. the right edge
     expect(Math.abs(listRight - boxes[0].right)).toBeLessThan(2);
     // Crumbs on the same line run right to left (the list may wrap on phones)
     for (let i = 1; i < boxes.length; i++) {

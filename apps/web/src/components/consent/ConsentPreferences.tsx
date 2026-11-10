@@ -8,6 +8,7 @@
 
 import React from 'react';
 import { useLanguage } from '@/hooks/useLanguage';
+import { Switch } from '@/components/common/Switch';
 import type { ConsentChoices } from '@/lib/consent/ConsentManager';
 
 interface ConsentPreferencesProps {
@@ -40,20 +41,17 @@ export function ConsentPreferences({ value, onChange, idPrefix = 'consent' }: Co
         return (
           <li
             key={row.key}
-            className="flex items-start justify-between gap-4 rounded-md border border-gray-200 dark:border-gray-700 p-3"
+            className="sw-row rounded-md border border-gray-200 dark:border-gray-700 p-3"
           >
             <label htmlFor={id} className="text-start cursor-pointer">
               <span className="block text-sm font-semibold text-gray-900 dark:text-gray-100">{row.title}</span>
               <span className="block text-xs text-gray-600 dark:text-gray-400">{row.description}</span>
             </label>
-            <input
+            <Switch
               id={id}
-              type="checkbox"
-              role="switch"
-              aria-checked={value[row.key]}
               checked={value[row.key]}
-              onChange={event => onChange({ ...value, [row.key]: event.target.checked })}
-              className="mt-1 h-5 w-5 shrink-0 accent-[var(--fanous-color-accent)] cursor-pointer"
+              onCheckedChange={(next) => onChange({ ...value, [row.key]: next })}
+              data-testid={`${idPrefix}-switch-${row.key}`}
             />
           </li>
         );

@@ -4,7 +4,10 @@ import { logger } from '@/lib/logger-client';
 import { use, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PostType, PostVisibility, CreateCommunityPostRequest } from '@al-ummah/shared-types';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
+import { useLanguage } from '@/hooks/useLanguage';
 import { Card } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
@@ -27,6 +30,7 @@ interface NewPostPageProps {
 
 export default function NewPostPage({ params }: NewPostPageProps) {
   const router = useRouter();
+  const { t } = useLanguage();
   const { locale, id } = use(params);
   const isRTL = locale === 'ar';
   const [loading, setLoading] = useState(false);
@@ -183,6 +187,9 @@ export default function NewPostPage({ params }: NewPostPageProps) {
 
   return (
     <div className="min-h-screen bg-background">
+      <div className="container mx-auto px-4 md:px-6">
+        <ChannelSettingsBreadcrumb channelId={id} locale={locale} currentPage="communityNew" />
+      </div>
       <div className="
         border-b
         bg-card
@@ -200,13 +207,18 @@ export default function NewPostPage({ params }: NewPostPageProps) {
         ">
           <div className="flex items-center gap-2 md:gap-3">
             <Button
+              asChild
               variant="ghost"
               size="icon"
-              onClick={() => router.back()}
-              className="w-8 h-8 md:w-10 md:h-10"
-              aria-label={isRTL ? 'رجوع' : 'Back'}
+              className="w-11 h-11"
             >
-              <ArrowLeft className={`w-4 h-4 md:w-5 md:h-5 ${isRTL ? 'rotate-180' : ''}`} />
+              <Link
+                href={`/${locale}/settings/channel/${id}/community`}
+                aria-label={t.common.backTo ? t.common.backTo.replace('{page}', t.channel.communitySettings || t.community.community) : t.common.back}
+                data-testid="new-post-back"
+              >
+                <ArrowLeft className="w-5 h-5 rtl:-scale-x-100" aria-hidden="true" />
+              </Link>
             </Button>
             <h1 className="text-lg md:text-2xl font-bold">
               {isRTL ? 'منشور جديد' : 'New Post'}
