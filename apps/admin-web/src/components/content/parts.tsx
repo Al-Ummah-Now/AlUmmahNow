@@ -146,12 +146,26 @@ export function SectionCard({ title, children, testId, id }: { title: string; ch
   );
 }
 
-export function StatGrid({ stats }: { stats: { label: string; value: string; testId?: string }[] }) {
+/**
+ * A row of numbers. A stat with `href` is a link to the list behind it (the
+ * channel's videos, the user's channels): the label is the link and it covers
+ * the whole tile, so the tile is one large target.
+ */
+export function StatGrid({ stats }: { stats: { label: string; value: string; testId?: string; href?: string; linkTestId?: string }[] }) {
   return (
-    <dl className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+    <dl className="grid grid-cols-2 sm:grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-3">
       {stats.map((s) => (
-        <div key={s.label} className="bg-surface-2 border border-border rounded p-3">
-          <dt className="text-xs text-fg-muted">{s.label}</dt>
+        <div key={s.label} className={`relative bg-surface-2 border border-border rounded p-3 ${s.href ? 'hover:border-accent focus-within:ring-2 focus-within:ring-focus' : ''}`}>
+          <dt className="text-xs text-fg-muted">
+            {s.href ? (
+              <Link href={s.href} className="text-link hover:underline underline-offset-2 focus:outline-none after:absolute after:inset-0 after:content-['']" data-testid={s.linkTestId}>
+                {s.label}
+                <span aria-hidden="true" className="ms-1 inline-block rtl:-scale-x-100">→</span>
+              </Link>
+            ) : (
+              s.label
+            )}
+          </dt>
           <dd className="text-xl font-semibold text-fg" data-testid={s.testId}>
             {s.value}
           </dd>

@@ -42,6 +42,8 @@ export async function listReports(params?: ListReportsParams): Promise<ListRepor
   const searchParams = new URLSearchParams();
   if (params?.status) searchParams.set('status', params.status);
   if (params?.entity_type) searchParams.set('entity_type', params.entity_type);
+  if (params?.entity_id) searchParams.set('entity_id', params.entity_id);
+  if (params?.reporter_id) searchParams.set('reporter_id', params.reporter_id);
   if (params?.limit) searchParams.set('limit', String(params.limit));
   if (params?.offset) searchParams.set('offset', String(params.offset));
 

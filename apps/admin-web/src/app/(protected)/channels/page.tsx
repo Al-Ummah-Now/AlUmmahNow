@@ -17,6 +17,7 @@ const YES_NO = ['yes', 'no'] as const;
 export default async function ChannelsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const params = pickParams(await searchParams, {
     q: 'text',
+    ownerId: 'text',
     verified: YES_NO,
     suspended: YES_NO,
     reported: ['yes'],
@@ -49,7 +50,8 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
         testId="channels-filters"
         values={params}
         fields={[
-          { kind: 'search', name: 'q', label: t('channels.searchLabel') },
+          { kind: 'search', name: 'q', label: t('channels.searchLabel'), suggest: 'channel' },
+          { kind: 'pick', name: 'ownerId', label: t('channels.ownerFilter'), suggest: 'user' },
           { kind: 'select', name: 'verified', label: t('channels.verified'), options: yesNo(t('channels.verified'), t('channels.unverified')) },
           { kind: 'select', name: 'suspended', label: t('channels.status'), options: yesNo(t('channels.suspended'), t('channels.active')) },
           { kind: 'flag', name: 'reported', label: t('content.reportedOnly'), value: 'yes' },

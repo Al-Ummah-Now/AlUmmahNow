@@ -35,8 +35,8 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
         testId="community-filters"
         values={filters}
         fields={[
-          { kind: 'search', name: 'q', label: t('community.searchLabel') },
-          { kind: 'text', name: 'channelId', label: t('community.channelId') },
+          { kind: 'search', name: 'q', label: t('community.searchLabel'), suggest: 'post' },
+          { kind: 'pick', name: 'channelId', label: t('community.channelId'), suggest: 'channel' },
         ]}
       />
       {!data && <ErrorAlert testId="community-error">{t('content.loadFailed')}</ErrorAlert>}

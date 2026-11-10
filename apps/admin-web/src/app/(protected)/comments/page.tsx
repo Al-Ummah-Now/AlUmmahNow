@@ -35,9 +35,9 @@ export default async function CommentsPage({ searchParams }: { searchParams: Pro
         testId="comments-filters"
         values={params}
         fields={[
-          { kind: 'search', name: 'q', label: t('comments.searchLabel') },
-          { kind: 'text', name: 'videoId', label: t('comments.videoId') },
-          { kind: 'text', name: 'userId', label: t('comments.userId') },
+          { kind: 'search', name: 'q', label: t('comments.searchLabel'), suggest: 'comment' },
+          { kind: 'pick', name: 'videoId', label: t('comments.videoId'), suggest: 'video' },
+          { kind: 'pick', name: 'userId', label: t('comments.userId'), suggest: 'user' },
         ]}
       />
       {!data && <ErrorAlert testId="comments-error">{t('content.loadFailed')}</ErrorAlert>}

@@ -8,7 +8,7 @@ import { canManageCreators, normalizeRole } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
 import { formatDate, formatNumber } from '@/i18n/translate';
 import { ErrorAlert, linkClass } from '@/components/ui';
-import { AuditCard, BackLink, Chip, MonoId, Notice, ReportsCard, SectionCard, StatGrid } from '@/components/content/parts';
+import { AuditCard, BackLink, Chip, MonoId, Notice, ReportsCard, SectionCard, StatGrid, smallButtonClass } from '@/components/content/parts';
 import { JobsPanel } from '@/components/content/jobs';
 import { UserAuthRequestsPanel } from '@/components/auth-requests/UserAuthRequestsPanel';
 import { UserCreatorTierPanel } from '@/components/creators/UserCreatorTierPanel';
@@ -41,6 +41,11 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
   }
   const role = normalizeRole((await getAdminSession())?.user.role);
   const u = user;
+  const uid = encodeURIComponent(u.id);
+  const channelsHref = `/channels?ownerId=${uid}`;
+  const videosHref = `/videos?ownerId=${uid}`;
+  const playlistsHref = `/playlists?ownerId=${uid}`;
+  const commentsHref = `/comments?userId=${uid}`;
 
   return (
     <div data-testid="user-detail" data-user-id={u.id} data-banned={u.isBanned ? 'true' : 'false'}>
@@ -80,10 +85,11 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
           <SectionCard title={t('users.countsTitle')} id="user-counts">
             <StatGrid
               stats={[
-                { label: t('users.countVideos'), value: formatNumber(u.counts.videos, locale) },
-                { label: t('users.countPlaylists'), value: formatNumber(u.counts.playlists, locale) },
+                { label: t('users.countChannels'), value: formatNumber(u.channels.length, locale), href: channelsHref, linkTestId: 'user-stat-channels-link' },
+                { label: t('users.countVideos'), value: formatNumber(u.counts.videos, locale), href: videosHref, linkTestId: 'user-stat-videos-link' },
+                { label: t('users.countPlaylists'), value: formatNumber(u.counts.playlists, locale), href: playlistsHref, linkTestId: 'user-stat-playlists-link' },
+                { label: t('users.countComments'), value: formatNumber(u.counts.comments, locale), href: commentsHref, linkTestId: 'user-stat-comments-link' },
                 { label: t('users.countSubscriptions'), value: formatNumber(u.counts.subscriptions, locale) },
-                { label: t('users.countComments'), value: formatNumber(u.counts.comments, locale) },
               ]}
             />
             <dl className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
@@ -96,11 +102,13 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
               <div><dt className="text-fg-muted">{t('content.updated')}</dt><dd className="text-fg">{u.updatedAt ? formatDate(u.updatedAt, locale, true) : t('content.none')}</dd></div>
             </dl>
             {u.bio && <p className="mt-4 text-sm text-fg whitespace-pre-wrap break-words" dir="auto">{u.bio}</p>}
-            <p className="mt-4 flex flex-wrap gap-4 text-sm">
-              <Link href={`/videos?ownerId=${encodeURIComponent(u.id)}`} className={linkClass}>{t('users.videosTitle')}</Link>
-              <Link href={`/playlists?ownerId=${encodeURIComponent(u.id)}`} className={linkClass}>{t('users.playlistsTitle')}</Link>
-              <Link href={`/comments?userId=${encodeURIComponent(u.id)}`} className={linkClass}>{t('users.countComments')}</Link>
-            </p>
+            <nav aria-label={t('users.contentNav')} className="mt-4 flex flex-wrap gap-2">
+              <Link href={channelsHref} className={smallButtonClass} data-testid="user-channels-link">{t('users.viewChannels')}</Link>
+              <Link href={videosHref} className={smallButtonClass} data-testid="user-videos-link">{t('users.videosTitle')}</Link>
+              <Link href={playlistsHref} className={smallButtonClass} data-testid="user-playlists-link">{t('users.playlistsTitle')}</Link>
+              <Link href={commentsHref} className={smallButtonClass} data-testid="user-comments-link">{t('users.countComments')}</Link>
+              <Link href={`/moderation?reporter_id=${encodeURIComponent(u.id)}`} className={smallButtonClass} data-testid="user-reports-filed-link">{t('users.viewReportsFiled')}</Link>
+            </nav>
           </SectionCard>
 
           <SectionCard title={t('users.channelsTitle')} id="user-channels" testId="user-channels">

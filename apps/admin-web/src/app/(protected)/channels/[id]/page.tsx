@@ -6,7 +6,7 @@ import { AdminApiError } from '@/lib/api/errors';
 import { getI18n } from '@/i18n/server';
 import { formatDate, formatNumber } from '@/i18n/translate';
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
-import { AuditCard, BackLink, Chip, MonoId, Notice, ReportsCard, StatGrid } from '@/components/content/parts';
+import { AuditCard, BackLink, Chip, MonoId, Notice, ReportsCard, StatGrid, smallButtonClass } from '@/components/content/parts';
 import { JobsPanel } from '@/components/content/jobs';
 import { logger } from '@/lib/logger';
 import { ChannelActions } from './ChannelActions';
@@ -36,6 +36,8 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
   }
 
   const ch = channel;
+  const videosHref = `/videos?channelId=${encodeURIComponent(ch.id)}`;
+  const playlistsHref = `/playlists?channelId=${encodeURIComponent(ch.id)}`;
   return (
     <div data-testid="channel-detail" data-channel-id={ch.id} data-suspended={ch.isSuspended ? 'true' : 'false'}>
       {back}
@@ -86,10 +88,10 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
           <section className={cardClass} aria-label={t('channels.statVideos')}>
             <StatGrid
               stats={[
-                { label: t('channels.statVideos'), value: formatNumber(ch.stats.videos, locale), testId: 'stat-videos' },
+                { label: t('channels.statVideos'), value: formatNumber(ch.stats.videos, locale), testId: 'stat-videos', href: videosHref, linkTestId: 'stat-videos-link' },
                 { label: t('channels.statSubscribers'), value: formatNumber(ch.stats.subscribers, locale) },
                 { label: t('channels.statViews'), value: formatNumber(ch.stats.views, locale) },
-                { label: t('channels.statPlaylists'), value: formatNumber(ch.stats.playlists, locale) },
+                { label: t('channels.statPlaylists'), value: formatNumber(ch.stats.playlists, locale), href: playlistsHref, linkTestId: 'stat-playlists-link' },
               ]}
             />
             <dl className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
@@ -112,11 +114,20 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
                 <dd className="text-fg">{ch.createdAt ? formatDate(ch.createdAt, locale, true) : t('content.none')}</dd>
               </div>
             </dl>
-            <p className="mt-4">
-              <Link href={`/videos?channelId=${encodeURIComponent(ch.id)}`} className={linkClass} data-testid="channel-videos-link">
+            <nav aria-label={t('channels.contentNav')} className="mt-4 flex flex-wrap gap-2">
+              <Link href={videosHref} className={smallButtonClass} data-testid="channel-videos-link">
                 {t('channels.viewVideos')}
               </Link>
-            </p>
+              <Link href={playlistsHref} className={smallButtonClass} data-testid="channel-playlists-link">
+                {t('channels.viewPlaylists')}
+              </Link>
+              <Link href={`/community?channelId=${encodeURIComponent(ch.id)}`} className={smallButtonClass} data-testid="channel-posts-link">
+                {t('channels.viewPosts')}
+              </Link>
+              <Link href={`/moderation?entity_type=channel&entity_id=${encodeURIComponent(ch.id)}`} className={smallButtonClass} data-testid="channel-reports-link">
+                {t('channels.viewReports')}
+              </Link>
+            </nav>
           </section>
 
           <ChannelActions

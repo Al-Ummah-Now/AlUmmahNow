@@ -30,6 +30,8 @@ export default async function ModerationPage({ searchParams }: PageProps) {
     data = await listReports({
       status: filters.status,
       entity_type: filters.entity_type,
+      entity_id: filters.entity_id,
+      reporter_id: filters.reporter_id,
       limit: PAGE_SIZE,
       offset: (page - 1) * PAGE_SIZE,
     });
@@ -51,7 +53,7 @@ export default async function ModerationPage({ searchParams }: PageProps) {
             </p>
           )}
         </div>
-        <FilterBar status={filters.status} entityType={filters.entity_type} />
+        <FilterBar status={filters.status} entityType={filters.entity_type} entityId={filters.entity_id} reporterId={filters.reporter_id} />
       </div>
 
       {failed && <ErrorAlert testId="reports-error">{t('errors.loadReports')}</ErrorAlert>}

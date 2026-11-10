@@ -6,6 +6,7 @@ import { deleteVideo, moveVideo, updateVideo, uploadVideoThumbnail, videoAction 
 import type { AdminContentPermission } from '@/lib/api/content-types';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { fieldClass, primaryButtonClass } from '@/components/ui';
+import { Autocomplete } from '@/components/search/Autocomplete';
 import { ActionFeedback, ConfirmButton, useContentAction } from '@/components/content/actions';
 import { Notice, SectionCard, smallButtonClass } from '@/components/content/parts';
 import { VideoActionsSlot } from '../extensions';
@@ -39,6 +40,8 @@ export function VideoActions({ video, permissions }: Props) {
   const [description, setDescription] = useState(video.description);
   const [isPublic, setIsPublic] = useState(video.isPublic);
   const [target, setTarget] = useState('');
+  // Bumped after a move so the channel picker starts empty again
+  const [moveRound, setMoveRound] = useState(0);
   const [crop, setCrop] = useState<{ url: string; size: ThumbnailCropSize; name: string } | null>(null);
 
   const can = (p: AdminContentPermission) => permissions.includes(p);
@@ -172,16 +175,25 @@ export function VideoActions({ video, permissions }: Props) {
       {canManage && (
         <SectionCard title={t('videos.moveTitle')} id={`${ids}-move`} testId="video-move">
           <div className="flex flex-col sm:flex-row sm:items-end gap-2">
-            <div className="flex flex-col gap-1 flex-1">
-              <label htmlFor={`${ids}-target`} className="text-sm text-fg-muted">{t('videos.targetChannel')}</label>
-              <input id={`${ids}-target`} value={target} onChange={(e) => setTarget(e.target.value)} dir="ltr" maxLength={200} className={fieldClass} data-testid="video-move-target" />
-            </div>
+            <Autocomplete
+              key={moveRound}
+              kind="channel"
+              mode="pick"
+              label={t('videos.targetChannel')}
+              onChange={(id) => setTarget(id)}
+              disabled={!!busy}
+              className="flex-1"
+              testId="video-move-target"
+            />
             <button
               type="button"
               className={smallButtonClass}
               disabled={!!busy || !target.trim()}
               onClick={async () => {
-                if (await run('move', () => moveVideo(video.id, target.trim()), { success: t('content.queued') })) setTarget('');
+                if (await run('move', () => moveVideo(video.id, target.trim()), { success: t('content.queued') })) {
+                  setTarget('');
+                  setMoveRound((n) => n + 1);
+                }
               }}
               data-testid="video-move-submit"
             >

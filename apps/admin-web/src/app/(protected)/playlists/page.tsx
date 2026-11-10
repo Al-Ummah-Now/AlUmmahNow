@@ -35,9 +35,9 @@ export default async function PlaylistsPage({ searchParams }: { searchParams: Pr
         testId="playlists-filters"
         values={filters}
         fields={[
-          { kind: 'search', name: 'q', label: t('playlists.searchLabel') },
-          { kind: 'text', name: 'channelId', label: t('playlists.channelId') },
-          { kind: 'text', name: 'ownerId', label: t('playlists.ownerId') },
+          { kind: 'search', name: 'q', label: t('playlists.searchLabel'), suggest: 'playlist' },
+          { kind: 'pick', name: 'channelId', label: t('playlists.channelId'), suggest: 'channel' },
+          { kind: 'pick', name: 'ownerId', label: t('playlists.ownerId'), suggest: 'user' },
         ]}
       />
       {!data && <ErrorAlert testId="playlists-error">{t('content.loadFailed')}</ErrorAlert>}

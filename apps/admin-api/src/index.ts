@@ -9,6 +9,7 @@ import { registerAllRouters } from './routers';
 import { publicSiteTheme } from './lib/siteSettings';
 import themesRouter, { publicThemes } from './routers/themes.router';
 import contentRouter from './routers/content.router';
+import suggestRouter from './routers/suggest.router';
 import processingRouter from './routers/processing.router';
 import staleUploadsRouter from './routers/staleUploads.router';
 import type { AdminBindings } from './base/types';
@@ -159,6 +160,9 @@ app.route('/api/themes', themesRouter as never);
 // Platform content management (channels, videos, comments, playlists, posts,
 // videos users): permission-checked, audited proxy to api-videos
 app.route('/api/content', contentRouter);
+
+// Admin autocomplete: suggestions for every search and lookup box in admin-web
+app.route('/api/suggest', suggestRouter);
 
 // Upload processing health (sync from Bunny, retry, mark failed): permission-checked, audited proxy to api-videos
 app.route('/api/processing', processingRouter);

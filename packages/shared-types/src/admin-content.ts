@@ -482,3 +482,26 @@ export interface LegacyRestoreResult {
 
 /** Retries per job delivery before it is marked failed and dead-lettered (matches the queue's max_retries). */
 export const ADMIN_JOB_MAX_RETRIES = 5;
+
+/**
+ * Admin autocomplete (admin-api GET /api/suggest/:kind). Every search and
+ * lookup box in the admin suggests these as the admin types, so nobody has to
+ * know or paste a raw id.
+ */
+export const ADMIN_SUGGEST_KINDS = ['channel', 'user', 'video', 'playlist', 'post', 'comment', 'contact', 'error'] as const;
+export type AdminSuggestKind = (typeof ADMIN_SUGGEST_KINDS)[number];
+
+export interface AdminSuggestion {
+  kind: AdminSuggestKind;
+  id: string;
+  /** Name, title or text: what the admin recognises */
+  label: string;
+  /** @handle, email, channel or app: what tells two similar labels apart */
+  secondary: string | null;
+  imageUrl: string | null;
+  /** The item this one belongs to (a comment's video, a post's channel), for its link */
+  parentId?: string | null;
+}
+
+/** Suggestions per request: enough to choose from, small enough to read at a glance. */
+export const ADMIN_SUGGEST_LIMIT = 8;

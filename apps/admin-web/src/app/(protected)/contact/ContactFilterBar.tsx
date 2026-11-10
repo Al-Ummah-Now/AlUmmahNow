@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { translateDynamic } from '@/i18n/translate';
 import { fieldClass, linkClass } from '@/components/ui';
+import { Autocomplete } from '@/components/search/Autocomplete';
 import { CONTACT_STATUSES, CONTACT_TOPICS, SEND_FAILED, type ContactInboxFilters } from './filters';
 
 /** GET form: filters live in the URL. Selects submit on change; text and dates on Apply. */
@@ -15,20 +16,16 @@ export function ContactFilterBar({ filters, active }: { filters: ContactInboxFil
 
   return (
     <Form action="/contact" role="search" aria-label={t('contact.filtersLabel')} className="flex flex-wrap items-end gap-3" data-testid="contact-filters" key={key}>
-      <div className="flex flex-col gap-1 grow sm:grow-0">
-        <label htmlFor="contact-q" className="text-sm text-fg-muted">
-          {t('contact.search')}
-        </label>
-        <input
-          id="contact-q"
-          name="q"
-          type="search"
-          defaultValue={filters.q ?? ''}
-          placeholder={t('contact.searchPlaceholder')}
-          className={`${fieldClass} w-full sm:w-64`}
-          data-testid="contact-search"
-        />
-      </div>
+      <Autocomplete
+        kind="contact"
+        mode="search"
+        name="q"
+        label={t('contact.search')}
+        defaultValue={filters.q ?? ''}
+        placeholder={t('contact.searchPlaceholder')}
+        className="grow sm:grow-0 sm:w-64"
+        testId="contact-search"
+      />
       <div className="flex flex-col gap-1">
         <label htmlFor="contact-status" className="text-sm text-fg-muted">
           {t('contact.statusFilter')}
