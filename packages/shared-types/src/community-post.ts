@@ -14,6 +14,9 @@ export interface CommunityPost extends SoftDelete, Moderation {
   videoId?: string;                  // For video link posts
   gif?: PostGif;                     // For GIF posts
 
+  /** ARTICLE posts: the article it stands for (written by the CMS, never by the API's users). */
+  article?: CommunityArticle;
+
   // Poll/Quiz specific
   poll?: PollData;                   // Poll configuration and options
   quiz?: QuizData;                   // Quiz configuration and questions
@@ -44,6 +47,19 @@ export interface CommunityPost extends SoftDelete, Moderation {
   // Viewer state (computed per request when authenticated, never stored)
   viewerHasLiked?: boolean;
   viewerPollVote?: string[];          // Option IDs the viewer voted for
+}
+
+/** A scholar's www article, posted to their channel's Community tab by the CMS. */
+export interface CommunityArticle {
+  title: string;
+  excerpt: string | null;
+  /** https image (the article's cover on the CMS media host), or null. */
+  coverUrl: string | null;
+  /** The article on www (https). */
+  url: string;
+  locale: 'en' | 'ar';
+  /** The CMS's key for the article (`cms-<id>`): the same article is always the same post. */
+  externalId: string;
 }
 
 export interface PostImage {
@@ -100,7 +116,9 @@ export enum PostType {
   POLL = 'poll',
   QUIZ = 'quiz',
   VIDEO = 'video',
-  GIF = 'gif'
+  GIF = 'gif',
+  /** A scholar's article from the CMS, linking to www (docs/scholars.md). */
+  ARTICLE = 'article'
 }
 
 export enum PostStatus {

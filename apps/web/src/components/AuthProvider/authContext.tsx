@@ -28,3 +28,5 @@ export const useAuth = () => {
   }
   return context;
 };
+/** The signed-in user, or null outside an AuthContextProvider (menus rendered on their own). */
+export const useOptionalAuth = (): AuthContextType => useContext(AuthContext) ?? { user: null };

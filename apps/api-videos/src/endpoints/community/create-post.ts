@@ -29,8 +29,11 @@ const sanitizeOptions = {
   disallowedTagsMode: 'discard' as const
 };
 
+// ARTICLE posts are written by the CMS only (internal API, lib/scholar-articles.ts).
+const USER_POST_TYPES = [PostType.TEXT, PostType.IMAGE, PostType.POLL, PostType.QUIZ, PostType.VIDEO, PostType.GIF] as const;
+
 const createPostSchema = z.object({
-  type: z.nativeEnum(PostType),
+  type: z.enum(USER_POST_TYPES),
   content: z.string().max(5000).optional(),
   images: z.array(z.object({
     width: z.number(),

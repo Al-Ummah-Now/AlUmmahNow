@@ -8213,7 +8213,8 @@
                 "poll",
                 "quiz",
                 "video",
-                "gif"
+                "gif",
+                "article"
               ]
             },
             "required": false,

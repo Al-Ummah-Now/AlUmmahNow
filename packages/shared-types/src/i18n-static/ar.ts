@@ -90,6 +90,9 @@ export const AR_TRANSLATIONS: AppTranslations = {
   },
 
   navigation: {
+    writeArticle: 'اكتب مقالًا',
+    myArticles: 'مقالاتي',
+    scholarPage: 'صفحة العالم',
     navigationMenu: 'قائمة التنقل',
     navigation: 'التنقل',
     accounts: 'الحسابات',
@@ -1322,6 +1325,10 @@ export const AR_TRANSLATIONS: AppTranslations = {
   },
 
   community: {
+    article: 'مقال',
+    readArticle: 'اقرأ المقال',
+    articleOpensSite: 'يُفتح على موقع الأمة الآن',
+    articleManagedInCms: 'يُحرَّر هذا المقال في نظام إدارة المحتوى.',
     community: 'المجتمع',
     managePosts: 'إدارة المنشورات',
     newPost: 'منشور جديد',

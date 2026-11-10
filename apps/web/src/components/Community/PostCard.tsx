@@ -11,6 +11,7 @@ import PollPost from './types/PollPost';
 import QuizPost from './types/QuizPost';
 import VideoPost from './types/VideoPost';
 import GifPost from './types/GifPost';
+import ArticlePost from './types/ArticlePost';
 import Image from 'next/image';
 
 interface PostCardProps {
@@ -88,6 +89,8 @@ export default function PostCard({
         return <VideoPost post={post} isRTL={isRTL} />;
       case PostType.GIF:
         return <GifPost post={post} isRTL={isRTL} />;
+      case PostType.ARTICLE:
+        return <ArticlePost post={post} />;
       default:
         return null;
     }

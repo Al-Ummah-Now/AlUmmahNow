@@ -231,6 +231,10 @@ export interface AppTranslations {
    * Navigation menu
    */
   navigation: {
+    /** Scholars (AlUmmahNowCMS docs/SCHOLARS.md): articles are written in the CMS. */
+    writeArticle: string;
+    myArticles: string;
+    scholarPage: string;
     navigationMenu: string;
     navigation: string;
     accounts: string;
@@ -1379,6 +1383,11 @@ export interface AppTranslations {
    * Community related
    */
   community: {
+    /** A scholar's article posted from the CMS (PostType.ARTICLE). */
+    article: string;
+    readArticle: string;
+    articleOpensSite: string;
+    articleManagedInCms: string;
     managePosts: string;
     newPost: string;
     searchPosts: string;

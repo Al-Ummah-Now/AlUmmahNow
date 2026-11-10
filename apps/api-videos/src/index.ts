@@ -40,6 +40,7 @@ import { buildContractDocument } from './lib/api-contract';
 import { sweepStalledUploads } from "./lib/uploads/lifecycle";
 import { createTusRouter } from "./endpoints/video/tus";
 import { createProcessingInternalRouter } from "./endpoints/video/processingInternal";
+import scholarsInternalRouter from "./routers/scholars-internal.router";
 import { createUploadsInternalRouter } from "./endpoints/video/uploadsInternal";
 import { createVideoFormatInternalRouter } from "./endpoints/video/videoFormatInternal";
 import { handleVideoFormatMessage, startDailyVideoFormatRun } from "./lib/video-format/job";
@@ -225,6 +226,8 @@ app.route('/internal/uploads', createUploadsInternalRouter() as never);
 app.route('/internal/video-format', createVideoFormatInternalRouter() as never);
 // New uploads → playlists: the admin Errors page's Retry on a failed add
 app.route('/internal/playlist-adds', createPlaylistAddsInternalRouter() as never);
+// Scholars (the CMS): their channels and their articles on the Community tab
+app.route('/internal/scholars', scholarsInternalRouter as never);
 
 // ==========================================
 // PROFILE/CHANNEL IMAGE UPLOADS
