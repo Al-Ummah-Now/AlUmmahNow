@@ -19,10 +19,12 @@
 
 import { logger } from '../logger';
 import R2Repository from '../r2Repo';
-import { requireSecret } from '../env-helpers';
+import { getSecret, requireSecret } from '../env-helpers';
+import { bunnyFileToken, tokenExpiry } from '../bunny-signing';
 import { announceProcessingResult } from '../notification-events';
 import {
 	applyPlan,
+	bunnyPhase,
 	BunnyVideoState,
 	MAX_CHECK_ATTEMPTS,
 	nextCheckDelaySeconds,
@@ -56,6 +58,10 @@ export interface ProcessingEnv {
 	'bunny-stream-key': SecretBinding | string;
 	bunny_stream_library_id: SecretBinding | string;
 	bunny_hostname?: string;
+	/** CDN token auth (lib/bunny-signing.ts): the thumbnail check signs its URL */
+	BUNNY_SIGN_URLS?: string;
+	BUNNY_SIGN_HOSTNAME?: string;
+	BUNNY_TOKEN_KEY?: SecretBinding | string;
 	SEARCH_DB?: D1Database;
 	NOTIFICATIONS_DB?: D1Database;
 }
@@ -99,6 +105,35 @@ export async function fetchBunnyVideo(env: ProcessingEnv, videoId: string): Prom
 	return (await response.json()) as BunnyVideoState;
 }
 
+/**
+ * Does Bunny's auto thumbnail exist yet? HEAD on the library CDN, signed when
+ * token authentication is on (query-form file token, like API responses).
+ * true / false (404 or 403), or undefined when the CDN could not be asked.
+ */
+export async function bunnyThumbnailExists(env: ProcessingEnv, videoId: string, fileName = 'thumbnail.jpg'): Promise<boolean | undefined> {
+	const host = env.bunny_hostname;
+	if (!host) return undefined;
+	const path = `/${videoId}/${fileName}`;
+	let url = `https://${host}${path}`;
+	try {
+		const signHost = env.BUNNY_SIGN_HOSTNAME || host;
+		if (env.BUNNY_SIGN_URLS === 'true' && signHost === host) {
+			const key = await getSecret(env.BUNNY_TOKEN_KEY, 'BUNNY_TOKEN_KEY');
+			if (key) {
+				const expires = tokenExpiry();
+				url += `?token=${await bunnyFileToken(key, path, expires)}&expires=${expires}`;
+			}
+		}
+		const response = await fetch(url, { method: 'HEAD' });
+		if (response.ok) return true;
+		if (response.status === 404 || response.status === 403) return false;
+		return undefined;
+	} catch (error) {
+		logger.warn('[ProcessingSync] Thumbnail check failed', { videoId, error: error instanceof Error ? error.message : String(error) });
+		return undefined;
+	}
+}
+
 export interface SyncResult {
 	videoId: string;
 	found: boolean;
@@ -138,7 +173,14 @@ export async function syncVideoFromBunny(
 
 	const bunny = opts.bunny !== undefined ? opts.bunny : await fetchBunnyVideo(env, videoId);
 	const now = opts.now ?? new Date();
-	const syncOpts = { host, now, loopStartedAt: opts.loopStartedAt };
+	// The thumbnail is checked once the video plays (Bunny makes it from
+	// thumbnailTime after the first resolution); custom thumbnails are ours
+	const phase = bunnyPhase(bunny);
+	const thumbnailExists =
+		(phase === 'ready' || phase === 'playable') && video.thumbnailType !== 'custom'
+			? await bunnyThumbnailExists(env, videoId, bunny?.thumbnailFileName || 'thumbnail.jpg')
+			: undefined;
+	const syncOpts = { host, now, loopStartedAt: opts.loopStartedAt, thumbnailExists };
 	const plan = planSync(video, bunny, syncOpts);
 	const bunnyView = bunny
 		? { status: bunny.status, encodeProgress: bunny.encodeProgress, availableResolutions: bunny.availableResolutions, length: bunny.length }
@@ -236,9 +278,11 @@ export type CheckDecision =
 
 /** Pure: what the loop does after a check, given the sync outcome. */
 export function decideNext(outcome: string, attempt: number): CheckDecision {
-	if (outcome !== 'pending') return { kind: 'done', outcome };
+	// pending: not playable yet; playable: watchable, keep checking until Finished
+	if (outcome !== 'pending' && outcome !== 'playable') return { kind: 'done', outcome };
 	const next = attempt + 1;
-	if (next >= MAX_CHECK_ATTEMPTS) return { kind: 'done', outcome: 'attempts_exhausted' };
+	// Out of checks while it already plays: done (ready), nothing for an admin
+	if (next >= MAX_CHECK_ATTEMPTS) return { kind: 'done', outcome: outcome === 'playable' ? 'ready' : 'attempts_exhausted' };
 	return { kind: 'again', delaySeconds: nextCheckDelaySeconds(next), attempt: next };
 }
 

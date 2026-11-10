@@ -77,6 +77,8 @@ export const Video = z.object({
     thumbnailUrl: Str().optional(),
     thumbnailType: z.enum(['auto', 'custom']).optional(),
     thumbnailSizes: z.record(z.string()).optional(),
+    // Bunny's auto thumbnail does not exist yet (lib/processing): views omit thumbnailUrl
+    thumbnailPending: z.boolean().optional(),
     videoUrl: Str().optional(),
     playUrl: Str().optional(),
     userId: Str(),

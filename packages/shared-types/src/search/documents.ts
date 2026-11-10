@@ -248,7 +248,8 @@ export function projectVideo(raw: unknown): SearchRow<'video'> | null {
       title,
       titleLocalized,
       description: truncate(description, DESCRIPTION_LIMIT),
-      thumbnailUrl: str(obj.thumbnailUrl),
+      // Bunny's auto thumbnail not made yet (api-videos lib/processing): no URL that 404s
+      thumbnailUrl: obj.thumbnailPending === true && obj.thumbnailType !== 'custom' ? undefined : str(obj.thumbnailUrl),
       duration: duration ?? undefined,
       views,
       likesCount,

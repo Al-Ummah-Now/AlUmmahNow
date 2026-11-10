@@ -15,10 +15,12 @@ export function transformVideoToView(
     const publicComments = (video.comments || []).filter((comment) => isCommentVisible(comment as unknown as StoredComment));
     // Processing internals stay server-side: the check loop's state and Bunny's
     // raw failure text. Clients get only the issue kind (watch page, studio).
-    const { processingCheck: _check, processingIssue, ...rest } = video;
+    // A thumbnail Bunny has not made yet would 404: clients show their placeholder instead.
+    const { processingCheck: _check, processingIssue, thumbnailPending, ...rest } = video;
     return {
         ...rest,
         ...(processingIssue ? { processingIssueKind: processingIssue.kind } : {}),
+        ...(thumbnailPending && video.thumbnailType !== 'custom' ? { thumbnailUrl: undefined } : {}),
         comments: publicComments,
         commentSettings: getCommentSettings(video),
         channelName: channel?.name || "",

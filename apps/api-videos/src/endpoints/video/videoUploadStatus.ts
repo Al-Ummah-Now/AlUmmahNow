@@ -6,8 +6,8 @@ import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import { requireSecret } from "../../lib/env-helpers";
 import { logger } from '../../lib/logger';
-import { inBackground } from "../../lib/websocket-notify";
-import { announceProcessingResult } from "../../lib/notification-events";
+import { syncVideoFromBunny } from "../../lib/processing/loop";
+import { bunnyPhase, uploadStatusView } from "../../lib/processing/sync";
 
 // Upload status type
 const UploadStatus = z.object({
@@ -156,43 +156,23 @@ export class VideoUploadStatus extends OptionalAuthRoute {
 			logger.warn("Could not fetch Bunny Stream status:", error);
 		}
 
-		// Determine status based on video data and Bunny Stream info
+		// One mapping for the status endpoint and the processing-check loop
+		// (lib/processing/sync.ts): playable at the first encoded resolution
+		// counts as ready. The record is written (and ready/failed announced
+		// once) by the same code the loop uses.
 		let status: "uploading" | "processing" | "ready" | "failed" | "deleted" = "ready";
 		let progress = 100;
 		let message = "Video is ready";
-		
+
 		if (bunnyStreamStatus) {
-			// Map Bunny Stream status to our status (see lib/bunny/schema.json):
-			// 0=Created, 1=Uploaded, 2=Processing, 3=Transcoding, 4=Finished,
-			// 5=Error, 6=UploadFailed, 7=Transcribing (captions; playable), 8+ JIT states (playable)
-			switch (bunnyStreamStatus.status) {
-				case 0: // Created
-					status = "uploading";
-					progress = Math.max(10, bunnyStreamStatus.encodeProgress || 0);
-					message = "Video upload queued";
-					break;
-				case 1: // Uploaded
-				case 2: // Processing
-					status = "processing";
-					progress = Math.max(25, bunnyStreamStatus.encodeProgress || 25);
-					message = "Video is being processed";
-					break;
-				case 3: // Transcoding
-					status = "processing";
-					progress = Math.max(50, bunnyStreamStatus.encodeProgress || 50);
-					message = "Video is being encoded";
-					break;
-				case 5: // Error
-				case 6: // UploadFailed
-					status = "failed";
-					progress = 0;
-					message = "Video processing failed";
-					break;
-				default: // 4=Finished, 7=Transcribing and later states are playable
-					status = "ready";
-					progress = 100;
-					message = "Video is ready";
-					break;
+			({ status, progress, message } = uploadStatusView(bunnyPhase(bunnyStreamStatus), bunnyStreamStatus));
+			try {
+				await syncVideoFromBunny(c.env as never, id, { bunny: bunnyStreamStatus });
+			} catch (error) {
+				logger.error('[VideoUploadStatus] Failed to sync the video from Bunny', {
+					videoId: id,
+					error: error instanceof Error ? error.message : String(error),
+				});
 			}
 		} else if (video.uploadStatus === 'initiated' || video.uploadStatus === 'uploading') {
 			status = "uploading";
@@ -206,84 +186,6 @@ export class VideoUploadStatus extends OptionalAuthRoute {
 			status = "failed";
 			progress = 0;
 			message = "Upload or processing failed";
-		}
-
-		// Update R2 object if status changed or resolutions need updating
-		const needsUpdate = bunnyStreamStatus && (
-			video.uploadStatus !== status ||
-			(bunnyStreamStatus.availableResolutions && video.availableResolutions.length === 0) ||
-			(bunnyStreamStatus.length && !video.duration)
-		);
-
-		if (needsUpdate) {
-			const previousStatus = video.uploadStatus;
-			try {
-				logger.info('[VideoUploadStatus] Updating video status in R2', {
-					videoId: id,
-					oldStatus: video.uploadStatus,
-					newStatus: status,
-					bunnyStatus: bunnyStreamStatus.status,
-				});
-
-				// Conditional write on the fresh video (SCALABILITY-AUDIT AV-3): a
-				// poll never overwrites a concurrent comment, edit or view flush,
-				// and only the poll that stores the transition announces it below.
-				let transitioned = false;
-				const saved = await repository.updateObject(id, (fresh) => {
-					transitioned = false;
-					const freshNeedsUpdate =
-						fresh.uploadStatus !== status ||
-						(bunnyStreamStatus.availableResolutions && (fresh.availableResolutions ?? []).length === 0) ||
-						(bunnyStreamStatus.length && !fresh.duration);
-					if (!freshNeedsUpdate) return false;
-					transitioned = fresh.uploadStatus !== status;
-					fresh.uploadStatus = status as any;
-					fresh.dateModified = new Date().toISOString();
-
-					// Update available resolutions if Bunny.net has them
-					if (bunnyStreamStatus.availableResolutions) {
-						fresh.availableResolutions = bunnyStreamStatus.availableResolutions
-							.split(',')
-							.map(r => r.trim())
-							.filter(r => r.length > 0);
-					}
-
-					// Update duration if available
-					if (bunnyStreamStatus.length) {
-						fresh.duration = bunnyStreamStatus.length;
-					}
-
-					// Update storage size if available
-					if (bunnyStreamStatus.storageSize) {
-						fresh.fileSize = bunnyStreamStatus.storageSize;
-					}
-
-					// Set playUrl for HLS streaming
-					if (!fresh.playUrl && bunnyStreamStatus.guid) {
-						fresh.playUrl = `https://${c.env.bunny_hostname}/${bunnyStreamStatus.guid}/playlist.m3u8`;
-					}
-					// Bunny's auto thumbnail sits next to the playlist
-					if (!fresh.thumbnailUrl && fresh.playUrl?.endsWith('/playlist.m3u8')) {
-						fresh.thumbnailUrl = fresh.playUrl.replace(/playlist\.m3u8$/, 'thumbnail.jpg');
-					}
-					return true;
-				});
-				if (saved) Object.assign(video, saved);
-				logger.info('[VideoUploadStatus] Video status updated in R2', { videoId: id, status });
-
-				// Terminal transition: uploader notification + subscriber fan-out (Story 29.10).
-				// Repeated polls never reach here twice (status already stored); the
-				// processor de-duplicates anyway.
-				if (transitioned && previousStatus !== status && (status === 'ready' || status === 'failed')) {
-					const terminal = status;
-					inBackground(c, 'processing-result', () => announceProcessingResult(c.env, { ...video, id }, terminal));
-				}
-			} catch (error) {
-				logger.error('[VideoUploadStatus] Failed to update video status in R2', {
-					videoId: id,
-					error: error instanceof Error ? error.message : String(error),
-				});
-			}
 		}
 
 		// Build response
