@@ -12,6 +12,7 @@ import { requireSecret, requireEnvVar } from "../../lib/env-helpers";
 import { fingerprintKey, initiateOnce, UploadClaimBusyError, UploadFingerprintSchema } from "../../lib/uploads/initiateOnce";
 import { checkReusable, issueTusSession, reuseFields, type PlaceholderRecord } from "../../lib/uploads/placeholder";
 import { patchVideo } from "../../lib/videoWrites";
+import { markUploadCreated } from "../../lib/uploads/reaper";
 import { thumbnailProcessor, thumbnailStorage } from "../../lib/thumbnail";
 import { adoptOrRequestSuggestion } from '../../lib/categorySuggestions';
 import { logger } from '../../lib/logger';
@@ -192,6 +193,8 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 					thumbnailTime: 0,
 				});
 				const videoId = bunnyVideo.guid;
+				// Ours: the reaper may remove it if its record never lands (lib/uploads/reaper.ts)
+				await markUploadCreated(c.env.global_settings, videoId, { userId, channelId });
 				const thumb = await this.processThumbnail(c, videoId, thumbnail);
 				const now = new Date().toISOString();
 				// Same record as a bulk upload (lib/upload/uploadRecord.ts). Without a

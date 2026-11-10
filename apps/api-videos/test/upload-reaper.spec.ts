@@ -9,6 +9,7 @@ import {
 	ABANDON_AFTER_MS,
 	FLAGGED_GRACE_MS,
 	isAbandonedCandidate,
+	markUploadCreated,
 	belongsToEnv,
 	CONFIRM_DELAY_SECONDS,
 	decideReap,
@@ -184,6 +185,19 @@ describe('decideReap: abandoned placeholders', () => {
 		assert.equal(decideReap(input({ record: otherIssue })).action, 'delete');
 	});
 
+	it('allowlist: only an unfinished upload (initiated, uploading, failed) an upload flow wrote is abandoned, even for Delete now', () => {
+		for (const status of ['initiated', 'uploading', 'failed']) assert.equal(decideReap(input({ record: placeholder({ uploadStatus: status }) as any })).action, 'delete', status);
+		for (const status of [undefined, 'scheduled', 'live', 'archived']) {
+			assert.equal(decideReap(input({ record: placeholder({ uploadStatus: status }) as any })).action, 'keep', String(status));
+			assert.equal(decideReap(input({ force: true, record: placeholder({ uploadStatus: status }) as any })).action, 'keep', `forced ${status}`);
+		}
+		const notUpload = placeholder({ uploadFingerprint: undefined, tusUpload: undefined, lastInitiateAt: undefined, originalFormat: undefined }) as any;
+		assert.deepEqual(decideReap(input({ record: notUpload, force: true })), { action: 'keep', reason: 'Not an upload record' });
+		assert.equal(isAbandonedCandidate(notUpload, NOW.getTime()), false);
+		assert.equal(isAbandonedCandidate(placeholder({ uploadStatus: 'scheduled' }) as any, NOW.getTime()), false);
+		assert.equal(decideReap(input({ record: placeholder({ uploadFingerprint: undefined, tusUpload: undefined, originalFormat: 'video/mp4' }) as any })).action, 'delete', 'a legacy initiate record');
+	});
+
 	it('idempotent: an abandoned record is done; one whose Bunny delete was interrupted is finished', () => {
 		const abandoned = placeholder({ abandoned: { at: 'x', reason: 'r', by: 'reaper', bunnyDeleted: true }, isDeleted: true }) as any;
 		assert.equal(decideReap(input({ record: abandoned, bunny: null })).action, 'keep');
@@ -193,7 +207,7 @@ describe('decideReap: abandoned placeholders', () => {
 });
 
 describe('decideReap: orphans', () => {
-	const orphan = (over: Partial<ReapInput> = {}) => input({ target: 'orphan', record: null, offsetNow: null, offsetBefore: null, ...over });
+	const orphan = (over: Partial<ReapInput> = {}) => input({ target: 'orphan', record: null, offsetNow: null, offsetBefore: null, uploadMarker: true, ...over });
 
 	it('no record, ours, older than 24 h, not ready: confirm, then delete', () => {
 		assert.equal(decideReap(orphan({ check: 0 })).action, 'confirm');
@@ -211,6 +225,13 @@ describe('decideReap: orphans', () => {
 		assert.equal(decideReap(orphan({ bunny: { status: 0, title: '[stage] Lecture', dateUploaded: ago(30 * H) } })).action, 'keep');
 		assert.equal(decideReap(orphan({ prefix: '[stage] ', bunny: { status: 0, title: 'Lecture', dateUploaded: ago(30 * H) } })).action, 'keep');
 		assert.equal(decideReap(orphan({ prefix: '[stage] ', bunny: { status: 0, title: '[stage] Lecture', dateUploaded: ago(30 * H) } })).action, 'delete');
+	});
+
+	it('only an upload-made Bunny video is an automatic orphan; a live stream video never is, even for Delete now', () => {
+		assert.deepEqual(decideReap(orphan({ uploadMarker: false })), { action: 'keep', reason: 'Not created by an upload (no upload marker): only an admin Delete now removes it' });
+		assert.equal(decideReap(orphan({ uploadMarker: false, force: true })).action, 'delete', 'an admin Delete now still can');
+		assert.deepEqual(decideReap(orphan({ liveStreamRef: true })), { action: 'keep', reason: 'A live stream refers to it' });
+		assert.equal(decideReap(orphan({ liveStreamRef: true, force: true })).action, 'keep');
 	});
 
 	it('belongsToEnv: prefix rule', () => {
@@ -310,11 +331,26 @@ describe('reaper loop', () => {
 		const env = makeEnv();
 		await writeReaperConfig(env, 'live', 'a');
 		bunny.videos.set(ORPHAN, { guid: ORPHAN, title: 'Lecture', status: 6, dateUploaded: ago(30 * H) });
+		await markUploadCreated(env.global_settings as never, ORPHAN, { userId: 'alice', channelId: 'ch1' });
 		await startReaperLoop(env, ORPHAN, 'orphan', { reason: 'test', now: NOW });
 		await runQueued(env);
 		await runQueued(env, new Date(NOW.getTime() + CONFIRM_DELAY_SECONDS * 1000));
 		assert.deepEqual(bunny.deleted, [ORPHAN]);
 		assert.equal(env.videos.read(ORPHAN), null);
+	});
+
+	it('an orphan without the upload marker, or one a live stream refers to, is kept', async () => {
+		const env = makeEnv();
+		await writeReaperConfig(env, 'live', 'a');
+		bunny.videos.set(ORPHAN, { guid: ORPHAN, title: 'Lecture', status: 0, dateUploaded: ago(30 * H) });
+		await startReaperLoop(env, ORPHAN, 'orphan', { reason: 'test', now: NOW });
+		await runQueued(env);
+		assert.deepEqual(bunny.deleted, []);
+		await env.videos.put('livestream:ls1', JSON.stringify({ id: 'ls1', streamUrl: `https://iframe.mediadelivery.net/embed/1/${ORPHAN}` }));
+		await startReaperLoop(env, ORPHAN, 'orphan', { reason: 'admin', force: true, now: NOW });
+		await runQueued(env);
+		await runQueued(env, new Date(NOW.getTime() + 120_000));
+		assert.deepEqual(bunny.deleted, [], 'Delete now never removes a live stream video');
 	});
 
 	it('deduped: a second start while a loop is live does nothing; a superseded message is dropped', async () => {
