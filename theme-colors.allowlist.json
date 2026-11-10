@@ -157,7 +157,6 @@
   "apps/web/src/components/comment/CommentBody.tsx": 25,
   "apps/web/src/components/commentsSection/index.tsx": 38,
   "apps/web/src/components/common/InfiniteScrollTrigger.tsx": 12,
-  "apps/web/src/components/common/MenuButton.tsx": 12,
   "apps/web/src/components/common/SignInPrompt.tsx": 9,
   "apps/web/src/components/communityGuidelines/index.tsx": 10,
   "apps/web/src/components/consent/ConsentBanner/ConsentBannerView.tsx": 30,
