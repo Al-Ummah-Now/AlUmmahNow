@@ -50,6 +50,10 @@ export const PURGE_MAX_PAGE_SIZE = 100;
 /** Bunny answered 429: wait and retry this video (1 s, 2 s, 4 s, 8 s), then fail the page. */
 export const PURGE_429_RETRIES = 4;
 const RECENT_LIMIT = 50;
+/** At the end of the library another lap starts from page 1 while the last lap deleted at least this many… */
+export const PURGE_LAP_MIN_DELETES = 50;
+/** …up to this many laps. */
+export const PURGE_MAX_LAPS = 5;
 
 export type PurgeStatus = 'running' | 'stopped' | 'finished' | 'failed';
 
@@ -85,6 +89,9 @@ export interface PurgeState {
 	deletedByStatus?: Record<string, number>;
 	/** Other environments' videos (never deleted) seen per Bunny status, counted on each listing */
 	otherEnvByStatus?: Record<string, number>;
+	/** Lap through the library (1 = first) and deletions in the current lap */
+	lap?: number;
+	lapDeleted?: number;
 	/** Videos Bunny refused to delete (5xx / 4xx other than 404 and 429): skipped so they never block a page */
 	deleteFailed?: { videoId: string; status?: number; error: string; at: string }[];
 }
@@ -130,9 +137,17 @@ export function decidePurge(input: { video: BunnyView; prefix: string; now: numb
 }
 
 /** Next page after one page: the same one when deletes moved the rest up. */
+/**
+ * Next page after one page. The same page again only when at least half of it
+ * was deleted (the rest moved up into it); otherwise on to the next page.
+ * Re-listing on every deletion kept QA run 4f7346af (2026-11-10) on page 3 for
+ * good: new test uploads keep arriving at the top of the newest-first list
+ * and each listing found a few more. What a move-on skips is caught by the
+ * next lap (runPurgePage).
+ */
 export function nextPurgePage(input: { page: number; listed: number; deleted: number; total: number; dryRun: boolean; pageSize?: number }): number | null {
 	if (input.listed === 0) return null;
-	if (!input.dryRun && input.deleted > 0) return input.page;
+	if (!input.dryRun && input.deleted > 0 && input.deleted * 2 >= input.listed) return input.page;
 	if (input.page * (input.pageSize ?? PURGE_PAGE_SIZE) >= input.total) return null;
 	return input.page + 1;
 }
@@ -312,7 +327,15 @@ export async function runPurgePage(env: PurgeEnv, message: PurgeMessage, now = n
 		}),
 	);
 	const deleted = state.dryRun ? 0 : removed.length;
-	const next = nextPurgePage({ page: message.page, listed: listed.items.length, deleted, total: listed.totalItems, dryRun: state.dryRun, pageSize });
+	let next = nextPurgePage({ page: message.page, listed: listed.items.length, deleted, total: listed.totalItems, dryRun: state.dryRun, pageSize });
+	// End of the library: another lap catches what moving on skipped, while laps still find enough
+	let lap = state.lap ?? 1;
+	let lapDeleted = (state.lapDeleted ?? 0) + deleted;
+	if (next === null && !state.dryRun && lapDeleted >= PURGE_LAP_MIN_DELETES && lap < PURGE_MAX_LAPS) {
+		next = 1;
+		lap += 1;
+		lapDeleted = 0;
+	}
 
 	let current = true;
 	await repo(env).updateObject(PURGE_STATE_KEY, (fresh) => {
@@ -327,6 +350,8 @@ export async function runPurgePage(env: PurgeEnv, message: PurgeMessage, now = n
 		fresh.recent = [...removed, ...fresh.recent].slice(0, RECENT_LIMIT);
 		fresh.bunnyTotal = listed.totalItems;
 		fresh.page = next ?? message.page;
+		fresh.lap = lap;
+		fresh.lapDeleted = lapDeleted;
 		fresh.updatedAt = now.toISOString();
 		fresh.attempts = undefined;
 		fresh.lastError = undefined;

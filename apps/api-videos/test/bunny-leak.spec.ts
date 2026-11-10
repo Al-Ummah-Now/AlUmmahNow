@@ -235,7 +235,9 @@ describe('test-library purge rules', () => {
 	});
 
 	it('re-lists the same page after deletes, advances otherwise, stops at the end', () => {
-		assert.equal(nextPurgePage({ page: 3, listed: 50, deleted: 4, total: 500, dryRun: false }), 3);
+		assert.equal(nextPurgePage({ page: 3, listed: 50, deleted: 25, total: 500, dryRun: false }), 3);
+		// Fewer than half deleted: move on (the next lap catches what moved up)
+		assert.equal(nextPurgePage({ page: 3, listed: 50, deleted: 4, total: 500, dryRun: false }), 4);
 		assert.equal(nextPurgePage({ page: 3, listed: 50, deleted: 0, total: 500, dryRun: false }), 4);
 		assert.equal(nextPurgePage({ page: 3, listed: 50, deleted: 0, total: 150, dryRun: false }), null);
 		assert.equal(nextPurgePage({ page: 3, listed: 0, deleted: 0, total: 150, dryRun: false }), null);
@@ -375,6 +377,22 @@ describe('test-library purge run', () => {
 		assert.equal(state?.status, 'finished');
 		assert.equal(state?.throttled, 2);
 		assert.ok((state?.concurrency ?? 99) <= 20);
+	});
+
+	it('laps: a page with few deletions moves on, and a new lap from page 1 catches what moved up', async () => {
+		const bunny = bunnyStub();
+		const env = makeEnv();
+		// 30 kept stage videos on top, then 400 leaked QA videos (pages of 50)
+		for (let i = 0; i < 430; i++) {
+			bunny.videos.push({ guid: uuid(i + 1), title: i < 30 ? '[stage] E2E' : 'E2E leaked', status: 4, dateUploaded: new Date(Date.now() - 2 * H - i * 1000).toISOString() });
+		}
+		await startPurge(env, { actor: 'a', dryRun: false });
+		await drain(env);
+		const state = await readPurgeState(env);
+		assert.equal(state?.status, 'finished');
+		assert.equal(bunny.videos.filter((v) => v.title === 'E2E leaked').length, 0, 'every leaked video is gone after the laps');
+		assert.equal(bunny.videos.length, 30);
+		assert.ok((state?.lap ?? 1) >= 1);
 	});
 
 	it('refuses to start on production, and a production worker drops a run', async () => {
