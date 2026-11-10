@@ -213,7 +213,11 @@
 		"ClientId": "b1770235-e4b6-42f3-9eb4-3c03ca111b02",
 		"Issuer": "https://auth.alummahnow.net",
 		"Audience": "https://videos.api.alummahnow.net",
-		"bunny_hostname": "vz-25839d05-80d.b-cdn.net",
+		// CDN host of the library the stream key/library-id secrets point at
+		// (400189). New uploads land there, so their playUrl/thumbnailUrl must
+		// use this host; vz-25839d05 belongs to a different library and 404s
+		// every new upload (2026-11-10 incident).
+		"bunny_hostname": "vz-215a1ffd-a5a.b-cdn.net",
 		// Existing videos live on legacy library 400189 with CDN token auth on:
 		// sign its URLs (playUrl, thumbnails) in API responses
 		"BUNNY_SIGN_URLS": "true",
