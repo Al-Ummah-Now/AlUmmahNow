@@ -374,3 +374,38 @@ describe('channel section types: limits, permissions, failures', () => {
     }
   });
 });
+
+describe('channel section types: edge cache for signed-out visitors (spec §8.4)', () => {
+  /** A Cache API stand-in on globalThis.caches.default */
+  function stubCache() {
+    const store = new Map<string, string>();
+    const cache = {
+      match: async (url: string) => (store.has(url) ? new Response(store.get(url)) : undefined),
+      put: async (url: string, res: Response) => { store.set(url, await res.text()); },
+      delete: async (url: string) => store.delete(url),
+    };
+    (globalThis as any).caches = { default: cache };
+    return store;
+  }
+
+  it('a visitor asking for fewer sections never shrinks the cached list for everyone', async () => {
+    const store = stubCache();
+    try {
+      const e = env();
+      await add(e, { type: 'recent_uploads' });
+      await add(e, { type: 'popular_uploads' });
+      const small = await send(visitorApp, e, 'GET', `/api/channels/${CH}/sections/populated?limit=1`);
+      assert.equal(((await small.json()) as any).result.sections.length, 1);
+      assert.equal(store.size, 0, 'a limited response is not cached');
+      assert.equal((await populated(e, visitorApp)).length, 2);
+      assert.equal(store.size, 1, 'the full list is cached');
+      assert.equal((await populated(e, visitorApp)).length, 2);
+
+      // A write purges this colo's entry
+      await add(e, { type: 'shorts' });
+      assert.equal(store.size, 0);
+    } finally {
+      delete (globalThis as any).caches;
+    }
+  });
+});

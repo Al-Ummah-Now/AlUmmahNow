@@ -4,7 +4,7 @@ import { addAuthToSchema } from '../../lib/openapi-auth';
 import { ChannelSectionTypeSchema } from '../../lib/channelSectionSchemas';
 import { applySectionOrder, listChannelSections, readSectionOrder } from '../../lib/channelSectionOrder';
 import R2Repository from '../../lib/r2Repo';
-import { Channel, ChannelSection } from '@al-ummah/shared-types';
+import { Channel, ChannelSection, CHANNEL_SECTION_CONSTRAINTS } from '@al-ummah/shared-types';
 import { transformChannelSectionsToView } from '../../lib/transformations';
 import { transformChannelSectionWithContent } from '../../lib/channelSectionPopulator';
 import { canEditChannelLayout } from '../../lib/channelSectionAccess';
@@ -171,7 +171,10 @@ export class ChannelSectionsListPopulated extends OptionalAuthRoute {
     }
 
     const canEdit = canEditChannelLayout(channel, auth?.userId);
-    const cacheable = !auth && populate && !type;
+    // Cached only for the full list: every query parameter that could shape
+    // the body is at a value that can't (a channel has at most 12 sections),
+    // so no visitor's ?limit=1 or ?type= is served to everyone else
+    const cacheable = !auth && populate && !type && !cursor && limit >= CHANNEL_SECTION_CONSTRAINTS.MAX_SECTIONS_PER_CHANNEL;
     const cacheUrl = sectionsCacheUrl(c.req.url, channelId);
     if (cacheable) {
       const cached = await readEdgeCache<unknown>(cacheUrl);
