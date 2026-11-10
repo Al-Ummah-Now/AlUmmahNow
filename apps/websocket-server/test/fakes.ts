@@ -20,9 +20,27 @@ export class FakeSocket {
   last() { return this.sent[this.sent.length - 1]; }
 }
 
-/** The runtime's view of one object: the sockets it accepted outlive any instance. */
+/** Durable Object storage: survives instances; each call takes a random async delay. */
+export class FakeStorage {
+  data = new Map<string, unknown>();
+  fail = false;
+  private async op<T>(fn: () => T): Promise<T> {
+    await tick();
+    if (this.fail) throw new Error('storage unavailable');
+    return fn();
+  }
+  get<T>(key: string) { return this.op(() => this.data.get(key) as T | undefined); }
+  put(key: string, value: unknown) { return this.op(() => { this.data.set(key, structuredClone(value)); }); }
+  delete(key: string) { return this.op(() => this.data.delete(key)); }
+  list<T>({ prefix = '' }: { prefix?: string } = {}) {
+    return this.op(() => new Map([...this.data].filter(([k]) => k.startsWith(prefix)).sort(([a], [b]) => a.localeCompare(b))) as Map<string, T>);
+  }
+}
+
+/** The runtime's view of one object: the sockets it accepted and its storage outlive any instance. */
 export class FakeCtx {
   accepted: Array<{ ws: FakeSocket; tags: string[] }> = [];
+  storage = new FakeStorage();
   acceptWebSocket(ws: FakeSocket, tags: string[] = []) { this.accepted.push({ ws, tags }); }
   getWebSockets(tag?: string) {
     return this.accepted.filter((a) => !a.ws.closed && (!tag || a.tags.includes(tag))).map((a) => a.ws);
@@ -59,13 +77,17 @@ export function restoreWorkerGlobals(): void {
 const tick = () => new Promise<void>((resolve) => setTimeout(resolve, Math.floor(Math.random() * 3)));
 
 /**
- * Durable Object namespace: one instance per name, and like the platform's
- * input gate each object handles one request at a time (calls queue up).
- * `hibernate(name)` drops the instance; the next call constructs a new one
- * over the same accepted sockets.
+ * Durable Object namespace: one instance per name. Like the platform, an
+ * object takes new requests while one of its requests awaits something (an
+ * outbound call, a token check), so requests interleave at every await.
+ * `hibernate(name)` drops an idle object's instance (the platform never
+ * hibernates one with a request in flight); the next call constructs a new
+ * one over the same accepted sockets and storage. `broken` names objects
+ * whose calls fail (an unreachable object, or one on older code).
  */
 export class FakeNamespace<T extends { fetch(r: Request): Promise<Response> }> {
-  objects = new Map<string, { ctx: FakeCtx; instance?: T; queue: Promise<unknown> }>();
+  objects = new Map<string, { ctx: FakeCtx; instance?: T; inflight: number }>();
+  broken = new Set<string>();
   calls = new Map<string, number>();
   env: Record<string, unknown> = {};
   constructor(private readonly make: (ctx: FakeCtx, env: any) => T) {}
@@ -77,20 +99,25 @@ export class FakeNamespace<T extends { fetch(r: Request): Promise<Response> }> {
   }
   instance(name: string): T {
     let entry = this.objects.get(name);
-    if (!entry) this.objects.set(name, (entry = { ctx: new FakeCtx(), queue: Promise.resolve() }));
+    if (!entry) this.objects.set(name, (entry = { ctx: new FakeCtx(), inflight: 0 }));
     entry.instance ??= this.make(entry.ctx, this.env);
     return entry.instance;
   }
-  call<R>(name: string, fn: (o: T) => Promise<R>): Promise<R> {
+  async call<R>(name: string, fn: (o: T) => Promise<R>): Promise<R> {
     this.instance(name);
     const entry = this.objects.get(name)!;
     this.calls.set(name, (this.calls.get(name) ?? 0) + 1);
-    const run = entry.queue.then(async () => { await tick(); return fn(this.instance(name)); });
-    entry.queue = run.catch(() => undefined);
-    return run;
+    entry.inflight++;
+    try {
+      await tick();
+      if (this.broken.has(name)) throw new Error(`${name} unavailable`);
+      return await fn(this.instance(name));
+    } finally {
+      entry.inflight--;
+    }
   }
   hibernate(name: string) {
     const entry = this.objects.get(name);
-    if (entry) entry.instance = undefined;
+    if (entry && entry.inflight === 0) entry.instance = undefined;
   }
 }

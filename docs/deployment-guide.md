@@ -180,7 +180,8 @@ pnpm wrangler deploy
 ```
 
 **Configuration:**
-- Durable Object: WebSocketDurableObject (socket shards `sockets:<n>`, view counters `views:<id>:<n>`)
+- Durable Object: WebSocketDurableObject (socket shards `sockets:<n>`, channel directories `topic:<channel>`, view counters `views:<id>:<n>`)
+- `SOCKET_SHARDS` (optional, default 8, max 64): number of socket shards
 - Rate limiting: WS_CONNECT_LIMITER, WS_MESSAGE_LIMITER
 
 ## Environment Configuration
