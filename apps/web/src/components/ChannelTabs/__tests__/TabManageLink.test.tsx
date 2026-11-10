@@ -43,11 +43,17 @@ describe('TabManageLink', () => {
     expect(screen.getByTestId('tab-manage-link')).toHaveAttribute('href', href);
   });
 
-  it('follows the member role: an editor manages videos but not owner-only playlists', () => {
+  it('follows the member role: an editor manages videos and playlists (playlist.manage)', () => {
     asMember('editor');
     const videos = renderTab('videos');
     expect(screen.getByTestId('tab-manage-link')).toHaveAttribute('href', '/en/settings/channel/ch-1/videos');
     videos.unmount();
+    renderTab('playlists');
+    expect(screen.getByTestId('tab-manage-link')).toHaveAttribute('href', '/en/settings/channel/ch-1/playlists');
+  });
+
+  it('a moderator gets no playlist manage link', () => {
+    asMember('moderator');
     const { container } = renderTab('playlists');
     expect(container).toBeEmptyDOMElement();
   });

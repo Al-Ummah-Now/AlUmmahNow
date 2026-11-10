@@ -1,9 +1,7 @@
-import { redirect, notFound } from 'next/navigation';
-import { isChannelOwner } from '@/lib/channel-utils';
+import { notFound } from 'next/navigation';
 import { getChannelById } from '@/lib/api/channels';
 import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
 import PlaylistManager from '@/components/PlaylistManager';
-import PlaylistManagerRTL from '@/components/PlaylistManager/rtl';
 
 interface ChannelPlaylistsPageProps {
   params: Promise<{
@@ -13,35 +11,22 @@ interface ChannelPlaylistsPageProps {
 }
 
 /**
- * Channel Settings - Playlists: create, edit and delete channel playlists.
+ * Channel Settings - Playlists: the channel's playlists. Who may open it
+ * (owner, admin, editor: playlist.manage) is checked by the layout.
  */
 export default async function ChannelPlaylistsPage({ params }: ChannelPlaylistsPageProps) {
   const { locale, id } = await params;
-
-  const isOwner = await isChannelOwner(id);
-  if (!isOwner) {
-    redirect(`/${locale}/channels/${id}`);
-  }
-
   const channel = await getChannelById(id);
   if (!channel) {
     notFound();
   }
-
   const displayName = channel.nameLocalized?.[locale] || channel.name;
-  const Manager = locale === 'ar' ? PlaylistManagerRTL : PlaylistManager;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-      <div className="container mx-auto px-4 py-8 max-w-5xl">
-        <ChannelSettingsBreadcrumb
-          channelId={id}
-          channelName={displayName}
-          locale={locale}
-          currentPage="playlists"
-          className="mb-6"
-        />
-        <Manager channelId={id} />
+    <div className="min-h-screen">
+      <div className="container mx-auto max-w-5xl px-4 py-8">
+        <ChannelSettingsBreadcrumb channelId={id} channelName={displayName} locale={locale} currentPage="playlists" className="mb-6" />
+        <PlaylistManager channelId={id} />
       </div>
     </div>
   );

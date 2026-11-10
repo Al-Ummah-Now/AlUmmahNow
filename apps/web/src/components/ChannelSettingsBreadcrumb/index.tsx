@@ -11,6 +11,8 @@ interface ChannelSettingsBreadcrumbProps {
   channelName?: string;
   locale: string;
   currentPage: ChannelSettingsPage;
+  /** A page under `currentPage` (a playlist in Manage Playlists): `currentPage` then links back. */
+  subPage?: string;
   className?: string;
 }
 
@@ -23,6 +25,7 @@ export default function ChannelSettingsBreadcrumb({
   channelName,
   locale,
   currentPage,
+  subPage,
   className,
 }: ChannelSettingsBreadcrumbProps) {
   const { t } = useLanguage();
@@ -46,6 +49,8 @@ export default function ChannelSettingsBreadcrumb({
   }
   if (currentPage === 'communityNew') {
     trail.push({ label: pageLabels.community, href: `${overview}/community` }, { label: t.community.newPost });
+  } else if (currentPage !== 'overview' && subPage) {
+    trail.push({ label: pageLabels[currentPage], href: `${overview}/${currentPage}` }, { label: subPage });
   } else if (currentPage !== 'overview') {
     trail.push({ label: pageLabels[currentPage] });
   }

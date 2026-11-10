@@ -3,7 +3,7 @@
 import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import React, { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { Search, UploadCloud, Trash2, Eye, Edit } from 'lucide-react';
+import { Search, UploadCloud, Trash2, Eye, Edit, ListPlus, MoreVertical, Check } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { VideoObject } from '@/interfaces';
@@ -15,6 +15,12 @@ import Link from 'next/link';
 import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
 import { logger } from '@/lib/logger-client';
 import { formatViews } from '@/lib/format/videoMeta';
+import { reportError } from '@/lib/errors/reporter';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import AddToPlaylistDialog from '@/components/playlists/AddToPlaylistDialog';
+import { toPicked, type PickedVideo } from '@/components/playlists/VideoPicker';
+import { fill } from '@/components/playlists/text';
+import '@/theme/playlist-tools.css';
 
 type FilterStatus = 'all' | 'ready' | 'processing' | 'uploading' | 'failed';
 type FilterPrivacy = 'all' | 'public' | 'private';
@@ -41,6 +47,8 @@ export default function ChannelVideosPage() {
   const [privacyFilter, setPrivacyFilter] = useState<FilterPrivacy>('all');
   const [sortBy, setSortBy] = useState<SortBy>('date');
   const [selectedVideos, setSelectedVideos] = useState<Set<string>>(new Set());
+  // "Add to playlist": the videos it adds, in the order shown (null: closed)
+  const [playlistVideos, setPlaylistVideos] = useState<PickedVideo[] | null>(null);
 
   // Check channel ownership
   useEffect(() => {
@@ -97,7 +105,7 @@ export default function ChannelVideosPage() {
         setVideos(allVideos);
         setFilteredVideos(allVideos);
       } catch (error) {
-        logger.error('Error fetching videos and channel', { error, channelId });
+        reportError(error, { extra: { step: 'video-management-load', channelId } });
       } finally {
         setLoading(false);
       }
@@ -159,6 +167,10 @@ export default function ChannelVideosPage() {
     } else {
       setSelectedVideos(new Set(filteredVideos.map((v) => v.id)));
     }
+  };
+
+  const addSelectedToPlaylist = () => {
+    setPlaylistVideos(filteredVideos.filter((v) => selectedVideos.has(v.id)).map(toPicked));
   };
 
   const handleDeleteVideo = async (videoId: string) => {
@@ -224,8 +236,8 @@ export default function ChannelVideosPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen p-4 sm:p-6">
+      <div className="mx-auto max-w-7xl">
         {/* Breadcrumb */}
         <ChannelSettingsBreadcrumb
           channelId={channelId}
@@ -238,20 +250,21 @@ export default function ChannelVideosPage() {
         {/* Header */}
         <div className="mb-8">
           <div className="mb-4">
-            <h1 className="text-3xl font-bold dark:text-white">{t.video.videoManagement}</h1>
+            <h1 className="text-3xl font-bold text-[var(--fanous-color-text-primary)]">{t.video.videoManagement}</h1>
           </div>
 
           {/* Search and Filters */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 space-y-4">
+          <div className="c space-y-4 !p-4">
             {/* Search */}
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+              <Search className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-[var(--fanous-color-text-muted)]" size={20} aria-hidden="true" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={t.video.searchVideos}
-                className="w-full pl-10 pr-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                aria-label={t.video.searchVideos}
+                className="f-input w-full py-2 pe-4 ps-10"
               />
             </div>
 
@@ -261,7 +274,7 @@ export default function ChannelVideosPage() {
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as FilterStatus)}
                 aria-label={t.video.filterByStatus || t.video.allStatus}
-                className="px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                className="f-input px-4 py-2"
               >
                 <option value="all">{t.video.allStatus}</option>
                 <option value="ready">{t.video.ready}</option>
@@ -274,7 +287,7 @@ export default function ChannelVideosPage() {
                 value={privacyFilter}
                 onChange={(e) => setPrivacyFilter(e.target.value as FilterPrivacy)}
                 aria-label={t.video.filterByPrivacy}
-                className="px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                className="f-input px-4 py-2"
               >
                 <option value="all">{t.video.filterByPrivacy}</option>
                 <option value="public">{t.video.public}</option>
@@ -285,7 +298,7 @@ export default function ChannelVideosPage() {
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as SortBy)}
                 aria-label={t.search.sortBy}
-                className="px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                className="f-input px-4 py-2"
               >
                 <option value="date">{t.video.sortByDate}</option>
                 <option value="views">{t.video.sortByViews}</option>
@@ -295,22 +308,20 @@ export default function ChannelVideosPage() {
 
             {/* Bulk Actions */}
             {selectedVideos.size > 0 && (
-              <div className="flex items-center gap-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                <span className="text-sm font-medium dark:text-white">
+              <div className="flex flex-wrap items-center gap-3 rounded-[var(--r-md)] bg-[var(--m-sel)] p-3" data-testid="video-bulk-bar">
+                <span className="text-sm font-medium text-[var(--fanous-color-text-primary)]">
                   {t.video.videosSelected?.replace('{count}', selectedVideos.size.toString()) || `${selectedVideos.size} videos selected`}
                 </span>
-                <button
-                  onClick={handleSelectAll}
-                  className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                >
+                <button type="button" onClick={handleSelectAll} className="b b-ghost b-sm">
                   {selectedVideos.size === filteredVideos.length ? t.video.deselectAll : t.video.selectAll}
                 </button>
                 <div className="flex-1" />
-                <button
-                  onClick={handleDeleteSelected}
-                  className="flex items-center gap-2 px-4 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                >
-                  <Trash2 size={16} />
+                <button type="button" onClick={addSelectedToPlaylist} className="b b-primary b-sm" data-testid="bulk-add-to-playlist">
+                  <ListPlus size={16} aria-hidden="true" />
+                  {t.playlistTools.addToPlaylist}
+                </button>
+                <button type="button" onClick={handleDeleteSelected} className="b b-ghost b-sm text-[var(--fanous-color-error-text)]">
+                  <Trash2 size={16} aria-hidden="true" />
                   {t.video.deleteSelected}
                 </button>
               </div>
@@ -320,34 +331,37 @@ export default function ChannelVideosPage() {
 
         {/* Video Grid */}
         {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="text-gray-500 dark:text-gray-400">{t.common.loading}</div>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" aria-busy="true" aria-label={t.common.loading}>
+            {Array.from({ length: 8 }, (_, i) => <div key={i} className="sk aspect-video" />)}
           </div>
         ) : filteredVideos.length === 0 ? (
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-12 text-center">
-            <UploadCloud size={64} className="mx-auto mb-4 text-gray-400" />
-            <h2 className="text-2xl font-semibold mb-2 dark:text-white">{t.video.noVideosFound}</h2>
-            <p className="text-gray-600 dark:text-gray-400">{t.video.uploadFirstVideo}</p>
+          <div className="c empty">
+            <UploadCloud size={64} aria-hidden="true" />
+            <h2 className="text-2xl font-semibold text-[var(--fanous-color-text-primary)]">{t.video.noVideosFound}</h2>
+            <p>{t.video.uploadFirstVideo}</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredVideos.map((video) => (
-              <div
-                key={video.id}
-                className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
-              >
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {filteredVideos.map((video) => {
+              const selected = selectedVideos.has(video.id);
+              return (
+              <div key={video.id} className="c !p-0 overflow-hidden" data-testid="managed-video" data-video-id={video.id}>
                 {/* Checkbox */}
                 <div className="relative">
-                  <input
-                    type="checkbox"
-                    checked={selectedVideos.has(video.id)}
-                    onChange={() => handleSelectVideo(video.id)}
-                    aria-label={`${t.video.selectVideo || t.video.selectAll}: ${video.title}`}
-                    className="absolute top-3 left-3 w-5 h-5 z-10 cursor-pointer"
-                  />
+                  <label className="absolute start-2 top-2 z-10 grid h-11 w-11 cursor-pointer place-items-center">
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={() => handleSelectVideo(video.id)}
+                      aria-label={`${t.video.selectVideo || t.video.selectAll}: ${video.title}`}
+                      className="peer sr-only"
+                      data-testid="managed-video-select"
+                    />
+                    <span className="ck pl-ck peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-[var(--fanous-color-focus-ring)]" data-on={selected || undefined} aria-hidden="true">{selected && <Check />}</span>
+                  </label>
 
                   {/* Thumbnail */}
-                  <div className="relative w-full aspect-video overflow-hidden bg-gray-200 dark:bg-gray-700">
+                  <div className="relative aspect-video w-full overflow-hidden bg-[var(--m-control)]">
                     {video.thumbnailUrl ? (
                       <FitImage
                         src={video.thumbnailUrl}
@@ -357,20 +371,8 @@ export default function ChannelVideosPage() {
                         videoHeight={video.height}
                       />
                     ) : (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <svg
-                          className="w-16 h-16 text-gray-400"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={1.5}
-                            d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
-                          />
-                        </svg>
+                      <div className="absolute inset-0 flex items-center justify-center text-[var(--fanous-color-text-muted)]">
+                        <UploadCloud size={48} aria-hidden="true" />
                       </div>
                     )}
                   </div>
@@ -378,57 +380,69 @@ export default function ChannelVideosPage() {
 
                 {/* Content */}
                 <div className="p-4">
-                  <h3 className="font-semibold text-lg mb-2 line-clamp-2 dark:text-white">
-                    {video.title}
-                  </h3>
-                  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mb-3">
+                  <div className="mb-2 flex items-start gap-1">
+                    <h3 className="line-clamp-2 flex-1 text-lg font-semibold text-[var(--fanous-color-text-primary)]">
+                      {video.title}
+                    </h3>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button type="button" className="b b-ghost b-icon -me-2 -mt-1 flex-none" aria-label={fill(t.playlistTools.moreActions, { title: video.title })} data-testid="managed-video-menu">
+                          <MoreVertical className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onSelect={() => setPlaylistVideos([toPicked(video)])} data-testid="managed-video-add-to-playlist">
+                          <ListPlus className="h-4 w-4" aria-hidden="true" />
+                          {t.playlistTools.addToPlaylist}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                  <div className="mb-3 flex items-center gap-2 text-sm text-[var(--fanous-color-text-secondary)] dark:text-[var(--fanous-color-text-muted)]">
                     <span>{formatViews(video.views, lang)}</span>
-                    <span>•</span>
+                    <span aria-hidden="true">•</span>
                     <span>{formatDate(video.dateCreated)}</span>
                   </div>
 
-                  <div className="flex items-center gap-2 mb-3">
-                    <span
-                      className={`px-2 py-1 rounded text-xs font-medium ${
-                        video.isPublic
-                          ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
-                          : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
-                      }`}
-                    >
+                  <div className="mb-3 flex items-center gap-2">
+                    <span className={`bdg ${video.isPublic ? 'bdg-ok' : 'pl-bdg-muted'}`}>
                       {video.isPublic ? t.video.public : t.video.private}
                     </span>
                   </div>
 
                   {/* Actions */}
                   <div className="flex gap-2">
-                    <Link
-                      href={`/${locale}/video?vid=${video.id}`}
-                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 border dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm"
-                    >
-                      <Eye size={16} />
+                    <Link href={`/${locale}/video?vid=${video.id}`} className="b b-secondary b-sm flex-1">
+                      <Eye size={16} aria-hidden="true" />
                       {t.common.viewAll}
                     </Link>
-                    <Link
-                      href={`/${locale}/video/${video.id}/edit`}
-                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 border dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm"
-                    >
-                      <Edit size={16} />
+                    <Link href={`/${locale}/video/${video.id}/edit`} className="b b-secondary b-sm flex-1">
+                      <Edit size={16} aria-hidden="true" />
                       {t.common.edit}
                     </Link>
                     <button
+                      type="button"
                       onClick={() => handleDeleteVideo(video.id)}
-                      className="px-3 py-2 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                      className="b b-ghost b-icon text-[var(--fanous-color-error-text)]"
                       aria-label={t.common.delete}
                     >
-                      <Trash2 size={16} />
+                      <Trash2 size={16} aria-hidden="true" />
                     </button>
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
+
+      <AddToPlaylistDialog
+        open={playlistVideos !== null}
+        onOpenChange={(open) => { if (!open) setPlaylistVideos(null); }}
+        channelId={channelId}
+        videos={playlistVideos ?? []}
+      />
     </div>
   );
 }
