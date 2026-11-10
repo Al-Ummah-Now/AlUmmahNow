@@ -125,7 +125,7 @@ export function useRealTimeNotifications(
       if ('Notification' in window && Notification.permission === 'granted') {
         new Notification(notification.title, {
           body: notification.message,
-          icon: '/android-chrome-192x192.png',
+          icon: '/icon-192.png',
           tag: notification.id
         });
       }

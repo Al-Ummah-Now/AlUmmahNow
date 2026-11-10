@@ -1,0 +1,14 @@
+{
+  "name": "@al-ummah/app-icons",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Favicon and app-icon sets for every Al Ummah Now web app, generated from one SVG family",
+  "type": "module",
+  "scripts": {
+    "build": "node --experimental-strip-types --no-warnings src/cli.ts",
+    "test": "node --experimental-strip-types --no-warnings --test test/*.test.ts"
+  },
+  "devDependencies": {
+    "sharp": "0.34.5"
+  }
+}
