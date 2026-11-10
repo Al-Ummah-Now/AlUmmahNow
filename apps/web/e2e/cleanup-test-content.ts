@@ -83,6 +83,14 @@ export async function cleanupTestVideos(opts: CleanupOptions): Promise<number> {
 
 const RUN_USERS: AuthUser[] = ['single', 'multi', 'none', 'scratch', 'fresh'];
 
+function withTimeout<T>(work: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${what} took longer than ${Math.round(ms / 1000)} s`)), ms);
+  });
+  return Promise.race([work, timeout]).finally(() => clearTimeout(timer));
+}
+
 /**
  * CI run mode (E2E_RUN_ID): the users are this job's own, so everything they
  * own goes. Their videos first (the owner delete also removes the Bunny video),
@@ -94,12 +102,22 @@ const RUN_USERS: AuthUser[] = ['single', 'multi', 'none', 'scratch', 'fresh'];
  */
 export async function eraseRunUsers(log: (message: string) => void = () => undefined): Promise<number> {
   if (!runId()) throw new Error('eraseRunUsers only runs in run mode (E2E_RUN_ID)');
-  await cleanupTestVideos({ keepSeed: false, minAgeMs: 0, log, users: RUN_USERS });
+  try {
+    await withTimeout(cleanupTestVideos({ keepSeed: false, minAgeMs: 0, log, users: RUN_USERS }), 4 * 60 * 1000, 'deleting the run users\' videos');
+  } catch (error) {
+    log(`[cleanup] ${(error as Error).message}`);
+  }
   let erased = 0;
+  // Bounded: the workflow's account delete runs after this step and must get its turn
+  const deadline = Date.now() + 8 * 60 * 1000;
   for (const user of RUN_USERS) {
     if (!fs.existsSync(AUTH_STATE[user])) continue;
+    if (Date.now() > deadline) {
+      log(`[cleanup] out of time before ${user}; the QA cleanup removes what is left`);
+      break;
+    }
     try {
-      await ensureFreshSession(AUTH_STATE[user]);
+      await withTimeout(ensureFreshSession(AUTH_STATE[user]), 90_000, `refreshing ${user}'s session`);
       const u = userApi(user);
       let resumeToken: string | undefined;
       for (let round = 0; round < 20; round++) {
@@ -149,7 +167,8 @@ if (require.main === module) {
     // CI teardown step: erase this run's users from the stored sessions
     if (args.has('--run-users')) {
       await eraseRunUsers((m) => console.log(m));
-      return;
+      // A browser or socket left open by a session refresh must not keep the step alive
+      process.exit(0);
     }
     if (!args.has('--skip-auth')) {
       const { default: globalSetup } = await import('./auth.setup');

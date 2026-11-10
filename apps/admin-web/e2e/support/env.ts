@@ -42,6 +42,15 @@ export const RUN_ID = runId();
 export const SHARED_STATE_PROJECT = 'shared-state';
 
 /**
+ * Skip reason for tests that end sessions (sign out everywhere, revoke): they
+ * may only sign in as this job's own run accounts. Outside run mode
+ * accounts.admin / accounts.nonadmin are the shared seeds, and signing those
+ * out ends every other suite's sessions. Use: test.skip(!RUN_ID, RUN_ACCOUNTS_ONLY).
+ * scripts/qa/__tests__/session-killers.test.ts enforces it.
+ */
+export const RUN_ACCOUNTS_ONLY = 'ends the account\'s sessions everywhere: only with this job\'s own run accounts (E2E_RUN_ID)';
+
+/**
  * The Playwright project this job runs. Global setup and the workers must agree
  * on the run account names before any test has a TestInfo, so it comes from the
  * environment; required in run mode because two jobs with the same name would

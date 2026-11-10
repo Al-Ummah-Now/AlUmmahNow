@@ -169,6 +169,7 @@ jobs:
       - name: Delete the run accounts
         if: always()
         continue-on-error: true
+        timeout-minutes: 5
         run: >-
           node --experimental-strip-types --no-warnings scripts/e2e/teardown-run-users.ts
           --auth-url "$OPENAUTH_ISSUER_URL" --file "$E2E_RUN_USERS_FILE"
