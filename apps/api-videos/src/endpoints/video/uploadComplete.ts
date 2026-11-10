@@ -122,7 +122,9 @@ export class UploadCompleteEndpoint extends AuthenticatedRoute {
 				dateModified: new Date().toISOString(),
 				...(fileSize && { fileSize }),
 				...(duration && { duration }),
-			}), { ownerId: userId });
+				// The proxy's durable session copy is not needed once uploaded
+				tusUpload: undefined,
+			} as Partial<VideoType>), { ownerId: userId });
 			if (saved.status === 'missing') {
 				return c.json({ success: false, error: "Video not found" }, 404);
 			}

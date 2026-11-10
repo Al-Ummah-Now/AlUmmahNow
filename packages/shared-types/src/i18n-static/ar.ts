@@ -706,6 +706,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     invalidType: 'يرجى رفع ملف فيديو صالح ({types})',
     authRequired: 'يجب تسجيل الدخول لرفع الفيديوهات.',
     sessionMissing: 'تعذر إنشاء جلسة الرفع. يرجى المحاولة مرة أخرى.',
+    reconnecting: 'جارٍ إعادة الاتصال… سيُستأنف الرفع من حيث توقف',
     authTokenMissing: 'لم يتم العثور على رمز المصادقة. يرجى تسجيل الدخول مرة أخرى.',
     completeFailed: 'تعذر إكمال الرفع',
     processingFailed: 'فشلت معالجة الفيديو',

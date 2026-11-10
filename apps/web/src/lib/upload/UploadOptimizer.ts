@@ -1,3 +1,4 @@
+import { DEFAULT_TUS_CHUNK_SIZE } from './resilient-tus';
 import { DeviceCapabilities } from '@al-ummah/shared-types';
 
 /**
@@ -128,21 +129,17 @@ export class UploadOptimizer {
    * Determine optimal chunk size for TUS uploads
    */
   getOptimalChunkSize(): number {
-    const bandwidth = this.bandwidthMonitor.getAverageBandwidth();
+    // Fewer, larger requests are faster through the API TUS proxy (measured on
+    // QA, see lib/upload/README.md "Chunk size"): 50 MB unless memory is
+    // tight. Never above ~90 MB (Workers take up to 100 MB per request, and
+    // 90 MB chunks already ran far slower).
     const memory = this.memoryMonitor.getAvailableMemory();
+    const memoryLimit = memory * 0.02; // per chunk, several files in parallel
 
-    // Base chunk size on bandwidth (target 2-3 second chunks)
-    let chunkSize = bandwidth * 2.5;
+    const MIN_CHUNK = 16 * 1024 * 1024;
+    const MAX_CHUNK = DEFAULT_TUS_CHUNK_SIZE;
 
-    // Constrain by memory (max 1% of available memory per chunk)
-    const memoryLimit = memory * 0.01;
-    chunkSize = Math.min(chunkSize, memoryLimit);
-
-    // Apply min/max bounds
-    const MIN_CHUNK = 1024 * 1024;      // 1MB minimum
-    const MAX_CHUNK = 10 * 1024 * 1024; // 10MB maximum
-
-    return Math.max(MIN_CHUNK, Math.min(MAX_CHUNK, Math.floor(chunkSize)));
+    return Math.max(MIN_CHUNK, Math.min(MAX_CHUNK, Math.floor(memoryLimit)));
   }
 
   /**

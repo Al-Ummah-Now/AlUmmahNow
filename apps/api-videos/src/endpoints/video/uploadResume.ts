@@ -5,23 +5,26 @@ import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import R2Repository, { rethrowBusy } from "../../lib/r2Repo";
 import { patchVideo } from '../../lib/videoWrites';
-import { generateTUSConfig } from "../../lib/bunny/tus";
+import { generateTUSConfig, createTusProxySession, TUS_PROXY_SESSION_TTL_SECONDS } from "../../lib/bunny/tus";
+import { buildTusUploadId, type VideoTusUpload } from "./tus/tusProxy";
 import { requireSecret } from "../../lib/env-helpers";
 import { logger } from '../../lib/logger';
 
 /**
  * Upload Resume Endpoint
  *
- * Allows users to resume an interrupted TUS upload by generating a new
- * authorization signature for the existing video. This endpoint is useful
- * when an upload was interrupted due to network issues, browser crash,
- * or expired authorization.
+ * Re-authorises an unfinished upload of the SAME Bunny video: a new TUS proxy
+ * session (send as `tusSessionId` upload metadata) and, while Bunny still
+ * holds the bytes, the proxy upload id to resume at Bunny's offset. The client
+ * calls it when the proxy answers 404 (session or upload gone), after a page
+ * reload or browser crash, or for a bulk-queue file whose session expired.
+ * Bunny credentials never reach the client.
  */
 export class UploadResumeEndpoint extends AuthenticatedRoute {
 	schema = addAuthToSchema({
 		tags: ["Videos"],
 		summary: "Resume Video Upload",
-		description: "Generate new TUS authorization to resume an interrupted video upload. The video must have been previously initiated and owned by the authenticated user.",
+		description: "Re-authorise an unfinished upload of the same video: returns a new TUS proxy session id and, when the earlier upload still exists at Bunny, its proxy upload id (resume at its offset). Any not-yet-finished upload of the caller can be resumed; a finished one answers 409 with completed: true.",
 		request: {
 			headers: z.object({
           channelId: Str({ description: "User's selected channel ID" }).optional().nullable(),
@@ -39,14 +42,9 @@ export class UploadResumeEndpoint extends AuthenticatedRoute {
 							success: z.boolean(),
 							result: z.object({
 								videoId: z.string().describe("Video GUID for upload"),
-								tusEndpoint: z.string().describe("TUS upload endpoint"),
-								tusHeaders: z.object({
-									AuthorizationSignature: z.string().describe("TUS authorization signature"),
-									AuthorizationExpire: z.string().describe("Unix timestamp when signature expires"),
-									LibraryId: z.string().describe("Bunny.net Stream library ID"),
-									VideoId: z.string().describe("Video GUID"),
-								}).describe("Headers required for TUS upload"),
-								expiresAt: z.string().describe("ISO 8601 datetime when authorization expires"),
+								tusSessionId: z.string().describe("New TUS proxy session id (send as tusSessionId upload metadata)"),
+								tusUploadId: z.string().optional().describe("Proxy upload id of the earlier upload, when Bunny may still hold its bytes: resume at /api/videos/tus/<tusUploadId>"),
+								expiresAt: z.string().describe("ISO 8601 datetime when the session expires"),
 								chunkSize: z.number().describe("Recommended chunk size in bytes"),
 								resumable: z.boolean().describe("Whether upload supports resume"),
 								videoMetadata: z.object({
@@ -126,26 +124,14 @@ export class UploadResumeEndpoint extends AuthenticatedRoute {
 				}, 403);
 			}
 
-			// Check upload status - only allow resume for 'uploading' or 'initiated' status
+			// Any upload that has not finished can be resumed; a finished one
+			// tells the client so (it treats the file as uploaded).
 			const uploadStatus = video.uploadStatus || 'initiated';
 			if (uploadStatus === 'ready' || uploadStatus === 'processing') {
 				return c.json({
 					success: false,
+					completed: true,
 					error: `Cannot resume upload - video status is '${uploadStatus}'. Upload has already been completed.`,
-				}, 409);
-			}
-
-			if (uploadStatus === 'failed') {
-				return c.json({
-					success: false,
-					error: "Cannot resume failed upload. Please initiate a new upload.",
-				}, 409);
-			}
-
-			if (uploadStatus !== 'uploading' && uploadStatus !== 'initiated') {
-				return c.json({
-					success: false,
-					error: `Cannot resume upload - video status is '${uploadStatus}'. Only 'uploading' or 'initiated' videos can be resumed.`,
 				}, 409);
 			}
 
@@ -161,29 +147,45 @@ export class UploadResumeEndpoint extends AuthenticatedRoute {
 				}, 500);
 			}
 
-			// Generate new TUS configuration for resuming upload
-			const tusConfig = await generateTUSConfig(
-				libraryId,
-				bunnyKey,
-				videoId,
-				1 // 1 hour expiration
-			);
+			// New proxy session for the same video (the proxy signs every Bunny
+			// request itself; this signature only fills the stored session).
+			const tusConfig = await generateTUSConfig(libraryId, bunnyKey, videoId, 1);
+			let tusSessionId: string;
+			try {
+				tusSessionId = await createTusProxySession(c.env.TUS_SESSIONS, {
+					videoId,
+					userId,
+					channelId: video.channelId,
+					tusConfig,
+				});
+			} catch (error) {
+				logger.warn('[UploadResume] Session store unavailable', { videoId, error: error instanceof Error ? error.message : String(error) });
+				c.header('Retry-After', '5');
+				return c.json({ success: false, error: 'Session store unavailable, retry' }, 503);
+			}
 
-			// Update video metadata to reflect resume attempt
+			// The earlier upload, while Bunny may still hold its bytes
+			const durable = (video as VideoType & { tusUpload?: VideoTusUpload }).tusUpload;
+			const tusUploadId = durable?.sessionId && durable.bunnyUploadUrl ? buildTusUploadId(durable.sessionId, videoId) : undefined;
+
+			// Record the resume attempt; best effort, never blocks the upload
 			// (conditional write on the fresh video, SCALABILITY-AUDIT AV-3)
 			const resumedAt = new Date().toISOString();
-			await patchVideo(repository, videoId, { dateModified: resumedAt, lastResumeAt: resumedAt } as Partial<VideoType>, { ownerId: userId });
+			try {
+				await patchVideo(repository, videoId, (fresh) => fresh.uploadStatus === 'ready' || fresh.uploadStatus === 'processing' ? false : { dateModified: resumedAt, lastResumeAt: resumedAt } as Partial<VideoType>, { ownerId: userId });
+			} catch (error) {
+				logger.warn('[UploadResume] Could not record the resume attempt', { videoId, error: error instanceof Error ? error.message : String(error) });
+			}
 
-			// Return TUS configuration for resuming upload
 			return c.json({
 				success: true,
 				result: {
 					videoId,
-					tusEndpoint: tusConfig.tusEndpoint,
-					tusHeaders: tusConfig.tusHeaders,
-					expiresAt: tusConfig.expiresAt,
+					tusSessionId,
+					...(tusUploadId ? { tusUploadId } : {}),
+					expiresAt: new Date(Date.now() + TUS_PROXY_SESSION_TTL_SECONDS * 1000).toISOString(),
 					chunkSize: tusConfig.chunkSize,
-					resumable: tusConfig.resumable,
+					resumable: true,
 					videoMetadata: {
 						title: video.title,
 						uploadStatus: uploadStatus,

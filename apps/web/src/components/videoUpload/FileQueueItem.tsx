@@ -114,7 +114,7 @@ export function FileQueueItem({
   const canRemove = file.status === 'pending' || file.status === 'cancelled' || file.status === 'failed';
 
   return (
-    <div data-testid="batch-file" data-status={file.status} data-video-id={file.videoId || ''} className="
+    <div data-testid="batch-file" data-status={file.status} data-video-id={file.videoId || ''} data-reconnecting={file.reconnecting ? 'true' : 'false'} data-bytes-uploaded={file.bytesUploaded} className="
       border border-gray-200 dark:border-gray-700
       rounded-lg
       p-3
@@ -176,8 +176,15 @@ export function FileQueueItem({
             </div>
           )}
 
+          {/* Reconnecting: a transient failure is being retried; progress is kept */}
+          {file.status === 'uploading' && file.reconnecting && (
+            <div data-testid="batch-file-reconnecting" role="status" className="text-xs text-muted-foreground mb-2">
+              {t.upload.reconnecting}
+            </div>
+          )}
+
           {/* Upload Speed */}
-          {file.status === 'uploading' && file.speed && (
+          {file.status === 'uploading' && !file.reconnecting && file.speed && (
             <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">
               {t.batch.uploadSpeed}: {formatSpeed(file.speed)}
             </div>

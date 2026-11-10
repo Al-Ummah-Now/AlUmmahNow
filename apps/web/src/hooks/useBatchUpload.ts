@@ -4,7 +4,10 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { UploadQueueItem, VideoUploadMetadata } from '@al-ummah/shared-types';
 import { BatchUploadManager } from '@/lib/upload/BatchUploadManager';
 import { UploadOptimizer } from '@/lib/upload/UploadOptimizer';
-import { buildBatchUploadEntries } from '@/lib/upload/batch-entries';
+import { buildBatchUploadEntries, getTusProxyEndpoint } from '@/lib/upload/batch-entries';
+import { requestUploadResume, type ReauthoriseResult } from '@/lib/upload/resilient-tus';
+import { findRememberedUpload, forgetUpload, rememberUpload } from '@/lib/upload/resume-store';
+import type { BatchUploadEntry } from '@/lib/upload/BatchUploadManager';
 import { hasActiveUploads } from '@/lib/upload/batch-status';
 import { initiateBatchUpload, completeVideoUpload } from '@/lib/actions/upload';
 import { getClientAuthHeaders } from '@/lib/auth/client-token';
@@ -77,6 +80,7 @@ export function useBatchUpload({
       // tracked (same step the single-upload flow performs).
       batchManagerRef.current.onUploadSuccess(async (item) => {
         if (!item.videoId) return;
+        forgetUpload(item.file, channelIdRef.current);
         try {
           const result = await completeVideoUpload(item.videoId, channelIdRef.current, item.file.size);
           if (!result.success) {
@@ -94,9 +98,11 @@ export function useBatchUpload({
     }
 
     return () => {
-      // Cleanup on unmount
+      // Leaving the page pauses (keeps every upload resumable: picking the
+      // same files again resumes them). Cancelling here terminated the uploads
+      // at Bunny and threw away what was already uploaded.
       if (batchManagerRef.current) {
-        batchManagerRef.current.cancelAll();
+        batchManagerRef.current.pauseAll();
       }
     };
   }, []);
@@ -123,41 +129,95 @@ export function useBatchUpload({
         return;
       }
 
-      // Initiate batch upload with backend (one TUS proxy session per file)
-      const initiateResult = await initiateBatchUpload(
-        selectedFiles.map(file => ({
-          title: file.name.replace(/\.[^/.]+$/, ''),
-          fileSize: file.size,
-          mimeType: file.type,
-          isPublic: sharedMetadata.isPublic ?? true,
-          description: sharedMetadata.description,
-          tags: sharedMetadata.tags?.join(','),
-        })),
-        channelId,
-        {
-          channelId,
-          category: sharedMetadata.category,
-          isPublic: sharedMetadata.isPublic,
-        }
-      );
-
-      if (!initiateResult.success || !initiateResult.result) {
-        throw new Error(initiateResult.error || t.batch.errors.initiateFailed);
-      }
-
       // Browser uploads go straight to the API TUS proxy with the user's token
       const authHeaders = await getClientAuthHeaders();
       if (!authHeaders['Authorization']) {
         throw new Error(t.errors.unauthorized);
       }
+      const apiUrl = getApiUrl();
+      const endpoint = getTusProxyEndpoint(apiUrl);
+      const chunkSize = optimizerRef.current.getOptimalChunkSize();
 
-      const entries = buildBatchUploadEntries({
-        files: selectedFiles,
-        sessions: initiateResult.result,
-        apiUrl: getApiUrl(),
-        authorization: authHeaders['Authorization'],
-        chunkSize: optimizerRef.current.getOptimalChunkSize(),
-      });
+      // A file picked again after a reload or a crash resumes its video (same
+      // Bunny upload, at its offset) instead of becoming a new video.
+      const resumedEntries: BatchUploadEntry[] = [];
+      const freshFiles: File[] = [];
+      for (const file of selectedFiles) {
+        const remembered = findRememberedUpload(file, channelId);
+        if (!remembered) {
+          freshFiles.push(file);
+          continue;
+        }
+        let result: ReauthoriseResult | null = null;
+        for (let attempt = 0; attempt < 3 && !result; attempt++) {
+          try {
+            result = await requestUploadResume(apiUrl, remembered.videoId, authHeaders);
+          } catch (error) {
+            logger.warn('[useBatchUpload] Resume check failed, retrying', { videoId: remembered.videoId, attempt, error });
+            await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
+          }
+        }
+        if (result?.kind === 'grant') {
+          resumedEntries.push({
+            file,
+            videoId: remembered.videoId,
+            tusConfig: {
+              tusEndpoint: endpoint,
+              tusHeaders: { Authorization: authHeaders['Authorization'] },
+              metadata: { tusSessionId: result.tusSessionId, videoId: remembered.videoId },
+              chunkSize,
+              expiresAt: '',
+              ...(result.tusUploadId ? { uploadUrl: `${endpoint}/${result.tusUploadId}` } : {}),
+            },
+          });
+          continue;
+        }
+        if (result?.kind === 'completed') {
+          forgetUpload(file, channelId);
+          logger.info('[useBatchUpload] File was already uploaded', { videoId: remembered.videoId });
+          onUploadCompleteRef.current?.(remembered.videoId);
+          continue;
+        }
+        // The video is gone (deleted) or could not be checked: a new upload
+        forgetUpload(file, channelId);
+        freshFiles.push(file);
+      }
+
+      let freshEntries: BatchUploadEntry[] = [];
+      if (freshFiles.length > 0) {
+        // Initiate batch upload with backend (one TUS proxy session per file)
+        const initiateResult = await initiateBatchUpload(
+          freshFiles.map(file => ({
+            title: file.name.replace(/\.[^/.]+$/, ''),
+            fileSize: file.size,
+            mimeType: file.type,
+            isPublic: sharedMetadata.isPublic ?? true,
+            description: sharedMetadata.description,
+            tags: sharedMetadata.tags?.join(','),
+          })),
+          channelId,
+          {
+            channelId,
+            category: sharedMetadata.category,
+            isPublic: sharedMetadata.isPublic,
+          }
+        );
+
+        if (!initiateResult.success || !initiateResult.result) {
+          throw new Error(initiateResult.error || t.batch.errors.initiateFailed);
+        }
+
+        freshEntries = buildBatchUploadEntries({
+          files: freshFiles,
+          sessions: initiateResult.result,
+          apiUrl,
+          authorization: authHeaders['Authorization'],
+          chunkSize,
+        });
+        for (const entry of freshEntries) rememberUpload(entry.file, channelId, entry.videoId);
+      }
+
+      const entries = [...resumedEntries, ...freshEntries];
 
       // Add videos to batch manager
       await batchManagerRef.current.addVideos(entries, sharedMetadata);
@@ -181,6 +241,7 @@ export function useBatchUpload({
 
     const item = files.find(f => f.id === fileId);
     if (item && (item.status === 'pending' || item.status === 'cancelled' || item.status === 'failed')) {
+      forgetUpload(item.file, channelIdRef.current);
       // removeUpload drops it from the manager's queue too; cancelUpload only
       // marked it cancelled, so the removed file came back on the next update
       batchManagerRef.current.removeUpload(fileId);
@@ -239,6 +300,8 @@ export function useBatchUpload({
     if (!batchManagerRef.current) return;
 
     try {
+      const item = batchManagerRef.current.getQueueState().get(fileId);
+      if (item) forgetUpload(item.file, channelIdRef.current);
       await batchManagerRef.current.cancelUpload(fileId);
     } catch (error) {
       logger.error('Failed to cancel upload:', error);
@@ -286,6 +349,9 @@ export function useBatchUpload({
   const cancelAll = useCallback(() => {
     if (!batchManagerRef.current) return;
 
+    for (const item of batchManagerRef.current.getQueueState().values()) {
+      if (item.status === 'uploading' || item.status === 'pending' || item.status === 'paused') forgetUpload(item.file, channelIdRef.current);
+    }
     batchManagerRef.current.cancelAll();
     setIsUploading(false);
 

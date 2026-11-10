@@ -35,6 +35,7 @@ export interface UploadQueueItem {
   speed?: number;                 // Current upload speed (bytes/sec)
   bytesUploaded: number;          // Bytes uploaded
   bytesTotal: number;             // Total file size
+  reconnecting?: boolean;         // Retrying after a transient failure (progress kept)
 }
 
 /**
@@ -107,6 +108,8 @@ export interface TusConfig {
   metadata?: Record<string, string>;
   chunkSize: number;
   expiresAt: string;
+  /** Resume this existing proxy upload (from uploadResume) instead of creating one */
+  uploadUrl?: string;
 }
 
 /**
@@ -117,6 +120,8 @@ export interface TusCallbacks {
   onProgress?: (id: string, bytesUploaded: number, bytesTotal: number) => void;
   onSuccess?: (id: string) => void;
   onBeforeRequest?: (id: string, req: any) => void;
+  /** True while retrying after a transient failure, false once bytes flow again */
+  onReconnecting?: (id: string, reconnecting: boolean) => void;
 }
 
 /**

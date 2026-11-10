@@ -69,7 +69,7 @@ const optimizer = new UploadOptimizer();
 
 // Get optimal settings
 const concurrency = optimizer.getOptimalConcurrency(); // 1-5
-const chunkSize = optimizer.getOptimalChunkSize(); // 1MB-10MB
+const chunkSize = optimizer.getOptimalChunkSize(); // 16MB-50MB (memory-bound)
 const batchSize = optimizer.getRecommendedBatchSize(); // Max videos to upload
 
 // Check if device can handle batch upload
@@ -260,3 +260,28 @@ __tests__/integration.test.ts
 - **Implementation Status**: `/docs/features/03-batch-upload-IMPLEMENTATION-STATUS.md`
 - **TUS Protocol**: https://tus.io/protocols/resumable-upload.html
 - **Bunny.net Stream API**: https://docs.bunny.net/reference/video_createvideo
+
+## Resilience (resilient-tus.ts)
+
+A file never restarts from byte 0 unless Bunny really lost its bytes:
+
+- **HEAD failures retry, never re-create.** tus-js-client creates a NEW upload when HEAD answers anything but 2xx or 423. `ResilientHttpStack` turns HEAD 5xx/429/408/401 (and the API proxy answers 423 itself) into 423, which tus retries on the same upload URL at the server's offset.
+- **Long, jittered retries.** ~15 minutes of backoff per stall (reset whenever bytes are accepted), then up to 3 more cycles 60 s apart. Covers deploys and KV/Bunny incidents.
+- **Fresh token per request.** Bulk uploads outlive access tokens; a 401 forces a token refresh and retries.
+- **404/410 re-authorises the same video** through `GET /api/videos/upload/resume/:videoId` (new proxy session + the earlier upload id), never a new video.
+- **Reload / crash.** `resume-store.ts` remembers file → video (7 days); picking the same file again resumes that video, and the per-video tus fingerprint resumes its upload URL.
+- **UI.** Progress never goes backwards; a retrying file shows "Reconnecting…" (`data-reconnecting`) and keeps its queue slot; a file that really fails frees its slot so the rest of the batch continues.
+
+## Chunk size
+
+Measured on QA (2026-11-09, one 150 MB file, sequential PATCHes from a home connection; MB/s per file, two rounds):
+
+| chunk | requests | round 1 | round 2 | 3 files in parallel (100 MB each, aggregate) |
+|------:|---------:|--------:|--------:|------:|
+| 5 MB  | 30 | 8.6 | 9.5 / 9.4 | 19.1 |
+| 10 MB | 15 | –   | 10.5 / 9.1 | – |
+| 25 MB | 6  | 13.7 | 13.7 / 7.5 | – |
+| 50 MB | 3  | 8.0 | 15.8 / 9.6 | 24.7 |
+| 90 MB | 2  | 1.3 | – | – |
+
+50 MB is the default (`DEFAULT_TUS_CHUNK_SIZE`; the optimizer lowers it to 16 MB+ when memory is tight). Above that, requests near the Workers 100 MB body limit ran far slower.

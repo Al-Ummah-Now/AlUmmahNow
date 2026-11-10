@@ -23942,7 +23942,7 @@
           "Videos"
         ],
         "summary": "Resume Video Upload",
-        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nGenerate new TUS authorization to resume an interrupted video upload. The video must have been previously initiated and owned by the authenticated user.",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nRe-authorise an unfinished upload of the same video: returns a new TUS proxy session id and, when the earlier upload still exists at Bunny, its proxy upload id (resume at its offset). Any not-yet-finished upload of the caller can be resumed; a finished one answers 409 with completed: true.",
         "operationId": "get_UploadResumeEndpoint",
         "parameters": [
           {
@@ -23987,41 +23987,17 @@
                           "type": "string",
                           "description": "Video GUID for upload"
                         },
-                        "tusEndpoint": {
+                        "tusSessionId": {
                           "type": "string",
-                          "description": "TUS upload endpoint"
+                          "description": "New TUS proxy session id (send as tusSessionId upload metadata)"
                         },
-                        "tusHeaders": {
-                          "type": "object",
-                          "properties": {
-                            "AuthorizationSignature": {
-                              "type": "string",
-                              "description": "TUS authorization signature"
-                            },
-                            "AuthorizationExpire": {
-                              "type": "string",
-                              "description": "Unix timestamp when signature expires"
-                            },
-                            "LibraryId": {
-                              "type": "string",
-                              "description": "Bunny.net Stream library ID"
-                            },
-                            "VideoId": {
-                              "type": "string",
-                              "description": "Video GUID"
-                            }
-                          },
-                          "required": [
-                            "AuthorizationSignature",
-                            "AuthorizationExpire",
-                            "LibraryId",
-                            "VideoId"
-                          ],
-                          "description": "Headers required for TUS upload"
+                        "tusUploadId": {
+                          "type": "string",
+                          "description": "Proxy upload id of the earlier upload, when Bunny may still hold its bytes: resume at /api/videos/tus/<tusUploadId>"
                         },
                         "expiresAt": {
                           "type": "string",
-                          "description": "ISO 8601 datetime when authorization expires"
+                          "description": "ISO 8601 datetime when the session expires"
                         },
                         "chunkSize": {
                           "type": "number",
@@ -24060,8 +24036,7 @@
                       },
                       "required": [
                         "videoId",
-                        "tusEndpoint",
-                        "tusHeaders",
+                        "tusSessionId",
                         "expiresAt",
                         "chunkSize",
                         "resumable",

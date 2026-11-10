@@ -7,7 +7,7 @@ import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
 import { requireSecret } from "../../lib/env-helpers";
-import { generateTUSConfig, createTusProxySession } from "../../lib/bunny/tus";
+import { generateTUSConfig, createTusProxySession, TUS_PROXY_SESSION_TTL_SECONDS } from "../../lib/bunny/tus";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import { logger } from '../../lib/logger';
 
@@ -195,7 +195,7 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 				return {
 					videoId,
 					tusSessionId,
-					expiresAt: tusConfig.expiresAt,
+					expiresAt: new Date(Date.now() + TUS_PROXY_SESSION_TTL_SECONDS * 1000).toISOString(),
 					chunkSize: tusConfig.chunkSize,
 					resumable: tusConfig.resumable,
 				};

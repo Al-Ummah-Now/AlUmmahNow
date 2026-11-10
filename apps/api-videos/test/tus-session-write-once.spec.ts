@@ -13,7 +13,7 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { Hono } from 'hono';
-import { createTusRouter } from '../src/endpoints/video/tus/tusProxy';
+import { createTusRouter, clearTusSessionCache } from '../src/endpoints/video/tus/tusProxy';
 import { MessageType } from '../src/lib/queue';
 import { MemoryBucket, MemoryQueue, videoFixture } from './helpers';
 
@@ -62,6 +62,7 @@ describe('TUS sessions written once (AV-24)', () => {
 	let bunnyOffset = 0;
 	beforeEach(() => {
 		bunnyOffset = 0;
+		clearTusSessionCache();
 		globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
 			const u = String(url);
 			if (u === 'https://bunny.test/tusupload' && init?.method === 'POST') return new Response(null, { status: 201, headers: { Location: '/tusupload/b1' } });
@@ -84,26 +85,29 @@ describe('TUS sessions written once (AV-24)', () => {
 			headers: { 'Tus-Resumable': '1.0.0', 'Upload-Length': String(SIZE), 'Upload-Metadata': `tusSessionId ${btoa('s1')}` },
 		});
 		assert.equal(created.status, 201, await created.clone().text());
-		assert.deepEqual(h.kv.puts, ['tus:upload:s1']);
-		const stored = JSON.parse(h.kv.data.get('tus:upload:s1')!);
+		const uploadId = created.headers.get('Location')!.split('/').pop()!;
+		const [uploadKey, videoInId] = uploadId.split('.');
+		assert.equal(videoInId, 'vid', 'the upload id carries the video id');
+		assert.deepEqual(h.kv.puts, [`tus:upload:${uploadKey}`]);
+		const stored = JSON.parse(h.kv.data.get(`tus:upload:${uploadKey}`)!);
 		assert.equal(stored.bunnyUploadUrl, 'https://video.bunnycdn.com/tusupload/b1', 'POST stores the whole session, upload URL included');
 		globalThis.fetch = ((orig) => (async (url: string | URL | Request, init?: RequestInit) =>
 			orig(String(url).replace('https://video.bunnycdn.com', 'https://bunny.test'), init)) as typeof fetch)(globalThis.fetch);
 
 		for (let offset = 0; offset < SIZE; offset += CHUNK) {
-			const res = await h.request('/api/videos/tus/s1', {
+			const res = await h.request(`/api/videos/tus/${uploadId}`, {
 				method: 'PATCH',
 				body: new Uint8Array(CHUNK),
 				headers: { 'Content-Type': 'application/offset+octet-stream', 'Upload-Offset': String(offset), 'Tus-Resumable': '1.0.0' },
 			});
 			assert.equal(res.status, 204, `chunk at ${offset}: ${res.status}`);
 			if (offset % (10 * CHUNK) === 0) {
-				const head = await h.request('/api/videos/tus/s1', { method: 'HEAD', headers: { 'Tus-Resumable': '1.0.0' } });
+				const head = await h.request(`/api/videos/tus/${uploadId}`, { method: 'HEAD', headers: { 'Tus-Resumable': '1.0.0' } });
 				assert.equal(head.status, 200);
 				assert.equal(head.headers.get('Upload-Offset'), String(offset + CHUNK), 'the offset comes from Bunny');
 			}
 		}
-		assert.deepEqual(h.kv.puts, ['tus:upload:s1'], 'no write per chunk or resume');
+		assert.deepEqual(h.kv.puts, [`tus:upload:${uploadKey}`], 'no write per chunk or resume');
 		assert.equal(h.videos.read('vid').uploadStatus, 'processing');
 		assert.equal(h.queue.messages.filter((m: any) => m.type === MessageType.VideoUploadCompleted).length, 1);
 	});
