@@ -113,15 +113,16 @@ async function idsOf(env: AdminServiceEnv, kind: 'video' | 'channel', by: { chan
 	return ids;
 }
 
-/** Live stream records scanned per cascade (they are few; this bounds the request). */
-const LIVE_STREAM_SCAN_LIMIT = 300;
+/** Live stream records scanned per cascade (they are few; this bounds one request). */
+const LIVE_STREAM_SCAN_LIMIT = 2000;
 
 /**
  * Keys of the live streams (`livestream:<id>` in the videos bucket) of a
- * channel or owner. They are not in the ownership index, so this is a
- * bounded prefix scan.
+ * channel or owner. They are not in the ownership index, so this is a prefix
+ * scan; `truncated` is true when it stopped at the limit before the end, and
+ * the caller reports the cascade as incomplete so the admin retries it.
  */
-async function liveStreamKeysOf(env: AdminServiceEnv, by: { channelId?: string; ownerId?: string }): Promise<string[]> {
+async function liveStreamKeysOf(env: AdminServiceEnv, by: { channelId?: string; ownerId?: string }): Promise<{ keys: string[]; truncated: boolean }> {
 	const keys: string[] = [];
 	let cursor: string | undefined;
 	let scanned = 0;
@@ -134,7 +135,15 @@ async function liveStreamKeysOf(env: AdminServiceEnv, by: { channelId?: string; 
 		}
 		cursor = page.truncated ? (page as { cursor?: string }).cursor : undefined;
 	} while (cursor && scanned < LIVE_STREAM_SCAN_LIMIT);
-	return keys;
+	if (cursor) logger.warn('[Admin] Live stream scan stopped at its limit; the cascade is incomplete', { ...by, scanned });
+	return { keys, truncated: !!cursor };
+}
+
+/** Holds (or lifts) on the live streams of a channel or owner; an unfinished scan counts as a failure. */
+async function cascadeLiveStreams(env: AdminServiceEnv, by: { channelId?: string; ownerId?: string }, mutate: (record: Row) => boolean): Promise<{ changed: number; failed: number }> {
+	const { keys, truncated } = await liveStreamKeysOf(env, by);
+	const result = await cascade(env.videos, keys, mutate);
+	return { changed: result.changed, failed: result.failed + (truncated ? 1 : 0) };
 }
 
 /** Applies `mutate` to each record; counts the ones that changed and the ones that failed. */
@@ -255,7 +264,7 @@ export async function suspendChannel(env: AdminServiceEnv, id: string, actorId: 
 	});
 	if (!saved || saved.isDeleted) throw new AdminError(404, 'channel_not_found');
 	const videos = await cascade(env.videos, await idsOf(env, 'video', { channelId: id }), (v) => applySuspensionHold(v as SuspendableRecord, hold));
-	const live = await cascade(env.videos, await liveStreamKeysOf(env, { channelId: id }), (s) => applySuspensionHold(s as SuspendableRecord, hold));
+	const live = await cascadeLiveStreams(env, { channelId: id }, (s) => applySuspensionHold(s as SuspendableRecord, hold));
 	videos.failed += live.failed;
 	await send(env, MessageType.ChannelUpdate, { channelId: id, userId: saved.userId, action: 'suspended' });
 	return { channels: 1, videos: videos.changed, failed: videos.failed, complete: videos.failed === 0 };
@@ -271,7 +280,7 @@ export async function unsuspendChannel(env: AdminServiceEnv, id: string): Promis
 	});
 	if (!saved) throw new AdminError(404, 'channel_not_found');
 	const videos = await cascade(env.videos, await idsOf(env, 'video', { channelId: id }), (v) => liftSuspensionHold(v as SuspendableRecord, hold));
-	const live = await cascade(env.videos, await liveStreamKeysOf(env, { channelId: id }), (s) => liftSuspensionHold(s as SuspendableRecord, hold));
+	const live = await cascadeLiveStreams(env, { channelId: id }, (s) => liftSuspensionHold(s as SuspendableRecord, hold));
 	videos.failed += live.failed;
 	await send(env, MessageType.ChannelUpdate, { channelId: id, userId: saved.userId, action: 'unsuspended' });
 	return { channels: 1, videos: videos.changed, failed: videos.failed, complete: videos.failed === 0 };
@@ -787,7 +796,7 @@ export async function banUser(env: AdminServiceEnv, userId: string, actorId: str
 	const hold = userHold(userId);
 	const channels = await cascade(env.channels, await idsOf(env, 'channel', { ownerId: userId }), (ch) => applySuspensionHold(ch as SuspendableRecord, hold));
 	const videos = await cascade(env.videos, await idsOf(env, 'video', { ownerId: userId }), (v) => applySuspensionHold(v as SuspendableRecord, hold));
-	const live = await cascade(env.videos, await liveStreamKeysOf(env, { ownerId: userId }), (s) => applySuspensionHold(s as SuspendableRecord, hold));
+	const live = await cascadeLiveStreams(env, { ownerId: userId }, (s) => applySuspensionHold(s as SuspendableRecord, hold));
 	videos.failed += live.failed;
 	const failed = channels.failed + videos.failed;
 	return { ban, channels: channels.changed, videos: videos.changed, failed, complete: failed === 0 };
@@ -799,7 +808,7 @@ export async function unbanUser(env: AdminServiceEnv, userId: string): Promise<A
 	const hold = userHold(userId);
 	const channels = await cascade(env.channels, await idsOf(env, 'channel', { ownerId: userId }), (ch) => liftSuspensionHold(ch as SuspendableRecord, hold));
 	const videos = await cascade(env.videos, await idsOf(env, 'video', { ownerId: userId }), (v) => liftSuspensionHold(v as SuspendableRecord, hold));
-	const live = await cascade(env.videos, await liveStreamKeysOf(env, { ownerId: userId }), (s) => liftSuspensionHold(s as SuspendableRecord, hold));
+	const live = await cascadeLiveStreams(env, { ownerId: userId }, (s) => liftSuspensionHold(s as SuspendableRecord, hold));
 	videos.failed += live.failed;
 	const failed = channels.failed + videos.failed;
 	return { channels: channels.changed, videos: videos.changed, failed, complete: failed === 0 };
