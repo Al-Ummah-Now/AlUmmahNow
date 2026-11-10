@@ -52,5 +52,11 @@ export function useBatchPlaylists(files: UploadQueueItem[], isUploading: boolean
     setOverrides((prev) => ({ ...prev, [rowId]: ids }));
   }, []);
 
-  return { batchPlaylists, setBatchPlaylists, overrides, setRowPlaylists, committed };
+  /** Back to no playlists (the page's channel changed: these belong to the old channel). Committed rows keep theirs. */
+  const reset = useCallback(() => {
+    setBatchPlaylists([]);
+    setOverrides({});
+  }, []);
+
+  return { batchPlaylists, setBatchPlaylists, overrides, setRowPlaylists, committed, reset };
 }

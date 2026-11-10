@@ -1,7 +1,7 @@
 'use client';
 
 import { logger } from '@/lib/logger-client';
-import React, { useState, useCallback, useRef, useMemo } from "react";
+import React, { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { VideoObject } from "@/interfaces";
 import VideoUpload from "@/components/videoUpload";
 import { BatchUploadQueue } from "@/components/videoUpload/BatchUploadQueue";
@@ -36,6 +36,18 @@ import { PlaylistPicker } from "@/components/videoUpload/PlaylistPicker";
 import { PlaylistAddNotices } from "@/components/videoUpload/PlaylistAddNotices";
 import { BatchRowPlaylists } from "@/components/videoUpload/BatchRowPlaylists";
 import { newBatchId, orderKeyFor } from "@/lib/upload/playlist-adds";
+import { UploadChannelPicker } from "@/components/videoUpload/UploadChannelPicker";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import {
+  channelChangeState,
+  channelDisplayName,
+  initialUploadChannel,
+  readRememberedUploadChannel,
+  rememberUploadChannel,
+  roleOn,
+  uploadEligibleChannels,
+  type RememberedUploadChannel,
+} from "@/lib/upload/upload-channel";
 
 
 const UploadPage: React.FC = () => {
@@ -50,15 +62,54 @@ const UploadPage: React.FC = () => {
   const auth = useAuth();
   const creator = useCreatorAccess();
   const { user: sessionUser, loading: sessionLoading } = useMultiAccount();
-  // Uploads go to the session's active channel (the one picked in the account
-  // menu, possibly a channel the user manages); the channel context is the
-  // fallback while the session loads.
-  const uploadChannelId = sessionUser?.channel?.id || activeChannel?.channelId || '';
-  // The role on that channel (owner, or a channel role). Only a role that
-  // can't upload (a channel moderator) is blocked; the API checks again.
-  const uploadRole = sessionUser?.channels?.find((c) => c.id === uploadChannelId)?.role
-    ?? (sessionUser?.channel?.id === uploadChannelId ? sessionUser?.channel?.role : undefined);
-  const roleCannotUpload = !!uploadRole && !can(uploadRole, 'video.upload');
+  const userId = sessionUser?.id ?? auth?.user?.id;
+
+  // Where the upload goes: the channel picker below is the one source of truth
+  // (lib/upload/upload-channel.ts). It lists the channels the account may
+  // upload to and starts on a ?channel= link, the last pick on this page, the
+  // header's active channel or the session's, in that order. The API checks
+  // the chosen channel (channelId header) against the channel's owner and
+  // members, not against the session.
+  const uploadChannels = useMemo(
+    () => uploadEligibleChannels(sessionUser?.channels, userId),
+    [sessionUser?.channels, userId],
+  );
+  const navChannelId = activeChannel?.channelId ?? null;
+  const sessionChannelId = sessionUser?.channel?.id ?? null;
+  const deepLinkChannelId = searchParams?.get('channel') || null;
+  // The remembered pick is read after mount (browser storage), per user
+  const [remembered, setRemembered] = useState<{ userId: string; value: RememberedUploadChannel | null } | null>(null);
+  useEffect(() => {
+    if (!userId) return;
+    setRemembered({ userId, value: readRememberedUploadChannel(userId) });
+  }, [userId]);
+  const rememberedReady = !!userId && remembered?.userId === userId;
+  const [pickedChannelId, setPickedChannelId] = useState<string | null>(null);
+  const defaultChannel = useMemo(() => initialUploadChannel({
+    eligible: uploadChannels,
+    deepLinkId: deepLinkChannelId,
+    remembered: rememberedReady ? remembered?.value : null,
+    navChannelId,
+    sessionChannelId,
+  }), [uploadChannels, deepLinkChannelId, rememberedReady, remembered, navChannelId, sessionChannelId]);
+  const pickedStillEligible = !!pickedChannelId && uploadChannels.some((c) => c.id === pickedChannelId);
+  const uploadChannelId = (rememberedReady ? (pickedStillEligible ? pickedChannelId : defaultChannel.id) : null) ?? '';
+  const uploadChannel = uploadChannels.find((c) => c.id === uploadChannelId) ?? null;
+  const uploadDestination = useMemo(
+    () => (uploadChannel ? { id: uploadChannel.id, name: channelDisplayName(uploadChannel, lang), ...(uploadChannel.avatarUrl ? { avatarUrl: uploadChannel.avatarUrl } : {}) } : null),
+    [uploadChannel, lang],
+  );
+  useEffect(() => {
+    if (!uploadChannelId) return;
+    logger.debug('[UploadPage] Upload channel', { channelId: uploadChannelId, source: pickedStillEligible ? 'picked' : defaultChannel.source, navChannelId, sessionChannelId });
+  }, [uploadChannelId, pickedStillEligible, defaultChannel.source, navChannelId, sessionChannelId]);
+  // Every channel the account holds is one whose role can't upload (a channel
+  // moderator): say so instead of "create a channel". The API checks again.
+  const blockedRole = uploadChannels.length === 0
+    ? (sessionUser?.channels ?? []).map((c) => roleOn(c, userId)).find((role) => !!role && !can(role, 'video.upload'))
+    : undefined;
+  const roleCannotUpload = !!blockedRole;
+  const uploadRole = blockedRole;
 
   const [uploadMode, setUploadMode] = useState<UploadMode>('single');
   const [uploadComplete, setUploadComplete] = useState(false);
@@ -148,6 +199,64 @@ const UploadPage: React.FC = () => {
   // An in-app link would stop them: ask first (closing the tab is not intercepted)
   const leaveDialog = useLeaveGuard(batchBytesInFlight, t.confirmDialog.uploadLeaveBody);
 
+  // Channel picker: what changing the destination means right now. Started
+  // uploads are never moved (the picker is disabled); chosen files ask first.
+  const [singleWork, setSingleWork] = useState({ hasFile: false, busy: false });
+  const [singleFormKey, setSingleFormKey] = useState(0);
+  const handleSingleWorkChange = useCallback((work: { hasFile: boolean; busy: boolean }) => {
+    setSingleWork((prev) => (prev.hasFile === work.hasFile && prev.busy === work.busy ? prev : work));
+  }, []);
+  const changeState = channelChangeState({
+    rows: files,
+    singleHasFile: uploadMode === 'single' && singleWork.hasFile,
+    singleBusy: uploadMode === 'single' && singleWork.busy,
+    singleDone: uploadComplete,
+  });
+  // A re-upload goes into its own video, on that video's channel
+  const pickerLocked = changeState === 'locked' || isUploading || isInitiating || !!resumeVideoId;
+  const [pendingChannelId, setPendingChannelId] = useState<string | null>(null);
+  const resetBatchPlaylists = batchPlaylists.reset;
+
+  const applyChannel = useCallback((channelId: string) => {
+    logger.info('[UploadPage] Upload channel picked', { channelId, from: uploadChannelId });
+    setPickedChannelId(channelId);
+    rememberUploadChannel(userId, { channelId, navChannelId: navChannelId ?? sessionChannelId });
+    // Playlists and categories belong to the old channel; finished rows stay on it
+    setBatchCategory(undefined);
+    resetBatchPlaylists();
+    clearFinished();
+    setSingleFormKey((k) => k + 1);
+    setSingleWork({ hasFile: false, busy: false });
+    setUploadError(null);
+    setUploadProgress(0);
+    // A ?channel= link would otherwise win again on reload
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has('channel')) {
+        url.searchParams.set('channel', channelId);
+        window.history.replaceState(window.history.state, '', url.toString());
+      }
+    }
+  }, [uploadChannelId, userId, navChannelId, sessionChannelId, resetBatchPlaylists, clearFinished]);
+
+  const handleChannelPick = useCallback((channelId: string) => {
+    if (pickerLocked || channelId === uploadChannelId) return;
+    if (changeState === 'confirm') setPendingChannelId(channelId);
+    else applyChannel(channelId);
+  }, [pickerLocked, uploadChannelId, changeState, applyChannel]);
+
+  // Switching channel in the header while nothing is chosen here follows it
+  const lastNavRef = useRef(navChannelId ?? sessionChannelId);
+  useEffect(() => {
+    const nav = navChannelId ?? sessionChannelId;
+    if (nav === lastNavRef.current) return;
+    lastNavRef.current = nav;
+    if (changeState === 'free') setPickedChannelId(null);
+  }, [navChannelId, sessionChannelId, changeState]);
+
+  const pendingChannel = pendingChannelId ? uploadChannels.find((c) => c.id === pendingChannelId) : undefined;
+  const pendingChannelName = pendingChannel ? channelDisplayName(pendingChannel, lang) : '';
+
   const { rows: categoryRows, pick: pickRowCategory } = useBatchCategories(files, batchCategory, uploadChannelId);
   const renderRowCategory = (file: UploadQueueItem) => {
     const row = file.videoId ? categoryRows[file.videoId] : undefined;
@@ -215,6 +324,7 @@ const UploadPage: React.FC = () => {
 
   const handleModeChange = (mode: UploadMode) => {
     setUploadMode(mode);
+    setSingleWork({ hasFile: false, busy: false });
     setUploadError(null);
     setUploadProgress(0);
     if (mode === 'batch') {
@@ -297,7 +407,7 @@ const UploadPage: React.FC = () => {
   }
 
   // Wait for the session's channels before deciding the user has none
-  if (!uploadChannelId && sessionLoading) {
+  if (!uploadChannelId && (sessionLoading || (uploadChannels.length > 0 && !rememberedReady))) {
     return (
       <main className="flex flex-col p-4 md:p-6 lg:p-8 w-full min-h-screen bg-gray-50 dark:bg-gray-900">
         <div
@@ -310,8 +420,8 @@ const UploadPage: React.FC = () => {
     );
   }
 
-  // Show 403 error if user has no channel
-  if (!uploadChannelId) {
+  // Show 403 error if user has no channel (one whose role can't upload is below)
+  if (!uploadChannelId && !roleCannotUpload) {
     return (
       <main className="flex flex-col p-4 md:p-6 lg:p-8 w-full min-h-screen bg-gray-50 dark:bg-gray-900">
         <div className="max-w-2xl mx-auto w-full">
@@ -347,7 +457,7 @@ const UploadPage: React.FC = () => {
     );
   }
 
-  // The active channel is one the user manages with a role that can't upload
+  // Every channel the user holds is one they manage with a role that can't upload
   if (roleCannotUpload) {
     return (
       <main className="flex flex-col p-4 md:p-6 lg:p-8 w-full min-h-screen">
@@ -380,6 +490,15 @@ const UploadPage: React.FC = () => {
             {t.upload.shareWithCommunity || `Share your content with the ${t.common.appName} community`}
           </p>
         </div>
+
+        {/* Where the video goes: before any file is chosen, in both modes */}
+        <UploadChannelPicker
+          channels={uploadChannels}
+          value={uploadChannelId}
+          onChange={handleChannelPick}
+          userId={userId}
+          disabled={pickerLocked}
+        />
 
         {resumeVideoId && !uploadComplete && (
           <div
@@ -492,6 +611,9 @@ const UploadPage: React.FC = () => {
             {/* Upload Component */}
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 md:p-6">
               <VideoUpload
+                key={`${uploadChannelId}:${singleFormKey}`}
+                channel={uploadDestination}
+                onWorkChange={handleSingleWorkChange}
                 onUploadComplete={handleUploadComplete}
                 onProgress={handleUploadProgress}
                 onError={handleUploadError}
@@ -705,6 +827,19 @@ const UploadPage: React.FC = () => {
         )}
       </div>
       {leaveDialog}
+      <ConfirmDialog
+        open={!!pendingChannelId}
+        onResult={(confirmed) => {
+          const next = pendingChannelId;
+          setPendingChannelId(null);
+          if (confirmed && next && !pickerLocked) applyChannel(next);
+        }}
+        title={t.upload.channelSwitchTitle.replace('{name}', pendingChannelName)}
+        description={(uploadMode === 'single' ? t.upload.channelSwitchBodySingle : t.upload.channelSwitchBodyBatch).replace('{name}', pendingChannelName)}
+        confirmLabel={t.upload.channelSwitchConfirm}
+        danger={false}
+        testId="upload-channel-switch"
+      />
     </main>
   );
 };

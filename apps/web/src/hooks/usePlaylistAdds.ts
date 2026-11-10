@@ -13,6 +13,8 @@ import { reportError } from '@/lib/errors/reporter';
 import { logger } from '@/lib/logger-client';
 
 interface Request {
+  /** The channel the video was uploaded to (the page's picker may move on) */
+  channelId: string;
   videoId: string;
   playlistIds: string[];
   orderKey: string;
@@ -26,6 +28,8 @@ export function usePlaylistAdds(channelId: string) {
   const requestedRef = useRef<Set<string>>(new Set());
   const startedAtRef = useRef<number | null>(null);
   const channelRef = useRef(channelId);
+  // Video → the channel it was uploaded to: its adds and status reads keep that channel
+  const videoChannelRef = useRef<Map<string, string>>(new Map());
   useEffect(() => {
     channelRef.current = channelId;
   }, [channelId]);
@@ -33,7 +37,7 @@ export function usePlaylistAdds(channelId: string) {
   const send = useCallback(async (req: Request) => {
     let answers: Awaited<ReturnType<typeof requestPlaylistAdds>> = null;
     try {
-      answers = await requestPlaylistAdds(channelRef.current, req.videoId, req.playlistIds, req.orderKey);
+      answers = await requestPlaylistAdds(req.channelId, req.videoId, req.playlistIds, req.orderKey);
     } catch (error) {
       reportError(error, { extra: { component: 'upload-playlists', step: 'request' } });
     }
@@ -54,9 +58,11 @@ export function usePlaylistAdds(channelId: string) {
     const fresh = [...new Set(playlistIds)].filter((id) => !requestedRef.current.has(`${videoId}/${id}`));
     if (!fresh.length) return;
     for (const id of fresh) requestedRef.current.add(`${videoId}/${id}`);
+    const videoChannel = videoChannelRef.current.get(videoId) ?? channelRef.current;
+    videoChannelRef.current.set(videoId, videoChannel);
     setItems((prev) => [...prev, ...fresh.map((playlistId) => ({ videoId, playlistId, status: 'unsent' as const }))]);
     startedAtRef.current = Date.now();
-    void send({ videoId, playlistIds: fresh, orderKey });
+    void send({ channelId: videoChannel, videoId, playlistIds: fresh, orderKey });
   }, [send]);
 
   // Watch open adds: send unsent requests again, read the status of the rest
@@ -69,10 +75,16 @@ export function usePlaylistAdds(channelId: string) {
     const timer = setTimeout(async () => {
       for (const req of [...unsentRef.current.values()]) await send(req);
       const videoIds = [...new Set(openKey.split(',').map((k) => k.split('/')[0]))];
-      const answers = await getPlaylistAddStatus(channelRef.current, videoIds).catch((error) => {
+      const byChannel = new Map<string, string[]>();
+      for (const videoId of videoIds) {
+        const owner = videoChannelRef.current.get(videoId) ?? channelRef.current;
+        byChannel.set(owner, [...(byChannel.get(owner) ?? []), videoId]);
+      }
+      const parts = await Promise.all([...byChannel].map(([owner, ids]) => getPlaylistAddStatus(owner, ids).catch((error) => {
         reportError(error, { extra: { component: 'upload-playlists', step: 'status' } });
         return null;
-      });
+      })));
+      const answers = parts.every((part) => part === null) ? null : parts.flatMap((part) => part ?? []);
       if (cancelled) return;
       // Same list back: a new array still re-arms the timer for the next read
       setItems((prev) => (answers ? mergeStatuses(prev, answers) : [...prev]));

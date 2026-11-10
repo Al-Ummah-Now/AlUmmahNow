@@ -48,6 +48,8 @@ interface ChannelInfo {
   name: string;
   nameLocalized?: Record<string, string>; // Multi-language channel names
   avatarUrl?: string;
+  /** Unique @handle, when the channel has one */
+  handle?: string;
   isMain: boolean;
   /** The account's channel role: owner, or a role it was given (admin, editor, moderator) */
   role?: ChannelRole;
@@ -63,6 +65,7 @@ function toChannelInfo(channel: AccessibleChannel): ChannelInfo {
     name: channel.name,
     ...(channel.nameLocalized ? { nameLocalized: channel.nameLocalized } : {}),
     ...(channel.avatarUrl ? { avatarUrl: channel.avatarUrl } : {}),
+    ...(channel.handle ? { handle: channel.handle } : {}),
     isMain: channel.isMain,
     role: channel.role,
     ...(channel.isSuspended ? { isSuspended: true, suspension: channel.suspension } : {}),
