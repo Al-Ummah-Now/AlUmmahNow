@@ -4,7 +4,8 @@ import { z } from "zod";
 import { Report as BusinessReport, ResponseError } from "../../lib/types";
 import { ReportInput } from "../../lib/model/input";
 import { ReportView } from "../../lib/model/view";
-import R2Repository from "../../lib/r2Repo";
+import R2Repository, { CREATE_ONLY } from "../../lib/r2Repo";
+import { reportClaimKey } from "../../lib/report-claims";
 import Queue, { MessageType } from "../../lib/queue";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import { logger } from '../../lib/logger';
@@ -98,7 +99,8 @@ export class ReportCreate extends AuthenticatedRoute {
 			// Check if this user already reported this entity
 			if (existingReportsResponse.objects) {
 				for (const reportKey of existingReportsResponse.objects) {
-					if (reportKey.key && reportKey.key.includes(`:${userId}:`)) {
+					// Keys are report:<entityId>:<reportId>:<userId> (the old `:<userId>:` test never matched)
+					if (reportKey.key && reportKey.key.endsWith(`:${userId}`)) {
 						return c.json(
 							{
 								success: false,
@@ -120,8 +122,30 @@ export class ReportCreate extends AuthenticatedRoute {
 				dateCreated: new Date().toISOString(),
 			};
 
-			// Save the report to the repository
-			await repository.putObject(`report:${report.entityId}:${report.id}:${userId}`, report);
+			// One report per user and entity, claimed once (SCALABILITY-AUDIT AV-21):
+			// of a double submit only the request that creates the claim files a
+			// report. The report keeps its random id, so it does not reveal who filed it.
+			const claimed = await bucket.put(reportClaimKey(report.entityId, userId), JSON.stringify({ reportId: report.id }), {
+				httpMetadata: { contentType: "application/json" },
+				onlyIf: CREATE_ONLY,
+			});
+			if (!claimed) {
+				return c.json(
+					{
+						success: false,
+						error: "You have already reported this content",
+					},
+					409
+				);
+			}
+
+			// Save the report to the repository; without it the claim is released so the user can try again
+			try {
+				await repository.putObject(`report:${report.entityId}:${report.id}:${userId}`, report);
+			} catch (error) {
+				await bucket.delete(reportClaimKey(report.entityId, userId)).catch(() => undefined);
+				throw error;
+			}
 
 			// Queue report for content moderation processing
 			const queue = new Queue(c.env.queue);

@@ -33,6 +33,7 @@ import { eraseUserSubscriptions, exportUserSubscriptions } from '../subscription
 import { defaultPointerPrefix } from '../uploadDefaultPointer';
 import { sectionOrderKey } from '../channelSectionOrder';
 import { BucketLike, BudgetExhausted, OperationBudget, asBucket, deleteKeys, readJson, updateJson, writeJson } from './scan';
+import { isReportClaimOf } from '../report-claims';
 
 /** Tombstone written in place of a user id on content kept after erasure. */
 export const DELETED_USER_ID = 'deleted-user';
@@ -680,6 +681,11 @@ export async function eraseUserData(
 			const reports = asBucket(env.reports);
 			return scanPages(reports, undefined, ctx, async (objects) => {
 				for (const { key } of objects) {
+					// The one-report-per-entity claims (lib/report-claims.ts) name the user: delete them
+					if (isReportClaimOf(key, userId)) {
+						await deleteKeys(reports, [key], ctx.budget);
+						continue;
+					}
 					if (!key.endsWith(`:${userId}`)) continue;
 					const report = await readJson<Json>(reports, key, ctx.budget);
 					if (report) {

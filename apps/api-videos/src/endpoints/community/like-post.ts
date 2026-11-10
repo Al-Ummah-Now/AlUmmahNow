@@ -5,6 +5,7 @@ import { addAuthToSchema } from '../../lib/openapi-auth';
 import Queue, { MessageType } from '../../lib/queue';
 import { withPostCounts } from '../../lib/post-counters';
 import { logger } from '../../lib/logger';
+import { CREATE_ONLY } from '../../lib/r2Repo';
 
 export class LikeCommunityPost extends AuthenticatedRoute {
   schema = addAuthToSchema({
@@ -62,19 +63,19 @@ export class LikeCommunityPost extends AuthenticatedRoute {
 
       const post: CommunityPost = await withPostCounts(c.env.NOTIFICATIONS_DB, [await postData.json<CommunityPost>()]).then(([p]) => p);
 
-      // Check if user already liked
+      // One like record per user, created once (SCALABILITY-AUDIT AV-22): of a
+      // double tap or two tabs only the request that creates it counts and
+      // sends the event; the others answer "already liked".
       const likeKey = `likes/${postId}/${userId}.json`;
-      const existingLike = await c.env.community_posts.get(likeKey);
+      const likeRecord = {
+        userId: userId,
+        userChannelId: userChannelId,
+        postId,
+        likedAt: new Date().toISOString(),
+      };
+      const created = await c.env.community_posts.put(likeKey, JSON.stringify(likeRecord), { onlyIf: CREATE_ONLY });
 
-      if (!existingLike) {
-        // Add like
-        const likeRecord = {
-          userId: userId,
-          userChannelId: userChannelId,
-          postId,
-          likedAt: new Date().toISOString(),
-        };
-        await c.env.community_posts.put(likeKey, JSON.stringify(likeRecord));
+      if (created) {
 
         // Queue message for async counter update (fix race condition)
         const queue = new Queue(c.env.queue);

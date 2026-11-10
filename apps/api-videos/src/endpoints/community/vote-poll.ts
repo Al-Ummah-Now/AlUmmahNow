@@ -10,6 +10,7 @@ import { addAuthToSchema } from '../../lib/openapi-auth';
 import Queue, { MessageType } from '../../lib/queue';
 import { withPostCounts } from '../../lib/post-counters';
 import { logger } from '../../lib/logger';
+import { CREATE_ONLY } from '../../lib/r2Repo';
 
 const voteSchema = z.object({
   optionIds: z.array(z.string()).min(1).max(5),
@@ -137,7 +138,12 @@ export class VoteOnPoll extends AuthenticatedRoute {
         optionIds: body.optionIds,
         votedAt: new Date().toISOString(),
       };
-      await c.env.community_posts.put(voteKey, JSON.stringify(voteRecord));
+      // Created once (SCALABILITY-AUDIT AV-22): of two votes at once only the
+      // first is stored and counted; the other is refused like any repeat vote.
+      const created = await c.env.community_posts.put(voteKey, JSON.stringify(voteRecord), { onlyIf: CREATE_ONLY });
+      if (!created) {
+        return c.json({ error: 'Already voted on this poll' }, 400);
+      }
 
       // Send to queue for score calculation (moved from synchronous calculation)
       const queue = new Queue(c.env.queue);
