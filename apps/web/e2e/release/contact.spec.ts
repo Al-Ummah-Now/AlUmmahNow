@@ -20,8 +20,10 @@ test.describe.configure({ mode: 'serial' });
 
 /** One marker per run: every message of this run carries it, so the admin finds (and deletes) exactly these. */
 const RUN = `rc${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-// admin-api drops forms sent faster than this (a bot signal)
-const MIN_FILL_MS = 3200;
+// admin-api drops forms sent faster than this (a bot signal, lib/contact.ts MIN_FILL_MS)
+// and still answers 201, so a too-fast send looks like success but stores nothing
+const SERVER_MIN_FILL_MS = 3000;
+const MIN_FILL_MS = SERVER_MIN_FILL_MS + 500;
 
 const MESSAGE = {
   en: `Release check ${RUN}: the player stops after a minute on my phone.`,
@@ -36,7 +38,6 @@ test.beforeAll(async () => {
 });
 
 async function sendMessage(page: Page, locale: Locale, opts: { name: string; email?: string; topic: string }): Promise<void> {
-  const openedAt = Date.now();
   await page.goto(`${target().web}/${locale}/contact?from=${encodeURIComponent(`/${locale}/explore`)}`);
   await expect(page.getByTestId('contact-page')).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
   await expect(page.getByTestId('contact-page-url')).toContainText(`/${locale}/explore`);
@@ -45,6 +46,9 @@ async function sendMessage(page: Page, locale: Locale, opts: { name: string; ema
   await page.getByTestId('contact-submit').click();
   await expect(page.getByTestId('contact-error-summary')).toBeFocused();
   await expect(page.getByTestId('contact-message')).toHaveAttribute('aria-invalid', 'true');
+  // The form starts its fill clock when it hydrates, not when navigation starts:
+  // the client-side validation above proves it has, so count from here
+  const openedAt = Date.now();
 
   await page.getByTestId('contact-name').fill(opts.name);
   if (opts.email) await page.getByTestId('contact-email').fill(opts.email);
@@ -52,7 +56,11 @@ async function sendMessage(page: Page, locale: Locale, opts: { name: string; ema
   await page.getByTestId('contact-message').fill(MESSAGE[locale]);
   const wait = MIN_FILL_MS - (Date.now() - openedAt);
   if (wait > 0) await page.waitForTimeout(wait);
+  const sent = page.waitForRequest((req) => req.method() === 'POST' && new URL(req.url()).pathname === '/api/contact');
   await page.getByTestId('contact-submit').click();
+  // Below the floor admin-api would drop the message as a bot and still report success
+  const elapsedMs = Number((await sent).postDataJSON()?.elapsedMs);
+  expect(elapsedMs, 'the fill time the form reports to admin-api').toBeGreaterThanOrEqual(SERVER_MIN_FILL_MS);
   await expect(page.getByTestId('contact-success')).toBeVisible({ timeout: 30000 });
 }
 
