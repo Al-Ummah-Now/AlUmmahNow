@@ -35,13 +35,13 @@ export function VideoFormatChoice({ value, onChange, name = 'videoFormat', testI
 
   return (
     <fieldset data-testid={testIdPrefix} disabled={disabled}>
-      <legend className="block text-sm font-medium mb-1 dark:text-white">{t.video.formatLabel}</legend>
-      <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">{t.video.formatHelp}</p>
+      <legend className="block text-sm font-medium mb-1 text-[var(--fanous-color-text-primary)]">{t.video.formatLabel}</legend>
+      <p className="text-sm text-[var(--fanous-color-text-secondary)] mb-2">{t.video.formatHelp}</p>
       <div className="space-y-2">
         {OPTIONS.map((option) => (
           <label
             key={option}
-            className="flex items-center gap-3 p-3 border dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
+            className="flex items-center gap-3 p-3 border border-[var(--fanous-color-divider)] rounded-lg cursor-pointer hover:bg-[var(--fanous-color-surface-raised)]"
           >
             <input
               type="radio"
@@ -53,8 +53,8 @@ export function VideoFormatChoice({ value, onChange, name = 'videoFormat', testI
               data-testid={`${testIdPrefix}-${option}`}
             />
             <div>
-              <div className="font-medium dark:text-white">{label(option)}</div>
-              <div className="text-sm text-gray-600 dark:text-gray-400">{hint(option)}</div>
+              <div className="font-medium text-[var(--fanous-color-text-primary)]">{label(option)}</div>
+              <div className="text-sm text-[var(--fanous-color-text-secondary)]">{hint(option)}</div>
             </div>
           </label>
         ))}
