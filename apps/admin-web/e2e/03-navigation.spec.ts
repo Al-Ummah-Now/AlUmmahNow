@@ -1,3 +1,4 @@
+import { accounts } from './support/env';
 import { test, expect } from './support/fixtures';
 import { horizontalOverflow } from './support/ui';
 
@@ -39,7 +40,7 @@ test.describe('navigation', () => {
     if (isMobile) {
       await expect(page.getByTestId('user-email')).toBeHidden();
     } else {
-      await expect(page.getByTestId('user-email')).toHaveText('qa-admin@delivered.resend.dev');
+      await expect(page.getByTestId('user-email')).toHaveText(accounts.admin.email);
     }
     await expect(page.getByTestId('logout-button')).toBeVisible();
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);

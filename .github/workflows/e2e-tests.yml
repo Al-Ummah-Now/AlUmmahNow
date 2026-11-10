@@ -59,7 +59,9 @@ jobs:
   e2e:
     name: E2E - ${{ matrix.project }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 150
+    # specs (100) + shared-state (up to 85 waiting + 40) + teardown (15); the
+    # teardown steps must always get their turn
+    timeout-minutes: 250
     permissions:
       contents: write  # only the qa-lock steps get the token (a git ref is the lock)
       actions: read  # qa-lock: is the lock's holder run still going?
@@ -226,6 +228,7 @@ jobs:
       - name: Erase the run accounts' content
         if: always()
         continue-on-error: true
+        timeout-minutes: 10
         run: |
           if [ ! -s "$E2E_RUN_USERS_FILE" ]; then echo "No run accounts were generated"; exit 0; fi
           pnpm exec tsx apps/web/e2e/cleanup-test-content.ts --run-users
@@ -236,6 +239,7 @@ jobs:
       - name: Delete the run accounts
         if: always()
         continue-on-error: true
+        timeout-minutes: 5
         run: >-
           node --experimental-strip-types --no-warnings scripts/e2e/teardown-run-users.ts
           --auth-url "$OPENAUTH_URL" --file "$E2E_RUN_USERS_FILE"
@@ -329,7 +333,7 @@ jobs:
     name: E2E - ${{ matrix.project }}
     if: ${{ github.event_name != 'pull_request' && !inputs.update_snapshots }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 140
+    timeout-minutes: 160
     permissions:
       contents: write  # only the qa-lock steps get the token
       actions: read
@@ -405,6 +409,7 @@ jobs:
       - name: Erase the run accounts' content
         if: always()
         continue-on-error: true
+        timeout-minutes: 10
         run: |
           if [ ! -s "$E2E_RUN_USERS_FILE" ]; then echo "No run accounts were generated"; exit 0; fi
           pnpm exec tsx apps/web/e2e/cleanup-test-content.ts --run-users
@@ -415,6 +420,7 @@ jobs:
       - name: Delete the run accounts
         if: always()
         continue-on-error: true
+        timeout-minutes: 5
         run: >-
           node --experimental-strip-types --no-warnings scripts/e2e/teardown-run-users.ts
           --auth-url "$OPENAUTH_URL" --file "$E2E_RUN_USERS_FILE"

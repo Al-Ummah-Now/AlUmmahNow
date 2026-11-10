@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from './support/fixtures';
-import { ADMIN_WEB_URL, OPENAUTH_URL, accounts, storageStatePath } from './support/env';
+import { ADMIN_WEB_URL, OPENAUTH_URL, RUN_ACCOUNTS_ONLY, RUN_ID, accounts, storageStatePath } from './support/env';
 import { uiLogin } from './support/ui';
 import { skipUntilSignInDeployed } from './support/deployed';
 
@@ -175,6 +175,7 @@ test.describe('log out (single sign-out)', () => {
   }
 
   test('AUTH-12 logout from the nav signs out everywhere', async ({ page }) => {
+    test.skip(!RUN_ID, RUN_ACCOUNTS_ONLY);
     await skipUntilSignInDeployed();
     await uiLogin(page, accounts.admin);
     await logOutThroughAuthServer(page, () => page.getByTestId('logout-button').click());
@@ -189,6 +190,7 @@ test.describe('log out (single sign-out)', () => {
   });
 
   test('AUTH-15 log out from access denied signs out everywhere and returns to the public home page', async ({ page }) => {
+    test.skip(!RUN_ID, RUN_ACCOUNTS_ONLY);
     await skipUntilSignInDeployed();
     await uiLogin(page, accounts.nonadmin, /\/access-denied$/);
     await logOutThroughAuthServer(page, () => page.getByRole('button', { name: 'Log out' }).click());

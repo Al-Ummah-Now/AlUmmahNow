@@ -67,10 +67,10 @@ describe('accountKind', () => {
 		assert.equal(accountKind('e2e+42887909300-1-web-chromium-single@e2e.alummahnow.net'), 'throwaway');
 	});
 
-	it('matches the users pinned in .github/workflows/e2e-tests.yml', () => {
+	it('lists the retired pinned users; no workflow pins users any more (per-run accounts, #732; retire them: #737)', () => {
 		const workflow = readFileSync(join(ROOT, '.github/workflows/e2e-tests.yml'), 'utf8');
-		const pinned = [...new Set([...workflow.matchAll(/"users":"(\d+)"/g)].map((m) => m[1]))].sort();
-		assert.deepEqual(pinned, [...PINNED_E2E_USER_TIMESTAMPS].sort());
+		assert.equal([...workflow.matchAll(/"users":"(\d+)"/g)].length, 0);
+		assert.deepEqual([...PINNED_E2E_USER_TIMESTAMPS].sort(), ['1795000000001', '1795000000002', '1795000000003', '1795000000004', '1795000000005']);
 	});
 });
 

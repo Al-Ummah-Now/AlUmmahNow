@@ -180,6 +180,7 @@ jobs:
       - name: Delete the run accounts
         if: always()
         continue-on-error: true
+        timeout-minutes: 5
         env:
           E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET || (inputs.env == 'stage' && secrets.E2E_CODE_SINK_SECRET_STAGE) || secrets.E2E_CODE_SINK_SECRET_QA }}
           TEST_PROMOTE_SECRET: ${{ secrets.TEST_PROMOTE_SECRET || (inputs.env == 'stage' && secrets.TEST_PROMOTE_SECRET_STAGE) || secrets.TEST_PROMOTE_SECRET_QA }}
