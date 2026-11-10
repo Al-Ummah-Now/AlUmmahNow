@@ -26,6 +26,23 @@ const isRemoteTarget = baseURL.startsWith('https://');
 // e2e/release/ is the release suite (playwright.release.config.ts), never run here
 const DEDICATED_DIRS = [/e2e\/a11y\//, /e2e\/visual\//, /e2e\/release\//];
 
+/*
+ * Upload transport and upload UI specs: every test sends real bytes to the Bunny
+ * library QA and stage share, and every upload is one Bunny encode. On
+ * 2026-11-10 the suites sent ~4,400 QA uploads in a day and filled that
+ * library's encoding queue. So:
+ *  - they run in the chromium project only (the transport is the same in every
+ *    browser; the other browser/device projects still run every other spec);
+ *  - E2E_SKIP_UPLOAD_SPECS=1 (pull requests, e2e-tests.yml) skips them, as the
+ *    release suite (release-e2e.yml) covers upload modes, resume, reuse, bulk and
+ *    upload -> ready -> plays on every pull request. Nightly and after every
+ *    Release they run in chromium.
+ */
+const UPLOAD_SPECS = /\/(12-video-upload|13-video-upload-tus-resume|17-tus-proxy-upload|18-tus-proxy-logs|40-upload-form|41-batch-upload|42-upload-templates)\.spec\.ts$/;
+const SKIP_UPLOAD_SPECS = process.env.E2E_SKIP_UPLOAD_SPECS === '1';
+/** testIgnore of a browser/device project: the dedicated dirs, plus the upload specs unless this project runs them. */
+const browserIgnore = (runsUploads: boolean) => (runsUploads && !SKIP_UPLOAD_SPECS ? DEDICATED_DIRS : [...DEDICATED_DIRS, UPLOAD_SPECS]);
+
 export default defineConfig({
   testDir: './e2e',
   /* Visual baselines are OS-independent paths; they are generated on Linux in CI */
@@ -131,26 +148,31 @@ export default defineConfig({
     // Standard browser projects (for tests that don't need authentication)
     {
       name: 'chromium',
+      testIgnore: browserIgnore(true),
       use: { ...devices['Desktop Chrome'] },
     },
 
     {
       name: 'firefox',
+      testIgnore: browserIgnore(false),
       use: { ...devices['Desktop Firefox'] },
     },
 
     {
       name: 'webkit',
+      testIgnore: browserIgnore(false),
       use: { ...devices['Desktop Safari'] },
     },
 
     /* Test against mobile viewports. */
     {
       name: 'Mobile Chrome',
+      testIgnore: browserIgnore(false),
       use: { ...devices['Pixel 5'] },
     },
     {
       name: 'Mobile Safari',
+      testIgnore: browserIgnore(false),
       use: { ...devices['iPhone 12'] },
     },
 

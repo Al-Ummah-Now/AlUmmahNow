@@ -16,9 +16,13 @@ test.use({ storageState: AUTH_STATE.single });
 
 let video: E2EVideo | null = null;
 
-test.beforeEach(async () => {
+test.beforeEach(async ({}, testInfo) => {
   test.setTimeout(240000);
-  video = await createDisposableVideo('single', 'chapters', { sample: 'long' });
+  // Chapters validate against the stored duration (set by upload/complete):
+  // a record is enough. Subtitle tracks go to Bunny's captions API, so the
+  // SUB- tests send the file (shared QA/stage Bunny library: encode only when needed).
+  const encode = testInfo.title.startsWith('SUB-');
+  video = await createDisposableVideo('single', 'chapters', { sample: 'long', encode });
 });
 
 test.afterEach(async () => {

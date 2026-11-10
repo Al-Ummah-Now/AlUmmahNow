@@ -12,6 +12,11 @@ name: Release regressions
 on:
   pull_request:
     branches: [main]
+    # Docs-only changes do not change the product: no run (each run sends ~20
+    # uploads to the Bunny library QA and stage share)
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
   workflow_dispatch:
     inputs:
       env:
@@ -71,7 +76,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: .ci-trusted
-          sparse-checkout: scripts/ci
+          sparse-checkout: |
+            scripts/ci
+            scripts/release
           persist-credentials: false
 
       - uses: actions/setup-node@v6
@@ -112,7 +119,23 @@ jobs:
           CI: 'true'
           E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET || (inputs.env == 'stage' && secrets.E2E_CODE_SINK_SECRET_STAGE) || secrets.E2E_CODE_SINK_SECRET_QA }}
           TEST_PROMOTE_SECRET: ${{ secrets.TEST_PROMOTE_SECRET || (inputs.env == 'stage' && secrets.TEST_PROMOTE_SECRET_STAGE) || secrets.TEST_PROMOTE_SECRET_QA }}
+          # In every throwaway user's email (targets.ts sinkEmail): the upload budget finds this run's users
+          E2E_RUN_TAG: g${{ github.run_id }}a${{ github.run_attempt }}
         run: npx playwright test -c playwright.release.config.ts
+
+      # Uploads this run sent (its own users, by E2E_RUN_TAG): every upload with
+      # bytes is a Bunny encode in the library QA and stage share. Informational
+      # (a warning over budget). Trusted copy: it runs with the Cloudflare token.
+      # Without the token (workflow_call from the release) it warns and exits 0.
+      - name: Upload budget
+        if: always()
+        continue-on-error: true
+        run: >-
+          node --experimental-strip-types --no-warnings "$GITHUB_WORKSPACE/.ci-trusted/scripts/release/upload-budget.ts"
+          --env "$E2E_ENV" --emails "%-g${{ github.run_id }}a${{ github.run_attempt }}-%" --label "release run" --max 30
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       # Artifacts of this public repo are downloadable by anyone signed in to
       # GitHub: drop any report/trace that holds a secret or a storage state,

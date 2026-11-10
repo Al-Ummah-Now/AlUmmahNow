@@ -75,7 +75,8 @@ test.describe('Thumbnail - saving', () => {
   let video: E2EVideo | null = null;
 
   test.beforeEach(async () => {
-    video = await createDisposableVideo('single', 'thumbnail');
+    // Auto thumbnails are Bunny's frames: this one needs a real encode
+    video = await createDisposableVideo('single', 'thumbnail', { encode: true });
   });
 
   test.afterEach(async () => {

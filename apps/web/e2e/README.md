@@ -226,6 +226,26 @@ await helpers.setDesktopViewport(page);
 - Created on-the-fly during test execution
 - Automatically cleaned up after tests
 
+## Uploads cost Bunny encodes (shared QA/stage library)
+
+QA and stage share one Bunny Stream library: every upload that sends bytes is one
+Bunny encode, and on 2026-11-10 the suites sent ~4,400 QA uploads in a day and
+filled that library's encoding queue. So:
+
+- `createDisposableVideo` is **record only** by default (initiate + complete, no
+  bytes: the record is "processing" and Bunny encodes nothing). Pass
+  `{ encode: true }` only when the spec needs Bunny's output (auto thumbnails,
+  subtitle tracks, a public watch page). `setupPublicDisposable` encodes.
+- The upload transport/UI specs (`UPLOAD_SPECS` in `playwright.config.ts`) run in
+  the `chromium` project only; `E2E_SKIP_UPLOAD_SPECS=1` skips them (pull requests
+  do: the release suite covers uploads there).
+- Run locally against QA with existing users
+  (`E2E_REUSE_USERS_TIMESTAMP=<n>`) instead of registering new ones: new users
+  upload their seed videos again. Add `E2E_SKIP_UPLOAD_SPECS=1` unless you are
+  working on uploads.
+- CI reports each job's uploads (`scripts/release/upload-budget.ts`, step
+  "Upload budget").
+
 ## Running Tests
 
 ### Run All E2E Tests

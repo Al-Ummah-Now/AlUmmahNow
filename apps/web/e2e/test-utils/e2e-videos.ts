@@ -147,9 +147,20 @@ export async function getVideo(u: UserApi, videoId: string): Promise<E2EVideo | 
 }
 
 /** Uploads the sample clip as a new video and returns it */
+/**
+ * Uploads a video the way the web uploader does: initiate, TUS bytes, complete.
+ *
+ * `bytes: false` (record only): initiate and complete without sending the
+ * file. The record is "processing" exactly as right after a real upload (the
+ * state these specs saw before Bunny finished anyway), but Bunny never gets
+ * bytes, so it never encodes anything. QA and stage share one Bunny library
+ * whose encoding queue the suites filled on 2026-11-10 (thousands of test
+ * encodes a day): only a spec that needs Bunny's output (frames, playback, a
+ * watch page) sends the bytes.
+ */
 export async function uploadVideo(
   u: UserApi,
-  opts: { title: string; titleAr?: string; isPublic: boolean; channelIndex?: number; description?: string; sample?: SampleVideo },
+  opts: { title: string; titleAr?: string; isPublic: boolean; channelIndex?: number; description?: string; sample?: SampleVideo; bytes?: boolean },
 ): Promise<E2EVideo> {
   const channelId = u.channelIds[opts.channelIndex ?? 0];
   if (!channelId) throw new Error('User has no channel to upload to');
@@ -173,7 +184,7 @@ export async function uploadVideo(
   const videoId = initiate.data.result?.videoId;
   const tusSessionId = initiate.data.result?.tusSessionId;
   if (!videoId || !tusSessionId) throw new Error(`Upload initiate for "${opts.title}" returned no videoId/tusSessionId`);
-  await u.api.tusUpload({ token: u.token, tusSessionId, videoId, filePath: sample.file, mimeType: 'video/mp4' });
+  if (opts.bytes !== false) await u.api.tusUpload({ token: u.token, tusSessionId, videoId, filePath: sample.file, mimeType: 'video/mp4' });
   await u.api.post('/api/videos/upload/complete', { videoId, fileSize, duration: sample.duration }, { token: u.token, channelId });
   const video: E2EVideo = { id: videoId, title: opts.title, channelId, isPublic: opts.isPublic };
   // initiate stores only the plain title/description; set the localized fields explicitly
@@ -289,7 +300,8 @@ export function setupPublicDisposable(user: AuthUser, label: string) {
   let video: E2EVideo | null = null;
   return {
     create: async () => {
-      video = await createDisposableVideo(user, label, { isPublic: true });
+      // Public pages (watch, comments, channel sections) need a real, encoding video
+      video = await createDisposableVideo(user, label, { isPublic: true, encode: true });
       return video;
     },
     remove: async () => {
@@ -308,10 +320,17 @@ export function disposableTitle(label: string): string {
   return `E2E Temp ${label} ${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
+/**
+ * A video one spec owns and deletes again. Record only by default (no bytes,
+ * so Bunny encodes nothing; see uploadVideo): enough for edit, delete, bulk,
+ * schedule and dashboard flows. `encode: true` sends the file, for a spec that
+ * needs Bunny's output (auto thumbnails, chapters on a real duration,
+ * playback).
+ */
 export async function createDisposableVideo(
   user: AuthUser,
   label: string,
-  opts: { isPublic?: boolean; channelIndex?: number; titleAr?: string; sample?: SampleVideo } = {},
+  opts: { isPublic?: boolean; channelIndex?: number; titleAr?: string; sample?: SampleVideo; encode?: boolean } = {},
 ): Promise<E2EVideo> {
   const u = userApi(user);
   return uploadVideo(u, {
@@ -320,6 +339,7 @@ export async function createDisposableVideo(
     isPublic: opts.isPublic ?? false,
     channelIndex: opts.channelIndex,
     sample: opts.sample,
+    bytes: opts.encode === true,
   });
 }
 

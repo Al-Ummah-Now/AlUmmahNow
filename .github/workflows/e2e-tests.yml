@@ -27,6 +27,7 @@ on:
 permissions:
   contents: read
   packages: read
+  pull-requests: read  # the superseded check reads the PR's current head
   checks: write  # EnricoMi/publish-unit-test-result-action creates the JUnit check runs
 
 env:
@@ -116,12 +117,46 @@ jobs:
         id: e2e-start
         run: echo "at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
 
+      # A pull request run waits in the pinned users' queue (job concurrency
+      # above) and may start after the PR got a newer push: it then tests an
+      # outdated commit and only adds uploads to the Bunny library QA and stage
+      # share. Skip the specs; the newer push's run tests the PR.
+      - name: Superseded?
+        id: superseded
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_SHA: ${{ github.event.pull_request.head.sha }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          head=$(gh api "repos/${{ github.repository }}/pulls/$PR" --jq .head.sha || echo "")
+          if [ -n "$head" ] && [ "$head" != "$RUN_SHA" ]; then
+            echo "::notice::PR #$PR moved on to ${head:0:8}; this run (${RUN_SHA:0:8}) skips its specs"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Uploads this job sends to QA (Bunny encodes in the library QA and stage
+      # share): the pinned users' upload counters before and after the specs.
+      - name: Upload budget (before)
+        id: uploads-before
+        if: steps.superseded.outputs.skip != 'true'
+        continue-on-error: true
+        run: node --experimental-strip-types --no-warnings scripts/release/upload-budget.ts --env qa --emails "test-%-${{ matrix.users }}@e2e.alummahnow.net" --snapshot "$RUNNER_TEMP/uploads-before.json"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
       - name: Run E2E specs
+        if: steps.superseded.outputs.skip != 'true'
         working-directory: apps/web
         run: pnpm exec playwright test --project="${{ matrix.project }}"
         env:
           CI: true
           E2E_USERS_TIMESTAMP: ${{ matrix.users }}
+          # Pull requests: the upload transport/UI specs are covered by the release
+          # suite on every PR; they run nightly and after every Release, in chromium
+          # only (playwright.config.ts UPLOAD_SPECS)
+          E2E_SKIP_UPLOAD_SPECS: ${{ github.event_name == 'pull_request' && '1' || '' }}
           E2E_GLOBAL_TIMEOUT_MINUTES: '100'
           E2E_MAX_FAILURES: '40'
           E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET_QA }}
@@ -129,10 +164,23 @@ jobs:
           # auth.setup has a promoted QA admin give the channel-owning users the Creator tier
           TEST_PROMOTE_SECRET: ${{ secrets.TEST_PROMOTE_SECRET_QA }}
 
+      # Budget: a PR run sends ~9 uploads with bytes (+ record-only disposables);
+      # chromium in the full matrix adds the upload specs. Over it: a warning.
+      - name: Upload budget (QA)
+        if: always() && steps.uploads-before.outcome == 'success'
+        continue-on-error: true
+        run: >-
+          node --experimental-strip-types --no-warnings scripts/release/upload-budget.ts --env qa
+          --emails "test-%-${{ matrix.users }}@e2e.alummahnow.net" --baseline "$RUNNER_TEMP/uploads-before.json"
+          --label "${{ matrix.project }}" --max ${{ github.event_name != 'pull_request' && matrix.project == 'chromium' && '90' || '45' }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
       # QA videos-queue writes/min and DLQ writes during this run (all QA traffic in
       # the window, not only this job). Informational for now: it does not fail the job.
       - name: Queue budget (QA)
-        if: always() && steps.e2e-start.outputs.at
+        if: always() && steps.e2e-start.outputs.at && steps.superseded.outputs.skip != 'true'
         continue-on-error: true
         run: node --experimental-strip-types --no-warnings scripts/release/queue-budget.ts --env qa --since "${{ steps.e2e-start.outputs.at }}"
         env:
