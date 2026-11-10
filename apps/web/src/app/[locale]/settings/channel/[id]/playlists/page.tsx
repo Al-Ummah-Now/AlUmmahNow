@@ -25,7 +25,7 @@ export default async function ChannelPlaylistsPage({ params }: ChannelPlaylistsP
   return (
     <div className="min-h-screen">
       <div className="container mx-auto max-w-5xl px-4 py-8">
-        <ChannelSettingsBreadcrumb channelId={id} channelName={displayName} locale={locale} currentPage="playlists" className="mb-6" />
+        <ChannelSettingsBreadcrumb channelId={id} channelName={displayName} channelHandle={channel.handle} locale={locale} currentPage="playlists" className="mb-6" />
         <PlaylistManager channelId={id} />
       </div>
     </div>

@@ -1,21 +1,21 @@
 /**
  * Settings Index Page
  *
- * Main settings page that lists all available settings sections
+ * The signed-in user's own settings (upload defaults, profile, privacy,
+ * contact). Channel settings are not part of it: each channel has its own
+ * settings, opened from the channel (see ChannelSettingsBreadcrumb).
  */
 
 'use client';
 
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/components/AuthProvider/authContext';
-import { useCurrentChannel } from '@/hooks/useMultiAccount';
 import { SignInPrompt } from '@/components/common/SignInPrompt';
 import Link from 'next/link';
 import { NotificationSettingsPanel } from '@/components/notifications/NotificationSettingsPanel';
 import {
   Settings,
   Video,
-  Tv,
   User,
   ChevronRight,
   Shield,
@@ -25,8 +25,6 @@ import {
 export default function SettingsPage() {
   const { t, lang } = useLanguage();
   const { user } = useAuth();
-  // The active channel lives in the multi-account session, not on the auth user
-  const currentChannel = useCurrentChannel();
 
   if (!user) {
     return (
@@ -44,13 +42,6 @@ export default function SettingsPage() {
       icon: Video,
       href: `/${lang}/settings/upload-defaults`,
       available: true,
-    },
-    {
-      title: t.settings?.channelSettings || 'Channel Settings',
-      description: t.settings?.channelSettingsDesc || 'Manage your channel settings and customization',
-      icon: Tv,
-      href: currentChannel?.id ? `/${lang}/settings/channel/${currentChannel.id}` : null,
-      available: !!currentChannel?.id,
     },
     {
       title: t.settings?.profileSettings || 'Profile Settings',
@@ -87,7 +78,7 @@ export default function SettingsPage() {
             </h1>
           </div>
           <p className="text-gray-600 dark:text-gray-400">
-            {t.settings?.settingsDescription || 'Manage your account, channels, and preferences'}
+            {t.settings?.settingsDescription || 'Manage your account and preferences'}
           </p>
         </div>
 

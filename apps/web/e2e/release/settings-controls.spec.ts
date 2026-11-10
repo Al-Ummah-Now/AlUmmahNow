@@ -264,13 +264,27 @@ async function expectNoDeadHelp(page: Page): Promise<void> {
   expect(dead, 'help text that leads nowhere').toEqual([]);
 }
 
-/** The page at `path` has a breadcrumb whose back link goes to `parent`, and clicking it gets there. */
-async function checkBackTo(page: Page, path: string, parent: string, locale: Locale, phone: boolean): Promise<void> {
+/**
+ * The page at `path` has a breadcrumb whose back link goes to `parent`, and clicking it gets there.
+ * User settings pages start at the user's Settings (/settings). Channel settings pages belong to the
+ * channel: "<channel> › Settings › <page>", Settings being that channel's settings (`channelSettings`),
+ * never the user's /settings. `parent: 'channel'` = the channel page, read from the first crumb.
+ */
+async function checkBackTo(page: Page, path: string, parent: string, locale: Locale, phone: boolean, channelSettings?: string): Promise<void> {
   const web = target().web;
   await gotoSettled(page, `${web}${path}`);
   const crumbs = page.locator('[data-testid=settings-breadcrumb],[data-testid=channel-settings-breadcrumb]').first();
   await expect(crumbs, `${path}: no breadcrumb`).toBeVisible({ timeout: 30000 });
-  await expect(crumbs.getByRole('link', { name: /^(Settings|الإعدادات)$/ }), `${path}: breadcrumb does not start at Settings`).toHaveAttribute('href', `/${locale}/settings`);
+  const settingsLink = crumbs.getByRole('link', { name: /^(Settings|الإعدادات)$/ });
+  if (channelSettings) {
+    await expect(settingsLink, `${path}: Settings should be the channel's settings`).toHaveAttribute('href', channelSettings);
+    await expect(crumbs.locator(`a[href="/${locale}/settings"]`), `${path}: channel settings must not link to the user's Settings`).toHaveCount(0);
+    const first = crumbs.locator('.sb-list a').first();
+    await expect(first, `${path}: breadcrumb does not start at the channel`).not.toHaveAttribute('href', channelSettings);
+    if (parent === 'channel') parent = (await first.getAttribute('href')) as string;
+  } else {
+    await expect(settingsLink, `${path}: breadcrumb does not start at Settings`).toHaveAttribute('href', `/${locale}/settings`);
+  }
   const back = crumbs.getByTestId('settings-back');
   await expect(back, `${path}: no back link`).toBeVisible();
   await expect(back).toHaveAttribute('href', parent);
@@ -346,19 +360,21 @@ test.describe('Release: settings controls', () => {
       const hrefs = await cards.evaluateAll((els) => els.map((e) => e.getAttribute('href') as string));
       expect(hrefs.length, 'settings cards').toBeGreaterThanOrEqual(3);
 
-      const pages: Array<[string, string]> = [
+      // The user's Settings no longer links to any channel's settings
+      expect(hrefs.filter((h) => h.includes('/settings/channel/')), 'channel settings on the user Settings page').toEqual([]);
+      const pages: Array<[string, string, string?]> = [
         ...hrefs.map((h): [string, string] => [h, settings]),
-        [channel, settings],
-        ...['edit', 'videos', 'playlists', 'tabs', 'sections', 'community'].map((s): [string, string] => [`${channel}/${s}`, channel]),
-        [`${channel}/community/new`, `${channel}/community`],
+        [channel, 'channel', channel],
+        ...['edit', 'videos', 'playlists', 'tabs', 'sections', 'community'].map((s): [string, string, string] => [`${channel}/${s}`, channel, channel]),
+        [`${channel}/community/new`, `${channel}/community`, channel],
       ];
       const seen = new Set<string>();
       for (const vp of VIEWPORTS) {
         await page.setViewportSize({ width: vp.width, height: vp.height });
-        for (const [path, parent] of pages) {
+        for (const [path, parent, channelSettings] of pages) {
           if (seen.has(`${vp.name}${path}`)) continue;
           seen.add(`${vp.name}${path}`);
-          await checkBackTo(page, path, parent, locale, vp.name === 'phone');
+          await checkBackTo(page, path, parent, locale, vp.name === 'phone', channelSettings);
         }
       }
     });
