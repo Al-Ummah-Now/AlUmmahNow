@@ -179,7 +179,9 @@ app.post('/test-library-purge', async (c) => {
   const dryRun = input.dryRun !== false;
   const resume = input.resume === true;
   // Optional tuning (api-videos clamps: min age 10 min-24 h, 1-50 in flight, 10-100 per page)
-  const tuning = Object.fromEntries((['minAgeMinutes', 'concurrency', 'pageSize'] as const).filter((k) => typeof input[k] === 'number').map((k) => [k, input[k]]));
+  const tuning: Record<string, unknown> = Object.fromEntries((['minAgeMinutes', 'concurrency', 'pageSize'] as const).filter((k) => typeof input[k] === 'number').map((k) => [k, input[k]]));
+  // Bunny statuses to delete (a stuck-first pass), integers only
+  if (Array.isArray(input.statuses) && input.statuses.every((v) => Number.isInteger(v))) tuning.statuses = input.statuses;
   const result = await audited(c, [TEST_LIBRARY_PURGE_AUDIT_KEY], `test_library_purge_${action}`, action === 'start' ? { dryRun, resume, ...tuning } : {}, () =>
     callUploads(c.env, '/test-library-purge', { method: 'POST', json: { action, dryRun, resume, ...tuning, actor: actorLabel(c) } }),
   );
