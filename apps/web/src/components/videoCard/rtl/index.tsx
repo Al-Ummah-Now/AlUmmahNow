@@ -2,6 +2,7 @@
 import React from "react";
 import Link from "next/link";
 import VideoThumbnail from "@/components/VideoThumbnail";
+import { ProcessingBadge } from "../ProcessingBadge";
 import { VideoObject, getLocalizedValue } from "@al-ummah/shared-types";
 import { removeUnwantedChars } from "@/lib/utility";
 import { useLanguage } from "@/hooks/useLanguage";
@@ -26,6 +27,7 @@ const VideoCardRTL: React.FC<VideoObject> = (video) => {
           dir="rtl"
         >
           {/* Thumbnail */}
+          <ProcessingBadge uploadStatus={video.uploadStatus} />
           <VideoThumbnail src={video.thumbnailUrl} alt={title.replace(/⧸/g, ".")} className="h-48" />
 
           {/* Video Details */}

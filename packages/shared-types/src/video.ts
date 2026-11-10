@@ -35,6 +35,8 @@ export interface VideoObject extends Timestamps, SoftDelete, Moderation {
   description: string | null;
   descriptionLocalized?: Record<string, string>; // Multi-language descriptions
   thumbnailUrl: string;
+  /** Upload processing state; absent on older videos (treated as ready) */
+  uploadStatus?: 'initiated' | 'uploading' | 'processing' | 'ready' | 'failed' | 'deleted';
   thumbnailType?: 'auto' | 'custom'; // Type of thumbnail (auto-generated or custom)
   thumbnailSizes?: {
     hd?: string;    // 1280x720

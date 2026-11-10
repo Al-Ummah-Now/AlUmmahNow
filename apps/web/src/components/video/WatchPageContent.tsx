@@ -25,7 +25,8 @@ import { MenuButton } from "@/components/common/MenuButton";
 import { useActionRowFit } from "@/hooks/useActionRowFit";
 import { parseTime } from "@/lib/embed/params";
 import { VideoInfo } from "@/interfaces";
-import { PlayerOptions } from "@/components/VideoPagePlayer/interface";
+import { PlayerOptions, isVideoProcessing } from "@/components/VideoPagePlayer/interface";
+import { VideoProcessingState } from "@/components/video/VideoProcessingState";
 import { fetchRelatedVideos, fetchVideoById } from "@/lib/api/videos";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { useLanguage } from "@/hooks/useLanguage";
@@ -147,6 +148,8 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
   }, [videoId, relatedAttempt]);
 
   const videoDetails = state.status === 'ready' ? state.video : null;
+  // A processing video swaps in the player once its check sees it ready
+  const handleProcessed = useCallback((fresh: PlayerOptions) => setState({ status: 'ready', video: fresh }), []);
   const isOwnVideo = !!user && !!videoDetails?.userId && videoDetails.userId === user.id;
   // One line of actions at every width: labels drop to icons, then the comment pill goes
   useActionRowFit(actionsRef, [videoDetails?.id, !!user, isOwnVideo, lang]);
@@ -183,12 +186,16 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
           {videoDetails && (
             <div className="flex flex-col w-full mt-0 items-center">
               <section id={VIDEO_PLAYER_ID} className="w-full" tabIndex={-1}>
-                <Player
-                  key={videoDetails.id}
-                  options={videoDetails}
-                  startTime={startTime}
-                  onPlayerReady={handlePlayerReady}
-                />
+                {isVideoProcessing(videoDetails) || videoDetails.uploadStatus === 'failed' ? (
+                  <VideoProcessingState video={videoDetails} isOwner={isOwnVideo} onReady={handleProcessed} />
+                ) : (
+                  <Player
+                    key={videoDetails.id}
+                    options={videoDetails}
+                    startTime={startTime}
+                    onPlayerReady={handlePlayerReady}
+                  />
+                )}
               </section>
 
               <div className="watch-actions" ref={actionsRef} data-testid="watch-actions">

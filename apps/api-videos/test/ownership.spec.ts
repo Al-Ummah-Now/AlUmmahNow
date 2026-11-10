@@ -292,7 +292,8 @@ describe('endpoints served from the ownership index', () => {
 			assert.deepEqual(after.data, before.data);
 		}
 		const publicView = await (await visitor.request('/api/channels/mine1/videos?limit=12', {}, indexed)).json() as any;
-		assert.deepEqual(publicView.data.map((v: any) => v.id), ['m-a', 'm-b', 'm-g']);
+		// m-g is still processing: listed to its owner only (no playlist yet)
+		assert.deepEqual(publicView.data.map((v: any) => v.id), ['m-a', 'm-b']);
 
 		const page1 = await (await owner.request('/api/channels/mine1/videos?limit=2', {}, indexed)).json() as any;
 		assert.deepEqual(page1.data.map((v: any) => v.id), ['m-f', 'm-c']);

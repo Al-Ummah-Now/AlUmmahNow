@@ -4677,6 +4677,25 @@
                           "duration": {
                             "type": "number"
                           },
+                          "uploadStatus": {
+                            "type": "string",
+                            "enum": [
+                              "initiated",
+                              "uploading",
+                              "processing",
+                              "ready",
+                              "failed"
+                            ]
+                          },
+                          "processingIssueKind": {
+                            "type": "string",
+                            "enum": [
+                              "encode_failed",
+                              "needs_reupload",
+                              "stalled"
+                            ],
+                            "description": "Why processing did not finish"
+                          },
                           "isDeleted": {
                             "type": "boolean"
                           },
@@ -5576,6 +5595,25 @@
                           },
                           "duration": {
                             "type": "number"
+                          },
+                          "uploadStatus": {
+                            "type": "string",
+                            "enum": [
+                              "initiated",
+                              "uploading",
+                              "processing",
+                              "ready",
+                              "failed"
+                            ]
+                          },
+                          "processingIssueKind": {
+                            "type": "string",
+                            "enum": [
+                              "encode_failed",
+                              "needs_reupload",
+                              "stalled"
+                            ],
+                            "description": "Why processing did not finish"
                           },
                           "isDeleted": {
                             "type": "boolean"
@@ -6895,6 +6933,25 @@
                           },
                           "duration": {
                             "type": "number"
+                          },
+                          "uploadStatus": {
+                            "type": "string",
+                            "enum": [
+                              "initiated",
+                              "uploading",
+                              "processing",
+                              "ready",
+                              "failed"
+                            ]
+                          },
+                          "processingIssueKind": {
+                            "type": "string",
+                            "enum": [
+                              "encode_failed",
+                              "needs_reupload",
+                              "stalled"
+                            ],
+                            "description": "Why processing did not finish"
                           },
                           "isDeleted": {
                             "type": "boolean"
@@ -19939,6 +19996,25 @@
                           "duration": {
                             "type": "number"
                           },
+                          "uploadStatus": {
+                            "type": "string",
+                            "enum": [
+                              "initiated",
+                              "uploading",
+                              "processing",
+                              "ready",
+                              "failed"
+                            ]
+                          },
+                          "processingIssueKind": {
+                            "type": "string",
+                            "enum": [
+                              "encode_failed",
+                              "needs_reupload",
+                              "stalled"
+                            ],
+                            "description": "Why processing did not finish"
+                          },
                           "isDeleted": {
                             "type": "boolean"
                           },
@@ -20394,6 +20470,25 @@
                             },
                             "duration": {
                               "type": "number"
+                            },
+                            "uploadStatus": {
+                              "type": "string",
+                              "enum": [
+                                "initiated",
+                                "uploading",
+                                "processing",
+                                "ready",
+                                "failed"
+                              ]
+                            },
+                            "processingIssueKind": {
+                              "type": "string",
+                              "enum": [
+                                "encode_failed",
+                                "needs_reupload",
+                                "stalled"
+                              ],
+                              "description": "Why processing did not finish"
                             },
                             "isDeleted": {
                               "type": "boolean"
@@ -21505,6 +21600,25 @@
                           },
                           "duration": {
                             "type": "number"
+                          },
+                          "uploadStatus": {
+                            "type": "string",
+                            "enum": [
+                              "initiated",
+                              "uploading",
+                              "processing",
+                              "ready",
+                              "failed"
+                            ]
+                          },
+                          "processingIssueKind": {
+                            "type": "string",
+                            "enum": [
+                              "encode_failed",
+                              "needs_reupload",
+                              "stalled"
+                            ],
+                            "description": "Why processing did not finish"
                           },
                           "isDeleted": {
                             "type": "boolean"
@@ -24406,6 +24520,25 @@
                     "duration": {
                       "type": "number"
                     },
+                    "uploadStatus": {
+                      "type": "string",
+                      "enum": [
+                        "initiated",
+                        "uploading",
+                        "processing",
+                        "ready",
+                        "failed"
+                      ]
+                    },
+                    "processingIssueKind": {
+                      "type": "string",
+                      "enum": [
+                        "encode_failed",
+                        "needs_reupload",
+                        "stalled"
+                      ],
+                      "description": "Why processing did not finish"
+                    },
                     "isDeleted": {
                       "type": "boolean"
                     },
@@ -24900,6 +25033,25 @@
                             },
                             "duration": {
                               "type": "number"
+                            },
+                            "uploadStatus": {
+                              "type": "string",
+                              "enum": [
+                                "initiated",
+                                "uploading",
+                                "processing",
+                                "ready",
+                                "failed"
+                              ]
+                            },
+                            "processingIssueKind": {
+                              "type": "string",
+                              "enum": [
+                                "encode_failed",
+                                "needs_reupload",
+                                "stalled"
+                              ],
+                              "description": "Why processing did not finish"
                             },
                             "isDeleted": {
                               "type": "boolean"

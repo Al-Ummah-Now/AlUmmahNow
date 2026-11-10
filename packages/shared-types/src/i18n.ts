@@ -521,6 +521,15 @@ export interface AppTranslations {
     selectVideoMessage: string;
     videoNotFound: string;
     videoNotFoundDescription: string;
+    processingTitle: string;
+    processingDescription: string;
+    processingProgress: string;
+    processingFailedTitle: string;
+    processingFailedDescription: string;
+    processingFailedOwnerDescription: string;
+    processingReupload: string;
+    processingBadge: string;
+    processingFailedBadge: string;
     noVideosAvailable: string;
     latest: string;
     popular: string;

@@ -30,6 +30,14 @@ export interface PlayerOptions {
   /** Who reacted (used to restore the viewer's like/dislike state) */
   likes?: VideoReaction[];
   dislikes?: VideoReaction[];
+  /** Anything but "ready" (or unset, for older videos) shows the processing state instead of the player */
+  uploadStatus?: 'initiated' | 'uploading' | 'processing' | 'ready' | 'failed';
+  processingIssueKind?: 'encode_failed' | 'needs_reupload' | 'stalled';
+}
+
+/** True while the video cannot play yet (still uploading or processing at Bunny). */
+export function isVideoProcessing(video: Pick<PlayerOptions, 'uploadStatus'>): boolean {
+  return video.uploadStatus === 'initiated' || video.uploadStatus === 'uploading' || video.uploadStatus === 'processing';
 }
 
 export interface VideoReaction {

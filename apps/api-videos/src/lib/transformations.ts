@@ -13,8 +13,12 @@ export function transformVideoToView(
 ): z.infer<typeof VideoView> {
     // Held-for-review, hidden and deleted comments are never exposed with the video
     const publicComments = (video.comments || []).filter((comment) => isCommentVisible(comment as unknown as StoredComment));
+    // Processing internals stay server-side: the check loop's state and Bunny's
+    // raw failure text. Clients get only the issue kind (watch page, studio).
+    const { processingCheck: _check, processingIssue, ...rest } = video;
     return {
-        ...video,
+        ...rest,
+        ...(processingIssue ? { processingIssueKind: processingIssue.kind } : {}),
         comments: publicComments,
         commentSettings: getCommentSettings(video),
         channelName: channel?.name || "",
