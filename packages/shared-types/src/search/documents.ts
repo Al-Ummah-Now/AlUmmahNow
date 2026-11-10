@@ -326,6 +326,13 @@ export function projectChannel(raw: unknown): SearchRow<'channel'> | null {
 /** Matches COVER_CANDIDATES in api-videos lib/playlistCovers.ts */
 const COVER_VIDEO_IDS = 5;
 
+/** Cover candidates: the managers' chosen cover video first (while it is in the playlist), then the order. */
+function coverCandidates(videos: unknown[], chosen: unknown): string[] {
+  const ids = videos.filter((video): video is string => typeof video === 'string');
+  const first = typeof chosen === 'string' && ids.includes(chosen) ? chosen : null;
+  return (first ? [first, ...ids.filter((id) => id !== first)] : ids).slice(0, COVER_VIDEO_IDS);
+}
+
 export function projectPlaylist(raw: unknown): SearchRow<'playlist'> | null {
   const obj = asRecord(raw);
   const id = obj && str(obj.id);
@@ -361,9 +368,7 @@ export function projectPlaylist(raw: unknown): SearchRow<'playlist'> | null {
       name,
       description: truncate(description, DESCRIPTION_LIMIT),
       thumbnailUrl: str(obj.thumbnailUrl),
-      coverVideoIds: Array.isArray(obj.videos)
-        ? obj.videos.filter((video): video is string => typeof video === 'string').slice(0, COVER_VIDEO_IDS)
-        : undefined,
+      coverVideoIds: Array.isArray(obj.videos) ? coverCandidates(obj.videos, obj.coverVideoId) : undefined,
       videosCount,
       channelId: str(obj.channelId),
       userId: str(obj.userId),

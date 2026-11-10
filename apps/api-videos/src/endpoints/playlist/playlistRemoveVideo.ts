@@ -104,6 +104,8 @@ export class PlaylistRemoveVideo extends AuthenticatedRoute {
                 const { [videoId]: _gone, ...dates } = fresh.videoAddedAt;
                 fresh.videoAddedAt = dates;
             }
+            // A removed cover video: the cover is automatic again
+            if (fresh.coverVideoId === videoId) delete fresh.coverVideoId;
             fresh.dateModified = new Date().toISOString();
             return true;
         });

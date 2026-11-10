@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { MAX_COVER_R2_READS, resolvePlaylistCovers, withPlaylistCovers } from '../src/lib/playlistCovers';
 import { attachSearchPlaylistCovers } from '../src/lib/search/playlistCovers';
 import { signBunnyUrlsInText } from '../src/lib/bunny-signing';
+import { projectPlaylist } from '@al-ummah/shared-types';
 import { MemoryBucket } from './helpers';
 
 const thumb = (id: string) => `https://images.test/${id}.jpg`;
@@ -73,6 +74,18 @@ describe('resolvePlaylistCovers', () => {
 		assert.equal(theirs.get('p')?.videoId, 'b');
 	});
 
+	it('a chosen cover video comes first; a viewer who cannot see it gets the first visible one', async () => {
+		const index = fakeIndex({ a: { thumbnailUrl: thumb('a') }, c: { thumbnailUrl: thumb('c') } });
+		const chosen = await resolvePlaylistCovers(env({}, index), [{ id: 'p', videos: ['a', 'b', 'c'], coverVideoId: 'c' }]);
+		assert.equal(chosen.get('p')?.videoId, 'c');
+		const e = env({ c: video('c', { isPublic: false }), a: video('a') });
+		const hidden = await resolvePlaylistCovers(e, [{ id: 'p', videos: ['a', 'c'], coverVideoId: 'c' }], 'visitor');
+		assert.equal(hidden.get('p')?.videoId, 'a');
+		// No longer in the playlist: ignored
+		const gone = await resolvePlaylistCovers(env({}, index), [{ id: 'p', videos: ['a'], coverVideoId: 'c' }]);
+		assert.equal(gone.get('p')?.videoId, 'a');
+	});
+
 	it('returns no cover for an empty playlist', async () => {
 		const covers = await resolvePlaylistCovers(env({}), [{ id: 'p', videos: [] }]);
 		assert.equal(covers.size, 0);
@@ -108,6 +121,12 @@ describe('resolvePlaylistCovers', () => {
 });
 
 describe('search playlist covers', () => {
+	it('the search index puts a chosen cover video first among the candidates', () => {
+		const base = { id: 'p', title: 'P', isPublic: true, userId: 'u', videos: ['a', 'b', 'c'] };
+		assert.deepEqual(projectPlaylist({ ...base, coverVideoId: 'c' })?.payload.coverVideoIds, ['c', 'a', 'b']);
+		assert.deepEqual(projectPlaylist({ ...base, coverVideoId: 'gone' })?.payload.coverVideoIds, ['a', 'b', 'c']);
+	});
+
 	it('adds the cover and strips the internal id list', async () => {
 		const index = fakeIndex({ a: { thumbnailUrl: thumb('a') } });
 		const playlist = { id: 'p', name: 'P', videosCount: 1, coverVideoIds: ['a'] };
