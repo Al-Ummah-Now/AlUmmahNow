@@ -60,4 +60,5 @@
 export { AuthenticatedRoute } from './AuthenticatedRoute';
 export { OptionalAuthRoute } from './OptionalAuthRoute';
 export { PublicRoute } from './PublicRoute';
+export { ValidatedRoute } from './ValidatedRoute';
 export type { AppContext, AuthContext, AppBindings } from './types';

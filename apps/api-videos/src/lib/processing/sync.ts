@@ -107,7 +107,11 @@ export function bunnyPhase(bunny: BunnyVideoState | null): BunnyPhase {
  * What the owner's upload-status endpoint reports for a Bunny state (same
  * mapping as the check loop): playable counts as ready.
  */
-export function uploadStatusView(phase: BunnyPhase, bunny: BunnyVideoState | null): {
+export function uploadStatusView(
+	phase: BunnyPhase,
+	bunny: BunnyVideoState | null,
+	record?: Pick<SyncableVideo, 'uploadStatus' | 'processingIssue'>,
+): {
 	status: 'uploading' | 'processing' | 'ready' | 'failed';
 	progress: number;
 	message: string;
@@ -115,6 +119,12 @@ export function uploadStatusView(phase: BunnyPhase, bunny: BunnyVideoState | nul
 	const encode = bunny?.encodeProgress ?? 0;
 	switch (phase) {
 		case 'awaiting_upload':
+			// Bunny still waits for bytes, but the upload was given up on
+			// (the browser reported it, or the stalled sweep flagged it): it is
+			// failed until a re-upload reopens it, never "uploading" forever
+			if (record?.uploadStatus === 'failed') {
+				return { status: 'failed', progress: 0, message: record.processingIssue?.reason || 'The upload could not be completed' };
+			}
 			return { status: 'uploading', progress: Math.max(10, encode), message: 'Video upload queued' };
 		case 'encoding':
 			return { status: 'processing', progress: Math.max(25, encode), message: 'Video is being encoded' };

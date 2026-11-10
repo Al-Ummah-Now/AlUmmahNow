@@ -3,7 +3,8 @@
  * Get, update, and delete individual upload templates
  */
 
-import { OpenAPIRoute, Str, Bool } from 'chanfana';
+import { Str, Bool } from 'chanfana';
+import { ValidatedRoute } from '../../base/ValidatedRoute';
 import { z } from 'zod';
 import { clearDefaultTemplate, isDefaultTemplate, readDefaultPointer, setDefaultTemplate } from '../../lib/uploadDefaultPointer';
 import R2Repository, { rethrowBusy } from '../../lib/r2Repo';
@@ -21,7 +22,7 @@ import { logger } from '../../lib/logger';
  * Get Upload Template Endpoint
  * GET /api/upload-defaults/:id
  */
-export class GetUploadDefaultEndpoint extends OpenAPIRoute {
+export class GetUploadDefaultEndpoint extends ValidatedRoute {
   schema = addAuthToSchema(
     {
       tags: ['Settings'],
@@ -180,7 +181,7 @@ export class GetUploadDefaultEndpoint extends OpenAPIRoute {
  * Update Upload Template Endpoint
  * PUT /api/upload-defaults/:id
  */
-export class UpdateUploadDefaultEndpoint extends OpenAPIRoute {
+export class UpdateUploadDefaultEndpoint extends ValidatedRoute {
   schema = addAuthToSchema(
     {
       tags: ['Settings'],
@@ -422,7 +423,7 @@ export class UpdateUploadDefaultEndpoint extends OpenAPIRoute {
  * Delete Upload Template Endpoint
  * DELETE /api/upload-defaults/:id
  */
-export class DeleteUploadDefaultEndpoint extends OpenAPIRoute {
+export class DeleteUploadDefaultEndpoint extends ValidatedRoute {
   schema = addAuthToSchema(
     {
       tags: ['Settings'],
@@ -570,7 +571,7 @@ export class DeleteUploadDefaultEndpoint extends OpenAPIRoute {
  * Set Default Template Endpoint
  * PUT /api/upload-defaults/:id/default
  */
-export class SetDefaultTemplateEndpoint extends OpenAPIRoute {
+export class SetDefaultTemplateEndpoint extends ValidatedRoute {
   schema = addAuthToSchema(
     {
       tags: ['Settings'],

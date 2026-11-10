@@ -1,4 +1,4 @@
-import { OpenAPIRoute } from 'chanfana';
+import { ValidatedRoute } from './ValidatedRoute';
 import { AppContext, AuthContext } from './types';
 
 /**
@@ -31,7 +31,7 @@ import { AppContext, AuthContext } from './types';
  * }
  * ```
  */
-export abstract class OptionalAuthRoute extends OpenAPIRoute {
+export abstract class OptionalAuthRoute extends ValidatedRoute {
   /**
    * Get the authentication context if present.
    *

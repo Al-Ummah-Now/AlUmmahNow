@@ -202,8 +202,9 @@ export class UpdateTranslationsEndpoint extends AdminRoute {
   };
 
   async handle(c: AppContext) {
+    // Outside the catch-all: a bad request is chanfana's 400, not a 500
+    const data = await this.getValidatedData<typeof this.schema>();
     try {
-      const data = await this.getValidatedData<typeof this.schema>();
       const { locale } = data.params;
       const body = data.body as { translations: Partial<AppTranslations>; merge?: boolean };
       const { translations: newTranslations, merge = true } = body;

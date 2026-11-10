@@ -19,7 +19,7 @@
 import { readFileSync } from 'fs';
 import { test, expect, type Page, type WebSocketRoute } from '@playwright/test';
 import { target } from './targets';
-import { signUpOnWeb, createProfile, type Locale } from './web-session';
+import { signUpOnWeb, createProfile, gotoSettled, type Locale } from './web-session';
 
 const DESKTOP = { width: 1280, height: 800 };
 const PHONE = { width: 390, height: 844 };
@@ -185,7 +185,7 @@ test.describe('Release: real-time toasts stay out of the way during a bulk uploa
 
       // Desktop
       await page.setViewportSize(DESKTOP);
-      await page.goto(`${target().web}/${locale}`);
+      await gotoSettled(page, `${target().web}/${locale}`);
       await waitForToasts(page, rt);
       pushBurst(rt, `${locale}-d`);
       await checkBurst(page, locale, `${locale}-desktop`);
@@ -193,7 +193,7 @@ test.describe('Release: real-time toasts stay out of the way during a bulk uploa
 
       // Phone: above the tab bar, below the header
       await page.setViewportSize(PHONE);
-      await page.goto(`${target().web}/${locale}`);
+      await gotoSettled(page, `${target().web}/${locale}`);
       await waitForToasts(page, rt);
       pushBurst(rt, `${locale}-p`);
       await checkBurst(page, locale, `${locale}-phone`);

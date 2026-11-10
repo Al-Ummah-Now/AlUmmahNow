@@ -15,6 +15,23 @@ export interface WebUser {
   userId: string;
 }
 
+/**
+ * page.goto that waits out a navigation the app is still making on its own
+ * (after the sign-in callback the web app replaces the URL once more; WebKit
+ * reports a goto started meanwhile as "interrupted by another navigation").
+ * Only that error is retried, once, after the page has loaded.
+ */
+export async function gotoSettled(page: Page, url: string): Promise<void> {
+  await page.waitForLoadState('load');
+  try {
+    await page.goto(url);
+  } catch (e) {
+    if (!/interrupted by another navigation/.test(String(e))) throw e;
+    await page.waitForLoadState('load');
+    await page.goto(url);
+  }
+}
+
 /** Records every main-frame navigation so a bounce through an error page is caught. */
 export function recordNavigations(page: Page): string[] {
   const urls: string[] = [];

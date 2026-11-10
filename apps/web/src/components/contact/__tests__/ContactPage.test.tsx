@@ -14,7 +14,7 @@ jest.mock('@/hooks/useLanguage', () => ({
   }),
 }));
 jest.mock('@/components/AuthProvider/authContext', () => ({ useAuth: () => ({ user: mockUser }) }));
-jest.mock('next/navigation', () => ({ useSearchParams: () => mockParams }));
+jest.mock('next/navigation', () => ({ useSearchParams: () => mockParams, usePathname: () => `/${mockLang}/contact` }));
 jest.mock('@/lib/logger-client', () => ({ logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn() } }));
 jest.mock('@/theme/contact.css', () => ({}), { virtual: true });
 
@@ -26,6 +26,16 @@ describe('Contact us page', () => {
     mockParams = new URLSearchParams();
     fetchMock.mockReset();
     global.fetch = fetchMock as unknown as typeof fetch;
+  });
+
+  it('shows the Settings breadcrumb with a way back only when opened from Settings', () => {
+    const { unmount } = render(<ContactPage />);
+    expect(screen.queryByTestId('settings-breadcrumb')).toBeNull();
+    unmount();
+    mockParams = new URLSearchParams('from=/en/settings');
+    render(<ContactPage />);
+    expect(screen.getByTestId('settings-breadcrumb')).toBeInTheDocument();
+    expect(screen.getByTestId('settings-back')).toHaveAttribute('href', '/en/settings');
   });
 
   it('shows accessible errors and sends nothing when the form is incomplete', async () => {

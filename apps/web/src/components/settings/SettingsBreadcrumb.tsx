@@ -2,8 +2,10 @@
 
 /**
  * "Settings › <page>" trail with a back arrow to the parent page. Rendered by
- * settings/layout.tsx on the settings sub-pages, by the profile page when it was
- * opened from Settings (?from=settings), and by ChannelSettingsBreadcrumb on the
+ * settings/layout.tsx on the settings sub-pages, by the profile and Contact us
+ * pages when opened from Settings (?from=settings, or ?from=/<lang>/settings on
+ * Contact us, whose ?from= is the page the message is about), and by
+ * ChannelSettingsBreadcrumb on the
  * channel settings pages. Real links to the parent route, never history.back():
  * a page opened directly has nothing to go back to.
  */
@@ -20,6 +22,12 @@ export interface Crumb {
   href?: string;
 }
 
+/** True when ?from= says the page was opened from the Settings page. */
+export function openedFromSettings(from: string | null | undefined, lang: string): boolean {
+  if (!from) return false;
+  return from === 'settings' || from.replace(/\/+$/, '') === `/${lang}/settings`;
+}
+
 /** The trail for the page at `pathname`, or null where the layout shows none (/settings itself, channel pages). */
 export function settingsTrail(pathname: string, lang: string, t: AppTranslations, fromSettings = false): Crumb[] | null {
   const base = `/${lang}`;
@@ -29,6 +37,9 @@ export function settingsTrail(pathname: string, lang: string, t: AppTranslations
 
   if (path === `${base}/profile`) {
     return fromSettings ? [root, { label: t.settings?.profileSettings || 'Profile Settings', href: `${base}/profile` }] : null;
+  }
+  if (path === `${base}/contact`) {
+    return fromSettings ? [root, { label: t.contact.settingsTitle, href: `${base}/contact` }] : null;
   }
   if (path === `${settings}/upload-defaults`) return [root, { label: t.settings?.uploadDefaults || 'Upload Defaults', href: path }];
   if (path === `${settings}/privacy`) return [root, { label: t.privacy.settingsTitle, href: path }];
@@ -84,7 +95,7 @@ export function SettingsBreadcrumb() {
   const { t, lang } = useLanguage();
   const pathname = usePathname() ?? '';
   const params = useSearchParams();
-  const trail = settingsTrail(pathname, lang, t, params?.get('from') === 'settings');
+  const trail = settingsTrail(pathname, lang, t, openedFromSettings(params?.get('from'), lang));
   if (!trail) return null;
   return <BreadcrumbTrail trail={trail} label={t.settings?.breadcrumb || 'Settings breadcrumb'} className="sb-page" />;
 }
