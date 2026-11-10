@@ -107,3 +107,14 @@ describe('web error reporter', () => {
     uninstall();
   });
 });
+
+describe('network drops are not reported', () => {
+  it('recognises browser network failures and aborts', async () => {
+    const { isNetworkDrop } = await import('../reporter');
+    expect(isNetworkDrop(new TypeError('Failed to fetch'))).toBe(true);
+    expect(isNetworkDrop(new TypeError('Load failed'))).toBe(true);
+    expect(isNetworkDrop(Object.assign(new Error('x'), { name: 'AbortError' }))).toBe(true);
+    expect(isNetworkDrop(new Error('x'), 'ChannelsPage: Failed to fetch channels')).toBe(true);
+    expect(isNetworkDrop(new TypeError("Cannot read properties of undefined (reading 'title')"))).toBe(false);
+  });
+});

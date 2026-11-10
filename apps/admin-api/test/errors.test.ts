@@ -49,7 +49,7 @@ import {
   setErrorAssignee,
   setErrorStatus,
 } from '../src/lib/errors-store';
-import { alertRecipient, renderErrorAlert, sendErrorAlerts, ERROR_ALERT_LIMITS } from '../src/lib/errors-alerts';
+import { alertRecipient, isAlertWorthy, renderErrorAlert, sendErrorAlerts, ERROR_ALERT_LIMITS } from '../src/lib/errors-alerts';
 import { consumeErrorQueue, enqueueIngest, retryDelaySeconds, type ErrorIngestMessage } from '../src/endpoints/errors/ErrorsIngest';
 import { runRetry, SERVICE_RETRIES } from '../src/lib/errors-actions';
 import { contactMailItemKey, reportContactMailFailure } from '../src/lib/contact-mail-queue';
@@ -431,7 +431,7 @@ describe('async ingest queue', () => {
 describe('alerts', () => {
   it('mails new groups in production only, never test groups, within the hourly limit', async () => {
     const db = sqliteD1();
-    const out = await ingestErrorEvents(db, [ev(), ev({ message: 'Other error', test: true })], ctx());
+    const out = await ingestErrorEvents(db, [ev({ kind: 'boundary' }), ev({ kind: 'boundary', message: 'Other error', test: true })], ctx());
     const mails: string[] = [];
     const fetchImpl = (async (_u: string, init?: RequestInit) => (mails.push(JSON.parse(String(init?.body)).subject), new Response('{"id":"e1"}'))) as typeof fetch;
     const env = { ENVIRONMENT: 'production', RESEND_API_KEY: 'k', CONTACT_INBOX: 'support@alummahnow.net', ADMIN_WEB_URL: 'https://admin.alummahnow.net' };
@@ -441,10 +441,29 @@ describe('alerts', () => {
     assert.equal(alertRecipient({ ERRORS_ALERT_TO: 'ops@alummahnow.net', CONTACT_INBOX: 'support@alummahnow.net' }), 'ops@alummahnow.net');
 
     // Over the hourly limit: recorded, not mailed
-    const many = await ingestErrorEvents(db, Array.from({ length: ERROR_ALERT_LIMITS.perHour + 2 }, (_, i) => ev({ message: `Distinct failure kind ${'abcdefghijklmnopqrstuvwxyz'[i]}` })), ctx());
+    const many = await ingestErrorEvents(db, Array.from({ length: ERROR_ALERT_LIMITS.perHour + 2 }, (_, i) => ev({ kind: 'boundary', message: `Distinct failure kind ${'abcdefghijklmnopqrstuvwxyz'[i]}` })), ctx());
     mails.length = 0;
     await sendErrorAlerts(db, env, many, NOW, fetchImpl);
     assert.equal(mails.length, ERROR_ALERT_LIMITS.perHour - 1);
+  });
+
+  it('mails only critical kinds: no mail for handled client problems', async () => {
+    const db = sqliteD1();
+    const out = await ingestErrorEvents(db, [
+      ev({ kind: 'caught', message: 'WebSocket error (will reconnect)' }),
+      ev({ kind: 'fetch', message: 'Failed to fetch' }),
+      ev({ kind: 'unhandled', message: 'Browser-only crash' }),
+      ev({ kind: 'player', message: 'Player stalled' }),
+      ev({ app: 'api-videos', kind: 'http', message: 'GET /api/videos answered 500' }),
+    ], ctx());
+    const mails: string[] = [];
+    const fetchImpl = (async (_u: string, init?: RequestInit) => (mails.push(JSON.parse(String(init?.body)).subject), new Response('{"id":"e1"}'))) as typeof fetch;
+    const env = { ENVIRONMENT: 'production', RESEND_API_KEY: 'k', CONTACT_INBOX: 'support@alummahnow.net' };
+    assert.equal(await sendErrorAlerts(db, env, out, NOW, fetchImpl), 1);
+    assert.match(mails[0], /api-videos/);
+    assert.equal(isAlertWorthy({ app: 'processor', kind: 'unhandled' }), true);
+    assert.equal(isAlertWorthy({ app: 'web', kind: 'rejection' }), false);
+    assert.equal(isAlertWorthy({ app: 'web', kind: 'action' }), true);
   });
 
   it('links to the group in the admin', () => {

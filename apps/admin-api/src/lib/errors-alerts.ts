@@ -1,5 +1,6 @@
 /**
- * New-error and spike alerts for the admin Errors page, emailed to the
+ * New-error and spike alerts for the admin Errors page (critical kinds only,
+ * see isAlertWorthy), emailed to the
  * admin notification address (ERRORS_ALERT_TO, else the support inbox
  * CONTACT_INBOX). Production only, never for the release E2E's test errors,
  * at most one alert per group every 6 hours and ERROR_ALERT_LIMITS.perHour
@@ -14,6 +15,21 @@ export const ERROR_ALERT_LIMITS = {
   perHour: 10,
   perGroupHours: 6,
 } as const;
+
+const SERVER_APPS = new Set(['api-videos', 'admin-api', 'processor', 'scheduler', 'websocket']);
+
+/**
+ * Only failures that need someone to act are emailed: a server answering 5xx,
+ * a crash a user actually saw (error page), a crash in a Worker, and
+ * "needs action" items. Problems the page handled itself (caught, fetch,
+ * player, upload, chunk, skew) and browser-side rejections are listed on the
+ * Errors page only, never mailed.
+ */
+export function isAlertWorthy(group: Pick<ErrorGroupRow, 'kind' | 'app'>): boolean {
+  if (group.kind === 'http' || group.kind === 'boundary' || group.kind === 'action') return true;
+  if (group.kind === 'unhandled' || group.kind === 'rejection') return SERVER_APPS.has(group.app);
+  return false;
+}
 
 export interface AlertEnv extends MailerEnv {
   ERRORS_ALERT_TO?: string;
@@ -65,9 +81,9 @@ export async function sendErrorAlerts(db: D1Database, env: AlertEnv, outcome: In
   const to = alertRecipient(env);
   if (!to) return 0;
   const candidates: [ErrorGroupRow, 'new' | 'spike'][] = [
-    ...outcome.created.filter((g) => !g.test).map((g) => [g, 'new'] as [ErrorGroupRow, 'new']),
+    ...outcome.created.filter((g) => !g.test && isAlertWorthy(g)).map((g) => [g, 'new'] as [ErrorGroupRow, 'new']),
     ...outcome.spiking
-      .filter((g) => !g.test && g.status !== 'ignored')
+      .filter((g) => !g.test && g.status !== 'ignored' && isAlertWorthy(g))
       .filter((g) => !g.last_alert_at || now.getTime() - Date.parse(g.last_alert_at) > ERROR_ALERT_LIMITS.perGroupHours * 3600_000)
       .map((g) => [g, 'spike'] as [ErrorGroupRow, 'spike']),
   ];
