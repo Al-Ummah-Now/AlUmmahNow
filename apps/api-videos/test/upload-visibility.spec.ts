@@ -126,7 +126,7 @@ describe('single and bulk initiate write the same record', () => {
 });
 
 describe('one listing rule', () => {
-	const processing = videoFixture({ id: 'p1', userId: OWNER, channelId: CHANNEL, uploadStatus: 'processing', duration: 54, thumbnailUrl: `https://${HOST}/p1/thumbnail.jpg`, thumbnailType: 'auto' });
+	const processing = videoFixture({ id: 'p1', userId: OWNER, channelId: CHANNEL, uploadStatus: 'processing', duration: 54, width: 1080, height: 1920, thumbnailUrl: `https://${HOST}/p1/thumbnail.jpg`, thumbnailType: 'auto' });
 	const uploading = videoFixture({ id: 'u1', userId: OWNER, channelId: CHANNEL, uploadStatus: 'uploading', thumbnailUrl: `https://${HOST}/u1/thumbnail.jpg`, thumbnailType: 'auto' });
 	const ready = videoFixture({ id: 'r1', userId: OWNER, channelId: CHANNEL, uploadStatus: 'ready', duration: 300 });
 	const legacy = videoFixture({ id: 'l1', userId: OWNER, channelId: CHANNEL, duration: 300 });

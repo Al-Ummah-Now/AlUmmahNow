@@ -271,6 +271,46 @@ describe('processing-check loop', () => {
 	});
 });
 
+describe('sweep candidates', () => {
+	it('come from the ownership index when it is complete: no full bucket read', async () => {
+		const env = makeEnv();
+		await env.videos.put(ID, JSON.stringify(stuck()));
+		for (let i = 0; i < 30; i++) await env.videos.put(`ready-${i}`, JSON.stringify(videoFixture({ id: `ready-${i}`, uploadStatus: 'ready' })));
+		const queries: string[] = [];
+		env.SEARCH_DB = {
+			prepare(sql: string) {
+				queries.push(sql);
+				const stmt = {
+					bind: () => stmt,
+					first: async () => (/search_meta/.test(sql) ? { value: '1' } : null),
+					all: async () => ({ results: /upload_status IN/.test(sql) ? [{ id: ID }] : [] }),
+				};
+				return stmt;
+			},
+		};
+		let gets = 0;
+		const get = env.videos.get.bind(env.videos);
+		env.videos.get = async (key: string) => {
+			gets++;
+			return get(key);
+		};
+		const stats = await sweepProcessingVideos(env, { now: NOW });
+		assert.equal(stats.source, 'index');
+		assert.equal(stats.scanned, 1);
+		assert.equal(stats.loopsStarted, 1);
+		assert.ok(gets <= 3, `read ${gets} objects, not the whole bucket`);
+		assert.ok(queries.some((q) => /upload_status IN/.test(q)));
+	});
+
+	it('a video uploaded 3 minutes ago without a loop is picked up', async () => {
+		const env = makeEnv();
+		await env.videos.put(ID, JSON.stringify(stuck({ dateCreated: new Date(NOW.getTime() - 3 * 60_000).toISOString() })));
+		const stats = await sweepProcessingVideos(env, { now: NOW });
+		assert.equal(stats.source, 'scan');
+		assert.equal(stats.loopsStarted, 1);
+	});
+});
+
 describe('internal processing endpoints', () => {
 	it('sync previews without writing and applies through the queue', async () => {
 		const env = makeEnv();
