@@ -1,7 +1,13 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { NextRequest } from 'next/server';
-import { decodeJwtExp, refreshTokens, shouldRefresh } from '../src/lib/token-refresh';
+import {
+  LEGACY_TOKEN_ISSUED_BEFORE_SECONDS,
+  decodeJwtExp,
+  isLegacyLongLivedToken,
+  refreshTokens,
+  shouldRefresh,
+} from '../src/lib/token-refresh';
 import { parseSessionCookie, withRotatedTokens } from '../src/lib/session-cookie';
 import { refreshSessionMiddleware } from '../src/lib/session-middleware';
 import { config } from '../src/middleware';
@@ -79,6 +85,27 @@ describe('decodeJwtExp / shouldRefresh', () => {
 
   it('leaves an unreadable token to signature verification', () => {
     assert.equal(shouldRefresh('garbage', NOW), false);
+  });
+
+  it('refreshes a 30-day token issued before 15-minute tokens, whatever its exp', () => {
+    const issued = LEGACY_TOKEN_ISSUED_BEFORE_SECONDS - 2 * 24 * 3600;
+    const legacy = jwt(issued + 30 * 24 * 3600, { iat: issued });
+    assert.equal(isLegacyLongLivedToken(legacy), true);
+    assert.equal(shouldRefresh(legacy, issued + 3600), true);
+    // Over 15 minutes by a second
+    const long = jwt(issued + 901, { iat: issued });
+    assert.equal(shouldRefresh(long, issued + 60), true);
+    // Exactly 15 minutes: the normal rule
+    const short = jwt(issued + 900, { iat: issued });
+    assert.equal(isLegacyLongLivedToken(short), false);
+    assert.equal(shouldRefresh(short, issued + 60), false);
+  });
+
+  it('a long-lived token issued after the cutoff (local issuer) is not refreshed on every request', () => {
+    const issued = LEGACY_TOKEN_ISSUED_BEFORE_SECONDS + 24 * 3600;
+    const dev = jwt(issued + 30 * 24 * 3600, { iat: issued });
+    assert.equal(isLegacyLongLivedToken(dev), false);
+    assert.equal(shouldRefresh(dev, issued + 60), false);
   });
 });
 

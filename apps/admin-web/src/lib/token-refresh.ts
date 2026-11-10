@@ -27,9 +27,46 @@ export function decodeJwtExp(token: string): number | null {
   }
 }
 
+/** Access tokens are issued for 15 minutes (Auth ACCESS_TOKEN_TTL). */
+export const MAX_ACCESS_TOKEN_LIFETIME_SECONDS = 15 * 60;
+
 /**
- * Whether the access token expires within `skewSeconds`. An unreadable token
- * is left alone: signature verification in getAdminSession rejects it.
+ * Every deployed Auth has issued 15-minute tokens since 2026-11-08 (#437).
+ * Long-lived tokens issued before this cutoff are the old 30-day ones; later
+ * ones only come from an issuer without ACCESS_TOKEN_TTL (local dev), where
+ * refreshing on every request would never end.
+ */
+export const LEGACY_TOKEN_ISSUED_BEFORE_SECONDS = Date.UTC(2026, 10, 11) / 1000;
+
+function decodeJwtClaims(token: string): { iat?: unknown; exp?: unknown } | null {
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  try {
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+    const payload: unknown = JSON.parse(atob(padded));
+    return payload && typeof payload === 'object' ? (payload as { iat?: unknown; exp?: unknown }) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A 30-day access token from before 15-minute tokens. Its roles are frozen at
+ * issue (a revoked Admin keeps working), so it is refreshed now rather than
+ * used until it expires.
+ */
+export function isLegacyLongLivedToken(accessToken: string): boolean {
+  const claims = decodeJwtClaims(accessToken);
+  const { iat, exp } = claims ?? {};
+  if (typeof iat !== 'number' || typeof exp !== 'number' || !Number.isFinite(iat) || !Number.isFinite(exp)) return false;
+  return exp - iat > MAX_ACCESS_TOKEN_LIFETIME_SECONDS && iat < LEGACY_TOKEN_ISSUED_BEFORE_SECONDS;
+}
+
+/**
+ * Whether the access token expires within `skewSeconds` (or is a legacy
+ * 30-day token). An unreadable token is left alone: signature verification in
+ * getAdminSession rejects it.
  */
 export function shouldRefresh(
   accessToken: string,
@@ -38,6 +75,7 @@ export function shouldRefresh(
 ): boolean {
   const exp = decodeJwtExp(accessToken);
   if (exp === null) return false;
+  if (isLegacyLongLivedToken(accessToken)) return true;
   return exp - nowSeconds <= skewSeconds;
 }
 
