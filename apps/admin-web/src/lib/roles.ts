@@ -66,7 +66,8 @@ export function canUseContactInbox(role?: string): boolean {
 }
 
 /**
- * Upload processing health and the Errors page: mirrors admin-api PERMISSIONS
+ * Upload processing health and the "Uploads & processing" section of the
+ * Errors page: mirrors admin-api PERMISSIONS
  * (videos:processing is granted to admins and super admins, not moderators).
  */
 export function canUseProcessing(role?: string): boolean {
@@ -92,4 +93,18 @@ export function canManageVideosUsers(role?: string): boolean {
 export function canUseStaleUploads(role?: string): boolean {
   const r = normalizeRole(role);
   return r === 'admin' || r === 'super_admin';
+}
+
+/**
+ * Errors page: mirrors admin-api PERMISSIONS (errors:read and errors:manage
+ * are granted to admins and super admins, apps/admin-api/src/lib/roles.ts).
+ * admin-api enforces it; this only hides what the user cannot open or do.
+ */
+export function canReadErrors(role?: string): boolean {
+  const r = normalizeRole(role);
+  return r === 'admin' || r === 'super_admin';
+}
+
+export function canManageErrors(role?: string): boolean {
+  return canReadErrors(role);
 }

@@ -1,6 +1,6 @@
 'use server';
 
-import type { AdminJob, AdminJobStatus, LegacyRestorePlan, Report, ReportStats } from '@al-ummah/shared-types';
+import type { AdminJob, AdminJobStatus, ErrorStatus, LegacyRestorePlan, Report, ReportStats } from '@al-ummah/shared-types';
 import { AdminApiError, type ActionResult } from './errors';
 import { fetchAdmin, requestAdmin } from './request';
 import type {
@@ -35,6 +35,7 @@ import type {
   FlaggedVideoList,
   VideoFormatRunView,
 } from './types';
+import type { ErrorCounts, ErrorFacets, ErrorGroup, ErrorGroupDetail, ErrorGroupList, NeedsActionItem } from './error-groups-types';
 
 export async function listReports(params?: ListReportsParams): Promise<ListReportsResponse> {
   const searchParams = new URLSearchParams();
@@ -391,4 +392,60 @@ export async function listFlaggedVideoFormats(limit = 25, offset = 0): Promise<F
 
 export async function setVideoFormat(ids: string[], format: 'short' | 'video' | 'auto'): Promise<ActionResult<{ results: Array<{ id: string; changed: boolean; error?: string }> }>> {
   return mutate('/api/video-format/set', 'POST', { ids, format });
+}
+
+// ---------- Errors (errors:read / errors:manage) ----------
+
+export async function listErrorGroups(query: string): Promise<ErrorGroupList> {
+  return fetchAdmin<ErrorGroupList>(`/api/errors/groups${query ? `?${query}` : ''}`);
+}
+
+export async function getErrorCounts(): Promise<ErrorCounts> {
+  return fetchAdmin<ErrorCounts>('/api/errors/counts');
+}
+
+export async function getErrorFacets(): Promise<ErrorFacets> {
+  return fetchAdmin<ErrorFacets>('/api/errors/facets');
+}
+
+/** The group of a reference a user quoted, or null when it is unknown. */
+export async function findErrorRef(ref: string): Promise<string | null> {
+  try {
+    return (await fetchAdmin<{ groupId: string }>(`/api/errors/refs/${encodeURIComponent(ref)}`)).groupId;
+  } catch (error) {
+    if (error instanceof AdminApiError && error.status === 404) return null;
+    throw error;
+  }
+}
+
+export async function getErrorGroup(id: string): Promise<ErrorGroupDetail> {
+  return fetchAdmin<ErrorGroupDetail>(`/api/errors/groups/${encodeURIComponent(id)}`);
+}
+
+/** Status and/or assignee ("me" assigns to the caller, null unassigns). */
+export async function updateErrorGroup(id: string, patch: { status?: ErrorStatus; assignee?: 'me' | null }): Promise<ActionResult<{ group: ErrorGroup }>> {
+  return mutate(`/api/errors/groups/${encodeURIComponent(id)}`, 'PATCH', patch);
+}
+
+export async function addErrorGroupNote(id: string, body: string): Promise<ActionResult<unknown>> {
+  return mutate(`/api/errors/groups/${encodeURIComponent(id)}/notes`, 'POST', { body });
+}
+
+/** Deletes a release E2E test group by one of its references (admin-api refuses real groups). */
+export async function deleteTestErrorGroup(ref: string): Promise<ActionResult<{ deleted: number }>> {
+  try {
+    const data = await fetchAdmin<{ deleted: number }>(`/api/errors/test-groups/${encodeURIComponent(ref)}`, { method: 'DELETE' });
+    return { ok: true, data };
+  } catch (error) {
+    if (error instanceof AdminApiError) return { ok: false, status: error.status, error: error.message };
+    return { ok: false, status: 500, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
+export async function retryNeedsAction(id: string): Promise<ActionResult<{ outcome: { ok: boolean; status: string; result: string }; action: NeedsActionItem }>> {
+  return mutate(`/api/errors/actions/${encodeURIComponent(id)}/retry`, 'POST', {});
+}
+
+export async function dismissNeedsAction(id: string): Promise<ActionResult<{ action: NeedsActionItem }>> {
+  return mutate(`/api/errors/actions/${encodeURIComponent(id)}`, 'PATCH', { status: 'dismissed' });
 }

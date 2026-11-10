@@ -18,7 +18,8 @@ describe('processing health', () => {
       for (const key of Object.keys(en[group])) {
         const value = (ar[group] as Record<string, string>)[key];
         assert.ok(value, `${group}.${key} missing in Arabic`);
-        if (!/^(colBunny)$/.test(key)) assert.match(value, ARABIC, `${group}.${key} is not Arabic`);
+        // colBunny is a brand name; timelineHour is placeholders only
+        if (!/^(colBunny|timelineHour)$/.test(key)) assert.match(value, ARABIC, `${group}.${key} is not Arabic`);
       }
     }
   });

@@ -44,6 +44,11 @@
     "ADMIN_API_URL": "https://admin.api.qa.alummahnow.net",
     "NEXT_PUBLIC_API_URL": "https://videos.api.qa.alummahnow.net",
     "NEXT_PUBLIC_BASE_URL": "https://admin.qa.alummahnow.net",
+    "ERRORS_INGEST_URL": "https://admin.api.qa.alummahnow.net/internal/errors",
     "ClientId": "b24e39de-601d-463b-b50d-37a0a94e986b"
-  }
+  },
+  "secrets_store_secrets": [
+    // X-API-Key for admin-api /internal/errors (app/api/errors/route.ts, instrumentation.ts)
+    { "binding": "INTERNAL_API_KEY", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "internal-api-key-qa" }
+  ]
 }

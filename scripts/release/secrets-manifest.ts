@@ -76,7 +76,7 @@ function envs(app: string, qa: string, spec: Make): WorkerSecrets[] {
 
 export const SECRETS_MANIFEST: WorkerSecrets[] = [
 	...envs('web', 'al-ummah-web-qa', { required: [{ ...INTERNAL_API_KEY, purpose: 'Secrets Store internal-api-key[-qa|-stage]; X-API-Key of the Contact us route to admin-api /internal/contact' }], clientIdVars: CLIENT_REQUIRED }),
-	...envs('admin-web', 'al-ummah-admin-web-qa', { clientIdVars: CLIENT_REQUIRED }),
+	...envs('admin-web', 'al-ummah-admin-web-qa', { required: [{ ...INTERNAL_API_KEY, purpose: 'Secrets Store internal-api-key[-qa|-stage]; X-API-Key of browser and SSR error reports to admin-api /internal/errors' }], clientIdVars: CLIENT_REQUIRED }),
 	...envs('api-videos', 'videos-qa', { required: API_VIDEOS_SECRETS, clientIdVars: CLIENT_OPTIONAL }),
 	...envs('admin-api', 'al-ummah-admin-api-qa', {
 		required: [
