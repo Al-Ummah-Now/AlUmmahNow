@@ -77,6 +77,14 @@ test.describe('Release: friendly errors and the admin Errors page', () => {
       }).toPass({ timeout: 90000, intervals: [3000, 5000, 10000] });
 
       await expect(page.getByTestId('error-test-chip')).toBeVisible();
+      // Groups are per fingerprint, not per run, and a test event never reopens
+      // a group: a run stopped between resolve and delete leaves it resolved.
+      // Reopen it first, so resolving is still checked.
+      const status = page.getByTestId('error-status');
+      if (['resolved', 'ignored'].includes((await status.getAttribute('data-status')) ?? '')) {
+        await page.getByTestId('error-action-reopen').click();
+        await expect(status).toHaveAttribute('data-status', 'new', { timeout: 15000 });
+      }
       await page.getByTestId('error-action-resolve').click();
       await expect(page.getByTestId('error-status')).toHaveAttribute('data-status', 'resolved', { timeout: 15000 });
 

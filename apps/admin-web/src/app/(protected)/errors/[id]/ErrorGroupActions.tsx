@@ -94,8 +94,11 @@ export function ErrorGroupActions({ id, actions, testRef = null }: { id: string;
                 setError(t('errorsPage.failed'));
                 return;
               }
+              // No router.refresh() after the push: dispatched while the Server
+              // Action is still settling in the router, the refresh runs for this
+              // (deleted) group's URL and cancels the navigation, so the admin
+              // stayed on the group. /errors is dynamic: the push loads it fresh.
               router.push('/errors');
-              router.refresh();
             }}
             data-testid="error-delete-test-group"
           >

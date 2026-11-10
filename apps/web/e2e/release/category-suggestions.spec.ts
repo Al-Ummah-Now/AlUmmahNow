@@ -22,6 +22,7 @@ import { releaseEnv, sinkEmail, target, TEST_PASSWORD } from './targets';
 import { apiFetch, completeRegistration, createProfile, signUpOnWeb, type Locale, type WebUser } from './web-session';
 import { fillSecret } from './secret-fill';
 import { grantCreatorTier } from './creator-tier';
+import { createChannelInMenu } from './account-menu';
 
 // Signs users in through the auth server: traces would hold the typed password and code
 test.use({ trace: 'off' });
@@ -69,6 +70,25 @@ async function createChannel(user: WebUser): Promise<string> {
   return id as string;
 }
 
+/**
+ * A fresh uploader as the upload page needs one: a Creator (uploading is by
+ * invitation) with a channel in the web session (without one the page says
+ * "Channel required"), created in the account menu as users do.
+ */
+async function newUploader(page: Page, prefix: string, locale: Locale): Promise<WebUser & { channelId: string }> {
+  const user = await signUpOnWeb(page, prefix, locale);
+  await createProfile(user);
+  await grantCreatorTier(user);
+  const channelId = await createChannelInMenu(page, user, `Release E2E categories ${prefix} ${Date.now().toString(36)}`);
+  return { ...user, channelId };
+}
+
+/** Nothing is uploaded: the uploader's channel is removed afterwards (soft: never hides the test's own failure). */
+async function deleteChannel(user: WebUser & { channelId: string }): Promise<void> {
+  const res = await apiFetch(user, `/api/channels/${user.channelId}`, { method: 'DELETE', headers: { channelId: user.channelId } });
+  expect.soft(res.status, `DELETE /api/channels/${user.channelId}: ${await res.clone().text()}`).toBeLessThan(300);
+}
+
 const LOCALES: Array<{ locale: Locale; title: string; badge: RegExp }> = [
   { locale: 'en', title: 'Rulings of fasting while travelling', badge: /Suggested by AI/ },
   { locale: 'ar', title: 'أحكام الصيام في السفر', badge: /اقترحه الذكاء الاصطناعي/ },
@@ -78,51 +98,54 @@ test.describe('Release: AI category suggestions', () => {
   for (const { locale, title, badge } of LOCALES) {
     test(`upload form preselects the AI's category and the uploader changes it (${locale})`, async ({ page }, info) => {
       hookOnly();
-      const user = await signUpOnWeb(page, `rel-cat-${locale}`, locale);
-      await createProfile(user);
-      // Uploading is by invitation: an admin gives the fresh user the Creator tier
-      await grantCreatorTier(user);
-      await acceptConsent(page);
-      await openUploadForm(page, locale);
+      const user = await newUploader(page, `rel-cat-${locale}`, locale);
+      try {
+        await acceptConsent(page);
+        await openUploadForm(page, locale);
 
-      await fillTitle(page, locale, `${title} [e2e-category:fiqh] ${Date.now().toString(36)}`);
-      const select = page.getByTestId('category-select');
-      await expect(select).toHaveValue('fiqh', { timeout: AI_TIMEOUT });
-      const suggested = page.getByTestId('category-ai-suggested');
-      await expect(suggested).toBeVisible();
-      await expect(suggested).toContainText(badge);
-      await suggested.scrollIntoViewIfNeeded();
-      await shot(page, info, `upload-ai-preselected-${locale}`);
+        await fillTitle(page, locale, `${title} [e2e-category:fiqh] ${Date.now().toString(36)}`);
+        const select = page.getByTestId('category-select');
+        await expect(select).toHaveValue('fiqh', { timeout: AI_TIMEOUT });
+        const suggested = page.getByTestId('category-ai-suggested');
+        await expect(suggested).toBeVisible();
+        await expect(suggested).toContainText(badge);
+        await suggested.scrollIntoViewIfNeeded();
+        await shot(page, info, `upload-ai-preselected-${locale}`);
 
-      // The uploader's choice wins and is no longer marked as the AI's
-      await select.selectOption('ramadan');
-      await expect(select).toHaveValue('ramadan');
-      await expect(suggested).toBeHidden();
-      // Later text changes never override it
-      await fillTitle(page, locale, `${title} [e2e-category:aqeedah] ${Date.now().toString(36)}`);
-      await page.waitForTimeout(3000);
-      await expect(select).toHaveValue('ramadan');
+        // The uploader's choice wins and is no longer marked as the AI's
+        await select.selectOption('ramadan');
+        await expect(select).toHaveValue('ramadan');
+        await expect(suggested).toBeHidden();
+        // Later text changes never override it
+        await fillTitle(page, locale, `${title} [e2e-category:aqeedah] ${Date.now().toString(36)}`);
+        await page.waitForTimeout(3000);
+        await expect(select).toHaveValue('ramadan');
+      } finally {
+        await deleteChannel(user);
+      }
     });
   }
 
   test('when the AI is unsure the form offers its top options instead of preselecting (ar)', async ({ page }, info) => {
     hookOnly();
-    const user = await signUpOnWeb(page, 'rel-cat-low', 'ar');
-    await createProfile(user);
-    await grantCreatorTier(user);
-    await acceptConsent(page);
-    await openUploadForm(page, 'ar');
+    const user = await newUploader(page, 'rel-cat-low', 'ar');
+    try {
+      await acceptConsent(page);
+      await openUploadForm(page, 'ar');
 
-    await fillTitle(page, 'ar', `درس عام [e2e-category:low] ${Date.now().toString(36)}`);
-    const options = page.getByTestId('category-ai-options');
-    await expect(options).toBeVisible({ timeout: AI_TIMEOUT });
-    await expect(page.getByTestId('category-select')).toHaveValue('');
-    await expect(options.getByTestId('category-ai-option')).toHaveCount(3);
-    await shot(page, info, 'upload-ai-options-ar');
+      await fillTitle(page, 'ar', `درس عام [e2e-category:low] ${Date.now().toString(36)}`);
+      const options = page.getByTestId('category-ai-options');
+      await expect(options).toBeVisible({ timeout: AI_TIMEOUT });
+      await expect(page.getByTestId('category-select')).toHaveValue('');
+      await expect(options.getByTestId('category-ai-option')).toHaveCount(3);
+      await shot(page, info, 'upload-ai-options-ar');
 
-    await options.locator('[data-category="dawah"]').click();
-    await expect(page.getByTestId('category-select')).toHaveValue('dawah');
-    await expect(options).toBeHidden();
+      await options.locator('[data-category="dawah"]').click();
+      await expect(page.getByTestId('category-select')).toHaveValue('dawah');
+      await expect(options).toBeHidden();
+    } finally {
+      await deleteChannel(user);
+    }
   });
 
   test('a video without a category gets the AI\'s, shown to its owner as a suggestion; an admin accepts it', async ({ page, browser }, info) => {
