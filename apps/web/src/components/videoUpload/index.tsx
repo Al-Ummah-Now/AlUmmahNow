@@ -1,5 +1,7 @@
 'use client';
 import { logger } from '@/lib/logger-client';
+import { withoutErrorForwarding } from '@/lib/errors/reporter';
+import { reportUploadError, uploadErrorMessage, type UploadStep } from '@/lib/upload/report-upload-error';
 import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { ResilientUpload, grantedUploadUrl, reportUploadFailure, requestUploadResume, tusEndpointFor, type ReauthoriseResult } from "@/lib/upload/resilient-tus";
 import { findRememberedUpload, forgetUpload, rememberUpload } from "@/lib/upload/resume-store";
@@ -72,7 +74,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
   resumeVideoId,
   resumeTitle,
 }) => {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
 
   const [isDragOver, setIsDragOver] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -221,7 +223,26 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
 
   // Moves the form into the error state (keeping the last progress) and
   // notifies the page so it can show the failure banner.
-  const reportFailure = (message: string) => {
+  // Step of the running upload, reported with a failure
+  const uploadStepRef = useRef<UploadStep>('initiate');
+
+  /**
+   * Every failure of this form: reported to the admin Errors page (step,
+   * file size and type, HTTP status), shown as a friendly message with the
+   * reference. Our own translated messages are kept; raw errors never shown.
+   */
+  const reportFailure = (error: unknown, step: UploadStep = uploadStepRef.current) => {
+    const e = (error ?? {}) as { message?: string; status?: number; serverRef?: string };
+    const ref = reportUploadError(step, error, {
+      flow: 'single',
+      ...(selectedFile ? { file: selectedFile } : {}),
+      ...(typeof e.status === 'number' ? { status: e.status } : {}),
+      ...(e.serverRef ? { serverRef: e.serverRef } : {}),
+    });
+    withoutErrorForwarding(() => logger.error(`[VideoUpload] ${step} failed`, { ref, error }));
+    const own = new Set<string>([t.upload.sessionMissing, t.upload.authTokenMissing, t.upload.completeFailed, t.upload.processingFailed].filter(Boolean));
+    const friendly = e.message && own.has(e.message) ? e.message : t.errors.uploadFailed;
+    const message = uploadErrorMessage(friendly, ref, lang);
     setUploadProgress(prev => ({
       percentage: prev?.percentage || 0,
       state: 'error',
@@ -294,6 +315,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
       }
 
       if (!videoId) {
+        uploadStepRef.current = 'initiate';
         // Same file again (another tab or browser, storage cleared): the server
         // reuses its unfinished video and hands back its upload at the offset
         const fingerprint = await tryFileFingerprint(selectedFile);
@@ -330,7 +352,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
         );
 
         if (!initiateResult.success || !initiateResult.result) {
-          throw new Error(initiateResult.error || VIDEO_UPLOAD_ERRORS.UPLOAD_FAILED);
+          throw Object.assign(new Error(initiateResult.error || VIDEO_UPLOAD_ERRORS.UPLOAD_FAILED), { status: initiateResult.status, serverRef: initiateResult.serverRef });
         }
 
         const { videoId: newVideoId, tusSessionId: newSessionId, libraryId, authToken, thumbnailUrl: returnedThumbnailUrl, tusUploadId } = initiateResult.result;
@@ -343,7 +365,6 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
         thumbnailUrlRef.current = returnedThumbnailUrl || '';
 
         if (!newSessionId) {
-          logger.error('[VideoUpload] Initiate response has no TUS session id', { videoId: newVideoId });
           throw new Error(t.upload.sessionMissing);
         }
 
@@ -382,8 +403,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
           setUploadProgress(prev => prev && prev.state === 'uploading' ? { ...prev, reconnecting } : prev);
         },
         onError: (error) => {
-          logger.error('TUS upload error:', error);
-          reportFailure(error.message || t.errors.uploadFailed);
+          reportFailure(error, 'tus');
         },
         onProgress: (bytesUploaded, bytesTotal) => {
           const percent = Math.round((bytesUploaded / bytesTotal) * 100);
@@ -427,9 +447,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
         onSuccess: () => {
           forgetUpload(selectedFile, channelId);
           finishUpload().catch((error: unknown) => {
-            const message = error instanceof Error && error.message ? error.message : t.errors.uploadFailed;
-            logger.error('[VideoUpload] Failed to finish upload', { videoId, error: message });
-            reportFailure(message);
+            reportFailure(error);
           });
         },
       });
@@ -439,6 +457,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
           onProgress(75);
 
           // Step 3: Complete upload
+          uploadStepRef.current = 'complete';
           const completeResult = await completeVideoUpload(
             videoId,
             channelId,
@@ -447,7 +466,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
           );
 
           if (!completeResult.success) {
-            throw new Error(completeResult.error || t.upload.completeFailed);
+            throw Object.assign(new Error(completeResult.error || t.upload.completeFailed), { status: completeResult.status, serverRef: completeResult.serverRef });
           }
 
           // The bytes are uploaded. Processing continues on the server (its
@@ -486,14 +505,12 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
                 logger.info('Video scheduled successfully:', schedulingInfo);
                 setScheduleError(null);
               } else {
-                const errorMsg = scheduleResult?.error || t.errors.genericError;
-                logger.warn('Failed to schedule video:', errorMsg);
-                setScheduleError(t.upload.scheduleFailed.replace('{error}', errorMsg));
+                const ref = reportUploadError('schedule', scheduleResult?.error || 'Scheduling failed', { flow: 'single', videoId, ...(selectedFile ? { file: selectedFile } : {}) });
+                setScheduleError(t.upload.scheduleFailed.replace('{error}', uploadErrorMessage(t.errors.genericError, ref, lang)));
               }
             } catch (schedError) {
-              const errorMsg = schedError instanceof Error ? schedError.message : t.errors.genericError;
-              logger.warn('Error scheduling video:', schedError);
-              setScheduleError(t.upload.scheduleFailed.replace('{error}', errorMsg));
+              const ref = reportUploadError('schedule', schedError, { flow: 'single', videoId, ...(selectedFile ? { file: selectedFile } : {}) });
+              setScheduleError(t.upload.scheduleFailed.replace('{error}', uploadErrorMessage(t.errors.genericError, ref, lang)));
             }
           }
 
@@ -538,11 +555,11 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
       };
 
       tusUploadRef.current = upload;
+      uploadStepRef.current = 'tus';
       await upload.start();
 
     } catch (error: unknown) {
-      const err = error as { message?: string };
-      reportFailure(err.message || t.errors.uploadFailed);
+      reportFailure(error);
     }
   };
 

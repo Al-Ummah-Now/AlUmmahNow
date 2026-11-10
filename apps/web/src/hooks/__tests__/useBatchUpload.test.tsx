@@ -201,8 +201,8 @@ describe('useBatchUpload', () => {
     await act(async () => {
       await hook.result.current.addFiles([mp4('a.mp4')]);
     });
-    expect(onError).toHaveBeenCalledWith(EN_TRANSLATIONS.batch.errors.initiateFailed);
-    expect(logger.error).toHaveBeenCalledWith('[useBatchUpload] Failed to add files', expect.anything());
+    expect(onError).toHaveBeenCalledWith(expect.stringMatching(/^Failed to initialize batch upload\. Please try again\. \(Reference: ERR-[A-Z0-9]{4}-[A-Z0-9]{4}\)$/));
+    expect(logger.error).toHaveBeenCalledWith('[useBatchUpload] initiate failed', expect.objectContaining({ ref: expect.stringMatching(/^ERR-/) }));
     expect(hook.result.current.isInitiating).toBe(false);
   });
 
@@ -228,7 +228,7 @@ describe('useBatchUpload', () => {
     await act(async () => {
       await hook.result.current.startUpload();
     });
-    expect(onError).toHaveBeenCalledWith(EN_TRANSLATIONS.errors.uploadFailed);
+    expect(onError).toHaveBeenCalledWith(expect.stringMatching(/^Upload failed \(Reference: ERR-[A-Z0-9]{4}-[A-Z0-9]{4}\)$/));
     expect(onError).not.toHaveBeenCalledWith('raw boom');
     expect(hook.result.current.isUploading).toBe(false);
     spy.mockRestore();
@@ -242,6 +242,6 @@ describe('useBatchUpload', () => {
     });
     await uploadAll(hook);
     expect(onError).not.toHaveBeenCalled();
-    expect(logger.error).toHaveBeenCalledWith('[useBatchUpload] Complete upload failed', expect.objectContaining({ error: 'raw 500' }));
+    expect(logger.error).toHaveBeenCalledWith('[useBatchUpload] complete failed', expect.objectContaining({ error: 'raw 500', videoId: 'v43' }));
   });
 });

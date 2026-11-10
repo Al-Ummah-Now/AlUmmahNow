@@ -46,6 +46,11 @@ export interface ClientReporterOptions {
   /** Probability a background event of this kind is sent (default: 0.25 for network failures, 1 otherwise). */
   sampleRate?: (kind: ErrorKind, error: unknown) => number;
   flushDelayMs?: number;
+  /**
+   * Errors the window listeners (install) must leave alone because another
+   * handler reports them (e.g. version skew, reported by the skew recovery).
+   */
+  skip?: (error: unknown) => boolean;
   /** Injected in tests. */
   transport?: (body: string, useBeacon: boolean) => void;
   random?: () => number;
@@ -62,6 +67,8 @@ export interface ClientReporter {
   flush(useBeacon?: boolean): void;
   /** window error / unhandledrejection listeners and flush on page hide. Returns an uninstall function. */
   install(onError?: (error: unknown, kind: ErrorKind) => void): () => void;
+  /** True when this exact error object was already reported (avoids sending it twice). */
+  wasReported(error: unknown): boolean;
 }
 
 const MAX_BACKGROUND = 30;
@@ -98,6 +105,7 @@ export function createErrorReporter(options: ClientReporterOptions): ClientRepor
   const sampleRate = options.sampleRate ?? ((kind: ErrorKind, error: unknown) => (kind === 'fetch' && /fetch|network|load failed/i.test(messageOf(error)) ? 0.25 : kind === 'rejection' ? 0.5 : 1));
   const queue: ErrorEventInput[] = [];
   const seen = new Map<string, { sent: number; folded: number; last: ErrorEventInput }>();
+  const reportedObjects = new WeakSet<object>();
   let background = 0;
   let timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -132,6 +140,7 @@ export function createErrorReporter(options: ClientReporterOptions): ClientRepor
   function report(error: unknown, opts: ReportOptions = {}): string {
     const ref = opts.ref ?? newErrorRef();
     try {
+      if (error && typeof error === 'object') reportedObjects.add(error);
       const err = error instanceof Error ? error : null;
       const stack = err?.stack;
       if (!opts.shown && isIgnorableError(error, stack)) return ref;
@@ -201,12 +210,14 @@ export function createErrorReporter(options: ClientReporterOptions): ClientRepor
         return;
       }
       const error = ev.error ?? ev.message;
+      if (options.skip?.(error)) return;
       const kind = classifyKind(error, 'unhandled');
       report(error, { kind });
       onError?.(error, kind);
     };
     const onRejection = (e: unknown) => {
       const reason = (e as { reason?: unknown }).reason;
+      if (options.skip?.(reason)) return;
       const kind = classifyKind(reason, 'rejection');
       report(reason, { kind });
       onError?.(reason, kind);
@@ -261,5 +272,6 @@ export function createErrorReporter(options: ClientReporterOptions): ClientRepor
     return ref;
   }
 
-  return { report, needsAction, flush, install };
+  const wasReported = (error: unknown) => !!error && typeof error === 'object' && reportedObjects.has(error);
+  return { report, needsAction, flush, install, wasReported };
 }

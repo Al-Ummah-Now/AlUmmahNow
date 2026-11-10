@@ -29,6 +29,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { ContactTopicKey } from '@al-ummah/shared-types';
+import { errorScreenStrings, parseErrorRef } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { MAIN_CONTENT_ID } from '@/components/SkipLinks';
@@ -73,7 +74,11 @@ export function ContactPage() {
     name: user?.name || '',
     email: accountEmail,
     topic: topicFromParam(params?.get('topic')),
-    message: '',
+    // From an error screen: the reference, so support finds what happened
+    message: (() => {
+      const ref = parseErrorRef(params?.get('ref') ?? '');
+      return ref ? `${errorScreenStrings(params?.get('lang') ?? (typeof document !== 'undefined' ? document.documentElement.lang : 'en')).reference}: ${ref}\n\n` : '';
+    })(),
   });
   const [errors, setErrors] = useState<ContactErrors>({});
   const [showSummary, setShowSummary] = useState(false);

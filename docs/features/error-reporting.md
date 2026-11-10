@@ -121,23 +121,45 @@ Queue consumers: report in the branch where a message is given up
 
 ### In the browser (web, admin-web)
 
-Each app has one reporter, created in `src/lib/errors/reporter.ts` with the
-app's context (release, Worker version, route, locale, theme, `usr_` id) and
-installed by `ErrorReportingProvider` (window `error`, `unhandledrejection`,
-failed `/_next/` chunk loads, flush on page hide).
+**Every client-side error path reports.** Each app has one reporter, created
+in `src/lib/errors/reporter.ts` with the app's context (release
+`NEXT_PUBLIC_RELEASE`, Worker version, environment, route, locale, theme,
+`usr_` id) and installed by `ErrorReportingProvider` in the root layout.
+These are wired in already:
+
+| Path | How it reports |
+| --- | --- |
+| Uncaught errors, unhandled rejections, failed `/_next/` chunk loads | window listeners (`install()`) |
+| `logger.error()` from `@/lib/logger-client` or `@/lib/logger` (browser) | forwarded automatically (`forwardLoggedError`, kind `caught`): the Error in `data` (or `data.error`), plus the log message and primitive fields of `data` as context |
+| Error boundaries (`FriendlyError`) | kind `boundary`; a server render error keeps the digest reference |
+| Version skew | `lib/version-skew/report.ts` `reportVersionSkew` (kind `skew`), then the skew recovery |
+| Uploads (`useBatchUpload`, `BatchUploadManager`, `components/videoUpload`) | `lib/upload/report-upload-error.ts`: step (`auth`, `resume`, `initiate`, `queue`, `start`, `tus`, `retry`, `complete`, `schedule`), file count, total and file size, MIME type, HTTP status, the API's own reference, bytes sent; never file names |
+| API helpers (`lib/api/api-client.ts`, `lib/api/upload-client.ts`) | kind `fetch` with endpoint, method, status and the API's `X-Error-Ref` (401/404 are not errors) |
+| Server side (render, route handlers, Server Actions) | `src/instrumentation.ts` `onRequestError` |
+
+Delivery: shown errors are sent at once; background ones are batched,
+deduplicated (3 in full, then counted) and sampled (network failures 25%),
+at most 30 a page, and flushed with `sendBeacon` when the page is hidden.
+They go to the same-origin `/api/errors` route, which adds the internal key,
+the IP (per-IP rate limit in admin-api, never stored) and user agent, and
+queues them in admin-api.
 
 ```ts
-import { reportError, reportNeedsAction } from '@/lib/errors/reporter';
+import { reportError, reportNeedsAction, withoutErrorForwarding } from '@/lib/errors/reporter';
 
-// A failure the UI handled (shows its own message): report it, get the reference to show.
-const ref = reportError(error, { kind: 'fetch', status: res.status, extra: { endpoint: 'comments' } });
+// A failure the UI handles: report it and show the reference with your own friendly message.
+const ref = reportError(error, { kind: 'fetch', shown: true, status: res.status, extra: { endpoint: 'comments' } });
+
+// You report it yourself with better context: keep your own log line local.
+withoutErrorForwarding(() => logger.error('[comments] post failed', { ref, error }));
 
 // Something only an admin can fix (no Retry from the browser: retry specs from browsers are dropped).
 reportNeedsAction({ key: `upload-finalise:${videoId}`, source: 'upload', title: 'Upload could not be finalised', itemUrl: `/videos/${videoId}` });
 ```
 
 Do not show `error.message` to users. Show the friendly screen
-(`FriendlyError`) or your own copy, plus the reference.
+(`FriendlyError`) or your own copy plus the reference
+(`uploadErrorMessage(friendly, ref, lang)` for uploads).
 
 ### Retry actions
 

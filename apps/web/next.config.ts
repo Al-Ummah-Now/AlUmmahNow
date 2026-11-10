@@ -14,7 +14,14 @@ const joseWebCrypto = path.join(
 /** @type {import('next').NextConfig} */
 
 const nextConfig = {
-    productionBrowserSourceMaps: true, // Enable source maps in production for better error tracking
+    // Browser source maps: the release uploads them privately to R2 for the admin
+    // Errors page and deletes them from the deployed assets (scripts/release/upload-sourcemaps.ts)
+    productionBrowserSourceMaps: true,
+
+    // Build id sent with every client error report; source maps are stored under it
+    env: {
+        NEXT_PUBLIC_RELEASE: (process.env.GITHUB_SHA || process.env.RELEASE_SHA || 'dev').slice(0, 12),
+    },
 
     // Enable server-side source maps with webpack (more stable than Turbopack for Cloudflare Workers)
     webpack: (config: Record<string, unknown>, { isServer }: { isServer: boolean }) => {

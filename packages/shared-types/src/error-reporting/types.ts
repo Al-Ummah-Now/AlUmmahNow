@@ -24,7 +24,7 @@ export type ErrorApp = (typeof ERROR_APPS)[number];
  * - action: a "needs action" item (failed job, dead-lettered message, email not sent, AI step failed,
  *   admin job failed): listed on the Errors page with a link to the item and, when given, a Retry button
  */
-export const ERROR_KINDS = ['boundary', 'unhandled', 'rejection', 'chunk', 'skew', 'fetch', 'http', 'player', 'upload', 'action'] as const;
+export const ERROR_KINDS = ['boundary', 'unhandled', 'rejection', 'chunk', 'skew', 'fetch', 'http', 'player', 'upload', 'action', 'caught'] as const;
 export type ErrorKind = (typeof ERROR_KINDS)[number];
 
 /** Admin workflow status of a group. */

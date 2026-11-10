@@ -1,47 +1,46 @@
 /**
  * Route error boundaries for /en/live and /ar/live (app/{en,ar}/live/error.tsx).
  * They only render after a runtime error, which E2E cannot trigger against a
- * deployed build, so they are covered here.
+ * deployed build, so they are covered here: the friendly screen, reported to
+ * the admin Errors page, never the raw message.
  */
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import LiveError from '../en/live/error';
 import LiveErrorAR from '../ar/live/error';
 
-jest.mock('@/lib/logger-client', () => ({
-  logger: { error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() },
-}));
-
-import { logger } from '@/lib/logger-client';
+const report = jest.fn((..._a: unknown[]) => 'ERR-LIVE-0001');
+jest.mock('@/lib/errors/reporter', () => ({ reportError: (...a: unknown[]) => report(...a) }));
+jest.mock('@/lib/version-skew/recovery', () => ({ recoverFromVersionSkew: () => false }));
 
 describe('live route error boundaries', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('en: shows an accessible alert, logs the error and retries via reset()', () => {
+  it('en: an accessible alert, reported, retries via reset(), no raw text', async () => {
     const reset = jest.fn();
-    render(<LiveError error={Object.assign(new Error('boom'), { digest: 'd1' })} reset={reset} />);
+    const error = new Error('boom secret internals');
+    render(<LiveError error={error} reset={reset} />);
 
     const alert = screen.getByRole('alert');
-    expect(alert).toHaveAttribute('aria-labelledby', 'error-title');
+    expect(alert).toHaveAttribute('aria-labelledby', 'friendly-error-title');
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Something went wrong');
-    expect(screen.getByRole('link', { name: 'Go to home page' })).toHaveAttribute('href', '/en');
-    expect(logger.error).toHaveBeenCalledWith('Live page error', expect.objectContaining({ message: 'boom', digest: 'd1' }));
+    expect(screen.getByRole('link', { name: 'Go to home' })).toHaveAttribute('href', '/en');
+    await waitFor(() => expect(report).toHaveBeenCalledWith(error, expect.objectContaining({ kind: 'boundary', extra: expect.objectContaining({ boundary: 'live' }) })));
+    expect(document.body.textContent).not.toContain('secret internals');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Try loading the page again' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(reset).toHaveBeenCalledTimes(1);
   });
 
-  it('ar: renders RTL Arabic copy, links to /ar and retries via reset()', () => {
+  it('ar: RTL Arabic copy, links to /ar, retries via reset()', async () => {
     const reset = jest.fn();
     render(<LiveErrorAR error={new Error('boom')} reset={reset} />);
 
-    const alert = screen.getByRole('alert');
-    expect(alert).toHaveAttribute('dir', 'rtl');
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveAttribute('dir', 'rtl'));
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('حدث خطأ ما');
-    expect(screen.getByRole('link', { name: 'الذهاب إلى الصفحة الرئيسية' })).toHaveAttribute('href', '/ar');
-    expect(logger.error).toHaveBeenCalledWith('Live page error (AR)', expect.objectContaining({ message: 'boom' }));
+    expect(screen.getByRole('link', { name: 'الصفحة الرئيسية' })).toHaveAttribute('href', '/ar');
 
-    fireEvent.click(screen.getByRole('button', { name: 'حاول تحميل الصفحة مرة أخرى' }));
+    fireEvent.click(screen.getByRole('button', { name: 'حاول مرة أخرى' }));
     expect(reset).toHaveBeenCalledTimes(1);
   });
 });

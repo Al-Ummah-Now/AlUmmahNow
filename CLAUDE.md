@@ -211,7 +211,7 @@ logger.warn('Deprecated API endpoint accessed', { endpoint, userId });
 Users never see raw errors, and failures that need a person go to the videos admin **Errors** page. Use the shared reporter (`@al-ummah/shared-types`), never a bespoke log-and-forget:
 
 - Workers: wrap fetch handlers with `withErrorReporting(app, handler)`; report handled failures with `reportServerError`; when a job gives up (last queue retry, DLQ, email not sent, AI step or admin job failed) call `reportNeedsAction` with a stable `key`, a link to the item and, where possible, a `retry` spec registered in `apps/admin-api/src/lib/errors-actions.ts`; call `resolveNeedsAction` when it later succeeds.
-- Browser (web, admin-web): `reportError` / `reportNeedsAction` from `@/lib/errors/reporter`; show `FriendlyError` (or your own copy) with the reference, never `error.message`.
+- Browser (web, admin-web): every UI error must reach the server. `logger.error()` in the browser is forwarded automatically; for failures the user sees, call `reportError(error, { shown: true, status, extra })` from `@/lib/errors/reporter` (uploads: `reportUploadError(step, error, ctx)`) and show `FriendlyError` (or your own copy) with the reference, never `error.message`.
 - Ingestion is asynchronous (queue + retry + DLQ). Full guide: `docs/features/error-reporting.md`.
 
 ### Internationalization (i18n) Standards

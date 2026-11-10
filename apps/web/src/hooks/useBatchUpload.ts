@@ -16,7 +16,8 @@ import { getClientAuthHeaders } from '@/lib/auth/client-token';
 import { getApiUrl } from '@/lib/runtime-config';
 import { logger } from '@/lib/logger-client';
 import { holdReload, recoverFromVersionSkew } from '@/lib/version-skew/recovery';
-import { reportUploadError } from '@/lib/upload/report-upload-error';
+import { withoutErrorForwarding } from '@/lib/errors/reporter';
+import { reportUploadError, uploadErrorMessage, type UploadErrorContext, type UploadStep } from '@/lib/upload/report-upload-error';
 import { MAX_BATCH_FILES, planBatchSelection, remainingSlots } from '@/lib/upload/batch-selection';
 import { useLanguage } from '@/hooks/useLanguage';
 
@@ -39,7 +40,7 @@ export function useBatchUpload({
   onUploadComplete,
   onError,
 }: UseBatchUploadOptions) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const [files, setFiles] = useState<UploadQueueItem[]>([]);
   const [overallProgress, setOverallProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
@@ -56,12 +57,27 @@ export function useBatchUpload({
   const onUploadCompleteRef = useRef(onUploadComplete);
   const onErrorRef = useRef(onError);
   const uploadFailedMessageRef = useRef(t.errors.uploadFailed);
+  const langRef = useRef(lang);
   useEffect(() => {
     channelIdRef.current = channelId;
     onUploadCompleteRef.current = onUploadComplete;
     onErrorRef.current = onError;
     uploadFailedMessageRef.current = t.errors.uploadFailed;
-  }, [channelId, onUploadComplete, onError, t]);
+    langRef.current = lang;
+  }, [channelId, onUploadComplete, onError, t, lang]);
+
+  /**
+   * Every upload failure the user sees: reported to the admin Errors page
+   * (step, file count and sizes, HTTP status), then shown as a friendly
+   * message with the reference instead of the raw error.
+   */
+  /** Reports the failure; shows the friendly message with the reference unless `friendly` is null (report only). */
+  const failUpload = useCallback((step: UploadStep, error: unknown, friendly: string | null, ctx: UploadErrorContext = {}) => {
+    const ref = reportUploadError(step, error, ctx);
+    withoutErrorForwarding(() => logger.error(`[useBatchUpload] ${step} failed`, { ref, videoId: ctx.videoId, status: ctx.status, error }));
+    if (friendly !== null) onErrorRef.current?.(uploadErrorMessage(friendly, ref, langRef.current));
+    return ref;
+  }, []);
 
   // Initialize managers
   useEffect(() => {
@@ -87,6 +103,13 @@ export function useBatchUpload({
         }
       });
 
+      // A file's transfer failed for good (after the TUS client's own retries)
+      batchManagerRef.current.onUploadError((item, error, step) => {
+        const ref = failUpload(step, error, uploadFailedMessageRef.current, { file: item.file, videoId: item.videoId, bytesUploaded: item.bytesUploaded, attempt: item.retryCount });
+        // The file's row shows the friendly message and reference, never the raw error
+        item.error = uploadErrorMessage(uploadFailedMessageRef.current, ref, langRef.current);
+      });
+
       // After TUS finishes, mark the upload complete so Bunny processing is
       // tracked (same step the single-upload flow performs).
       batchManagerRef.current.onUploadSuccess(async (item) => {
@@ -101,15 +124,17 @@ export function useBatchUpload({
           if (!result.success) {
             // The bytes are at Bunny and the TUS proxy already moved the video
             // to processing (queued, with the processing-check loop behind it):
-            // this call is only a backstop, so the user is not shown an error
-            reportUploadError('[useBatchUpload] Complete upload failed', { videoId: item.videoId, error: result.error });
+            // this call is only a backstop, so it is reported but the user is not shown an error
+            failUpload('complete', result.error || 'Complete upload failed', null, {
+              file: item.file, videoId: item.videoId, ...(result.status ? { status: result.status } : {}), ...(result.serverRef ? { serverRef: result.serverRef } : {}),
+            });
             return;
           }
           logger.info('[useBatchUpload] Upload completed', { videoId: item.videoId });
           onUploadCompleteRef.current?.(item.videoId);
         } catch (error) {
           if (recoverFromVersionSkew(error, 'batch-complete')) return;
-          reportUploadError('[useBatchUpload] Complete upload threw', { videoId: item.videoId, error });
+          failUpload('complete', error, null, { file: item.file, videoId: item.videoId });
         } finally {
           release();
         }
@@ -124,7 +149,8 @@ export function useBatchUpload({
         batchManagerRef.current.pauseAll();
       }
     };
-  }, []);
+    // failUpload is stable (no dependencies), so this still runs once
+  }, [failUpload]);
 
   /**
    * Add files to the upload queue
@@ -159,6 +185,10 @@ export function useBatchUpload({
     const toAdd = plan.toAdd;
 
     setIsInitiating(true);
+    // Which step a failure belongs to (reported with it)
+    let step: UploadStep = 'auth';
+    let initiateStatus: number | undefined;
+    let initiateRef: string | undefined;
 
     try {
       // Check device capability (for the new files only)
@@ -184,6 +214,7 @@ export function useBatchUpload({
 
       // A file picked again after a reload or a crash resumes its video (same
       // Bunny upload, at its offset) instead of becoming a new video.
+      step = 'resume';
       const resumedEntries: BatchUploadEntry[] = [];
       const freshFiles: File[] = [];
       for (const file of toAdd) {
@@ -230,6 +261,7 @@ export function useBatchUpload({
 
       let freshEntries: BatchUploadEntry[] = [];
       if (freshFiles.length > 0) {
+        step = 'initiate';
         // Fingerprints: the same file picked again (another tab or browser,
         // storage cleared) reuses its unfinished video instead of a new one
         const fingerprints = await Promise.all(freshFiles.map((file) => tryFileFingerprint(file)));
@@ -253,7 +285,9 @@ export function useBatchUpload({
         );
 
         if (!initiateResult.success || !initiateResult.result) {
-          throw new Error(initiateResult.error || 'batch initiate failed');
+          initiateStatus = initiateResult.status;
+          initiateRef = initiateResult.serverRef;
+          throw new Error(initiateResult.error || 'Batch initiate failed');
         }
 
         freshEntries = buildBatchUploadEntries({
@@ -266,6 +300,7 @@ export function useBatchUpload({
         for (const entry of freshEntries) rememberUpload(entry.file, channelId, entry.videoId);
       }
 
+      step = 'queue';
       const entries = [...resumedEntries, ...freshEntries];
 
       // Add videos to batch manager (may be none: all already uploaded)
@@ -280,12 +315,14 @@ export function useBatchUpload({
         onError?.(error.message);
         return;
       }
-      reportUploadError('[useBatchUpload] Failed to add files', { channelId, count: toAdd.length, error });
-      onError?.(t.batch.errors.initiateFailed);
+      const friendly = step === 'auth' ? t.errors.unauthorized : t.batch.errors.initiateFailed;
+      failUpload(step, error, friendly, {
+        files: toAdd, ...(initiateStatus ? { status: initiateStatus } : {}), ...(initiateRef ? { serverRef: initiateRef } : {}),
+      });
     } finally {
       setIsInitiating(false);
     }
-  }, [channelId, sharedMetadata, onError, t]);
+  }, [channelId, sharedMetadata, onError, t, failUpload]);
 
   /**
    * Remove a file from the queue
@@ -321,10 +358,11 @@ export function useBatchUpload({
         setIsUploading(false);
       }
       if (recoverFromVersionSkew(error, 'batch-start')) return;
-      reportUploadError('[useBatchUpload] Failed to start uploads', { error });
-      onError?.(uploadFailedMessageRef.current);
+      failUpload('start', error, uploadFailedMessageRef.current, {
+        files: Array.from(batchManagerRef.current?.getQueueState().values() ?? []).map((i) => i.file),
+      });
     }
-  }, [onError]);
+  }, [failUpload]);
 
   /**
    * Pause a single upload
@@ -376,10 +414,10 @@ export function useBatchUpload({
     try {
       await batchManagerRef.current.retryUpload(fileId);
     } catch (error) {
-      reportUploadError('[useBatchUpload] Failed to retry upload', { fileId, error });
-      onError?.(uploadFailedMessageRef.current);
+      const item = batchManagerRef.current?.getQueueState().get(fileId);
+      failUpload('retry', error, uploadFailedMessageRef.current, item ? { file: item.file, videoId: item.videoId } : {});
     }
-  }, [onError]);
+  }, [failUpload]);
 
   /**
    * Pause all uploads

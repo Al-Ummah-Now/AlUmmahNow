@@ -8,7 +8,6 @@ import {
 import { TusParallelManager } from './TusParallelManager';
 import { UploadOptimizer } from './UploadOptimizer';
 import { logger } from '@/lib/logger-client';
-import { reportUploadError } from './report-upload-error';
 
 
 /**
@@ -42,6 +41,8 @@ export type ProgressCallback = (progress: BatchProgress) => void;
  * Called once a file has been fully uploaded through TUS
  */
 export type UploadSuccessCallback = (item: UploadQueueItem) => void;
+/** A file failed for good: step is where (start, retry, or the TUS transfer itself). */
+export type UploadErrorCallback = (item: UploadQueueItem, error: unknown, step: 'start' | 'retry' | 'tus') => void;
 
 /**
  * A file paired with the video record and TUS config created for it by the API
@@ -62,6 +63,7 @@ export class BatchUploadManager {
   private statusCallbacks: Map<string, Set<StatusChangeCallback>>;
   private progressCallbacks: Set<ProgressCallback>;
   private successCallbacks: Set<UploadSuccessCallback> = new Set();
+  private errorCallbacks: Set<UploadErrorCallback> = new Set();
   private uploadSpeeds: Map<string, number[]>; // Track upload speeds for ETA
 
   constructor(concurrentLimit: number = 3) {
@@ -182,12 +184,12 @@ export class BatchUploadManager {
         await this.tusManager.start(item.id);
         this.updateStatus(item.id, 'uploading');
       } catch (error) {
-        reportUploadError('[BatchUploadManager] Failed to start upload', { id: item.id, videoId: item.videoId, error });
         this.updateStatus(item.id, 'failed');
         const queueItem = this.queue.get(item.id);
         if (queueItem) {
           queueItem.error = error instanceof Error ? error.message : 'Upload failed';
         }
+        this.notifyError(queueItem ?? item, error, 'start');
       }
     }
   }
@@ -248,9 +250,9 @@ export class BatchUploadManager {
       await this.tusManager.start(videoId);
       this.updateStatus(videoId, 'uploading');
     } catch (error) {
-      reportUploadError('[BatchUploadManager] Retry failed', { id: videoId, videoId: item.videoId, error });
       this.updateStatus(videoId, 'failed');
       item.error = error instanceof Error ? error.message : 'Retry failed';
+      this.notifyError(item, error, 'retry');
     }
   }
 
@@ -349,6 +351,32 @@ export class BatchUploadManager {
     return () => {
       this.successCallbacks.delete(callback);
     };
+  }
+
+  /**
+   * Register a callback fired when a file fails (useBatchUpload reports it to
+   * the admin Errors page and shows the user a message with its reference).
+   * Without a callback the failure is still logged, which reports it too.
+   */
+  onUploadError(callback: UploadErrorCallback): () => void {
+    this.errorCallbacks.add(callback);
+    return () => {
+      this.errorCallbacks.delete(callback);
+    };
+  }
+
+  private notifyError(item: UploadQueueItem | undefined, error: unknown, step: 'start' | 'retry' | 'tus'): void {
+    if (!item || this.errorCallbacks.size === 0) {
+      logger.error(`[BatchUploadManager] Upload ${step} failed`, { id: item?.id, error });
+      return;
+    }
+    this.errorCallbacks.forEach((callback) => {
+      try {
+        callback(item, error, step);
+      } catch (callbackError) {
+        logger.error('[BatchUploadManager] Upload error callback failed', { id: item.id, error: callbackError });
+      }
+    });
   }
 
   /**
@@ -472,12 +500,13 @@ export class BatchUploadManager {
         const item = this.queue.get(id);
         if (!item) return;
 
-        // The raw text is for the logs only; the row shows a friendly message
-        reportUploadError('[BatchUploadManager] Upload failed', { id, videoId: item.videoId, error: error.message });
+        // The raw text is reported (notifyError); the row shows a friendly message
         item.error = error.message;
         item.reconnecting = false;
         this.updateStatus(id, 'failed');
         this.queue.set(id, item);
+        // Before the update, so the row shows the friendly message the callback sets
+        this.notifyError(item, error, 'tus');
         this.notifyProgressUpdate();
       },
     };
