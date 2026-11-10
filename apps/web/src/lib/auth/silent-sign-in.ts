@@ -96,7 +96,7 @@ export function shouldProbe(input: { hasAppSession: boolean; flagSet: boolean; p
 
 /**
  * What the probe's answer means: sign in silently only when the auth server
- * has an active account for this browser. 401 ([]), no active account, or no
+ * has an active account for this browser. No accounts ([]), no active account, or no
  * answer (null: network, CORS) all mean "stay anonymous".
  */
 export function probeOutcome(accounts: AuthAccount[] | null): 'sign-in' | 'stay-anonymous' {

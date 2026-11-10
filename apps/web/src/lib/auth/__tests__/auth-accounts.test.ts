@@ -122,10 +122,12 @@ describe('decideFollow (a switch made in another app)', () => {
 });
 
 describe('auth server calls', () => {
-  it('lists accounts with credentials; 401 = none; network/CORS failure = unknown', async () => {
+  it('lists accounts with credentials; no session (200 [] or older 401) = none; network/CORS failure = unknown', async () => {
     const ok = respond(200, { accounts: [{ userId: 'a', email: 'a@x', isActive: true, lastUsed: 1 }, { nope: 1 }] });
     expect(await fetchAuthAccounts(AUTH, ok)).toEqual([{ userId: 'a', email: 'a@x', name: undefined, isActive: true }]);
     expect(ok).toHaveBeenCalledWith(`${AUTH}/session/accounts`, expect.objectContaining({ credentials: 'include' }));
+    // Auth answers a signed-out browser 200 {"accounts":[]} (no failed request in the console)
+    expect(await fetchAuthAccounts(AUTH, respond(200, { accounts: [] }))).toEqual([]);
     expect(await fetchAuthAccounts(AUTH, respond(401, {}))).toEqual([]);
     expect(await fetchAuthAccounts(AUTH, respond(500, {}))).toBeNull();
     const blocked = jest.fn(async () => {

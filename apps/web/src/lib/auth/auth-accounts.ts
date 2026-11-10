@@ -5,7 +5,7 @@
  * The auth server keeps every account signed in to this browser in its own
  * host-only `__session` cookie, which this app's server never sees. The page
  * asks the auth server directly, with a credentialed fetch:
- *   GET    {AUTH}/session/accounts           -> { accounts: [...] } | 401
+ *   GET    {AUTH}/session/accounts           -> { accounts: [...] } ([] when signed out; older auth: 401)
  *   POST   {AUTH}/session/switch {userId}    -> changes the active account
  *   DELETE {AUTH}/session/accounts/:userId   -> signs one account out
  * Every app's next silent /authorize signs in the active account.
@@ -60,7 +60,7 @@ export function parseAuthAccounts(body: unknown): AuthAccount[] {
 
 /**
  * The browser's accounts: a list when the auth server answered, [] when it has
- * no browser session (401), null when it could not be asked (no auth URL,
+ * no browser session (200 with an empty list; older auth answered 401), null when it could not be asked (no auth URL,
  * network, CORS): callers then rely on the local sessions alone.
  */
 export async function fetchAuthAccounts(authOrigin: string, fetchImpl: typeof fetch = fetch): Promise<AuthAccount[] | null> {

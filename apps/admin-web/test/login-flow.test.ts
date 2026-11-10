@@ -165,7 +165,7 @@ describe('account menu (auth server accounts)', () => {
     assert.deepEqual(parseAccounts({}), []);
   });
 
-  it('asks the auth server with credentials; 401 means no accounts, a network/CORS failure means unknown', async () => {
+  it('asks the auth server with credentials; no session (200 [] or older 401) means no accounts, a network/CORS failure means unknown', async () => {
     const seen: Array<{ url: string; init?: RequestInit }> = [];
     const ok = (async (url: RequestInfo | URL, init?: RequestInit) => {
       seen.push({ url: String(url), init });
@@ -175,6 +175,8 @@ describe('account menu (auth server accounts)', () => {
     assert.equal(seen[0].url, `${ISSUER}/session/accounts`);
     assert.equal(seen[0].init?.credentials, 'include');
 
+    const signedOut = (async () => new Response('{"accounts":[]}', { status: 200 })) as typeof fetch;
+    assert.deepEqual(await fetchAuthAccounts(ISSUER, signedOut), []);
     const unauthorized = (async () => new Response('{}', { status: 401 })) as typeof fetch;
     assert.deepEqual(await fetchAuthAccounts(ISSUER, unauthorized), []);
     const blocked = (async () => {
