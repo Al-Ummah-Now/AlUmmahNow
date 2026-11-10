@@ -522,15 +522,29 @@ describe('creator tiers: channels, access and admin', () => {
     assert.deepEqual([owner.via, owner.tier?.unlimited, owner.limits, owner.maxChannels], ['super_admin', true, null, null]);
   });
 
-  it('a super admin gets a stored Unlimited tier on first sight: still Unlimited when a later token lacks the role; an admin-set tier is kept', async () => {
+  it('a super admin gets a stored Unlimited row on first sight; it counts only while the role is held and is removed once revoked; admin-set tiers are kept', async () => {
     const h = await harness();
-    await creatorAccess(h.d1, 'boss', ['Super Admin']);
-    const later = await creatorAccess(h.d1, 'boss', []);
-    assert.deepEqual([later.canUpload, later.tier?.id, later.via], [true, 'unlimited', 'tier']);
+    const first = await creatorAccess(h.d1, 'boss', ['Super Admin']);
+    assert.deepEqual([first.canUpload, first.via], [true, 'super_admin']);
+    const stored = () => h.db.db.prepare("SELECT assigned_by FROM creator_tier_assignments WHERE user_id = 'boss'").get() as { assigned_by: string } | undefined;
+    assert.equal(stored()?.assigned_by, 'system:super-admin');
+    // Role revoked: nothing left, and the automatic row is gone
+    const revoked = await creatorAccess(h.d1, 'boss', []);
+    assert.deepEqual([revoked.canUpload, revoked.tier, revoked.via], [false, null, 'none']);
+    assert.equal(stored(), undefined);
+    // An admin-set tier is never overwritten or removed by the role logic
     await assignTier(h.d1, 'boss2', 'creator', 'admin-1');
     await creatorAccess(h.d1, 'boss2', ['super_admin']);
-    const kept = await creatorAccess(h.d1, 'boss2', []);
-    assert.equal(kept.tier?.id, 'creator', 'an admin-set tier is never overwritten');
+    assert.equal((await creatorAccess(h.d1, 'boss2', [])).tier?.id, 'creator');
+  });
+
+  it("an automatic super admin row never grants on someone else's channel", async () => {
+    const h = await harness();
+    await creatorAccess(h.d1, 'boss', ['Super Admin']);
+    const manager = await resolveCreator(h.d1, { userId: 'helper', roles: [], channelOwnerId: 'boss' });
+    assert.deepEqual([manager.tier, manager.via], [null, 'none']);
+    // and a manager acting there doesn't remove the owner's row
+    assert.ok(h.db.db.prepare("SELECT 1 FROM creator_tier_assignments WHERE user_id = 'boss'").get());
   });
 
   it('tier definitions fall back to the shipped defaults, validate, and cannot be deleted while held', async () => {

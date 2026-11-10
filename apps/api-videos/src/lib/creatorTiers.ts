@@ -132,10 +132,11 @@ export const SUPER_ADMIN_ASSIGNER = 'system:super-admin';
 
 /**
  * Super admins hold a stored Unlimited assignment too (owner, 2026-11-10), so
- * their access shows in the admin and doesn't depend on the role reaching
- * every request. Written once, on first sight; never overwrites a tier an
- * admin set. A failed write is logged, never blocks the request (the role
- * check above already granted Unlimited).
+ * their access shows in the admin. It is a record of the role, not a grant:
+ * resolveCreator honours it only while the token carries Super Admin and
+ * deletes it once the role is gone, so a revoked super admin keeps nothing.
+ * Written once, on first sight; never overwrites a tier an admin set. A failed
+ * write is logged, never blocks the request.
  */
 async function storeSuperAdminTier(db: D1Database, userId: string): Promise<void> {
 	try {
@@ -148,6 +149,16 @@ async function storeSuperAdminTier(db: D1Database, userId: string): Promise<void
 			.run();
 	} catch (error) {
 		logger.warn('[Creator] Could not store the super admin Unlimited tier', { userId, error: error instanceof Error ? error.message : String(error) });
+	}
+}
+
+/** Removes an automatic super admin row (the role was revoked); admin-set tiers are untouched. */
+async function dropSuperAdminTier(db: D1Database, userId: string): Promise<void> {
+	try {
+		await db.prepare('DELETE FROM creator_tier_assignments WHERE user_id = ? AND assigned_by = ?').bind(userId, SUPER_ADMIN_ASSIGNER).run();
+		logger.info('[Creator] Removed the automatic Unlimited tier of a former super admin', { userId });
+	} catch (error) {
+		logger.warn('[Creator] Could not remove a former super admin Unlimited tier', { userId, error: error instanceof Error ? error.message : String(error) });
 	}
 }
 
@@ -166,7 +177,13 @@ export async function resolveCreator(
 		return { subjectId: who.userId, tier: unlimited, via: 'super_admin' };
 	}
 	const subjectId = ownChannel ? who.userId : (who.channelOwnerId as string);
-	const assignment = await readAssignment(db, subjectId);
+	let assignment = await readAssignment(db, subjectId);
+	// An automatic super admin row is only as good as the role: it never grants
+	// on someone else's channel, and once the role is gone it is removed
+	if (assignment?.assignedBy === SUPER_ADMIN_ASSIGNER) {
+		if (subjectId === who.userId && !isSuperAdmin(who.roles)) await dropSuperAdminTier(db, subjectId);
+		assignment = null;
+	}
 	if (!assignment) {
 		// A super admin working on someone else's channel still has their own Unlimited
 		if (isSuperAdmin(who.roles)) return { subjectId: who.userId, tier: unlimited, via: 'super_admin' };
