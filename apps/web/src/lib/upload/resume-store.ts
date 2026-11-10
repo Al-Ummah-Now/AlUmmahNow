@@ -5,7 +5,10 @@
  * user picks the file again, instead of creating a new video from byte 0.
  *
  * Keyed by channel + file identity (name, size, lastModified). Entries are
- * dropped when the upload finishes or is cancelled, and after 7 days.
+ * dropped when an upload is cancelled or removed, and after 7 days. A finished
+ * batch upload keeps its entry, so picking the file again shows "already
+ * uploaded" (uploadResume answers completed) instead of a duplicate video; the
+ * single uploader forgets on finish and treats completed as a new upload.
  */
 
 export interface RememberedUpload {

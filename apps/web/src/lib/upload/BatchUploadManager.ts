@@ -8,6 +8,7 @@ import {
 import { TusParallelManager } from './TusParallelManager';
 import { UploadOptimizer } from './UploadOptimizer';
 import { logger } from '@/lib/logger-client';
+import { reportUploadError } from './report-upload-error';
 
 
 /**
@@ -83,6 +84,8 @@ export class BatchUploadManager {
     entries: BatchUploadEntry[],
     sharedMetadata: Partial<VideoUploadMetadata>
   ): Promise<void> {
+    // Every picked file may already be uploaded or queued: nothing to add
+    if (entries.length === 0) return;
     for (const config of entries) {
       const { file } = config;
       const id = this.generateId();
@@ -117,6 +120,56 @@ export class BatchUploadManager {
   }
 
   /**
+   * Show a file picked again after it was uploaded as "already uploaded"
+   * (its existing row, or a new finished row when it was uploaded before a
+   * reload). Nothing is uploaded and no video is created.
+   */
+  markAlreadyUploaded(rowId: string): void {
+    const item = this.queue.get(rowId);
+    if (!item) return;
+    item.alreadyUploaded = true;
+    this.queue.set(rowId, item);
+    this.notifyProgressUpdate();
+  }
+
+  addAlreadyUploaded(file: File, videoId: string, sharedMetadata: Partial<VideoUploadMetadata>): string {
+    const id = this.generateId();
+    this.queue.set(id, {
+      id,
+      file,
+      videoId,
+      metadata: { title: file.name, ...sharedMetadata } as VideoUploadMetadata,
+      status: 'completed',
+      progress: 100,
+      bytesUploaded: file.size,
+      bytesTotal: file.size,
+      retryCount: 0,
+      alreadyUploaded: true,
+      completedAt: new Date(),
+    });
+    this.notifyProgressUpdate();
+    return id;
+  }
+
+  /**
+   * Remove completed and cancelled rows ("Clear finished"). Pending, running,
+   * paused and failed rows stay.
+   */
+  clearFinished(): void {
+    let removed = false;
+    for (const [id, item] of this.queue.entries()) {
+      if (item.status === 'completed' || item.status === 'cancelled') {
+        this.tusManager.cancel(id);
+        this.queue.delete(id);
+        this.statusCallbacks.delete(id);
+        this.uploadSpeeds.delete(id);
+        removed = true;
+      }
+    }
+    if (removed) this.notifyProgressUpdate();
+  }
+
+  /**
    * Start all uploads in the queue
    */
   async startUploads(): Promise<void> {
@@ -129,7 +182,7 @@ export class BatchUploadManager {
         await this.tusManager.start(item.id);
         this.updateStatus(item.id, 'uploading');
       } catch (error) {
-        logger.error(`Failed to start upload ${item.id}:`, error);
+        reportUploadError('[BatchUploadManager] Failed to start upload', { id: item.id, videoId: item.videoId, error });
         this.updateStatus(item.id, 'failed');
         const queueItem = this.queue.get(item.id);
         if (queueItem) {
@@ -195,7 +248,7 @@ export class BatchUploadManager {
       await this.tusManager.start(videoId);
       this.updateStatus(videoId, 'uploading');
     } catch (error) {
-      logger.error(`Retry failed for ${videoId}:`, error);
+      reportUploadError('[BatchUploadManager] Retry failed', { id: videoId, videoId: item.videoId, error });
       this.updateStatus(videoId, 'failed');
       item.error = error instanceof Error ? error.message : 'Retry failed';
     }
@@ -419,6 +472,8 @@ export class BatchUploadManager {
         const item = this.queue.get(id);
         if (!item) return;
 
+        // The raw text is for the logs only; the row shows a friendly message
+        reportUploadError('[BatchUploadManager] Upload failed', { id, videoId: item.videoId, error: error.message });
         item.error = error.message;
         item.reconnecting = false;
         this.updateStatus(id, 'failed');

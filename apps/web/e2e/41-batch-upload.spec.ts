@@ -116,7 +116,14 @@ test.describe('Batch upload - queue', () => {
     await expect(page.getByTestId('batch-start')).toBeDisabled();
     const chooser = page.waitForEvent('filechooser');
     await page.getByTestId('batch-add-videos').click();
-    expect((await chooser).isMultiple()).toBe(true);
+    const picker = await chooser;
+    expect(picker.isMultiple()).toBe(true);
+    // Adding through the picker after a finished batch queues the file (production 2026-11-10)
+    await picker.setFiles(createTestFile(`${prefix} 4.mp4`, 64));
+    await expect(items(page)).toHaveCount(3);
+    await expect(items(page).filter({ hasText: `${prefix} 4` })).toHaveAttribute('data-status', 'pending');
+    await expect(page.getByTestId('upload-page-error')).toHaveCount(0);
+    await expect(page.getByTestId('batch-start')).toBeEnabled();
 
     // The two uploaded files exist on QA; the removed one was never uploaded
     const titles = (await listOwnVideos(userApi('single'))).map((v) => v.title).filter((t) => t.startsWith(prefix));
@@ -133,6 +140,57 @@ test.describe('Batch upload - queue', () => {
     await expect(page.getByTestId('batch-cancel-all')).toHaveCount(0);
     await expect(page.getByTestId('batch-start')).toBeDisabled();
   });
+});
+
+const ALREADY_UPLOADED = { en: 'Already uploaded', ar: 'تم رفعه من قبل' } as const;
+
+test.describe('Batch upload - more files after a finished batch', () => {
+  for (const locale of ['en', 'ar'] as const) {
+    test(`BATCH-007 uploads, adds more (one already uploaded), uploads again and clears finished (${locale})`, async ({ page }) => {
+      test.setTimeout(300000);
+      await openBatch(page, locale);
+      const input = page.getByTestId('batch-file-input');
+      const [first, second] = batchFiles(2, 32);
+
+      await input.setInputFiles([first, second]);
+      await expect(items(page)).toHaveCount(2);
+      await page.getByTestId('batch-start').click();
+      await expect(page.getByTestId('batch-queue')).toHaveAttribute('data-completed', '2', { timeout: 120000 });
+
+      // Add more: two new files plus one that is already uploaded
+      const third = createTestFile(`${prefix} 3.mp4`, 32);
+      const fourth = createTestFile(`${prefix} 4.mp4`, 32);
+      await input.setInputFiles([first, third, fourth]);
+      await expect(items(page)).toHaveCount(4);
+      await expect(page.getByTestId('upload-page-error')).toHaveCount(0);
+      const firstRow = items(page).filter({ hasText: `${prefix} 1` });
+      await expect(firstRow).toHaveCount(1);
+      await expect(firstRow).toHaveAttribute('data-status', 'completed');
+      await expect(firstRow.getByTestId('batch-file-already-uploaded')).toContainText(ALREADY_UPLOADED[locale]);
+      const videoId = await firstRow.getAttribute('data-video-id');
+      expect(videoId).toBeTruthy();
+      await expect(firstRow.getByTestId('batch-file-view-video')).toHaveAttribute('href', `/${locale}/video/${videoId}`);
+      for (const n of [3, 4]) await expect(items(page).filter({ hasText: `${prefix} ${n}` })).toHaveAttribute('data-status', 'pending');
+
+      // Upload again: only the two new files
+      await page.getByTestId('batch-start').click();
+      await expect(page.getByTestId('batch-queue')).toHaveAttribute('data-completed', '4', { timeout: 120000 });
+      await expect(page.getByTestId('upload-page-error')).toHaveCount(0);
+
+      // One video per file: picking the uploaded file again did not create a second one
+      await expect
+        .poll(async () => (await listOwnVideos(userApi('single'))).map((v) => v.title).filter((t) => t.startsWith(prefix)).sort(), { timeout: 30000 })
+        .toEqual([1, 2, 3, 4].map((n) => `${prefix} ${n}`));
+
+      // Clear finished empties the queue and brings the drop zone back; a new pick still works
+      await page.getByTestId('batch-clear-finished').click();
+      await expect(items(page)).toHaveCount(0);
+      await expect(page.getByTestId('batch-dropzone')).toBeVisible();
+      await input.setInputFiles(createTestFile(`${prefix} 5.mp4`, 32));
+      await expect(items(page)).toHaveCount(1);
+      await expect(items(page)).toHaveAttribute('data-status', 'pending');
+    });
+  }
 });
 
 test.describe('Batch upload - localization and theme', () => {
