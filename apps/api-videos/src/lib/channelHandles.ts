@@ -203,6 +203,24 @@ export async function releaseHandle(bucket: R2Bucket, handle: string | undefined
 	}
 }
 
+/**
+ * Releases `handle` after a handle change, unless the channel uses it again by
+ * now (a later change back to it), so a release that lands late does not free
+ * a handle in use (SCALABILITY-AUDIT AV-13).
+ */
+export async function releaseReplacedHandle(
+	handles: R2Bucket,
+	channels: R2Bucket,
+	handle: string | undefined | null,
+	channelId: string,
+): Promise<void> {
+	if (!handle) return;
+	const channel = await channels.get(channelId);
+	const current = channel ? ((await channel.json()) as { handle?: string }).handle : undefined;
+	if (current && handleKey(current) === handleKey(handle)) return;
+	await releaseHandle(handles, handle, channelId);
+}
+
 /** Claim the first available default handle for a channel. */
 export async function claimDefaultHandle(
 	bucket: R2Bucket,

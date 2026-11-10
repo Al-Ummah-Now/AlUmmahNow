@@ -8,7 +8,7 @@ import R2Repository from "../../lib/r2Repo";
 import { patchOwnedRecord } from '../../lib/videoWrites';
 import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from "../../base";
-import { canClaimOfficialHandles, claimHandle, handleKey, normalizeHandleInput, releaseHandle, validateHandleFormat } from "../../lib/channelHandles";
+import { canClaimOfficialHandles, claimHandle, handleKey, normalizeHandleInput, releaseReplacedHandle, validateHandleFormat } from "../../lib/channelHandles";
 import { logger } from "../../lib/logger";
 
 export class ChannelUpdate extends AuthenticatedRoute {
@@ -120,7 +120,7 @@ export class ChannelUpdate extends AuthenticatedRoute {
         const { handle: requestedHandle, contactEmail, location, ...restInput } = channelUpdateInput;
 
         // @handle claim/change (case-only changes keep the same index entry)
-        let handle = existingChannel.handle;
+        let claimed: string | undefined;
         if (requestedHandle !== undefined && normalizeHandleInput(requestedHandle) !== (existingChannel.handle || '')) {
             const allowOfficial = canClaimOfficialHandles(c.get('auth')?.payload?.roles);
             const claim = await claimHandle(c.env.channel_tabs, requestedHandle, existingChannel, { allowOfficial });
@@ -135,18 +135,16 @@ export class ChannelUpdate extends AuthenticatedRoute {
                     reason: claim.reason,
                 }, 409);
             }
-            if (existingChannel.handle && handleKey(existingChannel.handle) !== handleKey(claim.handle)) {
-                await releaseHandle(c.env.channel_tabs, existingChannel.handle, id);
-            }
             logger.info('[ChannelUpdate] Handle claimed', { channelId: id, handle: claim.handle, previous: existingChannel.handle });
-            handle = claim.handle;
+            claimed = claim.handle;
         }
 
         // Update the channel with new values, on the fresh copy with a conditional
         // write (SCALABILITY-AUDIT AV-5), so concurrent changes are not overwritten
         const saved = await patchOwnedRecord(repository, id, (fresh) => ({
             ...restInput,
-            handle,
+            // Without a handle change keep the fresh one: a concurrent change must not be reverted
+            handle: claimed ?? fresh.handle,
             // Empty strings clear optional About fields
             contactEmail: contactEmail === undefined ? fresh.contactEmail : (contactEmail || undefined),
             location: location === undefined ? fresh.location : (location || undefined),
@@ -155,6 +153,19 @@ export class ChannelUpdate extends AuthenticatedRoute {
             nameLocalized: channelUpdateInput.nameLocalized ?? fresh.nameLocalized,
             descriptionLocalized: channelUpdateInput.descriptionLocalized ?? fresh.descriptionLocalized,
         }), { ownerId: userId });
+        // SCALABILITY-AUDIT AV-13: of concurrent handle changes the last write
+        // stands; each frees the handle its write replaced, so no claim is left over
+        if (claimed) {
+            if (saved.status === 'ok') {
+                const replaced = saved.previous.handle;
+                if (replaced && handleKey(replaced) !== handleKey(claimed)) {
+                    await releaseReplacedHandle(c.env.channel_tabs, c.env.channels, replaced, id);
+                }
+            } else {
+                // Our write did not land: give back the handle we claimed for it
+                await releaseReplacedHandle(c.env.channel_tabs, c.env.channels, claimed, id);
+            }
+        }
         if (saved.status === 'missing') {
             return c.json({ success: false, error: "Channel not found" }, 404);
         }
