@@ -4,6 +4,7 @@ import { ChannelCardProps } from './types';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getLocalizedValue } from '@al-ummah/shared-types';
+import { AvatarImage, CoverImage, normalizeImageUrl } from '@/components/media/ProfileImages';
 
 /**
  * ChannelCard Component
@@ -42,25 +43,18 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
       onClick={handleView}
       dir={dir}
     >
-      {/* Channel Avatar/Cover */}
+      {/* Channel Avatar/Cover (<img>s: theme rules cannot blank them) */}
       <div
-        className="h-32 bg-gradient-to-br from-blue-500 to-purple-600 dark:from-blue-700 dark:to-purple-800 flex items-center justify-center"
-        style={{
-          backgroundImage: channel.coverUrl ? `url(${channel.coverUrl})` : undefined,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-        }}
+        className="relative h-32 overflow-hidden bg-gradient-to-br from-blue-500 to-purple-600 dark:from-blue-700 dark:to-purple-800 flex items-center justify-center"
+        data-testid="channel-card-cover"
       >
-        {!channel.coverUrl && (
-          <div
-            className="w-16 h-16 rounded-full bg-white dark:bg-gray-700 flex items-center justify-center text-2xl font-bold text-gray-800 dark:text-white"
-            style={{
-              backgroundImage: channel.avatarUrl ? `url(${channel.avatarUrl})` : undefined,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-            }}
-          >
-            {!channel.avatarUrl && name.charAt(0).toUpperCase()}
+        {normalizeImageUrl(channel.coverUrl) ? (
+          <CoverImage src={channel.coverUrl} alt="" testId="channel-card-cover-image" />
+        ) : (
+          <div className="relative w-16 h-16 rounded-full overflow-hidden bg-white dark:bg-gray-700 flex items-center justify-center text-2xl font-bold text-gray-800 dark:text-white">
+            {normalizeImageUrl(channel.avatarUrl)
+              ? <AvatarImage src={channel.avatarUrl} alt="" fallback={null} testId="channel-card-avatar-image" />
+              : name.charAt(0).toUpperCase()}
           </div>
         )}
       </div>

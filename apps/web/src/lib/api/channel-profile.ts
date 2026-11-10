@@ -43,6 +43,9 @@ export interface ChannelProfileUpdate {
   links?: ChannelLink[];
   contactEmail?: string;
   location?: string;
+  /** Empty string removes the image (uploads go through their own endpoints) */
+  avatarUrl?: string;
+  coverUrl?: string;
 }
 
 export type ChannelProfileUpdateResult =

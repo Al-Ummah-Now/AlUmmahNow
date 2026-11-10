@@ -220,7 +220,8 @@ test.describe('Profile - edit', () => {
 
     await expect.poll(async () => (await getProfile()).avatarUrl, { timeout: 60000 }).not.toBe(original.avatarUrl);
     const updated = (await getProfile()).avatarUrl!;
-    await expect(page.getByTestId('profile-avatar-upload')).toHaveAttribute('style', new RegExp(updated.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    // The avatar preview is an <img> showing the stored photo
+    await expect(page.getByTestId('profile-avatar-image')).toHaveAttribute('src', updated);
   });
 
   test('PROF-035 Arabic edit page is RTL with Arabic labels', async ({ page }) => {
