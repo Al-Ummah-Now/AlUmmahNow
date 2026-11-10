@@ -3,7 +3,7 @@ import { AUTH_CONFIG, getAuthConfig } from './auth-config';
 import { getClient } from '../lib/openauth-client';
 import { logger } from '../lib/logger';
 import { normalizeRoles, hasAdminRole, hasModeratorRole } from '../lib/roles';
-import { decodeVerifiedClaims, isTokenRevoked } from '../lib/token-revocation';
+import { decodeVerifiedClaims, isLegacyLongLivedToken, isTokenRevoked } from '../lib/token-revocation';
 
 interface AuthPayload {
   sub: string;
@@ -184,6 +184,10 @@ async function validateJWTBasic(token: string): Promise<AuthPayload | null> {
       logger.debug('JWT token expired', { exp: payload.exp, now });
       return null;
     }
+    if (isLegacyLongLivedToken(payload)) {
+      logger.debug('Rejected a legacy long-lived token', { userId: payload.sub });
+      return null;
+    }
 
     return payload;
   } catch (error) {
@@ -215,6 +219,12 @@ async function validateJWTWithSignature(token: string, env?: any): Promise<AuthP
       // The token's own times (signature already verified above)
       const claims = decodeVerifiedClaims(token);
       const userId = openAuthPayload.id || '';
+
+      // A legacy 30-day token carries the roles from its issue: 401, the client refreshes (#663)
+      if (isLegacyLongLivedToken(claims)) {
+        logger.debug('Rejected a legacy long-lived token', { userId });
+        return null;
+      }
 
       // Signed out everywhere / account deleted / suspended since this sign-in (#437)
       if (await isTokenRevoked(env.TOKEN_REVOCATIONS, { userId, authTime: claims.auth_time, iat: claims.iat })) {

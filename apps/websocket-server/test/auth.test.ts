@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { authenticateToken, canPublish, canSubscribe } from '../src/auth.ts';
+import { LEGACY_TOKEN_ISSUED_BEFORE_S, isLegacyLongLivedToken } from '../src/token-revocation.ts';
 import { ISSUER, WEB_CLIENT, makeSigner, unsignedToken } from './helpers.ts';
 
 const prodEnv = { Issuer: ISSUER, ALLOWED_CLIENT_IDS: `${WEB_CLIENT}, admin-client`, ENVIRONMENT: 'production' };
@@ -37,6 +38,23 @@ test('expired token is rejected', async () => {
   const { getKey, sign } = await makeSigner();
   const token = await sign({}, { exp: Math.floor(Date.now() / 1000) - 60 });
   assert.equal(await authenticateToken(token, prodEnv, { getKey }), null);
+});
+
+test('legacy 30-day token is rejected so the client fetches a fresh one (#663)', async () => {
+  const { getKey, sign } = await makeSigner();
+  const now = Math.floor(Date.now() / 1000);
+  const legacy = await sign({}, { iat: LEGACY_TOKEN_ISSUED_BEFORE_S - 3600, exp: now + 30 * 86400 });
+  assert.equal(await authenticateToken(legacy, prodEnv, { getKey }), null);
+  // A long-lived token from a local issuer after the cutover still connects
+  const local = await sign({}, { iat: LEGACY_TOKEN_ISSUED_BEFORE_S, exp: now + 30 * 86400 });
+  assert.equal((await authenticateToken(local, prodEnv, { getKey }))?.sub, 'user-123');
+});
+
+test('legacy token rule: over 15 minutes + 60 s slack, issued before the cutover', () => {
+  const iat = LEGACY_TOKEN_ISSUED_BEFORE_S - 3600;
+  assert.equal(isLegacyLongLivedToken({ iat, exp: iat + 961 }), true);
+  assert.equal(isLegacyLongLivedToken({ iat, exp: iat + 960 }), false);
+  assert.equal(isLegacyLongLivedToken({ exp: iat + 30 * 86400 }), false);
 });
 
 test('token without exp is rejected', async () => {

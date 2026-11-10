@@ -9,7 +9,16 @@ import { Hono } from 'hono';
 import { SignJWT, exportJWK, generateKeyPair } from 'jose';
 import { authMiddleware } from '../src/middleware/auth';
 import { __resetClientForTests } from '../src/lib/openauth-client';
-import { CACHE_MS, KV_CACHE_TTL_S, clearRevocationCache, decodeVerifiedClaims, isRevoked, isTokenRevoked } from '../src/lib/token-revocation';
+import {
+	CACHE_MS,
+	KV_CACHE_TTL_S,
+	LEGACY_TOKEN_ISSUED_BEFORE_S,
+	clearRevocationCache,
+	decodeVerifiedClaims,
+	isLegacyLongLivedToken,
+	isRevoked,
+	isTokenRevoked,
+} from '../src/lib/token-revocation';
 
 const ISSUER = 'https://auth.test.example';
 const nowS = () => Math.floor(Date.now() / 1000);
@@ -63,6 +72,18 @@ describe('revocation rules', () => {
 		assert.equal(await isTokenRevoked(broken, { userId: 'usr_a', iat: 1 }), false);
 	});
 
+	it('a legacy token lives longer than 15 minutes (+60 s slack) and was issued before the cutover (#663)', () => {
+		const before = LEGACY_TOKEN_ISSUED_BEFORE_S - 3600;
+		assert.equal(isLegacyLongLivedToken({ iat: before, exp: before + 30 * 86400 }), true);
+		assert.equal(isLegacyLongLivedToken({ iat: before, exp: before + 961 }), true);
+		assert.equal(isLegacyLongLivedToken({ iat: before, exp: before + 960 }), false, 'within the slack');
+		assert.equal(isLegacyLongLivedToken({ iat: before, exp: before + 900 }), false);
+		// A long-lived token after the cutover only comes from a local issuer without ACCESS_TOKEN_TTL
+		assert.equal(isLegacyLongLivedToken({ iat: LEGACY_TOKEN_ISSUED_BEFORE_S, exp: LEGACY_TOKEN_ISSUED_BEFORE_S + 30 * 86400 }), false);
+		assert.equal(isLegacyLongLivedToken({ exp: before + 30 * 86400 }), false);
+		assert.equal(isLegacyLongLivedToken({}), false);
+	});
+
 	it('decodes the times of a verified token', () => {
 		const payload = Buffer.from(JSON.stringify({ iat: 10, exp: 20, auth_time: 5 })).toString('base64url');
 		assert.deepEqual(decodeVerifiedClaims(`h.${payload}.s`), { iat: 10, exp: 20, auth_time: 5 });
@@ -79,15 +100,17 @@ describe('admin-api authMiddleware with the revocation list', () => {
 		clearRevocationCache();
 		const { publicKey, privateKey } = await generateKeyPair('ES256');
 		const jwk = { ...(await exportJWK(publicKey)), kid: 'k1', alg: 'ES256', use: 'sig' };
-		sign = (claims) =>
-			new SignJWT({ mode: 'access', type: 'user', properties: { id: 'usr_a', email: 'a@example.com' }, ...claims })
+		sign = (claims) => {
+			const jwt = new SignJWT({ mode: 'access', type: 'user', properties: { id: 'usr_a', email: 'a@example.com' }, ...claims })
 				.setProtectedHeader({ alg: 'ES256', kid: 'k1' })
 				.setIssuer(ISSUER)
 				.setAudience('client-1')
-				.setSubject('user:abc')
-				.setIssuedAt()
-				.setExpirationTime('15m')
-				.sign(privateKey);
+				.setSubject('user:abc');
+			// Explicit iat/exp in claims (legacy tokens) win over the 15-minute default
+			if (claims.iat === undefined) jwt.setIssuedAt();
+			if (claims.exp === undefined) jwt.setExpirationTime('15m');
+			return jwt.sign(privateKey);
+		};
 		realFetch = globalThis.fetch;
 		globalThis.fetch = (async (input: RequestInfo | URL) => {
 			const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
@@ -127,6 +150,15 @@ describe('admin-api authMiddleware with the revocation list', () => {
 		assert.equal((await call(await sign({ auth_time: nowS() - 3600 }), { TOKEN_REVOCATIONS: kv })).status, 401);
 		clearRevocationCache();
 		assert.equal((await call(await sign({ auth_time: nowS() - 5 }), { TOKEN_REVOCATIONS: kv })).status, 200);
+	});
+
+	it('rejects a legacy 30-day token with 401 so the client refreshes (#663)', async () => {
+		const iat = LEGACY_TOKEN_ISSUED_BEFORE_S - 3600;
+		const res = await call(await sign({ iat, exp: nowS() + 30 * 86400 }), {});
+		assert.equal(res.status, 401);
+		// A 15-minute token, and a long one from a local issuer after the cutover, still work
+		assert.equal((await call(await sign({}), {})).status, 200);
+		assert.equal((await call(await sign({ iat: LEGACY_TOKEN_ISSUED_BEFORE_S, exp: nowS() + 30 * 86400 }), {})).status, 200);
 	});
 
 	it('without the binding nothing changes (rollout safety)', async () => {

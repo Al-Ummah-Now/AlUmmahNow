@@ -13,7 +13,7 @@
 
 import { createRemoteJWKSet, jwtVerify, type JWTPayload, type JWTVerifyGetKey } from 'jose';
 import { logger } from './lib/logger';
-import { isTokenRevoked } from './token-revocation';
+import { isLegacyLongLivedToken, isTokenRevoked } from './token-revocation';
 
 /** Identity established for a connection. */
 export interface AuthPayload {
@@ -139,6 +139,11 @@ async function verifySignedToken(
     }
     if (!audienceAllowed(payload.aud, allowed)) {
       logger.warn('WebSocket token rejected: client not allowed', { aud: payload.aud });
+      return null;
+    }
+    // A legacy 30-day token carries the roles from its issue (#663); clients fetch a fresh token
+    if (isLegacyLongLivedToken(payload)) {
+      logger.warn('WebSocket token rejected: legacy long-lived token');
       return null;
     }
     // Signed out everywhere / account deleted / suspended since this sign-in

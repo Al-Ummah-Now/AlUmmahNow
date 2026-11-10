@@ -5,7 +5,7 @@ import { logger } from '../lib/logger';
 import { isUserScopedRoute } from '../lib/reactions';
 import { channelRoleOf } from '@al-ummah/shared-types';
 import { memberMayActAs } from '../lib/channelAccess';
-import { decodeVerifiedClaims, isTokenRevoked } from '../lib/token-revocation';
+import { decodeVerifiedClaims, isLegacyLongLivedToken, isTokenRevoked } from '../lib/token-revocation';
 
 // Type for the decoded JWT payload from OpenAuth
 interface AuthPayload {
@@ -107,6 +107,12 @@ async function validateJWTWithSignature(token: string, env?: any): Promise<AuthP
       // The token's own times (signature already verified above)
       const claims = decodeVerifiedClaims(token);
       const userId = openAuthPayload.id || '';
+
+      // A legacy 30-day token carries the roles from its issue: 401, the client refreshes (#663)
+      if (isLegacyLongLivedToken(claims)) {
+        logger.debug('Rejected a legacy long-lived token', { userId });
+        return null;
+      }
 
       // Signed out everywhere / account deleted / suspended since this sign-in (#437)
       if (await isTokenRevoked(env.TOKEN_REVOCATIONS, { userId, authTime: claims.auth_time, iat: claims.iat })) {

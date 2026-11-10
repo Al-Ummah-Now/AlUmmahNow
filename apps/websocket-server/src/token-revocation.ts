@@ -1,5 +1,5 @@
 /**
- * Token revocation check (#437). Keep in sync: the same file lives in
+ * Token revocation check (#437) and the legacy 30-day token check (#663). Keep in sync: the same file lives in
  * apps/api-videos, apps/admin-api and apps/websocket-server.
  *
  * The auth worker writes one entry per user to the TOKEN_REVOCATIONS KV when
@@ -60,6 +60,31 @@ export async function isTokenRevoked(kv: KVNamespace | undefined, token: TokenTi
 		console.warn('[revocation] Revocation list unavailable; allowing the token', String(error));
 		return false;
 	}
+}
+
+/** Access tokens are issued for 15 minutes (Auth ACCESS_TOKEN_TTL, AlUmmahNowAuth#437). */
+export const MAX_ACCESS_TOKEN_LIFETIME_S = 15 * 60;
+/** Clock and issuer slack on top of the 15 minutes. */
+export const ACCESS_TOKEN_LIFETIME_SLACK_S = 60;
+/**
+ * Every deployed Auth has issued 15-minute tokens since 2026-11-08. A longer
+ * token issued before this cutoff is an old 30-day one; later ones only come
+ * from a local issuer without ACCESS_TOKEN_TTL (development), which keeps
+ * working. Same cutoff as the web/admin-web refresh (token-refresh.ts), so a
+ * token rejected here is one those clients already refresh ahead of time.
+ */
+export const LEGACY_TOKEN_ISSUED_BEFORE_S = Date.UTC(2026, 10, 11) / 1000;
+
+/**
+ * A legacy 30-day access token (#663): its roles were frozen at issue, so a
+ * demoted admin could keep using it until it expired (by about 2026-12-08).
+ * Rejected with 401; clients refresh and get a 15-minute token with current
+ * roles. Takes the claims of an already verified token.
+ */
+export function isLegacyLongLivedToken(claims: { iat?: number; exp?: number }): boolean {
+	const { iat, exp } = claims;
+	if (typeof iat !== 'number' || typeof exp !== 'number' || !Number.isFinite(iat) || !Number.isFinite(exp)) return false;
+	return exp - iat > MAX_ACCESS_TOKEN_LIFETIME_S + ACCESS_TOKEN_LIFETIME_SLACK_S && iat < LEGACY_TOKEN_ISSUED_BEFORE_S;
 }
 
 /** Claims of a JWT that was already verified (no signature check here). */
