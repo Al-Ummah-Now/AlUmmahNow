@@ -33,8 +33,39 @@ export async function captureBuild(app: string, url: string, fetchImpl: Fetch = 
 	return { app, url, ...parseBuild(html) };
 }
 
+export interface RetryOptions {
+	attempts: number;
+	delayMs: number;
+	sleep: (ms: number) => Promise<void>;
+}
+
+/**
+ * The old build is reached through its version's preview URL. Right after a
+ * version is uploaded that URL can answer 5xx (522) or time out for a while
+ * (seen on stage when one release followed another within minutes), so a 5xx
+ * or a network error is retried. Any 4xx, and above all 404 (the old chunk is
+ * gone), fails at once: that is the breakage this check exists to catch.
+ */
+export const OLD_BUILD_RETRY: RetryOptions = { attempts: 7, delayMs: 10_000, sleep: (ms) => new Promise((r) => setTimeout(r, ms)) };
+
+async function fetchOldChunk(url: string, fetchImpl: Fetch, retry: RetryOptions): Promise<number | string> {
+	let last: number | string = 0;
+	for (let attempt = 1; attempt <= retry.attempts; attempt++) {
+		try {
+			const res = await fetchImpl(url, { headers: UA, signal: AbortSignal.timeout(20_000) });
+			await res.body?.cancel();
+			if (res.status < 500) return res.status;
+			last = res.status;
+		} catch (error) {
+			last = error instanceof Error ? error.message : String(error);
+		}
+		if (attempt < retry.attempts) await retry.sleep(retry.delayMs);
+	}
+	return last;
+}
+
 /** Checks one snapshot after the promote. At most `limit` chunks are fetched. */
-export async function checkOldBuildServed(before: BuildSnapshot, fetchImpl: Fetch = fetch, limit = 8): Promise<CheckResult> {
+export async function checkOldBuildServed(before: BuildSnapshot, fetchImpl: Fetch = fetch, limit = 8, retry: RetryOptions = OLD_BUILD_RETRY): Promise<CheckResult> {
 	const name = `skew protection (${before.app})`;
 	if (!before.deploymentId) {
 		return { name, ok: true, detail: 'the previous build has no deployment id (built before skew protection); nothing to check' };
@@ -43,10 +74,10 @@ export async function checkOldBuildServed(before: BuildSnapshot, fetchImpl: Fetc
 	const origin = new URL(before.url).origin;
 	let onlyOld = 0;
 	for (const chunk of before.chunks.slice(0, limit)) {
-		const withDpl = await fetchImpl(`${origin}${chunk}?dpl=${encodeURIComponent(before.deploymentId)}`, { headers: UA, signal: AbortSignal.timeout(20_000) });
-		await withDpl.body?.cancel();
-		if (withDpl.status !== 200) {
-			return { name, ok: false, detail: `${chunk}?dpl=${before.deploymentId} answered ${withDpl.status}: pages opened before the promote would break` };
+		const status = await fetchOldChunk(`${origin}${chunk}?dpl=${encodeURIComponent(before.deploymentId)}`, fetchImpl, retry);
+		if (status !== 200) {
+			const tries = typeof status === 'number' && status < 500 ? '' : ` (after ${retry.attempts} tries)`;
+			return { name, ok: false, detail: `${chunk}?dpl=${before.deploymentId} answered ${status}${tries}: pages opened before the promote would break` };
 		}
 		const plain = await fetchImpl(`${origin}${chunk}`, { headers: UA, signal: AbortSignal.timeout(20_000) });
 		await plain.body?.cancel();

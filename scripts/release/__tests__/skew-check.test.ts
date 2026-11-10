@@ -27,6 +27,40 @@ describe('skew check', () => {
 		assert.match(r.detail, /page-2\.js\?dpl=abc-1-1 answered 404/);
 	});
 
+	const noWait = { attempts: 3, delayMs: 0, sleep: async () => {} };
+
+	it('retries an old chunk while its preview URL is still starting (5xx, network error)', async () => {
+		let calls = 0;
+		const flaky = (async (url: string | URL) => {
+			if (String(url).includes('dpl=')) {
+				calls++;
+				if (calls === 1) return new Response('x', { status: 522 });
+				if (calls === 2) throw new Error('fetch failed');
+			}
+			return new Response('x', { status: 200 });
+		}) as unknown as typeof fetch;
+		const r = await checkOldBuildServed(before, flaky, 8, noWait);
+		assert.equal(r.ok, true, r.detail);
+	});
+
+	it('fails when the old chunk keeps answering 5xx', async () => {
+		const r = await checkOldBuildServed(before, fakeFetch((u) => (u.includes('dpl=') ? 522 : 200)), 8, noWait);
+		assert.equal(r.ok, false);
+		assert.match(r.detail, /answered 522 \(after 3 tries\)/);
+	});
+
+	it('does not retry a 404: the old chunk is gone', async () => {
+		let dplCalls = 0;
+		const r = await checkOldBuildServed(
+			before,
+			fakeFetch((u) => (u.includes('dpl=') && u.includes('page-2') ? (dplCalls++, 404) : 200)),
+			8,
+			noWait,
+		);
+		assert.equal(r.ok, false);
+		assert.equal(dplCalls, 1);
+	});
+
 	it('has nothing to check for a build from before skew protection', async () => {
 		const r = await checkOldBuildServed({ ...before, deploymentId: null }, fakeFetch(() => 500));
 		assert.equal(r.ok, true);
