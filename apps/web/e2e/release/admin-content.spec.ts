@@ -8,7 +8,7 @@
  *
  * Runs in Chrome, Firefox and WebKit (playwright.release.config.ts).
  */
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Locator, type Page } from '@playwright/test';
 import { promoteToAdmin } from './sink';
 import { sinkEmail, target, TEST_PASSWORD } from './targets';
 import { apiFetch, completeRegistration, createProfile, signUpOnWeb, type WebUser } from './web-session';
@@ -86,7 +86,7 @@ async function findInList(page: Page, url: string, row: ReturnType<Page['locator
   await expect
     .poll(
       async () => {
-        await page.goto(url);
+        await page.goto(url, { waitUntil: 'domcontentloaded' });
         return row.count();
       },
       { message: `not listed at ${url}`, timeout: 60000, intervals: [2000, 5000] },
@@ -116,7 +116,8 @@ async function expectJobSucceeded(page: Page, kind: string, count = 1): Promise<
     .toBe('succeeded');
 }
 
-async function confirm(page: Page, testId: string, opts: { reason?: string; typed?: boolean } = {}): Promise<void> {
+/** `answer`: what shows once the action is done, when the page drops its action panel (a deleted channel); default the queued notice. */
+async function confirm(page: Page, testId: string, opts: { reason?: string; typed?: boolean; answer?: Locator } = {}): Promise<void> {
   await page.getByTestId(testId).click();
   const dialog = page.getByTestId(`${testId}-dialog`);
   await expect(dialog).toBeVisible();
@@ -129,7 +130,7 @@ async function confirm(page: Page, testId: string, opts: { reason?: string; type
   // The form's submit closes the dialog and starts the action
   await expect(dialog, `${testId}: the confirm did not submit`).toBeHidden();
   // This action's own answer (an earlier "Saved" may still be on screen): the queued notice, or its error
-  const queued = page.getByTestId('content-action-message').filter({ hasText: QUEUED_NOTICE });
+  const queued = opts.answer ?? page.getByTestId('content-action-message').filter({ hasText: QUEUED_NOTICE });
   const error = page.getByTestId('content-action-error');
   await expect(queued.or(error).first(), `${testId}: no answer from the action`).toBeVisible({ timeout: 30000 });
   if (await error.first().isVisible()) throw new Error(`${testId} failed: ${await error.first().innerText()}`);
@@ -196,7 +197,7 @@ test.describe('Release: admin content management', () => {
       await expect
         .poll(
           async () => {
-            await page.goto(`${target().adminWeb}/videos?q=${encodeURIComponent(videoId)}`);
+            await page.goto(`${target().adminWeb}/videos?q=${encodeURIComponent(videoId)}`, { waitUntil: 'domcontentloaded' });
             return videoRow.count();
           },
           { message: 'deleted video is still listed', timeout: JOB_TIMEOUT, intervals: [3000] },
@@ -206,7 +207,8 @@ test.describe('Release: admin content management', () => {
 
       // Delete the channel
       await page.goto(`${target().adminWeb}/channels/${encodeURIComponent(channelId)}`);
-      await confirm(page, 'channel-delete', { typed: true });
+      // A deleted channel's page shows the deleted notice instead of its action panel
+      await confirm(page, 'channel-delete', { typed: true, answer: page.getByTestId('channel-deleted') });
       await expect(page.getByTestId('channel-deleted')).toBeVisible({ timeout: 30000 });
       await expectJobSucceeded(page, 'channel.purge');
       expect(await publicStatus(`/api/channels/${channelId}`), 'deleted channel still public').toBe(404);
