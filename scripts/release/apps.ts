@@ -94,6 +94,11 @@ export const APPS: AppRule[] = [
 				Audience: 'https://videos.api.alummahnow.net',
 				WEBSOCKET_URL: 'https://realtime.alummahnow.net',
 				CORS_ORIGINS: 'https://videos.alummahnow.net,https://alummahnow.net,https://www.alummahnow.net,https://admin.alummahnow.net,https://cms.alummahnow.net',
+				// CDN host of the Bunny library the stream secrets point at (400189); uploads
+				// get their playUrl/thumbnailUrl on it, and it is the host that is signed.
+				// A different host here 404s every new upload (2026-11-10 incident).
+				bunny_hostname: 'vz-215a1ffd-a5a.b-cdn.net',
+				BUNNY_SIGN_HOSTNAME: 'vz-215a1ffd-a5a.b-cdn.net',
 			},
 			requiredBindings: [
 				INTERNAL_API_KEY,
