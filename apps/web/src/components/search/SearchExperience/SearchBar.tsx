@@ -13,7 +13,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Clock, LayoutGrid, Search, X } from 'lucide-react';
+import { Clock, LayoutGrid, ListVideo, Search, X } from 'lucide-react';
 import type { SearchSuggestion } from '@al-ummah/shared-types';
 import { Autocomplete, type AutocompleteOption } from '@/components/ui/Autocomplete';
 import { fetchSuggestions, suggestionHref, type SuggestKind } from '@/lib/search/suggest-client';
@@ -51,7 +51,7 @@ export function suggestionOptions(suggestions: SearchSuggestion[]): Autocomplete
     subtitle: s.subtitle,
     thumbnailUrl: s.thumbnailUrl,
     thumbnailShape: s.type === 'channel' ? 'round' : s.type === 'video' ? 'wide' : s.type === 'playlist' ? 'square' : undefined,
-    icon: s.type === 'category' ? <LayoutGrid className="h-4 w-4" /> : <Search className="h-4 w-4" />,
+    icon: s.type === 'category' ? <LayoutGrid className="h-4 w-4" /> : s.type === 'playlist' ? <ListVideo className="h-4 w-4" /> : <Search className="h-4 w-4" />,
     value: s,
   }));
 }
