@@ -188,7 +188,7 @@
   "vars": {
     // Error reports to the admin Errors page (docs/features/error-reporting.md)
     "ERRORS_INGEST_URL": "https://admin.api.qa.alummahnow.net/internal/errors",
-    // Upload-session limits enforced on QA with roomy numbers, so limiter bugs show here (#290)
+    // Upload limits enforced (any value but "off"): the numbers come from each user's creator tier, edited in the videos admin (middleware/upload-limits.ts)
     "UPLOAD_RATE_LIMIT": "relaxed",
     "ZONE": "al-ummah-now-images",
     "ClientId": "c1770235-e4b6-42f3-9eb4-3c03ca111b02",

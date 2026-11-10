@@ -22,6 +22,7 @@
 import { test, expect, type Browser, type Page } from '@playwright/test';
 import { target } from './targets';
 import { apiFetch, createProfile, signUpOnWeb, type WebUser } from './web-session';
+import { grantCreatorTier } from './creator-tier';
 
 // Signs users in through the auth server: traces would hold passwords and codes
 test.use({ trace: 'off' });
@@ -37,6 +38,8 @@ async function newSignedInPage(browser: Browser, prefix: string): Promise<{ page
 }
 
 async function createChannel(user: WebUser, label: string): Promise<string> {
+  // Creating channels is by invitation: an admin makes the owner a Creator (channel members upload under it)
+  await grantCreatorTier(user);
   const res = await apiFetch(user, '/api/channels', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

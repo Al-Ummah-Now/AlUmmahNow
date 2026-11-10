@@ -78,3 +78,5 @@ export * from './error-reporting';
 export * from './legacy-profiles';
 // Per-channel roles (owner/admin/editor/moderator), separate from site roles
 export * from './channel-roles';
+// Creator tiers: who may upload and create channels (videos admin)
+export * from './creator-tiers';

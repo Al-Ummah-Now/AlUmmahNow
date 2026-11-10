@@ -14,6 +14,7 @@ import * as path from 'path';
 import { test, expect, type Page } from '@playwright/test';
 import { target } from './targets';
 import { apiFetch, createProfile, signUpOnWeb, type WebUser } from './web-session';
+import { grantCreatorTier } from './creator-tier';
 
 test.use({ trace: 'off' });
 
@@ -61,6 +62,8 @@ test.describe('Release: single and bulk uploads behave the same', () => {
     test.setTimeout(15 * 60_000);
     const user = await signUpOnWeb(page, 'rel-upload-modes');
     await createProfile(user);
+    // Uploading and creating channels are by invitation: an admin makes the new user a Creator
+    await grantCreatorTier(user);
     const channelId = await createChannelInMenu(page, user, `Release E2E modes ${Date.now().toString(36)}`);
     const stamp = Date.now().toString(36);
     const singleTitle = `Release E2E single ${stamp}`;

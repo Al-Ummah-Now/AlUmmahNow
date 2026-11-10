@@ -12,6 +12,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { promoteToAdmin } from './sink';
 import { sinkEmail, target, TEST_PASSWORD } from './targets';
 import { apiFetch, completeRegistration, createProfile, signUpOnWeb, type WebUser } from './web-session';
+import { grantCreatorTier } from './creator-tier';
 import { fillSecret } from './secret-fill';
 
 // Signs users in through the auth server: traces would hold the password and code
@@ -37,6 +38,8 @@ async function signInAsAdmin(page: Page, prefix: string): Promise<void> {
 }
 
 async function createChannel(user: WebUser, name: string): Promise<string> {
+  // Creating channels is by invitation: an admin makes the owner a Creator (channel members upload under it)
+  await grantCreatorTier(user);
   const res = await apiFetch(user, '/api/channels', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

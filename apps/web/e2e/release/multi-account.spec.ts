@@ -21,6 +21,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { clickAccountMenuItem } from './account-menu';
 import { sinkEmail, target } from './targets';
 import { completeRegistration, createProfile, expectNoErrorHop, recordNavigations, signUpOnWeb, webAccessToken } from './web-session';
+import { grantCreatorTier } from './creator-tier';
 
 // This file signs users in through the auth server: its traces would hold the
 // typed password and email code (fillSecret args, form POST bodies). Trace off.
@@ -99,6 +100,8 @@ test.describe('Release: several accounts at once', () => {
   test('add a second account: the switcher lists both, switching works, signing out of one keeps the other', async ({ page }) => {
     const a = await signUpOnWeb(page, 'rel-multi-a');
     await createProfile(a);
+    // Uploading and creating channels are by invitation: an admin makes the new user a Creator
+    await grantCreatorTier(a);
     await createChannelsInMenu(page, 'A', 3);
 
     // Header → account menu → Add another account
@@ -122,6 +125,8 @@ test.describe('Release: several accounts at once', () => {
     const b = { email: bEmail, ...(await webAccessToken(page)) };
     expect(b.userId).not.toBe(a.userId);
     await createProfile(b);
+    // Uploading and creating channels are by invitation: an admin makes the new user a Creator
+    await grantCreatorTier(b);
     await createChannelsInMenu(page, 'B', 3);
 
     // Both accounts are stored, in cookies the browser accepts (with their

@@ -45,6 +45,7 @@ const NAV_ITEMS: { href: string; label: MessageKey }[] = [
   { href: '/stale-uploads', label: 'nav.staleUploads' },
   { href: '/errors', label: 'nav.errors' },
   { href: '/jobs', label: 'nav.jobs' },
+  { href: '/creators', label: 'nav.creators' },
   { href: '/auth-requests', label: 'nav.authRequests' },
   { href: '/legacy-profiles', label: 'nav.legacyProfiles' },
   { href: '/video-formats', label: 'nav.videoFormats' },

@@ -395,3 +395,66 @@ describe('content endpoints: restore legacy profile fields', () => {
     assert.equal(calls.filter((c) => c.method === 'POST').length, 0);
   });
 });
+
+describe('content endpoints: creator tiers', () => {
+  const tiers = { items: [{ id: 'creator', name: 'Creator', unlimited: false, perHour: 300, perDay: 2000, maxConcurrent: 20, maxChannels: 3 }] };
+
+  it('assigning a tier needs creators:manage, is audited with the previous tier, and the user page reads the history back', async () => {
+    const { db, log } = fakeDb();
+    let assignment: { tierId: string; source: string } | null = null;
+    const { fetcher, calls } = fakeVideos({
+      'GET /users/usr_1/creator-tier': () => ({ body: { success: true, result: { assignment } } }),
+      'PUT /users/usr_1/creator-tier': (call) => {
+        const { tierId, source } = call.body as { tierId: string | null; source: string };
+        assignment = tierId ? { tierId, source } : null;
+        return { body: { success: true, result: { assignment } } };
+      },
+    });
+    const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
+    const denied = await call('/api/content/users/usr_1/creator-tier', { method: 'PUT', roles: 'moderator', json: { tierId: 'creator' } });
+    assert.equal(denied.status, 403);
+    assert.ok(!calls.some((c) => c.method === 'PUT'), 'a moderator change never reaches api-videos');
+
+    assert.equal((await call('/api/content/users/usr_1/creator-tier', { method: 'PUT', roles: 'admin', user: 'admin-7', json: { tierId: 'creator' } })).status, 200);
+    assert.equal((await call('/api/content/users/usr_1/creator-tier', { method: 'PUT', roles: 'super_admin', json: { tierId: null } })).status, 200);
+    assert.deepEqual(log.map((r) => [r.key, JSON.parse(r.new_value), JSON.parse(r.old_value!)]), [
+      ['content:user:usr_1', { action: 'creator-tier', details: { tierId: 'creator', source: 'admin' } }, { tierId: null, source: null }],
+      ['content:user:usr_1', { action: 'creator-tier', details: { tierId: null, source: 'admin' } }, { tierId: 'creator', source: 'admin' }],
+    ]);
+    assert.equal(log[0].actor_id, 'admin-7');
+    const page = (await (await call('/api/content/users/usr_1/creator-tier', { roles: 'moderator' })).json()) as { result: { assignment: unknown; audit: { action: string }[] } };
+    assert.equal(page.result.assignment, null);
+    assert.equal(page.result.audit.length, 2);
+  });
+
+  it('editing a tier definition is audited with the previous limits; a refused edit leaves no row', async () => {
+    const { db, log } = fakeDb();
+    const { fetcher } = fakeVideos({
+      'GET /creator-tiers': () => ({ body: { success: true, result: tiers } }),
+      'PUT /creator-tiers/creator': (call) =>
+        (call.body as { perHour: number }).perHour > 0
+          ? { body: { success: true, result: { tier: { ...tiers.items[0], ...(call.body as object) } } } }
+          : { status: 400, body: { success: false, code: 'invalid_tier', error: 'perHour must be a whole number from 1 to 100000' } },
+    });
+    const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
+    assert.equal((await call('/api/content/creator-tiers/creator', { method: 'PUT', roles: 'moderator', json: { perHour: 500 } })).status, 403);
+    assert.equal((await call('/api/content/creator-tiers/creator', { method: 'PUT', roles: 'admin', json: { perHour: 500 } })).status, 200);
+    const bad = await call('/api/content/creator-tiers/creator', { method: 'PUT', roles: 'admin', json: { perHour: 0 } });
+    assert.equal(bad.status, 400);
+    assert.equal(((await bad.json()) as { code: string }).code, 'invalid_tier');
+    assert.equal(log.length, 1);
+    assert.equal(log[0].key, 'content:creator-tier:creator');
+    assert.deepEqual(JSON.parse(log[0].old_value!), { perHour: 300 });
+  });
+
+  it('every admin role reads the Creators list and the tiers; creators:manage is listed for admins only', async () => {
+    const { fetcher, calls } = fakeVideos({ 'GET /creator-tiers': () => ({ body: { success: true, result: tiers } }) });
+    const call = appFor({ REPORTS_DB: fakeDb().db, VIDEOS: fetcher });
+    assert.equal((await call('/api/content/creators?filter=needs_tier', { roles: 'moderator' })).status, 200);
+    assert.equal(calls.find((c) => c.path === '/creators')?.search, '?filter=needs_tier');
+    assert.equal((await call('/api/content/creator-tiers', { roles: 'moderator' })).status, 200);
+    const read = async (roles: string) => ((await (await call('/api/content/permissions', { roles })).json()) as { result: { permissions: string[] } }).result.permissions;
+    assert.ok((await read('admin')).includes('creators:manage'));
+    assert.ok(!(await read('moderator')).includes('creators:manage'));
+  });
+});

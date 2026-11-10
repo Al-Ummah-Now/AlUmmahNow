@@ -58,6 +58,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
             ? 'أنشئ قناتك الأولى لبدء مشاركة الفيديوهات وبناء جمهورك.'
             : 'Create your first channel to start sharing videos and building your audience.'}
         </p>
+        {onCreate && (
         <button
           onClick={onCreate}
           className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
@@ -72,6 +73,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
           </svg>
           {t.channel.createChannel}
         </button>
+        )}
       </div>
     );
   }

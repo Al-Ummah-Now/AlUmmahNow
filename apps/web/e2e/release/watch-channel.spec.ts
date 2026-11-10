@@ -11,6 +11,7 @@ import { test, expect, type BrowserContext, type Page } from '@playwright/test';
 import { target } from './targets';
 import { watchUrl } from './videos';
 import { apiFetch, createProfile, signUpOnWeb, type Locale } from './web-session';
+import { grantCreatorTier } from './creator-tier';
 
 // The signed-in test registers through the auth server: its trace would hold
 // the typed password and email code. Trace off for the file.
@@ -136,6 +137,8 @@ test.describe('Release: watch-page channel row', () => {
     await page.setViewportSize({ width: 1000, height: 900 });
     const user = await signUpOnWeb(page, 'rel-watch-subscribe', 'ar');
     await createProfile(user);
+    // Uploading and creating channels are by invitation: an admin makes the new user a Creator
+    await grantCreatorTier(user);
 
     // Subscriptions are made by a channel: create it the way users do (account
     // menu), which puts it in the web session.

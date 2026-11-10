@@ -60,3 +60,23 @@ describe('role checks', () => {
     assert.equal(isSuperAdmin('Admin'), false);
   });
 });
+
+describe('creator tiers in the admin', () => {
+  it('admins and super admins change tiers; moderators see the Creators page read-only', async () => {
+    const { canManageCreators } = await import('../src/lib/roles');
+    assert.equal(canManageCreators('admin'), true);
+    assert.equal(canManageCreators('Super Admin'), true);
+    assert.equal(canManageCreators('moderator'), false);
+    assert.equal(canManageCreators(undefined), false);
+  });
+
+  it('the nav lists Creators, and its strings exist in English and Arabic', async () => {
+    const { readFileSync } = await import('node:fs');
+    const nav = readFileSync(new URL('../src/components/AdminNav.tsx', import.meta.url), 'utf8');
+    assert.match(nav, /href: '\/creators', label: 'nav\.creators'/);
+    const en = (await import('../src/i18n/messages/en')).default;
+    const ar = (await import('../src/i18n/messages/ar')).default;
+    assert.deepEqual(Object.keys(ar.creators).sort(), Object.keys(en.creators).sort());
+    assert.ok(ar.nav.creators && en.nav.creators);
+  });
+});

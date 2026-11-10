@@ -17,6 +17,7 @@ import * as path from 'path';
 import { test, expect, type Page } from '@playwright/test';
 import { target } from './targets';
 import { apiFetch, createProfile, signUpOnWeb, type WebUser } from './web-session';
+import { grantCreatorTier } from './creator-tier';
 
 // Signs users in through the auth server: traces would hold the password and code
 test.use({ trace: 'off' });
@@ -79,6 +80,8 @@ test.describe('Release: a deploy while the page is open', () => {
     test.setTimeout(360000);
     const user: WebUser = await signUpOnWeb(page, 'rel-skew-upload');
     await createProfile(user);
+    // Uploading and creating channels are by invitation: an admin makes the new user a Creator
+    await grantCreatorTier(user);
     await page.context().addCookies([{ name: 'aun_consent', value: `v1.a0.e0.p0.${Date.now()}`, url: target().web, sameSite: 'Lax' }]);
 
     // A channel, created the way users do (it also refreshes the web session's channels)

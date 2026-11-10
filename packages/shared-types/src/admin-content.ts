@@ -10,6 +10,8 @@
  * them (Auth and Videos are separate apps).
  */
 
+import type { CreatorTierAssignment } from './creator-tiers';
+
 // ---------------------------------------------------------------------------
 // Permissions
 // ---------------------------------------------------------------------------
@@ -25,6 +27,8 @@ export const ADMIN_CONTENT_PERMISSIONS = [
   'content:delete',
   /** Edit, ban and erase videos users (videos profiles; never the Auth account). */
   'users:manage',
+  /** Assign creator tiers to users and edit the tier definitions (videos-side; never Auth RBAC). */
+  'creators:manage',
 ] as const;
 
 export type AdminContentPermission = (typeof ADMIN_CONTENT_PERMISSIONS)[number];
@@ -35,7 +39,7 @@ export type AdminContentPermission = (typeof ADMIN_CONTENT_PERMISSIONS)[number];
  */
 export const ROLE_CONTENT_PERMISSIONS: Readonly<Record<string, readonly AdminContentPermission[]>> = {
   super_admin: ADMIN_CONTENT_PERMISSIONS,
-  admin: ['channels:manage', 'videos:manage', 'content:delete', 'users:manage'],
+  admin: ['channels:manage', 'videos:manage', 'content:delete', 'users:manage', 'creators:manage'],
   moderator: [],
 };
 
@@ -325,6 +329,8 @@ export interface AdminUserDetail extends AdminUserRow {
   timezone: string | null;
   updatedAt: string | null;
   ban: VideosBan | null;
+  /** The user's creator tier assignment; null = no tier (cannot upload or create channels). */
+  creatorTier?: CreatorTierAssignment | null;
   channels: AdminChannelRow[];
   counts: { videos: number; playlists: number; watchHistory: number; subscriptions: number; comments: number };
 }

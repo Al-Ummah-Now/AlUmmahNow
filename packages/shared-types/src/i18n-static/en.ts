@@ -688,6 +688,21 @@ export const EN_TRANSLATIONS: AppTranslations = {
     resultsLabel: 'Search results',
   },
 
+  creator: {
+    invitationTitle: 'Uploading is by invitation for now',
+    invitationMessage: 'Uploading videos and creating channels are open to invited creators while we get started. You can still watch, follow and save videos.',
+    invitationShort: 'Uploading is by invitation for now',
+    limitReached: "You've reached the upload limit; try again in {time}",
+    limitReachedSoon: "You've reached the upload limit; try again in a moment",
+    channelLimit: 'You can own up to {max} channels',
+    batchPartial: '{started} of {total} files started. The other {left} will start in {time} if you keep this page open.',
+    batchDeferredRow: 'Waiting for the upload limit',
+    unavailable: 'Uploads are briefly unavailable; try again shortly',
+    minutes: '{count} minutes',
+    minute: '1 minute',
+    hours: '{count} hours',
+    hour: '1 hour',
+  },
   upload: {
     uploadTitle: 'Upload Video',
     uploadVideo: 'Upload Video',

@@ -287,6 +287,8 @@ jobs:
           OPENAUTH_CLIENT_ID: f0de3c30-0304-4ac4-86d6-1e185dec0439
           D1_DATABASE_NAME: al-ummah-now-d1-stage
           D1_DATABASE_ID: c7886ef6-c70b-4b7f-a65b-3df9f9aba9e2
+          SEARCH_D1_DATABASE_NAME: al-ummah-now-search-stage
+          SEARCH_D1_DATABASE_ID: 956a3550-bd20-4cfc-9bf2-b1c2265b33dd
 
   # Release regressions against the stage candidates (now serving stage traffic):
   # sign-up/sign-in on web, profile and admin, callback errors, playback, watch

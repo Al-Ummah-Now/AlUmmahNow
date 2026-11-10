@@ -11,6 +11,7 @@ import * as path from 'path';
 import { test, expect } from '@playwright/test';
 import { target } from './targets';
 import { apiFetch, createProfile, signUpOnWeb, type WebUser } from './web-session';
+import { grantCreatorTier } from './creator-tier';
 
 // This file signs users in through the auth server: its traces would hold the
 // typed password and email code (fillSecret args, form POST bodies). Trace off.
@@ -50,6 +51,8 @@ test.describe('Release: uploads', () => {
   test('profile and channel images upload and are served', async ({ page }) => {
     const user = await signUpOnWeb(page, 'rel-images');
     await createProfile(user);
+    // Uploading and creating channels are by invitation: an admin makes the new user a Creator
+    await grantCreatorTier(user);
 
     const profileRes = await apiFetch(user, '/api/profile/avatar', { method: 'PUT', body: imageForm() });
     const profileText = await profileRes.text();
@@ -70,6 +73,8 @@ test.describe('Release: uploads', () => {
   test('a video uploaded on the upload page is listed as the user\'s video', async ({ page }) => {
     const user = await signUpOnWeb(page, 'rel-upload');
     await createProfile(user);
+    // Uploading and creating channels are by invitation: an admin makes the new user a Creator
+    await grantCreatorTier(user);
     // Create the channel the way users do (account menu), which also refreshes
     // the web session's channels; a channel created only through the API is
     // not in the session until its channel list is reloaded

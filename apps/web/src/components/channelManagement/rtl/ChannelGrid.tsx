@@ -54,6 +54,7 @@ export const ChannelGridRTL: React.FC<ChannelGridProps> = ({
         <p className="text-gray-600 dark:text-gray-400 text-center mb-6 max-w-md">
           أنشئ قناتك الأولى لبدء مشاركة مقاطع الفيديو وبناء جمهورك.
         </p>
+        {onCreate && (
         <button
           onClick={onCreate}
           className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
@@ -68,6 +69,7 @@ export const ChannelGridRTL: React.FC<ChannelGridProps> = ({
           </svg>
           أنشئ قناتك الأولى
         </button>
+        )}
       </div>
     );
   }

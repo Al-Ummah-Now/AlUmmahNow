@@ -17,18 +17,6 @@
 
 import { Context } from 'hono';
 import { logger } from '../lib/logger';
-import { canClaimOfficialHandles } from '../lib/channelHandles';
-
-/**
- * Super admins (the videos-side "Super Admin" role, the same check that
- * guards the official handles) are never upload limited: no session, hourly,
- * daily or concurrency limit. Owner decision 2026-11-10 after the prod
- * "Rate limit exceeded: hour" on their own bulk upload.
- */
-export function isUploadUnlimited(c: Context): boolean {
-  const auth = c.get('auth') as { payload?: { roles?: string[] } } | undefined;
-  return canClaimOfficialHandles(auth?.payload?.roles);
-}
 
 /**
  * Rate limit tiers with different quotas
@@ -42,7 +30,7 @@ export enum RateLimitTier {
 /**
  * Rate limit configuration per tier
  */
-interface RateLimitConfig {
+export interface RateLimitConfig {
   perMinute: number;
   perHour: number;
   perDay: number;
@@ -74,103 +62,16 @@ const RATE_LIMITS: Record<RateLimitTier, RateLimitConfig> = {
 };
 
 /**
- * Video upload SESSIONS (#290). Counted once per video when an upload is
- * initiated (initiate, batch initiate (one per video), direct and stream
- * upload), never per TUS chunk: the TUS POST/HEAD/PATCH/DELETE of an initiated
- * upload is authorised by its session (same user, checked in the TUS proxy).
- * A batch may hold 15 videos, so a fresh hour must fit one full batch.
- */
-export type UploadLimitProfile = 'standard' | 'relaxed';
-
-export const UPLOAD_SESSION_LIMITS: Record<UploadLimitProfile, RateLimitConfig> = {
-  // Production
-  standard: { perMinute: 15, perHour: 20, perDay: 50, maxConcurrent: 5 },
-  // QA and stage: enforced (so the limiter path runs there) but roomy enough for E2E and seeding
-  relaxed: { perMinute: 60, perHour: 300, perDay: 2000, maxConcurrent: 20 },
-};
-
-/** Operation name for upload sessions (counters from the old per-request limiter do not carry over) */
-export const UPLOAD_SESSION_OPERATION = 'video_upload_session';
-
-/**
- * Limits for upload sessions in this env, or null when not enforced.
- * UPLOAD_RATE_LIMIT ("standard" | "relaxed" | "off") wins; without it,
- * development and preview are not enforced and everything else is standard.
- */
-export function uploadSessionLimits(env: { UPLOAD_RATE_LIMIT?: string; ENVIRONMENT?: string }): RateLimitConfig | null {
-  const profile = env.UPLOAD_RATE_LIMIT;
-  if (profile === 'off') return null;
-  if (profile === 'standard' || profile === 'relaxed') return UPLOAD_SESSION_LIMITS[profile];
-  const environment = env.ENVIRONMENT || 'development';
-  return environment === 'development' || environment === 'preview' ? null : UPLOAD_SESSION_LIMITS.standard;
-}
-
-/** Upload sessions a request opens: one per video in a batch initiate (1..15), otherwise one. */
-export async function uploadSessionWeight(c: Context): Promise<number> {
-  if (!c.req.path.endsWith('/upload/batch/initiate')) return 1;
-  try {
-    const body = (await c.req.raw.clone().json()) as { videos?: unknown };
-    return Array.isArray(body?.videos) ? Math.min(15, Math.max(1, body.videos.length)) : 1;
-  } catch {
-    return 1;
-  }
-}
-
-/** Routes that open new upload sessions (POST only); everything else in an upload continues one */
-export const UPLOAD_SESSION_PATHS = [
-  '/api/videos/upload',
-  '/api/videos/upload/initiate',
-  '/api/videos/upload/batch/initiate',
-] as const;
-
-/**
- * Calls that continue an initiated upload but are not idempotent: the TUS
- * create (POST /api/videos/tus, which starts the Bunny upload for the session)
- * and complete. A separate, looser bucket than sessions so normal retries never
- * trip it, but one session cannot be replayed without bound. TUS PATCH/HEAD
- * stay unlimited (owner-checked, bounded by the upload's length).
- */
-export const UPLOAD_CONTINUE_PATHS = ['/api/videos/tus', '/api/videos/upload/complete'] as const;
-export const UPLOAD_CONTINUE_OPERATION = 'video_upload_continue';
-export const UPLOAD_CONTINUE_LIMITS: Record<UploadLimitProfile, RateLimitConfig> = {
-  standard: { perMinute: 30, perHour: 100, perDay: 300, maxConcurrent: 10 },
-  relaxed: { perMinute: 120, perHour: 1000, perDay: 5000, maxConcurrent: 40 },
-};
-
-export function uploadContinueLimitMiddleware() {
-  return rateLimitMiddleware(UPLOAD_CONTINUE_OPERATION, {
-    limits: (env) => {
-      const session = uploadSessionLimits(env as { UPLOAD_RATE_LIMIT?: string; ENVIRONMENT?: string });
-      if (!session) return null;
-      return session === UPLOAD_SESSION_LIMITS.relaxed ? UPLOAD_CONTINUE_LIMITS.relaxed : UPLOAD_CONTINUE_LIMITS.standard;
-    },
-    methods: ['POST'],
-    exempt: isUploadUnlimited,
-  });
-}
-
-/** The upload-session limiter mounted on UPLOAD_SESSION_PATHS in index.ts */
-export function uploadSessionLimitMiddleware() {
-  return rateLimitMiddleware(UPLOAD_SESSION_OPERATION, {
-    limits: (env) => uploadSessionLimits(env as { UPLOAD_RATE_LIMIT?: string; ENVIRONMENT?: string }),
-    weight: uploadSessionWeight,
-    methods: ['POST'],
-    exempt: isUploadUnlimited,
-  });
-}
-
-
-/**
  * Time window durations in seconds
  */
-const TIME_WINDOWS = {
+export const TIME_WINDOWS = {
   minute: 60,
   hour: 3600,
   day: 86400,
 } as const;
 
-type Period = keyof typeof TIME_WINDOWS;
-const PERIODS: Period[] = ['minute', 'hour', 'day'];
+export type Period = keyof typeof TIME_WINDOWS;
+export const PERIODS: Period[] = ['minute', 'hour', 'day'];
 
 /**
  * How long a request's concurrency lease lives if the request never releases
@@ -218,7 +119,7 @@ function getUserTier(userId: string): RateLimitTier {
 }
 
 /** Start (epoch seconds) of the fixed window of `period` that holds `now`. */
-function windowStart(period: Period, now: number): number {
+export function windowStart(period: Period, now: number): number {
   return now - (now % TIME_WINDOWS[period]);
 }
 
@@ -333,7 +234,8 @@ export async function checkRateLimit(
       result.limitExceeded = 'concurrent';
       result.retryAfter = 60;
     } else {
-      const period = PERIODS.find((p) => used[p] + weight > perPeriod[p]) ?? 'day';
+      // The full window that frees up last decides when the request can pass
+      const period = PERIODS.filter((p) => used[p] + weight > perPeriod[p]).pop() ?? 'day';
       result.limitExceeded = period;
       result.retryAfter = Math.max(1, resetAt[period] - now);
     }
@@ -364,6 +266,28 @@ export async function releaseRateLimit(db: D1Database, userId: string, operation
       .run();
   } catch (error) {
     logger.error('[SECURITY] Failed to release rate limit', { error, userId, operation });
+  }
+}
+
+/**
+ * Gives back `count` units counted at `atMs` (a session that created nothing,
+ * a retry that reused an unfinished upload, an upload flagged failed or
+ * abandoned). Only windows that still hold `atMs` move: a window that has
+ * already ended started over anyway. Never below zero. Never throws.
+ */
+export async function refundRateLimit(db: D1Database, userId: string, operation: string, count: number, atMs = Date.now()): Promise<void> {
+  if (!(count > 0)) return;
+  const at = Math.floor(atMs / 1000);
+  try {
+    await db.batch(
+      PERIODS.map((period) =>
+        db
+          .prepare('UPDATE upload_rate_windows SET count = MAX(0, count - ?) WHERE user_id = ? AND operation = ? AND period = ? AND window_start = ?')
+          .bind(count, userId, operation, period, windowStart(period, at))
+      )
+    );
+  } catch (error) {
+    logger.error('[SECURITY] Failed to refund rate limit units', { error, userId, operation, count });
   }
 }
 
@@ -406,14 +330,11 @@ export interface RateLimitOptions {
   weight?: (c: Context) => Promise<number>;
   /** Only these methods are counted (default: all) */
   methods?: string[];
-  /** Requests this returns true for are not limited or counted */
-  exempt?: (c: Context) => boolean;
 }
 
 export function rateLimitMiddleware(operation: string, options: RateLimitOptions = {}) {
   return async (c: Context, next: () => Promise<void>) => {
     if (options.methods && !options.methods.includes(c.req.method)) return next();
-    if (options.exempt?.(c)) return next();
 
     const resolveLimits =
       options.limits ??
@@ -449,7 +370,7 @@ export function rateLimitMiddleware(operation: string, options: RateLimitOptions
 
     if (result.unavailable) {
       return c.json(
-        { success: false, error: 'Upload limits are temporarily unavailable; try again shortly', retryAfter: result.retryAfter },
+        { success: false, code: 'upload_limits_unavailable', error: 'Uploads are briefly unavailable; try again shortly', retryAfter: result.retryAfter },
         503,
         { 'Retry-After': String(result.retryAfter) }
       );
@@ -466,7 +387,10 @@ export function rateLimitMiddleware(operation: string, options: RateLimitOptions
       return c.json(
         {
           success: false,
-          error: `Rate limit exceeded: ${result.limitExceeded}`,
+          // Friendly (shown to users); the period is in limitExceeded
+          code: 'upload_limit',
+          error: "You've reached the upload limit; try again later",
+          limitExceeded: result.limitExceeded,
           retryAfter: result.retryAfter,
           remaining: result.remaining,
           resetAt: result.resetAt,

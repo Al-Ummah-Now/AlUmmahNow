@@ -337,14 +337,15 @@ test.describe('Upload page - access states', () => {
     });
   });
 
-  test.describe('without a channel', () => {
+  test.describe('without a creator tier', () => {
     test.use({ storageState: AUTH_STATE.none });
 
-    test('UPL-010 links users without a channel to channel creation (ar)', async ({ page }) => {
+    test('UPL-010 tells users without a tier that uploading is by invitation (ar)', async ({ page }) => {
       await page.goto('/ar/upload');
-      await expect(uploadUi(page).channelRequired).toBeVisible();
-      await expect(page.getByTestId('upload-create-channel')).toHaveAttribute('href', '/ar/profile/create');
-      await expect(page.getByTestId('upload-create-channel')).toHaveText(ARABIC);
+      const notice = uploadUi(page).byInvitation;
+      await expect(notice).toBeVisible();
+      await expect(notice.getByRole('heading')).toHaveText(ARABIC);
+      await expect(page.getByTestId('upload-create-channel')).toHaveCount(0);
     });
   });
 });

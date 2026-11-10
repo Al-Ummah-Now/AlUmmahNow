@@ -34,6 +34,7 @@ import { eraseUserData } from '../privacy/user-data';
 import { OperationBudget } from '../privacy/scan';
 import { BunnyStreamClient } from '../bunny/stream';
 import { requireSecret } from '../env-helpers';
+import { readAssignment } from '../creatorTiers';
 import { bansFor, deleteBan, readBan, writeBan } from './bans';
 import { createJob, type JobHandler, type JobOutcome, type JobQueue } from './jobs';
 import { approvedFromPlan, planLegacyRestore, runLegacyRestore, type ApprovedRestore, type AuthUsersDb } from './legacy-restore';
@@ -851,8 +852,10 @@ export async function userDetail(env: AdminServiceEnv, userId: string): Promise<
 		subscribedChannelIds(env.NOTIFICATIONS_DB, userId, profile?.subscribedTo ?? []).then((ids) => ids.length).catch(() => 0),
 		db.prepare('SELECT COUNT(*) AS n FROM admin_comments WHERE user_id = ?').bind(userId).first<{ n: number }>().then((r) => Number(r?.n) || 0),
 	]);
+	const creatorTier = await readAssignment(db as unknown as D1Database, userId).catch(() => null);
 	return {
 		...toUserRow(userId, profile, !!ban),
+		creatorTier,
 		bio: profile?.bio ?? '',
 		timezone: profile?.timezone ?? null,
 		updatedAt: profile?.dateModified ?? null,

@@ -71,6 +71,22 @@ export class D1Client {
     return parsed.flatMap((r) => r.results || []);
   }
 
+  /**
+   * Gives a user a creator tier (videos search D1: creator_tier_assignments).
+   * Uploading and creating channels are by invitation, so accounts that seed
+   * channels and videos need one. Idempotent; never downgrades an existing tier.
+   */
+  ensureCreatorTier(userId: string, tierId: string): 'created' | 'exists' {
+    const user = sqlString(userId, SAFE_ID, 'user id');
+    const tier = sqlString(tierId, SAFE_ID, 'tier id');
+    const existing = this.execute<{ tier_id: string }>(`SELECT tier_id FROM creator_tier_assignments WHERE user_id = ${user}`);
+    if (existing.length > 0) return 'exists';
+    this.execute(
+      `INSERT INTO creator_tier_assignments (user_id, tier_id, source, assigned_by, assigned_at) VALUES (${user}, ${tier}, 'admin', 'seed', '${new Date().toISOString()}')`,
+    );
+    return 'created';
+  }
+
   /** Returns a map of email -> user id for the given emails (exact match). */
   findUserIdsByEmail(emails: string[]): Map<string, string> {
     if (emails.length === 0) return new Map();

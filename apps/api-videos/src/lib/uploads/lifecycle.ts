@@ -22,6 +22,7 @@ import { logger } from '../logger';
 import { processingAttempt } from '../notification-events';
 import { bunnyTusRequestHeaders } from '../bunny/tus';
 import { startProcessingLoop, type ProcessingEnv } from '../processing/loop';
+import { refundUploadSession } from '../../middleware/upload-limits';
 
 export interface VideoTusUpload {
   sessionId: string;
@@ -45,6 +46,7 @@ interface SecretLike { text?(): Promise<string>; get?(): Promise<string> }
 
 export interface UploadLifecycleEnv {
   videos: R2Bucket;
+  channels?: R2Bucket;
   queue?: unknown;
   PROCESSING_CHECK_QUEUE?: unknown;
   SEARCH_DB?: D1Database;
@@ -159,6 +161,8 @@ export async function flagNeedsReupload(
 
   const video = flagged as UploadVideo;
   logger.error('[Uploads] Upload needs a re-upload', { videoId, userId: video.userId, source: opts.source, reason: opts.reason });
+  // The failed upload gives its session back to the tier holder it was counted against
+  await refundUploadSession(env.SEARCH_DB, await uploadSubjectOf(env, video), video.dateCreated).catch(() => undefined);
   await new Queue(env.queue).send(MessageType.VideoUploadFailed, {
     videoId,
     userId: video.userId,
@@ -171,6 +175,18 @@ export async function flagNeedsReupload(
     timestamp: now.toISOString(),
   });
   return 'flagged';
+}
+
+/** Whose creator-tier counters an upload moved: the channel owner, else the uploader. */
+async function uploadSubjectOf(env: UploadLifecycleEnv, video: UploadVideo): Promise<string> {
+  const channelId = video.channelId;
+  if (!channelId || channelId === video.userId || !env.channels) return video.userId;
+  try {
+    const channel = (await (await env.channels.get(channelId))?.json<{ userId?: string }>()) ?? null;
+    return channel?.userId || video.userId;
+  } catch {
+    return video.userId;
+  }
 }
 
 /** A re-upload of the same video starts: back to `uploading`, flag cleared. */

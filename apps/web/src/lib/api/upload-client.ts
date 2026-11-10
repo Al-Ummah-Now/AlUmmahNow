@@ -18,8 +18,22 @@ import { getApiUrl } from '@/lib/runtime-config';
 import { logger } from '@/lib/logger-client';
 import type { UploadFingerprint } from '@/lib/upload/fingerprint';
 
-/** status and serverRef are set on failures (for the admin Errors page report). */
-type ApiResult<T> = { success: boolean; result?: T; error?: string; status?: number; serverRef?: string };
+/**
+ * status and serverRef are set on failures (for the admin Errors page report).
+ * `code` and `retryAfter` come with a refusal (creator tiers: uploads_by_invitation,
+ * upload_limit); `deferred` with a batch the upload limit fits only in part.
+ * Show refusals through lib/upload/friendly-error.ts, never `error` itself.
+ */
+export type ApiResult<T> = {
+  success: boolean;
+  result?: T;
+  error?: string;
+  status?: number;
+  serverRef?: string;
+  code?: string;
+  retryAfter?: number;
+  deferred?: { count: number; indexes: number[]; retryAfter: number; retryAt: string };
+};
 
 interface CallOptions {
   method: 'GET' | 'POST' | 'PUT';
@@ -52,7 +66,7 @@ export async function callUploadApi<T>(opts: CallOptions, fallbackError: string,
         body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
         cache: 'no-store',
       });
-      const json = (await res.json().catch(() => null)) as ApiResult<T> | null;
+      const json = (await res.json().catch(() => null)) as (ApiResult<T> & { retryAfter?: number }) | null;
       if (res.status === 401 && !forceToken) {
         // Token expired mid-batch: fetch a fresh one once and repeat
         forceToken = true;
@@ -61,6 +75,10 @@ export async function callUploadApi<T>(opts: CallOptions, fallbackError: string,
       if (res.ok && json) return { ...json, accessToken: auth.accessToken };
       lastError = json?.error || fallbackError;
       const serverRef = res.headers?.get?.('X-Error-Ref') || (json as { reference?: string } | null)?.reference || undefined;
+      if (json?.code && res.status < 500) {
+        // A creator-tier refusal: its code and wait, for the friendly message
+        return { success: false, error: lastError, status: res.status, code: json.code, ...(json.retryAfter ? { retryAfter: json.retryAfter } : {}) };
+      }
       if (res.status < 500 || attempt >= retries) return { success: false, error: lastError, status: res.status, ...(serverRef ? { serverRef } : {}) };
     } catch (error) {
       logger.warn('[upload-client] request failed', { path: opts.path, attempt, error });
@@ -153,12 +171,12 @@ export async function initiateBatchUpload(
   videos: Array<{ title: string; description?: string; fileSize: number; mimeType: string; isPublic: boolean; tags?: string; fingerprint?: UploadFingerprint }>,
   channelId: string,
   sharedMetadata?: { channelId?: string; category?: string; isPublic?: boolean }
-): Promise<BatchUploadInitiateResponse & { status?: number; serverRef?: string }> {
+): Promise<BatchUploadInitiateResponse & Pick<ApiResult<unknown>, 'status' | 'serverRef' | 'code' | 'retryAfter' | 'deferred'>> {
   const { accessToken: _token, ...res } = await callUploadApi<BatchUploadInitiateResponse['result']>(
     { method: 'POST', path: '/api/videos/upload/batch/initiate', channelId, body: { videos, sharedMetadata }, retries: videos.every((v) => v.fingerprint) ? 3 : 0 },
     'Failed to initiate batch upload'
   );
-  return res as BatchUploadInitiateResponse & { status?: number; serverRef?: string };
+  return res as BatchUploadInitiateResponse & Pick<ApiResult<unknown>, 'status' | 'serverRef' | 'code' | 'retryAfter' | 'deferred'>;
 }
 
 /** Schedules the publish of a just-uploaded video (the upload form's last step). */

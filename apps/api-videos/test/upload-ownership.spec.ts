@@ -10,7 +10,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { getContractDocument, listServedRoutes } from '../src/index';
-import { UPLOAD_SESSION_PATHS } from '../src/middleware/rate-limit';
+import { UPLOAD_SESSION_PATHS } from '../src/middleware/upload-limits';
 import { UploadCompleteEndpoint } from '../src/endpoints/video/uploadComplete';
 import { VideoChaptersUpdate } from '../src/endpoints/video/chaptersUpdate';
 import { MemoryBucket, MemoryQueue, buildApp, videoFixture } from './helpers';

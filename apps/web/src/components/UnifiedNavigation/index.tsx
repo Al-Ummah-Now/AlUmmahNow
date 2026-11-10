@@ -12,6 +12,7 @@ import { logger } from '@/lib/logger-client';
 import { useState, useEffect } from 'react';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { MenuBackdrop } from './MenuBackdrop';
+import { mayCreateChannel, refreshCreatorAccess, useCreatorAccess } from '@/hooks/useCreatorAccess';
 import { useLanguage } from '@/hooks/useLanguage';
 import Link from 'next/link';
 import { login } from '@/lib/actions';
@@ -165,6 +166,7 @@ export function UnifiedNavigation() {
     setIsOpenState(open);
     setView('main');
   };
+  const canCreateChannel = mayCreateChannel(useCreatorAccess());
   const [isCreatingChannel, setIsCreatingChannel] = useState(false);
   const [newChannelName, setNewChannelName] = useState('');
   const [showLogoutAllConfirm, setShowLogoutAllConfirm] = useState(false);
@@ -254,6 +256,8 @@ export function UnifiedNavigation() {
       // Reload channels to show the newly created channel
       await reloadChannels();
     }
+    // One more channel (or a refusal): the tier's channel allowance may have changed
+    void refreshCreatorAccess();
   };
 
   const navItems = [
@@ -544,8 +548,8 @@ export function UnifiedNavigation() {
                   <span className={`${ROW_TEXT} flex-1`}>{t.navigation.useWithoutChannel}</span>
                   {!channel && <Check className={ROW_ICON} aria-hidden="true" />}
                 </button>
-                        {/* Create Channel - Only for Active Account */}
-                        {!isCreatingChannel ? (
+                        {/* Create Channel - Only for Active Account, and only with a creator tier that allows another channel */}
+                        {!canCreateChannel ? null : !isCreatingChannel ? (
                           <button
                             onClick={() => setIsCreatingChannel(true)}
                             data-testid="nav-create-channel"

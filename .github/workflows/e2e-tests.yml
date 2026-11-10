@@ -126,6 +126,8 @@ jobs:
           E2E_MAX_FAILURES: '40'
           E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET_QA }}
           E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
+          # auth.setup has a promoted QA admin give the channel-owning users the Creator tier
+          TEST_PROMOTE_SECRET: ${{ secrets.TEST_PROMOTE_SECRET_QA }}
 
       # QA videos-queue writes/min and DLQ writes during this run (all QA traffic in
       # the window, not only this job). Informational for now: it does not fail the job.
@@ -150,10 +152,12 @@ jobs:
         env:
           E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET_QA }}
           E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
+          # auth.setup has a promoted QA admin give the channel-owning users the Creator tier
+          TEST_PROMOTE_SECRET: ${{ secrets.TEST_PROMOTE_SECRET_QA }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: >-
           python3 scripts/ci/scan-artifacts-for-secrets.py
-          --env E2E_CODE_SINK_SECRET --env E2E_USER_PASSWORD --env CLOUDFLARE_API_TOKEN
+          --env E2E_CODE_SINK_SECRET --env E2E_USER_PASSWORD --env TEST_PROMOTE_SECRET --env CLOUDFLARE_API_TOKEN
           --remove apps/web/playwright-report apps/web/test-results
 
       - name: Upload HTML report
@@ -233,15 +237,19 @@ jobs:
           E2E_MAX_FAILURES: '0'
           E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET_QA }}
           E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
+          # auth.setup has a promoted QA admin give the channel-owning users the Creator tier
+          TEST_PROMOTE_SECRET: ${{ secrets.TEST_PROMOTE_SECRET_QA }}
 
       - name: Scan test output for secrets
         if: always()
         env:
           E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET_QA }}
           E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
+          # auth.setup has a promoted QA admin give the channel-owning users the Creator tier
+          TEST_PROMOTE_SECRET: ${{ secrets.TEST_PROMOTE_SECRET_QA }}
         run: >-
           python3 scripts/ci/scan-artifacts-for-secrets.py
-          --env E2E_CODE_SINK_SECRET --env E2E_USER_PASSWORD
+          --env E2E_CODE_SINK_SECRET --env E2E_USER_PASSWORD --env TEST_PROMOTE_SECRET
           --remove apps/web/playwright-report apps/web/test-results
 
       - name: Upload report
@@ -304,6 +312,8 @@ jobs:
           E2E_MAX_FAILURES: '0'
           E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET_QA }}
           E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
+          # auth.setup has a promoted QA admin give the channel-owning users the Creator tier
+          TEST_PROMOTE_SECRET: ${{ secrets.TEST_PROMOTE_SECRET_QA }}
 
       - name: Commit snapshots
         run: |

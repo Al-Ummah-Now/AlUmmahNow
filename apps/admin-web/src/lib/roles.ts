@@ -108,3 +108,13 @@ export function canReadErrors(role?: string): boolean {
 export function canManageErrors(role?: string): boolean {
   return canReadErrors(role);
 }
+
+/**
+ * Creator tiers: assigning tiers and editing their limits mirrors the
+ * creators:manage content permission (admins and super admins). Moderators
+ * see the Creators page read-only.
+ */
+export function canManageCreators(role?: string): boolean {
+  const r = normalizeRole(role);
+  return r === 'admin' || r === 'super_admin';
+}

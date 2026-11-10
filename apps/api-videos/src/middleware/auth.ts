@@ -298,6 +298,7 @@ export async function channelIdMiddleware(c: Context, next: Next) {
     // and the channel's owner (new videos belong to the owner, lib/channelAccess.ts)
     c.set('channelId', channelId);
     c.set('channelRole', role);
+    // Uploads to the channel run under its owner's creator tier (middleware/upload-limits.ts)
     c.set('channelOwnerId', channelData.userId);
 
     return await next();

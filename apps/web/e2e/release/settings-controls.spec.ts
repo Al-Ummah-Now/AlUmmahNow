@@ -21,6 +21,7 @@
 import { test, expect, type BrowserContext, type Locator, type Page } from '@playwright/test';
 import { target } from './targets';
 import { apiFetch, createProfile, gotoSettled, signInAgain, signUpOnWeb, type Locale, type WebUser } from './web-session';
+import { grantCreatorTier } from './creator-tier';
 
 // Signs in through the auth server: the trace would hold the password and code
 test.use({ trace: 'off' });
@@ -51,6 +52,8 @@ async function ownChannel(user: WebUser): Promise<string> {
   const body = (await list.json().catch(() => ({}))) as { data?: Array<{ id: string; ownerId?: string; userId?: string }> };
   const mine = body.data?.find((c) => !user.userId || c.ownerId === user.userId || c.userId === user.userId);
   if (mine) return mine.id;
+  // Creating channels is by invitation: an admin makes the new user a Creator
+  await grantCreatorTier(user);
   const res = await apiFetch(user, '/api/channels', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

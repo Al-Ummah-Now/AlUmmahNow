@@ -8,6 +8,7 @@ import { test, expect, type BrowserContext, type Page } from '@playwright/test';
 import { target } from './targets';
 import { findPlayableVideo, NO_PLAYABLE_VIDEO, watchUrl } from './videos';
 import { apiFetch, createProfile, signUpOnWeb, startSignIn, type Locale } from './web-session';
+import { grantCreatorTier } from './creator-tier';
 
 // This file signs users in through the auth server: its traces would hold the
 // typed password and email code (fillSecret args, form POST bodies). Trace off.
@@ -71,6 +72,8 @@ test.describe('Release: live comments', () => {
     await answerConsent(context);
     const author = await signUpOnWeb(page, 'rel-live-comment');
     await createProfile(author);
+    // Uploading and creating channels are by invitation: an admin makes the new user a Creator
+    await grantCreatorTier(author);
     const channelRes = await apiFetch(author, '/api/channels', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

@@ -26,6 +26,7 @@
  *   SEED_PROCESSING_TIMEOUT_SECONDS  max wait for Bunny encoding (default 900)
  *   OPENAUTH_URL / WEB_APP_URL / API_URL / OPENAUTH_CLIENT_ID  target environment (defaults: QA)
  *   D1_DATABASE_NAME / D1_DATABASE_ID  OpenAuth D1 database (defaults: QA)
+ *   SEARCH_D1_DATABASE_NAME / SEARCH_D1_DATABASE_ID  videos search D1 (creator tiers; defaults: QA)
  *   WRANGLER_BIN           wrangler executable (default: npx --yes wrangler)
  */
 
@@ -79,6 +80,8 @@ const authConfig: AuthConfig = {
 const API_URL = (process.env.API_URL || 'https://videos.api.qa.alummahnow.net').replace(/\/$/, '');
 const D1_NAME = process.env.D1_DATABASE_NAME || 'al-ummah-now-d1-qa';
 const D1_ID = process.env.D1_DATABASE_ID || '28590f3c-dd92-4c26-a803-d73a9bbe2b58';
+const SEARCH_D1_NAME = process.env.SEARCH_D1_DATABASE_NAME || 'al-ummah-now-search-qa';
+const SEARCH_D1_ID = process.env.SEARCH_D1_DATABASE_ID || '0282bac3-5b70-4343-a991-937c732d981a';
 
 const api = new ApiClient(API_URL);
 
@@ -783,6 +786,25 @@ async function main(): Promise<void> {
     return;
   }
   log.info('Creator token', { userId: creator.userId, exp: decodeJwtPayload(creator.accessToken).exp });
+
+  // Uploading and creating channels are by invitation (creator tiers): the
+  // accounts that seed channels and videos hold the Creator tier
+  log.group('Creator tiers');
+  const videosD1 = new D1Client({ databaseName: SEARCH_D1_NAME, databaseId: SEARCH_D1_ID });
+  for (const [key, session] of [['creator', creator], ['viewer', viewer]] as const) {
+    if (!session) continue;
+    if (MODE === 'check') {
+      record('tier', `${key} -> creator`, 'skipped', 'check mode');
+      continue;
+    }
+    try {
+      record('tier', `${key} -> creator`, videosD1.ensureCreatorTier(session.userId, 'creator'));
+    } catch (error) {
+      record('tier', `${key} -> creator`, 'failed', error instanceof Error ? error.message : String(error));
+      throw error;
+    }
+  }
+  log.groupEnd();
 
   log.group('Channels');
   const creatorExisting = await listOwnChannels(creator);
