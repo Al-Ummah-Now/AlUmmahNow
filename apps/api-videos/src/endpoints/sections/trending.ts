@@ -1,5 +1,6 @@
 import { isShortOrFlag } from "@al-ummah/shared-types";
 import { PublicRoute, AppContext } from "../../base";
+import { publicVideoFields } from '../../lib/transformations';
 import { isVideoPubliclyVisible } from "../../lib/visibility";
 import { Num, Str } from "chanfana";
 import { z } from "zod";
@@ -137,7 +138,7 @@ export class TrendingVideosSection extends PublicRoute {
           data: page.videos.map((video) => {
             const t = page.trending?.get(video.id);
             return transformTrendingVideoForResponse({
-              ...video,
+              ...publicVideoFields(video),
               trendingMetadata: t && {
                 rank: t.rank,
                 score: t.score,
@@ -192,7 +193,7 @@ export class TrendingVideosSection extends PublicRoute {
             if (category && video.category !== category) return null;
 
             return {
-              ...video,
+              ...publicVideoFields(video),
               trendingMetadata: {
                 rank: startIndex + index + 1,
                 score: trendingVideo.trendingScore,
@@ -258,7 +259,7 @@ export class TrendingVideosSection extends PublicRoute {
             if (!isVideoPubliclyVisible(video)) return null;
 
             return {
-              ...video,
+              ...publicVideoFields(video),
               trendingMetadata: {
                 rank: trending.rank || 0,
                 score: trending.trendingScore,

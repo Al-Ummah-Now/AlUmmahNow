@@ -1,4 +1,5 @@
 import { Str, Num } from "chanfana";
+import { createUploadRecord } from '../../lib/upload/uploadRecord';
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { z } from "zod";
 import { VideoCategory } from "@al-ummah/shared-types";
@@ -147,31 +148,22 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 				const videoId = bunnyVideo.guid;
 				const now = new Date().toISOString();
 
-				const video: VideoType = {
-					id: videoId,
+				// Same record as a single upload (lib/upload/uploadRecord.ts)
+				const video: VideoType = createUploadRecord({
+					videoId,
 					title: videoData.title,
-					description: videoData.description || '',
+					description: videoData.description,
 					userId,
 					channelId,
-					playUrl: `https://${c.env.bunny_hostname}/${videoId}/playlist.m3u8`,
-					thumbnailType: 'auto',
-					thumbnailUrl: `https://${c.env.bunny_hostname}/${videoId}/thumbnail.jpg`,
-					dateCreated: now,
-					dateModified: now,
-					views: 0,
-					availableResolutions: [],
-					comments: [],
-					likes: [],
-					dislikes: [],
 					isPublic: videoData.isPublic ?? sharedMetadata?.isPublic ?? true,
-					isLive: false,
-					tags: videoData.tags ? videoData.tags.split(',').map(tag => tag.trim()).filter(Boolean) : [],
+					tags: videoData.tags,
 					category: sharedMetadata?.category,
-					...(videoData.format && videoData.format !== 'auto' ? { format: videoData.format } : {}),
-					uploadStatus: 'uploading',
+					format: videoData.format,
 					fileSize: videoData.fileSize,
-					originalFormat: videoData.mimeType,
-				};
+					mimeType: videoData.mimeType,
+					bunnyHostname: c.env.bunny_hostname,
+					now: new Date(now),
+				});
 
 				await repository.putObject(videoId, video);
 

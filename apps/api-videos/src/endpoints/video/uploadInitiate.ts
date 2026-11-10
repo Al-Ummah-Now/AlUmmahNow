@@ -1,4 +1,5 @@
 import { Str, Num } from "chanfana";
+import { createUploadRecord } from '../../lib/upload/uploadRecord';
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import { Channel, VideoCategory } from "@al-ummah/shared-types";
@@ -269,41 +270,25 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 				});
 			}
 
-			// No custom thumbnail: point at the one Bunny generates next to the
-			// playlist, so cards and listings have an image (signed per response)
-			if (!thumbnailUrl) {
-				thumbnailUrl = `https://${c.env.bunny_hostname}/${videoId}/thumbnail.jpg`;
-			}
-
-			// Create video metadata for R2 storage
-			const video = {
-				id: videoId,
+			// Same record as a bulk upload (lib/upload/uploadRecord.ts). Without a
+			// stored thumbnail there is no thumbnail URL until Bunny's exists.
+			const video = createUploadRecord({
+				videoId,
 				title,
-				description: description || '',
+				description,
 				userId,
 				channelId,
-				thumbnailUrl,
-				thumbnailType,
-				thumbnailSizes,
-				playUrl: `https://${c.env.bunny_hostname}/${videoId}/playlist.m3u8`,
-				dateCreated: new Date().toISOString(),
-				dateModified: new Date().toISOString(),
-				views: 0,
-				availableResolutions: [],
-				comments: [],
-				likes: [],
-				dislikes: [],
 				isPublic: isPublic ?? true,
-				isLive: false,
-				tags: tags ? tags.split(',').map(tag => tag.trim()).filter(Boolean) : [],
-				...(titleLocalized && { titleLocalized }),
-				...(descriptionLocalized && { descriptionLocalized }),
-				...(category && { category }),
-				...(format && format !== 'auto' && { format }),
-				uploadStatus: 'uploading' as const,
-				fileSize: fileSize,  // Store file size directly
-				originalFormat: mimeType,  // Store MIME type as original format
-			};
+				tags,
+				titleLocalized,
+				descriptionLocalized,
+				category,
+				format,
+				fileSize,
+				mimeType,
+				customThumbnail: thumbnailUrl ? { url: thumbnailUrl, type: thumbnailType, sizes: thumbnailSizes } : undefined,
+				bunnyHostname: c.env.bunny_hostname,
+			});
 
 			// Save metadata to R2
 			logger.info('[UploadInitiate] Preparing to save video metadata to R2', {
@@ -375,8 +360,8 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 					tusSessionId, // Client uses this to access TUS proxy
 					chunkSize: tusConfig.chunkSize,
 					resumable: tusConfig.resumable,
-					// Thumbnail fields
-					thumbnailUrl,
+					// Thumbnail fields (a stored thumbnail only; Bunny's comes once the video plays)
+					thumbnailUrl: thumbnailUrl || undefined,
 					thumbnailSizes,
 					// Legacy fields for backward compatibility
 					libraryId,

@@ -5,7 +5,25 @@ import { z } from "zod";
 import { Video as BusinessVideo, Channel as BusinessChannel, Profile as BusinessProfile, Playlist as BusinessPlaylist, Comment as BusinessComment } from "./types";
 import { VideoView, ChannelView, ProfileView, PlaylistView, CommentView } from "./model/view";
 import { isShort } from "@al-ummah/shared-types";
+import { isVideoReady } from './visibility';
 import { getCommentSettings, isCommentVisible, StoredComment } from './comments';
+
+/**
+ * The stored video without server-only processing fields, as every video view
+ * returns it: no check-loop state (processingCheck), no raw Bunny failure text
+ * (processingIssue → processingIssueKind), and no auto thumbnail URL until the
+ * video is ready and Bunny's image exists (it would 404: clients show their
+ * placeholder). Used by the detail view and every list view.
+ */
+export function publicVideoFields<T extends Record<string, any>>(video: T): Omit<T, 'processingCheck' | 'processingIssue' | 'thumbnailPending'> & { processingIssueKind?: 'encode_failed' | 'needs_reupload' | 'stalled' } {
+    const { processingCheck: _check, processingIssue, thumbnailPending, ...rest } = video as Record<string, any>;
+    const hideThumbnail = (thumbnailPending || !isVideoReady(video)) && video.thumbnailType !== 'custom';
+    return {
+        ...rest,
+        ...(processingIssue ? { processingIssueKind: processingIssue.kind } : {}),
+        ...(hideThumbnail ? { thumbnailUrl: undefined, thumbnailSizes: undefined } : {}),
+    } as never;
+}
 
 // Transform a business video to a view model
 export function transformVideoToView(
@@ -14,14 +32,8 @@ export function transformVideoToView(
 ): z.infer<typeof VideoView> {
     // Held-for-review, hidden and deleted comments are never exposed with the video
     const publicComments = (video.comments || []).filter((comment) => isCommentVisible(comment as unknown as StoredComment));
-    // Processing internals stay server-side: the check loop's state and Bunny's
-    // raw failure text. Clients get only the issue kind (watch page, studio).
-    // A thumbnail Bunny has not made yet would 404: clients show their placeholder instead.
-    const { processingCheck: _check, processingIssue, thumbnailPending, ...rest } = video;
     return {
-        ...rest,
-        ...(processingIssue ? { processingIssueKind: processingIssue.kind } : {}),
-        ...(thumbnailPending && video.thumbnailType !== 'custom' ? { thumbnailUrl: undefined } : {}),
+        ...publicVideoFields(video),
         comments: publicComments,
         commentSettings: getCommentSettings(video),
         channelName: channel?.name || "",

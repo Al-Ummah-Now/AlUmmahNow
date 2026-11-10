@@ -1,3 +1,4 @@
+import { isVideoListedFor } from './visibility';
 /**
  * Playlist helpers shared by playlist endpoints.
  */
@@ -38,8 +39,7 @@ export function canViewPlaylist(playlist: PlaylistType, userId?: string | null):
  * Deleted/hidden videos are never shown; private videos only to their owner.
  */
 export function canViewVideo(video: VideoType, userId?: string | null): boolean {
-    if (video.isDeleted || video.isHidden) return false;
-    if (video.isPublic === false) return !!userId && video.userId === userId;
+    if (!isVideoListedFor(video, userId)) return false;
     return true;
 }
 

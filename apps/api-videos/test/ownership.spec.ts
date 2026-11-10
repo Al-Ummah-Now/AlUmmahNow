@@ -403,8 +403,9 @@ describe('endpoints served from the ownership index', () => {
 		const app = buildApp(r => r.get('/api/channels/:id', ChannelFetch), null);
 		const body = await (await app.request('/api/channels/mine1', {}, indexed)).json() as any;
 		const view = body.result ?? body;
-		// m-a, m-b, m-d, m-g + zz-short-new, zz-short-old, zz-short-live, zz-no-duration, zz-landscape-2min, zz-vertical-as-video
-		assert.equal(view.videosCount, 10);
+		// m-a, m-b, m-d + zz-short-new, zz-short-old, zz-short-live, zz-no-duration, zz-landscape-2min, zz-vertical-as-video;
+		// m-g is still processing, so it is not counted until it is ready
+		assert.equal(view.videosCount, 9);
 	});
 
 	it('GET /api/channels/:id/about totals match the scan without reading the videos bucket', async () => {
@@ -415,7 +416,7 @@ describe('endpoints served from the ownership index', () => {
 		// The scan fallback reads at most FALLBACK_SCAN_OBJECTS and says its totals may be partial (AV-16)
 		assert.equal(before.result.statsPartial, true);
 		assert.deepEqual({ ...after, result: { ...after.result, statsPartial: true } }, before);
-		assert.equal(after.result.videosCount, 4, 'm-a, m-b, m-d (short) and m-g count; private, hidden and scheduled do not');
+		assert.equal(after.result.videosCount, 3, 'm-a, m-b and m-d (short) count; m-g (processing), private, hidden and scheduled do not');
 		assert.equal(after.result.totalViews, 1055);
 		assert.equal(after.result.statsPartial, false);
 		assert.equal(indexed.videos.calls, 0);

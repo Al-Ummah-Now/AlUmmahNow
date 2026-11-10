@@ -12,6 +12,7 @@
  */
 
 import { logger } from './logger';
+import { isVideoPubliclyVisible } from './visibility';
 import { detectTextLanguage } from '@al-ummah/shared-types';
 
 export interface DiscoveryVideo {
@@ -82,11 +83,9 @@ const HOUR_MS = 60 * 60 * 1000;
  */
 export function isDiscoverable(video: DiscoveryVideo | null | undefined): video is DiscoveryVideo {
   if (!video || typeof video !== 'object' || !video.id || typeof video.title !== 'string') return false;
-  if (video.isPublic === false) return false;
-  if (video.isDeleted || video.isHidden || video.markedForDeletion) return false;
-  if (video.uploadStatus && video.uploadStatus !== 'ready') return false;
-  if (video.scheduledPublishStatus === 'scheduled' || video.scheduledPublishStatus === 'publishing') return false;
-  return true;
+  if (video.markedForDeletion) return false;
+  // Public, ready, not removed, not scheduled: the shared listing rule
+  return isVideoPubliclyVisible(video);
 }
 
 function normalize(text: string): string {

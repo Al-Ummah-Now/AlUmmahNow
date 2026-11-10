@@ -1,5 +1,6 @@
 import { isShort } from "@al-ummah/shared-types";
 import { Num, Str } from "chanfana";
+import { publicVideoFields } from '../../lib/transformations';
 import { FALLBACK_SCAN_OBJECTS } from "../../lib/scanBudget";
 import { string, z } from "zod";
 import { Video as BusinessVideo, Channel as BusinessChannel, PaginationResponse, ResponseError } from "../../lib/types";
@@ -159,7 +160,7 @@ export class ChannelLiveList extends OptionalAuthRoute {
 
 			// Transform business videos to view models
 			const transformToView = (video: VideoType) => ({
-				...video,
+				...publicVideoFields(video),
 				channelName: channel.name || "",
 				channelAvatarUrl: channel.avatarUrl || undefined,
 				likesCount: video.likes?.length || 0,

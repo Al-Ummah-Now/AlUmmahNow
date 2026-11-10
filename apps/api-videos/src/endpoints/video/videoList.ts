@@ -1,5 +1,6 @@
 import { isShort } from "@al-ummah/shared-types";
 import { Num, Str } from "chanfana";
+import { publicVideoFields } from '../../lib/transformations';
 import { string, z } from "zod";
 import { Video as BusinessVideo, PaginationResponse, ResponseError } from "../../lib/types";
 import { VideoView } from "../../lib/model/view";
@@ -7,7 +8,7 @@ import R2Repository from "../../lib/r2Repo";
 import { VideoCategory, Channel } from "@al-ummah/shared-types";
 import { OptionalAuthRoute, AppContext } from '../../base';
 import { logger } from "../../lib/logger";
-import { isInternalRecord } from "../../lib/visibility";
+import { isInternalRecord, isVideoListedFor } from "../../lib/visibility";
 import { waitUntilOf } from "../../lib/search/ownership";
 import { INDEX_CURSOR_PREFIX, channelVideosFromIndex } from "../../lib/search/channelVideoIndex";
 import { edgeCacheUrl, readEdgeCache, writeEdgeCache } from "../../lib/edge-cache";
@@ -140,13 +141,9 @@ export class VideosList extends OptionalAuthRoute {
 			if (filter === "private" && video.isPublic !== false) return false;
 			if (filter === "live" && !video.isLive) return false;
 
-			// If video is explicitly private (false), only show if user owns it
-			if (video.isPublic === false) {
-				return userId && video.userId === userId;
-			}
-
-			// If video is public (true) or undefined/null (default to public), always show it
-			return true;
+			// One listing rule (lib/visibility.ts): public + ready for everyone,
+			// the owner also sees their own private and processing videos
+			return isVideoListedFor(video, userId);
 		};
 
 		const compareVideos = (a: VideoType, b: VideoType) => {
@@ -238,7 +235,7 @@ export class VideosList extends OptionalAuthRoute {
 		const transformToView = (video: VideoType) => {
 			const channel = video.channelId ? channelMap.get(video.channelId) : undefined;
 			return {
-				...video,
+				...publicVideoFields(video),
 				channelName: channel?.name || "",
 				channelAvatarUrl: channel?.avatarUrl,
 				likesCount: video.likes?.length || 0,
