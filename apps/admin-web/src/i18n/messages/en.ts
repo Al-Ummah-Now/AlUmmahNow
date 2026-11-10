@@ -1333,6 +1333,8 @@ const en = {
     bulkDeleteBody: 'They are removed from Bunny, storage, search and notifications. This cannot be undone.',
     bulkResult: '{ok} of {total} done',
     previewTitle: 'Preview',
+    erasedTitle: 'Video deleted',
+    erasedBody: 'This video was erased from Al Ummah Now videos: Bunny, storage, search and notifications. Its delete job is below.',
     noPreview: 'No playable stream yet.',
     processingTitle: 'Processing',
     bunnyStatus: 'Bunny status',

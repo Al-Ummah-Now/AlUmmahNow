@@ -227,7 +227,11 @@ test.describe('Release: admin content management', () => {
       await page.getByTestId('video-edit-title').fill(newTitle);
       await page.getByTestId('video-edit-save').click();
       await expect(page.getByTestId('video-title')).toHaveText(newTitle, { timeout: 30000 });
-      await confirm(page, 'video-delete', { typed: true });
+      // Its answer is the queued notice, or (purge already done when the page re-reads) the deleted view
+      await confirm(page, 'video-delete', {
+        typed: true,
+        answer: page.getByTestId('content-action-message').filter({ hasText: QUEUED_NOTICE }).or(page.getByTestId('video-erased')),
+      });
       // The purge job polls this page; leave once it is done (the record may be gone by then)
       await jobsIdle(page);
       // The queued purge erases the record entirely: it leaves the admin list and the public API

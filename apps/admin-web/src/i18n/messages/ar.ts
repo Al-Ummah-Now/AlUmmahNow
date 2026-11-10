@@ -1332,6 +1332,8 @@ const ar: Messages = {
     bulkDeleteBody: 'تُحذف من Bunny والتخزين والبحث والإشعارات. لا يمكن التراجع عن ذلك.',
     bulkResult: 'تم {ok} من {total}',
     previewTitle: 'معاينة',
+    erasedTitle: 'تم حذف الفيديو',
+    erasedBody: 'حُذف هذا الفيديو من فيديوهات Al Ummah Now: من Bunny والتخزين والبحث والإشعارات. مهمة الحذف موضّحة أدناه.',
     noPreview: 'لا يوجد بث قابل للتشغيل بعد.',
     processingTitle: 'المعالجة',
     bunnyStatus: 'حالة Bunny',
