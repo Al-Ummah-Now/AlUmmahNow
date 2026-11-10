@@ -1,6 +1,6 @@
 import Link from 'next/link';
-import { getProcessingErrors, listContactMessages } from '@/lib/api/admin';
-import type { ContactListResponse, ProcessingErrorsResponse } from '@/lib/api/types';
+import { getProcessingErrors, listContactMessages, listFlaggedVideoFormats } from '@/lib/api/admin';
+import type { ContactListResponse, FlaggedVideoList, ProcessingErrorsResponse } from '@/lib/api/types';
 import { getAdminSession } from '@/lib/auth';
 import { canUseContactInbox, canUseProcessing } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
@@ -37,6 +37,14 @@ export default async function ErrorsPage() {
     data = await getProcessingErrors();
   } catch (e) {
     logger.error('[errors] Failed to load', { error: e instanceof Error ? e.message : String(e) });
+  }
+
+  // Videos Bunny cannot describe (no length or size): a Short/video decision is needed (videos:format, admins)
+  let formatFlagged: FlaggedVideoList | null = null;
+  try {
+    formatFlagged = await listFlaggedVideoFormats(20, 0);
+  } catch (e) {
+    logger.error('[errors] Failed to load unclassified videos', { error: e instanceof Error ? e.message : String(e) });
   }
 
   // Contact us emails that finally failed (contact mail queue); admins and super admins
@@ -176,6 +184,43 @@ export default async function ErrorsPage() {
                       <td className={tdClass}>{t(d.step === 'ContactDataErase' ? 'errorsPage.stepContact' : 'errorsPage.stepAccount')}</td>
                       <td className={`${tdClass} break-words`}>{d.failureReason || t('errorsPage.noReason')}</td>
                       <td className={tdClass}>{d.attempts}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+
+      {formatFlagged && (
+        <section aria-labelledby="errors-format">
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+            <h2 id="errors-format" className="text-xl font-semibold text-fg">{t('errorsPage.formatTitle')}</h2>
+            <Link href="/video-formats" className={linkClass}>{t('errorsPage.openFormats')}</Link>
+          </div>
+          {formatFlagged.items.length === 0 ? (
+            <div className={`${cardClass} text-center text-fg-muted`} data-testid="errors-format-empty">{t('errorsPage.formatEmpty')}</div>
+          ) : (
+            <div className="bg-surface border border-border rounded-lg overflow-x-auto">
+              <table className="w-full" data-testid="errors-format">
+                <caption className="sr-only">{t('errorsPage.formatTitle')}</caption>
+                <thead className="border-b border-border">
+                  <tr>
+                    <th className={thClass} scope="col">{t('errorsPage.colWhen')}</th>
+                    <th className={thClass} scope="col">{t('errorsPage.colVideo')}</th>
+                    <th className={thClass} scope="col">{t('errorsPage.colReason')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {formatFlagged.items.map((v) => (
+                    <tr key={v.id} className="border-b border-border last:border-0" data-video-id={v.id}>
+                      <td className={tdClass}>{v.formatIssue?.at ? formatDate(v.formatIssue.at, locale, true) : '—'}</td>
+                      <td className={tdClass}>
+                        <div className="font-medium text-fg">{v.title || v.id}</div>
+                        <div className="text-fg-muted text-xs" dir="ltr">{v.id}</div>
+                      </td>
+                      <td className={tdClass}>{v.formatIssue?.reason || t('errorsPage.noReason')}</td>
                     </tr>
                   ))}
                 </tbody>

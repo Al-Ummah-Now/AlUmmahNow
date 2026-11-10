@@ -33,6 +33,8 @@ import {
 	newVideoFormatRun,
 	readVideoFormatRunFrom,
 	startVideoFormatRunWith,
+	VIDEO_FORMAT_APPLIED_KEY,
+	VIDEO_FORMAT_PAGE_DELAY_SECONDS,
 	VIDEO_FORMAT_PAGE_SIZE,
 	wasShortByOldRule,
 	writeVideoFormatRun,
@@ -51,6 +53,8 @@ import { backfillSearchPage } from '../search/backfill';
 
 export interface VideoFormatEnv extends ProcessingEnv {
 	global_settings?: R2Bucket;
+	/** Seconds between pages (default VIDEO_FORMAT_PAGE_DELAY_SECONDS) */
+	VIDEO_FORMAT_PAGE_DELAY_SECONDS?: string;
 	BUNNY_SIGN_HOSTNAME?: string;
 	BUNNY_SIGN_URLS?: string;
 	BUNNY_TOKEN_KEY?: unknown;
@@ -104,12 +108,49 @@ export function largestResolution(playlist: string): { width: number; height: nu
 	return best;
 }
 
-/** The encoded size from the CDN's master playlist (signed when the library uses token auth). */
-async function sizeFromPlaylist(env: VideoFormatEnv, video: FormatVideo): Promise<EncodedSize | null> {
+/** Total of a media playlist's segment lengths (#EXTINF), in whole seconds; null when it has none. */
+export function playlistDuration(playlist: string): number | null {
+	let total = 0;
+	for (const m of playlist.matchAll(/#EXTINF:\s*([0-9]+(?:\.[0-9]+)?)/g)) total += Number(m[1]);
+	return total > 0 ? Math.round(total) : null;
+}
+
+/** First media playlist a master playlist points to (relative to the master's URL). */
+export function firstMediaPlaylist(master: string): string | null {
+	const lines = master.split(/\r?\n/).map((l) => l.trim());
+	for (let i = 0; i < lines.length; i++) {
+		if (lines[i].startsWith('#EXT-X-STREAM-INF')) {
+			const uri = lines.slice(i + 1).find((l) => l && !l.startsWith('#'));
+			if (uri) return uri;
+		}
+	}
+	return null;
+}
+
+/** The Bunny CDN host and video id a record plays from (its playUrl, else the configured library). */
+export function playlistLocation(env: Pick<VideoFormatEnv, 'bunny_hostname'>, video: Pick<FormatVideo, 'id' | 'playUrl'>): { host: string; id: string } | null {
 	const match = /^https:\/\/([^/]+)\/([A-Za-z0-9-]+)\/playlist\.m3u8$/.exec(video.playUrl ?? '');
-	if (!match || match[2] !== video.id) return null;
-	const [, host, id] = match;
-	let url = video.playUrl as string;
+	if (match) return match[2] === video.id ? { host: match[1], id: match[2] } : null;
+	return env.bunny_hostname ? { host: env.bunny_hostname, id: video.id } : null;
+}
+
+async function fetchText(url: string, what: string): Promise<string | null> {
+	const res = await fetch(url);
+	if (res.status === 403 || res.status === 404) return null;
+	if (!res.ok) throw new Error(`${what}: HTTP ${res.status}`);
+	return res.text();
+}
+
+/**
+ * Encoded size and length from Bunny's CDN, for any library: the master
+ * playlist's largest RESOLUTION and the sum of a media playlist's segments.
+ * Signed with the library's token key where token authentication is on.
+ */
+async function sizeFromPlaylist(env: VideoFormatEnv, video: FormatVideo, opts: { needDuration: boolean }): Promise<EncodedSize | null> {
+	const where = playlistLocation(env, video);
+	if (!where) return null;
+	const { host, id } = where;
+	let url = `https://${host}/${id}/playlist.m3u8`;
 	const signHost = env.BUNNY_SIGN_HOSTNAME || env.bunny_hostname;
 	if (env.BUNNY_SIGN_URLS === 'true' && host === signHost) {
 		const key = await getSecret(env.BUNNY_TOKEN_KEY, 'BUNNY_TOKEN_KEY');
@@ -118,26 +159,60 @@ async function sizeFromPlaylist(env: VideoFormatEnv, video: FormatVideo): Promis
 			url = signedBunnyUrl(host, id, 'playlist.m3u8', await bunnyDirectoryToken(key, id, expires), expires);
 		}
 	}
-	const res = await fetch(url);
-	if (res.status === 403 || res.status === 404) return null;
-	if (!res.ok) throw new Error(`playlist ${id}: HTTP ${res.status}`);
-	const size = largestResolution(await res.text());
-	return size ? { ...size, source: 'playlist' } : null;
+	const master = await fetchText(url, `playlist ${id}`);
+	if (!master) return null;
+	const size = largestResolution(master);
+	let duration: number | undefined;
+	if (opts.needDuration) {
+		const media = firstMediaPlaylist(master);
+		if (media) duration = playlistDuration((await fetchText(new URL(media, url).toString(), `media playlist ${id}`)) ?? '') ?? undefined;
+	}
+	if (!size && !duration) return null;
+	return { ...(size ?? {}), duration, source: 'playlist' };
 }
 
 /**
- * Bunny's encoded size (and length) of a ready video: the Stream API for the
- * configured library, else the master playlist. Null when neither has it.
+ * Bunny's encoded size and length of a ready video, whichever library holds
+ * it: the Stream API when the video plays from the configured library (prod:
+ * legacy 400189 on vz-215a1ffd), and Bunny's CDN playlists for any other
+ * library (and when the API has no size). Null when Bunny cannot describe it.
  * Throws on transient errors (the page is retried).
  */
 export async function readEncodedSize(env: VideoFormatEnv, video: FormatVideo): Promise<EncodedSize | null> {
-	const bunny = await fetchBunnyVideo(env, video.id);
-	if (bunny && positive(bunny.width) && positive(bunny.height)) {
-		return { width: bunny.width, height: bunny.height, duration: positive(bunny.length), source: 'bunny-api' };
-	}
-	const fromPlaylist = await sizeFromPlaylist(env, video);
-	if (fromPlaylist) return { ...fromPlaylist, duration: positive(bunny?.length) };
-	return bunny && positive(bunny.length) ? { duration: bunny.length, source: 'bunny-api' } : null;
+	const where = playlistLocation(env, video);
+	const configuredLibrary = !where || where.host === env.bunny_hostname;
+	const bunny = configuredLibrary ? await fetchBunnyVideo(env, video.id) : null;
+	const apiSize = bunny && positive(bunny.width) && positive(bunny.height) ? { width: bunny.width, height: bunny.height } : null;
+	const apiDuration = positive(bunny?.length);
+	if (apiSize && (apiDuration || positive(video.duration))) return { ...apiSize, duration: apiDuration, source: 'bunny-api' };
+	const cdn = await sizeFromPlaylist(env, video, { needDuration: !apiDuration && !positive(video.duration) });
+	const width = apiSize?.width ?? cdn?.width;
+	const height = apiSize?.height ?? cdn?.height;
+	const duration = apiDuration ?? cdn?.duration;
+	if (!width && !duration) return null;
+	return { width, height, duration, source: apiSize || apiDuration ? 'bunny-api' : 'playlist' };
+}
+
+function pageDelaySeconds(env: VideoFormatEnv): number {
+	const n = Number(env.VIDEO_FORMAT_PAGE_DELAY_SECONDS);
+	return Number.isFinite(n) && n >= 0 ? Math.min(Math.floor(n), 600) : VIDEO_FORMAT_PAGE_DELAY_SECONDS;
+}
+
+/**
+ * Daily: classify what imports, syncs and uploads added since the last run
+ * (an idempotent run over every video; only unclassified ones are read from
+ * Bunny). Starts only once an admin has completed a real run (so a new
+ * environment always starts with a dry run), and not while a run is going.
+ */
+export async function startDailyVideoFormatRun(env: VideoFormatEnv, now = new Date()): Promise<{ started: boolean; why?: string; runId?: string }> {
+	if (!env.global_settings || !env.PROCESSING_CHECK_QUEUE) return { started: false, why: 'not configured' };
+	const applied = await env.global_settings.get(VIDEO_FORMAT_APPLIED_KEY);
+	if (!applied) return { started: false, why: 'no applied run yet (an admin starts the first one)' };
+	const latest = await readVideoFormatRun(env);
+	const stale = latest ? now.getTime() - Date.parse(latest.updatedAt) > 2 * 60 * 60 * 1000 : true;
+	if (latest?.status === 'running' && !stale) return { started: false, why: 'a run is in progress' };
+	const run = await startVideoFormatRun(env, { dryRun: false, requestedBy: 'daily', now });
+	return { started: true, runId: run.runId };
 }
 
 function issueFor(video: FormatVideo, missing: Array<'duration' | 'dimensions'>, now: Date, why?: string): VideoFormatIssue {
@@ -318,7 +393,9 @@ export async function handleVideoFormatMessage(env: VideoFormatEnv, msg: QueueMe
 		// Next page first: if the state write then fails, the retry re-runs this
 		// (idempotent) page and the duplicate next page is acknowledged above
 		if (result.nextCursor) {
-			await env.PROCESSING_CHECK_QUEUE!.send({ ...body, page: body.page + 1, cursor: result.nextCursor } satisfies VideoFormatJobMessage);
+			await env.PROCESSING_CHECK_QUEUE!.send({ ...body, page: body.page + 1, cursor: result.nextCursor } satisfies VideoFormatJobMessage, {
+				delaySeconds: pageDelaySeconds(env),
+			});
 		}
 		run.pages[String(body.page)] = result.counts;
 		run.updatedAt = now.toISOString();
@@ -329,6 +406,11 @@ export async function handleVideoFormatMessage(env: VideoFormatEnv, msg: QueueMe
 			run.finishedAt = now.toISOString();
 		}
 		await writeRun(env, run);
+		if (run.status === 'done' && !run.dryRun) {
+			await env.global_settings!.put(VIDEO_FORMAT_APPLIED_KEY, JSON.stringify({ runId: run.runId, finishedAt: run.finishedAt }), {
+				httpMetadata: { contentType: 'application/json' },
+			});
+		}
 		logger.info('[VideoFormat] Page done', { runId: body.runId, page: body.page, counts: result.counts, done: run.status === 'done' });
 		msg.ack();
 	} catch (error) {

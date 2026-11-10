@@ -34,7 +34,7 @@ import { createTusRouter } from "./endpoints/video/tus";
 import { createProcessingInternalRouter } from "./endpoints/video/processingInternal";
 import { createUploadsInternalRouter } from "./endpoints/video/uploadsInternal";
 import { createVideoFormatInternalRouter } from "./endpoints/video/videoFormatInternal";
-import { handleVideoFormatMessage } from "./lib/video-format/job";
+import { handleVideoFormatMessage, startDailyVideoFormatRun } from "./lib/video-format/job";
 import { VIDEO_FORMAT_JOB_KIND } from "@al-ummah/shared-types";
 // Profile/Channel image upload handlers (not in routers yet)
 import handleAvatarUpdate from "./endpoints/profile/profileAvatarUpdate";
@@ -475,6 +475,13 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 			} catch (error) {
 				logger.error('[Ownership] Reconcile failed', { error: error instanceof Error ? error.message : String(error) });
 				reportJobFailure(rawEnv, ctx, 'ownership-reconcile', error);
+			}
+			try {
+				// Short vs video: classify videos added by imports, syncs and uploads (lib/video-format/job.ts)
+				const daily = await startDailyVideoFormatRun(rawEnv as never);
+				logger.info('[VideoFormat] Daily run', daily);
+			} catch (error) {
+				logger.error('[VideoFormat] Daily run failed to start', { error: error instanceof Error ? error.message : String(error) });
 			}
 			try {
 				// Upload rate limits (AV-14): drop windows of users who stopped uploading and expired leases.

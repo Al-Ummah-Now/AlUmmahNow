@@ -14,8 +14,11 @@ import {
 } from '@al-ummah/shared-types';
 import {
 	handleVideoFormatMessage,
+	firstMediaPlaylist,
 	largestResolution,
+	playlistDuration,
 	readVideoFormatRun,
+	startDailyVideoFormatRun,
 	runVideoFormatPage,
 	startVideoFormatRun,
 } from '../src/lib/video-format/job';
@@ -96,6 +99,72 @@ describe('largestResolution', () => {
 		const m3u8 = '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1,RESOLUTION=360x640\n360p/video.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=2,RESOLUTION=1080x1920\n1080p/video.m3u8\n';
 		assert.deepEqual(largestResolution(m3u8), { width: 1080, height: 1920 });
 		assert.equal(largestResolution('#EXTM3U\n'), null);
+	});
+});
+
+describe('playlist parsing', () => {
+	it('sums a media playlist and finds the first rendition', () => {
+		assert.equal(playlistDuration('#EXTM3U\n#EXTINF:4.000,\na.ts\n#EXTINF:4.000,\nb.ts\n#EXTINF:2.4,\nc.ts\n'), 10);
+		assert.equal(playlistDuration('#EXTM3U\n'), null);
+		assert.equal(firstMediaPlaylist('#EXTM3U\n#EXT-X-STREAM-INF:RESOLUTION=640x360\n360p/video.m3u8\n'), '360p/video.m3u8');
+	});
+});
+
+describe('every library, every legacy record', () => {
+	it('legacy records with no size or length: read from Bunny whichever library holds them; the uploader choice is never touched', async () => {
+		const NEWER = 'vz-25839d05-80d.b-cdn.net';
+		const env = makeEnv({
+			// Configured library (prod: legacy 400189): the Stream API has size and length
+			'k-legacy-api': ready('k-legacy-api', {}),
+			// Another library (no API key here): the CDN gives size and, from the media playlist, length
+			'l-other-lib': ready('l-other-lib', { playUrl: `https://${NEWER}/l-other-lib/playlist.m3u8` }),
+			// Imported record without a playUrl: the configured library's CDN
+			'm-no-playurl': videoFixture({ id: 'm-no-playurl', title: 'm', channelId: 'c1', playUrl: undefined, uploadStatus: undefined }),
+			// The uploader chose "video": classified by that choice, never read or changed
+			'n-choice': ready('n-choice', { format: 'video' }),
+		});
+		bunny['k-legacy-api'] = { status: 200, body: { guid: 'k-legacy-api', status: 4, length: 75, width: 1080, height: 1920 } };
+		playlists['/l-other-lib/playlist.m3u8'] = '#EXTM3U\n#EXT-X-STREAM-INF:RESOLUTION=720x1280\n720p/video.m3u8\n';
+		playlists['/l-other-lib/720p/video.m3u8'] = '#EXTM3U\n#EXTINF:6.0,\na.ts\n#EXTINF:6.0,\nb.ts\n';
+		playlists['/m-no-playurl/playlist.m3u8'] = '#EXTM3U\n#EXT-X-STREAM-INF:RESOLUTION=1920x1080\n1080p/video.m3u8\n';
+		playlists['/m-no-playurl/1080p/video.m3u8'] = '#EXTM3U\n#EXTINF:100.0,\na.ts\n';
+
+		const { counts } = await runVideoFormatPage(env, message(), { now: NOW });
+		assert.deepEqual([await stored(env, 'k-legacy-api')].map((v) => [v.width, v.height, v.duration]), [[1080, 1920, 75]]);
+		assert.deepEqual([await stored(env, 'l-other-lib')].map((v) => [v.width, v.height, v.duration]), [[720, 1280, 12]]);
+		assert.deepEqual([await stored(env, 'm-no-playurl')].map((v) => [v.width, v.height, v.duration]), [[1920, 1080, 100]]);
+		assert.ok(!fetched.some((u) => u.includes('video.bunnycdn.com') && u.includes('l-other-lib')), 'no API call for another library');
+		assert.equal(counts.shorts, 2, 'k and l: vertical and short');
+		assert.equal(counts.flagged, 0);
+		const choice = await stored(env, 'n-choice');
+		assert.equal(choice.format, 'video');
+		assert.equal(choice.width, undefined);
+		assert.ok(!fetched.some((u) => u.includes('n-choice')));
+		const rows = await env.SEARCH_DB.prepare("SELECT id FROM content_ownership WHERE kind = 'video' AND is_short = 1 ORDER BY id").all();
+		assert.deepEqual(rows.results.map((r: any) => r.id), ['k-legacy-api', 'l-other-lib']);
+	});
+
+	it('pages wait between each other (rate limit) and the daily run starts only after an applied run', async () => {
+		const videos: Record<string, unknown> = {};
+		for (let i = 0; i < 3; i++) videos[`v${i}`] = ready(`v${i}`, { duration: 30, width: 720, height: 1280 });
+		const env = makeEnv(videos);
+		assert.deepEqual(await startDailyVideoFormatRun(env, NOW), { started: false, why: 'no applied run yet (an admin starts the first one)' });
+		await startVideoFormatRun(env, { dryRun: true, limit: 2, now: NOW });
+		await handleVideoFormatMessage(env, queued(env.PROCESSING_CHECK_QUEUE.sent[0].body), NOW);
+		assert.equal(env.PROCESSING_CHECK_QUEUE.sent[1].delaySeconds, 5);
+		await handleVideoFormatMessage(env, queued(env.PROCESSING_CHECK_QUEUE.sent[1].body), NOW);
+		assert.equal((await startDailyVideoFormatRun(env, NOW)).started, false, 'a dry run does not unlock the daily run');
+
+		env.VIDEO_FORMAT_PAGE_DELAY_SECONDS = '0';
+		await startVideoFormatRun(env, { dryRun: false, limit: 2, now: NOW });
+		const first = env.PROCESSING_CHECK_QUEUE.sent.length - 1;
+		await handleVideoFormatMessage(env, queued(env.PROCESSING_CHECK_QUEUE.sent[first].body), NOW);
+		assert.equal(env.PROCESSING_CHECK_QUEUE.sent[first + 1].delaySeconds, 0);
+		await handleVideoFormatMessage(env, queued(env.PROCESSING_CHECK_QUEUE.sent[first + 1].body), NOW);
+		const daily = await startDailyVideoFormatRun(env, NOW);
+		assert.equal(daily.started, true);
+		assert.equal((await readVideoFormatRun(env))!.requestedBy, 'daily');
+		assert.equal((await startDailyVideoFormatRun(env, NOW)).started, false, 'not while a run is going');
 	});
 });
 
@@ -263,6 +332,7 @@ describe('processing loop and format flags', () => {
 		const id = 'p-1';
 		const env = makeEnv({ [id]: videoFixture({ id, uploadStatus: 'processing', dateCreated: NOW.toISOString(), processingCheck: { loopId: 'L1', startedAt: NOW.toISOString(), attempt: 0 } }) });
 		bunny[id] = { status: 200, body: { guid: id, status: 4, encodeProgress: 100, availableResolutions: '720p', length: 40 } };
+		playlists[`/${id}/thumbnail.jpg`] = 'jpeg';
 		await runProcessingCheck(env, { kind: 'processing-check', videoId: id, loopId: 'L1', attempt: 0, startedAt: NOW.toISOString() }, NOW);
 		let video = await stored(env, id);
 		assert.equal(video.uploadStatus, 'ready');
