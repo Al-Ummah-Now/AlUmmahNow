@@ -84,7 +84,7 @@ export function ThemeLibrary({ themes, canEdit, author }: { themes: ThemeListIte
               {!theme.builtIn && <a className={action} href={exportUrl(theme.id, theme.latestVersion ?? 'draft')} data-testid={`theme-export-${theme.id}`}>{t('themeBuilder.export')}</a>}
               {canEdit && !theme.builtIn && (theme.active
                 ? <button type="button" className={action} disabled title={t('themeBuilder.deleteActive')} data-testid={`theme-delete-${theme.id}`}>{t('themeBuilder.delete')}</button>
-                : <ConfirmButton label={t('themeBuilder.delete')} title={t('themeBuilder.delete')} body={t('themeBuilder.confirmDelete', { name: theme.name[locale] })} confirmLabel={t('themeBuilder.delete')} withReason danger disabled={pending} testId={`theme-delete-${theme.id}`} onConfirm={(reason) => onDelete(theme, reason)} />)}
+                : <ConfirmButton label={t('themeBuilder.delete')} title={t('confirmDialog.themeDeleteTitle')} body={t('themeBuilder.confirmDelete', { name: theme.name[locale] })} confirmLabel={t('themeBuilder.delete')} withReason typeToConfirm={theme.id} danger disabled={pending} testId={`theme-delete-${theme.id}`} dialogTestId="theme-delete-confirm" onConfirm={(reason) => onDelete(theme, reason)} />)}
             </div>
           </li>
         ))}

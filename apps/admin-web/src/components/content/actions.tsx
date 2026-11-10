@@ -104,6 +104,11 @@ interface ConfirmDialogContent {
   testId: string;
 }
 
+interface ConfirmDialogTestIds {
+  /** The dialog's own test-id base when it differs from the opening button's (`<base>-dialog`, `-confirm`, `-cancel`, `-typed`). */
+  dialogTestId?: string;
+}
+
 interface ConfirmDialogProps extends ConfirmDialogContent {
   open: boolean;
   /** Esc, the backdrop and Cancel all call this. */
@@ -125,7 +130,8 @@ function confirmValuesOf(required: string | readonly string[] | undefined): stri
 
 /**
  * Modal <dialog> (showModal: focus trap, Escape cancels) to confirm a change.
- * Focus starts on Cancel, or on the reason / type-to-confirm field when there is one.
+ * Focus always starts on Cancel (owner rule: the safe choice first, so Enter never confirms a
+ * change by accident); the reason and type-to-confirm fields are one Tab away.
  * Never use window.confirm/alert/prompt instead.
  */
 export function ConfirmDialog({ open, onCancel, onConfirm, title, body, confirmLabel, withReason, reasonHint, typeToConfirm, typeToConfirmLabel, danger, testId }: ConfirmDialogProps) {
@@ -142,10 +148,11 @@ export function ConfirmDialog({ open, onCancel, onConfirm, title, body, confirmL
     if (!dialog) return;
     if (open && !dialog.open) {
       dialog.showModal();
-      if (!withReason && confirmValues.length === 0) cancelRef.current?.focus();
+      // showModal() focuses the first field (the reason or the typed text): move it to Cancel
+      cancelRef.current?.focus();
     }
     if (!open && dialog.open) dialog.close();
-  }, [open, withReason, confirmValues.length]);
+  }, [open]);
 
   const ready = typedMatches(typed, typeToConfirm);
   const reset = () => {
@@ -232,7 +239,7 @@ interface ConfirmProps extends ConfirmDialogContent {
 }
 
 /** A button that opens a modal <dialog> to confirm (and optionally explain) a change. */
-export function ConfirmButton({ label, disabled, busy, onConfirm, ...dialog }: ConfirmProps) {
+export function ConfirmButton({ label, disabled, busy, onConfirm, dialogTestId, ...dialog }: ConfirmProps & ConfirmDialogTestIds) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
 
@@ -243,6 +250,7 @@ export function ConfirmButton({ label, disabled, busy, onConfirm, ...dialog }: C
       </button>
       <ConfirmDialog
         {...dialog}
+        testId={dialogTestId ?? dialog.testId}
         open={open}
         onCancel={() => setOpen(false)}
         onConfirm={(reason) => {
