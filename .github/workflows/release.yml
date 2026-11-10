@@ -191,6 +191,15 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # wrangler re-bundles the web worker (worker.ts imports @al-ummah/logger) at
+      # upload, and the seed imports web code: both need the workspace packages'
+      # dist/, which only the build job made until now. Build them right after install.
+      - name: Build shared packages
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
+          pnpm --filter @al-ummah/theme-packages build
+
       - uses: actions/download-artifact@v4
         with:
           name: release-workers
@@ -263,14 +272,6 @@ jobs:
       # Idempotent stage data for the release E2E (accounts, channels, encoded
       # videos, playlists): everything already there is found and skipped. Stage
       # accounts register through the auth E2E code sink (apps/web/e2e/seed).
-      # The seed imports web code (test-utils → logger-client → errors reporter)
-      # that reads the workspace packages' dist, as seed-qa.yml builds them.
-      - name: Build shared packages (stage seed)
-        run: |
-          pnpm --filter @al-ummah/shared-types build
-          pnpm --filter @al-ummah/logger build
-          pnpm --filter @al-ummah/theme-packages build
-
       - name: Install Chromium and ffmpeg (stage seed)
         run: |
           (cd apps/web && pnpm exec playwright install --with-deps chromium)
@@ -372,6 +373,15 @@ jobs:
         run: pnpm install --frozen-lockfile
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # wrangler re-bundles the web worker (worker.ts imports @al-ummah/logger) at
+      # upload, and the seed imports web code: both need the workspace packages'
+      # dist/, which only the build job made until now. Build them right after install.
+      - name: Build shared packages
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
+          pnpm --filter @al-ummah/theme-packages build
 
       - uses: actions/download-artifact@v4
         with:
