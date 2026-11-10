@@ -18,6 +18,7 @@
  * lacking prompt=login). Stage release runs never skip.
  */
 import { test, expect, type Page } from '@playwright/test';
+import { clickAccountMenuItem } from './account-menu';
 import { sinkEmail, target } from './targets';
 import { completeRegistration, createProfile, expectNoErrorHop, recordNavigations, signUpOnWeb, webAccessToken } from './web-session';
 
@@ -104,7 +105,7 @@ test.describe('Release: several accounts at once', () => {
     await page.goto(`${target().web}/en`, { waitUntil: 'load' });
     await openAccountMenu(page);
     const authorize = page.waitForRequest((r) => r.url().startsWith(`${target().auth}/authorize`), { timeout: 30000 });
-    await page.locator('[data-testid="nav-add-account"]:visible').first().click();
+    await clickAccountMenuItem(page, 'nav-add-account');
     const prompt = new URL((await authorize).url()).searchParams.get('prompt');
     if (process.env.GITHUB_EVENT_NAME === 'pull_request') {
       test.skip(prompt !== 'login', 'the add-account fix is not deployed on the target yet (it lands with the PR that adds it)');
@@ -143,7 +144,7 @@ test.describe('Release: several accounts at once', () => {
     page.on('request', (r) => {
       if (r.isNavigationRequest() && r.frame() === page.mainFrame()) hops.push(r.url());
     });
-    await page.locator('[data-testid="nav-sign-out"]:visible').first().click();
+    await clickAccountMenuItem(page, 'nav-sign-out');
     await expect.poll(() => activeUserId(page), { timeout: 20000 }).toBe(b.userId);
     expect(hops.some((u) => u.startsWith(`${target().auth}/logout`)), `signed out everywhere: ${hops.join(' → ')}`).toBe(false);
     expect(await switcherAccounts(page)).toEqual([{ email: b.email, active: true }]);
