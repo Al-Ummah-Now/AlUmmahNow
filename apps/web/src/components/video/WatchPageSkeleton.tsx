@@ -8,16 +8,16 @@ export interface WatchHint {
   poster?: string;
 }
 
-const BLOCK = 'wsk-b animate-pulse rounded bg-gray-200 dark:bg-gray-700';
+const BLOCK = 'wsk-b animate-pulse rounded bg-muted';
 
 /** Player, title, channel, actions and description placeholders, at their final sizes. */
 export function WatchDetailsSkeleton({ hint }: { hint?: WatchHint }) {
   return (
     <div data-testid="watch-skeleton" role="status" aria-busy="true" className="flex flex-col w-full mt-0 items-center">
-      <div className="wsk-player w-full aspect-video rounded-lg bg-gray-900 bg-cover bg-center" style={hint?.poster ? { backgroundImage: `url("${hint.poster}")` } : undefined} />
+      <div className="wsk-player w-full aspect-video rounded-lg bg-muted bg-cover bg-center" style={hint?.poster ? { backgroundImage: `url("${hint.poster}")` } : undefined} />
       <div className="wsk-details mt-4 w-full">
         {hint?.title
-          ? <p className="wsk-title text-lg md:text-xl font-semibold text-black dark:text-white mb-3">{hint.title}</p>
+          ? <p className="wsk-title text-lg md:text-xl font-semibold text-foreground mb-3">{hint.title}</p>
           : <div className={`wsk-title-b ${BLOCK} mb-3 h-7 w-3/4`} />}
         <div className="wsk-channel flex items-center gap-3 min-h-11">
           {hint?.channelAvatar
@@ -25,7 +25,7 @@ export function WatchDetailsSkeleton({ hint }: { hint?: WatchHint }) {
             ? <img src={hint.channelAvatar} alt="" className="wsk-avatar h-11 w-11 rounded-full object-cover" />
             : <div className={`wsk-avatar ${BLOCK} h-11 w-11 !rounded-full`} />}
           {hint?.channelName
-            ? <span className="wsk-name text-sm md:text-base font-medium text-gray-700 dark:text-gray-300">{hint.channelName}</span>
+            ? <span className="wsk-name text-sm md:text-base font-medium text-muted-foreground">{hint.channelName}</span>
             : <div className={`wsk-name-b ${BLOCK} h-4 w-40`} />}
           <div className={`wsk-subscribe ${BLOCK} hidden h-9 w-24 !rounded-full`} />
         </div>

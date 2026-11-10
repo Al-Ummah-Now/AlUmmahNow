@@ -20,7 +20,7 @@ export default function LegacyWatch({ hint }: { hint?: WatchHint }) {
       <main id={MAIN_CONTENT_ID} className="flex flex-1 flex-col items-center justify-center p-8" dir={isRTL ? 'rtl' : 'ltr'}>
         <div className="text-center">
           <h1 className="text-2xl font-bold mb-4">{t.video.noVideoSelected}</h1>
-          <p className="text-gray-600 dark:text-gray-400 mb-6">
+          <p className="text-muted-foreground mb-6">
             {t.video.selectVideoMessage}
           </p>
         </div>
