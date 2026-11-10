@@ -1,5 +1,5 @@
 /**
- * Channel subscriptions in D1 (NOTIFICATIONS_DB, migration 0006;
+ * Channel subscriptions in D1 (NOTIFICATIONS_DB, migration 0007;
  * docs/architecture/SCALABILITY-AUDIT.md, AV-4 and AV-6).
  *
  * The source of truth for who subscribes to which channel. It replaces the
