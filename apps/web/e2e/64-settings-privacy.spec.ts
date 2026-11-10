@@ -127,6 +127,7 @@ test.describe('Privacy settings - anonymous', () => {
     await page.goto('/en/settings/privacy');
     await page.evaluate(() => localStorage.setItem('pendingVideoAnalytics', '[1]'));
     await page.getByRole('button', { name: 'Clear data on this device' }).click();
+    await page.getByTestId('clear-device-dialog-confirm').click();
     await expect(page.getByRole('status')).toHaveText('Data on this device has been cleared.');
     expect(await page.evaluate(() => localStorage.getItem('pendingVideoAnalytics'))).toBeNull();
   });

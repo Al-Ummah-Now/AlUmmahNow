@@ -9,6 +9,7 @@
  * at a time) and in manual QA runs, not on pull requests.
  */
 import { test, expect, type Page } from '@playwright/test';
+import { adminConfirm, confirmInApp } from './in-app-confirm';
 import { target } from './targets';
 import { signInAsAdmin } from './admin-session';
 
@@ -188,8 +189,10 @@ test.describe('Release: theme builder', () => {
       }
       if (created) {
         await page.goto(`${target().adminWeb}/site-theme`);
+        // Builds before the in-app dialog used window.confirm
         page.once('dialog', (dialog) => void dialog.accept());
         await page.getByTestId(`theme-delete-${id}`).click();
+        await confirmInApp(page, adminConfirm('theme-delete-confirm'), id);
         await expect(page.getByTestId(`theme-row-${id}`)).toHaveCount(0, { timeout: 30000 });
       }
     }

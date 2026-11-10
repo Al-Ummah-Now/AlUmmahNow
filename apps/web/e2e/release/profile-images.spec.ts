@@ -11,6 +11,7 @@
  * the profile's channel card show them.
  */
 import { test, expect, type Page } from '@playwright/test';
+import { confirmInApp, webConfirm } from './in-app-confirm';
 import { target } from './targets';
 import { apiFetch, createProfile, signUpOnWeb, type WebUser } from './web-session';
 import { grantCreatorTier } from './creator-tier';
@@ -61,6 +62,7 @@ test.describe('Release: profile and channel images', () => {
 
     // Remove clears the stored cover and the preview
     await page.getByTestId('profile-cover-upload-remove').click();
+    await confirmInApp(page, webConfirm('profile-image-remove-dialog'));
     await expect(page.getByTestId('profile-cover-image')).toHaveCount(0);
     await expect.poll(async () => (await storedProfile(user)).coverUrl ?? '', { timeout: 20000 }).toBe('');
   });

@@ -102,7 +102,7 @@ export const GLOBAL_EVENT_ALLOWLIST: ReadonlySet<string> = new Set([
   'visibilitychange',
   'pagehide',
   'pageshow',
-  'beforeunload',
+  // No 'beforeunload': the app never shows browser prompts; flushes use pagehide
   'unload',
   'load',
   'DOMContentLoaded',

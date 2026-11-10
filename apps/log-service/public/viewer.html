@@ -354,8 +354,8 @@
             connect();
         });
 
-        // Clean up on page unload
-        window.addEventListener('beforeunload', () => {
+        // Clean up when the page is left
+        window.addEventListener('pagehide', () => {
             disconnect();
         });
     </script>

@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { AlertTriangle, ArrowDownUp, ExternalLink, ListVideo, Lock, Pencil, Plus, Trash2 } from 'lucide-react';
 import { playlistSortOf } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { reportError } from '@/lib/errors/reporter';
 import { PlaylistCover } from '@/components/PlaylistCover';
 import { deletePlaylist, listPlaylists, type PlaylistWithVideos } from '@/lib/api/playlists';
@@ -33,6 +34,7 @@ export function managePlaylistsHref(lang: string, channelId: string, playlistId?
 
 export default function PlaylistManager({ channelId }: PlaylistManagerProps) {
   const { t, lang, isRTL } = useLanguage();
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const p = t.playlistTools;
   const [playlists, setPlaylists] = useState<PlaylistWithVideos[]>([]);
   const [loading, setLoading] = useState(true);
@@ -61,7 +63,13 @@ export default function PlaylistManager({ channelId }: PlaylistManagerProps) {
 
   const handleDelete = async (playlist: PlaylistWithVideos) => {
     const title = pickLanguage(playlist.name || playlist.title || '', lang);
-    if (!window.confirm(t.playlist.confirmDelete.replace('{title}', title))) return;
+    const confirmed = await confirm({
+      title: t.confirmDialog.deletePlaylistTitle,
+      description: t.playlist.confirmDelete.replace('{title}', title),
+      confirmLabel: t.common.delete,
+      testId: 'playlist-delete-dialog',
+    });
+    if (!confirmed) return;
     setDeletingId(playlist.id);
     setError(null);
     try {
@@ -80,6 +88,7 @@ export default function PlaylistManager({ channelId }: PlaylistManagerProps) {
 
   return (
     <div className="space-y-6" dir={isRTL ? 'rtl' : 'ltr'}>
+      {confirmDialog}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className={`text-2xl font-bold ${TEXT}`}>{t.playlist.managePlaylists}</h1>

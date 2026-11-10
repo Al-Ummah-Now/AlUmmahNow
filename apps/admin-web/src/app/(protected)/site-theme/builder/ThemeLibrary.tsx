@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ID_PATTERN } from '@al-ummah/theme-packages';
 import { useLanguage } from '@/i18n/I18nProvider';
+import { useConfirm } from '@/components/content/actions';
 import type { ThemeListItem } from '@/lib/api/admin';
 import { ErrorAlert, cardClass, fieldClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { ThemeApiError, duplicate, exportUrl, importZip, removeTheme } from './api';
@@ -13,6 +14,7 @@ const action = 'text-sm font-medium underline text-fg disabled:opacity-50';
 
 export function ThemeLibrary({ themes, canEdit, author }: { themes: ThemeListItem[]; canEdit: boolean; author: string }) {
   const { t, locale } = useLanguage();
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const router = useRouter();
   const [failure, setFailure] = useState<string | null>(null);
   const [source, setSource] = useState<ThemeListItem | null>(null);
@@ -40,9 +42,18 @@ export function ThemeLibrary({ themes, canEdit, author }: { themes: ThemeListIte
       router.push(`/site-theme/themes/${id}`);
     } catch (e) { fail(e); }
   });
-  const onDelete = (theme: ThemeListItem) => {
+  const onDelete = async (theme: ThemeListItem) => {
     if (theme.active) { setFailure(t('themeBuilder.deleteActive')); return; }
-    if (!window.confirm(t('themeBuilder.confirmDelete', { name: theme.name[locale] }))) return;
+    // Deleting a theme removes its draft and every published version: type its id first
+    const confirmed = await confirm({
+      title: t('confirmDialog.themeDeleteTitle'),
+      body: t('themeBuilder.confirmDelete', { name: theme.name[locale] }),
+      confirmLabel: t('content.delete'),
+      typeToConfirm: theme.id,
+      danger: true,
+      testId: 'theme-delete-confirm',
+    });
+    if (!confirmed) return;
     start(async () => {
       try { await removeTheme(theme.id); router.refresh(); } catch (e) { fail(e); }
     });
@@ -50,6 +61,7 @@ export function ThemeLibrary({ themes, canEdit, author }: { themes: ThemeListIte
 
   return (
     <section className={`${cardClass} mt-8`} aria-labelledby="theme-builder-title" data-testid="theme-library">
+      {confirmDialog}
       <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
         <div>
           <h2 id="theme-builder-title" className="text-lg font-semibold text-fg">{t('themeBuilder.title')}</h2>

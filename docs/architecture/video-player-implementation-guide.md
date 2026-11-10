@@ -671,7 +671,7 @@ export class VideoAnalytics {
     this.flushInterval = setInterval(() => this.flush(), 30000);
 
     // Flush on page unload
-    window.addEventListener('beforeunload', () => this.flush());
+    window.addEventListener('pagehide', () => this.flush());
   }
 
   trackReady() {
@@ -822,7 +822,7 @@ export class VideoAnalytics {
     if (this.flushInterval) {
       clearInterval(this.flushInterval);
     }
-    window.removeEventListener('beforeunload', () => this.flush());
+    window.removeEventListener('pagehide', () => this.flush());
   }
 }
 

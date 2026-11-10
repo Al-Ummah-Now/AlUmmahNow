@@ -131,8 +131,8 @@ test.describe('comments - post and delete (single-channel user)', () => {
       // Stored on the server, not only optimistic
       await expect.poll(async () => (await listComments(request, video.id)).some((c) => c.text === text)).toBe(true);
 
-      page.once('dialog', (dialog) => dialog.accept());
       await mine.getByRole('button', { name: del }).click();
+      await page.getByTestId('comment-delete-dialog-confirm').click();
       await expect(section.locator('p', { hasText: text })).toHaveCount(0);
       await expect.poll(async () => (await listComments(request, video.id)).some((c) => c.text === text)).toBe(false);
     });
@@ -155,8 +155,9 @@ test.describe('comments - post and delete (single-channel user)', () => {
     await page.reload();
     await expect(mine).toBeVisible();
 
-    page.once('dialog', (dialog) => dialog.dismiss());
     await mine.getByRole('button', { name: 'Delete comment' }).click();
+    await page.getByTestId('comment-delete-dialog-cancel').click();
+    await expect(page.getByTestId('comment-delete-dialog')).toHaveCount(0);
     await expect(mine).toBeVisible();
     // Other people's comments offer Report, never Delete
     await expect(mine.getByRole('button', { name: 'Report' })).toHaveCount(0);

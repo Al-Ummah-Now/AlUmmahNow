@@ -125,17 +125,23 @@ test.describe('Upload Resume', () => {
     expect(offsets.filter((o) => o === 0)).toHaveLength(1);
   });
 
-  test('should warn before leaving during an upload', async ({ page }) => {
+  test('should ask in-app before following a link during an upload', async ({ page }) => {
     await gotoUpload(page, 'en');
     const hold = await holdTusPatches(page);
-    await startUpload(page, await helpers.createTestVideo('close-tab.mp4', 64), 'Close Tab Test');
+    await startUpload(page, await helpers.createTestVideo('leave-link.mp4', 64), 'Leave Link Test');
     await hold.waitForHeldPatch();
 
-    const dialog = page.waitForEvent('dialog');
-    await page.close({ runBeforeUnload: true });
-    const prompt = await dialog;
-    expect(prompt.type()).toBe('beforeunload');
-    await prompt.accept();
+    // No browser prompt: an in-app link opens the leave dialog, "Stay" keeps the page
+    let prompted = false;
+    page.on('dialog', (d) => {
+      prompted = true;
+      void d.dismiss();
+    });
+    const url = page.url();
+    await page.locator('a[href^="/en"]').first().click();
+    await page.getByTestId('leave-guard-cancel').click();
+    await expect(page).toHaveURL(url);
+    expect(prompted).toBe(false);
     await hold.release();
   });
 
@@ -146,7 +152,6 @@ test.describe('Upload Resume', () => {
     await startUpload(page, await helpers.createTestVideo('reload-test.mp4', 64), 'Reload Test');
     await hold.waitForHeldPatch();
 
-    page.on('dialog', (d) => void d.accept());
     await hold.release();
     await page.reload();
 

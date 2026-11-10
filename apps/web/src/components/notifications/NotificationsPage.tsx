@@ -6,6 +6,7 @@ import { Bell, Settings } from 'lucide-react';
 import type { NotificationItem } from '@al-ummah/shared-types';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { NotificationsService } from '@/services/api/notifications';
 import { publishUnreadCount } from '@/lib/notifications/render';
 import { logger } from '@/lib/logger-client';
@@ -21,6 +22,7 @@ interface NotificationsPageProps {
 export function NotificationsPageView({ dir }: NotificationsPageProps) {
   const { user } = useAuth();
   const { t, lang } = useLanguage();
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const texts = t.notificationCenter;
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const [items, setItems] = useState<NotificationItem[]>([]);
@@ -81,6 +83,13 @@ export function NotificationsPageView({ dir }: NotificationsPageProps) {
   };
 
   const remove = async (item: NotificationItem) => {
+    const confirmed = await confirm({
+      title: t.confirmDialog.deleteNotificationTitle,
+      description: t.confirmDialog.deleteNotificationBody,
+      confirmLabel: t.common.delete,
+      testId: 'notification-delete-dialog',
+    });
+    if (!confirmed) return;
     const previous = items;
     setItems((prev) => prev.filter((n) => n.id !== item.id));
     const result = await NotificationsService.remove(item.id);
@@ -103,6 +112,7 @@ export function NotificationsPageView({ dir }: NotificationsPageProps) {
 
   return (
     <main dir={dir} className="mx-auto max-w-3xl px-4 py-8" data-testid="notifications-page">
+      {confirmDialog}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="flex items-center gap-3 text-2xl font-bold text-gray-900 dark:text-white">
           <Bell className="h-7 w-7 text-[var(--fanous-color-accent)]" aria-hidden="true" />

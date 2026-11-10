@@ -20,6 +20,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import AddToPlaylistDialog from '@/components/playlists/AddToPlaylistDialog';
 import { toPicked, type PickedVideo } from '@/components/playlists/VideoPicker';
 import { fill } from '@/components/playlists/text';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import '@/theme/playlist-tools.css';
 
 type FilterStatus = 'all' | 'ready' | 'processing' | 'uploading' | 'failed';
@@ -49,6 +50,9 @@ export default function ChannelVideosPage() {
   const [selectedVideos, setSelectedVideos] = useState<Set<string>>(new Set());
   // "Add to playlist": the videos it adds, in the order shown (null: closed)
   const [playlistVideos, setPlaylistVideos] = useState<PickedVideo[] | null>(null);
+  // A failed delete, shown inline above the list
+  const [actionError, setActionError] = useState<string | null>(null);
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   // Check channel ownership
   useEffect(() => {
@@ -179,7 +183,15 @@ export default function ChannelVideosPage() {
   const handleDeleteVideo = async (videoId: string) => {
     if (!user) return;
 
-    if (!confirm(t.video.confirmDelete)) return;
+    setActionError(null);
+    const video = videos.find((v) => v.id === videoId);
+    const confirmed = await confirm({
+      title: t.confirmDialog.deleteVideoTitle,
+      description: video?.title ? `${video.title}: ${t.video.confirmDelete}` : t.video.confirmDelete,
+      confirmLabel: t.common.delete,
+      testId: 'video-delete-dialog',
+    });
+    if (!confirmed) return;
 
     try {
       const result = await deleteVideo(videoId, { channelId });
@@ -193,7 +205,7 @@ export default function ChannelVideosPage() {
       }
     } catch (error) {
       logger.error('Error deleting video', { error, videoId, channelId });
-      alert(t.errors.genericError);
+      setActionError(t.errors.genericError);
     }
   };
 
@@ -201,9 +213,17 @@ export default function ChannelVideosPage() {
     if (!user) return;
     if (selectedVideos.size === 0) return;
 
-    if (!confirm(t.video.confirmDeleteMultiple?.replace('{count}', selectedVideos.size.toString()) || 'Are you sure you want to delete selected videos?')) {
-      return;
-    }
+    setActionError(null);
+    const count = selectedVideos.size.toString();
+    // Bulk delete is high impact: the user types the delete word first
+    const confirmed = await confirm({
+      title: t.confirmDialog.deleteVideosTitle.replace('{count}', count),
+      description: t.video.confirmDeleteMultiple?.replace('{count}', count),
+      confirmLabel: t.common.delete,
+      typeToConfirm: t.confirmDialog.deleteWord,
+      testId: 'videos-bulk-delete-dialog',
+    });
+    if (!confirmed) return;
 
     try {
       const deletePromises = Array.from(selectedVideos).map((videoId) =>
@@ -216,7 +236,7 @@ export default function ChannelVideosPage() {
       setSelectedVideos(new Set());
     } catch (error) {
       logger.error('Error deleting videos', { error, selectedVideos: Array.from(selectedVideos), channelId });
-      alert(t.errors.genericError);
+      setActionError(t.errors.genericError);
     }
   };
 
@@ -255,6 +275,12 @@ export default function ChannelVideosPage() {
           <div className="mb-4">
             <h1 className="text-3xl font-bold text-[var(--fanous-color-text-primary)]">{t.video.videoManagement}</h1>
           </div>
+          {confirmDialog}
+          {actionError && (
+            <p role="alert" data-testid="videos-action-error" className="mb-4 rounded-md border border-[var(--fanous-color-error-text)] p-3 text-sm text-[var(--fanous-color-error-text)]">
+              {actionError}
+            </p>
+          )}
 
           {/* Search and Filters */}
           <div className="c space-y-4 !p-4">

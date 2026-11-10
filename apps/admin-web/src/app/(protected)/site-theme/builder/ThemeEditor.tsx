@@ -9,6 +9,7 @@ import {
   type Issue, type Mode, type ThemePackage,
 } from '@al-ummah/theme-packages';
 import { useLanguage } from '@/i18n/I18nProvider';
+import { useConfirm } from '@/components/content/actions';
 import type { MessageKey } from '@/i18n/translate';
 import { setSiteTheme } from '@/lib/api/admin';
 import { ErrorAlert, cardClass, fieldClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
@@ -58,6 +59,7 @@ export interface EditorProps {
 
 export function ThemeEditor({ initial, assets: initialAssets, latestVersion: initialLatest, activeVersion: initialActive, canEdit }: EditorProps) {
   const { t, locale } = useLanguage();
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const router = useRouter();
   const [theme, setTheme] = useState<ThemePackage>(initial);
   const [saved, setSaved] = useState<ThemePackage>(initial);
@@ -150,10 +152,20 @@ export function ThemeEditor({ initial, assets: initialAssets, latestVersion: ini
       uploadTarget.current?.(path);
     });
   };
-  const removeFile = (path: string) => run('upload', async () => {
-    await deleteAsset(theme.id, path);
-    setAssets((prev) => prev.filter((a) => a.path !== path));
-  });
+  const removeFile = async (path: string) => {
+    const confirmed = await confirm({
+      title: t('confirmDialog.themeAssetTitle'),
+      body: t('confirmDialog.themeAssetBody', { path }),
+      confirmLabel: t('themeBuilder.delete'),
+      danger: true,
+      testId: 'theme-asset-delete-confirm',
+    });
+    if (!confirmed) return;
+    run('upload', async () => {
+      await deleteAsset(theme.id, path);
+      setAssets((prev) => prev.filter((a) => a.path !== path));
+    });
+  };
 
   const readOnly = !canEdit;
   const componentNames = Object.keys(COMPONENT_PARTS);
@@ -162,6 +174,7 @@ export function ThemeEditor({ initial, assets: initialAssets, latestVersion: ini
 
   return (
     <div data-testid="theme-editor" data-theme-id={theme.id}>
+      {confirmDialog}
       <input ref={fileInput} type="file" className="hidden" data-testid="asset-file-input" onChange={(e) => onFile(e.target.files?.[0])} />
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div>

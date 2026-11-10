@@ -7,6 +7,7 @@ import type { ActionResult } from '@/lib/api/errors';
 import type { StaleUploadActionResult, StaleUploadItem } from '@/lib/api/types';
 import type { Locale } from '@/i18n/config';
 import { useLanguage } from '@/i18n/I18nProvider';
+import { useConfirm } from '@/components/content/actions';
 import { formatDate, type MessageKey } from '@/i18n/translate';
 import { ErrorAlert, cardClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
@@ -23,6 +24,7 @@ const tdClass = 'px-3 py-3 align-top text-sm';
 export function StaleUploadsTable({ items, locale, now }: { items: StaleUploadItem[]; locale: Locale; now: number }) {
   const router = useRouter();
   const { t } = useLanguage();
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const ids = useId();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
@@ -69,8 +71,17 @@ export function StaleUploadsTable({ items, locale, now }: { items: StaleUploadIt
     router.refresh();
   }
 
-  const deleteNow = () => {
-    if (!window.confirm(t('staleUploads.confirmDelete', { count: chosen.length }))) return;
+  // Bulk delete at Bunny: the admin types the delete word first
+  const deleteNow = async () => {
+    const confirmed = await confirm({
+      title: t('confirmDialog.staleDeleteTitle'),
+      body: t('staleUploads.confirmDelete', { count: chosen.length }),
+      confirmLabel: t('staleUploads.deleteNow'),
+      typeToConfirm: t('confirmDialog.deleteWord'),
+      danger: true,
+      testId: 'stale-delete-confirm',
+    });
+    if (!confirmed) return;
     void run('delete', deleteStaleUploads, 'staleUploads.queuedDelete');
   };
 
@@ -80,6 +91,7 @@ export function StaleUploadsTable({ items, locale, now }: { items: StaleUploadIt
 
   return (
     <div className="space-y-3">
+      {confirmDialog}
       <div className="flex flex-wrap items-center gap-3" role="toolbar" aria-label={t('staleUploads.tableCaption')}>
         <span className="text-sm text-fg-muted tabular-nums" aria-live="polite">{t('staleUploads.selected', { count: chosen.length })}</span>
         <button type="button" onClick={deleteNow} disabled={!can.delete || busy !== null} className={`${primaryButtonClass} disabled:opacity-50`} data-testid="stale-delete">

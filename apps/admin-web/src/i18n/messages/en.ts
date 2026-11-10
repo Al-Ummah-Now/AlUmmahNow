@@ -1881,6 +1881,20 @@ const en = {
     previous: 'Previous',
     next: 'Next',
   },
+  confirmDialog: {
+    deleteWord: 'DELETE',
+    thumbsFixTitle: 'Fix thumbnails?',
+    contactDeleteTitle: 'Delete message?',
+    themeDeleteTitle: 'Delete theme?',
+    goLiveTitle: 'Turn on automatic deletion?',
+    staleDeleteTitle: 'Delete stale uploads?',
+    errorTestGroupTitle: 'Delete test group?',
+    errorTestGroupBody: 'This test error group and its occurrences are removed.',
+    themeAssetTitle: 'Delete file?',
+    themeAssetBody: 'Delete {path} from this theme draft? Parts that use it lose the image.',
+    signOutAllTitle: 'Sign out of all accounts?',
+    signOutAllBody: 'Every account in this browser is signed out, on every Al Ummah Now app.',
+  },
 };
 
 type DeepStringRecord<T> = { [K in keyof T]: T[K] extends string ? string : DeepStringRecord<T[K]> };

@@ -6,6 +6,7 @@ import type { ErrorStatus } from '@al-ummah/shared-types';
 import { addErrorGroupNote, deleteTestErrorGroup, updateErrorGroup } from '@/lib/api/admin';
 import type { ActionResult } from '@/lib/api/errors';
 import { useLanguage } from '@/i18n/I18nProvider';
+import { useConfirm } from '@/components/content/actions';
 import type { MessageKey } from '@/i18n/translate';
 import { ErrorAlert, cardClass, fieldClass, primaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
@@ -25,6 +26,7 @@ const STATUS_ACTIONS: { action: GroupAction; status: ErrorStatus; label: Message
 export function ErrorGroupActions({ id, actions, testRef = null }: { id: string; actions: GroupAction[]; /** A reference of a test group: offers Delete test group */ testRef?: string | null }) {
   const router = useRouter();
   const { t } = useLanguage();
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const ids = useId();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +54,7 @@ export function ErrorGroupActions({ id, actions, testRef = null }: { id: string;
 
   return (
     <section className={cardClass} aria-labelledby={`${ids}-manage`} data-testid="error-group-actions">
+      {confirmDialog}
       <h2 id={`${ids}-manage`} className="text-lg font-semibold text-fg mb-4">
         {t('errorsPage.manage')}
       </h2>
@@ -85,6 +88,14 @@ export function ErrorGroupActions({ id, actions, testRef = null }: { id: string;
             className={smallButton}
             disabled={!!busy}
             onClick={async () => {
+              const confirmed = await confirm({
+                title: t('confirmDialog.errorTestGroupTitle'),
+                body: t('confirmDialog.errorTestGroupBody'),
+                confirmLabel: t('errorsPage.deleteTestGroup'),
+                danger: true,
+                testId: 'error-delete-test-group-confirm',
+              });
+              if (!confirmed) return;
               setBusy('delete');
               setError(null);
               const result = await deleteTestErrorGroup(testRef).catch((): ActionResult<unknown> => ({ ok: false, status: 0, error: 'request failed' }));

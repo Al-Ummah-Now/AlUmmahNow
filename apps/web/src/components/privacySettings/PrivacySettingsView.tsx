@@ -9,6 +9,7 @@
 import React, { useEffect, useState } from 'react';
 import { Download, ExternalLink, Shield, Smartphone, Trash2, Clock } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { ConsentManager, type ConsentChoices } from '@/lib/consent/ConsentManager';
 import { ConsentPreferences } from '@/components/consent/ConsentPreferences';
 import { PrivacyService, downloadBlob } from '@/services/api/privacy.service';
@@ -42,6 +43,7 @@ function StatusLine({ status }: { status: Status }) {
 
 export function PrivacySettingsView({ dir, signedIn }: PrivacySettingsViewProps) {
   const { t } = useLanguage();
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const p = t.privacy;
   const [choices, setChoices] = useState<ConsentChoices>(NONE);
   const [consentStatus, setConsentStatus] = useState<Status>({ kind: 'idle' });
@@ -75,6 +77,13 @@ export function PrivacySettingsView({ dir, signedIn }: PrivacySettingsViewProps)
   };
 
   const clearDevice = async () => {
+    const confirmed = await confirm({
+      title: t.confirmDialog.clearDeviceTitle,
+      description: t.confirmDialog.clearDeviceBody,
+      confirmLabel: t.confirmDialog.clear,
+      testId: 'clear-device-dialog',
+    });
+    if (!confirmed) return;
     await clearLocalPersonalData();
     setDeviceStatus({ kind: 'done', message: p.deviceDataCleared });
   };
@@ -95,6 +104,7 @@ export function PrivacySettingsView({ dir, signedIn }: PrivacySettingsViewProps)
 
   return (
     <div dir={dir} className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {confirmDialog}
       <div className="mx-auto max-w-3xl space-y-6 px-4 py-8 text-start">
         <header>
           <h1 className="flex items-center gap-3 text-3xl font-bold text-gray-900 dark:text-gray-100">

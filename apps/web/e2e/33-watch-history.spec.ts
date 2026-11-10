@@ -102,15 +102,17 @@ test.describe('watch history - signed in', () => {
     await expect(page.getByText(`${videos.length} videos`)).toBeVisible();
 
     // Dismissing the confirmation keeps everything
-    page.once('dialog', (d) => d.dismiss());
     await page.getByRole('button', { name: 'Clear all history' }).click();
+    await page.getByTestId('watch-history-clear-dialog-cancel').click();
     await expect(page.getByRole('listitem')).toHaveCount(videos.length);
 
-    page.once('dialog', (d) => {
-      expect(d.message()).toContain('Clear your entire watch history?');
-      void d.accept();
-    });
+    // Clearing everything needs the delete word typed first
     await page.getByRole('button', { name: 'Clear all history' }).click();
+    const dialog = page.getByTestId('watch-history-clear-dialog');
+    await expect(dialog).toContainText('Clear your entire watch history?');
+    await expect(page.getByTestId('watch-history-clear-dialog-confirm')).toBeDisabled();
+    await page.getByTestId('watch-history-clear-dialog-typed').fill('DELETE');
+    await page.getByTestId('watch-history-clear-dialog-confirm').click();
     await expect(page.getByRole('heading', { name: 'No watch history yet' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Browse Videos' })).toHaveAttribute('href', '/en');
   });

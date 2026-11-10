@@ -7,6 +7,7 @@ import { History, Trash2, X, RefreshCw, PauseCircle, PlayCircle } from 'lucide-r
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { useWatchHistory, type UseWatchHistoryReturn } from '@/hooks/useWatchHistory';
 import { resolveUrl } from '@/lib/utility';
 import type { WatchHistoryItem } from '@/services/api/watch-history';
@@ -113,10 +114,18 @@ export default function WatchHistoryPage() {
   const { user } = useAuth();
   const history = useWatchHistory(!!user);
 
+  const { confirm, dialog: confirmDialog } = useConfirm();
+
+  // Clearing all history is high impact: the user types the delete word first
   const handleClear = async () => {
-    if (window.confirm(t.watchHistory.confirmClear)) {
-      await history.clearAll();
-    }
+    const confirmed = await confirm({
+      title: t.confirmDialog.clearHistoryTitle,
+      description: t.watchHistory.confirmClear,
+      confirmLabel: t.watchHistory.clearAll,
+      typeToConfirm: t.confirmDialog.deleteWord,
+      testId: 'watch-history-clear-dialog',
+    });
+    if (confirmed) await history.clearAll();
   };
 
   if (!user) {
@@ -133,6 +142,7 @@ export default function WatchHistoryPage() {
 
   return (
     <div className="max-w-4xl mx-auto p-6" dir="ltr">
+      {confirmDialog}
       <div className="flex justify-between items-center gap-4 mb-6">
         <div>
           <h1 className="text-3xl font-bold">{t.watchHistory.title}</h1>

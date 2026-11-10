@@ -54,6 +54,27 @@ const eslintConfig = [
       "no-console": ["error", { allow: ["warn", "error"] }],
     },
   },
+  {
+    // No browser prompts (owner rule): use the in-app confirm dialog
+    // (src/components/ui/confirm-dialog.tsx) and inline errors; never beforeunload
+    files: ["**/*.{ts,tsx,js,jsx,mjs}"],
+    rules: {
+      "no-alert": "error",
+      "no-restricted-globals": [
+        "error",
+        { name: "alert", message: "Show an inline error or status instead of a browser alert." },
+        { name: "confirm", message: "Use the in-app confirm dialog (src/components/ui/confirm-dialog.tsx)." },
+        { name: "prompt", message: "Use an in-app dialog with an input." },
+      ],
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "Literal[value='beforeunload']",
+          message: "No beforeunload: guard in-app links with the leave dialog, flush telemetry on pagehide.",
+        },
+      ],
+    },
+  },
 ];
 
 export default eslintConfig;

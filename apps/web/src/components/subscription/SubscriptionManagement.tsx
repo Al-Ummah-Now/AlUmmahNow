@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useProfile } from '@/hooks/useProfile';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { SignInPrompt } from '@/components/common/SignInPrompt';
 import { unsubscribeFromChannel, getUserSubscriptions } from '@/lib/api/channels';
 import { Button } from '@/components/ui/button';
@@ -16,6 +17,7 @@ export const SubscriptionManagement: React.FC = () => {
   const { user } = useAuth();
   const { profile } = useProfile(user);
   const { t, dir } = useLanguage();
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const s = t.subscriptions;
   const isAuthenticated = !!user;
   const [subscriptions, setSubscriptions] = useState<Channel[]>([]);
@@ -44,6 +46,13 @@ export const SubscriptionManagement: React.FC = () => {
 
   const handleUnsubscribe = async (channelId: string) => {
     if (!user || !profile) return;
+    const confirmed = await confirm({
+      title: t.confirmDialog.unsubscribeTitle,
+      description: t.confirmDialog.unsubscribeBody,
+      confirmLabel: t.confirmDialog.unsubscribe,
+      testId: 'unsubscribe-dialog',
+    });
+    if (!confirmed) return;
 
     setIsLoading(true);
     setUnsubscribeError(false);
@@ -73,6 +82,7 @@ export const SubscriptionManagement: React.FC = () => {
 
   return (
     <div className="max-w-4xl mx-auto p-6" dir={dir}>
+      {confirmDialog}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">{s.mySubscriptions}</h1>
         <Button

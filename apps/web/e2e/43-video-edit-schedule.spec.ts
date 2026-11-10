@@ -82,6 +82,7 @@ test.describe('Edit schedule - private video', () => {
     await expect.poll(async () => (await getSchedule('single', video!))?.status, { timeout: 60000 }).toBe('scheduled');
 
     await page.getByTestId('edit-schedule-cancel').click();
+    await page.getByTestId('edit-cancel-schedule-dialog-confirm').click();
     await expect(page.getByTestId('edit-schedule-success')).toBeVisible();
     await expect(section).toHaveAttribute('data-state', 'unscheduled');
     await expect(page.getByTestId('edit-schedule-date')).toHaveValue('');

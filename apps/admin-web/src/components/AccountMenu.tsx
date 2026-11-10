@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useLanguage } from '@/i18n/I18nProvider';
+import { useConfirm } from '@/components/content/actions';
 import {
   fetchAuthAccounts,
   reauthPath,
@@ -25,6 +26,7 @@ interface AccountMenuProps {
  */
 export function AccountMenu({ issuer, currentEmail }: AccountMenuProps) {
   const { t } = useLanguage();
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const [open, setOpen] = useState(false);
   const [accounts, setAccounts] = useState<AuthAccount[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -95,6 +97,7 @@ export function AccountMenu({ issuer, currentEmail }: AccountMenuProps) {
 
   return (
     <div ref={rootRef} className="relative">
+      {confirmDialog}
       <button
         type="button"
         data-testid="account-menu-trigger"
@@ -156,7 +159,25 @@ export function AccountMenu({ issuer, currentEmail }: AccountMenuProps) {
             <button type="button" role="menuitem" data-testid="account-add" disabled={busy} onClick={onAdd} className={`${itemClass} text-start`}>
               {t('accounts.add')}
             </button>
-            <form ref={signOutAllRef} action="/api/logout" method="POST">
+            <form
+              ref={signOutAllRef}
+              action="/api/logout"
+              method="POST"
+              onSubmit={async (e) => {
+                // With several accounts a click signs every one out: confirm first
+                // (requestSubmit from onSignOut has no submitter and goes straight through)
+                if (count < 2 || !(e.nativeEvent as SubmitEvent).submitter) return;
+                e.preventDefault();
+                const confirmed = await confirm({
+                  title: t('confirmDialog.signOutAllTitle'),
+                  body: t('confirmDialog.signOutAllBody'),
+                  confirmLabel: t('accounts.signOutAll'),
+                  danger: true,
+                  testId: 'account-sign-out-all-confirm',
+                });
+                if (confirmed) signOutAllRef.current?.submit();
+              }}
+            >
               <button type="submit" role="menuitem" data-testid="account-sign-out-all" disabled={busy} className={`${itemClass} w-full text-start`}>
                 {t('accounts.signOutAll')}
               </button>

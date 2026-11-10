@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useProfile } from "@/hooks/useProfile";
 import { useLanguage } from "@/hooks/useLanguage";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useMultiAccount } from "@/hooks/useMultiAccount";
 import { User } from "@/interfaces";
 import { formatRelativeTime } from '@/lib/format/videoMeta';
@@ -35,6 +36,7 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
   user
 }) => {
   const { t, lang, isRTL } = useLanguage();
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const { profile } = useProfile(user || null);
   const { user: account } = useMultiAccount();
   const [newCommentText, setNewCommentText] = useState("");
@@ -100,7 +102,13 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
   };
 
   const handleDelete = async (commentId: string) => {
-    if (!window.confirm(t.comments.confirmDelete)) return;
+    const confirmed = await confirm({
+      title: t.confirmDialog.deleteCommentTitle,
+      description: t.confirmDialog.deleteCommentBody,
+      confirmLabel: t.common.delete,
+      testId: 'comment-delete-dialog',
+    });
+    if (!confirmed) return;
     setActionError(false);
     const ok = await deleteComment(commentId);
     if (!ok) setActionError(true);
@@ -251,6 +259,7 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
 
   return (
     <div className="space-y-6" dir={isRTL ? 'rtl' : 'ltr'} data-testid="comments-section">
+      {confirmDialog}
       {/* Header: count, sort, connection status */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-bold" data-testid="comments-count">

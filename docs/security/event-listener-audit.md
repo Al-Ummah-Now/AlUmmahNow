@@ -17,8 +17,8 @@ regression guard is `apps/web/src/lib/security/__tests__/event-listener-audit.te
 | window:resize | `ChannelTabs` (LTR/RTL) | Tab overflow layout | Effect cleanup |
 | window:popstate, window:session-login | `hooks/useMultiAccount.tsx` | Multi-account session switching | Effect cleanup |
 | window:storage, window:session-updated | `components/CookieSizeMonitor.tsx` | Development-only cookie size monitor | Effect cleanup |
-| window:beforeunload, document:visibilitychange | `services/analytics/video-analytics.ts` | Flush analytics before unload | Removed in `destroy()`. Consent-gated (Story 1.3) |
-| window:beforeunload | `services/experiments/analytics.ts` | Flush A/B events | Process lifetime singleton. Consent-gated |
+| window:pagehide, document:visibilitychange | `services/analytics/video-analytics.ts` | Flush analytics when the page is hidden or left | Removed in `destroy()`. Consent-gated (Story 1.3) |
+| window:pagehide | `services/experiments/analytics.ts` | Flush A/B events | Process lifetime singleton. Consent-gated |
 | document:securitypolicyviolation, document:visibilitychange, window:pagehide | `components/security/SecurityBootstrap.tsx` | CSP violation reporting, security log flush | AbortController on unmount |
 
 Player events (`play`, `timeupdate`, `fullscreenchange` and so on) are registered on the

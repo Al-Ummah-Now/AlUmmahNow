@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, Bell, BellOff, X, Check, AlertCircle, Loader2 } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import {
   scheduleVideo,
   updateSchedule,
@@ -34,6 +35,7 @@ export default function ScheduleSection({
   onScheduleChange,
 }: ScheduleSectionProps) {
   const { t, isRTL } = useLanguage();
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const s = t.schedule ?? ({} as NonNullable<typeof t.schedule>);
 
   // A cancelled or published schedule keeps its date on the video; only pending ones count
@@ -123,6 +125,13 @@ export default function ScheduleSection({
   };
 
   const handleCancelSchedule = async () => {
+    const confirmed = await confirm({
+      title: t.confirmDialog.cancelScheduleTitle,
+      description: s.confirmCancelSchedule,
+      confirmLabel: s.cancelSchedule ?? t.common.confirm,
+      testId: 'edit-cancel-schedule-dialog',
+    });
+    if (!confirmed) return;
     setLoading(true);
     setError(null);
     setSuccess(null);
@@ -223,6 +232,7 @@ export default function ScheduleSection({
 
   return (
     <Card className="p-4" data-testid="edit-schedule" data-state={isScheduled ? 'scheduled' : 'unscheduled'}>
+      {confirmDialog}
       <div className="space-y-4">
         {/* Header */}
         <div className="flex items-center justify-between">
