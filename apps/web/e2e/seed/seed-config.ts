@@ -6,7 +6,7 @@
  * and skip items that already exist.
  */
 
-export type SeedRole = 'admin' | 'moderator' | 'creator' | 'viewer';
+export type SeedRole = 'superadmin' | 'admin' | 'moderator' | 'creator' | 'viewer';
 
 export interface SeedAccount {
   key: SeedRole;
@@ -15,7 +15,7 @@ export interface SeedAccount {
   displayNameAr: string;
   bio: string;
   /** D1 rbac role id to assign, if any */
-  rbacRoleId?: 'role_admin' | 'role_moderator';
+  rbacRoleId?: 'role_super_admin' | 'role_admin' | 'role_moderator';
 }
 
 /**
@@ -26,6 +26,15 @@ export interface SeedAccount {
 export const SEED_EMAIL_DOMAIN = process.env.SEED_EMAIL_DOMAIN || 'delivered.resend.dev';
 
 export const SEED_ACCOUNTS: readonly SeedAccount[] = [
+  {
+    // Super-admin-only admin flows (channel ownership transfer) in the admin-web E2E suite
+    key: 'superadmin',
+    email: `qa-superadmin@${SEED_EMAIL_DOMAIN}`,
+    displayName: 'QA Super Admin',
+    displayNameAr: 'المسؤول الأعلى للاختبار',
+    bio: 'Seeded QA super administrator account.',
+    rbacRoleId: 'role_super_admin',
+  },
   {
     key: 'admin',
     email: `qa-admin@${SEED_EMAIL_DOMAIN}`,
