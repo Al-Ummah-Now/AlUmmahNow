@@ -109,9 +109,10 @@ test.describe('Section manager', () => {
 
     const crumbs = page.getByTestId('channel-settings-breadcrumb');
     await expect(crumbs).toHaveAttribute('aria-label', 'Breadcrumb');
-    // Settings › Channel Settings › <channel> › Manage Sections; the arrow goes back to the channel's settings
-    await expect(crumbs.getByRole('link', { name: 'Settings', exact: true })).toHaveAttribute('href', '/en/settings');
-    await expect(crumbs.getByRole('link', { name: channelsOf(owner).main.name, exact: true })).toHaveAttribute('href', `/en/settings/channel/${channelId()}`);
+    // <channel> › Settings › Manage Sections: the name opens the channel, Settings its settings; the arrow goes back there
+    await expect(crumbs.getByRole('link', { name: 'Settings', exact: true })).toHaveAttribute('href', `/en/settings/channel/${channelId()}`);
+    await expect(crumbs.getByRole('link', { name: channelsOf(owner).main.name, exact: true })).toHaveAttribute('href', /^\/en\/(@|channels\/)/);
+    await expect(crumbs.locator('a[href="/en/settings"]')).toHaveCount(0);
     await expect(crumbs.getByTestId('settings-back')).toHaveAttribute('href', `/en/settings/channel/${channelId()}`);
     await expect(crumbs.locator('[aria-current="page"]')).toHaveText('Manage Sections');
   });

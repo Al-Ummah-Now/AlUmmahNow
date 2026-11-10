@@ -312,6 +312,7 @@ function ChannelEditPage() {
           <ChannelSettingsBreadcrumb
             channelId={channelId}
             channelName={channel?.name || ''}
+            channelHandle={channel?.handle}
             locale={locale}
             currentPage="edit"
             className="mb-6"

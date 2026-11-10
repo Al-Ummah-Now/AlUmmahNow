@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures';
 import type { BrowserContext } from '@playwright/test';
-import { ANONYMOUS_STATE, AUTH_STATE, readAccount } from './test-utils/auth-state';
+import { ANONYMOUS_STATE, AUTH_STATE } from './test-utils/auth-state';
 import { clickAndWaitForURL } from './test-utils/qa-content';
 
 /**
@@ -33,17 +33,17 @@ test.describe('Settings - anonymous', () => {
 test.describe('Settings - channel owner', () => {
   test.use({ storageState: AUTH_STATE.single });
 
-  test('SET-010 lists all sections; channel settings link to the active channel', async ({ page }) => {
-    const { channels } = readAccount('single');
+  test('SET-010 lists the user\'s own sections; no channel settings', async ({ page }) => {
     await page.goto('/en/settings');
     await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible();
     const sections = page.getByTestId('settings-section');
     await expect(sections).toHaveCount(4);
     await expect(sections.filter({ hasText: 'Upload Defaults' })).toHaveAttribute('href', '/en/settings/upload-defaults');
-    // Was always "Not available" because it read the channel off the auth user
-    await expect(sections.filter({ hasText: 'Channel Settings' })).toHaveAttribute('href', `/en/settings/channel/${channels[0].id}`);
-    await expect(sections.filter({ hasText: 'Profile Settings' })).toHaveAttribute('href', '/en/profile');
+    await expect(sections.filter({ hasText: 'Profile Settings' })).toHaveAttribute('href', '/en/profile?from=settings');
     await expect(sections.filter({ hasText: 'Privacy & data' })).toHaveAttribute('href', '/en/settings/privacy');
+    // Channel settings belong to the channel (opened from it), not to the user's Settings
+    await expect(sections.filter({ hasText: 'Channel Settings' })).toHaveCount(0);
+    await expect(page.locator('a[href*="/settings/channel/"]')).toHaveCount(0);
   });
 
   test('SET-011 section links navigate', async ({ page }) => {
@@ -56,8 +56,8 @@ test.describe('Settings - channel owner', () => {
     await page.goto('/ar/settings');
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     await expect(page.getByRole('heading', { level: 1, name: 'الإعدادات' })).toBeVisible();
-    await expect(page.getByText('إدارة حسابك وقنواتك وتفضيلاتك')).toBeVisible();
-    for (const title of ['إعدادات الرفع الافتراضية', 'إعدادات القناة', 'إعدادات الملف الشخصي', 'الخصوصية والبيانات']) {
+    await expect(page.getByText('إدارة حسابك وتفضيلاتك')).toBeVisible();
+    for (const title of ['إعدادات الرفع الافتراضية', 'إعدادات الملف الشخصي', 'الخصوصية والبيانات']) {
       await expect(page.getByTestId('settings-section').filter({ hasText: title })).toHaveAttribute('data-available', 'true');
     }
   });
@@ -66,12 +66,11 @@ test.describe('Settings - channel owner', () => {
 test.describe('Settings - no channel', () => {
   test.use({ storageState: AUTH_STATE.none });
 
-  test('SET-020 channel settings are unavailable without a channel', async ({ page }) => {
+  test('SET-020 a user without a channel sees the same sections, none of them about channels', async ({ page }) => {
     await page.goto('/en/settings');
-    const channel = page.getByTestId('settings-section').filter({ hasText: 'Channel Settings' });
-    await expect(channel).toHaveAttribute('data-available', 'false');
-    await expect(channel).toContainText('Not available - requires an active channel');
-    await expect(channel.locator('a')).toHaveCount(0);
+    await expect(page.getByTestId('settings-section')).toHaveCount(4);
+    await expect(page.getByTestId('settings-section').filter({ hasText: 'Channel Settings' })).toHaveCount(0);
+    await expect(page.getByText('Not available - requires an active channel')).toHaveCount(0);
   });
 });
 

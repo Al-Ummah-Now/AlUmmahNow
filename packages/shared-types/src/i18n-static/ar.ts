@@ -1979,7 +1979,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     channelSettingsDesc: 'إدارة إعدادات قناتك وتخصيصها',
     profileSettings: 'إعدادات الملف الشخصي',
     profileSettingsDesc: 'تحديث معلومات ملفك الشخصي وتفضيلاتك',
-    settingsDescription: 'إدارة حسابك وقنواتك وتفضيلاتك',
+    settingsDescription: 'إدارة حسابك وتفضيلاتك',
     notAvailable: 'غير متاح - يتطلب قناة نشطة',
     signInTitle: 'سجّل الدخول لإدارة إعداداتك',
     signInMessage: 'تتوفر إعدادات الرفع والقناة والملف الشخصي بعد تسجيل الدخول.',

@@ -72,6 +72,7 @@ export default async function ChannelSettingsPage({ params }: ChannelSettingsPag
         <ChannelSettingsBreadcrumb
           channelId={id}
           channelName={displayName}
+          channelHandle={channel.handle}
           locale={locale}
           currentPage="overview"
           className="mb-6"

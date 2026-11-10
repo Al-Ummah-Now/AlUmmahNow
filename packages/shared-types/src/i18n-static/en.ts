@@ -1984,7 +1984,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     channelSettingsDesc: 'Manage your channel settings and customization',
     profileSettings: 'Profile Settings',
     profileSettingsDesc: 'Update your profile information and preferences',
-    settingsDescription: 'Manage your account, channels, and preferences',
+    settingsDescription: 'Manage your account and preferences',
     notAvailable: 'Not available - requires an active channel',
     signInTitle: 'Sign in to manage your settings',
     signInMessage: 'Upload defaults, channel and profile settings are available once you sign in.',
