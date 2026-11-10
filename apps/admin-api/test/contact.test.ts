@@ -155,7 +155,7 @@ describe('contact emails', () => {
     const mail = renderInboxNotification(message, { to: 'support@alummahnow.net', adminUrl: 'https://admin.alummahnow.net/', environment: 'production' });
     assert.equal(mail.replyTo, 'amina@example.org');
     assert.equal(mail.subject, '[Contact] Account & sign-in: Amina');
-    assert.ok(mail.text.includes('https://admin.alummahnow.net/contact/m1'));
+    assert.match(mail.text, /^Open in the admin inbox: https:\/\/admin\.alummahnow\.net\/contact\/m1$/m);
   });
 
   it('sinks E2E addresses, skips without a key and reports Resend failures', async () => {

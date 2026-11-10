@@ -7,8 +7,8 @@
  *   - the Worker exists
  *   - every required secret is bound (worker secret or Secrets Store), and every
  *     Secrets Store binding points at a secret that exists and is active. A secret
- *     the deployed Worker does not have yet passes when the release's own config
- *     (apps.ts configPath) binds it to an active Secrets Store secret: the promote
+ *     the deployed Worker does not have yet passes when this commit's own config
+ *     (apps.ts configPath; wrangler.qa.jsonc for QA) binds it to an active Secrets Store secret: the promote
  *     that follows adds it, so the first release of a new binding is not blocked.
  *   - no forbidden (test-only) secret is bound
  *   - every client id the Worker uses (deployed var or fixed in code) exists and is
@@ -51,14 +51,18 @@ export interface Deps {
 
 const ROOT = resolve(new URL('../..', import.meta.url).pathname);
 
-/** Secrets Store binding `name` in the production/stage config this release deploys (QA has none in apps.ts). */
+/**
+ * Secrets Store binding `name` in the config this commit deploys: apps.ts configPath
+ * for production and stage, `<app dir>/wrangler.qa.jsonc` (top level) for QA.
+ */
 export function declaredInConfig(entry: WorkerSecrets, name: string, root = ROOT): { store_id: string; secret_name: string } | null {
-	if (entry.env === 'qa') return null;
 	const rule = APPS.find((a) => a.app === entry.app);
-	const envRule = entry.env === 'production' ? rule?.production : rule?.stage;
-	if (!rule || !envRule) return null;
+	if (!rule) return null;
+	const envRule = entry.env === 'production' ? rule.production : entry.env === 'stage' ? rule.stage : { env: null };
+	if (!envRule) return null;
+	const path = entry.env === 'qa' ? `${rule.dir}/wrangler.qa.jsonc` : rule.configPath;
 	try {
-		const config = parseJsonc(readFileSync(resolve(root, rule.configPath), 'utf8')) as WranglerConfig;
+		const config = parseJsonc(readFileSync(resolve(root, path), 'utf8')) as WranglerConfig;
 		const list = (resolveEnv(config, envRule.env).config.secrets_store_secrets ?? []) as { binding: string; store_id: string; secret_name: string }[];
 		const hit = list.find((b) => b.binding === name);
 		return hit ? { store_id: hit.store_id, secret_name: hit.secret_name } : null;
