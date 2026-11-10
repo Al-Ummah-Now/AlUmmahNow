@@ -5,13 +5,12 @@ import { useQueryState } from "nuqs";
 import { MAIN_CONTENT_ID } from "@/components/SkipLinks";
 import WatchPageContent from "@/components/video/WatchPageContent";
 import { useLanguage } from "@/hooks/useLanguage";
-import type { WatchHint } from "@/components/video/WatchPageSkeleton";
 
 /**
  * Legacy watch route (/[locale]/video?vid=<id>), still used by video cards.
  * Renders the same watch page as /[locale]/video/[id].
  */
-export default function LegacyWatch({ hint }: { hint?: WatchHint }) {
+export default function LegacyWatch({ skeleton }: { skeleton?: React.ReactNode }) {
   const { t, isRTL } = useLanguage();
   const [vid] = useQueryState("vid", { shallow: false });
 
@@ -28,5 +27,5 @@ export default function LegacyWatch({ hint }: { hint?: WatchHint }) {
     );
   }
 
-  return <WatchPageContent videoId={vid} hint={hint} />;
+  return <WatchPageContent videoId={vid} skeleton={skeleton} />;
 }

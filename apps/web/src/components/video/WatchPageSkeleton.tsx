@@ -1,5 +1,3 @@
-import { RelatedSkeletonRows } from '@/components/related/RelatedVideosSkeleton';
-
 /** What the server already knows about the video when the page starts. */
 export interface WatchHint {
   title?: string;
@@ -13,7 +11,7 @@ const BLOCK = 'wsk-b animate-pulse rounded bg-muted';
 /** Player, title, channel, actions and description placeholders, at their final sizes. */
 export function WatchDetailsSkeleton({ hint }: { hint?: WatchHint }) {
   return (
-    <div data-testid="watch-skeleton" role="status" aria-busy="true" className="flex flex-col w-full mt-0 items-center">
+    <div role="status" aria-busy="true" className="flex flex-col w-full mt-0 items-center">
       <div className="wsk-player w-full aspect-video rounded-lg bg-muted bg-cover bg-center" style={hint?.poster ? { backgroundImage: `url("${hint.poster}")` } : undefined} />
       <div className="wsk-details mt-4 w-full">
         {hint?.title
@@ -48,22 +46,5 @@ export function CommentsSkeleton() {
       <div className={`${BLOCK} h-7 w-40`} />
       <div className={`${BLOCK} h-24 w-full !rounded-lg`} />
     </div>
-  );
-}
-
-/** The whole watch page, for the route's loading state. */
-export function WatchPageSkeleton({ hint }: { hint?: WatchHint }) {
-  return (
-    <main className="flex flex-1 flex-col md:flex-row overflow-hidden">
-      <div className="flex flex-col lg:flex-row gap-4 p-4 w-full mt-0 lg:mt-0 overflow-hidden">
-        <div className="flex flex-col w-full lg:w-3/4 overflow-hidden">
-          <WatchDetailsSkeleton hint={hint} />
-          <div className="flex flex-col w-full mt-6 gap-6"><div className="w-full max-w-4xl mx-auto px-4"><CommentsSkeleton /></div></div>
-        </div>
-        <div className="hidden lg:block lg:w-1/4 min-w-[350px] max-w-[500px] pt-4 overflow-hidden" aria-hidden="true">
-          <RelatedSkeletonRows />
-        </div>
-      </div>
-    </main>
   );
 }

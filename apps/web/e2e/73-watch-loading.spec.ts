@@ -49,6 +49,27 @@ async function trackShift(page: Page): Promise<void> {
   });
 }
 
+/** Every comments skeleton node the page ever creates, and the most present at once (hidden copies included). */
+async function trackCommentsSkeletons(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const w = window as unknown as { __skel: { seen: Set<Element>; max: number } };
+    w.__skel = { seen: new Set(), max: 0 };
+    const scan = () => {
+      const nodes = document.querySelectorAll('[data-testid="comments-skeleton"]');
+      nodes.forEach((node) => w.__skel.seen.add(node));
+      w.__skel.max = Math.max(w.__skel.max, nodes.length);
+    };
+    new MutationObserver(scan).observe(document, { childList: true, subtree: true });
+  });
+}
+
+async function skeletonStats(page: Page): Promise<{ created: number; maxAtOnce: number }> {
+  return page.evaluate(() => {
+    const { seen, max } = (window as unknown as { __skel: { seen: Set<Element>; max: number } }).__skel;
+    return { created: seen.size, maxAtOnce: max };
+  });
+}
+
 for (const lang of ['en', 'ar'] as const) {
   test.describe(`Watch page loading (${lang})`, () => {
     test.use({ storageState: ANONYMOUS_STATE });
@@ -73,5 +94,19 @@ for (const lang of ['en', 'ar'] as const) {
       await page.waitForTimeout(1500);
       expect(await page.evaluate(() => (window as unknown as { __cls: number }).__cls)).toBeLessThan(0.1);
     });
+
+    for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
+      test(`WATCH-LOAD-003 one comments skeleton, then the comments (${lang}, ${viewport.width})`, async ({ page }) => {
+        await page.setViewportSize(viewport);
+        await trackCommentsSkeletons(page);
+        await delayVideoAction(page);
+        await page.goto(`/${lang}/video/${VIDEO}`, { waitUntil: 'domcontentloaded' });
+        await expect(page.getByTestId('comments-skeleton')).toBeVisible();
+        await expect(page.getByTestId('comments-section')).toBeVisible({ timeout: 30000 });
+        await expect(page.getByTestId('comments-skeleton')).toHaveCount(0);
+        await expect(page.getByTestId('comments-section')).toHaveCount(1);
+        expect(await skeletonStats(page)).toEqual({ created: 1, maxAtOnce: 1 });
+      });
+    }
   });
 }

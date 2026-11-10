@@ -1,7 +1,7 @@
 import WatchPageContent from '@/components/video/WatchPageContent';
-import { loadWatchHint } from '@/lib/video/watch-hint';
+import { WatchSkeletonSlot } from '@/components/video/WatchSkeletonSlot';
 
 export default async function VideoViewPage({ params }: { params: Promise<{ id: string; locale: string }> }) {
   const { id, locale } = await params;
-  return <WatchPageContent videoId={id} hint={await loadWatchHint(id, locale)} />;
+  return <WatchPageContent videoId={id} skeleton={<WatchSkeletonSlot id={id} locale={locale} />} />;
 }
