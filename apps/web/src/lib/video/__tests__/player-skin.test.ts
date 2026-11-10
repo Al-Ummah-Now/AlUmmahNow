@@ -75,6 +75,19 @@ describe('player skin CSS', () => {
     expect(declarationsFor('.video-js.vjs-fanous.vjs-scrubbing .vjs-progress-control .vjs-progress-holder')).toMatch(/height:\s*16px/);
   });
 
+  it('draws one continuous track: fills end square mid-track, buffered ranges join (v2026.11.09.5 dent)', () => {
+    expect(declarationsFor('.video-js.vjs-fanous .vjs-progress-control .vjs-progress-holder')).toMatch(/container:\s*fanous-track\s*\/\s*size/);
+    for (const fill of ['.vjs-load-progress', '.vjs-play-progress']) {
+      const rules = declarationsFor(`.video-js.vjs-fanous .vjs-progress-holder ${fill}`);
+      // Rounded start, trailing corners only as round as the track's own cap has left
+      expect(rules).toMatch(/--vjs-fanous-fill-end:\s*clamp\(0px,\s*50cqh - \(100cqw - 100%\),\s*50cqh\)/);
+      expect(rules).toMatch(/border-radius:\s*50cqh var\(--vjs-fanous-fill-end\) var\(--vjs-fanous-fill-end\) 50cqh \/ 50%/);
+      expect(rules).not.toMatch(/border-radius:\s*999px/);
+    }
+    expect(declarationsFor('.video-js.vjs-fanous .vjs-progress-holder .vjs-load-progress div')).toMatch(/border-radius:\s*0/);
+    expect(declarationsFor('.video-js.vjs-fanous .vjs-progress-holder .vjs-load-progress')).toMatch(/overflow:\s*hidden/);
+  });
+
   it('clips the video to the frame radius in one place', () => {
     const frame = declarationsFor('.video-js.vjs-fanous');
     expect(frame).toMatch(/border-radius:\s*var\(--fanous-radius-lg/);

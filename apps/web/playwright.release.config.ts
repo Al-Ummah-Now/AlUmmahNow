@@ -14,12 +14,12 @@ const PLAYER = /player\.spec\.ts$/;
  */
 const ALL_BROWSERS = /(anonymous-console|realtime-toasts|admin-content)\.spec\.ts$/;
 /**
- * The control-bar layout spec also runs in Firefox and WebKit when asked, locally:
+ * The control-bar layout and progress-track specs also run in Firefox and WebKit when asked, locally:
  * RELEASE_PLAYER_BROWSERS=firefox,webkit (layout only, so the browsers' own decoders suffice).
  * PLAYER_FIREFOX_PATH runs the installed Firefox over WebDriver BiDi instead of Playwright's build,
  * as playwright.player.config.ts does.
  */
-const BAR_ROW = /player-bar-row\.player\.spec\.ts$/;
+const BAR_ROW = /player-(bar-row|track)\.player\.spec\.ts$/;
 const EXTRA_BROWSERS = (process.env.RELEASE_PLAYER_BROWSERS ?? '').split(',').map((b) => b.trim()).filter(Boolean);
 const EXTRA_DEVICES = {
   firefox: process.env.PLAYER_FIREFOX_PATH

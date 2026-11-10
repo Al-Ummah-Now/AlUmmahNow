@@ -283,6 +283,10 @@
   box-shadow: var(--fanous-player-track-edge);
   overflow: visible;
   contain: none;
+  /* A size container (its height is set, its width comes from the flex row), so the fills below can
+     measure the track: 100cqw is its length, 50cqh half its height. Size containment only: nothing
+     here clips or contains paint, so the handle still draws outside the track */
+  container: fanous-track / size;
   transition: height 120ms ease;
   outline: 0;
 }
@@ -297,16 +301,34 @@
   height: 16px;
 }
 
+/*
+  One continuous track (v2026.11.09.5: a dent where the buffered fill ended). The played and buffered
+  fills share the track's height and its rounded start; their trailing edge is square, so where a fill
+  ends mid-track it meets the track flush. A rounded (999px) trailing cap let the darker track show
+  above and below it: a notch beside the handle. Near the far end the trailing corners round again,
+  by exactly as much as the track's own cap has left (half the height, less the distance still to go),
+  so a full fill ends in the track's curve: the corner shares the cap's centre and stays inside it.
+  The vertical radius is 50% of the height; the horizontal one is the clamp (a zero makes it square).
+*/
 .video-js.vjs-fanous .vjs-progress-holder .vjs-load-progress,
-.video-js.vjs-fanous .vjs-progress-holder .vjs-load-progress div,
 .video-js.vjs-fanous .vjs-progress-holder .vjs-play-progress {
+  --vjs-fanous-fill-end: clamp(0px, 50cqh - (100cqw - 100%), 50cqh);
   top: 0;
   height: 100%;
-  border-radius: 999px;
+  border-radius: 50cqh var(--vjs-fanous-fill-end) var(--vjs-fanous-fill-end) 50cqh / 50%;
 }
 
+/* Every buffered range is a plain strip inside the buffered layer, which clips them to its shape:
+   adjacent ranges (HLS segments) join without a seam, real holes stay holes */
 .video-js.vjs-fanous .vjs-progress-holder .vjs-load-progress {
   background: transparent;
+  overflow: hidden;
+}
+
+.video-js.vjs-fanous .vjs-progress-holder .vjs-load-progress div {
+  top: 0;
+  height: 100%;
+  border-radius: 0;
 }
 
 .video-js.vjs-fanous .vjs-progress-holder .vjs-load-progress div {

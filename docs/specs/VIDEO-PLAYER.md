@@ -139,6 +139,7 @@ The chrome sections of `video-player.css` that it replaces are deleted, so there
 |---|---|
 | Control row | 48px, buttons in a 44px hit area with a 22px icon (1.9 stroke) and a 38px hover fill |
 | Progress hit area | 20px tall (44px on coarse pointers), track 12px, 16px on hover (prod) |
+| Progress fills | Played and buffered fills share the track's height and rounded start; where a fill ends mid-track its edge is square, flush with the track (a pill end left a dent), and only rounds as it reaches the track's own end cap. Buffered ranges are plain strips clipped by the buffered layer, so adjacent ranges join; chapter separators are the only gaps. Release spec `player-track.player.spec.ts` samples the track's pixels along its length |
 | Handle | 18px, 22px on hover and while dragging, centred on the fill edge |
 | Volume slider | 72px reserved, 4px track, 6px on hover, 12px handle |
 | Settings panel | `min(280px, 100% - 16px)` wide, 44px rows, 12px radius, 8px above the bar, end-aligned with the gear |
