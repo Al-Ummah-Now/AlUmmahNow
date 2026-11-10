@@ -41,6 +41,8 @@ export const PURGE_PAGE_SIZE = 50;
 /** A Bunny video younger than this may be an upload whose record is about to land. */
 export const PURGE_MIN_AGE_MS = 60 * 60 * 1000;
 export const PURGE_MAX_DELIVERIES = 6;
+/** Videos of one page checked and deleted at once (Bunny API calls in flight). */
+export const PURGE_CONCURRENCY = 10;
 const RECENT_LIMIT = 50;
 
 export type PurgeStatus = 'running' | 'stopped' | 'finished' | 'failed';
@@ -201,25 +203,37 @@ export async function runPurgePage(env: PurgeEnv, message: PurgeMessage, now = n
 	const kept: Record<string, number> = {};
 	const removed: PurgeState['recent'] = [];
 	let candidates = 0;
-	for (const video of listed.items) {
+	// Videos of a page are independent: up to PURGE_CONCURRENCY at once. One at a
+	// time, each Bunny DELETE (~2 s) made a page of 50 take ~1 min (QA, 2026-11-10:
+	// ~17 h for the 25k leaked videos). A failure rejects the page; the queue
+	// retries it, and videos already deleted answer 404 (done).
+	const one = async (video: BunnyView): Promise<void> => {
 		const id = video.guid ?? '';
 		const hasRecord = id ? !!(await env.videos.head(id)) : false;
 		const decision = decidePurge({ video, prefix, now: now.getTime(), hasRecord, liveStreamRef: !!id && lives.some((t) => t.includes(id)) });
 		if (decision.action === 'keep') {
 			kept[decision.reason] = (kept[decision.reason] ?? 0) + 1;
-			continue;
+			return;
 		}
-		candidates++;
-		if (state.dryRun) continue;
+		if (state.dryRun) {
+			candidates++;
+			return;
+		}
 		// Re-check right before the delete: a record may have landed since the head
 		if (await env.videos.head(id)) {
 			kept['has-record'] = (kept['has-record'] ?? 0) + 1;
-			candidates--;
-			continue;
+			return;
 		}
+		candidates++;
 		await deleteBunnyVideo(env, id);
 		removed.push({ videoId: id, title: video.title, status: video.status, at: now.toISOString() });
-	}
+	};
+	let cursor = 0;
+	await Promise.all(
+		Array.from({ length: Math.min(PURGE_CONCURRENCY, listed.items.length) }, async () => {
+			while (cursor < listed.items.length) await one(listed.items[cursor++]);
+		}),
+	);
 	const deleted = state.dryRun ? 0 : removed.length;
 	const next = nextPurgePage({ page: message.page, listed: listed.items.length, deleted, total: listed.totalItems, dryRun: state.dryRun });
 
