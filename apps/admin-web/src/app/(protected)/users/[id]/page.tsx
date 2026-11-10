@@ -14,6 +14,7 @@ import { UserAuthRequestsPanel } from '@/components/auth-requests/UserAuthReques
 import { UserCreatorTierPanel } from '@/components/creators/UserCreatorTierPanel';
 import { logger } from '@/lib/logger';
 import { UserActions } from './UserActions';
+import { InviteStatusChip } from '@/components/invites/InviteStatusChip';
 
 export const dynamic = 'force-dynamic';
 
@@ -67,6 +68,7 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
         <div className="flex flex-wrap gap-1">
           {u.isBanned && <Chip tone="bad" large testId="user-banned">{t('users.banned')}</Chip>}
           {u.profileDeleted && <Chip tone="neutral" large>{t('users.profileDeleted')}</Chip>}
+          {u.invite && u.invite.status !== 'active' && <InviteStatusChip status={u.invite.status} t={t} large />}
         </div>
       </div>
 
@@ -77,6 +79,12 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
         </Notice>
       )}
       {u.profileDeleted && <Notice testId="user-profile-deleted">{t('users.profileDeletedBanner')}</Notice>}
+      {u.invite && u.invite.status !== 'active' && (
+        <Notice testId="user-invite">
+          <p>{t('invites.userInvited', { date: u.createdAt ? formatDate(u.createdAt, locale) : '' })}</p>
+          <Link href={`/users/invites?q=${encodeURIComponent(u.invite.id)}`} className={linkClass} data-testid="user-invite-manage">{t('invites.manage')}</Link>
+        </Notice>
+      )}
 
       <UserCreatorTierPanel userId={u.id} userName={u.displayName || u.userName || u.id} canManage={canManageCreators(role)} />
 

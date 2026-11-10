@@ -76,6 +76,8 @@ export function hrefFor(s: Pick<AdminSuggestion, 'kind' | 'id' | 'parentId'>): s
       return `/contact/${id}`;
     case 'error':
       return `/errors/${id}`;
+    case 'invite':
+      return `/users/invites?q=${id}`;
     case 'playlist':
       return `/playlists?q=${id}`;
     case 'post':

@@ -69,6 +69,7 @@ const KIND_LABEL: Record<AdminSuggestKind, MessageKey> = {
   comment: 'autocomplete.kinds.comment',
   contact: 'autocomplete.kinds.contact',
   error: 'autocomplete.kinds.error',
+  invite: 'autocomplete.kinds.invite',
 };
 
 type Envelope<T> = { success?: boolean; result?: T };
@@ -358,8 +359,11 @@ function OptionContent({ option, kind }: { option: AutocompleteOption; kind: Adm
     <>
       <Thumb suggestion={s} />
       <span className="flex min-w-0 flex-col">
-        <span className="truncate text-fg" dir="auto">
-          {s.label}
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="truncate text-fg" dir="auto">
+            {s.label}
+          </span>
+          <InvitedBadge suggestion={s} />
         </span>
         <span className="flex min-w-0 gap-2 text-xs text-fg-muted">
           {s.secondary && (
@@ -373,6 +377,17 @@ function OptionContent({ option, kind }: { option: AutocompleteOption; kind: Adm
         </span>
       </span>
     </>
+  );
+}
+
+/** Users invited by an admin who have not signed in yet (docs/admin/INVITES.md). */
+function InvitedBadge({ suggestion }: { suggestion: Pick<AdminSuggestion, 'badge'> }) {
+  const { t } = useLanguage();
+  if (suggestion.badge !== 'invited') return null;
+  return (
+    <span className="shrink-0 rounded-full border border-border bg-surface-2 px-2 text-xs text-fg-muted" data-testid="autocomplete-badge-invited">
+      {t('autocomplete.badges.invited')}
+    </span>
   );
 }
 
@@ -400,8 +415,11 @@ function PickedChip({
     <div className="flex min-h-10 items-center gap-2 rounded border border-border bg-surface-2 py-1 ps-1 pe-1" data-testid={testId ? `${testId}-chip` : undefined} data-id={id}>
       {item ? <Thumb suggestion={item} /> : <span aria-hidden="true" className="h-9 w-1" />}
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-sm text-fg" dir="auto">
-          {name}
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="truncate text-sm text-fg" dir="auto">
+            {name}
+          </span>
+          {item && <InvitedBadge suggestion={item} />}
         </span>
         <span className="flex min-w-0 gap-2 text-xs text-fg-muted">
           {item?.secondary && (
