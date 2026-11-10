@@ -1,10 +1,11 @@
 import { SITE_THEMES } from '@al-ummah/shared-types';
-import { getSiteThemeHistory, getSiteThemeState, type SiteThemeChange } from '@/lib/api/admin';
+import { getSiteThemeHistory, getSiteThemeState, listThemes, type SiteThemeChange, type ThemeListItem } from '@/lib/api/admin';
 import { getAdminSession } from '@/lib/auth';
 import { getI18n } from '@/i18n/server';
 import { ErrorAlert, cardClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { SiteThemePicker, type ThemePreview } from './SiteThemePicker';
+import { ThemeLibrary } from './builder/ThemeLibrary';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,13 +18,19 @@ const palette: Record<string, Record<string, string>> = {
 };
 
 export default async function SiteThemePage() {
-  const { t } = await getI18n();
+  const { t, locale } = await getI18n();
   const session = await getAdminSession();
-  const previews: ThemePreview[] = SITE_THEMES.map((id) => ({ id, swatches: Object.values(palette[id]).slice(0, 6) }));
-  const [stateResult, historyResult] = await Promise.allSettled([getSiteThemeState(), getSiteThemeHistory()]);
+  const canEdit = session?.user.role === 'admin' || session?.user.role === 'super_admin';
+  const [stateResult, historyResult, themesResult] = await Promise.allSettled([getSiteThemeState(), getSiteThemeHistory(), listThemes()]);
   const state = stateResult.status === 'fulfilled' ? stateResult.value : null;
   const history: SiteThemeChange[] | null = historyResult.status === 'fulfilled' ? historyResult.value : null;
-  for (const result of [stateResult, historyResult]) {
+  const themes: ThemeListItem[] = themesResult.status === 'fulfilled' ? themesResult.value.themes : [];
+  // Built-ins, then every theme package that has a published version (its latest)
+  const previews: ThemePreview[] = [
+    ...SITE_THEMES.map((id) => ({ id, name: id, version: null, swatches: Object.values(palette[id]).slice(0, 6) })),
+    ...themes.filter((th) => !th.builtIn && th.latestVersion).map((th) => ({ id: th.id, name: th.name[locale], version: th.activeVersion ?? th.latestVersion, swatches: [] })),
+  ];
+  for (const result of [stateResult, historyResult, themesResult]) {
     if (result.status === 'rejected') {
       logger.error('[site-theme] Failed to load', { error: result.reason instanceof Error ? result.reason.message : String(result.reason) });
     }
@@ -35,7 +42,8 @@ export default async function SiteThemePage() {
         <p className="text-fg-muted mt-2">{t('siteTheme.subtitle')}</p>
       </div>
       {!state && <ErrorAlert testId="site-theme-error">{t('siteTheme.failed')}</ErrorAlert>}
-      {state && <SiteThemePicker initial={state.theme} previews={previews} canEdit={session?.user.role === 'admin' || session?.user.role === 'super_admin'} />}
+      {state && <SiteThemePicker initial={{ theme: state.theme, version: state.version ?? null }} previews={previews} canEdit={canEdit} />}
+      {themesResult.status === 'fulfilled' && <ThemeLibrary themes={themes} canEdit={canEdit} author="Al Ummah Now" />}
       <section className={`${cardClass} mt-8`} aria-labelledby="site-theme-history-title" data-testid="site-theme-history">
         <h2 id="site-theme-history-title" className="text-lg font-semibold text-fg mb-3">{t('siteTheme.history')}</h2>
         {!history && <p className="text-fg-muted" data-testid="site-theme-history-error">{t('siteTheme.historyUnavailable')}</p>}

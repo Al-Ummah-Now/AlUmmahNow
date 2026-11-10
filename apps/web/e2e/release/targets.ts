@@ -75,6 +75,8 @@ export function releaseEnv(): ReleaseEnv {
 export const target = (): Target => ({
   ...TARGETS[releaseEnv()],
   ...(process.env.WEB_APP_URL ? { web: process.env.WEB_APP_URL } : {}),
+  ...(process.env.ADMIN_WEB_APP_URL ? { adminWeb: process.env.ADMIN_WEB_APP_URL } : {}),
+  ...(process.env.ADMIN_API_APP_URL ? { adminApi: process.env.ADMIN_API_APP_URL } : {}),
 });
 
 /**

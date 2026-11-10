@@ -88,6 +88,9 @@ importers:
       '@al-ummah/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
+      '@al-ummah/theme-packages':
+        specifier: workspace:*
+        version: link:../../packages/theme-packages
       '@opennextjs/cloudflare':
         specifier: ^1.20.1
         version: 1.20.1(next@16.2.10(@playwright/test@1.56.1)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(rclone.js@0.6.6)(wrangler@4.108.0)
