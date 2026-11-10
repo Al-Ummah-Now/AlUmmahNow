@@ -243,16 +243,13 @@ describe('session refresh middleware', () => {
   });
 
   it('never runs on /login or the auth routes, so a sign-out redirect cannot loop', () => {
-    const matches = (path: string) =>
-      config.matcher.some((pattern) => {
-        if (pattern === '/') return path === '/';
-        const base = pattern.replace('/:path*', '');
-        return path === base || path.startsWith(`${base}/`);
-      });
-    for (const path of ['/login', '/access-denied', '/api/callback', '/api/logout', '/api/auth/logout']) {
+    // The matcher is one regular expression over the pathname (Next.js anchors it)
+    const matches = (path: string) => config.matcher.some((pattern) => new RegExp(`^${pattern}$`).test(path));
+    for (const path of ['/login', '/access-denied', '/api/callback', '/api/logout', '/api/auth/logout', '/api/auth/refresh', '/_next/static/x.js', '/favicon.ico', '/logo.svg']) {
       assert.equal(matches(path), false, path);
     }
-    for (const path of ['/', '/dashboard', '/moderation/reports', '/translations', '/indices']) {
+    // Every protected page, including ones added later (AW-1: /site-theme was missing)
+    for (const path of ['/', '/dashboard', '/moderation/reports', '/translations', '/indices', '/site-theme', '/dashboard/users/u1']) {
       assert.equal(matches(path), true, path);
     }
   });
