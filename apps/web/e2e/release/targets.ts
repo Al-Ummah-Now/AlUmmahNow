@@ -1,10 +1,15 @@
+import { appendFileSync } from 'fs';
 import { randomBytes } from 'crypto';
 
 /**
  * Where the release regressions run. E2E_ENV=qa on PRs, E2E_ENV=stage in the
- * release workflow. Never production: these specs create accounts and data.
+ * release workflow. E2E_ENV=production only from prod-signed-in.yml, which runs
+ * the signed-in specs alone: every user is a test-release-*@delivered.resend.dev
+ * address listed in PROD_USER_FILE before it exists, and the workflow deletes
+ * them all afterwards (scripts/release/delete-test-user.ts). The other specs
+ * create data and never run there.
  */
-export type ReleaseEnv = 'qa' | 'stage';
+export type ReleaseEnv = 'qa' | 'stage' | 'production';
 
 export interface Target {
   web: string;
@@ -43,11 +48,27 @@ const TARGETS: Record<ReleaseEnv, Target> = {
     www: 'https://www.stage.alummahnow.net',
     cms: 'https://cms.stage.alummahnow.net',
   },
+  production: {
+    web: 'https://videos.alummahnow.net',
+    api: 'https://videos.api.alummahnow.net',
+    adminWeb: 'https://admin.alummahnow.net',
+    adminApi: 'https://admin.api.alummahnow.net',
+    auth: 'https://auth.alummahnow.net',
+    profile: 'https://profile.auth.alummahnow.net',
+    authAdmin: 'https://admin.auth.alummahnow.net',
+    www: 'https://www.alummahnow.net',
+    cms: 'https://cms.alummahnow.net',
+  },
 };
 
 export function releaseEnv(): ReleaseEnv {
   const env = process.env.E2E_ENV ?? 'qa';
-  if (env !== 'qa' && env !== 'stage') throw new Error(`E2E_ENV must be qa or stage, got "${env}"`);
+  if (env === 'production') {
+    // No cleanup list, no production run: every account must be deletable afterwards
+    if (!process.env.PROD_USER_FILE) throw new Error('E2E_ENV=production needs PROD_USER_FILE (prod-signed-in.yml)');
+    return env;
+  }
+  if (env !== 'qa' && env !== 'stage') throw new Error(`E2E_ENV must be qa, stage or production, got "${env}"`);
   return env;
 }
 
@@ -56,8 +77,18 @@ export const target = (): Target => ({
   ...(process.env.WEB_APP_URL ? { web: process.env.WEB_APP_URL } : {}),
 });
 
-/** Sink addresses: the auth server stores their codes for the test instead of emailing them. */
+/**
+ * Sink addresses: the auth server stores their codes for the test instead of emailing them.
+ * Production has no sink: there it is a Resend test address (codes read through the
+ * Resend API, sink.ts), recorded in PROD_USER_FILE for deletion before it is used.
+ * The prefix is dropped there (delete-test-user.ts only accepts test-release-<ms>-<hex>).
+ */
 export function sinkEmail(prefix: string): string {
+  if (releaseEnv() === 'production') {
+    const email = `test-release-${Date.now()}-${randomBytes(3).toString('hex')}@delivered.resend.dev`;
+    appendFileSync(process.env.PROD_USER_FILE as string, `${email}\n`);
+    return email;
+  }
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@e2e.alummahnow.net`;
 }
 

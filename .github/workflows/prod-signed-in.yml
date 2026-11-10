@@ -1,0 +1,104 @@
+name: Production signed-in check
+
+# Runs the "signed in everywhere" release spec (every app opens signed in after one
+# sign-in, including www's header without a click; account switching; single
+# sign-out) and the "Start sign-in again" restart-page spec against PRODUCTION.
+#
+# Users are throwaway test-release-*@delivered.resend.dev accounts: the specs list
+# each address in PROD_USER_FILE before creating it, read its email code through
+# the Resend API (RESEND_API_KEY), and the last step deletes every listed account
+# and its videos profile, pass or fail (scripts/release/delete-test-user.ts).
+# By hand only, from main (e.g. after a production release).
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prod-signed-in
+  cancel-in-progress: false
+
+jobs:
+  signed-in:
+    name: Signed in everywhere (production)
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      E2E_ENV: production
+      PLAYWRIGHT_VERSION: 1.56.1  # keep in step with apps/web/package.json
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      # Same layout as release-e2e.yml: the release specs next to a standalone @playwright/test
+      - name: Prepare the suite
+        run: |
+          SUITE="$RUNNER_TEMP/release-e2e"
+          mkdir -p "$SUITE/e2e/test-utils"
+          cp -R apps/web/e2e/release apps/web/e2e/test-fixtures "$SUITE/e2e/"
+          cp apps/web/e2e/test-utils/code-sink.ts "$SUITE/e2e/test-utils/"
+          cp apps/web/playwright.release.config.ts "$SUITE/"
+          cd "$SUITE"
+          npm init -y > /dev/null
+          npm install --no-audit --no-fund "@playwright/test@$PLAYWRIGHT_VERSION"
+          echo "SUITE=$SUITE" >> "$GITHUB_ENV"
+
+      - name: Install Chromium
+        working-directory: ${{ env.SUITE }}
+        run: npx playwright install --with-deps chromium
+
+      # One random password for this run's accounts, masked, so the scan below can look for it;
+      # and the list of accounts to delete afterwards (outside the uploaded folders)
+      - name: Generate the test password
+        run: |
+          echo "PROD_USER_FILE=$RUNNER_TEMP/prod-test-users" >> "$GITHUB_ENV"
+          pw="Rel-$(openssl rand -base64 18 | tr '+/' '-_' | tr -d '=')-1!"
+          echo "::add-mask::$pw"
+          echo "E2E_TEST_PASSWORD=$pw" >> "$GITHUB_ENV"
+
+      - name: Signed in everywhere, www without a click, restart page
+        id: check
+        working-directory: ${{ env.SUITE }}
+        env:
+          CI: 'true'
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        run: >-
+          npx playwright test -c playwright.release.config.ts --project=auth-flows
+          e2e/release/signed-in-everywhere.spec.ts e2e/release/sign-in-restart.spec.ts
+
+      - name: Delete production test accounts
+        if: always()
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -s "$PROD_USER_FILE" ]; then
+            echo "deleting $(wc -l < "$PROD_USER_FILE") account(s)"
+            node --experimental-strip-types --no-warnings scripts/release/delete-test-user.ts "$PROD_USER_FILE"
+          else
+            echo "no production test accounts were created"
+          fi
+
+      # Artifacts of this public repo are downloadable by anyone signed in to GitHub
+      - name: Scan test output for secrets
+        if: failure()
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        run: >-
+          python3 -I scripts/ci/scan-artifacts-for-secrets.py --env E2E_TEST_PASSWORD --env RESEND_API_KEY
+          --remove "$SUITE/release-report" "$SUITE/test-results"
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: prod-signed-in
+          path: |
+            ${{ env.SUITE }}/release-report/
+            ${{ env.SUITE }}/test-results/
+          retention-days: 14
