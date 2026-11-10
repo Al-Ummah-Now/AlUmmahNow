@@ -73,7 +73,9 @@
         // Error ingest (endpoints/errors/ErrorsIngest.ts): /internal/errors enqueues, this Worker writes D1
         "binding": "ERRORS_QUEUE",
         "queue": "al-ummah-now-errors-qa"
-      }
+      },
+      // Short/video format backfill runs on api-videos' processing-check queue (apps/api-videos/src/lib/video-format/job.ts)
+      { "binding": "PROCESSING_CHECK_QUEUE", "queue": "al-ummah-now-processing-check-qa" }
     ],
     "consumers": [
       {

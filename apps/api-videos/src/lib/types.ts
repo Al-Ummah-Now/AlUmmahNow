@@ -95,6 +95,9 @@ export const Video = z.object({
     originalFormat: z.string().optional(),
     // Uploader / admin choice of Short or video; absent = detected (shared-types video-format.ts)
     format: z.enum(['short', 'video']).optional(),
+    // Who chose the format by hand, and why detection could not decide (video-format-ops.ts)
+    formatSetBy: z.object({ by: z.enum(['owner', 'admin']), userId: z.string(), at: z.string() }).optional(),
+    formatIssue: z.object({ reason: z.string(), missing: z.array(z.enum(['duration', 'dimensions'])), at: z.string() }).optional(),
     uploadStatus: z.enum(['initiated', 'uploading', 'processing', 'ready', 'failed']).optional(),
     // Why processing did not finish (lib/processing): Bunny encode failure, an
     // upload whose bytes never arrived (re-upload needed) or a stalled encode.

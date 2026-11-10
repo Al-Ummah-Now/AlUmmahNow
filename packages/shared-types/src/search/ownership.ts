@@ -18,6 +18,7 @@ import { NOT_TOMBSTONED, type SearchDb, type SearchStatement } from './store';
 import type { SearchEntityType } from './documents';
 import { isShort, type VideoFormatInput } from '../video-format';
 import { channelMembersOf } from '../channel-roles';
+import { hasOpenFormatIssue } from '../video-format-ops';
 
 export type OwnershipKind = 'video' | 'channel' | 'profile';
 
@@ -62,6 +63,8 @@ export interface OwnershipRow {
   isLive: boolean;
   /** Short (videos only; see video-format.ts). */
   isShort: boolean;
+  /** Unclassifiable Short/video with no choice made: an admin must set it (video-format-ops.ts). */
+  needsFormat: boolean;
   duration: number | null;
   scheduleStatus: string | null;
   uploadStatus: string | null;
@@ -141,6 +144,7 @@ export function projectOwnership(kind: OwnershipKind, id: string, raw: unknown):
       isPublic: true,
       isLive: false,
       isShort: false,
+      needsFormat: false,
       duration: null,
       scheduleStatus: null,
       uploadStatus: null,
@@ -159,6 +163,7 @@ export function projectOwnership(kind: OwnershipKind, id: string, raw: unknown):
       isPublic: !obj.isPrivate,
       isLive: false,
       isShort: false,
+      needsFormat: false,
       duration: null,
       scheduleStatus: null,
       uploadStatus: null,
@@ -176,6 +181,7 @@ export function projectOwnership(kind: OwnershipKind, id: string, raw: unknown):
     isPublic: obj.isPublic !== false,
     isLive: Boolean(obj.isLive),
     isShort: isShort(obj as VideoFormatInput),
+    needsFormat: hasOpenFormatIssue(obj as never),
     duration: finite(obj.duration),
     scheduleStatus: text(obj.scheduledPublishStatus),
     uploadStatus: text(obj.uploadStatus),
@@ -204,8 +210,8 @@ export function ownershipTombstone(kind: OwnershipKind): string {
 export function ownershipUpsertStatement(db: SearchDb, row: OwnershipRow, now: number, version = now): SearchStatement {
   return db.prepare(
     `INSERT INTO ${OWNERSHIP_TABLE} (kind, id, owner_id, channel_id, is_public, is_hidden, is_deleted, is_live, duration, schedule_status, upload_status, views, created_at, updated_at, indexed_at, source_version,
-       admin_title, handle, email, is_verified, is_suspended, subscribers, admin_cols, is_short)
-     SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+       admin_title, handle, email, is_verified, is_suspended, subscribers, admin_cols, is_short, needs_format)
+     SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
      WHERE ${NOT_TOMBSTONED}
      ON CONFLICT(kind, id) DO UPDATE SET
        owner_id = excluded.owner_id, channel_id = excluded.channel_id, is_public = excluded.is_public,
@@ -214,13 +220,13 @@ export function ownershipUpsertStatement(db: SearchDb, row: OwnershipRow, now: n
        views = excluded.views, created_at = excluded.created_at, updated_at = excluded.updated_at,
        indexed_at = excluded.indexed_at, source_version = excluded.source_version,
        admin_title = excluded.admin_title, handle = excluded.handle, email = excluded.email, is_verified = excluded.is_verified,
-       is_suspended = excluded.is_suspended, subscribers = excluded.subscribers, admin_cols = excluded.admin_cols, is_short = excluded.is_short
+       is_suspended = excluded.is_suspended, subscribers = excluded.subscribers, admin_cols = excluded.admin_cols, is_short = excluded.is_short, needs_format = excluded.needs_format
      WHERE excluded.source_version >= ${OWNERSHIP_TABLE}.source_version`,
   ).bind(
     row.kind, row.id, row.ownerId, row.channelId, int(row.isPublic), int(row.isHidden), int(row.isDeleted),
     int(row.isLive), row.duration, row.scheduleStatus, row.uploadStatus, row.views, row.createdAt, row.updatedAt, now, version,
     row.title ?? null, row.handle ?? null, row.email ?? null, int(row.isVerified === true), int(row.isSuspended === true),
-    row.subscribers ?? 0, OWNERSHIP_ADMIN_COLS_VERSION, int(row.isShort),
+    row.subscribers ?? 0, OWNERSHIP_ADMIN_COLS_VERSION, int(row.isShort), int(row.needsFormat),
     ownershipTombstone(row.kind), row.id, version,
   );
 }

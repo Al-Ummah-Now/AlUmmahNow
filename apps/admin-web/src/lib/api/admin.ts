@@ -32,6 +32,8 @@ import type {
   CategoryBulkResult,
   CategoryBackfillPage,
   CategorizeConfigView,
+  FlaggedVideoList,
+  VideoFormatRunView,
 } from './types';
 
 export async function listReports(params?: ListReportsParams): Promise<ListReportsResponse> {
@@ -371,4 +373,22 @@ export async function runCategoryBackfill(params: { dryRun: boolean; cursor?: st
 
 export async function updateCategorizeConfig(patch: Partial<CategorizeConfigView>): Promise<ActionResult<CategorizeConfigView>> {
   return mutate('/api/category-suggestions/config', 'PUT', patch);
+}
+
+// Short vs video formats (admin-api /api/video-format; videos:format)
+
+export async function getLatestVideoFormatRun(): Promise<VideoFormatRunView | null> {
+  return fetchAdmin<VideoFormatRunView | null>('/api/video-format/runs/latest');
+}
+
+export async function startVideoFormatBackfill(dryRun: boolean): Promise<ActionResult<VideoFormatRunView>> {
+  return mutate('/api/video-format/backfill', 'POST', { dryRun });
+}
+
+export async function listFlaggedVideoFormats(limit = 25, offset = 0): Promise<FlaggedVideoList> {
+  return fetchAdmin<FlaggedVideoList>(`/api/video-format/flagged?limit=${limit}&offset=${offset}`);
+}
+
+export async function setVideoFormat(ids: string[], format: 'short' | 'video' | 'auto'): Promise<ActionResult<{ results: Array<{ id: string; changed: boolean; error?: string }> }>> {
+  return mutate('/api/video-format/set', 'POST', { ids, format });
 }

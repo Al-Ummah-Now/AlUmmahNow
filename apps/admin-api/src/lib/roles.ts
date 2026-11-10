@@ -58,6 +58,8 @@ export const PERMISSIONS = {
   'errors:manage': ADMIN_ROLE_IDS,
   /** Stale uploads: list abandoned upload placeholders and Bunny orphans; Delete now, Keep, Retry, reaper mode. */
   'videos:uploads': ADMIN_ROLE_IDS,
+  /** Short/video formats: run the backfill, list unclassifiable videos, set a video's format. */
+  'videos:format': ADMIN_ROLE_IDS,
 } as const satisfies Record<string, readonly string[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

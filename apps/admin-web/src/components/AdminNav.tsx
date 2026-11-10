@@ -45,6 +45,7 @@ const NAV_ITEMS: { href: string; label: MessageKey }[] = [
   { href: '/jobs', label: 'nav.jobs' },
   { href: '/auth-requests', label: 'nav.authRequests' },
   { href: '/legacy-profiles', label: 'nav.legacyProfiles' },
+  { href: '/video-formats', label: 'nav.videoFormats' },
 ];
 
 const PROCESSING_ITEMS = new Set(['/processing', '/errors']);
@@ -52,9 +53,11 @@ const PROCESSING_ITEMS = new Set(['/processing', '/errors']);
 export function AdminNav({ userEmail, authIssuer, contactNew = null, canProcess = false, canManageUsers = false, canStaleUploads = false }: AdminNavProps) {
   const pathname = usePathname();
   const { t } = useLanguage();
+  // contact:read and videos:format are admin-only: contactNew is null for moderators
   const items = NAV_ITEMS.filter(
     (i) =>
       (i.href !== '/contact' || contactNew !== null) &&
+      (i.href !== '/video-formats' || contactNew !== null) &&
       (!PROCESSING_ITEMS.has(i.href) || canProcess) &&
       (i.href !== '/legacy-profiles' || canManageUsers) &&
       (i.href !== '/stale-uploads' || canStaleUploads),

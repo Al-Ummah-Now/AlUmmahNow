@@ -7,6 +7,7 @@ import contactRouter from './contact.router';
 import authRequestsRouter from './authRequests.router';
 import errorsRouter from './errors.router';
 import categorySuggestionsRouter from './categorySuggestions.router';
+import videoFormatRouter from './video-format.router';
 
 /**
  * Register all feature routers with the main OpenAPI instance.
@@ -38,4 +39,7 @@ export function registerAllRouters(openapi: any) {
 
   // AI category suggestions (review, backfill, settings) at /api/category-suggestions
   openapi.route('/api/category-suggestions', categorySuggestionsRouter);
+
+  // Short vs video formats (backfill runs, unclassifiable videos, manual set) at /api/video-format
+  openapi.route('/api/video-format', videoFormatRouter);
 }

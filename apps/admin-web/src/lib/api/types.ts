@@ -370,3 +370,54 @@ export interface CategoryBackfillPage {
   nextCursor: string | null;
   done: boolean;
 }
+
+/** A Short/video format backfill run (admin-api /api/video-format/runs/latest). */
+export interface VideoFormatRunView {
+  runId: string;
+  dryRun: boolean;
+  requestedBy?: string;
+  status: 'running' | 'done';
+  startedAt: string;
+  updatedAt: string;
+  finishedAt?: string;
+  nextCursor: string | null;
+  lastError?: string;
+  pagesDone: number;
+  totals: {
+    scanned: number;
+    shorts: number;
+    videos: number;
+    overrides: number;
+    live: number;
+    unknown: number;
+    oldRuleShorts: number;
+    becameShorts: number;
+    becameVideos: number;
+    dimensionsStored: number;
+    rechecking: number;
+    flagged: number;
+    errors: number;
+  };
+}
+
+/** A video the Short/video rule cannot classify (no duration or encoded size, no choice). */
+export interface FlaggedVideo {
+  id: string;
+  title?: string;
+  channelId?: string;
+  thumbnailUrl?: string;
+  duration: number | null;
+  width: number | null;
+  height: number | null;
+  uploadStatus?: string;
+  format: 'short' | 'video' | null;
+  formatIssue: { reason: string; missing: Array<'duration' | 'dimensions'>; at: string } | null;
+  dateCreated?: string;
+}
+
+export interface FlaggedVideoList {
+  items: FlaggedVideo[];
+  total: number;
+  limit: number;
+  offset: number;
+}

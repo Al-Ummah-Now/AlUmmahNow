@@ -33,6 +33,8 @@ export interface AdminBindings {
 
   // Queue
   queue: any;
+  /** api-videos' processing-check queue: starts Short/video format backfill runs */
+  PROCESSING_CHECK_QUEUE?: Queue;
 
   /** Token revocation list written by the auth worker (#437) */
   TOKEN_REVOCATIONS?: KVNamespace;
