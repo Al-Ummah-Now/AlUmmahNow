@@ -37,25 +37,25 @@ const buttonVariants = cva(
   }
 )
 
-function Button({
-  className,
-  variant,
-  size,
-  asChild = false,
-  ...props
-}: React.ComponentProps<"button"> &
-  VariantProps<typeof buttonVariants> & {
-    asChild?: boolean
-  }) {
+// forwardRef: a Radix trigger (DialogTrigger asChild, PopoverTrigger asChild) needs the button's
+// node to return focus to it on close
+const Button = React.forwardRef<
+  HTMLButtonElement,
+  React.ComponentPropsWithoutRef<"button"> &
+    VariantProps<typeof buttonVariants> & {
+      asChild?: boolean
+    }
+>(function Button({ className, variant, size, asChild = false, ...props }, ref) {
   const Comp = asChild ? Slot : "button"
 
   return (
     <Comp
+      ref={ref}
       data-slot="button"
       className={cn(buttonVariants({ variant, size, className }))}
       {...(props as React.HTMLAttributes<HTMLElement>)}
     />
   )
-}
+})
 
 export { Button, buttonVariants }

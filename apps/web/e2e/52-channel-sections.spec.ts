@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import { AxeBuilder } from '@axe-core/playwright';
 import type { Locator, Page } from '@playwright/test';
 import { ANONYMOUS_STATE, AUTH_STATE } from './test-utils/auth-state';
 import {
@@ -97,6 +98,45 @@ test.describe('Section manager', () => {
       }
     });
   });
+
+  for (const [locale, colorScheme] of [['en', 'dark'], ['ar', 'light']] as const) {
+    test(`SECT-011 the section-type picker is option cards: grouped, keyboard, WCAG AA (${locale}, ${colorScheme})`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme });
+      await openManager(page, locale);
+      const dialog = await openAddDialog(page, locale === 'ar' ? 'إضافة قسم' : 'Add section');
+      await expect(dialog).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
+      const picker = dialog.getByTestId('section-type-options');
+      await expect(picker.getByRole('group')).toHaveCount(3);
+      const options = dialog.locator('[data-section-type]');
+      await expect(options).toHaveCount(7);
+
+      // Cards, not primary buttons: not a pill, and the title is not on the primary gold
+      const look = await options.first().evaluate((el) => {
+        const cs = getComputedStyle(el);
+        return { radius: parseFloat(cs.borderTopLeftRadius), height: el.getBoundingClientRect().height };
+      });
+      expect(look.radius).toBeLessThan(look.height / 3);
+      expect(look.height).toBeGreaterThanOrEqual(44);
+
+      // The first card has focus; the arrow keys move through the cards (ArrowLeft is forward in Arabic)
+      await expect(options.first()).toBeFocused();
+      await page.keyboard.press(locale === 'ar' ? 'ArrowLeft' : 'ArrowRight');
+      await expect(options.nth(1)).toBeFocused();
+      await page.keyboard.press('End');
+      await expect(options.last()).toBeFocused();
+
+      const axe = await new AxeBuilder({ page }).include('[role="dialog"]').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+      expect(axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`)).toEqual([]);
+
+      // Enter picks the focused type and moves on to its form; Escape closes
+      await page.keyboard.press('Home');
+      await page.keyboard.press('Enter');
+      await expect(dialog.getByRole('heading', { name: locale === 'ar' ? 'إعداد القسم' : 'Configure section' })).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(dialog).toBeHidden();
+      await expect(page.getByTestId('add-section-button')).toBeFocused();
+    });
+  }
 
   test('SECT-003 validates featured-video and playlist sections', async ({ page }) => {
     await openManager(page);

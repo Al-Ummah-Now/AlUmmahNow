@@ -43,7 +43,6 @@
   "apps/web/src/components/ChannelSections/SectionEmptyState.tsx": 6,
   "apps/web/src/components/ChannelSections/SectionHeader.tsx": 6,
   "apps/web/src/components/ChannelSections/index.tsx": 8,
-  "apps/web/src/components/ChannelSections/management/AddSectionDialog.tsx": 11,
   "apps/web/src/components/ChannelSections/management/SectionForm.tsx": 27,
   "apps/web/src/components/ChannelSections/management/SortableSectionItem.tsx": 19,
   "apps/web/src/components/ChannelSections/rtl/index.tsx": 8,
@@ -252,7 +251,7 @@
   "apps/web/src/lib/video/subtitle-helpers.ts": 7,
   "apps/web/src/styles/keyboard-feedback.css": 2,
   "apps/web/src/styles/video-player.css": 11,
-  "apps/web/src/theme/bridge.css": 10,
-  "apps/web/src/theme/pages.css": 12,
-  "apps/web/src/theme/system.css": 41
+  "apps/web/src/theme/bridge.css": 14,
+  "apps/web/src/theme/pages.css": 14,
+  "apps/web/src/theme/system.css": 47
 }
