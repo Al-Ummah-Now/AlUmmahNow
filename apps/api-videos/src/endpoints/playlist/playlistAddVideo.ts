@@ -8,6 +8,8 @@ import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { canManagePlaylist } from "../../lib/channelAccess";
 import { persistAutoOrder } from "../../lib/playlistOrder";
+import { isVideoListedFor, isVideoRemoved } from "../../lib/visibility";
+import { PLAYLIST_MAX_VIDEOS } from "@al-ummah/shared-types";
 
 export class PlaylistAddVideo extends AuthenticatedRoute {
     schema = {
@@ -109,7 +111,12 @@ export class PlaylistAddVideo extends AuthenticatedRoute {
         const videoRepository = new R2Repository<VideoType>(videosBucket);
         
         const video = await videoRepository.getObject(videoId);
-        if (!video) {
+        // The playlist's own channel videos (any state its managers see), or
+        // another channel's video the caller may watch (saved from its page);
+        // never another channel's private, processing or removed video
+        const addable = !!video && !isVideoRemoved(video)
+            && (video.channelId === playlist.channelId || isVideoListedFor(video, userId));
+        if (!video || !addable) {
             return c.json({
                 success: false,
                 error: "Video not found",
@@ -123,6 +130,7 @@ export class PlaylistAddVideo extends AuthenticatedRoute {
             if (fresh.userId !== playlist.userId || fresh.channelId !== playlist.channelId) return { reject: { status: 403, error: "Unauthorized - you can only modify your own playlists" } };
             const videos = fresh.videos || [];
             if (videos.includes(videoId)) return { reject: { status: 400, error: "Video is already in this playlist" } };
+            if (videos.length >= PLAYLIST_MAX_VIDEOS) return { reject: { status: 400, error: `A playlist holds at most ${PLAYLIST_MAX_VIDEOS} videos` } };
             // Manual order: at the end. The add date feeds the "date added" order.
             const now = new Date().toISOString();
             fresh.videos = [...videos, videoId];

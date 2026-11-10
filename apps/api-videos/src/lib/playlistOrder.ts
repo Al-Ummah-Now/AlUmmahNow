@@ -4,14 +4,18 @@
  * listed, so every client sees one order and pages cut after sorting.
  *
  * The order is also materialized into the stored `videos` array: every write
- * re-sorts it, and a read that sorted from fresh video data (views change)
- * writes the new order back when it differs. Readers that only use the ids
- * (lists, covers, channel Playlists tab) therefore follow the same order.
+ * re-sorts it, and reads re-sort from fresh video data (views change) at most
+ * once per ORDER_REFRESH_MS, writing the order back with `orderRefreshedAt`.
+ * Between refreshes every reader uses the stored, already sorted order, so
+ * an anonymous read never loads the whole playlist and pages stay stable.
  */
 import { playlistSortOf, sortPlaylistVideoIds, type PlaylistSort, type PlaylistSortVideo } from '@al-ummah/shared-types';
 import R2Repository from './r2Repo';
 import { logger } from './logger';
 import type { PlaylistType, VideoType } from './playlists';
+
+/** How long a stored automatic order is used before a read re-sorts it. */
+export const ORDER_REFRESH_MS = 10 * 60 * 1000;
 
 /** Object reads run at once. */
 const READ_CONCURRENCY = 25;
@@ -46,15 +50,22 @@ export function orderOf(playlist: Pick<PlaylistType, 'videos'> & { videoAddedAt?
 	return sortPlaylistVideoIds(playlist.videos || [], sort, sortVideoOf(videos), playlist.videoAddedAt ?? {});
 }
 
+/** Whether an automatic order is due for a re-sort from fresh video data. */
+export function isOrderStale(playlist: { orderRefreshedAt?: string }, now = Date.now()): boolean {
+	const at = playlist.orderRefreshedAt ? Date.parse(playlist.orderRefreshedAt) : NaN;
+	return !Number.isFinite(at) || now - at >= ORDER_REFRESH_MS;
+}
+
 const sameOrder = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((id, i) => id === b[i]);
 
 /**
  * The playlist's ids in order, with the videos loaded for an automatic sort
  * (empty map for manual: nothing to read).
  */
-export async function orderedPlaylist(env: { videos: R2Bucket }, playlist: PlaylistType): Promise<{ ids: string[]; videos: Map<string, VideoType>; sort: PlaylistSort }> {
+export async function orderedPlaylist(env: { videos: R2Bucket }, playlist: PlaylistType, now = Date.now()): Promise<{ ids: string[]; videos: Map<string, VideoType>; sort: PlaylistSort }> {
 	const sort = playlistSortOf(playlist);
-	if (sort.sortMode !== 'auto') return { ids: [...(playlist.videos || [])], videos: new Map(), sort };
+	// Manual, or an automatic order sorted recently: the stored order is it
+	if (sort.sortMode !== 'auto' || !isOrderStale(playlist, now)) return { ids: [...(playlist.videos || [])], videos: new Map(), sort };
 	const videos = await loadPlaylistVideos(env, playlist.videos || []);
 	return { ids: orderOf(playlist, videos, sort), videos, sort };
 }
@@ -75,8 +86,10 @@ export async function persistAutoOrder(env: { playlists: R2Bucket; videos: R2Buc
 		const sort = playlistSortOf(fresh);
 		if (sort.sortMode !== 'auto') return false;
 		const next = orderOf(fresh, videos, sort);
-		if (sameOrder(next, fresh.videos || [])) return false;
+		// Unchanged and refreshed recently: nothing to write
+		if (sameOrder(next, fresh.videos || []) && !isOrderStale(fresh)) return false;
 		fresh.videos = next;
+		fresh.orderRefreshedAt = new Date().toISOString();
 		return true;
 	});
 	return stored ? stored.videos || [] : null;
@@ -90,7 +103,8 @@ export function refreshStoredOrder(
 	videos: Map<string, VideoType>,
 	waitUntil: ((p: Promise<unknown>) => void) | null,
 ): void {
-	if (playlistSortOf(playlist).sortMode !== 'auto' || sameOrder(ordered, playlist.videos || [])) return;
+	// Only after a read that re-sorted (stale order): store it and the refresh time
+	if (playlistSortOf(playlist).sortMode !== 'auto' || videos.size === 0) return;
 	const task = persistAutoOrder(env, playlist.id, videos).catch((error) => {
 		logger.warn('[PlaylistOrder] Could not store the refreshed order', { playlistId: playlist.id, error: error instanceof Error ? error.message : String(error) });
 	});

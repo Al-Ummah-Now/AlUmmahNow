@@ -29,7 +29,7 @@ import { canManagePlaylist, roleOnChannel, type ChannelAccessEnv } from './chann
 
 /** Re-exported: the one manage check (lib/channelAccess.ts) every playlist write uses. */
 export { canManagePlaylist };
-import { isInternalRecord } from './visibility';
+import { isInternalRecord, isVideoPubliclyVisible } from './visibility';
 import { orderedPlaylist, persistAutoOrder } from './playlistOrder';
 import { logger } from './logger';
 import type { PlaylistType, VideoType } from './playlists';
@@ -328,7 +328,11 @@ export async function playlistManageItems(env: Pick<PlaylistEnv, 'videos'>, play
 	const loaded = await loadInBatches(ids, (id) => ordered.videos.has(id) ? Promise.resolve(ordered.videos.get(id)!) : repo.getObject(id));
 	const items = ids.map((id, i) => {
 		const video = loaded[i];
-		const usable = !!video && !isInternalRecord(video) && video.isDeleted !== true && video.isHidden !== true;
+		// The channel's own videos show in full (managers see its private and
+		// processing ones); another channel's video (saved from its watch page)
+		// only while it is public, so no private metadata leaks
+		const usable = !!video && !isInternalRecord(video) && video.isDeleted !== true && video.isHidden !== true
+			&& (video.channelId === playlist.channelId || isVideoPubliclyVisible(video));
 		return {
 			id,
 			position: offset + i,

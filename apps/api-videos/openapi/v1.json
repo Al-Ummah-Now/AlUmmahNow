@@ -6202,6 +6202,9 @@
                               "type": "string"
                             }
                           },
+                          "orderRefreshedAt": {
+                            "type": "string"
+                          },
                           "isDeleted": {
                             "type": "boolean"
                           },
@@ -15120,6 +15123,9 @@
                               "type": "string"
                             }
                           },
+                          "orderRefreshedAt": {
+                            "type": "string"
+                          },
                           "isDeleted": {
                             "type": "boolean"
                           },
@@ -15927,6 +15933,9 @@
                       "additionalProperties": {
                         "type": "string"
                       }
+                    },
+                    "orderRefreshedAt": {
+                      "type": "string"
                     },
                     "isDeleted": {
                       "type": "boolean"

@@ -8,6 +8,7 @@ import { toPlaylistResponse, canViewPlaylist, canViewVideo, PlaylistType, VideoT
 import { resolvePlaylistCovers, type PlaylistCover } from "../../lib/playlistCovers";
 import { logger } from "../../lib/logger";
 import { canManageChannelPlaylists } from "../../lib/playlistBulk";
+import { isSystemPlaylist } from "../../lib/library";
 import { orderedPlaylist, refreshStoredOrder } from "../../lib/playlistOrder";
 import { waitUntilOf } from "../../lib/search/ownership";
 import { playlistSortOf } from "@al-ummah/shared-types";
@@ -80,7 +81,7 @@ export class PlaylistFetch extends OptionalAuthRoute {
         // A private channel playlist is also shown to the channel's playlist
         // managers (owner, admins, editors: playlist.manage).
         const visible = !!playlist && (canViewPlaylist(playlist, userId)
-            || (!playlist.isDeleted && !playlist.isHidden && playlist.isPublic === false && await canManageChannelPlaylists(c.env as never, playlist.channelId, userId)));
+            || (!playlist.isDeleted && !playlist.isHidden && playlist.isPublic === false && !isSystemPlaylist(playlist) && await canManageChannelPlaylists(c.env as never, playlist.channelId, userId)));
         if (!playlist || !visible) {
             return c.json({ success: false, error: "Playlist not found" }, 404);
         }
