@@ -81,6 +81,17 @@ const ROW_ICONS: Record<'quality' | 'speed' | 'captions' | 'audio' | 'shortcuts'
   shortcuts: Keyboard,
 };
 
+/**
+ * A value as text, with any Latin run in brackets ("Auto (720p)") isolated left to right: in an
+ * Arabic row the brackets otherwise resolve right to left and some fonts mirror only one of them,
+ * which drew "(720p( تلقائي".
+ */
+function valueText(value: string) {
+  const m = value.match(/^(.*?)(\s*)(\([\x20-\x7E]*\))$/);
+  if (!m) return value;
+  return <>{m[1]}{m[2]}<bdi dir="ltr">{m[3]}</bdi></>;
+}
+
 export interface SettingsMenuProps {
   player: Player;
   lang: SupportedLanguage;
@@ -333,7 +344,7 @@ export function SettingsMenu({ player, lang, onShowShortcuts }: SettingsMenuProp
           >
             <span className="vjs-fanous-mi-icon" aria-hidden="true">{createElement(ROW_ICONS[r.id])}</span>
             <span className="vjs-fanous-mi-label">{r.label}</span>
-            {r.value !== undefined && <span className="vjs-fanous-mi-value">{r.value}</span>}
+            {r.value !== undefined && <span className="vjs-fanous-mi-value">{valueText(r.value)}</span>}
             {r.id !== 'shortcuts' && <span className="vjs-fanous-mi-end" aria-hidden="true">{dir === 'rtl' ? <ChevronLeft /> : <ChevronRight />}</span>}
           </button>
         ))}

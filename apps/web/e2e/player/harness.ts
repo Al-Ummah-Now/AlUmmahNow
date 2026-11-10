@@ -24,7 +24,9 @@ function livePlaylist(): string {
   return `${lines.join('\n')}\n`;
 }
 
-export async function routeFixtures(page: Page): Promise<void> {
+const CHAPTER_TITLES: [string, string, string] = ['Opening', 'The middle', 'Closing'];
+
+export async function routeFixtures(page: Page, chapterTitles: [string, string, string] = CHAPTER_TITLES): Promise<void> {
   await page.route('**/__player-fixtures/**', async (route) => {
     const rel = decodeURIComponent(new URL(route.request().url()).pathname.replace(/^.*\/__player-fixtures\//, ''));
     if (rel === 'live/master.m3u8') {
@@ -47,9 +49,9 @@ export async function routeFixtures(page: Page): Promise<void> {
           parsedAt: '2026-01-01T00:00:00.000Z',
           version: 1,
           chapters: [
-            { id: 'c1', startTime: 0, endTime: 30, title: 'Opening' },
-            { id: 'c2', startTime: 30, endTime: 60, title: 'The middle' },
-            { id: 'c3', startTime: 60, endTime: 90, title: 'Closing' },
+            { id: 'c1', startTime: 0, endTime: 30, title: chapterTitles[0] },
+            { id: 'c2', startTime: 30, endTime: 60, title: chapterTitles[1] },
+            { id: 'c3', startTime: 60, endTime: 90, title: chapterTitles[2] },
           ],
         },
       }),
@@ -82,6 +84,10 @@ export interface HarnessOptions {
   resumeAt?: number;
   /** Player theme; defaults to PLAYER_THEME, else the theme the server was built with */
   theme?: string;
+  /** Also switch the site theme (html[data-theme]) so the page uses that theme's fonts */
+  siteTheme?: boolean;
+  /** Titles of the three fixture chapters */
+  chapterTitles?: [string, string, string];
 }
 
 const THEMES_CSS = path.resolve(__dirname, '../../../../packages/fanous-tokens/generated-player');
@@ -133,7 +139,7 @@ async function keepDevBuildStill(page: Page): Promise<void> {
 }
 
 export async function openHarness(page: Page, opts: HarnessOptions = {}): Promise<Locator> {
-  await routeFixtures(page);
+  await routeFixtures(page, opts.chapterTitles);
   await keepDevBuildStill(page);
   // A recorded consent choice keeps the consent banner out of the frame (lib/consent/consent-cookie.ts)
   const origin = new URL(process.env.PLAYER_BASE_URL || `http://localhost:${process.env.PLAYER_PORT || 3101}`).origin;
@@ -166,6 +172,16 @@ export async function openHarness(page: Page, opts: HarnessOptions = {}): Promis
   if (opts.watch === false) q.set('watch', '0');
   if (opts.width) q.set('width', String(opts.width));
   await page.goto(`/${opts.lang ?? 'en'}/dev/player?${q}`);
+  // The site theme picks the page fonts (theme/fonts.css), which the player's layers inherit. The
+  // server renders its own theme and the page sets it again once loaded, so this one is kept pinned.
+  if (theme && opts.siteTheme) {
+    await page.evaluate((name) => {
+      const html = document.documentElement;
+      const set = () => { if (html.getAttribute('data-theme') !== name) html.setAttribute('data-theme', name); };
+      set();
+      new MutationObserver(set).observe(html, { attributes: true, attributeFilter: ['data-theme'] });
+    }, theme);
+  }
   const player = page.locator('.video-js.vjs-fanous').first();
   await expect(player).toBeVisible({ timeout: 60_000 });
   // A live stream loads no segments before Play, so there is no metadata to wait for
