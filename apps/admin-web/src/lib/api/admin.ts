@@ -2,7 +2,7 @@
 
 import type { Report, ReportStats } from '@al-ummah/shared-types';
 import { AdminApiError, type ActionResult } from './errors';
-import { requestAdmin } from './request';
+import { fetchAdmin, requestAdmin } from './request';
 import type {
   ListReportsParams,
   ListReportsResponse,
@@ -24,11 +24,6 @@ import type {
   SyncResponse,
   ContactMailKind,
 } from './types';
-
-async function fetchAdmin<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const body = await requestAdmin(endpoint, options);
-  return body.result as T;
-}
 
 export async function listReports(params?: ListReportsParams): Promise<ListReportsResponse> {
   const searchParams = new URLSearchParams();
