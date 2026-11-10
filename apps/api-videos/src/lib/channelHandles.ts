@@ -166,13 +166,30 @@ export async function claimHandle(
 		userId: channel.userId as string,
 		dateClaimed: new Date().toISOString(),
 	};
-	await bucket.put(handleKey(entry.handle), JSON.stringify(entry), { httpMetadata: { contentType: 'application/json' } });
-
-	// Read back: a concurrent claim of the same handle may have overwritten ours
-	const stored = await readHandleEntry(bucket, entry.handle);
-	if (!stored || stored.channelId !== channel.id) {
-		logger.warn('[ChannelHandles] Lost a concurrent handle claim', { handle: entry.handle, channelId: channel.id });
-		return { ok: false, reason: 'taken' };
+	// Create-only (SCALABILITY-AUDIT AV-13): R2 evaluates the condition
+	// atomically, so of two channels claiming the same handle at once exactly
+	// one creates the index entry. (The old put + read-back let both win when
+	// each read back before the other's put.)
+	const created = await bucket.put(handleKey(entry.handle), JSON.stringify(entry), {
+		httpMetadata: { contentType: 'application/json' },
+		onlyIf: { etagDoesNotMatch: '*' },
+	});
+	if (!created) {
+		// Already claimed: fine if by this channel (a retry, or a re-claim in
+		// different letter case, which updates the entry only while it is still
+		// this channel's: etag-matched)
+		const object = await bucket.get(handleKey(entry.handle));
+		const stored = object ? await object.json<HandleIndexEntry>().catch(() => null) : null;
+		if (!object || !stored || stored.channelId !== channel.id) {
+			logger.warn('[ChannelHandles] Lost a concurrent handle claim', { handle: entry.handle, channelId: channel.id });
+			return { ok: false, reason: 'taken' };
+		}
+		if (stored.handle !== entry.handle) {
+			await bucket.put(handleKey(entry.handle), JSON.stringify({ ...stored, handle: entry.handle }), {
+				httpMetadata: { contentType: 'application/json' },
+				onlyIf: { etagMatches: object.etag },
+			});
+		}
 	}
 	return { ok: true, handle: entry.handle };
 }

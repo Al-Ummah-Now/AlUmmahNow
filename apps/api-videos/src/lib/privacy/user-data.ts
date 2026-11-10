@@ -526,8 +526,11 @@ export async function eraseUserData(
 						if (!ctx.checkpoint.o.includes(channelId)) ctx.checkpoint.o.push(channelId);
 						if (!ctx.checkpoint.k.includes(key)) ctx.checkpoint.k.push(key);
 						// Free the channel's @handle (index entry in channel_tabs, see lib/channelHandles.ts)
+						// only if the entry is this channel's (a stale field must not free another channel's handle)
 						if (typeof channel.handle === 'string' && channel.handle) {
-							await deleteKeys(asBucket(env.channel_tabs), [`channel-handles/${channel.handle.toLowerCase()}`], ctx.budget);
+							const handleKey = `channel-handles/${channel.handle.toLowerCase()}`;
+							const entry = await readJson<Json>(asBucket(env.channel_tabs), handleKey, ctx.budget);
+							if (entry?.channelId === channelId) await deleteKeys(asBucket(env.channel_tabs), [handleKey], ctx.budget);
 						}
 						continue;
 					}

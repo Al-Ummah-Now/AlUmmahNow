@@ -18,7 +18,7 @@ import { logger } from "../../lib/logger";
 import {
 	canClaimOfficialHandles,
 	checkHandleAvailability,
-	handleKey,
+	claimHandle,
 	claimDefaultHandle,
 	defaultHandleCandidates,
 	normalizeHandleInput,
@@ -217,13 +217,10 @@ export class ChannelHandlesBackfill extends PublicRoute {
 				// Make sure the index points at this channel (repairs a lost index write)
 				const entry = await readHandleEntry(c.env.channel_tabs, channel.handle);
 				if (!entry && !dryRun) {
-					const restored = await checkHandleAvailability(c.env.channel_tabs, channel.handle, channel.id);
-					if (restored.available) {
-						await c.env.channel_tabs.put(handleKey(channel.handle), JSON.stringify({
-							handle: channel.handle, channelId: channel.id, userId: channel.userId, dateClaimed: new Date().toISOString(),
-						}), { httpMetadata: { contentType: 'application/json' } });
-						repaired++;
-					}
+					// Create-only claim (SCALABILITY-AUDIT AV-13): never overwrites a
+					// handle another channel claimed meanwhile
+					const restored = await claimHandle(c.env.channel_tabs, channel.handle, channel);
+					if (restored.ok) repaired++;
 				}
 				skipped++;
 				continue;
