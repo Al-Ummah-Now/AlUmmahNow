@@ -4,7 +4,11 @@
   "compatibility_date": "2025-04-12",
   "compatibility_flags": [
     "nodejs_compat",
-    "nodejs_compat_populate_process_env"
+    "nodejs_compat_populate_process_env",
+    // Skew protection fetches an old version through its workers.dev preview URL.
+    // Without this flag a Worker's fetch to a workers.dev URL of its own account
+    // fails (error 1042, a 522 on the custom domain): release v2026.11.10.4.
+    "global_fetch_strictly_public"
   ],
   "logpush": false,
   "minify": true,

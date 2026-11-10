@@ -48,11 +48,11 @@ export interface RetryOptions {
  */
 export const OLD_BUILD_RETRY: RetryOptions = { attempts: 7, delayMs: 10_000, sleep: (ms) => new Promise((r) => setTimeout(r, ms)) };
 
-async function fetchOldChunk(url: string, fetchImpl: Fetch, retry: RetryOptions): Promise<number | string> {
+async function fetchOldChunk(url: string, fetchImpl: Fetch, retry: RetryOptions, headers: Record<string, string>): Promise<number | string> {
 	let last: number | string = 0;
 	for (let attempt = 1; attempt <= retry.attempts; attempt++) {
 		try {
-			const res = await fetchImpl(url, { headers: UA, signal: AbortSignal.timeout(20_000) });
+			const res = await fetchImpl(url, { headers: { ...UA, ...headers }, signal: AbortSignal.timeout(20_000) });
 			await res.body?.cancel();
 			if (res.status < 500) return res.status;
 			last = res.status;
@@ -64,8 +64,20 @@ async function fetchOldChunk(url: string, fetchImpl: Fetch, retry: RetryOptions)
 	return last;
 }
 
-/** Checks one snapshot after the promote. At most `limit` chunks are fetched. */
-export async function checkOldBuildServed(before: BuildSnapshot, fetchImpl: Fetch = fetch, limit = 8, retry: RetryOptions = OLD_BUILD_RETRY): Promise<CheckResult> {
+/**
+ * Checks one snapshot. At most `limit` chunks are fetched. `headers` reach a
+ * candidate at 0% (Cloudflare-Workers-Version-Overrides) before traffic moves.
+ * A 5xx that never clears is not a cold preview: a Worker's fetch to its own
+ * account's workers.dev is refused (error 1042, a 522 here) unless the app sets
+ * global_fetch_strictly_public (v2026.11.10.4; skew-config.ts requires it).
+ */
+export async function checkOldBuildServed(
+	before: BuildSnapshot,
+	fetchImpl: Fetch = fetch,
+	limit = 8,
+	retry: RetryOptions = OLD_BUILD_RETRY,
+	headers: Record<string, string> = {}
+): Promise<CheckResult> {
 	const name = `skew protection (${before.app})`;
 	if (!before.deploymentId) {
 		return { name, ok: true, detail: 'the previous build has no deployment id (built before skew protection); nothing to check' };
@@ -74,12 +86,12 @@ export async function checkOldBuildServed(before: BuildSnapshot, fetchImpl: Fetc
 	const origin = new URL(before.url).origin;
 	let onlyOld = 0;
 	for (const chunk of before.chunks.slice(0, limit)) {
-		const status = await fetchOldChunk(`${origin}${chunk}?dpl=${encodeURIComponent(before.deploymentId)}`, fetchImpl, retry);
+		const status = await fetchOldChunk(`${origin}${chunk}?dpl=${encodeURIComponent(before.deploymentId)}`, fetchImpl, retry, headers);
 		if (status !== 200) {
 			const tries = typeof status === 'number' && status < 500 ? '' : ` (after ${retry.attempts} tries)`;
 			return { name, ok: false, detail: `${chunk}?dpl=${before.deploymentId} answered ${status}${tries}: pages opened before the promote would break` };
 		}
-		const plain = await fetchImpl(`${origin}${chunk}`, { headers: UA, signal: AbortSignal.timeout(20_000) });
+		const plain = await fetchImpl(`${origin}${chunk}`, { headers: { ...UA, ...headers }, signal: AbortSignal.timeout(20_000) });
 		await plain.body?.cancel();
 		if (plain.status === 404) onlyOld++;
 	}

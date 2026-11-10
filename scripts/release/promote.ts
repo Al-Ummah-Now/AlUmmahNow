@@ -27,7 +27,7 @@ import { createCfClient } from './cf-api.ts';
 import { ensureCustomDomains, expectedDomains } from './custom-domains.ts';
 import { runSmoke, HOSTS, VERSIONED_HEALTH, WORKERS, type CheckResult, type SmokeEnv } from './smoke.ts';
 import { computeMapping, mappingVarArgs, readDeploymentId, SKEW_APPS } from './skew-mapping.ts';
-import { captureBuild, checkOldBuildServed, type BuildSnapshot } from './skew-check.ts';
+import { captureBuild, checkOldBuildServed, OLD_BUILD_RETRY, type BuildSnapshot } from './skew-check.ts';
 
 export type ReleaseEnv = 'stage' | 'production';
 
@@ -125,7 +125,8 @@ export interface PromoteDeps {
 	skewArgs?: (app: ReleaseApp, previous: string | null) => Promise<string[]>;
 	/** Snapshot of the builds serving now (before 100%), checked after the promote (skew-check.ts) */
 	captureBuilds?: (env: ReleaseEnv, apps: string[]) => Promise<BuildSnapshot[]>;
-	checkSkew?: (snapshots: BuildSnapshot[]) => Promise<CheckResult[]>;
+	/** `overrides` (worker -> candidate) reaches the candidates at 0%; without it, what serves 100% */
+	checkSkew?: (env: ReleaseEnv, snapshots: BuildSnapshot[], overrides?: Record<string, string>) => Promise<CheckResult[]>;
 	log: (line: string) => void;
 }
 
@@ -197,6 +198,19 @@ export async function promote(apps: ReleaseApp[], env: ReleaseEnv, message: stri
 	const versioned = (list: Released[]) =>
 		Object.fromEntries(list.filter((r) => VERSIONED_HEALTH.some((v) => v.app === r.app)).map((r) => [r.app, r.candidate]));
 
+	// What an open page uses now (the version at 100%), for the skew checks below
+	let snapshots: BuildSnapshot[] = [];
+	try {
+		snapshots = (await deps.captureBuilds?.(env, promoted.map((p) => p.r.app))) ?? [];
+	} catch (error) {
+		log(`::warning::could not snapshot the serving builds, skew protection is not checked: ${(error as Error).message}`);
+	}
+	const skewFailures = async (overrides?: Record<string, string>) => {
+		const results = (await deps.checkSkew?.(env, snapshots, overrides)) ?? [];
+		for (const r of results) log(`${r.ok ? 'PASS' : 'FAIL'}  ${r.name}${overrides ? ' (candidate at 0%)' : ''}: ${r.detail}`);
+		return failures(results);
+	};
+
 	// 2. Candidates at 0%: reachable only through the override header
 	try {
 		for (const { r, a } of promoted) {
@@ -207,18 +221,16 @@ export async function promote(apps: ReleaseApp[], env: ReleaseEnv, message: stri
 		const pre = failures(await deps.smoke(env, overrides));
 		if (pre.length) throw new Error(`pre-traffic smoke failed: ${pre.join('; ')}`);
 		log('Pre-traffic smoke passed on the candidates');
+		// The candidate must reach the version serving now before anyone moves to
+		// it, or every open page breaks at 100% (v2026.11.10.4: 522 on the hop)
+		const preSkew = await skewFailures(overrides);
+		if (preSkew.length) throw new Error(`skew protection check failed before traffic moved: ${preSkew.join('; ')}`);
 	} catch (error) {
 		rollback((error as Error).message);
 		throw new ReleaseError((error as Error).message, released, true);
 	}
 
 	// 3. 100% traffic, triggers (crons, custom domains), and the smoke a user would see
-	let snapshots: BuildSnapshot[] = [];
-	try {
-		snapshots = (await deps.captureBuilds?.(env, promoted.map((p) => p.r.app))) ?? [];
-	} catch (error) {
-		log(`::warning::could not snapshot the serving builds, skew protection is not checked: ${(error as Error).message}`);
-	}
 	try {
 		for (const { r, a } of promoted) {
 			run(a.cwd, ['versions', 'deploy', `${r.candidate}@100%`, ...a.configArgs, '-y', '--message', message]);
@@ -231,9 +243,7 @@ export async function promote(apps: ReleaseApp[], env: ReleaseEnv, message: stri
 		// Pages opened before the promote must keep loading the old build's chunks.
 		// Stage gates production, so there it fails the release; in production the
 		// new version works for everyone who reloads, so it is a loud warning.
-		const skewResults = (await deps.checkSkew?.(snapshots)) ?? [];
-		for (const r of skewResults) log(`${r.ok ? 'PASS' : 'FAIL'}  ${r.name}: ${r.detail}`);
-		const skew = failures(skewResults);
+		const skew = await skewFailures();
 		if (skew.length && env === 'stage') throw new Error(`skew protection check failed: ${skew.join('; ')}`);
 		if (skew.length) log(`::warning::skew protection check failed in production (no rollback): ${skew.join('; ')}`);
 	} catch (error) {
@@ -320,7 +330,14 @@ if (isMain) {
 			skewArgs: (a, previous) => skewArgsFor(a, previous, log),
 			captureBuilds: async (e, list) =>
 				Promise.all(Object.entries(SKEW_PAGES).filter(([app]) => list.includes(app)).map(([app, page]) => captureBuild(app, `${HOSTS[e][page.host]}${page.path}`))),
-			checkSkew: async (snapshots) => Promise.all(snapshots.map((s) => checkOldBuildServed(s))),
+			checkSkew: async (e, snapshots, overrides) =>
+				Promise.all(
+					snapshots.map((s) => {
+						const worker = WORKERS[e][s.app];
+						const version = overrides?.[worker];
+						return checkOldBuildServed(s, fetch, 8, OLD_BUILD_RETRY, version ? { 'Cloudflare-Workers-Version-Overrides': `${worker}="${version}"` } : {});
+					})
+				),
 			log,
 		});
 		writeResult({ env, status: 'promoted', released });
