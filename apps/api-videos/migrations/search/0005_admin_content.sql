@@ -7,7 +7,9 @@
 --    keep admin_cols = 0 until the pass rewrites them; the admin lists advance
 --    the pass while any remain (apps/api-videos/src/lib/admin/directory.ts).
 --    Public readers do not use these columns.
-ALTER TABLE content_ownership ADD COLUMN title TEXT;
+-- admin_title, not title: QA already has a title column from the Creator Studio
+-- preview migration, and SQLite has no ADD COLUMN IF NOT EXISTS.
+ALTER TABLE content_ownership ADD COLUMN admin_title TEXT;
 ALTER TABLE content_ownership ADD COLUMN handle TEXT;
 ALTER TABLE content_ownership ADD COLUMN email TEXT;
 ALTER TABLE content_ownership ADD COLUMN is_verified INTEGER NOT NULL DEFAULT 0;

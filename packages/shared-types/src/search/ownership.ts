@@ -197,7 +197,7 @@ export function ownershipTombstone(kind: OwnershipKind): string {
 export function ownershipUpsertStatement(db: SearchDb, row: OwnershipRow, now: number, version = now): SearchStatement {
   return db.prepare(
     `INSERT INTO ${OWNERSHIP_TABLE} (kind, id, owner_id, channel_id, is_public, is_hidden, is_deleted, is_live, duration, schedule_status, upload_status, views, created_at, updated_at, indexed_at, source_version,
-       title, handle, email, is_verified, is_suspended, subscribers, admin_cols)
+       admin_title, handle, email, is_verified, is_suspended, subscribers, admin_cols)
      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
      WHERE ${NOT_TOMBSTONED}
      ON CONFLICT(kind, id) DO UPDATE SET
@@ -206,7 +206,7 @@ export function ownershipUpsertStatement(db: SearchDb, row: OwnershipRow, now: n
        duration = excluded.duration, schedule_status = excluded.schedule_status, upload_status = excluded.upload_status,
        views = excluded.views, created_at = excluded.created_at, updated_at = excluded.updated_at,
        indexed_at = excluded.indexed_at, source_version = excluded.source_version,
-       title = excluded.title, handle = excluded.handle, email = excluded.email, is_verified = excluded.is_verified,
+       admin_title = excluded.admin_title, handle = excluded.handle, email = excluded.email, is_verified = excluded.is_verified,
        is_suspended = excluded.is_suspended, subscribers = excluded.subscribers, admin_cols = excluded.admin_cols
      WHERE excluded.source_version >= ${OWNERSHIP_TABLE}.source_version`,
   ).bind(
