@@ -14,7 +14,7 @@ import type {
   CommunityPost,
   Channel,
 } from '@al-ummah/shared-types';
-import { findPostComment, getChannelObject, topLevelCommentKey } from './post-comment-helpers';
+import { findPostComment, getChannelObject, topLevelCommentKey, recordReplyParent } from './post-comment-helpers';
 import { notifyUserInBackground } from '../../lib/websocket-notify';
 import { scanInBackground } from '../../lib/moderation-scan';
 
@@ -229,6 +229,7 @@ export class CreatePostComment extends AuthenticatedRoute {
       // Store as reply
       const replyKey = `comments/${postId}/replies/${requestBody.parentCommentId}/${comment.id}.json`;
       await bucket.put(replyKey, JSON.stringify(comment));
+      await recordReplyParent(bucket, postId, comment.id, requestBody.parentCommentId);
 
       // Update parent's replies index
       await this.updateRepliesIndex(

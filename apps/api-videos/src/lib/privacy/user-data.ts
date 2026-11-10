@@ -23,7 +23,7 @@
  *   channel_tabs/channel-tabs/{channelId}              tab config of a channel
  *   videos/{videoId}                                   video (owner: userId; embeds comments, likes, dislikes)
  *   watch_history/{userId}:{videoId}                   watch history entry
- *   community_posts/posts/{channelId}/{postId}.json    post (+ likes/, votes/, comments/, comment-likes/ trees)
+ *   community_posts/posts/{channelId}/{postId}.json    post (+ likes/, votes/, comments/ (incl. reply-parents/ pointers), comment-likes/ trees)
  *   playlists/{playlistId}                             playlist (owner: userId)
  *   upload-defaults/{userId}/...                       upload templates
  *   reports/report:{entityId}:{reportId}:{reporterId}  reports filed by the user
@@ -377,7 +377,7 @@ export async function collectUserData(
 				if (post.userId === userId || c.checkpoint.o.includes(post.channelId)) out.communityPosts.push(post);
 			})(ctx, 'posts/'),
 		(ctx) =>
-			readEach(community, (key) => !key.endsWith('/index.json') && !key.endsWith('/pinned.json'), (comment) => {
+			readEach(community, (key) => !key.endsWith('/index.json') && !key.endsWith('/pinned.json') && !key.includes('/reply-parents/'), (comment) => {
 				if (comment.userId === userId) out.communityComments.push(comment);
 			})(ctx, 'comments/'),
 		(ctx) => readEach(community, (key) => key.endsWith(userSuffix), (r) => void out.communityLikes.push(r))(ctx, 'likes/'),
@@ -634,7 +634,8 @@ export async function eraseUserData(
 		(ctx) =>
 			scanPages(community, 'comments/', ctx, async (objects) => {
 				for (const { key } of objects) {
-					if (key.endsWith('/index.json') || key.endsWith('/pinned.json')) continue;
+					// Index documents, the pinned pointer and reply-parent pointers hold no user data
+					if (key.endsWith('/index.json') || key.endsWith('/pinned.json') || key.includes('/reply-parents/')) continue;
 					// Conditional rewrite (SCALABILITY-AUDIT AV-23): a concurrent like or
 					// edit cannot bring the author back
 					let anonymized = false;

@@ -9,6 +9,7 @@ import type { Channel, CommunityPost, PostComment } from '@al-ummah/shared-types
  * - comments/{postId}/top-level/index.json                   top-level index (newest first)
  * - comments/{postId}/replies/{parentId}/{replyId}.json      reply
  * - comments/{postId}/replies/{parentId}/index.json          replies index (chronological)
+ * - comments/{postId}/reply-parents/{replyId}.json           { parentCommentId } of a reply
  * - comments/{postId}/pinned.json                            { commentId } of the pinned comment
  * - comment-likes/{postId}/{commentId}/{userId}.json         like record
  */
@@ -30,6 +31,19 @@ export function repliesIndexKey(postId: string, parentCommentId: string): string
   return `comments/${postId}/replies/${parentCommentId}/index.json`;
 }
 
+/** Where a reply's parent is recorded, so a reply is found without listing (SCALABILITY-AUDIT AV-16). */
+export function replyParentKey(postId: string, replyId: string): string {
+  return `comments/${postId}/reply-parents/${replyId}.json`;
+}
+
+/** Records a reply's parent (create-only: a reply's parent never changes). */
+export async function recordReplyParent(bucket: R2Bucket, postId: string, replyId: string, parentCommentId: string): Promise<void> {
+  await bucket.put(replyParentKey(postId, replyId), JSON.stringify({ parentCommentId }), {
+    httpMetadata: { contentType: 'application/json' },
+    onlyIf: { etagDoesNotMatch: '*' },
+  });
+}
+
 export function pinnedPointerKey(postId: string): string {
   return `comments/${postId}/pinned.json`;
 }
@@ -39,7 +53,10 @@ export function commentLikeKey(postId: string, commentId: string, userId: string
 }
 
 /**
- * Find a comment by ID, checking top-level comments first and then replies.
+ * Find a comment by ID: the top-level key, then the reply's parent pointer
+ * (two or three gets; SCALABILITY-AUDIT AV-16). Replies created before the
+ * pointers existed are found once by listing the post's replies (every page),
+ * and the pointer is written then, so the next lookup is direct.
  */
 export async function findPostComment(
   bucket: R2Bucket,
@@ -52,6 +69,16 @@ export async function findPostComment(
     return { comment: await topObj.json<PostComment>(), commentKey: topKey };
   }
 
+  const pointer = await bucket.get(replyParentKey(postId, commentId));
+  if (pointer) {
+    const { parentCommentId } = await pointer.json<{ parentCommentId?: string }>();
+    if (parentCommentId) {
+      const key = replyCommentKey(postId, parentCommentId, commentId);
+      const replyObj = await bucket.get(key);
+      return replyObj ? { comment: await replyObj.json<PostComment>(), commentKey: key } : { comment: null, commentKey: '' };
+    }
+  }
+
   let cursor: string | undefined;
   do {
     const listed = await bucket.list({ prefix: `comments/${postId}/replies/`, cursor });
@@ -59,6 +86,8 @@ export async function findPostComment(
     if (match) {
       const replyObj = await bucket.get(match.key);
       if (replyObj) {
+        const parentCommentId = match.key.slice(`comments/${postId}/replies/`.length).split('/')[0];
+        await recordReplyParent(bucket, postId, commentId, parentCommentId).catch(() => undefined);
         return { comment: await replyObj.json<PostComment>(), commentKey: match.key };
       }
     }
