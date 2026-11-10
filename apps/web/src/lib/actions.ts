@@ -6,6 +6,7 @@ import { headers as getHeaders, cookies as getCookies } from "next/headers"
 import { subjects, setTokens } from "./auth"
 import { AuthSubject } from "@/interfaces"
 import { startSingleSignOut } from "./auth/single-sign-out"
+import { sessionRoles } from "./auth/session-roles"
 import { newStateNonce, pkceCookieValue, stateCookieOptions, withState, PKCE_COOKIE, STATE_COOKIE } from "./auth/oauth-state"
 
 export async function getClient() {
@@ -27,6 +28,9 @@ export async function authenticated(): Promise<AuthSubject | false> {
             id: session.userId,
             email: session.email,
             displayName: session.displayName,
+            // Role names from the session's access token (verified when the session was made). UI
+            // hints only (e.g. the Scholar's "Write article"); every app checks roles itself.
+            roles: sessionRoles(session.accessToken),
           }
         } as AuthSubject;
       }
