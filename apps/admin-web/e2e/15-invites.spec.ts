@@ -16,6 +16,7 @@
  * an account. The account and channel stay on QA, like the release suite's.
  */
 import { randomBytes } from 'node:crypto';
+import type { Page, TestInfo } from '@playwright/test';
 import { test, expect } from './support/fixtures';
 import { adminApi } from './support/api';
 import { OPENAUTH_URL, VIDEOS_API_URL } from './support/env';
@@ -45,6 +46,13 @@ async function sinkCode(email: string, timeoutMs = 30_000): Promise<string> {
 }
 
 test.describe.configure({ mode: 'serial' });
+// It types a throwaway password: no traces (the artifacts are public)
+test.use({ trace: 'off' });
+
+/** The QA walkthrough's evidence: a full-page screenshot per step, attached to the report. Never taken while a secret is on screen. */
+async function shot(page: Page, testInfo: TestInfo, name: string) {
+  await testInfo.attach(name, { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
+}
 
 test.describe('invite creators', () => {
   test.beforeAll(async ({}, testInfo) => {
@@ -54,13 +62,14 @@ test.describe('invite creators', () => {
     test.skip(!SINK_SECRET, 'E2E_CODE_SINK_SECRET is not set');
   });
 
-  test('INV-01 invite with a new channel: the user exists at once, with the channel', async ({ page }) => {
+  test('INV-01 invite with a new channel: the user exists at once, with the channel', async ({ page }, testInfo) => {
     await page.goto('/users/invites/new');
     await page.getByTestId('invite-email').fill(EMAIL);
     await page.getByTestId('invite-name').fill('E2E Invited Creator');
     await page.getByTestId('invite-email').blur();
     await page.getByTestId('invite-add-channel').click();
     await page.getByTestId('invite-channel-name').fill(CHANNEL);
+    await shot(page, testInfo, '1-invite-form');
     await page.getByTestId('invite-submit').click();
     const created = page.getByTestId('invite-created');
     await expect(created).toBeVisible({ timeout: 30_000 });
@@ -68,10 +77,12 @@ test.describe('invite creators', () => {
     state.inviteId = (await created.getAttribute('data-invite-id'))!;
     expect(state.userId).toMatch(/^usr_[0-9a-f]{32}$/);
     await expect(page.getByTestId('invite-warnings')).toHaveCount(0);
+    await shot(page, testInfo, '2-invited');
 
     await page.getByTestId('invite-open-user').click();
     await expect(page.getByTestId('user-detail')).toHaveAttribute('data-user-id', state.userId);
     await expect(page.getByTestId('invite-status-invited').or(page.getByTestId('invite-status-sending')).first()).toBeVisible();
+    await shot(page, testInfo, '3-user-page-invited-with-channel');
 
     const { body } = await adminApi<{ channels: Array<{ id: string; name: string }> }>(`/api/content/users/${state.userId}`);
     const channel = body.result!.channels.find((c) => c.name === CHANNEL);
@@ -79,7 +90,7 @@ test.describe('invite creators', () => {
     state.channelId = channel!.id;
   });
 
-  test('INV-02 copy invite link: shown once in an in-app dialog', async ({ page }) => {
+  test('INV-02 copy invite link: shown once in an in-app dialog', async ({ page }, testInfo) => {
     test.skip(!state.inviteId, 'INV-01 did not run');
     // The account reaches auth through the queue within seconds
     await expect.poll(async () => (await adminApi<{ status: string }>(`/api/invites/${state.inviteId}`)).body.result?.status, { timeout: 60_000 }).toBe('invited');
@@ -90,10 +101,11 @@ test.describe('invite creators', () => {
     const dialog = page.getByTestId('invite-link-dialog');
     await expect(dialog).toBeVisible();
     state.link = await dialog.getByTestId('invite-link-url').inputValue();
+    await shot(page, testInfo, '4-copy-invite-link');
     expect(state.link).toMatch(new RegExp(`^${escapeRe(OPENAUTH_URL)}/invite/[0-9a-f]{64}$`));
   });
 
-  test('INV-03 first sign-in lands in the invited account with its channel', async ({ browser }) => {
+  test('INV-03 first sign-in lands in the invited account with its channel', async ({ browser, page: adminPage }, testInfo) => {
     test.skip(!state.link, 'INV-02 did not run');
     const context = await browser.newContext({ storageState: { cookies: [], origins: [] } });
     const page = await context.newPage();
@@ -102,8 +114,10 @@ test.describe('invite creators', () => {
       await expect.poll(async () => (await page.request.get(state.link!)).status(), { timeout: 60_000 }).toBe(200);
       await page.goto(state.link!);
       await expect(page.getByText(EMAIL)).toBeVisible();
+      await shot(page, testInfo, '5-invite-link-page');
       await page.locator('button[data-action="accept-invite"]').click();
       await expect(page).toHaveURL(new RegExp(`^${escapeRe(OPENAUTH_URL)}`), { timeout: 30_000 });
+      await shot(page, testInfo, '6-sign-in-page');
       await page.click('a[href*="register"]');
       await page.fill('input[name="email"]', EMAIL);
       await fillSecret(page.locator('input[name="password"]'), PASSWORD);
@@ -113,6 +127,7 @@ test.describe('invite creators', () => {
       await fillSecret(page.locator('input[name="code"]'), await sinkCode(EMAIL));
       await page.click('button[data-component="button"]');
       await expect(page).toHaveURL(/videos\.[^/]*alummahnow\.net\/en/, { timeout: 30_000 });
+      await shot(page, testInfo, '7-signed-in');
 
       const token = await page.evaluate(async () => (await (await fetch('/api/auth/token', { credentials: 'same-origin' })).json()) as { accessToken?: string; userId?: string });
       expect(token.userId, 'signed in to the pre-provisioned account').toBe(state.userId);
@@ -122,10 +137,17 @@ test.describe('invite creators', () => {
       const view = (await channel.json()) as { userId?: string; name?: string };
       expect(view.userId).toBe(state.userId);
       expect(view.name).toBe(CHANNEL);
+      // Their channel's settings: only its owner may open them
+      await page.goto(new URL(`/en/settings/channel/${state.channelId}`, page.url()).toString());
+      await expect(page.getByText(CHANNEL).first()).toBeVisible({ timeout: 30_000 });
+      await shot(page, testInfo, '8-their-channel-settings');
     } finally {
       await context.close();
     }
     await expect.poll(async () => (await adminApi<{ status: string }>(`/api/invites/${state.inviteId}`)).body.result?.status, { timeout: 7 * 60_000, intervals: [15_000] }).toBe('active');
+    await adminPage.goto(`/users/invites?q=${encodeURIComponent(EMAIL)}`);
+    await expect(adminPage.locator(`[data-testid="invite-row"][data-invite-id="${state.inviteId}"]`)).toHaveAttribute('data-status', 'active');
+    await shot(adminPage, testInfo, '9-invites-list-signed-in');
   });
 
   test('INV-04 inviting an email that has an account offers that account instead', async ({ page }) => {
