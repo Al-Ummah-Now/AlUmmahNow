@@ -1794,7 +1794,7 @@
   }
 
   .video-js.vjs-fanous .vjs-control-bar {
-    padding: var(--fanous-player-bar-pad-compact);
+    padding: var(--fanous-player-bar-pad-compact, var(--fanous-player-bar-pad));
   }
 }
 

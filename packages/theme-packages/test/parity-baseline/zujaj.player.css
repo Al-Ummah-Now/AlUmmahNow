@@ -3,6 +3,7 @@
   --fanous-player-bar: linear-gradient(135deg,rgb(255 255 255/.16),transparent 42%),rgb(8 58 69/.78);
   --fanous-player-bar-edge: inset 0 1px 0 rgb(255 255 255/.34),inset 0 0 0 1px rgb(255 255 255/.14),0 10px 26px rgb(3 30 36/.42);
   --fanous-player-bar-pad: 6px 10px 2px;
+  --fanous-player-bar-pad-compact: 4px 6px 2px;
   --fanous-player-bar-inset: 10px;
   --fanous-player-bar-radius: 12px;
   --fanous-player-blur: blur(16px) saturate(1.4);

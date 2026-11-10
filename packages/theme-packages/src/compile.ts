@@ -140,7 +140,8 @@ function fontsCss(pkg: ThemePackage, assetUrl: (p: string) => string): string {
 function playerCss(pkg: ThemePackage, assetUrl: (p: string) => string): string {
   const chrome = pkg.components.player.chrome ?? {};
   const lines = [
-    ...PLAYER_TOKENS.map((name) => `  --fanous-player-${name}: ${toCss(String(chrome[name]), assetUrl)};`),
+    // An absent optional field (bar-pad-compact) is left out; the skin falls back to bar-pad
+    ...PLAYER_TOKENS.filter((name) => chrome[name] !== undefined && chrome[name] !== '').map((name) => `  --fanous-player-${name}: ${toCss(String(chrome[name]), assetUrl)};`),
     ...Object.entries(PLAYER_SHARED).map(([name, value]) => `  --fanous-player-${name}: ${value};`),
   ];
   return `${scopeOf(pkg.id)} {\n${lines.join('\n')}\n}\n`;

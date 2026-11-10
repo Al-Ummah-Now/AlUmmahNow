@@ -3,6 +3,7 @@ html[data-theme='lantern'] {
   --fanous-player-bar: radial-gradient(70% 150% at 12% 100%,rgb(232 180 119/.26),transparent 70%),linear-gradient(0deg,rgb(26 15 5/.96),rgb(38 23 8/.86) 62%,rgb(38 23 8/.42) 82%,transparent);
   --fanous-player-bar-edge: none;
   --fanous-player-bar-pad: 44px 12px 6px;
+  --fanous-player-bar-pad-compact: 14px 8px 2px;
   --fanous-player-bar-inset: 0;
   --fanous-player-bar-radius: 0;
   --fanous-player-blur: none;
@@ -43,6 +44,7 @@ html[data-theme='zujaj'] {
   --fanous-player-bar: linear-gradient(135deg,rgb(255 255 255/.16),transparent 42%),rgb(8 58 69/.78);
   --fanous-player-bar-edge: inset 0 1px 0 rgb(255 255 255/.34),inset 0 0 0 1px rgb(255 255 255/.14),0 10px 26px rgb(3 30 36/.42);
   --fanous-player-bar-pad: 6px 10px 2px;
+  --fanous-player-bar-pad-compact: 4px 6px 2px;
   --fanous-player-bar-inset: 10px;
   --fanous-player-bar-radius: 12px;
   --fanous-player-blur: blur(16px) saturate(1.4);
@@ -83,6 +85,7 @@ html[data-theme='nahas'] {
   --fanous-player-bar: linear-gradient(180deg,#6a3d1a,#3d210d 42%,#2a1508);
   --fanous-player-bar-edge: inset 0 1px 0 rgb(255 211 154/.5),inset 0 2px 0 rgb(0 0 0/.3),inset 0 -1px 0 rgb(0 0 0/.45);
   --fanous-player-bar-pad: 8px 12px 2px;
+  --fanous-player-bar-pad-compact: 6px 8px 2px;
   --fanous-player-bar-inset: 0;
   --fanous-player-bar-radius: 0;
   --fanous-player-blur: none;
@@ -123,6 +126,7 @@ html[data-theme='fawanees'] {
   --fanous-player-bar: radial-gradient(45% 170% at 50% 118%,rgb(244 174 58/.32),transparent 72%),linear-gradient(0deg,rgb(5 12 20/.97),rgb(9 21 30/.88) 62%,rgb(9 21 30/.44) 82%,transparent);
   --fanous-player-bar-edge: none;
   --fanous-player-bar-pad: 44px 12px 6px;
+  --fanous-player-bar-pad-compact: 14px 8px 2px;
   --fanous-player-bar-inset: 0;
   --fanous-player-bar-radius: 0;
   --fanous-player-blur: none;

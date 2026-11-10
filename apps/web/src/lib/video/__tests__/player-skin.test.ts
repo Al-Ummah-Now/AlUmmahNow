@@ -199,7 +199,7 @@ describe('player skin CSS', () => {
     expect(containerBlock(359)).toMatch(/\.vjs-time-control\.vjs-duration\s*\{\s*display:\s*none/);
     // Small players get the compact padding instead of the tall gradient, and smaller buttons;
     // the sizes are set on the bar, because a container query never styles its own container
-    expect(containerBlock(539)).toMatch(/\.vjs-control-bar\s*\{\s*padding:\s*var\(--fanous-player-bar-pad-compact\)/);
+    expect(containerBlock(539)).toMatch(/\.vjs-control-bar\s*\{\s*padding:\s*var\(--fanous-player-bar-pad-compact, var\(--fanous-player-bar-pad\)\)/);
     expect(containerBlock(439)).toMatch(/\.video-js\.vjs-fanous \.vjs-control-bar\s*\{[^}]*--vjs-fanous-hit:\s*36px/);
     expect(containerBlock(719)).toMatch(/vjs-fanous-live\s*\{\s*max-width:\s*120px/);
   });

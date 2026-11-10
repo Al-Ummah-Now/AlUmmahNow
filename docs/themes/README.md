@@ -207,7 +207,8 @@ Style fields compile to these properties, which the apps' component CSS reads:
 | `sidebar.indicatorShape` | `--m-ind-shape` (a `path()` or `inset()`) | `player.ring` | `--m-player-ring` |
 
 `components.player.chrome` sets the player controls. One value serves both modes, because the
-controls sit over video. Fields: `bar`, `bar-edge`, `bar-pad`, `bar-inset`, `bar-radius`, `blur`,
+controls sit over video. Fields: `bar`, `bar-edge`, `bar-pad`, `bar-pad-compact` (optional: the padding
+on players under 540px wide; `bar-pad` when absent), `bar-inset`, `bar-radius`, `blur`,
 `icon`, `dim`, `track`, `track-edge`, `buffered`, `played`, `glow`, `handle`, `handle-edge`,
 `hover`, `press`, `shape`, `tip-bg`, `tip-text`, `tip-edge`, `menu`, `menu-edge`, `menu-hover`,
 `menu-selected`, `accent`, `big`, `big-icon`, `big-edge`, `spin`, `pill`, `pill-edge`, `cue`, `err`,
