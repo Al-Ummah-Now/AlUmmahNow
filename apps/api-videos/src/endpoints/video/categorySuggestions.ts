@@ -35,6 +35,8 @@ const Envelope = z.object({ success: z.boolean(), result: SuggestionSchema });
 const ErrorSchema = z.object({ success: z.boolean(), error: z.string() });
 
 const DRAFT_KEY = z.string().min(8).max(80).regex(/^[A-Za-z0-9_-]+$/);
+// Only Arabic and English are read (CATEGORY_LANGUAGES); anything else is refused, not silently sent on
+const localized = (max: number) => z.object({ ar: z.string().max(max).optional(), en: z.string().max(max).optional() }).strict();
 
 function present(row: CategorySuggestionRow, extra: Record<string, unknown> = {}) {
 	const view = toSuggestionView(row);
@@ -72,10 +74,10 @@ export class CategorySuggestionRequest extends AuthenticatedRoute {
 						schema: z.object({
 							draftKey: DRAFT_KEY.describe("Client-generated key of the form (8-80 chars, A-Z a-z 0-9 _ -)"),
 							title: z.string().max(500).optional(),
-							titleLocalized: z.record(z.string().max(500)).optional(),
+							titleLocalized: localized(500).optional(),
 							description: z.string().max(10000).optional(),
-							descriptionLocalized: z.record(z.string().max(10000)).optional(),
-							tags: z.array(z.string().max(100)).max(100).optional(),
+							descriptionLocalized: localized(10000).optional(),
+							tags: z.array(z.string().max(100)).max(50).optional(),
 						}),
 					},
 				},

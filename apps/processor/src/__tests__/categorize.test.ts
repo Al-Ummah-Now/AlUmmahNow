@@ -12,6 +12,7 @@ import {
   MessageType,
   VideoCategory,
   buildCategoryText,
+  draftSubjectId,
   categoryPatchForVideo,
   decideCategory,
   getCategorySuggestion,
@@ -107,6 +108,12 @@ describe('thresholds and the write rule', () => {
     expect(text).toContain('Tags: hadith');
     expect(text.length).toBeLessThan(3200);
     expect(buildCategoryText({ title: ' ', tags: [] })).toBe('');
+    // Only Arabic and English are read, and the whole text is bounded whatever is sent
+    const many = buildCategoryText({ titleLocalized: { fr: 'Titre', ar: 'عنوان' } as Record<string, string>, descriptionLocalized: { en: 'd'.repeat(9000), de: 'x' } as Record<string, string>, tags: Array.from({ length: 80 }, (_, i) => `${i}-${'t'.repeat(200)}`), transcript: 'y'.repeat(9000) });
+    expect(many).toContain('Title (ar): عنوان');
+    expect(many).not.toContain('Titre');
+    expect(many).not.toContain('(de)');
+    expect(many.length).toBeLessThanOrEqual(8000);
     expect(vttToText('WEBVTT\n\n1\n00:00:01.000 --> 00:00:02.000\n<v Speaker>بسم الله</v>\n\nNOTE x\n')).toBe('بسم الله');
   });
 
@@ -283,6 +290,17 @@ describe('category suggestion job', () => {
     for (const id of ['v1', 'v2']) await markCategorySuggestionPending(db, { subjectId: id, subjectType: 'video', reason: 'upload', now: NOW });
     expect(await handleCategorySuggest(videoJob('v1'), env, logger, { lastAttempt: false, now: NOW })).toMatchObject({ status: 'done', result: 'model' });
     expect(await handleCategorySuggest(videoJob('v2'), env, logger, { lastAttempt: false, now: NOW })).toEqual({ status: 'done', result: 'budget' });
+    expect(ai!.run).toHaveBeenCalledTimes(1);
+  });
+
+  it('form suggestions stop at their share of the cap; uploads keep the rest', async () => {
+    const { db, env, ai } = setup({ cap: 1 });
+    const draftId = draftSubjectId('u1', 'form-key-123');
+    await markCategorySuggestionPending(db, { subjectId: draftId, subjectType: 'draft', reason: 'draft', userId: 'u1', now: NOW });
+    expect(await handleCategorySuggest({ subjectId: draftId, subjectType: 'draft', reason: 'draft', text: { title: 'Fiqh of zakat' } }, env, logger, { lastAttempt: false, now: NOW })).toEqual({ status: 'done', result: 'budget' });
+    expect((await getCategorySuggestion(db, draftId))).toMatchObject({ status: 'budget', last_error: 'draft_budget_share_reached' });
+    await markCategorySuggestionPending(db, { subjectId: 'v1', subjectType: 'video', reason: 'upload', now: NOW });
+    expect(await handleCategorySuggest(videoJob('v1'), env, logger, { lastAttempt: false, now: NOW })).toMatchObject({ status: 'done', result: 'model' });
     expect(ai!.run).toHaveBeenCalledTimes(1);
   });
 

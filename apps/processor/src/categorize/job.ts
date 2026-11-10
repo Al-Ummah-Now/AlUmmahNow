@@ -15,6 +15,7 @@
  */
 import type { Logger } from '@al-ummah/logger';
 import {
+  CATEGORY_DRAFT_BUDGET_SHARE,
   CATEGORY_MODEL,
   CATEGORY_SYSTEM_PROMPT,
   CATEGORY_TEST_HOOK_MODEL,
@@ -268,7 +269,14 @@ export async function handleCategorySuggest(
       return { status: 'done', result: 'disabled' };
     }
     const estimate = estimateCategorizeNeurons(text);
-    if (!(await reserveBudget(env.REPORTS_DB, config.dailyNeuronCap, estimate, now, CATEGORIZE_FEATURE))) {
+    // Form suggestions stop at their share of the cap, so typing in forms can never use up the budget uploads and the backfill need
+    const cap = subjectType === 'draft' ? Math.floor(config.dailyNeuronCap * CATEGORY_DRAFT_BUDGET_SHARE) : config.dailyNeuronCap;
+    if (!(await reserveBudget(env.REPORTS_DB, cap, estimate, now, CATEGORIZE_FEATURE))) {
+      if (subjectType === 'draft') {
+        await recordCategorySuggestionResult(db, subjectId, { status: 'budget', inputHash, error: 'draft_budget_share_reached', now });
+        logger.warn('[Categorize] Form suggestions reached their share of the daily cap', { subjectId, cap });
+        return { status: 'done', result: 'budget' };
+      }
       await recordCategorySuggestionResult(db, subjectId, { status: 'budget', inputHash, error: 'daily_budget_reached', now });
       logger.warn('[Categorize] Daily neuron cap reached; flagged for admin, retried by the daily sweep', { alert: 'category_suggest_budget', subjectId, cap: config.dailyNeuronCap });
       return { status: 'done', result: 'budget' };
