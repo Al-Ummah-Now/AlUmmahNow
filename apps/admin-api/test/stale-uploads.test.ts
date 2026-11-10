@@ -6,7 +6,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { Hono } from 'hono';
-import staleUploadsRouter, { REAPER_MODE_AUDIT_KEY, STALE_UPLOAD_AUDIT_PREFIX } from '../src/routers/staleUploads.router';
+import staleUploadsRouter, { REAPER_MODE_AUDIT_KEY, STALE_UPLOAD_AUDIT_PREFIX, TEST_LIBRARY_PURGE_AUDIT_KEY } from '../src/routers/staleUploads.router';
 import { permissionsFor } from '../src/lib/roles';
 import { sqliteD1 } from './d1-sqlite';
 
@@ -102,5 +102,28 @@ describe('/api/uploads/stale', () => {
     const res = (await (await req('/api/uploads/stale/audit')).json()) as any;
     assert.equal(res.result.entries[0].videoId, ID);
     assert.equal(res.result.entries[0].action, 'keep');
+  });
+
+  it('test-library purge: dry run by default, audited, forwarded; bad actions refused', async () => {
+    const { req, calls, audit } = setup(['Admin']);
+    assert.equal((await req('/api/uploads/stale/test-library-purge', post({ action: 'wipe' }))).status, 400);
+    assert.equal(calls.length, 0);
+    assert.equal((await req('/api/uploads/stale/test-library-purge', post({ action: 'start' }))).status, 200);
+    assert.equal(calls[0].path, '/internal/uploads/test-library-purge');
+    assert.deepEqual(calls[0].body, { action: 'start', dryRun: true, resume: false, actor: 'admin@example.com' });
+    assert.equal((await req('/api/uploads/stale/test-library-purge', post({ action: 'start', dryRun: false, resume: true }))).status, 200);
+    assert.deepEqual(calls[1].body, { action: 'start', dryRun: false, resume: true, actor: 'admin@example.com' });
+    const rows = await audit();
+    assert.equal(rows.length, 2);
+    assert.ok(rows.every((r: any) => r.key === TEST_LIBRARY_PURGE_AUDIT_KEY));
+    assert.equal((await req('/api/uploads/stale/test-library-purge')).status, 200);
+    assert.equal(calls[2].method, 'GET');
+  });
+
+  it('test-library purge: a refusal from api-videos (production) drops the audit row', async () => {
+    const { req, audit } = setup(['Admin'], () => ({ status: 403, json: { success: false, error: 'The test-library purge runs only on QA / stage' } }));
+    const res = await req('/api/uploads/stale/test-library-purge', post({ action: 'start', dryRun: false }));
+    assert.equal(res.status, 403);
+    assert.equal((await audit()).length, 0);
   });
 });

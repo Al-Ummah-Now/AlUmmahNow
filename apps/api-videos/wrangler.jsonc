@@ -487,6 +487,8 @@
 				"BUNNY_SIGN_URLS": "true",
 				// Stage shares the QA Bunny library: tag what stage creates there for cleanup
 				"BUNNY_NAME_PREFIX": "[stage] ",
+				// Test library shared with QA: allows the admin test-library purge (lib/uploads/testLibraryPurge.ts). Never in production.
+				"BUNNY_TEST_LIBRARY": "true",
 				// Upload limits enforced, as in production (numbers from the creator tiers)
 				"UPLOAD_RATE_LIMIT": "relaxed",
 				"BUNNY_SIGN_HOSTNAME": "vz-cb79844a-c5d.b-cdn.net",

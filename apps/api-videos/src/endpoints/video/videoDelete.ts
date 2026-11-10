@@ -4,6 +4,7 @@ import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
+import { enqueueBunnyDelete } from "../../lib/uploads/bunnyDelete";
 import { AuthenticatedRoute, AppContext } from '../../base';
 
 export class VideoDelete extends AuthenticatedRoute {
@@ -108,6 +109,9 @@ export class VideoDelete extends AuthenticatedRoute {
 
 		// Delete the video
 		await repository.deleteObject(videoId);
+		// …and its Bunny video (queued, retried): without this every deleted
+		// upload stayed in the library and was still encoded (lib/uploads/bunnyDelete.ts)
+		await enqueueBunnyDelete(c.env.PROCESSING_CHECK_QUEUE, videoId, 'owner-delete');
 
 		return {
 			success: true,

@@ -26,6 +26,7 @@ type C = Context<Env>;
 
 export const STALE_UPLOAD_AUDIT_PREFIX = 'uploads:stale:';
 export const REAPER_MODE_AUDIT_KEY = 'uploads:reaper:mode';
+export const TEST_LIBRARY_PURGE_AUDIT_KEY = 'uploads:test-library-purge';
 const MAX_IDS = 100;
 
 const app = new Hono<Env>();
@@ -157,6 +158,29 @@ app.post('/mode', async (c) => {
   const mode = (await body(c)).mode;
   if (mode !== 'dry-run' && mode !== 'live') return c.json({ success: false, code: 'bad_request', error: 'mode must be dry-run or live' }, 400);
   const result = await audited(c, [REAPER_MODE_AUDIT_KEY], 'set_mode', { mode }, () => callUploads(c.env, '/mode', { method: 'POST', json: { mode, actor: actorLabel(c) } }));
+  return c.json({ success: true, result });
+});
+
+/**
+ * QA / stage only: the test-library purge (api-videos
+ * lib/uploads/testLibraryPurge.ts) removes every Bunny video of this
+ * environment that has no record. api-videos refuses it on production.
+ */
+app.get('/test-library-purge', async (c) => {
+  const result = await callUploads(c.env, '/test-library-purge');
+  return c.json({ success: true, result });
+});
+
+/** Start (dry run unless dryRun is false; resume continues a stopped / failed run) or stop the purge. */
+app.post('/test-library-purge', async (c) => {
+  const input = await body(c);
+  const action = input.action;
+  if (action !== 'start' && action !== 'stop') return c.json({ success: false, code: 'bad_request', error: 'action must be start or stop' }, 400);
+  const dryRun = input.dryRun !== false;
+  const resume = input.resume === true;
+  const result = await audited(c, [TEST_LIBRARY_PURGE_AUDIT_KEY], `test_library_purge_${action}`, action === 'start' ? { dryRun, resume } : {}, () =>
+    callUploads(c.env, '/test-library-purge', { method: 'POST', json: { action, dryRun, resume, actor: actorLabel(c) } }),
+  );
   return c.json({ success: true, result });
 });
 
