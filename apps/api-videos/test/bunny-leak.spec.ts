@@ -21,6 +21,7 @@ import {
 	PURGE_KIND,
 	PURGE_MAX_DELIVERIES,
 	PURGE_MIN_AGE_MS,
+	PURGE_CONCURRENCY,
 	PURGE_PAGE_SIZE,
 	purgeAllowed,
 	readPurgeState,
@@ -50,12 +51,19 @@ function bunnyStub() {
 		deleted: [] as string[],
 		failDeletes: 0,
 		failList: 0,
+		deleteDelayMs: 0,
+		inFlight: 0,
+		maxInFlight: 0,
 	};
 	globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
 		const url = new URL(String(input));
 		const method = init?.method ?? 'GET';
 		const one = url.pathname.match(/\/library\/\d+\/videos\/([0-9a-f-]{36})$/);
 		if (one && method === 'DELETE') {
+			s.inFlight++;
+			s.maxInFlight = Math.max(s.maxInFlight, s.inFlight);
+			await new Promise((r) => setTimeout(r, s.deleteDelayMs));
+			s.inFlight--;
 			if (s.failDeletes > 0) {
 				s.failDeletes--;
 				return new Response('busy', { status: 503 });
@@ -287,6 +295,16 @@ describe('test-library purge run', () => {
 		for (const id of [...recorded, ...young, live]) assert.ok(left.has(id), `${id} kept`);
 		assert.equal(bunny.videos.filter((v) => v.title.startsWith('[stage] ')).length, 10, "stage's videos are stage's to purge");
 		assert.ok(state!.recent.length <= 50);
+	});
+
+	it('deletes a page\'s videos concurrently, never more than PURGE_CONCURRENCY at once', async () => {
+		const { bunny, env } = await seed();
+		bunny.deleteDelayMs = 20;
+		await startPurge(env, { actor: 'a', dryRun: false });
+		await drain(env);
+		assert.equal(bunny.deleted.length, 130);
+		assert.ok(bunny.maxInFlight > 1, 'deletes overlap');
+		assert.ok(bunny.maxInFlight <= PURGE_CONCURRENCY, `at most ${PURGE_CONCURRENCY} in flight (saw ${bunny.maxInFlight})`);
 	});
 
 	it('refuses to start on production, and a production worker drops a run', async () => {
