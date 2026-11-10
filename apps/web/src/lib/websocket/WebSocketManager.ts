@@ -122,7 +122,8 @@ export class WebSocketManager {
         };
 
         this.ws.onerror = (error) => {
-          logger.error('❌ WebSocket error:', error);
+          // A dropped connection (network change, sleeping tab) is normal; it reconnects
+          logger.warn('WebSocket error (will reconnect):', error);
           this.state.status = 'error';
           this.notifyStateChange();
           reject(error);
@@ -405,9 +406,11 @@ export class WebSocketManager {
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       this.connect().catch(error => {
-        logger.error('❌ Reconnect failed:', error);
         if (this.state.reconnectAttempts < this.config.maxReconnectAttempts) {
+          logger.warn('Reconnect failed, retrying:', error);
           this.scheduleReconnect();
+        } else {
+          logger.error('Realtime connection gave up after all reconnect attempts', { attempts: this.state.reconnectAttempts, error });
         }
       });
     }, delay);

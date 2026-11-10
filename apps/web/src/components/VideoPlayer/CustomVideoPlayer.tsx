@@ -200,7 +200,7 @@ export default function CustomVideoPlayer({
   // WebSocket integration for real-time metrics
   // Memoize onError to prevent re-creating on every render
   const handleWebSocketError = useCallback((error: Error) => {
-    logger.error('[CustomVideoPlayer] WebSocket error:', error);
+    logger.warn('[CustomVideoPlayer] WebSocket error (viewer count will reconnect):', error);
   }, []);
 
   const { viewerCount, isConnected: wsConnected } = useVideoWebSocket({

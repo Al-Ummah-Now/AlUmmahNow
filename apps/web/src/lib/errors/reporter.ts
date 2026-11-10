@@ -123,12 +123,22 @@ function errorIn(data: unknown): unknown {
  * context; without one, the log message itself is reported. An Error that
  * was already reported directly is not sent again.
  */
+/** A browser-side network drop (offline, aborted, connection reset): not our bug, never reported. */
+export function isNetworkDrop(error: unknown, message = ''): boolean {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+  const text = `${message} ${error && typeof error === 'object' ? String((error as { message?: unknown }).message ?? '') : typeof error === 'string' ? error : ''}`;
+  const name = error && typeof error === 'object' ? String((error as { name?: unknown }).name ?? '') : '';
+  if (name === 'AbortError') return true;
+  return /\b(Failed to fetch|Load failed|NetworkError when attempting to fetch resource|Network request failed|The network connection was lost)\b/i.test(text);
+}
+
 export function forwardLoggedError(message: string, data: unknown): void {
   if (typeof window === 'undefined' || forwardingPaused > 0) return;
   const r = getReporter();
   if (!r) return;
   try {
     const found = errorIn(data);
+    if (isNetworkDrop(found ?? data, message)) return;
     const extra: Extra = { logged: message.slice(0, 200), ...primitives(data) };
     const detail = data && typeof data === 'object' && typeof (data as { error?: unknown }).error === 'string' ? (data as { error: string }).error : typeof data === 'string' ? data : '';
     const error = found ?? Object.assign(new Error(detail ? `${message}: ${detail}` : message), { name: 'LoggedError' });
