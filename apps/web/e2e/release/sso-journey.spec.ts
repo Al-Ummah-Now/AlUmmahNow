@@ -16,6 +16,7 @@
  * pull request (recorded as an annotation, detected by behaviour); release runs never skip.
  */
 import { test, expect, type BrowserContext, type Cookie, type Page } from '@playwright/test';
+import { grantCreatorTier } from './creator-tier';
 import { promoteToAdmin } from './sink';
 import { target, TEST_PASSWORD } from './targets';
 import { fillSecret } from './secret-fill';
@@ -159,6 +160,8 @@ test.describe('Release: SSO journey across every app', () => {
       // A creator (profile + channel) who is also an admin
       const user = await signUpOnWeb(page, `rel-sso-${locale}`, locale);
       await createProfile(user);
+      // Creating channels is by invitation: an admin grants the Creator plan, in effect at once
+      await grantCreatorTier(user);
       const channel = await apiFetch(user, '/api/channels', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
