@@ -146,9 +146,18 @@ for (const dpr of [1, 2]) {
           }, at);
           await page.waitForFunction(() => !document.querySelector<HTMLVideoElement>('.video-js video')!.seeking);
           await page.waitForTimeout(250);
-          const track = await layoutBox(holder);
-          const head = await layoutBox(played);
-          const handle = await inkBox(page, played, 'before', 14);
+          // Video.js can still move the fill after the seek settles; a playhead read before the
+          // two ink captures is then compared with a handle drawn later. Measure until the fill is
+          // in the same place before and after the capture
+          let track = await layoutBox(holder);
+          let head = await layoutBox(played);
+          let handle = await inkBox(page, played, 'before', 14);
+          for (let attempt = 0; attempt < 4; attempt++) {
+            const [t2, h2] = [await layoutBox(holder), await layoutBox(played)];
+            if (t2.cy === track.cy && h2.right === head.right) break;
+            [track, head] = [t2, h2];
+            handle = await inkBox(page, played, 'before', 14);
+          }
           near(handle.cy, track.cy, `handle on the track at ${at}`);
           // The bar runs left to right in both directions, so the playhead is the fill's right edge
           near(handle.cx, head.right, `handle on the playhead at ${at}`);
