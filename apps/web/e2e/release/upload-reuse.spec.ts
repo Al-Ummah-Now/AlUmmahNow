@@ -28,6 +28,7 @@ const SAMPLE = path.join(__dirname, '..', 'test-fixtures', 'e2e-sample-40s.mp4')
 
 function paddedVideo(dir: string, name: string, bytes: number): string {
   const head = fs.readFileSync(SAMPLE);
+  fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, name);
   fs.writeFileSync(file, Buffer.concat([head, randomBytes(Math.max(0, bytes - head.length))]));
   return file;

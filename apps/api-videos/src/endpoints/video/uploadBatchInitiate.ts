@@ -12,6 +12,7 @@ import { requireSecret } from "../../lib/env-helpers";
 import { fingerprintKey, initiateOnce, UploadClaimBusyError, UploadFingerprintSchema } from "../../lib/uploads/initiateOnce";
 import { checkReusable, issueTusSession, reuseFields, type PlaceholderRecord } from "../../lib/uploads/placeholder";
 import { patchVideo } from "../../lib/videoWrites";
+import { markUploadCreated } from "../../lib/uploads/reaper";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import { requestVideoSuggestion } from '../../lib/categorySuggestions';
 import { logger } from '../../lib/logger';
@@ -179,6 +180,8 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 						thumbnailTime: 0,
 					});
 					const videoId = bunnyVideo.guid;
+					// Ours: the reaper may remove it if its record never lands (lib/uploads/reaper.ts)
+					await markUploadCreated(c.env.global_settings, videoId, { userId, channelId });
 					const now = new Date().toISOString();
 
 					// Same record as a single upload (lib/upload/uploadRecord.ts)

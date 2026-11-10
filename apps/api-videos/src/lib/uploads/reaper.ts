@@ -48,6 +48,15 @@ export const REAPER_CONFIG_KEY = `${REAPER_PREFIX}config.json`;
 export const REAPER_SWEEP_KEY = `${REAPER_PREFIX}sweep.json`;
 export const REAPER_ITEM_PREFIX = `${REAPER_PREFIX}items/`;
 export const REAPER_AUDIT_PREFIX = `${REAPER_PREFIX}audit/`;
+/**
+ * Marker the upload flows write right after creating a Bunny video
+ * (markUploadCreated). The reaper deletes a recordless Bunny video on its own
+ * only when it carries this marker: anything else in the library (live
+ * streams, legacy flows) is never an automatic orphan.
+ */
+export const UPLOAD_MARKER_PREFIX = `${REAPER_PREFIX}created/`;
+/** Upload statuses of an unfinished upload: the only records the reaper may abandon. */
+const ABANDONABLE_STATUSES = new Set(['initiated', 'uploading', 'failed']);
 
 /** No upload activity this long → abandoned. */
 export const ABANDON_AFTER_MS = 24 * 3600 * 1000;
@@ -122,6 +131,7 @@ export interface RecordView {
 	isDeleted?: boolean;
 	abandoned?: { at: string; reason: string; by: string; bunnyDeleted: boolean };
 	uploadFingerprint?: string;
+	originalFormat?: string;
 	processingIssue?: { kind: string; reason?: string; at: string } | null;
 	tusUpload?: { sessionId: string; bunnyUploadUrl: string; fileSize: number; createdAt: string };
 }
@@ -173,6 +183,15 @@ export interface ReapInput {
 	/** TUS offset now, and at the previous check of this loop (null: no upload at Bunny) */
 	offsetNow?: number | null;
 	offsetBefore?: number | null;
+	/** Orphans: an upload flow created this Bunny video (UPLOAD_MARKER_PREFIX) */
+	uploadMarker?: boolean;
+	/** Orphans: a live stream record refers to this Bunny video */
+	liveStreamRef?: boolean;
+}
+
+/** A record an upload flow wrote (initiate, batch initiate, server upload): not a live stream or another record type. */
+export function isUploadFlowRecord(record: Pick<RecordView, 'uploadFingerprint' | 'tusUpload' | 'lastInitiateAt' | 'originalFormat'>): boolean {
+	return !!(record.uploadFingerprint || record.tusUpload || record.lastInitiateAt || record.originalFormat);
 }
 
 /** Latest sign of upload activity on a record. */
@@ -209,6 +228,8 @@ export function decideReap(input: ReapInput): ReapDecision {
 		if (record) return { action: 'keep', reason: 'Has a record (not an orphan)' };
 		if (!bunny) return { action: 'keep', reason: 'Already gone at Bunny' };
 		if (!belongsToEnv(bunny.title, input.prefix)) return { action: 'keep', reason: 'Belongs to another environment' };
+		if (input.liveStreamRef) return { action: 'keep', reason: 'A live stream refers to it' };
+		if (!input.uploadMarker && !input.force) return { action: 'keep', reason: 'Not created by an upload (no upload marker): only an admin Delete now removes it' };
 		if (!ORPHAN_DELETABLE.has(bunny.status ?? -1)) return { action: 'keep', reason: `Bunny status ${bunny.status}: ready or encoding videos are never deleted` };
 		const age = now - (Date.parse(bunny.dateUploaded || '') || now);
 		if (!input.force && age < ORPHAN_MIN_AGE_MS) return { action: 'keep', reason: 'Younger than 24 hours' };
@@ -225,6 +246,9 @@ export function decideReap(input: ReapInput): ReapDecision {
 		return { action: 'keep', reason: 'Already abandoned' };
 	}
 	if (record.uploadStatus === 'ready' || record.uploadStatus === 'processing') return { action: 'keep', reason: `Upload finished (${record.uploadStatus})` };
+	// Allowlist: only an unfinished upload an upload flow wrote is ever abandoned
+	if (!ABANDONABLE_STATUSES.has(record.uploadStatus ?? '')) return { action: 'keep', reason: `Upload status ${record.uploadStatus ?? 'none'} is not an unfinished upload` };
+	if (!isUploadFlowRecord(record)) return { action: 'keep', reason: 'Not an upload record' };
 	if (bunny && !ABANDONED_DELETABLE.has(bunny.status ?? -1)) return { action: 'keep', reason: `Bunny status ${bunny.status}: bytes arrived` };
 	if (!input.force && now - lastActivityAt(record) < ABANDON_AFTER_MS) return { action: 'keep', reason: 'Upload activity in the last 24 hours' };
 	if (!input.force && inReuploadGrace(record, now)) return { action: 'keep', reason: 'Flagged for re-upload; the uploader has 7 days to re-upload' };
@@ -506,7 +530,15 @@ export async function runReaperCheck(env: ReaperEnv, message: ReaperMessage, now
 	if (message.target === 'abandoned' && record && !record.abandoned && record.uploadStatus !== 'ready' && record.uploadStatus !== 'processing') {
 		offsetNow = await fetchTusOffset(env, record);
 	}
+	let uploadMarker = false;
+	let liveStreamRef = false;
+	if (message.target === 'orphan' && !record && bunny) {
+		uploadMarker = !!(await env.global_settings.head(`${UPLOAD_MARKER_PREFIX}${message.videoId}`));
+		liveStreamRef = await referencedByLiveStream(env, message.videoId);
+	}
 	const decision = decideReap({
+		uploadMarker,
+		liveStreamRef,
 		target: message.target,
 		now: now.getTime(),
 		mode: config.mode,
@@ -653,10 +685,33 @@ export function inReuploadGrace(record: Pick<RecordView, 'processingIssue'>, now
 	return !Number.isFinite(at) || now - at < FLAGGED_GRACE_MS;
 }
 
+/** Upload flows: mark a Bunny video they created (best effort: without it the video is never an automatic orphan). */
+export async function markUploadCreated(store: Pick<R2Bucket, 'put'>, videoId: string, meta: { userId: string; channelId: string }, now = new Date()): Promise<void> {
+	try {
+		await store.put(`${UPLOAD_MARKER_PREFIX}${videoId}`, JSON.stringify({ ...meta, at: now.toISOString() }), JSON_META);
+	} catch (error) {
+		logger.warn('[UploadReaper] Upload marker not written', { videoId, error: error instanceof Error ? error.message : String(error) });
+	}
+}
+
+/** Whether any live stream record (videos bucket, `livestream:<id>`) mentions this Bunny video id. */
+export async function referencedByLiveStream(env: Pick<ReaperEnv, 'videos'>, videoId: string): Promise<boolean> {
+	let cursor: string | undefined;
+	do {
+		const page = await env.videos.list({ prefix: 'livestream:', cursor, limit: 500 });
+		for (const object of page.objects) {
+			const text = await (await env.videos.get(object.key))?.text();
+			if (text?.includes(videoId)) return true;
+		}
+		cursor = page.truncated ? page.cursor : undefined;
+	} while (cursor);
+	return false;
+}
+
 /** Pre-filter of the sweep (the check decides): an unfinished record quiet for 24 h, not in its re-upload grace. */
 export function isAbandonedCandidate(record: RecordView, now: number): boolean {
 	if (record.abandoned || record.isDeleted) return false;
-	if (record.uploadStatus === 'ready' || record.uploadStatus === 'processing') return false;
+	if (!ABANDONABLE_STATUSES.has(record.uploadStatus ?? '') || !isUploadFlowRecord(record)) return false;
 	return now - lastActivityAt(record) >= ABANDON_AFTER_MS && !inReuploadGrace(record, now);
 }
 
