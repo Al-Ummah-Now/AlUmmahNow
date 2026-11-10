@@ -1,3 +1,4 @@
+import { findPostComment } from './post-comment-helpers';
 import { addToCommentIndex, patchComment, removeFromCommentIndex } from '../../lib/community-comments';
 import { bumpPostComments } from '../../lib/community-posts';
 import { Str } from 'chanfana';
@@ -87,7 +88,7 @@ export class DeletePostComment extends AuthenticatedRoute {
     const post: CommunityPost = await postObj.json();
 
     // 2. Find comment
-    const { comment, commentKey } = await this.findComment(bucket, postId, commentId);
+    const { comment, commentKey } = await findPostComment(bucket, postId, commentId);
 
     if (!comment) {
       return c.json(
@@ -179,34 +180,5 @@ export class DeletePostComment extends AuthenticatedRoute {
       success: true,
       message: 'Comment deleted successfully',
     });
-  }
-
-  private async findComment(
-    bucket: R2Bucket,
-    postId: string,
-    commentId: string
-  ): Promise<{ comment: PostComment | null; commentKey: string }> {
-    // Try top-level first
-    let commentKey = `comments/${postId}/top-level/${commentId}.json`;
-    let commentObj = await bucket.get(commentKey);
-
-    if (commentObj) {
-      const comment: PostComment = await commentObj.json();
-      return { comment, commentKey };
-    }
-
-    // Search in replies
-    const repliesList = await bucket.list({ prefix: `comments/${postId}/replies/` });
-    for (const object of repliesList.objects) {
-      if (object.key.endsWith(`/${commentId}.json`)) {
-        commentObj = await bucket.get(object.key);
-        if (commentObj) {
-          const comment: PostComment = await commentObj.json();
-          return { comment, commentKey: object.key };
-        }
-      }
-    }
-
-    return { comment: null, commentKey: '' };
   }
 }

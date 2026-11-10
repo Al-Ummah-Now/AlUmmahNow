@@ -167,3 +167,46 @@ describe('pinned comment (AV-12)', () => {
 		}
 	});
 });
+
+describe('reply lookup without listing (AV-16)', () => {
+	const countLists = (e: any) => {
+		const counter = { lists: 0 };
+		const list = e.community_posts.list.bind(e.community_posts);
+		// Listings of reply keys only (a like still recounts that comment's like records)
+		e.community_posts.list = async (opts: any) => { if (String(opts?.prefix ?? '').startsWith('comments/p1/replies/')) counter.lists++; return list(opts); };
+		return counter;
+	};
+
+	it('a reply is liked, edited and unliked through its parent pointer, never by listing', async () => {
+		const e = env();
+		const parent = await comment(e, 0, 'Parent');
+		const reply = await comment(e, 1, 'Reply', parent);
+		assert.deepEqual(e.community_posts.read(`comments/p1/reply-parents/${reply}.json`), { parentCommentId: parent });
+		const counter = countLists(e);
+		const { app, h } = user(2);
+		assert.equal((await app.request(`${BASE}/${reply}/like`, { method: 'POST', headers: h }, e)).status, 200);
+		assert.equal((await user(1).app.request(`${BASE}/${reply}`, { method: 'PUT', headers: user(1).h, body: JSON.stringify({ content: 'Edited' }) }, e)).status, 200);
+		assert.equal((await app.request(`${BASE}/${reply}/like`, { method: 'DELETE', headers: h }, e)).status, 200);
+		assert.equal(counter.lists, 0);
+		assert.equal(e.community_posts.read(`comments/p1/replies/${parent}/${reply}.json`).content, 'Edited');
+	});
+
+	it('a reply from before the pointers is found past the first 1000 keys, and found directly after that', async () => {
+		const e = env();
+		const parent = await comment(e, 0, 'Parent');
+		// 1500 older replies without pointers; the one we act on sorts last
+		for (let i = 0; i < 1500; i++) {
+			const id = `old-${String(i).padStart(4, '0')}`;
+			e.community_posts.store.set(`comments/p1/replies/${parent}/${id}.json`, JSON.stringify({ id, postId: 'p1', parentCommentId: parent, userId: 'u9', content: id, likes: 0, createdAt: '2026-01-01T00:00:00.000Z' }));
+		}
+		const target = 'old-zzzz';
+		e.community_posts.store.set(`comments/p1/replies/${parent}/${target}.json`, JSON.stringify({ id: target, postId: 'p1', parentCommentId: parent, userId: 'u9', content: 'Target', likes: 0, createdAt: '2026-01-01T00:00:00.000Z' }));
+		const { app, h } = user(3);
+		const first = await app.request(`${BASE}/${target}/like`, { method: 'POST', headers: h }, e);
+		assert.equal(first.status, 200, 'the old lookup read one page and answered 404 here');
+		assert.deepEqual(e.community_posts.read(`comments/p1/reply-parents/${target}.json`), { parentCommentId: parent }, 'the pointer is written on first lookup');
+		const counter = countLists(e);
+		assert.equal((await app.request(`${BASE}/${target}/like`, { method: 'DELETE', headers: h }, e)).status, 200);
+		assert.equal(counter.lists, 0, 'found through the pointer');
+	});
+});

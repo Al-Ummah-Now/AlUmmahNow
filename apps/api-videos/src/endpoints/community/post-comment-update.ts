@@ -1,3 +1,4 @@
+import { findPostComment } from './post-comment-helpers';
 import { patchComment } from '../../lib/community-comments';
 import { Str } from 'chanfana';
 import { z } from 'zod';
@@ -91,7 +92,7 @@ export class UpdatePostComment extends AuthenticatedRoute {
     const bucket = c.env.community_posts;
 
     // 1. Find comment (check both top-level and replies)
-    const { comment, commentKey } = await this.findComment(bucket, postId, commentId);
+    const { comment, commentKey } = await findPostComment(bucket, postId, commentId);
 
     if (!comment) {
       return c.json(
@@ -163,34 +164,5 @@ export class UpdatePostComment extends AuthenticatedRoute {
       success: true,
       comment,
     });
-  }
-
-  private async findComment(
-    bucket: R2Bucket,
-    postId: string,
-    commentId: string
-  ): Promise<{ comment: PostComment | null; commentKey: string }> {
-    // Try top-level first
-    let commentKey = `comments/${postId}/top-level/${commentId}.json`;
-    let commentObj = await bucket.get(commentKey);
-
-    if (commentObj) {
-      const comment: PostComment = await commentObj.json();
-      return { comment, commentKey };
-    }
-
-    // Search in replies
-    const repliesList = await bucket.list({ prefix: `comments/${postId}/replies/` });
-    for (const object of repliesList.objects) {
-      if (object.key.endsWith(`/${commentId}.json`)) {
-        commentObj = await bucket.get(object.key);
-        if (commentObj) {
-          const comment: PostComment = await commentObj.json();
-          return { comment, commentKey: object.key };
-        }
-      }
-    }
-
-    return { comment: null, commentKey: '' };
   }
 }
