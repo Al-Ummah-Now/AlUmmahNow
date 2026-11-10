@@ -49,12 +49,12 @@ async function createChannel(user: WebUser, name: string): Promise<string> {
   return id as string;
 }
 
-/** A video record (upload started, no file sent): enough for the admin pages. */
+/** A video record (upload started, no file sent): enough for the admin pages. fileSize and mimeType are required by the initiate schema. */
 async function createVideo(user: WebUser, channelId: string, title: string): Promise<string> {
   const res = await apiFetch(user, '/api/videos/upload/initiate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', channelId },
-    body: JSON.stringify({ title, description: 'Created by the release E2E suite', isPublic: true }),
+    body: JSON.stringify({ title, description: 'Created by the release E2E suite', isPublic: true, fileSize: 1024, mimeType: 'video/mp4' }),
   });
   const text = await res.text();
   expect(res.status, `POST /api/videos/upload/initiate: ${text}`).toBeLessThan(300);
