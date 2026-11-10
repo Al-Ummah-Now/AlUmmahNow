@@ -7,7 +7,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { Hono } from 'hono';
-import { cleanTrashReason, isPurgeDue, purgeAfter, purgeCutoff, trashDaysLeft, type TrashItem } from '@al-ummah/shared-types';
+import { cleanTrashReason, isTrashPurgeDue, purgeAfter, purgeCutoff, trashDaysLeft, type TrashItem } from '@al-ummah/shared-types';
 import trashRouter from '../src/routers/trash.router';
 import { canManageTrash, isHourlyTick, runTrashCleanup } from '../src/lib/trash';
 import { insertContactMessage, softDeleteContactMessage } from '../src/lib/contact-store';
@@ -76,10 +76,10 @@ describe('shared 30-day helpers', () => {
     assert.equal(purgeCutoff(NOW), '2026-11-20T12:00:00.000Z');
     assert.equal(trashDaysLeft(ago(1).toISOString(), NOW), 29);
     assert.equal(trashDaysLeft(ago(31).toISOString(), NOW), 0);
-    assert.equal(isPurgeDue({ deletedAt: ago(29).toISOString(), purgeRequestedAt: null }, NOW), false);
-    assert.equal(isPurgeDue({ deletedAt: ago(30).toISOString(), purgeRequestedAt: null }, NOW), true);
-    assert.equal(isPurgeDue({ deletedAt: ago(1).toISOString(), purgeRequestedAt: NOW.toISOString() }, NOW), true);
-    assert.equal(isPurgeDue({ deletedAt: null, purgeRequestedAt: NOW.toISOString() }, NOW), false, 'a live item is never purged');
+    assert.equal(isTrashPurgeDue({ deletedAt: ago(29).toISOString(), purgeRequestedAt: null }, NOW), false);
+    assert.equal(isTrashPurgeDue({ deletedAt: ago(30).toISOString(), purgeRequestedAt: null }, NOW), true);
+    assert.equal(isTrashPurgeDue({ deletedAt: ago(1).toISOString(), purgeRequestedAt: NOW.toISOString() }, NOW), true);
+    assert.equal(isTrashPurgeDue({ deletedAt: null, purgeRequestedAt: NOW.toISOString() }, NOW), false, 'a live item is never purged');
     assert.equal(cleanTrashReason('  spam  '), 'spam');
     assert.equal(cleanTrashReason('   '), null);
     assert.equal(cleanTrashReason(42), null);

@@ -19,7 +19,7 @@ const remove = (reason: string) => adminApi(`/api/content/creator-tiers/${tierId
 
 test.describe.configure({ mode: 'serial' });
 
-test.describe('recently deleted', () => {
+test.describe('recently deleted (contact messages, themes, creator tiers)', () => {
   test.use({ storageState: storageStatePath('admin') });
 
   test.beforeAll(async ({}, testInfo) => {

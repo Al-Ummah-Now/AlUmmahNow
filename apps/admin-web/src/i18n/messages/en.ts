@@ -1968,6 +1968,7 @@ const en = {
     softNote: 'It is hidden at once and can be restored from Recently deleted for 30 days.',
     reasonHint: 'Shown in Recently deleted. Optional.',
     movedToBin: 'Deleted. It can be restored from Recently deleted for 30 days.',
+    otherAreas: 'Also deleted from:',
     viewDeleted: 'Recently deleted',
     deletedNotice: 'Deleted. It can be restored from Recently deleted until it is deleted permanently.',
   },
