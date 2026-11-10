@@ -737,6 +737,11 @@ export const EN_TRANSLATIONS: AppTranslations = {
     customThumbnailInput: 'Upload a custom thumbnail',
     batchGuideline: 'Batch uploads support 1-15 videos at once',
     batchFileInput: 'Select video files',
+    modeTabsLabel: 'How many videos',
+    modeSingle: 'Single video',
+    modeSingleHint: 'One video with full details',
+    modeBatch: 'Batch upload',
+    modeBatchHint: 'Up to 15 videos at once',
   },
 
   batch: {

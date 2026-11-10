@@ -870,6 +870,12 @@ export interface AppTranslations {
     customThumbnailInput: string;
     batchGuideline: string;
     batchFileInput: string;
+    /** Accessible name of the single/batch mode tab list on the upload page */
+    modeTabsLabel: string;
+    modeSingle: string;
+    modeSingleHint: string;
+    modeBatch: string;
+    modeBatchHint: string;
   };
 
   /**

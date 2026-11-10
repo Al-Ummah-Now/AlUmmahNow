@@ -737,6 +737,11 @@ export const AR_TRANSLATIONS: AppTranslations = {
     customThumbnailInput: 'رفع صورة مصغرة مخصصة',
     batchGuideline: 'يدعم الرفع الجماعي من 1 إلى 15 فيديو في المرة الواحدة',
     batchFileInput: 'اختر ملفات الفيديو',
+    modeTabsLabel: 'عدد الفيديوهات',
+    modeSingle: 'فيديو واحد',
+    modeSingleHint: 'فيديو واحد بكامل تفاصيله',
+    modeBatch: 'رفع جماعي',
+    modeBatchHint: 'حتى 15 فيديو في المرة الواحدة',
   },
 
   batch: {

@@ -31,8 +31,23 @@ test.describe('Upload form - metadata', () => {
   test('UPL-001 shows the upload modes and a labelled metadata form (en)', async ({ page }) => {
     await gotoUpload(page, 'en');
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(/upload/i);
-    await expect(page.getByTestId('upload-mode-single')).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByTestId('upload-mode-batch')).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByTestId('upload-mode-single')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByTestId('upload-mode-batch')).toHaveAttribute('aria-selected', 'false');
+    // The mode switch is a tab list that owns the upload panel, not a pair of buttons
+    const tabs = page.getByRole('tablist', { name: 'How many videos' });
+    await expect(tabs.getByRole('tab')).toHaveCount(2);
+    await expect(page.getByRole('tab', { name: 'Single video', selected: true })).toBeVisible();
+    await expect(page.getByRole('tabpanel', { name: 'Single video' })).toContainText(/./);
+    // Roving tabindex: arrows move focus, Enter selects
+    await page.getByTestId('upload-mode-single').focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(page.getByTestId('upload-mode-batch')).toBeFocused();
+    await expect(page.getByTestId('upload-mode-single')).toHaveAttribute('aria-selected', 'true');
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('tabpanel', { name: 'Batch upload' })).toBeVisible();
+    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('Space');
+    await expect(page.getByTestId('upload-mode-single')).toHaveAttribute('aria-selected', 'true');
 
     await selectVideo(page, await helpers.createTestVideo('upl-001.mp4', 16));
     // Selects are reachable by their visible labels
@@ -48,6 +63,18 @@ test.describe('Upload form - metadata', () => {
     await gotoUpload(page, 'ar');
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(ARABIC);
+    // Mode tabs: Arabic names, first tab on the right, ArrowLeft moves to the next tab in RTL
+    const single = page.getByTestId('upload-mode-single');
+    const batch = page.getByTestId('upload-mode-batch');
+    await expect(single).toHaveAccessibleName('فيديو واحد');
+    await expect(batch).toHaveAccessibleName('رفع جماعي');
+    const [singleBox, batchBox] = [await single.boundingBox(), await batch.boundingBox()];
+    expect(singleBox!.x).toBeGreaterThan(batchBox!.x);
+    await single.focus();
+    await page.keyboard.press('ArrowLeft');
+    await expect(batch).toBeFocused();
+    await page.keyboard.press('ArrowRight');
+    await expect(single).toBeFocused();
     await selectVideo(page, await helpers.createTestVideo('upl-002.mp4', 16));
 
     const category = page.getByTestId('category-select');
