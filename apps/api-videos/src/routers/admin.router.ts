@@ -14,6 +14,8 @@ import {
 	ADMIN_VIDEO_SORTS,
 	ADMIN_VIDEO_STATUSES,
 	ADMIN_JOB_STATUSES,
+	ADMIN_CREATOR_FILTERS,
+	MAX_BULK_CREATOR_TIER,
 } from '@al-ummah/shared-types';
 import { listChannels, listComments, listUsers, listVideos } from '../lib/admin/directory';
 import * as admin from '../lib/admin/service';
@@ -21,7 +23,7 @@ import { checkImage, checkThumbnailShapeFor, storeImage } from '../lib/admin/ima
 import { countJobs, getJob, listJobs, retryJob } from '../lib/admin/jobs';
 import { LegacyRestoreError } from '../lib/admin/legacy-restore';
 import { logger } from '../lib/logger';
-import { listCreators } from '../lib/admin/creators';
+import { bulkAssignTier, limitHitsSince, listCreators, tierCounts } from '../lib/admin/creators';
 import { assignTier, CreatorTierError, deleteTier, readAssignment, readTiers, saveTier } from '../lib/creatorTiers';
 
 type Env = { Bindings: admin.AdminServiceEnv & Record<string, unknown> };
@@ -220,7 +222,7 @@ app.post('/legacy-profiles/restore', async (c) => {
 // admin-api checks creators:manage and writes the audit row.
 const CreatorQuery = z.object({
 	q: z.string().max(200).optional(),
-	filter: z.enum(['all', 'needs_tier', 'assigned', 'limited']).optional(),
+	filter: z.enum(ADMIN_CREATOR_FILTERS).optional(),
 	tierId: z.string().max(40).optional(),
 	...page,
 });
@@ -238,7 +240,18 @@ const TierBody = z
 	.strict();
 const searchDb = (c: Context<Env>) => c.env.SEARCH_DB as D1Database;
 app.get('/creators', async (c) => ok(c, await listCreators(c.env as never, parse(CreatorQuery, c.req.query()))));
-app.get('/creator-tiers', async (c) => ok(c, { items: await readTiers(searchDb(c)) }));
+app.get('/creator-tiers', async (c) => {
+	const [items, counts, limitHits7d] = await Promise.all([readTiers(searchDb(c)), tierCounts(searchDb(c)), limitHitsSince(searchDb(c))]);
+	return ok(c, { items, counts, limitHits7d });
+});
+const TierBulk = z
+	.object({
+		userIds: z.array(z.string().min(1).max(128)).min(1).max(MAX_BULK_CREATOR_TIER),
+		tierId: z.string().min(1).max(40).nullable(),
+		dryRun: z.boolean().optional(),
+	})
+	.strict();
+app.post('/creators/tier', async (c) => ok(c, await bulkAssignTier(searchDb(c), parse(TierBulk, await body(c)) as { userIds: string[]; tierId: string | null; dryRun?: boolean }, actor(c))));
 app.post('/creator-tiers', async (c) => {
 	const input = parse(TierBody, await body(c));
 	if (!input.id) throw new admin.AdminError(400, 'invalid_request', 'id: Required');

@@ -4,13 +4,14 @@ import { getContentPermissions, getUser } from '@/lib/api/content';
 import type { AdminContentPermission, UserDetailView } from '@/lib/api/content-types';
 import { AdminApiError } from '@/lib/api/errors';
 import { getAdminSession } from '@/lib/auth';
-import { normalizeRole } from '@/lib/roles';
+import { canManageCreators, normalizeRole } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
 import { formatDate, formatNumber } from '@/i18n/translate';
 import { ErrorAlert, linkClass } from '@/components/ui';
 import { AuditCard, BackLink, Chip, MonoId, Notice, ReportsCard, SectionCard, StatGrid } from '@/components/content/parts';
 import { JobsPanel } from '@/components/content/jobs';
 import { UserAuthRequestsPanel } from '@/components/auth-requests/UserAuthRequestsPanel';
+import { UserCreatorTierPanel } from '@/components/creators/UserCreatorTierPanel';
 import { logger } from '@/lib/logger';
 import { UserActions } from './UserActions';
 
@@ -71,6 +72,8 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
         </Notice>
       )}
       {u.profileDeleted && <Notice testId="user-profile-deleted">{t('users.profileDeletedBanner')}</Notice>}
+
+      <UserCreatorTierPanel userId={u.id} userName={u.displayName || u.userName || u.id} canManage={canManageCreators(role)} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">

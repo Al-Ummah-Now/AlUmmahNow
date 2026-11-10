@@ -4,7 +4,7 @@
  * Creator tiers (admin-api /api/content/creators, /creator-tiers,
  * /users/:id/creator-tier). Videos-side data: never the Auth admin or Auth RBAC.
  */
-import type { AdminAuditEntry, AdminCreatorsPage, CreatorTier, CreatorTierAssignment } from '@al-ummah/shared-types';
+import type { AdminAuditEntry, AdminCreatorFilter, AdminCreatorsPage, CreatorTierAssignment, CreatorTierBulkResult, CreatorTiersList } from '@al-ummah/shared-types';
 import { AdminApiError, type ActionResult } from './errors';
 import { requestAdmin } from './request';
 
@@ -18,24 +18,24 @@ async function mutate<T>(endpoint: string, method: string, body?: unknown): Prom
     const data = await fetchAdmin<T>(endpoint, { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
     return { ok: true, data };
   } catch (error) {
-    if (error instanceof AdminApiError) return { ok: false, status: error.status, error: error.message };
+    if (error instanceof AdminApiError) return { ok: false, status: error.status, error: error.message, code: error.code };
     return { ok: false, status: 500, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
 
-export type CreatorFilter = 'all' | 'needs_tier' | 'assigned' | 'limited';
-
-export async function listCreators(params: { q?: string; filter?: CreatorFilter; page?: number } = {}): Promise<AdminCreatorsPage> {
+export async function listCreators(params: { q?: string; filter?: AdminCreatorFilter; tier?: string; page?: number } = {}): Promise<AdminCreatorsPage> {
   const query = new URLSearchParams();
   if (params.q) query.set('q', params.q);
   if (params.filter && params.filter !== 'all') query.set('filter', params.filter);
+  if (params.tier) query.set('tierId', params.tier);
   if (params.page && params.page > 1) query.set('page', String(params.page));
   query.set('pageSize', '50');
   return fetchAdmin<AdminCreatorsPage>(`/api/content/creators?${query}`);
 }
 
-export async function listCreatorTiers(): Promise<CreatorTier[]> {
-  return (await fetchAdmin<{ items: CreatorTier[] }>('/api/content/creator-tiers')).items;
+/** The tier definitions, how many users hold each, and the week's limit hits. */
+export async function listCreatorTiers(): Promise<CreatorTiersList> {
+  return fetchAdmin<CreatorTiersList>('/api/content/creator-tiers');
 }
 
 export async function creatorTierAudit(): Promise<AdminAuditEntry[]> {
@@ -46,9 +46,18 @@ export async function getUserCreatorTier(userId: string): Promise<{ assignment: 
   return fetchAdmin(`/api/content/users/${encodeURIComponent(userId)}/creator-tier`);
 }
 
-/** Assign a tier (its id) or remove it (null). Applies to the user's next request. */
-export async function setUserCreatorTier(userId: string, tierId: string | null): Promise<ActionResult<unknown>> {
-  return mutate(`/api/content/users/${encodeURIComponent(userId)}/creator-tier`, 'PUT', { tierId, source: 'admin' });
+/**
+ * Assign a tier (its id) or remove it (null). Applies to the user's next
+ * request. A super admin's automatic Unlimited changes only with
+ * `confirmSuperAdmin` (admin-api answers 409 super_admin_tier otherwise).
+ */
+export async function setUserCreatorTier(userId: string, tierId: string | null, opts: { confirmSuperAdmin?: boolean } = {}): Promise<ActionResult<unknown>> {
+  return mutate(`/api/content/users/${encodeURIComponent(userId)}/creator-tier`, 'PUT', { tierId, source: 'admin', ...(opts.confirmSuperAdmin ? { confirmSuperAdmin: true } : {}) });
+}
+
+/** One tier (or none: null) for the selected users; super admins are skipped. */
+export async function bulkSetCreatorTier(userIds: string[], tierId: string | null): Promise<ActionResult<CreatorTierBulkResult>> {
+  return mutate<CreatorTierBulkResult>('/api/content/creators/tier', 'POST', { userIds, tierId });
 }
 
 export interface TierForm {
