@@ -49,7 +49,9 @@ jobs:
   release-e2e:
     name: Release regressions (${{ inputs.env || 'qa' }})
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    # 163 tests on shared QA: green runs already took up to 25 min, so 25 cancelled
+    # every run once the suite grew (#657). 45 leaves headroom; tests keep their own limits.
+    timeout-minutes: 45
     env:
       E2E_ENV: ${{ inputs.env || 'qa' }}
       PLAYWRIGHT_VERSION: 1.56.1  # keep in step with apps/web/package.json
