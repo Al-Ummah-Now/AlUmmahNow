@@ -153,6 +153,8 @@ app.use('/api/*', channelIdMiddleware);
 // Sign Bunny Stream URLs in responses for CDN token authentication
 // (no-op unless BUNNY_SIGN_URLS is "true"; see middleware/bunny-signing.ts)
 app.use('/api/*', bunnySigningMiddleware);
+// Admin video details carry play/thumbnail URLs for the admin player preview
+app.use('/internal/admin/*', bunnySigningMiddleware);
 
 // ==========================================
 // RATE LIMITING
