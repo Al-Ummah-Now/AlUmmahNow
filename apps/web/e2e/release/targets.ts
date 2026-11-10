@@ -91,7 +91,9 @@ export function sinkEmail(prefix: string): string {
     appendFileSync(process.env.PROD_USER_FILE as string, `${email}\n`);
     return email;
   }
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@e2e.alummahnow.net`;
+  // CI's run tag (release-e2e.yml E2E_RUN_TAG) lets the upload budget count this run's users
+  const tag = /^[a-z0-9]{1,24}$/.test(process.env.E2E_RUN_TAG ?? '') ? `${process.env.E2E_RUN_TAG}-` : '';
+  return `${prefix}-${tag}${Date.now()}-${Math.random().toString(36).slice(2, 8)}@e2e.alummahnow.net`;
 }
 
 /**
