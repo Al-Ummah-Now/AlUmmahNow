@@ -89,7 +89,7 @@ describe('sectionData helpers', () => {
       actualStartTime: '2026-01-01T10:00:00Z',
     });
     expect(card.status).toBe('ended');
-    expect(card.thumbnailUrl).toBe('/logo.png');
+    expect(card.thumbnailUrl).toBe('/brand/logo-320.webp');
     expect(card.channel.id).toBe(CHANNEL_ID);
     expect(card.startedAt).toBeInstanceOf(Date);
   });

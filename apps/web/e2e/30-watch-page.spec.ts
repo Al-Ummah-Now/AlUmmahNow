@@ -227,9 +227,9 @@ test.describe('watch page - reactions (signed in)', () => {
 test.describe('watch page - report (signed in, not the owner)', () => {
   test.use({ storageState: AUTH_STATE.single });
 
-  for (const [locale, report, title, close] of [
-    ['en', 'Report', 'Report Content', 'Close'],
-    ['ar', 'إبلاغ', 'الإبلاغ عن محتوى', 'إغلاق'],
+  for (const [locale, report, title, close, spam] of [
+    ['en', 'Report', 'Report Content', 'Close', 'Spam or Misleading'],
+    ['ar', 'إبلاغ', 'الإبلاغ عن محتوى', 'إغلاق', 'بريد مزعج أو مضلل'],
   ] as const) {
     test(`WATCH-011 report dialog opens, requires a reason and closes without reporting (${locale})`, async ({ page, request }) => {
       const video = await qaLecture(request, 1);
@@ -243,7 +243,15 @@ test.describe('watch page - report (signed in, not the owner)', () => {
       // Submitting needs a reason: the submit button stays disabled until one is chosen
       const submit = dialog.locator('button[type="submit"]');
       await expect(submit).toBeDisabled();
-      await dialog.locator('#report-reason').selectOption('spam');
+      // The reason is a themed select: #report-reason is its trigger button, the native
+      // select behind it is hidden. Pick the reason from the menu the way a viewer does.
+      const reason = dialog.locator('#report-reason');
+      await reason.click();
+      const option = page.getByRole('menuitemradio', { name: spam, exact: true });
+      await expect(option).toBeVisible();
+      await option.click();
+      await expect(reason).toContainText(spam);
+      await expect(dialog.locator('select.tsf-native')).toHaveValue('spam');
       await expect(submit).toBeEnabled();
 
       await dialog.getByRole('button', { name: close }).first().click();

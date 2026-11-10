@@ -5,6 +5,7 @@ import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { LiveStream, PaginatedResponse } from '@al-ummah/shared-types';
 import { listLiveStreams } from '@/lib/api/livestreams';
 import { logger } from '@/lib/logger-client';
+import { BRAND_LOGO_LARGE } from '@/components/brand/BrandLogo';
 import { useOptionalWebSocketSubscription } from '@/lib/websocket/WebSocketProvider';
 import type { ApiLiveStream } from '@/components/ChannelSections/sectionData';
 
@@ -26,7 +27,7 @@ function toCardModel(stream: ApiLiveStream): LiveStream {
   return {
     id: stream.id,
     title: stream.title,
-    thumbnailUrl: stream.thumbnailUrl || '/logo.png',
+    thumbnailUrl: stream.thumbnailUrl || BRAND_LOGO_LARGE,
     status: stream.status === 'cancelled' ? 'ended' : stream.status,
     viewerCount: stream.currentViewers,
     channel: { id: stream.channelId, name: stream.channelName || '' },

@@ -167,3 +167,19 @@ describe('player skin CSS', () => {
     expect(declarationsFor('.video-js.vjs-fanous [data-icon="play"]')).toContain('round(nearest, var(--vjs-fanous-play-nudge), 1px)');
   });
 });
+
+describe('site theme rules leave the player dialogs alone', () => {
+  const bridge = fs.readFileSync(path.join(__dirname, '../../../theme/bridge.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+
+  it('the site dialog colours skip the shortcuts dialog, whose chips are drawn for the player surface', () => {
+    // A white site dialog under the player's cream key chips left them at 1.4:1 contrast in light mode
+    const dialogRules = bridge.match(/[^{}]*\[role=dialog\][^{}]*\{[^{}]*background[^{}]*\}/g) ?? [];
+    expect(dialogRules.length).toBeGreaterThan(0);
+    for (const rule of dialogRules) {
+      const selector = rule.slice(0, rule.indexOf('{'));
+      for (const part of selector.split(',').filter((s) => s.includes('[role=dialog]'))) {
+        expect(part).toContain(':not(.vjs-fanous-dialog)');
+      }
+    }
+  });
+});

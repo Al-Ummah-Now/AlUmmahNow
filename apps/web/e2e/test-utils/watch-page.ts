@@ -117,6 +117,17 @@ export async function keepControlsVisible(page: Page): Promise<void> {
   });
 }
 
+/**
+ * Plays from the big play button, then pauses. The redesigned control bar (and its
+ * settings button) stays hidden until playback has started once.
+ */
+export async function startThenPause(page: Page): Promise<void> {
+  await page.locator('.video-js .vjs-big-play-button').click();
+  await page.waitForFunction(() => (document.querySelector<HTMLVideoElement>('.video-js video')?.currentTime ?? 0) > 0.3, undefined, { timeout: 30000 });
+  await page.evaluate(() => document.querySelector<HTMLVideoElement>('.video-js video')!.pause());
+  await keepControlsVisible(page);
+}
+
 export function mediaState(page: Page) {
   return page.evaluate(() => {
     const v = document.querySelector<HTMLVideoElement>('.video-js video')!;

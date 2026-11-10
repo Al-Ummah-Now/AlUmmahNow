@@ -3,7 +3,6 @@
 import { HeaderSearch } from '@/components/Header/HeaderSearch';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { Bookmark, Clock, Compass, Heart, History, Home, Languages, Menu, Moon, ShieldCheck, Sun, Tv, BookOpen, X, type LucideIcon } from 'lucide-react';
@@ -13,6 +12,7 @@ import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { UnifiedNavigation } from '@/components/UnifiedNavigation';
 import { UnifiedNavigationRTL } from '@/components/UnifiedNavigation/rtl';
 import { UploadAction } from '@/components/Header/UploadAction';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 
 const L = {
   en: { browse: 'Browse', you: 'You', create: 'Create', more: 'More', history: 'History', watchLater: 'Watch later', liked: 'Liked videos', settings: 'Settings', search: 'Search videos', lightMode: 'Switch to light mode', darkMode: 'Switch to dark mode', other: 'العربية', otherLabel: 'التبديل إلى العربية', menu: 'Menu', close: 'Close menu' },
@@ -83,7 +83,7 @@ export function AppShell() {
           <button type="button" className="ic" aria-label={open ? c.close : c.menu} aria-expanded={open} data-testid="nav-drawer-toggle" onClick={() => setOpen(!open)}><Menu aria-hidden="true" /></button>
           <UploadAction />
           <Link href={`${base}/`} className="ah-brand" aria-label={t.a11y.goToHomePage}>
-            <Image src="/logo.png" alt="" width={32} height={32} className="ah-logo" />
+            <BrandLogo className="ah-logo" />
             <span>{t.common.appName}</span>
           </Link>
         </div>
