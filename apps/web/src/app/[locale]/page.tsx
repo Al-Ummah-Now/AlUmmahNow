@@ -11,7 +11,7 @@ import { getNextVideosCursor } from "./videos/VideosPageClient";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { useLanguage } from "@/hooks/useLanguage";
 import { ContinueWatchingShelf } from "@/components/history/ContinueWatchingShelf";
-import { HomeHero } from "@/components/ThemeDemo/HomeHero";
+import { HomeHero, HomeHeroPlaceholder } from "@/components/ThemeDemo/HomeHero";
 
 const VideosPage: React.FC = () => {
   const { t, isRTL } = useLanguage();
@@ -67,6 +67,8 @@ const VideosPage: React.FC = () => {
     fetchVideos(null);
   }, [fetchVideos]);
 
+  const featured = videos.find((v) => v.id !== 'e42e5deb-c86a-40b0-b8ec-6072fc550dba');
+
   const handleNextPage = () => {
     if (nextCursor) {
       setCursor(nextCursor); // Update the cursor in the query state
@@ -82,7 +84,7 @@ const VideosPage: React.FC = () => {
           style={{ direction: isRTL ? "rtl" : "ltr" }}
         >
 <ContinueWatchingShelf />
-{videos.find((v) => v.id !== 'e42e5deb-c86a-40b0-b8ec-6072fc550dba') && <HomeHero video={videos.find((v) => v.id !== 'e42e5deb-c86a-40b0-b8ec-6072fc550dba')!} />}
+{featured ? <HomeHero video={featured} /> : loading && videos.length === 0 && <HomeHeroPlaceholder />}
 <h1 className="home-h text-2xl font-bold text-black dark:text-white mb-4">{t.video.videos}</h1>
           {loading && videos.length === 0 ? (
             // Card-sized placeholders reserve the grid's space so the cards
