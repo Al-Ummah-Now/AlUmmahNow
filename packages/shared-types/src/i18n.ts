@@ -1569,6 +1569,37 @@ export interface AppTranslations {
     saveFailed: string;
     createAndAdd: string;
     channelRequired: string;
+    /** Upload page: pick or create playlists for new uploads */
+    upload: {
+      label: string;
+      hint: string;
+      batchLabel: string;
+      batchHint: string;
+      rowLabel: string;
+      sameAsBatch: string;
+      customize: string;
+      useBatch: string;
+      choose: string;
+      noneSelected: string;
+      selectedCount: string;
+      searchLabel: string;
+      searchPlaceholder: string;
+      noMatches: string;
+      remove: string;
+      newPlaylist: string;
+      descriptionOptional: string;
+      create: string;
+      creating: string;
+      cancel: string;
+      created: string;
+      locked: string;
+      addingTo: string;
+      added: string;
+      willRetryOne: string;
+      willRetry: string;
+      notAddedOne: string;
+      notAdded: string;
+    };
   };
 
   /**

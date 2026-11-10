@@ -360,6 +360,17 @@ describe('retry runner', () => {
     assert.deepEqual(SERVICE_RETRIES.processor.paths, ['/dlq/replay']);
   });
 
+  it('retries a failed upload playlist add through the api-videos binding', async () => {
+    const calls: { url: string; body: string }[] = [];
+    const VIDEOS = { fetch: async (url: string, init?: RequestInit) => (calls.push({ url, body: String(init?.body) }), new Response('{}', { status: 200 })) };
+    const ok = await runRetry(env({ VIDEOS }), { kind: 'service', service: 'api-videos', path: '/internal/playlist-adds/retry', body: { videoId: 'v1', playlistId: 'p1' } }, '1');
+    assert.equal(ok.status, 'resolved');
+    assert.deepEqual(calls, [{ url: 'https://api-videos.internal/internal/playlist-adds/retry', body: '{"videoId":"v1","playlistId":"p1"}' }]);
+    const refused = await runRetry(env({ VIDEOS }), { kind: 'service', service: 'api-videos', path: '/internal/admin/videos/delete' }, '1');
+    assert.equal(refused.ok, false);
+    assert.equal(calls.length, 1);
+  });
+
   it('keeps the item open with the reason when the retry fails, dismisses a vanished item', async () => {
     const failing = { fetch: async () => new Response('boom', { status: 500 }) };
     assert.equal((await runRetry(env({ PROCESSOR: failing }), { kind: 'service', service: 'processor', path: '/dlq/replay' }, '1')).status, 'open');

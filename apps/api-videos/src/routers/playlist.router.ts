@@ -9,6 +9,7 @@ import { PlaylistDelete } from '../endpoints/playlist/playlistDelete';
 import { PlaylistsList } from '../endpoints/playlist/playlistsList';
 import { PlaylistAddVideo } from '../endpoints/playlist/playlistAddVideo';
 import { PlaylistRemoveVideo } from '../endpoints/playlist/playlistRemoveVideo';
+import { PlaylistUploadAddsCreate, PlaylistUploadAddsStatus } from '../endpoints/playlist/playlistUploadAdds';
 
 const app = new Hono();
 
@@ -18,6 +19,9 @@ export const playlistRouter = fromHono(app, { base: '/api/playlists' });
 // CRUD operations
 playlistRouter.get('/', PlaylistsList);           // GET /api/playlists - List all playlists
 playlistRouter.post('/', PlaylistCreate);          // POST /api/playlists - Create playlist
+// New uploads → playlists (queued; registered before /:id)
+playlistRouter.post('/upload-adds', PlaylistUploadAddsCreate);  // POST /api/playlists/upload-adds
+playlistRouter.get('/upload-adds', PlaylistUploadAddsStatus);   // GET /api/playlists/upload-adds?videoIds=
 playlistRouter.get('/:id', PlaylistFetch);         // GET /api/playlists/:id - Get playlist
 playlistRouter.patch('/:id', PlaylistUpdate);      // PATCH /api/playlists/:id - Update playlist
 playlistRouter.delete('/:id', PlaylistDelete);     // DELETE /api/playlists/:id - Delete playlist

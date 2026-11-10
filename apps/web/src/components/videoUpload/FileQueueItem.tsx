@@ -29,6 +29,8 @@ interface FileQueueItemProps {
   onRetry: () => void;
   /** This row's category picker (batch uploader) */
   categorySlot?: React.ReactNode;
+  /** This row's playlists (batch uploader) */
+  playlistSlot?: React.ReactNode;
 }
 
 export function FileQueueItem({
@@ -40,6 +42,7 @@ export function FileQueueItem({
   onCancel,
   onRetry,
   categorySlot,
+  playlistSlot,
 }: FileQueueItemProps) {
   const { t, lang } = useLanguage();
   // Processing result pushed in real time (shown here instead of a toast, NotificationCenter)
@@ -180,6 +183,12 @@ export function FileQueueItem({
           {categorySlot && (
             <div className="mb-3 max-w-md" data-testid="batch-file-category">
               {categorySlot}
+            </div>
+          )}
+
+          {playlistSlot && (
+            <div className="mb-3 max-w-md" data-testid="batch-file-playlists">
+              {playlistSlot}
             </div>
           )}
 

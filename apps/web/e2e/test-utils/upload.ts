@@ -242,3 +242,17 @@ export async function failTusPatches(page: Page, status = 403, times?: number) {
   await page.route(TUS_URL_PATTERN, handler);
   return () => page.unroute(TUS_URL_PATTERN, handler);
 }
+
+/**
+ * Whether the target has upload playlists (POST/GET /api/playlists/upload-adds).
+ * Before they are deployed, GET /api/playlists/upload-adds is read as a
+ * playlist id (404); once deployed it needs a sign-in (401).
+ */
+export async function uploadPlaylistsDeployed(): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_URL}/api/playlists/upload-adds?videoIds=probe`);
+    return res.status !== 404;
+  } catch {
+    return false;
+  }
+}

@@ -2,6 +2,8 @@ import { reportServerError, withErrorReporting, type ErrorReporterEnv } from '@a
 import { SUBSCRIPTION_IMPORT_CRON, importPendingSubscriptions } from './lib/subscription-import';
 import { handleProcessingCheckBatch, sweepProcessingVideos } from './lib/processing/loop';
 import { handleReaperBatch, isReaperMessage, sweepStaleUploads } from './lib/uploads/reaper';
+import { handlePlaylistAddBatch, isPlaylistAddMessage } from './lib/playlistUploadAdds';
+import { createPlaylistAddsInternalRouter } from './endpoints/playlist/playlistAddsInternal';
 
 /** Every 10 minutes: start a processing-check loop for any video stuck without one */
 export const PROCESSING_SWEEP_CRON = '*/10 * * * *';
@@ -219,6 +221,8 @@ app.route('/internal/processing', createProcessingInternalRouter() as never);
 app.route('/internal/uploads', createUploadsInternalRouter() as never);
 // Short/video format backfill (ops; admins go through admin-api)
 app.route('/internal/video-format', createVideoFormatInternalRouter() as never);
+// New uploads → playlists: the admin Errors page's Retry on a failed add
+app.route('/internal/playlist-adds', createPlaylistAddsInternalRouter() as never);
 
 // ==========================================
 // PROFILE/CHANNEL IMAGE UPLOADS
@@ -560,7 +564,8 @@ async function handleFetch(request: Request, env: AppBindings, ctx: ExecutionCon
  * Queue consumers, by queue name (prod name, or with its -stage / -qa suffix):
  * - al-ummah-now-admin-jobs*: heavy admin actions (lib/admin/jobs.ts).
  * - otherwise PROCESSING_CHECK_QUEUE, which carries the per-video
- *   processing-check loop and the upload reaper's checks (kind "upload-reaper").
+ *   processing-check loop, the upload reaper's checks (kind "upload-reaper")
+ *   and new uploads' playlist adds (kind "playlist-add").
  * R2 writes go through the search-sync wrapper so changes reach the search
  * index and ownership rows like any API write.
  */
@@ -575,10 +580,13 @@ async function queue(batch: MessageBatch<unknown>, env: AppBindings, ctx: Execut
 		const isFormat = (m: { body: unknown }) => (m.body as { kind?: unknown } | null)?.kind === VIDEO_FORMAT_JOB_KIND;
 		for (const msg of batch.messages.filter(isFormat)) await handleVideoFormatMessage(synced, msg);
 		const rest = batch.messages.filter((m) => !isFormat(m));
+		// New uploads → playlists (lib/playlistUploadAdds.ts)
+		const playlistAdds = rest.filter((m) => isPlaylistAddMessage(m.body));
 		const reaper = rest.filter((m) => isReaperMessage(m.body));
-		const processing = rest.filter((m) => !isReaperMessage(m.body));
+		const processing = rest.filter((m) => !isReaperMessage(m.body) && !isPlaylistAddMessage(m.body));
 		if (processing.length) await handleProcessingCheckBatch({ messages: processing }, synced);
 		if (reaper.length) await handleReaperBatch({ messages: reaper }, synced);
+		if (playlistAdds.length) await handlePlaylistAddBatch({ messages: playlistAdds }, synced, ctx);
 	} catch (error) {
 		// The batch is retried by the queue; the failure is flagged on the admin Errors page
 		reportServerError('api-videos', env as never, ctx, error, { route: `queue:${batch.queue}`, extra: { messages: batch.messages.length } });

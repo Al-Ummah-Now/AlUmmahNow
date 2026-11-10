@@ -1,4 +1,5 @@
 import { Num, Str } from "chanfana";
+import { canManagePlaylist } from "../../lib/channelAccess";
 import { string, z } from "zod";
 import { Playlist, PaginationResponse, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
@@ -72,11 +73,13 @@ export class PlaylistsList extends OptionalAuthRoute {
         if (channelFilter) {
             // R2 has no secondary index, so scan pages and filter by channel.
             const matches: PlaylistType[] = [];
+            // The channel's managers (owner, admin, editor) see its private playlists too
+            const manages = await canManagePlaylist(c.env as never, { channelId: channelFilter }, userId);
             let scanCursor: string | undefined;
             for (let page = 0; page < CHANNEL_SCAN_MAX_PAGES; page++) {
                 const result = await repository.listObjects(CHANNEL_SCAN_PAGE_SIZE, scanCursor);
                 for (const playlist of result.items || []) {
-                    if (playlist.channelId === channelFilter && canViewPlaylist(playlist, userId) && !isSystemPlaylist(playlist)) {
+                    if (playlist.channelId === channelFilter && (canViewPlaylist(playlist, userId) || (manages && !playlist.isDeleted && !playlist.isHidden)) && !isSystemPlaylist(playlist)) {
                         matches.push(playlist);
                     }
                 }

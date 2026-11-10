@@ -26,6 +26,8 @@ interface BatchUploadQueueProps {
   onRetryFile: (fileId: string) => void;
   /** Category picker for a row (batch uploader) */
   renderCategory?: (file: UploadQueueItem) => React.ReactNode;
+  /** Playlist picker for a row (batch uploader: the batch's playlists or its own) */
+  renderPlaylists?: (file: UploadQueueItem) => React.ReactNode;
 }
 
 export function BatchUploadQueue({
@@ -43,6 +45,7 @@ export function BatchUploadQueue({
   onCancelFile,
   onRetryFile,
   renderCategory,
+  renderPlaylists,
 }: BatchUploadQueueProps) {
   const { t, isRTL: _isRTL } = useLanguage();
 
@@ -299,6 +302,7 @@ export function BatchUploadQueue({
               onCancel={() => onCancelFile(file.id)}
               onRetry={() => onRetryFile(file.id)}
               categorySlot={renderCategory?.(file)}
+              playlistSlot={renderPlaylists?.(file)}
             />
           ))
         )}

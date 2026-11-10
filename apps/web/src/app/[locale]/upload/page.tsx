@@ -28,6 +28,13 @@ import { UploadsByInvitationNotice } from "@/components/VideosNotices";
 import { login } from "@/lib/actions";
 import Link from "next/link";
 import { can } from "@al-ummah/shared-types";
+import { useChannelPlaylists } from "@/hooks/useChannelPlaylists";
+import { usePlaylistAdds } from "@/hooks/usePlaylistAdds";
+import { useBatchPlaylists } from "@/hooks/useBatchPlaylists";
+import { PlaylistPicker } from "@/components/videoUpload/PlaylistPicker";
+import { PlaylistAddNotices } from "@/components/videoUpload/PlaylistAddNotices";
+import { BatchRowPlaylists } from "@/components/videoUpload/BatchRowPlaylists";
+import { newBatchId, orderKeyFor } from "@/lib/upload/playlist-adds";
 
 
 const UploadPage: React.FC = () => {
@@ -91,6 +98,37 @@ const UploadPage: React.FC = () => {
       setUploadError(error);
     },
   });
+
+  // Playlists: the channel's list (both modes), the adds this page asked for,
+  // and the batch's choice (one for every video, each row can have its own)
+  const channelPlaylists = useChannelPlaylists(uploadChannelId);
+  const { queue: queuePlaylistAdds, notices: playlistNotices } = usePlaylistAdds(uploadChannelId);
+  const batchPlaylists = useBatchPlaylists(files, isUploading, queuePlaylistAdds);
+  const singlePlaylists = useMemo(() => ({
+    list: channelPlaylists.playlists,
+    loading: channelPlaylists.loading,
+    failed: channelPlaylists.failed,
+    create: channelPlaylists.create,
+  }), [channelPlaylists.playlists, channelPlaylists.loading, channelPlaylists.failed, channelPlaylists.create]);
+  const handleSingleVideoReady = useCallback((videoId: string, playlistIds: string[]) => {
+    queuePlaylistAdds(videoId, playlistIds, orderKeyFor(newBatchId(), 0));
+  }, [queuePlaylistAdds]);
+  const renderRowPlaylists = (file: UploadQueueItem) => {
+    if (!file.videoId || file.alreadyUploaded || file.status === 'cancelled') return null;
+    return (
+      <BatchRowPlaylists
+        rowId={file.id}
+        playlists={channelPlaylists.playlists}
+        loading={channelPlaylists.loading}
+        failed={channelPlaylists.failed}
+        batch={batchPlaylists.batchPlaylists}
+        override={batchPlaylists.overrides[file.id]}
+        committed={batchPlaylists.committed[file.id]}
+        onOverride={(ids) => batchPlaylists.setRowPlaylists(file.id, ids)}
+        onCreate={channelPlaylists.create}
+      />
+    );
+  };
 
   // Processing status of what this page uploaded: the single upload, and every
   // batch file whose bytes are uploaded
@@ -375,6 +413,9 @@ const UploadPage: React.FC = () => {
           />
         )}
 
+        {/* Playlist adds being retried, or that will not happen (never the raw error) */}
+        <PlaylistAddNotices notices={playlistNotices} playlists={channelPlaylists.playlists} />
+
         {/* Upload complete: the video now processes on the server */}
         {uploadComplete && uploadedVideo && (
           <UploadProcessingCard
@@ -463,6 +504,8 @@ const UploadPage: React.FC = () => {
                 className="w-full"
                 resumeVideoId={resumeVideoId}
                 resumeTitle={resumeTitle}
+                playlists={singlePlaylists}
+                onVideoReady={handleSingleVideoReady}
               />
             </div>
           </>
@@ -486,7 +529,8 @@ const UploadPage: React.FC = () => {
             {/* Settings for the whole batch */}
             <section className="mb-6 rounded-lg border border-border bg-background p-4" aria-labelledby="batch-settings-title" data-testid="batch-settings">
               <h2 id="batch-settings-title" className="mb-3 text-sm font-semibold text-foreground">{t.batch.batchSettings}</h2>
-              <div className="max-w-md">
+              <div className="grid max-w-3xl gap-4 md:grid-cols-2">
+                <div>
                 <CategorySelector
                   id="batch-category-default"
                   testId="batch-category-default"
@@ -494,6 +538,20 @@ const UploadPage: React.FC = () => {
                   hint={t.batch.categoryForAllHint}
                   value={batchCategory}
                   onChange={setBatchCategory}
+                  disabled={isInitiating}
+                />
+                </div>
+                <PlaylistPicker
+                  id="batch-playlists-default"
+                  testId="batch-playlists-default"
+                  label={t.playlist.upload.batchLabel}
+                  hint={t.playlist.upload.batchHint}
+                  playlists={channelPlaylists.playlists}
+                  loading={channelPlaylists.loading}
+                  failed={channelPlaylists.failed}
+                  selected={batchPlaylists.batchPlaylists}
+                  onChange={batchPlaylists.setBatchPlaylists}
+                  onCreate={channelPlaylists.create}
                   disabled={isInitiating}
                 />
               </div>
@@ -549,6 +607,7 @@ const UploadPage: React.FC = () => {
                   onCancelFile={cancelUpload}
                   onRetryFile={retryUpload}
                   renderCategory={renderRowCategory}
+                  renderPlaylists={renderRowPlaylists}
                 />
               </div>
             )}
