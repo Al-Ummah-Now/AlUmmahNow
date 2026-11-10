@@ -132,6 +132,16 @@ export type ProcessingStatus = 'uploading' | 'processing' | 'ready' | 'failed' |
  * Where the uploader's processing notification leads: a ready video opens on
  * its watch page; a failed one opens in the studio (its edit page) to fix it.
  */
+/**
+ * Dedupe key of the uploader's "ready" / "failed" notification: one per
+ * video, result and processing attempt. A redelivered message is stored once;
+ * a new result after an admin retry or a re-upload carries a new attempt.
+ */
+export function uploadResultDedupeKey(videoId: string, status: 'ready' | 'failed', attempt?: unknown): string {
+  const base = `upload:${status}:${videoId}`;
+  return typeof attempt === 'string' && attempt ? `${base}:${attempt.slice(0, 80)}` : base;
+}
+
 export function uploadResultActionUrl(videoId: string, status: 'ready' | 'failed'): string {
   return status === 'ready' ? `/video/${videoId}` : `/video/${videoId}/edit`;
 }

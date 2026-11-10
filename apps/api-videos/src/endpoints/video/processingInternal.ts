@@ -21,7 +21,7 @@ import {
 	startProcessingLoop,
 	syncVideoFromBunny,
 } from '../../lib/processing/loop';
-import { announceProcessingResult } from '../../lib/notification-events';
+import { announceAndRecordProcessingResult, pendingProcessingResult } from '../../lib/notification-events';
 
 const MAX_IDS = 100;
 
@@ -39,6 +39,7 @@ interface HealthVideo {
 	playUrl?: string;
 	processingIssue?: { kind: string; reason?: string; at: string };
 	processingCheck?: Record<string, unknown>;
+	processingAnnounced?: 'ready' | 'failed';
 }
 
 function parseIds(body: unknown): string[] | null {
@@ -215,7 +216,11 @@ export function createProcessingInternalRouter() {
 				await new R2Repository<HealthVideo>(c.env.videos).updateObject(id, (fresh) => {
 					if (!fresh.processingIssue && fresh.uploadStatus !== 'failed') return false;
 					delete fresh.processingIssue;
-					if (fresh.uploadStatus === 'failed') fresh.uploadStatus = 'processing';
+					if (fresh.uploadStatus === 'failed') {
+						fresh.uploadStatus = 'processing';
+						// The retried attempt gets its own "ready" / "failed" announcement
+						delete fresh.processingAnnounced;
+					}
 					return true;
 				});
 				results.push({ videoId: id, ...(await startProcessingLoop(c.env, id, { reason: 'admin-retry', force: true, initialDelaySeconds: 0 })) });
@@ -248,8 +253,21 @@ export function createProcessingInternalRouter() {
 				fresh.dateModified = now;
 				return true;
 			});
-			if (saved && transitioned) await announceProcessingResult(c.env as never, { ...saved, id }, 'failed');
-			results.push({ videoId: id, found: !!saved, changed: !!saved && transitioned });
+			// Tell the uploader. Also repeats an earlier announcement that never
+			// landed, so re-running mark-failed recovers a lost notification.
+			let announced = true;
+			if (saved && pendingProcessingResult(saved) === 'failed') {
+				try {
+					await announceAndRecordProcessingResult(c.env as never, { ...saved, id }, 'failed');
+				} catch (error) {
+					announced = false;
+					logger.error('[ProcessingAdmin] Failed notification not queued; run mark-failed again', {
+						videoId: id,
+						error: error instanceof Error ? error.message : String(error),
+					});
+				}
+			}
+			results.push({ videoId: id, found: !!saved, changed: !!saved && transitioned, announced });
 		}
 		return c.json({ success: true, result: { results } });
 	});

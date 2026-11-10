@@ -19,18 +19,29 @@ import {
  * polled with backoff as well (5 s → 30 s), so the status still arrives
  * without a websocket. Each video stops being polled once ready or failed.
  * A failed poll keeps the video "processing"; errors are never shown.
+ * `forget(id)` drops a video's phase when it is uploaded again (a re-upload of
+ * the same video), so its earlier result is not shown for the new upload.
  */
 export function useProcessingStatus(
   videoIds: string[],
   channelId: string,
   userId: string | undefined,
-): Record<string, ProcessingPhase> {
+): { phases: Record<string, ProcessingPhase>; forget: (videoId: string) => void } {
   const [phases, setPhases] = useState<Record<string, ProcessingPhase>>({});
   const phasesRef = useRef(phases);
   phasesRef.current = phases;
 
   const settle = useCallback((videoId: string, phase: ProcessingPhase) => {
     setPhases((prev) => (prev[videoId] === phase || isTerminalPhase(prev[videoId]) ? prev : { ...prev, [videoId]: phase }));
+  }, []);
+
+  const forget = useCallback((videoId: string) => {
+    setPhases((prev) => {
+      if (!(videoId in prev)) return prev;
+      const next = { ...prev };
+      delete next[videoId];
+      return next;
+    });
   }, []);
 
   const tracked = useMemo(() => new Set(videoIds.filter(Boolean)), [videoIds]);
@@ -79,5 +90,5 @@ export function useProcessingStatus(
     };
   }, [pendingKey, channelId, settle]);
 
-  return phases;
+  return { phases, forget };
 }

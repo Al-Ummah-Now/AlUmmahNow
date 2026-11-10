@@ -7,7 +7,7 @@ import { eraseUserPostInteractions } from './lib/post-counters';
 import { applyModerationToSearchIndex, handleSearchIndexSync } from './handlers/search-index';
 import { recordViewRollup, recordWatchTimeRollup } from './lib/analytics-rollup';
 import { CounterBatch } from './lib/analytics-counters';
-import { notifyLiveStream, notifyVideoProcessing, ProcessingStatus, uploadResultActionUrl } from './lib/websocket-notify';
+import { notifyLiveStream, notifyVideoProcessing, ProcessingStatus, uploadResultActionUrl, uploadResultDedupeKey } from './lib/websocket-notify';
 import {
   eraseUserNotifications,
   fanoutNotificationPage,
@@ -448,7 +448,7 @@ export class MessageProcessor {
   }
 
   private async processUploadLifecycleMessage(message: AlUmmahMessage, env: QueueEnvironment): Promise<void> {
-    const payload = message.payload as { videoId?: string; userId?: string; title?: string; error?: string; duration?: number };
+    const payload = message.payload as { videoId?: string; userId?: string; title?: string; error?: string; duration?: number; attempt?: unknown };
     if (!payload.videoId) {
       throw new Error('Upload message missing required field: videoId');
     }
@@ -474,7 +474,7 @@ export class MessageProcessor {
         params: { videoTitle: payload.title || '' },
         actionUrl: uploadResultActionUrl(payload.videoId, status),
         entityId: payload.videoId,
-        dedupeKey: `upload:${status}:${payload.videoId}`,
+        dedupeKey: uploadResultDedupeKey(payload.videoId, status, payload.attempt),
       });
       notificationId = stored ? stored.id : null;
     }
