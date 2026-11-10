@@ -93,6 +93,10 @@ test.describe('Release: Contact us', () => {
     await signInAsAdmin(page, context);
     page.on('dialog', (dialog) => void dialog.accept());
 
+    // Self-healing: earlier runs that died before their cleanup left messages behind.
+    // Delete this suite's own leftovers (sink senders, "Release rc…" names) older than an hour.
+    await sweepLeftovers(page);
+
     const inbox = `${target().adminWeb}/contact?q=${RUN}`;
     await page.goto(inbox);
     const nav = page.getByRole('navigation').getByRole('link', { name: /Contact messages|رسائل التواصل/ });
@@ -151,6 +155,26 @@ test.describe('Release: Contact us', () => {
     await expect(page.getByTestId('contact-empty')).toBeVisible();
   });
 });
+
+/** Deletes old "Release rc…" messages from E2E sink senders (at most 20 per run). */
+async function sweepLeftovers(page: Page): Promise<void> {
+  await page.goto(`${target().adminWeb}/contact?q=${encodeURIComponent('Release rc')}`);
+  await expect(page.getByTestId('contact-total')).toBeVisible();
+  const cutoff = Date.now() - 3600_000;
+  const stale = await page.getByTestId('contact-row').evaluateAll(
+    (rows, before) =>
+      rows
+        .filter((row) => /@e2e\.alummahnow\.net$/.test(row.querySelector('td span[dir="ltr"]')?.textContent?.trim() ?? ''))
+        .filter((row) => Date.parse(row.querySelector('time')?.getAttribute('datetime') ?? '') < before)
+        .map((row) => row.getAttribute('data-message-id') as string),
+    cutoff,
+  );
+  for (const id of stale.slice(0, 20)) {
+    await page.goto(`${target().adminWeb}/contact/${id}`);
+    await page.getByTestId('contact-delete').click();
+    await expect(page).toHaveURL(new RegExp(`${target().adminWeb}/contact(\\?|$)`), { timeout: 30000 });
+  }
+}
 
 async function signInAsAdmin(page: Page, context: import('@playwright/test').BrowserContext): Promise<void> {
   const email = sinkEmail('rel-contact-admin');
