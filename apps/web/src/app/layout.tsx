@@ -7,6 +7,7 @@ import { headers } from "next/headers";
 import { DEFAULT_LOCALE, LOCALE_REQUEST_HEADER } from "@/lib/i18n/locales";
 import { getTextDirection, isLocaleSupported } from "@/lib/i18n/utils";
 import "./globals.css";
+import "@/theme/font-faces.css";
 import "@/theme/fonts.css";
 import "@/theme/materials.css";
 import "@/theme/bridge.css";

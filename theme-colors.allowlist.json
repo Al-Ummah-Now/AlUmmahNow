@@ -255,10 +255,6 @@
   "apps/web/src/styles/keyboard-feedback.css": 2,
   "apps/web/src/styles/video-player.css": 11,
   "apps/web/src/theme/bridge.css": 10,
-  "apps/web/src/theme/materials.css": 9,
-  "apps/web/src/theme/materials/lantern.css": 3,
-  "apps/web/src/theme/materials/nahas.css": 3,
-  "apps/web/src/theme/materials/zujaj.css": 3,
   "apps/web/src/theme/pages.css": 12,
   "apps/web/src/theme/system.css": 42
 }

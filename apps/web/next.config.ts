@@ -1,11 +1,5 @@
 import { createRequire } from "node:module";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-// Player chrome tokens for the theme this build ships (docs/specs/VIDEO-PLAYER.md section 6).
-// Only the active theme's file is bundled, so a build carries one theme, as THEMES.md requires.
-const activeTheme = /^[a-z0-9-]+$/.test(process.env.ACTIVE_THEME ?? "") ? process.env.ACTIVE_THEME! : "lantern";
-const playerTokens = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../packages/fanous-tokens/generated-player", `${activeTheme}.css`);
 
 // jose's default Node build verifies JWTs through node:crypto, and workerd's
 // node:crypto EC support makes ES256 signature checks fail on Cloudflare
@@ -28,14 +22,14 @@ const nextConfig = {
             config.devtool = "source-map";
         }
         const resolve = (config.resolve ?? {}) as { alias?: Record<string, string> };
-        resolve.alias = { ...(resolve.alias ?? {}), jose$: joseWebCrypto, "@fanous/player-tokens.css$": playerTokens };
+        resolve.alias = { ...(resolve.alias ?? {}), jose$: joseWebCrypto };
         config.resolve = resolve;
         return config;
     },
 
     // Empty turbopack config to silence Next.js 16 warning
     turbopack: {
-        resolveAlias: { jose: path.relative(process.cwd(), joseWebCrypto), "@fanous/player-tokens.css": path.relative(process.cwd(), playerTokens) },
+        resolveAlias: { jose: path.relative(process.cwd(), joseWebCrypto) },
     },
 
     // Increase body size limit for file uploads (default is 1MB)

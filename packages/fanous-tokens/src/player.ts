@@ -1,6 +1,7 @@
 // Player chrome tokens: themes/<theme>/player.json -> generated-player/<theme>.css.
 // `player.ts` writes the CSS, `player.ts --check` fails on an invalid theme or stale output.
-// The web app imports only the active theme's file (ACTIVE_THEME, default lantern) at build time.
+// The videos site now compiles player chrome from its theme packages (packages/theme-packages), which a test
+// keeps equal to these files; these remain the source for the player harness and native apps.
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';

@@ -84,7 +84,7 @@ import { useVideoPlayerI18n } from '@/lib/video/i18n';
 import { useVideoWebSocket } from '@/hooks/useVideoWebSocket';
 import { useWatchProgress } from '@/hooks/useWatchProgress';
 import { formatResumeTime, resumePosition, startOverStillRelevant } from '@/lib/video/resume';
-import '@fanous/player-tokens.css';
+import '@/theme/player-themes.css';
 import '@/styles/video-player.css';
 import '@/styles/player-skin.css';
 import '@/styles/keyboard-feedback.css';
