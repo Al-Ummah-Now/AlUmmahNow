@@ -209,7 +209,7 @@ describe('filters ask for names, never raw ids', () => {
       { kind: 'pick', name: 'channelId', label: 'Channel', suggest: 'channel' },
       { kind: 'pick', name: 'ownerId', label: 'Owner', suggest: 'user' },
     ];
-    const Form = FilterForm as unknown as React.FC<React.ComponentProps<typeof FilterForm>>;
+    const Form = FilterForm as unknown as React.FC<{ action: string; label: string; testId: string; fields: FilterField[]; values: Record<string, string> }>;
     const html = render(React.createElement(Form, { action: '/videos', label: 'Videos', testId: 'vf', fields, values: { channelId: 'ch_1' } }));
     assert.equal((html.match(/role="combobox"/g) ?? []).length, 2, 'the search box and the empty owner picker');
     assert.match(html, /data-testid="vf-channelId-chip" data-id="ch_1"/);
