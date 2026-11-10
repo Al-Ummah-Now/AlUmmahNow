@@ -191,9 +191,9 @@ export default function UploadDefaultsPage() {
         {confirmDialog}
 
         {actionError && (
-          <div role="alert" data-testid="templates-action-error" className="mb-6 flex items-center gap-2 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-            <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
-            <p className="text-sm text-red-600 dark:text-red-400">{actionError}</p>
+          <div role="alert" data-testid="templates-action-error" className="mb-6 flex items-center gap-2 p-4 rounded-lg border border-[color-mix(in_srgb,var(--fanous-color-error-fill)_40%,transparent)] bg-[color-mix(in_srgb,var(--fanous-color-error-fill)_14%,var(--fanous-color-surface))] text-[var(--fanous-color-error-text)]">
+            <AlertCircle className="w-5 h-5 flex-shrink-0" aria-hidden="true" />
+            <p className="text-sm">{actionError}</p>
           </div>
         )}
 
