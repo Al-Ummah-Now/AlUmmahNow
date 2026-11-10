@@ -354,6 +354,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
               data: selectedThumbnail.data,
               position: selectedThumbnail.position,
               filename: selectedThumbnail.filename,
+              ...(selectedThumbnail.video ? { video: selectedThumbnail.video } : {}),
             } : undefined,
             ...(fingerprint ? { fingerprint } : {}),
           },

@@ -16,7 +16,7 @@ import {
   RecommendationRequest
 } from "./types";
 import { isShort, type BatchUploadInitiateResponse } from "@al-ummah/shared-types";
-import { apiRequestServer, buildApiUrl } from "./api-client";
+import { apiRequestServer, apiRequestServerResult, buildApiUrl } from "./api-client";
 import { getServerAuthContext } from "./server-auth";
 import { logger } from '@/lib/logger-server';
 
@@ -104,11 +104,11 @@ export async function updateVideo(
   videoId: string,
   data: Omit<Partial<VideoCreateRequest>, 'category'> & { category?: VideoCreateRequest['category'] | null },
   headers: Required<Pick<ApiHeaders, 'channelId'>>
-): Promise<{ success: boolean; result?: { video: VideoObject }; error?: string } | null> {
+): Promise<{ success: boolean; result?: { video: VideoObject }; error?: string; code?: string } | null> {
   try {
     logger.debug('[updateVideo] Updating video', { videoId, data });
 
-    return apiRequestServer<{ success: boolean; result?: { video: VideoObject }; error?: string }>(
+    const response = await apiRequestServerResult<{ success: boolean; result?: { video: VideoObject }; error?: string }>(
       {
         method: 'PUT',
         url: buildApiUrl(`/api/videos/${videoId}`),
@@ -121,6 +121,10 @@ export async function updateVideo(
       }),
       true
     );
+    if (response.data) return response.data;
+    // A refusal keeps its code (thumbnail_shape: the picked thumbnail isn't the video's shape)
+    const body = (response.errorBody ?? null) as { error?: string; code?: string } | null;
+    return body ? { success: false, error: body.error, code: body.code } : null;
   } catch (error) {
     logger.error('updateVideo error:', error);
     return null;

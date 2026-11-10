@@ -86,3 +86,8 @@ export function searchedRef(f: ErrorListFilters): string | null {
 export function errorsBadgeCount(counts: { new?: number; openActions?: number } | null | undefined): number {
   return Math.max(0, (counts?.new ?? 0) + (counts?.openActions ?? 0));
 }
+
+/** Where an admin replaces a flagged thumbnail: the video's page (its Edit card has the thumbnail upload with crop). */
+export function thumbnailFixHref(videoId: string): string {
+  return `/videos/${encodeURIComponent(videoId)}`;
+}

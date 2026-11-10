@@ -27,7 +27,7 @@ import {
 } from '../../lib/processing/loop';
 import { announceAndRecordProcessingResult, pendingProcessingResult } from '../../lib/notification-events';
 import { createJob, getJob, listJobs, retryJob, type JobEnv } from '../../lib/admin/jobs';
-import { THUMBNAIL_REPAIR_JOB, THUMBNAIL_REPAIR_TARGET } from '../../lib/thumbnail/repair';
+import { THUMBNAIL_REPAIR_JOB, THUMBNAIL_REPAIR_TARGET, isStillFlagged, latestFlagged, type FlaggedThumbnails } from '../../lib/thumbnail/repair';
 
 const MAX_IDS = 100;
 
@@ -78,6 +78,30 @@ function matches(video: HealthVideo, status: string): boolean {
 }
 
 /** Failed thumbnail repair runs, for the Errors page (an unreadable jobs table is logged, not fatal). */
+/**
+ * Thumbnails the latest every-video check flagged (shape differs from the
+ * video), minus the ones whose thumbnail changed since. Null when unreadable.
+ */
+async function flaggedThumbnails(env: JobEnv & { videos: R2Bucket }): Promise<(FlaggedThumbnails & { total: number }) | null> {
+	try {
+		const flagged = latestFlagged(await listJobs(env, { targetKind: 'video', targetId: THUMBNAIL_REPAIR_TARGET, limit: 20 }));
+		if (!flagged) return null;
+		const repo = new R2Repository<{ id: string; title?: string; channelId?: string; isDeleted?: boolean; thumbnailCheck?: { outcome?: string } }>(env.videos);
+		const items = (
+			await Promise.all(
+				flagged.items.slice(0, 100).map(async (item) => {
+					const record = await repo.getObject(item.videoId).catch(() => null);
+					return isStillFlagged(record) ? { ...item, title: record?.title, channelId: record?.channelId } : null;
+				}),
+			)
+		).filter((item): item is NonNullable<typeof item> => !!item);
+		return { ...flagged, items, total: items.length };
+	} catch (error) {
+		logger.warn('[ProcessingAdmin] Flagged thumbnails unavailable', { error: error instanceof Error ? error.message : String(error) });
+		return null;
+	}
+}
+
 async function failedThumbnailRuns(env: JobEnv) {
 	try {
 		const runs = await listJobs(env, { targetKind: 'video', targetId: THUMBNAIL_REPAIR_TARGET, limit: 20 });
@@ -232,6 +256,7 @@ export function createProcessingInternalRouter() {
 				deadLetters,
 				erasureDeadLetters,
 				thumbnailRuns: await failedThumbnailRuns(c.env as unknown as JobEnv),
+				thumbnailFlagged: await flaggedThumbnails(c.env as never),
 				reconciler: await readSweepStats(c.env),
 			},
 		});

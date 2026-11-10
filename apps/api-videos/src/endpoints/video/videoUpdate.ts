@@ -1,3 +1,4 @@
+import { verifyThumbnailUrl } from "../../lib/thumbnail/repair";
 import { canOnVideo } from "../../lib/channelAccess";
 import { applyFormatChoice } from "@al-ummah/shared-types";
 import { Bool, Str } from "chanfana";
@@ -75,6 +76,14 @@ export class VideoUpdate extends AuthenticatedRoute {
 					},
 				},
 			},
+			"422": {
+				description: "thumbnailUrl refused: code thumbnail_shape (not the video's shape, with expected and actual sizes) or thumbnail_unreadable",
+				content: {
+					"application/json": {
+						schema: ResponseError,
+					},
+				},
+			},
 			"403": {
 				description: "Forbidden - user doesn't own this video",
 				content: {
@@ -132,6 +141,17 @@ export class VideoUpdate extends AuthenticatedRoute {
 			);
 		}
 
+		// A new thumbnail must have the video's shape (lib/thumbnail/shape.ts)
+		let thumbnailType: 'auto' | 'custom' | undefined;
+		if (videoUpdateInput.thumbnailUrl !== undefined && videoUpdateInput.thumbnailUrl !== existingVideo.thumbnailUrl) {
+			const verdict = await verifyThumbnailUrl(c.env as never, { ...existingVideo, id } as never, videoUpdateInput.thumbnailUrl);
+			if (!verdict.ok) {
+				logger.info('[VideoUpdate] Thumbnail refused', { videoId: id, code: verdict.code });
+				return c.json({ success: false, code: verdict.code, error: verdict.error, ...(verdict.expected ? { expected: verdict.expected, actual: verdict.actual } : {}) }, 422);
+			}
+			thumbnailType = verdict.type;
+		}
+
 		// Update the video with new values (applied to the fresh copy on every
 		// compare-and-swap attempt, SCALABILITY-AUDIT AV-3)
 		const { category, tags, format, ...restInput } = videoUpdateInput;
@@ -153,6 +173,12 @@ export class VideoUpdate extends AuthenticatedRoute {
 			// "Upload as Short / as video" wins over detection; 'auto' clears the choice.
 			// A choice also resolves an open format issue (admin flag).
 			if (format) applyFormatChoice(next, format, { by: 'owner', userId: effectiveUserId, at: next.dateModified });
+			if (thumbnailType) {
+				// A new thumbnail ends any shape flag on the old one
+				next.thumbnailType = thumbnailType;
+				delete (next as { thumbnailCheck?: unknown }).thumbnailCheck;
+				delete (next as { thumbnailSizes?: unknown }).thumbnailSizes;
+			}
 			return next;
 		};
 

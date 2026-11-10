@@ -39,6 +39,7 @@ import { createProcessingInternalRouter } from "./endpoints/video/processingInte
 import { createUploadsInternalRouter } from "./endpoints/video/uploadsInternal";
 import { createVideoFormatInternalRouter } from "./endpoints/video/videoFormatInternal";
 import { handleVideoFormatMessage, startDailyVideoFormatRun } from "./lib/video-format/job";
+import { startDailyThumbnailCheck } from "./lib/thumbnail/repair";
 import { VIDEO_FORMAT_JOB_KIND } from "@al-ummah/shared-types";
 // Profile/Channel image upload handlers (not in routers yet)
 import handleAvatarUpdate from "./endpoints/profile/profileAvatarUpdate";
@@ -493,6 +494,14 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 				logger.info('[VideoFormat] Daily run', daily);
 			} catch (error) {
 				logger.error('[VideoFormat] Daily run failed to start', { error: error instanceof Error ? error.message : String(error) });
+			}
+			try {
+				// Thumbnail shapes: flag (Errors page) any thumbnail that does not match its video (lib/thumbnail/repair.ts)
+				const thumbs = await startDailyThumbnailCheck(rawEnv as never);
+				logger.info('[ThumbnailRepair] Daily run', thumbs);
+			} catch (error) {
+				logger.error('[ThumbnailRepair] Daily run failed to start', { error: error instanceof Error ? error.message : String(error) });
+				reportJobFailure(rawEnv, ctx, 'thumbnail-check', error);
 			}
 			try {
 				// Upload rate limits (AV-14): drop windows of users who stopped uploading and expired leases.

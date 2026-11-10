@@ -17,7 +17,7 @@ import {
 } from '@al-ummah/shared-types';
 import { listChannels, listComments, listUsers, listVideos } from '../lib/admin/directory';
 import * as admin from '../lib/admin/service';
-import { checkImage, storeImage } from '../lib/admin/images';
+import { checkImage, checkThumbnailShapeFor, storeImage } from '../lib/admin/images';
 import { countJobs, getJob, listJobs, retryJob } from '../lib/admin/jobs';
 import { LegacyRestoreError } from '../lib/admin/legacy-restore';
 import { logger } from '../lib/logger';
@@ -162,7 +162,9 @@ app.get('/videos/:id', async (c) => ok(c, await admin.videoDetail(c.env, c.req.p
 app.patch('/videos/:id', async (c) => ok(c, await admin.updateVideo(c.env, c.req.param('id'), parse(VideoEdit, await body(c)))));
 app.post('/videos/:id/thumbnail', async (c) => {
 	const form = await c.req.parseBody();
-	const url = await storeImage(c.env, checkImage(form.photo), 'thumbnail');
+	const file = checkImage(form.photo);
+	await checkThumbnailShapeFor(c.env as never, c.req.param('id'), file);
+	const url = await storeImage(c.env, file, 'thumbnail');
 	return ok(c, await admin.updateVideo(c.env, c.req.param('id'), { thumbnailUrl: url }));
 });
 app.post('/videos/:id/move', async (c) => {

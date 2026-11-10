@@ -186,7 +186,7 @@ export default async function VideoPage({ params }: { params: Promise<{ id: stri
           </SectionCard>
 
           <VideoActions
-            video={{ id: v.id, title: v.title, description: v.description, isPublic: v.isPublic, isDeleted: v.isDeleted, unpublished, status: v.status, processing: v.processing }}
+            video={{ id: v.id, title: v.title, description: v.description, isPublic: v.isPublic, isDeleted: v.isDeleted, unpublished, status: v.status, processing: v.processing, width: v.width, height: v.height }}
             permissions={permissions}
           />
         </div>

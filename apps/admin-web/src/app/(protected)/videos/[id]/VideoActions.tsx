@@ -9,6 +9,8 @@ import { fieldClass, primaryButtonClass } from '@/components/ui';
 import { ActionFeedback, ConfirmButton, useContentAction } from '@/components/content/actions';
 import { Notice, SectionCard, smallButtonClass } from '@/components/content/parts';
 import { VideoActionsSlot } from '../extensions';
+import { ThumbnailCropDialog, loadImageFile } from '@/components/content/ThumbnailCropDialog';
+import { shapesMatch, type ThumbnailCropSize } from '@al-ummah/shared-types';
 
 interface Props {
   video: {
@@ -20,6 +22,9 @@ interface Props {
     unpublished: boolean;
     status: string | null;
     processing: { status: string; encodeProgress: number | null; resolutions: string[] } | null;
+    /** Encoded size: a picked thumbnail is cropped to this shape */
+    width?: number | null;
+    height?: number | null;
   };
   permissions: AdminContentPermission[];
 }
@@ -34,11 +39,23 @@ export function VideoActions({ video, permissions }: Props) {
   const [description, setDescription] = useState(video.description);
   const [isPublic, setIsPublic] = useState(video.isPublic);
   const [target, setTarget] = useState('');
+  const [crop, setCrop] = useState<{ url: string; size: ThumbnailCropSize; name: string } | null>(null);
 
   const can = (p: AdminContentPermission) => permissions.includes(p);
   const canManage = can('videos:manage');
   if (video.isDeleted) return null;
   if (!canManage && !can('content:delete')) return <Notice testId="content-read-only">{t('content.readOnly')}</Notice>;
+
+  const videoSize: ThumbnailCropSize | null = video.width && video.height ? { width: video.width, height: video.height } : null;
+  const closeCrop = () => {
+    if (crop) URL.revokeObjectURL(crop.url);
+    setCrop(null);
+  };
+  async function uploadThumbnail(file: File) {
+    const form = new FormData();
+    form.set('photo', file);
+    await run('thumbnail', () => uploadVideoThumbnail(video.id, form), { success: t('content.saved') });
+  }
 
   const edit: { title?: string; description?: string; isPublic?: boolean } = {};
   if (title.trim() !== video.title) edit.title = title.trim();
@@ -92,11 +109,31 @@ export function VideoActions({ video, permissions }: Props) {
                 const file = e.currentTarget.files?.[0];
                 e.currentTarget.value = '';
                 if (!file) return;
-                const form = new FormData();
-                form.set('photo', file);
-                await run('thumbnail', () => uploadVideoThumbnail(video.id, form), { success: t('content.saved') });
+                // Another shape than the video is cropped to it first (never stretched)
+                if (videoSize) {
+                  const loaded = await loadImageFile(file).catch(() => null);
+                  if (loaded && !shapesMatch(loaded.size, videoSize)) {
+                    setCrop({ url: loaded.url, size: loaded.size, name: file.name });
+                    return;
+                  }
+                  if (loaded) URL.revokeObjectURL(loaded.url);
+                }
+                await uploadThumbnail(file);
               }}
             />
+            {crop && videoSize && (
+              <ThumbnailCropDialog
+                src={crop.url}
+                image={crop.size}
+                video={videoSize}
+                filename={crop.name}
+                onCancel={closeCrop}
+                onConfirm={(file) => {
+                  closeCrop();
+                  void uploadThumbnail(file);
+                }}
+              />
+            )}
             <span className="text-xs text-fg-subtle">{busy === 'thumbnail' ? t('content.working') : t('content.imageHint')}</span>
           </div>
         </SectionCard>

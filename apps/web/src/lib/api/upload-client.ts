@@ -103,7 +103,8 @@ export interface InitiateMetadata {
   categorySuggestionKey?: string;
   fileSize: number;
   mimeType: string;
-  thumbnail?: { type: 'auto' | 'custom'; data?: string; position?: number; filename?: string };
+  /** `video`: the video's size, so the API drops an image of another shape for Bunny's frame */
+  thumbnail?: { type: 'auto' | 'custom'; data?: string; position?: number; filename?: string; video?: { width: number; height: number } };
   /** Same file again → same unfinished video (lib/upload/fingerprint.ts) */
   fingerprint?: UploadFingerprint;
 }

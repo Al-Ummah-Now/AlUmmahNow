@@ -207,6 +207,25 @@ export async function getVideoDuration(videoFile: File): Promise<number> {
 }
 
 /**
+ * The video's display size (rotation applied by the browser), or null when the
+ * browser can't read it. A custom thumbnail is cropped to this shape.
+ */
+export async function probeVideoSize(videoFile: File): Promise<{ width: number; height: number } | null> {
+  return new Promise((resolve) => {
+    const video = document.createElement('video');
+    const url = URL.createObjectURL(videoFile);
+    const done = (size: { width: number; height: number } | null) => {
+      URL.revokeObjectURL(url);
+      resolve(size);
+    };
+    video.preload = 'metadata';
+    video.addEventListener('loadedmetadata', () => done(video.videoWidth > 0 && video.videoHeight > 0 ? { width: video.videoWidth, height: video.videoHeight } : null));
+    video.addEventListener('error', () => done(null));
+    video.src = url;
+  });
+}
+
+/**
  * Validate if file is a valid video
  * @param file - File to validate
  * @returns boolean - True if file is a valid video
