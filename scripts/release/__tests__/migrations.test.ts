@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, rmSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { buildSchema } from '../d1-schema.ts';
-import { checkMigrations, parseNameStatus } from '../migration-guard.ts';
+import { checkMigrations, NEVER_APPLIED_FIXES, parseNameStatus, sha256 } from '../migration-guard.ts';
 import { discover, snapshotDiffs } from '../schema-snapshot.ts';
 
 const ROOT = resolve(import.meta.dirname, '../../..');
@@ -35,6 +35,22 @@ describe('migration guard', () => {
 		assert.ok(errors[0].includes('modified'));
 		assert.ok(errors[1].includes('deleted'));
 		assert.ok(errors[2].includes('renamed'));
+	});
+
+	it('allows the one recorded fix of a never-applied migration, and nothing else', () => {
+		const path = 'apps/processor/migrations/0002_more.sql';
+		const fixes = { [path]: { sha256: sha256('fixed') } };
+		const diff = parseNameStatus(`M\t${path}`);
+		assert.deepEqual(checkMigrations(diff, base, () => 'fixed', fixes), []);
+		assert.match(checkMigrations(diff, base, () => 'edited again', fixes)[0], /never-applied fix/);
+		assert.match(checkMigrations(parseNameStatus(`D\t${path}`), base, () => null, fixes)[0], /deleted/);
+		assert.match(checkMigrations(parseNameStatus('M\tapps/processor/migrations/0001_reports.sql'), base, () => 'x', fixes)[0], /modified/);
+	});
+
+	it('every recorded never-applied fix matches the committed file', () => {
+		for (const [path, fix] of Object.entries(NEVER_APPLIED_FIXES)) {
+			assert.equal(sha256(readFileSync(join(ROOT, path), 'utf8')), fix.sha256, path);
+		}
 	});
 
 	it('covers migrations in subdirs (api-videos migrations/search)', () => {
