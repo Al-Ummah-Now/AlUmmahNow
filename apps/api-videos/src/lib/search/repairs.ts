@@ -59,6 +59,7 @@ const BUCKET_FOR: Record<IndexRepairEntity, string> = {
 	video: 'videos',
 	channel: 'channels',
 	playlist: 'playlists',
+	stream: 'videos',
 	post: 'community_posts',
 	profile: 'profiles',
 };
@@ -187,9 +188,10 @@ export async function repairObject(env: RepairJobEnv, repair: { entity: IndexRep
 	if (raw && !value) return;
 	// Deleted objects: a delete as of now. Present ones: their R2 time (newer writes win)
 	const version = stored ?? now;
-	const kind = repair.entity === 'profile' ? 'profile' : ownershipKindFor(repair.entity);
+	// Profiles and live streams have an ownership row only (they are not searchable)
+	const kind = repair.entity === 'profile' || repair.entity === 'stream' ? repair.entity : ownershipKindFor(repair.entity);
 	if (kind) await repairOwnership(db, kind, repair.id, value, version, now);
-	if (repair.entity !== 'profile') await repairSearch(db, repair.entity, repair.id, value, version, now);
+	if (repair.entity !== 'profile' && repair.entity !== 'stream') await repairSearch(db, repair.entity, repair.id, value, version, now);
 }
 
 /** One step of the job (admin-jobs queue consumer). */

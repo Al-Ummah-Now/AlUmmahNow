@@ -9,8 +9,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
 	FLUSH_DELAY_MS,
+	INDEX_MAX_FAILURES,
+	RETRY_DELAY_MS,
 	VERIFY_DELAYS_MS,
 	ViewCounter,
+	type ViewIndex,
 	mergeViewCounter,
 	type CounterStorage,
 	type VideoBucket,
@@ -256,4 +259,85 @@ test('a restarted object resumes from storage', async () => {
 	await drain([shard], clock);
 	assert.equal(bucket.read('vid').views, 4);
 	assert.deepEqual(bucket.read('vid').viewCounter.shards, { '2': 4 });
+});
+
+/** The D1 indexes as the counter sees them (shared-types syncVideoViews; failures on demand). */
+class FakeIndex implements ViewIndex {
+	views = new Map<string, number>();
+	syncs = 0;
+	failNext = 0;
+	repairs: string[] = [];
+	repairFails = false;
+	async sync(videoId: string, views: number) {
+		await tick();
+		this.syncs++;
+		if (this.failNext > 0) {
+			this.failNext--;
+			throw new Error('D1 unavailable');
+		}
+		this.views.set(videoId, Math.max(this.views.get(videoId) ?? 0, views));
+	}
+	async recordRepair(videoId: string) {
+		if (this.repairFails) throw new Error('D1 unavailable');
+		this.repairs.push(videoId);
+	}
+}
+
+function indexedShard(bucket: FakeBucket, clock: Clock, index: FakeIndex) {
+	const shard = new Shard(bucket, clock);
+	shard.counter = new ViewCounter(shard.storage, bucket, { now: () => clock.now, index });
+	return shard;
+}
+
+test('each flush raises the views in the indexes; 1000 views over 4 shards end with the index at the stored count', async () => {
+	const bucket = new FakeBucket();
+	const clock = new Clock();
+	const index = new FakeIndex();
+	bucket.set('vid', { id: 'vid', views: 100 });
+	const shards = [0, 1, 2, 3].map(() => indexedShard(bucket, clock, index));
+	await Promise.all(Array.from({ length: 1000 }, (_, i) => shards[i % 4].counter.increment('vid', String(i % 4))));
+	await drain(shards, clock);
+	assert.equal(bucket.read('vid').views, 1100);
+	assert.equal(index.views.get('vid'), 1100, 'the index holds the stored count');
+	assert.ok(index.syncs <= 4 * (1 + VERIFY_DELAYS_MS.length) + 4, `one sync per changed flush (${index.syncs}), not per view`);
+});
+
+test('a failed index sync is retried on the next alarm, then handed to the repair job', async () => {
+	const bucket = new FakeBucket();
+	const clock = new Clock();
+	const index = new FakeIndex();
+	bucket.set('vid', { id: 'vid', views: 0 });
+	const shard = indexedShard(bucket, clock, index);
+	await shard.counter.increment('vid', '0');
+	index.failNext = 2;
+	clock.now += FLUSH_DELAY_MS;
+	await shard.fireIfDue(clock.now);
+	assert.equal(bucket.read('vid').views, 1, 'R2 is flushed whatever the index does');
+	assert.equal(shard.storage.alarmAt, clock.now + RETRY_DELAY_MS, 'retry scheduled');
+	await drain([shard], clock);
+	assert.equal(index.views.get('vid'), 1, 'retried until it landed');
+	assert.equal(index.repairs.length, 0);
+
+	// D1 keeps failing: after INDEX_MAX_FAILURES the video goes to index_repairs (Errors page, Retry)
+	await shard.counter.increment('vid', '0');
+	index.failNext = 1000;
+	await drain([shard], clock);
+	assert.equal(bucket.read('vid').views, 2);
+	assert.deepEqual(index.repairs, ['vid']);
+	assert.equal(index.syncs >= INDEX_MAX_FAILURES, true);
+	assert.equal(shard.storage.alarmAt, null, 'settles once the repair job owns it');
+
+	// Repair record refused too: keeps retrying (logged with an alert), never drops the count
+	await shard.counter.increment('vid', '0');
+	index.repairFails = true;
+	clock.now += FLUSH_DELAY_MS;
+	for (let i = 0; i < INDEX_MAX_FAILURES + 2; i++) {
+		await shard.fireIfDue(clock.now);
+		clock.now += RETRY_DELAY_MS;
+	}
+	assert.notEqual(shard.storage.alarmAt, null, 'still scheduled');
+	index.failNext = 0;
+	index.repairFails = false;
+	await drain([shard], clock);
+	assert.equal(index.views.get('vid'), 3);
 });

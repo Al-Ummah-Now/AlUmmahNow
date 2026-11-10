@@ -5,6 +5,9 @@ import { LiveStream as BusinessLiveStream, PaginationResponse, ResponseError } f
 import { LiveStreamView } from "../../lib/model/view";
 import R2Repository from "../../lib/r2Repo";
 import { logger } from '../../lib/logger';
+import { scheduleOwnershipHeal, streamListIds, waitUntilOf } from '../../lib/search/ownership';
+import { pageFromIndex } from '../../lib/search/indexPage';
+import { scanPage } from '../../lib/scanCursor';
 
 export class LiveStreamsList extends OptionalAuthRoute {
 	schema = {
@@ -64,52 +67,47 @@ export class LiveStreamsList extends OptionalAuthRoute {
 			type LiveStreamType = z.infer<typeof BusinessLiveStream>;
 			const repository = new R2Repository<LiveStreamType>(bucket);
 
-			// List live streams with livestream: prefix
-			// Since R2Repository doesn't support prefix directly, we'll need to use the R2 bucket directly for listing
-			const listResult = await bucket.list({
-				prefix: "livestream:",
-				cursor: cursor || undefined,
+			const auth = c.get('auth');
+			const viewerId = auth?.userId ?? null;
+			// Hidden streams (suspended channel, banned owner, moderation) and private
+			// ones reach their owner only
+			const isListed = (stream: LiveStreamType | null): stream is LiveStreamType =>
+				!!stream &&
+				(!status || stream.status === status) &&
+				(!channelId || stream.channelId === channelId) &&
+				(!(stream as { isHidden?: boolean }).isHidden || (!!viewerId && stream.userId === viewerId)) &&
+				(!stream.isPrivate || (!!viewerId && stream.userId === viewerId));
+
+			// Live first, then newest: one keyset page of the ownership index (kind
+			// 'stream'). Filtering a prefix listing returned short or empty pages.
+			const indexed = await pageFromIndex<LiveStreamType>({
+				cursor,
+				sort: 'live-first',
 				limit,
+				fetch: (after, pageLimit) => streamListIds(c.env as never, { channelId: channelId || null, status, limit: pageLimit, after, viewerId }),
+				load: (id) => repository.getObject(`livestream:${id}`),
+				isListed,
 			});
 
-			let streams: LiveStreamType[] = [];
-
-			// Fetch the actual stream data
-			if (listResult.objects) {
-				for (const obj of listResult.objects) {
-					if (obj.key && obj.key.startsWith('livestream:')) {
-						try {
-							const stream = await repository.getObject(obj.key);
-							if (stream) {
-								streams.push(stream);
-							}
-						} catch (error) {
-							logger.error(`Error loading stream ${obj.key}:`, error);
-							// Continue with other streams
-						}
-					}
-				}
-			}
-
-			// Apply filters
-			if (status) {
-				streams = streams.filter(stream => stream.status === status);
-			}
-			if (channelId) {
-				streams = streams.filter(stream => stream.channelId === channelId);
-			}
-
-			// Filter out private streams for non-authenticated users
-			const auth = c.get('auth');
-			// Hidden streams (suspended channel, banned owner, moderation) reach their owner only
-			streams = streams.filter(stream => !(stream as { isHidden?: boolean }).isHidden || (!!auth && stream.userId === auth.userId));
-			if (!auth) {
-				streams = streams.filter(stream => !stream.isPrivate);
+			let streams: LiveStreamType[];
+			let nextCursor: string;
+			if (indexed) {
+				streams = indexed.items;
+				nextCursor = indexed.cursor;
 			} else {
-				// Show private streams only if user owns the channel
-				streams = streams.filter(stream => 
-					!stream.isPrivate || stream.userId === auth.userId
-				);
+				// Index unavailable: a bounded scan of the livestream: prefix that keeps its place (lib/scanCursor.ts)
+				if (!cursor) scheduleOwnershipHeal(c.env as never, waitUntilOf(c as never), 'stream');
+				const scanned = await scanPage<LiveStreamType>({
+					cursor,
+					limit,
+					list: async (pageCursor, pageSize) => {
+						const batch = await repository.listObjects(pageSize, pageCursor, 'livestream:');
+						return { items: batch.items || [], cursor: batch.cursor || '' };
+					},
+					isListed,
+				});
+				streams = scanned.items;
+				nextCursor = scanned.cursor;
 			}
 
 			// Transform to view models
@@ -127,7 +125,7 @@ export class LiveStreamsList extends OptionalAuthRoute {
 				rtmpUrl: auth?.userId === stream.userId ? stream.rtmpUrl : undefined,
 			}));
 
-			// Sort by date created (newest first) and status (live streams first)
+			// Live streams first, then newest (the index order; the scan page is sorted the same way)
 			streamViews.sort((a, b) => {
 				// Live streams first
 				if (a.status === 'live' && b.status !== 'live') return -1;
@@ -139,7 +137,7 @@ export class LiveStreamsList extends OptionalAuthRoute {
 			return {
 				success: true,
 				result: {
-					cursor: listResult.truncated ? listResult.cursor || "" : "",
+					cursor: nextCursor,
 					limit,
 					data: streamViews,
 				},

@@ -13,10 +13,13 @@ import {
 	MAX_SWEEP_RESTARTS,
 	sweepProcessingVideos,
 	syncVideoFromBunny,
+	SWEEP_MAX_OBJECTS,
 } from '../src/lib/processing/loop';
 import { createProcessingInternalRouter } from '../src/endpoints/video/processingInternal';
 import { MessageType } from '@al-ummah/shared-types';
 import { MemoryBucket, videoFixture } from './helpers';
+import { SqliteD1 } from './search-sqlite-d1';
+import { ownershipCompleteKey, ownershipUpsertStatement, projectOwnership } from '@al-ummah/shared-types';
 
 const HOST = 'vz-215a1ffd-a5a.b-cdn.net';
 const WRONG = 'vz-25839d05-80d.b-cdn.net';
@@ -321,6 +324,78 @@ describe('sweep candidates', () => {
 		assert.equal(stats.loopsStarted, 1);
 		assert.ok(gets <= 3, `read ${gets} objects, not the whole bucket`);
 		assert.ok(queries.some((q) => /upload_status IN/.test(q)));
+	});
+
+	it('a run reads at most SWEEP_MAX_OBJECTS videos of a 30k catalogue and the next runs continue where it stopped', async () => {
+		const db = new SqliteD1();
+		const videos = new MemoryBucket();
+		const notReady = new Set<string>();
+		let failed = 0;
+		const now = Date.now();
+		const statements = [];
+		for (let i = 0; i < 30_000; i++) {
+			const id = `v${String(i).padStart(6, '0')}`;
+			const status = i % 30 === 0 ? 'processing' : i % 101 === 0 ? 'failed' : 'ready';
+			const video = videoFixture({ id, uploadStatus: status, dateCreated: '2026-11-10T03:00:00.000Z' });
+			if (status === 'failed') failed++;
+			if (status === 'processing') {
+				notReady.add(id);
+				videos.store.set(id, JSON.stringify(video));
+			}
+			statements.push(ownershipUpsertStatement(db as never, projectOwnership('video', id, video)!, now, now));
+		}
+		for (let i = 0; i < statements.length; i += 500) await db.batch(statements.slice(i, i + 500) as never);
+		db.db.prepare('INSERT INTO search_meta (key, value, updated_at) VALUES (?, ?, ?)').run(ownershipCompleteKey('video'), '1', now);
+		const env = makeEnv(videos);
+		env.SEARCH_DB = db;
+		const gets: string[] = [];
+		const get = videos.get.bind(videos);
+		videos.get = async (key: string) => {
+			gets.push(key);
+			return get(key);
+		};
+		const runs = [];
+		for (let run = 0; run < 3; run++) {
+			const before = gets.length;
+			const stats = await sweepProcessingVideos(env, { now: NOW, maxStarts: 0 });
+			assert.equal(stats.source, 'index');
+			assert.ok(gets.length - before <= SWEEP_MAX_OBJECTS, `run ${run} read ${gets.length - before} objects`);
+			assert.equal(stats.flagged.failed, failed, 'failed uploads counted in SQL, not loaded');
+			runs.push(stats);
+		}
+		assert.deepEqual(runs.map((r) => r.scanned), [400, 400, 200]);
+		assert.deepEqual(runs.map((r) => r.wrapped), [false, false, true]);
+		assert.deepEqual(new Set(gets), notReady, 'every not-ready video looked at once over the runs');
+		const fourth = await sweepProcessingVideos(env, { now: NOW, maxStarts: 0 });
+		assert.equal(fourth.scanned, 400, 'starts over after wrapping');
+	});
+
+	it('without the index, a run lists and reads a bounded slice and the next run continues it', async () => {
+		const videos = new MemoryBucket();
+		for (let i = 0; i < 2500; i++) {
+			const id = `v${String(i).padStart(5, '0')}`;
+			videos.store.set(id, JSON.stringify(videoFixture({ id, uploadStatus: i % 2 ? 'ready' : 'processing', dateCreated: '2026-11-10T03:00:00.000Z' })));
+		}
+		const env = makeEnv(videos);
+		const seen = new Set<string>();
+		const get = videos.get.bind(videos);
+		let gets = 0;
+		videos.get = async (key: string) => {
+			gets++;
+			if (key.startsWith('v')) seen.add(key);
+			return get(key);
+		};
+		const scanned: number[] = [];
+		for (let run = 0; run < 7; run++) {
+			const before = gets;
+			const stats = await sweepProcessingVideos(env, { now: NOW, maxStarts: 0 });
+			assert.equal(stats.source, 'scan');
+			assert.ok(gets - before <= SWEEP_MAX_OBJECTS + 1, `run ${run}: ${gets - before} gets`);
+			scanned.push(stats.scanned);
+			if (stats.wrapped) break;
+		}
+		assert.deepEqual(scanned, [400, 400, 400, 400, 400, 400, 100]);
+		assert.equal(seen.size, 2500, 'the whole bucket over the runs');
 	});
 
 	it('a video uploaded 3 minutes ago without a loop is picked up', async () => {

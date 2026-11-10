@@ -11,7 +11,7 @@
  * rows it has, and reports `indexComplete: false`.
  */
 import {
-	OWNERSHIP_ADMIN_COLS_VERSION,
+	OWNERSHIP_ADMIN_COLS_SINCE,
 	OWNERSHIP_TABLE,
 	type AdminChannelQuery,
 	type AdminChannelRow,
@@ -100,7 +100,7 @@ export async function adminIndexReady(db: SearchDb, kind: OwnershipKind): Promis
 	if (!(await isOwnershipComplete(db, kind))) return false;
 	const stale = await db
 		.prepare(`SELECT 1 AS x FROM ${OWNERSHIP_TABLE} WHERE kind = ? AND admin_cols < ? LIMIT 1`)
-		.bind(kind, OWNERSHIP_ADMIN_COLS_VERSION)
+		.bind(kind, OWNERSHIP_ADMIN_COLS_SINCE)
 		.first<{ x: number }>();
 	return !stale;
 }

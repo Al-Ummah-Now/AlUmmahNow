@@ -415,65 +415,105 @@ export interface SweepStats {
 	flagged: { needsReupload: number; stalled: number; failed: number };
 	errors: number;
 	durationMs: number;
-	/** Where the candidates came from: the ownership index or a full R2 scan */
+	/** Where the candidates came from: the ownership index or an R2 scan */
 	source?: 'index' | 'scan';
+	/**
+	 * Where the next run continues (a run reads at most SWEEP_MAX_OBJECTS
+	 * objects): the last video id of the index walk, or the R2 cursor of the scan.
+	 */
+	resume?: { after?: string; scanCursor?: string };
+	/** True when this run reached the end of the not-ready videos (the next starts over). */
+	wrapped?: boolean;
 }
+
+/** Objects one sweep run reads at most, however many videos are not ready (SCALABILITY item 5). */
+export const SWEEP_MAX_OBJECTS = 400;
+/** Failed uploads counted for the health view at most (an index range, not a load). */
+const SWEEP_FAILED_COUNT_CAP = 10_000;
+/** Keys one scan run lists at most while the index is unavailable. */
+const SWEEP_SCAN_KEYS = 1000;
 
 /**
  * Safety net (cron): start a loop for every video still uploading/processing
  * that has none (e.g. uploads from before the loop existed, or a lost
  * message). Capped per run; records the run for the admin health view.
  */
-const NOT_FINISHED = ['initiated', 'uploading', 'processing', 'failed'];
+const NOT_READY = ['initiated', 'uploading', 'processing'];
+
+async function loadVideos(env: ProcessingEnv, keys: string[]): Promise<LoopVideo[]> {
+	const out: LoopVideo[] = [];
+	for (let i = 0; i < keys.length; i += 25) {
+		const batch = await Promise.all(
+			keys.slice(i, i + 25).map(async (key) => {
+				try {
+					return (await (await env.videos.get(key))?.json<LoopVideo>()) ?? null;
+				} catch {
+					return null;
+				}
+			}),
+		);
+		for (const v of batch) if (v?.id) out.push(v);
+	}
+	return out;
+}
 
 /**
- * Records the sweep has to look at: from the ownership index (one D1 query
- * for videos not ready yet) when it is complete; otherwise every video object
- * in R2, read in parallel batches. The R2-only sweep read objects one by one
- * (210 s for 400 videos on prod, 2026-11-10), so stuck uploads waited minutes
- * for their loop.
+ * Records one run looks at, at most SWEEP_MAX_OBJECTS. From the ownership
+ * index when it is complete: the not-ready videos in id order after where the
+ * last run stopped (index (kind, upload_status, id), migration 0013), wrapping
+ * around at the end; failed uploads are counted in SQL, not loaded. Otherwise
+ * one bounded slice of the bucket, continuing from the last run's R2 cursor.
+ * Both used to read everything every 10 minutes: every failed upload ever, or
+ * the whole bucket.
  */
-async function sweepCandidates(env: ProcessingEnv): Promise<{ videos: LoopVideo[]; scanned: number; source: 'index' | 'scan' }> {
-	const load = async (keys: string[]) => {
-		const out: LoopVideo[] = [];
-		for (let i = 0; i < keys.length; i += 25) {
-			const batch = await Promise.all(
-				keys.slice(i, i + 25).map(async (key) => {
-					try {
-						return (await (await env.videos.get(key))?.json<LoopVideo>()) ?? null;
-					} catch {
-						return null;
-					}
-				}),
-			);
-			for (const v of batch) if (v?.id) out.push(v);
-		}
-		return out;
-	};
+async function sweepCandidates(env: ProcessingEnv, previous: SweepStats | null): Promise<{ videos: LoopVideo[]; scanned: number; source: 'index' | 'scan'; failed?: number; resume: SweepStats['resume']; wrapped: boolean }> {
 	const db = env.SEARCH_DB;
 	if (db) {
 		try {
 			if (await isOwnershipComplete(db as never, 'video')) {
-				const placeholders = NOT_FINISHED.map(() => '?').join(', ');
-				const { results } = await db
-					.prepare(`SELECT id FROM content_ownership WHERE kind = 'video' AND upload_status IN (${placeholders})`)
-					.bind(...NOT_FINISHED)
+				const after = previous?.source === 'index' ? previous.resume?.after ?? '' : '';
+				const placeholders = NOT_READY.map(() => '?').join(', ');
+				const page = await db
+					.prepare(`SELECT id FROM content_ownership WHERE kind = 'video' AND upload_status IN (${placeholders}) AND id > ? ORDER BY id LIMIT ?`)
+					.bind(...NOT_READY, after, SWEEP_MAX_OBJECTS + 1)
 					.all<{ id: string }>();
-				const ids = (results ?? []).map((r) => r.id);
-				return { videos: await load(ids), scanned: ids.length, source: 'index' };
+				const rows = (page.results ?? []).map((r) => r.id);
+				const ids = rows.slice(0, SWEEP_MAX_OBJECTS);
+				const wrapped = rows.length <= SWEEP_MAX_OBJECTS;
+				const failed = await db
+					.prepare(`SELECT COUNT(*) AS n FROM (SELECT 1 FROM content_ownership WHERE kind = 'video' AND upload_status = 'failed' LIMIT ?)`)
+					.bind(SWEEP_FAILED_COUNT_CAP)
+					.first<{ n: number }>();
+				return {
+					videos: await loadVideos(env, ids),
+					scanned: ids.length,
+					source: 'index',
+					failed: Number(failed?.n ?? 0),
+					resume: wrapped ? {} : { after: ids[ids.length - 1] },
+					wrapped,
+				};
 			}
 		} catch (error) {
 			logger.warn('[ProcessingSweep] Index query failed; scanning R2', { error: error instanceof Error ? error.message : String(error) });
 		}
 	}
 	const keys: string[] = [];
-	let cursor: string | undefined;
+	let cursor: string | undefined = previous?.source === 'scan' ? previous.resume?.scanCursor : undefined;
+	let listed = 0;
 	do {
-		const page = await env.videos.list({ cursor, limit: 1000 });
+		// Never list more keys than the run can still read, so the cursor is always after every key read
+		const page = await env.videos.list({ cursor, limit: Math.min(SWEEP_MAX_OBJECTS - keys.length, SWEEP_SCAN_KEYS - listed) });
+		listed += page.objects.length;
 		cursor = page.truncated ? page.cursor : undefined;
 		for (const object of page.objects) if (!object.key.includes('/') && !object.key.includes(':')) keys.push(object.key);
-	} while (cursor);
-	return { videos: await load(keys), scanned: keys.length, source: 'scan' };
+	} while (cursor && listed < SWEEP_SCAN_KEYS && keys.length < SWEEP_MAX_OBJECTS);
+	return {
+		videos: await loadVideos(env, keys),
+		scanned: keys.length,
+		source: 'scan',
+		resume: cursor ? { scanCursor: cursor } : {},
+		wrapped: !cursor,
+	};
 }
 
 export async function sweepProcessingVideos(env: ProcessingEnv, opts: { now?: Date; maxStarts?: number; minAgeMs?: number } = {}): Promise<SweepStats> {
@@ -493,16 +533,19 @@ export async function sweepProcessingVideos(env: ProcessingEnv, opts: { now?: Da
 		errors: 0,
 		durationMs: 0,
 	};
-	const candidates = await sweepCandidates(env);
+	const candidates = await sweepCandidates(env, await readSweepStats(env));
 	stats.scanned = candidates.scanned;
 	stats.source = candidates.source;
+	stats.resume = candidates.resume;
+	stats.wrapped = candidates.wrapped;
+	if (candidates.failed !== undefined) stats.flagged.failed = candidates.failed;
 	{
 		for (const video of candidates.videos) {
 			// Abandoned by the upload reaper (lib/uploads/reaper.ts): gone, not stuck
 			if ((video as { abandoned?: unknown }).abandoned) continue;
 			if (video.processingIssue?.kind === 'needs_reupload') stats.flagged.needsReupload++;
 			else if (video.processingIssue?.kind === 'stalled') stats.flagged.stalled++;
-			else if (video.uploadStatus === 'failed') stats.flagged.failed++;
+			else if (video.uploadStatus === 'failed' && candidates.failed === undefined) stats.flagged.failed++;
 			const status = video.uploadStatus;
 			if (status !== 'processing' && status !== 'uploading' && status !== 'initiated') continue;
 			stats.notReady++;

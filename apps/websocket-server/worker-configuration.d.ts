@@ -11,6 +11,8 @@ interface Env {
 	VIDEOS?: R2Bucket;
 	// Community post view counters (analytics_daily); the post view counter flushes into it (post-view-counter.ts)
 	NOTIFICATIONS_DB?: D1Database;
+	// Search and ownership indexes (D1); the view counter mirrors flushed counts into them (view-counter.ts)
+	SEARCH_DB?: D1Database;
 	TOKEN_REVOCATIONS?: KVNamespace;
 
 	// Auth environment variables (from secrets/environment)

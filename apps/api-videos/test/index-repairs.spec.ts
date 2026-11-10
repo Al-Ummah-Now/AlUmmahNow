@@ -154,7 +154,7 @@ describe('queued reconcile passes (finish in minutes, not days)', () => {
 			ADMIN_JOBS_QUEUE: new JobsQueue(),
 		};
 		const first = await startIndexReconcile(env as never);
-		assert.equal(first.queued.length, 7, '3 ownership kinds + 4 search tables');
+		assert.equal(first.queued.length, 9, '5 ownership kinds (video, channel, profile, playlist, stream) + 4 search tables');
 		const again = await startIndexReconcile(env as never);
 		assert.deepEqual(again.queued.map((j) => j.id).sort(), first.queued.map((j) => j.id).sort(), 'active jobs are reused');
 		await drainJobs(env as never);

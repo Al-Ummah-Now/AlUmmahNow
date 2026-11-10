@@ -344,7 +344,7 @@ describe('endpoints served from the ownership index', () => {
 
 		const page1 = await (await owner.request('/api/channels/mine1/videos?limit=2', {}, indexed)).json() as any;
 		assert.deepEqual(page1.data.map((v: any) => v.id), ['m-f', 'm-c']);
-		assert.equal(page1.cursor, 'idx:2');
+		assert.match(page1.cursor, /^ks:/, 'keyset cursor (sort key and id of the last row)');
 		const page2 = await (await owner.request(`/api/channels/mine1/videos?limit=2&cursor=${page1.cursor}`, {}, indexed)).json() as any;
 		assert.deepEqual(page2.data.map((v: any) => v.id), ['m-a', 'm-b']);
 		const page3 = await (await owner.request(`/api/channels/mine1/videos?limit=2&cursor=${page2.cursor}`, {}, indexed)).json() as any;

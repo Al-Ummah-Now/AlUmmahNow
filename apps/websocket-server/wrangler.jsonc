@@ -52,7 +52,9 @@
 	],
 	// Community post view counters (src/post-view-counter.ts flushes into analytics_daily)
 	"d1_databases": [
-		{ "binding": "NOTIFICATIONS_DB", "database_name": "al-ummah-now-notifications", "database_id": "2479ad9b-76f6-41e6-ac77-69e46faa5e69" }
+		{ "binding": "NOTIFICATIONS_DB", "database_name": "al-ummah-now-notifications", "database_id": "2479ad9b-76f6-41e6-ac77-69e46faa5e69" },
+		// The view counter raises views in the search and ownership indexes after each flush (view-counter.ts)
+		{ "binding": "SEARCH_DB", "database_name": "al-ummah-now-search", "database_id": "41064871-cf1f-46e9-b102-7b913240ad89" }
 	],
 	"kv_namespaces": [
 			// Token revocation list written by the auth worker (#437)
@@ -118,7 +120,8 @@
 				{ "binding": "VIDEOS", "bucket_name": "videos-stage" }
 			],
 			"d1_databases": [
-				{ "binding": "NOTIFICATIONS_DB", "database_name": "al-ummah-now-notifications-stage", "database_id": "8626a5a5-0291-4150-ac9e-6083b606a140" }
+				{ "binding": "NOTIFICATIONS_DB", "database_name": "al-ummah-now-notifications-stage", "database_id": "8626a5a5-0291-4150-ac9e-6083b606a140" },
+				{ "binding": "SEARCH_DB", "database_name": "al-ummah-now-search-stage", "database_id": "956a3550-bd20-4cfc-9bf2-b1c2265b33dd" }
 			],
 			"kv_namespaces": [
 			// Token revocation list written by the auth worker (#437)

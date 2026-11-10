@@ -8,10 +8,10 @@ import { toPlaylistResponse, canViewPlaylist } from "../../lib/playlists";
 import { withPlaylistCovers } from "../../lib/playlistCovers";
 import { logger } from "../../lib/logger";
 import { isSystemPlaylist } from "../../lib/library";
+import { playlistListIds, scheduleOwnershipHeal, waitUntilOf } from "../../lib/search/ownership";
+import { pageFromIndex } from "../../lib/search/indexPage";
+import { scanPage } from "../../lib/scanCursor";
 
-// Bounds for scanning the playlists bucket when filtering by channel
-const CHANNEL_SCAN_PAGE_SIZE = 100;
-const CHANNEL_SCAN_MAX_PAGES = 20;
 
 export class PlaylistsList extends OptionalAuthRoute {
     schema = {
@@ -70,47 +70,62 @@ export class PlaylistsList extends OptionalAuthRoute {
         type PlaylistType = z.infer<typeof Playlist>;
         const repository = new R2Repository<PlaylistType>(c.env.playlists);
 
-        if (channelFilter) {
-            // R2 has no secondary index, so scan pages and filter by channel.
-            const matches: PlaylistType[] = [];
-            // The channel's managers (owner, admin, editor) see its private playlists too
-            const manages = await canManagePlaylist(c.env as never, { channelId: channelFilter }, userId);
-            let scanCursor: string | undefined;
-            for (let page = 0; page < CHANNEL_SCAN_MAX_PAGES; page++) {
-                const result = await repository.listObjects(CHANNEL_SCAN_PAGE_SIZE, scanCursor);
-                for (const playlist of result.items || []) {
-                    if (playlist.channelId === channelFilter && (canViewPlaylist(playlist, userId) || (manages && !playlist.isDeleted && !playlist.isHidden)) && !isSystemPlaylist(playlist)) {
-                        matches.push(playlist);
-                    }
-                }
-                if (!result.cursor) break;
-                scanCursor = result.cursor;
-            }
+        // The channel's managers (owner, admin, editor) see its private playlists too
+        const manages = channelFilter ? await canManagePlaylist(c.env as never, { channelId: channelFilter }, userId) : false;
+        // System playlists (Watch later) are listed in the Library, not with user playlists
+        const isListed = (playlist: PlaylistType | null): playlist is PlaylistType =>
+            !!playlist &&
+            !isSystemPlaylist(playlist) &&
+            (!channelFilter || playlist.channelId === channelFilter) &&
+            (canViewPlaylist(playlist, userId) || (manages && !playlist.isDeleted && !playlist.isHidden));
 
-            matches.sort((a, b) => (b.dateModified || '').localeCompare(a.dateModified || ''));
+        // A channel's playlists by last change (as before), every playlist newest
+        // first: one keyset page of the ownership index (kind 'playlist')
+        const sort = channelFilter ? 'updated' as const : 'latest' as const;
+        const indexed = await pageFromIndex<PlaylistType>({
+            cursor,
+            sort,
+            limit,
+            fetch: (after, pageLimit) => playlistListIds(c.env as never, {
+                channelId: channelFilter || null,
+                sort,
+                limit: pageLimit,
+                after,
+                privateFor: manages ? true : (userId || null),
+            }),
+            load: (id) => repository.getObject(id),
+            isListed,
+        });
 
-            logger.debug('[PlaylistsList] Channel playlists listed', {
-                channelId: channelFilter,
-                count: matches.length,
-            });
-
-            return {
-                cursor: "",
+        let items: PlaylistType[];
+        let nextCursor: string;
+        if (indexed) {
+            items = indexed.items;
+            nextCursor = indexed.cursor;
+        } else {
+            // Index unavailable: a bounded scan whose cursor keeps its place in the
+            // R2 listing (lib/scanCursor.ts), and the index rebuild is queued
+            if (!cursor) scheduleOwnershipHeal(c.env as never, waitUntilOf(c as never), 'playlist');
+            const scanned = await scanPage<PlaylistType>({
+                cursor,
                 limit,
-                data: await withPlaylistCovers(c.env, matches.slice(0, limit).map(toPlaylistResponse), userId),
-            };
+                list: async (pageCursor, pageSize) => {
+                    const batch = await repository.listObjects(pageSize, pageCursor);
+                    return { items: batch.items || [], cursor: batch.cursor || "" };
+                },
+                isListed,
+            });
+            items = scanned.items;
+            nextCursor = scanned.cursor;
+            if (channelFilter) items.sort((a, b) => (b.dateModified || '').localeCompare(a.dateModified || ''));
         }
 
-        const playlists = !cursor ? await repository.listObjects(limit) : await repository.listObjects(limit, cursor);
-        // System playlists (Watch later) are listed in the Library, not with user playlists
-        const visible = (playlists.items || []).filter((playlist) => canViewPlaylist(playlist, userId) && !isSystemPlaylist(playlist));
+        logger.debug('[PlaylistsList] Playlists listed', { channelId: channelFilter, count: items.length, source: indexed ? 'index' : 'scan' });
 
-        const response = {
-            cursor: playlists.cursor || "",
+        return {
+            cursor: nextCursor,
             limit,
-            data: await withPlaylistCovers(c.env, visible.map(toPlaylistResponse), userId),
+            data: await withPlaylistCovers(c.env, items.map(toPlaylistResponse), userId),
         };
-
-        return response;
     }
 }

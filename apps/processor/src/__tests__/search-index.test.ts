@@ -99,10 +99,11 @@ describe('search index sync', () => {
     expect(executed.some(e => e.sql.startsWith('DELETE FROM content_ownership') && e.values[1] === 'c1')).toBe(true);
   });
 
-  it('does not touch the ownership index for playlists', async () => {
+  it('writes the ownership row of a playlist (the channel Playlists tab and /api/playlists read it)', async () => {
     const { env, processor, executed } = setup();
-    await processor.processMessage(message(MessageType.SearchIndexSync, { entity: 'playlist', id: 'p1', object: { id: 'p1', name: 'x' } }), env);
-    expect(executed.some(e => e.sql.includes('content_ownership'))).toBe(false);
+    await processor.processMessage(message(MessageType.SearchIndexSync, { entity: 'playlist', id: 'p1', object: { id: 'p1', name: 'x', channelId: 'c1', userId: 'u1' } }), env);
+    const upsert = executed.find(e => e.sql.includes('INSERT INTO content_ownership'));
+    expect(upsert?.values.slice(0, 2)).toEqual(['playlist', 'p1']);
   });
 
   it('flags banned content as hidden and deleted in the ownership index', async () => {

@@ -25,6 +25,7 @@ import {
 } from '@al-ummah/shared-types';
 import { logger } from './logger';
 import { channelVideosFromIndex } from './search/channelVideoIndex';
+import { playlistListIds, scheduleOwnershipHeal, streamListIds } from './search/ownership';
 import { listLikedIds } from './library';
 import { toPlaylistResponse } from './playlists';
 import { withPlaylistCovers } from './playlistCovers';
@@ -385,16 +386,33 @@ async function getPlaylistsByIds(playlistIds: string[], channelId: string, env: 
   return (await withPlaylistCovers(env, playlists.map((p) => toPlaylistResponse(p as never)))) as unknown as Record<string, unknown>[];
 }
 
-/** The channel's public playlists, newest first (one bounded list, like the Playlists tab) */
+/**
+ * The channel's public playlists, newest first: one page of the ownership
+ * index (kind 'playlist'), so a channel's playlists are found however many
+ * playlists the bucket holds. A bounded bucket slice while the index is
+ * unavailable (its rebuild is queued).
+ */
 async function getChannelPlaylists(channelId: string, limit: number, env: any): Promise<Record<string, unknown>[]> {
   const repo = new R2Repository<StoredPlaylist>(env.playlists);
-  const page = await repo.listObjects(FALLBACK_SCAN_OBJECTS);
-  const own = (page.items || [])
-    .filter((p) => isListablePlaylist(p) && p.channelId === channelId && !(p as { systemType?: string }).systemType)
-    .sort((a, b) => new Date(b.dateCreated || 0).getTime() - new Date(a.dateCreated || 0).getTime())
-    .slice(0, limit);
+  const listable = (p: StoredPlaylist | null): p is StoredPlaylist =>
+    !!p && isListablePlaylist(p) && p.channelId === channelId && !(p as { systemType?: string }).systemType;
+  const indexed = await playlistListIds(env, { channelId, sort: 'latest', limit, privateFor: null });
+  let own: StoredPlaylist[];
+  if (indexed) {
+    own = (await Promise.all(indexed.ids.map((id) => repo.getObject(id).catch(() => null)))).filter(listable);
+  } else {
+    scheduleOwnershipHeal(env, null, 'playlist');
+    const page = await repo.listObjects(FALLBACK_SCAN_OBJECTS);
+    own = (page.items || [])
+      .filter(listable)
+      .sort((a, b) => new Date(b.dateCreated || 0).getTime() - new Date(a.dateCreated || 0).getTime())
+      .slice(0, limit);
+  }
   return (await withPlaylistCovers(env, own.map((p) => toPlaylistResponse(p as never)))) as unknown as Record<string, unknown>[];
 }
+
+/** Streams of a channel looked at per status for a shelf (sorted in memory by their times). */
+const STREAM_SHELF_CANDIDATES = 50;
 
 type StoredLiveStream = SectionLiveStream & { userId?: string; isPrivate?: boolean; isHidden?: boolean; dateCreated?: string };
 
@@ -408,11 +426,20 @@ const timeOf = (value?: string) => {
  * (most recent first). Public, not hidden streams of this channel.
  */
 async function getLiveStreams(channelId: string, limit: number, env: any, filter: 'live_and_upcoming' | 'past', channel?: StoredChannel | null): Promise<SectionLiveStream[]> {
-  const listed = await env.videos.list({ prefix: 'livestream:', limit: FALLBACK_SCAN_OBJECTS });
   const repo = new R2Repository<StoredLiveStream>(env.videos);
-  const streams = (await Promise.all((listed.objects || []).map((o: { key: string }) => repo.getObject(o.key)))).filter(
-    (st): st is StoredLiveStream => !!st && st.channelId === channelId && !st.isPrivate && !st.isHidden,
-  );
+  const shown = (st: StoredLiveStream | null): st is StoredLiveStream => !!st && st.channelId === channelId && !st.isPrivate && !st.isHidden;
+  // The channel's streams of the statuses this shelf shows, from the ownership index (kind 'stream')
+  const statuses = filter === 'past' ? ['ended'] : ['live', 'scheduled'];
+  const pages = await Promise.all(statuses.map((status) => streamListIds(env, { channelId, status, limit: STREAM_SHELF_CANDIDATES, viewerId: null })));
+  let streams: StoredLiveStream[];
+  if (pages.every(Boolean)) {
+    const ids = pages.flatMap((page) => page!.ids);
+    streams = (await Promise.all(ids.map((id) => repo.getObject(`livestream:${id}`).catch(() => null)))).filter(shown);
+  } else {
+    scheduleOwnershipHeal(env, null, 'stream');
+    const listed = await env.videos.list({ prefix: 'livestream:', limit: FALLBACK_SCAN_OBJECTS });
+    streams = (await Promise.all((listed.objects || []).map((o: { key: string }) => repo.getObject(o.key)))).filter(shown);
+  }
   const now = Date.now();
   const picked =
     filter === 'past'
