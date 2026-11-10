@@ -11,6 +11,9 @@ import { target } from './targets';
 import { findPlayableVideo, NO_PLAYABLE_VIDEO, watchUrl } from './videos';
 import { createProfile, signUpOnWeb, type Locale } from './web-session';
 
+// Signs in through the auth server: a retained trace would hold the password and code
+test.use({ trace: 'off' });
+
 const WIDTHS = [768, 1024, 1280, 1440];
 /** Side-column rows: thumbnail beside the text, never a full-width card. */
 const MAX_SIDE_THUMB = 180;

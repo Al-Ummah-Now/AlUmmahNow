@@ -16,7 +16,8 @@ import { test, expect, type Page } from '@playwright/test';
 import { target } from './targets';
 import { signUpOnWeb, createProfile, type Locale } from './web-session';
 
-test.use({ hasTouch: true });
+// Signs in through the auth server: a retained trace would hold the password and code
+test.use({ hasTouch: true, trace: 'off' });
 
 const MENU_BUTTON = '[data-testid="video-card-menu"]';
 

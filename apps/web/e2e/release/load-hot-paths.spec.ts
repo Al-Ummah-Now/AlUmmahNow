@@ -17,6 +17,9 @@ import { test, expect } from '@playwright/test';
 import { apiFetch, createProfile, signUpOnWeb, type WebUser } from './web-session';
 import { grantCreatorTier } from './creator-tier';
 
+// Signs in through the auth server: a retained trace would hold the password and code
+test.use({ trace: 'off' });
+
 const VIEWS = 200;
 const WATCH_REPORTS = 120;
 const SECONDS_PER_REPORT = 5;
