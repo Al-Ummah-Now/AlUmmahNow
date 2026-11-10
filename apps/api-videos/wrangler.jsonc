@@ -155,12 +155,6 @@
 			// Token revocation list written by the auth worker (#437)
 			{ "binding": "TOKEN_REVOCATIONS", "id": "2afbb5f5d5414c9ea1a7d54013cfe724", "preview_id": "e6e662fc9cd9420797ddfa8060eb6956" },
 		{
-			"binding": "RATE_LIMIT_KV",
-			"id": "4771816fd0cc469383de67257280c516",
-			"preview_id": "0464af73f01045dc82dd2a1c25c3daa4",
-			"remote": true
-		},
-		{
 			"binding": "TUS_SESSIONS",
 			"id": "a7f78b8bf0984994a2cd2f4c92169ae1",
 			"preview_id": "56c4fbe8aec04166b9256bf951655c3a",
@@ -350,10 +344,6 @@
 			"kv_namespaces": [
 			// Token revocation list written by the auth worker (#437)
 			{ "binding": "TOKEN_REVOCATIONS", "id": "0831520b71144a6e848ed62918602c13" },
-				{
-					"binding": "RATE_LIMIT_KV",
-					"id": "2c80e4bba64943a29e4bf091374a1362"
-				},
 				{
 					"binding": "TUS_SESSIONS",
 					"id": "a200f6a898594502971558727243e538"

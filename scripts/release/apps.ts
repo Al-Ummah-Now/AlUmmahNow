@@ -96,7 +96,8 @@ export const APPS: AppRule[] = [
 			requiredBindings: [
 				INTERNAL_API_KEY,
 				{ kind: 'secrets_store_secrets', name: 'BUNNY_TOKEN_KEY' },
-				{ kind: 'kv_namespaces', name: 'RATE_LIMIT_KV' },
+				// Search index; also the upload rate limits (SCALABILITY-AUDIT AV-14)
+				{ kind: 'd1_databases', name: 'SEARCH_DB' },
 				{ kind: 'kv_namespaces', name: 'TUS_SESSIONS' },
 				{ kind: 'queue_producer', name: 'queue' },
 				{ kind: 'queue_producer', name: 'MODERATION_QUEUE' },
