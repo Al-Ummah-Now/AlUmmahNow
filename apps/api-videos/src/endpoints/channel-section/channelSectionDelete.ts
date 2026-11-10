@@ -83,14 +83,14 @@ export class ChannelSectionDelete extends AuthenticatedRoute {
 
     const userId = this.getUserId(c);
 
-    logger.info(`Deleting section ${sectionId} for channel ${channelId} by user ${userId}`);
+    logger.debug(`Deleting section ${sectionId} for channel ${channelId} by user ${userId}`);
 
     // Verify channel exists and ownership
     const channelRepo = new R2Repository<Channel>(c.env.channels);
     const channel = await channelRepo.getObject(channelId);
 
     if (!channel) {
-      logger.warn(`Channel not found: ${channelId}`);
+      logger.debug(`Channel not found: ${channelId}`);
       return c.json(
         {
           success: false,
@@ -110,7 +110,7 @@ export class ChannelSectionDelete extends AuthenticatedRoute {
     const section = await sectionsRepo.getObject(`${channelId}/${sectionId}`);
 
     if (!section) {
-      logger.warn(`Section not found: ${sectionId} in channel ${channelId}`);
+      logger.debug(`Section not found: ${sectionId} in channel ${channelId}`);
       return c.json(
         {
           success: false,
@@ -138,7 +138,7 @@ export class ChannelSectionDelete extends AuthenticatedRoute {
       timestamp: new Date().toISOString(),
     });
 
-    logger.info(`Successfully deleted section ${sectionId} from channel ${channelId}`);
+    logger.debug(`Successfully deleted section ${sectionId} from channel ${channelId}`);
 
     return c.json({
       success: true,

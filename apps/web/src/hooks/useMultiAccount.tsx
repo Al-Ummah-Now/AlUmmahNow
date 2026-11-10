@@ -245,7 +245,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       const expectedCache = cacheChannels(live.map(toSessionChannel), current.id, activeRevoked ? null : activeId);
       const cached = cacheChannels(cookieChannelsRef.current.map((c) => toSessionChannel(c as unknown as Channel)), current.id, activeId);
       if (activeRevoked || !sameChannelList(expectedCache, cached)) {
-        logger.info('[MultiAccountProvider] Channel list changed; updating the session cache', { activeRevoked, channels: channels.length });
+        logger.debug('[MultiAccountProvider] Channel list changed; updating the session cache', { activeRevoked, channels: channels.length });
         await reloadUserChannels();
         const sessionInfo = await getActiveSessionInfo();
         if (sessionInfo && mountedRef.current) {
@@ -274,7 +274,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
   const loadSessionData = useCallback((): Promise<void> => {
     if (loadInFlightRef.current) {
       if (!reloadQueuedRef.current) {
-        logger.info('[MultiAccountProvider] Already loading, loading again after it');
+        logger.debug('[MultiAccountProvider] Already loading, loading again after it');
         reloadQueuedRef.current = loadInFlightRef.current.then(() => {
           reloadQueuedRef.current = null;
           return loadSessionData();
@@ -295,13 +295,13 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
           setError(null);
         }
 
-        logger.info('[MultiAccountProvider] Fetching session info...');
+        logger.debug('[MultiAccountProvider] Fetching session info...');
         const authOrigin = getAuthUrl();
         const sessionInfo = await getActiveSessionInfo();
-        logger.info('[MultiAccountProvider] Session info received:', sessionInfo ? 'Has data' : 'No data');
+        logger.debug('[MultiAccountProvider] Session info received:', sessionInfo ? 'Has data' : 'No data');
 
         if (!mountedRef.current) {
-          logger.info('[MultiAccountProvider] Component unmounted, aborting');
+          logger.debug('[MultiAccountProvider] Component unmounted, aborting');
           return;
         }
 
@@ -312,7 +312,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
             tabStorage.set(PROBE_FLAG);
             // Anonymous visitors ask the auth server once per tab, no more
             if (probeOutcome(await fetchAuthAccounts(authOrigin)) === 'sign-in') {
-              logger.info('[MultiAccountProvider] Signed in on the auth server, signing in here silently');
+              logger.debug('[MultiAccountProvider] Signed in on the auth server, signing in here silently');
               silentSignIn();
               return;
             }
@@ -332,7 +332,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
           });
           if (follow.kind !== 'none') {
             tabStorage.set(followKey(follow.userId));
-            logger.info('[MultiAccountProvider] Following the active account of the auth server', { how: follow.kind });
+            logger.debug('[MultiAccountProvider] Following the active account of the auth server', { how: follow.kind });
             if (follow.kind === 'silent-sign-in') {
               silentSignIn();
               return;
@@ -353,7 +353,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
           setAccounts(sessionInfo.accounts);
           // The live list replaces the cookie's first-paint cache
           void refreshLiveChannels(true);
-          logger.info('[MultiAccountProvider] Session loaded successfully:', {
+          logger.debug('[MultiAccountProvider] Session loaded successfully:', {
           
             email: sessionInfo.user?.email,
             accountsCount: sessionInfo.accounts.length
@@ -361,7 +361,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
         } else {
           applySessionUser(null);
           setAccounts([]);
-          logger.info('[MultiAccountProvider] No session found');
+          logger.debug('[MultiAccountProvider] No session found');
         }
 
         // Dispatch event to notify other components (like CookieSizeMonitor)
@@ -378,7 +378,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
         if (mountedRef.current) {
           setLoading(false);
         }
-        logger.info('[MultiAccountProvider] Loading complete, loading state set to false');
+        logger.debug('[MultiAccountProvider] Loading complete, loading state set to false');
       }
     }
     // router is stable from useRouter()
@@ -406,7 +406,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
   // Listen for navigation events to detect OAuth callback returns
   useEffect(() => {
     const handleRouteChange = () => {
-      logger.info('[MultiAccountProvider] Route changed, reloading session data');
+      logger.debug('[MultiAccountProvider] Route changed, reloading session data');
       loadSessionData();
     };
 
@@ -431,7 +431,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    logger.info('[MultiAccountProvider] Session updated parameter detected');
+    logger.debug('[MultiAccountProvider] Session updated parameter detected');
 
     // Clean up URL immediately
     const newUrl = new URL(window.location.href);
@@ -441,7 +441,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
     // The session will load via the normal loadSessionData on mount
     // Just trigger a router refresh after a short delay to ensure everything is ready
     const timeoutId = setTimeout(() => {
-      logger.info('[MultiAccountProvider] Calling router.refresh() after OAuth callback');
+      logger.debug('[MultiAccountProvider] Calling router.refresh() after OAuth callback');
       router.refresh();
     }, 200);
 
@@ -481,21 +481,21 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       const currentPath = window.location.pathname;
       const result = await switchUserAccount(userId, currentPath);
 
-      logger.info('[MultiAccountProvider] Account switched successfully');
-      logger.info('[MultiAccountProvider] Current path:', currentPath);
-      logger.info('[MultiAccountProvider] Redirect needed?', result.needsRedirect);
-      logger.info('[MultiAccountProvider] Redirect path:', result.redirectPath);
+      logger.debug('[MultiAccountProvider] Account switched successfully');
+      logger.debug('[MultiAccountProvider] Current path:', currentPath);
+      logger.debug('[MultiAccountProvider] Redirect needed?', result.needsRedirect);
+      logger.debug('[MultiAccountProvider] Redirect path:', result.redirectPath);
 
       // Reload session data to get new user/channels
       await loadSessionData();
 
       if (result.needsRedirect && result.redirectPath) {
         // Navigate to redirect path (e.g., from /profile/create to home if new user has profile)
-        logger.info('[MultiAccountProvider] Navigating to:', result.redirectPath);
+        logger.debug('[MultiAccountProvider] Navigating to:', result.redirectPath);
         router.push(result.redirectPath);
       } else {
         // Stay on current page but refresh to re-run ProfileGuard and server components
-        logger.info('[MultiAccountProvider] Refreshing current page');
+        logger.debug('[MultiAccountProvider] Refreshing current page');
         router.refresh();
       }
     } catch (err) {
@@ -626,7 +626,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
 
       const next = decideAfterSignOut({ authAccounts: await fetchAuthAccounts(authOrigin), localUserIds, signOutUrl });
       if (next.kind === 'single-sign-out') {
-        logger.info('[MultiAccountProvider] Last account logged out, starting single sign-out');
+        logger.debug('[MultiAccountProvider] Last account logged out, starting single sign-out');
         window.location.assign(next.url);
         return;
       }
@@ -661,7 +661,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       const { signOutUrl } = await logoutAllAccounts(currentLocale());
       applySessionUser(null);
       setAccounts([]);
-      logger.info('[MultiAccountProvider] All accounts logged out, starting single sign-out');
+      logger.debug('[MultiAccountProvider] All accounts logged out, starting single sign-out');
       if (signOutUrl) window.location.assign(signOutUrl);
     } catch (err) {
       logger.error('[MultiAccountProvider] Failed to logout all:', err);

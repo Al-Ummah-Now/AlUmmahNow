@@ -40,7 +40,7 @@ export function shouldVerifyJWTSignature(env: any): boolean {
       security_risk: 'This should NEVER happen in production'
     });
   } else {
-    logger.info('JWT signature verification ENABLED', {
+    logger.debug('JWT signature verification ENABLED', {
       environment,
       security: 'Production-grade token validation active'
     });

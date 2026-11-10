@@ -161,7 +161,7 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 			const repository = new R2Repository<VideoType>(c.env.videos);
 			const queue = new Queue(c.env.queue);
 
-			logger.info('[UploadBatchInitiate] Initiating batch', {
+			logger.debug('[UploadBatchInitiate] Initiating batch', {
 				userId,
 				channelId,
 				videoCount: videos.length,
@@ -283,7 +283,7 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 				};
 			}));
 
-			logger.info('[UploadBatchInitiate] Batch initiated', {
+			logger.debug('[UploadBatchInitiate] Batch initiated', {
 				userId,
 				channelId,
 				videoIds: results.map(r => r.videoId),

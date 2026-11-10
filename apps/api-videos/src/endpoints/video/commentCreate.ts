@@ -184,7 +184,7 @@ export class CommentCreate extends AuthenticatedRoute {
 
 		const [item] = await toCommentListItems(c.env, [comment], channelId, { userId, isVideoOwner }, { videoId: id });
 
-		logger.info('[CommentCreate] Comment created', { videoId: id, commentId: comment.id, channelId, parentCommentId: parent?.id, held });
+		logger.debug('[CommentCreate] Comment created', { videoId: id, commentId: comment.id, channelId, parentCommentId: parent?.id, held });
 
 		if (!held) {
 			// Realtime: viewers of the video get the comment with its author (no viewer-specific flags)

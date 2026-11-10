@@ -108,13 +108,13 @@ export function useTranslationsQuery(locale: SupportedLanguage) {
   return useQuery({
     queryKey: translationsQueryKeys.locale(locale),
     queryFn: async (): Promise<AppTranslations> => {
-      logger.info('Fetching translations from API', { locale });
+      logger.debug('Fetching translations from API', { locale });
       const apiData = await getApiTranslations(locale);
 
       if (apiData && apiData.translations) {
         // Merge API translations over static (key-by-key fallback)
         const merged = deepMergeTranslations(staticTranslations, apiData.translations);
-        logger.info('Loaded translations from R2', { locale, appName: merged.common.appName });
+        logger.debug('Loaded translations from R2', { locale, appName: merged.common.appName });
         return merged;
       }
 

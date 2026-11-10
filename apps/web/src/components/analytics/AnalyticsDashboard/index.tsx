@@ -86,7 +86,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
       videoId: d.csvVideoId,
       published: d.csvPublished,
     });
-    logger.info('[AnalyticsDashboard] CSV export', { channelId: channelData?.channelId, days: metrics?.length ?? 0 });
+    logger.debug('[AnalyticsDashboard] CSV export', { channelId: channelData?.channelId, days: metrics?.length ?? 0 });
     downloadCsv(analyticsCsvFilename(channelData?.channelId), csv);
   };
 

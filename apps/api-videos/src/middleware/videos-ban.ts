@@ -37,7 +37,7 @@ export async function videosBanMiddleware(c: Context, next: Next) {
 		return next();
 	}
 	if (!ban) return next();
-	logger.info('[VideosBan] Request refused for a banned user', { userId: auth.userId, method: c.req.method, path: c.req.path });
+	logger.debug('[VideosBan] Request refused for a banned user', { userId: auth.userId, method: c.req.method, path: c.req.path });
 	return c.json(
 		{
 			success: false,

@@ -46,7 +46,7 @@ export function VideoSection({
 
   const handleLoadMore = () => {
     if (onLoadMore && !loadingMore) {
-      logger.info('[VideoSection] Loading more videos', { section: title });
+      logger.debug('[VideoSection] Loading more videos', { section: title });
       onLoadMore();
     }
   };

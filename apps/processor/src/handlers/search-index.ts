@@ -62,7 +62,7 @@ export async function handleSearchIndexSync(message: AlUmmahMessage, env: QueueE
     }
   }
   const result = await syncSearchDocument(db, entity, id, object ?? null, { version });
-  logger.info('Search index synced', { entity, id, version, result });
+  logger.debug('Search index synced', { entity, id, version, result });
 }
 
 /** Remove content a moderator removed or banned from the search index. */
@@ -89,5 +89,5 @@ export async function applyModerationToSearchIndex(
     }
   }
   const result = await removeSearchDocument(db, type, payload.entityId);
-  logger.info('Moderated content removed from search index', { type, id: payload.entityId, result });
+  logger.debug('Moderated content removed from search index', { type, id: payload.entityId, result });
 }

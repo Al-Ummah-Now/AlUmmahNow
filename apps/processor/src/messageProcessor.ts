@@ -73,7 +73,7 @@ export class MessageProcessor {
 
   async processMessage(message: AlUmmahMessage, env: QueueEnvironment): Promise<ProcessingResult> {
     const startTime = Date.now();
-    this.logger.info(`Processing message ${message.id} of type ${message.type}`);
+    this.logger.debug(`Processing message ${message.id} of type ${message.type}`);
 
     try {
       // Validate message structure
@@ -89,7 +89,7 @@ export class MessageProcessor {
       if (!this.batchCounters) await this.flushCounters(env);
 
       const processingTime = Date.now() - startTime;
-      this.logger.info(`Successfully processed message ${message.id} in ${processingTime}ms`);
+      this.logger.debug(`Successfully processed message ${message.id} in ${processingTime}ms`);
       
       return {
         success: true,
@@ -258,7 +258,7 @@ export class MessageProcessor {
       // Client-side telemetry (A/B test exposures, web vitals, player performance).
       // Persisted by saveMessageToR2; nothing else to do.
       case MessageType.ClientAnalyticsEvent:
-        this.logger.info('Client analytics batch stored', {
+        this.logger.debug('Client analytics batch stored', {
           kind: (message.payload as { kind?: string }).kind,
           eventCount: Array.isArray((message.payload as { events?: unknown[] }).events)
             ? (message.payload as { events: unknown[] }).events.length
@@ -317,16 +317,16 @@ export class MessageProcessor {
     // Process profile-related actions
     switch (message.type) {
       case MessageType.ProfileCreate:
-        this.logger.info(`Profile created for user ${userId}`);
+        this.logger.debug(`Profile created for user ${userId}`);
         break;
       case MessageType.ProfileUpdate:
-        this.logger.info(`Profile updated for user ${userId}`);
+        this.logger.debug(`Profile updated for user ${userId}`);
         break;
       case MessageType.ProfileDelete:
-        this.logger.info(`Profile deleted for user ${userId}`);
+        this.logger.debug(`Profile deleted for user ${userId}`);
         break;
       case MessageType.ProfileView:
-        this.logger.info(`Profile viewed by ${userId || 'anonymous'}`);
+        this.logger.debug(`Profile viewed by ${userId || 'anonymous'}`);
         break;
     }
   }
@@ -344,16 +344,16 @@ export class MessageProcessor {
     // Process channel-related actions
     switch (message.type) {
       case MessageType.ChannelCreate:
-        this.logger.info(`Channel ${channelId} created by user ${userId}`);
+        this.logger.debug(`Channel ${channelId} created by user ${userId}`);
         break;
       case MessageType.ChannelUpdate:
-        this.logger.info(`Channel ${channelId} updated by user ${userId}`);
+        this.logger.debug(`Channel ${channelId} updated by user ${userId}`);
         break;
       case MessageType.ChannelDelete:
-        this.logger.info(`Channel ${channelId} deleted by user ${userId}`);
+        this.logger.debug(`Channel ${channelId} deleted by user ${userId}`);
         break;
       case MessageType.ChannelView:
-        this.logger.info(`Channel ${channelId} viewed by ${userId || 'anonymous'}`);
+        this.logger.debug(`Channel ${channelId} viewed by ${userId || 'anonymous'}`);
         break;
     }
   }
@@ -381,10 +381,10 @@ export class MessageProcessor {
     // Process subscription actions
     switch (message.type) {
       case MessageType.Subscribe:
-        this.logger.info(`User ${userId} subscribed to channel ${channelId}`);
+        this.logger.debug(`User ${userId} subscribed to channel ${channelId}`);
         break;
       case MessageType.Unsubscribe:
-        this.logger.info(`User ${userId} unsubscribed from channel ${channelId}`);
+        this.logger.debug(`User ${userId} unsubscribed from channel ${channelId}`);
         break;
     }
   }
@@ -404,28 +404,28 @@ export class MessageProcessor {
     // Process video-related actions
     switch (message.type) {
       case MessageType.VideoCreate:
-        this.logger.info(`Video ${videoId} created by user ${actualUserId || 'unknown'}`);
+        this.logger.debug(`Video ${videoId} created by user ${actualUserId || 'unknown'}`);
         break;
       case MessageType.VideoEdit:
-        this.logger.info(`Video ${videoId} edited by user ${actualUserId || 'unknown'}`);
+        this.logger.debug(`Video ${videoId} edited by user ${actualUserId || 'unknown'}`);
         break;
       case MessageType.VideoDelete:
-        this.logger.info(`Video ${videoId} deleted by user ${actualUserId || 'unknown'}`);
+        this.logger.debug(`Video ${videoId} deleted by user ${actualUserId || 'unknown'}`);
         break;
       case MessageType.VideoView:
-        this.logger.info(`Video ${videoId} viewed by user ${actualUserId || 'anonymous'}`);
+        this.logger.debug(`Video ${videoId} viewed by user ${actualUserId || 'anonymous'}`);
         break;
       case MessageType.VideoLike:
-        this.logger.info(`Video ${videoId} liked by user ${actualUserId || 'unknown'}`);
+        this.logger.debug(`Video ${videoId} liked by user ${actualUserId || 'unknown'}`);
         break;
       case MessageType.VideoUnlike:
-        this.logger.info(`Video ${videoId} unliked by user ${actualUserId || 'unknown'}`);
+        this.logger.debug(`Video ${videoId} unliked by user ${actualUserId || 'unknown'}`);
         break;
       case MessageType.VideoDislike:
-        this.logger.info(`Video ${videoId} disliked by user ${actualUserId || 'unknown'}`);
+        this.logger.debug(`Video ${videoId} disliked by user ${actualUserId || 'unknown'}`);
         break;
       case MessageType.VideoUndislike:
-        this.logger.info(`Video ${videoId} undisliked by user ${actualUserId || 'unknown'}`);
+        this.logger.debug(`Video ${videoId} undisliked by user ${actualUserId || 'unknown'}`);
         break;
     }
   }
@@ -435,7 +435,7 @@ export class MessageProcessor {
 
     // Search telemetry is published with the VideoView type but has no videoId.
     if (!payload.videoId && payload.searchQuery !== undefined) {
-      this.logger.info('Search event recorded', { query: payload.searchQuery });
+      this.logger.debug('Search event recorded', { query: payload.searchQuery });
       return;
     }
 
@@ -467,7 +467,7 @@ export class MessageProcessor {
       [MessageType.VideoUploadCancelled]: 'cancelled',
     };
     const status = statusByType[message.type] as ProcessingStatus;
-    this.logger.info(`Video ${payload.videoId} upload status: ${status}`, { userId: payload.userId });
+    this.logger.debug(`Video ${payload.videoId} upload status: ${status}`, { userId: payload.userId });
 
     // Terminal states are stored in the uploader's notification center first so
     // the realtime event carries the stored id (or is skipped when opted out).
@@ -509,7 +509,7 @@ export class MessageProcessor {
     // Push the row unless it was already pushed: a retry after a failure
     // between store and push still pushes it (SCALABILITY-AUDIT PR-10)
     const pending = await unpushedNotification(env.NOTIFICATIONS_DB, payload);
-    this.logger.info('Notification stored', {
+    this.logger.debug('Notification stored', {
       userId: payload.recipientUserId,
       key: payload.notificationKey,
       stored: !!stored,
@@ -557,7 +557,7 @@ export class MessageProcessor {
     const pushed = await pushStoredNotifications(env, page.rows, data);
     await enqueuePush(env, page.rows, data);
     await markPushed(env.NOTIFICATIONS_DB, page.rows);
-    this.logger.info('Notification fan-out page finished', {
+    this.logger.debug('Notification fan-out page finished', {
       kind: payload.kind,
       channelId: payload.channelId,
       entityId: payload.entityId,
@@ -583,7 +583,7 @@ export class MessageProcessor {
       return;
     }
     const summary = await dispatchPush(env.NOTIFICATIONS_DB, payload, this.pushProviders);
-    this.logger.info('Push dispatch finished', { key: payload.notificationKey, recipients: payload.recipients.length, ...summary });
+    this.logger.debug('Push dispatch finished', { key: payload.notificationKey, recipients: payload.recipients.length, ...summary });
   }
 
   private async processLiveStreamMessage(message: AlUmmahMessage, env: QueueEnvironment): Promise<void> {
@@ -591,7 +591,7 @@ export class MessageProcessor {
     if (!payload.liveStreamId) {
       throw new Error('Live stream message missing required field: liveStreamId');
     }
-    this.logger.info(`Live stream ${payload.liveStreamId} event ${MessageType[message.type]}`, { status: payload.status });
+    this.logger.debug(`Live stream ${payload.liveStreamId} event ${MessageType[message.type]}`, { status: payload.status });
 
     if (message.type === MessageType.LiveStreamView) return;
 
@@ -616,25 +616,25 @@ export class MessageProcessor {
     // Process comment-related actions
     switch (message.type) {
       case MessageType.CommentCreate:
-        this.logger.info(`Comment ${commentId} created by user ${userId} on video ${videoId}`);
+        this.logger.debug(`Comment ${commentId} created by user ${userId} on video ${videoId}`);
         break;
       case MessageType.CommentEdit:
-        this.logger.info(`Comment ${commentId} edited by user ${userId} on video ${videoId}`);
+        this.logger.debug(`Comment ${commentId} edited by user ${userId} on video ${videoId}`);
         break;
       case MessageType.CommentDelete:
-        this.logger.info(`Comment ${commentId} deleted by user ${userId} on video ${videoId}`);
+        this.logger.debug(`Comment ${commentId} deleted by user ${userId} on video ${videoId}`);
         break;
       case MessageType.CommentLike:
-        this.logger.info(`Comment ${commentId} liked by user ${userId} on video ${videoId}`);
+        this.logger.debug(`Comment ${commentId} liked by user ${userId} on video ${videoId}`);
         break;
       case MessageType.CommentDislike:
-        this.logger.info(`Comment ${commentId} disliked by user ${userId} on video ${videoId}`);
+        this.logger.debug(`Comment ${commentId} disliked by user ${userId} on video ${videoId}`);
         break;
       case MessageType.CommentUnlike:
-        this.logger.info(`Comment ${commentId} unliked by user ${userId} on video ${videoId}`);
+        this.logger.debug(`Comment ${commentId} unliked by user ${userId} on video ${videoId}`);
         break;
       case MessageType.CommentUndislike:
-        this.logger.info(`Comment ${commentId} undisliked by user ${userId} on video ${videoId}`);
+        this.logger.debug(`Comment ${commentId} undisliked by user ${userId} on video ${videoId}`);
         break;
     }
   }
@@ -651,22 +651,22 @@ export class MessageProcessor {
     // Process playlist-related actions
     switch (message.type) {
       case MessageType.PlaylistCreate:
-        this.logger.info(`Playlist ${playlistId} created by user ${userId}`);
+        this.logger.debug(`Playlist ${playlistId} created by user ${userId}`);
         break;
       case MessageType.PlaylistEdit:
-        this.logger.info(`Playlist ${playlistId} edited by user ${userId}`);
+        this.logger.debug(`Playlist ${playlistId} edited by user ${userId}`);
         break;
       case MessageType.PlaylistDelete:
-        this.logger.info(`Playlist ${playlistId} deleted by user ${userId}`);
+        this.logger.debug(`Playlist ${playlistId} deleted by user ${userId}`);
         break;
       case MessageType.PlaylistAdd:
-        this.logger.info(`Video added to playlist ${playlistId} by user ${userId}`);
+        this.logger.debug(`Video added to playlist ${playlistId} by user ${userId}`);
         break;
       case MessageType.PlaylistRemove:
-        this.logger.info(`Video removed from playlist ${playlistId} by user ${userId}`);
+        this.logger.debug(`Video removed from playlist ${playlistId} by user ${userId}`);
         break;
       case MessageType.PlaylistClone:
-        this.logger.info(`Playlist ${playlistId} cloned by user ${userId}`);
+        this.logger.debug(`Playlist ${playlistId} cloned by user ${userId}`);
         break;
     }
   }
@@ -732,18 +732,18 @@ export class MessageProcessor {
     // Log watch history events for analytics
     switch (type) {
       case 'watch_started':
-        this.logger.info(`User ${userId} started watching video ${videoId}`);
+        this.logger.debug(`User ${userId} started watching video ${videoId}`);
         break;
       case 'watch_progress':
         if (progress !== undefined && duration !== undefined && duration > 0) {
           const percentage = Math.round((progress / duration) * 100);
-          this.logger.info(`User ${userId} progress on video ${videoId}: ${percentage}% (${progress}s/${duration}s)`);
+          this.logger.debug(`User ${userId} progress on video ${videoId}: ${percentage}% (${progress}s/${duration}s)`);
         } else {
           this.logger.warn(`Watch progress event missing progress/duration fields for video ${videoId}`);
         }
         break;
       case 'watch_completed':
-        this.logger.info(`User ${userId} completed watching video ${videoId}`);
+        this.logger.debug(`User ${userId} completed watching video ${videoId}`);
         break;
       default:
         this.logger.warn(`Unknown watch history event type: ${type}`);
@@ -766,13 +766,13 @@ export class MessageProcessor {
     // Process community post actions
     switch (message.type) {
       case MessageType.CommunityPostCreated:
-        this.logger.info(`Community post ${postId} created on channel ${channelId} by actor`, { actor });
+        this.logger.debug(`Community post ${postId} created on channel ${channelId} by actor`, { actor });
         break;
       case MessageType.CommunityPostUpdated:
-        this.logger.info(`Community post ${postId} updated on channel ${channelId} by actor`, { actor });
+        this.logger.debug(`Community post ${postId} updated on channel ${channelId} by actor`, { actor });
         break;
       case MessageType.CommunityPostDeleted:
-        this.logger.info(`Community post ${postId} deleted from channel ${channelId} by actor`, { actor });
+        this.logger.debug(`Community post ${postId} deleted from channel ${channelId} by actor`, { actor });
         break;
       // CommunityPostLiked/Unliked are now handled by dedicated handlePostLikeEvent handler
       // PollVoted is now handled by dedicated handlePollVoteEvent handler
@@ -797,25 +797,25 @@ export class MessageProcessor {
     // Process post comment actions
     switch (message.type) {
       case MessageType.PostCommentCreated:
-        this.logger.info(`Comment ${commentId} created on post ${postId} by actor`, { actor });
+        this.logger.debug(`Comment ${commentId} created on post ${postId} by actor`, { actor });
         break;
       case MessageType.PostCommentUpdated:
-        this.logger.info(`Comment ${commentId} updated on post ${postId} by actor`, { actor });
+        this.logger.debug(`Comment ${commentId} updated on post ${postId} by actor`, { actor });
         break;
       case MessageType.PostCommentLiked:
-        this.logger.info(`Comment ${commentId} liked on post ${postId} by actor`, { actor });
+        this.logger.debug(`Comment ${commentId} liked on post ${postId} by actor`, { actor });
         break;
       case MessageType.PostCommentUnliked:
-        this.logger.info(`Comment ${commentId} unliked on post ${postId} by actor`, { actor });
+        this.logger.debug(`Comment ${commentId} unliked on post ${postId} by actor`, { actor });
         break;
       case MessageType.PostCommentDeleted:
-        this.logger.info(`Comment ${commentId} deleted from post ${postId} by actor`, { actor });
+        this.logger.debug(`Comment ${commentId} deleted from post ${postId} by actor`, { actor });
         break;
       case MessageType.PostCommentPinned:
-        this.logger.info(`Comment ${commentId} pinned on post ${postId} by actor`, { actor });
+        this.logger.debug(`Comment ${commentId} pinned on post ${postId} by actor`, { actor });
         break;
       case MessageType.PostCommentHearted:
-        this.logger.info(`Comment ${commentId} hearted on post ${postId} by actor`, { actor });
+        this.logger.debug(`Comment ${commentId} hearted on post ${postId} by actor`, { actor });
         break;
     }
   }
@@ -844,7 +844,7 @@ export class MessageProcessor {
       // Their community post likes and poll votes come off the counters (PR-2/3/4)
       await eraseUserPostInteractions(env.NOTIFICATIONS_DB, userId);
     }
-    this.logger.info('Anonymised moderation reports after user data erasure', {
+    this.logger.debug('Anonymised moderation reports after user data erasure', {
       userId,
       changes: (result as { meta?: { changes?: number } })?.meta?.changes ?? 0,
     });
@@ -905,7 +905,7 @@ export class MessageProcessor {
           VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
         `).bind(reportId, entityType, entityId, reporterId, reason, description || null, createdAt).run();
 
-        this.logger.info(`Report ${reportId} saved for ${entityType} ${entityId}`, {
+        this.logger.debug(`Report ${reportId} saved for ${entityType} ${entityId}`, {
           reason,
           reporterId,
         });
@@ -938,7 +938,7 @@ export class MessageProcessor {
           WHERE id = ?
         `).bind(finalStatus, moderatorId ?? null, action ?? null, moderatorNotes || null, resolvedAt, resolvedAt, reportId).run();
 
-        this.logger.info(`Report ${reportId} resolved by moderator ${moderatorId}`, {
+        this.logger.debug(`Report ${reportId} resolved by moderator ${moderatorId}`, {
           action,
           entityType,
           entityId,

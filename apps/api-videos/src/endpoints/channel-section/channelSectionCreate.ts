@@ -136,7 +136,7 @@ export class ChannelSectionCreate extends AuthenticatedRoute {
 
     const userId = this.getUserId(c);
 
-    logger.info(`Creating section for channel ${channelId} by user ${userId}`, {
+    logger.debug(`Creating section for channel ${channelId} by user ${userId}`, {
       type: input.type,
       title: input.title,
     });
@@ -146,7 +146,7 @@ export class ChannelSectionCreate extends AuthenticatedRoute {
     const channel = await channelRepo.getObject(channelId);
 
     if (!channel) {
-      logger.warn(`Channel not found: ${channelId}`);
+      logger.debug(`Channel not found: ${channelId}`);
       return c.json(
         {
           success: false,
@@ -189,7 +189,7 @@ export class ChannelSectionCreate extends AuthenticatedRoute {
     );
 
     if (rejected || !order) {
-      logger.warn(`Maximum sections limit reached for channel ${channelId}`);
+      logger.debug(`Maximum sections limit reached for channel ${channelId}`);
       return reject({ status: 400, code: 'section_limit', error: `Up to ${CHANNEL_SECTION_CONSTRAINTS.MAX_SECTIONS_PER_CHANNEL} sections per channel` });
     }
     const nextPosition = order.sectionIds.indexOf(sectionId);
@@ -246,7 +246,7 @@ export class ChannelSectionCreate extends AuthenticatedRoute {
     // Transform to view model
     const sectionView = transformChannelSectionToView(section, channel);
 
-    logger.info(`Successfully created section ${section.id} for channel ${channelId}`, {
+    logger.debug(`Successfully created section ${section.id} for channel ${channelId}`, {
       type: section.type,
       position: section.position,
     });

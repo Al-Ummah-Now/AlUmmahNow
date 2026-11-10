@@ -21,6 +21,8 @@ export default [
       "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
       "@typescript-eslint/no-explicit-any": "off",
       "no-case-declarations": "off",
+      // Logging policy (docs/operations/logging.md): production code logs through the logger, never console.log/info/debug
+      "no-console": ["error", { allow: ["warn", "error"] }],
     },
   },
 ];

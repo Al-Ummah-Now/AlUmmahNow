@@ -34,7 +34,7 @@ export function VideosPageClient() {
   const loadPage = useCallback(async (cursor: string | null) => {
     setLoading(true);
     setError(false);
-    logger.info('VideosPage: Fetching videos', { cursor: cursor || 'initial' });
+    logger.debug('VideosPage: Fetching videos', { cursor: cursor || 'initial' });
     try {
       const page = await fetchVideosWithPagination(cursor);
       if (!page) {
@@ -48,7 +48,7 @@ export function VideosPageClient() {
         return [...prev, ...pageVideos.filter((v) => !seen.has(v.id))];
       });
       setNextCursor(getNextVideosCursor(page));
-      logger.info('VideosPage: Videos loaded', { count: pageVideos.length });
+      logger.debug('VideosPage: Videos loaded', { count: pageVideos.length });
     } catch (err) {
       logger.error('VideosPage: Failed to fetch videos', { error: err });
       setError(true);

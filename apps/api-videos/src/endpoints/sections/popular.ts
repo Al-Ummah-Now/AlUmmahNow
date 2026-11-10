@@ -130,7 +130,7 @@ export class PopularVideosSection extends PublicRoute {
 
       if (popularIndex) {
         // Use index data
-        logger.info("Using popular videos index", { period, indexVideos: popularIndex.videos.length });
+        logger.debug("Using popular videos index", { period, indexVideos: popularIndex.videos.length });
         fromIndex = true;
 
         // Apply filters to index data
@@ -148,7 +148,7 @@ export class PopularVideosSection extends PublicRoute {
             const decodedCursor = JSON.parse(atob(cursor));
             startIndex = decodedCursor.offset || 0;
           } catch (e) {
-            logger.warn("Invalid cursor provided", { cursor });
+            logger.debug("Invalid cursor provided", { cursor });
           }
         }
 
@@ -191,7 +191,7 @@ export class PopularVideosSection extends PublicRoute {
         }
       } else {
         // Fall back to direct R2 query
-        logger.info("Index stale or not found, using direct R2 query");
+        logger.debug("Index stale or not found, using direct R2 query");
         fromIndex = false;
 
         // List all videos (limited for performance)

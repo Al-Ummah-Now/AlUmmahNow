@@ -64,7 +64,7 @@ export async function uploadFileDirect<T = unknown>(
     throw new DirectUploadError(message, response.status, body);
   }
 
-  logger.info('[uploadFileDirect] Uploaded', { path, status: response.status });
+  logger.debug('[uploadFileDirect] Uploaded', { path, status: response.status });
   return body as T;
 }
 

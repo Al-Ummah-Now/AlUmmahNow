@@ -107,7 +107,7 @@ export class GetTranslationsEndpoint extends PublicRoute {
       const object = await bucket.get(key);
 
       if (!object) {
-        logger.warn(`Translations not found for locale: ${locale}`);
+        logger.debug(`Translations not found for locale: ${locale}`);
         return c.json(
           {
             success: false,
@@ -132,7 +132,7 @@ export class GetTranslationsEndpoint extends PublicRoute {
       // Parse and return translations
       const translationData: TranslationData = await object.json();
 
-      logger.info(`Fetched translations for locale: ${locale}, version: ${translationData.version}`);
+      logger.debug(`Fetched translations for locale: ${locale}, version: ${translationData.version}`);
 
       return c.json(
         {

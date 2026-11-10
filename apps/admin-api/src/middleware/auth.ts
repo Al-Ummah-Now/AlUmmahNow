@@ -181,7 +181,7 @@ async function validateJWTBasic(token: string): Promise<AuthPayload | null> {
 
     const now = Math.floor(Date.now() / 1000);
     if (payload.exp && payload.exp < now) {
-      logger.warn('JWT token expired', { exp: payload.exp, now });
+      logger.debug('JWT token expired', { exp: payload.exp, now });
       return null;
     }
 
@@ -242,7 +242,7 @@ async function validateJWTWithSignature(token: string, env?: any): Promise<AuthP
     }
 
     if ('error' in result) {
-      logger.error('OpenAuth verification error:', result.error);
+      logger.debug('OpenAuth verification rejected the token', { error: result.error });
     }
 
     return null;

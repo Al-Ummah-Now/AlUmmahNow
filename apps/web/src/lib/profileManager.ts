@@ -25,7 +25,7 @@ class ProfileManager {
   }
 
   async loadProfile(user: User | null) {
-    logger.info('ProfileManager.loadProfile called with:', { 
+    logger.debug('ProfileManager.loadProfile called with:', { 
       user: !!user, 
       
       userIdType: typeof user?.id,
@@ -72,7 +72,7 @@ class ProfileManager {
       if (profile) {
         this.profile = profile;
       } else {
-        logger.info('ProfileManager: ⚠️ API returned null/undefined');
+        logger.debug('ProfileManager: ⚠️ API returned null/undefined');
         this.profile = null;
       }
     } catch (error) {

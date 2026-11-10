@@ -95,7 +95,7 @@ export function useWatchProgress(
    */
   const debugLog = useCallback((...args: unknown[]) => {
     if (enableDebugLogging) {
-      logger.info('[useWatchProgress]', ...args);
+      logger.debug('[useWatchProgress]', ...args);
     }
   }, [enableDebugLogging]);
 

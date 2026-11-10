@@ -14,6 +14,6 @@ export async function POST(request: Request) {
   const response = NextResponse.redirect(startSingleSignOut(process.env.Issuer!, `${origin}/`), 303);
   for (const name of SIGN_IN_COOKIES) response.cookies.delete(name);
   response.headers.set('Cache-Control', 'no-store');
-  logger.info('[auth] Admin logged out, starting single sign-out');
+  logger.debug('[auth] Admin logged out, starting single sign-out');
   return response;
 }

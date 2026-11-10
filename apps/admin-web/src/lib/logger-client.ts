@@ -1,63 +1,42 @@
 /**
- * Client-side logger for browser environment
- * Console wrapper with consistent formatting and level filtering
+ * Browser logger. Logging policy (docs/operations/logging.md): on a production
+ * host the console shows nothing below warn, whatever the build says; QA/stage/
+ * preview hosts honour NEXT_PUBLIC_LOG_LEVEL (default warn); `next dev` shows debug.
+ * Data is redacted (tokens, emails, bodies) before it reaches the console.
  */
+/* eslint-disable no-console -- the one place browser code writes to the console */
 
-type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+import { isLogLevel, levelEnabled, redact, redactString, type LogLevel } from '@al-ummah/logger/policy';
 
-const LOG_LEVELS: Record<LogLevel, number> = {
-  debug: 0,
-  info: 1,
-  warn: 2,
-  error: 3,
-};
+/** Hosts that are not production: localhost, *.qa.*, *.stage.*, *.staging.*, *.preview.*, workers.dev. */
+const NON_PRODUCTION_HOST = /^(localhost|127\.0\.0\.1|\[::1\])$|(^|\.)(qa|stage|staging|preview)\.|\.workers\.dev$/i;
 
-/**
- * Get the minimum log level from environment or default to 'info' in production
- */
-function getMinLogLevel(): LogLevel {
-  // In production, default to 'warn' to reduce noise
-  // In development, default to 'debug' to see everything
-  const isDev = process.env.NODE_ENV === 'development';
-  const envLevel = process.env.NEXT_PUBLIC_LOG_LEVEL as LogLevel | undefined;
-
-  if (envLevel && envLevel in LOG_LEVELS) {
-    return envLevel;
-  }
-
-  return isDev ? 'debug' : 'warn';
+export function clientLogLevel(
+  hostname: string = typeof location !== 'undefined' ? location.hostname : '',
+  configured: string | undefined = process.env.NEXT_PUBLIC_LOG_LEVEL,
+  nodeEnv: string | undefined = process.env.NODE_ENV,
+): LogLevel {
+  if (nodeEnv === 'development') return isLogLevel(configured) ? configured : 'debug';
+  const level: LogLevel = isLogLevel(configured) ? configured : 'warn';
+  // Production host: never below warn
+  if (!NON_PRODUCTION_HOST.test(hostname) && !levelEnabled(level, 'warn')) return 'warn';
+  return level;
 }
 
-/**
- * Check if a log level should be output based on minimum level
- */
-function shouldLog(level: LogLevel): boolean {
-  const minLevel = getMinLogLevel();
-  return LOG_LEVELS[level] >= LOG_LEVELS[minLevel];
+function write(level: LogLevel, message: string, data?: unknown): void {
+  if (!levelEnabled(level, clientLogLevel())) return;
+  // Constant '%s' format: a message carrying user input is never read as a format string
+  const line = `[${level.toUpperCase()}] ${redactString(String(message))}`;
+  const args = data === undefined ? ['%s', line] : ['%s', line, redact(data)];
+  if (level === 'error') console.error(...args);
+  else if (level === 'warn') console.warn(...args);
+  else console.debug(...args);
 }
 
 export const logger = {
-  info: (message: string, data?: unknown) => {
-    if (shouldLog('info')) {
-      console.log(`[INFO] ${message}`, data !== undefined ? data : '');
-    }
-  },
-
-  warn: (message: string, data?: unknown) => {
-    if (shouldLog('warn')) {
-      console.warn(`[WARN] ${message}`, data !== undefined ? data : '');
-    }
-  },
-
-  error: (message: string, data?: unknown) => {
-    if (shouldLog('error')) {
-      console.error(`[ERROR] ${message}`, data !== undefined ? data : '');
-    }
-  },
-
-  debug: (message: string, data?: unknown) => {
-    if (shouldLog('debug')) {
-      console.log(`[DEBUG] ${message}`, data !== undefined ? data : '');
-    }
-  },
+  trace: (message: string, data?: unknown) => write('trace', message, data),
+  debug: (message: string, data?: unknown) => write('debug', message, data),
+  info: (message: string, data?: unknown) => write('info', message, data),
+  warn: (message: string, data?: unknown) => write('warn', message, data),
+  error: (message: string, data?: unknown) => write('error', message, data),
 };

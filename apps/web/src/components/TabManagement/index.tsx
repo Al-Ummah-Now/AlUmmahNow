@@ -71,7 +71,7 @@ export default function TabManagement({
       });
 
       setHasChanges(true);
-      logger.info('TabManagement: Tabs reordered', {
+      logger.debug('TabManagement: Tabs reordered', {
         activeId: active.id,
         overId: over.id,
         channelId,
@@ -109,7 +109,7 @@ export default function TabManagement({
     });
 
     setHasChanges(true);
-    logger.info('TabManagement: Tab visibility toggled', { tabId, channelId });
+    logger.debug('TabManagement: Tab visibility toggled', { tabId, channelId });
   };
 
   // Set default tab
@@ -126,7 +126,7 @@ export default function TabManagement({
 
     setDefaultTab(tabId);
     setHasChanges(true);
-    logger.info('TabManagement: Default tab set', { tabId, channelId });
+    logger.debug('TabManagement: Default tab set', { tabId, channelId });
   };
 
   // Save changes
@@ -136,7 +136,7 @@ export default function TabManagement({
     setSuccess(null);
 
     try {
-      logger.info('TabManagement: Saving tab configuration', {
+      logger.debug('TabManagement: Saving tab configuration', {
         channelId,
         defaultTab,
         tabsCount: tabs.length,
@@ -148,7 +148,7 @@ export default function TabManagement({
         setHasChanges(false);
         setSuccess(t.channel.tabs.changes_saved);
         setTimeout(() => setSuccess(null), 3000);
-        logger.info('TabManagement: Tab configuration saved successfully', {
+        logger.debug('TabManagement: Tab configuration saved successfully', {
           channelId,
         });
       } else {

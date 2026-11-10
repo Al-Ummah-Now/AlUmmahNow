@@ -520,7 +520,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
                   scheduledPublishTimezone: scheduleResult.result.timezone,
                   scheduledPublishStatus: scheduleResult.result.status,
                 };
-                logger.info('Video scheduled successfully:', schedulingInfo);
+                logger.debug('Video scheduled successfully:', schedulingInfo);
                 setScheduleError(null);
               } else {
                 const ref = reportUploadError('schedule', scheduleResult?.error || 'Scheduling failed', { flow: 'single', videoId, ...(selectedFile ? { file: selectedFile } : {}) });

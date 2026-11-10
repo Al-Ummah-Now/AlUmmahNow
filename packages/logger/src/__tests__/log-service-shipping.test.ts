@@ -1,4 +1,4 @@
-import { createLogger, resolveLogServiceUrl } from '../index.js';
+import { createLogger, resetLogging, resolveLogServiceUrl } from '../index.js';
 
 /**
  * Deployed workers must not POST log lines to the local log-service: with
@@ -11,21 +11,28 @@ describe('log-service shipping', () => {
   const realFetch = globalThis.fetch;
   const realLog = console.log;
   const realWarn = console.warn;
+  const realInfo = console.info;
 
   beforeEach(() => {
     process.env = { ...env };
     delete process.env.LOG_SERVICE_URL;
     delete process.env.NODE_ENV;
+    // info must pass the gate for these tests; the gate itself is tested in logger.test.ts
+    process.env.LOG_LEVEL = 'info';
+    resetLogging();
     fetchMock = jest.fn(() => Promise.resolve(new Response('ok')));
     globalThis.fetch = fetchMock as unknown as typeof fetch;
     console.log = jest.fn();
     console.warn = jest.fn();
+    console.info = jest.fn();
   });
   afterEach(() => {
     process.env = env;
     globalThis.fetch = realFetch;
     console.log = realLog;
     console.warn = realWarn;
+    console.info = realInfo;
+    resetLogging();
   });
 
   it('is off by default, even with forceHttpLogging', () => {

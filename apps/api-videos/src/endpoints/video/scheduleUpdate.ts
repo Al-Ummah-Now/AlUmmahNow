@@ -284,7 +284,7 @@ export class VideoScheduleUpdate extends AuthenticatedRoute {
         },
       });
 
-      logger.info(`Rescheduled video ${videoId} from ${previousSchedule} to ${video.scheduledPublishDate}`);
+      logger.debug(`Rescheduled video ${videoId} from ${previousSchedule} to ${video.scheduledPublishDate}`);
 
       // Send queue message for schedule update
       const queue = new Queue(c.env.queue);

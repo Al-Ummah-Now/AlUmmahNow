@@ -51,7 +51,7 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
       return;
     }
     const ok = await toggle();
-    logger.info('[ChannelHeader] Subscription toggle finished', { channelId: channel.id, ok });
+    logger.debug('[ChannelHeader] Subscription toggle finished', { channelId: channel.id, ok });
   };
 
   return (

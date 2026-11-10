@@ -17,7 +17,7 @@ import { EN_TRANSLATIONS, AR_TRANSLATIONS } from '../translations';
  * @example
  * ```typescript
  * const translations = getTranslations('ar');
- * logger.info(translations.common.appName); // 'الأمة الآن'
+ * logger.debug(translations.common.appName); // 'الأمة الآن'
  * ```
  */
 export function getTranslations(lang: SupportedLanguage): AppTranslations {

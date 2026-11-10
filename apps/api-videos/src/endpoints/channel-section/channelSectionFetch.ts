@@ -63,7 +63,7 @@ export class ChannelSectionFetch extends OptionalAuthRoute {
     const request = await this.getValidatedData<typeof this.schema>();
     const { channelId, sectionId } = request.params;
 
-    logger.info(`Fetching section ${sectionId} for channel ${channelId}`);
+    logger.debug(`Fetching section ${sectionId} for channel ${channelId}`);
 
     // Get auth context (optional)
     const auth = c.get('auth');
@@ -73,7 +73,7 @@ export class ChannelSectionFetch extends OptionalAuthRoute {
     const channel = await channelRepo.getObject(channelId);
 
     if (!channel) {
-      logger.warn(`Channel not found: ${channelId}`);
+      logger.debug(`Channel not found: ${channelId}`);
       return c.json(
         {
           success: false,
@@ -85,7 +85,7 @@ export class ChannelSectionFetch extends OptionalAuthRoute {
 
     // Check if channel is deleted
     if (channel.isDeleted) {
-      logger.warn(`Channel is deleted: ${channelId}`);
+      logger.debug(`Channel is deleted: ${channelId}`);
       return c.json(
         {
           success: false,
@@ -97,7 +97,7 @@ export class ChannelSectionFetch extends OptionalAuthRoute {
 
     // Check if channel is hidden (moderation) - blocks everyone including owner
     if (channel.isHidden) {
-      logger.warn(`Channel is hidden: ${channelId}`);
+      logger.debug(`Channel is hidden: ${channelId}`);
       return c.json(
         {
           success: false,
@@ -109,7 +109,7 @@ export class ChannelSectionFetch extends OptionalAuthRoute {
 
     // Check if channel is private - only owner can access
     if (channel.isPrivate && channel.userId !== auth?.userId) {
-      logger.warn(`Private channel ${channelId} access denied for user ${auth?.userId}`);
+      logger.debug(`Private channel ${channelId} access denied for user ${auth?.userId}`);
       return c.json(
         {
           success: false,
@@ -124,7 +124,7 @@ export class ChannelSectionFetch extends OptionalAuthRoute {
     const section = await sectionsRepo.getObject(`${channelId}/${sectionId}`);
 
     if (!section) {
-      logger.warn(`Section not found: ${sectionId} in channel ${channelId}`);
+      logger.debug(`Section not found: ${sectionId} in channel ${channelId}`);
       return c.json(
         {
           success: false,
@@ -138,7 +138,7 @@ export class ChannelSectionFetch extends OptionalAuthRoute {
     // Position from the channel's order document (SCALABILITY-AUDIT AV-20)
     const sectionView = transformChannelSectionToView(await withResolvedPosition(c.env.channel_sections, channelId, section), channel);
 
-    logger.info(`Successfully fetched section ${sectionId} for channel ${channelId}`);
+    logger.debug(`Successfully fetched section ${sectionId} for channel ${channelId}`);
 
     return c.json({
       success: true,

@@ -86,7 +86,7 @@ export class PlaylistsList extends OptionalAuthRoute {
 
             matches.sort((a, b) => (b.dateModified || '').localeCompare(a.dateModified || ''));
 
-            logger.info('[PlaylistsList] Channel playlists listed', {
+            logger.debug('[PlaylistsList] Channel playlists listed', {
                 channelId: channelFilter,
                 count: matches.length,
             });

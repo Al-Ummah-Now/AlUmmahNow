@@ -151,7 +151,7 @@ export class ChannelDelete extends AuthenticatedRoute {
 		// Videos, playlists, posts and sections go after the response
 		inBackground(c, `channel-delete:${id}`, () => removeChannelContent(c.env, id));
 
-		logger.info('[ChannelDelete] Channel deleted', { channelId: id, userId, wasMain: channel.isMain === true, newMainChannelId });
+		logger.debug('[ChannelDelete] Channel deleted', { channelId: id, userId, wasMain: channel.isMain === true, newMainChannelId });
 
 		return {
 			success: true,

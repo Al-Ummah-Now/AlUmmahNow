@@ -40,11 +40,11 @@ export const useProfile = (user: User | null, initialProfile?: Profile | null) =
 
     // Call the actual API
     fetchProfile(user, (newProfile) => {
-      logger.info('useProfile: ✅ Profile received from API');
+      logger.debug('useProfile: ✅ Profile received from API');
       setProfile(newProfile);
     }).then(success => {
       if (!success) {
-        logger.info('useProfile: ⚠️ API call failed, creating fallback profile');
+        logger.debug('useProfile: ⚠️ API call failed, creating fallback profile');
         // Create fallback profile if API fails
         setProfile({
           id: user.id,

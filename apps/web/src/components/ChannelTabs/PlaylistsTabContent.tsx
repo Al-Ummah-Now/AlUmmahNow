@@ -22,13 +22,13 @@ export function PlaylistsTabContent({ channelId }: PlaylistsTabContentProps) {
       setLoading(true);
       setError(null);
 
-      logger.info('Fetching channel playlists', { channelId });
+      logger.debug('Fetching channel playlists', { channelId });
 
       getChannelPlaylists(channelId, { limit: 20 })
         .then((response) => {
           if (response && response.data) {
             setPlaylists(response.data);
-            logger.info('Channel playlists loaded', { count: response.data.length });
+            logger.debug('Channel playlists loaded', { count: response.data.length });
           } else {
             logger.warn('No playlists response', { channelId });
           }

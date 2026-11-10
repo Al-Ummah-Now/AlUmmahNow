@@ -84,7 +84,7 @@ export class VideoFetch extends OptionalAuthRoute {
 
 		// Check if video is deleted (soft delete)
 		if (video.isDeleted) {
-			logger.warn('[VideoFetch] Video is deleted', { videoId: id });
+			logger.debug('[VideoFetch] Video is deleted', { videoId: id });
 			return c.json(
 				{
 					success: false,
@@ -96,7 +96,7 @@ export class VideoFetch extends OptionalAuthRoute {
 
 		// Check if video is hidden (moderation) - blocks everyone
 		if (video.isHidden) {
-			logger.warn('[VideoFetch] Video is hidden', { videoId: id });
+			logger.debug('[VideoFetch] Video is hidden', { videoId: id });
 			return c.json(
 				{
 					success: false,
@@ -128,13 +128,13 @@ export class VideoFetch extends OptionalAuthRoute {
 				channel = await channelRepository.getObject(video.channelId);
 
 				if (channel) {
-					logger.info('[VideoFetch] Channel fetched successfully', {
+					logger.debug('[VideoFetch] Channel fetched successfully', {
 						videoId: video.id,
 						channelId: video.channelId,
 						channelName: channel.name
 					});
 				} else {
-					logger.warn('[VideoFetch] Channel not found', {
+					logger.debug('[VideoFetch] Channel not found', {
 						videoId: video.id,
 						channelId: video.channelId
 					});

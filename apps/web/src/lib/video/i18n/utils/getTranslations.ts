@@ -26,7 +26,7 @@ const TRANSLATIONS: Record<SupportedLanguage, VideoPlayerTranslations> = {
  * @example
  * ```typescript
  * const translations = getTranslations('ar');
- * logger.info(translations.player.loading); // "جاري تحميل مشغل الفيديو..."
+ * logger.debug(translations.player.loading); // "جاري تحميل مشغل الفيديو..."
  * ```
  */
 export function getTranslations(

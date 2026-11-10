@@ -96,7 +96,7 @@ export const LibraryService = {
         logger.warn('[LibraryService] Add to watch later failed', { videoId, status: response.status });
         return { ok: false, error: 'failed' };
       }
-      logger.info('[LibraryService] Saved to watch later', { videoId });
+      logger.debug('[LibraryService] Saved to watch later', { videoId });
       return { ok: true, saved: true };
     } catch (error) {
       logger.error('[LibraryService] Add to watch later error', { videoId, error });

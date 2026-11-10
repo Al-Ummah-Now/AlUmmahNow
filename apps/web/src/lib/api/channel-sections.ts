@@ -18,7 +18,7 @@ export async function listChannelSections(
   channelId: string
 ): Promise<ChannelSection[] | null> {
   try {
-    logger.info('listChannelSections: Starting request', { channelId });
+    logger.debug('listChannelSections: Starting request', { channelId });
 
     const response = await apiRequestServer<{
       success: boolean;
@@ -32,7 +32,7 @@ export async function listChannelSections(
       functionName: 'listChannelSections'
     }, getServerAuthContext, false);
 
-    logger.info('listChannelSections: Response received', {
+    logger.debug('listChannelSections: Response received', {
       channelId,
       hasResponse: !!response,
       responseType: typeof response,
@@ -63,7 +63,7 @@ export async function listChannelSectionsPopulated(
   channelId: string
 ): Promise<ChannelSection[] | null> {
   try {
-    logger.info('listChannelSectionsPopulated: Starting request', { channelId });
+    logger.debug('listChannelSectionsPopulated: Starting request', { channelId });
 
     const response = await apiRequestServer<{
       success: boolean;
@@ -77,7 +77,7 @@ export async function listChannelSectionsPopulated(
       functionName: 'listChannelSectionsPopulated'
     }, getServerAuthContext, false);
 
-    logger.info('listChannelSectionsPopulated: Response received', {
+    logger.debug('listChannelSectionsPopulated: Response received', {
       channelId,
       hasResponse: !!response,
       responseType: typeof response,

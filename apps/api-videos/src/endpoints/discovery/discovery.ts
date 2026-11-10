@@ -85,7 +85,7 @@ export class SearchSuggestionsGet extends OptionalAuthRoute {
     if (db) {
       try {
         const suggestions = await suggestFromIndex(db, q, limit);
-        logger.info("[SearchSuggestions] Served suggestions from index", { q, count: suggestions.length });
+        logger.debug("[SearchSuggestions] Served suggestions from index", { q, count: suggestions.length });
         c.header("Cache-Control", "public, max-age=60");
         return c.json(suggestions);
       } catch (error) {
@@ -99,7 +99,7 @@ export class SearchSuggestionsGet extends OptionalAuthRoute {
         loadChannels(c.env.channels),
       ]);
       const suggestions = buildSuggestions(videos, channels, q, limit);
-      logger.info("[SearchSuggestions] Served suggestions", { q, count: suggestions.length });
+      logger.debug("[SearchSuggestions] Served suggestions", { q, count: suggestions.length });
       c.header("Cache-Control", "public, max-age=60");
       return c.json(suggestions);
     } catch (error) {
@@ -158,7 +158,7 @@ export class TrendingGet extends OptionalAuthRoute {
         ...toVideoResponse(video, channels),
         trendingMetadata: { rank, score: trending.score, viewsVelocity: trending.viewsVelocity },
       }));
-      logger.info("[Trending] Served trending videos", { period, category: query.category, language: query.language, count: data.length });
+      logger.debug("[Trending] Served trending videos", { period, category: query.category, language: query.language, count: data.length });
       c.header("Cache-Control", "public, max-age=120");
       return c.json({ success: true, period, category: query.category, language: query.language, data, videos: data });
     } catch (error) {
@@ -294,7 +294,7 @@ export class RecommendationsGet extends OptionalAuthRoute {
         writeEdgeCache(cacheUrl, body, data.length >= limit ? fullTtl : SHORT_RECOMMENDATIONS_TTL, waitUntilOf(c as never));
       }
       if (!userId) c.header("Cache-Control", anonymousRecommendationsCacheControl(data.length, limit));
-      logger.info("[Recommendations] Served recommendations", { videoId: query.videoId, userId, count: data.length, basedOn, source: pool.source });
+      logger.debug("[Recommendations] Served recommendations", { videoId: query.videoId, userId, count: data.length, basedOn, source: pool.source });
       c.header("X-Recommendations-Cache", "MISS");
       return c.json(body);
     } catch (error) {

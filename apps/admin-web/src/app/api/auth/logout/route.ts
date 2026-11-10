@@ -13,6 +13,6 @@ export async function GET(request: NextRequest) {
   const response = NextResponse.redirect(singleSignOutNext(process.env.Issuer!, url.searchParams, url.origin), 302);
   for (const name of SIGN_IN_COOKIES) response.cookies.delete(name);
   response.headers.set('Cache-Control', 'no-store');
-  logger.info('[auth] Front-channel logout');
+  logger.debug('[auth] Front-channel logout');
   return response;
 }

@@ -67,7 +67,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   if (!content) {
-    logger.info('[oembed] Not available', { kind: ref.kind, id: ref.id });
+    logger.debug('[oembed] Not available', { kind: ref.kind, id: ref.id });
     return json({ error: 'Not found' }, 404);
   }
   return json(buildOEmbed(origin, ref, size, content), 200, 300);

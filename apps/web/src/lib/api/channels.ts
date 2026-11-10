@@ -280,7 +280,7 @@ export async function updateChannelAvatar(
 
   const authContext = await getServerAuthContext();
 
-  logger.info('[updateChannelAvatar] Auth context', {
+  logger.debug('[updateChannelAvatar] Auth context', {
     hasToken: !!authContext?.accessToken,
     tokenLength: authContext?.accessToken?.length,
 
@@ -293,7 +293,7 @@ export async function updateChannelAvatar(
     'channelId': headers.channelId,
   };
 
-  logger.info('[updateChannelAvatar] Request headers', {
+  logger.debug('[updateChannelAvatar] Request headers', {
     hasAuth: requestHeaders.Authorization.length > 10,
     channelId: requestHeaders.channelId,
     
@@ -305,7 +305,7 @@ export async function updateChannelAvatar(
     body: formData,
   });
 
-  logger.info('[updateChannelAvatar] Response', {
+  logger.debug('[updateChannelAvatar] Response', {
     status: response.status,
     statusText: response.statusText,
     ok: response.ok,
@@ -338,7 +338,7 @@ export async function updateChannelCover(
 
   const authContext = await getServerAuthContext();
 
-  logger.info('[updateChannelCover] Auth context', {
+  logger.debug('[updateChannelCover] Auth context', {
     hasToken: !!authContext?.accessToken,
     tokenLength: authContext?.accessToken?.length,
 
@@ -351,7 +351,7 @@ export async function updateChannelCover(
     'channelId': headers.channelId,
   };
 
-  logger.info('[updateChannelCover] Request headers', {
+  logger.debug('[updateChannelCover] Request headers', {
     hasAuth: requestHeaders.Authorization.length > 10,
     channelId: requestHeaders.channelId,
     
@@ -363,7 +363,7 @@ export async function updateChannelCover(
     body: formData,
   });
 
-  logger.info('[updateChannelCover] Response', {
+  logger.debug('[updateChannelCover] Response', {
     status: response.status,
     statusText: response.statusText,
     ok: response.ok,

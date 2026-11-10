@@ -142,7 +142,7 @@ export class SyncTranslationsEndpoint extends PublicRoute {
         httpMetadata: { contentType: 'application/json' },
       });
       synced.push('en');
-      logger.info('Synced English translations to R2');
+      logger.debug('Synced English translations to R2');
 
       // Prepare Arabic translation data
       const arData: TranslationData = {
@@ -158,7 +158,7 @@ export class SyncTranslationsEndpoint extends PublicRoute {
         httpMetadata: { contentType: 'application/json' },
       });
       synced.push('ar');
-      logger.info('Synced Arabic translations to R2');
+      logger.debug('Synced Arabic translations to R2');
 
       // Compute checksums
       const checksums: Record<string, string> = {
@@ -180,7 +180,7 @@ export class SyncTranslationsEndpoint extends PublicRoute {
       await bucket.put('translations/metadata.json', JSON.stringify(metadata, null, 2), {
         httpMetadata: { contentType: 'application/json' },
       });
-      logger.info('Synced translations metadata to R2');
+      logger.debug('Synced translations metadata to R2');
 
       // Prepare config
       const config: I18nConfig = {
@@ -211,7 +211,7 @@ export class SyncTranslationsEndpoint extends PublicRoute {
       await bucket.put('config/i18n-config.json', JSON.stringify(config, null, 2), {
         httpMetadata: { contentType: 'application/json' },
       });
-      logger.info('Synced i18n config to R2');
+      logger.debug('Synced i18n config to R2');
 
       return c.json({
         success: true,

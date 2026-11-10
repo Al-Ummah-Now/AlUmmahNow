@@ -7,11 +7,8 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { WebSocketDurableObject, MAX_BROADCAST_ITEMS } from './websocket';
 import { broadcastToShards, readAllShards, shardsInRandomOrder, type BroadcastItem } from './shards';
-import { createLogger } from '@al-ummah/logger';
+import { logger } from './lib/logger';
 import { reportServerError, requestIdOf, type ErrorReporterEnv, type ExecutionContextLike } from '@al-ummah/shared-types';
-
-// Create logger instance
-const logger = createLogger('websocket-server', { logLevel: 'info', forceHttpLogging: true });
 
 // Export the Durable Object
 export { WebSocketDurableObject };

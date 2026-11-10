@@ -132,7 +132,7 @@ export class PinPostComment extends AuthenticatedRoute {
       await setCommentPinned(bucket, postId, previous, false);
     }
 
-    logger.info('[PinPostComment] Comment pinned', { postId, commentId, previous: previous || undefined, userId });
+    logger.debug('[PinPostComment] Comment pinned', { postId, commentId, previous: previous || undefined, userId });
 
     const response: PostCommentPinResponse = { success: true, pinned: true, commentId };
     return c.json(response);
@@ -164,7 +164,7 @@ export class UnpinPostComment extends AuthenticatedRoute {
     // another comment that landed meanwhile stays)
     await swapPinnedPointer(bucket, postId, (current) => (current === commentId ? '' : false));
 
-    logger.info('[UnpinPostComment] Comment unpinned', { postId, commentId, userId });
+    logger.debug('[UnpinPostComment] Comment unpinned', { postId, commentId, userId });
 
     const response: PostCommentPinResponse = { success: true, pinned: false, commentId };
     return c.json(response);

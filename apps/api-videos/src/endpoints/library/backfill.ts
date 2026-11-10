@@ -125,7 +125,7 @@ export class LibraryBackfill extends PublicRoute {
 			cursor = (listing as { cursor?: string }).cursor;
 		}
 
-		logger.info("[LibraryBackfill] Batch finished", { target: body.target, scanned, inserted, done });
+		logger.debug("[LibraryBackfill] Batch finished", { target: body.target, scanned, inserted, done });
 		return { success: true, result: { target: body.target, scanned, inserted, nextCursor: done ? null : cursor ?? null } };
 	}
 }

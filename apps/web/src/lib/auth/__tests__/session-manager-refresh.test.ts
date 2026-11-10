@@ -31,7 +31,7 @@ jest.mock('../../api/api-client', () => ({
 }));
 jest.mock('../openauth-client', () => ({ getOpenAuthClient: jest.fn() }));
 jest.mock('../../auth', () => ({ subjects: {} }));
-jest.mock('@/lib/logger-server', () => ({ logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() } }));
+jest.mock('@/lib/logger-server', () => ({ logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn(), trace: jest.fn() } }));
 const revokeTokensOnSignOut = jest.fn(async () => undefined);
 jest.mock('../revoke-on-sign-out', () => ({ revokeTokensOnSignOut: (...args: unknown[]) => revokeTokensOnSignOut(...(args as [])) }));
 

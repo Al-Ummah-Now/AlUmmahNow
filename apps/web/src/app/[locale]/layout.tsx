@@ -36,7 +36,7 @@ export default async function LocaleLayout({
 
   // Validate locale - return 404 if not supported
   if (!isLocaleSupported(locale)) {
-    logger.warn(`[LocaleLayout] Unsupported locale requested: ${locale}`);
+    logger.debug(`[LocaleLayout] Unsupported locale requested: ${locale}`);
     notFound();
   }
 

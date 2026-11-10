@@ -29,7 +29,7 @@ export async function getServerAuthContext(): Promise<AuthContext | null> {
     }
   } catch (_error) {
     // SessionManager not available or error - fall back to legacy
-    logger.info('[getServerAuthContext] SessionManager not available, using legacy auth');
+    logger.debug('[getServerAuthContext] SessionManager not available, using legacy auth');
   }
 
   // Fall back to legacy cookies
@@ -66,7 +66,7 @@ export async function getServerAuthContext(): Promise<AuthContext | null> {
         updatedAt: new Date().toISOString(),
       }
     );
-    logger.info('[getServerAuthContext] Auto-migrated user to SessionManager', { userId });
+    logger.debug('[getServerAuthContext] Auto-migrated user to SessionManager', { userId });
   } catch (migrationError) {
     // Migration failed, continue with legacy auth
     logger.error('[getServerAuthContext] Auto-migration failed', migrationError);

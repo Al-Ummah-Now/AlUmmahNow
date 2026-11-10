@@ -104,11 +104,11 @@ export async function getProfileById(userId: string): Promise<Profile | null> {
     return null;
   }
 
-  logger.info(`[${fnName}] 🔐 Authentication:`);
-  logger.info(`[${fnName}]   Requesting User ID: ${authContext.userId}`);
-  logger.info(`[${fnName}]   Target User ID: ${userId}`);
-  logger.info(`[${fnName}]   Has Token: true`);
-  logger.info(`[${fnName}]   Token Length: ${authContext.accessToken?.length} chars`);
+  logger.debug(`[${fnName}] 🔐 Authentication:`);
+  logger.debug(`[${fnName}]   Requesting User ID: ${authContext.userId}`);
+  logger.debug(`[${fnName}]   Target User ID: ${userId}`);
+  logger.debug(`[${fnName}]   Has Token: true`);
+  logger.debug(`[${fnName}]   Token Length: ${authContext.accessToken?.length} chars`);
 
   const result = await apiRequestServer<unknown>(
     {
@@ -179,7 +179,7 @@ export async function createProfileAPI(
 ): Promise<ApiResponse<{ profile: Profile }> | null> {
   const fnName = 'createProfileAPI';
 
-  logger.info(`[${fnName}] Starting profile creation...`);
+  logger.debug(`[${fnName}] Starting profile creation...`);
 
   const authContext = await getServerAuthContext();
   if (!authContext) {
@@ -188,7 +188,7 @@ export async function createProfileAPI(
     return null;
   }
 
-  logger.info(`[${fnName}] Auth context:`, {
+  logger.debug(`[${fnName}] Auth context:`, {
     userId: authContext.userId,
     hasToken: !!authContext.accessToken,
     tokenLength: authContext.accessToken?.length
@@ -201,7 +201,7 @@ export async function createProfileAPI(
   });
 
   const requestBody = { ...data, id: authContext.userId };
-  logger.info(`[${fnName}] Request body:`, { ...requestBody, email: '***' });
+  logger.debug(`[${fnName}] Request body:`, { ...requestBody, email: '***' });
 
   const result = await apiRequestServer<ApiResponse<{ profile: Profile }>>(
     {

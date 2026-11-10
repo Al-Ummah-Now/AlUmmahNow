@@ -119,6 +119,12 @@ function fetchData() {
 
 **Rationale**: Centralized logging provides structured log aggregation, filtering, and viewing through the log service. Console logging bypasses this system and creates maintenance issues.
 
+**Volume policy** (docs/operations/logging.md; production logs are billed per line):
+- Levels: production `warn`, stage `info`, QA/dev `debug`, set by `LOG_LEVEL` in each wrangler env (checked by `pnpm check:config`). debug/trace never reach production.
+- `info` is for the one summary line per request or job (`logger.request()` / `logger.job()`); per-step progress and object dumps are `debug`.
+- `warn`/`error` only for real problems, with ids, step, status and the Error. Not found, hidden content, expired tokens, anonymous visitors and other 4xx outcomes are not warnings.
+- Never log secrets, tokens, emails or bodies; the logger redacts, but don't pass them. `no-console` (warn/error allowed) is a lint error in production sources.
+
 #### Server-Side Logging (API, Processor, WebSocket)
 
 Use the server logger library for all backend applications:

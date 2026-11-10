@@ -178,7 +178,7 @@ export class NotificationSettingsUpdate extends AuthenticatedRoute {
 		const { body } = await this.getValidatedData<typeof this.schema>();
 		const userId = this.getUserId(c);
 		const settings = await updateSettings(db, userId, body.settings);
-		logger.info("[Notifications] Settings updated", { userId, settings });
+		logger.debug("[Notifications] Settings updated", { userId, settings });
 		return { success: true, result: { settings, categories: NOTIFICATION_CATEGORIES } };
 	}
 }
@@ -244,7 +244,7 @@ export class ChannelBellUpdate extends AuthenticatedRoute {
 			if (!subscribed) return c.json({ success: false, error: "not_subscribed" }, 409);
 		}
 		await setBell(db, params.channelId, userId, body.bell);
-		logger.info("[Notifications] Channel bell updated", { userId, channelId: params.channelId, bell: body.bell });
+		logger.debug("[Notifications] Channel bell updated", { userId, channelId: params.channelId, bell: body.bell });
 		return { success: true, result: { channelId: params.channelId, bell: body.bell, subscribed: true } };
 	}
 }

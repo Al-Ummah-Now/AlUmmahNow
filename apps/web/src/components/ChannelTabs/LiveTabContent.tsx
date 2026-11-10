@@ -22,13 +22,13 @@ export function LiveTabContent({ channelId }: LiveTabContentProps) {
       setLoading(true);
       setError(null);
 
-      logger.info('Fetching channel live streams', { channelId });
+      logger.debug('Fetching channel live streams', { channelId });
 
       getChannelLiveStreams(channelId, { limit: 20 })
         .then((response) => {
           if (response && response.data) {
             setLiveStreams(response.data);
-            logger.info('Channel live streams loaded', { count: response.data.length });
+            logger.debug('Channel live streams loaded', { count: response.data.length });
           } else {
             logger.warn('No live streams response', { channelId });
           }

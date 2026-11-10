@@ -75,7 +75,7 @@ export async function createVideo(
   headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<ApiResponse<{ video: VideoObject }> | null> {
   try {
-    logger.info('[createVideo] Creating video', { data });
+    logger.debug('[createVideo] Creating video', { data });
 
     return apiRequestServer<ApiResponse<{ video: VideoObject }>>(
       {
@@ -106,7 +106,7 @@ export async function updateVideo(
   headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{ success: boolean; result?: { video: VideoObject }; error?: string } | null> {
   try {
-    logger.info('[updateVideo] Updating video', { videoId, data });
+    logger.debug('[updateVideo] Updating video', { videoId, data });
 
     return apiRequestServer<{ success: boolean; result?: { video: VideoObject }; error?: string }>(
       {
@@ -136,7 +136,7 @@ export async function deleteVideo(
   headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<ApiResponse<{ success: boolean }> | null> {
   try {
-    logger.info('[deleteVideo] Attempting to delete video:', { videoId });
+    logger.debug('[deleteVideo] Attempting to delete video:', { videoId });
 
     return apiRequestServer<ApiResponse<{ success: boolean }>>(
       {
@@ -177,7 +177,7 @@ export async function bulkDeleteVideos(
   };
 } | null> {
   try {
-    logger.info('[bulkDeleteVideos] Attempting to delete videos:', { count: videoIds.length, videoIds });
+    logger.debug('[bulkDeleteVideos] Attempting to delete videos:', { count: videoIds.length, videoIds });
 
     return apiRequestServer<{
       success: boolean;
@@ -216,7 +216,7 @@ export async function bulkUpdateVideos(
   summary: { total: number; succeeded: number; failed: number };
 } | null> {
   try {
-    logger.info('[bulkUpdateVideos] Editing videos', { count: videoIds.length, fields: Object.keys(changes) });
+    logger.debug('[bulkUpdateVideos] Editing videos', { count: videoIds.length, fields: Object.keys(changes) });
     return apiRequestServer<{
       success: boolean;
       results: Array<{ videoId: string; success: boolean; changed?: boolean; error?: string }>;
@@ -319,7 +319,7 @@ export async function removeVideoCommentDislike(
   headers?: Pick<ApiHeaders, 'channelId'>
 ): Promise<CommentReactionResponse | null> {
   try {
-    logger.info('[removeVideoCommentDislike] Removing comment dislike', { videoId, commentId });
+    logger.debug('[removeVideoCommentDislike] Removing comment dislike', { videoId, commentId });
 
     return apiRequestServer<CommentReactionResponse>(
       {
@@ -346,7 +346,7 @@ export async function createVideoComment(
   headers?: Pick<ApiHeaders, 'channelId'>
 ): Promise<CommentMutationResponse | null> {
   try {
-    logger.info('[createVideoComment] Creating comment', { videoId });
+    logger.debug('[createVideoComment] Creating comment', { videoId });
 
     return apiRequestServer<CommentMutationResponse>(
       {
@@ -375,7 +375,7 @@ export async function updateVideoComment(
   headers?: Pick<ApiHeaders, 'channelId'>
 ): Promise<CommentMutationResponse | null> {
   try {
-    logger.info('[updateVideoComment] Updating comment', { videoId, commentId });
+    logger.debug('[updateVideoComment] Updating comment', { videoId, commentId });
 
     return apiRequestServer<CommentMutationResponse>(
       {
@@ -403,7 +403,7 @@ export async function deleteVideoComment(
   headers?: Pick<ApiHeaders, 'channelId'>
 ): Promise<{ success: boolean } | null> {
   try {
-    logger.info('[deleteVideoComment] Deleting comment', { videoId, commentId });
+    logger.debug('[deleteVideoComment] Deleting comment', { videoId, commentId });
 
     return apiRequestServer<{ success: boolean }>(
       {
@@ -429,7 +429,7 @@ export async function likeVideo(
   headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{ success: boolean } | null> {
   try {
-    logger.info('[likeVideo] Liking video', { videoId });
+    logger.debug('[likeVideo] Liking video', { videoId });
 
     return apiRequestServer<{ success: boolean }>(
       {
@@ -458,7 +458,7 @@ export async function unlikeVideo(
   headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{ success: boolean } | null> {
   try {
-    logger.info('[unlikeVideo] Unliking video', { videoId });
+    logger.debug('[unlikeVideo] Unliking video', { videoId });
 
     return apiRequestServer<{ success: boolean }>(
       {
@@ -487,7 +487,7 @@ export async function dislikeVideo(
   headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{ success: boolean } | null> {
   try {
-    logger.info('[dislikeVideo] Disliking video', { videoId });
+    logger.debug('[dislikeVideo] Disliking video', { videoId });
 
     return apiRequestServer<{ success: boolean }>(
       {
@@ -516,7 +516,7 @@ export async function removeVideoDislike(
   headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<{ success: boolean } | null> {
   try {
-    logger.info('[removeVideoDislike] Removing dislike', { videoId });
+    logger.debug('[removeVideoDislike] Removing dislike', { videoId });
 
     return apiRequestServer<{ success: boolean }>(
       {
@@ -546,7 +546,7 @@ export async function likeVideoComment(
   headers?: Pick<ApiHeaders, 'channelId'>
 ): Promise<CommentReactionResponse | null> {
   try {
-    logger.info('[likeVideoComment] Liking comment', { videoId, commentId });
+    logger.debug('[likeVideoComment] Liking comment', { videoId, commentId });
 
     return apiRequestServer<CommentReactionResponse>(
       {
@@ -573,7 +573,7 @@ export async function unlikeVideoComment(
   headers?: Pick<ApiHeaders, 'channelId'>
 ): Promise<CommentReactionResponse | null> {
   try {
-    logger.info('[unlikeVideoComment] Unliking comment', { videoId, commentId });
+    logger.debug('[unlikeVideoComment] Unliking comment', { videoId, commentId });
 
     return apiRequestServer<CommentReactionResponse>(
       {
@@ -600,7 +600,7 @@ export async function dislikeVideoComment(
   headers?: Pick<ApiHeaders, 'channelId'>
 ): Promise<CommentReactionResponse | null> {
   try {
-    logger.info('[dislikeVideoComment] Disliking comment', { videoId, commentId });
+    logger.debug('[dislikeVideoComment] Disliking comment', { videoId, commentId });
 
     return apiRequestServer<CommentReactionResponse>(
       {
@@ -685,7 +685,7 @@ export async function searchVideos(
       ...(accessToken && { 'Authorization': `Bearer ${accessToken}` }),
     };
 
-    logger.info('[searchVideos] Making request:', {
+    logger.debug('[searchVideos] Making request:', {
       url: fullUrl,
       queryParams: queryParams.toString(),
       headers: requestHeaders,
@@ -697,7 +697,7 @@ export async function searchVideos(
       headers: requestHeaders,
     });
 
-    logger.info('[searchVideos] Response status:', response.status);
+    logger.debug('[searchVideos] Response status:', response.status);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -706,7 +706,7 @@ export async function searchVideos(
     }
 
     const result = await response.json();
-    logger.info('[searchVideos] Response data:', {
+    logger.debug('[searchVideos] Response data:', {
       dataLength: result?.data?.length || 0,
       cursor: result?.cursor,
       fullResult: result
@@ -1045,9 +1045,9 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions | undef
     if (!vid) return undefined;
 
     try {
-        logger.info('[fetchVideoById] Fetching video:', vid);
+        logger.debug('[fetchVideoById] Fetching video:', vid);
         const video = await getVideoById(vid);
-        logger.info('[fetchVideoById] API response:', video);
+        logger.debug('[fetchVideoById] API response:', video);
 
         if (!video) {
             throw new Error('Video not found');
@@ -1088,7 +1088,7 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions | undef
             processingIssueKind: (video as { processingIssueKind?: PlayerOptions['processingIssueKind'] }).processingIssueKind,
         };
 
-        logger.info('[fetchVideoById] Mapped to PlayerOptions:', playerOptions);
+        logger.debug('[fetchVideoById] Mapped to PlayerOptions:', playerOptions);
         return playerOptions;
     } catch (error) {
         logger.error('[fetchVideoById] Error:', error);
@@ -1117,7 +1117,7 @@ export async function fetchRelatedVideos(videoId: string): Promise<VideoInfo[]> 
         ],
     });
     saveLastGoodShelf(related);
-    logger.info('[fetchRelatedVideos] Related shelf', { videoId, recommended: recommendedCount, total: related.length });
+    logger.debug('[fetchRelatedVideos] Related shelf', { videoId, recommended: recommendedCount, total: related.length });
     return related;
 }
 

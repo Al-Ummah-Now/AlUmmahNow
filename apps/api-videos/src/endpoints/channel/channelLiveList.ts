@@ -82,7 +82,7 @@ export class ChannelLiveList extends OptionalAuthRoute {
 		const { limit, cursor, active } = request.query;
 		const userId = this.getUserId(c);
 
-		logger.info('Fetching channel live streams', {
+		logger.debug('Fetching channel live streams', {
 			channelId,
 			limit,
 			cursor,
@@ -99,7 +99,7 @@ export class ChannelLiveList extends OptionalAuthRoute {
 			const channel = await channelRepo.getObject(channelId);
 
 			if (!channel) {
-				logger.warn('Channel not found', { channelId });
+				logger.debug('Channel not found', { channelId });
 				return c.json({
 					success: false,
 					error: `Channel ${channelId} not found`
@@ -108,7 +108,7 @@ export class ChannelLiveList extends OptionalAuthRoute {
 
 			// Same channel visibility rules as the Videos and Shorts tabs
 			if (channel.isDeleted || channel.isHidden || (channel.isPrivate && channel.userId !== userId)) {
-				logger.warn('Channel not listable', { channelId, isDeleted: !!channel.isDeleted, isHidden: !!channel.isHidden });
+				logger.debug('Channel not listable', { channelId, isDeleted: !!channel.isDeleted, isHidden: !!channel.isHidden });
 				return c.json({
 					success: false,
 					error: 'Channel not found'
@@ -176,7 +176,7 @@ export class ChannelLiveList extends OptionalAuthRoute {
 			};
 
 			const duration = Date.now() - startTime;
-			logger.info('Successfully fetched channel live streams', {
+			logger.debug('Successfully fetched channel live streams', {
 				channelId,
 				streamsCount: limitedStreams.length,
 				hasMore: Boolean(nextCursor),

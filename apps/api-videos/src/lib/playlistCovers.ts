@@ -129,7 +129,7 @@ export async function resolvePlaylistCovers(
         }
     }
 
-    logger.info("[PlaylistCovers] Resolved covers", {
+    logger.debug("[PlaylistCovers] Resolved covers", {
         playlists: pending.length,
         covers: covers.size,
         indexed: indexed.size,

@@ -39,7 +39,7 @@ export async function updateChannelTabConfig(
     }>;
   }
 ): Promise<ChannelTabConfig | null> {
-  logger.info('updateChannelTabConfig: Request', {
+  logger.debug('updateChannelTabConfig: Request', {
     channelId,
     defaultTab: data.defaultTab,
     tabsCount: data.tabs?.length,
@@ -69,7 +69,7 @@ export async function verifyChannelOwnership(
     const authContext = await getServerAuthContext();
 
     if (!authContext || !authContext.userId) {
-      logger.warn('verifyChannelOwnership: No authenticated user', { channelId });
+      logger.debug('verifyChannelOwnership: No authenticated user', { channelId });
       return false;
     }
 
@@ -77,14 +77,14 @@ export async function verifyChannelOwnership(
     const channel = await getChannelById(channelId);
 
     if (!channel) {
-      logger.warn('verifyChannelOwnership: Channel not found', { channelId });
+      logger.debug('verifyChannelOwnership: Channel not found', { channelId });
       return false;
     }
 
     // Check ownership
     const isOwner = channel.userId === authContext.userId;
 
-    logger.info('verifyChannelOwnership: Ownership verified', {
+    logger.debug('verifyChannelOwnership: Ownership verified', {
       channelId,
       
       isOwner,

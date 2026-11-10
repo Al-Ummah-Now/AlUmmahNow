@@ -93,7 +93,7 @@ export default function ChannelVideosPage() {
           setChannelName(channel.nameLocalized?.[locale] || channel.name || '');
         }
 
-        logger.info('Channel videos loaded', { channelId, count: allVideos.length });
+        logger.debug('Channel videos loaded', { channelId, count: allVideos.length });
         setVideos(allVideos);
         setFilteredVideos(allVideos);
       } catch (error) {

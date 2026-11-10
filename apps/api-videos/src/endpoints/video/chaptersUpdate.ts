@@ -108,7 +108,7 @@ export class VideoChaptersUpdate extends AuthenticatedRoute {
       // Fetch video and check ownership
       const video = await videoRepo.getObject(videoId);
       if (!video) {
-        logger.warn('Video not found for chapter update', { videoId });
+        logger.debug('Video not found for chapter update', { videoId });
         return c.json(
           {
             success: false,
@@ -136,7 +136,7 @@ export class VideoChaptersUpdate extends AuthenticatedRoute {
       // Validate chapters
       const validation = validateChapters(chapters, video.duration || 0);
       if (!validation.valid) {
-        logger.warn('Invalid chapters provided', {
+        logger.debug('Invalid chapters provided', {
           videoId,
           errors: validation.errors,
         });
@@ -167,7 +167,7 @@ export class VideoChaptersUpdate extends AuthenticatedRoute {
         return c.json({ success: false, error: 'Not authorized to edit this video' }, 403);
       }
 
-      logger.info('Chapters manually updated', {
+      logger.debug('Chapters manually updated', {
         videoId,
         userId,
         chapterCount: chapters.length,

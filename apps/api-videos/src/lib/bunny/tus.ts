@@ -261,7 +261,7 @@ export async function createTusProxySession(
     expirationTtl: ttlSeconds,
   });
 
-  logger.info('[TUS] Proxy session created', {
+  logger.debug('[TUS] Proxy session created', {
     tusSessionId,
     videoId: params.videoId,
     userId: params.userId,

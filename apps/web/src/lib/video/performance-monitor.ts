@@ -70,7 +70,7 @@ export class VideoPerformanceMonitor {
     this.frameTimes = [];
     this.warnings = [];
 
-    logger.info('[VideoPerformance] Starting monitoring');
+    logger.debug('[VideoPerformance] Starting monitoring');
     
     this.startFrameMonitoring();
     this.startInteractionMonitoring();
@@ -95,7 +95,7 @@ export class VideoPerformanceMonitor {
     // Clear warning throttle state
     this.lastWarningTime.clear();
 
-    logger.info('[VideoPerformance] Stopped monitoring');
+    logger.debug('[VideoPerformance] Stopped monitoring');
   }
 
   /**

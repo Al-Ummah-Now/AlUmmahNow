@@ -57,7 +57,7 @@ export function PopularVideosSection({
         params.cursor = cursor;
       }
 
-      logger.info('[PopularVideosSection] Fetching videos', { params, loadMore });
+      logger.debug('[PopularVideosSection] Fetching videos', { params, loadMore });
       const response = await getPopularVideos(params);
 
       if (!response) {
@@ -73,7 +73,7 @@ export function PopularVideosSection({
 
         setCursor(response.cursor);
         setHasMore(!!response.cursor);
-        logger.info('[PopularVideosSection] Videos loaded', {
+        logger.debug('[PopularVideosSection] Videos loaded', {
           count: response.data.length,
           hasMore: !!response.cursor,
           period: response.metadata.period

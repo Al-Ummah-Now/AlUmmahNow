@@ -25,7 +25,7 @@ jest.mock('@/lib/api/channel-tabs', () => ({
 }));
 
 jest.mock('@/lib/logger-client', () => ({
-  logger: {
+  logger: { debug: jest.fn(),
     info: jest.fn(),
     error: jest.fn(),
     warn: jest.fn(),

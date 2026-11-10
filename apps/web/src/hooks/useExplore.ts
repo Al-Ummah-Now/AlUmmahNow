@@ -61,7 +61,7 @@ export function useExplore() {
       return;
     }
     setExplore({ status: 'ready', data });
-    logger.info('[Explore] Explore data loaded', { language, seasonal: data.seasonal.length });
+    logger.debug('[Explore] Explore data loaded', { language, seasonal: data.seasonal.length });
   }, [language]);
 
   useEffect(() => {

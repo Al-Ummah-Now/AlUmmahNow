@@ -18,7 +18,7 @@ jest.mock('../resilient-tus', () => ({
   reportUploadFailure: jest.fn(async () => true),
 }));
 jest.mock('@/lib/auth/client-token', () => ({ fetchClientAuthToken: jest.fn(async () => 'tok') }));
-jest.mock('@/lib/logger-client', () => ({ logger: { error: jest.fn(), warn: jest.fn(), info: jest.fn() } }));
+jest.mock('@/lib/logger-client', () => ({ logger: { debug: jest.fn(), error: jest.fn(), warn: jest.fn(), info: jest.fn() } }));
 
 import { TusParallelManager } from '../TusParallelManager';
 import { reportUploadFailure } from '../resilient-tus';

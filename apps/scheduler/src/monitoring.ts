@@ -12,7 +12,7 @@ import { logger } from './lib/logger';
  * where they are read.
  */
 export function reportMetrics(metrics: { processed: number; failed: number; duration: number }): void {
-  logger.info('[Scheduler] Run metrics', { event: 'SCHEDULER_METRICS', ...metrics });
+  logger.debug('[Scheduler] Run metrics', { event: 'SCHEDULER_METRICS', ...metrics });
 }
 
 /**
@@ -21,7 +21,7 @@ export function reportMetrics(metrics: { processed: number; failed: number; dura
  */
 export function logEvent(event: PublishEvent | Record<string, unknown>): void {
   if (event.type === 'SCHEDULED_PUBLISH_FAILURE') logger.warn(`[Scheduler] ${String(event.type)}`, event);
-  else logger.info(`[Scheduler] ${String(event.type)}`, event);
+  else logger.debug(`[Scheduler] ${String(event.type)}`, event);
 }
 
 /**

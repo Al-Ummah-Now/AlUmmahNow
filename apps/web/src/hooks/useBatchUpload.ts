@@ -138,7 +138,7 @@ export function useBatchUpload({
             });
             return;
           }
-          logger.info('[useBatchUpload] Upload completed', { videoId: item.videoId });
+          logger.debug('[useBatchUpload] Upload completed', { videoId: item.videoId });
           onUploadCompleteRef.current?.(item.videoId);
         } catch (error) {
           if (recoverFromVersionSkew(error, 'batch-complete')) return;
@@ -258,7 +258,7 @@ export function useBatchUpload({
         if (result?.kind === 'completed') {
           // Uploaded before (an earlier visit): a finished "already uploaded"
           // row with a link to the video, never a second video
-          logger.info('[useBatchUpload] File was already uploaded', { videoId: remembered.videoId });
+          logger.debug('[useBatchUpload] File was already uploaded', { videoId: remembered.videoId });
           manager.addAlreadyUploaded(file, remembered.videoId, sharedMetadata);
           continue;
         }

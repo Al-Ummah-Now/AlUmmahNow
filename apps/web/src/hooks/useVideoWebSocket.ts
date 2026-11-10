@@ -107,7 +107,7 @@ export function useVideoWebSocket({
       });
       lastHeartbeatRef.current = now;
       if (process.env.NODE_ENV !== 'production') {
-        logger.info('[useVideoWebSocket] Sent viewing heartbeat');
+        logger.debug('[useVideoWebSocket] Sent viewing heartbeat');
       }
     } catch (error) {
       logger.error('[useVideoWebSocket] Error sending heartbeat:', error);
@@ -130,7 +130,7 @@ export function useVideoWebSocket({
     const data = eventData as PresenceEvent | { type: 'viewer_count'; viewerCount: number };
 
     if (process.env.NODE_ENV !== 'production') {
-      logger.info('[useVideoWebSocket] Received update:', data);
+      logger.debug('[useVideoWebSocket] Received update:', data);
     }
 
     if (data.type === 'presence_update' && 'viewerCount' in data && typeof data.viewerCount === 'number') {
@@ -200,7 +200,7 @@ export function useVideoWebSocket({
         : undefined;
 
     if (process.env.NODE_ENV !== 'production') {
-      logger.info('[useVideoWebSocket] Initializing WebSocket for video:', videoId);
+      logger.debug('[useVideoWebSocket] Initializing WebSocket for video:', videoId);
     }
 
     try {
@@ -219,7 +219,7 @@ export function useVideoWebSocket({
       let lastStatus: string | null = null;
       const unsubscribeState = wsManager.current.onStateChange((state) => {
         if (process.env.NODE_ENV !== 'production') {
-          logger.info('[useVideoWebSocket] State changed:', state.status);
+          logger.debug('[useVideoWebSocket] State changed:', state.status);
         }
 
         // Only update state if status actually changed
@@ -251,7 +251,7 @@ export function useVideoWebSocket({
       // Cleanup on unmount
       return () => {
         if (process.env.NODE_ENV !== 'production') {
-          logger.info('[useVideoWebSocket] Cleaning up');
+          logger.debug('[useVideoWebSocket] Cleaning up');
         }
 
         // Clear heartbeat interval

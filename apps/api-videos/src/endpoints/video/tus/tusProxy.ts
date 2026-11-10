@@ -257,7 +257,7 @@ export class TusProxy {
    * OPTIONS - Handle CORS preflight and TUS capabilities
    */
   async handleOptions(c: any): Promise<Response> {
-    logger.info('[TUS Proxy] OPTIONS request');
+    logger.debug('[TUS Proxy] OPTIONS request');
 
     return new Response(null, {
       status: 204,
@@ -290,7 +290,7 @@ export class TusProxy {
       const uploadMetadata = c.req.header('Upload-Metadata');
       const uploadDeferLength = c.req.header('Upload-Defer-Length');
 
-      logger.info('[TUS Proxy] POST - Create upload', {
+      logger.debug('[TUS Proxy] POST - Create upload', {
         userId,
         uploadLength,
         uploadDeferLength,
@@ -653,7 +653,7 @@ export class TusProxy {
    */
   async handleDelete(c: any, uploadId: string): Promise<Response> {
     try {
-      logger.info('[TUS Proxy] DELETE - Terminate upload', { uploadId });
+      logger.debug('[TUS Proxy] DELETE - Terminate upload', { uploadId });
 
       const lookup = await this.resolveSession(uploadId);
       if (lookup.kind === 'unavailable') return this.retryLater('Session store unavailable, retry');

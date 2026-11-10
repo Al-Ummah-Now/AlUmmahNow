@@ -38,7 +38,7 @@ export abstract class AdminRoute extends OpenAPIRoute {
     const auth = c.get('auth');
 
     // Debug: Log what we received in auth context
-    logger.info('[AdminRoute] Auth context received', {
+    logger.debug('[AdminRoute] Auth context received', {
       hasAuth: !!auth,
       authKeys: auth ? Object.keys(auth) : [],
       userId: auth?.userId,
@@ -50,7 +50,7 @@ export abstract class AdminRoute extends OpenAPIRoute {
     });
 
     if (!auth) {
-      logger.warn('[AdminRoute] Authentication required but not present', {
+      logger.debug('[AdminRoute] Authentication required but not present', {
         path: c.req.path,
         method: c.req.method
       });
@@ -92,7 +92,7 @@ export abstract class AdminRoute extends OpenAPIRoute {
       // Get roles from auth context (already validated by adminMiddleware)
       const auth = c.get('auth');
 
-      logger.info('[AdminRoute] checkAdminRole called', {
+      logger.debug('[AdminRoute] checkAdminRole called', {
         userId,
         hasAuth: !!auth,
         authRoles: auth?.roles,
@@ -108,7 +108,7 @@ export abstract class AdminRoute extends OpenAPIRoute {
       const isAdmin = hasAdminRole(roles);
       const isModerator = hasModeratorRole(roles);
 
-      logger.info('[AdminRoute] Role check result', {
+      logger.debug('[AdminRoute] Role check result', {
         userId,
         roles,
         rolesLength: roles.length,

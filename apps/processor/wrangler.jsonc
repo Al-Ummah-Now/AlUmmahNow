@@ -93,7 +93,8 @@
 		// Error reports to the admin Errors page (docs/features/error-reporting.md)
 		"ERRORS_INGEST_URL": "https://admin.api.alummahnow.net/internal/errors",
 		"ENVIRONMENT": "production",
-		"LOG_LEVEL": "info",
+		// Logging policy (docs/operations/logging.md): production warn, stage info, QA/dev debug
+		"LOG_LEVEL": "warn",
 		"WEBSOCKET_URL": "https://realtime.alummahnow.net",
 		// Epic 28: env kill switch ("false" = no AI calls) and default daily cap; D1 moderation_config
 		// must ALSO enable it (off until an Admin turns it on in admin-web).
@@ -192,6 +193,7 @@
 				// Error reports to the admin Errors page (docs/features/error-reporting.md)
 				"ERRORS_INGEST_URL": "https://admin.api.stage.alummahnow.net/internal/errors",
 				"ENVIRONMENT": "stage",
+				// Logging policy (docs/operations/logging.md): production warn, stage info, QA/dev debug
 				"LOG_LEVEL": "info",
 				"WEBSOCKET_URL": "https://realtime.stage.alummahnow.net",
 				"AI_MODERATION_ENABLED": "true",
@@ -214,6 +216,7 @@
 		"development": {
 			"vars": {
 				"ENVIRONMENT": "development",
+				// Logging policy (docs/operations/logging.md): production warn, stage info, QA/dev debug
 				"LOG_LEVEL": "debug"
 			}
 		},
@@ -221,6 +224,7 @@
 		"staging": {
 			"vars": {
 				"ENVIRONMENT": "staging",
+				// Logging policy (docs/operations/logging.md): production warn, stage info, QA/dev debug
 				"LOG_LEVEL": "info"
 			}
 		}
@@ -229,9 +233,13 @@
 	// Observability (wrangler v3.88.0+)
 	"observability": {
 		"enabled": true,
-		// Low traffic: keep every invocation. Lower this when traffic grows.
+		// Logging policy (docs/operations/logging.md): every invocation is sampled, so
+		// every warn/error line is kept (head sampling is decided before the outcome is
+		// known, so a lower rate would drop errors too). The code logs only warn/error and
+		// slow requests in production; the automatic per-invocation log line is off on
+		// this high-volume worker (the request/job summaries replace it).
 		"head_sampling_rate": 1,
-		"logs": { "enabled": true, "head_sampling_rate": 1 }
+		"logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": false }
 	},
 
 	// Development server configuration

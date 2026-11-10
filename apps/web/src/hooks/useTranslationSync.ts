@@ -7,6 +7,7 @@
  * and invalidates the React Query cache when updates are received.
  */
 
+import { logger } from '@/lib/logger-client';
 import { useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useWebSocketSubscription } from "@/lib/websocket/WebSocketProvider";
@@ -60,7 +61,7 @@ export function useTranslationSync(): void {
       }
       lastUpdateRef.current = updateKey;
 
-      console.log(
+      logger.debug(
         `[i18n] Received translation update for ${message.locale} (v${message.version})`
       );
 

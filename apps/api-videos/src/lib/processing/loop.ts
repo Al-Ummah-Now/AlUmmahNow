@@ -203,7 +203,7 @@ export async function syncVideoFromBunny(
 		fresh.dateModified = now.toISOString();
 		return true;
 	});
-	logger.info('[ProcessingSync] Record synced from Bunny', {
+	logger.debug('[ProcessingSync] Record synced from Bunny', {
 		videoId,
 		outcome: plan.outcome,
 		bunnyStatus: bunny?.status,
@@ -270,7 +270,7 @@ export async function startProcessingLoop(
 		reason: opts.reason,
 	};
 	await queue.send(message, { delaySeconds: delay });
-	logger.info('[ProcessingLoop] Loop started', { videoId, loopId, reason: opts.reason, delay });
+	logger.debug('[ProcessingLoop] Loop started', { videoId, loopId, reason: opts.reason, delay });
 	return { started: true, loopId };
 }
 

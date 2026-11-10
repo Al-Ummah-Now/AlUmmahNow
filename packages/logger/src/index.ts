@@ -1,15 +1,24 @@
-/**
- * Log levels in order of severity
- */
-export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+/* eslint-disable no-console -- this module is the one place that writes to the console */
+import {
+  levelEnabled,
+  redact,
+  redactString,
+  resolveLogLevel,
+  summaryLevel,
+  SLOW_MS,
+  type LogLevel,
+} from './policy.js';
+
+export * from './policy.js';
 
 /**
  * Logger configuration options
  */
 export interface LoggerConfig {
   /**
-   * Minimum log level to output
-   * @default 'info'
+   * Minimum log level to output. Leave unset in app code: the level then comes
+   * from the environment (configureLogging(env), or LOG_LEVEL / ENVIRONMENT /
+   * NEXTJS_ENV in process.env) per the logging policy in ./policy.ts.
    */
   logLevel?: LogLevel;
 
@@ -66,29 +75,132 @@ export function resolveLogServiceUrl(configured?: string): string | null {
   return readEnv('NODE_ENV') === 'development' ? 'http://localhost:3089' : null;
 }
 
+// ---------------------------------------------------------------------------
+// Process-wide level (one per isolate)
+// ---------------------------------------------------------------------------
+
+/** Worker bindings / process.env subset that decides the level. */
+export interface LoggingEnv {
+  LOG_LEVEL?: unknown;
+  ENVIRONMENT?: unknown;
+  NEXTJS_ENV?: unknown;
+}
+
+let globalLevel: LogLevel | null = null;
+
+/**
+ * Sets the level for every logger without an explicit one. Workers call it at the
+ * top of each fetch/scheduled/queue handler with their `env` (bindings are not in
+ * process.env at older compatibility dates); it is cheap and idempotent.
+ */
+export function configureLogging(env: LoggingEnv | undefined | null): LogLevel {
+  globalLevel = resolveLogLevel({
+    logLevel: env?.LOG_LEVEL,
+    environment: env?.ENVIRONMENT ?? env?.NEXTJS_ENV,
+    nodeEnv: readEnv('NODE_ENV'),
+  });
+  return globalLevel;
+}
+
+/** Current process-wide level; resolved from process.env the first time. */
+export function getGlobalLogLevel(): LogLevel {
+  if (globalLevel === null) {
+    globalLevel = resolveLogLevel({
+      logLevel: readEnv('LOG_LEVEL'),
+      environment: readEnv('ENVIRONMENT') ?? readEnv('NEXTJS_ENV'),
+      nodeEnv: readEnv('NODE_ENV'),
+    });
+  }
+  return globalLevel;
+}
+
+/** Test helper: forget the configured level so the next call re-reads the environment. */
+export function resetLogging(): void {
+  globalLevel = null;
+  sink = null;
+}
+
+// ---------------------------------------------------------------------------
+// Sink for warn/error (admin Errors pipeline)
+// ---------------------------------------------------------------------------
+
+/** One structured log entry, already redacted. */
+export interface LogEntry {
+  level: LogLevel;
+  app: string;
+  msg: string;
+  [field: string]: unknown;
+}
+
+export type LogSink = (entry: LogEntry, original: unknown) => void;
+let sink: LogSink | null = null;
+
+/**
+ * Registers a callback for every emitted warn/error entry (after level gating
+ * and redaction), e.g. the admin Errors reporter. `original` is the unredacted
+ * data argument so a reporter can keep the real Error for its stack.
+ * The sink must not throw; if it does, the error is swallowed.
+ */
+export function setLogSink(next: LogSink | null): void {
+  sink = next;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/** Builds the single structured entry for one log call. */
+export function buildEntry(level: LogLevel, app: string, message: string, data?: unknown): LogEntry {
+  const entry: LogEntry = { level, app, msg: redactString(String(message)) };
+  if (data === undefined) return entry;
+  const safe = redact(data);
+  if (data instanceof Error) entry.error = safe;
+  else if (isPlainObject(safe)) {
+    for (const [k, v] of Object.entries(safe)) {
+      if (k === 'level' || k === 'app' || k === 'msg') entry[`data_${k}`] = v;
+      else entry[k] = v;
+    }
+  } else entry.data = safe;
+  return entry;
+}
+
+/** Per-request summary fields (route, status, duration, ids). */
+export interface RequestSummary {
+  method?: string;
+  /** Route pattern or pathname (never the query string). */
+  route: string;
+  status?: number;
+  durationMs: number;
+  error?: unknown;
+  [id: string]: unknown;
+}
+
+/** Per-job (queue message, cron tick, admin job) summary. */
+export interface JobSummary {
+  job: string;
+  /** 'ok' | 'retry' | 'failed' | 'skipped' … */
+  outcome: string;
+  durationMs: number;
+  error?: unknown;
+  [id: string]: unknown;
+}
+
 /**
  * Logger class for Al Ummah Now applications
  *
- * Features:
- * - Console logging (always available)
- * - File logging (local development only)
- * - Structured log format with timestamps
- * - Configurable log levels
- * - Non-blocking async file writes
+ * Every call writes at most one structured console entry ({ level, app, msg, …fields })
+ * which Workers Logs indexes field by field. Data is redacted (secrets, tokens,
+ * emails, bodies) and Errors keep their name/message/stack.
  *
  * @example
  * ```typescript
- * const logger = new Logger({
- *   logLevel: 'debug',
- *   logFilePath: 'logs/api-videos.log'
- * });
- *
- * logger.info('Server started', { port: 3000 });
- * logger.error('Failed to connect', error);
+ * const logger = createLogger('api-videos');
+ * logger.warn('Bunny webhook rejected', { videoId, status });
+ * logger.request({ method: 'GET', route: '/videos/:id', status: 200, durationMs: 42 });
  * ```
  */
 export class Logger {
-  private logLevel: LogLevel;
+  private logLevel: LogLevel | null;
   private appName: string;
   private consoleLogging: boolean;
   private fileLogging: boolean;
@@ -96,7 +208,7 @@ export class Logger {
   private useHttpLogging: boolean = false;
 
   constructor(config: LoggerConfig = {}) {
-    this.logLevel = config.logLevel ?? 'info';
+    this.logLevel = config.logLevel ?? null;
     this.appName = config.appName ?? 'unknown';
     this.consoleLogging = config.consoleLogging ?? true;
     this.fileLogging = config.fileLogging ?? true;
@@ -114,62 +226,41 @@ export class Logger {
    */
   private isWorkersEnvironment(): boolean {
     try {
-      // Check for Workers-specific global objects
       // @ts-ignore - These globals exist in Workers but not in Node.js
       if (typeof globalThis.WebSocketPair !== 'undefined') {
         return true;
       }
-
       // @ts-ignore
       if (typeof globalThis.DurableObjectNamespace !== 'undefined') {
         return true;
       }
-
-      // Check for caches API (exists in Workers and browsers, but combined with no window means Workers)
       // @ts-ignore
       if (typeof globalThis.caches !== 'undefined' && typeof globalThis.window === 'undefined') {
         return true;
       }
-
       return false;
     } catch {
       return false;
     }
   }
 
-  /**
-   * Check if a log level should be output based on configured minimum level
-   */
-  private shouldLog(level: LogLevel): boolean {
-    const levels: Record<LogLevel, number> = {
-      debug: 0,
-      info: 1,
-      warn: 2,
-      error: 3,
-    };
-    return levels[level] >= levels[this.logLevel];
+  /** Whether a call at `level` would be emitted. Use it to skip building costly data. */
+  isEnabled(level: LogLevel): boolean {
+    return levelEnabled(level, this.getLogLevel());
   }
 
   /**
-   * Write log entry via HTTP to log service
+   * Write log entry via HTTP to log service (local development only)
    */
-  private async sendLogToService(level: LogLevel, message: string, data?: unknown): Promise<void> {
+  private sendLogToService(entry: LogEntry): void {
     if (!this.fileLogging || !this.logServiceUrl) return;
-
     try {
-      // Don't await - fire and forget to avoid blocking
       fetch(`${this.logServiceUrl}/log`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          app: this.appName,
-          level,
-          message,
-          data,
-        }),
+        body: JSON.stringify({ app: this.appName, level: entry.level, message: entry.msg, data: entry }),
       }).catch(() => {
         // Silently fail if log service is unavailable
-        // This prevents logging from breaking the application
       });
     } catch {
       // Silently ignore errors
@@ -177,130 +268,103 @@ export class Logger {
   }
 
   /**
-   * Write log entry to file (Node.js environment only)
+   * Write log entry to file (Node.js local development only)
    */
-  private async writeToFile(level: LogLevel, message: string, data?: unknown): Promise<void> {
+  private async writeToFile(entry: LogEntry): Promise<void> {
     if (!this.fileLogging) return;
-
     try {
       const { appendFile } = await import('fs/promises');
       const { join } = await import('path');
-
-      const timestamp = new Date().toISOString();
-      const dataStr = data ? ` ${JSON.stringify(data)}` : '';
-      const logLine = `[${timestamp}] [${level.toUpperCase()}] ${message}${dataStr}\n`;
-
-      // Write to logs directory in monorepo root
+      const logLine = `[${new Date().toISOString()}] [${entry.level.toUpperCase()}] ${entry.msg} ${JSON.stringify(entry)}\n`;
       const logFilePath = join(process.cwd(), '../../logs', `${this.appName}.log`);
       await appendFile(logFilePath, logLine, 'utf8');
-    } catch (err) {
-      // Don't throw if file logging fails
-      if (this.consoleLogging) {
-        console.error('[LOGGER] Failed to write to log file:', err);
+    } catch {
+      // File logging is best effort (no logs/ dir in deployed runtimes)
+    }
+  }
+
+  private emit(level: LogLevel, message: string, data?: unknown): void {
+    if (!this.isEnabled(level)) return;
+    const entry = buildEntry(level, this.appName, message, data);
+    if (this.consoleLogging) {
+      // One object per call: Workers Logs indexes its fields, and a constant-shape
+      // object can never be read as a printf format (CodeQL js/tainted-format-string).
+      if (level === 'error') console.error(entry);
+      else if (level === 'warn') console.warn(entry);
+      else if (level === 'info') console.info(entry);
+      else console.debug(entry);
+    }
+    if (this.useHttpLogging) this.sendLogToService(entry);
+    else if (this.logServiceUrl || readEnv('NODE_ENV') === 'development') void this.writeToFile(entry);
+    if (sink && (level === 'warn' || level === 'error')) {
+      try {
+        sink(entry, data);
+      } catch {
+        // A reporter failure must never break the caller
       }
     }
   }
 
-  /**
-   * Write log (either via HTTP for Workers or direct file I/O for Node.js)
-   */
-  private writeLog(level: LogLevel, message: string, data?: unknown): void {
-    if (this.useHttpLogging) {
-      this.sendLogToService(level, message, data);
-    } else {
-      this.writeToFile(level, message, data);
-    }
+  /** Very fine-grained tracing; QA/dev only, never emitted in production. */
+  trace(message: string, data?: unknown): void {
+    this.emit('trace', message, data);
   }
 
-  /**
-   * Log debug message
-   * @param message - Log message
-   * @param data - Optional data to include (will be JSON stringified)
-   */
-  // Console output keeps the format string constant ('%s'): a message that carries user input
-  // (ids, URLs) must never be read as a printf-style format (CodeQL js/tainted-format-string).
+  /** Diagnostic detail; QA/dev only, never emitted in production. */
   debug(message: string, data?: unknown): void {
-    if (this.shouldLog('debug')) {
-      if (this.consoleLogging) {
-        console.log('[DEBUG] %s', message, data ? JSON.stringify(data, null, 2) : '');
-      }
-      this.writeLog('debug', message, data);
-    }
+    this.emit('debug', message, data);
   }
 
-  /**
-   * Log info message
-   * @param message - Log message
-   * @param data - Optional data to include (will be JSON stringified)
-   */
+  /** Stage and below. Prefer one request()/job() summary over several info lines. */
   info(message: string, data?: unknown): void {
-    if (this.shouldLog('info')) {
-      if (this.consoleLogging) {
-        console.log('[INFO] %s', message, data ? JSON.stringify(data, null, 2) : '');
-      }
-      this.writeLog('info', message, data);
-    }
+    this.emit('info', message, data);
   }
 
-  /**
-   * Log warning message
-   * @param message - Log message
-   * @param data - Optional data to include (will be JSON stringified)
-   */
+  /** Something went wrong but was handled. Keep full context (ids, step, status). */
   warn(message: string, data?: unknown): void {
-    if (this.shouldLog('warn')) {
-      if (this.consoleLogging) {
-        console.warn('[WARN] %s', message, data ? JSON.stringify(data, null, 2) : '');
-      }
-      this.writeLog('warn', message, data);
-    }
+    this.emit('warn', message, data);
   }
 
-  /**
-   * Log error message
-   * @param message - Log message
-   * @param error - Error object or data to include
-   */
+  /** A failure. Pass the Error (or { error, …ids }) so the stack is kept. */
   error(message: string, error?: unknown): void {
-    if (this.shouldLog('error')) {
-      if (this.consoleLogging) {
-        console.error('[ERROR] %s', message, error);
-      }
-      this.writeLog('error', message, error);
-    }
+    this.emit('error', message, error);
   }
 
   /**
-   * Get current log level
+   * The one summary line for a request: info normally (stage and below), warn
+   * when slower than `slowMs`, error on 5xx or a thrown error.
    */
+  request(summary: RequestSummary, slowMs: number = SLOW_MS): void {
+    const level = summaryLevel(summary, slowMs);
+    const { method, route, status } = summary;
+    const label = level === 'warn' ? 'slow request' : level === 'error' ? 'request failed' : 'request';
+    this.emit(level, `${label} ${method ?? ''} ${route} ${status ?? ''}`.replace(/\s+/g, ' ').trim(), summary);
+  }
+
+  /** The one summary line for a job (queue message, cron tick, admin job). */
+  job(summary: JobSummary, slowMs: number = SLOW_MS): void {
+    const level = summaryLevel(summary, slowMs);
+    this.emit(level, `job ${summary.job} ${summary.outcome}${level === 'warn' && summary.durationMs >= slowMs ? ' (slow)' : ''}`, summary);
+  }
+
+  /** Effective level: explicit config, else the process-wide policy level. */
   getLogLevel(): LogLevel {
-    return this.logLevel;
+    return this.logLevel ?? getGlobalLogLevel();
   }
 
-  /**
-   * Set log level
-   */
-  setLogLevel(level: LogLevel): void {
+  /** Pins this logger's level (null returns it to the process-wide level). */
+  setLogLevel(level: LogLevel | null): void {
     this.logLevel = level;
   }
 
-  /**
-   * Check if file logging is enabled
-   */
   isFileLoggingEnabled(): boolean {
     return this.fileLogging;
   }
 
-  /**
-   * Check if using HTTP logging (Workers environment)
-   */
   isHttpLoggingEnabled(): boolean {
     return this.useHttpLogging;
   }
 
-  /**
-   * Get app name
-   */
   getAppName(): string {
     return this.appName;
   }
@@ -316,6 +380,53 @@ export function createLogger(appName: string, config: Omit<LoggerConfig, 'appNam
     ...config,
     appName,
   });
+}
+
+/** The logger shape apps export: bound methods, safe to destructure or mock. */
+export interface AppLogger {
+  trace(message: string, data?: unknown): void;
+  debug(message: string, data?: unknown): void;
+  info(message: string, data?: unknown): void;
+  warn(message: string, data?: unknown): void;
+  error(message: string, error?: unknown): void;
+  request(summary: RequestSummary, slowMs?: number): void;
+  job(summary: JobSummary, slowMs?: number): void;
+  isEnabled(level: LogLevel): boolean;
+}
+
+/** An app's logger, levelled by the logging policy (no per-app level). */
+export function appLogger(appName: string, config: Omit<LoggerConfig, 'appName' | 'logLevel'> = {}): AppLogger {
+  const base = createLogger(appName, { forceHttpLogging: true, ...config });
+  return {
+    trace: (m, d) => base.trace(m, d),
+    debug: (m, d) => base.debug(m, d),
+    info: (m, d) => base.info(m, d),
+    warn: (m, d) => base.warn(m, d),
+    error: (m, e) => base.error(m, e),
+    request: (s, slow) => base.request(s, slow),
+    job: (s, slow) => base.job(s, slow),
+    isEnabled: (l) => base.isEnabled(l),
+  };
+}
+
+/**
+ * Wraps a Worker's exported handlers (fetch / scheduled / queue / email) so each
+ * invocation first applies the logging policy from its `env` (the second
+ * argument of every handler). Needed where bindings are not in process.env.
+ */
+export function withLogging<T extends object>(handlers: T): T {
+  const out: Record<string, unknown> = {};
+  for (const [name, value] of Object.entries(handlers)) {
+    if (typeof value === 'function') {
+      out[name] = (first: unknown, env: LoggingEnv | undefined, ...rest: unknown[]) => {
+        configureLogging(env);
+        return (value as (...args: unknown[]) => unknown).call(handlers, first, env, ...rest);
+      };
+    } else {
+      out[name] = value;
+    }
+  }
+  return out as T;
 }
 
 export default Logger;

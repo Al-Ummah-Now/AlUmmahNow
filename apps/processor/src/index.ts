@@ -4,7 +4,8 @@ import { erasureRetryDelaySeconds } from './contact/erase';
 /** Account erasure steps: retried with backoff, then dead-lettered (shown on the admin Errors page). */
 const ERASURE_TYPES: readonly number[] = [MessageType.UserDataErased, MessageType.ContactDataErase];
 import { MessageProcessor } from './messageProcessor';
-import { createLogger } from '@al-ummah/logger';
+import type { createLogger } from '@al-ummah/logger';
+import { loggerFor } from './lib/logger';
 import { purgeExpiredNotifications } from './lib/notifications-store';
 import { handleModerationScan, isScanPayload } from './moderation/consumer';
 import { purgeExpiredModerationData } from './moderation/store';
@@ -158,10 +159,7 @@ async function checkDLQHealth(_env: QueueEnvironment): Promise<{ status: string;
 export const ROLLUP_IMPORT_CRON = '17 * * * *';
 
 export async function runRollupImport(env: QueueEnvironment, now = Date.now()) {
-  const logger = createLogger('processor', {
-    logLevel: (env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error') || 'info',
-    forceHttpLogging: true,
-  });
+  const logger = loggerFor(env);
   if (!env.NOTIFICATIONS_DB) {
     logger.warn('[Rollups] NOTIFICATIONS_DB not bound; legacy rollup import skipped');
     return null;
@@ -200,10 +198,7 @@ export async function runCategorizeSweep(env: QueueEnvironment, budget: boolean,
 }
 
 export async function runScheduled(env: QueueEnvironment, now = Date.now()): Promise<number> {
-  const logger = createLogger('processor', {
-    logLevel: (env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error') || 'info',
-    forceHttpLogging: true,
-  });
+  const logger = loggerFor(env);
   // AI moderation retention (Epic 28): 30-day translations, 12-month signals
   try {
     await purgeExpiredModerationData(env.REPORTS_DB, now);
@@ -255,10 +250,7 @@ export default {
 };
 
 async function handleQueue(batch: MessageBatch<AlUmmahMessage>, env: QueueEnvironment, ctx?: ExecutionContextLike): Promise<void> {
-  const logger = createLogger('processor', {
-    logLevel: (env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error') || 'info',
-    forceHttpLogging: true,
-  });
+  const logger = loggerFor(env);
   // Dead-letter queues: alert + store for replay (see src/dlq). Checked first:
   // a DLQ batch must never be processed (and fail) again as a normal message.
   if (isDeadLetterQueue(batch.queue)) {
@@ -280,25 +272,31 @@ async function handleQueue(batch: MessageBatch<AlUmmahMessage>, env: QueueEnviro
 
   // One processor per batch: it collects the batch's analytics increments (flushed below)
   const processor = new MessageProcessor(logger, undefined, { batchCounters: true });
+  const startedAt = Date.now();
+  const retried: string[] = [];
+  const deadLettered: string[] = [];
 
-  logger.info(`Processing batch of ${batch.messages.length} messages`);
-
-  // Process messages in parallel for better performance
-  const results = await Promise.allSettled(
+  await Promise.allSettled(
     batch.messages.map(async (message: QueueMessage<AlUmmahMessage>) => {
       try {
         const result = await processor.processMessage(message.body, env);
-        
+
         if (!result.success) {
           if (result.shouldRetry) {
             // Retry the message (account erasure steps back off; contact/erase.ts)
-            logger.warn(`Retrying message ${message.body.id}`);
+            retried.push(message.body.id);
             const delaySeconds = erasureRetryDelaySeconds(message.body?.type, message.attempts ?? 1, ERASURE_TYPES);
             if (delaySeconds) message.retry({ delaySeconds });
             else message.retry();
           } else {
-            // Send to dead letter queue (if available)
-            logger.error(`Sending message ${message.body.id} to DLQ`);
+            deadLettered.push(message.body.id);
+            logger.error('[Queue] Message failed for good; sending to DLQ', {
+              messageId: message.body.id,
+              type: message.body.type,
+              queue: batch.queue,
+              reason: result.error,
+              retryCount: message.body.retryCount ?? 0,
+            });
             if (env.DLQ && typeof env.DLQ.send === 'function') {
               await env.DLQ.send({
                 ...message.body,
@@ -307,18 +305,21 @@ async function handleQueue(batch: MessageBatch<AlUmmahMessage>, env: QueueEnviro
                 failedAt: result.processedAt,
               });
             } else {
-              logger.warn(`DLQ not configured - acknowledging message ${message.body.id} without DLQ`);
+              logger.warn('[Queue] DLQ not configured; message acknowledged without DLQ', { messageId: message.body.id });
             }
             message.ack();
           }
         } else {
-          // Successfully processed
-          logger.debug(`Message ${message.body.id} processed successfully`);
           message.ack();
         }
       } catch (error) {
-        logger.error(`Unexpected error processing message ${message.body.id}`, error);
-        // For unexpected errors, we'll retry
+        retried.push(message.body.id);
+        logger.error('[Queue] Unexpected error processing message; retrying', {
+          messageId: message.body.id,
+          type: message.body.type,
+          queue: batch.queue,
+          error,
+        });
         const delaySeconds = erasureRetryDelaySeconds(message.body?.type, message.attempts ?? 1, ERASURE_TYPES);
         if (delaySeconds) message.retry({ delaySeconds });
         else message.retry();
@@ -329,18 +330,21 @@ async function handleQueue(batch: MessageBatch<AlUmmahMessage>, env: QueueEnviro
   // One D1 transaction for the whole batch's analytics increments
   await processor.flushCounters(env);
 
-  // Log summary of processing results
-  const successful = results.filter((r: PromiseSettledResult<unknown>) => r.status === 'fulfilled').length;
-  const failed = results.filter((r: PromiseSettledResult<unknown>) => r.status === 'rejected').length;
-  
-  logger.info(`Batch processing complete: ${successful} successful, ${failed} failed`);
+  // One summary line per batch (info at stage and below; warn when messages were retried or it was slow)
+  logger.job({
+    job: 'queue-batch',
+    queue: batch.queue,
+    outcome: retried.length ? 'retry' : 'ok',
+    messages: batch.messages.length,
+    retried: retried.length,
+    deadLettered: deadLettered.length,
+    retriedIds: retried.length ? retried.slice(0, 20) : undefined,
+    durationMs: Date.now() - startedAt,
+  });
 }
 
 async function handleFetch(request: Request, env: QueueEnvironment, ctx?: ExecutionContextLike): Promise<Response> {
-  const logger = createLogger('processor', {
-    logLevel: (env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error') || 'info',
-    forceHttpLogging: true,
-  });
+  const logger = loggerFor(env);
   const url = new URL(request.url);
   
   logger.debug(`Received ${request.method} request to ${url.pathname}`);

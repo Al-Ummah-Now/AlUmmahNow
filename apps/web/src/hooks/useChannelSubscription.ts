@@ -109,7 +109,7 @@ export function useChannelSubscription({
         setError('channel');
         return false;
       }
-      logger.info('[useChannelSubscription] Updating subscription', { channelId, method });
+      logger.debug('[useChannelSubscription] Updating subscription', { channelId, method });
       const response = await fetch(`${getApiUrl()}/api/channels/${channelId}/subscriptions`, {
         method,
         headers: { 'Content-Type': 'application/json', ...headers },

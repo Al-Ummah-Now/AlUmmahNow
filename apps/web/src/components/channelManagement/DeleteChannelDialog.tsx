@@ -96,7 +96,7 @@ export function DeleteChannelDialog({ channel, open, onOpenChange, onDeleted, re
         setFailed(true);
         return;
       }
-      logger.info('[DeleteChannelDialog] Channel deleted', { channelId: channel.id, newMainChannelId: result.newMainChannelId });
+      logger.debug('[DeleteChannelDialog] Channel deleted', { channelId: channel.id, newMainChannelId: result.newMainChannelId });
 
       await reloadChannels();
       if (user?.channel?.id === channel.id) {

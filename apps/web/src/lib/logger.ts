@@ -1,58 +1,11 @@
 /**
- * Unified logger for Next.js web app
- * - Server-side: Uses @al-ummah/logger for file + console logging
- * - Client-side: Console logging only (browser environment)
+ * Unified logger for the Next.js web app.
+ * - Server: @al-ummah/logger, levelled by the logging policy (production warn,
+ *   stage info, QA/dev debug; LOG_LEVEL var overrides).
+ * - Browser: lib/logger-client (production hosts show nothing below warn).
  */
 
-import { createLogger } from '@al-ummah/logger';
-import { forwardLoggedError } from '@/lib/errors/reporter';
+import { logger as serverLogger } from './logger-server';
+import { logger as clientLogger } from './logger-client';
 
-// Server-side logger instance (only works on server)
-const serverLogger = typeof window === 'undefined'
-  ? createLogger('web', {
-      logLevel: (process.env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error') || 'info',
-      forceHttpLogging: true,
-    })
-  : null;
-
-// Helper to check if running on server
-function isServer(): boolean {
-  return typeof window === 'undefined';
-}
-
-// Unified logger that works on both client and server
-export const logger = {
-  info: (message: string, data?: unknown) => {
-    if (isServer() && serverLogger) {
-      serverLogger.info(message, data);
-    } else {
-      console.log(`[INFO] ${message}`, data || '');
-    }
-  },
-
-  warn: (message: string, data?: unknown) => {
-    if (isServer() && serverLogger) {
-      serverLogger.warn(message, data);
-    } else {
-      console.warn(`[WARN] ${message}`, data || '');
-    }
-  },
-
-  error: (message: string, data?: unknown) => {
-    if (isServer() && serverLogger) {
-      serverLogger.error(message, data);
-    } else {
-      console.error(`[ERROR] ${message}`, data || '');
-      // Browser: also to the admin Errors page (lib/errors/reporter.ts)
-      forwardLoggedError(message, data);
-    }
-  },
-
-  debug: (message: string, data?: unknown) => {
-    if (isServer() && serverLogger) {
-      serverLogger.debug(message, data);
-    } else {
-      console.log(`[DEBUG] ${message}`, data || '');
-    }
-  },
-};
+export const logger = typeof window === 'undefined' ? serverLogger : clientLogger;

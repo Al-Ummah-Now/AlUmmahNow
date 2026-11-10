@@ -140,7 +140,7 @@ export class AnalyticsSummaryGet extends AuthenticatedRoute {
       const scope = await loadScope(c, userId, query.channelId);
       if (!scope.ok) return c.json({ success: false, error: scope.error }, scope.status);
       const summary = buildSummary(scope.videos, scope.channels);
-      logger.info("[Analytics] Summary served", { userId, channelId: query.channelId, videos: scope.videos.length });
+      logger.debug("[Analytics] Summary served", { userId, channelId: query.channelId, videos: scope.videos.length });
       return c.json(summary);
     } catch (error) {
       logger.error("[Analytics] Summary failed", { userId, error });

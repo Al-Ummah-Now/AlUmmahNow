@@ -49,7 +49,7 @@ export class ExploreGet extends OptionalAuthRoute {
     }
     try {
       const data = await buildExplore(db, c.env.global_settings, { language: query.language });
-      logger.info("[Explore] Served explore data", {
+      logger.debug("[Explore] Served explore data", {
         language: query.language,
         categories: data.categories.length,
         newChannels: data.newChannels.length,

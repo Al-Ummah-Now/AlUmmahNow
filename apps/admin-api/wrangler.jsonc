@@ -149,7 +149,8 @@
 	// Environment variables
 	"vars": {
 		"ENVIRONMENT": "production",
-		"LOG_LEVEL": "info",
+		// Logging policy (docs/operations/logging.md): production warn, stage info, QA/dev debug
+		"LOG_LEVEL": "warn",
 		"WEBSOCKET_URL": "https://realtime.alummahnow.net",
 		"Issuer": "https://auth.alummahnow.net",
 		// Shown in admin when D1 has no cap; keep equal to the processor's value
@@ -298,6 +299,7 @@
 			],
 			"vars": {
 				"ENVIRONMENT": "stage",
+				// Logging policy (docs/operations/logging.md): production warn, stage info, QA/dev debug
 				"LOG_LEVEL": "info",
 				"WEBSOCKET_URL": "https://realtime.stage.alummahnow.net",
 				"Issuer": "https://auth.stage.alummahnow.net",
@@ -323,6 +325,7 @@
 		"development": {
 			"vars": {
 				"ENVIRONMENT": "development",
+				// Logging policy (docs/operations/logging.md): production warn, stage info, QA/dev debug
 				"LOG_LEVEL": "debug",
 				"WEBSOCKET_URL": "http://localhost:3087",
 				"VIDEOS_API_URL": "http://127.0.0.1:3086",
@@ -333,6 +336,7 @@
 		"staging": {
 			"vars": {
 				"ENVIRONMENT": "staging",
+				// Logging policy (docs/operations/logging.md): production warn, stage info, QA/dev debug
 				"LOG_LEVEL": "info"
 			}
 		}
@@ -341,7 +345,7 @@
 	// Observability
 	"observability": {
 		"enabled": true,
-		// Low traffic: keep every invocation. Lower this when traffic grows.
+		// Low traffic (admins only): every invocation and its invocation log are kept (docs/operations/logging.md).
 		"head_sampling_rate": 1,
 		"logs": { "enabled": true, "head_sampling_rate": 1 }
 	},

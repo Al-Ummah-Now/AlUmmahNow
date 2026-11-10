@@ -85,6 +85,7 @@
     // Error reports to the admin Errors page (docs/features/error-reporting.md)
     "ERRORS_INGEST_URL": "https://admin.api.qa.alummahnow.net/internal/errors",
     "ENVIRONMENT": "qa",
+    // Logging policy (docs/operations/logging.md): production warn, stage info, QA/dev debug
     "LOG_LEVEL": "debug",
     "WEBSOCKET_URL": "https://realtime.qa.alummahnow.net",
     "AI_MODERATION_ENABLED": "true",

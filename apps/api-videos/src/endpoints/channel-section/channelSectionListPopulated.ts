@@ -109,7 +109,7 @@ export class ChannelSectionsListPopulated extends OptionalAuthRoute {
     const { channelId } = request.params;
     const { limit, cursor, type, populate } = request.query;
 
-    logger.info(`Listing populated sections for channel ${channelId}`, {
+    logger.debug(`Listing populated sections for channel ${channelId}`, {
       limit,
       cursor,
       type,
@@ -124,7 +124,7 @@ export class ChannelSectionsListPopulated extends OptionalAuthRoute {
     const channel = await channelRepo.getObject(channelId);
 
     if (!channel) {
-      logger.warn(`Channel not found: ${channelId}`);
+      logger.debug(`Channel not found: ${channelId}`);
       return c.json(
         {
           success: false,
@@ -136,7 +136,7 @@ export class ChannelSectionsListPopulated extends OptionalAuthRoute {
 
     // Check if channel is deleted (soft delete)
     if (channel.isDeleted) {
-      logger.warn(`Channel is deleted: ${channelId}`);
+      logger.debug(`Channel is deleted: ${channelId}`);
       return c.json(
         {
           success: false,
@@ -148,7 +148,7 @@ export class ChannelSectionsListPopulated extends OptionalAuthRoute {
 
     // Check if channel is hidden (moderation) - blocks everyone including owner
     if (channel.isHidden) {
-      logger.warn(`Channel is hidden: ${channelId}`);
+      logger.debug(`Channel is hidden: ${channelId}`);
       return c.json(
         {
           success: false,
@@ -160,7 +160,7 @@ export class ChannelSectionsListPopulated extends OptionalAuthRoute {
 
     // Check if channel is private - only owner can access
     if (channel.isPrivate && channel.userId !== auth?.userId) {
-      logger.warn(`Private channel ${channelId} access denied for user ${auth?.userId}`);
+      logger.debug(`Private channel ${channelId} access denied for user ${auth?.userId}`);
       return c.json(
         {
           success: false,
@@ -199,7 +199,7 @@ export class ChannelSectionsListPopulated extends OptionalAuthRoute {
       sectionViews = transformChannelSectionsToView(filteredSections, channel);
     }
 
-    logger.info(`Found ${sectionViews.length} sections for channel ${channelId}`, {
+    logger.debug(`Found ${sectionViews.length} sections for channel ${channelId}`, {
       populated: populate,
       canEdit,
       hiddenEmpty: filteredSections.length - sectionViews.length,

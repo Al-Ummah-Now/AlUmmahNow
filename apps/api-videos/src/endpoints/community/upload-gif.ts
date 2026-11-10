@@ -158,7 +158,7 @@ export class UploadCommunityPostGif extends AuthenticatedRoute {
 
       const path = `/community-posts/${channelId}/${sanitizedFilename}`;
 
-      logger.info('[SECURITY] GIF file validated and sanitized', {
+      logger.debug('[SECURITY] GIF file validated and sanitized', {
         userId,
         channelId,
         originalName: file.name,

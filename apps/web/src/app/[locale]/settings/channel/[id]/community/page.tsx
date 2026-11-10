@@ -80,7 +80,7 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
 
   // Posts are shown on the channel page's Community tab (there is no per-post page)
   const handleView = (post: CommunityPost) => {
-    logger.info('Opening community post on channel page', { channelId: id, postId: post.id });
+    logger.debug('Opening community post on channel page', { channelId: id, postId: post.id });
     router.push(`/${locale}/channels/${id}?tab=community`);
   };
 

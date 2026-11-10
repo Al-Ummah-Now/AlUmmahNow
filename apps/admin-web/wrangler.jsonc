@@ -28,6 +28,8 @@
   },
   "upload_source_maps": true,
   "vars": {
+    // Logging policy (docs/operations/logging.md): production warn, stage info, QA/dev debug
+    "LOG_LEVEL": "debug",
     "Issuer": "https://auth.alummahnow.net",
     "NEXTJS_ENV": "development",
     "API_URL": "http://127.0.0.1:3086",

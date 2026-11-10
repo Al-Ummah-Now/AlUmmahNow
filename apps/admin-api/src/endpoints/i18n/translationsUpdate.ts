@@ -277,7 +277,7 @@ export class UpdateTranslationsEndpoint extends AdminRoute {
           });
 
           if (broadcastResponse.ok) {
-            logger.info(`Broadcast translations update for ${locale}`);
+            logger.debug(`Broadcast translations update for ${locale}`);
           } else {
             logger.warn(`Failed to broadcast translations update: ${broadcastResponse.status}`);
           }

@@ -22,13 +22,13 @@ export function VideosTabContent({ channelId }: VideosTabContentProps) {
       setLoading(true);
       setError(null);
 
-      logger.info('Fetching channel videos', { channelId });
+      logger.debug('Fetching channel videos', { channelId });
 
       getChannelVideos(channelId, { limit: 20 })
         .then((response) => {
           if (response && response.data) {
             setVideos(response.data);
-            logger.info('Channel videos loaded', { count: response.data.length });
+            logger.debug('Channel videos loaded', { count: response.data.length });
           } else {
             logger.warn('No videos response', { channelId });
           }

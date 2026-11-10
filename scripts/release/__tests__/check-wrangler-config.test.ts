@@ -6,7 +6,7 @@ import { APPS } from '../apps.ts';
 import { runCheck } from '../check-wrangler-config.ts';
 import { checkDeployCommands, scanPackageScripts, scanWorkflow } from '../deploy-commands.ts';
 import { parseJsonc } from '../jsonc.ts';
-import { applyAccepted, checkApp, type AppRule, type WranglerConfig } from '../wrangler-config.ts';
+import { applyAccepted, checkApp, checkLogPolicy, resolveEnv, type AppRule, type WranglerConfig } from '../wrangler-config.ts';
 
 const ROOT = resolve(import.meta.dirname, '../../..');
 const rule = (app: string) => APPS.find((a) => a.app === app)!;
@@ -228,5 +228,56 @@ describe('stage', () => {
 		const other = load('processor');
 		(other.env!.stage as typeof stage).queues.consumers[0].queue = 'some-other-queue';
 		assert.ok(has(checkApp(rule('processor'), other), 'queue_consumer'));
+	});
+});
+
+describe('logging policy', () => {
+	const vars = (config: WranglerConfig, env?: string) =>
+		(env ? config.env![env].vars : config.vars) as Record<string, string>;
+	const loadQa = (app: string) => parseJsonc(readFileSync(join(ROOT, rule(app).qaConfigPath!), 'utf8')) as WranglerConfig;
+
+	it('every app sets LOG_LEVEL: production warn, stage info, QA debug', () => {
+		for (const app of APPS) {
+			const config = load(app.app);
+			assert.equal(resolveEnv(config, app.production.env).vars.LOG_LEVEL, 'warn', `${app.app} production`);
+			assert.equal(resolveEnv(config, 'stage').vars.LOG_LEVEL, 'info', `${app.app} stage`);
+			assert.equal(resolveEnv(loadQa(app.app), null).vars.LOG_LEVEL, 'debug', `${app.app} QA`);
+		}
+	});
+
+	it('fails when production LOG_LEVEL is missing, chatty or invalid', () => {
+		const config = load('api-videos');
+		delete vars(config).LOG_LEVEL;
+		assert.ok(has(checkApp(rule('api-videos'), config), 'top level', 'LOG_LEVEL is not set'));
+		for (const level of ['info', 'debug', 'trace', 'verbose']) {
+			vars(config).LOG_LEVEL = level;
+			assert.ok(has(checkApp(rule('api-videos'), config), 'LOG_LEVEL', 'not allowed in production'), level);
+		}
+		vars(config).LOG_LEVEL = 'error';
+		assert.ok(!has(checkApp(rule('api-videos'), config), 'LOG_LEVEL'));
+	});
+
+	it('fails when stage ships debug', () => {
+		const config = load('web');
+		vars(config, 'stage').LOG_LEVEL = 'debug';
+		assert.ok(has(checkApp(rule('web'), config), 'env.stage', 'not allowed in stage'));
+	});
+
+	it('fails when production samples invocations (that drops error lines too)', () => {
+		const config = load('websocket-server');
+		(config.observability as { logs: { head_sampling_rate: number } }).logs.head_sampling_rate = 0.1;
+		assert.ok(has(checkApp(rule('websocket-server'), config), 'head_sampling_rate must be 1'));
+	});
+
+	it('fails when observability logs are off', () => {
+		const config = load('scheduler');
+		delete config.observability;
+		assert.ok(has(checkApp(rule('scheduler'), config), 'observability logs are off'));
+	});
+
+	it('checks the QA config too', () => {
+		const qa = loadQa('processor');
+		delete vars(qa).LOG_LEVEL;
+		assert.ok(has(checkLogPolicy('processor', resolveEnv(qa, null), 'qa'), 'QA config', 'LOG_LEVEL is not set'));
 	});
 });

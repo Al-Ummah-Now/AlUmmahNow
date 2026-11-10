@@ -86,7 +86,7 @@ export class CommentApprove extends AuthenticatedRoute {
 			});
 		}
 
-		logger.info('[CommentApprove] Comment approved', { videoId: id, commentId: cid });
+		logger.debug('[CommentApprove] Comment approved', { videoId: id, commentId: cid });
 		return { success: true };
 	}
 }

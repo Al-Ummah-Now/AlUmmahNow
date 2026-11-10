@@ -80,7 +80,7 @@ export function useSearchPage() {
     setNextCursor(response.data.nextCursor);
     setRelaxed(response.data.relaxed);
     setStatus('done');
-    logger.info('[SearchPage] Results shown', { count: response.data.results.length, type: response.data.type });
+    logger.debug('[SearchPage] Results shown', { count: response.data.results.length, type: response.data.type });
   }, []);
 
   useEffect(() => {

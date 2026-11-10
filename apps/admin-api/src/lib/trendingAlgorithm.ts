@@ -145,7 +145,7 @@ export function processTrendingVideos(
   algorithm: 'velocity' | 'engagement' | 'hybrid' = 'hybrid',
   limit: number = 100
 ): TrendingVideo[] {
-  logger.info(`Processing ${videos.length} videos for trending with ${algorithm} algorithm`);
+  logger.debug(`Processing ${videos.length} videos for trending with ${algorithm} algorithm`);
 
   const trendingVideos = videos
     .filter(v => v.isPublic !== false)
@@ -178,6 +178,6 @@ export function processTrendingVideos(
     rank: index + 1,
   }));
 
-  logger.info(`Found ${rankedVideos.length} trending videos`);
+  logger.debug(`Found ${rankedVideos.length} trending videos`);
   return rankedVideos;
 }

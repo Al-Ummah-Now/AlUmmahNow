@@ -33,7 +33,7 @@ export default async function ChannelHandleLayout({ children, params }: HandleLa
 
   const [channel, userId] = await Promise.all([loadChannelByHandle(decodeHandleSegment(handle)), getCurrentUserId()]);
   if (!channel) {
-    logger.info('[ChannelHandleLayout] Unknown handle', { handle });
+    logger.debug('[ChannelHandleLayout] Unknown handle', { handle });
     notFound();
   }
 

@@ -130,9 +130,9 @@ async function validateJWTWithSignature(token: string, env?: any): Promise<AuthP
       return payload;
     }
     
-    // If result is an error, log it
+    // An expired or invalid token is an ordinary 401 (the client refreshes): debug only
     if ('error' in result) {
-      logger.error('OpenAuth verification error:', result.error);
+      logger.debug('OpenAuth verification rejected the token', { error: result.error });
     }
     
     return null;
@@ -262,7 +262,7 @@ export async function channelIdMiddleware(c: Context, next: Next) {
 
     const channelObject = await channelsBucket.get(channelId);
     if (!channelObject) {
-      logger.warn(`Channel not found: ${channelId}`);
+      logger.debug(`Channel not found: ${channelId}`);
       return c.json({
         success: false,
         error: 'Channel not found'

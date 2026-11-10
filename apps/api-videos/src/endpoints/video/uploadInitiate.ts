@@ -226,7 +226,7 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 				};
 				try {
 					await repository.putObject(videoId, video as VideoType);
-					logger.info('[UploadInitiate] Video metadata saved to R2', { videoId, channelId, fingerprinted: !!claimKey });
+					logger.debug('[UploadInitiate] Video metadata saved to R2', { videoId, channelId, fingerprinted: !!claimKey });
 				} catch (error) {
 					// The Bunny video has no record now: the reaper's orphan sweep removes it.
 					logger.error('[UploadInitiate] Failed to save video metadata to R2', {
@@ -266,7 +266,7 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 				});
 				videoId = outcome.videoId;
 				reused = outcome.reused;
-				if (outcome.replaced) logger.info('[UploadInitiate] Earlier video of this file not reusable; created a new one', { videoId, why: outcome.replaced });
+				if (outcome.replaced) logger.debug('[UploadInitiate] Earlier video of this file not reusable; created a new one', { videoId, why: outcome.replaced });
 			} else {
 				videoId = await create();
 			}
@@ -354,13 +354,13 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 		const channelRepo = new R2Repository<Channel>(c.env.channels);
 		const channel = await channelRepo.getObject(channelId);
 		if (!channel) {
-			logger.warn('[UploadInitiate] Channel not found, skipping collection', { channelId, userId });
+			logger.debug('[UploadInitiate] Channel not found, skipping collection', { channelId, userId });
 			return undefined;
 		}
 		if (channel.bunnyCollectionId) return channel.bunnyCollectionId;
 		try {
 			const collectionId = await ensureChannelCollection(channelRepo, bunnyStream, libraryId, channelId, channel.name || `Channel ${channelId}`);
-			logger.info('[UploadInitiate] Collection created and saved to channel', { channelId, collectionId });
+			logger.debug('[UploadInitiate] Collection created and saved to channel', { channelId, collectionId });
 			return collectionId;
 		} catch (error) {
 			logger.error('[UploadInitiate] Failed to create collection', {
@@ -385,14 +385,14 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 		const fallback = { thumbnailUrl: `https://${c.env.bunny_hostname}/${videoId}/thumbnail.jpg`, thumbnailType: 'auto' as const, custom: false };
 		if (!thumbnail?.data) return fallback;
 		try {
-			logger.info('[UploadInitiate] Processing thumbnail', { videoId, thumbnailType: thumbnail.type, position: thumbnail.position });
+			logger.debug('[UploadInitiate] Processing thumbnail', { videoId, thumbnailType: thumbnail.type, position: thumbnail.position });
 			// Process base64 thumbnail data (validates and converts to ArrayBuffer)
 			const processed = await thumbnailProcessor.processBase64(thumbnail.data, thumbnail.filename || 'thumbnail.jpg');
 			const imageStorageKey = await requireSecret(c.env.image_storage_key, 'image_storage_key');
 			const zone = requireEnvVar(c.env, 'ZONE');
 			// Bunny.net Image Optimizer resizes on the fly using URL parameters
 			const storageResult = await thumbnailStorage.storeInBunny(videoId, processed.original, zone, imageStorageKey, 'https://images.alummahnow.net');
-			logger.info('[UploadInitiate] Thumbnail saved to Bunny.net', { videoId, sizes: Object.keys(storageResult.thumbnailSizes) });
+			logger.debug('[UploadInitiate] Thumbnail saved to Bunny.net', { videoId, sizes: Object.keys(storageResult.thumbnailSizes) });
 			return { thumbnailUrl: storageResult.cdnUrl, thumbnailType: thumbnail.type ?? 'custom', thumbnailSizes: storageResult.thumbnailSizes, custom: true };
 		} catch (error) {
 			logger.error('[UploadInitiate] Thumbnail processing failed', {

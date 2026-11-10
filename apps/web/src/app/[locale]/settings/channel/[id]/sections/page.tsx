@@ -95,14 +95,14 @@ export default function ChannelSectionsManagement() {
       setError(null);
 
       try {
-        logger.info('ChannelSectionsManagement: Fetching sections and channel', { channelId });
+        logger.debug('ChannelSectionsManagement: Fetching sections and channel', { channelId });
 
         const [sectionList, channel] = await Promise.all([
           listChannelSectionsPopulated(channelId),
           getChannelById(channelId),
         ]);
 
-        logger.info('ChannelSectionsManagement: API response received', {
+        logger.debug('ChannelSectionsManagement: API response received', {
           channelId,
           hasSections: !!sectionList,
           sectionsCount: sectionList?.length || 0,
@@ -175,7 +175,7 @@ export default function ChannelSectionsManagement() {
         }));
       });
       setHasChanges(true);
-      logger.info('ChannelSectionsManagement: Sections reordered', { channelId, activeId: active.id, overId: over.id });
+      logger.debug('ChannelSectionsManagement: Sections reordered', { channelId, activeId: active.id, overId: over.id });
     }
   }
 
@@ -201,7 +201,7 @@ export default function ChannelSectionsManagement() {
             .map((section, index) => ({ ...section, position: index }))
         );
         flash(s.deleted);
-        logger.info('ChannelSectionsManagement: Section deleted', { channelId, sectionId: sectionToDelete });
+        logger.debug('ChannelSectionsManagement: Section deleted', { channelId, sectionId: sectionToDelete });
       } else {
         setError(s.deleteFailed);
       }
@@ -220,7 +220,7 @@ export default function ChannelSectionsManagement() {
     try {
       const result = await createChannelSection(channelId, data);
       if (!result.ok) return errorMessage(result.code);
-      logger.info('ChannelSectionsManagement: Section created', { channelId, sectionId: result.section.id, type: data.type });
+      logger.debug('ChannelSectionsManagement: Section created', { channelId, sectionId: result.section.id, type: data.type });
       await refreshSections();
       flash(s.created);
       return null;
@@ -242,7 +242,7 @@ export default function ChannelSectionsManagement() {
         setEditError(errorMessage(result.code));
         return;
       }
-      logger.info('ChannelSectionsManagement: Section updated', { channelId, sectionId: sectionToEdit.id });
+      logger.debug('ChannelSectionsManagement: Section updated', { channelId, sectionId: sectionToEdit.id });
       await refreshSections();
       setSectionToEdit(null);
       flash(s.updated);
@@ -268,7 +268,7 @@ export default function ChannelSectionsManagement() {
 
       setHasChanges(false);
       flash(s.published);
-      logger.info('ChannelSectionsManagement: Section order published', { channelId, count: sections.length });
+      logger.debug('ChannelSectionsManagement: Section order published', { channelId, count: sections.length });
     } catch (err) {
       logger.error('ChannelSectionsManagement: Error publishing sections', { error: err, channelId });
       setError(s.publishFailed);

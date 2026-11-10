@@ -78,7 +78,7 @@ export class ChannelPlaylistsList extends OptionalAuthRoute {
 		const { limit, cursor } = request.query;
 		const userId = this.getUserId(c);
 
-		logger.info('Fetching channel playlists', {
+		logger.debug('Fetching channel playlists', {
 			channelId,
 			limit,
 			cursor,
@@ -94,7 +94,7 @@ export class ChannelPlaylistsList extends OptionalAuthRoute {
 			const channel = await channelRepo.getObject(channelId);
 
 			if (!channel) {
-				logger.warn('Channel not found', { channelId });
+				logger.debug('Channel not found', { channelId });
 				return c.json({
 					success: false,
 					error: `Channel ${channelId} not found`
@@ -103,7 +103,7 @@ export class ChannelPlaylistsList extends OptionalAuthRoute {
 
 			// Check if channel is deleted (soft delete)
 			if (channel.isDeleted) {
-				logger.warn('Channel is deleted', { channelId });
+				logger.debug('Channel is deleted', { channelId });
 				return c.json({
 					success: false,
 					error: 'Channel not found'
@@ -112,7 +112,7 @@ export class ChannelPlaylistsList extends OptionalAuthRoute {
 
 			// Check if channel is hidden (moderation) - blocks everyone including owner
 			if (channel.isHidden) {
-				logger.warn('Channel is hidden', { channelId });
+				logger.debug('Channel is hidden', { channelId });
 				return c.json({
 					success: false,
 					error: 'Channel not found'
@@ -121,7 +121,7 @@ export class ChannelPlaylistsList extends OptionalAuthRoute {
 
 			// Check if channel is private - only owner can access
 			if (channel.isPrivate && channel.userId !== userId) {
-				logger.warn('Private channel access denied', { channelId, userId });
+				logger.debug('Private channel access denied', { channelId, userId });
 				return c.json({
 					success: false,
 					error: 'Channel not found'
@@ -181,7 +181,7 @@ export class ChannelPlaylistsList extends OptionalAuthRoute {
 			};
 
 			const duration = Date.now() - startTime;
-			logger.info('Successfully fetched channel playlists', {
+			logger.debug('Successfully fetched channel playlists', {
 				channelId,
 				playlistsCount: limitedPlaylists.length,
 				totalFiltered: channelPlaylists.length,

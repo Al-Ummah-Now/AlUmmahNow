@@ -113,7 +113,7 @@ export class VideoBulkUpdate extends AuthenticatedRoute {
 		}));
 
 		const succeeded = results.filter((r) => r.success).length;
-		logger.info('[VideoBulkUpdate] Bulk edit', { userId, total: videoIds.length, succeeded, fields: Object.keys(changes) });
+		logger.debug('[VideoBulkUpdate] Bulk edit', { userId, total: videoIds.length, succeeded, fields: Object.keys(changes) });
 		return {
 			success: true,
 			results,

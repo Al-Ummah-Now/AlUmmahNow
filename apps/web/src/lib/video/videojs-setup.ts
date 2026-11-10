@@ -110,8 +110,8 @@ export function createVideoPlayer(
   let player: Player | null = null;
 
   try {
-    logger.info('[createVideoPlayer] Options received:', options);
-    logger.info('[createVideoPlayer] Poster URL:', options.poster);
+    logger.debug('[createVideoPlayer] Options received:', options);
+    logger.debug('[createVideoPlayer] Poster URL:', options.poster);
 
     registerFanousComponents();
     const copy = chromeCopy(options.language === 'ar' ? 'ar' : 'en');

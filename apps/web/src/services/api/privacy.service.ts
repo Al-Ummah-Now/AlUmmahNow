@@ -89,7 +89,7 @@ export const PrivacyService = {
       total.complete = result.complete === true;
       resumeToken = result.resumeToken;
     }
-    logger.info('[PrivacyService] Erasure finished', { complete: total.complete });
+    logger.debug('[PrivacyService] Erasure finished', { complete: total.complete });
     return total;
   },
 };

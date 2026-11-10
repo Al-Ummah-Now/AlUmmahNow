@@ -178,11 +178,11 @@ export class VideoScheduleDelete extends AuthenticatedRoute {
           const scheduledDate = new Date(previousSchedule);
           const key = buildScheduleKey(scheduledDate, videoId);
           await scheduledBucket.delete(key);
-          logger.info(`Removed scheduled entry for video ${videoId}: ${key}`);
+          logger.debug(`Removed scheduled entry for video ${videoId}: ${key}`);
         }
       }
 
-      logger.info(`Cancelled schedule for video ${videoId}`);
+      logger.debug(`Cancelled schedule for video ${videoId}`);
 
       // Send queue message for schedule cancellation
       const queue = new Queue(c.env.queue);
