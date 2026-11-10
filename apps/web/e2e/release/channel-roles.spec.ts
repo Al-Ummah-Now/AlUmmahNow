@@ -28,6 +28,9 @@ import { grantCreatorTier } from './creator-tier';
 test.use({ trace: 'off' });
 test.setTimeout(240_000);
 
+// The nav badge carries a screen-reader prefix ("Your role: ") before the role name
+const ROLE_BADGE = 'Your role: Channel admin';
+
 async function newSignedInPage(browser: Browser, prefix: string): Promise<{ page: Page; user: WebUser; close: () => Promise<void> }> {
   const context = await browser.newContext();
   await context.addCookies([{ name: 'aun_consent', value: `v1.a0.e0.p0.${Date.now()}`, url: target().web, sameSite: 'Lax' }]);
@@ -99,7 +102,7 @@ test('a channel role shows under "Channels you manage" live, and disappears when
     const option = managedOption(member.page, ownerChannel);
     await expect(option).toBeVisible({ timeout: 30000 });
     await expect(option).toHaveAttribute('data-role', 'admin');
-    await expect(option.locator('[data-testid="nav-channel-role"]')).toHaveText('Channel admin');
+    await expect(option.locator('[data-testid="nav-channel-role"]')).toHaveText(ROLE_BADGE);
     await expect(member.page.locator('[data-testid="nav-channel-group-managed"]')).toContainText('Channels you manage');
     await expect(member.page.locator('[data-testid="nav-channel-group-owned"]')).toContainText('Your channels');
 
@@ -111,7 +114,7 @@ test('a channel role shows under "Channels you manage" live, and disappears when
       await trigger.click();
       await expect(member.page.locator('[data-testid="nav-active-channel"]:visible').first()).toHaveAttribute('href', new RegExp(`/channels/${ownerChannel}$`), { timeout: 3000 });
     }).toPass({ timeout: 45000 });
-    await expect(member.page.locator('[data-testid="nav-active-channel"]:visible [data-testid="nav-channel-role"]').first()).toHaveText('Channel admin');
+    await expect(member.page.locator('[data-testid="nav-active-channel"]:visible [data-testid="nav-channel-role"]').first()).toHaveText(ROLE_BADGE);
 
     // The owner revokes it: gone from the menu on the next load, and the session moved off it
     const revoke = await apiFetch(owner.user, `/api/channels/${ownerChannel}/members/${encodeURIComponent(member.user.userId)}`, { method: 'DELETE' });

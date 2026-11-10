@@ -10,6 +10,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { target } from './targets';
 import { findPlayableVideo, NO_PLAYABLE_VIDEO, watchUrl } from './videos';
 import { createProfile, signUpOnWeb, type Locale } from './web-session';
+import { grantCreatorTier } from './creator-tier';
 
 // Signs in through the auth server: a retained trace would hold the password and code
 test.use({ trace: 'off' });
@@ -174,6 +175,8 @@ test.describe('Release: watch page and header layout, tablet to desktop', () => 
       // measurements: create the profile the way the other signed-in specs do.
       const user = await signUpOnWeb(page, 'watch-layout', locale);
       await createProfile(user);
+      // The header's Upload button shows only with a creator tier (uploads are by invitation)
+      await grantCreatorTier(user);
       await checkAllWidths(page, id!, locale);
     });
   }

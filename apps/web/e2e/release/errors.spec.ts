@@ -41,7 +41,8 @@ async function friendlyScreen(page: Page, locale: 'en' | 'ar', mode: 'client' | 
   const text = await page.locator('body').innerText();
   for (const raw of RAW) expect(text, `raw error text ${raw} on the page`).not.toMatch(raw);
   // Themed: the card uses the site's tokens, and the help link goes to the contact page with the reference
-  await expect(page.getByRole('link', { name: locale === 'ar' ? 'تواصل معنا' : 'Contact us' })).toHaveAttribute('href', `/${locale}/contact?ref=${encodeURIComponent(ref)}`);
+  // Inside the friendly screen (the side nav has its own Contact us link)
+  await expect(page.getByTestId('friendly-error').getByRole('link', { name: locale === 'ar' ? 'تواصل معنا' : 'Contact us' })).toHaveAttribute('href', `/${locale}/contact?ref=${encodeURIComponent(ref)}`);
   if (locale === 'ar') await expect(page.getByRole('heading', { level: 1 })).toContainText(/[؀-ۿ]/);
   // Let the reporter flush (it batches) before leaving the page
   await page.waitForTimeout(3000);
