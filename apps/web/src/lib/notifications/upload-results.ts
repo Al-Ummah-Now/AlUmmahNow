@@ -25,6 +25,12 @@ export function publishUploadResult(videoId: string, result: UploadResult): void
   listeners.forEach((listener) => listener());
 }
 
+/** Forget a video's result: a new upload of the same video (a re-upload) starts over. */
+export function clearUploadResult(videoId: string): void {
+  if (!results.delete(videoId)) return;
+  listeners.forEach((listener) => listener());
+}
+
 function subscribe(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);

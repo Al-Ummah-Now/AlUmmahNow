@@ -61,6 +61,7 @@ describe('the browser reports an upload it cannot finish', () => {
 			{ videoId: msgs[0].payload.videoId, userId: msgs[0].payload.userId, kind: msgs[0].payload.kind, source: msgs[0].payload.source },
 			{ videoId: 'vid', userId: 'alice', kind: 'needs_reupload', source: 'client' },
 		);
+		assert.equal(msgs[0].payload.attempt, `issue:${v.processingIssue.at}`, 'keyed to this failure');
 		const again = await report(e)('vid');
 		assert.equal(((await again.json()) as any).result.status, 'already-flagged');
 		assert.equal(failedMessages(e).length, 1, 'announced once');
@@ -80,13 +81,14 @@ describe('the browser reports an upload it cannot finish', () => {
 
 describe('re-uploading a flagged video', () => {
 	it('uploadResume reopens it (uploading, flag cleared) and completing keeps it clear', async () => {
-		const e = env({ vid: videoFixture({ id: 'vid', userId: 'alice', channelId: 'ch', uploadStatus: 'failed', processingIssue: { kind: 'needs_reupload', at: NOW.toISOString() } }) });
+		const e = env({ vid: videoFixture({ id: 'vid', userId: 'alice', channelId: 'ch', uploadStatus: 'failed', processingIssue: { kind: 'needs_reupload', at: NOW.toISOString() }, processingAnnounced: 'failed' }) });
 		const app = buildApp((r) => r.get('/api/videos/upload/resume/:videoId', UploadResumeEndpoint), { userId: 'alice' });
 		const res = await app.request('/api/videos/upload/resume/vid', {}, e);
 		assert.equal(res.status, 200, await res.clone().text());
 		let v = e.videos.read('vid');
 		assert.equal(v.uploadStatus, 'uploading');
 		assert.equal(v.processingIssue, undefined);
+		assert.equal(v.processingAnnounced, undefined, 'the new upload gets its own ready/failed notification');
 
 		v.processingIssue = { kind: 'needs_reupload', at: NOW.toISOString() };
 		v.uploadStatus = 'failed';

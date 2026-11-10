@@ -27,6 +27,8 @@ interface PublishableVideo {
 	isDeleted?: boolean;
 	uploadStatus?: string;
 	scheduledPublishStatus?: string;
+	processingCheck?: { loopId?: string };
+	processingIssue?: { at?: string };
 }
 
 interface EventsEnv extends NotificationsEnv {
@@ -90,13 +92,25 @@ export async function announceLiveStarted(
 export type ProcessingResult = 'ready' | 'failed';
 
 /**
+ * Which processing attempt a result belongs to. The processor dedupes the
+ * uploader's notification on it, so a redelivered message is stored once while
+ * a genuine second result (after an admin retry or a re-upload) still lands.
+ * Stable per attempt: a failure keyed by when it was flagged, otherwise by the
+ * processing loop that produced the result.
+ */
+export function processingAttempt(video: PublishableVideo, status: ProcessingResult): string | undefined {
+	if (status === 'failed' && video.processingIssue?.at) return `issue:${video.processingIssue.at}`;
+	return video.processingCheck?.loopId ? `loop:${video.processingCheck.loopId}` : undefined;
+}
+
+/**
  * Upload processing reached a terminal state: the processor stores the
- * uploader's notification (ready / failed, one per video) and, when published,
+ * uploader's notification (ready / failed, one per processing attempt) and, when published,
  * subscribers are told (the fan-out skips the uploader).
  *
  * Throws when a message could not be queued, so a queue-driven caller (the
  * processing-check loop) retries and finally dead-letters, which alerts the
- * admins. Repeats are harmless: the processor de-duplicates per video.
+ * admins. Repeats are harmless: the processor de-duplicates per video and attempt.
  */
 export async function announceProcessingResult(env: EventsEnv, video: PublishableVideo, status: ProcessingResult): Promise<void> {
 	if (!env.queue) {
@@ -112,6 +126,7 @@ export async function announceProcessingResult(env: EventsEnv, video: Publishabl
 			channelId: video.channelId,
 			title: video.title,
 			duration: video.duration,
+			attempt: processingAttempt(video, status),
 			timestamp: new Date().toISOString(),
 		},
 		timestamp: Date.now(),

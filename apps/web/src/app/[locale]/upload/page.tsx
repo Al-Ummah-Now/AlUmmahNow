@@ -15,7 +15,7 @@ import { MAX_BATCH_FILES, isFinishedRow } from "@/lib/upload/batch-selection";
 import { UploadProcessingCard } from "@/components/videoUpload/UploadProcessingCard";
 import { useProcessingStatus } from "@/hooks/useProcessingStatus";
 import { batchNotice } from "@/lib/upload/processing-status";
-import { useUploadResult } from "@/lib/notifications/upload-results";
+import { clearUploadResult, useUploadResult } from "@/lib/notifications/upload-results";
 import { useActiveChannel } from "@/contexts/ActiveChannelContext";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { useMultiAccount } from "@/hooks/useMultiAccount";
@@ -81,7 +81,7 @@ const UploadPage: React.FC = () => {
     if (uploadedVideo?.id) ids.push(uploadedVideo.id);
     return ids;
   }, [files, uploadedVideo?.id]);
-  const processingPhases = useProcessingStatus(processingIds, uploadChannelId, auth?.user?.id);
+  const { phases: processingPhases, forget: forgetProcessingPhase } = useProcessingStatus(processingIds, uploadChannelId, auth?.user?.id);
   // A result pushed with the uploader's notification (NotificationCenter) wins over the poll
   const singleResult = useUploadResult(uploadedVideo?.id);
 
@@ -99,6 +99,11 @@ const UploadPage: React.FC = () => {
   }, [batchBytesInFlight]);
 
   const handleUploadComplete = (video: VideoObject) => {
+    // A re-upload of a video this session already saw finish starts at "processing" again
+    if (video.id) {
+      clearUploadResult(video.id);
+      forgetProcessingPhase(video.id);
+    }
     setUploadedVideo(video);
     setUploadComplete(true);
     setUploadError(null);

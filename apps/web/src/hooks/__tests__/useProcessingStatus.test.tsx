@@ -43,17 +43,17 @@ describe('useProcessingStatus', () => {
   it('polls with backoff until ready, then stops polling that video', async () => {
     mockGetStatus.mockResolvedValueOnce(status('processing')).mockResolvedValueOnce(status('ready'));
     const { result } = renderHook(() => useProcessingStatus(['v1'], 'ch1', 'u1'));
-    expect(result.current.v1).toBeUndefined();
+    expect(result.current.phases.v1).toBeUndefined();
 
     await advance(5000);
     expect(mockGetStatus).toHaveBeenCalledWith('v1', 'ch1');
-    expect(result.current.v1).toBe('processing');
+    expect(result.current.phases.v1).toBe('processing');
 
     await advance(9999);
     expect(mockGetStatus).toHaveBeenCalledTimes(1);
     await advance(1);
     expect(mockGetStatus).toHaveBeenCalledTimes(2);
-    expect(result.current.v1).toBe('ready');
+    expect(result.current.phases.v1).toBe('ready');
 
     await advance(120000);
     expect(mockGetStatus).toHaveBeenCalledTimes(2);
@@ -68,18 +68,18 @@ describe('useProcessingStatus', () => {
       mockRealtime?.({ type: 'video_processing_update', videoId: 'other', status: 'ready' });
       mockRealtime?.({ type: 'notification', videoId: 'v1', status: 'ready' });
     });
-    expect(result.current).toEqual({ v2: 'failed' });
+    expect(result.current.phases).toEqual({ v2: 'failed' });
   });
 
   it('keeps a video processing when a poll fails, and retries', async () => {
     mockGetStatus.mockRejectedValueOnce(new Error('network down')).mockResolvedValueOnce({ success: false, error: 'HTTP 500' }).mockResolvedValueOnce(status('ready'));
     const { result } = renderHook(() => useProcessingStatus(['v1'], 'ch1', 'u1'));
     await advance(5000);
-    expect(result.current.v1).toBeUndefined();
+    expect(result.current.phases.v1).toBeUndefined();
     await advance(10000);
-    expect(result.current.v1).toBeUndefined();
+    expect(result.current.phases.v1).toBeUndefined();
     await advance(20000);
-    expect(result.current.v1).toBe('ready');
+    expect(result.current.phases.v1).toBe('ready');
   });
 
   it('never moves a finished video back to processing', async () => {
@@ -90,6 +90,24 @@ describe('useProcessingStatus', () => {
       mockRealtime?.({ type: 'video_processing_update', videoId: 'v1', status: 'processing' });
     });
     await advance(60000);
-    expect(result.current.v1).toBe('ready');
+    expect(result.current.phases.v1).toBe('ready');
+  });
+
+  it('forgets a finished video that is uploaded again, and follows the new upload', async () => {
+    mockGetStatus.mockResolvedValue(status('processing'));
+    const { result } = renderHook(() => useProcessingStatus(['v1'], 'ch1', 'u1'));
+    act(() => {
+      mockRealtime?.({ type: 'video_processing_update', videoId: 'v1', status: 'failed' });
+    });
+    expect(result.current.phases.v1).toBe('failed');
+
+    act(() => result.current.forget('v1'));
+    expect(result.current.phases.v1).toBeUndefined();
+    await advance(5000);
+    expect(result.current.phases.v1).toBe('processing');
+    act(() => {
+      mockRealtime?.({ type: 'video_processing_update', videoId: 'v1', status: 'ready' });
+    });
+    expect(result.current.phases.v1).toBe('ready');
   });
 });

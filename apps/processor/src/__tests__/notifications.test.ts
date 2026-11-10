@@ -241,6 +241,17 @@ describe('notification center (processor)', () => {
     expect(realtime[0].message.data).toMatchObject({ notificationKey: 'uploadFailed', actionUrl: '/video/v2/edit', params: { videoTitle: 'Broken' } });
   });
 
+  it('stores one result per processing attempt: redelivery deduped, a failure after a retry still lands', async () => {
+    const failed = (attempt: string) => message(MessageType.VideoUploadFailed, { videoId: 'v3', userId: 'up', title: 'Lesson', attempt });
+    await processor().processMessage(failed('loop:a1'), env());
+    await processor().processMessage(failed('loop:a1'), env()); // queue redelivery
+    await processor().processMessage(failed('loop:a2'), env()); // the admin retry failed too
+    expect(rows("SELECT dedupe_key FROM notifications WHERE user_id = 'up' ORDER BY dedupe_key")).toEqual([
+      { dedupe_key: 'upload:failed:v3:loop:a1' },
+      { dedupe_key: 'upload:failed:v3:loop:a2' },
+    ]);
+  });
+
   it('keeps the legacy realtime notification when no store is bound', async () => {
     await processor().processMessage(message(MessageType.VideoUploadFailed, { videoId: 'v1', userId: 'up' }), env({ NOTIFICATIONS_DB: undefined }));
     expect(pushedTo()).toEqual(['user:up']);

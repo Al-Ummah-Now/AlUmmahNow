@@ -492,4 +492,51 @@ describe('processing result announcement (uploader "ready" / "failed" notificati
 		await deliver(env);
 		assert.equal(resultMessages(env).length, 0);
 	});
+
+	it('keys each result to its processing attempt so a failure after an admin retry is announced again', async () => {
+		const env = makeEnv();
+		await env.videos.put(ID, JSON.stringify(stuck({ userId: 'uploader-1' })));
+		await startProcessingLoop(env, ID, { reason: 'upload-complete', now: NOW });
+		bunnyResponses[ID] = { status: 200, body: { ...FINISHED, status: 5 } };
+		await deliver(env);
+		assert.ok(resultMessages(env)[0].body.payload.attempt, 'the result names its attempt');
+
+		// The admin retries: the record forgets the announcement, a new loop runs and fails again
+		const app = createProcessingInternalRouter();
+		await app.request('/retry', { method: 'POST', body: JSON.stringify({ ids: [ID] }) }, env);
+		const retried = await read(env);
+		assert.equal(retried.uploadStatus, 'processing');
+		assert.equal(retried.processingAnnounced, undefined);
+		await deliver(env);
+		const sent = resultMessages(env);
+		assert.equal(sent.length, 2, 'the second failure reaches the uploader');
+		assert.notEqual(sent[1].body.payload.attempt, sent[0].body.payload.attempt);
+	});
+
+	it('mark failed repeats an announcement that never landed and reports it per video', async () => {
+		const env = makeEnv();
+		await env.videos.put(ID, JSON.stringify(stuck({ userId: 'uploader-1' })));
+		const app = createProcessingInternalRouter();
+		const realSend = env.queue.send.bind(env.queue);
+		env.queue.send = async () => {
+			throw new Error('queue unavailable');
+		};
+		const first = await (await app.request('/mark-failed', { method: 'POST', body: JSON.stringify({ ids: [ID] }) }, env)).json() as any;
+		assert.equal(first.success, true);
+		assert.deepEqual(first.result.results[0], { videoId: ID, found: true, changed: true, announced: false });
+		assert.equal((await read(env)).processingAnnounced, undefined);
+
+		env.queue.send = realSend;
+		const second = await (await app.request('/mark-failed', { method: 'POST', body: JSON.stringify({ ids: [ID] }) }, env)).json() as any;
+		assert.deepEqual(second.result.results[0], { videoId: ID, found: true, changed: false, announced: true });
+		const sent = resultMessages(env);
+		assert.equal(sent.length, 1);
+		assert.equal(sent[0].body.type, MessageType.VideoUploadFailed);
+		assert.match(sent[0].body.payload.attempt, /^issue:/);
+		assert.equal((await read(env)).processingAnnounced, 'failed');
+
+		// Already announced: running it again sends nothing
+		await app.request('/mark-failed', { method: 'POST', body: JSON.stringify({ ids: [ID] }) }, env);
+		assert.equal(resultMessages(env).length, 1);
+	});
 });

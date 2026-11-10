@@ -19,6 +19,7 @@ import R2Repository from '../r2Repo';
 import { Video as BusinessVideo } from '../types';
 import Queue, { MessageType } from '../queue';
 import { logger } from '../logger';
+import { processingAttempt } from '../notification-events';
 import { bunnyTusRequestHeaders } from '../bunny/tus';
 import { startProcessingLoop, type ProcessingEnv } from '../processing/loop';
 
@@ -57,6 +58,8 @@ const UNFINISHED = new Set(['initiated', 'uploading', 'failed', undefined]);
 function clearUploadFlags(video: UploadVideo): void {
   if (video.processingIssue?.kind === 'needs_reupload') delete video.processingIssue;
   delete video.uploadWatch;
+  // A new upload gets its own "ready" / "failed" announcement
+  delete (video as { processingAnnounced?: unknown }).processingAnnounced;
 }
 
 /**
@@ -162,6 +165,7 @@ export async function flagNeedsReupload(
     channelId: video.channelId,
     title: video.title,
     error: opts.reason,
+    attempt: processingAttempt({ ...video, id: videoId }, 'failed'),
     kind: 'needs_reupload',
     source: opts.source,
     timestamp: now.toISOString(),
