@@ -22,6 +22,8 @@ import {
 	PURGE_MAX_DELIVERIES,
 	PURGE_MIN_AGE_MS,
 	PURGE_CONCURRENCY,
+	PURGE_MAX_CONCURRENCY,
+	purgeOptions,
 	PURGE_PAGE_SIZE,
 	purgeAllowed,
 	readPurgeState,
@@ -52,6 +54,7 @@ function bunnyStub() {
 		failDeletes: 0,
 		failList: 0,
 		deleteDelayMs: 0,
+		fail429: 0,
 		inFlight: 0,
 		maxInFlight: 0,
 	};
@@ -64,6 +67,10 @@ function bunnyStub() {
 			s.maxInFlight = Math.max(s.maxInFlight, s.inFlight);
 			await new Promise((r) => setTimeout(r, s.deleteDelayMs));
 			s.inFlight--;
+			if (s.fail429 > 0) {
+				s.fail429--;
+				return new Response('slow down', { status: 429 });
+			}
 			if (s.failDeletes > 0) {
 				s.failDeletes--;
 				return new Response('busy', { status: 503 });
@@ -305,6 +312,34 @@ describe('test-library purge run', () => {
 		assert.equal(bunny.deleted.length, 130);
 		assert.ok(bunny.maxInFlight > 1, 'deletes overlap');
 		assert.ok(bunny.maxInFlight <= PURGE_CONCURRENCY, `at most ${PURGE_CONCURRENCY} in flight (saw ${bunny.maxInFlight})`);
+	});
+
+	it('wipe options: clamped (10 min floor, 50 in flight, 100 per page); a 10-minute run deletes what the 1-hour rule keeps', async () => {
+		assert.deepEqual(purgeOptions({}), { minAgeMs: 60 * 60000, concurrency: PURGE_CONCURRENCY, pageSize: PURGE_PAGE_SIZE });
+		assert.deepEqual(purgeOptions({ minAgeMinutes: 1, concurrency: 500, pageSize: 5000 }), { minAgeMs: 10 * 60000, concurrency: PURGE_MAX_CONCURRENCY, pageSize: 100 });
+		assert.deepEqual(purgeOptions({ minAgeMinutes: '5', concurrency: 'x' }), { minAgeMs: 60 * 60000, concurrency: PURGE_CONCURRENCY, pageSize: PURGE_PAGE_SIZE });
+		const { bunny, env, recorded, young, live } = await seed();
+		// 20 minutes old: kept by the default hour, deleted by a 10-minute wipe
+		for (const v of bunny.videos) if (young.includes(v.guid)) v.dateUploaded = new Date(Date.now() - 20 * 60000).toISOString();
+		const state = await startPurge(env, { actor: 'a', dryRun: false, minAgeMinutes: 10, concurrency: 40, pageSize: 100 });
+		assert.equal(state.concurrency, 40);
+		await drain(env);
+		assert.equal(bunny.deleted.length, 133);
+		const left = new Set(bunny.videos.map((v) => v.guid));
+		for (const id of [...recorded, live]) assert.ok(left.has(id));
+		assert.equal(bunny.videos.filter((v) => v.title.startsWith('[stage] ')).length, 10);
+	});
+
+	it('Bunny 429: the video is retried after a back-off, and the next page runs with half the concurrency', async () => {
+		const { bunny, env } = await seed();
+		bunny.fail429 = 2;
+		await startPurge(env, { actor: 'a', dryRun: false, concurrency: 40 });
+		await drain(env);
+		assert.equal(bunny.deleted.filter((id, i, all) => all.indexOf(id) === i).length, 130);
+		const state = await readPurgeState(env);
+		assert.equal(state?.status, 'finished');
+		assert.equal(state?.throttled, 2);
+		assert.ok((state?.concurrency ?? 99) <= 20);
 	});
 
 	it('refuses to start on production, and a production worker drops a run', async () => {

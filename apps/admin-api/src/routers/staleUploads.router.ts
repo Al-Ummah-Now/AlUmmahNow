@@ -178,8 +178,10 @@ app.post('/test-library-purge', async (c) => {
   if (action !== 'start' && action !== 'stop') return c.json({ success: false, code: 'bad_request', error: 'action must be start or stop' }, 400);
   const dryRun = input.dryRun !== false;
   const resume = input.resume === true;
-  const result = await audited(c, [TEST_LIBRARY_PURGE_AUDIT_KEY], `test_library_purge_${action}`, action === 'start' ? { dryRun, resume } : {}, () =>
-    callUploads(c.env, '/test-library-purge', { method: 'POST', json: { action, dryRun, resume, actor: actorLabel(c) } }),
+  // Optional tuning (api-videos clamps: min age 10 min-24 h, 1-50 in flight, 10-100 per page)
+  const tuning = Object.fromEntries((['minAgeMinutes', 'concurrency', 'pageSize'] as const).filter((k) => typeof input[k] === 'number').map((k) => [k, input[k]]));
+  const result = await audited(c, [TEST_LIBRARY_PURGE_AUDIT_KEY], `test_library_purge_${action}`, action === 'start' ? { dryRun, resume, ...tuning } : {}, () =>
+    callUploads(c.env, '/test-library-purge', { method: 'POST', json: { action, dryRun, resume, ...tuning, actor: actorLabel(c) } }),
   );
   return c.json({ success: true, result });
 });
