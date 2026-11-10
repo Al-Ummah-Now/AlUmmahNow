@@ -70,6 +70,8 @@ const DEFAULT_RATES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 const ROW_HEIGHT = 44;
 /** Below this many rows of room above the bar, the panel covers the bar instead */
 const MIN_ROWS_ABOVE_BAR = 3;
+/** Frames narrower than this (phones) are small players: the panel fills the frame */
+const SMALL_FRAME_WIDTH = 480;
 
 const ROW_ICONS: Record<'quality' | 'speed' | 'captions' | 'audio' | 'shortcuts', LucideIcon> = {
   quality: SlidersHorizontal,
@@ -166,21 +168,25 @@ export function SettingsMenu({ player, lang, onShowShortcuts }: SettingsMenuProp
       const barH = bar?.offsetHeight ?? 0;
       const viewportW = document.documentElement.clientWidth;
       const viewportH = window.innerHeight;
-      const inset = frame.width < 360 ? 8 : 12;
-      menu.style.width = `${Math.max(160, Math.min(280, frame.width - 16))}px`;
-      menu.style.right = `${viewportW - frame.right + inset}px`;
       // The panel is border-box: its height includes its padding and border around the view
       const cs = getComputedStyle(menu);
       const chrome = ['paddingTop', 'paddingBottom', 'borderTopWidth', 'borderBottomWidth'].reduce((sum, k) => sum + (parseFloat(cs[k as 'paddingTop']) || 0), 0);
-      // Above the bar when three rows fit there; in a frame too short for that (a small player
-      // whose bar wraps) it fills the frame over the controls instead of rising out of the player
+      // Above the bar when the player is wide enough and three rows fit there. A small player (a
+      // phone-width frame, or one too short for three rows above its bar) gets the whole frame,
+      // 8px in from every edge, over the controls: one clean surface with every row in reach,
+      // never a 280px box half over the progress bar with the controls peeking out beside it.
       const above = frame.height - barH - 16;
-      const over = above < MIN_ROWS_ABOVE_BAR * ROW_HEIGHT + chrome;
+      const over = frame.width < SMALL_FRAME_WIDTH || above < MIN_ROWS_ABOVE_BAR * ROW_HEIGHT + chrome;
+      const inset = over || frame.width < 360 ? 8 : 12;
+      menu.style.width = `${over ? Math.max(0, frame.width - 16) : Math.max(160, Math.min(280, frame.width - 16))}px`;
+      menu.style.right = `${viewportW - frame.right + inset}px`;
       const room = over ? Math.max(0, frame.height - 16) : above;
       menu.toggleAttribute('data-over-bar', over);
       menu.style.bottom = `${viewportH - (over ? frame.bottom : frame.bottom - barH) + 8}px`;
       menu.style.maxHeight = `${room}px`;
-      menu.style.height = `${Math.min(room, view.scrollHeight + chrome)}px`;
+      // A small player's panel is the whole frame whatever the view holds (Safari, playing HLS
+      // natively, has no Quality row), so it never leaves a strip of controls showing above it
+      menu.style.height = `${over ? room : Math.min(room, view.scrollHeight + chrome)}px`;
     };
     fit();
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(fit) : null;
