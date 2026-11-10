@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { addContactNote, deleteContactMessage, replyToContactMessage, updateContactMessage } from '@/lib/api/admin';
 import type { ActionResult } from '@/lib/api/errors';
@@ -31,6 +31,8 @@ export function ContactActions({ id, status, locale, assignedToMe, hasAssignee }
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [nextStatus, setNextStatus] = useState<ContactStatus>(status);
+  // The status changes under the panel (queue delivery, refresh): follow it
+  useEffect(() => setNextStatus(status), [status]);
   const [note, setNote] = useState('');
   const [reply, setReply] = useState('');
 
