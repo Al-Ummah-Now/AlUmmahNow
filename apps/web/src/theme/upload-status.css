@@ -1,0 +1,54 @@
+/* After-upload processing status (upload page): the single-upload card, the
+   batch notice and the batch row chips. Colours and depth come from each
+   theme's tokens and materials; logical properties keep it right in RTL. */
+
+.ups-card{position:relative;border:1px solid transparent;border-radius:var(--r-xl,20px);background:var(--m-card) padding-box,var(--m-border) border-box;box-shadow:var(--m-card-edge);backdrop-filter:var(--m-blur);-webkit-backdrop-filter:var(--m-blur);padding:clamp(18px,3.4vw,32px);margin-block-end:32px;color:var(--fanous-color-text-primary)}
+.ups-head{display:flex;align-items:flex-start;gap:clamp(12px,2.4vw,20px)}
+.ups-badge{flex:none;display:grid;place-items:center;width:56px;height:56px;border-radius:50%;background:var(--m-primary);box-shadow:var(--m-primary-edge),0 0 36px -8px var(--m-glow);color:var(--fanous-color-on-primary)}
+.ups-badge svg{width:28px;height:28px}
+.ups-card[data-phase=failed] .ups-badge{background:var(--fanous-color-error-fill);box-shadow:none;color:var(--fanous-color-on-error-fill)}
+.ups-title{margin:2px 0 0;font-size:clamp(19px,2.6vw,23px);font-weight:700;line-height:1.3;outline:none}
+.ups-name{margin:4px 0 0;font-weight:600;overflow-wrap:anywhere}
+.ups-body{margin:8px 0 0;max-width:60ch;color:var(--fanous-color-text-secondary);line-height:1.6}
+
+/* Step track: Uploaded → Processing → Ready (or Couldn't be processed) */
+.ups-steps{list-style:none;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;max-width:640px;margin:24px 0 0;padding:0}
+.ups-step{position:relative;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;font-size:13px;font-weight:600;color:var(--fanous-color-text-secondary)}
+.ups-step::before{content:"";position:absolute;inset-block-start:13px;inset-inline-end:50%;width:100%;height:2px;border-radius:2px;background:var(--fanous-color-outline);opacity:.45}
+.ups-step:first-child::before{display:none}
+.ups-step[data-state=done]::before,.ups-step[data-state=current]::before{background:var(--fanous-color-primary);opacity:1}
+.ups-step[data-state=failed]::before{background:var(--fanous-color-error-text);opacity:1}
+.ups-dot{position:relative;z-index:1;display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--m-control);box-shadow:inset 0 0 0 2px var(--fanous-color-outline);color:var(--fanous-color-text-secondary)}
+.ups-dot svg{width:16px;height:16px}
+.ups-step[data-state=done]{color:var(--fanous-color-text-primary)}
+.ups-step[data-state=done] .ups-dot{background:var(--m-primary);box-shadow:var(--m-primary-edge);color:var(--fanous-color-on-primary)}
+.ups-step[data-state=current]{color:var(--fanous-color-text-primary)}
+.ups-step[data-state=current] .ups-dot{background:var(--m-control);box-shadow:inset 0 0 0 2px var(--fanous-color-primary),0 0 0 5px color-mix(in srgb,var(--fanous-color-primary) 22%,transparent);color:var(--fanous-color-link)}
+.ups-step[data-state=failed]{color:var(--fanous-color-error-text)}
+.ups-step[data-state=failed] .ups-dot{background:var(--fanous-color-error-fill);box-shadow:none;color:var(--fanous-color-on-error-fill)}
+.ups-spin{animation:ups-spin 1.1s linear infinite}
+@keyframes ups-spin{to{transform:rotate(360deg)}}
+html[dir=rtl] .ups-spin{animation-direction:reverse}
+
+.ups-status{margin:18px 0 0;font-size:14px;font-weight:600;color:var(--fanous-color-text-secondary)}
+.ups-card[data-phase=ready] .ups-status{color:var(--fanous-color-success-text)}
+.ups-card[data-phase=failed] .ups-status{color:var(--fanous-color-error-text)}
+.ups-actions{display:flex;flex-wrap:wrap;gap:10px;margin-block-start:20px}
+.ups-actions .b{text-decoration:none}
+
+/* Batch notice: what happens next for the whole queue */
+.ups-notice{display:flex;align-items:flex-start;gap:12px;margin-block-end:16px;padding:14px var(--fanous-spacing-lg,16px);border-radius:var(--r-lg,14px);background:var(--m-raised);box-shadow:var(--m-raised-edge);border-inline-start:4px solid var(--fanous-color-primary);color:var(--fanous-color-text-primary);line-height:1.55;font-size:14px}
+.ups-notice svg{flex:none;width:20px;height:20px;margin-block-start:1px;color:var(--fanous-color-primary)}
+.ups-notice[data-notice=allReady]{border-inline-start-color:var(--fanous-color-success-text)}
+.ups-notice[data-notice=allReady] svg{color:var(--fanous-color-success-text)}
+
+/* Batch row: processing status after the bytes are uploaded */
+.ups-chip{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:var(--r-pill,999px);font-size:12px;font-weight:600;line-height:18px;background:var(--m-control);box-shadow:inset 0 0 0 1px var(--fanous-color-outline);color:var(--fanous-color-text-primary);white-space:nowrap}
+.ups-chip svg{width:14px;height:14px;flex:none}
+.ups-chip[data-phase=processing] svg{color:var(--fanous-color-primary)}
+.ups-chip[data-phase=ready]{color:var(--fanous-color-success-text);box-shadow:inset 0 0 0 1px currentColor}
+.ups-chip[data-phase=failed]{color:var(--fanous-color-error-text);box-shadow:inset 0 0 0 1px currentColor}
+.ups-row-link{font-size:12px;font-weight:600;color:var(--fanous-color-link);text-decoration:underline;text-underline-offset:2px}
+
+@media (max-width:480px){.ups-badge{width:44px;height:44px}.ups-badge svg{width:22px;height:22px}.ups-step{font-size:12px}.ups-actions .b{flex:1 1 100%}}
+@media (prefers-reduced-motion:reduce){.ups-spin{animation:none}}

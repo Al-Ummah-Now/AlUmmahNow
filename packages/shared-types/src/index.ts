@@ -52,6 +52,7 @@ export * from './i18n-library';
 export * from './i18n-bulk-edit';
 export * from './i18n-community-guidelines';
 export * from './i18n-contact';
+export * from './i18n-upload-status';
 
 // Static en/ar UI translations (web fallback + api-videos translation seed)
 export { EN_TRANSLATIONS } from './i18n-static/en';

@@ -88,6 +88,8 @@ export function uploadUi(page: Page) {
     success: page.getByTestId('upload-success'),
     successTitle: page.getByTestId('upload-success-title'),
     viewVideo: page.getByTestId('upload-view-video'),
+    processingMessage: page.getByTestId('upload-processing-message'),
+    processingStatus: page.getByTestId('upload-processing-status'),
     uploadAnother: page.getByTestId('upload-another'),
     channelRequired: page.getByTestId('upload-channel-required'),
     signIn: page.getByTestId('upload-sign-in'),
@@ -116,8 +118,8 @@ export async function startUpload(page: Page, filePath: string, titleEn: string)
 }
 
 /**
- * Waits for the whole flow (initiate → TUS → complete → processing polls) to
- * finish. Processing polls for up to ~30s before the page reports success.
+ * Waits for the upload (initiate → TUS → complete) to finish. The page then
+ * shows "Upload complete" while the video processes on the server.
  */
 export async function expectUploadSuccess(page: Page, title?: string, timeout = 120_000) {
   const ui = uploadUi(page);

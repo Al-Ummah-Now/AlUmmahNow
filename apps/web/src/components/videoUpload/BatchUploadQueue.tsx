@@ -3,13 +3,19 @@
 import React from 'react';
 import { UploadQueueItem } from '@al-ummah/shared-types';
 import { FileQueueItem } from './FileQueueItem';
-import { Pause, Play, X, RotateCcw } from 'lucide-react';
+import { Pause, Play, X, RotateCcw, Info, CheckCircle2 } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
+import type { BatchNotice, ProcessingPhase } from '@/lib/upload/processing-status';
+import '@/theme/upload-status.css';
 
 interface BatchUploadQueueProps {
   files: UploadQueueItem[];
   overallProgress: number;
   isUploading: boolean;
+  /** Server-side processing of each uploaded file, by video id */
+  processingPhases?: Record<string, ProcessingPhase>;
+  /** What happens next for the whole queue (see batchNotice) */
+  notice?: BatchNotice;
   onPauseAll: () => void;
   onResumeAll: () => void;
   onCancelAll: () => void;
@@ -24,6 +30,8 @@ export function BatchUploadQueue({
   files,
   overallProgress,
   // isUploading,
+  processingPhases = {},
+  notice = null,
   onPauseAll,
   onResumeAll,
   onCancelAll,
@@ -48,6 +56,30 @@ export function BatchUploadQueue({
 
   const hasActiveTasks = stats.uploading > 0 || stats.pending > 0 || stats.paused > 0;
 
+  // One polite announcement per row that finishes processing (not one live region per row)
+  const [announcement, setAnnouncement] = React.useState('');
+  const announcedRef = React.useRef<Record<string, ProcessingPhase>>({});
+  React.useEffect(() => {
+    for (const file of files) {
+      if (!file.videoId) continue;
+      const phase = processingPhases[file.videoId];
+      if ((phase === 'ready' || phase === 'failed') && announcedRef.current[file.videoId] !== phase) {
+        announcedRef.current[file.videoId] = phase;
+        const title = file.metadata.title || file.file.name;
+        setAnnouncement((phase === 'ready' ? t.uploadStatus.announceReady : t.uploadStatus.announceFailed).replace('{title}', title));
+      }
+    }
+  }, [files, processingPhases, t]);
+
+  const noticeText =
+    notice === 'keepOpen'
+      ? t.uploadStatus.batchKeepOpen
+      : notice === 'processing'
+        ? t.uploadStatus.batchProcessing
+        : notice === 'allReady'
+          ? t.uploadStatus.batchAllReady
+          : '';
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 md:p-6" data-testid="batch-queue" data-total={stats.total} data-completed={stats.completed}>
       {/* Header */}
@@ -57,7 +89,7 @@ export function BatchUploadQueue({
             {t.batch.uploadQueue}
           </h2>
           <p className="text-sm text-gray-600 dark:text-gray-400 mt-1" data-testid="batch-summary">
-            {t.batch.ofCompleted.replace('{completed}', stats.completed.toString()).replace('{total}', stats.total.toString())}
+            {t.uploadStatus.uploadedCount.replace('{completed}', stats.completed.toString()).replace('{total}', stats.total.toString())}
           </p>
         </div>
 
@@ -163,6 +195,16 @@ export function BatchUploadQueue({
         </div>
       </div>
 
+      {noticeText && (
+        <p className="ups-notice" data-testid="batch-notice" data-notice={notice ?? ''}>
+          {notice === 'allReady' ? <CheckCircle2 aria-hidden="true" /> : <Info aria-hidden="true" />}
+          <span>{noticeText}</span>
+        </p>
+      )}
+      <p className="sr-only" role="status" aria-live="polite" aria-atomic="true" data-testid="batch-processing-announcement">
+        {announcement}
+      </p>
+
       {/* Overall Progress Bar */}
       <div className="mb-4">
         <div className="flex items-center justify-between mb-2">
@@ -219,7 +261,7 @@ export function BatchUploadQueue({
         {stats.completed > 0 && (
           <div className="bg-green-50 dark:bg-green-900/20 px-2 py-1.5 rounded text-center">
             <div className="font-semibold text-green-700 dark:text-green-300">{stats.completed}</div>
-            <div className="text-green-600 dark:text-green-400">{t.batch.completed}</div>
+            <div className="text-green-600 dark:text-green-400">{t.uploadStatus.uploadedLabel}</div>
           </div>
         )}
         {stats.failed > 0 && (
@@ -247,6 +289,7 @@ export function BatchUploadQueue({
             <FileQueueItem
               key={file.id}
               file={file}
+              processingPhase={file.status === 'completed' ? (file.videoId && processingPhases[file.videoId]) || 'processing' : undefined}
               onRemove={() => onRemoveFile(file.id)}
               onPause={() => onPauseFile(file.id)}
               onResume={() => onResumeFile(file.id)}

@@ -129,6 +129,14 @@ export async function broadcastMany(
 export type ProcessingStatus = 'uploading' | 'processing' | 'ready' | 'failed' | 'cancelled';
 
 /**
+ * Where the uploader's processing notification leads: a ready video opens on
+ * its watch page; a failed one opens in the studio (its edit page) to fix it.
+ */
+export function uploadResultActionUrl(videoId: string, status: 'ready' | 'failed'): string {
+  return status === 'ready' ? `/video/${videoId}` : `/video/${videoId}/edit`;
+}
+
+/**
  * Notify a video's processing/upload status change on `video:<id>` and, for
  * terminal states, send a notification to the uploader on `user:<userId>`.
  */
@@ -158,7 +166,7 @@ export async function notifyVideoProcessing(
         notificationType: 'upload',
         notificationKey: status === 'ready' ? 'uploadReady' : 'uploadFailed',
         params: { videoTitle: data.title || '' },
-        actionUrl: `/video/${videoId}`,
+        actionUrl: uploadResultActionUrl(videoId, status),
       }));
     }
   }

@@ -405,3 +405,91 @@ describe('ready at the first encoded resolution', () => {
 	});
 });
 
+describe('processing result announcement (uploader "ready" / "failed" notification)', () => {
+	const read = async (env: any) => JSON.parse(await (await env.videos.get(ID)).text());
+	const resultMessages = (env: any) =>
+		env.queue.sent.filter(
+			(m: any) => m.body.type === MessageType.VideoProcessingCompleted || m.body.type === MessageType.VideoUploadFailed,
+		);
+	async function deliver(env: any, attempts = 1) {
+		const outcome = { acked: 0, retried: 0 };
+		const msg = env.PROCESSING_CHECK_QUEUE.sent.shift();
+		await handleProcessingCheckBatch(
+			{ messages: [{ body: msg.body, attempts, ack: () => outcome.acked++, retry: () => outcome.retried++ }] },
+			env,
+		);
+		return { outcome, msg };
+	}
+
+	it('announces a ready video once, for its uploader, and records it', async () => {
+		const env = makeEnv();
+		await env.videos.put(ID, JSON.stringify(stuck({ userId: 'uploader-1', title: 'Tafsir 1' })));
+		await startProcessingLoop(env, ID, { reason: 'upload-complete', now: NOW });
+		bunnyResponses[ID] = { status: 200, body: FINISHED };
+		await deliver(env);
+
+		const sent = resultMessages(env);
+		assert.equal(sent.length, 1, 'one uploader message per video');
+		assert.equal(sent[0].body.type, MessageType.VideoProcessingCompleted);
+		assert.equal(sent[0].body.payload.userId, 'uploader-1');
+		assert.equal(sent[0].body.payload.title, 'Tafsir 1');
+		const fanout = env.queue.sent.filter((m: any) => m.body.type === MessageType.NotificationFanout);
+		assert.equal(fanout.length, 1);
+		assert.equal(fanout[0].body.payload.actorUserId, 'uploader-1', 'the fan-out names the uploader so it skips them');
+		assert.equal((await read(env)).processingAnnounced, 'ready');
+
+		// A later sync or status poll never announces it again
+		await syncVideoFromBunny(env, ID, { now: NOW });
+		assert.equal(resultMessages(env).length, 1);
+	});
+
+	it('announces a failed encode with the failed type', async () => {
+		const env = makeEnv();
+		await env.videos.put(ID, JSON.stringify(stuck({ userId: 'uploader-1' })));
+		await startProcessingLoop(env, ID, { reason: 'upload-complete', now: NOW });
+		bunnyResponses[ID] = { status: 200, body: { ...FINISHED, status: 5 } };
+		await deliver(env);
+		const sent = resultMessages(env);
+		assert.equal(sent.length, 1);
+		assert.equal(sent[0].body.type, MessageType.VideoUploadFailed);
+		assert.equal((await read(env)).processingAnnounced, 'failed');
+	});
+
+	it('retries through the queue when the announcement cannot be queued, then announces once', async () => {
+		const env = makeEnv();
+		await env.videos.put(ID, JSON.stringify(stuck({ userId: 'uploader-1' })));
+		await startProcessingLoop(env, ID, { reason: 'upload-complete', now: NOW });
+		bunnyResponses[ID] = { status: 200, body: FINISHED };
+
+		const realSend = env.queue.send.bind(env.queue);
+		env.queue.send = async () => {
+			throw new Error('queue unavailable');
+		};
+		const first = await deliver(env);
+		assert.equal(first.outcome.retried, 1, 'the check message is retried (DLQ after max retries)');
+		assert.equal(first.outcome.acked, 0);
+		const afterFailure = await read(env);
+		assert.equal(afterFailure.uploadStatus, 'ready');
+		assert.equal(afterFailure.processingAnnounced, undefined, 'not recorded as announced');
+
+		// The queue redelivers the same message; the queue works again
+		env.queue.send = realSend;
+		env.PROCESSING_CHECK_QUEUE.sent.unshift({ body: first.msg.body });
+		const second = await deliver(env, 2);
+		assert.equal(second.outcome.acked, 1);
+		assert.equal(resultMessages(env).length, 1, 'announced exactly once');
+		assert.equal((await read(env)).processingAnnounced, 'ready');
+	});
+
+	it('does not re-announce a video already announced by the status poll', async () => {
+		const env = makeEnv();
+		await env.videos.put(ID, JSON.stringify(stuck({ userId: 'uploader-1' })));
+		await startProcessingLoop(env, ID, { reason: 'upload-complete', now: NOW });
+		// The uploader's status poll stored ready and announced it first
+		const polled = await read(env);
+		await env.videos.put(ID, JSON.stringify({ ...polled, uploadStatus: 'ready', processingAnnounced: 'ready', playUrl: `https://${HOST}/${ID}/playlist.m3u8`, thumbnailUrl: `https://${HOST}/${ID}/thumbnail.jpg` }));
+		bunnyResponses[ID] = { status: 200, body: FINISHED };
+		await deliver(env);
+		assert.equal(resultMessages(env).length, 0);
+	});
+});

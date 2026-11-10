@@ -2,6 +2,7 @@ import type { LibraryTranslations, NotificationCenterTranslations } from './i18n
 import type { BulkEditTranslations } from './i18n-bulk-edit';
 import type { CommunityGuidelinesTranslations } from './i18n-community-guidelines';
 import type { ContactTranslations } from './i18n-contact';
+import type { UploadStatusTranslations } from './i18n-upload-status';
 /**
  * Internationalization (i18n) Types
  *
@@ -138,6 +139,8 @@ export interface AppTranslations {
   communityGuidelines: CommunityGuidelinesTranslations;
   /** Contact us page (/[locale]/contact) */
   contact: ContactTranslations;
+  /** After-upload processing status on the upload page (single and batch) */
+  uploadStatus: UploadStatusTranslations;
   /** Notification center, settings and per-channel bell (Story 29.10) */
   notificationCenter: NotificationCenterTranslations;
 

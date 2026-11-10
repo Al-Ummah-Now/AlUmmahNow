@@ -16,9 +16,12 @@ import {
 import Link from 'next/link';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useUploadResult } from '@/lib/notifications/upload-results';
+import type { ProcessingPhase } from '@/lib/upload/processing-status';
 
 interface FileQueueItemProps {
   file: UploadQueueItem;
+  /** Server-side processing once the file's bytes are uploaded (status completed) */
+  processingPhase?: ProcessingPhase;
   onRemove: () => void;
   onPause: () => void;
   onResume: () => void;
@@ -28,6 +31,7 @@ interface FileQueueItemProps {
 
 export function FileQueueItem({
   file,
+  processingPhase: processingPhaseProp,
   onRemove,
   onPause,
   onResume,
@@ -35,8 +39,10 @@ export function FileQueueItem({
   onRetry,
 }: FileQueueItemProps) {
   const { t, lang } = useLanguage();
-  // Processing result pushed in real time; shown here instead of a toast (NotificationCenter)
+  // Processing result pushed in real time (shown here instead of a toast, NotificationCenter)
+  // wins over the polled phase
   const processed = useUploadResult(file.status === 'completed' ? file.videoId : null);
+  const processingPhase: ProcessingPhase | undefined = processingPhaseProp ? processed ?? processingPhaseProp : undefined;
 
   const formatBytes = (bytes: number): string => {
     if (bytes === 0) return '0 B';
@@ -101,7 +107,7 @@ export function FileQueueItem({
       case 'processing':
         return t.upload.processing;
       case 'completed':
-        return t.batch.completed;
+        return t.uploadStatus.uploadedLabel;
       case 'failed':
         return t.upload.failed;
       case 'cancelled':
@@ -118,7 +124,7 @@ export function FileQueueItem({
   const canRemove = file.status === 'pending' || file.status === 'cancelled' || file.status === 'failed';
 
   return (
-    <div data-testid="batch-file" data-status={file.status} data-video-id={file.videoId || ''} data-reconnecting={file.reconnecting ? 'true' : 'false'} data-bytes-uploaded={file.bytesUploaded} className="
+    <div data-testid="batch-file" data-status={file.status} data-processing={processingPhase ?? ''} data-video-id={file.videoId || ''} data-reconnecting={file.reconnecting ? 'true' : 'false'} data-bytes-uploaded={file.bytesUploaded} className="
       border border-gray-200 dark:border-gray-700
       rounded-lg
       p-3
@@ -136,8 +142,8 @@ export function FileQueueItem({
         {/* File Info */}
         <div className="flex-1 min-w-0">
           {/* File Name & Size */}
-          <div className="flex items-start justify-between gap-2 mb-2">
-            <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
+            <div className="flex-1 min-w-[10rem]">
               <h3 data-testid="batch-file-name" className="
                 text-sm font-medium
                 text-gray-900 dark:text-white
@@ -150,22 +156,22 @@ export function FileQueueItem({
               </p>
             </div>
 
-            {/* Status Badge */}
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-              {getStatusIcon(file.status)}
-              <span data-testid="batch-file-status" className={`text-xs font-medium ${getStatusColor(file.status)}`}>
-                {getStatusText(file.status)}
+            {/* Status Badge: after the bytes are uploaded, the server-side processing status */}
+            {processingPhase ? (
+              <span className="ups-chip flex-shrink-0" data-testid="batch-file-status" data-phase={processingPhase}>
+                {processingPhase === 'processing' && <Loader2 className="ups-spin" aria-hidden="true" />}
+                {processingPhase === 'ready' && <CheckCircle aria-hidden="true" />}
+                {processingPhase === 'failed' && <AlertCircle aria-hidden="true" />}
+                {t.uploadStatus.row[processingPhase]}
               </span>
-              {processed && (
-                <span
-                  data-testid="batch-file-processed"
-                  data-result={processed}
-                  className={`text-xs font-medium ${processed === 'ready' ? 'text-[var(--fanous-color-success-text)]' : 'text-[var(--fanous-color-error-text)]'}`}
-                >
-                  · {processed === 'ready' ? t.notifications.realtime.uploadReadyTitle : t.upload.processingFailed}
+            ) : (
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                {getStatusIcon(file.status)}
+                <span data-testid="batch-file-status" className={`text-xs font-medium ${getStatusColor(file.status)}`}>
+                  {getStatusText(file.status)}
                 </span>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
           {/* Progress Bar */}
@@ -226,6 +232,18 @@ export function FileQueueItem({
               <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
               <span>{t.batch.errors.uploadFailedRetry}</span>
             </div>
+          )}
+
+          {/* Where to go once processing ends */}
+          {processingPhase === 'ready' && file.videoId && (
+            <Link href={`/${lang}/video/${file.videoId}`} className="ups-row-link" data-testid="batch-file-view">
+              {t.uploadStatus.viewVideo}
+            </Link>
+          )}
+          {processingPhase === 'failed' && file.videoId && (
+            <Link href={`/${lang}/video/${file.videoId}/edit`} className="ups-row-link" data-testid="batch-file-edit">
+              {t.uploadStatus.editVideo}
+            </Link>
           )}
 
           {/* Action Buttons */}
