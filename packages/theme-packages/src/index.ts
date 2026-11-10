@@ -9,3 +9,4 @@ export { compilePackage, resolveColor, resolvedColors, scopeOf, type CompileOpti
 export { AA_NON_TEXT, AA_TEXT, MAX_ASSET_BYTES, MAX_PACKAGE_BYTES, contrastIssues, sectionOf, sniff, svgProblem, validatePackage, type Issue, type Validation, type ValidateOptions } from './validate.ts';
 export { createZip, crc32, packageToZip, readZip, zipToPackage } from './zip.ts';
 export { duplicatePackage, nextVersion, ID_PATTERN } from './edit.ts';
+export { BUILT_IN_THEMES, BUILT_IN_IDS, DEFAULT_THEME } from './builtins.generated.ts';

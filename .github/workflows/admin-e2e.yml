@@ -86,6 +86,7 @@ jobs:
         run: |
           pnpm --filter @al-ummah/shared-types build
           pnpm --filter @al-ummah/logger build
+          pnpm --filter @al-ummah/theme-packages build
 
       - name: Check QA credentials
         run: |

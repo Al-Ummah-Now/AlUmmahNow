@@ -46,6 +46,10 @@
     {
       "binding": "community_posts",
       "bucket_name": "community-posts-qa"
+    },
+    {
+      "binding": "theme_packages",
+      "bucket_name": "theme-packages-qa"
     }
   ],
 

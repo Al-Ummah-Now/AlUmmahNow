@@ -47,3 +47,20 @@ test('the first HTML must carry a known data-theme on <html>', async () => {
 	const unknown = site({ body: { theme: 'zujaj' } }, '<html data-theme="neon">');
 	await assert.rejects(checkSiteTheme('https://a', 'https://w', unknown.fetchFn), /renders an unknown theme: neon/);
 });
+
+test('a theme package made in the admin passes when its CSS is served and the page renders it', async () => {
+	const pkg = { id: 'eid-lights', version: '1.0.0', css: 'https://a/public/themes/eid-lights/1.0.0/theme.css' };
+	const asked: string[] = [];
+	const fetchFn = (css: { ok: boolean; text: string }, html: string) => async (url: string) => {
+		asked.push(url);
+		if (url.endsWith('/public/site-theme')) return { ok: true, status: 200, json: async () => ({ theme: 'eid-lights', package: pkg }), text: async () => '' };
+		if (url === pkg.css) return { ok: css.ok, status: css.ok ? 200 : 404, json: async () => ({}), text: async () => css.text };
+		return { ok: true, status: 200, json: async () => ({}), text: async () => html };
+	};
+	const good = { ok: true, text: "html[data-theme='eid-lights']{}" };
+	const page = '<html lang="en" data-theme="eid-lights"><head><style id="theme-package">';
+	assert.match(await checkSiteTheme('https://a', 'https://w', fetchFn(good, page)), /Site theme eid-lights@1\.0\.0; the site renders eid-lights/);
+	assert.ok(asked.includes(pkg.css));
+	await assert.rejects(checkSiteTheme('https://a', 'https://w', fetchFn({ ok: false, text: '' }, page)), /answered 404/);
+	await assert.rejects(checkSiteTheme('https://a', 'https://w', fetchFn(good, '<html data-theme="eid-lights">')), /unknown theme: eid-lights/);
+});
