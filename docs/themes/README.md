@@ -287,3 +287,33 @@ The platform themes are packages in `packages/theme-packages/themes/<id>/` (list
 `themes/index.json`): Lantern, Zujaj, Nahas and Fawanees (the default). `pnpm themes:build` compiles
 them into the stylesheets the videos site imports, and `pnpm themes:check` fails CI when a package
 is invalid or a stylesheet is stale.
+
+## Videos platform: storage, delivery and the builder
+
+This section is specific to the videos site and its admin. Other apps that adopt the format keep
+their own storage.
+
+**Built-in** packages ship in the repo (above) and compile into the site's stylesheets at build
+time. **Custom** packages are made in the admin theme builder (`admin-web` → Site theme) and
+stored by `admin-api`:
+
+| Where | What |
+|---|---|
+| R2 `theme_packages` (`theme-packages`, `-stage`, `-qa`) | `themes/<id>/draft/{theme.json,assets/…}`, and per published version `themes/<id>/<version>/{theme.json,assets/…,theme.css}`. A published version never changes. |
+| D1 `theme_packages`, `theme_package_versions` (migration 0009) | names, based-on, latest version, draft and publish metadata |
+| D1 `site_settings_log` | audit rows: `site.theme` changes, and `theme.package` create/import/publish/delete |
+
+- **Drafts and versions.** Edits save to the draft, which may be invalid (errors come back for
+  display). Publishing validates the draft with its files, compiles it, and writes it as the next
+  version (`1.0.0`, `1.1.0`, …).
+- **The site theme** is a built-in id or `<id>@<version>` of a published package. Admins set it
+  (`PUT /api/site-settings/theme`); moderators can read.
+- **Delivery.** `GET /public/site-theme` answers `{ theme, package?: { id, version, css } }`. The
+  videos site inlines the package's compiled CSS (fetched once per version), and serves the files
+  it names from its own origin at `/api/theme-packages/<id>/<version>/assets/…` (proxied from
+  `/public/themes/…`, cached for a year). If the version is missing, or its CSS cannot be fetched or
+  fails the checks, the site renders Fawanees.
+- **Builder.** Duplicate any theme, edit every token and component section with live WCAG AA
+  results, upload images and fonts into `assets/`, preview the site's real components (light/dark,
+  en/ar, desktop/phone), publish, use as the site theme, export/import `.zip`, delete custom themes
+  that are not active.
