@@ -29,7 +29,9 @@ const TUS_VERSION = '1.0.0';
 const TUS_EXTENSIONS = ['creation', 'creation-with-upload', 'termination', 'concatenation'];
 const BUNNY_TUS_ENDPOINT = 'https://video.bunnycdn.com/tusupload';
 
-// Upload metadata stored in KV for session management
+// Upload metadata stored in KV for session management: written once by POST,
+// then only read (SCALABILITY-AUDIT AV-24). `uploadOffset` is the offset at
+// creation; the live offset is always Bunny's.
 interface TusUploadSession {
   videoId: string;
   userId: string;
@@ -306,11 +308,8 @@ export class TusProxy {
       const uploadOffset = bunnyResponse.headers.get('Upload-Offset') || '0';
       const uploadLength = bunnyResponse.headers.get('Upload-Length') || session.fileSize.toString();
 
-      // Update session with current offset
-      session.uploadOffset = parseInt(uploadOffset, 10);
-      await kv.put(this.getSessionKey(uploadId), JSON.stringify(session), {
-        expirationTtl: 3600,
-      });
+      // The session is written once, by POST (SCALABILITY-AUDIT AV-24): the
+      // offset always comes from Bunny, so nothing is written back here.
 
       return new Response(null, {
         status: 200,
@@ -412,14 +411,14 @@ export class TusProxy {
       // Get updated offset from Bunny
       const newOffset = bunnyResponse.headers.get('Upload-Offset') || uploadOffset;
 
-      // Update session
-      session.uploadOffset = parseInt(newOffset || '0', 10);
-      await kv.put(this.getSessionKey(uploadId), JSON.stringify(session), {
-        expirationTtl: 3600,
-      });
+      // No session write per chunk (SCALABILITY-AUDIT AV-24): the stored offset
+      // was never read, and a KV write per chunk ran into KV's one write per
+      // second per key (a 500 mid-upload) and left other locations reading a
+      // stale copy. The session stays as POST wrote it.
+      const offsetNow = parseInt(newOffset || '0', 10);
 
       // Check if upload is complete
-      if (session.uploadOffset >= session.fileSize) {
+      if (offsetNow >= session.fileSize) {
         // Update video status in R2
         const bucket = this.env.videos;
         const repository = new R2Repository<z.infer<typeof BusinessVideo>>(bucket);
