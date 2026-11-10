@@ -19,6 +19,9 @@ import { completeRegistration } from './web-session';
 import { fillSecret } from './secret-fill';
 import { watchUrl } from './videos';
 
+// Signs in through the auth server: a retained trace would hold the password and code
+test.use({ trace: 'off' });
+
 type Locale = 'en' | 'ar';
 const LOCALES: Locale[] = ['en', 'ar'];
 

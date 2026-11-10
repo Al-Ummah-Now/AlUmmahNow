@@ -21,6 +21,9 @@ import { test, expect, type Page, type WebSocketRoute } from '@playwright/test';
 import { target } from './targets';
 import { signUpOnWeb, createProfile, gotoSettled, type Locale } from './web-session';
 
+// Signs in through the auth server: a retained trace would hold the password and code
+test.use({ trace: 'off' });
+
 const DESKTOP = { width: 1280, height: 800 };
 const PHONE = { width: 390, height: 844 };
 const BULK = 5;
