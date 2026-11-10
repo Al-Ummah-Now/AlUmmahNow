@@ -20,10 +20,12 @@ function Segmented<T extends string>({ value, options, onChange, label, testId }
   );
 }
 
-export function Preview({ theme, assetUrl }: { theme: ThemePackage; assetUrl: (path: string) => string }) {
+/** `followMode` is the mode being edited: the preview switches to it whenever it changes. */
+export function Preview({ theme, assetUrl, followMode }: { theme: ThemePackage; assetUrl: (path: string) => string; followMode?: 'light' | 'dark' }) {
   const { t, locale } = useLanguage();
   const [page, setPage] = useState<PreviewPage>('home');
-  const [mode, setMode] = useState<'light' | 'dark'>('dark');
+  const [mode, setMode] = useState<'light' | 'dark'>(followMode ?? 'dark');
+  useEffect(() => { if (followMode) setMode(followMode); }, [followMode]);
   const [lang, setLang] = useState<'en' | 'ar'>(locale === 'ar' ? 'ar' : 'en');
   const [device, setDevice] = useState<'desktop' | 'phone'>('desktop');
   const frame = useRef<HTMLIFrameElement>(null);
