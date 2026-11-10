@@ -67,6 +67,8 @@ export function SearchBar({
   useEffect(() => setReady(true), []);
   const header = variant === 'header';
   const a = t.autocomplete;
+  // The popup renders beside the form: the header's .ah-search pill clips and restyles its children
+  const [popupHost, setPopupHost] = useState<HTMLDivElement | null>(null);
 
   const groups = useMemo(() => [
     { key: 'channel', label: a.groupChannels },
@@ -149,6 +151,7 @@ export function SearchBar({
           onSubmit={(query) => onSubmit(query)}
           load={load}
           loadKey={channelId ?? 'all'}
+          popupHost={popupHost}
           groups={groups}
           emptyOptions={recent}
           emptyHeader={emptyHeader}
@@ -200,6 +203,7 @@ export function SearchBar({
           {header ? <Search className="h-[18px] w-[18px]" aria-hidden="true" /> : t.search.searchButton}
         </button>
       </form>
+      <div ref={setPopupHost} />
     </div>
   );
 }
