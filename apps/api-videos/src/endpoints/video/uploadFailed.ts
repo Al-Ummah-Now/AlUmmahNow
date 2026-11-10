@@ -6,6 +6,7 @@ import { addAuthToSchema } from "../../lib/openapi-auth";
 import { rethrowBusy } from "../../lib/r2Repo";
 import { flagNeedsReupload } from "../../lib/uploads/lifecycle";
 import { logger } from '../../lib/logger';
+import { canOnVideo, type AccessVideo } from '../../lib/channelAccess';
 
 /**
  * The uploader's browser gave up on an upload it cannot finish (after every
@@ -49,7 +50,15 @@ export class UploadFailedEndpoint extends AuthenticatedRoute {
 		const videoId = request.params.videoId;
 		const reason = request.body?.reason?.trim() || 'The upload could not be completed. Upload the video file again.';
 		try {
-			const result = await flagNeedsReupload(c.env as never, videoId, { reason, source: 'client', ownerId: userId });
+			// The owner, or a member whose channel role uploads (their uploads
+			// are owned by the channel owner, spec §8)
+			const object = await c.env.videos.get(videoId);
+			if (!object) return c.json({ success: false, error: 'Video not found' }, 404);
+			const video = (await object.json()) as AccessVideo;
+			if (!(await canOnVideo(c.env as never, video, userId, 'video.upload'))) {
+				return c.json({ success: false, error: 'Forbidden - not your video' }, 403);
+			}
+			const result = await flagNeedsReupload(c.env as never, videoId, { reason, source: 'client', ownerId: video.userId ?? userId });
 			if (result === 'missing') return c.json({ success: false, error: 'Video not found' }, 404);
 			if (result === 'forbidden') return c.json({ success: false, error: 'Forbidden - not your video' }, 403);
 			if (result === 'finished') return c.json({ success: false, error: 'The upload already finished' }, 409);
