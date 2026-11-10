@@ -2,7 +2,6 @@ import { isShort } from "@al-ummah/shared-types";
 import { Num, Str } from "chanfana";
 import { publicVideoFields, uploaderProcessingIssue } from '../../lib/transformations';
 import { isVideoPubliclyVisible } from "../../lib/visibility";
-import { FALLBACK_SCAN_OBJECTS } from "../../lib/scanBudget";
 import { string, z } from "zod";
 import { Video as BusinessVideo, Channel as BusinessChannel, PaginationResponse, ResponseError } from "../../lib/types";
 import { VideoView } from "../../lib/model/view";
@@ -11,6 +10,7 @@ import { logger } from '../../lib/logger';
 import { OptionalAuthRoute, AppContext } from "../../base";
 import { waitUntilOf } from "../../lib/search/ownership";
 import { channelVideosFromIndex } from "../../lib/search/channelVideoIndex";
+import { scanPage } from "../../lib/scanCursor";
 
 export class ChannelShortsList extends OptionalAuthRoute {
 	schema = {
@@ -170,12 +170,19 @@ export class ChannelShortsList extends OptionalAuthRoute {
 				limitedShorts = page.videos;
 				nextCursor = page.cursor;
 			} else {
-				// Index incomplete (or a legacy R2 cursor): one bounded slice of the
-				// bucket, as before (the helper schedules an index heal).
-				const videos = await repository.listObjects(Math.min(limit * 10, FALLBACK_SCAN_OBJECTS), cursor);
-				const channelShorts = (videos.items || []).filter(isListed).sort(compare);
-				limitedShorts = channelShorts.slice(0, limit);
-				nextCursor = channelShorts.length > limit ? (videos.cursor || "") : "";
+				// Index unavailable: a bounded scan whose cursor keeps its place in the
+				// R2 listing (lib/scanCursor.ts); the helper queued an index heal.
+				const scanned = await scanPage<VideoType>({
+					cursor,
+					limit,
+					list: async (pageCursor, pageSize) => {
+						const batch = await repository.listObjects(pageSize, pageCursor);
+						return { items: batch.items || [], cursor: batch.cursor || "" };
+					},
+					isListed,
+				});
+				limitedShorts = scanned.items.sort(compare);
+				nextCursor = scanned.cursor;
 			}
 
 			// Transform business videos to view models

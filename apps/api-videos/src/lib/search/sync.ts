@@ -112,7 +112,8 @@ export async function repairLater(
     logger.warn('[SearchSync] Index write failed; object queued for repair', { entity: input.entity, id: input.id, reason: input.reason, error: input.error });
     return 'recorded';
   } catch (recordError) {
-    if (ctx.producer && input.entity !== 'profile') {
+    // The processor syncs search entities; profiles and live streams are rewritten by the repair job only
+    if (ctx.producer && input.entity !== 'profile' && input.entity !== 'stream') {
       try {
         const payload: SearchIndexSyncPayload = { entity: input.entity, id: input.id, object: input.object ?? null, version: input.version };
         await ctx.producer.send({ id: crypto.randomUUID(), type: MessageType.SearchIndexSync, payload, timestamp: Date.now() });
@@ -186,9 +187,28 @@ async function syncOwnershipInline(ctx: RepairContext, type: SearchEntityType, i
   }
 }
 
+/** Live stream records share the videos bucket (`livestream:<id>`); their ownership rows are kind 'stream'. */
+const STREAM_KEY_PREFIX = 'livestream:';
+
+function streamIdForKey(key: string): string | null {
+  if (!key?.startsWith(STREAM_KEY_PREFIX)) return null;
+  const id = key.slice(STREAM_KEY_PREFIX.length);
+  return id && !id.includes('/') && !id.includes(':') ? id : null;
+}
+
+/** Ownership row of one live stream (never searchable). A failed write is repaired per object. */
+async function syncStreamInline(ctx: RepairContext, id: string, key: string, object: unknown, version: number): Promise<void> {
+  try {
+    await syncOwnership(ctx.db, 'stream', id, object, Date.now(), version);
+  } catch (error) {
+    await repairLater(ctx, { entity: 'stream', id, key, reason: 'ownership-write', error: error instanceof Error ? error.message : String(error) });
+  }
+}
+
 function wrapBucket(bucket: R2Bucket, type: SearchEntityType, queue: SearchSyncQueue, ctx: RepairContext): R2Bucket {
   const { db, waitUntil } = ctx;
   const tracksOwnership = ownershipKindFor(type) !== null;
+  const tracksStreams = type === 'video';
   // Admin comment list (lib/admin/commentIndex.ts): video comments mirrored in D1, after the response
   const tracksComments = type === 'video';
   return new Proxy(bucket, {
@@ -196,6 +216,16 @@ function wrapBucket(bucket: R2Bucket, type: SearchEntityType, queue: SearchSyncQ
       if (prop === 'put') {
         return async (key: string, value: unknown, options?: R2PutOptions) => {
           const result = await target.put(key, value as Parameters<R2Bucket['put']>[1], options);
+          const streamId = tracksStreams && result !== null ? streamIdForKey(key) : null;
+          if (streamId) {
+            let decoded = decodeValue(value);
+            if (decoded === undefined) {
+              const stored = await target.get(key).catch(() => null);
+              decoded = stored ? await stored.json().catch(() => null) : null;
+            }
+            await syncStreamInline(ctx, streamId, key, decoded, r2Version(result as { uploaded?: Date } | undefined) ?? Date.now());
+            return result;
+          }
           const id = searchIdForKey(type, key);
           // R2 returns null when an onlyIf precondition prevented the write.
           if (id && result !== null) {
@@ -229,6 +259,11 @@ function wrapBucket(bucket: R2Bucket, type: SearchEntityType, queue: SearchSyncQ
           await target.delete(keys);
           const version = Date.now();
           for (const key of Array.isArray(keys) ? keys : [keys]) {
+            const streamId = tracksStreams ? streamIdForKey(key) : null;
+            if (streamId) {
+              await syncStreamInline(ctx, streamId, key, null, version);
+              continue;
+            }
             const id = searchIdForKey(type, key);
             if (!id) continue;
             if (tracksOwnership) await syncOwnershipInline(ctx, type, id, null, version);

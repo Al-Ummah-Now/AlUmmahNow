@@ -193,6 +193,7 @@ describe('search index drift, index repairs and maintenance', () => {
     assert.equal(repairHref('profile', 'usr_1'), '/users/usr_1');
     assert.equal(repairHref('playlist', 'pl_1'), null);
     assert.equal(repairHref('post', 'p_1'), null);
+    assert.equal(repairHref('stream', 's_1'), null);
   });
 
   it('maintenance progress reads the latest result, else the step params', () => {
@@ -208,6 +209,7 @@ describe('search index drift, index repairs and maintenance', () => {
       'repairRetryAll', 'repairRetrying', 'repairRetryQueued', 'repairRetryFailed', 'repairReasonOwnershipWrite', 'repairReasonSearchWrite',
       'repairReasonReread', 'repairReasonUnreadable', 'repairReasonRefused', 'repairReasonDeadLetter', 'repairReasonModeration', 'repairReasonOther',
       'maintenanceTitle', 'maintenanceHint', 'maintenanceProgress', 'colStatus', 'colProgress', 'colUpdated',
+      'indexKindPlaylist', 'indexKindStream', 'repairReasonViewsSync',
     ] as const;
     for (const key of keys) {
       const e = (en.errorsPage as Record<string, string>)[key];

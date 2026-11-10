@@ -12,13 +12,14 @@
 --   apps/api-videos/migrations/search/0010_video_format_issues.sql
 --   apps/api-videos/migrations/search/0011_creator_tiers.sql
 --   apps/api-videos/migrations/search/0012_index_repairs.sql
+--   apps/api-videos/migrations/search/0013_list_indexes.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
 CREATE TABLE admin_jobs (id TEXT PRIMARY KEY, kind TEXT NOT NULL, target_kind TEXT NOT NULL, target_id TEXT NOT NULL, params TEXT NOT NULL DEFAULT '{}', status TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, result TEXT, actor_id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, finished_at TEXT);
 CREATE TABLE category_suggestions (subject_id TEXT PRIMARY KEY, subject_type TEXT NOT NULL, user_id TEXT, channel_id TEXT, reason TEXT NOT NULL, status TEXT NOT NULL, input_hash TEXT, category TEXT, confidence REAL, options_json TEXT, model TEXT, prompt_version TEXT, threshold REAL, applied INTEGER NOT NULL DEFAULT 0, previous_category TEXT, previous_source TEXT, outcome TEXT NOT NULL DEFAULT 'pending', final_category TEXT, reviewed_by TEXT, reviewed_at INTEGER, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
 CREATE TABLE channel_access (channel_id TEXT NOT NULL, user_id TEXT NOT NULL, role TEXT NOT NULL, source_version INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (channel_id, user_id));
-CREATE TABLE content_ownership (kind TEXT NOT NULL, id TEXT NOT NULL, owner_id TEXT, channel_id TEXT, is_public INTEGER NOT NULL DEFAULT 1, is_hidden INTEGER NOT NULL DEFAULT 0, is_deleted INTEGER NOT NULL DEFAULT 0, is_live INTEGER NOT NULL DEFAULT 0, duration REAL, schedule_status TEXT, upload_status TEXT, views INTEGER NOT NULL DEFAULT 0, created_at INTEGER, updated_at INTEGER, indexed_at INTEGER NOT NULL DEFAULT 0, source_version INTEGER NOT NULL DEFAULT 0, admin_title TEXT, handle TEXT, email TEXT, is_verified INTEGER NOT NULL DEFAULT 0, is_suspended INTEGER NOT NULL DEFAULT 0, subscribers INTEGER NOT NULL DEFAULT 0, admin_cols INTEGER NOT NULL DEFAULT 0, is_short INTEGER NOT NULL DEFAULT 0, needs_format INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (kind, id));
+CREATE TABLE content_ownership (kind TEXT NOT NULL, id TEXT NOT NULL, owner_id TEXT, channel_id TEXT, is_public INTEGER NOT NULL DEFAULT 1, is_hidden INTEGER NOT NULL DEFAULT 0, is_deleted INTEGER NOT NULL DEFAULT 0, is_live INTEGER NOT NULL DEFAULT 0, duration REAL, schedule_status TEXT, upload_status TEXT, views INTEGER NOT NULL DEFAULT 0, created_at INTEGER, updated_at INTEGER, indexed_at INTEGER NOT NULL DEFAULT 0, source_version INTEGER NOT NULL DEFAULT 0, admin_title TEXT, handle TEXT, email TEXT, is_verified INTEGER NOT NULL DEFAULT 0, is_suspended INTEGER NOT NULL DEFAULT 0, subscribers INTEGER NOT NULL DEFAULT 0, admin_cols INTEGER NOT NULL DEFAULT 0, is_short INTEGER NOT NULL DEFAULT 0, needs_format INTEGER NOT NULL DEFAULT 0, video_category TEXT, status TEXT, PRIMARY KEY (kind, id));
 CREATE TABLE creator_tier_assignments (user_id TEXT PRIMARY KEY, tier_id TEXT NOT NULL, source TEXT NOT NULL DEFAULT 'admin' CHECK (source IN ('admin', 'subscription')), assigned_by TEXT NOT NULL, assigned_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE creator_tiers (id TEXT PRIMARY KEY, name TEXT NOT NULL, unlimited INTEGER NOT NULL DEFAULT 0, per_hour INTEGER NOT NULL, per_day INTEGER NOT NULL, max_concurrent INTEGER NOT NULL, max_channels INTEGER, updated_at TEXT, updated_by TEXT) WITHOUT ROWID;
 CREATE TABLE index_repairs (entity TEXT NOT NULL, id TEXT NOT NULL, r2_key TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', attempts INTEGER NOT NULL DEFAULT 0, reason TEXT NOT NULL, last_error TEXT, next_attempt_at INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY (entity, id)) WITHOUT ROWID;
@@ -45,7 +46,7 @@ CREATE TABLE 'search_posts_fts_data'(id INTEGER PRIMARY KEY, block BLOB);
 CREATE TABLE 'search_posts_fts_docsize'(id INTEGER PRIMARY KEY, sz BLOB);
 CREATE TABLE 'search_posts_fts_idx'(segid, term, pgno, PRIMARY KEY(segid, term)) WITHOUT ROWID;
 CREATE TABLE search_tombstones (entity TEXT NOT NULL, id TEXT NOT NULL, version INTEGER NOT NULL, PRIMARY KEY (entity, id)) WITHOUT ROWID;
-CREATE TABLE search_videos (rowid INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE, channel_id TEXT, visible INTEGER NOT NULL DEFAULT 1, language TEXT, category TEXT, duration INTEGER, is_verified INTEGER NOT NULL DEFAULT 0, is_live INTEGER NOT NULL DEFAULT 0, views INTEGER NOT NULL DEFAULT 0, created_at INTEGER, popularity REAL NOT NULL DEFAULT 0, payload TEXT NOT NULL, content_hash TEXT, indexed_at INTEGER NOT NULL DEFAULT 0, source_version INTEGER NOT NULL DEFAULT 0, is_short INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE search_videos (rowid INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE, channel_id TEXT, visible INTEGER NOT NULL DEFAULT 1, language TEXT, category TEXT, duration INTEGER, is_verified INTEGER NOT NULL DEFAULT 0, is_live INTEGER NOT NULL DEFAULT 0, views INTEGER NOT NULL DEFAULT 0, created_at INTEGER, popularity REAL NOT NULL DEFAULT 0, payload TEXT NOT NULL, content_hash TEXT, indexed_at INTEGER NOT NULL DEFAULT 0, source_version INTEGER NOT NULL DEFAULT 0, is_short INTEGER NOT NULL DEFAULT 0, activity_at INTEGER);
 CREATE VIRTUAL TABLE search_videos_fts USING fts5 (title, body, tokenize = 'unicode61 remove_diacritics 2', prefix = '2 3');
 CREATE TABLE 'search_videos_fts_config'(k PRIMARY KEY, v) WITHOUT ROWID;
 CREATE TABLE 'search_videos_fts_content'(id INTEGER PRIMARY KEY, c0, c1);
@@ -67,11 +68,20 @@ CREATE INDEX idx_catsug_user ON category_suggestions (user_id, created_at);
 CREATE INDEX idx_channel_access_user ON channel_access (user_id);
 CREATE INDEX idx_content_ownership_admin_cols ON content_ownership (kind, admin_cols);
 CREATE INDEX idx_content_ownership_channel ON content_ownership (kind, channel_id, created_at);
+CREATE INDEX idx_content_ownership_channel_feed ON content_ownership (kind, channel_id, COALESCE(created_at, 0), id);
+CREATE INDEX idx_content_ownership_channel_live ON content_ownership (kind, channel_id, is_live, COALESCE(created_at, 0), id);
 CREATE INDEX idx_content_ownership_channel_short ON content_ownership (kind, channel_id, is_short, created_at);
+CREATE INDEX idx_content_ownership_channel_updated ON content_ownership (kind, channel_id, COALESCE(updated_at, 0), id);
+CREATE INDEX idx_content_ownership_channel_views ON content_ownership (kind, channel_id, views, id);
 CREATE INDEX idx_content_ownership_created ON content_ownership (kind, created_at);
+CREATE INDEX idx_content_ownership_feed ON content_ownership (kind, COALESCE(created_at, 0), id);
+CREATE INDEX idx_content_ownership_feed_category ON content_ownership (kind, video_category, COALESCE(created_at, 0), id);
+CREATE INDEX idx_content_ownership_feed_views ON content_ownership (kind, views, id);
 CREATE INDEX idx_content_ownership_indexed ON content_ownership (kind, indexed_at);
+CREATE INDEX idx_content_ownership_live ON content_ownership (kind, is_live, COALESCE(created_at, 0), id);
 CREATE INDEX idx_content_ownership_needs_format ON content_ownership (kind, needs_format, created_at);
 CREATE INDEX idx_content_ownership_owner ON content_ownership (kind, owner_id);
+CREATE INDEX idx_content_ownership_upload ON content_ownership (kind, upload_status, id);
 CREATE INDEX idx_creator_tier_assignments_tier ON creator_tier_assignments (tier_id);
 CREATE INDEX idx_index_repairs_due ON index_repairs (status, next_attempt_at);
 CREATE INDEX idx_search_channels_created ON search_channels (visible, created_at);
@@ -81,12 +91,14 @@ CREATE INDEX idx_search_playlists_indexed ON search_playlists (indexed_at);
 CREATE INDEX idx_search_posts_channel ON search_posts (channel_id);
 CREATE INDEX idx_search_posts_indexed ON search_posts (indexed_at);
 CREATE INDEX idx_search_tombstones_version ON search_tombstones (version);
+CREATE INDEX idx_search_videos_activity ON search_videos (visible, activity_at);
 CREATE INDEX idx_search_videos_category ON search_videos (category, created_at);
 CREATE INDEX idx_search_videos_channel ON search_videos (channel_id);
 CREATE INDEX idx_search_videos_created ON search_videos (created_at);
 CREATE INDEX idx_search_videos_indexed ON search_videos (indexed_at);
 CREATE INDEX idx_search_videos_language ON search_videos (language, created_at);
 CREATE INDEX idx_search_videos_short ON search_videos (is_short, created_at);
+CREATE INDEX idx_search_videos_views ON search_videos (visible, views);
 CREATE INDEX idx_upload_limit_hits_at ON upload_limit_hits (hit_at);
 CREATE INDEX idx_upload_limit_hits_user ON upload_limit_hits (user_id, hit_at);
 CREATE INDEX idx_upload_rate_leases_expires ON upload_rate_leases (expires_at);

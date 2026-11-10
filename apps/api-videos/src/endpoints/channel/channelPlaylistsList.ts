@@ -1,5 +1,4 @@
 import { Num, Str } from "chanfana";
-import { FALLBACK_SCAN_OBJECTS } from "../../lib/scanBudget";
 import { string, z } from "zod";
 import { Playlist as BusinessPlaylist, Channel as BusinessChannel, PaginationResponse, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
@@ -7,6 +6,10 @@ import { logger } from '../../lib/logger';
 import { toPlaylistResponse } from "../../lib/playlists";
 import { withPlaylistCovers } from "../../lib/playlistCovers";
 import { OptionalAuthRoute, AppContext } from "../../base";
+import { isSystemPlaylist } from "../../lib/library";
+import { playlistListIds, scheduleOwnershipHeal, waitUntilOf } from "../../lib/search/ownership";
+import { pageFromIndex } from "../../lib/search/indexPage";
+import { scanPage } from "../../lib/scanCursor";
 
 export class ChannelPlaylistsList extends OptionalAuthRoute {
 	schema = {
@@ -128,51 +131,52 @@ export class ChannelPlaylistsList extends OptionalAuthRoute {
 				}, 404);
 			}
 
-			// Get playlists from R2 bucket
 			const bucket = c.env.playlists;
 			type PlaylistType = z.infer<typeof BusinessPlaylist>;
 			const repository = new R2Repository<PlaylistType>(bucket);
+			const isOwner = Boolean(userId && channel.userId === userId);
 
-			// Use R2's native cursor pagination to get all playlists
-			const playlists = await repository.listObjects(Math.min(limit * 10, FALLBACK_SCAN_OBJECTS), cursor); // Get more to filter
+			// The channel's playlists; private ones only for the channel owner
+			const isListed = (playlist: PlaylistType | null): playlist is PlaylistType =>
+				!!playlist &&
+				playlist.channelId === channelId &&
+				!playlist.isDeleted &&
+				!playlist.isHidden &&
+				!isSystemPlaylist(playlist) &&
+				(playlist.isPublic !== false || isOwner);
 
-			// Filter playlists for this channel and based on privacy settings
-			let channelPlaylists = (playlists.items || []).filter(playlist => {
-				// Must belong to this channel
-				if (playlist.channelId !== channelId) {
-					return false;
-				}
-
-				// Filter out soft-deleted playlists
-				if (playlist.isDeleted) {
-					return false;
-				}
-
-				// Filter out moderation-hidden playlists
-				if (playlist.isHidden) {
-					return false;
-				}
-
-				// If playlist is explicitly private (false), only show if user is channel owner
-				if (playlist.isPublic === false) {
-					return userId && channel.userId === userId;
-				}
-
-				// If playlist is public (true) or undefined/null (default to public), show it
-				return true;
+			// Newest first, one keyset page of the ownership index (kind 'playlist').
+			// The bucket slice it replaces missed playlists outside its window.
+			const indexed = await pageFromIndex<PlaylistType>({
+				cursor,
+				sort: 'latest',
+				limit,
+				fetch: (after, pageLimit) => playlistListIds(c.env as never, { channelId, sort: 'latest', limit: pageLimit, after, privateFor: isOwner }),
+				load: (id) => repository.getObject(id),
+				isListed,
 			});
 
-			// Sort by latest first
-			channelPlaylists.sort((a, b) => {
-				return new Date(b.dateCreated || 0).getTime() - new Date(a.dateCreated || 0).getTime();
-			});
-
-			// Limit to requested amount
-			const limitedPlaylists = channelPlaylists.slice(0, limit);
-
-			// Return response with custom cursor for pagination
-			const hasMore = channelPlaylists.length > limit;
-			const nextCursor = hasMore ? playlists.cursor : "";
+			let limitedPlaylists: PlaylistType[];
+			let nextCursor: string;
+			if (indexed) {
+				limitedPlaylists = indexed.items;
+				nextCursor = indexed.cursor;
+			} else {
+				// Index unavailable: a bounded scan that keeps its place (lib/scanCursor.ts); the rebuild is queued
+				if (!cursor) scheduleOwnershipHeal(c.env as never, waitUntilOf(c as never), 'playlist');
+				const scanned = await scanPage<PlaylistType>({
+					cursor,
+					limit,
+					list: async (pageCursor, pageSize) => {
+						const batch = await repository.listObjects(pageSize, pageCursor);
+						return { items: batch.items || [], cursor: batch.cursor || "" };
+					},
+					isListed,
+				});
+				limitedPlaylists = scanned.items.sort((a, b) => new Date(b.dateCreated || 0).getTime() - new Date(a.dateCreated || 0).getTime());
+				nextCursor = scanned.cursor;
+			}
+			const hasMore = !!nextCursor;
 
 			const response = {
 				cursor: nextCursor || "",
@@ -184,7 +188,7 @@ export class ChannelPlaylistsList extends OptionalAuthRoute {
 			logger.debug('Successfully fetched channel playlists', {
 				channelId,
 				playlistsCount: limitedPlaylists.length,
-				totalFiltered: channelPlaylists.length,
+				source: indexed ? 'index' : 'scan',
 				hasMore,
 				duration
 			});

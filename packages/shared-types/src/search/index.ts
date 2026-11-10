@@ -5,3 +5,4 @@ export * from './entitlements';
 export * from './api';
 export * from './ownership';
 export * from './repairs';
+export * from './views';

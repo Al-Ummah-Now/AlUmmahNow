@@ -199,8 +199,8 @@ app.post('/thumbnails/:jobId/retry', async (c) => {
   return c.json({ success: true, result });
 });
 
-const INDEX_KINDS = ['video', 'channel', 'profile', 'search:video', 'search:channel', 'search:playlist', 'search:post'];
-const REPAIR_ENTITIES = ['video', 'channel', 'playlist', 'post', 'profile'];
+const INDEX_KINDS = ['video', 'channel', 'profile', 'playlist', 'stream', 'search:video', 'search:channel', 'search:playlist', 'search:post'];
+const REPAIR_ENTITIES = ['video', 'channel', 'playlist', 'post', 'profile', 'stream'];
 
 /**
  * Rebuild one index: the ownership index of a kind (the admin's video,
@@ -211,7 +211,7 @@ const REPAIR_ENTITIES = ['video', 'channel', 'playlist', 'post', 'profile'];
 app.post('/index-rebuild', async (c) => {
   const input = await body(c);
   if (typeof input.kind !== 'string' || !INDEX_KINDS.includes(input.kind)) {
-    return c.json({ success: false, code: 'bad_request', error: 'kind must be video, channel, profile or search:<video|channel|playlist|post>' }, 400);
+    return c.json({ success: false, code: 'bad_request', error: 'kind must be video, channel, profile, playlist, stream or search:<video|channel|playlist|post>' }, 400);
   }
   const json = { kind: input.kind, actorId: actorOf(c) };
   const result = await audited(c, ['ownership-index'], 'rebuild_ownership_index', { kind: input.kind }, () =>

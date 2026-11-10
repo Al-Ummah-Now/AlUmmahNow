@@ -10,17 +10,19 @@ import type { AdminContentPermission, AdminJob } from '@/lib/api/content-types';
 import { JobsTable } from '@/components/content/jobs';
 import { logger } from '@/lib/logger';
 import { ISSUE_LABEL, ourStatusLabel } from '../processing/labels';
-import { indexItemHref, jobProgress, repairHref, thumbnailFixHref } from './filters';
+import { jobProgress, repairHref, thumbnailFixHref } from './filters';
 import { IndexRebuildButton } from './IndexRebuildButton';
 import { IndexRepairRetryButton } from './IndexRepairRetryButton';
 import { JOB_STATUS_LABEL, isJobActive } from '@/lib/admin-jobs';
 import type { MessageKey } from '@/i18n/translate';
 
 /** Label of each ownership index kind (Errors page, "Index out of sync"). */
-export const INDEX_KIND_LABEL: Record<'video' | 'channel' | 'profile', MessageKey> = {
+export const INDEX_KIND_LABEL: Record<'video' | 'channel' | 'profile' | 'playlist' | 'stream', MessageKey> = {
   video: 'errorsPage.indexKindVideo',
   channel: 'errorsPage.indexKindChannel',
   profile: 'errorsPage.indexKindProfile',
+  playlist: 'errorsPage.indexKindPlaylist',
+  stream: 'errorsPage.indexKindStream',
 };
 
 /** Label of each search table (Errors page, "Search index out of sync", repairs, maintenance). */
@@ -40,6 +42,7 @@ const REPAIR_REASON_LABEL: Partial<Record<string, MessageKey>> = {
   'pass-refused': 'errorsPage.repairReasonRefused',
   'queue-dead-letter': 'errorsPage.repairReasonDeadLetter',
   moderation: 'errorsPage.repairReasonModeration',
+  'views-sync': 'errorsPage.repairReasonViewsSync',
 };
 
 /** Label of an index named by the API: an ownership kind, or `search:<entity>`. */
@@ -55,6 +58,7 @@ function indexLabel(t: Awaited<ReturnType<typeof getI18n>>['t'], index: string):
 /** Label of a repair's entity (profiles are only in the admin lists index). */
 function repairEntityLabel(t: Awaited<ReturnType<typeof getI18n>>['t'], entity: string): string {
   if (entity === 'profile') return t('errorsPage.indexKindProfile');
+  if (entity === 'stream') return t('errorsPage.indexKindStream');
   return indexLabel(t, `search:${entity}`);
 }
 
@@ -185,11 +189,18 @@ export function FailuresSections({ failures, t, locale }: { failures: Failures; 
                     <td className={tdClass}>{d.failed}</td>
                     <td className={tdClass}>
                       <ul className="space-y-1">
-                        {d.sampleIds.slice(0, 5).map((id) => (
-                          <li key={id}>
-                            <Link href={indexItemHref(d.kind, id)} className={linkClass}><span dir="ltr" className="text-xs">{id}</span></Link>
-                          </li>
-                        ))}
+                        {d.sampleIds.slice(0, 5).map((id) => {
+                          const href = repairHref(d.kind, id);
+                          return (
+                            <li key={id}>
+                              {href ? (
+                                <Link href={href} className={linkClass}><span dir="ltr" className="text-xs">{id}</span></Link>
+                              ) : (
+                                <span dir="ltr" className="text-xs text-fg-muted">{id}</span>
+                              )}
+                            </li>
+                          );
+                        })}
                       </ul>
                     </td>
                     <td className={tdClass}>

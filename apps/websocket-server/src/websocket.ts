@@ -18,7 +18,8 @@ import { DurableObject } from "cloudflare:workers";
 import { authenticateToken, canPublish, canSubscribe, canSubscribeAnonymously } from './auth';
 import { ClientMessageSchema, ServerMessage } from './messages';
 import { logger } from './lib/logger';
-import { ViewCounter, type CounterStorage, type VideoBucket } from './view-counter';
+import { ViewCounter, type CounterStorage, type VideoBucket, type ViewIndex } from './view-counter';
+import { recordIndexRepair, syncVideoViews, type SearchDb } from '@al-ummah/shared-types';
 import { PostViewCounter, type CounterDb, type PostCounterStorage } from './post-view-counter';
 import { SHARD_HEADER, isSocketShardName, routeBroadcast, shardRequest, topicName, type BroadcastItem, type FanOutResult } from './shards';
 
@@ -550,10 +551,20 @@ export class WebSocketDurableObject extends DurableObject {
   private getViewCounter(): ViewCounter {
     if (!this.viewCounter) {
       const env = this.env as Env;
+      const db = env.SEARCH_DB as unknown as SearchDb | undefined;
+      // Flushed counts go to the D1 indexes too (view-counter.ts header)
+      const index: ViewIndex | undefined = db
+        ? {
+            sync: async (videoId, views) => {
+              await syncVideoViews(db, videoId, views);
+            },
+            recordRepair: (videoId, error) => recordIndexRepair(db, { entity: 'video', id: videoId, reason: 'views-sync', error }),
+          }
+        : undefined;
       this.viewCounter = new ViewCounter(
         this.ctx.storage as unknown as CounterStorage,
         env.VIDEOS as unknown as VideoBucket | undefined,
-        { logger, onFlushed: (videoId, views) => this.pushViewCount(videoId, views) },
+        { logger, onFlushed: (videoId, views) => this.pushViewCount(videoId, views), index },
       );
     }
     return this.viewCounter;

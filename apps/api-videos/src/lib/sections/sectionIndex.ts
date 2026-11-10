@@ -46,15 +46,25 @@ export interface TrendingInfo {
 export interface SectionPage {
 	/** Full video objects of the page, in order, publicly visible */
 	videos: VideoObject[];
-	/** Matching videos in the index (for trending: among the candidates) */
-	total: number;
+	/**
+	 * Matching videos in the index, on the first page only and counted up to
+	 * MAX_SECTION_OFFSET + 1 (no deeper page is served); for trending, among the
+	 * candidates. Later pages leave it out: counting every match on every page
+	 * read the whole table per request.
+	 */
+	total?: number;
 	/** Offset of the next page, when there is one */
 	nextOffset?: number;
 	/** Trending rank and score per video id (trending only) */
 	trending?: Map<string, TrendingInfo>;
 }
 
-/** Candidates scored for trending: the newest and the most viewed videos (each up to this many). */
+/**
+ * Candidates scored for trending: the newest, the most viewed and the most
+ * recently viewed videos (activity_at, raised by the view counter), each up to
+ * this many: at most 3 × this many index rows per request, whatever the
+ * catalogue size, and an older video that is being watched now is a candidate.
+ */
 export const TRENDING_CANDIDATES = 200;
 /** Page size bounds (the endpoints document 1–50): each video on a page is one R2 get. */
 export const MAX_SECTION_LIMIT = 50;
@@ -109,32 +119,39 @@ function filters(q: SectionQuery): { where: string; binds: unknown[] } {
 }
 
 /** Ids of the page, in order, and the number of matches. */
-async function pageIds(db: Db, q: SectionQuery): Promise<{ ids: string[]; total: number; trending?: Map<string, TrendingInfo> }> {
+async function pageIds(db: Db, q: SectionQuery): Promise<{ ids: string[]; total?: number; hasMore: boolean; trending?: Map<string, TrendingInfo> }> {
 	const { where, binds } = filters(q);
 	if (q.sort !== 'trending') {
 		const order = q.sort === 'popular' ? 'views DESC, created_at DESC, id' : 'created_at DESC, id';
 		const [rows, count] = await Promise.all([
-			db.prepare(`SELECT id FROM search_videos WHERE ${where} ORDER BY ${order} LIMIT ? OFFSET ?`).bind(...binds, q.limit, q.offset).all<{ id: string }>(),
-			db.prepare(`SELECT COUNT(*) AS n FROM search_videos WHERE ${where}`).bind(...binds).first<{ n: number }>(),
+			db.prepare(`SELECT id FROM search_videos WHERE ${where} ORDER BY ${order} LIMIT ? OFFSET ?`).bind(...binds, q.limit + 1, q.offset).all<{ id: string }>(),
+			q.offset === 0
+				? db.prepare(`SELECT COUNT(*) AS n FROM (SELECT 1 FROM search_videos WHERE ${where} LIMIT ?)`).bind(...binds, MAX_SECTION_OFFSET + 1).first<{ n: number }>()
+				: Promise.resolve(null),
 		]);
-		return { ids: (rows.results ?? []).map((r) => r.id), total: Number(count?.n ?? 0) };
+		const ids = (rows.results ?? []).map((r) => r.id);
+		return { ids: ids.slice(0, q.limit), hasMore: ids.length > q.limit, ...(count ? { total: Number(count.n ?? 0) } : {}) };
 	}
 
-	// Trending: score the newest and the most viewed candidates with the same formula as before
+	// Trending: score the newest, the most viewed and the most recently watched candidates with the same formula as before
 	const { results } = await db
 		.prepare(
-			`SELECT id, payload FROM (SELECT id, payload FROM search_videos WHERE ${where} ORDER BY created_at DESC LIMIT ?)
+			`SELECT id, payload, views FROM (SELECT id, payload, views FROM search_videos WHERE ${where} ORDER BY created_at DESC LIMIT ?)
 			 UNION
-			 SELECT id, payload FROM (SELECT id, payload FROM search_videos WHERE ${where} ORDER BY views DESC LIMIT ?)`,
+			 SELECT id, payload, views FROM (SELECT id, payload, views FROM search_videos WHERE ${where} ORDER BY views DESC LIMIT ?)
+			 UNION
+			 SELECT id, payload, views FROM (SELECT id, payload, views FROM search_videos WHERE ${where} AND activity_at IS NOT NULL ORDER BY activity_at DESC LIMIT ?)`,
 		)
-		.bind(...binds, TRENDING_CANDIDATES, ...binds, TRENDING_CANDIDATES)
-		.all<{ id: string; payload: string }>();
+		.bind(...binds, TRENDING_CANDIDATES, ...binds, TRENDING_CANDIDATES, ...binds, TRENDING_CANDIDATES)
+		.all<{ id: string; payload: string; views: number }>();
 	const algorithm = q.algorithm ?? 'hybrid';
 	const scored = (results ?? [])
 		.map((row) => {
 			let video: VideoObject;
 			try {
-				video = { ...(JSON.parse(row.payload) as VideoObject), id: row.id };
+				const payload = JSON.parse(row.payload) as VideoObject;
+				// The row's views are current (the view counter raises them); the payload's may lag
+				video = { ...payload, id: row.id, views: Math.max(Number(row.views) || 0, Number(payload.views) || 0) };
 			} catch {
 				return null;
 			}
@@ -150,7 +167,7 @@ async function pageIds(db: Db, q: SectionQuery): Promise<{ ids: string[]; total:
 	const trending = new Map<string, TrendingInfo>();
 	const page = scored.slice(q.offset, q.offset + q.limit);
 	page.forEach((v, i) => trending.set(v.id, { rank: q.offset + i + 1, score: v.score, viewsVelocity: v.viewsVelocity, engagementVelocity: v.engagementVelocity }));
-	return { ids: page.map((v) => v.id), total: scored.length, trending };
+	return { ids: page.map((v) => v.id), total: scored.length, hasMore: q.offset + q.limit < scored.length, trending };
 }
 
 /**
@@ -179,8 +196,8 @@ export async function sectionFromIndex(env: { SEARCH_DB?: unknown; videos: R2Buc
 	const end = q.offset + found.ids.length;
 	return {
 		videos,
-		total: found.total,
-		nextOffset: found.ids.length === q.limit && end < found.total ? end : undefined,
+		...(found.total !== undefined ? { total: found.total } : {}),
+		nextOffset: found.hasMore && end < MAX_SECTION_OFFSET ? end : undefined,
 		trending: found.trending,
 	};
 }

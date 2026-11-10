@@ -239,7 +239,7 @@ export type IndexDrift = OwnershipDrift & { rebuild: AdminJob | null };
 export type SearchIndexDrift = SearchDrift & { rebuild: AdminJob | null };
 export interface IndexRepairs { pending: number; failedTotal: number; failed: IndexRepair[]; job: AdminJob | null }
 /** Index the Rebuild button targets: an ownership kind or a search table. */
-export type IndexRebuildKind = 'video' | 'channel' | 'profile' | `search:${'video' | 'channel' | 'playlist' | 'post'}`;
+export type IndexRebuildKind = 'video' | 'channel' | 'profile' | 'playlist' | 'stream' | `search:${'video' | 'channel' | 'playlist' | 'post'}`;
 /** Wrong-shape thumbnails an admin replaces by hand (imported or custom: never auto-replaced). */
 export interface ThumbnailFlagged {
   runId: string;

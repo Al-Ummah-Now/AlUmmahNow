@@ -10,7 +10,8 @@ import { OptionalAuthRoute, AppContext } from '../../base';
 import { logger } from "../../lib/logger";
 import { isInternalRecord, isVideoListedFor } from "../../lib/visibility";
 import { waitUntilOf } from "../../lib/search/ownership";
-import { INDEX_CURSOR_PREFIX, channelVideosFromIndex } from "../../lib/search/channelVideoIndex";
+import { channelVideosFromIndex } from "../../lib/search/channelVideoIndex";
+import { scanPage } from "../../lib/scanCursor";
 import { edgeCacheUrl, readEdgeCache, writeEdgeCache } from "../../lib/edge-cache";
 
 /** Seconds the anonymous first page of the general feed is reused. */
@@ -110,7 +111,7 @@ export class VideosList extends OptionalAuthRoute {
 		const filterChannelId = queryChannelId || channelId;
 
 		// The anonymous first page is the same for every visitor and costs an R2
-		// read per video, so it is reused briefly. Pages and channel views are not.
+		// read per video, so it is reused briefly. Later pages and channel views are not.
 		const firstPageCacheUrl = !userId && !filterChannelId && !cursor && !format && !titleQuery
 			? edgeCacheUrl(c.req.url, `videos/v1/first-page/${limit}/${sort}/${filter}/${category || "_"}`)
 			: null;
@@ -192,47 +193,46 @@ export class VideosList extends OptionalAuthRoute {
 		let nextCursor = cursor;
 		let source: "index" | "scan" = "scan";
 
-		// A channel filter is answered from the ownership index (D1): scanning the
-		// bucket and filtering afterwards returned empty pages for channels whose
-		// videos sat beyond the scanned window, sorted only within that window.
-		const indexed = filterChannelId
-			? await channelVideosFromIndex<VideoType>(c.env as never, {
-				channelId: filterChannelId,
-				cursor,
-				limit,
-				query: {
-					sort: INDEX_SORT[sort as VideoSort],
-					privateFor: privateOwnerId,
-					...INDEX_FILTER[(filter || "all") as VideoFilter],
-					...(format === "short" ? { shortsOnly: true } : format === "video" ? { notShort: true } : {}),
-				},
-				load: id => repository.getObject(id),
-				isListed: (video): video is VideoType => !!video && Boolean(isVisible(video)),
-				compare: INDEX_SORT[sort as VideoSort] ? undefined : compareVideos,
-				waitUntil: waitUntilOf(c as never),
-			})
-			: null;
+		// Answered from the ownership index (D1), with or without a channel: one
+		// keyset page per request (date or views, then id), visibility in SQL and
+		// re-checked on each loaded object. Scanning the bucket returned short,
+		// unsorted pages and skipped videos past the scanned window.
+		const indexed = await channelVideosFromIndex<VideoType>(c.env as never, {
+			channelId: filterChannelId || null,
+			cursor,
+			limit,
+			query: {
+				sort: INDEX_SORT[sort as VideoSort],
+				privateFor: privateOwnerId,
+				...INDEX_FILTER[(filter || "all") as VideoFilter],
+				...(format === "short" ? { shortsOnly: true } : format === "video" ? { notShort: true } : {}),
+				...(category ? { category } : {}),
+			},
+			load: id => repository.getObject(id),
+			isListed: (video): video is VideoType => !!video && Boolean(isVisible(video)),
+			compare: INDEX_SORT[sort as VideoSort] ? undefined : compareVideos,
+			waitUntil: waitUntilOf(c as never),
+		});
 
 		if (indexed) {
 			source = "index";
 			filteredVideos.push(...indexed.videos);
 			nextCursor = indexed.cursor;
 		} else {
-			// R2's native cursor pagination cuts the page before visibility filtering,
-			// so a page full of private/internal records used to come back nearly
-			// empty (the home page showed 1-3 videos and a "Load More" button). Keep
-			// reading whole R2 pages until `limit` visible videos are collected or the
-			// bucket is exhausted; the cursor always points after the last page read,
-			// so nothing is skipped (a response may hold up to 2*limit-1 videos).
-			const MAX_PAGES = 5;
-			// An index cursor cannot resume an R2 listing (index became unavailable).
-			if (nextCursor?.startsWith(INDEX_CURSOR_PREFIX)) nextCursor = undefined;
-			for (let page = 0; page < MAX_PAGES; page++) {
-				const batch = await repository.listObjects(limit, nextCursor);
-				filteredVideos.push(...(batch.items || []).filter(isVisible));
-				nextCursor = batch.cursor || "";
-				if (!nextCursor || filteredVideos.length >= limit) break;
-			}
+			// Fallback while the index is unavailable: a bounded scan whose cursor
+			// carries its position inside the R2 page (lib/scanCursor.ts), so a
+			// page that fills up mid-listing never drops the rest of that listing.
+			const page = await scanPage<VideoType>({
+				cursor,
+				limit,
+				list: async (pageCursor, pageSize) => {
+					const batch = await repository.listObjects(pageSize, pageCursor);
+					return { items: batch.items || [], cursor: batch.cursor || "" };
+				},
+				isListed: (video) => Boolean(isVisible(video)),
+			});
+			filteredVideos.push(...page.items);
+			nextCursor = page.cursor;
 			filteredVideos.sort(compareVideos);
 		}
 		logger.debug('[VideosList] Listed videos', { channelId: filterChannelId, source, count: filteredVideos.length });

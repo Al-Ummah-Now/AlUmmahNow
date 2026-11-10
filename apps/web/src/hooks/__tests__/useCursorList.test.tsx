@@ -24,6 +24,26 @@ describe('useCursorList', () => {
     expect(fetchPage.mock.calls.map((c) => c[0])).toEqual([undefined, 'c1', 'c2']);
   });
 
+  it('hands the API keyset and scan cursors back verbatim (they are opaque)', async () => {
+    // api-videos: `ks:` keyset positions (base64url) and `scan:<n>:<R2 cursor>` fallbacks
+    const keyset = 'ks:WyJsYXRlc3QiLDE3NzUwMDE2MDAwMDAsIm0tYyJd';
+    const scan = 'scan:7:AAAA/bb+cc==';
+    const fetchPage = jest.fn(async (cursor: string | undefined) =>
+      cursor === undefined ? page(['a'], keyset) : cursor === keyset ? page(['b'], scan) : page(['c'], '')
+    );
+    const { result } = renderHook(() => useCursorList<Item>('ch1', fetchPage, 'playlists'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(result.current.items).toHaveLength(2));
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(result.current.hasMore).toBe(false));
+    expect(fetchPage.mock.calls.map((c) => c[0])).toEqual([undefined, keyset, scan]);
+    expect(result.current.items.map((i) => i.id)).toEqual(['a', 'b', 'c']);
+    // The API clients put them in the query string encoded, so they arrive unchanged
+    const { buildQueryParams } = jest.requireActual('@/lib/api/api-client');
+    expect(new URLSearchParams(buildQueryParams({ cursor: scan }).slice(1)).get('cursor')).toBe(scan);
+  });
+
   it('drops items a later page repeats', async () => {
     const fetchPage = jest.fn(async (cursor: string | undefined) => (cursor ? page(['b', 'c'], null) : page(['a', 'b'], 'c1')));
     const { result } = renderHook(() => useCursorList<Item>('ch1', fetchPage, 'videos'));

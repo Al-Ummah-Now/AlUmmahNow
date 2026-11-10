@@ -18,7 +18,7 @@ import { startOwnershipRebuild, type OwnershipRebuildEnv } from './ownershipRebu
 import { startSearchReconcile, type SearchReconcileEnv } from './backfill';
 import { kickRepairJobIfPending, type RepairJobEnv } from './repairs';
 
-const BUCKET_FOR_KIND: Record<string, string> = { video: 'videos', channel: 'channels', profile: 'profiles', playlist: 'playlists', post: 'community_posts' };
+const BUCKET_FOR_KIND: Record<string, string> = { video: 'videos', channel: 'channels', profile: 'profiles', playlist: 'playlists', stream: 'videos', post: 'community_posts' };
 
 export type IndexMaintenanceEnv = OwnershipRebuildEnv & SearchReconcileEnv & RepairJobEnv;
 

@@ -18,9 +18,9 @@ import type { SearchEntityType } from './documents';
 
 export const INDEX_REPAIRS_TABLE = 'index_repairs';
 
-/** Entities a repair covers: the searchable types plus profiles (ownership only). */
-export type IndexRepairEntity = SearchEntityType | 'profile';
-export const INDEX_REPAIR_ENTITIES: ReadonlyArray<IndexRepairEntity> = ['video', 'channel', 'playlist', 'post', 'profile'];
+/** Entities a repair covers: the searchable types plus profiles and live streams (ownership only). */
+export type IndexRepairEntity = SearchEntityType | 'profile' | 'stream';
+export const INDEX_REPAIR_ENTITIES: ReadonlyArray<IndexRepairEntity> = ['video', 'channel', 'playlist', 'post', 'profile', 'stream'];
 
 /** Attempts before a repair is 'failed' and waits for an admin's Retry. */
 export const REPAIR_MAX_ATTEMPTS = 6;
@@ -33,7 +33,8 @@ export type IndexRepairReason =
   | 'pass-unreadable'
   | 'pass-refused'
   | 'queue-dead-letter'
-  | 'moderation';
+  | 'moderation'
+  | 'views-sync';
 
 export interface IndexRepair {
   entity: IndexRepairEntity;

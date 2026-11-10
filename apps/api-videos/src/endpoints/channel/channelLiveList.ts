@@ -1,7 +1,6 @@
 import { isShort } from "@al-ummah/shared-types";
 import { Num, Str } from "chanfana";
 import { publicVideoFields } from '../../lib/transformations';
-import { FALLBACK_SCAN_OBJECTS } from "../../lib/scanBudget";
 import { string, z } from "zod";
 import { Video as BusinessVideo, Channel as BusinessChannel, PaginationResponse, ResponseError } from "../../lib/types";
 import { VideoView } from "../../lib/model/view";
@@ -10,6 +9,7 @@ import { logger } from '../../lib/logger';
 import { OptionalAuthRoute, AppContext } from "../../base";
 import { waitUntilOf } from "../../lib/search/ownership";
 import { channelVideosFromIndex } from "../../lib/search/channelVideoIndex";
+import { scanPage } from "../../lib/scanCursor";
 
 export class ChannelLiveList extends OptionalAuthRoute {
 	schema = {
@@ -151,11 +151,20 @@ export class ChannelLiveList extends OptionalAuthRoute {
 				limitedStreams = page.videos;
 				nextCursor = page.cursor;
 			} else {
-				const videos = await repository.listObjects(Math.min(limit * 10, FALLBACK_SCAN_OBJECTS), cursor);
-				const channelLiveStreams = (videos.items || []).filter(isListed).sort((a, b) =>
+				// Index unavailable: a bounded scan whose cursor keeps its place in the
+				// R2 listing (lib/scanCursor.ts); the helper queued an index heal.
+				const scanned = await scanPage<VideoType>({
+					cursor,
+					limit,
+					list: async (pageCursor, pageSize) => {
+						const batch = await repository.listObjects(pageSize, pageCursor);
+						return { items: batch.items || [], cursor: batch.cursor || "" };
+					},
+					isListed,
+				});
+				limitedStreams = scanned.items.sort((a, b) =>
 					new Date(b.dateCreated || 0).getTime() - new Date(a.dateCreated || 0).getTime());
-				limitedStreams = channelLiveStreams.slice(0, limit);
-				nextCursor = channelLiveStreams.length > limit ? (videos.cursor || "") : "";
+				nextCursor = scanned.cursor;
 			}
 
 			// Transform business videos to view models
