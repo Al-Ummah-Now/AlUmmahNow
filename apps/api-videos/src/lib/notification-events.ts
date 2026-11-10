@@ -95,12 +95,14 @@ export type ProcessingResult = 'ready' | 'failed';
  * Which processing attempt a result belongs to. The processor dedupes the
  * uploader's notification on it, so a redelivered message is stored once while
  * a genuine second result (after an admin retry or a re-upload) still lands.
- * Stable per attempt: a failure keyed by when it was flagged, otherwise by the
- * processing loop that produced the result.
+ * Stable per attempt: a failure keyed by when it was flagged (plus the loop
+ * that flagged it, so an admin retry failing in the same millisecond is still
+ * a new attempt), otherwise by the processing loop that produced the result.
  */
 export function processingAttempt(video: PublishableVideo, status: ProcessingResult): string | undefined {
-	if (status === 'failed' && video.processingIssue?.at) return `issue:${video.processingIssue.at}`;
-	return video.processingCheck?.loopId ? `loop:${video.processingCheck.loopId}` : undefined;
+	const loopId = video.processingCheck?.loopId;
+	if (status === 'failed' && video.processingIssue?.at) return `issue:${video.processingIssue.at}${loopId ? `:${loopId}` : ''}`;
+	return loopId ? `loop:${loopId}` : undefined;
 }
 
 /**
