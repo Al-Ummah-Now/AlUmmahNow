@@ -6,7 +6,7 @@
  * and skip items that already exist.
  */
 
-export type SeedRole = 'superadmin' | 'admin' | 'moderator' | 'creator' | 'viewer' | 'ssoUi' | 'ssoCms';
+export type SeedRole = 'superadmin' | 'admin' | 'moderator' | 'creator' | 'viewer' | 'ssoUi' | 'ssoUiChain' | 'ssoUiMultiA' | 'ssoUiMultiB' | 'ssoCms';
 
 export interface SeedAccount {
   key: SeedRole;
@@ -77,6 +77,30 @@ export const SEED_ACCOUNTS: readonly SeedAccount[] = [
     displayName: 'QA SSO Journey (UI)',
     displayNameAr: 'رحلة الدخول الموحد للاختبار (الواجهة)',
     bio: 'Seeded QA account used only by the AlUmmahNowUI SSO journey spec.',
+  },
+  // AlUmmahNowUI accounts-chain and accounts-signed-in specs (sign out, account
+  // switching): one account each, never shared. The display name carries the
+  // address's local part: the specs find it in the account menu.
+  {
+    key: 'ssoUiChain',
+    email: `qa-sso-ui-chain@${SEED_EMAIL_DOMAIN}`,
+    displayName: 'qa-sso-ui-chain',
+    displayNameAr: 'qa-sso-ui-chain',
+    bio: 'Seeded QA account used only by the AlUmmahNowUI accounts-chain spec.',
+  },
+  {
+    key: 'ssoUiMultiA',
+    email: `qa-sso-ui-multi-a@${SEED_EMAIL_DOMAIN}`,
+    displayName: 'qa-sso-ui-multi-a',
+    displayNameAr: 'qa-sso-ui-multi-a',
+    bio: 'Seeded QA account used only by the AlUmmahNowUI accounts-signed-in spec (first account).',
+  },
+  {
+    key: 'ssoUiMultiB',
+    email: `qa-sso-ui-multi-b@${SEED_EMAIL_DOMAIN}`,
+    displayName: 'qa-sso-ui-multi-b',
+    displayNameAr: 'qa-sso-ui-multi-b',
+    bio: 'Seeded QA account used only by the AlUmmahNowUI accounts-signed-in spec (second account).',
   },
   {
     key: 'ssoCms',
