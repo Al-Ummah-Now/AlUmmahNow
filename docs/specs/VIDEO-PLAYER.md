@@ -38,7 +38,7 @@ says which side each proposed element comes from.
 | Scrub handle | White 16px disc, left half clipped at 0:00 | 14px themed disc | **Redesigned:** 18px themed disc, 22px on hover and while dragging, fully visible at 0% and 100% in every browser | Redesign (owner) |
 | Hover time tooltip | Video.js tooltip, unstyled font | Themed chip | Themed chip with tabular numerals, chapter title when the video has chapters, preview image when the video has preview sprites | Prototype, extended |
 | Chapters | Markers inside the progress holder | 2px dark marks | Prod's markers, drawn as 2px gaps in the theme's bar colour | Prod |
-| Volume | White bar with a grey shadow segment, handle only on hover | 76px native range, white track in Firefox | **Redesigned:** Video.js volume slider, always reserves 72px, 4px themed track, accent fill, 12px handle always shown, 6px track on hover. Hidden on players under 480px wide (phones have hardware volume), mute stays | Redesign (owner) |
+| Volume | White bar with a grey shadow segment, handle only on hover | 76px native range, white track in Firefox | **Redesigned:** Video.js volume slider, always reserves 72px, 4px themed track, accent fill, 12px handle always shown, 6px track on hover. Hidden on players under 540px wide (phones and tablets have hardware volume), mute stays | Redesign (owner) |
 | Time | Remaining only, "-58:12", monospace font | "0:00 / 2:26" in the UI font | "0:00 / 2:26", UI font, tabular numerals, total dimmed | Prototype |
 | Quality | Bare "Auto" text button with its own popup | Row in the settings menu | Row in the settings menu. **Behaviour is prod's:** Auto plus each height, highest first, "Auto (720p)" shows the playing rendition, hidden when the stream has no renditions (Safari native HLS) | Prod behaviour, prototype placement (owner) |
 | Settings menu | None (quality popup only) | Root list and submenus, visually weak | **Prototype's structure** (quality, speed, captions, audio track, shortcuts). **Visual rebuilt from prod's quality menu:** solid themed surface, hairline edge, selected row filled with a check mark. Panel above the gear, end-aligned, submenus slide in with a back row, 44px rows, never clipped | Prototype structure, prod visual, redesign (owner) |
@@ -144,7 +144,7 @@ The chrome sections of `video-player.css` that it replaces are deleted, so there
 | Settings panel | `min(280px, 100% - 16px)` wide, 44px rows, 12px radius, 8px above the bar, end-aligned with the gear |
 | Big play glyph | The play triangle's path is centred in its 24px viewBox and nudged 7% of the icon width towards the end side for optical centring (`--vjs-fanous-play-nudge`); the bar's play icon gets the same nudge |
 | Big play | 76px disc, 32px icon, 60px on players under 480px wide |
-| Breakpoints | Container queries on the player: under 480px the volume slider, PiP and theatre hide; under 360px next hides |
+| Breakpoints | Container queries on the player keep the bar on one row from 320 to 1920px (release spec `player-bar-row.player.spec.ts`): under 720px the live badge's "behind" text is cut short; under 620px next and PiP hide; under 540px the volume slider hides and the bar takes its compact padding (`bar-pad-compact`); under 440px theatre hides and buttons draw at 36px with 20px icons (touch keeps a 44px target); under 360px the duration hides |
 
 ### States
 
@@ -308,7 +308,7 @@ and the shared scales. The values are the ones in `player-themes.md`.
 | Token | Used for |
 |---|---|
 | `scrim` | End screen scrim over the last frame |
-| `bar`, `bar-edge`, `bar-pad`, `bar-inset`, `bar-radius`, `blur` | Control bar backdrop, its edge, padding, inset from the frame, radius and backdrop filter |
+| `bar`, `bar-edge`, `bar-pad`, `bar-pad-compact`, `bar-inset`, `bar-radius`, `blur` | Control bar backdrop, its edge, padding, padding on players under 540px wide, inset from the frame, radius and backdrop filter |
 | `icon`, `dim` | Icons and time; secondary text (total time, menu values) |
 | `track`, `track-edge`, `buffered`, `played`, `glow` | Progress and volume track, its hairline edge, buffered range, played fill, fill glow |
 | `handle`, `handle-edge` | Scrub and volume handle and its ring |

@@ -244,9 +244,9 @@
   content: "";
   position: absolute;
   z-index: 1;
-  left: 13px;
-  right: 13px;
-  bottom: 7px;
+  left: calc(50% - 9px);
+  right: calc(50% - 9px);
+  bottom: calc(var(--vjs-fanous-hit) / 2 - 15px);
   height: 2px;
   border-radius: 2px;
   background: var(--fanous-player-accent);
@@ -1724,18 +1724,98 @@
   display: none;
 }
 
-/* Narrow players: phones have hardware volume; picture in picture and theatre make no sense */
-@container fanous-player (max-width: 479px) {
+/*
+  Narrow players: the control bar is always one row (v2026.11.09.5: on a tablet the fullscreen button
+  wrapped onto a second row and the bar covered half the video). The full bar needs about 600px
+  (six 44px buttons, the 128px volume panel, an H:MM:SS time and the bar's padding and inset), so
+  as the player narrows the lower-priority controls go, the way the big video sites do it:
+    under 720px  the live badge's "behind" text is cut short
+    under 620px  next and picture in picture (both stay on the keyboard: N and P)
+    under 540px  the volume slider (mute stays; phones and tablets have hardware volume) and the
+                 bar's tall gradient padding gives way to its compact padding (bar-pad-compact),
+                 so the bar never covers more than half of a 16:9 player
+    under 440px  theatre, and the buttons draw at 36px with 20px icons (on touch each keeps its
+                 centred 44px ::after target, below)
+    under 360px  the duration (the current time stays); the live badge keeps room for "Live"
+  The hide rules name .vjs-control.vjs-button so they outrank the button rule's `display: grid`
+  (they did not before, so picture in picture and theatre never hid). The release spec
+  player-bar-row.player.spec.ts walks 320 to 1920px and fails on any second row.
+*/
+/* "Live · 1:02:33 behind" is cut short (the full text stays in its label); the badge's colour still
+   says it is behind */
+@container fanous-player (max-width: 719px) {
+  .video-js.vjs-fanous .vjs-control-bar .vjs-control.vjs-button.vjs-fanous-live {
+    max-width: 120px;
+  }
+
+  /* The bar is left to right; the label takes its own text's direction, so Arabic keeps
+     "مباشر" and loses the end of the text, not the start */
+  .video-js.vjs-fanous .vjs-fanous-live-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    unicode-bidi: plaintext;
+  }
+}
+
+@container fanous-player (max-width: 619px) {
+  .video-js.vjs-fanous .vjs-control-bar .vjs-control.vjs-button.vjs-fanous-next,
+  .video-js.vjs-fanous .vjs-control-bar .vjs-control.vjs-button.vjs-picture-in-picture-control {
+    display: none;
+  }
+}
+
+@container fanous-player (max-width: 539px) {
   .video-js.vjs-fanous .vjs-volume-panel .vjs-volume-control.vjs-volume-horizontal {
     display: none;
   }
 
-  /* As specific as the button rule (display: grid), which otherwise kept them shown */
-  .video-js.vjs-fanous .vjs-control-bar .vjs-control.vjs-button.vjs-picture-in-picture-control,
+  .video-js.vjs-fanous .vjs-control-bar {
+    padding: var(--fanous-player-bar-pad-compact);
+  }
+}
+
+@container fanous-player (max-width: 439px) {
+  /* On the bar, not the player: a container query never styles its own container */
+  .video-js.vjs-fanous .vjs-control-bar {
+    --vjs-fanous-row: 40px;
+    --vjs-fanous-hit: 36px;
+    --vjs-fanous-fill: 32px;
+    --vjs-fanous-icon: 20px;
+  }
+
   .video-js.vjs-fanous .vjs-control-bar .vjs-control.vjs-button.vjs-fanous-theatre {
     display: none;
   }
 
+  .video-js.vjs-fanous .vjs-time-control.vjs-current-time {
+    padding-inline-start: 4px;
+  }
+
+  .video-js.vjs-fanous .vjs-control-bar .vjs-control.vjs-button.vjs-fanous-live {
+    margin: 0 2px;
+    padding: 0 8px;
+  }
+}
+
+@container fanous-player (max-width: 359px) {
+  .video-js.vjs-fanous .vjs-time-control.vjs-time-divider,
+  .video-js.vjs-fanous .vjs-time-control.vjs-duration {
+    display: none;
+  }
+
+  .video-js.vjs-fanous .vjs-time-control.vjs-current-time {
+    padding-inline-end: 4px;
+  }
+
+  .video-js.vjs-fanous .vjs-control-bar .vjs-control.vjs-button.vjs-fanous-live {
+    max-width: 68px;
+  }
+}
+
+/* Phones: the big play button is smaller */
+@container fanous-player (max-width: 479px) {
   .video-js.vjs-fanous .vjs-big-play-button,
   .video-js.vjs-fanous.vjs-big-play-centered .vjs-big-play-button {
     width: 60px;
@@ -1744,12 +1824,6 @@
     top: round(down, 50% - 30px, 1px);
     left: round(down, 50% - 30px, 1px);
     margin: 0;
-  }
-}
-
-@container fanous-player (max-width: 359px) {
-  .video-js.vjs-fanous .vjs-control-bar .vjs-control.vjs-button.vjs-fanous-next {
-    display: none;
   }
 }
 

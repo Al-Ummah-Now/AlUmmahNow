@@ -4,6 +4,7 @@
     "bar": "radial-gradient(45% 170% at 50% 118%,rgb(244 174 58/.32),transparent 72%),linear-gradient(0deg,rgb(5 12 20/.97),rgb(9 21 30/.88) 62%,rgb(9 21 30/.44) 82%,transparent)",
     "bar-edge": "none",
     "bar-pad": "44px 12px 6px",
+    "bar-pad-compact": "14px 8px 2px",
     "bar-inset": "0",
     "bar-radius": "0",
     "blur": "none",

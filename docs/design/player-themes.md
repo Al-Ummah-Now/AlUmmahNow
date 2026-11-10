@@ -56,6 +56,18 @@ currently deploy, from `apps/web/src/theme/player-themes.css`.
 | Nahas | `8px 12px 2px` |
 | Fawanees | `44px 12px 6px` |
 
+### Compact control bar padding (`--p-bar-pad-compact`)
+
+Players under 540px wide (phones, tablets with the watch page's side column): the tall gradient
+padding would cover half of a 16:9 frame, so the bar uses this instead.
+
+| Theme | Value |
+|---|---|
+| Lantern | `14px 8px 2px` |
+| Zujaj | `4px 6px 2px` |
+| Nahas | `6px 8px 2px` |
+| Fawanees | `14px 8px 2px` |
+
 ### Control bar inset from the frame (`--p-bar-inset`)
 
 | Theme | Value |
