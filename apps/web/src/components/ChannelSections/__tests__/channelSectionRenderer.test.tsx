@@ -26,6 +26,7 @@ jest.mock('@/hooks/useLanguage', () => ({
 }));
 const mockUser = { current: null as null | { id: string } };
 jest.mock('@/components/AuthProvider/authContext', () => ({ useAuth: () => ({ user: mockUser.current }) }));
+jest.mock('@/hooks/useMultiAccount', () => ({ useOptionalMultiAccount: () => null }));
 jest.mock('@/lib/api/channels', () => ({ getChannelSubscriptionStatus: jest.fn() }));
 jest.mock('@/lib/api/channel-sections', () => ({ listChannelSectionsPopulated: jest.fn() }));
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
@@ -215,7 +216,7 @@ describe('ChannelSections (Home tab)', () => {
   it('offers editors a retry when loading fails', async () => {
     mockList.mockRejectedValueOnce(new Error('down')).mockResolvedValueOnce([section('recent_uploads', FILLED.recent_uploads)] as never);
     render(
-      <ChannelViewerProvider canEditLayout>
+      <ChannelViewerProvider channelId={CHANNEL} isOwner>
         <ChannelSections channelId={CHANNEL} />
       </ChannelViewerProvider>
     );

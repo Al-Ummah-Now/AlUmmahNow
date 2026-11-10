@@ -721,6 +721,11 @@ export function useMultiAccount() {
   return context;
 }
 
+/** The account context where a page may render without the provider (tests, embeds): null there */
+export function useOptionalMultiAccount(): MultiAccountContextValue | null {
+  return useContext(MultiAccountContext);
+}
+
 /** The active account's id, or null outside the provider (no throw: for hooks used in tests without it). */
 export function useActiveUserId(): string | null {
   return useContext(MultiAccountContext)?.user?.id ?? null;
