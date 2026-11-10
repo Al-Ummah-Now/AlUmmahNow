@@ -54,8 +54,13 @@ function UserSummary({ user }: { user: AdminUserSearchItem }) {
             </span>
           )}
         </span>
-        <span className="block text-xs text-fg-muted truncate" dir="ltr">
-          {user.email || t('channels.pickerNoEmail')}
+        <span className="flex items-center gap-2 text-xs text-fg-muted min-w-0">
+          <span className="truncate" dir="ltr">{user.email || t('channels.pickerNoEmail')}</span>
+          {user.invite && user.invite.status !== 'active' && user.invite.status !== 'revoked' && (
+            <span className="shrink-0 rounded-full border border-border bg-surface-2 px-2 text-fg-muted" data-testid="user-picker-invited">
+              {t('invites.badge')}
+            </span>
+          )}
         </span>
         <span className={`block text-xs ${user.isBanned ? 'text-danger-fg' : 'text-fg-subtle'}`}>{userMeta(user, t)}</span>
       </span>

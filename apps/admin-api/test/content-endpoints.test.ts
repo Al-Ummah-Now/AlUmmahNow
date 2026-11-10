@@ -190,7 +190,7 @@ describe('content endpoints: permissions', () => {
     assert.equal(calls.length, 0);
     const res = await call('/api/content/users/search?q=%40amina&exclude=usr_owner&channelId=ch_1&other=x', { roles: 'super_admin' });
     assert.equal(res.status, 200);
-    assert.deepEqual(((await res.json()) as { result: { items: unknown[] } }).result.items, [{ id: 'usr_2' }]);
+    assert.deepEqual(((await res.json()) as { result: { items: unknown[] } }).result.items, [{ id: 'usr_2', invite: null }], 'each result says whether the user is invited (null: not)');
     const params = new URLSearchParams(calls[0].search);
     assert.deepEqual(Object.fromEntries(params), { q: '@amina', exclude: 'usr_owner', channelId: 'ch_1' });
   });
