@@ -1,4 +1,8 @@
 import { SUBSCRIPTION_IMPORT_CRON, importPendingSubscriptions } from './lib/subscription-import';
+import { handleProcessingCheckBatch, sweepProcessingVideos } from './lib/processing/loop';
+
+/** Every 10 minutes: start a processing-check loop for any video stuck without one */
+export const PROCESSING_SWEEP_CRON = '*/10 * * * *';
 import { fromHono } from "chanfana";
 import { bunnySigningMiddleware } from './middleware/bunny-signing';
 import { Hono } from "hono";
@@ -20,6 +24,7 @@ import { buildContractDocument } from './lib/api-contract';
 
 // TUS Proxy import (not in routers yet)
 import { createTusRouter } from "./endpoints/video/tus";
+import { createProcessingInternalRouter } from "./endpoints/video/processingInternal";
 // Profile/Channel image upload handlers (not in routers yet)
 import handleAvatarUpdate from "./endpoints/profile/profileAvatarUpdate";
 import handleCoverUpdate from "./endpoints/profile/profileCoverUpdate";
@@ -175,6 +180,8 @@ app.use('/api/videos/tus/*', authMiddleware);
 // Mount the TUS proxy router
 const tusRouter = createTusRouter();
 app.route('/api/videos/tus', tusRouter);
+// Processing health / repair (internal; admin-api proxies with RBAC + audit)
+app.route('/internal/processing', createProcessingInternalRouter() as never);
 
 // ==========================================
 // PROFILE/CHANNEL IMAGE UPLOADS
@@ -386,6 +393,15 @@ app.get("/", async (c) => {
  * See src/lib/privacy/retention.ts and docs/compliance/GDPR.md.
  */
 async function scheduled(controller: ScheduledController, rawEnv: AppBindings, ctx: ExecutionContext): Promise<void> {
+	if (controller?.cron === PROCESSING_SWEEP_CRON) {
+		// Safety net for the per-video processing-check loop (lib/processing/loop.ts)
+		ctx.waitUntil(
+			sweepProcessingVideos(withSearchSync(rawEnv, ctx) as never).catch((error) =>
+				logger.error('[ProcessingSweep] Run failed', { error: error instanceof Error ? error.message : String(error) }),
+			),
+		);
+		return;
+	}
 	if (controller?.cron === SUBSCRIPTION_IMPORT_CRON) {
 		// Hourly: move legacy channel subscriptions into D1 (SCALABILITY-AUDIT AV-4)
 		ctx.waitUntil(
@@ -460,7 +476,17 @@ async function handleFetch(request: Request, env: AppBindings, ctx: ExecutionCon
 	return out;
 }
 
+/**
+ * Queue consumer: the per-video processing-check loop (PROCESSING_CHECK_QUEUE).
+ * R2 writes go through the search-sync wrapper so a video that becomes ready
+ * reaches the search index and ownership rows like any API write.
+ */
+async function queue(batch: MessageBatch<unknown>, env: AppBindings, ctx: ExecutionContext): Promise<void> {
+	await handleProcessingCheckBatch(batch, withSearchSync(env, ctx) as never);
+}
+
 export default {
 	fetch: handleFetch,
 	scheduled,
+	queue,
 };

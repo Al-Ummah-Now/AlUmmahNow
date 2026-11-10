@@ -52,6 +52,8 @@ export interface AppBindings {
   queue: Queue;
   /** AI moderation queue (Epic 28). Optional: scans are skipped when unbound. */
   MODERATION_QUEUE?: Queue;
+  /** Per-video processing-check loop (lib/processing/loop.ts). Optional: no loop when unbound. */
+  PROCESSING_CHECK_QUEUE?: Queue;
 
   // Secrets (accessed via .text() method)
   image_storage_key: { text(): Promise<string> };

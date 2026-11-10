@@ -13,7 +13,7 @@
 	"version_metadata": { "binding": "CF_VERSION_METADATA" },
 	// Daily GDPR retention sweep (src/lib/privacy/retention.ts)
 	"triggers": {
-		"crons": ["17 3 * * *", "47 * * * *"]
+		"crons": ["17 3 * * *", "47 * * * *", "*/10 * * * *"]
 	},
 	"observability": {
 		"enabled": true,
@@ -162,8 +162,22 @@
 		}
 	],
 	"queues": {
-		"consumers": [],
+		// Per-video processing-check loop (src/lib/processing/loop.ts): the consumer
+		// re-enqueues a video with a delay until Bunny finishes encoding it.
+		"consumers": [
+			{
+				"queue": "al-ummah-now-processing-check",
+				"max_batch_size": 10,
+				"max_batch_timeout": 5,
+				"max_retries": 5,
+				"dead_letter_queue": "al-ummah-now-dlq"
+			}
+		],
 		"producers": [
+			{
+				"queue": "al-ummah-now-processing-check",
+				"binding": "PROCESSING_CHECK_QUEUE"
+			},
 			{
 				"queue": "al-ummah-now-videos",
 				"binding": "queue"
@@ -354,7 +368,20 @@
 				}
 			],
 			"queues": {
+				"consumers": [
+					{
+						"queue": "al-ummah-now-processing-check-stage",
+						"max_batch_size": 10,
+						"max_batch_timeout": 5,
+						"max_retries": 5,
+						"dead_letter_queue": "al-ummah-now-dlq-stage"
+					}
+				],
 				"producers": [
+					{
+						"queue": "al-ummah-now-processing-check-stage",
+						"binding": "PROCESSING_CHECK_QUEUE"
+					},
 					{
 						"queue": "al-ummah-now-videos-stage",
 						"binding": "queue"

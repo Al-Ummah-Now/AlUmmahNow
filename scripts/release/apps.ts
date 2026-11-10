@@ -108,6 +108,9 @@ export const APPS: AppRule[] = [
 				{ kind: 'kv_namespaces', name: 'TUS_SESSIONS' },
 				{ kind: 'queue_producer', name: 'queue' },
 				{ kind: 'queue_producer', name: 'MODERATION_QUEUE' },
+				// Per-video processing-check loop (src/lib/processing/loop.ts; 2026-11-10 incident)
+				{ kind: 'queue_producer', name: 'PROCESSING_CHECK_QUEUE' },
+				{ kind: 'queue_consumer', name: 'al-ummah-now-processing-check' },
 				{ kind: 'r2_buckets', name: 'videos' },
 				// Per-video view counter in the realtime worker (SCALABILITY-AUDIT AV-1)
 				{ kind: 'durable_objects', name: 'VIEW_COUNTER' },

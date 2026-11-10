@@ -23,6 +23,7 @@ import R2Repository, { rethrowBusy } from '../../../lib/r2Repo';
 import { Video as BusinessVideo } from '../../../lib/types';
 import Queue, { MessageType } from '../../../lib/queue';
 import { logger } from '../../../lib/logger';
+import { startProcessingLoop } from '../../../lib/processing/loop';
 
 // TUS Protocol Constants
 const TUS_VERSION = '1.0.0';
@@ -306,6 +307,11 @@ export class TusProxy {
         fileSize: session.fileSize,
         timestamp: new Date().toISOString(),
       });
+
+      // Check Bunny until the encode finishes (lib/processing/loop.ts)
+      await startProcessingLoop(this.env, session.videoId, { reason: 'upload-complete' }).catch((error) =>
+        logger.error('[TUS Proxy] Could not start the processing check loop', { videoId: session.videoId, error: error instanceof Error ? error.message : String(error) }),
+      );
 
       logger.info('[TUS Proxy] Upload completed', {
         uploadId,
