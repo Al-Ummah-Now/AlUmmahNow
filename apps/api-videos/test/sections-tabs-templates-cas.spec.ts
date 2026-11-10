@@ -32,7 +32,7 @@ import {
 import { removeChannelContent } from '../src/lib/channelDeletion';
 import { sectionOrderKey } from '../src/lib/channelSectionOrder';
 import { defaultPointerKey } from '../src/lib/uploadDefaultPointer';
-import { MemoryBucket, MemoryQueue, SlowBucket, buildApp } from './helpers';
+import { MemoryBucket, MemoryQueue, SlowBucket, buildApp, videoFixture } from './helpers';
 
 const json = { 'Content-Type': 'application/json' };
 const ME = 'owner';
@@ -61,7 +61,8 @@ function env(sections: Record<string, unknown> = {}, templates: Record<string, u
 		channel_sections: new SlowBucket(sections),
 		channel_tabs: new SlowBucket({}),
 		'upload-defaults': new SlowBucket(templates),
-		videos: new MemoryBucket(),
+		// One public video of the channel, so featured_videos sections validate
+		videos: new MemoryBucket({ v1: videoFixture({ id: 'v1', channelId: CH, userId: ME }) }),
 		playlists: new MemoryBucket(),
 		community_posts: new MemoryBucket(),
 		queue: new MemoryQueue(),
@@ -72,7 +73,8 @@ const app = buildApp(routes, { userId: ME });
 const send = (e: any, method: string, path: string, body?: unknown) =>
 	app.request(path, { method, headers: json, body: body === undefined ? undefined : JSON.stringify(body) }, e);
 
-const createSection = (e: any, title: string) => send(e, 'POST', `/api/channels/${CH}/sections`, { type: 'recent_uploads', title });
+// featured_videos has no per-type limit, so these tests reach the total limit
+const createSection = (e: any, title: string) => send(e, 'POST', `/api/channels/${CH}/sections`, { type: 'featured_videos', title, videoIds: ['v1'] });
 const listSections = async (e: any) => ((await (await send(e, 'GET', `/api/channels/${CH}/sections`)).json()) as any).result.sections as any[];
 
 /** Positions are exactly 0..n-1, each once. */

@@ -2348,13 +2348,19 @@
             "schema": {
               "type": "string",
               "enum": [
+                "channel_spotlight",
                 "featured_videos",
                 "recent_uploads",
                 "popular_uploads",
+                "shorts",
+                "live_streams",
+                "liked_videos",
                 "single_playlist",
                 "multiple_playlists",
+                "created_playlists",
+                "featured_channels",
                 "subscribed_channels",
-                "liked_videos"
+                "community_posts"
               ],
               "description": "Filter by section type"
             },
@@ -2456,7 +2462,7 @@
           "Channel Sections"
         ],
         "summary": "Create a new channel section",
-        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\n\n        Creates a new section for organizing channel content.\n\n        **Authorization:**\n        - User must be authenticated\n        - User must own the channel\n\n        **Position:**\n        - Automatically calculated as last position + 1\n        - Use PATCH /sections/reorder to change order\n\n        **Validation:**\n        - Section type determines required fields\n        - Content validation based on type\n      ",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\n\n        Creates a new section for organizing channel content.\n\n        **Authorization:**\n        - User must be authenticated\n        - User must be able to edit the channel layout (owner; channel admin once channel roles exist)\n        - subscribed_channels / liked_videos: channel owner only, with `consent: true`\n\n        **Position:**\n        - Appended last; a channel_spotlight is always first\n        - Use PATCH /sections/reorder to change order\n\n        **Limits:** 12 sections per channel; one of each automatic type (shorts and\n        live_streams: one per sort / filter); one spotlight.\n\n        **Errors** carry a stable `code`: validation_failed, section_limit,\n        section_type_limit (409), owner_consent_required (403), consent_required,\n        invalid_video, invalid_playlist, invalid_channel.\n      ",
         "operationId": "post_ChannelSectionCreate",
         "parameters": [
           {
@@ -2490,13 +2496,19 @@
                   "type": {
                     "type": "string",
                     "enum": [
+                      "channel_spotlight",
                       "featured_videos",
                       "recent_uploads",
                       "popular_uploads",
+                      "shorts",
+                      "live_streams",
+                      "liked_videos",
                       "single_playlist",
                       "multiple_playlists",
+                      "created_playlists",
+                      "featured_channels",
                       "subscribed_channels",
-                      "liked_videos"
+                      "community_posts"
                     ]
                   },
                   "title": {
@@ -2520,24 +2532,28 @@
                   "videoIds": {
                     "type": "array",
                     "items": {
-                      "type": "string"
+                      "type": "string",
+                      "minLength": 1
                     },
                     "maxItems": 20
                   },
                   "playlistId": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1
                   },
                   "playlistIds": {
                     "type": "array",
                     "items": {
-                      "type": "string"
+                      "type": "string",
+                      "minLength": 1
                     },
                     "maxItems": 10
                   },
                   "channelIds": {
                     "type": "array",
                     "items": {
-                      "type": "string"
+                      "type": "string",
+                      "minLength": 1
                     },
                     "maxItems": 20
                   },
@@ -2545,6 +2561,38 @@
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 20
+                  },
+                  "trailerVideoId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "returningVideoId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "sort": {
+                    "type": "string",
+                    "enum": [
+                      "latest",
+                      "popular"
+                    ]
+                  },
+                  "liveFilter": {
+                    "type": "string",
+                    "enum": [
+                      "live_and_upcoming",
+                      "past"
+                    ]
+                  },
+                  "postMode": {
+                    "type": "string",
+                    "enum": [
+                      "latest",
+                      "pinned"
+                    ]
+                  },
+                  "consent": {
+                    "type": "boolean"
                   },
                   "showTimestamp": {
                     "type": "boolean"
@@ -2690,6 +2738,34 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "This section type is already on the channel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "field": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
           }
         }
       }
@@ -2700,7 +2776,7 @@
           "Channel Sections"
         ],
         "summary": "List channel sections with populated content",
-        "description": "🔓 **Authentication Optional**: This endpoint works without authentication but provides additional features when authenticated with a valid JWT token in the Authorization header (Bearer <token>).\n\n\n        Retrieves all channel sections with auto-populated content for dynamic types.\n\n        **Public Access:**\n        - Public channels: All sections visible to everyone\n        - Private channels: Only visible to channel owner (requires auth)\n\n        **Auto-Population:**\n        - recent_uploads: Latest videos from the channel\n        - popular_uploads: Most viewed videos from the channel\n        - liked_videos: Videos liked by the channel owner\n        - subscribed_channels: Channels the user is subscribed to\n\n        **Query Parameters:**\n        - populate: Include populated content (videos/playlists/channels)\n        - type: Filter by section type\n        - limit: Maximum sections to return (default: 20, max: 50)\n      ",
+        "description": "🔓 **Authentication Optional**: This endpoint works without authentication but provides additional features when authenticated with a valid JWT token in the Authorization header (Bearer <token>).\n\n\n        Retrieves all channel sections with auto-populated content for dynamic types.\n\n        **Public Access:**\n        - Public channels: All sections visible to everyone\n        - Private channels: Only visible to channel owner (requires auth)\n\n        **Population:** every section type is populated on the server\n        (`populatedContent`) and carries `isEmpty`. Empty sections are left\n        out, except for people who can edit the channel, who get them with\n        `emptyHint` (noContent, consentMissing, communityTabHidden,\n        loadFailed) and `canEdit: true`. subscribed_channels and liked_videos\n        populate only with the channel owner's opt-in.\n\n        **Caching:** signed-out responses are cached at the edge for 60 s.\n\n        **Query Parameters:**\n        - populate: Include populated content (videos/playlists/channels)\n        - type: Filter by section type\n        - limit: Maximum sections to return (default: 20, max: 50)\n      ",
         "operationId": "get_ChannelSectionsListPopulated",
         "parameters": [
           {
@@ -2750,13 +2826,19 @@
             "schema": {
               "type": "string",
               "enum": [
+                "channel_spotlight",
                 "featured_videos",
                 "recent_uploads",
                 "popular_uploads",
+                "shorts",
+                "live_streams",
+                "liked_videos",
                 "single_playlist",
                 "multiple_playlists",
+                "created_playlists",
+                "featured_channels",
                 "subscribed_channels",
-                "liked_videos"
+                "community_posts"
               ],
               "description": "Filter by section type"
             },
@@ -2897,7 +2979,7 @@
                       "type": "string"
                     },
                     "minItems": 1,
-                    "maxItems": 5
+                    "maxItems": 12
                   }
                 },
                 "required": [
@@ -3217,24 +3299,28 @@
                   "videoIds": {
                     "type": "array",
                     "items": {
-                      "type": "string"
+                      "type": "string",
+                      "minLength": 1
                     },
                     "maxItems": 20
                   },
                   "playlistId": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1
                   },
                   "playlistIds": {
                     "type": "array",
                     "items": {
-                      "type": "string"
+                      "type": "string",
+                      "minLength": 1
                     },
                     "maxItems": 10
                   },
                   "channelIds": {
                     "type": "array",
                     "items": {
-                      "type": "string"
+                      "type": "string",
+                      "minLength": 1
                     },
                     "maxItems": 20
                   },
@@ -3242,6 +3328,44 @@
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 20
+                  },
+                  "trailerVideoId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "minLength": 1
+                  },
+                  "returningVideoId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "minLength": 1
+                  },
+                  "sort": {
+                    "type": "string",
+                    "enum": [
+                      "latest",
+                      "popular"
+                    ]
+                  },
+                  "liveFilter": {
+                    "type": "string",
+                    "enum": [
+                      "live_and_upcoming",
+                      "past"
+                    ]
+                  },
+                  "postMode": {
+                    "type": "string",
+                    "enum": [
+                      "latest",
+                      "pinned"
+                    ]
+                  },
+                  "consent": {
+                    "type": "boolean"
                   },
                   "showTimestamp": {
                     "type": "boolean"

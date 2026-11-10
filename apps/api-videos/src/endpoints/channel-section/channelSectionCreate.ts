@@ -1,7 +1,7 @@
 import { Str } from 'chanfana';
 import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
-import { changeSectionOrder } from '../../lib/channelSectionOrder';
+import { changeSectionOrder, listChannelSections } from '../../lib/channelSectionOrder';
 import R2Repository from '../../lib/r2Repo';
 import {
   Channel,
@@ -9,40 +9,22 @@ import {
   ChannelSectionCreateInput,
   CHANNEL_SECTION_CONSTRAINTS
 } from '@al-ummah/shared-types';
+import { transformChannelSectionToView } from '../../lib/transformations';
+import { canEditChannelLayout } from '../../lib/channelSectionAccess';
 import {
-  transformChannelSectionToView,
-  validateSectionContent
-} from '../../lib/transformations';
+  checkSectionConsent,
+  checkSectionContent,
+  checkSectionLimits,
+  clampItemCount,
+  spotlightFirst,
+  type SectionRuleError,
+} from '../../lib/channelSectionRules';
+import { ChannelSectionCreateInputSchema, SectionErrorSchema } from '../../lib/channelSectionSchemas';
+import { purgeSectionsCache } from '../../lib/channelSectionCache';
+import { waitUntilOf } from '../../lib/search/ownership';
 import { MessageType, queueChannelSectionEvent } from '../../lib/queue';
 import { logger } from '../../lib/logger';
 import { AuthenticatedRoute, AppContext } from '../../base';
-
-// Zod schema for the input
-const ChannelSectionCreateInputSchema = z.object({
-  type: z.enum([
-    'featured_videos',
-    'recent_uploads',
-    'popular_uploads',
-    'single_playlist',
-    'multiple_playlists',
-    'subscribed_channels',
-    'liked_videos',
-  ]),
-  title: z.string().min(1).max(CHANNEL_SECTION_CONSTRAINTS.MAX_TITLE_LENGTH),
-  titleLocalized: z.record(z.string()).optional(),
-  style: z.enum(['horizontal_row', 'vertical_list']).optional(),
-  videoIds: z.array(z.string()).max(CHANNEL_SECTION_CONSTRAINTS.MAX_VIDEO_IDS).optional(),
-  playlistId: z.string().optional(),
-  playlistIds: z.array(z.string()).max(CHANNEL_SECTION_CONSTRAINTS.MAX_PLAYLIST_IDS).optional(),
-  channelIds: z.array(z.string()).max(CHANNEL_SECTION_CONSTRAINTS.MAX_CHANNEL_IDS).optional(),
-  itemCount: z.number()
-    .int()
-    .min(CHANNEL_SECTION_CONSTRAINTS.MIN_ITEM_COUNT)
-    .max(CHANNEL_SECTION_CONSTRAINTS.MAX_ITEM_COUNT)
-    .optional(),
-  showTimestamp: z.boolean().optional(),
-  showChannelName: z.boolean().optional(),
-});
 
 export class ChannelSectionCreate extends AuthenticatedRoute {
   schema = addAuthToSchema(
@@ -54,15 +36,19 @@ export class ChannelSectionCreate extends AuthenticatedRoute {
 
         **Authorization:**
         - User must be authenticated
-        - User must own the channel
+        - User must be able to edit the channel layout (owner; channel admin once channel roles exist)
+        - subscribed_channels / liked_videos: channel owner only, with \`consent: true\`
 
         **Position:**
-        - Automatically calculated as last position + 1
+        - Appended last; a channel_spotlight is always first
         - Use PATCH /sections/reorder to change order
 
-        **Validation:**
-        - Section type determines required fields
-        - Content validation based on type
+        **Limits:** 12 sections per channel; one of each automatic type (shorts and
+        live_streams: one per sort / filter); one spotlight.
+
+        **Errors** carry a stable \`code\`: validation_failed, section_limit,
+        section_type_limit (409), owner_consent_required (403), consent_required,
+        invalid_video, invalid_playlist, invalid_channel.
       `,
       request: {
         headers: z.object({
@@ -123,6 +109,10 @@ export class ChannelSectionCreate extends AuthenticatedRoute {
             },
           },
         },
+        '409': {
+          description: 'This section type is already on the channel',
+          content: { 'application/json': { schema: SectionErrorSchema } },
+        },
         '404': {
           description: 'Channel not found',
           content: {
@@ -166,54 +156,44 @@ export class ChannelSectionCreate extends AuthenticatedRoute {
       );
     }
 
-    if (channel.userId !== userId) {
+    if (!canEditChannelLayout(channel, userId)) {
       logger.warn(`User ${userId} attempted to create section for channel ${channelId} owned by ${channel.userId}`);
-      return c.json(
-        {
-          success: false,
-          error: 'You can only create sections for your own channel',
-        },
-        403
-      );
+      return c.json({ success: false, code: 'forbidden', error: 'You can only create sections for your own channel' }, 403);
     }
 
-    // Validate content based on type
-    const validation = validateSectionContent(input.type, input);
-    if (!validation.valid) {
-      logger.warn('Section content validation failed', { errors: validation.errors });
-      return c.json(
-        {
-          success: false,
-          error: 'Validation failed',
-          details: validation.errors.map((msg) => ({
-            field: 'content',
-            message: msg,
-          })),
-        },
-        400
-      );
-    }
+    const reject = (failure: SectionRuleError) => {
+      logger.warn('[ChannelSectionCreate] Rejected', { channelId, type: input.type, code: failure.code, field: failure.field });
+      return c.json({ success: false, code: failure.code, error: failure.error, ...(failure.field ? { field: failure.field } : {}) }, failure.status);
+    };
+
+    const consentFailure = checkSectionConsent(channel, userId, input.type, input, 'create');
+    if (consentFailure) return reject(consentFailure);
+    const contentFailure = await checkSectionContent(c.env, channel, input.type, input);
+    if (contentFailure) return reject(contentFailure);
+
+    // Per-type limits read the live sections; the total limit is enforced again
+    // by the conditional order write below (parallel creates)
+    const existing = (await listChannelSections<ChannelSection>(c.env.channel_sections, channelId)).filter((s) => !s.isDeleted);
+    const limitFailure = checkSectionLimits(existing, input);
+    if (limitFailure) return reject(limitFailure);
 
     // Reserve the next slot in the channel's order document with a
     // conditional write (SCALABILITY-AUDIT AV-20): parallel creates get
-    // distinct positions and the section limit holds under concurrency
+    // distinct positions and the section limit holds under concurrency.
+    // A spotlight goes first (spec §5).
     const sectionId = crypto.randomUUID();
+    const spotlightIds = new Set(existing.filter((s) => s.type === 'channel_spotlight').map((s) => s.id));
+    if (input.type === 'channel_spotlight') spotlightIds.add(sectionId);
     const { order, rejected } = await changeSectionOrder<'full'>(c.env.channel_sections, channelId, (ids) =>
-      ids.length >= CHANNEL_SECTION_CONSTRAINTS.MAX_SECTIONS_PER_CHANNEL ? { reject: 'full' } : [...ids, sectionId],
+      ids.length >= CHANNEL_SECTION_CONSTRAINTS.MAX_SECTIONS_PER_CHANNEL ? { reject: 'full' } : spotlightFirst([...ids, sectionId], spotlightIds),
     );
 
-    // Check max sections limit
     if (rejected || !order) {
       logger.warn(`Maximum sections limit reached for channel ${channelId}`);
-      return c.json(
-        {
-          success: false,
-          error: `Maximum ${CHANNEL_SECTION_CONSTRAINTS.MAX_SECTIONS_PER_CHANNEL} sections allowed per channel`,
-        },
-        400
-      );
+      return reject({ status: 400, code: 'section_limit', error: `Up to ${CHANNEL_SECTION_CONSTRAINTS.MAX_SECTIONS_PER_CHANNEL} sections per channel` });
     }
     const nextPosition = order.sectionIds.indexOf(sectionId);
+    const now = new Date().toISOString();
 
     // Create section object
     const section: ChannelSection = {
@@ -229,11 +209,18 @@ export class ChannelSectionCreate extends AuthenticatedRoute {
       playlistId: input.playlistId,
       playlistIds: input.playlistIds || [],
       channelIds: input.channelIds || [],
-      itemCount: input.itemCount || CHANNEL_SECTION_CONSTRAINTS.DEFAULT_ITEM_COUNT,
+      ...(input.type === 'channel_spotlight' ? { trailerVideoId: input.trailerVideoId, returningVideoId: input.returningVideoId } : {}),
+      ...(input.type === 'shorts' ? { sort: input.sort ?? 'latest' } : {}),
+      ...(input.type === 'live_streams' ? { liveFilter: input.liveFilter ?? 'live_and_upcoming' } : {}),
+      ...(input.type === 'community_posts' ? { postMode: input.postMode ?? 'latest' } : {}),
+      ...(input.consent === true && (input.type === 'subscribed_channels' || input.type === 'liked_videos')
+        ? { consent: { grantedBy: userId, grantedAt: now } }
+        : {}),
+      itemCount: clampItemCount(input.type, input.itemCount),
       showTimestamp: input.showTimestamp ?? true,
       showChannelName: input.showChannelName ?? false,
-      dateCreated: new Date().toISOString(),
-      dateModified: new Date().toISOString(),
+      dateCreated: now,
+      dateModified: now,
     };
 
     // Save to R2 with composite key
@@ -254,8 +241,10 @@ export class ChannelSectionCreate extends AuthenticatedRoute {
       timestamp: new Date().toISOString(),
     });
 
+    purgeSectionsCache(c.req.url, channelId, waitUntilOf(c as never));
+
     // Transform to view model
-    const sectionView = transformChannelSectionToView(section);
+    const sectionView = transformChannelSectionToView(section, channel);
 
     logger.info(`Successfully created section ${section.id} for channel ${channelId}`, {
       type: section.type,

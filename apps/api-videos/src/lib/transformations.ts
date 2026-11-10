@@ -163,19 +163,19 @@ export function createEntityDefaults() {
 // Channel Section Transformations
 // ============================================================================
 
-import {
-    ChannelSection,
-    ChannelSectionView,
-    ChannelSectionCreateInput,
-    ChannelSectionUpdateInput,
-    AUTO_POPULATED_TYPES,
-    CONTENT_REQUIRED_TYPES
-} from '@al-ummah/shared-types';
+import { ChannelSection, ChannelSectionView } from '@al-ummah/shared-types';
+import { hasValidSectionConsent } from './channelSectionAccess';
 
 /**
- * Transform business channel section to view model
+ * Transform a channel section to its view model. `channel` (the section's
+ * channel) decides whether a stored opt-in still counts (spec §6); without it
+ * any stored opt-in is reported.
  */
-export function transformChannelSectionToView(section: ChannelSection): ChannelSectionView {
+export function transformChannelSectionToView(
+    section: ChannelSection,
+    channel?: { userId?: string | null } | null,
+): ChannelSectionView {
+    const isConsentType = section.type === 'subscribed_channels' || section.type === 'liked_videos';
     return {
         id: section.id,
         channelId: section.channelId,
@@ -192,7 +192,13 @@ export function transformChannelSectionToView(section: ChannelSection): ChannelS
             playlistId: section.playlistId,
             playlistIds: section.playlistIds && section.playlistIds.length > 0 ? section.playlistIds : undefined,
             channelIds: section.channelIds && section.channelIds.length > 0 ? section.channelIds : undefined,
+            trailerVideoId: section.trailerVideoId,
+            returningVideoId: section.returningVideoId,
         },
+        ...(section.type === 'shorts' ? { sort: section.sort ?? 'latest' } : {}),
+        ...(section.type === 'live_streams' ? { liveFilter: section.liveFilter ?? 'live_and_upcoming' } : {}),
+        ...(section.type === 'community_posts' ? { postMode: section.postMode ?? 'latest' } : {}),
+        ...(isConsentType ? { consented: channel ? hasValidSectionConsent(section, channel) : !!section.consent?.grantedBy } : {}),
         dateCreated: section.dateCreated,
         dateModified: section.dateModified,
     };
@@ -201,60 +207,9 @@ export function transformChannelSectionToView(section: ChannelSection): ChannelS
 /**
  * Transform multiple channel sections to view models
  */
-export function transformChannelSectionsToView(sections: ChannelSection[]): ChannelSectionView[] {
-    return sections.map(transformChannelSectionToView);
-}
-
-/**
- * Validate section content based on type
- */
-export function validateSectionContent(
-    type: string,
-    input: ChannelSectionCreateInput | ChannelSectionUpdateInput
-): { valid: boolean; errors: string[] } {
-    const errors: string[] = [];
-
-    // Check required fields for specific types
-    if (CONTENT_REQUIRED_TYPES[type]) {
-        const requiredFields = CONTENT_REQUIRED_TYPES[type];
-
-        if (requiredFields.includes('videoIds')) {
-            if (!input.videoIds || input.videoIds.length === 0) {
-                errors.push(`${type} type requires at least one video ID`);
-            }
-        }
-
-        if (requiredFields.includes('playlistId')) {
-            if (!input.playlistId) {
-                errors.push(`${type} type requires playlistId`);
-            }
-        }
-
-        if (requiredFields.includes('playlistIds')) {
-            if (!input.playlistIds || input.playlistIds.length === 0) {
-                errors.push(`${type} type requires at least one playlist ID`);
-            }
-        }
-    }
-
-    // Auto-populated types shouldn't have content
-    if (AUTO_POPULATED_TYPES.includes(type as any)) {
-        if (input.videoIds && input.videoIds.length > 0) {
-            errors.push(`${type} sections are auto-populated, remove videoIds`);
-        }
-        if (input.playlistId) {
-            errors.push(`${type} sections are auto-populated, remove playlistId`);
-        }
-        if (input.playlistIds && input.playlistIds.length > 0) {
-            errors.push(`${type} sections are auto-populated, remove playlistIds`);
-        }
-        if (input.channelIds && input.channelIds.length > 0) {
-            errors.push(`${type} sections are auto-populated, remove channelIds`);
-        }
-    }
-
-    return {
-        valid: errors.length === 0,
-        errors,
-    };
+export function transformChannelSectionsToView(
+    sections: ChannelSection[],
+    channel?: { userId?: string | null } | null,
+): ChannelSectionView[] {
+    return sections.map((section) => transformChannelSectionToView(section, channel));
 }

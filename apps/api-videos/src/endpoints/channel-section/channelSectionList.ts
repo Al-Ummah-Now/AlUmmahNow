@@ -1,6 +1,7 @@
 import { Str } from 'chanfana';
 import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
+import { ChannelSectionTypeSchema } from '../../lib/channelSectionSchemas';
 import { applySectionOrder, readSectionOrder } from '../../lib/channelSectionOrder';
 import R2Repository from '../../lib/r2Repo';
 import { Channel, ChannelSection, ChannelSectionView } from '@al-ummah/shared-types';
@@ -45,16 +46,7 @@ export class ChannelSectionsList extends OptionalAuthRoute {
             description: 'Pagination cursor from previous response',
             required: false,
           }),
-          type: z
-            .enum([
-              'featured_videos',
-              'recent_uploads',
-              'popular_uploads',
-              'single_playlist',
-              'multiple_playlists',
-              'subscribed_channels',
-              'liked_videos',
-            ])
+          type: ChannelSectionTypeSchema
             .optional()
             .describe('Filter by section type'),
         }),
@@ -201,7 +193,7 @@ export class ChannelSectionsList extends OptionalAuthRoute {
       .sort((a, b) => a.position - b.position);
 
     // Transform to view models
-    const sectionViews = transformChannelSectionsToView(filteredSections);
+    const sectionViews = transformChannelSectionsToView(filteredSections, channel);
 
     logger.info(`Found ${filteredSections.length} sections for channel ${channelId}`);
 

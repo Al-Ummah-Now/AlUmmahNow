@@ -136,7 +136,7 @@ export class ChannelSectionFetch extends OptionalAuthRoute {
 
     // Transform to view model
     // Position from the channel's order document (SCALABILITY-AUDIT AV-20)
-    const sectionView = transformChannelSectionToView(await withResolvedPosition(c.env.channel_sections, channelId, section));
+    const sectionView = transformChannelSectionToView(await withResolvedPosition(c.env.channel_sections, channelId, section), channel);
 
     logger.info(`Successfully fetched section ${sectionId} for channel ${channelId}`);
 

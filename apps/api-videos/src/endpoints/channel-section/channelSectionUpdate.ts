@@ -9,31 +9,15 @@ import {
   ChannelSectionUpdateInput,
   CHANNEL_SECTION_CONSTRAINTS
 } from '@al-ummah/shared-types';
-import {
-  transformChannelSectionToView,
-  validateSectionContent
-} from '../../lib/transformations';
+import { transformChannelSectionToView } from '../../lib/transformations';
+import { canEditChannelLayout } from '../../lib/channelSectionAccess';
+import { checkSectionConsent, checkSectionContent, clampItemCount, type SectionRuleError } from '../../lib/channelSectionRules';
+import { ChannelSectionUpdateInputSchema } from '../../lib/channelSectionSchemas';
+import { purgeSectionsCache } from '../../lib/channelSectionCache';
+import { waitUntilOf } from '../../lib/search/ownership';
 import { MessageType, queueChannelSectionEvent } from '../../lib/queue';
 import { logger } from '../../lib/logger';
 import { AuthenticatedRoute, AppContext } from '../../base';
-
-// Zod schema for the input
-const ChannelSectionUpdateInputSchema = z.object({
-  title: z.string().min(1).max(CHANNEL_SECTION_CONSTRAINTS.MAX_TITLE_LENGTH).optional(),
-  titleLocalized: z.record(z.string()).optional(),
-  style: z.enum(['horizontal_row', 'vertical_list']).optional(),
-  videoIds: z.array(z.string()).max(CHANNEL_SECTION_CONSTRAINTS.MAX_VIDEO_IDS).optional(),
-  playlistId: z.string().optional(),
-  playlistIds: z.array(z.string()).max(CHANNEL_SECTION_CONSTRAINTS.MAX_PLAYLIST_IDS).optional(),
-  channelIds: z.array(z.string()).max(CHANNEL_SECTION_CONSTRAINTS.MAX_CHANNEL_IDS).optional(),
-  itemCount: z.number()
-    .int()
-    .min(CHANNEL_SECTION_CONSTRAINTS.MIN_ITEM_COUNT)
-    .max(CHANNEL_SECTION_CONSTRAINTS.MAX_ITEM_COUNT)
-    .optional(),
-  showTimestamp: z.boolean().optional(),
-  showChannelName: z.boolean().optional(),
-});
 
 export class ChannelSectionUpdate extends AuthenticatedRoute {
   schema = addAuthToSchema(
@@ -154,15 +138,9 @@ export class ChannelSectionUpdate extends AuthenticatedRoute {
       );
     }
 
-    if (channel.userId !== userId) {
+    if (!canEditChannelLayout(channel, userId)) {
       logger.warn(`User ${userId} attempted to update section for channel ${channelId} owned by ${channel.userId}`);
-      return c.json(
-        {
-          success: false,
-          error: 'You can only update sections for your own channel',
-        },
-        403
-      );
+      return c.json({ success: false, code: 'forbidden', error: 'You can only update sections for your own channel' }, 403);
     }
 
     // Get existing section
@@ -180,22 +158,29 @@ export class ChannelSectionUpdate extends AuthenticatedRoute {
       );
     }
 
-    // Validate content if being updated
-    const validation = validateSectionContent(section.type, input);
-    if (!validation.valid) {
-      logger.warn('Section content validation failed', { errors: validation.errors });
-      return c.json(
-        {
-          success: false,
-          error: 'Validation failed',
-          details: validation.errors.map((msg) => ({
-            field: 'content',
-            message: msg,
-          })),
-        },
-        400
-      );
-    }
+    const reject = (failure: SectionRuleError) => {
+      logger.warn('[ChannelSectionUpdate] Rejected', { channelId, sectionId, code: failure.code, field: failure.field });
+      return c.json({ success: false, code: failure.code, error: failure.error, ...(failure.field ? { field: failure.field } : {}) }, failure.status);
+    };
+
+    // null clears one spotlight video; the rules check that one remains
+    const rulesInput = {
+      ...input,
+      trailerVideoId: input.trailerVideoId === null ? undefined : input.trailerVideoId,
+      returningVideoId: input.returningVideoId === null ? undefined : input.returningVideoId,
+    };
+    const current: ChannelSection = {
+      ...section,
+      ...(input.trailerVideoId === null ? { trailerVideoId: undefined } : {}),
+      ...(input.returningVideoId === null ? { returningVideoId: undefined } : {}),
+    };
+    const consentFailure = checkSectionConsent(channel, userId, section.type, rulesInput, 'update');
+    if (consentFailure) return reject(consentFailure);
+    const contentFailure = await checkSectionContent(c.env, channel, section.type, rulesInput, current);
+    if (contentFailure) return reject(contentFailure);
+
+    const isConsentType = section.type === 'subscribed_channels' || section.type === 'liked_videos';
+    const now = new Date().toISOString();
 
     // Apply the partial update to the fresh section with a conditional write
     // (SCALABILITY-AUDIT AV-20); a section deleted meanwhile is not re-created
@@ -208,10 +193,18 @@ export class ChannelSectionUpdate extends AuthenticatedRoute {
         ...(input.playlistId !== undefined && { playlistId: input.playlistId }),
         ...(input.playlistIds !== undefined && { playlistIds: input.playlistIds }),
         ...(input.channelIds !== undefined && { channelIds: input.channelIds }),
-        ...(input.itemCount !== undefined && { itemCount: input.itemCount }),
+        ...(input.itemCount !== undefined && { itemCount: clampItemCount(section.type, input.itemCount) }),
+        ...(section.type === 'channel_spotlight' && input.trailerVideoId !== undefined && { trailerVideoId: input.trailerVideoId ?? undefined }),
+        ...(section.type === 'channel_spotlight' && input.returningVideoId !== undefined && { returningVideoId: input.returningVideoId ?? undefined }),
+        ...(section.type === 'shorts' && input.sort !== undefined && { sort: input.sort }),
+        ...(section.type === 'live_streams' && input.liveFilter !== undefined && { liveFilter: input.liveFilter }),
+        ...(section.type === 'community_posts' && input.postMode !== undefined && { postMode: input.postMode }),
+        // Opting in records who consented; opting out removes it (spec §6)
+        ...(isConsentType && input.consent === true && { consent: { grantedBy: userId, grantedAt: now } }),
+        ...(isConsentType && input.consent === false && { consent: undefined }),
         ...(input.showTimestamp !== undefined && { showTimestamp: input.showTimestamp }),
         ...(input.showChannelName !== undefined && { showChannelName: input.showChannelName }),
-        dateModified: new Date().toISOString(),
+        dateModified: now,
       });
     });
     if (!saved) {
@@ -233,8 +226,10 @@ export class ChannelSectionUpdate extends AuthenticatedRoute {
       timestamp: new Date().toISOString(),
     });
 
+    purgeSectionsCache(c.req.url, channelId, waitUntilOf(c as never));
+
     // Transform to view model
-    const sectionView = transformChannelSectionToView(updatedSection);
+    const sectionView = transformChannelSectionToView(updatedSection, channel);
 
     logger.info(`Successfully updated section ${sectionId} for channel ${channelId}`);
 

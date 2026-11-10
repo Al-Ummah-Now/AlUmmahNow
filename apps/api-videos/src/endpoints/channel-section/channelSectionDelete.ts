@@ -5,6 +5,9 @@ import { changeSectionOrder } from '../../lib/channelSectionOrder';
 import R2Repository from '../../lib/r2Repo';
 import { Channel, ChannelSection } from '@al-ummah/shared-types';
 import { MessageType, queueChannelSectionEvent } from '../../lib/queue';
+import { canEditChannelLayout } from '../../lib/channelSectionAccess';
+import { purgeSectionsCache } from '../../lib/channelSectionCache';
+import { waitUntilOf } from '../../lib/search/ownership';
 import { logger } from '../../lib/logger';
 import { AuthenticatedRoute, AppContext } from '../../base';
 
@@ -97,15 +100,9 @@ export class ChannelSectionDelete extends AuthenticatedRoute {
       );
     }
 
-    if (channel.userId !== userId) {
+    if (!canEditChannelLayout(channel, userId)) {
       logger.warn(`User ${userId} attempted to delete section for channel ${channelId} owned by ${channel.userId}`);
-      return c.json(
-        {
-          success: false,
-          error: 'You can only delete sections for your own channel',
-        },
-        403
-      );
+      return c.json({ success: false, code: 'forbidden', error: 'You can only delete sections for your own channel' }, 403);
     }
 
     // Get existing section
@@ -130,6 +127,8 @@ export class ChannelSectionDelete extends AuthenticatedRoute {
     await changeSectionOrder<never>(c.env.channel_sections, channelId, (ids) =>
       ids.includes(sectionId) ? ids.filter((id) => id !== sectionId) : false,
     );
+
+    purgeSectionsCache(c.req.url, channelId, waitUntilOf(c as never));
 
     // Queue analytics event
     await queueChannelSectionEvent(c.env.queue, MessageType.ChannelSectionDelete, {

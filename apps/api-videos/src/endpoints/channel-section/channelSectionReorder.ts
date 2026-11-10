@@ -10,6 +10,10 @@ import {
   CHANNEL_SECTION_CONSTRAINTS
 } from '@al-ummah/shared-types';
 import { transformChannelSectionsToView } from '../../lib/transformations';
+import { canEditChannelLayout } from '../../lib/channelSectionAccess';
+import { spotlightFirst } from '../../lib/channelSectionRules';
+import { purgeSectionsCache } from '../../lib/channelSectionCache';
+import { waitUntilOf } from '../../lib/search/ownership';
 import { MessageType, queueChannelSectionEvent } from '../../lib/queue';
 import { logger } from '../../lib/logger';
 import { AuthenticatedRoute, AppContext } from '../../base';
@@ -143,15 +147,9 @@ export class ChannelSectionReorder extends AuthenticatedRoute {
       );
     }
 
-    if (channel.userId !== userId) {
+    if (!canEditChannelLayout(channel, userId)) {
       logger.warn(`User ${userId} attempted to reorder sections for channel ${channelId} owned by ${channel.userId}`);
-      return c.json(
-        {
-          success: false,
-          error: 'You can only reorder sections for your own channel',
-        },
-        403
-      );
+      return c.json({ success: false, code: 'forbidden', error: 'You can only reorder sections for your own channel' }, 403);
     }
 
     // Fetch all existing sections
@@ -228,6 +226,8 @@ export class ChannelSectionReorder extends AuthenticatedRoute {
       );
     }
 
+    const spotlightIds = new Set(filteredSections.filter((s) => s.type === 'channel_spotlight').map((s) => s.id));
+
     // Store the new order with one conditional write (SCALABILITY-AUDIT
     // AV-20). A section created meanwhile (in the fresh order but not in the
     // list this request validated against) keeps its place at the end.
@@ -235,7 +235,8 @@ export class ChannelSectionReorder extends AuthenticatedRoute {
     try {
       const { order } = await changeSectionOrder<never>(c.env.channel_sections, channelId, (ids) => {
         const requested = new Set(sectionIds);
-        return [...sectionIds, ...ids.filter((id) => !requested.has(id) && !existingIds.has(id))];
+        // The spotlight always leads (spec §5), whatever order the client sent
+        return spotlightFirst([...sectionIds, ...ids.filter((id) => !requested.has(id) && !existingIds.has(id))], spotlightIds);
       });
       updatedSections = applySectionOrder(filteredSections, order);
     } catch (error) {
@@ -250,6 +251,8 @@ export class ChannelSectionReorder extends AuthenticatedRoute {
     }
 
 
+    purgeSectionsCache(c.req.url, channelId, waitUntilOf(c as never));
+
     // Queue analytics event
     await queueChannelSectionEvent(c.env.queue, MessageType.ChannelSectionReorder, {
       channelId,
@@ -259,7 +262,7 @@ export class ChannelSectionReorder extends AuthenticatedRoute {
     });
 
     // Transform to view models
-    const sectionViews = transformChannelSectionsToView(updatedSections);
+    const sectionViews = transformChannelSectionsToView(updatedSections, channel);
 
     logger.info(`Successfully reordered ${updatedSections.length} sections for channel ${channelId}`);
 

@@ -1,11 +1,16 @@
 import { Str, Bool } from 'chanfana';
 import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
-import { applySectionOrder, readSectionOrder } from '../../lib/channelSectionOrder';
+import { ChannelSectionTypeSchema } from '../../lib/channelSectionSchemas';
+import { applySectionOrder, listChannelSections, readSectionOrder } from '../../lib/channelSectionOrder';
 import R2Repository from '../../lib/r2Repo';
 import { Channel, ChannelSection } from '@al-ummah/shared-types';
 import { transformChannelSectionsToView } from '../../lib/transformations';
-import { populateSectionContent, transformChannelSectionWithContent } from '../../lib/channelSectionPopulator';
+import { transformChannelSectionWithContent } from '../../lib/channelSectionPopulator';
+import { canEditChannelLayout } from '../../lib/channelSectionAccess';
+import { SECTIONS_CACHE_TTL_SECONDS, sectionsCacheUrl } from '../../lib/channelSectionCache';
+import { readEdgeCache, writeEdgeCache } from '../../lib/edge-cache';
+import { waitUntilOf } from '../../lib/search/ownership';
 import { logger } from '../../lib/logger';
 import { OptionalAuthRoute, AppContext } from '../../base';
 
@@ -21,11 +26,14 @@ export class ChannelSectionsListPopulated extends OptionalAuthRoute {
         - Public channels: All sections visible to everyone
         - Private channels: Only visible to channel owner (requires auth)
 
-        **Auto-Population:**
-        - recent_uploads: Latest videos from the channel
-        - popular_uploads: Most viewed videos from the channel
-        - liked_videos: Videos liked by the channel owner
-        - subscribed_channels: Channels the user is subscribed to
+        **Population:** every section type is populated on the server
+        (\`populatedContent\`) and carries \`isEmpty\`. Empty sections are left
+        out, except for people who can edit the channel, who get them with
+        \`emptyHint\` (noContent, consentMissing, communityTabHidden,
+        loadFailed) and \`canEdit: true\`. subscribed_channels and liked_videos
+        populate only with the channel owner's opt-in.
+
+        **Caching:** signed-out responses are cached at the edge for 60 s.
 
         **Query Parameters:**
         - populate: Include populated content (videos/playlists/channels)
@@ -56,16 +64,7 @@ export class ChannelSectionsListPopulated extends OptionalAuthRoute {
             description: 'Pagination cursor from previous response',
             required: false,
           }),
-          type: z
-            .enum([
-              'featured_videos',
-              'recent_uploads',
-              'popular_uploads',
-              'single_playlist',
-              'multiple_playlists',
-              'subscribed_channels',
-              'liked_videos',
-            ])
+          type: ChannelSectionTypeSchema
             .optional()
             .describe('Filter by section type'),
         }),
@@ -171,76 +170,46 @@ export class ChannelSectionsListPopulated extends OptionalAuthRoute {
       );
     }
 
-    // List sections with prefix for this channel
-    const listResult = await c.env.channel_sections.list({
-      prefix: `${channelId}/`,
-      limit,
-      cursor: cursor || undefined,
-    });
-
-    // Fetch full objects
-    const sectionsRepo = new R2Repository<ChannelSection>(c.env.channel_sections);
-    const sections = await Promise.all(
-      listResult.objects.map(async (obj: any) => {
-        const section = await sectionsRepo.getObject(obj.key);
-        return section;
-      })
-    );
-
-    // Filter out nulls, deleted, and hidden sections
-    let filteredSections = sections.filter((s): s is ChannelSection => {
-      if (s === null) return false;
-      if (s.isDeleted) return false;
-      if (s.isHidden) return false;
-      return true;
-    });
-
-    // Filter by type if provided
-    if (type) {
-      filteredSections = filteredSections.filter((s) => s.type === type);
+    const canEdit = canEditChannelLayout(channel, auth?.userId);
+    const cacheable = !auth && populate && !type;
+    const cacheUrl = sectionsCacheUrl(c.req.url, channelId);
+    if (cacheable) {
+      const cached = await readEdgeCache<unknown>(cacheUrl);
+      if (cached) return c.json(cached as Record<string, unknown>);
     }
 
-    // Order from the channel's order document (SCALABILITY-AUDIT AV-20);
-    // a position is the index among all of the channel's sections
-    const positions = new Map(
-      applySectionOrder(
-        sections.filter((s): s is ChannelSection => s !== null),
-        await readSectionOrder(c.env.channel_sections, channelId),
-      ).map((s) => [s.id, s.position]),
-    );
-    filteredSections = filteredSections
-      .map((s) => ({ ...s, position: positions.get(s.id) ?? s.position }))
-      .sort((a, b) => a.position - b.position);
+    // A channel has at most 12 sections: read them all, then order (AV-20)
+    const sections = await listChannelSections<ChannelSection>(c.env.channel_sections, channelId);
+    const ordered = applySectionOrder(sections, await readSectionOrder(c.env.channel_sections, channelId));
+    let filteredSections = ordered.filter((s) => !s.isDeleted && !s.isHidden);
+    if (type) filteredSections = filteredSections.filter((s) => s.type === type);
+    filteredSections = filteredSections.slice(0, limit);
 
-    // Transform to view models with optional content population
     let sectionViews: any[];
-
     if (populate) {
-      // Include populated content
-      sectionViews = await Promise.all(
-        filteredSections.map(async (section) => {
-          return await transformChannelSectionWithContent(section, c.env);
-        })
-      );
+      // Sections populate in parallel; a failing one comes back empty (loadFailed), never a 500
+      const populated = await Promise.all(filteredSections.map((section) => transformChannelSectionWithContent(section, c.env, channel)));
+      sectionViews = canEdit
+        ? populated.map((view) => ({ ...view, canEdit: true }))
+        : populated.filter((view) => !view.isEmpty).map(({ emptyHint: _hint, ...view }) => view);
     } else {
-      // Just basic transformation without content
-      sectionViews = transformChannelSectionsToView(filteredSections);
+      sectionViews = transformChannelSectionsToView(filteredSections, channel);
     }
 
-    logger.info(`Found ${filteredSections.length} sections for channel ${channelId}`, {
+    logger.info(`Found ${sectionViews.length} sections for channel ${channelId}`, {
       populated: populate,
+      canEdit,
+      hiddenEmpty: filteredSections.length - sectionViews.length,
     });
 
-    return c.json({
+    const body = {
       success: true,
       result: {
         sections: sectionViews,
-        pagination: {
-          cursor: listResult.truncated ? listResult.cursor : '',
-          hasMore: listResult.truncated,
-          total: filteredSections.length,
-        },
+        pagination: { cursor: '', hasMore: false, total: sectionViews.length },
       },
-    });
+    };
+    if (cacheable) writeEdgeCache(cacheUrl, body, SECTIONS_CACHE_TTL_SECONDS, waitUntilOf(c as never));
+    return c.json(body);
   }
 }
