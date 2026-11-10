@@ -311,6 +311,10 @@ export function useBatchUpload({
         setIsUploading(false);
       }
     } catch (error) {
+      // Never leave the actions hidden after a failed start
+      if (batchManagerRef.current && !hasActiveUploads(Array.from(batchManagerRef.current.getQueueState().values()))) {
+        setIsUploading(false);
+      }
       if (recoverFromVersionSkew(error, 'batch-start')) return;
       reportUploadError('[useBatchUpload] Failed to start uploads', { error });
       onError?.(uploadFailedMessageRef.current);
