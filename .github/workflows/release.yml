@@ -214,6 +214,15 @@ jobs:
             { echo '### Stage release'; echo '```json'; cat release-result.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           fi
 
+      # The translation store (global_settings R2) is not created by a deploy:
+      # seed the files stage is missing from the repo defaults (edits made on
+      # stage are kept), then check /api/i18n/translations/{en,ar} answer 200.
+      - name: Seed translations (missing files only) and check they are served
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm exec tsx scripts/release/seed-translations.ts --env stage
+
       # Idempotent stage data for the release E2E (accounts, channels, encoded
       # videos, playlists): everything already there is found and skipped. Stage
       # accounts register through the auth E2E code sink (apps/web/e2e/seed).
