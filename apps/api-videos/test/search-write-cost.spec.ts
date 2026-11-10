@@ -15,7 +15,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { syncSearchDocument } from '@al-ummah/shared-types';
 import { scheduleOwnershipHeal } from '../src/lib/search/ownership';
-import { MemoryBucket, videoFixture } from './helpers';
+import { JobsQueue, MemoryBucket, drainJobs, videoFixture } from './helpers';
 import { SqliteD1 } from './search-sqlite-d1';
 
 /** Records the SQL of every statement prepared. */
@@ -97,25 +97,29 @@ describe('search writes when only counters change (AV-17)', () => {
 	});
 });
 
-describe('ownership heal lease (AV-17)', () => {
-	it('fallback readers while a heal runs cost one read each, no write', async () => {
+describe('ownership heal request (AV-17)', () => {
+	it('fallback readers while a heal was just requested cost one read each, no write', async () => {
 		const db = new SqliteD1();
-		db.db.prepare("INSERT INTO search_meta (key, value, updated_at) VALUES ('ownership:heal:video', 'lease', ?)").run(Date.now());
+		db.db.prepare("INSERT INTO search_meta (key, value, updated_at) VALUES ('ownership:heal-queued:video', 'requested', ?)").run(Date.now());
 		const sql = recording(db);
-		const env = { SEARCH_DB: db, videos: new MemoryBucket({}), channels: new MemoryBucket({}) };
+		const env = { SEARCH_DB: db, videos: new MemoryBucket({}), channels: new MemoryBucket({}), ADMIN_JOBS_QUEUE: new JobsQueue() };
 		const tasks: Promise<unknown>[] = [];
 		for (let i = 0; i < 50; i++) scheduleOwnershipHeal(env as never, (p) => tasks.push(p), 'video');
 		await Promise.all(tasks);
 		assert.equal(sql.length, 50);
 		assert.ok(sql.every((s) => s.startsWith('SELECT updated_at FROM search_meta')), sql.find((s) => !s.startsWith('SELECT')));
-		assert.equal(env.videos.calls, 0, 'no heal pass ran');
+		assert.equal(env.videos.calls, 0, 'no pass runs in a request');
+		assert.equal(env.ADMIN_JOBS_QUEUE.sent.length, 0);
 	});
 
-	it('an expired lease is taken over', async () => {
+	it('an expired request queues the rebuild job; the job (not the request) walks the bucket', async () => {
 		const db = new SqliteD1();
-		db.db.prepare("INSERT INTO search_meta (key, value, updated_at) VALUES ('ownership:heal:video', 'lease', ?)").run(Date.now() - 10 * 60_000);
-		const env = { SEARCH_DB: db, videos: new MemoryBucket({ v1: videoFixture({ id: 'v1' }) }), channels: new MemoryBucket({}) };
+		db.db.prepare("INSERT INTO search_meta (key, value, updated_at) VALUES ('ownership:heal-queued:video', 'requested', ?)").run(Date.now() - 20 * 60_000);
+		const env = { SEARCH_DB: db, videos: new MemoryBucket({ v1: videoFixture({ id: 'v1' }) }), channels: new MemoryBucket({}), ADMIN_JOBS_QUEUE: new JobsQueue() };
 		await scheduleOwnershipHeal(env as never, null, 'video');
-		assert.ok(env.videos.calls > 0, 'the heal pass ran');
+		assert.equal(env.videos.calls, 0);
+		assert.equal(env.ADMIN_JOBS_QUEUE.sent.length, 1);
+		await drainJobs(env as never);
+		assert.ok(env.videos.calls > 0, 'the queued pass ran');
 	});
 });

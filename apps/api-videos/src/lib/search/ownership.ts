@@ -9,10 +9,15 @@
  * `ownership:complete:<kind>`, which a full pass sets after walking the whole
  * bucket (rows not seen during the pass are pruned). Until then, and whenever
  * the table is missing or a query fails, callers get `null` and fall back to
- * their R2 scan, scheduling a heal (`scheduleOwnershipHeal`) that advances the
- * pass in the background. A per-owner "has rows" check is not enough: an owner
- * with one new (indexed) and one old (unindexed) channel would silently lose
- * the old one, and a channel with no videos would scan forever.
+ * their bounded R2 scan, and `scheduleOwnershipHeal` queues the rebuild job
+ * (admin-jobs queue; never run inside the request). A per-owner "has rows"
+ * check is not enough: an owner with one new (indexed) and one old
+ * (unindexed) channel would silently lose the old one.
+ *
+ * Once complete, a kind stays complete: an object whose write failed, or that
+ * a pass could not read or index, is recorded in index_repairs and rewritten
+ * by the repair job (./repairs.ts). One object never sends every reader back
+ * to R2 scans.
  */
 
 import {
@@ -34,6 +39,8 @@ import {
   ownershipInvalidatedKey,
   ownershipUpsertStatement,
   projectOwnership,
+  indexRepairStatement,
+  pendingRepairCount,
 } from '@al-ummah/shared-types';
 import { logger } from '../logger';
 import { syncCommentIndex } from '../admin/commentIndex';
@@ -328,13 +335,20 @@ export interface OwnershipPageResult {
   removed: number;
   failed: number;
   /**
-   * Listed objects that exist but have no row refreshed by this page: not
-   * this entity (projectOwnership is null) or the write was refused (a
-   * tombstone newer than the object). A pass counts them like failures.
+   * Listed objects that exist but whose write was refused (a tombstone newer
+   * than the object): queued for repair by the pass. Objects that are not
+   * this entity (projectOwnership is null: other JSON under an entity-like
+   * key) are not counted; they have no row to miss.
    */
   skipped: number;
   /** Ids of skipped and failed objects (at most OWNERSHIP_DRIFT_SAMPLE) */
   problemIds: string[];
+  /** Ids of every refused object on the page (the pass queues each for repair) */
+  refusedIds: string[];
+  /** Ids of every object the page could not read (queued for repair) */
+  failedIds: string[];
+  /** Listed objects that are not this entity (no row expected) */
+  unindexable: number;
   nextCursor: string | null;
   done: boolean;
 }
@@ -419,9 +433,8 @@ export async function backfillOwnershipPage(
     for (const r of results ?? []) seen.add(r.id);
   }
   const refused = expected.filter(id => !seen.has(id));
-  const skippedIds = [...unindexable, ...refused];
-  if (skippedIds.length) {
-    logger.warn('[Ownership] Listed objects not indexed', { kind, unindexable: unindexable.slice(0, 5), refused: refused.slice(0, 5), count: skippedIds.length });
+  if (refused.length || unindexable.length) {
+    logger.warn('[Ownership] Listed objects not indexed', { kind, unindexable: unindexable.slice(0, 5), refused: refused.slice(0, 5), count: refused.length + unindexable.length });
   }
   const nextCursor = page.truncated ? (page as { cursor?: string }).cursor ?? null : null;
   return {
@@ -430,8 +443,11 @@ export async function backfillOwnershipPage(
     upserted: seen.size,
     removed,
     failed,
-    skipped: skippedIds.length,
-    problemIds: [...skippedIds, ...failedIds].sort().slice(0, OWNERSHIP_DRIFT_SAMPLE),
+    skipped: refused.length,
+    problemIds: [...refused, ...failedIds].sort().slice(0, OWNERSHIP_DRIFT_SAMPLE),
+    refusedIds: refused,
+    failedIds,
+    unindexable: unindexable.length,
     nextCursor,
     done: !nextCursor,
   };
@@ -477,6 +493,8 @@ export interface OwnershipPassResult {
   complete: boolean;
   /** Set when the pass finished: the drift it found, or null when the index holds every object */
   drift?: OwnershipDrift | null;
+  /** Objects this run queued for the repair job */
+  queuedRepairs?: number;
 }
 
 /** Forget the kind's pass in progress, so the next step starts a full pass from the first key. */
@@ -500,14 +518,15 @@ export async function readOwnershipDrift(db: SearchDb): Promise<OwnershipDrift[]
 
 /**
  * Advance the kind's rebuild pass by up to `maxPages` pages. The cursor is
- * kept in search_meta, so passes resume across cron runs, heals and internal
- * calls. When the bucket has been fully walked, rows not seen since the pass
- * started are pruned (objects removed without going through api-videos).
- * The kind is marked complete only if every listed object was indexed (none
- * failed to read, none skipped) and no write was lost since the pass started;
- * otherwise the completeness marker is removed, so readers fall back to R2.
- * Either way the finished pass compares the index with what it listed and
- * sets (or clears) the kind's drift flag for the admin Errors page.
+ * kept in search_meta, so passes resume across job steps and internal calls.
+ * When the bucket has been fully walked, rows not seen since the pass started
+ * are pruned (objects removed without going through api-videos).
+ *
+ * Objects a page could not read or whose write was refused are queued for
+ * the repair job (index_repairs) and no longer block the pass: the kind is
+ * marked complete when every listed object has a row or is queued for repair
+ * (one stuck object used to keep a kind incomplete, and every reader on R2
+ * scans, forever). Otherwise the marker is removed and the drift flag set.
  */
 export async function runOwnershipPass(
   env: OwnershipEnv,
@@ -523,6 +542,13 @@ export async function runOwnershipPass(
 
   while (result.pages < maxPages) {
     const page = await backfillOwnershipPage(env, kind, { cursor: state.cursor, limit: options.pageSize, now: clock() });
+    // Objects the page could not index: repaired one by one, never blocking the pass
+    const repairs = [
+      ...page.refusedIds.map(id => indexRepairStatement(db, { entity: kind, id, reason: 'pass-refused', error: 'a delete newer than the stored object blocked the write' }, clock())),
+      ...page.failedIds.map(id => indexRepairStatement(db, { entity: kind, id, reason: 'pass-unreadable', error: 'the pass could not read the object' }, clock())),
+    ];
+    for (let i = 0; i < repairs.length; i += 50) await db.batch(repairs.slice(i, i + 50));
+    if (repairs.length) result.queuedRepairs = (result.queuedRepairs ?? 0) + repairs.length;
     result.pages++;
     result.scanned += page.scanned;
     state = {
@@ -530,7 +556,7 @@ export async function runOwnershipPass(
       cursor: page.nextCursor,
       failed: state.failed + page.failed,
       skipped: (state.skipped ?? 0) + page.skipped,
-      stored: (state.stored ?? 0) + page.scanned - page.removed,
+      stored: (state.stored ?? 0) + page.scanned - page.removed - page.unindexable,
       problemIds: [...(state.problemIds ?? []), ...page.problemIds].slice(0, OWNERSHIP_DRIFT_SAMPLE),
     };
     if (page.done) {
@@ -547,8 +573,9 @@ export async function runOwnershipPass(
   const invalidated = await db.prepare('SELECT updated_at FROM search_meta WHERE key = ?')
     .bind(ownershipInvalidatedKey(kind)).first<{ updated_at: number }>();
   const skipped = state.skipped ?? 0;
-  // A pass resumed from an older build's state did not count skips on its first pages
-  const trustworthy = state.counted !== false && state.failed === 0 && skipped === 0
+  // A pass resumed from an older build's state did not count skips on its first pages.
+  // `invalidated` is only written by workers built before per-object repairs (rollout).
+  const trustworthy = state.counted !== false
     && !(invalidated && Number(invalidated.updated_at) >= state.startedAt);
   const statements = [
     db.prepare(`DELETE FROM ${OWNERSHIP_TABLE} WHERE kind = ? AND indexed_at < ?`).bind(kind, state.startedAt),
@@ -591,12 +618,11 @@ async function recordOwnershipDrift(db: SearchDb, kind: OwnershipKind, state: Pa
   const stored = Math.max(0, (state.stored ?? 0) - Number(deleted?.n ?? 0));
   const skipped = state.skipped ?? 0;
   const counted = state.counted !== false;
-  if (counted && indexed >= stored && skipped === 0 && state.failed === 0) {
-    await db.prepare('DELETE FROM search_meta WHERE key = ?').bind(ownershipDriftKey(kind)).run();
-    return null;
-  }
-  if (!counted && indexed >= stored && skipped === 0 && state.failed === 0) {
-    // Partial counts from an older build's state: no verdict; the next pass decides
+  // Objects queued for repair are on their way into the index, not missing
+  const queued = await pendingRepairCount(db, kind);
+  if (indexed + queued >= stored) {
+    // Partial counts from an older build's state give no verdict; the next pass decides
+    if (counted) await db.prepare('DELETE FROM search_meta WHERE key = ?').bind(ownershipDriftKey(kind)).run();
     return null;
   }
   const drift: OwnershipDrift = {
@@ -613,7 +639,12 @@ async function recordOwnershipDrift(db: SearchDb, kind: OwnershipKind, state: Pa
   return drift;
 }
 
-/** Daily cron: advance both passes (a full pass also refreshes complete markers). */
+/**
+ * Advance every kind's pass inline (internal endpoint and tests). The daily
+ * cron no longer calls this: it queues one rebuild job per kind
+ * (startIndexReconcile in ./reconcileJobs.ts), which finishes a whole pass in
+ * minutes instead of 2000 objects a day.
+ */
 export async function reconcileOwnershipIndex(
   env: OwnershipEnv,
   options: { pagesPerKind?: number; pageSize?: number; now?: () => number } = {},
@@ -624,7 +655,7 @@ export async function reconcileOwnershipIndex(
   for (const kind of ['channel', 'video', 'profile'] as OwnershipKind[]) {
     summary[kind] = { kind, pages: 0, scanned: 0, done: false, complete: false };
     if (!db || !env[BUCKET_FOR_KIND[kind]]) continue;
-    // Share the self-heal lease so the cron and a heal never walk the same cursor at once.
+    // Share the pass lease so two runs never walk the same cursor at once.
     if (!(await acquireHealLease(db, kind, (options.now ?? Date.now)()))) continue;
     try {
       summary[kind] = await runOwnershipPass(env, kind, { maxPages: options.pagesPerKind ?? 20, pageSize: options.pageSize, now: options.now });
@@ -667,10 +698,16 @@ export async function withOwnershipLease<T>(env: OwnershipEnv, kind: OwnershipKi
   }
 }
 
+/** A reader's heal request is honoured at most this often per kind (the job dedupes too). */
+export const OWNERSHIP_HEAL_REQUEST_MS = 10 * 60 * 1000;
+const healRequestKey = (kind: OwnershipKind) => `ownership:heal-queued:${kind}`;
+
 /**
- * Called by a reader that fell back to an R2 scan: advance the rebuild pass in
- * the background (one heal at a time per kind). Returns the background
- * promise (also handed to waitUntil) so tests can await it.
+ * Called by a reader that fell back to an R2 scan: queue the kind's rebuild
+ * job (admin-jobs queue, resumable steps, retries, Errors page on failure).
+ * Nothing runs in the request: one read when a heal was requested recently,
+ * else a lease write and the job lookup. Returns the background promise (also
+ * handed to waitUntil) so tests can await it.
  */
 export function scheduleOwnershipHeal(
   env: OwnershipEnv,
@@ -678,18 +715,22 @@ export function scheduleOwnershipHeal(
   kind: OwnershipKind,
 ): Promise<void> | null {
   const db = dbOf(env);
-  if (!db || !env[BUCKET_FOR_KIND[kind]]) return null;
+  if (!db || !env[BUCKET_FOR_KIND[kind]] || !env.ADMIN_JOBS_QUEUE) return null;
   const task = (async () => {
     try {
-      if (!(await acquireHealLease(db, kind, Date.now()))) return;
-      try {
-        const result = await runOwnershipPass(env, kind, { maxPages: OWNERSHIP_HEAL_PAGES });
-        logger.info('[Ownership] Self-heal step finished', { ...result });
-      } finally {
-        await db.prepare('DELETE FROM search_meta WHERE key = ?').bind(leaseKey(kind)).run();
-      }
+      const now = Date.now();
+      const held = await db.prepare('SELECT updated_at FROM search_meta WHERE key = ?').bind(healRequestKey(kind)).first<{ updated_at: number }>();
+      if (held && Number(held.updated_at) >= now - OWNERSHIP_HEAL_REQUEST_MS) return;
+      const took = await db.prepare(
+        `INSERT INTO search_meta (key, value, updated_at) VALUES (?, 'requested', ?)
+         ON CONFLICT(key) DO UPDATE SET updated_at = excluded.updated_at WHERE search_meta.updated_at < ?`,
+      ).bind(healRequestKey(kind), now, now - OWNERSHIP_HEAL_REQUEST_MS).run() as { meta?: { changes?: number } };
+      if (!(Number(took?.meta?.changes) > 0)) return;
+      const { startOwnershipRebuild } = await import('./ownershipRebuild');
+      const { job, existing } = await startOwnershipRebuild(env as never, kind, 'system', { fresh: false });
+      logger.info('[Ownership] Heal requested', { kind, jobId: job.id, existing });
     } catch (error) {
-      logger.warn('[Ownership] Self-heal failed', { kind, error: errorText(error) });
+      logger.warn('[Ownership] Heal request failed', { kind, error: errorText(error) });
     }
   })();
   if (waitUntil) waitUntil(task);

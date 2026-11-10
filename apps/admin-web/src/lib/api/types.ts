@@ -6,7 +6,7 @@
  * files can only export async functions.
  */
 
-import type { AdminJob, AiModerationConfig, AiUsageDay, ModerationCategoryPolicy, ModerationSignal, OwnershipDrift } from '@al-ummah/shared-types';
+import type { AdminJob, AiModerationConfig, AiUsageDay, ModerationCategoryPolicy, ModerationSignal, OwnershipDrift, SearchDrift, IndexRepair } from '@al-ummah/shared-types';
 
 import type {
   Report,
@@ -225,10 +225,21 @@ export interface ProcessingErrorsResponse {
   thumbnailFlagged?: ThumbnailFlagged | null;
   /** Ownership index short of the objects in R2 (admin lists miss content), per kind (absent from older builds) */
   indexDrift?: IndexDrift[];
+  /** Search tables short of the indexable objects in R2, per entity (absent from older builds) */
+  searchDrift?: SearchIndexDrift[];
+  /** Per-object index repairs: pending count, failed ones (Retry) and the latest repair job (absent from older builds) */
+  indexRepairs?: IndexRepairs | null;
+  /** Latest reconcile/rebuild job of each index, with its progress (absent from older builds) */
+  indexMaintenance?: { index: string; job: AdminJob }[];
   reconciler: ReconcilerStats | null;
 }
 /** A finished index pass found the admin lists' index short of what R2 holds; `rebuild` is the latest rebuild job. */
 export type IndexDrift = OwnershipDrift & { rebuild: AdminJob | null };
+/** A finished search reconcile pass found rows missing; `rebuild` is the latest reconcile job. */
+export type SearchIndexDrift = SearchDrift & { rebuild: AdminJob | null };
+export interface IndexRepairs { pending: number; failedTotal: number; failed: IndexRepair[]; job: AdminJob | null }
+/** Index the Rebuild button targets: an ownership kind or a search table. */
+export type IndexRebuildKind = 'video' | 'channel' | 'profile' | `search:${'video' | 'channel' | 'playlist' | 'post'}`;
 /** Wrong-shape thumbnails an admin replaces by hand (imported or custom: never auto-replaced). */
 export interface ThumbnailFlagged {
   runId: string;

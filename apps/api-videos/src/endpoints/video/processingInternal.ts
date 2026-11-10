@@ -9,7 +9,9 @@
  *   GET  /internal/processing/thumbnails   recent thumbnail aspect repair runs (admin jobs)
  *   POST /internal/processing/thumbnails   { ids?: string[], dryRun?: boolean, actorId } → queued run (dry run by default)
  *   POST /internal/processing/thumbnails/:jobId/retry  resume a failed run
- *   POST /internal/processing/index-rebuild  { kind, actorId } → queued ownership index rebuild (Errors page drift flag)
+ *   POST /internal/processing/index-rebuild  { kind, actorId } → queued index rebuild (Errors page drift flag):
+ *                                          kind video|channel|profile (ownership) or search:<entity> (search table)
+ *   POST /internal/processing/index-repairs/retry  { entity?, id? } → failed per-object repairs back to pending (all when omitted)
  *   POST /internal/processing/sync         { ids: string[], dryRun?: boolean } (apply = queue the check now)
  *   POST /internal/processing/retry        { ids: string[] }
  *   POST /internal/processing/mark-failed  { ids: string[], reason?: string }
@@ -31,7 +33,9 @@ import { createJob, getJob, listJobs, retryJob, type JobEnv } from '../../lib/ad
 import { THUMBNAIL_REPAIR_JOB, THUMBNAIL_REPAIR_TARGET, isStillFlagged, latestFlagged, type FlaggedThumbnails } from '../../lib/thumbnail/repair';
 import { readOwnershipDrift } from '../../lib/search/ownership';
 import { isOwnershipKind, ownershipRebuildJobs, startOwnershipRebuild, type OwnershipRebuildEnv } from '../../lib/search/ownershipRebuild';
-import type { AdminJob, OwnershipDrift } from '@al-ummah/shared-types';
+import { isSearchEntity, readSearchDrift, searchReconcileJobs, startSearchReconcile, type SearchReconcileEnv } from '../../lib/search/backfill';
+import { readIndexRepairs, repairJobs, retryIndexRepairs, type RepairJobEnv } from '../../lib/search/repairs';
+import { ALL_OWNERSHIP_KINDS, INDEX_REPAIR_ENTITIES, SEARCH_ENTITY_TYPES, type AdminJob, type IndexRepair, type IndexRepairEntity, type OwnershipDrift, type SearchDrift } from '@al-ummah/shared-types';
 
 const MAX_IDS = 100;
 
@@ -127,6 +131,46 @@ async function failedThumbnailRuns(env: JobEnv) {
 		return runs.filter((run) => run.status === 'failed');
 	} catch (error) {
 		logger.warn('[ProcessingAdmin] Thumbnail runs unavailable', { error: error instanceof Error ? error.message : String(error) });
+		return [];
+	}
+}
+
+/** Search table drift flags, each with its latest reconcile job. Empty when unreadable. */
+async function searchDrift(env: SearchReconcileEnv): Promise<Array<SearchDrift & { rebuild: AdminJob | null }>> {
+	if (!env.SEARCH_DB) return [];
+	try {
+		const flags = await readSearchDrift(env.SEARCH_DB);
+		return await Promise.all(flags.map(async (flag) => ({ ...flag, rebuild: (await searchReconcileJobs(env, flag.entity, 1))[0] ?? null })));
+	} catch (error) {
+		logger.warn('[ProcessingAdmin] Search drift unavailable', { error: error instanceof Error ? error.message : String(error) });
+		return [];
+	}
+}
+
+/** Per-object repairs: pending count, the failed ones (Retry) and the latest repair job. Null when unreadable. */
+async function indexRepairs(env: RepairJobEnv): Promise<{ pending: number; failedTotal: number; failed: IndexRepair[]; job: AdminJob | null } | null> {
+	if (!env.SEARCH_DB) return null;
+	try {
+		const repairs = await readIndexRepairs(env.SEARCH_DB);
+		return { ...repairs, job: (await repairJobs(env, 1))[0] ?? null };
+	} catch (error) {
+		logger.warn('[ProcessingAdmin] Index repairs unavailable', { error: error instanceof Error ? error.message : String(error) });
+		return null;
+	}
+}
+
+/**
+ * Index maintenance in progress: the latest reconcile/rebuild job of every
+ * index (ownership kinds, search tables), with its progress (pages, objects).
+ */
+async function indexMaintenance(env: OwnershipRebuildEnv & SearchReconcileEnv): Promise<Array<{ index: string; job: AdminJob }>> {
+	if (!env.SEARCH_DB) return [];
+	try {
+		const ownership = await Promise.all(ALL_OWNERSHIP_KINDS.map(async (kind) => ({ index: kind as string, job: (await ownershipRebuildJobs(env, kind, 1))[0] })));
+		const search = await Promise.all(SEARCH_ENTITY_TYPES.map(async (entity) => ({ index: `search:${entity}`, job: (await searchReconcileJobs(env, entity, 1))[0] })));
+		return [...ownership, ...search].filter((row): row is { index: string; job: AdminJob } => !!row.job);
+	} catch (error) {
+		logger.warn('[ProcessingAdmin] Index maintenance unavailable', { error: error instanceof Error ? error.message : String(error) });
 		return [];
 	}
 }
@@ -277,6 +321,9 @@ export function createProcessingInternalRouter() {
 				thumbnailRuns: await failedThumbnailRuns(c.env as unknown as JobEnv),
 				thumbnailFlagged: await flaggedThumbnails(c.env as never),
 				indexDrift: await indexDrift(c.env as unknown as OwnershipRebuildEnv),
+				searchDrift: await searchDrift(c.env as unknown as SearchReconcileEnv),
+				indexRepairs: await indexRepairs(c.env as unknown as RepairJobEnv),
+				indexMaintenance: await indexMaintenance(c.env as never),
 				reconciler: await readSweepStats(c.env),
 			},
 		});
@@ -313,15 +360,37 @@ export function createProcessingInternalRouter() {
 		return c.json({ success: true, result: { job: await retryJob(env, existing.id) } });
 	});
 
-	// Ownership index rebuild (lib/search/ownershipRebuild.ts): the Errors page's "Index out of sync" Rebuild
+	// Index rebuild: the Errors page's "Index out of sync" Rebuild. Ownership kinds
+	// (lib/search/ownershipRebuild.ts) or a search table (`search:<entity>`, lib/search/backfill.ts)
 	app.post('/index-rebuild', async (c) => {
 		const body = ((await c.req.json().catch(() => null)) ?? {}) as { kind?: unknown; actorId?: unknown };
-		if (!isOwnershipKind(body.kind)) return c.json({ success: false, error: 'kind must be video, channel or profile' }, 400);
-		const env = c.env as unknown as OwnershipRebuildEnv;
+		const searchEntity = typeof body.kind === 'string' && body.kind.startsWith('search:') ? body.kind.slice('search:'.length) : null;
+		if (!isOwnershipKind(body.kind) && !isSearchEntity(searchEntity)) {
+			return c.json({ success: false, error: 'kind must be video, channel, profile or search:<video|channel|playlist|post>' }, 400);
+		}
+		const env = c.env as unknown as OwnershipRebuildEnv & SearchReconcileEnv;
 		if (!env.SEARCH_DB) return c.json({ success: false, error: 'SEARCH_DB is not bound' }, 503);
 		const actorId = typeof body.actorId === 'string' && body.actorId ? body.actorId.slice(0, 128) : 'admin';
-		const { job, existing } = await startOwnershipRebuild(env, body.kind, actorId);
+		const { job, existing } = isSearchEntity(searchEntity)
+			? await startSearchReconcile(env, searchEntity, actorId, { fresh: true })
+			: await startOwnershipRebuild(env, body.kind as never, actorId);
 		return c.json({ success: true, result: { job, existing } }, existing ? 200 : 202);
+	});
+
+	// Per-object index repairs that failed after their retries (Errors page): back to pending, job started
+	app.post('/index-repairs/retry', async (c) => {
+		const body = ((await c.req.json().catch(() => null)) ?? {}) as { entity?: unknown; id?: unknown };
+		const env = c.env as unknown as RepairJobEnv;
+		if (!env.SEARCH_DB) return c.json({ success: false, error: 'SEARCH_DB is not bound' }, 503);
+		let target: { entity: IndexRepairEntity; id: string } | undefined;
+		if (body.entity !== undefined || body.id !== undefined) {
+			if (typeof body.entity !== 'string' || !(INDEX_REPAIR_ENTITIES as readonly string[]).includes(body.entity) || typeof body.id !== 'string' || !body.id || body.id.length > 200) {
+				return c.json({ success: false, error: 'entity and id name one repair (omit both to retry every failed one)' }, 400);
+			}
+			target = { entity: body.entity as IndexRepairEntity, id: body.id };
+		}
+		const result = await retryIndexRepairs(env, target);
+		return c.json({ success: true, result });
 	});
 
 	app.post('/retry', async (c) => {

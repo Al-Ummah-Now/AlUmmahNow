@@ -184,3 +184,32 @@ export class SlowBucket extends MemoryBucket {
 		return super.put(key, value, options);
 	}
 }
+
+/** ADMIN_JOBS_QUEUE stand-in: records sends (with their delay). */
+export class JobsQueue {
+	sent: Array<{ body: unknown; delaySeconds?: number }> = [];
+	async send(body: unknown, options?: { delaySeconds?: number }) {
+		this.sent.push({ body, delaySeconds: options?.delaySeconds });
+	}
+}
+
+/**
+ * Deliver queued admin-job messages like the queue does (a retry is redelivered
+ * with attempts + 1; after max_retries the message dead-letters). Delays are
+ * not waited for.
+ */
+export async function drainJobs(env: { ADMIN_JOBS_QUEUE: JobsQueue }, maxDeliveries = 200): Promise<number> {
+	const { handleAdminJobBatch } = await import('../src/lib/admin/jobs');
+	const { ADMIN_JOB_HANDLERS } = await import('../src/lib/admin/service');
+	const attempts = new Map<unknown, number>();
+	let delivered = 0;
+	for (; delivered < maxDeliveries && env.ADMIN_JOBS_QUEUE.sent.length; delivered++) {
+		const { body } = env.ADMIN_JOBS_QUEUE.sent.shift()!;
+		const n = (attempts.get(body) ?? 0) + 1;
+		attempts.set(body, n);
+		let retried = false;
+		await handleAdminJobBatch({ messages: [{ body, attempts: n, ack() {}, retry() { retried = true; } }] }, env as never, ADMIN_JOB_HANDLERS);
+		if (retried && n <= 5) env.ADMIN_JOBS_QUEUE.sent.push({ body });
+	}
+	return delivered;
+}

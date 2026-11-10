@@ -41,6 +41,7 @@ import {
   type SearchDb,
 } from '@al-ummah/shared-types';
 import { runModel, type AiBinding, type AiContext } from '../moderation/ai';
+import { repairOrThrow } from '../handlers/search-index';
 import { reserveBudget, settleBudget } from '../moderation/budget';
 import { neuronsFor } from '../moderation/pricing';
 import { estimateTokens } from '../moderation/text';
@@ -181,8 +182,12 @@ async function applyToVideo(
       try {
         await syncSearchDocument(env.SEARCH_DB as unknown as SearchDb, 'video', videoId, next, { version });
       } catch (error) {
-        // The daily reconciliation sweep re-projects it; the category is already stored
-        logger.warn('[Categorize] Search index update failed', { videoId, error: error instanceof Error ? error.message : String(error) });
+        // The category is already stored: the repair job rewrites this video's row (never only logged).
+        // Not rethrown when D1 refuses the record too: a retry would re-run the model for nothing;
+        // the daily reconcile pass rewrites the row.
+        await repairOrThrow(env.SEARCH_DB as unknown as SearchDb, { entity: 'video', id: videoId, reason: 'search-write' }, error, logger).catch((lost) =>
+          logger.error('[Categorize] Search index write lost; the reconcile pass rewrites it', { alert: 'index_write_lost', videoId, error: lost instanceof Error ? lost.message : String(lost) }),
+        );
       }
     }
     logger.info('[Categorize] Category written onto video', { videoId, category: patch.category, previousCategory, previousSource, mode });

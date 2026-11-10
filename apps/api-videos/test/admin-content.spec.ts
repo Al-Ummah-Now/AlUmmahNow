@@ -235,9 +235,14 @@ describe('admin lists (ownership index)', () => {
 		assert.equal((await call('GET', '/videos?status=bogus')).status, 400);
 	});
 
-	it('rebuilds rows written before the admin columns', async () => {
+	it('rows written before the admin columns: the list queues a rebuild (never in the request) and the public marker stays', async () => {
 		const { db, call } = await setup();
 		db.db.prepare("UPDATE content_ownership SET admin_title = NULL, admin_cols = 0 WHERE kind = 'video'").run();
+		const first = (await call('GET', '/videos?q=seerah', undefined, { hold: true })).body.result;
+		assert.equal(first.indexComplete, false);
+		assert.ok(db.db.prepare("SELECT 1 FROM search_meta WHERE key = 'ownership:complete:v2:video'").get(), 'public readers keep the index');
+		// The queued rebuild runs (call() drains the jobs queue), then the list is complete
+		await call('GET', '/jobs?limit=1');
 		const result = (await call('GET', '/videos?q=seerah')).body.result;
 		assert.deepEqual(result.items.map((v: any) => v.id), ['v2']);
 		assert.equal(result.indexComplete, true);

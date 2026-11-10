@@ -25,8 +25,13 @@ export interface JobEnv {
 	ADMIN_JOBS_QUEUE?: JobQueue;
 }
 
-/** What a job handler returns: done, or another step to queue (resumable work). */
-export type JobOutcome = { done: true; result?: Record<string, unknown> } | { done: false; params: Record<string, unknown>; result?: Record<string, unknown> };
+/**
+ * What a job handler returns: done, or another step to queue (resumable work),
+ * optionally after `delaySeconds` (work that waits for a backoff to run out).
+ */
+export type JobOutcome =
+	| { done: true; result?: Record<string, unknown> }
+	| { done: false; params: Record<string, unknown>; result?: Record<string, unknown>; delaySeconds?: number };
 export type JobHandler = (env: unknown, job: AdminJob) => Promise<JobOutcome>;
 
 interface JobRow {
@@ -219,7 +224,8 @@ export async function handleAdminJobBatch(batch: { messages: readonly JobMessage
 			} else {
 				// Resumable work: store the next step and queue it as a fresh delivery
 				await setStatus(env, job.id, { status: 'queued', params: JSON.stringify(outcome.params), result: outcome.result ? JSON.stringify(outcome.result) : null });
-				await env.ADMIN_JOBS_QUEUE!.send(message(job.id));
+				const delaySeconds = Math.max(0, Math.floor(Number(outcome.delaySeconds) || 0));
+				await env.ADMIN_JOBS_QUEUE!.send(message(job.id), delaySeconds ? { delaySeconds } : undefined);
 			}
 			msg.ack();
 		} catch (error) {

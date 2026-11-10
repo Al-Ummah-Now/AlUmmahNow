@@ -97,3 +97,15 @@ export function indexItemHref(kind: 'video' | 'channel' | 'profile', id: string)
   const base = kind === 'video' ? '/videos' : kind === 'channel' ? '/channels' : '/users';
   return `${base}/${encodeURIComponent(id)}`;
 }
+
+/** Link to the admin page of an object in an index repair or search drift row (playlists and posts have none). */
+export function repairHref(entity: string, id: string): string | null {
+  if (entity === 'video' || entity === 'channel' || entity === 'profile') return indexItemHref(entity, id);
+  return null;
+}
+
+/** Objects and pages walked so far by an index rebuild/reconcile job (its latest result, else its step params). */
+export function jobProgress(job: { result: Record<string, unknown> | null; params: Record<string, unknown> }): { pages: number; scanned: number } {
+  const source = job.result ?? job.params ?? {};
+  return { pages: Number(source.pages) || 0, scanned: Number(source.scanned) || 0 };
+}

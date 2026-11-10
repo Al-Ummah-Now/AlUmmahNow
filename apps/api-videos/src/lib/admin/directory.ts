@@ -5,14 +5,14 @@
  * are then read from R2 for the fields the index does not hold.
  *
  * Index readiness: a kind is usable once its ownership pass completed and no
- * row predates the admin columns. Until then each list advances the pass
- * (the same lease the cron and self-heal use) before querying, and reports
- * `indexComplete: false` if the pass is still not done.
+ * row predates the admin columns. Until then a list queues the kind's rebuild
+ * job (admin-jobs queue, deduped; nothing runs inside the request and the
+ * public readers' completeness marker is never touched), answers from the
+ * rows it has, and reports `indexComplete: false`.
  */
 import {
 	OWNERSHIP_ADMIN_COLS_VERSION,
 	OWNERSHIP_TABLE,
-	ownershipCompleteKey,
 	type AdminChannelQuery,
 	type AdminChannelRow,
 	type AdminCommentQuery,
@@ -25,7 +25,9 @@ import {
 	type OwnershipKind,
 	type SearchDb,
 } from '@al-ummah/shared-types';
-import { isOwnershipComplete, scheduleOwnershipHeal, type OwnershipEnv } from '../search/ownership';
+import { isOwnershipComplete, type OwnershipEnv } from '../search/ownership';
+import { startOwnershipRebuild } from '../search/ownershipRebuild';
+import type { JobQueue } from './jobs';
 import { subscriberCounts } from '../subscription-store';
 import { bansFor } from './bans';
 import { logger } from '../logger';
@@ -39,6 +41,7 @@ export interface AdminEnv extends OwnershipEnv {
 	playlists: R2Bucket;
 	community_posts: R2Bucket;
 	watch_history?: R2Bucket;
+	ADMIN_JOBS_QUEUE?: JobQueue;
 }
 
 type Row = Record<string, any>;
@@ -102,20 +105,23 @@ export async function adminIndexReady(db: SearchDb, kind: OwnershipKind): Promis
 	return !stale;
 }
 
-/** Advances the ownership pass for `kind` when the admin columns are not usable yet. */
+/**
+ * True when the admin columns of `kind` are usable. Otherwise the kind's
+ * rebuild job is queued (an active one is reused: one lookup per request) and
+ * false is returned. The rebuild rewrites stale rows while the public readers
+ * keep their (still valid) completeness marker.
+ */
 export async function ensureAdminIndex(env: AdminEnv, kind: OwnershipKind): Promise<boolean> {
 	const db = dbOf(env);
 	if (await adminIndexReady(db, kind)) return true;
-	if (await isOwnershipComplete(db, kind)) {
-		// Rows from before the admin columns: start a fresh pass that rewrites every row
-		await db.prepare("DELETE FROM search_meta WHERE key = ?").bind(ownershipCompleteKey(kind)).run();
-	}
 	try {
-		await scheduleOwnershipHeal(env, null, kind);
+		// A complete index with rows from before the admin columns: rewrite every row from the first key
+		const fresh = await isOwnershipComplete(db, kind);
+		await startOwnershipRebuild(env as never, kind, 'system', { fresh });
 	} catch (error) {
-		logger.warn('[AdminDirectory] Index pass failed', { kind, error: error instanceof Error ? error.message : String(error) });
+		logger.warn('[AdminDirectory] Could not queue the index rebuild', { kind, error: error instanceof Error ? error.message : String(error) });
 	}
-	return adminIndexReady(db, kind);
+	return false;
 }
 
 // ---------------------------------------------------------------------------
