@@ -346,3 +346,64 @@ export interface AdminAuditEntry {
   actorId: string;
   createdAt: string;
 }
+
+// ---------------------------------------------------------------------------
+// Admin jobs (heavy actions run from a queue, with retries and a DLQ)
+// ---------------------------------------------------------------------------
+
+/**
+ * Heavy admin actions are jobs: the request makes the quick single-record
+ * change (e.g. the channel is suspended at once), queues the rest and
+ * returns. Each kind is idempotent, so a retry finishes a partial run.
+ */
+export const ADMIN_JOB_KINDS = [
+  /** Make the channel's videos and live streams follow its suspension state. */
+  'channel.sync-holds',
+  /** Erase a deleted channel's videos (R2, Bunny, search, notifications) and content. */
+  'channel.purge',
+  /** Move a channel with its videos and playlists to another videos user. */
+  'channel.transfer',
+  /** Move a video into another channel. */
+  'video.move',
+  /** Erase a deleted video (R2, Bunny, search, notifications). */
+  'video.purge',
+  /** Make a user's channels, videos and live streams follow their ban state. */
+  'user.sync-holds',
+  /** Erase a user's videos data (privacy path), in resumable steps. */
+  'user.delete-data',
+] as const;
+
+export type AdminJobKind = (typeof ADMIN_JOB_KINDS)[number];
+export const ADMIN_JOB_STATUSES = ['queued', 'running', 'retrying', 'succeeded', 'failed'] as const;
+export type AdminJobStatus = (typeof ADMIN_JOB_STATUSES)[number];
+export type AdminJobTarget = 'channel' | 'video' | 'user';
+
+export interface AdminJob {
+  id: string;
+  kind: AdminJobKind;
+  targetKind: AdminJobTarget;
+  targetId: string;
+  params: Record<string, unknown>;
+  status: AdminJobStatus;
+  attempts: number;
+  lastError: string | null;
+  result: Record<string, unknown> | null;
+  actorId: string;
+  createdAt: string;
+  updatedAt: string;
+  finishedAt: string | null;
+}
+
+/** The permission an admin needs to retry a job of each kind (the same one that started it). */
+export const ADMIN_JOB_PERMISSIONS: Readonly<Record<AdminJobKind, readonly AdminContentPermission[]>> = {
+  'channel.sync-holds': ['channels:manage'],
+  'channel.purge': ['content:delete'],
+  'channel.transfer': ['channels:transfer'],
+  'video.move': ['videos:manage'],
+  'video.purge': ['content:delete'],
+  'user.sync-holds': ['users:manage'],
+  'user.delete-data': ['users:manage', 'content:delete'],
+};
+
+/** Retries per job delivery before it is marked failed and dead-lettered (matches the queue's max_retries). */
+export const ADMIN_JOB_MAX_RETRIES = 5;

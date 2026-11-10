@@ -117,6 +117,14 @@
         "max_batch_timeout": 5,
         "max_retries": 5,
         "dead_letter_queue": "al-ummah-now-dlq-qa"
+      },
+      {
+        // Heavy admin actions (lib/admin/jobs.ts). One job per invocation: each gets the full subrequest budget.
+        "queue": "al-ummah-now-admin-jobs-qa",
+        "max_batch_size": 1,
+        "max_batch_timeout": 5,
+        "max_retries": 5,
+        "dead_letter_queue": "al-ummah-now-dlq-qa"
       }
     ],
     "producers": [
@@ -131,6 +139,10 @@
       {
         "queue": "al-ummah-now-moderation-qa",
         "binding": "MODERATION_QUEUE"
+      },
+      {
+        "queue": "al-ummah-now-admin-jobs-qa",
+        "binding": "ADMIN_JOBS_QUEUE"
       }
     ]
   },

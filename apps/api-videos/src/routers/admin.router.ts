@@ -13,10 +13,12 @@ import {
 	ADMIN_USER_SORTS,
 	ADMIN_VIDEO_SORTS,
 	ADMIN_VIDEO_STATUSES,
+	ADMIN_JOB_STATUSES,
 } from '@al-ummah/shared-types';
 import { listChannels, listComments, listUsers, listVideos } from '../lib/admin/directory';
 import * as admin from '../lib/admin/service';
 import { checkImage, storeImage } from '../lib/admin/images';
+import { countJobs, getJob, listJobs, retryJob } from '../lib/admin/jobs';
 import { logger } from '../lib/logger';
 
 type Env = { Bindings: admin.AdminServiceEnv & Record<string, unknown> };
@@ -138,10 +140,10 @@ app.post('/channels/:id/images/:kind', async (c) => {
 	return ok(c, await admin.updateChannel(c.env, c.req.param('id'), kind === 'avatar' ? { avatarUrl: url } : { coverUrl: url }));
 });
 app.post('/channels/:id/suspend', async (c) => ok(c, await admin.suspendChannel(c.env, c.req.param('id'), actor(c), parse(Reason, await body(c)).reason)));
-app.post('/channels/:id/unsuspend', async (c) => ok(c, await admin.unsuspendChannel(c.env, c.req.param('id'))));
+app.post('/channels/:id/unsuspend', async (c) => ok(c, await admin.unsuspendChannel(c.env, c.req.param('id'), actor(c))));
 app.post('/channels/:id/transfer', async (c) => {
 	const { newOwnerId } = parse(z.object({ newOwnerId: z.string().min(1).max(200) }), await body(c));
-	return ok(c, await admin.transferChannel(c.env, c.req.param('id'), newOwnerId));
+	return ok(c, await admin.transferChannel(c.env, c.req.param('id'), newOwnerId, actor(c)));
 });
 app.delete('/channels/:id', async (c) => ok(c, await admin.deleteChannel(c.env, c.req.param('id'), actor(c))));
 
@@ -156,15 +158,12 @@ app.post('/videos/:id/thumbnail', async (c) => {
 });
 app.post('/videos/:id/move', async (c) => {
 	const { channelId } = parse(z.object({ channelId: z.string().min(1).max(200) }), await body(c));
-	return ok(c, await admin.moveVideo(c.env, c.req.param('id'), channelId));
+	return ok(c, await admin.moveVideo(c.env, c.req.param('id'), channelId, actor(c)));
 });
 app.post('/videos/:id/unpublish', async (c) => ok(c, await admin.setVideoPublished(c.env, c.req.param('id'), false)));
 app.post('/videos/:id/republish', async (c) => ok(c, await admin.setVideoPublished(c.env, c.req.param('id'), true)));
 app.post('/videos/:id/reprocess', async (c) => ok(c, await admin.reprocessVideo(c.env, c.req.param('id'))));
-app.delete('/videos/:id', async (c) => {
-	await admin.deleteVideo(c.env, c.req.param('id'));
-	return ok(c, { deleted: true });
-});
+app.delete('/videos/:id', async (c) => ok(c, await admin.deleteVideo(c.env, c.req.param('id'), actor(c))));
 
 // Comments, playlists, community posts
 app.get('/comments', async (c) => ok(c, await listComments(c.env, parse(CommentQuery, c.req.query()))));
@@ -188,10 +187,28 @@ app.get('/users', async (c) => ok(c, await listUsers(c.env, parse(UserQuery, c.r
 app.get('/users/:id', async (c) => ok(c, await admin.userDetail(c.env, c.req.param('id'))));
 app.patch('/users/:id', async (c) => ok(c, await admin.updateUser(c.env, c.req.param('id'), parse(UserEdit, await body(c)))));
 app.post('/users/:id/ban', async (c) => ok(c, await admin.banUser(c.env, c.req.param('id'), actor(c), parse(Reason, await body(c)).reason)));
-app.post('/users/:id/unban', async (c) => ok(c, await admin.unbanUser(c.env, c.req.param('id'))));
-app.post('/users/:id/delete-data', async (c) => {
-	const { resumeToken } = parse(z.object({ resumeToken: z.string().max(4000).optional() }), await body(c));
-	return ok(c, await admin.deleteUserData(c.env, c.req.param('id'), resumeToken));
+app.post('/users/:id/unban', async (c) => ok(c, await admin.unbanUser(c.env, c.req.param('id'), actor(c))));
+app.post('/users/:id/delete-data', async (c) => ok(c, await admin.deleteUserData(c.env, c.req.param('id'), actor(c))));
+
+// Admin jobs (heavy actions run from the admin-jobs queue; see lib/admin/jobs.ts)
+const JobQuery = z.object({
+	status: z.enum(ADMIN_JOB_STATUSES).optional(),
+	targetKind: z.enum(['channel', 'video', 'user']).optional(),
+	targetId: z.string().max(200).optional(),
+	limit: z.coerce.number().int().min(1).max(100).optional(),
+});
+app.get('/jobs', async (c) => ok(c, { items: await listJobs(c.env, parse(JobQuery, c.req.query())) }));
+app.get('/jobs/counts', async (c) => ok(c, { failed: await countJobs(c.env, 'failed'), retrying: await countJobs(c.env, 'retrying') }));
+app.get('/jobs/:id', async (c) => {
+	const job = await getJob(c.env, c.req.param('id'));
+	if (!job) throw new admin.AdminError(404, 'job_not_found');
+	return ok(c, job);
+});
+app.post('/jobs/:id/retry', async (c) => {
+	const existing = await getJob(c.env, c.req.param('id'));
+	if (!existing) throw new admin.AdminError(404, 'job_not_found');
+	if (existing.status !== 'failed') throw new admin.AdminError(409, 'job_not_failed', 'Only failed jobs can be retried');
+	return ok(c, await retryJob(c.env, existing.id));
 });
 
 export default app;

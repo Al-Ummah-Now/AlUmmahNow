@@ -13,8 +13,9 @@ import {
 	isHeldBy,
 	liftSuspensionHold,
 	userHold,
-	type AdminCascadeResult,
 	type AdminChannelDetail,
+	type AdminJob,
+	type AdminJobKind,
 	type AdminUserDetail,
 	type AdminVideoDetail,
 	type SuspendableRecord,
@@ -33,6 +34,7 @@ import { OperationBudget } from '../privacy/scan';
 import { BunnyStreamClient } from '../bunny/stream';
 import { requireSecret } from '../env-helpers';
 import { bansFor, deleteBan, readBan, writeBan } from './bans';
+import { createJob, type JobHandler, type JobOutcome, type JobQueue } from './jobs';
 import {
 	channelVideoStats,
 	contentIds,
@@ -52,6 +54,8 @@ export interface AdminServiceEnv extends AdminEnv {
 	channel_sections?: R2Bucket;
 	'bunny-stream-key'?: { text(): Promise<string> } | string;
 	bunny_stream_library_id?: { text(): Promise<string> } | string;
+	/** The admin-jobs queue (heavy actions run from it; lib/admin/jobs.ts). */
+	ADMIN_JOBS_QUEUE?: JobQueue;
 }
 
 export class AdminError extends Error {
@@ -167,6 +171,12 @@ async function cascade(bucket: R2Bucket, ids: string[], mutate: (record: Row) =>
 	return { changed, failed };
 }
 
+/** A cascade step's outcome: done, or an error (so the job retries) when some records failed. */
+function finish(result: Record<string, unknown>, failed: number): JobOutcome {
+	if (failed > 0) throw new Error(`${failed} record(s) could not be updated; retrying (${JSON.stringify(result)})`);
+	return { done: true, result };
+}
+
 // ---------------------------------------------------------------------------
 // Channels
 // ---------------------------------------------------------------------------
@@ -250,8 +260,11 @@ export async function updateChannel(env: AdminServiceEnv, id: string, edit: Chan
 	return saved;
 }
 
-/** Suspends a channel: hidden everywhere with its videos; the owner still sees it with a notice. */
-export async function suspendChannel(env: AdminServiceEnv, id: string, actorId: string, reason?: string): Promise<AdminCascadeResult> {
+/**
+ * Suspends a channel: the channel itself is hidden at once (its owner still
+ * sees it with a notice); a job then hides its videos and live streams.
+ */
+export async function suspendChannel(env: AdminServiceEnv, id: string, actorId: string, reason?: string): Promise<{ job: AdminJob }> {
 	const hold = channelHold(id);
 	const info: SuspensionInfo = { at: now(), by: actorId, ...(reason ? { reason } : {}) };
 	const saved = await repo(env.channels).updateObject(id, (fresh) => {
@@ -263,14 +276,11 @@ export async function suspendChannel(env: AdminServiceEnv, id: string, actorId: 
 		return true;
 	});
 	if (!saved || saved.isDeleted) throw new AdminError(404, 'channel_not_found');
-	const videos = await cascade(env.videos, await idsOf(env, 'video', { channelId: id }), (v) => applySuspensionHold(v as SuspendableRecord, hold));
-	const live = await cascadeLiveStreams(env, { channelId: id }, (s) => applySuspensionHold(s as SuspendableRecord, hold));
-	videos.failed += live.failed;
 	await send(env, MessageType.ChannelUpdate, { channelId: id, userId: saved.userId, action: 'suspended' });
-	return { channels: 1, videos: videos.changed, failed: videos.failed, complete: videos.failed === 0 };
+	return { job: await createJob(env, { kind: 'channel.sync-holds', targetKind: 'channel', targetId: id, actorId }) };
 }
 
-export async function unsuspendChannel(env: AdminServiceEnv, id: string): Promise<AdminCascadeResult> {
+export async function unsuspendChannel(env: AdminServiceEnv, id: string, actorId: string): Promise<{ job: AdminJob }> {
 	const hold = channelHold(id);
 	const saved = await repo(env.channels).updateObject(id, (fresh) => {
 		fresh.isSuspended = false;
@@ -279,11 +289,25 @@ export async function unsuspendChannel(env: AdminServiceEnv, id: string): Promis
 		fresh.dateModified = now();
 	});
 	if (!saved) throw new AdminError(404, 'channel_not_found');
-	const videos = await cascade(env.videos, await idsOf(env, 'video', { channelId: id }), (v) => liftSuspensionHold(v as SuspendableRecord, hold));
-	const live = await cascadeLiveStreams(env, { channelId: id }, (s) => liftSuspensionHold(s as SuspendableRecord, hold));
-	videos.failed += live.failed;
 	await send(env, MessageType.ChannelUpdate, { channelId: id, userId: saved.userId, action: 'unsuspended' });
-	return { channels: 1, videos: videos.changed, failed: videos.failed, complete: videos.failed === 0 };
+	return { job: await createJob(env, { kind: 'channel.sync-holds', targetKind: 'channel', targetId: id, actorId }) };
+}
+
+/**
+ * Job channel.sync-holds: the channel's videos and live streams follow its
+ * current suspension state, whichever action queued the job. A suspend and a
+ * quick unsuspend therefore converge, whatever order their jobs run in.
+ */
+async function syncChannelHolds(env: AdminServiceEnv, job: AdminJob): Promise<JobOutcome> {
+	const id = job.targetId;
+	const channel = await repo(env.channels).getObject(id);
+	if (!channel) return { done: true, result: { skipped: 'channel_not_found' } };
+	const hold = channelHold(id);
+	const suspended = channel.isSuspended === true && channel.isDeleted !== true;
+	const mutate = (r: Row) => (suspended ? applySuspensionHold(r as SuspendableRecord, hold) : liftSuspensionHold(r as SuspendableRecord, hold));
+	const videos = await cascade(env.videos, await idsOf(env, 'video', { channelId: id }), mutate);
+	const live = await cascadeLiveStreams(env, { channelId: id }, mutate);
+	return finish({ suspended, videos: videos.changed, liveStreams: live.changed }, videos.failed + live.failed);
 }
 
 async function removeFromProfile(env: AdminServiceEnv, userId: string, channelId: string): Promise<void> {
@@ -309,24 +333,43 @@ async function promoteNextMain(env: AdminServiceEnv, userId: string, leavingId: 
 
 /**
  * Moves a channel and its videos and playlists to another videos user. The new
- * owner must have a videos profile and must not be banned. Per-channel roles
- * live with the channel and move with it.
+ * owner must have a videos profile and must not be banned (checked now); the
+ * move itself is a job. Per-channel roles live with the channel and move with it.
  */
-export async function transferChannel(env: AdminServiceEnv, id: string, newOwnerId: string): Promise<AdminCascadeResult & { previousOwnerId: string | null }> {
+export async function transferChannel(env: AdminServiceEnv, id: string, newOwnerId: string, actorId: string): Promise<{ job: AdminJob }> {
 	const channel = await repo(env.channels).getObject(id);
 	if (!channel || channel.isDeleted) throw new AdminError(404, 'channel_not_found');
 	if (channel.userId === newOwnerId) throw new AdminError(409, 'already_owner');
 	const target = await repo(env.profiles).getObject(newOwnerId);
 	if (!target) throw new AdminError(404, 'new_owner_not_found');
 	if (env.SEARCH_DB && (await readBan(env.SEARCH_DB, newOwnerId))) throw new AdminError(409, 'new_owner_banned');
-	const previousOwnerId: string | null = channel.userId ?? null;
-	const targetHasChannels = (await idsOf(env, 'channel', { ownerId: newOwnerId })).length > 0;
+	// Decided now, so a retried job does not re-decide from a half-moved state
+	const makeMain = (await idsOf(env, 'channel', { ownerId: newOwnerId })).length === 0;
+	return {
+		job: await createJob(env, {
+			kind: 'channel.transfer',
+			targetKind: 'channel',
+			targetId: id,
+			actorId,
+			params: { newOwnerId, previousOwnerId: channel.userId ?? null, wasMain: channel.isMain === true, makeMain },
+		}),
+	};
+}
+
+/** Job channel.transfer. Every step is idempotent, so a retry finishes a partial move. */
+async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutcome> {
+	const id = job.targetId;
+	const { newOwnerId, previousOwnerId, wasMain, makeMain } = job.params as { newOwnerId: string; previousOwnerId: string | null; wasMain: boolean; makeMain: boolean };
 	const saved = await repo(env.channels).updateObject(id, (fresh) => {
+		if (fresh.isDeleted) return false;
+		if (fresh.userId === newOwnerId) return false;
 		fresh.userId = newOwnerId;
-		fresh.isMain = !targetHasChannels;
+		fresh.isMain = makeMain;
 		fresh.dateModified = now();
+		return true;
 	});
-	if (!saved) throw new AdminError(404, 'channel_not_found');
+	if (!saved) return { done: true, result: { skipped: 'channel_not_found' } };
+	if (saved.isDeleted) return { done: true, result: { skipped: 'channel_deleted' } };
 	await repo(env.profiles).updateObject(newOwnerId, (profile) => {
 		const list: string[] = Array.isArray(profile.channels) ? profile.channels : [];
 		if (list.includes(id)) return false;
@@ -335,34 +378,50 @@ export async function transferChannel(env: AdminServiceEnv, id: string, newOwner
 	});
 	if (previousOwnerId) {
 		await removeFromProfile(env, previousOwnerId, id);
-		if (channel.isMain) await promoteNextMain(env, previousOwnerId, id);
+		if (wasMain) await promoteNextMain(env, previousOwnerId, id);
 	}
 	const videos = await cascade(env.videos, await idsOf(env, 'video', { channelId: id }), (v) => {
 		if (v.userId === newOwnerId) return false;
 		v.userId = newOwnerId;
 		return true;
 	});
-	const playlistIds = Array.isArray(channel.playlists) ? (channel.playlists as string[]).filter((p) => typeof p === 'string') : [];
+	const playlistIds = Array.isArray(saved.playlists) ? (saved.playlists as string[]).filter((p) => typeof p === 'string') : [];
 	const playlists = await cascade(env.playlists, playlistIds, (p) => {
 		if (p.channelId !== id || p.userId === newOwnerId) return false;
 		p.userId = newOwnerId;
 		return true;
 	});
-	await send(env, MessageType.ChannelUpdate, { channelId: id, userId: newOwnerId, previousOwnerId, action: 'transferred' });
 	const failed = videos.failed + playlists.failed;
-	return { channels: 1, videos: videos.changed, failed, complete: failed === 0, previousOwnerId };
+	if (failed === 0) await send(env, MessageType.ChannelUpdate, { channelId: id, userId: newOwnerId, previousOwnerId, action: 'transferred' });
+	return finish({ videos: videos.changed, playlists: playlists.changed, previousOwnerId }, failed);
 }
 
-/** Deletes a video's stored data, media and per-video records (the privacy-erase path). */
-async function purgeVideo(env: AdminServiceEnv, videoId: string, video: Row | null, bunnyClient?: { client: BunnyStreamClient; libraryId: number } | null): Promise<void> {
+/**
+ * Deletes a video's stored data, media and per-video records (the privacy-erase
+ * path). Idempotent: a video already gone from R2 or Bunny counts as erased.
+ * `strict` (jobs) throws when Bunny or the notification cleanup fails, so the
+ * job retries instead of leaving media behind.
+ */
+async function purgeVideo(
+	env: AdminServiceEnv,
+	videoId: string,
+	video: Row | null,
+	bunnyClient?: { client: BunnyStreamClient; libraryId: number } | null,
+	opts: { strict?: boolean } = { strict: true },
+): Promise<void> {
 	await env.videos.delete(videoId);
 	const b = bunnyClient === undefined ? await bunny(env) : bunnyClient;
+	if (!b && opts.strict) throw new Error('Bunny Stream is unavailable');
 	if (b) {
 		try {
 			await b.client.deleteVideo(b.libraryId, videoId);
 		} catch (error) {
-			// The R2 record is gone, so the stream is unreachable from the app
-			logger.warn('[Admin] Bunny Stream delete failed', { videoId, error: error instanceof Error ? error.message : String(error) });
+			const message = error instanceof Error ? error.message : String(error);
+			// Already gone from Bunny: nothing left to erase there
+			if (!/status: 404/.test(message)) {
+				logger.warn('[Admin] Bunny Stream delete failed', { videoId, error: message });
+				if (opts.strict) throw new Error(`Bunny Stream delete failed for ${videoId}: ${message}`);
+			}
 		}
 	}
 	if (env.NOTIFICATIONS_DB) {
@@ -373,17 +432,19 @@ async function purgeVideo(env: AdminServiceEnv, videoId: string, video: Row | nu
 			]);
 		} catch (error) {
 			logger.warn('[Admin] Notification cleanup failed', { videoId, error: error instanceof Error ? error.message : String(error) });
+			if (opts.strict) throw error;
 		}
 	}
 	await send(env, MessageType.VideoDelete, { videoId, userId: video?.userId, channelId: video?.channelId, reason: 'admin' });
 }
 
 /**
- * Soft-deletes a channel: the record stays (isDeleted, hidden, handle freed)
- * for the audit trail; its videos are erased (R2, Bunny, search, notifications),
- * its playlists, posts and sections removed.
+ * Soft-deletes a channel: at once the record is marked deleted and hidden (it
+ * stays for the audit trail), its handle is freed and it leaves its owner's
+ * profile; a job then erases its videos (R2, Bunny, search, notifications) and
+ * removes its playlists, posts and sections.
  */
-export async function deleteChannel(env: AdminServiceEnv, id: string, actorId: string): Promise<AdminCascadeResult> {
+export async function deleteChannel(env: AdminServiceEnv, id: string, actorId: string): Promise<{ job: AdminJob }> {
 	const channel = await repo(env.channels).getObject(id);
 	if (!channel || channel.isDeleted) throw new AdminError(404, 'channel_not_found');
 	const at = now();
@@ -407,21 +468,31 @@ export async function deleteChannel(env: AdminServiceEnv, id: string, actorId: s
 		await removeFromProfile(env, channel.userId, id);
 		if (channel.isMain) await promoteNextMain(env, channel.userId, id);
 	}
+	return { job: await createJob(env, { kind: 'channel.purge', targetKind: 'channel', targetId: id, actorId, params: { userId: channel.userId ?? null } }) };
+}
+
+/** Job channel.purge: erases a deleted channel's videos and content. Idempotent (erased items are simply gone). */
+async function purgeChannel(env: AdminServiceEnv, job: AdminJob): Promise<JobOutcome> {
+	const id = job.targetId;
+	const userId = (job.params.userId as string | null) ?? null;
+	const channel = await repo(env.channels).getObject(id);
+	if (channel && channel.isDeleted !== true) return { done: true, result: { skipped: 'channel_not_deleted' } };
 	const videoIds = await idsOf(env, 'video', { channelId: id });
 	const b = await bunny(env);
 	let failed = 0;
 	await eachLimited(videoIds, 6, async (videoId) => {
 		try {
-			await purgeVideo(env, videoId, { userId: channel.userId, channelId: id }, b);
+			await purgeVideo(env, videoId, { userId, channelId: id }, b);
 		} catch (error) {
 			failed++;
 			logger.warn('[Admin] Video purge failed', { videoId, error: error instanceof Error ? error.message : String(error) });
 		}
 	});
+	if (failed > 0) return finish({ videos: videoIds.length - failed }, failed);
 	// Playlists (soft), posts and sections, like an owner's delete
 	await removeChannelContent({ videos: env.videos, playlists: env.playlists, community_posts: env.community_posts, channel_sections: env.channel_sections }, id);
-	await send(env, MessageType.ChannelDelete, { channelId: id, userId: channel.userId, reason: 'admin' });
-	return { channels: 1, videos: videoIds.length - failed, failed, complete: failed === 0 };
+	await send(env, MessageType.ChannelDelete, { channelId: id, userId, reason: 'admin' });
+	return { done: true, result: { videos: videoIds.length } };
 }
 
 // ---------------------------------------------------------------------------
@@ -512,8 +583,18 @@ export async function updateVideo(env: AdminServiceEnv, id: string, edit: VideoE
 	return saved;
 }
 
-/** Moves a video into another channel (and to that channel's owner); suspension holds follow the channel. */
-export async function moveVideo(env: AdminServiceEnv, id: string, channelId: string): Promise<Row> {
+/** Checks the move now and queues it (video.move). */
+export async function moveVideo(env: AdminServiceEnv, id: string, channelId: string, actorId: string): Promise<{ job: AdminJob }> {
+	const [video, target] = await Promise.all([repo(env.videos).getObject(id), repo(env.channels).getObject(channelId)]);
+	if (!video || id.includes(':') || video.isDeleted) throw new AdminError(404, 'video_not_found');
+	if (!target || target.isDeleted) throw new AdminError(404, 'channel_not_found');
+	return { job: await createJob(env, { kind: 'video.move', targetKind: 'video', targetId: id, actorId, params: { channelId, fromChannelId: video.channelId ?? null } }) };
+}
+
+/** Job video.move: into the channel (and to its owner); suspension holds follow the channel. Idempotent. */
+async function runMove(env: AdminServiceEnv, job: AdminJob): Promise<JobOutcome> {
+	const id = job.targetId;
+	const channelId = job.params.channelId as string;
 	const target = await repo(env.channels).getObject(channelId);
 	if (!target || target.isDeleted) throw new AdminError(404, 'channel_not_found');
 	const saved = await repo(env.videos).updateObject(id, (fresh) => {
@@ -527,10 +608,10 @@ export async function moveVideo(env: AdminServiceEnv, id: string, channelId: str
 		fresh.dateModified = now();
 		return true;
 	});
-	if (!saved) throw new AdminError(404, 'video_not_found');
-	if (saved.channelId !== channelId) throw new AdminError(409, 'move_failed');
+	if (!saved) return { done: true, result: { skipped: 'video_not_found' } };
+	if (saved.channelId !== channelId) throw new Error('The video did not move');
 	await send(env, MessageType.VideoEdit, { videoId: id, userId: saved.userId, channelId });
-	return saved;
+	return { done: true, result: { channelId, ownerId: saved.userId ?? null } };
 }
 
 export const ADMIN_UNPUBLISH_HOLD = 'admin:unpublished';
@@ -568,10 +649,25 @@ export async function reprocessVideo(env: AdminServiceEnv, id: string): Promise<
 	return saved ?? video;
 }
 
-export async function deleteVideo(env: AdminServiceEnv, id: string): Promise<void> {
-	const video = await repo(env.videos).getObject(id);
-	if (!video || id.includes(':')) throw new AdminError(404, 'video_not_found');
-	await purgeVideo(env, id, video);
+/** Deletes a video: hidden and marked deleted at once; a job erases it (R2, Bunny, search, notifications). */
+export async function deleteVideo(env: AdminServiceEnv, id: string, actorId: string): Promise<{ job: AdminJob }> {
+	if (id.includes(':')) throw new AdminError(404, 'video_not_found');
+	const saved = await repo(env.videos).updateObject(id, (fresh) => {
+		if (fresh.isDeleted === true && fresh.isHidden === true) return false;
+		fresh.isDeleted = true;
+		fresh.isHidden = true;
+		fresh.deletedAt = now();
+		fresh.dateModified = now();
+		return true;
+	});
+	if (!saved) throw new AdminError(404, 'video_not_found');
+	return { job: await createJob(env, { kind: 'video.purge', targetKind: 'video', targetId: id, actorId, params: { userId: saved.userId ?? null, channelId: saved.channelId ?? null } }) };
+}
+
+/** Job video.purge. Idempotent: an erased video is simply gone. */
+async function runVideoPurge(env: AdminServiceEnv, job: AdminJob): Promise<JobOutcome> {
+	await purgeVideo(env, job.targetId, { userId: job.params.userId, channelId: job.params.channelId }, undefined, { strict: true });
+	return { done: true };
 }
 
 // ---------------------------------------------------------------------------
@@ -788,41 +884,52 @@ export async function updateUser(env: AdminServiceEnv, userId: string, edit: Use
 	return saved;
 }
 
-/** Bans a usr_ id on videos and hides their channels and videos. Auth is not involved. */
-export async function banUser(env: AdminServiceEnv, userId: string, actorId: string, reason?: string): Promise<AdminCascadeResult & { ban: VideosBan }> {
-	const db = env.SEARCH_DB!;
+/** Bans a usr_ id on videos (enforced at once); a job hides their channels and videos. Auth is not involved. */
+export async function banUser(env: AdminServiceEnv, userId: string, actorId: string, reason?: string): Promise<{ ban: VideosBan; job: AdminJob }> {
 	const ban: VideosBan = { userId, reason: reason?.trim() || null, bannedBy: actorId, bannedAt: now() };
-	await writeBan(db, ban);
-	const hold = userHold(userId);
-	const channels = await cascade(env.channels, await idsOf(env, 'channel', { ownerId: userId }), (ch) => applySuspensionHold(ch as SuspendableRecord, hold));
-	const videos = await cascade(env.videos, await idsOf(env, 'video', { ownerId: userId }), (v) => applySuspensionHold(v as SuspendableRecord, hold));
-	const live = await cascadeLiveStreams(env, { ownerId: userId }, (s) => applySuspensionHold(s as SuspendableRecord, hold));
-	videos.failed += live.failed;
-	const failed = channels.failed + videos.failed;
-	return { ban, channels: channels.changed, videos: videos.changed, failed, complete: failed === 0 };
+	await writeBan(env.SEARCH_DB!, ban);
+	return { ban, job: await createJob(env, { kind: 'user.sync-holds', targetKind: 'user', targetId: userId, actorId }) };
 }
 
-export async function unbanUser(env: AdminServiceEnv, userId: string): Promise<AdminCascadeResult> {
+export async function unbanUser(env: AdminServiceEnv, userId: string, actorId: string): Promise<{ job: AdminJob }> {
 	const removed = await deleteBan(env.SEARCH_DB!, userId);
 	if (!removed) throw new AdminError(404, 'not_banned');
+	return { job: await createJob(env, { kind: 'user.sync-holds', targetKind: 'user', targetId: userId, actorId }) };
+}
+
+/** Job user.sync-holds: the user's channels, videos and live streams follow their current ban state. */
+async function syncUserHolds(env: AdminServiceEnv, job: AdminJob): Promise<JobOutcome> {
+	const userId = job.targetId;
+	const banned = !!(await readBan(env.SEARCH_DB!, userId));
 	const hold = userHold(userId);
-	const channels = await cascade(env.channels, await idsOf(env, 'channel', { ownerId: userId }), (ch) => liftSuspensionHold(ch as SuspendableRecord, hold));
-	const videos = await cascade(env.videos, await idsOf(env, 'video', { ownerId: userId }), (v) => liftSuspensionHold(v as SuspendableRecord, hold));
-	const live = await cascadeLiveStreams(env, { ownerId: userId }, (s) => liftSuspensionHold(s as SuspendableRecord, hold));
-	videos.failed += live.failed;
-	const failed = channels.failed + videos.failed;
-	return { channels: channels.changed, videos: videos.changed, failed, complete: failed === 0 };
+	const mutate = (r: Row) => (banned ? applySuspensionHold(r as SuspendableRecord, hold) : liftSuspensionHold(r as SuspendableRecord, hold));
+	const channels = await cascade(env.channels, await idsOf(env, 'channel', { ownerId: userId }), mutate);
+	const videos = await cascade(env.videos, await idsOf(env, 'video', { ownerId: userId }), mutate);
+	const live = await cascadeLiveStreams(env, { ownerId: userId }, mutate);
+	return finish({ banned, channels: channels.changed, videos: videos.changed, liveStreams: live.changed }, channels.failed + videos.failed + live.failed);
 }
 
 /**
  * Erases the user's videos data (profile, channels, videos and their media,
  * playlists, history, comments, likes, subscriptions) with the privacy-erase
- * path. A ban, if any, is kept. Auth is not involved: their account and
- * sign-in keep working, and signing in to videos again starts a new, empty
- * profile (unless banned). Resumable: call again with `resumeToken` while
- * `complete` is false.
+ * path, as a job (user.delete-data) that runs in resumable steps. A ban, if
+ * any, is kept. Auth is not involved: their account and sign-in keep working,
+ * and signing in to videos again starts a new, empty profile (unless banned).
  */
-export async function deleteUserData(env: AdminServiceEnv & Record<string, unknown>, userId: string, resumeToken?: string) {
+export async function deleteUserData(env: AdminServiceEnv, userId: string, actorId: string): Promise<{ job: AdminJob }> {
+	return { job: await createJob(env, { kind: 'user.delete-data', targetKind: 'user', targetId: userId, actorId }) };
+}
+
+/** Job user.delete-data: one budgeted erase step; an unfinished erase queues the next step with its resume token. */
+async function runUserDelete(env: AdminServiceEnv, job: AdminJob): Promise<JobOutcome> {
+	const previous = (job.result?.deletedVideos as number | undefined) ?? 0;
+	const summary = await eraseUserStep(env as AdminServiceEnv & Record<string, unknown>, job.targetId, job.params.resumeToken as string | undefined);
+	const result = { deletedVideos: previous + summary.deletedVideoIds.length };
+	if (!summary.complete) return { done: false, params: { resumeToken: summary.resumeToken }, result };
+	return { done: true, result };
+}
+
+async function eraseUserStep(env: AdminServiceEnv & Record<string, unknown>, userId: string, resumeToken?: string) {
 	const b = await bunny(env);
 	const budget = new OperationBudget(900);
 	const summary = await eraseUserData(
@@ -853,3 +960,14 @@ export async function deleteUserData(env: AdminServiceEnv & Record<string, unkno
 	for (const videoId of summary.deletedVideoIds) await send(env, MessageType.VideoDelete, { videoId, userId, reason: 'admin-erasure' });
 	return summary;
 }
+
+/** The admin-jobs queue consumer's handlers, one per job kind (lib/admin/jobs.ts). */
+export const ADMIN_JOB_HANDLERS: Record<AdminJobKind, JobHandler> = {
+	'channel.sync-holds': (env, job) => syncChannelHolds(env as AdminServiceEnv, job),
+	'channel.purge': (env, job) => purgeChannel(env as AdminServiceEnv, job),
+	'channel.transfer': (env, job) => runTransfer(env as AdminServiceEnv, job),
+	'video.move': (env, job) => runMove(env as AdminServiceEnv, job),
+	'video.purge': (env, job) => runVideoPurge(env as AdminServiceEnv, job),
+	'user.sync-holds': (env, job) => syncUserHolds(env as AdminServiceEnv, job),
+	'user.delete-data': (env, job) => runUserDelete(env as AdminServiceEnv, job),
+};

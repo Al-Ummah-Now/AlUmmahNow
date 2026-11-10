@@ -2,7 +2,7 @@
  * Platform content management (/internal/admin/*, lib/admin/*) and videos bans
  * (middleware/videos-ban.ts) over in-memory R2 and a real SQLite search DB.
  */
-import { describe, it } from 'node:test';
+import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { Hono } from 'hono';
 import { fromHono } from 'chanfana';
@@ -25,9 +25,61 @@ import { CreateCommunityPost } from '../src/endpoints/community/create-post';
 import { LiveStreamsList } from '../src/endpoints/live/liveStreamsList';
 import { LiveStreamUpdate } from '../src/endpoints/live/liveStreamUpdate';
 import { MemoryBucket, MemoryQueue, commentFixture, videoFixture } from './helpers';
+import { backoffSeconds, handleAdminJobBatch, type JobMessage } from '../src/lib/admin/jobs';
+import { ADMIN_JOB_HANDLERS } from '../src/lib/admin/service';
 import { SqliteD1 } from './search-sqlite-d1';
 
 const OWNER = 'usr_owner';
+
+/** Bunny Stream API stand-in: records calls; `bunny.status` makes deletes fail. */
+const bunny = { calls: [] as string[], status: 200 };
+const realFetch = globalThis.fetch;
+before(() => {
+	globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+		const url = String(input instanceof Request ? input.url : input);
+		if (!url.startsWith('https://video.bunnycdn.com/')) return realFetch(input, init);
+		bunny.calls.push(`${init?.method ?? 'GET'} ${new URL(url).pathname}`);
+		return new Response(bunny.status < 300 ? '{}' : 'error', { status: bunny.status });
+	}) as typeof fetch;
+});
+after(() => {
+	globalThis.fetch = realFetch;
+});
+
+const MAX_RETRIES = 5; // wrangler: admin-jobs consumer max_retries
+
+/**
+ * The admin-jobs queue and its consumer, as Cloudflare runs them: a retried
+ * message comes back with attempts + 1; after max_retries it goes to the DLQ.
+ */
+class JobsQueue {
+	pending: { body: unknown; attempts: number; delaySeconds?: number }[] = [];
+	dlq: unknown[] = [];
+	delays: number[] = [];
+	refuse = false;
+	async send(body: unknown, options?: { delaySeconds?: number }) {
+		if (this.refuse) throw new Error('Queue send failed');
+		this.pending.push({ body, attempts: 1, delaySeconds: options?.delaySeconds });
+	}
+	/** Delivers messages (newest first when `reverse`) until the queue is empty. */
+	async drain(env: unknown, opts: { reverse?: boolean } = {}) {
+		for (let guard = 0; this.pending.length && guard < 200; guard++) {
+			const delivery = opts.reverse ? this.pending.pop()! : this.pending.shift()!;
+			let outcome: 'ack' | { delaySeconds?: number } = 'ack';
+			const msg: JobMessage = {
+				body: delivery.body,
+				attempts: delivery.attempts,
+				ack: () => { outcome = 'ack'; },
+				retry: (o) => { outcome = { delaySeconds: o?.delaySeconds }; },
+			};
+			await handleAdminJobBatch({ messages: [msg] }, env as never, ADMIN_JOB_HANDLERS);
+			if (outcome === 'ack') continue;
+			this.delays.push((outcome as { delaySeconds?: number }).delaySeconds ?? 0);
+			if (delivery.attempts > MAX_RETRIES) this.dlq.push(delivery.body);
+			else this.pending.push({ ...delivery, attempts: delivery.attempts + 1 });
+		}
+	}
+}
 const OTHER = 'usr_other';
 
 function profile(id: string, overrides: Record<string, unknown> = {}) {
@@ -60,21 +112,33 @@ async function setup(seed: { profiles?: Record<string, unknown>; channels?: Reco
 		'upload-defaults': new MemoryBucket(),
 		reports: new MemoryBucket(),
 		queue: new MemoryQueue(),
+		ADMIN_JOBS_QUEUE: new JobsQueue(),
+		'bunny-stream-key': 'test-key',
+		bunny_stream_library_id: '7',
 	};
 	for (const kind of ['video', 'channel', 'profile'] as const) await runOwnershipPass(raw as never, kind, { maxPages: 10 });
 	const env = withSearchSync(raw, { waitUntil: (p: Promise<unknown>) => { pending.push(p); } });
 	const app = new Hono();
 	app.route('/internal/admin', adminRouter);
-	const call = async (method: string, path: string, body?: unknown) => {
+	const jobs = raw.ADMIN_JOBS_QUEUE;
+	/** Calls admin; heavy actions' jobs then run through the consumer unless `hold`. */
+	const call = async (method: string, path: string, body?: unknown, opts: { hold?: boolean } = {}) => {
 		const res = await app.request(`/internal/admin${path}`, {
 			method,
 			headers: { 'Content-Type': 'application/json', 'X-Admin-Actor': 'usr_admin' },
 			...(body !== undefined ? { body: JSON.stringify(body) } : {}),
 		}, env);
 		await Promise.all(pending.splice(0));
-		return { status: res.status, body: (await res.json()) as any };
+		const json = (await res.json()) as any;
+		if (!opts.hold) {
+			await jobs.drain(env);
+			await Promise.all(pending.splice(0));
+		}
+		return { status: res.status, body: json };
 	};
-	return { db, raw, env, call, flush: () => Promise.all(pending.splice(0)) };
+	/** The job a heavy action returned, as it stands now. */
+	const jobOf = async (res: { body: any }) => (await call('GET', `/jobs/${res.body.result.job.id}`)).body.result;
+	return { db, raw, env, call, jobs, jobOf, flush: () => Promise.all(pending.splice(0)) };
 }
 
 /** The public api-videos routes a visitor or user would call, with the ban middleware. */
@@ -160,7 +224,7 @@ describe('admin lists (ownership index)', () => {
 
 describe('channel actions', () => {
 	it('suspend hides the channel and its videos from the public; the owner still lists it; unsuspend restores', async () => {
-		const { env, call } = await setup();
+		const { env, call, jobOf } = await setup();
 		const visitor = publicApp(env, null);
 		const owner = publicApp(env, OWNER);
 		assert.equal((await visitor('GET', '/api/channels/ch1')).status, 200);
@@ -168,7 +232,12 @@ describe('channel actions', () => {
 
 		const suspended = await call('POST', '/channels/ch1/suspend', { reason: 'Copyright' });
 		assert.equal(suspended.status, 200);
-		assert.equal(suspended.body.result.videos, 2);
+		assert.equal(suspended.body.result.job.kind, 'channel.sync-holds');
+		assert.equal(suspended.body.result.job.status, 'queued', 'the request only queues the cascade');
+		const job = await jobOf(suspended);
+		assert.equal(job.status, 'succeeded');
+		assert.equal(job.result.videos, 2);
+		assert.equal(job.actorId, 'usr_admin');
 		assert.equal((await visitor('GET', '/api/channels/ch1')).status, 404);
 		assert.equal((await visitor('GET', '/api/videos/v1')).status, 404);
 		const mine = (await (await owner('GET', '/api/channels')).json()) as any;
@@ -272,15 +341,19 @@ describe('channel actions', () => {
 	});
 
 	it('transfers a channel with its videos to another videos user', async () => {
-		const { raw, call } = await setup();
+		const { raw, call, jobOf } = await setup();
 		const res = await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER });
 		assert.equal(res.status, 200);
-		assert.equal(res.body.result.previousOwnerId, OWNER);
+		const job = await jobOf(res);
+		assert.equal(job.status, 'succeeded');
+		assert.equal(job.result.previousOwnerId, OWNER);
+		assert.equal(job.result.videos, 2);
 		assert.equal(JSON.parse(raw.channels.store.get('ch1')!).userId, OTHER);
 		assert.equal(JSON.parse(raw.videos.store.get('v1')!).userId, OTHER);
 		assert.deepEqual(JSON.parse(raw.profiles.store.get(OTHER)!).channels, ['ch1']);
 		assert.deepEqual(JSON.parse(raw.profiles.store.get(OWNER)!).channels, []);
 		assert.equal((await call('POST', '/channels/ch1/transfer', { newOwnerId: 'usr_nobody' })).status, 404);
+		assert.equal((await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER })).body.code, 'already_owner');
 	});
 
 	it('delete soft-deletes the channel, erases its videos and frees the handle', async () => {
@@ -297,6 +370,7 @@ describe('channel actions', () => {
 		assert.equal((db.db.prepare("SELECT COUNT(*) AS n FROM content_ownership WHERE kind = 'video' AND channel_id = 'ch1'").get() as any).n, 0);
 		assert.equal((await call('GET', '/channels')).body.result.total, 0);
 		assert.equal(raw.queue.messages.filter((m: any) => m.type === MessageType.VideoDelete).length, 2, 'one VideoDelete per erased video');
+		assert.ok(bunny.calls.includes('DELETE /library/7/videos/v1') && bunny.calls.includes('DELETE /library/7/videos/v2'), 'media erased from Bunny');
 	});
 });
 
@@ -355,12 +429,15 @@ describe('comments index', () => {
 
 describe('videos bans (users)', () => {
 	it('blocks a banned user\'s writes and profile, keeps public reads, and hides their content', async () => {
-		const { env, raw, call } = await setup();
+		const { env, raw, call, jobOf } = await setup();
 		const banned = publicApp(env, OWNER);
 		const visitor = publicApp(env, null);
 		const res = await call('POST', `/users/${OWNER}/ban`, { reason: 'Abuse' });
 		assert.equal(res.status, 200);
-		assert.equal(res.body.result.channels, 1);
+		assert.equal(res.body.result.ban.reason, 'Abuse');
+		const job = await jobOf(res);
+		assert.equal(job.kind, 'user.sync-holds');
+		assert.equal(job.result.channels, 1);
 		forgetCachedBan(OWNER);
 
 		const comment = await banned('POST', '/api/videos/legacy/comments', { text: 'hi' }, { channelId: 'ch1' });
@@ -386,10 +463,10 @@ describe('videos bans (users)', () => {
 	});
 
 	it('deleting a user\'s videos data removes it; they start fresh unless banned, and the ban survives', async () => {
-		const { env, raw, call } = await setup();
-		let erased = await call('POST', `/users/${OTHER}/delete-data`, {});
+		const { env, raw, call, jobOf } = await setup();
+		const erased = await call('POST', `/users/${OTHER}/delete-data`, {});
 		assert.equal(erased.status, 200);
-		while (!erased.body.result.complete) erased = await call('POST', `/users/${OTHER}/delete-data`, { resumeToken: erased.body.result.resumeToken });
+		assert.equal((await jobOf(erased)).status, 'succeeded');
 		assert.equal(raw.profiles.store.has(OTHER), false);
 		const fresh = publicApp(env, OTHER);
 		assert.equal((await fresh('GET', '/api/profile')).status, 404, 'no profile: the web app offers to create one');
@@ -397,8 +474,9 @@ describe('videos bans (users)', () => {
 		assert.ok(created.status < 300, `a fresh profile can be created (${created.status})`);
 
 		await call('POST', `/users/${OWNER}/ban`, { reason: 'Spam' });
-		erased = await call('POST', `/users/${OWNER}/delete-data`, {});
-		while (!erased.body.result.complete) erased = await call('POST', `/users/${OWNER}/delete-data`, { resumeToken: erased.body.result.resumeToken });
+		const erasedOwner = await jobOf(await call('POST', `/users/${OWNER}/delete-data`, {}));
+		assert.equal(erasedOwner.status, 'succeeded');
+		assert.equal(erasedOwner.result.deletedVideos, 2);
 		assert.equal(raw.profiles.store.has(OWNER), false);
 		assert.equal(raw.videos.store.has('v1'), false);
 		forgetCachedBan(OWNER);
@@ -426,5 +504,100 @@ describe('users list', () => {
 		assert.equal((await call('GET', '/users')).body.result.total, 2);
 		assert.equal((await call('PATCH', `/users/${OTHER}`, { displayName: 'Renamed' })).status, 200);
 		assert.deepEqual((await call('GET', '/users?q=renamed')).body.result.items.map((u: any) => u.id), [OTHER]);
+	});
+});
+
+describe('admin jobs (queue, retry, DLQ)', () => {
+	it('a failing job retries with backoff, then fails, dead-letters and flags the admin; Retry finishes it', async () => {
+		const { raw, call, jobs, jobOf } = await setup();
+		bunny.status = 500;
+		try {
+			const res = await call('DELETE', '/videos/v1');
+			assert.equal(res.status, 200);
+			assert.equal((await call('GET', '/videos/v1')).status, 404, 'hidden and marked deleted at once');
+			const failed = await jobOf(res);
+			assert.equal(failed.status, 'failed');
+			assert.equal(failed.attempts, MAX_RETRIES + 1);
+			assert.match(failed.lastError, /Bunny Stream delete failed/);
+			assert.deepEqual(jobs.delays, [10, 20, 40, 80, 160, 300], 'exponential backoff, capped');
+			assert.equal(jobs.dlq.length, 1, 'the last delivery goes to the DLQ');
+			assert.equal((jobs.dlq[0] as any).type, MessageType.AdminJob);
+			assert.deepEqual((await call('GET', '/jobs/counts')).body.result, { failed: 1, retrying: 0 });
+			assert.deepEqual((await call('GET', '/jobs?status=failed')).body.result.items.map((j: any) => j.id), [failed.id]);
+			assert.deepEqual((await call('GET', '/jobs?targetKind=video&targetId=v1')).body.result.items.map((j: any) => j.status), ['failed']);
+		} finally {
+			bunny.status = 200;
+		}
+		const failedId = (await call('GET', '/jobs?status=failed')).body.result.items[0].id;
+		const retried = await call('POST', `/jobs/${failedId}/retry`);
+		assert.equal(retried.status, 200);
+		const done = (await call('GET', `/jobs/${failedId}`)).body.result;
+		assert.equal(done.status, 'succeeded');
+		assert.equal(done.lastError, null);
+		assert.equal(raw.videos.store.has('v1'), false);
+		assert.equal((await call('POST', `/jobs/${failedId}/retry`)).body.code, 'job_not_failed', 'only failed jobs retry');
+		assert.equal((await call('GET', '/jobs/nope')).status, 404);
+	});
+
+	it('a video already gone from Bunny counts as erased', async () => {
+		const { call, jobOf } = await setup();
+		bunny.status = 404;
+		try {
+			assert.equal((await jobOf(await call('DELETE', '/videos/v1'))).status, 'succeeded');
+		} finally {
+			bunny.status = 200;
+		}
+	});
+
+	it('when the queue refuses, the job is failed at once (visible, retryable)', async () => {
+		const { env, call, jobs } = await setup();
+		jobs.refuse = true;
+		const res = await call('POST', '/channels/ch1/suspend', { reason: 'x' });
+		assert.equal(res.status, 200);
+		assert.equal(res.body.result.job.status, 'failed');
+		assert.match(res.body.result.job.lastError, /Could not queue the job/);
+		jobs.refuse = false;
+		const visitor = publicApp(env, null);
+		assert.equal((await visitor('GET', '/api/videos/v1')).status, 200, 'the cascade has not run');
+		await call('POST', `/jobs/${res.body.result.job.id}/retry`);
+		assert.equal((await visitor('GET', '/api/videos/v1')).status, 404, 'Retry runs it');
+	});
+
+	it('suspend then unsuspend converge whatever order their jobs run in', async () => {
+		const { env, call, jobs } = await setup();
+		const visitor = publicApp(env, null);
+		await call('POST', '/channels/ch1/suspend', { reason: 'x' }, { hold: true });
+		await call('POST', '/channels/ch1/unsuspend', undefined, { hold: true });
+		await jobs.drain(env, { reverse: true });
+		assert.equal((await visitor('GET', '/api/videos/v1')).status, 200);
+		assert.equal((await visitor('GET', '/api/channels/ch1')).status, 200);
+	});
+
+	it('a resumable job queues its next step with the new params and keeps its result', async () => {
+		const { env, jobs, call } = await setup();
+		const steps: unknown[] = [];
+		const created = await call('POST', `/users/${OTHER}/delete-data`, {}, { hold: true });
+		const id = created.body.result.job.id;
+		jobs.pending.splice(0);
+		await jobs.send({ id: 'm', type: MessageType.AdminJob, payload: { jobId: id }, timestamp: 0 });
+		const handlers = {
+			'user.delete-data': async (_env: unknown, job: any) => {
+				steps.push(job.params.resumeToken ?? null);
+				const n = Number(job.result?.n ?? 0) + 1;
+				return n < 3 ? { done: false as const, params: { resumeToken: `t${n}` }, result: { n } } : { done: true as const, result: { n } };
+			},
+		};
+		for (let i = 0; i < 5 && jobs.pending.length; i++) {
+			const d = jobs.pending.shift()!;
+			await handleAdminJobBatch({ messages: [{ body: d.body, attempts: 1, ack() {}, retry() {} }] }, env as never, handlers);
+		}
+		assert.deepEqual(steps, [null, 't1', 't2']);
+		const job = (await call('GET', `/jobs/${id}`)).body.result;
+		assert.equal(job.status, 'succeeded');
+		assert.deepEqual(job.result, { n: 3 });
+	});
+
+	it('backoff doubles from 10s and caps at 5 minutes', () => {
+		assert.deepEqual([1, 2, 3, 4, 5, 6, 9].map(backoffSeconds), [10, 20, 40, 80, 160, 300, 300]);
 	});
 });

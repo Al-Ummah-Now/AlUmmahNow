@@ -50,10 +50,12 @@ describe('processDeadLetterBatch', () => {
     const scan = queueMessage('q-2', { id: 's-1', type: MessageType.ModerationScan, timestamp: 1, payload: {} });
     const legacy = queueMessage('q-3', { type: 'SCHEDULER_METRICS', processed: 1 });
     const junk = queueMessage('q-4', 'not an object');
-    await processDeadLetterBatch({ queue: 'al-ummah-now-dlq', messages: [scan, legacy, junk] }, { NOTIFICATIONS_DB: db, ENVIRONMENT: 'production' }, logger, 5);
+    const job = queueMessage('q-5', { id: 'j-1', type: MessageType.AdminJob, timestamp: 1, payload: { jobId: 'job_1' } });
+    await processDeadLetterBatch({ queue: 'al-ummah-now-dlq', messages: [scan, legacy, junk, job] }, { NOTIFICATIONS_DB: db, ENVIRONMENT: 'production' }, logger, 5);
     const rows = await listDeadLetters(db);
     const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
     expect(byId['q-2']).toEqual(expect.objectContaining({ source: 'moderation', type_name: 'ModerationScan' }));
+    expect(byId['q-5']).toEqual(expect.objectContaining({ source: 'admin-jobs', type_name: 'AdminJob' }));
     expect(byId['q-3']).toEqual(expect.objectContaining({ source: 'videos', type_name: 'SCHEDULER_METRICS', message_type: null }));
     expect(byId['q-4']).toEqual(expect.objectContaining({ type_name: 'unknown', body_json: '"not an object"' }));
   });
@@ -122,6 +124,9 @@ describe('replayDeadLetter', () => {
     const scanDb = await seeded({ id: 's', type: MessageType.ModerationScan, timestamp: 1, payload: {} });
     expect((await replayDeadLetter(scanDb, queue, 'q-1')).status).toBe('not_replayable');
     expect((await replayDeadLetter(scanDb, queue, 'nope')).status).toBe('not_found');
+    // Admin jobs are retried from admin (the job's Retry), which resets the job row too
+    const jobDb = await seeded({ id: 'j', type: MessageType.AdminJob, timestamp: 1, payload: { jobId: 'job_1' } });
+    expect((await replayDeadLetter(jobDb, queue, 'q-1')).status).toBe('not_replayable');
     const legacyDb = await seeded({ type: 'SCHEDULER_METRICS' });
     expect((await replayDeadLetter(legacyDb, queue, 'q-1')).status).toBe('not_replayable');
     expect(queue.send).not.toHaveBeenCalled();
