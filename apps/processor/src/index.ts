@@ -185,10 +185,7 @@ export async function runRollupImport(env: QueueEnvironment, now = Date.now()) {
 
 /** AI category suggestions: hourly re-send of stale pending rows; daily re-send of budget-skipped rows + draft purge. */
 export async function runCategorizeSweep(env: QueueEnvironment, budget: boolean, now = Date.now()) {
-  const logger = createLogger('processor', {
-    logLevel: (env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error') || 'info',
-    forceHttpLogging: true,
-  });
+  const logger = loggerFor(env);
   try {
     return await sweepCategorySuggestions(env.SEARCH_DB as unknown as SearchDb | undefined, env.MESSAGE_QUEUE, logger, { budget, now });
   } catch (error) {
