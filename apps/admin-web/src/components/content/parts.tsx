@@ -43,7 +43,7 @@ export const smallButtonClass =
 export const dangerButtonClass =
   'inline-flex items-center justify-center px-3 py-2 rounded border border-danger-border bg-danger-bg text-danger-fg text-sm font-medium hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-60 disabled:cursor-not-allowed';
 
-export function PageHeader({ title, subtitle, total, t, children }: { title: string; subtitle: string; total?: number; t: Translator; children?: React.ReactNode }) {
+export function PageHeader({ title, subtitle, total, t, children, deletedKind }: { title: string; subtitle: string; total?: number; t: Translator; children?: React.ReactNode; deletedKind?: string }) {
   return (
     <div className="flex flex-wrap justify-between items-end gap-4 mb-6">
       <div>
@@ -56,6 +56,14 @@ export function PageHeader({ title, subtitle, total, t, children }: { title: str
               <span data-testid="content-total" data-total={total}>
                 {t('content.total', { count: total })}
               </span>
+            </>
+          )}
+          {deletedKind && (
+            <>
+              {' · '}
+              <Link href={`/deleted?kind=${encodeURIComponent(deletedKind)}`} className={linkClass} data-testid="view-deleted">
+                {t('deleted.viewDeleted')}
+              </Link>
             </>
           )}
         </p>

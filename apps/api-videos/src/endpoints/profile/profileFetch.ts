@@ -70,7 +70,8 @@ export class ProfileFetch extends OptionalAuthRoute {
 			const repository = new R2Repository<ProfileType>(bucket);
 			const profile = await repository.getObject(id);
 
-			if (!profile) {
+			// A profile whose data an admin deleted (restorable for 30 days) is not shown
+			if (!profile || (profile as { adminDeletion?: unknown }).adminDeletion) {
 				return c.json(
 					{
 						success: false,

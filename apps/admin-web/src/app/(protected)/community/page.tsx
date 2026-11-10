@@ -28,7 +28,7 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
 
   return (
     <div>
-      <PageHeader title={t('community.title')} subtitle={t('community.subtitle')} t={t} />
+      <PageHeader deletedKind="post" title={t('community.title')} subtitle={t('community.subtitle')} t={t} />
       <FilterForm
         action="/community"
         label={t('community.title')}

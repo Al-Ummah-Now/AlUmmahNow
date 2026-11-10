@@ -12,6 +12,8 @@ import type {
   AdminChannelRow,
   AdminCommentRow,
   AdminContentPermission,
+  AdminDeletionKind,
+  AdminDeletionPage,
   AdminPage,
   AdminPlaylistRow,
   AdminPostRow,
@@ -41,6 +43,7 @@ function withQuery(path: string, params: ListParams = {}): string {
   return `${BASE}${path}${query ? `?${query}` : ''}`;
 }
 
+const reasonBody = (reason?: string) => ({ reason: reason?.trim() || undefined });
 const json = (method: string, body?: unknown): RequestInit => ({ method, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });
 
 // Permissions and history
@@ -104,8 +107,9 @@ export async function readJob(id: string): Promise<ActionResult<AdminJob>> {
   return toResult(() => fetchAdmin<AdminJob>(`${BASE}/jobs/${enc(id)}`));
 }
 
-export async function deleteChannel(id: string): Promise<ActionResult<JobResult>> {
-  return toResult(() => fetchAdmin<JobResult>(`${BASE}/channels/${enc(id)}`, json('DELETE')));
+/** Soft delete (restorable for 30 days under Recently deleted). */
+export async function deleteChannel(id: string, reason?: string): Promise<ActionResult<JobResult>> {
+  return toResult(() => fetchAdmin<JobResult>(`${BASE}/channels/${enc(id)}`, json('DELETE', reasonBody(reason))));
 }
 
 // Videos
@@ -134,8 +138,9 @@ export async function videoAction(id: string, action: 'unpublish' | 'republish' 
   return toResult(() => fetchAdmin(`${BASE}/videos/${enc(id)}/${action}`, json('POST')));
 }
 
-export async function deleteVideo(id: string): Promise<ActionResult<JobResult>> {
-  return toResult(() => fetchAdmin<JobResult>(`${BASE}/videos/${enc(id)}`, json('DELETE')));
+/** Soft delete (restorable for 30 days under Recently deleted). */
+export async function deleteVideo(id: string, reason?: string): Promise<ActionResult<unknown>> {
+  return toResult(() => fetchAdmin(`${BASE}/videos/${enc(id)}`, json('DELETE', reasonBody(reason))));
 }
 
 // Comments, playlists, community posts
@@ -144,24 +149,24 @@ export async function listComments(params: ListParams): Promise<AdminPage<AdminC
   return fetchAdmin(withQuery('/comments', params));
 }
 
-export async function deleteComment(videoId: string, commentId: string): Promise<ActionResult<unknown>> {
-  return toResult(() => fetchAdmin(`${BASE}/videos/${enc(videoId)}/comments/${enc(commentId)}`, json('DELETE')));
+export async function deleteComment(videoId: string, commentId: string, reason?: string): Promise<ActionResult<unknown>> {
+  return toResult(() => fetchAdmin(`${BASE}/videos/${enc(videoId)}/comments/${enc(commentId)}`, json('DELETE', reasonBody(reason))));
 }
 
 export async function listPlaylists(params: ListParams): Promise<CursorPage<AdminPlaylistRow>> {
   return fetchAdmin(withQuery('/playlists', params));
 }
 
-export async function deletePlaylist(id: string): Promise<ActionResult<unknown>> {
-  return toResult(() => fetchAdmin(`${BASE}/playlists/${enc(id)}`, json('DELETE')));
+export async function deletePlaylist(id: string, reason?: string): Promise<ActionResult<unknown>> {
+  return toResult(() => fetchAdmin(`${BASE}/playlists/${enc(id)}`, json('DELETE', reasonBody(reason))));
 }
 
 export async function listPosts(params: ListParams): Promise<CursorPage<AdminPostRow>> {
   return fetchAdmin(withQuery('/posts', params));
 }
 
-export async function deletePost(channelId: string, postId: string): Promise<ActionResult<unknown>> {
-  return toResult(() => fetchAdmin(`${BASE}/posts/${enc(channelId)}/${enc(postId)}`, json('DELETE')));
+export async function deletePost(channelId: string, postId: string, reason?: string): Promise<ActionResult<unknown>> {
+  return toResult(() => fetchAdmin(`${BASE}/posts/${enc(channelId)}/${enc(postId)}`, json('DELETE', reasonBody(reason))));
 }
 
 // Users (videos profiles; never the Auth account)
@@ -186,9 +191,24 @@ export async function unbanUser(id: string): Promise<ActionResult<JobResult>> {
   return toResult(() => fetchAdmin<JobResult>(`${BASE}/users/${enc(id)}/unban`, json('POST')));
 }
 
-/** Queues the erase of the user's videos data (a job that resumes itself); the ban, if any, is kept. */
-export async function deleteUserData(id: string): Promise<ActionResult<JobResult>> {
-  return toResult(() => fetchAdmin<JobResult>(`${BASE}/users/${enc(id)}/delete-data`, json('POST', {})));
+/** Soft-deletes the user's videos data (hidden now, erased by the 30-day cleanup); the ban, if any, is kept. */
+export async function deleteUserData(id: string, reason?: string): Promise<ActionResult<JobResult>> {
+  return toResult(() => fetchAdmin<JobResult>(`${BASE}/users/${enc(id)}/delete-data`, json('POST', reasonBody(reason))));
+}
+
+// Recently deleted (soft deletes: restorable for 30 days, then purged by the cleanup)
+
+export async function listDeletions(params: { kind?: AdminDeletionKind; cursor?: string; pageSize?: number }): Promise<AdminDeletionPage> {
+  return fetchAdmin(withQuery('/deletions', params as ListParams));
+}
+
+export async function restoreDeletion(kind: AdminDeletionKind, id: string): Promise<ActionResult<unknown>> {
+  return toResult(() => fetchAdmin(`${BASE}/deletions/${enc(kind)}/${enc(id)}/restore`, json('POST', {})));
+}
+
+/** "Delete permanently now": queues it for the next cleanup run (still restorable until then). */
+export async function requestPermanentDeletion(kind: AdminDeletionKind, id: string): Promise<ActionResult<unknown>> {
+  return toResult(() => fetchAdmin(`${BASE}/deletions/${enc(kind)}/${enc(id)}/purge`, json('POST', {})));
 }
 
 // Admin jobs (heavy actions run from a queue; failed ones wait here for Retry)

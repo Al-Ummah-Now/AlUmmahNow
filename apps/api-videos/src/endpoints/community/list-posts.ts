@@ -1,3 +1,4 @@
+import { isChannelDeleted } from '../../lib/community-posts';
 import { withPostViews } from '../../lib/post-views';
 import { z } from 'zod';
 import R2Repository from '../../lib/r2Repo';
@@ -69,8 +70,8 @@ export class ListCommunityPosts extends OptionalAuthRoute {
       const indexKey = `posts/${postChannelId}/index.json`;
       const indexData = await c.env.community_posts.get(indexKey);
 
-      if (!indexData) {
-        // No posts for this channel
+      if (!indexData || (await isChannelDeleted(c.env.channels, postChannelId))) {
+        // No posts for this channel (or the channel is deleted)
         return c.json({
           posts: [],
           pagination: {

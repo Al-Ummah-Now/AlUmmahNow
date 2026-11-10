@@ -165,7 +165,9 @@ export function ChannelActions({ channel, permissions }: Props) {
             busy={busy === 'delete'}
             disabled={!!busy}
             testId="channel-delete"
-            onConfirm={() => run('delete', () => deleteChannel(channel.id), { success: t('content.queued') })}
+            withReason
+            reasonHint={t('deleted.reasonHint')}
+            onConfirm={(reason) => run('delete', () => deleteChannel(channel.id, reason), { success: t('deleted.movedToBin') })}
           />
         </SectionCard>
       )}

@@ -28,7 +28,7 @@ export default async function PlaylistsPage({ searchParams }: { searchParams: Pr
 
   return (
     <div>
-      <PageHeader title={t('playlists.title')} subtitle={t('playlists.subtitle')} t={t} />
+      <PageHeader deletedKind="playlist" title={t('playlists.title')} subtitle={t('playlists.subtitle')} t={t} />
       <FilterForm
         action="/playlists"
         label={t('playlists.title')}

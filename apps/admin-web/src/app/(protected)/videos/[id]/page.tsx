@@ -99,7 +99,12 @@ export default async function VideoPage({ params }: { params: Promise<{ id: stri
         </div>
       </div>
 
-      {v.isDeleted && <Notice tone="bad" testId="video-deleted">{t('videos.deletedNotice')}</Notice>}
+      {v.isDeleted && (
+        <Notice tone="bad" testId="video-deleted">
+          {t('deleted.deletedNotice')}{' '}
+          <Link href="/deleted?kind=video" className={linkClass}>{t('deleted.viewDeleted')}</Link>
+        </Notice>
+      )}
       {v.isHidden && (holds.length > 0 || v.moderationAction) && (
         <Notice tone="warn" testId="video-holds">
           {t('videos.holds')}: {[...holds.map((k) => t(k)), ...(v.moderationAction ? [t('videos.moderationHidden')] : [])].join(' · ')}

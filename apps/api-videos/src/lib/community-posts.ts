@@ -13,3 +13,15 @@ export async function bumpPostComments(bucket: R2Bucket, postKey: string, delta:
 	});
 	return saved !== null;
 }
+
+/**
+ * Whether a channel is deleted (an admin soft delete keeps it, hidden and
+ * restorable, for 30 days): its posts are not shown meanwhile.
+ */
+export async function isChannelDeleted(channels: R2Bucket | undefined, channelId: string): Promise<boolean> {
+	if (!channels) return false;
+	const object = await channels.get(channelId);
+	if (!object) return false;
+	const channel = (await object.json()) as { isDeleted?: boolean } | null;
+	return channel?.isDeleted === true;
+}

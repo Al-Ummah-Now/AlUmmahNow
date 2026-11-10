@@ -20,6 +20,8 @@ import type {
   AdminVideoRow,
 } from '@al-ummah/shared-types';
 
+export type { AdminDeletion, AdminDeletionKind, AdminDeletionPage, AdminDeletionStatus } from '@al-ummah/shared-types';
+
 export type {
   AdminUserSearchItem,
   AdminJob,

@@ -53,7 +53,7 @@ export default async function VideosPage({ searchParams }: { searchParams: Promi
 
   return (
     <div>
-      <PageHeader title={t('videos.title')} subtitle={t('videos.subtitle')} total={data?.total} t={t}>
+      <PageHeader deletedKind="video" title={t('videos.title')} subtitle={t('videos.subtitle')} total={data?.total} t={t}>
         {counts && (
           <nav aria-label={t('videos.statusSummary')} className="flex flex-wrap gap-2" data-testid="video-status-summary">
             <Link href={hrefWith('/videos', {}, { status: 'processing' })} className="rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-focus" aria-current={params.status === 'processing' ? 'true' : undefined}>

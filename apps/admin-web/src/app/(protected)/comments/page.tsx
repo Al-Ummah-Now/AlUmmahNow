@@ -28,7 +28,7 @@ export default async function CommentsPage({ searchParams }: { searchParams: Pro
 
   return (
     <div>
-      <PageHeader title={t('comments.title')} subtitle={t('comments.subtitle')} total={data?.total} t={t} />
+      <PageHeader deletedKind="comment" title={t('comments.title')} subtitle={t('comments.subtitle')} total={data?.total} t={t} />
       <FilterForm
         action="/comments"
         label={t('comments.title')}

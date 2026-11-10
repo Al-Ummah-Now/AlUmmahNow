@@ -75,7 +75,12 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
-      {ch.isDeleted && <Notice tone="bad" testId="channel-deleted">{t('channels.deletedNotice')}</Notice>}
+      {ch.isDeleted && (
+        <Notice tone="bad" testId="channel-deleted">
+          {t('deleted.deletedNotice')}{' '}
+          <Link href="/deleted?kind=channel" className={linkClass}>{t('deleted.viewDeleted')}</Link>
+        </Notice>
+      )}
       {ch.isSuspended && ch.suspension && (
         <Notice tone="bad" testId="channel-suspended-banner">
           <p>{t('channels.suspendedBanner', { date: formatDate(ch.suspension.at, locale, true) })}</p>

@@ -1,3 +1,4 @@
+import { isChannelDeleted } from '../../lib/community-posts';
 import { recordPostView, withPostViews } from '../../lib/post-views';
 import { z } from 'zod';
 import { CommunityPost, PostStatus } from '@al-ummah/shared-types';
@@ -51,8 +52,8 @@ export class GetCommunityPost extends OptionalAuthRoute {
 
       const post = (await postData.json()) as CommunityPost;
 
-      // Don't show deleted posts
-      if (post.status === PostStatus.DELETED) {
+      // Don't show deleted posts, nor the posts of a deleted channel
+      if (post.status === PostStatus.DELETED || (await isChannelDeleted(c.env.channels, postChannelId))) {
         return c.json({ error: 'Post not found' }, 404);
       }
 

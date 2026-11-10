@@ -9,7 +9,8 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { Hono } from 'hono';
 import { fromHono } from 'chanfana';
-import { applySuspensionHold, liftSuspensionHold, MessageType, VIDEOS_BANNED_CODE } from '@al-ummah/shared-types';
+import { applySuspensionHold, deletionDaysLeft, deletionStatusOf, isPurgeDue, liftSuspensionHold, MessageType, purgeAfterOf, VIDEOS_BANNED_CODE } from '@al-ummah/shared-types';
+import { canViewPlaylist } from '../src/lib/playlists';
 import adminRouter from '../src/routers/admin.router';
 import { withSearchSync } from '../src/lib/search/sync';
 import { runOwnershipPass } from '../src/lib/search/ownership';
@@ -29,7 +30,9 @@ import { LiveStreamsList } from '../src/endpoints/live/liveStreamsList';
 import { LiveStreamUpdate } from '../src/endpoints/live/liveStreamUpdate';
 import { MemoryBucket, MemoryQueue, commentFixture, videoFixture } from './helpers';
 import { backoffSeconds, handleAdminJobBatch, type JobMessage } from '../src/lib/admin/jobs';
-import { ADMIN_JOB_HANDLERS } from '../src/lib/admin/service';
+import { ADMIN_JOB_HANDLERS, purgeDeletion } from '../src/lib/admin/service';
+import { createJob } from '../src/lib/admin/jobs';
+import { runDeletionCleanup } from '../src/lib/admin/deletions';
 import { SqliteD1 } from './search-sqlite-d1';
 
 const OWNER = 'usr_owner';
@@ -141,7 +144,27 @@ async function setup(seed: { profiles?: Record<string, unknown>; channels?: Reco
 	};
 	/** The job a heavy action returned, as it stands now. */
 	const jobOf = async (res: { body: any }) => (await call('GET', `/jobs/${res.body.result.job.id}`)).body.result;
-	return { db, raw, env, call, jobs, jobOf, flush: () => Promise.all(pending.splice(0)) };
+	/** One run of the hourly deletion cleanup (lib/admin/deletions.ts), then the jobs it started, then a run that records them. */
+	const cleanup = async (now = Date.now()) => {
+		const purge = (d: any) => purgeDeletion(env as never, d);
+		const first = await runDeletionCleanup(env as never, purge, { now });
+		await Promise.all(pending.splice(0));
+		await jobs.drain(env);
+		await Promise.all(pending.splice(0));
+		const second = await runDeletionCleanup(env as never, purge, { now });
+		await Promise.all(pending.splice(0));
+		return { first, second };
+	};
+	/** "Delete permanently now", then the cleanup; returns the purge job (if the kind uses one) as it stands. */
+	const purgeNow = async (kind: string, id: string) => {
+		const queued = await call('POST', `/deletions/${kind}/${id}/purge`);
+		assert.equal(queued.status, 200, JSON.stringify(queued.body));
+		assert.equal(queued.body.result.deletion.status, 'queued');
+		await cleanup();
+		const row = db.db.prepare('SELECT purge_job_id FROM admin_deletions WHERE kind = ? AND target_id = ?').get(kind, id) as { purge_job_id: string | null } | undefined;
+		return row?.purge_job_id ? (await call('GET', `/jobs/${row.purge_job_id}`)).body.result : null;
+	};
+	return { db, raw, env, call, jobs, jobOf, cleanup, purgeNow, flush: () => Promise.all(pending.splice(0)) };
 }
 
 /** The public api-videos routes a visitor or user would call, with the ban middleware. */
@@ -439,14 +462,27 @@ describe('channel actions', () => {
 		assert.equal((await search('bilal@example.com'))[0].isBanned, true, 'banned users are listed as such');
 	});
 
-	it('delete soft-deletes the channel, erases its videos and frees the handle', async () => {
-		const { raw, db, call } = await setup();
+	it('delete soft-deletes the channel (hidden, restorable); the purge erases its videos and frees the handle', async () => {
+		const { env, raw, db, call, purgeNow } = await setup();
+		const visitor = publicApp(env, null);
 		await raw.channel_tabs.put('channel-handles/ch1', JSON.stringify({ handle: 'ch1', channelId: 'ch1', userId: OWNER }));
-		const res = await call('DELETE', '/channels/ch1');
+		const res = await call('DELETE', '/channels/ch1', { reason: 'Spam' });
 		assert.equal(res.status, 200);
+		assert.equal(res.body.result.deletion.status, 'deleted');
+		assert.equal(res.body.result.deletion.reason, 'Spam');
 		const stored = JSON.parse(raw.channels.store.get('ch1')!);
 		assert.equal(stored.isDeleted, true);
 		assert.equal(stored.deletedBy, 'usr_admin');
+		assert.equal(raw.videos.store.has('v1'), true, 'nothing erased at delete time');
+		assert.equal(raw.channel_tabs.store.has('channel-handles/ch1'), true, 'the handle stays reserved while restorable');
+		assert.equal((await visitor('GET', '/api/channels/ch1')).status, 404);
+		assert.equal((await visitor('GET', '/api/videos/v1')).status, 404, 'its videos are hidden with it');
+		assert.equal(bunny.calls.length, 0);
+
+		const job = await purgeNow('channel', 'ch1');
+		assert.equal(job.kind, 'channel.purge');
+		assert.equal(job.status, 'succeeded');
+		assert.equal(raw.channels.store.has('ch1'), false, 'the record itself is purged');
 		assert.equal(raw.videos.store.has('v1'), false);
 		assert.equal(raw.videos.store.has('v2'), false);
 		assert.equal(raw.channel_tabs.store.has('channel-handles/ch1'), false);
@@ -455,47 +491,49 @@ describe('channel actions', () => {
 		assert.equal(raw.queue.messages.filter((m: any) => m.type === MessageType.VideoDelete).length, 2, 'one VideoDelete per erased video');
 		assert.ok(bunny.calls.includes('DELETE /library/7/videos/v1') && bunny.calls.includes('DELETE /library/7/videos/v2'), 'media erased from Bunny');
 	});
-	it('purge scans the playlists in bounded steps and soft-deletes only the channel\'s, however many there are', async () => {
+	it('purge scans the playlists in bounded steps and removes only the channel\'s, however many there are', async () => {
 		// 1,200 playlists (more than two scan steps), three of them ch1's, spread across the steps
 		const playlists: Record<string, unknown> = {};
 		for (let i = 0; i < 1200; i++) {
 			const id = `pl${String(i).padStart(4, '0')}`;
 			playlists[id] = { id, title: id, userId: OTHER, channelId: [5, 600, 1199].includes(i) ? 'ch1' : 'ch-other', videos: [] };
 		}
-		const { raw, call } = await setup({ playlists });
+		const { raw, call, purgeNow } = await setup({ playlists });
 		const res = await call('DELETE', '/channels/ch1');
 		assert.equal(res.status, 200);
+		await purgeNow('channel', 'ch1');
 		const jobs = (await call('GET', '/jobs?targetId=ch1')).body.result.items;
 		const purge = jobs.find((j: any) => j.kind === 'channel.purge');
 		assert.equal(purge.status, 'succeeded');
 		assert.equal(purge.result.playlists, 3);
 		assert.equal(purge.result.scanned, 1200, 'every playlist object scanned, none cut off');
-		for (const id of ['pl0005', 'pl0600', 'pl1199']) assert.equal(JSON.parse(raw.playlists.store.get(id)!).isDeleted, true, id);
+		for (const id of ['pl0005', 'pl0600', 'pl1199']) assert.equal(raw.playlists.store.has(id), false, id);
 		assert.equal(JSON.parse(raw.playlists.store.get('pl0006')!).isDeleted, undefined, 'other channels\' playlists untouched');
 		assert.equal(raw.queue.messages.filter((m: any) => m.type === MessageType.ChannelDelete).length, 1, 'ChannelDelete sent once, at the end');
 	});
 
 	it('a failed playlist write retries its own step, then the purge finishes', async () => {
 		const playlists: Record<string, unknown> = { a: { id: 'a', title: 'a', channelId: 'ch1', videos: [] }, b: { id: 'b', title: 'b', channelId: 'ch1', videos: [] } };
-		const { raw, call } = await setup({ playlists });
-		const put = raw.playlists.put.bind(raw.playlists);
+		const { raw, call, purgeNow } = await setup({ playlists });
+		const remove = raw.playlists.delete.bind(raw.playlists);
 		let failOnce = true;
-		raw.playlists.put = (async (key: string, ...rest: unknown[]) => {
-			if (key === 'b' && failOnce) { failOnce = false; throw new Error('R2 write failed'); }
-			return (put as any)(key, ...rest);
+		raw.playlists.delete = (async (keys: string | string[]) => {
+			if (keys === 'b' && failOnce) { failOnce = false; throw new Error('R2 delete failed'); }
+			return remove(keys);
 		}) as any;
 		await call('DELETE', '/channels/ch1');
+		await purgeNow('channel', 'ch1');
 		const purge = (await call('GET', '/jobs?targetId=ch1')).body.result.items.find((j: any) => j.kind === 'channel.purge');
 		assert.equal(purge.status, 'succeeded');
 		assert.ok(purge.attempts >= 2, 'the failed step was retried');
-		assert.equal(JSON.parse(raw.playlists.store.get('a')!).isDeleted, true);
-		assert.equal(JSON.parse(raw.playlists.store.get('b')!).isDeleted, true);
+		assert.equal(raw.playlists.store.has('a'), false);
+		assert.equal(raw.playlists.store.has('b'), false);
 	});
 });
 
 describe('video actions', () => {
 	it('edit, move, unpublish/republish and delete', async () => {
-		const { env, raw, call } = await setup({
+		const { env, raw, call, purgeNow } = await setup({
 			channels: { ch1: channel('ch1'), ch2: channel('ch2', { userId: OTHER, isMain: true }) },
 		});
 		const visitor = publicApp(env, null);
@@ -515,8 +553,11 @@ describe('video actions', () => {
 		assert.equal((await visitor('GET', '/api/videos/v1')).status, 200);
 
 		assert.equal((await call('DELETE', '/videos/v1')).status, 200);
+		assert.equal(JSON.parse(raw.videos.store.get('v1')!).isDeleted, true, 'soft: kept until the cleanup');
+		assert.equal((await call('GET', '/videos/v1')).body.result.isDeleted, true, 'the admin detail shows it as deleted');
+		assert.equal((await visitor('GET', '/api/videos/v1')).status, 404);
+		assert.equal((await purgeNow('video', 'v1')).status, 'succeeded');
 		assert.equal(raw.videos.store.has('v1'), false);
-		assert.equal((await call('GET', '/videos/v1')).status, 404);
 		v1 = null;
 	});
 });
@@ -582,10 +623,13 @@ describe('videos bans (users)', () => {
 	});
 
 	it('deleting a user\'s videos data removes it; they start fresh unless banned, and the ban survives', async () => {
-		const { env, raw, call, jobOf } = await setup();
+		const { env, raw, call, jobOf, purgeNow } = await setup();
 		const erased = await call('POST', `/users/${OTHER}/delete-data`, {});
 		assert.equal(erased.status, 200);
-		assert.equal((await jobOf(erased)).status, 'succeeded');
+		assert.equal((await jobOf(erased)).kind, 'user.sync-holds', 'soft: their content is only hidden');
+		assert.equal(raw.profiles.store.has(OTHER), true);
+		assert.equal((await call('GET', `/users?q=${OTHER}@`)).body.result.total, 0, 'listed under Recently deleted instead');
+		assert.equal((await purgeNow('user', OTHER)).status, 'succeeded');
 		assert.equal(raw.profiles.store.has(OTHER), false);
 		const fresh = publicApp(env, OTHER);
 		assert.equal((await fresh('GET', '/api/profile')).status, 404, 'no profile: the web app offers to create one');
@@ -593,7 +637,8 @@ describe('videos bans (users)', () => {
 		assert.ok(created.status < 300, `a fresh profile can be created (${created.status})`);
 
 		await call('POST', `/users/${OWNER}/ban`, { reason: 'Spam' });
-		const erasedOwner = await jobOf(await call('POST', `/users/${OWNER}/delete-data`, {}));
+		await call('POST', `/users/${OWNER}/delete-data`, {});
+		const erasedOwner = await purgeNow('user', OWNER);
 		assert.equal(erasedOwner.status, 'succeeded');
 		assert.equal(erasedOwner.result.deletedVideos, 2);
 		assert.equal(raw.profiles.store.has(OWNER), false);
@@ -628,13 +673,16 @@ describe('users list', () => {
 
 describe('admin jobs (queue, retry, DLQ)', () => {
 	it('a failing job retries with backoff, then fails, dead-letters and flags the admin; Retry finishes it', async () => {
-		const { raw, call, jobs, jobOf } = await setup();
+		const { raw, call, jobs, cleanup, db } = await setup();
 		bunny.status = 500;
 		try {
 			const res = await call('DELETE', '/videos/v1');
 			assert.equal(res.status, 200);
-			assert.equal((await call('GET', '/videos/v1')).status, 404, 'hidden and marked deleted at once');
-			const failed = await jobOf(res);
+			assert.equal((await call('GET', '/videos/v1')).body.result.isDeleted, true, 'marked deleted at once');
+			await call('POST', '/deletions/video/v1/purge');
+			const runs = await cleanup();
+			assert.equal(runs.second.failed, 1, 'the cleanup sees the failed purge job and retries it next run');
+			const failed = (await call('GET', '/jobs?targetKind=video&targetId=v1')).body.result.items[0];
 			assert.equal(failed.status, 'failed');
 			assert.equal(failed.attempts, MAX_RETRIES + 1);
 			assert.match(failed.lastError, /Bunny Stream delete failed/);
@@ -654,15 +702,18 @@ describe('admin jobs (queue, retry, DLQ)', () => {
 		assert.equal(done.status, 'succeeded');
 		assert.equal(done.lastError, null);
 		assert.equal(raw.videos.store.has('v1'), false);
+		await cleanup();
+		assert.ok((db.db.prepare("SELECT purged_at FROM admin_deletions WHERE kind = 'video' AND target_id = 'v1'").get() as any).purged_at, 'the cleanup records the purge');
 		assert.equal((await call('POST', `/jobs/${failedId}/retry`)).body.code, 'job_not_failed', 'only failed jobs retry');
 		assert.equal((await call('GET', '/jobs/nope')).status, 404);
 	});
 
 	it('a video already gone from Bunny counts as erased', async () => {
-		const { call, jobOf } = await setup();
+		const { call, purgeNow } = await setup();
 		bunny.status = 404;
 		try {
-			assert.equal((await jobOf(await call('DELETE', '/videos/v1'))).status, 'succeeded');
+			await call('DELETE', '/videos/v1');
+			assert.equal((await purgeNow('video', 'v1')).status, 'succeeded');
 		} finally {
 			bunny.status = 200;
 		}
@@ -695,8 +746,8 @@ describe('admin jobs (queue, retry, DLQ)', () => {
 	it('a resumable job queues its next step with the new params and keeps its result', async () => {
 		const { env, jobs, call } = await setup();
 		const steps: unknown[] = [];
-		const created = await call('POST', `/users/${OTHER}/delete-data`, {}, { hold: true });
-		const id = created.body.result.job.id;
+		const created = await createJob(env as never, { kind: 'user.delete-data', targetKind: 'user', targetId: OTHER, actorId: 'usr_admin' });
+		const id = created.id;
 		jobs.pending.splice(0);
 		await jobs.send({ id: 'm', type: MessageType.AdminJob, payload: { jobId: id }, timestamp: 0 });
 		const handlers = {
@@ -718,5 +769,211 @@ describe('admin jobs (queue, retry, DLQ)', () => {
 
 	it('backoff doubles from 10s and caps at 5 minutes', () => {
 		assert.deepEqual([1, 2, 3, 4, 5, 6, 9].map(backoffSeconds), [10, 20, 40, 80, 160, 300, 300]);
+	});
+});
+
+describe('soft deletes (Recently deleted, restore, cleanup)', () => {
+	const DAY = 86_400_000;
+
+	it('helpers: purge is due after 30 days or once queued; days left count down', () => {
+		const deletedAt = '2026-11-01T00:00:00.000Z';
+		const at = Date.parse(deletedAt);
+		assert.equal(purgeAfterOf(deletedAt), '2026-12-01T00:00:00.000Z');
+		assert.equal(deletionDaysLeft({ deletedAt }, at), 30);
+		assert.equal(deletionDaysLeft({ deletedAt }, at + 29.5 * DAY), 1);
+		assert.equal(deletionDaysLeft({ deletedAt }, at + 31 * DAY), 0);
+		assert.equal(isPurgeDue({ deletedAt, purgeRequestedAt: null, purgedAt: null }, at + 29 * DAY), false);
+		assert.equal(isPurgeDue({ deletedAt, purgeRequestedAt: null, purgedAt: null }, at + 30 * DAY), true);
+		assert.equal(isPurgeDue({ deletedAt, purgeRequestedAt: deletedAt, purgedAt: null }, at), true, 'queued: due now');
+		assert.equal(isPurgeDue({ deletedAt, purgeRequestedAt: deletedAt, purgedAt: deletedAt }, at + 99 * DAY), false, 'purged: never again');
+		assert.equal(deletionStatusOf({ purgeRequestedAt: null, purgeStartedAt: null, purgedAt: null }), 'deleted');
+		assert.equal(deletionStatusOf({ purgeRequestedAt: 'x', purgeStartedAt: null, purgedAt: null }), 'queued');
+		assert.equal(deletionStatusOf({ purgeRequestedAt: 'x', purgeStartedAt: 'x', purgedAt: null }), 'purging');
+	});
+
+	it('the cleanup purges a video only after its 30 days, once, and Recently deleted lists it until then', async () => {
+		const { raw, call, cleanup } = await setup();
+		await call('DELETE', '/videos/v1', { reason: 'Copyright' });
+		const listed = (await call('GET', '/deletions?kind=video')).body.result;
+		assert.deepEqual(listed.items.map((d: any) => [d.id, d.status, d.deletedBy, d.reason]), [['v1', 'deleted', 'usr_admin', 'Copyright']]);
+		assert.equal((await call('GET', '/deletions?kind=channel')).body.result.items.length, 0);
+
+		const early = await cleanup(Date.now() + 29 * DAY);
+		assert.equal(early.first.due, 0, 'not due before 30 days');
+		assert.equal(raw.videos.store.has('v1'), true);
+
+		const late = await cleanup(Date.now() + 31 * DAY);
+		assert.deepEqual([late.first.started, late.second.purged], [1, 1]);
+		assert.equal(raw.videos.store.has('v1'), false);
+		assert.equal((await call('GET', '/deletions')).body.result.items.length, 0, 'purged items leave the list');
+		assert.ok((await call('GET', '/deletions')).body.result.lastRun.at, 'the last run is shown');
+
+		const again = await cleanup(Date.now() + 40 * DAY);
+		assert.equal(again.first.due, 0, 'idempotent: nothing left to do');
+	});
+
+	it('restore brings a video back everywhere; a second restore is 404', async () => {
+		const { env, raw, call } = await setup();
+		const visitor = publicApp(env, null);
+		await call('DELETE', '/videos/v1');
+		assert.equal((await visitor('GET', '/api/videos/v1')).status, 404);
+		assert.equal((await call('GET', '/videos?q=tafsir')).body.result.total, 0, 'not in admin lists');
+		const restored = await call('POST', '/deletions/video/v1/restore');
+		assert.equal(restored.status, 200);
+		assert.equal((await visitor('GET', '/api/videos/v1')).status, 200);
+		const v1 = JSON.parse(raw.videos.store.get('v1')!);
+		assert.deepEqual([v1.isDeleted, v1.isHidden, v1.adminDeletion, v1.suspensionHolds], [false, false, undefined, undefined]);
+		assert.equal((await call('GET', '/videos?q=tafsir')).body.result.total, 1);
+		assert.equal((await call('POST', '/deletions/video/v1/restore')).status, 404);
+	});
+
+	it('a moderation-hidden video stays hidden after delete and restore', async () => {
+		const { raw, call } = await setup();
+		await call('DELETE', '/videos/v2');
+		await call('POST', '/deletions/video/v2/restore');
+		assert.equal(JSON.parse(raw.videos.store.get('v2')!).isHidden, true);
+	});
+
+	it('"Delete permanently now" only queues it: still restorable until the cleanup starts the purge', async () => {
+		const { raw, call, cleanup, jobs, env } = await setup();
+		await call('DELETE', '/videos/v1');
+		const queued = await call('POST', '/deletions/video/v1/purge');
+		assert.equal(queued.body.result.deletion.status, 'queued');
+		assert.equal(queued.body.result.deletion.purgeRequestedBy, 'usr_admin');
+		assert.equal(raw.videos.store.has('v1'), true, 'nothing erased by the request itself');
+		assert.equal((await call('POST', '/deletions/video/v1/restore')).status, 200, 'restorable while queued');
+		assert.equal((await cleanup()).first.due, 0, 'a restored item is not purged');
+		assert.equal(raw.videos.store.has('v1'), true);
+
+		// Once a run has started the purge, restore is refused
+		await call('DELETE', '/videos/v1');
+		await call('POST', '/deletions/video/v1/purge');
+		await runDeletionCleanup(env as never, (d) => purgeDeletion(env as never, d));
+		const refused = await call('POST', '/deletions/video/v1/restore', undefined, { hold: true });
+		assert.equal(refused.status, 409);
+		assert.equal(refused.body.code, 'purge_in_progress');
+		await jobs.drain(env);
+		assert.equal(raw.videos.store.has('v1'), false);
+	});
+
+	it('a failed inline purge is counted and retried next run', async () => {
+		const { raw, call, cleanup, db } = await setup({ playlists: { pl1: { id: 'pl1', title: 'Lessons', userId: OWNER, channelId: 'ch1', videos: [] } } });
+		await call('DELETE', '/playlists/pl1');
+		await call('POST', '/deletions/playlist/pl1/purge');
+		const remove = raw.playlists.delete.bind(raw.playlists);
+		raw.playlists.delete = (async () => { throw new Error('R2 delete failed'); }) as any;
+		assert.equal((await cleanup()).first.failed, 1);
+		const row = db.db.prepare("SELECT attempts, last_error, purged_at FROM admin_deletions WHERE kind = 'playlist'").get() as any;
+		assert.deepEqual([row.attempts >= 1, /R2 delete failed/.test(row.last_error), row.purged_at], [true, true, null]);
+		raw.playlists.delete = remove as any;
+		assert.equal((await cleanup()).first.purged, 1);
+		assert.equal(raw.playlists.store.has('pl1'), false);
+	});
+
+	it('comments: hidden at once, restorable, removed by the purge', async () => {
+		const { env, raw, call, purgeNow } = await setup();
+		await env.videos.put('v1', JSON.stringify(videoFixture({ id: 'v1', userId: OWNER, channelId: 'ch1', comments: [commentFixture('c1', { text: 'Salam', userId: OTHER })] })));
+		await call('DELETE', '/videos/v1/comments/c1', { reason: 'Abuse' });
+		let stored = JSON.parse(raw.videos.store.get('v1')!).comments[0];
+		assert.deepEqual([stored.id, stored.isDeleted, stored.adminDeletion.reason], ['c1', true, 'Abuse']);
+		assert.equal((await call('GET', '/comments?videoId=v1')).body.result.total, 0);
+		const [row] = (await call('GET', '/deletions?kind=comment')).body.result.items;
+		assert.deepEqual([row.id, row.parentId, row.title], ['c1', 'v1', 'Salam']);
+		await call('POST', '/deletions/comment/c1/restore');
+		stored = JSON.parse(raw.videos.store.get('v1')!).comments[0];
+		assert.deepEqual([stored.isDeleted, stored.adminDeletion], [false, undefined]);
+		assert.equal((await call('GET', '/comments?videoId=v1')).body.result.total, 1);
+		await call('DELETE', '/videos/v1/comments/c1');
+		await purgeNow('comment', 'c1');
+		assert.equal(JSON.parse(raw.videos.store.get('v1')!).comments.length, 0);
+	});
+
+	it('playlists: hidden and off the channel, back on restore, gone after the purge', async () => {
+		const { raw, call, purgeNow } = await setup({
+			channels: { ch1: channel('ch1', { playlists: ['pl1'] }) },
+			playlists: { pl1: { id: 'pl1', title: 'Lessons', userId: OWNER, channelId: 'ch1', videos: [] } },
+		});
+		await call('DELETE', '/playlists/pl1');
+		assert.equal(canViewPlaylist(JSON.parse(raw.playlists.store.get('pl1')!), OWNER), false);
+		assert.deepEqual(JSON.parse(raw.channels.store.get('ch1')!).playlists, []);
+		assert.equal((await call('GET', '/playlists')).body.result.items.length, 0);
+		await call('POST', '/deletions/playlist/pl1/restore');
+		assert.equal(canViewPlaylist(JSON.parse(raw.playlists.store.get('pl1')!), OWNER), true);
+		assert.deepEqual(JSON.parse(raw.channels.store.get('ch1')!).playlists, ['pl1']);
+		await call('DELETE', '/playlists/pl1');
+		await purgeNow('playlist', 'pl1');
+		assert.equal(raw.playlists.store.has('pl1'), false);
+	});
+
+	it('community posts: restored in date order in the channel index; the purge removes the object', async () => {
+		const { raw, call, purgeNow } = await setup();
+		const post = (id: string, day: number) => ({ id, channelId: 'ch1', userId: OWNER, type: 'text', content: id, status: 'published', createdAt: `2026-03-0${day}T00:00:00.000Z` });
+		for (const [id, day] of [['p1', 1], ['p2', 2], ['p3', 3]] as const) await raw.community_posts.put(`posts/ch1/${id}.json`, JSON.stringify(post(id, day)));
+		await raw.community_posts.put('posts/ch1/index.json', JSON.stringify({ postIds: ['p3', 'p2', 'p1'], lastUpdated: 'x' }));
+		await call('DELETE', '/posts/ch1/p2');
+		assert.deepEqual(JSON.parse(raw.community_posts.store.get('posts/ch1/index.json')!).postIds, ['p3', 'p1']);
+		assert.equal(JSON.parse(raw.community_posts.store.get('posts/ch1/p2.json')!).status, 'deleted');
+		await call('POST', '/deletions/post/p2/restore');
+		assert.deepEqual(JSON.parse(raw.community_posts.store.get('posts/ch1/index.json')!).postIds, ['p3', 'p2', 'p1']);
+		assert.equal(JSON.parse(raw.community_posts.store.get('posts/ch1/p2.json')!).status, 'published');
+		await call('DELETE', '/posts/ch1/p2');
+		await purgeNow('post', 'p2');
+		assert.equal(raw.community_posts.store.has('posts/ch1/p2.json'), false);
+	});
+
+	it('channels: restore puts it back on the profile as main, with its videos and playlists visible', async () => {
+		const { env, raw, call } = await setup({
+			channels: { ch1: channel('ch1', { playlists: ['pl1'] }) },
+			playlists: { pl1: { id: 'pl1', title: 'Lessons', userId: OWNER, channelId: 'ch1', videos: [] } },
+		});
+		const visitor = publicApp(env, null);
+		await call('DELETE', '/channels/ch1');
+		assert.deepEqual(JSON.parse(raw.profiles.store.get(OWNER)!).channels, []);
+		assert.equal(canViewPlaylist(JSON.parse(raw.playlists.store.get('pl1')!), OWNER), false, 'its playlists are hidden with it');
+		assert.equal((await call('POST', '/deletions/channel/ch1/restore')).status, 200);
+		assert.equal((await visitor('GET', '/api/channels/ch1')).status, 200);
+		assert.equal((await visitor('GET', '/api/videos/v1')).status, 200);
+		assert.equal((await visitor('GET', '/api/videos/v2')).status, 404, 'moderation-hidden video stays hidden');
+		assert.deepEqual(JSON.parse(raw.profiles.store.get(OWNER)!).channels, ['ch1']);
+		assert.equal(JSON.parse(raw.channels.store.get('ch1')!).isMain, true, 'main again: the owner has no other');
+		assert.equal(canViewPlaylist(JSON.parse(raw.playlists.store.get('pl1')!), OWNER), true);
+	});
+
+	it('a suspended channel stays suspended through delete and restore', async () => {
+		const { env, call } = await setup();
+		const visitor = publicApp(env, null);
+		await call('POST', '/channels/ch1/suspend', { reason: 'x' });
+		await call('DELETE', '/channels/ch1');
+		await call('POST', '/deletions/channel/ch1/restore');
+		assert.equal((await visitor('GET', '/api/videos/v1')).status, 404, 'still held by the suspension');
+		await call('POST', '/channels/ch1/unsuspend');
+		assert.equal((await visitor('GET', '/api/videos/v1')).status, 200);
+	});
+
+	it('users: content hidden while deleted, back on restore; a second delete is refused', async () => {
+		const { env, call } = await setup();
+		const visitor = publicApp(env, null);
+		await call('POST', `/users/${OWNER}/delete-data`, { reason: 'Request' });
+		assert.equal((await call('POST', `/users/${OWNER}/delete-data`, {})).status, 409);
+		assert.equal((await visitor('GET', '/api/channels/ch1')).status, 404);
+		assert.equal((await visitor('GET', '/api/videos/v1')).status, 404);
+		assert.equal((await call('POST', `/deletions/user/${OWNER}/restore`)).status, 200);
+		assert.equal((await visitor('GET', '/api/channels/ch1')).status, 200);
+		assert.equal((await visitor('GET', '/api/videos/v1')).status, 200);
+		assert.equal((await call('GET', `/users?q=${OWNER}`)).body.result.total, 1);
+	});
+
+	it('Recently deleted pages with a cursor and rejects unknown kinds', async () => {
+		const { call } = await setup();
+		await call('DELETE', '/videos/v1');
+		await call('DELETE', '/videos/legacy');
+		const first = (await call('GET', '/deletions?pageSize=1')).body.result;
+		assert.equal(first.items.length, 1);
+		const second = (await call('GET', `/deletions?pageSize=1&cursor=${encodeURIComponent(first.nextCursor)}`)).body.result;
+		assert.equal(second.items.length, 1);
+		assert.notEqual(second.items[0].id, first.items[0].id);
+		assert.equal(second.nextCursor, null);
+		assert.equal((await call('GET', '/deletions?kind=bogus')).status, 400);
+		assert.equal((await call('POST', '/deletions/bogus/x/restore')).status, 404);
 	});
 });

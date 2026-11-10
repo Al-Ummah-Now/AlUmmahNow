@@ -73,7 +73,8 @@ export class ProfilesList extends PublicRoute {
 		const profiles = !cursor ? await repository.listObjects(limit) : await repository.listObjects(limit, cursor);
 		
 		// Transform profiles to view models
-		const profileViews = (profiles.items || []).map(profile => toPublicProfile(profile));
+		// Profiles whose data an admin deleted (restorable for 30 days) are left out
+		const profileViews = (profiles.items || []).filter((profile) => !(profile as { adminDeletion?: unknown }).adminDeletion).map(profile => toPublicProfile(profile));
 
 		return {
 			success: true,

@@ -24,8 +24,10 @@ export const ADMIN_CONTENT_PERMISSIONS = [
   'channels:transfer',
   /** Edit, move, unpublish and reprocess videos. */
   'videos:manage',
-  /** Delete channels, videos, comments, playlists and community posts. */
+  /** Delete channels, videos, comments, playlists and community posts (soft: restorable for 30 days), and restore them. */
   'content:delete',
+  /** Queue a soft-deleted item for permanent deletion before its 30 days are up ("Delete permanently now"). */
+  'content:purge',
   /** Edit, ban and erase videos users (videos profiles; never the Auth account). */
   'users:manage',
   /** Assign creator tiers to users and edit the tier definitions (videos-side; never Auth RBAC). */
@@ -40,7 +42,7 @@ export type AdminContentPermission = (typeof ADMIN_CONTENT_PERMISSIONS)[number];
  */
 export const ROLE_CONTENT_PERMISSIONS: Readonly<Record<string, readonly AdminContentPermission[]>> = {
   super_admin: ADMIN_CONTENT_PERMISSIONS,
-  admin: ['channels:manage', 'videos:manage', 'content:delete', 'users:manage', 'creators:manage'],
+  admin: ['channels:manage', 'videos:manage', 'content:delete', 'content:purge', 'users:manage', 'creators:manage'],
   moderator: [],
 };
 
@@ -106,6 +108,13 @@ export function liftSuspensionHold(record: SuspendableRecord, hold: string): boo
   delete record.hiddenBeforeSuspension;
   return true;
 }
+
+/**
+ * Holds that hide what sits under a soft-deleted channel or user (their
+ * videos, live streams, playlists, channels) until it is restored or purged.
+ */
+export const deletedChannelHold = (channelId: string) => `deleted-channel:${channelId}`;
+export const deletedUserHold = (userId: string) => `deleted-user:${userId}`;
 
 export function isHeldBy(record: SuspendableRecord | null | undefined, hold: string): boolean {
   return Array.isArray(record?.suspensionHolds) && record!.suspensionHolds!.includes(hold);
@@ -527,3 +536,88 @@ export interface AdminSuggestion {
 
 /** Suggestions per request: enough to choose from, small enough to read at a glance. */
 export const ADMIN_SUGGEST_LIMIT = 8;
+
+// ---------------------------------------------------------------------------
+// Soft delete (owner rule 2026-11-10): every admin delete is restorable for 30
+// days, then a scheduled cleanup purges it. "Delete permanently now" only
+// queues the item for that same cleanup; the cleanup is the one hard-delete path.
+// ---------------------------------------------------------------------------
+
+/** Days a soft-deleted item stays restorable before the cleanup purges it. */
+export const SOFT_DELETE_RETENTION_DAYS = 30;
+const DAY_MS = 86_400_000;
+
+export const ADMIN_DELETION_KINDS = ['channel', 'video', 'comment', 'playlist', 'post', 'user'] as const;
+export type AdminDeletionKind = (typeof ADMIN_DELETION_KINDS)[number];
+
+/**
+ * deleted: restorable, purged when its 30 days are up;
+ * queued: an admin asked for permanent deletion, the next cleanup run purges it (still restorable until then);
+ * purging: the purge has started (no longer restorable);
+ * purged: gone.
+ */
+export type AdminDeletionStatus = 'deleted' | 'queued' | 'purging' | 'purged';
+
+export interface AdminDeletion {
+  kind: AdminDeletionKind;
+  id: string;
+  /** The video of a comment, the channel of a community post. */
+  parentId: string | null;
+  title: string;
+  ownerId: string | null;
+  channelId: string | null;
+  deletedAt: string;
+  deletedBy: string;
+  reason: string | null;
+  purgeRequestedAt: string | null;
+  purgeRequestedBy: string | null;
+  /** When the cleanup purges it at the latest (deletedAt + 30 days). */
+  purgeAfter: string;
+  purgeStartedAt: string | null;
+  purgedAt: string | null;
+  purgeJobId: string | null;
+  attempts: number;
+  lastError: string | null;
+  status: AdminDeletionStatus;
+}
+
+export interface AdminDeletionCleanupRun {
+  at: string;
+  due: number;
+  purged: number;
+  started: number;
+  failed: number;
+  skipped: number;
+}
+
+export interface AdminDeletionPage {
+  items: AdminDeletion[];
+  nextCursor: string | null;
+  lastRun: AdminDeletionCleanupRun | null;
+}
+
+/** deletedAt + 30 days, as an ISO string. */
+export function purgeAfterOf(deletedAt: string): string {
+  const at = Date.parse(deletedAt);
+  return new Date((Number.isFinite(at) ? at : 0) + SOFT_DELETE_RETENTION_DAYS * DAY_MS).toISOString();
+}
+
+/** Whole days left before the cleanup purges it (0 when due). */
+export function deletionDaysLeft(deletion: Pick<AdminDeletion, 'deletedAt'>, now: number = Date.now()): number {
+  const left = Date.parse(purgeAfterOf(deletion.deletedAt)) - now;
+  return left <= 0 ? 0 : Math.ceil(left / DAY_MS);
+}
+
+/** Whether the cleanup should purge it now: 30 days are up, or an admin queued it. */
+export function isPurgeDue(deletion: Pick<AdminDeletion, 'deletedAt' | 'purgeRequestedAt' | 'purgedAt'>, now: number = Date.now()): boolean {
+  if (deletion.purgedAt) return false;
+  if (deletion.purgeRequestedAt) return true;
+  return Date.parse(purgeAfterOf(deletion.deletedAt)) <= now;
+}
+
+export function deletionStatusOf(deletion: Pick<AdminDeletion, 'purgeRequestedAt' | 'purgeStartedAt' | 'purgedAt'>): AdminDeletionStatus {
+  if (deletion.purgedAt) return 'purged';
+  if (deletion.purgeStartedAt) return 'purging';
+  if (deletion.purgeRequestedAt) return 'queued';
+  return 'deleted';
+}

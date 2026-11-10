@@ -108,6 +108,17 @@ async function softDeleteIfOwned(bucket: R2Bucket, key: string, channelId: strin
 	return marked;
 }
 
+/**
+ * Deletes one stored object when it belongs to the channel (the admin purge,
+ * lib/admin/deletions.ts). Idempotent: an object already gone counts as done.
+ */
+async function hardDeleteIfOwned(bucket: R2Bucket, key: string, channelId: string): Promise<boolean> {
+	const record = await new R2Repository<Record<string, unknown>>(bucket).getObject(key);
+	if (!record || record.channelId !== channelId) return false;
+	await bucket.delete(key);
+	return true;
+}
+
 /** Posts, sections and the section order of a deleted channel (prefix deletes, no scan). */
 export async function removeChannelPostsAndSections(
 	env: Pick<ContentBuckets, 'community_posts' | 'channel_sections'>,
@@ -120,7 +131,7 @@ export async function removeChannelPostsAndSections(
 }
 
 /**
- * One bounded step of soft-deleting a channel's objects in a bucket with no
+ * One bounded step of soft-deleting (or, `hard`, deleting) a channel's objects in a bucket with no
  * per-channel index (playlists): scans at most `budget` objects from `cursor`,
  * `concurrency` reads at a time. The returned `cursor` is where the next step
  * starts (absent once the scan reached the end); `failed` counts writes that
@@ -129,7 +140,7 @@ export async function removeChannelPostsAndSections(
 export async function softDeleteChannelObjectsStep(
 	bucket: R2Bucket,
 	channelId: string,
-	opts: { cursor?: string; budget?: number; concurrency?: number; now?: string } = {},
+	opts: { cursor?: string; budget?: number; concurrency?: number; now?: string; hard?: boolean } = {},
 ): Promise<{ removed: number; failed: number; scanned: number; cursor?: string }> {
 	const budget = opts.budget ?? 500;
 	const concurrency = opts.concurrency ?? 16;
@@ -149,7 +160,7 @@ export async function softDeleteChannelObjectsStep(
 				while (next < keys.length) {
 					const key = keys[next++];
 					try {
-						if (await softDeleteIfOwned(bucket, key, channelId, now)) removed++;
+						if (await (opts.hard ? hardDeleteIfOwned(bucket, key, channelId) : softDeleteIfOwned(bucket, key, channelId, now))) removed++;
 					} catch (error) {
 						failed++;
 						logger.warn('[ChannelDeletion] Could not soft-delete object', { key, channelId, error: error instanceof Error ? error.message : String(error) });
