@@ -17,13 +17,47 @@
  * Without a queue binding (local dev) the batch is written inline.
  */
 import type { Context } from 'hono';
-import { ACTION_KEY, ERROR_LIMITS, buildServerEvent, parseUserAgent, scrubEvent, type ErrorEventInput, type StackFrame } from '@al-ummah/shared-types';
+import { ACTION_KEY, ERROR_LIMITS, USER_ID, buildServerEvent, parseUserAgent, scrubEvent, type ErrorApp, type ErrorEventInput, type StackFrame } from '@al-ummah/shared-types';
 import type { AdminBindings } from '../../base/types';
 import { hashIp, safeEqual } from '../../lib/contact';
 import { allowClientEvents, ingestErrorEvents, resolveActionItems, type IngestOutcome } from '../../lib/errors-store';
 import { sendErrorAlerts } from '../../lib/errors-alerts';
 import { symbolicateFrames } from '../../lib/sourcemaps';
 import { logger } from '../../lib/logger';
+
+const BROWSER_APPS: readonly ErrorApp[] = ['web', 'admin-web'];
+/** A browser event may fold at most this many repeats into one report */
+const BROWSER_MAX_COUNT = 50;
+
+/**
+ * A browser batch is untrusted: the page can send anything. Only what the
+ * proxy (the app's /api/errors route, which holds the key) vouches for is
+ * kept: the app it serves (X-Report-App), the signed-in account from its own
+ * session (X-Client-User-Id), never the page's own claims. Counts are capped,
+ * and "test" (no alert mail, pruned after a day) is honoured only outside
+ * production, so a forged test event can never hide a real production error.
+ */
+export function constrainBrowserEvents(
+  events: ErrorEventInput[],
+  vouched: { app?: string | undefined; userId?: string | undefined; environment: string },
+): ErrorEventInput[] {
+  const app = BROWSER_APPS.includes(vouched.app as ErrorApp) ? (vouched.app as ErrorApp) : undefined;
+  const userId = vouched.userId && USER_ID.test(vouched.userId) ? vouched.userId : undefined;
+  const out: ErrorEventInput[] = [];
+  for (const e of events) {
+    const eventApp = app ?? (BROWSER_APPS.includes(e.app) ? e.app : null);
+    if (!eventApp) continue; // a page cannot report as a Worker
+    const { userId: _claimed, count, test, environment: _env, ...rest } = e;
+    out.push({
+      ...rest,
+      app: eventApp,
+      ...(userId ? { userId } : {}),
+      ...(typeof count === 'number' ? { count: Math.max(1, Math.min(BROWSER_MAX_COUNT, Math.floor(count))) } : {}),
+      ...(test && vouched.environment !== 'production' ? { test: true } : {}),
+    });
+  }
+  return out;
+}
 
 /** What goes on the queue: everything already validated and scrubbed. */
 export interface ErrorIngestMessage {
@@ -150,6 +184,14 @@ export async function errorsIngest(c: Context<{ Bindings: AdminBindings }>): Pro
     : rawResolved.map((r) => (r as { key?: unknown })?.key).filter((k): k is string => typeof k === 'string' && ACTION_KEY.test(k));
   if (events.length === 0 && resolved.length === 0) return c.json({ success: false, error: 'no valid events' }, 400);
 
+  if (fromBrowser) {
+    events = constrainBrowserEvents(events, {
+      app: c.req.header('X-Report-App'),
+      userId: c.req.header('X-Client-User-Id'),
+      environment: env.ENVIRONMENT || 'development',
+    });
+    if (events.length === 0) return c.json({ success: false, error: 'no valid events' }, 400);
+  }
   const userAgent = c.req.header('X-Client-User-Agent') || undefined;
   // Rate limit per IP (a changing user agent must not reset it); anonymous visitors are counted by a
   // keyed hash of IP + browser. Neither the IP nor the user agent is stored.

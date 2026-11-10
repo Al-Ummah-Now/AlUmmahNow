@@ -601,3 +601,28 @@ describe('stack parsing stays linear on hostile input', () => {
     ]);
   });
 });
+
+describe('browser batches are constrained to what the proxy vouches for', () => {
+  it('app from the proxy, user from its session, capped counts, test only outside production', async () => {
+    const { constrainBrowserEvents } = await import('../src/endpoints/errors/ErrorsIngest');
+    const forged: ErrorEventInput[] = [
+      { app: 'admin-api', kind: 'unhandled', ref: newErrorRef(), message: 'pretend Worker crash', userId: 'usr_victim', count: 1_000_000, test: true, environment: 'qa' },
+      { app: 'web', kind: 'boundary', ref: newErrorRef(), message: 'real looking', userId: 'usr_victim', test: true },
+    ];
+    const prod = constrainBrowserEvents(forged, { app: 'web', userId: 'usr_me1234', environment: 'production' });
+    assert.equal(prod.length, 2);
+    for (const e of prod) {
+      assert.equal(e.app, 'web');
+      assert.equal(e.userId, 'usr_me1234');
+      assert.equal(e.test, undefined);
+      assert.equal(e.environment, undefined);
+    }
+    assert.equal(prod[0].count, 50);
+
+    const anon = constrainBrowserEvents(forged, { environment: 'qa' });
+    assert.deepEqual(anon.map((e) => e.app), ['web'], 'without X-Report-App a Worker app name is dropped');
+    assert.equal(anon[0].userId, undefined, 'no session, no user, whatever the page claims');
+    assert.equal(anon[0].test, true, 'test is honoured on QA/stage');
+    assert.equal(constrainBrowserEvents(forged, { app: 'processor', environment: 'qa' }).length, 1, 'a bogus X-Report-App is ignored');
+  });
+});
