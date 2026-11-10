@@ -6,6 +6,7 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { AdminSuggestion } from '@al-ummah/shared-types';
@@ -13,7 +14,7 @@ import { I18nProvider } from '../src/i18n/I18nProvider';
 import en from '../src/i18n/messages/en';
 import ar from '../src/i18n/messages/ar';
 import { Autocomplete, type AutocompleteProps } from '../src/components/search/Autocomplete';
-import { FilterForm, type FilterField } from '../src/components/content/FilterForm';
+import type { FilterField } from '../src/components/content/FilterForm';
 import {
   MIN_QUERY,
   failed,
@@ -203,18 +204,26 @@ describe('autocomplete: markup', () => {
 });
 
 describe('filters ask for names, never raw ids', () => {
-  it('FilterForm renders id filters as pickers and search boxes as comboboxes', () => {
-    const fields: FilterField[] = [
-      { kind: 'search', name: 'q', label: 'Title', suggest: 'video' },
-      { kind: 'pick', name: 'channelId', label: 'Channel', suggest: 'channel' },
-      { kind: 'pick', name: 'ownerId', label: 'Owner', suggest: 'user' },
+  // FilterForm itself renders through next/form, which needs the app router; the pages' field lists are checked instead
+  it('every list page filters by picked names, and no FilterForm field takes raw text', () => {
+    const page = (path: string) => readFileSync(new URL(`../src/app/(protected)/${path}`, import.meta.url), 'utf8');
+    const picks: [string, string, string][] = [
+      ['videos/page.tsx', 'channelId', 'channel'],
+      ['videos/page.tsx', 'ownerId', 'user'],
+      ['playlists/page.tsx', 'channelId', 'channel'],
+      ['playlists/page.tsx', 'ownerId', 'user'],
+      ['community/page.tsx', 'channelId', 'channel'],
+      ['comments/page.tsx', 'videoId', 'video'],
+      ['comments/page.tsx', 'userId', 'user'],
+      ['channels/page.tsx', 'ownerId', 'user'],
     ];
-    const Form = FilterForm as unknown as React.FC<{ action: string; label: string; testId: string; fields: FilterField[]; values: Record<string, string> }>;
-    const html = render(React.createElement(Form, { action: '/videos', label: 'Videos', testId: 'vf', fields, values: { channelId: 'ch_1' } }));
-    assert.equal((html.match(/role="combobox"/g) ?? []).length, 2, 'the search box and the empty owner picker');
-    assert.match(html, /data-testid="vf-channelId-chip" data-id="ch_1"/);
-    assert.match(html, /<input type="hidden" name="ownerId" value=""\/>/);
-    assert.doesNotMatch(html, /type="text"[^>]*name="(channelId|ownerId|videoId|userId)"/);
+    for (const [file, name, kind] of picks) assert.match(page(file), new RegExp(`kind: 'pick', name: '${name}', [^}]*suggest: '${kind}'`), `${file} ${name}`);
+    for (const file of ['videos', 'playlists', 'community', 'comments', 'channels', 'users'].map((p) => `${p}/page.tsx`)) {
+      assert.doesNotMatch(page(file), /kind: 'text'/, file);
+      assert.match(page(file), /kind: 'search', name: 'q', [^}]*suggest: '/, file);
+    }
+    const field: FilterField = { kind: 'pick', name: 'channelId', label: 'Channel', suggest: 'channel' };
+    assert.equal(field.kind, 'pick');
   });
 
   it('labels no longer ask for an ID', () => {
