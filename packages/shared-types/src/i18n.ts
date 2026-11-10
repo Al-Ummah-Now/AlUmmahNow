@@ -4,6 +4,7 @@ import type { CommunityGuidelinesTranslations } from './i18n-community-guideline
 import type { ContactTranslations } from './i18n-contact';
 import type { UploadStatusTranslations } from './i18n-upload-status';
 import type { ChannelRolesTranslations } from './i18n-channel-roles';
+import type { ChannelSectionsTranslations } from './i18n-channel-sections';
 /**
  * Internationalization (i18n) Types
  *
@@ -144,6 +145,8 @@ export interface AppTranslations {
   contact: ContactTranslations;
   /** After-upload processing status on the upload page (single and batch) */
   uploadStatus: UploadStatusTranslations;
+  /** Channel Home sections: add/edit flow, manager, rendering (docs/specs/CHANNEL-SECTIONS.md) */
+  channelSections: ChannelSectionsTranslations;
   /** Notification center, settings and per-channel bell (Story 29.10) */
   notificationCenter: NotificationCenterTranslations;
 

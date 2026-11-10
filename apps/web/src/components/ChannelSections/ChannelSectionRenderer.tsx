@@ -1,129 +1,126 @@
-import { ChannelSection, ChannelSectionType } from '@al-ummah/shared-types';
-import { FeaturedVideosSection } from './types/FeaturedVideosSection';
-import { LikedVideosSection } from './types/LikedVideosSection';
-import { RecentUploadsSection } from './types/RecentUploadsSection';
-import { PopularUploadsSection } from './types/PopularUploadsSection';
-import { MultiplePlaylistsSection } from './types/MultiplePlaylistsSection';
-import { SinglePlaylistSection } from './types/SinglePlaylistSection';
-import { AllPlaylistsSection } from './types/AllPlaylistsSection';
-import { LiveEventsSection } from './types/LiveEventsSection';
-import { CompletedEventsSection } from './types/CompletedEventsSection';
-import { UpcomingEventsSection } from './types/UpcomingEventsSection';
-import { MultipleChannelsSection } from './types/MultipleChannelsSection';
-import { SubscriptionsSection } from './types/SubscriptionsSection';
-import { logger } from '@/lib/logger-client';
+'use client';
+
+import type { ReactNode } from 'react';
+import { ChannelTileRow } from '@/components/ChannelTile';
+import { getLocalizedValue } from '@al-ummah/shared-types';
+import { pickLanguage } from '@/lib/format/pick-language';
 import { useLanguage } from '@/hooks/useLanguage';
-import {
-  getSectionChannelIds,
-  getSectionPlaylistIds,
-  getSectionPopulatedChannels,
-  getSectionVideoIds,
-  type PopulatedChannelSection,
-} from './sectionData';
+import { SectionHeader } from './SectionHeader';
+import { OwnerSectionNote } from './OwnerSectionNote';
+import { VideoShelf } from './shelves/VideoShelf';
+import { PlaylistShelf } from './shelves/PlaylistShelf';
+import { LiveShelf } from './shelves/LiveShelf';
+import { CommunityShelf } from './shelves/CommunityShelf';
+import { SpotlightSection } from './shelves/SpotlightSection';
+import { resolveSectionTitle, sectionLabelKey, type PopulatedChannelSection } from './sectionData';
 
 interface ChannelSectionRendererProps {
-  section: ChannelSection | PopulatedChannelSection;
+  section: PopulatedChannelSection;
   channelId: string;
 }
 
+/** `data-section` kind: the themes style shelves by it (theme/pages.css) */
+const SECTION_KIND: Record<PopulatedChannelSection['type'], string> = {
+  channel_spotlight: 'spotlight',
+  featured_videos: 'featured',
+  recent_uploads: 'videos',
+  popular_uploads: 'videos',
+  shorts: 'shorts',
+  live_streams: 'events',
+  liked_videos: 'videos',
+  single_playlist: 'playlist',
+  multiple_playlists: 'playlists',
+  created_playlists: 'playlists',
+  featured_channels: 'channels',
+  subscribed_channels: 'channels',
+  community_posts: 'community',
+};
+
 /**
- * Map backend snake_case types to frontend component types
- * Backend: featured_videos, recent_uploads, etc.
- * Frontend: featuredVideos, recentUploads, etc.
+ * One Home tab section, drawn from the content the API populated. Nothing is
+ * fetched here. A section without content only reaches people who can edit
+ * the channel; they see why it's hidden instead of a shelf.
  */
-function normalizeType(backendType: ChannelSectionType | string): string {
-  const typeMap: Record<string, string> = {
-    featured_videos: 'featuredVideos',
-    recent_uploads: 'recentUploads',
-    popular_uploads: 'popularUploads',
-    single_playlist: 'singlePlaylist',
-    multiple_playlists: 'multiplePlaylists',
-    subscribed_channels: 'subscriptions',
-    multiple_channels: 'multipleChannels',
-    live_events: 'liveEvents',
-    upcoming_events: 'upcomingEvents',
-    completed_events: 'completedEvents',
-    liked_videos: 'likedVideos',
-  };
-
-  return typeMap[backendType] || backendType;
-}
-
 export function ChannelSectionRenderer({ section, channelId }: ChannelSectionRendererProps) {
-  const { t } = useLanguage();
-  const normalizedType = normalizeType(section.type);
-  logger.info('ChannelSectionRenderer: Rendering section', {
-    originalType: section.type,
-    normalizedType,
-    sectionId: section.id,
-    channelId
-  });
+  const { t, locale } = useLanguage();
+  const content = section.populatedContent ?? {};
+  const tabHref = (tab: string) => `/${locale}/channels/${channelId}?tab=${tab}`;
 
-  switch (normalizedType) {
-    case 'featuredVideos':
-      return (
-        <FeaturedVideosSection
-          videoIds={getSectionVideoIds(section)}
-          title={section.title}
-          channelId={channelId}
-        />
-      );
+  const showNote = !!section.canEdit && (section.isEmpty || !!section.emptyHint);
+  const fallbackTitle =
+    section.type === 'single_playlist' && content.playlist
+      ? pickLanguage(content.playlist.name || content.playlist.title || '', locale)
+      : t.channelSections.labels[sectionLabelKey(section)];
+  const title = resolveSectionTitle(getLocalizedValue(section.titleLocalized, section.title, locale), fallbackTitle);
 
-    case 'recentUploads':
-      return <RecentUploadsSection channelId={channelId} title={section.title} />;
-
-    case 'popularUploads':
-      return <PopularUploadsSection channelId={channelId} title={section.title} />;
-
-    case 'multiplePlaylists':
-      return (
-        <MultiplePlaylistsSection
-          title={section.title || t.channel.featuredPlaylists}
-          playlistIds={getSectionPlaylistIds(section)}
-        />
-      );
-
-    case 'singlePlaylist':
-      return <SinglePlaylistSection playlistId={getSectionPlaylistIds(section)[0] || ''} />;
-
-    case 'allPlaylists':
-      return <AllPlaylistsSection channelId={channelId} />;
-
-    case 'liveEvents':
-      return <LiveEventsSection channelId={channelId} title={section.title} />;
-
-    case 'completedEvents':
-      return <CompletedEventsSection channelId={channelId} title={section.title} />;
-
-    case 'upcomingEvents':
-      return <UpcomingEventsSection channelId={channelId} title={section.title} />;
-
-    case 'multipleChannels':
-      return (
-        <MultipleChannelsSection
-          title={section.title || t.channel.featuredChannels}
-          channelIds={getSectionChannelIds(section)}
-        />
-      );
-
-    case 'subscriptions':
-      return (
-        <SubscriptionsSection
-          channelId={channelId}
-          title={section.title}
-          channels={getSectionPopulatedChannels(section)}
-        />
-      );
-
-    case 'likedVideos':
-      return <LikedVideosSection channelId={channelId} title={section.title} />;
-
-    default:
-      logger.warn('ChannelSectionRenderer: Unknown section type', {
-        sectionType: section.type,
-        sectionId: section.id,
-        channelId
-      });
-      return null;
+  if (section.type === 'channel_spotlight' && !showNote) {
+    return (
+      <SpotlightSection
+        channelId={channelId}
+        trailer={content.spotlight?.trailer}
+        returning={content.spotlight?.returning}
+      />
+    );
   }
+
+  let body: ReactNode = null;
+  let viewAllHref: string | undefined;
+  let viewAllLabel: string | undefined;
+
+  switch (section.type) {
+    case 'featured_videos':
+    case 'liked_videos':
+      body = content.videos?.length ? <VideoShelf videos={content.videos} /> : null;
+      break;
+    case 'recent_uploads':
+    case 'popular_uploads':
+      body = content.videos?.length ? <VideoShelf videos={content.videos} /> : null;
+      viewAllHref = tabHref('videos');
+      break;
+    case 'shorts':
+      body = content.videos?.length ? <VideoShelf videos={content.videos} shorts /> : null;
+      viewAllHref = tabHref('shorts');
+      break;
+    case 'live_streams':
+      body = content.streams?.length ? <LiveShelf streams={content.streams} channelId={channelId} /> : null;
+      viewAllHref = tabHref('live');
+      break;
+    case 'single_playlist':
+      body = content.videos?.length ? <VideoShelf videos={content.videos} /> : null;
+      viewAllHref = content.playlist ? `/${locale}/playlist/${content.playlist.id}` : undefined;
+      break;
+    case 'multiple_playlists':
+      body = content.playlists?.length ? <PlaylistShelf playlists={content.playlists} /> : null;
+      break;
+    case 'created_playlists':
+      body = content.playlists?.length ? <PlaylistShelf playlists={content.playlists} /> : null;
+      viewAllHref = tabHref('playlists');
+      break;
+    case 'featured_channels':
+    case 'subscribed_channels':
+      body = content.channels?.length ? <ChannelTileRow channels={content.channels} /> : null;
+      break;
+    case 'community_posts':
+      body = content.posts?.length ? <CommunityShelf posts={content.posts} channelId={channelId} /> : null;
+      viewAllHref = tabHref('community');
+      viewAllLabel = t.channelSections.render.seeAllPosts;
+      break;
+  }
+
+  // Nothing to draw and no note: a type this build doesn't know, or stale data
+  if (!body && !showNote) return null;
+
+  return (
+    <section
+      data-section={SECTION_KIND[section.type] ?? 'videos'}
+      data-section-type={section.type}
+      data-section-id={section.id}
+      data-testid={`channel-section-${section.type}`}
+      className="space-y-4"
+    >
+      <SectionHeader title={title} viewAllHref={body ? viewAllHref : undefined} viewAllLabel={viewAllLabel} />
+      {showNote && <OwnerSectionNote section={section} channelId={channelId} />}
+      {body}
+    </section>
+  );
 }

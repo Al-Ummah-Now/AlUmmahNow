@@ -13,6 +13,7 @@ import { COMMUNITY_GUIDELINES_AR } from '../i18n-community-guidelines';
 import { CONTACT_AR } from '../i18n-contact';
 import { UPLOAD_STATUS_AR } from '../i18n-upload-status';
 import { CHANNEL_ROLES_AR } from '../i18n-channel-roles';
+import { CHANNEL_SECTIONS_AR } from '../i18n-channel-sections';
 
 export const AR_TRANSLATIONS: AppTranslations = {
   imageCrop: {
@@ -34,6 +35,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
   contact: CONTACT_AR,
   uploadStatus: UPLOAD_STATUS_AR,
   channelRoles: CHANNEL_ROLES_AR,
+  channelSections: CHANNEL_SECTIONS_AR,
   notificationCenter: NOTIFICATION_CENTER_AR,
   common: {
     appName: 'الأمة الآن',

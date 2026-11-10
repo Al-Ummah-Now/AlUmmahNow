@@ -3,6 +3,7 @@ import { ChannelHeader as ChannelHeaderLTR } from '@/components/Channel/ChannelH
 import { ChannelHeader as ChannelHeaderRTL } from '@/components/Channel/rtl/ChannelHeader';
 import { ChannelTabBar } from '@/components/ChannelTabs';
 import { getTextDirection } from '@/lib/i18n/utils';
+import { ChannelViewerProvider } from '@/components/Channel/ChannelViewerContext';
 
 interface ChannelPageShellProps {
   channel: Channel;
@@ -30,7 +31,7 @@ export function ChannelPageShell({ channel, locale, isOwner, children }: Channel
 
       {/* Tab Content */}
       <div className="container mx-auto px-4 py-6">
-        {children}
+        <ChannelViewerProvider canEditLayout={isOwner}>{children}</ChannelViewerProvider>
       </div>
     </div>
   );
