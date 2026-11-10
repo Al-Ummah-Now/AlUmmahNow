@@ -9,6 +9,6 @@
     "test": "node --experimental-strip-types --no-warnings --test test/*.test.ts"
   },
   "devDependencies": {
-    "sharp": "0.34.5"
+    "sharp": "0.35.5"
   }
 }
