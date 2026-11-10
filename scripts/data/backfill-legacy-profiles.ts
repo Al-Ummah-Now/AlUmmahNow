@@ -30,6 +30,8 @@ import { cfToken, DEFAULT_ACCOUNT_ID } from '../release/cf-api.ts';
 import { pairProfiles, planProfile, type StoredProfile } from './legacy-profiles.ts';
 
 const BUCKETS = { qa: 'profiles-qa', stage: 'profiles-stage', production: 'profiles' } as const;
+/** Auth service D1 (AlUmmahNowAuth apps/auth wrangler configs): users.email is the verified address */
+const AUTH_DBS = { qa: '28590f3c-dd92-4c26-a803-d73a9bbe2b58', stage: 'c7886ef6-c70b-4b7f-a65b-3df9f9aba9e2', production: 'af76f007-e21e-43aa-88de-ebfefe46fb56' } as const;
 type Env = keyof typeof BUCKETS;
 
 function arg(name: string): string | undefined {
@@ -110,7 +112,29 @@ for (let i = 0; i < keys.length; i += BATCH) {
 }
 if (unreadable) console.log(`${unreadable} object(s) were not JSON and were left alone`);
 
-const { pairs, unmatched, ambiguous } = pairProfiles(profiles);
+/** usr_ id → auth email (users.email in the auth service's D1), looked up only when legacy records exist */
+async function authEmailsFor(ids: string[]): Promise<Map<string, string>> {
+	const out = new Map<string, string>();
+	const url = `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID || DEFAULT_ACCOUNT_ID}/d1/database/${AUTH_DBS[env as Env]}/query`;
+	for (let i = 0; i < ids.length; i += 50) {
+		const chunk = ids.slice(i, i + 50);
+		const res = await cfFetch(url, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ sql: `SELECT id, email FROM users WHERE deleted_at IS NULL AND id IN (${chunk.map(() => '?').join(',')})`, params: chunk }),
+		});
+		const json = (await res.json()) as { success: boolean; result?: { results: { id: string; email: string }[] }[] };
+		if (!res.ok || !json.success) throw new Error(`auth users query: HTTP ${res.status}`);
+		for (const row of json.result?.[0]?.results ?? []) out.set(row.id, row.email);
+	}
+	return out;
+}
+
+// Every pairing is decided on the auth email of the usr_ id, never the profile's editable email
+const legacyEmails = new Set(profiles.filter((p) => /^[0-9a-f]{32}$/.test(p.id)).map((p) => String(p.email ?? '').trim().toLowerCase()).filter(Boolean));
+const candidates = profiles.filter((p) => p.id.startsWith('usr_') && legacyEmails.size).map((p) => p.id);
+const authEmails = await authEmailsFor(candidates);
+const { pairs, unmatched, ambiguous } = pairProfiles(profiles, authEmails);
 const plans = pairs.map(({ current, legacy }) => ({ legacy, plan: planProfile(current, legacy) })).filter(({ plan }) => plan.changes.length);
 const legacyCount = profiles.filter((p) => /^[0-9a-f]{32}$/.test(p.id)).length;
 

@@ -82,17 +82,33 @@ test('without a legacy record only doubled slashes are normalised', () => {
 	assert.deepEqual(clean.changes, []);
 });
 
-test('pairs by email (case-insensitive) and leaves unmatched or ambiguous records alone', () => {
+test('pairs on the auth email of the usr_ id (case-insensitive); unmatched or ambiguous records are left alone', () => {
 	const other = { id: 'usr_00000000000000000000000000000001', email: 'b@example.com' };
 	const orphan = { id: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', email: 'gone@example.com' };
-	const dupA = { id: 'usr_00000000000000000000000000000002', email: 'dup@example.com' };
-	const dupB = { id: 'usr_00000000000000000000000000000003', email: 'dup@example.com' };
+	const dupA = { id: 'usr_00000000000000000000000000000002', email: 'x' };
+	const dupB = { id: 'usr_00000000000000000000000000000003', email: 'y' };
 	const dupLegacy = { id: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', email: 'dup@example.com' };
-	const r = pairProfiles([legacy, current, other, orphan, dupA, dupB, dupLegacy, { id: 'not-a-profile-key' }]);
+	const auth = new Map([
+		[USR_ID, 'OWNER@example.com'],
+		[other.id, 'b@example.com'],
+		[dupA.id, 'dup@example.com'],
+		[dupB.id, 'dup@example.com'],
+	]);
+	const r = pairProfiles([legacy, current, other, orphan, dupA, dupB, dupLegacy, { id: 'not-a-profile-key' }], auth);
 	const byId = Object.fromEntries(r.pairs.map((p) => [p.current.id, p.legacy?.id ?? null]));
 	assert.deepEqual(byId, { [USR_ID]: LEGACY_ID, [other.id]: null, [dupA.id]: null, [dupB.id]: null });
 	assert.deepEqual(r.unmatched, [orphan.id]);
 	assert.deepEqual(r.ambiguous, ['dup@example.com']);
+});
+
+test('a usr_ profile claiming the legacy email in its editable profile field is not paired', () => {
+	const intruder = { id: 'usr_00000000000000000000000000000009', email: legacy.email };
+	const r = pairProfiles([legacy, intruder], new Map([[intruder.id, 'intruder@example.com']]));
+	assert.deepEqual(r.pairs.map((x) => [x.current.id, x.legacy]), [[intruder.id, undefined]]);
+	assert.deepEqual(r.unmatched, [LEGACY_ID]);
+	// and without an auth record at all
+	const none = pairProfiles([legacy, intruder], new Map());
+	assert.deepEqual(none.pairs.map((p) => p.legacy), [undefined]);
 });
 
 test('helpers', () => {
