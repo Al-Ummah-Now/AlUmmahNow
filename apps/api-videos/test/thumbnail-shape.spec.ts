@@ -66,7 +66,8 @@ beforeEach(() => {
 			const body = bunnyVideos[url.split('/videos/')[1]];
 			return new Response(body ? JSON.stringify(body) : null, { status: body ? 200 : 404 });
 		}
-		if (method === 'PUT' && url.includes('storage.bunnycdn.com')) {
+		const host = new URL(url).hostname;
+		if (method === 'PUT' && (host === 'storage.bunnycdn.com' || host.endsWith('.storage.bunnycdn.com'))) {
 			stored.push(url);
 			return new Response(null, { status: 201 });
 		}
