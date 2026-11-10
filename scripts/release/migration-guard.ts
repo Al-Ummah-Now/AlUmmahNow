@@ -5,6 +5,7 @@
  *
  *   pnpm check:migrations <base-ref>
  */
+import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
@@ -38,10 +39,32 @@ const dirOf = (p: string) => p.slice(0, p.lastIndexOf('/'));
 const nameOf = (p: string) => p.slice(p.lastIndexOf('/') + 1);
 
 /**
+ * The one escape (SPEC §6.2): a migration that has never been applied in ANY
+ * environment (its name is absent from d1_migrations in QA, stage and
+ * production) may be corrected in place, once. Each entry pins the sha256 of
+ * the corrected file, so any later edit is refused again. Record the evidence.
+ */
+export const NEVER_APPLIED_FIXES: Readonly<Record<string, { sha256: string; reason: string }>> = {
+  'apps/api-videos/migrations/search/0005_admin_content.sql': {
+    sha256: 'f9ed626bb8e39687d804557a781ecc882687eea11565fe73369b1504aa372c53',
+    reason:
+      '2026-11-10 (#604): failed on QA with "duplicate column name: title" (QA has content_ownership.title from the Creator Studio preview migration) and was recorded nowhere: d1_migrations on QA, stage and production list only 0001-0004. Corrected to add admin_title.',
+  },
+};
+
+export const sha256 = (text: string) => createHash('sha256').update(text).digest('hex');
+
+/**
  * @param changes  name-status diff base...head
  * @param baseFiles every migration file path that exists at base
  */
-export function checkMigrations(changes: Change[], baseFiles: string[]): string[] {
+export function checkMigrations(
+	changes: Change[],
+	baseFiles: string[],
+	/** Content of a file at head, for the NEVER_APPLIED_FIXES check. */
+	headContent: (path: string) => string | null = () => null,
+	fixes: Readonly<Record<string, { sha256: string }>> = NEVER_APPLIED_FIXES,
+): string[] {
 	const errors: string[] = [];
 	const latest = new Map<string, string>();
 	for (const f of baseFiles) {
@@ -52,7 +75,11 @@ export function checkMigrations(changes: Change[], baseFiles: string[]): string[
 	for (const c of changes) {
 		const touched = [c.path, c.from].filter((p): p is string => !!p && isMigration(p));
 		if (touched.length === 0) continue;
-		if (c.status === 'M') errors.push(`${c.path}: existing migration modified. Add a new migration instead.`);
+		if (c.status === 'M' && fixes[c.path]) {
+			const content = headContent(c.path);
+			if (content !== null && sha256(content) === fixes[c.path].sha256) continue;
+			errors.push(`${c.path}: differs from its recorded never-applied fix (NEVER_APPLIED_FIXES). Add a new migration instead.`);
+		} else if (c.status === 'M') errors.push(`${c.path}: existing migration modified. Add a new migration instead.`);
 		else if (c.status === 'D') errors.push(`${c.path}: existing migration deleted.`);
 		else if (c.status === 'R') errors.push(`${c.from} → ${c.path}: existing migration renamed.`);
 		else if (c.status === 'A' || c.status === 'C') {
@@ -76,7 +103,14 @@ if (isMain) {
 	const mergeBase = git('merge-base', base, 'HEAD').trim();
 	const changes = parseNameStatus(git('diff', '--name-status', '-M', `${mergeBase}`, 'HEAD'));
 	const baseFiles = git('ls-tree', '-r', '--name-only', mergeBase).split('\n');
-	const errors = checkMigrations(changes, baseFiles);
+	const headContent = (path: string) => {
+		try {
+			return git('show', `HEAD:${path}`);
+		} catch {
+			return null;
+		}
+	};
+	const errors = checkMigrations(changes, baseFiles, headContent);
 	if (errors.length) {
 		process.stderr.write(`Migration guard failed:\n${errors.map((e) => `  - ${e}`).join('\n')}\n`);
 		process.exit(1);
