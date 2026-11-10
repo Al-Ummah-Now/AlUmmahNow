@@ -1,4 +1,4 @@
-import { OpenAPIRoute } from 'chanfana';
+import { ValidatedRoute } from './ValidatedRoute';
 
 /**
  * Base class for truly public API endpoints that don't need authentication.
@@ -29,7 +29,7 @@ import { OpenAPIRoute } from 'chanfana';
  * }
  * ```
  */
-export abstract class PublicRoute extends OpenAPIRoute {
+export abstract class PublicRoute extends ValidatedRoute {
   // Currently just a semantic wrapper around OpenAPIRoute.
   // This provides room for future shared public endpoint functionality
   // such as rate limiting, CORS headers, caching, etc.

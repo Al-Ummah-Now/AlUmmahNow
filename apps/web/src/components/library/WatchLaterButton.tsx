@@ -46,6 +46,9 @@ export function WatchLaterButton({ videoId, className = '' }: WatchLaterButtonPr
   };
 
   const Icon = saved ? Check : Clock;
+  // The watch page's action row (.watch-actions, theme/system.css) draws the
+  // pill like its siblings. No Tailwind grey here: the theme bridge paints
+  // bg-gray-100 buttons as secondary buttons, a different fill from the row.
   return (
     <>
       <button
@@ -56,7 +59,7 @@ export function WatchLaterButton({ videoId, className = '' }: WatchLaterButtonPr
         data-testid="watch-later-button"
         title={saved ? texts.removeFromWatchLater : texts.saveToWatchLater}
         data-saved={saved ? 'true' : 'false'}
-        className={`inline-flex items-center gap-2 rounded-full bg-gray-100 px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-200 disabled:opacity-60 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${className}`}
+        className={`inline-flex items-center gap-2 ${className}`.trim()}
       >
         <Icon className="h-4 w-4" aria-hidden="true" />
         <span className="wa-label">{saved ? texts.removeFromWatchLater : texts.saveToWatchLater}</span>

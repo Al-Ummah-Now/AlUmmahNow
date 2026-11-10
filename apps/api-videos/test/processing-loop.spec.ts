@@ -401,6 +401,13 @@ describe('ready at the first encoded resolution', () => {
 		assert.equal(uploadStatusView(bunnyPhase(TRANSCODING_240), TRANSCODING_240).status, 'ready');
 		assert.equal(uploadStatusView(bunnyPhase({ status: 3 }), { status: 3 }).status, 'processing');
 		assert.equal(uploadStatusView(bunnyPhase({ status: 0 }), { status: 0 }).status, 'uploading');
+		// Given up on (browser report or stalled sweep) while Bunny still waits for bytes: failed, with the reason
+		const flagged = uploadStatusView(bunnyPhase({ status: 0 }), { status: 0 }, {
+			uploadStatus: 'failed',
+			processingIssue: { kind: 'needs_reupload', reason: 'Upload stopped', at: '2026-11-10T00:00:00.000Z' },
+		});
+		assert.deepEqual([flagged.status, flagged.message], ['failed', 'Upload stopped']);
+		assert.equal(uploadStatusView(bunnyPhase({ status: 0 }), { status: 0 }, { uploadStatus: 'uploading' }).status, 'uploading');
 		assert.equal(uploadStatusView(bunnyPhase(FINISHED), FINISHED).progress, 100);
 		assert.equal(uploadStatusView(bunnyPhase({ status: 5 }), { status: 5 }).status, 'failed');
 	});

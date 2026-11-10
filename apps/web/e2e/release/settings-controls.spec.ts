@@ -20,7 +20,7 @@
  */
 import { test, expect, type BrowserContext, type Locator, type Page } from '@playwright/test';
 import { target } from './targets';
-import { apiFetch, createProfile, signInAgain, signUpOnWeb, type Locale, type WebUser } from './web-session';
+import { apiFetch, createProfile, gotoSettled, signInAgain, signUpOnWeb, type Locale, type WebUser } from './web-session';
 
 // Signs in through the auth server: the trace would hold the password and code
 test.use({ trace: 'off' });
@@ -259,21 +259,6 @@ async function expectNoDeadHelp(page: Page): Promise<void> {
     return out;
   }, HELP_TEXT.source);
   expect(dead, 'help text that leads nowhere').toEqual([]);
-}
-
-/**
- * page.goto that waits out a client-side navigation still landing from the
- * previous step (WebKit finishes the router's push after the URL changes).
- */
-async function gotoSettled(page: Page, url: string): Promise<void> {
-  await page.waitForLoadState('load');
-  try {
-    await page.goto(url);
-  } catch (e) {
-    if (!/interrupted by another navigation/.test(String(e))) throw e;
-    await page.waitForLoadState('load');
-    await page.goto(url);
-  }
 }
 
 /** The page at `path` has a breadcrumb whose back link goes to `parent`, and clicking it gets there. */

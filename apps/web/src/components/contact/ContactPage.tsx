@@ -33,6 +33,7 @@ import { errorScreenStrings, parseErrorRef } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { MAIN_CONTENT_ID } from '@/components/SkipLinks';
+import { SettingsBreadcrumb } from '@/components/settings/SettingsBreadcrumb';
 import { logger } from '@/lib/logger-client';
 import {
   CONTACT_LIMITS,
@@ -200,6 +201,9 @@ export function ContactPage() {
   const errorFields = FIELD_ORDER.filter((f) => errors[f]);
 
   return (
+    <>
+    {/* Opened from Settings: "Settings › Contact us" with a way back */}
+    <SettingsBreadcrumb />
     <main id={MAIN_CONTENT_ID} className="ct" dir={isRTL ? 'rtl' : 'ltr'} data-testid="contact-page">
       <header className="ct-head">
         <span className="ct-badge" aria-hidden="true">
@@ -428,6 +432,7 @@ export function ContactPage() {
         </aside>
       </div>
     </main>
+    </>
   );
 }
 

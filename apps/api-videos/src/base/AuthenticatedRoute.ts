@@ -1,4 +1,4 @@
-import { OpenAPIRoute } from 'chanfana';
+import { ValidatedRoute } from './ValidatedRoute';
 import { HTTPException } from 'hono/http-exception';
 import { AppContext, AuthContext } from './types';
 import { logger } from '../lib/logger';
@@ -27,7 +27,7 @@ import { logger } from '../lib/logger';
  * }
  * ```
  */
-export abstract class AuthenticatedRoute extends OpenAPIRoute {
+export abstract class AuthenticatedRoute extends ValidatedRoute {
   /**
    * Executes the endpoint with authentication validation.
    * Overrides the base execute() to check auth before calling handle().

@@ -16,7 +16,7 @@ jest.mock('@/hooks/useLanguage', () => ({
 }));
 
 import { Switch } from '@/components/common/Switch';
-import { BreadcrumbTrail, settingsTrail } from '../SettingsBreadcrumb';
+import { BreadcrumbTrail, openedFromSettings, settingsTrail } from '../SettingsBreadcrumb';
 import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
 
 describe('Switch', () => {
@@ -65,6 +65,20 @@ describe('settingsTrail', () => {
   it('shows on the profile page only when opened from Settings', () => {
     expect(settingsTrail('/en/profile', 'en', t)).toBeNull();
     expect(settingsTrail('/en/profile', 'en', t, true)?.map((c) => c.href)).toEqual(['/en/settings', '/en/profile']);
+  });
+
+  it('shows on Contact us only when opened from Settings', () => {
+    expect(settingsTrail('/en/contact', 'en', t)).toBeNull();
+    expect(settingsTrail('/ar/contact', 'ar', AR_TRANSLATIONS, true)?.map((c) => c.href)).toEqual(['/ar/settings', '/ar/contact']);
+  });
+
+  it('reads "opened from Settings" from ?from=settings or ?from=/<lang>/settings', () => {
+    expect(openedFromSettings('settings', 'en')).toBe(true);
+    expect(openedFromSettings('/en/settings', 'en')).toBe(true);
+    expect(openedFromSettings('/ar/settings/', 'ar')).toBe(true);
+    expect(openedFromSettings('/en/settings/privacy', 'en')).toBe(false);
+    expect(openedFromSettings('/en/watch/abc', 'en')).toBe(false);
+    expect(openedFromSettings(null, 'en')).toBe(false);
   });
 });
 

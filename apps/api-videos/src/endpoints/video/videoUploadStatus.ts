@@ -166,7 +166,7 @@ export class VideoUploadStatus extends OptionalAuthRoute {
 		let message = "Video is ready";
 
 		if (bunnyStreamStatus) {
-			({ status, progress, message } = uploadStatusView(bunnyPhase(bunnyStreamStatus), bunnyStreamStatus));
+			({ status, progress, message } = uploadStatusView(bunnyPhase(bunnyStreamStatus), bunnyStreamStatus, video as never));
 			try {
 				await syncVideoFromBunny(c.env as never, id, { bunny: bunnyStreamStatus });
 			} catch (error) {

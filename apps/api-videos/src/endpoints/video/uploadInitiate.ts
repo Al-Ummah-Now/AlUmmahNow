@@ -120,9 +120,10 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 		// Get authenticated user ID
 		const userId = this.getUserId(c);
 
+		// Validated outside the catch-all below: a bad request is a 400 with the
+		// issues (chanfana), not a 500
+		const request = await this.getValidatedData<typeof this.schema>();
 		try {
-			// Get validated data
-			const request = await this.getValidatedData<typeof this.schema>();
 			const { title, description, fileSize, mimeType, isPublic, tags, thumbnail, titleLocalized, descriptionLocalized, category, format, fingerprint, categorySuggestionKey } = request.body;
 
 			// Validate required fields

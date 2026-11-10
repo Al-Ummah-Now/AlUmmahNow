@@ -94,9 +94,16 @@ test.describe('Release: page frame', () => {
 
         // Header search goes to the search page with the query
         const query = 'quran';
-        await page.getByTestId('header-search-input').fill(query);
-        await page.getByTestId('header-search-submit').click();
-        await expect(page).toHaveURL(new RegExp(`/${locale}/search\\?(.*&)?q=${query}`));
+        const input = page.getByTestId('header-search-input');
+        // The explore page can still be streaming in after its URL commits; the
+        // header's Suspense boundary may remount the box then and drop what was
+        // typed. Type again only if the text is gone; the submit must navigate.
+        await expect(async () => {
+          if ((await input.inputValue()) !== query) await input.fill(query);
+          await expect(input).toHaveValue(query);
+          await page.getByTestId('header-search-submit').click();
+          await expect(page).toHaveURL(new RegExp(`/${locale}/search\\?(.*&)?q=${query}`), { timeout: 5000 });
+        }).toPass({ timeout: 30000 });
         await expect(page.getByTestId('search-page')).toBeVisible();
         await expectNoSidewaysScroll(page);
       });
