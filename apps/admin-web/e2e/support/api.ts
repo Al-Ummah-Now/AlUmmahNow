@@ -13,6 +13,7 @@ import { ADMIN_API_URL, E2E_DESCRIPTION_TAG, E2E_ENTITY_PREFIX, TOKENS_PATH, VID
 
 export interface Tokens {
   admin: string;
+  superadmin: string;
   moderator: string;
   reporter: string;
 }

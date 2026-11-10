@@ -1,5 +1,5 @@
 /**
- * Logs in the admin, moderator and non-admin QA accounts through the real
+ * Logs in the super admin, admin, moderator and non-admin QA accounts through the real
  * auth server, saves their storage states, fetches API tokens for fixtures and
  * seeds enough reports to exercise pagination.
  */
@@ -39,7 +39,7 @@ export default async function globalSetup(_config: FullConfig) {
   fs.mkdirSync(AUTH_DIR, { recursive: true });
   const reuse = process.env.E2E_REUSE_AUTH === '1';
   const maxAge = 60 * 60 * 1000;
-  const all = [accounts.admin, accounts.moderator, accounts.nonadmin];
+  const all = [accounts.admin, accounts.moderator, accounts.nonadmin, accounts.superadmin];
 
   await Promise.all(
     all.map(async (account) => {
@@ -49,8 +49,8 @@ export default async function globalSetup(_config: FullConfig) {
   );
 
   if (!(reuse && fresh(TOKENS_PATH, maxAge))) {
-    const [admin, moderator, reporter] = await Promise.all(all.map((a) => getAccessToken(a)));
-    fs.writeFileSync(TOKENS_PATH, JSON.stringify({ admin, moderator, reporter }, null, 2));
+    const [admin, moderator, reporter, superadmin] = await Promise.all(all.map((a) => getAccessToken(a)));
+    fs.writeFileSync(TOKENS_PATH, JSON.stringify({ admin, moderator, reporter, superadmin }, null, 2));
   }
 
   // Close anything a previous, aborted run left open, then seed the

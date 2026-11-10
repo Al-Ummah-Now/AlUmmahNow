@@ -16,6 +16,7 @@ import type {
   AdminPlaylistRow,
   AdminPostRow,
   AdminUserRow,
+  AdminUserSearchItem,
   AdminVideoRow,
   ChannelDetailView,
   ContentAuditEntry,
@@ -85,6 +86,22 @@ export async function unsuspendChannel(id: string): Promise<ActionResult<JobResu
 
 export async function transferChannel(id: string, newOwnerId: string): Promise<ActionResult<JobResult>> {
   return toResult(() => fetchAdmin<JobResult>(`${BASE}/channels/${enc(id)}/transfer`, json('POST', { newOwnerId })));
+}
+
+/**
+ * The transfer's new-owner picker: users matching an email, name, @handle or
+ * id, without the current owner, each with their channel count and role on
+ * this channel. Super admins only (admin-api checks channels:transfer).
+ */
+export async function searchTransferCandidates(channelId: string, q: string, exclude: string[]): Promise<ActionResult<{ items: AdminUserSearchItem[] }>> {
+  const query = new URLSearchParams({ q, channelId });
+  if (exclude.length) query.set('exclude', exclude.join(','));
+  return toResult(() => fetchAdmin<{ items: AdminUserSearchItem[] }>(`${BASE}/users/search?${query}`));
+}
+
+/** One job's current state, for following an action's job from the page that started it. */
+export async function readJob(id: string): Promise<ActionResult<AdminJob>> {
+  return toResult(() => fetchAdmin<AdminJob>(`${BASE}/jobs/${enc(id)}`));
 }
 
 export async function deleteChannel(id: string): Promise<ActionResult<JobResult>> {

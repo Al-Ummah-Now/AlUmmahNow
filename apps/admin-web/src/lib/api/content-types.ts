@@ -15,11 +15,13 @@ import type {
   AdminPostRow,
   AdminUserDetail,
   AdminUserRow,
+  AdminUserSearchItem,
   AdminVideoDetail,
   AdminVideoRow,
 } from '@al-ummah/shared-types';
 
 export type {
+  AdminUserSearchItem,
   AdminJob,
   AdminChannelRow,
   AdminCommentRow,

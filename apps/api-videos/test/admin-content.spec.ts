@@ -378,6 +378,67 @@ describe('channel actions', () => {
 		assert.equal((await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER })).body.code, 'already_owner');
 	});
 
+	it('transfer takes a user id only and refuses missing, deleted and banned users', async () => {
+		const { call, raw } = await setup({
+			profiles: {
+				[OWNER]: profile(OWNER, { channels: ['ch1'] }),
+				[OTHER]: profile(OTHER),
+				usr_gone: profile('usr_gone', { isDeleted: true }),
+				usr_banned: profile('usr_banned'),
+			},
+		});
+		const byEmail = await call('POST', '/channels/ch1/transfer', { newOwnerId: `${OTHER}@example.com` });
+		assert.equal(byEmail.status, 400);
+		assert.equal(byEmail.body.code, 'invalid_new_owner', 'an email is not an owner id');
+		assert.equal((await call('POST', '/channels/ch1/transfer', { newOwnerId: '@handle' })).body.code, 'invalid_new_owner');
+		assert.equal((await call('POST', '/channels/ch1/transfer', { newOwnerId: '' })).status, 400);
+		assert.equal((await call('POST', '/channels/ch1/transfer', { newOwnerId: 'usr_gone' })).body.code, 'new_owner_not_found');
+		await call('POST', '/users/usr_banned/ban', { reason: 'Abuse' });
+		const banned = await call('POST', '/channels/ch1/transfer', { newOwnerId: 'usr_banned' });
+		assert.equal(banned.status, 409);
+		assert.equal(banned.body.code, 'new_owner_banned');
+		assert.equal(JSON.parse(raw.channels.store.get('ch1')!).userId, OWNER, 'nothing moved');
+		const trimmed = await call('POST', '/channels/ch1/transfer', { newOwnerId: ` ${OTHER} ` });
+		assert.equal(trimmed.status, 200);
+		assert.equal(JSON.parse(raw.channels.store.get('ch1')!).userId, OTHER);
+	});
+
+	it('user search finds users by email, name, @handle, channel @handle and id, without the excluded owner', async () => {
+		const { call } = await setup({
+			profiles: {
+				[OWNER]: profile(OWNER, { channels: ['ch1', 'ch2'], email: 'owner@example.com', displayName: 'Owner Person' }),
+				usr_amina: profile('usr_amina', { email: 'amina@example.com', displayName: 'Amina Yusuf', userName: 'aminay' }),
+				usr_bilal: profile('usr_bilal', { email: 'bilal@example.com', displayName: 'Bilal Ahmed', userName: 'bilal', channels: ['ch3'] }),
+			},
+			channels: {
+				ch1: channel('ch1', { handle: 'owners-main' }),
+				ch2: channel('ch2', { handle: 'owners-second', isMain: false }),
+				ch3: channel('ch3', { userId: 'usr_bilal', handle: 'nasheeds', members: [{ userId: 'usr_amina', role: 'editor' }] }),
+			},
+			videos: {},
+		});
+		const search = async (q: string, extra = '') => (await call('GET', `/users/search?q=${encodeURIComponent(q)}${extra}`)).body.result.items as any[];
+		assert.deepEqual((await search('amina@example.com')).map((u) => u.id), ['usr_amina'], 'by email');
+		assert.deepEqual((await search('Bilal')).map((u) => u.id), ['usr_bilal'], 'by name');
+		assert.deepEqual((await search('@aminay')).map((u) => u.id), ['usr_amina'], 'by user @handle');
+		assert.deepEqual((await search('@nasheeds')).map((u) => u.id), ['usr_bilal'], 'by channel @handle');
+		assert.deepEqual((await search('usr_bilal')).map((u) => u.id), ['usr_bilal'], 'by id');
+		assert.deepEqual(await search('a'), [], 'one character finds nothing');
+		assert.deepEqual(await search('@'), []);
+		const all = await search('example.com', `&exclude=${OWNER}&channelId=ch3`);
+		assert.deepEqual(all.map((u) => u.id).sort(), ['usr_amina', 'usr_bilal'], 'the excluded owner is left out');
+		const amina = all.find((u) => u.id === 'usr_amina');
+		const bilal = all.find((u) => u.id === 'usr_bilal');
+		assert.equal(amina.channelRole, 'editor', "the user's role on the channel");
+		assert.equal(amina.channelCount, 0);
+		assert.equal(bilal.channelCount, 1);
+		assert.equal(bilal.email, 'bilal@example.com');
+		assert.equal((await search('owner@example.com'))[0].channelCount, 2);
+		const banned = await call('POST', '/users/usr_bilal/ban', {});
+		assert.equal(banned.status, 200);
+		assert.equal((await search('bilal@example.com'))[0].isBanned, true, 'banned users are listed as such');
+	});
+
 	it('delete soft-deletes the channel, erases its videos and frees the handle', async () => {
 		const { raw, db, call } = await setup();
 		await raw.channel_tabs.put('channel-handles/ch1', JSON.stringify({ handle: 'ch1', channelId: 'ch1', userId: OWNER }));
