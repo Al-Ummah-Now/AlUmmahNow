@@ -1,5 +1,7 @@
 'use client';
 
+import { formatViews } from '@/lib/format/videoMeta';
+import { RelativeDate } from '@/components/RelativeDate';
 import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Player } from "video.js";
@@ -26,8 +28,8 @@ import { fetchRelatedVideos, fetchVideoById } from "@/lib/api/videos";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { useLanguage } from "@/hooks/useLanguage";
 import { getLocalizedValue } from "@al-ummah/shared-types";
-import { CommentsSkeleton, WatchDetailsSkeleton, type WatchHint } from "@/components/video/WatchPageSkeleton";
 import { enableWatchPageFeatures, getPlayerUi, subscribePlayerUi, updatePlayerUi } from "@/lib/video/player-ui";
+import { CommentsSkeleton, WatchDetailsSkeleton, type WatchHint } from "@/components/video/WatchPageSkeleton";
 
 type VideoState =
   | { status: 'loading' }
@@ -164,7 +166,7 @@ export default function WatchPageContent({ videoId, hint }: { videoId: string; h
   const isOwnVideo = !!user && !!videoDetails?.userId && videoDetails.userId === user.id;
 
   return (
-    <main id={MAIN_CONTENT_ID} className="flex flex-1 flex-col md:flex-row overflow-hidden" dir={isRTL ? 'rtl' : 'ltr'}>
+    <main id={MAIN_CONTENT_ID} className="flex flex-1 flex-col md:flex-row overflow-hidden" dir={isRTL ? 'rtl' : 'ltr'} data-theatre={theatre || undefined}>
       <div className={`flex flex-col ${theatre ? '' : 'lg:flex-row'} gap-4 p-4 w-full mt-0 lg:mt-0 overflow-hidden`} data-theatre={theatre || undefined} data-testid="watch-layout">
         <div className={`flex flex-col w-full ${theatre ? '' : 'lg:w-3/4'} overflow-hidden`}>
           {!videoDetails && <WatchDetailsSkeleton hint={hint} />}
@@ -179,7 +181,7 @@ export default function WatchPageContent({ videoId, hint }: { videoId: string; h
                 />
               </section>
 
-              <div className="w-full max-w-4xl mt-4 px-4">
+              <div className="watch-actions">
                 <VideoMetricsDisplay
                   key={videoDetails.id}
                   videoId={videoId}
@@ -194,9 +196,6 @@ export default function WatchPageContent({ videoId, hint }: { videoId: string; h
                     logger.debug('[WatchPage] Video metrics updated', { metrics });
                   }}
                 />
-              </div>
-
-              <div className="w-full max-w-4xl mt-4 px-4 flex flex-wrap items-center gap-3">
                   <ShareDialog
                     videoId={videoId}
                     title={getLocalizedValue(videoDetails.titleLocalized, videoDetails.title, lang)}
@@ -215,18 +214,16 @@ export default function WatchPageContent({ videoId, hint }: { videoId: string; h
                       <span>{t.video.editVideo}</span>
                     </Link>
                   )}
-              </div>
-
-              {/* Report video (hidden for anonymous viewers and the owner) */}
-              {!isOwnVideo && (
-                <div ref={reportRef} className={`w-full max-w-4xl mt-2 px-4 flex ${isRTL ? 'justify-start' : 'justify-end'}`}>
-                  <ReportContentButton
+                  {!isOwnVideo && <div ref={reportRef} data-report-content><ReportContentButton
                     contentType="video"
                     contentId={videoId}
                     contentTitle={getLocalizedValue(videoDetails.titleLocalized, videoDetails.title, lang)}
-                  />
-                </div>
-              )}
+                  /></div>}
+              </div>
+              <details className="watch-desc" open={false}>
+                <summary><span>{formatViews(videoDetails.views, lang)}</span> <RelativeDate value={videoDetails.dateCreated} lang={lang} /></summary>
+                {videoDetails.description && <p>{videoDetails.description}</p>}
+              </details>
             </div>
           )}
 

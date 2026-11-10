@@ -1,4 +1,5 @@
 "use client";
+import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import React from "react";
 import { SearchFilters as SearchFiltersType } from "@/lib/api/types";
 import { useLanguage } from "@/hooks/useLanguage";
@@ -85,7 +86,7 @@ export const SearchFilters: React.FC<SearchFiltersProps> = ({
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 {t.search.category}
               </label>
-              <select
+              <ThemedSelectField
                 value={filters.category || ''}
                 onChange={(e) => updateFilter('category', e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -96,7 +97,7 @@ export const SearchFilters: React.FC<SearchFiltersProps> = ({
                     {cat.label}
                   </option>
                 ))}
-              </select>
+              </ThemedSelectField>
             </div>
 
             {/* Language Filter */}
@@ -104,7 +105,7 @@ export const SearchFilters: React.FC<SearchFiltersProps> = ({
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 {t.search.language}
               </label>
-              <select
+              <ThemedSelectField
                 value={filters.language || 'all'}
                 onChange={(e) => updateFilter('language', e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -113,7 +114,7 @@ export const SearchFilters: React.FC<SearchFiltersProps> = ({
                 <option value="all">{t.search.allLanguages}</option>
                 <option value="en">{t.search.english}</option>
                 <option value="ar">{t.search.arabic}</option>
-              </select>
+              </ThemedSelectField>
             </div>
 
             {/* Duration Filter */}
@@ -121,7 +122,7 @@ export const SearchFilters: React.FC<SearchFiltersProps> = ({
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 {t.search.duration}
               </label>
-              <select
+              <ThemedSelectField
                 value={filters.duration || 'all'}
                 onChange={(e) => updateFilter('duration', e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -132,7 +133,7 @@ export const SearchFilters: React.FC<SearchFiltersProps> = ({
                     {dur.label}
                   </option>
                 ))}
-              </select>
+              </ThemedSelectField>
             </div>
 
             {/* Date Range */}
@@ -166,7 +167,7 @@ export const SearchFilters: React.FC<SearchFiltersProps> = ({
                 {t.search.sortBy}
               </label>
               <div className="flex gap-2">
-                <select
+                <ThemedSelectField
                   value={filters.sortBy || 'relevance'}
                   onChange={(e) => updateFilter('sortBy', e.target.value)}
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -177,8 +178,8 @@ export const SearchFilters: React.FC<SearchFiltersProps> = ({
                       {sort.label}
                     </option>
                   ))}
-                </select>
-                <select
+                </ThemedSelectField>
+                <ThemedSelectField
                   value={filters.sortOrder || 'desc'}
                   onChange={(e) => updateFilter('sortOrder', e.target.value)}
                   className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -186,7 +187,7 @@ export const SearchFilters: React.FC<SearchFiltersProps> = ({
                 >
                   <option value="desc">{t.search.descending}</option>
                   <option value="asc">{t.search.ascending}</option>
-                </select>
+                </ThemedSelectField>
               </div>
             </div>
 

@@ -14,6 +14,7 @@
  * - Visual key indicators
  */
 
+import { BodyPortal } from '@/components/ui/BodyPortal';
 import React, { useEffect, useRef } from 'react';
 import { X, HelpCircle, Play, SkipBack, SkipForward, Volume2, Maximize, PictureInPicture, RotateCw } from 'lucide-react';
 
@@ -216,7 +217,7 @@ export function VideoKeyboardHelp({ isOpen, onClose, language }: VideoKeyboardHe
   const pressEscText = language === 'ar' ? 'اضغط ESC للإغلاق' : 'Press ESC to close';
 
   return (
-    <div
+    <BodyPortal><div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
       onClick={onClose}
       role="dialog"
@@ -299,6 +300,6 @@ export function VideoKeyboardHelp({ isOpen, onClose, language }: VideoKeyboardHe
           </div>
         </div>
       </div>
-    </div>
+    </div></BodyPortal>
   );
 }

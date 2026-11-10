@@ -1132,6 +1132,7 @@ export async function fetchVideos(cursor: string | null = null): Promise<VideoIn
             channelId: video.channelId,
             channelName: video.channelName,
             thumbnail: video.thumbnailUrl,
+            duration: video.duration,
             video: video.videoUrl,
             views: `${video.views || 0}`,
             width: video.width,

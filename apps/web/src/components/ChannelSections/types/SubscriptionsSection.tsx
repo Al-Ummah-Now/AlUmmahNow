@@ -29,7 +29,7 @@ export function SubscriptionsSection({ channelId, title, channels }: Subscriptio
   logger.debug('SubscriptionsSection: Rendering', { channelId, count: visibleChannels.length });
 
   return (
-    <section className="space-y-4" dir={isRTL ? 'rtl' : 'ltr'} data-testid="subscriptions-section">
+    <section data-section="channels" className="space-y-4" dir={isRTL ? 'rtl' : 'ltr'} data-testid="subscriptions-section">
       <SectionHeader title={title || t.channel.subscriptionsSection} />
       {visibleChannels.length === 0 ? (
         <SectionEmptyState message={t.discovery.subscriptionsEmpty} />

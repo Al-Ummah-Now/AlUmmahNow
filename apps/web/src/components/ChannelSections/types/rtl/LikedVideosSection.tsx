@@ -57,7 +57,7 @@ export function LikedVideosSection({ channelId, title }: LikedVideosSectionProps
   }
 
   return (
-    <section className="space-y-4" dir="rtl">
+    <section data-section="liked" className="space-y-4" dir="rtl">
       <SectionHeader
         title={title || 'الفيديوهات المفضلة'}
         viewAllHref={`/ar/channels/${channelId}/liked`}

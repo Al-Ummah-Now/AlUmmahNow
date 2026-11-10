@@ -1,4 +1,5 @@
 "use client";
+import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Profile } from '@/interfaces';
@@ -388,7 +389,7 @@ const ProfileEditPage = () => {
               <label htmlFor="profile-timezone" className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
                 {t.profile?.timezone || 'Timezone'}
               </label>
-              <select
+              <ThemedSelectField
                 id="profile-timezone"
                 name="timezone"
                 value={timezone}
@@ -407,7 +408,7 @@ const ProfileEditPage = () => {
                     ))}
                   </optgroup>
                 ))}
-              </select>
+              </ThemedSelectField>
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                 {t.profile?.currentTimezone || 'Current timezone'}: {getTimezoneDisplayName(timezone, locale)}
               </p>

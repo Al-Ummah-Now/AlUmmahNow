@@ -7,6 +7,8 @@
  * Supports bilingual fields (EN/AR) and template variables.
  */
 
+import { BodyPortal } from '@/components/ui/BodyPortal';
+import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import { useState, useEffect } from 'react';
 import { X, Save, AlertCircle } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -192,7 +194,7 @@ export function TemplateEditorModal({
   if (!isOpen) return null;
 
   return (
-    <div
+    <BodyPortal><div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
@@ -549,7 +551,7 @@ export function TemplateEditorModal({
                   <label htmlFor="template-category" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     {isRTL ? 'التصنيف' : 'Category'}
                   </label>
-                  <select
+                  <ThemedSelectField
                     id="template-category"
                     data-testid="template-category"
                     value={category}
@@ -577,14 +579,14 @@ export function TemplateEditorModal({
                         {cat.label[lang]}
                       </option>
                     ))}
-                  </select>
+                  </ThemedSelectField>
                 </div>
 
                 <div>
                   <label htmlFor="template-visibility" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     {isRTL ? 'الخصوصية' : 'Visibility'}
                   </label>
-                  <select
+                  <ThemedSelectField
                     id="template-visibility"
                     data-testid="template-visibility"
                     value={visibility}
@@ -609,14 +611,14 @@ export function TemplateEditorModal({
                     <option value="public">{isRTL ? 'عام' : 'Public'}</option>
                     <option value="private">{isRTL ? 'خاص' : 'Private'}</option>
                     <option value="unlisted">{isRTL ? 'غير مدرج' : 'Unlisted'}</option>
-                  </select>
+                  </ThemedSelectField>
                 </div>
 
                 <div>
                   <label htmlFor="template-language" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     {isRTL ? 'اللغة' : 'Language'}
                   </label>
-                  <select
+                  <ThemedSelectField
                     id="template-language"
                     data-testid="template-language"
                     value={language}
@@ -640,7 +642,7 @@ export function TemplateEditorModal({
                   >
                     <option value="en">{isRTL ? 'إنجليزي' : 'English'}</option>
                     <option value="ar">{isRTL ? 'عربي' : 'Arabic'}</option>
-                  </select>
+                  </ThemedSelectField>
                 </div>
               </div>
             </div>
@@ -699,6 +701,6 @@ export function TemplateEditorModal({
           </div>
         </form>
       </div>
-    </div>
+    </div></BodyPortal>
   );
 }

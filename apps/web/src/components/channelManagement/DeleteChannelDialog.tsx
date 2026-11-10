@@ -15,6 +15,7 @@
  *   was the deleted one and redirects to the profile with a success notice
  */
 
+import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -133,7 +134,7 @@ export function DeleteChannelDialog({ channel, open, onOpenChange, onDeleted, re
               <label htmlFor={selectId} className="block text-sm font-medium text-gray-900 dark:text-gray-100">
                 {t.channel.newMainChannel}
               </label>
-              <select
+              <ThemedSelectField
                 id={selectId}
                 value={newMainId}
                 onChange={(e) => setNewMainId(e.target.value)}
@@ -144,7 +145,7 @@ export function DeleteChannelDialog({ channel, open, onOpenChange, onDeleted, re
                 {otherChannels.map((ch) => (
                   <option key={ch.id} value={ch.id}>{nameOf(ch)}</option>
                 ))}
-              </select>
+              </ThemedSelectField>
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 {t.channel.deleteMainNote.replace('{next}', nameOf(otherChannels.find((ch) => ch.id === newMainId) || otherChannels[0]))}
               </p>

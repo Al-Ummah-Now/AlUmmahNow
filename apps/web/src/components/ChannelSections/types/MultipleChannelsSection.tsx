@@ -54,7 +54,7 @@ export function MultipleChannelsSection({ title, channelIds }: MultipleChannelsS
   }, [idsKey]);
 
   return (
-    <section className="space-y-4" dir={isRTL ? 'rtl' : 'ltr'} data-testid="multiple-channels-section">
+    <section data-section="channels" className="space-y-4" dir={isRTL ? 'rtl' : 'ltr'} data-testid="multiple-channels-section">
       <SectionHeader title={title || t.channel.featuredChannels} />
       {loading ? (
         <ChannelTileGridSkeleton count={5} />

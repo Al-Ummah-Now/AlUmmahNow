@@ -1,0 +1,20 @@
+/* Zujaj: painted glass. Translucent panes, blur, light catching the top edge. */
+:root{--r-sm:3px;--r-md:6px;--r-lg:8px;--r-xl:12px;--r-pill:8px;--m-blur:blur(18px) saturate(1.35);
+--m-glow:color-mix(in srgb,var(--fanous-color-motif) 40%,transparent);
+--m-page:radial-gradient(70% 70% at 100% 0%,color-mix(in srgb,var(--fanous-color-motif) 26%,transparent),transparent 70%),radial-gradient(60% 60% at 0% 100%,color-mix(in srgb,var(--fanous-color-primary) 18%,transparent),transparent 70%),linear-gradient(160deg,var(--fanous-color-hero-start),var(--fanous-color-background));
+--m-header:linear-gradient(180deg,color-mix(in srgb,var(--fanous-c-nav-bg) 92%,white 8%),color-mix(in srgb,var(--fanous-c-nav-bg) 86%,transparent));
+--m-header-edge:inset 0 -1px 0 color-mix(in srgb,white 18%,transparent),0 8px 28px -18px rgb(5 40 48/.7);
+--m-rail:color-mix(in srgb,var(--fanous-color-surface) 76%,transparent);--m-rail-edge:inset -1px 0 0 color-mix(in srgb,white 22%,transparent);
+--m-card:linear-gradient(135deg,color-mix(in srgb,white 16%,transparent),transparent 46%),color-mix(in srgb,var(--fanous-color-surface) 84%,transparent);
+--m-border:linear-gradient(transparent,transparent);
+--m-card-edge:inset 0 0 0 1px color-mix(in srgb,white 26%,transparent),inset 0 1px 0 color-mix(in srgb,white 46%,transparent),0 18px 36px -24px rgb(5 40 48/.6);
+--m-raised:linear-gradient(135deg,color-mix(in srgb,white 14%,transparent),transparent 50%),color-mix(in srgb,var(--fanous-color-surface-raised) 92%,transparent);--m-raised-edge:inset 0 0 0 1px color-mix(in srgb,white 30%,transparent),0 24px 44px -18px rgb(5 40 48/.6);
+--m-control:color-mix(in srgb,var(--fanous-color-background) 72%,transparent);--m-control-edge:inset 0 0 0 1px color-mix(in srgb,white 14%,transparent);
+--m-primary:linear-gradient(180deg,color-mix(in srgb,var(--fanous-color-primary-hover) 62%,var(--fanous-color-primary)),var(--fanous-color-primary));--m-primary-hover:var(--fanous-color-primary-hover);--m-primary-press:var(--fanous-color-primary-pressed);
+--m-primary-edge:inset 0 1px 0 color-mix(in srgb,white 44%,transparent),inset 0 0 0 1px color-mix(in srgb,white 14%,transparent);
+--m-active:linear-gradient(135deg,color-mix(in srgb,white 18%,transparent),color-mix(in srgb,var(--fanous-color-motif) 22%,transparent));--m-active-edge:inset 0 0 0 1px color-mix(in srgb,white 28%,transparent);--m-hover:color-mix(in srgb,var(--fanous-color-motif) 16%,transparent);
+--m-ind:var(--fanous-color-focus-ring);--m-ind-w:3px;--m-ind-h:24px;--m-ind-shadow:0 0 10px var(--fanous-color-focus-ring);--m-ind-shape:inset(0 round 2px);
+--m-hero:linear-gradient(135deg,color-mix(in srgb,white 16%,transparent),transparent 42%),linear-gradient(120deg,var(--fanous-color-hero-start),var(--fanous-color-surface-raised));--m-thumb-edge:0 0 0 1px color-mix(in srgb,white 42%,transparent),0 0 26px -6px var(--m-glow)}
+:root{--m-sel:color-mix(in srgb,white 16%,transparent);--m-sel-edge:inset 0 0 0 1px color-mix(in srgb,white 24%,transparent);--m-sel-bar:var(--fanous-color-link);--m-sel-glow:none}
+:root{--m-player:0 0 0 1px color-mix(in srgb,white 34%,transparent);--m-player-inner:inset 0 0 0 1px color-mix(in srgb,white 16%,transparent)}
+:root{--m-player-ring:inset 0 0 0 1px color-mix(in srgb,white 42%,transparent),inset 0 1px 0 1px color-mix(in srgb,white 18%,transparent)}

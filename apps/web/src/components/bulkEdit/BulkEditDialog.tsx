@@ -5,6 +5,7 @@
  */
 'use client';
 
+import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import React, { useEffect, useState } from 'react';
 import { VIDEO_CATEGORIES } from '@al-ummah/shared-types';
 import {
@@ -81,22 +82,22 @@ export function BulkEditDialog({ open, count, onOpenChange, onApply }: BulkEditD
           <div className="mt-4 space-y-4">
             <label className="block text-sm font-medium">
               {b.visibility}
-              <select className={fieldClass} value={form.visibility} onChange={(e) => set('visibility', e.target.value as BulkEditForm['visibility'])} data-testid="bulk-edit-visibility">
+              <ThemedSelectField className={fieldClass} value={form.visibility} onChange={(e) => set('visibility', e.target.value as BulkEditForm['visibility'])} data-testid="bulk-edit-visibility">
                 <option value="">{b.noChange}</option>
                 <option value="public">{b.public}</option>
                 <option value="private">{b.private}</option>
-              </select>
+              </ThemedSelectField>
             </label>
 
             <label className="block text-sm font-medium">
               {b.category}
-              <select className={fieldClass} value={form.category} onChange={(e) => set('category', e.target.value)} data-testid="bulk-edit-category">
+              <ThemedSelectField className={fieldClass} value={form.category} onChange={(e) => set('category', e.target.value)} data-testid="bulk-edit-category">
                 <option value="">{b.noChange}</option>
                 <option value={CLEAR_CATEGORY}>{b.clearCategory}</option>
                 {VIDEO_CATEGORIES.map((c) => (
                   <option key={c.value} value={c.value}>{c.label[lang === 'ar' ? 'ar' : 'en']}</option>
                 ))}
-              </select>
+              </ThemedSelectField>
             </label>
 
             <label className="block text-sm font-medium">
