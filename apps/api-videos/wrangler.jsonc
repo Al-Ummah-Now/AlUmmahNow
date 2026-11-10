@@ -269,6 +269,8 @@
 		"BUNNY_SIGN_URLS": "true",
 		// Name prefix for Bunny videos/collections this env creates (stage: "[stage] "; none in production)
 		"BUNNY_NAME_PREFIX": "",
+		// Test-library purge off: production's library is real (the purge also refuses ENVIRONMENT=production)
+		"BUNNY_TEST_LIBRARY": "false",
 		// Upload limits enforced (any value but "off"): the numbers come from each user's creator tier, edited in the videos admin (middleware/upload-limits.ts)
 		"UPLOAD_RATE_LIMIT": "standard",
 		"BUNNY_SIGN_HOSTNAME": "vz-215a1ffd-a5a.b-cdn.net",
