@@ -37,7 +37,8 @@ import * as path from 'path';
 import { ResendTestClient } from '../test-utils/resend-client';
 import { readSinkCode, SINK_DOMAIN } from '../test-utils/code-sink';
 import { ApiClient, ApiError } from './seed-api';
-import { loginWithPassword, registerAccount, decodeJwtPayload, type AuthConfig, type SessionTokens } from './seed-auth';
+import { EmailTakenError, loginWithPassword, registerAccount, resetPassword, decodeJwtPayload, type AuthConfig, type SessionTokens } from './seed-auth';
+import { passwordResetRefusal } from './seed-reset-guard';
 import {
   SEED_ACCOUNTS,
   SEED_EMAIL_DOMAIN,
@@ -220,9 +221,24 @@ async function ensureAccounts(browser: Browser): Promise<Sessions> {
       );
     }
     log.info('Login rejected; registering account', { email: account.email });
-    const session = await registerAccount(browser, authConfig, account.email, PASSWORD, readCode);
+    let session: SessionTokens;
+    try {
+      session = await registerAccount(browser, authConfig, account.email, PASSWORD, readCode);
+      record('account', account.email, 'created', `userId=${session.userId}`);
+    } catch (error) {
+      if (!(error instanceof EmailTakenError)) throw error;
+      // The account exists with another password (rotated seed secret): reset it,
+      // keeping its id and roles. Only the seed's own sink accounts on QA/stage.
+      const refusal = passwordResetRefusal(authConfig.issuerUrl, account.email, SEED_ACCOUNTS.map((a) => a.email));
+      if (refusal) throw new Error(`${account.email} exists with another password and cannot be reset: ${refusal}`);
+      log.info('Account exists with another password; resetting it through forgot-password', { email: account.email });
+      await resetPassword(browser, authConfig, account.email, PASSWORD, readCode);
+      const relogin = await loginWithPassword(browser, authConfig, account.email, PASSWORD);
+      if (!relogin.ok) throw new Error(`Login for ${account.email} still fails after the password reset: ${relogin.message}`);
+      session = relogin.session;
+      record('account', account.email, 'password reset', `userId=${session.userId}`);
+    }
     sessions.set(account.key, session);
-    record('account', account.email, 'created', `userId=${session.userId}`);
     await sleep(2000);
   }
   log.groupEnd();

@@ -10,6 +10,7 @@ import { fillSecret } from '../release/secret-fill';
  *   → /password/authorize form (email, password)          [login]
  *   → /password/register form (email, password, repeat)   [register]
  *     → emailed code form (code), code read via Resend API
+ *   → /password/change (forgot password: email → code → new password)  [reset, seed accounts only]
  *   → {web}/api/callback sets the `al_ummah_session` cookie
  *     (URL-encoded JSON: { activeUserId, accounts: { [id]: { accessToken, … } } })
  */
@@ -156,6 +157,63 @@ export async function loginWithPassword(browser: Browser, cfg: AuthConfig, email
   }
 }
 
+/** auth's "There is already an account with this email." (en and ar). */
+const EMAIL_TAKEN = /already an account|already taken|يوجد حساب/i;
+
+/** Registration refused because the email already has an account (its password differs). */
+export class EmailTakenError extends Error {
+  constructor(readonly email: string) {
+    super(`An account already exists for ${email}`);
+    this.name = 'EmailTakenError';
+  }
+}
+
+/**
+ * Sets a new password on an EXISTING account through auth's forgot-password
+ * flow (sign-in page → "Forgot password?" → email → emailed code → new
+ * password twice). The account keeps its id, roles and data. The caller must
+ * check passwordResetRefusal() first: this is for the seed's own accounts on
+ * QA/stage only. Never logs the password or the code.
+ */
+export async function resetPassword(
+  browser: Browser,
+  cfg: AuthConfig,
+  email: string,
+  password: string,
+  readCode: (email: string) => Promise<string | null>,
+): Promise<void> {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  try {
+    await gotoSignIn(page, cfg);
+    const forgot = await page.waitForSelector('a[href*="change"]', { timeout: 30000 });
+    await forgot.click();
+    await page.waitForSelector('input[name="email"]', { timeout: 30000 });
+    await page.fill('input[name="email"]', email);
+    await submitForm(page);
+    for (let attempt = 1; ; attempt++) {
+      await page.waitForSelector(CODE_INPUT_SELECTOR, { timeout: 30000 });
+      log.info('Password reset requires an emailed code; reading it', { email, attempt });
+      const code = await readCode(email);
+      if (!code) throw new Error(`No password reset code received for ${email}`);
+      maskSecret(code);
+      await fillSecret(page.locator(CODE_INPUT_SELECTOR).first(), code);
+      await submitForm(page);
+      if (await page.locator('input[name="password"]').first().isVisible().catch(() => false)) break;
+      if (attempt === 3) throw new Error(`Password reset code was not accepted for ${email}: ${await readAlert(page)}`);
+      log.warn('Password reset code rejected, retrying with a fresh code lookup', { email });
+      await page.waitForTimeout(5000);
+    }
+    await fillSecret(page.locator('input[name="password"]'), password);
+    await fillSecret(page.locator('input[name="repeat"]'), password);
+    await submitForm(page);
+    const message = await readAlert(page);
+    if (message) throw new Error(`Password reset rejected for ${email}: ${message}`);
+  } finally {
+    await context.close();
+  }
+}
+
 /**
  * Registers a new account (email + password + emailed code). Throws if the
  * email is already registered, because that means the configured password
@@ -183,6 +241,7 @@ export async function registerAccount(
     let step = await waitForAuthStep(page, cfg);
     if (step === 'alert') {
       const message = await readAlert(page);
+      if (EMAIL_TAKEN.test(message)) throw new EmailTakenError(email);
       throw new Error(`Registration rejected for ${email}: ${message}`);
     }
 
@@ -199,6 +258,7 @@ export async function registerAccount(
       step = await waitForAuthStep(page, cfg);
       if (step === 'alert') {
         const message = await readAlert(page);
+        if (EMAIL_TAKEN.test(message)) throw new EmailTakenError(email);
         if (!/code/i.test(message) || attempt === 3) {
           throw new Error(`Verification failed for ${email}: ${message}`);
         }
