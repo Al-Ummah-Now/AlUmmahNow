@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS creator_invites (
     note TEXT,
     role TEXT NOT NULL DEFAULT 'creator',   -- creator | viewer
     tier_id TEXT,                           -- the creator tier (plan) given
+    auth_roles TEXT NOT NULL DEFAULT '[]',  -- JSON: extra auth roles by name (auth's allow-list, e.g. ["Scholar"])
     channels TEXT NOT NULL DEFAULT '[]',    -- JSON [{id, name, handle, action: created|transferred, jobId?}]
     expires_in_days INTEGER NOT NULL DEFAULT 14,
     continue_url TEXT,

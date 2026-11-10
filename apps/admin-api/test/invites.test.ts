@@ -161,7 +161,7 @@ const invite = (overrides: Record<string, unknown> = {}) => ({ email: '  New.Cre
 describe('POST /api/invites', () => {
   it('makes the user at once with a stable id: profile, plan and a new channel, then auth through the queue', async () => {
     const t = setup();
-    const res = await t.call('POST', '/api/invites', invite({ channels: { create: [{ name: 'Tafsir Daily', handle: 'tafsir-daily' }] } }));
+    const res = await t.call('POST', '/api/invites', invite({ authRoles: ['Scholar'], channels: { create: [{ name: 'Tafsir Daily', handle: 'tafsir-daily' }] } }));
     assert.equal(res.status, 201, JSON.stringify(res.body));
     const inv = res.body.result.invite;
     assert.match(inv.id, /^inv_[0-9a-f]{32}$/);
@@ -180,6 +180,7 @@ describe('POST /api/invites', () => {
     assert.equal(created.body.userId, inv.userId);
     assert.equal(created.body.inviteId, inv.id);
     assert.equal(created.body.locale, 'ar');
+    assert.deepEqual(created.body.roles, ['Scholar']);
     assert.equal(created.body.continueUrl, 'https://videos.qa.alummahnow.net/api/auth/login?prompt=login&locale=ar&return=%2Far');
     const after = await t.call('GET', `/api/invites/${inv.id}`);
     assert.equal(after.body.result.status, 'invited');
@@ -230,6 +231,7 @@ describe('POST /api/invites', () => {
     assert.match(admin.body.error, /channels:transfer/);
     assert.equal((await t.call('POST', '/api/invites', invite({ tierId: 'gold' }))).body.code, 'unknown_plan');
     assert.equal((await t.call('POST', '/api/invites', invite({ email: 'nope' }))).body.code, 'invalid_email');
+    assert.equal((await t.call('POST', '/api/invites', invite({ authRoles: ['Admin'] }))).body.code, 'role_not_grantable');
     assert.equal((await t.call('POST', '/api/invites', invite({ expiresInDays: 120 }))).status, 400);
   });
 

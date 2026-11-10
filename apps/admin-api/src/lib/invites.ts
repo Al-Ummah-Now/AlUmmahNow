@@ -25,6 +25,8 @@ export type InviteOp = 'create' | 'resend' | 'link' | 'revoke' | 'restore' | 'pu
 export type InviteMessage = { type: 'invite'; id: string; op: InviteOp; args?: Record<string, unknown> };
 
 export const INVITE_RETENTION_DAYS = 30;
+/** Auth roles an invite may add (auth's INVITE_GRANTABLE_ROLES). */
+export const INVITE_AUTH_ROLES = ['Scholar'] as const;
 export const DEFAULT_INVITE_DAYS = 14;
 export const MAX_INVITE_DAYS = 90;
 /** Invite changes (create, resend, link, revoke…) one admin may make per hour. */
@@ -48,6 +50,7 @@ export interface InviteRow {
   note: string | null;
   role: InviteRole;
   tier_id: string | null;
+  auth_roles: string;
   channels: string;
   expires_in_days: number;
   continue_url: string | null;
@@ -86,6 +89,7 @@ export interface InviteView {
   note: string | null;
   role: InviteRole;
   tierId: string | null;
+  authRoles: string[];
   channels: InviteChannel[];
   status: InviteListStatus;
   delivery: InviteDelivery;
@@ -147,6 +151,7 @@ export function toView(row: InviteRow, now = Date.now()): InviteView {
     note: row.note,
     role: row.role,
     tierId: row.tier_id,
+    authRoles: parseJson<string[]>(row.auth_roles, []),
     channels: parseJson<InviteChannel[]>(row.channels, []),
     status: statusOf(row, now),
     delivery: row.delivery_status,
@@ -269,6 +274,7 @@ export interface NewInvite {
   note: string | null;
   role: InviteRole;
   tierId: string | null;
+  authRoles: string[];
   expiresInDays: number;
   continueUrl: string | null;
   createdBy: string;
@@ -278,11 +284,11 @@ export interface NewInvite {
 export async function insertInvite(db: D1Database, input: NewInvite, now = new Date().toISOString()): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO creator_invites (id, user_id, email, name, locale, note, role, tier_id, channels, expires_in_days, continue_url,
+      `INSERT INTO creator_invites (id, user_id, email, name, locale, note, role, tier_id, auth_roles, channels, expires_in_days, continue_url,
          delivery_status, created_by, created_by_email, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, 'sending', ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, 'sending', ?, ?, ?, ?)`
     )
-    .bind(input.id, input.userId, input.email, input.name, input.locale, input.note, input.role, input.tierId, input.expiresInDays, input.continueUrl, input.createdBy, input.createdByEmail, now, now)
+    .bind(input.id, input.userId, input.email, input.name, input.locale, input.note, input.role, input.tierId, JSON.stringify(input.authRoles), input.expiresInDays, input.continueUrl, input.createdBy, input.createdByEmail, now, now)
     .run();
 }
 
@@ -404,6 +410,7 @@ export async function processInvite(env: InviteQueueEnv, msg: InviteMessage, att
         note: row.note,
         expiresInDays: row.expires_in_days,
         continueUrl: row.continue_url,
+        roles: parseJson<string[]>(row.auth_roles, []),
         details: { role: row.role, tierId: row.tier_id, channels: parseJson(row.channels, []) },
         actor: { id: row.created_by, email: row.created_by_email },
       });

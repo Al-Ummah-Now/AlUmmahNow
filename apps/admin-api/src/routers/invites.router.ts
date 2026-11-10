@@ -21,6 +21,7 @@ import {
   DEFAULT_INVITE_DAYS,
   EMAIL_RE,
   INVITE_ACTIONS_PER_HOUR,
+  INVITE_AUTH_ROLES,
   MAX_INVITE_DAYS,
   addChannels,
   enqueue,
@@ -137,7 +138,7 @@ function channelPlan(input: unknown): ChannelPlan {
 }
 
 /**
- * Invite: { email, name?, role: creator|viewer, tierId?, locale: en|ar, note?,
+ * Invite: { email, name?, role: creator|viewer, tierId?, authRoles?: ['Scholar'], locale: en|ar, note?,
  * expiresInDays?, channels?: { create: [{name, handle?}], transfer: [channelId] } }.
  */
 app.post('/', async (c) => {
@@ -151,6 +152,8 @@ app.post('/', async (c) => {
   const locale = input.locale === 'ar' ? 'ar' : 'en';
   const days = input.expiresInDays === undefined || input.expiresInDays === null ? DEFAULT_INVITE_DAYS : Number(input.expiresInDays);
   if (!Number.isInteger(days) || days < 1 || days > MAX_INVITE_DAYS) throw new HttpError(400, 'invalid_request', `expiresInDays must be 1 to ${MAX_INVITE_DAYS}`);
+  const authRoles = Array.isArray(input.authRoles) ? [...new Set(input.authRoles)] : [];
+  if (authRoles.some((r) => !(INVITE_AUTH_ROLES as readonly unknown[]).includes(r))) throw new HttpError(400, 'role_not_grantable', `An invite can only add: ${INVITE_AUTH_ROLES.join(', ')}`);
   const plan = channelPlan(input.channels);
   if (plan.create.length) need(c, 'channels:manage');
   if (plan.transfer.length) need(c, 'channels:transfer');
@@ -176,6 +179,7 @@ app.post('/', async (c) => {
     note: str(input.note, 1000),
     role: role as 'creator' | 'viewer',
     tierId,
+    authRoles: authRoles as string[],
     expiresInDays: days,
     continueUrl: signInUrl(c.env, locale),
     createdBy: actorOf(c),
@@ -190,7 +194,7 @@ app.post('/', async (c) => {
     await c.env.REPORTS_DB.prepare('DELETE FROM creator_invites WHERE id = ?').bind(row.id).run();
     throw error;
   }
-  await record(c, 'created', ref, { email, role, tierId, locale });
+  await record(c, 'created', ref, { email, role, tierId, locale, authRoles });
 
   const warnings: Array<{ step: string; code: string; message: string }> = [];
   if (tierId) {
