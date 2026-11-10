@@ -1547,6 +1547,13 @@ export const EN_TRANSLATIONS: AppTranslations = {
         subscribed_channels: 'Channels you subscribe to',
         liked_videos: 'Videos you liked',
       },
+      typeGroups: {
+        videos: 'Videos',
+        playlists: 'Playlists',
+        channels: 'Channels',
+        community: 'Community',
+      },
+      chooseSectionType: 'Choose what this section shows on your channel.',
       form: {
         sectionTitle: 'Section title',
         enterSectionTitle: 'Enter section title',

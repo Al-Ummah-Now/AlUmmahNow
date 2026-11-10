@@ -1606,6 +1606,9 @@ export interface AppTranslations {
       channelsCount: string;
       typeLabels: Record<string, string>;
       typeDescriptions: Record<string, string>;
+      /** Headings that group the section types in the add dialog */
+      typeGroups: { videos: string; playlists: string; channels: string; community: string };
+      chooseSectionType: string;
       form: {
         sectionTitle: string;
         enterSectionTitle: string;

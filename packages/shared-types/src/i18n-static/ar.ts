@@ -1547,6 +1547,13 @@ export const AR_TRANSLATIONS: AppTranslations = {
         subscribed_channels: 'القنوات التي تشترك بها',
         liked_videos: 'الفيديوهات التي أعجبتك',
       },
+      typeGroups: {
+        videos: 'الفيديوهات',
+        playlists: 'قوائم التشغيل',
+        channels: 'القنوات',
+        community: 'المجتمع',
+      },
+      chooseSectionType: 'اختر ما يعرضه هذا القسم في قناتك.',
       form: {
         sectionTitle: 'عنوان القسم',
         enterSectionTitle: 'أدخل عنوان القسم',
