@@ -447,6 +447,70 @@ describe('content endpoints: creator tiers', () => {
     assert.deepEqual(JSON.parse(log[0].old_value!), { perHour: 300 });
   });
 
+  it('a super admin\'s automatic Unlimited is not changed without the explicit confirmation, and the override is audited', async () => {
+    const { db, log } = fakeDb();
+    let assignment: Record<string, unknown> | null = { userId: 'usr_owner', tierId: 'unlimited', source: 'admin', assignedBy: 'system:super-admin', assignedAt: '2026-11-10T00:00:00Z' };
+    const { fetcher, calls } = fakeVideos({
+      'GET /users/usr_owner/creator-tier': () => ({ body: { success: true, result: { assignment } } }),
+      'PUT /users/usr_owner/creator-tier': (call) => {
+        const { tierId } = call.body as { tierId: string | null };
+        assignment = tierId ? { tierId, source: 'admin', assignedBy: 'admin-1' } : null;
+        return { body: { success: true, result: { assignment } } };
+      },
+    });
+    const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
+    const refused = await call('/api/content/users/usr_owner/creator-tier', { method: 'PUT', roles: 'admin', json: { tierId: 'creator' } });
+    assert.equal(refused.status, 409);
+    assert.equal(((await refused.json()) as { code: string }).code, 'super_admin_tier');
+    assert.ok(!calls.some((c) => c.method === 'PUT'), 'nothing reaches api-videos');
+    assert.equal(log.length, 0, 'no audit row for a refused change');
+
+    const confirmed = await call('/api/content/users/usr_owner/creator-tier', { method: 'PUT', roles: 'admin', json: { tierId: null, confirmSuperAdmin: true } });
+    assert.equal(confirmed.status, 200);
+    assert.deepEqual(JSON.parse(log[0].new_value), { action: 'creator-tier', details: { tierId: null, source: 'admin', overrodeSuperAdmin: true } });
+    assert.deepEqual(JSON.parse(log[0].old_value!), { tierId: 'unlimited', source: 'admin' });
+  });
+
+  it('bulk assign: needs creators:manage, audits each user who changes (from the dry run), skips super admins, and drops the rows when api-videos fails', async () => {
+    const { db, log } = fakeDb();
+    let fail = false;
+    const { fetcher, calls } = fakeVideos({
+      'POST /creators/tier': (call) => {
+        const { userIds, dryRun } = call.body as { userIds: string[]; dryRun?: boolean };
+        if (!dryRun && fail) return { status: 503, body: { success: false, code: 'unavailable', error: 'down' } };
+        const changed = userIds.filter((id) => id === 'usr_a' || id === 'usr_b').map((userId) => ({ userId, previous: userId === 'usr_b' ? { tierId: 'creator', source: 'admin' } : null }));
+        return { body: { success: true, result: { changed, unchanged: userIds.filter((id) => id === 'usr_c'), skippedSuperAdmin: userIds.filter((id) => id === 'usr_owner') } } };
+      },
+    });
+    const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
+    const userIds = ['usr_a', 'usr_b', 'usr_c', 'usr_owner'];
+    assert.equal((await call('/api/content/creators/tier', { method: 'POST', roles: 'moderator', json: { userIds, tierId: 'unlimited' } })).status, 403);
+    assert.equal(calls.length, 0);
+    assert.equal((await call('/api/content/creators/tier', { method: 'POST', roles: 'admin', json: { userIds: [], tierId: 'creator' } })).status, 400);
+    assert.equal((await call('/api/content/creators/tier', { method: 'POST', roles: 'admin', json: { userIds } })).status, 400, 'tierId is required (null removes)');
+
+    const res = await call('/api/content/creators/tier', { method: 'POST', roles: 'admin', user: 'admin-7', json: { userIds, tierId: 'unlimited' } });
+    assert.equal(res.status, 200);
+    const result = ((await res.json()) as { result: { changed: { userId: string }[]; unchanged: string[]; skippedSuperAdmin: string[] } }).result;
+    assert.deepEqual(result.changed.map((ch) => ch.userId), ['usr_a', 'usr_b']);
+    assert.deepEqual(result.unchanged, ['usr_c']);
+    assert.deepEqual(result.skippedSuperAdmin, ['usr_owner']);
+    assert.deepEqual(calls.map((c) => (c.body as { dryRun?: boolean }).dryRun ?? false), [true, false], 'plans, then applies');
+    assert.deepEqual((calls[1].body as { userIds: string[] }).userIds, ['usr_a', 'usr_b'], 'applies only the planned changes');
+    assert.deepEqual(log.map((r) => [r.key, JSON.parse(r.old_value!).tierId, r.actor_id]), [
+      ['content:user:usr_a', null, 'admin-7'],
+      ['content:user:usr_b', 'creator', 'admin-7'],
+    ]);
+    const details = JSON.parse(log[0].new_value).details as { tierId: string; bulk: string };
+    assert.equal(details.tierId, 'unlimited');
+    assert.ok(details.bulk, 'rows of one bulk change share its run id');
+
+    fail = true;
+    const failed = await call('/api/content/creators/tier', { method: 'POST', roles: 'admin', json: { userIds, tierId: null } });
+    assert.equal(failed.status, 503);
+    assert.equal(log.length, 2, 'the failed bulk change left no audit rows');
+  });
+
   it('every admin role reads the Creators list and the tiers; creators:manage is listed for admins only', async () => {
     const { fetcher, calls } = fakeVideos({ 'GET /creator-tiers': () => ({ body: { success: true, result: tiers } }) });
     const call = appFor({ REPORTS_DB: fakeDb().db, VIDEOS: fetcher });

@@ -577,7 +577,7 @@ describe('creator tiers: channels, access and admin', () => {
     assert.equal(resolved.tier?.id, 'creator');
   });
 
-  it('the Creators list shows tier holders and users with content but no tier (Needs tier), with usage and limit hits', async () => {
+  it('the Creators list shows every videos user, flags users with content but no tier (Needs tier), with usage and limit hits', async () => {
     const h = await harness({ tiers: { alice: 'small' } });
     const add = (kind: string, id: string, owner: string) =>
       h.db.db.prepare('INSERT INTO content_ownership (kind, id, owner_id) VALUES (?, ?, ?)').run(kind, id, owner);
@@ -589,7 +589,7 @@ describe('creator tiers: channels, access and admin', () => {
     const profiles = { get: async () => null } as unknown as R2Bucket;
     const page = await listCreators({ SEARCH_DB: h.d1, profiles }, {});
     const byId = new Map(page.items.map((r) => [r.userId, r]));
-    assert.ok(!byId.has('usr_viewer'), 'a viewer with no content and no tier is not a creator');
+    assert.equal(byId.get('usr_viewer')?.needsTier, false, 'every videos user is listed; a viewer without content does not need a tier');
     assert.equal(byId.get('usr_migrated')?.needsTier, true);
     assert.equal(byId.get('usr_migrated')?.channels, 1);
     assert.equal(byId.get('alice')?.needsTier, false);
@@ -599,6 +599,7 @@ describe('creator tiers: channels, access and admin', () => {
     assert.equal(page.items[0].userId, 'usr_migrated', 'Needs tier first');
     assert.equal(page.needsTier, 1);
     assert.equal(page.limitHits24h, 1);
+    assert.equal(page.limitHits7d, 1);
     const needs = await listCreators({ SEARCH_DB: h.d1, profiles }, { filter: 'needs_tier' });
     assert.deepEqual(needs.items.map((r) => r.userId), ['usr_migrated']);
   });

@@ -18,6 +18,24 @@ export const CREATOR_TIER_IDS = { creator: 'creator', unlimited: 'unlimited' } a
 export const CREATOR_TIER_SOURCES = ['admin', 'subscription'] as const;
 export type CreatorTierSource = (typeof CREATOR_TIER_SOURCES)[number];
 
+/**
+ * `assigned_by` of the Unlimited assignment stored automatically for a user
+ * holding the "Super Admin" role (source 'admin', tier 'unlimited').
+ */
+export const SUPER_ADMIN_TIER_ASSIGNER = 'system:super-admin';
+
+/**
+ * Where a user's tier comes from, as the admin shows it: an admin, the super
+ * admin role (automatic Unlimited) or a subscription.
+ */
+export type CreatorTierOrigin = CreatorTierSource | 'super_admin';
+
+export function creatorTierOrigin(assignment: Pick<CreatorTierAssignment, 'source' | 'assignedBy'> | null | undefined): CreatorTierOrigin | null {
+  if (!assignment) return null;
+  if (assignment.assignedBy === SUPER_ADMIN_TIER_ASSIGNER) return 'super_admin';
+  return assignment.source;
+}
+
 /** A tier definition, editable by admins. */
 export interface CreatorTier {
   id: string;
@@ -108,6 +126,10 @@ export interface AdminCreatorRow {
   email: string | null;
   avatarUrl: string | null;
   assignment: CreatorTierAssignment | null;
+  /** Where the tier comes from (null: no tier) */
+  origin: CreatorTierOrigin | null;
+  /** Display name of the admin who assigned it (videos profile), when known */
+  assignedByName: string | null;
   tierName: string | null;
   /** Owns a channel or has uploaded, but holds no tier: cannot upload or create channels until assigned */
   needsTier: boolean;
@@ -124,7 +146,42 @@ export interface AdminCreatorsPage {
   total: number;
   page: number;
   pageSize: number;
-  /** Users who hit an upload limit in the last 24 hours (shown as a notice) */
+  /** Users who hit an upload limit in the last 24 hours */
   limitHits24h: number;
+  /** Users who hit an upload limit in the last 7 days (the page's notice) */
+  limitHits7d: number;
   needsTier: number;
+}
+
+/** Filters of the admin's Creators list. */
+export const ADMIN_CREATOR_FILTERS = ['all', 'needs_tier', 'assigned', 'limited'] as const;
+export type AdminCreatorFilter = (typeof ADMIN_CREATOR_FILTERS)[number];
+/** The tier filter's value for users without a tier. */
+export const NO_CREATOR_TIER = 'none';
+
+/** How many users hold each tier (tier id -> users), and how many videos users hold none. */
+export interface CreatorTierCounts {
+  byTier: Record<string, number>;
+  none: number;
+}
+
+/** GET creator-tiers: the definitions and how many users hold each. */
+export interface CreatorTiersList {
+  items: CreatorTier[];
+  counts: CreatorTierCounts;
+  /** Users who hit an upload limit in the last 7 days (the tiers page notice) */
+  limitHits7d: number;
+}
+
+/** Most users one bulk tier change takes (one page of the Creators list, with room). */
+export const MAX_BULK_CREATOR_TIER = 100;
+
+/** The outcome of a bulk tier change. */
+export interface CreatorTierBulkResult {
+  /** Users whose tier changed, with the assignment they had before */
+  changed: { userId: string; previous: CreatorTierAssignment | null }[];
+  /** Users who already had the requested tier (from an admin) */
+  unchanged: string[];
+  /** Super admins: their automatic Unlimited is never changed in bulk */
+  skippedSuperAdmin: string[];
 }

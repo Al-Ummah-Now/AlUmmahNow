@@ -26,6 +26,10 @@ import {
   type AdminVideoDetail,
   type AdminVideoRow,
   type LegacyRestorePlan,
+  MAX_BULK_CREATOR_TIER,
+  creatorTierOrigin,
+  type CreatorTierAssignment,
+  type CreatorTierBulkResult,
 } from '@al-ummah/shared-types';
 import { callVideos, VideosError, type VideosCall, type VideosClientEnv } from '../lib/content/videosClient';
 import { dropAudit, readAudit, writeAudit, type AuditAction, type ContentKind } from '../lib/content/audit';
@@ -413,7 +417,7 @@ app.post('/legacy-profiles/restore', async (c) => {
 // super admins) and are audited. A change applies to the user's next request.
 // ---------------------------------------------------------------------------
 
-interface TierAssignment { tierId: string; source: string }
+type TierAssignment = Pick<CreatorTierAssignment, 'tierId' | 'source'> & Partial<Pick<CreatorTierAssignment, 'assignedBy' | 'assignedAt'>>;
 
 app.get('/creators', async (c) => ok(c, await videos(c, '/creators', { query: c.req.query() })));
 app.get('/creator-tiers', async (c) => ok(c, await videos(c, '/creator-tiers')));
@@ -457,6 +461,10 @@ app.get('/users/:id/creator-tier', async (c) => {
   return ok(c, { ...current, audit: audit.filter((e) => e.action === 'creator-tier') });
 });
 
+/**
+ * A super admin's automatic Unlimited is never changed by mistake: the change
+ * needs `confirmSuperAdmin: true` (the admin's explicit second confirmation).
+ */
 app.put('/users/:id/creator-tier', async (c) => {
   need(c, 'creators:manage');
   const id = c.req.param('id');
@@ -465,11 +473,58 @@ app.put('/users/:id/creator-tier', async (c) => {
   if (tierId === '') return c.json({ success: false, code: 'invalid_request', error: 'tierId is required (null removes the tier)' }, 400);
   const source = input.source === 'subscription' ? 'subscription' : 'admin';
   const current = await videos<{ assignment: TierAssignment | null }>(c, `/users/${encodeURIComponent(id)}/creator-tier`);
+  const superAdmin = creatorTierOrigin(current.assignment as CreatorTierAssignment | null) === 'super_admin';
+  if (superAdmin && input.confirmSuperAdmin !== true) {
+    logger.warn('[Content] Refused a change to a super admin tier', { userId: id, actorId: actorOf(c) });
+    return c.json({ success: false, code: 'super_admin_tier', error: 'This user is a super admin: their Unlimited tier is automatic' }, 409);
+  }
   return ok(c, await audited(c, {
     kind: 'user', id, action: 'creator-tier',
-    details: { tierId, source },
+    details: { tierId, source, ...(superAdmin ? { overrodeSuperAdmin: true } : {}) },
     previous: { tierId: current.assignment?.tierId ?? null, source: current.assignment?.source ?? null },
   }, () => videos(c, `/users/${encodeURIComponent(id)}/creator-tier`, { method: 'PUT', json: { tierId, source } })));
+});
+
+/**
+ * One tier (or none) for the selected users. Light work (one D1 batch of at
+ * most MAX_BULK_CREATOR_TIER rows), so it runs inline rather than as a queued
+ * admin job. Plans first (dry run), audits each user who changes, then
+ * applies; a failed apply drops the audit rows again. Super admins are
+ * skipped and users already on the tier are left alone, so a retry is safe.
+ */
+app.post('/creators/tier', async (c) => {
+  need(c, 'creators:manage');
+  const input = await body(c);
+  const userIds = Array.isArray(input.userIds) ? [...new Set(input.userIds.filter((v): v is string => typeof v === 'string' && v.length > 0))] : [];
+  const tierId = input.tierId === null ? null : typeof input.tierId === 'string' && input.tierId ? input.tierId : undefined;
+  if (!userIds.length || userIds.length > MAX_BULK_CREATOR_TIER || tierId === undefined) {
+    return c.json({ success: false, code: 'invalid_request', error: `userIds (1 to ${MAX_BULK_CREATOR_TIER}) and tierId (null removes the tier) are required` }, 400);
+  }
+  const plan = await videos<CreatorTierBulkResult>(c, '/creators/tier', { method: 'POST', json: { userIds, tierId, dryRun: true } });
+  if (!plan.changed.length) return ok(c, plan);
+  const db = c.env.REPORTS_DB;
+  const runId = crypto.randomUUID();
+  const auditIds = new Map<string, string>();
+  const drop = (ids: string[]) => Promise.all(ids.map((auditId) => dropAudit(db, auditId).catch((e) => logger.error('[Content] Could not drop the audit row of a failed action', { auditId, error: String(e) }))));
+  try {
+    for (const change of plan.changed) {
+      auditIds.set(change.userId, await writeAudit(db, {
+        kind: 'user', id: change.userId, action: 'creator-tier',
+        details: { tierId, source: 'admin', bulk: runId },
+        previous: { tierId: change.previous?.tierId ?? null, source: change.previous?.source ?? null },
+        actorId: actorOf(c),
+      }));
+    }
+    const result = await videos<CreatorTierBulkResult>(c, '/creators/tier', { method: 'POST', json: { userIds: plan.changed.map((ch) => ch.userId), tierId } });
+    // Someone else changed a user between the plan and the change: no row for a change that did not happen
+    const changed = new Set(result.changed.map((ch) => ch.userId));
+    await drop([...auditIds].filter(([userId]) => !changed.has(userId)).map(([, auditId]) => auditId));
+    logger.info('[Content] Action', { kind: 'user', action: 'creator-tier-bulk', tierId, users: result.changed.length, runId, actorId: actorOf(c) });
+    return ok(c, { ...result, unchanged: [...plan.unchanged, ...result.unchanged], skippedSuperAdmin: [...plan.skippedSuperAdmin, ...result.skippedSuperAdmin] });
+  } catch (error) {
+    await drop([...auditIds.values()]);
+    throw error;
+  }
 });
 
 // ---------------------------------------------------------------------------
