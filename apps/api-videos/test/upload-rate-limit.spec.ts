@@ -1,13 +1,22 @@
 /**
  * Upload rate limiting (#290): new upload SESSIONS are limited, the chunks of an
  * initiated upload are not. Runs the real limiter (as mounted in index.ts) and
- * the real TUS proxy router against in-memory KV and a stubbed Bunny.
+ * the real TUS proxy router against D1 (node:sqlite, the search migrations),
+ * in-memory KV for TUS sessions and a stubbed Bunny.
+ *
+ * The limiter checks and counts in one D1 transaction (SCALABILITY-AUDIT
+ * AV-14), so parallel requests cannot all pass and leaked leases expire.
  */
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Hono } from 'hono';
 import {
+  checkRateLimit,
+  pruneRateLimits,
+  RATE_LIMIT_LEASE_SECONDS,
+  RATE_LIMIT_UNAVAILABLE_RETRY_SECONDS,
+  rateLimitMiddleware,
   UPLOAD_CONTINUE_LIMITS,
   UPLOAD_CONTINUE_PATHS,
   UPLOAD_SESSION_LIMITS,
@@ -17,6 +26,7 @@ import {
   uploadSessionLimits,
 } from '../src/middleware/rate-limit';
 import { createTusRouter } from '../src/endpoints/video/tus/tusProxy';
+import { SqliteD1 } from './search-sqlite-d1';
 
 function memoryKv() {
   const data = new Map<string, string>();
@@ -29,10 +39,15 @@ function memoryKv() {
 }
 
 const realFetch = globalThis.fetch;
+const realNow = Date.now;
 const MB = 1024 * 1024;
+/** Test clock (Date.now): 5 s into an hour, so advancing a few minutes stays in the same hour and day */
+const START = Date.UTC(2026, 10, 9, 10, 0, 5);
+let clock = START;
+const advance = (seconds: number) => void (clock += seconds * 1000);
 
 function harness(env: Record<string, unknown> = { UPLOAD_RATE_LIMIT: 'standard' }) {
-  const rateKv = memoryKv();
+  const db = new SqliteD1();
   const tusKv = memoryKv();
   const created: string[] = [];
   const app = new Hono();
@@ -63,7 +78,7 @@ function harness(env: Record<string, unknown> = { UPLOAD_RATE_LIMIT: 'standard' 
 
   const fullEnv = {
     ...env,
-    RATE_LIMIT_KV: rateKv,
+    SEARCH_DB: db,
     TUS_SESSIONS: tusKv,
     'bunny-stream-key': 'test-key',
     bunny_stream_library_id: '123',
@@ -86,12 +101,14 @@ function harness(env: Record<string, unknown> = { UPLOAD_RATE_LIMIT: 'standard' 
     );
   const tusCreate = (user: string) =>
     request(user, '/api/videos/tus', { method: 'POST', headers: { 'tus-resumable': '1.0.0', 'upload-length': '10' } });
-  return { request, initiate, chunk, startUpload, tusCreate, created, rateKv };
+  return { request, initiate, chunk, startUpload, tusCreate, created, db };
 }
 
 describe('upload rate limiting (#290)', () => {
   let bunnyPatches = 0;
   beforeEach(() => {
+    clock = START;
+    Date.now = () => clock;
     bunnyPatches = 0;
     globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
       if (String(url).startsWith('https://bunny.test/') && init?.method === 'PATCH') {
@@ -104,6 +121,7 @@ describe('upload rate limiting (#290)', () => {
   });
   afterEach(() => {
     globalThis.fetch = realFetch;
+    Date.now = realNow;
   });
 
   it('counts an upload of many chunks once', async () => {
@@ -129,12 +147,7 @@ describe('upload rate limiting (#290)', () => {
     let refused: Response | undefined;
     // Spread over "minutes" so the per-minute limit is not what trips
     for (let i = 0; i < perHour + 1; i++) {
-      if (i > 0 && i % perMinute === 0) {
-        const key = [...h.rateKv.data.keys()][0];
-        const state = JSON.parse(h.rateKv.data.get(key)!);
-        state.lastReset.minute -= 61;
-        h.rateKv.data.set(key, JSON.stringify(state));
-      }
+      if (i > 0 && i % perMinute === 0) advance(60);
       const res = await h.initiate('alice');
       if (res.status === 200) allowed++;
       else refused = res;
@@ -162,10 +175,7 @@ describe('upload rate limiting (#290)', () => {
     assert.equal(first.status, 200, 'a full batch of 15 fits a fresh hour');
     assert.equal(first.headers.get('X-RateLimit-Remaining-Hour'), String(UPLOAD_SESSION_LIMITS.standard.perHour - 15));
     // Minute window passes; 6 more would exceed the hour (15 + 6 > 20)
-    const key = [...h.rateKv.data.keys()][0];
-    const state = JSON.parse(h.rateKv.data.get(key)!);
-    state.lastReset.minute -= 61;
-    h.rateKv.data.set(key, JSON.stringify(state));
+    advance(60);
     assert.equal((await batch(6)).status, 429);
     assert.equal(h.created.length, 15);
   });
@@ -199,7 +209,8 @@ describe('upload rate limiting (#290)', () => {
     const h = harness();
     await h.request('alice', '/api/videos/upload/initiate', { method: 'OPTIONS' });
     await h.request('alice', '/api/videos/upload', { method: 'GET' });
-    assert.equal(h.rateKv.data.size, 0);
+    assert.equal(h.db.count('upload_rate_windows'), 0);
+    assert.equal(h.db.count('upload_rate_leases'), 0);
   });
 
   it('index.ts mounts the limiter only on session routes, never on TUS, complete or resume', () => {
@@ -224,5 +235,149 @@ describe('upload rate limiting (#290)', () => {
     const next = await h.initiate('alice');
     assert.equal(next.status, 200);
     assert.equal(next.headers.get('X-RateLimit-Remaining-Hour'), String(UPLOAD_SESSION_LIMITS.standard.perHour - 1));
+  });
+});
+
+describe('upload rate limits under parallel requests (AV-14)', () => {
+  beforeEach(() => {
+    clock = START;
+    Date.now = () => clock;
+  });
+  afterEach(() => {
+    Date.now = realNow;
+  });
+
+  it('50 parallel initiations: only maxConcurrent are let in at once, the rest are refused and create nothing', async () => {
+    const h = harness();
+    const { maxConcurrent } = UPLOAD_SESSION_LIMITS.standard;
+    const responses = await Promise.all(Array.from({ length: 50 }, () => h.initiate('alice')));
+    const statuses = responses.map((r) => r.status);
+    assert.equal(statuses.filter((s) => s === 200).length, maxConcurrent, statuses.join());
+    const refused = responses.filter((r) => r.status === 429);
+    assert.equal(refused.length, 50 - maxConcurrent);
+    assert.ok(refused.every((r) => r.headers.get('X-RateLimit-Limit') === String(maxConcurrent)));
+    assert.equal(h.created.length, maxConcurrent);
+    const minute = h.db.db.prepare("SELECT count FROM upload_rate_windows WHERE user_id = 'alice' AND period = 'minute'").get() as { count: number };
+    assert.equal(minute.count, maxConcurrent, 'refused requests are not counted');
+    assert.equal(h.db.count('upload_rate_leases'), 0, 'every finished request released its lease');
+  });
+
+  it('50 parallel checks against a window: exactly the limit is counted', async () => {
+    const sqlite = new SqliteD1();
+    const db = sqlite as unknown as D1Database;
+    const limits = { perMinute: 15, perHour: 20, perDay: 50, maxConcurrent: 1000 };
+    const results = await Promise.all(Array.from({ length: 50 }, () => checkRateLimit(db, 'alice', 'op', limits, 1, clock)));
+    assert.equal(results.filter((r) => r.allowed).length, 15);
+    assert.ok(results.filter((r) => !r.allowed).every((r) => r.limitExceeded === 'minute'));
+    assert.equal(sqlite.count('upload_rate_leases'), 15, 'only allowed requests hold a lease');
+    // Next minute: the hour (20) caps it at 5 more, even with 50 at once
+    const next = await Promise.all(Array.from({ length: 50 }, () => checkRateLimit(db, 'alice', 'op', limits, 1, clock + 60_000)));
+    assert.equal(next.filter((r) => r.allowed).length, 5);
+    assert.ok(next.filter((r) => !r.allowed).every((r) => r.limitExceeded === 'hour'));
+  });
+
+  it('parallel batch initiations are weighed together: no batch pushes the window past its limit', async () => {
+    const h = harness();
+    const batch = () =>
+      h.request('alice', '/api/videos/upload/batch/initiate', {
+        method: 'POST',
+        body: JSON.stringify({ videos: Array.from({ length: 6 }, (_, i) => ({ title: `v${i}` })) }),
+        headers: { 'content-type': 'application/json' },
+      });
+    const statuses = await Promise.all(Array.from({ length: 6 }, () => batch().then((r) => r.status)));
+    // 15 per minute: two batches of 6 fit (12), a third would make 18
+    assert.equal(statuses.filter((s) => s === 200).length, 2, statuses.join());
+    assert.equal(h.created.length, 12);
+  });
+
+  it('holds at most maxConcurrent requests in flight, and frees the slots when they finish', async () => {
+    const db = new SqliteD1();
+    const limits = { perMinute: 100, perHour: 100, perDay: 100, maxConcurrent: 3 };
+    let open = () => {};
+    const gate = new Promise<void>((resolve) => (open = resolve));
+    let inFlight = 0;
+    const app = new Hono();
+    app.use('*', async (c, next) => {
+      c.set('userId' as never, 'alice' as never);
+      await next();
+    });
+    app.use('/slow', rateLimitMiddleware('slow_op', { limits: () => limits }));
+    app.post('/slow', async (c) => {
+      inFlight++;
+      await gate;
+      return c.json({ ok: true });
+    });
+    const send = () => app.request('/slow', { method: 'POST' }, { SEARCH_DB: db });
+    const pending = Array.from({ length: 10 }, send);
+    // Three requests are inside the handler; give the other seven time to reach the limiter
+    while (inFlight < 3) await new Promise((r) => setTimeout(r, 5));
+    await new Promise((r) => setTimeout(r, 20));
+    open();
+    const responses = await Promise.all(pending);
+    const refused = responses.filter((r) => r.status === 429);
+    assert.equal(responses.filter((r) => r.status === 200).length, 3);
+    assert.equal(refused.length, 7);
+    assert.equal(((await refused[0].json()) as { error: string }).error, 'Rate limit exceeded: concurrent');
+    assert.equal(db.count('upload_rate_leases'), 0);
+    assert.equal((await send()).status, 200, 'finished requests free their slots');
+  });
+
+  it('a lease that is never released expires instead of locking the user out', async () => {
+    const db = new SqliteD1() as unknown as D1Database;
+    const limits = { perMinute: 100, perHour: 100, perDay: 100, maxConcurrent: 2 };
+    // Two requests whose isolate died before releasing
+    assert.ok((await checkRateLimit(db, 'alice', 'op', limits, 1, clock)).allowed);
+    assert.ok((await checkRateLimit(db, 'alice', 'op', limits, 1, clock)).allowed);
+    const blocked = await checkRateLimit(db, 'alice', 'op', limits, 1, clock + 60_000);
+    assert.equal(blocked.limitExceeded, 'concurrent');
+    const later = await checkRateLimit(db, 'alice', 'op', limits, 1, clock + (RATE_LIMIT_LEASE_SECONDS + 1) * 1000);
+    assert.ok(later.allowed, 'the leaked leases expired');
+  });
+
+  it('a new minute starts over, while the hour keeps counting', async () => {
+    const db = new SqliteD1() as unknown as D1Database;
+    const limits = { perMinute: 2, perHour: 3, perDay: 100, maxConcurrent: 100 };
+    assert.ok((await checkRateLimit(db, 'alice', 'op', limits, 1, clock)).allowed);
+    assert.ok((await checkRateLimit(db, 'alice', 'op', limits, 1, clock)).allowed);
+    const minute = await checkRateLimit(db, 'alice', 'op', limits, 1, clock);
+    assert.equal(minute.limitExceeded, 'minute');
+    assert.equal(minute.retryAfter, 55, 'until the fixed minute ends');
+    assert.ok((await checkRateLimit(db, 'alice', 'op', limits, 1, clock + 60_000)).allowed);
+    const hour = await checkRateLimit(db, 'alice', 'op', limits, 1, clock + 120_000);
+    assert.equal(hour.limitExceeded, 'hour');
+    assert.ok((await checkRateLimit(db, 'bob', 'op', limits, 1, clock + 120_000)).allowed, 'per user');
+    assert.ok((await checkRateLimit(db, 'alice', 'other', limits, 1, clock + 120_000)).allowed, 'per operation');
+  });
+
+  it('prunes windows of users who stopped uploading and expired leases', async () => {
+    const sqlite = new SqliteD1();
+    const db = sqlite as unknown as D1Database;
+    await checkRateLimit(db, 'old', 'op', undefined, 1, clock);
+    await checkRateLimit(db, 'recent', 'op', undefined, 1, clock + 2 * 86400_000);
+    await pruneRateLimits(db, clock + 3 * 86400_000);
+    const users = (sqlite.db.prepare('SELECT DISTINCT user_id FROM upload_rate_windows').all() as { user_id: string }[]).map((r) => r.user_id);
+    assert.deepEqual(users, ['recent']);
+    assert.equal(sqlite.count('upload_rate_leases'), 0);
+  });
+
+  it('refuses the request (503, not counted) when D1 itself fails: an outage is never a bypass', async () => {
+    const broken = { prepare: () => ({ bind: () => ({}) }), batch: async () => { throw new Error('D1 unavailable'); } } as unknown as D1Database;
+    const result = await checkRateLimit(broken, 'alice', 'op', undefined, 1, clock);
+    assert.equal(result.allowed, false);
+    assert.equal(result.unavailable, true);
+    assert.equal(result.leaseId, undefined);
+
+    const app = new Hono();
+    app.use('*', async (c, next) => {
+      c.set('userId' as never, 'alice' as never);
+      await next();
+    });
+    let handled = 0;
+    app.use('/api/videos/upload/initiate', uploadSessionLimitMiddleware());
+    app.post('/api/videos/upload/initiate', (c) => (handled++, c.json({ ok: true })));
+    const res = await app.request('/api/videos/upload/initiate', { method: 'POST' }, { UPLOAD_RATE_LIMIT: 'standard', SEARCH_DB: broken });
+    assert.equal(res.status, 503);
+    assert.equal(res.headers.get('Retry-After'), String(RATE_LIMIT_UNAVAILABLE_RETRY_SECONDS));
+    assert.equal(handled, 0, 'the upload is not started');
   });
 });

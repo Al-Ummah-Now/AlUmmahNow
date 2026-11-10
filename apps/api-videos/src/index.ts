@@ -6,7 +6,7 @@ import { cors } from 'hono/cors'
 import { authMiddleware, optionalAuthMiddleware, channelIdMiddleware } from "./middleware/auth";
 import { loggingMiddleware } from "./middleware/logging";
 import { errorHandler } from "./middleware/error-handler";
-import { rateLimitMiddleware, UPLOAD_CONTINUE_PATHS, UPLOAD_SESSION_PATHS, uploadContinueLimitMiddleware, uploadSessionLimitMiddleware } from "./middleware/rate-limit";
+import { pruneRateLimits, rateLimitMiddleware, UPLOAD_CONTINUE_PATHS, UPLOAD_SESSION_PATHS, uploadContinueLimitMiddleware, uploadSessionLimitMiddleware } from "./middleware/rate-limit";
 import { logger } from './lib/logger';
 import { registerAllRouters } from './routers';
 import type { AppBindings } from './base';
@@ -410,6 +410,12 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 				await reconcileOwnershipIndex(rawEnv as never);
 			} catch (error) {
 				logger.error('[Ownership] Reconcile failed', { error: error instanceof Error ? error.message : String(error) });
+			}
+			try {
+				// Upload rate limits (AV-14): drop windows of users who stopped uploading and expired leases.
+				if (rawEnv.SEARCH_DB) await pruneRateLimits(rawEnv.SEARCH_DB);
+			} catch (error) {
+				logger.error('[RateLimit] Prune failed', { error: error instanceof Error ? error.message : String(error) });
 			}
 		})(),
 	);

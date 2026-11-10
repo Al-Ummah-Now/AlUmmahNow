@@ -37,11 +37,11 @@ export interface AppBindings {
 
   // D1: notification center + library per-user indexes (Epic 29; optional until bound)
   NOTIFICATIONS_DB?: D1Database;
-  // D1 search index (Epic 29, migrations/search). Optional so local setups without it still run.
+  // D1 search index (Epic 29, migrations/search); also holds the upload rate limits (middleware/rate-limit.ts).
+  // Optional so local setups without it still run.
   SEARCH_DB?: D1Database;
 
   // KV Namespaces
-  RATE_LIMIT_KV: KVNamespace;
   /** Workers rate limiting: watch-time reports per playback session (#235). Optional: unlimited without it. */
   WATCH_TIME_LIMITER?: RateLimit;
   TUS_SESSIONS: KVNamespace;

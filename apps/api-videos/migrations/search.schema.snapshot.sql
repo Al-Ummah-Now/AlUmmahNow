@@ -3,6 +3,7 @@
 --   apps/api-videos/migrations/search/0001_search_index.sql
 --   apps/api-videos/migrations/search/0002_content_ownership.sql
 --   apps/api-videos/migrations/search/0003_source_versions.sql
+--   apps/api-videos/migrations/search/0004_upload_rate_limits.sql
 
 CREATE TABLE content_ownership (kind TEXT NOT NULL, id TEXT NOT NULL, owner_id TEXT, channel_id TEXT, is_public INTEGER NOT NULL DEFAULT 1, is_hidden INTEGER NOT NULL DEFAULT 0, is_deleted INTEGER NOT NULL DEFAULT 0, is_live INTEGER NOT NULL DEFAULT 0, duration REAL, schedule_status TEXT, upload_status TEXT, views INTEGER NOT NULL DEFAULT 0, created_at INTEGER, updated_at INTEGER, indexed_at INTEGER NOT NULL DEFAULT 0, source_version INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (kind, id));
 CREATE TABLE search_channels (rowid INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE, channel_id TEXT, visible INTEGER NOT NULL DEFAULT 1, language TEXT, category TEXT, duration INTEGER, is_verified INTEGER NOT NULL DEFAULT 0, is_live INTEGER NOT NULL DEFAULT 0, views INTEGER NOT NULL DEFAULT 0, created_at INTEGER, popularity REAL NOT NULL DEFAULT 0, payload TEXT NOT NULL, content_hash TEXT, indexed_at INTEGER NOT NULL DEFAULT 0, source_version INTEGER NOT NULL DEFAULT 0);
@@ -35,6 +36,8 @@ CREATE TABLE 'search_videos_fts_content'(id INTEGER PRIMARY KEY, c0, c1);
 CREATE TABLE 'search_videos_fts_data'(id INTEGER PRIMARY KEY, block BLOB);
 CREATE TABLE 'search_videos_fts_docsize'(id INTEGER PRIMARY KEY, sz BLOB);
 CREATE TABLE 'search_videos_fts_idx'(segid, term, pgno, PRIMARY KEY(segid, term)) WITHOUT ROWID;
+CREATE TABLE upload_rate_leases (user_id TEXT NOT NULL, operation TEXT NOT NULL, lease_id TEXT NOT NULL, expires_at INTEGER NOT NULL, PRIMARY KEY (user_id, operation, lease_id)) WITHOUT ROWID;
+CREATE TABLE upload_rate_windows (user_id TEXT NOT NULL, operation TEXT NOT NULL, period TEXT NOT NULL, window_start INTEGER NOT NULL, count INTEGER NOT NULL, PRIMARY KEY (user_id, operation, period)) WITHOUT ROWID;
 CREATE INDEX idx_content_ownership_channel ON content_ownership (kind, channel_id, created_at);
 CREATE INDEX idx_content_ownership_indexed ON content_ownership (kind, indexed_at);
 CREATE INDEX idx_content_ownership_owner ON content_ownership (kind, owner_id);
@@ -50,3 +53,5 @@ CREATE INDEX idx_search_videos_channel ON search_videos (channel_id);
 CREATE INDEX idx_search_videos_created ON search_videos (created_at);
 CREATE INDEX idx_search_videos_indexed ON search_videos (indexed_at);
 CREATE INDEX idx_search_videos_language ON search_videos (language, created_at);
+CREATE INDEX idx_upload_rate_leases_expires ON upload_rate_leases (expires_at);
+CREATE INDEX idx_upload_rate_windows_start ON upload_rate_windows (window_start);

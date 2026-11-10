@@ -2,15 +2,17 @@
  * Rate Limiting Middleware for Upload Endpoints
  *
  * SECURITY: This middleware prevents abuse by limiting the number of requests
- * per user within specific time windows. It uses Cloudflare KV for distributed
- * rate limiting across all Workers instances.
+ * per user within specific time windows. Counters live in D1 (SEARCH_DB) and
+ * each request is checked and counted in one transaction, so the limits hold
+ * across all Workers instances and against parallel requests
+ * (docs/architecture/SCALABILITY-AUDIT.md, AV-14).
  *
  * Features:
  * - Per-user rate limits (by userId)
  * - Multiple time windows (minute, hour, day)
  * - Tier-based limits (free, pro, enterprise)
- * - Concurrent upload tracking
- * - Graceful degradation if KV unavailable
+ * - Concurrent request leases that expire if never released
+ * - Fails closed (503) when D1 cannot answer, so an outage is never a bypass
  */
 
 import { Context } from 'hono';
@@ -75,7 +77,7 @@ export const UPLOAD_SESSION_LIMITS: Record<UploadLimitProfile, RateLimitConfig> 
   relaxed: { perMinute: 60, perHour: 300, perDay: 2000, maxConcurrent: 20 },
 };
 
-/** KV operation for upload sessions (a new key: counters from the old per-request limiter do not carry over) */
+/** Operation name for upload sessions (counters from the old per-request limiter do not carry over) */
 export const UPLOAD_SESSION_OPERATION = 'video_upload_session';
 
 /**
@@ -143,6 +145,7 @@ export function uploadSessionLimitMiddleware() {
   });
 }
 
+
 /**
  * Time window durations in seconds
  */
@@ -152,20 +155,18 @@ const TIME_WINDOWS = {
   day: 86400,
 } as const;
 
+type Period = keyof typeof TIME_WINDOWS;
+const PERIODS: Period[] = ['minute', 'hour', 'day'];
+
 /**
- * Rate limit state stored in KV
+ * How long a request's concurrency lease lives if the request never releases
+ * it (isolate killed mid-request). Far longer than any upload API call, far
+ * shorter than the 25 h lockout the old KV counter could leak into.
  */
-interface RateLimitState {
-  minute: number;
-  hour: number;
-  day: number;
-  concurrent: number;
-  lastReset: {
-    minute: number;
-    hour: number;
-    day: number;
-  };
-}
+export const RATE_LIMIT_LEASE_SECONDS = 300;
+
+/** Retry-After of a request refused because D1 could not answer */
+export const RATE_LIMIT_UNAVAILABLE_RETRY_SECONDS = 30;
 
 /**
  * Rate limit result
@@ -184,6 +185,10 @@ export interface RateLimitResult {
   };
   retryAfter?: number; // Seconds until next allowed request
   limitExceeded?: 'minute' | 'hour' | 'day' | 'concurrent';
+  /** Concurrency lease of an allowed request; pass it to releaseRateLimit when the request ends */
+  leaseId?: string;
+  /** D1 could not answer: the request is refused (503), not counted */
+  unavailable?: boolean;
 }
 
 /**
@@ -198,182 +203,167 @@ function getUserTier(userId: string): RateLimitTier {
   return RateLimitTier.FREE;
 }
 
-/**
- * Get KV key for rate limit state
- */
-function getRateLimitKey(userId: string, operation: string): string {
-  return `rate_limit:${operation}:${userId}`;
+/** Start (epoch seconds) of the fixed window of `period` that holds `now`. */
+function windowStart(period: Period, now: number): number {
+  return now - (now % TIME_WINDOWS[period]);
 }
 
-/**
- * Initialize empty rate limit state
- */
-function initRateLimitState(): RateLimitState {
-  const now = Math.floor(Date.now() / 1000);
-  return {
-    minute: 0,
-    hour: 0,
-    day: 0,
-    concurrent: 0,
-    lastReset: {
-      minute: now,
-      hour: now,
-      day: now,
-    },
-  };
-}
+const COUNT_IN_WINDOW =
+  'COALESCE((SELECT count FROM upload_rate_windows WHERE user_id = ? AND operation = ? AND period = ? AND window_start >= ?), 0)';
 
 /**
- * Check and update rate limits
+ * Checks the limits and, when they allow it, counts the request — in one D1
+ * transaction (SCALABILITY-AUDIT AV-14). D1 runs a batch atomically and one at
+ * a time, so N parallel requests can never all read the same old count: the
+ * lease insert below is conditional on every limit still having room, and the
+ * window counters only move when that lease was inserted. A refused request
+ * changes nothing.
  *
- * @param kv - Cloudflare KV namespace
+ * Windows are fixed (aligned to the minute, hour and day); `concurrent` is the
+ * number of unexpired leases.
+ *
+ * Fails closed: when D1 itself errors the request is refused as unavailable
+ * (the middleware answers 503 with Retry-After), so overloading the database
+ * can never switch the limits off. Contention does not error: requests queue.
+ *
+ * @param db - SEARCH_DB (migrations/search/0004_upload_rate_limits.sql)
  * @param userId - User ID
- * @param operation - Operation being rate limited (e.g., 'video_upload', 'image_upload')
- * @returns Rate limit result
+ * @param operation - Operation being rate limited (e.g., 'video_upload_session', 'image_upload')
  */
 export async function checkRateLimit(
-  kv: KVNamespace,
+  db: D1Database,
   userId: string,
   operation: string,
   limits: RateLimitConfig = RATE_LIMITS[getUserTier(userId)],
-  weight = 1
+  weight = 1,
+  nowMs = Date.now()
 ): Promise<RateLimitResult> {
-  const key = getRateLimitKey(userId, operation);
-  const now = Math.floor(Date.now() / 1000);
+  const now = Math.floor(nowMs / 1000);
+  const starts: Record<Period, number> = {
+    minute: windowStart('minute', now),
+    hour: windowStart('hour', now),
+    day: windowStart('day', now),
+  };
+  const resetAt = {
+    minute: starts.minute + TIME_WINDOWS.minute,
+    hour: starts.hour + TIME_WINDOWS.hour,
+    day: starts.day + TIME_WINDOWS.day,
+  };
+  const perPeriod: Record<Period, number> = { minute: limits.perMinute, hour: limits.perHour, day: limits.perDay };
+  const leaseId = crypto.randomUUID();
+  const countArgs = (period: Period) => [userId, operation, period, starts[period]];
 
   try {
-    // Get current state from KV
-    const stateStr = await kv.get(key);
-    let state: RateLimitState = stateStr
-      ? JSON.parse(stateStr)
-      : initRateLimitState();
-
-    // Reset counters if time windows expired
-    if (now - state.lastReset.minute >= TIME_WINDOWS.minute) {
-      state.minute = 0;
-      state.lastReset.minute = now;
-    }
-
-    if (now - state.lastReset.hour >= TIME_WINDOWS.hour) {
-      state.hour = 0;
-      state.lastReset.hour = now;
-    }
-
-    if (now - state.lastReset.day >= TIME_WINDOWS.day) {
-      state.day = 0;
-      state.lastReset.day = now;
-    }
-
-    // Check limits
+    const results = await db.batch([
+      // Leases whose request never released them
+      db.prepare('DELETE FROM upload_rate_leases WHERE user_id = ? AND operation = ? AND expires_at <= ?').bind(userId, operation, now),
+      // The request's lease, only if every limit still has room for it
+      db
+        .prepare(
+          `INSERT INTO upload_rate_leases (user_id, operation, lease_id, expires_at)
+           SELECT ?, ?, ?, ?
+           WHERE (SELECT COUNT(*) FROM upload_rate_leases WHERE user_id = ? AND operation = ?) < ?
+             AND ${COUNT_IN_WINDOW} + ? <= ?
+             AND ${COUNT_IN_WINDOW} + ? <= ?
+             AND ${COUNT_IN_WINDOW} + ? <= ?`
+        )
+        .bind(
+          userId, operation, leaseId, now + RATE_LIMIT_LEASE_SECONDS,
+          userId, operation, limits.maxConcurrent,
+          ...countArgs('minute'), weight, perPeriod.minute,
+          ...countArgs('hour'), weight, perPeriod.hour,
+          ...countArgs('day'), weight, perPeriod.day
+        ),
+      // Count the request in each window, only if it got the lease; a later window starts over
+      ...PERIODS.map((period) =>
+        db
+          .prepare(
+            `INSERT INTO upload_rate_windows (user_id, operation, period, window_start, count)
+             SELECT ?, ?, ?, ?, ?
+             WHERE EXISTS (SELECT 1 FROM upload_rate_leases WHERE user_id = ? AND operation = ? AND lease_id = ?)
+             ON CONFLICT (user_id, operation, period) DO UPDATE SET
+               count = CASE WHEN excluded.window_start > upload_rate_windows.window_start
+                 THEN excluded.count ELSE upload_rate_windows.count + excluded.count END,
+               window_start = MAX(upload_rate_windows.window_start, excluded.window_start)`
+          )
+          .bind(userId, operation, period, starts[period], weight, userId, operation, leaseId)
+      ),
+      db
+        .prepare(
+          `SELECT
+             (SELECT COUNT(*) FROM upload_rate_leases WHERE user_id = ? AND operation = ? AND lease_id = ?) AS granted,
+             (SELECT COUNT(*) FROM upload_rate_leases WHERE user_id = ? AND operation = ?) AS leases,
+             ${COUNT_IN_WINDOW} AS minute,
+             ${COUNT_IN_WINDOW} AS hour,
+             ${COUNT_IN_WINDOW} AS day`
+        )
+        .bind(userId, operation, leaseId, userId, operation, ...countArgs('minute'), ...countArgs('hour'), ...countArgs('day')),
+    ]);
+    const state = (results[results.length - 1].results as Array<Record<Period | 'granted' | 'leases', number>>)[0];
+    const used = { minute: Number(state.minute), hour: Number(state.hour), day: Number(state.day) };
     const result: RateLimitResult = {
-      allowed: true,
+      allowed: Number(state.granted) > 0,
       remaining: {
-        minute: Math.max(0, limits.perMinute - state.minute),
-        hour: Math.max(0, limits.perHour - state.hour),
-        day: Math.max(0, limits.perDay - state.day),
+        minute: Math.max(0, perPeriod.minute - used.minute),
+        hour: Math.max(0, perPeriod.hour - used.hour),
+        day: Math.max(0, perPeriod.day - used.day),
       },
-      resetAt: {
-        minute: state.lastReset.minute + TIME_WINDOWS.minute,
-        hour: state.lastReset.hour + TIME_WINDOWS.hour,
-        day: state.lastReset.day + TIME_WINDOWS.day,
-      },
+      resetAt,
     };
-
-    // Check concurrent uploads
-    if (state.concurrent >= limits.maxConcurrent) {
-      result.allowed = false;
+    if (result.allowed) {
+      result.leaseId = leaseId;
+      return result;
+    }
+    // Refused: report the first limit that has no room (same order as the check)
+    if (Number(state.leases) >= limits.maxConcurrent) {
       result.limitExceeded = 'concurrent';
-      result.retryAfter = 60; // Retry after 1 minute
-      return result;
+      result.retryAfter = 60;
+    } else {
+      const period = PERIODS.find((p) => used[p] + weight > perPeriod[p]) ?? 'day';
+      result.limitExceeded = period;
+      result.retryAfter = Math.max(1, resetAt[period] - now);
     }
-
-    // Check minute limit
-    if (state.minute + weight > limits.perMinute) {
-      result.allowed = false;
-      result.limitExceeded = 'minute';
-      result.retryAfter = Math.max(1, result.resetAt.minute - now);
-      return result;
-    }
-
-    // Check hour limit
-    if (state.hour + weight > limits.perHour) {
-      result.allowed = false;
-      result.limitExceeded = 'hour';
-      result.retryAfter = Math.max(1, result.resetAt.hour - now);
-      return result;
-    }
-
-    // Check day limit
-    if (state.day + weight > limits.perDay) {
-      result.allowed = false;
-      result.limitExceeded = 'day';
-      result.retryAfter = Math.max(1, result.resetAt.day - now);
-      return result;
-    }
-
-    // Increment counters
-    state.minute += weight;
-    state.hour += weight;
-    state.day += weight;
-    state.concurrent++;
-    result.remaining = {
-      minute: Math.max(0, limits.perMinute - state.minute),
-      hour: Math.max(0, limits.perHour - state.hour),
-      day: Math.max(0, limits.perDay - state.day),
-    };
-
-    // Save updated state to KV (with 1 day TTL)
-    await kv.put(key, JSON.stringify(state), {
-      expirationTtl: TIME_WINDOWS.day + 3600, // 1 day + 1 hour buffer
-    });
-
     return result;
   } catch (error) {
-    logger.error('[SECURITY] Rate limit check failed', { error, userId, operation });
-
-    // Graceful degradation: allow request if KV is unavailable
-    // This prevents KV outages from blocking all uploads
+    logger.error('[SECURITY] Rate limit check failed; refusing the request', { error, userId, operation });
     return {
-      allowed: true,
-      remaining: {
-        minute: limits.perMinute,
-        hour: limits.perHour,
-        day: limits.perDay,
-      },
-      resetAt: {
-        minute: now + TIME_WINDOWS.minute,
-        hour: now + TIME_WINDOWS.hour,
-        day: now + TIME_WINDOWS.day,
-      },
+      allowed: false,
+      unavailable: true,
+      retryAfter: RATE_LIMIT_UNAVAILABLE_RETRY_SECONDS,
+      remaining: { minute: 0, hour: 0, day: 0 },
+      resetAt,
     };
   }
 }
 
 /**
- * Release concurrent upload slot
+ * Release a request's concurrency lease
  *
- * Call this after upload completes (success or failure)
+ * Call this after the request completes (success or failure). A lease that is
+ * never released expires after RATE_LIMIT_LEASE_SECONDS.
  */
-export async function releaseRateLimit(
-  kv: KVNamespace,
-  userId: string,
-  operation: string
-): Promise<void> {
-  const key = getRateLimitKey(userId, operation);
-
+export async function releaseRateLimit(db: D1Database, userId: string, operation: string, leaseId: string): Promise<void> {
   try {
-    const stateStr = await kv.get(key);
-    if (!stateStr) return;
-
-    const state: RateLimitState = JSON.parse(stateStr);
-    state.concurrent = Math.max(0, state.concurrent - 1);
-
-    await kv.put(key, JSON.stringify(state), {
-      expirationTtl: TIME_WINDOWS.day + 3600,
-    });
+    await db
+      .prepare('DELETE FROM upload_rate_leases WHERE user_id = ? AND operation = ? AND lease_id = ?')
+      .bind(userId, operation, leaseId)
+      .run();
   } catch (error) {
     logger.error('[SECURITY] Failed to release rate limit', { error, userId, operation });
   }
+}
+
+/**
+ * Deletes windows that ended more than a day ago and expired leases
+ * (daily cron). Rows are rewritten in place while a user is active, so this
+ * only drops users who stopped uploading.
+ */
+export async function pruneRateLimits(db: D1Database, nowMs = Date.now()): Promise<void> {
+  const now = Math.floor(nowMs / 1000);
+  await db.batch([
+    db.prepare('DELETE FROM upload_rate_windows WHERE window_start < ?').bind(now - 2 * TIME_WINDOWS.day),
+    db.prepare('DELETE FROM upload_rate_leases WHERE expires_at <= ?').bind(now),
+  ]);
 }
 
 /**
@@ -429,17 +419,24 @@ export function rateLimitMiddleware(operation: string, options: RateLimitOptions
       return next();
     }
 
-    // Get KV namespace
-    const kv = c.env.RATE_LIMIT_KV as KVNamespace;
+    const db = c.env.SEARCH_DB as D1Database | undefined;
 
-    if (!kv) {
-      logger.warn('[SECURITY] RATE_LIMIT_KV not configured, skipping rate limit check');
+    if (!db) {
+      logger.warn('[SECURITY] SEARCH_DB not configured, skipping rate limit check');
       return next();
     }
 
     // Check rate limit
     const weight = options.weight ? await options.weight(c) : 1;
-    const result = await checkRateLimit(kv, userId, operation, limits, weight);
+    const result = await checkRateLimit(db, userId, operation, limits, weight);
+
+    if (result.unavailable) {
+      return c.json(
+        { success: false, error: 'Upload limits are temporarily unavailable; try again shortly', retryAfter: result.retryAfter },
+        503,
+        { 'Retry-After': String(result.retryAfter) }
+      );
+    }
 
     if (!result.allowed) {
       logger.warn('[SECURITY] Rate limit exceeded', {
@@ -488,38 +485,8 @@ export function rateLimitMiddleware(operation: string, options: RateLimitOptions
     try {
       await next();
     } finally {
-      // Release concurrent slot after request completes
-      await releaseRateLimit(kv, userId, operation);
+      // Release the concurrency lease after the request completes
+      if (result.leaseId) await releaseRateLimit(db, userId, operation, result.leaseId);
     }
-  };
-}
-
-/**
- * Get rate limit status for a user
- *
- * Useful for showing users their current limits in UI
- */
-export async function getRateLimitStatus(
-  kv: KVNamespace,
-  userId: string,
-  operation: string
-): Promise<{
-  tier: RateLimitTier;
-  limits: RateLimitConfig;
-  current: RateLimitState;
-}> {
-  const tier = getUserTier(userId);
-  const limits = RATE_LIMITS[tier];
-  const key = getRateLimitKey(userId, operation);
-
-  const stateStr = await kv.get(key);
-  const state: RateLimitState = stateStr
-    ? JSON.parse(stateStr)
-    : initRateLimitState();
-
-  return {
-    tier,
-    limits,
-    current: state,
   };
 }
