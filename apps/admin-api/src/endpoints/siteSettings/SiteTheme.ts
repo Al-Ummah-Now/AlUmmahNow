@@ -3,7 +3,7 @@ import { z } from "zod";
 import { SITE_THEMES } from "@al-ummah/shared-types";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import { logger } from "../../lib/logger";
-import { readSiteTheme, writeSiteTheme } from "../../lib/siteSettings";
+import { readSiteTheme, readSiteThemeHistory, writeSiteTheme } from "../../lib/siteSettings";
 
 const ThemeState = z.object({
   theme: z.enum(SITE_THEMES),
@@ -50,5 +50,32 @@ export class SiteThemePut extends AdminRoute {
     const changed = await writeSiteTheme(c.env.REPORTS_DB, body.theme, actorId, crypto.randomUUID(), new Date().toISOString());
     if (changed) logger.info('[SiteTheme] Site theme changed', { theme: body.theme, actorId });
     return { success: true, changed, result: await readSiteTheme(c.env.REPORTS_DB) };
+  }
+}
+
+const ThemeChange = z.object({
+  id: z.string(),
+  oldValue: z.string().nullable(),
+  newValue: z.string(),
+  actorId: z.string(),
+  createdAt: z.string(),
+});
+
+export class SiteThemeHistory extends AdminRoute {
+  schema = addAuthToSchema({
+    tags: ["Site settings"],
+    summary: "Recent site theme changes",
+    description: "The audit log of theme changes, newest first. Admins and moderators.",
+    request: {
+      query: z.object({ limit: z.coerce.number().int().min(1).max(50).default(10) }),
+    },
+    responses: {
+      "200": { description: "Theme changes, newest first", content: { "application/json": { schema: z.object({ success: z.boolean(), result: z.object({ entries: z.array(ThemeChange) }) }) } } },
+    },
+  });
+
+  async handle(c: AppContext) {
+    const { query } = await this.getValidatedData<typeof this.schema>();
+    return { success: true, result: { entries: await readSiteThemeHistory(c.env.REPORTS_DB, query.limit) } };
   }
 }

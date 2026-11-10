@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import type { SiteTheme } from '@al-ummah/shared-types';
 import { setSiteTheme } from '@/lib/api/admin';
 import { useLanguage } from '@/i18n/I18nProvider';
@@ -16,11 +17,14 @@ export function SiteThemePicker({ initial, previews, canEdit }: { initial: SiteT
   const [current, setCurrent] = useState(initial);
   const [failed, setFailed] = useState(false);
   const [pending, start] = useTransition();
+  const router = useRouter();
   const choose = (theme: SiteTheme) =>
     start(async () => {
       setFailed(false);
       try {
         setCurrent((await setSiteTheme(theme)).theme);
+        // Re-reads the page so the recent changes list shows this change
+        router.refresh();
       } catch {
         setFailed(true);
       }

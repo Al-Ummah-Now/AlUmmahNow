@@ -377,6 +377,10 @@ const ar: Messages = {
     saved: 'تم تحديث مظهر الموقع',
     failed: 'تعذر تغيير المظهر',
     adminOnly: 'يمكن للمشرفين العامين فقط تغيير مظهر الموقع.',
+    history: 'التغييرات الأخيرة',
+    historyEmpty: 'لا توجد تغييرات بعد',
+    historyDefault: 'الافتراضي',
+    historyUnavailable: 'تعذر تحميل التغييرات الأخيرة',
   },
   indices: {
     title: 'فهارس الفيديو',
