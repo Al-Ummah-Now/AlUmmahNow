@@ -308,6 +308,7 @@ describe('uploadResume re-authorises the same video', () => {
 		assert.equal(res.status, 200, JSON.stringify(body));
 		assert.equal(body.result.videoId, 'vid');
 		assert.equal(body.result.tusUploadId, id, 'the same Bunny upload');
+		assert.equal(body.result.tusUploadFileSize, SIZE, 'a different file must not resume it');
 		assert.ok(h.kv.data.has(`tus:session:${body.result.tusSessionId}`));
 		assert.equal(body.result.tusHeaders, undefined, 'no Bunny credentials to the client');
 		const offset = await h.head(body.result.tusUploadId);

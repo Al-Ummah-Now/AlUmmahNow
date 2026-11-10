@@ -859,6 +859,10 @@ export interface AppTranslations {
     authRequired: string;
     sessionMissing: string;
     reconnecting: string;
+    needsReupload: string;
+    reupload: string;
+    reuploadBanner: string;
+    reuploadAlreadyDone: string;
     authTokenMissing: string;
     completeFailed: string;
     processingFailed: string;

@@ -12,7 +12,9 @@ import {
   ResilientHttpStack,
   ResilientUpload,
   classifyTusFailure,
+  grantedUploadUrl,
   jitteredRetryDelays,
+  reportUploadFailure,
   requestUploadResume,
   shouldMaskHeadStatus,
   uploadFingerprint,
@@ -221,6 +223,7 @@ function run(opts: {
   getAuthorization?: (force: boolean) => Promise<string | null>;
   tusSessionId?: string;
   uploadUrl?: string;
+  reportFailure?: (videoId: string, reason: string) => Promise<unknown>;
 }) {
   const progress: number[] = [];
   const reconnecting: boolean[] = [];
@@ -241,6 +244,7 @@ function run(opts: {
     sleep: async () => undefined,
     getAuthorization: opts.getAuthorization ?? (async () => 'Bearer t'),
     reauthorise: opts.reauthorise ?? (async () => ({ kind: 'gone', message: 'no' })),
+    reportFailure: opts.reportFailure,
     onProgress: (b) => progress.push(b),
     onReconnecting: (r) => reconnecting.push(r),
     onSuccess: () => resolve({ ok: true }),
@@ -392,9 +396,60 @@ describe('ResilientUpload against a failing proxy', () => {
     const server = new FakeTusServer(ENDPOINT);
     server.sessions.set('s1', 'v1');
     server.fail({ method: 'POST', status: 403 });
-    const { upload, done } = run({ server });
+    const reportFailure = jest.fn(async () => true);
+    const { upload, done } = run({ server, reportFailure });
     await upload.start();
     const result = await done;
     expect(result.ok).toBe(false);
+    // never silent: the video is flagged for a re-upload, once
+    expect(reportFailure).toHaveBeenCalledTimes(1);
+    expect(reportFailure).toHaveBeenCalledWith('v1', expect.any(String));
+  });
+
+  it('a successful upload reports nothing', async () => {
+    const server = new FakeTusServer(ENDPOINT);
+    server.sessions.set('s1', 'v1');
+    const reportFailure = jest.fn(async () => true);
+    const { upload, done } = run({ server, reportFailure });
+    await upload.start();
+    expect(await done).toEqual({ ok: true });
+    expect(reportFailure).not.toHaveBeenCalled();
+  });
+});
+
+describe('grantedUploadUrl', () => {
+  const file = { size: 100 };
+  it('resumes the earlier upload only for a file of the same size', () => {
+    expect(grantedUploadUrl('https://api.test/tus/', { tusUploadId: 'k.v1', tusUploadFileSize: 100 }, file)).toBe('https://api.test/tus/k.v1');
+    expect(grantedUploadUrl('https://api.test/tus', { tusUploadId: 'k.v1' }, file)).toBe('https://api.test/tus/k.v1');
+  });
+  it('a different file (re-upload) starts a new upload in the same video', () => {
+    expect(grantedUploadUrl('https://api.test/tus', { tusUploadId: 'k.v1', tusUploadFileSize: 99 }, file)).toBeUndefined();
+    expect(grantedUploadUrl('https://api.test/tus', {}, file)).toBeUndefined();
+  });
+});
+
+describe('reportUploadFailure', () => {
+  const res = (status: number) => ({ ok: status < 300, status }) as Response;
+  const sleep = async () => undefined;
+  it('posts the reason to the failed endpoint', async () => {
+    const f = jest.fn(async () => res(200));
+    await expect(reportUploadFailure('https://api.test/', 'v 1', { Authorization: 'Bearer t' }, 'gone', { fetchImpl: f as unknown as typeof fetch, sleep })).resolves.toBe(true);
+    expect(f).toHaveBeenCalledWith('https://api.test/api/videos/upload/failed/v%201', expect.objectContaining({
+      method: 'POST',
+      headers: { Authorization: 'Bearer t', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: 'gone' }),
+    }));
+  });
+  it('retries network errors and 5xx, stops on a final answer, never throws', async () => {
+    const f = jest.fn().mockRejectedValueOnce(new TypeError('offline')).mockResolvedValueOnce(res(503)).mockResolvedValueOnce(res(200));
+    await expect(reportUploadFailure('a', 'v', {}, 'r', { fetchImpl: f as unknown as typeof fetch, sleep })).resolves.toBe(true);
+    expect(f).toHaveBeenCalledTimes(3);
+    const finished = jest.fn(async () => res(409));
+    await expect(reportUploadFailure('a', 'v', {}, 'r', { fetchImpl: finished as unknown as typeof fetch, sleep })).resolves.toBe(false);
+    expect(finished).toHaveBeenCalledTimes(1);
+    const down = jest.fn(async () => { throw new TypeError('offline'); });
+    await expect(reportUploadFailure('a', 'v', {}, 'r', { fetchImpl: down as unknown as typeof fetch, sleep })).resolves.toBe(false);
+    expect(down).toHaveBeenCalledTimes(4);
   });
 });

@@ -5,7 +5,7 @@ import React, { useState, useCallback, useRef } from "react";
 import { VideoObject } from "@/interfaces";
 import VideoUpload from "@/components/videoUpload";
 import { BatchUploadQueue } from "@/components/videoUpload/BatchUploadQueue";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { CheckCircle, AlertCircle, Upload, FileStack, ShieldAlert } from "lucide-react";
 import { UploadModeTabs, UPLOAD_MODE_PANEL_ID, UPLOAD_MODE_TAB_ID, type UploadMode } from "@/components/videoUpload/UploadModeTabs";
 import { VIDEO_UPLOAD_CONFIG } from "@/lib/constants/uploadConfig";
@@ -23,6 +23,10 @@ const UploadPage: React.FC = () => {
   const params = useParams();
   const locale = params.locale as string;
   const router = useRouter();
+  // Studio "Re-upload" on a video flagged needs_reupload: upload into that video
+  const searchParams = useSearchParams();
+  const resumeVideoId = searchParams?.get('resume') || undefined;
+  const resumeTitle = searchParams?.get('title') || undefined;
   const { activeChannel } = useActiveChannel();
   const auth = useAuth();
   const { user: sessionUser, loading: sessionLoading } = useMultiAccount();
@@ -234,8 +238,19 @@ const UploadPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Upload mode tabs: the panel below belongs to the selected tab */}
-        {!uploadComplete && (
+        {resumeVideoId && !uploadComplete && (
+          <div
+            className="mb-6 rounded-lg border border-primary/50 bg-primary/10 p-4 text-foreground"
+            data-testid="upload-reupload-banner"
+            data-video-id={resumeVideoId}
+          >
+            <p className="font-medium">{resumeTitle ? `${t.upload.reupload}: ${resumeTitle}` : t.upload.reupload}</p>
+            <p className="text-sm mt-1 text-muted-foreground">{t.upload.reuploadBanner}</p>
+          </div>
+        )}
+
+        {/* Upload mode tabs: the panel below belongs to the selected tab (a re-upload is one file into one video) */}
+        {!uploadComplete && !resumeVideoId && (
           <UploadModeTabs
             mode={uploadMode}
             onChange={handleModeChange}
@@ -367,6 +382,8 @@ const UploadPage: React.FC = () => {
                 onProgress={handleUploadProgress}
                 onError={handleUploadError}
                 className="w-full"
+                resumeVideoId={resumeVideoId}
+                resumeTitle={resumeTitle}
               />
             </div>
           </>

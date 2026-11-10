@@ -27,6 +27,7 @@ import { API_VERSION_HEADER, deprecationHeaders, findDeprecation, resolveApiVers
 import { buildContractDocument } from './lib/api-contract';
 
 // TUS Proxy import (not in routers yet)
+import { sweepStalledUploads } from "./lib/uploads/lifecycle";
 import { createTusRouter } from "./endpoints/video/tus";
 import { createProcessingInternalRouter } from "./endpoints/video/processingInternal";
 // Profile/Channel image upload handlers (not in routers yet)
@@ -400,7 +401,8 @@ app.get("/", async (c) => {
 // ==========================================
 
 /**
- * Crons (wrangler `triggers.crons`): hourly, the subscription import;
+ * Crons (wrangler `triggers.crons`): hourly, the subscription import and the
+ * stalled-upload sweep;
  * daily, enforce data retention (Story 1.3, AC 5).
  * See src/lib/privacy/retention.ts and docs/compliance/GDPR.md.
  */
@@ -420,6 +422,13 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 			importPendingSubscriptions(rawEnv as never)
 				.then((result) => logger.info('[SubscriptionImport] Run finished', { ...result }))
 				.catch((error) => logger.error('[SubscriptionImport] Run failed', { error: error instanceof Error ? error.message : String(error) })),
+		);
+		// Hourly: uploads that went quiet are completed or flagged for a
+		// re-upload, never left hanging (lib/uploads/lifecycle.ts). Through the
+		// search-sync wrapper so the ownership index sees the new status.
+		ctx.waitUntil(
+			sweepStalledUploads(withSearchSync(rawEnv, ctx) as never)
+				.catch((error) => logger.error('[Uploads] Stalled-upload sweep failed', { error: error instanceof Error ? error.message : String(error) })),
 		);
 		return;
 	}

@@ -17,13 +17,12 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { getAuthContext } from '../../../middleware/auth';
-import { requireSecret } from '../../../lib/env-helpers';
-import { generateTUSSignature } from '../../../lib/bunny/tus';
+import { bunnyTusRequestHeaders } from '../../../lib/bunny/tus';
+import { markUploadComplete } from '../../../lib/uploads/lifecycle';
 import R2Repository, { rethrowBusy } from '../../../lib/r2Repo';
 import { Video as BusinessVideo } from '../../../lib/types';
 import Queue, { MessageType } from '../../../lib/queue';
 import { logger } from '../../../lib/logger';
-import { startProcessingLoop } from '../../../lib/processing/loop';
 
 // TUS Protocol Constants
 const TUS_VERSION = '1.0.0';
@@ -54,18 +53,11 @@ interface TusUploadSession {
   metadata?: Record<string, string>;
 }
 
-/**
- * The durable copy of the session on the video record (R2). It lets HEAD and
- * PATCH answer from Bunny while KV is unavailable or the KV entry is gone, and
- * uploadResume hand the same Bunny upload back to the client. Cleared when the
- * upload completes, so finished (public) videos never carry it.
- */
-export interface VideoTusUpload {
-  sessionId: string;
-  bunnyUploadUrl: string;
-  fileSize: number;
-  createdAt: string;
-}
+// The durable copy of the session on the video record (R2) lets HEAD and
+// PATCH answer from Bunny while KV is unavailable or the KV entry is gone, and
+// uploadResume hand the same Bunny upload back. Cleared on completion.
+export type { VideoTusUpload } from '../../../lib/uploads/lifecycle';
+import type { VideoTusUpload } from '../../../lib/uploads/lifecycle';
 
 /**
  * Proxy upload ids are `<uploadKey>.<videoId>`: uploadKey is new for every
@@ -160,25 +152,7 @@ export class TusProxy {
    * nothing signed at initiate time can expire under a long upload).
    */
   private async createBunnyHeaders(videoId: string): Promise<Record<string, string>> {
-    const bunnyKey = await requireSecret(this.env["bunny-stream-key"], 'bunny-stream-key');
-    const libraryIdRaw = await requireSecret(this.env.bunny_stream_library_id, 'bunny_stream_library_id');
-    const libraryId = parseInt(libraryIdRaw, 10);
-
-    // Generate signature with 1 hour expiration
-    const expirationTime = Math.floor(Date.now() / 1000) + 3600;
-    const signature = await generateTUSSignature(
-      libraryId,
-      bunnyKey,
-      expirationTime,
-      videoId
-    );
-
-    return {
-      'AuthorizationSignature': signature,
-      'AuthorizationExpire': expirationTime.toString(),
-      'LibraryId': libraryId.toString(),
-      'VideoId': videoId,
-    };
+    return bunnyTusRequestHeaders(this.env, videoId);
   }
 
   /** 503 + Retry-After: tus-js-client retries PATCH/POST on any 5xx. */
@@ -273,58 +247,9 @@ export class TusProxy {
     return storeFailed ? { kind: 'unavailable' } : { kind: 'missing' };
   }
 
-  /**
-   * Mark the video uploaded once Bunny holds every byte. Idempotent: only the
-   * call that moves the video to `processing` sends the completion message, so
-   * a retried final PATCH or a HEAD after completion never processes it twice.
-   * Never throws: the bytes are at Bunny whatever happens here.
-   */
+  /** Bunny holds every byte: lib/uploads/lifecycle.ts (idempotent, never throws). */
   private async markUploaded(session: TusUploadSession, uploadId: string): Promise<void> {
-    try {
-      const repository = new R2Repository<z.infer<typeof BusinessVideo> & { tusUpload?: VideoTusUpload }>(this.env.videos);
-      let changed = false;
-      // Conditional write on the fresh video (SCALABILITY-AUDIT AV-3); a
-      // video that processing already marked ready stays ready.
-      await repository.updateObject(session.videoId, (video) => {
-        changed = false;
-        if (video.uploadStatus === 'ready' || video.uploadStatus === 'processing') {
-          if (!video.tusUpload) return false;
-          delete video.tusUpload;
-          return true;
-        }
-        video.uploadStatus = 'processing';
-        delete video.tusUpload;
-        changed = true;
-        return true;
-      });
-      if (!changed) return;
-
-      const queue = new Queue(this.env.queue);
-      await queue.send(MessageType.VideoUploadCompleted, {
-        videoId: session.videoId,
-        userId: session.userId,
-        uploadId,
-        fileSize: session.fileSize,
-        timestamp: new Date().toISOString(),
-      });
-
-      // Check Bunny until the encode finishes (lib/processing/loop.ts)
-      await startProcessingLoop(this.env, session.videoId, { reason: 'upload-complete' }).catch((error) =>
-        logger.error('[TUS Proxy] Could not start the processing check loop', { videoId: session.videoId, error: error instanceof Error ? error.message : String(error) }),
-      );
-
-      logger.info('[TUS Proxy] Upload completed', {
-        uploadId,
-        videoId: session.videoId,
-        fileSize: session.fileSize,
-      });
-    } catch (error) {
-      logger.error('[TUS Proxy] Marking the upload complete failed (bytes are at Bunny; uploadComplete or the next HEAD retries it)', {
-        uploadId,
-        videoId: session.videoId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
+    await markUploadComplete(this.env, { videoId: session.videoId, userId: session.userId, fileSize: session.fileSize, uploadId });
   }
 
   /**

@@ -15,11 +15,13 @@ jest.mock('../resilient-tus', () => ({
   }),
   apiUrlFromTusEndpoint: (e: string) => e,
   requestUploadResume: jest.fn(),
+  reportUploadFailure: jest.fn(async () => true),
 }));
 jest.mock('@/lib/auth/client-token', () => ({ fetchClientAuthToken: jest.fn(async () => 'tok') }));
 jest.mock('@/lib/logger-client', () => ({ logger: { error: jest.fn(), warn: jest.fn(), info: jest.fn() } }));
 
 import { TusParallelManager } from '../TusParallelManager';
+import { reportUploadFailure } from '../resilient-tus';
 
 const config = (n: number) => ({
   tusEndpoint: 'https://api.test/api/videos/tus',
@@ -73,6 +75,13 @@ describe('TusParallelManager', () => {
     const opts = instances[0].opts;
     expect(opts).toMatchObject({ videoId: 'v1', tusSessionId: 's1', uploadUrl: 'https://api.test/api/videos/tus/k.v1' });
     await expect(opts.getAuthorization(false)).resolves.toBe('Bearer tok');
+  });
+
+  it('a file that fails for good is reported (flagged for a re-upload) with a fresh token', async () => {
+    const manager = new TusParallelManager(1);
+    manager.createUpload('f1', new File(['x'], 'a.mp4'), config(1), {});
+    await instances[0].opts.reportFailure!('v1', 'Upload service said the upload is gone');
+    expect(reportUploadFailure).toHaveBeenCalledWith('https://api.test/api/videos/tus', 'v1', { Authorization: 'Bearer tok' }, 'Upload service said the upload is gone');
   });
 
   it('pausing keeps the upload resumable; cancelling removes it', async () => {

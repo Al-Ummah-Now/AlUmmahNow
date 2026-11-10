@@ -39,6 +39,8 @@ export interface VideoObject {
     category?: VideoCategory;
     thumbnailType?: 'auto' | 'custom';
     uploadStatus?: 'initiated' | 'uploading' | 'processing' | 'ready' | 'failed' | 'deleted';
+    /** Set when the video needs the owner's action (e.g. the upload must be redone). */
+    processingIssue?: { kind: 'encode_failed' | 'needs_reupload' | 'stalled'; reason?: string; at?: string };
     comments?: Comments[]; // Optional array of Comments
     likes?: Likes[];       // Optional array of Likes
     dislikes?: Dislikes[]; // Optional array of Dislikes

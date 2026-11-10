@@ -123,8 +123,11 @@ export class UploadCompleteEndpoint extends AuthenticatedRoute {
 				dateModified: new Date().toISOString(),
 				...(fileSize && { fileSize }),
 				...(duration && { duration }),
-				// The proxy's durable session copy is not needed once uploaded
+				// The proxy's durable session copy and the upload-side flags are
+				// not needed once uploaded (lib/uploads/lifecycle.ts)
 				tusUpload: undefined,
+				uploadWatch: undefined,
+				...(fresh.processingIssue?.kind === 'needs_reupload' ? { processingIssue: undefined } : {}),
 			} as Partial<VideoType>), { ownerId: userId });
 			if (saved.status === 'missing') {
 				return c.json({ success: false, error: "Video not found" }, 404);

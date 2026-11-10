@@ -136,7 +136,7 @@ export class ResilientHttpStack implements tus.HttpStack {
 
 /** What uploadResume said about a video. */
 export type ReauthoriseResult =
-  | { kind: 'grant'; tusSessionId: string; tusUploadId?: string }
+  | { kind: 'grant'; tusSessionId: string; tusUploadId?: string; tusUploadFileSize?: number; title?: string }
   | { kind: 'completed' }
   | { kind: 'gone'; message: string };
 
@@ -159,16 +159,63 @@ export async function requestUploadResume(
     success?: boolean;
     completed?: boolean;
     error?: string;
-    result?: { tusSessionId?: string; tusUploadId?: string };
+    result?: { tusSessionId?: string; tusUploadId?: string; tusUploadFileSize?: number; videoMetadata?: { title?: string } };
   };
   if (res.ok && body.result?.tusSessionId) {
-    return { kind: 'grant', tusSessionId: body.result.tusSessionId, tusUploadId: body.result.tusUploadId };
+    return {
+      kind: 'grant',
+      tusSessionId: body.result.tusSessionId,
+      tusUploadId: body.result.tusUploadId,
+      tusUploadFileSize: body.result.tusUploadFileSize,
+      title: body.result.videoMetadata?.title,
+    };
   }
   if (res.status === 409 && body.completed) return { kind: 'completed' };
   if (res.status === 401 || res.status === 408 || res.status === 429 || res.status >= 500) {
     throw new Error(`upload resume ${res.status}`);
   }
   return { kind: 'gone', message: body.error || `Upload cannot be resumed (${res.status})` };
+}
+
+/**
+ * Where to resume a granted upload with `file`: the earlier upload's URL only
+ * when it was for a file of the same size (Bunny fixed its length); another
+ * file starts a new upload into the same video.
+ */
+export function grantedUploadUrl(endpoint: string, grant: { tusUploadId?: string; tusUploadFileSize?: number }, file: Pick<File, 'size'>): string | undefined {
+  if (!grant.tusUploadId) return undefined;
+  if (grant.tusUploadFileSize !== undefined && grant.tusUploadFileSize !== file.size) return undefined;
+  return `${endpoint.replace(/\/+$/, '')}/${grant.tusUploadId}`;
+}
+
+/**
+ * Tell the API an upload cannot finish (POST /api/videos/upload/failed/:id):
+ * the video is flagged for a re-upload, the uploader notified and admins see
+ * it. Best effort with a few retries; never throws.
+ */
+export async function reportUploadFailure(
+  apiUrl: string,
+  videoId: string,
+  headers: Record<string, string>,
+  reason: string,
+  opts: { fetchImpl?: typeof fetch; sleep?: (ms: number) => Promise<void> } = {},
+): Promise<boolean> {
+  const doFetch = opts.fetchImpl ?? fetch;
+  const sleep = opts.sleep ?? defaultSleep;
+  for (const delay of [0, 2000, 10000, 30000]) {
+    if (delay) await sleep(delay);
+    try {
+      const res = await doFetch(`${apiUrl.replace(/\/+$/, '')}/api/videos/upload/failed/${encodeURIComponent(videoId)}`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: reason.slice(0, 500) }),
+      });
+      if (res.ok || (res.status >= 400 && res.status < 500 && res.status !== 401 && res.status !== 408 && res.status !== 429)) return res.ok;
+    } catch {
+      // network: next attempt
+    }
+  }
+  return false;
 }
 
 export function tusEndpointFor(apiUrl: string): string {
@@ -193,6 +240,8 @@ export interface ResilientUploadOptions {
   getAuthorization: (force: boolean) => Promise<string | null>;
   /** uploadResume for this video. */
   reauthorise: (videoId: string) => Promise<ReauthoriseResult>;
+  /** The upload cannot finish: flag it for a re-upload (reportUploadFailure). */
+  reportFailure?: (videoId: string, reason: string) => Promise<unknown>;
   onProgress?: (bytesUploaded: number, bytesTotal: number) => void;
   onReconnecting?: (reconnecting: boolean) => void;
   onSuccess?: () => void;
@@ -355,7 +404,7 @@ export class ResilientUpload {
       }
       if (result.kind === 'gone') return this.fail(new Error(result.message));
       this.sessionId = result.tusSessionId;
-      this.uploadUrl = result.tusUploadId ? `${this.opts.endpoint.replace(/\/+$/, '')}/${result.tusUploadId}` : undefined;
+      this.uploadUrl = grantedUploadUrl(this.opts.endpoint, result, this.opts.file);
       this.upload = this.build();
       await this.resume();
       return;
@@ -392,6 +441,9 @@ export class ResilientUpload {
 
   private fail(error: Error): void {
     this.setReconnecting(false);
+    // Never dropped silently: the video is flagged for a re-upload (uploader
+    // notified, admins see it); picking the same file again still resumes.
+    void Promise.resolve(this.opts.reportFailure?.(this.opts.videoId, error.message || 'Upload failed')).catch(() => undefined);
     this.opts.onError?.(error);
   }
 }

@@ -19,6 +19,7 @@ import { VideoThumbnailUpload } from '../endpoints/video/videoThumbnailUpload';
 import { VideoUpload } from '../endpoints/video/videoUpload';
 import { UploadInitiateEndpoint } from '../endpoints/video/uploadInitiate';
 import { UploadCompleteEndpoint } from '../endpoints/video/uploadComplete';
+import { UploadFailedEndpoint } from '../endpoints/video/uploadFailed';
 import { UploadResumeEndpoint } from '../endpoints/video/uploadResume';
 import { UploadBatchInitiateEndpoint } from '../endpoints/video/uploadBatchInitiate';
 
@@ -115,6 +116,9 @@ videoRouter.post('/upload/complete', UploadCompleteEndpoint);
 
 // Resume upload (authenticated)
 videoRouter.get('/upload/resume/:videoId', UploadResumeEndpoint);
+
+// Report an upload that cannot finish (authenticated): flags it for a re-upload
+videoRouter.post('/upload/failed/:videoId', UploadFailedEndpoint);
 
 // Batch upload initiate (authenticated)
 videoRouter.post('/upload/batch/initiate', UploadBatchInitiateEndpoint);
