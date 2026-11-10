@@ -116,6 +116,23 @@ async function expectJobSucceeded(page: Page, kind: string, count = 1): Promise<
     .toBe('succeeded');
 }
 
+/**
+ * Opens an admin detail page and waits until React has hydrated its actions
+ * panel: a fill or click before that is lost (hydration resets the field), which
+ * left Save disabled. React marks the DOM nodes it owns with __reactFiber keys.
+ */
+async function openDetail(page: Page, path: string, actionsTestId: string): Promise<void> {
+  await page.goto(`${target().adminWeb}${path}`, { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(
+    (id) => {
+      const el = document.querySelector(`[data-testid="${id}"]`);
+      return !!el && Object.keys(el).some((k) => k.startsWith('__reactFiber'));
+    },
+    actionsTestId,
+    { timeout: 45000 },
+  );
+}
+
 /** `answer`: what shows once the action is done, when the page drops its action panel (a deleted channel); default the queued notice. */
 async function confirm(page: Page, testId: string, opts: { reason?: string; typed?: boolean; answer?: Locator } = {}): Promise<void> {
   await page.getByTestId(testId).click();
@@ -156,7 +173,8 @@ test.describe('Release: admin content management', () => {
       // Find the channel and open it
       const channelRow = page.locator(`[data-testid="channel-row"][data-channel-id="${channelId}"]`);
       await findInList(page, `${target().adminWeb}/channels?q=${encodeURIComponent(channelId)}`, channelRow);
-      await channelRow.getByRole('link').first().click();
+      const channelPath = `/channels/${encodeURIComponent(channelId)}`;
+      await openDetail(page, channelPath, 'channel-actions');
       await expect(page.getByTestId('channel-detail')).toHaveAttribute('data-channel-id', channelId);
 
       // Edit
@@ -164,7 +182,7 @@ test.describe('Release: admin content management', () => {
       await page.getByTestId('channel-edit-description').fill(description);
       await page.getByTestId('channel-edit-save').click();
       await expect(page.getByTestId('content-action-message')).toBeVisible();
-      await page.reload();
+      await openDetail(page, channelPath, 'channel-actions');
       await expect(page.getByTestId('channel-edit-description')).toHaveValue(description);
 
       // Suspend: hidden publicly at once, the cascade to its videos runs as a job
@@ -184,7 +202,7 @@ test.describe('Release: admin content management', () => {
       // The video: find, edit, delete
       const videoRow = page.locator(`[data-testid="video-row"][data-video-id="${videoId}"]`);
       await findInList(page, `${target().adminWeb}/videos?q=${encodeURIComponent(videoId)}`, videoRow);
-      await videoRow.getByTestId('video-link').click();
+      await openDetail(page, `/videos/${encodeURIComponent(videoId)}`, 'video-actions');
       await expect(page.getByTestId('video-detail')).toBeVisible();
       const newTitle = `${videoTitle} (edited)`;
       await page.getByTestId('video-edit-title').fill(newTitle);
@@ -206,7 +224,7 @@ test.describe('Release: admin content management', () => {
       expect(await publicStatus(`/api/videos/${videoId}`), 'deleted video still public').toBe(404);
 
       // Delete the channel
-      await page.goto(`${target().adminWeb}/channels/${encodeURIComponent(channelId)}`);
+      await openDetail(page, channelPath, 'channel-actions');
       // A deleted channel's page shows the deleted notice instead of its action panel
       await confirm(page, 'channel-delete', { typed: true, answer: page.getByTestId('channel-deleted') });
       await expect(page.getByTestId('channel-deleted')).toBeVisible({ timeout: 30000 });
