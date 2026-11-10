@@ -67,7 +67,7 @@ export function ConfirmDialog({
     <AlertDialogPrimitive.Root open={open} onOpenChange={(next) => !next && finish(false)}>
       <AlertDialogPrimitive.Portal>
         <AlertDialogPrimitive.Overlay
-          className="fixed inset-0 z-50 bg-black/50"
+          className="fixed inset-0 z-50 bg-[color-mix(in_srgb,var(--fanous-c-dialog-text)_45%,transparent)]"
           data-testid={`${testId}-backdrop`}
           onClick={() => finish(false)}
         />

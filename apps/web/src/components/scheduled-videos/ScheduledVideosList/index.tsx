@@ -174,7 +174,7 @@ export function ScheduledVideosList({
     <div className={className}>
       {confirmDialog}
       {actionError && (
-        <p role="alert" data-testid="scheduled-videos-action-error" className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200">
+        <p role="alert" data-testid="scheduled-videos-action-error" className="mb-4 rounded-lg p-3 text-sm border border-[color-mix(in_srgb,var(--fanous-color-error-fill)_40%,transparent)] bg-[color-mix(in_srgb,var(--fanous-color-error-fill)_14%,var(--fanous-color-surface))] text-[var(--fanous-color-error-text)]">
           {actionError}
         </p>
       )}
