@@ -15,9 +15,14 @@ const near = (actual: number, expected: number, what: string) =>
   expect(Math.abs(actual - expected), `${what}: ${actual.toFixed(2)} vs ${expected.toFixed(2)}`).toBeLessThanOrEqual(TOLERANCE);
 
 /** The height of one line of a row's label in its own font, plus rounding */
+/**
+ * Height of the label's own text laid out on one line. The probe carries the same text so it
+ * uses the same faces: under `line-height: normal` an Arabic label takes the Arabic face's line
+ * height, which an 'x' in the Latin face does not (19px vs 18px with macOS's Arabic fallback)
+ */
 const oneLine = (row: Locator) => row.locator('.vjs-fanous-mi-label').evaluate((el) => {
-  const probe = el.cloneNode() as HTMLElement;
-  probe.textContent = 'x';
+  const probe = el.cloneNode(true) as HTMLElement;
+  probe.style.whiteSpace = 'nowrap';
   el.parentElement!.appendChild(probe);
   const h = probe.getBoundingClientRect().height;
   probe.remove();
