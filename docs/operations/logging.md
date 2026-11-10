@@ -66,10 +66,13 @@ Expected outcomes are not warnings: not found, hidden/deleted content, invalid
 cursors, expired or invalid tokens (an ordinary 401), anonymous visitors without a
 session, bots asking for unsupported locales.
 
-`setLogSink()` in `@al-ummah/logger` receives every emitted warn/error entry
-(after redaction, plus the original Error). The admin Errors reporter
-(`feat/errors-*`, not on main yet) can register there to send them to the admin
-Errors page.
+Crashes, 5xx answers and needs-action items also reach the admin **Errors** page
+through the error reporter (`withErrorReporting` / `reportServerError`,
+[docs/features/error-reporting.md](../features/error-reporting.md)), independent of
+Workers Logs sampling. Handled failures that only log are not forwarded (they would
+double-count the 5xx the reporter already records); a reporter that wants them can
+register with `setLogSink()` in `@al-ummah/logger`, which receives every emitted
+warn/error entry after redaction, plus the original Error.
 
 ## Browser
 
