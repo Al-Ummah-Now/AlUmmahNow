@@ -12,6 +12,7 @@
  */
 
 import { Hono } from 'hono';
+import { readErasureDeadLetters, type ErasureDeadLetter } from '../../lib/privacy/erasure-dead-letters';
 import { logger } from '../../lib/logger';
 import R2Repository from '../../lib/r2Repo';
 import {
@@ -187,6 +188,15 @@ export function createProcessingInternalRouter() {
 				logger.warn('[ProcessingAdmin] Dead letters unavailable', { error: error instanceof Error ? error.message : String(error) });
 			}
 		}
+		// Account erasure steps that failed for good (#616): the Errors page lists them too
+		let erasureDeadLetters: ErasureDeadLetter[] = [];
+		if (db) {
+			try {
+				erasureDeadLetters = await readErasureDeadLetters(db, limit);
+			} catch (error) {
+				logger.warn('[ProcessingAdmin] Erasure dead letters unavailable', { error: error instanceof Error ? error.message : String(error) });
+			}
+		}
 		return c.json({
 			success: true,
 			result: {
@@ -201,6 +211,7 @@ export function createProcessingInternalRouter() {
 					dateModified: v.dateModified,
 				})),
 				deadLetters,
+				erasureDeadLetters,
 				reconciler: await readSweepStats(c.env),
 			},
 		});

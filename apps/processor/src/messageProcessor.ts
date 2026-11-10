@@ -19,6 +19,7 @@ import {
   reconcileChannelSubscriber,
 } from './lib/notifications-store';
 import { eraseUserModerationData } from './moderation/store';
+import { eraseUserContactData } from './contact/erase';
 import type { NotificationCreatePayload, NotificationFanoutPayload, PushDispatchPayload } from '@al-ummah/shared-types';
 import { dispatchPush, enqueuePush } from './push/dispatch';
 import { resolvePushProviders, type PushProviders } from './push/provider';
@@ -274,6 +275,11 @@ export class MessageProcessor {
       // GDPR erasure (Story 1.3): anonymise the reporter on moderation reports in D1
       case MessageType.UserDataErased:
         await this.processUserDataErased(message, env);
+        break;
+
+      // Account erasure, Contact us step (#616): queued by processUserDataErased
+      case MessageType.ContactDataErase:
+        await this.processContactDataErase(message, env);
         break;
 
       // Search index (Story 29.9): content written outside api-videos
@@ -824,6 +830,10 @@ export class MessageProcessor {
     if (!userId || userId === DELETED_USER_ID) {
       throw new Error('UserDataErased message missing required field: userId');
     }
+    // Contact us messages (#616) are erased by their own queued step, so it retries and
+    // dead-letters on its own. Queued first: if a later step fails, this message is
+    // retried and queues it again, which is harmless (the step is idempotent).
+    await this.queueContactDataErase(message, userId, env);
     const result = await env.REPORTS_DB.prepare('UPDATE reports SET reporter_id = ? WHERE reporter_id = ?')
       .bind(DELETED_USER_ID, userId)
       .run();
@@ -838,6 +848,31 @@ export class MessageProcessor {
       userId,
       changes: (result as { meta?: { changes?: number } })?.meta?.changes ?? 0,
     });
+  }
+
+  private async queueContactDataErase(message: AlUmmahMessage, userId: string, env: QueueEnvironment): Promise<void> {
+    const step: AlUmmahMessage = {
+      id: `${message.id}:contact`,
+      type: MessageType.ContactDataErase,
+      timestamp: new Date().toISOString(),
+      payload: { userId },
+    };
+    if (env.MESSAGE_QUEUE) {
+      await env.MESSAGE_QUEUE.send(step);
+      return;
+    }
+    // No producer binding (local dev): do the step inline
+    await this.processContactDataErase(step, env);
+  }
+
+  /** Deletes the erased account's Contact us messages and notes (idempotent; contact/erase.ts). */
+  private async processContactDataErase(message: AlUmmahMessage, env: QueueEnvironment): Promise<void> {
+    const { userId } = message.payload as { userId?: string };
+    if (!userId || userId === DELETED_USER_ID) {
+      throw new Error('ContactDataErase message missing required field: userId');
+    }
+    const erased = await eraseUserContactData(env.REPORTS_DB, userId);
+    this.logger.info('Erased Contact us data after user data erasure', { userId, ...erased });
   }
 
   private async processReportMessage(message: AlUmmahMessage, env: QueueEnvironment): Promise<void> {

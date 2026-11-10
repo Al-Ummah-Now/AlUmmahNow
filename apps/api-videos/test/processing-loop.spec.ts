@@ -354,6 +354,7 @@ describe('internal processing endpoints', () => {
 		const res = await (await createProcessingInternalRouter().request('/errors', {}, env)).json() as any;
 		assert.deepEqual(res.result.videos.map((v: any) => v.id), [ID]);
 		assert.deepEqual(res.result.deadLetters, []);
+		assert.deepEqual(res.result.erasureDeadLetters, []);
 	});
 });
 
