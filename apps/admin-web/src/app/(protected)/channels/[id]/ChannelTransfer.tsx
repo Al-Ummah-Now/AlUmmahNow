@@ -19,7 +19,7 @@ import { ActionFeedback, ConfirmButton, useContentAction } from '@/components/co
 import { JobStatusChip } from '@/components/content/jobs';
 import { SectionCard } from '@/components/content/parts';
 import { UserPicker } from '@/components/content/UserPicker';
-import { transferConfirmValues, userName } from '@/components/content/userPickerModel';
+import { bidiIsolate, transferConfirmValues, userName } from '@/components/content/userPickerModel';
 import { logger } from '@/lib/logger-client';
 
 /** How often the started transfer's job is re-read, and for how long at most. */
@@ -100,6 +100,7 @@ export function ChannelTransfer({ channel }: Props) {
   const name = target ? userName(target) : '';
   const email = target?.email ?? '';
   const confirmValues = target ? transferConfirmValues(channel.handle, target.email) : [];
+  const iso = (value: string) => bidiIsolate(value, locale);
 
   return (
     <SectionCard title={t('channels.transferTitle')} id={`${ids}-transfer`} testId="channel-transfer">
@@ -124,10 +125,10 @@ export function ChannelTransfer({ channel }: Props) {
         <div className="sm:mb-5">
           <ConfirmButton
             label={t('channels.transfer')}
-            title={t('channels.transferConfirm', { name, email: email || t('channels.pickerNoEmail') })}
+            title={t('channels.transferConfirm', { name: iso(name), email: email ? iso(email) : t('channels.pickerNoEmail') })}
             body={t('channels.transferBody', {
-              channel: channel.name || channel.id,
-              name,
+              channel: iso(channel.name || channel.id),
+              name: iso(name),
               videos: formatNumber(channel.videos, locale),
               playlists: formatNumber(channel.playlists, locale),
             })}
@@ -135,8 +136,8 @@ export function ChannelTransfer({ channel }: Props) {
             typeToConfirm={confirmValues}
             typeToConfirmLabel={
               channel.handle
-                ? t('channels.transferTypeToConfirm', { handle: channel.handle, email: email || t('channels.pickerNoEmail') })
-                : t('channels.transferTypeToConfirmNoHandle', { email })
+                ? t('channels.transferTypeToConfirm', { handle: iso(`@${channel.handle}`), email: email ? iso(email) : t('channels.pickerNoEmail') })
+                : t('channels.transferTypeToConfirmNoHandle', { email: iso(email) })
             }
             danger
             disabled={!!busy || !target || confirmValues.length === 0}
