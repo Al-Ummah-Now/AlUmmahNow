@@ -490,7 +490,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
           // The bytes are uploaded. Processing continues on the server (its
           // check loop finishes the record and notifies the uploader), so the
           // page shows "Upload complete, processing" now instead of waiting here.
-          logger.info('[VideoUpload] Upload complete; processing continues on the server', { videoId });
+          logger.debug('[VideoUpload] Upload complete; processing continues on the server', { videoId });
 
           setUploadProgress({ percentage: 100, state: 'complete' });
           onProgress(100);

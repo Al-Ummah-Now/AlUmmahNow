@@ -129,7 +129,7 @@ export async function listAccessibleChannels(c: AppContext, userId: string): Pro
 	} else {
 		candidates = await scanChannels(repository, ch => channelRoleOf(ch, userId) !== null);
 		scheduleOwnershipHeal(c.env as never, waitUntilOf(c as never), 'channel');
-		logger.info('[ChannelAccess] Indexes not usable yet; served from a bounded scan', { userId, found: candidates.length });
+		logger.debug('[ChannelAccess] Indexes not usable yet; served from a bounded scan', { userId, found: candidates.length });
 	}
 
 	const seen = new Set<string>();
@@ -305,7 +305,7 @@ export class ChannelMemberAdd extends AuthenticatedRoute {
 			return [...members, { userId: targetId!, role: body.role, addedBy: actorId, addedAt: now }];
 		});
 		if (rejected) return fail(c, rejected.status, rejected.code, rejected.message);
-		logger.info('[ChannelMembers] Role granted', { channelId: params.id, actorId, targetId, role: body.role });
+		logger.debug('[ChannelMembers] Role granted', { channelId: params.id, actorId, targetId, role: body.role });
 		return c.json({ success: true, data: { members: await memberViews(c, channel!, actorId), maxMembers: MAX_CHANNEL_MEMBERS } }, 200, NO_STORE);
 	}
 }
@@ -339,7 +339,7 @@ export class ChannelMemberUpdate extends AuthenticatedRoute {
 			return members.map(m => (m.userId === target.userId ? { ...m, role: body.role, updatedAt: new Date().toISOString() } : m));
 		});
 		if (rejected) return fail(c, rejected.status, rejected.code, rejected.message);
-		logger.info('[ChannelMembers] Role changed', { channelId: params.id, actorId, targetId: params.userId, role: body.role });
+		logger.debug('[ChannelMembers] Role changed', { channelId: params.id, actorId, targetId: params.userId, role: body.role });
 		return c.json({ success: true, data: { members: await memberViews(c, channel!, actorId), maxMembers: MAX_CHANNEL_MEMBERS } }, 200, NO_STORE);
 	}
 }
@@ -369,7 +369,7 @@ export class ChannelMemberRemove extends AuthenticatedRoute {
 			return members.filter(m => m.userId !== target.userId);
 		});
 		if (rejected) return fail(c, rejected.status, rejected.code, rejected.message);
-		logger.info('[ChannelMembers] Member removed', { channelId: params.id, actorId, targetId: params.userId });
+		logger.debug('[ChannelMembers] Member removed', { channelId: params.id, actorId, targetId: params.userId });
 		return c.json({ success: true }, 200, NO_STORE);
 	}
 }

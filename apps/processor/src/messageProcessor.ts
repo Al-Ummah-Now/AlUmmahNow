@@ -872,7 +872,7 @@ export class MessageProcessor {
       throw new Error('ContactDataErase message missing required field: userId');
     }
     const erased = await eraseUserContactData(env.REPORTS_DB, userId);
-    this.logger.info('Erased Contact us data after user data erasure', { userId, ...erased });
+    this.logger.debug('Erased Contact us data after user data erasure', { userId, ...erased });
   }
 
   private async processReportMessage(message: AlUmmahMessage, env: QueueEnvironment): Promise<void> {

@@ -53,7 +53,7 @@ export function useProcessingStatus(
     if (event?.type !== 'video_processing_update' || !event.videoId || !trackedRef.current.has(event.videoId)) return;
     const phase = phaseFromStatus(event.status);
     if (isTerminalPhase(phase)) {
-      logger.info('[useProcessingStatus] Realtime processing result', { videoId: event.videoId, phase });
+      logger.debug('[useProcessingStatus] Realtime processing result', { videoId: event.videoId, phase });
       settle(event.videoId, phase);
     }
   });
