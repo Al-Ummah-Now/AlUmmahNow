@@ -1,6 +1,6 @@
 'use server';
 
-import type { Report, ReportStats, SiteTheme } from '@al-ummah/shared-types';
+import type { Report, ReportStats } from '@al-ummah/shared-types';
 import { getAdminSession } from '@/lib/auth';
 import { logger } from '@/lib/logger';
 import { AdminApiError, type ActionResult } from './errors';
@@ -203,7 +203,10 @@ export async function getAiUsage(days = 30): Promise<AiUsageView> {
 // ---------- Site settings ----------
 
 export interface SiteThemeState {
-  theme: SiteTheme;
+  /** A built-in id or a theme package id */
+  theme: string;
+  /** The published version of a theme package; null for a built-in */
+  version: string | null;
   isDefault: boolean;
   updatedBy: string | null;
   updatedAt: string | null;
@@ -226,8 +229,43 @@ export async function getSiteThemeHistory(limit = 10): Promise<SiteThemeChange[]
   return ((await requestAdmin(`/api/site-settings/theme/history?limit=${limit}`)).result as { entries: SiteThemeChange[] }).entries;
 }
 
-export async function setSiteTheme(theme: SiteTheme): Promise<SiteThemeState> {
-  return (await requestAdmin('/api/site-settings/theme', { method: 'PUT', body: JSON.stringify({ theme }) })).result as SiteThemeState;
+/** A built-in theme by id, or a published theme package with its version. */
+export async function setSiteTheme(theme: string, version?: string | null): Promise<SiteThemeState> {
+  return (await requestAdmin('/api/site-settings/theme', { method: 'PUT', body: JSON.stringify(version ? { theme, version } : { theme }) })).result as SiteThemeState;
+}
+
+// ---------- Theme packages (the theme builder) ----------
+
+export interface ThemeListItem {
+  id: string;
+  name: { en: string; ar: string };
+  builtIn: boolean;
+  kind: string;
+  basedOn: string | null;
+  latestVersion: string | null;
+  draftUpdatedAt: string | null;
+  versions: { version: string; publishedAt?: string; publishedBy?: string; size?: number }[];
+  active: boolean;
+  activeVersion?: string | null;
+}
+
+export async function listThemes(): Promise<{ active: { id: string; version: string | null }; themes: ThemeListItem[] }> {
+  return (await requestAdmin('/api/themes')).result as { active: { id: string; version: string | null }; themes: ThemeListItem[] };
+}
+
+export interface ThemeDetail {
+  id: string;
+  theme: Record<string, unknown> | null;
+  assets: { path: string; size: number }[];
+  validation: { ok: boolean; errors: { path: string; message: string }[]; warnings: { path: string; message: string }[] } | null;
+  versions: { version: string; published_at: string; published_by: string; size_bytes: number }[];
+  latestVersion: string | null;
+  active: boolean;
+  activeVersion: string | null;
+}
+
+export async function getThemeDetail(id: string): Promise<ThemeDetail> {
+  return (await requestAdmin(`/api/themes/${encodeURIComponent(id)}`)).result as ThemeDetail;
 }
 
 // ---------- Contact us inbox ----------

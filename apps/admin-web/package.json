@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack --port 3091",
-    "build": "next build",
+    "dev": "node --experimental-strip-types --no-warnings ../../packages/theme-packages/scripts/admin-kit.ts && next dev --turbopack --port 3091",
+    "build": "node --experimental-strip-types --no-warnings ../../packages/theme-packages/scripts/admin-kit.ts && next build",
     "build:worker": "opennextjs-cloudflare build",
     "start": "next start --port 3091",
     "preview": "opennextjs-cloudflare build && wrangler dev",
@@ -15,12 +15,14 @@
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:report": "playwright show-report",
-    "test": "tsx --test test/*.test.ts"
+    "test": "tsx --test test/*.test.ts",
+    "theme-kit": "node --experimental-strip-types --no-warnings ../../packages/theme-packages/scripts/admin-kit.ts"
   },
   "dependencies": {
+    "@al-ummah-now/openauth": "1.0.15",
     "@al-ummah/logger": "workspace:*",
     "@al-ummah/shared-types": "workspace:*",
-    "@al-ummah-now/openauth": "1.0.15",
+    "@al-ummah/theme-packages": "workspace:*",
     "@opennextjs/cloudflare": "^1.20.1",
     "@tanstack/react-query": "^5.90.11",
     "next": "^16.2.10",
