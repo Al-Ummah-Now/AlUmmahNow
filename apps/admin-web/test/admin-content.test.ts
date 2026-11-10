@@ -9,6 +9,8 @@ import { ADMIN_CONTENT_PERMISSIONS, ADMIN_JOB_KINDS, ADMIN_JOB_STATUSES, type Ad
 import en from '../src/i18n/messages/en';
 import ar from '../src/i18n/messages/ar';
 import { canRetryJob, isActiveJob, jobTargetHref, jobTone } from '../src/components/content/job-helpers';
+import { JOB_KIND_LABEL } from '../src/lib/admin-jobs';
+import { createTranslator } from '../src/i18n/translate';
 import { hrefWith, pickParams } from '../src/components/content/query';
 
 const ARABIC = /[؀-ۿ]/;
@@ -68,9 +70,20 @@ describe('admin content i18n', () => {
   it('labels every job kind, status and target', () => {
     for (const messages of [en, ar] as unknown as Record<string, Tree>[]) {
       const jobs = messages.jobs as Record<string, Record<string, string>>;
-      for (const kind of ADMIN_JOB_KINDS) assert.ok(jobs.kinds[kind], `jobs.kinds.${kind}`);
       for (const status of ADMIN_JOB_STATUSES) assert.ok(jobs.statuses[status], `jobs.statuses.${status}`);
       for (const target of ['channel', 'video', 'user']) assert.ok(jobs.targets[target], `jobs.targets.${target}`);
+    }
+  });
+
+  it('renders a translated label for every job kind through the translator', () => {
+    // Kinds contain a dot; a dot-path lookup of the raw kind finds nothing and shows the key
+    for (const locale of ['en', 'ar'] as const) {
+      const t = createTranslator(locale);
+      for (const kind of ADMIN_JOB_KINDS) {
+        const label = t(JOB_KIND_LABEL[kind]);
+        assert.ok(!label.startsWith('jobs.'), `${locale}: ${kind} shows the raw key ${label}`);
+        if (locale === 'ar') assert.match(label, ARABIC, `${kind} is not Arabic`);
+      }
     }
   });
 

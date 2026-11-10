@@ -1432,16 +1432,6 @@ const ar: Messages = {
       video: 'فيديو',
       user: 'مستخدم',
     },
-    kinds: {
-      'channel.sync-holds': 'تطبيق الإيقاف على الفيديوهات',
-      'channel.purge': 'مسح محتوى القناة',
-      'channel.transfer': 'نقل ملكية القناة',
-      'video.move': 'نقل الفيديو',
-      'video.purge': 'مسح الفيديو',
-      'user.sync-holds': 'تطبيق الحظر على المحتوى',
-      'user.delete-data': 'حذف بيانات الفيديوهات',
-      'profiles.restore-legacy': 'استعادة حقول الملفات الشخصية القديمة',
-    },
     statuses: {
       queued: 'في الانتظار',
       running: 'قيد التشغيل',

@@ -18,7 +18,8 @@ import { fillSecret } from './secret-fill';
 // Signs users in through the auth server: traces would hold the password and code
 test.use({ trace: 'off' });
 
-const JOB_TIMEOUT = 90000;
+// channel.purge scans the playlists bucket in steps (no per-channel index): allow it a couple of minutes
+const JOB_TIMEOUT = 120000;
 
 async function signInAsAdmin(page: Page, prefix: string): Promise<void> {
   const email = sinkEmail(prefix);
@@ -81,7 +82,11 @@ async function findInList(page: Page, url: string, row: ReturnType<Page['locator
     .toBeGreaterThan(0);
 }
 
-/** Waits for the newest job of a kind on the detail page to finish (the panel refreshes itself while one runs). */
+/**
+ * Waits for the newest job of a kind on the detail page to finish. No reloads:
+ * the jobs panel re-reads the page every 3s while a job runs, which is what an
+ * admin sees (and reloading on top of that crashed WebKit's page).
+ */
 async function expectJobSucceeded(page: Page, kind: string): Promise<void> {
   const item = page.locator(`[data-testid="job-item"][data-job-kind="${kind}"]`).first();
   await expect(item).toBeVisible({ timeout: 30000 });
@@ -90,7 +95,6 @@ async function expectJobSucceeded(page: Page, kind: string): Promise<void> {
       async () => {
         const status = await item.getAttribute('data-job-status');
         if (status === 'failed') throw new Error(`${kind} job failed: ${await item.innerText()}`);
-        if (status !== 'succeeded') await page.reload();
         return status;
       },
       { message: `${kind} job did not finish`, timeout: JOB_TIMEOUT, intervals: [3000] },
@@ -114,6 +118,8 @@ async function confirm(page: Page, testId: string, opts: { reason?: string; type
 test.describe('Release: admin content management', () => {
   test('an admin finds, edits, suspends, unsuspends and deletes a channel and its video', async ({ page, browser }, testInfo) => {
     test.skip(!process.env.TEST_PROMOTE_SECRET, 'TEST_PROMOTE_SECRET is not set: cannot create an admin user');
+    // Two sign-ups, three queued jobs and index polling: longer than the suite's default
+    test.setTimeout(360000);
     const tag = `${testInfo.project.name}-${Date.now().toString(36)}`;
 
     const creatorContext = await browser.newContext();

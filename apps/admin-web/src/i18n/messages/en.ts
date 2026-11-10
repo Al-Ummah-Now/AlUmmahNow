@@ -1433,16 +1433,6 @@ const en = {
       video: 'Video',
       user: 'User',
     },
-    kinds: {
-      'channel.sync-holds': 'Apply suspension to videos',
-      'channel.purge': 'Erase channel content',
-      'channel.transfer': 'Transfer channel',
-      'video.move': 'Move video',
-      'video.purge': 'Erase video',
-      'user.sync-holds': 'Apply ban to content',
-      'user.delete-data': 'Delete videos data',
-      'profiles.restore-legacy': 'Restore legacy profile fields',
-    },
     statuses: {
       queued: 'Queued',
       running: 'Running',
