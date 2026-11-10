@@ -335,10 +335,21 @@ jobs:
       env: production
     secrets: inherit
 
+  # Emergency override: while the repository variable RELEASE_SKIP_STAGE_E2E is
+  # "true", a failed stage E2E no longer blocks production (it still runs and
+  # reports). Stage deploy and both secrets checks must still pass, and the
+  # production 0% smoke still gates the promote. Unset the variable afterwards.
   production:
     name: Production (migrate, 0% smoke, promote)
-    needs: [resolve, stage-e2e, secrets-stage, secrets-production]
-    if: needs.resolve.outputs.production == 'true'
+    needs: [resolve, stage, stage-e2e, secrets-stage, secrets-production]
+    if: >-
+      always() &&
+      needs.resolve.outputs.production == 'true' &&
+      needs.stage.result == 'success' &&
+      needs.secrets-stage.result == 'success' &&
+      needs.secrets-production.result == 'success' &&
+      (needs.stage-e2e.result == 'success' ||
+       (vars.RELEASE_SKIP_STAGE_E2E == 'true' && needs.stage-e2e.result == 'failure'))
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     environment:
