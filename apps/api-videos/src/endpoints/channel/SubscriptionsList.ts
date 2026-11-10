@@ -106,7 +106,7 @@ export class SubscriptionsList extends AuthenticatedRoute {
 
 			return c.json({
 				success: true,
-				data: await toPublicChannels(c.env.NOTIFICATIONS_DB, channels),
+				data: await toPublicChannels(c.env.NOTIFICATIONS_DB, channels, c.env as never),
 				total,
 				page,
 				pageSize,

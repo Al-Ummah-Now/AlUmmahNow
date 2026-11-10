@@ -2,6 +2,7 @@ import { Str } from "chanfana";
 import { z } from "zod";
 import { Channel as BusinessChannel, ResponseError } from "../../lib/types";
 import { ChannelView } from "../../lib/model/view";
+import { withIndexedVideoCount } from "../../lib/public-views";
 import { transformChannelToView } from "../../lib/transformations";
 import { isAdminRole } from "../../lib/public-access";
 import R2Repository from "../../lib/r2Repo";
@@ -38,6 +39,6 @@ export class ChannelOwnerFetch extends AuthenticatedRoute {
 			return c.json({ success: false, error: "You do not have permission to view this channel's private fields" }, 403);
 		}
 
-		return c.json(transformChannelToView(channel), 200, { "Cache-Control": "private, no-store" });
+		return c.json(await withIndexedVideoCount(c.env as never, transformChannelToView(channel)), 200, { "Cache-Control": "private, no-store" });
 	}
 }

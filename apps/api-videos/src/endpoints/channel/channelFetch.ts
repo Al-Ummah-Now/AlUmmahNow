@@ -5,8 +5,6 @@ import { PublicChannelView } from "../../lib/model/view";
 import { toPublicChannels } from "../../lib/public-views";
 import R2Repository from "../../lib/r2Repo";
 import { OptionalAuthRoute, AppContext } from "../../base";
-import { channelTotalsFromIndex } from "../../lib/search/ownership";
-import { logger } from "../../lib/logger";
 
 export class ChannelFetch extends OptionalAuthRoute {
 	schema = {
@@ -117,16 +115,10 @@ export class ChannelFetch extends OptionalAuthRoute {
 			}
 
 			// Transform to view model for response
-			const [channelView] = await toPublicChannels(c.env.NOTIFICATIONS_DB, [channel]);
+			const [channelView] = await toPublicChannels(c.env.NOTIFICATIONS_DB, [channel], c.env as never);
 
-			// Uploads don't append to channel.videos, so count from the ownership
-			// index (public, published videos; same rule as /about). Index
-			// unavailable or incomplete: keep the stored count.
-			const totals = await channelTotalsFromIndex(c.env as never, channel.id).catch((error) => {
-				logger.warn('[ChannelFetch] Video count from index failed', { channelId: channel.id, error: error instanceof Error ? error.message : String(error) });
-				return null;
-			});
-			if (totals) channelView.videosCount = totals.videosCount;
+			// videosCount comes from the ownership index (toPublicChannels): uploads
+			// don't append to channel.videos.
 
 			// No queue message per channel read: the processor only logged it (and
 			// rejected anonymous ones), at the cost of queue operations per page load.
