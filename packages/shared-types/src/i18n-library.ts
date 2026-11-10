@@ -45,6 +45,37 @@ export interface LibraryTranslations {
   createChannelForPlaylists: string;
 }
 
+/** CLDR plural forms (Intl.PluralRules): English uses one/other, Arabic all six. */
+export interface PluralTexts {
+  zero?: string;
+  one?: string;
+  two?: string;
+  few?: string;
+  many?: string;
+  other: string;
+}
+
+export interface NotificationToastTranslations {
+  /** Label of the toast region (a landmark screen readers can jump to) */
+  region: string;
+  dismiss: string;
+  view: string;
+  viewAll: string;
+  /** "+3 more" collapse; links to the notifications page */
+  more: PluralTexts;
+  /** One toast for several notifications of the same kind that arrived together */
+  grouped: {
+    uploadReady: PluralTexts;
+    uploadFailed: PluralTexts;
+    newComment: PluralTexts;
+    newSubscriber: PluralTexts;
+    newVideo: PluralTexts;
+    liveStarted: PluralTexts;
+    commentReply: PluralTexts;
+    other: PluralTexts;
+  };
+}
+
 export interface NotificationCenterTranslations {
   title: string;
   bellLabel: string;
@@ -98,6 +129,8 @@ export interface NotificationCenterTranslations {
   minutesAgo: string;
   hoursAgo: string;
   daysAgo: string;
+  /** Real-time toasts (bottom corner). Grouped texts are CLDR plural tables; `{count}` is the localized number. */
+  toasts: NotificationToastTranslations;
 }
 
 export const LIBRARY_EN: LibraryTranslations = {
@@ -231,6 +264,23 @@ export const NOTIFICATION_CENTER_EN: NotificationCenterTranslations = {
   minutesAgo: '{count} min ago',
   hoursAgo: '{count} h ago',
   daysAgo: '{count} d ago',
+  toasts: {
+    region: 'Notifications',
+    dismiss: 'Dismiss notification',
+    view: 'View',
+    viewAll: 'View all',
+    more: { other: '+{count} more' },
+    grouped: {
+      uploadReady: { one: '{count} video finished processing', other: '{count} videos finished processing' },
+      uploadFailed: { one: '{count} video could not be processed', other: '{count} videos could not be processed' },
+      newComment: { one: '{count} new comment on your videos', other: '{count} new comments on your videos' },
+      newSubscriber: { one: '{count} new subscriber', other: '{count} new subscribers' },
+      newVideo: { one: '{count} new video from your subscriptions', other: '{count} new videos from your subscriptions' },
+      liveStarted: { one: '{count} channel went live', other: '{count} channels went live' },
+      commentReply: { one: '{count} new reply to your comments', other: '{count} new replies to your comments' },
+      other: { one: '{count} new notification', other: '{count} new notifications' },
+    },
+  },
 };
 
 export const NOTIFICATION_CENTER_AR: NotificationCenterTranslations = {
@@ -286,4 +336,69 @@ export const NOTIFICATION_CENTER_AR: NotificationCenterTranslations = {
   minutesAgo: 'منذ {count} دقيقة',
   hoursAgo: 'منذ {count} ساعة',
   daysAgo: 'منذ {count} يوم',
+  toasts: {
+    region: 'الإشعارات',
+    dismiss: 'إغلاق الإشعار',
+    view: 'عرض',
+    viewAll: 'عرض الكل',
+    more: { one: '+ إشعار آخر', two: '+ إشعاران آخران', few: '+{count} إشعارات أخرى', many: '+{count} إشعارًا آخر', other: '+{count} إشعار آخر' },
+    grouped: {
+      uploadReady: {
+        one: 'اكتملت معالجة فيديو واحد',
+        two: 'اكتملت معالجة مقطعي فيديو',
+        few: 'اكتملت معالجة {count} مقاطع فيديو',
+        many: 'اكتملت معالجة {count} مقطع فيديو',
+        other: 'اكتملت معالجة {count} مقطع فيديو',
+      },
+      uploadFailed: {
+        one: 'تعذرت معالجة فيديو واحد',
+        two: 'تعذرت معالجة مقطعي فيديو',
+        few: 'تعذرت معالجة {count} مقاطع فيديو',
+        many: 'تعذرت معالجة {count} مقطع فيديو',
+        other: 'تعذرت معالجة {count} مقطع فيديو',
+      },
+      newComment: {
+        one: 'تعليق جديد على فيديوهاتك',
+        two: 'تعليقان جديدان على فيديوهاتك',
+        few: '{count} تعليقات جديدة على فيديوهاتك',
+        many: '{count} تعليقًا جديدًا على فيديوهاتك',
+        other: '{count} تعليق جديد على فيديوهاتك',
+      },
+      newSubscriber: {
+        one: 'مشترك جديد',
+        two: 'مشتركان جديدان',
+        few: '{count} مشتركين جدد',
+        many: '{count} مشتركًا جديدًا',
+        other: '{count} مشترك جديد',
+      },
+      newVideo: {
+        one: 'فيديو جديد من اشتراكاتك',
+        two: 'مقطعا فيديو جديدان من اشتراكاتك',
+        few: '{count} مقاطع فيديو جديدة من اشتراكاتك',
+        many: '{count} مقطع فيديو جديدًا من اشتراكاتك',
+        other: '{count} مقطع فيديو جديد من اشتراكاتك',
+      },
+      liveStarted: {
+        one: 'بدأت قناة بثًا مباشرًا',
+        two: 'بدأت قناتان بثًا مباشرًا',
+        few: 'بدأت {count} قنوات بثًا مباشرًا',
+        many: 'بدأت {count} قناة بثًا مباشرًا',
+        other: 'بدأت {count} قناة بثًا مباشرًا',
+      },
+      commentReply: {
+        one: 'رد جديد على تعليقاتك',
+        two: 'ردان جديدان على تعليقاتك',
+        few: '{count} ردود جديدة على تعليقاتك',
+        many: '{count} ردًا جديدًا على تعليقاتك',
+        other: '{count} رد جديد على تعليقاتك',
+      },
+      other: {
+        one: 'إشعار جديد',
+        two: 'إشعاران جديدان',
+        few: '{count} إشعارات جديدة',
+        many: '{count} إشعارًا جديدًا',
+        other: '{count} إشعار جديد',
+      },
+    },
+  },
 };

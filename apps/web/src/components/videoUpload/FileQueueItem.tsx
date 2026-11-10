@@ -14,6 +14,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useUploadResult } from '@/lib/notifications/upload-results';
 
 interface FileQueueItemProps {
   file: UploadQueueItem;
@@ -33,6 +34,8 @@ export function FileQueueItem({
   onRetry,
 }: FileQueueItemProps) {
   const { t, isRTL: _isRTL } = useLanguage();
+  // Processing result pushed in real time; shown here instead of a toast (NotificationCenter)
+  const processed = useUploadResult(file.status === 'completed' ? file.videoId : null);
 
   const formatBytes = (bytes: number): string => {
     if (bytes === 0) return '0 B';
@@ -152,6 +155,15 @@ export function FileQueueItem({
               <span data-testid="batch-file-status" className={`text-xs font-medium ${getStatusColor(file.status)}`}>
                 {getStatusText(file.status)}
               </span>
+              {processed && (
+                <span
+                  data-testid="batch-file-processed"
+                  data-result={processed}
+                  className={`text-xs font-medium ${processed === 'ready' ? 'text-[var(--fanous-color-success-text)]' : 'text-[var(--fanous-color-error-text)]'}`}
+                >
+                  · {processed === 'ready' ? t.notifications.realtime.uploadReadyTitle : t.upload.processingFailed}
+                </span>
+              )}
             </div>
           </div>
 

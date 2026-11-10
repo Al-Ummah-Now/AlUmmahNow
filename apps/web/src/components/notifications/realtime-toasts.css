@@ -1,0 +1,26 @@
+/* Real-time notification toasts (NotificationCenter).
+   Bottom-end corner so they never cover the header or its menus; mirrored in RTL by the
+   logical insets. Layered just under the sticky header (z 50), whose open menus therefore
+   draw over them, and under the phone drawer, popovers and modals; above the tab bar (44). */
+.rt-toasts{position:fixed;z-index:48;inset-block-end:calc(68px + env(safe-area-inset-bottom));inset-inline:16px;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+@media(min-width:1024px){.rt-toasts{inset-block-end:16px;inset-inline-start:auto;inset-inline-end:16px;width:360px}}
+/* Above the floating mini player (bottom-end, min(360px,70vw) wide, 16:9) */
+@media(min-width:640px){body:has(.custom-video-player[data-mini]) .rt-toasts{inset-block-end:calc(16px + min(360px,70vw) * 9 / 16 + 12px)}}
+.rt-toasts>*{pointer-events:auto}
+.rt-list{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
+.rt-toast.toast{align-items:flex-start;max-width:none;width:100%;margin:0;padding-block:12px;padding-inline:14px 8px;-webkit-backdrop-filter:var(--m-blur);backdrop-filter:var(--m-blur);animation:rt-in 180ms cubic-bezier(.2,0,0,1)}
+.rt-toast .rt-icon{margin-block-start:2px;color:var(--fanous-c-nav-indicator)}
+.rt-toast.err .rt-icon{color:var(--fanous-c-toast-error)}
+.rt-toast .rt-body{flex:1;min-width:0}
+.rt-toast .rt-title{font-size:14px;font-weight:600;line-height:1.35;margin:0;color:var(--fanous-c-toast-text)}
+.rt-toast .rt-message{font-size:13px;line-height:1.4;margin:2px 0 0;color:var(--fanous-color-text-secondary);overflow-wrap:anywhere}
+.rt-toast .rt-foot{display:flex;align-items:center;gap:10px;margin-block-start:8px}
+.rt-toast .rt-time{font-size:12px;color:var(--fanous-color-text-muted)}
+.rt-toast .rt-action{display:inline-flex;align-items:center;min-height:32px;padding-inline:12px;border-radius:var(--r-pill);font-size:13px;font-weight:600;color:var(--fanous-c-button-primary-text)!important;background:var(--fanous-c-button-primary-bg);text-decoration:none}
+.rt-toast .rt-close{display:grid;place-items:center;flex:none;width:32px;height:32px;border:0;border-radius:var(--r-pill);background:transparent;color:var(--fanous-color-text-secondary);cursor:pointer}
+.rt-toast .rt-close svg{width:16px;height:16px;color:inherit}
+@media(hover:hover){.rt-toast .rt-close:hover{background:var(--m-hover)}.rt-toast .rt-action:hover{filter:brightness(1.08)}}
+.rt-toast :is(.rt-close,.rt-action):focus-visible,.rt-more:focus-visible{outline:2px solid var(--fanous-color-focus-ring);outline-offset:2px}
+.rt-more{align-self:flex-end;display:inline-flex;align-items:center;min-height:32px;padding-inline:12px;border-radius:var(--r-pill);font-size:13px;font-weight:600;background:var(--m-raised);box-shadow:var(--m-raised-edge);color:var(--fanous-c-toast-text)!important;text-decoration:none}
+@keyframes rt-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.rt-toast.toast{animation:none}}
