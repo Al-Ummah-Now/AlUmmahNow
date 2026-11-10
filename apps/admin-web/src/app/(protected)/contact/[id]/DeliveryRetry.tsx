@@ -45,11 +45,15 @@ export function DeliveryRetry({ id, kind, noteId }: { id: string; kind: ContactM
   );
 }
 
-/** While an email is queued, re-reads the page every few seconds (for about two minutes). */
-export function RefreshWhileQueued({ active }: { active: boolean }) {
+/**
+ * While an email is queued, re-reads the page every few seconds, for about two
+ * minutes per change: `signature` names the queued emails, so a newly queued
+ * one (a reply sent later) starts a fresh budget.
+ */
+export function RefreshWhileQueued({ signature }: { signature: string }) {
   const router = useRouter();
   useEffect(() => {
-    if (!active) return;
+    if (!signature) return;
     let ticks = 0;
     const timer = setInterval(() => {
       ticks += 1;
@@ -57,6 +61,6 @@ export function RefreshWhileQueued({ active }: { active: boolean }) {
       router.refresh();
     }, 3000);
     return () => clearInterval(timer);
-  }, [active, router]);
+  }, [signature, router]);
   return null;
 }

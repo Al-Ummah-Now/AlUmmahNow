@@ -60,12 +60,19 @@ export default async function ContactMessagePage({ params }: PageProps) {
   const { message: m, notes } = data;
   const delivery = (status: string | null) => (status ? translateDynamic(t, 'delivery', status) : t('delivery.pending'));
   const deliveryClass = (status: string | null) => (status === 'failed' ? 'text-danger-fg font-medium' : '');
-  const queued = m.notify_status === 'queued' || m.ack_status === 'queued' || notes.some((n) => n.email_status === 'queued');
+  // Which emails are still queued: the page re-reads itself while any are
+  const queued = [
+    m.notify_status === 'queued' ? 'notify' : '',
+    m.ack_status === 'queued' ? 'ack' : '',
+    ...notes.filter((n) => n.email_status === 'queued').map((n) => n.id),
+  ]
+    .filter(Boolean)
+    .join(',');
 
   return (
     <div>
       {back}
-      <RefreshWhileQueued active={queued} />
+      <RefreshWhileQueued signature={queued} />
       {m.send_failed_at && (
         <ErrorAlert testId="contact-send-failed">
           <p className="font-medium">{t('contact.sendFailedBanner')}</p>
