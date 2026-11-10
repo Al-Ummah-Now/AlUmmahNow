@@ -108,10 +108,16 @@ function RuntimeConfigScript({ nonce }: { nonce?: string }) {
  * websocket, notifications or consent banner, and no session lookup, so an
  * embed never acts as the viewer even when the browser sent a session cookie.
  */
-function EmbedDocument({ locale, nonce, theme, children }: { locale: string; nonce?: string; theme: string; children: React.ReactNode }) {
+/** A theme package made in the admin: its compiled CSS, scoped to its own data-theme. */
+function ThemePackageStyle({ css, nonce }: { css: string | null; nonce?: string }) {
+  return css ? <style id="theme-package" nonce={nonce} dangerouslySetInnerHTML={{ __html: css }} /> : null;
+}
+
+function EmbedDocument({ locale, nonce, theme, themeCss, children }: { locale: string; nonce?: string; theme: string; themeCss: string | null; children: React.ReactNode }) {
   return (
     <html lang={locale} dir={getTextDirection(locale)} data-theme={theme} suppressHydrationWarning>
       <head>
+        <ThemePackageStyle css={themeCss} nonce={nonce} />
         <RuntimeConfigScript nonce={nonce} />
       </head>
       <body className="font-inter">
@@ -129,10 +135,10 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
   // Per-request CSP nonce set by middleware (production only).
   const nonce = requestHeaders.get(NONCE_HEADER) ?? undefined;
 
-  const theme = await getSiteTheme();
+  const { id: theme, css: themeCss } = await getSiteTheme();
 
   if (requestHeaders.get(EMBED_REQUEST_HEADER) === '1') {
-    return <EmbedDocument locale={locale} nonce={nonce} theme={theme}>{children}</EmbedDocument>;
+    return <EmbedDocument locale={locale} nonce={nonce} theme={theme} themeCss={themeCss}>{children}</EmbedDocument>;
   }
 
   const subject = await authenticated()
@@ -149,6 +155,7 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
           crossOrigin="anonymous"
           referrerPolicy="no-referrer"
         />
+        <ThemePackageStyle css={themeCss} nonce={nonce} />
         <RuntimeConfigScript nonce={nonce} />
       </head>
       <body className="font-inter">

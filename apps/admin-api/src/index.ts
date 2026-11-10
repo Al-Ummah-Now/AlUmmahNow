@@ -5,7 +5,8 @@ import { authMiddleware, adminMiddleware } from "./middleware/auth";
 import { loggingMiddleware } from "./middleware/logging";
 import { logger } from './lib/logger';
 import { registerAllRouters } from './routers';
-import { readSiteTheme } from './lib/siteSettings';
+import { publicSiteTheme } from './lib/siteSettings';
+import themesRouter, { publicThemes } from './routers/themes.router';
 import type { AdminBindings } from './base/types';
 import { contactSubmit } from './endpoints/contact/ContactSubmit';
 
@@ -87,12 +88,15 @@ app.use('/api/*', loggingMiddleware);
 
 // The site theme is public and read by the web apps on every page, so it is short-lived at the edge
 app.get('/public/site-theme', async (c) => {
-  const { theme } = await readSiteTheme((c.env as AdminBindings).REPORTS_DB);
-  return c.json({ theme }, 200, { 'Cache-Control': 'public, max-age=30' });
+  const answer = await publicSiteTheme((c.env as AdminBindings).REPORTS_DB, new URL(c.req.url).origin);
+  return c.json(answer, 200, { 'Cache-Control': 'public, max-age=30' });
 });
 
 // Contact us messages from the videos site's server (X-API-Key; endpoints/contact/ContactSubmit.ts)
 app.post('/internal/contact', (c) => contactSubmit(c as never));
+
+// Published theme packages: compiled CSS, theme.json and assets, immutable per version
+app.route('/public/themes', publicThemes as never);
 
 // Apply auth + admin middleware to all API routes
 app.use('/api/*', authMiddleware);
@@ -125,6 +129,9 @@ const openapi = fromHono(app, {
 // ==========================================
 
 registerAllRouters(openapi);
+
+// Theme builder (zip and file bodies, so plain Hono): /api/themes
+app.route('/api/themes', themesRouter as never);
 
 // ==========================================
 // HEALTH CHECK

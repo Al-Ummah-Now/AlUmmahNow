@@ -8,6 +8,7 @@
 --   apps/admin-api/migrations/0006_site_settings.sql
 --   apps/admin-api/migrations/0007_ai_budget.sql
 --   apps/admin-api/migrations/0008_contact_messages.sql
+--   apps/admin-api/migrations/0009_theme_packages.sql
 
 CREATE TABLE ai_budget_daily (day TEXT NOT NULL, feature TEXT NOT NULL, reserved REAL NOT NULL DEFAULT 0, PRIMARY KEY (day, feature));
 CREATE TABLE ai_usage_daily (day TEXT NOT NULL, model TEXT NOT NULL, feature TEXT NOT NULL DEFAULT 'moderation', calls INTEGER NOT NULL DEFAULT 0, input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0, neurons REAL NOT NULL DEFAULT 0, usd REAL NOT NULL DEFAULT 0, PRIMARY KEY (day, model, feature));
@@ -26,6 +27,8 @@ CREATE TABLE reports (id TEXT PRIMARY KEY, entity_type TEXT NOT NULL CHECK (enti
 CREATE TABLE site_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE site_settings_log (id TEXT PRIMARY KEY, key TEXT NOT NULL, old_value TEXT, new_value TEXT NOT NULL, actor_id TEXT NOT NULL, created_at TEXT NOT NULL);
 CREATE TABLE subscriptions (id TEXT PRIMARY KEY, subject_type TEXT NOT NULL CHECK (subject_type IN ('channel', 'organisation', 'user')), subject_id TEXT NOT NULL, plan_id TEXT NOT NULL REFERENCES plans(id), plan_version INTEGER NOT NULL, status TEXT NOT NULL CHECK (status IN ('trialing', 'active', 'past_due', 'canceled', 'expired')), current_period_start TEXT, current_period_end TEXT, provider TEXT NOT NULL DEFAULT 'manual', provider_subscription_ref TEXT, assigned_by TEXT NOT NULL, reason TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')));
+CREATE TABLE theme_package_versions (theme_id TEXT NOT NULL, version TEXT NOT NULL, size_bytes INTEGER NOT NULL, published_by TEXT NOT NULL, published_at TEXT NOT NULL, PRIMARY KEY (theme_id, version));
+CREATE TABLE theme_packages (id TEXT PRIMARY KEY, name_en TEXT NOT NULL, name_ar TEXT NOT NULL, based_on TEXT, latest_version TEXT, draft_updated_by TEXT NOT NULL, draft_updated_at TEXT NOT NULL, created_by TEXT NOT NULL, created_at TEXT NOT NULL);
 CREATE TABLE usage_counters (subject_type TEXT NOT NULL, subject_id TEXT NOT NULL, key TEXT NOT NULL, period TEXT NOT NULL, value INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY (subject_type, subject_id, key, period));
 CREATE INDEX idx_channel_verification_log_channel ON channel_verification_log (channel_id, created_at);
 CREATE INDEX idx_contact_messages_created ON contact_messages (created_at DESC);

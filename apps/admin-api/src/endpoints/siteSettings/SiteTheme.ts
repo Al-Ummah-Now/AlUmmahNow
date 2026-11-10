@@ -1,12 +1,14 @@
 import { AdminRoute, AppContext } from "../../base";
 import { z } from "zod";
-import { SITE_THEMES } from "@al-ummah/shared-types";
+import { isBuiltInSiteTheme } from "@al-ummah/shared-types";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import { logger } from "../../lib/logger";
 import { readSiteTheme, readSiteThemeHistory, writeSiteTheme } from "../../lib/siteSettings";
+import type { SiteThemeRef } from "@al-ummah/shared-types";
 
 const ThemeState = z.object({
-  theme: z.enum(SITE_THEMES),
+  theme: z.string(),
+  version: z.string().nullable(),
   isDefault: z.boolean(),
   updatedBy: z.string().nullable(),
   updatedAt: z.string().nullable(),
@@ -30,13 +32,14 @@ export class SiteThemePut extends AdminRoute {
   schema = addAuthToSchema({
     tags: ["Site settings"],
     summary: "Set the site theme",
-    description: "Admins only. Changes the theme for the whole site and appends an audit row.",
+    description: "Admins only. Changes the theme for the whole site and appends an audit row. A built-in theme is its id; a theme package made in the theme builder also needs a published version.",
     request: {
-      body: { content: { "application/json": { schema: z.object({ theme: z.enum(SITE_THEMES) }) } } },
+      body: { content: { "application/json": { schema: z.object({ theme: z.string().regex(/^[a-z][a-z0-9-]{1,39}$/), version: z.string().regex(/^\d+\.\d+\.\d+$/).optional() }) } } },
     },
     responses: {
       "200": { description: "Updated site theme", content: { "application/json": { schema: z.object({ success: z.boolean(), changed: z.boolean(), result: ThemeState }) } } },
       "403": { description: "Admin role required" },
+      "404": { description: "No such theme or published version" },
     },
   });
 
@@ -47,8 +50,20 @@ export class SiteThemePut extends AdminRoute {
     }
     const { body } = await this.getValidatedData<typeof this.schema>();
     const actorId = this.getUserId(c);
-    const changed = await writeSiteTheme(c.env.REPORTS_DB, body.theme, actorId, crypto.randomUUID(), new Date().toISOString());
-    if (changed) logger.info('[SiteTheme] Site theme changed', { theme: body.theme, actorId });
+    let ref: SiteThemeRef;
+    if (isBuiltInSiteTheme(body.theme)) {
+      ref = { id: body.theme, version: null };
+    } else {
+      if (!body.version) return c.json({ success: false, error: 'A custom theme needs its published version' }, 400);
+      const published = await c.env.REPORTS_DB
+        .prepare('SELECT version FROM theme_package_versions WHERE theme_id = ? AND version = ?')
+        .bind(body.theme, body.version)
+        .first<{ version: string }>();
+      if (!published) return c.json({ success: false, error: `${body.theme}@${body.version} is not a published theme` }, 404);
+      ref = { id: body.theme, version: body.version };
+    }
+    const changed = await writeSiteTheme(c.env.REPORTS_DB, ref, actorId, crypto.randomUUID(), new Date().toISOString());
+    if (changed) logger.info('[SiteTheme] Site theme changed', { theme: body.theme, version: ref.version, actorId });
     return { success: true, changed, result: await readSiteTheme(c.env.REPORTS_DB) };
   }
 }

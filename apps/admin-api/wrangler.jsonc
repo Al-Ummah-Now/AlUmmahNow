@@ -72,6 +72,13 @@
 			"bucket_name": "community-posts",
 			"preview_bucket_name": "community-posts-preview",
 			"remote": true
+		},
+		{
+			// Theme packages made in the admin theme builder (src/lib/themePackages.ts)
+			"binding": "theme_packages",
+			"bucket_name": "theme-packages",
+			"preview_bucket_name": "theme-packages-preview",
+			"remote": true
 		}
 	],
 
@@ -167,6 +174,10 @@
 				{
 					"binding": "community_posts",
 					"bucket_name": "community-posts-stage"
+				},
+				{
+					"binding": "theme_packages",
+					"bucket_name": "theme-packages-stage"
 				}
 			],
 			"queues": {

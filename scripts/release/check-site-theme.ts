@@ -8,14 +8,21 @@ type Fetch = (url: string) => Promise<Pick<Response, 'ok' | 'status' | 'json' | 
 export async function checkSiteTheme(adminApi: string, web: string, fetchFn: Fetch = fetch): Promise<string> {
 	const response = await fetchFn(`${adminApi}/public/site-theme`);
 	if (!response.ok) throw new Error(`/public/site-theme answered ${response.status}; has migration 0006 been applied?`);
-	const { theme } = (await response.json()) as { theme?: string };
-	if (!theme || !THEMES.includes(theme)) throw new Error(`Unknown site theme: ${theme}`);
+	const { theme, package: pkg } = (await response.json()) as { theme?: string; package?: { id: string; version: string; css: string } };
+	if (!theme) throw new Error(`Unknown site theme: ${theme}`);
+	// A theme package made in the admin: its compiled CSS must be served
+	if (!THEMES.includes(theme)) {
+		if (!pkg || pkg.id !== theme) throw new Error(`Unknown site theme: ${theme}`);
+		const css = await fetchFn(pkg.css);
+		if (!css.ok) throw new Error(`The CSS of ${theme}@${pkg.version} answered ${css.status}`);
+		if (!(await css.text()).includes(`html[data-theme='${theme}']`)) throw new Error(`The CSS of ${theme}@${pkg.version} is not scoped to it`);
+	}
 
 	const html = await (await fetchFn(`${web}/en`)).text();
-	const rendered = /<html[^>]*data-theme="(\w+)"/.exec(html)?.[1];
+	const rendered = /<html[^>]*data-theme="([a-z][a-z0-9-]*)"/.exec(html)?.[1];
 	if (!rendered) throw new Error('The first HTML has no data-theme');
-	if (!THEMES.includes(rendered)) throw new Error(`The site renders an unknown theme: ${rendered}`);
-	return `Site theme ${theme}; the site renders ${rendered} (they can differ for up to a minute after a change).`;
+	if (!THEMES.includes(rendered) && !(pkg && rendered === pkg.id && html.includes('id="theme-package"'))) throw new Error(`The site renders an unknown theme: ${rendered}`);
+	return `Site theme ${theme}${pkg ? `@${pkg.version}` : ''}; the site renders ${rendered} (they can differ for up to a minute after a change).`;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

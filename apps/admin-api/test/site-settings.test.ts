@@ -23,7 +23,7 @@ function fakeDb() {
 describe('site theme setting', () => {
   it('is fawanees when unset', async () => {
     const { db } = fakeDb();
-    assert.deepEqual(await readSiteTheme(db), { theme: 'fawanees', isDefault: true, updatedBy: null, updatedAt: null });
+    assert.deepEqual(await readSiteTheme(db), { theme: 'fawanees', version: null, isDefault: true, updatedBy: null, updatedAt: null });
   });
 
   it('falls back to fawanees for a value that is not a theme', async () => {
