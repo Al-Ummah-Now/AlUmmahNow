@@ -1,13 +1,14 @@
 /**
  * The "Add channel section" dialog: the section-type picker (option cards grouped under
- * headings), picking a type opens its form, keyboard use (arrow keys, Home/End, Escape) in
+ * Videos, Playlists, Channels and Community), picking a type opens its form, keyboard use (arrow keys, Home/End, Escape) in
  * both directions, and the option-card styles reading theme part tokens only.
  */
 import React from 'react';
 import fs from 'fs';
 import path from 'path';
 import { render, screen, within, fireEvent, waitFor } from '@testing-library/react';
-import { AddSectionDialog, SECTION_TYPES, SECTION_TYPE_GROUPS } from '../management/AddSectionDialog';
+import { CHANNEL_SECTION_TYPES } from '@al-ummah/shared-types';
+import { AddSectionDialog, SECTION_CARD_GROUPS, cardKey } from '../management/AddSectionDialog';
 
 const mockLanguage = { isRTL: false };
 
@@ -23,9 +24,15 @@ jest.mock('@/hooks/useLanguage', () => ({
     };
   },
 }));
+jest.mock('@/lib/api/channels', () => ({
+  getChannelVideos: jest.fn().mockResolvedValue({ data: [], cursor: '', limit: 50 }),
+  getChannelPlaylists: jest.fn().mockResolvedValue({ data: [], cursor: '', limit: 50 }),
+}));
+jest.mock('@/lib/api/videos', () => ({ getVideoById: jest.fn() }));
+jest.mock('@/lib/api/search', () => ({ searchContent: jest.fn() }));
 
-function openDialog(onAdd = jest.fn()) {
-  render(<AddSectionDialog channelId="ch-1" onAdd={onAdd} />);
+function openDialog(onAdd = jest.fn().mockResolvedValue(null)) {
+  render(<AddSectionDialog channelId="ch-1" existing={[]} canGrantConsent onAdd={onAdd} />);
   fireEvent.click(screen.getByTestId('add-section-button'));
   return screen.getByRole('dialog');
 }
@@ -44,16 +51,17 @@ describe('AddSectionDialog', () => {
 
     const picker = within(dialog).getByTestId('section-type-options');
     const groups = within(picker).getAllByRole('group');
-    expect(groups.map((g) => g.getAttribute('aria-labelledby') && document.getElementById(g.getAttribute('aria-labelledby')!)?.textContent)).toEqual(['Videos', 'Playlists', 'Channels']);
+    expect(groups.map((g) => g.getAttribute('aria-labelledby') && document.getElementById(g.getAttribute('aria-labelledby')!)?.textContent)).toEqual(['Videos', 'Playlists', 'Channels', 'Community']);
 
+    // Every type has a card; live streams have two (live and upcoming, past)
     const types = options(dialog).map((o) => o.dataset.sectionType);
-    expect(types).toHaveLength(7);
-    expect([...types].sort()).toEqual([...SECTION_TYPES].sort());
-    expect(types).toEqual(SECTION_TYPE_GROUPS.flatMap((g) => g.types));
+    expect(types).toHaveLength(14);
+    expect([...new Set(types)].sort()).toEqual([...CHANNEL_SECTION_TYPES].sort());
+    expect(options(dialog).map((o) => o.dataset.sectionCard)).toEqual(SECTION_CARD_GROUPS.flatMap((g) => g.cards.map(cardKey)));
 
     // Each card: a button named by all it shows (title, then its one-line description), with an icon
-    const recent = within(dialog).getByRole('button', { name: /^Recent uploads/ });
-    expect(recent).toHaveAccessibleName('Recent uploads Your latest videos');
+    const recent = within(dialog).getByRole('button', { name: /^Latest videos/ });
+    expect(recent).toHaveAccessibleName('Latest videos Your newest videos');
     expect(recent).toHaveClass('opt');
     expect(recent).toHaveAttribute('type', 'button');
     expect(recent.querySelector('.opt-icon svg')).not.toBeNull();
@@ -65,21 +73,21 @@ describe('AddSectionDialog', () => {
     const dialog = openDialog();
     fireEvent.click(within(dialog).getByRole('button', { name: /^Featured playlists/ }));
 
-    expect(within(dialog).getByRole('heading', { name: 'Configure section' })).toBeInTheDocument();
-    expect(dialog).toHaveAccessibleDescription('Specific playlists you choose');
+    expect(within(dialog).getByRole('heading', { name: 'Featured playlists' })).toBeInTheDocument();
+    expect(dialog).toHaveAccessibleDescription('Playlists you pick');
     expect(within(dialog).queryByTestId('section-type-options')).toBeNull();
     expect(within(dialog).getByLabelText(/Section title/)).toBeInTheDocument();
-    expect(within(dialog).getByLabelText(/Playlist IDs/)).toBeInTheDocument();
+    expect(await within(dialog).findByTestId('playlist-picker-options')).toBeInTheDocument();
 
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Back' }));
     expect(within(dialog).getByRole('heading', { name: 'Add channel section' })).toBeInTheDocument();
     await waitFor(() => expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: /^Featured playlists/ })));
   });
 
   it('submits the picked type through onAdd and closes', async () => {
-    const onAdd = jest.fn().mockResolvedValue(undefined);
+    const onAdd = jest.fn().mockResolvedValue(null);
     const dialog = openDialog(onAdd);
-    fireEvent.click(within(dialog).getByRole('button', { name: /^Recent uploads/ }));
+    fireEvent.click(within(dialog).getByRole('button', { name: /^Latest videos/ }));
     fireEvent.change(within(dialog).getByLabelText(/Section title/), { target: { value: 'Newest' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create section' }));
 
@@ -99,16 +107,17 @@ describe('AddSectionDialog', () => {
     expect(document.activeElement).toBe(all[2]);
     fireEvent.keyDown(all[2], { key: 'ArrowUp' });
     expect(document.activeElement).toBe(all[1]);
+    const last = all.length - 1;
     fireEvent.keyDown(all[1], { key: 'End' });
-    expect(document.activeElement).toBe(all[6]);
-    fireEvent.keyDown(all[6], { key: 'ArrowDown' }); // wraps
+    expect(document.activeElement).toBe(all[last]);
+    fireEvent.keyDown(all[last], { key: 'ArrowDown' }); // wraps
     expect(document.activeElement).toBe(all[0]);
     fireEvent.keyDown(all[0], { key: 'Home' });
     expect(document.activeElement).toBe(all[0]);
     // The focused card is now the one Tab reaches
     fireEvent.keyDown(all[0], { key: 'ArrowLeft' });
-    expect(document.activeElement).toBe(all[6]);
-    expect(all.filter((o) => o.tabIndex === 0)).toEqual([all[6]]);
+    expect(document.activeElement).toBe(all[last]);
+    expect(all.filter((o) => o.tabIndex === 0)).toEqual([all[last]]);
   });
 
   it('in Arabic the dialog is right-to-left and ArrowLeft moves forward', async () => {
@@ -117,12 +126,27 @@ describe('AddSectionDialog', () => {
     expect(dialog).toHaveAttribute('dir', 'rtl');
     expect(within(dialog).getByRole('heading', { name: 'إضافة قسم للقناة' })).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: /^أحدث الفيديوهات/ })).toHaveAccessibleName('أحدث الفيديوهات أحدث فيديوهاتك');
+    expect(within(dialog).getByRole('heading', { name: 'المجتمع' })).toBeInTheDocument();
     const all = options(dialog);
     await waitFor(() => expect(document.activeElement).toBe(all[0]));
     fireEvent.keyDown(all[0], { key: 'ArrowLeft' });
     expect(document.activeElement).toBe(all[1]);
     fireEvent.keyDown(all[1], { key: 'ArrowRight' });
     expect(document.activeElement).toBe(all[0]);
+  });
+
+  it('skips cards at their limit: disabled, marked and out of the arrow-key path', async () => {
+    render(<AddSectionDialog channelId="ch-1" existing={[{ type: 'channel_spotlight' }, { type: 'recent_uploads' }]} canGrantConsent onAdd={jest.fn()} />);
+    fireEvent.click(screen.getByTestId('add-section-button'));
+    const dialog = screen.getByRole('dialog');
+    const spotlight = dialog.querySelector<HTMLButtonElement>('[data-section-card="channel_spotlight"]')!;
+    expect(spotlight).toBeDisabled();
+    expect(spotlight).toHaveAccessibleName('Channel spotlight Already on your channel');
+    const featured = dialog.querySelector<HTMLButtonElement>('[data-section-card="featured_videos"]')!;
+    await waitFor(() => expect(document.activeElement).toBe(featured));
+    fireEvent.keyDown(featured, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(dialog.querySelector('[data-section-card="popular_uploads"]'));
+    expect(within(dialog).getByRole('button', { name: /^Liked videos/ })).toHaveAccessibleName('Liked videos Videos you liked, shown publicly Private data');
   });
 
   it('Escape closes the dialog and focus returns to the Add section button', async () => {

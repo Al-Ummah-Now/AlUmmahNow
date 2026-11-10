@@ -1,39 +1,76 @@
 import { test, expect } from './fixtures';
 import { AxeBuilder } from '@axe-core/playwright';
-import type { Locator, Page } from '@playwright/test';
+import type { Browser, Locator, Page } from '@playwright/test';
 import { ANONYMOUS_STATE, AUTH_STATE } from './test-utils/auth-state';
 import {
   channelsOf,
   clickUntil,
+  createPlaylist,
   createSection,
+  createTextPost,
+  deletePlaylistQuietly,
+  deletePostsContaining,
+  deleteSectionsOfType,
   deleteSectionsTitled,
   expectRtl,
   fillStable,
   findQaLecturesChannel,
-  listChannelPlaylists,
   listPublicChannelVideos,
   listSections,
   tempName,
   keyboardMoveDown,
   withLock,
 } from './test-utils/channel-content';
+import { setupPublicDisposable } from './test-utils/e2e-videos';
 
 /**
- * Channel sections: the owner's section manager
- * (/[locale]/settings/channel/[id]/sections: add, edit, reorder, delete) and
- * how sections render on the channel Home tab; plus the /[locale]/sections
- * video-sections page.
+ * Channel sections (docs/specs/CHANNEL-SECTIONS.md): the owner's section
+ * manager (/[locale]/settings/channel/[id]/sections: add, edit, reorder,
+ * delete), every section type added through the grouped dialog and drawn on
+ * the channel Home tab, for the owner and for a signed-out visitor; plus the
+ * /[locale]/sections video-sections page.
  *
- * Writes go to the single user's own channel. Every section a test creates
- * has a unique "E2E Temp …" title and is deleted afterwards. Tests that change
- * the channel's section list hold a run-wide lock, because the reorder API
- * takes the full list of section ids.
+ * Writes go to the single user's own channel. Tests that change the channel's
+ * section list hold a run-wide lock, because the reorder API takes the full
+ * list of section ids and most types can be added once per channel. Sections
+ * with a temp title are deleted by title; default-titled ones by type.
  */
 
 const owner = 'single' as const;
 const channelId = () => channelsOf(owner).main.id;
+const MAX_SECTIONS = 12;
+const LOCK_WAIT = 600_000;
 
-async function openManager(page: Page, locale: 'en' | 'ar' = 'en') {
+type Locale = 'en' | 'ar';
+
+const UI = {
+  en: {
+    addSection: 'Add section',
+    addChannelSection: 'Add channel section',
+    created: 'Section created successfully',
+    deleted: 'Section deleted successfully',
+    published: 'Sections published successfully!',
+    publish: 'Publish',
+    deleteSection: 'Delete section',
+    delete: 'Delete',
+    back: 'Back',
+    automatic: 'Automatic content',
+  },
+  ar: {
+    addSection: 'إضافة قسم',
+    addChannelSection: 'إضافة قسم للقناة',
+    created: 'تم إنشاء القسم بنجاح',
+    deleted: 'تم حذف القسم بنجاح',
+    published: 'تم نشر الأقسام بنجاح!',
+    publish: 'نشر',
+    deleteSection: 'حذف القسم',
+    delete: 'حذف',
+    back: 'رجوع',
+    automatic: 'محتوى تلقائي',
+  },
+} as const;
+
+async function openManager(page: Page, locale: Locale = 'en') {
   await page.goto(`/${locale}/settings/channel/${channelId()}/sections`);
   await expect(page.getByTestId('sections-count')).toBeVisible();
 }
@@ -42,10 +79,21 @@ function sectionRow(page: Page, title: string): Locator {
   return page.getByTestId('section-item').filter({ has: page.getByTestId('section-item-title').getByText(title, { exact: true }) });
 }
 
-async function openAddDialog(page: Page, label = 'Add section') {
+async function openAddDialog(page: Page, locale: Locale = 'en') {
   const dialog = page.getByRole('dialog');
-  await clickUntil(page.getByRole('button', { name: label }), async () => expect(dialog).toBeVisible({ timeout: 3000 }));
+  await clickUntil(page.getByRole('button', { name: UI[locale].addSection }), async () => expect(dialog).toBeVisible({ timeout: 3000 }));
+  await expect(dialog.getByTestId('section-type-options')).toBeVisible();
   return dialog;
+}
+
+/** Deletes a section row through its delete button and the confirmation */
+async function deleteRow(page: Page, row: Locator, locale: Locale) {
+  await row.getByTestId('section-delete').click();
+  const confirm = page.getByRole('alertdialog');
+  await expect(confirm.getByRole('heading', { name: UI[locale].deleteSection })).toBeVisible();
+  await confirm.getByRole('button', { name: UI[locale].delete, exact: true }).click();
+  await expect(row).toHaveCount(0);
+  await expect(page.getByRole('status').filter({ hasText: UI[locale].deleted })).toBeVisible();
 }
 
 test.describe('Section manager', () => {
@@ -55,8 +103,8 @@ test.describe('Section manager', () => {
     const existing = await listSections(owner, channelId());
     await openManager(page);
     await expect(page.getByRole('heading', { level: 1, name: 'Channel sections' })).toBeVisible();
-    await expect(page.getByText('Customize your channel layout (max 10 sections)')).toBeVisible();
-    await expect(page.getByTestId('sections-count')).toHaveText(`${existing.length} of 10 sections used`);
+    await expect(page.getByText(`Customize your channel layout (max ${MAX_SECTIONS} sections)`)).toBeVisible();
+    await expect(page.getByTestId('sections-count')).toHaveText(`${existing.length} of ${MAX_SECTIONS} sections used`);
     await expect(page.getByTestId('publish-sections')).toBeDisabled();
 
     const crumbs = page.getByTestId('channel-settings-breadcrumb');
@@ -68,49 +116,60 @@ test.describe('Section manager', () => {
     await expect(crumbs.locator('[aria-current="page"]')).toHaveText('Manage Sections');
   });
 
-  test('SECT-002 adds an automatic section that then renders on the channel Home tab', async ({ page }) => {
+  test('SECT-002 adds a titled automatic section that then renders on the channel Home tab', async ({ page }) => {
     const title = tempName('Recent');
-    await withLock('sections', async () => {
-      try {
-        await openManager(page);
-        const dialog = await openAddDialog(page);
-        await expect(dialog.getByRole('heading', { name: 'Add channel section' })).toBeVisible();
-        await expect(dialog.locator('[data-section-type]')).toHaveCount(7);
-        await dialog.locator('[data-section-type="recent_uploads"]').click();
-        await expect(dialog.getByRole('heading', { name: 'Configure section' })).toBeVisible();
-        await expect(dialog).toContainText('This section type will automatically display content from your channel.');
-        await fillStable(dialog.getByLabel('Section title'), title);
-        await expect(dialog.getByText(`${title.length}/100 characters`)).toBeVisible();
-        await dialog.getByRole('button', { name: 'Create section' }).click();
+    await withLock(
+      'sections',
+      async () => {
+        try {
+          await deleteSectionsOfType(owner, channelId(), ['recent_uploads']);
+          await openManager(page);
+          const dialog = await openAddDialog(page);
+          await expect(dialog.getByRole('heading', { name: 'Add channel section' })).toBeVisible();
+          await dialog.locator('[data-section-card="recent_uploads"]').click();
+          await expect(dialog.getByRole('heading', { name: 'Latest videos' })).toBeVisible();
+          await expect(dialog.getByText('Your newest videos')).toBeVisible();
+          await fillStable(dialog.getByLabel('Section title'), title);
+          await dialog.getByTestId('section-form-submit').click();
 
-        await expect(dialog).toBeHidden();
-        await expect(page.getByRole('status').filter({ hasText: 'Section created successfully' })).toBeVisible();
-        const row = sectionRow(page, title);
-        await expect(row).toBeVisible();
-        await expect(row).toContainText('Recent uploads · Automatic content');
-        expect((await listSections(owner, channelId())).some((s) => s.title === title && s.type === 'recent_uploads')).toBe(true);
+          await expect(dialog).toBeHidden();
+          await expect(page.getByRole('status').filter({ hasText: 'Section created successfully' })).toBeVisible();
+          const row = sectionRow(page, title);
+          await expect(row).toBeVisible();
+          await expect(row).toContainText('Latest videos, Automatic content');
+          expect((await listSections(owner, channelId())).some((s) => s.title === title && s.type === 'recent_uploads')).toBe(true);
 
-        // Public channel page: the section heading uses the owner's title
-        await page.goto(`/en/channels/${channelId()}`);
-        await expect(page.getByTestId('tabpanel-home').getByRole('heading', { name: title })).toBeVisible();
-      } finally {
-        await deleteSectionsTitled(owner, channelId(), title);
-      }
-    });
+          // The card is at its limit now: it stays in the list, closed
+          const again = await openAddDialog(page);
+          await expect(again.locator('[data-section-card="recent_uploads"]')).toBeDisabled();
+          await expect(again.locator('[data-section-card="recent_uploads"]')).toContainText('Already on your channel');
+          await page.keyboard.press('Escape');
+
+          // Channel Home, as the owner: the section heading uses the owner's title (a note when there's nothing to show)
+          await page.goto(`/en/channels/${channelId()}`);
+          await expect(page.getByTestId('channel-section-recent_uploads').getByRole('heading', { name: title })).toBeVisible();
+        } finally {
+          await deleteSectionsTitled(owner, channelId(), title);
+        }
+      },
+      LOCK_WAIT
+    );
   });
 
   for (const [locale, colorScheme] of [['en', 'dark'], ['ar', 'light']] as const) {
     test(`SECT-011 the section-type picker is option cards: grouped, keyboard, WCAG AA (${locale}, ${colorScheme})`, async ({ page }) => {
       await page.emulateMedia({ colorScheme });
       await openManager(page, locale);
-      const dialog = await openAddDialog(page, locale === 'ar' ? 'إضافة قسم' : 'Add section');
+      const dialog = await openAddDialog(page, locale);
       await expect(dialog).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
       const picker = dialog.getByTestId('section-type-options');
-      await expect(picker.getByRole('group')).toHaveCount(3);
-      const options = dialog.locator('[data-section-type]');
-      await expect(options).toHaveCount(7);
+      // Videos, Playlists, Channels, Community; live streams have a card per filter
+      await expect(picker.getByRole('group')).toHaveCount(4);
+      await expect(picker.getByRole('group').last().getByRole('heading')).toHaveText(locale === 'ar' ? 'المجتمع' : 'Community');
+      const options = dialog.locator('[data-section-card]');
+      await expect(options).toHaveCount(14);
 
-      // Cards, not primary buttons: not a pill, and the title is not on the primary gold
+      // Cards, not primary buttons: not a pill, and big enough to tap
       const look = await options.first().evaluate((el) => {
         const cs = getComputedStyle(el);
         return { radius: parseFloat(cs.borderTopLeftRadius), height: el.getBoundingClientRect().height };
@@ -118,156 +177,192 @@ test.describe('Section manager', () => {
       expect(look.radius).toBeLessThan(look.height / 3);
       expect(look.height).toBeGreaterThanOrEqual(44);
 
-      // The first card has focus; the arrow keys move through the cards (ArrowLeft is forward in Arabic)
-      await expect(options.first()).toBeFocused();
+      // Private data is labelled on its cards
+      await expect(dialog.locator('[data-section-card="liked_videos"]')).toContainText(locale === 'ar' ? 'بيانات خاصة' : 'Private data');
+
+      // The first open card has focus; the arrow keys move through the open cards (ArrowLeft is forward in Arabic)
+      const open = dialog.locator('[data-section-card]:not(:disabled)');
+      await expect(open.first()).toBeFocused();
       await page.keyboard.press(locale === 'ar' ? 'ArrowLeft' : 'ArrowRight');
-      await expect(options.nth(1)).toBeFocused();
+      await expect(open.nth(1)).toBeFocused();
       await page.keyboard.press('End');
-      await expect(options.last()).toBeFocused();
+      await expect(open.last()).toBeFocused();
 
       const axe = await new AxeBuilder({ page }).include('[role="dialog"]').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
       expect(axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`)).toEqual([]);
 
-      // Enter picks the focused type and moves on to its form; Escape closes
+      // Enter picks the focused card and moves on to its form, titled with the card; Back returns to it; Escape closes
       await page.keyboard.press('Home');
+      const first = await open.first().getAttribute('data-section-card');
       await page.keyboard.press('Enter');
-      await expect(dialog.getByRole('heading', { name: locale === 'ar' ? 'إعداد القسم' : 'Configure section' })).toBeVisible();
+      await expect(dialog.getByTestId('section-form')).toBeVisible();
+      if (first === 'channel_spotlight') {
+        await expect(dialog.getByRole('heading', { name: locale === 'ar' ? 'واجهة القناة' : 'Channel spotlight' })).toBeVisible();
+      }
+      await dialog.getByRole('button', { name: UI[locale].back }).click();
+      await expect(dialog.locator(`[data-section-card="${first}"]`)).toBeFocused();
       await page.keyboard.press('Escape');
       await expect(dialog).toBeHidden();
       await expect(page.getByTestId('add-section-button')).toBeFocused();
     });
   }
 
-  test('SECT-003 validates featured-video and playlist sections', async ({ page }) => {
+  test('SECT-003 validates picks and titles before saving', async ({ page }) => {
     await openManager(page);
     const dialog = await openAddDialog(page);
 
-    await dialog.locator('[data-section-type="featured_videos"]').click();
-    await dialog.getByRole('button', { name: 'Create section' }).click();
-    await expect(dialog.locator('#videoIds-error')).toHaveText('At least one video ID is required');
-    await expect(dialog.getByLabel('Video IDs')).toHaveAttribute('aria-invalid', 'true');
+    await dialog.locator('[data-section-card="featured_videos"]').click();
+    await dialog.getByTestId('section-form-submit').click();
+    await expect(dialog.getByRole('alert').filter({ hasText: 'Pick at least one.' })).toBeVisible();
 
     await fillStable(dialog.getByLabel('Section title'), 'Bad <title>');
-    await dialog.getByRole('button', { name: 'Create section' }).click();
-    await expect(dialog.locator('#title-error')).toHaveText('Title cannot contain < or > characters');
+    await dialog.getByTestId('section-form-submit').click();
+    await expect(dialog.getByRole('alert').filter({ hasText: 'Title cannot contain < or > characters' })).toBeVisible();
 
-    // Cancel returns to the type picker
-    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    // Back returns to the cards
+    await dialog.getByRole('button', { name: 'Back' }).click();
     await expect(dialog.getByRole('heading', { name: 'Add channel section' })).toBeVisible();
 
-    await dialog.locator('[data-section-type="single_playlist"]').click();
-    await fillStable(dialog.getByLabel(/Playlist IDs/), 'one, two');
-    await dialog.getByRole('button', { name: 'Create section' }).click();
-    await expect(dialog.locator('#playlists-error')).toHaveText('Single playlist section requires exactly one playlist ID');
+    // Featured playlists and featured channels need a title of their own
+    await dialog.locator('[data-section-card="multiple_playlists"]').click();
+    await dialog.getByTestId('section-form-submit').click();
+    await expect(dialog.getByRole('alert').filter({ hasText: 'Give this section a title, for example "Our scholars".' })).toBeVisible();
+    await expect(dialog.getByRole('alert').filter({ hasText: 'Pick at least one.' })).toBeVisible();
 
-    await dialog.getByRole('button', { name: 'Cancel' }).click();
-    await dialog.locator('[data-section-type="multiple_playlists"]').click();
-    await dialog.getByRole('button', { name: 'Create section' }).click();
-    await expect(dialog.locator('#title-error')).toHaveText('Title is required for this section type');
-    await expect(dialog.locator('#playlists-error')).toHaveText('At least one playlist is required');
+    await dialog.getByRole('button', { name: 'Back' }).click();
+    await dialog.locator('[data-section-card="subscribed_channels"]').click();
+    await dialog.getByTestId('section-form-submit').click();
+    await expect(dialog.getByRole('alert').filter({ hasText: 'Confirm that visitors may see this.' })).toBeVisible();
 
     await dialog.getByRole('button', { name: 'Close' }).click();
     await expect(dialog).toBeHidden();
+    expect((await listSections(owner, channelId())).some((s) => s.title?.startsWith('Bad'))).toBe(false);
   });
 
   test('SECT-004 edits a section title', async ({ page }) => {
     const title = tempName('Edit');
     const renamed = `${title} renamed`;
-    await withLock('sections', async () => {
-      try {
-        await createSection(owner, channelId(), { type: 'popular_uploads', title });
-        await openManager(page);
-        await sectionRow(page, title).getByRole('button', { name: `Edit section: ${title}` }).click();
-        const dialog = page.getByRole('dialog');
-        await expect(dialog.getByRole('heading', { name: 'Edit section' })).toBeVisible();
-        await expect(dialog.getByLabel('Section title')).toHaveValue(title);
-        await dialog.getByLabel('Section title').fill(renamed);
-        await dialog.getByRole('button', { name: 'Save changes' }).click();
+    await withLock(
+      'sections',
+      async () => {
+        try {
+          await deleteSectionsOfType(owner, channelId(), ['popular_uploads']);
+          await createSection(owner, channelId(), { type: 'popular_uploads', title });
+          await openManager(page);
+          await sectionRow(page, title).getByRole('button', { name: `Edit section: ${title}` }).click();
+          const dialog = page.getByRole('dialog');
+          await expect(dialog.getByRole('heading', { name: 'Edit section' })).toBeVisible();
+          await expect(dialog.getByLabel('Section title')).toHaveValue(title);
+          await dialog.getByLabel('Section title').fill(renamed);
+          await dialog.getByRole('button', { name: 'Save changes' }).click();
 
-        await expect(dialog).toBeHidden();
-        await expect(page.getByRole('status').filter({ hasText: 'Section updated successfully' })).toBeVisible();
-        await expect(sectionRow(page, renamed)).toBeVisible();
-        await expect.poll(async () => (await listSections(owner, channelId())).map((s) => s.title)).toContain(renamed);
-      } finally {
-        await deleteSectionsTitled(owner, channelId(), title);
-      }
-    });
+          await expect(dialog).toBeHidden();
+          await expect(page.getByRole('status').filter({ hasText: 'Section updated successfully' })).toBeVisible();
+          await expect(sectionRow(page, renamed)).toBeVisible();
+          await expect.poll(async () => (await listSections(owner, channelId())).map((s) => s.title)).toContain(renamed);
+        } finally {
+          await deleteSectionsTitled(owner, channelId(), title);
+        }
+      },
+      LOCK_WAIT
+    );
   });
 
-  test('SECT-005 reorders sections with the keyboard and publishes the order', async ({ page }) => {
-    const first = tempName('First');
-    const second = tempName('Second');
-    await withLock('sections', async () => {
-      try {
-        await createSection(owner, channelId(), { type: 'recent_uploads', title: first });
-        await createSection(owner, channelId(), { type: 'popular_uploads', title: second });
-        await openManager(page);
+  for (const locale of ['en', 'ar'] as const) {
+    test(`SECT-005 reorders sections with the keyboard and publishes the order (${locale})`, async ({ page }) => {
+      const first = tempName('First');
+      const second = tempName('Second');
+      await withLock(
+        'sections',
+        async () => {
+          try {
+            await deleteSectionsOfType(owner, channelId(), ['recent_uploads', 'community_posts']);
+            await createSection(owner, channelId(), { type: 'recent_uploads', title: first });
+            await createSection(owner, channelId(), { type: 'community_posts', title: second });
+            await openManager(page, locale);
 
-        const titles = page.getByTestId('section-item-title');
-        const order = async () => (await titles.allInnerTexts()).filter((t) => t === first || t === second);
-        await expect.poll(order).toEqual([first, second]);
+            const titles = page.getByTestId('section-item-title');
+            const order = async () => (await titles.allInnerTexts()).filter((t) => t === first || t === second);
+            await expect.poll(order).toEqual([first, second]);
 
-        // dnd-kit keyboard sensor: Space picks up, ArrowDown moves, Space drops
-        const handle = sectionRow(page, first).getByTestId('section-drag-handle');
-        await keyboardMoveDown(page, handle);
+            // dnd-kit keyboard sensor: Space picks up, ArrowDown moves, Space drops
+            await keyboardMoveDown(page, sectionRow(page, first).getByTestId('section-drag-handle'));
 
-        await expect.poll(order).toEqual([second, first]);
-        await expect(page.getByTestId('sections-unpublished')).toHaveText('(Unpublished changes)');
-        await page.getByTestId('publish-sections').click();
-        await expect(page.getByRole('status').filter({ hasText: 'Sections published successfully!' })).toBeVisible();
-        await expect(page.getByTestId('sections-unpublished')).toHaveCount(0);
+            await expect.poll(order).toEqual([second, first]);
+            await expect(page.getByTestId('sections-unpublished')).toBeVisible();
+            await expect(page.getByTestId('publish-sections')).toHaveText(UI[locale].publish);
+            await page.getByTestId('publish-sections').click();
+            await expect(page.getByRole('status').filter({ hasText: UI[locale].published })).toBeVisible();
+            await expect(page.getByTestId('sections-unpublished')).toHaveCount(0);
 
-        await expect
-          .poll(async () => (await listSections(owner, channelId())).map((s) => s.title).filter((t) => t === first || t === second))
-          .toEqual([second, first]);
-      } finally {
-        await deleteSectionsTitled(owner, channelId(), first);
-        await deleteSectionsTitled(owner, channelId(), second);
-      }
+            await expect
+              .poll(async () => (await listSections(owner, channelId())).map((s) => s.title).filter((t) => t === first || t === second))
+              .toEqual([second, first]);
+
+            // The Home tab follows the new order
+            await page.goto(`/${locale}/channels/${channelId()}`);
+            const homeOrder = page.locator('[data-testid="channel-sections"] > section[data-section-type]');
+            await expect
+              .poll(async () =>
+                (await homeOrder.evaluateAll((els) => els.map((e) => e.getAttribute('data-section-type')))).filter(
+                  (t) => t === 'recent_uploads' || t === 'community_posts'
+                )
+              )
+              .toEqual(['community_posts', 'recent_uploads']);
+          } finally {
+            await deleteSectionsTitled(owner, channelId(), first);
+            await deleteSectionsTitled(owner, channelId(), second);
+          }
+        },
+        LOCK_WAIT
+      );
     });
-  });
+  }
 
   test('SECT-006 deletes a section after confirmation (cancel keeps it)', async ({ page }) => {
     const title = tempName('Delete');
-    await withLock('sections', async () => {
-      try {
-        await createSection(owner, channelId(), { type: 'recent_uploads', title });
-        await openManager(page);
-        const row = sectionRow(page, title);
-        await row.getByRole('button', { name: `Delete section: ${title}` }).click();
-        const confirm = page.getByRole('alertdialog');
-        await expect(confirm.getByRole('heading', { name: 'Delete section' })).toBeVisible();
-        await confirm.getByRole('button', { name: 'Cancel' }).click();
-        await expect(confirm).toBeHidden();
-        await expect(row).toBeVisible();
+    await withLock(
+      'sections',
+      async () => {
+        try {
+          await deleteSectionsOfType(owner, channelId(), ['recent_uploads']);
+          await createSection(owner, channelId(), { type: 'recent_uploads', title });
+          await openManager(page);
+          const row = sectionRow(page, title);
+          await row.getByRole('button', { name: `Delete section: ${title}` }).click();
+          const confirm = page.getByRole('alertdialog');
+          await expect(confirm.getByRole('heading', { name: 'Delete section' })).toBeVisible();
+          await confirm.getByRole('button', { name: 'Cancel' }).click();
+          await expect(confirm).toBeHidden();
+          await expect(row).toBeVisible();
 
-        await row.getByRole('button', { name: `Delete section: ${title}` }).click();
-        await confirm.getByRole('button', { name: 'Delete' }).click();
-        await expect(row).toHaveCount(0);
-        await expect(page.getByRole('status').filter({ hasText: 'Section deleted successfully' })).toBeVisible();
-        await expect.poll(async () => (await listSections(owner, channelId())).some((s) => s.title === title)).toBe(false);
-      } finally {
-        await deleteSectionsTitled(owner, channelId(), title);
-      }
-    });
+          await deleteRow(page, row, 'en');
+          await expect.poll(async () => (await listSections(owner, channelId())).some((s) => s.title === title)).toBe(false);
+        } finally {
+          await deleteSectionsTitled(owner, channelId(), title);
+        }
+      },
+      LOCK_WAIT
+    );
   });
 
   test('SECT-007 Arabic section manager is RTL and fully translated', async ({ page }) => {
     await openManager(page, 'ar');
     await expectRtl(page);
     await expect(page.getByRole('heading', { level: 1, name: 'أقسام القناة' })).toBeVisible();
-    await expect(page.getByTestId('sections-count')).toContainText('من 10 أقسام');
+    await expect(page.getByTestId('sections-count')).toContainText(`من ${MAX_SECTIONS} أقسام`);
     await expect(page.getByTestId('publish-sections')).toHaveText('نشر');
     await expect(page.getByTestId('channel-settings-breadcrumb')).toHaveAttribute('aria-label', 'مسار التنقل');
 
-    const dialog = await openAddDialog(page, 'إضافة قسم');
+    const dialog = await openAddDialog(page, 'ar');
     await expect(dialog).toHaveAttribute('dir', 'rtl');
     await expect(dialog.getByRole('heading', { name: 'إضافة قسم للقناة' })).toBeVisible();
-    await expect(dialog.locator('[data-section-type="recent_uploads"]')).toContainText('أحدث الفيديوهات');
-    await dialog.locator('[data-section-type="featured_videos"]').click();
-    await dialog.getByRole('button', { name: 'إنشاء القسم' }).click();
-    await expect(dialog.locator('#videoIds-error')).toHaveText('مطلوب معرف فيديو واحد على الأقل');
-    await dialog.getByRole('button', { name: 'إلغاء' }).click();
+    await expect(dialog.locator('[data-section-card="recent_uploads"]')).toContainText('أحدث الفيديوهات');
+    await dialog.locator('[data-section-card="featured_videos"]').click();
+    await expect(dialog.getByRole('heading', { name: 'فيديوهات مميزة' })).toBeVisible();
+    await dialog.getByTestId('section-form-submit').click();
+    await expect(dialog.getByRole('alert').filter({ hasText: 'اختر عنصرًا واحدًا على الأقل.' })).toBeVisible();
+    await dialog.getByRole('button', { name: 'رجوع' }).click();
     await expect(dialog.getByRole('heading', { name: 'إضافة قسم للقناة' })).toBeVisible();
   });
 
@@ -291,39 +386,306 @@ test.describe('Section manager', () => {
   });
 });
 
-test.describe('Sections on the channel Home tab', () => {
-  test.use({ storageState: ANONYMOUS_STATE });
+// ---------------------------------------------------------------------------
+// Every section type: add through the dialog, render for the owner and for a
+// visitor, remove. The owner sees a note on a section with nothing to show;
+// visitors don't see that section at all.
+// ---------------------------------------------------------------------------
 
-  test('SECT-010 featured-video and playlist sections render their configured content', async ({ page }) => {
+interface Fixtures {
+  /** A public video of the owner's channel */
+  ownVideoId: string;
+  /** A public video of another channel (QA Lectures) */
+  otherVideoId: string;
+  lecturesChannelId: string;
+  lecturesChannelName: string;
+  /** A public playlist of the owner's channel holding the own video */
+  playlistId: string;
+  playlistTitle: string;
+  postMarker: string;
+}
+
+interface TypeCase {
+  /** The dialog card (data-section-card) */
+  card: string;
+  type: string;
+  /** Title for the types that need one */
+  title?: string;
+  fill?: (dialog: Locator, fx: Fixtures) => Promise<void>;
+  /**
+   * What a visitor sees once it's added: the content is checked in `content`;
+   * 'empty' types have nothing on the test channel (owner note only); 'any'
+   * depends on the account's own data (likes, subscriptions) and is checked
+   * for agreement between the owner's note and the visitor's view.
+   */
+  expect: 'content' | 'empty' | 'any';
+  content?: (section: Locator, fx: Fixtures, locale: Locale) => Promise<void>;
+}
+
+const pickPasted = (testId: string, id: () => string) => async (dialog: Locator) => {
+  await fillStable(dialog.getByTestId(`${testId}-paste`), id());
+  await dialog.getByTestId(`${testId}-paste`).press('Enter');
+  await expect(dialog.getByTestId(`${testId}-selected`).locator('li')).toHaveCount(1);
+};
+
+const pickPlaylist = async (dialog: Locator, fx: Fixtures) => {
+  await dialog.getByTestId('playlist-picker-options').locator(`[data-playlist-id="${fx.playlistId}"]`).click();
+  await expect(dialog.getByTestId('playlist-picker-options').locator(`[data-playlist-id="${fx.playlistId}"]`)).toHaveAttribute('aria-pressed', 'true');
+};
+
+const videoLink = (section: Locator, videoId: string) => section.locator(`a[href*="vid=${videoId}"]`).first();
+
+const TYPE_CASES = (fx: () => Fixtures): TypeCase[] => [
+  {
+    card: 'channel_spotlight',
+    type: 'channel_spotlight',
+    fill: async (dialog) => pickPasted('spotlight-trailer', () => fx().ownVideoId)(dialog),
+    expect: 'content',
+    content: async (section, f, locale) => {
+      // Nobody here is subscribed to the test channel: the trailer plays
+      const spot = section.page().getByTestId('section-spotlight');
+      await expect(spot).toHaveAttribute('data-spotlight-kind', 'trailer');
+      await expect(spot.locator(`a[href="/${locale}/video?vid=${f.ownVideoId}"]`).first()).toBeVisible();
+    },
+  },
+  {
+    card: 'featured_videos',
+    type: 'featured_videos',
+    fill: async (dialog) => pickPasted('video-picker', () => fx().otherVideoId)(dialog),
+    expect: 'content',
+    content: async (section, f) => {
+      await expect(videoLink(section, f.otherVideoId)).toBeVisible();
+    },
+  },
+  {
+    card: 'recent_uploads',
+    type: 'recent_uploads',
+    expect: 'content',
+    content: async (section, f) => {
+      await expect(videoLink(section, f.ownVideoId)).toBeVisible();
+    },
+  },
+  {
+    card: 'popular_uploads',
+    type: 'popular_uploads',
+    expect: 'content',
+    content: async (section, f) => {
+      await expect(videoLink(section, f.ownVideoId)).toBeVisible();
+    },
+  },
+  // The test video is landscape, so it is not a Short
+  { card: 'shorts', type: 'shorts', expect: 'empty' },
+  { card: 'live_streams', type: 'live_streams', expect: 'empty' },
+  { card: 'live_streams_past', type: 'live_streams', expect: 'empty' },
+  {
+    card: 'liked_videos',
+    type: 'liked_videos',
+    fill: async (dialog) => dialog.getByTestId('section-consent').check(),
+    expect: 'any',
+  },
+  {
+    card: 'single_playlist',
+    type: 'single_playlist',
+    fill: pickPlaylist,
+    expect: 'content',
+    content: async (section, f, locale) => {
+      // Titled with the playlist's name; its videos as a row; the view-all link opens the playlist
+      await expect(section.getByRole('heading', { name: f.playlistTitle })).toBeVisible();
+      await expect(videoLink(section, f.ownVideoId)).toBeVisible();
+      await expect(section.locator(`a[href="/${locale}/playlist/${f.playlistId}"]`).first()).toBeVisible();
+    },
+  },
+  {
+    card: 'multiple_playlists',
+    type: 'multiple_playlists',
+    title: tempName('Playlists'),
+    fill: pickPlaylist,
+    expect: 'content',
+    content: async (section, f, locale) => {
+      const card = section.getByTestId('section-playlist-card').filter({ hasText: f.playlistTitle });
+      await expect(card).toBeVisible();
+      await expect(card.locator(`a[href="/${locale}/playlist/${f.playlistId}"]`).first()).toBeVisible();
+    },
+  },
+  {
+    card: 'created_playlists',
+    type: 'created_playlists',
+    expect: 'content',
+    content: async (section, f) => {
+      await expect(section.getByTestId('section-playlist-card').filter({ hasText: f.playlistTitle })).toBeVisible();
+    },
+  },
+  {
+    card: 'featured_channels',
+    type: 'featured_channels',
+    title: tempName('Channels'),
+    fill: async (dialog, f) => {
+      await fillStable(dialog.getByTestId('channel-picker-search'), f.lecturesChannelName);
+      const option = dialog.getByTestId('channel-picker-options').locator(`[data-channel-id="${f.lecturesChannelId}"]`);
+      await option.click();
+      await expect(option).toHaveAttribute('aria-pressed', 'true');
+    },
+    expect: 'content',
+    content: async (section, f) => {
+      await expect(section.getByTestId('channel-tile').filter({ hasText: f.lecturesChannelName })).toBeVisible();
+    },
+  },
+  {
+    card: 'subscribed_channels',
+    type: 'subscribed_channels',
+    fill: async (dialog) => dialog.getByTestId('section-consent').check(),
+    expect: 'any',
+  },
+  {
+    card: 'community_posts',
+    type: 'community_posts',
+    expect: 'content',
+    content: async (section, f) => {
+      await expect(section.getByTestId('section-post-card').filter({ hasText: f.postMarker })).toBeVisible();
+    },
+  },
+];
+
+/** The section on the Home tab: the spotlight draws its own hero when it has a video */
+function homeSection(page: Page, c: TypeCase): Locator {
+  const section = page.locator(`[data-testid="channel-section-${c.type}"]`);
+  return c.type === 'channel_spotlight' ? section.or(page.getByTestId('section-spotlight')) : section;
+}
+
+async function openHome(page: Page, locale: Locale) {
+  await page.goto(`/${locale}/channels/${channelId()}`);
+  await expect(page.getByTestId('tabpanel-home')).toBeVisible();
+  // The sections load after the page: wait for the list (or for no list, when a visitor has none)
+  await expect(page.getByTestId('channel-sections-loading')).toHaveCount(0, { timeout: 20_000 });
+}
+
+async function visitorPage(browser: Browser): Promise<Page> {
+  const context = await browser.newContext({ storageState: ANONYMOUS_STATE });
+  return context.newPage();
+}
+
+test.describe('Each section type: add, render, remove', () => {
+  test.use({ storageState: AUTH_STATE.single });
+  // In order, one at a time (they share the channel), but a failure doesn't skip the rest
+  test.describe.configure({ mode: 'default' });
+
+  const disposable = setupPublicDisposable(owner, 'Sections');
+  let fx: Fixtures | null = null;
+  const getFx = () => {
+    if (!fx) throw new Error('Section fixtures were not created');
+    return fx;
+  };
+
+  test.beforeAll(async ({}, testInfo) => {
+    // 28 round trips through the dialog and two Home tabs: the rendering is the same in every browser
+    test.skip(testInfo.project.name !== 'chromium', 'Every section type runs on the chromium project only');
+    test.setTimeout(300_000);
+    const video = await disposable.create();
     const lectures = await findQaLecturesChannel();
-    const [video] = await listPublicChannelVideos(lectures.id);
-    const [playlist] = await listChannelPlaylists(lectures.id);
-    const featured = tempName('Featured');
-    const single = tempName('Playlist');
-
-    await withLock('sections', async () => {
-      try {
-        // Content is stored by the API under `content` (videoIds / playlistId)
-        await createSection(owner, channelId(), { type: 'featured_videos', title: featured, videoIds: [video.id] });
-        await createSection(owner, channelId(), { type: 'single_playlist', title: single, playlistId: playlist.id });
-
-        await page.goto(`/en/channels/${channelId()}`);
-        const home = page.getByTestId('tabpanel-home');
-        const featuredSection = home.locator('section').filter({ has: page.getByRole('heading', { name: featured }) });
-        await expect(featuredSection).toBeVisible();
-        await expect(featuredSection.getByTestId('video-card')).toHaveCount(1);
-        await expect(featuredSection.getByTestId('video-card')).toHaveAttribute('href', `/en/video?vid=${video.id}`);
-
-        const playlistLink = home.getByRole('link', { name: new RegExp(playlist.name) }).first();
-        await expect(playlistLink).toBeVisible();
-        await expect(playlistLink).toHaveAttribute('href', `/en/playlist/${playlist.id}`);
-        await expect(home).not.toContainText('Playlist not found');
-      } finally {
-        await deleteSectionsTitled(owner, channelId(), featured);
-        await deleteSectionsTitled(owner, channelId(), single);
-      }
-    });
+    const [other] = await listPublicChannelVideos(lectures.id);
+    const playlistTitle = tempName('Sections playlist');
+    const playlist = await createPlaylist(owner, channelId(), { title: playlistTitle, isPublic: true, videoIds: [video.id] });
+    const postMarker = tempName('Sections post');
+    await createTextPost(owner, channelId(), postMarker);
+    fx = {
+      ownVideoId: video.id,
+      otherVideoId: other.id,
+      lecturesChannelId: lectures.id,
+      lecturesChannelName: lectures.name,
+      playlistId: playlist.id,
+      playlistTitle,
+      postMarker,
+    };
   });
+
+  test.afterAll(async () => {
+    test.setTimeout(120_000);
+    if (fx) {
+      await deletePlaylistQuietly(owner, channelId(), fx.playlistId);
+      await deletePostsContaining(owner, channelId(), fx.postMarker);
+    }
+    await disposable.remove();
+  });
+
+  for (const locale of ['en', 'ar'] as const) {
+    for (const c of TYPE_CASES(getFx)) {
+      test(`SECT-030 ${c.card}: add, render for the owner and a visitor, remove (${locale})`, async ({ page, browser }) => {
+        test.setTimeout(LOCK_WAIT + 180_000);
+        const f = getFx();
+        const ui = UI[locale];
+        await withLock(
+          'sections',
+          async () => {
+            const visitor = await visitorPage(browser);
+            try {
+              await deleteSectionsOfType(owner, channelId(), [c.type]);
+
+              // Add through the dialog
+              await openManager(page, locale);
+              const dialog = await openAddDialog(page, locale);
+              const cardButton = dialog.locator(`[data-section-card="${c.card}"]`);
+              await expect(cardButton).toBeEnabled();
+              const label = (await cardButton.locator('.opt-title').innerText()).trim();
+              await cardButton.click();
+              await expect(dialog.getByRole('heading', { name: label })).toBeVisible();
+              if (c.title) await fillStable(dialog.getByTestId('section-title-input'), c.title);
+              await c.fill?.(dialog, f);
+              await dialog.getByTestId('section-form-submit').click();
+              await expect(dialog).toBeHidden();
+              await expect(page.getByRole('status').filter({ hasText: ui.created })).toBeVisible();
+
+              // The row: titled with the card's label (or the given title); Hidden while it has nothing to show
+              const rowTitle = c.title ?? label;
+              const row = page.locator(`[data-testid="section-item"][data-section-type="${c.type}"]`);
+              await expect(row).toHaveCount(1);
+              await expect(row.getByTestId('section-item-title')).toHaveText(rowTitle);
+              if (c.expect === 'empty') await expect(row.getByTestId('section-hidden-badge')).toBeVisible();
+              if (c.expect === 'content') await expect(row.getByTestId('section-hidden-badge')).toHaveCount(0);
+
+              // Home tab, as the owner
+              await openHome(page, locale);
+              const ownSection = homeSection(page, c);
+              await expect(ownSection.first()).toBeVisible();
+              const note = page.locator(`[data-testid="channel-section-${c.type}"]`).getByTestId('section-owner-note');
+              if (c.expect === 'empty') {
+                await expect(note).toBeVisible();
+                await expect(note).toHaveAttribute('data-empty-hint', 'noContent');
+                await expect(note.getByRole('link')).toHaveAttribute('href', `/${locale}/settings/channel/${channelId()}/sections`);
+              }
+              if (c.expect === 'content') {
+                await expect(note).toHaveCount(0);
+                await c.content?.(ownSection.first(), f, locale);
+              }
+              const ownerSeesNote = (await note.count()) > 0;
+
+              // Home tab, as a signed-out visitor: never the note; the section only with content
+              await expect(async () => {
+                await openHome(visitor, locale);
+                await expect(visitor.getByTestId('section-owner-note')).toHaveCount(0);
+                const visible = homeSection(visitor, c);
+                if (c.expect === 'empty' || ownerSeesNote) await expect(visible).toHaveCount(0);
+                else {
+                  await expect(visible.first()).toBeVisible({ timeout: 5000 });
+                  await c.content?.(visible.first(), f, locale);
+                }
+              }).toPass({ timeout: 60_000, intervals: [2000, 5000, 10_000] });
+
+              // Remove through the manager; it leaves the Home tab
+              await openManager(page, locale);
+              await deleteRow(page, page.locator(`[data-testid="section-item"][data-section-type="${c.type}"]`), locale);
+              await expect.poll(async () => (await listSections(owner, channelId())).some((s) => s.type === c.type)).toBe(false);
+              await openHome(page, locale);
+              await expect(homeSection(page, c)).toHaveCount(0);
+            } finally {
+              await visitor.context().close();
+              await deleteSectionsOfType(owner, channelId(), [c.type]);
+            }
+          },
+          LOCK_WAIT
+        );
+      });
+    }
+  }
 });
 
 test.describe('Video sections page (/sections)', () => {

@@ -157,7 +157,7 @@ export async function listSections(user: AuthUser, channelId: string): Promise<S
 export async function createSection(
   user: AuthUser,
   channelId: string,
-  data: { type: string; title: string; videoIds?: string[]; playlistId?: string; playlistIds?: string[] }
+  data: { type: string; title: string; videoIds?: string[]; playlistId?: string; playlistIds?: string[]; channelIds?: string[]; consent?: boolean }
 ): Promise<SectionRow> {
   const { status, body } = await apiAs<{ result?: { section?: SectionRow } }>(user, 'POST', `/api/channels/${channelId}/sections`, {
     channelId,
@@ -171,6 +171,19 @@ export async function createSection(
 export async function deleteSectionsTitled(user: AuthUser, channelId: string, prefix = TEMP_PREFIX) {
   for (const section of await listSections(user, channelId)) {
     if (section.title?.startsWith(prefix)) {
+      await apiAs(user, 'DELETE', `/api/channels/${channelId}/sections/${section.id}`, { channelId });
+    }
+  }
+}
+
+/**
+ * Deletes the channel's sections of these types. Types with a per-channel
+ * limit (spotlight, Latest videos, ...) have a default title, so tests that
+ * add them clean up by type; they run under the 'sections' lock.
+ */
+export async function deleteSectionsOfType(user: AuthUser, channelId: string, types: string[]) {
+  for (const section of await listSections(user, channelId)) {
+    if (types.includes(section.type)) {
       await apiAs(user, 'DELETE', `/api/channels/${channelId}/sections/${section.id}`, { channelId });
     }
   }

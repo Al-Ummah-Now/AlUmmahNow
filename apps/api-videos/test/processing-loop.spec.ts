@@ -542,7 +542,9 @@ describe('processing result announcement (uploader "ready" / "failed" notificati
 		await deliver(env);
 		assert.ok(resultMessages(env)[0].body.payload.attempt, 'the result names its attempt');
 
-		// The admin retries: the record forgets the announcement, a new loop runs and fails again
+		// The admin retries: the record forgets the announcement, a new loop runs and fails again.
+		// Attempts are keyed by their start time; a real retry is never in the same millisecond.
+		await new Promise((resolve) => setTimeout(resolve, 5));
 		const app = createProcessingInternalRouter();
 		await app.request('/retry', { method: 'POST', body: JSON.stringify({ ids: [ID] }) }, env);
 		const retried = await read(env);

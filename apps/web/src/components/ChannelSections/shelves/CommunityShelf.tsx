@@ -18,14 +18,14 @@ export function CommunityShelf({ posts, channelId }: { posts: SectionPostSummary
   const href = `/${locale}/channels/${channelId}?tab=community`;
 
   return (
-    <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" role="list">
+    <ul className="grid items-start gap-4 sm:grid-cols-2 lg:grid-cols-3" role="list">
       {posts.map((post) => (
         <li key={post.id} className="min-w-0">
           <Link
             href={href}
             data-testid="section-post-card"
             data-post-id={post.id}
-            className="community-card flex h-full flex-col overflow-hidden rounded-lg border border-border bg-card text-card-foreground hover:border-brand-edge focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="community-card flex flex-col overflow-hidden rounded-lg border border-border bg-card text-card-foreground hover:border-brand-edge focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {(post.image?.url || post.gifUrl) && (
               // eslint-disable-next-line @next/next/no-img-element -- user media from R2, sizes vary
