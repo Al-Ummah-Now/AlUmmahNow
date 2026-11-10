@@ -14,7 +14,7 @@ import {
   sameOriginUrl,
   successDestination,
 } from '@/lib/auth/silent-sign-in';
-import { CLEAR_STATE_COOKIE, STATE_COOKIE, stateMatches } from '@/lib/auth/oauth-state';
+import { CLEAR_PKCE_COOKIE, CLEAR_STATE_COOKIE, PKCE_COOKIE, STATE_COOKIE, pkceVerifierFor, stateMatches } from '@/lib/auth/oauth-state';
 
 /** The login route's one-shot cookies are spent once the callback ran. */
 async function clearSignInCookies(): Promise<void> {
@@ -23,6 +23,7 @@ async function clearSignInCookies(): Promise<void> {
     store.delete(RETURN_COOKIE);
     store.delete(SILENT_COOKIE);
     store.delete(CLEAR_STATE_COOKIE);
+    store.delete(CLEAR_PKCE_COOKIE);
   } catch {
     // Outside a request context (tests): nothing to clear
   }
@@ -34,7 +35,7 @@ type ValidationResult =
   | { success: true; user?: User }
   | { success: false; error: Error };
 
-async function validate(code: string | null, url: URL): Promise<ValidationResult> {
+async function validate(code: string | null, url: URL, verifier?: string): Promise<ValidationResult> {
   logger.debug("[code]", code)
   logger.debug("[url]", url)
 
@@ -46,7 +47,7 @@ async function validate(code: string | null, url: URL): Promise<ValidationResult
   // issuer rejects the code when they differ.
   const locale = url.searchParams.get("locale");
   const redirectUri = `${url.origin}/api/callback${locale ? `?locale=${encodeURIComponent(locale)}` : ""}`;
-  const exchanged = await client.exchange(code!, redirectUri);
+  const exchanged = await client.exchange(code!, redirectUri, verifier);
   logger.debug("[exchanged]", exchanged)
   if (exchanged.err == false) {
     // Extract user info from the access token
@@ -141,7 +142,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(sameOriginUrl(callbackErrorDestination({ error: authError, silent, returnPath, locale }), url.origin));
   }
 
-  const result = await validate(code, url);
+  const result = await validate(code, url, pkceVerifierFor(url.searchParams.get("state"), req.cookies.get(PKCE_COOKIE)?.value));
   logger.debug("[result]", result)
   await clearSignInCookies();
 

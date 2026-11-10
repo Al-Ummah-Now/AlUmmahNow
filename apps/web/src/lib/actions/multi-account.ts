@@ -19,7 +19,7 @@ import { subjects } from '../auth';
 import { shouldRedirectToProfileCreation } from '../profile-helpers';
 import { logger } from '@/lib/logger-server';
 import { singleSignOutToHome } from '../auth/single-sign-out';
-import { newStateNonce, stateCookieOptions, withState, STATE_COOKIE } from '../auth/oauth-state';
+import { newStateNonce, pkceCookieValue, stateCookieOptions, withState, PKCE_COOKIE, STATE_COOKIE } from '../auth/oauth-state';
 
 /**
  * Get OpenAuth client
@@ -40,14 +40,16 @@ export async function addUserAccount(locale: string = 'en'): Promise<void> {
   cookieStore.set("auth_locale", locale, { httpOnly: true, sameSite: "lax", secure: protocol === "https", path: "/", maxAge: 600 });
 
   const client = await getAuthClient();
-  const { url } = await client.authorize(
+  const { url, challenge } = await client.authorize(
     `${protocol}://${host}/api/callback/multi-account`,
-    "code"
+    "code",
+    { pkce: true }
   );
 
-  // Bind the callback to this browser (login CSRF)
+  // Bind the callback to this browser (login CSRF), with its PKCE verifier
   const nonce = newStateNonce();
   cookieStore.set(STATE_COOKIE, nonce, stateCookieOptions(protocol === "https"));
+  if (challenge.verifier) cookieStore.set(PKCE_COOKIE, pkceCookieValue(nonce, challenge.verifier), stateCookieOptions(protocol === "https"));
 
   // prompt=login: without it the auth server's shared sign-in (__session)
   // answers with a code for the account that is already signed in, without a

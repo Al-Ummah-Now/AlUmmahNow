@@ -24,8 +24,11 @@ jest.mock('next/server', () => ({
     },
   },
 }));
-const authorize = jest.fn(async (redirectUri: string) => ({
-  url: `https://auth.qa.alummahnow.net/authorize?client_id=c&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&state=s`,
+const authorize = jest.fn(async (redirectUri: string, _type: string, opts?: { pkce?: boolean }) => ({
+  url:
+    `https://auth.qa.alummahnow.net/authorize?client_id=c&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&state=s` +
+    (opts?.pkce ? '&code_challenge=ch-1&code_challenge_method=S256' : ''),
+  challenge: { state: 's', ...(opts?.pkce ? { verifier: 'ver-1' } : {}) },
 }));
 jest.mock('@/lib/auth/openauth-client', () => ({ getOpenAuthClient: () => ({ authorize }) }));
 jest.mock('@/lib/i18n/utils', () => ({ isLocaleSupported: (l: string) => l === 'en' || l === 'ar' }));
@@ -45,11 +48,15 @@ describe('GET /api/auth/login', () => {
     expect(url.searchParams.get('lang')).toBe('ar');
     // redirect_uri stays exactly what /token is called with
     expect(url.searchParams.get('redirect_uri')).toBe('https://videos.qa.alummahnow.net/api/callback');
-    const { auth_state: state, ...rest } = res.set;
+    const { auth_state: state, auth_pkce: pkce, ...rest } = res.set;
     expect(rest).toEqual({ auth_locale: 'ar', auth_return: '/ar/video/x', auth_silent: '1' });
     // The callback only accepts a state equal to this browser's cookie
     expect(state).toMatch(/^[a-f0-9]{64}$/);
     expect(url.searchParams.get('state')).toBe(state);
+    // PKCE (S256): the challenge goes to /authorize, the verifier stays bound to the state
+    expect(authorize).toHaveBeenLastCalledWith('https://videos.qa.alummahnow.net/api/callback', 'code', { pkce: true });
+    expect(url.searchParams.get('code_challenge_method')).toBe('S256');
+    expect(pkce).toBe(`${state}.ver-1`);
   });
 
   it('prompt=login (add account) is not silent', async () => {

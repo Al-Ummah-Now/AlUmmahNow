@@ -14,8 +14,10 @@ import { highestAdminRole, normalizeRole } from './roles';
 import { SESSION_COOKIE_NAME, sessionCookieOptions } from './session-cookie';
 import { SIGN_IN_COOKIES } from './single-sign-out';
 import {
+  PKCE_COOKIE,
   STATE_COOKIE,
   STATE_COOKIE_PATH,
+  pkceVerifierFor,
   callbackErrorRedirect,
   returnPathFromState,
   sameOriginRedirect,
@@ -28,7 +30,7 @@ interface Tokens {
 }
 
 export interface CallbackClient {
-  exchange(code: string, redirectUri: string): Promise<{ err: unknown; tokens?: Tokens }>;
+  exchange(code: string, redirectUri: string, verifier?: string): Promise<{ err: unknown; tokens?: Tokens }>;
   verify(
     subjects: unknown,
     token: string,
@@ -60,6 +62,7 @@ export async function handleCallback(request: NextRequest, deps: CallbackDeps): 
     const response = NextResponse.redirect(sameOriginRedirect(path, request.url), status);
     // One-shot: the state cookie is spent whatever happens
     response.cookies.set(STATE_COOKIE, '', { path: STATE_COOKIE_PATH, maxAge: 0, httpOnly: true, sameSite: 'lax' });
+    response.cookies.set(PKCE_COOKIE, '', { path: STATE_COOKIE_PATH, maxAge: 0, httpOnly: true, sameSite: 'lax' });
     response.headers.set('Cache-Control', 'no-store');
     return response;
   };
@@ -81,7 +84,8 @@ export async function handleCallback(request: NextRequest, deps: CallbackDeps): 
 
   try {
     const client = await deps.getClient();
-    const exchanged = await client.exchange(code, callbackUrl(request));
+    const verifier = pkceVerifierFor(state, request.cookies.get(PKCE_COOKIE)?.value);
+    const exchanged = await client.exchange(code, callbackUrl(request), verifier);
     if (exchanged.err || !exchanged.tokens) {
       const err = exchanged.err as { name?: string; message?: string } | undefined;
       log.error('[auth] Token exchange failed', { name: err?.name, message: err?.message });

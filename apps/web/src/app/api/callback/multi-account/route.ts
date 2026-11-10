@@ -7,12 +7,14 @@ import { logger } from '@/lib/logger-server';
 import { isLocaleSupported } from '@/lib/i18n/utils';
 import { DEFAULT_LOCALE } from '@/lib/i18n/locales';
 import { cookies as getCookies } from "next/headers";
-import { CLEAR_STATE_COOKIE, STATE_COOKIE, stateMatches } from '@/lib/auth/oauth-state';
+import { CLEAR_PKCE_COOKIE, CLEAR_STATE_COOKIE, PKCE_COOKIE, STATE_COOKIE, pkceVerifierFor, stateMatches } from '@/lib/auth/oauth-state';
 
 /** The state cookie is one-shot: spent once the callback ran. */
 async function clearStateCookie(): Promise<void> {
   try {
-    (await getCookies()).delete(CLEAR_STATE_COOKIE);
+    const store = await getCookies();
+    store.delete(CLEAR_STATE_COOKIE);
+    store.delete(CLEAR_PKCE_COOKIE);
   } catch {
     // Outside a request context (tests): nothing to clear
   }
@@ -24,14 +26,14 @@ type ValidationResult =
   | { success: true; user?: User }
   | { success: false; error: Error };
 
-async function validate(code: string, url: URL): Promise<ValidationResult> {
+async function validate(code: string, url: URL, verifier?: string): Promise<ValidationResult> {
   logger.debug("[Multi-Account Callback] code:", code);
   logger.debug("[Multi-Account Callback] url:", url.toString());
 
   const client = await getClient();
 
   // Use the multi-account callback URL
-  const exchanged = await client.exchange(code, `${url.origin}/api/callback/multi-account`);
+  const exchanged = await client.exchange(code, `${url.origin}/api/callback/multi-account`, verifier);
   logger.debug("[Multi-Account Callback] exchanged:", exchanged);
 
   if (exchanged.err == false) {
@@ -127,7 +129,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(`${url.origin}/${locale}/auth/error`);
   }
 
-  const result = await validate(code, url);
+  const result = await validate(code, url, pkceVerifierFor(url.searchParams.get("state"), req.cookies.get(PKCE_COOKIE)?.value));
 
   logger.debug("[Multi-Account Callback] result:", result);
 

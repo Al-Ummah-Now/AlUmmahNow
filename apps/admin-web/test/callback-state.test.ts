@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { NextRequest } from 'next/server';
 import { handleCallback, type CallbackClient } from '../src/lib/callback-handler';
-import { encodeState, newStateNonce, sameOriginRedirect, stateMatches } from '../src/lib/login-flow';
+import { encodeState, newStateNonce, pkceCookieValue, pkceVerifierFor, sameOriginRedirect, stateMatches } from '../src/lib/login-flow';
 
 const APP = 'https://admin.qa.alummahnow.net';
 const silent = { info: () => {}, warn: () => {}, error: () => {} };
@@ -15,8 +15,8 @@ const ACCESS = `${b64url({ alg: 'ES256' })}.${b64url({ exp: 9_999_999_999 })}.si
 function client(roles: string[] = ['admin']) {
   const calls: string[] = [];
   const impl: CallbackClient = {
-    async exchange(code) {
-      calls.push(`exchange:${code}`);
+    async exchange(code, _redirectUri, verifier) {
+      calls.push(`exchange:${code}${verifier ? `:${verifier}` : ''}`);
       return { err: false, tokens: { access: ACCESS, refresh: 'user:r1' } };
     },
     async verify() {
@@ -68,8 +68,9 @@ describe('admin callback: OAuth state bound to the browser', () => {
       assert.deepEqual(calls, []);
       assert.equal(res.headers.get('location'), `${APP}/login?error=auth_failed`);
       const set = setCookies(res);
-      assert.deepEqual(Object.keys(set), ['admin_oauth_state']);
+      assert.deepEqual(Object.keys(set).sort(), ['admin_oauth_pkce', 'admin_oauth_state']);
       assert.match(set.admin_oauth_state, /Max-Age=0/i);
+      assert.match(set.admin_oauth_pkce, /Max-Age=0/i);
       assert.match(set.admin_oauth_state, /Path=\/api\/callback/i);
     });
   }
@@ -88,6 +89,23 @@ describe('admin callback: OAuth state bound to the browser', () => {
     const session = JSON.parse(decodeURIComponent(set.admin_session.split(';')[0].slice('admin_session='.length)));
     assert.equal(session.refreshToken, 'user:r1');
     assert.match(set.admin_session, /HttpOnly/i);
+  });
+
+  it('PKCE: exchanges with the verifier bound to this state, never one of another state', async () => {
+    const ok = client();
+    await handleCallback(
+      request(`code=c1&state=${encodeURIComponent(STATE)}`, { admin_oauth_state: NONCE, admin_oauth_pkce: pkceCookieValue(NONCE, 'ver-1') }),
+      { getClient: async () => ok.impl, subjects: {}, log: silent },
+    );
+    assert.deepEqual(ok.calls, ['exchange:c1:ver-1', 'verify']);
+    const other = client();
+    await handleCallback(
+      request(`code=c1&state=${encodeURIComponent(STATE)}`, { admin_oauth_state: NONCE, admin_oauth_pkce: pkceCookieValue('b'.repeat(32), 'ver-x') }),
+      { getClient: async () => other.impl, subjects: {}, log: silent },
+    );
+    assert.deepEqual(other.calls, ['exchange:c1', 'verify']);
+    assert.equal(pkceVerifierFor(STATE, pkceCookieValue(NONCE, 'v')), 'v');
+    assert.equal(pkceVerifierFor(STATE, 'no-dot'), undefined);
   });
 
   it('a matching state with login_required shows the sign-in form, without an exchange', async () => {

@@ -34,6 +34,28 @@ export function withState(authorizeUrl: string, nonce: string): string {
   return url.toString();
 }
 
+/**
+ * PKCE (RFC 7636): every authorize also sends an S256 code_challenge; its
+ * verifier is kept next to the state cookie (same path and lifetime), bound
+ * to the state nonce, and sent with the code exchange. A leaked code can't
+ * be redeemed without it, and the auth server can then require PKCE.
+ */
+export const PKCE_COOKIE = 'auth_pkce';
+export const CLEAR_PKCE_COOKIE = { name: PKCE_COOKIE, path: STATE_COOKIE_PATH } as const;
+
+/** Cookie value binding a verifier to the state nonce. */
+export function pkceCookieValue(nonce: string, verifier: string): string {
+  return `${nonce}.${verifier}`;
+}
+
+/** The verifier stored for this callback's `state`, if any. */
+export function pkceVerifierFor(state: string | null | undefined, cookie: string | null | undefined): string | undefined {
+  if (!state || !cookie) return undefined;
+  const dot = cookie.indexOf('.');
+  if (dot <= 0 || !stateMatches(state, cookie.slice(0, dot))) return undefined;
+  return cookie.slice(dot + 1) || undefined;
+}
+
 /** The callback belongs to this browser's sign-in: `state` equals the cookie. */
 export function stateMatches(state: string | null | undefined, cookie: string | null | undefined): boolean {
   if (!state || !cookie || !/^[A-Za-z0-9_-]{16,128}$/.test(state) || state.length !== cookie.length) return false;
