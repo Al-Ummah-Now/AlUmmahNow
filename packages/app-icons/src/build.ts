@@ -1,7 +1,17 @@
-// Builds one app's favicon set from the SVG marks in marks.ts.
+// Builds each app's icon set by downscaling its crop (assets/crops/<app>.webp, made by `crop`).
+// Production files are the crop and nothing else; QA and stage SVGs add the environment dot.
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
-import { APPS, bleedSvg, faviconSvg, type AppIcon, type AppId } from './marks.ts';
+import { APPS, type AppId } from './crop.ts';
 import { ico } from './ico.ts';
+
+export const CROPS = join(dirname(fileURLToPath(import.meta.url)), '../assets/crops');
+export type Env = 'prod' | 'qa' | 'stage';
+/** Environment markers for non-production tabs (not part of the art). */
+export const ENV_DOT = { qa: '#7c3aed', stage: '#db2777' } as const;
+/** Browser chrome and manifest colour: the night sky of the logo. */
+export const THEME_COLOR = '#09273a';
 
 export interface IconFile { path: string; type: string; body: Uint8Array }
 export interface BuildOptions {
@@ -9,59 +19,58 @@ export interface BuildOptions {
   base?: string;
   /** Also write favicon-16x16.png and favicon-32x32.png, for sites that already link them. */
   legacyPng?: boolean;
-  /** Manifest start_url (default "/"). */
   startUrl?: string;
 }
 
 const enc = (s: string) => new TextEncoder().encode(s);
+export const cropPath = (app: AppId) => join(CROPS, `${app}.webp`);
 
-/** SVG to an exact-size PNG, palette-quantised to keep the file small. */
-export async function rasterise(svg: string, size: number): Promise<Uint8Array> {
-  const density = Math.ceil((72 * size) / 32) * 2; // render at 2x, then downsample for clean edges
-  const buf = await sharp(Buffer.from(svg), { density })
-    .resize(size, size)
-    .png({ palette: true, colours: 256, effort: 10, compressionLevel: 9 })
-    .toBuffer();
+/** The crop downscaled to an exact size (Lanczos), full-colour PNG. */
+export async function downscale(app: AppId, size: number): Promise<Uint8Array> {
+  const buf = await sharp(cropPath(app)).resize(size, size, { kernel: 'lanczos3' }).png({ compressionLevel: 9, effort: 10 }).toBuffer();
   return new Uint8Array(buf);
 }
 
+/** favicon.svg: the 64 px downscale wrapped in SVG; QA and stage add a corner dot. */
+export function svgWrap(png64: Uint8Array, env: Env = 'prod'): string {
+  const dot = env === 'prod' ? '' : `<circle cx="52.8" cy="11.2" r="9.8" fill="#fff"/><circle cx="52.8" cy="11.2" r="7.2" fill="${ENV_DOT[env]}"/>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 64 64"><image width="64" height="64" href="data:image/png;base64,${Buffer.from(png64).toString('base64')}"/>${dot}</svg>\n`;
+}
+
 export function manifest(app: AppId, opts: BuildOptions = {}): string {
-  const a: AppIcon = APPS[app];
   const base = opts.base ?? '/';
   return `${JSON.stringify({
-    name: a.name,
-    short_name: a.short,
+    name: APPS[app].name,
+    short_name: APPS[app].short,
     start_url: opts.startUrl ?? '/',
     display: 'standalone',
-    background_color: a.manifest.background,
-    theme_color: a.manifest.theme,
+    background_color: THEME_COLOR,
+    theme_color: THEME_COLOR,
     icons: [
-      { src: `${base}icon-192.png`, sizes: '192x192', type: 'image/png', purpose: 'any' },
-      { src: `${base}icon-512.png`, sizes: '512x512', type: 'image/png', purpose: 'any' },
-      { src: `${base}icon-maskable-512.png`, sizes: '512x512', type: 'image/png', purpose: 'maskable' },
-      { src: `${base}favicon.svg`, sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
+      { src: `${base}icon-192.png`, sizes: '192x192', type: 'image/png' },
+      { src: `${base}icon-512.png`, sizes: '512x512', type: 'image/png' },
     ],
   }, null, 2)}\n`;
 }
 
+/** Windows .ico for the desktop tools: 16 to 256 px. */
+export async function desktopIco(app: AppId): Promise<Uint8Array> {
+  return ico(await Promise.all([16, 24, 32, 48, 64, 128, 256].map((s) => downscale(app, s))));
+}
+
 export async function buildApp(app: AppId, opts: BuildOptions = {}): Promise<IconFile[]> {
-  const light = faviconSvg(app, { scheme: 'light' });
-  const [p16, p32, p48, p192, p512] = await Promise.all([16, 32, 48, 192, 512].map((s) => rasterise(light, s)));
+  const [p16, p32, p48, p64, p180, p192, p512] = await Promise.all([16, 32, 48, 64, 180, 192, 512].map((s) => downscale(app, s)));
   const files: IconFile[] = [
-    { path: 'favicon.svg', type: 'image/svg+xml', body: enc(faviconSvg(app)) },
-    { path: 'favicon-qa.svg', type: 'image/svg+xml', body: enc(faviconSvg(app, { env: 'qa' })) },
-    { path: 'favicon-stage.svg', type: 'image/svg+xml', body: enc(faviconSvg(app, { env: 'stage' })) },
+    { path: 'favicon.svg', type: 'image/svg+xml', body: enc(svgWrap(p64)) },
+    { path: 'favicon-qa.svg', type: 'image/svg+xml', body: enc(svgWrap(p64, 'qa')) },
+    { path: 'favicon-stage.svg', type: 'image/svg+xml', body: enc(svgWrap(p64, 'stage')) },
     { path: 'favicon.ico', type: 'image/x-icon', body: ico([p16, p32, p48]) },
-    { path: 'apple-touch-icon.png', type: 'image/png', body: await rasterise(bleedSvg(app, 0.62), 180) },
+    { path: 'apple-touch-icon.png', type: 'image/png', body: p180 },
     { path: 'icon-192.png', type: 'image/png', body: p192 },
     { path: 'icon-512.png', type: 'image/png', body: p512 },
-    // maskable: key art inside the central 80% circle (W3C safe zone)
-    { path: 'icon-maskable-512.png', type: 'image/png', body: await rasterise(bleedSvg(app, 0.5), 512) },
     { path: 'site.webmanifest', type: 'application/manifest+json', body: enc(manifest(app, opts)) },
   ];
-  if (opts.legacyPng) {
-    files.push({ path: 'favicon-16x16.png', type: 'image/png', body: p16 }, { path: 'favicon-32x32.png', type: 'image/png', body: p32 });
-  }
+  if (opts.legacyPng) files.push({ path: 'favicon-16x16.png', type: 'image/png', body: p16 }, { path: 'favicon-32x32.png', type: 'image/png', body: p32 });
   return files;
 }
 
