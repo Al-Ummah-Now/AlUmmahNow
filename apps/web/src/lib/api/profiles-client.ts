@@ -284,3 +284,22 @@ export const updateCoverPhoto = async (profile: Profile, file: File, setProfile:
         return false;
     }
 };
+
+/**
+ * Removes the profile's avatar or cover (the API stores an empty URL, which
+ * every page shows as "no photo"). Only that field is sent.
+ */
+export const removeProfileImage = async (kind: 'avatar' | 'cover', setProfile: (profile: Profile) => void) => {
+    try {
+        const result = await updateProfileAPI(kind === 'avatar' ? { avatarUrl: '' } : { coverUrl: '' });
+        const updated = profileFrom(result);
+        if (updated) {
+            setProfile(updated);
+            return true;
+        }
+        return false;
+    } catch (error) {
+        logger.error('[removeProfileImage] Error:', error);
+        return false;
+    }
+};

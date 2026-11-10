@@ -407,7 +407,7 @@ main:has(input[type=file]) [class*="border-dashed"]{border-radius:var(--r-lg)}
 main:has(input[type=file]) :has(>*>[class*="border-dashed"]),main:has(input[type=file]) :has(>[class*="border-dashed"]){background:transparent!important;box-shadow:none!important;padding:0!important;border-color:transparent!important}
 /* Channel cards: slim identity band, quiet actions */
 main [class*="h-32"][class*="bg-gradient-to-br"]{height:72px!important;background:linear-gradient(135deg,color-mix(in srgb,var(--fanous-color-primary) 28%,var(--fanous-color-surface-raised)),var(--fanous-color-surface-raised))!important}
-main [class*="h-32"][class*="bg-gradient-to-br"]>*{width:44px!important;height:44px!important;font-size:18px!important}
+main [class*="h-32"][class*="bg-gradient-to-br"]>:not(img){width:44px!important;height:44px!important;font-size:18px!important}
 main div:has(>[class*="h-32"][class*="bg-gradient-to-br"]) .flex.gap-2>:is(a,button){height:36px;min-height:36px}
 main div:has(>[class*="h-32"][class*="bg-gradient-to-br"]) [class*="bg-red-"]{background:transparent!important;color:var(--fanous-c-button-destructive-bg,#c0392b)!important;box-shadow:none!important}
 /* Channel tabs and content share one edge */

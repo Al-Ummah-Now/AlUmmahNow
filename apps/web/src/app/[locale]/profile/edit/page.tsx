@@ -3,7 +3,8 @@ import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Profile } from '@/interfaces';
-import { fetchProfile, updateCoverPhoto, updateProfile, updateProfilePhoto } from "@/lib/api/profiles-client";
+import { fetchProfile, removeProfileImage, updateCoverPhoto, updateProfile, updateProfilePhoto } from "@/lib/api/profiles-client";
+import { EditableAvatar, EditableCover } from "@/components/media/ProfileImages";
 import ImageCropDialog from "@/components/ImageCropDialog";
 import { useMultiAccount } from "@/hooks/useMultiAccount";
 import { useAuth } from '@/components/AuthProvider/authContext';
@@ -103,17 +104,35 @@ const ProfileEditPage = () => {
   // Picked image waiting to be positioned/zoomed before upload
   const [cropping, setCropping] = useState<{ type: 'profilePhoto' | 'coverPhoto'; file: File } | null>(null);
 
-  const handlePhotoUpdate = (type: 'profilePhoto' | 'coverPhoto', file: File) => {
-    // Logic to handle photo update
-    if (!profile) return;
+  // Which photo is uploading or being removed (disables its buttons meanwhile)
+  const [photoBusy, setPhotoBusy] = useState<'profilePhoto' | 'coverPhoto' | null>(null);
+  const [photoError, setPhotoError] = useState('');
 
-    if (type === 'profilePhoto') {
-      void updateProfilePhoto(profile, file, setProfile).then((ok) => {
-        if (ok) void reloadProfile();
-      });
+  const handlePhotoUpdate = async (type: 'profilePhoto' | 'coverPhoto', file: File) => {
+    if (!profile) return;
+    setPhotoBusy(type);
+    setPhotoError('');
+    try {
+      const ok = type === 'profilePhoto'
+        ? await updateProfilePhoto(profile, file, setProfile)
+        : await updateCoverPhoto(profile, file, setProfile);
+      if (!ok) setPhotoError(t.errors.uploadFailed || t.profile.saveFailed);
+      else if (type === 'profilePhoto') void reloadProfile();
+    } finally {
+      setPhotoBusy(null);
     }
-    if (type === 'coverPhoto') {
-      updateCoverPhoto(profile, file, setProfile);
+  };
+
+  const removePhoto = async (type: 'profilePhoto' | 'coverPhoto') => {
+    if (!profile) return;
+    setPhotoBusy(type);
+    setPhotoError('');
+    try {
+      const ok = await removeProfileImage(type === 'profilePhoto' ? 'avatar' : 'cover', setProfile);
+      if (!ok) setPhotoError(t.profile.saveFailed);
+      else if (type === 'profilePhoto') void reloadProfile();
+    } finally {
+      setPhotoBusy(null);
     }
   };
 
@@ -138,6 +157,12 @@ const ProfileEditPage = () => {
 
   const displayFirstName = getLocalizedName(profile?.firstName, profile?.firstNameLocalized);
   const displayLastName = getLocalizedName(profile?.lastName, profile?.lastNameLocalized);
+  // First/last names are optional: fall back to the display name, then the email
+  const welcomeName =
+    `${displayFirstName} ${displayLastName}`.trim() ||
+    getLocalizedName(profile?.displayName, profile?.displayNameLocalized) ||
+    profile?.email ||
+    '';
 
   if (!auth?.user) {
     return <SignInPrompt title={t.profile.signInTitle} message={t.profile.signInMessage} />;
@@ -148,96 +173,58 @@ const ProfileEditPage = () => {
       <main className="flex-1 p-6 max-w-4xl mx-auto w-full">
         {/* Name Section */}
         <section id="name" className="section mb-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
-          <div className="relative group">
-            {/* Cover Photo */}
-            <div
-              className="cover-photo h-48 bg-gray-300 dark:bg-gray-700 rounded-md overflow-hidden cursor-pointer relative"
-              role="button"
-              tabIndex={0}
-              aria-label={t.channel.clickToChangeCover}
-              data-testid="profile-cover-upload"
-              onClick={() => document.getElementById('coverPhotoInput')?.click()}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  document.getElementById('coverPhotoInput')?.click();
-                }
-              }}
-              style={{
-                backgroundImage: profile?.coverUrl ? `url(${profile.coverUrl})` : 'none',
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-              }}
-            >
-              {/* Edit indicator - always visible */}
-              <div className="absolute top-4 end-4 bg-black/60 backdrop-blur-sm px-4 py-2 rounded-lg flex items-center gap-2 text-white pointer-events-none">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                <span className="text-sm font-medium">{t.channel.clickToChangeCover || 'Click to change cover'}</span>
-              </div>
-              {/* Hover overlay */}
-              <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-              <input
-                type="file"
-                id="coverPhotoInput"
-                aria-label={t.channel.clickToChangeCover}
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const picked = e.target.files?.[0];
-                  e.target.value = '';
-                  if (picked) setCropping({ type: 'coverPhoto', file: picked });
-                }}
-              />
-            </div>
-
-            {/* Profile Photo */}
-            <div
-              className="profile-photo w-24 h-24 rounded-full bg-gray-300 dark:bg-gray-700 border-4 border-gray-50 dark:border-gray-900 absolute bottom-[-24px] start-4 cursor-pointer overflow-hidden relative group/avatar"
-              role="button"
-              tabIndex={0}
-              aria-label={t.channel.clickToChangeAvatar}
-              data-testid="profile-avatar-upload"
-              onClick={() => document.getElementById('profilePhotoInput')?.click()}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  document.getElementById('profilePhotoInput')?.click();
-                }
-              }}
-              style={{
-                backgroundImage: profile?.avatarUrl ? `url(${profile.avatarUrl})` : `url(/avatar.png)`,
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-              }}
-            >
-              {/* Avatar edit indicator - always visible */}
-              <div className="absolute inset-0 bg-black/40 flex items-center justify-center pointer-events-none">
-                <div className="bg-white/90 dark:bg-gray-800/90 rounded-full p-2">
-                  <svg className="w-6 h-6 text-gray-800 dark:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                </div>
-              </div>
-              {/* Hover overlay */}
-              <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/avatar:opacity-100 transition-opacity"></div>
-              <input
-                type="file"
-                id="profilePhotoInput"
-                aria-label={t.channel.clickToChangeAvatar}
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const picked = e.target.files?.[0];
-                  e.target.value = '';
-                  if (picked) setCropping({ type: 'profilePhoto', file: picked });
-                }}
-              />
-            </div>
-          </div>
+          <EditableCover
+            url={profile?.coverUrl}
+            alt={t.channel.currentCover}
+            onPick={() => document.getElementById('coverPhotoInput')?.click()}
+            onRemove={() => void removePhoto('coverPhoto')}
+            labels={{ pick: t.channel.clickToChangeCover, change: t.channel.changeCover, remove: t.channel.removeCover }}
+            testId="profile-cover-upload"
+            imageTestId="profile-cover-image"
+            busy={photoBusy === 'coverPhoto'}
+            className="cover-photo h-48 rounded-md bg-gray-300 dark:bg-gray-700"
+          />
+          <EditableAvatar
+            url={profile?.avatarUrl}
+            alt={t.channel.currentAvatar}
+            onPick={() => document.getElementById('profilePhotoInput')?.click()}
+            onRemove={() => void removePhoto('profilePhoto')}
+            labels={{ pick: t.channel.clickToChangeAvatar, change: t.channel.changeAvatar, remove: t.channel.removeAvatar }}
+            testId="profile-avatar-upload"
+            imageTestId="profile-avatar-image"
+            busy={photoBusy === 'profilePhoto'}
+            // eslint-disable-next-line @next/next/no-img-element -- static default avatar
+            placeholder={<img src="/avatar.png" alt="" className="h-full w-full object-cover" />}
+            className="profile-photo relative z-[3] -mt-12 ps-4"
+          />
+          {photoError && (
+            <p role="alert" data-testid="profile-photo-error" className="mt-2 text-sm text-red-600 dark:text-red-400">{photoError}</p>
+          )}
+          {/* Pickers live outside the clickable areas so their click does not bubble back */}
+          <input
+            type="file"
+            id="coverPhotoInput"
+            aria-label={t.channel.clickToChangeCover}
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const picked = e.target.files?.[0];
+              e.target.value = '';
+              if (picked) setCropping({ type: 'coverPhoto', file: picked });
+            }}
+          />
+          <input
+            type="file"
+            id="profilePhotoInput"
+            aria-label={t.channel.clickToChangeAvatar}
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const picked = e.target.files?.[0];
+              e.target.value = '';
+              if (picked) setCropping({ type: 'profilePhoto', file: picked });
+            }}
+          />
           <ImageCropDialog
             file={cropping?.file ?? null}
             kind={cropping?.type === 'coverPhoto' ? 'cover' : 'avatar'}
@@ -245,10 +232,10 @@ const ProfileEditPage = () => {
             onApply={(cropped) => {
               const type = cropping?.type;
               setCropping(null);
-              if (type) handlePhotoUpdate(type, cropped);
+              if (type) void handlePhotoUpdate(type, cropped);
             }}
           />
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mt-12">{t.profile.welcomeUser?.replace('{name}', `${displayFirstName} ${displayLastName}`) || `${t.common.welcome} ${displayFirstName} ${displayLastName}!`}</h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mt-4">{t.profile.welcomeUser?.replace('{name}', welcomeName) || `${t.common.welcome} ${welcomeName}!`}</h1>
           <p className="text-gray-600 dark:text-gray-400">{t.profile.editProfileDescription || 'Edit your profile information below.'}</p>
         </section>
 

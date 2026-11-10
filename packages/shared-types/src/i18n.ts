@@ -275,6 +275,12 @@ export interface AppTranslations {
     singleChannel: string;
     clickToChangeCover: string;
     clickToChangeAvatar: string;
+    changeCover: string;
+    removeCover: string;
+    changeAvatar: string;
+    removeAvatar: string;
+    currentCover: string;
+    currentAvatar: string;
     updateChannelInformation: string;
     channelNotFoundMessage: string;
     charactersRemaining: string;
