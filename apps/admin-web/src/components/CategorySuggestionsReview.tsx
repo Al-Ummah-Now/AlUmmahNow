@@ -14,15 +14,9 @@ import type { ActionResult } from '@/lib/api/errors';
 import type { CategoryBulkResult, CategorySuggestionItem, CategorySuggestionQueue } from '@/lib/api/types';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { translateDynamic, type Translator } from '@/i18n/translate';
-import type { Locale } from '@/i18n/config';
+import { categoryLabel } from '@/lib/category-label';
 import { ErrorAlert, fieldClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
-
-export function categoryLabel(value: string | null | undefined, locale: Locale): string | null {
-  if (!value) return null;
-  const found = VIDEO_CATEGORIES.find((c) => c.value === value);
-  return found ? found.label[locale] ?? found.label.en : value;
-}
 
 const pct = (confidence: number | null) => (confidence === null ? null : Math.round(confidence * 100));
 
