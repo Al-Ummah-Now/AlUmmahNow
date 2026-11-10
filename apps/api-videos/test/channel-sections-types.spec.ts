@@ -49,8 +49,10 @@ function env() {
     videos: new MemoryBucket({
       'v-long1': videoFixture({ id: 'v-long1', channelId: CH, userId: OWNER, duration: 600, views: 5, dateCreated: '2026-01-01T00:00:00.000Z' }),
       'v-long2': videoFixture({ id: 'v-long2', channelId: CH, userId: OWNER, duration: 900, views: 50, dateCreated: '2026-02-01T00:00:00.000Z' }),
-      's1': videoFixture({ id: 's1', channelId: CH, userId: OWNER, duration: 30, views: 1, dateCreated: '2026-02-02T00:00:00.000Z' }),
-      's2': videoFixture({ id: 's2', channelId: CH, userId: OWNER, duration: 40, views: 9, dateCreated: '2026-01-02T00:00:00.000Z' }),
+      // Under a minute but landscape: a video, not a Short (the shared rule)
+      'v-wide': videoFixture({ id: 'v-wide', channelId: CH, userId: OWNER, duration: 45, width: 1280, height: 720, views: 2, dateCreated: '2026-01-15T00:00:00.000Z' }),
+      's1': videoFixture({ id: 's1', channelId: CH, userId: OWNER, duration: 30, width: 720, height: 1280, views: 1, dateCreated: '2026-02-02T00:00:00.000Z' }),
+      's2': videoFixture({ id: 's2', channelId: CH, userId: OWNER, duration: 40, width: 1080, height: 1920, views: 9, dateCreated: '2026-01-02T00:00:00.000Z' }),
       'v-priv': videoFixture({ id: 'v-priv', channelId: CH, userId: OWNER, isPublic: false }),
       'v-proc': videoFixture({ id: 'v-proc', channelId: CH, userId: OWNER, uploadStatus: 'processing', dateCreated: '2026-04-01T00:00:00.000Z' }),
       'v-del': videoFixture({ id: 'v-del', channelId: CH, userId: OWNER, isDeleted: true }),
@@ -165,9 +167,9 @@ describe('channel section types: content per type', () => {
   it('recent_uploads and popular_uploads: long-form public ready videos, newest / most viewed first', async () => {
     const e = env();
     const recent = await addAndRead(e, { type: 'recent_uploads' });
-    assert.deepEqual(recent.asVisitor.populatedContent.videos.map((v: any) => v.id), ['v-long2', 'v-long1']);
+    assert.deepEqual(recent.asVisitor.populatedContent.videos.map((v: any) => v.id), ['v-long2', 'v-wide', 'v-long1']);
     const popular = await addAndRead(e, { type: 'popular_uploads' });
-    assert.deepEqual(popular.asVisitor.populatedContent.videos.map((v: any) => v.id), ['v-long2', 'v-long1']);
+    assert.deepEqual(popular.asVisitor.populatedContent.videos.map((v: any) => v.id), ['v-long2', 'v-long1', 'v-wide']);
     assert.ok(recent.asVisitor.populatedContent.videos.every((v: any) => Array.isArray(v.comments) && v.comments.length === 0), 'shelf videos carry no comment list');
   });
 

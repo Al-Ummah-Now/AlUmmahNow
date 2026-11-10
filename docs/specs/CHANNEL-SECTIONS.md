@@ -221,7 +221,7 @@ No migration is needed. Sections without the new fields read with defaults (`sor
 | Method and path | Change |
 |---|---|
 | `POST /api/channels/:id/sections` | New types and fields. Per-type validation (§4) runs in `validateSectionContent`, including "video or playlist belongs to this channel". Limits: 12 total (400 `section_limit`), per type (409 `section_type_limit`). Consent rules (§6). Errors return a stable `code` (and an English `error` for logs). The web shows localized text for the code, never the raw message |
-| `PATCH /api/channels/:id/sections/:sectionId` | Same fields. `type` can't change. `consent: false` removes consent. A channel admin editing a consent type gets 403 |
+| `PUT /api/channels/:id/sections/:sectionId` | Same fields. `type` can't change. `consent: false` removes consent. A channel admin editing a consent type gets 403 |
 | `PATCH /api/channels/:id/sections/reorder` | Spotlight is moved first |
 | `DELETE …/:sectionId` | Unchanged |
 | `GET /api/channels/:id/sections` | Unchanged. Returns the raw config for the manager |
@@ -324,8 +324,10 @@ are added as cards in that design, under four small headings:
 
 ## 11. Copy (en / ar)
 
-Strings live in `packages/shared-types/src/i18n-static/{en,ar}.ts` under
-`channelManage.sections` and `channel`.
+Strings live in `packages/shared-types/src/i18n-channel-sections.ts` (`channelSections`, en and ar),
+shared by the web static fallback and the api-videos translation seed. The manager's page chrome
+(header, count, publish, delete) stays under `channelManage.sections` in
+`packages/shared-types/src/i18n-static/{en,ar}.ts`.
 
 | Key | en | ar |
 |---|---|---|

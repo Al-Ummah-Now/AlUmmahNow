@@ -104,8 +104,12 @@ export function SortableSectionItem({ section, onDelete, onEdit, pinned = false 
           )}
         </div>
         <div className="mt-0.5 text-xs text-muted-foreground md:text-sm">
-          {typeLabel}
-          <span aria-hidden="true">{', '}</span>
+          {title !== typeLabel && (
+            <>
+              {typeLabel}
+              <span aria-hidden="true">{', '}</span>
+            </>
+          )}
           {getSectionContentSummary(section, s)}
         </div>
         {hidden && <p className="sr-only">{cs.emptyHints[section.emptyHint ?? 'noContent']}</p>}

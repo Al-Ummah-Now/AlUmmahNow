@@ -35,7 +35,7 @@ export function OwnerSectionNote({ section, channelId }: OwnerSectionNoteProps) 
       </p>
       <Link
         href={`/${locale}/settings/channel/${channelId}/sections`}
-        className="shrink-0 rounded-sm text-sm font-semibold text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="shrink-0 rounded-sm text-sm font-semibold text-brand-ink underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         {strings.editSections}
       </Link>

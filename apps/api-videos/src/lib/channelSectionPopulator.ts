@@ -17,6 +17,7 @@ import {
   ChannelSectionView,
   Channel,
   CommunityPost,
+  isShort,
   PostStatus,
   PostVisibility,
   Profile,
@@ -254,9 +255,12 @@ async function getChannelUploads(
   channel?: StoredChannel | null,
 ): Promise<VideoObject[]> {
   const videoRepo = new R2Repository<StoredVideo>(env.videos);
-  const isShort = (v: StoredVideo) => !v.isLive && (v.duration ?? 0) > 0 && (v.duration ?? 0) < 60;
+  // The shared Short rule (length and shape), as the index applies it
   const isListed = (video: StoredVideo | null): video is StoredVideo =>
-    !!video && video.channelId === channelId && isListableVideo(video) && (form === 'shorts' ? isShort(video) : !isShort(video) && !video.isLive);
+    !!video &&
+    video.channelId === channelId &&
+    isListableVideo(video) &&
+    (form === 'shorts' ? !video.isLive && isShort(video) : !isShort(video) && !video.isLive);
 
   const indexed = await channelVideosFromIndex<StoredVideo>(env, {
     channelId,
