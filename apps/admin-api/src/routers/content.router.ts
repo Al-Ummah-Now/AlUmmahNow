@@ -346,7 +346,9 @@ app.get('/users', async (c) => {
 app.get('/users/search', async (c) => {
   need(c, 'channels:transfer');
   const { q = '', exclude, channelId } = c.req.query();
-  return ok(c, await videos(c, '/users/search', { query: { q, ...(exclude ? { exclude } : {}), ...(channelId ? { channelId } : {}) } }));
+  const found = await videos<{ items: Array<{ id: string }> }>(c, '/users/search', { query: { q, ...(exclude ? { exclude } : {}), ...(channelId ? { channelId } : {}) } });
+  // Invited users (not signed in yet) are valid new owners; the picker badges them
+  return ok(c, Array.isArray(found?.items) ? { ...found, items: await withInvites(c, found.items) } : found);
 });
 
 app.get('/users/:id', async (c) => {
