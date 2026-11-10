@@ -15,6 +15,9 @@ import { grantCreatorTier } from './creator-tier';
 // Signs in through the auth server: a retained trace would hold the password and code
 test.use({ trace: 'off' });
 
+// Signs up/in: no trace or video, they would record the password (see secret-fill.ts)
+test.use({ trace: 'off', video: 'off' });
+
 const WIDTHS = [768, 1024, 1280, 1440];
 /** Side-column rows: thumbnail beside the text, never a full-width card. */
 const MAX_SIDE_THUMB = 180;
