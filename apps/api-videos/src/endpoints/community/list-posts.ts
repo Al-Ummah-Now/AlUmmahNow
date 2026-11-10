@@ -1,3 +1,4 @@
+import { withPostViews } from '../../lib/post-views';
 import { z } from 'zod';
 import R2Repository from '../../lib/r2Repo';
 import {
@@ -128,6 +129,9 @@ export class ListCommunityPosts extends OptionalAuthRoute {
           posts.push(post);
         }
       }
+
+      // Views: legacy field + D1 count (SCALABILITY-AUDIT AV-8)
+      await withPostViews(c.env.NOTIFICATIONS_DB, posts);
 
       // Sort by creation date (newest first)
       posts.sort((a, b) =>

@@ -8,6 +8,7 @@
  * DELETE /api/library/saved-posts/:postId       (idempotent)
  */
 
+import { withPostViews } from '../../lib/post-views';
 import { Str } from "chanfana";
 import { z } from "zod";
 import { AuthenticatedRoute, AppContext } from "../../base";
@@ -103,6 +104,8 @@ export class SavedPostsList extends AuthenticatedRoute {
 		const items = posts
 			.map((post, i) => (post && post.status !== "deleted" ? { ...post, savedAt: new Date(page.items[i].savedAt).toISOString() } : null))
 			.filter(Boolean);
+		// Views: legacy field + D1 count (SCALABILITY-AUDIT AV-8)
+		await withPostViews(c.env.NOTIFICATIONS_DB, items as Array<{ id: string; views?: number }>);
 
 		return { success: true, result: { items, nextCursor: page.nextCursor, total: page.total } };
 	}

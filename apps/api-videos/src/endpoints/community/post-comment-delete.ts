@@ -1,3 +1,4 @@
+import { bumpPostComments } from '../../lib/community-posts';
 import { Str } from 'chanfana';
 import { z } from 'zod';
 import { AuthenticatedRoute, AppContext } from '../../base';
@@ -142,8 +143,8 @@ export class DeletePostComment extends AuthenticatedRoute {
     }
 
     // 6. Decrement post's comments count
-    post.comments = Math.max(0, post.comments - 1);
-    await bucket.put(postKey, JSON.stringify(post));
+    // Conditional write of the counter only (SCALABILITY-AUDIT AV-9)
+    await bumpPostComments(bucket, postKey, -1);
 
     // 7. Send queue event
     const queue = new Queue(c.env.queue);
