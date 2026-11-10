@@ -4,7 +4,8 @@ import { getCategorySuggestionStats, listCategorySuggestions } from '@/lib/api/a
 import type { CategorySuggestionList, CategorySuggestionQueue, CategorySuggestionStats } from '@/lib/api/types';
 import { getI18n } from '@/i18n/server';
 import { formatNumber } from '@/i18n/translate';
-import { CategorySuggestionsReview, categoryLabel } from '@/components/CategorySuggestionsReview';
+import { CategorySuggestionsReview } from '@/components/CategorySuggestionsReview';
+import { categoryLabel } from '@/lib/category-label';
 import { ErrorAlert, cardClass, fieldClass, linkClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { CategorizeSettings, CategoryBackfill } from './CategorizeControls';
