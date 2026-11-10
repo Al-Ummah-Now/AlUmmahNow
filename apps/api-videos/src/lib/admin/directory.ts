@@ -124,7 +124,7 @@ export async function ensureAdminIndex(env: AdminEnv, kind: OwnershipKind): Prom
 const CHANNEL_SORT: Record<string, string> = {
 	newest: 'c.created_at DESC, c.id',
 	oldest: 'c.created_at ASC, c.id',
-	name: 'lower(c.title) ASC, c.id',
+	name: 'lower(c.admin_title) ASC, c.id',
 	views: 'total_views DESC, c.id',
 };
 
@@ -136,7 +136,7 @@ export async function listChannels(env: AdminEnv, query: AdminChannelQuery): Pro
 	const binds: unknown[] = [];
 	if (query.q?.trim()) {
 		const term = likeTerm(query.q);
-		where.push(`(lower(c.title) LIKE ?1 ESCAPE '\\' OR lower(c.handle) LIKE ?1 ESCAPE '\\' OR lower(c.email) LIKE ?1 ESCAPE '\\' OR c.id = ?2 OR c.owner_id = ?2
+		where.push(`(lower(c.admin_title) LIKE ?1 ESCAPE '\\' OR lower(c.handle) LIKE ?1 ESCAPE '\\' OR lower(c.email) LIKE ?1 ESCAPE '\\' OR c.id = ?2 OR c.owner_id = ?2
 			OR c.owner_id IN (SELECT p.id FROM ${OWNERSHIP_TABLE} p WHERE p.kind = 'profile' AND lower(p.email) LIKE ?1 ESCAPE '\\'))`);
 		binds.push(term, query.q.trim());
 	}
@@ -190,7 +190,7 @@ export async function hydrateChannels(env: AdminEnv, rows: Row[]): Promise<Admin
 		const ch = objects.get(r.id) ?? {};
 		return {
 			id: r.id,
-			name: (ch.name as string) || r.title || r.id,
+			name: (ch.name as string) || r.admin_title || r.id,
 			handle: (ch.handle as string) || r.handle || null,
 			ownerId: r.owner_id ?? null,
 			ownerEmail: ownerEmail.get(r.owner_id) ?? r.email ?? null,
@@ -214,7 +214,7 @@ const VIDEO_SORT: Record<string, string> = {
 	newest: 'v.created_at DESC, v.id',
 	oldest: 'v.created_at ASC, v.id',
 	views: 'v.views DESC, v.id',
-	title: 'lower(v.title) ASC, v.id',
+	title: 'lower(v.admin_title) ASC, v.id',
 };
 
 export async function listVideos(env: AdminEnv, query: AdminVideoQuery): Promise<AdminPage<AdminVideoRow>> {
@@ -228,7 +228,7 @@ export async function listVideos(env: AdminEnv, query: AdminVideoQuery): Promise
 		binds.push(likeTerm(query.q));
 		const like = n();
 		binds.push(query.q.trim());
-		where.push(`(lower(v.title) LIKE ${like} ESCAPE '\\' OR v.id = ${n()})`);
+		where.push(`(lower(v.admin_title) LIKE ${like} ESCAPE '\\' OR v.id = ${n()})`);
 	}
 	if (query.noChannel) where.push('v.channel_id IS NULL');
 	else if (query.channelId) {
@@ -264,7 +264,7 @@ export async function listVideos(env: AdminEnv, query: AdminVideoQuery): Promise
 	const total = await db.prepare(`SELECT COUNT(*) AS n FROM ${OWNERSHIP_TABLE} v WHERE ${whereSql}`).bind(...binds).first<{ n: number }>();
 	const { results } = await db
 		.prepare(
-			`SELECT v.*, ch.title AS channel_name FROM ${OWNERSHIP_TABLE} v
+			`SELECT v.*, ch.admin_title AS channel_name FROM ${OWNERSHIP_TABLE} v
 			 LEFT JOIN ${OWNERSHIP_TABLE} ch ON ch.kind = 'channel' AND ch.id = v.channel_id
 			 WHERE ${whereSql} ORDER BY ${VIDEO_SORT[query.sort ?? 'newest'] ?? VIDEO_SORT.newest} LIMIT ${pageSize} OFFSET ${offset}`,
 		)
@@ -279,7 +279,7 @@ export async function hydrateVideos(env: AdminEnv, rows: Row[]): Promise<AdminVi
 		const v = objects.get(r.id) ?? {};
 		return {
 			id: r.id,
-			title: (v.title as string) || r.title || r.id,
+			title: (v.title as string) || r.admin_title || r.id,
 			channelId: r.channel_id ?? null,
 			channelName: r.channel_name ?? null,
 			ownerId: r.owner_id ?? null,
@@ -311,7 +311,7 @@ export async function listUsers(env: AdminEnv, query: AdminUserQuery): Promise<A
 	const { page, pageSize, offset } = pageOf(query.page, query.pageSize);
 	// Profiles, plus banned users whose profile was deleted (the ban outlives the data)
 	const base = `
-		SELECT p.id AS id, p.title AS display_name, p.handle AS user_name, p.email AS email, p.created_at AS created_at,
+		SELECT p.id AS id, p.admin_title AS display_name, p.handle AS user_name, p.email AS email, p.created_at AS created_at,
 		       b.user_id IS NOT NULL AS banned, 0 AS profile_deleted
 		FROM ${OWNERSHIP_TABLE} p LEFT JOIN videos_bans b ON b.user_id = p.id
 		WHERE p.kind = 'profile' AND p.is_deleted = 0
@@ -389,7 +389,7 @@ export async function listComments(env: AdminEnv, query: AdminCommentQuery): Pro
 	const total = await db.prepare(`SELECT COUNT(*) AS n FROM admin_comments c WHERE ${whereSql}`).bind(...binds).first<{ n: number }>();
 	const { results } = await db
 		.prepare(
-			`SELECT c.*, v.title AS video_title FROM admin_comments c
+			`SELECT c.*, v.admin_title AS video_title FROM admin_comments c
 			 LEFT JOIN ${OWNERSHIP_TABLE} v ON v.kind = 'video' AND v.id = c.video_id
 			 WHERE ${whereSql} ORDER BY c.created_at DESC, c.comment_id LIMIT ${pageSize} OFFSET ${offset}`,
 		)

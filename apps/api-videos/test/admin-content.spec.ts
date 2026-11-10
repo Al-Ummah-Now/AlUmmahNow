@@ -4,6 +4,9 @@
  */
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { Hono } from 'hono';
 import { fromHono } from 'chanfana';
 import { applySuspensionHold, liftSuspensionHold, MessageType, VIDEOS_BANNED_CODE } from '@al-ummah/shared-types';
@@ -184,6 +187,25 @@ describe('suspension holds', () => {
 	});
 });
 
+describe('search migrations', () => {
+	it('apply over a database that already has the Creator Studio columns (QA ran that preview migration)', () => {
+		const dir = join(__dirname, '..', 'migrations', 'search');
+		const db = new DatabaseSync(':memory:');
+		for (const file of readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()) {
+			db.exec(readFileSync(join(dir, file), 'utf8'));
+			// The Studio branch's 0003_content_studio_columns.sql, as applied on QA
+			if (file.startsWith('0002_')) {
+				db.exec(`ALTER TABLE content_ownership ADD COLUMN studio_status TEXT;
+					ALTER TABLE content_ownership ADD COLUMN title TEXT;
+					ALTER TABLE content_ownership ADD COLUMN category TEXT;
+					ALTER TABLE content_ownership ADD COLUMN language TEXT;`);
+			}
+		}
+		const columns = (db.prepare("SELECT name FROM pragma_table_info('content_ownership')").all() as { name: string }[]).map((c) => c.name);
+		assert.ok(columns.includes('admin_title') && columns.includes('title'));
+	});
+});
+
 describe('admin lists (ownership index)', () => {
 	it('search channels by name, handle and owner email; filter suspended', async () => {
 		const { call } = await setup({
@@ -215,7 +237,7 @@ describe('admin lists (ownership index)', () => {
 
 	it('rebuilds rows written before the admin columns', async () => {
 		const { db, call } = await setup();
-		db.db.prepare("UPDATE content_ownership SET title = NULL, admin_cols = 0 WHERE kind = 'video'").run();
+		db.db.prepare("UPDATE content_ownership SET admin_title = NULL, admin_cols = 0 WHERE kind = 'video'").run();
 		const result = (await call('GET', '/videos?q=seerah')).body.result;
 		assert.deepEqual(result.items.map((v: any) => v.id), ['v2']);
 		assert.equal(result.indexComplete, true);
