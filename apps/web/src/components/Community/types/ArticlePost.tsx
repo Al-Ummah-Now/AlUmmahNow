@@ -18,17 +18,17 @@ export default function ArticlePost({ post }: ArticlePostProps) {
       lang={a.locale}
       dir="auto"
       data-testid="community-article"
-      className="block border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden hover:border-blue-500 dark:hover:border-blue-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 transition-colors"
+      className="block border border-[var(--fanous-color-divider)] rounded-lg overflow-hidden hover:border-[var(--fanous-color-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--fanous-color-focus-ring)] transition-colors"
     >
       {a.coverUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={a.coverUrl} alt="" loading="lazy" decoding="async" className="w-full aspect-[16/9] object-cover bg-gray-100 dark:bg-gray-800" />
+        <img src={a.coverUrl} alt="" loading="lazy" decoding="async" className="w-full aspect-[16/9] object-cover bg-[var(--fanous-color-surface-raised)]" />
       ) : null}
       <div className="p-4 space-y-2 text-start">
-        <span className="inline-block text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">{t.community.article}</span>
-        <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 break-words">{a.title}</h3>
-        {a.excerpt ? <p className="text-sm text-gray-700 dark:text-gray-300 break-words line-clamp-3">{a.excerpt}</p> : null}
-        <span className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 dark:text-blue-400">
+        <span className="inline-block text-xs font-medium uppercase tracking-wide text-[var(--fanous-color-text-muted)]">{t.community.article}</span>
+        <h3 className="text-base font-semibold text-[var(--fanous-color-text-primary)] break-words">{a.title}</h3>
+        {a.excerpt ? <p className="text-sm text-[var(--fanous-color-text-secondary)] break-words line-clamp-3">{a.excerpt}</p> : null}
+        <span className="inline-flex items-center gap-1 text-sm font-medium text-[var(--fanous-color-link)]">
           {t.community.readArticle}
           <span aria-hidden="true" className="rtl:rotate-180">→</span>
           <span className="sr-only">({t.community.articleOpensSite})</span>
