@@ -5,7 +5,7 @@ export const WEB_CLIENT = 'web-client-id';
 
 export interface Signer {
   getKey: JWTVerifyGetKey;
-  sign: (claims?: Record<string, unknown>, opts?: { exp?: number; issuer?: string; aud?: string }) => Promise<string>;
+  sign: (claims?: Record<string, unknown>, opts?: { iat?: number; exp?: number; issuer?: string; aud?: string }) => Promise<string>;
 }
 
 /** An ES256 key pair plus a local JWKS, standing in for the auth server. */
@@ -14,7 +14,7 @@ export async function makeSigner(kid = 'primary'): Promise<Signer> {
   const jwk = { ...(await exportJWK(publicKey)), kid, alg: 'ES256', use: 'sig' };
   const getKey = createLocalJWKSet({ keys: [jwk] });
   const sign: Signer['sign'] = async (claims = {}, opts = {}) => {
-    const now = Math.floor(Date.now() / 1000);
+    const now = opts.iat ?? Math.floor(Date.now() / 1000);
     return new SignJWT({
       mode: 'access',
       type: 'user',
@@ -26,7 +26,8 @@ export async function makeSigner(kid = 'primary'): Promise<Signer> {
       .setSubject('user:abc')
       .setAudience(opts.aud ?? WEB_CLIENT)
       .setIssuedAt(now)
-      .setExpirationTime(opts.exp ?? now + 3600)
+      // 15 minutes, like Auth (ACCESS_TOKEN_TTL); longer ones count as legacy before the cutover
+      .setExpirationTime(opts.exp ?? now + 900)
       .sign(privateKey);
   };
   return { getKey, sign };

@@ -10,8 +10,9 @@ import { cookies as getCookies, headers as getHeaders } from 'next/headers';
 import { createClient } from '@al-ummah-now/openauth/client';
 import { redirect } from 'next/navigation';
 import { subjects } from '@/interfaces/subjects';
-import { highestAdminRole, hasAdminAccess, type SystemRole } from './roles';
+import { hasAdminAccess, type SystemRole } from './roles';
 import { logger } from './logger';
+import { verifySessionTokens } from './session-state';
 import {
   LEGACY_ACCESS_COOKIE,
   LEGACY_REFRESH_COOKIE,
@@ -90,24 +91,29 @@ export const getAdminSessionState = cache(async (): Promise<{ session: AdminSess
     }
 
     const client = await getAuthClient();
-    const verified = await client.verify(subjects, tokens.accessToken);
+    const verdict = await verifySessionTokens(tokens, async (accessToken) => {
+      const verified = await client.verify(subjects, accessToken);
+      if (verified.err) {
+        logger.warn('[auth] Session token verification failed', {
+          name: verified.err.name,
+          message: verified.err.message,
+        });
+      }
+      return verified;
+    });
 
-    if (verified.err || !verified.subject) {
-      logger.warn('[auth] Session token verification failed', {
-        name: verified.err?.name,
-        message: verified.err?.message,
-      });
+    if (verdict.kind !== 'valid') {
+      if (verdict.kind === 'refresh' && verdict.reason === 'legacy') {
+        // The middleware refreshes these; requireAdminRole sends a render that
+        // still sees one to /api/auth/refresh (#663)
+        logger.info('[auth] Legacy long-lived access token; refresh required');
+      }
       // A refresh token is there to try: let the refresh route decide
-      return { session: null, expired: Boolean(tokens.refreshToken) };
+      return { session: null, expired: verdict.kind === 'refresh' };
     }
 
-    const userInfo = verified.subject.properties;
     const session: AdminSession = {
-      user: {
-        id: userInfo.id,
-        email: userInfo.email,
-        role: highestAdminRole(userInfo.roles),
-      },
+      user: verdict.user,
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
     };
