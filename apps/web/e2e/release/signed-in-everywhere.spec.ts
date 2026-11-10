@@ -22,6 +22,7 @@
  * run. Stage release runs never skip: there every app must pass.
  */
 import { test, expect, type APIRequestContext, type BrowserContext, type Page } from '@playwright/test';
+import { clickAccountMenuItem } from './account-menu';
 import { sinkEmail, target } from './targets';
 import { completeRegistration, createProfile, signUpOnWeb, type WebUser } from './web-session';
 
@@ -176,7 +177,7 @@ async function signUpA(page: Page, prefix: string): Promise<WebUser> {
 async function addAccountB(page: Page, prefix: string): Promise<WebUser> {
   await open(page, `${target().web}/en`);
   await openVideosMenu(page);
-  await page.locator('[data-testid="nav-add-account"]:visible').first().click();
+  await clickAccountMenuItem(page, 'nav-add-account');
   await expect(page.locator('input[name="password"]')).toBeVisible({ timeout: 20000 });
   const email = sinkEmail(prefix);
   await completeRegistration(page, email);
