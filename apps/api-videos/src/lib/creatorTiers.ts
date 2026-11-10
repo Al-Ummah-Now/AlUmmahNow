@@ -249,13 +249,55 @@ export async function deleteTier(db: D1Database, id: string): Promise<{ previous
 	return { previous };
 }
 
-/** Channels the user owns (not deleted), from the ownership index. */
-export async function countOwnedChannels(db: D1Database, userId: string): Promise<number> {
+/**
+ * Channel creation within a tier's limit, safe against parallel requests and
+ * against the ownership index (content_ownership, written from the queue)
+ * lagging behind: a create first reserves a slot in upload_rate_leases with
+ * one conditional INSERT (D1 runs it alone, so N parallel creates take at most
+ * the free slots). A reservation counts until its channel is in the index;
+ * the create's answer turns it into the channel's id, a failed create drops it.
+ */
+const CHANNEL_RESERVATION = 'channel_create';
+/** A failed or never-indexed create stops counting after this */
+const RESERVATION_TTL_SECONDS = 24 * 60 * 60;
+
+/** Channels the user owns plus creates in flight or not indexed yet. */
+export async function countChannelSlots(db: D1Database, userId: string, nowMs = Date.now()): Promise<number> {
 	const row = await db
-		.prepare(`SELECT COUNT(*) AS n FROM content_ownership WHERE kind = 'channel' AND owner_id = ? AND is_deleted = 0`)
-		.bind(userId)
+		.prepare(
+			`SELECT
+			   (SELECT COUNT(*) FROM content_ownership WHERE kind = 'channel' AND owner_id = ?1 AND is_deleted = 0)
+			 + (SELECT COUNT(*) FROM upload_rate_leases WHERE user_id = ?1 AND operation = ?2 AND expires_at > ?3
+			      AND lease_id NOT IN (SELECT id FROM content_ownership WHERE kind = 'channel')) AS n`,
+		)
+		.bind(userId, CHANNEL_RESERVATION, Math.floor(nowMs / 1000))
 		.first<{ n: number }>();
 	return Number(row?.n) || 0;
+}
+
+/** Reserves a channel slot when fewer than `max` are taken. Returns the reservation id, or null when full. */
+export async function reserveChannelSlot(db: D1Database, userId: string, max: number, nowMs = Date.now()): Promise<string | null> {
+	const id = `pending:${crypto.randomUUID()}`;
+	const now = Math.floor(nowMs / 1000);
+	const result = await db
+		.prepare(
+			`INSERT INTO upload_rate_leases (user_id, operation, lease_id, expires_at)
+			 SELECT ?1, ?2, ?3, ?4
+			 WHERE (SELECT COUNT(*) FROM content_ownership WHERE kind = 'channel' AND owner_id = ?1 AND is_deleted = 0)
+			     + (SELECT COUNT(*) FROM upload_rate_leases WHERE user_id = ?1 AND operation = ?2 AND expires_at > ?5
+			          AND lease_id NOT IN (SELECT id FROM content_ownership WHERE kind = 'channel')) < ?6`,
+		)
+		.bind(userId, CHANNEL_RESERVATION, id, now + RESERVATION_TTL_SECONDS, now, max)
+		.run();
+	return (result.meta?.changes ?? 0) > 0 ? id : null;
+}
+
+/** The create finished: the reservation becomes the channel's id (it stops counting once indexed), or is dropped. */
+export async function settleChannelSlot(db: D1Database, userId: string, reservation: string, channelId: string | null): Promise<void> {
+	const stmt = channelId
+		? db.prepare('UPDATE upload_rate_leases SET lease_id = ? WHERE user_id = ? AND operation = ? AND lease_id = ?').bind(channelId, userId, CHANNEL_RESERVATION, reservation)
+		: db.prepare('DELETE FROM upload_rate_leases WHERE user_id = ? AND operation = ? AND lease_id = ?').bind(userId, CHANNEL_RESERVATION, reservation);
+	await stmt.run();
 }
 
 /** Records an upload-limit refusal (the admin's notice to raise a limit). Never throws. */

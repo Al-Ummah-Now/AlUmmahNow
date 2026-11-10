@@ -162,7 +162,9 @@ export async function flagNeedsReupload(
   const video = flagged as UploadVideo;
   logger.error('[Uploads] Upload needs a re-upload', { videoId, userId: video.userId, source: opts.source, reason: opts.reason });
   // The failed upload gives its session back to the tier holder it was counted against
-  await refundUploadSession(env.SEARCH_DB, await uploadSubjectOf(env, video), video.dateCreated).catch(() => undefined);
+  await refundUploadSession(env.SEARCH_DB, await uploadSubjectOf(env, video), video.dateCreated, { source: opts.source, nowMs: now.getTime() }).catch((error) =>
+    logger.error('[Uploads] Upload session refund failed', { videoId, error: error instanceof Error ? error.message : String(error) }),
+  );
   await new Queue(env.queue).send(MessageType.VideoUploadFailed, {
     videoId,
     userId: video.userId,

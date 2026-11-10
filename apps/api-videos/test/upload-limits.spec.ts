@@ -15,6 +15,7 @@ import {
   countReused,
   MAX_BATCH_SIZE,
   refundUploadSession,
+  CLIENT_REFUNDS_PER_DAY,
   sessionLimitsOf,
   UPLOAD_CONTINUE_PATHS,
   UPLOAD_SESSION_OPERATION,
@@ -58,6 +59,8 @@ interface Options {
   tiers?: Record<string, string>;
   /** channel id -> owner, for the channelOwnerId the real channelIdMiddleware sets */
   channels?: Record<string, string>;
+  /** false: the channel stand-in does not index ownership (the queue has not run yet) */
+  indexChannels?: boolean;
   /** What the initiate stand-in answers (default: a new video) */
   initiateAnswer?: () => { status: number; body: unknown };
 }
@@ -89,12 +92,27 @@ async function harness(opts: Options = {}) {
   const continueLimiter = uploadContinueLimitMiddleware();
   for (const path of UPLOAD_CONTINUE_PATHS) app.use(path, continueLimiter);
   app.use('/api/channels', channelCreateGate);
-  app.post('/api/channels', (c) => {
-    db.db
-      .prepare("INSERT INTO content_ownership (kind, id, owner_id) VALUES ('channel', ?, ?)")
-      .run(`ch-${Math.random().toString(36).slice(2)}`, c.get('userId' as never) as string);
-    return c.json({ success: true });
+  // Stand-in for ChannelCreate. The real one indexes ownership from the queue
+  // (later); indexChannels: false leaves the index behind, x-test-fail fails it.
+  const channelsCreated: string[] = [];
+  app.post('/api/channels', async (c) => {
+    if (c.req.header('x-test-fail')) return c.json({ success: false, error: 'boom' }, 500);
+    // A tick between the gate and the store, where a parallel create could slip in
+    await new Promise((r) => setTimeout(r, 5));
+    const id = `ch-${Math.random().toString(36).slice(2)}`;
+    channelsCreated.push(id);
+    if (opts.indexChannels !== false) {
+      db.db.prepare("INSERT INTO content_ownership (kind, id, owner_id) VALUES ('channel', ?, ?)").run(id, c.get('userId' as never) as string);
+    }
+    return c.json({ success: true, result: { channel: { id } } });
   });
+  // Stand-ins for the direct video create, live stream create and the video list
+  app.post('/api/videos', (c) => c.json({ success: true }));
+  app.post('/api/live-streams', (c) => c.json({ success: true }));
+  app.get('/api/videos', (c) => c.json({ success: true }));
+  const indexChannel = (id: string, owner: string) =>
+    db.db.prepare("INSERT INTO content_ownership (kind, id, owner_id) VALUES ('channel', ?, ?)").run(id, owner);
+  const deleteChannel = (id: string) => db.db.prepare("UPDATE content_ownership SET is_deleted = 1 WHERE kind = 'channel' AND id = ?").run(id);
   // Stand-ins for the initiate handlers: each records the video it would create
   app.post('/api/videos/upload/initiate', (c) => {
     if (opts.initiateAnswer) {
@@ -159,7 +177,7 @@ async function harness(opts: Options = {}) {
         | { count: number }
         | undefined)?.count ?? 0,
     );
-  return { db, d1, request, initiate, batch, chunk, startUpload, tusCreate, complete, createChannel, created, hour };
+  return { db, d1, request, initiate, batch, chunk, startUpload, tusCreate, complete, createChannel, created, hour, channelsCreated, indexChannel, deleteChannel };
 }
 
 describe('creator tiers: who may upload', () => {
@@ -438,6 +456,57 @@ describe('creator tiers: channels, access and admin', () => {
     await assignTier(h.d1, 'alice', 'unlimited', 'admin');
     assert.equal((await h.createChannel('alice')).status, 200);
     for (let i = 0; i < 5; i++) assert.equal((await h.createChannel('owner', { 'x-test-roles': 'Super Admin' })).status, 200);
+  });
+
+  it('channel limit holds for parallel creates and before the ownership index catches up', async () => {
+    const h = await harness({ indexChannels: false });
+    const answers = await Promise.all(Array.from({ length: 6 }, () => h.createChannel('alice')));
+    assert.deepEqual(answers.map((r) => r.status).sort(), [200, 200, 403, 403, 403, 403], 'only the tier\'s 2 slots are taken');
+    // Sequential, index still behind: still full
+    assert.equal((await h.createChannel('alice')).status, 403);
+    // Indexed: counted once (the reservation stops counting), still full
+    for (const id of h.channelsCreated) h.indexChannel(id, 'alice');
+    const full = await h.createChannel('alice');
+    assert.equal(full.status, 403);
+    assert.equal(((await full.json()) as { channelsOwned: number }).channelsOwned, 2);
+    // A deleted channel frees its slot
+    h.deleteChannel(h.channelsCreated[0]);
+    assert.equal((await h.createChannel('alice')).status, 200);
+  });
+
+  it('a failed channel create gives its slot back', async () => {
+    const h = await harness({ indexChannels: false });
+    for (let i = 0; i < 3; i++) assert.equal((await h.createChannel('alice', { 'x-test-fail': '1' })).status, 500);
+    assert.equal((await h.createChannel('alice')).status, 200);
+    assert.equal((await h.createChannel('alice')).status, 200);
+    assert.equal((await h.createChannel('alice')).status, 403);
+  });
+
+  it('direct video create (POST /api/videos) and live stream create need a tier and count as sessions', async () => {
+    const h = await harness();
+    for (const path of ['/api/videos', '/api/live-streams']) {
+      const res = await h.request('nobody', path, { method: 'POST', body: '{}', headers: { 'content-type': 'application/json' } });
+      assert.equal(res.status, 403, path);
+      assert.equal(((await res.json()) as { code: string }).code, CREATOR_ERROR_CODES.uploadsByInvitation);
+      assert.equal((await h.request('alice', path, { method: 'POST', body: '{}', headers: { 'content-type': 'application/json' } })).status, 200, path);
+    }
+    assert.equal(h.hour('alice'), 2);
+    // Listing videos is not gated
+    assert.equal((await h.request('nobody', '/api/videos')).status, 200);
+  });
+
+  it('client-reported failures are refunded up to a daily cap; failures the sweep finds always are', async () => {
+    const h = await harness();
+    for (let i = 0; i < SMALL.perHour; i++) await h.initiate('alice');
+    const started = new Date(clock - 1000).toISOString();
+    let refunded = 0;
+    for (let i = 0; i < CLIENT_REFUNDS_PER_DAY + 5; i++) {
+      if (await refundUploadSession(h.d1, 'alice', started, { source: 'client', nowMs: clock })) refunded++;
+    }
+    assert.equal(refunded, CLIENT_REFUNDS_PER_DAY);
+    assert.equal(await refundUploadSession(h.d1, 'alice', started, { source: 'sweep', nowMs: clock }), true);
+    // The next day the client allowance starts over
+    assert.equal(await refundUploadSession(h.d1, 'alice', started, { source: 'client', nowMs: clock + 86_400_000 }), true);
   });
 
   it('GET /api/me/creator says what the user may do', async () => {
