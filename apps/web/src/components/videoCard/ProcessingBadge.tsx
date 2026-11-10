@@ -15,7 +15,7 @@ export function ProcessingBadge({ uploadStatus }: { uploadStatus?: string }) {
             data-testid="video-card-processing"
             data-status={uploadStatus}
             className={`absolute top-2 start-2 z-10 rounded px-2 py-0.5 text-xs font-semibold shadow ${
-                failed ? "bg-red-700 text-white" : "bg-amber-400 text-gray-900"
+                failed ? "bg-card text-destructive border border-destructive" : "bg-brand text-on-brand"
             }`}
         >
             {failed ? t.video.processingFailedBadge : t.video.processingBadge}
