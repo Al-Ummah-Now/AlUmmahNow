@@ -89,13 +89,15 @@ test.describe('keyboard', () => {
   test('KBD-02 nav links are reachable and show a focus indicator', async ({ page, browserName }) => {
     await page.goto('/dashboard');
     const tab = browserName === 'webkit' ? 'Alt+Tab' : 'Tab';
+    const labels = ['Dashboard', 'Moderation', 'Translations', 'Indices'];
     const reached: string[] = [];
-    for (let i = 0; i < 12; i++) {
+    // Tabs until every label is reached (the nav grows; a fixed count broke when items were added)
+    for (let i = 0; i < 40 && !labels.every((l) => reached.includes(l)); i++) {
       await page.keyboard.press(tab);
       const name = await page.evaluate(() => (document.activeElement as HTMLElement | null)?.innerText?.trim() ?? '');
       reached.push(name);
     }
-    for (const label of ['Dashboard', 'Moderation', 'Translations', 'Indices']) {
+    for (const label of labels) {
       expect(reached, `tab order: ${reached.join(' | ')}`).toContain(label);
     }
     await page.getByRole('link', { name: 'Moderation', exact: true }).focus();
