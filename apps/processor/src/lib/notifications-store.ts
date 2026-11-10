@@ -250,7 +250,7 @@ export async function pushStoredNotifications(
 
 /**
  * Brings the bell row of (channel, user) in line with channel_subscriptions,
- * which api-videos writes (migration 0007, SCALABILITY-AUDIT AV-4). Applied
+ * which api-videos writes (migration 0008, SCALABILITY-AUDIT AV-4). Applied
  * on every Subscribe/Unsubscribe event: for an imported channel it follows
  * the stored subscriptions, not the event, so late or reordered events cannot
  * resurrect or drop a subscriber. A channel whose legacy subscriptions are not
@@ -294,7 +294,7 @@ export async function eraseUserNotifications(db: D1Database, userId: string): Pr
     db.prepare('DELETE FROM notifications WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM notification_settings WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM channel_subscribers WHERE user_id = ?').bind(userId),
-    // Their subscriptions (api-videos, migration 0007), keeping the counts exact
+    // Their subscriptions (api-videos, migration 0008), keeping the counts exact
     db
       .prepare(
         `UPDATE channel_subscriber_counts
