@@ -7,7 +7,12 @@ import R2Repository from "../../lib/r2Repo";
 import { Channel } from "@al-ummah/shared-types";
 import { logger } from "../../lib/logger";
 import { isVideoRemoved } from "../../lib/visibility";
-import { channelsVideoIds, scheduleOwnershipHeal, waitUntilOf } from "../../lib/search/ownership";
+import { channelsVideoIds, ownerContentIds, scheduleOwnershipHeal, waitUntilOf } from "../../lib/search/ownership";
+import { publicSearchCandidateIds } from "../../lib/feedIndex";
+import { FALLBACK_SCAN_OBJECTS } from "../../lib/scanBudget";
+
+/** Videos loaded for a channel or owner search (one R2 get each, below the subrequest limit). */
+const INDEXED_CANDIDATES = 500;
 
 export class VideoSearch extends OptionalAuthRoute {
 	schema = {
@@ -156,20 +161,29 @@ export class VideoSearch extends OptionalAuthRoute {
 		// the index is incomplete, every R2 page is scanned (bounded). The
 		// response `cursor` is an offset into the filtered, sorted results (see
 		// pagination below), not an R2 continuation token.
-		const indexedIds = channelIdList.length > 0 ? await channelsVideoIds(c.env as never, channelIdList) : null;
+		// SCALABILITY-AUDIT AV-16: candidates come from D1 (the channels' videos,
+		// the owner's videos, or the best public matches); a bounded scan only
+		// while those indexes are unavailable. Each candidate is one R2 get, so
+		// channel and owner searches cover the newest INDEXED_CANDIDATES videos.
+		const indexedIds = channelIdList.length > 0
+			? await channelsVideoIds(c.env as never, channelIdList, INDEXED_CANDIDATES)
+			: isOwner && userId
+				? await ownerContentIds(c.env as never, 'video', userId, undefined, INDEXED_CANDIDATES)
+				: await publicSearchCandidateIds(c.env, query);
 		let videos: { cursor: string; items: VideoType[] };
 		if (indexedIds) {
 			const loaded = await Promise.all(indexedIds.map(id => repository.getObject(id)));
 			videos = { cursor: "", items: loaded.filter((video): video is VideoType => video !== null) };
 		} else {
-			if (channelIdList.length > 0) scheduleOwnershipHeal(c.env as never, waitUntilOf(c as never), 'video');
-			const MAX_PAGES = 20;
-			videos = await repository.listObjects(1000);
+			if (channelIdList.length > 0 || isOwner) scheduleOwnershipHeal(c.env as never, waitUntilOf(c as never), 'video');
+			const PAGE = 100;
+			const MAX_PAGES = FALLBACK_SCAN_OBJECTS / PAGE;
+			videos = await repository.listObjects(PAGE);
 			const collected = [...(videos.items || [])];
 			let next = videos.cursor;
 			let pages = 1;
 			while (next && pages < MAX_PAGES) {
-				const page = await repository.listObjects(1000, next);
+				const page = await repository.listObjects(PAGE, next);
 				collected.push(...(page.items || []));
 				next = page.cursor;
 				pages++;

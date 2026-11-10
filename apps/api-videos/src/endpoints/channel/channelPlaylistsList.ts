@@ -1,4 +1,5 @@
 import { Num, Str } from "chanfana";
+import { FALLBACK_SCAN_OBJECTS } from "../../lib/scanBudget";
 import { string, z } from "zod";
 import { Playlist as BusinessPlaylist, Channel as BusinessChannel, PaginationResponse, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
@@ -133,7 +134,7 @@ export class ChannelPlaylistsList extends OptionalAuthRoute {
 			const repository = new R2Repository<PlaylistType>(bucket);
 
 			// Use R2's native cursor pagination to get all playlists
-			const playlists = await repository.listObjects(limit * 10, cursor); // Get more to filter
+			const playlists = await repository.listObjects(Math.min(limit * 10, FALLBACK_SCAN_OBJECTS), cursor); // Get more to filter
 
 			// Filter playlists for this channel and based on privacy settings
 			let channelPlaylists = (playlists.items || []).filter(playlist => {

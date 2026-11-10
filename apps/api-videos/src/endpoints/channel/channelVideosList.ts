@@ -1,4 +1,5 @@
 import { Num, Str } from "chanfana";
+import { FALLBACK_SCAN_OBJECTS } from "../../lib/scanBudget";
 import { string, z } from "zod";
 import { Video as BusinessVideo, Channel as BusinessChannel, PaginationResponse, ResponseError } from "../../lib/types";
 import { VideoView } from "../../lib/model/view";
@@ -199,7 +200,7 @@ export class ChannelVideosList extends OptionalAuthRoute {
 				// Index incomplete (or a legacy R2 cursor): previous behaviour, one
 				// bounded slice of the bucket (the helper schedules an index heal).
 				// Use R2's native cursor pagination to get all videos
-				const videos = await repository.listObjects(limit * 10, cursor); // Get more to filter
+				const videos = await repository.listObjects(Math.min(limit * 10, FALLBACK_SCAN_OBJECTS), cursor); // Get more to filter
 
 				// Filter videos for this channel and based on privacy settings
 				const channelVideos = (videos.items || []).filter(isListed);

@@ -1,4 +1,5 @@
 import { Num, Str } from "chanfana";
+import { FALLBACK_SCAN_OBJECTS } from "../../lib/scanBudget";
 import { string, z } from "zod";
 import { Channel as BusinessChannel, PaginationResponse, ResponseError } from "../../lib/types";
 import { PublicChannelView } from "../../lib/model/view";
@@ -147,7 +148,8 @@ export class ChannelsList extends OptionalAuthRoute {
  * channels fall in the global listing order.
  */
 async function scanAllChannels<T>(repository: R2Repository<T>, limit: number, cursor?: string): Promise<{ cursor: string; items: T[] }> {
-	const MAX_PAGES = 50;
+	// Bounded (SCALABILITY-AUDIT AV-16)
+	const MAX_PAGES = Math.max(1, Math.ceil(FALLBACK_SCAN_OBJECTS / Math.max(1, limit)));
 	const first = !cursor ? await repository.listObjects(limit) : await repository.listObjects(limit, cursor);
 	const collected = [...(first.items || [])];
 	let next = first.cursor;

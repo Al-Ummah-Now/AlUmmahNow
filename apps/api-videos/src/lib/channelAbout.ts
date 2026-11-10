@@ -2,6 +2,7 @@
  * Channel visibility and About-tab helpers (Story 29.1).
  */
 
+import { FALLBACK_SCAN_OBJECTS } from './scanBudget';
 import { logger } from './logger';
 import { isVideoPubliclyVisible } from './visibility';
 import { countSubscribers } from './subscriptions';
@@ -42,7 +43,7 @@ interface ScannedVideo {
  * video id and channels don't keep a reliable list of their videos, so this
  * scans the videos bucket (bounded by `maxObjects`).
  */
-export async function computeChannelTotals(videosBucket: R2Bucket, channelId: string, maxObjects = 3000): Promise<ChannelTotals> {
+export async function computeChannelTotals(videosBucket: R2Bucket, channelId: string, maxObjects = FALLBACK_SCAN_OBJECTS): Promise<ChannelTotals> {
 	let totalViews = 0;
 	let videosCount = 0;
 	let scanned = 0;

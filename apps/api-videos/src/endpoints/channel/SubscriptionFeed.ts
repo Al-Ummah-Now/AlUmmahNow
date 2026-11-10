@@ -7,13 +7,16 @@ import { AuthenticatedRoute, AppContext } from "../../base";
 import { buildSubscriptionFeed } from "../../lib/subscriptions";
 import { subscribedChannelIds } from "../../lib/subscription-store";
 import { transformVideoToView } from "../../lib/transformations";
+import { subscriptionFeedIds } from "../../lib/feedIndex";
+import { FALLBACK_SCAN_OBJECTS } from "../../lib/scanBudget";
 
 /**
  * Upper bound on stored videos scanned per request. Videos live in R2 as
  * individual objects without a per-channel index, so the feed scans the
  * bucket the same way search does and filters in memory.
  */
-const MAX_SCAN_PAGES = 10;
+/** Fallback scan while the search index is unavailable (SCALABILITY-AUDIT AV-16) */
+const MAX_SCAN_PAGES = FALLBACK_SCAN_OBJECTS / 100;
 const SCAN_PAGE_SIZE = 100;
 
 export class SubscriptionFeed extends AuthenticatedRoute {
@@ -70,16 +73,31 @@ export class SubscriptionFeed extends AuthenticatedRoute {
 		}
 
 		const videoRepo = new R2Repository<VideoType>(c.env.videos);
-		const scanned: VideoType[] = [];
-		let scanCursor: string | undefined;
-		for (let page = 0; page < MAX_SCAN_PAGES; page++) {
-			const result = await videoRepo.listObjects(SCAN_PAGE_SIZE, scanCursor);
-			scanned.push(...(result.items || []));
-			if (!result.cursor) break;
-			scanCursor = result.cursor;
+		// From the search index: the page's ids, then those videos (R2 decides visibility)
+		const pageSize = Math.min(Math.max(1, Math.floor(limit) || 20), 100);
+		const parsedCursor = cursor ? parseInt(cursor, 10) : 0;
+		const offset = Number.isFinite(parsedCursor) && parsedCursor > 0 ? parsedCursor : 0;
+		const indexed = await subscriptionFeedIds(c.env, subscribedTo, pageSize, offset);
+		let scanned: VideoType[] = [];
+		let feed: ReturnType<typeof buildSubscriptionFeed<VideoType>>;
+		if (indexed) {
+			const loaded = (await Promise.all(indexed.ids.map((id) => videoRepo.getObject(id)))).filter((v): v is VideoType => v !== null);
+			const end = offset + indexed.ids.length;
+			feed = {
+				items: buildSubscriptionFeed(loaded, subscribedTo, pageSize).items,
+				nextCursor: indexed.ids.length > 0 && end < indexed.total ? String(end) : null,
+				total: indexed.total,
+			};
+		} else {
+			let scanCursor: string | undefined;
+			for (let page = 0; page < MAX_SCAN_PAGES; page++) {
+				const result = await videoRepo.listObjects(SCAN_PAGE_SIZE, scanCursor);
+				scanned.push(...(result.items || []));
+				if (!result.cursor) break;
+				scanCursor = result.cursor;
+			}
+			feed = buildSubscriptionFeed(scanned, subscribedTo, limit, cursor);
 		}
-
-		const feed = buildSubscriptionFeed(scanned, subscribedTo, limit, cursor);
 
 		const channelRepo = new R2Repository<ChannelType>(c.env.channels);
 		const channels = new Map<string, ChannelType | null>();
@@ -98,7 +116,7 @@ export class SubscriptionFeed extends AuthenticatedRoute {
 			return view;
 		});
 
-		logger.info('[SubscriptionFeed] Built feed', { userId, subscriptions: subscribedTo.length, scanned: scanned.length, returned: videos.length });
+		logger.info('[SubscriptionFeed] Built feed', { userId, subscriptions: subscribedTo.length, source: indexed ? 'index' : 'scan', scanned: scanned.length, returned: videos.length });
 
 		return {
 			success: true,

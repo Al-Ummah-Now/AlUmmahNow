@@ -96,6 +96,11 @@ async function whenComplete<T>(env: OwnershipEnv, kind: OwnershipKind, query: (d
 // Reads
 // ---------------------------------------------------------------------------
 
+/** Key order, or with `newest` only that many rows, newest first (a bounded read, SCALABILITY-AUDIT AV-16). */
+function orderAndLimit(newest?: number): string {
+  return newest ? 'ORDER BY created_at DESC, id LIMIT ?' : 'ORDER BY id';
+}
+
 /** Ids of the user's channels that are not deleted or hidden, in R2 key order. */
 export function ownedChannelIds(env: OwnershipEnv, userId: string): Promise<string[] | null> {
   return whenComplete(env, 'channel', async db => {
@@ -111,15 +116,41 @@ export function ownedChannelIds(env: OwnershipEnv, userId: string): Promise<stri
  * `channelIds` (or in no channel), moderation-hidden ones included: owner-only
  * views such as analytics still count them.
  */
-export function ownerContentIds(env: OwnershipEnv, kind: OwnershipKind, userId: string, channelIds?: string[]): Promise<string[] | null> {
+export function ownerContentIds(env: OwnershipEnv, kind: OwnershipKind, userId: string, channelIds?: string[], newest?: number): Promise<string[] | null> {
   return whenComplete(env, kind, async db => {
     const channelFilter = kind === 'video' && channelIds
       ? ` AND (channel_id IS NULL${channelIds.length ? ` OR channel_id IN (${channelIds.map(() => '?').join(', ')})` : ''})`
       : '';
     const { results } = await db.prepare(
-      `SELECT id FROM ${OWNERSHIP_TABLE} WHERE kind = ? AND owner_id = ? AND is_deleted = 0${channelFilter} ORDER BY id`,
-    ).bind(kind, userId, ...(channelFilter ? channelIds ?? [] : [])).all<{ id: string }>();
+      `SELECT id FROM ${OWNERSHIP_TABLE} WHERE kind = ? AND owner_id = ? AND is_deleted = 0${channelFilter} ${orderAndLimit(newest)}`,
+    ).bind(kind, userId, ...(channelFilter ? channelIds ?? [] : []), ...(newest ? [newest] : [])).all<{ id: string }>();
     return (results ?? []).map(r => r.id);
+  });
+}
+
+/**
+ * Ids of the user's not-deleted videos that carry a schedule (optionally of
+ * one channel and one schedule status): the scheduled-videos list without a
+ * bucket scan (SCALABILITY-AUDIT AV-16).
+ */
+export function ownerScheduledVideoIds(env: OwnershipEnv, userId: string, filter: { channelId?: string; status?: string } = {}): Promise<string[] | null> {
+  return whenComplete(env, 'video', async db => {
+    const clauses = [`kind = 'video'`, 'owner_id = ?', 'is_deleted = 0', 'schedule_status IS NOT NULL'];
+    const binds: unknown[] = [userId];
+    if (filter.channelId) { clauses.push('channel_id = ?'); binds.push(filter.channelId); }
+    if (filter.status) { clauses.push('schedule_status = ?'); binds.push(filter.status); }
+    const { results } = await db.prepare(`SELECT id FROM ${OWNERSHIP_TABLE} WHERE ${clauses.join(' AND ')} ORDER BY id`).bind(...binds).all<{ id: string }>();
+    return (results ?? []).map(r => r.id);
+  });
+}
+
+/** Video totals from the ownership index for the metrics endpoint, or null when it is not usable. */
+export function ownershipVideoTotals(env: OwnershipEnv): Promise<{ total: number; public: number; views: number } | null> {
+  return whenComplete(env, 'video', async db => {
+    const row = await db.prepare(
+      `SELECT COUNT(*) AS total, COALESCE(SUM(is_public), 0) AS public, COALESCE(SUM(views), 0) AS views FROM ${OWNERSHIP_TABLE} WHERE kind = 'video' AND is_deleted = 0`,
+    ).first<{ total: number; public: number; views: number }>();
+    return { total: Number(row?.total ?? 0), public: Number(row?.public ?? 0), views: Number(row?.views ?? 0) };
   });
 }
 
@@ -189,13 +220,13 @@ export function channelVideoIds(
 }
 
 /** Ids of every not-deleted, not-hidden video of the given channels. */
-export function channelsVideoIds(env: OwnershipEnv, channelIds: string[]): Promise<string[] | null> {
+export function channelsVideoIds(env: OwnershipEnv, channelIds: string[], newest?: number): Promise<string[] | null> {
   return whenComplete(env, 'video', async db => {
     if (!channelIds.length) return [];
     const placeholders = channelIds.map(() => '?').join(', ');
     const { results } = await db.prepare(
-      `SELECT id FROM ${OWNERSHIP_TABLE} WHERE kind = 'video' AND channel_id IN (${placeholders}) AND is_deleted = 0 AND is_hidden = 0 ORDER BY id`,
-    ).bind(...channelIds).all<{ id: string }>();
+      `SELECT id FROM ${OWNERSHIP_TABLE} WHERE kind = 'video' AND channel_id IN (${placeholders}) AND is_deleted = 0 AND is_hidden = 0 ${orderAndLimit(newest)}`,
+    ).bind(...channelIds, ...(newest ? [newest] : [])).all<{ id: string }>();
     return (results ?? []).map(r => r.id);
   });
 }
