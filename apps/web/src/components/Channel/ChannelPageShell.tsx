@@ -31,7 +31,7 @@ export function ChannelPageShell({ channel, locale, isOwner, children }: Channel
 
       {/* Tab Content */}
       <div className="container mx-auto px-4 py-6">
-        <ChannelViewerProvider canEditLayout={isOwner}>{children}</ChannelViewerProvider>
+        <ChannelViewerProvider channelId={channel.id} isOwner={isOwner}>{children}</ChannelViewerProvider>
       </div>
     </div>
   );

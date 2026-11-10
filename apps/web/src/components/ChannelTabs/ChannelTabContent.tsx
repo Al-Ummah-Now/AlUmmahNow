@@ -11,6 +11,7 @@ import { PlaylistsTabContent } from './PlaylistsTabContent';
 import { CommunityTabContent } from './CommunityTabContent';
 import { ChannelsTabContent } from './ChannelsTabContent';
 import { AboutTabContent } from './AboutTabContent';
+import { TabManageLink } from './TabManageLink';
 
 interface ChannelTabContentProps {
   channelId: string;
@@ -28,6 +29,9 @@ export function ChannelTabContent({
 
   return (
     <div className="p-5 bg-white dark:bg-gray-800">
+      {/* Manage link for people who run the channel (nothing for visitors) */}
+      <TabManageLink channelId={channelId} tab={activeTab} />
+
       {/* Home Tab */}
       {activeTab === 'home' && <HomeTabContent channelId={channelId} />}
 
