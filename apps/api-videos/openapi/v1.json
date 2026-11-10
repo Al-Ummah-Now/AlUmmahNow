@@ -4696,6 +4696,18 @@
                             ],
                             "description": "Why processing did not finish"
                           },
+                          "format": {
+                            "type": "string",
+                            "enum": [
+                              "short",
+                              "video"
+                            ],
+                            "description": "Uploader's choice of Short or video; absent = detected"
+                          },
+                          "isShort": {
+                            "type": "boolean",
+                            "description": "Short (≤ 3 min and vertical or square, or chosen by the uploader); shared rule"
+                          },
                           "isDeleted": {
                             "type": "boolean"
                           },
@@ -5390,7 +5402,7 @@
           "Channels"
         ],
         "summary": "List Channel Shorts",
-        "description": "🔓 **Authentication Optional**: Get all short-form videos (< 60 seconds) from a specific channel. Returns additional private shorts when authenticated as the channel owner.",
+        "description": "🔓 **Authentication Optional**: Get the Shorts of a specific channel (≤ 3 minutes and vertical or square, or marked as a Short by the uploader). Returns additional private shorts when authenticated as the channel owner.",
         "operationId": "get_ChannelShortsList",
         "parameters": [
           {
@@ -5614,6 +5626,18 @@
                               "stalled"
                             ],
                             "description": "Why processing did not finish"
+                          },
+                          "format": {
+                            "type": "string",
+                            "enum": [
+                              "short",
+                              "video"
+                            ],
+                            "description": "Uploader's choice of Short or video; absent = detected"
+                          },
+                          "isShort": {
+                            "type": "boolean",
+                            "description": "Short (≤ 3 min and vertical or square, or chosen by the uploader); shared rule"
                           },
                           "isDeleted": {
                             "type": "boolean"
@@ -6952,6 +6976,18 @@
                               "stalled"
                             ],
                             "description": "Why processing did not finish"
+                          },
+                          "format": {
+                            "type": "string",
+                            "enum": [
+                              "short",
+                              "video"
+                            ],
+                            "description": "Uploader's choice of Short or video; absent = detected"
+                          },
+                          "isShort": {
+                            "type": "boolean",
+                            "description": "Short (≤ 3 min and vertical or square, or chosen by the uploader); shared rule"
                           },
                           "isDeleted": {
                             "type": "boolean"
@@ -17831,7 +17867,7 @@
           "Search"
         ],
         "summary": "Search (v2)",
-        "description": "🔓 Public. Ranked search across videos, channels, playlists and community posts using the search index. Filters: type, duration, date, language, category, verified, channelId (search within a channel). Without `q`, returns the newest items matching the filters. When no result contains every word, results containing any word are returned with `relaxed: true`.",
+        "description": "🔓 Public. Ranked search across videos, channels, playlists and community posts using the search index. Filters: type, duration, format (short | video), date, language, category, verified, channelId (search within a channel). Without `q`, returns the newest items matching the filters. When no result contains every word, results containing any word are returned with `relaxed: true`.",
         "operationId": "get_SearchGet",
         "parameters": [
           {
@@ -17874,6 +17910,20 @@
             "required": false,
             "description": "Videos only: short < 4 min, medium 4-20 min, long > 20 min",
             "name": "duration",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "short",
+                "video"
+              ],
+              "description": "Videos only: Shorts (≤ 3 min and vertical or square, or chosen by the uploader) or long-form videos"
+            },
+            "required": false,
+            "description": "Videos only: Shorts (≤ 3 min and vertical or square, or chosen by the uploader) or long-form videos",
+            "name": "format",
             "in": "query"
           },
           {
@@ -20015,6 +20065,18 @@
                             ],
                             "description": "Why processing did not finish"
                           },
+                          "format": {
+                            "type": "string",
+                            "enum": [
+                              "short",
+                              "video"
+                            ],
+                            "description": "Uploader's choice of Short or video; absent = detected"
+                          },
+                          "isShort": {
+                            "type": "boolean",
+                            "description": "Short (≤ 3 min and vertical or square, or chosen by the uploader); shared rule"
+                          },
                           "isDeleted": {
                             "type": "boolean"
                           },
@@ -20322,6 +20384,15 @@
                       "fr"
                     ],
                     "description": "Primary language of the video content"
+                  },
+                  "format": {
+                    "type": "string",
+                    "enum": [
+                      "short",
+                      "video",
+                      "auto"
+                    ],
+                    "description": "Publish as a Short or as a video; 'auto' (default) detects it"
                   }
                 },
                 "required": [
@@ -20489,6 +20560,18 @@
                                 "stalled"
                               ],
                               "description": "Why processing did not finish"
+                            },
+                            "format": {
+                              "type": "string",
+                              "enum": [
+                                "short",
+                                "video"
+                              ],
+                              "description": "Uploader's choice of Short or video; absent = detected"
+                            },
+                            "isShort": {
+                              "type": "boolean",
+                              "description": "Short (≤ 3 min and vertical or square, or chosen by the uploader); shared rule"
                             },
                             "isDeleted": {
                               "type": "boolean"
@@ -21402,10 +21485,10 @@
                 "live"
               ],
               "default": "all",
-              "description": "Filter videos by duration - short (≤3min), standard (>3min), live, or all"
+              "description": "Filter videos by format - short (Shorts: ≤ 3 min and vertical or square, or chosen by the uploader), standard (other videos), live, or all"
             },
             "required": false,
-            "description": "Filter videos by duration - short (≤3min), standard (>3min), live, or all",
+            "description": "Filter videos by format - short (Shorts: ≤ 3 min and vertical or square, or chosen by the uploader), standard (other videos), live, or all",
             "name": "durationFilter",
             "in": "query"
           },
@@ -21619,6 +21702,18 @@
                               "stalled"
                             ],
                             "description": "Why processing did not finish"
+                          },
+                          "format": {
+                            "type": "string",
+                            "enum": [
+                              "short",
+                              "video"
+                            ],
+                            "description": "Uploader's choice of Short or video; absent = detected"
+                          },
+                          "isShort": {
+                            "type": "boolean",
+                            "description": "Short (≤ 3 min and vertical or square, or chosen by the uploader); shared rule"
                           },
                           "isDeleted": {
                             "type": "boolean"
@@ -21977,6 +22072,9 @@
                           "dislikesCount": {
                             "type": "number"
                           },
+                          "isShort": {
+                            "type": "boolean"
+                          },
                           "commentsCount": {
                             "type": "number"
                           },
@@ -22285,6 +22383,9 @@
                           "dislikesCount": {
                             "type": "number"
                           },
+                          "isShort": {
+                            "type": "boolean"
+                          },
                           "commentsCount": {
                             "type": "number"
                           },
@@ -22550,6 +22651,9 @@
                           "dislikesCount": {
                             "type": "number"
                           },
+                          "isShort": {
+                            "type": "boolean"
+                          },
                           "commentsCount": {
                             "type": "number"
                           },
@@ -22787,6 +22891,9 @@
                           },
                           "dislikesCount": {
                             "type": "number"
+                          },
+                          "isShort": {
+                            "type": "boolean"
                           },
                           "commentsCount": {
                             "type": "number"
@@ -23067,6 +23174,9 @@
                           },
                           "dislikesCount": {
                             "type": "number"
+                          },
+                          "isShort": {
+                            "type": "boolean"
                           },
                           "commentsCount": {
                             "type": "number"
@@ -23481,6 +23591,15 @@
                         "tags": {
                           "type": "string",
                           "description": "Comma-separated tags"
+                        },
+                        "format": {
+                          "type": "string",
+                          "enum": [
+                            "short",
+                            "video",
+                            "auto"
+                          ],
+                          "description": "Upload as a Short or as a video; 'auto' (default) detects it from length and shape"
                         }
                       },
                       "required": [
@@ -24112,6 +24231,15 @@
                     ],
                     "description": "Video category"
                   },
+                  "format": {
+                    "type": "string",
+                    "enum": [
+                      "short",
+                      "video",
+                      "auto"
+                    ],
+                    "description": "Upload as a Short or as a video; 'auto' (default) detects it from length and shape"
+                  },
                   "thumbnail": {
                     "type": "object",
                     "properties": {
@@ -24712,6 +24840,18 @@
                       ],
                       "description": "Why processing did not finish"
                     },
+                    "format": {
+                      "type": "string",
+                      "enum": [
+                        "short",
+                        "video"
+                      ],
+                      "description": "Uploader's choice of Short or video; absent = detected"
+                    },
+                    "isShort": {
+                      "type": "boolean",
+                      "description": "Short (≤ 3 min and vertical or square, or chosen by the uploader); shared rule"
+                    },
                     "isDeleted": {
                       "type": "boolean"
                     },
@@ -25061,6 +25201,15 @@
                       "off"
                     ],
                     "description": "Comments: on, held for the owner's review, or off"
+                  },
+                  "format": {
+                    "type": "string",
+                    "enum": [
+                      "short",
+                      "video",
+                      "auto"
+                    ],
+                    "description": "Publish as a Short or as a video; 'auto' detects it (≤ 3 min and vertical or square = Short)"
                   }
                 }
               }
@@ -25225,6 +25374,18 @@
                                 "stalled"
                               ],
                               "description": "Why processing did not finish"
+                            },
+                            "format": {
+                              "type": "string",
+                              "enum": [
+                                "short",
+                                "video"
+                              ],
+                              "description": "Uploader's choice of Short or video; absent = detected"
+                            },
+                            "isShort": {
+                              "type": "boolean",
+                              "description": "Short (≤ 3 min and vertical or square, or chosen by the uploader); shared rule"
                             },
                             "isDeleted": {
                               "type": "boolean"
