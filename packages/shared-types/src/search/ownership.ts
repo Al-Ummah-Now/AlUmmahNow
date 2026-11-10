@@ -53,15 +53,19 @@ export function ownershipObjectKey(kind: OwnershipKind, id: string): string {
 /**
  * Version of the projected columns. 1: admin columns (title, handle, email,
  * verified, suspended, subscribers; 0005). 2: video category and stream status
- * (0013). Rows written by an older version keep the old value until the next
- * ownership pass rewrites them; readers of a newer column wait for that (see
- * api-videos ownership.ts `columnsCurrent`), admin lists rebuild while any remain.
+ * (0013). 3: list media and processing columns (image, item count, processing
+ * issue, abandoned; 0014). Rows written by an older version keep the old value
+ * until the next ownership pass rewrites them; readers of a newer column wait
+ * for that (see api-videos ownership.ts `columnsCurrent`) or read the object
+ * for those rows only (admin lists), and admin lists rebuild while any remain.
  */
-export const OWNERSHIP_ADMIN_COLS_VERSION = 2;
+export const OWNERSHIP_ADMIN_COLS_VERSION = 3;
 /** Rows at or above this version have the admin columns (admin lists wait for them). */
 export const OWNERSHIP_ADMIN_COLS_SINCE = 1;
 /** Rows at or above this version have the list columns (category, status). */
 export const OWNERSHIP_LIST_COLS_SINCE = 2;
+/** Rows at or above this version have the media and processing columns (admin lists, processing health). */
+export const OWNERSHIP_MEDIA_COLS_SINCE = 3;
 
 export const OWNERSHIP_TABLE = 'content_ownership';
 
@@ -153,6 +157,15 @@ export interface OwnershipRow {
   /** Channel suspended by an admin. */
   isSuspended?: boolean;
   subscribers?: number;
+  /** Video thumbnail, channel or profile avatar, playlist thumbnail (columns version 3). */
+  imageUrl?: string | null;
+  /** Videos in a playlist (columns version 3). */
+  itemCount?: number;
+  /** Open processing issue of a video: its kind and when it was flagged (columns version 3). */
+  issue?: string | null;
+  issueAt?: number | null;
+  /** Upload removed by the upload reaper (columns version 3). */
+  isAbandoned?: boolean;
 }
 
 export type OwnershipSyncResult = 'upserted' | 'removed' | 'skipped';
@@ -226,6 +239,7 @@ export function projectOwnership(kind: OwnershipKind, id: string, raw: unknown):
       isVerified: false,
       isSuspended: false,
       subscribers: 0,
+      imageUrl: text(obj.avatarUrl),
     };
   }
   if (kind === 'playlist') {
@@ -247,6 +261,8 @@ export function projectOwnership(kind: OwnershipKind, id: string, raw: unknown):
       isVerified: false,
       isSuspended: false,
       subscribers: 0,
+      imageUrl: text(obj.thumbnailUrl),
+      itemCount: Array.isArray(obj.videos) ? obj.videos.length : Array.isArray(obj.videoIds) ? obj.videoIds.length : count(obj.videoCount),
     };
   }
   if (kind === 'stream') {
@@ -268,6 +284,7 @@ export function projectOwnership(kind: OwnershipKind, id: string, raw: unknown):
       isVerified: false,
       isSuspended: false,
       subscribers: 0,
+      imageUrl: text(obj.thumbnailUrl),
     };
   }
   if (kind === 'channel') {
@@ -287,6 +304,7 @@ export function projectOwnership(kind: OwnershipKind, id: string, raw: unknown):
       isVerified: Boolean(obj.isVerified),
       isSuspended: Boolean(obj.isSuspended),
       subscribers: count(obj.subscriberCount ?? obj.subscribers),
+      imageUrl: text(obj.avatarUrl),
     };
   }
   return {
@@ -306,7 +324,18 @@ export function projectOwnership(kind: OwnershipKind, id: string, raw: unknown):
     isVerified: false,
     isSuspended: false,
     subscribers: 0,
+    imageUrl: text(obj.thumbnailUrl),
+    ...processingIssueOf(obj.processingIssue),
+    isAbandoned: obj.abandoned !== undefined && obj.abandoned !== null && obj.abandoned !== false,
   };
+}
+
+/** The open processing issue of a video record (`processingIssue: { kind, at }`). */
+function processingIssueOf(value: unknown): { issue: string | null; issueAt: number | null } {
+  if (!value || typeof value !== 'object') return { issue: null, issueAt: null };
+  const issue = value as { kind?: unknown; at?: unknown };
+  const kind = text(issue.kind);
+  return kind ? { issue: kind, issueAt: time(issue.at) ?? 0 } : { issue: null, issueAt: null };
 }
 
 function int(value: boolean): number {
@@ -327,8 +356,9 @@ export function ownershipUpsertStatement(db: SearchDb, row: OwnershipRow, now: n
   // (websocket-server view-counter.ts), and an object read before its flush is not newer.
   return db.prepare(
     `INSERT INTO ${OWNERSHIP_TABLE} (kind, id, owner_id, channel_id, is_public, is_hidden, is_deleted, is_live, duration, schedule_status, upload_status, views, created_at, updated_at, indexed_at, source_version,
-       admin_title, handle, email, is_verified, is_suspended, subscribers, admin_cols, is_short, needs_format, video_category, status)
-     SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+       admin_title, handle, email, is_verified, is_suspended, subscribers, admin_cols, is_short, needs_format, video_category, status,
+       image_url, item_count, issue, issue_at, is_abandoned)
+     SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
      WHERE ${NOT_TOMBSTONED}
      ON CONFLICT(kind, id) DO UPDATE SET
        owner_id = excluded.owner_id, channel_id = excluded.channel_id, is_public = excluded.is_public,
@@ -339,6 +369,7 @@ export function ownershipUpsertStatement(db: SearchDb, row: OwnershipRow, now: n
        admin_title = excluded.admin_title, handle = excluded.handle, email = excluded.email, is_verified = excluded.is_verified,
        is_suspended = excluded.is_suspended, subscribers = excluded.subscribers, admin_cols = excluded.admin_cols, is_short = excluded.is_short, needs_format = excluded.needs_format,
        video_category = excluded.video_category, status = excluded.status,
+       image_url = excluded.image_url, item_count = excluded.item_count, issue = excluded.issue, issue_at = excluded.issue_at, is_abandoned = excluded.is_abandoned,
        views = max(excluded.views, ${OWNERSHIP_TABLE}.views)
      WHERE excluded.source_version >= ${OWNERSHIP_TABLE}.source_version`,
   ).bind(
@@ -346,6 +377,7 @@ export function ownershipUpsertStatement(db: SearchDb, row: OwnershipRow, now: n
     int(row.isLive), row.duration, row.scheduleStatus, row.uploadStatus, row.views, row.createdAt, row.updatedAt, now, version,
     row.title ?? null, row.handle ?? null, row.email ?? null, int(row.isVerified === true), int(row.isSuspended === true),
     row.subscribers ?? 0, OWNERSHIP_ADMIN_COLS_VERSION, int(row.isShort), int(row.needsFormat), row.category ?? null, row.status ?? null,
+    row.imageUrl ?? null, row.itemCount ?? 0, row.issue ?? null, row.issueAt ?? null, int(row.isAbandoned === true),
     ownershipTombstone(row.kind), row.id, version,
   );
 }
@@ -365,11 +397,13 @@ export function ownershipColumnsUpgradeStatement(db: SearchDb, row: OwnershipRow
   return db.prepare(
     `UPDATE ${OWNERSHIP_TABLE} SET
        admin_title = ?, handle = ?, email = ?, is_verified = ?, is_suspended = ?, subscribers = ?,
-       is_short = ?, needs_format = ?, video_category = ?, status = ?, admin_cols = ?
+       is_short = ?, needs_format = ?, video_category = ?, status = ?,
+       image_url = ?, item_count = ?, issue = ?, issue_at = ?, is_abandoned = ?, admin_cols = ?
      WHERE kind = ? AND id = ? AND admin_cols < ?`,
   ).bind(
     row.title ?? null, row.handle ?? null, row.email ?? null, int(row.isVerified === true), int(row.isSuspended === true), row.subscribers ?? 0,
-    int(row.isShort), int(row.needsFormat), row.category ?? null, row.status ?? null, OWNERSHIP_ADMIN_COLS_VERSION,
+    int(row.isShort), int(row.needsFormat), row.category ?? null, row.status ?? null,
+    row.imageUrl ?? null, row.itemCount ?? 0, row.issue ?? null, row.issueAt ?? null, int(row.isAbandoned === true), OWNERSHIP_ADMIN_COLS_VERSION,
     row.kind, row.id, OWNERSHIP_ADMIN_COLS_VERSION,
   );
 }

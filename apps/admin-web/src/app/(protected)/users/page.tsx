@@ -6,17 +6,18 @@ import { getI18n } from '@/i18n/server';
 import { formatDate } from '@/i18n/translate';
 import { ErrorAlert, linkClass } from '@/components/ui';
 import { FilterForm } from '@/components/content/FilterForm';
-import { Chip, EmptyState, MonoId, Notice, PageHeader, Pager, tableWrapClass, tdClass, thClass, wideOnly } from '@/components/content/parts';
-import { PAGE_SIZE, hrefWith, pickParams, type SearchParams } from '@/components/content/query';
+import { Chip, EmptyState, MonoId, Notice, PageHeader, CursorPager, tableWrapClass, tdClass, thClass, wideOnly } from '@/components/content/parts';
+import { PAGE_SIZE, hrefWith, pickParams, type SearchParams, withoutPaging } from '@/components/content/query';
 import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
 /** Videos users: Al Ummah Now videos profiles (api-videos), keyed by the usr_ id. Not Auth accounts. */
 export default async function UsersPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
-  const params = pickParams(await searchParams, { q: 'text', banned: ['yes', 'no'], sort: ADMIN_USER_SORTS, page: 'page' });
+  const params = pickParams(await searchParams, { q: 'text', banned: ['yes', 'no'], sort: ADMIN_USER_SORTS, page: 'page', cursor: 'cursor' });
   const { t, locale } = await getI18n();
   const page = Number(params.page ?? 1);
+  const filters = withoutPaging(params);
 
   let data: AdminPage<AdminUserRow> | null = null;
   try {
@@ -27,7 +28,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
 
   return (
     <div>
-      <PageHeader title={t('users.title')} subtitle={t('users.subtitle')} total={data?.total} t={t} />
+      <PageHeader title={t('users.title')} subtitle={t('users.subtitle')} total={data?.total} totalCapped={data?.totalCapped} t={t} />
       <FilterForm
         action="/users"
         label={t('users.title')}
@@ -89,7 +90,13 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
               </tbody>
             </table>
           </div>
-          <Pager page={page} pageSize={PAGE_SIZE} total={data.total} t={t} href={(p) => hrefWith('/users', params, { page: p > 1 ? String(p) : undefined })} />
+          <CursorPager
+            hasCursor={!!params.cursor || page > 1}
+            nextHref={data.cursor ? hrefWith('/users', filters, { cursor: data.cursor }) : null}
+            firstHref={hrefWith('/users', filters)}
+            labels={{ first: t('content.firstPage'), next: t('content.nextPage') }}
+            t={t}
+          />
         </>
       )}
     </div>

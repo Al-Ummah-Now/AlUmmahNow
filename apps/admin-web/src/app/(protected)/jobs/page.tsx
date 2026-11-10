@@ -1,12 +1,12 @@
 import Link from 'next/link';
 import { ADMIN_JOB_STATUSES } from '@al-ummah/shared-types';
-import { getContentPermissions, getJobCounts, listJobs } from '@/lib/api/content';
+import { getContentPermissions, getJobCounts, listJobsPage } from '@/lib/api/content';
 import type { AdminContentPermission, AdminJob, JobCounts } from '@/lib/api/content-types';
 import { getI18n } from '@/i18n/server';
 import { ErrorAlert } from '@/components/ui';
-import { EmptyState, PageHeader } from '@/components/content/parts';
+import { CursorPager, EmptyState, PageHeader } from '@/components/content/parts';
 import { JobsTable } from '@/components/content/jobs';
-import { pickParams, type SearchParams } from '@/components/content/query';
+import { hrefWith, pickParams, type SearchParams } from '@/components/content/query';
 import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
@@ -27,16 +27,20 @@ const FILTERS = [
  */
 export default async function JobsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const raw = await searchParams;
-  const params = pickParams(raw, { status: [...ADMIN_JOB_STATUSES, 'all'] });
+  const params = pickParams(raw, { status: [...ADMIN_JOB_STATUSES, 'all'], cursor: 'cursor' });
   // Failed first: that is what needs an admin
   const status = params.status === 'all' ? undefined : (params.status ?? 'failed');
   const { t } = await getI18n();
 
   let jobs: AdminJob[] | null = null;
+  let nextCursor = '';
   let counts: JobCounts | null = null;
   let permissions: AdminContentPermission[] = [];
   try {
-    [jobs, counts, permissions] = await Promise.all([listJobs({ status, limit: 100 }), getJobCounts(), getContentPermissions()]);
+    let page: { items: AdminJob[]; cursor: string };
+    [page, counts, permissions] = await Promise.all([listJobsPage({ status, limit: 50, cursor: params.cursor }), getJobCounts(), getContentPermissions()]);
+    jobs = page.items;
+    nextCursor = page.cursor;
   } catch (e) {
     logger.error('[jobs] Failed to load', { error: e instanceof Error ? e.message : String(e) });
   }
@@ -65,6 +69,15 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
       {!jobs && <ErrorAlert testId="jobs-error">{t('content.loadFailed')}</ErrorAlert>}
       {jobs && jobs.length === 0 && <EmptyState>{status === 'failed' ? t('jobs.emptyFailed') : t('jobs.empty')}</EmptyState>}
       {jobs && jobs.length > 0 && <JobsTable jobs={jobs} permissions={permissions} />}
+      {jobs && (
+        <CursorPager
+          hasCursor={!!params.cursor}
+          nextHref={nextCursor ? hrefWith('/jobs', { status: params.status }, { cursor: nextCursor }) : null}
+          firstHref={hrefWith('/jobs', { status: params.status })}
+          labels={{ first: t('content.firstPage'), next: t('content.nextPage') }}
+          t={t}
+        />
+      )}
     </div>
   );
 }

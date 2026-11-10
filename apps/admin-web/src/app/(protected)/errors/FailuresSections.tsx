@@ -376,7 +376,10 @@ export function FailuresSections({ failures, t, locale }: { failures: Failures; 
         <section aria-labelledby="errors-videos">
           <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
             <h2 id="errors-videos" className="text-xl font-semibold text-fg">{t('errorsPage.videosTitle')}</h2>
-            <Link href="/processing?status=failed" className={linkClass}>{t('errorsPage.openProcessing')}</Link>
+            {/* Failed and flagged videos: the newest here, every one on the Processing page ("Not ready or flagged") */}
+            <Link href={data.videosCursor ? '/processing?status=stuck' : '/processing?status=failed'} className={linkClass} data-more={data.videosCursor ? 'true' : undefined}>
+              {t('errorsPage.openProcessing')}
+            </Link>
           </div>
           {data.videos.length === 0 ? (
             <div className={`${cardClass} text-center text-fg-muted`} data-testid="errors-videos-empty">{t('errorsPage.videosEmpty')}</div>

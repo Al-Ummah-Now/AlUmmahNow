@@ -4,8 +4,10 @@
  * `videos:processing` permission and writes the audit row (apps/admin-api,
  * endpoints/processing). Not part of the public contract.
  *
- *   GET  /internal/processing/videos?status=stuck|processing|failed|all&bunny=1&limit=
- *   GET  /internal/processing/errors       failed/flagged videos + dead-lettered checks + failed thumbnail runs + index drift
+ *   GET  /internal/processing/videos?status=stuck|processing|failed|stalled|needs_reupload|all&bunny=1&limit=&cursor=
+ *                                          newest first from the ownership index; `cursor` continues (result.cursor)
+ *   GET  /internal/processing/errors?cursor=  failed/flagged videos (index; result.videosCursor continues) + dead-lettered
+ *                                          checks + failed thumbnail runs + index drift
  *   GET  /internal/processing/thumbnails   recent thumbnail aspect repair runs (admin jobs)
  *   POST /internal/processing/thumbnails   { ids?: string[], dryRun?: boolean, actorId } → queued run (dry run by default)
  *   POST /internal/processing/thumbnails/:jobId/retry  resume a failed run
@@ -32,9 +34,12 @@ import { announceAndRecordProcessingResult, pendingProcessingResult } from '../.
 import { createJob, getJob, listJobs, retryJob, type JobEnv } from '../../lib/admin/jobs';
 import { THUMBNAIL_REPAIR_JOB, THUMBNAIL_REPAIR_TARGET, isStillFlagged, latestFlagged, type FlaggedThumbnails } from '../../lib/thumbnail/repair';
 import { readOwnershipDrift } from '../../lib/search/ownership';
+import { decodeCursor, encodeCursor, keysetQuery } from '../../lib/search/keyset';
+import { ensureAdminIndex } from '../../lib/admin/directory';
 import { isOwnershipKind, ownershipRebuildJobs, startOwnershipRebuild, type OwnershipRebuildEnv } from '../../lib/search/ownershipRebuild';
 import { isSearchEntity, readSearchDrift, searchReconcileJobs, startSearchReconcile, type SearchReconcileEnv } from '../../lib/search/backfill';
 import { readIndexRepairs, repairJobs, retryIndexRepairs, type RepairJobEnv } from '../../lib/search/repairs';
+import { OWNERSHIP_MEDIA_COLS_SINCE, type SearchDb } from '@al-ummah/shared-types';
 import { ALL_OWNERSHIP_KINDS, INDEX_REPAIR_ENTITIES, SEARCH_ENTITY_TYPES, type AdminJob, type IndexRepair, type IndexRepairEntity, type OwnershipDrift, type SearchDrift } from '@al-ummah/shared-types';
 
 const MAX_IDS = 100;
@@ -65,24 +70,46 @@ function parseIds(body: unknown): string[] | null {
 	return clean.length === ids.length ? [...new Set(clean)] : null;
 }
 
-function matches(video: HealthVideo, status: string): boolean {
-	if (video.abandoned && status !== 'all') return false;
-	const notReady = video.uploadStatus && video.uploadStatus !== 'ready';
+/**
+ * Processing lists from the ownership index (columns of migration 0014):
+ * each status is a condition over idx_content_ownership_stuck (videos not
+ * ready or flagged, not abandoned) or the feed indexes ('all'), so a page is
+ * a keyset seek that never walks the ready catalogue.
+ */
+const STUCK_SQL = "v.is_abandoned = 0 AND ((v.upload_status IS NOT NULL AND v.upload_status <> 'ready') OR v.issue IS NOT NULL)";
+const ERRORS_SQL = "(v.issue IS NOT NULL OR v.upload_status = 'failed')";
+
+function statusCondition(status: string): { where: string[]; params: unknown[] } {
 	switch (status) {
 		case 'all':
-			return true;
+			return { where: [], params: [] };
 		case 'processing':
-			return video.uploadStatus === 'processing' || video.uploadStatus === 'uploading' || video.uploadStatus === 'initiated';
+			return { where: [STUCK_SQL, "v.upload_status IN ('processing', 'uploading', 'initiated')"], params: [] };
 		case 'failed':
-			return video.uploadStatus === 'failed';
+			return { where: [STUCK_SQL, "v.upload_status = 'failed'"], params: [] };
 		case 'stalled':
-			return video.processingIssue?.kind === 'stalled';
 		case 'needs_reupload':
-			return video.processingIssue?.kind === 'needs_reupload';
+			return { where: [STUCK_SQL, 'v.issue = ?'], params: [status] };
 		default:
 			// stuck: anything not ready, or flagged
-			return !!notReady || !!video.processingIssue;
+			return { where: [STUCK_SQL], params: [] };
 	}
+}
+
+/** The R2 objects of one page of index rows, in the page's order (missing objects dropped). */
+async function videosOf(env: ProcessingEnv, ids: string[]): Promise<HealthVideo[]> {
+	const out: Array<HealthVideo | null> = [];
+	for (let i = 0; i < ids.length; i += LOAD_CONCURRENCY) {
+		out.push(...(await Promise.all(ids.slice(i, i + LOAD_CONCURRENCY).map(async (id) => (await (await env.videos.get(id))?.json<HealthVideo>().catch(() => null)) ?? null))));
+	}
+	return out.filter((v): v is HealthVideo => !!v?.id);
+}
+
+const LOAD_CONCURRENCY = 25;
+
+/** Whether the index can answer: SEARCH_DB bound and the video pass complete with the processing columns (else the rebuild is queued). */
+async function processingIndexReady(env: ProcessingEnv): Promise<boolean> {
+	return ensureAdminIndex(env as never, 'video', OWNERSHIP_MEDIA_COLS_SINCE);
 }
 
 /** Failed thumbnail repair runs, for the Errors page (an unreadable jobs table is logged, not fatal). */
@@ -183,23 +210,30 @@ export function createProcessingInternalRouter() {
 		const withBunny = c.req.query('bunny') === '1';
 		const channelId = c.req.query('channelId');
 		const limit = Math.min(Math.max(parseInt(c.req.query('limit') || '100', 10) || 100, 1), 500);
-		const items: HealthVideo[] = [];
-		let scanned = 0;
-		let cursor: string | undefined;
-		do {
-			const page = await c.env.videos.list({ cursor, limit: 500 });
-			cursor = page.truncated ? page.cursor : undefined;
-			for (const object of page.objects) {
-				if (object.key.includes('/') || object.key.includes(':')) continue;
-				scanned++;
-				const video = (await (await c.env.videos.get(object.key))?.json<HealthVideo>().catch(() => null)) ?? null;
-				if (!video?.id || !matches(video, status)) continue;
-				if (channelId && video.channelId !== channelId) continue;
-				items.push(video);
-			}
-		} while (cursor && items.length < limit);
-		items.sort((a, b) => (b.dateCreated || '').localeCompare(a.dateCreated || ''));
-		const page = items.slice(0, limit);
+		const db = (c.env as { SEARCH_DB?: SearchDb }).SEARCH_DB;
+		if (!db) return c.json({ success: false, error: 'SEARCH_DB is not bound' }, 503);
+		const indexComplete = await processingIndexReady(c.env);
+		const condition = statusCondition(status);
+		const where = ["v.kind = 'video'", ...condition.where];
+		const params = [...condition.params];
+		if (channelId) {
+			where.push('v.channel_id = ?');
+			params.push(channelId);
+		}
+		const tag = `pv:${status}`;
+		const found = await keysetQuery<{ id: string }>(db, {
+			from: 'content_ownership v',
+			select: 'v.id AS id',
+			where,
+			params,
+			columns: ['COALESCE(v.created_at, 0)', 'v.id'],
+			direction: 'DESC',
+			after: decodeCursor(c.req.query('cursor'), tag, ['number', 'string']),
+			limit,
+		});
+		const page = await videosOf(c.env, found.rows.map((r) => r.id));
+		const scanned = found.rows.length;
+		const nextCursor = found.hasMore && found.last ? encodeCursor(tag, found.last) : '';
 		const rows = await Promise.all(
 			page.map(async (video) => {
 				let bunny: unknown = undefined;
@@ -230,7 +264,7 @@ export function createProcessingInternalRouter() {
 				};
 			}),
 		);
-		return c.json({ success: true, result: { items: rows, scanned, reconciler: await readSweepStats(c.env) } });
+		return c.json({ success: true, result: { items: rows, scanned, cursor: nextCursor, indexComplete, reconciler: await readSweepStats(c.env) } });
 	});
 
 	// Dry run (default): Bunny is read and the plan returned, nothing written.
@@ -258,18 +292,22 @@ export function createProcessingInternalRouter() {
 	// processing checks (stored by the processor's DLQ consumer in NOTIFICATIONS_DB).
 	app.get('/errors', async (c) => {
 		const limit = Math.min(Math.max(parseInt(c.req.query('limit') || '100', 10) || 100, 1), 500);
-		const videos: HealthVideo[] = [];
-		let cursor: string | undefined;
-		do {
-			const page = await c.env.videos.list({ cursor, limit: 500 });
-			cursor = page.truncated ? page.cursor : undefined;
-			for (const object of page.objects) {
-				if (object.key.includes('/') || object.key.includes(':')) continue;
-				const video = (await (await c.env.videos.get(object.key))?.json<HealthVideo>().catch(() => null)) ?? null;
-				if (video?.id && (video.uploadStatus === 'failed' || video.processingIssue)) videos.push(video);
-			}
-		} while (cursor && videos.length < limit);
-		videos.sort((a, b) => (b.processingIssue?.at || b.dateModified || '').localeCompare(a.processingIssue?.at || a.dateModified || ''));
+		const searchDb = (c.env as { SEARCH_DB?: SearchDb }).SEARCH_DB;
+		if (!searchDb) return c.json({ success: false, error: 'SEARCH_DB is not bound' }, 503);
+		// Failed or flagged videos, latest flag (or change) first: idx_content_ownership_errors
+		const indexComplete = await processingIndexReady(c.env);
+		const found = await keysetQuery<{ id: string }>(searchDb, {
+			from: 'content_ownership v',
+			select: 'v.id AS id',
+			where: ["v.kind = 'video'", ERRORS_SQL],
+			params: [],
+			columns: ['COALESCE(v.issue_at, v.updated_at, 0)', 'v.id'],
+			direction: 'DESC',
+			after: decodeCursor(c.req.query('cursor'), 'pe', ['number', 'string']),
+			limit,
+		});
+		const videos = await videosOf(c.env, found.rows.map((r) => r.id));
+		const videosCursor = found.hasMore && found.last ? encodeCursor('pe', found.last) : '';
 		let deadLetters: unknown[] = [];
 		const db = (c.env as { NOTIFICATIONS_DB?: D1Database }).NOTIFICATIONS_DB;
 		if (db) {
@@ -306,7 +344,9 @@ export function createProcessingInternalRouter() {
 		return c.json({
 			success: true,
 			result: {
-				videos: videos.slice(0, limit).map((v) => ({
+				videosCursor,
+				indexComplete,
+				videos: videos.map((v) => ({
 					id: v.id,
 					title: v.title,
 					channelId: v.channelId,

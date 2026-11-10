@@ -6,16 +6,17 @@ import { formatDate } from '@/i18n/translate';
 import { ErrorAlert, linkClass } from '@/components/ui';
 import { FilterForm } from '@/components/content/FilterForm';
 import { DeleteRowButton } from '@/components/content/actions';
-import { Chip, EmptyState, MonoId, PageHeader, Pager, tableWrapClass, tdClass, thClass, wideOnly } from '@/components/content/parts';
-import { PAGE_SIZE, hrefWith, pickParams, type SearchParams } from '@/components/content/query';
+import { Chip, EmptyState, MonoId, PageHeader, CursorPager, tableWrapClass, tdClass, thClass, wideOnly } from '@/components/content/parts';
+import { PAGE_SIZE, hrefWith, pickParams, type SearchParams, withoutPaging } from '@/components/content/query';
 import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
 export default async function CommentsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
-  const params = pickParams(await searchParams, { q: 'text', videoId: 'text', userId: 'text', page: 'page' });
+  const params = pickParams(await searchParams, { q: 'text', videoId: 'text', userId: 'text', page: 'page', cursor: 'cursor' });
   const { t, locale } = await getI18n();
   const page = Number(params.page ?? 1);
+  const filters = withoutPaging(params);
 
   let data: AdminPage<AdminCommentRow> | null = null;
   let permissions: AdminContentPermission[] = [];
@@ -28,7 +29,7 @@ export default async function CommentsPage({ searchParams }: { searchParams: Pro
 
   return (
     <div>
-      <PageHeader title={t('comments.title')} subtitle={t('comments.subtitle')} total={data?.total} t={t} />
+      <PageHeader title={t('comments.title')} subtitle={t('comments.subtitle')} total={data?.total} totalCapped={data?.totalCapped} t={t} />
       <FilterForm
         action="/comments"
         label={t('comments.title')}
@@ -86,7 +87,13 @@ export default async function CommentsPage({ searchParams }: { searchParams: Pro
               </tbody>
             </table>
           </div>
-          <Pager page={page} pageSize={PAGE_SIZE} total={data.total} t={t} href={(p) => hrefWith('/comments', params, { page: p > 1 ? String(p) : undefined })} />
+          <CursorPager
+            hasCursor={!!params.cursor || page > 1}
+            nextHref={data.cursor ? hrefWith('/comments', filters, { cursor: data.cursor }) : null}
+            firstHref={hrefWith('/comments', filters)}
+            labels={{ first: t('content.firstPage'), next: t('content.nextPage') }}
+            t={t}
+          />
         </>
       )}
     </div>

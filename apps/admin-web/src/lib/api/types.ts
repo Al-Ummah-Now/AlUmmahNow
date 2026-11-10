@@ -203,7 +203,15 @@ export interface ReconcilerStats {
   errors: number;
   durationMs: number;
 }
-export interface ProcessingVideosResponse { items: ProcessingVideoRow[]; scanned: number; reconciler: ReconcilerStats | null }
+export interface ProcessingVideosResponse {
+  items: ProcessingVideoRow[];
+  scanned: number;
+  reconciler: ReconcilerStats | null;
+  /** Next page (absent from older api-videos builds) */
+  cursor?: string;
+  /** False while the video index is being rebuilt with the processing columns: the list may be partial */
+  indexComplete?: boolean;
+}
 export interface ProcessingDeadLetter { id: string; dlq: string; attempts: number; failureReason: string | null; receivedAt: string | number; videoId?: string }
 /** An account erasure step that failed after its retries (#616). */
 export interface ErasureDeadLetter {
@@ -215,6 +223,8 @@ export interface ErasureDeadLetter {
   receivedAt: string | number;
 }
 export interface ProcessingErrorsResponse {
+  /** More failed/flagged videos than shown (the Processing page pages through them); absent from older builds */
+  videosCursor?: string;
   videos: Pick<ProcessingVideoRow, 'id' | 'title' | 'channelId' | 'userId' | 'uploadStatus' | 'processingIssue' | 'dateCreated' | 'dateModified'>[];
   deadLetters: ProcessingDeadLetter[];
   /** Absent from older api-videos builds */

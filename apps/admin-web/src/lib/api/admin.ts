@@ -269,10 +269,11 @@ export async function deleteContactMessage(id: string): Promise<ActionResult<{ d
 
 // Upload processing health (admin-api /api/processing; videos:processing)
 
-export async function listProcessingVideos(params: { status?: string; channelId?: string } = {}): Promise<ProcessingVideosResponse> {
+export async function listProcessingVideos(params: { status?: string; channelId?: string; cursor?: string } = {}): Promise<ProcessingVideosResponse> {
   const query = new URLSearchParams();
   if (params.status) query.set('status', params.status);
   if (params.channelId) query.set('channelId', params.channelId);
+  if (params.cursor) query.set('cursor', params.cursor);
   const suffix = query.size ? `?${query}` : '';
   return fetchAdmin<ProcessingVideosResponse>(`/api/processing/videos${suffix}`);
 }

@@ -49,6 +49,7 @@ import {
 	countPrefix,
 	ensureAdminIndex,
 	hydrateChannels,
+	listPlaylistsFromIndex,
 	readMany,
 	toUserRow,
 	type AdminEnv,
@@ -757,6 +758,9 @@ const includesText = (q: string | undefined, ...fields: unknown[]) => {
 };
 
 export async function listPlaylists(env: AdminServiceEnv, query: { q?: string; channelId?: string; ownerId?: string; cursor?: string | null; pageSize?: number }) {
+	// The ownership index once its playlist pass completed; until then (or for a scan cursor) the bucket
+	const indexed = env.SEARCH_DB ? await listPlaylistsFromIndex(env, query).catch(() => null) : null;
+	if (indexed) return indexed;
 	const { values, nextCursor } = await scanMatching(env.playlists, {
 		cursor: query.cursor,
 		want: query.pageSize ?? 20,
@@ -862,7 +866,7 @@ export async function userDetail(env: AdminServiceEnv, userId: string): Promise<
 				(
 					await db
 						.prepare(
-							`SELECT c.*, (SELECT COALESCE(SUM(v.views), 0) FROM content_ownership v WHERE v.kind = 'video' AND v.channel_id = c.id AND v.is_deleted = 0) AS total_views
+							`SELECT c.*, COALESCE((SELECT t.views FROM channel_totals t WHERE t.channel_id = c.id), 0) AS total_views
 							 FROM content_ownership c WHERE c.kind = 'channel' AND c.id IN (SELECT value FROM json_each(?)) ORDER BY c.created_at`,
 						)
 						.bind(JSON.stringify(channelIds))

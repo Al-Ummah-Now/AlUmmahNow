@@ -95,14 +95,14 @@ const badIds = (c: C) => c.json({ success: false, code: 'bad_request', error: `i
 /** Stuck videos with Bunny's state next to ours, and the reconciler's last run. */
 app.get('/videos', async (c) => {
   const result = await callProcessing(c.env, '/videos', {
-    query: { status: c.req.query('status'), channelId: c.req.query('channelId'), limit: c.req.query('limit'), bunny: c.req.query('bunny') ?? '1' },
+    query: { status: c.req.query('status'), channelId: c.req.query('channelId'), limit: c.req.query('limit'), cursor: c.req.query('cursor'), bunny: c.req.query('bunny') ?? '1' },
   });
   return c.json({ success: true, result });
 });
 
 /** Failures that need an admin: failed / flagged videos and dead-lettered checks. */
 app.get('/errors', async (c) => {
-  const result = await callProcessing(c.env, '/errors', { query: { limit: c.req.query('limit') } });
+  const result = await callProcessing(c.env, '/errors', { query: { limit: c.req.query('limit'), cursor: c.req.query('cursor') } });
   return c.json({ success: true, result });
 });
 

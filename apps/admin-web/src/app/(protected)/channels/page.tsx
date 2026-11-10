@@ -6,8 +6,8 @@ import { getI18n } from '@/i18n/server';
 import { formatDate, formatNumber } from '@/i18n/translate';
 import { ErrorAlert, linkClass } from '@/components/ui';
 import { FilterForm } from '@/components/content/FilterForm';
-import { Chip, EmptyState, MonoId, Notice, PageHeader, Pager, tableWrapClass, tdClass, thClass, wideOnly } from '@/components/content/parts';
-import { PAGE_SIZE, hrefWith, pickParams, type SearchParams } from '@/components/content/query';
+import { Chip, EmptyState, MonoId, Notice, PageHeader, CursorPager, tableWrapClass, tdClass, thClass, wideOnly } from '@/components/content/parts';
+import { PAGE_SIZE, hrefWith, pickParams, type SearchParams, withoutPaging } from '@/components/content/query';
 import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
@@ -24,9 +24,11 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
     createdTo: 'date',
     sort: ADMIN_CHANNEL_SORTS,
     page: 'page',
+    cursor: 'cursor',
   });
   const { t, locale } = await getI18n();
   const page = Number(params.page ?? 1);
+  const filters = withoutPaging(params);
 
   let data: AdminPage<AdminChannelRow> | null = null;
   try {
@@ -42,7 +44,7 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
 
   return (
     <div>
-      <PageHeader title={t('channels.title')} subtitle={t('channels.subtitle')} total={data?.total} t={t} />
+      <PageHeader title={t('channels.title')} subtitle={t('channels.subtitle')} total={data?.total} totalCapped={data?.totalCapped} t={t} />
       <FilterForm
         action="/channels"
         label={t('channels.title')}
@@ -151,7 +153,13 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
               </tbody>
             </table>
           </div>
-          <Pager page={page} pageSize={PAGE_SIZE} total={data.total} t={t} href={(p) => hrefWith('/channels', params, { page: p > 1 ? String(p) : undefined })} />
+          <CursorPager
+            hasCursor={!!params.cursor || page > 1}
+            nextHref={data.cursor ? hrefWith('/channels', filters, { cursor: data.cursor }) : null}
+            firstHref={hrefWith('/channels', filters)}
+            labels={{ first: t('content.firstPage'), next: t('content.nextPage') }}
+            t={t}
+          />
         </>
       )}
     </div>
