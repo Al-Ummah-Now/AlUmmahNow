@@ -6,7 +6,7 @@ import {
   ChannelSectionUpdateInput,
   ChannelSectionReorderInput,
 } from '@al-ummah/shared-types';
-import { apiRequestServer, buildApiUrl } from './api-client';
+import { apiRequestServer, apiRequestServerResult, buildApiUrl, type ApiResult } from './api-client';
 import { getServerAuthContext } from './server-auth';
 import { logger } from '@/lib/logger';
 
@@ -125,28 +125,37 @@ export async function getChannelSection(
 }
 
 /**
+ * Outcome of a section write: the saved section, or the API's stable error
+ * code (docs/specs/CHANNEL-SECTIONS.md §8.2) for the page to localize.
+ */
+export type SectionWriteResult =
+  | { ok: true; section: ChannelSection }
+  | { ok: false; code: string };
+
+function toWriteResult(result: ApiResult<{ success: boolean; result?: { section: ChannelSection } }>): SectionWriteResult {
+  if (result.data?.success && result.data.result?.section) {
+    return { ok: true, section: result.data.result.section };
+  }
+  const body = result.errorBody as { code?: unknown } | undefined;
+  const code = typeof body?.code === 'string' ? body.code : result.status === 403 ? 'forbidden' : 'generic';
+  logger.warn('Channel section write rejected', { status: result.status, code });
+  return { ok: false, code };
+}
+
+/**
  * Create a new section
  * POST /api/channels/{channelId}/sections
  */
 export async function createChannelSection(
   channelId: string,
   data: ChannelSectionCreateInput
-): Promise<ChannelSection | null> {
-  const response = await apiRequestServer<{
-    success: boolean;
-    result: { section: ChannelSection };
-  }>({
+): Promise<SectionWriteResult> {
+  return toWriteResult(await apiRequestServerResult<{ success: boolean; result?: { section: ChannelSection } }>({
     method: 'POST',
     url: buildApiUrl(`/api/channels/${channelId}/sections`),
     body: data,
     functionName: 'createChannelSection'
-  }, getServerAuthContext, true);
-
-  if (!response || !response.success || !response.result) {
-    return null;
-  }
-
-  return response.result.section;
+  }, getServerAuthContext, true));
 }
 
 /**
@@ -157,22 +166,13 @@ export async function updateChannelSection(
   channelId: string,
   sectionId: string,
   data: ChannelSectionUpdateInput
-): Promise<{ section: ChannelSection } | null> {
-  const response = await apiRequestServer<{
-    success: boolean;
-    result: { section: ChannelSection };
-  }>({
+): Promise<SectionWriteResult> {
+  return toWriteResult(await apiRequestServerResult<{ success: boolean; result?: { section: ChannelSection } }>({
     method: 'PUT',
     url: buildApiUrl(`/api/channels/${channelId}/sections/${sectionId}`),
     body: data,
     functionName: 'updateChannelSection'
-  }, getServerAuthContext, true);
-
-  if (!response || !response.success) {
-    return null;
-  }
-
-  return { section: response.result.section };
+  }, getServerAuthContext, true));
 }
 
 /**

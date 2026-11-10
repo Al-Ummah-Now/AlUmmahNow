@@ -1,6 +1,4 @@
-import type { Channel, ChannelSection, LiveStream } from '@al-ummah/shared-types';
-import { getChannelById } from '@/lib/api/channels';
-import { logger } from '@/lib/logger-client';
+import type { Channel, ChannelSection, ChannelSectionType, LiveStream, VideoObject } from '@al-ummah/shared-types';
 import { BRAND_LOGO_LARGE } from '@/components/brand/BrandLogo';
 
 /**
@@ -21,10 +19,52 @@ export type ChannelSummary = Pick<
   | 'videosCount'
 > & Partial<Pick<Channel, 'handle' | 'userId' | 'isMain'>>;
 
+/** Why an editor sees a section that visitors don't (API `emptyHint`) */
+export type SectionEmptyHint = 'noContent' | 'consentMissing' | 'communityTabHidden' | 'loadFailed';
+
+/** A community post as the API returns it for a Home tab section */
+export interface SectionPostSummary {
+  id: string;
+  channelId: string;
+  type: string;
+  content?: string;
+  image?: { url: string; width: number; height: number };
+  videoId?: string;
+  gifUrl?: string;
+  poll?: { question: string; optionsCount: number };
+  likes: number;
+  comments: number;
+  pinned: boolean;
+  createdAt: string;
+}
+
+/** A playlist as the API returns it in section content (public fields, cover filled in) */
+export interface SectionPlaylist {
+  id: string;
+  name?: string;
+  title?: string;
+  description?: string;
+  thumbnailUrl?: string | null;
+  cover?: { videoId?: string; thumbnailUrl?: string | null } | null;
+  videosCount?: number;
+  videos?: unknown[];
+}
+
+/** Content the API filled in for a section (docs/specs/CHANNEL-SECTIONS.md §8.3) */
+export interface SectionContent {
+  videos?: VideoObject[];
+  playlist?: SectionPlaylist;
+  playlists?: SectionPlaylist[];
+  channels?: ChannelSummary[];
+  streams?: ApiLiveStream[];
+  posts?: SectionPostSummary[];
+  spotlight?: { trailer?: VideoObject; returning?: VideoObject };
+}
+
 /**
- * Section as returned by GET /api/channels/{id}/sections/populated.
- * The API returns the view model (content refs nested under `content`) plus
- * `populatedContent` for auto-populated section types.
+ * Section as returned by GET /api/channels/{id}/sections/populated: the view
+ * model plus the server-populated content. Visitors only get sections with
+ * content; editors get every section with `canEdit` and an `emptyHint`.
  */
 export type PopulatedChannelSection = ChannelSection & {
   content?: {
@@ -32,46 +72,29 @@ export type PopulatedChannelSection = ChannelSection & {
     playlistId?: string;
     playlistIds?: string[];
     channelIds?: string[];
+    trailerVideoId?: string;
+    returningVideoId?: string;
   };
-  populatedContent?: {
-    channels?: ChannelSummary[];
-  };
+  sort?: 'latest' | 'popular';
+  liveFilter?: 'live_and_upcoming' | 'past';
+  postMode?: 'latest' | 'pinned';
+  consented?: boolean;
+  populatedContent?: SectionContent;
+  isEmpty?: boolean;
+  emptyHint?: SectionEmptyHint;
+  canEdit?: boolean;
 };
 
 /**
- * Configured channel ids of a section (flat business shape or nested view shape)
+ * The key of the default title: Shorts and live sections read differently
+ * by their order and filter ("Popular Shorts", "Past live streams").
  */
-export function getSectionChannelIds(section: PopulatedChannelSection): string[] {
-  if (section.channelIds && section.channelIds.length > 0) {
-    return section.channelIds;
-  }
-  return section.content?.channelIds ?? [];
-}
-
-/**
- * Configured video ids of a section. The API returns content refs nested
- * under `content` (view shape); older callers used the flat business shape.
- */
-export function getSectionVideoIds(section: PopulatedChannelSection): string[] {
-  if (section.videoIds && section.videoIds.length > 0) {
-    return section.videoIds;
-  }
-  return section.content?.videoIds ?? [];
-}
-
-/**
- * Configured playlist ids of a section (multiple_playlists uses the list,
- * single_playlist a single `playlistId`; both shapes are accepted)
- */
-export function getSectionPlaylistIds(section: PopulatedChannelSection): string[] {
-  if (section.playlistIds && section.playlistIds.length > 0) {
-    return section.playlistIds;
-  }
-  if (section.content?.playlistIds && section.content.playlistIds.length > 0) {
-    return section.content.playlistIds;
-  }
-  const single = section.playlistId || section.content?.playlistId;
-  return single ? [single] : [];
+export function sectionLabelKey(
+  section: Pick<PopulatedChannelSection, 'type' | 'sort' | 'liveFilter'>
+): ChannelSectionType | 'shorts_popular' | 'live_streams_past' {
+  if (section.type === 'shorts' && section.sort === 'popular') return 'shorts_popular';
+  if (section.type === 'live_streams' && section.liveFilter === 'past') return 'live_streams_past';
+  return section.type;
 }
 
 /**
@@ -86,35 +109,9 @@ export function resolveSectionTitle(title: string | undefined | null, fallback: 
   return trimmed;
 }
 
-/**
- * Channels auto-populated by the API (e.g. subscribed_channels sections)
- */
+/** Channels the API filled in for a section (featured or subscribed channels) */
 export function getSectionPopulatedChannels(section: PopulatedChannelSection): ChannelSummary[] {
   return section.populatedContent?.channels ?? [];
-}
-
-function isVisibleChannel(channel: Channel | null): channel is Channel {
-  return !!channel && !channel.isDeleted && !channel.isHidden && !channel.isPrivate;
-}
-
-/**
- * Fetch channels by id (in order), skipping missing, private or moderated channels
- */
-export async function fetchChannelsByIds(channelIds: string[]): Promise<ChannelSummary[]> {
-  const uniqueIds = Array.from(new Set(channelIds.filter(Boolean)));
-
-  const results = await Promise.all(
-    uniqueIds.map(async (id) => {
-      try {
-        return await getChannelById(id);
-      } catch (error) {
-        logger.warn('fetchChannelsByIds: Failed to fetch channel', { channelId: id, error });
-        return null;
-      }
-    })
-  );
-
-  return results.filter(isVisibleChannel);
 }
 
 /**

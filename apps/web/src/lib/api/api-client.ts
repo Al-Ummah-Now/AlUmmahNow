@@ -34,10 +34,14 @@ export interface AuthContext {
   // Note: userId is not sent from client, but available server-side from JWT token or session
 }
 
-/** Response body (null on failure) plus the HTTP status (null when no response arrived). */
-interface ApiResult<T> {
+/**
+ * Response body (null on failure) plus the HTTP status (null when no response
+ * arrived) and, for an error response, its JSON body when it had one.
+ */
+export interface ApiResult<T> {
   data: T | null;
   status: number | null;
+  errorBody?: unknown;
 }
 
 /**
@@ -123,7 +127,13 @@ async function sendApiRequest<T>(
         errorBody: errorText
       });
       logApiEnd(functionName, false);
-      return { data: null, status: response.status };
+      let errorBody: unknown;
+      try {
+        errorBody = errorText ? JSON.parse(errorText) : undefined;
+      } catch {
+        errorBody = undefined;
+      }
+      return { data: null, status: response.status, errorBody };
     }
 
     // 204 No Content (e.g. DELETE /api/upload-defaults/:id) has no body to parse;
@@ -175,6 +185,19 @@ export async function apiRequestServer<T>(
   requireAuth: boolean = false,
   onUnauthorized: UnauthorizedHandler = refreshAuthAfterUnauthorized
 ): Promise<T | null> {
+  return (await apiRequestServerResult<T>(options, getAuth, requireAuth, onUnauthorized)).data;
+}
+
+/**
+ * apiRequestServer that also returns the status and the error body, for
+ * callers that show a specific message per API error code.
+ */
+export async function apiRequestServerResult<T>(
+  options: ApiRequestOptions,
+  getAuth: () => Promise<AuthContext | null>,
+  requireAuth: boolean = false,
+  onUnauthorized: UnauthorizedHandler = refreshAuthAfterUnauthorized
+): Promise<ApiResult<T>> {
   const { functionName } = options;
 
   logApiStep({ functionName, step: 'Getting authentication context' });
@@ -182,12 +205,12 @@ export async function apiRequestServer<T>(
 
   if (!authContext && requireAuth) {
     logApiError(functionName, 'Authentication required but not available');
-    return null;
+    return { data: null, status: 401 };
   }
 
   const first = await sendApiRequest<T>(options, authContext || undefined);
   if (first.status !== 401 || !authContext?.accessToken) {
-    return first.data;
+    return first;
   }
 
   let renewed: AuthContext | null = null;
@@ -198,11 +221,11 @@ export async function apiRequestServer<T>(
   }
   if (!renewed?.accessToken || renewed.accessToken === authContext.accessToken) {
     logApiStep({ functionName, step: '401: no renewed token, not retrying' });
-    return first.data;
+    return first;
   }
 
   logApiStep({ functionName, step: '401: retrying once with a refreshed token' });
-  return (await sendApiRequest<T>(options, { ...authContext, ...renewed })).data;
+  return sendApiRequest<T>(options, { ...authContext, ...renewed });
 }
 
 /**

@@ -2,59 +2,58 @@
 
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { ChannelSection } from '@al-ummah/shared-types';
-import { GripVertical, Edit, Trash2 } from 'lucide-react';
+import { getLocalizedValue } from '@al-ummah/shared-types';
+import { EyeOff, GripVertical, Pencil, Pin, Star, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/hooks/useLanguage';
 import type { AppTranslations } from '@/lib/i18n/types';
+import { resolveSectionTitle, sectionLabelKey, type PopulatedChannelSection } from '../sectionData';
+import { SECTION_ICONS } from './AddSectionDialog';
 
 interface SortableSectionItemProps {
-  section: ChannelSection;
+  section: PopulatedChannelSection;
   onDelete: () => void;
   onEdit?: () => void;
+  /** The spotlight always leads the Home tab, so it isn't dragged */
+  pinned?: boolean;
 }
 
 type SectionStrings = AppTranslations['channelManage']['sections'];
 
-export function getSectionContentSummary(section: ChannelSection, s: SectionStrings): string {
-  if (section.videoIds && section.videoIds.length > 0) {
-    return s.videosCount.replace('{count}', String(section.videoIds.length));
-  }
-  if (section.playlistIds && section.playlistIds.length > 0) {
-    return s.playlistsCount.replace('{count}', String(section.playlistIds.length));
-  }
-  if (section.playlistId) {
-    return s.playlistsCount.replace('{count}', '1');
-  }
-  if (section.channelIds && section.channelIds.length > 0) {
-    return s.channelsCount.replace('{count}', String(section.channelIds.length));
-  }
+/** Picked content of a section ("Videos: 3"), or "Automatic content" */
+export function getSectionContentSummary(section: PopulatedChannelSection, s: SectionStrings): string {
+  const content = { ...section.content, ...pickFlat(section) };
+  const spotlight = [content.trailerVideoId, content.returningVideoId].filter(Boolean).length;
+  if (content.videoIds?.length) return s.videosCount.replace('{count}', String(content.videoIds.length));
+  if (spotlight) return s.videosCount.replace('{count}', String(spotlight));
+  if (content.playlistIds?.length) return s.playlistsCount.replace('{count}', String(content.playlistIds.length));
+  if (content.playlistId) return s.playlistsCount.replace('{count}', '1');
+  if (content.channelIds?.length) return s.channelsCount.replace('{count}', String(content.channelIds.length));
   return s.automaticContent;
 }
 
-export function SortableSectionItem({
-  section,
-  onDelete,
-  onEdit,
-}: SortableSectionItemProps) {
-  const { t } = useLanguage();
+/** Older responses had the ids at the top level */
+function pickFlat(section: PopulatedChannelSection) {
+  const flat: NonNullable<PopulatedChannelSection['content']> = {};
+  if (section.videoIds?.length) flat.videoIds = section.videoIds;
+  if (section.playlistIds?.length) flat.playlistIds = section.playlistIds;
+  if (section.playlistId) flat.playlistId = section.playlistId;
+  if (section.channelIds?.length) flat.channelIds = section.channelIds;
+  return flat;
+}
+
+export function SortableSectionItem({ section, onDelete, onEdit, pinned = false }: SortableSectionItemProps) {
+  const { t, locale } = useLanguage();
   const s = t.channelManage.sections;
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: section.id });
+  const cs = t.channelSections;
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: section.id, disabled: pinned });
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
-  const title = section.title || s.typeLabels[section.type] || section.type;
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+  const labelKey = sectionLabelKey(section);
+  const typeLabel = cs.labels[labelKey] ?? section.type;
+  const title = resolveSectionTitle(getLocalizedValue(section.titleLocalized, section.title, locale), typeLabel);
+  const hidden = !!section.isEmpty || !!section.emptyHint;
+  const Icon = SECTION_ICONS[labelKey] ?? Star;
 
   return (
     <div
@@ -62,48 +61,71 @@ export function SortableSectionItem({
       style={style}
       data-testid="section-item"
       data-section-id={section.id}
-      className="flex items-center gap-3 md:gap-4 p-3 md:p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:shadow-md dark:hover:shadow-gray-900 transition-shadow"
+      data-section-type={section.type}
+      data-hidden={hidden || undefined}
+      className="flex items-center gap-3 rounded-lg border border-border bg-card p-3 text-card-foreground md:gap-4 md:p-4"
     >
-      {/* Drag handle - touch-friendly size */}
-      <div
-        {...attributes}
-        {...listeners}
-        data-testid="section-drag-handle"
-        className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 min-w-[44px] min-h-[44px] flex items-center justify-center -ms-2 md:-ms-3"
-        aria-label={`${s.dragToReorder}: ${title}`}
-      >
-        <GripVertical className="w-5 h-5" />
+      {pinned ? (
+        <span className="-ms-2 flex min-h-[44px] min-w-[44px] items-center justify-center text-muted-foreground md:-ms-3" title={cs.pinnedFirst}>
+          <Pin className="h-5 w-5" aria-hidden="true" />
+          <span className="sr-only">{cs.pinnedFirst}</span>
+        </span>
+      ) : (
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          data-testid="section-drag-handle"
+          className="-ms-2 flex min-h-[44px] min-w-[44px] cursor-grab items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing md:-ms-3"
+          aria-label={`${s.dragToReorder}: ${title}`}
+        >
+          <GripVertical className="h-5 w-5" aria-hidden="true" />
+        </button>
+      )}
+
+      <span className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-md bg-brand-soft text-brand-ink sm:flex" aria-hidden="true">
+        <Icon className="h-5 w-5" />
+      </span>
+
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="truncate text-sm font-medium text-foreground md:text-base" data-testid="section-item-title" dir="auto">
+            {title}
+          </span>
+          {hidden && (
+            <span
+              className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
+              title={cs.emptyHints[section.emptyHint ?? 'noContent']}
+              data-testid="section-hidden-badge"
+            >
+              <EyeOff className="h-3 w-3" aria-hidden="true" />
+              {cs.hidden}
+            </span>
+          )}
+        </div>
+        <div className="mt-0.5 text-xs text-muted-foreground md:text-sm">
+          {typeLabel}
+          <span aria-hidden="true">{', '}</span>
+          {getSectionContentSummary(section, s)}
+        </div>
+        {hidden && <p className="sr-only">{cs.emptyHints[section.emptyHint ?? 'noContent']}</p>}
       </div>
 
-      <div className="flex-1 min-w-0">
-        <div className="font-medium text-sm md:text-base text-gray-900 dark:text-gray-100 truncate" data-testid="section-item-title">
-          {title}
-        </div>
-        <div className="text-xs md:text-sm text-gray-600 dark:text-gray-400 mt-0.5">
-          {s.typeLabels[section.type] || section.type} · {getSectionContentSummary(section, s)}
-        </div>
-      </div>
-
-      <div className="flex gap-1 md:gap-2 flex-shrink-0">
+      <div className="flex shrink-0 gap-1 md:gap-2">
         {onEdit && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onEdit}
-            className="h-9 w-9 md:h-8 md:w-8 p-0"
-            aria-label={`${s.editSection}: ${title}`}
-          >
-            <Edit className="w-4 h-4" />
+          <Button variant="ghost" size="sm" onClick={onEdit} className="h-9 w-9 p-0 md:h-8 md:w-8" aria-label={`${s.editSection}: ${title}`} data-testid="section-edit">
+            <Pencil className="h-4 w-4" aria-hidden="true" />
           </Button>
         )}
         <Button
           variant="ghost"
           size="sm"
           onClick={onDelete}
-          className="h-9 w-9 md:h-8 md:w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20"
+          className="h-9 w-9 p-0 text-destructive hover:bg-muted md:h-8 md:w-8"
           aria-label={`${s.deleteSection}: ${title}`}
+          data-testid="section-delete"
         >
-          <Trash2 className="w-4 h-4" />
+          <Trash2 className="h-4 w-4" aria-hidden="true" />
         </Button>
       </div>
     </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import {
   DndContext,
@@ -17,11 +17,13 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import { ChannelSection, ChannelSectionCreateInput } from '@al-ummah/shared-types';
+import { CHANNEL_SECTION_CONSTRAINTS, type ChannelSectionCreateInput } from '@al-ummah/shared-types';
+import type { PopulatedChannelSection } from '@/components/ChannelSections/sectionData';
+import { useAuth } from '@/components/AuthProvider/authContext';
 import { SortableSectionItem } from '@/components/ChannelSections/management/SortableSectionItem';
 import { AddSectionDialog } from '@/components/ChannelSections/management/AddSectionDialog';
 import { SectionForm } from '@/components/ChannelSections/management/SectionForm';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -39,7 +41,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
-  listChannelSections,
+  listChannelSectionsPopulated,
   createChannelSection,
   updateChannelSection,
   deleteChannelSection,
@@ -50,7 +52,9 @@ import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
 import { getChannelById } from '@/lib/api/channels';
 import { useLanguage } from '@/hooks/useLanguage';
 
-const MAX_SECTIONS = 10;
+const MAX_SECTIONS = CHANNEL_SECTION_CONSTRAINTS.MAX_SECTIONS_PER_CHANNEL;
+
+const isSpotlight = (section: { type: string }) => section.type === 'channel_spotlight';
 
 export default function ChannelSectionsManagement() {
   const params = useParams();
@@ -58,8 +62,11 @@ export default function ChannelSectionsManagement() {
   const locale = (params.locale as string) || 'en';
   const { t, isRTL } = useLanguage();
   const s = t.channelManage.sections;
+  const cs = t.channelSections;
+  const { user } = useAuth();
 
-  const [sections, setSections] = useState<ChannelSection[]>([]);
+  const [sections, setSections] = useState<PopulatedChannelSection[]>([]);
+  const [channelOwnerId, setChannelOwnerId] = useState<string | null>(null);
   const [channelName, setChannelName] = useState<string>('');
   const [hasChanges, setHasChanges] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -68,7 +75,8 @@ export default function ChannelSectionsManagement() {
   const [success, setSuccess] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [sectionToDelete, setSectionToDelete] = useState<string | null>(null);
-  const [sectionToEdit, setSectionToEdit] = useState<ChannelSection | null>(null);
+  const [sectionToEdit, setSectionToEdit] = useState<PopulatedChannelSection | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
   const [updating, setUpdating] = useState(false);
 
   const sensors = useSensors(
@@ -90,7 +98,7 @@ export default function ChannelSectionsManagement() {
         logger.info('ChannelSectionsManagement: Fetching sections and channel', { channelId });
 
         const [sectionList, channel] = await Promise.all([
-          listChannelSections(channelId),
+          listChannelSectionsPopulated(channelId),
           getChannelById(channelId),
         ]);
 
@@ -103,10 +111,12 @@ export default function ChannelSectionsManagement() {
 
         if (channel) {
           setChannelName(channel.nameLocalized?.[locale] || channel.name || '');
+          setChannelOwnerId(channel.userId ?? null);
         }
 
         if (sectionList) {
-          setSections([...sectionList].sort((a, b) => a.position - b.position));
+          // The populated list is already in the published order, spotlight first
+          setSections(sectionList as PopulatedChannelSection[]);
         } else {
           logger.warn('ChannelSectionsManagement: No sections returned', { channelId });
           setError(s.loadFailed);
@@ -133,14 +143,33 @@ export default function ChannelSectionsManagement() {
     setTimeout(() => setSuccess(null), 3000);
   }
 
+  /** A rejected write's code, in the viewer's language */
+  const errorMessage = useCallback(
+    (code: string) => (cs.errors as Record<string, string>)[code] ?? cs.errors.generic,
+    [cs.errors]
+  );
+
+  /** Re-read the populated list so content, hints and badges match the server */
+  async function refreshSections() {
+    try {
+      const list = await listChannelSectionsPopulated(channelId);
+      if (list) setSections(list as PopulatedChannelSection[]);
+    } catch (err) {
+      logger.warn('ChannelSectionsManagement: refresh failed', { channelId, error: err });
+    }
+  }
+
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
 
     if (over && active.id !== over.id) {
       setSections((current) => {
-        const oldIndex = current.findIndex((sec) => sec.id === active.id);
-        const newIndex = current.findIndex((sec) => sec.id === over.id);
-        return arrayMove(current, oldIndex, newIndex).map((section, index) => ({
+        const pinned = current.filter(isSpotlight);
+        const movable = current.filter((sec) => !isSpotlight(sec));
+        const oldIndex = movable.findIndex((sec) => sec.id === active.id);
+        const newIndex = movable.findIndex((sec) => sec.id === over.id);
+        if (oldIndex < 0 || newIndex < 0) return current;
+        return [...pinned, ...arrayMove(movable, oldIndex, newIndex)].map((section, index) => ({
           ...section,
           position: index,
         }));
@@ -184,47 +213,42 @@ export default function ChannelSectionsManagement() {
     }
   }
 
-  async function handleAdd(data: ChannelSectionCreateInput) {
+  /** Resolves to a localized error for the dialog, or null when added */
+  async function handleAdd(data: ChannelSectionCreateInput): Promise<string | null> {
     setError(null);
     setSuccess(null);
-
     try {
-      const section = await createChannelSection(channelId, data);
-
-      if (section) {
-        setSections((prev) => [...prev, section]);
-        flash(s.created);
-        logger.info('ChannelSectionsManagement: Section created', { channelId, sectionId: section.id, type: data.type });
-      } else {
-        setError(s.createFailed);
-      }
+      const result = await createChannelSection(channelId, data);
+      if (!result.ok) return errorMessage(result.code);
+      logger.info('ChannelSectionsManagement: Section created', { channelId, sectionId: result.section.id, type: data.type });
+      await refreshSections();
+      flash(s.created);
+      return null;
     } catch (err) {
-      logger.error('ChannelSectionsManagement: Error creating section', { error: err, data, channelId });
-      setError(s.createFailed);
+      logger.error('ChannelSectionsManagement: Error creating section', { error: err, type: data.type, channelId });
+      return cs.errors.generic;
     }
   }
 
   async function handleUpdate(data: ChannelSectionCreateInput) {
     if (!sectionToEdit) return;
     setUpdating(true);
-    setError(null);
+    setEditError(null);
     setSuccess(null);
-
     try {
       const { type: _type, ...changes } = data;
       const result = await updateChannelSection(channelId, sectionToEdit.id, changes);
-
-      if (result?.section) {
-        setSections((prev) => prev.map((sec) => (sec.id === sectionToEdit.id ? { ...sec, ...result.section } : sec)));
-        setSectionToEdit(null);
-        flash(s.updated);
-        logger.info('ChannelSectionsManagement: Section updated', { channelId, sectionId: sectionToEdit.id });
-      } else {
-        setError(s.updateFailed);
+      if (!result.ok) {
+        setEditError(errorMessage(result.code));
+        return;
       }
+      logger.info('ChannelSectionsManagement: Section updated', { channelId, sectionId: sectionToEdit.id });
+      await refreshSections();
+      setSectionToEdit(null);
+      flash(s.updated);
     } catch (err) {
       logger.error('ChannelSectionsManagement: Error updating section', { error: err, sectionId: sectionToEdit.id, channelId });
-      setError(s.updateFailed);
+      setEditError(cs.errors.generic);
     } finally {
       setUpdating(false);
     }
@@ -253,15 +277,17 @@ export default function ChannelSectionsManagement() {
     }
   }
 
+  const canGrantConsent = !!user?.id && !!channelOwnerId && user.id === channelOwnerId;
+
   if (loading) {
     return (
       <div className="max-w-4xl mx-auto p-4 md:p-6" dir={isRTL ? 'rtl' : 'ltr'}>
         <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-48"></div>
-          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-64"></div>
+          <div className="h-8 bg-muted rounded w-48"></div>
+          <div className="h-4 bg-muted rounded w-64"></div>
           <div className="space-y-3">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-20 bg-gray-200 dark:bg-gray-700 rounded"></div>
+              <div key={i} className="h-20 bg-muted rounded"></div>
             ))}
           </div>
         </div>
@@ -280,10 +306,10 @@ export default function ChannelSectionsManagement() {
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-gray-100">
+          <h1 className="text-xl md:text-2xl font-bold text-foreground">
             {s.title}
           </h1>
-          <p className="text-sm md:text-base text-gray-600 dark:text-gray-400 mt-1">
+          <p className="text-sm md:text-base text-muted-foreground mt-1">
             {s.description.replace('{max}', String(MAX_SECTIONS))}
           </p>
         </div>
@@ -300,39 +326,43 @@ export default function ChannelSectionsManagement() {
       </div>
 
       {success && (
-        <div role="status" className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg text-sm text-green-800 dark:text-green-300">
+        <div role="status" className="p-3 bg-brand-soft border border-brand-edge rounded-lg text-sm text-brand-ink">
           {success}
         </div>
       )}
 
       {error && (
-        <div role="alert" className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-800 dark:text-red-300">
+        <div role="alert" className="p-3 border border-destructive rounded-lg text-sm text-destructive">
           {error}
         </div>
       )}
 
-      <div className="text-sm text-gray-600 dark:text-gray-400" data-testid="sections-count">
+      <div className="text-sm text-muted-foreground" data-testid="sections-count">
         {s.sectionsUsed.replace('{count}', String(sections.length)).replace('{max}', String(MAX_SECTIONS))}
         {hasChanges && (
-          <span className="ms-2 text-orange-600 dark:text-orange-400" data-testid="sections-unpublished">
+          <span className="ms-2 font-medium text-foreground" data-testid="sections-unpublished">
             {s.unpublishedChanges}
           </span>
         )}
       </div>
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <SortableContext items={sections.map((sec) => sec.id)} strategy={verticalListSortingStrategy}>
+        <SortableContext items={sections.filter((sec) => !isSpotlight(sec)).map((sec) => sec.id)} strategy={verticalListSortingStrategy}>
           <div className="space-y-2 md:space-y-3" data-testid="sections-list">
             {sections.length === 0 ? (
-              <div className="p-8 md:p-12 text-center border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg">
-                <p className="text-sm md:text-base text-gray-600 dark:text-gray-400">{s.empty}</p>
+              <div className="p-8 md:p-12 text-center border border-border bg-muted rounded-lg">
+                <p className="text-sm md:text-base text-muted-foreground">{s.empty}</p>
               </div>
             ) : (
               sections.map((section) => (
                 <SortableSectionItem
                   key={section.id}
                   section={section}
-                  onEdit={() => setSectionToEdit(section)}
+                  pinned={isSpotlight(section)}
+                  onEdit={() => {
+                    setEditError(null);
+                    setSectionToEdit(section);
+                  }}
                   onDelete={() => openDeleteDialog(section.id)}
                 />
               ))
@@ -345,6 +375,8 @@ export default function ChannelSectionsManagement() {
         <div className="pt-2">
           <AddSectionDialog
             channelId={channelId}
+            existing={sections}
+            canGrantConsent={canGrantConsent}
             onAdd={handleAdd}
             disabled={sections.length >= MAX_SECTIONS}
           />
@@ -352,7 +384,7 @@ export default function ChannelSectionsManagement() {
       )}
 
       {sections.length >= MAX_SECTIONS && (
-        <div className="p-3 bg-brand-soft dark:bg-brand-soft border border-brand-edge dark:border-brand-edge rounded-lg text-sm text-brand-ink dark:text-brand-ink">
+        <div className="p-3 bg-brand-soft border border-brand-edge rounded-lg text-sm text-brand-ink">
           {s.maxReached}
         </div>
       )}
@@ -370,14 +402,12 @@ export default function ChannelSectionsManagement() {
                 channelId={channelId}
                 sectionType={sectionToEdit.type}
                 mode="edit"
-                initialData={{
-                  title: sectionToEdit.title,
-                  videoIds: sectionToEdit.videoIds,
-                  playlistIds: sectionToEdit.playlistIds,
-                  playlistId: sectionToEdit.playlistId,
-                }}
+                initial={sectionToEdit}
+                canGrantConsent={canGrantConsent}
+                serverError={editError}
                 onSubmit={handleUpdate}
                 onCancel={() => setSectionToEdit(null)}
+                cancelLabel={s.cancel}
                 isLoading={updating}
               />
             </div>
@@ -396,7 +426,7 @@ export default function ChannelSectionsManagement() {
             <AlertDialogCancel>{s.cancel}</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDelete}
-              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+              className={buttonVariants({ variant: "destructive" })}
             >
               {s.delete}
             </AlertDialogAction>
