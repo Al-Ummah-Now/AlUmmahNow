@@ -7,6 +7,12 @@ import { defineConfig, devices } from '@playwright/test';
  * admin promotion uses TEST_PROMOTE_SECRET. Needs only @playwright/test.
  */
 const PLAYER = /player\.spec\.ts$/;
+/**
+ * Specs that run in Chrome, Firefox and WebKit (the defect they pin showed in
+ * every browser). Branded Chrome, not the bundled Chromium: they open the watch
+ * page, and Chromium's missing H.264 decoder logs player errors of its own.
+ */
+const ALL_BROWSERS = /anonymous-console\.spec\.ts$/;
 
 export default defineConfig({
   testDir: './e2e/release',
@@ -26,7 +32,7 @@ export default defineConfig({
   projects: [
     {
       name: 'auth-flows',
-      testIgnore: PLAYER,
+      testIgnore: [PLAYER, ALL_BROWSERS],
       use: { ...devices['Desktop Chrome'] },
     },
     {
@@ -35,5 +41,8 @@ export default defineConfig({
       testMatch: PLAYER,
       use: { ...devices['Desktop Chrome'], channel: 'chrome' },
     },
+    { name: 'chrome', testMatch: ALL_BROWSERS, use: { ...devices['Desktop Chrome'], channel: 'chrome' } },
+    { name: 'firefox', testMatch: ALL_BROWSERS, use: { ...devices['Desktop Firefox'] } },
+    { name: 'webkit', testMatch: ALL_BROWSERS, use: { ...devices['Desktop Safari'] } },
   ],
 });

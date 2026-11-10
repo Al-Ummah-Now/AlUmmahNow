@@ -92,10 +92,11 @@ jobs:
           npm install --no-audit --no-fund "@playwright/test@$PLAYWRIGHT_VERSION"
           echo "SUITE=$SUITE" >> "$GITHUB_ENV"
 
-      # chromium for the auth flows, branded Chrome for real H.264 playback
+      # chromium for the auth flows, branded Chrome for real H.264 playback,
+      # firefox and webkit for the cross-browser specs (ALL_BROWSERS in the config)
       - name: Install browsers
         working-directory: ${{ env.SUITE }}
-        run: npx playwright install --with-deps chromium chrome
+        run: npx playwright install --with-deps chromium chrome firefox webkit
 
       # One password for this run's throwaway users, known to the workflow so
       # the artifact scan below can look for it (targets.ts TEST_PASSWORD).
