@@ -1,3 +1,4 @@
+import { recountCommentLikes } from '../../lib/community-comments';
 import { Str } from 'chanfana';
 import { z } from 'zod';
 import { AuthenticatedRoute, AppContext } from '../../base';
@@ -75,6 +76,15 @@ export class UnlikePostComment extends AuthenticatedRoute {
     const likeKey = `comment-likes/${postId}/${commentId}/${userId}.json`;
     const existingLike = await bucket.get(likeKey);
 
+    // 3. Delete the like record, then store the total recounted from the
+    // records with a conditional write of the comment (SCALABILITY-AUDIT
+    // AV-11): two unlikes at once cannot both subtract
+    if (existingLike) {
+      await bucket.delete(likeKey);
+    }
+    const totalLikes = await recountCommentLikes(bucket, postId, commentId, commentKey);
+    comment.likes = totalLikes ?? comment.likes;
+
     if (!existingLike) {
       // Not liked - return current state
       return c.json({
@@ -83,13 +93,6 @@ export class UnlikePostComment extends AuthenticatedRoute {
         totalLikes: comment.likes,
       });
     }
-
-    // 3. Delete like record
-    await bucket.delete(likeKey);
-
-    // 4. Decrement comment's likes count
-    comment.likes = Math.max(0, comment.likes - 1);
-    await bucket.put(commentKey, JSON.stringify(comment));
 
     // 5. Send queue event
     const queue = new Queue(c.env.queue);

@@ -1,3 +1,5 @@
+import { recountCommentLikes } from '../../lib/community-comments';
+import R2Repository from '../../lib/r2Repo';
 import { Str } from 'chanfana';
 import { z } from 'zod';
 import { AuthenticatedRoute, AppContext } from '../../base';
@@ -86,32 +88,39 @@ export class LikePostComment extends AuthenticatedRoute {
       );
     }
 
-    // 3. Check if already liked
+    // 3. Create the like record create-only (SCALABILITY-AUDIT AV-11): of two
+    // likes by the same user (two tabs, double click) exactly one creates it
     const likeKey = `comment-likes/${postId}/${commentId}/${userId}.json`;
-    const existingLike = await bucket.get(likeKey);
-
-    if (existingLike) {
-      // Already liked - return current state
-      return c.json({
-        success: true,
-        liked: true,
-        totalLikes: comment.likes,
-      });
-    }
-
-    // 4. Create like record
     const likeRecord: PostCommentLikeRecord = {
       userId: userId,
       postId,
       commentId,
       likedAt: new Date().toISOString(),
     };
+    const created = await new R2Repository<PostCommentLikeRecord>(bucket).createObject(likeKey, likeRecord);
 
-    await bucket.put(likeKey, JSON.stringify(likeRecord));
+    // 4. The total is the number of like records, stored with a conditional
+    // write of the comment (exact under concurrent likers; other fields kept)
+    const totalLikes = await recountCommentLikes(bucket, postId, commentId, commentKey);
+    if (totalLikes === null) {
+      return c.json(
+        {
+          success: false,
+          error: 'Comment not found',
+        },
+        404
+      );
+    }
+    comment.likes = totalLikes;
 
-    // 5. Increment comment's likes count
-    comment.likes++;
-    await bucket.put(commentKey, JSON.stringify(comment));
+    if (!created) {
+      // Already liked - return current state
+      return c.json({
+        success: true,
+        liked: true,
+        totalLikes,
+      });
+    }
 
     // 6. Send queue event
     const queue = new Queue(c.env.queue);

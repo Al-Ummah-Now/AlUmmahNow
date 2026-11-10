@@ -1,3 +1,4 @@
+import { patchComment } from '../../lib/community-comments';
 import { Str } from 'chanfana';
 import { z } from 'zod';
 import { AuthenticatedRoute, AppContext } from '../../base';
@@ -64,9 +65,16 @@ abstract class SetCommentHeartRoute extends AuthenticatedRoute {
       return c.json({ success: false, error: 'Cannot heart a deleted comment' }, 400);
     }
 
-    if (Boolean(comment.isHeartedByCreator) !== this.hearted) {
-      comment.isHeartedByCreator = this.hearted;
-      await bucket.put(commentKey, JSON.stringify(comment));
+    // On the fresh comment with a conditional write (SCALABILITY-AUDIT AV-11):
+    // never resets likes / replies that land meanwhile
+    const { rejected } = await patchComment<'deleted'>(bucket, commentKey, (fresh) => {
+      if (this.hearted && (fresh.deletedAt || fresh.isDeleted)) return { reject: 'deleted' };
+      if (Boolean(fresh.isHeartedByCreator) === this.hearted) return false;
+      fresh.isHeartedByCreator = this.hearted;
+      return true;
+    });
+    if (rejected) {
+      return c.json({ success: false, error: 'Cannot heart a deleted comment' }, 400);
     }
 
     logger.info('[PostCommentHeart] Heart state updated', { postId, commentId, hearted: this.hearted, userId });
