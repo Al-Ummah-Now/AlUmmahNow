@@ -11,6 +11,7 @@ import { LIBRARY_EN, NOTIFICATION_CENTER_EN } from '../i18n-library';
 import { BULK_EDIT_EN } from '../i18n-bulk-edit';
 import { COMMUNITY_GUIDELINES_EN } from '../i18n-community-guidelines';
 import { CONTACT_EN } from '../i18n-contact';
+import { UPLOAD_STATUS_EN } from '../i18n-upload-status';
 
 export const EN_TRANSLATIONS: AppTranslations = {
   imageCrop: {
@@ -30,6 +31,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
   bulkEdit: BULK_EDIT_EN,
   communityGuidelines: COMMUNITY_GUIDELINES_EN,
   contact: CONTACT_EN,
+  uploadStatus: UPLOAD_STATUS_EN,
   notificationCenter: NOTIFICATION_CENTER_EN,
   common: {
     appName: 'Al Ummah Now',

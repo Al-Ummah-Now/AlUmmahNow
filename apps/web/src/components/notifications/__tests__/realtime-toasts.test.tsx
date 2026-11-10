@@ -66,8 +66,8 @@ describe('NotificationCenter toasts', () => {
     render(<NotificationCenter />);
     push(ready(1));
     const toast = screen.getByTestId('realtime-toast');
-    expect(toast).toHaveTextContent('Video Ready');
-    expect(toast).toHaveTextContent('Your video "Good Deeds 1" has finished processing');
+    expect(toast).toHaveTextContent('Video ready');
+    expect(toast).toHaveTextContent('Your video "Good Deeds 1" is ready to watch');
     expect(within(toast).getByTestId('realtime-toast-action')).toHaveAttribute('href', '/en/video/v1');
   });
 
@@ -94,7 +94,7 @@ describe('NotificationCenter toasts', () => {
     push(ready(3));
     expect(announcer).toHaveTextContent('');
     act(() => jest.advanceTimersByTime(1500));
-    expect(announcer).toHaveTextContent('Video Ready. 3 videos finished processing');
+    expect(announcer).toHaveTextContent('Video ready. 3 videos finished processing');
   });
 
   it('dismisses with the close button and with Escape, and expires on its own', () => {

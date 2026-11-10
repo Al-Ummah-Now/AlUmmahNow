@@ -1,17 +1,21 @@
 'use client';
 
 import { logger } from '@/lib/logger-client';
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { VideoObject } from "@/interfaces";
 import VideoUpload from "@/components/videoUpload";
 import { BatchUploadQueue } from "@/components/videoUpload/BatchUploadQueue";
-import { useRouter, useParams, useSearchParams } from "next/navigation";
-import { CheckCircle, AlertCircle, Upload, FileStack, ShieldAlert } from "lucide-react";
+import { useParams, useSearchParams } from "next/navigation";
+import { AlertCircle, Upload, FileStack, ShieldAlert } from "lucide-react";
 import { UploadModeTabs, UPLOAD_MODE_PANEL_ID, UPLOAD_MODE_TAB_ID, type UploadMode } from "@/components/videoUpload/UploadModeTabs";
 import { VIDEO_UPLOAD_CONFIG } from "@/lib/constants/uploadConfig";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useBatchUpload } from "@/hooks/useBatchUpload";
 import { MAX_BATCH_FILES, isFinishedRow } from "@/lib/upload/batch-selection";
+import { UploadProcessingCard } from "@/components/videoUpload/UploadProcessingCard";
+import { useProcessingStatus } from "@/hooks/useProcessingStatus";
+import { batchNotice } from "@/lib/upload/processing-status";
+import { useUploadResult } from "@/lib/notifications/upload-results";
 import { useActiveChannel } from "@/contexts/ActiveChannelContext";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { useMultiAccount } from "@/hooks/useMultiAccount";
@@ -23,7 +27,6 @@ const UploadPage: React.FC = () => {
   const { t, lang } = useLanguage();
   const params = useParams();
   const locale = params.locale as string;
-  const router = useRouter();
   // Studio "Re-upload" on a video flagged needs_reupload: upload into that video
   const searchParams = useSearchParams();
   const resumeVideoId = searchParams?.get('resume') || undefined;
@@ -71,6 +74,30 @@ const UploadPage: React.FC = () => {
     },
   });
 
+  // Processing status of what this page uploaded: the single upload, and every
+  // batch file whose bytes are uploaded
+  const processingIds = useMemo(() => {
+    const ids = files.flatMap((f) => (f.status === 'completed' && f.videoId ? [f.videoId] : []));
+    if (uploadedVideo?.id) ids.push(uploadedVideo.id);
+    return ids;
+  }, [files, uploadedVideo?.id]);
+  const processingPhases = useProcessingStatus(processingIds, uploadChannelId, auth?.user?.id);
+  // A result pushed with the uploader's notification (NotificationCenter) wins over the poll
+  const singleResult = useUploadResult(uploadedVideo?.id);
+
+  // Leaving while batch files still upload from this tab would pause them
+  const notice = uploadMode === 'batch' ? batchNotice(files, processingPhases, isUploading) : null;
+  const batchBytesInFlight = notice === 'keepOpen';
+  useEffect(() => {
+    if (!batchBytesInFlight) return;
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [batchBytesInFlight]);
+
   const handleUploadComplete = (video: VideoObject) => {
     setUploadedVideo(video);
     setUploadComplete(true);
@@ -88,12 +115,6 @@ const UploadPage: React.FC = () => {
   const handleUploadError = (error: string) => {
     setUploadError(error);
     setUploadComplete(false);
-  };
-
-  const handleViewVideo = () => {
-    if (uploadedVideo) {
-      router.push(`/${locale}/video/${uploadedVideo.id}`);
-    }
   };
 
   const handleUploadAnother = () => {
@@ -267,46 +288,14 @@ const UploadPage: React.FC = () => {
           />
         )}
 
-        {/* Upload Success State */}
+        {/* Upload complete: the video now processes on the server */}
         {uploadComplete && uploadedVideo && (
-          <div
-            className="mb-8 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 md:p-6"
-            data-testid="upload-success"
-            data-video-id={uploadedVideo.id}
-          >
-            <div className="flex items-start">
-              <CheckCircle className="h-6 w-6 text-green-500 mt-1 me-3 flex-shrink-0" />
-              <div className="flex-1">
-                <h3 className="text-base md:text-lg font-medium text-green-800 dark:text-green-200 mb-2">
-                  {t.upload.uploadComplete}!
-                </h3>
-                <p className="text-sm md:text-base font-medium text-green-900 dark:text-green-100 mb-1" data-testid="upload-success-title">
-                  {uploadedVideo.title}
-                </p>
-                <p className="text-sm md:text-base text-green-700 dark:text-green-300 mb-4">
-                  {t.upload.videoUploadedMessage || `Your video "${uploadedVideo.title}" has been uploaded and is now being processed.`}
-                </p>
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    data-testid="upload-view-video"
-                    onClick={handleViewVideo}
-                    className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 font-medium text-sm"
-                  >
-                    {t.upload.viewVideo || 'View Video'}
-                  </button>
-                  <button
-                    type="button"
-                    data-testid="upload-another"
-                    onClick={handleUploadAnother}
-                    className="bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 px-4 py-2 rounded-md border border-green-600 dark:border-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 focus:outline-none focus:ring-2 focus:ring-green-500 font-medium text-sm"
-                  >
-                    {t.upload.uploadAnother || `${t.upload.uploadTitle} Another Video`}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+          <UploadProcessingCard
+            videoId={uploadedVideo.id}
+            title={uploadedVideo.title}
+            phase={singleResult ?? processingPhases[uploadedVideo.id] ?? 'processing'}
+            onUploadAnother={handleUploadAnother}
+          />
         )}
 
         {!uploadComplete && (
@@ -362,7 +351,7 @@ const UploadPage: React.FC = () => {
                       {t.upload.uploading}
                     </h3>
                     <p className="text-sm md:text-base text-blue-700 dark:text-blue-300 mb-4">
-                      {t.upload.waitingMessage || 'Please wait while your video is being uploaded and processed.'}
+                      {t.uploadStatus.uploadingKeepOpen}
                     </p>
                     <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2">
                       <div
@@ -446,6 +435,8 @@ const UploadPage: React.FC = () => {
                   files={files}
                   overallProgress={overallProgress}
                   isUploading={isUploading}
+                  processingPhases={processingPhases}
+                  notice={notice}
                   onPauseAll={pauseAll}
                   onResumeAll={resumeAll}
                   onCancelAll={cancelAll}

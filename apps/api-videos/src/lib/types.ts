@@ -101,6 +101,9 @@ export const Video = z.object({
         reason: z.string().optional(),
         at: z.string(),
     }).optional(),
+    // Terminal status whose result (uploader notification, subscriber fan-out)
+    // is safely queued; the processing loop re-announces until it matches.
+    processingAnnounced: z.enum(['ready', 'failed']).optional(),
     // Per-video processing-check loop (lib/processing/loop.ts); internal.
     processingCheck: z.object({
         loopId: z.string(),

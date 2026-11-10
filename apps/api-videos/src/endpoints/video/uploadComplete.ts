@@ -184,6 +184,7 @@ export class UploadCompleteEndpoint extends AuthenticatedRoute {
 						await queue.send(MessageType.VideoUploadFailed, {
 							videoId,
 							userId,
+							title: failed.video.title,
 							error: error.message || 'Unknown error',
 							timestamp: new Date().toISOString(),
 						});

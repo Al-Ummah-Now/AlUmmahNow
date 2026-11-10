@@ -9,7 +9,7 @@ import { useAuth } from "@/components/AuthProvider/authContext";
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { VIDEO_UPLOAD_CONFIG, VIDEO_UPLOAD_ERRORS } from "@/lib/constants/uploadConfig";
 import { Upload, X, AlertCircle, Pause, Play, RotateCcw } from "lucide-react";
-import { initiateVideoUpload, completeVideoUpload, getVideoUploadStatus, scheduleUploadedVideo } from "@/lib/api/upload-client";
+import { initiateVideoUpload, completeVideoUpload, scheduleUploadedVideo } from "@/lib/api/upload-client";
 import { useHoldReloadWhile } from "@/lib/version-skew/VersionSkewProvider";
 import { VideoFormatChoice, type VideoFormatChoiceValue } from "@/components/videoFormat/VideoFormatChoice";
 import { useLanguage } from "@/hooks/useLanguage";
@@ -423,30 +423,10 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
             throw new Error(completeResult.error || t.upload.completeFailed);
           }
 
-          // Step 4: Poll for processing status
-          let pollCount = 0;
-          const maxPolls = VIDEO_UPLOAD_CONFIG.POLLING.MAX_POLLS;
-
-          while (pollCount < maxPolls) {
-            const statusResult = await getVideoUploadStatus(videoId, channelId);
-
-            if (statusResult.success && statusResult.result) {
-              const { status, progress: encodingProgress } = statusResult.result;
-
-              const overallProgress = 75 + (encodingProgress * 0.25);
-              setUploadProgress({ percentage: overallProgress, state: 'processing' });
-              onProgress(overallProgress);
-
-              if (status === 'ready') {
-                break;
-              } else if (status === 'failed') {
-                throw new Error(t.upload.processingFailed);
-              }
-            }
-
-            await new Promise(resolve => setTimeout(resolve, VIDEO_UPLOAD_CONFIG.POLLING.INTERVAL_MS));
-            pollCount++;
-          }
+          // The bytes are uploaded. Processing continues on the server (its
+          // check loop finishes the record and notifies the uploader), so the
+          // page shows "Upload complete, processing" now instead of waiting here.
+          logger.info('[VideoUpload] Upload complete; processing continues on the server', { videoId });
 
           setUploadProgress({ percentage: 100, state: 'complete' });
           onProgress(100);

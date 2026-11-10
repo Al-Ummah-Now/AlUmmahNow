@@ -87,29 +87,68 @@ export async function announceLiveStarted(
 	});
 }
 
+export type ProcessingResult = 'ready' | 'failed';
+
 /**
  * Upload processing reached a terminal state: the processor stores the
- * uploader's notification (ready / failed) and, when published, subscribers are told.
+ * uploader's notification (ready / failed, one per video) and, when published,
+ * subscribers are told (the fan-out skips the uploader).
+ *
+ * Throws when a message could not be queued, so a queue-driven caller (the
+ * processing-check loop) retries and finally dead-letters, which alerts the
+ * admins. Repeats are harmless: the processor de-duplicates per video.
  */
-export async function announceProcessingResult(env: EventsEnv, video: PublishableVideo, status: 'ready' | 'failed'): Promise<void> {
-	if (env.queue) {
-		try {
-			await env.queue.send({
-				id: crypto.randomUUID(),
-				type: status === 'ready' ? MessageType.VideoProcessingCompleted : MessageType.VideoUploadFailed,
-				payload: {
-					videoId: video.id,
-					userId: video.userId,
-					channelId: video.channelId,
-					title: video.title,
-					duration: video.duration,
-					timestamp: new Date().toISOString(),
-				},
-				timestamp: Date.now(),
-			});
-		} catch (error) {
-			logger.warn('[notification-events] Failed to enqueue processing result', { videoId: video.id, status, error });
+export async function announceProcessingResult(env: EventsEnv, video: PublishableVideo, status: ProcessingResult): Promise<void> {
+	if (!env.queue) {
+		logger.warn('[notification-events] Queue not bound; processing result not announced', { videoId: video.id, status });
+		return;
+	}
+	await env.queue.send({
+		id: crypto.randomUUID(),
+		type: status === 'ready' ? MessageType.VideoProcessingCompleted : MessageType.VideoUploadFailed,
+		payload: {
+			videoId: video.id,
+			userId: video.userId,
+			channelId: video.channelId,
+			title: video.title,
+			duration: video.duration,
+			timestamp: new Date().toISOString(),
+		},
+		timestamp: Date.now(),
+	});
+	if (status === 'ready') {
+		const published = { ...video, uploadStatus: 'ready' };
+		if (isAnnounceable(published) && !(await announceNewVideo(env, published))) {
+			throw new Error('Subscriber fan-out could not be queued');
 		}
 	}
-	if (status === 'ready') await announceNewVideo(env, { ...video, uploadStatus: 'ready' });
+}
+
+interface AnnounceableRecord extends PublishableVideo {
+	processingAnnounced?: ProcessingResult;
+}
+
+/** The terminal status still waiting for its announcement, or null. */
+export function pendingProcessingResult(video: AnnounceableRecord | null | undefined): ProcessingResult | null {
+	const status = video?.uploadStatus;
+	if (status !== 'ready' && status !== 'failed') return null;
+	return video?.processingAnnounced === status ? null : status;
+}
+
+/**
+ * Announce a terminal status and record it on the video, so the processing
+ * loop knows the announcement landed (and repeats it on its next attempt if not).
+ */
+export async function announceAndRecordProcessingResult(
+	env: EventsEnv & { videos: R2Bucket },
+	video: AnnounceableRecord,
+	status: ProcessingResult,
+): Promise<void> {
+	await announceProcessingResult(env, video, status);
+	await new R2Repository<AnnounceableRecord>(env.videos).updateObject(video.id, (fresh) => {
+		if (fresh.uploadStatus !== status || fresh.processingAnnounced === status) return false;
+		fresh.processingAnnounced = status;
+		return true;
+	});
+	logger.info('[notification-events] Processing result announced', { videoId: video.id, status });
 }

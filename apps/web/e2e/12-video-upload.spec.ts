@@ -1,3 +1,4 @@
+import * as path from 'path';
 import { test, expect, helpers } from './fixtures';
 import { AUTH_STATE, ANONYMOUS_STATE } from './test-utils/auth-state';
 import {
@@ -53,13 +54,48 @@ test.describe('Video Upload Flow', () => {
 
     await expectUploadSuccess(page, 'Test Islamic Lecture');
     const ui = uploadUi(page);
-    await expect(ui.viewVideo).toBeVisible();
+    // Upload done, processing on the server: no watch link yet
+    await expect(ui.processingMessage).toContainText("We're processing your video");
     await expect(ui.uploadAnother).toBeVisible();
     expect(tracker.videoIds.size).toBe(1);
 
     // "Upload Another" returns to an empty drop zone
     await ui.uploadAnother.click();
     await expect(ui.dropzone).toBeVisible();
+  });
+
+  test('says the video is processing after the upload, then Ready, and notifies the uploader', async ({ page }) => {
+    // Waits for Bunny to encode a real (tiny) video: minutes, not seconds
+    test.setTimeout(12 * 60_000);
+    const title = `Processing notice E2E ${Date.now().toString(36)}`;
+    await gotoUpload(page, 'en');
+    await helpers.uploadTestVideo(page, {
+      videoPath: path.join(__dirname, 'test-fixtures', 'e2e-sample.mp4'),
+      titleEn: title,
+      isPublic: false,
+    });
+
+    const ui = uploadUi(page);
+    await expectUploadSuccess(page, title);
+    await expect(page.getByTestId('upload-success-heading')).toHaveText('Upload complete');
+    await expect(ui.processingMessage).toHaveText(
+      "We're processing your video. It will be available once processing finishes, and we'll notify you when it's ready.",
+    );
+    await expect(ui.processingStatus).toHaveAttribute('aria-live', 'polite');
+    await expect(page.getByText(/leave this page/i)).toHaveCount(0);
+    const videoId = (await ui.success.getAttribute('data-video-id')) ?? '';
+    expect(videoId).not.toBe('');
+
+    // Processing finishes on the server (check loop); the card follows it
+    await expect(ui.success).toHaveAttribute('data-phase', 'ready', { timeout: 10 * 60_000 });
+    await expect(ui.processingStatus).toHaveText(`"${title}" is ready to watch`);
+    await expect(ui.viewVideo).toHaveAttribute('href', `/en/video/${videoId}`);
+
+    // The server stored the uploader's notification (works with the tab closed)
+    await page.goto('/en/notifications');
+    const item = page.getByTestId('notification-item').filter({ hasText: `Your video "${title}" is ready to watch` });
+    await expect(item).toHaveCount(1, { timeout: 60_000 });
+    await expect(item.getByRole('link')).toHaveAttribute('href', `/en/video/${videoId}`);
   });
 
   test('should show upload progress tracking', async ({ page }) => {

@@ -176,6 +176,33 @@ describe('notification center (processor)', () => {
       expect(await fanoutNotification(db, payload)).toEqual([]);
     });
 
+    it('tells the uploader once that the video is ready, and never sends them the subscriber notification', async () => {
+      // The uploader ("owner") is subscribed to their own channel with bell = all
+      const ready = message(MessageType.VideoProcessingCompleted, { videoId: 'v9', userId: 'owner', title: 'Tafsir 9' });
+      await processor().processMessage(ready, env());
+      await processor().processMessage({ ...ready, id: 'retry' }, env());
+      await processor().processMessage(
+        message(MessageType.NotificationFanout, {
+          kind: 'new_video',
+          channelId: 'ch1',
+          entityId: 'v9',
+          isHighlight: true,
+          actorUserId: 'owner',
+          params: { channelName: 'C', videoTitle: 'Tafsir 9' },
+          actionUrl: '/video/v9',
+        }),
+        env(),
+      );
+      expect(rows("SELECT notification_key, action_url, params_json FROM notifications WHERE user_id = 'owner'")).toEqual([
+        { notification_key: 'uploadReady', action_url: '/video/v9', params_json: JSON.stringify({ videoTitle: 'Tafsir 9' }) },
+      ]);
+      expect(rows("SELECT user_id FROM notifications WHERE notification_key = 'uploadReady'")).toEqual([{ user_id: 'owner' }]);
+      expect(rows("SELECT user_id FROM notifications WHERE notification_key = 'newVideo' ORDER BY user_id").map((r) => r.user_id)).toEqual([
+        'all-user',
+        'hl-user',
+      ]);
+    });
+
     it('stores live-started notifications in the live category', async () => {
       await fanoutNotification(db, { kind: 'live_started', channelId: 'ch1', entityId: 'l1', isHighlight: true, actorUserId: 'owner' });
       expect(rows("SELECT DISTINCT category, notification_key, dedupe_key FROM notifications")).toEqual([
@@ -198,6 +225,20 @@ describe('notification center (processor)', () => {
     expect(notificationBodies[0].message.data.notificationId).toBe(stored[0].id);
     // the duplicate status event is not stored and therefore not pushed as a notification
     expect(notificationBodies).toHaveLength(1);
+  });
+
+  it('links a failed upload to the video in the studio, in the store and in the realtime event', async () => {
+    await processor().processMessage(message(MessageType.VideoUploadFailed, { videoId: 'v2', userId: 'up', title: 'Broken' }), env());
+    expect(rows("SELECT notification_key, action_url FROM notifications WHERE user_id = 'up'")).toEqual([
+      { notification_key: 'uploadFailed', action_url: '/video/v2/edit' },
+    ]);
+    const realtime = fetchMock.mock.calls
+      .map(([, init]) => JSON.parse((init as RequestInit).body as string))
+      .flatMap((b) => (Array.isArray(b.items) ? b.items : [b]))
+      .filter((b) => b.message.type === 'notification');
+    expect(realtime).toHaveLength(1);
+    expect(realtime[0].channel).toBe('user:up');
+    expect(realtime[0].message.data).toMatchObject({ notificationKey: 'uploadFailed', actionUrl: '/video/v2/edit', params: { videoTitle: 'Broken' } });
   });
 
   it('keeps the legacy realtime notification when no store is bound', async () => {

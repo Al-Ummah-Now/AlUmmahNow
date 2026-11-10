@@ -21,7 +21,7 @@ import { logger } from '../logger';
 import R2Repository from '../r2Repo';
 import { getSecret, requireSecret } from '../env-helpers';
 import { bunnyFileToken, tokenExpiry } from '../bunny-signing';
-import { announceProcessingResult } from '../notification-events';
+import { announceAndRecordProcessingResult, pendingProcessingResult, ProcessingResult } from '../notification-events';
 import {
 	applyPlan,
 	bunnyPhase,
@@ -72,6 +72,7 @@ type LoopVideo = SyncableVideo & {
 	title?: string;
 	isPublic?: boolean;
 	dateModified?: string;
+	processingAnnounced?: ProcessingResult;
 	processingCheck?: {
 		loopId: string;
 		startedAt: string;
@@ -209,7 +210,7 @@ export async function syncVideoFromBunny(
 	if (saved && transition) {
 		// Same downstream path as the uploader's status poll: uploader
 		// notification, subscriber fan-out (processor de-duplicates per video).
-		await announceProcessingResult(env as never, { ...saved, id: videoId }, transition);
+		await announceAndRecordProcessingResult(env as never, { ...saved, id: videoId }, transition);
 	}
 	return { videoId, found: true, dryRun: false, plan, bunny: bunnyView, ours: summary(saved ?? video), changed: !!saved };
 }
@@ -293,6 +294,12 @@ export async function runProcessingCheck(env: ProcessingEnv, message: Processing
 	if (!video) return { kind: 'drop', why: 'video deleted' };
 	if (video.processingCheck?.loopId !== message.loopId) return { kind: 'drop', why: 'superseded loop' };
 	if (video.processingCheck?.finishedAt) return { kind: 'drop', why: 'loop already finished' };
+
+	// A terminal status reached earlier (by this loop or the uploader's status
+	// poll) whose announcement did not land: announce it now. A failure throws,
+	// so the queue retries and finally dead-letters (admins are alerted).
+	const unannounced = pendingProcessingResult(video);
+	if (unannounced) await announceAndRecordProcessingResult(env as never, video, unannounced);
 
 	const bunny = await fetchBunnyVideo(env, message.videoId);
 	const result = await syncVideoFromBunny(env, message.videoId, { now, loopStartedAt: message.startedAt, bunny });

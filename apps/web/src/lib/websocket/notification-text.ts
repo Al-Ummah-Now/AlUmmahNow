@@ -27,6 +27,17 @@ export function resolveNotificationText(
   event: NotificationEvent,
   t: AppTranslations
 ): { title: string; message: string } {
+  // Upload results read the current copy (uploadStatus.notification): stored
+  // translation files keep older values for the realtime.* keys
+  const upload = t.uploadStatus?.notification;
+  if (upload && (event.notificationKey === 'uploadReady' || event.notificationKey === 'uploadFailed')) {
+    const ready = event.notificationKey === 'uploadReady';
+    return {
+      title: interpolate(ready ? upload.readyTitle : upload.failedTitle, event.params),
+      message: interpolate(ready ? upload.readyMessage : upload.failedMessage, event.params),
+    };
+  }
+
   const mapping = event.notificationKey ? KEY_TO_TEXT[event.notificationKey] : undefined;
   if (mapping) {
     const texts = t.notifications.realtime;

@@ -7,7 +7,7 @@ import { eraseUserPostInteractions } from './lib/post-counters';
 import { applyModerationToSearchIndex, handleSearchIndexSync } from './handlers/search-index';
 import { recordViewRollup, recordWatchTimeRollup } from './lib/analytics-rollup';
 import { CounterBatch } from './lib/analytics-counters';
-import { notifyLiveStream, notifyVideoProcessing, ProcessingStatus } from './lib/websocket-notify';
+import { notifyLiveStream, notifyVideoProcessing, ProcessingStatus, uploadResultActionUrl } from './lib/websocket-notify';
 import {
   eraseUserNotifications,
   fanoutNotificationPage,
@@ -472,7 +472,7 @@ export class MessageProcessor {
         recipientUserId: payload.userId,
         notificationKey: status === 'ready' ? 'uploadReady' : 'uploadFailed',
         params: { videoTitle: payload.title || '' },
-        actionUrl: `/video/${payload.videoId}`,
+        actionUrl: uploadResultActionUrl(payload.videoId, status),
         entityId: payload.videoId,
         dedupeKey: `upload:${status}:${payload.videoId}`,
       });
