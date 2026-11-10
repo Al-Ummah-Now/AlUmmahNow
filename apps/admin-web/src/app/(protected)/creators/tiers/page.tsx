@@ -5,6 +5,9 @@ import { canManageCreators } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
 import { CreatorTiersView } from '@/components/creators/CreatorTiersView';
 import { logger } from '@/lib/logger';
+import Link from 'next/link';
+import { linkClass } from '@/components/ui';
+import { trashHref } from '@/lib/trash';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,5 +23,16 @@ export default async function CreatorTiersPage() {
   } catch (e) {
     logger.error('[creators] Failed to load tiers', { error: e instanceof Error ? e.message : String(e) });
   }
-  return <CreatorTiersView list={list} audit={audit} canManage={canManage} t={t} locale={locale} actions={{ save: saveCreatorTier, remove: deleteCreatorTier }} />;
+  return (
+    <>
+      <CreatorTiersView list={list} audit={audit} canManage={canManage} t={t} locale={locale} actions={{ save: saveCreatorTier, remove: deleteCreatorTier }} />
+      {canManage && (
+        <p className="mt-6">
+          <Link href={trashHref('creator-tier')} className={linkClass} data-testid="tiers-recently-deleted">
+            {t('trash.link')}
+          </Link>
+        </p>
+      )}
+    </>
+  );
 }

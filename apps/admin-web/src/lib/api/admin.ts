@@ -258,9 +258,10 @@ export async function retryContactDelivery(id: string, kind: ContactMailKind, no
   return mutate(`/api/contact/messages/${encodeURIComponent(id)}/retry`, 'POST', { kind, ...(noteId ? { noteId } : {}) });
 }
 
-export async function deleteContactMessage(id: string): Promise<ActionResult<{ deleted: string }>> {
+/** Soft delete: the message moves to Recently deleted, restorable for 30 days. */
+export async function deleteContactMessage(id: string, reason = ''): Promise<ActionResult<{ deleted: string }>> {
   try {
-    const data = await fetchAdmin<{ deleted: string }>(`/api/contact/messages/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    const data = await fetchAdmin<{ deleted: string }>(`/api/contact/messages/${encodeURIComponent(id)}`, { method: 'DELETE', body: JSON.stringify({ reason }) });
     return { ok: true, data };
   } catch (error) {
     if (error instanceof AdminApiError) return { ok: false, status: error.status, error: error.message };
