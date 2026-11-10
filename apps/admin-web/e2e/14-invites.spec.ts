@@ -27,6 +27,8 @@ const stamp = `${Date.now()}-${randomBytes(3).toString('hex')}`;
 const EMAIL = `invite-${stamp}@e2e.alummahnow.net`;
 const CHANNEL = `e2e-admin-invite ${stamp}`;
 
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 const state: { userId?: string; inviteId?: string; channelId?: string; link?: string } = {};
 
 async function sinkCode(email: string, timeoutMs = 30_000): Promise<string> {
@@ -88,7 +90,7 @@ test.describe('invite creators', () => {
     const dialog = page.getByTestId('invite-link-dialog');
     await expect(dialog).toBeVisible();
     state.link = await dialog.getByTestId('invite-link-url').inputValue();
-    expect(state.link).toMatch(new RegExp(`^${OPENAUTH_URL}/invite/[0-9a-f]{64}$`));
+    expect(state.link).toMatch(new RegExp(`^${escapeRe(OPENAUTH_URL)}/invite/[0-9a-f]{64}$`));
   });
 
   test('INV-03 first sign-in lands in the invited account with its channel', async ({ browser }) => {
@@ -101,7 +103,7 @@ test.describe('invite creators', () => {
       await page.goto(state.link!);
       await expect(page.getByText(EMAIL)).toBeVisible();
       await page.locator('button[data-action="accept-invite"]').click();
-      await expect(page).toHaveURL(new RegExp(`^${OPENAUTH_URL}`), { timeout: 30_000 });
+      await expect(page).toHaveURL(new RegExp(`^${escapeRe(OPENAUTH_URL)}`), { timeout: 30_000 });
       await page.click('a[href*="register"]');
       await page.fill('input[name="email"]', EMAIL);
       await fillSecret(page.locator('input[name="password"]'), PASSWORD);

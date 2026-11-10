@@ -116,7 +116,15 @@ const hex = () => crypto.randomUUID().replace(/-/g, '');
 export const newUserId = () => `usr_${hex()}`;
 export const newInviteId = () => `inv_${hex()}`;
 export const normalizeEmail = (email: string) => email.trim().toLowerCase();
-export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** One @, something before it, a dotted domain after it, no spaces; linear time (no backtracking regex). */
+export function isEmailAddress(value: string): boolean {
+  if (value.length > 254 || /\s/.test(value)) return false;
+  const at = value.indexOf('@');
+  if (at < 1 || at !== value.lastIndexOf('@')) return false;
+  const domain = value.slice(at + 1);
+  const dot = domain.lastIndexOf('.');
+  return dot > 0 && dot < domain.length - 1;
+}
 const errorText = (error: unknown) => (error instanceof AuthApiError ? `${error.code}: ${error.message}` : error instanceof Error ? error.message : String(error));
 
 function parseJson<T>(raw: string | null, fallback: T): T {

@@ -19,7 +19,7 @@ import { audit } from '../lib/authModeration';
 import { logger } from '../lib/logger';
 import {
   DEFAULT_INVITE_DAYS,
-  EMAIL_RE,
+  isEmailAddress,
   INVITE_ACTIONS_PER_HOUR,
   INVITE_AUTH_ROLES,
   MAX_INVITE_DAYS,
@@ -116,7 +116,7 @@ app.get('/', async (c) => {
 
 app.get('/lookup', async (c) => {
   const email = normalizeEmail(c.req.query('email') ?? '');
-  if (!EMAIL_RE.test(email)) throw new HttpError(400, 'invalid_email', 'A valid email is required');
+  if (!isEmailAddress(email)) throw new HttpError(400, 'invalid_email', 'A valid email is required');
   return ok(c, await lookup(c, email));
 });
 
@@ -145,7 +145,7 @@ app.post('/', async (c) => {
   need(c, 'users:manage');
   const input = await body(c);
   const email = normalizeEmail(String(input.email ?? ''));
-  if (!EMAIL_RE.test(email) || email.length > 254) throw new HttpError(400, 'invalid_email', 'A valid email is required');
+  if (!isEmailAddress(email)) throw new HttpError(400, 'invalid_email', 'A valid email is required');
   const role = input.role === 'viewer' ? 'viewer' : 'creator';
   const tierId = role === 'creator' ? str(input.tierId, 64) : null;
   if (tierId) need(c, 'creators:manage');
