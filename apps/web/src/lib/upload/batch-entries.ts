@@ -61,6 +61,8 @@ export function buildBatchUploadEntries({
         },
         chunkSize: chunkSize || session.chunkSize,
         expiresAt: session.expiresAt,
+        // A reused video (same file uploaded before): resume its upload at Bunny's offset
+        ...(session.tusUploadId ? { uploadUrl: `${endpoint}/${session.tusUploadId}` } : {}),
       },
     };
   });

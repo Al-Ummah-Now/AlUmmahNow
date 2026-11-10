@@ -83,3 +83,13 @@ export function canManageVideosUsers(role?: string): boolean {
   const r = normalizeRole(role);
   return r === 'admin' || r === 'super_admin';
 }
+
+/**
+ * Stale uploads: mirrors admin-api PERMISSIONS (videos:uploads is granted to
+ * admins and super admins, not moderators). admin-api enforces it; this only
+ * hides what the user cannot open.
+ */
+export function canUseStaleUploads(role?: string): boolean {
+  const r = normalizeRole(role);
+  return r === 'admin' || r === 'super_admin';
+}

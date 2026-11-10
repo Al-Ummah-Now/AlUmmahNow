@@ -9,7 +9,9 @@ import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
 import { requireSecret } from "../../lib/env-helpers";
-import { generateTUSConfig, createTusProxySession, TUS_PROXY_SESSION_TTL_SECONDS } from "../../lib/bunny/tus";
+import { fingerprintKey, initiateOnce, UploadClaimBusyError, UploadFingerprintSchema } from "../../lib/uploads/initiateOnce";
+import { checkReusable, issueTusSession, reuseFields, type PlaceholderRecord } from "../../lib/uploads/placeholder";
+import { patchVideo } from "../../lib/videoWrites";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import { logger } from '../../lib/logger';
 
@@ -23,6 +25,7 @@ const BatchVideoSchema = z.object({
 	isPublic: z.boolean().optional(),
 	tags: z.string().optional().describe("Comma-separated tags"),
 	format: z.enum(['short', 'video', 'auto']).optional().describe("Upload as a Short or as a video; 'auto' (default) detects it from length and shape"),
+	fingerprint: UploadFingerprintSchema.optional().describe("File fingerprint (name, size, lastModified, SHA-256 of the first and last MiB): retrying the same file reuses its unfinished video"),
 });
 
 const SharedMetadataSchema = z.object({
@@ -42,6 +45,9 @@ function validateBatchVideo(video: BatchVideo): string | null {
 	}
 	if (!video.mimeType || !video.mimeType.startsWith('video/')) {
 		return `Invalid MIME type for "${video.title}": must be a video format (e.g., video/mp4)`;
+	}
+	if (video.fingerprint && video.fingerprint.size !== video.fileSize) {
+		return `fingerprint.size must equal fileSize for "${video.title}"`;
 	}
 	return null;
 }
@@ -79,6 +85,8 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 								expiresAt: z.string().describe("ISO 8601 datetime when the session expires"),
 								chunkSize: z.number().describe("Recommended chunk size in bytes"),
 								resumable: z.boolean().describe("Whether upload supports resume"),
+								reused: z.boolean().optional().describe("True when an unfinished upload of the same file was reused (same videoId)"),
+								tusUploadId: z.string().optional().describe("Proxy upload id of the reused video's earlier upload: resume at /api/videos/tus/<tusUploadId>"),
 							})),
 						}),
 					},
@@ -90,6 +98,10 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 			},
 			"401": {
 				description: "Unauthorized - authentication required",
+				content: { "application/json": { schema: ResponseError } },
+			},
+			"503": {
+				description: "Another request is starting the same file's upload, or a store is unavailable: retry",
 				content: { "application/json": { schema: ResponseError } },
 			},
 			"500": {
@@ -143,59 +155,114 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 				videoCount: videos.length,
 			});
 
-			const results = await Promise.all(videos.map(async (videoData) => {
-				const bunnyVideo = await bunnyStream.createVideo(libraryId, {
-					title: videoData.title,
-					thumbnailTime: 0,
-				});
-				const videoId = bunnyVideo.guid;
-				const now = new Date().toISOString();
+			// Duplicate files in one request share one video
+			const keys = await Promise.all(videos.map((v) => (v.fingerprint ? fingerprintKey(channelId, userId, v.fingerprint) : Promise.resolve(undefined))));
+			const byKey = new Map<string, Promise<{ videoId: string; reused: boolean }>>();
 
-				// Same record as a single upload (lib/upload/uploadRecord.ts)
-				const video: VideoType = createUploadRecord({
-					videoId,
+			const results = await Promise.all(videos.map(async (videoData, index) => {
+				const claimKey = keys[index];
+				const metadata = {
 					title: videoData.title,
-					description: videoData.description,
-					userId: ownerId,
-					uploadedBy,
-					channelId,
+					description: videoData.description || '',
 					isPublic: videoData.isPublic ?? sharedMetadata?.isPublic ?? true,
-					tags: videoData.tags,
-					category: sharedMetadata?.category,
-					format: videoData.format,
+					tags: videoData.tags ? videoData.tags.split(',').map(tag => tag.trim()).filter(Boolean) : [],
+					...(sharedMetadata?.category ? { category: sharedMetadata.category } : {}),
+					...(videoData.format && videoData.format !== 'auto' ? { format: videoData.format } : {}),
 					fileSize: videoData.fileSize,
-					mimeType: videoData.mimeType,
-					bunnyHostname: c.env.bunny_hostname,
-					now: new Date(now),
-				});
+					originalFormat: videoData.mimeType,
+				};
 
-				await repository.putObject(videoId, video);
+				const create = async (): Promise<string> => {
+					const bunnyVideo = await bunnyStream.createVideo(libraryId, {
+						title: videoData.title,
+						thumbnailTime: 0,
+					});
+					const videoId = bunnyVideo.guid;
+					const now = new Date().toISOString();
 
-				await queue.send(MessageType.VideoUploadStarted, {
-					videoId,
+					// Same record as a single upload (lib/upload/uploadRecord.ts)
+					const video: VideoType = {
+						...createUploadRecord({
+							videoId,
+							title: videoData.title,
+							description: videoData.description,
+							userId: ownerId,
+							uploadedBy,
+							channelId,
+							isPublic: videoData.isPublic ?? sharedMetadata?.isPublic ?? true,
+							tags: videoData.tags,
+							category: sharedMetadata?.category,
+							format: videoData.format,
+							fileSize: videoData.fileSize,
+							mimeType: videoData.mimeType,
+							bunnyHostname: c.env.bunny_hostname,
+							now: new Date(now),
+						}),
+						...(claimKey ? { uploadFingerprint: claimKey, lastInitiateAt: now } : {}),
+					};
+
+					await repository.putObject(videoId, video);
+
+					await queue.send(MessageType.VideoUploadStarted, {
+						videoId,
+						userId,
+						channelId,
+						title: videoData.title,
+						fileSize: videoData.fileSize,
+						mimeType: videoData.mimeType,
+						timestamp: now,
+						batchUpload: true,
+					});
+					return videoId;
+				};
+
+				let outcome: { videoId: string; reused: boolean };
+				if (claimKey) {
+					let pending = byKey.get(claimKey);
+					if (!pending) {
+						pending = initiateOnce(claimKey, {
+							store: c.env.global_settings as never,
+							userId,
+							channelId,
+							check: (id) => checkReusable(c.env as never, id, { ownerId, uploadedBy, channelId }),
+							create,
+						});
+						byKey.set(claimKey, pending);
+					}
+					outcome = await pending;
+				} else {
+					outcome = { videoId: await create(), reused: false };
+				}
+				const { videoId, reused } = outcome;
+
+				let stored: PlaceholderRecord | null = null;
+				if (reused) {
+					const nowIso = new Date().toISOString();
+					const result = await patchVideo(repository, videoId, (fresh) => {
+						const fields = reuseFields(fresh as unknown as PlaceholderRecord, metadata, nowIso);
+						return fields ? (fields as Partial<VideoType>) : false;
+					}, { ownerId });
+					if (result.status !== 'ok') throw new UploadClaimBusyError(claimKey!);
+					stored = result.video as unknown as PlaceholderRecord;
+				}
+
+				const session = await issueTusSession(c.env.TUS_SESSIONS, {
+					libraryId,
+					bunnyKey,
 					userId,
 					channelId,
-					title: videoData.title,
-					fileSize: videoData.fileSize,
-					mimeType: videoData.mimeType,
-					timestamp: now,
-					batchUpload: true,
-				});
-
-				const tusConfig = await generateTUSConfig(libraryId, bunnyKey, videoId, 1);
-				const tusSessionId = await createTusProxySession(c.env.TUS_SESSIONS, {
 					videoId,
-					userId,
-					channelId,
-					tusConfig,
+					video: stored,
 				});
 
 				return {
 					videoId,
-					tusSessionId,
-					expiresAt: new Date(Date.now() + TUS_PROXY_SESSION_TTL_SECONDS * 1000).toISOString(),
-					chunkSize: tusConfig.chunkSize,
-					resumable: tusConfig.resumable,
+					tusSessionId: session.tusSessionId,
+					...(session.tusUploadId ? { tusUploadId: session.tusUploadId } : {}),
+					expiresAt: session.expiresAt,
+					chunkSize: session.chunkSize,
+					resumable: session.resumable,
+					reused,
 				};
 			}));
 
@@ -207,6 +274,10 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 
 			return c.json({ success: true, result: results });
 		} catch (error) {
+			if (error instanceof UploadClaimBusyError) {
+				c.header('Retry-After', '3');
+				return c.json({ success: false, error: error.message, retryable: true }, 503);
+			}
 			logger.error("[UploadBatchInitiate] Batch upload initiate error", {
 				userId,
 				error: error instanceof Error ? error.message : String(error),

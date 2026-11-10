@@ -16,6 +16,7 @@ import type { BatchUploadInitiateResponse, VideoScheduleResponse } from '@al-umm
 import { fetchClientAuthInfo } from '@/lib/auth/client-token';
 import { getApiUrl } from '@/lib/runtime-config';
 import { logger } from '@/lib/logger-client';
+import type { UploadFingerprint } from '@/lib/upload/fingerprint';
 
 type ApiResult<T> = { success: boolean; result?: T; error?: string };
 
@@ -81,6 +82,8 @@ export interface InitiateMetadata {
   fileSize: number;
   mimeType: string;
   thumbnail?: { type: 'auto' | 'custom'; data?: string; position?: number; filename?: string };
+  /** Same file again → same unfinished video (lib/upload/fingerprint.ts) */
+  fingerprint?: UploadFingerprint;
 }
 
 export interface InitiateResult {
@@ -95,11 +98,17 @@ export interface InitiateResult {
   message?: string;
   /** JWT for the TUS upload (the same token this call used) */
   authToken?: string;
+  /** True when an unfinished upload of the same file was reused */
+  reused?: boolean;
+  /** Proxy upload id of the reused video's earlier upload (resume at its offset) */
+  tusUploadId?: string;
 }
 
 export async function initiateVideoUpload(metadata: InitiateMetadata, channelId: string): Promise<ApiResult<InitiateResult>> {
   const res = await callUploadApi<InitiateResult>(
-    { method: 'POST', path: '/api/videos/upload/initiate', channelId, body: metadata },
+    // With a fingerprint the initiate is idempotent (same file → same video), so
+    // a 5xx (e.g. 503 while a concurrent request creates it) is safe to retry.
+    { method: 'POST', path: '/api/videos/upload/initiate', channelId, body: metadata, retries: metadata.fingerprint ? 3 : 0 },
     'Failed to initiate upload'
   );
   const { accessToken, ...rest } = res;
@@ -137,12 +146,12 @@ export async function getVideoUploadStatus(videoId: string, channelId: string): 
 }
 
 export async function initiateBatchUpload(
-  videos: Array<{ title: string; description?: string; fileSize: number; mimeType: string; isPublic: boolean; tags?: string }>,
+  videos: Array<{ title: string; description?: string; fileSize: number; mimeType: string; isPublic: boolean; tags?: string; fingerprint?: UploadFingerprint }>,
   channelId: string,
   sharedMetadata?: { channelId?: string; category?: string; isPublic?: boolean }
 ): Promise<BatchUploadInitiateResponse> {
   const { accessToken: _token, ...res } = await callUploadApi<BatchUploadInitiateResponse['result']>(
-    { method: 'POST', path: '/api/videos/upload/batch/initiate', channelId, body: { videos, sharedMetadata } },
+    { method: 'POST', path: '/api/videos/upload/batch/initiate', channelId, body: { videos, sharedMetadata }, retries: videos.every((v) => v.fingerprint) ? 3 : 0 },
     'Failed to initiate batch upload'
   );
   return res as BatchUploadInitiateResponse;

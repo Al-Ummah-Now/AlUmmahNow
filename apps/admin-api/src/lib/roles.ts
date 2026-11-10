@@ -56,6 +56,8 @@ export const PERMISSIONS = {
   'errors:read': ADMIN_ROLE_IDS,
   /** Acknowledge, resolve, ignore, assign and annotate error groups. */
   'errors:manage': ADMIN_ROLE_IDS,
+  /** Stale uploads: list abandoned upload placeholders and Bunny orphans; Delete now, Keep, Retry, reaper mode. */
+  'videos:uploads': ADMIN_ROLE_IDS,
 } as const satisfies Record<string, readonly string[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

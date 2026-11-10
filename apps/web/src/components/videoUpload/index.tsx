@@ -3,6 +3,7 @@ import { logger } from '@/lib/logger-client';
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { ResilientUpload, grantedUploadUrl, reportUploadFailure, requestUploadResume, tusEndpointFor, type ReauthoriseResult } from "@/lib/upload/resilient-tus";
 import { findRememberedUpload, forgetUpload, rememberUpload } from "@/lib/upload/resume-store";
+import { tryFileFingerprint } from "@/lib/upload/fingerprint";
 import { fetchClientAuthToken, getClientAuthHeaders } from "@/lib/auth/client-token";
 import { VideoObject } from "@/interfaces";
 import { useAuth } from "@/components/AuthProvider/authContext";
@@ -275,6 +276,9 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
       }
 
       if (!videoId) {
+        // Same file again (another tab or browser, storage cleared): the server
+        // reuses its unfinished video and hands back its upload at the offset
+        const fingerprint = await tryFileFingerprint(selectedFile);
         const initiateResult = await initiateVideoUpload(
           {
             title: metadata.titleEn || metadata.title,
@@ -300,6 +304,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
               position: selectedThumbnail.position,
               filename: selectedThumbnail.filename,
             } : undefined,
+            ...(fingerprint ? { fingerprint } : {}),
           },
           channelId
         );
@@ -308,9 +313,11 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
           throw new Error(initiateResult.error || VIDEO_UPLOAD_ERRORS.UPLOAD_FAILED);
         }
 
-        const { videoId: newVideoId, tusSessionId: newSessionId, libraryId, authToken, thumbnailUrl: returnedThumbnailUrl } = initiateResult.result;
+        const { videoId: newVideoId, tusSessionId: newSessionId, libraryId, authToken, thumbnailUrl: returnedThumbnailUrl, tusUploadId } = initiateResult.result;
         videoId = newVideoId;
         tusSessionId = newSessionId || '';
+        uploadUrl = tusUploadId ? `${endpoint}/${tusUploadId}` : undefined;
+        if (initiateResult.result.reused) logger.info('[VideoUpload] Reusing the unfinished upload of this file', { videoId, resumable: !!tusUploadId });
         fallbackAuthorization = authToken ? `Bearer ${authToken}` : undefined;
         libraryIdRef.current = libraryId || 0;
         thumbnailUrlRef.current = returnedThumbnailUrl || '';

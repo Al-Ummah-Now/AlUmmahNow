@@ -41,6 +41,8 @@ interface HealthVideo {
 	processingIssue?: { kind: string; reason?: string; at: string };
 	processingCheck?: Record<string, unknown>;
 	processingAnnounced?: 'ready' | 'failed';
+	/** Removed by the upload reaper (Stale uploads view) */
+	abandoned?: unknown;
 }
 
 function parseIds(body: unknown): string[] | null {
@@ -51,6 +53,7 @@ function parseIds(body: unknown): string[] | null {
 }
 
 function matches(video: HealthVideo, status: string): boolean {
+	if (video.abandoned && status !== 'all') return false;
 	const notReady = video.uploadStatus && video.uploadStatus !== 'ready';
 	switch (status) {
 		case 'all':

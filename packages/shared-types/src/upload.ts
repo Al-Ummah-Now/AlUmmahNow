@@ -93,6 +93,10 @@ export interface BatchUploadInitiateResponse {
     expiresAt: string;
     chunkSize: number;
     resumable: boolean;
+    /** True when an unfinished upload of the same file (fingerprint) was reused */
+    reused?: boolean;
+    /** Proxy upload id of the reused video's earlier upload: resume at <tus endpoint>/<tusUploadId> */
+    tusUploadId?: string;
   }>;
   error?: string;
 }

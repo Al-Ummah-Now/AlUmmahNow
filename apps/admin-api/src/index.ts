@@ -9,6 +9,7 @@ import { publicSiteTheme } from './lib/siteSettings';
 import themesRouter, { publicThemes } from './routers/themes.router';
 import contentRouter from './routers/content.router';
 import processingRouter from './routers/processing.router';
+import staleUploadsRouter from './routers/staleUploads.router';
 import type { AdminBindings } from './base/types';
 import { contactSubmit } from './endpoints/contact/ContactSubmit';
 import { contactMailConsumer, type ContactMailJob, type QueueMessageLike } from './lib/contact-mail-queue';
@@ -159,6 +160,9 @@ app.route('/api/content', contentRouter);
 
 // Upload processing health (sync from Bunny, retry, mark failed): permission-checked, audited proxy to api-videos
 app.route('/api/processing', processingRouter);
+
+// Stale uploads (abandoned placeholders, Bunny orphans): permission-checked, audited proxy to api-videos
+app.route('/api/uploads/stale', staleUploadsRouter as never);
 
 // ==========================================
 // HEALTH CHECK

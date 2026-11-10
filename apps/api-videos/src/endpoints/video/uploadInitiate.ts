@@ -9,7 +9,9 @@ import { ensureChannelCollection } from '../../lib/channelCollection';
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
 import { requireSecret, requireEnvVar } from "../../lib/env-helpers";
-import { generateTUSConfig, createTusProxySession } from "../../lib/bunny/tus";
+import { fingerprintKey, initiateOnce, UploadClaimBusyError, UploadFingerprintSchema } from "../../lib/uploads/initiateOnce";
+import { checkReusable, issueTusSession, reuseFields, type PlaceholderRecord } from "../../lib/uploads/placeholder";
+import { patchVideo } from "../../lib/videoWrites";
 import { thumbnailProcessor, thumbnailStorage } from "../../lib/thumbnail";
 import { logger } from '../../lib/logger';
 import { AuthenticatedRoute, AppContext } from '../../base';
@@ -42,6 +44,7 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 								position: z.number().min(0).max(100).optional().describe("Frame position (0-100%) for auto-generated thumbnails"),
 								filename: z.string().optional().describe("Original filename"),
 							}).optional().describe("Thumbnail configuration"),
+							fingerprint: UploadFingerprintSchema.optional().describe("File fingerprint (name, size, lastModified, SHA-256 of the first and last MiB). With it, retrying the same file reuses its unfinished video (same id, upload resumed at its offset) instead of creating a new one."),
 						}),
 					},
 				},
@@ -62,6 +65,9 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 								tusSessionId: z.string().describe("Secure session ID for TUS proxy (client sends this to /api/videos/tus)"),
 								chunkSize: z.number().describe("Recommended chunk size in bytes"),
 								resumable: z.boolean().describe("Whether upload supports resume"),
+								reused: z.boolean().optional().describe("True when an unfinished upload of the same file was reused (same videoId)"),
+								tusUploadId: z.string().optional().describe("Proxy upload id of the reused video's earlier upload: resume at /api/videos/tus/<tusUploadId>"),
+								expiresAt: z.string().optional().describe("ISO 8601 datetime when the TUS session expires"),
 								// Thumbnail fields
 								thumbnailUrl: z.string().optional().describe("Primary thumbnail URL"),
 								thumbnailSizes: z.object({
@@ -87,6 +93,14 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 					},
 				},
 			},
+			"503": {
+				description: "Another request is starting the same file's upload, or a store is unavailable: retry",
+				content: {
+					"application/json": {
+						schema: ResponseError,
+					},
+				},
+			},
 			"500": {
 				description: "Internal server error",
 				content: {
@@ -105,7 +119,7 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 		try {
 			// Get validated data
 			const request = await this.getValidatedData<typeof this.schema>();
-			const { title, description, fileSize, mimeType, isPublic, tags, thumbnail, titleLocalized, descriptionLocalized, category, format } = request.body;
+			const { title, description, fileSize, mimeType, isPublic, tags, thumbnail, titleLocalized, descriptionLocalized, category, format, fingerprint } = request.body;
 
 			// Validate required fields
 			if (!fileSize || fileSize <= 0) {
@@ -125,24 +139,12 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 			const channelId = c.req.header('channelId') || userId;
 			// A channel member's upload belongs to the channel's owner (lib/channelAccess.ts)
 			const { ownerId, uploadedBy } = uploadIdentity(c, userId);
-
-			// Create video in Bunny Stream first to get video ID
-			logger.info('[DEBUG] Extracting Bunny secrets...', {
-				hasKeyBinding: !!c.env["bunny-stream-key"],
-				keyBindingType: typeof c.env["bunny-stream-key"],
-				hasLibraryBinding: !!c.env.bunny_stream_library_id,
-				libraryBindingType: typeof c.env.bunny_stream_library_id,
-			});
+			if (fingerprint && fingerprint.size !== fileSize) {
+				return c.json({ success: false, error: "fingerprint.size must equal fileSize" }, 400);
+			}
 
 			const bunnyKey = await requireSecret(c.env["bunny-stream-key"], 'bunny-stream-key');
 			const libraryIdRaw = await requireSecret(c.env.bunny_stream_library_id, 'bunny_stream_library_id');
-
-			logger.info('[DEBUG] Bunny secrets extracted', {
-				keyLength: bunnyKey?.length || 0,
-				keyPrefix: bunnyKey?.substring(0, 8) || 'none',
-				libraryId: libraryIdRaw,
-			});
-
 			const libraryId = parseInt(libraryIdRaw, 10);
 
 			if (isNaN(libraryId)) {
@@ -153,246 +155,240 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 			}
 
 			const bunnyStream = new stream(bunnyKey).forEnv(c.env);
-
-			// Fetch channel and ensure it has a Bunny.net collection
-			let collectionId: string | undefined;
-
-			// Only create/check collection if channelId is not the userId (i.e., a real channel)
-			if (channelId !== userId) {
-				const channelBucket = c.env.channels;
-				const channelRepo = new R2Repository<Channel>(channelBucket);
-				const channel = await channelRepo.getObject(channelId);
-
-				if (!channel) {
-					logger.warn('[UploadInitiate] Channel not found, skipping collection', {
-						channelId,
-						userId,
-					});
-				} else {
-					collectionId = channel.bunnyCollectionId;
-
-					// Create collection if it doesn't exist
-					if (!collectionId) {
-						logger.info('[UploadInitiate] Creating Bunny.net collection for channel', {
-							channelId,
-							channelName: channel.name,
-						});
-
-						try {
-							collectionId = await ensureChannelCollection(channelRepo, bunnyStream, libraryId, channelId, channel.name || `Channel ${channelId}`);
-
-							logger.info('[UploadInitiate] Collection created and saved to channel', {
-								channelId,
-								collectionId,
-							});
-						} catch (error) {
-							logger.error('[UploadInitiate] Failed to create collection', {
-								channelId,
-								error: error instanceof Error ? error.message : String(error),
-							});
-							// Continue without collection - video will be created without collectionId
-						}
-					} else {
-						logger.info('[UploadInitiate] Using existing collection for channel', {
-							channelId,
-							collectionId,
-						});
-					}
-				}
-			}
-
-			// Create video in Bunny Stream
-			const bunnyVideo = await bunnyStream.createVideo(libraryId, {
-				title,
-				collectionId, // Add to collection if available
-				thumbnailTime: 0,
-			});
-
-			const videoId = bunnyVideo.guid;
-
-			// Process thumbnail if provided
-			let thumbnailUrl = '';
-			let thumbnailType: 'auto' | 'custom' = 'auto';
-			let thumbnailSizes: Record<string, string> | undefined;
-
-			if (thumbnail && thumbnail.data) {
-				try {
-					// Process both auto-generated (extracted video frames) and custom thumbnails
-					logger.info('[UploadInitiate] Processing thumbnail', {
-						videoId,
-						thumbnailType: thumbnail.type,
-						hasData: !!thumbnail.data,
-						position: thumbnail.position
-					});
-
-					// Process base64 thumbnail data (validates and converts to ArrayBuffer)
-					const processed = await thumbnailProcessor.processBase64(
-						thumbnail.data,
-						thumbnail.filename || 'thumbnail.jpg'
-					);
-
-					// Get Bunny.net storage credentials
-					const imageStorageKey = await requireSecret(c.env.image_storage_key, 'image_storage_key');
-					const zone = requireEnvVar(c.env, 'ZONE');
-					const cdnBaseUrl = 'https://images.alummahnow.net';
-
-					// Store in Bunny.net with automatic multi-size generation
-					// Bunny.net Image Optimizer will resize on-the-fly using URL parameters
-					const storageResult = await thumbnailStorage.storeInBunny(
-						videoId,
-						processed.original,
-						zone,
-						imageStorageKey,
-						cdnBaseUrl
-					);
-
-					thumbnailUrl = storageResult.cdnUrl;  // HD version by default
-					thumbnailType = thumbnail.type;  // Preserve original type (auto or custom)
-					thumbnailSizes = storageResult.thumbnailSizes;  // HD, SD, mobile, thumb
-
-					logger.info('[UploadInitiate] Thumbnail saved successfully to Bunny.net', {
-						videoId,
-						thumbnailUrl,
-						thumbnailType,
-						sizes: Object.keys(thumbnailSizes)
-					});
-				} catch (error) {
-					logger.error('[UploadInitiate] Thumbnail processing failed', {
-						videoId,
-						thumbnailType: thumbnail.type,
-						error: error instanceof Error ? error.message : String(error)
-					});
-					// Continue without thumbnail, will fall back to Bunny.net auto-generated
-				}
-			} else if (thumbnail && !thumbnail.data && thumbnail.position !== undefined) {
-				// Only position specified without data - use Bunny.net auto-generation
-				thumbnailType = 'auto';
-				logger.info('[UploadInitiate] Using Bunny.net auto-generated thumbnail', {
-					videoId,
-					position: thumbnail.position
-				});
-			}
-
-			// Same record as a bulk upload (lib/upload/uploadRecord.ts). Without a
-			// stored thumbnail there is no thumbnail URL until Bunny's exists.
-			const video = createUploadRecord({
-				videoId,
-				title,
-				description,
-				userId: ownerId,
-				uploadedBy,
-				channelId,
-				isPublic: isPublic ?? true,
-				tags,
-				titleLocalized,
-				descriptionLocalized,
-				category,
-				format,
-				fileSize,
-				mimeType,
-				customThumbnail: thumbnailUrl ? { url: thumbnailUrl, type: thumbnailType, sizes: thumbnailSizes } : undefined,
-				bunnyHostname: c.env.bunny_hostname,
-			});
-
-			// Save metadata to R2
-			logger.info('[UploadInitiate] Preparing to save video metadata to R2', {
-				videoId,
-				bucketBinding: 'videos',
-				videoData: {
-					title: video.title,
-					userId: video.userId,
-					channelId: video.channelId,
-					uploadStatus: video.uploadStatus
-				}
-			});
-
+			type VideoType = z.infer<typeof BusinessVideo>;
 			const bucket = c.env.videos;
-
 			if (!bucket) {
-				logger.error('[UploadInitiate] R2 bucket binding not available', { videoId });
+				logger.error('[UploadInitiate] R2 bucket binding not available');
 				throw new Error('R2 bucket binding "videos" is not configured');
 			}
-
-			type VideoType = z.infer<typeof BusinessVideo>;
 			const repository = new R2Repository<VideoType>(bucket);
+			const claimKey = fingerprint ? await fingerprintKey(channelId, userId, fingerprint) : undefined;
 
-			try {
-				await repository.putObject(videoId, video);
-				logger.info('[UploadInitiate] Video metadata saved successfully to R2', { videoId });
-			} catch (error) {
-				logger.error('[UploadInitiate] Failed to save video metadata to R2', {
-					videoId,
-					error: error instanceof Error ? error.message : String(error),
-					stack: error instanceof Error ? error.stack : undefined,
+			// Metadata the uploader entered (applied on create and on reuse)
+			const metadata = {
+				title,
+				description: description || '',
+				isPublic: isPublic ?? true,
+				tags: tags ? tags.split(',').map(tag => tag.trim()).filter(Boolean) : [],
+				...(titleLocalized && { titleLocalized }),
+				...(descriptionLocalized && { descriptionLocalized }),
+				...(category && { category }),
+				...(format && format !== 'auto' && { format }),
+				fileSize,
+				originalFormat: mimeType,
+			};
+
+			// Creates the Bunny video and its record (the claim, when there is
+			// one, guarantees this runs once per file).
+			const create = async (): Promise<string> => {
+				const collectionId = await this.channelCollection(c, bunnyStream, libraryId, channelId, userId);
+				const bunnyVideo = await bunnyStream.createVideo(libraryId, {
+					title,
+					collectionId, // Add to collection if available
+					thumbnailTime: 0,
 				});
-				throw error; // Re-throw so the endpoint returns an error
+				const videoId = bunnyVideo.guid;
+				const thumb = await this.processThumbnail(c, videoId, thumbnail);
+				const now = new Date().toISOString();
+				// Same record as a bulk upload (lib/upload/uploadRecord.ts). Without a
+				// stored thumbnail there is no thumbnail URL until Bunny's exists.
+				const video = {
+					...createUploadRecord({
+						videoId,
+						title,
+						description,
+						// A channel member's upload belongs to the channel's owner (lib/channelAccess.ts)
+						userId: ownerId,
+						uploadedBy,
+						channelId,
+						isPublic: isPublic ?? true,
+						tags,
+						titleLocalized,
+						descriptionLocalized,
+						category,
+						format,
+						fileSize,
+						mimeType,
+						customThumbnail: thumb.custom ? { url: thumb.thumbnailUrl, type: thumb.thumbnailType, sizes: thumb.thumbnailSizes } : undefined,
+						bunnyHostname: c.env.bunny_hostname,
+						now: new Date(now),
+					}),
+					...(claimKey ? { uploadFingerprint: claimKey, lastInitiateAt: now } : {}),
+				};
+				try {
+					await repository.putObject(videoId, video as VideoType);
+					logger.info('[UploadInitiate] Video metadata saved to R2', { videoId, channelId, fingerprinted: !!claimKey });
+				} catch (error) {
+					// The Bunny video has no record now: the reaper's orphan sweep removes it.
+					logger.error('[UploadInitiate] Failed to save video metadata to R2', {
+						videoId,
+						error: error instanceof Error ? error.message : String(error),
+					});
+					throw error;
+				}
+
+				// Send analytics event for upload initiation
+				const queue = new Queue(c.env.queue);
+				await queue.send(MessageType.VideoUploadStarted, {
+					videoId,
+					userId,
+					channelId,
+					title,
+					fileSize,
+					mimeType,
+					timestamp: now,
+				});
+				return videoId;
+			};
+
+			let videoId: string;
+			let reused = false;
+			if (claimKey) {
+				const outcome = await initiateOnce(claimKey, {
+					store: c.env.global_settings as never,
+					userId,
+					channelId,
+					check: (id) => checkReusable(c.env as never, id, { ownerId, uploadedBy, channelId }),
+					create,
+				});
+				videoId = outcome.videoId;
+				reused = outcome.reused;
+				if (outcome.replaced) logger.info('[UploadInitiate] Earlier video of this file not reusable; created a new one', { videoId, why: outcome.replaced });
+			} else {
+				videoId = await create();
 			}
 
-			// Send analytics event for upload initiation
-			const queue = new Queue(c.env.queue);
-			await queue.send(MessageType.VideoUploadStarted, {
-				videoId,
-				userId,
-				channelId,
-				title,
-				fileSize,
-				mimeType,
-				timestamp: new Date().toISOString(),
-			});
+			let stored: PlaceholderRecord | null = null;
+			let thumbnailUrl: string | undefined;
+			let thumbnailSizes: Record<string, string> | undefined;
+			if (reused) {
+				// Same video again: latest metadata (and thumbnail, when one was sent)
+				const thumb = thumbnail?.data ? await this.processThumbnail(c, videoId, thumbnail) : null;
+				const nowIso = new Date().toISOString();
+				const result = await patchVideo(repository, videoId, (fresh) => {
+					const fields = reuseFields(fresh as unknown as PlaceholderRecord, metadata, nowIso);
+					if (!fields) return false;
+					if (thumb?.custom) Object.assign(fields, { thumbnailUrl: thumb.thumbnailUrl, thumbnailType: thumb.thumbnailType, thumbnailSizes: thumb.thumbnailSizes });
+					return fields as Partial<VideoType>;
+				}, { ownerId });
+				if (result.status !== 'ok') {
+					logger.warn('[UploadInitiate] Reused video vanished while updating it', { videoId, status: result.status });
+					return c.json({ success: false, error: 'Upload could not be started, retry' }, 503);
+				}
+				stored = result.video as unknown as PlaceholderRecord;
+				thumbnailUrl = stored.thumbnailUrl as string | undefined;
+				thumbnailSizes = stored.thumbnailSizes as Record<string, string> | undefined;
+			} else {
+				stored = (await repository.getObject(videoId)) as unknown as PlaceholderRecord | null;
+				thumbnailUrl = stored?.thumbnailUrl as string | undefined;
+				thumbnailSizes = stored?.thumbnailSizes as Record<string, string> | undefined;
+			}
 
-			// Generate TUS configuration for resumable upload
-			const tusConfig = await generateTUSConfig(
+			// TUS proxy session (no Bunny credentials reach the client); for a
+			// reused video also its earlier upload, resumed at Bunny's offset.
+			const session = await issueTusSession(c.env.TUS_SESSIONS, {
 				libraryId,
 				bunnyKey,
-				videoId,
-				1 // 1 hour expiration
-			);
-
-			// Store TUS proxy session in KV (TUS_PROXY_SESSION_TTL_SECONDS)
-			const tusSessionId = await createTusProxySession(c.env.TUS_SESSIONS, {
-				videoId,
 				userId,
 				channelId,
-				tusConfig,
+				videoId,
+				video: reused ? stored : null,
 			});
 
-			// Return session ID to client (no TUS credentials exposed)
 			return c.json({
 				success: true,
 				result: {
 					videoId,
-					tusSessionId, // Client uses this to access TUS proxy
-					chunkSize: tusConfig.chunkSize,
-					resumable: tusConfig.resumable,
+					tusSessionId: session.tusSessionId, // Client uses this to access TUS proxy
+					...(session.tusUploadId ? { tusUploadId: session.tusUploadId } : {}),
+					chunkSize: session.chunkSize,
+					resumable: session.resumable,
+					expiresAt: session.expiresAt,
+					reused,
 					// Thumbnail fields (a stored thumbnail only; Bunny's comes once the video plays)
 					thumbnailUrl: thumbnailUrl || undefined,
 					thumbnailSizes,
 					// Legacy fields for backward compatibility
 					libraryId,
 					status: 'uploading',
-					message: 'Upload initiated successfully. Use tusSessionId with TUS proxy.',
+					message: reused ? 'Unfinished upload of this file reused. Use tusSessionId (and tusUploadId) with TUS proxy.' : 'Upload initiated successfully. Use tusSessionId with TUS proxy.',
 				},
 			});
 
 		} catch (error) {
-			// Enhanced error logging
+			if (error instanceof UploadClaimBusyError) {
+				c.header('Retry-After', '3');
+				return c.json({ success: false, error: error.message, retryable: true }, 503);
+			}
 			logger.error("Upload initiate error:", {
 				message: error instanceof Error ? error.message : String(error),
 				stack: error instanceof Error ? error.stack : undefined,
 				name: error instanceof Error ? error.name : undefined,
-				errorObject: error,
 			});
 
-			// Return more detailed error message for debugging
 			const errorMessage = error instanceof Error ? error.message : String(error);
-			const errorStack = error instanceof Error ? error.stack : undefined;
-
 			return c.json({
 				success: false,
 				error: "Failed to initiate upload",
 				details: errorMessage,
-				stack: errorStack,
 			}, 500);
+		}
+	}
+
+	/** The channel's Bunny collection (created on first upload); undefined for a user-level upload or on failure. */
+	private async channelCollection(c: AppContext, bunnyStream: stream, libraryId: number, channelId: string, userId: string): Promise<string | undefined> {
+		if (channelId === userId) return undefined;
+		const channelRepo = new R2Repository<Channel>(c.env.channels);
+		const channel = await channelRepo.getObject(channelId);
+		if (!channel) {
+			logger.warn('[UploadInitiate] Channel not found, skipping collection', { channelId, userId });
+			return undefined;
+		}
+		if (channel.bunnyCollectionId) return channel.bunnyCollectionId;
+		try {
+			const collectionId = await ensureChannelCollection(channelRepo, bunnyStream, libraryId, channelId, channel.name || `Channel ${channelId}`);
+			logger.info('[UploadInitiate] Collection created and saved to channel', { channelId, collectionId });
+			return collectionId;
+		} catch (error) {
+			logger.error('[UploadInitiate] Failed to create collection', {
+				channelId,
+				error: error instanceof Error ? error.message : String(error),
+			});
+			// Continue without collection - video will be created without collectionId
+			return undefined;
+		}
+	}
+
+	/**
+	 * Store a thumbnail sent with the initiate (custom image or an extracted
+	 * frame) in Bunny image storage; without one, point at the thumbnail Bunny
+	 * generates next to the playlist (signed per response).
+	 */
+	private async processThumbnail(
+		c: AppContext,
+		videoId: string,
+		thumbnail: { type?: 'auto' | 'custom'; data?: string; position?: number; filename?: string } | undefined,
+	): Promise<{ thumbnailUrl: string; thumbnailType: 'auto' | 'custom'; thumbnailSizes?: Record<string, string>; custom: boolean }> {
+		const fallback = { thumbnailUrl: `https://${c.env.bunny_hostname}/${videoId}/thumbnail.jpg`, thumbnailType: 'auto' as const, custom: false };
+		if (!thumbnail?.data) return fallback;
+		try {
+			logger.info('[UploadInitiate] Processing thumbnail', { videoId, thumbnailType: thumbnail.type, position: thumbnail.position });
+			// Process base64 thumbnail data (validates and converts to ArrayBuffer)
+			const processed = await thumbnailProcessor.processBase64(thumbnail.data, thumbnail.filename || 'thumbnail.jpg');
+			const imageStorageKey = await requireSecret(c.env.image_storage_key, 'image_storage_key');
+			const zone = requireEnvVar(c.env, 'ZONE');
+			// Bunny.net Image Optimizer resizes on the fly using URL parameters
+			const storageResult = await thumbnailStorage.storeInBunny(videoId, processed.original, zone, imageStorageKey, 'https://images.alummahnow.net');
+			logger.info('[UploadInitiate] Thumbnail saved to Bunny.net', { videoId, sizes: Object.keys(storageResult.thumbnailSizes) });
+			return { thumbnailUrl: storageResult.cdnUrl, thumbnailType: thumbnail.type ?? 'custom', thumbnailSizes: storageResult.thumbnailSizes, custom: true };
+		} catch (error) {
+			logger.error('[UploadInitiate] Thumbnail processing failed', {
+				videoId,
+				thumbnailType: thumbnail.type,
+				error: error instanceof Error ? error.message : String(error),
+			});
+			// Continue without thumbnail, will fall back to Bunny.net auto-generated
+			return fallback;
 		}
 	}
 }

@@ -232,3 +232,75 @@ export interface SyncPreview {
   error?: string;
 }
 export interface SyncResponse { dryRun: boolean; results: SyncPreview[] }
+
+// Stale uploads (admin-api /api/uploads/stale → api-videos /internal/uploads; lib/uploads/reaper.ts)
+export type StaleUploadTarget = 'abandoned' | 'orphan';
+export type StaleUploadStatus = 'checking' | 'would_delete' | 'deleted' | 'kept' | 'skipped' | 'failed';
+export type ReaperMode = 'dry-run' | 'live';
+
+export interface StaleUploadItem {
+  videoId: string;
+  target: StaleUploadTarget;
+  status: StaleUploadStatus;
+  reason?: string;
+  nextCheckAt?: string;
+  checks: number;
+  firstSeenAt: string;
+  lastCheckedAt?: string;
+  updatedAt: string;
+  bunny?: { title?: string; status?: number; dateUploaded?: string; storageSize?: number; encodeProgress?: number } | null;
+  record?: { title?: string; channelId?: string; userId?: string; uploadStatus?: string; dateCreated?: string; lastActivityAt?: string } | null;
+  offset?: { value: number | null; at: string };
+  force?: boolean;
+  actor?: string;
+  keptBy?: string;
+  keptAt?: string;
+  attempts?: number;
+  lastError?: string;
+  failedAt?: string;
+  deletedAt?: string;
+}
+
+export interface ReaperSweep {
+  lastRunAt: string;
+  mode: ReaperMode;
+  recordsScanned: number;
+  abandonedCandidates: number;
+  bunnyScanned: number;
+  bunnyTotal: number;
+  orphanCandidates: number;
+  loopsStarted: number;
+  skipped: number;
+  errors: number;
+  nextBunnyPage: number;
+  durationMs: number;
+}
+
+export interface ReaperDeleteRow {
+  key: string;
+  at: string;
+  videoId: string;
+  target: StaleUploadTarget;
+  actor: string;
+  mode: ReaperMode;
+  force: boolean;
+  reason: string;
+  state: 'started' | 'done';
+  bunnyDeleted?: boolean;
+  recordAbandoned?: boolean;
+}
+
+export interface StaleUploadDeadLetter { id: string; dlq: string; attempts: number; failureReason: string | null; receivedAt: string | number; videoId?: string }
+
+export interface StaleUploadsResponse {
+  items: StaleUploadItem[];
+  counts: Partial<Record<StaleUploadStatus, number>>;
+  config: { mode: ReaperMode; updatedAt?: string; updatedBy?: string };
+  sweep: ReaperSweep | null;
+  audit: ReaperDeleteRow[];
+  deadLetters: StaleUploadDeadLetter[];
+}
+
+export interface StaleUploadActionResult {
+  results: { videoId: string; started?: boolean; kept?: boolean; why?: string }[];
+}
