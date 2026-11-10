@@ -45,6 +45,12 @@ const INTERNAL_API_KEY: RequiredSecret = {
 	purpose: 'Secrets Store internal-api-key[-qa]; X-API-Key between our Workers and for /internal/* routes',
 };
 
+const AUTH_MODERATION_CLIENT_SECRET: RequiredSecret = {
+	name: 'AUTH_MODERATION_CLIENT_SECRET',
+	purpose:
+		'worker secret; client secret of AUTH_MODERATION_CLIENT_ID (moderation requests to auth, docs/admin/AUTH_MODERATION_REQUESTS.md). Set by AlUmmahNowAuth scripts/release/rotate-client-secret.ts',
+};
+
 const API_VIDEOS_SECRETS: RequiredSecret[] = [
 	{ name: 'bunny-stream-key', purpose: 'Secrets Store; Bunny Stream API key (create, upload, update videos)' },
 	{ name: 'bunny_stream_library_id', purpose: 'Secrets Store; Bunny Stream library id' },
@@ -73,8 +79,13 @@ export const SECRETS_MANIFEST: WorkerSecrets[] = [
 	...envs('admin-web', 'al-ummah-admin-web-qa', { clientIdVars: CLIENT_REQUIRED }),
 	...envs('api-videos', 'videos-qa', { required: API_VIDEOS_SECRETS, clientIdVars: CLIENT_OPTIONAL }),
 	...envs('admin-api', 'al-ummah-admin-api-qa', {
-		required: [INTERNAL_API_KEY, { name: 'RESEND_API_KEY', purpose: 'Secrets Store RESEND_API_KEY (shared with the auth server); Contact us notification, acknowledgement and reply emails' }],
-		clientIdVars: CLIENT_OPTIONAL,
+		required: [
+			INTERNAL_API_KEY,
+			{ name: 'RESEND_API_KEY', purpose: 'Secrets Store RESEND_API_KEY (shared with the auth server); Contact us notification, acknowledgement and reply emails' },
+			AUTH_MODERATION_CLIENT_SECRET,
+		],
+		// Checked when set: the var arrives with the deploy of the code that reads it
+		clientIdVars: [...CLIENT_OPTIONAL, { name: 'AUTH_MODERATION_CLIENT_ID', required: false }],
 	}),
 	...envs('websocket-server', 'al-ummah-now-comms-qa', { required: [INTERNAL_API_KEY], clientIdVars: CLIENT_OPTIONAL }),
 	...envs('processor', 'al-ummah-now-processor-qa', { required: [INTERNAL_API_KEY] }),

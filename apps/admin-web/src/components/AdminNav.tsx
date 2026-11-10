@@ -30,6 +30,7 @@ const NAV_ITEMS: { href: string; label: MessageKey }[] = [
   { href: '/contact', label: 'nav.contact' },
   { href: '/processing', label: 'nav.processing' },
   { href: '/errors', label: 'nav.errors' },
+  { href: '/auth-requests', label: 'nav.authRequests' },
 ];
 
 const PROCESSING_ITEMS = new Set(['/processing', '/errors']);
