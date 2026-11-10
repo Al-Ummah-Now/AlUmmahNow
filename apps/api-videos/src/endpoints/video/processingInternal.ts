@@ -5,7 +5,8 @@
  * endpoints/processing). Not part of the public contract.
  *
  *   GET  /internal/processing/videos?status=stuck|processing|failed|all&bunny=1&limit=
- *   POST /internal/processing/sync         { ids: string[], dryRun?: boolean }
+ *   GET  /internal/processing/errors       failed/flagged videos + dead-lettered checks
+ *   POST /internal/processing/sync         { ids: string[], dryRun?: boolean } (apply = queue the check now)
  *   POST /internal/processing/retry        { ids: string[] }
  *   POST /internal/processing/mark-failed  { ids: string[], reason?: string }
  */
@@ -124,6 +125,9 @@ export function createProcessingInternalRouter() {
 		return c.json({ success: true, result: { items: rows, scanned, reconciler: await readSweepStats(c.env) } });
 	});
 
+	// Dry run (default): Bunny is read and the plan returned, nothing written.
+	// Apply: each video's check loop is (re)started through the queue, which
+	// syncs it now and keeps checking until Bunny finishes (retry, backoff, DLQ).
 	app.post('/sync', async (c) => {
 		const body = await c.req.json().catch(() => null);
 		const ids = parseIds(body);
@@ -132,13 +136,73 @@ export function createProcessingInternalRouter() {
 		const results = [];
 		for (const id of ids) {
 			try {
-				results.push(await syncVideoFromBunny(c.env, id, { dryRun }));
+				if (dryRun) results.push(await syncVideoFromBunny(c.env, id, { dryRun: true }));
+				else results.push({ videoId: id, ...(await startProcessingLoop(c.env, id, { reason: 'admin-sync', force: true, initialDelaySeconds: 0 })) });
 			} catch (error) {
-				results.push({ videoId: id, found: true, dryRun, changed: false, error: error instanceof Error ? error.message : String(error) });
+				results.push({ videoId: id, error: error instanceof Error ? error.message : String(error) });
 			}
 		}
-		logger.info('[ProcessingAdmin] Sync from Bunny', { count: ids.length, dryRun, changed: results.filter((r) => r.changed).length });
+		logger.info('[ProcessingAdmin] Sync from Bunny', { count: ids.length, dryRun });
 		return c.json({ success: true, result: { dryRun, results } });
+	});
+
+	// Failures that need an admin: flagged / failed videos and dead-lettered
+	// processing checks (stored by the processor's DLQ consumer in NOTIFICATIONS_DB).
+	app.get('/errors', async (c) => {
+		const limit = Math.min(Math.max(parseInt(c.req.query('limit') || '100', 10) || 100, 1), 500);
+		const videos: HealthVideo[] = [];
+		let cursor: string | undefined;
+		do {
+			const page = await c.env.videos.list({ cursor, limit: 500 });
+			cursor = page.truncated ? page.cursor : undefined;
+			for (const object of page.objects) {
+				if (object.key.includes('/') || object.key.includes(':')) continue;
+				const video = (await (await c.env.videos.get(object.key))?.json<HealthVideo>().catch(() => null)) ?? null;
+				if (video?.id && (video.uploadStatus === 'failed' || video.processingIssue)) videos.push(video);
+			}
+		} while (cursor && videos.length < limit);
+		videos.sort((a, b) => (b.processingIssue?.at || b.dateModified || '').localeCompare(a.processingIssue?.at || a.dateModified || ''));
+		let deadLetters: unknown[] = [];
+		const db = (c.env as { NOTIFICATIONS_DB?: D1Database }).NOTIFICATIONS_DB;
+		if (db) {
+			try {
+				const { results } = await db
+					.prepare(
+						`SELECT id, type_name, dlq, attempts, failure_reason, body_json, received_at FROM dead_letters
+						 WHERE replayed_at IS NULL AND body_json LIKE '%"kind":"processing-check"%' ORDER BY received_at DESC LIMIT ?`,
+					)
+					.bind(limit)
+					.all<{ id: string; dlq: string; attempts: number; failure_reason: string | null; body_json: string; received_at: string | number }>();
+				deadLetters = (results ?? []).map((row) => {
+					let videoId: string | undefined;
+					try {
+						videoId = (JSON.parse(row.body_json) as { videoId?: string }).videoId;
+					} catch {
+						videoId = undefined;
+					}
+					return { id: row.id, dlq: row.dlq, attempts: row.attempts, failureReason: row.failure_reason, receivedAt: row.received_at, videoId };
+				});
+			} catch (error) {
+				logger.warn('[ProcessingAdmin] Dead letters unavailable', { error: error instanceof Error ? error.message : String(error) });
+			}
+		}
+		return c.json({
+			success: true,
+			result: {
+				videos: videos.slice(0, limit).map((v) => ({
+					id: v.id,
+					title: v.title,
+					channelId: v.channelId,
+					userId: v.userId,
+					uploadStatus: v.uploadStatus,
+					processingIssue: v.processingIssue ?? null,
+					dateCreated: v.dateCreated,
+					dateModified: v.dateModified,
+				})),
+				deadLetters,
+				reconciler: await readSweepStats(c.env),
+			},
+		});
 	});
 
 	app.post('/retry', async (c) => {

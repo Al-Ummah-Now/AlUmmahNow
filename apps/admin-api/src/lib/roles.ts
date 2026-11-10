@@ -46,6 +46,8 @@ export const PERMISSIONS = {
   'contact:read': ADMIN_ROLE_IDS,
   /** Change status and assignee, add notes, reply to and delete contact messages. */
   'contact:manage': ADMIN_ROLE_IDS,
+  /** Upload processing health: sync from Bunny, retry processing, mark failed. */
+  'videos:processing': ADMIN_ROLE_IDS,
 } as const satisfies Record<string, readonly string[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

@@ -20,6 +20,9 @@ import type {
   ContactMessage,
   ContactNote,
   ContactStatus,
+  ProcessingErrorsResponse,
+  ProcessingVideosResponse,
+  SyncResponse,
 } from './types';
 
 const ADMIN_API_URL = process.env.ADMIN_API_URL || 'http://127.0.0.1:3090';
@@ -322,4 +325,31 @@ export async function deleteContactMessage(id: string): Promise<ActionResult<{ d
     if (error instanceof AdminApiError) return { ok: false, status: error.status, error: error.message };
     return { ok: false, status: 500, error: error instanceof Error ? error.message : 'Unknown error' };
   }
+}
+
+// Upload processing health (admin-api /api/processing; videos:processing)
+
+export async function listProcessingVideos(params: { status?: string; channelId?: string } = {}): Promise<ProcessingVideosResponse> {
+  const query = new URLSearchParams();
+  if (params.status) query.set('status', params.status);
+  if (params.channelId) query.set('channelId', params.channelId);
+  const suffix = query.size ? `?${query}` : '';
+  return fetchAdmin<ProcessingVideosResponse>(`/api/processing/videos${suffix}`);
+}
+
+export async function getProcessingErrors(): Promise<ProcessingErrorsResponse> {
+  return fetchAdmin<ProcessingErrorsResponse>('/api/processing/errors');
+}
+
+/** dryRun (default) previews what a sync would change; apply queues each video's check. */
+export async function syncProcessing(ids: string[], dryRun: boolean): Promise<ActionResult<SyncResponse>> {
+  return mutate('/api/processing/sync', 'POST', { ids, dryRun });
+}
+
+export async function retryProcessing(ids: string[]): Promise<ActionResult<unknown>> {
+  return mutate('/api/processing/retry', 'POST', { ids });
+}
+
+export async function markProcessingFailed(ids: string[], reason?: string): Promise<ActionResult<unknown>> {
+  return mutate('/api/processing/mark-failed', 'POST', { ids, ...(reason ? { reason } : {}) });
 }

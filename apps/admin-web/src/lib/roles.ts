@@ -64,3 +64,12 @@ export function canUseContactInbox(role?: string): boolean {
   const r = normalizeRole(role);
   return r === 'admin' || r === 'super_admin';
 }
+
+/**
+ * Upload processing health and the Errors page: mirrors admin-api PERMISSIONS
+ * (videos:processing is granted to admins and super admins, not moderators).
+ */
+export function canUseProcessing(role?: string): boolean {
+  const r = normalizeRole(role);
+  return r === 'admin' || r === 'super_admin';
+}

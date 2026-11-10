@@ -76,11 +76,14 @@ type LoopVideo = SyncableVideo & {
 		outcome?: string;
 		bunnyStatus?: number;
 		bunnyProgress?: number;
+		restarts?: number;
 	};
 };
 
 /** A loop whose next check is this late is considered dead (lost message). */
 const STALE_LOOP_MS = 15 * 60 * 1000;
+/** Sweep restarts of a dead loop before the video is flagged for an admin. */
+export const MAX_SWEEP_RESTARTS = 3;
 
 const BUNNY_API = 'https://video.bunnycdn.com';
 
@@ -181,7 +184,7 @@ function queueOf(env: ProcessingEnv): Queue | undefined {
 export async function startProcessingLoop(
 	env: ProcessingEnv,
 	videoId: string,
-	opts: { reason: string; force?: boolean; now?: Date; initialDelaySeconds?: number },
+	opts: { reason: string; force?: boolean; now?: Date; initialDelaySeconds?: number; restarts?: number },
 ): Promise<{ started: boolean; loopId?: string; why?: string }> {
 	const queue = queueOf(env);
 	if (!queue) {
@@ -207,6 +210,7 @@ export async function startProcessingLoop(
 			startedAt: now.toISOString(),
 			attempt: 0,
 			nextCheckAt: new Date(now.getTime() + delay * 1000).toISOString(),
+			...(opts.restarts ? { restarts: opts.restarts } : {}),
 		};
 		return true;
 	});
@@ -376,7 +380,20 @@ export async function sweepProcessingVideos(env: ProcessingEnv, opts: { now?: Da
 			if (now.getTime() - (Date.parse(video.dateCreated || '') || 0) < minAge) continue;
 			if (stats.loopsStarted >= maxStarts) continue;
 			try {
-				const result = await startProcessingLoop(env, video.id, { reason: 'sweep', now, initialDelaySeconds: 0 });
+				// A loop that died (its messages dead-lettered) is restarted a few
+				// times; then the video is flagged for an admin instead.
+				const check = video.processingCheck;
+				const died = check && !check.finishedAt && now.getTime() - (Date.parse(check.nextCheckAt || '') || 0) > STALE_LOOP_MS;
+				if (died && (check.restarts ?? 0) >= MAX_SWEEP_RESTARTS) {
+					await new R2Repository<LoopVideo>(env.videos).updateObject(video.id, (fresh) => {
+						if (fresh.processingIssue || fresh.uploadStatus === 'ready') return false;
+						fresh.processingIssue = { kind: 'stalled', reason: `The processing check failed ${MAX_SWEEP_RESTARTS + 1} times (see dead letters)`, at: now.toISOString() };
+						return true;
+					});
+					stats.flagged.stalled++;
+					continue;
+				}
+				const result = await startProcessingLoop(env, video.id, { reason: 'sweep', now, initialDelaySeconds: 0, restarts: died ? (check.restarts ?? 0) + 1 : 0 });
 				if (result.started) stats.loopsStarted++;
 				else stats.alreadyActive++;
 			} catch (error) {
