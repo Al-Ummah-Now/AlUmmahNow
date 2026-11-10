@@ -378,6 +378,10 @@ const en = {
     saved: 'Site theme updated',
     failed: 'Could not change the theme',
     adminOnly: 'Only admins can change the site theme.',
+    history: 'Recent changes',
+    historyEmpty: 'No changes yet',
+    historyDefault: 'default',
+    historyUnavailable: 'Could not load the recent changes',
   },
   indices: {
     title: 'Video Indices',

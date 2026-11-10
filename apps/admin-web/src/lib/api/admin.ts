@@ -208,6 +208,19 @@ export async function getSiteThemeState(): Promise<SiteThemeState> {
   return (await requestAdmin('/api/site-settings/theme')).result as SiteThemeState;
 }
 
+export interface SiteThemeChange {
+  id: string;
+  oldValue: string | null;
+  newValue: string;
+  actorId: string;
+  createdAt: string;
+}
+
+/** The audit log of theme changes, newest first. */
+export async function getSiteThemeHistory(limit = 10): Promise<SiteThemeChange[]> {
+  return ((await requestAdmin(`/api/site-settings/theme/history?limit=${limit}`)).result as { entries: SiteThemeChange[] }).entries;
+}
+
 export async function setSiteTheme(theme: SiteTheme): Promise<SiteThemeState> {
   return (await requestAdmin('/api/site-settings/theme', { method: 'PUT', body: JSON.stringify({ theme }) })).result as SiteThemeState;
 }

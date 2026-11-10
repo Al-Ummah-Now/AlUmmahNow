@@ -31,3 +31,20 @@ export async function writeSiteTheme(db: Db, theme: SiteTheme, actorId: string, 
   ]);
   return true;
 }
+
+export interface ThemeChange {
+  id: string;
+  oldValue: string | null;
+  newValue: string;
+  actorId: string;
+  createdAt: string;
+}
+
+/** The latest theme changes from the audit log, newest first. */
+export async function readSiteThemeHistory(db: Db, limit: number): Promise<ThemeChange[]> {
+  const { results } = await db
+    .prepare('SELECT id, old_value, new_value, actor_id, created_at FROM site_settings_log WHERE key = ? ORDER BY created_at DESC, id DESC LIMIT ?')
+    .bind(SITE_THEME_SETTING_KEY, limit)
+    .all<{ id: string; old_value: string | null; new_value: string; actor_id: string; created_at: string }>();
+  return results.map((r) => ({ id: r.id, oldValue: r.old_value, newValue: r.new_value, actorId: r.actor_id, createdAt: r.created_at }));
+}
