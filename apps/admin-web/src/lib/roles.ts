@@ -73,3 +73,13 @@ export function canUseProcessing(role?: string): boolean {
   const r = normalizeRole(role);
   return r === 'admin' || r === 'super_admin';
 }
+
+/**
+ * Videos users tools (Restore legacy profile fields): mirrors the users:manage
+ * content permission (shared-types ROLE_CONTENT_PERMISSIONS: admins and super
+ * admins). admin-api enforces it; this only hides what the user cannot use.
+ */
+export function canManageVideosUsers(role?: string): boolean {
+  const r = normalizeRole(role);
+  return r === 'admin' || r === 'super_admin';
+}

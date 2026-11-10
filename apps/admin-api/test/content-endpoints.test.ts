@@ -322,3 +322,76 @@ describe('content endpoints: reports', () => {
     assert.deepEqual(detail.result.reports.map((r) => r.id), ['r1']);
   });
 });
+
+describe('content endpoints: restore legacy profile fields', () => {
+  const USR = 'usr_3a7c71348b164b84a3a4acb3962937e6';
+  const USR2 = 'usr_cccccccccccccccccccccccccccccccc';
+  const plan = {
+    legacyCount: 2,
+    pairedCount: 2,
+    items: [
+      { id: USR, legacyId: '4b623aeb45eb610c8c72cca719e0f6c7', changes: [{ field: 'firstNameLocalized.ar', from: '', to: 'محمود' }, { field: 'lastNameLocalized.ar', from: null, to: 'درويش' }] },
+      { id: USR2, legacyId: 'cccccccccccccccccccccccccccccccc', changes: [{ field: 'bioLocalized.ar', from: '', to: 'نبذة' }] },
+    ],
+    unmatched: [],
+    ambiguousCount: 0,
+  };
+  const job = { id: 'job_r', kind: 'profiles.restore-legacy', targetKind: 'user', targetId: 'legacy-profiles', status: 'queued' };
+
+  it('the dry run and Run need users:manage; moderators get neither', async () => {
+    const { db, log } = fakeDb();
+    const { fetcher, calls } = fakeVideos({ 'GET /legacy-profiles/plan': () => ({ body: { success: true, result: plan } }) });
+    const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
+    assert.equal((await call('/api/content/legacy-profiles/plan', { roles: 'moderator' })).status, 403);
+    assert.equal((await call('/api/content/legacy-profiles/restore', { method: 'POST', roles: 'moderator', json: {} })).status, 403);
+    assert.equal(calls.length, 0);
+    const res = await call('/api/content/legacy-profiles/plan', { roles: 'admin' });
+    assert.equal(res.status, 200);
+    assert.deepEqual(((await res.json()) as { result: unknown }).result, plan);
+    assert.equal(log.length, 0, 'the dry run is not audited: it changes nothing');
+  });
+
+  it('Run audits every profile with its planned changes, then queues the fresh plan (never a client change list)', async () => {
+    const { db, log } = fakeDb();
+    const { fetcher, calls } = fakeVideos({
+      'GET /legacy-profiles/plan': () => ({ body: { success: true, result: plan } }),
+      'POST /legacy-profiles/restore': () => ({ body: { success: true, result: { job } } }),
+    });
+    const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
+    const res = await call('/api/content/legacy-profiles/restore', { method: 'POST', roles: 'admin', user: 'actor-7', json: { ids: [USR], approved: [{ id: USR, fields: ['email'] }] } });
+    assert.equal(res.status, 200);
+    assert.equal(((await res.json()) as { result: { job: { id: string } } }).result.job.id, 'job_r');
+
+    const sent = calls.find((c) => c.method === 'POST')!.body as { runId: string; approved: unknown[] };
+    assert.deepEqual(sent.approved, [{ id: USR, legacyId: '4b623aeb45eb610c8c72cca719e0f6c7', fields: ['firstNameLocalized.ar', 'lastNameLocalized.ar'] }]);
+    assert.equal(log.length, 1);
+    assert.equal(log[0].key, `content:user:${USR}`);
+    assert.equal(log[0].actor_id, 'actor-7');
+    assert.deepEqual(JSON.parse(log[0].new_value), {
+      action: 'restore-legacy-fields',
+      details: { runId: sent.runId, legacyId: '4b623aeb45eb610c8c72cca719e0f6c7', changes: [{ field: 'firstNameLocalized.ar', to: 'محمود' }, { field: 'lastNameLocalized.ar', to: 'درويش' }] },
+    });
+    assert.deepEqual(JSON.parse(log[0].old_value!), { 'firstNameLocalized.ar': '', 'lastNameLocalized.ar': null });
+  });
+
+  it('without ids every planned profile is run; a refused job leaves no audit rows', async () => {
+    const { db, log } = fakeDb();
+    const { fetcher } = fakeVideos({
+      'GET /legacy-profiles/plan': () => ({ body: { success: true, result: plan } }),
+      'POST /legacy-profiles/restore': () => ({ status: 409, body: { success: false, code: 'nothing_to_restore', error: 'Nothing left to restore' } }),
+    });
+    const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
+    const res = await call('/api/content/legacy-profiles/restore', { method: 'POST', roles: 'super_admin', json: {} });
+    assert.equal(res.status, 409);
+    assert.equal(log.length, 0);
+  });
+
+  it('an empty plan is refused before anything is audited', async () => {
+    const { db, log } = fakeDb();
+    const { fetcher, calls } = fakeVideos({ 'GET /legacy-profiles/plan': () => ({ body: { success: true, result: { ...plan, items: [] } } }) });
+    const res = await appFor({ REPORTS_DB: db, VIDEOS: fetcher })('/api/content/legacy-profiles/restore', { method: 'POST', roles: 'admin', json: {} });
+    assert.equal(res.status, 409);
+    assert.equal(log.length, 0);
+    assert.equal(calls.filter((c) => c.method === 'POST').length, 0);
+  });
+});

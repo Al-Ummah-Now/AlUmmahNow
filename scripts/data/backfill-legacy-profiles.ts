@@ -1,6 +1,11 @@
 /**
  * Fills empty fields of usr_ video profiles from the user's pre-SSO profile.
  *
+ * Production runs this from the admin instead: Legacy profiles (admin job
+ * 'profiles.restore-legacy', api-videos lib/admin/legacy-restore.ts) shows the
+ * same dry run, audits every profile, backs it up to the private ADMIN_BACKUPS
+ * bucket and writes conditionally. This CLI is for QA/stage checks.
+ *
  *   node --experimental-strip-types scripts/data/backfill-legacy-profiles.ts --env qa            # dry run
  *   node --experimental-strip-types scripts/data/backfill-legacy-profiles.ts --env qa --apply
  *   ... --env production [--apply] [--backup-dir <dir>]

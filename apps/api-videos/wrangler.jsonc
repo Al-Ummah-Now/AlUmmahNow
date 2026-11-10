@@ -129,6 +129,11 @@
 			"binding": "analytics_rollups",
 			"bucket_name": "al-ummah-now-messages",
 			"remote": true
+		},
+		{
+			// Private pre-change copies written by admin jobs (legacy profile restore); never public
+			"binding": "ADMIN_BACKUPS",
+			"bucket_name": "admin-backups"
 		}
 	],
 	"d1_databases": [
@@ -145,6 +150,13 @@
 			"database_name": "al-ummah-now-search",
 			"database_id": "41064871-cf1f-46e9-b102-7b913240ad89",
 			"migrations_dir": "migrations/search"
+		},
+		{
+			// Auth service D1, READ ONLY: the legacy profile restore (lib/admin/legacy-restore.ts)
+			// reads users.email (the verified address). Nothing here writes to it.
+			"binding": "AUTH_DB",
+			"database_name": "al-ummah-now-d1",
+			"database_id": "af76f007-e21e-43aa-88de-ebfefe46fb56"
 		}
 	],
 	// Watch-time reports per playback session (#235); videoWatchTime.ts
@@ -352,6 +364,10 @@
 				{
 					"binding": "analytics_rollups",
 					"bucket_name": "al-ummah-now-messages-stage"
+				},
+				{
+					"binding": "ADMIN_BACKUPS",
+					"bucket_name": "admin-backups-stage"
 				}
 			],
 			"d1_databases": [
@@ -365,6 +381,12 @@
 					"database_name": "al-ummah-now-search-stage",
 					"database_id": "956a3550-bd20-4cfc-9bf2-b1c2265b33dd",
 					"migrations_dir": "migrations/search"
+				},
+				{
+					// Auth service D1 (stage), READ ONLY: legacy profile restore
+					"binding": "AUTH_DB",
+					"database_name": "al-ummah-now-d1-stage",
+					"database_id": "c7886ef6-c70b-4b7f-a65b-3df9f9aba9e2"
 				}
 			],
 			// Watch-time reports per playback session (#235); videoWatchTime.ts

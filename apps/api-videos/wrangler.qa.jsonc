@@ -79,6 +79,11 @@
     {
       "binding": "analytics_rollups",
       "bucket_name": "al-ummah-now-messages-qa"
+    },
+    {
+      // Private pre-change copies written by admin jobs (legacy profile restore)
+      "binding": "ADMIN_BACKUPS",
+      "bucket_name": "admin-backups-qa"
     }
   ],
   "d1_databases": [
@@ -94,6 +99,12 @@
       "database_name": "al-ummah-now-search-qa",
       "database_id": "0282bac3-5b70-4343-a991-937c732d981a",
       "migrations_dir": "migrations/search"
+    },
+    {
+      // Auth service D1 (QA), READ ONLY: legacy profile restore (lib/admin/legacy-restore.ts)
+      "binding": "AUTH_DB",
+      "database_name": "al-ummah-now-d1-qa",
+      "database_id": "28590f3c-dd92-4c26-a803-d73a9bbe2b58"
     }
   ],
   // Watch-time reports per playback session (#235); videoWatchTime.ts

@@ -25,6 +25,7 @@ import {
   type AdminUserDetail,
   type AdminVideoDetail,
   type AdminVideoRow,
+  type LegacyRestorePlan,
 } from '@al-ummah/shared-types';
 import { callVideos, VideosError, type VideosCall, type VideosClientEnv } from '../lib/content/videosClient';
 import { dropAudit, readAudit, writeAudit, type AuditAction, type ContentKind } from '../lib/content/audit';
@@ -356,6 +357,54 @@ app.post('/users/:id/delete-data', async (c) => {
   // Queues the erase job (it resumes itself in api-videos); audited once here
   return ok(c, await audited(c, { kind: 'user', id, action: 'delete-data' }, () =>
     videos(c, `/users/${encodeURIComponent(id)}/delete-data`, { method: 'POST', json: {} })));
+});
+
+// ---------------------------------------------------------------------------
+// Restore legacy profile fields: fills empty fields of usr_ profiles from the
+// user's pre-SSO profile (api-videos lib/admin/legacy-restore.ts). The dry run
+// writes nothing; Run audits every profile it will change (with the planned
+// field changes), then queues the job, which backs each profile up first.
+// ---------------------------------------------------------------------------
+
+app.get('/legacy-profiles/plan', async (c) => {
+  need(c, 'users:manage');
+  return ok(c, await videos<LegacyRestorePlan>(c, '/legacy-profiles/plan'));
+});
+
+app.post('/legacy-profiles/restore', async (c) => {
+  need(c, 'users:manage');
+  const input = await body(c);
+  const only = Array.isArray(input.ids) ? new Set(input.ids.filter((id): id is string => typeof id === 'string')) : null;
+  // The fresh dry run is what gets approved and audited (never a client-supplied change list)
+  const plan = await videos<LegacyRestorePlan>(c, '/legacy-profiles/plan');
+  const items = plan.items.filter((item) => !only || only.has(item.id));
+  if (!items.length) return c.json({ success: false, code: 'nothing_to_restore', error: 'Nothing to restore' }, 409);
+  const runId = crypto.randomUUID();
+  const db = c.env.REPORTS_DB;
+  const auditIds: string[] = [];
+  try {
+    for (const item of items) {
+      auditIds.push(await writeAudit(db, {
+        kind: 'user',
+        id: item.id,
+        action: 'restore-legacy-fields',
+        details: { runId, legacyId: item.legacyId, changes: item.changes.map((ch) => ({ field: ch.field, to: ch.to })) },
+        previous: Object.fromEntries(item.changes.map((ch) => [ch.field, ch.from ?? null])),
+        actorId: actorOf(c),
+      }));
+    }
+    const result = await videos<{ job: AdminJob }>(c, '/legacy-profiles/restore', {
+      method: 'POST',
+      json: { runId, approved: items.map((item) => ({ id: item.id, legacyId: item.legacyId, fields: item.changes.map((ch) => ch.field) })) },
+    });
+    logger.info('[Content] Action', { kind: 'user', action: 'restore-legacy-fields', profiles: items.length, jobId: result.job.id, actorId: actorOf(c) });
+    return ok(c, result);
+  } catch (error) {
+    for (const id of auditIds) {
+      await dropAudit(db, id).catch((e) => logger.error('[Content] Could not drop the audit row of a failed action', { auditId: id, error: String(e) }));
+    }
+    throw error;
+  }
 });
 
 // ---------------------------------------------------------------------------

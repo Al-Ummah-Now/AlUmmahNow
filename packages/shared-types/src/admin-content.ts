@@ -371,6 +371,11 @@ export const ADMIN_JOB_KINDS = [
   'user.sync-holds',
   /** Erase a user's videos data (privacy path), in resumable steps. */
   'user.delete-data',
+  /**
+   * Fill empty fields of usr_ profiles from the user's pre-SSO profile (the
+   * fields an admin approved in the dry run; pre-change copy backed up first).
+   */
+  'profiles.restore-legacy',
 ] as const;
 
 export type AdminJobKind = (typeof ADMIN_JOB_KINDS)[number];
@@ -403,7 +408,44 @@ export const ADMIN_JOB_PERMISSIONS: Readonly<Record<AdminJobKind, readonly Admin
   'video.purge': ['content:delete'],
   'user.sync-holds': ['users:manage'],
   'user.delete-data': ['users:manage', 'content:delete'],
+  'profiles.restore-legacy': ['users:manage'],
 };
+
+// ---------------------------------------------------------------------------
+// Restore legacy profile fields (admin job 'profiles.restore-legacy')
+// ---------------------------------------------------------------------------
+
+/** The job's target: one job covers every profile it restores (they are audited one by one). */
+export const LEGACY_RESTORE_TARGET = { kind: 'user', id: 'legacy-profiles' } as const;
+
+/** One usr_ profile the dry run would fill from its legacy record. */
+export interface LegacyRestoreItem {
+  /** The usr_ profile */
+  id: string;
+  /** The legacy (pre-SSO, 32-hex) record it is filled from */
+  legacyId: string;
+  /** Field paths (`firstNameLocalized.ar`, `coverUrl`) with the value now and the value it would get */
+  changes: { field: string; from: unknown; to: unknown }[];
+}
+
+/** The dry run: nothing is written. */
+export interface LegacyRestorePlan {
+  /** Legacy records found in the profiles bucket */
+  legacyCount: number;
+  /** Legacy records paired with a usr_ profile through the auth service's verified email */
+  pairedCount: number;
+  items: LegacyRestoreItem[];
+  /** Legacy records with no usr_ profile of that verified email (left alone) */
+  unmatched: string[];
+  /** Emails with several legacy records or several users (left alone); counted, never listed */
+  ambiguousCount: number;
+}
+
+/** What the job did, per profile (the job's result). */
+export interface LegacyRestoreResult {
+  written: { id: string; legacyId: string; fields: string[]; backupKey: string }[];
+  skipped: { id: string; reason: string }[];
+}
 
 /** Retries per job delivery before it is marked failed and dead-lettered (matches the queue's max_retries). */
 export const ADMIN_JOB_MAX_RETRIES = 5;

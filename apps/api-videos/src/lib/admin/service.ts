@@ -11,6 +11,7 @@ import {
 	applySuspensionHold,
 	channelHold,
 	isHeldBy,
+	LEGACY_RESTORE_TARGET,
 	liftSuspensionHold,
 	userHold,
 	type AdminChannelDetail,
@@ -35,6 +36,7 @@ import { BunnyStreamClient } from '../bunny/stream';
 import { requireSecret } from '../env-helpers';
 import { bansFor, deleteBan, readBan, writeBan } from './bans';
 import { createJob, type JobHandler, type JobOutcome, type JobQueue } from './jobs';
+import { approvedFromPlan, planLegacyRestore, runLegacyRestore, type ApprovedRestore, type AuthUsersDb } from './legacy-restore';
 import {
 	channelVideoStats,
 	contentIds,
@@ -56,6 +58,10 @@ export interface AdminServiceEnv extends AdminEnv {
 	bunny_stream_library_id?: { text(): Promise<string> } | string;
 	/** The admin-jobs queue (heavy actions run from it; lib/admin/jobs.ts). */
 	ADMIN_JOBS_QUEUE?: JobQueue;
+	/** Auth service D1, read only (verified emails for the legacy profile restore). */
+	AUTH_DB?: AuthUsersDb;
+	/** Private bucket for pre-change copies written by admin jobs. */
+	ADMIN_BACKUPS?: R2Bucket;
 }
 
 export class AdminError extends Error {
@@ -961,6 +967,20 @@ async function eraseUserStep(env: AdminServiceEnv & Record<string, unknown>, use
 	return summary;
 }
 
+/** Dry run of "Restore legacy profile fields" (lib/admin/legacy-restore.ts). */
+export const legacyRestorePlan = (env: AdminServiceEnv) => planLegacyRestore(env);
+
+/**
+ * Queues "Restore legacy profile fields" for the approved items, narrowed to a
+ * fresh plan (only fields that are still empty and planned).
+ */
+export async function startLegacyRestore(env: AdminServiceEnv, requested: ApprovedRestore[], actorId: string, runId?: string): Promise<{ job: AdminJob; approved: ApprovedRestore[] }> {
+	const approved = approvedFromPlan(await planLegacyRestore(env), requested);
+	if (!approved.length) throw new AdminError(409, 'nothing_to_restore', 'Nothing left to restore: the dry run has changed');
+	const job = await createJob(env, { kind: 'profiles.restore-legacy', targetKind: LEGACY_RESTORE_TARGET.kind, targetId: LEGACY_RESTORE_TARGET.id, params: { approved, ...(runId ? { runId } : {}) }, actorId });
+	return { job, approved };
+}
+
 /** The admin-jobs queue consumer's handlers, one per job kind (lib/admin/jobs.ts). */
 export const ADMIN_JOB_HANDLERS: Record<AdminJobKind, JobHandler> = {
 	'channel.sync-holds': (env, job) => syncChannelHolds(env as AdminServiceEnv, job),
@@ -970,4 +990,5 @@ export const ADMIN_JOB_HANDLERS: Record<AdminJobKind, JobHandler> = {
 	'video.purge': (env, job) => runVideoPurge(env as AdminServiceEnv, job),
 	'user.sync-holds': (env, job) => syncUserHolds(env as AdminServiceEnv, job),
 	'user.delete-data': (env, job) => runUserDelete(env as AdminServiceEnv, job),
+	'profiles.restore-legacy': (env, job) => runLegacyRestore(env as AdminServiceEnv, job),
 };
