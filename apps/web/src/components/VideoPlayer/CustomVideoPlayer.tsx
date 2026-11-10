@@ -45,7 +45,7 @@
 'use client';
 import { logger } from '@/lib/logger-client';
 
-import { useEffect, useRef, useState, useCallback, useSyncExternalStore } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useCallback, useSyncExternalStore } from 'react';
 import { createVideoPlayer, disposeVideoPlayer } from '@/lib/video/videojs-setup';
 import { isSameMediaUrl } from '@/lib/video/media-url';
 import { isLivePlayback } from '@/lib/video/live-state';
@@ -75,6 +75,7 @@ import { SettingsMenu } from './SettingsMenu';
 import { ProgressTooltip } from './ProgressTooltip';
 import { EndScreen, MiniPlayerButtons } from './PlayerOverlays';
 import { getPlayerUi, subscribePlayerUi } from '@/lib/video/player-ui';
+import { keepFrameInView } from '@/lib/video/theatre-scroll';
 import { applyBuiltInIcons } from '@/lib/video/components';
 import { ViewerCount } from './ViewerCount';
 import { KeyboardHelpModal } from './KeyboardHelpModal';
@@ -91,6 +92,9 @@ import type { Player } from 'video.js';
 import { hasErrorMethod, type ExtendedPlayer } from '@/lib/video/videojs';
 import type { PlayerTextTrack } from '@/lib/video/subtitle-tracks';
 import type { AnalyticsContext } from '@al-ummah/shared-types';
+
+// Layout effects only run in the browser; React 18 warns when the server render meets one
+const useBrowserLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 export interface CustomVideoPlayerProps {
   videoId: string;
@@ -964,6 +968,18 @@ export default function CustomVideoPlayer({
     io.observe(frame);
     return () => io.disconnect();
   }, [playerUi.miniPlayerAvailable, isPlaying]);
+
+  /**
+   * Theatre on or off keeps the frame's top in view (lib/video/theatre-scroll.ts). It runs in the
+   * same commit as the page's theatre layout, before paint, so the frame never shows off screen.
+   * The floating mini player is already in view.
+   */
+  const theatreSeenRef = useRef(playerUi.theatre);
+  useBrowserLayoutEffect(() => {
+    if (theatreSeenRef.current === playerUi.theatre) return;
+    theatreSeenRef.current = playerUi.theatre;
+    if (!mini) keepFrameInView(frameRef.current);
+  }, [playerUi.theatre, mini]);
 
   const closeMini = useCallback(() => {
     miniDismissedRef.current = true;

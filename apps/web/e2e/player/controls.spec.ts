@@ -139,6 +139,42 @@ test.describe('player controls', () => {
     await expect(page.getByTestId('watch-layout')).not.toHaveAttribute('data-theatre', '');
   });
 
+  for (const lang of ['en', 'ar'] as const) {
+    test(`theatre on and off keeps the player in view (${lang})`, async ({ page }) => {
+      const player = await openHarness(page, { lang });
+      await startPlayback(page, player);
+      await pauseAt(page, player, 5);
+      const layout = page.getByTestId('watch-layout');
+      const frameTop = () => player.evaluate((el) => Math.round(el.getBoundingClientRect().top));
+      const barBottom = () => page.evaluate(() => {
+        const header = document.querySelector('header');
+        const sticky = header && /sticky|fixed/.test(getComputedStyle(header).position);
+        return sticky ? Math.max(0, Math.round(header.getBoundingClientRect().bottom)) : 0;
+      });
+      // A viewer scrolled past the frame's top (and Firefox over WebDriver BiDi centres the button
+      // before it clicks, which does the same): the toggle shows the frame's top again
+      for (const on of [true, false]) {
+        await page.evaluate(() => window.scrollBy(0, 250));
+        expect(await frameTop()).toBeLessThan(0);
+        await player.evaluate((el) => (el as HTMLElement).focus({ preventScroll: true }));
+        await page.keyboard.press('t');
+        if (on) await expect(layout).toHaveAttribute('data-theatre', '');
+        else await expect(layout).not.toHaveAttribute('data-theatre');
+        await expect.poll(frameTop).toBeGreaterThanOrEqual(await barBottom());
+        expect(await frameTop()).toBeLessThan(page.viewportSize()!.height / 2);
+        await page.waitForTimeout(100);
+      }
+      // Clicking the button never leaves the frame's top off screen
+      const theatre = player.locator('.vjs-fanous-theatre');
+      for (const on of [true, false]) {
+        await player.hover();
+        await theatre.click();
+        await expect(theatre).toHaveAttribute('aria-pressed', String(on));
+        await expect.poll(frameTop).toBeGreaterThanOrEqual(await barBottom());
+      }
+    });
+  }
+
   test('embeds have no theatre, next or mini player', async ({ page }) => {
     const player = await openHarness(page, { watch: false });
     await startPlayback(page, player);
