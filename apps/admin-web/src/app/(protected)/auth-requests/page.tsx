@@ -68,7 +68,7 @@ export default async function AuthRequestsPage({ searchParams }: { searchParams:
             </thead>
             <tbody>
               {list.requests.map((r) => (
-                <tr key={r.id} className="border-t border-border" data-testid="auth-requests-row" data-request-id={r.id} data-delivery={r.delivery.status} data-status={r.status ?? ''}>
+                <tr key={r.id} className="border-t border-border" data-testid="auth-requests-row" data-request-id={r.id} data-auth-request-id={r.authRequestId ?? ''} data-delivery={r.delivery.status} data-status={r.status ?? ''}>
                   <td className="p-3 whitespace-nowrap">{formatDate(r.createdAt, locale, true)}</td>
                   <td className="p-3">
                     <Link href={`/auth-requests/users/${encodeURIComponent(r.subjectUserId)}`} className={linkClass} dir="ltr">{r.subjectUserId}</Link>

@@ -104,6 +104,7 @@ export function UserAuthRequestsPanel({
               className={`border rounded p-3 ${authRequestNeedsAttention(r) ? 'border-danger-border' : 'border-border'}`}
               data-testid="auth-request-row"
               data-request-id={r.id}
+              data-auth-request-id={r.authRequestId ?? ''}
               data-delivery={r.delivery.status}
               data-status={r.status ?? ''}
             >

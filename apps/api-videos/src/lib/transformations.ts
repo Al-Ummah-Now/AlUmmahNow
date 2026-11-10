@@ -4,7 +4,7 @@
 import { z } from "zod";
 import { Video as BusinessVideo, Channel as BusinessChannel, Profile as BusinessProfile, Playlist as BusinessPlaylist, Comment as BusinessComment } from "./types";
 import { VideoView, ChannelView, ProfileView, PlaylistView, CommentView } from "./model/view";
-import { isShort } from "@al-ummah/shared-types";
+import { can, channelRoleOf, isShort, type ChannelRoleSource } from "@al-ummah/shared-types";
 import { isVideoReady } from './visibility';
 import { getCommentSettings, isCommentVisible, StoredComment } from './comments';
 
@@ -23,6 +23,31 @@ export function publicVideoFields<T extends Record<string, any>>(video: T): Omit
         ...(processingIssue ? { processingIssueKind: processingIssue.kind } : {}),
         ...(hideThumbnail ? { thumbnailUrl: undefined, thumbnailSizes: undefined } : {}),
     } as never;
+}
+
+/**
+ * The processing issue with its reason (why an upload failed or stalled), for
+ * the people who can act on it: the video's owner and channel members who may
+ * upload (they re-upload it). Visitors only ever get processingIssueKind from
+ * publicVideoFields(); the check-loop state stays server-side for everyone.
+ * Spread after publicVideoFields() in list views.
+ */
+export function uploaderProcessingIssue(
+    video: { userId?: string | null; processingIssue?: { kind?: string; reason?: string; at?: string } | null },
+    channel: ChannelRoleSource | null | undefined,
+    viewerId: string | null | undefined,
+): { processingIssue?: { kind: 'encode_failed' | 'needs_reupload' | 'stalled'; reason?: string; at?: string } } {
+    const issue = video.processingIssue;
+    if (!issue?.kind || !viewerId) return {};
+    const mayUpload = (!!video.userId && video.userId === viewerId) || can(channelRoleOf(channel, viewerId), 'video.upload');
+    if (!mayUpload) return {};
+    return {
+        processingIssue: {
+            kind: issue.kind as 'encode_failed' | 'needs_reupload' | 'stalled',
+            ...(issue.reason ? { reason: issue.reason } : {}),
+            ...(issue.at ? { at: issue.at } : {}),
+        },
+    };
 }
 
 // Transform a business video to a view model

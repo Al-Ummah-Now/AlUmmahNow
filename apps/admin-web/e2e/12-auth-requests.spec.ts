@@ -72,7 +72,12 @@ async function registerTestUser(browser: import('@playwright/test').Browser): Pr
   }
 }
 
-async function sendRequest(page: Page, userId: string, action: string, reason: string): Promise<string> {
+/**
+ * Sends a request and waits until auth has it. Returns both ids: the videos
+ * admin's own row id (areq_…, its list and user pages) and auth's request id
+ * (auth's admin dashboard and client API know only that one).
+ */
+async function sendRequest(page: Page, userId: string, action: string, reason: string): Promise<{ id: string; authId: string }> {
   await page.goto(`/auth-requests/users/${encodeURIComponent(userId)}`);
   const panel = page.getByTestId('auth-requests-panel');
   await expect(panel).toBeVisible();
@@ -94,11 +99,16 @@ async function sendRequest(page: Page, userId: string, action: string, reason: s
   await expect(row).toHaveAttribute('data-delivery', 'sent', { timeout: 60_000 });
   await expect(row).toHaveAttribute('data-status', 'pending');
   await expect(row.getByTestId('auth-request-failed')).toHaveCount(0);
-  return (await row.getAttribute('data-request-id'))!;
+  const id = (await row.getAttribute('data-request-id'))!;
+  const authId = (await row.getAttribute('data-auth-request-id')) ?? '';
+  expect(authId, 'a sent request carries auth\'s request id').toMatch(/\S/);
+  expect(authId).not.toBe(id);
+  return { id, authId };
 }
 
 /** Opens the request in the auth admin dashboard as the QA admin (SSO, or the password form). */
-async function openInAuthAdmin(page: Page, requestId: string) {
+async function openInAuthAdmin(page: Page, authRequestId: string) {
+  const requestId = authRequestId;
   await page.goto(`${AUTH_ADMIN_URL}/moderation/${requestId}`);
   await page.waitForURL((url) => url.href.startsWith(AUTH_ADMIN_URL) || url.href.startsWith(OPENAUTH_URL), { timeout: 45_000 });
   if (page.url().startsWith(OPENAUTH_URL)) {
@@ -146,8 +156,8 @@ test.describe('Requests to auth', () => {
     const authAdmin = await page.context().newPage();
 
     // 1) Rejected: auth's note comes back to the videos admin
-    const rejectedId = await sendRequest(page, subject.id, 'suspend_account', 'E2E: please suspend this account');
-    await openInAuthAdmin(authAdmin, rejectedId);
+    const { id: rejectedId, authId: rejectedAuthId } = await sendRequest(page, subject.id, 'suspend_account', 'E2E: please suspend this account');
+    await openInAuthAdmin(authAdmin, rejectedAuthId);
     await expect(authAdmin.getByTestId('moderation-subject-email')).toHaveText(subject.email);
     await expect(authAdmin.getByTestId('moderation-reason')).toContainText('E2E: please suspend');
     await authAdmin.locator('textarea#note').fill('E2E: not enough evidence');
@@ -157,8 +167,8 @@ test.describe('Requests to auth', () => {
     await expect(page.locator(`[data-request-id="${rejectedId}"]`).getByTestId('auth-request-decision')).toContainText('E2E: not enough evidence');
 
     // 2) Approved: auth runs the action (deletes the test account) and the videos admin shows "Actioned"
-    const approvedId = await sendRequest(page, subject.id, 'delete_account', 'E2E: delete this test account');
-    await openInAuthAdmin(authAdmin, approvedId);
+    const { id: approvedId, authId: approvedAuthId } = await sendRequest(page, subject.id, 'delete_account', 'E2E: delete this test account');
+    await openInAuthAdmin(authAdmin, approvedAuthId);
     authAdmin.once('dialog', (dialog) => dialog.accept());
     await authAdmin.getByRole('button', { name: 'Approve and run' }).click();
     // Auth runs the action from its moderation-actions queue; its page refreshes while queued

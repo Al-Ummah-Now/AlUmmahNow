@@ -20,6 +20,17 @@ export async function uiLogin(page: Page, account: Account, expectedPath: RegExp
   await page.waitForURL((url) => expectedPath.test(url.pathname), { timeout: 45_000 });
 }
 
+/**
+ * Pick a theme in the header select and wait for the server refresh it starts
+ * (PreferencesControls: router.refresh() in a transition, aria-busy while
+ * pending). Navigating while it is in flight is interrupted by it in WebKit.
+ */
+export async function chooseTheme(page: Page, theme: Theme) {
+  const select = page.getByTestId('theme-select');
+  await select.selectOption(theme);
+  await expect(page.locator('[aria-busy]').filter({ has: select })).toHaveAttribute('aria-busy', 'false', { timeout: 15_000 });
+}
+
 /** Persist UI preferences the same way the preference selects do. */
 export async function setPreferences(page: Page, prefs: { locale?: Locale; theme?: Theme }) {
   const url = new URL(page.url() === 'about:blank' ? process.env.ADMIN_WEB_URL || 'https://admin.qa.alummahnow.net' : page.url());
