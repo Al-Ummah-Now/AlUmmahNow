@@ -23,16 +23,18 @@ import {
 	type CreatorTier,
 	type CreatorTierAssignment,
 	type CreatorTierSource,
+	isSuperAdmin as isSuperAdminRole,
 } from '@al-ummah/shared-types';
-import { canClaimOfficialHandles } from './channelHandles';
+
+import { logger } from './logger';
 
 const SHIPPED_TIERS: CreatorTier[] = [
 	{ ...DEFAULT_CREATOR_TIER, updatedAt: null, updatedBy: null },
 	{ ...DEFAULT_UNLIMITED_TIER, updatedAt: null, updatedBy: null },
 ];
 
-/** The videos "Super Admin" role (same check as the official handles). */
-export const isSuperAdmin = (roles: readonly string[] | undefined | null) => canClaimOfficialHandles(roles);
+/** The videos "Super Admin" role (the shared role check, packages/shared-types roles.ts). */
+export const isSuperAdmin = (roles: readonly string[] | undefined | null) => isSuperAdminRole(roles);
 
 export class CreatorTierError extends Error {
 	constructor(readonly status: number, readonly code: string, message = code) {
@@ -125,6 +127,30 @@ export interface ResolvedCreator {
 	via: 'tier' | 'super_admin' | 'none';
 }
 
+/** Who stored a super admin's automatic Unlimited assignment */
+export const SUPER_ADMIN_ASSIGNER = 'system:super-admin';
+
+/**
+ * Super admins hold a stored Unlimited assignment too (owner, 2026-11-10), so
+ * their access shows in the admin and doesn't depend on the role reaching
+ * every request. Written once, on first sight; never overwrites a tier an
+ * admin set. A failed write is logged, never blocks the request (the role
+ * check above already granted Unlimited).
+ */
+async function storeSuperAdminTier(db: D1Database, userId: string): Promise<void> {
+	try {
+		await db
+			.prepare(
+				`INSERT INTO creator_tier_assignments (user_id, tier_id, source, assigned_by, assigned_at) VALUES (?, 'unlimited', 'admin', ?, ?)
+				 ON CONFLICT (user_id) DO NOTHING`,
+			)
+			.bind(userId, SUPER_ADMIN_ASSIGNER, new Date().toISOString())
+			.run();
+	} catch (error) {
+		logger.warn('[Creator] Could not store the super admin Unlimited tier', { userId, error: error instanceof Error ? error.message : String(error) });
+	}
+}
+
 /**
  * The tier that applies to `userId` acting (optionally) on a channel owned by
  * `channelOwnerId`. Throws when D1 cannot answer (fail closed).
@@ -135,7 +161,10 @@ export async function resolveCreator(
 ): Promise<ResolvedCreator> {
 	const unlimited = { ...DEFAULT_UNLIMITED_TIER, updatedAt: null, updatedBy: null };
 	const ownChannel = !who.channelOwnerId || who.channelOwnerId === who.userId;
-	if (ownChannel && isSuperAdmin(who.roles)) return { subjectId: who.userId, tier: unlimited, via: 'super_admin' };
+	if (ownChannel && isSuperAdmin(who.roles)) {
+		await storeSuperAdminTier(db, who.userId);
+		return { subjectId: who.userId, tier: unlimited, via: 'super_admin' };
+	}
 	const subjectId = ownChannel ? who.userId : (who.channelOwnerId as string);
 	const assignment = await readAssignment(db, subjectId);
 	if (!assignment) {

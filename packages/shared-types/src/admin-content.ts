@@ -11,6 +11,7 @@
  */
 
 import type { CreatorTierAssignment } from './creator-tiers';
+import { normalizeRole } from './roles';
 
 // ---------------------------------------------------------------------------
 // Permissions
@@ -43,15 +44,11 @@ export const ROLE_CONTENT_PERMISSIONS: Readonly<Record<string, readonly AdminCon
   moderator: [],
 };
 
-function normalizeRoleId(role: unknown): string {
-  return String(role ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_');
-}
-
 /** Every permission granted by any of the roles (display names or ids). */
 export function contentPermissionsFor(roles: readonly unknown[] | undefined | null): AdminContentPermission[] {
   const granted = new Set<AdminContentPermission>();
   for (const role of roles ?? []) {
-    for (const permission of ROLE_CONTENT_PERMISSIONS[normalizeRoleId(role)] ?? []) granted.add(permission);
+    for (const permission of ROLE_CONTENT_PERMISSIONS[normalizeRole(role)] ?? []) granted.add(permission);
   }
   return ADMIN_CONTENT_PERMISSIONS.filter((p) => granted.has(p));
 }

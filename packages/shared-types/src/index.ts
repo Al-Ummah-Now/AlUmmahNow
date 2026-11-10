@@ -81,3 +81,4 @@ export * from './channel-roles';
 // Creator tiers: who may upload and create channels (videos admin)
 export * from './creator-tiers';
 export * from './thumbnail-crop';
+export * from './roles';

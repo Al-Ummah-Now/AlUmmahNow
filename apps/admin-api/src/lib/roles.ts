@@ -5,25 +5,15 @@
  * "Admin", "Moderator"). Everything in this service compares against
  * snake_case ids, so roles are normalized once when the token is read.
  *
- * This module has no imports so it can be unit tested without the Workers runtime.
+ * Role names are read by the shared helper (packages/shared-types roles.ts).
  */
+import { normalizeRole, normalizeRoles } from '@al-ummah/shared-types';
 
 export const ADMIN_ROLE_IDS = ['super_admin', 'admin'] as const;
 export const MODERATOR_ROLE_IDS = [...ADMIN_ROLE_IDS, 'moderator'] as const;
 
-/** "Super Admin" -> "super_admin", "admin" -> "admin". */
-export function normalizeRole(role: unknown): string {
-  return String(role ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_');
-}
-
-/** Normalize a token's role claim, dropping empty and non-string entries. */
-export function normalizeRoles(roles: unknown): string[] {
-  if (!Array.isArray(roles)) return [];
-  return roles
-    .filter((role): role is string => typeof role === 'string')
-    .map(normalizeRole)
-    .filter((role) => role.length > 0);
-}
+// One reading of role names for every app (packages/shared-types roles.ts)
+export { normalizeRole, normalizeRoles };
 
 /** True for super admins and admins (not moderators). */
 export function hasAdminRole(roles: readonly string[] | undefined): boolean {

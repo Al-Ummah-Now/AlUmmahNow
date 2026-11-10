@@ -522,6 +522,17 @@ describe('creator tiers: channels, access and admin', () => {
     assert.deepEqual([owner.via, owner.tier?.unlimited, owner.limits, owner.maxChannels], ['super_admin', true, null, null]);
   });
 
+  it('a super admin gets a stored Unlimited tier on first sight: still Unlimited when a later token lacks the role; an admin-set tier is kept', async () => {
+    const h = await harness();
+    await creatorAccess(h.d1, 'boss', ['Super Admin']);
+    const later = await creatorAccess(h.d1, 'boss', []);
+    assert.deepEqual([later.canUpload, later.tier?.id, later.via], [true, 'unlimited', 'tier']);
+    await assignTier(h.d1, 'boss2', 'creator', 'admin-1');
+    await creatorAccess(h.d1, 'boss2', ['super_admin']);
+    const kept = await creatorAccess(h.d1, 'boss2', []);
+    assert.equal(kept.tier?.id, 'creator', 'an admin-set tier is never overwritten');
+  });
+
   it('tier definitions fall back to the shipped defaults, validate, and cannot be deleted while held', async () => {
     const h = await harness();
     h.db.db.exec("DELETE FROM creator_tiers WHERE id IN ('creator', 'unlimited')");

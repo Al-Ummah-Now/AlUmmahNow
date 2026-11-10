@@ -148,7 +148,22 @@ function toShelfVideo(video: StoredVideo, channel?: StoredChannel | null): Video
  * by the caller). Never throws: a failing source is logged and the section is
  * reported empty with `loadFailed`, so one section can't fail the Home tab.
  */
-export async function populateSection(section: ChannelSection | ChannelSectionView, env: any, channel?: StoredChannel | null): Promise<PopulatedSection> {
+/**
+ * How upload sections treat Shorts. Recent and Popular uploads list every
+ * upload, Shorts included, unless the channel has its own Shorts section
+ * (then they stay long-form so nothing is listed twice). Owner, 2026-11-10.
+ */
+export interface SectionPopulateOptions {
+  /** The channel has a visible Shorts section */
+  hasShortsSection?: boolean;
+}
+
+export async function populateSection(
+  section: ChannelSection | ChannelSectionView,
+  env: any,
+  channel?: StoredChannel | null,
+  options: SectionPopulateOptions = {},
+): Promise<PopulatedSection> {
   const owner = channel ?? (await new R2Repository<StoredChannel>(env.channels).getObject(section.channelId));
   try {
     if ((section.type === 'subscribed_channels' || section.type === 'liked_videos') && !hasValidSectionConsent(section as ChannelSection, owner)) {
@@ -157,7 +172,7 @@ export async function populateSection(section: ChannelSection | ChannelSectionVi
     if (section.type === 'community_posts' && !(await isCommunityTabVisible(env, section.channelId))) {
       return { content: {}, isEmpty: true, emptyHint: 'communityTabHidden' };
     }
-    const content = await populateSectionContent(section, env, owner);
+    const content = await populateSectionContent(section, env, owner, options);
     const isEmpty = isSectionContentEmpty(section.type, content);
     return isEmpty ? { content, isEmpty, emptyHint: 'noContent' } : { content, isEmpty };
   } catch (error) {
@@ -201,10 +216,12 @@ export async function populateSectionContent(
   section: ChannelSection | ChannelSectionView,
   env: any,
   channel?: StoredChannel | null,
+  options: SectionPopulateOptions = {},
 ): Promise<SectionContent> {
   const s = section as ChannelSection & { content?: ChannelSectionView['content'] };
   const itemCount = clampItemCount(section.type as never, section.itemCount || undefined);
   const owner = channel ?? (await new R2Repository<StoredChannel>(env.channels).getObject(section.channelId));
+  const uploadsForm: UploadForm = options.hasShortsSection ? 'long' : 'all';
 
   switch (section.type) {
     case 'channel_spotlight':
@@ -212,9 +229,9 @@ export async function populateSectionContent(
     case 'featured_videos':
       return { videos: await getVideosByIds(s.videoIds?.length ? s.videoIds : s.content?.videoIds ?? [], env) };
     case 'recent_uploads':
-      return { videos: await getChannelUploads(section.channelId, itemCount, env, 'latest', 'long', owner) };
+      return { videos: await getChannelUploads(section.channelId, itemCount, env, 'latest', uploadsForm, owner) };
     case 'popular_uploads':
-      return { videos: await getChannelUploads(section.channelId, itemCount, env, 'popular', 'long', owner) };
+      return { videos: await getChannelUploads(section.channelId, itemCount, env, 'popular', uploadsForm, owner) };
     case 'shorts':
       return { videos: await getChannelUploads(section.channelId, itemCount, env, s.sort === 'popular' ? 'popular' : 'latest', 'shorts', owner) };
     case 'live_streams':
@@ -238,6 +255,9 @@ export async function populateSectionContent(
   }
 }
 
+/** Long-form only, Shorts only, or every upload (never live streams) */
+type UploadForm = 'long' | 'shorts' | 'all';
+
 /** Parallel reads per batch when the index cannot answer and the bucket is scanned */
 const SCAN_CONCURRENCY = 25;
 
@@ -251,7 +271,7 @@ async function getChannelUploads(
   limit: number,
   env: any,
   sort: 'latest' | 'popular',
-  form: 'long' | 'shorts',
+  form: UploadForm,
   channel?: StoredChannel | null,
 ): Promise<VideoObject[]> {
   const videoRepo = new R2Repository<StoredVideo>(env.videos);
@@ -260,13 +280,14 @@ async function getChannelUploads(
     !!video &&
     video.channelId === channelId &&
     isListableVideo(video) &&
-    (form === 'shorts' ? !video.isLive && isShort(video) : !isShort(video) && !video.isLive);
+    !video.isLive &&
+    (form === 'all' || (form === 'shorts' ? isShort(video) : !isShort(video)));
 
   const indexed = await channelVideosFromIndex<StoredVideo>(env, {
     channelId,
     cursor: undefined,
     limit,
-    query: { sort, privateFor: null, isPublic: true, ...(form === 'shorts' ? { shortsOnly: true } : { longFormOnly: true }) },
+    query: { sort, privateFor: null, isPublic: true, ...(form === 'shorts' ? { shortsOnly: true } : form === 'long' ? { longFormOnly: true } : { notLive: true }) },
     load: (id) => videoRepo.getObject(id),
     // The index already applied the Short rule; re-check only visibility so the rule lives in one place
     isListed: (video): video is StoredVideo => !!video && video.channelId === channelId && isListableVideo(video),
@@ -484,8 +505,9 @@ export async function transformChannelSectionWithContent(
   section: ChannelSection,
   env: any,
   channel?: StoredChannel | null,
+  options: SectionPopulateOptions = {},
 ): Promise<ChannelSectionView & { populatedContent: SectionContent; isEmpty: boolean; emptyHint?: EmptyHint }> {
-  const populated = await populateSection(section, env, channel);
+  const populated = await populateSection(section, env, channel, options);
   return {
     ...transformChannelSectionToView(section, channel),
     populatedContent: populated.content,
