@@ -135,17 +135,27 @@ async function interceptTus(page: Page, inject: Injection): Promise<TusLog> {
     if (injected) {
       if (method === 'PATCH') log.patches.push({ uploadId, offset, status: injected.fulfill });
       if (method === 'HEAD') log.heads.push({ uploadId, status: injected.fulfill });
-      return route.fulfill({ status: injected.fulfill, headers: cors, body: method === 'HEAD' ? undefined : '{"error":"injected"}' });
+      return route.fulfill({ status: injected.fulfill, headers: { ...cors, 'x-e2e-injected': '1' }, body: method === 'HEAD' ? undefined : '{"error":"injected"}' });
     }
-    const res = await route.fetch();
+    // Untouched requests go to the proxy as they are (route.fetch would drop
+    // the chunk body in WebKit); their answers are logged from the response.
+    return route.continue();
+  });
+  page.on('response', (res) => {
+    const req = res.request();
+    const url = new URL(req.url());
+    if (!/\/api\/videos\/tus(\/[^/]+)?$/.test(url.pathname)) return;
+    const method = req.method();
     const status = res.status();
-    if (method === 'POST') {
-      const location = res.headers()['location'] ?? '';
-      log.posts.push({ status, videoId: location.split('/').pop()?.split('.')[1] ?? '' });
+    if (method === 'OPTIONS') return;
+    const uploadId = url.pathname.split('/api/videos/tus')[1]?.replace(/^\//, '') ?? '';
+    const headers = res.headers();
+    if (method === 'POST') log.posts.push({ status, videoId: (headers['location'] ?? '').split('/').pop()?.split('.')[1] ?? '' });
+    if (method === 'PATCH') {
+      if (headers['x-e2e-injected']) return;
+      log.patches.push({ uploadId, offset: Number(req.headers()['upload-offset'] ?? -1), status, acked: Number(headers['upload-offset'] ?? -1) });
     }
-    if (method === 'PATCH') log.patches.push({ uploadId, offset, status, acked: Number(res.headers()['upload-offset'] ?? -1) });
-    if (method === 'HEAD') log.heads.push({ uploadId, status });
-    return route.fulfill({ response: res });
+    if (method === 'HEAD' && !headers['x-e2e-injected']) log.heads.push({ uploadId, status });
   });
   return log;
 }
