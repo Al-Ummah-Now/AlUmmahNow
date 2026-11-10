@@ -12,6 +12,8 @@ import { Channel as BusinessChannel, Profile as BusinessProfile } from './types'
 import { PublicChannelView, PublicProfileView } from './model/view';
 import { safeChannelLinks } from './channelAbout';
 import { subscriberCounts } from './subscription-store';
+import { channelVideoCountsFromIndex, OwnershipEnv } from './search/ownership';
+import { logger } from './logger';
 
 type StoredChannel = z.infer<typeof BusinessChannel> & { isVerified?: boolean };
 type StoredProfile = z.infer<typeof BusinessProfile>;
@@ -64,7 +66,43 @@ export function toPublicProfile(profile: StoredProfile): z.infer<typeof PublicPr
 }
 
 /** toPublicChannel for many channels, with their subscriber counts from one D1 query. */
-export async function toPublicChannels(db: D1Database | undefined, channels: StoredChannel[]): Promise<z.infer<typeof PublicChannelView>[]> {
-	const counts = await subscriberCounts(db, channels);
-	return channels.map((channel) => toPublicChannel(channel, channel?.id ? counts.get(channel.id) : undefined));
+/**
+ * Public channel views. With `env` (the ownership index), `videosCount` is the
+ * channel's public, published, ready videos counted in the index: uploads
+ * never append to the stored `channel.videos`, which therefore stays [] (the
+ * 2026-11-10 "0 videos" badge). Without the index the stored count is kept.
+ */
+export async function toPublicChannels(
+	db: D1Database | undefined,
+	channels: StoredChannel[],
+	env?: OwnershipEnv,
+): Promise<z.infer<typeof PublicChannelView>[]> {
+	const [counts, videoCounts] = await Promise.all([
+		subscriberCounts(db, channels),
+		env
+			? channelVideoCountsFromIndex(env, channels.map((channel) => channel?.id)).catch((error) => {
+					logger.warn('[PublicViews] Video counts from index failed', { error: error instanceof Error ? error.message : String(error) });
+					return null;
+				})
+			: Promise.resolve(null),
+	]);
+	return channels.map((channel) => {
+		const view = toPublicChannel(channel, channel?.id ? counts.get(channel.id) : undefined);
+		const indexed = channel?.id ? videoCounts?.get(channel.id) : undefined;
+		if (indexed !== undefined) view.videosCount = indexed;
+		return view;
+	});
+}
+
+/**
+ * Set a channel view's `videosCount` from the ownership index (the owner and
+ * create/update responses build their view from the stored channel, whose
+ * `videos` array uploads never update). Keeps the stored count without the index.
+ */
+export async function withIndexedVideoCount<T extends { id?: string; videosCount?: number }>(env: OwnershipEnv, view: T): Promise<T> {
+	if (!view?.id) return view;
+	const counts = await channelVideoCountsFromIndex(env, [view.id]).catch(() => null);
+	const indexed = counts?.get(view.id);
+	if (indexed !== undefined) view.videosCount = indexed;
+	return view;
 }

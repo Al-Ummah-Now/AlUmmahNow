@@ -3,6 +3,7 @@ import { z } from "zod";
 import { Channel as BusinessChannel, ResponseError } from "../../lib/types";
 import { ChannelUpdateInput } from "../../lib/model/input";
 import { ChannelView } from "../../lib/model/view";
+import { withIndexedVideoCount } from "../../lib/public-views";
 import { transformChannelToView } from "../../lib/transformations";
 import R2Repository from "../../lib/r2Repo";
 import { patchOwnedRecord } from '../../lib/videoWrites';
@@ -183,7 +184,7 @@ export class ChannelUpdate extends AuthenticatedRoute {
 		});
         
         // Transform to view model for response
-        const channelView = transformChannelToView(updatedChannel);
+        const channelView = await withIndexedVideoCount(c.env as never, transformChannelToView(updatedChannel));
 
         return {
             success: true,

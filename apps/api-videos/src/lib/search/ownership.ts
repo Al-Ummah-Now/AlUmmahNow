@@ -247,6 +247,32 @@ export function channelTotalsFromIndex(env: OwnershipEnv, channelId: string): Pr
   });
 }
 
+/**
+ * Public published video counts of several channels in one query (same rule
+ * as channelTotalsFromIndex). Channels with no such video map to 0. Null when
+ * the index is unavailable or incomplete (callers keep the stored count).
+ */
+export function channelVideoCountsFromIndex(env: OwnershipEnv, channelIds: string[]): Promise<Map<string, number> | null> {
+  const ids = [...new Set(channelIds.filter(Boolean))];
+  if (!ids.length) return Promise.resolve(new Map());
+  return whenComplete(env, 'video', async db => {
+    const counts = new Map<string, number>(ids.map(id => [id, 0]));
+    // D1 caps bound parameters per statement; stay well under it
+    for (let i = 0; i < ids.length; i += 50) {
+      const chunk = ids.slice(i, i + 50);
+      const placeholders = chunk.map(() => '?').join(', ');
+      const { results } = await db.prepare(
+        `SELECT channel_id, COUNT(*) AS videos FROM ${OWNERSHIP_TABLE}
+         WHERE kind = 'video' AND channel_id IN (${placeholders}) AND is_deleted = 0 AND is_hidden = 0 AND is_public = 1
+           AND (schedule_status IS NULL OR schedule_status = 'published')
+         GROUP BY channel_id`,
+      ).bind(...chunk).all<{ channel_id: string; videos: number }>();
+      for (const row of results ?? []) counts.set(row.channel_id, Number(row.videos) || 0);
+    }
+    return counts;
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Rebuild pass
 // ---------------------------------------------------------------------------

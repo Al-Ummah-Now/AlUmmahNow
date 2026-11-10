@@ -119,7 +119,7 @@ export class ChannelsList extends OptionalAuthRoute {
 		}
 
 		// Transform business channels to view models
-		const channelViews = await toPublicChannels(c.env.NOTIFICATIONS_DB, filteredChannels);
+		const channelViews = await toPublicChannels(c.env.NOTIFICATIONS_DB, filteredChannels, c.env as never);
 
 		let response: PaginationResponse<any>;
 		if (!filteredChannels || filteredChannels.length === 0) {

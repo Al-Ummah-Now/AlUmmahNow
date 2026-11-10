@@ -251,11 +251,19 @@ describe('endpoints served from the ownership index', () => {
 		const app = buildApp(r => r.get('/api/channels', ChannelsList), { userId: 'owner' });
 		const before = await (await app.request('/api/channels?limit=100', {}, scan)).json() as any;
 		const after = await (await app.request('/api/channels?limit=100', {}, indexed)).json() as any;
-		assert.deepEqual(after, before);
+		// videosCount differs on purpose: the index counts the channel's public
+		// published videos, the scan path keeps the stored (never updated) array
+		const strip = (body: any) => ({ ...body, data: body.data.map(({ videosCount: _v, ...rest }: any) => rest) });
+		assert.deepEqual(strip(after), strip(before));
 		assert.deepEqual(after.data.map((c: any) => c.id), ['mine1', 'mine2']);
+		const requestQueries = db.queries;
+		for (const channel of after.data) {
+			const totals = await channelTotalsFromIndex(indexed as never, channel.id);
+			assert.equal(channel.videosCount, totals?.videosCount, `${channel.id} count from the index`);
+		}
 		assert.ok(scan.channels.calls > 250, `scan read ${scan.channels.calls} objects`);
 		assert.equal(indexed.channels.calls, 2, 'one GET per owned, non-deleted channel; no list');
-		assert.equal(db.queries, 2, 'completeness check + id lookup');
+		assert.equal(requestQueries, 4, 'completeness check + id lookup + video completeness + one count query');
 	});
 
 	it('GET /api/channels ("mine") falls back to the scan and heals while the index is incomplete', async () => {

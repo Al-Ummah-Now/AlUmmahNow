@@ -95,7 +95,7 @@ export class ChannelByHandleFetch extends OptionalAuthRoute {
 			logger.debug('[ChannelByHandle] Not found', { handle, channelId });
 			return c.json({ success: false, error: "Object not found" }, 404);
 		}
-		const [view] = await toPublicChannels(c.env.NOTIFICATIONS_DB, [channel]);
+		const [view] = await toPublicChannels(c.env.NOTIFICATIONS_DB, [channel], c.env as never);
 		return view;
 	}
 }
