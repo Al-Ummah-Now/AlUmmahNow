@@ -27,7 +27,7 @@ export const cropPath = (app: AppId) => join(CROPS, `${app}.webp`);
 
 /** The crop downscaled to an exact size (Lanczos), full-colour PNG. */
 export async function downscale(app: AppId, size: number): Promise<Uint8Array> {
-  const buf = await sharp(cropPath(app)).resize(size, size, { kernel: 'lanczos3' }).png({ compressionLevel: 9, effort: 10 }).toBuffer();
+  const buf = await sharp(cropPath(app)).resize(size, size, { kernel: 'lanczos3' }).png({ compressionLevel: 9, palette: false }).toBuffer();
   return new Uint8Array(buf);
 }
 

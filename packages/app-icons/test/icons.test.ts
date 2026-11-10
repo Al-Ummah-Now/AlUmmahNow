@@ -67,6 +67,8 @@ test('every app builds every size from its crop', async () => {
       assert.deepEqual(pngSize(files.get(path)!), { width: size, height: size }, `${app} ${path}`);
     }
     assert.ok(!files.has('icon-maskable-512.png'));
+    // true colour (RGB or RGBA), never a quantised palette: the art is used as is
+    for (const path of ['apple-touch-icon.png', 'icon-192.png', 'icon-512.png']) assert.ok([2, 6].includes(files.get(path)![25]), `${app} ${path} colour type`);
   }
 });
 
