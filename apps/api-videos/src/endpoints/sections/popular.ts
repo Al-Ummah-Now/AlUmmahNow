@@ -1,3 +1,4 @@
+import { isShortOrFlag } from "@al-ummah/shared-types";
 import { PublicRoute, AppContext } from "../../base";
 import { isVideoPubliclyVisible } from "../../lib/visibility";
 import { Num, Str } from "chanfana";
@@ -22,6 +23,7 @@ const VideoResponseSchema = z.object({
   views: z.number(),
   likesCount: z.number(),
   dislikesCount: z.number(),
+  isShort: z.boolean().optional(),
   commentsCount: z.number(),
   duration: z.number().optional(),
   category: z.nativeEnum(VideoCategory).optional(),
@@ -270,6 +272,8 @@ function transformVideoForResponse(video: VideoObject, engagementRate?: number) 
     views: video.views || 0,
     likesCount: video.likesCount || 0,
     dislikesCount: video.dislikesCount || 0,
+    // Shared rule (search payloads carry it; older entries are computed)
+    isShort: isShortOrFlag(video),
     commentsCount: video.commentsCount || 0,
     duration: video.duration,
     category: video.category,

@@ -6,6 +6,7 @@
 import { Timestamps, SoftDelete, Moderation } from './common';
 import { SubtitleTrack } from './subtitle';
 import { VideoCategory } from './upload-defaults';
+import type { VideoFormat } from './video-format';
 
 // Re-export VideoCategory for convenience
 export { VideoCategory };
@@ -58,7 +59,10 @@ export interface VideoObject extends Timestamps, SoftDelete, Moderation {
   width?: number;
   height?: number;
   availableResolutions?: string[];
-  format?: string;
+  /** Uploader / admin choice of Short or video; absent = detected (see video-format.ts). */
+  format?: VideoFormat;
+  /** Short by the shared rule; computed by the API (classifyVideoFormat), never stored */
+  isShort?: boolean;
   fileSize?: number;
 
   // Engagement metrics
@@ -136,6 +140,8 @@ export interface VideoCreateRequest {
   tags?: string[];
   category?: VideoCategory;
   language?: string;
+  /** Short or video; 'auto' (or absent) detects it (see video-format.ts) */
+  format?: VideoFormat | 'auto';
 }
 
 export interface VideoUpdateRequest {
@@ -149,6 +155,8 @@ export interface VideoUpdateRequest {
   category?: VideoCategory;
   language?: string;
   commentSettings?: VideoCommentSettings;
+  /** Short or video; 'auto' clears the choice so it is detected again */
+  format?: VideoFormat | 'auto';
 }
 
 /** Comments on a video: on, held for the owner's review, or off */

@@ -76,6 +76,8 @@ export interface InitiateMetadata {
   isPublic?: boolean;
   tags?: string;
   category?: string;
+  /** Upload as Short / as video; 'auto' detects it */
+  format?: 'auto' | 'short' | 'video';
   fileSize: number;
   mimeType: string;
   thumbnail?: { type: 'auto' | 'custom'; data?: string; position?: number; filename?: string };

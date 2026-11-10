@@ -7,7 +7,6 @@
  * a `t=` link, a muted preview that never plays, or scrubbing the bar without
  * playing records nothing.
  */
-import { SHORT_VIDEO_MAX_SECONDS } from '@al-ummah/shared-types';
 import type { WatchProgress } from '@/services/api/watch-history';
 
 /** Seconds of real playback in this page before any progress is saved. */
@@ -32,13 +31,13 @@ const MAX_PLAYBACK_STEP_SECONDS = 1.5;
 /** The position to open the player at, or null to start from the beginning. */
 export function resumePosition(
   progress: Pick<WatchProgress, 'currentTime' | 'duration' | 'completed'> | null | undefined,
-  isLive = false
+  isLive = false,
+  isShort = false
 ): number | null {
-  if (!progress || isLive || progress.completed) return null;
+  // Shorts (Lamahat; shared rule in shared-types video-format.ts) always start from the beginning
+  if (!progress || isLive || isShort || progress.completed) return null;
   const { currentTime, duration } = progress;
   if (!Number.isFinite(currentTime) || !Number.isFinite(duration) || duration <= 0) return null;
-  // Shorts (Lamahat) always start from the beginning
-  if (duration <= SHORT_VIDEO_MAX_SECONDS) return null;
   if (currentTime < RESUME_MIN_POSITION_SECONDS) return null;
   if (currentTime / duration > RESUME_MAX_RATIO) return null;
   if (duration - currentTime < RESUME_END_MARGIN_SECONDS) return null;

@@ -574,6 +574,14 @@ export const AR_TRANSLATIONS: AppTranslations = {
     shortVideos: 'قصيرة (≤٣ دقائق)',
     standardVideos: 'عادية (٣-٢٠ دقيقة)',
     longVideos: 'طويلة (>٢٠ دقيقة)',
+    formatLabel: 'مقطع قصير أو فيديو',
+    formatHelp: 'المقاطع القصيرة مدتها ٣ دقائق أو أقل وتكون عمودية أو مربعة، وتظهر في المقاطع القصيرة بدلًا من الفيديوهات.',
+    formatAuto: 'تحديد تلقائي',
+    formatAutoHint: 'مقطع قصير إذا كانت مدته ٣ دقائق أو أقل وكان عموديًا أو مربعًا',
+    formatShort: 'رفع كمقطع قصير',
+    formatShortHint: 'يظهر دائمًا في المقاطع القصيرة',
+    formatVideo: 'رفع كفيديو',
+    formatVideoHint: 'يظهر دائمًا في الفيديوهات',
   },
 
   search: {

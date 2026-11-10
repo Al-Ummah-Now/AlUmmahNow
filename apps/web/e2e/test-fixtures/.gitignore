@@ -19,6 +19,8 @@ E2E Temp *
 !README.md
 # Tiny real H.264/AAC clip (4s 426x240, ~60KB) used to seed E2E videos without ffmpeg
 !e2e-sample.mp4
+# Tiny vertical H.264/AAC clip (4s 240x426, ~65KB): a Short (release video-format spec)
+!e2e-sample-vertical.mp4
 # 1280x720 JPEG used as a custom thumbnail
 !e2e-thumbnail.jpg
 # 40s 160x90 H.264/AAC clip (~120KB) for chapter tests (chapters need >= 10s each)

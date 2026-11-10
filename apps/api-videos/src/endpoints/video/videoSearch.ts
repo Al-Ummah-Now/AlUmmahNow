@@ -1,3 +1,4 @@
+import { isShort } from "@al-ummah/shared-types";
 import { Num, OpenAPIRoute, Str } from "chanfana";
 import { OptionalAuthRoute, AppContext } from '../../base';
 import { string, z } from "zod";
@@ -37,7 +38,7 @@ export class VideoSearch extends OptionalAuthRoute {
 				channelIds: Str({
 					description: "Comma-separated channel IDs to filter by",
 				}).optional(),
-				durationFilter: z.enum(["all", "short", "standard", "live"]).optional().default("all").describe("Filter videos by duration - short (≤3min), standard (>3min), live, or all"),
+				durationFilter: z.enum(["all", "short", "standard", "live"]).optional().default("all").describe("Filter videos by format - short (Shorts: ≤ 3 min and vertical or square, or chosen by the uploader), standard (other videos), live, or all"),
 				scheduleFilter: z.enum(["all", "scheduled", "published"]).optional().default("all").describe("Filter by scheduled publish status - scheduled/publishing, published, or all"),
 				isOwner: z.boolean().optional().default(false).describe("When true, validates that the user owns all specified channels"),
 			}),
@@ -213,11 +214,11 @@ export class VideoSearch extends OptionalAuthRoute {
 				if (filter === "public" && video.isPublic === false) return false;
 				if (filter === "private" && video.isPublic !== false) return false;
 
-				// Duration filter
-				if (durationFilter === "short" && (video.duration === undefined || video.duration > 180)) {
+				// Format filter (shared rule: ≤ 3 min and vertical/square, or the uploader's choice)
+				if (durationFilter === "short" && !isShort(video)) {
 					return false;
 				}
-				if (durationFilter === "standard" && (video.duration === undefined || video.duration <= 180 || video.isLive)) {
+				if (durationFilter === "standard" && (isShort(video) || video.isLive)) {
 					return false;
 				}
 				if (durationFilter === "live" && !video.isLive) {
@@ -345,6 +346,7 @@ export class VideoSearch extends OptionalAuthRoute {
 				channelAvatarUrl: channel?.avatarUrl,
 				likesCount: video.likes?.length || 0,
 				dislikesCount: video.dislikes?.length || 0,
+				isShort: isShort(video),
 				commentsCount: video.comments?.length || 0,
 			};
 		};

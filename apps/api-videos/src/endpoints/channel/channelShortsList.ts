@@ -1,3 +1,4 @@
+import { isShort } from "@al-ummah/shared-types";
 import { Num, Str } from "chanfana";
 import { FALLBACK_SCAN_OBJECTS } from "../../lib/scanBudget";
 import { string, z } from "zod";
@@ -13,7 +14,7 @@ export class ChannelShortsList extends OptionalAuthRoute {
 	schema = {
 		tags: ["Channels"],
 		summary: "List Channel Shorts",
-		description: "🔓 **Authentication Optional**: Get all short-form videos (< 60 seconds) from a specific channel. Returns additional private shorts when authenticated as the channel owner.",
+		description: "🔓 **Authentication Optional**: Get the Shorts of a specific channel (≤ 3 minutes and vertical or square, or marked as a Short by the uploader). Returns additional private shorts when authenticated as the channel owner.",
 		request: {
 			params: z.object({
 				id: Str({
@@ -122,8 +123,8 @@ export class ChannelShortsList extends OptionalAuthRoute {
 				if (!video) return false;
 				if (video.channelId !== channelId) return false;
 				if (video.isDeleted || video.isHidden) return false;
-				// A short has a known duration under 60 seconds and is not a live stream
-				if (!video.duration || video.duration >= 60) return false;
+				// Shared rule: ≤ 3 min and vertical/square, or the uploader's choice; never live
+				if (!isShort(video)) return false;
 				if (video.isLive) return false;
 				// Private videos only for the channel owner; public or unset counts as public
 				// Not ready yet (uploading, processing, failed): only the owner sees it
@@ -185,6 +186,7 @@ export class ChannelShortsList extends OptionalAuthRoute {
 				channelAvatarUrl: channel.avatarUrl || undefined,
 				likesCount: video.likes?.length || 0,
 				dislikesCount: video.dislikes?.length || 0,
+				isShort: isShort(video),
 				commentsCount: video.comments?.length || 0,
 			});
 

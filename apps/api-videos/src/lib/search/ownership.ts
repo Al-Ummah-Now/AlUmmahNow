@@ -173,9 +173,9 @@ export interface ChannelVideoQuery {
    * a user id only those that user created, `false`/null none.
    */
   privateFor: boolean | string | null;
-  /** Exclude live streams and videos shorter than 60 s (channel "Videos" tab). */
+  /** Exclude live streams and Shorts (channel "Videos" tab; rule: shared-types video-format.ts). */
   longFormOnly?: boolean;
-  /** Only videos with a known duration under 60 s, not live (channel "Shorts" tab). */
+  /** Only Shorts, not live (channel "Shorts" tab; rule: shared-types video-format.ts). */
   shortsOnly?: boolean;
   /** Only public (`true`) or only private (`false`) videos. */
   isPublic?: boolean;
@@ -200,10 +200,10 @@ export function channelVideoIds(
     const where = [`kind = 'video'`, 'channel_id = ?', 'is_deleted = 0', 'is_hidden = 0'];
     const params: unknown[] = [channelId];
     if (query.longFormOnly) {
-      where.push('is_live = 0', '(duration IS NULL OR duration = 0 OR duration >= 60)');
+      where.push('is_live = 0', 'is_short = 0');
     }
     if (query.shortsOnly) {
-      where.push('is_live = 0', 'duration > 0', 'duration < 60');
+      where.push('is_live = 0', 'is_short = 1');
     }
     if (query.liveOnly) where.push('is_live = 1');
     if (query.isPublic !== undefined) where.push(query.isPublic ? 'is_public = 1' : 'is_public = 0');

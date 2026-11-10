@@ -58,9 +58,6 @@ export const CHANNEL_BELL_LEVELS = ['all', 'highlights', 'none'] as const;
 export type ChannelBellLevel = (typeof CHANNEL_BELL_LEVELS)[number];
 export const DEFAULT_CHANNEL_BELL: ChannelBellLevel = 'highlights';
 
-/** Uploads at or below this duration (seconds) are Lamahat/shorts, not highlights. */
-export const SHORT_VIDEO_MAX_SECONDS = 60;
-
 /** Stored notifications are deleted after this many days (processor cron). */
 export const NOTIFICATION_RETENTION_DAYS = 90;
 

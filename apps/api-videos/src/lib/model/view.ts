@@ -101,6 +101,8 @@ export const VideoView = z.object({
     // Upload processing: anything but "ready" shows the "Processing, ready soon" state
     uploadStatus: z.enum(['initiated', 'uploading', 'processing', 'ready', 'failed']).optional(),
     processingIssueKind: z.enum(['encode_failed', 'needs_reupload', 'stalled']).optional().describe("Why processing did not finish"),
+    format: z.enum(['short', 'video']).optional().describe("Uploader's choice of Short or video; absent = detected"),
+    isShort: z.boolean().optional().describe("Short (≤ 3 min and vertical or square, or chosen by the uploader); shared rule"),
     ...SoftDeleteFields,
     ...ModerationFields,
     // For detailed views, include recent comments

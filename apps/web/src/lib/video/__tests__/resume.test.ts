@@ -30,9 +30,14 @@ describe('resumePosition', () => {
     expect(resumePosition(p(89, 100))).toBe(89);
   });
 
-  it('never resumes shorts (60 s or less)', () => {
-    expect(resumePosition(p(30, 60))).toBeNull();
-    expect(resumePosition(p(30, 61))).toBe(30);
+  it('never resumes Shorts (shared rule), whatever their length', () => {
+    expect(resumePosition(p(30, 120), false, true)).toBeNull();
+    expect(resumePosition(p(300, 600), false, true)).toBeNull(); // "Upload as Short"
+  });
+
+  it('resumes short landscape videos: length alone no longer makes a Short', () => {
+    expect(resumePosition(p(30, 60))).toBe(30);
+    expect(resumePosition(p(30, 120), false, false)).toBe(30);
   });
 
   it('does not resume completed, live, missing or corrupt progress', () => {

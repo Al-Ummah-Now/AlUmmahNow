@@ -131,8 +131,9 @@ export class VideoUpdate extends AuthenticatedRoute {
 
 		// Update the video with new values (applied to the fresh copy on every
 		// compare-and-swap attempt, SCALABILITY-AUDIT AV-3)
-		const { category, tags, ...restInput } = videoUpdateInput;
-		const applyUpdate = (base: VideoType): VideoType => ({
+		const { category, tags, format, ...restInput } = videoUpdateInput;
+		const applyUpdate = (base: VideoType): VideoType => {
+			const next: VideoType = {
 			...base,
 			...restInput,
 			dateModified: new Date().toISOString(),
@@ -143,7 +144,12 @@ export class VideoUpdate extends AuthenticatedRoute {
 			tags: tags !== undefined ? Array.from(new Set(tags)) : base.tags,
 			// Category: undefined keeps current value, null clears it
 			category: category === undefined ? base.category : (category ?? undefined),
-		});
+			};
+			// "Upload as Short / as video" wins over detection; 'auto' clears the choice
+			if (format === 'auto') delete next.format;
+			else if (format) next.format = format;
+			return next;
+		};
 
 		logger.info('[VideoUpdate] Updating video', {
 			videoId: id,

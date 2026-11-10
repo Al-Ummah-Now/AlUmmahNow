@@ -13,6 +13,8 @@ export interface PublicVideo {
   uploadStatus?: string;
   isPublic?: boolean;
   isLive?: boolean;
+  /** Short by the shared rule (≤ 3 min and vertical/square, or the uploader's choice) */
+  isShort?: boolean;
   availableResolutions?: string[];
   playUrl?: string;
   channelId?: string;
@@ -29,15 +31,15 @@ export interface PublicVideo {
 export const HISTORY_MIN_SECONDS = 40;
 
 /**
- * Shortest video the resume spec may use: videos of 60s or less are shorts and
- * never resume (lib/video/resume.ts), and 12s of play must stay under 95%.
+ * Shortest video the resume spec may use: 12s of play must stay under 95%.
+ * Shorts never resume (lib/video/resume.ts); pass `{ excludeShorts: true }`.
  */
 export const RESUME_MIN_VIDEO_SECONDS = 75;
 
 export const NO_PLAYABLE_VIDEO = 'no public, encoded video in this environment (seed one; see CLAUDE.md "Release regressions")';
 
 /** A public, encoded, non-live video of at least `minSeconds`, or null when the env has none. */
-export async function findPlayableVideo(minSeconds = 8): Promise<PublicVideo | null> {
+export async function findPlayableVideo(minSeconds = 8, opts: { excludeShorts?: boolean } = {}): Promise<PublicVideo | null> {
   let cursor = '';
   for (let page = 0; page < 5; page++) {
     const res = await fetch(`${target().api}/api/videos?limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`);
@@ -50,7 +52,8 @@ export async function findPlayableVideo(minSeconds = 8): Promise<PublicVideo | n
         !v.isLive &&
         (v.availableResolutions?.length ?? 0) > 0 &&
         !!v.playUrl &&
-        (v.duration ?? 0) >= minSeconds,
+        (v.duration ?? 0) >= minSeconds &&
+        !(opts.excludeShorts && v.isShort),
     );
     if (playable.length > 0) return playable[0];
     if (!body.cursor || (body.data ?? []).length === 0) return null;

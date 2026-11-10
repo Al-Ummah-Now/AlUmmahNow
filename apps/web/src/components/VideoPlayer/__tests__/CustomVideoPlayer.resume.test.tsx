@@ -286,7 +286,7 @@ describe('CustomVideoPlayer resume (#242)', () => {
     ['near the start', progress(5), {}],
     ['near the end', progress(595), {}],
     ['completed', progress(300, true), {}],
-    ['a short', progress(30, false, 45), {}],
+    ['a Short (shared rule)', progress(30, false, 120), { isShort: true }],
     ['live', progress(300), { isLive: true }],
   ])('starts from the beginning when %s', async (_label, loaded, props) => {
     renderWith(loaded, props as Props);

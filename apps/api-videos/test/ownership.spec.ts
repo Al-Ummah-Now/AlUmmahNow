@@ -69,7 +69,7 @@ function populated() {
 		videoFixture({ id: 'm-a', title: 'Tafsir one', channelId: 'mine1', duration: 900, views: 5, dateCreated: '2026-03-01T00:00:00.000Z' }),
 		videoFixture({ id: 'm-b', title: 'Tafsir two', channelId: 'mine1', duration: 900, views: 50, dateCreated: '2026-02-01T00:00:00.000Z' }),
 		videoFixture({ id: 'm-c', title: 'Private tafsir', channelId: 'mine1', duration: 900, views: 7, isPublic: false, dateCreated: '2026-04-01T00:00:00.000Z' }),
-		videoFixture({ id: 'm-d', title: 'Short clip', channelId: 'mine1', duration: 30, views: 1000 }),
+		videoFixture({ id: 'm-d', title: 'Short clip', channelId: 'mine1', duration: 30, width: 1080, height: 1920, views: 1000 }),
 		videoFixture({ id: 'm-e', title: 'Hidden', channelId: 'mine1', duration: 900, views: 9, isHidden: true }),
 		videoFixture({ id: 'm-f', title: 'Scheduled', channelId: 'mine1', duration: 900, views: 3, isPublic: false, scheduledPublishStatus: 'scheduled', dateCreated: '2026-05-01T00:00:00.000Z' }),
 		videoFixture({ id: 'm-g', title: 'Processing', channelId: 'mine1', duration: 900, views: 0, uploadStatus: 'processing', dateCreated: '2026-01-15T00:00:00.000Z' }),
@@ -317,12 +317,16 @@ describe('endpoints served from the ownership index', () => {
 	async function lateKeys() {
 		const data = populated();
 		const late = [
-			videoFixture({ id: 'zz-short-new', title: 'New short', channelId: 'mine1', duration: 6, views: 2, dateCreated: '2026-06-01T00:00:00.000Z' }),
-			videoFixture({ id: 'zz-short-old', title: 'Old short', channelId: 'mine1', duration: 45, views: 90, dateCreated: '2026-01-02T00:00:00.000Z' }),
-			videoFixture({ id: 'zz-short-private', title: 'Private short', channelId: 'mine1', duration: 20, isPublic: false }),
-			videoFixture({ id: 'zz-short-hidden', title: 'Hidden short', channelId: 'mine1', duration: 20, isHidden: true }),
-			videoFixture({ id: 'zz-short-live', title: 'Short live', channelId: 'mine1', duration: 20, isLive: true, dateCreated: '2026-07-01T00:00:00.000Z' }),
+			videoFixture({ id: 'zz-short-new', title: 'New short', channelId: 'mine1', duration: 6, width: 1080, height: 1920, views: 2, dateCreated: '2026-06-01T00:00:00.000Z' }),
+			videoFixture({ id: 'zz-short-old', title: 'Old short', channelId: 'mine1', duration: 45, width: 1080, height: 1920, views: 90, dateCreated: '2026-01-02T00:00:00.000Z' }),
+			videoFixture({ id: 'zz-short-private', title: 'Private short', channelId: 'mine1', duration: 20, width: 1080, height: 1920, isPublic: false }),
+			videoFixture({ id: 'zz-short-hidden', title: 'Hidden short', channelId: 'mine1', duration: 20, width: 1080, height: 1920, isHidden: true }),
+			videoFixture({ id: 'zz-short-live', title: 'Short live', channelId: 'mine1', duration: 20, width: 1080, height: 1920, isLive: true, dateCreated: '2026-07-01T00:00:00.000Z' }),
 			videoFixture({ id: 'zz-no-duration', title: 'Unknown length', channelId: 'mine1' }),
+			// Under 3 min but landscape: a video, not a Short (shared rule)
+			videoFixture({ id: 'zz-landscape-2min', title: 'Landscape clip', channelId: 'mine1', duration: 120, width: 1920, height: 1080 }),
+			// Vertical and short, but the uploader chose "Upload as video"
+			videoFixture({ id: 'zz-vertical-as-video', title: 'Vertical as video', channelId: 'mine1', duration: 60, width: 1080, height: 1920, format: 'video' }),
 		];
 		for (const v of late) data.videos[v.id] = v;
 		const scan = { videos: new MemoryBucket(data.videos), channels: new MemoryBucket(data.channels), queue: new MemoryQueue() };
@@ -354,6 +358,26 @@ describe('endpoints served from the ownership index', () => {
 		assert.equal(page2.cursor, '');
 	});
 
+	it('Videos and Shorts tabs split by the shared rule: shape, length and the uploader choice', async () => {
+		const { scan, indexed } = await lateKeys();
+		const app = buildApp(r => { r.get('/api/channels/:id/videos', ChannelVideosList); r.get('/api/channels/:id/shorts', ChannelShortsList); }, null);
+		const ids = async (tab: string, e: unknown) =>
+			((await (await app.request(`/api/channels/mine1/${tab}?limit=50`, {}, e as never)).json()) as any).data.map((v: any) => v.id) as string[];
+		const videos = await ids('videos', indexed);
+		const shorts = await ids('shorts', indexed);
+		assert.ok(videos.includes('zz-landscape-2min'), 'a 2-minute landscape video is a video');
+		assert.ok(videos.includes('zz-vertical-as-video'), '"Upload as video" wins over a vertical 1-minute clip');
+		assert.ok(videos.includes('zz-no-duration'), 'unknown length: a video until detected');
+		for (const id of ['zz-short-new', 'zz-short-old', 'm-d']) {
+			assert.ok(shorts.includes(id), `${id} is a Short`);
+			assert.ok(!videos.includes(id), `${id} is not under Videos`);
+		}
+		for (const id of ['zz-landscape-2min', 'zz-vertical-as-video', 'zz-no-duration']) assert.ok(!shorts.includes(id), `${id} is not a Short`);
+		// The R2 scan fallback applies the same rule as the index
+		const scanned = await ids('videos', scan);
+		assert.ok(!scanned.includes('m-d'), 'scan: the vertical 30 s clip is a Short');
+	});
+
 	it('GET /api/channels/:id/shorts and /live 404 for deleted and (to others) private channels', async () => {
 		const { indexed } = await lateKeys();
 		const visitor = buildApp(r => { r.get('/api/channels/:id/shorts', ChannelShortsList); r.get('/api/channels/:id/live', ChannelLiveList); }, null);
@@ -379,8 +403,8 @@ describe('endpoints served from the ownership index', () => {
 		const app = buildApp(r => r.get('/api/channels/:id', ChannelFetch), null);
 		const body = await (await app.request('/api/channels/mine1', {}, indexed)).json() as any;
 		const view = body.result ?? body;
-		// m-a, m-b, m-d, m-g + zz-short-new, zz-short-old, zz-short-live, zz-no-duration
-		assert.equal(view.videosCount, 8);
+		// m-a, m-b, m-d, m-g + zz-short-new, zz-short-old, zz-short-live, zz-no-duration, zz-landscape-2min, zz-vertical-as-video
+		assert.equal(view.videosCount, 10);
 	});
 
 	it('GET /api/channels/:id/about totals match the scan without reading the videos bucket', async () => {

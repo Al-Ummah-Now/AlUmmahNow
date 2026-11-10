@@ -110,6 +110,8 @@ export interface CustomVideoPlayerProps {
   enableAnalytics?: boolean;
   enableWebSocket?: boolean;
   isLive?: boolean;
+  /** Short by the shared rule: always starts from the beginning (no resume) */
+  isShort?: boolean;
   className?: string;
   ariaLabel?: string;
   /** Video title (kept for callers; the resume prompt that showed it is gone, #242) */
@@ -143,6 +145,7 @@ export default function CustomVideoPlayer({
   enableAnalytics = true,
   enableWebSocket = true,
   isLive = false,
+  isShort = false,
   className = '',
   ariaLabel,
   lang = 'en',
@@ -231,7 +234,7 @@ export default function CustomVideoPlayer({
     resumeDecidedForRef.current = videoId;
     const player = playerRef.current as ExtendedPlayer | null;
     if (!player || (startTime && startTime > 0)) return;
-    const position = resumePosition(loadedProgress, isLive);
+    const position = resumePosition(loadedProgress, isLive, isShort);
     if (position === null) return;
 
     const seekToResume = () => {
@@ -262,7 +265,7 @@ export default function CustomVideoPlayer({
     const needed = viaMse ? 2 : 1;
     if ((player.readyState?.() ?? 0) >= needed) seekToResume();
     else player.one(viaMse ? 'loadeddata' : 'loadedmetadata', seekToResume);
-  }, [playerReady, loadedProgress, videoId, isLive, startTime, t]);
+  }, [playerReady, loadedProgress, videoId, isLive, isShort, startTime, t]);
 
   // The pill goes once playback is well past the resume point or back at 0
   useEffect(() => {
@@ -1021,6 +1024,7 @@ export default function CustomVideoPlayer({
       className={`custom-video-player aspect-video ${className}`}
       dir={dir}
       data-portrait={portrait || undefined}
+      data-short={isShort || undefined}
       data-mini={mini || undefined}
       data-ended={ended || undefined}
     >

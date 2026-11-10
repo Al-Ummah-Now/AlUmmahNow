@@ -10,6 +10,7 @@ import type {
   SearchPostPayload,
   SearchVideoPayload,
 } from './documents';
+import type { VideoFormat } from '../video-format';
 
 export type SearchDurationFilter = 'short' | 'medium' | 'long';
 export type SearchDateFilter = 'hour' | 'today' | 'week' | 'month' | 'year';
@@ -35,6 +36,8 @@ export interface SearchQuery {
   q?: string;
   type?: SearchEntityType;
   duration?: SearchDurationFilter;
+  /** Videos only: Shorts or (long-form) videos, by the shared rule (video-format.ts). */
+  format?: VideoFormat;
   date?: SearchDateFilter;
   language?: string;
   category?: string;

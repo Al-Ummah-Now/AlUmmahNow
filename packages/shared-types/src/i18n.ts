@@ -703,6 +703,15 @@ export interface AppTranslations {
     shortVideos?: string;
     standardVideos?: string;
     longVideos?: string;
+    // Short vs video (uploader choice; shared-types video-format.ts)
+    formatLabel?: string;
+    formatHelp?: string;
+    formatAuto?: string;
+    formatAutoHint?: string;
+    formatShort?: string;
+    formatShortHint?: string;
+    formatVideo?: string;
+    formatVideoHint?: string;
   };
 
   /**

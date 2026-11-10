@@ -128,20 +128,20 @@ export async function upsertSearchRow(db: SearchDb, row: SearchRow, options: Sea
   const ours = `(SELECT rowid FROM ${base} WHERE id = ? AND source_version = ?)`;
   const statements: SearchStatement[] = [
     db.prepare(
-      `INSERT INTO ${base} (id, channel_id, visible, language, category, duration, is_verified, is_live, views, created_at, popularity, payload, content_hash, indexed_at, source_version)
-       SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      `INSERT INTO ${base} (id, channel_id, visible, language, category, duration, is_verified, is_live, views, created_at, popularity, payload, content_hash, indexed_at, source_version, is_short)
+       SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
        WHERE ${NOT_TOMBSTONED}
        ON CONFLICT(id) DO UPDATE SET
          channel_id = excluded.channel_id, visible = excluded.visible, language = excluded.language,
          category = excluded.category, duration = excluded.duration, is_verified = excluded.is_verified,
          is_live = excluded.is_live, views = excluded.views, created_at = excluded.created_at,
          popularity = excluded.popularity, payload = excluded.payload, content_hash = excluded.content_hash,
-         indexed_at = excluded.indexed_at, source_version = excluded.source_version
+         indexed_at = excluded.indexed_at, source_version = excluded.source_version, is_short = excluded.is_short
        WHERE excluded.source_version >= ${base}.source_version`,
     ).bind(
       row.id, row.channelId, boolInt(row.visible), row.language, row.category, row.duration,
       boolInt(row.isVerified), boolInt(row.isLive), row.views, row.createdAt, row.popularity,
-      payload, hash, now, version,
+      payload, hash, now, version, boolInt(row.isShort),
       row.type, row.id, version,
     ),
     // Only if the base row now holds this version (the upsert above won)

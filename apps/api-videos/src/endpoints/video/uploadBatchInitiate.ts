@@ -20,6 +20,7 @@ const BatchVideoSchema = z.object({
 	mimeType: Str({ description: "MIME type of the video file", required: true }),
 	isPublic: z.boolean().optional(),
 	tags: z.string().optional().describe("Comma-separated tags"),
+	format: z.enum(['short', 'video', 'auto']).optional().describe("Upload as a Short or as a video; 'auto' (default) detects it from length and shape"),
 });
 
 const SharedMetadataSchema = z.object({
@@ -166,6 +167,7 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 					isLive: false,
 					tags: videoData.tags ? videoData.tags.split(',').map(tag => tag.trim()).filter(Boolean) : [],
 					category: sharedMetadata?.category,
+					...(videoData.format && videoData.format !== 'auto' ? { format: videoData.format } : {}),
 					uploadStatus: 'uploading',
 					fileSize: videoData.fileSize,
 					originalFormat: videoData.mimeType,

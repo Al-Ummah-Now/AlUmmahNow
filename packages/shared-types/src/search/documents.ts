@@ -12,6 +12,7 @@
  */
 
 import { VIDEO_CATEGORIES } from '../upload-defaults';
+import { isShort, type VideoFormatInput } from '../video-format';
 import { buildIndexText, detectTextLanguage } from './normalize';
 
 export type SearchEntityType = 'video' | 'channel' | 'playlist' | 'post';
@@ -41,6 +42,8 @@ export interface SearchVideoPayload {
   language?: string;
   tags: string[];
   isLive: boolean;
+  /** Short or video (video-format.ts). */
+  isShort?: boolean;
   channelId: string;
   channelName?: string;
   channelAvatarUrl?: string;
@@ -111,6 +114,8 @@ export interface SearchRow<T extends SearchEntityType = SearchEntityType> {
   duration: number | null;
   isVerified: boolean;
   isLive: boolean;
+  /** Short (videos only; see video-format.ts). */
+  isShort: boolean;
   views: number;
   /** Epoch milliseconds the item was published/created. */
   createdAt: number | null;
@@ -222,6 +227,7 @@ export function projectVideo(raw: unknown): SearchRow<'video'> | null {
   const likesCount = countOf(obj.likes, obj.likesCount);
   const language = str(obj.language) ?? detectTextLanguage(`${title} ${description ?? ''}`) ?? null;
   const duration = num(obj.duration) > 0 ? Math.round(num(obj.duration)) : null;
+  const short = isShort(obj as VideoFormatInput);
 
   return {
     type: 'video',
@@ -233,6 +239,7 @@ export function projectVideo(raw: unknown): SearchRow<'video'> | null {
     duration,
     isVerified: false,
     isLive: obj.isLive === true,
+    isShort: short,
     views,
     createdAt: timeOf(obj.publishedAt, obj.dateCreated, obj.createdAt),
     popularity: round(log10p(views) * 0.3 + log10p(likesCount) * 0.3),
@@ -260,6 +267,7 @@ export function projectVideo(raw: unknown): SearchRow<'video'> | null {
       language: language ?? undefined,
       tags: tags.slice(0, 10),
       isLive: obj.isLive === true,
+      isShort: short,
       channelId: str(obj.channelId) ?? '',
       channelName: str(obj.channelName) ?? str(obj.channel),
       channelAvatarUrl: str(obj.channelAvatarUrl),
@@ -292,6 +300,7 @@ export function projectChannel(raw: unknown): SearchRow<'channel'> | null {
     duration: null,
     isVerified: obj.isVerified === true,
     isLive: false,
+    isShort: false,
     views: Math.max(num(obj.totalViews), 0),
     createdAt: timeOf(obj.dateCreated, obj.createdAt),
     popularity: round(log10p(subscribersCount) * 0.4 + log10p(videosCount) * 0.2),
@@ -341,6 +350,7 @@ export function projectPlaylist(raw: unknown): SearchRow<'playlist'> | null {
     duration: null,
     isVerified: false,
     isLive: false,
+    isShort: false,
     views,
     createdAt: timeOf(obj.dateCreated, obj.createdAt),
     popularity: round(log10p(views) * 0.3 + log10p(videosCount) * 0.2),
@@ -393,6 +403,7 @@ export function projectPost(raw: unknown): SearchRow<'post'> | null {
     duration: null,
     isVerified: obj.channelVerified === true,
     isLive: false,
+    isShort: false,
     views: Math.max(num(obj.views), 0),
     createdAt: timeOf(obj.createdAt, obj.updatedAt),
     popularity: round(log10p(likes) * 0.3 + log10p(comments) * 0.3),
@@ -433,7 +444,7 @@ export function projectSearchDocument(type: SearchEntityType, raw: unknown): Sea
 export function searchRowHash(row: SearchRow): string {
   const text = JSON.stringify([
     row.channelId, row.visible, row.language, row.category, row.duration, row.isVerified, row.isLive,
-    row.createdAt, row.titleText, row.bodyText,
+    row.createdAt, row.titleText, row.isShort, row.bodyText,
   ]);
   let hash = 0x811c9dc5;
   for (let i = 0; i < text.length; i++) {

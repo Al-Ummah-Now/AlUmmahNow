@@ -1,3 +1,4 @@
+import { isShort } from "@al-ummah/shared-types";
 import { Num, Str } from "chanfana";
 import { FALLBACK_SCAN_OBJECTS } from "../../lib/scanBudget";
 import { string, z } from "zod";
@@ -159,8 +160,8 @@ export class ChannelVideosList extends OptionalAuthRoute {
 					return isOwner;
 				}
 
-				// Exclude shorts (duration < 60 seconds) and live streams
-				if (video.duration && video.duration < 60) {
+				// Exclude Shorts (shared rule: ≤ 3 min and vertical/square, or the uploader's choice) and live streams
+				if (isShort(video)) {
 					return false;
 				}
 				if (video.isLive) {
@@ -240,6 +241,7 @@ export class ChannelVideosList extends OptionalAuthRoute {
 				channelAvatarUrl: channel.avatarUrl || undefined,
 				likesCount: video.likes?.length || 0,
 				dislikesCount: video.dislikes?.length || 0,
+				isShort: isShort(video),
 				commentsCount: video.comments?.length || 0,
 			});
 

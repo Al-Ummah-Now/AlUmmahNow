@@ -29,6 +29,10 @@ export interface VideoObject {
     views?: number;
     width?: number;
     height?: number;
+    /** Uploader's choice of Short or video; absent = detected */
+    format?: 'short' | 'video';
+    /** Short by the shared rule (API-computed) */
+    isShort?: boolean;
     availableResolutions?: string[];
     likesCount: number;
     dislikesCount: number;

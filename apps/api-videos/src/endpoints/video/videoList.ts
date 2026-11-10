@@ -1,3 +1,4 @@
+import { isShort } from "@al-ummah/shared-types";
 import { Num, Str } from "chanfana";
 import { string, z } from "zod";
 import { Video as BusinessVideo, PaginationResponse, ResponseError } from "../../lib/types";
@@ -242,6 +243,7 @@ export class VideosList extends OptionalAuthRoute {
 				channelAvatarUrl: channel?.avatarUrl,
 				likesCount: video.likes?.length || 0,
 				dislikesCount: video.dislikes?.length || 0,
+				isShort: isShort(video),
 				commentsCount: video.comments?.length || 0,
 			};
 		};
