@@ -1,4 +1,4 @@
-import { formatAbsoluteDate, formatRelativeTime, formatViews } from '../videoMeta';
+import { formatAbsoluteDate, formatRelativeTime, formatViews, formatSubscribers } from '../videoMeta';
 
 describe('formatViews', () => {
   it('uses English singular, plural and zero', () => {
@@ -63,5 +63,24 @@ describe('formatViews with API strings', () => {
   it('reads numeric strings', () => {
     expect(formatViews('1', 'en')).toBe('1 view');
     expect(formatViews('abc', 'en')).toBe('No views');
+  });
+});
+
+describe('formatSubscribers', () => {
+  it('uses English singular, plural and zero', () => {
+    expect(formatSubscribers(0, 'en')).toBe('No subscribers');
+    expect(formatSubscribers(1, 'en')).toBe('1 subscriber');
+    expect(formatSubscribers(2, 'en')).toBe('2 subscribers');
+    expect(formatSubscribers(1500, 'en')).toBe('1.5K subscribers');
+    expect(formatSubscribers(undefined, 'en')).toBe('No subscribers');
+  });
+
+  it('uses every Arabic plural form', () => {
+    expect(formatSubscribers(0, 'ar')).toBe('لا يوجد مشتركون');
+    expect(formatSubscribers(1, 'ar')).toBe('مشترك واحد');
+    expect(formatSubscribers(2, 'ar')).toBe('مشتركان');
+    expect(formatSubscribers(5, 'ar')).toMatch(/مشتركين$/);
+    expect(formatSubscribers(11, 'ar')).toMatch(/مشتركًا$/);
+    expect(formatSubscribers(100, 'ar')).toMatch(/مشترك$/);
   });
 });

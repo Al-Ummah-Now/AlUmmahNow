@@ -219,7 +219,6 @@
   "apps/web/src/components/settings/ChannelAboutFields.tsx": 49,
   "apps/web/src/components/settings/TemplateEditorModal.tsx": 131,
   "apps/web/src/components/settings/VariableGuide.tsx": 38,
-  "apps/web/src/components/subscription/SubscribeButton.tsx": 2,
   "apps/web/src/components/subscription/SubscriptionFeed.tsx": 15,
   "apps/web/src/components/subscription/SubscriptionManagement.tsx": 20,
   "apps/web/src/components/ui/alert-dialog.tsx": 1,

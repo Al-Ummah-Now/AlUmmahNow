@@ -56,6 +56,12 @@ describe('loginRoutePath', () => {
     expect(url.searchParams.get('locale')).toBe('ar');
     expect(url.searchParams.get('return')).toBe('/ar/video/x?t=3');
   });
+  it('without a prompt is a plain sign-in that comes back to the page', () => {
+    const url = new URL(loginRoutePath('/en/video/x', 'en'), 'https://videos.example');
+    expect(url.pathname).toBe('/api/auth/login');
+    expect(url.searchParams.has('prompt')).toBe(false);
+    expect(url.searchParams.get('return')).toBe('/en/video/x');
+  });
   it('drops an unsafe return path', () => {
     const url = new URL(loginRoutePath('//evil.example', 'en', 'none'), 'https://videos.example');
     expect(url.searchParams.get('return')).toBeNull();

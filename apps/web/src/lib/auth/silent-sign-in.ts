@@ -103,9 +103,13 @@ export function probeOutcome(accounts: AuthAccount[] | null): 'sign-in' | 'stay-
   return accounts?.some((a) => a.isActive) ? 'sign-in' : 'stay-anonymous';
 }
 
-/** The login route for a silent (prompt=none) or explicit (prompt=login) sign-in. */
-export function loginRoutePath(returnPath: string, locale: string, prompt: LoginPrompt): string {
-  const params = new URLSearchParams({ prompt, locale });
+/**
+ * The login route for a silent (prompt=none) or explicit (prompt=login) sign-in.
+ * Without a prompt it is a plain sign-in: the auth server shows its sign-in page,
+ * or returns straight away when the browser is already signed in there.
+ */
+export function loginRoutePath(returnPath: string, locale: string, prompt?: LoginPrompt): string {
+  const params = new URLSearchParams(prompt ? { prompt, locale } : { locale });
   const safe = safeReturnPath(returnPath);
   if (safe) params.set('return', safe);
   return `/api/auth/login?${params.toString()}`;
