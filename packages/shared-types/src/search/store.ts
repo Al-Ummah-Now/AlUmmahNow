@@ -92,14 +92,28 @@ export async function upsertSearchRow(db: SearchDb, row: SearchRow, options: Sea
   // One lookup: the indexed row (if any) and the item's last delete
   const found = await db
     .prepare(
-      `SELECT b.content_hash, b.source_version, (SELECT version FROM ${TOMBSTONE_TABLE} WHERE entity = ? AND id = ?) AS tomb
+      `SELECT b.content_hash, b.source_version, b.views, b.popularity, b.payload,
+         (SELECT version FROM ${TOMBSTONE_TABLE} WHERE entity = ? AND id = ?) AS tomb
        FROM (SELECT 1) LEFT JOIN ${base} b ON b.id = ?`,
     )
     .bind(row.type, row.id, row.id)
-    .first<{ content_hash: string | null; source_version: number | null; tomb: number | null }>();
+    .first<{ content_hash: string | null; source_version: number | null; views: number | null; popularity: number | null; payload: string | null; tomb: number | null }>();
   const existing = found && found.source_version !== null ? { content_hash: found.content_hash, source_version: Number(found.source_version) } : null;
   if ((found?.tomb != null && Number(found.tomb) >= version) || (existing && existing.source_version > version)) return 'stale';
-  if (!options.force && existing && existing.content_hash === hash) {
+  const payload = JSON.stringify(row.payload);
+  if (!options.force && existing && existing.content_hash === hash && found) {
+    if (Number(found.views) !== row.views || Number(found.popularity) !== row.popularity || found.payload !== payload) {
+      // Only counters or display fields changed (a like, a flushed view count): one
+      // UPDATE of the base row; the full-text entry stays as it is (AV-17).
+      // Applied only if no newer version was committed meanwhile.
+      const touch = options.touch ? ', indexed_at = ?' : '';
+      const outcome = (await db
+        .prepare(`UPDATE ${base} SET views = ?, popularity = ?, payload = ?, source_version = max(source_version, ?)${touch} WHERE id = ? AND source_version <= ?`)
+        .bind(row.views, row.popularity, payload, version, ...(options.touch ? [now] : []), row.id, version)
+        .run()) as { meta?: { changes?: number } };
+      if (outcome?.meta?.changes === 0) return 'stale';
+      return row.visible ? 'indexed' : 'hidden';
+    }
     // Same content: still record the newer version, so an older write cannot slip in after it
     const sets = options.touch ? 'source_version = max(source_version, ?), indexed_at = ?' : 'source_version = max(source_version, ?)';
     const binds = options.touch ? [version, now, row.id] : [version, row.id];
@@ -127,7 +141,7 @@ export async function upsertSearchRow(db: SearchDb, row: SearchRow, options: Sea
     ).bind(
       row.id, row.channelId, boolInt(row.visible), row.language, row.category, row.duration,
       boolInt(row.isVerified), boolInt(row.isLive), row.views, row.createdAt, row.popularity,
-      JSON.stringify(row.payload), hash, now, version,
+      payload, hash, now, version,
       row.type, row.id, version,
     ),
     // Only if the base row now holds this version (the upsert above won)

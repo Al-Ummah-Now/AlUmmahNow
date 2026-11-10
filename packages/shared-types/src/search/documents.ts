@@ -417,11 +417,17 @@ export function projectSearchDocument(type: SearchEntityType, raw: unknown): Sea
   }
 }
 
-/** Stable content hash (FNV-1a, 32-bit) used to skip writes when nothing indexed changed. */
+/**
+ * Stable content hash (FNV-1a, 32-bit) of what the full-text entry and the
+ * filter columns depend on. Counters (views, likes → popularity) and the
+ * display payload are left out: when only they change, upsertSearchRow
+ * updates the base row in place instead of rewriting the full-text entry
+ * (SCALABILITY-AUDIT AV-17).
+ */
 export function searchRowHash(row: SearchRow): string {
   const text = JSON.stringify([
     row.channelId, row.visible, row.language, row.category, row.duration, row.isVerified, row.isLive,
-    row.createdAt, row.popularity, row.titleText, row.bodyText, row.payload,
+    row.createdAt, row.titleText, row.bodyText,
   ]);
   let hash = 0x811c9dc5;
   for (let i = 0; i < text.length; i++) {
