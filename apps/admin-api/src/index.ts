@@ -10,6 +10,8 @@ import { publicSiteTheme } from './lib/siteSettings';
 import themesRouter, { publicThemes } from './routers/themes.router';
 import contentRouter from './routers/content.router';
 import suggestRouter from './routers/suggest.router';
+import invitesRouter from './routers/invites.router';
+import { scheduleInviteSyncs } from './lib/invites';
 import processingRouter from './routers/processing.router';
 import staleUploadsRouter from './routers/staleUploads.router';
 import trashRouter from './routers/trash.router';
@@ -165,6 +167,8 @@ app.route('/api/content', contentRouter);
 
 // Admin autocomplete: suggestions for every search and lookup box in admin-web
 app.route('/api/suggest', suggestRouter);
+// Invite creators: pre-provisioned accounts, plan and channels before first sign-in (docs/admin/INVITES.md)
+app.route('/api/invites', invitesRouter);
 
 // Upload processing health (sync from Bunny, retry, mark failed): permission-checked, audited proxy to api-videos
 app.route('/api/processing', processingRouter);
@@ -196,6 +200,7 @@ app.get('/health', (c) => {
 /**
  * Cron (wrangler triggers.crons):
  *   - every 5 minutes: queue status reads of open requests to auth (lib/authModerationQueue.ts)
+ *     and of open invites (lib/invites.ts)
  *   - 03:17 UTC daily: retention of error data and old source maps (lib/errors-retention.ts)
  *   - hourly (the 5-minute tick at the top of each UTC hour): soft-delete cleanup, the only hard
  *     delete of contact messages, themes and creator tiers (lib/trash.ts)
@@ -207,6 +212,7 @@ async function scheduled(controller: ScheduledController, env: AdminBindings, ct
   }
   ctx.waitUntil(scheduleSyncs(env).catch((error) => logger.error('[AuthRequests] scheduled status reads failed', { error: String(error) })));
   if (isHourlyTick(controller.scheduledTime)) ctx.waitUntil(runTrashCleanup(env as never).then(() => undefined));
+  ctx.waitUntil(scheduleInviteSyncs(env as never).catch((error) => logger.error('[Invites] scheduled status reads failed', { error: String(error) })));
 }
 
 /**

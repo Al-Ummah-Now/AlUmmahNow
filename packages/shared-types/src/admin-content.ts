@@ -321,6 +321,12 @@ export interface AdminUserRow {
   isBanned: boolean;
   /** True when the ban record exists but the videos profile was deleted. */
   profileDeleted?: boolean;
+  /**
+   * Set by admin-api when the user was invited (docs/admin/INVITES.md):
+   * invited (not signed in yet), active (signed in), expired, revoked,
+   * sending/failed (the auth account is being made / could not be).
+   */
+  invite?: { id: string; status: 'sending' | 'failed' | 'invited' | 'active' | 'expired' | 'revoked' } | null;
 }
 
 /** User search for pickers (channel ownership transfer): 2+ characters, a few best matches. */

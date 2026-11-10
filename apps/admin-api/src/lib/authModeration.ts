@@ -170,7 +170,7 @@ export class AuthModerationClient {
     return new AuthModerationClient({ authUrl: env.Issuer, clientId: env.AUTH_MODERATION_CLIENT_ID, clientSecret: env.AUTH_MODERATION_CLIENT_SECRET, fetch: fetchImpl });
   }
 
-  private async call<T>(method: string, path: string, body?: unknown, headers: Record<string, string> = {}): Promise<{ status: number; data: T }> {
+  protected async call<T>(method: string, path: string, body?: unknown, headers: Record<string, string> = {}): Promise<{ status: number; data: T }> {
     const secret = await readSecret(this.config.clientSecret);
     const url = new URL(path, this.config.authUrl);
     let res: Response;

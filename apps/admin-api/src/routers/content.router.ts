@@ -39,6 +39,7 @@ import { callVideos, VideosError, type VideosCall, type VideosClientEnv } from '
 import { dropAudit, readAudit, writeAudit, type AuditAction, type ContentKind } from '../lib/content/audit';
 import { openReportCounts, recentReports, reportedIds, type ReportEntity } from '../lib/content/reports';
 import { logger } from '../lib/logger';
+import { inviteStatusByUser } from '../lib/invites';
 import type { AdminBindings, AuthContext } from '../base/types';
 
 type Env = { Bindings: AdminBindings & VideosClientEnv; Variables: { auth?: AuthContext } };
@@ -330,7 +331,16 @@ app.delete('/posts/:channelId/:postId', async (c) => {
 // Users (videos profiles, keyed by the usr_ id; never the Auth account)
 // ---------------------------------------------------------------------------
 
-app.get('/users', async (c) => ok(c, await videos(c, '/users', { query: c.req.query() })));
+/** Invited users carry their invite status (the "Invited" badge in lists and pickers). */
+async function withInvites<T extends { id: string }>(c: C, items: T[]): Promise<Array<T & { invite: { id: string; status: string } | null }>> {
+  const byUser = await inviteStatusByUser(c.env.REPORTS_DB, items.map((i) => i.id)).catch(() => new Map());
+  return items.map((i) => ({ ...i, invite: byUser.get(i.id) ?? null }));
+}
+
+app.get('/users', async (c) => {
+  const page = await videos<AdminPage<{ id: string }>>(c, '/users', { query: c.req.query() });
+  return ok(c, Array.isArray(page?.items) ? { ...page, items: await withInvites(c, page.items) } : page);
+});
 
 /** The new-owner picker of a channel transfer: a few users by email, name, @handle or id. */
 app.get('/users/search', async (c) => {
@@ -351,7 +361,8 @@ app.get('/users/:id', async (c) => {
     readAudit(c.env.REPORTS_DB, { kind: 'user', id, limit: 20 }),
     jobsFor(c, 'user', id),
   ]);
-  return ok(c, { ...user, reports, audit, jobs });
+  const [withInvite] = await withInvites(c, [user]);
+  return ok(c, { ...withInvite, reports, audit, jobs });
 });
 
 app.patch('/users/:id', async (c) => {

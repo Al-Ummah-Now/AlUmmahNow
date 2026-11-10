@@ -26,6 +26,7 @@ import { LegacyRestoreError } from '../lib/admin/legacy-restore';
 import { isDeletionKind, listDeletions } from '../lib/admin/deletions';
 import { logger } from '../lib/logger';
 import { bulkAssignTier, limitHitsSince, listCreators, tierCounts } from '../lib/admin/creators';
+import { createChannelFor, lookupAccount, provisionProfile } from '../lib/admin/invites';
 import { assignTier, CreatorTierError, deleteTier, purgeTiers, readAssignment, readDeletedTiers, readTiers, requestTierPurge, restoreTier, saveTier } from '../lib/creatorTiers';
 
 type Env = { Bindings: admin.AdminServiceEnv & Record<string, unknown> };
@@ -211,7 +212,18 @@ app.delete('/posts/:channelId/:postId', async (c) => {
 // Users (videos profiles)
 app.get('/users', async (c) => ok(c, await listUsers(c.env, parse(UserQuery, c.req.query()) as never)));
 app.get('/users/search', async (c) => ok(c, await searchUsers(c.env, parse(UserSearchQuery, c.req.query()) as never)));
+// Invited creators (docs/admin/INVITES.md): who has an email, the invited user's
+// profile (create-only) and channels made for them
+app.get('/accounts', async (c) => ok(c, await lookupAccount(c.env, c.req.query('email') ?? '')));
+app.post('/users/provision', async (c) => {
+	const input = parse(z.object({ userId: z.string().min(1).max(64), email: z.string().trim().email().max(254), displayName: z.string().max(100).nullable().optional() }), await body(c));
+	return ok(c, await provisionProfile(c.env, input as { userId: string; email: string; displayName?: string | null }));
+});
 app.get('/users/:id', async (c) => ok(c, await admin.userDetail(c.env, c.req.param('id'))));
+app.post('/users/:id/channels', async (c) => {
+	const input = parse(z.object({ name: z.string().trim().min(1).max(100), handle: z.string().trim().max(60).nullable().optional(), description: z.string().max(5000).nullable().optional() }), await body(c));
+	return ok(c, { channel: await createChannelFor(c.env, c.req.param('id'), input as { name: string; handle?: string | null; description?: string | null }) });
+});
 app.patch('/users/:id', async (c) => ok(c, await admin.updateUser(c.env, c.req.param('id'), parse(UserEdit, await body(c)))));
 app.post('/users/:id/ban', async (c) => ok(c, await admin.banUser(c.env, c.req.param('id'), actor(c), parse(Reason, await body(c)).reason)));
 app.post('/users/:id/unban', async (c) => ok(c, await admin.unbanUser(c.env, c.req.param('id'), actor(c))));
