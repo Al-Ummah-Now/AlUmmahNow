@@ -545,8 +545,8 @@ Ramadan is a natural launch moment: aim Phase B + 21.2 to ship **before Ramadan*
 | # | Decision | Options | Recommendation |
 |---|---|---|---|
 | D1 | App stack | **Decided 2026-11-08: native everywhere.** Swift (Apple, incl. macOS), Kotlin (Android/TV), C# (Windows WinUI 3, Linux GTK 4, Tizen), Rust shared core; webOS web | — (decided) |
-| D2 | Video delivery | Bunny (today) / R2 + Cloudflare CDN | Pending Cloudflare confirmation and cost cap (≤ $500/mo) |
-| D3 | Live provider | Bunny Stream Live (preview) / self-hosted RTMP to R2 | Follows D2 |
+| D2 | Video delivery | Bunny (today) / R2 + Cloudflare CDN | **Decided 2026-11-10: R2 + Cloudflare CDN.** Cloudflare Support confirmed in writing that HLS in R2 served via a custom domain on our zone meets the CDN video terms on a self-serve plan (Workers Paid / Pro) while R2 is subscribed; no published usage level forces Enterprise. Stream ruled out (~$50k/mo at 50M min). Setup required: Cache Rule cache-everything on the media host (.m3u8/.ts not cached by default), Smart Tiered Cache, custom domain (never r2.dev). Limits: no Cache Reserve for R2 public buckets (cold tail = first-byte latency, $0 egress), 512 MB max cacheable file on Pro, 50 bucket-mgmt ops/s, 1,200 REST calls/5 min (management only). |
+| D3 | Live provider | Bunny Stream Live (preview) / self-hosted RTMP to R2 | **Unblocked by D2 (2026-11-10).** Recommended: self-hosted RTMP/SRT ingest → HLS segments in the same R2 bucket, served through the same CDN path (covered by Cloudflare's D2 confirmation). Awaiting owner decision. |
 | D4 | Monetisation | None / donations / premium / sponsorship | None at launch |
 | D5 | Kids content policy | Allow-list ownership, age bands | Moderator-curated allow-list |
 | D6 | Fonts | Plex Arabic + Plex / Noto Kufi + Inter / licensed custom | Open-licensed pair |
