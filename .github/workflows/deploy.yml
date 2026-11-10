@@ -1021,6 +1021,15 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
+      # A deploy does not create the translation store (global_settings R2):
+      # seed QA's missing files from the repo defaults, keep edited ones, and
+      # check /api/i18n/translations/{en,ar} answer 200.
+      - name: Seed QA translations (missing files only)
+        run: pnpm exec tsx scripts/release/seed-translations.ts --env qa
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
       - name: Deploy Processor to QA
         run: |
           cd apps/processor
