@@ -385,7 +385,7 @@ export function ThemeEditor({ initial, assets: initialAssets, latestVersion: ini
             </div>
           )}
         </div>
-        <Preview theme={theme} assetUrl={assetUrl} />
+        <Preview theme={theme} assetUrl={assetUrl} followMode={mode} />
       </div>
     </div>
   );
