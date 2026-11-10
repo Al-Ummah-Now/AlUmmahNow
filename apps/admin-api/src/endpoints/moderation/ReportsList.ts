@@ -14,6 +14,8 @@ export class ReportsList extends AdminRoute {
       query: z.object({
         status: z.enum(['pending', 'reviewing', 'resolved', 'dismissed']).optional(),
         entity_type: z.enum(['video', 'comment', 'channel', 'livestream', 'playlist', 'post']).optional(),
+        entity_id: z.string().trim().min(1).max(200).optional().describe("Only reports about this item (the admin picks it by name)"),
+        reporter_id: z.string().trim().min(1).max(200).optional().describe("Only reports filed by this user"),
         limit: Num({ description: "Number of reports to return (max 100)" }).optional().default(50),
         offset: Num({ description: "Offset for pagination" }).optional().default(0),
       }),
@@ -48,7 +50,7 @@ export class ReportsList extends AdminRoute {
 
   async handle(c: AppContext) {
     const request = await this.getValidatedData<typeof this.schema>();
-    const { status, entity_type, limit, offset } = request.query;
+    const { status, entity_type, entity_id, reporter_id, limit, offset } = request.query;
 
     try {
       const db = c.env.REPORTS_DB;
@@ -66,6 +68,16 @@ export class ReportsList extends AdminRoute {
       if (entity_type) {
         conditions.push('entity_type = ?');
         params.push(entity_type);
+      }
+
+      if (entity_id) {
+        conditions.push('entity_id = ?');
+        params.push(entity_id);
+      }
+
+      if (reporter_id) {
+        conditions.push('reporter_id = ?');
+        params.push(reporter_id);
       }
 
       if (conditions.length > 0) {
@@ -91,7 +103,7 @@ export class ReportsList extends AdminRoute {
 
       logger.debug('Reports listed', {
         moderatorId: this.getUserId(c),
-        filters: { status, entity_type },
+        filters: { status, entity_type, entity: !!entity_id, reporter: !!reporter_id },
         count: result.results?.length || 0
       });
 

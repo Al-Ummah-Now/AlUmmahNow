@@ -34,7 +34,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
         testId="users-filters"
         values={params}
         fields={[
-          { kind: 'search', name: 'q', label: t('users.searchLabel') },
+          { kind: 'search', name: 'q', label: t('users.searchLabel'), suggest: 'user' },
           { kind: 'select', name: 'banned', label: t('users.status'), options: [{ value: 'yes', label: t('users.banned') }, { value: 'no', label: t('users.notBanned') }] },
           { kind: 'select', name: 'sort', label: t('content.sort'), allLabel: t('users.sortNewest'), options: [{ value: 'oldest', label: t('users.sortOldest') }, { value: 'name', label: t('users.sortName') }] },
         ]}

@@ -6,6 +6,7 @@ import { ERROR_STATUSES } from '@al-ummah/shared-types';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { translateDynamic } from '@/i18n/translate';
 import { fieldClass, linkClass } from '@/components/ui';
+import { Autocomplete } from '@/components/search/Autocomplete';
 import type { ErrorFacets } from '@/lib/api/error-groups-types';
 import { errorsHref, type ErrorListFilters } from './filters';
 
@@ -21,20 +22,16 @@ export function ErrorFilterBar({ filters, facets, active }: { filters: ErrorList
   return (
     <Form action="/errors" role="search" aria-label={t('errorsPage.filtersLabel')} className="flex flex-wrap items-end gap-3" data-testid="errors-filters" key={key}>
       {filters.needsAction && <input type="hidden" name="tab" value="needs-action" />}
-      <div className="flex flex-col gap-1 grow sm:grow-0">
-        <label htmlFor="errors-q" className="text-sm text-fg-muted">
-          {t('errorsPage.search')}
-        </label>
-        <input
-          id="errors-q"
-          name="q"
-          type="search"
-          defaultValue={filters.q ?? ''}
-          placeholder={t('errorsPage.searchPlaceholder')}
-          className={`${fieldClass} w-full sm:w-72`}
-          data-testid="errors-search"
-        />
-      </div>
+      <Autocomplete
+        kind="error"
+        mode="search"
+        name="q"
+        label={t('errorsPage.search')}
+        defaultValue={filters.q ?? ''}
+        placeholder={t('errorsPage.searchPlaceholder')}
+        className="grow sm:grow-0 sm:w-72"
+        testId="errors-search"
+      />
       <div className="flex flex-col gap-1">
         <label htmlFor="errors-app" className="text-sm text-fg-muted">
           {t('errorsPage.appFilter')}

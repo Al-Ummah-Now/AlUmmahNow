@@ -72,12 +72,13 @@ export default async function VideosPage({ searchParams }: { searchParams: Promi
         testId="videos-filters"
         values={params}
         fields={[
-          { kind: 'search', name: 'q', label: t('videos.searchLabel') },
+          { kind: 'search', name: 'q', label: t('videos.searchLabel'), suggest: 'video' },
           // Processing comes first: failed and stuck uploads are what admins look for most
           { kind: 'select', name: 'status', label: t('videos.status'), options: ['processing', 'failed', 'uploading', 'initiated', 'ready'].map((s) => ({ value: s, label: statusLabel(s) })) },
           { kind: 'select', name: 'visibility', label: t('videos.visibility'), options: [{ value: 'public', label: t('videos.public') }, { value: 'private', label: t('videos.private') }] },
           { kind: 'select', name: 'hidden', label: t('videos.hidden'), options: [{ value: 'yes', label: t('videos.hiddenYes') }, { value: 'no', label: t('videos.hiddenNo') }] },
-          { kind: 'text', name: 'channelId', label: t('videos.channelId') },
+          { kind: 'pick', name: 'channelId', label: t('videos.channelId'), suggest: 'channel' },
+          { kind: 'pick', name: 'ownerId', label: t('videos.ownerId'), suggest: 'user' },
           { kind: 'flag', name: 'noChannel', label: t('videos.noChannel'), value: '1' },
           { kind: 'flag', name: 'reported', label: t('content.reportedOnly'), value: 'yes' },
           { kind: 'date', name: 'createdFrom', label: t('content.from') },

@@ -4,11 +4,17 @@ import Form from 'next/form';
 import Link from 'next/link';
 import { useId } from 'react';
 import { useLanguage } from '@/i18n/I18nProvider';
+import type { AdminSuggestKind } from '@al-ummah/shared-types';
 import { fieldClass, linkClass } from '@/components/ui';
+import { Autocomplete } from '@/components/search/Autocomplete';
 
+/**
+ * search: free text, with live suggestions of `suggest` items as the admin types.
+ * pick: an id filter (channel, owner, video…) chosen by name; the URL keeps the id.
+ */
 export type FilterField =
-  | { kind: 'search'; name: string; label: string; wide?: boolean }
-  | { kind: 'text'; name: string; label: string }
+  | { kind: 'search'; name: string; label: string; suggest: AdminSuggestKind; wide?: boolean }
+  | { kind: 'pick'; name: string; label: string; suggest: AdminSuggestKind }
   | { kind: 'date'; name: string; label: string }
   | { kind: 'select'; name: string; label: string; options: { value: string; label: string }[]; allLabel?: string }
   | { kind: 'flag'; name: string; label: string; value: string };
@@ -23,7 +29,8 @@ interface Props {
 
 /**
  * A GET form, so filters live in the URL. Selects and checkboxes submit on
- * change; text fields submit with Enter or the Apply button. Fields stack on a
+ * change; search boxes submit with Enter or the Apply button, and an id
+ * filter submits when a value is chosen. Fields stack on a
  * phone and flow in a row from the small breakpoint up.
  */
 export function FilterForm({ action, label, fields, values, testId }: Props) {
@@ -46,8 +53,23 @@ export function FilterForm({ action, label, fields, values, testId }: Props) {
             </label>
           );
         }
+        if (field.kind === 'search' || field.kind === 'pick') {
+          return (
+            <Autocomplete
+              key={field.name}
+              kind={field.suggest}
+              mode={field.kind}
+              name={field.name}
+              label={field.label}
+              defaultValue={values[field.name] ?? ''}
+              submitOnChange={field.kind === 'pick'}
+              className={field.kind === 'search' && field.wide !== false ? 'sm:min-w-64 sm:flex-1' : 'sm:min-w-56'}
+              testId={`${testId}-${field.name}`}
+            />
+          );
+        }
         return (
-          <div key={field.name} className={`flex flex-col gap-1 ${field.kind === 'search' && field.wide !== false ? 'sm:min-w-64 sm:flex-1' : ''}`}>
+          <div key={field.name} className="flex flex-col gap-1">
             <label htmlFor={fieldId} className="text-sm text-fg-muted">
               {field.label}
             </label>
@@ -61,16 +83,7 @@ export function FilterForm({ action, label, fields, values, testId }: Props) {
                 ))}
               </select>
             ) : (
-              <input
-                id={fieldId}
-                name={field.name}
-                type={field.kind === 'date' ? 'date' : field.kind === 'search' ? 'search' : 'text'}
-                defaultValue={values[field.name] ?? ''}
-                dir={field.kind === 'text' ? 'ltr' : 'auto'}
-                onChange={field.kind === 'date' ? submit : undefined}
-                className={fieldClass}
-                maxLength={200}
-              />
+              <input id={fieldId} name={field.name} type="date" defaultValue={values[field.name] ?? ''} onChange={submit} className={fieldClass} />
             )}
           </div>
         );

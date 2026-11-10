@@ -19,6 +19,8 @@ import type {
 export interface ListReportsParams {
   status?: ReportStatus;
   entity_type?: ReportableEntityType;
+  entity_id?: string;
+  reporter_id?: string;
   limit?: number;
   offset?: number;
 }

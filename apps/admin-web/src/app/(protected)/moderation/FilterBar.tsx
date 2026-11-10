@@ -5,11 +5,14 @@ import Link from 'next/link';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { translateDynamic } from '@/i18n/translate';
 import { fieldClass, linkClass } from '@/components/ui';
-import { ENTITY_TYPES, REPORT_STATUSES } from './filters';
+import { Autocomplete } from '@/components/search/Autocomplete';
+import { ENTITY_TYPES, REPORT_STATUSES, entitySuggestKind } from './filters';
 
 interface FilterBarProps {
   status?: string;
   entityType?: string;
+  entityId?: string;
+  reporterId?: string;
 }
 
 /**
@@ -17,11 +20,17 @@ interface FilterBarProps {
  * Selects submit on change; the Apply button covers keyboard users who
  * prefer to set both filters first.
  */
-export function FilterBar({ status, entityType }: FilterBarProps) {
+export function FilterBar({ status, entityType, entityId, reporterId }: FilterBarProps) {
   const { t } = useLanguage();
 
   const submitOnChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    e.currentTarget.form?.requestSubmit();
+    const form = e.currentTarget.form;
+    // A reported item belongs to one type: a new type drops it
+    if (e.currentTarget.name === 'entity_type') {
+      const entity = form?.elements.namedItem('entity_id');
+      if (entity instanceof HTMLInputElement) entity.value = '';
+    }
+    form?.requestSubmit();
   };
 
   return (
@@ -72,13 +81,39 @@ export function FilterBar({ status, entityType }: FilterBarProps) {
           ))}
         </select>
       </div>
+      {entitySuggestKind(entityType as never) ? (
+        <Autocomplete
+          key={`entity-${entityType}-${entityId ?? ''}`}
+          kind={entitySuggestKind(entityType as never)!}
+          mode="pick"
+          name="entity_id"
+          label={t('moderation.entityFilter')}
+          defaultValue={entityId ?? ''}
+          submitOnChange
+          className="sm:min-w-56"
+          testId="moderation-entity"
+        />
+      ) : (
+        entityId && <input type="hidden" name="entity_id" value={entityId} />
+      )}
+      <Autocomplete
+        key={`reporter-${reporterId ?? ''}`}
+        kind="user"
+        mode="pick"
+        name="reporter_id"
+        label={t('moderation.reporterFilter')}
+        defaultValue={reporterId ?? ''}
+        submitOnChange
+        className="sm:min-w-56"
+        testId="moderation-reporter"
+      />
       <button
         type="submit"
         className="bg-accent hover:bg-accent-hover text-on-accent rounded px-4 py-2 font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-focus"
       >
         {t('moderation.applyFilters')}
       </button>
-      {(status || entityType) && (
+      {(status || entityType || entityId || reporterId) && (
         <Link href="/moderation" className={`${linkClass} py-2`}>
           {t('moderation.clearFilters')}
         </Link>

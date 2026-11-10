@@ -4,6 +4,7 @@ import type { Locale } from '@/i18n/config';
 import { formatNumber, type MessageKey, type Translator } from '@/i18n/translate';
 import { creatorsHref, type CreatorsQuery } from '@/lib/creator-tiers';
 import { ErrorAlert, fieldClass, linkClass, secondaryButtonClass } from '@/components/ui';
+import { Autocomplete } from '@/components/search/Autocomplete';
 import { PageHeader, Pager } from '@/components/content/parts';
 import { CreatorsTable, type CreatorsTableProps } from './CreatorsTable';
 import { LimitHitsNotice } from './LimitHitsNotice';
@@ -48,10 +49,7 @@ export function CreatorsView({ data, tiers, query, canManage, t, locale, setTier
       )}
 
       <form method="get" action="/creators" className="mb-4 flex flex-wrap items-end gap-2" data-testid="creators-filter">
-        <label className="flex flex-col gap-1 text-sm text-fg-muted">
-          {t('creators.search')}
-          <input type="search" name="q" defaultValue={query.q} className={`${fieldClass} min-w-64`} data-testid="creators-search" />
-        </label>
+        <Autocomplete kind="user" mode="search" name="q" label={t('creators.search')} defaultValue={query.q ?? ''} className="min-w-64" testId="creators-search" />
         <label className="flex flex-col gap-1 text-sm text-fg-muted">
           {t('creators.tierFilter')}
           <select name="tier" defaultValue={query.tier} className={fieldClass} data-testid="creators-tier-select">
