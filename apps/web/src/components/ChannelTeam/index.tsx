@@ -42,8 +42,9 @@ export function teamErrorMessage(t: AppTranslations, error: unknown): string {
   }
 }
 
-const CARD = 'rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900 sm:p-6';
-const FIELD = 'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100';
+// `c` is the theme's card material (theme/system.css).
+const CARD = 'c p-4 sm:p-6';
+const FIELD = 'w-full rounded-lg border border-[var(--fanous-c-form-input-border)] bg-[var(--fanous-c-form-input-bg)] px-3 py-2 text-sm text-[var(--fanous-c-form-input-text)] focus:outline-none focus:ring-2 focus:ring-brand';
 const BUTTON = 'inline-flex min-h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60';
 
 export default function ChannelTeam({ channelId, role, locale }: ChannelTeamProps) {
@@ -142,7 +143,7 @@ export default function ChannelTeam({ channelId, role, locale }: ChannelTeamProp
 
   const me: TeamMember | null = user ? { userId: user.id, role, isYou: true } : null;
   const roleBadge = (r: ChannelRole) => (
-    <span data-testid="team-member-role" className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-0.5 text-xs font-medium text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">
+    <span data-testid="team-member-role" className="c rounded-full px-2.5 py-0.5 text-xs font-medium text-[var(--fanous-color-text-secondary)]">
       {tr.roles[r]}
     </span>
   );
@@ -151,60 +152,60 @@ export default function ChannelTeam({ channelId, role, locale }: ChannelTeamProp
     <div className="space-y-6" data-testid="channel-team">
       {message && (
         <p role={message.kind === 'error' ? 'alert' : 'status'} id={ids.status} data-testid="team-message" data-kind={message.kind}
-          className={`rounded-lg px-4 py-3 text-sm ${message.kind === 'error' ? 'bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-300' : 'bg-green-50 text-green-800 dark:bg-green-950/40 dark:text-green-300'}`}>
+          className={`rounded-lg px-4 py-3 text-sm ${message.kind === 'error' ? 'bg-[color-mix(in_srgb,var(--fanous-color-error-fill)_14%,var(--fanous-color-surface))] text-[var(--fanous-color-error-text)]' : 'bg-[color-mix(in_srgb,var(--fanous-color-verified-fill)_16%,var(--fanous-color-surface))] text-[var(--fanous-color-success-text)]'}`}>
           {message.text}
         </p>
       )}
 
       {can(role, 'members.manage') && (
         <form onSubmit={onAdd} className={CARD} data-testid="team-add-form" aria-describedby={message ? ids.status : undefined}>
-          <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">{tr.addTitle}</h2>
+          <h2 className="mb-4 text-lg font-semibold text-[var(--fanous-color-text-primary)]">{tr.addTitle}</h2>
           <div className="grid gap-4 sm:grid-cols-[1fr_auto_auto] sm:items-end">
             <div>
-              <label htmlFor={ids.handle} className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">{tr.handleLabel}</label>
+              <label htmlFor={ids.handle} className="mb-1 block text-sm font-medium text-[var(--fanous-color-text-secondary)]">{tr.handleLabel}</label>
               <input id={ids.handle} dir="ltr" value={handle} onChange={(e) => setHandle(e.target.value.replace(/\s/g, ''))}
                 placeholder={tr.handlePlaceholder} autoCapitalize="off" autoCorrect="off" spellCheck={false} maxLength={64}
                 disabled={busy === 'add'} className={FIELD} data-testid="team-add-handle" />
             </div>
             <div>
-              <label htmlFor={ids.role} className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">{tr.roleLabel}</label>
+              <label htmlFor={ids.role} className="mb-1 block text-sm font-medium text-[var(--fanous-color-text-secondary)]">{tr.roleLabel}</label>
               <select id={ids.role} value={newRole} onChange={(e) => setNewRole(e.target.value as ChannelMemberRole)}
                 disabled={busy === 'add'} className={FIELD} data-testid="team-add-role">
                 {grantable.map((r) => <option key={r} value={r}>{tr.roles[r]}</option>)}
               </select>
             </div>
             <button type="submit" disabled={!handle.trim() || busy === 'add'} aria-busy={busy === 'add'}
-              className={`${BUTTON} bg-brand text-white hover:bg-brand-hover`} data-testid="team-add-submit">
+              className={`${BUTTON} bg-brand text-on-brand hover:bg-brand-hover`} data-testid="team-add-submit">
               {busy === 'add' ? tr.adding : tr.add}
             </button>
           </div>
-          <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">{tr.roleHelp[newRole]}</p>
-          {team && <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{tr.limit.replace('{count}', String(team.maxMembers))}</p>}
+          <p className="mt-3 text-sm text-[var(--fanous-color-text-secondary)] dark:text-[var(--fanous-color-text-muted)]">{tr.roleHelp[newRole]}</p>
+          {team && <p className="mt-1 text-xs text-[var(--fanous-color-text-muted)]">{tr.limit.replace('{count}', String(team.maxMembers))}</p>}
         </form>
       )}
 
       <section className={CARD} aria-labelledby="team-list-title">
-        <h2 id="team-list-title" className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">{tr.team}</h2>
+        <h2 id="team-list-title" className="mb-4 text-lg font-semibold text-[var(--fanous-color-text-primary)]">{tr.team}</h2>
         {!canView && me && (
-          <ul className="divide-y divide-gray-100 dark:divide-gray-800">
+          <ul className="divide-y divide-[var(--fanous-color-divider)]">
             <li className="flex items-center gap-3 py-3" data-testid="team-member" data-role={role}>
-              <span className="flex-1 text-sm font-medium text-gray-900 dark:text-gray-100">{tr.you}</span>
+              <span className="flex-1 text-sm font-medium text-[var(--fanous-color-text-primary)]">{tr.you}</span>
               {roleBadge(role)}
             </li>
           </ul>
         )}
-        {canView && loading && <p className="text-sm text-gray-600 dark:text-gray-400" role="status">{tr.teamLoading}</p>}
+        {canView && loading && <p className="text-sm text-[var(--fanous-color-text-secondary)] dark:text-[var(--fanous-color-text-muted)]" role="status">{tr.teamLoading}</p>}
         {canView && loadError && (
           <div className="flex flex-wrap items-center gap-3" role="alert">
-            <p className="text-sm text-red-700 dark:text-red-400">{loadError}</p>
-            <button type="button" onClick={() => void refresh()} className={`${BUTTON} border border-gray-300 text-gray-800 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800`}>
+            <p className="text-sm text-[var(--fanous-color-error-text)]">{loadError}</p>
+            <button type="button" onClick={() => void refresh()} className={`${BUTTON} b-primary`}>
               {t.common.retry}
             </button>
           </div>
         )}
         {canView && team && (
           <>
-            <ul className="divide-y divide-gray-100 dark:divide-gray-800" data-testid="team-list">
+            <ul className="divide-y divide-[var(--fanous-color-divider)]" data-testid="team-list">
               {team.members.map((m) => {
                 const manageable = m.role !== 'owner' && !m.isYou && canManageRole(role, m.role as ChannelMemberRole);
                 return (
@@ -213,12 +214,12 @@ export default function ChannelTeam({ channelId, role, locale }: ChannelTeamProp
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={m.avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover" />
                     ) : (
-                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-purple-500 text-sm font-semibold text-white" aria-hidden="true">
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--fanous-c-button-primary-bg)] text-sm font-semibold text-[var(--fanous-c-button-primary-text)]" aria-hidden="true">
                         {nameOf(m).charAt(0).toUpperCase()}
                       </span>
                     )}
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-900 dark:text-gray-100">
-                      {nameOf(m)}{m.isYou && m.displayName ? <span className="text-gray-500 dark:text-gray-400"> ({m.displayName})</span> : null}
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--fanous-color-text-primary)]">
+                      {nameOf(m)}{m.isYou && m.displayName ? <span className="text-[var(--fanous-color-text-muted)]"> ({m.displayName})</span> : null}
                     </span>
                     {manageable ? (
                       <select aria-label={tr.changeRole.replace('{name}', nameOf(m))} value={m.role}
@@ -229,7 +230,7 @@ export default function ChannelTeam({ channelId, role, locale }: ChannelTeamProp
                     ) : roleBadge(m.role)}
                     {manageable && (
                       <button type="button" onClick={() => setConfirm({ kind: 'remove', member: m })} disabled={busy === m.userId}
-                        className={`${BUTTON} text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40`} data-testid="team-member-remove">
+                        className={`${BUTTON} b-danger`} data-testid="team-member-remove">
                         {tr.remove}
                       </button>
                     )}
@@ -237,29 +238,29 @@ export default function ChannelTeam({ channelId, role, locale }: ChannelTeamProp
                 );
               })}
             </ul>
-            {team.members.length === 1 && <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">{tr.noMembers}</p>}
+            {team.members.length === 1 && <p className="mt-2 text-sm text-[var(--fanous-color-text-secondary)] dark:text-[var(--fanous-color-text-muted)]">{tr.noMembers}</p>}
           </>
         )}
       </section>
 
       {role !== 'owner' && me && (
         <button type="button" onClick={() => setConfirm({ kind: 'leave', member: me })} disabled={busy === me.userId}
-          className={`${BUTTON} border border-red-300 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/40`} data-testid="team-leave">
+          className={`${BUTTON} b-danger`} data-testid="team-leave">
           {tr.leave}
         </button>
       )}
 
       <AlertDialog open={confirm !== null} onOpenChange={(open) => !open && setConfirm(null)}>
-        <AlertDialogContent className="w-[calc(100%-2rem)] max-w-md dark:bg-gray-800">
+        <AlertDialogContent className="w-[calc(100%-2rem)] max-w-md">
           <AlertDialogHeader>
-            <AlertDialogTitle className="dark:text-white">{confirm?.kind === 'leave' ? tr.leave : tr.remove}</AlertDialogTitle>
-            <AlertDialogDescription className="dark:text-gray-400">
+            <AlertDialogTitle className="text-[var(--fanous-c-dialog-text)]">{confirm?.kind === 'leave' ? tr.leave : tr.remove}</AlertDialogTitle>
+            <AlertDialogDescription className="text-[var(--fanous-c-dialog-muted)]">
               {confirm?.kind === 'leave' ? tr.leaveConfirm : tr.removeConfirm.replace('{name}', confirm ? nameOf(confirm.member) : '')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col-reverse gap-2 sm:flex-row">
             <AlertDialogCancel className="w-full sm:w-auto">{t.common.cancel}</AlertDialogCancel>
-            <AlertDialogAction onClick={() => void onConfirm()} data-testid="team-confirm" className="w-full bg-red-600 text-white hover:bg-red-700 sm:w-auto">
+            <AlertDialogAction onClick={() => void onConfirm()} data-testid="team-confirm" className="b-danger w-full sm:w-auto">
               {confirm?.kind === 'leave' ? tr.leave : tr.remove}
             </AlertDialogAction>
           </AlertDialogFooter>
