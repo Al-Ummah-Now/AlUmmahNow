@@ -68,3 +68,5 @@ export * from './admin-content';
 
 // Error reporting: scrubbing, fingerprints, references, client and Worker reporters (admin Errors page)
 export * from './error-reporting';
+// Legacy (pre-SSO) profile restore planning (admin job + CLI)
+export * from './legacy-profiles';

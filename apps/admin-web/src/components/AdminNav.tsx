@@ -18,6 +18,8 @@ interface AdminNavProps {
   contactNew?: number | null;
   /** Processing health and Errors items (the user has videos:processing) */
   canProcess?: boolean;
+  /** Legacy profiles item (the user has users:manage) */
+  canManageUsers?: boolean;
 }
 
 const NAV_ITEMS: { href: string; label: MessageKey }[] = [
@@ -38,14 +40,15 @@ const NAV_ITEMS: { href: string; label: MessageKey }[] = [
   { href: '/errors', label: 'nav.errors' },
   { href: '/jobs', label: 'nav.jobs' },
   { href: '/auth-requests', label: 'nav.authRequests' },
+  { href: '/legacy-profiles', label: 'nav.legacyProfiles' },
 ];
 
 const PROCESSING_ITEMS = new Set(['/processing', '/errors']);
 
-export function AdminNav({ userEmail, authIssuer, contactNew = null, canProcess = false }: AdminNavProps) {
+export function AdminNav({ userEmail, authIssuer, contactNew = null, canProcess = false, canManageUsers = false }: AdminNavProps) {
   const pathname = usePathname();
   const { t } = useLanguage();
-  const items = NAV_ITEMS.filter((i) => (i.href !== '/contact' || contactNew !== null) && (!PROCESSING_ITEMS.has(i.href) || canProcess));
+  const items = NAV_ITEMS.filter((i) => (i.href !== '/contact' || contactNew !== null) && (!PROCESSING_ITEMS.has(i.href) || canProcess) && (i.href !== '/legacy-profiles' || canManageUsers));
 
   // Most specific match wins, so /moderation/ai does not also highlight /moderation
   const activeHref = items.map((i) => i.href)

@@ -22,6 +22,8 @@ interface __BaseEnv_Env {
 	analytics_rollups: R2Bucket;
 	NOTIFICATIONS_DB: D1Database;
 	SEARCH_DB: D1Database;
+	AUTH_DB: D1Database;
+	ADMIN_BACKUPS: R2Bucket;
 	queue: Queue;
 	MODERATION_QUEUE: Queue;
 	image_storage_key: SecretsStoreSecret;
@@ -69,6 +71,8 @@ declare namespace Cloudflare {
 		analytics_rollups: R2Bucket;
 		NOTIFICATIONS_DB: D1Database;
 		SEARCH_DB: D1Database;
+		AUTH_DB: D1Database;
+		ADMIN_BACKUPS: R2Bucket;
 		queue: Queue;
 		MODERATION_QUEUE: Queue;
 		image_storage_key: SecretsStoreSecret;

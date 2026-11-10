@@ -1,6 +1,6 @@
 'use server';
 
-import type { Report, ReportStats } from '@al-ummah/shared-types';
+import type { AdminJob, AdminJobStatus, LegacyRestorePlan, Report, ReportStats } from '@al-ummah/shared-types';
 import { AdminApiError, type ActionResult } from './errors';
 import { fetchAdmin, requestAdmin } from './request';
 import type {
@@ -278,4 +278,29 @@ export async function retryProcessing(ids: string[]): Promise<ActionResult<unkno
 
 export async function markProcessingFailed(ids: string[], reason?: string): Promise<ActionResult<unknown>> {
   return mutate('/api/processing/mark-failed', 'POST', { ids, ...(reason ? { reason } : {}) });
+}
+
+// Admin jobs (heavy actions queued in api-videos; admin-api /api/content/jobs)
+
+export async function listAdminJobs(params: { status?: AdminJobStatus; targetKind?: string; targetId?: string; limit?: number } = {}): Promise<AdminJob[]> {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) if (value !== undefined) query.set(key, String(value));
+  const suffix = query.size ? `?${query}` : '';
+  return (await fetchAdmin<{ items: AdminJob[] }>(`/api/content/jobs${suffix}`)).items;
+}
+
+/** Queues a failed job again (it needs the permissions of the action it re-runs; audited). */
+export async function retryAdminJob(id: string): Promise<ActionResult<AdminJob>> {
+  return mutate(`/api/content/jobs/${encodeURIComponent(id)}/retry`, 'POST', {});
+}
+
+// Restore legacy profile fields (users:manage): dry run, then a queued job
+
+export async function getLegacyRestorePlan(): Promise<LegacyRestorePlan> {
+  return fetchAdmin<LegacyRestorePlan>('/api/content/legacy-profiles/plan');
+}
+
+/** Runs the current dry run (every planned profile); admin-api audits each profile first. */
+export async function startLegacyRestore(): Promise<ActionResult<{ job: AdminJob }>> {
+  return mutate('/api/content/legacy-profiles/restore', 'POST', {});
 }

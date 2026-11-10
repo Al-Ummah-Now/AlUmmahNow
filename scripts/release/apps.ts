@@ -117,13 +117,16 @@ export const APPS: AppRule[] = [
 				// Heavy admin actions run as queued jobs (lib/admin/jobs.ts)
 				{ kind: 'queue_producer', name: 'ADMIN_JOBS_QUEUE' },
 				{ kind: 'queue_consumer', name: 'al-ummah-now-admin-jobs' },
+				// Restore legacy profile fields (lib/admin/legacy-restore.ts): verified emails, backups
+				{ kind: 'd1_databases', name: 'AUTH_DB' },
+				{ kind: 'r2_buckets', name: 'ADMIN_BACKUPS' },
 				{ kind: 'r2_buckets', name: 'videos' },
 				// Per-video view counter in the realtime worker (SCALABILITY-AUDIT AV-1)
 				{ kind: 'durable_objects', name: 'VIEW_COUNTER' },
 			],
 			...PROD_GUARDS,
 		},
-		stage: stageRule({ name: 'videos-stage', requireRoutes: true, vars: { Issuer: STAGE_AUTH, Audience: STAGE_API, WEBSOCKET_URL: STAGE_REALTIME, ENVIRONMENT: 'stage', CORS_ORIGINS: 'https://videos.stage.alummahnow.net,https://admin.stage.alummahnow.net,https://stage.alummahnow.net,https://www.stage.alummahnow.net,https://cms.stage.alummahnow.net' }, requiredBindings: [INTERNAL_API_KEY, { kind: 'queue_producer', name: 'queue' }, { kind: 'queue_producer', name: 'MODERATION_QUEUE' }, { kind: 'queue_producer', name: 'ADMIN_JOBS_QUEUE' }, { kind: 'queue_consumer', name: 'al-ummah-now-admin-jobs-stage' }, { kind: 'd1_databases', name: 'SEARCH_DB' }, { kind: 'durable_objects', name: 'VIEW_COUNTER' }] }),
+		stage: stageRule({ name: 'videos-stage', requireRoutes: true, vars: { Issuer: STAGE_AUTH, Audience: STAGE_API, WEBSOCKET_URL: STAGE_REALTIME, ENVIRONMENT: 'stage', CORS_ORIGINS: 'https://videos.stage.alummahnow.net,https://admin.stage.alummahnow.net,https://stage.alummahnow.net,https://www.stage.alummahnow.net,https://cms.stage.alummahnow.net' }, requiredBindings: [INTERNAL_API_KEY, { kind: 'queue_producer', name: 'queue' }, { kind: 'queue_producer', name: 'MODERATION_QUEUE' }, { kind: 'queue_producer', name: 'ADMIN_JOBS_QUEUE' }, { kind: 'queue_consumer', name: 'al-ummah-now-admin-jobs-stage' }, { kind: 'd1_databases', name: 'SEARCH_DB' }, { kind: 'd1_databases', name: 'AUTH_DB' }, { kind: 'r2_buckets', name: 'ADMIN_BACKUPS' }, { kind: 'durable_objects', name: 'VIEW_COUNTER' }] }),
 	},
 	{
 		app: 'processor',

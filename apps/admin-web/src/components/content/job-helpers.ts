@@ -22,7 +22,9 @@ export function canRetryJob(job: Pick<AdminJob, 'kind'>, permissions: readonly A
   return needed.every((p) => permissions.includes(p));
 }
 
-export function jobTargetHref(job: Pick<AdminJob, 'targetKind' | 'targetId'>): string {
+export function jobTargetHref(job: Pick<AdminJob, 'kind' | 'targetKind' | 'targetId'>): string {
+  // The legacy profile restore covers many profiles: it lives on its own page
+  if (job.kind === 'profiles.restore-legacy') return '/legacy-profiles';
   const base = job.targetKind === 'channel' ? '/channels' : job.targetKind === 'video' ? '/videos' : '/users';
   return `${base}/${encodeURIComponent(job.targetId)}`;
 }

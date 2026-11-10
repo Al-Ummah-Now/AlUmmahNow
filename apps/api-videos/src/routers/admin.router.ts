@@ -19,6 +19,7 @@ import { listChannels, listComments, listUsers, listVideos } from '../lib/admin/
 import * as admin from '../lib/admin/service';
 import { checkImage, storeImage } from '../lib/admin/images';
 import { countJobs, getJob, listJobs, retryJob } from '../lib/admin/jobs';
+import { LegacyRestoreError } from '../lib/admin/legacy-restore';
 import { logger } from '../lib/logger';
 
 type Env = { Bindings: admin.AdminServiceEnv & Record<string, unknown> };
@@ -124,6 +125,9 @@ app.onError((error, c) => {
 	if (error instanceof admin.AdminError) {
 		return c.json({ success: false, code: error.code, error: error.message }, error.status);
 	}
+	if (error instanceof LegacyRestoreError) {
+		return c.json({ success: false, code: error.code, error: error.message }, error.status);
+	}
 	logger.error('[AdminInternal] Request failed', { path: c.req.path, error: error instanceof Error ? error.message : String(error) });
 	return c.json({ success: false, code: 'internal_error', error: 'Internal error' }, 500);
 });
@@ -189,6 +193,21 @@ app.patch('/users/:id', async (c) => ok(c, await admin.updateUser(c.env, c.req.p
 app.post('/users/:id/ban', async (c) => ok(c, await admin.banUser(c.env, c.req.param('id'), actor(c), parse(Reason, await body(c)).reason)));
 app.post('/users/:id/unban', async (c) => ok(c, await admin.unbanUser(c.env, c.req.param('id'), actor(c))));
 app.post('/users/:id/delete-data', async (c) => ok(c, await admin.deleteUserData(c.env, c.req.param('id'), actor(c))));
+
+// Restore legacy profile fields (lib/admin/legacy-restore.ts): dry run, then a queued job
+const LegacyRestoreRequest = z.object({
+	/** admin-api's id for this run, also in its audit rows */
+	runId: z.string().uuid().optional(),
+	approved: z
+		.array(z.object({ id: z.string().regex(/^usr_[0-9a-f]{32}$/), legacyId: z.string().regex(/^[0-9a-f]{32}$/), fields: z.array(z.string().max(100)).min(1).max(50) }))
+		.min(1)
+		.max(300),
+});
+app.get('/legacy-profiles/plan', async (c) => ok(c, await admin.legacyRestorePlan(c.env)));
+app.post('/legacy-profiles/restore', async (c) => {
+	const request = parse(LegacyRestoreRequest, await body(c));
+	return ok(c, await admin.startLegacyRestore(c.env, request.approved as never, actor(c), request.runId));
+});
 
 // Admin jobs (heavy actions run from the admin-jobs queue; see lib/admin/jobs.ts)
 const JobQuery = z.object({

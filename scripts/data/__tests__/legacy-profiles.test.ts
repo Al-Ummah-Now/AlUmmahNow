@@ -111,6 +111,13 @@ test('a usr_ profile claiming the legacy email in its editable profile field is 
 	assert.deepEqual(none.pairs.map((p) => p.legacy), [undefined]);
 });
 
+test('only the approved fields are planned (the admin job runs what the dry run showed, nothing more)', () => {
+	const plan = planProfile({ id: USR_ID, avatarUrl: '', firstNameLocalized: { ar: '' } }, legacy, { only: new Set(['firstNameLocalized.ar']) });
+	assert.deepEqual(plan.changes.map((c) => c.field), ['firstNameLocalized.ar']);
+	assert.equal(plan.next.avatarUrl, '');
+	assert.deepEqual(planProfile(current, legacy, { only: new Set() }).changes, []);
+});
+
 test('helpers', () => {
 	assert.equal(isLegacyId(LEGACY_ID), true);
 	assert.equal(isLegacyId(USR_ID), false);
