@@ -90,7 +90,7 @@ const api = new ApiClient(API_URL);
 // Summary bookkeeping
 // ---------------------------------------------------------------------------
 
-type Status = 'created' | 'exists' | 'updated' | 'skipped' | 'missing' | 'failed-soft' | 'failed';
+type Status = 'created' | 'exists' | 'password reset' | 'updated' | 'skipped' | 'missing' | 'failed-soft' | 'failed';
 
 interface SummaryRow {
   area: string;
