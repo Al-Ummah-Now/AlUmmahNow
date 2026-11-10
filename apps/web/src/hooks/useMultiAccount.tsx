@@ -21,7 +21,10 @@ import {
   logoutAllAccounts,
   getActiveSessionInfo,
 } from '@/lib/actions/multi-account';
-import type { Channel, ChannelCreateRequest } from '@al-ummah/shared-types';
+import type { AccessibleChannel, Channel, ChannelCreateRequest, ChannelRole } from '@al-ummah/shared-types';
+import { ChannelAccessError, fetchChannelAccess } from '@/lib/channels/access';
+import { cacheChannels, toSessionChannel } from '@/lib/channels/session-cache';
+import { sameChannelList } from '@/lib/channels/menu';
 import { logger } from '@/lib/logger-client';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getAuthUrl } from '@/lib/runtime-config';
@@ -45,7 +48,28 @@ interface ChannelInfo {
   nameLocalized?: Record<string, string>; // Multi-language channel names
   avatarUrl?: string;
   isMain: boolean;
+  /** The account's channel role: owner, or a role it was given (admin, editor, moderator) */
+  role?: ChannelRole;
+  isSuspended?: boolean;
+  suspension?: { at: string; reason?: string };
 }
+
+/** The live list's entries as the menu holds them. */
+function toChannelInfo(channel: AccessibleChannel): ChannelInfo {
+  return {
+    id: channel.id,
+    userId: channel.userId,
+    name: channel.name,
+    ...(channel.nameLocalized ? { nameLocalized: channel.nameLocalized } : {}),
+    ...(channel.avatarUrl ? { avatarUrl: channel.avatarUrl } : {}),
+    isMain: channel.isMain,
+    role: channel.role,
+    ...(channel.isSuspended ? { isSuspended: true, suspension: channel.suspension } : {}),
+  };
+}
+
+/** Live channel list refreshes on focus are at most this frequent. */
+const LIVE_REFRESH_MIN_MS = 10_000;
 
 interface UserInfo {
   id: string;
@@ -155,6 +179,91 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // The cookie's first-paint channel cache, and the last live list (GET /api/channels/access)
+  const cookieChannelsRef = useRef<ChannelInfo[]>([]);
+  const liveRef = useRef<{ userId: string; channels: ChannelInfo[] } | null>(null);
+  const userRef = useRef<UserInfo | null>(null);
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
+  /**
+   * Show a session's user: its cookie cache paints first, and a live list
+   * already loaded for the same account is kept (no flicker back to the cache).
+   */
+  const applySessionUser = useCallback((next: UserInfo | null) => {
+    if (!next) {
+      liveRef.current = null;
+      cookieChannelsRef.current = [];
+      userRef.current = null;
+      setUser(null);
+      return;
+    }
+    cookieChannelsRef.current = next.channels;
+    const live = liveRef.current?.userId === next.id ? liveRef.current.channels : null;
+    const shown = live
+      ? { ...next, channels: live, channel: next.channel ? (live.find((c) => c.id === next.channel!.id) ?? next.channel) : null }
+      : next;
+    userRef.current = shown;
+    setUser(shown);
+  }, []);
+
+  const liveInFlight = useRef<AbortController | null>(null);
+  const lastLiveAt = useRef(0);
+
+  /**
+   * Load the live channel list (owned + channels with a role) straight from
+   * api-videos. Rewrites the cookie cache only when it no longer matches
+   * (a channel created, deleted, renamed, a role granted, changed or revoked),
+   * and moves off an active channel whose role was revoked. A failure keeps
+   * the cached list; it is reported, never shown raw.
+   */
+  const refreshLiveChannels = useCallback(async (force = false): Promise<void> => {
+    const current = userRef.current;
+    if (!current) return;
+    if (!force && Date.now() - lastLiveAt.current < LIVE_REFRESH_MIN_MS) return;
+    lastLiveAt.current = Date.now();
+    liveInFlight.current?.abort();
+    const controller = new AbortController();
+    liveInFlight.current = controller;
+    try {
+      const live = await fetchChannelAccess(current.id, controller.signal);
+      if (controller.signal.aborted || !mountedRef.current || userRef.current?.id !== current.id) return;
+      const channels = live.map(toChannelInfo);
+      liveRef.current = { userId: current.id, channels };
+      const activeId = userRef.current?.channel?.id ?? null;
+      const activeRevoked = !!activeId && !channels.some((c) => c.id === activeId);
+      setUser((u) => {
+        if (!u || u.id !== current.id) return u;
+        const next = { ...u, channels, channel: u.channel ? (channels.find((c) => c.id === u.channel!.id) ?? u.channel) : null };
+        userRef.current = next;
+        return next;
+      });
+
+      const expectedCache = cacheChannels(live.map(toSessionChannel), current.id, activeRevoked ? null : activeId);
+      const cached = cacheChannels(cookieChannelsRef.current.map((c) => toSessionChannel(c as unknown as Channel)), current.id, activeId);
+      if (activeRevoked || !sameChannelList(expectedCache, cached)) {
+        logger.info('[MultiAccountProvider] Channel list changed; updating the session cache', { activeRevoked, channels: channels.length });
+        await reloadUserChannels();
+        const sessionInfo = await getActiveSessionInfo();
+        if (sessionInfo && mountedRef.current) {
+          applySessionUser(sessionInfo.user);
+          setAccounts(sessionInfo.accounts);
+        }
+        // The page was acting as a channel the account can no longer use
+        if (activeRevoked) router.refresh();
+      }
+    } catch (err) {
+      if ((err as { name?: string })?.name === 'AbortError') return;
+      // Already reported (lib/channels/report.ts); the cached list stays
+      if (!(err instanceof ChannelAccessError)) logger.error('[MultiAccountProvider] Live channel list failed:', err);
+    } finally {
+      if (liveInFlight.current === controller) liveInFlight.current = null;
+    }
+    // router is stable from useRouter()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [applySessionUser]);
+
   // Load initial session data
   const loadSessionData = useCallback(async () => {
     // Prevent concurrent loads
@@ -215,7 +324,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
           await switchUserAccount(follow.userId, window.location.pathname);
           const switched = await getActiveSessionInfo();
           if (switched && mountedRef.current) {
-            setUser(switched.user);
+            applySessionUser(switched.user);
             setAccounts(switched.accounts);
             router.refresh();
             return;
@@ -224,15 +333,17 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       }
 
       if (sessionInfo) {
-        setUser(sessionInfo.user);
+        applySessionUser(sessionInfo.user);
         setAccounts(sessionInfo.accounts);
+        // The live list replaces the cookie's first-paint cache
+        void refreshLiveChannels(true);
         logger.info('[MultiAccountProvider] Session loaded successfully:', {
           
           email: sessionInfo.user?.email,
           accountsCount: sessionInfo.accounts.length
         });
       } else {
-        setUser(null);
+        applySessionUser(null);
         setAccounts([]);
         logger.info('[MultiAccountProvider] No session found');
       }
@@ -244,7 +355,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       if (!mountedRef.current) return;
       logger.error('[MultiAccountProvider] Failed to load session:', err);
-      setUser(null);
+      applySessionUser(null);
       setAccounts([]);
       setError(err instanceof Error ? err.message : 'Failed to load session data');
     } finally {
@@ -256,7 +367,20 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
     }
     // router is stable from useRouter()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [applySessionUser, refreshLiveChannels]);
+
+  // The live list again when the tab comes back (a role granted or revoked
+  // meanwhile, a channel created on another device), throttled
+  useEffect(() => {
+    const onFocus = () => { void refreshLiveChannels(); };
+    const onVisible = () => { if (document.visibilityState === 'visible') void refreshLiveChannels(); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [refreshLiveChannels]);
 
   // Load data on mount
   useEffect(() => {
@@ -428,6 +552,8 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
 
         if (newChannel) {
           await loadSessionData();
+          // The menu's live list shows the new channel right away, whichever page created it
+          await refreshLiveChannels(true);
           router.refresh();
           return newChannel;
         }
@@ -445,28 +571,19 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
     })();
     createChannelInFlight.current = run;
     return run;
-  }, [loadSessionData, router, t]);
+  }, [loadSessionData, refreshLiveChannels, router, t]);
 
-  // Reload channels (without triggering full loading state). Calls run one
-  // after another and each resolves once every earlier reload has finished:
-  // two overlapping reloads (e.g. the background refresh below and a save)
-  // left Server Actions in flight after the caller's await, and a navigation
-  // started then could be undone by the App Router.
+  // Reload channels now (after creating, deleting or editing a channel, or a
+  // role change): the live list, which also updates the session cache when
+  // it changed. Calls run one after another and each resolves once every
+  // earlier reload has finished, so a navigation started after the caller's
+  // await is not undone by a Server Action still in flight.
   const reloadChain = useRef<Promise<void>>(Promise.resolve());
   const reloadChannels = useCallback(() => {
     const run = reloadChain.current.then(async () => {
       try {
         setError(null);
-
-        await reloadUserChannels();
-
-        // Update session data WITHOUT setting loading state
-        // This prevents UI flicker when reloading channels
-        const sessionInfo = await getActiveSessionInfo();
-        if (sessionInfo) {
-          setUser(sessionInfo.user);
-          setAccounts(sessionInfo.accounts);
-        }
+        await refreshLiveChannels(true);
       } catch (err) {
         logger.error('[MultiAccountProvider] Failed to reload channels:', err);
         setError(t.errors.failedToLoad);
@@ -474,27 +591,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
     });
     reloadChain.current = run;
     return run;
-  }, [t]);
-
-  // Session channels are cached at sign-in, so avatars or names changed since
-  // then (or on another device) would never reach the navigation. Refresh them
-  // once per tab, after the page's own requests (Server Actions run one at a
-  // time, so this must not queue ahead of them).
-  const signedInUserId = user?.id;
-  useEffect(() => {
-    if (!signedInUserId) return;
-    const key = `aun_channels_refreshed_${signedInUserId}`;
-    try {
-      if (sessionStorage.getItem(key)) return;
-      sessionStorage.setItem(key, String(Date.now()));
-    } catch {
-      // Storage unavailable (private mode): refresh on every load instead
-    }
-    const timer = window.setTimeout(() => {
-      void reloadChannels();
-    }, 4000);
-    return () => window.clearTimeout(timer);
-  }, [signedInUserId, reloadChannels]);
+  }, [refreshLiveChannels, t]);
 
   // Logout current account. The last account out also ends the shared
   // sign-in on the auth server (single sign-out, #291): the browser leaves for
@@ -508,7 +605,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       // Sign this account out of the browser (every app), then here
       if (signingOut) await removeAuthAccount(authOrigin, signingOut);
       const { signOutUrl } = await logoutCurrentAccount(currentLocale());
-      setUser(null);
+      applySessionUser(null);
       setAccounts([]);
 
       const next = decideAfterSignOut({ authAccounts: await fetchAuthAccounts(authOrigin), localUserIds, signOutUrl });
@@ -531,7 +628,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       logger.error('[MultiAccountProvider] Failed to logout:', err);
       setError(t.errors.genericError);
     }
-  }, [user?.id, localAccounts, loadSessionData, router, t]);
+  }, [user?.id, localAccounts, loadSessionData, router, t, applySessionUser]);
 
   // Logout all accounts (and the shared sign-in)
   const logoutAll = useCallback(async (skipConfirmation = false) => {
@@ -546,7 +643,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       }
 
       const { signOutUrl } = await logoutAllAccounts(currentLocale());
-      setUser(null);
+      applySessionUser(null);
       setAccounts([]);
       logger.info('[MultiAccountProvider] All accounts logged out, starting single sign-out');
       if (signOutUrl) window.location.assign(signOutUrl);
@@ -554,7 +651,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       logger.error('[MultiAccountProvider] Failed to logout all:', err);
       setError(t.errors.genericError);
     }
-  }, [t]);
+  }, [t, applySessionUser]);
 
   // Refresh session data
   const refresh = useCallback(async () => {
@@ -565,10 +662,10 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
     await reloadActiveProfile();
     const sessionInfo = await getActiveSessionInfo();
     if (sessionInfo) {
-      setUser(sessionInfo.user);
+      applySessionUser(sessionInfo.user);
       setAccounts(sessionInfo.accounts);
     }
-  }, []);
+  }, [applySessionUser]);
 
   const value: MultiAccountContextValue = {
     user,

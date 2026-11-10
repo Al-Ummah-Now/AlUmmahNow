@@ -3,6 +3,7 @@
  * Manually update chapters for a video (requires authentication and ownership)
  */
 
+import { canOnVideo } from "../../lib/channelAccess";
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { Str } from 'chanfana';
 import { z } from 'zod';
@@ -117,7 +118,7 @@ export class VideoChaptersUpdate extends AuthenticatedRoute {
         );
       }
 
-      if (video.userId !== userId) {
+      if (!(await canOnVideo(c.env as never, video, userId, 'video.edit'))) {
         logger.warn('User not authorized to edit video chapters', {
           videoId,
           userId,
@@ -158,7 +159,7 @@ export class VideoChaptersUpdate extends AuthenticatedRoute {
       };
 
       // Conditional write on the fresh video (SCALABILITY-AUDIT AV-3)
-      const saved = await patchVideo(videoRepo, videoId, { chapters: chapterData, hasChapters: true }, { ownerId: userId });
+      const saved = await patchVideo(videoRepo, videoId, { chapters: chapterData, hasChapters: true }, { ownerId: video.userId });
       if (saved.status === 'missing') {
         return c.json({ success: false, error: 'Video not found' }, 404);
       }

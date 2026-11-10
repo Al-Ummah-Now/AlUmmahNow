@@ -35,6 +35,8 @@ interface ChannelAboutFieldsProps {
   onChange: (value: ChannelAboutValues) => void;
   onHandleStatusChange?: (status: HandleStatus) => void;
   disabled?: boolean;
+  /** The handle is read-only (only the channel owner changes it) */
+  handleLocked?: boolean;
 }
 
 const inputClass =
@@ -50,7 +52,7 @@ export function isValidContactEmail(email: string): boolean {
   return email.trim() === '' || EMAIL_PATTERN.test(email.trim());
 }
 
-export function ChannelAboutFields({ channelId, currentHandle, value, onChange, onHandleStatusChange, disabled }: ChannelAboutFieldsProps) {
+export function ChannelAboutFields({ channelId, currentHandle, value, onChange, onHandleStatusChange, disabled, handleLocked }: ChannelAboutFieldsProps) {
   const { t, lang } = useLanguage();
   const ids = { handle: useId(), handleHelp: useId(), handleStatus: useId(), email: useId(), emailHelp: useId(), location: useId(), links: useId() };
   const [status, setStatus] = useState<HandleStatus>({ state: 'idle' });
@@ -130,6 +132,7 @@ export function ChannelAboutFields({ channelId, currentHandle, value, onChange, 
             autoCorrect="off"
             spellCheck={false}
             disabled={disabled}
+            readOnly={handleLocked}
             placeholder={t.channel.handlePlaceholder}
             aria-describedby={`${ids.handleHelp} ${ids.handleStatus}`}
             aria-invalid={status.state === 'unavailable'}

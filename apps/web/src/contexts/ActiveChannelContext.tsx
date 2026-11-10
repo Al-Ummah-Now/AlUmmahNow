@@ -33,12 +33,19 @@ export interface ActiveChannelProviderProps {
   children: React.ReactNode;
   userChannels?: Channel[];
   userId?: string;
+  /**
+   * The session's active channel (chosen in the account menu, which may be a
+   * channel the user manages rather than owns). When it is in the list it
+   * wins over the stored choice, so every page acts as the same channel.
+   */
+  sessionChannelId?: string | null;
 }
 
 export const ActiveChannelProvider: React.FC<ActiveChannelProviderProps> = ({
   children,
   userChannels = [],
-  userId
+  userId,
+  sessionChannelId,
 }) => {
   const [activeChannel, setActiveChannelState] = useState<ActiveChannel | null>(null);
 
@@ -70,6 +77,22 @@ export const ActiveChannelProvider: React.FC<ActiveChannelProviderProps> = ({
     }
 
     const storageKey = getStorageKey(userId);
+
+    const sessionChannel = sessionChannelId ? userChannels.find(ch => ch.id === sessionChannelId) : undefined;
+    if (sessionChannel) {
+      const fromSession: ActiveChannel = {
+        channelId: sessionChannel.id,
+        userId: sessionChannel.userId,
+        name: sessionChannel.name,
+        avatarUrl: sessionChannel.avatarUrl,
+        isMain: sessionChannel.isMain,
+      };
+      setActiveChannelState(fromSession);
+      if (typeof window !== 'undefined') {
+        try { localStorage.setItem(storageKey, JSON.stringify(fromSession)); } catch { /* storage unavailable */ }
+      }
+      return;
+    }
 
     // Try to load from localStorage for THIS user
     if (typeof window !== 'undefined') {
@@ -125,7 +148,7 @@ export const ActiveChannelProvider: React.FC<ActiveChannelProviderProps> = ({
         localStorage.removeItem(storageKey);
       }
     }
-  }, [userChannels, userId]);
+  }, [userChannels, userId, sessionChannelId]);
 
   const setActiveChannel = useCallback((channel: ActiveChannel) => {
     logger.debug('ActiveChannelProvider: Setting active channel:', channel);

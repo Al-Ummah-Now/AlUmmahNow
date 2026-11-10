@@ -1,3 +1,4 @@
+import { canOnVideo } from "../../lib/channelAccess";
 import { OpenAPIRoute, Str } from "chanfana";
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { z } from "zod";
@@ -87,6 +88,8 @@ export class UploadCompleteEndpoint extends AuthenticatedRoute {
 
 
 		let videoId: string | undefined;
+		// Owner the caller was authorised against (a channel member completes an upload owned by the channel owner)
+		let authorizedOwner: string | undefined;
 
 		try {
 			// Get validated data
@@ -108,12 +111,13 @@ export class UploadCompleteEndpoint extends AuthenticatedRoute {
 			}
 
 			// Check ownership
-			if (video.userId !== userId) {
+			if (!(await canOnVideo(c.env as never, video, userId, 'video.upload'))) {
 				return c.json({
 					success: false,
 					error: "Forbidden - you can only complete uploads for your own videos",
 				}, 403);
 			}
+			authorizedOwner = video.userId;
 
 			// Update video status to processing with a conditional write on the
 			// fresh video (SCALABILITY-AUDIT AV-3). A video that processing already
@@ -128,7 +132,7 @@ export class UploadCompleteEndpoint extends AuthenticatedRoute {
 				tusUpload: undefined,
 				uploadWatch: undefined,
 				...(fresh.processingIssue?.kind === 'needs_reupload' ? { processingIssue: undefined } : {}),
-			} as Partial<VideoType>), { ownerId: userId });
+			} as Partial<VideoType>), { ownerId: video.userId });
 			if (saved.status === 'missing') {
 				return c.json({ success: false, error: "Video not found" }, 404);
 			}
@@ -167,7 +171,7 @@ export class UploadCompleteEndpoint extends AuthenticatedRoute {
 			logger.error("Upload complete error:", error);
 
 			// Try to update video status to failed if we have the videoId
-			if (videoId) {
+			if (videoId && authorizedOwner) {
 				try {
 					const bucket = c.env.videos;
 					type VideoType = z.infer<typeof BusinessVideo>;
@@ -176,7 +180,7 @@ export class UploadCompleteEndpoint extends AuthenticatedRoute {
 					const failed = await patchVideo(repository, videoId, (fresh) => fresh.uploadStatus === 'ready' ? false : {
 						uploadStatus: 'failed' as const,
 						dateModified: new Date().toISOString(),
-					}, { ownerId: userId });
+					}, { ownerId: authorizedOwner });
 
 					if (failed.status === 'ok' && failed.changed) {
 						// Send failure event

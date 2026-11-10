@@ -32,7 +32,7 @@ export function ActiveChannelWrapper({ children }: ActiveChannelWrapperProps) {
   );
 
   return (
-    <ActiveChannelProvider userChannels={channels} userId={user?.id}>
+    <ActiveChannelProvider userChannels={channels} userId={user?.id} sessionChannelId={sessionUser?.channel?.id ?? null}>
       <SuspendedChannelNotice channels={channels} />
       {children}
     </ActiveChannelProvider>

@@ -409,8 +409,9 @@ export async function getActiveSessionInfo() {
     accountsCount: session.availableAccounts.length,
   });
 
-  // Filter channels to only include those belonging to the active user
-  const userChannels = session.availableChannels.filter(ch => ch.userId === session.userId);
+  // The cookie's first-paint cache (owned and managed channels, each with the
+  // caller's role); the menu replaces it with the live list (GET /api/channels/access)
+  const userChannels = session.availableChannels;
 
   const channelData = session.channel ? {
     id: session.channel.id,
@@ -419,6 +420,7 @@ export async function getActiveSessionInfo() {
     nameLocalized: session.channel.nameLocalized,
     avatarUrl: session.channel.avatarUrl,
     isMain: session.channel.isMain,
+    role: session.channel.role ?? (session.channel.userId === session.userId ? 'owner' as const : undefined),
   } : null;
 
   logger.debug('[getActiveSessionInfo] TRACE', {
@@ -443,6 +445,7 @@ export async function getActiveSessionInfo() {
         nameLocalized: ch.nameLocalized,
         avatarUrl: ch.avatarUrl,
         isMain: ch.isMain,
+        role: ch.role ?? (ch.userId === session.userId ? 'owner' as const : undefined),
         ...(ch.isSuspended ? { isSuspended: true, suspension: ch.suspension } : {}),
       })),
     },

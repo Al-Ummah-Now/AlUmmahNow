@@ -1,3 +1,4 @@
+import { canOnVideo } from "../../lib/channelAccess";
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { Str, Bool } from 'chanfana';
 import { z } from 'zod';
@@ -137,7 +138,7 @@ export class VideoScheduleUpdate extends AuthenticatedRoute {
       }
 
       // Check if user owns the video
-      if (video.userId !== userId) {
+      if (!(await canOnVideo(c.env as never, video, userId, 'video.schedule'))) {
         return c.json(
           {
             success: false,
@@ -211,7 +212,7 @@ export class VideoScheduleUpdate extends AuthenticatedRoute {
       // scheduler may have started publishing meanwhile.
       const newSchedule = { date: video.scheduledPublishDate, timezone: video.scheduledPublishTimezone };
       const { data: saved, rejected } = await videoRepo.updateObjectOrReject<{ status: 403 | 404 | 409; error: string }>(videoId, (fresh) => {
-        if (fresh.userId !== userId) return { reject: { status: 403, error: 'Forbidden - you do not own this video' } };
+        if (fresh.userId !== video.userId) return { reject: { status: 403, error: 'Forbidden - you do not own this video' } };
         if (!fresh.scheduledPublishStatus || fresh.scheduledPublishStatus === 'cancelled') {
           return { reject: { status: 404, error: 'Video is not scheduled for publication' } };
         }

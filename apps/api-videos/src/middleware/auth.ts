@@ -3,6 +3,8 @@ import { AUTH_CONFIG, getAuthConfig } from './auth-config';
 import { getClient } from '../lib/openauth-client';
 import { logger } from '../lib/logger';
 import { isUserScopedRoute } from '../lib/reactions';
+import { channelRoleOf } from '@al-ummah/shared-types';
+import { memberMayActAs } from '../lib/channelAccess';
 import { decodeVerifiedClaims, isTokenRevoked } from '../lib/token-revocation';
 
 // Type for the decoded JWT payload from OpenAuth
@@ -216,7 +218,8 @@ export function channelRefusesWrite(method: string, path: string): boolean {
  * Must be used AFTER authMiddleware
  * Validates that the channelId in the header:
  * 1. Exists as a channel in R2
- * 2. Belongs to the authenticated user
+ * 2. Belongs to the authenticated user, or the user holds a channel role
+ *    that allows this request (lib/channelAccess.ts memberMayActAs)
  *
  * If channelId header is not provided, middleware passes through
  * If channelId is invalid or doesn't belong to user, returns 403
@@ -267,11 +270,14 @@ export async function channelIdMiddleware(c: Context, next: Next) {
     }
 
     // Parse channel data
-    const channelData = await channelObject.json() as { userId: string; isSuspended?: boolean; isDeleted?: boolean };
+    const channelData = await channelObject.json() as { userId: string; members?: unknown; isSuspended?: boolean; isDeleted?: boolean };
 
-    // Verify ownership
-    if (channelData.userId !== auth.userId) {
-      logger.warn(`User ${auth.userId} attempted to use channel ${channelId} owned by ${channelData.userId}`);
+    // The owner, or a member whose channel role allows this request (reads,
+    // and the writes listed in lib/channelAccess.ts). Channel roles come from
+    // the channel record, never from token (site) roles.
+    const role = channelRoleOf(channelData, auth.userId);
+    if (!memberMayActAs(role, c.req.method, c.req.path)) {
+      logger.warn(`User ${auth.userId} attempted to use channel ${channelId} owned by ${channelData.userId}`, { role, method: c.req.method, path: c.req.path });
       return c.json({
         success: false,
         error: 'You do not have permission to perform actions on behalf of this channel'
@@ -288,8 +294,11 @@ export async function channelIdMiddleware(c: Context, next: Next) {
       }, 403);
     }
 
-    // Set channelId in context for use by endpoints
+    // Set channelId in context for use by endpoints, with the caller's role
+    // and the channel's owner (new videos belong to the owner, lib/channelAccess.ts)
     c.set('channelId', channelId);
+    c.set('channelRole', role);
+    c.set('channelOwnerId', channelData.userId);
 
     return await next();
   } catch (error) {

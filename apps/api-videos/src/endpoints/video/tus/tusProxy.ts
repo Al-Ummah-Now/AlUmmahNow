@@ -225,7 +225,8 @@ export class TusProxy {
         if (video && durable && durable.sessionId === sessionId && durable.bunnyUploadUrl) {
           const session: TusUploadSession = {
             videoId,
-            userId: video.userId,
+            // The uploader: a channel member's upload is owned by the channel owner
+            userId: video.uploadedBy ?? video.userId,
             bunnyUploadUrl: durable.bunnyUploadUrl,
             fileSize: durable.fileSize,
             uploadOffset: 0,

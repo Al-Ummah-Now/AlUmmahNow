@@ -1,3 +1,4 @@
+import { canOnVideo } from "../../lib/channelAccess";
 import { Num, Str } from "chanfana";
 import { z } from "zod";
 import { Video, ResponseError } from "../../lib/types";
@@ -106,7 +107,8 @@ export class CommentList extends OptionalAuthRoute {
 		}
 
 		const commentSettings = getCommentSettings(video);
-		const viewer: CommentViewer = { userId, isVideoOwner: !!userId && video.userId === userId };
+		// Held comments show to the video's owner and to channel admins and moderators
+		const viewer: CommentViewer = { userId, isVideoOwner: await canOnVideo(c.env as never, video, userId, 'comment.moderate') };
 		const page = commentSettings === 'off'
 			? { items: [] as StoredComment[], nextCursor: null, total: 0 }
 			: paginateComments(video.comments as unknown as StoredComment[], limit, cursor, sort, viewer);

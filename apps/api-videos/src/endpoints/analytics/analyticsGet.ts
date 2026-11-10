@@ -1,3 +1,4 @@
+import { canOnVideo } from "../../lib/channelAccess";
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { Str } from "chanfana";
 import { z } from "zod";
@@ -162,7 +163,7 @@ export class AnalyticsGet extends AuthenticatedRoute {
 			const object = await c.env.videos.get(entityId);
 			const video = object ? await object.json<AnalyticsVideo>() : null;
 			if (!video || video.isDeleted) return { status: 404 as const, error: "Video not found" };
-			if (video.userId !== userId) return { status: 403 as const, error: "You can only view analytics for your own videos" };
+			if (!(await canOnVideo(c.env as never, video as never, userId, 'analytics.view'))) return { status: 403 as const, error: "You can only view analytics for your own videos" };
 			videos = [video];
 			// Subscribers belong to channels, not videos
 			channels = [];

@@ -371,6 +371,8 @@ async function runTransfer(env: AdminServiceEnv, job: AdminJob): Promise<JobOutc
 		if (fresh.userId === newOwnerId) return false;
 		fresh.userId = newOwnerId;
 		fresh.isMain = makeMain;
+		// Owners hold no member role: a new owner who was a member loses that entry
+		if (Array.isArray(fresh.members)) fresh.members = fresh.members.filter((m: { userId?: string }) => m?.userId !== newOwnerId);
 		fresh.dateModified = now();
 		return true;
 	});

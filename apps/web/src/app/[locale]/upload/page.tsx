@@ -21,6 +21,7 @@ import { useAuth } from "@/components/AuthProvider/authContext";
 import { useMultiAccount } from "@/hooks/useMultiAccount";
 import { login } from "@/lib/actions";
 import Link from "next/link";
+import { can } from "@al-ummah/shared-types";
 
 
 const UploadPage: React.FC = () => {
@@ -34,9 +35,15 @@ const UploadPage: React.FC = () => {
   const { activeChannel } = useActiveChannel();
   const auth = useAuth();
   const { user: sessionUser, loading: sessionLoading } = useMultiAccount();
-  // The single uploader uploads to the session's active channel; fall back to
-  // it while the channel context is still loading the user's channels.
-  const uploadChannelId = activeChannel?.channelId || sessionUser?.channel?.id || '';
+  // Uploads go to the session's active channel (the one picked in the account
+  // menu, possibly a channel the user manages); the channel context is the
+  // fallback while the session loads.
+  const uploadChannelId = sessionUser?.channel?.id || activeChannel?.channelId || '';
+  // The role on that channel (owner, or a channel role). Only a role that
+  // can't upload (a channel moderator) is blocked; the API checks again.
+  const uploadRole = sessionUser?.channels?.find((c) => c.id === uploadChannelId)?.role
+    ?? (sessionUser?.channel?.id === uploadChannelId ? sessionUser?.channel?.role : undefined);
+  const roleCannotUpload = !!uploadRole && !can(uploadRole, 'video.upload');
 
   const [uploadMode, setUploadMode] = useState<UploadMode>('single');
   const [uploadComplete, setUploadComplete] = useState(false);
@@ -248,6 +255,27 @@ const UploadPage: React.FC = () => {
                 {t.upload.goHome}
               </Link>
             </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  // The active channel is one the user manages with a role that can't upload
+  if (roleCannotUpload) {
+    return (
+      <main className="flex flex-col p-4 md:p-6 lg:p-8 w-full min-h-screen bg-gray-50 dark:bg-gray-900">
+        <div className="max-w-2xl mx-auto w-full">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 md:p-12 text-center" data-testid="upload-role-forbidden" data-role={uploadRole}>
+            <ShieldAlert size={64} className="mx-auto mb-6 text-amber-500" aria-hidden="true" />
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">{t.channelRoles.cannotUpload}</h1>
+            <p className="text-gray-600 dark:text-gray-400 mb-8">{t.channelRoles.cannotUploadHint}</p>
+            <Link
+              href={`/${locale}`}
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors font-medium"
+            >
+              {t.upload.goHome}
+            </Link>
           </div>
         </div>
       </main>

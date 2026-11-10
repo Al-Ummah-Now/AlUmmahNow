@@ -20,6 +20,8 @@ export interface UploadRecordInput {
 	title: string;
 	description?: string;
 	userId: string;
+	/** A channel member who uploaded on the owner's behalf (userId is the owner) */
+	uploadedBy?: string;
 	channelId: string;
 	isPublic?: boolean;
 	/** Comma-separated, as the upload forms send them */
@@ -46,6 +48,7 @@ export function createUploadRecord(input: UploadRecordInput): VideoRecord {
 		title: input.title,
 		description: input.description || '',
 		userId: input.userId,
+		...(input.uploadedBy ? { uploadedBy: input.uploadedBy } : {}),
 		channelId: input.channelId,
 		playUrl: `https://${input.bunnyHostname}/${input.videoId}/playlist.m3u8`,
 		thumbnailType: thumbnail?.type ?? 'auto',

@@ -1,6 +1,4 @@
-import { redirect } from 'next/navigation';
-import { isChannelOwner } from '@/lib/channel-utils';
-import { logger } from '@/lib/logger-server';
+import { requireChannelPage } from '@/lib/channels/guard';
 
 interface ChannelSettingsLayoutProps {
   children: React.ReactNode;
@@ -11,19 +9,15 @@ interface ChannelSettingsLayoutProps {
 }
 
 /**
- * Ownership guard for every channel settings page (overview, edit, videos,
- * tabs, sections, playlists, community). Several of these are client pages
- * that previously rendered their management UI for any visitor; anonymous
- * users and other users' channels are now sent to the public channel page.
+ * Guard for every channel settings page: the owner and anyone holding a
+ * channel role get in; each section's own layout narrows it to the role that
+ * can use it (edit/tabs/sections need channel.edit, videos need video.edit,
+ * playlists and community stay owner-only). Signed-out visitors and users
+ * with no role are sent to the public channel page. Site-admin rights alone
+ * don't count: a site admin holds no channel role.
  */
 export default async function ChannelSettingsLayout({ children, params }: ChannelSettingsLayoutProps) {
   const { locale, id } = await params;
-
-  const isOwner = await isChannelOwner(id);
-  if (!isOwner) {
-    logger.warn('[ChannelSettingsLayout] Non-owner redirected to channel page', { channelId: id, locale });
-    redirect(`/${locale}/channels/${id}`);
-  }
-
+  await requireChannelPage(locale, id, 'overview');
   return <>{children}</>;
 }

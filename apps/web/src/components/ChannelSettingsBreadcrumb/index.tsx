@@ -3,7 +3,7 @@
 import { useLanguage } from '@/hooks/useLanguage';
 import { BreadcrumbTrail, type Crumb } from '@/components/settings/SettingsBreadcrumb';
 
-export type ChannelSettingsPage = 'overview' | 'edit' | 'videos' | 'tabs' | 'sections' | 'community' | 'communityNew' | 'playlists';
+export type ChannelSettingsPage = 'overview' | 'edit' | 'videos' | 'tabs' | 'sections' | 'community' | 'communityNew' | 'playlists' | 'team';
 
 interface ChannelSettingsBreadcrumbProps {
   channelId: string;
@@ -35,6 +35,7 @@ export default function ChannelSettingsBreadcrumb({
     sections: t.channel.manageSections || 'Manage Sections',
     community: t.channel.communitySettings || 'Community',
     playlists: t.playlist.managePlaylists,
+    team: t.channelRoles.team,
   };
 
   const trail: Crumb[] = [{ label: t.header?.settings || 'Settings', href: `/${locale}/settings` }];

@@ -2,6 +2,7 @@
  * Upload subtitle track for a video
  */
 
+import { canOnVideo } from "../../lib/channelAccess";
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { Str, Bool } from 'chanfana';
 import { z } from 'zod';
@@ -164,7 +165,7 @@ export class SubtitlesUpload extends AuthenticatedRoute {
       }
 
       // Check ownership
-      if (video.userId !== userId) {
+      if (!(await canOnVideo(c.env as never, video, userId, 'video.edit'))) {
         return c.json(
           {
             success: false,
@@ -224,7 +225,7 @@ export class SubtitlesUpload extends AuthenticatedRoute {
         hasSubtitles: true,
         subtitleLanguages: metadata.tracks.map((t) => t.language),
         dateModified: new Date().toISOString(),
-      }, { ownerId: userId });
+      }, { ownerId: video.userId });
       if (saved.status === 'missing') {
         return c.json({ success: false, error: 'Video not found' }, 404);
       }

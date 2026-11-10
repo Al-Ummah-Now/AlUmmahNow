@@ -1,3 +1,4 @@
+import { uploadIdentity } from "../../lib/channelAccess";
 import { Str, Num } from "chanfana";
 import { createUploadRecord } from '../../lib/upload/uploadRecord';
 import { z } from "zod";
@@ -122,6 +123,8 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 			}
 
 			const channelId = c.req.header('channelId') || userId;
+			// A channel member's upload belongs to the channel's owner (lib/channelAccess.ts)
+			const { ownerId, uploadedBy } = uploadIdentity(c, userId);
 
 			// Create video in Bunny Stream first to get video ID
 			logger.info('[DEBUG] Extracting Bunny secrets...', {
@@ -276,7 +279,8 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 				videoId,
 				title,
 				description,
-				userId,
+				userId: ownerId,
+				uploadedBy,
 				channelId,
 				isPublic: isPublic ?? true,
 				tags,

@@ -3,6 +3,7 @@ import type { BulkEditTranslations } from './i18n-bulk-edit';
 import type { CommunityGuidelinesTranslations } from './i18n-community-guidelines';
 import type { ContactTranslations } from './i18n-contact';
 import type { UploadStatusTranslations } from './i18n-upload-status';
+import type { ChannelRolesTranslations } from './i18n-channel-roles';
 /**
  * Internationalization (i18n) Types
  *
@@ -137,6 +138,8 @@ export interface AppTranslations {
   library: LibraryTranslations;
   bulkEdit: BulkEditTranslations;
   communityGuidelines: CommunityGuidelinesTranslations;
+  /** Per-channel roles: account menu groups, role badges, channel Team page */
+  channelRoles: ChannelRolesTranslations;
   /** Contact us page (/[locale]/contact) */
   contact: ContactTranslations;
   /** After-upload processing status on the upload page (single and batch) */

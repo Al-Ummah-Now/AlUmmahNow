@@ -1,3 +1,4 @@
+import { can, channelRoleOf } from "@al-ummah/shared-types";
 import { Hono } from "hono";
 import type { AppContext } from "../../base/types";
 import BunnyStorageClient from "../../lib/bunny/storage";
@@ -49,7 +50,7 @@ const handleAvatarUpdate = async (c: AppContext) => {
         // Verify user owns this channel
         const auth = c.get('auth');
         const userId = auth?.userId;
-        if (channel.userId !== userId) {
+        if (!can(channelRoleOf(channel, userId), 'channel.edit')) {
             return c.json({
                 success: false,
                 error: "You do not have permission to update this channel",
@@ -81,7 +82,7 @@ const handleAvatarUpdate = async (c: AppContext) => {
 		});
 
         // Conditional write on the fresh channel (SCALABILITY-AUDIT AV-5)
-        const saved = await patchOwnedRecord(repository, id, { avatarUrl }, { ownerId: userId });
+        const saved = await patchOwnedRecord(repository, id, { avatarUrl }, { ownerId: channel.userId });
         if (saved.status === 'missing') {
             return c.json({ success: false, error: "Channel not found" }, 404);
         }

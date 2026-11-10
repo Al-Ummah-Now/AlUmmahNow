@@ -4,6 +4,7 @@
  * PUT /api/videos/:videoId/subtitles/:language/default
  */
 
+import { canOnVideo } from "../../lib/channelAccess";
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { Str } from 'chanfana';
 import { z } from 'zod';
@@ -70,7 +71,7 @@ export class SubtitlesSetDefault extends AuthenticatedRoute {
         return c.json({ success: false, error: 'Video not found' }, 404);
       }
 
-      if (video.userId !== userId) {
+      if (!(await canOnVideo(c.env as never, video, userId, 'video.edit'))) {
         return c.json({ success: false, error: 'You do not have permission to modify this video' }, 403);
       }
 
@@ -91,7 +92,7 @@ export class SubtitlesSetDefault extends AuthenticatedRoute {
       await patchVideo(videoRepo, videoId, {
         subtitles: updatedMetadata.tracks,
         dateModified: new Date().toISOString(),
-      }, { ownerId: userId });
+      }, { ownerId: video.userId });
 
       const queue = new Queue(c.env.queue);
       await queue.send(MessageType.VideoEdit, {

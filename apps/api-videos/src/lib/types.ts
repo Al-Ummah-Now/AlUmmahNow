@@ -82,6 +82,8 @@ export const Video = z.object({
     videoUrl: Str().optional(),
     playUrl: Str().optional(),
     userId: Str(),
+    /** The channel member who uploaded it, when not the owner (spec CHANNEL-ROLES §8). Private. */
+    uploadedBy: Str().optional(),
     channelId: Str(),
     dateCreated: DateTime(),
     dateModified: DateTime(),
@@ -212,6 +214,14 @@ export const Channel = z.object({
     subscribers: z.array(Subscription).default([]),
     subscriptions: z.array(Subscription).default([]),
     likes: z.array(Like).default([]),
+    // Per-channel roles (lib/channelAccess.ts). The owner is userId; never in public views.
+    members: z.array(z.object({
+        userId: Str(),
+        role: z.enum(['admin', 'editor', 'moderator']),
+        addedBy: Str(),
+        addedAt: Str(),
+        updatedAt: Str().optional(),
+    })).optional(),
     // Soft delete and moderation fields
     ...SoftDeleteFields,
     ...ModerationFields,
