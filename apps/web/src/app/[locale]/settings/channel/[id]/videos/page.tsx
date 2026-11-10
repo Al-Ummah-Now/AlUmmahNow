@@ -67,10 +67,13 @@ export default function ChannelVideosPage() {
     }
   }, [channelId, router, locale]);
 
-  // Fetch videos and channel for this channel
+  // Fetch videos and channel for this channel. Keyed on the user's id: the user
+  // object is re-created when the session settles, and a second full load would
+  // remount every card (closing an open menu) and flash the grid.
+  const userId = user?.id;
   useEffect(() => {
     const fetchData = async () => {
-      if (!user || !isOwner) return;
+      if (!userId || !isOwner) return;
 
       setLoading(true);
       try {
@@ -114,7 +117,7 @@ export default function ChannelVideosPage() {
     if (isOwner) {
       fetchData();
     }
-  }, [user, channelId, isOwner, locale]);
+  }, [userId, channelId, isOwner, locale]);
 
   // Apply filters and search
   useEffect(() => {
@@ -354,7 +357,7 @@ export default function ChannelVideosPage() {
                       checked={selected}
                       onChange={() => handleSelectVideo(video.id)}
                       aria-label={`${t.video.selectVideo || t.video.selectAll}: ${video.title}`}
-                      className="peer sr-only"
+                      className="peer pl-hit"
                       data-testid="managed-video-select"
                     />
                     <span className="ck pl-ck peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-[var(--fanous-color-focus-ring)]" data-on={selected || undefined} aria-hidden="true">{selected && <Check />}</span>
@@ -414,7 +417,7 @@ export default function ChannelVideosPage() {
                   <div className="flex gap-2">
                     <Link href={`/${locale}/video?vid=${video.id}`} className="b b-secondary b-sm flex-1">
                       <Eye size={16} aria-hidden="true" />
-                      {t.common.viewAll}
+                      {t.common.view}
                     </Link>
                     <Link href={`/${locale}/video/${video.id}/edit`} className="b b-secondary b-sm flex-1">
                       <Edit size={16} aria-hidden="true" />

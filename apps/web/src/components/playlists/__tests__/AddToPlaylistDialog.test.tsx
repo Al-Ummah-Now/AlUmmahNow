@@ -27,7 +27,7 @@ beforeEach(() => {
 });
 
 it('adds the videos to every chosen playlist and shows each result', async () => {
-  (addVideosToPlaylist as jest.Mock).mockImplementation(async (id: string) => (id === 'p1' ? { ok: true, data: done(2) } : { ok: false, status: 503 }));
+  (addVideosToPlaylist as jest.Mock).mockImplementation(async (id: string) => (id === 'p1' ? { ok: true, data: { ...done(2), videosCount: 3 } } : { ok: false, status: 503 }));
   render(<AddToPlaylistDialog open onOpenChange={jest.fn()} channelId="ch" videos={videos} />);
   expect(screen.getByText('Add 2 videos to playlists')).toBeInTheDocument();
   const options = await screen.findAllByTestId('add-to-playlist-option');
@@ -40,6 +40,8 @@ it('adds the videos to every chosen playlist and shows each result', async () =>
   const results = screen.getByTestId('add-to-playlist-results');
   expect(within(results).getByText('Added 2 videos to Tafsir.')).toBeInTheDocument();
   expect(within(results).getByText("Couldn't add the videos to Fiqh. Please try again.")).toBeInTheDocument();
+  // The row shows the playlist's count after the add (1 before, 3 now)
+  expect(screen.getAllByTestId('add-to-playlist-option')[0].closest('label')).toHaveTextContent('3 videos');
   // Done playlists can't be chosen again
   expect(screen.getAllByTestId('add-to-playlist-option')[0]).toBeDisabled();
 });

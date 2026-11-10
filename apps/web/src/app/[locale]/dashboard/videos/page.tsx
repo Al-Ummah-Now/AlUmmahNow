@@ -4,7 +4,9 @@ import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import { logger } from '@/lib/logger-client';
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, UploadCloud, Trash2, Eye, Edit, X, BarChart3, Pencil, RotateCcw } from 'lucide-react';
+import { Search, UploadCloud, Trash2, Eye, Edit, X, BarChart3, Pencil, RotateCcw, ListPlus } from 'lucide-react';
+import AddToPlaylistDialog from '@/components/playlists/AddToPlaylistDialog';
+import { toPicked, type PickedVideo } from '@/components/playlists/VideoPicker';
 import { formatViews } from '@/lib/format/videoMeta';
 import { RelativeDate } from '@/components/RelativeDate';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -71,6 +73,8 @@ export default function VideoDashboardPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
+  // "Add to playlist": a playlist belongs to one channel, so the videos come from one
+  const [playlistTarget, setPlaylistTarget] = useState<{ channelId: string; videos: PickedVideo[] } | null>(null);
 
   // Redirect if not authenticated or no channels
   useEffect(() => {
@@ -193,6 +197,9 @@ export default function VideoDashboardPage() {
 
     setFilteredVideos(filtered);
   }, [videos, searchQuery, statusFilter, sortBy]);
+
+  // The channels the selection comes from (one playlist holds one channel's videos)
+  const selectionChannels = Array.from(new Set(videos.filter((v) => selectedVideos.has(v.id)).map((v) => v.channelId || '')));
 
   const handleSelectVideo = (videoId: string) => {
     const newSelected = new Set(selectedVideos);
@@ -498,6 +505,23 @@ export default function VideoDashboardPage() {
                   {selectedVideos.size === filteredVideos.length ? t.video.deselectAll : t.video.selectAll}
                 </button>
                 <div className="flex-1" />
+                {selectionChannels.length > 1 && (
+                  <span className="text-xs text-[var(--fanous-color-text-secondary)] dark:text-[var(--fanous-color-text-muted)]" id="dashboard-playlist-hint">{t.playlistTools.oneChannelOnly}</span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const chosen = filteredVideos.filter((v) => selectedVideos.has(v.id));
+                    if (selectionChannels.length === 1) setPlaylistTarget({ channelId: selectionChannels[0], videos: chosen.map(toPicked) });
+                  }}
+                  disabled={selectionChannels.length !== 1}
+                  aria-describedby={selectionChannels.length > 1 ? 'dashboard-playlist-hint' : undefined}
+                  data-testid="dashboard-add-to-playlist"
+                  className="b b-secondary b-sm disabled:opacity-50"
+                >
+                  <ListPlus size={16} aria-hidden="true" />
+                  {t.playlistTools.addToPlaylist}
+                </button>
                 <button
                   onClick={() => setBulkEditOpen(true)}
                   data-testid="dashboard-edit-selected"
@@ -664,6 +688,18 @@ export default function VideoDashboardPage() {
                       <BarChart3 size={14} aria-hidden="true" />
                       <span className="text-xs">{t.analytics.dashboard.viewAnalytics}</span>
                     </Link>
+                    {video.channelId && (
+                      <button
+                        type="button"
+                        onClick={() => setPlaylistTarget({ channelId: video.channelId!, videos: [toPicked(video)] })}
+                        data-testid="dashboard-video-add-to-playlist"
+                        className="b b-secondary b-icon b-sm flex-none"
+                        aria-label={`${t.playlistTools.addToPlaylist}: ${video.title}`}
+                        title={t.playlistTools.addToPlaylist}
+                      >
+                        <ListPlus size={14} aria-hidden="true" />
+                      </button>
+                    )}
                     <button
                       onClick={() => handleDeleteVideo(video.id)}
                       data-testid="dashboard-video-delete"
@@ -690,6 +726,13 @@ export default function VideoDashboardPage() {
             </div>
           </div>
         )}
+
+        <AddToPlaylistDialog
+          open={playlistTarget !== null}
+          onOpenChange={(open) => { if (!open) setPlaylistTarget(null); }}
+          channelId={playlistTarget?.channelId ?? ''}
+          videos={playlistTarget?.videos ?? []}
+        />
 
         <BulkEditDialog open={bulkEditOpen} count={selectedVideos.size} onOpenChange={setBulkEditOpen} onApply={applyBulkEdit} />
 

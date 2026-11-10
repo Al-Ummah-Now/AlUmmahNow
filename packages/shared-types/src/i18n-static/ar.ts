@@ -1621,6 +1621,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     chooseAtLeastOne: 'اختر قائمة تشغيل أولًا.',
     done: 'تم',
     addToPlaylist: 'إضافة إلى قائمة تشغيل',
+    oneChannelOnly: 'اختر فيديوهات من قناة واحدة لإضافتها إلى قائمة تشغيل.',
     moreActions: 'إجراءات أخرى لـ {title}',
     noVideosChosen: 'اختر فيديو واحدًا على الأقل.',
     sortLabel: 'الترتيب',
