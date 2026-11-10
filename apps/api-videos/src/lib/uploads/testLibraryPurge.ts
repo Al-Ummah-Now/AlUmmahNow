@@ -79,6 +79,12 @@ export interface PurgeState {
 	pageSize?: number;
 	/** Bunny 429 answers seen; a page that saw one halves the next page's concurrency */
 	throttled?: number;
+	/** Only these Bunny statuses are deleted (a "stuck first" pass); absent: every status */
+	statuses?: number[];
+	/** Deleted (or, in a dry run, would delete) per Bunny status */
+	deletedByStatus?: Record<string, number>;
+	/** Other environments' videos (never deleted) seen per Bunny status, counted on each listing */
+	otherEnvByStatus?: Record<string, number>;
 }
 
 export interface PurgeMessage {
@@ -98,10 +104,17 @@ export function purgeAllowed(env: Pick<PurgeEnv, 'BUNNY_TEST_LIBRARY' | 'ENVIRON
 	return env.BUNNY_TEST_LIBRARY === 'true' && (env.ENVIRONMENT ?? '').toLowerCase() !== 'production';
 }
 
-export type PurgeDecision = { action: 'delete'; reason: string } | { action: 'keep'; reason: 'other-env' | 'young' | 'has-record' | 'live-stream' | 'no-id' };
+export type PurgeDecision = { action: 'delete'; reason: string } | { action: 'keep'; reason: 'other-env' | 'young' | 'has-record' | 'live-stream' | 'no-id' | 'status-later' };
+
+/**
+ * Bunny statuses that hold the library's encoding slots: 0 Created, 1 Uploaded,
+ * 2 Processing, 3 Transcoding, 7 JIT segmenting. QA, 2026-11-10: leaked test
+ * videos in these states kept every new upload at "processing 0%".
+ */
+export const STUCK_STATUSES = [0, 1, 2, 3, 7] as const;
 
 /** Pure: what to do with one Bunny video. */
-export function decidePurge(input: { video: BunnyView; prefix: string; now: number; hasRecord: boolean; liveStreamRef: boolean; minAgeMs?: number }): PurgeDecision {
+export function decidePurge(input: { video: BunnyView; prefix: string; now: number; hasRecord: boolean; liveStreamRef: boolean; minAgeMs?: number; statuses?: readonly number[] }): PurgeDecision {
 	const { video } = input;
 	if (!video.guid) return { action: 'keep', reason: 'no-id' };
 	if (!belongsToEnv(video.title, input.prefix)) return { action: 'keep', reason: 'other-env' };
@@ -110,6 +123,7 @@ export function decidePurge(input: { video: BunnyView; prefix: string; now: numb
 	if (!Number.isFinite(created) || input.now - created < (input.minAgeMs ?? PURGE_MIN_AGE_MS)) return { action: 'keep', reason: 'young' };
 	if (input.hasRecord) return { action: 'keep', reason: 'has-record' };
 	if (input.liveStreamRef) return { action: 'keep', reason: 'live-stream' };
+	if (input.statuses && !input.statuses.includes(video.status ?? -1)) return { action: 'keep', reason: 'status-later' };
 	return { action: 'delete', reason: `No record; Bunny status ${video.status}` };
 }
 
@@ -137,12 +151,16 @@ export async function readPurgeState(env: Pick<PurgeEnv, 'global_settings'>): Pr
 
 /** Admin Start: a new run, or resume a stopped / failed one at its page. */
 /** Start options an admin may set, clamped to the safe ranges. */
-export function purgeOptions(input: { minAgeMinutes?: unknown; concurrency?: unknown; pageSize?: unknown }): { minAgeMs: number; concurrency: number; pageSize: number } {
+export function purgeOptions(input: { minAgeMinutes?: unknown; concurrency?: unknown; pageSize?: unknown; statuses?: unknown }): { minAgeMs: number; concurrency: number; pageSize: number; statuses?: number[] } {
 	const int = (v: unknown, fallback: number, min: number, max: number) => {
 		const n = typeof v === 'number' && Number.isFinite(v) ? Math.floor(v) : fallback;
 		return Math.min(max, Math.max(min, n));
 	};
+	const statuses = Array.isArray(input.statuses)
+		? [...new Set(input.statuses.filter((v): v is number => Number.isInteger(v) && v >= 0 && v <= 10))].sort((a, b) => a - b)
+		: [];
 	return {
+		...(statuses.length ? { statuses } : {}),
 		minAgeMs: int(input.minAgeMinutes, PURGE_MIN_AGE_MS / 60000, PURGE_MIN_AGE_FLOOR_MS / 60000, 24 * 60) * 60000,
 		concurrency: int(input.concurrency, PURGE_CONCURRENCY, 1, PURGE_MAX_CONCURRENCY),
 		pageSize: int(input.pageSize, PURGE_PAGE_SIZE, 10, PURGE_MAX_PAGE_SIZE),
@@ -151,7 +169,7 @@ export function purgeOptions(input: { minAgeMinutes?: unknown; concurrency?: unk
 
 export async function startPurge(
 	env: PurgeEnv,
-	opts: { actor: string; dryRun: boolean; resume?: boolean; now?: Date; minAgeMinutes?: unknown; concurrency?: unknown; pageSize?: unknown },
+	opts: { actor: string; dryRun: boolean; resume?: boolean; now?: Date; minAgeMinutes?: unknown; concurrency?: unknown; pageSize?: unknown; statuses?: unknown },
 ): Promise<PurgeState> {
 	if (!purgeAllowed(env)) throw new Error('The test-library purge runs only on a QA / stage worker (BUNNY_TEST_LIBRARY)');
 	if (!env.PROCESSING_CHECK_QUEUE) throw new Error('PROCESSING_CHECK_QUEUE is not bound');
@@ -231,6 +249,8 @@ export async function runPurgePage(env: PurgeEnv, message: PurgeMessage, now = n
 	const minAgeMs = state.minAgeMs ?? PURGE_MIN_AGE_MS;
 	const concurrency = state.concurrency ?? PURGE_CONCURRENCY;
 	let throttled = 0;
+	const byStatus: Record<string, number> = {};
+	const otherEnv: Record<string, number> = {};
 	const listed = await listBunnyVideos(env, message.page, pageSize);
 	const lives = listed.items.length ? await liveStreamTexts(env) : [];
 	const kept: Record<string, number> = {};
@@ -243,13 +263,15 @@ export async function runPurgePage(env: PurgeEnv, message: PurgeMessage, now = n
 	const one = async (video: BunnyView): Promise<void> => {
 		const id = video.guid ?? '';
 		const hasRecord = id ? !!(await env.videos.head(id)) : false;
-		const decision = decidePurge({ video, prefix, now: now.getTime(), hasRecord, liveStreamRef: !!id && lives.some((t) => t.includes(id)), minAgeMs });
+		const decision = decidePurge({ video, prefix, now: now.getTime(), hasRecord, liveStreamRef: !!id && lives.some((t) => t.includes(id)), minAgeMs, statuses: state.statuses });
 		if (decision.action === 'keep') {
 			kept[decision.reason] = (kept[decision.reason] ?? 0) + 1;
+			if (decision.reason === 'other-env') otherEnv[String(video.status)] = (otherEnv[String(video.status)] ?? 0) + 1;
 			return;
 		}
 		if (state.dryRun) {
 			candidates++;
+			byStatus[String(video.status)] = (byStatus[String(video.status)] ?? 0) + 1;
 			return;
 		}
 		// Re-check right before the delete: a record may have landed since the head
@@ -269,6 +291,7 @@ export async function runPurgePage(env: PurgeEnv, message: PurgeMessage, now = n
 				await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
 			}
 		}
+		byStatus[String(video.status)] = (byStatus[String(video.status)] ?? 0) + 1;
 		removed.push({ videoId: id, title: video.title, status: video.status, at: now.toISOString() });
 	};
 	let cursor = 0;
@@ -296,6 +319,8 @@ export async function runPurgePage(env: PurgeEnv, message: PurgeMessage, now = n
 		fresh.updatedAt = now.toISOString();
 		fresh.attempts = undefined;
 		fresh.lastError = undefined;
+		for (const [k, n] of Object.entries(byStatus)) (fresh.deletedByStatus ??= {})[k] = (fresh.deletedByStatus[k] ?? 0) + n;
+		for (const [k, n] of Object.entries(otherEnv)) (fresh.otherEnvByStatus ??= {})[k] = (fresh.otherEnvByStatus[k] ?? 0) + n;
 		if (throttled) {
 			fresh.throttled = (fresh.throttled ?? 0) + throttled;
 			// Bunny pushed back: half as many in flight from the next page on

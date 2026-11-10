@@ -114,8 +114,8 @@ describe('/api/uploads/stale', () => {
     assert.equal((await req('/api/uploads/stale/test-library-purge', post({ action: 'start', dryRun: false, resume: true }))).status, 200);
     assert.deepEqual(calls[1].body, { action: 'start', dryRun: false, resume: true, actor: 'admin@example.com' });
     // Wipe tuning is forwarded (numbers only; api-videos clamps it)
-    assert.equal((await req('/api/uploads/stale/test-library-purge', post({ action: 'start', dryRun: false, minAgeMinutes: 10, concurrency: 40, pageSize: 100, extra: 1, concurrencyX: 'no' }))).status, 200);
-    assert.deepEqual(calls[2].body, { action: 'start', dryRun: false, resume: false, minAgeMinutes: 10, concurrency: 40, pageSize: 100, actor: 'admin@example.com' });
+    assert.equal((await req('/api/uploads/stale/test-library-purge', post({ action: 'start', dryRun: false, minAgeMinutes: 10, concurrency: 40, pageSize: 100, statuses: [0, 1, 2, 3, 7], extra: 1, concurrencyX: 'no' }))).status, 200);
+    assert.deepEqual(calls[2].body, { action: 'start', dryRun: false, resume: false, minAgeMinutes: 10, concurrency: 40, pageSize: 100, statuses: [0, 1, 2, 3, 7], actor: 'admin@example.com' });
     const rows = await audit();
     assert.equal(rows.length, 3);
     assert.ok(rows.every((r: any) => r.key === TEST_LIBRARY_PURGE_AUDIT_KEY));

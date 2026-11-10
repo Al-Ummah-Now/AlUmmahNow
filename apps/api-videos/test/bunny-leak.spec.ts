@@ -24,6 +24,7 @@ import {
 	PURGE_CONCURRENCY,
 	PURGE_MAX_CONCURRENCY,
 	purgeOptions,
+	STUCK_STATUSES,
 	PURGE_PAGE_SIZE,
 	purgeAllowed,
 	readPurgeState,
@@ -328,6 +329,24 @@ describe('test-library purge run', () => {
 		const left = new Set(bunny.videos.map((v) => v.guid));
 		for (const id of [...recorded, live]) assert.ok(left.has(id));
 		assert.equal(bunny.videos.filter((v) => v.title.startsWith('[stage] ')).length, 10);
+	});
+
+	it('stuck-first pass: only queued/encoding statuses are deleted; counts per status, stage counted but kept', async () => {
+		const { bunny, env } = await seed();
+		const state = await startPurge(env, { actor: 'a', dryRun: false, minAgeMinutes: 10, concurrency: 40, pageSize: 100, statuses: [...STUCK_STATUSES, 99, 'x'] });
+		assert.deepEqual(state.statuses, [0, 1, 2, 3, 7]);
+		await drain(env);
+		const after = await readPurgeState(env);
+		// seed(): every third video is status 2, the rest 4
+		assert.ok(bunny.deleted.length > 0);
+		assert.ok(bunny.videos.filter((v) => !v.title.startsWith('[stage] ')).every((v) => v.status !== 2 || !bunny.deleted.includes(v.guid)));
+		for (const id of bunny.deleted) assert.ok(!bunny.videos.some((v) => v.guid === id));
+		assert.deepEqual(Object.keys(after!.deletedByStatus ?? {}), ['2']);
+		assert.equal(after!.deletedByStatus!['2'], bunny.deleted.length);
+		assert.ok((after!.kept['status-later'] ?? 0) > 0);
+		const stageLeft = bunny.videos.filter((v) => v.title.startsWith('[stage] '));
+		assert.equal(stageLeft.length, 10);
+		assert.ok(Object.values(after!.otherEnvByStatus ?? {}).reduce((a, b) => a + b, 0) >= 10);
 	});
 
 	it('Bunny 429: the video is retried after a back-off, and the next page runs with half the concurrency', async () => {
