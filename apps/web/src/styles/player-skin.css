@@ -223,13 +223,16 @@
   Optical centring of play triangles (owner: "TEST ALIGNMENTS"). The path is centred in its viewBox
   (icons.ts); a triangle's mass sits left of its box centre, so it reads as off-centre until it is
   moved right by about 7% of the icon width. Applied in the bar and in the big play button.
+  Rounded to whole pixels: 7% of the 22px bar icon is 1.54px, and each browser snaps a fractional
+  transform to the device grid its own way (Chrome at 1x drew the triangle 1px off its layout spot).
+  The strategy is spelt out: the CSS minifier drops a two-argument round(), leaving the bare 7%.
 */
 .video-js.vjs-fanous {
   --vjs-fanous-play-nudge: 7%;
 }
 
 .video-js.vjs-fanous [data-icon="play"] {
-  transform: translateX(var(--vjs-fanous-play-nudge));
+  transform: translateX(round(nearest, var(--vjs-fanous-play-nudge), 1px));
 }
 
 /* Toggles that are on: accent icon and a short underline */
@@ -1333,7 +1336,7 @@
   height: 18px;
   fill: currentColor;
   /* The same optical nudge as every play triangle */
-  transform: translateX(var(--vjs-fanous-play-nudge));
+  transform: translateX(round(nearest, var(--vjs-fanous-play-nudge), 1px));
 }
 
 .video-js.vjs-fanous .vjs-fanous-next-text {

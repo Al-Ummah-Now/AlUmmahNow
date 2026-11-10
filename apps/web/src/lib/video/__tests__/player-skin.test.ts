@@ -157,4 +157,13 @@ describe('player skin CSS', () => {
     expect(uncommented).toMatch(/@container fanous-player \(max-width: 479px\)[\s\S]*vjs-picture-in-picture-control/);
     expect(uncommented).toMatch(/@container fanous-player \(max-width: 359px\)[\s\S]*vjs-fanous-next/);
   });
+
+  it('nudges play triangles by whole pixels, with a rounding the minifier keeps', () => {
+    // 7% of the 22px bar icon is 1.54px; a fractional transform is snapped differently per browser.
+    // A two-argument round() is folded away by the CSS pipeline, so the strategy is spelt out.
+    const nudges = uncommented.match(/transform:\s*translateX\([^;]*--vjs-fanous-play-nudge[^;]*;/g) ?? [];
+    expect(nudges.length).toBeGreaterThanOrEqual(2);
+    for (const n of nudges) expect(n).toContain('translateX(round(nearest, var(--vjs-fanous-play-nudge), 1px))');
+    expect(declarationsFor('.video-js.vjs-fanous [data-icon="play"]')).toContain('round(nearest, var(--vjs-fanous-play-nudge), 1px)');
+  });
 });
