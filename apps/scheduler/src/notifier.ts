@@ -33,7 +33,7 @@ export async function sendNotification(
       }
     );
 
-    logger.info(`Sent publish notification to user ${metadata.userId}`);
+    logger.debug(`Sent publish notification to user ${metadata.userId}`);
   } catch (error) {
     logger.error(`Failed to send notification for video ${metadata.videoId}:`, error);
   }
@@ -69,7 +69,7 @@ export async function sendFailureNotification(
       }
     );
 
-    logger.info(`Sent failure notification to user ${metadata.userId}`);
+    logger.debug(`Sent failure notification to user ${metadata.userId}`);
   } catch (notifyError) {
     logger.error(`Failed to send failure notification for video ${metadata.videoId}:`, notifyError);
   }

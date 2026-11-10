@@ -148,7 +148,7 @@ export class VideoThumbnailUpload extends AuthenticatedRoute {
 				action: 'thumbnail_upload',
 			});
 
-			logger.info('[VideoThumbnailUpload] Thumbnail updated', {
+			logger.debug('[VideoThumbnailUpload] Thumbnail updated', {
 				videoId: id,
 				userId,
 				thumbnailUrl,

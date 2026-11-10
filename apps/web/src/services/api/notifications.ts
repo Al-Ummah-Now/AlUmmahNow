@@ -102,7 +102,7 @@ export const NotificationsService = {
       { method: 'PUT', body: JSON.stringify({ bell }) },
       'Set channel bell',
     );
-    if (result) logger.info('[NotificationsService] Channel bell set', { channelId, bell });
+    if (result) logger.debug('[NotificationsService] Channel bell set', { channelId, bell });
     return !!result;
   },
 };

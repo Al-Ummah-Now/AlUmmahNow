@@ -85,7 +85,7 @@ export function useRealTimeNotifications(
     }
 
     const event = eventData as NotificationEvent;
-    logger.info('📥 Real-time notification:', event);
+    logger.debug('📥 Real-time notification:', event);
 
     if (event.type === 'notification') {
       const { title, message } = resolveNotificationText(event, translationsRef.current);
@@ -195,7 +195,7 @@ export function useRealTimeNotifications(
     if (typeof window === 'undefined' || !('Notification' in window)) return null;
     if (Notification.permission !== 'default') return Notification.permission;
     const permission = await Notification.requestPermission();
-    logger.info('Notification permission:', permission);
+    logger.debug('Notification permission:', permission);
     return permission;
   }, []);
   

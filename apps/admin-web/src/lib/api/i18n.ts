@@ -33,7 +33,7 @@ export async function getTranslations(
   locale: SupportedLanguage
 ): Promise<TranslationData | null> {
   const requestId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-  logger.info(`[i18n] Fetching translations`, { requestId, locale });
+  logger.debug(`[i18n] Fetching translations`, { requestId, locale });
 
   try {
     const url = `${getApiUrl()}/api/i18n/translations/${locale}`;
@@ -63,7 +63,7 @@ export async function getTranslations(
     const data = await response.json() as { success: boolean; result: TranslationData };
 
     if (data.success && data.result) {
-      logger.info(`[i18n] Translations fetched successfully`, { requestId, locale });
+      logger.debug(`[i18n] Translations fetched successfully`, { requestId, locale });
       return data.result;
     }
 
@@ -84,7 +84,7 @@ export async function getTranslations(
  */
 export async function getI18nConfig(): Promise<I18nConfig | null> {
   const requestId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-  logger.info(`[i18n] Fetching config`, { requestId });
+  logger.debug(`[i18n] Fetching config`, { requestId });
 
   try {
     const response = await fetch(`${getApiUrl()}/api/i18n/config`, {
@@ -106,7 +106,7 @@ export async function getI18nConfig(): Promise<I18nConfig | null> {
     const data = await response.json() as { success: boolean; result: I18nConfig };
 
     if (data.success && data.result) {
-      logger.info(`[i18n] Config fetched successfully`, { requestId });
+      logger.debug(`[i18n] Config fetched successfully`, { requestId });
       return data.result;
     }
 
@@ -126,7 +126,7 @@ export async function getI18nConfig(): Promise<I18nConfig | null> {
  */
 export async function getI18nMetadata(): Promise<I18nMetadata | null> {
   const requestId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-  logger.info(`[i18n] Fetching metadata`, { requestId });
+  logger.debug(`[i18n] Fetching metadata`, { requestId });
 
   try {
     const response = await fetch(`${getApiUrl()}/api/i18n/metadata`, {
@@ -148,7 +148,7 @@ export async function getI18nMetadata(): Promise<I18nMetadata | null> {
     const data = await response.json() as { success: boolean; result: I18nMetadata };
 
     if (data.success && data.result) {
-      logger.info(`[i18n] Metadata fetched successfully`, { requestId });
+      logger.debug(`[i18n] Metadata fetched successfully`, { requestId });
       return data.result;
     }
 
@@ -172,7 +172,7 @@ export async function updateTranslations(
   mode: 'merge' | 'replace' = 'merge'
 ): Promise<{ success: boolean; error?: string }> {
   const requestId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-  logger.info(`[i18n] Updating translations`, { requestId, locale, mode });
+  logger.debug(`[i18n] Updating translations`, { requestId, locale, mode });
 
   try {
     const session = await getAdminSession();
@@ -199,7 +199,7 @@ export async function updateTranslations(
       cache: 'no-store',
     });
 
-    logger.info(`[i18n] Update response`, {
+    logger.debug(`[i18n] Update response`, {
       requestId,
       status: response.status,
       ok: response.ok,
@@ -220,7 +220,7 @@ export async function updateTranslations(
     }
 
     const data = await response.json() as { success: boolean };
-    logger.info(`[i18n] Translations updated successfully`, { requestId, locale });
+    logger.debug(`[i18n] Translations updated successfully`, { requestId, locale });
     return { success: data.success };
   } catch (error) {
     logger.error(`[i18n] Error updating translations`, {
@@ -240,7 +240,7 @@ export async function updateTranslations(
  */
 export async function syncTranslations(): Promise<{ success: boolean; error?: string }> {
   const requestId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-  logger.info(`[i18n] Syncing translations`, { requestId });
+  logger.debug(`[i18n] Syncing translations`, { requestId });
 
   try {
     const session = await getAdminSession();
@@ -263,7 +263,7 @@ export async function syncTranslations(): Promise<{ success: boolean; error?: st
       },
     });
 
-    logger.info(`[i18n] Sync response`, {
+    logger.debug(`[i18n] Sync response`, {
       requestId,
       status: response.status,
       ok: response.ok,
@@ -283,7 +283,7 @@ export async function syncTranslations(): Promise<{ success: boolean; error?: st
     }
 
     const data = await response.json() as { success: boolean };
-    logger.info(`[i18n] Translations synced successfully`, { requestId });
+    logger.debug(`[i18n] Translations synced successfully`, { requestId });
     return { success: data.success };
   } catch (error) {
     logger.error('[i18n] Error syncing translations', {

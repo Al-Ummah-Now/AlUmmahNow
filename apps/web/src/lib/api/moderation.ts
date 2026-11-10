@@ -96,7 +96,7 @@ export async function createReport(
     }
 
     const data: ReportApiResponse = await response.json();
-    logger.info('[createReport] Report created', { entityType: reportData.contentType, entityId: reportData.contentId });
+    logger.debug('[createReport] Report created', { entityType: reportData.contentType, entityId: reportData.contentId });
     return { success: true, report: data.result?.report };
   } catch (error) {
     logger.error('createReport failed:', error);

@@ -141,7 +141,7 @@ export function initializeSpriteThumbnails(
       responsive: width * height
     });
 
-    logger.info('[ProgressPreview] Sprite thumbnails initialized:', {
+    logger.debug('[ProgressPreview] Sprite thumbnails initialized:', {
       url: previewUrl,
       interval,
       width,
@@ -169,7 +169,7 @@ export function initializeSpriteThumbnails(
  *   { start: 0, end: 30 },
  *   { start: 60, end: 90 }
  * ], (segments) => {
- *   logger.info('Updated segments:', segments);
+ *   logger.debug('Updated segments:', segments);
  * });
  */
 export function setupWatchedSegments(
@@ -322,7 +322,7 @@ export function setupWatchedSegments(
     updateProgressBarSegments();
   }
 
-  logger.info('[ProgressPreview] Watched segments tracking initialized');
+  logger.debug('[ProgressPreview] Watched segments tracking initialized');
 
   // Return cleanup function
   return () => {

@@ -18,7 +18,8 @@
     "openapi:generate": "tsx --conditions=import scripts/generate-openapi.ts",
     "test:api": "curl -s http://127.0.0.1:3086/test | jq .",
     "test:health": "curl -s http://127.0.0.1:3086/health | jq .",
-    "test:metrics": "curl -s http://127.0.0.1:3086/metrics | jq ."
+    "test:metrics": "curl -s http://127.0.0.1:3086/metrics | jq .",
+    "lint": "eslint src"
   },
   "dependencies": {
     "@al-ummah/logger": "workspace:*",

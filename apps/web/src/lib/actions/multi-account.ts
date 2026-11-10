@@ -392,22 +392,12 @@ export async function cleanupExpiredSessions(): Promise<void> {
  * Get active session info for client components
  */
 export async function getActiveSessionInfo() {
-  logger.info('[getActiveSessionInfo] Called - fetching active session');
-
+  // Runs on every page load: no info/warn here (an anonymous visitor has no session).
   const session = await SessionManager.getActiveSession();
 
   if (!session) {
-    logger.warn('[getActiveSessionInfo] No active session found');
     return null;
   }
-
-  logger.info('[getActiveSessionInfo] Session found:', {
-    
-    email: session.email,
-    hasChannel: !!session.channel,
-    channelsCount: session.availableChannels.length,
-    accountsCount: session.availableAccounts.length,
-  });
 
   // The cookie's first-paint cache (owned and managed channels, each with the
   // caller's role); the menu replaces it with the live list (GET /api/channels/access)
@@ -423,12 +413,11 @@ export async function getActiveSessionInfo() {
     role: session.channel.role ?? (session.channel.userId === session.userId ? 'owner' as const : undefined),
   } : null;
 
-  logger.debug('[getActiveSessionInfo] TRACE', {
-
-    email: session.email,
-    'session.channel': session.channel ? session.channel.name : null,
-    'channelData': channelData ? channelData.name : null,
-    userChannelsCount: userChannels.length,
+  logger.trace('[getActiveSessionInfo] Session', {
+    userId: session.userId,
+    channelId: channelData?.id ?? null,
+    channelsCount: userChannels.length,
+    accountsCount: session.availableAccounts.length,
   });
 
   const result = {
@@ -459,7 +448,6 @@ export async function getActiveSessionInfo() {
     })),
   };
 
-  logger.info('[getActiveSessionInfo] Returning session info successfully');
   return result;
 }
 

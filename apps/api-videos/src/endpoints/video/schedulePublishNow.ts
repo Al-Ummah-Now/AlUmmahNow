@@ -84,14 +84,14 @@ export class VideoSchedulePublishNow extends AuthenticatedRoute {
     const { channelId } = data.headers;
     const userId = this.getUserId(c);
 
-    logger.info('[VideoSchedulePublishNow] Publishing video immediately', { videoId: id, userId, channelId });
+    logger.debug('[VideoSchedulePublishNow] Publishing video immediately', { videoId: id, userId, channelId });
 
     try {
       const videoRepository = new R2Repository<VideoObject>(c.env.videos);
       const video = await videoRepository.getObject(id);
 
       if (!video) {
-        logger.warn('[VideoSchedulePublishNow] Video not found', { videoId: id });
+        logger.debug('[VideoSchedulePublishNow] Video not found', { videoId: id });
         return c.json(
           {
             success: false,
@@ -103,7 +103,7 @@ export class VideoSchedulePublishNow extends AuthenticatedRoute {
 
       // Authorization check - user must own the video
       if (!(await canOnVideo(c.env as never, video, userId, 'video.schedule'))) {
-        logger.warn('[VideoSchedulePublishNow] Unauthorized - user does not own video', {
+        logger.debug('[VideoSchedulePublishNow] Unauthorized - user does not own video', {
           videoId: id,
           videoOwner: video.userId,
           requestUser: userId,
@@ -119,7 +119,7 @@ export class VideoSchedulePublishNow extends AuthenticatedRoute {
 
       // Check if video is already public
       if (video.isPublic === true) {
-        logger.info('[VideoSchedulePublishNow] Video is already public', { videoId: id });
+        logger.debug('[VideoSchedulePublishNow] Video is already public', { videoId: id });
         return c.json(
           {
             success: false,
@@ -154,7 +154,7 @@ export class VideoSchedulePublishNow extends AuthenticatedRoute {
 
       inBackground(c, 'video-published', () => announceNewVideo(c.env, { ...updatedVideo, id } as Parameters<typeof announceNewVideo>[1]));
 
-      logger.info('[VideoSchedulePublishNow] Video published successfully', {
+      logger.debug('[VideoSchedulePublishNow] Video published successfully', {
         videoId: id,
         wasScheduled: !!previousStatus,
         previousStatus,

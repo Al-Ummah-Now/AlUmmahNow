@@ -5,22 +5,23 @@ import { acquireLock, releaseLock, updateLastRun } from './locks';
 import { listDueSchedules, publishVideo, removeSchedule } from './publisher';
 import { scheduleRetries } from './retry';
 import { sendNotification } from './notifier';
-import { reportMetrics, logEvent, sendAlert, recordRunMetrics, type RunMetrics } from './monitoring';
+import { logEvent, sendAlert, recordRunMetrics, type RunMetrics } from './monitoring';
 import { logger } from './lib/logger';
+import { withLogging } from '@al-ummah/logger';
 
 // Export the Durable Object class for Cloudflare Workers runtime
 export { SchedulerLock } from './durable-objects/SchedulerLock';
 
-export default {
+export default withLogging({
   /**
-   * Scheduled cron trigger - runs every minute
+   * Scheduled cron trigger - runs every minute. A tick with nothing due logs
+   * nothing; a tick with work logs one summary line (info at stage and below,
+   * warn when a publish failed or the run was slow, error when the run threw).
    */
   async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
     const startTime = Date.now();
 
     try {
-      logger.info(`Scheduler cron triggered at ${new Date().toISOString()}`);
-
       // Update last run timestamp
       await updateLastRun(env.SCHEDULER_LOCKS);
 
@@ -35,29 +36,30 @@ export default {
         return;
       }
 
-      logger.info(`Found ${allVideos.length} due videos (${scan.operations} R2 reads${scan.truncated ? ', more next run' : ''})`);
-
       // 4. Process in batches with distributed locking
       const results = await processBatch(allVideos, env, ctx);
 
       // 5. Report metrics: one aggregated write per run (SC-4)
-      const duration = Date.now() - startTime;
-      reportMetrics({
-        processed: results.successful.length,
-        failed: results.failed.length,
-        duration,
-      });
       await recordRunMetrics(env, results.metrics);
-
-      logger.info(`Batch complete: ${results.successful.length} successful, ${results.failed.length} failed, ${duration}ms`);
 
       // 5. Handle failures with retry
       if (results.failed.length > 0) {
-        logger.info(`Scheduling retries for ${results.failed.length} failed videos`);
         await scheduleRetries(results.failed, env, ctx);
       }
+
+      logger.job({
+        job: 'scheduler-tick',
+        event: 'SCHEDULER_METRICS',
+        outcome: results.failed.length > 0 ? 'retry' : 'ok',
+        due: allVideos.length,
+        published: results.successful.length,
+        failed: results.failed.length,
+        r2Reads: scan.operations,
+        truncated: scan.truncated || undefined,
+        durationMs: Date.now() - startTime,
+      });
     } catch (error) {
-      logger.error('Scheduler error:', error);
+      logger.error('[Scheduler] Run failed', { error, durationMs: Date.now() - startTime });
       sendAlert(error);
       reportServerError('scheduler', env, ctx, error, { route: 'cron:scheduler' });
     }
@@ -65,7 +67,7 @@ export default {
 
   /** Internal API (service binding from admin-api): POST /failed/retry */
   fetch: withErrorReporting<Env, ExecutionContext>('scheduler', (request, env) => handleSchedulerRequest(request, env)),
-};
+});
 
 /**
  * Process a batch of scheduled videos
@@ -115,7 +117,7 @@ async function processBatch(
         const outcome = await publishVideo(env.VIDEOS, video, env.QUEUE);
         if (outcome === 'cancelled' || outcome === 'rescheduled' || outcome === 'missing') {
           // Not a failure to retry: the entry is obsolete (SC-3)
-          logger.info(`Schedule entry for video ${video.videoId} is obsolete (${outcome}); removed`);
+          logger.debug(`Schedule entry for video ${video.videoId} is obsolete (${outcome}); removed`);
           ctx.waitUntil(removeSchedule(env.SCHEDULED_VIDEOS, video));
           return;
         }
@@ -149,16 +151,14 @@ async function processBatch(
 
         results.successful.push(video);
 
-        logger.info(`Published video ${video.videoId} in ${Date.now() - publishStartTime}ms (delay: ${delaySeconds}s)`);
+        logger.debug(`Published video ${video.videoId} in ${Date.now() - publishStartTime}ms (delay: ${delaySeconds}s)`);
       } catch (error) {
-        logger.error(`Failed to publish video ${video.videoId}:`, error);
-
-        // Log failure event
-        logEvent({
-          type: 'SCHEDULED_PUBLISH_FAILURE',
+        // One line with full context (was an error plus a SCHEDULED_PUBLISH_FAILURE warning)
+        logger.error('[Scheduler] SCHEDULED_PUBLISH_FAILURE', {
+          step: 'publish',
           videoId: video.videoId,
           scheduledTime: video.scheduledPublishDate,
-          error: error instanceof Error ? error.message : String(error),
+          error,
         });
 
         results.metrics.failed++;

@@ -55,7 +55,7 @@ export function RecentVideosSection({
         params.cursor = cursor;
       }
 
-      logger.info('[RecentVideosSection] Fetching videos', { params, loadMore });
+      logger.debug('[RecentVideosSection] Fetching videos', { params, loadMore });
       const response = await getRecentVideos(params);
 
       if (!response) {
@@ -71,7 +71,7 @@ export function RecentVideosSection({
 
         setCursor(response.cursor);
         setHasMore(!!response.cursor);
-        logger.info('[RecentVideosSection] Videos loaded', {
+        logger.debug('[RecentVideosSection] Videos loaded', {
           count: response.data.length,
           hasMore: !!response.cursor
         });

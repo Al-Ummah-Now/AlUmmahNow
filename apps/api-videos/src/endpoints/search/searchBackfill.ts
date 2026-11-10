@@ -61,11 +61,11 @@ export class SearchBackfillPost extends PublicRoute {
     try {
       if (query.prune !== undefined) {
         await pruneSearchIndex(db, query.entity, query.prune);
-        logger.info("[SearchBackfill] Pruned stale rows", { entity: query.entity, before: query.prune });
+        logger.debug("[SearchBackfill] Pruned stale rows", { entity: query.entity, before: query.prune });
         return c.json({ success: true, entity: query.entity, pruned: true });
       }
       const result = await backfillSearchPage(c.env as never, query.entity, { cursor: query.cursor, limit: query.limit, mode: "force" });
-      logger.info("[SearchBackfill] Indexed page", { ...result });
+      logger.debug("[SearchBackfill] Indexed page", { ...result });
       return c.json({ success: true, ...result });
     } catch (error) {
       logger.error("[SearchBackfill] Backfill failed", { entity: query.entity, error: error instanceof Error ? error.message : String(error) });
@@ -121,7 +121,7 @@ export class OwnershipBackfillPost extends PublicRoute {
     const pages = Math.min(Math.max(1, Math.floor(Number(query.pages) || 10)), 50);
     try {
       const result = await runOwnershipPass(c.env as never, query.entity, { maxPages: pages });
-      logger.info("[Ownership] Backfill call finished", { ...result });
+      logger.debug("[Ownership] Backfill call finished", { ...result });
       return c.json({ success: true, ...result });
     } catch (error) {
       logger.error("[Ownership] Backfill failed", { entity: query.entity, error: error instanceof Error ? error.message : String(error) });

@@ -44,7 +44,7 @@ export default function PlaylistView({ playlistId }: PlaylistViewProps) {
       const result = await getPlaylistById(playlistId, undefined, { includeVideos: true });
       setPlaylist(result);
       setVideos(result?.videoItems || []);
-      logger.info('[PlaylistView] Playlist loaded', {
+      logger.debug('[PlaylistView] Playlist loaded', {
         playlistId,
         found: !!result,
         videos: result?.videoItems?.length || 0,

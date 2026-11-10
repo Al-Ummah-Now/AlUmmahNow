@@ -1,3 +1,4 @@
+/* eslint-disable no-console -- usage example, not rendered by any route */
 /**
  * ViewerCount Component Usage Examples
  * Task 1.2: ViewerCount Component

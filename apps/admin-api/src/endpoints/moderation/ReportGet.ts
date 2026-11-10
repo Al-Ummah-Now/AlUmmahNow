@@ -66,7 +66,7 @@ export class ReportGet extends AdminRoute {
         }, 404);
       }
 
-      logger.info('Report viewed', {
+      logger.debug('Report viewed', {
         reportId,
         moderatorId: this.getUserId(c)
       });

@@ -30,6 +30,7 @@ jest.mock('../channels', () => ({
 jest.mock('@/lib/logger', () => ({
   logger: {
     info: jest.fn(),
+    debug: jest.fn(),
     warn: jest.fn(),
     error: jest.fn(),
   },
@@ -175,7 +176,7 @@ describe('updateChannelTabConfig', () => {
 
     await updateChannelTabConfig('test-channel-id', updateData);
 
-    expect(logger.info).toHaveBeenCalledWith(
+    expect(logger.debug).toHaveBeenCalledWith(
       'updateChannelTabConfig: Request',
       {
         channelId: 'test-channel-id',
@@ -265,7 +266,7 @@ describe('verifyChannelOwnership', () => {
     const result = await verifyChannelOwnership('test-channel-id');
 
     expect(result).toBe(true);
-    expect(logger.info).toHaveBeenCalledWith(
+    expect(logger.debug).toHaveBeenCalledWith(
       'verifyChannelOwnership: Ownership verified',
       {
         channelId: 'test-channel-id',
@@ -284,7 +285,7 @@ describe('verifyChannelOwnership', () => {
     const result = await verifyChannelOwnership('test-channel-id');
 
     expect(result).toBe(false);
-    expect(logger.info).toHaveBeenCalledWith(
+    expect(logger.debug).toHaveBeenCalledWith(
       'verifyChannelOwnership: Ownership verified',
       {
         channelId: 'test-channel-id',
@@ -300,7 +301,7 @@ describe('verifyChannelOwnership', () => {
     const result = await verifyChannelOwnership('test-channel-id');
 
     expect(result).toBe(false);
-    expect(logger.warn).toHaveBeenCalledWith(
+    expect(logger.debug).toHaveBeenCalledWith(
       'verifyChannelOwnership: No authenticated user',
       { channelId: 'test-channel-id' }
     );
@@ -322,7 +323,7 @@ describe('verifyChannelOwnership', () => {
     const result = await verifyChannelOwnership('test-channel-id');
 
     expect(result).toBe(false);
-    expect(logger.warn).toHaveBeenCalledWith(
+    expect(logger.debug).toHaveBeenCalledWith(
       'verifyChannelOwnership: Channel not found',
       { channelId: 'test-channel-id' }
     );
@@ -448,7 +449,7 @@ describe('Edge Cases', () => {
     const result = await updateChannelTabConfig('test-channel-id', {});
 
     expect(result).toBeTruthy();
-    expect(logger.info).toHaveBeenCalledWith(
+    expect(logger.debug).toHaveBeenCalledWith(
       'updateChannelTabConfig: Request',
       expect.objectContaining({
         tabsCount: undefined,

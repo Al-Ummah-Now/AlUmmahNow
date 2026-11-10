@@ -106,7 +106,7 @@ export class SearchGet extends OptionalAuthRoute {
       const result = await searchIndex(db, search);
       await attachSearchPlaylistCovers(c.env, result.results);
       const searchTime = Date.now() - started;
-      logger.info("[Search] Served search", {
+      logger.debug("[Search] Served search", {
         q: search.q,
         type: search.type ?? "all",
         filters: { duration: search.duration, format: search.format, date: search.date, language: search.language, category: search.category, verified: search.verified, channelId: search.channelId },

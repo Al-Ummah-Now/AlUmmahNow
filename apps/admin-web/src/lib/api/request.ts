@@ -30,7 +30,7 @@ export async function requestAdmin(endpoint: string, options: RequestInit = {}):
   const requestId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
   const url = `${ADMIN_API_URL}${endpoint}`;
 
-  logger.info(`[API Request] ${method} ${endpoint}`, { requestId, url, method, hasBody: !!options.body });
+  logger.debug(`[API Request] ${method} ${endpoint}`, { requestId, url, method, hasBody: !!options.body });
 
   const session = await getAdminSession();
   if (!session) {
@@ -67,7 +67,7 @@ export async function requestAdmin(endpoint: string, options: RequestInit = {}):
     body = { raw: text };
   }
 
-  logger.info(`[API Response] ${response.status} ${method} ${endpoint}`, {
+  logger.debug(`[API Response] ${response.status} ${method} ${endpoint}`, {
     requestId,
     status: response.status,
     ok: response.ok,

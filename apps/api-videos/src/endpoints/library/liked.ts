@@ -67,7 +67,7 @@ export class LikedVideosList extends AuthenticatedRoute {
 		}));
 		if (missing.length > 0) await pruneLikes(db, userId, missing);
 
-		logger.info("[Library] Liked videos listed", { userId, returned: items.length, pruned: missing.length });
+		logger.debug("[Library] Liked videos listed", { userId, returned: items.length, pruned: missing.length });
 		return { success: true, result: { items, nextCursor: page.nextCursor, total: Math.max(0, page.total - missing.length) } };
 	}
 }

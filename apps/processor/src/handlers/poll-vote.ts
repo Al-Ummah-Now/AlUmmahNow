@@ -40,5 +40,5 @@ export async function handlePollVoteEvent(
   const counted = await syncPollVote(db, env.community_posts, postId, actor.userId, timestamp);
   if (imported === 'more') await continueImport(message, env, logger, postId);
 
-  logger.info('Poll vote processed', { postId, channelId, userId: actor.userId, options: counted, imported });
+  logger.debug('Poll vote processed', { postId, channelId, userId: actor.userId, options: counted, imported });
 }

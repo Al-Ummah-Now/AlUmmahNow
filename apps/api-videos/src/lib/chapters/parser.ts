@@ -134,7 +134,7 @@ export function parseChapters(
     });
   }
 
-  logger.info('Chapters parsed', {
+  logger.debug('Chapters parsed', {
     totalLines: lines.length,
     foundTimestamps: timestampLines.length,
     validChapters: chapters.length,

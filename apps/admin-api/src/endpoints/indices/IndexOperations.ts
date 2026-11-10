@@ -82,7 +82,7 @@ export class IndexOperations extends AdminRoute {
   async handle(c: AppContext) {
     try {
       const userId = this.getUserId(c);
-      logger.info('[IndexOperations] Processing request', { userId, path: c.req.path });
+      logger.debug('[IndexOperations] Processing request', { userId, path: c.req.path });
 
       // Get validated data
       const data = await this.getValidatedData<typeof this.schema>();

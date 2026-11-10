@@ -117,7 +117,7 @@ export async function getRecentVideos(
     }
 
     const url = `${baseUrl}/api/videos/sections/recent${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-    logger.info('[getRecentVideos] Fetching from:', { url });
+    logger.debug('[getRecentVideos] Fetching from:', { url });
 
     const response = await fetch(url, {
       method: 'GET',
@@ -137,7 +137,7 @@ export async function getRecentVideos(
     }
 
     const data = await response.json();
-    logger.info('[getRecentVideos] Success:', { videoCount: data.data?.length });
+    logger.debug('[getRecentVideos] Success:', { videoCount: data.data?.length });
     return data;
   } catch (error) {
     logger.error('[getRecentVideos] Error:', error);
@@ -162,7 +162,7 @@ export async function getPopularVideos(
     if (params.minViews !== undefined) queryParams.append('minViews', params.minViews.toString());
 
     const url = `${baseUrl}/api/videos/sections/popular${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-    logger.info('[getPopularVideos] Fetching from:', { url, params });
+    logger.debug('[getPopularVideos] Fetching from:', { url, params });
 
     const response = await fetch(url, {
       method: 'GET',
@@ -182,7 +182,7 @@ export async function getPopularVideos(
     }
 
     const data = await response.json();
-    logger.info('[getPopularVideos] Success:', { videoCount: data.data?.length, period: params.period });
+    logger.debug('[getPopularVideos] Success:', { videoCount: data.data?.length, period: params.period });
     return data;
   } catch (error) {
     logger.error('[getPopularVideos] Error:', error);
@@ -208,7 +208,7 @@ export async function getTrendingVideos(
     if (params.region) queryParams.append('region', params.region);
 
     const url = `${baseUrl}/api/videos/sections/trending${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-    logger.info('[getTrendingVideos] Fetching from:', { url, params });
+    logger.debug('[getTrendingVideos] Fetching from:', { url, params });
 
     const response = await fetch(url, {
       method: 'GET',
@@ -228,7 +228,7 @@ export async function getTrendingVideos(
     }
 
     const data = await response.json();
-    logger.info('[getTrendingVideos] Success:', { videoCount: data.data?.length, algorithm: params.algorithm });
+    logger.debug('[getTrendingVideos] Success:', { videoCount: data.data?.length, algorithm: params.algorithm });
     return data;
   } catch (error) {
     logger.error('[getTrendingVideos] Error:', error);
@@ -253,7 +253,7 @@ export async function getRecommendedVideos(
     if (params.seedVideoId) queryParams.append('seedVideoId', params.seedVideoId);
 
     const url = `${baseUrl}/api/videos/sections/recommended${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-    logger.info('[getRecommendedVideos] Fetching from:', { url, params });
+    logger.debug('[getRecommendedVideos] Fetching from:', { url, params });
 
     const response = await fetch(url, {
       method: 'GET',
@@ -272,7 +272,7 @@ export async function getRecommendedVideos(
     }
 
     const data = await response.json();
-    logger.info('[getRecommendedVideos] Success:', {
+    logger.debug('[getRecommendedVideos] Success:', {
       videoCount: data.data?.length,
       strategy: params.strategy,
       basedOn: data.metadata?.basedOn
@@ -300,7 +300,7 @@ export async function getCategoryVideos(
     if (params.cursor) queryParams.append('cursor', params.cursor);
 
     const url = `${baseUrl}/api/videos/sections/by-category/${category}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-    logger.info('[getCategoryVideos] Fetching from:', { url, category });
+    logger.debug('[getCategoryVideos] Fetching from:', { url, category });
 
     const response = await fetch(url, {
       method: 'GET',
@@ -320,7 +320,7 @@ export async function getCategoryVideos(
     }
 
     const data = await response.json();
-    logger.info('[getCategoryVideos] Success:', { videoCount: data.data?.length, category });
+    logger.debug('[getCategoryVideos] Success:', { videoCount: data.data?.length, category });
     return data;
   } catch (error) {
     logger.error('[getCategoryVideos] Error:', error);

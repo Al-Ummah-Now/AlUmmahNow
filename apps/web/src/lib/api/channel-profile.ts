@@ -129,7 +129,7 @@ export async function deleteOwnedChannel(channelId: string, newMainChannelId?: s
     const { status, json } = await send('DELETE', `/api/channels/${encodeURIComponent(channelId)}${query}`, channelId);
     const result = json.result as { newMainChannelId?: string | null } | undefined;
     if (status >= 200 && status < 300 && json.success) {
-      logger.info('[deleteOwnedChannel] Deleted', { channelId, newMainChannelId: result?.newMainChannelId });
+      logger.debug('[deleteOwnedChannel] Deleted', { channelId, newMainChannelId: result?.newMainChannelId });
       return { ok: true, newMainChannelId: result?.newMainChannelId ?? null, status };
     }
     logger.warn('[deleteOwnedChannel] Rejected', { channelId, status, error: json.error });

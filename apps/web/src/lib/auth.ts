@@ -6,8 +6,8 @@ export { subjects } from "@/interfaces/subjects"
 export async function setTokens(access: string, refresh: string) {
   try {
     const cookies = await getCookies()
-    logger.info("Setting tokens - access token length:", access?.length)
-    logger.info("Setting tokens - refresh token length:", refresh?.length)
+    logger.debug("Setting tokens - access token length:", access?.length)
+    logger.debug("Setting tokens - refresh token length:", refresh?.length)
 
     cookies.set({
       name: "access_token",
@@ -28,7 +28,7 @@ export async function setTokens(access: string, refresh: string) {
       secure: process.env.NODE_ENV === "production", // Only secure in production
     })
     
-    logger.info("Tokens set successfully")
+    logger.debug("Tokens set successfully")
   } catch (error) {
     logger.error("Error setting tokens:", error)
   }

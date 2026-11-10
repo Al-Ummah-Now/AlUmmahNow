@@ -36,6 +36,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.js"
+    },
+    "./policy": {
+      "types": "./dist/policy.d.ts",
+      "import": "./dist/policy.js",
+      "require": "./dist/policy.js"
     }
   }
 }

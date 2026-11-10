@@ -74,7 +74,7 @@ export class AppConfigDocumentPut extends PublicRoute {
 		}
 		await kv.put(params.key, JSON.stringify(parsed.data));
 		forgetAppConfigDocument(kv, params.key);
-		logger.info('[AppConfig] Document replaced', { key: params.key });
+		logger.debug('[AppConfig] Document replaced', { key: params.key });
 		return c.json({ success: true, key: params.key, value: parsed.data });
 	}
 }

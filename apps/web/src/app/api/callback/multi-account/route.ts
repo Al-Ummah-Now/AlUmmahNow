@@ -25,14 +25,14 @@ type ValidationResult =
   | { success: false; error: Error };
 
 async function validate(code: string, url: URL): Promise<ValidationResult> {
-  logger.info("[Multi-Account Callback] code:", code);
-  logger.info("[Multi-Account Callback] url:", url.toString());
+  logger.debug("[Multi-Account Callback] code:", code);
+  logger.debug("[Multi-Account Callback] url:", url.toString());
 
   const client = await getClient();
 
   // Use the multi-account callback URL
   const exchanged = await client.exchange(code, `${url.origin}/api/callback/multi-account`);
-  logger.info("[Multi-Account Callback] exchanged:", exchanged);
+  logger.debug("[Multi-Account Callback] exchanged:", exchanged);
 
   if (exchanged.err == false) {
     // Extract user info from the access token
@@ -49,7 +49,7 @@ async function validate(code: string, url: URL): Promise<ValidationResult> {
     // Save to SessionManager (multi-account system)
     try {
       if (user) {
-        logger.info("[Multi-Account Callback] Adding account to session:", {
+        logger.debug("[Multi-Account Callback] Adding account to session:", {
           
           email: user.email,
         });
@@ -69,12 +69,12 @@ async function validate(code: string, url: URL): Promise<ValidationResult> {
             updatedAt: new Date().toISOString(),
           }
         );
-        logger.info("[Multi-Account Callback] Successfully added account to session:", user.id);
+        logger.debug("[Multi-Account Callback] Successfully added account to session:", user.id);
 
         // Verify the session was actually saved
         const verifySession = await SessionManager.getActiveSession();
         if (verifySession) {
-          logger.info("[Multi-Account Callback] Session verified:", {
+          logger.debug("[Multi-Account Callback] Session verified:", {
             
             email: verifySession.email,
             accountsCount: verifySession.availableAccounts.length,
@@ -129,12 +129,12 @@ export async function GET(req: NextRequest) {
 
   const result = await validate(code, url);
 
-  logger.info("[Multi-Account Callback] result:", result);
+  logger.debug("[Multi-Account Callback] result:", result);
 
   if (result.success) {
     // For multi-account callback, redirect to profile page where user can see all their accounts
     // Note: Could use state parameter to track where "Add Account" was clicked for better UX
-    logger.info("[Multi-Account Callback] Redirecting to profile page");
+    logger.debug("[Multi-Account Callback] Redirecting to profile page");
     // Add query param to trigger session reload
     return NextResponse.redirect(`${url.origin}/${locale}/profile?session_updated=true`);
   }

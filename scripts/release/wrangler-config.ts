@@ -170,6 +170,8 @@ export interface AppRule {
 	production: EnvRule;
 	/** Stage rule; enforced (with prod parity) only once env.stage exists. */
 	stage?: EnvRule;
+	/** QA wrangler file (deployed from PR heads), checked against the QA logging policy. */
+	qaConfigPath?: string;
 	accepted?: AcceptedFinding[];
 }
 
@@ -262,6 +264,47 @@ export function checkParity(app: string, prod: ResolvedEnv, stage: ResolvedEnv):
 	return errors;
 }
 
+/**
+ * Logging policy (docs/operations/logging.md): which LOG_LEVEL values each tier may
+ * deploy. Production defaults to warn (error is allowed; anything chattier needs an
+ * accepted finding, e.g. info during an incident); debug/trace never ship there.
+ */
+export type LogTier = 'production' | 'stage' | 'qa';
+export const LOG_LEVEL_POLICY: Record<LogTier, { default: string; allowed: string[] }> = {
+	production: { default: 'warn', allowed: ['warn', 'error'] },
+	stage: { default: 'info', allowed: ['info', 'warn', 'error'] },
+	qa: { default: 'debug', allowed: ['trace', 'debug', 'info', 'warn', 'error'] },
+};
+
+/**
+ * LOG_LEVEL is set and allowed for the tier, and production samples every
+ * invocation (head sampling is decided before the outcome, so a lower rate drops
+ * error lines too; volume is controlled by levels and invocation_logs instead).
+ */
+export function checkLogPolicy(app: string, resolved: ResolvedEnv, tier: LogTier): string[] {
+	const where = `${app} (${tier === 'qa' ? 'QA config' : resolved.envName === null ? 'top level' : `env.${resolved.envName}`})`;
+	const errors: string[] = [];
+	const policy = LOG_LEVEL_POLICY[tier];
+	const level = resolved.vars.LOG_LEVEL;
+	if (level === undefined) {
+		errors.push(`${where}: vars.LOG_LEVEL is not set (logging policy: ${tier} uses ${JSON.stringify(policy.default)})`);
+	} else if (typeof level !== 'string' || !policy.allowed.includes(level)) {
+		errors.push(`${where}: vars.LOG_LEVEL ${JSON.stringify(level)} is not allowed in ${tier} (allowed: ${policy.allowed.join(', ')}; default ${policy.default})`);
+	}
+	const obs = resolved.config.observability as
+		| { enabled?: boolean; head_sampling_rate?: number; logs?: { enabled?: boolean; head_sampling_rate?: number } }
+		| undefined;
+	if (!obs?.enabled && !obs?.logs?.enabled) {
+		errors.push(`${where}: observability logs are off; warn/error lines would be lost`);
+	} else if (tier === 'production') {
+		const rates = [obs.head_sampling_rate, obs.logs?.head_sampling_rate].filter((r): r is number => typeof r === 'number');
+		if (rates.some((r) => r < 1)) {
+			errors.push(`${where}: production head_sampling_rate must be 1 so no error line is dropped (found ${rates.join(', ')}); cut volume with LOG_LEVEL / invocation_logs`);
+		}
+	}
+	return errors;
+}
+
 /** Every problem in one app's deployed config, before accepted findings are applied. */
 export function checkApp(rule: AppRule, config: WranglerConfig): string[] {
 	const errors: string[] = [];
@@ -269,12 +312,14 @@ export function checkApp(rule: AppRule, config: WranglerConfig): string[] {
 	try {
 		prod = resolveEnv(config, rule.production.env);
 		errors.push(...checkEnv(rule.app, prod, rule.production));
+		errors.push(...checkLogPolicy(rule.app, prod, 'production'));
 	} catch (error) {
 		errors.push(`${rule.app}: ${(error as Error).message}`);
 	}
 	if (rule.stage && rule.stage.env && config.env?.[rule.stage.env]) {
 		const stage = resolveEnv(config, rule.stage.env);
 		errors.push(...checkEnv(rule.app, stage, rule.stage));
+		errors.push(...checkLogPolicy(rule.app, stage, 'stage'));
 		if (prod) errors.push(...checkParity(rule.app, prod, stage));
 	}
 	return errors;

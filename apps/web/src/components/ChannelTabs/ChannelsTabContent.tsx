@@ -43,11 +43,11 @@ export function ChannelsTabContent({ channelId }: ChannelsTabContentProps) {
     let cancelled = false;
     setLoading(true);
     setError(false);
-    logger.info('ChannelsTabContent: Loading featured channels', { channelId });
+    logger.debug('ChannelsTabContent: Loading featured channels', { channelId });
 
     loadFeaturedChannels(channelId)
       .then((result) => {
-        logger.info('ChannelsTabContent: Featured channels loaded', { channelId, count: result.length });
+        logger.debug('ChannelsTabContent: Featured channels loaded', { channelId, count: result.length });
         if (!cancelled) setChannels(result);
       })
       .catch((err) => {

@@ -147,7 +147,7 @@ export function createProcessingInternalRouter() {
 				results.push({ videoId: id, error: error instanceof Error ? error.message : String(error) });
 			}
 		}
-		logger.info('[ProcessingAdmin] Sync from Bunny', { count: ids.length, dryRun });
+		logger.debug('[ProcessingAdmin] Sync from Bunny', { count: ids.length, dryRun });
 		return c.json({ success: true, result: { dryRun, results } });
 	});
 

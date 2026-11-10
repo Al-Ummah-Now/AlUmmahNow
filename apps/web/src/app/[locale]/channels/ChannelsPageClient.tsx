@@ -23,7 +23,7 @@ export function ChannelsPageClient() {
   const loadPage = useCallback(async (cursor: string | null) => {
     setLoading(true);
     setError(false);
-    logger.info('ChannelsPage: Fetching channels', { cursor: cursor || 'initial' });
+    logger.debug('ChannelsPage: Fetching channels', { cursor: cursor || 'initial' });
     try {
       const page = await listDirectoryChannels({ limit: PAGE_SIZE, cursor: cursor || undefined });
       if (!page) {
@@ -36,7 +36,7 @@ export function ChannelsPageClient() {
         return [...prev, ...page.data.filter((c) => !seen.has(c.id))];
       });
       setNextCursor(page.cursor || null);
-      logger.info('ChannelsPage: Channels loaded', { count: page.data.length, hasMore: !!page.cursor });
+      logger.debug('ChannelsPage: Channels loaded', { count: page.data.length, hasMore: !!page.cursor });
     } catch (err) {
       logger.error('ChannelsPage: Failed to fetch channels', { error: err });
       setError(true);

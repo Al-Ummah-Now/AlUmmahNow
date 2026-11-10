@@ -78,5 +78,5 @@ export async function removeSearchHistoryEntry(query: string): Promise<SearchHis
 
 export async function clearSearchHistory(): Promise<void> {
   await write([]);
-  logger.info('[SearchHistory] Search history cleared');
+  logger.debug('[SearchHistory] Search history cleared');
 }

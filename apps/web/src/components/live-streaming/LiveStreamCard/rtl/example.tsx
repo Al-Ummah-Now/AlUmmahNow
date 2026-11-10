@@ -1,3 +1,4 @@
+/* eslint-disable no-console -- usage example, not rendered by any route */
 /**
  * LiveStreamCard RTL Usage Examples
  * Task 1.4: LiveStreamCard RTL Variant (Arabic)

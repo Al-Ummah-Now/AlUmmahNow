@@ -13,6 +13,7 @@ import { authMiddleware, optionalAuthMiddleware, channelIdMiddleware } from "./m
 import { videosBanMiddleware } from "./middleware/videos-ban";
 import adminInternalRouter from "./routers/admin.router";
 import { loggingMiddleware } from "./middleware/logging";
+import { withLogging } from "@al-ummah/logger";
 import { errorHandler } from "./middleware/error-handler";
 import { pruneRateLimits, rateLimitMiddleware } from "./middleware/rate-limit";
 import { UPLOAD_CONTINUE_PATHS, UPLOAD_SESSION_PATHS, uploadContinueLimitMiddleware, uploadSessionLimitMiddleware } from "./middleware/upload-limits";
@@ -582,8 +583,8 @@ function reportJobFailure(env: AppBindings, ctx: ExecutionContext, job: string, 
 }
 
 // Uncaught exceptions and 5xx answers are reported to the admin Errors page (docs/features/error-reporting.md)
-export default {
+export default withLogging({
 	fetch: withErrorReporting<AppBindings & ErrorReporterEnv, ExecutionContext>('api-videos', handleFetch as never),
 	scheduled,
 	queue,
-};
+});

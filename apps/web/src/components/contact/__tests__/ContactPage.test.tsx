@@ -15,7 +15,7 @@ jest.mock('@/hooks/useLanguage', () => ({
 }));
 jest.mock('@/components/AuthProvider/authContext', () => ({ useAuth: () => ({ user: mockUser }) }));
 jest.mock('next/navigation', () => ({ useSearchParams: () => mockParams, usePathname: () => `/${mockLang}/contact` }));
-jest.mock('@/lib/logger-client', () => ({ logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn() } }));
+jest.mock('@/lib/logger-client', () => ({ logger: { debug: jest.fn(), warn: jest.fn(), info: jest.fn(), error: jest.fn() } }));
 jest.mock('@/theme/contact.css', () => ({}), { virtual: true });
 
 describe('Contact us page', () => {

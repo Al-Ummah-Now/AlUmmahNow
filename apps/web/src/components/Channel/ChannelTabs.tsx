@@ -23,7 +23,7 @@ export function ChannelTabs({ channel, locale }: ChannelTabsProps) {
   useEffect(() => {
     const fetchTabConfig = async () => {
       try {
-        logger.info('[ChannelTabs] Fetching tab configuration', { channelId: channel.id });
+        logger.debug('[ChannelTabs] Fetching tab configuration', { channelId: channel.id });
         const config = await getChannelTabConfig(channel.id);
 
         if (config) {
@@ -38,7 +38,7 @@ export function ChannelTabs({ channel, locale }: ChannelTabsProps) {
             }));
 
           setTabs(apiTabs);
-          logger.info('[ChannelTabs] Tab configuration loaded', {
+          logger.debug('[ChannelTabs] Tab configuration loaded', {
             channelId: channel.id,
             tabCount: apiTabs.length,
           });

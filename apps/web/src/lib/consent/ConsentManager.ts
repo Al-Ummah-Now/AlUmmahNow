@@ -126,7 +126,7 @@ export const ConsentManager = {
       if (!state[category] && (previous === null || previous[category])) purgeCategoryData(category);
     }
 
-    logger.info('[Consent] Consent updated', {
+    logger.debug('[Consent] Consent updated', {
       analytics: state.analytics,
       experiments: state.experiments,
       performance: state.performance,

@@ -43,6 +43,7 @@ export const APPS: AppRule[] = [
 	{
 		app: 'web',
 		configPath: 'apps/web/wrangler.production.jsonc',
+		qaConfigPath: 'apps/web/wrangler.qa.jsonc',
 		dir: 'apps/web',
 		deployFlags: 'config',
 		production: {
@@ -65,6 +66,7 @@ export const APPS: AppRule[] = [
 	{
 		app: 'admin-web',
 		configPath: 'apps/admin-web/wrangler.production.jsonc',
+		qaConfigPath: 'apps/admin-web/wrangler.qa.jsonc',
 		dir: 'apps/admin-web',
 		deployFlags: 'config',
 		production: {
@@ -94,6 +96,7 @@ export const APPS: AppRule[] = [
 	{
 		app: 'api-videos',
 		configPath: 'apps/api-videos/wrangler.jsonc',
+		qaConfigPath: 'apps/api-videos/wrangler.qa.jsonc',
 		dir: 'apps/api-videos',
 		deployFlags: 'any',
 		production: {
@@ -139,6 +142,7 @@ export const APPS: AppRule[] = [
 	{
 		app: 'processor',
 		configPath: 'apps/processor/wrangler.jsonc',
+		qaConfigPath: 'apps/processor/wrangler.qa.jsonc',
 		dir: 'apps/processor',
 		deployFlags: 'any',
 		production: {
@@ -165,6 +169,7 @@ export const APPS: AppRule[] = [
 	{
 		app: 'websocket-server',
 		configPath: 'apps/websocket-server/wrangler.jsonc',
+		qaConfigPath: 'apps/websocket-server/wrangler.qa.jsonc',
 		dir: 'apps/websocket-server',
 		deployFlags: 'any',
 		production: {
@@ -189,6 +194,7 @@ export const APPS: AppRule[] = [
 	{
 		app: 'scheduler',
 		configPath: 'apps/scheduler/wrangler.jsonc',
+		qaConfigPath: 'apps/scheduler/wrangler.qa.jsonc',
 		dir: 'apps/scheduler',
 		deployFlags: 'any',
 		production: {
@@ -210,6 +216,7 @@ export const APPS: AppRule[] = [
 	{
 		app: 'admin-api',
 		configPath: 'apps/admin-api/wrangler.jsonc',
+		qaConfigPath: 'apps/admin-api/wrangler.qa.jsonc',
 		dir: 'apps/admin-api',
 		deployFlags: 'any',
 		production: {

@@ -38,7 +38,7 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
   const refetch = useCallback(async () => {
     // Skip if no channelId
     if (!channelId) {
-      logger.info('useChannels: Skipping fetch - missing channelId');
+      logger.debug('useChannels: Skipping fetch - missing channelId');
       setChannels([]);
       setError(null);
       setIsLoading(false);
@@ -49,7 +49,7 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
     setError(null);
 
     try {
-      logger.info('useChannels: Fetching channels with headers:', { channelId });
+      logger.debug('useChannels: Fetching channels with headers:', { channelId });
 
       const response = await listChannels(
         { limit: 100 }, // Get up to 100 channels
@@ -60,26 +60,26 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
         throw new Error('Failed to fetch channels');
       }
 
-      logger.info('useChannels: API response:', response);
+      logger.debug('useChannels: API response:', response);
 
       // Handle different response formats
       if ('data' in response && Array.isArray(response.data)) {
         const channelData = response.data as Channel[];
         setChannels(channelData);
-        logger.info('useChannels: Set channels:', channelData);
+        logger.debug('useChannels: Set channels:', channelData);
       } else if ('result' in response) {
         const resultObj = response.result as Record<string, unknown>;
         if (resultObj && 'channels' in resultObj && Array.isArray(resultObj.channels)) {
           const channelData = resultObj.channels as Channel[];
           setChannels(channelData);
-          logger.info('useChannels: Set channels:', channelData);
+          logger.debug('useChannels: Set channels:', channelData);
         } else {
           setChannels([]);
         }
       } else if ('channels' in response && Array.isArray(response.channels)) {
         const channelData = response.channels as Channel[];
         setChannels(channelData);
-        logger.info('useChannels: Set channels:', channelData);
+        logger.debug('useChannels: Set channels:', channelData);
       } else {
         setChannels([]);
       }
@@ -115,7 +115,7 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
     setError(null);
 
     try {
-      logger.info('useChannels: Creating channel with data:', data);
+      logger.debug('useChannels: Creating channel with data:', data);
 
       const headers: Required<Pick<ApiHeaders, 'channelId'>> = {
         channelId
@@ -127,7 +127,7 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
         throw new Error('Failed to create channel');
       }
 
-      logger.info('useChannels: Channel created successfully:', response);
+      logger.debug('useChannels: Channel created successfully:', response);
 
       // Refetch channels after creation
       await refetch();
@@ -156,7 +156,7 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
     setError(null);
 
     try {
-      logger.info('useChannels: Updating channel', { id, data });
+      logger.debug('useChannels: Updating channel', { id, data });
 
       const headers: Required<Pick<ApiHeaders, 'channelId'>> = {
         // The API checks the header against the channel being changed
@@ -169,7 +169,7 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
         throw new Error('Failed to update channel');
       }
 
-      logger.info('useChannels: Channel updated successfully:', response);
+      logger.debug('useChannels: Channel updated successfully:', response);
 
       // Refetch channels after update
       await refetch();
@@ -195,7 +195,7 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
     setError(null);
 
     try {
-      logger.info('useChannels: Deleting channel', id);
+      logger.debug('useChannels: Deleting channel', id);
 
       const headers: Required<Pick<ApiHeaders, 'channelId'>> = {
         // The API checks the header against the channel being changed
@@ -208,7 +208,7 @@ export const useChannels = (options: UseChannelsOptions = {}): UseChannelsReturn
         throw new Error('Failed to delete channel');
       }
 
-      logger.info('useChannels: Channel deleted successfully:', response);
+      logger.debug('useChannels: Channel deleted successfully:', response);
 
       // Refetch channels after deletion
       await refetch();

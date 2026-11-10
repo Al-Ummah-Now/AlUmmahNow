@@ -39,7 +39,7 @@ jest.mock('../../api/api-client', () => ({
 }));
 jest.mock('../openauth-client', () => ({ getOpenAuthClient: jest.fn() }));
 jest.mock('../../auth', () => ({ subjects: {} }));
-jest.mock('@/lib/logger-server', () => ({ logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() } }));
+jest.mock('@/lib/logger-server', () => ({ logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn(), trace: jest.fn() } }));
 
 import { SessionManager, type SessionData } from '../session-manager';
 

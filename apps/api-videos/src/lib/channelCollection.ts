@@ -33,7 +33,7 @@ export async function ensureChannelCollection<C extends { bunnyCollectionId?: st
 	});
 	const kept = stored?.bunnyCollectionId || undefined;
 	if (kept !== created) {
-		logger.info('[ChannelCollection] Another upload created the collection first; removing ours', { channelId, ours: created, stored: kept });
+		logger.debug('[ChannelCollection] Another upload created the collection first; removing ours', { channelId, ours: created, stored: kept });
 		await bunny.deleteCollection(libraryId, created).catch((error) => {
 			logger.warn('[ChannelCollection] Could not delete the duplicate collection', {
 				channelId,

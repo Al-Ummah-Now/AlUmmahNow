@@ -45,7 +45,7 @@ export function VideoProcessingState({ video, isOwner, onReady }: Props) {
         }
         const fresh = await fetchVideoById(video.id);
         if (!cancelled && fresh && !isVideoProcessing(fresh)) {
-          logger.info('[VideoProcessingState] Video finished processing', { videoId: video.id, status: fresh.uploadStatus });
+          logger.debug('[VideoProcessingState] Video finished processing', { videoId: video.id, status: fresh.uploadStatus });
           onReady(fresh);
         }
       } catch (error) {

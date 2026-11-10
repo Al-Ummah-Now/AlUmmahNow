@@ -119,7 +119,7 @@ export class ChannelSectionUpdate extends AuthenticatedRoute {
 
     const userId = this.getUserId(c);
 
-    logger.info(`Updating section ${sectionId} for channel ${channelId} by user ${userId}`, {
+    logger.debug(`Updating section ${sectionId} for channel ${channelId} by user ${userId}`, {
       updates: Object.keys(input),
     });
 
@@ -128,7 +128,7 @@ export class ChannelSectionUpdate extends AuthenticatedRoute {
     const channel = await channelRepo.getObject(channelId);
 
     if (!channel) {
-      logger.warn(`Channel not found: ${channelId}`);
+      logger.debug(`Channel not found: ${channelId}`);
       return c.json(
         {
           success: false,
@@ -148,7 +148,7 @@ export class ChannelSectionUpdate extends AuthenticatedRoute {
     const section = await sectionsRepo.getObject(`${channelId}/${sectionId}`);
 
     if (!section) {
-      logger.warn(`Section not found: ${sectionId} in channel ${channelId}`);
+      logger.debug(`Section not found: ${sectionId} in channel ${channelId}`);
       return c.json(
         {
           success: false,
@@ -231,7 +231,7 @@ export class ChannelSectionUpdate extends AuthenticatedRoute {
     // Transform to view model
     const sectionView = transformChannelSectionToView(updatedSection, channel);
 
-    logger.info(`Successfully updated section ${sectionId} for channel ${channelId}`);
+    logger.debug(`Successfully updated section ${sectionId} for channel ${channelId}`);
 
     return c.json({
       success: true,

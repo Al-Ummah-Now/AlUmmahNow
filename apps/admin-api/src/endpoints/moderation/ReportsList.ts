@@ -89,7 +89,7 @@ export class ReportsList extends AdminRoute {
       const boundCountStmt = params.length > 0 ? countStmt.bind(...params) : countStmt;
       const countResult = await boundCountStmt.first<{ count: number }>();
 
-      logger.info('Reports listed', {
+      logger.debug('Reports listed', {
         moderatorId: this.getUserId(c),
         filters: { status, entity_type },
         count: result.results?.length || 0

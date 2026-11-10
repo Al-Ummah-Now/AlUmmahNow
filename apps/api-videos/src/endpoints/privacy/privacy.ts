@@ -66,7 +66,7 @@ export class PrivacyExport extends AuthenticatedRoute {
 		const budget = budgetFor(c);
 		const resumeToken = c.req.query('resume') || undefined;
 		const data = await collectUserData(buckets(c), userId, budget, { resumeToken });
-		logger.info('[Privacy] Data export generated', { userId, complete: data.complete, operations: budget.spent });
+		logger.debug('[Privacy] Data export generated', { userId, complete: data.complete, operations: budget.spent });
 		return c.json(data, 200, {
 			'Content-Disposition': `attachment; filename="al-ummah-now-data-${new Date().toISOString().slice(0, 10)}.json"`,
 			'Cache-Control': 'no-store',
@@ -146,7 +146,7 @@ export class PrivacyErase extends AuthenticatedRoute {
 			logger.error('[Privacy] Failed to queue erasure follow-up', { userId, error: error instanceof Error ? error.message : String(error) });
 		}
 
-		logger.info('[Privacy] User data erased', {
+		logger.debug('[Privacy] User data erased', {
 			userId,
 			complete: summary.complete,
 			deleted: summary.deleted,
@@ -223,7 +223,7 @@ export class PrivacyConsentPut extends AuthenticatedRoute {
 			// No profile yet: the browser cookie remains the record until one exists.
 			return c.json({ success: true, stored: false });
 		}
-		logger.info('[Privacy] Consent recorded', { userId, analytics: record.analytics, experiments: record.experiments, performance: record.performance });
+		logger.debug('[Privacy] Consent recorded', { userId, analytics: record.analytics, experiments: record.experiments, performance: record.performance });
 		return c.json({ success: true, stored: true });
 	}
 }

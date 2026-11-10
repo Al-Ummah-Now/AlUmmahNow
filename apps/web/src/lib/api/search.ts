@@ -44,7 +44,7 @@ export async function searchContent(query: SearchQuery): Promise<SearchResult> {
       return { ok: false, status: response.status };
     }
     const data = (await response.json()) as SearchResponse;
-    logger.info('[searchContent] Search served', { params: params.toString(), count: data.results?.length ?? 0 });
+    logger.debug('[searchContent] Search served', { params: params.toString(), count: data.results?.length ?? 0 });
     return { ok: true, data: { ...data, results: data.results ?? [] } };
   } catch (error) {
     logger.error('[searchContent] Request failed', { error, params: params.toString() });

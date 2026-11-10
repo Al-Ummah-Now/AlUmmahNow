@@ -102,7 +102,7 @@ export class ListUploadDefaultsEndpoint extends AuthenticatedRoute {
         prefix,
       });
 
-      logger.info('Upload defaults query:', { userId, channelId, prefix, objectCount: result.objects.length });
+      logger.debug('Upload defaults query:', { userId, channelId, prefix, objectCount: result.objects.length });
 
       // Fetch and parse templates
       const templates: UploadTemplate[] = [];
@@ -141,7 +141,7 @@ export class ListUploadDefaultsEndpoint extends AuthenticatedRoute {
         },
       };
 
-      logger.info('Upload defaults response:', {
+      logger.debug('Upload defaults response:', {
         templatesCount: templates.length,
         hasDefault: !!defaultTemplate,
         hasCursor: !!response.result.cursor

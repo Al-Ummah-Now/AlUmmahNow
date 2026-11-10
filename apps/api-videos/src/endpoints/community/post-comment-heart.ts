@@ -77,7 +77,7 @@ abstract class SetCommentHeartRoute extends AuthenticatedRoute {
       return c.json({ success: false, error: 'Cannot heart a deleted comment' }, 400);
     }
 
-    logger.info('[PostCommentHeart] Heart state updated', { postId, commentId, hearted: this.hearted, userId });
+    logger.debug('[PostCommentHeart] Heart state updated', { postId, commentId, hearted: this.hearted, userId });
 
     const response: PostCommentHeartResponse = { success: true, hearted: this.hearted, commentId };
     return c.json(response);

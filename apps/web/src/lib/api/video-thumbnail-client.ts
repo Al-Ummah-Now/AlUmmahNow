@@ -45,7 +45,7 @@ export async function uploadVideoThumbnail(
   const effectiveChannelId = channelId || authHeaders['channelId'];
   if (effectiveChannelId) headers['channelId'] = effectiveChannelId;
 
-  logger.info('[uploadVideoThumbnail] Uploading thumbnail', { videoId, size: file.size, type: file.type });
+  logger.debug('[uploadVideoThumbnail] Uploading thumbnail', { videoId, size: file.size, type: file.type });
 
   try {
     const response = await fetch(`${getApiUrl()}/api/videos/${encodeURIComponent(videoId)}/thumbnail`, {

@@ -113,7 +113,7 @@ export async function handleCommentReaction(
 		});
 	}
 
-	logger.info('[CommentReaction] Applied', { videoId: id, commentId: cid, channelId, reaction, action, changed });
+	logger.debug('[CommentReaction] Applied', { videoId: id, commentId: cid, channelId, reaction, action, changed });
 
 	const likes = (comment as StoredComment).likes || [];
 	const dislikes = (comment as StoredComment).dislikes || [];

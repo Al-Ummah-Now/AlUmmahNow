@@ -1,31 +1,7 @@
 /**
- * Logger for scheduler application
- * Uses @al-ummah/logger package for centralized logging
+ * scheduler logger. Level comes from the logging policy (@al-ummah/logger/policy):
+ * production warn, stage info, QA/dev debug, overridable with the LOG_LEVEL var.
  */
+import { appLogger } from '@al-ummah/logger';
 
-import { createLogger } from '@al-ummah/logger';
-
-// Create logger instance for scheduler
-// Note: In Cloudflare Workers, use environment bindings instead of process.env
-const schedulerLogger = createLogger('scheduler', {
-  logLevel: 'info', // Default level, can be overridden via Cloudflare env vars
-  forceHttpLogging: true, // Force HTTP logging for Cloudflare Workers
-});
-
-export const logger = {
-  info: (message: string, data?: unknown) => {
-    schedulerLogger.info(message, data);
-  },
-
-  warn: (message: string, data?: unknown) => {
-    schedulerLogger.warn(message, data);
-  },
-
-  error: (message: string, data?: unknown) => {
-    schedulerLogger.error(message, data);
-  },
-
-  debug: (message: string, data?: unknown) => {
-    schedulerLogger.debug(message, data);
-  },
-};
+export const logger = appLogger('scheduler');

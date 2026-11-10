@@ -19,7 +19,7 @@ export async function isChannelOwner(channelId: string): Promise<boolean> {
     const authContext = await getServerAuthContext();
 
     if (!authContext || !authContext.userId) {
-      logger.info('[isChannelOwner] No authenticated user', { channelId });
+      logger.debug('[isChannelOwner] No authenticated user', { channelId });
       return false;
     }
 
@@ -34,7 +34,7 @@ export async function isChannelOwner(channelId: string): Promise<boolean> {
     // Check ownership
     const isOwner = channel.userId === authContext.userId;
 
-    logger.info('[isChannelOwner] Ownership checked', {
+    logger.debug('[isChannelOwner] Ownership checked', {
       channelId,
       
       isOwner,

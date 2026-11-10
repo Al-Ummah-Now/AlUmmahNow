@@ -85,10 +85,10 @@ async function validate(code: string | null, url: URL): Promise<ValidationResult
             updatedAt: new Date().toISOString(),
           }
         );
-        logger.info("[OAuth Callback] Saved to SessionManager:", user.id);
+        logger.debug("[OAuth Callback] Saved to SessionManager:", user.id);
       }
     } catch (_sessionError) {
-      logger.info("[OAuth Callback] SessionManager not available, using legacy cookies");
+      logger.debug("[OAuth Callback] SessionManager not available, using legacy cookies");
       // Fall back to legacy cookie storage
       await setTokens(exchanged.tokens.access, exchanged.tokens.refresh);
     }
@@ -153,7 +153,7 @@ export async function GET(req: NextRequest) {
         const profileExists = await checkProfileExists(result.user);
         if (!profileExists) {
           const profilePath = getProfileCreationPath(locale as 'en' | 'ar');
-          logger.info("Redirecting new user to profile creation", profilePath);
+          logger.debug("Redirecting new user to profile creation", profilePath);
           return NextResponse.redirect(`${url.origin}${profilePath}?session_updated=true`);
         }
       } catch (error) {

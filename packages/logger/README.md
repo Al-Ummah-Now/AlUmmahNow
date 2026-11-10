@@ -206,3 +206,10 @@ pnpm --filter @al-ummah/logger clean
 ## License
 
 UNLICENSED - Private package for Al Ummah Now monorepo.
+
+## Logging policy
+
+Levels per environment, redaction, request/job summaries and Workers Logs
+sampling are documented in [docs/operations/logging.md](../../docs/operations/logging.md).
+Apps use `appLogger('<app>')` and never set a level in code; Workers wrap their
+handlers with `withLogging()` so each invocation applies its `env.LOG_LEVEL`.

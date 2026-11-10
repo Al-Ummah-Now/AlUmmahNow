@@ -9,7 +9,7 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { APPS } from './apps.ts';
 import { parseJsonc } from './jsonc.ts';
-import { applyAccepted, checkApp, type AppRule, type WranglerConfig } from './wrangler-config.ts';
+import { applyAccepted, checkApp, checkLogPolicy, resolveEnv, type AppRule, type WranglerConfig } from './wrangler-config.ts';
 import { checkDeployCommands, scanPackageScripts, scanWorkflow, type DeployCommand } from './deploy-commands.ts';
 import { checkSkewConfig } from './skew-config.ts';
 
@@ -28,7 +28,13 @@ export function runCheck(root: string, apps: AppRule[] = APPS): CheckResult {
 			errors.push(`${rule.app}: ${rule.configPath} not found`);
 			continue;
 		}
-		const result = applyAccepted(rule, checkApp(rule, parseJsonc(readFileSync(path, 'utf8')) as WranglerConfig));
+		const found = checkApp(rule, parseJsonc(readFileSync(path, 'utf8')) as WranglerConfig);
+		if (rule.qaConfigPath) {
+			const qaPath = join(root, rule.qaConfigPath);
+			if (!existsSync(qaPath)) found.push(`${rule.app}: ${rule.qaConfigPath} not found`);
+			else found.push(...checkLogPolicy(rule.app, resolveEnv(parseJsonc(readFileSync(qaPath, 'utf8')) as WranglerConfig, null), 'qa'));
+		}
+		const result = applyAccepted(rule, found);
 		errors.push(...result.errors);
 		accepted.push(...result.accepted);
 	}

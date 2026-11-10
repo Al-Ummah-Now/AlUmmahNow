@@ -37,7 +37,7 @@ export async function handlePostLikeEvent(
   const liked = await syncPostLike(db, env.community_posts, postId, actor.userId, timestamp);
   if (imported === 'more') await continueImport(message, env, logger, postId);
 
-  logger.info('Post like processed', { postId, channelId, userId: actor.userId, liked, imported });
+  logger.debug('Post like processed', { postId, channelId, userId: actor.userId, liked, imported });
 }
 
 /**
@@ -47,5 +47,5 @@ export async function handlePostLikeEvent(
 export async function continueImport(message: AlUmmahMessage, env: QueueEnvironment, logger: Logger, postId: string): Promise<void> {
   if (!env.MESSAGE_QUEUE) throw new Error(`legacy import of post ${postId} not finished; retrying`);
   await env.MESSAGE_QUEUE.send(message);
-  logger.info('Legacy post counter import continues in a follow-up message', { postId });
+  logger.debug('Legacy post counter import continues in a follow-up message', { postId });
 }

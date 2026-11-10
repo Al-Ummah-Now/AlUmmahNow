@@ -119,13 +119,6 @@ export function UnifiedNavigation() {
 
   // Update local state when user changes
   useEffect(() => {
-    logger.debug('[UnifiedNavigation] User changed:', {
-      
-      email: user?.email,
-      hasChannel: !!user?.channel,
-      channelName: user?.channel?.name,
-      channelsCount: user?.channels?.length || 0,
-    });
     setChannel(user?.channel);
     setChannels(user?.channels || []);
   }, [user?.id, user?.email, user?.channel, user?.channels]);

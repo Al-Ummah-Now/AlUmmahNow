@@ -153,7 +153,7 @@ export class CategoryVideosSection extends PublicRoute {
 
       if (categoryIndex) {
         // Use index data
-        logger.info("Using category videos index", { category, indexVideos: categoryIndex.videos.length });
+        logger.debug("Using category videos index", { category, indexVideos: categoryIndex.videos.length });
         fromIndex = true;
 
         // Sort index data based on sort parameter
@@ -188,7 +188,7 @@ export class CategoryVideosSection extends PublicRoute {
             const decodedCursor = JSON.parse(atob(cursor));
             startIndex = decodedCursor.offset || 0;
           } catch (e) {
-            logger.warn("Invalid cursor provided", { cursor });
+            logger.debug("Invalid cursor provided", { cursor });
           }
         }
 
@@ -221,7 +221,7 @@ export class CategoryVideosSection extends PublicRoute {
         }
       } else {
         // Fall back to direct R2 query
-        logger.info("Category index stale or not found, using direct R2 query", { category });
+        logger.debug("Category index stale or not found, using direct R2 query", { category });
         fromIndex = false;
 
         // List videos and filter by category

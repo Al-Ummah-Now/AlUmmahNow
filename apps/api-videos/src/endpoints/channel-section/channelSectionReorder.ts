@@ -128,7 +128,7 @@ export class ChannelSectionReorder extends AuthenticatedRoute {
 
     const userId = this.getUserId(c);
 
-    logger.info(`Reordering sections for channel ${channelId} by user ${userId}`, {
+    logger.debug(`Reordering sections for channel ${channelId} by user ${userId}`, {
       sectionCount: sectionIds.length,
     });
 
@@ -137,7 +137,7 @@ export class ChannelSectionReorder extends AuthenticatedRoute {
     const channel = await channelRepo.getObject(channelId);
 
     if (!channel) {
-      logger.warn(`Channel not found: ${channelId}`);
+      logger.debug(`Channel not found: ${channelId}`);
       return c.json(
         {
           success: false,
@@ -174,7 +174,7 @@ export class ChannelSectionReorder extends AuthenticatedRoute {
       const missing = [...existingIds].filter((id) => !providedIds.has(id));
       const extra = [...providedIds].filter((id) => !existingIds.has(id));
 
-      logger.warn('Section count mismatch in reorder', {
+      logger.debug('Section count mismatch in reorder', {
         expected: filteredSections.length,
         provided: sectionIds.length,
         missing,
@@ -199,7 +199,7 @@ export class ChannelSectionReorder extends AuthenticatedRoute {
     // Validate: no duplicates
     const uniqueIds = new Set(sectionIds);
     if (uniqueIds.size !== sectionIds.length) {
-      logger.warn('Duplicate section IDs in reorder request');
+      logger.debug('Duplicate section IDs in reorder request');
       return c.json(
         {
           success: false,
@@ -213,7 +213,7 @@ export class ChannelSectionReorder extends AuthenticatedRoute {
     const existingIds = new Set(filteredSections.map((s) => s.id));
     const invalidIds = sectionIds.filter((id) => !existingIds.has(id));
     if (invalidIds.length > 0) {
-      logger.warn('Invalid section IDs in reorder', { invalidIds });
+      logger.debug('Invalid section IDs in reorder', { invalidIds });
       return c.json(
         {
           success: false,
@@ -264,7 +264,7 @@ export class ChannelSectionReorder extends AuthenticatedRoute {
     // Transform to view models
     const sectionViews = transformChannelSectionsToView(updatedSections, channel);
 
-    logger.info(`Successfully reordered ${updatedSections.length} sections for channel ${channelId}`);
+    logger.debug(`Successfully reordered ${updatedSections.length} sections for channel ${channelId}`);
 
     return c.json({
       success: true,

@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
       return new NextResponse(null, { status: 204 });
     }
     for (const report of normalizeCspReports(JSON.parse(raw))) {
-      logger.warn('[Security] CSP violation', report);
+      logger.info('[Security] CSP violation', report);
     }
   } catch (error) {
     logger.warn('[Security] Unreadable CSP report', { error: error instanceof Error ? error.message : String(error) });

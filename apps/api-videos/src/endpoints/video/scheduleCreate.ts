@@ -238,7 +238,7 @@ export class VideoScheduleCreate extends AuthenticatedRoute {
         },
       });
 
-      logger.info(`Scheduled video ${videoId} for ${scheduledDate.toISOString()}`);
+      logger.debug(`Scheduled video ${videoId} for ${scheduledDate.toISOString()}`);
 
       // Send queue message for video scheduling
       const queue = new Queue(c.env.queue);

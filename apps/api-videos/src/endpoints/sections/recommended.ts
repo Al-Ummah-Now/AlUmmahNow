@@ -126,7 +126,7 @@ export class RecommendedVideosSection extends OptionalAuthRoute {
           if (watchHistoryBucket) {
             const watchHistory = await getWatchHistory(watchHistoryBucket, userId);
             watchedVideoIds = new Set(watchHistory);
-            logger.info("Loaded watch history for recommendations", { userId, watchedCount: watchedVideoIds.size });
+            logger.debug("Loaded watch history for recommendations", { userId, watchedCount: watchedVideoIds.size });
           }
         } catch (error) {
           logger.warn("Failed to load watch history", { error, userId });
@@ -180,7 +180,7 @@ export class RecommendedVideosSection extends OptionalAuthRoute {
                 const decodedCursor = JSON.parse(atob(cursor));
                 startIndex = decodedCursor.offset || 0;
               } catch (e) {
-                logger.warn("Invalid cursor provided", { cursor });
+                logger.debug("Invalid cursor provided", { cursor });
               }
             }
 

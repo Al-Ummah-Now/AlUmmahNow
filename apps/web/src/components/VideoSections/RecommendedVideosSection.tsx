@@ -67,7 +67,7 @@ export function RecommendedVideosSection({
         params.cursor = cursor;
       }
 
-      logger.info('[RecommendedVideosSection] Fetching videos', { params, userId, loadMore });
+      logger.debug('[RecommendedVideosSection] Fetching videos', { params, userId, loadMore });
       const response = await getRecommendedVideos(params, userId ? { } : undefined);
 
       if (!response) {
@@ -84,7 +84,7 @@ export function RecommendedVideosSection({
         setCursor(response.cursor);
         setHasMore(!!response.cursor);
         setBasedOn(response.metadata.basedOn);
-        logger.info('[RecommendedVideosSection] Videos loaded', {
+        logger.debug('[RecommendedVideosSection] Videos loaded', {
           count: response.data.length,
           hasMore: !!response.cursor,
           strategy: response.metadata.strategy,

@@ -100,7 +100,7 @@ export function applySavedVolume(player: Player | ExtendedPlayer): void {
     if (savedState) {
       extPlayer.volume(savedState.volume);
       extPlayer.muted(savedState.muted);
-      logger.info('[VolumeControl] Restored volume:', savedState);
+      logger.debug('[VolumeControl] Restored volume:', savedState);
     } else {
       // Fallback: Set reasonable defaults if no saved state
       const fallbackVolume = 0.7; // 70% volume as reasonable default
@@ -109,7 +109,7 @@ export function applySavedVolume(player: Player | ExtendedPlayer): void {
       extPlayer.volume(fallbackVolume);
       extPlayer.muted(fallbackMuted);
 
-      logger.info('[VolumeControl] Applied fallback volume:', { volume: fallbackVolume, muted: fallbackMuted });
+      logger.debug('[VolumeControl] Applied fallback volume:', { volume: fallbackVolume, muted: fallbackMuted });
 
       // Save the fallback state for future use
       saveVolumeState(fallbackVolume, fallbackMuted);
@@ -240,7 +240,7 @@ export function setupScrollWheelControl(player: Player | ExtendedPlayer): () => 
       extPlayer.muted(false);
     }
 
-    logger.info('[VolumeControl] Scroll wheel:', { currentVolume, newVolume, muted: extPlayer.muted() });
+    logger.debug('[VolumeControl] Scroll wheel:', { currentVolume, newVolume, muted: extPlayer.muted() });
   };
 
   // Add event listener with passive: false to allow preventDefault
@@ -352,7 +352,7 @@ export function setupKeyboardAccessibility(
     // Update ARIA values
     updateAriaValues();
 
-    logger.info('[VolumeControl] Keyboard control:', { 
+    logger.debug('[VolumeControl] Keyboard control:', { 
       key: event.key, 
       newVolume, 
       newMuted 
@@ -425,7 +425,7 @@ export function setupVolumeChangeListener(
     const started = typeof (player as { hasStarted?: () => boolean }).hasStarted === 'function' ? (player as { hasStarted: () => boolean }).hasStarted() : true;
     if (interacted || started) showVolumeIndicator(player, volume, muted, lang);
 
-    logger.info('[VolumeControl] Volume changed:', { volume, muted });
+    logger.debug('[VolumeControl] Volume changed:', { volume, muted });
   };
 
   player.on('volumechange', handleVolumeChange);

@@ -12,7 +12,8 @@
     "type-check": "tsc --noEmit",
     "clean": "rm -rf .wrangler",
     "verify": "node verify.js",
-    "test": "tsx --import ./test/register-cf-stub.mjs --test test/*.test.ts"
+    "test": "tsx --import ./test/register-cf-stub.mjs --test test/*.test.ts",
+    "lint": "eslint src"
   },
   "dependencies": {
     "@al-ummah-now/openauth": "1.0.15",

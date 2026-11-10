@@ -116,7 +116,7 @@ export class SubscriptionFeed extends AuthenticatedRoute {
 			return view;
 		});
 
-		logger.info('[SubscriptionFeed] Built feed', { userId, subscriptions: subscribedTo.length, source: indexed ? 'index' : 'scan', scanned: scanned.length, returned: videos.length });
+		logger.debug('[SubscriptionFeed] Built feed', { userId, subscriptions: subscribedTo.length, source: indexed ? 'index' : 'scan', scanned: scanned.length, returned: videos.length });
 
 		return {
 			success: true,

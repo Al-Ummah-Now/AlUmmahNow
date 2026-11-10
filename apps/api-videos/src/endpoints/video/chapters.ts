@@ -81,7 +81,7 @@ export class VideoChaptersGet extends PublicRoute {
       // Fetch video
       const video = await videoRepo.getObject(videoId);
       if (!video) {
-        logger.warn('Video not found for chapters', { videoId });
+        logger.debug('Video not found for chapters', { videoId });
         return c.json(
           {
             success: false,
@@ -93,7 +93,7 @@ export class VideoChaptersGet extends PublicRoute {
 
       // Check if chapters exist and not regenerating
       if (video.chapters && !regenerate) {
-        logger.info('Returning cached chapters', {
+        logger.debug('Returning cached chapters', {
           videoId,
           chapterCount: video.chapters.chapters.length,
         });
@@ -107,7 +107,7 @@ export class VideoChaptersGet extends PublicRoute {
       if (!video.description) {
         // Not an error: most videos have no chapters. A 400 here logged a failed
         // request in the browser console on every such watch page.
-        logger.info('No description to parse chapters from', { videoId });
+        logger.debug('No description to parse chapters from', { videoId });
         return c.json({
           success: true,
           chapters: null,
@@ -121,7 +121,7 @@ export class VideoChaptersGet extends PublicRoute {
       );
 
       if (!parseResult.success || parseResult.chapters.length === 0) {
-        logger.info('No valid chapters found in description', {
+        logger.debug('No valid chapters found in description', {
           videoId,
           errors: parseResult.errors,
         });
@@ -143,7 +143,7 @@ export class VideoChaptersGet extends PublicRoute {
         version: 1,
       };
 
-      logger.info('Chapters parsed from the description', {
+      logger.debug('Chapters parsed from the description', {
         videoId,
         chapterCount: parseResult.chapters.length,
       });

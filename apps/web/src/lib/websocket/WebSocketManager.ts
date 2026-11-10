@@ -63,12 +63,12 @@ export class WebSocketManager {
         void userId;
         const wsUrl = this.config.url;
 
-        logger.info('🔌 Connecting to WebSocket:', wsUrl);
+        logger.debug('🔌 Connecting to WebSocket:', wsUrl);
 
         this.ws = new WebSocket(wsUrl);
 
         this.ws.onopen = () => {
-          logger.info('✅ WebSocket connected');
+          logger.debug('✅ WebSocket connected');
           this.state.status = 'connected';
           this.authenticated = false;
           this.anonymousReady = false;
@@ -111,7 +111,7 @@ export class WebSocketManager {
         this.ws.onclose = (event) => {
           this.authenticated = false;
           this.anonymousReady = false;
-          logger.info('🔌 WebSocket closed', { code: event.code, reason: event.reason });
+          logger.debug('🔌 WebSocket closed', { code: event.code, reason: event.reason });
           this.state.status = 'disconnected';
           this.stopHeartbeat();
           this.notifyStateChange();
@@ -173,7 +173,7 @@ export class WebSocketManager {
       this.sendChannelMessage('subscribe', channel);
     }
 
-    logger.info(`📡 Subscribed to channel: ${channel}`);
+    logger.debug(`📡 Subscribed to channel: ${channel}`);
 
     // Return unsubscribe function
     return () => {
@@ -182,7 +182,7 @@ export class WebSocketManager {
         const index = channelSubs.findIndex(sub => sub === subscription);
         if (index !== -1) {
           channelSubs.splice(index, 1);
-          logger.info(`📡 Unsubscribed from channel: ${channel}`);
+          logger.debug(`📡 Unsubscribed from channel: ${channel}`);
 
           if (channelSubs.length === 0) {
             this.subscriptions.delete(channel);
@@ -211,7 +211,7 @@ export class WebSocketManager {
         channel,
         data: { channel },
       }));
-      logger.info('📤 Sent channel message', { type, channel });
+      logger.debug('📤 Sent channel message', { type, channel });
     } catch (error) {
       logger.error('❌ Error sending channel message:', error);
     }
@@ -243,14 +243,14 @@ export class WebSocketManager {
     if (this.state.status === 'connected' && this.ws) {
       try {
         this.ws.send(JSON.stringify(message));
-        logger.info('📤 Sent message', { type, data });
+        logger.debug('📤 Sent message', { type, data });
       } catch (error) {
         logger.error('❌ Error sending message:', error);
         this.messageQueue.push(message);
       }
     } else {
       this.messageQueue.push(message);
-      logger.info('📤 Message queued', { type, data });
+      logger.debug('📤 Message queued', { type, data });
     }
   }
 
@@ -282,11 +282,11 @@ export class WebSocketManager {
   }
 
   private handleMessage(message: WebSocketMessage): void {
-    logger.info('📥 Received message', { type: message.type, data: message.data });
+    logger.debug('📥 Received message', { type: message.type, data: message.data });
 
     // Handle connection acknowledgment
     if (message.type === 'connection_acknowledged') {
-      logger.info('✅ Connection acknowledged by server');
+      logger.debug('✅ Connection acknowledged by server');
       if (!this.config.getAuthToken && !this.config.authToken) {
         this.anonymousReady = true;
         this.resubscribeAll();
@@ -296,7 +296,7 @@ export class WebSocketManager {
 
     // Handle authentication response
     if (message.type === 'authenticated') {
-      logger.info('🔐 Authentication successful', { userId: (message.data as { userId?: string })?.userId });
+      logger.debug('🔐 Authentication successful', { userId: (message.data as { userId?: string })?.userId });
       this.authenticated = true;
       this.resubscribeAll();
       return;
@@ -400,7 +400,7 @@ export class WebSocketManager {
       30000 // Max 30 seconds
     );
 
-    logger.info(`🔄 Scheduling reconnect attempt ${this.state.reconnectAttempts}/${this.config.maxReconnectAttempts} in ${delay}ms`);
+    logger.debug(`🔄 Scheduling reconnect attempt ${this.state.reconnectAttempts}/${this.config.maxReconnectAttempts} in ${delay}ms`);
 
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
@@ -436,7 +436,7 @@ export class WebSocketManager {
       if (message && this.ws) {
         try {
           this.ws.send(JSON.stringify(message));
-          logger.info('📤 Sent queued message', { type: message.type, data: message.data });
+          logger.debug('📤 Sent queued message', { type: message.type, data: message.data });
         } catch (error) {
           logger.error('❌ Error sending queued message:', error);
           this.messageQueue.unshift(message);
@@ -496,7 +496,7 @@ export class WebSocketManager {
         token: token,
       };
       this.ws.send(JSON.stringify(authMessage));
-      logger.info('🔐 Sent authentication message');
+      logger.debug('🔐 Sent authentication message');
     } catch (error) {
       logger.error('❌ Error sending auth message:', error);
     }

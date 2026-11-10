@@ -34,7 +34,7 @@ export async function handleChannelSectionEvent(
   // Process specific channel section events
   switch (message.type) {
     case MessageType.ChannelSectionCreate:
-      logger.info(`Channel section ${sectionId} created for channel ${channelId} by user ${userId}`, {
+      logger.debug(`Channel section ${sectionId} created for channel ${channelId} by user ${userId}`, {
         sectionType,
         position,
         title,
@@ -44,7 +44,7 @@ export async function handleChannelSectionEvent(
       break;
 
     case MessageType.ChannelSectionUpdate:
-      logger.info(`Channel section ${sectionId} updated for channel ${channelId} by user ${userId}`, {
+      logger.debug(`Channel section ${sectionId} updated for channel ${channelId} by user ${userId}`, {
         sectionType,
         position,
         title,
@@ -54,13 +54,13 @@ export async function handleChannelSectionEvent(
       break;
 
     case MessageType.ChannelSectionDelete:
-      logger.info(`Channel section ${sectionId} deleted from channel ${channelId} by user ${userId}`);
+      logger.debug(`Channel section ${sectionId} deleted from channel ${channelId} by user ${userId}`);
       // Track section deletion analytics
       await trackSectionDeletion(payload, env, logger);
       break;
 
     case MessageType.ChannelSectionReorder:
-      logger.info(`Channel sections reordered for channel ${channelId} by user ${userId}`, {
+      logger.debug(`Channel sections reordered for channel ${channelId} by user ${userId}`, {
         position,
       });
       // Track reordering patterns (which sections are moved most frequently)
@@ -68,7 +68,7 @@ export async function handleChannelSectionEvent(
       break;
 
     case MessageType.ChannelSectionView:
-      logger.info(`Channel section ${sectionId} viewed on channel ${channelId} by user ${userId}`, {
+      logger.debug(`Channel section ${sectionId} viewed on channel ${channelId} by user ${userId}`, {
         sectionType,
       });
       // Track section view metrics for popularity analysis

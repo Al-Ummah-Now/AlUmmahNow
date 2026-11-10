@@ -46,7 +46,7 @@ export async function getTranslations(
 
   try {
     const apiUrl = getApiUrl();
-    logger.info('i18n API fetch', { locale, apiUrl });
+    logger.debug('i18n API fetch', { locale, apiUrl });
     const response = await fetch(`${apiUrl}/api/i18n/translations/${locale}`, {
       headers: {
         Accept: "application/json",

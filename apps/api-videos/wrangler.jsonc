@@ -17,9 +17,13 @@
 	},
 	"observability": {
 		"enabled": true,
-		// Low traffic: keep every invocation. Lower this when traffic grows.
+		// Logging policy (docs/operations/logging.md): every invocation is sampled, so
+		// every warn/error line is kept (head sampling is decided before the outcome is
+		// known, so a lower rate would drop errors too). The code logs only warn/error and
+		// slow requests in production; the automatic per-invocation log line is off on
+		// this high-volume worker (the request/job summaries replace it).
 		"head_sampling_rate": 1,
-		"logs": { "enabled": true, "head_sampling_rate": 1 }
+		"logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": false }
 	},
 	/**
 	 * Smart Placement
@@ -248,6 +252,8 @@
 	"vars": {
 		// Error reports to the admin Errors page (docs/features/error-reporting.md)
 		"ERRORS_INGEST_URL": "https://admin.api.alummahnow.net/internal/errors",
+		// Logging policy (docs/operations/logging.md): production warn, stage info, QA/dev debug
+		"LOG_LEVEL": "warn",
 		"ENVIRONMENT": "production",
 		"ZONE": "al-ummah-now-images",
 		"ClientId": "b1770235-e4b6-42f3-9eb4-3c03ca111b02",
@@ -470,6 +476,8 @@
 			"vars": {
 				// Error reports to the admin Errors page (docs/features/error-reporting.md)
 				"ERRORS_INGEST_URL": "https://admin.api.stage.alummahnow.net/internal/errors",
+				// Logging policy (docs/operations/logging.md): production warn, stage info, QA/dev debug
+				"LOG_LEVEL": "info",
 				"ENVIRONMENT": "stage",
 				"ZONE": "al-ummah-now-images",
 				"ClientId": "b1770235-e4b6-42f3-9eb4-3c03ca111b02",

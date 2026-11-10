@@ -59,6 +59,9 @@
   "vars": {
     // Error reports to the admin Errors page (docs/features/error-reporting.md)
     "ERRORS_INGEST_URL": "https://admin.api.qa.alummahnow.net/internal/errors",
+    // Logging policy (docs/operations/logging.md): production warn, stage info, QA/dev debug
+    "LOG_LEVEL": "debug",
+    "ENVIRONMENT": "qa",
     "MAX_RETRIES": "3",
     "BATCH_SIZE": "50",
     "LOCK_TTL": "120",

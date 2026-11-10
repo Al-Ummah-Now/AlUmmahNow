@@ -32,7 +32,7 @@ export default function ChannelTabsSettingsPage() {
       setError(null);
 
       try {
-        logger.info('ChannelTabsSettings: Fetching tab configuration', {
+        logger.debug('ChannelTabsSettings: Fetching tab configuration', {
           channelId,
         });
 
@@ -62,7 +62,7 @@ export default function ChannelTabsSettingsPage() {
         const tabConfig = await getChannelTabConfig(channelId);
 
         if (tabConfig) {
-          logger.info('ChannelTabsSettings: Tab configuration loaded', {
+          logger.debug('ChannelTabsSettings: Tab configuration loaded', {
             channelId,
             defaultTab: tabConfig.defaultTab,
             tabsCount: tabConfig.tabs.length,
@@ -93,7 +93,7 @@ export default function ChannelTabsSettingsPage() {
     tabs: Array<{ id: string; visible: boolean; position: number }>;
   }): Promise<boolean> => {
     try {
-      logger.info('ChannelTabsSettings: Saving tab configuration', {
+      logger.debug('ChannelTabsSettings: Saving tab configuration', {
         channelId,
         defaultTab: data.defaultTab,
         tabsCount: data.tabs.length,
@@ -103,7 +103,7 @@ export default function ChannelTabsSettingsPage() {
 
       if (result) {
         setConfig(result);
-        logger.info('ChannelTabsSettings: Tab configuration saved successfully', {
+        logger.debug('ChannelTabsSettings: Tab configuration saved successfully', {
           channelId,
         });
         return true;

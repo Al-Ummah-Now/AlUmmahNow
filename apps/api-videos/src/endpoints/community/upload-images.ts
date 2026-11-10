@@ -171,7 +171,7 @@ export class UploadCommunityPostImages extends AuthenticatedRoute {
 
         const path = `/community-posts/${channelId}/${sanitizedFilename}`;
 
-        logger.info('[SECURITY] Image file validated and sanitized', {
+        logger.debug('[SECURITY] Image file validated and sanitized', {
           userId,
           channelId,
           originalName: file.name,

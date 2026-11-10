@@ -321,7 +321,7 @@ export function useRealTimeComments(options: UseRealTimeCommentsOptions): UseRea
       return [...pinned, saved, ...rest];
     });
     if (!commentsRef.current.some((c) => c.id === saved.id)) setTotal((n) => n + 1);
-    logger.info('[useRealTimeComments] Comment added', { videoId, commentId: saved.id, held: !!saved.isHeld });
+    logger.debug('[useRealTimeComments] Comment added', { videoId, commentId: saved.id, held: !!saved.isHeld });
     return { ok: true, held: !!saved.isHeld };
   }, [videoId, channelId]);
 

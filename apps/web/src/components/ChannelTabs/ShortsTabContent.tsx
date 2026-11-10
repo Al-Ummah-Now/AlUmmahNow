@@ -22,13 +22,13 @@ export function ShortsTabContent({ channelId }: ShortsTabContentProps) {
       setLoading(true);
       setError(null);
 
-      logger.info('Fetching channel shorts', { channelId });
+      logger.debug('Fetching channel shorts', { channelId });
 
       getChannelShorts(channelId, { limit: 20 })
         .then((response) => {
           if (response && response.data) {
             setShorts(response.data);
-            logger.info('Channel shorts loaded', { count: response.data.length });
+            logger.debug('Channel shorts loaded', { count: response.data.length });
           } else {
             logger.warn('No shorts response', { channelId });
           }

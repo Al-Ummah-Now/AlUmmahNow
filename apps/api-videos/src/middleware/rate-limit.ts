@@ -353,7 +353,7 @@ export function rateLimitMiddleware(operation: string, options: RateLimitOptions
 
     const limits = resolveLimits(c.env ?? {}, userId);
     if (!limits) {
-      logger.info('[SECURITY] Rate limit not enforced in this environment', { operation });
+      logger.debug('[SECURITY] Rate limit not enforced in this environment', { operation });
       return next();
     }
 

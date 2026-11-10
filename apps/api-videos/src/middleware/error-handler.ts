@@ -1,6 +1,7 @@
 import { Context } from 'hono';
 import { reportServerError, requestIdOf } from '@al-ummah/shared-types';
 import { logger } from '../lib/logger';
+import { markErrorLogged } from './logging';
 
 /**
  * Detect if we're running in development mode
@@ -144,14 +145,15 @@ export function errorHandler(err: Error, c: Context) {
 	const isDev = isDevelopmentMode(c);
 	const statusCode = getErrorStatusCode(err);
 
-	// Log the error
-	logger.error(`[ERROR HANDLER] ${err.name}: ${err.message}`, {
-		error: getErrorDetails(err),
-		statusCode,
-		method: c.req.method,
-		path: c.req.path,
-		isDevelopment: isDev,
-	});
+	// 5xx: one error line with the stack (the request summary then stays quiet).
+	// 4xx thrown as errors (not found, validation) are expected: debug only.
+	const context = { error: err, statusCode, method: c.req.method, path: c.req.path, ray: c.req.header('cf-ray') || undefined };
+	if (statusCode >= 500) {
+		logger.error(`[ERROR HANDLER] ${err.name}: ${err.message}`, context);
+		markErrorLogged(c);
+	} else {
+		logger.debug(`[ERROR HANDLER] ${err.name}: ${err.message}`, context);
+	}
 
 	// Transient errors (a lost write race, ConcurrentUpdateError) say when to retry
 	const retryAfter = (err as { retryAfterSeconds?: unknown })?.retryAfterSeconds;

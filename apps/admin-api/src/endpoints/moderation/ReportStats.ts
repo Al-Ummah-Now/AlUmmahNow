@@ -120,7 +120,7 @@ export class ReportStats extends AdminRoute {
         'SELECT COUNT(*) as count FROM reports WHERE created_at >= ?'
       ).bind(last30Days).first<{ count: number }>();
 
-      logger.info('Report stats retrieved', {
+      logger.debug('Report stats retrieved', {
         moderatorId: this.getUserId(c),
         total: totalResult?.count || 0
       });

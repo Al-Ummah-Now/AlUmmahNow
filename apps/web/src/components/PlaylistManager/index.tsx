@@ -105,7 +105,7 @@ export default function PlaylistManager({ channelId }: PlaylistManagerProps) {
       setPlaylists((prev) => prev.map((p) => p.id === form.id
         ? { ...p, title, name: title, description, isPublic: form.isPublic }
         : p));
-      logger.info('[PlaylistManager] Playlist updated', { playlistId: form.id });
+      logger.debug('[PlaylistManager] Playlist updated', { playlistId: form.id });
     } else {
       const result = await createPlaylist({ name: title, description, isPublic: form.isPublic }, { channelId });
       setSaving(false);
@@ -116,7 +116,7 @@ export default function PlaylistManager({ channelId }: PlaylistManagerProps) {
         return;
       }
       setPlaylists((prev) => [{ ...created, name: created.name || title, videos: [] }, ...prev]);
-      logger.info('[PlaylistManager] Playlist created', { playlistId: created.id });
+      logger.debug('[PlaylistManager] Playlist created', { playlistId: created.id });
     }
 
     setForm(null);

@@ -251,21 +251,21 @@ export class ReportAction extends AdminRoute {
 
       switch (action) {
         case 'removed':
-          logger.info(`Content hidden: ${entityType}:${entityId}`);
+          logger.debug(`Content hidden: ${entityType}:${entityId}`);
           return {
             performed: true,
             action: 'removed',
             notes: `Content marked as hidden: ${notes || 'Moderation action'}`,
           };
         case 'warning':
-          logger.info(`Warning added to content: ${entityType}:${entityId}`);
+          logger.debug(`Warning added to content: ${entityType}:${entityId}`);
           return {
             performed: true,
             action: 'warning',
             notes: `Warning added to content: ${notes || 'Policy violation'}`,
           };
         default:
-          logger.info(`Content banned: ${entityType}:${entityId}`);
+          logger.debug(`Content banned: ${entityType}:${entityId}`);
           return {
             performed: true,
             action: 'banned',

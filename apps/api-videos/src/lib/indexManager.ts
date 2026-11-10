@@ -129,7 +129,7 @@ export class IndexManager {
     try {
       const object = await this.bucket.get(indexId);
       if (!object) {
-        logger.info(`Index ${indexId} not found`);
+        logger.debug(`Index ${indexId} not found`);
         return null;
       }
 
@@ -150,7 +150,7 @@ export class IndexManager {
       await this.bucket.put(index.id, JSON.stringify(index), {
         httpMetadata: { contentType: 'application/json' },
       });
-      logger.info(`Index ${index.id} saved successfully`);
+      logger.debug(`Index ${index.id} saved successfully`);
     } catch (error) {
       logger.error(`Failed to save index ${index.id}`, { error });
       throw error;

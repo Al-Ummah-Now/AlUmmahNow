@@ -2,7 +2,8 @@ import { fromHono } from "chanfana";
 import { Hono } from "hono";
 import { cors } from 'hono/cors';
 import { authMiddleware, adminMiddleware } from "./middleware/auth";
-import { loggingMiddleware } from "./middleware/logging";
+import { loggingMiddleware, markErrorLogged } from "./middleware/logging";
+import { withLogging } from "@al-ummah/logger";
 import { logger } from './lib/logger';
 import { registerAllRouters } from './routers';
 import { publicSiteTheme } from './lib/siteSettings';
@@ -26,7 +27,8 @@ const app = new Hono();
 // Global error handler
 // Uncaught exceptions are recorded on the Errors page; the caller gets only a reference
 app.onError((err, c) => {
-  logger.error('Unhandled error:', err);
+  logger.error('Unhandled error', { error: err, method: c.req.method, path: c.req.path, ray: c.req.header('cf-ray') || undefined });
+  markErrorLogged(c);
   const reference = reportAdminApiError(c as never, err, 500);
   return c.json({ success: false, error: 'Internal server error', reference }, 500, reference ? { 'X-Error-Ref': reference } : {});
 });
@@ -209,5 +211,5 @@ async function queue(batch: { queue: string; messages: readonly QueueMessageLike
   for (const m of batch.messages) m.retry();
 }
 
-export default { fetch: app.fetch, scheduled, queue };
+export default withLogging({ fetch: app.fetch, scheduled, queue });
 export { app };

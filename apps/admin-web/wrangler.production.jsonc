@@ -28,12 +28,14 @@
   },
   "observability": {
     "enabled": true,
-    // Low traffic: keep every invocation. Lower this when traffic grows.
+    // Low traffic (admins only): every invocation and its invocation log are kept (docs/operations/logging.md).
     "head_sampling_rate": 1,
     "logs": { "enabled": true, "head_sampling_rate": 1 }
   },
   "upload_source_maps": true,
   "vars": {
+    // Logging policy (docs/operations/logging.md): production warn, stage info, QA/dev debug
+    "LOG_LEVEL": "warn",
     "CF_WORKER_NAME": "al-ummah-admin-web",
     "CF_PREVIEW_DOMAIN": "mahmoud-s-darwish",
     "Issuer": "https://auth.alummahnow.net",
@@ -71,6 +73,8 @@
         }
       ],
       "vars": {
+        // Logging policy (docs/operations/logging.md): production warn, stage info, QA/dev debug
+        "LOG_LEVEL": "info",
         "CF_WORKER_NAME": "al-ummah-admin-web-stage",
         "CF_PREVIEW_DOMAIN": "mahmoud-s-darwish",
         "Issuer": "https://auth.stage.alummahnow.net",

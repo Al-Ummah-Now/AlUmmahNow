@@ -263,7 +263,7 @@ export class ChannelHandlesBackfill extends PublicRoute {
 		}
 
 		const nextCursor = page.truncated ? page.cursor : null;
-		logger.info('[HandlesBackfill] Page done', { scanned: page.objects.length, assigned: assigned.length, repaired, skipped, failed: failed.length, nextCursor, dryRun });
+		logger.debug('[HandlesBackfill] Page done', { scanned: page.objects.length, assigned: assigned.length, repaired, skipped, failed: failed.length, nextCursor, dryRun });
 		return { success: true, result: { scanned: page.objects.length, assigned, repaired, skipped, failed, nextCursor, dryRun } };
 	}
 }

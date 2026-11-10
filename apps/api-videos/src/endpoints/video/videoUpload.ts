@@ -144,7 +144,7 @@ export class VideoUpload extends AuthenticatedRoute {
                     });
                 }
 
-                logger.info('[SECURITY] Video file validated', {
+                logger.debug('[SECURITY] Video file validated', {
                     userId,
                     detectedFormat: magicByteResult.detectedFormat,
                     detectedMimeType: magicByteResult.detectedMimeType,

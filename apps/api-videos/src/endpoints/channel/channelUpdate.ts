@@ -136,17 +136,17 @@ export class ChannelUpdate extends AuthenticatedRoute {
             const allowOfficial = canClaimOfficialHandles(c.get('auth')?.payload?.roles);
             const claim = await claimHandle(c.env.channel_tabs, requestedHandle, existingChannel, { allowOfficial });
             if (claim.ok && allowOfficial && validateHandleFormat(claim.handle) === 'reserved') {
-                logger.info('[ChannelUpdate] Official handle claimed by Super Admin', { channelId: id, handle: claim.handle, userId });
+                logger.debug('[ChannelUpdate] Official handle claimed by Super Admin', { channelId: id, handle: claim.handle, userId });
             }
             if (claim.ok === false) {
-                logger.info('[ChannelUpdate] Handle unavailable', { channelId: id, reason: claim.reason });
+                logger.debug('[ChannelUpdate] Handle unavailable', { channelId: id, reason: claim.reason });
                 return c.json({
                     success: false,
                     error: "handle_unavailable",
                     reason: claim.reason,
                 }, 409);
             }
-            logger.info('[ChannelUpdate] Handle claimed', { channelId: id, handle: claim.handle, previous: existingChannel.handle });
+            logger.debug('[ChannelUpdate] Handle claimed', { channelId: id, handle: claim.handle, previous: existingChannel.handle });
             claimed = claim.handle;
         }
 

@@ -19,7 +19,12 @@ export default tseslint.config(
     rules: {
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/no-unused-vars': 'error',
-      'no-console': 'off', // We use console for logging in Workers
+      // Logging policy (docs/operations/logging.md): production code logs through the logger, never console.log/info/debug
+      'no-console': ['error', { allow: ['warn', 'error'] }],
     },
+  },
+  {
+    files: ['**/__tests__/**', '**/*.test.ts', 'test/**', 'scripts/**'],
+    rules: { 'no-console': 'off' },
   }
 );

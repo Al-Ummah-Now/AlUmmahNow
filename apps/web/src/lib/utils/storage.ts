@@ -163,7 +163,7 @@ export class StorageManager {
     });
 
     if (itemsRemoved > 0) {
-      logger.info(`[StorageManager] Cleaned up ${itemsRemoved} old items`);
+      logger.debug(`[StorageManager] Cleaned up ${itemsRemoved} old items`);
     }
 
     return itemsRemoved;
@@ -345,7 +345,7 @@ export class StorageManager {
       });
 
       const newUsage = this.getStorageUsagePercentage();
-      logger.info(`[StorageManager] Emergency cleanup complete. New usage: ${newUsage.toFixed(1)}%`);
+      logger.debug(`[StorageManager] Emergency cleanup complete. New usage: ${newUsage.toFixed(1)}%`);
     } catch (error) {
       logger.error('[StorageManager] Emergency cleanup failed:', error);
     }
@@ -414,7 +414,7 @@ export class StorageManager {
 
     try {
       localStorage.clear();
-      logger.info('[StorageManager] All localStorage cleared');
+      logger.debug('[StorageManager] All localStorage cleared');
     } catch (error) {
       logger.error('[StorageManager] Failed to clear localStorage:', error);
     }
@@ -431,13 +431,12 @@ export function monitorStorage(): void {
 
   const stats = StorageManager.getStorageStats();
 
-  console.group('[StorageManager] Storage Statistics');
-  logger.info(`Total Used: ${(stats.used / 1024).toFixed(2)} KB / ${(stats.max / 1024 / 1024).toFixed(2)} MB`);
-  logger.info(`Usage: ${stats.percentage.toFixed(1)}%`);
-  logger.info(`Warning Level: ${stats.isWarning ? 'YES' : 'No'}`);
-  logger.info('\nTop 5 Storage Items:');
+  logger.debug('[StorageManager] Storage Statistics');
+  logger.debug(`Total Used: ${(stats.used / 1024).toFixed(2)} KB / ${(stats.max / 1024 / 1024).toFixed(2)} MB`);
+  logger.debug(`Usage: ${stats.percentage.toFixed(1)}%`);
+  logger.debug(`Warning Level: ${stats.isWarning ? 'YES' : 'No'}`);
+  logger.debug('\nTop 5 Storage Items:');
   stats.items.slice(0, 5).forEach(item => {
-    logger.info(`  ${item.key}: ${(item.size / 1024).toFixed(2)} KB`);
+    logger.debug(`  ${item.key}: ${(item.size / 1024).toFixed(2)} KB`);
   });
-  console.groupEnd();
 }

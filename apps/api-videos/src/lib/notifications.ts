@@ -254,7 +254,7 @@ export async function enqueueFanout(env: NotificationsEnv, payload: Notification
 	if (!env.queue) return false;
 	try {
 		await env.queue.send({ id: crypto.randomUUID(), type: MessageType.NotificationFanout, payload, timestamp: Date.now() });
-		logger.info('[Notifications] Fan-out queued', { kind: payload.kind, channelId: payload.channelId, entityId: payload.entityId });
+		logger.debug('[Notifications] Fan-out queued', { kind: payload.kind, channelId: payload.channelId, entityId: payload.entityId });
 		return true;
 	} catch (error) {
 		logger.warn('[Notifications] Failed to enqueue fan-out', { kind: payload.kind, error });

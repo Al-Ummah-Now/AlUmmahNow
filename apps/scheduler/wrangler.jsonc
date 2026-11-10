@@ -3,6 +3,14 @@
 	"main": "src/index.ts",
 	"compatibility_date": "2025-01-20",
 	"compatibility_flags": ["nodejs_compat"],
+	// Logging policy (docs/operations/logging.md): the cron runs every minute, so the
+	// automatic per-invocation log is off; a tick logs only when it fails or is slow.
+	// Every invocation is sampled so no error line is dropped.
+	"observability": {
+		"enabled": true,
+		"head_sampling_rate": 1,
+		"logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": false }
+	},
 
 	// Run every minute
 	"triggers": {
@@ -82,6 +90,9 @@
 	"vars": {
 		// Error reports to the admin Errors page (docs/features/error-reporting.md)
 		"ERRORS_INGEST_URL": "https://admin.api.alummahnow.net/internal/errors",
+		// Logging policy (docs/operations/logging.md): production warn, stage info, QA/dev debug
+		"LOG_LEVEL": "warn",
+		"ENVIRONMENT": "production",
 		"MAX_RETRIES": "3",
 		"BATCH_SIZE": "50",
 		"LOCK_TTL": "120",
@@ -144,6 +155,9 @@
 			"vars": {
 				// Error reports to the admin Errors page (docs/features/error-reporting.md)
 				"ERRORS_INGEST_URL": "https://admin.api.stage.alummahnow.net/internal/errors",
+				// Logging policy (docs/operations/logging.md): production warn, stage info, QA/dev debug
+				"LOG_LEVEL": "info",
+				"ENVIRONMENT": "stage",
 				"MAX_RETRIES": "3",
 				"BATCH_SIZE": "50",
 				"LOCK_TTL": "120",

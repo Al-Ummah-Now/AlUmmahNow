@@ -104,7 +104,7 @@ export class SubtitlesSetDefault extends AuthenticatedRoute {
         language,
       });
 
-      logger.info('[SubtitlesSetDefault] Default subtitle updated', { videoId, language, userId });
+      logger.debug('[SubtitlesSetDefault] Default subtitle updated', { videoId, language, userId });
 
       return c.json({
         success: true,

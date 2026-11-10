@@ -33,7 +33,7 @@ export default async function ChannelLayout({
 
   // Validate locale
   if (!isLocaleSupported(locale)) {
-    logger.warn(`[ChannelLayout] Unsupported locale: ${locale}`);
+    logger.debug(`[ChannelLayout] Unsupported locale: ${locale}`);
     notFound();
   }
 

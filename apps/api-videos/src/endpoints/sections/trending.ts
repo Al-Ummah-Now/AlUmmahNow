@@ -166,7 +166,7 @@ export class TrendingVideosSection extends PublicRoute {
 
       if (trendingIndex) {
         // Use index data
-        logger.info("Using trending videos index", { algorithm: trendingIndex.algorithm, indexVideos: trendingIndex.videos.length });
+        logger.debug("Using trending videos index", { algorithm: trendingIndex.algorithm, indexVideos: trendingIndex.videos.length });
         fromIndex = true;
 
         // Handle cursor-based pagination
@@ -176,7 +176,7 @@ export class TrendingVideosSection extends PublicRoute {
             const decodedCursor = JSON.parse(atob(cursor));
             startIndex = decodedCursor.offset || 0;
           } catch (e) {
-            logger.warn("Invalid cursor provided", { cursor });
+            logger.debug("Invalid cursor provided", { cursor });
           }
         }
 
@@ -225,7 +225,7 @@ export class TrendingVideosSection extends PublicRoute {
         });
       } else {
         // Fall back to direct calculation
-        logger.info("Index stale or not found, calculating trending videos", { algorithm, timeWindow });
+        logger.debug("Index stale or not found, calculating trending videos", { algorithm, timeWindow });
         fromIndex = false;
 
         // Fetch videos for trending calculation

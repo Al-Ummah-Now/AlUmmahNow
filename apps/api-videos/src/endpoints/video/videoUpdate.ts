@@ -156,7 +156,7 @@ export class VideoUpdate extends AuthenticatedRoute {
 			return next;
 		};
 
-		logger.info('[VideoUpdate] Updating video', {
+		logger.debug('[VideoUpdate] Updating video', {
 			videoId: id,
 			userId: effectiveUserId,
 			fields: Object.keys(videoUpdateInput),

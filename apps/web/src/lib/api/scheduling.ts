@@ -25,7 +25,7 @@ export async function scheduleVideo(
   error?: string;
 } | null> {
   try {
-    logger.info('[scheduleVideo] Scheduling video', {
+    logger.debug('[scheduleVideo] Scheduling video', {
       videoId,
       scheduledPublishDate,
       timezone,
@@ -76,7 +76,7 @@ export async function updateSchedule(
   error?: string;
 } | null> {
   try {
-    logger.info('[updateSchedule] Updating video schedule', {
+    logger.debug('[updateSchedule] Updating video schedule', {
       videoId,
       scheduledPublishDate,
       timezone,
@@ -123,7 +123,7 @@ export async function cancelSchedule(
   error?: string;
 } | null> {
   try {
-    logger.info('[cancelSchedule] Canceling video schedule', { videoId });
+    logger.debug('[cancelSchedule] Canceling video schedule', { videoId });
 
     return apiRequestServer<{
       success: boolean;
@@ -161,7 +161,7 @@ export async function publishNow(
   error?: string;
 } | null> {
   try {
-    logger.info('[publishNow] Publishing video immediately', { videoId });
+    logger.debug('[publishNow] Publishing video immediately', { videoId });
 
     return apiRequestServer<{
       success: boolean;
@@ -203,7 +203,7 @@ export async function listScheduledVideos(
   error?: string;
 } | null> {
   try {
-    logger.info('[listScheduledVideos] Fetching scheduled videos', params);
+    logger.debug('[listScheduledVideos] Fetching scheduled videos', params);
 
     const queryParams = new URLSearchParams();
     if (params?.limit) queryParams.append('limit', params.limit.toString());
@@ -250,7 +250,7 @@ export async function getVideoSchedule(
   error?: string;
 } | null> {
   try {
-    logger.info('[getVideoSchedule] Fetching video schedule', { videoId });
+    logger.debug('[getVideoSchedule] Fetching video schedule', { videoId });
 
     return apiRequestServer<{
       success: boolean;

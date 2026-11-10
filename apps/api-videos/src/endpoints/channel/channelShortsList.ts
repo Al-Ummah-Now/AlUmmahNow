@@ -83,7 +83,7 @@ export class ChannelShortsList extends OptionalAuthRoute {
 		const { limit, cursor, sort } = request.query;
 		const userId = this.getUserId(c);
 
-		logger.info('Fetching channel shorts', {
+		logger.debug('Fetching channel shorts', {
 			channelId,
 			limit,
 			cursor,
@@ -100,7 +100,7 @@ export class ChannelShortsList extends OptionalAuthRoute {
 			const channel = await channelRepo.getObject(channelId);
 
 			if (!channel) {
-				logger.warn('Channel not found', { channelId });
+				logger.debug('Channel not found', { channelId });
 				return c.json({
 					success: false,
 					error: `Channel ${channelId} not found`
@@ -109,7 +109,7 @@ export class ChannelShortsList extends OptionalAuthRoute {
 
 			// Same visibility rules as the Videos tab (deleted, hidden and private channels are not listed)
 			if (channel.isDeleted || channel.isHidden || (channel.isPrivate && channel.userId !== userId)) {
-				logger.warn('Channel not listable', { channelId, isDeleted: !!channel.isDeleted, isHidden: !!channel.isHidden });
+				logger.debug('Channel not listable', { channelId, isDeleted: !!channel.isDeleted, isHidden: !!channel.isHidden });
 				return c.json({
 					success: false,
 					error: 'Channel not found'
@@ -197,7 +197,7 @@ export class ChannelShortsList extends OptionalAuthRoute {
 			};
 
 			const duration = Date.now() - startTime;
-			logger.info('Successfully fetched channel shorts', {
+			logger.debug('Successfully fetched channel shorts', {
 				channelId,
 				shortsCount: limitedShorts.length,
 				hasMore: Boolean(nextCursor),

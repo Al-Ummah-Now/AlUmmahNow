@@ -53,10 +53,10 @@ export function ChannelTabBar({
   useEffect(() => {
     const fetchTabConfig = async () => {
       try {
-        logger.info('[ChannelTabBar:RTL] Fetching tab configuration', { channelId });
+        logger.debug('[ChannelTabBar:RTL] Fetching tab configuration', { channelId });
         const config = await getChannelTabConfig(channelId);
         setTabConfig(config);
-        logger.info('[ChannelTabBar:RTL] Tab configuration loaded', {
+        logger.debug('[ChannelTabBar:RTL] Tab configuration loaded', {
           channelId,
           defaultTab: config?.defaultTab,
           visibleCount: config?.tabs.filter(t => t.visible).length
@@ -129,7 +129,7 @@ export function ChannelTabBar({
   }, []);
 
   const handleTabClick = (tab: ChannelTab) => {
-    logger.info('[ChannelTabBar:RTL] Tab clicked', { tab, channelId, activeTab });
+    logger.debug('[ChannelTabBar:RTL] Tab clicked', { tab, channelId, activeTab });
 
     // Build new URL with tab parameter
     const params = new URLSearchParams(searchParams);

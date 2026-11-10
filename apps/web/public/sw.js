@@ -169,10 +169,19 @@ async function safeCachePut(cache, request, response) {
 }
 
 /**
+ * Progress logging: local development only (logging policy: production consoles
+ * show nothing below warn). Warnings and errors use console.warn/console.error.
+ */
+const SW_DEBUG = ['localhost', '127.0.0.1'].includes(self.location.hostname);
+function swLog(...args) {
+  if (SW_DEBUG) console.debug(...args);
+}
+
+/**
  * Install event - cache static assets
  */
 self.addEventListener('install', (event) => {
-  console.log('[SW] Installing service worker...');
+  swLog('[SW] Installing service worker...');
 
   event.waitUntil(
     cacheMutex.withLock('install', async () => {
@@ -187,7 +196,7 @@ self.addEventListener('install', (event) => {
             if (response.ok) {
               // TODO: Implement SRI validation when hashes are available
               await safeCachePut(cache, asset.url, response);
-              console.log('[SW] Cached static asset:', asset.url);
+              swLog('[SW] Cached static asset:', asset.url);
             } else {
               console.error('[SW] Failed to cache static asset:', asset.url, response.status);
             }
@@ -198,7 +207,7 @@ self.addEventListener('install', (event) => {
 
         await Promise.all(promises);
         await self.skipWaiting();
-        console.log('[SW] Installation complete');
+        swLog('[SW] Installation complete');
       } catch (error) {
         console.error('[SW] Installation error:', error);
         throw error;
@@ -211,7 +220,7 @@ self.addEventListener('install', (event) => {
  * Activate event - clean up old caches
  */
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activating service worker...');
+  swLog('[SW] Activating service worker...');
 
   event.waitUntil(
     cacheMutex.withLock('activate', async () => {
@@ -223,7 +232,7 @@ self.addEventListener('activate', (event) => {
           cacheNames
             .filter(name => !validCaches.includes(name))
             .map(name => {
-              console.log('[SW] Deleting old cache:', name);
+              swLog('[SW] Deleting old cache:', name);
               return caches.delete(name);
             })
         );
@@ -240,7 +249,7 @@ self.addEventListener('activate', (event) => {
         }, CACHE_CLEANUP_INTERVAL);
 
         await self.clients.claim();
-        console.log('[SW] Activation complete');
+        swLog('[SW] Activation complete');
       } catch (error) {
         console.error('[SW] Activation error:', error);
         throw error;
@@ -460,7 +469,7 @@ async function limitCacheSize(cacheName, maxSize) {
 
       // Delete items
       if (itemsToDelete.length > 0) {
-        console.log(`[SW] Removing ${itemsToDelete.length} items from ${cacheName} to free space`);
+        swLog(`[SW] Removing ${itemsToDelete.length} items from ${cacheName} to free space`);
 
         await Promise.all(
           itemsToDelete.map(request => cache.delete(request))
@@ -505,4 +514,4 @@ self.addEventListener('beforeunload', () => {
   }
 });
 
-console.log('[SW] Service Worker loaded with security controls');
+swLog('[SW] Service Worker loaded with security controls');

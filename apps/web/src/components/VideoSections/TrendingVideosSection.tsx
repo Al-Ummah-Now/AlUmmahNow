@@ -68,7 +68,7 @@ export function TrendingVideosSection({
         params.cursor = cursor;
       }
 
-      logger.info('[TrendingVideosSection] Fetching videos', { params, loadMore });
+      logger.debug('[TrendingVideosSection] Fetching videos', { params, loadMore });
       const response = await getTrendingVideos(params);
 
       if (!response) {
@@ -84,7 +84,7 @@ export function TrendingVideosSection({
 
         setCursor(response.cursor);
         setHasMore(!!response.cursor);
-        logger.info('[TrendingVideosSection] Videos loaded', {
+        logger.debug('[TrendingVideosSection] Videos loaded', {
           count: response.data.length,
           hasMore: !!response.cursor,
           algorithm: response.metadata.algorithmVersion

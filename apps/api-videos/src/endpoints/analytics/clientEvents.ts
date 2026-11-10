@@ -55,7 +55,7 @@ export class ClientAnalyticsEventsCreate extends OptionalAuthRoute {
       referrer: body.referrer,
       receivedAt: new Date().toISOString(),
     });
-    logger.info("[ClientAnalytics] Batch queued", { kind: body.kind, count: body.events.length, userId });
+    logger.debug("[ClientAnalytics] Batch queued", { kind: body.kind, count: body.events.length, userId });
     return c.json({ success: true, accepted: body.events.length }, 202);
   }
 }

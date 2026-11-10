@@ -142,7 +142,7 @@ export class LocalStorageQuotaManager {
 
       if (removedCount > 0) {
         localStorage.setItem(storageKey, JSON.stringify(parsed));
-        logger.info(`[QuotaManager] Cleaned up ${removedCount} old assignments`);
+        logger.debug(`[QuotaManager] Cleaned up ${removedCount} old assignments`);
       }
 
       return removedCount;
@@ -202,7 +202,7 @@ export class LocalStorageQuotaManager {
 
       if (removedCount > 0) {
         localStorage.setItem(storageKey, JSON.stringify(parsed));
-        logger.info(`[QuotaManager] Evicted ${removedCount} LRU items`);
+        logger.debug(`[QuotaManager] Evicted ${removedCount} LRU items`);
       }
 
       return removedCount;
@@ -312,7 +312,7 @@ export class LocalStorageQuotaManager {
           // Final retry
           try {
             localStorage.setItem(key, value);
-            logger.info('[QuotaManager] Recovery successful after emergency cleanup');
+            logger.debug('[QuotaManager] Recovery successful after emergency cleanup');
             return { success: true };
           } catch (retryError) {
             logger.error('[QuotaManager] Recovery failed:', retryError);

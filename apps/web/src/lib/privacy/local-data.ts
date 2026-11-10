@@ -114,5 +114,5 @@ export async function clearLocalPersonalData(options: { includePreferences?: boo
     doomed.forEach(key => ls.removeItem(key));
   }
   await EncryptedStorage.clearAll();
-  logger.info('[Privacy] Cleared personal data from this device');
+  logger.debug('[Privacy] Cleared personal data from this device');
 }

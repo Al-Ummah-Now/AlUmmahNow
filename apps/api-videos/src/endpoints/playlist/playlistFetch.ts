@@ -105,7 +105,7 @@ export class PlaylistFetch extends OptionalAuthRoute {
                 .filter((video): video is VideoType => !!video && canViewVideo(video, userId))
                 .map((video) => transformVideoToView(video));
 
-            logger.info("[PlaylistFetch] Expanded playlist videos", {
+            logger.debug("[PlaylistFetch] Expanded playlist videos", {
                 playlistId: id,
                 requested: ids.length,
                 returned: response.videoItems.length,

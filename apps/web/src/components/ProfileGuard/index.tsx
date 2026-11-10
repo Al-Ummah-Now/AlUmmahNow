@@ -124,7 +124,7 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children }) => {
           // GET /api/profile also answers "no profile" for a banned user: tell them apart
           const status = await getVideosBanStatus();
           if (status.banned) {
-            logger.info('[ProfileGuard] User is banned on videos; showing the notice instead of the profile flow');
+            logger.debug('[ProfileGuard] User is banned on videos; showing the notice instead of the profile flow');
             setBan({ reason: status.reason });
             setProfileExists(true);
             setHasChecked(true);

@@ -46,6 +46,14 @@ const eslintConfig = [
       ],
     },
   },
+  {
+    // Logging policy (docs/operations/logging.md): production code logs through the logger, never console.log/info/debug
+    files: ["src/**/*.{ts,tsx}", "worker.ts"],
+    ignores: ["**/__tests__/**", "**/*.test.{ts,tsx}", "**/*.spec.{ts,tsx}", "src/test/**"],
+    rules: {
+      "no-console": ["error", { allow: ["warn", "error"] }],
+    },
+  },
 ];
 
 export default eslintConfig;

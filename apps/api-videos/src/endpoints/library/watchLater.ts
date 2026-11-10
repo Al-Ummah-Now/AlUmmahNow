@@ -69,7 +69,7 @@ export class WatchLaterList extends AuthenticatedRoute {
 			videos.filter((v): v is VideoType => !!v && canViewVideo(v, userId)),
 		);
 
-		logger.info("[WatchLater] Listed", { userId, total: ids.length, returned: items.length });
+		logger.debug("[WatchLater] Listed", { userId, total: ids.length, returned: items.length });
 		return {
 			success: true,
 			result: {
@@ -134,7 +134,7 @@ export class WatchLaterAdd extends AuthenticatedRoute {
 			return c.json({ success: false, error: "watch_later_full", limit: WATCH_LATER_MAX_ITEMS }, 409);
 		}
 
-		logger.info("[WatchLater] Add", { userId, videoId: body.videoId, added });
+		logger.debug("[WatchLater] Add", { userId, videoId: body.videoId, added });
 		return { success: true, result: { videoId: body.videoId, saved: true, added, total: playlist.videos.length } };
 	}
 }
@@ -157,7 +157,7 @@ export class WatchLaterRemove extends AuthenticatedRoute {
 			return removed;
 		});
 
-		logger.info("[WatchLater] Remove", { userId, videoId: params.videoId, removed });
+		logger.debug("[WatchLater] Remove", { userId, videoId: params.videoId, removed });
 		return { success: true, result: { videoId: params.videoId, saved: false, removed, total: playlist?.videos?.length || 0 } };
 	}
 }
@@ -191,7 +191,7 @@ export class WatchLaterReorder extends AuthenticatedRoute {
 		if (rejected || (!playlist && body.videoIds.length > 0)) {
 			return c.json({ success: false, error: "videoIds must contain exactly the videos in Watch later" }, 400);
 		}
-		logger.info("[WatchLater] Reordered", { userId, count: body.videoIds.length });
+		logger.debug("[WatchLater] Reordered", { userId, count: body.videoIds.length });
 		return { success: true, result: { videoIds: body.videoIds } };
 	}
 }

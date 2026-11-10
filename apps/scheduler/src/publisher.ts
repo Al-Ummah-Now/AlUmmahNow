@@ -73,12 +73,12 @@ export async function publishVideo(
       onlyIf: { etagMatches: videoObject.etag },
     });
     if (!written) {
-      logger.info(`Video ${metadata.videoId} changed while publishing; re-checking (attempt ${attempt})`);
+      logger.debug(`Video ${metadata.videoId} changed while publishing; re-checking (attempt ${attempt})`);
       await new Promise((resolve) => setTimeout(resolve, Math.random() * 5 * 2 ** Math.min(attempt, 6)));
       continue;
     }
 
-    logger.info(`Successfully published video ${metadata.videoId} via scheduler`);
+    logger.debug(`Successfully published video ${metadata.videoId} via scheduler`);
 
     // Search index (Story 29.9): the video is public now
     if (queue) {

@@ -561,18 +561,17 @@ export class SessionManager {
     // The account's sign-in ended (refresh token rejected): signed out, so its
     // dead token is never sent. Signing in again replaces the account.
     if (activeAccount.needsSignIn) {
-      logger.info('[SessionManager.getActiveSession] Active account needs to sign in again', {
+      logger.debug('[SessionManager.getActiveSession] Active account needs to sign in again', {
         userId: activeAccount.userId,
       });
       return null;
     }
 
-    logger.debug('[SessionManager.getActiveSession] TRACE BEFORE FILTER:', {
+    logger.trace('[SessionManager.getActiveSession] Before filter', {
       userId: activeAccount.userId,
-      email: activeAccount.email,
-      'sessionData.activeChannelId': sessionData.activeChannelId,
-      'activeAccount.activeChannelId': activeAccount.activeChannelId,
-      'activeAccount.channels': activeAccount.channels.map(c => ({ id: c.id, name: c.name, userId: c.userId })),
+      activeChannelId: sessionData.activeChannelId,
+      accountActiveChannelId: activeAccount.activeChannelId,
+      channelIds: activeAccount.channels.map(c => c.id),
     });
 
     // IMPORTANT: Filter out channels that don't belong to their respective users for ALL accounts
@@ -602,7 +601,7 @@ export class SessionManager {
 
     // If activeChannelId doesn't match any channel for this user, clear it
     if (sessionData.activeChannelId && !activeChannel) {
-      logger.info('[SessionManager] Active channel ID does not belong to current user, clearing it');
+      logger.debug('[SessionManager] Active channel ID does not belong to current user, clearing it');
       sessionData.activeChannelId = null;
       activeAccount.activeChannelId = null;
       sessionNeedsUpdate = true;
@@ -613,13 +612,10 @@ export class SessionManager {
       await this.persistIfWritable(sessionData);
     }
 
-    logger.debug('[SessionManager.getActiveSession] TRACE AFTER FILTER:', {
+    logger.trace('[SessionManager.getActiveSession] After filter', {
       userId: activeAccount.userId,
-      email: activeAccount.email,
-      'sessionData.activeChannelId': sessionData.activeChannelId,
-      'activeAccount.activeChannelId': activeAccount.activeChannelId,
-      'activeChannel': activeChannel ? activeChannel.name : null,
-      'activeAccount.channels.length': activeAccount.channels.length,
+      activeChannelId: sessionData.activeChannelId,
+      channelsCount: activeAccount.channels.length,
     });
 
     // Build account info for all accounts
@@ -796,7 +792,7 @@ export class SessionManager {
         account.displayName = (profileData.displayName as string) || (profileData.email as string) || account.email;
         account.avatarUrl = profileData.avatarUrl as string | undefined;
         await this.setSessionData(sessionData);
-        logger.info('[SessionManager] Updated profile for user', {
+        logger.debug('[SessionManager] Updated profile for user', {
           userId,
           displayName: account.displayName,
           hasAvatar: !!account.avatarUrl
@@ -847,7 +843,7 @@ export class SessionManager {
     if (result === 'refreshed') {
       account.lastActivity = Date.now();
       await this.setSessionData(sessionData);
-      logger.info('[SessionManager.refreshAccount] Tokens refreshed', { userId, expiresAt: account.expiresAt });
+      logger.debug('[SessionManager.refreshAccount] Tokens refreshed', { userId, expiresAt: account.expiresAt });
     } else if (result === 'needs-sign-in') {
       await this.setSessionData(sessionData);
       logger.warn('[SessionManager.refreshAccount] Refresh token rejected; account needs to sign in again', { userId });

@@ -36,7 +36,7 @@ export async function handleChannelTabEvent(
   // Process specific channel tab events
   switch (message.type) {
     case MessageType.ChannelTabCreate:
-      logger.info(`Channel tab ${tabId} created for channel ${channelId} by user ${userId}`, {
+      logger.debug(`Channel tab ${tabId} created for channel ${channelId} by user ${userId}`, {
         tabType,
         tabName,
         position,
@@ -47,7 +47,7 @@ export async function handleChannelTabEvent(
       break;
 
     case MessageType.ChannelTabUpdate:
-      logger.info(`Channel tab ${tabId} updated for channel ${channelId} by user ${userId}`, {
+      logger.debug(`Channel tab ${tabId} updated for channel ${channelId} by user ${userId}`, {
         tabType,
         tabName,
         position,
@@ -57,13 +57,13 @@ export async function handleChannelTabEvent(
       break;
 
     case MessageType.ChannelTabDelete:
-      logger.info(`Channel tab ${tabId} deleted from channel ${channelId} by user ${userId}`);
+      logger.debug(`Channel tab ${tabId} deleted from channel ${channelId} by user ${userId}`);
       // Track tab deletion analytics
       await trackTabDeletion(payload, env, logger);
       break;
 
     case MessageType.ChannelTabReorder:
-      logger.info(`Channel tabs reordered for channel ${channelId} by user ${userId}`, {
+      logger.debug(`Channel tabs reordered for channel ${channelId} by user ${userId}`, {
         position,
       });
       // Track reordering patterns
@@ -71,7 +71,7 @@ export async function handleChannelTabEvent(
       break;
 
     case MessageType.ChannelTabSwitch:
-      logger.info(`User ${userId} switched to tab ${tabId} on channel ${channelId}`, {
+      logger.debug(`User ${userId} switched to tab ${tabId} on channel ${channelId}`, {
         tabType,
         tabName,
         previousTabId: payload.previousTabId,

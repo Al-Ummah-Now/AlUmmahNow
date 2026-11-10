@@ -39,7 +39,7 @@ export async function contactSubmit(c: Context<{ Bindings: AdminBindings }>): Pr
 
   // Bots get the same answer as people, and nothing is stored or sent
   if (isLikelyBot(raw)) {
-    logger.info('[Contact] Dropped a likely bot submission');
+    logger.debug('[Contact] Dropped a likely bot submission');
     return c.json({ success: true, result: { id: null } }, 201);
   }
 
@@ -67,7 +67,7 @@ export async function contactSubmit(c: Context<{ Bindings: AdminBindings }>): Pr
     return c.json({ success: false, error: 'rate_limited' }, 429, { 'Retry-After': '3600' });
   }
 
-  logger.info('[Contact] Message received', { id, signedIn: !!user });
+  logger.debug('[Contact] Message received', { id, signedIn: !!user });
   // Mail is sent by the queue consumer (lib/contact-mail-queue.ts), never on this request
   const jobs = (['notify', 'ack'] as const).map((kind) => ({ v: 1 as const, kind, messageId: id }));
   if (!(await enqueueContactMail(env, jobs))) {
