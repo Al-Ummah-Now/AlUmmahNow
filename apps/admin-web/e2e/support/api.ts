@@ -63,7 +63,14 @@ export async function adminApi<T = unknown>(
     },
   });
   const text = await response.text();
-  return { status: response.status, body: text ? JSON.parse(text) : {} };
+  // A route QA does not have yet answers with a plain-text 404: specs probe for that and skip
+  let body: { success?: boolean; result?: T; error?: string; [k: string]: unknown } = {};
+  try {
+    body = text ? JSON.parse(text) : {};
+  } catch {
+    body = { error: text.slice(0, 200) };
+  }
+  return { status: response.status, body };
 }
 
 export async function getReport(id: string): Promise<AdminReport | null> {
