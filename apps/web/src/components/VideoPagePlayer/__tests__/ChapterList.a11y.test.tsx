@@ -87,14 +87,18 @@ describe('ChapterList keyboard accessibility', () => {
 });
 
 describe('ChapterMarkers', () => {
-  it('are pointer-only shortcuts hidden from the tab order inside the seek slider', () => {
+  it('are pointer-only shortcuts with nothing focusable inside the seek slider', () => {
+    const onSeek = jest.fn();
     const { container } = render(
-      <ChapterMarkers chapters={chapters} currentChapter={null} duration={180} onSeek={jest.fn()} />
+      <ChapterMarkers chapters={chapters} currentChapter={null} duration={180} onSeek={onSeek} />
     );
     const group = container.firstElementChild as HTMLElement;
     expect(group).toHaveAttribute('aria-hidden', 'true');
-    const markers = container.querySelectorAll('button');
+    // A slider may not contain interactive content (axe nested-interactive)
+    expect(container.querySelectorAll('button, a, input, [tabindex]')).toHaveLength(0);
+    const markers = container.querySelectorAll<HTMLElement>('.vjs-fanous-chapter-mark');
     expect(markers).toHaveLength(2); // the 0:00 chapter has no marker
-    markers.forEach((marker) => expect(marker).toHaveAttribute('tabindex', '-1'));
+    fireEvent.click(markers[1]);
+    expect(onSeek).toHaveBeenCalledWith(chapters[2]);
   });
 });

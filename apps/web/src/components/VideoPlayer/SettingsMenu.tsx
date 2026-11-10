@@ -157,6 +157,17 @@ export function SettingsMenu({ player, lang, onShowShortcuts }: SettingsMenuProp
       const target = e.target as Node;
       if (menuRef.current?.contains(target) || gear()?.contains(target)) return;
       close(false);
+      // A press on the video only dismisses the menu: swallow the click that follows, or
+      // Video.js would also toggle playback
+      if (p.el()?.contains(target) && !(target as Element).closest?.('.vjs-control-bar')) {
+        const swallow = (ev: MouseEvent) => {
+          ev.stopPropagation();
+          ev.preventDefault();
+        };
+        document.addEventListener('click', swallow, { capture: true, once: true });
+        // A press that never becomes a click (drag, cancelled touch) must not eat a later click
+        window.setTimeout(() => document.removeEventListener('click', swallow, { capture: true }), 600);
+      }
     };
     document.addEventListener('pointerdown', onPointerDown, true);
     return () => {

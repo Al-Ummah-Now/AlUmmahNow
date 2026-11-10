@@ -193,6 +193,33 @@ describe('SettingsMenu', () => {
     expect(screen.queryByTestId('player-settings-menu')).toBeNull();
   });
 
+  it('a press on the video only dismisses the menu: the click after it never reaches the player', () => {
+    const f = fakePlayer();
+    const video = document.createElement('video');
+    f.el.appendChild(video);
+    const onPlayerClick = jest.fn();
+    video.addEventListener('click', onPlayerClick);
+    render(<SettingsMenu player={f.player as unknown as Player} lang="en" onShowShortcuts={jest.fn()} />);
+    openMenu(f);
+    fireEvent.pointerDown(video);
+    expect(screen.queryByTestId('player-settings-menu')).toBeNull();
+    fireEvent.click(video);
+    expect(onPlayerClick).not.toHaveBeenCalled();
+    // Only that one click: the next one plays or pauses as usual
+    fireEvent.click(video);
+    expect(onPlayerClick).toHaveBeenCalledTimes(1);
+
+    // A press outside the player closes the menu without eating anything
+    const outside = document.createElement('button');
+    document.body.appendChild(outside);
+    const onOutside = jest.fn();
+    outside.addEventListener('click', onOutside);
+    openMenu(f);
+    fireEvent.pointerDown(outside);
+    fireEvent.click(outside);
+    expect(onOutside).toHaveBeenCalledTimes(1);
+  });
+
   it('opens the shortcuts dialog from its row', () => {
     const f = fakePlayer();
     const onShow = jest.fn();
