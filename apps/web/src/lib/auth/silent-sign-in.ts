@@ -70,6 +70,22 @@ export function safeReturnPath(value: string | null | undefined): string | null 
 }
 
 /**
+ * The page a sign-in started from, read from the request's Referer (a server
+ * action posts to the page it was called on, so the Referer is that page).
+ * Only a page on `origin` counts; anything else is null (sign-in goes home).
+ */
+export function returnPathFromReferer(referer: string | null | undefined, origin: string): string | null {
+  if (!referer) return null;
+  try {
+    const page = new URL(referer);
+    if (page.origin !== new URL(origin).origin) return null;
+    return safeReturnPath(`${page.pathname}${page.search}`);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * The absolute URL to redirect to: `path` on `origin`, or `origin/` when it
  * would leave that origin.
  */
@@ -113,6 +129,15 @@ export function loginRoutePath(returnPath: string, locale: string, prompt?: Logi
   const safe = safeReturnPath(returnPath);
   if (safe) params.set('return', safe);
   return `/api/auth/login?${params.toString()}`;
+}
+
+/**
+ * Browser only: a signed-out visitor on a page that needs an account goes to
+ * sign-in and comes back to this page (never to the home page).
+ */
+export function signInAndReturnHere(locale: string): void {
+  const { pathname, search } = window.location;
+  window.location.assign(loginRoutePath(`${pathname}${search}`, locale));
 }
 
 /**
