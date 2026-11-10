@@ -74,3 +74,6 @@ bmad/
 *.backup
 logs/
 release-result.json
+
+# Local backups written by data migrations (scripts/migrations)
+.migration-backups/
