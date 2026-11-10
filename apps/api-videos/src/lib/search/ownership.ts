@@ -24,6 +24,10 @@ import {
   SearchStatement,
   ownershipCompleteKey,
   ownershipDeleteStatement,
+  ownershipDriftKey,
+  legacyOwnershipCompleteKey,
+  OWNERSHIP_DRIFT_SAMPLE,
+  type OwnershipDrift,
   r2Version,
   tombstoneStatement,
   ownershipTombstone,
@@ -315,15 +319,37 @@ export function channelVideoCountsFromIndex(env: OwnershipEnv, channelIds: strin
 
 export interface OwnershipPageResult {
   kind: OwnershipKind;
+  /** Entity keys listed on the page (removed ones included) */
   scanned: number;
   upserted: number;
   removed: number;
   failed: number;
+  /**
+   * Listed objects that exist but have no row refreshed by this page: not
+   * this entity (projectOwnership is null) or the write was refused (a
+   * tombstone newer than the object). A pass counts them like failures.
+   */
+  skipped: number;
+  /** Ids of skipped and failed objects (at most OWNERSHIP_DRIFT_SAMPLE) */
+  problemIds: string[];
   nextCursor: string | null;
   done: boolean;
 }
 
-/** Write ownership rows for one page of the bucket. */
+/** Bound parameters per verification query (D1 allows 100). */
+const VERIFY_CHUNK = 90;
+
+/**
+ * Write ownership rows for one page of the bucket.
+ *
+ * Every object read is recorded as seen (indexed_at = now): rewritten when
+ * its version is not older than the row's, otherwise the newer row is kept
+ * and only marked seen. Without that mark the pass's prune deleted rows whose
+ * stored version was ahead of the object's R2 `uploaded` time (rows written
+ * by a write path that stamped a later clock: 2026-11-10, 345 videos and a
+ * channel vanished from every list). The page then reads back which listed
+ * objects have a row seen now; the rest are counted as skipped.
+ */
 export async function backfillOwnershipPage(
   env: OwnershipEnv,
   kind: OwnershipKind,
@@ -340,6 +366,10 @@ export async function backfillOwnershipPage(
   let failed = 0;
   let removed = 0;
   const statements: SearchStatement[] = [];
+  /** Ids that must have a row seen by this page once the writes are applied */
+  const expected: string[] = [];
+  const unindexable: string[] = [];
+  const failedIds: string[] = [];
   await Promise.all(page.objects.map(async object => {
     const id = ownershipIdForKey(kind, object.key);
     if (!id) return;
@@ -355,29 +385,71 @@ export async function backfillOwnershipPage(
         return;
       }
       const row = projectOwnership(kind, id, value);
+      if (!row) {
+        unindexable.push(id);
+        return;
+      }
       // Version = when this copy was written, so a newer write made meanwhile is kept
-      if (row) statements.push(ownershipUpsertStatement(db, row, now, r2Version(stored) ?? 0));
+      const version = r2Version(stored) ?? 0;
+      statements.push(ownershipUpsertStatement(db, row, now, version), ownershipSeenStatement(db, kind, id, now));
+      expected.push(id);
       // The channel's role rows (channel_access) are rebuilt with it
-      if (row && kind === 'channel') statements.push(...channelAccessStatements(db, id, value, r2Version(stored) ?? 0));
+      if (kind === 'channel') statements.push(...channelAccessStatements(db, id, value, version));
       // Admin comment list: rewritten only when the video's comments changed
-      if (row && kind === 'video') await syncCommentIndex(db, id, value);
+      if (kind === 'video') await syncCommentIndex(db, id, value);
     } catch (error) {
       failed++;
+      failedIds.push(id);
       logger.warn('[Ownership] Failed to read object during backfill', { kind, key: object.key, error: errorText(error) });
     }
   }));
-  const upserted = statements.length - removed;
   for (let i = 0; i < statements.length; i += 50) {
     await db.batch(statements.slice(i, i + 50));
   }
+  // Read back: every listed object that exists must now have a row seen by this page
+  const seen = new Set<string>();
+  for (let i = 0; i < expected.length; i += VERIFY_CHUNK) {
+    const chunk = expected.slice(i, i + VERIFY_CHUNK);
+    const { results } = await db.prepare(
+      `SELECT id FROM ${OWNERSHIP_TABLE} WHERE kind = ? AND indexed_at >= ? AND id IN (${chunk.map(() => '?').join(', ')})`,
+    ).bind(kind, now, ...chunk).all<{ id: string }>();
+    for (const r of results ?? []) seen.add(r.id);
+  }
+  const refused = expected.filter(id => !seen.has(id));
+  const skippedIds = [...unindexable, ...refused];
+  if (skippedIds.length) {
+    logger.warn('[Ownership] Listed objects not indexed', { kind, unindexable: unindexable.slice(0, 5), refused: refused.slice(0, 5), count: skippedIds.length });
+  }
   const nextCursor = page.truncated ? (page as { cursor?: string }).cursor ?? null : null;
-  return { kind, scanned, upserted, removed, failed, nextCursor, done: !nextCursor };
+  return {
+    kind,
+    scanned,
+    upserted: seen.size,
+    removed,
+    failed,
+    skipped: skippedIds.length,
+    problemIds: [...skippedIds, ...failedIds].sort().slice(0, OWNERSHIP_DRIFT_SAMPLE),
+    nextCursor,
+    done: !nextCursor,
+  };
+}
+
+/** Marks an existing row seen when the upsert kept it because it is newer than the object read. */
+function ownershipSeenStatement(db: SearchDb, kind: OwnershipKind, id: string, now: number): SearchStatement {
+  return db.prepare(`UPDATE ${OWNERSHIP_TABLE} SET indexed_at = ? WHERE kind = ? AND id = ? AND indexed_at < ?`).bind(now, kind, id, now);
 }
 
 interface PassState {
   cursor: string | null;
   startedAt: number;
   failed: number;
+  /** Absent in state saved by older builds (counted from then on) */
+  skipped?: number;
+  /** Objects listed and still stored (scanned minus removed) */
+  stored?: number;
+  problemIds?: string[];
+  /** False when the pass resumed state from an older build: its counts are partial */
+  counted?: boolean;
 }
 
 const passKey = (kind: OwnershipKind) => `ownership:sweep:${kind}`;
@@ -387,7 +459,8 @@ async function readPass(db: SearchDb, kind: OwnershipKind): Promise<PassState | 
   const row = await db.prepare('SELECT value FROM search_meta WHERE key = ?').bind(passKey(kind)).first<{ value: string }>();
   if (!row) return null;
   try {
-    return JSON.parse(row.value) as PassState;
+    const state = JSON.parse(row.value) as PassState;
+    return state.stored === undefined ? { ...state, counted: false } : state;
   } catch {
     return null;
   }
@@ -399,15 +472,39 @@ export interface OwnershipPassResult {
   scanned: number;
   done: boolean;
   complete: boolean;
+  /** Set when the pass finished: the drift it found, or null when the index holds every object */
+  drift?: OwnershipDrift | null;
+}
+
+/** Forget the kind's pass in progress, so the next step starts a full pass from the first key. */
+export async function resetOwnershipPass(db: SearchDb, kind: OwnershipKind): Promise<void> {
+  await db.prepare('DELETE FROM search_meta WHERE key = ?').bind(passKey(kind)).run();
+}
+
+/** Drift flags of every kind (admin Errors page), oldest kind order. */
+export async function readOwnershipDrift(db: SearchDb): Promise<OwnershipDrift[]> {
+  const { results } = await db.prepare(`SELECT value FROM search_meta WHERE key LIKE 'ownership:drift:%' ORDER BY key`).all<{ value: string }>();
+  const out: OwnershipDrift[] = [];
+  for (const row of results ?? []) {
+    try {
+      out.push(JSON.parse(row.value) as OwnershipDrift);
+    } catch {
+      // A malformed flag is rewritten by the next pass
+    }
+  }
+  return out;
 }
 
 /**
  * Advance the kind's rebuild pass by up to `maxPages` pages. The cursor is
  * kept in search_meta, so passes resume across cron runs, heals and internal
- * calls. When the bucket has been fully walked, rows not refreshed since the
- * pass started are pruned (objects removed without going through api-videos)
- * and, if no object failed to read and no write was lost since the pass
- * started, the kind is marked complete.
+ * calls. When the bucket has been fully walked, rows not seen since the pass
+ * started are pruned (objects removed without going through api-videos).
+ * The kind is marked complete only if every listed object was indexed (none
+ * failed to read, none skipped) and no write was lost since the pass started;
+ * otherwise the completeness marker is removed, so readers fall back to R2.
+ * Either way the finished pass compares the index with what it listed and
+ * sets (or clears) the kind's drift flag for the admin Errors page.
  */
 export async function runOwnershipPass(
   env: OwnershipEnv,
@@ -419,13 +516,20 @@ export async function runOwnershipPass(
   if (!db || !env[BUCKET_FOR_KIND[kind]]) return result;
   const clock = options.now ?? Date.now;
   const maxPages = Math.max(1, options.maxPages ?? OWNERSHIP_HEAL_PAGES);
-  let state: PassState = (await readPass(db, kind)) ?? { cursor: null, startedAt: clock(), failed: 0 };
+  let state: PassState = (await readPass(db, kind)) ?? { cursor: null, startedAt: clock(), failed: 0, skipped: 0, stored: 0, problemIds: [], counted: true };
 
   while (result.pages < maxPages) {
     const page = await backfillOwnershipPage(env, kind, { cursor: state.cursor, limit: options.pageSize, now: clock() });
     result.pages++;
     result.scanned += page.scanned;
-    state = { ...state, cursor: page.nextCursor, failed: state.failed + page.failed };
+    state = {
+      ...state,
+      cursor: page.nextCursor,
+      failed: state.failed + page.failed,
+      skipped: (state.skipped ?? 0) + page.skipped,
+      stored: (state.stored ?? 0) + page.scanned - page.removed,
+      problemIds: [...(state.problemIds ?? []), ...page.problemIds].slice(0, OWNERSHIP_DRIFT_SAMPLE),
+    };
     if (page.done) {
       result.done = true;
       break;
@@ -439,10 +543,14 @@ export async function runOwnershipPass(
   }
   const invalidated = await db.prepare('SELECT updated_at FROM search_meta WHERE key = ?')
     .bind(ownershipInvalidatedKey(kind)).first<{ updated_at: number }>();
-  const trustworthy = state.failed === 0 && !(invalidated && Number(invalidated.updated_at) >= state.startedAt);
+  const skipped = state.skipped ?? 0;
+  // A pass resumed from an older build's state did not count skips on its first pages
+  const trustworthy = state.counted !== false && state.failed === 0 && skipped === 0
+    && !(invalidated && Number(invalidated.updated_at) >= state.startedAt);
   const statements = [
     db.prepare(`DELETE FROM ${OWNERSHIP_TABLE} WHERE kind = ? AND indexed_at < ?`).bind(kind, state.startedAt),
     db.prepare('DELETE FROM search_meta WHERE key = ?').bind(passKey(kind)),
+    db.prepare('DELETE FROM search_meta WHERE key = ?').bind(legacyOwnershipCompleteKey(kind)),
   ];
   // Role rows of channels the pass pruned (removed without going through api-videos)
   if (kind === 'channel') {
@@ -450,16 +558,56 @@ export async function runOwnershipPass(
       `DELETE FROM ${CHANNEL_ACCESS_TABLE} WHERE channel_id NOT IN (SELECT id FROM ${OWNERSHIP_TABLE} WHERE kind = 'channel')`,
     ));
   }
-  if (trustworthy) {
-    statements.push(db.prepare(
+  await db.batch(statements);
+  // Compared after the prune: a row the pass saw is never pruned, so a missing one is drift
+  result.drift = await recordOwnershipDrift(db, kind, state, now);
+  result.complete = trustworthy && !result.drift;
+  await (result.complete
+    ? db.prepare(
       `INSERT INTO search_meta (key, value, updated_at) VALUES (?, ?, ?)
        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
-    ).bind(ownershipCompleteKey(kind), String(state.startedAt), now));
-  }
-  await db.batch(statements);
-  result.complete = trustworthy;
-  logger.info('[Ownership] Pass finished', { kind, startedAt: state.startedAt, failed: state.failed, complete: result.complete });
+    ).bind(ownershipCompleteKey(kind), String(state.startedAt), now)
+    // An earlier pass's marker must not outlive a pass that found the index incomplete
+    : db.prepare('DELETE FROM search_meta WHERE key = ?').bind(ownershipCompleteKey(kind))).run();
+  logger.info('[Ownership] Pass finished', { kind, startedAt: state.startedAt, failed: state.failed, skipped, complete: result.complete });
   return result;
+}
+
+/**
+ * Compare the index with what the finished pass listed and set or clear the
+ * drift flag. Rows beyond the listed count are objects created during the
+ * pass (written inline after the listing passed their key): not drift.
+ * `stored` in the flag is the listed count minus objects deleted meanwhile.
+ */
+async function recordOwnershipDrift(db: SearchDb, kind: OwnershipKind, state: PassState, now: number): Promise<OwnershipDrift | null> {
+  const row = await db.prepare(`SELECT COUNT(*) AS n FROM ${OWNERSHIP_TABLE} WHERE kind = ?`).bind(kind).first<{ n: number }>();
+  const indexed = Number(row?.n ?? 0);
+  // Objects deleted while the pass ran were listed but rightly have no row (their tombstone is newer than the pass start)
+  const deleted = await db.prepare('SELECT COUNT(*) AS n FROM search_tombstones WHERE entity = ? AND version >= ? AND version <= ?')
+    .bind(ownershipTombstone(kind), state.startedAt, now).first<{ n: number }>();
+  const stored = Math.max(0, (state.stored ?? 0) - Number(deleted?.n ?? 0));
+  const skipped = state.skipped ?? 0;
+  const counted = state.counted !== false;
+  if (counted && indexed >= stored && skipped === 0 && state.failed === 0) {
+    await db.prepare('DELETE FROM search_meta WHERE key = ?').bind(ownershipDriftKey(kind)).run();
+    return null;
+  }
+  if (!counted && indexed >= stored && skipped === 0 && state.failed === 0) {
+    // Partial counts from an older build's state: no verdict; the next pass decides
+    return null;
+  }
+  const drift: OwnershipDrift = {
+    kind,
+    stored,
+    indexed,
+    skipped,
+    failed: state.failed,
+    sampleIds: state.problemIds ?? [],
+    at: new Date(now).toISOString(),
+  };
+  await setMeta(db, ownershipDriftKey(kind), JSON.stringify(drift), now);
+  logger.warn('[Ownership] Index does not hold every stored object', { alert: 'ownership_drift', ...drift });
+  return drift;
 }
 
 /** Daily cron: advance both passes (a full pass also refreshes complete markers). */
@@ -498,6 +646,22 @@ async function acquireHealLease(db: SearchDb, kind: OwnershipKind, now: number):
      ON CONFLICT(key) DO UPDATE SET updated_at = excluded.updated_at WHERE search_meta.updated_at < ?`,
   ).bind(leaseKey(kind), now, now - OWNERSHIP_HEAL_LEASE_MS).run() as { meta?: { changes?: number } };
   return Number(outcome?.meta?.changes) > 0;
+}
+
+/**
+ * Run `task` holding the kind's pass lease (shared with the cron and
+ * self-heal, so two passes never walk the same cursor). Null when another
+ * pass holds it.
+ */
+export async function withOwnershipLease<T>(env: OwnershipEnv, kind: OwnershipKind, task: () => Promise<T>, now = Date.now()): Promise<T | null> {
+  const db = dbOf(env);
+  if (!db) throw new Error('SEARCH_DB is not bound');
+  if (!(await acquireHealLease(db, kind, now))) return null;
+  try {
+    return await task();
+  } finally {
+    await db.prepare('DELETE FROM search_meta WHERE key = ?').bind(leaseKey(kind)).run();
+  }
 }
 
 /**

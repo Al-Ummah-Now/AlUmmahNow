@@ -39,6 +39,7 @@ import { bansFor, deleteBan, readBan, writeBan } from './bans';
 import { createJob, type JobHandler, type JobOutcome, type JobQueue } from './jobs';
 import { approvedFromPlan, planLegacyRestore, runLegacyRestore, type ApprovedRestore, type AuthUsersDb } from './legacy-restore';
 import { runThumbnailRepairStep, type ThumbnailRepairEnv } from '../thumbnail/repair';
+import { runOwnershipRebuildStep, type OwnershipRebuildEnv } from '../search/ownershipRebuild';
 import {
 	channelVideoStats,
 	contentIds,
@@ -1019,4 +1020,6 @@ export const ADMIN_JOB_HANDLERS: Record<AdminJobKind, JobHandler> = {
 	'profiles.restore-legacy': (env, job) => runLegacyRestore(env as AdminServiceEnv, job),
 	// Thumbnail aspect repair (lib/thumbnail/repair.ts), started from the admin Processing page
 	'videos.repair-thumbnails': (env, job) => runThumbnailRepairStep(env as ThumbnailRepairEnv, job) as unknown as Promise<JobOutcome>,
+	// Ownership index rebuild (lib/search/ownershipRebuild.ts), started from the Errors page's drift flag
+	'search.rebuild-ownership': (env, job) => runOwnershipRebuildStep(env as OwnershipRebuildEnv, job),
 };

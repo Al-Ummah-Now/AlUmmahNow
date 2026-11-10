@@ -7,7 +7,9 @@
  * Bunny" previews synchronously (read only) and applies by queueing each
  * video's processing-check loop; "Retry processing" queues the same loop;
  * "Mark failed" flags the video for re-upload and tells the uploader;
- * "Check thumbnails" queues the thumbnail aspect repair job (dry run first).
+ * "Check thumbnails" queues the thumbnail aspect repair job (dry run first);
+ * "Rebuild index" (Errors page, "Index out of sync") queues the ownership
+ * index rebuild job.
  *
  * Every change writes its audit row (site_settings_log, key
  * `processing:video:<id>`) before calling api-videos and removes it again if
@@ -194,6 +196,25 @@ app.post('/thumbnails/:jobId/retry', async (c) => {
     callProcessing(c.env, `/thumbnails/${jobId}/retry`, { method: 'POST' }),
   );
   return c.json({ success: true, result });
+});
+
+const INDEX_KINDS = ['video', 'channel', 'profile'];
+
+/**
+ * Rebuild the ownership index of one kind (the admin's video, channel and user
+ * lists read it): queues the admin job, or returns the one already running.
+ * Audited under the fixed key processing:video:ownership-index.
+ */
+app.post('/index-rebuild', async (c) => {
+  const input = await body(c);
+  if (typeof input.kind !== 'string' || !INDEX_KINDS.includes(input.kind)) {
+    return c.json({ success: false, code: 'bad_request', error: 'kind must be video, channel or profile' }, 400);
+  }
+  const json = { kind: input.kind, actorId: actorOf(c) };
+  const result = await audited(c, ['ownership-index'], 'rebuild_ownership_index', { kind: input.kind }, () =>
+    callProcessing(c.env, '/index-rebuild', { method: 'POST', json }),
+  );
+  return c.json({ success: true, result }, 202);
 });
 
 export default app;

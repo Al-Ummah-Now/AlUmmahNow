@@ -465,3 +465,8 @@ export async function startThumbnailRepair(dryRun: boolean, ids?: string[]): Pro
 export async function retryThumbnailRun(id: string): Promise<ActionResult<{ job: ThumbnailRun }>> {
   return mutate(`/api/processing/thumbnails/${encodeURIComponent(id)}/retry`, 'POST', {});
 }
+
+/** Queues a rebuild of the ownership index of one kind (Errors page, "Index out of sync"); returns the running one if any. */
+export async function startIndexRebuild(kind: 'video' | 'channel' | 'profile'): Promise<ActionResult<{ job: AdminJob; existing: boolean }>> {
+  return mutate('/api/processing/index-rebuild', 'POST', { kind });
+}

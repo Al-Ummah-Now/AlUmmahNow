@@ -10,7 +10,17 @@ import type { AdminContentPermission, AdminJob } from '@/lib/api/content-types';
 import { JobsTable } from '@/components/content/jobs';
 import { logger } from '@/lib/logger';
 import { ISSUE_LABEL, ourStatusLabel } from '../processing/labels';
-import { thumbnailFixHref } from './filters';
+import { indexItemHref, thumbnailFixHref } from './filters';
+import { IndexRebuildButton } from './IndexRebuildButton';
+import { JOB_STATUS_LABEL, isJobActive } from '@/lib/admin-jobs';
+import type { MessageKey } from '@/i18n/translate';
+
+/** Label of each ownership index kind (Errors page, "Index out of sync"). */
+export const INDEX_KIND_LABEL: Record<'video' | 'channel' | 'profile', MessageKey> = {
+  video: 'errorsPage.indexKindVideo',
+  channel: 'errorsPage.indexKindChannel',
+  profile: 'errorsPage.indexKindProfile',
+};
 
 const thClass = 'text-start px-4 py-3 text-fg-muted font-medium whitespace-nowrap';
 const tdClass = 'px-4 py-3 align-top text-sm';
@@ -75,6 +85,7 @@ export function hasFailures(f: Failures): boolean {
     f.data?.erasureDeadLetters?.length ||
     f.data?.thumbnailRuns?.length ||
     f.data?.thumbnailFlagged?.items.length ||
+    f.data?.indexDrift?.length ||
     f.formatFlagged?.items.length ||
     f.contactFailed?.messages.length ||
     f.failedJobs?.length
@@ -89,7 +100,8 @@ export function hasFailures(f: Failures): boolean {
  * failed after the mail queue's retries (each links to the message, where it
  * can be retried), account erasure steps that dead-lettered, thumbnail repair
  * runs that failed after their retries, thumbnails the daily check found of
- * another shape than their video (fixed by hand on the video page), and admin jobs
+ * another shape than their video (fixed by hand on the video page), indexes the
+ * admin lists read that miss stored items (Rebuild queues the index rebuild job), and admin jobs
  * (heavy content actions) that failed after their retries, with Retry.
  */
 export function FailuresSections({ failures, t, locale }: { failures: Failures; t: Awaited<ReturnType<typeof getI18n>>['t']; locale: Awaited<ReturnType<typeof getI18n>>['locale'] }) {
@@ -97,6 +109,62 @@ export function FailuresSections({ failures, t, locale }: { failures: Failures; 
   return (
     <>
       {canProcess && !data && <ErrorAlert testId="errors-processing-error">{t('errorsPage.processingLoadFailed')}</ErrorAlert>}
+
+      {!!data?.indexDrift?.length && (
+        <section aria-labelledby="errors-index" data-testid="errors-index-section">
+          <div className="mb-3">
+            <h2 id="errors-index" className="text-xl font-semibold text-fg">{t('errorsPage.indexTitle')}</h2>
+            <p className="mt-1 text-sm text-fg-muted">{t('errorsPage.indexHint', { when: formatDate(data.indexDrift[0].at, locale, true) })}</p>
+          </div>
+          <div className="bg-surface border border-border rounded-lg overflow-x-auto">
+            <table className="w-full" data-testid="errors-index">
+              <caption className="sr-only">{t('errorsPage.indexCaption')}</caption>
+              <thead className="border-b border-border">
+                <tr>
+                  <th className={thClass} scope="col">{t('errorsPage.colIndex')}</th>
+                  <th className={thClass} scope="col">{t('errorsPage.colStored')}</th>
+                  <th className={thClass} scope="col">{t('errorsPage.colIndexed')}</th>
+                  <th className={thClass} scope="col">{t('errorsPage.colSkipped')}</th>
+                  <th className={thClass} scope="col">{t('errorsPage.colUnreadable')}</th>
+                  <th className={thClass} scope="col">{t('errorsPage.colExamples')}</th>
+                  <th className={thClass} scope="col"><span className="sr-only">{t('errorsPage.rebuild')}</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.indexDrift.map((d) => (
+                  <tr key={d.kind} className="border-b border-border last:border-0" data-index-kind={d.kind}>
+                    <td className={tdClass}>
+                      <div className="text-fg">{t(INDEX_KIND_LABEL[d.kind])}</div>
+                      <div className="text-fg-muted text-xs">{formatDate(d.at, locale, true)}</div>
+                    </td>
+                    <td className={tdClass}>{d.stored}</td>
+                    <td className={tdClass}>{d.indexed}</td>
+                    <td className={tdClass}>{d.skipped}</td>
+                    <td className={tdClass}>{d.failed}</td>
+                    <td className={tdClass}>
+                      <ul className="space-y-1">
+                        {d.sampleIds.slice(0, 5).map((id) => (
+                          <li key={id}>
+                            <Link href={indexItemHref(d.kind, id)} className={linkClass}><span dir="ltr" className="text-xs">{id}</span></Link>
+                          </li>
+                        ))}
+                      </ul>
+                    </td>
+                    <td className={tdClass}>
+                      <IndexRebuildButton kind={d.kind} active={!!d.rebuild && isJobActive(d.rebuild.status)} />
+                      {d.rebuild && (
+                        <div className="mt-1 text-fg-muted text-xs" data-testid={`index-rebuild-status-${d.kind}`}>
+                          {t('errorsPage.rebuildStatus', { status: t(JOB_STATUS_LABEL[d.rebuild.status]) })}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       {data && (
         <section aria-labelledby="errors-videos">

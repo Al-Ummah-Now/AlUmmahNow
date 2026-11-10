@@ -385,6 +385,14 @@ export const ADMIN_JOB_KINDS = [
    * (api-videos lib/thumbnail/repair.ts). Target id 'thumbnail-repair'.
    */
   'videos.repair-thumbnails',
+  /**
+   * Rebuild the ownership index of one kind (videos, channels or profiles:
+   * the admin lists) with a full pass over its bucket, in resumable steps; fails
+   * (and retries) while the index still misses stored objects (api-videos
+   * lib/search/ownershipRebuild.ts). Target id 'ownership-index'; started from
+   * the Errors page's "Index out of sync" flag.
+   */
+  'search.rebuild-ownership',
 ] as const;
 
 export type AdminJobKind = (typeof ADMIN_JOB_KINDS)[number];
@@ -419,6 +427,7 @@ export const ADMIN_JOB_PERMISSIONS: Readonly<Record<AdminJobKind, readonly Admin
   'user.delete-data': ['users:manage', 'content:delete'],
   'profiles.restore-legacy': ['users:manage'],
   'videos.repair-thumbnails': ['videos:manage'],
+  'search.rebuild-ownership': ['videos:manage'],
 };
 
 // ---------------------------------------------------------------------------

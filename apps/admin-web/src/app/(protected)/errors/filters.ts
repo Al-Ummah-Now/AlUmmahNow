@@ -91,3 +91,9 @@ export function errorsBadgeCount(counts: { new?: number; openActions?: number } 
 export function thumbnailFixHref(videoId: string): string {
   return `/videos/${encodeURIComponent(videoId)}`;
 }
+
+/** Admin page of an item an index pass skipped (Errors page, "Index out of sync"). */
+export function indexItemHref(kind: 'video' | 'channel' | 'profile', id: string): string {
+  const base = kind === 'video' ? '/videos' : kind === 'channel' ? '/channels' : '/users';
+  return `${base}/${encodeURIComponent(id)}`;
+}

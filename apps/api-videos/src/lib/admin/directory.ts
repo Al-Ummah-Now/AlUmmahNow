@@ -12,6 +12,7 @@
 import {
 	OWNERSHIP_ADMIN_COLS_VERSION,
 	OWNERSHIP_TABLE,
+	ownershipCompleteKey,
 	type AdminChannelQuery,
 	type AdminChannelRow,
 	type AdminCommentQuery,
@@ -107,7 +108,7 @@ export async function ensureAdminIndex(env: AdminEnv, kind: OwnershipKind): Prom
 	if (await adminIndexReady(db, kind)) return true;
 	if (await isOwnershipComplete(db, kind)) {
 		// Rows from before the admin columns: start a fresh pass that rewrites every row
-		await db.prepare("DELETE FROM search_meta WHERE key = ?").bind(`ownership:complete:${kind}`).run();
+		await db.prepare("DELETE FROM search_meta WHERE key = ?").bind(ownershipCompleteKey(kind)).run();
 	}
 	try {
 		await scheduleOwnershipHeal(env, null, kind);
