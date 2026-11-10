@@ -21,7 +21,8 @@ jest.mock('@/hooks/useLanguage', () => ({
     dir: 'ltr',
   }),
 }));
-jest.mock('next/navigation', () => ({ usePathname: () => '/en/video/v1' }));
+let mockPathname = '/en/video/v1';
+jest.mock('next/navigation', () => ({ usePathname: () => mockPathname }));
 jest.mock('@/lib/runtime-config', () => ({ getApiUrl: () => 'https://api.test' }));
 jest.mock('@/lib/auth/client-token', () => ({ getClientAuthHeaders: async () => authHeaders }));
 jest.mock('@/lib/logger-client', () => ({
@@ -58,6 +59,8 @@ describe('VideoDetails channel row', () => {
     global.fetch = fetchMock as unknown as typeof fetch;
     account = { user: null, loading: false };
     authHeaders = {};
+    mockPathname = '/en/video/v1';
+    window.history.replaceState({}, '', '/');
   });
 
   it('signed out: shows the real count and a Subscribe link that starts sign-in and returns to the video', async () => {
@@ -72,6 +75,17 @@ describe('VideoDetails channel row', () => {
     expect(href.pathname).toBe('/api/auth/login');
     expect(href.searchParams.get('return')).toBe('/en/video/v1');
     expect(href.searchParams.get('locale')).toBe('en');
+  });
+
+  it('signed out on the legacy route (/video?vid=): sign-in returns to the same video, query kept', async () => {
+    fetchMock.mockResolvedValue(status(false, 3));
+    mockPathname = '/en/video';
+    window.history.replaceState({}, '', '/en/video?vid=v1');
+    renderRow();
+    await waitFor(() => {
+      const href = new URL(screen.getByTestId('watch-subscribe').getAttribute('href')!, 'https://videos.test');
+      expect(href.searchParams.get('return')).toBe('/en/video?vid=v1');
+    });
   });
 
   it('signed in: loads the status, toggles Subscribe / Subscribed and the count follows', async () => {
