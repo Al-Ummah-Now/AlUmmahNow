@@ -1023,7 +1023,11 @@
   white-space: nowrap;
 }
 
-/* The progress bar's hover tooltip: time, and the chapter above it when there is one */
+/*
+  The progress bar's hover tooltip: time, and the chapter above it when there is one. Each line is
+  as tall as the theme's font draws it (`normal`): Noto Kufi Arabic and Amiri draw well past a fixed
+  16px line, which let the chapter title spill out of the tip and clipped it at its own box.
+*/
 .vjs-fanous-layer.vjs-fanous-tip {
   position: fixed;
   display: grid;
@@ -1036,7 +1040,7 @@
   color: var(--fanous-player-tip-text);
   box-shadow: var(--fanous-player-tip-edge);
   font-size: 12px;
-  line-height: 16px;
+  line-height: normal;
   pointer-events: none;
   white-space: nowrap;
 }
@@ -1173,6 +1177,17 @@
 .vjs-fanous-menu .vjs-fanous-mi-end svg {
   width: 16px;
   height: 16px;
+}
+
+/*
+  Label and value clip to their own box for the ellipsis, so the box takes the line height the
+  theme's font needs (`normal`) rather than the row's 20px: Noto Kufi Arabic (Zujaj) and Amiri
+  (Nahas) draw 25 to 27px at 14px, and a 20px box cut through the Arabic. The row stays 44px with
+  everything centred on its middle.
+*/
+.vjs-fanous-menu .vjs-fanous-mi-label,
+.vjs-fanous-menu .vjs-fanous-mi-value {
+  line-height: normal;
 }
 
 .vjs-fanous-menu .vjs-fanous-mi-label {

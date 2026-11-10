@@ -14,6 +14,16 @@ const playNudge = (iconWidth: number) => Math.round(iconWidth * 0.07);
 const near = (actual: number, expected: number, what: string) =>
   expect(Math.abs(actual - expected), `${what}: ${actual.toFixed(2)} vs ${expected.toFixed(2)}`).toBeLessThanOrEqual(TOLERANCE);
 
+/** The height of one line of a row's label in its own font, plus rounding */
+const oneLine = (row: Locator) => row.locator('.vjs-fanous-mi-label').evaluate((el) => {
+  const probe = el.cloneNode() as HTMLElement;
+  probe.textContent = 'x';
+  el.parentElement!.appendChild(probe);
+  const h = probe.getBoundingClientRect().height;
+  probe.remove();
+  return h + 1;
+});
+
 /** Keep the pointer off every control so no hover state is in the frame */
 const parkPointer = (page: Page) => page.mouse.move(1, 1);
 
@@ -220,8 +230,9 @@ for (const dpr of [1, 2]) {
           const r = await layoutBox(row);
           near(r.height, 44, `${id} row height`);
           const label = await layoutBox(row.locator('.vjs-fanous-mi-label'));
-          // One line: the label box is exactly one 20px line, never wrapped under its icon
-          near(label.height, 20, `${id} label is one line`);
+          // One line, never wrapped under its icon: the box is one line of the font (its line
+          // height is the font's own, so the theme's Arabic face fits; rtl-labels.spec.ts)
+          expect(label.height, `${id} label is one line`).toBeLessThanOrEqual(await oneLine(row));
           near(label.cy, r.cy, `${id} label centred`);
           const icon = await inkBox(page, row.locator('.vjs-fanous-mi-icon svg'));
           near(icon.cy, r.cy, `${id} icon centred`);
@@ -296,7 +307,7 @@ for (const dpr of [1, 2]) {
             const r = await layoutBox(row);
             near(r.height, 44, `${sub} ${id} row height`);
             const label = await layoutBox(row.locator('.vjs-fanous-mi-label'));
-            near(label.height, 20, `${sub} ${id} one line`);
+            expect(label.height, `${sub} ${id} one line`).toBeLessThanOrEqual(await oneLine(row));
             near(label.cy, r.cy, `${sub} ${id} label centred`);
             const slot = await layoutBox(row.locator('.vjs-fanous-mi-icon'));
             checkColumn.push(dir === 'ltr' ? slot.x - r.x : r.right - slot.right);
