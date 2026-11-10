@@ -24,6 +24,7 @@ import type {
   ContactBulkResult,
   ContactStaffItem,
   ProcessingErrorsResponse,
+  IndexRebuildKind,
   ProcessingVideosResponse,
   ThumbnailRun,
   SyncResponse,
@@ -698,8 +699,8 @@ export async function retryThumbnailRun(id: string): Promise<ActionResult<{ job:
   return mutate(`/api/processing/thumbnails/${encodeURIComponent(id)}/retry`, 'POST', {});
 }
 
-/** Queues a rebuild of the ownership index of one kind (Errors page, "Index out of sync"); returns the running one if any. */
-export async function startIndexRebuild(kind: 'video' | 'channel' | 'profile'): Promise<ActionResult<{ job: AdminJob; existing: boolean }>> {
+/** Queues a rebuild of one index (Errors page, "Index out of sync"): an ownership kind or a search table; returns the running one if any. */
+export async function startIndexRebuild(kind: IndexRebuildKind): Promise<ActionResult<{ job: AdminJob; existing: boolean }>> {
   return mutate('/api/processing/index-rebuild', 'POST', { kind });
 }
 
@@ -898,4 +899,7 @@ export async function saveYoutubeImportSettings(
 
 export async function saveYoutubeImportClientSecret(value: string): Promise<ActionResult<import('@al-ummah/shared-types').YoutubeImportSettingsView>> {
   return mutate('/api/youtube-import/client-secret', 'PUT', { value });
+/** Puts failed per-object index repairs back in the repair job's queue: one, or all when `target` is omitted. */
+export async function retryIndexRepairs(target?: { entity: string; id: string }): Promise<ActionResult<{ rearmed: number; job: AdminJob | null }>> {
+  return mutate('/api/processing/index-repairs/retry', 'POST', target ?? {});
 }

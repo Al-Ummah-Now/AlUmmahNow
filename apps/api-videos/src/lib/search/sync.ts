@@ -14,8 +14,12 @@
  * The ownership index (content_ownership, lib/search/ownership.ts) is updated
  * for videos and channels too, but inline before put/delete resolves, so a
  * client that creates a channel and immediately lists its channels sees it.
- * A failed ownership write marks the index incomplete (readers scan R2 again
- * until the next pass) instead of failing the request.
+ *
+ * A failed index write (ownership or search) never fails the request and
+ * never marks a whole kind incomplete: the one object is recorded in
+ * index_repairs and the repair job (lib/search/repairs.ts, admin-jobs queue,
+ * backoff, Errors page with Retry) rewrites it from R2. Only when D1 refuses
+ * that record too is the write handed to the processor queue (retries, DLQ).
  */
 
 import { onVideoWritten } from '../media/r2-delivery';
@@ -25,8 +29,10 @@ import {
   SearchEntityType,
   MessageType,
   SearchIndexSyncPayload,
-  invalidateOwnership,
   ownershipKindFor,
+  recordIndexRepair,
+  type IndexRepairEntity,
+  type IndexRepairReason,
   syncOwnership,
   r2Version,
   syncSearchDocument,
@@ -39,6 +45,7 @@ import { logger } from '../logger';
 import { syncCommentIndex } from '../admin/commentIndex';
 import { reportIndexFailure, syncVideoCommentRows, type IndexEnv } from '../channelComments';
 import { FOOTPRINT_BUCKETS, withFootprints } from '../privacy/footprints';
+import { kickRepairJob, type RepairJobEnv } from './repairs';
 
 /** R2 binding name → indexed entity type. */
 export const SEARCH_BUCKETS: Readonly<Record<string, SearchEntityType>> = {
@@ -81,6 +88,58 @@ function decodeValue(value: unknown): unknown | undefined {
 
 type ObjectSource = () => Promise<unknown>;
 
+/** Queue producer binding (the processor applies SearchIndexSync messages, with retries). */
+type QueueBinding = { send(message: unknown): Promise<unknown> };
+
+/** What a failed index write needs to be repaired later. */
+interface RepairContext {
+  db: SearchDb;
+  /** env.queue: the processor's queue, used only when D1 refuses the repair record */
+  producer?: QueueBinding;
+  /** ADMIN_JOBS_QUEUE + SEARCH_DB: starts the repair job */
+  jobs: RepairJobEnv;
+  waitUntil: (promise: Promise<unknown>) => void;
+}
+
+/**
+ * Hand one object whose index write failed to the repair path. Recorded in
+ * index_repairs (the repair job re-reads it from R2 and rewrites both
+ * indexes); when D1 refuses that record, sent to the processor as a
+ * SearchIndexSync message (queue retries, then DLQ on the Errors page). When
+ * both fail the write is logged as lost: the next reconcile pass rewrites it.
+ * The kind is never marked incomplete.
+ */
+export async function repairLater(
+  ctx: RepairContext,
+  input: { entity: IndexRepairEntity; id: string; key?: string; reason: IndexRepairReason; error: string; object?: unknown; version?: number },
+): Promise<'recorded' | 'queued' | 'lost'> {
+  try {
+    await recordIndexRepair(ctx.db, { entity: input.entity, id: input.id, key: input.key, reason: input.reason, error: input.error });
+    ctx.waitUntil(kickRepairJob(ctx.jobs).catch(error => logger.warn('[SearchSync] Could not start the repair job', { error: error instanceof Error ? error.message : String(error) })));
+    logger.warn('[SearchSync] Index write failed; object queued for repair', { entity: input.entity, id: input.id, reason: input.reason, error: input.error });
+    return 'recorded';
+  } catch (recordError) {
+    if (ctx.producer && input.entity !== 'profile') {
+      try {
+        const payload: SearchIndexSyncPayload = { entity: input.entity, id: input.id, object: input.object ?? null, version: input.version };
+        await ctx.producer.send({ id: crypto.randomUUID(), type: MessageType.SearchIndexSync, payload, timestamp: Date.now() });
+        logger.warn('[SearchSync] Index write failed; queued for the processor', { entity: input.entity, id: input.id, error: input.error });
+        return 'queued';
+      } catch (sendError) {
+        logger.warn('[SearchSync] Could not queue the index write', { entity: input.entity, id: input.id, error: sendError instanceof Error ? sendError.message : String(sendError) });
+      }
+    }
+    logger.error('[SearchSync] Index write lost; the next reconcile pass rewrites it', {
+      alert: 'index_write_lost',
+      entity: input.entity,
+      id: input.id,
+      error: input.error,
+      recordError: recordError instanceof Error ? recordError.message : String(recordError),
+    });
+    return 'lost';
+  }
+}
+
 /**
  * Per-request coordinator: serialises updates per key so the last write wins
  * even when one request writes the same object several times.
@@ -88,16 +147,17 @@ type ObjectSource = () => Promise<unknown>;
 export class SearchSyncQueue {
   private chains = new Map<string, Promise<void>>();
 
-  /** `counts`: NOTIFICATIONS_DB, for channels' live subscriber count (#1633) */
-  constructor(private db: SearchDb, private waitUntil: (promise: Promise<unknown>) => void, private counts?: SubscriberCountDb) {}
+  /** `repair`: where a failed write goes (index_repairs); `counts`: NOTIFICATIONS_DB, for channels' live subscriber count (#1633) */
+  constructor(private db: SearchDb, private waitUntil: (promise: Promise<unknown>) => void, private repair?: RepairContext, private counts?: SubscriberCountDb) {}
 
   /** `version`: R2 `uploaded` time of the written object, or the delete time (PR-8 order guard). */
-  enqueue(type: SearchEntityType, id: string, source: ObjectSource, version: number = Date.now()): void {
+  enqueue(type: SearchEntityType, id: string, source: ObjectSource, version: number = Date.now(), key: string = id): void {
     const chainKey = `${type}:${id}`;
     const previous = this.chains.get(chainKey) ?? Promise.resolve();
     const next = previous.then(async () => {
+      let object: unknown;
       try {
-        const object = await source();
+        object = await source();
         if (object && typeof object === 'object' && 'id' in object && (object as { id: unknown }).id !== id) {
           // Not the entity record for this id (some other JSON stored under an entity-like key).
           return;
@@ -107,11 +167,13 @@ export class SearchSyncQueue {
         const result = await syncSearchDocument(this.db, type, id, object ?? null, { version, ...(subscribers !== undefined ? { subscribers } : {}) });
         logger.debug('[SearchSync] Index updated', { type, id, result });
       } catch (error) {
-        logger.warn('[SearchSync] Failed to update search index', {
-          type,
-          id,
-          error: error instanceof Error ? error.message : String(error),
-        });
+        const reason = error instanceof Error ? error.message : String(error);
+        if (!this.repair) {
+          logger.warn('[SearchSync] Failed to update search index', { type, id, error: reason });
+          return;
+        }
+        // One object, retried by the repair job (SCALABILITY-AUDIT follow-up #12): never only logged
+        await repairLater(this.repair, { entity: type, id, key, reason: 'search-write', error: reason, object, version });
       }
     });
     this.chains.set(chainKey, next);
@@ -119,37 +181,18 @@ export class SearchSyncQueue {
   }
 }
 
-/** Queue producer binding (the processor applies SearchIndexSync messages, with retries). */
-type QueueBinding = { send(message: unknown): Promise<unknown> };
-
 /**
- * Write the ownership row inline. When that write fails, the item is handed to
- * the processor as a SearchIndexSync message (retried by the queue) instead of
- * marking the whole index incomplete, which sent every reader in every isolate
- * to bucket scans at once (SCALABILITY-AUDIT AV-16). Only when the message
- * cannot be sent either is the index marked incomplete.
+ * Write the ownership row inline. A failed write is repaired per object
+ * (repairLater) instead of marking the whole index incomplete, which sent
+ * every reader in every isolate to bucket scans at once (SCALABILITY-AUDIT AV-16).
  */
-async function syncOwnershipInline(db: SearchDb, queue: QueueBinding | undefined, type: SearchEntityType, id: string, object: unknown, version: number): Promise<void> {
+async function syncOwnershipInline(ctx: RepairContext, type: SearchEntityType, id: string, object: unknown, version: number): Promise<void> {
   const kind = ownershipKindFor(type);
   if (!kind) return;
   try {
-    await syncOwnership(db, kind, id, object, Date.now(), version);
-    return;
+    await syncOwnership(ctx.db, kind, id, object, Date.now(), version);
   } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    if (queue) {
-      try {
-        const payload: SearchIndexSyncPayload = { entity: type, id, object: object ?? null, version };
-        await queue.send({ id: crypto.randomUUID(), type: MessageType.SearchIndexSync, payload, timestamp: Date.now() });
-        logger.warn('[SearchSync] Ownership index write failed; queued for the processor', { kind, id, error: reason });
-        return;
-      } catch (sendError) {
-        logger.warn('[SearchSync] Could not queue the ownership write', { kind, id, error: sendError instanceof Error ? sendError.message : String(sendError) });
-      }
-    }
-    // Only this row is marked for re-sync (#859); the rest of the index stays usable
-    await invalidateOwnership(db, kind, Date.now(), id).catch(() => undefined);
-    logger.warn('[SearchSync] Ownership index write failed; row marked for re-sync', { kind, id, error: reason });
+    await repairLater(ctx, { entity: kind, id, reason: 'ownership-write', error: error instanceof Error ? error.message : String(error), object, version });
   }
 }
 
@@ -157,12 +200,11 @@ function wrapBucket(
   bucket: R2Bucket,
   type: SearchEntityType,
   queue: SearchSyncQueue,
-  db: SearchDb,
-  producer: QueueBinding | undefined,
-  waitUntil: (p: Promise<unknown>) => void,
+  ctx: RepairContext,
   onVideo?: (decoded: unknown) => Promise<void>,
   onVideoComments?: (id: string, decoded: unknown) => Promise<void>,
 ): R2Bucket {
+  const { db, waitUntil } = ctx;
   const tracksOwnership = ownershipKindFor(type) !== null;
   // Admin comment list (lib/admin/commentIndex.ts): video comments mirrored in D1, after the response
   const tracksComments = type === 'video';
@@ -183,15 +225,11 @@ function wrapBucket(
                 const stored = await target.get(key);
                 decoded = stored ? await stored.json().catch(() => null) : null;
               } catch (error) {
-                logger.warn('[SearchSync] Could not re-read object for the ownership index; index marked incomplete', {
-                  type,
-                  id,
-                  error: error instanceof Error ? error.message : String(error),
-                });
-                await invalidateOwnership(db, ownershipKindFor(type)!, Date.now(), id).catch(() => undefined);
+                // The ownership row of this one object is rewritten by the repair job
+                await repairLater(ctx, { entity: ownershipKindFor(type)!, id, key, reason: 'reread', error: error instanceof Error ? error.message : String(error) });
               }
             }
-            if (tracksOwnership && decoded !== undefined) await syncOwnershipInline(db, producer, type, id, decoded, version);
+            if (tracksOwnership && decoded !== undefined) await syncOwnershipInline(ctx, type, id, decoded, version);
             if (tracksComments && decoded !== undefined) waitUntil(syncCommentIndex(db, id, decoded));
             // Studio's channel comment rows (lib/channelComments): inline, so the next list sees the change
             if (onVideoComments && decoded && typeof decoded === 'object') await onVideoComments(id, decoded);
@@ -202,7 +240,7 @@ function wrapBucket(
               : async () => {
                 const stored = await target.get(key);
                 return stored ? stored.json() : null;
-              }, version);
+              }, version, key);
           }
           return result;
         };
@@ -214,10 +252,10 @@ function wrapBucket(
           for (const key of Array.isArray(keys) ? keys : [keys]) {
             const id = searchIdForKey(type, key);
             if (!id) continue;
-            if (tracksOwnership) await syncOwnershipInline(db, producer, type, id, null, version);
+            if (tracksOwnership) await syncOwnershipInline(ctx, type, id, null, version);
             if (tracksComments) waitUntil(syncCommentIndex(db, id, null));
             if (onVideoComments) await onVideoComments(id, null);
-            queue.enqueue(type, id, async () => null, version);
+            queue.enqueue(type, id, async () => null, version, key);
           }
         };
       }
@@ -246,14 +284,13 @@ function channelCommentsSync(env: object, db: SearchDb, ctx: Pick<ExecutionConte
  * Profiles are not searchable, but the admin's user list reads them from the
  * ownership index (kind 'profile'), so their puts and deletes keep that row current.
  */
-function wrapProfiles(bucket: R2Bucket, db: SearchDb): R2Bucket {
+function wrapProfiles(bucket: R2Bucket, ctx: RepairContext): R2Bucket {
   const sync = async (id: string, object: unknown, version: number) => {
     try {
-      await syncOwnership(db, 'profile', id, object, Date.now(), version);
+      await syncOwnership(ctx.db, 'profile', id, object, Date.now(), version);
     } catch (error) {
-      // The heal re-reads this profile from R2 (#859)
-      await invalidateOwnership(db, 'profile', Date.now(), id).catch(() => undefined);
-      logger.warn('[SearchSync] Profile index write failed; row marked for re-sync', { id, error: error instanceof Error ? error.message : String(error) });
+      // This profile's row is rewritten by the repair job; the other profiles' rows stay trusted
+      await repairLater(ctx, { entity: 'profile', id, reason: 'ownership-write', error: error instanceof Error ? error.message : String(error) });
     }
   };
   const idFor = (key: string) => (key && !key.includes('/') && !key.includes(':') ? key : null);
@@ -340,7 +377,13 @@ export function wrapSubtitles(bucket: R2Bucket, producer: QueueBinding | undefin
 export function withSearchSync<E extends object>(env: E, ctx: Pick<ExecutionContext, 'waitUntil'>): E {
   const db = (env as { SEARCH_DB?: SearchDb }).SEARCH_DB;
   if (!db || !ctx?.waitUntil) return env;
-  const queue = new SearchSyncQueue(db, promise => ctx.waitUntil(promise), (env as { NOTIFICATIONS_DB?: SubscriberCountDb }).NOTIFICATIONS_DB);
+  const repair: RepairContext = {
+    db,
+    producer: (env as { queue?: QueueBinding }).queue,
+    jobs: env as unknown as RepairJobEnv,
+    waitUntil: promise => ctx.waitUntil(promise),
+  };
+  const queue = new SearchSyncQueue(db, promise => ctx.waitUntil(promise), repair, (env as { NOTIFICATIONS_DB?: SubscriberCountDb }).NOTIFICATIONS_DB);
   const wrapped: Record<string, unknown> = { ...(env as Record<string, unknown>) };
   // Privacy footprints (lib/privacy/footprints.ts): who each write names, so erasure needs no bucket scan
   for (const binding of FOOTPRINT_BUCKETS) {
@@ -353,11 +396,11 @@ export function withSearchSync<E extends object>(env: E, ctx: Pick<ExecutionCont
       // The hook gets the unwrapped env: its own writes need no search sync of their own
       const onVideo = type === 'video' && (env as { MEDIA?: unknown }).MEDIA ? (decoded: unknown) => onVideoWritten(env as never, decoded) : undefined;
       const onVideoComments = type === 'video' ? channelCommentsSync(env, db, ctx) : undefined;
-      wrapped[binding] = wrapBucket(bucket, type, queue, db, (env as { queue?: QueueBinding }).queue, promise => ctx.waitUntil(promise), onVideo, onVideoComments);
+      wrapped[binding] = wrapBucket(bucket, type, queue, repair, onVideo, onVideoComments);
     }
   }
   const profiles = wrapped.profiles as R2Bucket | undefined;
-  if (profiles && typeof profiles.put === 'function') wrapped.profiles = wrapProfiles(profiles, db);
+  if (profiles && typeof profiles.put === 'function') wrapped.profiles = wrapProfiles(profiles, repair);
   const subtitles = wrapped.subtitles as R2Bucket | undefined;
   if (subtitles && typeof subtitles.put === 'function') wrapped.subtitles = wrapSubtitles(subtitles, (env as { queue?: QueueBinding }).queue, promise => ctx.waitUntil(promise));
   return wrapped as E;

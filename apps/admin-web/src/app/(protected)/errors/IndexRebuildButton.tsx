@@ -5,17 +5,19 @@ import { useRouter } from 'next/navigation';
 import { startIndexRebuild } from '@/lib/api/admin';
 import type { ActionResult } from '@/lib/api/errors';
 import type { AdminJob } from '@al-ummah/shared-types';
+import type { IndexRebuildKind } from '@/lib/api/types';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
 
 /**
- * Rebuild for an "Index out of sync" row: queues the ownership index rebuild
- * job (admin-api /api/processing/index-rebuild → api-videos admin job
- * 'search.rebuild-ownership', retried with backoff, failed jobs listed below
- * with Retry). A rebuild already running is reported instead of queuing another.
+ * Rebuild for an "Index out of sync" row: queues the index's rebuild job
+ * (admin-api /api/processing/index-rebuild → api-videos admin job
+ * 'search.rebuild-ownership' for an ownership kind, 'search.reconcile' for a
+ * search table; retried with backoff, failed jobs listed below with Retry).
+ * A rebuild already running is reported instead of queuing another.
  */
-export function IndexRebuildButton({ kind, active }: { kind: 'video' | 'channel' | 'profile'; active: boolean }) {
+export function IndexRebuildButton({ kind, active }: { kind: IndexRebuildKind; active: boolean }) {
   const router = useRouter();
   const { t } = useLanguage();
   const [busy, setBusy] = useState(false);
@@ -43,7 +45,7 @@ export function IndexRebuildButton({ kind, active }: { kind: 'video' | 'channel'
 
   return (
     <div className="flex flex-col items-start gap-1">
-      <button type="button" className={secondaryButtonClass} onClick={() => void rebuild()} disabled={busy || active} data-testid={`index-rebuild-${kind}`}>
+      <button type="button" className={secondaryButtonClass} onClick={() => void rebuild()} disabled={busy || active} data-testid={`index-rebuild-${kind.replace(':', '-')}`}>
         {busy ? t('errorsPage.rebuilding') : t('errorsPage.rebuild')}
       </button>
       {message && (

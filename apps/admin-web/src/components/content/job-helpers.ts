@@ -29,7 +29,7 @@ export function jobTargetHref(job: Pick<AdminJob, 'targetKind' | 'targetId'> & P
   // The thumbnail shape check spans many videos: it opens Processing health
   if (job.kind === 'videos.repair-thumbnails') return '/processing';
   // The index rebuild covers a whole bucket: its flag lives on the Errors page
-  if (job.kind === 'search.rebuild-ownership') return '/errors';
+  if (job.kind === 'search.rebuild-ownership' || job.kind === 'search.reconcile' || job.kind === 'search.repair-objects') return '/errors';
   // The discovery ranking covers the whole site: it stays on the jobs list
   if (job.kind === 'discovery.rank') return '/jobs';
   const base = job.targetKind === 'channel' ? '/channels' : job.targetKind === 'video' ? '/videos' : '/users';

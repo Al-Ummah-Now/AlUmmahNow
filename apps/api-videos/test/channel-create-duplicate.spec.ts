@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { withSearchSync } from '../src/lib/search/sync';
 import { isOwnershipComplete, runOwnershipPass } from '../src/lib/search/ownership';
 import { ChannelCreate } from '../src/endpoints/channel/channelCreate';
-import { MemoryBucket, MemoryQueue, buildApp } from './helpers';
+import { MemoryBucket, MemoryQueue, buildApp, JobsQueue, drainJobs } from './helpers';
 import { SqliteD1 } from './search-sqlite-d1';
 
 function channel(id: string, overrides: Record<string, unknown> = {}) {
@@ -36,6 +36,7 @@ function env() {
 		channel_tabs: new MemoryBucket(),
 		profiles: new MemoryBucket({ owner: { id: 'owner', email: 'owner@test.local' } }),
 		queue: new MemoryQueue(),
+		ADMIN_JOBS_QUEUE: new JobsQueue(),
 	};
 	const wrapped = withSearchSync(raw, ctx);
 	return { db, raw, wrapped, ctx, background };
@@ -89,6 +90,8 @@ describe('POST /api/channels duplicate-name guard', () => {
 		assert.equal((await create(e, 'Old Name')).status, 200);
 		assert.ok(e.background.length >= 1, 'a heal was scheduled');
 		await Promise.all(e.background);
+		assert.equal(e.raw.ADMIN_JOBS_QUEUE.sent.length, 1, 'as a queued rebuild job');
+		await drainJobs(e.raw as never);
 		assert.equal(await isOwnershipComplete(e.db, 'channel'), true);
 	});
 });
