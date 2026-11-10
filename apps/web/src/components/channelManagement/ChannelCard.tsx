@@ -4,7 +4,7 @@ import { ChannelCardProps } from './types';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getLocalizedValue } from '@al-ummah/shared-types';
-import { AvatarImage, CoverImage, normalizeImageUrl } from '@/components/media/ProfileImages';
+import { AvatarImage, CoverImage } from '@/components/media/ProfileImages';
 
 /**
  * ChannelCard Component
@@ -48,15 +48,16 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
         className="relative h-32 overflow-hidden bg-gradient-to-br from-blue-500 to-purple-600 dark:from-blue-700 dark:to-purple-800 flex items-center justify-center"
         data-testid="channel-card-cover"
       >
-        {normalizeImageUrl(channel.coverUrl) ? (
-          <CoverImage src={channel.coverUrl} alt="" testId="channel-card-cover-image" />
-        ) : (
-          <div className="relative w-16 h-16 rounded-full overflow-hidden bg-white dark:bg-gray-700 flex items-center justify-center text-2xl font-bold text-gray-800 dark:text-white">
-            {normalizeImageUrl(channel.avatarUrl)
-              ? <AvatarImage src={channel.avatarUrl} alt="" fallback={null} testId="channel-card-avatar-image" />
-              : name.charAt(0).toUpperCase()}
-          </div>
-        )}
+        {/* The cover fills the strip; the avatar always sits in its bottom corner (a card with a cover used to drop the avatar) */}
+        <CoverImage src={channel.coverUrl} alt="" testId="channel-card-cover-image" />
+        <div
+          className="absolute bottom-2 left-3 z-10 w-16 h-16 rounded-full overflow-hidden flex items-center justify-center text-2xl font-bold bg-[var(--fanous-color-surface-raised)] text-[var(--fanous-color-text-primary)] ring-2 ring-[var(--fanous-color-surface-raised)] shadow-md"
+          data-testid="channel-card-avatar"
+        >
+          {/* The initial shows when there is no avatar or it fails to load (the image covers it otherwise) */}
+          <span aria-hidden="true">{name.charAt(0).toUpperCase()}</span>
+          <AvatarImage src={channel.avatarUrl} alt="" fallback={null} testId="channel-card-avatar-image" />
+        </div>
       </div>
 
       {/* Channel Info */}

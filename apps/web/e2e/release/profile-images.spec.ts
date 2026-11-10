@@ -103,5 +103,7 @@ test.describe('Release: profile and channel images', () => {
 
     await page.goto(`${target().web}/en/profile`);
     await expectLoadedImage(page.getByTestId('channel-card-cover-image').first(), 'profile channel card cover', 100);
+    // A card with a cover still shows the channel avatar on top of it
+    await expectLoadedImage(page.getByTestId('channel-card-avatar-image').first(), 'profile channel card avatar', 40);
   });
 });
