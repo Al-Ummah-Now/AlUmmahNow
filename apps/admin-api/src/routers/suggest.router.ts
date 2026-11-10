@@ -32,6 +32,7 @@ import { getContactMessage, listContactMessages, type ContactMessageRow } from '
 import { getErrorGroup, listErrorGroups, type ErrorGroupRow } from '../lib/errors-store';
 import { hasPermission, type Permission } from '../lib/roles';
 import { logger } from '../lib/logger';
+import { getInvite, inviteStatusByUser, listInvites, toView, type InviteView } from '../lib/invites';
 import type { AdminBindings, AuthContext } from '../base/types';
 
 type Env = { Bindings: AdminBindings & VideosClientEnv; Variables: { auth?: AuthContext } };
@@ -118,6 +119,14 @@ const fromContact = (r: ContactMessageRow): AdminSuggestion => ({
   imageUrl: null,
 });
 
+const fromInvite = (r: InviteView): AdminSuggestion => ({
+  kind: 'invite',
+  id: r.id,
+  label: r.email,
+  secondary: clip(r.name),
+  imageUrl: null,
+});
+
 const fromError = (r: ErrorGroupRow): AdminSuggestion => ({
   kind: 'error',
   id: r.id,
@@ -150,11 +159,25 @@ async function search(c: C, kind: AdminSuggestKind, q: string, limit: number): P
     const { groups } = await listErrorGroups(c.env.REPORTS_DB, { q, limit, offset: 0 });
     return groups.map(fromError);
   }
+  if (kind === 'invite') {
+    const { items } = await listInvites(c.env.REPORTS_DB, { q, limit });
+    return items.map(fromInvite);
+  }
   const page = await callVideos<AdminPage<unknown>>(c.env, CONTENT_PATH[kind], {
     query: { q, pageSize: limit },
     actorId: c.get('auth')?.userId,
   });
-  return page.items.map(CONTENT_MAP[kind]);
+  const suggestions = page.items.map(CONTENT_MAP[kind]);
+  return kind === 'user' ? withInviteBadges(c, suggestions) : suggestions;
+}
+
+/** Invited users who have not signed in yet are pickable like any user, with an "Invited" badge. */
+async function withInviteBadges(c: C, suggestions: AdminSuggestion[]): Promise<AdminSuggestion[]> {
+  const invites = await inviteStatusByUser(c.env.REPORTS_DB, suggestions.map((s) => s.id)).catch(() => new Map());
+  return suggestions.map((s) => {
+    const status = invites.get(s.id)?.status;
+    return status && status !== 'active' && status !== 'revoked' ? { ...s, badge: 'invited' as const } : s;
+  });
 }
 
 async function byId(c: C, kind: AdminSuggestKind, id: string): Promise<AdminSuggestion | null> {
@@ -165,6 +188,10 @@ async function byId(c: C, kind: AdminSuggestKind, id: string): Promise<AdminSugg
   if (kind === 'error') {
     const row = await getErrorGroup(c.env.REPORTS_DB, id);
     return row ? fromError(row) : null;
+  }
+  if (kind === 'invite') {
+    const row = await getInvite(c.env.REPORTS_DB, id);
+    return row ? fromInvite(toView(row)) : null;
   }
   // Every content list matches an exact id in q except comments, which have no page of their own
   if (kind === 'comment') return null;

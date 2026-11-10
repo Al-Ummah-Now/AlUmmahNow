@@ -4,7 +4,8 @@ import { listUsers } from '@/lib/api/content';
 import type { AdminPage, AdminUserRow } from '@/lib/api/content-types';
 import { getI18n } from '@/i18n/server';
 import { formatDate } from '@/i18n/translate';
-import { ErrorAlert, linkClass } from '@/components/ui';
+import { ErrorAlert, linkClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
+import { InviteStatusChip } from '@/components/invites/InviteStatusChip';
 import { FilterForm } from '@/components/content/FilterForm';
 import { Chip, EmptyState, MonoId, Notice, PageHeader, Pager, tableWrapClass, tdClass, thClass, wideOnly } from '@/components/content/parts';
 import { PAGE_SIZE, hrefWith, pickParams, type SearchParams } from '@/components/content/query';
@@ -27,7 +28,12 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
 
   return (
     <div>
-      <PageHeader deletedKind="user" title={t('users.title')} subtitle={t('users.subtitle')} total={data?.total} t={t} />
+      <PageHeader deletedKind="user" title={t('users.title')} subtitle={t('users.subtitle')} total={data?.total} t={t}>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/users/invites" className={secondaryButtonClass} data-testid="users-invites-link">{t('invites.listLink')}</Link>
+          <Link href="/users/invites/new" className={primaryButtonClass} data-testid="users-invite-new">{t('invites.inviteButton')}</Link>
+        </div>
+      </PageHeader>
       <FilterForm
         action="/users"
         label={t('users.title')}
@@ -81,6 +87,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
                       <div className="flex flex-wrap gap-1">
                         {u.isBanned ? <Chip tone="bad" testId="chip-banned">{t('users.banned')}</Chip> : <span className="text-fg-subtle text-sm">{t('users.active')}</span>}
                         {u.profileDeleted && <Chip tone="neutral">{t('users.profileDeleted')}</Chip>}
+                        {u.invite && u.invite.status !== 'active' && <InviteStatusChip status={u.invite.status} t={t} />}
                       </div>
                     </td>
                     <td className={`${tdClass} ${wideOnly} text-sm text-fg-muted whitespace-nowrap`}>{u.createdAt ? <time dateTime={u.createdAt}>{formatDate(u.createdAt, locale)}</time> : t('content.none')}</td>
