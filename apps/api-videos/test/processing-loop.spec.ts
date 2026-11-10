@@ -4,7 +4,7 @@
  */
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyPlan, bunnyPhase, CHECK_BACKOFF_SECONDS, MAX_CHECK_ATTEMPTS, nextCheckDelaySeconds, planSync } from '../src/lib/processing/sync';
+import { applyPlan, bunnyPhase, CHECK_BACKOFF_SECONDS, MAX_CHECK_ATTEMPTS, nextCheckDelaySeconds, planSync, uploadStatusView } from '../src/lib/processing/sync';
 import {
 	decideNext,
 	handleProcessingCheckBatch,
@@ -58,11 +58,21 @@ function makeEnv(videos = new MemoryBucket()) {
 }
 
 let bunnyResponses: Record<string, { status: number; body?: unknown }> = {};
+/** HEAD status of Bunny's auto thumbnail on the CDN, per video (default 200) */
+let thumbnailStatus: Record<string, number> = {};
+let thumbnailChecks: string[] = [];
 const realFetch = globalThis.fetch;
 beforeEach(() => {
 	bunnyResponses = {};
+	thumbnailStatus = {};
+	thumbnailChecks = [];
 	globalThis.fetch = (async (input: RequestInfo | URL) => {
 		const url = String(input);
+		const thumb = /^https:\/\/vz-[^/]+\/([^/]+)\/thumbnail\.jpg/.exec(url);
+		if (thumb) {
+			thumbnailChecks.push(url);
+			return new Response(null, { status: thumbnailStatus[thumb[1]] ?? 200 });
+		}
 		const id = url.split('/videos/')[1];
 		const r = bunnyResponses[id] ?? { status: 404 };
 		return new Response(r.body ? JSON.stringify(r.body) : null, { status: r.status });
@@ -77,6 +87,8 @@ describe('planSync', () => {
 		assert.equal(bunnyPhase(null), 'missing');
 		assert.equal(bunnyPhase({ status: 0 }), 'awaiting_upload');
 		for (const s of [1, 2, 3]) assert.equal(bunnyPhase({ status: s }), 'encoding');
+		for (const s of [1, 2, 3]) assert.equal(bunnyPhase({ status: s, availableResolutions: '240p,360p' }), 'playable');
+		assert.equal(bunnyPhase({ status: 3, availableResolutions: '' }), 'encoding');
 		for (const s of [4, 7, 8, 9]) assert.equal(bunnyPhase({ status: s }), 'ready');
 		for (const s of [5, 6]) assert.equal(bunnyPhase({ status: s }), 'failed');
 	});
@@ -136,13 +148,15 @@ describe('planSync', () => {
 });
 
 describe('backoff and loop decisions', () => {
-	it('30 s → 1 m → 2 m → 5 m, capped', () => {
-		assert.deepEqual([0, 1, 2, 3, 4, 50].map(nextCheckDelaySeconds), [30, 60, 120, 300, 300, 300]);
-		assert.deepEqual([...CHECK_BACKOFF_SECONDS], [30, 60, 120, 300]);
+	it('15 s → 15 s → 30 s → 1 m → 2 m → 5 m, capped', () => {
+		assert.deepEqual([0, 1, 2, 3, 4, 5, 50].map(nextCheckDelaySeconds), [15, 15, 30, 60, 120, 300, 300]);
+		assert.deepEqual([...CHECK_BACKOFF_SECONDS], [15, 15, 30, 60, 120, 300]);
 	});
 
 	it('pending re-queues, terminal outcomes stop, the attempt cap stops', () => {
-		assert.deepEqual(decideNext('pending', 0), { kind: 'again', delaySeconds: 60, attempt: 1 });
+		assert.deepEqual(decideNext('pending', 0), { kind: 'again', delaySeconds: 15, attempt: 1 });
+		assert.deepEqual(decideNext('playable', 2), { kind: 'again', delaySeconds: 60, attempt: 3 });
+		assert.deepEqual(decideNext('playable', MAX_CHECK_ATTEMPTS - 1), { kind: 'done', outcome: 'ready' });
 		assert.deepEqual(decideNext('ready', 3), { kind: 'done', outcome: 'ready' });
 		assert.deepEqual(decideNext('failed', 3), { kind: 'done', outcome: 'failed' });
 		assert.deepEqual(decideNext('pending', MAX_CHECK_ATTEMPTS - 1), { kind: 'done', outcome: 'attempts_exhausted' });
@@ -158,7 +172,7 @@ describe('processing-check loop', () => {
 		const start = await startProcessingLoop(env, ID, { reason: 'upload-complete', now: NOW });
 		assert.equal(start.started, true);
 		assert.equal(env.PROCESSING_CHECK_QUEUE.sent.length, 1);
-		assert.equal(env.PROCESSING_CHECK_QUEUE.sent[0].delaySeconds, 30);
+		assert.equal(env.PROCESSING_CHECK_QUEUE.sent[0].delaySeconds, 15);
 
 		// Second start while the loop is alive: deduplicated
 		assert.equal((await startProcessingLoop(env, ID, { reason: 'sweep', now: NOW })).started, false);
@@ -173,7 +187,7 @@ describe('processing-check loop', () => {
 		};
 		await deliver();
 		assert.equal(env.PROCESSING_CHECK_QUEUE.sent.length, 1, 'still encoding: queued again');
-		assert.equal(env.PROCESSING_CHECK_QUEUE.sent[0].delaySeconds, 60);
+		assert.equal(env.PROCESSING_CHECK_QUEUE.sent[0].delaySeconds, 15);
 		assert.equal(env.PROCESSING_CHECK_QUEUE.sent[0].body.attempt, 1);
 
 		bunnyResponses[ID] = { status: 200, body: FINISHED };
@@ -300,6 +314,94 @@ describe('internal processing endpoints', () => {
 		const res = await (await createProcessingInternalRouter().request('/errors', {}, env)).json() as any;
 		assert.deepEqual(res.result.videos.map((v: any) => v.id), [ID]);
 		assert.deepEqual(res.result.deadLetters, []);
+	});
+});
+
+describe('ready at the first encoded resolution', () => {
+	const TRANSCODING_240 = { guid: ID, status: 3, encodeProgress: 35, availableResolutions: '240p', length: 34, width: 1920, height: 1080 };
+
+	it('status 3 with a resolution: ready now, outcome playable (keep checking)', () => {
+		const plan = planSync(stuck(), TRANSCODING_240, { host: HOST, now: NOW, thumbnailExists: true });
+		assert.equal(plan.phase, 'playable');
+		assert.equal(plan.outcome, 'playable');
+		assert.equal(plan.patch.uploadStatus, 'ready');
+		assert.equal(plan.terminalTransition, 'ready');
+		assert.deepEqual(plan.patch.availableResolutions, ['240p']);
+		assert.equal(plan.patch.playUrl, `https://${HOST}/${ID}/playlist.m3u8`);
+	});
+
+	it('status 3 without a resolution: still processing', () => {
+		const plan = planSync(stuck(), { status: 3, encodeProgress: 10, availableResolutions: '' }, { host: HOST, now: NOW });
+		assert.equal(plan.outcome, 'pending');
+		assert.equal(plan.patch.uploadStatus, undefined);
+	});
+
+	it('status 4 after playable: final, more resolutions, no second transition', () => {
+		const video = stuck();
+		applyPlan(video, planSync(video, TRANSCODING_240, { host: HOST, now: NOW, thumbnailExists: true }));
+		const final = planSync(video, FINISHED, { host: HOST, now: NOW, thumbnailExists: true });
+		assert.equal(final.outcome, 'ready');
+		assert.equal(final.terminalTransition, null, 'already ready: not announced again');
+		assert.deepEqual(final.patch.availableResolutions, ['360p', '480p', '720p', '240p', '1080p']);
+	});
+
+	it('a thumbnail that 404s is flagged pending and keeps the loop going, even at Finished', () => {
+		const video = stuck();
+		const plan = planSync(video, FINISHED, { host: HOST, now: NOW, thumbnailExists: false });
+		assert.equal(plan.outcome, 'playable');
+		assert.equal(plan.patch.thumbnailPending, true);
+		applyPlan(video, plan);
+		const later = planSync(video, FINISHED, { host: HOST, now: NOW, thumbnailExists: true });
+		assert.equal(later.outcome, 'ready');
+		assert.deepEqual(later.unset, ['thumbnailPending']);
+	});
+
+	it('the status endpoint maps phases the same way', () => {
+		assert.equal(uploadStatusView(bunnyPhase(TRANSCODING_240), TRANSCODING_240).status, 'ready');
+		assert.equal(uploadStatusView(bunnyPhase({ status: 3 }), { status: 3 }).status, 'processing');
+		assert.equal(uploadStatusView(bunnyPhase({ status: 0 }), { status: 0 }).status, 'uploading');
+		assert.equal(uploadStatusView(bunnyPhase(FINISHED), FINISHED).progress, 100);
+		assert.equal(uploadStatusView(bunnyPhase({ status: 5 }), { status: 5 }).status, 'failed');
+	});
+
+	it('the loop announces ready once at the first playable check and keeps going until Finished', async () => {
+		const env = makeEnv();
+		await env.videos.put(ID, JSON.stringify(stuck()));
+		await startProcessingLoop(env, ID, { reason: 'upload-complete', now: NOW });
+		const deliver = async () => {
+			const msg = env.PROCESSING_CHECK_QUEUE.sent.shift();
+			await handleProcessingCheckBatch({ messages: [{ body: msg.body, attempts: 1, ack: () => undefined, retry: () => assert.fail('retried') }] }, env);
+		};
+		const announced = () => env.queue.sent.filter((m: any) => m.body.type === MessageType.VideoProcessingCompleted).length;
+
+		bunnyResponses[ID] = { status: 200, body: TRANSCODING_240 };
+		await deliver();
+		let video = JSON.parse(await (await env.videos.get(ID)).text());
+		assert.equal(video.uploadStatus, 'ready', 'watchable at the first resolution');
+		assert.equal(announced(), 1);
+		assert.equal(env.PROCESSING_CHECK_QUEUE.sent.length, 1, 'still checking for the other resolutions');
+
+		await deliver(); // still 240p only: no change, no announcement
+		assert.equal(announced(), 1);
+
+		bunnyResponses[ID] = { status: 200, body: FINISHED };
+		await deliver();
+		video = JSON.parse(await (await env.videos.get(ID)).text());
+		assert.equal(video.availableResolutions.length, 5);
+		assert.equal(video.processingCheck.outcome, 'ready');
+		assert.equal(env.PROCESSING_CHECK_QUEUE.sent.length, 0, 'Finished: the loop exits');
+		assert.equal(announced(), 1, 'announced exactly once');
+	});
+
+	it('the thumbnail check is signed when token auth is on', async () => {
+		const env = { ...makeEnv(), BUNNY_SIGN_URLS: 'true', BUNNY_SIGN_HOSTNAME: HOST, BUNNY_TOKEN_KEY: 'token-key' };
+		await env.videos.put(ID, JSON.stringify(stuck()));
+		thumbnailStatus[ID] = 404;
+		const result = await syncVideoFromBunny(env, ID, { now: NOW, bunny: FINISHED as never });
+		assert.equal(result.plan?.outcome, 'playable');
+		assert.match(thumbnailChecks[0], new RegExp(`^https://${HOST}/${ID}/thumbnail\\.jpg\\?token=[\\w-]+&expires=\\d+$`));
+		const view = JSON.parse(await (await env.videos.get(ID)).text());
+		assert.equal(view.thumbnailPending, true);
 	});
 });
 

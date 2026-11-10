@@ -36,14 +36,24 @@ export interface SyncableVideo {
 	fileSize?: number;
 	width?: number;
 	height?: number;
+	/** Bunny's auto thumbnail does not exist yet: clients show the placeholder */
+	thumbnailPending?: boolean;
 	processingIssue?: { kind: 'encode_failed' | 'needs_reupload' | 'stalled'; reason?: string; at: string };
 }
 
-export type BunnyPhase = 'awaiting_upload' | 'encoding' | 'ready' | 'failed' | 'missing';
+/**
+ * `playable`: Bunny is still encoding (status 1-3) but at least one resolution
+ * is done, so the playlist plays. Bunny encodes the low resolutions first, so
+ * this is minutes (often seconds) before `ready` (status 4, every resolution).
+ */
+export type BunnyPhase = 'awaiting_upload' | 'encoding' | 'playable' | 'ready' | 'failed' | 'missing';
 
 export type SyncOutcome =
 	/** Encoded: record is (now) ready with resolutions, duration and URLs */
 	| 'ready'
+	/** Watchable (record ready) but Bunny is still adding resolutions or the
+	 *  thumbnail does not exist yet: keep checking until Finished */
+	| 'playable'
 	/** Bunny reported an encode / upload failure */
 	| 'failed'
 	/** Bytes never arrived (or the Bunny video is gone): the owner must upload again */
@@ -63,6 +73,8 @@ export interface SyncOptions {
 	stallAfterMs?: number;
 	/** When the current check loop started (stall clock); defaults to dateCreated */
 	loopStartedAt?: string;
+	/** Bunny's auto thumbnail answered (true) / 404'd (false); undefined: not checked */
+	thumbnailExists?: boolean;
 }
 
 export interface SyncPlan {
@@ -88,7 +100,31 @@ export function bunnyPhase(bunny: BunnyVideoState | null): BunnyPhase {
 	if (status === 4 || status >= 7) return 'ready';
 	if (status === 5 || status === 6) return 'failed';
 	if (status === 0) return 'awaiting_upload';
-	return 'encoding';
+	return parseResolutions(bunny.availableResolutions).length > 0 ? 'playable' : 'encoding';
+}
+
+/**
+ * What the owner's upload-status endpoint reports for a Bunny state (same
+ * mapping as the check loop): playable counts as ready.
+ */
+export function uploadStatusView(phase: BunnyPhase, bunny: BunnyVideoState | null): {
+	status: 'uploading' | 'processing' | 'ready' | 'failed';
+	progress: number;
+	message: string;
+} {
+	const encode = bunny?.encodeProgress ?? 0;
+	switch (phase) {
+		case 'awaiting_upload':
+			return { status: 'uploading', progress: Math.max(10, encode), message: 'Video upload queued' };
+		case 'encoding':
+			return { status: 'processing', progress: Math.max(25, encode), message: 'Video is being encoded' };
+		case 'playable':
+			return { status: 'ready', progress: Math.max(50, encode), message: 'Video is ready; more resolutions are on the way' };
+		case 'ready':
+			return { status: 'ready', progress: 100, message: 'Video is ready' };
+		default:
+			return { status: 'failed', progress: 0, message: 'Video processing failed' };
+	}
 }
 
 function parseResolutions(value: string | null | undefined): string[] {
@@ -156,7 +192,9 @@ export function planSync(video: SyncableVideo, bunny: BunnyVideoState | null, op
 		return { outcome, phase, patch, unset, reason, terminalTransition: terminal };
 	};
 
-	if (phase === 'ready' && bunny) {
+	if ((phase === 'ready' || phase === 'playable') && bunny) {
+		// Playable at the first encoded resolution: ready now (announced once,
+		// by the status change); later checks only add resolutions
 		setStatus('ready');
 		clearIssue();
 		const resolutions = parseResolutions(bunny.availableResolutions);
@@ -171,6 +209,15 @@ export function planSync(video: SyncableVideo, bunny: BunnyVideoState | null, op
 		if (video.thumbnailType !== 'custom') {
 			const thumb = canonicalUrl(video.thumbnailUrl, opts.host, video.id, bunny.thumbnailFileName || 'thumbnail.jpg');
 			if (thumb) patch.thumbnailUrl = thumb;
+			if (opts.thumbnailExists === false && !video.thumbnailPending) patch.thumbnailPending = true;
+			if (opts.thumbnailExists === true && video.thumbnailPending) unset.push('thumbnailPending');
+		}
+		const thumbnailMissing = video.thumbnailType !== 'custom' && opts.thumbnailExists === false;
+		if (phase === 'playable' || thumbnailMissing) {
+			// Stop after the stall limit even if Bunny never reports Finished: it plays
+			const stallAfter = opts.stallAfterMs ?? DEFAULT_STALL_AFTER_MS;
+			if (now - loopStarted >= stallAfter) return finish('ready');
+			return finish('playable');
 		}
 		return finish('ready');
 	}
@@ -227,8 +274,13 @@ export function applyPlan<T extends SyncableVideo>(video: T, plan: SyncPlan): bo
 	return changed;
 }
 
-/** Delay before the next check: 30 s, 1 m, 2 m, then every 5 m. */
-export const CHECK_BACKOFF_SECONDS = [30, 60, 120, 300] as const;
+/**
+ * Delay before the next check: 15 s, 15 s, 30 s, 1 m, 2 m, then every 5 m.
+ * Measured on QA (3 min 1080p clip): Bunny's first resolution was playable
+ * 24 s after the upload and every resolution done at 49 s, so the first
+ * checks are close together.
+ */
+export const CHECK_BACKOFF_SECONDS = [15, 15, 30, 60, 120, 300] as const;
 
 export function nextCheckDelaySeconds(attempt: number): number {
 	const index = Math.max(0, Math.min(attempt, CHECK_BACKOFF_SECONDS.length - 1));
