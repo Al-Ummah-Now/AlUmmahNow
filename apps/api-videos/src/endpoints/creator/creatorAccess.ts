@@ -9,7 +9,7 @@
  */
 import type { Context, Next } from 'hono';
 import { CREATOR_ERROR_CODES, type CreatorAccess } from '@al-ummah/shared-types';
-import { countOwnedChannels, resolveCreator } from '../../lib/creatorTiers';
+import { countChannelSlots, reserveChannelSlot, resolveCreator, settleChannelSlot } from '../../lib/creatorTiers';
 import { logger } from '../../lib/logger';
 import { invitationOnly, UPLOAD_SESSION_OPERATION } from '../../middleware/upload-limits';
 import { windowStart } from '../../middleware/rate-limit';
@@ -41,7 +41,7 @@ export async function uploadUsage(db: D1Database, userId: string, nowMs = Date.n
 
 export async function creatorAccess(db: D1Database, userId: string, roles: readonly string[] | undefined): Promise<CreatorAccess> {
 	const creator = await resolveCreator(db, { userId, roles });
-	const [channelsOwned, usage] = await Promise.all([countOwnedChannels(db, userId), uploadUsage(db, userId)]);
+	const [channelsOwned, usage] = await Promise.all([countChannelSlots(db, userId), uploadUsage(db, userId)]);
 	const tier = creator.tier;
 	const maxChannels = !tier || tier.unlimited ? null : tier.maxChannels;
 	return {
@@ -72,6 +72,7 @@ export async function channelCreateGate(c: Context, next: Next) {
 	if (c.req.method !== 'POST') return next();
 	const userId = c.get('userId') as string | undefined;
 	if (!userId) return next();
+	let reservation: string | null = null;
 	try {
 		const creator = await resolveCreator(c.env.SEARCH_DB, { userId, roles: rolesOf(c) });
 		if (!creator.tier) {
@@ -80,8 +81,9 @@ export async function channelCreateGate(c: Context, next: Next) {
 		}
 		const max = creator.tier.unlimited ? null : creator.tier.maxChannels;
 		if (max !== null) {
-			const owned = await countOwnedChannels(c.env.SEARCH_DB, userId);
-			if (owned >= max) {
+			reservation = await reserveChannelSlot(c.env.SEARCH_DB, userId, max);
+			if (!reservation) {
+				const owned = await countChannelSlots(c.env.SEARCH_DB, userId);
 				logger.info('[Creator] Channel create refused: channel limit', { userId, owned, max, tierId: creator.tier.id });
 				return c.json(
 					{ success: false, code: CREATOR_ERROR_CODES.channelLimit, error: `You can own up to ${max} channels`, maxChannels: max, channelsOwned: owned },
@@ -93,5 +95,21 @@ export async function channelCreateGate(c: Context, next: Next) {
 		logger.error('[Creator] Channel create gate failed; refusing', { userId, error: error instanceof Error ? error.message : String(error) });
 		return unavailable(c);
 	}
-	return next();
+	if (!reservation) return next();
+
+	let channelId: string | null = null;
+	try {
+		await next();
+		if (c.res.status < 300) {
+			const body = (await c.res.clone().json().catch(() => null)) as { result?: { channel?: { id?: unknown } } } | null;
+			const id = body?.result?.channel?.id;
+			channelId = typeof id === 'string' && id ? id : null;
+			// Created but no id in the answer: keep the slot taken until it expires
+			if (!channelId) return;
+		}
+	} finally {
+		await settleChannelSlot(c.env.SEARCH_DB, userId, reservation, channelId).catch((error) =>
+			logger.error('[Creator] Channel slot not settled', { userId, error: error instanceof Error ? error.message : String(error) }),
+		);
+	}
 }

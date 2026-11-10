@@ -36,6 +36,7 @@ import {
   RATE_LIMIT_UNAVAILABLE_RETRY_SECONDS,
   refundRateLimit,
   releaseRateLimit,
+  windowStart,
   type RateLimitConfig,
   type RateLimitResult,
 } from './rate-limit';
@@ -45,11 +46,19 @@ export const UPLOAD_SESSION_OPERATION = 'video_upload_session';
 /** TUS create and complete: a looser bucket so one session cannot be replayed without bound */
 export const UPLOAD_CONTINUE_OPERATION = 'video_upload_continue';
 
-/** Routes that open new upload sessions (POST only) */
+/**
+ * Routes that create video content (POST only): the upload sessions, plus the
+ * direct video create (POST /api/videos makes a Bunny video) and live stream
+ * create. Each needs a creator tier and counts as one session.
+ */
 export const UPLOAD_SESSION_PATHS = [
+  '/api/videos',
+  '/api/videos/',
   '/api/videos/upload',
   '/api/videos/upload/initiate',
   '/api/videos/upload/batch/initiate',
+  '/api/live-streams',
+  '/api/live-streams/',
 ] as const;
 
 /**
@@ -254,9 +263,43 @@ export function uploadContinueLimitMiddleware() {
  * when it was started in a window that is still open. `subjectId` is the
  * tier holder it was counted against (the channel owner, else the uploader).
  */
-export async function refundUploadSession(db: D1Database | undefined, subjectId: string, startedAt: string | number | undefined): Promise<void> {
-  if (!db || !subjectId) return;
+export async function refundUploadSession(
+  db: D1Database | undefined,
+  subjectId: string,
+  startedAt: string | number | undefined,
+  opts: { source?: 'client' | 'sweep'; nowMs?: number } = {},
+): Promise<boolean> {
+  if (!db || !subjectId) return false;
   const at = typeof startedAt === 'number' ? startedAt : startedAt ? Date.parse(startedAt) : NaN;
-  if (!Number.isFinite(at)) return;
+  if (!Number.isFinite(at)) return false;
+  // A failure the client reports itself is refunded only up to a daily cap:
+  // otherwise initiate → report failed → initiate would never reach a limit.
+  // Failures the server finds (the sweep) are always refunded.
+  if (opts.source === 'client' && !(await takeClientRefund(db, subjectId, opts.nowMs ?? Date.now()))) {
+    logger.warn('[Uploads] Client-reported failure not refunded: daily refund cap reached', { subjectId });
+    return false;
+  }
   await refundRateLimit(db, subjectId, UPLOAD_SESSION_OPERATION, 1, at);
+  return true;
+}
+
+/** Refunds for failures the client reports, per tier holder and day. */
+export const CLIENT_REFUNDS_PER_DAY = 20;
+const CLIENT_REFUND_OPERATION = 'video_upload_client_refund';
+
+/** Takes one client refund from today's allowance, atomically (one upsert). False when none is left. */
+async function takeClientRefund(db: D1Database, subjectId: string, nowMs: number): Promise<boolean> {
+  const window = windowStart('day', Math.floor(nowMs / 1000));
+  const row = await db
+    .prepare(
+      `INSERT INTO upload_rate_windows (user_id, operation, period, window_start, count) VALUES (?, ?, 'day', ?, 1)
+       ON CONFLICT (user_id, operation, period) DO UPDATE SET
+         count = CASE WHEN window_start = excluded.window_start THEN count + 1 ELSE 1 END,
+         window_start = excluded.window_start
+       WHERE upload_rate_windows.window_start <> excluded.window_start OR upload_rate_windows.count < ?
+       RETURNING count`,
+    )
+    .bind(subjectId, CLIENT_REFUND_OPERATION, window, CLIENT_REFUNDS_PER_DAY)
+    .first<{ count: number }>();
+  return row !== null;
 }
