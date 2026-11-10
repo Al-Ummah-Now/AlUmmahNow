@@ -27,6 +27,8 @@ interface FileQueueItemProps {
   onResume: () => void;
   onCancel: () => void;
   onRetry: () => void;
+  /** This row's category picker (batch uploader) */
+  categorySlot?: React.ReactNode;
 }
 
 export function FileQueueItem({
@@ -37,6 +39,7 @@ export function FileQueueItem({
   onResume,
   onCancel,
   onRetry,
+  categorySlot,
 }: FileQueueItemProps) {
   const { t, lang } = useLanguage();
   // Processing result pushed in real time (shown here instead of a toast, NotificationCenter)
@@ -173,6 +176,12 @@ export function FileQueueItem({
               </div>
             )}
           </div>
+
+          {categorySlot && (
+            <div className="mb-3 max-w-md" data-testid="batch-file-category">
+              {categorySlot}
+            </div>
+          )}
 
           {/* Progress Bar */}
           {(file.status === 'uploading' || file.status === 'paused' || file.status === 'processing') && (

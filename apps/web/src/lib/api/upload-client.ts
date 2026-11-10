@@ -21,7 +21,7 @@ import type { UploadFingerprint } from '@/lib/upload/fingerprint';
 type ApiResult<T> = { success: boolean; result?: T; error?: string };
 
 interface CallOptions {
-  method: 'GET' | 'POST';
+  method: 'GET' | 'POST' | 'PUT';
   path: string;
   channelId: string;
   body?: unknown;

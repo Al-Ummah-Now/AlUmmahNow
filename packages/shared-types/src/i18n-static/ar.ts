@@ -822,6 +822,13 @@ export const AR_TRANSLATIONS: AppTranslations = {
     alreadyUploaded: 'تم رفعه من قبل',
     viewVideo: 'مشاهدة الفيديو',
     clearFinished: 'مسح المكتملة',
+    batchSettings: 'إعدادات هذه الدفعة',
+    categoryForAll: 'تصنيف لكل الفيديوهات',
+    categoryForAllHint: 'يمكن أن يكون لكل فيديو تصنيفه الخاص. إن تُرك فارغًا يقترح الذكاء الاصطناعي تصنيفًا لكل فيديو.',
+    videoCategory: 'التصنيف',
+    categorySaving: 'جارٍ الحفظ…',
+    categorySaved: 'تم الحفظ',
+    categorySaveFailed: 'لم يُحفظ. حاول مجددًا.',
     errors: {
       tooFewFiles: 'يرجى تحديد ملف فيديو واحد على الأقل',
       tooManyFiles: 'الحد الأقصى 15 ملفاً. لقد حددت {count} ملف.',

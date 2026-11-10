@@ -822,6 +822,13 @@ export const EN_TRANSLATIONS: AppTranslations = {
     alreadyUploaded: 'Already uploaded',
     viewVideo: 'View video',
     clearFinished: 'Clear finished',
+    batchSettings: 'Settings for this batch',
+    categoryForAll: 'Category for all videos',
+    categoryForAllHint: 'Each video can still have its own. Left empty, AI suggests one for each video.',
+    videoCategory: 'Category',
+    categorySaving: 'Saving…',
+    categorySaved: 'Saved',
+    categorySaveFailed: 'Not saved. Try again.',
     errors: {
       tooFewFiles: 'Please select at least 1 video file',
       tooManyFiles: 'Maximum 15 files allowed. You selected {count} files.',

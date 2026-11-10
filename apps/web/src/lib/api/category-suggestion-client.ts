@@ -28,3 +28,12 @@ export async function getCategorySuggestion(query: { draftKey: string } | { vide
   );
   return res.success ? res.result ?? null : null;
 }
+
+/** Save a video's category as the uploader's choice (null clears it). Works while the file is still uploading. */
+export async function saveVideoCategory(videoId: string, category: string | null, channelId: string): Promise<boolean> {
+  const { accessToken: _token, ...res } = await callUploadApi<unknown>(
+    { method: 'PUT', path: `/api/videos/${encodeURIComponent(videoId)}`, channelId, body: { category }, retries: 2 },
+    'Category not saved',
+  );
+  return res.success;
+}

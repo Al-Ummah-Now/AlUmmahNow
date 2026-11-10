@@ -964,6 +964,13 @@ export interface AppTranslations {
     alreadyUploaded: string;
     viewVideo: string;
     clearFinished: string;
+    batchSettings: string;
+    categoryForAll: string;
+    categoryForAllHint: string;
+    videoCategory: string;
+    categorySaving: string;
+    categorySaved: string;
+    categorySaveFailed: string;
     errors: {
       tooFewFiles: string;
       tooManyFiles: string;
