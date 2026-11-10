@@ -10,6 +10,7 @@
  * upload flows can use it too.
  */
 
+import { Highlight } from '@/components/ui/Autocomplete';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Search, X, Film, Check } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -206,6 +207,10 @@ export default function VideoPicker({ channelId, selected, onChange, excludeIds,
           <span className="ck pl-ck" data-on={allOnPage || undefined} aria-hidden="true">{allOnPage && <Check />}</span>
           {p.selectAllOnPage}
         </label>
+        {/* A searchable checklist (several can be ticked), so not a combobox: the match count is announced */}
+        <span className="sr-only" role="status" aria-live="polite" data-testid="picker-match-count">
+          {debounced && !loading && page ? (selectable.length === 1 ? t.search.foundOneResult : t.search.foundResults.replace('{count}', String(selectable.length))) : ''}
+        </span>
         <span className={`text-sm ${MUTED}`} aria-live="polite" data-testid="picker-selected-count">
           {counted(selected.length, p.selectedOne, p.selectedOther)}
         </span>
@@ -264,7 +269,7 @@ export default function VideoPicker({ channelId, selected, onChange, excludeIds,
                     {duration && <span className="pl-dur">{duration}</span>}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className={`line-clamp-2 text-sm font-medium ${TEXT}`}>{title}</span>
+                    <span className={`line-clamp-2 text-sm font-medium ${TEXT}`} dir="auto"><Highlight text={title} query={debounced} /></span>
                     <span className="mt-1 flex flex-wrap gap-1">
                       {video.isShort && <span className="bdg bdg-ok">{p.shortBadge}</span>}
                       {video.isPublic === false && <span className="bdg pl-bdg-muted">{t.playlist.privateLabel}</span>}

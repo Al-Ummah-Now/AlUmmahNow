@@ -12,7 +12,7 @@ import { EN_TRANSLATIONS } from '@/lib/i18n/translations/en';
 import { AR_TRANSLATIONS } from '@/lib/i18n/translations/ar';
 import { getChannelPlaylists, getChannelVideos } from '@/lib/api/channels';
 import { getVideoById } from '@/lib/api/videos';
-import { searchContent } from '@/lib/api/search';
+import { fetchSuggestions } from '@/lib/search/suggest-client';
 import type { PopulatedChannelSection } from '../sectionData';
 
 jest.mock('@/hooks/useLanguage', () => ({
@@ -26,12 +26,12 @@ jest.mock('@/hooks/useLanguage', () => ({
 }));
 jest.mock('@/lib/api/channels', () => ({ getChannelVideos: jest.fn(), getChannelPlaylists: jest.fn() }));
 jest.mock('@/lib/api/videos', () => ({ getVideoById: jest.fn() }));
-jest.mock('@/lib/api/search', () => ({ searchContent: jest.fn() }));
+jest.mock('@/lib/search/suggest-client', () => ({ fetchSuggestions: jest.fn() }));
 
 const mockVideos = getChannelVideos as jest.MockedFunction<typeof getChannelVideos>;
 const mockPlaylists = getChannelPlaylists as jest.MockedFunction<typeof getChannelPlaylists>;
 const mockVideo = getVideoById as jest.MockedFunction<typeof getVideoById>;
-const mockSearch = searchContent as jest.MockedFunction<typeof searchContent>;
+const mockSuggest = fetchSuggestions as jest.MockedFunction<typeof fetchSuggestions>;
 
 const CHANNEL = 'c1';
 const cs = EN_TRANSLATIONS.channelSections;
@@ -154,9 +154,9 @@ describe('SectionForm payloads', () => {
     submit();
     expect(await screen.findByText(cs.form.pickRequired)).toBeInTheDocument();
     const options = await screen.findByTestId('video-picker-options');
-    expect(options.querySelector('[data-video-id="private"]')).toBeNull();
-    fireEvent.click(options.querySelector('[data-video-id="v2"]')!);
-    fireEvent.click(options.querySelector('[data-video-id="v1"]')!);
+    expect(options.querySelector('[data-option-id="private"]')).toBeNull();
+    fireEvent.click(options.querySelector('[data-option-id="v2"]')!);
+    fireEvent.click(options.querySelector('[data-option-id="v1"]')!);
     expect(screen.getByText('2 of 20 selected')).toBeInTheDocument();
     submit();
     expect(onSubmit).toHaveBeenCalledWith({ type: 'featured_videos', title: 'featured_videos section', videoIds: ['v2', 'v1'] });
@@ -185,8 +185,8 @@ describe('SectionForm payloads', () => {
     expect(await screen.findByText(cs.form.pastedNotFound)).toBeInTheDocument();
 
     const options = await screen.findByTestId('spotlight-returning-options');
-    await waitFor(() => expect(options.querySelector('[data-video-id="v1"]')).not.toBeNull());
-    fireEvent.click(options.querySelector('[data-video-id="v1"]')!);
+    await waitFor(() => expect(options.querySelector('[data-option-id="v1"]')).not.toBeNull());
+    fireEvent.click(options.querySelector('[data-option-id="v1"]')!);
     submit();
     expect(onSubmit).toHaveBeenCalledWith({ type: 'channel_spotlight', title: 'channel_spotlight section', returningVideoId: 'v1' });
   });
@@ -205,9 +205,9 @@ describe('SectionForm payloads', () => {
   it('single and multiple playlists use the playlist picker', async () => {
     const onSubmit = renderForm({ sectionType: 'single_playlist' });
     const options = await screen.findByTestId('playlist-picker-options');
-    expect(options.querySelector('[data-playlist-id="hidden"]')).toBeNull();
-    fireEvent.click(options.querySelector('[data-playlist-id="p1"]')!);
-    fireEvent.click(options.querySelector('[data-playlist-id="p2"]')!);
+    expect(options.querySelector('[data-option-id="hidden"]')).toBeNull();
+    fireEvent.click(options.querySelector('[data-option-id="p1"]')!);
+    fireEvent.click(options.querySelector('[data-option-id="p2"]')!);
     submit();
     expect(onSubmit).toHaveBeenCalledWith({ type: 'single_playlist', title: 'single_playlist section', playlistId: 'p2', itemCount: 12 });
   });
@@ -215,8 +215,8 @@ describe('SectionForm payloads', () => {
   it('featured playlists need a title', async () => {
     const onSubmit = renderForm({ sectionType: 'multiple_playlists' });
     const options = await screen.findByTestId('playlist-picker-options');
-    fireEvent.click(options.querySelector('[data-playlist-id="p2"]')!);
-    fireEvent.click(options.querySelector('[data-playlist-id="p1"]')!);
+    fireEvent.click(options.querySelector('[data-option-id="p2"]')!);
+    fireEvent.click(options.querySelector('[data-option-id="p1"]')!);
     submit();
     expect(onSubmit).not.toHaveBeenCalled();
     fireEvent.change(screen.getByTestId('section-title-input'), { target: { value: 'Courses' } });
@@ -225,23 +225,18 @@ describe('SectionForm payloads', () => {
   });
 
   it('featured channels are found by search, excluding this channel', async () => {
-    mockSearch.mockResolvedValue({
-      ok: true,
-      data: {
-        success: true, query: 'sh', type: 'channel', nextCursor: null, hasMore: false, relaxed: false, searchTime: 1,
-        results: [
-          { type: 'channel', id: CHANNEL, score: 1, channel: { id: CHANNEL, name: 'Me', isVerified: false, subscribersCount: 0, videosCount: 0 } },
-          { type: 'channel', id: 'c2', score: 1, channel: { id: 'c2', name: 'Sheikh A', isVerified: true, subscribersCount: 9, videosCount: 3 } },
-        ],
-      },
-    } as never);
+    mockSuggest.mockResolvedValue([
+      { type: 'channel', id: CHANNEL, text: 'Me' },
+      { type: 'channel', id: 'c2', text: 'Sheikh A', handle: 'sheikha', subtitle: '@sheikha', verified: true },
+    ]);
     const onSubmit = renderForm({ sectionType: 'featured_channels' });
     fireEvent.change(screen.getByTestId('section-title-input'), { target: { value: 'Our scholars' } });
     fireEvent.change(screen.getByTestId('channel-picker-search'), { target: { value: '@sh' } });
     const options = await screen.findByTestId('channel-picker-options', {}, { timeout: 2000 });
-    expect(mockSearch).toHaveBeenCalledWith({ q: 'sh', type: 'channel', limit: 10 });
-    expect(options.querySelector(`[data-channel-id="${CHANNEL}"]`)).toBeNull();
-    fireEvent.click(options.querySelector('[data-channel-id="c2"]')!);
+    await waitFor(() => expect(options.querySelector('[data-option-id="c2"]')).not.toBeNull());
+    expect(mockSuggest).toHaveBeenCalledWith('sh', expect.objectContaining({ types: ['channel'], limit: 10 }));
+    expect(options.querySelector(`[data-option-id="${CHANNEL}"]`)).toBeNull();
+    fireEvent.click(options.querySelector('[data-option-id="c2"]')!);
     submit();
     expect(onSubmit).toHaveBeenCalledWith({ type: 'featured_channels', title: 'Our scholars', channelIds: ['c2'] });
   });

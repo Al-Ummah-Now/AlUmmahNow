@@ -17,7 +17,6 @@ export {
   unlikeVideoComment,
   dislikeVideoComment,
   searchVideos,
-  getSearchSuggestions,
   getTrendingVideos,
   getRecommendedVideos,
   initiateVideoUploadApi,

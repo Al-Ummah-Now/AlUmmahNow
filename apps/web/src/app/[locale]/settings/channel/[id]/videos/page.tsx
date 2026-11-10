@@ -1,7 +1,10 @@
 "use client";
 
+import { FilterCombobox, type FilterItem } from '@/components/ui/FilterCombobox';
+import { matchesSearch } from '@/lib/search/match';
+import { getLocalizedValue } from '@al-ummah/shared-types';
 import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Search, UploadCloud, Trash2, Eye, Edit, ListPlus, MoreVertical, Check } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -123,6 +126,15 @@ export default function ChannelVideosPage() {
     }
   }, [userId, channelId, isOwner, locale]);
 
+  // Suggestions under the search box: this list's videos, in the viewer's language
+  const searchItems = useMemo<FilterItem[]>(() => videos.map((video) => ({
+    id: video.id,
+    label: getLocalizedValue(video.titleLocalized, video.title, locale),
+    keywords: [video.title, ...Object.values(video.titleLocalized ?? {})],
+    thumbnailUrl: video.thumbnailUrl || undefined,
+    thumbnailShape: 'wide' as const,
+  })), [videos, locale]);
+
   // Apply filters and search
   useEffect(() => {
     let filtered = [...videos];
@@ -130,7 +142,7 @@ export default function ChannelVideosPage() {
     // Search filter
     if (searchQuery) {
       filtered = filtered.filter((video) =>
-        video.title.toLowerCase().includes(searchQuery.toLowerCase())
+        matchesSearch(searchQuery, video.title, ...Object.values(video.titleLocalized ?? {}))
       );
     }
 
@@ -285,17 +297,17 @@ export default function ChannelVideosPage() {
           {/* Search and Filters */}
           <div className="c space-y-4 !p-4">
             {/* Search */}
-            <div className="relative">
-              <Search className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-[var(--fanous-color-text-muted)]" size={20} aria-hidden="true" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={t.video.searchVideos}
-                aria-label={t.video.searchVideos}
-                className="f-input w-full py-2 pe-4 ps-10"
-              />
-            </div>
+            <FilterCombobox
+              className="relative"
+              value={searchQuery}
+              onValueChange={setSearchQuery}
+              items={searchItems}
+              onPick={(item) => router.push(`/${locale}/video/${encodeURIComponent(item.id)}/edit`)}
+              label={t.video.searchVideos ?? t.search.searchInputLabel}
+              testId="channel-videos-search"
+              inputClassName="f-input w-full py-2 pe-10 ps-10"
+              icon={<Search className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-[var(--fanous-color-text-muted)]" size={20} aria-hidden="true" />}
+            />
 
             {/* Filters Row */}
             <div className="flex flex-wrap gap-4">

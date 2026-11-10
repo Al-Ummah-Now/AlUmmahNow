@@ -1,11 +1,12 @@
 'use client';
 
-import { use, useState, useEffect, useCallback } from 'react';
+import { FilterCombobox, type FilterItem } from '@/components/ui/FilterCombobox';
+import { matchesSearch } from '@/lib/search/match';
+import { use, useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { CommunityPost, PostType, PostStatus } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PostCard } from '@/components/Community/management/PostCard';
@@ -29,13 +30,18 @@ interface CommunityManagementPageProps {
 export default function CommunityManagementPage({ params }: CommunityManagementPageProps) {
   const router = useRouter();
   const { locale, id } = use(params);
-  const { t, isRTL } = useLanguage();
+  const { t } = useLanguage();
 
   const [activeTab, setActiveTab] = useState<PostStatus>(PostStatus.PUBLISHED);
   const [posts, setPosts] = useState<CommunityPost[]>([]);
   const [channelName, setChannelName] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  // Suggestions under the search box: the start of each post (or its poll/quiz question)
+  const searchItems = useMemo<FilterItem[]>(() => posts.map((post) => {
+    const text = (post.content || post.poll?.question || post.quiz?.question || '').replace(/\s+/g, ' ').trim();
+    return { id: post.id, label: text.length > 80 ? `${text.slice(0, 80)}…` : text, keywords: [post.poll?.question, post.quiz?.question] };
+  }).filter((item) => item.label), [posts]);
   const [filterType, setFilterType] = useState<PostType | 'all'>('all');
 
   // Fetch channel name
@@ -97,14 +103,12 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
   };
 
   const filteredPosts = posts.filter(post => {
-    const matchesSearch = !searchQuery ||
-      post.content?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      post.poll?.question?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      post.quiz?.question?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesQuery = !searchQuery ||
+      matchesSearch(searchQuery, post.content, post.poll?.question, post.quiz?.question);
 
     const matchesType = filterType === 'all' || post.type === filterType;
 
-    return matchesSearch && matchesType;
+    return matchesQuery && matchesType;
   });
 
   const tabCounts = {
@@ -150,23 +154,16 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
             flex-col sm:flex-row
             gap-3
           ">
-            <div className="relative flex-1">
-              <Search className="
-                absolute
-                left-3 rtl:right-3 rtl:left-auto
-                top-1/2
-                transform -translate-y-1/2
-                w-4 h-4
-                text-muted-foreground
-              " />
-              <Input
-                placeholder={t.community.searchPosts}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 rtl:pr-10 rtl:pl-3"
-                dir={isRTL ? 'rtl' : 'ltr'}
-              />
-            </div>
+            <FilterCombobox
+              className="relative flex-1"
+              value={searchQuery}
+              onValueChange={setSearchQuery}
+              items={searchItems}
+              label={t.community.searchPosts}
+              testId="community-posts-search"
+              inputClassName="h-9 w-full rounded-md border border-input bg-transparent ps-10 pe-9 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              icon={<Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />}
+            />
 
             <div className="flex gap-3">
               <Select value={filterType} onValueChange={(v) => setFilterType(v as PostType | 'all')}>

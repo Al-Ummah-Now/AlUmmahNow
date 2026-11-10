@@ -2,6 +2,7 @@
 
 import React, { useRef, useEffect, useState } from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
+import { ChannelSearch } from './ChannelSearch';
 import { useLanguage } from '@/hooks/useLanguage';
 import { logger } from '@/lib/logger-client';
 import { getChannelTabConfig } from '@/lib/api/channel-tabs';
@@ -265,7 +266,7 @@ export function ChannelTabBar({
             role="tablist"
             data-testid="channel-tabs"
             dir={isRTL ? 'rtl' : 'ltr'}
-            className="flex overflow-x-auto scrollbar-hide scroll-smooth"
+            className="flex min-w-0 overflow-x-auto scrollbar-hide scroll-smooth"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
           >
             {visibleTabs.map((tab) => (
@@ -307,6 +308,10 @@ export function ChannelTabBar({
               </svg>
             </button>
           )}
+
+          <div className="ms-auto flex shrink-0 justify-end">
+            <ChannelSearch channelId={channelId} />
+          </div>
         </div>
       </div>
     </div>

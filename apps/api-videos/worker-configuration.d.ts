@@ -32,6 +32,7 @@ interface __BaseEnv_Env {
 	INTERNAL_API_KEY: SecretsStoreSecret;
 	BUNNY_TOKEN_KEY: SecretsStoreSecret;
 	WATCH_TIME_LIMITER: RateLimit;
+	SUGGEST_LIMITER: RateLimit;
 	CF_VERSION_METADATA: WorkerVersionMetadata;
 	ENVIRONMENT: string;
 	ZONE: string;
@@ -81,6 +82,7 @@ declare namespace Cloudflare {
 		INTERNAL_API_KEY: SecretsStoreSecret;
 		BUNNY_TOKEN_KEY: SecretsStoreSecret;
 		WATCH_TIME_LIMITER: RateLimit;
+		SUGGEST_LIMITER: RateLimit;
 		CF_VERSION_METADATA: WorkerVersionMetadata;
 		ENVIRONMENT: string;
 		ZONE: string;

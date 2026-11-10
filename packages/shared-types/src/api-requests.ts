@@ -93,8 +93,18 @@ export interface SearchQueryParams {
 }
 
 export interface SearchSuggestion {
+  /** Text shown (and searched when there is no item to open) */
   text: string;
-  type: 'query' | 'channel' | 'category' | 'video';
+  type: 'query' | 'channel' | 'category' | 'video' | 'playlist';
+  /** Id of the video, channel or playlist to open */
+  id?: string;
+  /** Video thumbnail, channel avatar or playlist cover */
+  thumbnailUrl?: string;
+  /** Secondary line: channel name for videos and playlists, @handle for channels */
+  subtitle?: string;
+  /** Channel @handle (channels only) */
+  handle?: string;
+  verified?: boolean;
   count?: number;
   metadata?: Record<string, unknown>;
 }

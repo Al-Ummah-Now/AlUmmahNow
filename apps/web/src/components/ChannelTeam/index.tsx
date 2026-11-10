@@ -20,6 +20,8 @@ import {
   TeamError, type TeamErrorCode, type TeamMember, type TeamState,
 } from '@/lib/channels/team';
 import type { AppTranslations } from '@/lib/i18n';
+import { Autocomplete, type AutocompleteOption } from '@/components/ui/Autocomplete';
+import { fetchSuggestions } from '@/lib/search/suggest-client';
 
 interface ChannelTeamProps {
   channelId: string;
@@ -53,6 +55,17 @@ export default function ChannelTeam({ channelId, role, locale }: ChannelTeamProp
   const router = useRouter();
   const { user, reloadChannels } = useMultiAccount();
   const ids = { handle: useId(), role: useId(), status: useId() };
+
+  // People are found through their channels: suggest public channels by name or @handle
+  const loadPeople = useCallback(async (query: string, signal: AbortSignal): Promise<AutocompleteOption[]> => {
+    const found = await fetchSuggestions(query.replace(/^@+/, ''), { types: ['channel'], limit: 6, signal });
+    return found
+      .filter((s) => s.handle && s.id !== channelId)
+      .map((s) => ({
+        id: s.id ?? s.handle!, label: s.text, subtitle: `@${s.handle}`, keywords: [s.handle],
+        thumbnailUrl: s.thumbnailUrl, thumbnailShape: 'round' as const, value: s.handle,
+      }));
+  }, [channelId]);
 
   const canView = can(role, 'members.view');
   const grantable = CHANNEL_MEMBER_ROLES.filter((r) => canManageRole(role, r));
@@ -163,9 +176,21 @@ export default function ChannelTeam({ channelId, role, locale }: ChannelTeamProp
           <div className="grid gap-4 sm:grid-cols-[1fr_auto_auto] sm:items-end">
             <div>
               <label htmlFor={ids.handle} className="mb-1 block text-sm font-medium text-[var(--fanous-color-text-secondary)]">{tr.handleLabel}</label>
-              <input id={ids.handle} dir="ltr" value={handle} onChange={(e) => setHandle(e.target.value.replace(/\s/g, ''))}
-                placeholder={tr.handlePlaceholder} autoCapitalize="off" autoCorrect="off" spellCheck={false} maxLength={64}
-                disabled={busy === 'add'} className={FIELD} data-testid="team-add-handle" />
+              <Autocomplete
+                inputId={ids.handle}
+                value={handle}
+                onValueChange={(next) => setHandle(next.replace(/\s/g, ''))}
+                load={loadPeople}
+                loadKey={channelId}
+                minChars={2}
+                onSelect={(option) => setHandle(`@${option.value as string}`)}
+                hideNoMatches
+                listLabel={tr.handleLabel}
+                testId="team-add-handle"
+                optionTestId={() => 'team-add-suggestion'}
+                inputProps={{ dir: 'ltr', placeholder: tr.handlePlaceholder, autoCapitalize: 'off', maxLength: 64, disabled: busy === 'add' }}
+                inputClassName={FIELD}
+              />
             </div>
             <div>
               <label htmlFor={ids.role} className="mb-1 block text-sm font-medium text-[var(--fanous-color-text-secondary)]">{tr.roleLabel}</label>

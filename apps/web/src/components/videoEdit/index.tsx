@@ -1,4 +1,6 @@
 'use client';
+import { TagAutocomplete } from '@/components/ui/TagAutocomplete';
+import { useChannelTags } from '@/hooks/useChannelTags';
 import { logger } from '@/lib/logger-client';
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -62,6 +64,8 @@ export default function VideoEdit({
 }: VideoEditProps) {
   const { t, isRTL } = useLanguage();
   const { confirm: confirmDiscard, dialog: discardDialog } = useConfirm();
+  // The channel's own tags, suggested as you type a new one
+  const knownTags = useChannelTags([video.channelId || channelId]);
   const [activeTab, setActiveTab] = useState<'en' | 'ar'>('en');
   const [isSaving, setIsSaving] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -173,8 +177,8 @@ export default function VideoEdit({
     setSuccess(null);
   };
 
-  const handleAddTag = () => {
-    const tag = normalizeTag(tagInput);
+  const handleAddTag = (raw: string = tagInput) => {
+    const tag = normalizeTag(raw);
     if (tag && !formData.tags.includes(tag)) {
       setFormData((prev) => ({
         ...prev,
@@ -404,20 +408,21 @@ export default function VideoEdit({
             {t.video.videoTags}
           </label>
           <div className="flex gap-2 mb-3">
-            <input
-              type="text"
+            <TagAutocomplete
+              className="flex-1"
               value={tagInput}
-              data-testid="video-edit-tag-input"
-              aria-label={t.video.enterTag}
-              onChange={(e) => setTagInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
-              className="flex-1 px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-white"
-              placeholder={t.video.enterTag}
+              onValueChange={setTagInput}
+              tags={knownTags}
+              used={formData.tags}
+              onAdd={(tag) => handleAddTag(tag)}
+              label={t.video.enterTag ?? t.video.addTag ?? t.search.searchInputLabel}
+              testId="video-edit-tag-input"
+              inputClassName="w-full px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-white"
             />
             <button
               type="button"
               data-testid="video-edit-add-tag"
-              onClick={handleAddTag}
+              onClick={() => handleAddTag()}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
             >
               <Plus size={16} />

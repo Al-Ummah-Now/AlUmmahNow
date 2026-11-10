@@ -58,6 +58,8 @@ export interface SearchChannelPayload {
   descriptionLocalized?: Record<string, string>;
   avatarUrl?: string;
   coverUrl?: string;
+  /** Public @handle, without the @ */
+  handle?: string;
   isVerified: boolean;
   subscribersCount: number;
   videosCount: number;
@@ -314,6 +316,7 @@ export function projectChannel(raw: unknown): SearchRow<'channel'> | null {
       descriptionLocalized,
       avatarUrl: str(obj.avatarUrl),
       coverUrl: str(obj.coverUrl),
+      handle: str(obj.handle),
       isVerified: obj.isVerified === true,
       subscribersCount,
       videosCount,

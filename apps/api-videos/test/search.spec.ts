@@ -268,6 +268,47 @@ describe('searchIndex (D1 FTS5)', () => {
 		const fiqh = await suggestFromIndex(db, 'فق', 5);
 		assert.ok(fiqh.some(s => s.type === 'category' && s.metadata?.category === 'fiqh'));
 	});
+
+	it('suggests requested types with ids, thumbnails and subtitles, grouped and capped', async () => {
+		const db = seededDb();
+		await seed(db);
+		const all = await suggestFromIndex(db, 'seer', 8, { types: ['video', 'channel', 'playlist'], now: NOW });
+		assert.deepEqual([...new Set(all.map(s => s.type))], ['channel', 'video', 'playlist']);
+		const playlist = all.find(s => s.type === 'playlist')!;
+		assert.equal(playlist.id, 'pl-seerah');
+		assert.equal(playlist.subtitle, 'Seerah Studies');
+		const video = all.find(s => s.type === 'video')!;
+		assert.equal(video.subtitle, 'Seerah Studies');
+		assert.ok(video.id?.startsWith('v-seerah'));
+		const only = await suggestFromIndex(db, 'seer', 8, { types: ['playlist'], now: NOW });
+		assert.deepEqual(only.map(s => s.id), ['pl-seerah']);
+		const capped = await suggestFromIndex(db, 'seer', 2, { types: ['video', 'channel', 'playlist'], now: NOW });
+		assert.equal(capped.length, 2);
+		assert.ok(capped.some(s => s.type === 'video'), 'videos keep at least one slot');
+	});
+
+	it('limits suggestions to one channel and never suggests hidden content', async () => {
+		const db = seededDb();
+		await seed(db);
+		const inChannel = await suggestFromIndex(db, 'seer', 8, { types: ['video', 'channel', 'playlist', 'category'], channelId: 'ch-ar', now: NOW });
+		assert.deepEqual(inChannel, []);
+		const own = await suggestFromIndex(db, 'seer', 8, { types: ['video', 'playlist'], channelId: 'ch-en', now: NOW });
+		assert.ok(own.length >= 2 && own.every(s => s.type === 'video' || s.type === 'playlist'));
+		assert.deepEqual(await suggestFromIndex(db, 'tafsir', 8, { types: ['video', 'channel', 'playlist'], now: NOW }), []);
+	});
+
+	it('suggests a channel by its localized name and @handle', async () => {
+		const db = seededDb();
+		await seed(db);
+		await syncSearchDocument(db, 'channel', 'ch-handle', { id: 'ch-handle', name: 'Fiqh Daily', handle: 'fiqhdaily', dateCreated: new Date(NOW).toISOString() }, { now: NOW });
+		const [byHandle] = await suggestFromIndex(db, 'fiqhd', 5, { types: ['channel'], now: NOW });
+		assert.equal(byHandle.id, 'ch-handle');
+		assert.equal(byHandle.handle, 'fiqhdaily');
+		assert.equal(byHandle.subtitle, '@fiqhdaily');
+		const [localized] = await suggestFromIndex(db, 'hadith ch', 5, { types: ['channel'], now: NOW });
+		assert.equal(localized.text, 'Hadith Channel', 'the localized name that matched is shown');
+		assert.equal(localized.verified, true);
+	});
 });
 
 describe('search index sync on R2 writes', () => {
@@ -432,6 +473,26 @@ describe('search endpoints', () => {
 		const { routes, env } = await app();
 		const body = await (await routes.request('/api/search/suggestions?q=%D8%A7%D9%84%D8%B5%D9%84%D8%A7%D9%87', {}, env)).json() as any;
 		assert.equal(body[0].text, 'أحكام الصَّلاة');
+	});
+
+	it('GET /api/search/suggestions filters by types and channel, fills old rows\' handles, and rate limits', async () => {
+		const { routes, env } = await app();
+		const playlists = await (await routes.request('/api/search/suggestions?q=seer&types=playlist,bogus', {}, env)).json() as any;
+		assert.deepEqual(playlists.map((s: any) => s.type), ['playlist']);
+		const scoped = await (await routes.request('/api/search/suggestions?q=seer&types=video&channelId=ch-ar', {}, env)).json() as any;
+		assert.deepEqual(scoped, []);
+
+		const channels = new MemoryBucket({ 'ch-en': { id: 'ch-en', name: 'Seerah Studies', handle: 'seerah' } });
+		const withHandle = await (await routes.request('/api/search/suggestions?q=seer&types=channel', {}, { ...env, channels })).json() as any;
+		assert.equal(withHandle[0].handle, 'seerah');
+		assert.equal(withHandle[0].subtitle, '@seerah');
+
+		let calls = 0;
+		const SUGGEST_LIMITER = { limit: async () => ({ success: ++calls <= 1 }) };
+		assert.equal((await routes.request('/api/search/suggestions?q=seer', {}, { ...env, SUGGEST_LIMITER })).status, 200);
+		const limited = await routes.request('/api/search/suggestions?q=seer', {}, { ...env, SUGGEST_LIMITER });
+		assert.equal(limited.status, 429);
+		assert.equal(limited.headers.get('Retry-After'), '60');
 	});
 
 	it('activeSeasonalRails ignores invalid, disabled and out-of-window rails', () => {

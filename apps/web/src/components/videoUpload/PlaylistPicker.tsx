@@ -6,6 +6,7 @@
  * create one inline (name, visibility, optional description); a new playlist
  * is selected at once. Colours come from Fanous tokens only (light, dark, RTL).
  */
+import { Highlight } from '@/components/ui/Autocomplete';
 import React, { useId, useMemo, useState } from 'react';
 import { ChevronDown, ListVideo, Lock, Plus, X } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -180,6 +181,10 @@ export function PlaylistPicker({
             />
           </div>
 
+          {/* A filtered checklist (several can be ticked), so not a combobox: the count is announced instead */}
+          <p className="sr-only" role="status" aria-live="polite" data-testid={`${testId}-count`}>
+            {query.trim() && !loading && !failed ? (matches.length === 1 ? t.search.foundOneResult : t.search.foundResults.replace('{count}', String(matches.length))) : ''}
+          </p>
           <fieldset className="max-h-56 overflow-y-auto" aria-labelledby={`${base}-label`}>
             {loading ? (
               <p className="py-1 text-sm text-[var(--fanous-color-text-muted)]" role="status">{t.common.loading}</p>
@@ -203,7 +208,7 @@ export function PlaylistPicker({
                     checked={selected.includes(p.id)}
                     onChange={() => onChange(togglePlaylist(selected, p.id))}
                   />
-                  <span className="min-w-0 flex-1 truncate text-sm text-[var(--fanous-color-text-primary)]">{nameOf(p)}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm text-[var(--fanous-color-text-primary)]" dir="auto"><Highlight text={nameOf(p)} query={query} /></span>
                   {p.isPublic === false && <Lock className="h-3.5 w-3.5 text-[var(--fanous-color-text-muted)]" aria-label={t.playlist.privateLabel} />}
                 </label>
               ))

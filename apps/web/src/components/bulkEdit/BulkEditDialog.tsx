@@ -5,6 +5,7 @@
  */
 'use client';
 
+import { TagAutocomplete } from '@/components/ui/TagAutocomplete';
 import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import React, { useEffect, useState } from 'react';
 import { VIDEO_CATEGORIES } from '@al-ummah/shared-types';
@@ -31,13 +32,17 @@ interface BulkEditDialogProps {
   onOpenChange: (open: boolean) => void;
   /** Resolves when the request finished (the dialog closes on success). */
   onApply: (changes: BulkVideoChanges) => Promise<boolean>;
+  /** Tags of the selected videos (suggested for "remove") */
+  selectedTags?: string[];
+  /** Tags used on the creator's videos (suggested for "add") */
+  knownTags?: string[];
 }
 
 const fieldClass =
   'mt-1 block w-full min-h-11 rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-900 ' +
   'dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-600';
 
-export function BulkEditDialog({ open, count, onOpenChange, onApply }: BulkEditDialogProps) {
+export function BulkEditDialog({ open, count, onOpenChange, onApply, selectedTags = [], knownTags = [] }: BulkEditDialogProps) {
   const { t, lang, isRTL } = useLanguage();
   const b = t.bulkEdit;
   const [form, setForm] = useState<BulkEditForm>(EMPTY_BULK_EDIT);
@@ -100,15 +105,18 @@ export function BulkEditDialog({ open, count, onOpenChange, onApply }: BulkEditD
               </ThemedSelectField>
             </label>
 
-            <label className="block text-sm font-medium">
-              {b.addTags}
-              <input className={fieldClass} value={form.addTags} onChange={(e) => set('addTags', e.target.value)} aria-describedby="bulk-edit-tags-hint" data-testid="bulk-edit-add-tags" />
-            </label>
+            {/* A listbox inside a <label> would join its accessible name, so these use label/htmlFor */}
+            <div>
+              <label htmlFor="bulk-edit-add-tags" className="block text-sm font-medium">{b.addTags}</label>
+              <TagAutocomplete mode="list" inputId="bulk-edit-add-tags" value={form.addTags} onValueChange={(v) => set('addTags', v)}
+                tags={knownTags} label={b.addTags} placeholder="" describedBy="bulk-edit-tags-hint" testId="bulk-edit-add-tags" inputClassName={fieldClass} />
+            </div>
 
-            <label className="block text-sm font-medium">
-              {b.removeTags}
-              <input className={fieldClass} value={form.removeTags} onChange={(e) => set('removeTags', e.target.value)} aria-describedby="bulk-edit-tags-hint" data-testid="bulk-edit-remove-tags" />
-            </label>
+            <div>
+              <label htmlFor="bulk-edit-remove-tags" className="block text-sm font-medium">{b.removeTags}</label>
+              <TagAutocomplete mode="list" inputId="bulk-edit-remove-tags" value={form.removeTags} onValueChange={(v) => set('removeTags', v)}
+                tags={selectedTags} label={b.removeTags} placeholder="" describedBy="bulk-edit-tags-hint" testId="bulk-edit-remove-tags" inputClassName={fieldClass} />
+            </div>
             <p id="bulk-edit-tags-hint" className="text-xs text-gray-600 dark:text-gray-400">{b.tagsHint}</p>
 
             {error && (

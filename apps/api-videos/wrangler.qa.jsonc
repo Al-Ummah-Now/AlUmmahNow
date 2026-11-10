@@ -109,7 +109,9 @@
   ],
   // Watch-time reports per playback session (#235); videoWatchTime.ts
   "ratelimits": [
-    { "name": "WATCH_TIME_LIMITER", "namespace_id": "2203", "simple": { "limit": 6, "period": 60 } }
+    { "name": "WATCH_TIME_LIMITER", "namespace_id": "2203", "simple": { "limit": 6, "period": 60 } },
+    // Typeahead lookups per user or IP (GET /api/search/suggestions)
+    { "name": "SUGGEST_LIMITER", "namespace_id": "2223", "simple": { "limit": 120, "period": 60 } }
   ],
   "kv_namespaces": [
 			// Token revocation list written by the auth worker (#437)

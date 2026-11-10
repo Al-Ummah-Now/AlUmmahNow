@@ -11,17 +11,24 @@ import {
   SEARCH_DURATION_BOUNDS,
   SEARCH_ENTITY_TYPES,
   SEARCH_TABLES,
+  DEFAULT_SUGGESTION_TYPES,
+  SUGGESTION_GROUP_ORDER,
   SearchChannelInfo,
+  SearchChannelPayload,
   SearchDb,
   SearchEntityType,
   SearchQuery,
   SearchResultItem,
+  SearchPlaylistPayload,
   SearchStatement,
+  SearchVideoPayload,
+  SuggestionType,
   VIDEO_CATEGORIES,
   buildFtsQuery,
   detectTextLanguage,
   normalizeSearchText,
-  stripArabicArticle,
+  rankSuggestions,
+  scoreSuggestionMatch,
   tokenizeSearchText,
 } from '@al-ummah/shared-types';
 
@@ -283,9 +290,22 @@ export async function searchIndex(
 
 export interface IndexSuggestion {
   text: string;
-  type: 'query' | 'channel' | 'category' | 'video';
+  type: SuggestionType;
+  id?: string;
+  thumbnailUrl?: string;
+  subtitle?: string;
+  handle?: string;
+  verified?: boolean;
   count?: number;
   metadata?: Record<string, unknown>;
+}
+
+export interface SuggestOptions {
+  /** Which kinds to return (default: channels, videos, categories) */
+  types?: SuggestionType[];
+  /** Only videos and playlists of this channel (in-channel search) */
+  channelId?: string;
+  now?: number;
 }
 
 function pickLocalized(base: string, localized: Record<string, string> | undefined, lang: string | undefined): string {
@@ -293,59 +313,138 @@ function pickLocalized(base: string, localized: Record<string, string> | undefin
   return base;
 }
 
+/** The localized form that matches what was typed best, else the one in the query's script. */
+function bestText(base: string, localized: Record<string, string> | undefined, q: string, lang: string | undefined): string {
+  const candidates = [base, ...Object.values(localized ?? {})];
+  let best = pickLocalized(base, localized, lang);
+  let bestScore = scoreSuggestionMatch(best, q);
+  for (const text of candidates) {
+    const score = scoreSuggestionMatch(text, q);
+    if (score > bestScore) {
+      best = text;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
+/** Most of each kind in one response; videos fill whatever is left of `limit`. */
+const GROUP_CAPS: Record<SuggestionType, number> = { channel: 3, playlist: 3, category: 2, query: 0, video: SEARCH_MAX_LIMIT };
+
 /**
- * Typeahead suggestions: channel names, video titles (in the query's script
- * when a localized title exists) and categories whose label starts with the input.
+ * Typeahead suggestions from the search index: channel names (and @handles),
+ * video titles and playlist names whose words start with the input, plus
+ * matching categories. Only visible rows of visible channels are read, so
+ * private, unlisted-by-channel, hidden and deleted items are never suggested.
+ * Each group is ordered by match quality (exact > prefix > word prefix >
+ * substring), then by the index's relevance.
  */
-export async function suggestFromIndex(db: SearchDb, q: string, limit: number): Promise<IndexSuggestion[]> {
+export async function suggestFromIndex(db: SearchDb, q: string, limit: number, options: SuggestOptions = {}): Promise<IndexSuggestion[]> {
+  const types = options.types?.length ? options.types : DEFAULT_SUGGESTION_TYPES;
+  const want = new Set(types.filter(t => !(options.channelId && (t === 'channel' || t === 'category'))));
   const match = buildFtsQuery(q, { mode: 'all', column: 'title' });
   if (!match) return [];
   const lang = detectTextLanguage(q);
-  const empty: SearchQuery = {};
-  const [videoRows, channelRows] = (await db.batch([
-    buildTypeStatement(db, 'video', empty, match, limit, 0, Date.now()),
-    buildTypeStatement(db, 'channel', empty, match, Math.min(limit, 3), 0, Date.now()),
-  ])) as Array<{ results?: IndexRow[] }>;
+  const now = options.now ?? Date.now();
+  const scope: SearchQuery = options.channelId ? { channelId: options.channelId } : {};
+  // Over-fetch a little so re-ranking by match quality has candidates to choose from
+  const take = Math.min(limit * 2, SEARCH_MAX_LIMIT);
 
-  const suggestions: IndexSuggestion[] = [];
-  const seen = new Set<string>();
-  const add = (s: IndexSuggestion) => {
-    const key = normalizeSearchText(s.text);
-    if (!key || seen.has(key)) return;
-    seen.add(key);
-    suggestions.push(s);
+  const indexed = (['channel', 'video', 'playlist'] as const).filter(t => want.has(t));
+  const batches = indexed.length
+    ? (await db.batch(indexed.map(t => buildTypeStatement(db, t, scope, match, take, 0, now)))) as Array<{ results?: IndexRow[] }>
+    : [];
+  const rowsOf = (type: SuggestionType) => batches[indexed.indexOf(type as typeof indexed[number])]?.results ?? [];
+
+  const groups = new Map<SuggestionType, IndexSuggestion[]>();
+  const rank = (type: SuggestionType, items: Array<IndexSuggestion & { alt?: string[] }>) => {
+    groups.set(type, rankSuggestions(items, q, s => s.text, { alternates: s => s.alt ?? [], keepUnmatched: true })
+      .map(({ alt: _alt, ...s }) => s));
   };
 
-  for (const row of channelRows.results ?? []) {
-    const channel = parseJson<{ id: string; name: string; nameLocalized?: Record<string, string>; avatarUrl?: string; subscribersCount?: number }>(row.payload);
-    if (channel) {
-      add({
-        text: pickLocalized(channel.name, channel.nameLocalized, lang),
-        type: 'channel',
+  if (want.has('channel')) {
+    rank('channel', rowsOf('channel').flatMap(row => {
+      const channel = parseJson<SearchChannelPayload>(row.payload);
+      if (!channel?.id) return [];
+      const handle = channel.handle?.replace(/^@+/, '') || undefined;
+      return [{
+        text: bestText(channel.name, channel.nameLocalized, q, lang),
+        type: 'channel' as const,
+        id: channel.id,
+        thumbnailUrl: channel.avatarUrl,
+        subtitle: handle ? `@${handle}` : undefined,
+        handle,
+        verified: channel.isVerified === true,
         count: channel.subscribersCount,
         metadata: { channelId: channel.id, avatarUrl: channel.avatarUrl },
-      });
+        alt: handle ? [handle] : [],
+      }];
+    }));
+  }
+  if (want.has('video')) {
+    rank('video', rowsOf('video').flatMap(row => {
+      const video = parseJson<SearchVideoPayload>(row.payload);
+      if (!video?.id) return [];
+      const channel = channelInfo(row.channel_payload);
+      return [{
+        text: bestText(video.title, video.titleLocalized, q, lang),
+        type: 'video' as const,
+        id: video.id,
+        thumbnailUrl: video.thumbnailUrl,
+        subtitle: channel?.name ?? video.channelName,
+        verified: channel?.isVerified === true,
+        metadata: { videoId: video.id, channelId: video.channelId, isShort: video.isShort === true, duration: video.duration },
+      }];
+    }));
+  }
+  if (want.has('playlist')) {
+    rank('playlist', rowsOf('playlist').flatMap(row => {
+      const playlist = parseJson<SearchPlaylistPayload>(row.payload);
+      if (!playlist?.id) return [];
+      const channel = channelInfo(row.channel_payload);
+      return [{
+        text: playlist.name,
+        type: 'playlist' as const,
+        id: playlist.id,
+        thumbnailUrl: playlist.thumbnailUrl ?? playlist.cover?.thumbnailUrl,
+        subtitle: channel?.name,
+        count: playlist.videosCount,
+        metadata: { playlistId: playlist.id, channelId: playlist.channelId },
+      }];
+    }));
+  }
+  if (want.has('category')) {
+    const items = VIDEO_CATEGORIES.map(category => ({
+      text: lang === 'ar' ? category.label.ar : category.label.en,
+      type: 'category' as const,
+      metadata: { category: category.value },
+      alt: [category.label.ar, category.label.en],
+    }));
+    groups.set('category', rankSuggestions(items, q, s => s.text, { alternates: s => s.alt }).map(({ alt: _alt, ...s }) => s));
+  }
+
+  // De-duplicate across groups by normalised text + type, cap each group, then fill with videos.
+  const seen = new Set<string>();
+  const capped = new Map<SuggestionType, IndexSuggestion[]>();
+  for (const type of SUGGESTION_GROUP_ORDER) {
+    const list = (groups.get(type) ?? []).filter(s => {
+      const key = `${s.type}:${s.id ?? normalizeSearchText(s.text)}`;
+      if (!normalizeSearchText(s.text) || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    capped.set(type, list.slice(0, type === 'video' ? limit : Math.min(GROUP_CAPS[type], limit)));
+  }
+  let total = [...capped.values()].reduce((n, list) => n + list.length, 0);
+  // Over the limit: trim videos first, then the other groups from the end of the display order.
+  for (const type of ['video', ...[...SUGGESTION_GROUP_ORDER].reverse().filter(t => t !== 'video')] as SuggestionType[]) {
+    const list = capped.get(type) ?? [];
+    while (total > limit && list.length > (type === 'video' ? Math.min(1, list.length) : 0)) {
+      list.pop();
+      total -= 1;
     }
   }
-  for (const row of videoRows.results ?? []) {
-    const video = parseJson<{ id: string; title: string; titleLocalized?: Record<string, string>; channelId?: string }>(row.payload);
-    if (video) {
-      add({
-        text: pickLocalized(video.title, video.titleLocalized, lang),
-        type: 'video',
-        metadata: { videoId: video.id, channelId: video.channelId },
-      });
-    }
-  }
-  const nq = normalizeSearchText(q);
-  for (const category of VIDEO_CATEGORIES) {
-    const label = lang === 'ar' ? category.label.ar : category.label.en;
-    const words = tokenizeSearchText(label);
-    if (normalizeSearchText(label).startsWith(nq) || words.some(w => w.startsWith(nq) || stripArabicArticle(w).startsWith(nq))) {
-      add({ text: label, type: 'category', metadata: { category: category.value } });
-    }
-  }
-  return suggestions.slice(0, limit);
+  return SUGGESTION_GROUP_ORDER.flatMap(type => capped.get(type) ?? []).slice(0, limit);
 }
 
 /** Number of public videos per category (optionally in one language). */

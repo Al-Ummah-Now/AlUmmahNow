@@ -7,6 +7,10 @@
  * Supports bilingual fields (EN/AR) and template variables.
  */
 
+import { TagAutocomplete } from '@/components/ui/TagAutocomplete';
+import { useChannelTags } from '@/hooks/useChannelTags';
+import { useMultiAccount } from '@/hooks/useMultiAccount';
+import { splitTagList } from '@/lib/search/tags';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import { useState, useEffect } from 'react';
@@ -48,6 +52,9 @@ export function TemplateEditorModal({
   const [descriptionEn, setDescriptionEn] = useState('');
   const [descriptionAr, setDescriptionAr] = useState('');
   const [tags, setTags] = useState('');
+  // Tags from the creator's channels, suggested as they type
+  const { user: account } = useMultiAccount();
+  const knownTags = useChannelTags((account?.channels ?? []).map((c) => c.id));
   const [category, setCategory] = useState<VideoCategory | ''>('');
   const [visibility, setVisibility] = useState<'public' | 'private' | 'unlisted'>('public');
   const [language, setLanguage] = useState<'en' | 'ar'>('en');
@@ -147,10 +154,7 @@ export function TemplateEditorModal({
       }
 
       // Parse tags
-      const tagArray = tags
-        .split(',')
-        .map((tag) => tag.trim())
-        .filter((tag) => tag.length > 0);
+      const tagArray = splitTagList(tags);
 
       // Build request
       const templateData: CreateTemplateRequest | UpdateTemplateRequest = {
@@ -516,29 +520,16 @@ export function TemplateEditorModal({
                 <label htmlFor="template-tags" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   {isRTL ? 'الوسوم' : 'Tags'}
                 </label>
-                <input
-                  type="text"
-                  id="template-tags"
-                  data-testid="template-tags"
+                <TagAutocomplete
+                  mode="list"
+                  inputId="template-tags"
+                  testId="template-tags"
                   value={tags}
-                  onChange={(e) => setTags(e.target.value)}
-                  className="
-                    w-full
-                    px-4
-                    py-2
-                    border
-                    border-gray-300
-                    dark:border-gray-600
-                    rounded-lg
-                    bg-white
-                    dark:bg-gray-800
-                    text-gray-900
-                    dark:text-gray-100
-                    focus:ring-2
-                    focus:ring-primary
-                    focus:border-transparent
-                  "
+                  onValueChange={setTags}
+                  tags={knownTags}
+                  label={isRTL ? 'الوسوم' : 'Tags'}
                   placeholder={isRTL ? 'افصل الوسوم بفواصل' : 'Separate tags with commas'}
+                  inputClassName="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary focus:border-transparent"
                 />
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                   {isRTL ? 'مثال: إسلام، محاضرة، قرآن' : 'e.g., Islamic, Lecture, Quran'}
