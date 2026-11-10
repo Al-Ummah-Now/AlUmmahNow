@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Bell } from 'lucide-react';
@@ -33,6 +33,13 @@ interface WatchChannelMetaProps {
 export function WatchChannelMeta({ channelId, name, viewerId, authLoading, ownerUserId, initialCount, onCount }: WatchChannelMetaProps) {
   const { t, lang } = useLanguage();
   const pathname = usePathname();
+  // usePathname drops the query, and the legacy watch route (/video?vid=<id>,
+  // which the video cards link to) keeps the video id there: read it after
+  // mount so sign-in comes back to this video, not an empty /video.
+  const [search, setSearch] = useState('');
+  useEffect(() => {
+    setSearch(window.location.search);
+  }, [pathname]);
   const { isSubscribed, subscriberCount, isChecking, isUpdating, error, toggle } = useChannelSubscription({
     channelId,
     enabled: true,
@@ -51,7 +58,7 @@ export function WatchChannelMeta({ channelId, name, viewerId, authLoading, owner
     // route, which starts sign-in and comes back to this video
     action = (
       <a
-        href={loginRoutePath(pathname || `/${lang}`, lang)}
+        href={loginRoutePath(pathname ? `${pathname}${search}` : `/${lang}`, lang)}
         className="b b-primary b-sm watch-sub"
         data-testid="watch-subscribe"
         data-state="signed-out"
