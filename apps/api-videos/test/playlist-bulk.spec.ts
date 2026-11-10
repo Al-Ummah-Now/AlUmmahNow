@@ -354,6 +354,21 @@ describe('existing playlist routes follow playlist.manage', () => {
 		assert.equal((await call(env, 'ed', 'POST', '/api/playlists/pl/videos', { videoId: 'v0001' }, { channelId: 'ch' })).status, 200);
 	});
 
+	it('an editor picks a cover video of the playlist; removing that video makes the cover automatic again', async () => {
+		const env = setup({ playlists: { pl: playlist('pl', { videos: ['v0001', 'v0002'] }) } });
+		assert.equal((await call(env, 'ed', 'PATCH', '/api/playlists/pl', { coverVideoId: 'v0009' }, { channelId: 'ch' })).status, 400);
+		assert.equal((await call(env, 'ed', 'PATCH', '/api/playlists/pl', { coverVideoId: 'v0002' }, { channelId: 'ch' })).status, 200);
+		assert.equal(env.playlists.read('pl').coverVideoId, 'v0002');
+		const items = await call(env, 'ed', 'GET', '/api/playlists/pl/items', undefined, { channelId: 'ch' });
+		assert.equal(items.body.result.playlist.coverVideoId, 'v0002');
+		assert.equal((await call(env, 'ed', 'PATCH', '/api/playlists/pl', { coverVideoId: null }, { channelId: 'ch' })).status, 200);
+		assert.equal(env.playlists.read('pl').coverVideoId, undefined);
+		await call(env, 'ed', 'PATCH', '/api/playlists/pl', { coverVideoId: 'v0001' }, { channelId: 'ch' });
+		assert.equal((await call(env, 'ed', 'POST', '/api/playlists/pl/videos/remove', { videoIds: ['v0001'] }, { channelId: 'ch' })).status, 200);
+		assert.equal(env.playlists.read('pl').coverVideoId, undefined);
+		assert.equal((await call(env, 'mod', 'PATCH', '/api/playlists/pl', { coverVideoId: 'v0002' }, { channelId: 'ch' })).status, 403);
+	});
+
 	it('managers see the channel\'s private playlists in the list and by id; others do not', async () => {
 		const env = setup({ playlists: { pl: playlist('pl', { isPublic: false }), pub: playlist('pub') } });
 		const listFor = async (userId: string) => (await call(env, userId, 'GET', '/api/playlists?channelId=ch&limit=50')).body.data.map((p: any) => p.id).sort();

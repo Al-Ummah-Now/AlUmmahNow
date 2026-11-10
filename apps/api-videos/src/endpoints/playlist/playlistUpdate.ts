@@ -111,7 +111,7 @@ export class PlaylistUpdate extends AuthenticatedRoute {
         // The order: manual, or automatic by a field and direction. Switching
         // to automatic sorts now; switching back to manual keeps the current
         // automatic order as the starting manual order. Both need the videos.
-        const { sortMode, sortField, sortDirection, ...fields } = updateData;
+        const { sortMode, sortField, sortDirection, coverVideoId, ...fields } = updateData;
         const sortChange = sortMode !== undefined || sortField !== undefined || sortDirection !== undefined;
         const before = playlistSortOf(existingPlaylist);
         const after = playlistSortOf({ ...before, ...(sortMode ? { sortMode } : {}), ...(sortField ? { sortField } : {}), ...(sortDirection ? { sortDirection } : {}) });
@@ -131,7 +131,13 @@ export class PlaylistUpdate extends AuthenticatedRoute {
             if (updateData.videos && !isSameVideoSet(fresh.videos || [], updateData.videos)) {
                 return { reject: { status: 400, error: "videos must contain exactly the playlist's current video IDs (use the add/remove endpoints to change membership)" } };
             }
+            // The cover is one of the playlist's own videos (null: automatic again)
+            if (coverVideoId && !(fresh.videos || []).includes(coverVideoId)) {
+                return { reject: { status: 400, error: "coverVideoId must be a video of this playlist" } };
+            }
             Object.assign(fresh, fields, { dateModified: new Date().toISOString() });
+            if (coverVideoId === null) delete fresh.coverVideoId;
+            else if (coverVideoId) fresh.coverVideoId = coverVideoId;
             if (sortChange) {
                 if (target.sortMode === 'auto') fresh.videos = orderOf(fresh, known, target);
                 else if (freshBefore.sortMode === 'auto') fresh.videos = orderOf(fresh, known, freshBefore);

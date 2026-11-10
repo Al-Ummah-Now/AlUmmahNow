@@ -290,6 +290,8 @@ export async function removeVideos(env: Pick<PlaylistEnv, 'playlists'>, playlist
 			for (const id of drop) delete dates[id];
 			fresh.videoAddedAt = dates;
 		}
+		// A removed cover video: the cover is automatic again
+		if (fresh.coverVideoId && drop.has(fresh.coverVideoId)) delete fresh.coverVideoId;
 		fresh.dateModified = new Date().toISOString();
 		return true;
 	});

@@ -93,6 +93,7 @@ export const PlaylistUpdateInput = z.object({
     sortMode: z.enum(PLAYLIST_SORT_MODES).optional().describe("manual: the managers' own order; auto: by sortField and sortDirection"),
     sortField: z.enum(PLAYLIST_SORT_FIELDS).optional().describe("Automatic order field: added (to the playlist), published, title, views, duration"),
     sortDirection: z.enum(PLAYLIST_SORT_DIRECTIONS).optional().describe("Automatic order direction"),
+    coverVideoId: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/).nullable().optional().describe("Cover: a video of the playlist whose thumbnail is shown first (falls back to the first visible video); null goes back to automatic"),
 });
 
 export const ProfileUpdateInput = z.object({

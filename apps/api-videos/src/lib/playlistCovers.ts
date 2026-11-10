@@ -3,7 +3,8 @@
  *
  * Contract: `playlist.thumbnailUrl` is only ever the creator's custom image.
  * When it is not set, responses carry `cover: { videoId, thumbnailUrl }`, the
- * first video in playlist order that the viewer can see and that has a
+ * video the managers chose (`coverVideoId`) when the viewer can see it, else
+ * the first video in playlist order that the viewer can see and that has a
  * thumbnail. Nothing is persisted, so a cover follows the playlist's order and
  * its videos' visibility.
  *
@@ -32,6 +33,8 @@ export interface PlaylistCoverSource {
     userId?: string;
     thumbnailUrl?: string;
     videos?: string[];
+    /** The managers' chosen cover video: tried first, while it is in the playlist */
+    coverVideoId?: string;
 }
 
 export interface PlaylistCoverEnv {
@@ -46,7 +49,11 @@ export const MAX_COVER_R2_READS = 24;
 const INDEX_CHUNK_SIZE = 90;
 
 function candidatesOf(playlist: PlaylistCoverSource): string[] {
-    return (playlist.videos || []).slice(0, COVER_CANDIDATES);
+    const videos = playlist.videos || [];
+    const chosen = playlist.coverVideoId && videos.includes(playlist.coverVideoId) ? playlist.coverVideoId : null;
+    // The chosen cover first; a viewer who cannot see it gets the first visible video
+    const ordered = chosen ? [chosen, ...videos.filter((id) => id !== chosen)] : videos;
+    return ordered.slice(0, COVER_CANDIDATES);
 }
 
 /** Thumbnails of the public videos among `ids`; empty when the index is unavailable. */

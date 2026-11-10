@@ -192,6 +192,8 @@ export const Playlist = z.object({
     videoAddedAt: z.record(z.string()).optional(),
     /** When the automatic order was last sorted from fresh video data (ISO) */
     orderRefreshedAt: Str().optional(),
+    /** Cover: this video's thumbnail when the viewer can see it (lib/playlistCovers.ts) */
+    coverVideoId: Str().optional(),
     // Soft delete and moderation fields
     ...SoftDeleteFields,
     ...ModerationFields,

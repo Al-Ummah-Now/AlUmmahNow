@@ -206,7 +206,7 @@ export class PlaylistManageItems extends AuthenticatedRoute {
 						schema: z.object({
 							success: z.boolean(),
 							result: z.object({
-								playlist: z.object({ id: z.string(), title: z.string(), description: z.string().optional(), isPublic: z.boolean(), thumbnailUrl: z.string().optional(), channelId: z.string(), videosCount: z.number(), sortMode: z.enum(["manual", "auto"]), sortField: z.string(), sortDirection: z.enum(["asc", "desc"]) }),
+								playlist: z.object({ id: z.string(), title: z.string(), description: z.string().optional(), isPublic: z.boolean(), thumbnailUrl: z.string().optional(), coverVideoId: z.string().optional(), channelId: z.string(), videosCount: z.number(), sortMode: z.enum(["manual", "auto"]), sortField: z.string(), sortDirection: z.enum(["asc", "desc"]) }),
 								items: z.array(z.object({ id: z.string(), position: z.number(), video: z.object({ id: z.string(), title: z.string() }).passthrough().nullable() })),
 								nextOffset: z.number().nullable(),
 							}),
@@ -238,6 +238,7 @@ export class PlaylistManageItems extends AuthenticatedRoute {
 					...(playlist.description ? { description: playlist.description } : {}),
 					isPublic: playlist.isPublic !== false,
 					...(playlist.thumbnailUrl ? { thumbnailUrl: playlist.thumbnailUrl } : {}),
+					...(playlist.coverVideoId ? { coverVideoId: playlist.coverVideoId } : {}),
 					channelId: playlist.channelId,
 					videosCount: total,
 					...playlistSortOf(playlist),

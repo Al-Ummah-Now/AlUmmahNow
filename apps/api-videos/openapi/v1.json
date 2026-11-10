@@ -6205,6 +6205,9 @@
                           "orderRefreshedAt": {
                             "type": "string"
                           },
+                          "coverVideoId": {
+                            "type": "string"
+                          },
                           "isDeleted": {
                             "type": "boolean"
                           },
@@ -15126,6 +15129,9 @@
                           "orderRefreshedAt": {
                             "type": "string"
                           },
+                          "coverVideoId": {
+                            "type": "string"
+                          },
                           "isDeleted": {
                             "type": "boolean"
                           },
@@ -15937,6 +15943,9 @@
                     "orderRefreshedAt": {
                       "type": "string"
                     },
+                    "coverVideoId": {
+                      "type": "string"
+                    },
                     "isDeleted": {
                       "type": "boolean"
                     },
@@ -16235,6 +16244,14 @@
                       "desc"
                     ],
                     "description": "Automatic order direction"
+                  },
+                  "coverVideoId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "pattern": "^[A-Za-z0-9_-]{1,128}$",
+                    "description": "Cover: a video of the playlist whose thumbnail is shown first (falls back to the first visible video); null goes back to automatic"
                   }
                 }
               }
@@ -16544,6 +16561,9 @@
                               "type": "boolean"
                             },
                             "thumbnailUrl": {
+                              "type": "string"
+                            },
+                            "coverVideoId": {
                               "type": "string"
                             },
                             "channelId": {
