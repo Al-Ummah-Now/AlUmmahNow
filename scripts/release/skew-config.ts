@@ -7,6 +7,9 @@
  * and every config that serves a custom domain (production, stage, QA) must:
  *   - enable preview URLs (old versions are reached through them)
  *   - set CF_WORKER_NAME to its own worker name and CF_PREVIEW_DOMAIN
+ *   - set the global_fetch_strictly_public compatibility flag: without it the
+ *     Worker's fetch to its own account's workers.dev preview URL fails with
+ *     error 1042 (522 on the custom domain; release v2026.11.10.4 failed on it)
  * open-next.config.ts must enable skewProtection with the retention the
  * mapping script uses.
  */
@@ -19,6 +22,7 @@ import { resolveEnv, type WranglerConfig } from './wrangler-config.ts';
 export const SKEW_APP_DIRS = ['apps/web', 'apps/admin-web'];
 export const PREVIEW_DOMAIN = 'mahmoud-s-darwish';
 export const RUN_WORKER_FIRST = ['/_next/static/*'];
+export const STRICTLY_PUBLIC = 'global_fetch_strictly_public';
 /** Configs that serve a custom domain (the others are dev, PR previews or retired) */
 const SERVING = new Set(['wrangler.production.jsonc', 'wrangler.qa.jsonc']);
 
@@ -50,6 +54,8 @@ export function checkSkewConfig(root: string): string[] {
 				const preview = c.preview_urls ?? config.preview_urls;
 				if (preview !== true) errors.push(`${where}: preview_urls must be true (skew protection reaches old versions through them)`);
 				if (vars.CF_WORKER_NAME !== c.name) errors.push(`${where}: vars.CF_WORKER_NAME must be the worker name ${JSON.stringify(c.name)}`);
+				const flags = (c.compatibility_flags as string[] | undefined) ?? [];
+				if (!flags.includes(STRICTLY_PUBLIC)) errors.push(`${where}: compatibility_flags must include "${STRICTLY_PUBLIC}" (the skew hop to a workers.dev preview URL fails without it)`);
 				if (vars.CF_PREVIEW_DOMAIN !== PREVIEW_DOMAIN) errors.push(`${where}: vars.CF_PREVIEW_DOMAIN must be ${JSON.stringify(PREVIEW_DOMAIN)}`);
 			}
 		}

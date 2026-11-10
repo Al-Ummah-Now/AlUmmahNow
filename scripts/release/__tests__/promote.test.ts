@@ -346,26 +346,50 @@ describe('promote: skew protection', () => {
 
 describe('promote: skew protection check', () => {
 	const snap = { app: 'web', url: 'https://videos.stage.alummahnow.net/en', deploymentId: 'b1', chunks: ['/_next/static/chunks/a.js'] };
-	const failing = async () => [{ name: 'skew protection (web)', ok: false, detail: '404' }];
+	const result = (ok: boolean) => [{ name: 'skew protection (web)', ok, detail: ok ? 'ok' : '522' }];
+	const fullDeploys = (calls: { args: string[] }[]) => calls.filter((c) => c.args[1] === 'deploy' && c.args.some((a) => a.endsWith('@100%')) && !c.args.some((a) => a.endsWith('@0%'))).length;
 
-	it('snapshots before 100% and checks after; a failure on stage rolls back', async () => {
+	for (const env of ['stage', 'production'] as const) {
+		it(`${env}: the candidate at 0% must reach the serving build, or nothing moves (rollback)`, async () => {
+			const { run, calls } = fakeRun({ 'api-videos': V(1), web: V(2) });
+			const seen: (Record<string, string> | undefined)[] = [];
+			const err = await promote(twoApps(env), env, 'r', {
+				...deps(run),
+				captureBuilds: async () => [snap],
+				checkSkew: async (_e, _s, overrides) => (seen.push(overrides), result(false)),
+			}).catch((e) => e);
+			assert.ok(err instanceof ReleaseError && err.rolledBack, String(err));
+			assert.match(err.message, /skew protection check failed before traffic moved/);
+			assert.equal(fullDeploys(calls), 0, 'no candidate went to 100%');
+			assert.equal(seen.length, 1);
+			assert.equal(seen[0]?.[env === 'stage' ? 'al-ummah-now-stage' : 'al-ummah-now-production'], V(11));
+		});
+	}
+
+	it('snapshots before 0%, checks at 0% (override) and again at 100%; a 100% failure on stage rolls back', async () => {
 		const { run, calls } = fakeRun({ 'api-videos': V(1), web: V(2) });
 		const order: string[] = [];
 		const err = await promote(twoApps('stage'), 'stage', 'r', {
 			...deps(run),
-			captureBuilds: async (_e, apps) => (order.push(`capture ${apps.join(',')} after ${calls.filter((c) => c.args.join(' ').includes('@100%') && !c.args.join(' ').includes('@0%')).length} full deploys`), [snap]),
-			checkSkew: async (s) => (order.push(`check ${s.length}`), failing()),
+			captureBuilds: async (_e, apps) => (order.push(`capture ${apps.join(',')} at ${calls.filter((c) => c.args.some((a) => a.endsWith('@0%'))).length} splits`), [snap]),
+			checkSkew: async (_e, s, overrides) => (order.push(`check ${s.length} ${overrides ? '0%' : '100%'}`), result(!!overrides)),
 		}).catch((e) => e);
 		assert.ok(err instanceof ReleaseError && err.rolledBack, String(err));
-		assert.match(err.message, /skew protection check failed/);
-		assert.deepEqual(order, ['capture api-videos,web after 0 full deploys', 'check 1']);
+		assert.match(err.message, /skew protection check failed: /);
+		assert.deepEqual(order, ['capture api-videos,web at 0 splits', 'check 1 0%', 'check 1 100%']);
 	});
 
-	it('in production a failure is a warning, not a rollback', async () => {
+	it('in production a failure at 100% (after passing at 0%) is a warning, not a rollback', async () => {
 		const { run } = fakeRun({ 'api-videos': V(1), web: V(2) });
 		const lines: string[] = [];
-		await promote(twoApps('production'), 'production', 'r', { ...deps(run), log: (l) => lines.push(l), captureBuilds: async () => [snap], checkSkew: failing });
+		await promote(twoApps('production'), 'production', 'r', {
+			...deps(run),
+			log: (l) => lines.push(l),
+			captureBuilds: async () => [snap],
+			checkSkew: async (_e, _s, overrides) => result(!!overrides),
+		});
 		assert.ok(lines.some((l) => l.startsWith('::warning::skew protection check failed in production')));
+		assert.ok(lines.some((l) => l.includes('PASS  skew protection (web) (candidate at 0%)')));
 	});
 
 	it('a snapshot failure does not block the release', async () => {

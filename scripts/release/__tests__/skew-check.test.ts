@@ -65,4 +65,14 @@ describe('skew check', () => {
 		const r = await checkOldBuildServed({ ...before, deploymentId: null }, fakeFetch(() => 500));
 		assert.equal(r.ok, true);
 	});
+
+	it('sends the version override to reach a candidate at 0%', async () => {
+		const seen: string[] = [];
+		const f = (async (_u: string | URL, init?: RequestInit) => {
+			seen.push(String((init?.headers as Record<string, string>)['Cloudflare-Workers-Version-Overrides']));
+			return new Response('x', { status: 200 });
+		}) as unknown as typeof fetch;
+		await checkOldBuildServed(before, f, 1, noWait, { 'Cloudflare-Workers-Version-Overrides': 'w="v"' });
+		assert.deepEqual(seen, ['w="v"', 'w="v"']);
+	});
 });

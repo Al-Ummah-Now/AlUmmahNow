@@ -52,6 +52,7 @@ every action once, like the old behaviour did on every deploy, so rotate only wi
 - **Routing.** When a request's deployment id is not current, OpenNext fetches it from that version's preview URL,
   `<version>-<worker>.mahmoud-s-darwish.workers.dev`. That needs `preview_urls: true`, plus `CF_WORKER_NAME` and
   `CF_PREVIEW_DOMAIN` vars, in every serving config.
+- **Fetching the old version.** A Worker's `fetch()` to a workers.dev URL of its own account is refused (`error code: 1042`). On the custom domain that shows as a **522**. The `global_fetch_strictly_public` compatibility flag lifts this, so every web and admin-web config sets it. Release v2026.11.10.4 failed at stage without it: it was the first release with an older skew-protected build to route to.
 - **Chunks.** `assets.run_worker_first: ["/_next/static/*"]` sends chunk requests through the Worker, so `?dpl=<old>`
   reaches the old version's assets. Other static files are served directly as before. The OpenNext build reads this
   setting from `wrangler.jsonc`, so every config must carry the same value.
@@ -97,6 +98,11 @@ shows a small themed notice in English or Arabic, and reloads after about 1.5 s.
 The end-to-end test makes the server answer like a newer build. It checks two cases: an action the server lacks shows
 the notice and reloads into a working page, and a skew during an upload lets the upload finish before the reload.
 
-On every release, `promote.ts` also checks real routing (`skew-check.ts`). Before traffic moves, it records the serving
-page's deployment id and chunks. After the promote, those chunks must still load with `?dpl=<old id>`. A failure rolls
-back stage. In production it raises a warning.
+On every release, `promote.ts` also checks real routing (`skew-check.ts`). Before the candidates are deployed at 0%, it
+records the serving page's deployment id and chunks. That version is at 100%, so it has served traffic. Builds of
+cancelled or rolled-back runs never served traffic, so they are never in the mapping or the snapshot. The candidate is
+then checked twice:
+
+1. **At 0%, through the version override.** The candidate must serve those chunks with `?dpl=<old id>` by fetching them
+   from the old version. A failure rolls back before anyone moves, in stage and in production.
+2. **At 100%, again.** A failure rolls back stage. In production it raises a warning.

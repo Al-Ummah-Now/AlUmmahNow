@@ -110,6 +110,8 @@ describe('skew config check', () => {
 		}
 		const qa = join(copy, 'apps/web/wrangler.qa.jsonc');
 		writeFileSync(qa, readFileSync(qa, 'utf8').replace('"preview_urls": true,', '').replace('"CF_WORKER_NAME": "al-ummah-web-qa"', '"CF_WORKER_NAME": "al-ummah-now-production"'));
+		const prod = join(copy, 'apps/web/wrangler.production.jsonc');
+		writeFileSync(prod, readFileSync(prod, 'utf8').replace('"global_fetch_strictly_public"', '"nodejs_als"'));
 		const dev = join(copy, 'apps/admin-web/wrangler.jsonc');
 		writeFileSync(dev, readFileSync(dev, 'utf8').replace('"run_worker_first": ["/_next/static/*"]', '"run_worker_first": true'));
 		const onc = join(copy, 'apps/admin-web/open-next.config.ts');
@@ -118,6 +120,9 @@ describe('skew config check', () => {
 		assert.ok(errors.some((e) => e.includes('wrangler.qa.jsonc') && e.includes('preview_urls')), errors.join('\n'));
 		assert.ok(errors.some((e) => e.includes('wrangler.qa.jsonc') && e.includes('CF_WORKER_NAME')));
 		assert.ok(errors.some((e) => e.includes('admin-web/wrangler.jsonc') && e.includes('run_worker_first')));
+		// both the production top level and env.stage (inherited flags)
+		assert.ok(errors.some((e) => e.startsWith('apps/web/wrangler.production.jsonc:') && e.includes('global_fetch_strictly_public')), errors.join('\n'));
+		assert.ok(errors.some((e) => e.includes('apps/web/wrangler.production.jsonc (env.stage)') && e.includes('global_fetch_strictly_public')));
 		assert.ok(errors.some((e) => e.includes('admin-web/open-next.config.ts') && e.includes('SKEW_RETENTION')));
 	});
 });
