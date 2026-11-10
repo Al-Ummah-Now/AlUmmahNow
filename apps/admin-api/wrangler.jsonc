@@ -79,6 +79,11 @@
 			"bucket_name": "theme-packages",
 			"preview_bucket_name": "theme-packages-preview",
 			"remote": true
+		},
+		{
+			// Private source maps (release uploads; symbolicates browser stacks on the Errors page)
+			"binding": "SOURCEMAPS",
+			"bucket_name": "al-ummah-now-sourcemaps"
 		}
 	],
 
@@ -94,7 +99,12 @@
 			// Final mail failures → platform DLQ (processor stores them in dead_letters)
 			{ "binding": "ERRORS_DLQ", "queue": "al-ummah-now-dlq" },
 			// Requests to auth: sends, answers and status reads, with retries (src/lib/authModerationQueue.ts)
-			{ "binding": "AUTH_REQUESTS_QUEUE", "queue": "auth-moderation-requests" }
+			{ "binding": "AUTH_REQUESTS_QUEUE", "queue": "auth-moderation-requests" },
+			{
+				// Error ingest (endpoints/errors/ErrorsIngest.ts): /internal/errors enqueues, this Worker writes D1
+				"binding": "ERRORS_QUEUE",
+				"queue": "al-ummah-now-errors"
+			}
 		],
 		"consumers": [
 			{
@@ -106,14 +116,32 @@
 				"dead_letter_queue": "al-ummah-now-dlq"
 			},
 			{ "queue": "auth-moderation-requests", "max_batch_size": 10, "max_batch_timeout": 5, "max_retries": 6, "retry_delay": 30, "dead_letter_queue": "auth-moderation-requests-dlq" },
-			{ "queue": "auth-moderation-requests-dlq", "max_batch_size": 10, "max_batch_timeout": 5, "max_retries": 3 }
+			{ "queue": "auth-moderation-requests-dlq", "max_batch_size": 10, "max_batch_timeout": 5, "max_retries": 3 },
+			{
+				"queue": "al-ummah-now-errors",
+				"max_batch_size": 10,
+				"max_batch_timeout": 5,
+				"max_retries": 5,
+				"dead_letter_queue": "al-ummah-now-errors-dlq"
+			},
+			{
+				// Batches that failed 5 times: retried every 15 minutes, no DLQ of its own
+				"queue": "al-ummah-now-errors-dlq",
+				"max_batch_size": 10,
+				"max_batch_timeout": 30,
+				"max_retries": 10
+			}
 		]
 	},
-	// Status reads of open requests to auth (every 5 minutes)
-	"triggers": { "crons": ["*/5 * * * *"] },
-
-	// api-videos owns the content data: /internal/* (processing health, content management)
-	"services": [{ "binding": "VIDEOS", "service": "videos" }],
+	// Every 5 minutes: status reads of open requests to auth; 03:17 UTC: error data retention
+	"triggers": { "crons": ["*/5 * * * *", "17 3 * * *"] },
+	// Private source maps uploaded by the release (lib/sourcemaps.ts) are in r2_buckets as SOURCEMAPS.
+	// VIDEOS: api-videos owns the content data: /internal/* (processing health, content management)
+	// PROCESSOR: Retry of dead-lettered messages on the Errors page (lib/errors-actions.ts)
+	"services": [
+		{ "binding": "VIDEOS", "service": "videos" },
+		{ "binding": "PROCESSOR", "service": "al-ummah-now-processor" }
+	],
 
 	// Environment variables
 	"vars": {
@@ -204,6 +232,10 @@
 				{
 					"binding": "theme_packages",
 					"bucket_name": "theme-packages-stage"
+				},
+				{
+					"binding": "SOURCEMAPS",
+					"bucket_name": "al-ummah-now-sourcemaps-stage"
 				}
 			],
 			"queues": {
@@ -217,7 +249,12 @@
 					// Final mail failures → platform DLQ (processor stores them in dead_letters)
 					{ "binding": "ERRORS_DLQ", "queue": "al-ummah-now-dlq-stage" },
 					// Requests to auth: sends, answers and status reads, with retries (src/lib/authModerationQueue.ts)
-					{ "binding": "AUTH_REQUESTS_QUEUE", "queue": "auth-moderation-requests-stage" }
+					{ "binding": "AUTH_REQUESTS_QUEUE", "queue": "auth-moderation-requests-stage" },
+					{
+						// Error ingest (endpoints/errors/ErrorsIngest.ts): /internal/errors enqueues, this Worker writes D1
+						"binding": "ERRORS_QUEUE",
+						"queue": "al-ummah-now-errors-stage"
+					}
 				],
 				"consumers": [
 					{
@@ -229,12 +266,30 @@
 						"dead_letter_queue": "al-ummah-now-dlq-stage"
 					},
 					{ "queue": "auth-moderation-requests-stage", "max_batch_size": 10, "max_batch_timeout": 5, "max_retries": 6, "retry_delay": 30, "dead_letter_queue": "auth-moderation-requests-dlq-stage" },
-					{ "queue": "auth-moderation-requests-dlq-stage", "max_batch_size": 10, "max_batch_timeout": 5, "max_retries": 3 }
+					{ "queue": "auth-moderation-requests-dlq-stage", "max_batch_size": 10, "max_batch_timeout": 5, "max_retries": 3 },
+					{
+						"queue": "al-ummah-now-errors-stage",
+						"max_batch_size": 10,
+						"max_batch_timeout": 5,
+						"max_retries": 5,
+						"dead_letter_queue": "al-ummah-now-errors-dlq-stage"
+					},
+					{
+						// Batches that failed 5 times: retried every 15 minutes, no DLQ of its own
+						"queue": "al-ummah-now-errors-dlq-stage",
+						"max_batch_size": 10,
+						"max_batch_timeout": 30,
+						"max_retries": 10
+					}
 				]
 			},
-			"services": [{ "binding": "VIDEOS", "service": "videos-stage" }],
-			// Status reads of open requests to auth (every 5 minutes)
-			"triggers": { "crons": ["*/5 * * * *"] },
+			// Every 5 minutes: status reads of open requests to auth; 03:17 UTC: error data retention
+			"triggers": { "crons": ["*/5 * * * *", "17 3 * * *"] },
+			// Retry actions on the Errors page (lib/errors-actions.ts) and the videos service
+			"services": [
+				{ "binding": "VIDEOS", "service": "videos-stage" },
+				{ "binding": "PROCESSOR", "service": "al-ummah-now-processor-stage" }
+			],
 			"vars": {
 				"ENVIRONMENT": "stage",
 				"LOG_LEVEL": "info",

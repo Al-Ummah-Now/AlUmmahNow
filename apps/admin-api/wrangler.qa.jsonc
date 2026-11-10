@@ -4,7 +4,6 @@
   "main": "src/index.ts",
   "compatibility_date": "2024-09-01",
   "compatibility_flags": ["nodejs_compat"],
-
   "d1_databases": [
     {
       "binding": "REPORTS_DB",
@@ -50,6 +49,11 @@
     {
       "binding": "theme_packages",
       "bucket_name": "theme-packages-qa"
+    },
+    {
+      // Private source maps (deploy.yml uploads them for QA builds)
+      "binding": "SOURCEMAPS",
+      "bucket_name": "al-ummah-now-sourcemaps-qa"
     }
   ],
 
@@ -64,7 +68,12 @@
       // Final mail failures → platform DLQ (processor stores them in dead_letters)
       { "binding": "ERRORS_DLQ", "queue": "al-ummah-now-dlq-qa" },
       // Requests to auth: sends, answers and status reads, with retries (src/lib/authModerationQueue.ts)
-      { "binding": "AUTH_REQUESTS_QUEUE", "queue": "auth-moderation-requests-qa" }
+      { "binding": "AUTH_REQUESTS_QUEUE", "queue": "auth-moderation-requests-qa" },
+      {
+        // Error ingest (endpoints/errors/ErrorsIngest.ts): /internal/errors enqueues, this Worker writes D1
+        "binding": "ERRORS_QUEUE",
+        "queue": "al-ummah-now-errors-qa"
+      }
     ],
     "consumers": [
       {
@@ -76,14 +85,32 @@
         "dead_letter_queue": "al-ummah-now-dlq-qa"
       },
       { "queue": "auth-moderation-requests-qa", "max_batch_size": 10, "max_batch_timeout": 5, "max_retries": 6, "retry_delay": 30, "dead_letter_queue": "auth-moderation-requests-dlq-qa" },
-      { "queue": "auth-moderation-requests-dlq-qa", "max_batch_size": 10, "max_batch_timeout": 5, "max_retries": 3 }
+      { "queue": "auth-moderation-requests-dlq-qa", "max_batch_size": 10, "max_batch_timeout": 5, "max_retries": 3 },
+      {
+        "queue": "al-ummah-now-errors-qa",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 5,
+        "dead_letter_queue": "al-ummah-now-errors-dlq-qa"
+      },
+      {
+        // Batches that failed 5 times: retried every 15 minutes, no DLQ of its own
+        "queue": "al-ummah-now-errors-dlq-qa",
+        "max_batch_size": 10,
+        "max_batch_timeout": 30,
+        "max_retries": 10
+      }
     ]
   },
-  // Status reads of open requests to auth (every 5 minutes)
-  "triggers": { "crons": ["*/5 * * * *"] },
-
-  // api-videos owns the content data: /internal/* (processing health, content management)
-  "services": [{ "binding": "VIDEOS", "service": "videos-qa" }],
+  // Every 5 minutes: status reads of open requests to auth; 03:17 UTC: error data retention
+  "triggers": { "crons": ["*/5 * * * *", "17 3 * * *"] },
+  // Private source maps uploaded by the release (lib/sourcemaps.ts) are in r2_buckets as SOURCEMAPS.
+  // VIDEOS: api-videos owns the content data: /internal/* (processing health, content management)
+  // PROCESSOR: Retry of dead-lettered messages on the Errors page (lib/errors-actions.ts)
+  "services": [
+    { "binding": "VIDEOS", "service": "videos-qa" },
+    { "binding": "PROCESSOR", "service": "al-ummah-now-processor-qa" }
+  ],
 
   "vars": {
     "ENVIRONMENT": "qa",

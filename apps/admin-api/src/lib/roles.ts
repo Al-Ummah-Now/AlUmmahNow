@@ -52,6 +52,10 @@ export const PERMISSIONS = {
   'auth_requests:read': MODERATOR_ROLE_IDS,
   /** Send a moderation request to auth (suspend/delete the auth identity, …), retry it, answer auth. */
   'auth_requests:send': ADMIN_ROLE_IDS,
+  /** Read the Errors page (error groups, samples, timeline). */
+  'errors:read': ADMIN_ROLE_IDS,
+  /** Acknowledge, resolve, ignore, assign and annotate error groups. */
+  'errors:manage': ADMIN_ROLE_IDS,
 } as const satisfies Record<string, readonly string[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

@@ -1043,6 +1043,23 @@ jobs:
           name: admin-web-build-artifacts
           path: apps/admin-web/
 
+      # Queues and buckets new bindings need (scripts/release/ensure-resources.ts), then the web
+      # apps' browser source maps: uploaded to the private bucket and removed from the assets
+      # (scripts/release/upload-sourcemaps.ts; the Errors page symbolicates with them)
+      - name: Ensure qa resources
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node --experimental-strip-types --no-warnings scripts/release/ensure-resources.ts --env qa
+
+      - name: Upload private source maps (qa)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          node --experimental-strip-types --no-warnings scripts/release/upload-sourcemaps.ts --env qa --app web --release "${GITHUB_SHA::12}"
+          node --experimental-strip-types --no-warnings scripts/release/upload-sourcemaps.ts --env qa --app admin-web --release "${GITHUB_SHA::12}"
+
       - name: Deploy Web to QA
         run: |
           cd apps/web

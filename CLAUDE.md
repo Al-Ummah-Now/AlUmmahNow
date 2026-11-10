@@ -206,6 +206,14 @@ logger.error('Authentication failed', { error, userId, attempt });
 logger.warn('Deprecated API endpoint accessed', { endpoint, userId });
 ```
 
+### Errors and needs-action items
+
+Users never see raw errors, and failures that need a person go to the videos admin **Errors** page. Use the shared reporter (`@al-ummah/shared-types`), never a bespoke log-and-forget:
+
+- Workers: wrap fetch handlers with `withErrorReporting(app, handler)`; report handled failures with `reportServerError`; when a job gives up (last queue retry, DLQ, email not sent, AI step or admin job failed) call `reportNeedsAction` with a stable `key`, a link to the item and, where possible, a `retry` spec registered in `apps/admin-api/src/lib/errors-actions.ts`; call `resolveNeedsAction` when it later succeeds.
+- Browser (web, admin-web): `reportError` / `reportNeedsAction` from `@/lib/errors/reporter`; show `FriendlyError` (or your own copy) with the reference, never `error.message`.
+- Ingestion is asynchronous (queue + retry + DLQ). Full guide: `docs/features/error-reporting.md`.
+
 ### Internationalization (i18n) Standards
 
 **CRITICAL**: Always use i18n for all user-facing text. NEVER hardcode strings.
