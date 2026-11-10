@@ -36,10 +36,11 @@ test.describe('TUS Proxy - Security Verification', () => {
 
   test.beforeEach(async ({ page }) => {
     tracker = trackUploads(page);
-    // Server action responses (initiate/complete/status) are the only place
-    // upload credentials could leak to the browser. Their streamed bodies are
-    // not reliably readable from Playwright's network events, so copy them
-    // in the page from the fetch calls Next.js makes for server actions.
+    // The upload control responses (initiate/complete/status, called from the
+    // browser straight to api-videos) and any server action response are where
+    // upload credentials could leak to the browser. Streamed action bodies are
+    // not reliably readable from Playwright's network events, so copy every
+    // such body in the page from the fetch calls themselves.
     await page.addInitScript(() => {
       const w = window as unknown as { __actionBodies: string[] };
       w.__actionBodies = [];
@@ -47,7 +48,8 @@ test.describe('TUS Proxy - Security Verification', () => {
       window.fetch = async (input, init) => {
         const response = await originalFetch(input, init);
         const headers = new Headers(init?.headers);
-        if (headers.has('next-action')) {
+        const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        if (headers.has('next-action') || /\/api\/videos\/upload\//.test(url)) {
           response.clone().text().then((body) => w.__actionBodies.push(body), () => undefined);
         }
         return response;
@@ -82,7 +84,7 @@ test.describe('TUS Proxy - Security Verification', () => {
       expect(request.headers['authorization']).toMatch(/^Bearer [\w-]+\.[\w-]+\.[\w-]+$/);
     }
 
-    // 3. No Bunny.net credentials in any browser request or server action response
+    // 3. No Bunny.net credentials in any browser request or upload control response
     const browserTraffic = JSON.stringify(tracker.requests).toLowerCase();
     const actionBodies = () => page.evaluate(() => (window as unknown as { __actionBodies: string[] }).__actionBodies);
     // The initiate response (which carries the upload session) must be among them
@@ -148,19 +150,30 @@ test.describe('TUS Proxy - Error Handling', () => {
     await deleteVideos(page, tracker.videoIds);
   });
 
-  test('reports the failure after automatic retries are exhausted', async ({ page }) => {
-    test.slow(); // tus retries after 0, 3, 5, 10 and 20 seconds
+  test('keeps retrying while the proxy fails, says it is reconnecting, and finishes once it recovers', async ({ page }) => {
+    test.slow();
     const ui = uploadUi(page);
-    await failTusPatches(page, 500);
+    // A deploy or an incident: the proxy answers 500 to every chunk. The
+    // uploader retries for ~15 minutes (src/lib/upload/resilient-tus.ts)
+    // instead of failing the upload.
+    const recover = await failTusPatches(page, 500);
 
     await startUpload(page, await helpers.createTestVideo('server-error.mp4', 64), 'Server Error Test');
 
-    await expect(ui.progress).toHaveAttribute('data-state', 'error', { timeout: 90_000 });
-    await expect(ui.error).toBeVisible();
-    await expect(ui.retry).toBeVisible();
-    const patches = tracker.tusRequests().filter((r) => r.method === 'PATCH');
-    // The client retried before giving up
-    expect(patches.length).toBeGreaterThan(1);
-    expect(patches.every((p) => TUS_URL_PATTERN.test(p.url))).toBe(true);
+    const reconnecting = page.getByTestId('upload-reconnecting');
+    await expect(reconnecting).toBeVisible({ timeout: 60_000 });
+    await expect(reconnecting).toHaveAttribute('role', 'status');
+    await expect(ui.progress).toHaveAttribute('data-state', 'uploading');
+    await expect(ui.error).toBeHidden();
+    await expect(ui.retry).toBeHidden();
+    // The client retried, only ever against the proxy
+    await expect.poll(() => tracker.tusRequests().filter((r) => r.method === 'PATCH').length, { timeout: 30_000 }).toBeGreaterThan(1);
+    expect(tracker.tusRequests().filter((r) => r.method === 'PATCH').every((p) => TUS_URL_PATTERN.test(p.url))).toBe(true);
+
+    // The proxy is back: the same upload completes without the user doing anything
+    await recover();
+    await expectUploadSuccess(page, 'Server Error Test', 120_000);
+    await expect(reconnecting).toBeHidden();
+    expect(tracker.videoIds.size).toBe(1);
   });
 });

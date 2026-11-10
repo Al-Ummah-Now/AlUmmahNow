@@ -11,6 +11,7 @@ import { logger } from '@/lib/logger-client';
 
 import { useState, useEffect } from 'react';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
+import { MenuBackdrop } from './MenuBackdrop';
 import { useLanguage } from '@/hooks/useLanguage';
 import Link from 'next/link';
 import { login } from '@/lib/actions';
@@ -211,12 +212,7 @@ export function UnifiedNavigation() {
         {/* Dropdown Menu */}
         {isOpen && (
           <>
-            {/* Backdrop */}
-            <div
-              className="fixed inset-0 z-40"
-              onClick={() => setIsOpen(false)}
-              aria-hidden="true"
-            />
+            <MenuBackdrop onClose={() => setIsOpen(false)} />
 
             {/* Menu */}
             <div
@@ -343,15 +339,12 @@ export function UnifiedNavigation() {
       {/* Dropdown Menu */}
       {isOpen && (
         <>
-          {/* Backdrop */}
-          <div
-            className="fixed inset-0 z-40"
-            onClick={() => {
+          <MenuBackdrop
+            onClose={() => {
               setIsOpen(false);
               setIsCreatingChannel(false);
               setNewChannelName('');
             }}
-            aria-hidden="true"
           />
 
           {/* Menu */}

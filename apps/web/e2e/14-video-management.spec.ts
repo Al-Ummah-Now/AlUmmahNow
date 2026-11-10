@@ -121,15 +121,27 @@ test.describe('Video Filtering', () => {
     await expect(target).toHaveCount(0);
   });
 
-  test('should filter videos by duration', async ({ page }) => {
+  test('should filter videos by format', async ({ page }) => {
     await openDashboard(page);
+    const filter = page.getByTestId('dashboard-filter-duration');
+    const target = card(page, seed[SEED_TITLES.singleVideo]);
 
-    // Seed videos are 2-4 second clips
-    await page.getByTestId('dashboard-filter-duration').selectOption('short');
-    await expect(card(page, seed[SEED_TITLES.singleVideo])).toBeVisible();
+    // The search API's formats: Shorts are up to 3 minutes AND vertical or square
+    await expect(filter.locator('option')).toHaveText(['All Videos', 'Videos', 'Shorts', 'Live']);
+    expect(await filter.locator('option').evaluateAll((os) => os.map((o) => (o as HTMLOptionElement).value))).toEqual(['all', 'standard', 'short', 'live']);
 
-    await page.getByTestId('dashboard-filter-duration').selectOption('long');
-    await expect(card(page, seed[SEED_TITLES.singleVideo])).toHaveCount(0);
+    // The seed is a 4-second landscape (426x240) clip: a video, not a Short
+    await filter.selectOption('standard');
+    await expect(target).toBeVisible();
+
+    await filter.selectOption('short');
+    await expect(target).toHaveCount(0);
+
+    await filter.selectOption('live');
+    await expect(target).toHaveCount(0);
+
+    await filter.selectOption('all');
+    await expect(target).toBeVisible();
   });
 
   test('should clear filters', async ({ page }) => {

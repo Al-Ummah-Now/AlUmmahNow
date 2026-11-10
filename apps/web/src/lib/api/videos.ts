@@ -625,7 +625,7 @@ export async function searchVideos(
   query: string,
   filters?: SearchFilters & {
     channelIds?: string[];
-    durationFilter?: 'all' | 'short' | 'standard' | 'long' | 'live';
+    durationFilter?: 'all' | 'short' | 'standard' | 'live';
     scheduleFilter?: 'all' | 'scheduled' | 'published';
     isOwner?: boolean;
   },

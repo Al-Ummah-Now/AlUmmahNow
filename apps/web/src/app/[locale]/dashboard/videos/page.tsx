@@ -32,7 +32,8 @@ import {
 
 type FilterStatus = 'all' | 'ready' | 'processing' | 'uploading' | 'failed';
 type FilterPrivacy = 'all' | 'public' | 'private';
-type FilterDuration = 'all' | 'short' | 'standard' | 'long';
+/** The search API's format filter: Shorts (≤ 3 min and vertical or square, or chosen by the uploader), other videos, live */
+type FilterDuration = 'all' | 'short' | 'standard' | 'live';
 type SortBy = DashboardSort;
 type VideoStatus = Exclude<FilterStatus, 'all'>;
 
@@ -464,10 +465,10 @@ export default function VideoDashboardPage() {
                 onChange={(e) => setDurationFilter(e.target.value as FilterDuration)}
                 className="px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
               >
-                <option value="all">{t.video.allVideos || 'All Videos'}</option>
-                <option value="short">{t.video.shortVideos || 'Short (≤3 min)'}</option>
-                <option value="standard">{t.video.standardVideos || 'Standard (3-20 min)'}</option>
-                <option value="long">{t.video.longVideos || 'Long (>20 min)'}</option>
+                <option value="all">{t.video.allVideos}</option>
+                <option value="standard">{t.channel.videos}</option>
+                <option value="short">{t.channel.shorts}</option>
+                <option value="live">{t.channel.live}</option>
               </ThemedSelectField>
 
               <ThemedSelectField
