@@ -4,7 +4,7 @@ import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import { logger } from '@/lib/logger-client';
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, UploadCloud, Trash2, Eye, Edit, X, BarChart3, Pencil } from 'lucide-react';
+import { Search, UploadCloud, Trash2, Eye, Edit, X, BarChart3, Pencil, RotateCcw } from 'lucide-react';
 import { formatViews } from '@/lib/format/videoMeta';
 import { RelativeDate } from '@/components/RelativeDate';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -18,6 +18,7 @@ import Image from 'next/image';
 import { ProcessingProgress } from '@/components/video/ProcessingProgress';
 import Link from 'next/link';
 import { compareDashboardVideos, type DashboardSort } from '@/lib/dashboard/sort-videos';
+import { needsReupload, reuploadHref } from '@/lib/dashboard/reupload';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -639,6 +640,29 @@ export default function VideoDashboardPage() {
                       {video.isPublic ? t.video.public : t.video.private}
                     </span>
                   </div>
+
+                  {/* An upload that could not finish: why, and the way out */}
+                  {needsReupload(video) && (
+                    <div
+                      className="mt-3 rounded-lg border border-destructive bg-destructive/10 p-3"
+                      data-testid="dashboard-video-needs-reupload"
+                    >
+                      <p className="text-sm font-medium text-destructive">{t.upload.needsReupload}</p>
+                      {video.processingIssue?.reason && (
+                        <p className="mt-1 text-xs text-foreground" data-testid="dashboard-video-issue-reason">
+                          {video.processingIssue.reason}
+                        </p>
+                      )}
+                      <Link
+                        href={reuploadHref(lang, video)}
+                        data-testid="dashboard-video-reupload"
+                        className="mt-2 inline-flex items-center gap-1 rounded-lg bg-destructive px-3 py-1.5 text-xs font-medium text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        <RotateCcw size={14} aria-hidden="true" />
+                        {t.upload.reupload}
+                      </Link>
+                    </div>
+                  )}
 
                   {/* Actions */}
                   <div className="flex gap-2 mt-3">

@@ -1,7 +1,7 @@
 'use client';
 import { logger } from '@/lib/logger-client';
 import React, { useState, useRef, useCallback, useEffect } from "react";
-import { ResilientUpload, requestUploadResume, tusEndpointFor, type ReauthoriseResult } from "@/lib/upload/resilient-tus";
+import { ResilientUpload, grantedUploadUrl, reportUploadFailure, requestUploadResume, tusEndpointFor, type ReauthoriseResult } from "@/lib/upload/resilient-tus";
 import { findRememberedUpload, forgetUpload, rememberUpload } from "@/lib/upload/resume-store";
 import { fetchClientAuthToken, getClientAuthHeaders } from "@/lib/auth/client-token";
 import { VideoObject } from "@/interfaces";
@@ -26,6 +26,13 @@ interface VideoUploadProps {
   onProgress: (percentage: number) => void;
   onError: (error: string) => void;
   className?: string;
+  /**
+   * Re-upload into this existing video (studio "Re-upload" on a video flagged
+   * needs_reupload) instead of creating a new one. Never falls back to a new video.
+   */
+  resumeVideoId?: string;
+  /** Title of that video, prefilled (its metadata is kept as it is). */
+  resumeTitle?: string;
 }
 
 interface VideoMetadata {
@@ -57,7 +64,9 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
   onUploadComplete,
   onProgress,
   onError,
-  className = ""
+  className = "",
+  resumeVideoId,
+  resumeTitle,
 }) => {
   const { t } = useLanguage();
 
@@ -143,7 +152,8 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
     }
 
     setSelectedFile(file);
-    const defaultTitle = file.name.replace(/\.[^/.]+$/, ""); // Remove extension
+    // A re-upload keeps its video's title; a new upload starts from the file name
+    const defaultTitle = resumeTitle || file.name.replace(/\.[^/.]+$/, "");
     setMetadata(prev => ({
       ...prev,
       title: defaultTitle,
@@ -151,7 +161,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
       titleAr: ''
     }));
     setShowMetadataForm(true);
-  }, [onError, t]);
+  }, [onError, t, resumeTitle]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -229,20 +239,32 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
       let tusSessionId = '';
       let uploadUrl: string | undefined;
       let fallbackAuthorization: string | undefined;
-      const remembered = findRememberedUpload(selectedFile, channelId);
-      if (remembered) {
+      // A studio Re-upload targets its video; otherwise the same file picked
+      // again resumes the video it was being uploaded into.
+      const targetVideoId = resumeVideoId || findRememberedUpload(selectedFile, channelId)?.videoId;
+      if (targetVideoId) {
         let resumed: ReauthoriseResult | null = null;
-        try {
-          resumed = await requestUploadResume(getApiUrl(), remembered.videoId, await getClientAuthHeaders());
-        } catch (error) {
-          logger.warn('[VideoUpload] Resume check failed; starting a new upload', { videoId: remembered.videoId, error });
+        let lastError: unknown = null;
+        for (let attempt = 0; attempt < (resumeVideoId ? 3 : 1) && !resumed; attempt++) {
+          if (attempt) await new Promise((resolve) => setTimeout(resolve, 1500 * attempt));
+          try {
+            resumed = await requestUploadResume(getApiUrl(), targetVideoId, await getClientAuthHeaders());
+          } catch (error) {
+            lastError = error;
+            logger.warn('[VideoUpload] Resume check failed', { videoId: targetVideoId, attempt, error });
+          }
         }
         if (resumed?.kind === 'grant') {
-          videoId = remembered.videoId;
+          videoId = targetVideoId;
           tusSessionId = resumed.tusSessionId;
-          uploadUrl = resumed.tusUploadId ? `${endpoint}/${resumed.tusUploadId}` : undefined;
+          uploadUrl = grantedUploadUrl(endpoint, resumed, selectedFile);
           libraryIdRef.current = 0;
           thumbnailUrlRef.current = '';
+          rememberUpload(selectedFile, channelId, videoId);
+        } else if (resumeVideoId) {
+          // The user asked for this video: say why, never create another one.
+          if (resumed?.kind === 'completed') throw new Error(t.upload.reuploadAlreadyDone);
+          throw new Error(resumed?.kind === 'gone' ? resumed.message : (lastError instanceof Error ? lastError.message : VIDEO_UPLOAD_ERRORS.UPLOAD_FAILED));
         } else {
           forgetUpload(selectedFile, channelId);
         }
@@ -323,6 +345,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
           return token ? `Bearer ${token}` : fallbackAuthorization ?? null;
         },
         reauthorise: async (vid) => requestUploadResume(getApiUrl(), vid, await getClientAuthHeaders()),
+        reportFailure: async (vid, reason) => reportUploadFailure(getApiUrl(), vid, await getClientAuthHeaders(), reason),
         onReconnecting: (reconnecting) => {
           setUploadProgress(prev => prev && prev.state === 'uploading' ? { ...prev, reconnecting } : prev);
         },

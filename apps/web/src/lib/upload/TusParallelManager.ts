@@ -5,6 +5,7 @@ import {
   ResilientUpload,
   type ReauthoriseResult,
   apiUrlFromTusEndpoint,
+  reportUploadFailure,
   requestUploadResume,
 } from './resilient-tus';
 
@@ -13,6 +14,8 @@ export interface TusParallelManagerDeps {
   getAuthorization?: (force: boolean, fallback?: string) => Promise<string | null>;
   /** uploadResume for a video (re-authorises the same Bunny video). */
   reauthorise?: (videoId: string, endpoint: string, authorization: string | null) => Promise<ReauthoriseResult>;
+  /** Flags an upload that cannot finish (uploader + admin are told). */
+  reportFailure?: (videoId: string, reason: string, endpoint: string, authorization: string | null) => Promise<unknown>;
 }
 
 async function defaultGetAuthorization(force: boolean, fallback?: string): Promise<string | null> {
@@ -22,6 +25,10 @@ async function defaultGetAuthorization(force: boolean, fallback?: string): Promi
 
 async function defaultReauthorise(videoId: string, endpoint: string, authorization: string | null): Promise<ReauthoriseResult> {
   return requestUploadResume(apiUrlFromTusEndpoint(endpoint), videoId, authorization ? { Authorization: authorization } : {});
+}
+
+async function defaultReportFailure(videoId: string, reason: string, endpoint: string, authorization: string | null): Promise<unknown> {
+  return reportUploadFailure(apiUrlFromTusEndpoint(endpoint), videoId, authorization ? { Authorization: authorization } : {}, reason);
 }
 
 /**
@@ -37,11 +44,13 @@ export class TusParallelManager {
   private pendingQueue: string[] = [];
   private readonly getAuthorization: NonNullable<TusParallelManagerDeps['getAuthorization']>;
   private readonly reauthorise: NonNullable<TusParallelManagerDeps['reauthorise']>;
+  private readonly reportFailure: NonNullable<TusParallelManagerDeps['reportFailure']>;
 
   constructor(concurrentLimit: number = 3, deps: TusParallelManagerDeps = {}) {
     this.concurrentLimit = Math.max(1, Math.min(5, concurrentLimit));
     this.getAuthorization = deps.getAuthorization ?? defaultGetAuthorization;
     this.reauthorise = deps.reauthorise ?? defaultReauthorise;
+    this.reportFailure = deps.reportFailure ?? defaultReportFailure;
   }
 
   /**
@@ -66,6 +75,7 @@ export class TusParallelManager {
       metadata: config.metadata,
       getAuthorization: (force) => this.getAuthorization(force, fallbackAuth),
       reauthorise: async (vid) => this.reauthorise(vid, config.tusEndpoint, await this.getAuthorization(false, fallbackAuth)),
+      reportFailure: async (vid, reason) => this.reportFailure(vid, reason, config.tusEndpoint, await this.getAuthorization(false, fallbackAuth)),
       onProgress: (bytesUploaded, bytesTotal) => callbacks.onProgress?.(id, bytesUploaded, bytesTotal),
       onReconnecting: (reconnecting) => callbacks.onReconnecting?.(id, reconnecting),
       onSuccess: () => {

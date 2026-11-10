@@ -5,7 +5,7 @@ import { UploadQueueItem, VideoUploadMetadata } from '@al-ummah/shared-types';
 import { BatchUploadManager } from '@/lib/upload/BatchUploadManager';
 import { UploadOptimizer } from '@/lib/upload/UploadOptimizer';
 import { buildBatchUploadEntries, getTusProxyEndpoint } from '@/lib/upload/batch-entries';
-import { requestUploadResume, type ReauthoriseResult } from '@/lib/upload/resilient-tus';
+import { grantedUploadUrl, requestUploadResume, type ReauthoriseResult } from '@/lib/upload/resilient-tus';
 import { findRememberedUpload, forgetUpload, rememberUpload } from '@/lib/upload/resume-store';
 import type { BatchUploadEntry } from '@/lib/upload/BatchUploadManager';
 import { hasActiveUploads } from '@/lib/upload/batch-status';
@@ -176,7 +176,7 @@ export function useBatchUpload({
               metadata: { tusSessionId: result.tusSessionId, videoId: remembered.videoId },
               chunkSize,
               expiresAt: '',
-              ...(result.tusUploadId ? { uploadUrl: `${endpoint}/${result.tusUploadId}` } : {}),
+              uploadUrl: grantedUploadUrl(endpoint, result, file),
             },
           });
           continue;

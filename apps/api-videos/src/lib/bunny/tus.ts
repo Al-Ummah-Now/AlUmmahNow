@@ -10,6 +10,7 @@
  */
 
 import { logger } from '../logger';
+import { requireSecret } from '../env-helpers';
 
 /**
  * Generate a TUS authorization signature for Bunny.net video uploads
@@ -267,4 +268,26 @@ export async function createTusProxySession(
   });
 
   return tusSessionId;
+}
+interface SecretLike { text?(): Promise<string>; get?(): Promise<string> }
+
+/**
+ * Headers for a server-side request to a Bunny TUS upload URL (HEAD, PATCH,
+ * POST, DELETE): a fresh 1-hour signature each time, so nothing signed
+ * earlier can expire under a long upload.
+ */
+export async function bunnyTusRequestHeaders(
+  env: { 'bunny-stream-key': SecretLike | string; bunny_stream_library_id: SecretLike | string },
+  videoId: string,
+): Promise<Record<string, string>> {
+  const bunnyKey = await requireSecret(env['bunny-stream-key'] as never, 'bunny-stream-key');
+  const libraryId = parseInt(await requireSecret(env.bunny_stream_library_id as never, 'bunny_stream_library_id'), 10);
+  const expirationTime = Math.floor(Date.now() / 1000) + 3600;
+  const signature = await generateTUSSignature(libraryId, bunnyKey, expirationTime, videoId);
+  return {
+    AuthorizationSignature: signature,
+    AuthorizationExpire: expirationTime.toString(),
+    LibraryId: libraryId.toString(),
+    VideoId: videoId,
+  };
 }

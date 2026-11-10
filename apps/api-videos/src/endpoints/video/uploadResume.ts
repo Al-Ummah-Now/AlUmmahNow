@@ -4,9 +4,9 @@ import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import R2Repository, { rethrowBusy } from "../../lib/r2Repo";
-import { patchVideo } from '../../lib/videoWrites';
 import { generateTUSConfig, createTusProxySession, TUS_PROXY_SESSION_TTL_SECONDS } from "../../lib/bunny/tus";
 import { buildTusUploadId, type VideoTusUpload } from "./tus/tusProxy";
+import { reopenForReupload, type UploadVideo } from "../../lib/uploads/lifecycle";
 import { requireSecret } from "../../lib/env-helpers";
 import { logger } from '../../lib/logger';
 
@@ -44,6 +44,7 @@ export class UploadResumeEndpoint extends AuthenticatedRoute {
 								videoId: z.string().describe("Video GUID for upload"),
 								tusSessionId: z.string().describe("New TUS proxy session id (send as tusSessionId upload metadata)"),
 								tusUploadId: z.string().optional().describe("Proxy upload id of the earlier upload, when Bunny may still hold its bytes: resume at /api/videos/tus/<tusUploadId>"),
+								tusUploadFileSize: z.number().optional().describe("Size in bytes of the earlier upload (tusUploadId); a different file must start a new upload instead of resuming it"),
 								expiresAt: z.string().describe("ISO 8601 datetime when the session expires"),
 								chunkSize: z.number().describe("Recommended chunk size in bytes"),
 								resumable: z.boolean().describe("Whether upload supports resume"),
@@ -172,7 +173,14 @@ export class UploadResumeEndpoint extends AuthenticatedRoute {
 			// (conditional write on the fresh video, SCALABILITY-AUDIT AV-3)
 			const resumedAt = new Date().toISOString();
 			try {
-				await patchVideo(repository, videoId, (fresh) => fresh.uploadStatus === 'ready' || fresh.uploadStatus === 'processing' ? false : { dateModified: resumedAt, lastResumeAt: resumedAt } as Partial<VideoType>, { ownerId: userId });
+				// A re-upload of a flagged video reopens it (back to uploading,
+				// needs_reupload cleared); it is flagged again if this attempt fails.
+				await repository.updateObject(videoId, (fresh) => {
+					if (fresh.userId !== userId || fresh.uploadStatus === 'ready' || fresh.uploadStatus === 'processing') return false;
+					reopenForReupload(fresh as UploadVideo);
+					Object.assign(fresh, { dateModified: resumedAt, lastResumeAt: resumedAt });
+					return true;
+				});
 			} catch (error) {
 				logger.warn('[UploadResume] Could not record the resume attempt', { videoId, error: error instanceof Error ? error.message : String(error) });
 			}
@@ -182,13 +190,13 @@ export class UploadResumeEndpoint extends AuthenticatedRoute {
 				result: {
 					videoId,
 					tusSessionId,
-					...(tusUploadId ? { tusUploadId } : {}),
+					...(tusUploadId ? { tusUploadId, tusUploadFileSize: durable?.fileSize } : {}),
 					expiresAt: new Date(Date.now() + TUS_PROXY_SESSION_TTL_SECONDS * 1000).toISOString(),
 					chunkSize: tusConfig.chunkSize,
 					resumable: true,
 					videoMetadata: {
 						title: video.title,
-						uploadStatus: uploadStatus,
+						uploadStatus: uploadStatus === 'failed' ? 'uploading' : uploadStatus,
 						fileSize: video.fileSize,
 						mimeType: video.originalFormat,
 					},

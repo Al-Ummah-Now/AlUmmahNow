@@ -32,6 +32,7 @@ const SAMPLE = path.join(__dirname, '..', 'test-fixtures', 'e2e-sample-40s.mp4')
 /** A playable mp4 padded to `bytes` (players and Bunny ignore trailing data). */
 function paddedVideo(dir: string, name: string, bytes: number): string {
   const head = fs.readFileSync(SAMPLE);
+  fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, name);
   fs.writeFileSync(file, Buffer.concat([head, randomBytes(Math.max(0, bytes - head.length))]));
   return file;
@@ -283,6 +284,61 @@ test.describe('Release: uploads resume', () => {
     } finally {
       for (const videoId of new Set(log.posts.map((p) => p.videoId).filter(Boolean))) {
         await apiFetch(u.user, `/api/videos/${videoId}`, { method: 'DELETE', headers: { channelId: u.channelId } });
+      }
+    }
+  });
+
+  test('an upload that cannot finish is flagged: the studio offers Re-upload, which finishes the same video', async ({ page }, testInfo) => {
+    const u = await uploader(page, 'rel-reupload');
+    const file = paddedVideo(testInfo.outputDir, 'flag-me.mp4', 3 * CHUNK + 4321); // 4 chunks
+    await page.addInitScript((size) => window.localStorage.setItem('aun:tus-chunk-size', String(size)), CHUNK);
+
+    // PATCH #2 -> 403: not retryable, the browser gives up on this upload
+    let broken = true;
+    const log = await interceptTus(page, ({ method, n }) => (broken && method === 'PATCH' && n.patch === 2 ? { fulfill: 403 } : undefined));
+    const reports: number[] = [];
+    page.on('response', (res) => {
+      if (res.request().method() === 'POST' && /\/api\/videos\/upload\/failed\//.test(res.url())) reports.push(res.status());
+    });
+
+    const title = `Release E2E reupload ${Date.now().toString(36)}`;
+    let videoId = '';
+    try {
+      await page.goto(`${target().web}/en/upload`);
+      await expect(page.getByTestId('upload-dropzone')).toBeVisible({ timeout: 30000 });
+      await page.getByTestId('upload-file-input').setInputFiles(file);
+      await page.getByTestId('upload-title-en').fill(title);
+      await page.getByTestId('upload-is-public').uncheck();
+      await page.getByTestId('upload-submit').click();
+      await expect(page.getByTestId('upload-page-error')).toBeVisible({ timeout: 120000 });
+      videoId = log.posts[0]?.videoId ?? '';
+      expect(videoId, 'the TUS POST returned no upload URL with a video id').toBeTruthy();
+
+      // Never silent: reported, and the video is flagged
+      await expect.poll(() => reports, { message: 'the browser did not report the failed upload', timeout: 30000 }).toContain(200);
+      await expect.poll(() => videoStatus(u, videoId), { timeout: 30000 }).toBe('failed');
+
+      // The studio shows why and offers Re-upload into the same video
+      broken = false;
+      await page.goto(`${target().web}/en/dashboard/videos`);
+      const reupload = page.locator(`[data-testid="dashboard-video-reupload"][href*="resume=${videoId}"]`);
+      await expect(reupload).toBeVisible({ timeout: 60000 });
+      await reupload.click();
+      await expect(page.getByTestId('upload-reupload-banner')).toHaveAttribute('data-video-id', videoId, { timeout: 30000 });
+
+      await page.getByTestId('upload-file-input').setInputFiles(file);
+      await expect(page.getByTestId('upload-title-en')).toHaveValue(title);
+      await page.getByTestId('upload-submit').click();
+      await expect(page.getByTestId('upload-success')).toBeVisible({ timeout: 180000 });
+
+      // Same video, no second one; the bytes Bunny had were kept
+      expect(new Set(log.posts.filter((p) => p.status === 201).map((p) => p.videoId)), 'the re-upload created another video').toEqual(new Set([videoId]));
+      expect(new Set(log.patches.map((p) => p.uploadId.split('.')[1])).size, 'chunks went to another video').toBe(1);
+      expectNeverBackwards(log);
+      await expect.poll(() => videoStatus(u, videoId), { timeout: 60000 }).toMatch(/^(processing|ready)$/);
+    } finally {
+      for (const id of new Set([videoId, ...log.posts.map((p) => p.videoId)].filter(Boolean))) {
+        await apiFetch(u.user, `/api/videos/${id}`, { method: 'DELETE', headers: { channelId: u.channelId } });
       }
     }
   });

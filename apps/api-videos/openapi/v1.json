@@ -23855,6 +23855,175 @@
         }
       }
     },
+    "/api/v1/videos/upload/failed/{videoId}": {
+      "post": {
+        "tags": [
+          "Videos"
+        ],
+        "summary": "Report an upload that cannot finish",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nFlags the caller's unfinished upload as needing a re-upload (uploader notification, Re-upload action, admin processing-health view). Idempotent. A finished video answers 409.",
+        "operationId": "post_UploadFailedEndpoint",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Video whose upload failed"
+            },
+            "required": true,
+            "description": "Video whose upload failed",
+            "name": "videoId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 500,
+                    "description": "What failed, shown to the uploader and admins"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Flagged (or already flagged)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "result": {
+                      "type": "object",
+                      "properties": {
+                        "videoId": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "videoId",
+                        "status"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "result"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not the caller's video",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Video not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The upload already finished",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/videos/upload/initiate": {
       "post": {
         "tags": [
@@ -24176,6 +24345,10 @@
                         "tusUploadId": {
                           "type": "string",
                           "description": "Proxy upload id of the earlier upload, when Bunny may still hold its bytes: resume at /api/videos/tus/<tusUploadId>"
+                        },
+                        "tusUploadFileSize": {
+                          "type": "number",
+                          "description": "Size in bytes of the earlier upload (tusUploadId); a different file must start a new upload instead of resuming it"
                         },
                         "expiresAt": {
                           "type": "string",
