@@ -11,6 +11,7 @@ import {
   type E2EVideo,
 } from './test-utils/e2e-videos';
 import { ARABIC, expectDarkSurface, expectNoHorizontalScroll, getSchedule, scheduleVideoApi } from './test-utils/upload-studio';
+import { themedTrigger } from './test-utils/themed-select';
 
 /**
  * Scheduled videos page (/[locale]/scheduled-videos) beyond
@@ -105,7 +106,7 @@ test.describe('Scheduled list - locale, theme and layout', () => {
     await waitForItem(page, scheduledSeed);
     const row = item(page, scheduledSeed);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(ARABIC);
-    await expect(page.getByTestId('scheduled-status-filter')).toHaveAccessibleName(ARABIC);
+    await expect(themedTrigger(page.getByTestId('scheduled-status-filter'))).toHaveAccessibleName(ARABIC);
     await expect(row.getByTestId('scheduled-video-countdown')).toContainText(ARABIC);
     await expect(row.getByTestId('scheduled-video-edit')).toHaveText(ARABIC);
     await expect(row.getByTestId('scheduled-video-edit')).toHaveAttribute('href', `/ar/video/${scheduledSeed.id}/edit`);

@@ -235,7 +235,13 @@ test.describe('watch page - report (signed in, not the owner)', () => {
       const video = await qaLecture(request, 1);
       await openWatch(page, video, locale);
 
-      await page.getByRole('button', { name: report, exact: true }).click();
+      // Report lives in the action row's "More actions" menu
+      const more = page.getByTestId('watch-more-button');
+      await expect(more).toHaveAttribute('aria-haspopup', 'menu');
+      await more.click();
+      const reportItem = page.getByRole('menuitem', { name: report, exact: true });
+      await expect(reportItem).toHaveAttribute('data-testid', 'watch-more-report');
+      await reportItem.click();
       const dialog = page.getByRole('dialog', { name: title });
       await expect(dialog).toBeVisible();
       await expect(dialog).toContainText(video.titleLocalized?.[locale] || video.title);

@@ -11,6 +11,7 @@ import {
   type E2EVideo,
 } from './test-utils/e2e-videos';
 import { ARABIC, expectDarkSurface, expectNoHorizontalScroll } from './test-utils/upload-studio';
+import { themedTrigger } from './test-utils/themed-select';
 
 /**
  * Video dashboard (/[locale]/dashboard/videos) beyond 14/19: sorting, the
@@ -79,11 +80,37 @@ test.describe('Dashboard - sorting and dates', () => {
     for (let i = 1; i < created.length; i++) expect(created[i - 1]).toBeGreaterThanOrEqual(created[i]);
   });
 
-  test('DASH-003 labels a video uploaded today as "Today"', async ({ page }) => {
+  test('DASH-003 labels a video uploaded today with a recent relative time', async ({ page }) => {
     await openDashboard(page);
-    await expect(card(page, fresh!).getByTestId('dashboard-video-meta')).toContainText('Today');
+    await expectUploadedToday(page, fresh!, 'en');
   });
 });
+
+/**
+ * Cards show the upload time relative to now (faad4455), with the full date in
+ * the tooltip: a video uploaded minutes ago reads "now" / "5 minutes ago"
+ * (Arabic: "الآن" / "قبل ٥ دقائق"), the date is today's.
+ */
+async function expectUploadedToday(page: Page, video: E2EVideo, lang: 'en' | 'ar') {
+  const time = card(page, video).getByTestId('dashboard-video-meta').locator('time');
+  await expect(time).toBeVisible();
+  const created = await card(page, video).getAttribute('data-created');
+  expect(new Date((await time.getAttribute('datetime'))!).getTime()).toBe(new Date(created!).getTime());
+  const { text, title, recent, today } = await time.evaluate((el, l) => {
+    const rtf = new Intl.RelativeTimeFormat(l, { numeric: 'auto' });
+    const recentTexts = [rtf.format(0, 'second')];
+    for (let n = 1; n < 60; n++) recentTexts.push(rtf.format(-n, 'second'), rtf.format(-n, 'minute'));
+    for (let n = 1; n < 24; n++) recentTexts.push(rtf.format(-n, 'hour'));
+    return {
+      text: el.textContent?.trim() ?? '',
+      title: el.getAttribute('title'),
+      recent: recentTexts,
+      today: new Intl.DateTimeFormat(l, { dateStyle: 'long' }).format(new Date()),
+    };
+  }, lang);
+  expect(recent, `"${text}" is a time earlier today`).toContain(text);
+  expect(title).toBe(today);
+}
 
 test.describe('Dashboard - card actions', () => {
   test('DASH-004 selects a video by clicking its card', async ({ page }) => {
@@ -125,10 +152,10 @@ test.describe('Dashboard - locale, theme and layout', () => {
     await openDashboard(page, 'ar');
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(ARABIC);
-    await expect(page.getByTestId('dashboard-sort')).toHaveAccessibleName(ARABIC);
+    await expect(themedTrigger(page.getByTestId('dashboard-sort'))).toHaveAccessibleName(ARABIC);
     await expect(page.getByTestId('dashboard-sort').locator('option[value="title"]')).toHaveText(ARABIC);
     await expect(page.getByTestId('dashboard-filter-privacy').locator('option[value="private"]')).toHaveText(ARABIC);
-    await expect(card(page, fresh!).getByTestId('dashboard-video-meta')).toContainText('اليوم');
+    await expectUploadedToday(page, fresh!, 'ar');
     await expect(card(page, fresh!).getByTestId('dashboard-video-privacy')).toHaveText(ARABIC);
   });
 

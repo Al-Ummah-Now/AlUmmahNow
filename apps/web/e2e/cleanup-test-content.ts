@@ -17,6 +17,7 @@
 import * as fs from 'fs';
 import { AUTH_STATE, type AuthUser } from './test-utils/auth-state';
 import { listOwnVideos, userApi, SEED_TITLES } from './test-utils/e2e-videos';
+import { ensureFreshSession } from './test-utils/fresh-session';
 
 const USERS: AuthUser[] = ['single', 'multi', 'none', 'scratch'];
 const SEED_TITLE_SET = new Set<string>(Object.values(SEED_TITLES));
@@ -43,6 +44,8 @@ export async function cleanupTestVideos(opts: CleanupOptions): Promise<number> {
       log(`[cleanup] no stored session for ${user}; skipping`);
       continue;
     }
+    // A long run outlives the stored access token
+    await ensureFreshSession(AUTH_STATE[user]);
     const u = userApi(user);
     if (u.channelIds.length === 0) continue;
 

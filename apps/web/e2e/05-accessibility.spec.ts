@@ -39,9 +39,13 @@ test.describe('Accessibility - Semantic HTML', () => {
     await page.goto('/en/');
     await expect(page.getByTestId('video-card').first()).toBeVisible();
 
-    for (const img of await page.locator('img').all()) {
-      expect(await img.getAttribute('alt'), await img.evaluate((el) => el.outerHTML)).not.toBeNull();
-    }
+    await page.waitForLoadState('networkidle').catch(() => undefined);
+    // One pass over the images present now: the feed re-renders cards while it
+    // loads, so element handles taken one by one go stale
+    const images = page.locator('img');
+    expect(await images.count()).toBeGreaterThan(0);
+    const withoutAlt = await images.evaluateAll((els) => els.filter((el) => !el.hasAttribute('alt')).map((el) => el.outerHTML.slice(0, 200)));
+    expect(withoutAlt).toEqual([]);
   });
 
   test('icon-only header buttons have accessible names', async ({ page }) => {
@@ -129,11 +133,21 @@ test.describe('Accessibility - Forms', () => {
 
   test('profile edit form controls have labels', async ({ page }) => {
     await page.goto('/en/profile/edit');
-    const controls = page.locator('form').locator('input:visible, textarea:visible, select:visible');
+    const form = page.locator('form').filter({ has: page.locator('input[name="firstNameEn"]') });
+    // Themed dropdowns: the native <select> only carries the form value; people
+    // (and assistive tech) use the trigger button, which the label names
+    const themedNative = form.locator('select.tsf-native');
+    const controls = form.locator('input:visible, textarea:visible, select:visible:not(.tsf-native), button.tsf-trigger');
     await expect(controls.first()).toBeVisible();
+    await expect(form.locator('button.tsf-trigger').first()).toBeVisible();
 
     for (const control of await controls.all()) {
       expect(await hasLabel(control), await control.evaluate((el) => el.outerHTML.slice(0, 200))).toBe(true);
+    }
+    // The value-only selects stay out of the accessibility tree and tab order
+    for (const native of await themedNative.all()) {
+      await expect(native).toHaveAttribute('aria-hidden', 'true');
+      await expect(native).toHaveAttribute('tabindex', '-1');
     }
   });
 

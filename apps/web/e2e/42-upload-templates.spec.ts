@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test';
 import { test, expect, helpers } from './fixtures';
 import { AUTH_STATE } from './test-utils/auth-state';
 import { gotoUpload, selectVideo, uploadUi } from './test-utils/upload';
+import { chooseThemedOption } from './test-utils/themed-select';
 import {
   ARABIC,
   createTemplate,
@@ -88,8 +89,8 @@ test.describe('Upload templates - settings page', () => {
     await dialog.getByLabel('Template Name (Arabic)').fill('قالب جديد');
     await dialog.getByLabel('Title (English)').fill('Friday khutbah {{date}}');
     await dialog.getByLabel('Tags').fill('khutbah, friday');
-    await dialog.getByLabel('Category').selectOption('khutbah');
-    await dialog.getByLabel('Visibility').selectOption('private');
+    await chooseThemedOption(dialog.getByLabel('Category'), 'khutbah');
+    await chooseThemedOption(dialog.getByLabel('Visibility'), 'private');
     await dialog.getByTestId('template-editor-save').click();
 
     await expect(dialog).toBeHidden();

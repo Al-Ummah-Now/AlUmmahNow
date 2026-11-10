@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures';
 import type { Locator } from '@playwright/test';
 import { combinedSessionState, readAccount } from './test-utils/auth-state';
-import { openAccountMenu, showMenuView } from './test-utils/navigation';
+import { openAccountMenu, showMenuView, switchAccountTo } from './test-utils/navigation';
 
 /**
  * Account switching with two signed-in accounts.
@@ -29,7 +29,10 @@ test.describe('Account Switching', () => {
     await page.goto('/en');
     const menu = await openAccountMenu(page);
 
-    await expect(menu.getByText(/^ACCOUNTS \(2\)/)).toBeVisible();
+    // The accounts open from a submenu row on the main list
+    const switchAccount = menu.getByTestId('nav-switch-account');
+    await expect(switchAccount).toHaveText('Switch Account');
+    await expect(switchAccount).toHaveAttribute('aria-haspopup', 'menu');
     await showMenuView(menu, 'account');
     await expect(menu.getByTestId('nav-account')).toHaveCount(2);
     await showMenuView(menu, 'account');
@@ -54,8 +57,7 @@ test.describe('Account Switching', () => {
     await page.goto('/en');
 
     let menu = await openAccountMenu(page);
-    await showMenuView(menu, 'account');
-    await account(menu, multi.email).getByRole('menuitem').click();
+    await switchAccountTo(page, multi);
 
     menu = await openAccountMenu(page);
     await showMenuView(menu, 'account');
@@ -68,8 +70,7 @@ test.describe('Account Switching', () => {
       await expect(menu.locator(`[data-testid="nav-channel-option"][data-channel-id="${ch.id}"]`)).toBeVisible();
     }
 
-    await showMenuView(menu, 'account');
-    await account(menu, single.email).getByRole('menuitem').click();
+    await switchAccountTo(page, single);
     menu = await openAccountMenu(page);
     await showMenuView(menu, 'account');
     await expect(account(menu, single.email)).toHaveAttribute('data-active', 'true');
@@ -85,12 +86,12 @@ test.describe('Account Switching', () => {
     await page.goto('/en/profile/create');
     await expect(page).toHaveURL(/\/en\/?$/);
 
-    const menu = await openAccountMenu(page);
-    await showMenuView(menu, 'account');
-    await account(menu, multi.email).getByRole('menuitem').click();
+    await openAccountMenu(page);
+    await switchAccountTo(page, multi);
 
     await expect(page).toHaveURL(/\/en\/?$/);
     const reopened = await openAccountMenu(page);
+    await showMenuView(reopened, 'account');
     await expect(account(reopened, multi.email)).toHaveAttribute('data-active', 'true');
   });
 
@@ -100,30 +101,29 @@ test.describe('Account Switching', () => {
     await page.goto('/en');
 
     let menu = await openAccountMenu(page);
-    await showMenuView(menu, 'account');
-    await account(menu, multi.email).getByRole('menuitem').click();
+    await switchAccountTo(page, multi);
     const second = multi.channels.find((c) => !c.isMain)!;
     const optionSelector = `[data-testid="nav-channel-option"][data-channel-id="${second.id}"]`;
     // The menu re-renders (and may close) while the account switch settles:
     // reopen it and click until the second channel is the checked one
     await expect(async () => {
       menu = await openAccountMenu(page);
+      await showMenuView(menu, 'channel');
       const option = menu.locator(optionSelector);
       if ((await option.getAttribute('aria-checked')) !== 'true') await option.click();
       menu = await openAccountMenu(page);
+      await showMenuView(menu, 'channel');
       await expect(menu.locator(optionSelector)).toHaveAttribute('aria-checked', 'true', { timeout: 3000 });
     }).toPass({ timeout: 30000 });
 
     // Back to the single account: its own channel is active
-    await showMenuView(menu, 'account');
-    await account(menu, single.email).getByRole('menuitem').click();
+    await switchAccountTo(page, single);
     menu = await openAccountMenu(page);
     await showMenuView(menu, 'main');
     await expect(menu.getByTestId('nav-active-channel')).toHaveAttribute('href', `/en/channels/${single.channels[0].id}`);
 
     // And the multi account remembers its second channel
-    await showMenuView(menu, 'account');
-    await account(menu, multi.email).getByRole('menuitem').click();
+    await switchAccountTo(page, multi);
     menu = await openAccountMenu(page);
     await showMenuView(menu, 'main');
     await expect(menu.getByTestId('nav-active-channel')).toHaveAttribute('href', `/en/channels/${second.id}`);
@@ -134,10 +134,9 @@ test.describe('Account Switching', () => {
     await page.goto('/ar');
 
     let menu = await openAccountMenu(page);
-    await expect(menu).toHaveAttribute('dir', 'rtl');
-    await expect(menu.getByText(/^الحسابات \(2\)/)).toBeVisible();
-    await showMenuView(menu, 'account');
-    await account(menu, multi.email).getByRole('menuitem').click();
+    await expect(menu).toHaveCSS('direction', 'rtl');
+    await expect(menu.getByTestId('nav-switch-account')).toHaveText('تبديل الحساب');
+    await switchAccountTo(page, multi);
 
     menu = await openAccountMenu(page);
     await showMenuView(menu, 'account');

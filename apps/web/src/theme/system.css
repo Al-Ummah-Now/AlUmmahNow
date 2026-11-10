@@ -425,6 +425,8 @@ main [class*="h-48"]:is([class^="bg-gradient"],[class*=" bg-gradient"]),main [cl
 html{--z-header:50;--z-popover:1000;--z-modal:1100;--z-toast:1200}
 [data-body-portal]{position:relative;z-index:var(--z-modal)}
 [data-radix-popper-content-wrapper]{z-index:var(--z-popover)!important}
+/* A menu or listbox opened from inside a modal (a select in a dialog) portals after it: it must sit above that modal and its overlay, not under them */
+[data-body-portal]~[data-radix-popper-content-wrapper],body>[role=dialog]~[data-radix-popper-content-wrapper],body>[role=alertdialog]~[data-radix-popper-content-wrapper],body>[data-state].fixed.inset-0~[data-radix-popper-content-wrapper]{z-index:calc(var(--z-modal) + 1)!important}
 body>[role=dialog],body>[role=alertdialog],body>[data-state].fixed.inset-0{z-index:var(--z-modal)!important}
 [data-sonner-toaster]{z-index:var(--z-toast)!important}
 [data-body-portal]>.fixed.inset-0{background:rgb(0 0 0/.6);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
@@ -459,7 +461,9 @@ button.group:hover span.rounded-full{filter:brightness(1.12)}
 .search-dd [role=option]{min-height:40px}.search-dd [role=option][aria-selected=true],.search-dd [role=option]:hover{background:var(--m-hover)!important}
 .search-dd :is(span,p,button){color:var(--fanous-color-text-primary)}.search-dd p,.search-dd .text-xs{color:var(--fanous-color-text-secondary)}
 .ah-search-sheet{background:var(--fanous-c-nav-bg,var(--m-rail))!important;height:56px}.ah-search-sheet>div{flex:1 1 auto}
-@media(max-width:639px){.ah-search-wrap{display:none}.ah .ah-search-phone{display:inline-grid;justify-self:end}}
+@media(max-width:639px){.ah-search-wrap{display:none}.ah .ah-search-phone{display:inline-grid;justify-self:end}
+/* The phone header hides the inline search form; the sheet the search icon opens shows its own copy */
+.ah-search-sheet .ah-search{display:flex}}
 
 /* Watch page skeleton: same boxes as the final layout */
 .wsk-b{background:color-mix(in srgb,var(--fanous-color-text-primary) 10%,transparent)!important}

@@ -7,6 +7,7 @@ import path from 'path';
 import fs from 'fs';
 import { createTestFile, expectUploadSuccess, selectVideo, uploadUi } from './test-utils/upload';
 import { consentCookie } from './test-utils/consent';
+import { ensureFreshSessions } from './test-utils/fresh-session';
 
 /**
  * Test fixtures for Al Ummah Now E2E tests
@@ -32,11 +33,23 @@ type TestFixtures = {
     description: string;
     duration: number;
   };
+  /** Keeps the stored E2E sessions signed in (see test-utils/fresh-session.ts) */
+  freshSessions: void;
 };
 
 export { consentCookie };
 
 export const test = base.extend<TestFixtures>({
+  // Auto fixtures are set up before the test's own fixtures, so the stored
+  // session a context (storageState) or an API helper reads is never stale.
+  freshSessions: [
+    async ({}, use) => {
+      await ensureFreshSessions();
+      await use();
+    },
+    { auto: true },
+  ],
+
   context: async ({ context, baseURL }, use) => {
     if (baseURL) await context.addCookies([consentCookie(baseURL)]);
     await use(context);

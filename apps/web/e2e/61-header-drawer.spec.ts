@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures';
 import { ANONYMOUS_STATE, AUTH_STATE } from './test-utils/auth-state';
 import { clickAndWaitForURL } from './test-utils/qa-content';
-import { openSideDrawer } from './test-utils/navigation';
+import { closeSideDrawer, expectSideDrawerClosed, isDrawerLayout, openSideDrawer } from './test-utils/navigation';
 import type { Page } from '@playwright/test';
 
 const HOME_LINK = { en: 'Al Ummah Now home', ar: 'الصفحة الرئيسية للأمة الآن' } as const;
@@ -41,14 +41,14 @@ test.describe('Header', () => {
     await page.goto('/en/search');
     const header = page.getByRole('banner');
     const toggle = page.getByTestId('nav-drawer-toggle');
-    await expect(toggle).toHaveAccessibleName('Open navigation menu');
+    await expect(toggle).toHaveAccessibleName('Menu');
     await expect(toggle).toHaveAttribute('aria-expanded', 'false');
 
     await openSideDrawer(page);
     await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-    await expect(toggle).toHaveAccessibleName('Close navigation menu');
-    await page.getByTestId('nav-drawer-close').click();
-    await expect(page.getByTestId('side-nav')).toBeHidden();
+    await expect(toggle).toHaveAccessibleName('Close menu');
+    await closeSideDrawer(page);
+    await expect(toggle).toHaveAccessibleName('Menu');
 
     await clickAndWaitForURL(page, header.getByRole('link', { name: 'Al Ummah Now home' }), /\/en\/?$/);
   });
@@ -57,7 +57,7 @@ test.describe('Header', () => {
     await page.goto('/ar');
     const header = page.getByRole('banner');
     await expect(header.getByRole('link', { name: 'الصفحة الرئيسية للأمة الآن' })).toHaveAttribute('href', /^\/ar\/?$/);
-    await expect(page.getByTestId('nav-drawer-toggle')).toHaveAccessibleName('فتح قائمة التنقل');
+    await expect(page.getByTestId('nav-drawer-toggle')).toHaveAccessibleName('القائمة');
     const direction = await header.evaluate((el) => getComputedStyle(el).direction);
     expect(direction).toBe('rtl');
   });
@@ -97,7 +97,13 @@ test.describe('Header - channel owner', () => {
     await expect(page.getByRole('banner').getByTestId('header-upload')).toHaveAttribute('data-state', 'ready');
     await expectUploadAfterLogo(page, 'ar', true);
     if (isMobile) {
-      await expect(upload.getByText('Upload Video')).toBeHidden();
+      // A 44px icon button; the label is visually hidden but stays its accessible name
+      await expect(upload).toHaveAccessibleName('Upload Video');
+      const box = await upload.boundingBox();
+      const label = await upload.getByText('Upload Video').boundingBox();
+      expect(Math.round(box!.width)).toBe(44);
+      expect(label!.width).toBeLessThanOrEqual(1);
+      expect(label!.height).toBeLessThanOrEqual(1);
     } else {
       await expect(upload).toContainText('Upload Video');
     }
@@ -119,21 +125,28 @@ test.describe('Side drawer', () => {
     await page.goto('/en');
     const drawer = await openSideDrawer(page);
     await clickAndWaitForURL(page, drawer.getByRole('link', { name: 'Explore' }), /\/en\/explore$/);
-    await expect(drawer).toBeHidden();
-    await expect(page.getByTestId('nav-drawer-toggle')).toHaveAttribute('aria-expanded', 'false');
+    await expectSideDrawerClosed(page);
   });
 
   test('NAV-012 Escape and the overlay close the drawer', async ({ page }) => {
     await page.goto('/en');
-    const drawer = await openSideDrawer(page);
+    await openSideDrawer(page);
     await page.keyboard.press('Escape');
-    await expect(drawer).toBeHidden();
+    await expectSideDrawerClosed(page);
 
     await openSideDrawer(page);
-    // The overlay covers the page outside the 12rem drawer
-    const { width, height } = page.viewportSize()!;
-    await page.mouse.click(width - 10, height / 2);
-    await expect(drawer).toBeHidden();
+    const scrim = page.getByRole('button', { name: 'Close menu' }).and(page.locator('.nv-scrim'));
+    if (isDrawerLayout(page)) {
+      // The overlay covers the page outside the drawer
+      const { width, height } = page.viewportSize()!;
+      await page.mouse.click(width - 10, height / 2);
+      await expectSideDrawerClosed(page);
+    } else {
+      // The wide rail pushes the page aside instead of covering it: no overlay
+      await expect(scrim).toBeHidden();
+      await page.keyboard.press('Escape');
+      await expectSideDrawerClosed(page);
+    }
   });
 
   test('NAV-013 Arabic drawer is RTL with Arabic links', async ({ page }) => {
@@ -176,7 +189,7 @@ test.describe('Theme toggle', () => {
     await expect(html).toHaveClass(/\bdark\b/);
 
     drawer = await openSideDrawer(page);
-    await expect(drawer.getByTestId('theme-toggle')).toHaveAccessibleName('الوضع الفاتح');
+    await expect(drawer.getByTestId('theme-toggle')).toHaveAccessibleName('التبديل إلى الوضع الفاتح');
     await drawer.getByTestId('theme-toggle').click();
     await expect(html).not.toHaveClass(/\bdark\b/);
     expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe('light');

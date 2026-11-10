@@ -21,6 +21,8 @@ export const AUTH_STATE = {
    * delete) extra channels on; every other user's channel set is fixed.
    */
   scratch: path.join(AUTH_DIR, 'user-scratch.json'),
+  /** Signed in with NO profile and no channels (a newly registered user) */
+  fresh: path.join(AUTH_DIR, 'user-fresh.json'),
 } as const;
 
 /** Explicitly logged-out state (overrides a project's storageState) */
@@ -143,6 +145,28 @@ export function combinedSessionState(primary: AuthUser, secondary: AuthUser): St
   const json = JSON.stringify({ ...data, accounts });
   return {
     ...base,
-    cookies: base.cookies.map((c) => (c.name === SESSION_COOKIE ? { ...c, value: encoded ? encodeURIComponent(json) : json } : c)),
+    // Without the auth server's cookies: they hold only the primary user's
+    // browser session, which every spec storing that user shares. Switching
+    // accounts here posts the switch to the auth server, which left the
+    // primary user inactive there, so every later spec on that user was
+    // signed out once its stored token expired (no silent sign-in back).
+    cookies: base.cookies
+      .filter((c) => !isAuthServerCookie(c))
+      .map((c) => (c.name === SESSION_COOKIE ? { ...c, value: encoded ? encodeURIComponent(json) : json } : c)),
   };
+}
+
+/** The auth server's own cookies (its browser session), by host or, on localhost, by name */
+const AUTH_COOKIE_NAMES = new Set(['__session', 'oa_flow_bind']);
+function isAuthServerCookie(cookie: { name: string; domain?: string }): boolean {
+  const domain = (cookie.domain || '').replace(/^\./, '');
+  const issuer = process.env.OPENAUTH_URL || '';
+  let issuerHost = 'auth.qa.alummahnow.net';
+  try {
+    if (issuer) issuerHost = new URL(issuer).hostname;
+  } catch {
+    // keep the default
+  }
+  if (issuerHost === 'localhost' || issuerHost === '127.0.0.1') return AUTH_COOKIE_NAMES.has(cookie.name);
+  return domain === issuerHost;
 }

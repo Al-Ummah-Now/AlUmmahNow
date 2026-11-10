@@ -1,7 +1,19 @@
 // The shared fixture pre-answers the consent banner; these tests need the
 // first-visit state, so they use Playwright's base test.
-import { test, expect, type BrowserContext, type Page } from '@playwright/test';
+import { test as base, expect, type BrowserContext, type Page } from '@playwright/test';
 import { ANONYMOUS_STATE, AUTH_STATE } from './test-utils/auth-state';
+import { ensureFreshSessions } from './test-utils/fresh-session';
+
+// The stored session must still be signed in (see test-utils/fresh-session.ts)
+const test = base.extend<{ freshSessions: void }>({
+  freshSessions: [
+    async ({}, use) => {
+      await ensureFreshSessions(['none']);
+      await use();
+    },
+    { auto: true },
+  ],
+});
 
 /**
  * Cookie / tracking consent banner (GDPR): shown on a first visit without the

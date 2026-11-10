@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import type { APIRequestContext } from '@playwright/test';
+import type { APIRequestContext, Page } from '@playwright/test';
 import { ANONYMOUS_STATE, AUTH_STATE } from './test-utils/auth-state';
 import { API_URL, userApi } from './test-utils/e2e-videos';
 import { findSeedVideo } from './test-utils/qa-content';
@@ -28,6 +28,36 @@ async function watchLaterIds(request: APIRequestContext): Promise<string[]> {
 /** Mutating tests share one QA account; the mobile job runs concurrently with the desktop job. */
 const SHARED_STATE_REASON = 'Writes shared QA library state; covered by the desktop projects';
 
+const HUB_SECTIONS = ['history', 'watch-later', 'liked', 'playlists', 'saved-posts'] as const;
+
+/**
+ * A section offers "See all" exactly when it lists something; an empty section
+ * shows its empty text instead (the redesign hides the link with nothing to see).
+ */
+async function expectSeeAllMatchesContent(page: Page, id: (typeof HUB_SECTIONS)[number]) {
+  const section = page.getByTestId(`library-section-${id}`);
+  const empty = page.getByTestId(`library-empty-${id}`);
+  // Loaded: items or the empty text (an error state fails here)
+  await expect(section.locator('ul > li').or(empty).first()).toBeVisible();
+  const items = await section.locator('ul > li').count();
+  if (items > 0) await expect(page.getByTestId(`library-see-all-${id}`)).toBeVisible();
+  else {
+    await expect(empty).toBeVisible();
+    await expect(page.getByTestId(`library-see-all-${id}`)).toHaveCount(0);
+  }
+}
+
+/** Puts a seed video in Watch later and in the liked videos (desktop projects only). */
+async function seedHub(request: APIRequestContext, cleanup: string[], unlike: string[]) {
+  const video = await findSeedVideo(request);
+  const saved = await request.post(`${API_URL}/api/library/watch-later`, { headers: authHeaders(), data: { videoId: video.id } });
+  expect(saved.ok()).toBe(true);
+  cleanup.push(video.id);
+  const liked = await request.post(`${API_URL}/api/videos/${video.id}/likes`, { headers: authHeaders() });
+  expect(liked.ok()).toBe(true);
+  unlike.push(video.id);
+}
+
 test.describe('Library (signed in)', () => {
   test.use({ storageState: AUTH_STATE.single });
   test.describe.configure({ mode: 'serial' });
@@ -42,26 +72,37 @@ test.describe('Library (signed in)', () => {
     }
   });
 
-  test('hub shows every section with see-all links and is reachable from the side navigation', async ({ page }) => {
+  test('hub shows every section with see-all links and is reachable from the side navigation', async ({ page, request }, testInfo) => {
+    const seeded = !testInfo.project.name.startsWith('Mobile');
+    if (seeded) await seedHub(request, cleanup, unlike);
     await page.goto('/en');
     await page.getByTestId('nav-drawer-toggle').click();
     await page.getByTestId('side-nav').getByRole('link', { name: 'Library' }).click();
     await expect(page).toHaveURL(/\/en\/library$/);
 
     await expect(page.getByRole('heading', { level: 1, name: 'Library' })).toBeVisible();
-    for (const id of ['history', 'watch-later', 'liked', 'playlists', 'saved-posts']) {
+    for (const id of HUB_SECTIONS) {
       await expect(page.getByTestId(`library-section-${id}`)).toBeVisible();
+      await expectSeeAllMatchesContent(page, id);
     }
-    await expect(page.getByTestId('library-see-all-watch-later')).toHaveAttribute('href', '/en/library/watch-later');
-    await expect(page.getByTestId('library-see-all-liked')).toHaveAttribute('href', '/en/library/liked');
-    await expect(page.getByTestId('library-see-all-history')).toHaveAttribute('href', '/en/history');
+    if (seeded) {
+      await expect(page.getByTestId('library-see-all-watch-later')).toHaveAttribute('href', '/en/library/watch-later');
+      await expect(page.getByTestId('library-see-all-liked')).toHaveAttribute('href', '/en/library/liked');
+    }
+    // History fills as the account watches; when it lists something, it links to the history page
+    if (await page.getByTestId('library-see-all-history').count()) {
+      await expect(page.getByTestId('library-see-all-history')).toHaveAttribute('href', '/en/history');
+    }
   });
 
-  test('Arabic hub renders right-to-left', async ({ page }) => {
+  test('Arabic hub renders right-to-left', async ({ page, request }, testInfo) => {
+    const seeded = !testInfo.project.name.startsWith('Mobile');
+    if (seeded) await seedHub(request, cleanup, unlike);
     await page.goto('/ar/library');
     await expect(page.getByTestId('library-page')).toHaveAttribute('dir', 'rtl');
     await expect(page.getByRole('heading', { level: 1, name: 'المكتبة' })).toBeVisible();
-    await expect(page.getByTestId('library-see-all-watch-later')).toHaveAttribute('href', '/ar/library/watch-later');
+    await expectSeeAllMatchesContent(page, 'watch-later');
+    if (seeded) await expect(page.getByTestId('library-see-all-watch-later')).toHaveAttribute('href', '/ar/library/watch-later');
   });
 
   test('saves a video to Watch later from the watch page and removes it from the list', async ({ page, request }, testInfo) => {

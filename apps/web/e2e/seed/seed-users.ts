@@ -48,6 +48,21 @@ export async function ensureProfile(
 }
 
 /**
+ * Deletes the caller's profile if it has one (DELETE /api/profile only removes
+ * the profile record). Returns true when there was none to delete.
+ */
+export async function ensureNoProfile(api: ApiClient, session: SessionTokens): Promise<boolean> {
+  const existing = await api.get(`/api/profiles/${encodeURIComponent(session.userId)}`, {
+    token: session.accessToken,
+    allowStatus: [404],
+  });
+  if (existing.status === 404) return true;
+  await api.request('/api/profile', { method: 'DELETE', token: session.accessToken, allowStatus: [404] });
+  log.info('Profile deleted', { userId: session.userId });
+  return false;
+}
+
+/**
  * Lists the caller's own channels. GET /api/channels filters to the caller's
  * channels when authenticated but returns an empty cursor for any page with
  * no matches, so a single large page is requested.

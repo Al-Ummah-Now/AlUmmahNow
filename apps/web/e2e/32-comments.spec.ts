@@ -2,6 +2,7 @@ import { test, expect } from './fixtures';
 import type { APIRequestContext, Locator, Page } from '@playwright/test';
 import { ANONYMOUS_STATE, AUTH_STATE, readAccount } from './test-utils/auth-state';
 import { apiCall, qaLecture, qaVideoForProject, tempName, watchUrl, type QaVideo } from './test-utils/watch-page';
+import { watchSignInRedirect } from './test-utils/sign-in-redirect';
 
 /**
  * Comments section on the watch page, tested as it is today: anonymous and
@@ -62,8 +63,10 @@ test.describe('comments - anonymous', () => {
       await expect(section).toContainText(prompt);
       await expect(section.locator('div[dir]').first()).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
 
+      // Sign-in returns to this video, in this language
+      const signIn = watchSignInRedirect(page, { locale, returnPath: new URL(page.url()).pathname });
       await section.getByRole('button', { name: prompt }).click();
-      await expect(page).toHaveURL(new RegExp(`/${locale}/login\\?redirect=${encodeURIComponent(`/${locale}/video/${video.id}`)}`));
+      await signIn.verify();
     });
   }
 });
