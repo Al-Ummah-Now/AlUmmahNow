@@ -98,7 +98,7 @@ export function createProcessingInternalRouter() {
 					try {
 						const b = await fetchBunnyVideo(c.env, video.id);
 						bunny = b
-							? { status: b.status, encodeProgress: b.encodeProgress, availableResolutions: b.availableResolutions, length: b.length, storageSize: b.storageSize }
+							? { status: b.status, encodeProgress: b.encodeProgress, availableResolutions: b.availableResolutions, length: b.length, storageSize: b.storageSize, width: b.width, height: b.height }
 							: null;
 					} catch (error) {
 						bunny = { error: error instanceof Error ? error.message : String(error) };

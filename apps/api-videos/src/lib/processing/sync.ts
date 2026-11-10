@@ -18,6 +18,8 @@ export interface BunnyVideoState {
 	availableResolutions?: string | null;
 	length?: number;
 	storageSize?: number;
+	width?: number;
+	height?: number;
 	thumbnailFileName?: string | null;
 	transcodingMessages?: { message?: string; value?: string; level?: number }[] | null;
 }
@@ -32,6 +34,8 @@ export interface SyncableVideo {
 	availableResolutions?: string[];
 	duration?: number;
 	fileSize?: number;
+	width?: number;
+	height?: number;
 	processingIssue?: { kind: 'encode_failed' | 'needs_reupload' | 'stalled'; reason?: string; at: string };
 }
 
@@ -159,6 +163,9 @@ export function planSync(video: SyncableVideo, bunny: BunnyVideoState | null, op
 		if (resolutions.length && !sameList(video.availableResolutions, resolutions)) patch.availableResolutions = resolutions;
 		if (bunny.length && video.duration !== bunny.length) patch.duration = bunny.length;
 		if (bunny.storageSize && video.fileSize !== bunny.storageSize) patch.fileSize = bunny.storageSize;
+		// Dimensions decide what is a short (<= 180 s and height >= width)
+		if (bunny.width && video.width !== bunny.width) patch.width = bunny.width;
+		if (bunny.height && video.height !== bunny.height) patch.height = bunny.height;
 		const playUrl = canonicalUrl(video.playUrl, opts.host, video.id, 'playlist.m3u8');
 		if (playUrl) patch.playUrl = playUrl;
 		if (video.thumbnailType !== 'custom') {
