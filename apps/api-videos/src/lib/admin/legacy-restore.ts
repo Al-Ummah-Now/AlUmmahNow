@@ -128,7 +128,7 @@ export async function planLegacyRestore(env: LegacyRestoreEnv): Promise<LegacyRe
 	for (const { current: profile, legacy: record } of pairs) {
 		if (!record) continue;
 		const plan = planProfile(profile, record);
-		if (plan.changes.length) items.push({ id: profile.id, legacyId: record.id, changes: plan.changes });
+		if (plan.changes.length) items.push({ id: profile.id, legacyId: record.id, email: norm(authEmails.get(profile.id)), changes: plan.changes });
 	}
 	return {
 		legacyCount: legacy.length,

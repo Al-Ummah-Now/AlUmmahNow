@@ -14,7 +14,23 @@ import { test, expect } from './support/fixtures';
 import { adminApi } from './support/api';
 import { accounts } from './support/env';
 import { expectDirection, setPreferences } from './support/ui';
-import { cfToken, DEFAULT_ACCOUNT_ID } from '../../../scripts/release/cf-api';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+const DEFAULT_ACCOUNT_ID = '0e4b6e7f9faf280c3c9bf95995edc64f';
+
+/** CLOUDFLARE_API_TOKEN, or locally the `wrangler login` OAuth token (as scripts/release/cf-api.ts). */
+function cfToken(): string | undefined {
+  if (process.env.CLOUDFLARE_API_TOKEN) return process.env.CLOUDFLARE_API_TOKEN;
+  for (const dir of ['Library/Preferences/.wrangler', '.config/.wrangler', '.wrangler']) {
+    const file = path.join(os.homedir(), dir, 'config/default.toml');
+    if (!fs.existsSync(file)) continue;
+    const match = fs.readFileSync(file, 'utf8').match(/^oauth_token\s*=\s*"([^"]+)"/m);
+    if (match) return match[1];
+  }
+  return undefined;
+}
 
 const PROFILES = process.env.E2E_PROFILES_BUCKET || 'profiles-qa';
 const BACKUPS = process.env.E2E_ADMIN_BACKUPS_BUCKET || 'admin-backups-qa';

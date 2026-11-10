@@ -118,6 +118,12 @@ test('only the approved fields are planned (the admin job runs what the dry run 
 	assert.deepEqual(planProfile(current, legacy, { only: new Set() }).changes, []);
 });
 
+test('photos are only restored from the first-party image host', () => {
+	const offsite = { ...legacy, avatarUrl: 'https://evil.example/a.jpeg', coverUrl: 'http://images.alummahnow.net/c.jpeg' };
+	assert.deepEqual(planProfile({ id: USR_ID, avatarUrl: '', coverUrl: '' }, offsite).changes.filter((c) => /Url$/.test(c.field)), []);
+	assert.equal(planProfile({ id: USR_ID, coverUrl: '' }, { ...legacy, coverUrl: 'https://images.qa.alummahnow.net/c.jpeg' }).next.coverUrl, 'https://images.qa.alummahnow.net/c.jpeg');
+});
+
 test('helpers', () => {
 	assert.equal(isLegacyId(LEGACY_ID), true);
 	assert.equal(isLegacyId(USR_ID), false);
