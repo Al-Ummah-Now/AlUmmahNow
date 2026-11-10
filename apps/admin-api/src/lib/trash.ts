@@ -28,6 +28,7 @@ import { logger } from './logger';
 import { hasAdminRole, hasPermission } from './roles';
 import { ThemeError, ThemeStore } from './themePackages';
 import { CLEANUP_ACTOR, writeTrashAudit } from './trash-audit';
+import { InviteStateError, getInvite, listRevokedInvites, purgeRevokedInviteMirrors, requestInvitePurge, restoreInvite, type InviteQueueEnv } from './invites';
 
 export type TrashEnv = Pick<AdminBindings, 'REPORTS_DB' | 'theme_packages'> & VideosClientEnv;
 
@@ -49,6 +50,7 @@ export class TrashError extends Error {
 export function canManageTrash(roles: readonly string[] | undefined, kind: TrashKind): boolean {
   if (kind === 'contact-message') return hasPermission(roles, 'contact:manage');
   if (kind === 'theme') return hasAdminRole(roles);
+  if (kind === 'invite') return hasContentPermission(roles, 'users:manage');
   return hasContentPermission(roles, 'creators:manage');
 }
 
@@ -94,6 +96,20 @@ export async function listTrash(env: TrashEnv, kind: TrashKind): Promise<TrashIt
       purgeAfter: purgeAfter(r.deleted_at as string),
     }));
   }
+  if (kind === 'invite') {
+    // Revoked invites (docs/admin/INVITES.md): the invite and its never-used account
+    return (await listRevokedInvites(env.REPORTS_DB)).map((r) => ({
+      kind,
+      id: r.id,
+      title: r.name ? `${r.name} (${r.email})` : r.email,
+      deletedAt: r.deleted_at as string,
+      deletedBy: r.deleted_by,
+      reason: r.deleted_reason,
+      purgeRequestedAt: r.purge_requested_at,
+      purgeRequestedBy: r.purge_requested_at ? r.deleted_by : null,
+      purgeAfter: purgeAfter(r.deleted_at as string),
+    }));
+  }
   const { items } = await callVideos<{ items: DeletedTierView[] }>(env, '/creator-tiers/deleted');
   return items.map((t) => ({ kind, id: t.id, title: t.name, ...pick(t), purgeAfter: purgeAfter(t.deletedAt) }));
 }
@@ -112,6 +128,8 @@ export async function restoreTrash(env: TrashEnv, kind: TrashKind, id: string, a
     if (!(await restoreContactMessage(env.REPORTS_DB, id))) throw new TrashError(404, 'not_deleted', 'No deleted contact message with this id');
   } else if (kind === 'theme') {
     await themeCall(() => themes(env).restore(id, actorId, now.toISOString()));
+  } else if (kind === 'invite') {
+    await inviteCall(env, id, (queue, row) => restoreInvite(queue, row, { id: actorId, email: null }));
   } else {
     await callVideos(env, `/creator-tiers/${encodeURIComponent(id)}/restore`, { method: 'POST', actorId });
   }
@@ -125,11 +143,25 @@ export async function requestTrashPurge(env: TrashEnv, kind: TrashKind, id: stri
     if (!(await requestContactPurge(env.REPORTS_DB, id, { actorId, now }))) throw new TrashError(404, 'not_deleted', 'No deleted contact message with this id');
   } else if (kind === 'theme') {
     await themeCall(() => themes(env).requestPurge(id, actorId, now.toISOString()));
+  } else if (kind === 'invite') {
+    await inviteCall(env, id, (queue, row) => requestInvitePurge(queue, row, { id: actorId, email: null }));
   } else {
     await callVideos(env, `/creator-tiers/${encodeURIComponent(id)}/purge-request`, { method: 'POST', actorId });
   }
   await writeTrashAudit(env.REPORTS_DB, { kind, id, action: 'purge-request', actorId }, now);
   logger.info('[Trash] Queued for permanent deletion', { kind, id, actorId });
+}
+
+/** Invites change through the queue to auth: the router passes the whole env (queue and auth client). */
+async function inviteCall(env: TrashEnv, id: string, run: (queue: InviteQueueEnv, row: NonNullable<Awaited<ReturnType<typeof getInvite>>>) => Promise<void>): Promise<void> {
+  const row = await getInvite(env.REPORTS_DB, id);
+  if (!row || !row.deleted_at) throw new TrashError(404, 'not_deleted', 'No revoked invite with this id');
+  try {
+    await run(env as unknown as InviteQueueEnv, row);
+  } catch (error) {
+    if (error instanceof InviteStateError) throw new TrashError(error.status, error.code, error.message);
+    throw error;
+  }
 }
 
 async function themeCall(run: () => Promise<void>): Promise<void> {
@@ -159,6 +191,7 @@ export async function runTrashCleanup(env: TrashEnv, now = new Date(), limit = C
     'contact-message': { purged: 0, failed: 0 },
     theme: { purged: 0, failed: 0 },
     'creator-tier': { purged: 0, failed: 0 },
+    invite: { purged: 0, failed: 0 },
   };
   const audit = async (kind: TrashKind, ids: string[]) => {
     for (const id of ids) {
@@ -199,6 +232,15 @@ export async function runTrashCleanup(env: TrashEnv, now = new Date(), limit = C
   } catch (error) {
     result['creator-tier'].failed += 1;
     logger.error('[Trash] Creator tier purge failed', { error: error instanceof Error ? error.message : String(error) });
+  }
+
+  try {
+    const ids = await purgeRevokedInviteMirrors(env.REPORTS_DB, cutoff, limit);
+    result.invite.purged = ids.length;
+    await audit('invite', ids);
+  } catch (error) {
+    result.invite.failed += 1;
+    logger.error('[Trash] Invite purge failed', { error: error instanceof Error ? error.message : String(error) });
   }
 
   const total = Object.values(result).reduce((n, r) => n + r.purged + r.failed, 0);

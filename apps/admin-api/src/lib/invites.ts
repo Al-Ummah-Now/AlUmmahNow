@@ -496,6 +496,74 @@ export async function deadLetterInvite(env: InviteQueueEnv, msg: InviteMessage):
   }
 }
 
+/** Who acted on an invite (sent to auth with each change). */
+export interface InviteActorRef {
+  id: string;
+  email: string | null;
+}
+
+export class InviteStateError extends Error {
+  constructor(readonly status: 404 | 409, readonly code: string, message: string, readonly invite?: InviteView) {
+    super(message);
+  }
+}
+
+async function queueChange(env: InviteQueueEnv, row: InviteRow, op: Exclude<InviteOp, 'create' | 'sync'>, args: Record<string, unknown>, actor: InviteActorRef) {
+  const withActor = { ...args, actor };
+  await setPendingOp(env.REPORTS_DB, row.id, op, withActor);
+  await enqueue(env, row.id, op, withActor);
+}
+
+/**
+ * Undo a revoke (the invites list, or Recently deleted): the invite and its
+ * account come back in auth; revoked before auth had it, it is created now.
+ */
+export async function restoreInvite(env: InviteQueueEnv, row: InviteRow, actor: InviteActorRef): Promise<void> {
+  if (!row.deleted_at) return;
+  const other = await liveInviteForEmail(env.REPORTS_DB, row.email);
+  if (other) throw new InviteStateError(409, 'email_taken', 'Another open invite uses this email', toView(other));
+  const now = new Date().toISOString();
+  await env.REPORTS_DB.prepare('UPDATE creator_invites SET deleted_at = NULL, deleted_by = NULL, deleted_reason = NULL, purge_requested_at = NULL, updated_at = ? WHERE id = ?').bind(now, row.id).run();
+  if (row.delivery_status === 'sent') await queueChange(env, row, 'restore', {}, actor);
+  else {
+    await env.REPORTS_DB.prepare("UPDATE creator_invites SET delivery_status = 'sending', delivery_error = NULL WHERE id = ?").bind(row.id).run();
+    await enqueue(env, row.id, 'create');
+  }
+}
+
+/** "Delete permanently now": queues the revoked invite (and its auth account) for the cleanups' next run. */
+export async function requestInvitePurge(env: InviteQueueEnv, row: InviteRow, actor: InviteActorRef): Promise<void> {
+  if (!row.deleted_at) throw new InviteStateError(409, 'not_revoked', 'Revoke the invite first');
+  const now = new Date().toISOString();
+  await env.REPORTS_DB.prepare('UPDATE creator_invites SET purge_requested_at = COALESCE(purge_requested_at, ?), updated_at = ? WHERE id = ?').bind(now, now, row.id).run();
+  if (row.delivery_status === 'sent') await queueChange(env, row, 'purge', { confirm: row.email }, actor);
+}
+
+/** Revoked invites, for Recently deleted (newest first). */
+export async function listRevokedInvites(db: D1Database, limit = 500): Promise<InviteRow[]> {
+  const { results } = await db.prepare('SELECT * FROM creator_invites WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC LIMIT ?').bind(limit).all<InviteRow>();
+  return results ?? [];
+}
+
+/**
+ * The hourly trash cleanup's part: drops the mirror of revoked invites past
+ * their 30 days, or queued for permanent deletion once auth has that request
+ * (no change still pending). Auth removes the account on its own cleanup.
+ */
+export async function purgeRevokedInviteMirrors(db: D1Database, cutoff: string, limit: number): Promise<string[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT id FROM creator_invites WHERE deleted_at IS NOT NULL
+         AND (deleted_at <= ? OR (purge_requested_at IS NOT NULL AND (pending_op IS NULL OR delivery_status != 'sent')))
+       ORDER BY deleted_at LIMIT ?`
+    )
+    .bind(cutoff, limit)
+    .all<{ id: string }>();
+  const ids = (results ?? []).map((r) => r.id);
+  for (const id of ids) await db.prepare('DELETE FROM creator_invites WHERE id = ? AND deleted_at IS NOT NULL').bind(id).run();
+  return ids;
+}
+
 /** A SHA-256 hex digest (the "copy link" token goes to auth only as this). */
 export async function sha256Hex(value: string): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));

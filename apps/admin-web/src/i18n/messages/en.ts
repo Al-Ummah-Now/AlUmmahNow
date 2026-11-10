@@ -2109,6 +2109,7 @@ const en = {
       'contact-message': 'Contact messages',
       theme: 'Themes',
       'creator-tier': 'Creator tiers',
+      invite: 'Invites',
     },
   },
 };
