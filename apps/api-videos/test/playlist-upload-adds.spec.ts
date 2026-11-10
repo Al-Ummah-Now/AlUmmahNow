@@ -142,6 +142,43 @@ describe('upload order', () => {
 		assert.equal(await addVideoInOrder(env as never, 'p1', 'v1', orderKeyFor('b', 5), () => true), 'already');
 		assert.deepEqual(env.playlists.read('p1').videos, ['v1', 'old']);
 	});
+
+	it('manual order: an upload add goes at the end and records its add date', async () => {
+		const env = makeEnv();
+		await env.playlists.put('p1', JSON.stringify(playlist('p1', { videos: ['old'], sortMode: 'manual' })));
+		assert.equal(await addVideoInOrder(env as never, 'p1', 'v1', orderKeyFor('b', 0), () => true), 'added');
+		const stored = env.playlists.read('p1');
+		assert.deepEqual(stored.videos, ['old', 'v1']);
+		assert.equal(typeof stored.videoAddedAt.v1, 'string');
+		assert.equal('videoAddedAt' in toPlaylistResponse(stored), false);
+	});
+
+	it('automatic order: an upload add is sorted into place by the playlist field, not upload order', async () => {
+		const env = makeEnv();
+		const titled = (id: string, title: string) => env.videos.put(id, JSON.stringify(videoFixture({ id, title, userId: 'owner', channelId: 'ch' })));
+		await titled('v1', 'Charlie');
+		await titled('v2', 'Alpha');
+		await titled('v3', 'Bravo');
+		await env.playlists.put('p1', JSON.stringify(playlist('p1', { videos: [], sortMode: 'auto', sortField: 'title', sortDirection: 'asc' })));
+		for (const [videoId, index] of [['v1', 0], ['v2', 1], ['v3', 2]] as const) {
+			assert.equal(await addVideoInOrder(env as never, 'p1', videoId, orderKeyFor('b', index), () => true), 'added');
+		}
+		assert.deepEqual(env.playlists.read('p1').videos, ['v2', 'v3', 'v1']);
+		// Descending flips it
+		await env.playlists.put('p2', JSON.stringify(playlist('p2', { videos: [], sortMode: 'auto', sortField: 'title', sortDirection: 'desc' })));
+		for (const [videoId, index] of [['v1', 0], ['v2', 1], ['v3', 2]] as const) {
+			await addVideoInOrder(env as never, 'p2', videoId, orderKeyFor('c', index), () => true);
+		}
+		assert.deepEqual(env.playlists.read('p2').videos, ['v1', 'v3', 'v2']);
+	});
+
+	it('a full playlist refuses the upload add (playlist_full, not retried)', async () => {
+		const env = makeEnv();
+		const full = Array.from({ length: 1000 }, (_, i) => `x${i}`);
+		await env.playlists.put('p1', JSON.stringify(playlist('p1', { videos: full })));
+		assert.equal(await addVideoInOrder(env as never, 'p1', 'v1', orderKeyFor('b', 0), () => true), 'full');
+		assert.equal(env.playlists.read('p1').videos.length, 1000);
+	});
 });
 
 describe('requestPlaylistAdds', () => {
@@ -372,9 +409,11 @@ describe('routes', () => {
 		assert.equal(memberMayActAs('editor', 'DELETE', '/api/playlists/p1/videos/v1'), true);
 		assert.equal(memberMayActAs('moderator', 'POST', '/api/playlists/upload-adds'), false);
 		assert.equal(memberMayActAs('moderator', 'POST', '/api/playlists'), false);
-		// Editing or deleting a playlist itself stays owner only
-		assert.equal(memberMayActAs('editor', 'PATCH', '/api/playlists/p1'), false);
-		assert.equal(memberMayActAs('admin', 'DELETE', '/api/playlists/p1'), false);
+		// Editing the playlist itself (name, visibility, order, cover) and deleting
+		// it are playlist management too (Manage Playlists editor)
+		assert.equal(memberMayActAs('editor', 'PATCH', '/api/playlists/p1'), true);
+		assert.equal(memberMayActAs('admin', 'DELETE', '/api/playlists/p1'), true);
+		assert.equal(memberMayActAs('moderator', 'PATCH', '/api/playlists/p1'), false);
 	});
 
 	it('POST /internal/playlist-adds/retry restarts a failed add, 404 for an unknown one', async () => {
