@@ -147,16 +147,24 @@ export interface Pairing {
 	ambiguous: string[];
 }
 
-const emailKey = (p: StoredProfile): string => (typeof p.email === 'string' ? p.email.trim().toLowerCase() : '');
+const norm = (email: unknown): string => (typeof email === 'string' ? email.trim().toLowerCase() : '');
 
-/** Pairs every usr_ profile with the legacy record of the same email (when exactly one each). */
-export function pairProfiles(profiles: StoredProfile[]): Pairing {
+/**
+ * Pairs every usr_ profile with the legacy record of the same email (when exactly
+ * one each). The usr_ side is identified by the auth service's email for that
+ * user id (`authEmails`: the address the user verified with a code), never by
+ * the profile's stored `email`, which the profile update API lets a user edit:
+ * pairing on it would let someone copy another person's legacy profile into
+ * their own. A usr_ profile without an auth record is never paired. The legacy
+ * side can only be the stored email; nothing writes legacy keys any more.
+ */
+export function pairProfiles(profiles: StoredProfile[], authEmails: ReadonlyMap<string, string>): Pairing {
 	const byEmail = new Map<string, { usr: StoredProfile[]; legacy: StoredProfile[] }>();
 	const pairs: Pairing['pairs'] = [];
 	for (const p of profiles) {
 		const kind = isUsrId(p.id) ? 'usr' : isLegacyId(p.id) ? 'legacy' : null;
 		if (!kind) continue;
-		const key = emailKey(p);
+		const key = kind === 'usr' ? norm(authEmails.get(p.id)) : norm(p.email);
 		if (!key) {
 			if (kind === 'usr') pairs.push({ current: p });
 			continue;
