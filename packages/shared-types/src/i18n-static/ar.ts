@@ -1746,10 +1746,9 @@ export const AR_TRANSLATIONS: AppTranslations = {
     profileSettingsDesc: 'تحديث معلومات ملفك الشخصي وتفضيلاتك',
     settingsDescription: 'إدارة حسابك وقنواتك وتفضيلاتك',
     notAvailable: 'غير متاح - يتطلب قناة نشطة',
-    needHelp: 'هل تحتاج إلى مساعدة؟',
-    needHelpDesc: 'راجع الوثائق أو تواصل مع الدعم للمساعدة في إعداداتك.',
     signInTitle: 'سجّل الدخول لإدارة إعداداتك',
     signInMessage: 'تتوفر إعدادات الرفع والقناة والملف الشخصي بعد تسجيل الدخول.',
+    breadcrumb: 'مسار الإعدادات',
   },
 
   discovery: {

@@ -1751,10 +1751,9 @@ export const EN_TRANSLATIONS: AppTranslations = {
     profileSettingsDesc: 'Update your profile information and preferences',
     settingsDescription: 'Manage your account, channels, and preferences',
     notAvailable: 'Not available - requires an active channel',
-    needHelp: 'Need Help?',
-    needHelpDesc: 'Visit our documentation or contact support for assistance with your settings.',
     signInTitle: 'Sign in to manage your settings',
     signInMessage: 'Upload defaults, channel and profile settings are available once you sign in.',
+    breadcrumb: 'Settings breadcrumb',
   },
 
   discovery: {

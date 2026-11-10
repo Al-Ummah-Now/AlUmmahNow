@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { ChannelTabConfig } from '@al-ummah/shared-types';
 import TabManagement from '@/components/TabManagement';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { getChannelTabConfig, updateChannelTabConfig, verifyChannelOwnership } from '@/lib/api/channel-tabs';
 import { getChannelById } from '@/lib/api/channels';
@@ -13,7 +14,6 @@ import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
 
 export default function ChannelTabsSettingsPage() {
   const params = useParams();
-  const router = useRouter();
   const { t } = useLanguage();
   const channelId = params.id as string;
   const locale = (params.locale as string) || 'en';
@@ -147,12 +147,8 @@ export default function ChannelTabsSettingsPage() {
             {t.common.error}
           </h2>
           <p className="text-red-700 dark:text-red-300">{error}</p>
-          <Button
-            onClick={() => router.back()}
-            variant="outline"
-            className="mt-4"
-          >
-            {t.common.back}
+          <Button asChild variant="outline" className="mt-4">
+            <Link href={`/${locale}/settings/channel/${channelId}`}>{t.common.back}</Link>
           </Button>
         </div>
       </div>
@@ -170,12 +166,8 @@ export default function ChannelTabsSettingsPage() {
           <p className="text-brand-ink dark:text-brand-ink">
             {t.errors.forbidden}
           </p>
-          <Button
-            onClick={() => router.back()}
-            variant="outline"
-            className="mt-4"
-          >
-            {t.common.back}
+          <Button asChild variant="outline" className="mt-4">
+            <Link href={`/${locale}/settings/channel/${channelId}`}>{t.common.back}</Link>
           </Button>
         </div>
       </div>

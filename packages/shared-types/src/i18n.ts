@@ -1946,10 +1946,10 @@ export interface AppTranslations {
     profileSettingsDesc?: string;
     settingsDescription?: string;
     notAvailable?: string;
-    needHelp?: string;
-    needHelpDesc?: string;
     signInTitle?: string;
     signInMessage?: string;
+    /** Accessible name of the settings breadcrumb trail. */
+    breadcrumb?: string;
   };
   /**
    * Discovery: videos/channels directories and channel discovery sections

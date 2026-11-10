@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useId, useState } from 'react';
 import { Bell } from 'lucide-react';
 import { NOTIFICATION_CATEGORIES, type NotificationCategory, type NotificationSettings } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { NotificationsService } from '@/services/api/notifications';
 import { logger } from '@/lib/logger-client';
+import { Switch } from '@/components/common/Switch';
 
 /**
  * Settings page section (Story 29.10): turn notification categories on/off.
@@ -13,6 +14,7 @@ import { logger } from '@/lib/logger-client';
  */
 export function NotificationSettingsPanel() {
   const { t, dir } = useLanguage();
+  const uid = `notif${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const texts = t.notificationCenter;
   const [settings, setSettings] = useState<NotificationSettings | null>(null);
   const [status, setStatus] = useState<'idle' | 'saved' | 'error' | 'loadError'>('idle');
@@ -74,38 +76,28 @@ export function NotificationSettingsPanel() {
 
       {settings && (
         <ul className="divide-y divide-gray-100 dark:divide-gray-700">
-          {NOTIFICATION_CATEGORIES.map((category) => {
-            const id = `notif-setting-${category}`;
+          {NOTIFICATION_CATEGORIES.map((category, index) => {
+            // Ids come from useId(), never from the category name: page CSS
+            // matches substrings such as [id*=comments] (the watch page).
+            const id = `${uid}-${index}`;
             return (
-              <li key={category} className="flex items-center justify-between gap-4 py-3">
-                <div className="min-w-0">
-                  <label htmlFor={id} className="text-sm font-medium text-gray-900 dark:text-gray-100">
+              <li key={category} className="sw-row py-3" data-testid={`notification-setting-row-${category}`}>
+                <div>
+                  <label htmlFor={id} className="block text-sm font-medium text-gray-900 dark:text-gray-100">
                     {texts.categories[category]}
                   </label>
                   <p id={`${id}-desc`} className="text-xs text-gray-600 dark:text-gray-400">
                     {texts.categoryDescriptions[category]}
                   </p>
                 </div>
-                <button
+                <Switch
                   id={id}
-                  type="button"
-                  role="switch"
-                  aria-checked={settings[category]}
+                  checked={settings[category]}
+                  onCheckedChange={() => void toggle(category)}
                   aria-describedby={`${id}-desc`}
                   disabled={saving === category}
-                  onClick={() => void toggle(category)}
                   data-testid={`notification-setting-${category}`}
-                  className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:opacity-60 ${
-                    settings[category] ? 'bg-[var(--fanous-color-accent)]' : 'bg-gray-300 dark:bg-gray-600'
-                  }`}
-                >
-                  <span
-                    aria-hidden="true"
-                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
-                      settings[category] ? 'translate-x-5 rtl:-translate-x-5' : 'translate-x-0.5 rtl:-translate-x-0.5'
-                    }`}
-                  />
-                </button>
+                />
               </li>
             );
           })}
