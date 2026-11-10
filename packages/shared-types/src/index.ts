@@ -65,3 +65,6 @@ export * from './search';
 export * from './entitlements';
 export * from './site-theme';
 export * from './admin-content';
+
+// Error reporting: scrubbing, fingerprints, references, client and Worker reporters (admin Errors page)
+export * from './error-reporting';

@@ -11,6 +11,7 @@
 --   apps/admin-api/migrations/0009_theme_packages.sql
 --   apps/admin-api/migrations/0010_contact_mail_failures.sql
 --   apps/admin-api/migrations/0011_auth_moderation_requests.sql
+--   apps/admin-api/migrations/0012_error_groups.sql
 
 CREATE TABLE admin_audit_log (id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, actor_email TEXT, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL, metadata TEXT, created_at TEXT NOT NULL);
 CREATE TABLE ai_budget_daily (day TEXT NOT NULL, feature TEXT NOT NULL, reserved REAL NOT NULL DEFAULT 0, PRIMARY KEY (day, feature));
@@ -20,6 +21,16 @@ CREATE TABLE channel_verification_log (id TEXT PRIMARY KEY, channel_id TEXT NOT 
 CREATE TABLE contact_messages (id TEXT PRIMARY KEY, status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'open', 'replied', 'closed', 'spam')), topic TEXT NOT NULL CHECK (topic IN ('general', 'account', 'problem', 'content', 'partnership')), name TEXT NOT NULL, email TEXT NOT NULL, message TEXT NOT NULL, user_id TEXT, locale TEXT NOT NULL DEFAULT 'en' CHECK (locale IN ('en', 'ar')), page_url TEXT, user_agent TEXT, ip_hash TEXT NOT NULL, assignee_id TEXT, assignee_email TEXT, notify_status TEXT, ack_status TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, send_failed_at TEXT, delivery_error TEXT);
 CREATE TABLE contact_notes (id TEXT PRIMARY KEY, message_id TEXT NOT NULL REFERENCES contact_messages(id) ON DELETE CASCADE, kind TEXT NOT NULL CHECK (kind IN ('note', 'reply')), body TEXT NOT NULL, author_id TEXT NOT NULL, author_email TEXT, email_to TEXT, email_subject TEXT, email_status TEXT, email_id TEXT, created_at TEXT NOT NULL, email_error TEXT);
 CREATE TABLE entitlement_overrides (id TEXT PRIMARY KEY, subject_type TEXT NOT NULL CHECK (subject_type IN ('channel', 'organisation', 'user')), subject_id TEXT NOT NULL, key TEXT NOT NULL, value_json TEXT NOT NULL, expires_at TEXT, reason TEXT NOT NULL, created_by TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), UNIQUE (subject_type, subject_id, key));
+CREATE TABLE error_actions (id TEXT PRIMARY KEY, group_id TEXT NOT NULL REFERENCES error_groups(id) ON DELETE CASCADE, environment TEXT NOT NULL, item_key TEXT NOT NULL, app TEXT NOT NULL, source TEXT NOT NULL, title TEXT NOT NULL, detail TEXT, item_type TEXT, item_id TEXT, item_url TEXT, retry_json TEXT, retry_label TEXT, status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'retrying', 'resolved', 'dismissed')), occurrences INTEGER NOT NULL DEFAULT 1, attempts INTEGER NOT NULL DEFAULT 0, last_attempt_at TEXT, last_attempt_result TEXT, last_attempt_by TEXT, last_ref TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, resolved_at TEXT, UNIQUE (environment, item_key));
+CREATE TABLE error_events (id TEXT PRIMARY KEY, group_id TEXT NOT NULL REFERENCES error_groups(id) ON DELETE CASCADE, ref TEXT NOT NULL, kind TEXT NOT NULL, occurred_at TEXT NOT NULL, received_at TEXT NOT NULL, count INTEGER NOT NULL DEFAULT 1, release TEXT, worker_version TEXT, environment TEXT, route TEXT, method TEXT, status INTEGER, locale TEXT, theme TEXT, browser TEXT, os TEXT, user_id TEXT, request_id TEXT, name TEXT, message TEXT NOT NULL, stack TEXT, symbolicated_stack TEXT, shown INTEGER NOT NULL DEFAULT 0, extra_json TEXT);
+CREATE TABLE error_group_activity (id TEXT PRIMARY KEY, group_id TEXT NOT NULL REFERENCES error_groups(id) ON DELETE CASCADE, kind TEXT NOT NULL CHECK (kind IN ('created', 'status', 'assign', 'note', 'reopened', 'alert', 'retry', 'item')), from_status TEXT, to_status TEXT, body TEXT, actor_id TEXT, actor_email TEXT, created_at TEXT NOT NULL);
+CREATE TABLE error_group_releases (group_id TEXT NOT NULL, release TEXT NOT NULL, occurrences INTEGER NOT NULL DEFAULT 0, first_seen TEXT NOT NULL, last_seen TEXT NOT NULL, PRIMARY KEY (group_id, release));
+CREATE TABLE error_group_users (group_id TEXT NOT NULL, user_key TEXT NOT NULL, PRIMARY KEY (group_id, user_key));
+CREATE TABLE error_groups (id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, environment TEXT NOT NULL, app TEXT NOT NULL, kind TEXT NOT NULL, name TEXT, message TEXT NOT NULL, culprit TEXT, route TEXT, status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'acknowledged', 'resolved', 'ignored')), occurrences INTEGER NOT NULL DEFAULT 0, users INTEGER NOT NULL DEFAULT 0, samples INTEGER NOT NULL DEFAULT 0, first_seen TEXT NOT NULL, last_seen TEXT NOT NULL, first_release TEXT, last_release TEXT, resolved_at TEXT, resolved_release TEXT, regressed_at TEXT, assignee_id TEXT, assignee_email TEXT, last_alert_at TEXT, test INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL, UNIQUE (environment, fingerprint));
+CREATE TABLE error_hourly (group_id TEXT NOT NULL, hour TEXT NOT NULL, occurrences INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (group_id, hour));
+CREATE TABLE error_rate (bucket TEXT PRIMARY KEY, count INTEGER NOT NULL DEFAULT 0, expires_at TEXT NOT NULL);
+CREATE TABLE error_refs (ref TEXT PRIMARY KEY, group_id TEXT NOT NULL, event_id TEXT, created_at TEXT NOT NULL);
+CREATE TABLE error_releases (environment TEXT NOT NULL, app TEXT NOT NULL, release TEXT NOT NULL, first_seen TEXT NOT NULL, PRIMARY KEY (environment, app, release));
 CREATE TABLE moderation_actions (id TEXT PRIMARY KEY, signal_id TEXT, subject_type TEXT, subject_id TEXT, action TEXT NOT NULL, actor_type TEXT NOT NULL, actor_id TEXT, model TEXT, prompt_version TEXT, category TEXT, score REAL, reason TEXT, details_json TEXT, created_at TEXT NOT NULL);
 CREATE TABLE moderation_appeals (id TEXT PRIMARY KEY, action_id TEXT, signal_id TEXT, subject_type TEXT NOT NULL, subject_id TEXT NOT NULL, user_id TEXT NOT NULL, message TEXT, status TEXT NOT NULL DEFAULT 'open', reviewer_id TEXT, resolved_at TEXT, created_at TEXT NOT NULL);
 CREATE TABLE moderation_config (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_by TEXT, updated_at TEXT NOT NULL);
@@ -46,6 +57,19 @@ CREATE INDEX idx_contact_messages_send_failed ON contact_messages (send_failed_a
 CREATE INDEX idx_contact_messages_status ON contact_messages (status, created_at DESC);
 CREATE INDEX idx_contact_messages_user ON contact_messages (user_id, created_at);
 CREATE INDEX idx_contact_notes_message ON contact_notes (message_id, created_at);
+CREATE INDEX idx_error_actions_group ON error_actions (group_id, status, updated_at DESC);
+CREATE INDEX idx_error_actions_status ON error_actions (status, updated_at DESC);
+CREATE INDEX idx_error_events_group ON error_events (group_id, occurred_at DESC);
+CREATE INDEX idx_error_events_received ON error_events (received_at);
+CREATE INDEX idx_error_events_request ON error_events (request_id);
+CREATE INDEX idx_error_group_activity_group ON error_group_activity (group_id, created_at);
+CREATE INDEX idx_error_groups_app ON error_groups (app, last_seen DESC);
+CREATE INDEX idx_error_groups_last_seen ON error_groups (last_seen DESC);
+CREATE INDEX idx_error_groups_status ON error_groups (status, last_seen DESC);
+CREATE INDEX idx_error_hourly_hour ON error_hourly (hour);
+CREATE INDEX idx_error_rate_expires ON error_rate (expires_at);
+CREATE INDEX idx_error_refs_created ON error_refs (created_at);
+CREATE INDEX idx_error_refs_group ON error_refs (group_id);
 CREATE INDEX idx_modact_created ON moderation_actions(created_at DESC);
 CREATE INDEX idx_modact_signal ON moderation_actions(signal_id);
 CREATE INDEX idx_modact_subject ON moderation_actions(subject_type, subject_id);

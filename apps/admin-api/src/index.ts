@@ -13,6 +13,8 @@ import type { AdminBindings } from './base/types';
 import { contactSubmit } from './endpoints/contact/ContactSubmit';
 import { contactMailConsumer, type ContactMailJob, type QueueMessageLike } from './lib/contact-mail-queue';
 import { handleAuthRequestBatch, scheduleSyncs, type AuthRequestMessage } from './lib/authModerationQueue';
+import { consumeErrorQueue, errorsIngest, reportAdminApiError } from './endpoints/errors/ErrorsIngest';
+import { runErrorRetention } from './lib/errors-retention';
 
 // ==========================================
 // APP SETUP
@@ -21,12 +23,24 @@ import { handleAuthRequestBatch, scheduleSyncs, type AuthRequestMessage } from '
 const app = new Hono();
 
 // Global error handler
+// Uncaught exceptions are recorded on the Errors page; the caller gets only a reference
 app.onError((err, c) => {
   logger.error('Unhandled error:', err);
-  return c.json({
-    success: false,
-    error: err.message || 'Internal server error',
-  }, 500);
+  const reference = reportAdminApiError(c as never, err, 500);
+  return c.json({ success: false, error: 'Internal server error', reference }, 500, reference ? { 'X-Error-Ref': reference } : {});
+});
+
+// 5xx answers that did not throw are recorded too
+app.use('*', async (c, next) => {
+  await next();
+  if (c.res.status >= 500 && !c.res.headers.has('X-Error-Ref')) {
+    const reference = reportAdminApiError(c as never, null, c.res.status);
+    try {
+      if (reference) c.res.headers.set('X-Error-Ref', reference);
+    } catch {
+      // immutable headers (a proxied response): the event is recorded anyway
+    }
+  }
 });
 
 // ==========================================
@@ -101,6 +115,8 @@ app.post('/internal/contact', (c) => contactSubmit(c as never));
 
 // Published theme packages: compiled CSS, theme.json and assets, immutable per version
 app.route('/public/themes', publicThemes as never);
+// Error events from every app (X-API-Key; endpoints/errors/ErrorsIngest.ts)
+app.post('/internal/errors', (c) => errorsIngest(c as never));
 
 // Apply auth + admin middleware to all API routes
 app.use('/api/*', authMiddleware);
@@ -163,24 +179,31 @@ app.get('/health', (c) => {
 // ==========================================
 
 /**
- * HTTP (Hono), the queue consumers and the cron:
+ * Cron (wrangler triggers.crons):
+ *   - every 5 minutes: queue status reads of open requests to auth (lib/authModerationQueue.ts)
+ *   - 03:17 UTC daily: retention of error data and old source maps (lib/errors-retention.ts)
+ */
+async function scheduled(controller: ScheduledController, env: AdminBindings, ctx: ExecutionContext): Promise<void> {
+  if (controller.cron === '17 3 * * *') {
+    ctx.waitUntil(runErrorRetention(env as never));
+    return;
+  }
+  ctx.waitUntil(scheduleSyncs(env).catch((error) => logger.error('[AuthRequests] scheduled status reads failed', { error: String(error) })));
+}
+
+/**
+ * Queue consumers:
  *   - contact mail jobs (lib/contact-mail-queue.ts)
  *   - requests to auth: auth-moderation-requests[-env] and its DLQ (lib/authModerationQueue.ts)
- *   - every 5 minutes: queue status reads of open requests to auth
+ *   - error ingest and its DLQ: al-ummah-now-errors[-dlq][-env] (endpoints/errors/ErrorsIngest.ts)
  */
-export default {
-  fetch: app.fetch,
-  async queue(batch: { queue: string; messages: readonly QueueMessageLike<ContactMailJob>[] }, env: AdminBindings): Promise<void> {
-    if (/(^|-)contact-mail(-|$)/.test(batch.queue)) return contactMailConsumer(batch, env);
-    if (/^auth-moderation-requests(-|$)/.test(batch.queue)) return handleAuthRequestBatch(batch as unknown as MessageBatch<AuthRequestMessage>, env);
-    logger.error('[Queue] Batch for an unknown queue; retrying', { queue: batch.queue });
-    for (const m of batch.messages) m.retry();
-  },
-  async scheduled(_event: ScheduledController, env: AdminBindings, ctx: ExecutionContext) {
-    ctx.waitUntil(
-      scheduleSyncs(env).catch((error) => logger.error('[AuthRequests] scheduled status reads failed', { error: String(error) }))
-    );
-  },
-};
+async function queue(batch: { queue: string; messages: readonly QueueMessageLike<ContactMailJob>[] }, env: AdminBindings): Promise<void> {
+  if (/(^|-)contact-mail(-|$)/.test(batch.queue)) return contactMailConsumer(batch, env);
+  if (/^auth-moderation-requests(-|$)/.test(batch.queue)) return handleAuthRequestBatch(batch as unknown as MessageBatch<AuthRequestMessage>, env);
+  if (/(^|-)errors(-dlq)?(-|$)/.test(batch.queue)) return consumeErrorQueue(batch, env);
+  logger.error('[Queue] Batch for an unknown queue; retrying', { queue: batch.queue });
+  for (const m of batch.messages) m.retry();
+}
 
+export default { fetch: app.fetch, scheduled, queue };
 export { app };

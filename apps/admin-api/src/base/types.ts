@@ -75,6 +75,16 @@ export interface AdminBindings {
   CONTACT_MAIL_QUEUE?: Queue<unknown>;
   /** Platform DLQ (al-ummah-now-dlq[-env]): final mail failures, stored by the processor in dead_letters */
   ERRORS_DLQ?: Queue<unknown>;
+
+  // Errors page (lib/errors-*.ts)
+  /** Admin notification address for new-error and spike alerts (production only); falls back to CONTACT_INBOX */
+  ERRORS_ALERT_TO?: string;
+  /** Private source maps uploaded by the release, for symbolicating browser stacks */
+  SOURCEMAPS?: R2Bucket;
+  /** Error ingest queue (al-ummah-now-errors[-stage|-qa]): /internal/errors enqueues, this Worker consumes */
+  ERRORS_QUEUE?: Queue<unknown>;
+  /** Processor service binding: Retry of dead-lettered messages (POST /dlq/replay) */
+  PROCESSOR?: { fetch(input: string, init?: RequestInit): Promise<Response> };
 }
 
 /**

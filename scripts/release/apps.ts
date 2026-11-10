@@ -207,6 +207,12 @@ export const APPS: AppRule[] = [
 				{ kind: 'queue_producer', name: 'queue' },
 				// Contact us mail (lib/contact-email.ts), sent off the request path by its own queue
 				RESEND_API_KEY,
+				// Errors page: async ingest (queue + DLQ, consumed here), Retry of dead letters, private source maps
+				{ kind: 'queue_producer', name: 'ERRORS_QUEUE' },
+				{ kind: 'queue_consumer', name: 'al-ummah-now-errors' },
+				{ kind: 'queue_consumer', name: 'al-ummah-now-errors-dlq' },
+				{ kind: 'services', name: 'PROCESSOR' },
+				{ kind: 'r2_buckets', name: 'SOURCEMAPS' },
 				{ kind: 'r2_buckets', name: 'theme_packages' },
 				{ kind: 'services', name: 'VIDEOS' },
 				{ kind: 'queue_producer', name: 'CONTACT_MAIL_QUEUE' },
@@ -218,6 +224,6 @@ export const APPS: AppRule[] = [
 			],
 			...PROD_GUARDS,
 		},
-		stage: stageRule({ name: 'al-ummah-admin-api-stage', requireRoutes: true, vars: { ENVIRONMENT: 'stage', WEBSOCKET_URL: STAGE_REALTIME, Issuer: STAGE_AUTH, AUTH_MODERATION_CLIENT_ID: AUTH_MODERATION_CLIENT, ADMIN_WEB_URL: 'https://admin.stage.alummahnow.net' }, requiredBindings: [INTERNAL_API_KEY, { kind: 'd1_databases', name: 'REPORTS_DB' }, RESEND_API_KEY, { kind: 'r2_buckets', name: 'theme_packages' }, { kind: 'services', name: 'VIDEOS' }, { kind: 'queue_producer', name: 'CONTACT_MAIL_QUEUE' }, { kind: 'queue_consumer', name: 'al-ummah-now-contact-mail-stage' }, { kind: 'queue_producer', name: 'ERRORS_DLQ' }, { kind: 'queue_producer', name: 'AUTH_REQUESTS_QUEUE' }, { kind: 'queue_consumer', name: 'auth-moderation-requests-stage' }] }),
+		stage: stageRule({ name: 'al-ummah-admin-api-stage', requireRoutes: true, vars: { ENVIRONMENT: 'stage', WEBSOCKET_URL: STAGE_REALTIME, Issuer: STAGE_AUTH, AUTH_MODERATION_CLIENT_ID: AUTH_MODERATION_CLIENT, ADMIN_WEB_URL: 'https://admin.stage.alummahnow.net' }, requiredBindings: [INTERNAL_API_KEY, { kind: 'd1_databases', name: 'REPORTS_DB' }, RESEND_API_KEY, { kind: 'r2_buckets', name: 'theme_packages' }, { kind: 'services', name: 'VIDEOS' }, { kind: 'queue_producer', name: 'CONTACT_MAIL_QUEUE' }, { kind: 'queue_consumer', name: 'al-ummah-now-contact-mail-stage' }, { kind: 'queue_producer', name: 'ERRORS_DLQ' }, { kind: 'queue_producer', name: 'AUTH_REQUESTS_QUEUE' }, { kind: 'queue_consumer', name: 'auth-moderation-requests-stage' }, { kind: 'queue_producer', name: 'ERRORS_QUEUE' }, { kind: 'queue_consumer', name: 'al-ummah-now-errors-stage' }, { kind: 'queue_consumer', name: 'al-ummah-now-errors-dlq-stage' }, { kind: 'services', name: 'PROCESSOR' }, { kind: 'r2_buckets', name: 'SOURCEMAPS' }] }),
 	},
 ];

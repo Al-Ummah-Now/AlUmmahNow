@@ -22,7 +22,7 @@ import {
   type ContactNoteRow,
 } from '../../lib/contact-store';
 import { renderReply } from '../../lib/contact-email';
-import { enqueueContactMail, reportContactMailFailure } from '../../lib/contact-mail-queue';
+import { enqueueContactMail, reportContactMailFailure, resolveContactMailItem } from '../../lib/contact-mail-queue';
 
 const TAGS = ['Contact'];
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -257,6 +257,7 @@ export class ContactRetryDelivery extends ContactRoute {
       return c.json({ success: false, error: 'Could not queue the email' }, 503);
     }
     logger.info('[Contact] Delivery retried', { id: params.id, kind: body.kind, noteId: body.noteId, by: this.getUserId(c) });
+    await resolveContactMailItem(c.env, job);
     return { success: true, result: { message: await getContactMessage(db, params.id), notes: await listContactNotes(db, params.id) } };
   }
 }

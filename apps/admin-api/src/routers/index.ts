@@ -5,6 +5,7 @@ import channelsRouter from './channels.router';
 import siteSettingsRouter from './siteSettings.router';
 import contactRouter from './contact.router';
 import authRequestsRouter from './authRequests.router';
+import errorsRouter from './errors.router';
 
 /**
  * Register all feature routers with the main OpenAPI instance.
@@ -30,4 +31,7 @@ export function registerAllRouters(openapi: any) {
   openapi.route('/api/contact', contactRouter);
   // Moderation requests to auth at /api/auth-requests
   openapi.route('/api/auth-requests', authRequestsRouter);
+
+  // Errors page at /api/errors
+  openapi.route('/api/errors', errorsRouter);
 }

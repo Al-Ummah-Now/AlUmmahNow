@@ -15,6 +15,7 @@
  *   and Resend gets an Idempotency-Key per email.
  */
 import type { AdminBindings } from '../base/types';
+import { newErrorRef, scrubEvent } from '@al-ummah/shared-types';
 import { logger } from './logger';
 import { isSinkAddress } from './contact';
 import { getContactMessage, deliveryStatus, recordDelivery, type MailKind } from './contact-store';
@@ -66,9 +67,61 @@ export async function enqueueContactMail(env: Pick<AdminBindings, 'CONTACT_MAIL_
   }
 }
 
-/** Reports a final failure to the platform errors pipeline (processor DLQ consumer → dead_letters). */
-export async function reportContactMailFailure(env: Pick<AdminBindings, 'ERRORS_DLQ' | 'ENVIRONMENT'>, job: ContactMailJob, reason: string, attempts: number): Promise<void> {
+/** Needs-action item key of one email (lib/errors-actions.ts "contact-email" retries it). */
+export function contactMailItemKey(job: Pick<ContactMailJob, 'kind' | 'messageId' | 'noteId'>): string {
+  return `contact-email:${job.messageId}:${job.kind}${job.noteId ? `:${job.noteId}` : ''}`.slice(0, 160);
+}
+
+/**
+ * Flags a final failure on the admin Errors page: a needs-action item linking
+ * to the message, with Retry (queues the email again). Never throws.
+ */
+async function flagContactMailFailure(env: AdminBindings, job: ContactMailJob, reason: string): Promise<void> {
+  const event = scrubEvent({
+    app: 'admin-api',
+    kind: 'action',
+    ref: newErrorRef(),
+    message: `Contact ${job.kind} email not sent: ${reason}`,
+    environment: env.ENVIRONMENT,
+    occurredAt: new Date().toISOString(),
+    action: {
+      key: contactMailItemKey(job),
+      source: 'email',
+      title: 'Contact email not sent',
+      itemType: 'contact-message',
+      itemId: job.messageId,
+      itemUrl: `/contact/${encodeURIComponent(job.messageId)}`,
+      retry: { kind: 'builtin', handler: 'contact-email', args: { id: job.messageId, kind: job.kind, ...(job.noteId ? { noteId: job.noteId } : {}) } },
+      retryLabel: 'Resend email',
+    },
+  });
+  if (!event) return;
+  try {
+    // Imported lazily: the errors pipeline imports lib/errors-actions.ts, which imports this module
+    const { ingestAndAlert } = await import('../endpoints/errors/ErrorsIngest');
+    await ingestAndAlert(env, [event]);
+  } catch (error) {
+    logger.error('[ContactMail] Could not flag the failure on the Errors page', { error: error instanceof Error ? error.message : String(error) });
+  }
+}
+
+/** Closes the item once an admin queued the email again from the inbox. Never throws. */
+export async function resolveContactMailItem(env: AdminBindings, job: Pick<ContactMailJob, 'kind' | 'messageId' | 'noteId'>): Promise<void> {
+  try {
+    const { enqueueIngest } = await import('../endpoints/errors/ErrorsIngest');
+    await enqueueIngest(env, { v: 1, events: [], resolved: [contactMailItemKey(job)], trustedRetry: true, receivedAt: new Date().toISOString() });
+  } catch (error) {
+    logger.error('[ContactMail] Could not resolve the Errors page item', { error: error instanceof Error ? error.message : String(error) });
+  }
+}
+
+/**
+ * Reports a final failure: the platform DLQ (processor DLQ consumer →
+ * dead_letters) and a needs-action item on the admin Errors page.
+ */
+export async function reportContactMailFailure(env: AdminBindings, job: ContactMailJob, reason: string, attempts: number): Promise<void> {
   logger.error('[ContactMail] Delivery failed for good', { alert: 'contact_mail_failed', environment: env.ENVIRONMENT, ...job, attempts, reason });
+  if (job?.messageId) await flagContactMailFailure(env, job, reason);
   try {
     await env.ERRORS_DLQ?.send({
       id: `contact-${job.kind}-${job.noteId ?? job.messageId}`,
