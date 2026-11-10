@@ -140,9 +140,21 @@ jobs:
       # client id are read at runtime from each env's wrangler vars, so the same
       # build serves QA, stage and production (deploy.yml already ships one build
       # to QA and production).
+      # NEXT_DEPLOYMENT_ID: one id per build, for skew protection (promote.ts bakes
+      # the id -> Worker version mapping into each upload). The action key is the
+      # same for every release build, so an unchanged Server Action keeps its id
+      # across deploys (Next salts ids with it); stage and production share it
+      # because they run the same build. docs/release-pipeline/SKEW-PROTECTION.md
       - name: Build ${{ matrix.part }} (OpenNext)
         if: matrix.part != 'workers'
+        env:
+          NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: ${{ secrets.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY }}
         run: |
+          export NEXT_DEPLOYMENT_ID="${GITHUB_SHA::12}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          if [ -z "$NEXT_SERVER_ACTIONS_ENCRYPTION_KEY" ]; then
+            echo "::error::NEXT_SERVER_ACTIONS_ENCRYPTION_KEY is not set: every release would rename every Server Action"
+            exit 1
+          fi
           pnpm --filter "@al-ummah/${{ matrix.part }}" build
           cd "apps/${{ matrix.part }}" && pnpm opennextjs-cloudflare build
 

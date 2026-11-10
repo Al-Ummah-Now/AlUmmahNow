@@ -9,7 +9,9 @@ import { requestUploadResume, type ReauthoriseResult } from '@/lib/upload/resili
 import { findRememberedUpload, forgetUpload, rememberUpload } from '@/lib/upload/resume-store';
 import type { BatchUploadEntry } from '@/lib/upload/BatchUploadManager';
 import { hasActiveUploads } from '@/lib/upload/batch-status';
-import { initiateBatchUpload, completeVideoUpload } from '@/lib/actions/upload';
+import { initiateBatchUpload, completeVideoUpload } from '@/lib/api/upload-client';
+import { useHoldReloadWhile } from '@/lib/version-skew/VersionSkewProvider';
+import { holdReload } from '@/lib/version-skew/recovery';
 import { getClientAuthHeaders } from '@/lib/auth/client-token';
 import { getApiUrl } from '@/lib/runtime-config';
 import { logger } from '@/lib/logger-client';
@@ -36,6 +38,9 @@ export function useBatchUpload({
   const [overallProgress, setOverallProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [isInitiating, setIsInitiating] = useState(false);
+  // A deploy while files are queued, uploading or paused must not reload the
+  // page under them: the version-skew notice waits until the batch is over
+  useHoldReloadWhile(isInitiating || isUploading || hasActiveUploads(files));
 
   const batchManagerRef = useRef<BatchUploadManager | null>(null);
   const optimizerRef = useRef<UploadOptimizer | null>(null);
@@ -81,6 +86,8 @@ export function useBatchUpload({
       batchManagerRef.current.onUploadSuccess(async (item) => {
         if (!item.videoId) return;
         forgetUpload(item.file, channelIdRef.current);
+        // The TUS transfer is done but the item is not finished until complete answers
+        const release = holdReload();
         try {
           const result = await completeVideoUpload(item.videoId, channelIdRef.current, item.file.size);
           if (!result.success) {
@@ -93,6 +100,8 @@ export function useBatchUpload({
         } catch (error) {
           logger.error('[useBatchUpload] Complete upload threw', { videoId: item.videoId, error });
           onErrorRef.current?.(error instanceof Error ? error.message : uploadFailedMessageRef.current);
+        } finally {
+          release();
         }
       });
     }

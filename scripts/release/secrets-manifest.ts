@@ -80,3 +80,23 @@ export const SECRETS_MANIFEST: WorkerSecrets[] = [
 	...envs('processor', 'al-ummah-now-processor-qa', { required: [INTERNAL_API_KEY] }),
 	...envs('scheduler', 'al-ummah-scheduler-qa', { required: [INTERNAL_API_KEY] }),
 ];
+
+export interface BuildSecret {
+	name: string;
+	/** Workflow file whose OpenNext build step reads it */
+	workflow: string;
+	purpose: string;
+}
+
+/**
+ * GitHub Actions secrets read at build time (not Worker secrets). Next salts
+ * Server Action ids with NEXT_SERVER_ACTIONS_ENCRYPTION_KEY and generates a new
+ * key per build when it is unset, so every deploy renamed every action and open
+ * pages failed ("Server Action ... was not found on the server"). Stage and
+ * production run the same release build, so they share its key.
+ * The build steps fail when the secret is missing (docs/release-pipeline/SKEW-PROTECTION.md).
+ */
+export const BUILD_SECRETS: BuildSecret[] = [
+	{ name: 'NEXT_SERVER_ACTIONS_ENCRYPTION_KEY', workflow: 'release.yml', purpose: 'Server Action key of the stage + production build (web, admin-web)' },
+	{ name: 'NEXT_SERVER_ACTIONS_ENCRYPTION_KEY_QA', workflow: 'deploy.yml', purpose: 'Server Action key of the QA build (web, admin-web); PR builds get none' },
+];

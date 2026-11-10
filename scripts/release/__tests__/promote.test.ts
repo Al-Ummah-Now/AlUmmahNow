@@ -319,3 +319,59 @@ describe('custom domains', () => {
 		assert.ok(domains < order.indexOf('wait true'));
 	});
 });
+
+describe('promote: skew protection', () => {
+	it('passes each Next upload its deployment mapping, computed against the version serving now', async () => {
+		const { run, calls } = fakeRun({ 'api-videos': V(1), web: V(2) });
+		const asked: [string, string | null][] = [];
+		const skewArgs: PromoteDeps['skewArgs'] = async (a, previous) => {
+			asked.push([a.app, previous]);
+			return a.app === 'web' ? ['--var', 'CF_DEPLOYMENT_MAPPING:{"b2":"current","b1":"v2"}'] : [];
+		};
+		await promote(twoApps('production'), 'production', 'release abc', { ...deps(run), skewArgs });
+		assert.deepEqual(asked, [['api-videos', V(1)], ['web', V(2)]]);
+		const webUpload = calls.find((c) => c.args[1] === 'upload' && c.worker === 'web')!.args;
+		assert.ok(webUpload.includes('CF_DEPLOYMENT_MAPPING:{"b2":"current","b1":"v2"}'));
+		const apiUpload = calls.find((c) => c.args[1] === 'upload' && c.worker === 'api-videos')!.args;
+		assert.ok(!apiUpload.includes('--var'));
+	});
+
+	it('a bootstrap deploy carries the mapping too', async () => {
+		const { run, calls } = fakeRun({ 'api-videos': V(1), web: null });
+		await promote(twoApps('stage'), 'stage', 'release abc', { ...deps(run), skewArgs: async (a) => (a.app === 'web' ? ['--var', 'CF_DEPLOYMENT_MAPPING:{"b":"current"}'] : []) });
+		const deploy = calls.find((c) => c.args[0] === 'deploy' && c.worker === 'web')!.args;
+		assert.ok(deploy.includes('CF_DEPLOYMENT_MAPPING:{"b":"current"}'));
+	});
+});
+
+describe('promote: skew protection check', () => {
+	const snap = { app: 'web', url: 'https://videos.stage.alummahnow.net/en', deploymentId: 'b1', chunks: ['/_next/static/chunks/a.js'] };
+	const failing = async () => [{ name: 'skew protection (web)', ok: false, detail: '404' }];
+
+	it('snapshots before 100% and checks after; a failure on stage rolls back', async () => {
+		const { run, calls } = fakeRun({ 'api-videos': V(1), web: V(2) });
+		const order: string[] = [];
+		const err = await promote(twoApps('stage'), 'stage', 'r', {
+			...deps(run),
+			captureBuilds: async (_e, apps) => (order.push(`capture ${apps.join(',')} after ${calls.filter((c) => c.args.join(' ').includes('@100%') && !c.args.join(' ').includes('@0%')).length} full deploys`), [snap]),
+			checkSkew: async (s) => (order.push(`check ${s.length}`), failing()),
+		}).catch((e) => e);
+		assert.ok(err instanceof ReleaseError && err.rolledBack, String(err));
+		assert.match(err.message, /skew protection check failed/);
+		assert.deepEqual(order, ['capture api-videos,web after 0 full deploys', 'check 1']);
+	});
+
+	it('in production a failure is a warning, not a rollback', async () => {
+		const { run } = fakeRun({ 'api-videos': V(1), web: V(2) });
+		const lines: string[] = [];
+		await promote(twoApps('production'), 'production', 'r', { ...deps(run), log: (l) => lines.push(l), captureBuilds: async () => [snap], checkSkew: failing });
+		assert.ok(lines.some((l) => l.startsWith('::warning::skew protection check failed in production')));
+	});
+
+	it('a snapshot failure does not block the release', async () => {
+		const { run } = fakeRun({ 'api-videos': V(1), web: V(2) });
+		const lines: string[] = [];
+		await promote(twoApps('stage'), 'stage', 'r', { ...deps(run), log: (l) => lines.push(l), captureBuilds: async () => { throw new Error('timeout'); } });
+		assert.ok(lines.some((l) => l.includes('could not snapshot')));
+	});
+});
