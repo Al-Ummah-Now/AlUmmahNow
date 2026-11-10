@@ -1758,11 +1758,11 @@
 }
 
 @media (pointer: coarse) {
-  /* The extra hit area grows above the track only: grown both ways it reached 10px into the
-     button row, so taps there went to the buttons and the bar had a 34px target. The track stays
-     where the 20px slot puts it (centred, 4px from the slot's foot). */
   .video-js.vjs-fanous .vjs-progress-control {
     height: 44px;
+    /* The extra hit area grows above the track only: grown both ways it reached 10px into the
+       button row, so taps there went to the buttons and the bar had a 34px target. The track
+       stays where the 20px slot puts it (centred, 4px from the slot's foot). */
     margin-block: -24px 0;
     align-items: flex-end;
     padding-block-end: 4px;
