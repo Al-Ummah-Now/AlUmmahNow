@@ -75,7 +75,11 @@ describe('SettingsMenu', () => {
     expect(rowIds()).toEqual(['quality', 'speed', 'captions', 'shortcuts']);
     expect(document.activeElement).toHaveAttribute('data-row', 'quality');
     // Current values on the end side
-    expect(screen.getByText('Auto (720p)')).toBeInTheDocument();
+    const quality = document.querySelector('[data-row="quality"] .vjs-fanous-mi-value');
+    expect(quality).toHaveTextContent('Auto (720p)');
+    // The bracketed Latin run is isolated left to right, so an Arabic row never mirrors one bracket
+    expect(quality?.querySelector('bdi')).toHaveAttribute('dir', 'ltr');
+    expect(quality?.querySelector('bdi')).toHaveTextContent('(720p)');
     expect(screen.getByText('Normal')).toBeInTheDocument();
   });
 
