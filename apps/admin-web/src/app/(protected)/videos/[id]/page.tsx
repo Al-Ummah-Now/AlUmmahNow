@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getContentPermissions, getVideo } from '@/lib/api/content';
-import type { AdminContentPermission, VideoDetailView } from '@/lib/api/content-types';
+import { getContentPermissions, getVideo, listJobs } from '@/lib/api/content';
+import type { AdminContentPermission, AdminJob, VideoDetailView } from '@/lib/api/content-types';
 import { AdminApiError } from '@/lib/api/errors';
 import { getI18n } from '@/i18n/server';
 import { formatDate, formatNumber, type MessageKey } from '@/i18n/translate';
@@ -28,6 +28,35 @@ function bytes(n: number | null, locale: string): string | null {
   return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(v)} ${units[i]}`;
 }
 
+/**
+ * A video that is gone. The delete purge erases the record entirely, so the
+ * page the admin deleted it from re-renders as this: the deletion and its
+ * jobs (a failed purge keeps Retry here and on the Errors page). Never had a
+ * job: a plain 404.
+ */
+async function ErasedVideo({ id, back }: { id: string; back: React.ReactNode }) {
+  const { t } = await getI18n();
+  let jobs: AdminJob[] = [];
+  let permissions: AdminContentPermission[] = [];
+  try {
+    [jobs, permissions] = await Promise.all([listJobs({ targetKind: 'video', targetId: id, limit: 10 }), getContentPermissions()]);
+  } catch (e) {
+    logger.warn('[videos] Could not read an erased video\'s jobs', { id, error: e instanceof Error ? e.message : String(e) });
+  }
+  if (!jobs.length) notFound();
+  return (
+    <div data-testid="video-erased-page" data-video-id={id}>
+      {back}
+      <h1 className="text-2xl sm:text-3xl font-bold text-fg mb-2">{t('videos.erasedTitle')}</h1>
+      <p className="mb-6"><MonoId value={id} max={60} /></p>
+      <Notice testId="video-erased">{t('videos.erasedBody')}</Notice>
+      <div className="mt-6 max-w-xl">
+        <JobsPanel jobs={jobs} permissions={permissions} />
+      </div>
+    </div>
+  );
+}
+
 export default async function VideoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { t, locale } = await getI18n();
@@ -38,7 +67,7 @@ export default async function VideoPage({ params }: { params: Promise<{ id: stri
   try {
     [video, permissions] = await Promise.all([getVideo(id), getContentPermissions()]);
   } catch (e) {
-    if (e instanceof AdminApiError && e.status === 404) notFound();
+    if (e instanceof AdminApiError && e.status === 404) return <ErasedVideo id={id} back={back} />;
     logger.error('[videos] Failed to load video', { id, error: e instanceof Error ? e.message : String(e) });
   }
   if (!video) {
