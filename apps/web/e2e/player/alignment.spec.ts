@@ -8,8 +8,8 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { inkBox, layoutBox, openHarness, pauseAt, startPlayback, type Box } from './harness';
 
 const TOLERANCE = 1;
-/** Optical nudge of play triangles, as a share of the icon width (player-skin.css) */
-const PLAY_NUDGE = 0.07;
+/** Optical nudge of play triangles: 7% of the icon width, rounded to whole pixels (player-skin.css) */
+const playNudge = (iconWidth: number) => Math.round(iconWidth * 0.07);
 
 const near = (actual: number, expected: number, what: string) =>
   expect(Math.abs(actual - expected), `${what}: ${actual.toFixed(2)} vs ${expected.toFixed(2)}`).toBeLessThanOrEqual(TOLERANCE);
@@ -75,7 +75,7 @@ for (const dpr of [1, 2]) {
         const glyph = await inkBox(page, svg);
         const iconWidth = (await layoutBox(svg)).width;
         // Play points right in Arabic too (media convention), so the nudge is always rightward
-        near(glyph.cx - circle.cx, iconWidth * PLAY_NUDGE, 'big play horizontal nudge');
+        near(glyph.cx - circle.cx, playNudge(iconWidth), 'big play horizontal nudge');
         near(glyph.cy, circle.cy, 'big play vertical centre');
       });
 
@@ -91,7 +91,7 @@ for (const dpr of [1, 2]) {
           const icon = await inkBox(page, svg);
           const target = await layoutBox(button);
           const play = (await svg.getAttribute('data-icon')) === 'play';
-          const expectedX = target.cx + (play ? (await layoutBox(svg)).width * PLAY_NUDGE : 0);
+          const expectedX = target.cx + (play ? playNudge((await layoutBox(svg)).width) : 0);
           // Lucide's volume and fullscreen glyphs are drawn centred in the viewBox; their ink must sit centred too
           near(icon.cx, expectedX, `${name} horizontal`);
           near(icon.cy, target.cy, `${name} vertical`);
