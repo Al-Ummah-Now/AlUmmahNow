@@ -11,6 +11,11 @@ interface AdminNavProps {
   userEmail?: string;
   /** Auth server origin, for the account menu. */
   authIssuer?: string;
+  /**
+   * New contact messages for the nav badge; null hides the Contact messages
+   * item (the user lacks contact:read).
+   */
+  contactNew?: number | null;
 }
 
 const NAV_ITEMS: { href: string; label: MessageKey }[] = [
@@ -20,14 +25,16 @@ const NAV_ITEMS: { href: string; label: MessageKey }[] = [
   { href: '/translations', label: 'nav.translations' },
   { href: '/indices', label: 'nav.indices' },
   { href: '/site-theme', label: 'nav.siteTheme' },
+  { href: '/contact', label: 'nav.contact' },
 ];
 
-export function AdminNav({ userEmail, authIssuer }: AdminNavProps) {
+export function AdminNav({ userEmail, authIssuer, contactNew = null }: AdminNavProps) {
   const pathname = usePathname();
   const { t } = useLanguage();
+  const items = NAV_ITEMS.filter((i) => i.href !== '/contact' || contactNew !== null);
 
   // Most specific match wins, so /moderation/ai does not also highlight /moderation
-  const activeHref = NAV_ITEMS.map((i) => i.href)
+  const activeHref = items.map((i) => i.href)
     .filter((href) => pathname === href || pathname.startsWith(`${href}/`))
     .sort((a, b) => b.length - a.length)[0];
   const isActive = (path: string) => path === activeHref;
@@ -48,7 +55,7 @@ export function AdminNav({ userEmail, authIssuer }: AdminNavProps) {
 
         <nav aria-label={t('nav.label')} className="order-3 w-full lg:order-none lg:w-auto">
           <ul className="flex flex-wrap items-center gap-1 sm:gap-2">
-            {NAV_ITEMS.map((item) => {
+            {items.map((item) => {
               const active = isActive(item.href);
               return (
                 <li key={item.href}>
@@ -60,6 +67,16 @@ export function AdminNav({ userEmail, authIssuer }: AdminNavProps) {
                     }`}
                   >
                     {t(item.label)}
+                    {item.href === '/contact' && !!contactNew && contactNew > 0 && (
+                      <span
+                        data-testid="contact-nav-badge"
+                        data-count={contactNew}
+                        className="ms-2 inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-accent px-1.5 text-xs font-semibold text-on-accent align-middle"
+                      >
+                        <span aria-hidden="true">{contactNew > 99 ? '99+' : contactNew}</span>
+                        <span className="sr-only">{t('contact.navBadge', { count: contactNew })}</span>
+                      </span>
+                    )}
                   </Link>
                 </li>
               );

@@ -6,7 +6,10 @@
  * For every Worker x env in secrets-manifest.ts, against what is DEPLOYED:
  *   - the Worker exists
  *   - every required secret is bound (worker secret or Secrets Store), and every
- *     Secrets Store binding points at a secret that exists and is active
+ *     Secrets Store binding points at a secret that exists and is active. A secret
+ *     the deployed Worker does not have yet passes when the release's own config
+ *     (apps.ts configPath) binds it to an active Secrets Store secret: the promote
+ *     that follows adds it, so the first release of a new binding is not blocked.
  *   - no forbidden (test-only) secret is bound
  *   - every client id the Worker uses (deployed var or fixed in code) exists and is
  *     enabled in that env's auth D1 `oauth_clients`
@@ -16,7 +19,11 @@
  * (locally, `wrangler login` is enough). Same file in AlUmmahNow and AlUmmahNowAuth;
  * only secrets-manifest.ts differs.
  */
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { APPS } from './apps.ts';
+import { parseJsonc } from './jsonc.ts';
+import { resolveEnv, type WranglerConfig } from './wrangler-config.ts';
 import { createCfClient, d1Query, getWorkerBindings, type CfClient, type WorkerBinding } from './cf-api.ts';
 import { AUTH_DBS, SECRETS_MANIFEST, type EnvName, type WorkerSecrets } from './secrets-manifest.ts';
 
@@ -38,6 +45,26 @@ export interface Deps {
 	bindings(worker: string): Promise<WorkerBinding[] | null>;
 	storeSecrets(storeId: string): Promise<StoreSecret[]>;
 	clientIds(databaseId: string, ids: string[]): Promise<Map<string, boolean>>;
+	/** The Secrets Store binding the release's config declares for this Worker, if any. */
+	declared?(entry: WorkerSecrets, name: string): Promise<{ store_id: string; secret_name: string } | null>;
+}
+
+const ROOT = resolve(new URL('../..', import.meta.url).pathname);
+
+/** Secrets Store binding `name` in the production/stage config this release deploys (QA has none in apps.ts). */
+export function declaredInConfig(entry: WorkerSecrets, name: string, root = ROOT): { store_id: string; secret_name: string } | null {
+	if (entry.env === 'qa') return null;
+	const rule = APPS.find((a) => a.app === entry.app);
+	const envRule = entry.env === 'production' ? rule?.production : rule?.stage;
+	if (!rule || !envRule) return null;
+	try {
+		const config = parseJsonc(readFileSync(resolve(root, rule.configPath), 'utf8')) as WranglerConfig;
+		const list = (resolveEnv(config, envRule.env).config.secrets_store_secrets ?? []) as { binding: string; store_id: string; secret_name: string }[];
+		const hit = list.find((b) => b.binding === name);
+		return hit ? { store_id: hit.store_id, secret_name: hit.secret_name } : null;
+	} catch {
+		return null;
+	}
 }
 
 export function liveDeps(cf: CfClient): Deps {
@@ -59,6 +86,7 @@ export function liveDeps(cf: CfClient): Deps {
 			);
 			return new Map(rows.map((r) => [r.id, r.enabled === 1]));
 		},
+		declared: async (entry, name) => declaredInConfig(entry, name),
 	};
 }
 
@@ -73,7 +101,14 @@ export async function checkWorker(entry: WorkerSecrets, deps: Deps): Promise<Fin
 		const b = bindings.find((x) => x.name === req.name);
 		const check = `secret ${req.name}`;
 		if (!b) {
-			out.push({ ...base, ok: false, check, detail: `missing (${req.purpose})` });
+			const next = (await deps.declared?.(entry, req.name)) ?? null;
+			if (next) {
+				const s = (await deps.storeSecrets(next.store_id)).find((x) => x.name === next.secret_name);
+				const ok = !!s && (s.status ?? 'active') === 'active';
+				out.push({ ...base, ok, check, detail: `not deployed yet; this release binds Secrets Store ${next.secret_name}${ok ? '' : s ? ` (${s.status})` : ', which does not exist'}` });
+			} else {
+				out.push({ ...base, ok: false, check, detail: `missing (${req.purpose})` });
+			}
 		} else if (b.type === 'secret_text') {
 			out.push({ ...base, ok: true, check, detail: 'worker secret' });
 		} else if (b.type === 'secrets_store_secret') {

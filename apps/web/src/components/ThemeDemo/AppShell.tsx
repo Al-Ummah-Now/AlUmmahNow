@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { Bookmark, Clock, Compass, Heart, History, Home, Languages, Menu, Moon, ShieldCheck, Sun, Tv, BookOpen, X, type LucideIcon } from 'lucide-react';
+import { Bookmark, Clock, Compass, Heart, History, Home, Languages, Menu, Moon, ShieldCheck, Sun, Tv, BookOpen, Mail, X, type LucideIcon } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { saveLanguagePreference } from '@/lib/i18n/utils';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
@@ -58,6 +58,7 @@ export function AppShell() {
     { title: c.more, items: [
       { label: t.navigation.privacyAndCookies, href: `${base}/settings/privacy`, icon: ShieldCheck },
       { label: t.communityGuidelines.navLabel, href: `${base}/community-guidelines`, icon: BookOpen },
+      { label: t.contact.navLabel, href: `${base}/contact`, icon: Mail },
     ] },
   ];
 

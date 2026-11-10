@@ -252,6 +252,16 @@ async function validateJWTWithSignature(token: string, env?: any): Promise<AuthP
   }
 }
 
+/**
+ * Verifies an access token the same way the middleware does (signature and
+ * revocation when configured). Used by routes outside /api that accept an
+ * optional user token. Returns null when the token is not valid.
+ */
+export async function verifyAccessToken(token: string, env: unknown): Promise<AuthPayload | null> {
+  const authConfig = getAuthConfig(env);
+  return authConfig.VERIFY_JWT_SIGNATURE ? validateJWTWithSignature(token, env) : validateJWTBasic(token);
+}
+
 export function getAuthContext(c: Context): AuthContext | null {
   return c.get('auth') || null;
 }

@@ -3,6 +3,7 @@ import indicesRouter from './indices.router';
 import i18nRouter from './i18n.router';
 import channelsRouter from './channels.router';
 import siteSettingsRouter from './siteSettings.router';
+import contactRouter from './contact.router';
 
 /**
  * Register all feature routers with the main OpenAPI instance.
@@ -23,4 +24,7 @@ export function registerAllRouters(openapi: any) {
 
   // Site-wide settings at /api/site-settings
   openapi.route('/api/site-settings', siteSettingsRouter);
+
+  // Contact us inbox at /api/contact
+  openapi.route('/api/contact', contactRouter);
 }

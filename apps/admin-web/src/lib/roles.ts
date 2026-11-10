@@ -54,3 +54,13 @@ export function isSuperAdmin(role?: string): boolean {
 export function canModerate(role?: string): boolean {
   return ADMIN_ROLES.includes(normalizeRole(role) as SystemRole);
 }
+
+/**
+ * Contact us inbox: mirrors admin-api PERMISSIONS (contact:read and
+ * contact:manage are granted to admins and super admins, not moderators).
+ * admin-api enforces it; this only hides what the user cannot open.
+ */
+export function canUseContactInbox(role?: string): boolean {
+  const r = normalizeRole(role);
+  return r === 'admin' || r === 'super_admin';
+}

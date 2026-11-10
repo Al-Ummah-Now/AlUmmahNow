@@ -15,6 +15,11 @@ import type {
   AiConfigView,
   AiConfigPatch,
   AiUsageView,
+  ContactCounts,
+  ContactListResponse,
+  ContactMessage,
+  ContactNote,
+  ContactStatus,
 } from './types';
 
 const ADMIN_API_URL = process.env.ADMIN_API_URL || 'http://127.0.0.1:3090';
@@ -223,4 +228,60 @@ export async function getSiteThemeHistory(limit = 10): Promise<SiteThemeChange[]
 
 export async function setSiteTheme(theme: SiteTheme): Promise<SiteThemeState> {
   return (await requestAdmin('/api/site-settings/theme', { method: 'PUT', body: JSON.stringify({ theme }) })).result as SiteThemeState;
+}
+
+// ---------- Contact us inbox ----------
+
+export interface ContactFilters {
+  status?: string;
+  topic?: string;
+  from?: string;
+  to?: string;
+  q?: string;
+  assignee?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export async function listContactMessages(filters: ContactFilters = {}): Promise<ContactListResponse> {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) {
+    if (value !== undefined && value !== '') params.set(key, String(value));
+  }
+  const query = params.toString();
+  return fetchAdmin<ContactListResponse>(`/api/contact/messages${query ? `?${query}` : ''}`);
+}
+
+export async function getContactCounts(): Promise<ContactCounts> {
+  return fetchAdmin<ContactCounts>('/api/contact/counts');
+}
+
+export async function getContactMessage(id: string): Promise<{ message: ContactMessage; notes: ContactNote[] }> {
+  return fetchAdmin<{ message: ContactMessage; notes: ContactNote[] }>(`/api/contact/messages/${encodeURIComponent(id)}`);
+}
+
+/** Status and/or assignee ("me" assigns to the caller, null unassigns). */
+export async function updateContactMessage(
+  id: string,
+  patch: { status?: ContactStatus; assignee?: 'me' | null },
+): Promise<ActionResult<{ message: ContactMessage }>> {
+  return mutate(`/api/contact/messages/${encodeURIComponent(id)}`, 'PATCH', patch);
+}
+
+export async function addContactNote(id: string, body: string): Promise<ActionResult<{ note: ContactNote }>> {
+  return mutate(`/api/contact/messages/${encodeURIComponent(id)}/notes`, 'POST', { body });
+}
+
+export async function replyToContactMessage(id: string, body: string): Promise<ActionResult<{ note: ContactNote; message: ContactMessage }>> {
+  return mutate(`/api/contact/messages/${encodeURIComponent(id)}/reply`, 'POST', { body });
+}
+
+export async function deleteContactMessage(id: string): Promise<ActionResult<{ deleted: string }>> {
+  try {
+    const data = await fetchAdmin<{ deleted: string }>(`/api/contact/messages/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    return { ok: true, data };
+  } catch (error) {
+    if (error instanceof AdminApiError) return { ok: false, status: error.status, error: error.message };
+    return { ok: false, status: 500, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
 }

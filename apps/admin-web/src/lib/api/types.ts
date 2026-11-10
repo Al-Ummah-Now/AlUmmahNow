@@ -108,3 +108,50 @@ export interface AiUsageView {
   today: { day: string; neurons: number; usd: number };
   dailyNeuronCap: number | null;
 }
+
+// ---------- Contact us inbox (admin-api /api/contact) ----------
+
+export type ContactStatus = 'new' | 'open' | 'replied' | 'closed' | 'spam';
+export type ContactTopic = 'general' | 'account' | 'problem' | 'content' | 'partnership';
+
+export interface ContactMessage {
+  id: string;
+  status: ContactStatus;
+  topic: ContactTopic;
+  name: string;
+  email: string;
+  message: string;
+  user_id: string | null;
+  locale: 'en' | 'ar';
+  page_url: string | null;
+  user_agent: string | null;
+  assignee_id: string | null;
+  assignee_email: string | null;
+  notify_status: string | null;
+  ack_status: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ContactNote {
+  id: string;
+  message_id: string;
+  kind: 'note' | 'reply';
+  body: string;
+  author_id: string;
+  author_email: string | null;
+  email_to: string | null;
+  email_subject: string | null;
+  email_status: string | null;
+  email_id: string | null;
+  created_at: string;
+}
+
+export interface ContactListResponse {
+  messages: ContactMessage[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export type ContactCounts = Record<ContactStatus, number>;

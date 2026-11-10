@@ -20,6 +20,7 @@ import {
   FileText,
   ChevronRight,
   Shield,
+  Mail,
 } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -64,6 +65,13 @@ export default function SettingsPage() {
       description: t.privacy.settingsDescription,
       icon: Shield,
       href: `/${lang}/settings/privacy`,
+      available: true,
+    },
+    {
+      title: t.contact.settingsTitle,
+      description: t.contact.settingsDescription,
+      icon: Mail,
+      href: `/${lang}/contact?from=${encodeURIComponent(`/${lang}/settings`)}`,
       available: true,
     },
   ];
