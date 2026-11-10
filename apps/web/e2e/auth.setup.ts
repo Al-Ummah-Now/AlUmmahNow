@@ -2,6 +2,8 @@ import { chromium, type Browser, type BrowserContext, type FullConfig, type Page
 import { readSinkCode, SINK_DOMAIN } from './test-utils/code-sink';
 import { ApiClient } from './seed/seed-api';
 import { extractSession, loginOnPage } from './seed/seed-auth';
+import { fillSecret } from './release/secret-fill';
+import { e2eUserPassword } from './test-utils/user-password';
 import { ensureChannels, ensureProfile, purgeDisposableChannels, type UserChannelSpec } from './seed/seed-users';
 import { consentCookie } from './test-utils/consent';
 import * as fs from 'fs';
@@ -249,14 +251,14 @@ async function globalSetup(_config: FullConfig) {
   const testUsers: TestUser[] = [
     {
       email: `test-single-${timestamp}@${SINK_DOMAIN}`,
-      password: 'TestPassword123!',
+      password: e2eUserPassword(),
       name: 'Single Channel User',
       storageStatePath: path.join(authDir, 'user-single.json'),
       channels: [{ name: 'E2E Single Channel', description: 'E2E test channel (single-channel user)', isMain: true }],
     },
     {
       email: `test-multi-${timestamp}@${SINK_DOMAIN}`,
-      password: 'TestPassword456!',
+      password: e2eUserPassword(),
       name: 'Multi Channel User',
       storageStatePath: path.join(authDir, 'user-multi.json'),
       channels: [
@@ -266,7 +268,7 @@ async function globalSetup(_config: FullConfig) {
     },
     {
       email: `test-none-${timestamp}@${SINK_DOMAIN}`,
-      password: 'TestPassword789!',
+      password: e2eUserPassword(),
       name: 'No Channels User',
       storageStatePath: path.join(authDir, 'user-none.json'),
       channels: [],
@@ -275,7 +277,7 @@ async function globalSetup(_config: FullConfig) {
       // Owns the throwaway channels specs create and delete (channel create /
       // delete / handle flows), so the users above keep a fixed channel set.
       email: `test-scratch-${timestamp}@${SINK_DOMAIN}`,
-      password: 'TestPassword321!',
+      password: e2eUserPassword(),
       name: 'Scratch Channel User',
       storageStatePath: path.join(authDir, 'user-scratch.json'),
       channels: [{ name: 'E2E Scratch Channel', description: 'E2E test channel (throwaway-channel user)', isMain: true }],
@@ -335,8 +337,8 @@ async function globalSetup(_config: FullConfig) {
 
         // Fill registration form - OpenAuth uses name attributes
         await page.fill('input[name="email"]', user.email);
-        await page.fill('input[name="password"]', user.password);
-        await page.fill('input[name="repeat"]', user.password); // Repeat password field
+        await fillSecret(page.locator('input[name="password"]'), user.password);
+        await fillSecret(page.locator('input[name="repeat"]'), user.password); // Repeat password field
         await page.click('button[data-component="button"]');
 
         // Wait for verification code page or direct redirect

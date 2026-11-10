@@ -1,5 +1,6 @@
 import type { Browser, Page } from '@playwright/test';
 import { seedLogger as log, maskSecret } from './seed-logger';
+import { fillSecret } from '../release/secret-fill';
 
 /**
  * Browser-driven OpenAuth login / registration for the QA seed.
@@ -132,7 +133,7 @@ export async function loginOnPage(page: Page, cfg: AuthConfig, email: string, pa
   await gotoSignIn(page, cfg);
   await page.waitForSelector('input[name="email"]', { timeout: 30000 });
   await page.fill('input[name="email"]', email);
-  await page.fill('input[name="password"]', password);
+  await fillSecret(page.locator('input[name="password"]'), password);
   await submitForm(page);
   const step = await waitForAuthStep(page, cfg);
   if (step === 'web') {
@@ -175,8 +176,8 @@ export async function registerAccount(
     await registerLink.click();
     await page.waitForSelector('input[name="repeat"]', { timeout: 30000 });
     await page.fill('input[name="email"]', email);
-    await page.fill('input[name="password"]', password);
-    await page.fill('input[name="repeat"]', password);
+    await fillSecret(page.locator('input[name="password"]'), password);
+    await fillSecret(page.locator('input[name="repeat"]'), password);
     await submitForm(page);
 
     let step = await waitForAuthStep(page, cfg);

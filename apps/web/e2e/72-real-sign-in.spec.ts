@@ -2,6 +2,8 @@ import type { Page } from '@playwright/test';
 import { test, expect } from './fixtures';
 import { ANONYMOUS_STATE } from './test-utils/auth-state';
 import { SINK_DOMAIN } from './test-utils/code-sink';
+import { e2eUserPassword } from './test-utils/user-password';
+import { fillSecret } from './release/secret-fill';
 
 /**
  * The real sign-in path a visitor takes, in every browser project: account
@@ -11,7 +13,8 @@ import { SINK_DOMAIN } from './test-utils/code-sink';
  */
 const stamp = process.env.E2E_USERS_TIMESTAMP;
 const email = process.env.E2E_SIGNIN_EMAIL ?? (stamp ? `test-single-${stamp}@${SINK_DOMAIN}` : undefined);
-const password = process.env.E2E_SIGNIN_PASSWORD ?? 'TestPassword123!';
+// Read when signing in, so collecting this file never needs the secret
+const password = () => process.env.E2E_SIGNIN_PASSWORD ?? e2eUserPassword();
 
 async function openMenu(page: Page): Promise<void> {
   const trigger = page.locator('[data-testid="nav-menu-trigger"]:visible').first();
@@ -26,7 +29,7 @@ async function signIn(page: Page): Promise<void> {
   await page.getByRole('menuitem', { name: 'Sign In' }).click();
   await page.waitForSelector('input[name="email"]', { timeout: 30000 });
   await page.fill('input[name="email"]', email as string);
-  await page.fill('input[name="password"]', password);
+  await fillSecret(page.locator('input[name="password"]'), password());
   await page.locator('button[data-component="button"]').click();
   await page.waitForURL((url: URL) => !url.pathname.startsWith('/password') && !url.pathname.startsWith('/api/'), { timeout: 45000 });
   await page.waitForLoadState('load');
@@ -42,6 +45,9 @@ async function expectToken(page: Page, signedIn: boolean): Promise<void> {
     expect(hasToken).toBe(signedIn);
   }).toPass({ timeout: 20000 });
 }
+
+// fillSecret's argument would land in a trace
+test.use({ trace: 'off' });
 
 test.describe('Real sign-in', () => {
   test.use({ storageState: ANONYMOUS_STATE });
