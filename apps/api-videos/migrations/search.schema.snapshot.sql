@@ -6,12 +6,13 @@
 --   apps/api-videos/migrations/search/0004_upload_rate_limits.sql
 --   apps/api-videos/migrations/search/0005_admin_content.sql
 --   apps/api-videos/migrations/search/0006_admin_jobs.sql
+--   apps/api-videos/migrations/search/0007_video_format.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
 CREATE TABLE admin_jobs (id TEXT PRIMARY KEY, kind TEXT NOT NULL, target_kind TEXT NOT NULL, target_id TEXT NOT NULL, params TEXT NOT NULL DEFAULT '{}', status TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, result TEXT, actor_id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, finished_at TEXT);
-CREATE TABLE content_ownership (kind TEXT NOT NULL, id TEXT NOT NULL, owner_id TEXT, channel_id TEXT, is_public INTEGER NOT NULL DEFAULT 1, is_hidden INTEGER NOT NULL DEFAULT 0, is_deleted INTEGER NOT NULL DEFAULT 0, is_live INTEGER NOT NULL DEFAULT 0, duration REAL, schedule_status TEXT, upload_status TEXT, views INTEGER NOT NULL DEFAULT 0, created_at INTEGER, updated_at INTEGER, indexed_at INTEGER NOT NULL DEFAULT 0, source_version INTEGER NOT NULL DEFAULT 0, admin_title TEXT, handle TEXT, email TEXT, is_verified INTEGER NOT NULL DEFAULT 0, is_suspended INTEGER NOT NULL DEFAULT 0, subscribers INTEGER NOT NULL DEFAULT 0, admin_cols INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (kind, id));
-CREATE TABLE search_channels (rowid INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE, channel_id TEXT, visible INTEGER NOT NULL DEFAULT 1, language TEXT, category TEXT, duration INTEGER, is_verified INTEGER NOT NULL DEFAULT 0, is_live INTEGER NOT NULL DEFAULT 0, views INTEGER NOT NULL DEFAULT 0, created_at INTEGER, popularity REAL NOT NULL DEFAULT 0, payload TEXT NOT NULL, content_hash TEXT, indexed_at INTEGER NOT NULL DEFAULT 0, source_version INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE content_ownership (kind TEXT NOT NULL, id TEXT NOT NULL, owner_id TEXT, channel_id TEXT, is_public INTEGER NOT NULL DEFAULT 1, is_hidden INTEGER NOT NULL DEFAULT 0, is_deleted INTEGER NOT NULL DEFAULT 0, is_live INTEGER NOT NULL DEFAULT 0, duration REAL, schedule_status TEXT, upload_status TEXT, views INTEGER NOT NULL DEFAULT 0, created_at INTEGER, updated_at INTEGER, indexed_at INTEGER NOT NULL DEFAULT 0, source_version INTEGER NOT NULL DEFAULT 0, admin_title TEXT, handle TEXT, email TEXT, is_verified INTEGER NOT NULL DEFAULT 0, is_suspended INTEGER NOT NULL DEFAULT 0, subscribers INTEGER NOT NULL DEFAULT 0, admin_cols INTEGER NOT NULL DEFAULT 0, is_short INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (kind, id));
+CREATE TABLE search_channels (rowid INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE, channel_id TEXT, visible INTEGER NOT NULL DEFAULT 1, language TEXT, category TEXT, duration INTEGER, is_verified INTEGER NOT NULL DEFAULT 0, is_live INTEGER NOT NULL DEFAULT 0, views INTEGER NOT NULL DEFAULT 0, created_at INTEGER, popularity REAL NOT NULL DEFAULT 0, payload TEXT NOT NULL, content_hash TEXT, indexed_at INTEGER NOT NULL DEFAULT 0, source_version INTEGER NOT NULL DEFAULT 0, is_short INTEGER NOT NULL DEFAULT 0);
 CREATE VIRTUAL TABLE search_channels_fts USING fts5 (title, body, tokenize = 'unicode61 remove_diacritics 2', prefix = '2 3');
 CREATE TABLE 'search_channels_fts_config'(k PRIMARY KEY, v) WITHOUT ROWID;
 CREATE TABLE 'search_channels_fts_content'(id INTEGER PRIMARY KEY, c0, c1);
@@ -19,14 +20,14 @@ CREATE TABLE 'search_channels_fts_data'(id INTEGER PRIMARY KEY, block BLOB);
 CREATE TABLE 'search_channels_fts_docsize'(id INTEGER PRIMARY KEY, sz BLOB);
 CREATE TABLE 'search_channels_fts_idx'(segid, term, pgno, PRIMARY KEY(segid, term)) WITHOUT ROWID;
 CREATE TABLE search_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at INTEGER NOT NULL);
-CREATE TABLE search_playlists (rowid INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE, channel_id TEXT, visible INTEGER NOT NULL DEFAULT 1, language TEXT, category TEXT, duration INTEGER, is_verified INTEGER NOT NULL DEFAULT 0, is_live INTEGER NOT NULL DEFAULT 0, views INTEGER NOT NULL DEFAULT 0, created_at INTEGER, popularity REAL NOT NULL DEFAULT 0, payload TEXT NOT NULL, content_hash TEXT, indexed_at INTEGER NOT NULL DEFAULT 0, source_version INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE search_playlists (rowid INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE, channel_id TEXT, visible INTEGER NOT NULL DEFAULT 1, language TEXT, category TEXT, duration INTEGER, is_verified INTEGER NOT NULL DEFAULT 0, is_live INTEGER NOT NULL DEFAULT 0, views INTEGER NOT NULL DEFAULT 0, created_at INTEGER, popularity REAL NOT NULL DEFAULT 0, payload TEXT NOT NULL, content_hash TEXT, indexed_at INTEGER NOT NULL DEFAULT 0, source_version INTEGER NOT NULL DEFAULT 0, is_short INTEGER NOT NULL DEFAULT 0);
 CREATE VIRTUAL TABLE search_playlists_fts USING fts5 (title, body, tokenize = 'unicode61 remove_diacritics 2', prefix = '2 3');
 CREATE TABLE 'search_playlists_fts_config'(k PRIMARY KEY, v) WITHOUT ROWID;
 CREATE TABLE 'search_playlists_fts_content'(id INTEGER PRIMARY KEY, c0, c1);
 CREATE TABLE 'search_playlists_fts_data'(id INTEGER PRIMARY KEY, block BLOB);
 CREATE TABLE 'search_playlists_fts_docsize'(id INTEGER PRIMARY KEY, sz BLOB);
 CREATE TABLE 'search_playlists_fts_idx'(segid, term, pgno, PRIMARY KEY(segid, term)) WITHOUT ROWID;
-CREATE TABLE search_posts (rowid INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE, channel_id TEXT, visible INTEGER NOT NULL DEFAULT 1, language TEXT, category TEXT, duration INTEGER, is_verified INTEGER NOT NULL DEFAULT 0, is_live INTEGER NOT NULL DEFAULT 0, views INTEGER NOT NULL DEFAULT 0, created_at INTEGER, popularity REAL NOT NULL DEFAULT 0, payload TEXT NOT NULL, content_hash TEXT, indexed_at INTEGER NOT NULL DEFAULT 0, source_version INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE search_posts (rowid INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE, channel_id TEXT, visible INTEGER NOT NULL DEFAULT 1, language TEXT, category TEXT, duration INTEGER, is_verified INTEGER NOT NULL DEFAULT 0, is_live INTEGER NOT NULL DEFAULT 0, views INTEGER NOT NULL DEFAULT 0, created_at INTEGER, popularity REAL NOT NULL DEFAULT 0, payload TEXT NOT NULL, content_hash TEXT, indexed_at INTEGER NOT NULL DEFAULT 0, source_version INTEGER NOT NULL DEFAULT 0, is_short INTEGER NOT NULL DEFAULT 0);
 CREATE VIRTUAL TABLE search_posts_fts USING fts5 (title, body, tokenize = 'unicode61 remove_diacritics 2', prefix = '2 3');
 CREATE TABLE 'search_posts_fts_config'(k PRIMARY KEY, v) WITHOUT ROWID;
 CREATE TABLE 'search_posts_fts_content'(id INTEGER PRIMARY KEY, c0, c1);
@@ -34,7 +35,7 @@ CREATE TABLE 'search_posts_fts_data'(id INTEGER PRIMARY KEY, block BLOB);
 CREATE TABLE 'search_posts_fts_docsize'(id INTEGER PRIMARY KEY, sz BLOB);
 CREATE TABLE 'search_posts_fts_idx'(segid, term, pgno, PRIMARY KEY(segid, term)) WITHOUT ROWID;
 CREATE TABLE search_tombstones (entity TEXT NOT NULL, id TEXT NOT NULL, version INTEGER NOT NULL, PRIMARY KEY (entity, id)) WITHOUT ROWID;
-CREATE TABLE search_videos (rowid INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE, channel_id TEXT, visible INTEGER NOT NULL DEFAULT 1, language TEXT, category TEXT, duration INTEGER, is_verified INTEGER NOT NULL DEFAULT 0, is_live INTEGER NOT NULL DEFAULT 0, views INTEGER NOT NULL DEFAULT 0, created_at INTEGER, popularity REAL NOT NULL DEFAULT 0, payload TEXT NOT NULL, content_hash TEXT, indexed_at INTEGER NOT NULL DEFAULT 0, source_version INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE search_videos (rowid INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE, channel_id TEXT, visible INTEGER NOT NULL DEFAULT 1, language TEXT, category TEXT, duration INTEGER, is_verified INTEGER NOT NULL DEFAULT 0, is_live INTEGER NOT NULL DEFAULT 0, views INTEGER NOT NULL DEFAULT 0, created_at INTEGER, popularity REAL NOT NULL DEFAULT 0, payload TEXT NOT NULL, content_hash TEXT, indexed_at INTEGER NOT NULL DEFAULT 0, source_version INTEGER NOT NULL DEFAULT 0, is_short INTEGER NOT NULL DEFAULT 0);
 CREATE VIRTUAL TABLE search_videos_fts USING fts5 (title, body, tokenize = 'unicode61 remove_diacritics 2', prefix = '2 3');
 CREATE TABLE 'search_videos_fts_config'(k PRIMARY KEY, v) WITHOUT ROWID;
 CREATE TABLE 'search_videos_fts_content'(id INTEGER PRIMARY KEY, c0, c1);
@@ -50,6 +51,7 @@ CREATE INDEX idx_admin_jobs_status ON admin_jobs (status, updated_at);
 CREATE INDEX idx_admin_jobs_target ON admin_jobs (target_kind, target_id, created_at);
 CREATE INDEX idx_content_ownership_admin_cols ON content_ownership (kind, admin_cols);
 CREATE INDEX idx_content_ownership_channel ON content_ownership (kind, channel_id, created_at);
+CREATE INDEX idx_content_ownership_channel_short ON content_ownership (kind, channel_id, is_short, created_at);
 CREATE INDEX idx_content_ownership_created ON content_ownership (kind, created_at);
 CREATE INDEX idx_content_ownership_indexed ON content_ownership (kind, indexed_at);
 CREATE INDEX idx_content_ownership_owner ON content_ownership (kind, owner_id);
@@ -65,5 +67,6 @@ CREATE INDEX idx_search_videos_channel ON search_videos (channel_id);
 CREATE INDEX idx_search_videos_created ON search_videos (created_at);
 CREATE INDEX idx_search_videos_indexed ON search_videos (indexed_at);
 CREATE INDEX idx_search_videos_language ON search_videos (language, created_at);
+CREATE INDEX idx_search_videos_short ON search_videos (is_short, created_at);
 CREATE INDEX idx_upload_rate_leases_expires ON upload_rate_leases (expires_at);
 CREATE INDEX idx_upload_rate_windows_start ON upload_rate_windows (window_start);
