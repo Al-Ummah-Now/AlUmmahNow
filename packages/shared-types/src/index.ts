@@ -37,6 +37,9 @@ export * from './d1';
 export * from './moderation';
 export * from './ai-moderation';
 
+// AI category suggestions (upload/edit forms, backfill, admin review)
+export * from './category-suggestion';
+
 // Export schemas
 export * from './schemas/chapter';
 

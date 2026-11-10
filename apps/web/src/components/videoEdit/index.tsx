@@ -1,7 +1,7 @@
 'use client';
 import { logger } from '@/lib/logger-client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { X, Plus, FileText, Edit3 } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { VideoObject } from '@/interfaces';
@@ -10,6 +10,9 @@ import { updateVideo } from '@/lib/api/videos';
 import { getChapters, updateChapters, type Chapter } from '@/lib/api/chapters';
 import { CategorySelector } from '@/components/videoUpload/CategorySelector';
 import { getInitialEditMetadata, normalizeTag, haveTagsChanged } from './edit-metadata';
+import { applySuggestion, formText, newDraftKey, pickCategory, type CategoryFormState, type CategorySuggestionView } from '@/lib/category-suggestion/form';
+import { getCategorySuggestion } from '@/lib/api/category-suggestion-client';
+import { useCategorySuggestion } from '@/hooks/useCategorySuggestion';
 import VideoPreview from '@/components/videoPreview/index';
 import VideoPreviewRTL from '@/components/videoPreview/rtl/index';
 import ThumbnailSelector from './ThumbnailSelector';
@@ -101,6 +104,48 @@ export default function VideoEdit({
     };
   }, [video.id]);
 
+  // Category: an AI-set category is shown as a suggestion until the owner keeps or changes it;
+  // new text re-asks the AI unless a person chose the category
+  const [categoryState, setCategoryState] = useState<CategoryFormState>(() => ({
+    category: initialMetadata.category || undefined,
+    aiApplied: !!initialMetadata.category && video.categorySource === 'ai',
+    touched: !!initialMetadata.category && video.categorySource !== 'ai',
+  }));
+  const [categoryDraftKey] = useState(() => newDraftKey('edit'));
+  const [storedSuggestion, setStoredSuggestion] = useState<CategorySuggestionView | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getCategorySuggestion({ videoId: video.id })
+      .then((s) => { if (!cancelled) setStoredSuggestion(s); })
+      .catch((err) => logger.warn('[VideoEdit] Category suggestion not loaded', { videoId: video.id, error: err instanceof Error ? err.message : String(err) }));
+    return () => { cancelled = true; };
+  }, [video.id]);
+  const initialText = useMemo(
+    () => JSON.stringify(formText({ titleEn: video.titleLocalized?.en || video.title || '', titleAr: video.titleLocalized?.ar || '', descriptionEn: video.descriptionLocalized?.en || video.description || '', descriptionAr: video.descriptionLocalized?.ar || '', tags: initialMetadata.tags })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [video.id],
+  );
+  const categoryText = useMemo(
+    () => formText({ titleEn: formData.titleEn, titleAr: formData.titleAr, descriptionEn: formData.descriptionEn, descriptionAr: formData.descriptionAr, tags: formData.tags }),
+    [formData.titleEn, formData.titleAr, formData.descriptionEn, formData.descriptionAr, formData.tags],
+  );
+  const textChanged = JSON.stringify(categoryText) !== initialText;
+  const { suggestion: liveSuggestion, loading: categorySuggesting } = useCategorySuggestion({
+    draftKey: categoryDraftKey,
+    text: categoryText,
+    enabled: textChanged && !categoryState.touched,
+    channelId: video.channelId || channelId,
+  });
+  const categorySuggestion = (textChanged ? liveSuggestion : null) ?? storedSuggestion;
+  useEffect(() => {
+    setCategoryState((prev) => applySuggestion(prev, categorySuggestion));
+  }, [categorySuggestion]);
+  useEffect(() => {
+    setFormData((prev) => (prev.category === (categoryState.category ?? '') ? prev : { ...prev, category: categoryState.category ?? '' }));
+  }, [categoryState.category]);
+  // Keeping an AI-set category is a change worth saving (it becomes the owner's)
+  const confirmsAiCategory = video.categorySource === 'ai' && categoryState.touched && !!categoryState.category;
+
   // Track changes
   useEffect(() => {
     const original = getInitialEditMetadata(video);
@@ -114,10 +159,11 @@ export default function VideoEdit({
       formData.commentSettings !== initialCommentSettings(video as { commentSettings?: unknown }) ||
       formData.category !== original.category ||
       formData.format !== formatChoiceOf(video) ||
+      confirmsAiCategory ||
       haveTagsChanged(original.tags, formData.tags);
 
     setHasUnsavedChanges(hasChanges);
-  }, [formData, video]);
+  }, [formData, video, confirmsAiCategory]);
 
   const handleInputChange = (field: keyof EditFormData, value: string | boolean) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -390,12 +436,16 @@ export default function VideoEdit({
 
         {/* Category */}
         <CategorySelector
-          value={formData.category || undefined}
+          value={categoryState.category}
           onChange={(category) => {
-            setFormData((prev) => ({ ...prev, category: category || '' }));
+            setCategoryState(pickCategory(category));
             setError(null);
             setSuccess(null);
           }}
+          suggestion={categorySuggestion}
+          aiSelected={categoryState.aiApplied}
+          suggesting={categorySuggesting}
+          onConfirm={() => setCategoryState((prev) => pickCategory(prev.category))}
         />
 
         {/* Privacy */}

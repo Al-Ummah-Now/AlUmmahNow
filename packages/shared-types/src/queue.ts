@@ -128,6 +128,9 @@ export enum MessageType {
   // AI-assisted moderation (Epic 28). Explicit value in its own reserved range (230-239).
   // Sent by api-videos to the dedicated moderation queue (payload: ModerationScanPayload).
   ModerationScan = 230,
+  // AI category suggestion for a video or an upload-form draft (payload: CategorySuggestPayload,
+  // see category-suggestion.ts). Same reserved range: it shares the moderation queue's AI consumer.
+  CategorySuggest = 231,
 
   // Admin content job (api-videos lib/admin/jobs.ts), on the admin-jobs queue. Payload: { jobId }.
   AdminJob = 240,

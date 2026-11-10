@@ -40,6 +40,15 @@
     {
       "binding": "community_posts",
       "bucket_name": "community-posts-qa"
+    },
+    {
+      // AI category suggestions (src/categorize): read video text, write `category`
+      "binding": "videos",
+      "bucket_name": "videos-qa"
+    },
+    {
+      "binding": "subtitles",
+      "bucket_name": "subtitles-qa"
     }
   ],
 
@@ -79,7 +88,11 @@
     "LOG_LEVEL": "debug",
     "WEBSOCKET_URL": "https://realtime.qa.alummahnow.net",
     "AI_MODERATION_ENABLED": "true",
-    "AI_MODERATION_DAILY_NEURON_CAP": "10000"
+    "AI_MODERATION_DAILY_NEURON_CAP": "10000",
+    "AI_CATEGORIZE_ENABLED": "true",
+    "AI_CATEGORIZE_DAILY_NEURON_CAP": "20000",
+    // Release E2E: [e2e-category:<value>] in a title is answered without a model call. Never in production.
+    "CATEGORY_AI_TEST_HOOK": "true"
   },
 
   // Workers AI (Epic 28 moderation)

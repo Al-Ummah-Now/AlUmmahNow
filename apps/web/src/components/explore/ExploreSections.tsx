@@ -126,8 +126,15 @@ export function TrendingSection({ videos, fallback }: { videos: VideoObject[]; f
   );
 }
 
-export function CategoryGrid({ categories }: { categories: ExploreCategory[] }) {
+/** Explore never shows an empty category tile (the API filters too; this guards older responses). */
+export function visibleCategories(categories: ExploreCategory[]): ExploreCategory[] {
+  return categories.filter(category => category.count > 0);
+}
+
+export function CategoryGrid({ categories: all }: { categories: ExploreCategory[] }) {
   const { t, lang } = useLanguage();
+  const categories = visibleCategories(all);
+  if (!categories.length) return null;
   return (
     <section aria-labelledby="explore-categories" data-testid="explore-categories">
       <SectionHeader id="explore-categories" icon={BookOpen} title={t.explore.categories} />
@@ -141,6 +148,7 @@ export function CategoryGrid({ categories }: { categories: ExploreCategory[] }) 
                 href={`/${lang}/search?type=video&category=${encodeURIComponent(category.value)}`}
                 data-testid="explore-category"
                 data-category={category.value}
+                data-count={category.count}
                 aria-label={t.explore.browseCategory.replace('{category}', label)}
                 className="flex h-full items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3 hover:border-blue-400 hover:shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               >

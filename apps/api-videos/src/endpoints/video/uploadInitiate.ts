@@ -13,6 +13,7 @@ import { fingerprintKey, initiateOnce, UploadClaimBusyError, UploadFingerprintSc
 import { checkReusable, issueTusSession, reuseFields, type PlaceholderRecord } from "../../lib/uploads/placeholder";
 import { patchVideo } from "../../lib/videoWrites";
 import { thumbnailProcessor, thumbnailStorage } from "../../lib/thumbnail";
+import { adoptOrRequestSuggestion } from '../../lib/categorySuggestions';
 import { logger } from '../../lib/logger';
 import { AuthenticatedRoute, AppContext } from '../../base';
 
@@ -38,6 +39,8 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 							descriptionLocalized: z.record(z.string()).optional().describe("Multi-language descriptions, e.g. {en, ar}"),
 							category: z.nativeEnum(VideoCategory).optional().describe("Video category"),
 							format: z.enum(['short', 'video', 'auto']).optional().describe("Upload as a Short or as a video; 'auto' (default) detects it from length and shape"),
+							categorySuggestionKey: z.string().min(8).max(80).regex(/^[A-Za-z0-9_-]+$/).optional()
+								.describe("draftKey of the form's AI category suggestion (POST /api/videos/category-suggestions): the video adopts it and records whether the uploader kept it"),
 							thumbnail: z.object({
 								type: z.enum(['auto', 'custom']).describe("Thumbnail type: auto-generated or custom"),
 								data: z.string().optional().describe("Base64 encoded image data for custom thumbnails"),
@@ -119,7 +122,7 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 		try {
 			// Get validated data
 			const request = await this.getValidatedData<typeof this.schema>();
-			const { title, description, fileSize, mimeType, isPublic, tags, thumbnail, titleLocalized, descriptionLocalized, category, format, fingerprint } = request.body;
+			const { title, description, fileSize, mimeType, isPublic, tags, thumbnail, titleLocalized, descriptionLocalized, category, format, fingerprint, categorySuggestionKey } = request.body;
 
 			// Validate required fields
 			if (!fileSize || fileSize <= 0) {
@@ -172,7 +175,8 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 				tags: tags ? tags.split(',').map(tag => tag.trim()).filter(Boolean) : [],
 				...(titleLocalized && { titleLocalized }),
 				...(descriptionLocalized && { descriptionLocalized }),
-				...(category && { category }),
+				// A category submitted with the form is the uploader's (confirming or replacing the AI suggestion)
+				...(category && { category, categorySource: 'uploader' as const }),
 				...(format && format !== 'auto' && { format }),
 				fileSize,
 				originalFormat: mimeType,
@@ -206,6 +210,7 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 						titleLocalized,
 						descriptionLocalized,
 						category,
+						...(category && { categorySource: 'uploader' as const }),
 						format,
 						fileSize,
 						mimeType,
@@ -226,6 +231,10 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 					});
 					throw error;
 				}
+
+				// AI category (queued, never blocks the upload): adopt the form's suggestion and record
+				// what the uploader kept; without a category and without a suggestion, request one
+				adoptOrRequestSuggestion(c, { videoId, userId, channelId, category: category ?? null, draftKey: categorySuggestionKey });
 
 				// Send analytics event for upload initiation
 				const queue = new Queue(c.env.queue);

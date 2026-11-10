@@ -14,6 +14,7 @@ import { inBackground } from "../../lib/websocket-notify";
 import { announceNewVideo } from "../../lib/notification-events";
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { scanInBackground, videoScanText } from '../../lib/moderation-scan';
+import { recordOwnerCategory, requestVideoSuggestion } from '../../lib/categorySuggestions';
 
 export class VideoUpdate extends AuthenticatedRoute {
 	schema = {
@@ -143,8 +144,10 @@ export class VideoUpdate extends AuthenticatedRoute {
 			descriptionLocalized: videoUpdateInput.descriptionLocalized ?? base.descriptionLocalized,
 			// Tags replace the existing list (deduplicated); omitted keeps current tags
 			tags: tags !== undefined ? Array.from(new Set(tags)) : base.tags,
-			// Category: undefined keeps current value, null clears it
+			// Category: undefined keeps current value, null clears it. A category the owner
+			// sends is theirs (confirming or replacing an AI suggestion).
 			category: category === undefined ? base.category : (category ?? undefined),
+			categorySource: category === undefined ? base.categorySource : category ? 'uploader' : undefined,
 			};
 			// "Upload as Short / as video" wins over detection; 'auto' clears the choice
 			if (format === 'auto') delete next.format;
@@ -206,8 +209,17 @@ export class VideoUpdate extends AuthenticatedRoute {
 		});
 
 		// Re-scan only when the scanned text changed (title, description, tags, localized variants)
-		if (videoScanText(updatedVideo) !== videoScanText(previous)) {
+		const textChanged = videoScanText(updatedVideo) !== videoScanText(previous);
+		if (textChanged) {
 			scanInBackground(c, { surface: 'video_metadata', event: 'edit', subjectId: id, authorId: effectiveUserId, channelId, text: videoScanText(updatedVideo) });
+		}
+
+		// AI category: record what the owner kept; re-suggest when the text changed and no
+		// person has chosen a category (queued, never blocks the save)
+		if (category !== undefined) recordOwnerCategory(c, id, category ?? null, effectiveUserId);
+		const personChose = !!updatedVideo.category && updatedVideo.categorySource !== 'ai';
+		if (textChanged && !personChose) {
+			requestVideoSuggestion(c, { videoId: id, userId: effectiveUserId, channelId: updatedVideo.channelId, reason: 'edit' });
 		}
 
 		// Transform to view model for response

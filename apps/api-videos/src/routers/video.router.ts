@@ -8,6 +8,7 @@ import { VideoDelete } from '../endpoints/video/videoDelete';
 import { VideoBulkDelete } from '../endpoints/video/videoBulkDelete';
 import { VideoBulkUpdate } from '../endpoints/video/videoBulkUpdate';
 import { VideoFetch } from '../endpoints/video/videoFetch';
+import { CategorySuggestionGet, CategorySuggestionRequest } from '../endpoints/video/categorySuggestions';
 import { VideosList } from '../endpoints/video/videoList';
 import { VideoSearch } from '../endpoints/video/videoSearch';
 import { VideoView } from '../endpoints/video/videoView';
@@ -81,6 +82,10 @@ videoRouter.get('/scheduled', VideoScheduleList);
 
 // Create video (authenticated)
 videoRouter.post('/', VideoCreate);
+
+// AI category suggestions for the upload/edit forms (before /:id, which would match it)
+videoRouter.post('/category-suggestions', CategorySuggestionRequest);
+videoRouter.get('/category-suggestions', CategorySuggestionGet);
 
 // Get single video (public)
 videoRouter.get('/:id', VideoFetch);

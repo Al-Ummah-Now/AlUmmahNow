@@ -420,6 +420,9 @@ describe('search endpoints', () => {
 		const { routes, env } = await app();
 		const body = await (await routes.request('/api/explore', {}, env)).json() as any;
 		assert.equal(body.categories.find((c: any) => c.value === 'islamic_history').count, 2);
+		// Never an empty tile (owner decision): every category listed has a video
+		assert.ok(body.categories.length > 0);
+		assert.ok(body.categories.every((c: any) => c.count > 0), JSON.stringify(body.categories));
 		assert.deepEqual(body.newChannels.map((c: any) => c.id), ['ch-ar', 'ch-en']);
 		assert.deepEqual(body.seasonal.map((s: any) => s.id), ['ramadan']);
 		assert.deepEqual(body.seasonal[0].videos.map((v: any) => v.id), ['v-salah']);

@@ -180,6 +180,11 @@ for (const path of UPLOAD_CONTINUE_PATHS) app.use(path, uploadContinueLimit);
 app.use('/api/community/media/upload/images', rateLimitMiddleware('image_upload'));
 app.use('/api/community/media/upload/gif', rateLimitMiddleware('image_upload'));
 app.use('/api/videos/:id/thumbnail', rateLimitMiddleware('image_upload'));
+// AI category suggestions: forms debounce typing; this caps a client that does not
+app.use('/api/videos/category-suggestions', rateLimitMiddleware('category_suggest', {
+	limits: () => ({ perMinute: 20, perHour: 200, perDay: 1000, maxConcurrent: 5 }),
+	methods: ['POST'],
+}));
 
 // ==========================================
 // TUS PROXY

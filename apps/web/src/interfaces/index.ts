@@ -41,6 +41,8 @@ export interface VideoObject {
     isLive?: boolean;   // Added from API spec
     tags?: string[];
     category?: VideoCategory;
+    /** Who set the category: the owner, the AI (a suggestion nobody confirmed yet) or an admin */
+    categorySource?: 'uploader' | 'ai' | 'admin';
     thumbnailType?: 'auto' | 'custom';
     uploadStatus?: 'initiated' | 'uploading' | 'processing' | 'ready' | 'failed' | 'deleted';
     /** Set when the video needs the owner's action (e.g. the upload must be redone). */

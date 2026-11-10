@@ -134,6 +134,8 @@ export const Video = z.object({
     deletedAt: z.string().optional(),
     tags: z.array(z.string()).default([]),
     category: z.nativeEnum(VideoCategory).optional(),
+    // Who set the category: the uploader, the AI (a reviewable suggestion) or an admin
+    categorySource: z.enum(['uploader', 'ai', 'admin']).optional(),
     language: z.enum(['en', 'ar', 'ur', 'fr']).optional(),
     availableResolutions: z.array(z.string()).default([]),
     comments: z.array(Comment).default([]),

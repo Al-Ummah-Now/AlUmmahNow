@@ -46,6 +46,17 @@ export async function loadSeasonalConfig(bucket: R2Bucket | undefined): Promise<
   }
 }
 
+/**
+ * Explore tiles: only categories with at least one public, ready video in the
+ * index (categoryCounts counts visible rows only), in the canonical order.
+ * Never an empty tile; AI-suggested categories count like any other.
+ */
+export function nonEmptyCategories(counts: Map<string, number>): ExploreCategory[] {
+  return VIDEO_CATEGORIES
+    .map(category => ({ value: category.value, label: category.label, count: counts.get(category.value) ?? 0 }))
+    .filter(category => category.count > 0);
+}
+
 export async function buildExplore(
   db: SearchDb,
   settings: R2Bucket | undefined,
@@ -58,11 +69,7 @@ export async function buildExplore(
     loadSeasonalConfig(settings),
   ]);
 
-  const categories = VIDEO_CATEGORIES.map(category => ({
-    value: category.value,
-    label: category.label,
-    count: counts.get(category.value) ?? 0,
-  }));
+  const categories = nonEmptyCategories(counts);
 
   const newChannels = channels.results
     .map(item => (item.type === 'channel' ? item.channel : null))
