@@ -245,7 +245,7 @@ test.describe('Release: uploads resume', () => {
 
   test('a failing proxy and a reload mid-upload resume from the offset; one upload, one video', async ({ page }, testInfo) => {
     const u = await uploader(page, 'rel-resume');
-    const file = paddedVideo(testInfo.outputDir, 'resume-me.mp4', 7 * CHUNK + 123457); // 8 chunks
+    const file = paddedVideo(testInfo.outputPath(), 'resume-me.mp4', 7 * CHUNK + 123457); // 8 chunks
     await page.addInitScript((size) => window.localStorage.setItem('aun:tus-chunk-size', String(size)), CHUNK);
     page.on('dialog', (d) => void d.accept()); // "leave the page?" on reload
 
@@ -309,7 +309,7 @@ test.describe('Release: uploads resume', () => {
 
   test('bulk: a file that fails transiently reconnects and completes; the others complete around it', async ({ page }, testInfo) => {
     const u = await uploader(page, 'rel-bulk-resume');
-    const files = [1, 2, 3].map((i) => paddedVideo(testInfo.outputDir, `bulk-${i}-${Date.now().toString(36)}.mp4`, CHUNK + 300000 * i)); // 2 chunks each
+    const files = [1, 2, 3].map((i) => paddedVideo(testInfo.outputPath(), `bulk-${i}-${Date.now().toString(36)}.mp4`, CHUNK + 300000 * i)); // 2 chunks each
     await page.addInitScript((size) => window.localStorage.setItem('aun:tus-chunk-size', String(size)), CHUNK);
 
     // The first video to send a PATCH is the flaky one: its 1st PATCH -> 503,
