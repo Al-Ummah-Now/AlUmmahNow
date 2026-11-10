@@ -6,7 +6,7 @@
  * and skip items that already exist.
  */
 
-export type SeedRole = 'superadmin' | 'admin' | 'moderator' | 'creator' | 'viewer';
+export type SeedRole = 'superadmin' | 'admin' | 'moderator' | 'creator' | 'viewer' | 'ssoUi' | 'ssoCms';
 
 export interface SeedAccount {
   key: SeedRole;
@@ -64,6 +64,27 @@ export const SEED_ACCOUNTS: readonly SeedAccount[] = [
     displayName: 'QA Viewer',
     displayNameAr: 'مشاهد الاختبار',
     bio: 'Seeded QA viewer account.',
+  },
+  // Dedicated to ONE spec each, used by nothing else: the SSO journeys of
+  // AlUmmahNowUI and AlUmmahNowCMS end with "sign out -> signed out of every
+  // app", which ends every session of the account everywhere. On a shared
+  // account that bounced other suites to the sign-in page mid-test (CMS QA E2E,
+  // 2026-11-10). Those repos have no per-run account secrets yet; once they do,
+  // their journeys move to per-run accounts and these go.
+  {
+    key: 'ssoUi',
+    email: `qa-sso-ui@${SEED_EMAIL_DOMAIN}`,
+    displayName: 'QA SSO Journey (UI)',
+    displayNameAr: 'رحلة الدخول الموحد للاختبار (الواجهة)',
+    bio: 'Seeded QA account used only by the AlUmmahNowUI SSO journey spec.',
+  },
+  {
+    key: 'ssoCms',
+    email: `qa-sso-cms@${SEED_EMAIL_DOMAIN}`,
+    displayName: 'QA SSO Journey (CMS)',
+    displayNameAr: 'رحلة الدخول الموحد للاختبار (إدارة المحتوى)',
+    bio: 'Seeded QA account used only by the AlUmmahNowCMS SSO journey spec (CMS editor access needs the admin role).',
+    rbacRoleId: 'role_admin',
   },
 ];
 
