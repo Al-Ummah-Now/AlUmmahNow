@@ -32,6 +32,10 @@ export interface VideoFormatJobMessage {
 }
 
 export const VIDEO_FORMAT_PAGE_SIZE = 50;
+/** Pause between pages (rate limit on Bunny's API and CDN); env VIDEO_FORMAT_PAGE_DELAY_SECONDS overrides. */
+export const VIDEO_FORMAT_PAGE_DELAY_SECONDS = 5;
+/** Written when a run that changes records (not a dry run) finishes; the daily run starts only after one. */
+export const VIDEO_FORMAT_APPLIED_KEY = 'ops/video-format/applied.json';
 
 /** Run state lives in the global_settings bucket. */
 export const VIDEO_FORMAT_RUN_PREFIX = 'ops/video-format/runs/';
