@@ -202,13 +202,16 @@ export const APPS: AppRule[] = [
 				INTERNAL_API_KEY,
 				{ kind: 'd1_databases', name: 'REPORTS_DB' },
 				{ kind: 'queue_producer', name: 'queue' },
-				// Contact us mail (lib/contact-email.ts)
+				// Contact us mail (lib/contact-email.ts), sent off the request path by its own queue
 				RESEND_API_KEY,
 				{ kind: 'r2_buckets', name: 'theme_packages' },
 				{ kind: 'services', name: 'VIDEOS' },
+				{ kind: 'queue_producer', name: 'CONTACT_MAIL_QUEUE' },
+				{ kind: 'queue_consumer', name: 'al-ummah-now-contact-mail' },
+				{ kind: 'queue_producer', name: 'ERRORS_DLQ' },
 			],
 			...PROD_GUARDS,
 		},
-		stage: stageRule({ name: 'al-ummah-admin-api-stage', requireRoutes: true, vars: { ENVIRONMENT: 'stage', WEBSOCKET_URL: STAGE_REALTIME, Issuer: STAGE_AUTH }, requiredBindings: [INTERNAL_API_KEY, { kind: 'd1_databases', name: 'REPORTS_DB' }, RESEND_API_KEY, { kind: 'r2_buckets', name: 'theme_packages' }, { kind: 'services', name: 'VIDEOS' }] }),
+		stage: stageRule({ name: 'al-ummah-admin-api-stage', requireRoutes: true, vars: { ENVIRONMENT: 'stage', WEBSOCKET_URL: STAGE_REALTIME, Issuer: STAGE_AUTH }, requiredBindings: [INTERNAL_API_KEY, { kind: 'd1_databases', name: 'REPORTS_DB' }, RESEND_API_KEY, { kind: 'r2_buckets', name: 'theme_packages' }, { kind: 'services', name: 'VIDEOS' }, { kind: 'queue_producer', name: 'CONTACT_MAIL_QUEUE' }, { kind: 'queue_consumer', name: 'al-ummah-now-contact-mail-stage' }, { kind: 'queue_producer', name: 'ERRORS_DLQ' }] }),
 	},
 ];

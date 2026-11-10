@@ -167,7 +167,7 @@ describe('contact emails', () => {
     }) as unknown as typeof fetch;
     const mail = renderReply(message, 'Hi', {});
     assert.deepEqual(await sendContactEmail({ ENVIRONMENT: 'qa', RESEND_API_KEY: 'k' }, { ...mail, to: 'a@e2e.alummahnow.net' }, { fetchImpl: ok }), { status: 'sunk' });
-    assert.equal((await sendContactEmail({ ENVIRONMENT: 'production' }, mail, { fetchImpl: ok })).status, 'skipped');
+    assert.deepEqual(await sendContactEmail({ ENVIRONMENT: 'production' }, mail, { fetchImpl: ok }), { status: 'failed', error: 'RESEND_API_KEY is not bound', retryable: false });
     assert.deepEqual(await sendContactEmail({ ENVIRONMENT: 'production', RESEND_API_KEY: { get: async () => 'k' } }, mail, { fetchImpl: ok, idempotencyKey: 'x' }), { status: 'sent', id: 're_1' });
     assert.equal(calls.length, 1);
     const sent = JSON.parse(String(calls[0].body));
@@ -175,7 +175,11 @@ describe('contact emails', () => {
     assert.equal(sent.from, 'Al Ummah Now <support@alummahnow.net>');
     assert.equal((calls[0].headers as Record<string, string>)['Idempotency-Key'], 'x');
     const bad = (async () => new Response('nope', { status: 422 })) as unknown as typeof fetch;
-    assert.equal((await sendContactEmail({ RESEND_API_KEY: 'k' }, mail, { fetchImpl: bad })).status, 'failed');
+    assert.equal((await sendContactEmail({ RESEND_API_KEY: 'k' }, mail, { fetchImpl: bad })).retryable, false, '4xx is permanent');
+    const down = (async () => new Response('busy', { status: 503 })) as unknown as typeof fetch;
+    assert.equal((await sendContactEmail({ RESEND_API_KEY: 'k' }, mail, { fetchImpl: down })).retryable, true, '5xx is retried');
+    const offline = (async () => { throw new Error('network'); }) as unknown as typeof fetch;
+    assert.equal((await sendContactEmail({ RESEND_API_KEY: 'k' }, mail, { fetchImpl: offline })).retryable, true);
   });
 });
 
@@ -197,7 +201,7 @@ function newMessage(id: string, over: Partial<Parameters<typeof insertContactMes
 }
 
 describe('contact store (D1)', () => {
-  const MIGRATION = ['0008_contact_messages.sql'];
+  const MIGRATION = ['0008_contact_messages.sql', '0010_contact_mail_failures.sql'];
   const limits = { perIpHour: 2, perIpDay: 3, perUserHour: 1, perUserDay: 5 };
 
   it('rate-limits per IP per hour and per day', async () => {
@@ -242,7 +246,7 @@ describe('contact store (D1)', () => {
     assert.equal(await updateContactMessage(db, 'missing', { status: 'open' }, new Date()), false);
     assert.deepEqual((await listContactMessages(db, { assignee: 'me', viewerId: 'adm', limit: 20, offset: 0 })).messages.map((m) => m.id), ['m2']);
     assert.equal((await listContactMessages(db, { assignee: 'unassigned', limit: 20, offset: 0 })).total, 2);
-    assert.deepEqual(await contactCounts(db), { new: 2, open: 1, replied: 0, closed: 0, spam: 0 });
+    assert.deepEqual(await contactCounts(db), { new: 2, open: 1, replied: 0, closed: 0, spam: 0, send_failed: 0 });
     await updateContactMessage(db, 'm2', { assignee: null }, new Date());
     assert.equal((await getContactMessage(db, 'm2'))?.assignee_id, null);
 

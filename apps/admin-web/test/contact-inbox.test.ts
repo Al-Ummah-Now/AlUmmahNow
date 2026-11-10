@@ -41,6 +41,10 @@ describe('contact filters', () => {
     });
   });
 
+  it('accepts the send_failed view (messages whose email finally failed)', () => {
+    assert.equal(parseContactFilters({ status: 'send_failed' }).status, 'send_failed');
+  });
+
   it('builds shareable URLs', () => {
     assert.equal(contactHref({ status: 'open', q: 'a b', page: 2 }), '/contact?status=open&q=a+b&page=2');
     assert.equal(contactHref({ page: 1 }), '/contact');
@@ -52,7 +56,7 @@ describe('contact labels', () => {
     const groups: [string, string[]][] = [
       ['contactStatus', CONTACT_STATUSES],
       ['contactTopic', CONTACT_TOPICS],
-      ['delivery', ['sent', 'failed', 'skipped', 'sunk', 'pending']],
+      ['delivery', ['queued', 'sent', 'failed', 'skipped', 'sunk', 'pending']],
     ];
     for (const [group, keys] of groups) {
       for (const key of keys) {
@@ -63,5 +67,6 @@ describe('contact labels', () => {
       }
     }
     assert.ok(ARABIC.test(ar.nav.contact));
+    assert.ok(ARABIC.test(ar.contact.sendFailed) && ARABIC.test(ar.contact.retry));
   });
 });

@@ -11,6 +11,7 @@ import contentRouter from './routers/content.router';
 import processingRouter from './routers/processing.router';
 import type { AdminBindings } from './base/types';
 import { contactSubmit } from './endpoints/contact/ContactSubmit';
+import { contactMailConsumer, type ContactMailJob, type QueueMessageLike } from './lib/contact-mail-queue';
 
 // ==========================================
 // APP SETUP
@@ -160,4 +161,14 @@ app.get('/health', (c) => {
 // EXPORT
 // ==========================================
 
-export default app;
+/** HTTP (Hono) and the contact mail queue consumer (lib/contact-mail-queue.ts). */
+export default {
+  fetch: app.fetch,
+  async queue(batch: { queue: string; messages: readonly QueueMessageLike<ContactMailJob>[] }, env: AdminBindings): Promise<void> {
+    if (/(^|-)contact-mail(-|$)/.test(batch.queue)) return contactMailConsumer(batch, env);
+    logger.error('[Queue] Batch for an unknown queue; retrying', { queue: batch.queue });
+    for (const m of batch.messages) m.retry();
+  },
+};
+
+export { app };

@@ -41,6 +41,7 @@ const contactChipClasses: Record<string, string> = {
   replied: chipClasses.resolved,
   closed: chipClasses.dismissed,
   spam: 'bg-danger-bg text-danger-fg',
+  send_failed: 'bg-danger-bg text-danger-fg',
 };
 
 /** Contact message status (new, open, replied, closed, spam). */

@@ -10,9 +10,9 @@ import type { Context } from 'hono';
 import type { AdminBindings } from '../../base/types';
 import { logger } from '../../lib/logger';
 import { verifyAccessToken } from '../../middleware/auth';
-import { type ContactInput, CONTACT_LIMITS, hashIp, isLikelyBot, isSinkAddress, rateLimitsFor, safeEqual, validateContactInput } from '../../lib/contact';
-import { getContactMessage, insertContactMessage, setDeliveryStatus, type ContactMessageRow } from '../../lib/contact-store';
-import { renderAcknowledgement, renderInboxNotification, sendContactEmail } from '../../lib/contact-email';
+import { type ContactInput, CONTACT_LIMITS, hashIp, isLikelyBot, rateLimitsFor, safeEqual, validateContactInput } from '../../lib/contact';
+import { insertContactMessage, recordDelivery } from '../../lib/contact-store';
+import { enqueueContactMail, reportContactMailFailure } from '../../lib/contact-mail-queue';
 
 async function resolveKey(binding: AdminBindings['INTERNAL_API_KEY']): Promise<string> {
   if (typeof binding === 'string') return binding;
@@ -21,31 +21,6 @@ async function resolveKey(binding: AdminBindings['INTERNAL_API_KEY']): Promise<s
   } catch {
     return '';
   }
-}
-
-/** Support-inbox notification, then the sender's acknowledgement; statuses are recorded on the message. */
-export async function deliverContactEmails(env: AdminBindings, m: ContactMessageRow): Promise<void> {
-  const inbox = env.CONTACT_INBOX?.trim();
-  let notify: string;
-  if (!inbox) notify = 'skipped';
-  // A test message (E2E address outside production) never reaches the real inbox
-  else if (isSinkAddress(m.email, env.ENVIRONMENT)) notify = 'sunk';
-  else {
-    const result = await sendContactEmail(env, renderInboxNotification(m, { to: inbox, adminUrl: env.ADMIN_WEB_URL, environment: env.ENVIRONMENT }), {
-      idempotencyKey: `contact-notify-${m.id}`,
-    });
-    notify = result.status;
-    if (result.error) logger.error('[Contact] Inbox notification not sent', { id: m.id, status: result.status, error: result.error });
-  }
-  if (!inbox) logger.warn('[Contact] CONTACT_INBOX is not set: no support-inbox notification', { id: m.id });
-
-  const ack = await sendContactEmail(env, renderAcknowledgement(m, { replyTo: inbox || undefined, environment: env.ENVIRONMENT }), {
-    idempotencyKey: `contact-ack-${m.id}`,
-  });
-  if (ack.error) logger.error('[Contact] Acknowledgement not sent', { id: m.id, status: ack.status, error: ack.error });
-
-  await setDeliveryStatus(env.REPORTS_DB, m.id, 'notify_status', notify);
-  await setDeliveryStatus(env.REPORTS_DB, m.id, 'ack_status', ack.status);
 }
 
 export async function contactSubmit(c: Context<{ Bindings: AdminBindings }>): Promise<Response> {
@@ -93,13 +68,13 @@ export async function contactSubmit(c: Context<{ Bindings: AdminBindings }>): Pr
   }
 
   logger.info('[Contact] Message received', { id, signedIn: !!user });
-  const row = await getContactMessage(env.REPORTS_DB, id);
-  if (row) {
-    const work = deliverContactEmails(env, row).catch((error) => logger.error('[Contact] Email delivery failed', { id, error: String(error) }));
-    try {
-      c.executionCtx.waitUntil(work);
-    } catch {
-      await work;
+  // Mail is sent by the queue consumer (lib/contact-mail-queue.ts), never on this request
+  const jobs = (['notify', 'ack'] as const).map((kind) => ({ v: 1 as const, kind, messageId: id }));
+  if (!(await enqueueContactMail(env, jobs))) {
+    // Stored, but the mail could not be queued: flag it for an admin to retry
+    for (const job of jobs) {
+      await recordDelivery(env.REPORTS_DB, { messageId: id, kind: job.kind, status: 'failed', error: 'could not queue the email', now: new Date() });
+      await reportContactMailFailure(env, job, 'could not queue the email', 0);
     }
   }
   return c.json({ success: true, result: { id } }, 201);

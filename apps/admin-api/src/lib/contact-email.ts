@@ -164,7 +164,8 @@ export function renderReply(m: MessageForEmail, reply: string, opts: { replyTo?:
   return { to: m.email, subject: `${envTag(opts.environment)}${s.subject}`, text, html, replyTo: opts.replyTo };
 }
 
-export type DeliveryStatus = 'sent' | 'failed' | 'skipped' | 'sunk';
+/** queued: waiting in the mail queue; failed: gave up after retries (flagged for an admin). */
+export type DeliveryStatus = 'queued' | 'sent' | 'failed' | 'skipped' | 'sunk';
 
 export interface MailerEnv {
   ENVIRONMENT?: string;
@@ -188,16 +189,17 @@ async function resolveSecret(binding: MailerEnv['RESEND_API_KEY']): Promise<stri
 /**
  * Sends one email. Outside production, E2E addresses (@e2e.alummahnow.net,
  * which has no mail server) are not sent: the status is "sunk" and the E2E
- * suite reads it back from the message's record. Never throws.
+ * suite reads it back from the message's record. Never throws. `retryable`
+ * marks failures worth another attempt (network, 429, 5xx).
  */
 export async function sendContactEmail(
   env: MailerEnv,
   email: RenderedEmail,
   opts: { idempotencyKey?: string; fetchImpl?: typeof fetch } = {},
-): Promise<{ status: DeliveryStatus; id?: string; error?: string }> {
+): Promise<{ status: DeliveryStatus; id?: string; error?: string; retryable?: boolean }> {
   if (isSinkAddress(email.to, env.ENVIRONMENT)) return { status: 'sunk' };
   const key = await resolveSecret(env.RESEND_API_KEY);
-  if (!key) return { status: 'skipped', error: 'RESEND_API_KEY is not bound' };
+  if (!key) return { status: 'failed', error: 'RESEND_API_KEY is not bound', retryable: false };
   const doFetch = opts.fetchImpl ?? fetch;
   try {
     const res = await doFetch('https://api.resend.com/emails', {
@@ -216,10 +218,13 @@ export async function sendContactEmail(
         ...(email.replyTo ? { reply_to: email.replyTo } : {}),
       }),
     });
-    if (!res.ok) return { status: 'failed', error: `Resend ${res.status}: ${(await res.text()).slice(0, 200)}` };
+    if (!res.ok) {
+      const text = (await res.text().catch(() => '')).slice(0, 200);
+      return { status: 'failed', error: `Resend ${res.status}: ${text}`, retryable: res.status === 429 || res.status >= 500 };
+    }
     const body = (await res.json().catch(() => ({}))) as { id?: string };
     return { status: 'sent', id: body.id };
   } catch (error) {
-    return { status: 'failed', error: error instanceof Error ? error.message : String(error) };
+    return { status: 'failed', error: error instanceof Error ? error.message : String(error), retryable: true };
   }
 }

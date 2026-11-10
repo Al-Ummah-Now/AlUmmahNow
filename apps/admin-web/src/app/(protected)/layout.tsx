@@ -19,7 +19,9 @@ export default async function ProtectedLayout({
   if (canUseContactInbox(session.user.role)) {
     contactNew = 0;
     try {
-      contactNew = (await getContactCounts()).new;
+      const counts = await getContactCounts();
+      // New messages and messages whose email failed: both need an admin
+      contactNew = counts.new + counts.send_failed;
     } catch (e) {
       logger.warn('[layout] Contact counts unavailable', { error: e instanceof Error ? e.message : String(e) });
     }

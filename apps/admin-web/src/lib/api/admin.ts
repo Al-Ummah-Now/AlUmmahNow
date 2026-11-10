@@ -23,6 +23,7 @@ import type {
   ProcessingErrorsResponse,
   ProcessingVideosResponse,
   SyncResponse,
+  ContactMailKind,
 } from './types';
 
 const ADMIN_API_URL = process.env.ADMIN_API_URL || 'http://127.0.0.1:3090';
@@ -315,6 +316,11 @@ export async function addContactNote(id: string, body: string): Promise<ActionRe
 
 export async function replyToContactMessage(id: string, body: string): Promise<ActionResult<{ note: ContactNote; message: ContactMessage }>> {
   return mutate(`/api/contact/messages/${encodeURIComponent(id)}/reply`, 'POST', { body });
+}
+
+/** Queue a failed email (support notification, acknowledgement or a reply) again. */
+export async function retryContactDelivery(id: string, kind: ContactMailKind, noteId?: string): Promise<ActionResult<unknown>> {
+  return mutate(`/api/contact/messages/${encodeURIComponent(id)}/retry`, 'POST', { kind, ...(noteId ? { noteId } : {}) });
 }
 
 export async function deleteContactMessage(id: string): Promise<ActionResult<{ deleted: string }>> {

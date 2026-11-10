@@ -5,8 +5,11 @@ export const CONTACT_TOPICS: ContactTopic[] = ['general', 'account', 'problem', 
 export const CONTACT_PAGE_SIZE = 20;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
+/** Not a stored status: messages with an email that finally failed to send. */
+export const SEND_FAILED = 'send_failed' as const;
+
 export interface ContactInboxFilters {
-  status?: ContactStatus;
+  status?: ContactStatus | typeof SEND_FAILED;
   topic?: ContactTopic;
   from?: string;
   to?: string;
@@ -26,7 +29,7 @@ export function parseContactFilters(params: Record<string, string | string[] | u
   const assignee = first(params.assignee);
   const page = Number.parseInt(first(params.page) ?? '1', 10);
   return {
-    status: CONTACT_STATUSES.includes(status as ContactStatus) ? (status as ContactStatus) : undefined,
+    status: status === SEND_FAILED ? SEND_FAILED : CONTACT_STATUSES.includes(status as ContactStatus) ? (status as ContactStatus) : undefined,
     topic: CONTACT_TOPICS.includes(topic as ContactTopic) ? (topic as ContactTopic) : undefined,
     from: from && DAY.test(from) ? from : undefined,
     to: to && DAY.test(to) ? to : undefined,

@@ -129,6 +129,9 @@ export interface ContactMessage {
   assignee_email: string | null;
   notify_status: string | null;
   ack_status: string | null;
+  /** Set while an email of this message has finally failed to send */
+  send_failed_at: string | null;
+  delivery_error: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -144,6 +147,7 @@ export interface ContactNote {
   email_subject: string | null;
   email_status: string | null;
   email_id: string | null;
+  email_error?: string | null;
   created_at: string;
 }
 
@@ -154,7 +158,8 @@ export interface ContactListResponse {
   offset: number;
 }
 
-export type ContactCounts = Record<ContactStatus, number>;
+export type ContactCounts = Record<ContactStatus | 'send_failed', number>;
+export type ContactMailKind = 'notify' | 'ack' | 'reply';
 
 // Upload processing health (admin-api /api/processing; incident 2026-11-10)
 export type ProcessingIssueKind = 'encode_failed' | 'needs_reupload' | 'stalled';

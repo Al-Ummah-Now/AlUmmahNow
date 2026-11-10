@@ -9,12 +9,13 @@
 --   apps/admin-api/migrations/0007_ai_budget.sql
 --   apps/admin-api/migrations/0008_contact_messages.sql
 --   apps/admin-api/migrations/0009_theme_packages.sql
+--   apps/admin-api/migrations/0010_contact_mail_failures.sql
 
 CREATE TABLE ai_budget_daily (day TEXT NOT NULL, feature TEXT NOT NULL, reserved REAL NOT NULL DEFAULT 0, PRIMARY KEY (day, feature));
 CREATE TABLE ai_usage_daily (day TEXT NOT NULL, model TEXT NOT NULL, feature TEXT NOT NULL DEFAULT 'moderation', calls INTEGER NOT NULL DEFAULT 0, input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0, neurons REAL NOT NULL DEFAULT 0, usd REAL NOT NULL DEFAULT 0, PRIMARY KEY (day, model, feature));
 CREATE TABLE channel_verification_log (id TEXT PRIMARY KEY, channel_id TEXT NOT NULL, verified INTEGER NOT NULL, note TEXT, actor_id TEXT NOT NULL, created_at TEXT NOT NULL);
-CREATE TABLE contact_messages (id TEXT PRIMARY KEY, status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'open', 'replied', 'closed', 'spam')), topic TEXT NOT NULL CHECK (topic IN ('general', 'account', 'problem', 'content', 'partnership')), name TEXT NOT NULL, email TEXT NOT NULL, message TEXT NOT NULL, user_id TEXT, locale TEXT NOT NULL DEFAULT 'en' CHECK (locale IN ('en', 'ar')), page_url TEXT, user_agent TEXT, ip_hash TEXT NOT NULL, assignee_id TEXT, assignee_email TEXT, notify_status TEXT, ack_status TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-CREATE TABLE contact_notes (id TEXT PRIMARY KEY, message_id TEXT NOT NULL REFERENCES contact_messages(id) ON DELETE CASCADE, kind TEXT NOT NULL CHECK (kind IN ('note', 'reply')), body TEXT NOT NULL, author_id TEXT NOT NULL, author_email TEXT, email_to TEXT, email_subject TEXT, email_status TEXT, email_id TEXT, created_at TEXT NOT NULL);
+CREATE TABLE contact_messages (id TEXT PRIMARY KEY, status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'open', 'replied', 'closed', 'spam')), topic TEXT NOT NULL CHECK (topic IN ('general', 'account', 'problem', 'content', 'partnership')), name TEXT NOT NULL, email TEXT NOT NULL, message TEXT NOT NULL, user_id TEXT, locale TEXT NOT NULL DEFAULT 'en' CHECK (locale IN ('en', 'ar')), page_url TEXT, user_agent TEXT, ip_hash TEXT NOT NULL, assignee_id TEXT, assignee_email TEXT, notify_status TEXT, ack_status TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, send_failed_at TEXT, delivery_error TEXT);
+CREATE TABLE contact_notes (id TEXT PRIMARY KEY, message_id TEXT NOT NULL REFERENCES contact_messages(id) ON DELETE CASCADE, kind TEXT NOT NULL CHECK (kind IN ('note', 'reply')), body TEXT NOT NULL, author_id TEXT NOT NULL, author_email TEXT, email_to TEXT, email_subject TEXT, email_status TEXT, email_id TEXT, created_at TEXT NOT NULL, email_error TEXT);
 CREATE TABLE entitlement_overrides (id TEXT PRIMARY KEY, subject_type TEXT NOT NULL CHECK (subject_type IN ('channel', 'organisation', 'user')), subject_id TEXT NOT NULL, key TEXT NOT NULL, value_json TEXT NOT NULL, expires_at TEXT, reason TEXT NOT NULL, created_by TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), UNIQUE (subject_type, subject_id, key));
 CREATE TABLE moderation_actions (id TEXT PRIMARY KEY, signal_id TEXT, subject_type TEXT, subject_id TEXT, action TEXT NOT NULL, actor_type TEXT NOT NULL, actor_id TEXT, model TEXT, prompt_version TEXT, category TEXT, score REAL, reason TEXT, details_json TEXT, created_at TEXT NOT NULL);
 CREATE TABLE moderation_appeals (id TEXT PRIMARY KEY, action_id TEXT, signal_id TEXT, subject_type TEXT NOT NULL, subject_id TEXT NOT NULL, user_id TEXT NOT NULL, message TEXT, status TEXT NOT NULL DEFAULT 'open', reviewer_id TEXT, resolved_at TEXT, created_at TEXT NOT NULL);
@@ -33,6 +34,7 @@ CREATE TABLE usage_counters (subject_type TEXT NOT NULL, subject_id TEXT NOT NUL
 CREATE INDEX idx_channel_verification_log_channel ON channel_verification_log (channel_id, created_at);
 CREATE INDEX idx_contact_messages_created ON contact_messages (created_at DESC);
 CREATE INDEX idx_contact_messages_ip ON contact_messages (ip_hash, created_at);
+CREATE INDEX idx_contact_messages_send_failed ON contact_messages (send_failed_at) WHERE send_failed_at IS NOT NULL;
 CREATE INDEX idx_contact_messages_status ON contact_messages (status, created_at DESC);
 CREATE INDEX idx_contact_messages_user ON contact_messages (user_id, created_at);
 CREATE INDEX idx_contact_notes_message ON contact_notes (message_id, created_at);

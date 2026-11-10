@@ -3,8 +3,9 @@
  * signed out and signed in, in English and Arabic; an admin finds them in the
  * admin-web inbox, replies by email and deletes them again (self-cleaning).
  *
- * Every sender is an @e2e.alummahnow.net sink address: outside production
- * admin-api records their mail as "sunk" instead of sending it (lib/contact-email.ts),
+ * Mail goes through admin-api's contact mail queue. Every sender is an
+ * @e2e.alummahnow.net sink address: outside production the queue consumer
+ * records their mail as "sunk" instead of sending it (lib/contact-mail-queue.ts),
  * the same idea as the auth server's code sink. The test reads that delivery
  * state back from the admin inbox, so the support inbox never gets test mail.
  */
@@ -108,9 +109,11 @@ test.describe('Release: Contact us', () => {
       await expect(page.getByTestId('contact-message-body')).toHaveText(MESSAGE.ar);
       await expect(page.getByTestId('contact-user-link')).toHaveAttribute('href', /^\/users\/.+/);
       await expect(page.getByTestId('contact-page-url')).toContainText('/ar/explore');
-      // The sender's acknowledgement went to the sink, as did the support-inbox notification
-      await expect(page.getByTestId('contact-ack-status')).toContainText(/Test address|عنوان اختبار/);
-      await expect(page.getByTestId('contact-notify-status')).toContainText(/Test address|عنوان اختبار/);
+      // The queue delivered the acknowledgement and the support-inbox notification to the sink
+      // (the page re-reads itself while anything is queued)
+      await expect(page.getByTestId('contact-ack-status')).toHaveAttribute('data-status', 'sunk', { timeout: 90000 });
+      await expect(page.getByTestId('contact-notify-status')).toHaveAttribute('data-status', 'sunk', { timeout: 90000 });
+      await expect(page.getByTestId('contact-send-failed')).toHaveCount(0);
 
       await page.getByTestId('contact-assign-me').click();
       await expect(page.getByTestId('contact-unassign')).toBeVisible();
@@ -121,9 +124,10 @@ test.describe('Release: Contact us', () => {
       await page.getByTestId('contact-reply-body').fill(`وعليكم السلام، ${RUN}: حدّث التطبيق وأعد المحاولة.`);
       await page.getByTestId('contact-reply-send').click();
       const replyNote = page.locator('[data-testid="contact-note"][data-kind="reply"]');
-      // The reply email was produced and delivered to the E2E sink (production would say "sent")
-      await expect(replyNote).toHaveAttribute('data-email-status', 'sunk', { timeout: 30000 });
-      await expect(page.getByTestId('contact-message')).toHaveAttribute('data-status', 'replied');
+      // Queued at once, then delivered to the E2E sink by the queue consumer (production would say "sent")
+      await expect(replyNote).toHaveAttribute('data-email-status', /queued|sunk/);
+      await expect(replyNote).toHaveAttribute('data-email-status', 'sunk', { timeout: 90000 });
+      await expect(page.getByTestId('contact-message')).toHaveAttribute('data-status', 'replied', { timeout: 30000 });
 
       // A signed-out one is marked as spam, and spam cannot be replied to
       await page.goto(inbox);

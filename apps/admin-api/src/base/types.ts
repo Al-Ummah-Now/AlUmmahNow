@@ -65,6 +65,10 @@ export interface AdminBindings {
   CONTACT_FROM?: string;
   /** admin-web origin, for the inbox link in notifications */
   ADMIN_WEB_URL?: string;
+  /** Contact mail jobs (lib/contact-mail-queue.ts); this worker consumes them */
+  CONTACT_MAIL_QUEUE?: Queue<unknown>;
+  /** Platform DLQ (al-ummah-now-dlq[-env]): final mail failures, stored by the processor in dead_letters */
+  ERRORS_DLQ?: Queue<unknown>;
 }
 
 /**

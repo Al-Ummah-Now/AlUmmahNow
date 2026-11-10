@@ -1,10 +1,10 @@
 import Link from 'next/link';
-import { getProcessingErrors } from '@/lib/api/admin';
-import type { ProcessingErrorsResponse } from '@/lib/api/types';
+import { getProcessingErrors, listContactMessages } from '@/lib/api/admin';
+import type { ContactListResponse, ProcessingErrorsResponse } from '@/lib/api/types';
 import { getAdminSession } from '@/lib/auth';
-import { canUseProcessing } from '@/lib/roles';
+import { canUseContactInbox, canUseProcessing } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
-import { formatDate } from '@/i18n/translate';
+import { formatDate, translateDynamic } from '@/i18n/translate';
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { ISSUE_LABEL, ourStatusLabel } from '../processing/labels';
@@ -17,8 +17,9 @@ const tdClass = 'px-4 py-3 align-top text-sm';
 /**
  * Failures that need an admin: uploads that failed or were flagged (needs
  * re-upload, stalled) and processing checks that dead-lettered after their
- * retries. Each links to Processing health, where it can be synced, retried
- * or marked failed.
+ * retries (each links to Processing health, where it can be synced, retried
+ * or marked failed), and Contact us emails that failed after the mail queue's
+ * retries (each links to the message, where it can be retried).
  */
 export default async function ErrorsPage() {
   const { t, locale } = await getI18n();
@@ -32,6 +33,16 @@ export default async function ErrorsPage() {
     data = await getProcessingErrors();
   } catch (e) {
     logger.error('[errors] Failed to load', { error: e instanceof Error ? e.message : String(e) });
+  }
+
+  // Contact us emails that finally failed (contact mail queue); admins and super admins
+  let contactFailed: ContactListResponse | null = null;
+  if (canUseContactInbox(session?.user.role)) {
+    try {
+      contactFailed = await listContactMessages({ status: 'send_failed', limit: 20 });
+    } catch (e) {
+      logger.error('[errors] Failed to load contact mail failures', { error: e instanceof Error ? e.message : String(e) });
+    }
   }
 
   return (
@@ -110,6 +121,47 @@ export default async function ErrorsPage() {
                       <td className={tdClass} dir="ltr">{d.videoId ?? '—'}</td>
                       <td className={tdClass}>{d.failureReason || t('errorsPage.noReason')}</td>
                       <td className={tdClass}>{d.attempts}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+
+      {contactFailed && (
+        <section aria-labelledby="errors-contact">
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+            <h2 id="errors-contact" className="text-xl font-semibold text-fg">{t('errorsPage.contactTitle')}</h2>
+            <Link href="/contact?status=send_failed" className={linkClass}>{t('errorsPage.openContact')}</Link>
+          </div>
+          {contactFailed.messages.length === 0 ? (
+            <div className={`${cardClass} text-center text-fg-muted`} data-testid="errors-contact-empty">{t('errorsPage.contactEmpty')}</div>
+          ) : (
+            <div className="bg-surface border border-border rounded-lg overflow-x-auto">
+              <table className="w-full" data-testid="errors-contact">
+                <caption className="sr-only">{t('errorsPage.contactTitle')}</caption>
+                <thead className="border-b border-border">
+                  <tr>
+                    <th className={thClass} scope="col">{t('errorsPage.colWhen')}</th>
+                    <th className={thClass} scope="col">{t('contact.colFrom')}</th>
+                    <th className={thClass} scope="col">{t('contact.colTopic')}</th>
+                    <th className={thClass} scope="col">{t('errorsPage.colReason')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {contactFailed.messages.map((m) => (
+                    <tr key={m.id} className="border-b border-border last:border-0" data-message-id={m.id}>
+                      <td className={tdClass}>{formatDate(m.send_failed_at ?? m.updated_at, locale, true)}</td>
+                      <td className={tdClass}>
+                        <Link href={`/contact/${encodeURIComponent(m.id)}`} className={linkClass} aria-label={t('contact.openMessage', { name: m.name })}>
+                          <span dir="auto">{m.name}</span>
+                        </Link>
+                        <div className="text-fg-muted text-xs" dir="ltr">{m.email}</div>
+                      </td>
+                      <td className={tdClass}>{translateDynamic(t, 'contactTopic', m.topic)}</td>
+                      <td className={`${tdClass} break-words`}>{m.delivery_error || t('errorsPage.noReason')}</td>
                     </tr>
                   ))}
                 </tbody>

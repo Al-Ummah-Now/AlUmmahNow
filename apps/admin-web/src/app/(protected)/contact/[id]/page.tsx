@@ -10,6 +10,7 @@ import { formatDate, translateDynamic } from '@/i18n/translate';
 import { ContactStatusChip, ErrorAlert, cardClass, linkClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { ContactActions } from './ContactActions';
+import { DeliveryRetry, RefreshWhileQueued } from './DeliveryRetry';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,10 +59,19 @@ export default async function ContactMessagePage({ params }: PageProps) {
 
   const { message: m, notes } = data;
   const delivery = (status: string | null) => (status ? translateDynamic(t, 'delivery', status) : t('delivery.pending'));
+  const deliveryClass = (status: string | null) => (status === 'failed' ? 'text-danger-fg font-medium' : '');
+  const queued = m.notify_status === 'queued' || m.ack_status === 'queued' || notes.some((n) => n.email_status === 'queued');
 
   return (
     <div>
       {back}
+      <RefreshWhileQueued active={queued} />
+      {m.send_failed_at && (
+        <ErrorAlert testId="contact-send-failed">
+          <p className="font-medium">{t('contact.sendFailedBanner')}</p>
+          {m.delivery_error && <p className="text-sm mt-1 break-words">{t('contact.lastError', { error: m.delivery_error })}</p>}
+        </ErrorAlert>
+      )}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           <article className={cardClass} data-testid="contact-message" data-message-id={m.id} data-status={m.status}>
@@ -78,7 +88,10 @@ export default async function ContactMessagePage({ params }: PageProps) {
                   {translateDynamic(t, 'contactTopic', m.topic)}
                 </p>
               </div>
-              <ContactStatusChip status={m.status} label={translateDynamic(t, 'contactStatus', m.status)} large />
+              <span className="flex flex-wrap gap-2">
+                <ContactStatusChip status={m.status} label={translateDynamic(t, 'contactStatus', m.status)} large />
+                {m.send_failed_at && <ContactStatusChip status="send_failed" label={t('contact.sendFailed')} large />}
+              </span>
             </div>
             <p className="text-fg whitespace-pre-wrap break-words leading-7" dir="auto" data-testid="contact-message-body">
               {m.message}
@@ -121,9 +134,13 @@ export default async function ContactMessagePage({ params }: PageProps) {
                       {n.body}
                     </p>
                     {n.kind === 'reply' && (
-                      <p className={`mt-2 text-xs ${n.email_status === 'failed' || n.email_status === 'skipped' ? 'text-danger-fg' : 'text-fg-muted'}`} data-testid="contact-reply-delivery">
-                        {t('contact.delivery')}: {delivery(n.email_status)}
-                      </p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                        <span className={n.email_status === 'failed' ? 'text-danger-fg font-medium' : 'text-fg-muted'} data-testid="contact-reply-delivery">
+                          {t('contact.delivery')}: {delivery(n.email_status)}
+                        </span>
+                        {n.email_status === 'failed' && <DeliveryRetry id={m.id} kind="reply" noteId={n.id} />}
+                        {n.email_status === 'failed' && n.email_error && <span className="text-fg-subtle break-all">{t('contact.lastError', { error: n.email_error })}</span>}
+                      </div>
                     )}
                   </li>
                 ))}
@@ -194,9 +211,20 @@ export default async function ContactMessagePage({ params }: PageProps) {
               <div>
                 <dt className={dt}>{t('contact.delivery')}</dt>
                 <dd className="text-fg text-sm">
-                  {t('contact.notifyStatus')}: <span data-testid="contact-notify-status">{delivery(m.notify_status)}</span>
-                  <br />
-                  {t('contact.ackStatus')}: <span data-testid="contact-ack-status">{delivery(m.ack_status)}</span>
+                  <span className="flex flex-wrap items-center gap-2">
+                    {t('contact.notifyStatus')}:{' '}
+                    <span data-testid="contact-notify-status" data-status={m.notify_status ?? ''} className={deliveryClass(m.notify_status)}>
+                      {delivery(m.notify_status)}
+                    </span>
+                    {m.notify_status === 'failed' && <DeliveryRetry id={m.id} kind="notify" />}
+                  </span>
+                  <span className="flex flex-wrap items-center gap-2 mt-1">
+                    {t('contact.ackStatus')}:{' '}
+                    <span data-testid="contact-ack-status" data-status={m.ack_status ?? ''} className={deliveryClass(m.ack_status)}>
+                      {delivery(m.ack_status)}
+                    </span>
+                    {m.ack_status === 'failed' && <DeliveryRetry id={m.id} kind="ack" />}
+                  </span>
                 </dd>
               </div>
               {m.user_agent && (
