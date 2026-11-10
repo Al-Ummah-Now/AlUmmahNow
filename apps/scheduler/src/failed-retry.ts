@@ -27,8 +27,9 @@ export async function retryFailedSchedule(
   const entry = await bucket.get(failedKey);
   if (!entry) return 'not_found';
   const metadata = (await entry.json()) as ScheduledVideoMetadata;
-  const { error: _error, ...rest } = metadata;
-  const next: ScheduledVideoMetadata = { ...rest, retryCount: 0, scheduledPublishDate: now.toISOString() };
+  // Back on the schedule: the last failure is cleared
+  const next: ScheduledVideoMetadata = { ...metadata, retryCount: 0, scheduledPublishDate: now.toISOString() };
+  delete next.error;
   // New entry first, then remove the failed one: a crash in between leaves both (publishing is idempotent)
   await bucket.put(buildScheduleKey(now, input.videoId), JSON.stringify(next), { httpMetadata: { contentType: 'application/json' } });
   await bucket.delete(failedKey);
