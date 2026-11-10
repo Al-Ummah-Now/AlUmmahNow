@@ -10,6 +10,8 @@
  *   POST /internal/uploads/keep    { ids, actor } never pick these again (until Retry)
  *   POST /internal/uploads/retry   { ids, actor } restart the check loop (a failed item, a kept one)
  *   POST /internal/uploads/mode    { mode, actor } dry-run | live
+ *   GET  /internal/uploads/test-library-purge      QA/stage purge state (lib/uploads/testLibraryPurge.ts)
+ *   POST /internal/uploads/test-library-purge      { action: start|stop, dryRun?, resume?, actor }
  *
  * See lib/uploads/reaper.ts for the loop and its rules.
  */
@@ -29,11 +31,12 @@ import {
 	sweepStaleUploads,
 	writeReaperConfig,
 } from '../../lib/uploads/reaper';
+import { purgeAllowed, readPurgeState, startPurge, stopPurge, type PurgeEnv } from '../../lib/uploads/testLibraryPurge';
 
 const MAX_IDS = 100;
 const STATUSES = new Set(['checking', 'would_delete', 'deleted', 'kept', 'skipped', 'failed']);
 
-type Env = ReaperEnv & { NOTIFICATIONS_DB?: D1Database };
+type Env = PurgeEnv & { NOTIFICATIONS_DB?: D1Database };
 
 function parseIds(body: unknown): string[] | null {
 	const ids = (body as { ids?: unknown })?.ids;
@@ -133,6 +136,25 @@ export function createUploadsInternalRouter() {
 	app.post('/delete', (c) => loopAction(true, 'admin-delete')(c as never));
 	// Retry keeps the item's earlier force (a failed Delete now retries the delete)
 	app.post('/retry', (c) => loopAction(false, 'admin-retry')(c as never));
+
+	// QA/stage only: removes every Bunny video of this environment without a record
+	app.get('/test-library-purge', async (c) =>
+		c.json({ success: true, result: { allowed: purgeAllowed(c.env), state: await readPurgeState(c.env) } }),
+	);
+
+	app.post('/test-library-purge', async (c) => {
+		const body = (await c.req.json().catch(() => ({}))) as { action?: unknown; dryRun?: unknown; resume?: unknown };
+		const actor = actorOf(body);
+		if (!purgeAllowed(c.env)) return c.json({ success: false, error: 'The test-library purge runs only on QA / stage' }, 403);
+		if (body.action === 'stop') return c.json({ success: true, result: { state: await stopPurge(c.env, actor) } });
+		if (body.action !== 'start') return c.json({ success: false, error: 'action must be start or stop' }, 400);
+		try {
+			const state = await startPurge(c.env, { actor, dryRun: body.dryRun !== false, resume: body.resume === true });
+			return c.json({ success: true, result: { state } });
+		} catch (error) {
+			return c.json({ success: false, error: error instanceof Error ? error.message : String(error) }, 409);
+		}
+	});
 
 	app.post('/keep', async (c) => {
 		const body = await c.req.json().catch(() => null);

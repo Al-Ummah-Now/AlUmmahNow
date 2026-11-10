@@ -2,6 +2,8 @@ import { reportServerError, withErrorReporting, type ErrorReporterEnv } from '@a
 import { SUBSCRIPTION_IMPORT_CRON, importPendingSubscriptions } from './lib/subscription-import';
 import { handleProcessingCheckBatch, sweepProcessingVideos } from './lib/processing/loop';
 import { handleReaperBatch, isReaperMessage, sweepStaleUploads } from './lib/uploads/reaper';
+import { handleBunnyDeleteBatch, isBunnyDeleteMessage } from './lib/uploads/bunnyDelete';
+import { handlePurgeBatch, isPurgeMessage } from './lib/uploads/testLibraryPurge';
 import { handlePlaylistAddBatch, isPlaylistAddMessage } from './lib/playlistUploadAdds';
 import { createPlaylistAddsInternalRouter } from './endpoints/playlist/playlistAddsInternal';
 
@@ -565,7 +567,9 @@ async function handleFetch(request: Request, env: AppBindings, ctx: ExecutionCon
  * - al-ummah-now-admin-jobs*: heavy admin actions (lib/admin/jobs.ts).
  * - otherwise PROCESSING_CHECK_QUEUE, which carries the per-video
  *   processing-check loop, the upload reaper's checks (kind "upload-reaper")
- *   and new uploads' playlist adds (kind "playlist-add").
+ *   new uploads' playlist adds (kind "playlist-add"), Bunny deletes after an
+ *   owner delete (kind "bunny-delete") and the QA/stage test-library purge
+ *   (kind "test-library-purge").
  * R2 writes go through the search-sync wrapper so changes reach the search
  * index and ownership rows like any API write.
  */
@@ -583,9 +587,16 @@ async function queue(batch: MessageBatch<unknown>, env: AppBindings, ctx: Execut
 		// New uploads → playlists (lib/playlistUploadAdds.ts)
 		const playlistAdds = rest.filter((m) => isPlaylistAddMessage(m.body));
 		const reaper = rest.filter((m) => isReaperMessage(m.body));
-		const processing = rest.filter((m) => !isReaperMessage(m.body) && !isPlaylistAddMessage(m.body));
+		// Owner deletes → Bunny (lib/uploads/bunnyDelete.ts); QA/stage purge (lib/uploads/testLibraryPurge.ts)
+		const bunnyDeletes = rest.filter((m) => isBunnyDeleteMessage(m.body));
+		const purges = rest.filter((m) => isPurgeMessage(m.body));
+		const processing = rest.filter(
+			(m) => !isReaperMessage(m.body) && !isPlaylistAddMessage(m.body) && !isBunnyDeleteMessage(m.body) && !isPurgeMessage(m.body),
+		);
 		if (processing.length) await handleProcessingCheckBatch({ messages: processing }, synced);
 		if (reaper.length) await handleReaperBatch({ messages: reaper }, synced);
+		if (bunnyDeletes.length) await handleBunnyDeleteBatch({ messages: bunnyDeletes }, synced);
+		if (purges.length) await handlePurgeBatch({ messages: purges }, synced);
 		if (playlistAdds.length) await handlePlaylistAddBatch({ messages: playlistAdds }, synced, ctx);
 	} catch (error) {
 		// The batch is retried by the queue; the failure is flagged on the admin Errors page

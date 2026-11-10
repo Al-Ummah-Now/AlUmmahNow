@@ -199,6 +199,8 @@
     "bunny_hostname": "vz-cb79844a-c5d.b-cdn.net",
     // Flip to "true" together with enabling CDN token authentication on the library
     "BUNNY_SIGN_URLS": "true",
+    // QA and stage share a test Bunny library: allows the admin test-library purge (lib/uploads/testLibraryPurge.ts). Never in production.
+    "BUNNY_TEST_LIBRARY": "true",
     "WEBSOCKET_URL": "https://realtime.qa.alummahnow.net",
     "CORS_ORIGINS": "https://videos.qa.alummahnow.net,https://admin.qa.alummahnow.net,https://qa.alummahnow.net,https://www.qa.alummahnow.net,https://cms.qa.alummahnow.net"
   },

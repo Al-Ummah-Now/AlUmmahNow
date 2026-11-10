@@ -3,6 +3,7 @@ import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
+import { enqueueBunnyDelete } from "../../lib/uploads/bunnyDelete";
 import { AuthenticatedRoute, AppContext } from '../../base';
 
 export class VideoBulkDelete extends AuthenticatedRoute {
@@ -109,8 +110,9 @@ export class VideoBulkDelete extends AuthenticatedRoute {
 						timestamp: new Date().toISOString(),
 					});
 
-					// Delete the video
+					// Delete the video, then its Bunny video (queued; lib/uploads/bunnyDelete.ts)
 					await repository.deleteObject(videoId);
+					await enqueueBunnyDelete(c.env.PROCESSING_CHECK_QUEUE, videoId, 'bulk-delete');
 
 					return {
 						videoId,
