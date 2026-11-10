@@ -211,6 +211,14 @@ export function channelVideoIds(
     } else if (!query.privateFor) {
       where.push('is_public = 1');
     }
+    // Videos still uploading/processing (or failed) are listed only to their
+    // owner: the playlist does not exist yet (2026-11-10 incident)
+    if (typeof query.privateFor === 'string') {
+      where.push("(upload_status IS NULL OR upload_status = 'ready' OR owner_id = ?)");
+      params.push(query.privateFor);
+    } else if (!query.privateFor) {
+      where.push("(upload_status IS NULL OR upload_status = 'ready')");
+    }
     const { results } = await db.prepare(
       `SELECT id FROM ${OWNERSHIP_TABLE} WHERE ${where.join(' AND ')} ORDER BY ${order} LIMIT ? OFFSET ?`,
     ).bind(...params, query.limit + 1, query.offset).all<{ id: string }>();

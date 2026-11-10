@@ -15,6 +15,7 @@ import { searchVideos, bulkDeleteVideos, bulkUpdateVideos } from '@/lib/api/vide
 import { BulkEditDialog } from '@/components/bulkEdit/BulkEditDialog';
 import { applyChangesLocally, type BulkVideoChanges } from '@/lib/dashboard/bulk-edit';
 import Image from 'next/image';
+import { ProcessingProgress } from '@/components/video/ProcessingProgress';
 import Link from 'next/link';
 import { compareDashboardVideos, type DashboardSort } from '@/lib/dashboard/sort-videos';
 import {
@@ -37,6 +38,7 @@ type VideoStatus = Exclude<FilterStatus, 'all'>;
 /** Upload/processing status of a video; videos without one are treated as ready */
 function getVideoStatus(video: VideoObject): VideoStatus {
   const status = video.uploadStatus;
+  if (status === 'initiated') return 'uploading';
   return status === 'processing' || status === 'uploading' || status === 'failed' ? status : 'ready';
 }
 
@@ -47,6 +49,10 @@ export default function VideoDashboardPage() {
   const router = useRouter();
 
   const [videos, setVideos] = useState<VideoObject[]>([]);
+  // A processing video's live check saw it finish: update its status in place
+  const markSettled = React.useCallback((id: string, status: 'ready' | 'failed') => {
+    setVideos((prev) => prev.map((v) => (v.id === id ? { ...v, uploadStatus: status } : v)));
+  }, []);
   const [filteredVideos, setFilteredVideos] = useState<VideoObject[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -615,6 +621,13 @@ export default function VideoDashboardPage() {
                     >
                       {t.video[getVideoStatus(video)]}
                     </span>
+                    {(getVideoStatus(video) === 'processing' || getVideoStatus(video) === 'uploading') && video.channelId && (
+                      <ProcessingProgress
+                        videoId={video.id}
+                        channelId={video.channelId}
+                        onSettled={(status) => markSettled(video.id, status)}
+                      />
+                    )}
                     <span
                       data-testid="dashboard-video-privacy"
                       className={`inline-block px-2 py-1 rounded text-xs font-medium ${

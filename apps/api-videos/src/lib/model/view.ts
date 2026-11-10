@@ -98,6 +98,9 @@ export const VideoView = z.object({
     category: z.string().optional(),
     language: z.string().optional(),
     duration: z.number().optional(),
+    // Upload processing: anything but "ready" shows the "Processing, ready soon" state
+    uploadStatus: z.enum(['initiated', 'uploading', 'processing', 'ready', 'failed']).optional(),
+    processingIssueKind: z.enum(['encode_failed', 'needs_reupload', 'stalled']).optional().describe("Why processing did not finish"),
     ...SoftDeleteFields,
     ...ModerationFields,
     // For detailed views, include recent comments

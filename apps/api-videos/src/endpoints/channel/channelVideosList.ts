@@ -154,6 +154,11 @@ export class ChannelVideosList extends OptionalAuthRoute {
 					return false;
 				}
 
+				// Not ready yet (uploading, processing, failed): only the owner sees it, with its status
+				if (video.uploadStatus && video.uploadStatus !== 'ready') {
+					return isOwner;
+				}
+
 				// Exclude shorts (duration < 60 seconds) and live streams
 				if (video.duration && video.duration < 60) {
 					return false;

@@ -126,6 +126,8 @@ export class ChannelShortsList extends OptionalAuthRoute {
 				if (!video.duration || video.duration >= 60) return false;
 				if (video.isLive) return false;
 				// Private videos only for the channel owner; public or unset counts as public
+				// Not ready yet (uploading, processing, failed): only the owner sees it
+				if (video.uploadStatus && video.uploadStatus !== 'ready') return isOwner;
 				if (video.isPublic === false) return isOwner;
 				return true;
 			};

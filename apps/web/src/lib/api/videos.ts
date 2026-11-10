@@ -1078,6 +1078,8 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions | undef
             channelId: video.channelId,
             likes: (video.likes || []).map(({ userId, channelId }) => ({ userId, channelId })),
             dislikes: (video.dislikes || []).map(({ userId, channelId }) => ({ userId, channelId })),
+            uploadStatus: (video as { uploadStatus?: PlayerOptions['uploadStatus'] }).uploadStatus,
+            processingIssueKind: (video as { processingIssueKind?: PlayerOptions['processingIssueKind'] }).processingIssueKind,
         };
 
         logger.info('[fetchVideoById] Mapped to PlayerOptions:', playerOptions);
