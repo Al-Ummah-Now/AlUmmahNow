@@ -336,8 +336,15 @@ jobs:
       - name: Resolve QA seed URLs
         shell: bash
         run: |
-          VIDEO=$(curl -fsS "$API_URL/api/videos?limit=100" | jq -r '[.data[] | select(.title | startswith("QA Lecture"))][0].id // empty')
-          CHANNEL=$(curl -fsS "$API_URL/api/channels?limit=200" | jq -r '[.data[] | select(.name | startswith("Al Ummah Now QA"))][0].id // empty')
+          # The channel comes from the seed video: QA holds hundreds of E2E channels, and the seed
+          # channel fell off the first page of /api/channels (Lighthouse then audited /en/channels/)
+          SEED=$(curl -fsS "$API_URL/api/videos?limit=100" | jq -c '[.data[] | select(.title | startswith("QA Lecture"))][0] // {}')
+          VIDEO=$(echo "$SEED" | jq -r '.id // empty')
+          CHANNEL=$(echo "$SEED" | jq -r '.channelId // empty')
+          if [ -z "$VIDEO" ] || [ -z "$CHANNEL" ]; then
+            echo "::error::QA seed video or its channel not found (video='$VIDEO' channel='$CHANNEL')"
+            exit 1
+          fi
           echo "LHCI_WATCH_PATH=/en/video/${VIDEO}" >> $GITHUB_ENV
           echo "LHCI_CHANNEL_PATH=/en/channels/${CHANNEL}" >> $GITHUB_ENV
           echo "watch=$VIDEO channel=$CHANNEL"
