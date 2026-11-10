@@ -22290,10 +22290,17 @@
                   },
                   "titleLocalized": {
                     "type": "object",
-                    "additionalProperties": {
-                      "type": "string",
-                      "maxLength": 500
-                    }
+                    "properties": {
+                      "ar": {
+                        "type": "string",
+                        "maxLength": 500
+                      },
+                      "en": {
+                        "type": "string",
+                        "maxLength": 500
+                      }
+                    },
+                    "additionalProperties": false
                   },
                   "description": {
                     "type": "string",
@@ -22301,10 +22308,17 @@
                   },
                   "descriptionLocalized": {
                     "type": "object",
-                    "additionalProperties": {
-                      "type": "string",
-                      "maxLength": 10000
-                    }
+                    "properties": {
+                      "ar": {
+                        "type": "string",
+                        "maxLength": 10000
+                      },
+                      "en": {
+                        "type": "string",
+                        "maxLength": 10000
+                      }
+                    },
+                    "additionalProperties": false
                   },
                   "tags": {
                     "type": "array",
@@ -22312,7 +22326,7 @@
                       "type": "string",
                       "maxLength": 100
                     },
-                    "maxItems": 100
+                    "maxItems": 50
                   }
                 },
                 "required": [

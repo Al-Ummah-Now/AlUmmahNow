@@ -24,7 +24,11 @@ export const CATEGORY_PRESELECT_THRESHOLD = 0.6;
 /** Options offered when nothing is preselected. */
 export const CATEGORY_MAX_OPTIONS = 3;
 /** Limits on the text sent to the model, in characters. */
-export const CATEGORY_TEXT_LIMITS = { title: 300, description: 2500, tags: 30, transcript: 3000 } as const;
+export const CATEGORY_TEXT_LIMITS = { title: 300, description: 2500, tags: 30, tag: 60, transcript: 3000, total: 8000 } as const;
+/** Only these languages' titles and descriptions are read (the platform's languages). */
+export const CATEGORY_LANGUAGES = ['ar', 'en'] as const;
+/** Form (draft) suggestions may use at most this share of the daily cap: uploads and the backfill keep the rest. */
+export const CATEGORY_DRAFT_BUDGET_SHARE = 0.5;
 /** Suggestions for upload-form drafts are deleted after this long. */
 export const CATEGORY_DRAFT_TTL_MS = 7 * 86_400_000;
 /** Model id stored for suggestions made by the QA/stage test hook. */
@@ -88,13 +92,14 @@ export function buildCategoryText(input: CategoryInput): string {
     lines.push(`${label}: ${clip(text, max)}`);
   };
   add('Title', input.title, CATEGORY_TEXT_LIMITS.title);
-  for (const [lang, value] of Object.entries(input.titleLocalized ?? {})) add(`Title (${lang})`, value, CATEGORY_TEXT_LIMITS.title);
+  for (const lang of CATEGORY_LANGUAGES) add(`Title (${lang})`, input.titleLocalized?.[lang], CATEGORY_TEXT_LIMITS.title);
   add('Description', input.description, CATEGORY_TEXT_LIMITS.description);
-  for (const [lang, value] of Object.entries(input.descriptionLocalized ?? {})) add(`Description (${lang})`, value, CATEGORY_TEXT_LIMITS.description);
-  const tags = (input.tags ?? []).map(clean).filter(Boolean).slice(0, CATEGORY_TEXT_LIMITS.tags);
+  for (const lang of CATEGORY_LANGUAGES) add(`Description (${lang})`, input.descriptionLocalized?.[lang], CATEGORY_TEXT_LIMITS.description);
+  const tags = (input.tags ?? []).map((t) => clip(clean(t), CATEGORY_TEXT_LIMITS.tag)).filter(Boolean).slice(0, CATEGORY_TEXT_LIMITS.tags);
   if (tags.length) lines.push(`Tags: ${tags.join(', ')}`);
   add('Captions excerpt', input.transcript, CATEGORY_TEXT_LIMITS.transcript);
-  return lines.join('\n');
+  // Bounded whatever the caller sends: the model's input (and cost) has a ceiling
+  return lines.join('\n').slice(0, CATEGORY_TEXT_LIMITS.total);
 }
 
 /** Strip WebVTT timing, cue ids and markup, leaving the spoken text. */
