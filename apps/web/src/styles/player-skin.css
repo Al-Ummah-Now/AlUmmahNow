@@ -1482,6 +1482,9 @@
   font-weight: 700;
   line-height: 1;
   font-variant-numeric: tabular-nums;
+  /* The system font (SF on Apple) at 11px picks its small optical size, whose figures sit 1 to
+     1.5px right of centre in Firefox: the display design keeps them centred */
+  font-optical-sizing: none;
   /* Trim the line box to the cap height so centring the box centres the digit; the rounded
      figures overshoot the baseline more than the cap line, so their ink sits a little low in the
      trimmed box (0.6 to 1.1px across browsers): lift them half a pixel */
