@@ -23,6 +23,7 @@ import * as admin from '../lib/admin/service';
 import { checkImage, checkThumbnailShapeFor, storeImage } from '../lib/admin/images';
 import { countJobs, getJob, listJobs, retryJob } from '../lib/admin/jobs';
 import { LegacyRestoreError } from '../lib/admin/legacy-restore';
+import { isDeletionKind, listDeletions } from '../lib/admin/deletions';
 import { logger } from '../lib/logger';
 import { bulkAssignTier, limitHitsSince, listCreators, tierCounts } from '../lib/admin/creators';
 import { assignTier, CreatorTierError, deleteTier, readAssignment, readTiers, saveTier } from '../lib/creatorTiers';
@@ -168,7 +169,7 @@ app.post('/channels/:id/transfer', async (c) => {
 	if (!USER_ID.test(newOwnerId)) throw new admin.AdminError(400, 'invalid_new_owner');
 	return ok(c, await admin.transferChannel(c.env, c.req.param('id'), newOwnerId, actor(c)));
 });
-app.delete('/channels/:id', async (c) => ok(c, await admin.deleteChannel(c.env, c.req.param('id'), actor(c))));
+app.delete('/channels/:id', async (c) => ok(c, await admin.deleteChannel(c.env, c.req.param('id'), actor(c), parse(Reason, await body(c)).reason)));
 
 // Videos
 app.get('/videos', async (c) => ok(c, await listVideos(c.env, parse(VideoQuery, c.req.query()) as never)));
@@ -188,23 +189,23 @@ app.post('/videos/:id/move', async (c) => {
 app.post('/videos/:id/unpublish', async (c) => ok(c, await admin.setVideoPublished(c.env, c.req.param('id'), false)));
 app.post('/videos/:id/republish', async (c) => ok(c, await admin.setVideoPublished(c.env, c.req.param('id'), true)));
 app.post('/videos/:id/reprocess', async (c) => ok(c, await admin.reprocessVideo(c.env, c.req.param('id'))));
-app.delete('/videos/:id', async (c) => ok(c, await admin.deleteVideo(c.env, c.req.param('id'), actor(c))));
+app.delete('/videos/:id', async (c) => ok(c, await admin.deleteVideo(c.env, c.req.param('id'), actor(c), parse(Reason, await body(c)).reason)));
 
 // Comments, playlists, community posts
 app.get('/comments', async (c) => ok(c, await listComments(c.env, parse(CommentQuery, c.req.query()))));
 app.delete('/videos/:videoId/comments/:commentId', async (c) => {
-	await admin.deleteComment(c.env, c.req.param('videoId'), c.req.param('commentId'));
-	return ok(c, { deleted: true });
+	const { deletion } = await admin.deleteComment(c.env, c.req.param('videoId'), c.req.param('commentId'), actor(c), parse(Reason, await body(c)).reason);
+	return ok(c, { deleted: true, deletion });
 });
 app.get('/playlists', async (c) => ok(c, await admin.listPlaylists(c.env, parse(CursorQuery, c.req.query()))));
 app.delete('/playlists/:id', async (c) => {
-	await admin.deletePlaylist(c.env, c.req.param('id'));
-	return ok(c, { deleted: true });
+	const { deletion } = await admin.deletePlaylist(c.env, c.req.param('id'), actor(c), parse(Reason, await body(c)).reason);
+	return ok(c, { deleted: true, deletion });
 });
 app.get('/posts', async (c) => ok(c, await admin.listPosts(c.env, parse(CursorQuery, c.req.query()))));
 app.delete('/posts/:channelId/:postId', async (c) => {
-	await admin.deletePost(c.env, c.req.param('channelId'), c.req.param('postId'));
-	return ok(c, { deleted: true });
+	const { deletion } = await admin.deletePost(c.env, c.req.param('channelId'), c.req.param('postId'), actor(c), parse(Reason, await body(c)).reason);
+	return ok(c, { deleted: true, deletion });
 });
 
 // Users (videos profiles)
@@ -214,7 +215,25 @@ app.get('/users/:id', async (c) => ok(c, await admin.userDetail(c.env, c.req.par
 app.patch('/users/:id', async (c) => ok(c, await admin.updateUser(c.env, c.req.param('id'), parse(UserEdit, await body(c)))));
 app.post('/users/:id/ban', async (c) => ok(c, await admin.banUser(c.env, c.req.param('id'), actor(c), parse(Reason, await body(c)).reason)));
 app.post('/users/:id/unban', async (c) => ok(c, await admin.unbanUser(c.env, c.req.param('id'), actor(c))));
-app.post('/users/:id/delete-data', async (c) => ok(c, await admin.deleteUserData(c.env, c.req.param('id'), actor(c))));
+app.post('/users/:id/delete-data', async (c) => ok(c, await admin.deleteUserData(c.env, c.req.param('id'), actor(c), parse(Reason, await body(c)).reason)));
+
+// Soft deletes (lib/admin/deletions.ts): "Recently deleted", restore, "Delete permanently now"
+const DeletionQuery = z.object({
+	kind: z.string().refine(isDeletionKind, 'unknown kind').optional(),
+	cursor: z.string().max(400).optional(),
+	pageSize: z.coerce.number().int().min(1).max(100).optional(),
+});
+const deletionKind = (c: Context<Env>) => {
+	const kind = c.req.param('kind') ?? '';
+	if (!isDeletionKind(kind)) throw new admin.AdminError(404, 'deletion_not_found');
+	return kind;
+};
+app.get('/deletions', async (c) => {
+	const query = parse(DeletionQuery, c.req.query());
+	return ok(c, await listDeletions(c.env.SEARCH_DB as never, { kind: query.kind as never, cursor: query.cursor, pageSize: query.pageSize }));
+});
+app.post('/deletions/:kind/:id/restore', async (c) => ok(c, await admin.restoreDeletion(c.env, deletionKind(c), c.req.param('id'), actor(c))));
+app.post('/deletions/:kind/:id/purge', async (c) => ok(c, { deletion: await admin.requestDeletionPurge(c.env, deletionKind(c), c.req.param('id'), actor(c)) }));
 
 // Restore legacy profile fields (lib/admin/legacy-restore.ts): dry run, then a queued job
 const LegacyRestoreRequest = z.object({

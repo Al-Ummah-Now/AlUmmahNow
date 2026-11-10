@@ -14,7 +14,10 @@
  */
 import { Hono, type Context } from 'hono';
 import {
+  ADMIN_DELETION_KINDS,
   ADMIN_JOB_PERMISSIONS,
+  type AdminDeletionKind,
+  type AdminDeletionPage,
   contentPermissionsFor,
   hasContentPermission,
   type AdminChannelDetail,
@@ -70,6 +73,12 @@ app.onError((error, c) => {
 const ok = (c: C, result: unknown) => c.json({ success: true, result });
 const videos = <T>(c: C, path: string, call: VideosCall = {}) => callVideos<T>(c.env, path, { actorId: actorOf(c), ...call });
 const body = async (c: C) => (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+/** The optional reason sent with a delete (shown in Recently deleted). */
+const reasonOf = async (c: C) => {
+  const reason = (await body(c)).reason;
+  return typeof reason === 'string' && reason.trim() ? reason.trim().slice(0, 1000) : undefined;
+};
+const isDeletionKind = (kind: string): kind is AdminDeletionKind => (ADMIN_DELETION_KINDS as readonly string[]).includes(kind);
 
 /**
  * Audits then performs a change. The audit row goes in first and is removed
@@ -212,8 +221,9 @@ app.post('/channels/:id/transfer', async (c) => {
 app.delete('/channels/:id', async (c) => {
   need(c, 'content:delete');
   const id = c.req.param('id');
-  return ok(c, await audited(c, { kind: 'channel', id, action: 'delete' }, () =>
-    videos(c, `/channels/${encodeURIComponent(id)}`, { method: 'DELETE' })));
+  const reason = await reasonOf(c);
+  return ok(c, await audited(c, { kind: 'channel', id, action: 'delete', details: { soft: true, ...(reason ? { reason } : {}) } }, () =>
+    videos(c, `/channels/${encodeURIComponent(id)}`, { method: 'DELETE', json: { reason } })));
 });
 
 // ---------------------------------------------------------------------------
@@ -276,8 +286,9 @@ for (const action of ['unpublish', 'republish', 'reprocess'] as const) {
 app.delete('/videos/:id', async (c) => {
   need(c, 'content:delete');
   const id = c.req.param('id');
-  return ok(c, await audited(c, { kind: 'video', id, action: 'delete' }, () =>
-    videos(c, `/videos/${encodeURIComponent(id)}`, { method: 'DELETE' })));
+  const reason = await reasonOf(c);
+  return ok(c, await audited(c, { kind: 'video', id, action: 'delete', details: { soft: true, ...(reason ? { reason } : {}) } }, () =>
+    videos(c, `/videos/${encodeURIComponent(id)}`, { method: 'DELETE', json: { reason } })));
 });
 
 // ---------------------------------------------------------------------------
@@ -289,8 +300,9 @@ app.get('/comments', async (c) => ok(c, await videos(c, '/comments', { query: c.
 app.delete('/videos/:videoId/comments/:commentId', async (c) => {
   need(c, 'content:delete');
   const { videoId, commentId } = c.req.param();
-  return ok(c, await audited(c, { kind: 'comment', id: commentId, action: 'delete', details: { videoId } }, () =>
-    videos(c, `/videos/${encodeURIComponent(videoId)}/comments/${encodeURIComponent(commentId)}`, { method: 'DELETE' })));
+  const reason = await reasonOf(c);
+  return ok(c, await audited(c, { kind: 'comment', id: commentId, action: 'delete', details: { videoId, soft: true, ...(reason ? { reason } : {}) } }, () =>
+    videos(c, `/videos/${encodeURIComponent(videoId)}/comments/${encodeURIComponent(commentId)}`, { method: 'DELETE', json: { reason } })));
 });
 
 app.get('/playlists', async (c) => ok(c, await videos(c, '/playlists', { query: c.req.query() })));
@@ -298,8 +310,9 @@ app.get('/playlists', async (c) => ok(c, await videos(c, '/playlists', { query: 
 app.delete('/playlists/:id', async (c) => {
   need(c, 'content:delete');
   const id = c.req.param('id');
-  return ok(c, await audited(c, { kind: 'playlist', id, action: 'delete' }, () =>
-    videos(c, `/playlists/${encodeURIComponent(id)}`, { method: 'DELETE' })));
+  const reason = await reasonOf(c);
+  return ok(c, await audited(c, { kind: 'playlist', id, action: 'delete', details: { soft: true, ...(reason ? { reason } : {}) } }, () =>
+    videos(c, `/playlists/${encodeURIComponent(id)}`, { method: 'DELETE', json: { reason } })));
 });
 
 app.get('/posts', async (c) => ok(c, await videos(c, '/posts', { query: c.req.query() })));
@@ -307,8 +320,9 @@ app.get('/posts', async (c) => ok(c, await videos(c, '/posts', { query: c.req.qu
 app.delete('/posts/:channelId/:postId', async (c) => {
   need(c, 'content:delete');
   const { channelId, postId } = c.req.param();
-  return ok(c, await audited(c, { kind: 'post', id: postId, action: 'delete', details: { channelId } }, () =>
-    videos(c, `/posts/${encodeURIComponent(channelId)}/${encodeURIComponent(postId)}`, { method: 'DELETE' })));
+  const reason = await reasonOf(c);
+  return ok(c, await audited(c, { kind: 'post', id: postId, action: 'delete', details: { channelId, soft: true, ...(reason ? { reason } : {}) } }, () =>
+    videos(c, `/posts/${encodeURIComponent(channelId)}/${encodeURIComponent(postId)}`, { method: 'DELETE', json: { reason } })));
 });
 
 // ---------------------------------------------------------------------------
@@ -367,9 +381,37 @@ app.post('/users/:id/delete-data', async (c) => {
   need(c, 'users:manage');
   need(c, 'content:delete');
   const id = c.req.param('id');
-  // Queues the erase job (it resumes itself in api-videos); audited once here
-  return ok(c, await audited(c, { kind: 'user', id, action: 'delete-data' }, () =>
-    videos(c, `/users/${encodeURIComponent(id)}/delete-data`, { method: 'POST', json: {} })));
+  // Soft delete: hidden at once, erased by the 30-day cleanup (api-videos lib/admin/deletions.ts)
+  const reason = await reasonOf(c);
+  return ok(c, await audited(c, { kind: 'user', id, action: 'delete-data', details: { soft: true, ...(reason ? { reason } : {}) } }, () =>
+    videos(c, `/users/${encodeURIComponent(id)}/delete-data`, { method: 'POST', json: { reason } })));
+});
+
+// ---------------------------------------------------------------------------
+// Recently deleted (soft deletes, api-videos lib/admin/deletions.ts): every
+// admin delete above is restorable for 30 days, then the hourly cleanup purges
+// it. "Delete permanently now" only queues it for the next cleanup run.
+// ---------------------------------------------------------------------------
+
+app.get('/deletions', async (c) => ok(c, await videos<AdminDeletionPage>(c, '/deletions', { query: c.req.query() })));
+
+/** The permission a restore needs on top of content:delete (a user's data also needs users:manage). */
+const restoreNeeds = (kind: string) => (kind === 'user' ? (['content:delete', 'users:manage'] as const) : (['content:delete'] as const));
+
+app.post('/deletions/:kind/:id/restore', async (c) => {
+  const { kind, id } = c.req.param();
+  if (!isDeletionKind(kind)) return c.json({ success: false, code: 'deletion_not_found', error: 'Unknown kind' }, 404);
+  for (const permission of restoreNeeds(kind)) need(c, permission);
+  return ok(c, await audited(c, { kind, id, action: 'restore' }, () =>
+    videos(c, `/deletions/${kind}/${encodeURIComponent(id)}/restore`, { method: 'POST', json: {} })));
+});
+
+app.post('/deletions/:kind/:id/purge', async (c) => {
+  need(c, 'content:purge');
+  const { kind, id } = c.req.param();
+  if (!isDeletionKind(kind)) return c.json({ success: false, code: 'deletion_not_found', error: 'Unknown kind' }, 404);
+  return ok(c, await audited(c, { kind, id, action: 'purge-request' }, () =>
+    videos(c, `/deletions/${kind}/${encodeURIComponent(id)}/purge`, { method: 'POST', json: {} })));
 });
 
 // ---------------------------------------------------------------------------

@@ -117,6 +117,8 @@ describe('content endpoints: permissions', () => {
     ['POST', '/api/content/users/usr_1/ban', { reason: 'abuse' }],
     ['POST', '/api/content/users/usr_1/unban'],
     ['POST', '/api/content/users/usr_1/delete-data'],
+    ['POST', '/api/content/deletions/video/v_1/restore'],
+    ['POST', '/api/content/deletions/video/v_1/purge'],
   ];
 
   it('a moderator can read every list and detail but change nothing, and leaves no audit row', async () => {
@@ -544,5 +546,60 @@ describe('content endpoints: creator tiers', () => {
     const read = async (roles: string) => ((await (await call('/api/content/permissions', { roles })).json()) as { result: { permissions: string[] } }).result.permissions;
     assert.ok((await read('admin')).includes('creators:manage'));
     assert.ok(!(await read('moderator')).includes('creators:manage'));
+  });
+});
+
+describe('content endpoints: soft deletes', () => {
+  it('a delete passes its reason on and audits it as a soft delete', async () => {
+    const { db, log } = fakeDb();
+    const { fetcher, calls } = fakeVideos();
+    const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
+    assert.equal((await call('/api/content/videos/v_1', { method: 'DELETE', roles: 'admin', json: { reason: '  Copyright  ' } })).status, 200);
+    assert.deepEqual(calls.map((c) => [c.method, c.path, c.body]), [['DELETE', '/videos/v_1', { reason: 'Copyright' }]]);
+    assert.deepEqual(JSON.parse(log[0].new_value), { action: 'delete', details: { soft: true, reason: 'Copyright' } });
+  });
+
+  it('every role may list Recently deleted; the query is passed through', async () => {
+    const { db } = fakeDb();
+    const { fetcher, calls } = fakeVideos({ 'GET /deletions': () => ({ body: { success: true, result: { items: [], nextCursor: null, lastRun: null } } }) });
+    const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
+    assert.equal((await call('/api/content/deletions?kind=video', { roles: 'moderator' })).status, 200);
+    assert.equal(calls[0].search, '?kind=video');
+  });
+
+  it('restore needs content:delete (and users:manage for a user), and is audited', async () => {
+    const { db, log } = fakeDb();
+    const { fetcher, calls } = fakeVideos();
+    const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
+    assert.equal((await call('/api/content/deletions/channel/ch_1/restore', { method: 'POST', roles: 'admin' })).status, 200);
+    assert.deepEqual(calls.map((c) => [c.method, c.path]), [['POST', '/deletions/channel/ch_1/restore']]);
+    assert.deepEqual([log[0].key, JSON.parse(log[0].new_value).action, log[0].actor_id], ['content:channel:ch_1', 'restore', 'admin-1']);
+    assert.equal((await call('/api/content/deletions/user/usr_1/restore', { method: 'POST', roles: 'admin' })).status, 200);
+    assert.equal((await call('/api/content/deletions/bogus/x/restore', { method: 'POST', roles: 'admin' })).status, 404);
+  });
+
+  it('"Delete permanently now" needs content:purge (admin, super admin), is audited, and only queues the item', async () => {
+    const { db, log } = fakeDb();
+    const deletion = { kind: 'video', id: 'v_1', status: 'queued' };
+    const { fetcher, calls } = fakeVideos({ 'POST /deletions/video/v_1/purge': () => ({ body: { success: true, result: { deletion } } }) });
+    const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
+    assert.equal((await call('/api/content/deletions/video/v_1/purge', { method: 'POST', roles: 'moderator' })).status, 403);
+    for (const roles of ['admin', 'super_admin']) {
+      const res = await call('/api/content/deletions/video/v_1/purge', { method: 'POST', roles });
+      assert.equal(res.status, 200, roles);
+      assert.equal(((await res.json()) as { result: { deletion: { status: string } } }).result.deletion.status, 'queued');
+    }
+    assert.equal(calls.length, 2);
+    assert.deepEqual(log.map((r) => JSON.parse(r.new_value).action), ['purge-request', 'purge-request']);
+  });
+
+  it('a refused restore (purge already started) leaves no audit row', async () => {
+    const { db, log } = fakeDb();
+    const { fetcher } = fakeVideos({ 'POST /deletions/video/v_1/restore': () => ({ status: 409, body: { success: false, code: 'purge_in_progress', error: 'x' } }) });
+    const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
+    const res = await call('/api/content/deletions/video/v_1/restore', { method: 'POST', roles: 'admin' });
+    assert.equal(res.status, 409);
+    assert.equal(((await res.json()) as { code: string }).code, 'purge_in_progress');
+    assert.equal(log.length, 0);
   });
 });

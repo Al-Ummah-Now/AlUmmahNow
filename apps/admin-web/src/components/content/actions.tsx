@@ -93,6 +93,8 @@ interface ConfirmDialogContent {
   confirmLabel: string;
   /** Asks for a reason (sent with the change). */
   withReason?: boolean;
+  /** Help under the reason field (default: shown to the owner). */
+  reasonHint?: string;
   /** The exact text the admin must type to enable the confirm button. */
   /** The text the admin must type to enable the confirm button; with several, any one of them (emails ignore case). */
   typeToConfirm?: string | readonly string[];
@@ -126,7 +128,7 @@ function confirmValuesOf(required: string | readonly string[] | undefined): stri
  * Focus starts on Cancel, or on the reason / type-to-confirm field when there is one.
  * Never use window.confirm/alert/prompt instead.
  */
-export function ConfirmDialog({ open, onCancel, onConfirm, title, body, confirmLabel, withReason, typeToConfirm, typeToConfirmLabel, danger, testId }: ConfirmDialogProps) {
+export function ConfirmDialog({ open, onCancel, onConfirm, title, body, confirmLabel, withReason, reasonHint, typeToConfirm, typeToConfirmLabel, danger, testId }: ConfirmDialogProps) {
   const { t } = useLanguage();
   const ref = useRef<HTMLDialogElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
@@ -191,7 +193,7 @@ export function ConfirmDialog({ open, onCancel, onConfirm, title, body, confirmL
               {t('content.reason')}
             </label>
             <textarea id={`${ids}-reason`} value={reason} onChange={(e) => setReason(e.target.value)} rows={3} maxLength={1000} dir="auto" className={`${fieldClass} w-full`} data-testid={`${testId}-reason`} />
-            <span className="text-xs text-fg-subtle">{t('content.reasonHint')}</span>
+            <span className="text-xs text-fg-subtle">{reasonHint ?? t('content.reasonHint')}</span>
           </div>
         )}
         {confirmValues.length > 0 && (
@@ -274,13 +276,24 @@ export function useConfirm() {
   return { confirm, dialog };
 }
 
-/** Delete button for a list row (comment, playlist, post): confirm, delete, refresh. */
-export function DeleteRowButton({ title, body, testId, onDelete }: { title: string; body: string; testId: string; onDelete: () => Promise<ActionResult<unknown>> }) {
+/** A row's Delete (comment, playlist, post): a soft delete, restorable for 30 days under Recently deleted, with an optional reason. */
+export function DeleteRowButton({ title, body, testId, onDelete }: { title: string; body: string; testId: string; onDelete: (reason?: string) => Promise<ActionResult<unknown>> }) {
   const { t } = useLanguage();
   const { run, busy, error } = useContentAction();
   return (
     <div className="flex flex-col items-start gap-1">
-      <ConfirmButton label={t('content.delete')} title={title} body={body} confirmLabel={t('content.delete')} danger busy={busy === 'delete'} testId={testId} onConfirm={() => run('delete', onDelete)} />
+      <ConfirmButton
+        label={t('content.delete')}
+        title={title}
+        body={`${body} ${t('deleted.softNote')}`}
+        confirmLabel={t('content.delete')}
+        withReason
+        reasonHint={t('deleted.reasonHint')}
+        danger
+        busy={busy === 'delete'}
+        testId={testId}
+        onConfirm={(reason) => run('delete', () => onDelete(reason || undefined), { success: t('deleted.movedToBin') })}
+      />
       {error && (
         <span role="alert" className="text-danger-fg text-xs">
           {error}

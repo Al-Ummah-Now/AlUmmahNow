@@ -316,6 +316,8 @@ export async function listUsers(env: AdminEnv, query: AdminUserQuery): Promise<A
 		       b.user_id IS NOT NULL AS banned, 0 AS profile_deleted
 		FROM ${OWNERSHIP_TABLE} p LEFT JOIN videos_bans b ON b.user_id = p.id
 		WHERE p.kind = 'profile' AND p.is_deleted = 0
+		  -- users whose data an admin soft-deleted are in Recently deleted instead (lib/admin/deletions.ts)
+		  AND NOT EXISTS (SELECT 1 FROM admin_deletions d WHERE d.kind = 'user' AND d.target_id = p.id AND d.purged_at IS NULL)
 		UNION ALL
 		SELECT b.user_id, NULL, NULL, NULL, CAST(strftime('%s', b.banned_at) AS INTEGER) * 1000, 1, 1
 		FROM videos_bans b WHERE NOT EXISTS (SELECT 1 FROM ${OWNERSHIP_TABLE} p WHERE p.kind = 'profile' AND p.id = b.user_id)`;

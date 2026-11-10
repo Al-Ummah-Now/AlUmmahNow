@@ -11,9 +11,11 @@
 --   apps/api-videos/migrations/search/0009_category_suggestions.sql
 --   apps/api-videos/migrations/search/0010_video_format_issues.sql
 --   apps/api-videos/migrations/search/0011_creator_tiers.sql
+--   apps/api-videos/migrations/search/0015_admin_deletions.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
+CREATE TABLE admin_deletions (kind TEXT NOT NULL, target_id TEXT NOT NULL, parent_id TEXT, title TEXT NOT NULL DEFAULT '', owner_id TEXT, channel_id TEXT, deleted_at TEXT NOT NULL, deleted_by TEXT NOT NULL, reason TEXT, purge_requested_at TEXT, purge_requested_by TEXT, purge_started_at TEXT, purge_job_id TEXT, purged_at TEXT, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, PRIMARY KEY (kind, target_id)) WITHOUT ROWID;
 CREATE TABLE admin_jobs (id TEXT PRIMARY KEY, kind TEXT NOT NULL, target_kind TEXT NOT NULL, target_id TEXT NOT NULL, params TEXT NOT NULL DEFAULT '{}', status TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, result TEXT, actor_id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, finished_at TEXT);
 CREATE TABLE category_suggestions (subject_id TEXT PRIMARY KEY, subject_type TEXT NOT NULL, user_id TEXT, channel_id TEXT, reason TEXT NOT NULL, status TEXT NOT NULL, input_hash TEXT, category TEXT, confidence REAL, options_json TEXT, model TEXT, prompt_version TEXT, threshold REAL, applied INTEGER NOT NULL DEFAULT 0, previous_category TEXT, previous_source TEXT, outcome TEXT NOT NULL DEFAULT 'pending', final_category TEXT, reviewed_by TEXT, reviewed_at INTEGER, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
 CREATE TABLE channel_access (channel_id TEXT NOT NULL, user_id TEXT NOT NULL, role TEXT NOT NULL, source_version INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (channel_id, user_id));
@@ -56,6 +58,9 @@ CREATE TABLE upload_rate_windows (user_id TEXT NOT NULL, operation TEXT NOT NULL
 CREATE TABLE videos_bans (user_id TEXT PRIMARY KEY, reason TEXT, banned_by TEXT NOT NULL, banned_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE INDEX idx_admin_comments_created ON admin_comments (created_at);
 CREATE INDEX idx_admin_comments_user ON admin_comments (user_id, created_at);
+CREATE INDEX idx_admin_deletions_due ON admin_deletions (purged_at, deleted_at);
+CREATE INDEX idx_admin_deletions_list ON admin_deletions (kind, purged_at, deleted_at);
+CREATE INDEX idx_admin_deletions_requested ON admin_deletions (purged_at, purge_requested_at);
 CREATE INDEX idx_admin_jobs_status ON admin_jobs (status, updated_at);
 CREATE INDEX idx_admin_jobs_target ON admin_jobs (target_kind, target_id, created_at);
 CREATE INDEX idx_catsug_hash ON category_suggestions (input_hash);

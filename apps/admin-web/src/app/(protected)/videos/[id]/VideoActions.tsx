@@ -216,7 +216,9 @@ export function VideoActions({ video, permissions }: Props) {
             busy={busy === 'delete'}
             disabled={!!busy}
             testId="video-delete"
-            onConfirm={() => run('delete', () => deleteVideo(video.id), { success: t('content.queued') })}
+            withReason
+            reasonHint={t('deleted.reasonHint')}
+            onConfirm={(reason) => run('delete', () => deleteVideo(video.id, reason), { success: t('deleted.movedToBin') })}
           />
         </SectionCard>
       )}

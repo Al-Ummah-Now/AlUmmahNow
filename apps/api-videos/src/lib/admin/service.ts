@@ -10,11 +10,15 @@
 import {
 	applySuspensionHold,
 	channelHold,
+	deletedChannelHold,
+	deletedUserHold,
 	isHeldBy,
 	LEGACY_RESTORE_TARGET,
 	liftSuspensionHold,
 	userHold,
 	type AdminChannelDetail,
+	type AdminDeletion,
+	type AdminDeletionKind,
 	type AdminJob,
 	type AdminJobKind,
 	type AdminUserDetail,
@@ -37,6 +41,7 @@ import { requireSecret } from '../env-helpers';
 import { readAssignment } from '../creatorTiers';
 import { bansFor, deleteBan, readBan, writeBan } from './bans';
 import { createJob, type JobHandler, type JobOutcome, type JobQueue } from './jobs';
+import { pendingDeletion, recordDeletion, removeDeletion, requestPurge, type PurgeOutcome } from './deletions';
 import { approvedFromPlan, planLegacyRestore, runLegacyRestore, type ApprovedRestore, type AuthUsersDb } from './legacy-restore';
 import { runThumbnailRepairStep, type ThumbnailRepairEnv } from '../thumbnail/repair';
 import { runOwnershipRebuildStep, type OwnershipRebuildEnv } from '../search/ownershipRebuild';
@@ -313,11 +318,25 @@ async function syncChannelHolds(env: AdminServiceEnv, job: AdminJob): Promise<Jo
 	const channel = await repo(env.channels).getObject(id);
 	if (!channel) return { done: true, result: { skipped: 'channel_not_found' } };
 	const hold = channelHold(id);
-	const suspended = channel.isSuspended === true && channel.isDeleted !== true;
-	const mutate = (r: Row) => (suspended ? applySuspensionHold(r as SuspendableRecord, hold) : liftSuspensionHold(r as SuspendableRecord, hold));
+	const deletedHold = deletedChannelHold(id);
+	const deleted = channel.isDeleted === true;
+	const suspended = channel.isSuspended === true && !deleted;
+	const follow = (r: Row, h: string, on: boolean) => (on ? applySuspensionHold(r as SuspendableRecord, h) : liftSuspensionHold(r as SuspendableRecord, h));
+	const mutate = (r: Row) => {
+		// Both holds are always brought in line (no short-circuit)
+		const suspension = follow(r, hold, suspended);
+		const deletion = follow(r, deletedHold, deleted);
+		return suspension || deletion;
+	};
 	const videos = await cascade(env.videos, await idsOf(env, 'video', { channelId: id }), mutate);
 	const live = await cascadeLiveStreams(env, { channelId: id }, mutate);
-	return finish({ suspended, videos: videos.changed, liveStreams: live.changed }, videos.failed + live.failed);
+	// A soft-deleted channel's playlists are hidden with it (restored with it)
+	const playlistIds = Array.isArray(channel.playlists) ? (channel.playlists as unknown[]).filter((p): p is string => typeof p === 'string') : [];
+	const playlists = await cascade(env.playlists, playlistIds, (r) => (r.channelId === id ? follow(r, deletedHold, deleted) : false));
+	return finish(
+		{ suspended, deleted, videos: videos.changed, liveStreams: live.changed, playlists: playlists.changed },
+		videos.failed + live.failed + playlists.failed,
+	);
 }
 
 async function removeFromProfile(env: AdminServiceEnv, userId: string, channelId: string): Promise<void> {
@@ -452,37 +471,104 @@ async function purgeVideo(
 	await send(env, MessageType.VideoDelete, { videoId, userId: video?.userId, channelId: video?.channelId, reason: 'admin' });
 }
 
+/** What a soft delete changed on the record, so a restore can put it back. */
+interface AdminDeletionMark {
+	at: string;
+	by: string;
+	reason?: string;
+	wasMain?: boolean;
+}
+
+const cleanReason = (reason?: string | null) => (reason?.trim() ? reason.trim().slice(0, 1000) : undefined);
+
+/** A pending deletion that can still be restored (or 404/409). */
+async function restorable(env: AdminServiceEnv, kind: AdminDeletionKind, id: string): Promise<AdminDeletion> {
+	const deletion = await pendingDeletion(env.SEARCH_DB!, kind, id);
+	if (!deletion) throw new AdminError(404, 'deletion_not_found');
+	if (deletion.purgeStartedAt) throw new AdminError(409, 'purge_in_progress', 'Permanent deletion has started; it can no longer be restored');
+	return deletion;
+}
+
 /**
- * Soft-deletes a channel: at once the record is marked deleted and hidden (it
- * stays for the audit trail), its handle is freed and it leaves its owner's
- * profile; a job then erases its videos (R2, Bunny, search, notifications) and
- * removes its playlists, posts and sections.
+ * Soft-deletes a channel (restorable for 30 days; lib/admin/deletions.ts): the
+ * record is marked deleted and held hidden at once, it leaves its owner's
+ * profile (another channel becomes main), and a job hides its videos, live
+ * streams and playlists. Its handle stays reserved, so a restore gets it
+ * back. Nothing is erased until the cleanup purges it.
  */
-export async function deleteChannel(env: AdminServiceEnv, id: string, actorId: string): Promise<{ job: AdminJob }> {
+export async function deleteChannel(env: AdminServiceEnv, id: string, actorId: string, reason?: string): Promise<{ deletion: AdminDeletion; job: AdminJob }> {
 	const channel = await repo(env.channels).getObject(id);
 	if (!channel || channel.isDeleted) throw new AdminError(404, 'channel_not_found');
 	const at = now();
-	await repo(env.channels).updateObject(id, (fresh) => {
+	const mark: AdminDeletionMark = { at, by: actorId, ...(cleanReason(reason) ? { reason: cleanReason(reason) } : {}), wasMain: channel.isMain === true };
+	const saved = await repo(env.channels).updateObject(id, (fresh) => {
+		if (fresh.isDeleted) return false;
 		fresh.isDeleted = true;
 		fresh.deletedAt = at;
 		fresh.deletedBy = actorId;
-		fresh.isHidden = true;
+		fresh.adminDeletion = { ...mark, wasMain: fresh.isMain === true };
+		applySuspensionHold(fresh as SuspendableRecord, deletedChannelHold(id));
 		fresh.isMain = false;
 		fresh.dateModified = at;
+		return true;
 	});
-	if (env.channel_tabs) {
-		try {
-			await releaseHandle(env.channel_tabs, channel.handle, id);
-			await env.channel_tabs.delete(`channel-tabs/${id}`);
-		} catch (error) {
-			logger.warn('[Admin] Could not release handle/tabs', { channelId: id, error: error instanceof Error ? error.message : String(error) });
-		}
-	}
+	if (!saved || saved.adminDeletion?.at !== at) throw new AdminError(404, 'channel_not_found');
+	const deletion = await recordDeletion(env.SEARCH_DB!, {
+		kind: 'channel',
+		id,
+		title: channel.name ?? channel.handle ?? id,
+		ownerId: channel.userId ?? null,
+		channelId: id,
+		deletedBy: actorId,
+		reason: mark.reason,
+		deletedAt: at,
+	});
 	if (channel.userId) {
 		await removeFromProfile(env, channel.userId, id);
 		if (channel.isMain) await promoteNextMain(env, channel.userId, id);
 	}
-	return { job: await createJob(env, { kind: 'channel.purge', targetKind: 'channel', targetId: id, actorId, params: { userId: channel.userId ?? null } }) };
+	await send(env, MessageType.ChannelUpdate, { channelId: id, userId: channel.userId, action: 'deleted' });
+	return { deletion, job: await createJob(env, { kind: 'channel.sync-holds', targetKind: 'channel', targetId: id, actorId }) };
+}
+
+/** Restores a soft-deleted channel: back on its owner's profile (main again if they have none), un-hidden with its content. */
+export async function restoreChannel(env: AdminServiceEnv, id: string, actorId: string): Promise<{ job: AdminJob }> {
+	await restorable(env, 'channel', id);
+	let mark: AdminDeletionMark | undefined;
+	const saved = await repo(env.channels).updateObject(id, (fresh) => {
+		mark = fresh.adminDeletion as AdminDeletionMark | undefined;
+		fresh.isDeleted = false;
+		delete fresh.deletedAt;
+		delete fresh.deletedBy;
+		delete fresh.adminDeletion;
+		liftSuspensionHold(fresh as SuspendableRecord, deletedChannelHold(id));
+		fresh.dateModified = now();
+	});
+	if (!saved) throw new AdminError(404, 'channel_not_found');
+	await removeDeletion(env.SEARCH_DB!, 'channel', id);
+	if (saved.userId) {
+		await repo(env.profiles)
+			.updateObject(saved.userId, (profile) => {
+				const list: string[] = Array.isArray(profile.channels) ? profile.channels : [];
+				if (list.includes(id)) return false;
+				profile.channels = [...list, id];
+				return true;
+			})
+			.catch((error) => logger.warn('[Admin] Could not put the restored channel back on its profile', { channelId: id, error: error instanceof Error ? error.message : String(error) }));
+		if (mark?.wasMain) {
+			const others = (await idsOf(env, 'channel', { ownerId: saved.userId })).filter((c) => c !== id);
+			const hasMain = [...(await readMany(env.channels, others)).values()].some((c) => c.isMain === true && c.isDeleted !== true);
+			if (!hasMain) {
+				await repo(env.channels).updateObject(id, (ch) => {
+					if (ch.isMain === true) return false;
+					ch.isMain = true;
+					return true;
+				});
+			}
+		}
+	}
+	await send(env, MessageType.ChannelUpdate, { channelId: id, userId: saved.userId, action: 'restored' });
+	return { job: await createJob(env, { kind: 'channel.sync-holds', targetKind: 'channel', targetId: id, actorId }) };
 }
 
 /** Playlist objects scanned per channel.purge step (playlists have no per-channel index). */
@@ -502,6 +588,11 @@ async function purgeChannel(env: AdminServiceEnv, job: AdminJob): Promise<JobOut
 	if (p.stage !== 'playlists') {
 		const channel = await repo(env.channels).getObject(id);
 		if (channel && channel.isDeleted !== true) return { done: true, result: { skipped: 'channel_not_deleted' } };
+		if (channel && env.channel_tabs) {
+			// The handle stayed reserved while the channel could be restored
+			await releaseHandle(env.channel_tabs, channel.handle, id);
+			await env.channel_tabs.delete(`channel-tabs/${id}`);
+		}
 		const videoIds = await idsOf(env, 'video', { channelId: id });
 		const b = await bunny(env);
 		let failed = 0;
@@ -518,11 +609,13 @@ async function purgeChannel(env: AdminServiceEnv, job: AdminJob): Promise<JobOut
 		const result = { videos: videoIds.length, posts, sections };
 		return { done: false, params: { ...p, stage: 'playlists', ...result, playlists: 0, scanned: 0 }, result };
 	}
-	const step = await softDeleteChannelObjectsStep(env.playlists, id, { cursor: p.cursor as string | undefined, budget: PLAYLIST_SCAN_STEP });
+	const step = await softDeleteChannelObjectsStep(env.playlists, id, { cursor: p.cursor as string | undefined, budget: PLAYLIST_SCAN_STEP, hard: true });
 	// A failed write retries this step (from its own cursor), never skips it
 	if (step.failed > 0) return finish({ playlists: p.playlists, cursor: p.cursor ?? null }, step.failed);
 	const result = { videos: p.videos, posts: p.posts, sections: p.sections, playlists: Number(p.playlists ?? 0) + step.removed, scanned: Number(p.scanned ?? 0) + step.scanned };
 	if (step.cursor) return { done: false, params: { ...p, ...result, cursor: step.cursor }, result };
+	// Last: the record itself (the deletion row and the admin audit log keep the history)
+	await env.channels.delete(id);
 	await send(env, MessageType.ChannelDelete, { channelId: id, userId, reason: 'admin' });
 	return { done: true, result };
 }
@@ -683,23 +776,63 @@ export async function reprocessVideo(env: AdminServiceEnv, id: string): Promise<
 	return saved ?? video;
 }
 
-/** Deletes a video: hidden and marked deleted at once; a job erases it (R2, Bunny, search, notifications). */
-export async function deleteVideo(env: AdminServiceEnv, id: string, actorId: string): Promise<{ job: AdminJob }> {
+/**
+ * Soft-deletes a video (restorable for 30 days; lib/admin/deletions.ts): marked
+ * deleted and held hidden at once, so every public read, list, feed and index
+ * drops it. Its media and records stay until the cleanup purges it.
+ */
+export async function deleteVideo(env: AdminServiceEnv, id: string, actorId: string, reason?: string): Promise<{ deletion: AdminDeletion }> {
 	if (id.includes(':')) throw new AdminError(404, 'video_not_found');
+	const at = now();
+	const mark: AdminDeletionMark = { at, by: actorId, ...(cleanReason(reason) ? { reason: cleanReason(reason) } : {}) };
 	const saved = await repo(env.videos).updateObject(id, (fresh) => {
-		if (fresh.isDeleted === true && fresh.isHidden === true) return false;
+		if (fresh.isDeleted === true) return false;
 		fresh.isDeleted = true;
-		fresh.isHidden = true;
-		fresh.deletedAt = now();
+		fresh.deletedAt = at;
+		fresh.adminDeletion = mark;
+		applySuspensionHold(fresh as SuspendableRecord, ADMIN_DELETED_HOLD);
+		fresh.dateModified = at;
+		return true;
+	});
+	if (!saved || (saved.adminDeletion as AdminDeletionMark | undefined)?.at !== at) throw new AdminError(404, 'video_not_found');
+	const deletion = await recordDeletion(env.SEARCH_DB!, {
+		kind: 'video',
+		id,
+		title: saved.title ?? id,
+		ownerId: saved.userId ?? null,
+		channelId: saved.channelId ?? null,
+		deletedBy: actorId,
+		reason: mark.reason,
+		deletedAt: at,
+	});
+	await send(env, MessageType.VideoEdit, { videoId: id, userId: saved.userId, channelId: saved.channelId, action: 'deleted' });
+	return { deletion };
+}
+
+/** The hold a soft-deleted video, playlist or profile carries on itself (lifted on restore). */
+const ADMIN_DELETED_HOLD = 'admin:deleted';
+
+export async function restoreVideo(env: AdminServiceEnv, id: string): Promise<Row> {
+	await restorable(env, 'video', id);
+	const saved = await repo(env.videos).updateObject(id, (fresh) => {
+		if (!fresh.adminDeletion) return false;
+		fresh.isDeleted = false;
+		delete fresh.deletedAt;
+		delete fresh.adminDeletion;
+		liftSuspensionHold(fresh as SuspendableRecord, ADMIN_DELETED_HOLD);
 		fresh.dateModified = now();
 		return true;
 	});
 	if (!saved) throw new AdminError(404, 'video_not_found');
-	return { job: await createJob(env, { kind: 'video.purge', targetKind: 'video', targetId: id, actorId, params: { userId: saved.userId ?? null, channelId: saved.channelId ?? null } }) };
+	await removeDeletion(env.SEARCH_DB!, 'video', id);
+	await send(env, MessageType.VideoEdit, { videoId: id, userId: saved.userId, channelId: saved.channelId, action: 'restored' });
+	return saved;
 }
 
-/** Job video.purge. Idempotent: an erased video is simply gone. */
+/** Job video.purge (started only by the cleanup). Idempotent: an erased video is simply gone; a restored one is skipped. */
 async function runVideoPurge(env: AdminServiceEnv, job: AdminJob): Promise<JobOutcome> {
+	const video = await repo(env.videos).getObject(job.targetId);
+	if (video && video.isDeleted !== true) return { done: true, result: { skipped: 'video_not_deleted' } };
 	await purgeVideo(env, job.targetId, { userId: job.params.userId, channelId: job.params.channelId }, undefined, { strict: true });
 	return { done: true };
 }
@@ -708,18 +841,52 @@ async function runVideoPurge(env: AdminServiceEnv, job: AdminJob): Promise<JobOu
 // Comments, playlists, community posts
 // ---------------------------------------------------------------------------
 
-export async function deleteComment(env: AdminServiceEnv, videoId: string, commentId: string): Promise<void> {
-	let found = false;
+/** Soft-deletes a video comment (or reply): hidden at once (isDeleted), removed by the cleanup. */
+export async function deleteComment(env: AdminServiceEnv, videoId: string, commentId: string, actorId = 'admin', reason?: string): Promise<{ deletion: AdminDeletion }> {
+	let found: StoredComment | null = null;
+	const at = now();
+	const mark: AdminDeletionMark = { at, by: actorId, ...(cleanReason(reason) ? { reason: cleanReason(reason) } : {}) };
 	const saved = await repo(env.videos).updateObject(videoId, (fresh) => {
 		const target = findStoredComment(fresh.comments as StoredComment[], commentId);
-		found = !!target;
-		if (!target) return false;
-		fresh.comments = removeStoredComment(fresh.comments as StoredComment[], commentId).comments;
+		found = target && target.comment.isDeleted !== true ? target.comment : null;
+		if (!found) return false;
+		found.isDeleted = true;
+		(found as StoredComment & { adminDeletion?: AdminDeletionMark }).adminDeletion = mark;
 		return true;
 	});
 	if (!saved) throw new AdminError(404, 'video_not_found');
-	if (!found) throw new AdminError(404, 'comment_not_found');
+	const comment = found as StoredComment | null;
+	if (!comment) throw new AdminError(404, 'comment_not_found');
+	const deletion = await recordDeletion(env.SEARCH_DB!, {
+		kind: 'comment',
+		id: commentId,
+		parentId: videoId,
+		title: comment.text ?? '',
+		ownerId: comment.userId ?? null,
+		channelId: comment.channelId ?? null,
+		deletedBy: actorId,
+		reason: mark.reason,
+		deletedAt: at,
+	});
 	await send(env, MessageType.CommentDelete, { commentId, videoId, reason: 'admin' });
+	return { deletion };
+}
+
+export async function restoreComment(env: AdminServiceEnv, commentId: string): Promise<void> {
+	const deletion = await restorable(env, 'comment', commentId);
+	const videoId = deletion.parentId!;
+	let restored = false;
+	await repo(env.videos).updateObject(videoId, (fresh) => {
+		const target = findStoredComment(fresh.comments as StoredComment[], commentId);
+		const comment = target?.comment as (StoredComment & { adminDeletion?: AdminDeletionMark }) | undefined;
+		restored = !!comment?.adminDeletion;
+		if (!comment || !restored) return false;
+		comment.isDeleted = false;
+		delete comment.adminDeletion;
+		return true;
+	});
+	if (!restored) throw new AdminError(404, 'comment_not_found');
+	await removeDeletion(env.SEARCH_DB!, 'comment', commentId);
 }
 
 export interface CursorPage<T> {
@@ -781,20 +948,67 @@ export async function listPlaylists(env: AdminServiceEnv, query: { q?: string; c
 	};
 }
 
-export async function deletePlaylist(env: AdminServiceEnv, id: string): Promise<void> {
-	const playlist = await repo(env.playlists).getObject(id);
-	if (!playlist) throw new AdminError(404, 'playlist_not_found');
-	await env.playlists.delete(id);
-	if (playlist.channelId) {
+/** Soft-deletes a playlist: hidden at once and off its channel's list; removed by the cleanup. */
+export async function deletePlaylist(env: AdminServiceEnv, id: string, actorId = 'admin', reason?: string): Promise<{ deletion: AdminDeletion }> {
+	const at = now();
+	const mark: AdminDeletionMark = { at, by: actorId, ...(cleanReason(reason) ? { reason: cleanReason(reason) } : {}) };
+	const saved = id.includes('/') || id.includes(':') ? null : await repo(env.playlists).updateObject(id, (fresh) => {
+		if (fresh.isDeleted === true) return false;
+		fresh.isDeleted = true;
+		fresh.deletedAt = at;
+		fresh.adminDeletion = mark;
+		applySuspensionHold(fresh as SuspendableRecord, ADMIN_DELETED_HOLD);
+		fresh.dateModified = at;
+		return true;
+	});
+	if (!saved || (saved.adminDeletion as AdminDeletionMark | undefined)?.at !== at) throw new AdminError(404, 'playlist_not_found');
+	const deletion = await recordDeletion(env.SEARCH_DB!, {
+		kind: 'playlist',
+		id,
+		title: saved.title ?? id,
+		ownerId: saved.userId ?? null,
+		channelId: saved.channelId ?? null,
+		deletedBy: actorId,
+		reason: mark.reason,
+		deletedAt: at,
+	});
+	if (saved.channelId) {
 		await repo(env.channels)
-			.updateObject(playlist.channelId, (ch) => {
+			.updateObject(saved.channelId, (ch) => {
 				if (!Array.isArray(ch.playlists) || !ch.playlists.includes(id)) return false;
 				ch.playlists = ch.playlists.filter((p: string) => p !== id);
 				return true;
 			})
 			.catch(() => null);
 	}
-	await send(env, MessageType.PlaylistDelete, { playlistId: id, userId: playlist.userId, channelId: playlist.channelId, reason: 'admin' });
+	await send(env, MessageType.PlaylistEdit, { playlistId: id, userId: saved.userId, channelId: saved.channelId, action: 'deleted' });
+	return { deletion };
+}
+
+export async function restorePlaylist(env: AdminServiceEnv, id: string): Promise<void> {
+	await restorable(env, 'playlist', id);
+	const saved = await repo(env.playlists).updateObject(id, (fresh) => {
+		if (!fresh.adminDeletion) return false;
+		fresh.isDeleted = false;
+		delete fresh.deletedAt;
+		delete fresh.adminDeletion;
+		liftSuspensionHold(fresh as SuspendableRecord, ADMIN_DELETED_HOLD);
+		fresh.dateModified = now();
+		return true;
+	});
+	if (!saved) throw new AdminError(404, 'playlist_not_found');
+	await removeDeletion(env.SEARCH_DB!, 'playlist', id);
+	if (saved.channelId) {
+		await repo(env.channels)
+			.updateObject(saved.channelId, (ch) => {
+				const list: string[] = Array.isArray(ch.playlists) ? ch.playlists : [];
+				if (list.includes(id)) return false;
+				ch.playlists = [...list, id];
+				return true;
+			})
+			.catch(() => null);
+	}
+	await send(env, MessageType.PlaylistEdit, { playlistId: id, userId: saved.userId, channelId: saved.channelId, action: 'restored' });
 }
 
 const POST_KEY = /^posts\/([^/]+)\/([^/]+)\.json$/;
@@ -825,19 +1039,37 @@ export async function listPosts(env: AdminServiceEnv, query: { q?: string; chann
 	};
 }
 
-export async function deletePost(env: AdminServiceEnv, channelId: string, postId: string): Promise<void> {
-	const key = `posts/${channelId}/${postId}.json`;
+type PostIndex = { postIds: string[]; lastUpdated: string };
+const postKey = (channelId: string, postId: string) => `posts/${channelId}/${postId}.json`;
+const postIndexKey = (channelId: string) => `posts/${channelId}/index.json`;
+
+/** Soft-deletes a community post: status 'deleted' (hidden) and off its channel's index; removed by the cleanup. */
+export async function deletePost(env: AdminServiceEnv, channelId: string, postId: string, actorId = 'admin', reason?: string): Promise<{ deletion: AdminDeletion }> {
+	const at = now();
+	const mark: AdminDeletionMark & { previousStatus?: string } = { at, by: actorId, ...(cleanReason(reason) ? { reason: cleanReason(reason) } : {}) };
 	let wasDeleted = false;
-	const saved = await repo(env.community_posts).updateObject(key, (post) => {
+	const saved = await repo(env.community_posts).updateObject(postKey(channelId, postId), (post) => {
 		wasDeleted = post.status === 'deleted';
 		if (wasDeleted) return false;
+		post.adminDeletion = { ...mark, previousStatus: post.status ?? 'published' };
 		post.status = 'deleted';
-		post.updatedAt = now();
+		post.updatedAt = at;
 		return true;
 	});
 	if (!saved || wasDeleted) throw new AdminError(404, 'post_not_found');
-	await repo<{ postIds: string[]; lastUpdated: string }>(env.community_posts)
-		.updateObject(`posts/${channelId}/index.json`, (index) => {
+	const deletion = await recordDeletion(env.SEARCH_DB!, {
+		kind: 'post',
+		id: postId,
+		parentId: channelId,
+		title: typeof saved.content === 'string' ? saved.content : '',
+		ownerId: saved.userId ?? null,
+		channelId,
+		deletedBy: actorId,
+		reason: mark.reason,
+		deletedAt: at,
+	});
+	await repo<PostIndex>(env.community_posts)
+		.updateObject(postIndexKey(channelId), (index) => {
 			if (!Array.isArray(index.postIds) || !index.postIds.includes(postId)) return false;
 			index.postIds = index.postIds.filter((id) => id !== postId);
 			index.lastUpdated = now();
@@ -845,6 +1077,55 @@ export async function deletePost(env: AdminServiceEnv, channelId: string, postId
 		})
 		.catch(() => null);
 	await send(env, MessageType.CommunityPostDeleted, { postId, channelId, actor: { userId: 'admin' }, reason: 'admin' });
+	return { deletion };
+}
+
+/** Where a post goes back in its channel's index (newest first), found by binary search on creation dates. */
+async function postIndexPosition(env: AdminServiceEnv, channelId: string, postIds: string[], createdAt: number): Promise<number> {
+	const createdOf = async (id: string) => {
+		const post = await repo(env.community_posts).getObject(postKey(channelId, id)).catch(() => null);
+		const at = Date.parse(post?.createdAt ?? '');
+		return Number.isFinite(at) ? at : 0;
+	};
+	let lo = 0;
+	let hi = postIds.length;
+	while (lo < hi) {
+		const mid = (lo + hi) >> 1;
+		if ((await createdOf(postIds[mid])) > createdAt) lo = mid + 1;
+		else hi = mid;
+	}
+	return lo;
+}
+
+export async function restorePost(env: AdminServiceEnv, postId: string): Promise<void> {
+	const deletion = await restorable(env, 'post', postId);
+	const channelId = deletion.parentId!;
+	const saved = await repo(env.community_posts).updateObject(postKey(channelId, postId), (post) => {
+		const mark = post.adminDeletion as (AdminDeletionMark & { previousStatus?: string }) | undefined;
+		if (!mark || post.status !== 'deleted') return false;
+		post.status = mark.previousStatus ?? 'published';
+		delete post.adminDeletion;
+		post.updatedAt = now();
+		return true;
+	});
+	if (!saved || saved.status === 'deleted') throw new AdminError(404, 'post_not_found');
+	await removeDeletion(env.SEARCH_DB!, 'post', postId);
+	const createdAt = Date.parse(saved.createdAt ?? '') || 0;
+	const current = (await repo<PostIndex>(env.community_posts).getObject(postIndexKey(channelId)).catch(() => null))?.postIds ?? [];
+	const position = await postIndexPosition(env, channelId, current.filter((id) => id !== postId), createdAt);
+	await repo<PostIndex>(env.community_posts)
+		.updateObject(
+			postIndexKey(channelId),
+			(index) => {
+				const ids = Array.isArray(index.postIds) ? index.postIds : [];
+				if (ids.includes(postId)) return false;
+				index.postIds = [...ids.slice(0, position), postId, ...ids.slice(position)];
+				index.lastUpdated = now();
+				return true;
+			},
+			{ initial: () => ({ postIds: [], lastUpdated: now() }) },
+		)
+		.catch((error) => logger.warn('[Admin] Could not put the restored post back in its index', { postId, channelId, error: error instanceof Error ? error.message : String(error) }));
 }
 
 // ---------------------------------------------------------------------------
@@ -937,27 +1218,70 @@ export async function unbanUser(env: AdminServiceEnv, userId: string, actorId: s
 async function syncUserHolds(env: AdminServiceEnv, job: AdminJob): Promise<JobOutcome> {
 	const userId = job.targetId;
 	const banned = !!(await readBan(env.SEARCH_DB!, userId));
+	const deleted = !!(await pendingDeletion(env.SEARCH_DB!, 'user', userId));
 	const hold = userHold(userId);
-	const mutate = (r: Row) => (banned ? applySuspensionHold(r as SuspendableRecord, hold) : liftSuspensionHold(r as SuspendableRecord, hold));
+	const deletedHold = deletedUserHold(userId);
+	const follow = (r: Row, h: string, on: boolean) => (on ? applySuspensionHold(r as SuspendableRecord, h) : liftSuspensionHold(r as SuspendableRecord, h));
+	const mutate = (r: Row) => {
+		// Both holds are always brought in line (no short-circuit)
+		const ban = follow(r, hold, banned);
+		const deletion = follow(r, deletedHold, deleted);
+		return ban || deletion;
+	};
 	const channels = await cascade(env.channels, await idsOf(env, 'channel', { ownerId: userId }), mutate);
 	const videos = await cascade(env.videos, await idsOf(env, 'video', { ownerId: userId }), mutate);
 	const live = await cascadeLiveStreams(env, { ownerId: userId }, mutate);
-	return finish({ banned, channels: channels.changed, videos: videos.changed, liveStreams: live.changed }, channels.failed + videos.failed + live.failed);
+	return finish({ banned, deleted, channels: channels.changed, videos: videos.changed, liveStreams: live.changed }, channels.failed + videos.failed + live.failed);
 }
 
 /**
- * Erases the user's videos data (profile, channels, videos and their media,
- * playlists, history, comments, likes, subscriptions) with the privacy-erase
- * path, as a job (user.delete-data) that runs in resumable steps. A ban, if
- * any, is kept. Auth is not involved: their account and sign-in keep working,
- * and signing in to videos again starts a new, empty profile (unless banned).
+ * Soft-deletes a user's videos data (restorable for 30 days;
+ * lib/admin/deletions.ts): their profile stops being shown and a job hides
+ * their channels, videos and live streams. When the cleanup purges it, the
+ * privacy-erase path (user.delete-data) erases the profile, channels, videos
+ * and their media, playlists, history, comments, likes and subscriptions. A
+ * ban, if any, is kept. Auth is not involved: their account and sign-in keep
+ * working, and after the purge signing in to videos starts a new, empty
+ * profile (unless banned).
  */
-export async function deleteUserData(env: AdminServiceEnv, userId: string, actorId: string): Promise<{ job: AdminJob }> {
-	return { job: await createJob(env, { kind: 'user.delete-data', targetKind: 'user', targetId: userId, actorId }) };
+export async function deleteUserData(env: AdminServiceEnv, userId: string, actorId: string, reason?: string): Promise<{ deletion: AdminDeletion; job: AdminJob }> {
+	if (await pendingDeletion(env.SEARCH_DB!, 'user', userId)) throw new AdminError(409, 'already_deleted');
+	const at = now();
+	const mark: AdminDeletionMark = { at, by: actorId, ...(cleanReason(reason) ? { reason: cleanReason(reason) } : {}) };
+	const profile = await repo(env.profiles).updateObject(userId, (fresh) => {
+		fresh.adminDeletion = mark;
+		fresh.dateModified = at;
+	});
+	const deletion = await recordDeletion(env.SEARCH_DB!, {
+		kind: 'user',
+		id: userId,
+		title: (profile?.displayName as string | undefined) || (profile?.userName as string | undefined) || userId,
+		ownerId: userId,
+		deletedBy: actorId,
+		reason: mark.reason,
+		deletedAt: at,
+	});
+	await send(env, MessageType.ProfileUpdate, { userId, action: 'deleted' });
+	return { deletion, job: await createJob(env, { kind: 'user.sync-holds', targetKind: 'user', targetId: userId, actorId }) };
+}
+
+export async function restoreUser(env: AdminServiceEnv, userId: string, actorId: string): Promise<{ job: AdminJob }> {
+	await restorable(env, 'user', userId);
+	await repo(env.profiles).updateObject(userId, (fresh) => {
+		if (!fresh.adminDeletion) return false;
+		delete fresh.adminDeletion;
+		fresh.dateModified = now();
+		return true;
+	});
+	await removeDeletion(env.SEARCH_DB!, 'user', userId);
+	await send(env, MessageType.ProfileUpdate, { userId, action: 'restored' });
+	return { job: await createJob(env, { kind: 'user.sync-holds', targetKind: 'user', targetId: userId, actorId }) };
 }
 
 /** Job user.delete-data: one budgeted erase step; an unfinished erase queues the next step with its resume token. */
 async function runUserDelete(env: AdminServiceEnv, job: AdminJob): Promise<JobOutcome> {
+	// Started only by the cleanup: a user restored meanwhile is not erased
+	if (!(await pendingDeletion(env.SEARCH_DB!, 'user', job.targetId))) return { done: true, result: { skipped: 'user_not_deleted' } };
 	const previous = (job.result?.deletedVideos as number | undefined) ?? 0;
 	const summary = await eraseUserStep(env as AdminServiceEnv & Record<string, unknown>, job.targetId, job.params.resumeToken as string | undefined);
 	const result = { deletedVideos: previous + summary.deletedVideoIds.length };
@@ -995,6 +1319,103 @@ async function eraseUserStep(env: AdminServiceEnv & Record<string, unknown>, use
 	if (summary.complete) await send(env, MessageType.UserDataErased, { userId });
 	for (const videoId of summary.deletedVideoIds) await send(env, MessageType.VideoDelete, { videoId, userId, reason: 'admin-erasure' });
 	return summary;
+}
+
+// ---------------------------------------------------------------------------
+// Soft deletes: restore, "Delete permanently now", and the cleanup's purge
+// ---------------------------------------------------------------------------
+
+/** Restores a soft-deleted item (admin-api checks content:delete and audits it). */
+export async function restoreDeletion(env: AdminServiceEnv, kind: AdminDeletionKind, id: string, actorId: string): Promise<{ restored: true; job?: AdminJob }> {
+	switch (kind) {
+		case 'channel':
+			return { restored: true, ...(await restoreChannel(env, id, actorId)) };
+		case 'video':
+			await restoreVideo(env, id);
+			return { restored: true };
+		case 'comment':
+			await restoreComment(env, id);
+			return { restored: true };
+		case 'playlist':
+			await restorePlaylist(env, id);
+			return { restored: true };
+		case 'post':
+			await restorePost(env, id);
+			return { restored: true };
+		case 'user':
+			return { restored: true, ...(await restoreUser(env, id, actorId)) };
+	}
+}
+
+/**
+ * "Delete permanently now": queues the item for the next cleanup run, which
+ * purges it the same way as one whose 30 days are up. It stays restorable
+ * until that run starts the purge. admin-api checks content:purge and audits it.
+ */
+export async function requestDeletionPurge(env: AdminServiceEnv, kind: AdminDeletionKind, id: string, actorId: string): Promise<AdminDeletion> {
+	const deletion = await pendingDeletion(env.SEARCH_DB!, kind, id);
+	if (!deletion) throw new AdminError(404, 'deletion_not_found');
+	if (!deletion.purgeRequestedAt) await requestPurge(env.SEARCH_DB!, kind, id, actorId);
+	return (await pendingDeletion(env.SEARCH_DB!, kind, id)) ?? deletion;
+}
+
+const CLEANUP_ACTOR = 'system:deletion-cleanup';
+
+/**
+ * The one hard-delete path for admin deletes (run by the cleanup only,
+ * lib/admin/deletions.ts runDeletionCleanup). Small items are erased here;
+ * videos, channels and users through their admin job (R2, Bunny Stream,
+ * search and ownership indexes, notifications). Every step is idempotent.
+ */
+export async function purgeDeletion(env: AdminServiceEnv, d: AdminDeletion): Promise<PurgeOutcome> {
+	const actorId = d.purgeRequestedBy ?? CLEANUP_ACTOR;
+	switch (d.kind) {
+		case 'video': {
+			const video = await repo(env.videos).getObject(d.id);
+			if (!video) return { state: 'skipped', reason: 'video_gone' };
+			if (video.isDeleted !== true) return { state: 'skipped', reason: 'video_not_deleted' };
+			const job = await createJob(env, { kind: 'video.purge', targetKind: 'video', targetId: d.id, actorId, params: { userId: video.userId ?? null, channelId: video.channelId ?? null } });
+			return { state: 'started', jobId: job.id };
+		}
+		case 'channel': {
+			const channel = await repo(env.channels).getObject(d.id);
+			if (!channel) return { state: 'skipped', reason: 'channel_gone' };
+			if (channel.isDeleted !== true) return { state: 'skipped', reason: 'channel_not_deleted' };
+			const job = await createJob(env, { kind: 'channel.purge', targetKind: 'channel', targetId: d.id, actorId, params: { userId: channel.userId ?? null } });
+			return { state: 'started', jobId: job.id };
+		}
+		case 'user': {
+			const job = await createJob(env, { kind: 'user.delete-data', targetKind: 'user', targetId: d.id, actorId });
+			return { state: 'started', jobId: job.id };
+		}
+		case 'comment': {
+			let removed = false;
+			const video = await repo(env.videos).updateObject(d.parentId!, (fresh) => {
+				const target = findStoredComment(fresh.comments as StoredComment[], d.id);
+				if (!target || target.comment.isDeleted !== true) return false;
+				fresh.comments = removeStoredComment(fresh.comments as StoredComment[], d.id).comments;
+				removed = true;
+				return true;
+			});
+			return removed ? { state: 'purged' } : { state: 'skipped', reason: video ? 'comment_gone' : 'video_gone' };
+		}
+		case 'playlist': {
+			const playlist = await repo(env.playlists).getObject(d.id);
+			if (!playlist) return { state: 'skipped', reason: 'playlist_gone' };
+			if (playlist.isDeleted !== true) return { state: 'skipped', reason: 'playlist_not_deleted' };
+			await env.playlists.delete(d.id);
+			await send(env, MessageType.PlaylistDelete, { playlistId: d.id, userId: playlist.userId ?? d.ownerId ?? 'unknown', channelId: playlist.channelId, reason: 'admin' });
+			return { state: 'purged' };
+		}
+		case 'post': {
+			const key = postKey(d.parentId!, d.id);
+			const post = await repo(env.community_posts).getObject(key);
+			if (!post) return { state: 'skipped', reason: 'post_gone' };
+			if (post.status !== 'deleted') return { state: 'skipped', reason: 'post_not_deleted' };
+			await env.community_posts.delete(key);
+			return { state: 'purged' };
+		}
+	}
 }
 
 /** Dry run of "Restore legacy profile fields" (lib/admin/legacy-restore.ts). */

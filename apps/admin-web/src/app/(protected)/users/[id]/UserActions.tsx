@@ -101,7 +101,9 @@ export function UserActions({ user, permissions }: Props) {
               busy={busy === 'erase'}
               disabled={!!busy}
               testId="user-delete-data"
-              onConfirm={() => run('erase', () => deleteUserData(user.id), { success: t('users.deleteDataQueued') })}
+              withReason
+              reasonHint={t('deleted.reasonHint')}
+              onConfirm={(reason) => run('erase', () => deleteUserData(user.id, reason), { success: t('deleted.movedToBin') })}
             />
           )}
         </div>

@@ -27,7 +27,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
 
   return (
     <div>
-      <PageHeader title={t('users.title')} subtitle={t('users.subtitle')} total={data?.total} t={t} />
+      <PageHeader deletedKind="user" title={t('users.title')} subtitle={t('users.subtitle')} total={data?.total} t={t} />
       <FilterForm
         action="/users"
         label={t('users.title')}

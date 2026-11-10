@@ -35,6 +35,7 @@ const NAV_ITEMS: { href: string; label: MessageKey }[] = [
   { href: '/comments', label: 'nav.comments' },
   { href: '/playlists', label: 'nav.playlists' },
   { href: '/community', label: 'nav.community' },
+  { href: '/deleted', label: 'nav.deleted' },
   { href: '/users', label: 'nav.users' },
   { href: '/category-suggestions', label: 'nav.categorySuggestions' },
   { href: '/translations', label: 'nav.translations' },

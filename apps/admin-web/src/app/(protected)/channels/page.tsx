@@ -43,7 +43,7 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
 
   return (
     <div>
-      <PageHeader title={t('channels.title')} subtitle={t('channels.subtitle')} total={data?.total} t={t} />
+      <PageHeader deletedKind="channel" title={t('channels.title')} subtitle={t('channels.subtitle')} total={data?.total} t={t} />
       <FilterForm
         action="/channels"
         label={t('channels.title')}

@@ -92,11 +92,13 @@ export function VideoTable({ rows, permissions }: { rows: AdminVideoRow[]; permi
                 title={t('videos.bulkDeleteTitle', { count: chosen.length })}
                 body={t('videos.bulkDeleteBody')}
                 confirmLabel={t('videos.bulkDelete')}
+                withReason
+                reasonHint={t('deleted.reasonHint')}
                 danger
                 disabled={!chosen.length || !!busy}
                 busy={busy === 'delete'}
                 testId="video-bulk-delete"
-                onConfirm={() => bulk('delete', (id) => deleteVideo(id))}
+                onConfirm={(reason) => bulk('delete', (id) => deleteVideo(id, reason || undefined))}
               />
             )}
             {chosen.length > 0 && (

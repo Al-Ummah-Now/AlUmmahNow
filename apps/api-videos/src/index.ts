@@ -30,7 +30,8 @@ import { enforceRetention } from './lib/privacy/retention';
 import { DEFAULT_OPERATION_BUDGET, OperationBudget } from './lib/privacy/scan';
 import { withSearchSync } from './lib/search/sync';
 import { handleAdminJobBatch, type JobMessage } from './lib/admin/jobs';
-import { ADMIN_JOB_HANDLERS } from './lib/admin/service';
+import { ADMIN_JOB_HANDLERS, purgeDeletion } from './lib/admin/service';
+import { runDeletionCleanup } from './lib/admin/deletions';
 import { reconcileSearchIndex } from './lib/search/backfill';
 import { reconcileOwnershipIndex } from './lib/search/ownership';
 import { API_VERSION_HEADER, deprecationHeaders, findDeprecation, resolveApiVersion, unsupportedVersionResponse } from './lib/api-version';
@@ -469,6 +470,18 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 					logger.error('[SubscriptionImport] Run failed', { error: error instanceof Error ? error.message : String(error) });
 					reportJobFailure(rawEnv, ctx, 'subscription-import', error);
 				}),
+		);
+		// Hourly: admin soft deletes that are due (30 days up, or queued with
+		// "Delete permanently now") are purged (lib/admin/deletions.ts). Through
+		// the search-sync wrapper so purged content leaves the indexes.
+		ctx.waitUntil(
+			(async () => {
+				const env = withSearchSync(rawEnv, ctx) as never;
+				await runDeletionCleanup(env, (deletion) => purgeDeletion(env, deletion));
+			})().catch((error) => {
+				logger.error('[DeletionCleanup] Run failed', { error: error instanceof Error ? error.message : String(error) });
+				reportJobFailure(rawEnv, ctx, 'deletion-cleanup', error);
+			}),
 		);
 		// Hourly: uploads that went quiet are completed or flagged for a
 		// re-upload, never left hanging (lib/uploads/lifecycle.ts). Through the
