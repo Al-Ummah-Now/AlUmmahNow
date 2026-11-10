@@ -307,7 +307,7 @@ export function UnifiedNavigation() {
         )}
 
         {/* User Info (hidden on mobile) */}
-        <div className="hidden md:block text-start">
+        <div className="nav-trigger-name hidden md:block text-start">
           <div className="text-sm font-medium text-white truncate max-w-[150px]">
             {getDisplayName()}
           </div>

@@ -170,9 +170,13 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
   const isOwnVideo = !!user && !!videoDetails?.userId && videoDetails.userId === user.id;
 
   return (
-    <main id={MAIN_CONTENT_ID} className="flex flex-1 flex-col md:flex-row overflow-hidden" dir={isRTL ? 'rtl' : 'ltr'} data-theatre={theatre || undefined}>
+    // Below lg the related list stacks under the video (never beside it: at
+    // tablet widths a side column squeezed the player to half the page). From lg
+    // the player column takes what the side column leaves; the side column is
+    // 300-402px of compact rows (thumbnail beside text).
+    <main id={MAIN_CONTENT_ID} className="flex flex-1 flex-col overflow-hidden" dir={isRTL ? 'rtl' : 'ltr'} data-theatre={theatre || undefined}>
       <div className={`flex flex-col ${theatre ? '' : 'lg:flex-row'} gap-4 p-4 w-full mt-0 lg:mt-0 overflow-hidden`} data-theatre={theatre || undefined} data-testid="watch-layout">
-        <div className={`flex flex-col w-full ${theatre ? '' : 'lg:w-3/4'} overflow-hidden`}>
+        <div className={`flex flex-col w-full min-w-0 ${theatre ? '' : 'lg:flex-1'} overflow-hidden`} data-testid="watch-primary">
           {!videoDetails && <div data-testid="watch-skeleton" className="w-full">{skeleton ?? <WatchDetailsSkeleton />}</div>}
           {videoDetails && (
             <div className="flex flex-col w-full mt-0 items-center">
@@ -245,12 +249,12 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
           </div>
         </div>
 
-        <div className={`hidden lg:block ${theatre ? 'lg:w-full' : 'lg:w-1/4 min-w-[350px] max-w-[500px]'} pt-4 overflow-auto`}>
+        <div className={`hidden lg:block ${theatre ? 'lg:w-full' : 'lg:flex-none lg:w-[clamp(300px,30%,402px)]'} pt-4 overflow-auto`} data-testid="watch-secondary">
           {renderRelated("t_")}
         </div>
       </div>
 
-      <div className="block lg:hidden w-full mt-4 overflow-auto">
+      <div className="block lg:hidden w-full mt-4 px-4 overflow-auto" data-testid="watch-secondary-below">
         {renderRelated("b_")}
       </div>
     </main>

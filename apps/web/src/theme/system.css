@@ -235,7 +235,7 @@ main [data-slot=button]{max-width:100%;white-space:normal;height:auto;min-height
 
 /* Related: compact rows in the side column, full card grid anywhere below the player */
 [data-testid=related-videos-list]{display:grid;gap:4px;margin-inline:0!important}[data-testid=related-videos-list]>*{margin:0!important}
-.rv{display:grid;grid-template-columns:42% minmax(0,1fr);gap:10px;align-items:start;padding:6px;border-radius:var(--r-lg);text-decoration:none;color:inherit;transition:background-color 140ms}
+.rv{display:grid;grid-template-columns:clamp(120px,42%,168px) minmax(0,1fr);gap:10px;align-items:start;padding:6px;border-radius:var(--r-lg);text-decoration:none;color:inherit;transition:background-color 140ms}
 @media(hover:hover){.related-videos a.rv:hover{background:var(--m-hover)}}
 .rv:focus-visible{outline:2px solid var(--fanous-color-focus-ring);outline-offset:2px}
 .rv-t{position:relative;aspect-ratio:16/9;border-radius:var(--r-md);overflow:hidden;background:var(--m-card)}
@@ -316,6 +316,9 @@ a.group svg.lucide-chevron-right{align-self:center}
 .ah-end [class*="absolute"][class*="w-80"] [class*="text-gray-"]{color:var(--fanous-color-text-secondary)!important}
 @media(hover:hover){.ah-end [class*="absolute"][class*="w-80"] :is(button,a):hover{background:var(--m-hover)!important}}
 .ah-end [class*="max-w-[150px]"]{display:none}
+/* Account trigger: avatar and chevron read as one control (the hidden name block must not leave a gap between them) */
+.ah-end .nav-trigger-name{display:none}
+.ah-end [data-testid=nav-menu-trigger]{gap:2px;padding-inline:6px}
 .ah-end [class*="bg-red-"]{transform:scale(.82);transform-origin:center}
 
 /* Phone chrome */
