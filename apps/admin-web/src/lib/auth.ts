@@ -19,7 +19,7 @@ import {
   parseSessionCookie,
   sessionCookieOptions,
 } from './session-cookie';
-import { PATH_HEADER, loginPath } from './login-flow';
+import { PATH_HEADER, loginPath, safeReturnPath } from './login-flow';
 
 export { SESSION_COOKIE_NAME };
 
@@ -57,11 +57,16 @@ export async function getAuthClient(): Promise<AuthClient> {
  * Resolve the current admin session.
  *
  * The cookie is only a token carrier: the access token is verified against
- * the auth server's keys (refreshing it when expired) and the user identity
- * and role are taken from the verified token, never from the cookie JSON.
- * Memoised per request so layout, page and API helpers share one verification.
+ * the auth server's keys and the user identity and role are taken from the
+ * verified token, never from the cookie JSON. Memoised per request so layout,
+ * page and API helpers share one verification.
+ *
+ * Never refreshes (SCALABILITY-AUDIT AW-1): a render cannot store the rotated
+ * pair, so spending the refresh token here signed the admin out a minute
+ * later. The middleware refreshes ahead of expiry; if a render still sees an
+ * expired token, requireAdminRole sends the browser to /api/auth/refresh.
  */
-export const getAdminSession = cache(async (): Promise<AdminSession | null> => {
+export const getAdminSessionState = cache(async (): Promise<{ session: AdminSession | null; expired: boolean }> => {
   try {
     const cookieStore = await getCookies();
     const sessionValue = cookieStore.get(SESSION_COOKIE_NAME)?.value;
@@ -81,20 +86,19 @@ export const getAdminSession = cache(async (): Promise<AdminSession | null> => {
     }
 
     if (!tokens) {
-      return null;
+      return { session: null, expired: false };
     }
 
     const client = await getAuthClient();
-    const verified = await client.verify(subjects, tokens.accessToken, {
-      refresh: tokens.refreshToken,
-    });
+    const verified = await client.verify(subjects, tokens.accessToken);
 
     if (verified.err || !verified.subject) {
       logger.warn('[auth] Session token verification failed', {
         name: verified.err?.name,
         message: verified.err?.message,
       });
-      return null;
+      // A refresh token is there to try: let the refresh route decide
+      return { session: null, expired: Boolean(tokens.refreshToken) };
     }
 
     const userInfo = verified.subject.properties;
@@ -104,30 +108,32 @@ export const getAdminSession = cache(async (): Promise<AdminSession | null> => {
         email: userInfo.email,
         role: highestAdminRole(userInfo.roles),
       },
-      accessToken: verified.tokens?.access ?? tokens.accessToken,
-      refreshToken: verified.tokens?.refresh ?? tokens.refreshToken,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
     };
 
-    if (verified.tokens || fromLegacyCookies) {
-      // Cookies can only be written from route handlers and server actions.
-      // Pages normally never get here with an expired token: middleware.ts
-      // refreshes it ahead of expiry and persists the rotated pair. This is
-      // the fallback for when that refresh failed transiently.
+    if (fromLegacyCookies) {
+      // Move the legacy pair into admin_session where cookies are writable
+      // (route handlers, server actions); in a render this is a no-op.
       try {
         await setAdminSession(session);
       } catch {
-        logger.debug('[auth] Refreshed session not persisted (read-only cookie context)');
+        logger.debug('[auth] Legacy cookies not migrated (read-only cookie context)');
       }
     }
 
-    return session;
+    return { session, expired: false };
   } catch (error) {
     logger.error('[auth] Failed to resolve admin session', {
       error: error instanceof Error ? error.message : String(error),
     });
-    return null;
+    return { session: null, expired: false };
   }
 });
+
+export async function getAdminSession(): Promise<AdminSession | null> {
+  return (await getAdminSessionState()).session;
+}
 
 /**
  * Set admin session in cookies
@@ -165,12 +171,17 @@ export async function isAuthenticated(): Promise<boolean> {
  * Require admin role - redirect to login / access-denied if not authorized
  */
 export async function requireAdminRole(): Promise<AdminSession> {
-  const session = await getAdminSession();
+  const { session, expired } = await getAdminSessionState();
 
   if (!session) {
-    // Straight to sign-in, back to this page afterwards (the middleware
-    // passes the path being rendered).
+    // The middleware passes the path being rendered, to come back to it
     const path = (await getHeaders()).get(PATH_HEADER);
+    if (expired) {
+      // Refresh where the rotated pair can be stored (AW-1), then come back
+      const next = safeReturnPath(path);
+      redirect(next ? `/api/auth/refresh?next=${encodeURIComponent(next)}` : '/api/auth/refresh');
+    }
+    // Straight to sign-in
     redirect(loginPath(path));
   }
 

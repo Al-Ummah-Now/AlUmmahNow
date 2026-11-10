@@ -11,13 +11,10 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Pages that need an admin session. /login, /access-denied and the auth API
-  // routes are deliberately excluded so a sign-out redirect cannot loop.
-  matcher: [
-    '/',
-    '/dashboard/:path*',
-    '/moderation/:path*',
-    '/translations/:path*',
-    '/indices/:path*',
-  ],
+  // Every page that needs an admin session, so every one of them is refreshed
+  // here, where the rotated pair can be stored (AW-1). A page missing from a
+  // hand-written list (as /site-theme was) refreshed during its render and
+  // signed the admin out a minute later. Excluded: /login, /access-denied,
+  // the API and auth routes (so a sign-out redirect cannot loop) and assets.
+  matcher: ['/((?!login|access-denied|api/|_next/|favicon\\.ico|.*\\.[a-zA-Z0-9]+$).*)'],
 };

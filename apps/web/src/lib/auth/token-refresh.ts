@@ -19,6 +19,19 @@
  * - when the issuer definitively rejects the refresh token, mark the account
  *   `needsSignIn` instead of sending a dead token forever.
  *
+ * Across isolates (SCALABILITY-AUDIT WEB-1) the in-memory single-flight and
+ * rotation memory above do not help: a page request, its RSC requests and
+ * /api/auth/token often land in different isolates, each refreshes the same
+ * refresh token and writes its own Set-Cookie. That is correct because of an
+ * issuer invariant, not because of this module: every use of a refresh token
+ * within the reuse window returns the SAME successor refresh token (the
+ * issuer reserves `nextToken` when it stores a token), so whichever cookie the
+ * browser keeps holds the live refresh token. Checked against the real
+ * @al-ummah-now/openauth issuer in apps/admin-web/test/issuer-rotation.test.ts
+ * and for this module across simulated isolates in
+ * __tests__/token-refresh-isolates.test.ts. The in-memory maps only save
+ * issuer calls within one isolate.
+ *
  * No `next/headers` and no Node-only imports: the middleware uses this module.
  */
 
