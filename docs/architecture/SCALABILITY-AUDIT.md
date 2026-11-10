@@ -115,15 +115,15 @@ Severity is the reported impact at scale. The status column links the fix.
 | AV-23 | api-videos | med for erasure | Retention / erasure / channel-deletion jobs rewrite objects blind | open |
 | AV-24 | api-videos | low | Bunny collection / TUS session / upload status minor races | open |
 | PR-1 | processor | high | R2 read-modify-write serialised only in-isolate (`pendingByKey`) | fixed in [#505](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/505) |
-| PR-2 | processor | high | R2 read-modify-write of `posts/<channelId>/<postId>.json` with no `onlyIf` etag | open |
-| PR-3 | processor | high for popular polls | every vote recounts the whole poll (list + one GET per vote doc) and blind-PUTs results.json | open |
-| PR-4 | processor | medium | like count via full `list` of `likes/<postId>/` on every like. 1000 likes per list call, so 1M likes = 1000 list subrequests per message → over… | open |
-| PR-5 | processor | medium now, high for big channels | fan-out is one `INSERT OR IGNORE ... SELECT` over every subscriber with `RETURNING` all rows | open |
-| PR-6 | processor | medium | up to 500 realtime POSTs per fan-out message, and the videos batch runs 10 messages in one invocation | open |
-| PR-7 | processor | medium | `MESSAGE_QUEUE.send` in a loop, one subrequest each (100 recipients per message): 100k recipients = 1000 sends in one invocation | open |
-| PR-8 | processor | medium | SearchIndexSync applies the object snapshot carried in the message with no ordering guard | open |
-| PR-9 | processor | low | daily neuron cap is check-then-act (`SUM` then call AI then record). With autoscaled consumers (5 msgs × up to 250 invocations) the cap overshoots… | open |
-| PR-10 | processor | low | at-least-once interaction: fan-out insert succeeds, then the invocation fails before pushes/enqueue; the retry's `INSERT OR IGNORE` returns zero… | open |
+| PR-2 | processor | high | R2 read-modify-write of `posts/<channelId>/<postId>.json` with no `onlyIf` etag | fixed in [#510](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/510) |
+| PR-3 | processor | high for popular polls | every vote recounts the whole poll (list + one GET per vote doc) and blind-PUTs results.json | fixed in [#510](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/510) |
+| PR-4 | processor | medium | like count via full `list` of `likes/<postId>/` on every like. 1000 likes per list call, so 1M likes = 1000 list subrequests per message → over… | fixed in [#510](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/510) |
+| PR-5 | processor | medium now, high for big channels | fan-out is one `INSERT OR IGNORE ... SELECT` over every subscriber with `RETURNING` all rows | fixed in [#513](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/513) |
+| PR-6 | processor | medium | up to 500 realtime POSTs per fan-out message, and the videos batch runs 10 messages in one invocation | fixed in [#513](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/513) |
+| PR-7 | processor | medium | `MESSAGE_QUEUE.send` in a loop, one subrequest each (100 recipients per message): 100k recipients = 1000 sends in one invocation | fixed in [#513](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/513) |
+| PR-8 | processor | medium | SearchIndexSync applies the object snapshot carried in the message with no ordering guard | fixed in [#514](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/514) |
+| PR-9 | processor | low | daily neuron cap is check-then-act (`SUM` then call AI then record). With autoscaled consumers (5 msgs × up to 250 invocations) the cap overshoots… | fixed in [#521](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/521) |
+| PR-10 | processor | low | at-least-once interaction: fan-out insert succeeds, then the invocation fails before pushes/enqueue; the retry's `INSERT OR IGNORE` returns zero… | fixed in [#513](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/513) |
 | WS-1 | websocket-server | critical | Hibernation API (`ctx.acceptWebSocket`) used, but all connection state lives only in instance fields | open |
 | WS-2 | websocket-server | critical at scale | every socket, every broadcast and every stats call go to ONE global DO (`idFromName('websocket-instance')`) | open |
 | WS-3 | websocket-server | medium | presence session list is a KV read-modify-write without any conditional write | open |
@@ -599,30 +599,39 @@ Also: queue delivery is at-least-once, so a redelivered VideoView adds the view 
 Scenario: a like and a poll vote on the same post arrive in the same batch (both run in parallel via allSettled), or in two concurrent consumer invocations, or api-videos edits the post text at the same time.
 Each handler GETs the post, changes one field and PUTs the whole document. The last PUT wins: the like count write puts back the old poll totals (or the reverse), and a post edit made by the author between the GET and PUT is silently reverted.
 Severity: high (user-visible data loss on post edits, not only counters). Fix: move counters out of the post doc (D1 counters, or a per-post Durable Object), or at least use `get` → `put(..., { onlyIf: { etagMatches } })` with a retry loop. Never rewrite the author-owned document from the processor.
+Fixed in [#510](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/510): the processor no longer writes the post document; like and vote totals live in D1 (`analytics_daily`, entity `post`) and api-videos reads them from there (`src/lib/post-counters.ts`).
 
 **PR-3** — `src/handlers/poll-vote.ts:67-144` — every vote recounts the whole poll (list + one GET per vote doc) and blind-PUTs results.json.
 Scenarios: (a) a poll with N votes costs N R2 GETs per vote, so O(N²) total; at about 1000 votes one message exceeds the per-invocation subrequest limit, the message throws, retries 3 times and dead-letters, and results stop updating. With 10 messages per batch sharing one invocation it fails sooner.
 (b) Two concurrent recounts: the one that listed earlier (fewer votes) can PUT last, leaving results.json and post totals lower than reality until the next vote.
 Severity: high for popular polls. Fix: count votes in D1 (`poll_votes(post_id, user_id, option_ids)` with `INSERT ... ON CONFLICT` and `SELECT option, COUNT(*) GROUP BY`), or a per-poll Durable Object holding counters.
+Fixed in [#510](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/510): one vote = one R2 read + one D1 batch: `poll_votes` row plus `poll_votes`/`poll_option` counter deltas, applied only when the row changes state, so redelivery cannot double count. Legacy votes import in leased, cursor-paged follow-up messages.
 
 **PR-4** — `src/handlers/post-like.ts:61-88` — like count via full `list` of `likes/<postId>/` on every like. 1000 likes per list call, so 1M likes = 1000 list subrequests per message → over the limit; plus PR-2 race. Severity: medium. Fix: D1 counter (`UPDATE posts_counters SET likes = likes + 1`) or derive from a D1 likes table.
+Fixed in [#510](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/510): `post_likes` row + `likes` counter delta in one D1 batch, counted only on a state change (idempotent under at-least-once delivery); no `list` per like.
 
 **PR-5** — `src/lib/notifications-store.ts:99-141` — fan-out is one `INSERT OR IGNORE ... SELECT` over every subscriber with `RETURNING` all rows.
 Scenario: a channel with 200k "all" subscribers uploads; the single statement writes 200k rows in one D1 transaction. D1 is single-writer per database, so every other NOTIFICATIONS_DB write (notification inserts, DLQ storage, subscriber mirror) queues behind it, and the statement can hit D1's per-query time / memory limits and fail; the retry then re-runs the whole statement. The returned array is held in Worker memory (128 MB).
 Severity: medium now, high for big channels. Fix: page the fan-out (`WHERE s.user_id > ? ORDER BY s.user_id LIMIT 1000`), enqueue one follow-up message per page.
+Fixed in [#513](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/513): `fanoutNotificationPage` writes `FANOUT_PAGE` (1000) subscribers per message by `user_id` cursor; the next page is queued as a follow-up message before this page's pushes.
 
 **PR-6** — `src/lib/notifications-store.ts:144-165` with `src/index.ts:201` — up to 500 realtime POSTs per fan-out message, and the videos batch runs 10 messages in one invocation.
 Scenario: 3 fan-outs in one batch = 1500 fetches + D1 + queue sends in one invocation; past the subrequest limit fetches throw. `sendWebSocketNotification` swallows errors, so pushes are silently dropped. Each POST also lands on the websocket-server (see WS defects). Severity: medium. Fix: one batched `/broadcast-many` call per fan-out (array of user channels) or enqueue realtime pushes in chunks; process fan-out messages with a smaller batch size.
+Fixed in [#513](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/513): realtime events go to the websocket server as one batched `/broadcast` call per 500 recipients (`broadcastMany`).
 
 **PR-7** — `src/push/dispatch.ts:38-52` — `MESSAGE_QUEUE.send` in a loop, one subrequest each (100 recipients per message): 100k recipients = 1000 sends in one invocation. Severity: medium. Fix: `sendBatch` (100 messages per call) and page together with PR-5.
+Fixed in [#513](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/513): `enqueuePush` uses `sendBatch`, 25 PushDispatch messages (2500 recipients) per call, one fan-out page at a time.
 
 **PR-8** — `src/handlers/search-index.ts:44-63` + `packages/shared-types/src/search/store.ts:51-125` — SearchIndexSync applies the object snapshot carried in the message with no ordering guard.
 Scenario: scheduler publishes video (snapshot A, public), then the owner makes it private (snapshot B). The two messages are in different batches handled by concurrent invocations or retried; B is applied, then A overwrites it, and a private video is searchable until the next reconciliation pass. Same for delete-then-stale-upsert resurrecting a deleted item.
 Severity: medium (privacy leak window). Fix: store the object's `updatedAt`/version in the base row and make the upsert `ON CONFLICT DO UPDATE ... WHERE excluded.version >= version`; or have the processor re-read the current R2 object instead of trusting the snapshot.
+Fixed in [#514](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/514): `source_version` guard on the search base rows and tombstones (`packages/shared-types/src/search/store.ts`), same pattern as the ownership index; every producer sends the snapshot's R2 `uploaded` time as `version`.
 
 **PR-9** — `src/moderation/consumer.ts:66-71` — daily neuron cap is check-then-act (`SUM` then call AI then record). With autoscaled consumers (5 msgs × up to 250 invocations) the cap overshoots by up to every in-flight scan. Severity: low (cost overrun bounded by backlog). Fix: reserve budget atomically before calling AI (`UPDATE ai_budget SET used = used + ? WHERE day = ? AND used + ? <= cap`), reconcile after; or set `max_concurrency` on the moderation consumer.
+Fixed in [#521](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/521): `reserveBudget` reserves the scan's worst-case neurons in one conditional `UPDATE ai_budget_daily` before calling AI and `settleBudget` reconciles after (`src/moderation/budget.ts`).
 
 **PR-10** — `src/lib/notifications-store.ts:99-141` + `messageProcessor.ts:493-511` — at-least-once interaction: fan-out insert succeeds, then the invocation fails before pushes/enqueue; the retry's `INSERT OR IGNORE` returns zero rows, so push and realtime are never sent. Not a concurrency bug strictly, but it appears under load (subrequest/timeout failures in PR-6/PR-7). Severity: low. Fix: track `pushed_at` on notifications and select un-pushed rows on retry.
+Fixed in [#513](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/513): `notifications.pushed_at` (migration 0007); a retried page or create selects rows with `pushed_at IS NULL`, pushes them and marks them, so a partial failure is resent, not lost.
 
 #### OK
 
