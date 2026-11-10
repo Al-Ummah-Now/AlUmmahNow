@@ -28,8 +28,14 @@ export function watchSignInRedirect(page: Page, expected: { locale: 'en' | 'ar';
       const login = seen[0];
       expect(login.searchParams.get('locale')).toBe(expected.locale);
       expect(login.searchParams.get('return')).toBe(expected.returnPath);
-      const auth = webAuthConfig().openAuthUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      await expect(page).toHaveURL(new RegExp(`^${auth}/.*[?&]lang=${expected.locale}(&|$)`));
+      // Ends on the auth server's sign-in page, in the page's language
+      const authOrigin = new URL(webAuthConfig().openAuthUrl).origin;
+      await expect
+        .poll(() => {
+          const url = new URL(page.url());
+          return url.origin === authOrigin ? url.searchParams.get('lang') : `not on the auth server: ${url.origin}`;
+        }, { message: 'the auth server sign-in page opened' })
+        .toBe(expected.locale);
     },
   };
 }
