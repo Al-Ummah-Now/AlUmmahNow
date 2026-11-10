@@ -9,7 +9,7 @@
  */
 
 import { pickLanguage } from '@/lib/format/pick-language';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ListPlus, Lock, Plus, X } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/components/AuthProvider/authContext';
@@ -23,6 +23,7 @@ import {
   type PlaylistWithVideos,
 } from '@/lib/api/playlists';
 import { normalizePlaylistTitle } from '@/lib/playlists/playlist-utils';
+import { menuShift } from './menu-shift';
 
 interface SaveToPlaylistProps {
   videoId: string;
@@ -30,7 +31,6 @@ interface SaveToPlaylistProps {
 }
 
 const MAX_PLAYLISTS = 50;
-
 export default function SaveToPlaylist({ videoId, className = '' }: SaveToPlaylistProps) {
   const { t, isRTL } = useLanguage();
   const { user } = useAuth();
@@ -46,6 +46,25 @@ export default function SaveToPlaylist({ videoId, className = '' }: SaveToPlayli
   const [newIsPublic, setNewIsPublic] = useState(true);
   const [creating, setCreating] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // The menu hangs from the button's start edge, which can leave it partly
+  // off-screen (e.g. Safari at x = -183 when the button sits near the far edge
+  // of a wrapped row). Measure it once open and slide it back into view.
+  useLayoutEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const menu = menuRef.current;
+      if (!menu) return;
+      menu.style.transform = '';
+      const rect = menu.getBoundingClientRect();
+      const shift = menuShift(rect.left, rect.right, document.documentElement.clientWidth);
+      menu.style.transform = shift ? `translateX(${Math.round(shift)}px)` : '';
+    };
+    place();
+    window.addEventListener('resize', place);
+    return () => window.removeEventListener('resize', place);
+  }, [open]);
 
   const loadPlaylists = useCallback(async () => {
     if (!channelId) return;
@@ -168,7 +187,9 @@ export default function SaveToPlaylist({ videoId, className = '' }: SaveToPlayli
 
       {open && (
         <div
+          ref={menuRef}
           role="dialog"
+          data-testid="save-to-playlist-menu"
           aria-label={t.playlist.saveToPlaylistTitle}
           className={`absolute z-50 mt-2 w-72 max-w-[calc(100vw-2rem)] ${isRTL ? 'right-0' : 'left-0'} bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl`}
         >
