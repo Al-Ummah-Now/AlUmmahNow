@@ -67,6 +67,41 @@ describe('handle claims (AV-13)', () => {
 		assert.equal(e.channel_tabs.read('channel-handles/quran').channelId, holders[0].id);
 	});
 
+	it('one channel changing its handle 10 ways at once: it keeps one, no claim is left over', async () => {
+		for (let round = 0; round < 5; round++) {
+			const e = {
+				channels: new SlowBucket({ c1: { id: 'c1', userId: 'u1', name: 'Channel', handle: 'start', isMain: true, dateCreated: '2026-01-01T00:00:00.000Z', dateModified: '2026-01-01T00:00:00.000Z' } }),
+				channel_tabs: new SlowBucket({ 'channel-handles/start': { handle: 'start', channelId: 'c1', userId: 'u1' } }),
+				queue: new MemoryQueue(),
+			};
+			const app = buildApp((r: any) => r.put('/api/channels/:id', ChannelUpdate), { userId: 'u1' });
+			const statuses = await Promise.all(Array.from({ length: 10 }, (_, i) =>
+				app.request('/api/channels/c1', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ handle: `name${i}` }) }, e).then((r) => r.status)));
+			assert.ok(statuses.every((s) => s === 200), statuses.join());
+			const final = e.channels.read('c1').handle;
+			const claims = [...e.channel_tabs.store.keys()].filter((k) => k.startsWith('channel-handles/'));
+			assert.deepEqual(claims, [`channel-handles/${final}`], `only the handle in use is claimed (${final})`);
+		}
+	});
+
+	it('a name edit racing a handle change does not revert the handle', async () => {
+		for (let round = 0; round < 10; round++) {
+			const e = {
+				channels: new SlowBucket({ c1: { id: 'c1', userId: 'u1', name: 'Old', handle: 'old', isMain: true, dateCreated: '2026-01-01T00:00:00.000Z', dateModified: '2026-01-01T00:00:00.000Z' } }),
+				channel_tabs: new SlowBucket({ 'channel-handles/old': { handle: 'old', channelId: 'c1', userId: 'u1' } }),
+				queue: new MemoryQueue(),
+			};
+			const app = buildApp((r: any) => r.put('/api/channels/:id', ChannelUpdate), { userId: 'u1' });
+			const put = (body: unknown) => app.request('/api/channels/c1', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }, e);
+			await Promise.all([put({ handle: 'fresh' }), put({ name: 'New name' })]);
+			const channel = e.channels.read('c1');
+			assert.equal(channel.handle, 'fresh');
+			assert.equal(channel.name, 'New name');
+			assert.equal(e.channel_tabs.read('channel-handles/fresh')?.channelId, 'c1');
+			assert.ok(!e.channel_tabs.read('channel-handles/old'), 'the old handle is free');
+		}
+	});
+
 	it('erasure frees only handles that are the channel\'s own', async () => {
 		const empty = () => new MemoryBucket({});
 		const env = {
