@@ -113,6 +113,8 @@ export function ChannelSearch({ channelId }: { channelId: string }) {
         listLabel={t.search.suggestionsLabel}
         testId="channel-search-input"
         popupTestId="channel-search-dropdown"
+        // Wider than the box, opening toward the page from the end of the tab bar
+        popupClassName="!start-auto w-80 max-w-[calc(100vw-2rem)]"
         optionTestId={(option) => (option.removable ? 'channel-search-recent' : 'channel-search-suggestion')}
         inputRef={inputRef}
         inputProps={{
