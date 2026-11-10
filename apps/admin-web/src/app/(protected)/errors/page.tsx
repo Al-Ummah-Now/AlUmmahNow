@@ -130,6 +130,48 @@ export default async function ErrorsPage() {
         </section>
       )}
 
+      {data && (
+        <section aria-labelledby="errors-erasure">
+          <h2 id="errors-erasure" className="text-xl font-semibold text-fg mb-1">{t('errorsPage.erasureTitle')}</h2>
+          <p className="text-fg-muted text-sm mb-3">{t('errorsPage.erasureHint')}</p>
+          {(data.erasureDeadLetters ?? []).length === 0 ? (
+            <div className={`${cardClass} text-center text-fg-muted`} data-testid="errors-erasure-empty">{t('errorsPage.erasureEmpty')}</div>
+          ) : (
+            <div className="bg-surface border border-border rounded-lg overflow-x-auto">
+              <table className="w-full" data-testid="errors-erasure">
+                <caption className="sr-only">{t('errorsPage.erasureTitle')}</caption>
+                <thead className="border-b border-border">
+                  <tr>
+                    <th className={thClass} scope="col">{t('errorsPage.colWhen')}</th>
+                    <th className={thClass} scope="col">{t('errorsPage.colAccount')}</th>
+                    <th className={thClass} scope="col">{t('errorsPage.colStep')}</th>
+                    <th className={thClass} scope="col">{t('errorsPage.colReason')}</th>
+                    <th className={thClass} scope="col">{t('errorsPage.colAttempts')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(data.erasureDeadLetters ?? []).map((d) => (
+                    <tr key={d.id} className="border-b border-border last:border-0" data-dead-letter-id={d.id}>
+                      <td className={tdClass}>{formatDate(d.receivedAt, locale, true)}</td>
+                      <td className={tdClass}>
+                        {d.userId ? (
+                          <Link href={`/users/${encodeURIComponent(d.userId)}`} className={linkClass} dir="ltr">{d.userId}</Link>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                      <td className={tdClass}>{t(d.step === 'ContactDataErase' ? 'errorsPage.stepContact' : 'errorsPage.stepAccount')}</td>
+                      <td className={`${tdClass} break-words`}>{d.failureReason || t('errorsPage.noReason')}</td>
+                      <td className={tdClass}>{d.attempts}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+
       {contactFailed && (
         <section aria-labelledby="errors-contact">
           <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">

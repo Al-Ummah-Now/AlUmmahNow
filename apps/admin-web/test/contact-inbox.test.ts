@@ -68,5 +68,10 @@ describe('contact labels', () => {
     }
     assert.ok(ARABIC.test(ar.nav.contact));
     assert.ok(ARABIC.test(ar.contact.sendFailed) && ARABIC.test(ar.contact.retry));
+    // Errors page: account erasure failures (#616)
+    for (const key of ['erasureTitle', 'erasureHint', 'erasureEmpty', 'colAccount', 'colStep', 'stepAccount', 'stepContact'] as const) {
+      assert.ok(en.errorsPage[key], `en errorsPage.${key}`);
+      assert.ok(ARABIC.test(ar.errorsPage[key]), `ar errorsPage.${key}`);
+    }
   });
 });

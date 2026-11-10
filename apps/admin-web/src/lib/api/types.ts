@@ -205,9 +205,20 @@ export interface ReconcilerStats {
 }
 export interface ProcessingVideosResponse { items: ProcessingVideoRow[]; scanned: number; reconciler: ReconcilerStats | null }
 export interface ProcessingDeadLetter { id: string; dlq: string; attempts: number; failureReason: string | null; receivedAt: string | number; videoId?: string }
+/** An account erasure step that failed after its retries (#616). */
+export interface ErasureDeadLetter {
+  id: string;
+  step: 'UserDataErased' | 'ContactDataErase';
+  userId?: string;
+  attempts: number;
+  failureReason: string | null;
+  receivedAt: string | number;
+}
 export interface ProcessingErrorsResponse {
   videos: Pick<ProcessingVideoRow, 'id' | 'title' | 'channelId' | 'userId' | 'uploadStatus' | 'processingIssue' | 'dateCreated' | 'dateModified'>[];
   deadLetters: ProcessingDeadLetter[];
+  /** Absent from older api-videos builds */
+  erasureDeadLetters?: ErasureDeadLetter[];
   reconciler: ReconcilerStats | null;
 }
 export interface SyncPreview {

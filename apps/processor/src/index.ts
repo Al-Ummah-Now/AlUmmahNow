@@ -1,4 +1,8 @@
-import { AlUmmahMessage, QueueEnvironment } from './types';
+import { AlUmmahMessage, MessageType, QueueEnvironment } from './types';
+import { erasureRetryDelaySeconds } from './contact/erase';
+
+/** Account erasure steps: retried with backoff, then dead-lettered (shown on the admin Errors page). */
+const ERASURE_TYPES: readonly number[] = [MessageType.UserDataErased, MessageType.ContactDataErase];
 import { MessageProcessor } from './messageProcessor';
 import { createLogger } from '@al-ummah/logger';
 import { purgeExpiredNotifications } from './lib/notifications-store';
@@ -15,7 +19,7 @@ interface QueueMessage<T> {
   id?: string;
   body: T;
   ack: () => void;
-  retry: () => void;
+  retry: (options?: { delaySeconds?: number }) => void;
   /** Delivery attempt, starting at 1 (Cloudflare Queues). */
   attempts?: number;
 }
@@ -243,9 +247,11 @@ export default {
           
           if (!result.success) {
             if (result.shouldRetry) {
-              // Retry the message
+              // Retry the message (account erasure steps back off; contact/erase.ts)
               logger.warn(`Retrying message ${message.body.id}`);
-              message.retry();
+              const delaySeconds = erasureRetryDelaySeconds(message.body?.type, message.attempts ?? 1, ERASURE_TYPES);
+              if (delaySeconds) message.retry({ delaySeconds });
+              else message.retry();
             } else {
               // Send to dead letter queue (if available)
               logger.error(`Sending message ${message.body.id} to DLQ`);
@@ -269,7 +275,9 @@ export default {
         } catch (error) {
           logger.error(`Unexpected error processing message ${message.body.id}`, error);
           // For unexpected errors, we'll retry
-          message.retry();
+          const delaySeconds = erasureRetryDelaySeconds(message.body?.type, message.attempts ?? 1, ERASURE_TYPES);
+          if (delaySeconds) message.retry({ delaySeconds });
+          else message.retry();
         }
       })
     );

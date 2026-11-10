@@ -458,6 +458,13 @@ const en = {
     errorsLink: 'See errors',
   },
   errorsPage: {
+    erasureTitle: 'Account deletions that did not finish',
+    erasureHint: 'Steps of a videos account deletion that failed after their retries. The account is deleted; the listed data was not erased yet.',
+    erasureEmpty: 'Every account deletion finished',
+    colAccount: 'Account',
+    colStep: 'Step',
+    stepAccount: 'Reports, moderation and notifications',
+    stepContact: 'Contact us messages',
     contactTitle: 'Contact us emails that failed',
     contactEmpty: 'No contact emails are waiting for a retry',
     openContact: 'Open in Contact messages',
