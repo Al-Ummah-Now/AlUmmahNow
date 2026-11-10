@@ -7,8 +7,7 @@
  * ("Delete permanently now", which only queues it for the next cleanup).
  */
 
-/** Days a deleted item stays restorable before the cleanup purges it. */
-export const SOFT_DELETE_RETENTION_DAYS = 30;
+import { SOFT_DELETE_RETENTION_DAYS } from './admin-content';
 
 /** The kinds the admin "Recently deleted" views and the cleanup handle. */
 export const TRASH_KINDS = ['contact-message', 'theme', 'creator-tier'] as const;
@@ -55,7 +54,7 @@ export function trashDaysLeft(deletedAt: string, now: Date, days = SOFT_DELETE_R
 }
 
 /** True when the cleanup should purge the item now. */
-export function isPurgeDue(item: { deletedAt: string | null; purgeRequestedAt: string | null }, now: Date, days = SOFT_DELETE_RETENTION_DAYS): boolean {
+export function isTrashPurgeDue(item: { deletedAt: string | null; purgeRequestedAt: string | null }, now: Date, days = SOFT_DELETE_RETENTION_DAYS): boolean {
   if (!item.deletedAt) return false;
   return item.purgeRequestedAt !== null || Date.parse(item.deletedAt) <= now.getTime() - days * DAY_MS;
 }

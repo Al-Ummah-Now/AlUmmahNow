@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { ADMIN_DELETION_KINDS, deletionDaysLeft } from '@al-ummah/shared-types';
+import { ADMIN_DELETION_KINDS, TRASH_KINDS, deletionDaysLeft } from '@al-ummah/shared-types';
+import { trashHref } from '@/lib/trash';
 import { getContentPermissions, listDeletions } from '@/lib/api/content';
 import type { AdminContentPermission, AdminDeletion, AdminDeletionKind, AdminDeletionPage } from '@/lib/api/content-types';
 import { getI18n } from '@/i18n/server';
@@ -71,6 +72,15 @@ export default async function DeletedPage({ searchParams }: { searchParams: Prom
           );
         })}
       </nav>
+      <p className="text-sm text-fg-muted mb-4" data-testid="deleted-other-areas">
+        {t('deleted.otherAreas')}{' '}
+        {TRASH_KINDS.map((k, i) => (
+          <span key={k}>
+            {i > 0 && ', '}
+            <Link href={trashHref(k)} className={linkClass}>{t(`trash.kind.${k}` as MessageKey)}</Link>
+          </span>
+        ))}
+      </p>
       {data?.lastRun && (
         <p className="text-xs text-fg-subtle mb-4" data-testid="deleted-last-run">
           {t('deleted.lastRun', { when: formatDate(data.lastRun.at, locale, true), purged: String(data.lastRun.purged), failed: String(data.lastRun.failed) })}
