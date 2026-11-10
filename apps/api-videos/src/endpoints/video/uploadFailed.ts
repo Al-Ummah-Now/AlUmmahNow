@@ -50,12 +50,16 @@ export class UploadFailedEndpoint extends AuthenticatedRoute {
 		const videoId = request.params.videoId;
 		const reason = request.body?.reason?.trim() || 'The upload could not be completed. Upload the video file again.';
 		try {
-			// The owner, or a member whose channel role uploads (their uploads
-			// are owned by the channel owner, spec §8)
+			// The owner, or the member who uploaded it (their uploads are owned
+			// by the channel owner, spec §8) while their role still uploads. Only
+			// the uploading browser reports its own failure: another member
+			// cannot flag someone else's upload.
 			const object = await c.env.videos.get(videoId);
 			if (!object) return c.json({ success: false, error: 'Video not found' }, 404);
 			const video = (await object.json()) as AccessVideo;
-			if (!(await canOnVideo(c.env as never, video, userId, 'video.upload'))) {
+			const isOwner = !!video.userId && video.userId === userId;
+			const isUploader = !!video.uploadedBy && video.uploadedBy === userId;
+			if (!isOwner && !(isUploader && await canOnVideo(c.env as never, video, userId, 'video.upload'))) {
 				return c.json({ success: false, error: 'Forbidden - not your video' }, 403);
 			}
 			const result = await flagNeedsReupload(c.env as never, videoId, { reason, source: 'client', ownerId: video.userId ?? userId });

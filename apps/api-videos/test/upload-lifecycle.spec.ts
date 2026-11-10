@@ -47,15 +47,20 @@ function report(e: ReturnType<typeof env>, userId = 'alice') {
 }
 
 describe('the browser reports an upload it cannot finish', () => {
-	it('a channel editor reports their failed upload on the owner\'s video; a moderator cannot', async () => {
+	it('the member who uploaded reports their failed upload on the owner\'s video; other members cannot', async () => {
 		const e = {
 			...env({ vid: videoFixture({ id: 'vid', userId: 'owner', uploadedBy: 'ed', channelId: 'team', title: 'Talk', uploadStatus: 'uploading' }) }),
 			channels: new MemoryBucket({ team: { id: 'team', userId: 'owner', name: 'Team', members: [
 				{ userId: 'ed', role: 'editor', addedBy: 'owner', addedAt: '2026-11-01T00:00:00.000Z' },
 				{ userId: 'mod', role: 'moderator', addedBy: 'owner', addedAt: '2026-11-01T00:00:00.000Z' },
+				{ userId: 'ed2', role: 'editor', addedBy: 'owner', addedAt: '2026-11-01T00:00:00.000Z' },
+				{ userId: 'adm', role: 'admin', addedBy: 'owner', addedAt: '2026-11-01T00:00:00.000Z' },
 			] } }),
 		};
 		assert.equal((await report(e as never, 'mod')('vid')).status, 403);
+		// Only the uploader reports it: another editor or a channel admin cannot flag someone else's upload
+		assert.equal((await report(e as never, 'ed2')('vid')).status, 403);
+		assert.equal((await report(e as never, 'adm')('vid')).status, 403);
 		assert.equal((await report(e as never, 'stranger')('vid')).status, 403);
 		assert.equal(e.videos.read('vid').uploadStatus, 'uploading');
 		assert.equal((await report(e as never, 'ed')('vid')).status, 200);
