@@ -395,6 +395,21 @@ export class TusProxy {
         return c.json({ error: 'Unauthorized' }, 403);
       }
 
+      // Only an unfinished video takes a new upload: a long-lived session
+      // must not let anyone replace a finished video's content at Bunny.
+      let videoStatus: string | undefined;
+      try {
+        const object = await this.env.videos.get(videoId);
+        if (!object) return c.json({ error: 'Video not found' }, 404);
+        videoStatus = ((await object.json()) as { uploadStatus?: string }).uploadStatus;
+      } catch (error) {
+        logger.warn('[TUS Proxy] Video record unavailable on POST', { videoId, error: error instanceof Error ? error.message : String(error) });
+        return this.retryLater('Video store unavailable, retry');
+      }
+      if (videoStatus === 'ready' || videoStatus === 'processing') {
+        return c.json({ error: 'Upload already completed' }, 409);
+      }
+
       // Fresh Bunny signature: the one stored at initiate expires after an
       // hour, and a queued file in a bulk batch can start later than that.
       const requestHeaders: Record<string, string> = {
