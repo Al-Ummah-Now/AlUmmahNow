@@ -6,7 +6,9 @@
  */
 
 import {
+  LEGACY_TOKEN_ISSUED_BEFORE_MS,
   REFRESH_AHEAD_MS,
+  isLegacyLongLivedToken,
   __resetTokenRefreshStateForTests,
   accountExpiresAt,
   ROTATION_MEMORY_MS,
@@ -71,10 +73,35 @@ describe('expiry', () => {
     expect(legacy.expiresAt).toBeUndefined();
 
     expect(accountExpiresAt(legacy)).toBe(Math.floor((issuedAt + 30 * DAY) / 1000) * 1000);
-    // keeps working: no refresh, no sign-out, for the rest of its 30 days
-    expect(shouldRefresh(legacy, NOW)).toBe(false);
-    // and refreshes once it nears expiry
+    // Refreshed now, not used for the rest of its 30 days: its roles are frozen
+    // at issue (a revoked Admin would keep working)
+    expect(shouldRefresh(legacy, NOW)).toBe(true);
     expect(shouldRefresh(legacy, issuedAt + 30 * DAY - MINUTE)).toBe(true);
+  });
+
+  it('a token issued for longer than 15 minutes before the cutoff is due for refresh', () => {
+    const issuedAt = NOW - 10 * MINUTE;
+    const long = account('u1', { accessToken: jwt('u1', issuedAt, 15 * MINUTE + 1000), refreshToken: 'r1' });
+    expect(isLegacyLongLivedToken(long.accessToken)).toBe(true);
+    expect(shouldRefresh(long, NOW)).toBe(true);
+    // exactly 15 minutes: the normal rule (5 minutes left, no refresh)
+    const short = account('u1', { accessToken: jwt('u1', issuedAt, 15 * MINUTE), refreshToken: 'r1' });
+    expect(isLegacyLongLivedToken(short.accessToken)).toBe(false);
+    expect(shouldRefresh(short, NOW)).toBe(false);
+  });
+
+  it('a long-lived token issued after the cutoff (local issuer without ACCESS_TOKEN_TTL) is not refreshed on every request', () => {
+    const issuedAt = LEGACY_TOKEN_ISSUED_BEFORE_MS + DAY;
+    const dev = account('u1', { accessToken: jwt('u1', issuedAt, 30 * DAY), refreshToken: 'r1' });
+    expect(isLegacyLongLivedToken(dev.accessToken)).toBe(false);
+    expect(shouldRefresh(dev, issuedAt + MINUTE)).toBe(false);
+  });
+
+  it('a legacy token is still left alone when the account must sign in again', () => {
+    const legacy = jwt('u1', NOW - 2 * DAY, 30 * DAY);
+    expect(shouldRefresh(account('u1', { accessToken: legacy, refreshToken: 'r1', needsSignIn: true }), NOW)).toBe(false);
+    expect(shouldRefresh(account('u1', { accessToken: legacy, refreshToken: '' }), NOW)).toBe(false);
+    expect(isLegacyLongLivedToken('opaque-token')).toBe(false);
   });
 
   it('never refreshes an account that must sign in again, or one without a refresh token', () => {

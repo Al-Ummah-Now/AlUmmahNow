@@ -36,7 +36,7 @@ const revokeTokensOnSignOut = jest.fn(async () => undefined);
 jest.mock('../revoke-on-sign-out', () => ({ revokeTokensOnSignOut: (...args: unknown[]) => revokeTokensOnSignOut(...(args as [])) }));
 
 import { SessionManager, type SessionData, type UserSession } from '../session-manager';
-import { __resetTokenRefreshStateForTests, latestRotation } from '../token-refresh';
+import { LEGACY_TOKEN_ISSUED_BEFORE_MS, __resetTokenRefreshStateForTests, latestRotation } from '../token-refresh';
 import { DAY, MINUTE, fakeIssuer, jwt } from './token-fixtures';
 
 const COOKIE = 'al_ummah_session';
@@ -77,15 +77,28 @@ afterEach(() => {
 });
 
 describe('existing cookies on deploy (no expiresAt)', () => {
-  it('keep working with their 30-day token: no refresh, no sign-out', async () => {
-    const issuer = useIssuer({});
-    const legacyToken = jwt('u1', Date.now() - 3 * DAY, 30 * DAY);
-    writeAccount({ accessToken: legacyToken, refreshToken: 'r-legacy' });
+  it('a 30-day token is refreshed now (its roles are frozen at issue), not used for 30 days', async () => {
+    const fresh = jwt('u1', Date.now(), 15 * MINUTE);
+    const issuer = useIssuer({ 'r-legacy': { access: fresh, refresh: 'r2' } });
+    writeAccount({ accessToken: jwt('u1', LEGACY_TOKEN_ISSUED_BEFORE_MS - 3 * DAY, 30 * DAY), refreshToken: 'r-legacy' });
 
     const session = await SessionManager.ensureFreshActiveSession();
 
-    expect(session?.accessToken).toBe(legacyToken);
-    expect(issuer.calls).toHaveLength(0);
+    expect(issuer.calls).toEqual([{ refreshToken: 'r-legacy' }]);
+    expect(session?.accessToken).toBe(fresh);
+    expect(stored().accounts.u1).toMatchObject({ accessToken: fresh, refreshToken: 'r2' });
+  });
+
+  it('a 30-day token survives a temporary issuer failure: no sign-out', async () => {
+    const legacyToken = jwt('u1', LEGACY_TOKEN_ISSUED_BEFORE_MS - 3 * DAY, 30 * DAY);
+    const issuer = useIssuer({ 'r-legacy': { status: 503, error: 'temporarily_unavailable' } });
+    writeAccount({ accessToken: legacyToken, refreshToken: 'r-legacy' });
+
+    await SessionManager.ensureFreshActiveSession();
+
+    expect(issuer.calls).toEqual([{ refreshToken: 'r-legacy' }]);
+    expect(stored().accounts.u1).toMatchObject({ accessToken: legacyToken, refreshToken: 'r-legacy' });
+    expect(stored().accounts.u1.needsSignIn).toBeUndefined();
   });
 
   it('refresh once the token nears expiry, and store expiresAt', async () => {

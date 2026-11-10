@@ -118,9 +118,34 @@ export function accountExpiresAt(account: Pick<AccountTokens, 'accessToken' | 'e
   return accessTokenExpiresAt(account.accessToken);
 }
 
-/** True when the account should be refreshed now (expired or about to). */
+/** Access tokens are issued for 15 minutes (Auth ACCESS_TOKEN_TTL). */
+export const MAX_ACCESS_TOKEN_LIFETIME_MS = 15 * 60 * 1000;
+
+/**
+ * Every deployed Auth has issued 15-minute tokens since 2026-11-08 (#437).
+ * Long-lived tokens issued before this cutoff are the old 30-day ones; later
+ * ones only come from an issuer without ACCESS_TOKEN_TTL (local dev), where
+ * refreshing on every request would never end.
+ */
+export const LEGACY_TOKEN_ISSUED_BEFORE_MS = Date.UTC(2026, 10, 11);
+
+/**
+ * A 30-day access token from before 15-minute tokens. Its roles are frozen
+ * at the time it was issued (a revoked Admin keeps working, a granted role
+ * never shows), so it is refreshed now rather than used until it expires.
+ */
+export function isLegacyLongLivedToken(token: string | undefined | null): boolean {
+  const payload = decodeJwtPayload(token);
+  const iat = numericClaimMs(payload, 'iat');
+  const exp = numericClaimMs(payload, 'exp');
+  if (iat === null || exp === null) return false;
+  return exp - iat > MAX_ACCESS_TOKEN_LIFETIME_MS && iat < LEGACY_TOKEN_ISSUED_BEFORE_MS;
+}
+
+/** True when the account should be refreshed now (expired or about to, or a legacy 30-day token). */
 export function shouldRefresh(account: AccountTokens | undefined, now: number = Date.now(), aheadMs: number = REFRESH_AHEAD_MS): boolean {
   if (!account || account.needsSignIn || !account.refreshToken) return false;
+  if (isLegacyLongLivedToken(account.accessToken)) return true;
   const expiresAt = accountExpiresAt(account);
   // Unknown expiry (not a JWT): leave it to the 401 retry
   if (expiresAt === null) return false;
