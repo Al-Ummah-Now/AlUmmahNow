@@ -5,6 +5,7 @@ import * as SelectPrimitive from "@radix-ui/react-select"
 import { Check, ChevronDown, ChevronUp } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { bandCollisionPadding } from "@/lib/ui/visible-band"
 
 const Select = SelectPrimitive.Root
 
@@ -70,7 +71,7 @@ SelectScrollDownButton.displayName =
 const SelectContent = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content>
->(({ className, children, position = "popper", ...props }, ref) => (
+>(({ className, children, position = "popper", collisionPadding, ...props }, ref) => (
   <SelectPrimitive.Portal>
     <SelectPrimitive.Content
       ref={ref}
@@ -81,6 +82,8 @@ const SelectContent = React.forwardRef<
         className
       )}
       position={position}
+      // Flip/shift inside the band between the sticky header and the phone tab bar
+      collisionPadding={collisionPadding ?? bandCollisionPadding()}
       {...props}
     >
       <SelectScrollUpButton />

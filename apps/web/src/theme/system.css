@@ -454,3 +454,6 @@ button.group:hover span.rounded-full{filter:brightness(1.12)}
 
 /* The page, not the player, caps the watch column */
 .custom-video-player.aspect-video{max-height:calc(100dvh - 148px)}
+
+/* Menu-button rows (MenuButton): keyboard focus shows the same tile as hover */
+[role=menu]>.mi:focus{background:var(--m-hover)}

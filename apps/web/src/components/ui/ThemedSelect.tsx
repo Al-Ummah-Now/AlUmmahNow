@@ -1,8 +1,10 @@
 'use client';
 
+import type React from 'react';
 import type { ReactNode } from 'react';
 import { Check } from 'lucide-react';
 import * as Menu from '@radix-ui/react-dropdown-menu';
+import { bandCollisionPadding } from '@/lib/ui/visible-band';
 
 export interface ThemedOption {
   value: string;
@@ -19,6 +21,11 @@ interface ThemedSelectProps {
   testId?: string;
 }
 
+/** Mounts with the open menu, so the header/tab-bar band is read when it opens. */
+function BandedContent(props: React.ComponentProps<typeof Menu.Content>) {
+  return <Menu.Content collisionPadding={bandCollisionPadding()} {...props} />;
+}
+
 /** Compact ghost trigger with a themed menu of checkmark rows; replaces native selects. */
 export function ThemedSelect({ label, value, options, onChange, icon, dir, testId }: ThemedSelectProps) {
   const current = options.find((o) => o.value === value)?.label ?? '';
@@ -30,7 +37,7 @@ export function ThemedSelect({ label, value, options, onChange, icon, dir, testI
         <span className="ts-value">{current}</span>
       </Menu.Trigger>
       <Menu.Portal>
-        <Menu.Content data-slot="dropdown-menu-content" className="menu" align="start" sideOffset={6}>
+        <BandedContent data-slot="dropdown-menu-content" className="menu" align="start" sideOffset={6}>
           <Menu.RadioGroup value={value} onValueChange={onChange}>
             {options.map((o) => (
               <Menu.RadioItem key={o.value} value={o.value} className="ts-item" data-testid={testId ? `${testId}-${o.value}` : undefined}>
@@ -41,7 +48,7 @@ export function ThemedSelect({ label, value, options, onChange, icon, dir, testI
               </Menu.RadioItem>
             ))}
           </Menu.RadioGroup>
-        </Menu.Content>
+        </BandedContent>
       </Menu.Portal>
     </Menu.Root>
   );
