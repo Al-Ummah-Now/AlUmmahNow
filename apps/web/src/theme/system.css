@@ -308,7 +308,6 @@ html[dir=rtl] [data-testid=consent-banner]{right:auto!important;left:0!important
 .watch-actions:is([data-fit=icons],[data-fit=tight]) :is(button,a):has(>.wa-label):not(#_){width:var(--wa-h);padding:0}
 .watch-actions[data-fit=tight]{gap:6px}.watch-actions[data-fit=tight] .wa-comments:not(#_){display:none}
 .watch-actions[data-fit=tight] .wa-seg>button:not(#_){padding-inline:10px}
-.watch-actions [role=menu]{inset-inline-end:0;min-width:12rem}
 .watch-desc{width:100%;margin-block-start:12px;padding:10px 12px;border-radius:var(--r-lg);background:color-mix(in srgb,var(--fanous-color-text-primary) 7%,transparent);font-size:14px;line-height:20px;color:var(--fanous-color-text-primary)}
 .watch-desc summary{cursor:pointer;font-weight:600;display:flex;gap:10px}.watch-desc p{margin:8px 0 0;white-space:pre-line}
 [data-slot=button]{min-height:36px;gap:8px;font-size:14px;line-height:20px}[data-slot=button] svg{width:18px;height:18px}
