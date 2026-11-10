@@ -7,6 +7,10 @@ import { transformVideoToView } from "../../lib/transformations";
 import { toPlaylistResponse, canViewPlaylist, canViewVideo, PlaylistType, VideoType } from "../../lib/playlists";
 import { resolvePlaylistCovers, type PlaylistCover } from "../../lib/playlistCovers";
 import { logger } from "../../lib/logger";
+import { canManageChannelPlaylists } from "../../lib/playlistBulk";
+import { orderedPlaylist, refreshStoredOrder } from "../../lib/playlistOrder";
+import { waitUntilOf } from "../../lib/search/ownership";
+import { playlistSortOf } from "@al-ummah/shared-types";
 
 // Upper bound on videos resolved for a single playlist page
 const MAX_EXPANDED_VIDEOS = 200;
@@ -72,8 +76,12 @@ export class PlaylistFetch extends OptionalAuthRoute {
         const repository = new R2Repository<PlaylistType>(c.env.playlists);
         const playlist = await repository.getObject(id);
 
-        // Deleted, hidden and other users' private playlists all look "not found"
-        if (!playlist || !canViewPlaylist(playlist, userId)) {
+        // Deleted, hidden and other users' private playlists all look "not found".
+        // A private channel playlist is also shown to the channel's playlist
+        // managers (owner, admins, editors: playlist.manage).
+        const visible = !!playlist && (canViewPlaylist(playlist, userId)
+            || (!playlist.isDeleted && !playlist.isHidden && playlist.isPublic === false && await canManageChannelPlaylists(c.env as never, playlist.channelId, userId)));
+        if (!playlist || !visible) {
             return c.json({ success: false, error: "Playlist not found" }, 404);
         }
 
@@ -97,10 +105,17 @@ export class PlaylistFetch extends OptionalAuthRoute {
             }
         }
 
+        // The playlist's order, applied before anything is cut (automatic
+        // orders sort from fresh video data; a changed order is stored back)
+        const ordered = await orderedPlaylist(c.env as never, playlist);
+        response.videos = ordered.ids;
+        Object.assign(response, playlistSortOf(playlist));
+        refreshStoredOrder(c.env as never, playlist, ordered.ids, ordered.videos, waitUntilOf(c as never));
+
         if (includeVideos) {
             const videoRepo = new R2Repository<VideoType>(c.env.videos);
-            const ids = (playlist.videos || []).slice(0, MAX_EXPANDED_VIDEOS);
-            const videos = await Promise.all(ids.map((videoId) => videoRepo.getObject(videoId)));
+            const ids = ordered.ids.slice(0, MAX_EXPANDED_VIDEOS);
+            const videos = await Promise.all(ids.map((videoId) => ordered.videos.get(videoId) ?? videoRepo.getObject(videoId)));
             response.videoItems = videos
                 .filter((video): video is VideoType => !!video && canViewVideo(video, userId))
                 .map((video) => transformVideoToView(video));
@@ -115,7 +130,7 @@ export class PlaylistFetch extends OptionalAuthRoute {
             const first = playlist.thumbnailUrl ? undefined : response.videoItems.find((video) => video.thumbnailUrl);
             if (first?.thumbnailUrl) response.cover = { videoId: first.id, thumbnailUrl: first.thumbnailUrl };
         } else {
-            const cover = (await resolvePlaylistCovers(c.env, [playlist], userId)).get(id);
+            const cover = (await resolvePlaylistCovers(c.env, [{ ...playlist, videos: ordered.ids }], userId)).get(id);
             if (cover) response.cover = cover;
         }
 

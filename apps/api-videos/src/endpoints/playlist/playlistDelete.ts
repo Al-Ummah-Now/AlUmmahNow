@@ -4,6 +4,7 @@ import R2Repository from "../../lib/r2Repo";
 import { Playlist, ResponseError } from "../../lib/types";
 import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from "../../base";
+import { canManagePlaylist } from "../../lib/playlistBulk";
 
 export class PlaylistDelete extends AuthenticatedRoute {
     schema = {
@@ -69,16 +70,15 @@ export class PlaylistDelete extends AuthenticatedRoute {
             }, 404);
         }
 
-        // Check privacy permissions and ownership
-        if (playlist.isPublic === false && (!userId || playlist.userId !== userId)) {
+        // The owner, or a role on the playlist's channel granting playlist.manage
+        const allowed = await canManagePlaylist(c.env as never, playlist, userId);
+        if (!allowed && playlist.isPublic === false) {
             return c.json({
                 success: false,
                 error: "Playlist not found", // Don't reveal that private playlist exists
             }, 404);
         }
-
-        // Only allow deletion by the owner
-        if (playlist.userId !== userId) {
+        if (!allowed) {
             return c.json({
                 success: false,
                 error: "Unauthorized",

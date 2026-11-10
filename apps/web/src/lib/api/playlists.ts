@@ -9,7 +9,8 @@ import {
   PlaylistAddVideoRequest,
   PaginationResponse
 } from "./types";
-import { apiRequestServer, buildApiUrl } from "./api-client";
+import { apiRequestServer, apiRequestServerResult, buildApiUrl } from "./api-client";
+import type { PlaylistAddJobStatus, PlaylistBulkAddResult, PlaylistManageItem } from "@al-ummah/shared-types";
 import { getServerAuthContext } from "./server-auth";
 
 /**
@@ -23,9 +24,27 @@ export type PlaylistWithVideos = Playlist & {
 
 type PlaylistMutationResponse = {
   success: boolean;
-  result?: { playlist: Playlist };
+  result?: { playlist: Playlist; add?: PlaylistBulkAddResult };
   error?: string;
 };
+
+/**
+ * The answer of a playlist management call: the data, or the HTTP status
+ * (null: no answer, e.g. the network failed) so the page can pick a friendly
+ * message. Raw API errors never reach the user.
+ */
+export type PlaylistCallResult<T> = { ok: true; data: T } | { ok: false; status: number | null };
+
+async function managed<T>(options: { method: 'GET' | 'POST' | 'PUT'; path: string; body?: unknown; functionName: string }, channelId: string): Promise<PlaylistCallResult<T>> {
+  const result = await apiRequestServerResult<{ success?: boolean; result?: T }>({
+    method: options.method,
+    url: buildApiUrl(options.path),
+    ...(options.body !== undefined ? { body: options.body } : {}),
+    functionName: options.functionName,
+  }, () => requiredAuth(channelId), true);
+  if (result.data?.success && result.data.result !== undefined) return { ok: true, data: result.data.result };
+  return { ok: false, status: result.status };
+}
 
 /**
  * Optional auth for public reads: send the token when logged in (so owners
@@ -86,7 +105,7 @@ export async function getPlaylistById(
  * POST /api/playlists
  */
 export async function createPlaylist(
-  data: PlaylistCreateRequest & { title?: string },
+  data: PlaylistCreateRequest & { title?: string; videoIds?: string[] },
   headers: Required<Pick<ApiHeaders, 'channelId'>>
 ): Promise<PlaylistMutationResponse | null> {
   return apiRequestServer<PlaylistMutationResponse>({
@@ -98,6 +117,9 @@ export async function createPlaylist(
       description: data.description,
       thumbnailUrl: data.thumbnailUrl,
       isPublic: data.isPublic,
+      // The chosen videos, in order: validated and added by the API in the
+      // same request (the answer's `add` says what happened)
+      ...(data.videoIds?.length ? { videos: data.videoIds } : {}),
     },
     functionName: 'createPlaylist',
   }, () => requiredAuth(headers.channelId), true);
@@ -174,4 +196,115 @@ export async function removeVideoFromPlaylist(
     url: buildApiUrl(`/api/playlists/${encodeURIComponent(playlistId)}/videos/${encodeURIComponent(videoId)}`),
     functionName: 'removeVideoFromPlaylist',
   }, () => requiredAuth(headers.channelId), true);
+}
+
+/**
+ * Add many videos to a playlist, in the given order (idempotent, validated:
+ * only videos of the playlist's channel are added).
+ * POST /api/playlists/{id}/videos/bulk
+ *
+ * Up to 200 ids are added at once; for more (or when the write is slow) the
+ * answer is `queued` with a job id to follow with getPlaylistAddJob.
+ */
+export async function addVideosToPlaylist(
+  playlistId: string,
+  videoIds: string[],
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
+): Promise<PlaylistCallResult<PlaylistBulkAddResult>> {
+  return managed<PlaylistBulkAddResult>({
+    method: 'POST',
+    path: `/api/playlists/${encodeURIComponent(playlistId)}/videos/bulk`,
+    body: { videoIds },
+    functionName: 'addVideosToPlaylist',
+  }, headers.channelId);
+}
+
+/**
+ * Remove many videos from a playlist (idempotent).
+ * POST /api/playlists/{id}/videos/remove
+ */
+export async function removeVideosFromPlaylist(
+  playlistId: string,
+  videoIds: string[],
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
+): Promise<PlaylistCallResult<{ removed: number; videosCount: number }>> {
+  return managed({
+    method: 'POST',
+    path: `/api/playlists/${encodeURIComponent(playlistId)}/videos/remove`,
+    body: { videoIds },
+    functionName: 'removeVideosFromPlaylist',
+  }, headers.channelId);
+}
+
+/**
+ * Save a new order. Videos added meanwhile by someone else are kept (after
+ * the given ones); the answer is the stored order.
+ * PUT /api/playlists/{id}/videos/order
+ */
+export async function reorderPlaylistVideos(
+  playlistId: string,
+  videoIds: string[],
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
+): Promise<PlaylistCallResult<{ videos: string[] }>> {
+  return managed({
+    method: 'PUT',
+    path: `/api/playlists/${encodeURIComponent(playlistId)}/videos/order`,
+    body: { videoIds },
+    functionName: 'reorderPlaylistVideos',
+  }, headers.channelId);
+}
+
+export interface PlaylistManagePage {
+  playlist: { id: string; title: string; description?: string; isPublic: boolean; thumbnailUrl?: string; channelId: string; videosCount: number };
+  items: PlaylistManageItem[];
+  nextOffset: number | null;
+}
+
+/**
+ * One page of a playlist's entries for its managers (unavailable videos come
+ * back with `video: null` so they can be removed).
+ * GET /api/playlists/{id}/items
+ */
+export async function getPlaylistManageItems(
+  playlistId: string,
+  page: { offset: number; limit: number },
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
+): Promise<PlaylistCallResult<PlaylistManagePage>> {
+  return managed({
+    method: 'GET',
+    path: `/api/playlists/${encodeURIComponent(playlistId)}/items?offset=${page.offset}&limit=${page.limit}`,
+    functionName: 'getPlaylistManageItems',
+  }, headers.channelId);
+}
+
+/**
+ * Progress of a background add.
+ * GET /api/playlists/{id}/jobs/{jobId}
+ */
+export async function getPlaylistAddJob(
+  playlistId: string,
+  jobId: string,
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
+): Promise<PlaylistCallResult<PlaylistAddJobStatus>> {
+  return managed({
+    method: 'GET',
+    path: `/api/playlists/${encodeURIComponent(playlistId)}/jobs/${encodeURIComponent(jobId)}`,
+    functionName: 'getPlaylistAddJob',
+  }, headers.channelId);
+}
+
+/**
+ * Retry a background add that failed.
+ * POST /api/playlists/{id}/jobs/{jobId}/retry
+ */
+export async function retryPlaylistAddJob(
+  playlistId: string,
+  jobId: string,
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
+): Promise<PlaylistCallResult<PlaylistAddJobStatus>> {
+  return managed({
+    method: 'POST',
+    path: `/api/playlists/${encodeURIComponent(playlistId)}/jobs/${encodeURIComponent(jobId)}/retry`,
+    functionName: 'retryPlaylistAddJob',
+  }, headers.channelId);
 }

@@ -7,6 +7,7 @@ import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { canManagePlaylist } from "../../lib/channelAccess";
+import { persistAutoOrder } from "../../lib/playlistOrder";
 
 export class PlaylistAddVideo extends AuthenticatedRoute {
     schema = {
@@ -122,8 +123,11 @@ export class PlaylistAddVideo extends AuthenticatedRoute {
             if (fresh.userId !== playlist.userId || fresh.channelId !== playlist.channelId) return { reject: { status: 403, error: "Unauthorized - you can only modify your own playlists" } };
             const videos = fresh.videos || [];
             if (videos.includes(videoId)) return { reject: { status: 400, error: "Video is already in this playlist" } };
+            // Manual order: at the end. The add date feeds the "date added" order.
+            const now = new Date().toISOString();
             fresh.videos = [...videos, videoId];
-            fresh.dateModified = new Date().toISOString();
+            fresh.videoAddedAt = { ...(fresh.videoAddedAt ?? {}), [videoId]: now };
+            fresh.dateModified = now;
             return true;
         });
         if (!updatedPlaylist) {
@@ -132,6 +136,9 @@ export class PlaylistAddVideo extends AuthenticatedRoute {
         if (rejected) {
             return c.json({ success: false, error: rejected.error }, rejected.status);
         }
+        // An automatic order places it (no-op for manual playlists)
+        const ordered = await persistAutoOrder(c.env as never, id);
+        if (ordered) updatedPlaylist.videos = ordered;
 
         // Send queue message for playlist add
         const queue = new Queue(c.env.queue);

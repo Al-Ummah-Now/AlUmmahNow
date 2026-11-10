@@ -10,6 +10,14 @@ import { PlaylistsList } from '../endpoints/playlist/playlistsList';
 import { PlaylistAddVideo } from '../endpoints/playlist/playlistAddVideo';
 import { PlaylistRemoveVideo } from '../endpoints/playlist/playlistRemoveVideo';
 import { PlaylistUploadAddsCreate, PlaylistUploadAddsStatus } from '../endpoints/playlist/playlistUploadAdds';
+import {
+    PlaylistJobFetch,
+    PlaylistJobRetry,
+    PlaylistManageItems,
+    PlaylistVideosBulkAdd,
+    PlaylistVideosBulkRemove,
+    PlaylistVideosReorder,
+} from '../endpoints/playlist/playlistBulk';
 
 const app = new Hono();
 
@@ -29,5 +37,13 @@ playlistRouter.delete('/:id', PlaylistDelete);     // DELETE /api/playlists/:id 
 // Video management
 playlistRouter.post('/:id/videos', PlaylistAddVideo);               // POST /api/playlists/:id/videos - Add video to playlist
 playlistRouter.delete('/:id/videos/:videoId', PlaylistRemoveVideo); // DELETE /api/playlists/:id/videos/:videoId - Remove video from playlist
+
+// Bulk management (channel playlists: owner or playlist.manage on the channel)
+playlistRouter.post('/:id/videos/bulk', PlaylistVideosBulkAdd);     // POST /api/playlists/:id/videos/bulk - Add many videos (ordered, idempotent)
+playlistRouter.post('/:id/videos/remove', PlaylistVideosBulkRemove); // POST /api/playlists/:id/videos/remove - Remove many videos
+playlistRouter.put('/:id/videos/order', PlaylistVideosReorder);     // PUT /api/playlists/:id/videos/order - Reorder videos
+playlistRouter.get('/:id/items', PlaylistManageItems);              // GET /api/playlists/:id/items - Entries with their videos, for managers
+playlistRouter.get('/:id/jobs/:jobId', PlaylistJobFetch);           // GET /api/playlists/:id/jobs/:jobId - Background add progress
+playlistRouter.post('/:id/jobs/:jobId/retry', PlaylistJobRetry);    // POST /api/playlists/:id/jobs/:jobId/retry - Retry a failed background add
 
 export default playlistRouter;

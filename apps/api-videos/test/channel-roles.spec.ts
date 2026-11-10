@@ -330,12 +330,17 @@ describe('acting as a channel with a role', () => {
 		assert.equal(memberMayActAs('admin', 'PUT', '/api/channels/team'), true);
 		assert.equal(memberMayActAs('moderator', 'POST', '/api/videos/v1/comments/c1/approve'), true);
 		assert.equal(memberMayActAs('moderator', 'POST', '/api/videos/v1/likes'), true);
-		// Not listed: live streams, editing or deleting a playlist, posts, channel delete
-		assert.equal(memberMayActAs('admin', 'POST', '/api/live-streams'), false);
-		assert.equal(memberMayActAs('admin', 'PATCH', '/api/playlists/p1'), false);
-		// Creating a playlist and adding videos need playlist.manage
+		// Playlists: playlist.manage (owner, admin, editor)
 		assert.equal(memberMayActAs('admin', 'POST', '/api/playlists'), true);
+		assert.equal(memberMayActAs('editor', 'POST', '/api/playlists/pl/videos/bulk'), true);
+		assert.equal(memberMayActAs('editor', 'PUT', '/api/playlists/pl/videos/order'), true);
 		assert.equal(memberMayActAs('moderator', 'POST', '/api/playlists'), false);
+		assert.equal(memberMayActAs('moderator', 'POST', '/api/playlists/pl/videos/bulk'), false);
+		assert.equal(memberMayActAs('moderator', 'GET', '/api/playlists/pl/items'), true);
+		assert.equal(memberMayActAs('admin', 'PATCH', '/api/playlists/p1'), true);
+		assert.equal(memberMayActAs('editor', 'POST', '/api/playlists/upload-adds'), true);
+		// Not listed: live streams, posts, channel delete
+		assert.equal(memberMayActAs('admin', 'POST', '/api/live-streams'), false);
 		assert.equal(memberMayActAs('admin', 'DELETE', '/api/channels/team'), false);
 		assert.equal(memberMayActAs(null, 'GET', '/api/videos'), false);
 		assert.equal(memberMayActAs('owner', 'POST', '/api/live-streams'), true);

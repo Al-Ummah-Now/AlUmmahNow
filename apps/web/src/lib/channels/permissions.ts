@@ -17,14 +17,16 @@ export function roleMeets(role: ChannelRole | null | undefined, need: ChannelPag
 }
 
 /**
- * The channel settings pages and what each needs. Playlists and community
- * posts stay owner-only because their API routes are not open to members yet.
+ * The channel settings pages and what each needs. Playlists follow
+ * `playlist.manage`, which api-videos enforces on every playlist write from
+ * the same matrix. Community posts stay owner-only because their API routes
+ * are not open to members yet.
  */
 export const CHANNEL_SETTINGS_PAGES = {
   overview: 'any',
   edit: 'channel.edit',
   videos: 'video.edit',
-  playlists: 'owner',
+  playlists: 'playlist.manage',
   tabs: 'channel.edit',
   sections: 'channel.edit',
   community: 'owner',

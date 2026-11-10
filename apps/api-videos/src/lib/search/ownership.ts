@@ -198,6 +198,8 @@ export interface ChannelVideoQuery {
   longFormOnly?: boolean;
   /** Only Shorts, not live (channel "Shorts" tab; rule: shared-types video-format.ts). */
   shortsOnly?: boolean;
+  /** Exclude Shorts, keep long-form and live (the playlist picker's "Videos" filter). */
+  notShort?: boolean;
   /** Only public (`true`) or only private (`false`) videos. */
   isPublic?: boolean;
   /** Only live streams. */
@@ -234,6 +236,7 @@ export function channelVideoIds(
     if (query.shortsOnly) {
       where.push('is_live = 0', 'is_short = 1');
     }
+    if (query.notShort) where.push('is_short = 0');
     if (query.liveOnly) where.push('is_live = 1');
     if (query.notLive) where.push('is_live = 0');
     if (query.isPublic !== undefined) where.push(query.isPublic ? 'is_public = 1' : 'is_public = 0');

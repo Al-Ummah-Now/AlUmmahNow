@@ -28,6 +28,10 @@ export async function listVideos(
   params?: ListQueryParams & {
     sortBy?: 'date' | 'views' | 'likes' | 'relevance';
     sortOrder?: 'asc' | 'desc';
+    /** Only Shorts (`short`) or everything but Shorts (`video`) */
+    format?: 'video' | 'short';
+    /** Title contains this text (a page can come back short with a cursor: keep following it) */
+    q?: string;
   },
   headers?: ApiHeaders
 ): Promise<PaginationResponse<VideoObject> | null> {
@@ -35,6 +39,8 @@ export async function listVideos(
   if (params?.limit) queryParams.append('limit', params.limit.toString());
   if (params?.cursor) queryParams.append('cursor', params.cursor);
   if (params?.channelId) queryParams.append('channelId', params.channelId);
+  if (params?.format) queryParams.append('format', params.format);
+  if (params?.q?.trim()) queryParams.append('q', params.q.trim());
   if (params?.sortBy) queryParams.append('sortBy', params.sortBy);
   if (params?.sortOrder) queryParams.append('sortOrder', params.sortOrder);
 

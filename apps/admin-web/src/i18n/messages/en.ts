@@ -608,6 +608,7 @@ const en = {
       profilesRestoreLegacy: 'Restore legacy profile fields',
       videosRepairThumbnails: 'Fix thumbnail shapes',
       searchRebuildOwnership: 'Rebuild the admin lists index',
+      playlistAddVideos: 'Add videos to a playlist',
     },
     statuses: {
       queued: 'Queued',
