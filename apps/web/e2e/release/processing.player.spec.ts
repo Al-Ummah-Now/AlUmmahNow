@@ -26,7 +26,7 @@ test.use({ trace: 'off' });
 
 // 40 s so playback has room to advance (the 3 s sample can end first)
 const VIDEO = path.join(__dirname, '..', 'test-fixtures', 'e2e-sample-40s.mp4');
-/** Loop cadence is 30 s, 1 m, 2 m, then 5 m; a short clip encodes in ~1 min */
+/** Loop checks every minute for the first 10 min (sync.ts CHECK_BACKOFF_SECONDS); a short clip encodes in ~1 min */
 const READY_TIMEOUT_MS = 9 * 60_000;
 
 async function createChannelInMenu(page: Page, user: WebUser, name: string): Promise<string> {

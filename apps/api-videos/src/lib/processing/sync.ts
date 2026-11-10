@@ -285,17 +285,22 @@ export function applyPlan<T extends SyncableVideo>(video: T, plan: SyncPlan): bo
 }
 
 /**
- * Delay before the next check: 15 s, 15 s, 30 s, 1 m, 2 m, then every 5 m.
+ * Delay before the next check: 15 s, 15 s, 30 s, then every minute up to
+ * 10 min, every 2 min up to 14 min, then every 5 m.
  * Measured on QA (3 min 1080p clip): Bunny's first resolution was playable
  * 24 s after the upload and every resolution done at 49 s, so the first
- * checks are close together.
+ * checks are close together. When Bunny's encoder is backed up (2026-11-10:
+ * 40 s clips took 4-9 min on the QA library), a jump straight from 2 m to
+ * 5 m left a video playable at Bunny for up to 5 more minutes before it was
+ * marked ready (the 4 min check missed it, the next one came at 9 min), so
+ * the first 10 minutes are checked every minute.
  */
-export const CHECK_BACKOFF_SECONDS = [15, 15, 30, 60, 120, 300] as const;
+export const CHECK_BACKOFF_SECONDS = [15, 15, 30, 60, 60, 60, 60, 60, 60, 60, 60, 60, 120, 120, 300] as const;
 
 export function nextCheckDelaySeconds(attempt: number): number {
 	const index = Math.max(0, Math.min(attempt, CHECK_BACKOFF_SECONDS.length - 1));
 	return CHECK_BACKOFF_SECONDS[index];
 }
 
-/** Hard cap on checks per loop (~6 h at the 5-minute cadence). */
+/** Hard cap on checks per loop (~6 h: 14 min of early checks, then the 5-minute cadence). */
 export const MAX_CHECK_ATTEMPTS = 80;

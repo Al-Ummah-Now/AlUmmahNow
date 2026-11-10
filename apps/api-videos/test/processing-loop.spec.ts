@@ -2,7 +2,7 @@
  * Processing-check loop and Bunny sync (2026-11-10 incident: uploads stayed
  * "processing" with URLs on the wrong Bunny host although Bunny had encoded them).
  */
-import { afterEach, beforeEach, describe, it } from 'node:test';
+import { afterEach, beforeEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { applyPlan, bunnyPhase, CHECK_BACKOFF_SECONDS, MAX_CHECK_ATTEMPTS, nextCheckDelaySeconds, planSync, uploadStatusView } from '../src/lib/processing/sync';
 import {
@@ -63,6 +63,11 @@ let thumbnailStatus: Record<string, number> = {};
 let thumbnailChecks: string[] = [];
 const realFetch = globalThis.fetch;
 beforeEach(() => {
+	// The queue consumer reads the real clock (handleProcessingCheckBatch takes no
+	// `now`): pin it a minute after NOW, or the loops these tests start at NOW
+	// look older than the 6 h stall limit once the wall clock passes NOW + 6 h
+	// (they all failed from 2026-11-10T11:00Z). Timers stay real.
+	mock.timers.enable({ apis: ['Date'], now: NOW.getTime() + 60_000 });
 	bunnyResponses = {};
 	thumbnailStatus = {};
 	thumbnailChecks = [];
@@ -80,6 +85,7 @@ beforeEach(() => {
 });
 afterEach(() => {
 	globalThis.fetch = realFetch;
+	mock.timers.reset();
 });
 
 describe('planSync', () => {
@@ -148,9 +154,24 @@ describe('planSync', () => {
 });
 
 describe('backoff and loop decisions', () => {
-	it('15 s → 15 s → 30 s → 1 m → 2 m → 5 m, capped', () => {
-		assert.deepEqual([0, 1, 2, 3, 4, 5, 50].map(nextCheckDelaySeconds), [15, 15, 30, 60, 120, 300, 300]);
-		assert.deepEqual([...CHECK_BACKOFF_SECONDS], [15, 15, 30, 60, 120, 300]);
+	it('15 s → 15 s → 30 s → every minute to 10 min → every 2 min to 14 min → 5 m, capped', () => {
+		assert.deepEqual([0, 1, 2, 3, 4, 11, 12, 13, 14, 50].map(nextCheckDelaySeconds), [15, 15, 30, 60, 60, 60, 120, 120, 300, 300]);
+		assert.deepEqual([...CHECK_BACKOFF_SECONDS], [15, 15, 30, 60, 60, 60, 60, 60, 60, 60, 60, 60, 120, 120, 300]);
+	});
+
+	it('a video Bunny finishes within 10 min is seen within about a minute (no 2 m → 5 m gap)', () => {
+		// Check times since the loop started (2026-11-10: Bunny took 4-9 min; the
+		// old cadence checked at 4 min and next at 9 min)
+		const at: number[] = [];
+		let t = 0;
+		for (let attempt = 0; t < 10 * 60; attempt++) {
+			t += nextCheckDelaySeconds(attempt);
+			at.push(t);
+		}
+		const gaps = at.slice(1).map((v, i) => v - at[i]);
+		assert.ok(Math.max(...gaps) <= 60, `checks in the first 10 min are at most 1 min apart (${at.join(', ')})`);
+		const total = Array.from({ length: MAX_CHECK_ATTEMPTS }, (_, i) => nextCheckDelaySeconds(i)).reduce((a, b) => a + b, 0);
+		assert.ok(total >= 5 * 3600 && total <= 7 * 3600, `the attempt cap still spans about 6 h (${Math.round(total / 60)} min)`);
 	});
 
 	it('pending re-queues, terminal outcomes stop, the attempt cap stops', () => {
