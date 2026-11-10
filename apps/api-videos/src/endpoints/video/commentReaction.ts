@@ -72,17 +72,6 @@ export async function handleCommentReaction(
 
 	type VideoType = z.infer<typeof Video>;
 	const repository = new R2Repository<VideoType>(c.env.videos);
-	const video = await repository.getObject(id);
-
-	if (!video || isVideoRemoved(video) || (video.isPublic === false && video.userId !== userId)) {
-		return c.json({ success: false, error: "Object not found" }, 404);
-	}
-
-	// Top-level comments and replies can be reacted to; held comments cannot
-	const comment = findStoredComment(video.comments as unknown as StoredComment[], cid)?.comment;
-	if (!comment || !isCommentVisible(comment) || comment.status === 'held') {
-		return c.json({ success: false, error: "Object not found" }, 404);
-	}
 
 	const entry = {
 		id: crypto.randomUUID(),
@@ -92,11 +81,27 @@ export async function handleCommentReaction(
 		dateCreated: new Date().toISOString(),
 	};
 
-	const changed = applyCommentReaction(comment, reaction, action, entry);
+	// Conditional write (SCALABILITY-AUDIT AV-2): two people reacting to
+	// comments of one video at once both land.
+	let changed = false;
+	let comment = undefined as StoredComment | undefined;
+	const { data: video, rejected } = await repository.updateObjectOrReject<true>(id, (fresh) => {
+		changed = false;
+		comment = undefined;
+		if (isVideoRemoved(fresh) || (fresh.isPublic === false && fresh.userId !== userId)) return { reject: true };
+		// Top-level comments and replies can be reacted to; held comments cannot
+		const target = findStoredComment(fresh.comments as unknown as StoredComment[], cid)?.comment;
+		if (!target || !isCommentVisible(target) || target.status === 'held') return { reject: true };
+		comment = target;
+		changed = applyCommentReaction(target, reaction, action, entry);
+		return changed;
+	});
+
+	if (!video || rejected || !comment) {
+		return c.json({ success: false, error: "Object not found" }, 404);
+	}
 
 	if (changed) {
-		await repository.putObject(video.id, video);
-
 		const queue = new Queue(c.env.queue);
 		await queue.send(MESSAGE_TYPES[reaction][action], {
 			[reaction === 'like' ? 'likeId' : 'dislikeId']: entry.id,
@@ -110,8 +115,8 @@ export async function handleCommentReaction(
 
 	logger.info('[CommentReaction] Applied', { videoId: id, commentId: cid, channelId, reaction, action, changed });
 
-	const likes = comment.likes || [];
-	const dislikes = comment.dislikes || [];
+	const likes = (comment as StoredComment).likes || [];
+	const dislikes = (comment as StoredComment).dislikes || [];
 	return c.json({
 		success: true,
 		result: {

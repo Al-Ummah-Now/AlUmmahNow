@@ -29,11 +29,12 @@
   ],
   "kv_namespaces": [
 			// Token revocation list written by the auth worker (#437)
-			{ "binding": "TOKEN_REVOCATIONS", "id": "e6e662fc9cd9420797ddfa8060eb6956" },
-    {
-      "binding": "PRESENCE_KV",
-      "id": "2cf049fac822401fab2ef3fcb0675c8a"
-    }
+			{ "binding": "TOKEN_REVOCATIONS", "id": "e6e662fc9cd9420797ddfa8060eb6956" }
+  ],
+  // Workers Rate Limiting (per location, no KV): socket opens per IP, client messages per user or IP
+  "ratelimits": [
+  	{ "name": "WS_CONNECT_LIMITER", "namespace_id": "2303", "simple": { "limit": 120, "period": 60 } },
+  	{ "name": "WS_MESSAGE_LIMITER", "namespace_id": "2313", "simple": { "limit": 600, "period": 60 } }
   ],
   "vars": {
     "ENVIRONMENT": "qa",

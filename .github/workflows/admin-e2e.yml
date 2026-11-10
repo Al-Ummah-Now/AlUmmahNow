@@ -108,6 +108,16 @@ jobs:
         working-directory: apps/admin-web
         run: pnpm exec playwright test --project=${{ matrix.project }}
 
+      # Artifacts of this public repo are downloadable by anyone signed in to
+      # GitHub: drop any output that holds the seed password or a storage state,
+      # then fail. 01-auth.spec.ts types the password (trace off there).
+      - name: Scan test output for secrets
+        if: always()
+        run: >-
+          python3 scripts/ci/scan-artifacts-for-secrets.py
+          --env QA_SEED_PASSWORD
+          --remove apps/admin-web/playwright-report apps/admin-web/test-results
+
       - name: Upload HTML report
         if: always()
         uses: actions/upload-artifact@v4
@@ -121,9 +131,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: admin-e2e-results-${{ matrix.project }}
-          path: |
-            apps/admin-web/test-results/
-            !apps/admin-web/e2e/.auth/
+          path: apps/admin-web/test-results/
           retention-days: 14
 
       - name: Publish JUnit summary

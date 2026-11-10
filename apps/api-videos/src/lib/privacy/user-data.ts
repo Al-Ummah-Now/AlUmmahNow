@@ -29,7 +29,8 @@
  *   reports/report:{entityId}:{reportId}:{reporterId}  reports filed by the user
  */
 
-import { BucketLike, BudgetExhausted, OperationBudget, asBucket, deleteKeys, readJson, writeJson } from './scan';
+import { eraseUserSubscriptions, exportUserSubscriptions } from '../subscription-store';
+import { BucketLike, BudgetExhausted, OperationBudget, asBucket, deleteKeys, readJson, updateJson, writeJson } from './scan';
 
 /** Tombstone written in place of a user id on content kept after erasure. */
 export const DELETED_USER_ID = 'deleted-user';
@@ -52,6 +53,8 @@ export interface PrivacyBuckets {
 	'upload-defaults': unknown;
 	reports: unknown;
 	subtitles?: unknown;
+	/** Channel subscriptions (lib/subscription-store.ts) */
+	NOTIFICATIONS_DB?: D1Database;
 }
 
 type Json = Record<string, any>;
@@ -382,6 +385,13 @@ export async function collectUserData(
 				if (playlist.userId === userId) out.playlists.push(playlist);
 			})(ctx),
 		(ctx) => readEach(asBucket(env.reports), (key) => key.endsWith(`:${userId}`), (r) => void out.reportsFiled.push(r))(ctx),
+		// Subscriptions stored in D1 (SCALABILITY-AUDIT AV-4)
+		(ctx) =>
+			atomically(async () => {
+				if (!env.NOTIFICATIONS_DB) return;
+				ctx.budget.spend();
+				out.subscriptions.push(...(await exportUserSubscriptions(env.NOTIFICATIONS_DB, userId)));
+			}),
 	];
 
 	const result = await runPhases(phases, budget, options.resumeToken, options.pageSize ?? DEFAULT_PAGE_SIZE);
@@ -417,6 +427,16 @@ export interface ErasureHooks {
 
 function bump(map: Record<string, number>, key: string, by = 1): void {
 	if (by > 0) map[key] = (map[key] ?? 0) + by;
+}
+
+/** Counts of one conditional-write attempt, merged into the summary only when the write landed. */
+function newErasureSummary(): ErasureSummary {
+	return { userId: '', complete: true, deleted: {}, anonymized: {}, deletedVideoIds: [], affectedPosts: [] };
+}
+
+function mergeErasureSummary(into: ErasureSummary, from: ErasureSummary): void {
+	for (const [key, by] of Object.entries(from.deleted)) bump(into.deleted, key, by);
+	for (const [key, by] of Object.entries(from.anonymized)) bump(into.anonymized, key, by);
 }
 
 function stripUserReactions(list: unknown, userId: string): { list: Reaction[]; removed: number } {
@@ -504,12 +524,17 @@ export async function eraseUserData(
 						}
 						continue;
 					}
-					const { list, removed } = stripUserReactions(channel.subscriptions, userId);
-					if (removed > 0) {
-						channel.subscriptions = list;
-						await writeJson(channels, key, channel, ctx.budget);
-						bump(summary.deleted, 'subscriptions', removed);
-					}
+					if (stripUserReactions(channel.subscriptions, userId).removed === 0) continue;
+					// Conditional rewrite of the fresh channel (SCALABILITY-AUDIT AV-23)
+					let removed = 0;
+					await updateJson<Json>(channels, key, (fresh) => {
+						const stripped = stripUserReactions(fresh.subscriptions, userId);
+						removed = stripped.removed;
+						if (removed === 0) return false;
+						fresh.subscriptions = stripped.list;
+						return true;
+					}, ctx.budget);
+					if (removed > 0) bump(summary.deleted, 'subscriptions', removed);
 				}
 			});
 		},
@@ -543,17 +568,27 @@ export async function eraseUserData(
 						bump(summary.deleted, 'videos');
 						continue;
 					}
-					let changed = false;
-					for (const kind of ['likes', 'dislikes'] as const) {
-						const { list, removed } = stripUserReactions(video[kind], userId);
-						if (removed > 0) {
-							video[kind] = list;
-							bump(summary.deleted, 'videoReactions', removed);
-							changed = true;
+					// Strip and anonymise on the fresh video with a conditional write
+					// (SCALABILITY-AUDIT AV-23), counting only the attempt that landed
+					const needsChange = (['likes', 'dislikes'] as const).some((kind) => stripUserReactions(video[kind], userId).removed > 0)
+						|| anonymizeVideoComments(structuredClone(video.comments), userId, newErasureSummary());
+					if (!needsChange) continue;
+					let attempt = newErasureSummary();
+					await updateJson<Json>(videos, key, (fresh) => {
+						attempt = newErasureSummary();
+						let changed = false;
+						for (const kind of ['likes', 'dislikes'] as const) {
+							const { list, removed } = stripUserReactions(fresh[kind], userId);
+							if (removed > 0) {
+								fresh[kind] = list;
+								bump(attempt.deleted, 'videoReactions', removed);
+								changed = true;
+							}
 						}
-					}
-					if (anonymizeVideoComments(video.comments, userId, summary)) changed = true;
-					if (changed) await writeJson(videos, key, video, ctx.budget);
+						if (anonymizeVideoComments(fresh.comments, userId, attempt)) changed = true;
+						return changed;
+					}, ctx.budget);
+					mergeErasureSummary(summary, attempt);
 				}
 			});
 		},
@@ -588,16 +623,22 @@ export async function eraseUserData(
 			scanPages(community, 'comments/', ctx, async (objects) => {
 				for (const { key } of objects) {
 					if (key.endsWith('/index.json') || key.endsWith('/pinned.json')) continue;
-					const comment = await readJson<Json>(community, key, ctx.budget);
-					if (!comment || comment.userId !== userId) continue;
-					comment.userId = DELETED_USER_ID;
-					comment.channelId = DELETED_CHANNEL_ID;
-					comment.content = '';
-					comment.userDisplayName = '';
-					delete comment.userAvatarUrl;
-					comment.deletedAt = comment.deletedAt ?? new Date().toISOString();
-					await writeJson(community, key, comment, ctx.budget);
-					bump(summary.anonymized, 'communityComments');
+					// Conditional rewrite (SCALABILITY-AUDIT AV-23): a concurrent like or
+					// edit cannot bring the author back
+					let anonymized = false;
+					await updateJson<Json>(community, key, (comment) => {
+						anonymized = false;
+						if (comment.userId !== userId) return false;
+						comment.userId = DELETED_USER_ID;
+						comment.channelId = DELETED_CHANNEL_ID;
+						comment.content = '';
+						comment.userDisplayName = '';
+						delete comment.userAvatarUrl;
+						comment.deletedAt = comment.deletedAt ?? new Date().toISOString();
+						anonymized = true;
+						return true;
+					}, ctx.budget);
+					if (anonymized) bump(summary.anonymized, 'communityComments');
 				}
 			}),
 
@@ -640,8 +681,13 @@ export async function eraseUserData(
 			});
 		},
 
-		// Profile last
+		// Subscriptions in D1 (SCALABILITY-AUDIT AV-4), then the profile last
 		async (ctx) => {
+			if (env.NOTIFICATIONS_DB) {
+				ctx.budget.spend();
+				const removed = await eraseUserSubscriptions(env.NOTIFICATIONS_DB, userId);
+				if (removed > 0) bump(summary.deleted, 'subscriptions', removed);
+			}
 			const profiles = asBucket(env.profiles);
 			ctx.budget.spend();
 			if (await profiles.get(userId)) {

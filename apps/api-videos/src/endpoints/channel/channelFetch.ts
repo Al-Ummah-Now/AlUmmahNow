@@ -2,7 +2,7 @@ import { Str } from "chanfana";
 import { z } from "zod";
 import { Channel as BusinessChannel, ResponseError } from "../../lib/types";
 import { PublicChannelView } from "../../lib/model/view";
-import { toPublicChannel } from "../../lib/public-views";
+import { toPublicChannels } from "../../lib/public-views";
 import R2Repository from "../../lib/r2Repo";
 import { OptionalAuthRoute, AppContext } from "../../base";
 import { channelTotalsFromIndex } from "../../lib/search/ownership";
@@ -117,7 +117,7 @@ export class ChannelFetch extends OptionalAuthRoute {
 			}
 
 			// Transform to view model for response
-			const channelView = toPublicChannel(channel);
+			const [channelView] = await toPublicChannels(c.env.NOTIFICATIONS_DB, [channel]);
 
 			// Uploads don't append to channel.videos, so count from the ownership
 			// index (public, published videos; same rule as /about). Index

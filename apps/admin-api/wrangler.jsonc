@@ -22,6 +22,13 @@
 			"preview_database_id": "2d6a536c-6546-48c2-840a-40f9ddc21ab8",
 			"migrations_dir": "migrations",
 			"remote": true
+		},
+		{
+			// Search index (read only here): the section index rebuild reads it (SCALABILITY-AUDIT AA-4).
+			// Migrations live in apps/api-videos.
+			"binding": "SEARCH_DB",
+			"database_name": "al-ummah-now-search",
+			"database_id": "41064871-cf1f-46e9-b102-7b913240ad89"
 		}
 	],
 
@@ -117,6 +124,12 @@
 					"database_name": "al-ummah-now-reports-stage",
 					"database_id": "2b2c07fc-2823-46e0-958f-acfc401544ff",
 					"migrations_dir": "migrations"
+				},
+				{
+					// Search index (read only; migrations in apps/api-videos)
+					"binding": "SEARCH_DB",
+					"database_name": "al-ummah-now-search-stage",
+					"database_id": "956a3550-bd20-4cfc-9bf2-b1c2265b33dd"
 				}
 			],
 			// Token revocation list written by the auth worker (#437)

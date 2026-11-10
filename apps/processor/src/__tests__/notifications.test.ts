@@ -50,6 +50,8 @@ describe('notification center (processor)', () => {
   function pushedTo(): string[] {
     return fetchMock.mock.calls
       .map(([, init]) => JSON.parse((init as RequestInit).body as string))
+      // A body is one event or a batch of them ({ items })
+      .flatMap((b) => (Array.isArray(b.items) ? b.items : [b]))
       .filter((b) => b.message.type === 'notification')
       .map((b) => b.channel);
   }
@@ -62,6 +64,32 @@ describe('notification center (processor)', () => {
 
     await p.processMessage(message(MessageType.Unsubscribe, { targetChannelId: 'ch1', userId: 'u1' }), env());
     expect(rows('SELECT * FROM channel_subscribers')).toEqual([]);
+  });
+
+  it('follows the stored subscriptions of an imported channel, whatever order events arrive in', async () => {
+    const p = processor();
+    // api-videos imported the channel; u1 subscribed, then unsubscribed (row gone)
+    db.raw.prepare("INSERT INTO channel_subscription_imports VALUES ('ch1', 0, 0)").run();
+    await p.processMessage(message(MessageType.Unsubscribe, { targetChannelId: 'ch1', userId: 'u1' }), env());
+    // The Subscribe event arrives late: it must not bring u1 back
+    await p.processMessage(message(MessageType.Subscribe, { targetChannelId: 'ch1', userId: 'u1' }), env());
+    expect(rows('SELECT * FROM channel_subscribers')).toEqual([]);
+
+    // u2 subscribed (row present); a late Unsubscribe from an earlier change must not drop them
+    db.raw.prepare("INSERT INTO channel_subscriptions VALUES ('ch1', 'u2-ch', 'u2', 's2', 0)").run();
+    await p.processMessage(message(MessageType.Unsubscribe, { targetChannelId: 'ch1', userId: 'u2' }), env());
+    expect(rows('SELECT user_id FROM channel_subscribers')).toEqual([{ user_id: 'u2' }]);
+  });
+
+  it('erasing a user removes their subscriptions and keeps channel counts exact', async () => {
+    db.raw.exec(`INSERT INTO channel_subscriptions VALUES ('a', 'gone-ch', 'gone', 's1', 0), ('a', 'x-ch', 'x', 's2', 0), ('b', 'gone-ch2', 'gone', 's3', 0);
+      INSERT INTO channel_subscriber_counts VALUES ('a', 2), ('b', 1);`);
+    await processor().processMessage(message(MessageType.UserDataErased, { userId: 'gone' }), env());
+    expect(rows('SELECT channel_id, subscriber_channel_id FROM channel_subscriptions')).toEqual([{ channel_id: 'a', subscriber_channel_id: 'x-ch' }]);
+    expect(rows('SELECT channel_id, subscribers FROM channel_subscriber_counts ORDER BY channel_id')).toEqual([
+      { channel_id: 'a', subscribers: 1 },
+      { channel_id: 'b', subscribers: 0 },
+    ]);
   });
 
   it('stores a NotificationCreate once (dedupe) and pushes it with the stored id', async () => {
@@ -165,6 +193,7 @@ describe('notification center (processor)', () => {
 
     const notificationBodies = fetchMock.mock.calls
       .map(([, init]) => JSON.parse((init as RequestInit).body as string))
+      .flatMap((b) => (Array.isArray(b.items) ? b.items : [b]))
       .filter((b) => b.message.type === 'notification');
     expect(notificationBodies[0].message.data.notificationId).toBe(stored[0].id);
     // the duplicate status event is not stored and therefore not pushed as a notification

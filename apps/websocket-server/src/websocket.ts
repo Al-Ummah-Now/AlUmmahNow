@@ -1,40 +1,103 @@
 /**
  * WebSocket Durable Object
- * Handles WebSocket connections, authentication, and message routing
+ * Handles WebSocket connections, authentication, and message routing.
+ *
+ * Hibernation-safe: everything a socket needs (session, user, token expiry,
+ * channels, rate-limit window) lives in its attachment
+ * (`ws.serializeAttachment`). The in-memory indexes below are only a cache,
+ * rebuilt from `ctx.getWebSockets()` whenever the runtime constructs the
+ * object again (after hibernation, eviction or a code update).
+ *
+ * Socket objects are sharded (`sockets:<n>`, see shards.ts); the same class
+ * hosts the view counter (`views:<videoId>:<shard>`, see view-counter.ts).
  */
 
 import { DurableObject } from "cloudflare:workers";
 import { authenticateToken, canPublish, canSubscribe, canSubscribeAnonymously } from './auth';
-import { ChannelManager } from './channels';
-import { PresenceManager } from './presence';
-import { ClientMessageSchema, ServerMessage, RateLimitInfo } from './messages';
+import { ClientMessageSchema, ServerMessage } from './messages';
 import { logger } from './lib/logger';
 import { ViewCounter, type CounterStorage, type VideoBucket } from './view-counter';
+import { broadcastToShards, type BroadcastItem } from './shards';
 
-/** Name of the one object that holds the WebSocket connections (index.ts routes /ws and /broadcast to it). */
-export const SOCKETS_OBJECT_NAME = 'websocket-instance';
+/** Tag on every accepted socket, so its state can be found again after hibernation. */
+const SOCKET_TAG = 'socket';
+/** An attachment may hold at most 2 KiB; channels are capped to stay well below. */
+export const MAX_ATTACHMENT_BYTES = 2048;
+export const MAX_CHANNELS_PER_SOCKET = 12;
+/** Most broadcast items one internal request may carry. */
+export const MAX_BROADCAST_ITEMS = 1000;
 
-interface WebSocketConnection {
-  webSocket: WebSocket;
+/** Per-socket state, stored in the socket's attachment. */
+export interface SocketState {
   sessionId: string;
   userId?: string;
   authenticated: boolean;
   /** Unix seconds when the token the socket authenticated with expires (#437). */
   authExpiresAt?: number;
   connectedAt: number;
+  /** Client IP, the rate-limit key until the socket signs in. */
+  ip?: string;
+  channels: string[];
+  /** Fixed-window message counter: survives hibernation with the attachment. */
+  rl: { count: number; resetAt: number };
 }
 
+interface RateLimiter {
+  limit(options: { key: string }): Promise<{ success: boolean }>;
+}
+
+type SocketEnv = Env & { WS_MESSAGE_LIMITER?: RateLimiter };
+
 export class WebSocketDurableObject extends DurableObject {
-  private connections: Map<WebSocket, WebSocketConnection> = new Map();
-  private sessionToWebSocket: Map<string, WebSocket> = new Map();
-  private channelManager: ChannelManager = new ChannelManager();
-  private presenceManager: PresenceManager;
-  private rateLimits: Map<string, RateLimitInfo> = new Map();
+  /** Cache of each socket's attachment. */
+  private sockets: Map<WebSocket, SocketState> = new Map();
+  /** channel -> sockets subscribed to it. */
+  private subscribers: Map<string, Set<WebSocket>> = new Map();
   private viewCounter?: ViewCounter;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
-    this.presenceManager = new PresenceManager(env.PRESENCE_KV);
+    this.rebuildIndex();
+  }
+
+  /** Rebuilds the in-memory indexes from the sockets the runtime kept open. */
+  private rebuildIndex(): void {
+    this.sockets.clear();
+    this.subscribers.clear();
+    const live = typeof this.ctx.getWebSockets === 'function' ? this.ctx.getWebSockets(SOCKET_TAG) : [];
+    for (const ws of live) {
+      const state = ws.deserializeAttachment() as SocketState | null;
+      if (!state?.sessionId) continue;
+      this.sockets.set(ws, state);
+      for (const channel of state.channels) this.index(ws, channel);
+    }
+  }
+
+  private index(ws: WebSocket, channel: string): void {
+    let set = this.subscribers.get(channel);
+    if (!set) this.subscribers.set(channel, (set = new Set()));
+    set.add(ws);
+  }
+
+  private unindex(ws: WebSocket, channel: string): void {
+    const set = this.subscribers.get(channel);
+    if (!set) return;
+    set.delete(ws);
+    if (set.size === 0) this.subscribers.delete(channel);
+  }
+
+  /** Writes a socket's state back to its attachment. */
+  private save(ws: WebSocket, state: SocketState): void {
+    try {
+      ws.serializeAttachment(state);
+    } catch (error) {
+      logger.error('Failed to save socket state', error);
+    }
+  }
+
+  /** Number of sockets subscribed to a channel on this shard. */
+  subscriberCount(channel: string): number {
+    return this.subscribers.get(channel)?.size ?? 0;
   }
 
   /**
@@ -51,79 +114,59 @@ export class WebSocketDurableObject extends DurableObject {
       return await this.handleViewIncrement(request);
     }
 
-    // Handle internal broadcast endpoint
     if (url.pathname === '/broadcast' && request.method === 'POST') {
       return await this.handleBroadcastRequest(request);
     }
 
-    // Handle internal stats endpoint
     if (url.pathname === '/stats' && request.method === 'GET') {
       return this.handleStatsRequest();
     }
 
-    // Check if this is a WebSocket upgrade request
-    const upgradeHeader = request.headers.get('Upgrade');
-    if (upgradeHeader !== 'websocket') {
+    if (url.pathname === '/presence' && request.method === 'GET') {
+      return Response.json({ sessions: this.userSessionCount(url.searchParams.get('userId') ?? '') });
+    }
+
+    if (request.headers.get('Upgrade') !== 'websocket') {
       return new Response('Expected WebSocket upgrade', { status: 426 });
     }
 
-    // Check connection limit
-    const env = this.env as Env;
-    const maxConnections = env.MAX_CONNECTIONS_PER_DO || 1000;
-    if (this.connections.size >= maxConnections) {
+    const env = this.env as SocketEnv;
+    const maxConnections = Number(env.MAX_CONNECTIONS_PER_DO) || 1000;
+    if (this.ctx.getWebSockets(SOCKET_TAG).length >= maxConnections) {
       return new Response('Connection limit reached', { status: 503 });
     }
 
-    // Parse URL for authentication parameters
     // Only `token` is read. A `userId` query param is deliberately ignored: the
     // connection's identity comes solely from a verified token.
     const token = url.searchParams.get('token');
 
-    // Create WebSocket pair
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
+    this.ctx.acceptWebSocket(server, [SOCKET_TAG]);
 
-    // Accept the WebSocket connection
-    this.ctx.acceptWebSocket(server);
-
-    // Create session ID
-    const sessionId = crypto.randomUUID();
-
-    // Store connection info
-    const connection: WebSocketConnection = {
-      webSocket: server,
-      sessionId,
-      userId: undefined,
+    const state: SocketState = {
+      sessionId: crypto.randomUUID(),
       authenticated: false,
       connectedAt: Date.now(),
+      ip: request.headers.get('CF-Connecting-IP') ?? undefined,
+      channels: [],
+      rl: { count: 0, resetAt: 0 },
     };
+    this.sockets.set(server, state);
+    this.save(server, state);
 
-    this.connections.set(server, connection);
-    
-    // Store reverse lookup for efficient broadcasting
-    this.sessionToWebSocket.set(sessionId, server);
+    this.sendMessage(server, { type: 'connection_acknowledged', sessionId: state.sessionId });
 
-    // Send connection acknowledgment
-    this.sendMessage(server, {
-      type: 'connection_acknowledged',
-      sessionId,
-    });
-
-    // If token is provided in URL, attempt authentication
     // DEPRECATION: Token in URL is a security risk (exposed in logs, browser history)
     // Clients should send token via 'authenticate' message after connection
     if (token) {
       logger.warn('DEPRECATED: Token received in URL. Client should use authenticate message instead.', {
-        sessionId,
+        sessionId: state.sessionId,
       });
       await this.handleAuthentication(server, token);
     }
 
-    // Return the client WebSocket for the response
-    return new Response(null, {
-      status: 101,
-      webSocket: client,
-    });
+    return new Response(null, { status: 101, webSocket: client });
   }
 
   /**
@@ -131,130 +174,84 @@ export class WebSocketDurableObject extends DurableObject {
    */
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
     try {
-      const connection = this.connections.get(ws);
-      if (!connection) {
+      const state = this.sockets.get(ws);
+      if (!state) {
+        // Not one of ours (no attachment): tell the client to reconnect rather than go silent
+        ws.close(1011, 'Unknown session; reconnect');
         return;
       }
 
-      // Rate limiting check
-      if (!this.checkRateLimit(connection.sessionId)) {
-        this.sendMessage(ws, {
-          type: 'error',
-          error: 'Rate limit exceeded',
-          code: 'RATE_LIMIT',
-        });
+      if (!(await this.checkRateLimit(ws, state))) {
+        this.sendMessage(ws, { type: 'error', error: 'Rate limit exceeded', code: 'RATE_LIMIT' });
         return;
       }
 
-      // Parse and validate message
       const data = typeof message === 'string' ? message : new TextDecoder().decode(message);
-      
-      // Check message size limit (100KB)
       if (data.length > 100000) {
-        this.sendMessage(ws, {
-          type: 'error',
-          error: 'Message too large',
-          code: 'PAYLOAD_TOO_LARGE',
-        });
+        this.sendMessage(ws, { type: 'error', error: 'Message too large', code: 'PAYLOAD_TOO_LARGE' });
         return;
       }
-      
-      const parsedData = JSON.parse(data);
-      
-      // Validate with Zod schema
-      const validationResult = ClientMessageSchema.safeParse(parsedData);
+
+      const validationResult = ClientMessageSchema.safeParse(JSON.parse(data));
       if (!validationResult.success) {
-        this.sendMessage(ws, {
-          type: 'error',
-          error: 'Invalid message format',
-          code: 'INVALID_MESSAGE',
-        });
+        this.sendMessage(ws, { type: 'error', error: 'Invalid message format', code: 'INVALID_MESSAGE' });
         return;
       }
-      
       const clientMessage = validationResult.data;
 
       // A socket stays signed in only as long as its token (#437). Before a
       // re-auth too, so a failed one leaves the socket signed out.
       this.expireAuthIfNeeded(ws, { notify: clientMessage.type !== 'authenticate' });
 
-      // Handle different message types
       switch (clientMessage.type) {
         case 'authenticate':
           await this.handleAuthentication(ws, clientMessage.token);
           break;
-
         case 'subscribe':
-          await this.handleSubscribe(ws, clientMessage.channel);
+          this.handleSubscribe(ws, clientMessage.channel);
           break;
-
         case 'unsubscribe':
-          await this.handleUnsubscribe(ws, clientMessage.channel);
+          this.handleUnsubscribe(ws, clientMessage.channel);
           break;
-
         case 'message':
-          await this.handleMessage(ws, clientMessage.channel, clientMessage.data);
+          this.handleMessage(ws, clientMessage.channel, clientMessage.data);
           break;
-
         case 'ping':
         case 'heartbeat':
-          await this.handleHeartbeat(ws, clientMessage.timestamp);
+          this.sendMessage(ws, { type: 'pong', timestamp: Date.now() });
           break;
-
         default:
-          this.sendMessage(ws, {
-            type: 'error',
-            error: 'Unknown message type',
-            code: 'UNKNOWN_MESSAGE_TYPE',
-          });
+          this.sendMessage(ws, { type: 'error', error: 'Unknown message type', code: 'UNKNOWN_MESSAGE_TYPE' });
       }
     } catch (error) {
       logger.error('Error handling WebSocket message:', error);
-      this.sendMessage(ws, {
-        type: 'error',
-        error: 'Failed to process message',
-        code: 'PROCESSING_ERROR',
-      });
+      this.sendMessage(ws, { type: 'error', error: 'Failed to process message', code: 'PROCESSING_ERROR' });
     }
   }
 
-  /**
-   * Handle WebSocket close
-   */
   async webSocketClose(ws: WebSocket, code: number, reason: string, _wasClean: boolean): Promise<void> {
-    const connection = this.connections.get(ws);
-    if (connection) {
-      // Remove from channel subscriptions
-      this.channelManager.removeSession(connection.sessionId);
-
-      // Update presence
-      if (connection.authenticated && connection.userId) {
-        await this.presenceManager.setOffline(connection.userId, connection.sessionId);
-      }
-
-      // Clean up rate limits to prevent memory leak
-      this.rateLimits.delete(connection.sessionId);
-
-      // Remove from reverse lookup map
-      this.sessionToWebSocket.delete(connection.sessionId);
-
-      // Remove connection
-      this.connections.delete(ws);
-
-      logger.debug(`WebSocket closed: ${connection.sessionId}, code: ${code}, reason: ${reason}`);
+    const state = this.forget(ws);
+    // Complete the close handshake (no auto-reply at this compatibility date)
+    try {
+      ws.close(code === 1005 || code === 1006 || code === 1015 ? 1000 : code, reason);
+    } catch {
+      // already closed
     }
+    if (state) logger.debug(`WebSocket closed: ${state.sessionId}, code: ${code}, reason: ${reason}`);
   }
 
-  /**
-   * Handle WebSocket error
-   */
   async webSocketError(ws: WebSocket, error: unknown): Promise<void> {
     logger.error('WebSocket error:', error);
-    const connection = this.connections.get(ws);
-    if (connection) {
-      this.connections.delete(ws);
-      this.channelManager.removeSession(connection.sessionId);
-    }
+    this.forget(ws);
+  }
+
+  /** The one cleanup path for a closed or failed socket: drops it from every index. */
+  private forget(ws: WebSocket): SocketState | undefined {
+    const state = this.sockets.get(ws);
+    if (!state) return undefined;
+    for (const channel of state.channels) this.unindex(ws, channel);
+    this.sockets.delete(ws);
+    return state;
   }
 
   /**
@@ -268,21 +265,18 @@ export class WebSocketDurableObject extends DurableObject {
     ws: WebSocket,
     { notify = true, nowSeconds = Math.floor(Date.now() / 1000) }: { notify?: boolean; nowSeconds?: number } = {},
   ): boolean {
-    const connection = this.connections.get(ws);
-    if (!connection?.authenticated || connection.authExpiresAt === undefined || nowSeconds < connection.authExpiresAt) {
+    const state = this.sockets.get(ws);
+    if (!state?.authenticated || state.authExpiresAt === undefined || nowSeconds < state.authExpiresAt) {
       return false;
     }
-    const session = this.channelManager.getSession(connection.sessionId);
-    for (const channel of [...(session?.channels ?? [])]) {
-      if (!canSubscribeAnonymously(channel)) this.channelManager.unsubscribe(connection.sessionId, channel);
+    for (const channel of state.channels) {
+      if (!canSubscribeAnonymously(channel)) this.unindex(ws, channel);
     }
-    connection.authenticated = false;
+    state.channels = state.channels.filter(canSubscribeAnonymously);
+    state.authenticated = false;
+    this.save(ws, state);
     if (notify) {
-      this.sendMessage(ws, {
-        type: 'error',
-        error: 'Token expired; authenticate again',
-        code: 'AUTH_EXPIRED',
-      });
+      this.sendMessage(ws, { type: 'error', error: 'Token expired; authenticate again', code: 'AUTH_EXPIRED' });
     }
     return true;
   }
@@ -292,271 +286,187 @@ export class WebSocketDurableObject extends DurableObject {
     return !canSubscribeAnonymously(channel) && this.expireAuthIfNeeded(ws);
   }
 
-  /**
-   * Handle authentication
-   */
   private async handleAuthentication(ws: WebSocket, token: string): Promise<void> {
-    const connection = this.connections.get(ws);
-    if (!connection) {
-      return;
-    }
+    const state = this.sockets.get(ws);
+    if (!state) return;
 
     try {
       // Signature, issuer, expiry and client are checked in authenticateToken;
       // unsigned tokens are only accepted when ENVIRONMENT=development.
       const authPayload = await authenticateToken(token, this.env as Env);
-
       if (!authPayload) {
-        this.sendMessage(ws, {
-          type: 'error',
-          error: 'Invalid or expired token',
-          code: 'AUTH_FAILED',
-        });
+        this.sendMessage(ws, { type: 'error', error: 'Invalid or expired token', code: 'AUTH_FAILED' });
         return;
       }
 
       // A connection cannot switch to a different user; re-auth is only a token refresh.
-      if (connection.authenticated && connection.userId !== authPayload.sub) {
-        this.sendMessage(ws, {
-          type: 'error',
-          error: 'Connection is already authenticated as another user',
-          code: 'AUTH_FAILED',
-        });
+      if (state.userId !== undefined && state.userId !== authPayload.sub) {
+        this.sendMessage(ws, { type: 'error', error: 'Connection is already authenticated as another user', code: 'AUTH_FAILED' });
         return;
       }
 
-      // Update connection
-      connection.authenticated = true;
-      connection.userId = authPayload.sub;
-      connection.authExpiresAt = authPayload.exp;
+      state.authenticated = true;
+      state.userId = authPayload.sub;
+      state.authExpiresAt = authPayload.exp;
+      // Auto-subscribe to the user's notification channel
+      this.addChannel(ws, state, `user:${authPayload.sub}`);
+      this.save(ws, state);
 
-      // Add session to channel manager (a re-auth keeps the session and its channels)
-      const existingSession = this.channelManager.getSession(connection.sessionId);
-      if (existingSession) existingSession.userId = authPayload.sub;
-      else this.channelManager.addSession(connection.sessionId, authPayload.sub);
-
-      // Update presence
-      await this.presenceManager.setOnline(authPayload.sub, connection.sessionId);
-
-      // Send success response
-      this.sendMessage(ws, {
-        type: 'authenticated',
-        userId: authPayload.sub,
-        sessionId: connection.sessionId,
-      });
-
-      // Auto-subscribe to user's notification channel
-      const userChannel = `user:${authPayload.sub}`;
-      this.channelManager.subscribe(connection.sessionId, userChannel);
-
+      this.sendMessage(ws, { type: 'authenticated', userId: authPayload.sub, sessionId: state.sessionId });
     } catch (error) {
       logger.error('Authentication error:', error);
-      this.sendMessage(ws, {
-        type: 'error',
-        error: 'Authentication failed',
-        code: 'AUTH_ERROR',
-      });
+      this.sendMessage(ws, { type: 'error', error: 'Authentication failed', code: 'AUTH_ERROR' });
     }
   }
 
-  /**
-   * Handle channel subscription
-   */
-  private async handleSubscribe(ws: WebSocket, channel: string): Promise<void> {
-    const connection = this.connections.get(ws);
-    if (!connection) {
-      return;
+  /** Adds a channel to a socket if it fits in the attachment. Caller saves. */
+  private addChannel(ws: WebSocket, state: SocketState, channel: string): boolean {
+    if (state.channels.includes(channel)) return true;
+    const next = [...state.channels, channel];
+    if (next.length > MAX_CHANNELS_PER_SOCKET || JSON.stringify({ ...state, channels: next }).length > MAX_ATTACHMENT_BYTES) {
+      return false;
     }
+    state.channels = next;
+    this.index(ws, channel);
+    return true;
+  }
+
+  private handleSubscribe(ws: WebSocket, channel: string): void {
+    const state = this.sockets.get(ws);
+    if (!state) return;
 
     // Signed-out viewers may follow public video feeds; everything else needs a token.
-    if (!connection.authenticated && !canSubscribeAnonymously(channel)) {
-      this.sendMessage(ws, {
-        type: 'error',
-        error: 'Authentication required',
-        code: 'AUTH_REQUIRED',
-      });
+    if (!state.authenticated && !canSubscribeAnonymously(channel)) {
+      this.sendMessage(ws, { type: 'error', error: 'Authentication required', code: 'AUTH_REQUIRED' });
       return;
     }
 
     // user:<id> channels carry private notifications; only that user may join.
-    if (connection.authenticated && (!connection.userId || !canSubscribe(connection.userId, channel))) {
-      this.sendMessage(ws, {
-        type: 'error',
-        error: 'Not allowed to subscribe to this channel',
-        code: 'FORBIDDEN',
-      });
+    if (state.authenticated && (!state.userId || !canSubscribe(state.userId, channel))) {
+      this.sendMessage(ws, { type: 'error', error: 'Not allowed to subscribe to this channel', code: 'FORBIDDEN' });
       return;
     }
 
-    // Subscribe to channel
-    const success = this.channelManager.subscribe(connection.sessionId, channel);
-
-    if (success) {
-      this.sendMessage(ws, {
-        type: 'subscribed',
-        channel,
-      });
-    } else {
-      this.sendMessage(ws, {
-        type: 'error',
-        error: 'Failed to subscribe to channel',
-        code: 'SUBSCRIBE_FAILED',
-      });
-    }
-  }
-
-  /**
-   * Handle channel unsubscription
-   */
-  private async handleUnsubscribe(ws: WebSocket, channel: string): Promise<void> {
-    const connection = this.connections.get(ws);
-    if (!connection) {
+    if (!this.addChannel(ws, state, channel)) {
+      this.sendMessage(ws, { type: 'error', error: 'Too many channels on this connection', code: 'SUBSCRIBE_FAILED' });
       return;
     }
+    this.save(ws, state);
+    this.sendMessage(ws, { type: 'subscribed', channel });
+  }
 
-    const success = this.channelManager.unsubscribe(connection.sessionId, channel);
-
-    if (success) {
-      this.sendMessage(ws, {
-        type: 'unsubscribed',
-        channel,
-      });
-    } else {
-      this.sendMessage(ws, {
-        type: 'error',
-        error: 'Failed to unsubscribe from channel',
-        code: 'UNSUBSCRIBE_FAILED',
-      });
-    }
+  private handleUnsubscribe(ws: WebSocket, channel: string): void {
+    const state = this.sockets.get(ws);
+    if (!state) return;
+    state.channels = state.channels.filter((c) => c !== channel);
+    this.unindex(ws, channel);
+    this.save(ws, state);
+    this.sendMessage(ws, { type: 'unsubscribed', channel });
   }
 
   /**
-   * Handle message broadcasting
+   * A client message reaches the subscribers on this shard and, through the
+   * other shards, everyone else subscribed to the channel.
    */
-  private async handleMessage(ws: WebSocket, channel: string, data: any): Promise<void> {
-    const connection = this.connections.get(ws);
-    if (!connection || !connection.authenticated) {
-      this.sendMessage(ws, {
-        type: 'error',
-        error: 'Authentication required',
-        code: 'AUTH_REQUIRED',
-      });
+  private handleMessage(ws: WebSocket, channel: string, data: unknown): void {
+    const state = this.sockets.get(ws);
+    if (!state || !state.authenticated) {
+      this.sendMessage(ws, { type: 'error', error: 'Authentication required', code: 'AUTH_REQUIRED' });
       return;
     }
 
     // Clients may not post into user:<id> channels; those are fed by /broadcast only.
     if (!canPublish(channel)) {
-      this.sendMessage(ws, {
-        type: 'error',
-        error: 'Not allowed to publish to this channel',
-        code: 'FORBIDDEN',
-      });
+      this.sendMessage(ws, { type: 'error', error: 'Not allowed to publish to this channel', code: 'FORBIDDEN' });
       return;
     }
 
-    // Get all subscribers to this channel
-    const subscribers = this.channelManager.getChannelSubscribers(channel);
+    const message: ServerMessage = { type: 'message', channel, data, from: state.userId, timestamp: Date.now() };
+    const env = this.env as SocketEnv;
+    if (env.WEBSOCKET_DO) {
+      // Every shard (this one included) delivers to its own subscribers
+      this.ctx.waitUntil(
+        broadcastToShards(env.WEBSOCKET_DO, env, [{ channel, message }]).catch((error) =>
+          logger.error('Client message fan-out failed', error),
+        ),
+      );
+    } else {
+      this.deliver(channel, message);
+    }
+  }
 
-    // Broadcast message in proper format to all subscribers
-    const message: ServerMessage = {
-      type: 'message',
-      channel,
-      data,
-      from: connection.userId,
-      timestamp: Date.now(),
-    };
+  /**
+   * Fixed-window limit per socket, kept in the attachment so hibernation does
+   * not reset it, plus (when bound) a Workers Rate Limiting check per user or
+   * IP, so opening more sockets does not buy more messages.
+   */
+  private async checkRateLimit(ws: WebSocket, state: SocketState): Promise<boolean> {
+    const env = this.env as SocketEnv;
+    const now = Date.now();
+    const maxMessages = Number(env.RATE_LIMIT_MESSAGES) || 100;
+    const windowMs = Number(env.RATE_LIMIT_WINDOW_MS) || 60000;
 
-    for (const sessionId of [...subscribers]) {
-      const socket = this.sessionToWebSocket.get(sessionId);
-      if (socket && !this.expiredForChannel(socket, channel)) {
-        this.sendMessage(socket, message);
+    if (now > state.rl.resetAt) {
+      state.rl = { count: 0, resetAt: now + windowMs };
+    }
+    if (state.rl.count >= maxMessages) return false;
+    state.rl.count++;
+    this.save(ws, state);
+
+    const limiter = env.WS_MESSAGE_LIMITER;
+    const key = state.userId ? `u:${state.userId}` : state.ip ? `ip:${state.ip}` : undefined;
+    if (limiter && key) {
+      try {
+        const { success } = await limiter.limit({ key });
+        return success;
+      } catch (error) {
+        logger.warn('Rate limiter unavailable; per-socket limit only', error);
       }
     }
-  }
-
-  /**
-   * Handle heartbeat
-   */
-  private async handleHeartbeat(ws: WebSocket, _timestamp: number): Promise<void> {
-    const connection = this.connections.get(ws);
-    if (!connection) {
-      return;
-    }
-
-    // Update activity
-    this.channelManager.updateActivity(connection.sessionId);
-
-    // Refresh presence if authenticated
-    if (connection.authenticated && connection.userId) {
-      await this.presenceManager.refresh(connection.userId, connection.sessionId);
-    }
-
-    // Send pong response
-    this.sendMessage(ws, {
-      type: 'pong',
-      timestamp: Date.now(),
-    });
-  }
-
-  /**
-   * Check rate limit for a session
-   */
-  private checkRateLimit(sessionId: string): boolean {
-    const now = Date.now();
-    const limit = this.rateLimits.get(sessionId);
-
-    // Rate limit: configurable via environment variables
-    const env = this.env as Env;
-    const maxMessages = env.RATE_LIMIT_MESSAGES || 100;
-    const windowMs = env.RATE_LIMIT_WINDOW_MS || 60000; // Default 1 minute
-
-    if (!limit || now > limit.resetAt) {
-      // Reset or create new limit
-      this.rateLimits.set(sessionId, {
-        count: 1,
-        resetAt: now + windowMs,
-      });
-      return true;
-    }
-
-    if (limit.count >= maxMessages) {
-      return false;
-    }
-
-    // Increment count
-    limit.count++;
     return true;
   }
 
-  /**
-   * Send a message to a WebSocket
-   */
   private sendMessage(ws: WebSocket, message: ServerMessage): void {
+    this.sendRaw(ws, JSON.stringify(message));
+  }
+
+  private sendRaw(ws: WebSocket, payload: string): boolean {
     try {
-      ws.send(JSON.stringify(message));
+      ws.send(payload);
+      return true;
     } catch (error) {
       logger.error('Error sending WebSocket message:', error);
+      return false;
     }
   }
 
-  /**
-   * Broadcast message to a channel
-   * Optimized with reverse lookup map for O(n) performance
-   */
+  /** Sends a message to this shard's subscribers of a channel. Serialised once. Returns sockets reached. */
+  deliver(channel: string, message: unknown): number {
+    const subscribers = this.subscribers.get(channel);
+    if (!subscribers || subscribers.size === 0) return 0;
+    const payload = JSON.stringify(message);
+    let delivered = 0;
+    for (const ws of [...subscribers]) {
+      if (this.expiredForChannel(ws, channel)) continue;
+      if (this.sendRaw(ws, payload)) delivered++;
+    }
+    return delivered;
+  }
+
+  /** Kept for callers of the old API. */
   async broadcast(channel: string, message: ServerMessage): Promise<void> {
-    const subscribers = this.channelManager.getChannelSubscribers(channel);
-
-    for (const sessionId of [...subscribers]) {
-      const ws = this.sessionToWebSocket.get(sessionId);
-      if (ws && !this.expiredForChannel(ws, channel)) {
-        this.sendMessage(ws, message);
-      }
-    }
+    this.deliver(channel, message);
   }
 
-  /**
-   * Handle internal broadcast request
-   */
+  private userSessionCount(userId: string): number {
+    if (!userId) return 0;
+    let n = 0;
+    for (const state of this.sockets.values()) {
+      if (state.authenticated && state.userId === userId) n++;
+    }
+    return n;
+  }
+
   /** Only view-counter objects ever set an alarm. */
   async alarm(): Promise<void> {
     await this.getViewCounter().alarm();
@@ -594,59 +504,42 @@ export class WebSocketDurableObject extends DurableObject {
     }
   }
 
-  /** Pushes a flushed count to everyone watching the video (via the sockets object). */
+  /** Pushes a flushed count to everyone watching the video, on every socket shard. */
   private async pushViewCount(videoId: string, viewCount: number): Promise<void> {
     const env = this.env as Env;
     const channel = `video:${videoId}`;
     const message = { type: 'view_count_updated', channel, timestamp: Date.now(), data: { type: 'view_count_updated', videoId, viewCount } };
-    const stub = env.WEBSOCKET_DO.get(env.WEBSOCKET_DO.idFromName(SOCKETS_OBJECT_NAME));
-    await stub.fetch(new Request('http://internal/broadcast', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ channel, message }),
-    }));
+    const result = await broadcastToShards(env.WEBSOCKET_DO, env, [{ channel, message }]);
+    if (result.failed > 0) throw new Error(`view count push failed on ${result.failed} of ${result.shards} shards`);
   }
 
+  /** Body: `{ channel, message }` or `{ items: [{ channel, message }, ...] }`. */
   private async handleBroadcastRequest(request: Request): Promise<Response> {
+    let items: BroadcastItem[];
     try {
-      const { channel, message } = await request.json() as { channel: string; message: ServerMessage };
-
-      if (!channel || !message) {
-        return new Response(JSON.stringify({ error: 'Missing channel or message' }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
-
-      await this.broadcast(channel, message);
-
-      return new Response(JSON.stringify({ success: true }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    } catch (error) {
-      logger.error('Error handling broadcast request:', error);
-      return new Response(JSON.stringify({ error: 'Failed to broadcast' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      const body = (await request.json()) as { channel?: string; message?: unknown; items?: BroadcastItem[] };
+      items = Array.isArray(body.items) ? body.items : [{ channel: body.channel as string, message: body.message }];
+    } catch {
+      return Response.json({ error: 'Invalid JSON' }, { status: 400 });
     }
+    if (items.length === 0 || items.length > MAX_BROADCAST_ITEMS || items.some((i) => !i || typeof i.channel !== 'string' || !i.channel || !i.message)) {
+      return Response.json({ error: 'Missing channel or message' }, { status: 400 });
+    }
+    let delivered = 0;
+    for (const item of items) delivered += this.deliver(item.channel, item.message);
+    return Response.json({ success: true, delivered });
   }
 
-  /**
-   * Handle internal stats request
-   */
   private handleStatsRequest(): Response {
-    const stats = this.channelManager.getStats();
-
-    return new Response(JSON.stringify({
-      connections: this.connections.size,
-      channels: stats.totalChannels,
-      sessions: stats.totalSessions,
-      channelDetails: Object.fromEntries(stats.channels),
-    }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
+    const channelDetails: Record<string, number> = {};
+    for (const [channel, set] of this.subscribers) channelDetails[channel] = set.size;
+    let sessions = 0;
+    for (const state of this.sockets.values()) if (state.authenticated) sessions++;
+    return Response.json({
+      connections: this.sockets.size,
+      channels: this.subscribers.size,
+      sessions,
+      channelDetails,
     });
   }
 }

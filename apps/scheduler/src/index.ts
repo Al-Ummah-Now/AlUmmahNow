@@ -1,10 +1,10 @@
 import type { ScheduledVideoMetadata } from '@al-ummah/shared-types';
 import type { Env, BatchResult } from './types';
 import { acquireLock, releaseLock, updateLastRun } from './locks';
-import { publishVideo, queryScheduledVideos, queryOverdueVideos, removeSchedule } from './publisher';
+import { listDueSchedules, publishVideo, removeSchedule } from './publisher';
 import { scheduleRetries } from './retry';
 import { sendNotification } from './notifier';
-import { reportMetrics, logEvent, sendAlert, initializeMetrics, updateDailyMetrics } from './monitoring';
+import { reportMetrics, logEvent, sendAlert, recordRunMetrics, type RunMetrics } from './monitoring';
 import { logger } from './lib/logger';
 
 // Export the Durable Object class for Cloudflare Workers runtime
@@ -20,55 +20,33 @@ export default {
     try {
       logger.info(`Scheduler cron triggered at ${new Date().toISOString()}`);
 
-      // Initialize metrics if needed
-      await initializeMetrics(env);
-
       // Update last run timestamp
       await updateLastRun(env.SCHEDULER_LOCKS);
 
-      // 1. Get current time window (current minute)
+      // Due entries (overdue and this minute), oldest first, bounded per run (SC-2)
       const now = new Date();
-      const windowStart = new Date(now);
-      windowStart.setSeconds(0, 0);
-      const windowEnd = new Date(windowStart);
-      windowEnd.setMinutes(windowEnd.getMinutes() + 1);
-
-      logger.debug(`Processing time window: ${windowStart.toISOString()} to ${windowEnd.toISOString()}`);
-
-      // 2. Query scheduled videos for this time window
-      const scheduledVideos = await queryScheduledVideos(
-        env.SCHEDULED_VIDEOS,
-        windowStart,
-        windowEnd
-      );
-
-      // 3. Also check for overdue videos (past scheduled time but not published)
-      const overdueVideos = await queryOverdueVideos(env.SCHEDULED_VIDEOS, 72);
-
-      // Combine and deduplicate by videoId
-      const allVideosMap = new Map<string, ScheduledVideoMetadata>();
-      for (const video of [...scheduledVideos, ...overdueVideos]) {
-        allVideosMap.set(video.videoId, video);
-      }
-      const allVideos = Array.from(allVideosMap.values());
+      const batchSize = parseInt(env.BATCH_SIZE, 10) || 50;
+      const scan = await listDueSchedules(env.SCHEDULED_VIDEOS, now, { limit: batchSize });
+      const allVideos = [...new Map(scan.due.map((v) => [v.videoId, v])).values()];
 
       if (allVideos.length === 0) {
         logger.debug('No videos scheduled for current window or overdue');
         return;
       }
 
-      logger.info(`Found ${allVideos.length} videos to process (${scheduledVideos.length} current, ${overdueVideos.length} overdue)`);
+      logger.info(`Found ${allVideos.length} due videos (${scan.operations} R2 reads${scan.truncated ? ', more next run' : ''})`);
 
       // 4. Process in batches with distributed locking
       const results = await processBatch(allVideos, env, ctx);
 
-      // 5. Report metrics
+      // 5. Report metrics: one aggregated write per run (SC-4)
       const duration = Date.now() - startTime;
       reportMetrics({
         processed: results.successful.length,
         failed: results.failed.length,
         duration,
       });
+      await recordRunMetrics(env, results.metrics);
 
       logger.info(`Batch complete: ${results.successful.length} successful, ${results.failed.length} failed, ${duration}ms`);
 
@@ -95,10 +73,11 @@ async function processBatch(
   videos: ScheduledVideoMetadata[],
   env: Env,
   ctx: ExecutionContext
-): Promise<BatchResult> {
-  const results: BatchResult = {
+): Promise<BatchResult & { metrics: RunMetrics }> {
+  const results: BatchResult & { metrics: RunMetrics } = {
     successful: [],
     failed: [],
+    metrics: { published: 0, failed: 0, delaySeconds: 0 },
   };
 
   // Process videos in parallel with concurrency limit
@@ -127,8 +106,14 @@ async function processBatch(
       try {
         const publishStartTime = Date.now();
 
-        // Publish the video (idempotent - checks if already public)
-        await publishVideo(env.VIDEOS, video, env.QUEUE);
+        // Publish the video (idempotent, conditional on the copy it read: SC-1)
+        const outcome = await publishVideo(env.VIDEOS, video, env.QUEUE);
+        if (outcome === 'cancelled' || outcome === 'rescheduled' || outcome === 'missing') {
+          // Not a failure to retry: the entry is obsolete (SC-3)
+          logger.info(`Schedule entry for video ${video.videoId} is obsolete (${outcome}); removed`);
+          ctx.waitUntil(removeSchedule(env.SCHEDULED_VIDEOS, video));
+          return;
+        }
 
         // Calculate publish delay
         const scheduledTime = new Date(video.scheduledPublishDate).getTime();
@@ -148,8 +133,11 @@ async function processBatch(
           publishedAt: new Date().toISOString(),
         });
 
-        // Update metrics
-        await updateDailyMetrics(env, 'success', delaySeconds);
+        // Counted in memory, written once per run
+        if (outcome === 'published') {
+          results.metrics.published++;
+          results.metrics.delaySeconds += delaySeconds;
+        }
 
         // Remove from scheduled bucket
         ctx.waitUntil(removeSchedule(env.SCHEDULED_VIDEOS, video));
@@ -168,8 +156,7 @@ async function processBatch(
           error: error instanceof Error ? error.message : String(error),
         });
 
-        // Update metrics
-        await updateDailyMetrics(env, 'failure');
+        results.metrics.failed++;
 
         results.failed.push({
           video,

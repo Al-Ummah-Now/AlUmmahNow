@@ -4,7 +4,7 @@ import { Channel, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import { logger } from '../../lib/logger';
 import { OptionalAuthRoute, AppContext } from "../../base";
-import { countSubscribers, isSubscribed } from "../../lib/subscriptions";
+import { isSubscribedTo, subscriberCounts } from "../../lib/subscription-store";
 
 export class SubscriptionStatus extends OptionalAuthRoute {
 	schema = {
@@ -54,9 +54,12 @@ export class SubscriptionStatus extends OptionalAuthRoute {
 			return c.json({ success: false, error: "Channel not found" }, 404);
 		}
 
-		const subscribed = userId
-			? isSubscribed(channel.subscriptions, { userId, channelId: viewerChannelId })
-			: false;
+		// D1 for channels whose subscriptions moved there, the R2 array otherwise (AV-4)
+		const channelRef = { ...channel, id };
+		const [subscribed, counts] = await Promise.all([
+			userId ? isSubscribedTo(c.env.NOTIFICATIONS_DB, channelRef, { userId, channelId: viewerChannelId }) : Promise.resolve(false),
+			subscriberCounts(c.env.NOTIFICATIONS_DB, [channelRef]),
+		]);
 
 		logger.debug('[SubscriptionStatus] Resolved', { channelId: id, userId, viewerChannelId, subscribed });
 
@@ -65,7 +68,7 @@ export class SubscriptionStatus extends OptionalAuthRoute {
 			result: {
 				channelId: id,
 				isSubscribed: subscribed,
-				subscriberCount: countSubscribers(channel.subscriptions),
+				subscriberCount: counts.get(id) ?? 0,
 			},
 		};
 	}

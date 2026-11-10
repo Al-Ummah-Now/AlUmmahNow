@@ -8,6 +8,7 @@ import {
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import Queue, { MessageType } from '../../lib/queue';
+import { withPostCounts } from '../../lib/post-counters';
 import { logger } from '../../lib/logger';
 
 const voteSchema = z.object({
@@ -105,7 +106,7 @@ export class VoteOnPoll extends AuthenticatedRoute {
         return c.json({ error: 'Poll not found' }, 404);
       }
 
-      const post: CommunityPost = await postData.json();
+      const post: CommunityPost = await withPostCounts(c.env.NOTIFICATIONS_DB, [await postData.json<CommunityPost>()]).then(([p]) => p);
 
       if (post.type !== PostType.POLL || !post.poll) {
         return c.json({ error: 'Post is not a poll' }, 400);

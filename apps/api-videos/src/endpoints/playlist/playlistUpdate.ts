@@ -101,23 +101,23 @@ export class PlaylistUpdate extends AuthenticatedRoute {
             }, 403);
         }
 
-        // Reordering: the new order must be a permutation of the current videos
-        if (updateData.videos && !isSameVideoSet(existingPlaylist.videos || [], updateData.videos)) {
-            return c.json({
-                success: false,
-                error: "videos must contain exactly the playlist's current video IDs (use the add/remove endpoints to change membership)",
-            }, 400);
+        // Checked and applied on the fresh playlist with a conditional write
+        // (SCALABILITY-AUDIT AV-19): a rename during an add no longer reverts it
+        const { data: updatedPlaylist, rejected } = await repository.updateObjectOrReject<{ status: 400 | 403; error: string }>(id, (fresh) => {
+            if (fresh.userId !== userId) return { reject: { status: 403, error: "Unauthorized - you can only update your own playlists" } };
+            // Reordering: the new order must be a permutation of the current videos
+            if (updateData.videos && !isSameVideoSet(fresh.videos || [], updateData.videos)) {
+                return { reject: { status: 400, error: "videos must contain exactly the playlist's current video IDs (use the add/remove endpoints to change membership)" } };
+            }
+            Object.assign(fresh, updateData, { dateModified: new Date().toISOString() });
+            return true;
+        });
+        if (!updatedPlaylist) {
+            return c.json({ success: false, error: "Playlist not found" }, 404);
         }
-
-        // Update the playlist with new values
-        const updatedPlaylist = {
-            ...existingPlaylist,
-            ...updateData,
-            dateModified: new Date().toISOString(),
-        };
-
-        // Save updated playlist
-        await repository.putObject(id, updatedPlaylist);
+        if (rejected) {
+            return c.json({ success: false, error: rejected.error }, rejected.status);
+        }
 
         // Send queue message for playlist update
         const queue = new Queue(c.env.queue);

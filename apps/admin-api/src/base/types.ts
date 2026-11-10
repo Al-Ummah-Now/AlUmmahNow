@@ -17,6 +17,8 @@ export interface AuthContext {
 export interface AdminBindings {
   // D1 Database
   REPORTS_DB: D1Database;
+  /** Search index (api-videos owns it); the section index rebuild reads it (AA-4). */
+  SEARCH_DB?: D1Database;
 
   // R2 Buckets
   videos: R2Bucket;

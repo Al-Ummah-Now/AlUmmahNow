@@ -46,18 +46,14 @@
 	"r2_buckets": [
 		{ "binding": "VIDEOS", "bucket_name": "videos" }
 	],
-	/**
-	 * KV Namespace for presence tracking and state
-	 */
 	"kv_namespaces": [
 			// Token revocation list written by the auth worker (#437)
-			{ "binding": "TOKEN_REVOCATIONS", "id": "2afbb5f5d5414c9ea1a7d54013cfe724", "preview_id": "e6e662fc9cd9420797ddfa8060eb6956" },
-		{
-			"binding": "PRESENCE_KV",
-			"id": "a3dbf9b2b80c4a3ea101281e19fd8407",
-			"preview_id": "156bbaeac14b4d0da721673e951bef3e",
-			"remote": true
-		}
+			{ "binding": "TOKEN_REVOCATIONS", "id": "2afbb5f5d5414c9ea1a7d54013cfe724", "preview_id": "e6e662fc9cd9420797ddfa8060eb6956" }
+	],
+	// Workers Rate Limiting (per location, no KV): socket opens per IP, client messages per user or IP
+	"ratelimits": [
+		{ "name": "WS_CONNECT_LIMITER", "namespace_id": "2301", "simple": { "limit": 120, "period": 60 } },
+		{ "name": "WS_MESSAGE_LIMITER", "namespace_id": "2311", "simple": { "limit": 600, "period": 60 } }
 	],
 	/**
 	 * Environment Variables
@@ -111,11 +107,12 @@
 			],
 			"kv_namespaces": [
 			// Token revocation list written by the auth worker (#437)
-			{ "binding": "TOKEN_REVOCATIONS", "id": "0831520b71144a6e848ed62918602c13" },
-				{
-					"binding": "PRESENCE_KV",
-					"id": "03ba69245a7c40f4952ac5e0a9b402ca"
-				}
+			{ "binding": "TOKEN_REVOCATIONS", "id": "0831520b71144a6e848ed62918602c13" }
+			],
+			// Workers Rate Limiting (per location, no KV): socket opens per IP, client messages per user or IP
+			"ratelimits": [
+				{ "name": "WS_CONNECT_LIMITER", "namespace_id": "2302", "simple": { "limit": 120, "period": 60 } },
+				{ "name": "WS_MESSAGE_LIMITER", "namespace_id": "2312", "simple": { "limit": 600, "period": 60 } }
 			],
 			"vars": {
 				"ENVIRONMENT": "stage",

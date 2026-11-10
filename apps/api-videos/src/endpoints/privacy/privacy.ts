@@ -17,7 +17,7 @@ import { logger } from '../../lib/logger';
 import { requireSecret } from '../../lib/env-helpers';
 import Queue, { MessageType } from '../../lib/queue';
 import { BunnyStreamClient } from '../../lib/bunny/stream';
-import { DEFAULT_OPERATION_BUDGET, OperationBudget, asBucket, readJson, writeJson } from '../../lib/privacy/scan';
+import { DEFAULT_OPERATION_BUDGET, OperationBudget, asBucket, readJson, updateJson } from '../../lib/privacy/scan';
 import { collectUserData, eraseUserData, type PrivacyBuckets } from '../../lib/privacy/user-data';
 
 export const CONSENT_HISTORY_LIMIT = 50;
@@ -208,15 +208,18 @@ export class PrivacyConsentPut extends AuthenticatedRoute {
 			return c.json({ success: false, code: 'invalid_consent', error: 'Invalid consent record' }, 400);
 		}
 
-		const budget = new OperationBudget(4);
+		const budget = new OperationBudget(12);
 		const profiles = asBucket(c.env.profiles);
-		const profile = await readJson<Record<string, any>>(profiles, userId, budget);
+		const record: ConsentRecord = { ...parsed.data, recordedAt: new Date().toISOString() };
+		// Conditional write on the fresh profile (SCALABILITY-AUDIT AV-23), so a
+		// concurrent profile change and the consent record both stay
+		const profile = await updateJson<Record<string, any>>(profiles, userId, (fresh) => {
+			Object.assign(fresh, appendConsentRecord(fresh, record));
+		}, budget);
 		if (!profile) {
 			// No profile yet: the browser cookie remains the record until one exists.
 			return c.json({ success: true, stored: false });
 		}
-		const record: ConsentRecord = { ...parsed.data, recordedAt: new Date().toISOString() };
-		await writeJson(profiles, userId, appendConsentRecord(profile, record), budget);
 		logger.info('[Privacy] Consent recorded', { userId, analytics: record.analytics, experiments: record.experiments, performance: record.performance });
 		return c.json({ success: true, stored: true });
 	}

@@ -114,23 +114,22 @@ export class PlaylistAddVideo extends AuthenticatedRoute {
             }, 404);
         }
 
-        // Check if video is already in playlist
-        if (playlist.videos.includes(videoId)) {
-            return c.json({
-                success: false,
-                error: "Video is already in this playlist",
-            }, 400);
+        // Add on the fresh playlist with a conditional write (SCALABILITY-AUDIT
+        // AV-19): adding several videos at once keeps all of them
+        const { data: updatedPlaylist, rejected } = await playlistRepository.updateObjectOrReject<{ status: 400 | 403; error: string }>(id, (fresh) => {
+            if (fresh.userId !== userId) return { reject: { status: 403, error: "Unauthorized - you can only modify your own playlists" } };
+            const videos = fresh.videos || [];
+            if (videos.includes(videoId)) return { reject: { status: 400, error: "Video is already in this playlist" } };
+            fresh.videos = [...videos, videoId];
+            fresh.dateModified = new Date().toISOString();
+            return true;
+        });
+        if (!updatedPlaylist) {
+            return c.json({ success: false, error: "Playlist not found" }, 404);
         }
-
-        // Add video to playlist
-        const updatedPlaylist = {
-            ...playlist,
-            videos: [...playlist.videos, videoId],
-            dateModified: new Date().toISOString(),
-        };
-
-        // Save updated playlist
-        await playlistRepository.putObject(id, updatedPlaylist);
+        if (rejected) {
+            return c.json({ success: false, error: rejected.error }, rejected.status);
+        }
 
         // Send queue message for playlist add
         const queue = new Queue(c.env.queue);

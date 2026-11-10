@@ -225,43 +225,56 @@ export class VideoUploadStatus extends OptionalAuthRoute {
 					bunnyStatus: bunnyStreamStatus.status,
 				});
 
-				video.uploadStatus = status as any;
-				video.dateModified = new Date().toISOString();
+				// Conditional write on the fresh video (SCALABILITY-AUDIT AV-3): a
+				// poll never overwrites a concurrent comment, edit or view flush,
+				// and only the poll that stores the transition announces it below.
+				let transitioned = false;
+				const saved = await repository.updateObject(id, (fresh) => {
+					transitioned = false;
+					const freshNeedsUpdate =
+						fresh.uploadStatus !== status ||
+						(bunnyStreamStatus.availableResolutions && (fresh.availableResolutions ?? []).length === 0) ||
+						(bunnyStreamStatus.length && !fresh.duration);
+					if (!freshNeedsUpdate) return false;
+					transitioned = fresh.uploadStatus !== status;
+					fresh.uploadStatus = status as any;
+					fresh.dateModified = new Date().toISOString();
 
-				// Update available resolutions if Bunny.net has them
-				if (bunnyStreamStatus.availableResolutions) {
-					video.availableResolutions = bunnyStreamStatus.availableResolutions
-						.split(',')
-						.map(r => r.trim())
-						.filter(r => r.length > 0);
-				}
+					// Update available resolutions if Bunny.net has them
+					if (bunnyStreamStatus.availableResolutions) {
+						fresh.availableResolutions = bunnyStreamStatus.availableResolutions
+							.split(',')
+							.map(r => r.trim())
+							.filter(r => r.length > 0);
+					}
 
-				// Update duration if available
-				if (bunnyStreamStatus.length) {
-					video.duration = bunnyStreamStatus.length;
-				}
+					// Update duration if available
+					if (bunnyStreamStatus.length) {
+						fresh.duration = bunnyStreamStatus.length;
+					}
 
-				// Update storage size if available
-				if (bunnyStreamStatus.storageSize) {
-					video.fileSize = bunnyStreamStatus.storageSize;
-				}
+					// Update storage size if available
+					if (bunnyStreamStatus.storageSize) {
+						fresh.fileSize = bunnyStreamStatus.storageSize;
+					}
 
-				// Set playUrl for HLS streaming
-				if (!video.playUrl && bunnyStreamStatus.guid) {
-					video.playUrl = `https://${c.env.bunny_hostname}/${bunnyStreamStatus.guid}/playlist.m3u8`;
-				}
-				// Bunny's auto thumbnail sits next to the playlist
-				if (!video.thumbnailUrl && video.playUrl?.endsWith('/playlist.m3u8')) {
-					video.thumbnailUrl = video.playUrl.replace(/playlist\.m3u8$/, 'thumbnail.jpg');
-				}
-
-				await repository.putObject(id, video);
+					// Set playUrl for HLS streaming
+					if (!fresh.playUrl && bunnyStreamStatus.guid) {
+						fresh.playUrl = `https://${c.env.bunny_hostname}/${bunnyStreamStatus.guid}/playlist.m3u8`;
+					}
+					// Bunny's auto thumbnail sits next to the playlist
+					if (!fresh.thumbnailUrl && fresh.playUrl?.endsWith('/playlist.m3u8')) {
+						fresh.thumbnailUrl = fresh.playUrl.replace(/playlist\.m3u8$/, 'thumbnail.jpg');
+					}
+					return true;
+				});
+				if (saved) Object.assign(video, saved);
 				logger.info('[VideoUploadStatus] Video status updated in R2', { videoId: id, status });
 
 				// Terminal transition: uploader notification + subscriber fan-out (Story 29.10).
 				// Repeated polls never reach here twice (status already stored); the
 				// processor de-duplicates anyway.
-				if (previousStatus !== status && (status === 'ready' || status === 'failed')) {
+				if (transitioned && previousStatus !== status && (status === 'ready' || status === 'failed')) {
 					const terminal = status;
 					inBackground(c, 'processing-result', () => announceProcessingResult(c.env, { ...video, id }, terminal));
 				}

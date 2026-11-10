@@ -132,7 +132,10 @@ export class VideoChaptersGet extends PublicRoute {
         });
       }
 
-      // Save chapters to video
+      // Chapters parsed from the description are returned, not stored: this is a
+      // public read, and writing the video JSON on read traffic overwrote
+      // concurrent changes (SCALABILITY-AUDIT AV-3). Owners store chapters
+      // with PUT /:id/chapters.
       const chapterData = {
         chapters: parseResult.chapters,
         source: 'automatic' as const,
@@ -140,13 +143,7 @@ export class VideoChaptersGet extends PublicRoute {
         version: 1,
       };
 
-      await videoRepo.putObject(videoId, {
-        ...video,
-        chapters: chapterData,
-        hasChapters: true,
-      });
-
-      logger.info('Chapters parsed and saved', {
+      logger.info('Chapters parsed from the description', {
         videoId,
         chapterCount: parseResult.chapters.length,
       });

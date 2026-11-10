@@ -2,6 +2,7 @@
  * Epic 28: admin review of AI moderation signals against the real D1 schema
  * (migrations applied to node:sqlite) and an in-memory R2 bucket.
  */
+import { MemoryR2 } from './r2-fake';
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -42,16 +43,7 @@ function sqliteD1() {
   return db;
 }
 
-class Bucket implements R2Like {
-  data = new Map<string, string>();
-  async get(key: string) {
-    const v = this.data.get(key);
-    return v === undefined ? null : { text: async () => v };
-  }
-  async put(key: string, value: string) {
-    this.data.set(key, value);
-  }
-}
+class Bucket extends MemoryR2 implements R2Like {}
 
 function insertSignal(db: ReturnType<typeof sqliteD1>, row: Record<string, unknown>) {
   const base = {

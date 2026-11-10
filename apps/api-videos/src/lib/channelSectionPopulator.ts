@@ -8,6 +8,7 @@
  * - subscribed_channels: Public channels the channel owner is subscribed to
  */
 
+import { subscribedChannelIds } from './subscription-store';
 import R2Repository from './r2Repo';
 import { VideoObject, ChannelSection, ChannelSectionView, Channel, Profile } from '@al-ummah/shared-types';
 import { logger } from './logger';
@@ -215,7 +216,8 @@ async function getSubscribedChannels(
 
     const profileRepo = new R2Repository<Profile>(env.profiles);
     const profile = await profileRepo.getObject(channel.userId);
-    const subscribedTo = (profile?.subscribedTo || []).filter((id) => id !== channelId);
+    // D1 subscriptions plus legacy entries of channels not imported yet (AV-4/AV-6)
+    const subscribedTo = (await subscribedChannelIds(env.NOTIFICATIONS_DB, channel.userId, profile?.subscribedTo)).filter((id) => id !== channelId);
 
     const summaries: PublicChannelSummary[] = [];
     for (const subscribedChannelId of subscribedTo) {

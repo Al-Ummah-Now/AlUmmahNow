@@ -52,17 +52,3 @@ export const ClientMessageSchema = z.discriminatedUnion('type', [
     timestamp: z.number(),
   }),
 ]);
-
-// Server-internal types (not shared)
-export interface SessionData {
-  userId: string;
-  sessionId: string;
-  connectedAt: number;
-  lastActivity: number;
-  channels: Set<string>;
-}
-
-export interface RateLimitInfo {
-  count: number;
-  resetAt: number;
-}

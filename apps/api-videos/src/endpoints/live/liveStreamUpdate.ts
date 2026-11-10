@@ -125,34 +125,32 @@ export class LiveStreamUpdate extends AuthenticatedRoute {
 				);
 			}
 
-			// Update the stream
-			const updatedStream = {
-				...existingStream,
-				...updateData,
-				dateModified: new Date().toISOString(),
-			};
+			// Update the stream on the fresh copy with a conditional write
+			// (SCALABILITY-AUDIT AV-3)
+			let previousStatus = existingStream.status;
+			const { data: updatedStream, rejected } = await repository.updateObjectOrReject<true>(`livestream:${id}`, (fresh) => {
+				if (fresh.userId !== userId) return { reject: true };
+				previousStatus = fresh.status;
+				Object.assign(fresh, updateData, { dateModified: new Date().toISOString() });
 
-			// Handle status changes
-			if (updateData.status) {
-				switch (updateData.status) {
-					case 'live':
-						if (!updatedStream.actualStartTime) {
-							updatedStream.actualStartTime = new Date().toISOString();
-						}
-						break;
-					case 'ended':
-						if (!updatedStream.actualEndTime) {
-							updatedStream.actualEndTime = new Date().toISOString();
-						}
-						break;
+				// Handle status changes
+				if (updateData.status === 'live' && !fresh.actualStartTime) {
+					fresh.actualStartTime = new Date().toISOString();
 				}
+				if (updateData.status === 'ended' && !fresh.actualEndTime) {
+					fresh.actualEndTime = new Date().toISOString();
+				}
+				return true;
+			});
+			if (!updatedStream) {
+				return c.json({ success: false, error: "Live stream not found" }, 404);
+			}
+			if (rejected) {
+				return c.json({ success: false, error: "Insufficient permissions to modify this stream" }, 403);
 			}
 
-			// Save updated stream
-			await repository.putObject(`livestream:${id}`, updatedStream);
-
 			// Went live: tell subscribers (Story 29.10; processor de-duplicates per stream)
-			if (updatedStream.status === 'live' && existingStream.status !== 'live') {
+			if (updatedStream.status === 'live' && previousStatus !== 'live') {
 				inBackground(c, 'live-started', () =>
 					announceLiveStarted(c.env, { id, channelId: updatedStream.channelId || channelId, userId, title: updatedStream.title }),
 				);

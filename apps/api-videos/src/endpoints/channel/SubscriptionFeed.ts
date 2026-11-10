@@ -5,6 +5,7 @@ import R2Repository from "../../lib/r2Repo";
 import { logger } from '../../lib/logger';
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { buildSubscriptionFeed } from "../../lib/subscriptions";
+import { subscribedChannelIds } from "../../lib/subscription-store";
 import { transformVideoToView } from "../../lib/transformations";
 
 /**
@@ -62,7 +63,8 @@ export class SubscriptionFeed extends AuthenticatedRoute {
 			return c.json({ success: false, error: "Profile not found" }, 404);
 		}
 
-		const subscribedTo = profile.subscribedTo || [];
+		// D1 subscriptions plus legacy entries of channels not imported yet (AV-4/AV-6)
+		const subscribedTo = await subscribedChannelIds(c.env.NOTIFICATIONS_DB, userId, profile.subscribedTo);
 		if (subscribedTo.length === 0) {
 			return { success: true, data: [], cursor: null, total: 0 };
 		}

@@ -15,8 +15,15 @@ export class MemoryBucket {
 	constructor(initial: Record<string, unknown> = {}) {
 		for (const [k, v] of Object.entries(initial)) {
 			this.store.set(k, JSON.stringify(v));
-			this.uploaded.set(k, new Date());
+			this.uploaded.set(k, this.tick());
 		}
+	}
+
+	/** Write time of the next write: like R2's `uploaded`, later writes get later times. */
+	private lastWrite = 0;
+	private tick(): Date {
+		this.lastWrite = Math.max(Date.now(), this.lastWrite + 1);
+		return new Date(this.lastWrite);
 	}
 
 	/** Version per key, exposed as the R2 etag (for conditional puts). */
@@ -30,18 +37,25 @@ export class MemoryBucket {
 		this.calls++;
 		const raw = this.store.get(key);
 		if (raw === undefined) return null;
-		return { key, etag: this.etag(key), json: async () => JSON.parse(raw), text: async () => raw };
+		return { key, etag: this.etag(key), uploaded: this.uploaded.get(key), json: async () => JSON.parse(raw), text: async () => raw };
 	}
 
-	/** Like R2: resolves to null when an `onlyIf.etagMatches` precondition fails. */
-	async put(key: string, value: string, options?: { onlyIf?: { etagMatches?: string } }) {
+	/**
+	 * Like R2: resolves to null when an `onlyIf` precondition fails
+	 * (`etagMatches`, or `etagDoesNotMatch: '*'` = create only).
+	 */
+	async put(key: string, value: string, options?: { onlyIf?: { etagMatches?: string; etagDoesNotMatch?: string } }) {
 		this.calls++;
 		const expected = options?.onlyIf?.etagMatches;
-		if (expected !== undefined && expected !== this.etag(key)) return null;
+		if (expected !== undefined && (!this.store.has(key) || expected !== this.etag(key))) return null;
+		const notExpected = options?.onlyIf?.etagDoesNotMatch;
+		if (notExpected === '*' && this.store.has(key)) return null;
+		if (notExpected !== undefined && notExpected !== '*' && this.store.has(key) && notExpected === this.etag(key)) return null;
 		this.store.set(key, value);
-		this.uploaded.set(key, new Date());
+		const uploaded = this.tick();
+		this.uploaded.set(key, uploaded);
 		this.versions.set(key, (this.versions.get(key) ?? 0) + 1);
-		return { key, etag: this.etag(key) };
+		return { key, etag: this.etag(key), uploaded };
 	}
 
 	async delete(keys: string | string[]) {
@@ -49,17 +63,19 @@ export class MemoryBucket {
 		for (const key of Array.isArray(keys) ? keys : [keys]) {
 			this.store.delete(key);
 			this.uploaded.delete(key);
+			// Keep the version counter so a re-created key gets a new etag (as R2 does)
 		}
 	}
 
-	async list(opts: { limit?: number; cursor?: string; prefix?: string } = {}) {
+	async list(opts: { limit?: number; cursor?: string; prefix?: string; startAfter?: string } = {}) {
 		this.calls++;
 		// Key-based cursor like R2: resumes after the last returned key, so
 		// deleting objects between pages does not skip any.
 		const keys = [...this.store.keys()]
 			.filter((k) => !opts.prefix || k.startsWith(opts.prefix))
 			.sort()
-			.filter((k) => !opts.cursor || k > opts.cursor);
+			.filter((k) => !opts.cursor || k > opts.cursor)
+			.filter((k) => !opts.startAfter || k > opts.startAfter);
 		const limit = opts.limit ?? 1000;
 		const page = keys.slice(0, limit);
 		const truncated = limit < keys.length;
@@ -141,4 +157,19 @@ export function commentFixture(id: string, overrides: Record<string, unknown> = 
 		isPinned: false,
 		...overrides,
 	};
+}
+
+/** A MemoryBucket whose calls take a random few ms, so parallel requests interleave like isolates. */
+export class SlowBucket extends MemoryBucket {
+	private pause() {
+		return new Promise<void>((r) => setTimeout(r, Math.floor(Math.random() * 4)));
+	}
+	async get(key: string) {
+		await this.pause();
+		return super.get(key);
+	}
+	async put(key: string, value: string, options?: { onlyIf?: { etagMatches?: string; etagDoesNotMatch?: string } }) {
+		await this.pause();
+		return super.put(key, value, options);
+	}
 }

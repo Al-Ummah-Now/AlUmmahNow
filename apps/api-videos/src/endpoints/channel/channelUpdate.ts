@@ -5,6 +5,7 @@ import { ChannelUpdateInput } from "../../lib/model/input";
 import { ChannelView } from "../../lib/model/view";
 import { transformChannelToView } from "../../lib/transformations";
 import R2Repository from "../../lib/r2Repo";
+import { patchOwnedRecord } from '../../lib/videoWrites';
 import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { canClaimOfficialHandles, claimHandle, handleKey, normalizeHandleInput, releaseHandle, validateHandleFormat } from "../../lib/channelHandles";
@@ -141,21 +142,26 @@ export class ChannelUpdate extends AuthenticatedRoute {
             handle = claim.handle;
         }
 
-        // Update the channel with new values
-        const updatedChannel = {
-            ...existingChannel,
+        // Update the channel with new values, on the fresh copy with a conditional
+        // write (SCALABILITY-AUDIT AV-5), so concurrent changes are not overwritten
+        const saved = await patchOwnedRecord(repository, id, (fresh) => ({
             ...restInput,
             handle,
             // Empty strings clear optional About fields
-            contactEmail: contactEmail === undefined ? existingChannel.contactEmail : (contactEmail || undefined),
-            location: location === undefined ? existingChannel.location : (location || undefined),
+            contactEmail: contactEmail === undefined ? fresh.contactEmail : (contactEmail || undefined),
+            location: location === undefined ? fresh.location : (location || undefined),
             dateModified: new Date().toISOString(),
             // Preserve localized fields if provided
-            nameLocalized: channelUpdateInput.nameLocalized ?? existingChannel.nameLocalized,
-            descriptionLocalized: channelUpdateInput.descriptionLocalized ?? existingChannel.descriptionLocalized,
-        };
-
-        await repository.putObject(id, updatedChannel);
+            nameLocalized: channelUpdateInput.nameLocalized ?? fresh.nameLocalized,
+            descriptionLocalized: channelUpdateInput.descriptionLocalized ?? fresh.descriptionLocalized,
+        }), { ownerId: userId });
+        if (saved.status === 'missing') {
+            return c.json({ success: false, error: "Channel not found" }, 404);
+        }
+        if (saved.status === 'forbidden') {
+            return c.json({ success: false, error: "You do not have permission to update this channel" }, 403);
+        }
+        const updatedChannel = saved.video;
         
         // Send queue message for channel update
         const queue = new Queue(c.env.queue);

@@ -65,6 +65,15 @@ jobs:
         with:
           ref: ${{ inputs.ref || '' }}
 
+      # The artifact scanner comes from this workflow's own commit, never from
+      # inputs.ref: it runs with the secrets in its env.
+      - name: Check out the artifact scanner (trusted)
+        uses: actions/checkout@v4
+        with:
+          path: .ci-trusted
+          sparse-checkout: scripts/ci
+          persist-credentials: false
+
       - uses: actions/setup-node@v6
         with:
           node-version: '22'
@@ -88,6 +97,14 @@ jobs:
         working-directory: ${{ env.SUITE }}
         run: npx playwright install --with-deps chromium chrome
 
+      # One password for this run's throwaway users, known to the workflow so
+      # the artifact scan below can look for it (targets.ts TEST_PASSWORD).
+      - name: Generate the test password
+        run: |
+          pw="Rel-$(openssl rand -base64 18 | tr '+/' '-_' | tr -d '=')-1!"
+          echo "::add-mask::$pw"
+          echo "E2E_TEST_PASSWORD=$pw" >> "$GITHUB_ENV"
+
       - name: Run release regressions
         working-directory: ${{ env.SUITE }}
         env:
@@ -95,6 +112,21 @@ jobs:
           E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET || (inputs.env == 'stage' && secrets.E2E_CODE_SINK_SECRET_STAGE) || secrets.E2E_CODE_SINK_SECRET_QA }}
           TEST_PROMOTE_SECRET: ${{ secrets.TEST_PROMOTE_SECRET || (inputs.env == 'stage' && secrets.TEST_PROMOTE_SECRET_STAGE) || secrets.TEST_PROMOTE_SECRET_QA }}
         run: npx playwright test -c playwright.release.config.ts
+
+      # Artifacts of this public repo are downloadable by anyone signed in to
+      # GitHub: drop any report/trace that holds a secret or a storage state,
+      # then fail. Sign-in specs fill secrets in-page with trace off (secret-fill.ts).
+      - name: Scan test output for secrets
+        if: always()
+        env:
+          E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET || (inputs.env == 'stage' && secrets.E2E_CODE_SINK_SECRET_STAGE) || secrets.E2E_CODE_SINK_SECRET_QA }}
+          TEST_PROMOTE_SECRET: ${{ secrets.TEST_PROMOTE_SECRET || (inputs.env == 'stage' && secrets.TEST_PROMOTE_SECRET_STAGE) || secrets.TEST_PROMOTE_SECRET_QA }}
+        # Read from the trusted checkout on stdin (-I: no imports from the
+        # workspace), so nothing from inputs.ref runs with these secrets.
+        run: >-
+          python3 -I - --env E2E_TEST_PASSWORD --env E2E_CODE_SINK_SECRET --env TEST_PROMOTE_SECRET
+          --remove "$SUITE/release-report" "$SUITE/test-results"
+          < "$GITHUB_WORKSPACE/.ci-trusted/scripts/ci/scan-artifacts-for-secrets.py"
 
       - uses: actions/upload-artifact@v4
         if: failure()

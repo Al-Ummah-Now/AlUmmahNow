@@ -11,7 +11,7 @@ import { Bool, Num, Str } from "chanfana";
 import { z } from "zod";
 import { Channel as BusinessChannel, ResponseError } from "../../lib/types";
 import { PublicChannelView } from "../../lib/model/view";
-import { toPublicChannel } from "../../lib/public-views";
+import { toPublicChannels } from "../../lib/public-views";
 import R2Repository from "../../lib/r2Repo";
 import { OptionalAuthRoute, PublicRoute, AppContext } from "../../base";
 import { logger } from "../../lib/logger";
@@ -23,6 +23,7 @@ import {
 	defaultHandleCandidates,
 	normalizeHandleInput,
 	readHandleEntry,
+	releaseHandle,
 	resolveHandle,
 } from "../../lib/channelHandles";
 import { buildChannelAbout, computeChannelTotals, isChannelVisibleTo } from "../../lib/channelAbout";
@@ -94,7 +95,8 @@ export class ChannelByHandleFetch extends OptionalAuthRoute {
 			logger.debug('[ChannelByHandle] Not found', { handle, channelId });
 			return c.json({ success: false, error: "Object not found" }, 404);
 		}
-		return toPublicChannel(channel);
+		const [view] = await toPublicChannels(c.env.NOTIFICATIONS_DB, [channel]);
+		return view;
 	}
 }
 
@@ -244,7 +246,18 @@ export class ChannelHandlesBackfill extends PublicRoute {
 					failed.push(channel.id);
 					continue;
 				}
-				await repo.putObject(object.key, { ...channel, handle });
+				// Conditional write on the fresh channel (SCALABILITY-AUDIT AV-5); an owner
+				// who set a handle meanwhile keeps theirs and the claimed one is freed
+				const stored = await repo.updateObject(object.key, (fresh) => {
+					if (fresh.handle) return false;
+					fresh.handle = handle;
+					return true;
+				});
+				if (stored?.handle !== handle) {
+					await releaseHandle(c.env.channel_tabs, handle, channel.id);
+					skipped++;
+					continue;
+				}
 				assigned.push({ channelId: channel.id, handle });
 			} catch (error) {
 				logger.error('[HandlesBackfill] Failed', { channelId: channel.id, error: error instanceof Error ? error.message : String(error) });

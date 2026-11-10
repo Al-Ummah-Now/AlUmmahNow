@@ -77,8 +77,12 @@ export default defineConfig({
     actionTimeout: 15000,
     navigationTimeout: 30000,
 
-    /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
-    trace: 'on-first-retry',
+    /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer
+     * Not in CI: most specs run signed in (storageState), and a trace records the E2E users'
+     * live QA session cookies in request headers. CI output is a public artifact (this repo is
+     * public), and the pre-upload secret scan cannot recognise cookies. Failure video,
+     * screenshot and error context still upload. */
+    trace: process.env.CI ? 'off' : 'on-first-retry',
 
     /* Screenshot on failure */
     screenshot: 'only-on-failure',

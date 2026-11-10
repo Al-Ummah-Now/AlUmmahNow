@@ -79,7 +79,7 @@ async function getQueueDepth(env: Env): Promise<number> {
  */
 async function getFailureRate(env: Env): Promise<number> {
   try {
-    const metricsJson = await env.SCHEDULER_METRICS.get('daily_metrics');
+    const metricsJson = await env.SCHEDULER_METRICS.get(dailyMetricsKey());
     if (!metricsJson) return 0;
 
     const metrics: Metrics = JSON.parse(metricsJson);
@@ -93,47 +93,36 @@ async function getFailureRate(env: Env): Promise<number> {
   }
 }
 
+/** KV key of one UTC day's counters (a new key each day, so the counts reset daily). */
+export function dailyMetricsKey(at: Date = new Date()): string {
+  return `daily_metrics:${at.toISOString().slice(0, 10)}`;
+}
+
+export interface RunMetrics {
+  published: number;
+  failed: number;
+  /** Sum of publish delays (seconds) of the published videos */
+  delaySeconds: number;
+}
+
 /**
- * Update daily metrics
- * @param env Environment bindings
- * @param type Metric type ('success' or 'failure')
- * @param delay Publish delay in seconds (optional)
+ * Adds one run's counts to today's metrics (SCALABILITY-AUDIT SC-4): the run
+ * counts in memory and writes once, instead of a KV read-modify-write per
+ * video from up to ten parallel publishes (lost counts, 429s on the key).
  */
-export async function updateDailyMetrics(
-  env: Env,
-  type: 'success' | 'failure',
-  delay?: number
-): Promise<void> {
+export async function recordRunMetrics(env: Env, run: RunMetrics, at: Date = new Date()): Promise<void> {
+  if (run.published === 0 && run.failed === 0) return;
   try {
-    const metricsJson = await env.SCHEDULER_METRICS.get('daily_metrics');
-    let metrics: Metrics = {
-      scheduledVideosCount: 0,
-      publishedToday: 0,
-      failedToday: 0,
-      averageDelay: 0,
-      queueDepth: 0,
-    };
-
-    if (metricsJson) {
-      metrics = JSON.parse(metricsJson);
-    }
-
-    if (type === 'success') {
-      metrics.publishedToday += 1;
-      if (delay !== undefined) {
-        // Update average delay using incremental average
-        const totalDelay = metrics.averageDelay * (metrics.publishedToday - 1) + delay;
-        metrics.averageDelay = totalDelay / metrics.publishedToday;
-      }
-    } else {
-      metrics.failedToday += 1;
-    }
-
-    await env.SCHEDULER_METRICS.put(
-      'daily_metrics',
-      JSON.stringify(metrics),
-      { expirationTtl: 86400 } // 24 hours
-    );
+    const key = dailyMetricsKey(at);
+    const stored = await env.SCHEDULER_METRICS.get(key);
+    const metrics: Metrics = stored
+      ? JSON.parse(stored)
+      : { scheduledVideosCount: 0, publishedToday: 0, failedToday: 0, averageDelay: 0, queueDepth: 0 };
+    const totalDelay = metrics.averageDelay * metrics.publishedToday + run.delaySeconds;
+    metrics.publishedToday += run.published;
+    metrics.failedToday += run.failed;
+    metrics.averageDelay = metrics.publishedToday > 0 ? totalDelay / metrics.publishedToday : 0;
+    await env.SCHEDULER_METRICS.put(key, JSON.stringify(metrics), { expirationTtl: 2 * 86400 });
   } catch (error) {
     logger.error('Failed to update daily metrics:', error);
   }
@@ -151,31 +140,4 @@ export function sendAlert(error: unknown): void {
     event: 'SCHEDULER_ALERT',
     stack: error instanceof Error ? error.stack : undefined,
   });
-}
-
-/**
- * Initialize metrics on startup
- * @param env Environment bindings
- */
-export async function initializeMetrics(env: Env): Promise<void> {
-  try {
-    const metricsJson = await env.SCHEDULER_METRICS.get('daily_metrics');
-    if (!metricsJson) {
-      const initialMetrics: Metrics = {
-        scheduledVideosCount: 0,
-        publishedToday: 0,
-        failedToday: 0,
-        averageDelay: 0,
-        queueDepth: 0,
-      };
-
-      await env.SCHEDULER_METRICS.put(
-        'daily_metrics',
-        JSON.stringify(initialMetrics),
-        { expirationTtl: 86400 }
-      );
-    }
-  } catch (error) {
-    logger.error('Failed to initialize metrics:', error);
-  }
 }

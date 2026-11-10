@@ -4,6 +4,10 @@ import { ADMIN_WEB_URL, OPENAUTH_URL, accounts, storageStatePath } from './suppo
 import { uiLogin } from './support/ui';
 import { skipUntilSignInDeployed } from './support/deployed';
 
+// AUTH-03/04/05/12/15 type the QA seed password (uiLogin): a trace would hold it
+// in the fillSecret args and the sign-in POST body. Trace off for this file.
+test.use({ trace: 'off' });
+
 const PROTECTED = ['/dashboard', '/moderation', '/translations', '/indices', '/moderation/reports/does-not-exist'];
 
 test.describe('authentication - signed out', () => {

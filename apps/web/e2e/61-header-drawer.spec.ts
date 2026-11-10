@@ -37,10 +37,28 @@ test.describe('Header', () => {
     expect(direction).toBe('rtl');
   });
 
-  test('NAV-003 anonymous visitors get no upload shortcut', async ({ page }) => {
-    await page.goto('/en');
-    await expect(page.getByTestId('nav-menu-trigger')).toBeVisible();
-    await expect(page.getByRole('banner').getByRole('link', { name: /Upload Video/ })).toHaveCount(0);
+  test('NAV-003 signed-out visitors see Upload once, beside the menu button, in both directions', async ({ page, isMobile }) => {
+    for (const [lang, rtl] of [['en', false], ['ar', true]] as const) {
+      await page.goto(`/${lang}`);
+      await expect(page.getByTestId('nav-menu-trigger')).toBeVisible();
+      // Exactly one Upload anywhere on the page, and it is in the top bar
+      await expect(page.getByTestId('header-upload')).toHaveCount(1);
+      const upload = page.getByRole('banner').getByTestId('header-upload');
+      await expect(upload).toHaveAttribute('href', `/${lang}/upload`);
+      await expect(upload).toHaveAttribute('data-state', 'signed-out');
+      const toggle = await page.getByTestId('nav-drawer-toggle').boundingBox();
+      const box = await upload.boundingBox();
+      if (!toggle || !box) throw new Error('header controls not laid out');
+      // Start side, right after the menu button: to its right in LTR, to its left in RTL
+      if (rtl) expect(box.x + box.width).toBeLessThanOrEqual(toggle.x + 1);
+      else expect(box.x).toBeGreaterThanOrEqual(toggle.x + toggle.width - 1);
+      expect(Math.abs(box.y + box.height / 2 - (toggle.y + toggle.height / 2))).toBeLessThanOrEqual(1);
+      if (isMobile) {
+        // A 44px icon button; the label stays its accessible name
+        expect(Math.round(box.width)).toBe(44);
+        expect(Math.round(box.height)).toBe(44);
+      }
+    }
   });
 });
 
@@ -51,6 +69,8 @@ test.describe('Header - channel owner', () => {
     await page.goto('/en');
     const upload = page.getByRole('banner').getByRole('link', { name: /Upload Video/ });
     await expect(upload).toHaveAttribute('href', '/en/upload');
+    await expect(upload).toHaveAttribute('data-state', 'ready');
+    await expect(page.getByTestId('header-upload')).toHaveCount(1);
     if (isMobile) {
       await expect(upload.getByText('Upload Video')).toBeHidden();
     } else {

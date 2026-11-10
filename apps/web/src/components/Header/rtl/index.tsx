@@ -1,5 +1,6 @@
 "use client";
 import React from "react";
+import { HeaderSearch } from '@/components/Header/HeaderSearch';
 import Image from 'next/image';
 import IcoButton from '@/components/iconButton';
 import Link from "next/link";
@@ -43,6 +44,7 @@ const HeaderRTL: React.FC<HeaderProps> = ({ toggleCollapse, isNavOpen = false })
 
       {/* Unified Navigation and Upload Button */}
       <div className="flex-1 flex items-center justify-end gap-2">
+        <HeaderSearch />
         <NotificationBell dir="rtl" />
         <UnifiedNavigationRTL />
       </div>

@@ -1,15 +1,20 @@
 import { expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { OPENAUTH_URL, type Account } from './env';
+import { fillSecret } from './secret-fill';
 import type { Locale, Theme } from '../../src/i18n/config';
 
-/** Log in through the real auth server password form. */
+/**
+ * Log in through the real auth server password form. Specs that call this set
+ * test.use({ trace: 'off' }) at the top level (see fillSecret).
+ */
 export async function uiLogin(page: Page, account: Account, expectedPath: RegExp = /\/dashboard$/) {
   await page.goto('/login');
   await page.waitForURL((url) => url.href.startsWith(OPENAUTH_URL) || expectedPath.test(url.pathname));
   if (page.url().startsWith(OPENAUTH_URL)) {
     await page.locator('input[name="email"]').fill(account.email);
-    await page.locator('input[name="password"]').fill(account.password);
+    // Seed password: never through fill(), whose step title the HTML report keeps
+    await fillSecret(page.locator('input[name="password"]'), account.password);
     await page.locator('button[data-component="button"]').click();
   }
   await page.waitForURL((url) => expectedPath.test(url.pathname), { timeout: 45_000 });

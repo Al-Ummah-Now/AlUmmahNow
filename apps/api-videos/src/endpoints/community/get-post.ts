@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { CommunityPost, PostStatus } from '@al-ummah/shared-types';
 import { OptionalAuthRoute, AppContext } from '../../base';
+import { withPostCounts } from '../../lib/post-counters';
 import { logger } from '../../lib/logger';
 
 export class GetCommunityPost extends OptionalAuthRoute {
@@ -67,6 +68,9 @@ export class GetCommunityPost extends OptionalAuthRoute {
 
       // Save updated view count (async, don't wait)
       c.env.community_posts.put(postKey, JSON.stringify(post));
+
+      // Like / vote totals live in D1 (the processor no longer writes them into the document)
+      await withPostCounts(c.env.NOTIFICATIONS_DB, [post]);
 
       return c.json(post);
     } catch (error) {

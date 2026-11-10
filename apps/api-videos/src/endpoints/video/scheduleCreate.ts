@@ -167,65 +167,39 @@ export class VideoScheduleCreate extends AuthenticatedRoute {
         );
       }
 
-      // Fetch video from R2
+      // Check and schedule on the fresh video with a conditional write
+      // (SCALABILITY-AUDIT AV-3): a concurrent edit, comment or view flush is
+      // re-read, and two schedule requests cannot both pass the checks.
+      type Refusal = { status: 403 | 404 | 409; error: string; code: string };
       const videoRepo = new R2Repository<VideoObject>(c.env.videos);
-      const video = await videoRepo.getObject(videoId);
+      const { data: video, rejected } = await videoRepo.updateObjectOrReject<Refusal>(videoId, (fresh) => {
+        // Check if user owns the video
+        if (fresh.userId !== userId) {
+          return { reject: { status: 403, error: 'Forbidden - you do not own this video', code: 'SCH003' } };
+        }
+        // Check if video is already published
+        if (fresh.isPublic) {
+          return { reject: { status: 409, error: 'Cannot schedule a video that is already published', code: 'SCH005' } };
+        }
+        // Check if video is already scheduled
+        if (fresh.scheduledPublishStatus === 'scheduled' || fresh.scheduledPublishStatus === 'publishing') {
+          return { reject: { status: 409, error: 'Video is already scheduled for publication. Cancel existing schedule first.', code: 'SCH004' } };
+        }
+        // Update video with scheduling information
+        fresh.scheduledPublishDate = scheduledDate.toISOString();
+        fresh.scheduledPublishTimezone = timezone;
+        fresh.scheduledPublishStatus = 'scheduled';
+        fresh.scheduledBy = userId;
+        fresh.scheduledAt = now.toISOString();
+        return true;
+      });
 
       if (!video) {
-        return c.json(
-          {
-            success: false,
-            error: 'Video not found',
-            code: 'SCH002',
-          },
-          404
-        );
+        return c.json({ success: false, error: 'Video not found', code: 'SCH002' }, 404);
       }
-
-      // Check if user owns the video
-      if (video.userId !== userId) {
-        return c.json(
-          {
-            success: false,
-            error: 'Forbidden - you do not own this video',
-            code: 'SCH003',
-          },
-          403
-        );
+      if (rejected) {
+        return c.json({ success: false, error: rejected.error, code: rejected.code }, rejected.status);
       }
-
-      // Check if video is already published
-      if (video.isPublic) {
-        return c.json(
-          {
-            success: false,
-            error: 'Cannot schedule a video that is already published',
-            code: 'SCH005',
-          },
-          409
-        );
-      }
-
-      // Check if video is already scheduled
-      if (video.scheduledPublishStatus === 'scheduled' || video.scheduledPublishStatus === 'publishing') {
-        return c.json(
-          {
-            success: false,
-            error: 'Video is already scheduled for publication. Cancel existing schedule first.',
-            code: 'SCH004',
-          },
-          409
-        );
-      }
-
-      // Update video with scheduling information
-      video.scheduledPublishDate = scheduledDate.toISOString();
-      video.scheduledPublishTimezone = timezone;
-      video.scheduledPublishStatus = 'scheduled';
-      video.scheduledBy = userId;
-      video.scheduledAt = now.toISOString();
-
-      await videoRepo.putObject(videoId, video);
 
       // Create scheduled metadata for scheduler worker
       const scheduledMetadata: ScheduledVideoMetadata = {

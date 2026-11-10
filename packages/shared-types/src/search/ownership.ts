@@ -14,7 +14,7 @@
  * back to scanning R2 until the next pass repairs the table.
  */
 
-import type { SearchDb, SearchStatement } from './store';
+import { NOT_TOMBSTONED, type SearchDb, type SearchStatement } from './store';
 import type { SearchEntityType } from './documents';
 
 export type OwnershipKind = 'video' | 'channel';
@@ -127,23 +127,36 @@ function int(value: boolean): number {
   return value ? 1 : 0;
 }
 
-export function ownershipUpsertStatement(db: SearchDb, row: OwnershipRow, now: number): SearchStatement {
+/** Tombstone namespace of the ownership index (the search index uses the bare entity type). */
+export function ownershipTombstone(kind: OwnershipKind): string {
+  return `own:${kind}`;
+}
+
+/**
+ * Upsert one row, applied only if `version` is not older than the row's and
+ * than the item's last delete (SCALABILITY-AUDIT PR-8; see store.ts).
+ */
+export function ownershipUpsertStatement(db: SearchDb, row: OwnershipRow, now: number, version = now): SearchStatement {
   return db.prepare(
-    `INSERT INTO ${OWNERSHIP_TABLE} (kind, id, owner_id, channel_id, is_public, is_hidden, is_deleted, is_live, duration, schedule_status, upload_status, views, created_at, updated_at, indexed_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO ${OWNERSHIP_TABLE} (kind, id, owner_id, channel_id, is_public, is_hidden, is_deleted, is_live, duration, schedule_status, upload_status, views, created_at, updated_at, indexed_at, source_version)
+     SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+     WHERE ${NOT_TOMBSTONED}
      ON CONFLICT(kind, id) DO UPDATE SET
        owner_id = excluded.owner_id, channel_id = excluded.channel_id, is_public = excluded.is_public,
        is_hidden = excluded.is_hidden, is_deleted = excluded.is_deleted, is_live = excluded.is_live,
        duration = excluded.duration, schedule_status = excluded.schedule_status, upload_status = excluded.upload_status,
        views = excluded.views, created_at = excluded.created_at, updated_at = excluded.updated_at,
-       indexed_at = excluded.indexed_at`,
+       indexed_at = excluded.indexed_at, source_version = excluded.source_version
+     WHERE excluded.source_version >= ${OWNERSHIP_TABLE}.source_version`,
   ).bind(
     row.kind, row.id, row.ownerId, row.channelId, int(row.isPublic), int(row.isHidden), int(row.isDeleted),
-    int(row.isLive), row.duration, row.scheduleStatus, row.uploadStatus, row.views, row.createdAt, row.updatedAt, now,
+    int(row.isLive), row.duration, row.scheduleStatus, row.uploadStatus, row.views, row.createdAt, row.updatedAt, now, version,
+    ownershipTombstone(row.kind), row.id, version,
   );
 }
 
-export function ownershipDeleteStatement(db: SearchDb, kind: OwnershipKind, id: string): SearchStatement {
+/** Delete one row (a delete is final). Pair with tombstoneStatement so older snapshots stay out. */
+export function ownershipDeleteStatement(db: SearchDb, kind: OwnershipKind, id: string, _version?: number): SearchStatement {
   return db.prepare(`DELETE FROM ${OWNERSHIP_TABLE} WHERE kind = ? AND id = ?`).bind(kind, id);
 }
 
@@ -157,14 +170,23 @@ export async function syncOwnership(
   id: string,
   object: unknown,
   now = Date.now(),
+  version = now,
 ): Promise<OwnershipSyncResult> {
   if (object == null) {
-    await ownershipDeleteStatement(db, kind, id).run();
+    // Tombstone at the newer of the delete time and the row's version, then delete
+    await db.batch([
+      db.prepare(
+        `INSERT INTO search_tombstones (entity, id, version)
+         VALUES (?4, ?2, max(?3, COALESCE((SELECT source_version FROM ${OWNERSHIP_TABLE} WHERE kind = ?1 AND id = ?2), 0)))
+         ON CONFLICT(entity, id) DO UPDATE SET version = max(version, excluded.version)`,
+      ).bind(kind, id, version, ownershipTombstone(kind)),
+      ownershipDeleteStatement(db, kind, id),
+    ]);
     return 'removed';
   }
   const row = projectOwnership(kind, id, object);
   if (!row) return 'skipped';
-  await ownershipUpsertStatement(db, row, now).run();
+  await ownershipUpsertStatement(db, row, now, version).run();
   return 'upserted';
 }
 
@@ -196,9 +218,10 @@ export async function syncOwnershipSafely(
   id: string,
   object: unknown,
   now = Date.now(),
+  version = now,
 ): Promise<SafeOwnershipResult> {
   try {
-    return { ok: true, result: await syncOwnership(db, kind, id, object, now) };
+    return { ok: true, result: await syncOwnership(db, kind, id, object, now, version) };
   } catch (error) {
     let invalidated = false;
     try {

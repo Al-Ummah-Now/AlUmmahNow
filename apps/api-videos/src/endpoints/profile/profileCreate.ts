@@ -79,7 +79,15 @@ export class ProfileCreate extends AuthenticatedRoute {
         const bucket = c.env.profiles;
 		type ProfileType = z.infer<typeof BusinessProfile>;
 		const repository = new R2Repository<ProfileType>(bucket);
-		await repository.putObject(businessProfile.id, businessProfile);
+		// Create-only for a new profile; an existing one (made by an earlier
+		// create, a watch-history add or a subscribe) keeps its channels,
+		// history and consent and only takes the submitted fields
+		// (SCALABILITY-AUDIT AV-6). A blind put here wiped them.
+		const stored = await repository.updateObject(userId, (fresh) => {
+			if (fresh === (businessProfile as ProfileType)) return true;
+			Object.assign(fresh, profileInput, { id: userId, dateModified: new Date().toISOString() });
+			return true;
+		}, { initial: () => businessProfile as ProfileType });
 
 		// Send queue message for profile creation
 		const queue = new Queue(c.env.queue);
@@ -90,7 +98,7 @@ export class ProfileCreate extends AuthenticatedRoute {
 		});
 
 		// Transform to view model for response
-		const profileView = transformProfileToView(businessProfile);
+		const profileView = transformProfileToView(stored ?? businessProfile);
 
 		// Return the new profile
 		return {

@@ -128,26 +128,35 @@ export class VideoSchedulePublishNow extends AuthenticatedRoute {
         );
       }
 
-      // Update video to be public
+      // Publish on the fresh video with a conditional write (SCALABILITY-AUDIT AV-3)
       const now = new Date().toISOString();
-      const updatedVideo: VideoObject = {
-        ...video,
-        isPublic: true,
-        dateModified: now,
+      let previousStatus = video.scheduledPublishStatus;
+      const { data: updatedVideo, rejected } = await videoRepository.updateObjectOrReject<{ status: 403 | 409; error: string }>(id, (fresh) => {
+        if (fresh.userId !== userId) return { reject: { status: 403, error: 'Not authorized to publish this video' } };
+        if (fresh.isPublic === true) return { reject: { status: 409, error: 'Video is already public' } };
+        previousStatus = fresh.scheduledPublishStatus;
+        fresh.isPublic = true;
+        fresh.dateModified = now;
         // Update scheduling status if video was scheduled
-        ...(video.scheduledPublishStatus && {
-          scheduledPublishStatus: 'published' as const,
-          publishedViaSchedule: false, // Published manually, not via scheduler
-        }),
-      };
+        if (fresh.scheduledPublishStatus) {
+          fresh.scheduledPublishStatus = 'published';
+          fresh.publishedViaSchedule = false; // Published manually, not via scheduler
+        }
+        return true;
+      });
+      if (!updatedVideo) {
+        return c.json({ success: false, error: 'Video not found' }, 404);
+      }
+      if (rejected) {
+        return c.json({ success: false, error: rejected.error }, rejected.status);
+      }
 
-      await videoRepository.putObject(id, updatedVideo);
       inBackground(c, 'video-published', () => announceNewVideo(c.env, { ...updatedVideo, id } as Parameters<typeof announceNewVideo>[1]));
 
       logger.info('[VideoSchedulePublishNow] Video published successfully', {
         videoId: id,
-        wasScheduled: !!video.scheduledPublishStatus,
-        previousStatus: video.scheduledPublishStatus,
+        wasScheduled: !!previousStatus,
+        previousStatus,
       });
 
       // Queue notification event (using VideoEdit to track the visibility change)

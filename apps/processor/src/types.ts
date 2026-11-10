@@ -75,6 +75,8 @@ export interface QueueEnvironment {
   /** Producer to the processor's own queue (PushDispatch, Epic 9.4). Optional: push is skipped when unbound. */
   MESSAGE_QUEUE?: {
     send: (message: AlUmmahMessage) => Promise<void>;
+    /** Up to 100 messages (256 KB) in one subrequest (SCALABILITY-AUDIT PR-7). */
+    sendBatch?: (messages: Array<{ body: AlUmmahMessage }>) => Promise<void>;
   };
   DLQ?: { // Optional - might not be configured in all environments
     send: (message: AlUmmahMessage) => Promise<void>;
