@@ -11,7 +11,24 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 const SRC = path.join(__dirname, '..', 'src');
-const isClient = (code: string) => /^\s*(?:\/\/[^\n]*\n|\/\*[\s\S]*?\*\/\s*)*['"]use client['"]/.test(code);
+// The directive must be the first statement: skip leading whitespace and comments (linear scan)
+function isClient(code: string): boolean {
+  let i = 0;
+  for (;;) {
+    while (i < code.length && /\s/.test(code[i])) i++;
+    if (code.startsWith('//', i)) {
+      const end = code.indexOf('\n', i);
+      if (end < 0) return false;
+      i = end + 1;
+    } else if (code.startsWith('/*', i)) {
+      const end = code.indexOf('*/', i + 2);
+      if (end < 0) return false;
+      i = end + 2;
+    } else {
+      return code.startsWith("'use client'", i) || code.startsWith('"use client"', i);
+    }
+  }
+}
 
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
