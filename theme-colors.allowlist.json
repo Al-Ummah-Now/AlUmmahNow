@@ -15,7 +15,7 @@
   "apps/web/src/app/[locale]/scheduled-videos/page.tsx": 12,
   "apps/web/src/app/[locale]/sections/page.tsx": 6,
   "apps/web/src/app/[locale]/settings/channel/[id]/edit/page.tsx": 88,
-  "apps/web/src/app/[locale]/settings/channel/[id]/page.tsx": 52,
+  "apps/web/src/app/[locale]/settings/channel/[id]/page.tsx": 32,
   "apps/web/src/app/[locale]/settings/channel/[id]/playlists/page.tsx": 2,
   "apps/web/src/app/[locale]/settings/channel/[id]/tabs/page.tsx": 18,
   "apps/web/src/app/[locale]/settings/channel/[id]/videos/page.tsx": 67,
