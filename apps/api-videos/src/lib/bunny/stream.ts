@@ -8,6 +8,10 @@ import {
     TranscodingMessageModel,
 } from './types';
 
+/** One or more leading "[tag] " groups (the env prefix shape, e.g. "[stage] "). */
+const ENV_TAG = /^(?:\s*\[[^\]]{1,32}\]\s+)+/;
+const ENV_TAG_CHARS = /[\[\]]/g;
+
 export class BunnyStreamClient {
     private baseURL: string;
     private namePrefix = '';
@@ -28,12 +32,18 @@ export class BunnyStreamClient {
         return this;
     }
 
-    /** `name` with this env's prefix (once). */
+    /**
+     * `name` with this env's prefix (once). A leading "[tag] " in the name is
+     * dropped first, in every env: the upload reaper tells envs sharing a
+     * library apart by that prefix (lib/uploads/reaper.ts belongsToEnv), so a
+     * user title must never pass for another env's prefix.
+     */
     prefixed(name: string): string;
     prefixed(name: string | undefined): string | undefined;
     prefixed(name: string | undefined): string | undefined {
-        if (name === undefined || !this.namePrefix || name.startsWith(this.namePrefix)) return name;
-        return `${this.namePrefix}${name}`;
+        if (name === undefined) return name;
+        const bare = name.replace(ENV_TAG, '') || name.replace(ENV_TAG_CHARS, '') || 'Untitled';
+        return `${this.namePrefix}${bare}`;
     }
 
     private async request<T>(method: string, endpoint: string, body?: any, params?: Record<string, any>): Promise<T> {
