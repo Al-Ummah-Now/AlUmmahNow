@@ -59,6 +59,8 @@
 	 * Environment Variables
 	 */
 	"vars": {
+		// Error reports to the admin Errors page (docs/features/error-reporting.md)
+		"ERRORS_INGEST_URL": "https://admin.api.alummahnow.net/internal/errors",
 		"ENVIRONMENT": "production",
 		"WEBSOCKET_URL": "https://realtime.alummahnow.net",
 		"Issuer": "https://auth.alummahnow.net"
@@ -115,6 +117,8 @@
 				{ "name": "WS_MESSAGE_LIMITER", "namespace_id": "2312", "simple": { "limit": 600, "period": 60 } }
 			],
 			"vars": {
+				// Error reports to the admin Errors page (docs/features/error-reporting.md)
+				"ERRORS_INGEST_URL": "https://admin.api.stage.alummahnow.net/internal/errors",
 				"ENVIRONMENT": "stage",
 				"WEBSOCKET_URL": "https://realtime.stage.alummahnow.net",
 				"Issuer": "https://auth.stage.alummahnow.net"

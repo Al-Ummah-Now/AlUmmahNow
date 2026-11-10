@@ -21,6 +21,10 @@ export interface Env {
   LOCK_TTL: string;
   WEBSOCKET_URL: string;
   INTERNAL_API_KEY?: string | { get(): Promise<string> };
+  /** admin-api error ingest (Errors page) */
+  ERRORS_INGEST_URL?: string;
+  ENVIRONMENT?: string;
+  CF_VERSION_METADATA?: { id?: string; tag?: string };
 }
 
 // Scheduler-specific types

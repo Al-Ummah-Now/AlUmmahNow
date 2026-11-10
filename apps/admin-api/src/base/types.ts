@@ -85,6 +85,8 @@ export interface AdminBindings {
   ERRORS_QUEUE?: Queue<unknown>;
   /** Processor service binding: Retry of dead-lettered messages (POST /dlq/replay) */
   PROCESSOR?: { fetch(input: string, init?: RequestInit): Promise<Response> };
+  /** Scheduler service: Retry of a scheduled publish that failed for good (Errors page) */
+  SCHEDULER?: { fetch(input: string, init?: RequestInit): Promise<Response> };
 }
 
 /**

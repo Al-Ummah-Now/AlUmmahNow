@@ -106,10 +106,11 @@
   "triggers": { "crons": ["*/5 * * * *", "17 3 * * *"] },
   // Private source maps uploaded by the release (lib/sourcemaps.ts) are in r2_buckets as SOURCEMAPS.
   // VIDEOS: api-videos owns the content data: /internal/* (processing health, content management)
-  // PROCESSOR: Retry of dead-lettered messages on the Errors page (lib/errors-actions.ts)
+  // PROCESSOR, SCHEDULER: Retry actions on the Errors page (lib/errors-actions.ts): dead letters, failed scheduled publishes
   "services": [
     { "binding": "VIDEOS", "service": "videos-qa" },
-    { "binding": "PROCESSOR", "service": "al-ummah-now-processor-qa" }
+    { "binding": "PROCESSOR", "service": "al-ummah-now-processor-qa" },
+    { "binding": "SCHEDULER", "service": "al-ummah-scheduler-qa" }
   ],
 
   "vars": {

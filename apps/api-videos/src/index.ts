@@ -1,3 +1,4 @@
+import { reportServerError, withErrorReporting, type ErrorReporterEnv } from '@al-ummah/shared-types';
 import { SUBSCRIPTION_IMPORT_CRON, importPendingSubscriptions } from './lib/subscription-import';
 import { handleProcessingCheckBatch, sweepProcessingVideos } from './lib/processing/loop';
 
@@ -421,7 +422,10 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 		ctx.waitUntil(
 			importPendingSubscriptions(rawEnv as never)
 				.then((result) => logger.info('[SubscriptionImport] Run finished', { ...result }))
-				.catch((error) => logger.error('[SubscriptionImport] Run failed', { error: error instanceof Error ? error.message : String(error) })),
+				.catch((error) => {
+					logger.error('[SubscriptionImport] Run failed', { error: error instanceof Error ? error.message : String(error) });
+					reportJobFailure(rawEnv, ctx, 'subscription-import', error);
+				}),
 		);
 		// Hourly: uploads that went quiet are completed or flagged for a
 		// re-upload, never left hanging (lib/uploads/lifecycle.ts). Through the
@@ -441,18 +445,21 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 				await reconcileSearchIndex(rawEnv as never);
 			} catch (error) {
 				logger.error('[SearchReconcile] Sweep failed', { error: error instanceof Error ? error.message : String(error) });
+				reportJobFailure(rawEnv, ctx, 'search-reconcile', error);
 			}
 			try {
 				// Ownership index: advance (and when finished, prune and mark complete) the full pass of videos and channels.
 				await reconcileOwnershipIndex(rawEnv as never);
 			} catch (error) {
 				logger.error('[Ownership] Reconcile failed', { error: error instanceof Error ? error.message : String(error) });
+				reportJobFailure(rawEnv, ctx, 'ownership-reconcile', error);
 			}
 			try {
 				// Upload rate limits (AV-14): drop windows of users who stopped uploading and expired leases.
 				if (rawEnv.SEARCH_DB) await pruneRateLimits(rawEnv.SEARCH_DB);
 			} catch (error) {
 				logger.error('[RateLimit] Prune failed', { error: error instanceof Error ? error.message : String(error) });
+				reportJobFailure(rawEnv, ctx, 'rate-limit-prune', error);
 			}
 		})(),
 	);
@@ -464,6 +471,7 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 				logger.info('[Retention] Retention sweep finished', { ...result, operations: budget.spent });
 			} catch (error) {
 				logger.error('[Retention] Retention sweep failed', { error: error instanceof Error ? error.message : String(error) });
+				reportJobFailure(rawEnv, ctx, 'retention', error);
 			}
 		})(),
 	);
@@ -505,15 +513,27 @@ async function handleFetch(request: Request, env: AppBindings, ctx: ExecutionCon
  * index and ownership rows like any API write.
  */
 async function queue(batch: MessageBatch<unknown>, env: AppBindings, ctx: ExecutionContext): Promise<void> {
-	if (batch.queue.startsWith('al-ummah-now-admin-jobs')) {
-		await handleAdminJobBatch(batch as unknown as { messages: readonly JobMessage[] }, withSearchSync(env, ctx) as never, ADMIN_JOB_HANDLERS);
-		return;
+	try {
+		if (batch.queue.startsWith('al-ummah-now-admin-jobs')) {
+			await handleAdminJobBatch(batch as unknown as { messages: readonly JobMessage[] }, withSearchSync(env, ctx) as never, ADMIN_JOB_HANDLERS);
+			return;
+		}
+		await handleProcessingCheckBatch(batch, withSearchSync(env, ctx) as never);
+	} catch (error) {
+		// The batch is retried by the queue; the failure is flagged on the admin Errors page
+		reportServerError('api-videos', env as never, ctx, error, { route: `queue:${batch.queue}`, extra: { messages: batch.messages.length } });
+		throw error;
 	}
-	await handleProcessingCheckBatch(batch, withSearchSync(env, ctx) as never);
 }
 
+/** A daily job that failed: reported to the admin Errors page (it runs again tomorrow). */
+function reportJobFailure(env: AppBindings, ctx: ExecutionContext, job: string, error: unknown): void {
+	reportServerError('api-videos', env as never, ctx, error, { route: `cron:${job}` });
+}
+
+// Uncaught exceptions and 5xx answers are reported to the admin Errors page (docs/features/error-reporting.md)
 export default {
-	fetch: handleFetch,
+	fetch: withErrorReporting<AppBindings & ErrorReporterEnv, ExecutionContext>('api-videos', handleFetch as never),
 	scheduled,
 	queue,
 };

@@ -11,6 +11,7 @@ import { purgeExpiredModerationData } from './moderation/store';
 import { isDeadLetterQueue, processDeadLetterBatch } from './dlq/consumer';
 import { listDeadLetters, purgeExpiredDeadLetters, replayDeadLetter } from './dlq/store';
 import { getApiKey } from './lib/websocket-notify';
+import { reportServerError, resolveNeedsAction, withErrorReporting, type ExecutionContextLike } from '@al-ummah/shared-types';
 import { importLegacyRollups } from './lib/analytics-rollup';
 import { resumeStalledImports } from './lib/post-counters';
 
@@ -81,7 +82,8 @@ export async function handleDeadLetterRequest(
   request: Request,
   url: URL,
   env: QueueEnvironment,
-  logger: ReturnType<typeof createLogger>
+  logger: ReturnType<typeof createLogger>,
+  ctx?: ExecutionContextLike
 ): Promise<Response> {
   if (!(await isInternalCaller(request, env))) return json({ error: 'Unauthorized' }, 401);
   if (!env.NOTIFICATIONS_DB) return json({ error: 'NOTIFICATIONS_DB not bound' }, 503);
@@ -96,6 +98,8 @@ export async function handleDeadLetterRequest(
     if (!body || typeof body.id !== 'string' || !body.id) return json({ error: 'id is required' }, 400);
     const outcome = await replayDeadLetter(env.NOTIFICATIONS_DB, env.MESSAGE_QUEUE, body.id);
     logger.info('[DLQ] Replay requested', { id: body.id, status: outcome.status });
+    // Replayed by any caller: the item on the Errors page is done
+    if (outcome.status === 'replayed') resolveNeedsAction(env, ctx, `dlq:${body.id}`.slice(0, 160));
     const status = outcome.status === 'replayed' ? 200 : outcome.status === 'not_found' ? 404 : 409;
     return json(outcome, status);
   }
@@ -218,213 +222,225 @@ export default {
     ctx.waitUntil(runScheduled(env));
   },
 
-  async queue(batch: MessageBatch<AlUmmahMessage>, env: QueueEnvironment): Promise<void> {
-    const logger = createLogger('processor', {
-      logLevel: (env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error') || 'info',
-      forceHttpLogging: true,
-    });
-    // Dead-letter queues: alert + store for replay (see src/dlq). Checked first:
-    // a DLQ batch must never be processed (and fail) again as a normal message.
-    if (isDeadLetterQueue(batch.queue)) {
-      await processDeadLetterBatch(batch, env, logger);
-      return;
+  async queue(batch: MessageBatch<AlUmmahMessage>, env: QueueEnvironment, ctx?: ExecutionContextLike): Promise<void> {
+    try {
+      await handleQueue(batch, env, ctx);
+    } catch (error) {
+      // The whole batch failed (it is retried by the queue): flag it on the Errors page
+      reportServerError('processor', env, ctx, error, { kind: 'unhandled', route: `queue:${batch.queue ?? 'unknown'}`, extra: { messages: batch.messages.length } });
+      throw error;
     }
-    if (batch.queue?.includes('moderation')) {
-      await processModerationBatch(batch, env, logger);
-      return;
-    }
+  },
 
-    // One processor per batch: it collects the batch's analytics increments (flushed below)
-    const processor = new MessageProcessor(logger, undefined, { batchCounters: true });
+  fetch: withErrorReporting<QueueEnvironment, ExecutionContextLike>('processor', (request, env, ctx) => handleFetch(request, env, ctx)),
+};
 
-    logger.info(`Processing batch of ${batch.messages.length} messages`);
+async function handleQueue(batch: MessageBatch<AlUmmahMessage>, env: QueueEnvironment, ctx?: ExecutionContextLike): Promise<void> {
+  const logger = createLogger('processor', {
+    logLevel: (env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error') || 'info',
+    forceHttpLogging: true,
+  });
+  // Dead-letter queues: alert + store for replay (see src/dlq). Checked first:
+  // a DLQ batch must never be processed (and fail) again as a normal message.
+  if (isDeadLetterQueue(batch.queue)) {
+    await processDeadLetterBatch(batch, env, logger, Date.now(), ctx);
+    return;
+  }
+  if (batch.queue?.includes('moderation')) {
+    await processModerationBatch(batch, env, logger);
+    return;
+  }
 
-    // Process messages in parallel for better performance
-    const results = await Promise.allSettled(
-      batch.messages.map(async (message: QueueMessage<AlUmmahMessage>) => {
-        try {
-          const result = await processor.processMessage(message.body, env);
-          
-          if (!result.success) {
-            if (result.shouldRetry) {
-              // Retry the message (account erasure steps back off; contact/erase.ts)
-              logger.warn(`Retrying message ${message.body.id}`);
-              const delaySeconds = erasureRetryDelaySeconds(message.body?.type, message.attempts ?? 1, ERASURE_TYPES);
-              if (delaySeconds) message.retry({ delaySeconds });
-              else message.retry();
-            } else {
-              // Send to dead letter queue (if available)
-              logger.error(`Sending message ${message.body.id} to DLQ`);
-              if (env.DLQ && typeof env.DLQ.send === 'function') {
-                await env.DLQ.send({
-                  ...message.body,
-                  retryCount: (message.body.retryCount || 0) + 1,
-                  failureReason: result.error || 'Unknown error',
-                  failedAt: result.processedAt,
-                });
-              } else {
-                logger.warn(`DLQ not configured - acknowledging message ${message.body.id} without DLQ`);
-              }
-              message.ack();
-            }
+  // One processor per batch: it collects the batch's analytics increments (flushed below)
+  const processor = new MessageProcessor(logger, undefined, { batchCounters: true });
+
+  logger.info(`Processing batch of ${batch.messages.length} messages`);
+
+  // Process messages in parallel for better performance
+  const results = await Promise.allSettled(
+    batch.messages.map(async (message: QueueMessage<AlUmmahMessage>) => {
+      try {
+        const result = await processor.processMessage(message.body, env);
+        
+        if (!result.success) {
+          if (result.shouldRetry) {
+            // Retry the message (account erasure steps back off; contact/erase.ts)
+            logger.warn(`Retrying message ${message.body.id}`);
+            const delaySeconds = erasureRetryDelaySeconds(message.body?.type, message.attempts ?? 1, ERASURE_TYPES);
+            if (delaySeconds) message.retry({ delaySeconds });
+            else message.retry();
           } else {
-            // Successfully processed
-            logger.debug(`Message ${message.body.id} processed successfully`);
+            // Send to dead letter queue (if available)
+            logger.error(`Sending message ${message.body.id} to DLQ`);
+            if (env.DLQ && typeof env.DLQ.send === 'function') {
+              await env.DLQ.send({
+                ...message.body,
+                retryCount: (message.body.retryCount || 0) + 1,
+                failureReason: result.error || 'Unknown error',
+                failedAt: result.processedAt,
+              });
+            } else {
+              logger.warn(`DLQ not configured - acknowledging message ${message.body.id} without DLQ`);
+            }
             message.ack();
           }
-        } catch (error) {
-          logger.error(`Unexpected error processing message ${message.body.id}`, error);
-          // For unexpected errors, we'll retry
-          const delaySeconds = erasureRetryDelaySeconds(message.body?.type, message.attempts ?? 1, ERASURE_TYPES);
-          if (delaySeconds) message.retry({ delaySeconds });
-          else message.retry();
+        } else {
+          // Successfully processed
+          logger.debug(`Message ${message.body.id} processed successfully`);
+          message.ack();
         }
-      })
-    );
+      } catch (error) {
+        logger.error(`Unexpected error processing message ${message.body.id}`, error);
+        // For unexpected errors, we'll retry
+        const delaySeconds = erasureRetryDelaySeconds(message.body?.type, message.attempts ?? 1, ERASURE_TYPES);
+        if (delaySeconds) message.retry({ delaySeconds });
+        else message.retry();
+      }
+    })
+  );
 
-    // One D1 transaction for the whole batch's analytics increments
-    await processor.flushCounters(env);
+  // One D1 transaction for the whole batch's analytics increments
+  await processor.flushCounters(env);
 
-    // Log summary of processing results
-    const successful = results.filter((r: PromiseSettledResult<unknown>) => r.status === 'fulfilled').length;
-    const failed = results.filter((r: PromiseSettledResult<unknown>) => r.status === 'rejected').length;
+  // Log summary of processing results
+  const successful = results.filter((r: PromiseSettledResult<unknown>) => r.status === 'fulfilled').length;
+  const failed = results.filter((r: PromiseSettledResult<unknown>) => r.status === 'rejected').length;
+  
+  logger.info(`Batch processing complete: ${successful} successful, ${failed} failed`);
+}
+
+async function handleFetch(request: Request, env: QueueEnvironment, ctx?: ExecutionContextLike): Promise<Response> {
+  const logger = createLogger('processor', {
+    logLevel: (env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error') || 'info',
+    forceHttpLogging: true,
+  });
+  const url = new URL(request.url);
+  
+  logger.debug(`Received ${request.method} request to ${url.pathname}`);
+  
+  // Dead letters (see src/dlq): GET /dlq lists, POST /dlq/replay {"id"} re-sends one.
+  if (url.pathname === '/dlq' || url.pathname === '/dlq/replay') {
+    return handleDeadLetterRequest(request, url, env, logger, ctx);
+  }
+
+  // Health check endpoint
+  if (url.pathname === '/health') {
+    logger.debug('Health check requested');
     
-    logger.info(`Batch processing complete: ${successful} successful, ${failed} failed`);
-  },
-
-  async fetch(request: Request, env: QueueEnvironment): Promise<Response> {
-    const logger = createLogger('processor', {
-      logLevel: (env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error') || 'info',
-      forceHttpLogging: true,
-    });
-    const url = new URL(request.url);
-    
-    logger.debug(`Received ${request.method} request to ${url.pathname}`);
-    
-    // Dead letters (see src/dlq): GET /dlq lists, POST /dlq/replay {"id"} re-sends one.
-    if (url.pathname === '/dlq' || url.pathname === '/dlq/replay') {
-      return handleDeadLetterRequest(request, url, env, logger);
-    }
-
-    // Health check endpoint
-    if (url.pathname === '/health') {
-      logger.debug('Health check requested');
-      
-      try {
-        // Perform basic health checks
-        const healthStatus = {
-          status: 'healthy',
-          timestamp: new Date().toISOString(),
-          environment: env.ENVIRONMENT,
-          version: '1.0.0', // Could be read from package.json
-          dependencies: {
-            r2: await checkR2Health(env),
-            queue: await checkQueueHealth(env),
-            dlq: await checkDLQHealth(env),
-          }
-        };
-
-        // Determine overall health based on dependencies
-        const allHealthy = Object.values(healthStatus.dependencies).every(dep => dep.status === 'healthy');
-        if (!allHealthy) {
-          healthStatus.status = 'degraded';
+    try {
+      // Perform basic health checks
+      const healthStatus = {
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        environment: env.ENVIRONMENT,
+        version: '1.0.0', // Could be read from package.json
+        dependencies: {
+          r2: await checkR2Health(env),
+          queue: await checkQueueHealth(env),
+          dlq: await checkDLQHealth(env),
         }
+      };
 
-        return new Response(JSON.stringify(healthStatus), {
-          status: allHealthy ? 200 : 503,
-          headers: { 'content-type': 'application/json' },
-        });
-      } catch (error) {
-        logger.error('Health check failed', error);
-        return new Response(JSON.stringify({
-          status: 'unhealthy',
-          timestamp: new Date().toISOString(),
-          environment: env.ENVIRONMENT,
-          error: 'Health check failed',
-        }), {
-          status: 503,
-          headers: { 'content-type': 'application/json' },
-        });
+      // Determine overall health based on dependencies
+      const allHealthy = Object.values(healthStatus.dependencies).every(dep => dep.status === 'healthy');
+      if (!allHealthy) {
+        healthStatus.status = 'degraded';
       }
+
+      return new Response(JSON.stringify(healthStatus), {
+        status: allHealthy ? 200 : 503,
+        headers: { 'content-type': 'application/json' },
+      });
+    } catch (error) {
+      logger.error('Health check failed', error);
+      return new Response(JSON.stringify({
+        status: 'unhealthy',
+        timestamp: new Date().toISOString(),
+        environment: env.ENVIRONMENT,
+        error: 'Health check failed',
+      }), {
+        status: 503,
+        headers: { 'content-type': 'application/json' },
+      });
     }
+  }
 
-    // Queue status endpoint
-    if (url.pathname === '/queue/status') {
-      logger.debug('Queue status requested');
-      
-      try {
-        // Get queue metrics from Cloudflare GraphQL Analytics API
-        // To implement actual metrics, you would need to:
-        // 1. Add Cloudflare API token to environment variables
-        // 2. Make GraphQL queries to https://api.cloudflare.com/client/v4/graphql
-        // 3. Query the following datasets:
-        //    - queuesBacklogAdaptiveGroups (backlog metrics)
-        //    - queueConsumerMetricsAdaptiveGroups (consumer concurrency)  
-        //    - queueMessageOperationsAdaptiveGroups (operations metrics)
-        // Note: Actual implementation would require GraphQL API calls to Cloudflare Analytics
-        const queueMetrics = {
-          status: 'active',
-          environment: env.ENVIRONMENT,
-          timestamp: new Date().toISOString(),
-          metrics: {
-            // Backlog metrics (from queuesBacklogAdaptiveGroups dataset)
-            backlog: {
-              messages: 'requires_analytics_api_access',
-              bytes: 'requires_analytics_api_access',
-            },
-            // Consumer metrics (from queueConsumerMetricsAdaptiveGroups dataset)
-            consumer: {
-              averageConcurrency: 'requires_analytics_api_access',
-            },
-            // Message operations (from queueMessageOperationsAdaptiveGroups dataset)
-            operations: {
-              totalBillableOperations: 'requires_analytics_api_access',
-              totalBytes: 'requires_analytics_api_access',
-              averageLagTime: 'requires_analytics_api_access', // ms between write and consume
-              averageRetries: 'requires_analytics_api_access',
-              maxMessageSize: 'requires_analytics_api_access',
-            },
-            // Additional operational metrics
-            lastUpdated: new Date().toISOString(),
-            note: 'Metrics require Cloudflare GraphQL Analytics API integration',
+  // Queue status endpoint
+  if (url.pathname === '/queue/status') {
+    logger.debug('Queue status requested');
+    
+    try {
+      // Get queue metrics from Cloudflare GraphQL Analytics API
+      // To implement actual metrics, you would need to:
+      // 1. Add Cloudflare API token to environment variables
+      // 2. Make GraphQL queries to https://api.cloudflare.com/client/v4/graphql
+      // 3. Query the following datasets:
+      //    - queuesBacklogAdaptiveGroups (backlog metrics)
+      //    - queueConsumerMetricsAdaptiveGroups (consumer concurrency)  
+      //    - queueMessageOperationsAdaptiveGroups (operations metrics)
+      // Note: Actual implementation would require GraphQL API calls to Cloudflare Analytics
+      const queueMetrics = {
+        status: 'active',
+        environment: env.ENVIRONMENT,
+        timestamp: new Date().toISOString(),
+        metrics: {
+          // Backlog metrics (from queuesBacklogAdaptiveGroups dataset)
+          backlog: {
+            messages: 'requires_analytics_api_access',
+            bytes: 'requires_analytics_api_access',
           },
-          health: {
-            queueAccessible: true,
-            r2Accessible: true,
-            dlqAccessible: true,
+          // Consumer metrics (from queueConsumerMetricsAdaptiveGroups dataset)
+          consumer: {
+            averageConcurrency: 'requires_analytics_api_access',
           },
-          // Links to Cloudflare documentation for implementing metrics
-          documentation: {
-            metricsAPI: 'https://developers.cloudflare.com/queues/observability/metrics/',
-            graphqlAPI: 'https://developers.cloudflare.com/analytics/graphql-api/',
-          }
-        };
+          // Message operations (from queueMessageOperationsAdaptiveGroups dataset)
+          operations: {
+            totalBillableOperations: 'requires_analytics_api_access',
+            totalBytes: 'requires_analytics_api_access',
+            averageLagTime: 'requires_analytics_api_access', // ms between write and consume
+            averageRetries: 'requires_analytics_api_access',
+            maxMessageSize: 'requires_analytics_api_access',
+          },
+          // Additional operational metrics
+          lastUpdated: new Date().toISOString(),
+          note: 'Metrics require Cloudflare GraphQL Analytics API integration',
+        },
+        health: {
+          queueAccessible: true,
+          r2Accessible: true,
+          dlqAccessible: true,
+        },
+        // Links to Cloudflare documentation for implementing metrics
+        documentation: {
+          metricsAPI: 'https://developers.cloudflare.com/queues/observability/metrics/',
+          graphqlAPI: 'https://developers.cloudflare.com/analytics/graphql-api/',
+        }
+      };
 
-        return new Response(JSON.stringify(queueMetrics), {
-          headers: { 'content-type': 'application/json' },
-        });
-      } catch (error) {
-        logger.error('Failed to get queue status', error);
-        return new Response(JSON.stringify({
-          status: 'error',
-          environment: env.ENVIRONMENT,
-          timestamp: new Date().toISOString(),
-          error: 'Failed to retrieve queue metrics',
-        }), {
-          status: 500,
-          headers: { 'content-type': 'application/json' },
-        });
-      }
+      return new Response(JSON.stringify(queueMetrics), {
+        headers: { 'content-type': 'application/json' },
+      });
+    } catch (error) {
+      logger.error('Failed to get queue status', error);
+      return new Response(JSON.stringify({
+        status: 'error',
+        environment: env.ENVIRONMENT,
+        timestamp: new Date().toISOString(),
+        error: 'Failed to retrieve queue metrics',
+      }), {
+        status: 500,
+        headers: { 'content-type': 'application/json' },
+      });
     }
+  }
 
-    // Default response for unknown endpoints
-    logger.warn(`Unknown endpoint requested: ${url.pathname}`);
-    return new Response(JSON.stringify({
-      error: 'Not Found',
-      message: 'Available endpoints: /health, /queue/status, /dlq, /dlq/replay',
-    }), {
-      status: 404,
-      headers: { 'content-type': 'application/json' },
-    });
-  },
-};
+  // Default response for unknown endpoints
+  logger.warn(`Unknown endpoint requested: ${url.pathname}`);
+  return new Response(JSON.stringify({
+    error: 'Not Found',
+    message: 'Available endpoints: /health, /queue/status, /dlq, /dlq/replay',
+  }), {
+    status: 404,
+    headers: { 'content-type': 'application/json' },
+  });
+}

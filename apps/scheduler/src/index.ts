@@ -1,4 +1,5 @@
-import type { ScheduledVideoMetadata } from '@al-ummah/shared-types';
+import { reportServerError, withErrorReporting, type ScheduledVideoMetadata } from '@al-ummah/shared-types';
+import { handleSchedulerRequest } from './failed-retry';
 import type { Env, BatchResult } from './types';
 import { acquireLock, releaseLock, updateLastRun } from './locks';
 import { listDueSchedules, publishVideo, removeSchedule } from './publisher';
@@ -53,13 +54,17 @@ export default {
       // 5. Handle failures with retry
       if (results.failed.length > 0) {
         logger.info(`Scheduling retries for ${results.failed.length} failed videos`);
-        await scheduleRetries(results.failed, env);
+        await scheduleRetries(results.failed, env, ctx);
       }
     } catch (error) {
       logger.error('Scheduler error:', error);
       sendAlert(error);
+      reportServerError('scheduler', env, ctx, error, { route: 'cron:scheduler' });
     }
   },
+
+  /** Internal API (service binding from admin-api): POST /failed/retry */
+  fetch: withErrorReporting<Env, ExecutionContext>('scheduler', (request, env) => handleSchedulerRequest(request, env)),
 };
 
 /**

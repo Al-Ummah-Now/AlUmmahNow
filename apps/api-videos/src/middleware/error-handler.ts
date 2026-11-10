@@ -1,4 +1,5 @@
 import { Context } from 'hono';
+import { reportServerError, requestIdOf } from '@al-ummah/shared-types';
 import { logger } from '../lib/logger';
 
 /**
@@ -156,7 +157,25 @@ export function errorHandler(err: Error, c: Context) {
 	const retryAfter = (err as { retryAfterSeconds?: unknown })?.retryAfterSeconds;
 	if (typeof retryAfter === 'number' && retryAfter > 0) c.header('Retry-After', String(retryAfter));
 
+	// Server errors go to the admin Errors page; the client gets only a reference (X-Error-Ref)
+	let reference: string | undefined;
+	if (statusCode >= 500) {
+		let ctx: { waitUntil(p: Promise<unknown>): void } | undefined;
+		try {
+			ctx = c.executionCtx;
+		} catch {
+			ctx = undefined;
+		}
+		reference = reportServerError('api-videos', (c.env ?? {}) as never, ctx, err, {
+			route: c.req.path,
+			method: c.req.method,
+			status: statusCode,
+			requestId: requestIdOf(c.req.raw),
+		});
+		c.header('X-Error-Ref', reference);
+	}
+
 	// Format and return error response
 	const response = formatErrorResponse(err, isDev);
-	return c.json(response, statusCode as any);
+	return c.json(reference ? { ...response, reference } : response, statusCode as any);
 }
