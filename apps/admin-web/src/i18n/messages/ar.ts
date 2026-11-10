@@ -1378,6 +1378,7 @@ const ar: Messages = {
     pickerLoading: 'جارٍ البحث…',
     pickerEmpty: 'لا يوجد مستخدم فيديوهات يطابق «{query}».',
     pickerError: 'تعذّر البحث. حاول مرة أخرى.',
+    pickerResultsOne: 'نتيجة واحدة. استخدم مفتاحَي السهم للأعلى وللأسفل للتنقل، وEnter للاختيار.',
     pickerResults: 'النتائج: {count}. استخدم مفتاحَي السهم للأعلى وللأسفل للتنقل، وEnter للاختيار.',
     pickerOwnsNone: 'لا يملك قنوات',
     pickerOwnsOne: 'يملك قناة واحدة',
@@ -1395,7 +1396,7 @@ const ar: Messages = {
     transfer: 'نقل',
     transferConfirm: 'نقل هذه القناة إلى {name} ({email})؟',
     transferBody: 'تنتقل «{channel}» إلى {name} مع فيديوهاتها ({videos}) وقوائم تشغيلها ({playlists}). يصبح {name} المالك ويفقد المالك الحالي الملكية. يحتفظ أعضاء القناة بأدوارهم. يمكن التراجع بنقل آخر.',
-    transferTypeToConfirm: 'اكتب @{handle} أو {email} للتأكيد',
+    transferTypeToConfirm: 'اكتب {handle} أو {email} للتأكيد',
     transferTypeToConfirmNoHandle: 'اكتب {email} للتأكيد',
     transferPickFirst: 'اختر المالك الجديد أولًا.',
     transferStatus: {

@@ -14,6 +14,7 @@ import { createTranslator } from '../src/i18n/translate';
 import { UserPicker } from '../src/components/content/UserPicker';
 import { ConfirmButton } from '../src/components/content/actions';
 import {
+  bidiIsolate,
   canSearch,
   confirmMatches,
   initialPickerState,
@@ -133,6 +134,20 @@ describe('user picker text', () => {
     assert.equal(statusText(initialPickerState, tEn), '');
   });
 
+  it('one result is singular', () => {
+    const one = run([{ type: 'type', query: 'zz' }, { type: 'results', query: 'zz', results: [user('a')] }]);
+    assert.match(statusText(one, tEn), /^1 result\. /);
+    assert.match(statusText(one, tAr), /^نتيجة واحدة/);
+  });
+
+  it('isolates Latin values inside Arabic text, nowhere else', () => {
+    assert.equal(bidiIsolate('@nasheeds', 'ar'), '\u2068@nasheeds\u2069');
+    assert.equal(bidiIsolate('@nasheeds', 'en'), '@nasheeds');
+    assert.equal(bidiIsolate('', 'ar'), '');
+    const label = tAr('channels.transferTypeToConfirm', { handle: bidiIsolate('@nasheeds', 'ar'), email: bidiIsolate('a@b.c', 'ar') });
+    assert.ok(label.includes('\u2068@nasheeds\u2069') && label.includes('\u2068a@b.c\u2069'));
+  });
+
   it('shows channel count, role on the channel and bans', () => {
     assert.equal(userMeta(user('a'), tEn), 'Owns no channels');
     assert.equal(userMeta(user('a', { channelCount: 1 }), tEn), 'Owns 1 channel');
@@ -165,7 +180,7 @@ describe('transfer confirmation', () => {
         body: tEn('channels.transferBody', { channel: 'QA Nasheeds', name: 'Amina Yusuf', videos: 4, playlists: 1 }),
         confirmLabel: 'Transfer',
         typeToConfirm: transferConfirmValues('nasheeds', 'amina@example.com'),
-        typeToConfirmLabel: tEn('channels.transferTypeToConfirm', { handle: 'nasheeds', email: 'amina@example.com' }),
+        typeToConfirmLabel: tEn('channels.transferTypeToConfirm', { handle: '@nasheeds', email: 'amina@example.com' }),
         danger: true,
         testId: 'channel-transfer-submit',
         onConfirm: () => undefined,

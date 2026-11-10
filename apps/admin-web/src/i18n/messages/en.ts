@@ -1379,6 +1379,7 @@ const en = {
     pickerLoading: 'Searching…',
     pickerEmpty: 'No videos user matches “{query}”.',
     pickerError: 'The search failed. Try again.',
+    pickerResultsOne: '1 result. Use the up and down arrow keys to choose, Enter to select.',
     pickerResults: '{count} results. Use the up and down arrow keys to choose, Enter to select.',
     pickerOwnsNone: 'Owns no channels',
     pickerOwnsOne: 'Owns 1 channel',
@@ -1396,7 +1397,7 @@ const en = {
     transfer: 'Transfer',
     transferConfirm: 'Move this channel to {name} ({email})?',
     transferBody: '“{channel}” moves to {name} with its {videos} videos and {playlists} playlists. {name} becomes the owner and the current owner loses ownership. Channel members keep their roles. Undo it with another transfer.',
-    transferTypeToConfirm: 'Type @{handle} or {email} to confirm',
+    transferTypeToConfirm: 'Type {handle} or {email} to confirm',
     transferTypeToConfirmNoHandle: 'Type {email} to confirm',
     transferPickFirst: 'Choose the new owner first.',
     transferStatus: {
