@@ -26,6 +26,7 @@ import VideoThumbnail from '@/components/VideoThumbnail';
 import Link from 'next/link';
 import { compareDashboardVideos, type DashboardSort } from '@/lib/dashboard/sort-videos';
 import { needsReupload, reuploadHref } from '@/lib/dashboard/reupload';
+import { signInAndReturnHere } from '@/lib/auth/silent-sign-in';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -84,7 +85,7 @@ export default function VideoDashboardPage() {
   // Redirect if not authenticated or no channels
   useEffect(() => {
     if (!user) {
-      router.push(`/${lang}`);
+      signInAndReturnHere(lang);
       return;
     }
 

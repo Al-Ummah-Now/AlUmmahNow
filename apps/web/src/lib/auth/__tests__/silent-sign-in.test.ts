@@ -145,3 +145,21 @@ describe('callback destinations', () => {
     expect(successDestination('https://evil.example', 'en')).toBe('/en?session_updated=true');
   });
 });
+
+describe('returnPathFromReferer (the header "Sign in" comes back to the page it started from)', () => {
+  const { returnPathFromReferer } = jest.requireActual('../silent-sign-in') as typeof import('../silent-sign-in');
+  const ORIGIN = 'https://videos.qa.alummahnow.net';
+
+  it('returns the page path and query of a same-origin Referer', () => {
+    expect(returnPathFromReferer(`${ORIGIN}/ar/library?tab=saved`, ORIGIN)).toBe('/ar/library?tab=saved');
+    expect(returnPathFromReferer(`${ORIGIN}/en/dashboard/videos`, ORIGIN)).toBe('/en/dashboard/videos');
+  });
+
+  it('ignores another origin, API routes, hostile paths and a missing Referer', () => {
+    expect(returnPathFromReferer('https://evil.example/en/library', ORIGIN)).toBeNull();
+    expect(returnPathFromReferer(`${ORIGIN}/api/auth/login`, ORIGIN)).toBeNull();
+    expect(returnPathFromReferer(`${ORIGIN}/%2F%2Fevil.example`, ORIGIN)).toBeNull();
+    expect(returnPathFromReferer(null, ORIGIN)).toBeNull();
+    expect(returnPathFromReferer('not a url', ORIGIN)).toBeNull();
+  });
+});

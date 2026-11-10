@@ -8,6 +8,7 @@ import { AuthSubject } from "@/interfaces"
 import { startSingleSignOut } from "./auth/single-sign-out"
 import { sessionRoles } from "./auth/session-roles"
 import { newStateNonce, pkceCookieValue, stateCookieOptions, withState, PKCE_COOKIE, STATE_COOKIE } from "./auth/oauth-state"
+import { RETURN_COOKIE, returnPathFromReferer } from "./auth/silent-sign-in"
 
 export async function getClient() {
   return getOpenAuthClient();
@@ -91,13 +92,21 @@ export async function authenticated(): Promise<AuthSubject | false> {
 }
 
 export async function login(locale: string = 'en') {
+  // Back to the page the sign-in started from (the action posts to that page),
+  // or the locale's home when there is none
+  const requestHeaders = await getHeaders()
+  const host = requestHeaders.get("host")
+  const protocol = host?.includes("localhost") ? "http" : "https"
+  const returnPath = host ? returnPathFromReferer(requestHeaders.get("referer"), `${protocol}://${host}`) : null
+  const home = returnPath ?? `/${locale}`
+
   // Check if already logged in via SessionManager
   try {
     const { SessionManager } = await import('./auth/session-manager');
     const session = await SessionManager.getActiveSession();
 
     if (session) {
-      redirect(`/${locale}`);
+      redirect(home);
     }
   } catch (_sessionError) {
     // SessionManager not available, continue with legacy check
@@ -119,9 +128,9 @@ export async function login(locale: string = 'en') {
 
       if (!hasError && 'tokens' in verified) {
         await setTokens(verified.tokens!.access, verified.tokens!.refresh);
-        redirect(`/${locale}`);
+        redirect(home);
       } else if (!hasError) {
-        redirect(`/${locale}`);
+        redirect(home);
       }
     } catch (_loginVerifyError) {
       // Silent failure, proceed with new authorization
@@ -131,14 +140,12 @@ export async function login(locale: string = 'en') {
   // Redirect to OAuth login. The redirect_uri must be byte-identical at
   // /authorize and /token, so the locale travels in a short-lived cookie
   // instead of the callback query string.
-  const headers = await getHeaders()
-  const host = headers.get("host")
-  const protocol = host?.includes("localhost") ? "http" : "https"
   const cookieStore = await getCookies()
   cookieStore.set("auth_locale", locale, { httpOnly: true, sameSite: "lax", secure: protocol === "https", path: "/", maxAge: 600 })
-  // An interactive sign-in: not silent, back to the locale's home
+  // An interactive sign-in: not silent, back to the page it started from
   cookieStore.delete("auth_silent")
-  cookieStore.delete("auth_return")
+  if (returnPath) cookieStore.set(RETURN_COOKIE, returnPath, { httpOnly: true, sameSite: "lax", secure: protocol === "https", path: "/", maxAge: 600 })
+  else cookieStore.delete(RETURN_COOKIE)
   const { url, challenge } = await client.authorize(
     `${protocol}://${host}/api/callback`,
     "code",

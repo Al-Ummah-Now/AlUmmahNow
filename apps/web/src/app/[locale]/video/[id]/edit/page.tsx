@@ -12,6 +12,7 @@ import VideoEdit from '@/components/videoEdit/index';
 import Link from 'next/link';
 import { can } from '@al-ummah/shared-types';
 import { fetchChannelAccess } from '@/lib/channels/access';
+import { signInAndReturnHere } from '@/lib/auth/silent-sign-in';
 
 export default function VideoEditPage() {
   const { t, lang } = useLanguage();
@@ -29,9 +30,9 @@ export default function VideoEditPage() {
 
   useEffect(() => {
     if (!userId) {
-      router.push(`/${lang}`);
+      signInAndReturnHere(lang);
     }
-  }, [userId, router, lang]);
+  }, [userId, lang]);
 
   // Fetch once per video/user; refetching on every render-time dependency
   // change replaced the video mid-edit

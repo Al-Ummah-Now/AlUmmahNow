@@ -16,6 +16,7 @@ import { Loader } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { View, NavigateAction } from 'react-big-calendar';
+import { signInAndReturnHere } from '@/lib/auth/silent-sign-in';
 
 // Lazy load calendar component for better performance
 const ScheduledVideoCalendar = dynamic(
@@ -102,7 +103,7 @@ export default function ScheduledVideosPage() {
   // Redirect if not authenticated or no channels
   useEffect(() => {
     if (!auth.user) {
-      router.push(`/${locale}`);
+      signInAndReturnHere(locale);
       return;
     }
 
