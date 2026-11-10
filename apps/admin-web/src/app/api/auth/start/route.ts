@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
   const response = NextResponse.redirect(withLoginParams(authorizeUrl, prompt, returnTo, nonce), 302);
   response.cookies.set(STATE_COOKIE, nonce, stateCookieOptions(protocol === 'https'));
   // PKCE (S256): the verifier stays with this browser, bound to the state
-  if (challenge.verifier) response.cookies.set(PKCE_COOKIE, pkceCookieValue(nonce, challenge.verifier), stateCookieOptions(protocol === 'https'));
+  if (challenge?.verifier) response.cookies.set(PKCE_COOKIE, pkceCookieValue(nonce, challenge.verifier), stateCookieOptions(protocol === 'https'));
   response.headers.set('Cache-Control', 'no-store');
   return response;
 }

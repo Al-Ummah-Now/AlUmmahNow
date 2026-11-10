@@ -143,7 +143,7 @@ export async function login(locale: string = 'en') {
   // Bind the callback to this browser (login CSRF), with its PKCE verifier
   const nonce = newStateNonce()
   cookieStore.set(STATE_COOKIE, nonce, stateCookieOptions(protocol === "https"))
-  if (challenge.verifier) cookieStore.set(PKCE_COOKIE, pkceCookieValue(nonce, challenge.verifier), stateCookieOptions(protocol === "https"))
+  if (challenge?.verifier) cookieStore.set(PKCE_COOKIE, pkceCookieValue(nonce, challenge.verifier), stateCookieOptions(protocol === "https"))
   redirect(withAuthorizeLocale(withState(url, nonce), locale))
 }
 
