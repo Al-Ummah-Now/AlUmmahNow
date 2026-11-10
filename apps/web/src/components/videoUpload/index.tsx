@@ -1,7 +1,9 @@
 'use client';
 import { logger } from '@/lib/logger-client';
 import React, { useState, useRef, useCallback, useEffect } from "react";
-import * as tus from "tus-js-client";
+import { ResilientUpload, requestUploadResume, tusEndpointFor, type ReauthoriseResult } from "@/lib/upload/resilient-tus";
+import { findRememberedUpload, forgetUpload, rememberUpload } from "@/lib/upload/resume-store";
+import { fetchClientAuthToken, getClientAuthHeaders } from "@/lib/auth/client-token";
 import { VideoObject } from "@/interfaces";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { useMultiAccount } from '@/hooks/useMultiAccount';
@@ -48,6 +50,7 @@ interface UploadProgress {
   bytesUploaded?: number;
   bytesTotal?: number;
   timeRemaining?: number; // seconds
+  reconnecting?: boolean; // retrying a transient failure; progress is kept
 }
 
 const VideoUpload: React.FC<VideoUploadProps> = ({
@@ -78,7 +81,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
   const [scheduleError, setScheduleError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const tusUploadRef = useRef<tus.Upload | null>(null);
+  const tusUploadRef = useRef<ResilientUpload | null>(null);
   const uploadStartTimeRef = useRef<number>(0);
   const lastProgressTimeRef = useRef<number>(0);
   const lastBytesUploadedRef = useRef<number>(0);
@@ -216,73 +219,110 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
       onProgress(5);
 
       const tagsString = metadata.tags?.join(',') || '';
-      const initiateResult = await initiateVideoUpload(
-        {
-          title: metadata.titleEn || metadata.title,
-          titleLocalized: {
-            en: metadata.titleEn,
-            ar: metadata.titleAr
-          },
-          description: metadata.descriptionEn || metadata.description,
-          descriptionLocalized: {
-            en: metadata.descriptionEn || '',
-            ar: metadata.descriptionAr || ''
-          },
-          // When scheduling is enabled, video must be private until scheduled publish date
-          isPublic: scheduleData ? false : metadata.isPublic,
-          tags: tagsString,
-          category: metadata.category,
-          fileSize: selectedFile.size,
-          mimeType: selectedFile.type,
-          thumbnail: selectedThumbnail ? {
-            type: selectedThumbnail.type,
-            data: selectedThumbnail.data,
-            position: selectedThumbnail.position,
-            filename: selectedThumbnail.filename,
-          } : undefined,
-        },
-        channelId
-      );
+      const endpoint = tusEndpointFor(getApiUrl());
 
-      if (!initiateResult.success || !initiateResult.result) {
-        throw new Error(initiateResult.error || VIDEO_UPLOAD_ERRORS.UPLOAD_FAILED);
+      // The same file picked again after a reload or a crash resumes its
+      // video (same Bunny upload, at its offset) instead of a new one.
+      let videoId = '';
+      let tusSessionId = '';
+      let uploadUrl: string | undefined;
+      let fallbackAuthorization: string | undefined;
+      const remembered = findRememberedUpload(selectedFile, channelId);
+      if (remembered) {
+        let resumed: ReauthoriseResult | null = null;
+        try {
+          resumed = await requestUploadResume(getApiUrl(), remembered.videoId, await getClientAuthHeaders());
+        } catch (error) {
+          logger.warn('[VideoUpload] Resume check failed; starting a new upload', { videoId: remembered.videoId, error });
+        }
+        if (resumed?.kind === 'grant') {
+          videoId = remembered.videoId;
+          tusSessionId = resumed.tusSessionId;
+          uploadUrl = resumed.tusUploadId ? `${endpoint}/${resumed.tusUploadId}` : undefined;
+          libraryIdRef.current = 0;
+          thumbnailUrlRef.current = '';
+        } else {
+          forgetUpload(selectedFile, channelId);
+        }
       }
 
-      const { videoId, tusSessionId, libraryId, authToken, thumbnailUrl: returnedThumbnailUrl } = initiateResult.result;
+      if (!videoId) {
+        const initiateResult = await initiateVideoUpload(
+          {
+            title: metadata.titleEn || metadata.title,
+            titleLocalized: {
+              en: metadata.titleEn,
+              ar: metadata.titleAr
+            },
+            description: metadata.descriptionEn || metadata.description,
+            descriptionLocalized: {
+              en: metadata.descriptionEn || '',
+              ar: metadata.descriptionAr || ''
+            },
+            // When scheduling is enabled, video must be private until scheduled publish date
+            isPublic: scheduleData ? false : metadata.isPublic,
+            tags: tagsString,
+            category: metadata.category,
+            fileSize: selectedFile.size,
+            mimeType: selectedFile.type,
+            thumbnail: selectedThumbnail ? {
+              type: selectedThumbnail.type,
+              data: selectedThumbnail.data,
+              position: selectedThumbnail.position,
+              filename: selectedThumbnail.filename,
+            } : undefined,
+          },
+          channelId
+        );
+
+        if (!initiateResult.success || !initiateResult.result) {
+          throw new Error(initiateResult.error || VIDEO_UPLOAD_ERRORS.UPLOAD_FAILED);
+        }
+
+        const { videoId: newVideoId, tusSessionId: newSessionId, libraryId, authToken, thumbnailUrl: returnedThumbnailUrl } = initiateResult.result;
+        videoId = newVideoId;
+        tusSessionId = newSessionId || '';
+        fallbackAuthorization = authToken ? `Bearer ${authToken}` : undefined;
+        libraryIdRef.current = libraryId || 0;
+        thumbnailUrlRef.current = returnedThumbnailUrl || '';
+
+        if (!newSessionId) {
+          logger.error('[VideoUpload] Initiate response has no TUS session id', { videoId: newVideoId });
+          throw new Error(t.upload.sessionMissing);
+        }
+
+        if (!authToken) {
+          throw new Error(t.upload.authTokenMissing);
+        }
+        rememberUpload(selectedFile, channelId, videoId);
+      }
       videoIdRef.current = videoId;
-      libraryIdRef.current = libraryId || 0;
-      thumbnailUrlRef.current = returnedThumbnailUrl || '';
-
-      if (!tusSessionId) {
-        logger.error('[VideoUpload] Initiate response has no TUS session id', { videoId });
-        throw new Error(t.upload.sessionMissing);
-      }
-
-      if (!authToken) {
-        throw new Error(t.upload.authTokenMissing);
-      }
 
       // Step 2: Create TUS upload using secure proxy endpoint
       uploadStartTimeRef.current = Date.now();
       lastProgressTimeRef.current = Date.now();
       lastBytesUploadedRef.current = 0;
 
-      const upload = new tus.Upload(selectedFile, {
-        // Use TUS proxy endpoint (NOT Bunny.net directly)
-        endpoint: `${getApiUrl()}/api/videos/tus`,
-        retryDelays: [0, 3000, 5000, 10000, 20000],
-        chunkSize: 5 * 1024 * 1024, // 5MB chunks
-        // Include Authorization header since cookies don't cross origins
-        headers: {
-          'Authorization': `Bearer ${authToken}`
-        },
-        storeFingerprintForResuming: true,
-        removeFingerprintOnSuccess: true,
+      // Transient failures (deploys, KV/Bunny hiccups, network) are retried at
+      // the server's offset, with a fresh token on every request; a lost
+      // session re-authorises the same video (see resilient-tus.ts).
+      const upload = new ResilientUpload({
+        file: selectedFile,
+        endpoint,
+        videoId,
+        tusSessionId,
+        uploadUrl,
         metadata: {
-          tusSessionId: tusSessionId, // Session ID for TUS proxy to retrieve credentials
-          videoId: videoId,
           filename: selectedFile.name,
           filetype: selectedFile.type,
+        },
+        getAuthorization: async (force) => {
+          const token = await fetchClientAuthToken(force);
+          return token ? `Bearer ${token}` : fallbackAuthorization ?? null;
+        },
+        reauthorise: async (vid) => requestUploadResume(getApiUrl(), vid, await getClientAuthHeaders()),
+        onReconnecting: (reconnecting) => {
+          setUploadProgress(prev => prev && prev.state === 'uploading' ? { ...prev, reconnecting } : prev);
         },
         onError: (error) => {
           logger.error('TUS upload error:', error);
@@ -328,6 +368,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
         // tus-js-client does not await onSuccess, so every failure in here
         // must be caught and reported or the form stays in "processing".
         onSuccess: () => {
+          forgetUpload(selectedFile, channelId);
           finishUpload().catch((error: unknown) => {
             const message = error instanceof Error && error.message ? error.message : t.errors.uploadFailed;
             logger.error('[VideoUpload] Failed to finish upload', { videoId, error: message });
@@ -460,7 +501,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
       };
 
       tusUploadRef.current = upload;
-      upload.start();
+      await upload.start();
 
     } catch (error: unknown) {
       const err = error as { message?: string };
@@ -470,23 +511,24 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
 
   const pauseUpload = () => {
     if (tusUploadRef.current) {
-      tusUploadRef.current.abort();
-      setUploadProgress(prev => prev ? { ...prev, state: 'paused' } : null);
+      void tusUploadRef.current.abort();
+      setUploadProgress(prev => prev ? { ...prev, state: 'paused', reconnecting: false } : null);
     }
   };
 
   const resumeUpload = () => {
     if (tusUploadRef.current) {
-      tusUploadRef.current.start();
+      void tusUploadRef.current.start();
       setUploadProgress(prev => prev ? { ...prev, state: 'uploading' } : null);
     }
   };
 
   const cancelUpload = () => {
     if (tusUploadRef.current) {
-      tusUploadRef.current.abort(true); // Remove fingerprint
+      void tusUploadRef.current.abort(true); // Remove fingerprint
       tusUploadRef.current = null;
     }
+    if (selectedFile && activeChannel) forgetUpload(selectedFile, activeChannel.id);
     resetForm();
   };
 
@@ -495,7 +537,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
     // the completion step failed; only start over when initiate itself failed.
     if (tusUploadRef.current) {
       setUploadProgress(prev => prev ? { ...prev, state: 'uploading', error: undefined } : null);
-      tusUploadRef.current.start();
+      void tusUploadRef.current.start();
       return;
     }
     setUploadProgress(null);
@@ -577,7 +619,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
           <div className="mb-6" data-testid="upload-progress" data-state={uploadProgress.state}>
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300" data-testid="upload-progress-status">
-                {uploadProgress.state === 'uploading' && t.upload.uploading}
+                {uploadProgress.state === 'uploading' && (uploadProgress.reconnecting ? <span data-testid="upload-reconnecting" role="status">{t.upload.reconnecting}</span> : t.upload.uploading)}
                 {uploadProgress.state === 'paused' && t.upload.paused}
                 {uploadProgress.state === 'processing' && t.upload.processingVideo}
                 {uploadProgress.state === 'complete' && t.upload.uploadComplete}

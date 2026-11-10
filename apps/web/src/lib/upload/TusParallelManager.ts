@@ -1,68 +1,91 @@
-import * as tus from 'tus-js-client';
 import { TusConfig, TusCallbacks } from '@al-ummah/shared-types';
 import { logger } from '@/lib/logger-client';
+import { fetchClientAuthToken } from '@/lib/auth/client-token';
+import {
+  ResilientUpload,
+  type ReauthoriseResult,
+  apiUrlFromTusEndpoint,
+  requestUploadResume,
+} from './resilient-tus';
 
+export interface TusParallelManagerDeps {
+  /** "Bearer <token>" for each request; force=true after a 401. */
+  getAuthorization?: (force: boolean, fallback?: string) => Promise<string | null>;
+  /** uploadResume for a video (re-authorises the same Bunny video). */
+  reauthorise?: (videoId: string, endpoint: string, authorization: string | null) => Promise<ReauthoriseResult>;
+}
+
+async function defaultGetAuthorization(force: boolean, fallback?: string): Promise<string | null> {
+  const token = await fetchClientAuthToken(force);
+  return token ? `Bearer ${token}` : fallback ?? null;
+}
+
+async function defaultReauthorise(videoId: string, endpoint: string, authorization: string | null): Promise<ReauthoriseResult> {
+  return requestUploadResume(apiUrlFromTusEndpoint(endpoint), videoId, authorization ? { Authorization: authorization } : {});
+}
 
 /**
- * Manages parallel TUS uploads with concurrency control
+ * Manages parallel TUS uploads with concurrency control. Each file is a
+ * ResilientUpload: transient failures retry at the server's offset (shown as
+ * "reconnecting"), so only a truly failed file frees its slot, and the rest of
+ * the queue keeps going around it.
  */
 export class TusParallelManager {
-  private uploads: Map<string, tus.Upload> = new Map();
+  private uploads: Map<string, ResilientUpload> = new Map();
   private concurrentLimit: number;
-  private activeCount: number = 0;
+  private active: Set<string> = new Set();
   private pendingQueue: string[] = [];
+  private readonly getAuthorization: NonNullable<TusParallelManagerDeps['getAuthorization']>;
+  private readonly reauthorise: NonNullable<TusParallelManagerDeps['reauthorise']>;
 
-  constructor(concurrentLimit: number = 3) {
+  constructor(concurrentLimit: number = 3, deps: TusParallelManagerDeps = {}) {
     this.concurrentLimit = Math.max(1, Math.min(5, concurrentLimit));
+    this.getAuthorization = deps.getAuthorization ?? defaultGetAuthorization;
+    this.reauthorise = deps.reauthorise ?? defaultReauthorise;
   }
 
   /**
-   * Create a TUS upload instance with callbacks
+   * Create a resilient TUS upload with callbacks
    */
   createUpload(
     id: string,
     file: File,
     config: TusConfig,
     callbacks: TusCallbacks
-  ): tus.Upload {
-    const upload = new tus.Upload(file, {
+  ): ResilientUpload {
+    const fallbackAuth = config.tusHeaders?.Authorization;
+    const videoId = config.metadata?.videoId ?? '';
+    const tusSessionId = config.metadata?.tusSessionId ?? '';
+    const upload = new ResilientUpload({
+      file,
       endpoint: config.tusEndpoint,
-      headers: config.tusHeaders,
-      chunkSize: config.chunkSize || 5 * 1024 * 1024, // 5MB default
-      retryDelays: [0, 3000, 5000, 10000, 20000],
-      storeFingerprintForResuming: true,
-      removeFingerprintOnSuccess: true,
-      metadata: {
-        filename: file.name,
-        filetype: file.type,
-        // e.g. tusSessionId + videoId for the API TUS proxy
-        ...(config.metadata || {}),
-      },
-
-      onError: (error) => {
-        this.activeCount--;
-        this.processQueue();
-        callbacks.onError?.(id, error);
-      },
-
-      onProgress: (bytesUploaded, bytesTotal) => {
-        callbacks.onProgress?.(id, bytesUploaded, bytesTotal);
-      },
-
+      videoId,
+      tusSessionId,
+      uploadUrl: config.uploadUrl,
+      chunkSize: config.chunkSize || undefined,
+      metadata: config.metadata,
+      getAuthorization: (force) => this.getAuthorization(force, fallbackAuth),
+      reauthorise: async (vid) => this.reauthorise(vid, config.tusEndpoint, await this.getAuthorization(false, fallbackAuth)),
+      onProgress: (bytesUploaded, bytesTotal) => callbacks.onProgress?.(id, bytesUploaded, bytesTotal),
+      onReconnecting: (reconnecting) => callbacks.onReconnecting?.(id, reconnecting),
       onSuccess: () => {
-        this.activeCount--;
+        this.release(id);
         this.uploads.delete(id);
-        this.processQueue();
         callbacks.onSuccess?.(id);
       },
-
-      onBeforeRequest: (req) => {
-        callbacks.onBeforeRequest?.(id, req);
+      onError: (error) => {
+        this.release(id);
+        callbacks.onError?.(id, error);
       },
     });
 
     this.uploads.set(id, upload);
     return upload;
+  }
+
+  /** Free an upload's slot and start the next queued one. */
+  private release(id: string): void {
+    if (this.active.delete(id)) this.processQueue();
   }
 
   /**
@@ -73,28 +96,21 @@ export class TusParallelManager {
     if (!upload) {
       throw new Error(`Upload with id ${id} not found`);
     }
+    if (this.active.has(id)) return;
 
-    if (this.activeCount >= this.concurrentLimit) {
-      // Add to pending queue
+    if (this.active.size >= this.concurrentLimit) {
       if (!this.pendingQueue.includes(id)) {
         this.pendingQueue.push(id);
       }
       return;
     }
 
-    this.activeCount++;
-
+    this.active.add(id);
     try {
-      // Check for previous uploads to resume
-      const previousUploads = await upload.findPreviousUploads();
-      if (previousUploads.length > 0) {
-        upload.resumeFromPreviousUpload(previousUploads[0]);
-      }
-
-      upload.start();
+      // Resumes this video's stored upload URL (reload / crash) or creates one
+      await upload.start();
     } catch (error) {
-      this.activeCount--;
-      this.processQueue();
+      this.release(id);
       throw error;
     }
   }
@@ -105,16 +121,10 @@ export class TusParallelManager {
   pause(id: string): void {
     const upload = this.uploads.get(id);
     if (upload) {
-      upload.abort();
-      this.activeCount = Math.max(0, this.activeCount - 1);
-
-      // Remove from pending queue if it was queued
+      void upload.abort();
       const queueIndex = this.pendingQueue.indexOf(id);
-      if (queueIndex > -1) {
-        this.pendingQueue.splice(queueIndex, 1);
-      }
-
-      this.processQueue();
+      if (queueIndex > -1) this.pendingQueue.splice(queueIndex, 1);
+      this.release(id);
     }
   }
 
@@ -122,8 +132,7 @@ export class TusParallelManager {
    * Resume a paused upload
    */
   async resume(id: string): Promise<void> {
-    const upload = this.uploads.get(id);
-    if (upload) {
+    if (this.uploads.has(id)) {
       await this.start(id);
     }
   }
@@ -134,17 +143,11 @@ export class TusParallelManager {
   cancel(id: string): void {
     const upload = this.uploads.get(id);
     if (upload) {
-      upload.abort(true); // Remove fingerprint for resume
+      void upload.abort(true); // Remove fingerprint for resume
       this.uploads.delete(id);
-      this.activeCount = Math.max(0, this.activeCount - 1);
-
-      // Remove from pending queue if it was queued
       const queueIndex = this.pendingQueue.indexOf(id);
-      if (queueIndex > -1) {
-        this.pendingQueue.splice(queueIndex, 1);
-      }
-
-      this.processQueue();
+      if (queueIndex > -1) this.pendingQueue.splice(queueIndex, 1);
+      this.release(id);
     }
   }
 
@@ -152,7 +155,7 @@ export class TusParallelManager {
    * Process the pending queue
    */
   private processQueue(): void {
-    while (this.pendingQueue.length > 0 && this.activeCount < this.concurrentLimit) {
+    while (this.pendingQueue.length > 0 && this.active.size < this.concurrentLimit) {
       const nextId = this.pendingQueue.shift();
       if (nextId) {
         this.start(nextId).catch(error => {
@@ -166,7 +169,7 @@ export class TusParallelManager {
    * Get the number of active uploads
    */
   getActiveCount(): number {
-    return this.activeCount;
+    return this.active.size;
   }
 
   /**
@@ -183,12 +186,9 @@ export class TusParallelManager {
     this.concurrentLimit = Math.max(1, Math.min(5, limit));
 
     // Pause overflow uploads if new limit is lower
-    if (this.activeCount > this.concurrentLimit) {
-      const activeIds = Array.from(this.uploads.keys())
-        .filter(id => !this.pendingQueue.includes(id))
-        .slice(this.concurrentLimit);
-
-      activeIds.forEach(id => {
+    if (this.active.size > this.concurrentLimit) {
+      const overflow = Array.from(this.active).slice(this.concurrentLimit);
+      overflow.forEach(id => {
         this.pause(id);
         this.pendingQueue.unshift(id); // Add to front of queue
       });
@@ -201,7 +201,7 @@ export class TusParallelManager {
   /**
    * Get upload instance by ID
    */
-  getUpload(id: string): tus.Upload | undefined {
+  getUpload(id: string): ResilientUpload | undefined {
     return this.uploads.get(id);
   }
 
@@ -216,11 +216,9 @@ export class TusParallelManager {
    * Clear all uploads
    */
   clearAll(): void {
-    this.uploads.forEach((_upload, id) => {
-      this.cancel(id);
-    });
+    Array.from(this.uploads.keys()).forEach((id) => this.cancel(id));
     this.uploads.clear();
     this.pendingQueue = [];
-    this.activeCount = 0;
+    this.active.clear();
   }
 }

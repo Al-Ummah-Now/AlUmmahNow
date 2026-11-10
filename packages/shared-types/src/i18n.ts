@@ -841,6 +841,7 @@ export interface AppTranslations {
     invalidType: string;
     authRequired: string;
     sessionMissing: string;
+    reconnecting: string;
     authTokenMissing: string;
     completeFailed: string;
     processingFailed: string;

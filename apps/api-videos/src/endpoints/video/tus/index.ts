@@ -44,7 +44,7 @@ export { TusProxy, createTusRouter } from './tusProxy';
  *     filetype: file.type,
  *   },
  *   chunkSize: 5 * 1024 * 1024, // 5MB chunks
- *   retryDelays: [0, 3000, 5000, 10000, 20000],
+ *   // see apps/web/src/lib/upload/resilient-tus.ts for the retry/resume policy
  *   onError: (error) => {
  *     console.error('Upload failed:', error);
  *   },
@@ -71,7 +71,7 @@ export { TusProxy, createTusRouter } from './tusProxy';
  * - JWT authentication required for all operations
  * - Bunny.net credentials never exposed to client
  * - Upload sessions bound to authenticated user
- * - Automatic session expiration (1 hour)
+ * - Sessions written once, kept 7 days (KV + a durable copy on the video record)
  * - Video ownership verification
  *
  * Protocol Support:

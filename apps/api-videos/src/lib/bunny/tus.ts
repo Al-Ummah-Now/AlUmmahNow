@@ -227,13 +227,23 @@ export function getTusSessionKey(tusSessionId: string): string {
 }
 
 /**
+ * How long an initiate/resume session stays usable. Written once, read once
+ * (by the proxy's POST), so a long life is free. One hour lost the sessions of
+ * files queued behind others in a bulk batch before they ever started. The
+ * Bunny signature stored with it is not used by the proxy (it signs each
+ * request itself), so it may expire long before the session does.
+ */
+export const TUS_PROXY_SESSION_TTL_SECONDS = 7 * 24 * 3600;
+
+/**
  * Persist a TUS proxy session and return its ID.
- * Shared by single and batch upload initiation so both use the same proxy flow.
+ * Shared by single and batch upload initiation and by upload resume, so all
+ * use the same proxy flow.
  */
 export async function createTusProxySession(
   kv: KVNamespace,
   params: { videoId: string; userId: string; channelId: string; tusConfig: TUSUploadConfig },
-  ttlSeconds: number = 3600
+  ttlSeconds: number = TUS_PROXY_SESSION_TTL_SECONDS
 ): Promise<string> {
   const tusSessionId = crypto.randomUUID();
   const session: TusProxySession = {

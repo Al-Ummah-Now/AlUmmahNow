@@ -357,7 +357,7 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 				1 // 1 hour expiration
 			);
 
-			// Store TUS proxy session in KV (1 hour expiration)
+			// Store TUS proxy session in KV (TUS_PROXY_SESSION_TTL_SECONDS)
 			const tusSessionId = await createTusProxySession(c.env.TUS_SESSIONS, {
 				videoId,
 				userId,

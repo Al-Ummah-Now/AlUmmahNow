@@ -708,6 +708,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     invalidType: 'Please upload a valid video file ({types})',
     authRequired: 'Authentication required. Please log in to upload videos.',
     sessionMissing: 'The upload session could not be created. Please try again.',
+    reconnecting: 'Reconnecting… your upload will continue where it left off',
     authTokenMissing: 'Authentication token not found. Please log in again.',
     completeFailed: 'Failed to complete upload',
     processingFailed: 'Video processing failed',

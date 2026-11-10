@@ -177,7 +177,8 @@ export class BatchUploadManager {
   }
 
   /**
-   * Retry a failed upload
+   * Retry a failed upload. It resumes at the server's offset (same video, same
+   * upload), so the progress bar keeps what was already uploaded.
    */
   async retryUpload(videoId: string): Promise<void> {
     const item = this.queue.get(videoId);
@@ -186,8 +187,7 @@ export class BatchUploadManager {
     item.retryCount++;
     item.status = 'pending';
     item.error = undefined;
-    item.progress = 0;
-    item.bytesUploaded = 0;
+    item.reconnecting = false;
 
     this.queue.set(videoId, item);
 
@@ -387,10 +387,19 @@ export class BatchUploadManager {
         this.notifyProgressUpdate();
       },
 
+      onReconnecting: (_, reconnecting) => {
+        const item = this.queue.get(id);
+        if (!item || item.reconnecting === reconnecting) return;
+        item.reconnecting = reconnecting;
+        this.queue.set(id, item);
+        this.notifyProgressUpdate();
+      },
+
       onSuccess: () => {
         this.updateStatus(id, 'completed');
         const item = this.queue.get(id);
         if (item) {
+          item.reconnecting = false;
           item.completedAt = new Date();
           item.progress = 100;
           item.bytesUploaded = item.bytesTotal;
@@ -411,6 +420,7 @@ export class BatchUploadManager {
         if (!item) return;
 
         item.error = error.message;
+        item.reconnecting = false;
         this.updateStatus(id, 'failed');
         this.queue.set(id, item);
         this.notifyProgressUpdate();
