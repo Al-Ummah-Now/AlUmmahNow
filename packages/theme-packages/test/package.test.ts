@@ -152,6 +152,12 @@ test('zip: reads deflated entries and rejects bad archives', async () => {
   view.setUint16(central + 10, 8, true); view.setUint32(central + 24, data.length, true);
   assert.deepEqual((await readZip(zip))['assets/a.svg'], data);
   await assert.rejects(readZip(new Uint8Array(10)), /not a zip/);
+  // A deflated entry that inflates past its declared size is stopped, not inflated in full
+  const bomb = createZip({ 'assets/a.svg': deflated });
+  const bv = new DataView(bomb.buffer);
+  bv.setUint16(8, 8, true); bv.setUint32(22, 10, true);
+  bv.setUint16(central + 10, 8, true); bv.setUint32(central + 24, 10, true);
+  await assert.rejects(readZip(bomb), /larger than it says/);
   await assert.rejects(zipToPackage(createZip({ 'a.txt': new Uint8Array([1]) })), /no theme.json/);
 });
 
