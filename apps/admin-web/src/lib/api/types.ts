@@ -221,7 +221,16 @@ export interface ProcessingErrorsResponse {
   erasureDeadLetters?: ErasureDeadLetter[];
   /** Thumbnail aspect repair runs that failed after their retries */
   thumbnailRuns?: ThumbnailRun[];
+  /** Videos the latest every-video thumbnail check flagged and not fixed since (absent from older builds) */
+  thumbnailFlagged?: ThumbnailFlagged | null;
   reconciler: ReconcilerStats | null;
+}
+/** Wrong-shape thumbnails an admin replaces by hand (imported or custom: never auto-replaced). */
+export interface ThumbnailFlagged {
+  runId: string;
+  checkedAt: string;
+  total: number;
+  items: { videoId: string; reason?: string; title?: string; channelId?: string }[];
 }
 /** Per-video result of the thumbnail aspect check (api-videos lib/thumbnail/repair.ts). */
 export type ThumbnailOutcome = 'ok' | 'replaced' | 'would_replace' | 'flagged' | 'skipped' | 'error';

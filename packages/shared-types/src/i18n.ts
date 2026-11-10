@@ -705,6 +705,14 @@ export interface AppTranslations {
     thumbnailInvalidType: string;
     thumbnailTooLarge: string;
     thumbnailCurrentDefault: string;
+    cropTitle: string;
+    cropHelp: string;
+    cropZoom: string;
+    cropUse: string;
+    cropCancel: string;
+    cropFrameLabel: string;
+    thumbnailWrongShape: string;
+    thumbnailUnreadable: string;
     enterTitleEnglish: string;
     enterDescriptionEnglish: string;
     enterTitleArabic: string;

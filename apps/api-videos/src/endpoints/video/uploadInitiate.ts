@@ -1,6 +1,7 @@
 import { uploadIdentity } from "../../lib/channelAccess";
 import { Str, Num } from "chanfana";
 import { createUploadRecord } from '../../lib/upload/uploadRecord';
+import { checkThumbnailShape, imageSize, videoSizeOf } from '../../lib/thumbnail/shape';
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import { Channel, VideoCategory } from "@al-ummah/shared-types";
@@ -47,6 +48,8 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 								data: z.string().optional().describe("Base64 encoded image data for custom thumbnails"),
 								position: z.number().min(0).max(100).optional().describe("Frame position (0-100%) for auto-generated thumbnails"),
 								filename: z.string().optional().describe("Original filename"),
+								video: z.object({ width: z.number().int().positive(), height: z.number().int().positive() }).optional()
+									.describe("The video file's size as the browser reads it: an image of another shape is not stored (Bunny's frame is used instead)"),
 							}).optional().describe("Thumbnail configuration"),
 							fingerprint: UploadFingerprintSchema.optional().describe("File fingerprint (name, size, lastModified, SHA-256 of the first and last MiB). With it, retrying the same file reuses its unfinished video (same id, upload resumed at its offset) instead of creating a new one."),
 						}),
@@ -380,7 +383,7 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 	private async processThumbnail(
 		c: AppContext,
 		videoId: string,
-		thumbnail: { type?: 'auto' | 'custom'; data?: string; position?: number; filename?: string } | undefined,
+		thumbnail: { type?: 'auto' | 'custom'; data?: string; position?: number; filename?: string; video?: { width?: number; height?: number } } | undefined,
 	): Promise<{ thumbnailUrl: string; thumbnailType: 'auto' | 'custom'; thumbnailSizes?: Record<string, string>; custom: boolean }> {
 		const fallback = { thumbnailUrl: `https://${c.env.bunny_hostname}/${videoId}/thumbnail.jpg`, thumbnailType: 'auto' as const, custom: false };
 		if (!thumbnail?.data) return fallback;
@@ -388,6 +391,12 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 			logger.debug('[UploadInitiate] Processing thumbnail', { videoId, thumbnailType: thumbnail.type, position: thumbnail.position });
 			// Process base64 thumbnail data (validates and converts to ArrayBuffer)
 			const processed = await thumbnailProcessor.processBase64(thumbnail.data, thumbnail.filename || 'thumbnail.jpg');
+			// Never store a thumbnail of another shape than the video's: Bunny's own frame is used instead
+			const shape = checkThumbnailShape(imageSize(new Uint8Array(processed.original)), videoSizeOf(thumbnail.video));
+			if (!shape.ok) {
+				logger.warn('[UploadInitiate] Thumbnail dropped: wrong shape, using Bunny\'s frame', { videoId, expected: shape.expected, actual: shape.actual });
+				return fallback;
+			}
 			const imageStorageKey = await requireSecret(c.env.image_storage_key, 'image_storage_key');
 			const zone = requireEnvVar(c.env, 'ZONE');
 			// Bunny.net Image Optimizer resizes on the fly using URL parameters

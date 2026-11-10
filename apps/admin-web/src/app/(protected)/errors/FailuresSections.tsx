@@ -10,6 +10,7 @@ import type { AdminContentPermission, AdminJob } from '@/lib/api/content-types';
 import { JobsTable } from '@/components/content/jobs';
 import { logger } from '@/lib/logger';
 import { ISSUE_LABEL, ourStatusLabel } from '../processing/labels';
+import { thumbnailFixHref } from './filters';
 
 const thClass = 'text-start px-4 py-3 text-fg-muted font-medium whitespace-nowrap';
 const tdClass = 'px-4 py-3 align-top text-sm';
@@ -73,6 +74,7 @@ export function hasFailures(f: Failures): boolean {
     f.data?.deadLetters.length ||
     f.data?.erasureDeadLetters?.length ||
     f.data?.thumbnailRuns?.length ||
+    f.data?.thumbnailFlagged?.items.length ||
     f.formatFlagged?.items.length ||
     f.contactFailed?.messages.length ||
     f.failedJobs?.length
@@ -86,7 +88,8 @@ export function hasFailures(f: Failures): boolean {
  * it can be synced, retried or marked failed), and Contact us emails that
  * failed after the mail queue's retries (each links to the message, where it
  * can be retried), account erasure steps that dead-lettered, thumbnail repair
- * runs that failed after their retries, and admin jobs
+ * runs that failed after their retries, thumbnails the daily check found of
+ * another shape than their video (fixed by hand on the video page), and admin jobs
  * (heavy content actions) that failed after their retries, with Retry.
  */
 export function FailuresSections({ failures, t, locale }: { failures: Failures; t: Awaited<ReturnType<typeof getI18n>>['t']; locale: Awaited<ReturnType<typeof getI18n>>['locale'] }) {
@@ -244,6 +247,43 @@ export function FailuresSections({ failures, t, locale }: { failures: Failures; 
                       </td>
                       <td className={tdClass}>{r.lastError || t('errorsPage.noReason')}</td>
                       <td className={tdClass}>{r.attempts}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+
+      {data?.thumbnailFlagged && (
+        <section aria-labelledby="errors-thumb-flagged">
+          <div className="mb-3">
+            <h2 id="errors-thumb-flagged" className="text-xl font-semibold text-fg">{t('errorsPage.thumbFlaggedTitle')}</h2>
+            <p className="mt-1 text-sm text-fg-muted">{t('errorsPage.thumbFlaggedHint', { when: formatDate(data.thumbnailFlagged.checkedAt, locale, true) })}</p>
+          </div>
+          {data.thumbnailFlagged.items.length === 0 ? (
+            <div className={`${cardClass} text-center text-fg-muted`} data-testid="errors-thumb-flagged-empty">{t('errorsPage.thumbFlaggedEmpty')}</div>
+          ) : (
+            <div className="bg-surface border border-border rounded-lg overflow-x-auto">
+              <table className="w-full" data-testid="errors-thumb-flagged">
+                <caption className="sr-only">{t('errorsPage.thumbFlaggedCaption')}</caption>
+                <thead className="border-b border-border">
+                  <tr>
+                    <th className={thClass} scope="col">{t('errorsPage.colVideo')}</th>
+                    <th className={thClass} scope="col">{t('errorsPage.colReason')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.thumbnailFlagged.items.map((item) => (
+                    <tr key={item.videoId} className="border-b border-border last:border-0" data-video-id={item.videoId}>
+                      <td className={tdClass}>
+                        <Link href={thumbnailFixHref(item.videoId)} className={linkClass}>
+                          <span dir="auto">{item.title || item.videoId}</span>
+                        </Link>
+                        <div className="text-fg-muted text-xs" dir="ltr">{item.videoId}</div>
+                      </td>
+                      <td className={tdClass}>{item.reason || t('errorsPage.noReason')}</td>
                     </tr>
                   ))}
                 </tbody>

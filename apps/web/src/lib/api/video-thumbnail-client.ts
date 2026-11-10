@@ -28,6 +28,8 @@ export interface ThumbnailUploadResult {
   thumbnailUrl?: string;
   thumbnailSizes?: Record<string, string>;
   error?: string;
+  /** API refusal code, e.g. thumbnail_shape (not the video's shape) */
+  code?: string;
 }
 
 export async function uploadVideoThumbnail(
@@ -58,7 +60,7 @@ export async function uploadVideoThumbnail(
 
     if (!response.ok || !data?.success || !data?.result?.thumbnailUrl) {
       logger.error('[uploadVideoThumbnail] Upload failed', { videoId, status: response.status, error: data?.error });
-      return { success: false, error: data?.error };
+      return { success: false, error: data?.error, code: data?.code };
     }
 
     return {

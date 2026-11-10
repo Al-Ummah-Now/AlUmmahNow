@@ -231,7 +231,11 @@ export default function VideoEdit({
         onSave?.(result.result.video);
       } else {
         logger.error('[VideoEdit] Update failed', { videoId: video.id, error: result?.error });
-        setError(t.video.updateFailed ?? null);
+        setError(
+          (result?.code === 'thumbnail_shape' ? t.video.thumbnailWrongShape
+            : result?.code === 'thumbnail_unreadable' || result?.code === 'thumbnail_host' ? t.video.thumbnailUnreadable
+            : t.video.updateFailed) ?? null
+        );
       }
     } catch (err) {
       logger.error('Error saving video:', err);
@@ -383,6 +387,8 @@ export default function VideoEdit({
           playUrl={video.playUrl}
           channelId={video.channelId || channelId}
           onThumbnailChange={(url) => handleInputChange('thumbnailUrl', url)}
+          videoWidth={video.width}
+          videoHeight={video.height}
         />
 
         {/* Tags */}

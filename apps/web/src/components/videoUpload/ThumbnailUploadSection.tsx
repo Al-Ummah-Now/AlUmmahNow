@@ -3,7 +3,9 @@ import { logger } from '@/lib/logger-client';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Upload, CheckCircle, AlertCircle } from 'lucide-react';
-import { extractVideoFrames } from '@/lib/utils/videoFrameExtractor';
+import { extractVideoFrames, probeVideoSize } from '@/lib/utils/videoFrameExtractor';
+import { ThumbnailCropper, loadImageFile } from '@/components/VideoThumbnail/ThumbnailCropper';
+import { shapesMatch, type Size } from '@/lib/utils/thumbnailCrop';
 import { validateThumbnailFile, fileToBase64 } from '@/lib/utils/thumbnailValidator';
 import { useLanguage } from '@/hooks/useLanguage';
 import { FitImage } from '@/components/VideoThumbnail/FitImage';
@@ -14,6 +16,8 @@ export interface ThumbnailData {
   preview: string; // Preview URL
   position?: number; // For auto-generated (0-100%)
   filename?: string;
+  /** The video's size: the thumbnail has its shape (custom images are cropped to it) */
+  video?: Size;
 }
 
 interface ThumbnailUploadSectionProps {
@@ -36,6 +40,16 @@ export function ThumbnailUploadSection({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  // The video's size, and a picked image of another shape waiting to be cropped
+  const [videoSize, setVideoSize] = useState<Size | null>(null);
+  const [crop, setCrop] = useState<{ url: string; size: Size; name: string } | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    setVideoSize(null);
+    if (videoFile) void probeVideoSize(videoFile).then((size) => { if (live) setVideoSize(size); });
+    return () => { live = false; };
+  }, [videoFile]);
 
   // Extract frames from video for auto-thumbnails
   useEffect(() => {
@@ -69,12 +83,39 @@ export function ThumbnailUploadSection({
       preview: frame,
       position: positions[index],
       data: frame,
+      ...(videoSize ? { video: videoSize } : {}),
     };
 
     setSelectedThumbnail(thumbnailData);
     setCustomThumbnail(null);
     onThumbnailSelect(thumbnailData);
-  }, [disabled, onThumbnailSelect]);
+  }, [disabled, onThumbnailSelect, videoSize]);
+
+  // Use a custom image (already the video's shape, or cropped to it)
+  const applyCustomImage = useCallback(async (file: File) => {
+    try {
+      const base64 = await fileToBase64(file);
+
+      const thumbnailData: ThumbnailData = {
+        type: 'custom',
+        data: base64,
+        preview: base64,
+        filename: file.name,
+        ...(videoSize ? { video: videoSize } : {}),
+      };
+
+      setCustomThumbnail(file);
+      setSelectedThumbnail(thumbnailData);
+      onThumbnailSelect(thumbnailData);
+    } catch (_err) {
+      setError(t.upload.thumbnailProcessFailed);
+    }
+  }, [onThumbnailSelect, t, videoSize]);
+
+  const closeCrop = () => {
+    if (crop) URL.revokeObjectURL(crop.url);
+    setCrop(null);
+  };
 
   // Handle custom thumbnail upload
   const handleCustomUpload = useCallback(async (file: File) => {
@@ -102,24 +143,22 @@ export function ThumbnailUploadSection({
       logger.warn('Thumbnail warnings:', validation.warnings);
     }
 
-    // Convert to base64
-    try {
-      const base64 = await fileToBase64(file);
-
-      const thumbnailData: ThumbnailData = {
-        type: 'custom',
-        data: base64,
-        preview: base64,
-        filename: file.name,
-      };
-
-      setCustomThumbnail(file);
-      setSelectedThumbnail(thumbnailData);
-      onThumbnailSelect(thumbnailData);
-    } catch (_err) {
-      setError(t.upload.thumbnailProcessFailed);
+    // An image of another shape than the video is cropped to it first (never stretched)
+    if (videoSize) {
+      try {
+        const loaded = await loadImageFile(file);
+        if (!shapesMatch(loaded.size, videoSize)) {
+          setCrop({ url: loaded.url, size: loaded.size, name: file.name });
+          return;
+        }
+        URL.revokeObjectURL(loaded.url);
+      } catch {
+        setError(t.upload.thumbnailProcessFailed);
+        return;
+      }
     }
-  }, [disabled, onThumbnailSelect, t]);
+    await applyCustomImage(file);
+  }, [disabled, t, videoSize, applyCustomImage]);
 
   // Handle file input change
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -178,6 +217,21 @@ export function ThumbnailUploadSection({
           <AlertCircle size={16} className="me-2" />
           <span className="text-sm">{error}</span>
         </div>
+      )}
+
+      {crop && videoSize && (
+        <ThumbnailCropper
+          open
+          src={crop.url}
+          image={crop.size}
+          video={videoSize}
+          filename={crop.name}
+          onCancel={closeCrop}
+          onConfirm={(file) => {
+            closeCrop();
+            void applyCustomImage(file);
+          }}
+        />
       )}
 
       {/* Auto-generated thumbnails */}

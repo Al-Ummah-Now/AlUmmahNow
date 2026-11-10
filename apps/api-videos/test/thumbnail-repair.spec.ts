@@ -117,7 +117,7 @@ describe('planThumbnailRepair', () => {
 	it('matching shapes (within 5%) are left alone; unknown sizes are skipped or flagged', () => {
 		assert.equal(planThumbnailRepair({ thumbnailUrl: 'u', video: vertical, thumbnail: { width: 720, height: 1280 } }).action, 'none');
 		// A 1280x658 encode drawn into 1280x720 is 9% squashed: replaced
-		assert.equal(planThumbnailRepair({ thumbnailUrl: 'u', video: { width: 1280, height: 658 }, thumbnail: { width: 1280, height: 720 } }).action, 'use_bunny');
+		assert.equal(planThumbnailRepair({ thumbnailUrl: 'u', thumbnailType: 'auto', video: { width: 1280, height: 658 }, thumbnail: { width: 1280, height: 720 } }).action, 'use_bunny');
 		assert.equal(planThumbnailRepair({ thumbnailUrl: 'u', video: null, thumbnail: squashed }).action, 'skip');
 		assert.equal(planThumbnailRepair({ video: vertical, thumbnail: null }).action, 'skip');
 		assert.equal(planThumbnailRepair({ thumbnailUrl: 'u', video: vertical, thumbnail: null }).action, 'flag');

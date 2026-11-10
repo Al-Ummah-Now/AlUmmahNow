@@ -25827,6 +25827,24 @@
                       "filename": {
                         "type": "string",
                         "description": "Original filename"
+                      },
+                      "video": {
+                        "type": "object",
+                        "properties": {
+                          "width": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0
+                          },
+                          "height": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0
+                          }
+                        },
+                        "required": [
+                          "width",
+                          "height"
+                        ],
+                        "description": "The video file's size as the browser reads it: an image of another shape is not stored (Bunny's frame is used instead)"
                       }
                     },
                     "required": [
@@ -27256,6 +27274,31 @@
           },
           "404": {
             "description": "Video not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "thumbnailUrl refused: code thumbnail_shape (not the video's shape, with expected and actual sizes) or thumbnail_unreadable",
             "content": {
               "application/json": {
                 "schema": {
@@ -31162,6 +31205,31 @@
           },
           "404": {
             "description": "Video not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The image does not have the video's shape (code thumbnail_shape, with expected and actual sizes): crop it first",
             "content": {
               "application/json": {
                 "schema": {

@@ -6,6 +6,8 @@ import React, { useState, useRef } from 'react';
 import { Upload, Check } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { uploadVideoThumbnail, validateThumbnailFile } from '@/lib/api/video-thumbnail-client';
+import { ThumbnailCropper, loadImageFile } from '@/components/VideoThumbnail/ThumbnailCropper';
+import { shapesMatch, type Size } from '@/lib/utils/thumbnailCrop';
 
 interface ThumbnailSelectorProps {
   videoId: string;
@@ -17,6 +19,9 @@ interface ThumbnailSelectorProps {
   playUrl?: string;
   channelId: string;
   onThumbnailChange: (thumbnailUrl: string) => void;
+  /** The video's encoded size: a custom image is cropped to its shape first */
+  videoWidth?: number;
+  videoHeight?: number;
   className?: string;
 }
 
@@ -41,6 +46,8 @@ export default function ThumbnailSelector({
   playUrl,
   channelId,
   onThumbnailChange,
+  videoWidth,
+  videoHeight,
   className = '',
 }: ThumbnailSelectorProps) {
   const { t } = useLanguage();
@@ -49,6 +56,9 @@ export default function ThumbnailSelector({
   const [customThumbnail, setCustomThumbnail] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  // A picked image of another shape than the video, waiting to be cropped
+  const [crop, setCrop] = useState<{ url: string; size: Size; name: string } | null>(null);
+  const videoSize: Size | null = videoWidth && videoHeight ? { width: videoWidth, height: videoHeight } : null;
   // Frames that failed to load (short videos get fewer; unencoded videos none)
   const [missingFrames, setMissingFrames] = useState<Set<string>>(new Set());
 
@@ -81,6 +91,31 @@ export default function ThumbnailSelector({
     }
 
     setUploadError(null);
+
+    // An image of another shape than the video is cropped to it first (never stretched)
+    if (videoSize) {
+      try {
+        const loaded = await loadImageFile(file);
+        if (!shapesMatch(loaded.size, videoSize)) {
+          setCrop({ url: loaded.url, size: loaded.size, name: file.name });
+          return;
+        }
+        URL.revokeObjectURL(loaded.url);
+      } catch {
+        setUploadError(t.video.thumbnailInvalidType ?? null);
+        return;
+      }
+    }
+    await uploadFile(file);
+  };
+
+  const closeCrop = () => {
+    if (crop) URL.revokeObjectURL(crop.url);
+    setCrop(null);
+  };
+
+  const uploadFile = async (file: File) => {
+    setUploadError(null);
     setIsUploading(true);
 
     try {
@@ -101,7 +136,7 @@ export default function ThumbnailSelector({
         onThumbnailChange(uploadedUrl);
       } else {
         setCustomThumbnail(null);
-        setUploadError(result.error || t.video.thumbnailUploadFailed || null);
+        setUploadError(result.code === 'thumbnail_shape' ? t.video.thumbnailWrongShape ?? null : result.error || t.video.thumbnailUploadFailed || null);
       }
     } catch (error) {
       logger.error('[ThumbnailSelector] Error uploading thumbnail', { videoId, error });
@@ -249,6 +284,21 @@ export default function ThumbnailSelector({
           <p role="alert" data-testid="thumbnail-upload-error" className="text-sm text-red-500 mt-2">{uploadError}</p>
         )}
       </div>
+
+      {crop && videoSize && (
+        <ThumbnailCropper
+          open
+          src={crop.url}
+          image={crop.size}
+          video={videoSize}
+          filename={crop.name}
+          onCancel={closeCrop}
+          onConfirm={(file) => {
+            closeCrop();
+            void uploadFile(file);
+          }}
+        />
+      )}
 
       {/* Current Selection (announced to screen readers when it changes) */}
       <div className="pt-2 border-t dark:border-gray-700">

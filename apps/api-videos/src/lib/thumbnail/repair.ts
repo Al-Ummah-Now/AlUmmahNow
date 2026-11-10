@@ -10,12 +10,19 @@
  *   - auto frame from our image storage (thumbnailType 'auto', not on the
  *     Bunny Stream host): replaced by Bunny's own thumbnail of the video,
  *     which Bunny renders at the video's real aspect (checked first);
- *   - custom image the owner uploaded, or Bunny's own thumbnail: never
- *     changed, flagged for an admin. Cards letterbox them meanwhile, so
- *     nothing shows distorted.
+ *   - custom image the owner uploaded, an imported (legacy) thumbnail with
+ *     no type, or Bunny's own thumbnail: never changed, flagged for an admin
+ *     (owner, 2026-11-10: "I will edit them"). Cards letterbox them
+ *     meanwhile, so nothing shows distorted;
+ *   - old 4:3 YouTube art with bars on a landscape video counts as matching.
+ *
+ * Imported addresses without a scheme ("images.alummahnow.net/x.jpg") are
+ * read as https.
  *
  * Runs only as an admin job (lib/admin/jobs.ts, kind 'videos.repair-thumbnails'),
- * started from the admin Processing page, dry run first: each delivery checks
+ * started from the admin Processing page (dry run first) and daily from the
+ * api-videos cron (startDailyThumbnailCheck), whose flagged videos the admin
+ * Errors page lists until their thumbnail changes. Each delivery checks
  * VIDEOS_PER_STEP videos and queues the next step with its cursor (resumable).
  * A step that fails is retried with backoff; after the retries the job is
  * marked failed (admin sees it with Retry, which resumes at the cursor) and
@@ -33,24 +40,22 @@ import { signBunnyUrlsInText } from '../bunny-signing';
 import { getSecret } from '../env-helpers';
 import Queue from '../queue';
 import { MessageType } from '@al-ummah/shared-types';
+import { absoluteImageUrl, aspectMismatch, checkThumbnailShape, imageSize, isBunnyFrameOf, isLetterboxedArt, isOnHost, isOwnImageHost, resolveVideoSize, type Size } from './shape';
+import { createJob, listJobs, type JobEnv } from '../admin/jobs';
+import type { AdminJob } from '@al-ummah/shared-types';
+
+export { ASPECT_TOLERANCE, aspectMismatch, imageSize, type Size } from './shape';
 
 /** Admin job kind and the fixed target id its runs are listed under. */
 export const THUMBNAIL_REPAIR_JOB = 'videos.repair-thumbnails' as const;
 export const THUMBNAIL_REPAIR_TARGET = 'thumbnail-repair';
 
-/** Shapes further apart than 5% are a mismatch (rounding of odd encodes stays well inside). */
-export const ASPECT_TOLERANCE = 0.05;
 /** Bytes read from an image to find its size (JPEG SOF can sit after a large EXIF block). */
 const HEADER_BYTES = 256 * 1024;
 /** Videos checked per job delivery (each is a few subrequests: record, Bunny, one or two images). */
 export const VIDEOS_PER_STEP = 25;
 /** Videos listed in a job result for an admin to look at. */
 export const MAX_RESULT_ITEMS = 200;
-
-export interface Size {
-	width: number;
-	height: number;
-}
 
 export type RepairOutcome = 'ok' | 'replaced' | 'would_replace' | 'flagged' | 'skipped' | 'error';
 
@@ -90,79 +95,6 @@ interface RepairVideo {
 // Pure helpers
 // ---------------------------------------------------------------------------
 
-function u16be(b: Uint8Array, i: number): number {
-	return (b[i] << 8) | b[i + 1];
-}
-function u32be(b: Uint8Array, i: number): number {
-	return ((b[i] << 24) >>> 0) + ((b[i + 1] << 16) | (b[i + 2] << 8) | b[i + 3]);
-}
-function u24le(b: Uint8Array, i: number): number {
-	return b[i] | (b[i + 1] << 8) | (b[i + 2] << 16);
-}
-
-/**
- * Pixel size of a JPEG, PNG or WebP from its first bytes, or null. JPEG walks
- * the marker segments (so an EXIF preview inside APP1 is skipped) to the
- * first start-of-frame.
- */
-export function imageSize(bytes: Uint8Array): Size | null {
-	const b = bytes;
-	// PNG: signature, then IHDR width/height
-	if (b.length >= 24 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) {
-		const width = u32be(b, 16);
-		const height = u32be(b, 20);
-		return width && height ? { width, height } : null;
-	}
-	// WebP: RIFF....WEBP + VP8 / VP8L / VP8X chunk
-	if (b.length >= 30 && b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) {
-		const chunk = String.fromCharCode(b[12], b[13], b[14], b[15]);
-		if (chunk === 'VP8 ') return { width: u16le(b, 26) & 0x3fff, height: u16le(b, 28) & 0x3fff };
-		if (chunk === 'VP8L') {
-			const bits = b[21] | (b[22] << 8) | (b[23] << 16) | (b[24] << 24);
-			return { width: (bits & 0x3fff) + 1, height: ((bits >>> 14) & 0x3fff) + 1 };
-		}
-		if (chunk === 'VP8X') return { width: u24le(b, 24) + 1, height: u24le(b, 27) + 1 };
-		return null;
-	}
-	// JPEG
-	if (b.length >= 4 && b[0] === 0xff && b[1] === 0xd8) {
-		let i = 2;
-		while (i + 9 < b.length) {
-			if (b[i] !== 0xff) return null;
-			const marker = b[i + 1];
-			if (marker === 0xff) {
-				i++; // fill byte
-				continue;
-			}
-			if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
-				i += 2; // standalone markers
-				continue;
-			}
-			const length = u16be(b, i + 2);
-			// SOF0..SOF15 except DHT (C4), JPG (C8) and DAC (CC)
-			if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
-				const height = u16be(b, i + 5);
-				const width = u16be(b, i + 7);
-				return width && height ? { width, height } : null;
-			}
-			if (marker === 0xda || length < 2) return null; // start of scan: no frame header found
-			i += 2 + length;
-		}
-	}
-	return null;
-}
-
-function u16le(b: Uint8Array, i: number): number {
-	return b[i] | (b[i + 1] << 8);
-}
-
-/** True when the two shapes differ by more than `tolerance` (5%). */
-export function aspectMismatch(a: Size, b: Size, tolerance = ASPECT_TOLERANCE): boolean {
-	const ra = a.width / a.height;
-	const rb = b.width / b.height;
-	return Math.max(ra, rb) / Math.min(ra, rb) > 1 + tolerance;
-}
-
 const BUNNY_STREAM_HOST = /^https:\/\/vz-[a-z0-9-]+\.b-cdn\.net\//i;
 
 export function isBunnyStreamUrl(url: string | undefined): boolean {
@@ -186,9 +118,12 @@ export function planThumbnailRepair(input: {
 	if (!input.video) return { action: 'skip', reason: 'video size unknown (not encoded yet)' };
 	if (!input.thumbnail) return { action: 'flag', reason: 'thumbnail could not be read' };
 	if (!aspectMismatch(input.thumbnail, input.video)) return { action: 'none', reason: 'shape matches the video' };
+	if (isLetterboxedArt(input.thumbnail, input.video)) return { action: 'none', reason: '4:3 art with bars on a landscape video, shown whole' };
 	const shapes = `thumbnail ${input.thumbnail.width}x${input.thumbnail.height}, video ${input.video.width}x${input.video.height}`;
 	if (input.thumbnailType === 'custom') return { action: 'flag', reason: `custom thumbnail differs from the video's shape (${shapes}); the owner chose it` };
 	if (isBunnyStreamUrl(input.thumbnailUrl)) return { action: 'flag', reason: `Bunny's thumbnail differs from the video's shape (${shapes}); set a new thumbnail` };
+	// Imported (legacy) thumbnails carry no type: the owner picks a new one by hand, never replaced
+	if (input.thumbnailType !== 'auto') return { action: 'flag', reason: `imported thumbnail differs from the video's shape (${shapes}); set a new thumbnail` };
 	return { action: 'use_bunny', reason: `auto frame captured at the wrong shape (${shapes})` };
 }
 
@@ -199,7 +134,8 @@ export function planThumbnailRepair(input: {
 /** Sign a Bunny Stream image URL of `videoId` when the library needs tokens. */
 async function fetchableUrl(env: ThumbnailRepairEnv, videoId: string, url: string): Promise<string> {
 	const host = env.BUNNY_SIGN_HOSTNAME || env.bunny_hostname;
-	if (env.BUNNY_SIGN_URLS !== 'true' || !host || !url.includes(host) || url.includes('token=')) return url;
+	// Only Bunny's own host is signed (exact hostname, never a look-alike URL)
+	if (env.BUNNY_SIGN_URLS !== 'true' || !isOnHost(url, host) || url.includes('token=')) return url;
 	const key = await getSecret(env.BUNNY_TOKEN_KEY as never, 'BUNNY_TOKEN_KEY');
 	if (!key) return url;
 	const signed = await signBunnyUrlsInText(JSON.stringify({ id: videoId, thumbnailUrl: url }), host, key);
@@ -208,7 +144,10 @@ async function fetchableUrl(env: ThumbnailRepairEnv, videoId: string, url: strin
 
 /** Size of the image at `url`; null when it is not an image we can read. Throws on network/5xx (retried). */
 export async function fetchImageSize(env: ThumbnailRepairEnv, videoId: string, url: string): Promise<Size | null> {
-	const response = await fetch(await fetchableUrl(env, videoId, url), { headers: { Range: `bytes=0-${HEADER_BYTES - 1}` } });
+	const absolute = absoluteImageUrl(url);
+	if (!absolute) return null;
+	// No redirects: a redirect is treated as unreadable, never followed to another address
+	const response = await fetch(await fetchableUrl(env, videoId, absolute), { headers: { Range: `bytes=0-${HEADER_BYTES - 1}` }, redirect: 'manual' });
 	if (response.status >= 500) throw new Error(`GET thumbnail failed: HTTP ${response.status}`);
 	if (!response.ok) return null;
 	const reader = response.body?.getReader();
@@ -304,6 +243,7 @@ export async function repairVideoThumbnail(
 	await repo.updateObject(videoId, (fresh) => {
 		replaced = false;
 		if (fresh.isDeleted) return false;
+		const before = JSON.stringify([fresh.width, fresh.height, fresh.thumbnailUrl, sameCheck(fresh.thumbnailCheck)]);
 		// Store Bunny's size when the record lacks it (shorts rule, card letterboxing)
 		if (videoSize && (!fresh.width || !fresh.height)) {
 			fresh.width = videoSize.width;
@@ -321,6 +261,8 @@ export async function repairVideoThumbnail(
 			check.outcome = 'skipped';
 			check.reason = 'thumbnail changed while the job ran';
 		}
+		// A daily re-check that finds the same thing writes nothing (no search re-projection)
+		if (!replaced && JSON.stringify([fresh.width, fresh.height, fresh.thumbnailUrl, sameCheck(check)]) === before) return false;
 		fresh.thumbnailCheck = check;
 		return true;
 	});
@@ -337,6 +279,12 @@ export async function repairVideoThumbnail(
 	}
 	logger.info('[ThumbnailRepair] Video checked', { videoId, runId: opts.runId, outcome: check.outcome, reason: check.reason });
 	return { videoId, outcome: check.outcome, reason: check.reason, changed: replaced, ...(check.previousThumbnailUrl ? { previousThumbnailUrl: check.previousThumbnailUrl } : {}) };
+}
+
+/** What a check found, without when or by which run (to skip identical re-writes). */
+function sameCheck(check: ThumbnailCheck | undefined): unknown {
+	if (!check) return null;
+	return [check.dryRun, check.outcome, check.reason, check.thumbnail?.width, check.thumbnail?.height, check.video?.width, check.video?.height];
 }
 
 /** Record a video that kept failing, so the record shows it too. */
@@ -445,4 +393,90 @@ export async function runThumbnailRepairStep(env: ThumbnailRepairEnv, job: JobLi
 
 	logger.info('[ThumbnailRepair] Step done', { jobId: job.id, dryRun: params.dryRun, checked: result.checked, more: !!next });
 	return next ? { done: false, params: next, result } : { done: true, result };
+}
+
+// ---------------------------------------------------------------------------
+// Daily check and the admin's flagged list
+// ---------------------------------------------------------------------------
+
+const ACTIVE_STATUSES = new Set(['queued', 'running', 'retrying']);
+/** Actor of the cron-started runs (shown in the jobs list). */
+export const DAILY_CHECK_ACTOR = 'system:daily-thumbnail-check';
+
+/**
+ * Daily (api-videos cron): one every-video run, so a wrong-shape thumbnail that
+ * slips in (an import writing R2 directly, a Bunny thumbnail of the wrong
+ * shape) is flagged for an admin within a day. It replaces only auto frames on
+ * our image storage (with Bunny's frame, shape checked first); imported and
+ * custom thumbnails are flagged, never replaced. Skipped while a run is active.
+ * The run is an admin job: retried with backoff, then failed + DLQ, shown on
+ * the Errors page with Retry.
+ */
+export async function startDailyThumbnailCheck(env: JobEnv): Promise<{ started: boolean; why?: string; jobId?: string }> {
+	const runs = await listJobs(env, { targetKind: 'video', targetId: THUMBNAIL_REPAIR_TARGET, limit: 10 });
+	const active = runs.find((run) => ACTIVE_STATUSES.has(run.status));
+	if (active) return { started: false, why: `run ${active.id} is ${active.status}` };
+	const job = await createJob(env, { kind: THUMBNAIL_REPAIR_JOB, targetKind: 'video', targetId: THUMBNAIL_REPAIR_TARGET, params: { dryRun: false, scheduled: 'daily' }, actorId: DAILY_CHECK_ACTOR });
+	return job.status === 'failed' ? { started: false, why: job.lastError ?? 'could not queue', jobId: job.id } : { started: true, jobId: job.id };
+}
+
+export interface FlaggedThumbnails {
+	runId: string;
+	checkedAt: string;
+	items: Array<{ videoId: string; reason?: string }>;
+}
+
+/**
+ * Videos whose thumbnail does not match their shape, from the latest finished
+ * every-video run (daily or an admin's Check). Pure: the caller drops the
+ * ones fixed since (see isStillFlagged).
+ */
+export function latestFlagged(runs: readonly AdminJob[]): FlaggedThumbnails | null {
+	const run = runs.find((r) => r.status === 'succeeded' && !Array.isArray(r.params?.ids));
+	if (!run) return null;
+	const items = ((run.result as Partial<RepairJobResult> | null)?.items ?? []).filter((item) => item.outcome === 'flagged');
+	return { runId: run.id, checkedAt: run.finishedAt ?? run.updatedAt, items: items.map((i) => ({ videoId: i.videoId, ...(i.reason ? { reason: i.reason } : {}) })) };
+}
+
+/** A flagged video stays listed until its thumbnail changes (every thumbnail write clears thumbnailCheck) or a later check passes it. */
+export function isStillFlagged(record: { isDeleted?: boolean; thumbnailCheck?: { outcome?: string } } | null): boolean {
+	return !!record && !record.isDeleted && record.thumbnailCheck?.outcome === 'flagged';
+}
+
+// ---------------------------------------------------------------------------
+// Setting a thumbnail by URL (studio editor, any API client)
+// ---------------------------------------------------------------------------
+
+export interface ThumbnailUrlVerdict {
+	ok: boolean;
+	/** When accepted: auto for the video's own Bunny frames */
+	type?: 'auto' | 'custom';
+	/** When refused */
+	code?: 'thumbnail_shape' | 'thumbnail_unreadable' | 'thumbnail_host';
+	error?: string;
+	expected?: Size;
+	actual?: Size;
+}
+
+/**
+ * May `url` become the thumbnail of `video`? One of the video's own Bunny
+ * frames always may (Bunny renders them at the video's shape); any other image
+ * must be on one of our image hosts (never fetched otherwise), readable, and
+ * have the video's shape. An empty value clears the thumbnail.
+ */
+export async function verifyThumbnailUrl(
+	env: ThumbnailRepairEnv,
+	video: { id: string; width?: number; height?: number },
+	url: string,
+): Promise<ThumbnailUrlVerdict> {
+	if (!url.trim()) return { ok: true };
+	if (isBunnyFrameOf(url, video.id, env.bunny_hostname)) return { ok: true, type: 'auto' };
+	if (!isOwnImageHost(url, [env.bunny_hostname, env.BUNNY_SIGN_HOSTNAME])) {
+		return { ok: false, code: 'thumbnail_host', error: 'The thumbnail must be one of the video\'s frames or an uploaded image. Upload it instead.' };
+	}
+	const image = await fetchImageSize(env, video.id, url).catch(() => null);
+	if (!image) return { ok: false, code: 'thumbnail_unreadable', error: 'The thumbnail image could not be read. Upload it instead.' };
+	const videoSize = await resolveVideoSize(video, () => fetchBunnyVideo(env, video.id));
+	const shape = checkThumbnailShape(image, videoSize);
+	return shape.ok ? { ok: true, type: 'custom' } : shape;
 }

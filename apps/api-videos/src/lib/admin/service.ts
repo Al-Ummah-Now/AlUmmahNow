@@ -67,7 +67,7 @@ export interface AdminServiceEnv extends AdminEnv {
 }
 
 export class AdminError extends Error {
-	constructor(public status: 400 | 403 | 404 | 409, public code: string, message?: string) {
+	constructor(public status: 400 | 403 | 404 | 409 | 422, public code: string, message?: string) {
 		super(message ?? code);
 	}
 }
@@ -603,6 +603,8 @@ export async function updateVideo(env: AdminServiceEnv, id: string, edit: VideoE
 			fresh.thumbnailUrl = edit.thumbnailUrl;
 			fresh.thumbnailType = 'custom';
 			delete fresh.thumbnailSizes;
+			// A new thumbnail ends any shape flag on the old one
+			delete fresh.thumbnailCheck;
 		}
 		fresh.dateModified = now();
 	});

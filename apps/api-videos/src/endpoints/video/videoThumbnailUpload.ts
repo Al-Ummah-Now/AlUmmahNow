@@ -5,6 +5,8 @@
  *
  * The image is stored in the same Bunny.net image storage zone used for
  * profile/channel avatars and covers, and the video's thumbnailUrl is updated.
+ * It must have the video's shape (lib/thumbnail/shape.ts): the studio crops
+ * to it first; anything else is refused with 422 `thumbnail_shape`.
  */
 
 import { canOnVideo } from "../../lib/channelAccess";
@@ -16,6 +18,8 @@ import R2Repository, { rethrowBusy } from "../../lib/r2Repo";
 import { patchVideo } from '../../lib/videoWrites';
 import BunnyStorageClient from "../../lib/bunny/storage";
 import { validateImageBuffer, detectMimeType } from "../../lib/thumbnail/validator";
+import { checkThumbnailShape, imageSize, resolveVideoSize } from "../../lib/thumbnail/shape";
+import { fetchBunnyVideo } from "../../lib/processing/loop";
 import { thumbnailProcessor } from "../../lib/thumbnail/processor";
 import { requireSecret, requireEnvVar } from "../../lib/env-helpers";
 import { addAuthToSchema } from "../../lib/openapi-auth";
@@ -62,6 +66,7 @@ export class VideoThumbnailUpload extends AuthenticatedRoute {
 			"401": { description: "Unauthorized", content: { "application/json": { schema: ResponseError } } },
 			"403": { description: "Not the video owner", content: { "application/json": { schema: ResponseError } } },
 			"404": { description: "Video not found", content: { "application/json": { schema: ResponseError } } },
+			"422": { description: "The image does not have the video's shape (code thumbnail_shape, with expected and actual sizes): crop it first", content: { "application/json": { schema: ResponseError } } },
 			"500": { description: "Internal server error", content: { "application/json": { schema: ResponseError } } },
 		},
 	}, 'required');
@@ -97,6 +102,14 @@ export class VideoThumbnailUpload extends AuthenticatedRoute {
 				return c.json({ success: false, error: validation.error || "Invalid image" }, 400);
 			}
 
+			// Never a thumbnail of another shape than the video's (cards would crop or letterbox it)
+			const videoSize = await resolveVideoSize(video, () => fetchBunnyVideo(c.env as never, id));
+			const shape = checkThumbnailShape(imageSize(new Uint8Array(buffer)), videoSize);
+			if (!shape.ok) {
+				logger.info('[VideoThumbnailUpload] Refused: wrong shape', { videoId: id, expected: shape.expected, actual: shape.actual });
+				return c.json({ success: false, code: shape.code, error: shape.error, expected: shape.expected, actual: shape.actual }, 422);
+			}
+
 			// Use the sniffed type (magic bytes), not the client-declared one
 			const mimeType = detectMimeType(new Uint8Array(buffer)) || 'image/jpeg';
 			const extension = EXTENSIONS[mimeType] || 'jpg';
@@ -126,11 +139,11 @@ export class VideoThumbnailUpload extends AuthenticatedRoute {
 			const thumbnailUrl = thumbnailSizes.hd || baseUrl;
 
 			// Conditional write on the fresh video (SCALABILITY-AUDIT AV-3)
-			const saved = await patchVideo(repository, id, (fresh) => fresh.isDeleted ? false : {
-				thumbnailUrl,
-				thumbnailType: 'custom' as const,
-				thumbnailSizes,
-				dateModified: new Date().toISOString(),
+			const saved = await patchVideo(repository, id, (fresh) => {
+				if (fresh.isDeleted) return false;
+				// A new thumbnail ends any shape flag on the old one
+				delete (fresh as { thumbnailCheck?: unknown }).thumbnailCheck;
+				return { thumbnailUrl, thumbnailType: 'custom' as const, thumbnailSizes, dateModified: new Date().toISOString() };
 			}, { ownerId: video.userId });
 			if (saved.status === 'forbidden') {
 				return c.json({ success: false, error: "Forbidden - you can only update your own videos" }, 403);

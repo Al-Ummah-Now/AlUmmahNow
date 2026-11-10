@@ -5,7 +5,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { canManageErrors, canReadErrors } from '../src/lib/roles';
-import { errorGroupsQuery, errorsBadgeCount, errorsHref, parseErrorFilters, searchedRef } from '../src/app/(protected)/errors/filters';
+import { errorGroupsQuery, errorsBadgeCount, errorsHref, parseErrorFilters, searchedRef, thumbnailFixHref } from '../src/app/(protected)/errors/filters';
+import { shapesMatch } from '@al-ummah/shared-types';
 import { groupActionsFor, itemActionsFor, itemHref } from '../src/app/(protected)/errors/permissions';
 import en from '../src/i18n/messages/en';
 import ar from '../src/i18n/messages/ar';
@@ -122,5 +123,40 @@ describe('errors labels', () => {
     assert.match(ar.nav.errors, ARABIC);
     assert.equal(en.errorsPage.deleteTestGroup, 'Delete test group');
     assert.equal(ar.errorsPage.deleteTestGroup, 'حذف مجموعة الاختبار');
+  });
+});
+
+describe('thumbnails that do not match their video (owner edits them by hand)', () => {
+  it('each flagged thumbnail links to its video page, where the upload crops to the shape', () => {
+    assert.equal(thumbnailFixHref('0a3a5049-1b2c'), '/videos/0a3a5049-1b2c');
+    assert.equal(thumbnailFixHref('a/b c'), '/videos/a%2Fb%20c');
+  });
+
+  it('the upload crops only an image of another shape (5% like the API)', () => {
+    assert.equal(shapesMatch({ width: 1280, height: 720 }, { width: 1920, height: 1080 }), true);
+    assert.equal(shapesMatch({ width: 1280, height: 696 }, { width: 1920, height: 1080 }), true);
+    assert.equal(shapesMatch({ width: 640, height: 480 }, { width: 1440, height: 1440 }), false);
+    assert.equal(shapesMatch({ width: 1280, height: 720 }, { width: 1080, height: 1920 }), false);
+  });
+
+  it('section, hint, crop dialog and refusal are labelled in English and Arabic', () => {
+    const keys = [
+      ['errorsPage', 'thumbFlaggedTitle'], ['errorsPage', 'thumbFlaggedHint'], ['errorsPage', 'thumbFlaggedEmpty'], ['errorsPage', 'thumbFlaggedCaption'],
+      ['videos', 'cropTitle'], ['videos', 'cropHelp'], ['videos', 'cropFrameLabel'], ['videos', 'cropZoom'], ['videos', 'cropUse'], ['videos', 'cropFailed'],
+    ] as const;
+    for (const [section, key] of keys) {
+      const e = (en as unknown as Record<string, Record<string, string>>)[section][key];
+      const a = (ar as unknown as Record<string, Record<string, string>>)[section][key];
+      assert.ok(e && !ARABIC.test(e), `en ${section}.${key}`);
+      assert.ok(a && ARABIC.test(a), `ar ${section}.${key}`);
+    }
+    assert.match(en.errorsPage.thumbFlaggedHint, /\{when\}/);
+    assert.match(ar.errorsPage.thumbFlaggedHint, /\{when\}/);
+    for (const m of [en, ar]) {
+      assert.match(m.videos.cropHelp, /\{image\}/);
+      assert.match(m.videos.cropHelp, /\{video\}/);
+      assert.ok(m.content.errors.thumbnail_shape);
+    }
+    assert.match(en.processing.thumbsIntro, /imported thumbnails are only flagged/);
   });
 });
