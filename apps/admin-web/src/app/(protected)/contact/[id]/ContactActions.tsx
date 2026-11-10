@@ -124,7 +124,7 @@ export function ContactActions({ id, status, locale, assignedToMe, hasAssignee }
           </button>
           <ConfirmButton
             label={t('contact.delete')}
-            title={t('contact.delete')}
+            title={t('confirmDialog.contactDeleteTitle')}
             body={t('contact.deleteConfirm')}
             confirmLabel={t('contact.delete')}
             withReason
@@ -132,6 +132,8 @@ export function ContactActions({ id, status, locale, assignedToMe, hasAssignee }
             disabled={!!busy}
             busy={busy === 'delete'}
             testId="contact-delete"
+            // The dialog keeps the ids it had before the soft delete (release spec contact.spec.ts)
+            dialogTestId="contact-delete-confirm"
             onConfirm={async (reason) => {
               setBusy('delete');
               const result = await deleteContactMessage(id, reason).catch(() => ({ ok: false as const, status: 0, error: 'request failed' }));

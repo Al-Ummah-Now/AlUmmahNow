@@ -3,8 +3,10 @@
  * (its own sink user) makes a channel and a video; an admin (another sink
  * user, promoted) finds both, edits them, suspends the channel (the public
  * API stops serving it once the queued cascade finishes), unsuspends it and
- * deletes the video and the channel. Whatever is left is removed by the
- * creator in `finally`, so a failed run leaves nothing behind.
+ * deletes the video and the channel. Admin deletes are soft deletes: the item
+ * is hidden at once (admin lists, public API) and the hourly cleanup erases it
+ * 30 days later, so the run checks the hiding, not the purge. Whatever is left
+ * is removed by the creator in `finally`, so a failed run leaves nothing behind.
  *
  * Runs in Chrome, Firefox and WebKit (playwright.release.config.ts).
  */
@@ -18,10 +20,12 @@ import { fillSecret } from './secret-fill';
 // Signs users in through the auth server: traces would hold the password and code
 test.use({ trace: 'off' });
 
-// channel.purge scans the playlists bucket in steps (no per-channel index): allow it a couple of minutes
+// Queued cascades (suspend, unsuspend, the delete's hide) walk the channel's items: allow them a couple of minutes
 const JOB_TIMEOUT = 120000;
 /** admin-web content.queued (en): the answer to every queued action */
 const QUEUED_NOTICE = 'Queued. It runs in the background';
+/** admin-web deleted.movedToBin (en): the answer to a soft delete */
+const DELETED_NOTICE = 'It can be restored from Recently deleted';
 
 async function signInAsAdmin(page: Page, prefix: string): Promise<void> {
   const email = sinkEmail(prefix);
@@ -233,21 +237,22 @@ test.describe('Release: admin content management', () => {
       await page.getByTestId('video-edit-title').fill(newTitle);
       await page.getByTestId('video-edit-save').click();
       await expect(page.getByTestId('video-title')).toHaveText(newTitle, { timeout: 30000 });
-      // Its answer is the queued notice, or (purge already done when the page re-reads) the deleted view
+      // A soft delete: the page re-reads the video and shows it as deleted (its action panel, with the
+      // short-lived success message, is dropped for a deleted video), with the way to restore it
       await confirm(page, 'video-delete', {
         typed: true,
-        answer: page.getByTestId('content-action-message').filter({ hasText: QUEUED_NOTICE }).or(page.getByTestId('video-erased')),
+        answer: page.getByTestId('content-action-message').filter({ hasText: DELETED_NOTICE }).or(page.getByTestId('video-deleted')),
       });
-      // The purge job polls this page; leave once it is done (the record may be gone by then)
+      await expect(page.getByTestId('video-deleted')).toBeVisible({ timeout: 30000 });
       await jobsIdle(page);
-      // The queued purge erases the record entirely: it leaves the admin list and the public API
+      // Hidden at once: it leaves the admin list and the public API
       await expect
         .poll(
           async () => {
             await gotoDom(page, `${target().adminWeb}/videos?q=${encodeURIComponent(videoId)}`);
             return videoRow.count();
           },
-          { message: 'deleted video is still listed', timeout: JOB_TIMEOUT, intervals: [3000] },
+          { message: 'deleted video is still listed', timeout: 60000, intervals: [3000] },
         )
         .toBe(0);
       expect(await publicStatus(`/api/videos/${videoId}`), 'deleted video still public').toBe(404);
@@ -257,7 +262,8 @@ test.describe('Release: admin content management', () => {
       // A deleted channel's page shows the deleted notice instead of its action panel
       await confirm(page, 'channel-delete', { typed: true, answer: page.getByTestId('channel-deleted') });
       await expect(page.getByTestId('channel-deleted')).toBeVisible({ timeout: 30000 });
-      await expectJobSucceeded(page, 'channel.purge');
+      // The soft delete queues the hide cascade (its videos and playlists); the purge waits 30 days
+      await expectJobSucceeded(page, 'channel.sync-holds', 3);
       expect(await publicStatus(`/api/channels/${channelId}`), 'deleted channel still public').toBe(404);
     } finally {
       // Self-cleaning: whatever the admin did not delete, the creator does
