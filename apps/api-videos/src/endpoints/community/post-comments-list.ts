@@ -121,7 +121,7 @@ export class ListPostComments extends OptionalAuthRoute {
     // 4. Fetch comment objects in parallel (hidden/deleted handling in presentComment)
     const pinnedPointerObj = await bucket.get(pinnedPointerKey(postId));
     const pinnedCommentId = pinnedPointerObj
-      ? (await pinnedPointerObj.json<PinnedCommentPointer>()).commentId
+      ? (await pinnedPointerObj.json<PinnedCommentPointer>()).commentId || undefined
       : undefined;
 
     // The pinned comment is always shown first on the first page, wherever it
@@ -139,6 +139,8 @@ export class ListPostComments extends OptionalAuthRoute {
       })
     );
     comments.push(...fetchedComments.filter((c): c is PostComment => c !== null));
+    // The pointer decides which comment is pinned (SCALABILITY-AUDIT AV-12)
+    for (const comment of comments) comment.isPinned = Boolean(pinnedCommentId) && comment.id === pinnedCommentId;
 
     // 5. Sort comments based on sortBy
     if (sortBy === 'top') {

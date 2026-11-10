@@ -40,6 +40,12 @@ export class MemoryBucket {
 		return { key, etag: this.etag(key), uploaded: this.uploaded.get(key), json: async () => JSON.parse(raw), text: async () => raw };
 	}
 
+	/** Like R2 head(): metadata without the body, null when missing. */
+	async head(key: string) {
+		this.calls++;
+		return this.store.has(key) ? { key, etag: this.etag(key) } : null;
+	}
+
 	/**
 	 * Like R2: resolves to null when an `onlyIf` precondition fails
 	 * (`etagMatches`, or `etagDoesNotMatch: '*'` = create only).

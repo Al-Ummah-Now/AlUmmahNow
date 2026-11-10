@@ -1,3 +1,4 @@
+import { addToCommentIndex, patchComment } from '../../lib/community-comments';
 import { bumpPostComments } from '../../lib/community-posts';
 import { Str } from 'chanfana';
 import { z } from 'zod';
@@ -237,11 +238,19 @@ export class CreatePostComment extends AuthenticatedRoute {
         comment.id
       );
 
-      // Increment parent's repliesCount
+      // Increment parent's repliesCount on the fresh parent (SCALABILITY-AUDIT
+      // AV-11): parallel replies all count, and a like / heart / edit of the
+      // parent at the same time is kept
       if (parentComment) {
-        parentComment.repliesCount++;
         const parentKey = `comments/${postId}/top-level/${requestBody.parentCommentId}.json`;
-        await bucket.put(parentKey, JSON.stringify(parentComment));
+        const parent = (await patchComment<never>(bucket, parentKey, (fresh) => {
+          fresh.repliesCount = (fresh.repliesCount || 0) + 1;
+        })).data;
+        // The parent was deleted while this reply was being added: keep the
+        // thread listed (the delete took it out of the index as reply-less)
+        if (parent?.deletedAt) {
+          await addToCommentIndex(bucket, `comments/${postId}/top-level/index.json`, postId, parent.id, 'start');
+        }
       }
     } else {
       // Store as top-level comment
@@ -293,29 +302,15 @@ export class CreatePostComment extends AuthenticatedRoute {
     return c.json(response, 201);
   }
 
+  // Comment indexes change with a conditional write (SCALABILITY-AUDIT AV-10):
+  // two comments at once are both listed
   private async updateTopLevelIndex(
     bucket: R2Bucket,
     postId: string,
     commentId: string
   ): Promise<void> {
-    const indexKey = `comments/${postId}/top-level/index.json`;
-    const existing = await bucket.get(indexKey);
-
-    let index: PostCommentIndex = {
-      postId,
-      commentIds: [],
-      lastUpdated: new Date().toISOString(),
-    };
-
-    if (existing) {
-      index = await existing.json();
-    }
-
-    // Add to beginning (newest first)
-    index.commentIds.unshift(commentId);
-    index.lastUpdated = new Date().toISOString();
-
-    await bucket.put(indexKey, JSON.stringify(index));
+    // Newest first
+    await addToCommentIndex(bucket, `comments/${postId}/top-level/index.json`, postId, commentId, 'start');
   }
 
   private async updateRepliesIndex(
@@ -324,23 +319,7 @@ export class CreatePostComment extends AuthenticatedRoute {
     parentCommentId: string,
     replyId: string
   ): Promise<void> {
-    const indexKey = `comments/${postId}/replies/${parentCommentId}/index.json`;
-    const existing = await bucket.get(indexKey);
-
-    let index: PostCommentIndex = {
-      postId,
-      commentIds: [],
-      lastUpdated: new Date().toISOString(),
-    };
-
-    if (existing) {
-      index = await existing.json();
-    }
-
-    // Add to end (chronological order for replies)
-    index.commentIds.push(replyId);
-    index.lastUpdated = new Date().toISOString();
-
-    await bucket.put(indexKey, JSON.stringify(index));
+    // Chronological order for replies
+    await addToCommentIndex(bucket, `comments/${postId}/replies/${parentCommentId}/index.json`, postId, replyId, 'end');
   }
 }

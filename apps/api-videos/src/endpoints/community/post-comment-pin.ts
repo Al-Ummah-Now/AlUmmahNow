@@ -1,3 +1,5 @@
+import { patchComment } from '../../lib/community-comments';
+import R2Repository from '../../lib/r2Repo';
 import { Str } from 'chanfana';
 import { z } from 'zod';
 import { AuthenticatedRoute, AppContext } from '../../base';
@@ -48,9 +50,34 @@ function buildPinSchema(summary: string, description: string) {
   );
 }
 
-async function readPinnedPointer(bucket: R2Bucket, postId: string): Promise<PinnedCommentPointer | null> {
-  const obj = await bucket.get(pinnedPointerKey(postId));
-  return obj ? obj.json<PinnedCommentPointer>() : null;
+/**
+ * The pinned pointer (`comments/<post>/pinned.json`) is the single source of
+ * truth for which comment is pinned (SCALABILITY-AUDIT AV-12): it changes only
+ * with a conditional write, and the comment list derives `isPinned` from it.
+ * The comments' own `isPinned` flags are kept in step best-effort.
+ * An empty `commentId` means nothing is pinned.
+ */
+async function swapPinnedPointer(
+  bucket: R2Bucket,
+  postId: string,
+  next: (current: string) => string | false,
+): Promise<{ previous: string; changed: boolean }> {
+  let previous = '';
+  let changed = false;
+  await new R2Repository<PinnedCommentPointer>(bucket).updateObject(
+    pinnedPointerKey(postId),
+    (pointer) => {
+      previous = pointer.commentId || '';
+      const commentId = next(previous);
+      changed = commentId !== false && commentId !== previous;
+      if (!changed) return false;
+      pointer.commentId = commentId as string;
+      pointer.pinnedAt = new Date().toISOString();
+      return true;
+    },
+    { initial: () => ({ commentId: '', pinnedAt: new Date().toISOString() }) },
+  );
+  return { previous, changed };
 }
 
 async function setCommentPinned(
@@ -59,15 +86,12 @@ async function setCommentPinned(
   commentId: string,
   pinned: boolean
 ): Promise<PostComment | null> {
-  const key = topLevelCommentKey(postId, commentId);
-  const obj = await bucket.get(key);
-  if (!obj) {
-    return null;
-  }
-  const comment = await obj.json<PostComment>();
-  comment.isPinned = pinned;
-  await bucket.put(key, JSON.stringify(comment));
-  return comment;
+  const { data } = await patchComment<never>(bucket, topLevelCommentKey(postId, commentId), (comment) => {
+    if (Boolean(comment.isPinned) === pinned) return false;
+    comment.isPinned = pinned;
+    return true;
+  });
+  return data;
 }
 
 /**
@@ -100,17 +124,15 @@ export class PinPostComment extends AuthenticatedRoute {
       return c.json({ success: false, error: 'Cannot pin a deleted or hidden comment' }, 400);
     }
 
-    const previous = await readPinnedPointer(bucket, postId);
-    if (previous && previous.commentId !== commentId) {
-      await setCommentPinned(bucket, postId, previous.commentId, false);
+    // One conditional write of the pointer decides; the previous pin it
+    // replaced is unpinned (two pins at once leave exactly one pinned)
+    const { previous } = await swapPinnedPointer(bucket, postId, () => commentId);
+    await setCommentPinned(bucket, postId, commentId, true);
+    if (previous && previous !== commentId) {
+      await setCommentPinned(bucket, postId, previous, false);
     }
 
-    comment.isPinned = true;
-    await bucket.put(topLevelCommentKey(postId, commentId), JSON.stringify(comment));
-    const pointer: PinnedCommentPointer = { commentId, pinnedAt: new Date().toISOString() };
-    await bucket.put(pinnedPointerKey(postId), JSON.stringify(pointer));
-
-    logger.info('[PinPostComment] Comment pinned', { postId, commentId, previous: previous?.commentId, userId });
+    logger.info('[PinPostComment] Comment pinned', { postId, commentId, previous: previous || undefined, userId });
 
     const response: PostCommentPinResponse = { success: true, pinned: true, commentId };
     return c.json(response);
@@ -138,10 +160,9 @@ export class UnpinPostComment extends AuthenticatedRoute {
       return c.json({ success: false, error: 'Comment not found' }, 404);
     }
 
-    const pointer = await readPinnedPointer(bucket, postId);
-    if (pointer?.commentId === commentId) {
-      await bucket.delete(pinnedPointerKey(postId));
-    }
+    // Clear the pointer only if it still points at this comment (a pin of
+    // another comment that landed meanwhile stays)
+    await swapPinnedPointer(bucket, postId, (current) => (current === commentId ? '' : false));
 
     logger.info('[UnpinPostComment] Comment unpinned', { postId, commentId, userId });
 

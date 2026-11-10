@@ -1,3 +1,4 @@
+import { patchComment } from '../../lib/community-comments';
 import { Str } from 'chanfana';
 import { z } from 'zod';
 import { AuthenticatedRoute, AppContext } from '../../base';
@@ -125,11 +126,23 @@ export class UpdatePostComment extends AuthenticatedRoute {
     }
 
     // 4. Update comment
-    comment.content = requestBody.content;
-    comment.isEdited = true;
-    comment.updatedAt = new Date().toISOString();
-
-    await bucket.put(commentKey, JSON.stringify(comment));
+    // On the fresh comment with a conditional write (SCALABILITY-AUDIT AV-11):
+    // likes, replies or a heart that land meanwhile are kept, and a comment
+    // deleted meanwhile is not edited
+    const { data: saved, rejected } = await patchComment<'deleted'>(bucket, commentKey, (fresh) => {
+      if (fresh.deletedAt) return { reject: 'deleted' };
+      fresh.content = requestBody.content;
+      fresh.isEdited = true;
+      fresh.updatedAt = new Date().toISOString();
+      return true;
+    });
+    if (!saved) {
+      return c.json({ success: false, error: 'Comment not found' }, 404);
+    }
+    if (rejected) {
+      return c.json({ success: false, error: 'Cannot update deleted comment' }, 400);
+    }
+    Object.assign(comment, saved);
 
     // 5. Send queue event
     const queue = new Queue(c.env.queue);

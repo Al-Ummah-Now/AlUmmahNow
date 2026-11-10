@@ -1,3 +1,4 @@
+import { addToCommentIndex, patchComment, removeFromCommentIndex } from '../../lib/community-comments';
 import { bumpPostComments } from '../../lib/community-posts';
 import { Str } from 'chanfana';
 import { z } from 'zod';
@@ -122,23 +123,38 @@ export class DeletePostComment extends AuthenticatedRoute {
       );
     }
 
-    // 5. Soft delete
-    comment.deletedAt = new Date().toISOString();
+    // 5. Soft delete on the fresh comment with a conditional write
+    // (SCALABILITY-AUDIT AV-11). Only the request that sets deletedAt goes on
+    // to adjust indexes and counters, so two deletes at once count once.
+    const deletedAt = new Date().toISOString();
+    const { data: deleted, rejected } = await patchComment<'already'>(bucket, commentKey, (fresh) => {
+      if (fresh.deletedAt) return { reject: 'already' };
+      fresh.deletedAt = deletedAt;
+      return true;
+    });
+    if (!deleted || rejected) {
+      return c.json(
+        {
+          success: true,
+          message: 'Comment already deleted',
+        }
+      );
+    }
+    comment.deletedAt = deletedAt;
 
-    // If has replies, keep the comment but mask content
-    if (comment.repliesCount > 0) {
-      await bucket.put(commentKey, JSON.stringify(comment));
-    } else {
-      // No replies: mark as deleted but also remove from index
-      await bucket.put(commentKey, JSON.stringify(comment));
-
-      // Remove from index
+    // A comment with replies stays listed (shown as [deleted]); one without is
+    // taken out of its index. A reply that lands meanwhile re-adds it (see
+    // post-comment-create), and this re-check covers the other order.
+    if ((deleted.repliesCount || 0) === 0) {
       if (comment.parentCommentId) {
-        // Remove from replies index
-        await this.removeFromRepliesIndex(bucket, postId, comment.parentCommentId, commentId);
+        await removeFromCommentIndex(bucket, `comments/${postId}/replies/${comment.parentCommentId}/index.json`, commentId);
       } else {
-        // Remove from top-level index
-        await this.removeFromTopLevelIndex(bucket, postId, commentId);
+        const indexKey = `comments/${postId}/top-level/index.json`;
+        await removeFromCommentIndex(bucket, indexKey, commentId);
+        const after = await bucket.get(commentKey);
+        if (after && ((await after.json<PostComment>()).repliesCount || 0) > 0) {
+          await addToCommentIndex(bucket, indexKey, postId, commentId, 'start');
+        }
       }
     }
 
@@ -192,40 +208,5 @@ export class DeletePostComment extends AuthenticatedRoute {
     }
 
     return { comment: null, commentKey: '' };
-  }
-
-  private async removeFromTopLevelIndex(
-    bucket: R2Bucket,
-    postId: string,
-    commentId: string
-  ): Promise<void> {
-    const indexKey = `comments/${postId}/top-level/index.json`;
-    const existing = await bucket.get(indexKey);
-
-    if (!existing) return;
-
-    const index: PostCommentIndex = await existing.json();
-    index.commentIds = index.commentIds.filter((id) => id !== commentId);
-    index.lastUpdated = new Date().toISOString();
-
-    await bucket.put(indexKey, JSON.stringify(index));
-  }
-
-  private async removeFromRepliesIndex(
-    bucket: R2Bucket,
-    postId: string,
-    parentCommentId: string,
-    commentId: string
-  ): Promise<void> {
-    const indexKey = `comments/${postId}/replies/${parentCommentId}/index.json`;
-    const existing = await bucket.get(indexKey);
-
-    if (!existing) return;
-
-    const index: PostCommentIndex = await existing.json();
-    index.commentIds = index.commentIds.filter((id) => id !== commentId);
-    index.lastUpdated = new Date().toISOString();
-
-    await bucket.put(indexKey, JSON.stringify(index));
   }
 }
