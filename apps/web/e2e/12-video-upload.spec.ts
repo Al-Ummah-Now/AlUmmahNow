@@ -399,7 +399,17 @@ test.describe('Video Upload - Accessibility', () => {
     await expect(ui.descriptionEn).toHaveAccessibleName(/.+/);
     await expect(ui.close).toHaveAccessibleName(/.+/);
     await expect(ui.submit).toHaveAccessibleName(/.+/);
-    await expect(page.getByRole('tablist').getByRole('tab')).toHaveCount(2);
+    // Two tab lists: the title language (EN / AR) and the page's single / batch mode
+    const languageTabs = page.getByRole('tablist').filter({ has: ui.langTabEn });
+    await expect(languageTabs).toHaveAccessibleName(/.+/);
+    await expect(languageTabs.getByRole('tab')).toHaveCount(2);
+    const modeTabs = page.getByTestId('upload-mode-tabs');
+    await expect(modeTabs).toHaveAttribute('role', 'tablist');
+    await expect(modeTabs).toHaveAccessibleName(/.+/);
+    await expect(modeTabs.getByRole('tab')).toHaveCount(2);
+    for (const tab of await modeTabs.getByRole('tab').all()) await expect(tab).toHaveAccessibleName(/.+/);
+    await expect(modeTabs.getByRole('tab', { selected: true })).toHaveAttribute('aria-controls', /.+/);
+    await expect(page.getByRole('tablist')).toHaveCount(2);
     await expect(ui.isPublic).toHaveAccessibleName(/.+/);
   });
 });

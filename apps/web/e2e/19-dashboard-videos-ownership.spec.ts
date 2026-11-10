@@ -68,24 +68,29 @@ test.describe('Dashboard Videos - Single Channel', () => {
     expect(channels).toEqual([channelId]);
   });
 
-  test('should filter by duration - short', async ({ page }) => {
+  // The format filter follows the one Short rule: up to 3 minutes AND vertical
+  // or square (or chosen by the uploader). The seed clips are a few seconds
+  // long but landscape (426x240), so they are videos, not Shorts.
+  test('should filter by format - Shorts', async ({ page }) => {
     await openDashboard(page);
+    await expect(card(page, singleSeed[SEED_TITLES.singleVideo])).toBeVisible();
 
     await page.getByTestId('dashboard-filter-duration').selectOption('short');
-    await expect(card(page, singleSeed[SEED_TITLES.singleVideo])).toBeVisible();
+    await expect(card(page, singleSeed[SEED_TITLES.singleVideo])).toHaveCount(0);
+    await expect(card(page, singleSeed[SEED_TITLES.singlePrivate])).toHaveCount(0);
     const durations = await page.getByTestId('dashboard-video-card').evaluateAll((els) =>
       els.map((el) => Number(el.getAttribute('data-duration') || 0)),
     );
     for (const d of durations) expect(d).toBeLessThanOrEqual(180);
   });
 
-  test('should filter by duration - standard', async ({ page }) => {
+  test('should filter by format - videos', async ({ page }) => {
     await openDashboard(page);
 
     await page.getByTestId('dashboard-filter-duration').selectOption('standard');
-    // The seed clips are a few seconds long, so none of them are "standard"
-    await expect(card(page, singleSeed[SEED_TITLES.singleVideo])).toHaveCount(0);
-    await expect(card(page, singleSeed[SEED_TITLES.singlePrivate])).toHaveCount(0);
+    // Short landscape clips are videos
+    await expect(card(page, singleSeed[SEED_TITLES.singleVideo])).toBeVisible();
+    await expect(card(page, singleSeed[SEED_TITLES.singlePrivate])).toBeVisible();
   });
 
   test('should filter by privacy - public', async ({ page }) => {
@@ -128,12 +133,17 @@ test.describe('Dashboard Videos - Multiple Channels', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  test('should filter short videos from all channels', async ({ page }) => {
+  test('should filter by format across all channels', async ({ page }) => {
     await openDashboard(page);
 
-    await page.getByTestId('dashboard-filter-duration').selectOption('short');
+    // Each channel's landscape seed is a video: listed under Videos, not under Shorts
+    await page.getByTestId('dashboard-filter-duration').selectOption('standard');
     await expect(card(page, multiSeed[SEED_TITLES.multiOne])).toBeVisible();
     await expect(card(page, multiSeed[SEED_TITLES.multiTwo])).toBeVisible();
+
+    await page.getByTestId('dashboard-filter-duration').selectOption('short');
+    await expect(card(page, multiSeed[SEED_TITLES.multiOne])).toHaveCount(0);
+    await expect(card(page, multiSeed[SEED_TITLES.multiTwo])).toHaveCount(0);
   });
 
   test('should bulk delete videos across channels', async ({ page }) => {

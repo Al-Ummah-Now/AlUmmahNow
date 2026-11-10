@@ -74,15 +74,19 @@ export async function expectSideDrawerClosed(page: Page): Promise<void> {
 /** Moves the open account menu to its main list, or its channel or account switcher. */
 export async function showMenuView(menu: Locator, view: 'main' | 'channel' | 'account'): Promise<void> {
   const back = menu.getByTestId('nav-menu-back');
-  const marker = view === 'main' ? menu.getByTestId('nav-switch-account') : menu.getByTestId(view === 'channel' ? 'nav-channel-option-none' : 'nav-account').first();
+  // The main list is the one without a Back row (signed out it holds only Sign In)
+  const shown = async () =>
+    view === 'main'
+      ? (await menu.isVisible()) && !(await back.isVisible())
+      : menu.getByTestId(view === 'channel' ? 'nav-channel-option-none' : 'nav-account').first().isVisible();
   // Retried: a switch (channel or account) reloads the session, which remounts
   // the menu closed, sometimes twice while the page refresh lands
   await expect(async () => {
     if (!(await menu.isVisible())) await openAccountMenu(menu.page());
-    if (await marker.isVisible()) return;
+    if (await shown()) return;
     if (await back.isVisible()) await back.click({ timeout: 3000 });
     if (view !== 'main') await menu.getByTestId(`nav-switch-${view}`).click({ timeout: 3000 });
-    await expect(marker).toBeVisible({ timeout: 3000 });
+    await expect.poll(shown, { timeout: 3000 }).toBe(true);
   }).toPass({ timeout: 30000 });
 }
 

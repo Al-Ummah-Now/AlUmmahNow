@@ -16,12 +16,16 @@ import {
  * TUS Resumable Upload E2E Tests
  *
  * The web uploader sends the file with tus-js-client through the api-videos
- * TUS proxy in 5 MB chunks (retry delays 0/3/5/10/20s). These tests interrupt
- * the browser-side TUS requests to check that uploads resume from the server
+ * TUS proxy (src/lib/upload/resilient-tus.ts): 50 MB chunks, and transient
+ * failures (network, 5xx, 429) are retried for ~15 minutes while the page says
+ * "Reconnecting…" and keeps the progress. These tests interrupt the
+ * browser-side TUS requests to check that uploads resume from the server
  * offset instead of starting over.
  */
 
+// Small chunks through the uploader's E2E override, so a small file takes several
 const CHUNK_SIZE = 5 * 1024 * 1024;
+const CHUNK_SIZE_OVERRIDE_KEY = 'aun:tus-chunk-size';
 
 test.describe('Upload Resume', () => {
   test.use({ storageState: AUTH_STATE.single });
@@ -44,14 +48,21 @@ test.describe('Upload Resume', () => {
     await startUpload(page, await helpers.createTestVideo('network-offline.mp4', 64), 'Network Offline Test');
     await hold.waitForHeldPatch();
 
-    // The in-flight chunk fails while offline; tus does not retry offline
+    // The in-flight chunk fails while offline: the upload keeps its place and
+    // says it is reconnecting, with no error and no Retry to press
     await context.setOffline(true);
     await hold.release();
-    await expect(ui.progress).toHaveAttribute('data-state', 'error');
-    await expect(ui.retry).toBeVisible();
+    const reconnecting = page.getByTestId('upload-reconnecting');
+    await expect(reconnecting).toBeVisible();
+    await expect(reconnecting).toHaveAttribute('role', 'status');
+    await expect(reconnecting).not.toBeEmpty();
+    await expect(ui.progress).toHaveAttribute('data-state', 'uploading');
+    await expect(ui.retry).toBeHidden();
+    await expect(ui.pageError).toBeHidden();
 
+    // Back online it carries on by itself
     await context.setOffline(false);
-    await ui.retry.click();
+    await expect(reconnecting).toBeHidden({ timeout: 60000 });
     await expectUploadSuccess(page, 'Network Offline Test');
     // Same upload resumed: one video record only
     expect(tracker.videoIds.size).toBe(1);
@@ -89,6 +100,7 @@ test.describe('Upload Resume', () => {
     test.slow(); // ~6 MB transfer to the target environment
 
     await gotoUpload(page, 'en');
+    await page.evaluate(([key, size]) => localStorage.setItem(key, size), [CHUNK_SIZE_OVERRIDE_KEY, String(CHUNK_SIZE)]);
     // Fail the second chunk once; tus asks the server for the offset and
     // continues from there instead of re-sending the first chunk
     let patchCount = 0;
