@@ -201,7 +201,7 @@ describe('Autocomplete popupHost', () => {
     fireEvent.click(option);
     // The channel's @seerah handle is an exact match, so it ranks first
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'c1' }));
-    expect(input()).toHaveAttribute('aria-controls', within(host).getByRole('listbox').id);
+    expect(input()).toHaveAttribute('aria-controls', within(host).getByRole('listbox', { hidden: true }).id);
     host.remove();
   });
 });
