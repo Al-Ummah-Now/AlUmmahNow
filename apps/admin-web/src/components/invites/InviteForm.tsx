@@ -18,7 +18,15 @@ import { Autocomplete } from '@/components/search/Autocomplete';
 import { ActionFeedback, useContentAction } from '@/components/content/actions';
 import { Notice, SectionCard, smallButtonClass } from '@/components/content/parts';
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** One @, something before it, a dotted domain after it, no spaces; linear time (no backtracking regex). */
+function isEmailAddress(value: string): boolean {
+  if (value.length > 254 || /\s/.test(value)) return false;
+  const at = value.indexOf('@');
+  if (at < 1 || at !== value.lastIndexOf('@')) return false;
+  const domain = value.slice(at + 1);
+  const dot = domain.lastIndexOf('.');
+  return dot > 0 && dot < domain.length - 1;
+}
 
 interface Props {
   tiers: Array<{ id: string; name: string }>;
@@ -48,7 +56,7 @@ export function InviteForm({ tiers, canPlan, canCreateChannels, canTransfer }: P
   async function check(value: string) {
     const normalized = value.trim().toLowerCase();
     setLookup(null);
-    if (!EMAIL_RE.test(normalized)) return;
+    if (!isEmailAddress(normalized)) return;
     const result = await lookupInviteEmail(normalized);
     if (result.ok && (result.data.authUser || result.data.profile || result.data.invite)) setLookup(result.data);
   }
@@ -273,7 +281,7 @@ export function InviteForm({ tiers, canPlan, canCreateChannels, canTransfer }: P
       )}
 
       <ActionFeedback error={error} message={message} />
-      <button type="submit" className={primaryButtonClass} disabled={!!busy || blocked || !EMAIL_RE.test(email.trim().toLowerCase())} data-testid="invite-submit">
+      <button type="submit" className={primaryButtonClass} disabled={!!busy || blocked || !isEmailAddress(email.trim().toLowerCase())} data-testid="invite-submit">
         {busy ? t('content.working') : t('invites.submit')}
       </button>
     </form>
