@@ -14,12 +14,16 @@ import { apiFetch, type WebUser } from './web-session';
 export async function setCreatorTier(user: WebUser, tierId: string | null): Promise<void> {
   const page = await workerAdminPage();
   await page.goto(`${target().adminWeb}/auth-requests/users/${encodeURIComponent(user.userId)}`);
-  const select = page.locator(`[data-testid="creator-tier-select"][data-user-id="${user.userId}"]`);
+  // The user page's tier control (UserCreatorTierPanel): the wrapper carries the user id,
+  // the select and status are inside it, and a change is applied from a confirm dialog.
+  const control = page.locator(`[data-testid="user-creator-tier-control"][data-user-id="${user.userId}"]`);
+  const select = control.getByTestId('user-creator-tier-control-select');
   await expect(select, 'the creator tier selector on the user page').toBeEnabled({ timeout: 30000 });
-  // Already set (a reused account): selecting the same option saves nothing
+  // Already set (a reused account): selecting the same option changes nothing
   if ((await select.inputValue()) !== (tierId ?? '')) {
     await select.selectOption(tierId ?? '');
-    await expect(page.getByTestId('creator-tier-select-status')).toHaveAttribute('data-state', 'saved', { timeout: 30000 });
+    await control.getByTestId('user-creator-tier-control-change-confirm').click();
+    await expect(control.getByTestId('user-creator-tier-control-status')).toHaveAttribute('data-state', 'saved', { timeout: 30000 });
   }
   // In effect for the user's own token at once
   await expect
