@@ -12,6 +12,7 @@ export const JOB_KIND_LABEL: Record<AdminJobKind, MessageKey> = {
   'user.delete-data': 'adminJobs.kinds.userDeleteData',
   'profiles.restore-legacy': 'adminJobs.kinds.profilesRestoreLegacy',
   'videos.repair-thumbnails': 'adminJobs.kinds.videosRepairThumbnails',
+  'search.rebuild-ownership': 'adminJobs.kinds.searchRebuildOwnership',
 };
 
 export const JOB_STATUS_LABEL: Record<AdminJobStatus, MessageKey> = {

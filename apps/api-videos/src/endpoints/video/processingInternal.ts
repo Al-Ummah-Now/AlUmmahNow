@@ -5,10 +5,11 @@
  * endpoints/processing). Not part of the public contract.
  *
  *   GET  /internal/processing/videos?status=stuck|processing|failed|all&bunny=1&limit=
- *   GET  /internal/processing/errors       failed/flagged videos + dead-lettered checks + failed thumbnail runs
+ *   GET  /internal/processing/errors       failed/flagged videos + dead-lettered checks + failed thumbnail runs + index drift
  *   GET  /internal/processing/thumbnails   recent thumbnail aspect repair runs (admin jobs)
  *   POST /internal/processing/thumbnails   { ids?: string[], dryRun?: boolean, actorId } → queued run (dry run by default)
  *   POST /internal/processing/thumbnails/:jobId/retry  resume a failed run
+ *   POST /internal/processing/index-rebuild  { kind, actorId } → queued ownership index rebuild (Errors page drift flag)
  *   POST /internal/processing/sync         { ids: string[], dryRun?: boolean } (apply = queue the check now)
  *   POST /internal/processing/retry        { ids: string[] }
  *   POST /internal/processing/mark-failed  { ids: string[], reason?: string }
@@ -28,6 +29,9 @@ import {
 import { announceAndRecordProcessingResult, pendingProcessingResult } from '../../lib/notification-events';
 import { createJob, getJob, listJobs, retryJob, type JobEnv } from '../../lib/admin/jobs';
 import { THUMBNAIL_REPAIR_JOB, THUMBNAIL_REPAIR_TARGET, isStillFlagged, latestFlagged, type FlaggedThumbnails } from '../../lib/thumbnail/repair';
+import { readOwnershipDrift } from '../../lib/search/ownership';
+import { isOwnershipKind, ownershipRebuildJobs, startOwnershipRebuild, type OwnershipRebuildEnv } from '../../lib/search/ownershipRebuild';
+import type { AdminJob, OwnershipDrift } from '@al-ummah/shared-types';
 
 const MAX_IDS = 100;
 
@@ -99,6 +103,21 @@ async function flaggedThumbnails(env: JobEnv & { videos: R2Bucket }): Promise<(F
 	} catch (error) {
 		logger.warn('[ProcessingAdmin] Flagged thumbnails unavailable', { error: error instanceof Error ? error.message : String(error) });
 		return null;
+	}
+}
+
+/**
+ * Ownership index drift flags (a finished pass found the index short of the
+ * objects in R2), each with its latest rebuild job. Empty when unreadable.
+ */
+async function indexDrift(env: OwnershipRebuildEnv): Promise<Array<OwnershipDrift & { rebuild: AdminJob | null }>> {
+	if (!env.SEARCH_DB) return [];
+	try {
+		const flags = await readOwnershipDrift(env.SEARCH_DB);
+		return await Promise.all(flags.map(async (flag) => ({ ...flag, rebuild: (await ownershipRebuildJobs(env, flag.kind, 1))[0] ?? null })));
+	} catch (error) {
+		logger.warn('[ProcessingAdmin] Index drift unavailable', { error: error instanceof Error ? error.message : String(error) });
+		return [];
 	}
 }
 
@@ -257,6 +276,7 @@ export function createProcessingInternalRouter() {
 				erasureDeadLetters,
 				thumbnailRuns: await failedThumbnailRuns(c.env as unknown as JobEnv),
 				thumbnailFlagged: await flaggedThumbnails(c.env as never),
+				indexDrift: await indexDrift(c.env as unknown as OwnershipRebuildEnv),
 				reconciler: await readSweepStats(c.env),
 			},
 		});
@@ -291,6 +311,17 @@ export function createProcessingInternalRouter() {
 		if (!existing || existing.kind !== THUMBNAIL_REPAIR_JOB) return c.json({ success: false, error: 'Unknown thumbnail run' }, 404);
 		if (existing.status !== 'failed') return c.json({ success: false, error: 'Only a failed run can be retried' }, 409);
 		return c.json({ success: true, result: { job: await retryJob(env, existing.id) } });
+	});
+
+	// Ownership index rebuild (lib/search/ownershipRebuild.ts): the Errors page's "Index out of sync" Rebuild
+	app.post('/index-rebuild', async (c) => {
+		const body = ((await c.req.json().catch(() => null)) ?? {}) as { kind?: unknown; actorId?: unknown };
+		if (!isOwnershipKind(body.kind)) return c.json({ success: false, error: 'kind must be video, channel or profile' }, 400);
+		const env = c.env as unknown as OwnershipRebuildEnv;
+		if (!env.SEARCH_DB) return c.json({ success: false, error: 'SEARCH_DB is not bound' }, 503);
+		const actorId = typeof body.actorId === 'string' && body.actorId ? body.actorId.slice(0, 128) : 'admin';
+		const { job, existing } = await startOwnershipRebuild(env, body.kind, actorId);
+		return c.json({ success: true, result: { job, existing } }, existing ? 200 : 202);
 	});
 
 	app.post('/retry', async (c) => {

@@ -38,9 +38,50 @@ export const OWNERSHIP_ADMIN_COLS_VERSION = 1;
 
 export const OWNERSHIP_TABLE = 'content_ownership';
 
-/** search_meta key set when a full ownership pass of a bucket has completed. */
+/**
+ * search_meta key set when a full ownership pass of a bucket has completed.
+ * v2: markers written before passes counted skipped objects (2026-11-10: a
+ * pass dropped 345 videos and a channel yet marked the kinds complete) are
+ * not trusted; readers rebuild once and the fixed pass writes the v2 marker.
+ */
 export function ownershipCompleteKey(kind: OwnershipKind): string {
+  return `ownership:complete:v2:${kind}`;
+}
+
+/** The pre-v2 completeness marker (deleted by the next finished pass). */
+export function legacyOwnershipCompleteKey(kind: OwnershipKind): string {
   return `ownership:complete:${kind}`;
+}
+
+/** search_meta key of the kind's index drift flag (see OwnershipDrift). */
+export function ownershipDriftKey(kind: OwnershipKind): string {
+  return `ownership:drift:${kind}`;
+}
+
+/** Most ids of skipped objects a drift flag names (the rest are counted). */
+export const OWNERSHIP_DRIFT_SAMPLE = 20;
+
+/**
+ * Set by a finished ownership pass whose index does not hold every object it
+ * listed in R2 (`indexed < stored`), or that skipped or failed to read some
+ * of them; cleared by the next pass that indexes all of them. The admin
+ * Errors page shows it with a Rebuild that queues the
+ * 'search.rebuild-ownership' admin job.
+ */
+export interface OwnershipDrift {
+  kind: OwnershipKind;
+  /** Objects of this kind the pass listed in R2 */
+  stored: number;
+  /** Index rows of this kind after the pass */
+  indexed: number;
+  /** Listed objects the pass could not index (no row, unreadable as this entity, or blocked by a delete) */
+  skipped: number;
+  /** Listed objects the pass could not read */
+  failed: number;
+  /** Up to OWNERSHIP_DRIFT_SAMPLE ids of skipped or failed objects */
+  sampleIds: string[];
+  /** When the pass finished (ISO) */
+  at: string;
 }
 
 /**

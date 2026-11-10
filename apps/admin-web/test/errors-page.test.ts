@@ -5,7 +5,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { canManageErrors, canReadErrors } from '../src/lib/roles';
-import { errorGroupsQuery, errorsBadgeCount, errorsHref, parseErrorFilters, searchedRef, thumbnailFixHref } from '../src/app/(protected)/errors/filters';
+import { errorGroupsQuery, errorsBadgeCount, errorsHref, indexItemHref, parseErrorFilters, searchedRef, thumbnailFixHref } from '../src/app/(protected)/errors/filters';
 import { shapesMatch } from '@al-ummah/shared-types';
 import { groupActionsFor, itemActionsFor, itemHref } from '../src/app/(protected)/errors/permissions';
 import en from '../src/i18n/messages/en';
@@ -158,5 +158,30 @@ describe('thumbnails that do not match their video (owner edits them by hand)', 
       assert.ok(m.content.errors.thumbnail_shape);
     }
     assert.match(en.processing.thumbsIntro, /imported thumbnails are only flagged/);
+  });
+});
+
+describe('index out of sync (ownership index drift)', () => {
+  it('skipped items link to their admin page', () => {
+    assert.equal(indexItemHref('video', '0356d681-f59d-4329-8f95-18f8b45fbc91'), '/videos/0356d681-f59d-4329-8f95-18f8b45fbc91');
+    assert.equal(indexItemHref('channel', '33e31062-9628-4e41-8b3b-1a5828c041cd'), '/channels/33e31062-9628-4e41-8b3b-1a5828c041cd');
+    assert.equal(indexItemHref('profile', 'usr_1/x'), '/users/usr_1%2Fx');
+  });
+
+  it('section, columns and Rebuild are labelled in English and Arabic', () => {
+    const keys = [
+      'indexTitle', 'indexHint', 'indexCaption', 'indexKindVideo', 'indexKindChannel', 'indexKindProfile', 'colIndex', 'colStored', 'colIndexed',
+      'colSkipped', 'colUnreadable', 'colExamples', 'rebuild', 'rebuilding', 'rebuildQueued', 'rebuildRunning', 'rebuildFailed', 'rebuildStatus',
+    ] as const;
+    for (const key of keys) {
+      const e = (en.errorsPage as Record<string, string>)[key];
+      const a = (ar.errorsPage as Record<string, string>)[key];
+      assert.ok(e && !ARABIC.test(e), `en errorsPage.${key}`);
+      assert.ok(a && ARABIC.test(a), `ar errorsPage.${key}`);
+    }
+    for (const m of [en, ar]) {
+      assert.match(m.errorsPage.indexHint, /\{when\}/);
+      assert.match(m.errorsPage.rebuildStatus, /\{status\}/);
+    }
   });
 });

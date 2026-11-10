@@ -120,4 +120,20 @@ describe('/api/processing', () => {
     const mod = setup(['moderator']);
     assert.equal((await mod.req('/api/processing/thumbnails', post({}))).status, 403);
   });
+
+  it('index rebuild is audited and goes through to api-videos; bad kinds and moderators are refused', async () => {
+    const { req, calls, audit } = setup(['admin']);
+    const res = await req('/api/processing/index-rebuild', post({ kind: 'video' }));
+    assert.equal(res.status, 202);
+    assert.equal(calls[0].path, '/internal/processing/index-rebuild');
+    assert.deepEqual(calls[0].body, { kind: 'video', actorId: 'admin-1' });
+    const rows = await audit();
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].key, `${PROCESSING_AUDIT_PREFIX}ownership-index`);
+    assert.equal(JSON.parse(rows[0].new_value).action, 'rebuild_ownership_index');
+    assert.equal((await req('/api/processing/index-rebuild', post({ kind: 'posts' }))).status, 400);
+    assert.equal(calls.length, 1);
+    const mod = setup(['moderator']);
+    assert.equal((await mod.req('/api/processing/index-rebuild', post({ kind: 'video' }))).status, 403);
+  });
 });
