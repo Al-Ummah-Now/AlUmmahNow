@@ -1,6 +1,6 @@
 import type { ScheduledVideoMetadata } from '@al-ummah/shared-types';
 import type { Env, FailedVideo } from './types';
-import { markAsFailed } from './publisher';
+import { buildScheduleKey, markAsFailed } from './publisher';
 import { sendFailureNotification } from './notifier';
 import { logger } from './lib/logger';
 import { logEvent } from './monitoring';
@@ -22,8 +22,13 @@ export async function scheduleRetries(
     if (retryCount >= maxRetries) {
       // Mark as permanently failed
       logger.error(`Video ${video.videoId} exceeded max retries (${maxRetries})`);
-      await markAsFailed(env.SCHEDULED_VIDEOS, video, error);
-      await sendFailureNotification(env, video, error);
+      try {
+        // Out of the schedule for good (SC-3), so the owner is told once
+        await markAsFailed(env.SCHEDULED_VIDEOS, video, error);
+        await sendFailureNotification(env, video, error);
+      } catch (moveError) {
+        logger.error(`Failed to move video ${video.videoId} to the failed list:`, moveError);
+      }
       continue;
     }
 
@@ -45,7 +50,7 @@ export async function scheduleRetries(
       };
 
       // Save to scheduled bucket with new time
-      await rescheduleVideo(env.SCHEDULED_VIDEOS, updatedMetadata, retryTime);
+      await rescheduleVideo(env.SCHEDULED_VIDEOS, updatedMetadata, retryTime, video.scheduledPublishDate);
 
       // Log the retry (not sent to the queue: the processor rejects these objects)
       logEvent({
@@ -70,44 +75,29 @@ export async function scheduleRetries(
 export async function rescheduleVideo(
   scheduledBucket: R2Bucket,
   metadata: ScheduledVideoMetadata,
-  newTime: Date
+  newTime: Date,
+  /** Where the entry is now (defaults to metadata.scheduledPublishDate) */
+  fromDate: string = metadata.scheduledPublishDate
 ): Promise<void> {
   try {
-    // Remove old schedule entry
-    const oldDate = new Date(metadata.scheduledPublishDate);
-    const oldKey = buildScheduleKey(oldDate, metadata.videoId);
-    await scheduledBucket.delete(oldKey);
-
-    // Create new schedule entry
+    // New entry first, then remove the old one: a crash in between leaves a
+    // duplicate (harmless: publishing is idempotent), never no entry at all
+    const oldKey = buildScheduleKey(new Date(fromDate), metadata.videoId);
     const newKey = buildScheduleKey(newTime, metadata.videoId);
     await scheduledBucket.put(
       newKey,
-      JSON.stringify(metadata),
+      JSON.stringify({ ...metadata, scheduledPublishDate: newTime.toISOString() }),
       {
         httpMetadata: {
           contentType: 'application/json',
         },
       }
     );
+    if (oldKey !== newKey) await scheduledBucket.delete(oldKey);
 
     logger.info(`Rescheduled video ${metadata.videoId} from ${oldKey} to ${newKey}`);
   } catch (error) {
     logger.error(`Failed to reschedule video ${metadata.videoId}:`, error);
     throw error;
   }
-}
-
-/**
- * Build R2 key for a scheduled video
- * @param date Scheduled date
- * @param videoId Video ID
- * @returns R2 key string
- */
-function buildScheduleKey(date: Date, videoId: string): string {
-  const year = date.getUTCFullYear();
-  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(date.getUTCDate()).padStart(2, '0');
-  const hour = String(date.getUTCHours()).padStart(2, '0');
-
-  return `${year}-${month}-${day}/${hour}/${videoId}.json`;
 }
