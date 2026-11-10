@@ -351,6 +351,22 @@ async function measureInk(page: Page, target: Locator, part: 'self' | 'before' |
 
 }
 
+/**
+ * Resolves once every animation and transition in the target (and under it) has finished, plus
+ * one painted frame: slide-ins and height changes are measured at rest, however slow the runner.
+ */
+export async function animationsDone(target: Locator): Promise<void> {
+  await target.evaluate(async (el) => {
+    for (let round = 0; round < 5; round++) {
+      const running = el.getAnimations({ subtree: true }).filter((a) => a.playState !== 'finished');
+      if (running.length === 0) break;
+      // A cancelled animation rejects `finished`; it is not running any more either way
+      await Promise.all(running.map((a) => a.finished.catch(() => undefined)));
+    }
+    await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
+  });
+}
+
 export async function layoutBox(l: Locator): Promise<Box> {
   const r = await rect(l);
   return box(r.x, r.y, r.width, r.height);

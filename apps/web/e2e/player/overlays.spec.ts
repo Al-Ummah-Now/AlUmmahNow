@@ -11,7 +11,7 @@
  * chips, the X and Escape only) and the caption style dialog are checked here too.
  */
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { layoutBox, openHarness, pauseAt, startPlayback } from './harness';
+import { animationsDone, layoutBox, openHarness, pauseAt, startPlayback } from './harness';
 
 const TOLERANCE = 1;
 
@@ -89,7 +89,7 @@ async function openSettings(page: Page, player: Locator) {
   await player.locator('.vjs-fanous-settings').click();
   const menu = page.getByTestId('player-settings-menu');
   await expect(menu).toBeVisible();
-  await page.waitForTimeout(300);
+  await animationsDone(menu);
   return menu;
 }
 
@@ -120,12 +120,16 @@ for (const lang of ['en', 'ar'] as const) {
       // It keeps its place over the frame when the page scrolls under it
       const offset = { x: box.right - frame.right, y: box.bottom - frame.bottom };
       await page.evaluate(() => window.scrollBy(0, 120));
-      await page.waitForTimeout(200);
       const scrolled = await layoutBox(player);
       expect(scrolled.y, 'the page scrolled').toBeLessThan(frame.y - 50);
+      // The panel follows on the scroll event, which WebKit dispatches on a later rendering update
+      // (a fixed 200ms wait missed it on a loaded runner): wait for it to follow, then measure
+      await expect.poll(async () => Math.round((await layoutBox(menu)).bottom - (await layoutBox(player)).bottom), { timeout: 5_000 })
+        .toBe(Math.round(offset.y));
       const moved = await layoutBox(menu);
-      near(moved.right - scrolled.right, offset.x, 'menu keeps its inline place over the frame after scroll');
-      near(moved.bottom - scrolled.bottom, offset.y, 'menu keeps its place above the bar after scroll');
+      const now = await layoutBox(player);
+      near(moved.right - now.right, offset.x, 'menu keeps its inline place over the frame after scroll');
+      near(moved.bottom - now.bottom, offset.y, 'menu keeps its place above the bar after scroll');
     });
 
     test('the progress tooltip (time and chapter) sits above the page', async ({ page }) => {

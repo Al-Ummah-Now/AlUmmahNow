@@ -5,7 +5,7 @@
  * left. Anything more than 1px off fails.
  */
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { inkBox, layoutBox, openHarness, pauseAt, startPlayback, type Box } from './harness';
+import { animationsDone, inkBox, layoutBox, openHarness, pauseAt, startPlayback, type Box } from './harness';
 
 const TOLERANCE = 1;
 /** Optical nudge of play triangles: 7% of the icon width, rounded to whole pixels (player-skin.css) */
@@ -59,8 +59,9 @@ async function openMenu(page: Page, player: Locator) {
   // view; a viewer's click does not. Measure the page as the viewer sees it.
   await page.evaluate(() => window.scrollTo(0, 0));
   await parkPointer(page);
-  // Let the slide-in finish before measuring
-  await page.waitForTimeout(350);
+  // Let the slide-in finish before measuring: a fixed wait was too short for WebKit on a loaded
+  // runner, which measured rows mid-slide (17px past the panel's edge)
+  await animationsDone(menu);
   return menu;
 }
 
@@ -156,17 +157,20 @@ for (const dpr of [1, 2]) {
           }, at);
           await page.waitForFunction(() => !document.querySelector<HTMLVideoElement>('.video-js video')!.seeking);
           await page.waitForTimeout(250);
-          // Video.js can still move the fill after the seek settles; a playhead read before the
-          // two ink captures is then compared with a handle drawn later. Measure until the fill is
-          // in the same place before and after the capture
+          // Video.js can still move the fill after the seek settles, and a capture can show a frame
+          // painted before its last layout (WebKit and stock Firefox drew the handle 2.7px from
+          // the playhead both layout reads agreed on). Measure until the layout and the drawn
+          // handle both hold still: the same fill before and after, and two captures that agree
           let track = await layoutBox(holder);
           let head = await layoutBox(played);
           let handle = await inkBox(page, played, 'before', 14);
-          for (let attempt = 0; attempt < 4; attempt++) {
+          for (let attempt = 0; attempt < 6; attempt++) {
             const [t2, h2] = [await layoutBox(holder), await layoutBox(played)];
-            if (t2.cy === track.cy && h2.right === head.right) break;
-            [track, head] = [t2, h2];
-            handle = await inkBox(page, played, 'before', 14);
+            const again = await inkBox(page, played, 'before', 14);
+            const settled = t2.cy === track.cy && h2.right === head.right
+              && Math.abs(again.cx - handle.cx) < 0.5 && Math.abs(again.cy - handle.cy) < 0.5;
+            [track, head, handle] = [t2, h2, again];
+            if (settled) break;
           }
           near(handle.cy, track.cy, `handle on the track at ${at}`);
           // The bar runs left to right in both directions, so the playhead is the fill's right edge
@@ -294,7 +298,7 @@ for (const dpr of [1, 2]) {
           const menu = await openMenu(page, player);
           await menu.locator(`[data-row="${sub}"]`).click();
           await parkPointer(page);
-          await page.waitForTimeout(350);
+          await animationsDone(menu);
           const rows = menu.locator('.vjs-fanous-mi');
           const count = await rows.count();
           expect(count).toBeGreaterThanOrEqual(3);
