@@ -27,8 +27,16 @@ interface CategorySelectorProps {
   aiSelected?: boolean;
   /** A suggestion is being worked out */
   suggesting?: boolean;
-  /** Offer "Keep" to confirm an AI-set category as the uploader's (edit form) */
+  /** Offer "Keep" to confirm an AI-set category as the uploader's (edit form, batch rows) */
   onConfirm?: () => void;
+  /** Label instead of "Video Category" */
+  label?: string;
+  /** Helper line under the picker (replaces the default one) */
+  hint?: string;
+  /** data-testid of the select (default "category-select") */
+  testId?: string;
+  /** Smaller label and no default helper text (batch rows) */
+  compact?: boolean;
 }
 
 export function CategorySelector({
@@ -41,6 +49,10 @@ export function CategorySelector({
   aiSelected = false,
   suggesting = false,
   onConfirm,
+  label,
+  hint,
+  testId = 'category-select',
+  compact = false,
 }: CategorySelectorProps) {
   const { isRTL } = useLanguage();
   const labelOf = (v: string) => {
@@ -58,11 +70,11 @@ export function CategorySelector({
   };
 
   return (
-    <div className="space-y-2">
-      <label htmlFor={id} className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+    <div className={compact ? 'space-y-1.5' : 'space-y-2'}>
+      <label htmlFor={id} className={`block font-medium text-foreground ${compact ? 'text-xs' : 'text-sm'}`}>
         <span className="flex items-center gap-2">
-          <Folder className="w-4 h-4" />
-          {isRTL ? 'تصنيف الفيديو' : 'Video Category'}
+          <Folder className={compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} aria-hidden="true" />
+          {label ?? (isRTL ? 'تصنيف الفيديو' : 'Video Category')}
           {required && <span className="text-red-500">*</span>}
         </span>
       </label>
@@ -70,7 +82,7 @@ export function CategorySelector({
       <div className="relative">
         <ThemedSelectField
           id={id}
-          data-testid="category-select"
+          data-testid={testId}
           value={value || ''}
           onChange={handleChange}
           disabled={disabled}
@@ -161,7 +173,9 @@ export function CategorySelector({
       )}
 
       {/* Helper Text */}
-      {value && !aiSelected && (
+      {hint ? (
+        <p className="text-xs text-muted-foreground">{hint}</p>
+      ) : value && !aiSelected && !compact && (
         <p className="text-xs text-muted-foreground">
           {isRTL
             ? 'يساعد التصنيف المشاهدين في العثور على المحتوى'

@@ -11,6 +11,10 @@ import { UploadModeTabs, UPLOAD_MODE_PANEL_ID, UPLOAD_MODE_TAB_ID, type UploadMo
 import { VIDEO_UPLOAD_CONFIG } from "@/lib/constants/uploadConfig";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useBatchUpload } from "@/hooks/useBatchUpload";
+import { useBatchCategories } from "@/hooks/useBatchCategories";
+import { CategorySelector } from "@/components/videoUpload/CategorySelector";
+import { waitsForSuggestion } from "@/lib/category-suggestion/batch";
+import type { UploadQueueItem, VideoCategory } from "@al-ummah/shared-types";
 import { MAX_BATCH_FILES, isFinishedRow } from "@/lib/upload/batch-selection";
 import { UploadProcessingCard } from "@/components/videoUpload/UploadProcessingCard";
 import { useProcessingStatus } from "@/hooks/useProcessingStatus";
@@ -52,6 +56,9 @@ const UploadPage: React.FC = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Batch category: a default for every video, each row can have its own
+  const [batchCategory, setBatchCategory] = useState<VideoCategory | undefined>(undefined);
+  const batchSharedMetadata = useMemo(() => ({ category: batchCategory }), [batchCategory]);
 
   // Batch upload hook
   const {
@@ -73,6 +80,7 @@ const UploadPage: React.FC = () => {
     clearFinished,
   } = useBatchUpload({
     channelId: uploadChannelId,
+    sharedMetadata: batchSharedMetadata,
     onUploadComplete: (videoId) => {
       logger.debug('Video uploaded:', videoId);
     },
@@ -104,6 +112,40 @@ const UploadPage: React.FC = () => {
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [batchBytesInFlight]);
+
+  const { rows: categoryRows, pick: pickRowCategory } = useBatchCategories(files, batchCategory, uploadChannelId);
+  const renderRowCategory = (file: UploadQueueItem) => {
+    const row = file.videoId ? categoryRows[file.videoId] : undefined;
+    if (!file.videoId || !row) return null;
+    const videoId = file.videoId;
+    const saveText = row.save === 'saving' ? t.batch.categorySaving : row.save === 'saved' ? t.batch.categorySaved : row.save === 'failed' ? t.batch.categorySaveFailed : null;
+    return (
+      <>
+        <CategorySelector
+          id={`batch-category-${file.id}`}
+          testId="batch-file-category-select"
+          compact
+          label={t.batch.videoCategory}
+          value={row.category}
+          onChange={(category) => pickRowCategory(videoId, category)}
+          suggestion={row.suggestion}
+          aiSelected={row.aiApplied}
+          suggesting={waitsForSuggestion(row) && !row.category}
+          onConfirm={() => pickRowCategory(videoId, row.category)}
+        />
+        {saveText && (
+          <p
+            role="status"
+            data-testid="batch-file-category-save"
+            data-state={row.save}
+            className={`mt-1 text-xs ${row.save === 'failed' ? 'text-[var(--fanous-color-error-text)]' : 'text-muted-foreground'}`}
+          >
+            {saveText}
+          </p>
+        )}
+      </>
+    );
+  };
 
   const handleUploadComplete = (video: VideoObject) => {
     // A re-upload of a video this session already saw finish starts at "processing" again
@@ -429,6 +471,22 @@ const UploadPage: React.FC = () => {
               data-testid="batch-file-input"
             />
 
+            {/* Settings for the whole batch */}
+            <section className="mb-6 rounded-lg border border-border bg-background p-4" aria-labelledby="batch-settings-title" data-testid="batch-settings">
+              <h2 id="batch-settings-title" className="mb-3 text-sm font-semibold text-foreground">{t.batch.batchSettings}</h2>
+              <div className="max-w-md">
+                <CategorySelector
+                  id="batch-category-default"
+                  testId="batch-category-default"
+                  label={t.batch.categoryForAll}
+                  hint={t.batch.categoryForAllHint}
+                  value={batchCategory}
+                  onChange={setBatchCategory}
+                  disabled={isInitiating}
+                />
+              </div>
+            </section>
+
             {/* File Selection Area */}
             {files.length === 0 && !isInitiating && (
               <div className="mb-6">
@@ -478,6 +536,7 @@ const UploadPage: React.FC = () => {
                   onResumeFile={resumeUpload}
                   onCancelFile={cancelUpload}
                   onRetryFile={retryUpload}
+                  renderCategory={renderRowCategory}
                 />
               </div>
             )}

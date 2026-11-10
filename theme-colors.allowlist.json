@@ -222,7 +222,7 @@
   "apps/web/src/components/videoPreview/index.tsx": 9,
   "apps/web/src/components/videoPreview/rtl/index.tsx": 9,
   "apps/web/src/components/videoUpload/BatchUploadQueue.tsx": 57,
-  "apps/web/src/components/videoUpload/CategorySelector.tsx": 10,
+  "apps/web/src/components/videoUpload/CategorySelector.tsx": 8,
   "apps/web/src/components/videoUpload/FileQueueItem.tsx": 67,
   "apps/web/src/components/videoUpload/ScheduleDateTimeSelector.tsx": 57,
   "apps/web/src/components/videoUpload/TemplateSelector.tsx": 49,

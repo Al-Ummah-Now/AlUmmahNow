@@ -9,7 +9,9 @@
  * - one TUS upload per video (POST /api/videos/tus once), one video;
  * - the video reaches processing once;
  * - in a bulk batch, a file that fails transiently shows "reconnecting" and
- *   completes, and the other files complete around it.
+ *   completes, and the other files complete around it;
+ * - a bulk batch's default category and a row's own category (set before or
+ *   after its upload) are saved on the videos (en, ar).
  *
  * Small files in 5 MB chunks (the `aun:tus-chunk-size` override) so a few
  * chunks fit in a release run.
@@ -180,6 +182,60 @@ async function videoStatus(u: Uploader, videoId: string): Promise<string> {
   const body = (await res.json().catch(() => ({}))) as { result?: { status?: string } };
   return body.result?.status ?? `HTTP ${res.status}`;
 }
+
+/** The stored video's category and who set it, as its owner reads it. */
+async function storedCategory(u: Uploader, videoId: string): Promise<string> {
+  const res = await apiFetch(u.user, `/api/videos/${videoId}`, { headers: { channelId: u.channelId } });
+  const body = (await res.json().catch(() => ({}))) as { category?: string; categorySource?: string; result?: { category?: string; categorySource?: string; video?: { category?: string; categorySource?: string } } };
+  const v = body.result?.video ?? body.result ?? body;
+  return `${v.category ?? '-'}:${v.categorySource ?? '-'}`;
+}
+
+test.describe('Release: bulk upload categories', () => {
+  test.describe.configure({ timeout: 360000 });
+
+  for (const locale of ['en', 'ar'] as const) {
+    test(`a batch default and a per-row override are saved on the videos, before and after the upload (${locale})`, async ({ page }, testInfo) => {
+      const u = await uploader(page, `rel-bulk-cat-${locale}`);
+      const files = [1, 2].map((i) => paddedVideo(testInfo.outputDir, `bulk-cat-${locale}-${i}-${Date.now().toString(36)}.mp4`, 400000 * i));
+      const videoIds: string[] = [];
+      try {
+        await page.goto(`${target().web}/${locale}/upload`);
+        await page.getByTestId('upload-mode-batch').click();
+        await page.getByTestId('batch-category-default').selectOption('fiqh');
+        await page.getByTestId('batch-file-input').setInputFiles(files);
+        await expect(page.getByTestId('batch-queue')).toHaveAttribute('data-total', '2', { timeout: 60000 });
+
+        const rows = page.getByTestId('batch-file');
+        await expect(rows.nth(1).getByTestId('batch-file-category-select')).toHaveValue('fiqh', { timeout: 30000 });
+        for (let i = 0; i < 2; i++) {
+          const id = await rows.nth(i).getAttribute('data-video-id');
+          expect(id, 'row has its video').toBeTruthy();
+          videoIds.push(id as string);
+        }
+        // Each row starts from the default; one row gets its own before the upload
+        await expect(rows.nth(0).getByTestId('batch-file-category-select')).toHaveValue('fiqh');
+        await rows.nth(1).getByTestId('batch-file-category-select').selectOption('ramadan');
+        await expect(rows.nth(1).getByTestId('batch-file-category-save')).toHaveAttribute('data-state', 'saved', { timeout: 30000 });
+        await page.getByTestId('batch-settings').scrollIntoViewIfNeeded();
+        const shots = process.env.E2E_SCREENSHOT_DIR;
+        await page.screenshot({ path: shots ? path.join(shots, `batch-categories-${locale}-${testInfo.project.name}.png`) : testInfo.outputPath(`batch-categories-${locale}.png`), fullPage: true });
+
+        await page.getByTestId('batch-start').click();
+        await expect(page.getByTestId('batch-queue')).toHaveAttribute('data-completed', '2', { timeout: 240000 });
+
+        // ...and the other one after its upload finished
+        await rows.nth(0).getByTestId('batch-file-category-select').selectOption('aqeedah');
+        await expect(rows.nth(0).getByTestId('batch-file-category-save')).toHaveAttribute('data-state', 'saved', { timeout: 30000 });
+
+        await expect.poll(() => storedCategory(u, videoIds[0]), { timeout: 30000 }).toBe('aqeedah:uploader');
+        await expect.poll(() => storedCategory(u, videoIds[1]), { timeout: 30000 }).toBe('ramadan:uploader');
+      } finally {
+        for (const videoId of videoIds) await apiFetch(u.user, `/api/videos/${videoId}`, { method: 'DELETE', headers: { channelId: u.channelId } });
+      }
+    });
+  }
+});
 
 test.describe('Release: uploads resume', () => {
   test.describe.configure({ timeout: 360000 });
