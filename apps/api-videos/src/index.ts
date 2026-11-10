@@ -1,6 +1,7 @@
 import { reportServerError, withErrorReporting, type ErrorReporterEnv } from '@al-ummah/shared-types';
 import { SUBSCRIPTION_IMPORT_CRON, importPendingSubscriptions } from './lib/subscription-import';
 import { handleProcessingCheckBatch, sweepProcessingVideos } from './lib/processing/loop';
+import { handleReaperBatch, isReaperMessage, sweepStaleUploads } from './lib/uploads/reaper';
 
 /** Every 10 minutes: start a processing-check loop for any video stuck without one */
 export const PROCESSING_SWEEP_CRON = '*/10 * * * *';
@@ -31,6 +32,7 @@ import { buildContractDocument } from './lib/api-contract';
 import { sweepStalledUploads } from "./lib/uploads/lifecycle";
 import { createTusRouter } from "./endpoints/video/tus";
 import { createProcessingInternalRouter } from "./endpoints/video/processingInternal";
+import { createUploadsInternalRouter } from "./endpoints/video/uploadsInternal";
 // Profile/Channel image upload handlers (not in routers yet)
 import handleAvatarUpdate from "./endpoints/profile/profileAvatarUpdate";
 import handleCoverUpdate from "./endpoints/profile/profileCoverUpdate";
@@ -193,6 +195,8 @@ const tusRouter = createTusRouter();
 app.route('/api/videos/tus', tusRouter);
 // Processing health / repair (internal; admin-api proxies with RBAC + audit)
 app.route('/internal/processing', createProcessingInternalRouter() as never);
+// Stale uploads (abandoned placeholders, Bunny orphans): the reaper's admin side
+app.route('/internal/uploads', createUploadsInternalRouter() as never);
 
 // ==========================================
 // PROFILE/CHANNEL IMAGE UPLOADS
@@ -418,6 +422,14 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 		return;
 	}
 	if (controller?.cron === SUBSCRIPTION_IMPORT_CRON) {
+		// Hourly: the upload reaper's safety-net sweep (lib/uploads/reaper.ts);
+		// record writes go through the search-sync wrapper so an abandoned
+		// placeholder leaves the channel's lists.
+		ctx.waitUntil(
+			sweepStaleUploads(withSearchSync(rawEnv, ctx) as never).catch((error) =>
+				logger.error('[UploadReaper] Sweep failed', { error: error instanceof Error ? error.message : String(error) }),
+			),
+		);
 		// Hourly: move legacy channel subscriptions into D1 (SCALABILITY-AUDIT AV-4)
 		ctx.waitUntil(
 			importPendingSubscriptions(rawEnv as never)
@@ -508,7 +520,8 @@ async function handleFetch(request: Request, env: AppBindings, ctx: ExecutionCon
 /**
  * Queue consumers, by queue name (prod name, or with its -stage / -qa suffix):
  * - al-ummah-now-admin-jobs*: heavy admin actions (lib/admin/jobs.ts).
- * - otherwise the per-video processing-check loop (PROCESSING_CHECK_QUEUE).
+ * - otherwise PROCESSING_CHECK_QUEUE, which carries the per-video
+ *   processing-check loop and the upload reaper's checks (kind "upload-reaper").
  * R2 writes go through the search-sync wrapper so changes reach the search
  * index and ownership rows like any API write.
  */
@@ -518,7 +531,11 @@ async function queue(batch: MessageBatch<unknown>, env: AppBindings, ctx: Execut
 			await handleAdminJobBatch(batch as unknown as { messages: readonly JobMessage[] }, withSearchSync(env, ctx) as never, ADMIN_JOB_HANDLERS);
 			return;
 		}
-		await handleProcessingCheckBatch(batch, withSearchSync(env, ctx) as never);
+		const wrapped = withSearchSync(env, ctx) as never;
+		const reaper = batch.messages.filter((m) => isReaperMessage(m.body));
+		const processing = batch.messages.filter((m) => !isReaperMessage(m.body));
+		if (processing.length) await handleProcessingCheckBatch({ messages: processing }, wrapped);
+		if (reaper.length) await handleReaperBatch({ messages: reaper }, wrapped);
 	} catch (error) {
 		// The batch is retried by the queue; the failure is flagged on the admin Errors page
 		reportServerError('api-videos', env as never, ctx, error, { route: `queue:${batch.queue}`, extra: { messages: batch.messages.length } });

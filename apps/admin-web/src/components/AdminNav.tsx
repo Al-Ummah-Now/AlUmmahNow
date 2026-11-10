@@ -20,6 +20,8 @@ interface AdminNavProps {
   canProcess?: boolean;
   /** Legacy profiles item (the user has users:manage) */
   canManageUsers?: boolean;
+  /** Shows Stale uploads (the user has videos:uploads). */
+  canStaleUploads?: boolean;
 }
 
 const NAV_ITEMS: { href: string; label: MessageKey }[] = [
@@ -37,6 +39,7 @@ const NAV_ITEMS: { href: string; label: MessageKey }[] = [
   { href: '/site-theme', label: 'nav.siteTheme' },
   { href: '/contact', label: 'nav.contact' },
   { href: '/processing', label: 'nav.processing' },
+  { href: '/stale-uploads', label: 'nav.staleUploads' },
   { href: '/errors', label: 'nav.errors' },
   { href: '/jobs', label: 'nav.jobs' },
   { href: '/auth-requests', label: 'nav.authRequests' },
@@ -45,10 +48,16 @@ const NAV_ITEMS: { href: string; label: MessageKey }[] = [
 
 const PROCESSING_ITEMS = new Set(['/processing', '/errors']);
 
-export function AdminNav({ userEmail, authIssuer, contactNew = null, canProcess = false, canManageUsers = false }: AdminNavProps) {
+export function AdminNav({ userEmail, authIssuer, contactNew = null, canProcess = false, canManageUsers = false, canStaleUploads = false }: AdminNavProps) {
   const pathname = usePathname();
   const { t } = useLanguage();
-  const items = NAV_ITEMS.filter((i) => (i.href !== '/contact' || contactNew !== null) && (!PROCESSING_ITEMS.has(i.href) || canProcess) && (i.href !== '/legacy-profiles' || canManageUsers));
+  const items = NAV_ITEMS.filter(
+    (i) =>
+      (i.href !== '/contact' || contactNew !== null) &&
+      (!PROCESSING_ITEMS.has(i.href) || canProcess) &&
+      (i.href !== '/legacy-profiles' || canManageUsers) &&
+      (i.href !== '/stale-uploads' || canStaleUploads),
+  );
 
   // Most specific match wins, so /moderation/ai does not also highlight /moderation
   const activeHref = items.map((i) => i.href)

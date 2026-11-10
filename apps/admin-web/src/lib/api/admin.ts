@@ -23,6 +23,10 @@ import type {
   ProcessingVideosResponse,
   SyncResponse,
   ContactMailKind,
+  ReaperMode,
+  ReaperSweep,
+  StaleUploadActionResult,
+  StaleUploadsResponse,
 } from './types';
 
 export async function listReports(params?: ListReportsParams): Promise<ListReportsResponse> {
@@ -303,4 +307,30 @@ export async function getLegacyRestorePlan(): Promise<LegacyRestorePlan> {
 /** Runs the current dry run (every planned profile); admin-api audits each profile first. */
 export async function startLegacyRestore(): Promise<ActionResult<{ job: AdminJob }>> {
   return mutate('/api/content/legacy-profiles/restore', 'POST', {});
+}
+
+// Stale uploads: abandoned upload placeholders and Bunny orphans (admin-api videos:uploads)
+export async function getStaleUploads(status?: string): Promise<StaleUploadsResponse> {
+  const query = status ? `?status=${encodeURIComponent(status)}` : '';
+  return fetchAdmin<StaleUploadsResponse>(`/api/uploads/stale${query}`);
+}
+
+export async function scanStaleUploads(): Promise<ActionResult<ReaperSweep>> {
+  return mutate('/api/uploads/stale/scan', 'POST', {});
+}
+
+export async function deleteStaleUploads(ids: string[]): Promise<ActionResult<StaleUploadActionResult>> {
+  return mutate('/api/uploads/stale/delete', 'POST', { ids });
+}
+
+export async function keepStaleUploads(ids: string[]): Promise<ActionResult<StaleUploadActionResult>> {
+  return mutate('/api/uploads/stale/keep', 'POST', { ids });
+}
+
+export async function retryStaleUploads(ids: string[]): Promise<ActionResult<StaleUploadActionResult>> {
+  return mutate('/api/uploads/stale/retry', 'POST', { ids });
+}
+
+export async function setReaperMode(mode: ReaperMode): Promise<ActionResult<{ mode: ReaperMode }>> {
+  return mutate('/api/uploads/stale/mode', 'POST', { mode });
 }

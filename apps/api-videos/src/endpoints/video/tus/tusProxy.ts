@@ -333,7 +333,10 @@ export class TusProxy {
       try {
         const object = await this.env.videos.get(videoId);
         if (!object) return c.json({ error: 'Video not found' }, 404);
-        videoStatus = ((await object.json()) as { uploadStatus?: string }).uploadStatus;
+        const record = (await object.json()) as { uploadStatus?: string; abandoned?: unknown; isDeleted?: boolean };
+        // Abandoned by the upload reaper (deleted at Bunny): gone, like a deleted video
+        if (record.abandoned || record.isDeleted) return c.json({ error: 'Video not found' }, 404);
+        videoStatus = record.uploadStatus;
       } catch (error) {
         logger.warn('[TUS Proxy] Video record unavailable on POST', { videoId, error: error instanceof Error ? error.message : String(error) });
         return this.retryLater('Video store unavailable, retry');

@@ -83,4 +83,16 @@ describe('buildBatchUploadEntries', () => {
       authorization: 'Bearer token',
     })).toThrow(/Missing TUS session/);
   });
+
+  it('resumes a reused video at its earlier upload (tusUploadId)', () => {
+    const [entry] = buildBatchUploadEntries({
+      files: [file('again.mp4')],
+      sessions: [{ ...session(1), reused: true, tusUploadId: 'up1.video-1' }],
+      apiUrl: 'https://api.example.com',
+      authorization: 'Bearer t',
+    });
+    expect(entry.tusConfig.uploadUrl).toBe('https://api.example.com/api/videos/tus/up1.video-1');
+    const [plain] = buildBatchUploadEntries({ files: [file('new.mp4')], sessions: [session(2)], apiUrl: 'https://api.example.com', authorization: 'Bearer t' });
+    expect(plain.tusConfig.uploadUrl).toBeUndefined();
+  });
 });

@@ -7,6 +7,7 @@ import { UploadOptimizer } from '@/lib/upload/UploadOptimizer';
 import { buildBatchUploadEntries, getTusProxyEndpoint } from '@/lib/upload/batch-entries';
 import { grantedUploadUrl, requestUploadResume, type ReauthoriseResult } from '@/lib/upload/resilient-tus';
 import { findRememberedUpload, forgetUpload, rememberUpload } from '@/lib/upload/resume-store';
+import { tryFileFingerprint } from '@/lib/upload/fingerprint';
 import type { BatchUploadEntry } from '@/lib/upload/BatchUploadManager';
 import { hasActiveUploads } from '@/lib/upload/batch-status';
 import { initiateBatchUpload, completeVideoUpload } from '@/lib/api/upload-client';
@@ -229,15 +230,19 @@ export function useBatchUpload({
 
       let freshEntries: BatchUploadEntry[] = [];
       if (freshFiles.length > 0) {
+        // Fingerprints: the same file picked again (another tab or browser,
+        // storage cleared) reuses its unfinished video instead of a new one
+        const fingerprints = await Promise.all(freshFiles.map((file) => tryFileFingerprint(file)));
         // Initiate batch upload with backend (one TUS proxy session per file)
         const initiateResult = await initiateBatchUpload(
-          freshFiles.map(file => ({
+          freshFiles.map((file, index) => ({
             title: file.name.replace(/\.[^/.]+$/, ''),
             fileSize: file.size,
             mimeType: file.type,
             isPublic: sharedMetadata.isPublic ?? true,
             description: sharedMetadata.description,
             tags: sharedMetadata.tags?.join(','),
+            ...(fingerprints[index] ? { fingerprint: fingerprints[index] } : {}),
           })),
           channelId,
           {

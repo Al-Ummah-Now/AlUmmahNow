@@ -24490,6 +24490,35 @@
                             "auto"
                           ],
                           "description": "Upload as a Short or as a video; 'auto' (default) detects it from length and shape"
+                        },
+                        "fingerprint": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 512
+                            },
+                            "size": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0
+                            },
+                            "lastModified": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "hash": {
+                              "type": "string",
+                              "pattern": "^[a-f0-9]{64}$"
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "size",
+                            "lastModified",
+                            "hash"
+                          ],
+                          "description": "File fingerprint (name, size, lastModified, SHA-256 of the first and last MiB): retrying the same file reuses its unfinished video"
                         }
                       },
                       "required": [
@@ -24580,6 +24609,14 @@
                           "resumable": {
                             "type": "boolean",
                             "description": "Whether upload supports resume"
+                          },
+                          "reused": {
+                            "type": "boolean",
+                            "description": "True when an unfinished upload of the same file was reused (same videoId)"
+                          },
+                          "tusUploadId": {
+                            "type": "string",
+                            "description": "Proxy upload id of the reused video's earlier upload: resume at /api/videos/tus/<tusUploadId>"
                           }
                         },
                         "required": [
@@ -24647,6 +24684,31 @@
           },
           "500": {
             "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Another request is starting the same file's upload, or a store is unavailable: retry",
             "content": {
               "application/json": {
                 "schema": {
@@ -25160,6 +25222,35 @@
                       "type"
                     ],
                     "description": "Thumbnail configuration"
+                  },
+                  "fingerprint": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 512
+                      },
+                      "size": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0
+                      },
+                      "lastModified": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "hash": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "size",
+                      "lastModified",
+                      "hash"
+                    ],
+                    "description": "File fingerprint (name, size, lastModified, SHA-256 of the first and last MiB). With it, retrying the same file reuses its unfinished video (same id, upload resumed at its offset) instead of creating a new one."
                   }
                 },
                 "required": [
@@ -25200,6 +25291,18 @@
                         "resumable": {
                           "type": "boolean",
                           "description": "Whether upload supports resume"
+                        },
+                        "reused": {
+                          "type": "boolean",
+                          "description": "True when an unfinished upload of the same file was reused (same videoId)"
+                        },
+                        "tusUploadId": {
+                          "type": "string",
+                          "description": "Proxy upload id of the reused video's earlier upload: resume at /api/videos/tus/<tusUploadId>"
+                        },
+                        "expiresAt": {
+                          "type": "string",
+                          "description": "ISO 8601 datetime when the TUS session expires"
                         },
                         "thumbnailUrl": {
                           "type": "string",
@@ -25279,6 +25382,31 @@
           },
           "500": {
             "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Another request is starting the same file's upload, or a store is unavailable: retry",
             "content": {
               "application/json": {
                 "schema": {

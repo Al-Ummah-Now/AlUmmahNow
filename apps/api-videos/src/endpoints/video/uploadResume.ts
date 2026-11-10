@@ -111,7 +111,9 @@ export class UploadResumeEndpoint extends AuthenticatedRoute {
 			const repository = new R2Repository<VideoType>(bucket);
 			const video = await repository.getObject(videoId);
 
-			if (!video) {
+			// An abandoned placeholder (the upload reaper deleted it at Bunny) is gone too
+			const removed = video as (VideoType & { abandoned?: unknown; isDeleted?: boolean }) | null;
+			if (!video || removed?.abandoned || removed?.isDeleted) {
 				return c.json({
 					success: false,
 					error: "Video not found. Please initiate a new upload.",

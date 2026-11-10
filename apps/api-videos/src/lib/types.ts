@@ -119,6 +119,19 @@ export const Video = z.object({
         bunnyProgress: z.number().optional(),
         restarts: z.number().optional(),
     }).optional(),
+    // Idempotent initiate (lib/uploads/initiateOnce.ts); internal.
+    uploadFingerprint: z.string().optional(),
+    lastInitiateAt: z.string().optional(),
+    // Upload reaper (lib/uploads/reaper.ts): a placeholder whose bytes never
+    // arrived, deleted at Bunny and soft-removed here; internal.
+    abandoned: z.object({
+        at: z.string(),
+        reason: z.string(),
+        by: z.string(),
+        bunnyDeleted: z.boolean(),
+    }).optional(),
+    isDeleted: z.boolean().optional(),
+    deletedAt: z.string().optional(),
     tags: z.array(z.string()).default([]),
     category: z.nativeEnum(VideoCategory).optional(),
     language: z.enum(['en', 'ar', 'ur', 'fr']).optional(),

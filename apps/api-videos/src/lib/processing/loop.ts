@@ -469,6 +469,8 @@ export async function sweepProcessingVideos(env: ProcessingEnv, opts: { now?: Da
 	stats.source = candidates.source;
 	{
 		for (const video of candidates.videos) {
+			// Abandoned by the upload reaper (lib/uploads/reaper.ts): gone, not stuck
+			if ((video as { abandoned?: unknown }).abandoned) continue;
 			if (video.processingIssue?.kind === 'needs_reupload') stats.flagged.needsReupload++;
 			else if (video.processingIssue?.kind === 'stalled') stats.flagged.stalled++;
 			else if (video.uploadStatus === 'failed') stats.flagged.failed++;
