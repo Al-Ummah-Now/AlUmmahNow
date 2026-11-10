@@ -3,9 +3,12 @@
  * promotion. Both exist on QA and stage only and need X-E2E-Secret.
  */
 import { readSinkCode as readFromSink } from '../test-utils/code-sink';
-import { target } from './targets';
+import { readResendCode } from './resend-code';
+import { releaseEnv, target } from './targets';
 
-export function readSinkCode(email: string, timeoutMs = 20000): Promise<string> {
+/** The email code for `email`: the E2E sink on QA/stage, the Resend API on production. */
+export function readSinkCode(email: string, timeoutMs = 20000, sentAfter = Date.now() - 60000): Promise<string> {
+  if (releaseEnv() === 'production') return readResendCode(email, sentAfter, Math.max(timeoutMs, 60000));
   return readFromSink(target().auth, email, timeoutMs);
 }
 

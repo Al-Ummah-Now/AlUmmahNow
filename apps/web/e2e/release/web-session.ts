@@ -57,9 +57,10 @@ export async function completeRegistration(page: Page, email: string): Promise<v
   await page.fill('input[name="email"]', email);
   await fillSecret(page.locator('input[name="password"]'), TEST_PASSWORD);
   await fillSecret(page.locator('input[name="repeat"]'), TEST_PASSWORD);
+  const sentAfter = Date.now();
   await page.click('button[data-component="button"]');
   await expect(page.locator('input[name="code"]')).toBeVisible({ timeout: 20000 });
-  await fillSecret(page.locator('input[name="code"]'), await readSinkCode(email));
+  await fillSecret(page.locator('input[name="code"]'), await readSinkCode(email, 20000, sentAfter));
   await page.click('button[data-component="button"]');
 }
 

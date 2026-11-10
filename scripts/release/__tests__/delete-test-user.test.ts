@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { assertTestAddress, deleteStatements, kvPrefixes } from '../delete-test-user.ts';
+import { assertTestAddress, deleteStatements, kvPrefixes, profileObjectPath } from '../delete-test-user.ts';
 
 describe('assertTestAddress', () => {
 	it('accepts only release test addresses', () => {
@@ -38,6 +38,17 @@ describe('deleteStatements', () => {
 		for (const x of s) {
 			assert.ok(!x.sql.includes('u1'));
 			assert.deepEqual(x.params, ["u1'; DROP TABLE users; --"]);
+		}
+	});
+});
+
+describe('profileObjectPath', () => {
+	it('addresses the user\'s object in the production profiles bucket', () => {
+		assert.equal(profileObjectPath('usr_0123456789abcdef0123456789abcdef'), '/r2/buckets/profiles/objects/usr_0123456789abcdef0123456789abcdef');
+	});
+	it('refuses anything that is not an auth user id (no other object can be targeted)', () => {
+		for (const bad of ['', 'usr_', '../videos/x', 'usr_0123456789abcdef0123456789abcdef/../x', 'channel_1']) {
+			assert.throws(() => profileObjectPath(bad), /refusing/);
 		}
 	});
 });
