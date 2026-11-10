@@ -644,6 +644,21 @@ E2E_ENV=qa E2E_CODE_SINK_SECRET=... TEST_PROMOTE_SECRET=... npx playwright test 
 The suite tests the deployed environment, not the PR's code: a fix only turns
 its spec green after it is deployed to QA (merge to `main`).
 
+#### Production test data
+
+Only throwaway `test-<purpose>-<ms>[-<hex>]@delivered.resend.dev` accounts may
+touch production, and every one is deleted from every store when its run ends,
+pass or fail: list the address in a file before registering it and run
+`scripts/release/delete-test-user.ts <file>` in an `always()` step or an exit
+trap (`scripts/e2e/token-revocation.sh prod` does this). It removes the auth
+user, sessions, roles and KV entries, the videos profile, watch history and
+channels with their search rows (`scripts/release/prod-test-data.ts`), and
+refuses accounts that own videos or playlists (those go through
+`DELETE /api/privacy/data` as the user). `scripts/release/check-prod-test-data.ts`
+fails when anything is left; it runs after every production test run and daily
+(`prod-test-data.yml`, which also deletes what it finds). Never create
+channels, uploads or other content on production from a probe script.
+
 #### Legacy E2E suite
 
 `.github/workflows/e2e-tests.yml` (`apps/web/playwright.config.ts`, every other

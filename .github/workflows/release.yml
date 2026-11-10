@@ -369,6 +369,15 @@ jobs:
             echo "no production test accounts were created"
           fi
 
+      # Guard: nothing a test account created may stay on production, from this run or any
+      # other (a probe run by hand included). Deletes what it finds, then still fails the job.
+      - name: Production holds no test data
+        if: always()
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node --experimental-strip-types --no-warnings scripts/release/check-prod-test-data.ts --delete
+
       - name: Roll back (signed-in check failed)
         if: failure() && steps.signedin.outcome == 'failure'
         env:
