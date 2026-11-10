@@ -129,7 +129,10 @@ async function openReport(page: Page, where: string): Promise<void> {
     const more = row.locator('button[aria-haspopup="menu"]');
     await expect(more, `${where}: no report button and no "more" menu`).toBeVisible();
     await more.click();
-    await row.getByRole('menuitem', { name: REPORT }).click();
+    // The menu may render outside the row (a portal): find it through the button
+    const menuId = await more.getAttribute('aria-controls');
+    const menu = menuId ? page.locator(`[id="${menuId}"]`) : page.getByRole('menu');
+    await menu.getByRole('menuitem', { name: REPORT }).click();
   }
   const dialog = page.locator('[role="dialog"][aria-labelledby="report-content-title"]');
   await expect(dialog, `${where}: report dialog`).toBeVisible();
