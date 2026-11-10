@@ -22,6 +22,7 @@ import { CommentCreate } from '../src/endpoints/video/commentCreate';
 import { errorHandler } from '../src/middleware/error-handler';
 import { channelIdMiddleware, channelRefusesWrite } from '../src/middleware/auth';
 import { CreateCommunityPost } from '../src/endpoints/community/create-post';
+import { LiveStreamsList } from '../src/endpoints/live/liveStreamsList';
 import { MemoryBucket, MemoryQueue, commentFixture, videoFixture } from './helpers';
 import { SqliteD1 } from './search-sqlite-d1';
 
@@ -195,6 +196,7 @@ describe('channel actions', () => {
 			await next();
 		});
 		app.use('/api/*', channelIdMiddleware);
+		app.patch('/api/live-streams/:id', (c) => c.json({ success: true }));
 		const router = fromHono(app);
 		router.post('/api/community/channels/:channelId/posts', CreateCommunityPost);
 		for (const [method, path] of [['POST', '/api/videos/upload/initiate'], ['POST', '/api/videos/v1/watch-time'], ['DELETE', '/api/videos/v1']]) {
@@ -204,7 +206,22 @@ describe('channel actions', () => {
 			app.request(path, { method, headers: { 'Content-Type': 'application/json', channelId: 'ch1' }, ...(body ? { body: JSON.stringify(body) } : {}) }, env as never);
 
 		assert.equal((await asChannel('POST', '/api/videos/upload/initiate')).status, 200);
+		await (env as any).videos.put('livestream:ls1', JSON.stringify({ id: 'ls1', channelId: 'ch1', userId: OWNER, title: 'Live dars', status: 'live', isPrivate: false }));
+		const liveApp = (userId: string | null) => {
+			const live = new Hono();
+			live.use('*', async (c, next) => {
+				if (userId) c.set('auth' as never, { userId, payload: {} } as never);
+				await next();
+			});
+			fromHono(live).get('/api/live-streams', LiveStreamsList);
+			return async () => (await live.request('/api/live-streams', {}, env as never)).json();
+		};
+		const liveIds = async (userId: string | null) => JSON.stringify(await liveApp(userId)());
+		assert.match(await liveIds(null), /ls1/);
 		await call('POST', '/channels/ch1/suspend', { reason: 'Copyright' });
+		assert.doesNotMatch(await liveIds(null), /ls1/, 'the suspended channel\'s live stream is hidden from the public');
+		assert.match(await liveIds(OWNER), /ls1/, 'its owner still sees it');
+		assert.equal((await asChannel('PATCH', '/api/live-streams/ls1')).status, 403);
 
 		const upload = await asChannel('POST', '/api/videos/upload/initiate');
 		assert.equal(upload.status, 403);
@@ -217,10 +234,11 @@ describe('channel actions', () => {
 
 		await call('POST', '/channels/ch1/unsuspend');
 		assert.equal((await asChannel('POST', '/api/videos/upload/initiate')).status, 200);
+		assert.match(await liveIds(null), /ls1/, 'unsuspend restores the live stream');
 	});
 
 	it('which channel requests count as publishing', () => {
-		for (const [method, path] of [['POST', '/api/videos'], ['POST', '/api/videos/upload'], ['POST', '/api/videos/upload/batch/initiate'], ['POST', '/api/videos/tus'], ['PATCH', '/api/videos/tus/abc'], ['POST', '/api/videos/v1/publish-now'], ['PATCH', '/api/videos/v1/schedule'], ['POST', '/api/live-streams'], ['POST', '/api/playlists'], ['POST', '/api/community/media/upload/images']]) {
+		for (const [method, path] of [['POST', '/api/videos'], ['POST', '/api/videos/upload'], ['POST', '/api/videos/upload/batch/initiate'], ['POST', '/api/videos/tus'], ['PATCH', '/api/videos/tus/abc'], ['POST', '/api/videos/v1/publish-now'], ['PATCH', '/api/videos/v1/schedule'], ['POST', '/api/live-streams'], ['PATCH', '/api/live-streams/ls1'], ['POST', '/api/playlists'], ['POST', '/api/community/media/upload/images']]) {
 			assert.equal(channelRefusesWrite(method, path), true, `${method} ${path}`);
 		}
 		for (const [method, path] of [['GET', '/api/videos'], ['DELETE', '/api/videos/v1'], ['POST', '/api/videos/v1/likes'], ['POST', '/api/videos/v1/comments'], ['PUT', '/api/videos/v1'], ['POST', '/api/watch-history']]) {

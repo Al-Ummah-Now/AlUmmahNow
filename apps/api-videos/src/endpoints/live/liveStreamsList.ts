@@ -101,6 +101,8 @@ export class LiveStreamsList extends OptionalAuthRoute {
 
 			// Filter out private streams for non-authenticated users
 			const auth = c.get('auth');
+			// Hidden streams (suspended channel, banned owner, moderation) reach their owner only
+			streams = streams.filter(stream => !(stream as { isHidden?: boolean }).isHidden || (!!auth && stream.userId === auth.userId));
 			if (!auth) {
 				streams = streams.filter(stream => !stream.isPrivate);
 			} else {
