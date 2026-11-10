@@ -40,6 +40,7 @@ import { createJob, type JobHandler, type JobOutcome, type JobQueue } from './jo
 import { approvedFromPlan, planLegacyRestore, runLegacyRestore, type ApprovedRestore, type AuthUsersDb } from './legacy-restore';
 import { runThumbnailRepairStep, type ThumbnailRepairEnv } from '../thumbnail/repair';
 import { runOwnershipRebuildStep, type OwnershipRebuildEnv } from '../search/ownershipRebuild';
+import { runPlaylistAddStep, type PlaylistEnv } from '../playlistBulk';
 import {
 	channelVideoStats,
 	contentIds,
@@ -1022,4 +1023,6 @@ export const ADMIN_JOB_HANDLERS: Record<AdminJobKind, JobHandler> = {
 	'videos.repair-thumbnails': (env, job) => runThumbnailRepairStep(env as ThumbnailRepairEnv, job) as unknown as Promise<JobOutcome>,
 	// Ownership index rebuild (lib/search/ownershipRebuild.ts), started from the Errors page's drift flag
 	'search.rebuild-ownership': (env, job) => runOwnershipRebuildStep(env as OwnershipRebuildEnv, job),
+	// Bulk adds to a channel playlist above the inline cap, or after an inline write failed (lib/playlistBulk.ts)
+	'playlist.add-videos': (env, job) => runPlaylistAddStep(env as PlaylistEnv, job),
 };

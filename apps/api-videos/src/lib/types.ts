@@ -1,6 +1,6 @@
 import { Bool, DateTime, Str } from "chanfana";
 import { z } from "zod";
-import { VideoCategory } from "@al-ummah/shared-types";
+import { PLAYLIST_SORT_DIRECTIONS, PLAYLIST_SORT_FIELDS, PLAYLIST_SORT_MODES, VideoCategory } from "@al-ummah/shared-types";
 
 // Pure business/database models - represent data as stored in R2
 
@@ -177,11 +177,19 @@ export const Playlist = z.object({
     description: Str().optional(),
     thumbnailUrl: Str().optional(),
     userId: Str(),
+    /** The channel member who created it, when not the channel's owner (`userId`) */
+    createdBy: Str().optional(),
     channelId: Str(),
     dateCreated: DateTime(),
     dateModified: DateTime(),
-    videos: z.array(Str()).default([]), // Array of video IDs
+    videos: z.array(Str()).default([]), // Array of video IDs, stored in the playlist's order
     isPublic: z.boolean().default(true),
+    // Order (shared-types playlist-bulk.ts): absent on older playlists = manual
+    sortMode: z.enum(PLAYLIST_SORT_MODES).optional(),
+    sortField: z.enum(PLAYLIST_SORT_FIELDS).optional(),
+    sortDirection: z.enum(PLAYLIST_SORT_DIRECTIONS).optional(),
+    /** When each video was added (ISO), for the "date added" order */
+    videoAddedAt: z.record(z.string()).optional(),
     // Soft delete and moderation fields
     ...SoftDeleteFields,
     ...ModerationFields,

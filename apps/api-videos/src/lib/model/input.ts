@@ -1,3 +1,4 @@
+import { PLAYLIST_SORT_DIRECTIONS, PLAYLIST_SORT_FIELDS, PLAYLIST_SORT_MODES } from "@al-ummah/shared-types";
 import { Bool, DateTime, Str } from "chanfana";
 import { z } from "zod";
 import { VideoCategory } from "@al-ummah/shared-types";
@@ -30,8 +31,11 @@ export const PlaylistInput = z.object({
     title: Str({ description: "Playlist title" }),
     description: Str({ required: false, description: "Playlist description" }),
     thumbnailUrl: Str({ required: false, description: "Playlist thumbnail URL" }),
-    videos: z.array(Str()).optional(), // Array of video IDs to add
+    videos: z.array(Str()).optional().describe("Videos of the channel to add, in order (validated; above 200 the rest is added by a background job)"),
     isPublic: z.boolean().optional(),
+    sortMode: z.enum(PLAYLIST_SORT_MODES).optional().describe("manual: the managers' own order; auto: by sortField and sortDirection"),
+    sortField: z.enum(PLAYLIST_SORT_FIELDS).optional().describe("Automatic order field: added (to the playlist), published, title, views, duration"),
+    sortDirection: z.enum(PLAYLIST_SORT_DIRECTIONS).optional().describe("Automatic order direction"),
 });
 
 export const ProfileInput = z.object({
@@ -85,7 +89,10 @@ export const PlaylistUpdateInput = z.object({
     description: Str({ required: false, description: "Playlist description" }),
     thumbnailUrl: Str({ required: false, description: "Playlist thumbnail URL" }),
     isPublic: z.boolean().optional(),
-    videos: z.array(Str()).optional().describe("Reorder videos: the playlist's current video IDs in the new order"),
+    videos: z.array(Str()).optional().describe("Reorder videos: the playlist's current video IDs in the new order (manual order only)"),
+    sortMode: z.enum(PLAYLIST_SORT_MODES).optional().describe("manual: the managers' own order; auto: by sortField and sortDirection"),
+    sortField: z.enum(PLAYLIST_SORT_FIELDS).optional().describe("Automatic order field: added (to the playlist), published, title, views, duration"),
+    sortDirection: z.enum(PLAYLIST_SORT_DIRECTIONS).optional().describe("Automatic order direction"),
 });
 
 export const ProfileUpdateInput = z.object({

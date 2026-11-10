@@ -607,6 +607,7 @@ const ar: Messages = {
       profilesRestoreLegacy: 'استعادة حقول الملفات الشخصية القديمة',
       videosRepairThumbnails: 'إصلاح أبعاد الصور المصغّرة',
       searchRebuildOwnership: 'إعادة بناء فهرس قوائم الإدارة',
+      playlistAddVideos: 'إضافة فيديوهات إلى قائمة تشغيل',
     },
     statuses: {
       queued: 'في الانتظار',

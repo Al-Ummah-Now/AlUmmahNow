@@ -393,6 +393,14 @@ export const ADMIN_JOB_KINDS = [
    * the Errors page's "Index out of sync" flag.
    */
   'search.rebuild-ownership',
+  /**
+   * Add many videos to one channel playlist, in resumable steps (api-videos
+   * lib/playlistBulk.ts): adds above the synchronous cap, and adds whose
+   * request write failed (the playlist stays, the add finishes here). Target
+   * the playlist's channel; params name the playlist and the ordered ids.
+   * Idempotent: a video already in the playlist is skipped.
+   */
+  'playlist.add-videos',
 ] as const;
 
 export type AdminJobKind = (typeof ADMIN_JOB_KINDS)[number];
@@ -428,6 +436,7 @@ export const ADMIN_JOB_PERMISSIONS: Readonly<Record<AdminJobKind, readonly Admin
   'profiles.restore-legacy': ['users:manage'],
   'videos.repair-thumbnails': ['videos:manage'],
   'search.rebuild-ownership': ['videos:manage'],
+  'playlist.add-videos': ['videos:manage'],
 };
 
 // ---------------------------------------------------------------------------

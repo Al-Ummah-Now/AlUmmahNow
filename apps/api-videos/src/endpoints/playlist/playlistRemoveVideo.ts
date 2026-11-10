@@ -100,6 +100,10 @@ export class PlaylistRemoveVideo extends AuthenticatedRoute {
             const videos = fresh.videos || [];
             if (!videos.includes(videoId)) return { reject: { status: 404, error: "Video is not in this playlist" } };
             fresh.videos = videos.filter(vid => vid !== videoId);
+            if (fresh.videoAddedAt?.[videoId]) {
+                const { [videoId]: _gone, ...dates } = fresh.videoAddedAt;
+                fresh.videoAddedAt = dates;
+            }
             fresh.dateModified = new Date().toISOString();
             return true;
         });

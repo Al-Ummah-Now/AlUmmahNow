@@ -30,6 +30,18 @@ const INDEX_FILTER: Record<VideoFilter, { isPublic?: boolean; liveOnly?: boolean
 	live: { liveOnly: true },
 };
 
+/** The search text as compared: trimmed, NFKC, lower case; null when empty. */
+export function normalizeTitleQuery(q: string | null | undefined): string | null {
+	const text = (q ?? "").normalize("NFKC").trim().toLocaleLowerCase();
+	return text ? text : null;
+}
+
+/** Whether the video's title (or one of its translations) contains `query` (normalizeTitleQuery). */
+export function titleMatches(video: { title?: string | null; titleLocalized?: unknown }, query: string): boolean {
+	const titles = [video.title, ...Object.values((video.titleLocalized && typeof video.titleLocalized === "object" ? video.titleLocalized : {}) as Record<string, unknown>)];
+	return titles.some((title) => typeof title === "string" && title.normalize("NFKC").toLocaleLowerCase().includes(query));
+}
+
 export class VideosList extends OptionalAuthRoute {
 	schema = {
 		tags: ["Videos"],
@@ -49,6 +61,8 @@ export class VideosList extends OptionalAuthRoute {
 				filter: z.enum(["all", "public", "private", "live"]).optional().default("all").describe("Filter videos by type"),
 				channelId: Str({ description: "Filter by specific channel ID" }).optional().nullable(),
 				category: z.nativeEnum(VideoCategory).optional().describe("Filter by video category (e.g., 'quran_recitation', 'islamic_history')"),
+				format: z.enum(["video", "short"]).optional().describe("Only Shorts (`short`) or everything but Shorts (`video`)"),
+				q: Str({ description: "Only videos whose title contains this text (any language, case-insensitive). A page can come back short with a cursor: keep following it." }).max(200).optional(),
 			}),
 			headers: z.object({
 				channelId: Str({ description: "Channel ID" }).optional().nullable(),
@@ -87,7 +101,8 @@ export class VideosList extends OptionalAuthRoute {
 		const request = await this.getValidatedData<typeof this.schema>();
 
 		// Retrieve the validated parameters
-		const { limit, cursor, sort, filter, channelId: queryChannelId, category } = request.query;
+		const { limit, cursor, sort, filter, channelId: queryChannelId, category, format, q } = request.query;
+		const titleQuery = normalizeTitleQuery(q);
 		const userId = this.getUserId(c);
 		const { channelId } = request.headers;
 
@@ -96,7 +111,7 @@ export class VideosList extends OptionalAuthRoute {
 
 		// The anonymous first page is the same for every visitor and costs an R2
 		// read per video, so it is reused briefly. Pages and channel views are not.
-		const firstPageCacheUrl = !userId && !filterChannelId && !cursor
+		const firstPageCacheUrl = !userId && !filterChannelId && !cursor && !format && !titleQuery
 			? edgeCacheUrl(c.req.url, `videos/v1/first-page/${limit}/${sort}/${filter}/${category || "_"}`)
 			: null;
 		if (firstPageCacheUrl) {
@@ -144,6 +159,11 @@ export class VideosList extends OptionalAuthRoute {
 				return false;
 			}
 
+			// Format and title filters (the playlist picker)
+			if (format === "short" && !isShort(video)) return false;
+			if (format === "video" && isShort(video)) return false;
+			if (titleQuery && !titleMatches(video, titleQuery)) return false;
+
 			// Apply type filter
 			if (filter === "public" && video.isPublic === false) return false;
 			if (filter === "private" && video.isPublic !== false) return false;
@@ -184,6 +204,7 @@ export class VideosList extends OptionalAuthRoute {
 					sort: INDEX_SORT[sort as VideoSort],
 					privateFor: privateOwnerId,
 					...INDEX_FILTER[(filter || "all") as VideoFilter],
+					...(format === "short" ? { shortsOnly: true } : format === "video" ? { notShort: true } : {}),
 				},
 				load: id => repository.getObject(id),
 				isListed: (video): video is VideoType => !!video && Boolean(isVisible(video)),

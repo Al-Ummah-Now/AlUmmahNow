@@ -6147,6 +6147,9 @@
                           "userId": {
                             "type": "string"
                           },
+                          "createdBy": {
+                            "type": "string"
+                          },
                           "channelId": {
                             "type": "string"
                           },
@@ -6168,6 +6171,36 @@
                           "isPublic": {
                             "type": "boolean",
                             "default": true
+                          },
+                          "sortMode": {
+                            "type": "string",
+                            "enum": [
+                              "manual",
+                              "auto"
+                            ]
+                          },
+                          "sortField": {
+                            "type": "string",
+                            "enum": [
+                              "added",
+                              "published",
+                              "title",
+                              "views",
+                              "duration"
+                            ]
+                          },
+                          "sortDirection": {
+                            "type": "string",
+                            "enum": [
+                              "asc",
+                              "desc"
+                            ]
+                          },
+                          "videoAddedAt": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
                           },
                           "isDeleted": {
                             "type": "boolean"
@@ -15032,6 +15065,9 @@
                           "userId": {
                             "type": "string"
                           },
+                          "createdBy": {
+                            "type": "string"
+                          },
                           "channelId": {
                             "type": "string"
                           },
@@ -15053,6 +15089,36 @@
                           "isPublic": {
                             "type": "boolean",
                             "default": true
+                          },
+                          "sortMode": {
+                            "type": "string",
+                            "enum": [
+                              "manual",
+                              "auto"
+                            ]
+                          },
+                          "sortField": {
+                            "type": "string",
+                            "enum": [
+                              "added",
+                              "published",
+                              "title",
+                              "views",
+                              "duration"
+                            ]
+                          },
+                          "sortDirection": {
+                            "type": "string",
+                            "enum": [
+                              "asc",
+                              "desc"
+                            ]
+                          },
+                          "videoAddedAt": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
                           },
                           "isDeleted": {
                             "type": "boolean"
@@ -15194,10 +15260,38 @@
                     "type": "array",
                     "items": {
                       "type": "string"
-                    }
+                    },
+                    "description": "Videos of the channel to add, in order (validated; above 200 the rest is added by a background job)"
                   },
                   "isPublic": {
                     "type": "boolean"
+                  },
+                  "sortMode": {
+                    "type": "string",
+                    "enum": [
+                      "manual",
+                      "auto"
+                    ],
+                    "description": "manual: the managers' own order; auto: by sortField and sortDirection"
+                  },
+                  "sortField": {
+                    "type": "string",
+                    "enum": [
+                      "added",
+                      "published",
+                      "title",
+                      "views",
+                      "duration"
+                    ],
+                    "description": "Automatic order field: added (to the playlist), published, title, views, duration"
+                  },
+                  "sortDirection": {
+                    "type": "string",
+                    "enum": [
+                      "asc",
+                      "desc"
+                    ],
+                    "description": "Automatic order direction"
                   }
                 },
                 "required": [
@@ -15322,6 +15416,46 @@
                             "videosCount",
                             "isPublic"
                           ]
+                        },
+                        "add": {
+                          "type": "object",
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "done",
+                                "queued",
+                                "failed"
+                              ]
+                            },
+                            "added": {
+                              "type": "number"
+                            },
+                            "alreadyInPlaylist": {
+                              "type": "number"
+                            },
+                            "notInChannel": {
+                              "type": "number"
+                            },
+                            "pending": {
+                              "type": "number"
+                            },
+                            "videosCount": {
+                              "type": "number"
+                            },
+                            "jobId": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "added",
+                            "alreadyInPlaylist",
+                            "notInChannel",
+                            "pending",
+                            "videosCount"
+                          ],
+                          "description": "What happened to `videos`: added inline, or queued for the background"
                         }
                       },
                       "required": [
@@ -15739,6 +15873,9 @@
                     "userId": {
                       "type": "string"
                     },
+                    "createdBy": {
+                      "type": "string"
+                    },
                     "channelId": {
                       "type": "string"
                     },
@@ -15760,6 +15897,36 @@
                     "isPublic": {
                       "type": "boolean",
                       "default": true
+                    },
+                    "sortMode": {
+                      "type": "string",
+                      "enum": [
+                        "manual",
+                        "auto"
+                      ]
+                    },
+                    "sortField": {
+                      "type": "string",
+                      "enum": [
+                        "added",
+                        "published",
+                        "title",
+                        "views",
+                        "duration"
+                      ]
+                    },
+                    "sortDirection": {
+                      "type": "string",
+                      "enum": [
+                        "asc",
+                        "desc"
+                      ]
+                    },
+                    "videoAddedAt": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
                     },
                     "isDeleted": {
                       "type": "boolean"
@@ -16031,7 +16198,34 @@
                     "items": {
                       "type": "string"
                     },
-                    "description": "Reorder videos: the playlist's current video IDs in the new order"
+                    "description": "Reorder videos: the playlist's current video IDs in the new order (manual order only)"
+                  },
+                  "sortMode": {
+                    "type": "string",
+                    "enum": [
+                      "manual",
+                      "auto"
+                    ],
+                    "description": "manual: the managers' own order; auto: by sortField and sortDirection"
+                  },
+                  "sortField": {
+                    "type": "string",
+                    "enum": [
+                      "added",
+                      "published",
+                      "title",
+                      "views",
+                      "duration"
+                    ],
+                    "description": "Automatic order field: added (to the playlist), published, title, views, duration"
+                  },
+                  "sortDirection": {
+                    "type": "string",
+                    "enum": [
+                      "asc",
+                      "desc"
+                    ],
+                    "description": "Automatic order direction"
                   }
                 }
               }
@@ -16218,8 +16412,610 @@
               }
             }
           },
+          "409": {
+            "description": "Reorder refused: the playlist is sorted automatically",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
           "500": {
             "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/playlists/{id}/items": {
+      "get": {
+        "tags": [
+          "Playlists"
+        ],
+        "summary": "A playlist's entries for its managers",
+        "description": "Every stored id in the playlist's order (automatic orders are applied before the page is cut), with its video (private and processing videos included) or null when the video is gone or hidden, so managers can remove it.",
+        "operationId": "get_PlaylistManageItems",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Playlist ID"
+            },
+            "required": true,
+            "description": "Playlist ID",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "number",
+              "description": "First position"
+            },
+            "required": false,
+            "description": "First position",
+            "name": "offset",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "number",
+              "description": "Entries (1-100)"
+            },
+            "required": false,
+            "description": "Entries (1-100)",
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "result": {
+                      "type": "object",
+                      "properties": {
+                        "playlist": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "title": {
+                              "type": "string"
+                            },
+                            "description": {
+                              "type": "string"
+                            },
+                            "isPublic": {
+                              "type": "boolean"
+                            },
+                            "thumbnailUrl": {
+                              "type": "string"
+                            },
+                            "channelId": {
+                              "type": "string"
+                            },
+                            "videosCount": {
+                              "type": "number"
+                            },
+                            "sortMode": {
+                              "type": "string",
+                              "enum": [
+                                "manual",
+                                "auto"
+                              ]
+                            },
+                            "sortField": {
+                              "type": "string"
+                            },
+                            "sortDirection": {
+                              "type": "string",
+                              "enum": [
+                                "asc",
+                                "desc"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "title",
+                            "isPublic",
+                            "channelId",
+                            "videosCount",
+                            "sortMode",
+                            "sortField",
+                            "sortDirection"
+                          ]
+                        },
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "position": {
+                                "type": "number"
+                              },
+                              "video": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "title"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "position",
+                              "video"
+                            ]
+                          }
+                        },
+                        "nextOffset": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "playlist",
+                        "items",
+                        "nextOffset"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "result"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed to manage this playlist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Playlist not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/playlists/{id}/jobs/{jobId}": {
+      "get": {
+        "tags": [
+          "Playlists"
+        ],
+        "summary": "Progress of a background add",
+        "operationId": "get_PlaylistJobFetch",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Playlist ID"
+            },
+            "required": true,
+            "description": "Playlist ID",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Background add job ID"
+            },
+            "required": true,
+            "description": "Background add job ID",
+            "name": "jobId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The background add",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "result": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "playlistId": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "total": {
+                          "type": "number"
+                        },
+                        "processed": {
+                          "type": "number"
+                        },
+                        "added": {
+                          "type": "number"
+                        },
+                        "notInChannel": {
+                          "type": "number"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "playlistId",
+                        "status",
+                        "total",
+                        "processed",
+                        "added",
+                        "notInChannel",
+                        "updatedAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "result"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed to manage this playlist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Playlist not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/playlists/{id}/jobs/{jobId}/retry": {
+      "post": {
+        "tags": [
+          "Playlists"
+        ],
+        "summary": "Retry a failed background add",
+        "description": "Queues the add again with a fresh retry budget. A job that has not failed is returned unchanged.",
+        "operationId": "post_PlaylistJobRetry",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Playlist ID"
+            },
+            "required": true,
+            "description": "Playlist ID",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Background add job ID"
+            },
+            "required": true,
+            "description": "Background add job ID",
+            "name": "jobId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The background add",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "result": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "playlistId": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "total": {
+                          "type": "number"
+                        },
+                        "processed": {
+                          "type": "number"
+                        },
+                        "added": {
+                          "type": "number"
+                        },
+                        "notInChannel": {
+                          "type": "number"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "playlistId",
+                        "status",
+                        "total",
+                        "processed",
+                        "added",
+                        "notInChannel",
+                        "updatedAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "result"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed to manage this playlist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Playlist not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -16475,6 +17271,522 @@
           },
           "500": {
             "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/playlists/{id}/videos/bulk": {
+      "post": {
+        "tags": [
+          "Playlists"
+        ],
+        "summary": "Add many videos to a playlist",
+        "description": "Adds the ids in the given order after the playlist's current videos. Idempotent: ids already in the playlist are skipped. Only videos of the playlist's channel are added (others are counted in `notInChannel`). Up to 200 ids are added inline; the rest (or all of them, when the inline write fails) are added by a background job: the answer is then `queued` with `jobId`.",
+        "operationId": "post_PlaylistVideosBulkAdd",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Playlist ID"
+            },
+            "required": true,
+            "description": "Playlist ID",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "videoIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "minItems": 1,
+                    "maxItems": 1000,
+                    "description": "Video ids to add, in the order they should appear"
+                  }
+                },
+                "required": [
+                  "videoIds"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Added, or queued for the background",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "result": {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "done",
+                            "queued",
+                            "failed"
+                          ]
+                        },
+                        "added": {
+                          "type": "number"
+                        },
+                        "alreadyInPlaylist": {
+                          "type": "number"
+                        },
+                        "notInChannel": {
+                          "type": "number"
+                        },
+                        "pending": {
+                          "type": "number"
+                        },
+                        "videosCount": {
+                          "type": "number"
+                        },
+                        "jobId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "added",
+                        "alreadyInPlaylist",
+                        "notInChannel",
+                        "pending",
+                        "videosCount"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "result"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed to manage this playlist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Playlist not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/playlists/{id}/videos/order": {
+      "put": {
+        "tags": [
+          "Playlists"
+        ],
+        "summary": "Reorder a playlist's videos",
+        "description": "Manual order only (409 `PLAYLIST_SORT_AUTOMATIC` for an automatic one). Ids keep the given order. Videos added meanwhile (not in the list) follow in their current order, ids removed meanwhile are dropped, so a reorder never loses a concurrent add.",
+        "operationId": "put_PlaylistVideosReorder",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Playlist ID"
+            },
+            "required": true,
+            "description": "Playlist ID",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "videoIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "minItems": 1,
+                    "maxItems": 1000,
+                    "description": "The playlist's video ids in the new order"
+                  }
+                },
+                "required": [
+                  "videoIds"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The stored order",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "result": {
+                      "type": "object",
+                      "properties": {
+                        "videos": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "videos"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "result"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed to manage this playlist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Playlist not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The playlist is sorted automatically",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/playlists/{id}/videos/remove": {
+      "post": {
+        "tags": [
+          "Playlists"
+        ],
+        "summary": "Remove many videos from a playlist",
+        "description": "Idempotent: ids that are not in the playlist are ignored.",
+        "operationId": "post_PlaylistVideosBulkRemove",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Playlist ID"
+            },
+            "required": true,
+            "description": "Playlist ID",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "videoIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "minItems": 1,
+                    "maxItems": 1000,
+                    "description": "Video ids to remove"
+                  }
+                },
+                "required": [
+                  "videoIds"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Removed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "result": {
+                      "type": "object",
+                      "properties": {
+                        "removed": {
+                          "type": "number"
+                        },
+                        "videosCount": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "removed",
+                        "videosCount"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "result"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed to manage this playlist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Playlist not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -21085,6 +22397,31 @@
             "required": false,
             "description": "Filter by video category (e.g., 'quran_recitation', 'islamic_history')",
             "name": "category",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "video",
+                "short"
+              ],
+              "description": "Only Shorts (`short`) or everything but Shorts (`video`)"
+            },
+            "required": false,
+            "description": "Only Shorts (`short`) or everything but Shorts (`video`)",
+            "name": "format",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 200,
+              "description": "Only videos whose title contains this text (any language, case-insensitive). A page can come back short with a cursor: keep following it."
+            },
+            "required": false,
+            "description": "Only videos whose title contains this text (any language, case-insensitive). A page can come back short with a cursor: keep following it.",
+            "name": "q",
             "in": "query"
           },
           {

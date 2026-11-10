@@ -1,4 +1,5 @@
 import { isVideoListedFor } from './visibility';
+import { playlistSortOf } from '@al-ummah/shared-types';
 /**
  * Playlist helpers shared by playlist endpoints.
  */
@@ -21,11 +22,14 @@ export const PLAYLIST_DESCRIPTION_MAX = 5000;
  * `videosCount` so web components can use either naming.
  */
 export function toPlaylistResponse(playlist: PlaylistType) {
-    // The upload order of queued adds (lib/playlistUploadAdds.ts) is internal
-    const { uploadOrder: _uploadOrder, ...stored } = playlist as PlaylistType & { uploadOrder?: unknown };
+    // Internal: the upload order of queued adds (lib/playlistUploadAdds.ts) and
+    // the add dates behind the server-side "date added" order
+    const { uploadOrder: _uploadOrder, videoAddedAt: _addedAt, ...stored } = playlist as PlaylistType & { uploadOrder?: unknown };
     return {
         ...stored,
         name: playlist.title,
+        // Older playlists without a stored order are manual
+        ...playlistSortOf(playlist),
         videos: playlist.videos || [],
         videosCount: playlist.videos?.length || 0,
     };

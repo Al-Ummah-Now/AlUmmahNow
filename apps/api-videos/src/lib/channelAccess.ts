@@ -17,6 +17,7 @@ import {
 	type ChannelRoleSource,
 } from '@al-ummah/shared-types';
 import { logger } from './logger';
+import { isSystemPlaylist } from './library';
 
 export interface ChannelAccessEnv {
 	channels?: R2Bucket;
@@ -69,20 +70,23 @@ export async function canOnVideo(env: ChannelAccessEnv, video: AccessVideo, user
 
 /** The fields of a playlist record a manage check reads. */
 export interface AccessPlaylist {
+	id?: string;
 	userId?: string | null;
 	channelId?: string | null;
+	systemType?: unknown;
 }
 
 /**
  * Whether `userId` may change a playlist (add or remove videos). Its owner
  * may, as before; anyone else needs a role on the playlist's channel that
- * grants `playlist.manage` (owner, admin, editor). Fails closed when the
- * channel cannot be read.
+ * grants `playlist.manage` (owner, admin, editor), except on a system
+ * playlist. Fails closed when the channel cannot be read.
  */
 export async function canManagePlaylist(env: ChannelAccessEnv, playlist: AccessPlaylist, userId: string | null | undefined): Promise<boolean> {
 	if (!userId) return false;
 	if (playlist.userId && playlist.userId === userId) return true;
-	if (!playlist.channelId) return false;
+	// A system playlist (Watch later) is personal: only its owner
+	if (!playlist.channelId || isSystemPlaylist(playlist)) return false;
 	try {
 		return can(await roleOnChannel(env, playlist.channelId, userId), 'playlist.manage');
 	} catch (error) {
@@ -137,10 +141,9 @@ const MEMBER_WRITE_ROUTES: ReadonlyArray<{ methods: ReadonlyArray<string>; path:
 	{ methods: ['PUT'], path: /^\/api\/channels\/(?!handles|by-handle|access)[^/]+\/?$/, capability: 'channel.edit' },
 	{ methods: ['PUT'], path: /^\/api\/channels\/[^/]+\/(?:avatar|cover|tabs)\/?$/, capability: 'channel.edit' },
 	{ methods: ['POST', 'PUT', 'PATCH', 'DELETE'], path: /^\/api\/channels\/[^/]+\/sections(?:\/|$)/, capability: 'channel.edit' },
-	// The channel's playlists: create one, add or remove videos, queue adds for new uploads
-	{ methods: ['POST'], path: /^\/api\/playlists\/?$/, capability: 'playlist.manage' },
-	{ methods: ['POST'], path: /^\/api\/playlists\/upload-adds\/?$/, capability: 'playlist.manage' },
-	{ methods: ['POST', 'DELETE'], path: /^\/api\/playlists\/[^/]+\/videos(?:\/[^/]+)?\/?$/, capability: 'playlist.manage' },
+	// The channel's playlists: create, edit, delete, add, remove and reorder videos,
+	// queue adds for new uploads
+	{ methods: ['POST', 'PUT', 'PATCH', 'DELETE'], path: /^\/api\/playlists(?:\/|$)/, capability: 'playlist.manage' },
 ];
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);

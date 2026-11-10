@@ -8,6 +8,9 @@ import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { isSameVideoSet } from "../../lib/playlists";
+import { canManagePlaylist } from "../../lib/playlistBulk";
+import { loadPlaylistVideos, orderOf, persistAutoOrder } from "../../lib/playlistOrder";
+import { playlistSortOf } from "@al-ummah/shared-types";
 
 export class PlaylistUpdate extends AuthenticatedRoute {
     schema = {
@@ -49,6 +52,10 @@ export class PlaylistUpdate extends AuthenticatedRoute {
                         schema: ResponseError,
                     },
                 },
+            },
+            "409": {
+                description: "Reorder refused: the playlist is sorted automatically",
+                content: { "application/json": { schema: ResponseError } },
             },
             "400": {
                 description: "Bad request - invalid input data",
@@ -92,31 +99,58 @@ export class PlaylistUpdate extends AuthenticatedRoute {
             }, 404);
         }
 
-        // Verify ownership by user (the channelId header is optional, so it
-        // cannot be the ownership check on its own)
-        if (existingPlaylist.userId !== userId) {
+        // The owner, or a role on the playlist's channel granting playlist.manage
+        // (the channelId header is optional, so it cannot be the check on its own)
+        if (!(await canManagePlaylist(c.env as never, existingPlaylist, userId))) {
             return c.json({
                 success: false,
                 error: "Unauthorized - you can only update your own playlists",
             }, 403);
         }
 
+        // The order: manual, or automatic by a field and direction. Switching
+        // to automatic sorts now; switching back to manual keeps the current
+        // automatic order as the starting manual order. Both need the videos.
+        const { sortMode, sortField, sortDirection, ...fields } = updateData;
+        const sortChange = sortMode !== undefined || sortField !== undefined || sortDirection !== undefined;
+        const before = playlistSortOf(existingPlaylist);
+        const after = playlistSortOf({ ...before, ...(sortMode ? { sortMode } : {}), ...(sortField ? { sortField } : {}), ...(sortDirection ? { sortDirection } : {}) });
+        const known = sortChange && (before.sortMode === 'auto' || after.sortMode === 'auto')
+            ? await loadPlaylistVideos(c.env as never, existingPlaylist.videos || [])
+            : new Map();
+
         // Checked and applied on the fresh playlist with a conditional write
         // (SCALABILITY-AUDIT AV-19): a rename during an add no longer reverts it
-        const { data: updatedPlaylist, rejected } = await repository.updateObjectOrReject<{ status: 400 | 403; error: string }>(id, (fresh) => {
-            if (fresh.userId !== userId) return { reject: { status: 403, error: "Unauthorized - you can only update your own playlists" } };
+        const { data: updatedPlaylist, rejected } = await repository.updateObjectOrReject<{ status: 400 | 409; error: string }>(id, (fresh) => {
+            const freshBefore = playlistSortOf(fresh);
+            const target = sortChange ? after : freshBefore;
+            if (fields.videos && target.sortMode === 'auto') {
+                return { reject: { status: 409, error: "This playlist is sorted automatically: switch it to manual order to reorder it by hand" } };
+            }
             // Reordering: the new order must be a permutation of the current videos
             if (updateData.videos && !isSameVideoSet(fresh.videos || [], updateData.videos)) {
                 return { reject: { status: 400, error: "videos must contain exactly the playlist's current video IDs (use the add/remove endpoints to change membership)" } };
             }
-            Object.assign(fresh, updateData, { dateModified: new Date().toISOString() });
+            Object.assign(fresh, fields, { dateModified: new Date().toISOString() });
+            if (sortChange) {
+                if (target.sortMode === 'auto') fresh.videos = orderOf(fresh, known, target);
+                else if (freshBefore.sortMode === 'auto') fresh.videos = orderOf(fresh, known, freshBefore);
+                fresh.sortMode = target.sortMode;
+                fresh.sortField = target.sortField;
+                fresh.sortDirection = target.sortDirection;
+            }
             return true;
         });
         if (!updatedPlaylist) {
             return c.json({ success: false, error: "Playlist not found" }, 404);
         }
         if (rejected) {
-            return c.json({ success: false, error: rejected.error }, rejected.status);
+            return c.json({ success: false, ...(rejected.status === 409 ? { code: "PLAYLIST_SORT_AUTOMATIC" } : {}), error: rejected.error }, rejected.status);
+        }
+        // Videos added during the switch get their automatic place too
+        if (sortChange && after.sortMode === 'auto') {
+            const ordered = await persistAutoOrder(c.env as never, id, known);
+            if (ordered) updatedPlaylist.videos = ordered;
         }
 
         // Send queue message for playlist update

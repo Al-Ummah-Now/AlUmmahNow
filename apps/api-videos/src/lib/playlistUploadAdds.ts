@@ -17,19 +17,21 @@
  *
  * Idempotent: a video already in the playlist is never added twice; the
  * record holds the active loop id and a message of an older loop is dropped.
- * Upload order: each add carries an order key (batch id + position); the
- * video is placed after the batch's earlier videos already in the playlist and
- * before its later ones, whatever order the messages arrive in.
+ * Upload order: each add carries an order key (batch id + position); in a
+ * manual playlist the video is placed after the batch's earlier videos
+ * already in the playlist and before its later ones, whatever order the
+ * messages arrive in. An automatic playlist sorts it by its field instead.
  *
  * Who may add: the playlist's owner, or a role on the playlist's channel that
  * grants `playlist.manage` (owner, admin, editor), checked on request and
  * again when the add runs. The upload itself never fails because of an add.
  */
 
-import { reportNeedsAction, resolveNeedsAction, type ErrorReporterEnv, type ExecutionContextLike } from '@al-ummah/shared-types';
+import { PLAYLIST_MAX_VIDEOS, playlistSortOf, reportNeedsAction, resolveNeedsAction, type ErrorReporterEnv, type ExecutionContextLike } from '@al-ummah/shared-types';
 import { logger } from './logger';
 import R2Repository from './r2Repo';
 import { canManagePlaylist, type ChannelAccessEnv } from './channelAccess';
+import { persistAutoOrder } from './playlistOrder';
 import type { PlaylistType } from './playlists';
 
 export const PLAYLIST_ADD_KIND = 'playlist-add';
@@ -43,7 +45,7 @@ export const MAX_STATUS_VIDEOS = 50;
 
 export type PlaylistAddStatus = 'pending' | 'added' | 'retrying' | 'failed';
 /** Why an add will not happen (no retry): shown to the uploader as "not added". */
-export type PlaylistAddRefusal = 'playlist_not_found' | 'other_channel' | 'forbidden' | 'video_gone';
+export type PlaylistAddRefusal = 'playlist_not_found' | 'other_channel' | 'forbidden' | 'video_gone' | 'playlist_full';
 
 export interface PlaylistAddRecord {
 	videoId: string;
@@ -151,9 +153,14 @@ export function orderKeyFor(batchId: string, index: number): string {
  * Adds the video on the fresh playlist (conditional write). Idempotent: a
  * video already there is left where it is. Order keys of videos no longer in
  * the playlist are dropped, so the map never outgrows the playlist.
+ *
+ * The playlist's order decides where it goes: a manual playlist keeps the
+ * upload order at the end (insertionIndex); an automatic one sorts it into
+ * place by its field (lib/playlistOrder.ts). Either way the add date is
+ * recorded for the "date added" order, and a full playlist refuses it.
  */
-export async function addVideoInOrder(env: Pick<PlaylistAddEnv, 'playlists'>, playlistId: string, videoId: string, orderKey: string, guard: (fresh: OrderedPlaylist) => boolean): Promise<'added' | 'already' | 'missing' | 'refused'> {
-	let outcome: 'added' | 'already' | 'refused' = 'added';
+export async function addVideoInOrder(env: Pick<PlaylistAddEnv, 'playlists' | 'videos'>, playlistId: string, videoId: string, orderKey: string, guard: (fresh: OrderedPlaylist) => boolean): Promise<'added' | 'already' | 'missing' | 'refused' | 'full'> {
+	let outcome: 'added' | 'already' | 'refused' | 'full' = 'added';
 	const stored = await new R2Repository<OrderedPlaylist>(env.playlists).updateObject(playlistId, (fresh) => {
 		outcome = 'added';
 		if (fresh.isDeleted || !guard(fresh)) {
@@ -165,16 +172,31 @@ export async function addVideoInOrder(env: Pick<PlaylistAddEnv, 'playlists'>, pl
 			outcome = 'already';
 			return false;
 		}
+		if (videos.length >= PLAYLIST_MAX_VIDEOS) {
+			outcome = 'full';
+			return false;
+		}
 		const order: Record<string, string> = {};
 		for (const [id, key] of Object.entries(fresh.uploadOrder || {})) if (videos.includes(id)) order[id] = key;
-		const at = insertionIndex(videos, order, orderKey);
+		const at = playlistSortOf(fresh).sortMode === 'auto' ? videos.length : insertionIndex(videos, order, orderKey);
+		const now = new Date().toISOString();
 		fresh.videos = [...videos.slice(0, at), videoId, ...videos.slice(at)];
 		order[videoId] = orderKey;
 		fresh.uploadOrder = order;
-		fresh.dateModified = new Date().toISOString();
+		fresh.videoAddedAt = { ...(fresh.videoAddedAt ?? {}), [videoId]: now };
+		fresh.dateModified = now;
 		return true;
 	});
-	return stored ? outcome : 'missing';
+	if (!stored) return 'missing';
+	// Automatic order: sort the new video into place (best effort; reads re-sort a stale order too)
+	if (outcome === 'added' && playlistSortOf(stored).sortMode === 'auto') {
+		try {
+			await persistAutoOrder(env, playlistId);
+		} catch (error) {
+			logger.warn('[PlaylistAdds] Sorting the playlist after an upload add failed; reads sort it', { playlistId, videoId, error: error instanceof Error ? error.message : String(error) });
+		}
+	}
+	return outcome;
 }
 
 export interface AddRequest {
@@ -342,6 +364,10 @@ export async function runPlaylistAdd(env: PlaylistAddEnv, message: PlaylistAddMe
 	}
 
 	const result = await addVideoInOrder(env, message.playlistId, message.videoId, record.orderKey, (fresh) => fresh.channelId === record.channelId);
+	if (result === 'full') {
+		await markRefused(env, message, 'playlist_full');
+		return 'playlist_full';
+	}
 	if (result === 'missing' || result === 'refused') {
 		await markRefused(env, message, 'playlist_not_found');
 		return 'playlist_not_found';

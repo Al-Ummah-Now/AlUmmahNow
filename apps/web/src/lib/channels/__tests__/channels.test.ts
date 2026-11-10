@@ -96,8 +96,8 @@ describe('channel settings page permissions', () => {
   it('opens each page only for roles that can use it', () => {
     const open = (role: ChannelRole | null) => (Object.keys(CHANNEL_SETTINGS_PAGES) as Array<keyof typeof CHANNEL_SETTINGS_PAGES>).filter((p) => canOpenSettingsPage(role, p));
     expect(open('owner')).toEqual(['overview', 'edit', 'videos', 'playlists', 'tabs', 'sections', 'community', 'team']);
-    expect(open('admin')).toEqual(['overview', 'edit', 'videos', 'tabs', 'sections', 'team']);
-    expect(open('editor')).toEqual(['overview', 'videos', 'team']);
+    expect(open('admin')).toEqual(['overview', 'edit', 'videos', 'playlists', 'tabs', 'sections', 'team']);
+    expect(open('editor')).toEqual(['overview', 'videos', 'playlists', 'team']);
     expect(open('moderator')).toEqual(['overview', 'team']);
     expect(open(null)).toEqual([]);
   });
@@ -108,6 +108,8 @@ describe('channel settings page permissions', () => {
     expect(roleMeets('admin', 'owner')).toBe(false);
     expect(roleMeets('editor', 'video.upload')).toBe(true);
     expect(roleMeets('moderator', 'video.upload')).toBe(false);
+    expect(roleMeets('editor', 'playlist.manage')).toBe(true);
+    expect(roleMeets('moderator', 'playlist.manage')).toBe(false);
   });
 });
 
