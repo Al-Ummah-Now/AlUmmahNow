@@ -1,4 +1,5 @@
 import { canOnVideo } from "../../lib/channelAccess";
+import { applyFormatChoice } from "@al-ummah/shared-types";
 import { Bool, Str } from "chanfana";
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
@@ -149,9 +150,9 @@ export class VideoUpdate extends AuthenticatedRoute {
 			category: category === undefined ? base.category : (category ?? undefined),
 			categorySource: category === undefined ? base.categorySource : category ? 'uploader' : undefined,
 			};
-			// "Upload as Short / as video" wins over detection; 'auto' clears the choice
-			if (format === 'auto') delete next.format;
-			else if (format) next.format = format;
+			// "Upload as Short / as video" wins over detection; 'auto' clears the choice.
+			// A choice also resolves an open format issue (admin flag).
+			if (format) applyFormatChoice(next, format, { by: 'owner', userId: effectiveUserId, at: next.dateModified });
 			return next;
 		};
 

@@ -23,6 +23,7 @@ import { getSecret, requireSecret } from '../env-helpers';
 import { isOwnershipComplete } from '../search/ownership';
 import { bunnyFileToken, tokenExpiry } from '../bunny-signing';
 import { announceAndRecordProcessingResult, pendingProcessingResult, ProcessingResult } from '../notification-events';
+import { classifyVideoFormat, type VideoFormatInput } from '@al-ummah/shared-types';
 import {
 	applyPlan,
 	bunnyPhase,
@@ -273,6 +274,33 @@ export async function startProcessingLoop(
 	return { started: true, loopId };
 }
 
+/**
+ * Encoded but still not classifiable as Short or video (Bunny gave no length
+ * or size, no uploader choice): flag it for an admin (video-format-ops.ts).
+ * Clears the flag once the video is classifiable.
+ */
+async function flagUnclassifiable(repo: R2Repository<LoopVideo>, videoId: string, now: Date): Promise<void> {
+	await repo.updateObject(videoId, (fresh) => {
+		const decision = classifyVideoFormat(fresh as VideoFormatInput);
+		const record = fresh as { formatIssue?: unknown };
+		if (decision.source !== 'unknown') {
+			// Classifiable now (Bunny reported the size): an earlier flag is resolved
+			if (!record.formatIssue) return false;
+			delete record.formatIssue;
+			return true;
+		}
+		if (record.formatIssue) return false;
+		const missing = decision.missing ?? [];
+		record.formatIssue = {
+			reason: `Bunny reports no ${missing.join(' and ')} for this video; choose Short or video`,
+			missing,
+			at: now.toISOString(),
+		};
+		logger.warn('[ProcessingLoop] Encoded video cannot be classified as Short or video; flagged', { videoId, missing });
+		return true;
+	});
+}
+
 export type CheckDecision =
 	| { kind: 'done'; outcome: string }
 	| { kind: 'again'; delaySeconds: number; attempt: number }
@@ -305,6 +333,7 @@ export async function runProcessingCheck(env: ProcessingEnv, message: Processing
 	const bunny = await fetchBunnyVideo(env, message.videoId);
 	const result = await syncVideoFromBunny(env, message.videoId, { now, loopStartedAt: message.startedAt, bunny });
 	const outcome = result.plan?.outcome ?? 'pending';
+	if (outcome === 'ready') await flagUnclassifiable(repo, message.videoId, now);
 	let decision = decideNext(outcome, message.attempt);
 	if (decision.kind === 'done' && decision.outcome === 'attempts_exhausted') {
 		// Out of attempts while Bunny still is not done: flag it for admins.

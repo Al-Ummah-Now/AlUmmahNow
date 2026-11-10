@@ -33,6 +33,9 @@ import { sweepStalledUploads } from "./lib/uploads/lifecycle";
 import { createTusRouter } from "./endpoints/video/tus";
 import { createProcessingInternalRouter } from "./endpoints/video/processingInternal";
 import { createUploadsInternalRouter } from "./endpoints/video/uploadsInternal";
+import { createVideoFormatInternalRouter } from "./endpoints/video/videoFormatInternal";
+import { handleVideoFormatMessage } from "./lib/video-format/job";
+import { VIDEO_FORMAT_JOB_KIND } from "@al-ummah/shared-types";
 // Profile/Channel image upload handlers (not in routers yet)
 import handleAvatarUpdate from "./endpoints/profile/profileAvatarUpdate";
 import handleCoverUpdate from "./endpoints/profile/profileCoverUpdate";
@@ -202,6 +205,8 @@ app.route('/api/videos/tus', tusRouter);
 app.route('/internal/processing', createProcessingInternalRouter() as never);
 // Stale uploads (abandoned placeholders, Bunny orphans): the reaper's admin side
 app.route('/internal/uploads', createUploadsInternalRouter() as never);
+// Short/video format backfill (ops; admins go through admin-api)
+app.route('/internal/video-format', createVideoFormatInternalRouter() as never);
 
 // ==========================================
 // PROFILE/CHANNEL IMAGE UPLOADS
@@ -536,11 +541,15 @@ async function queue(batch: MessageBatch<unknown>, env: AppBindings, ctx: Execut
 			await handleAdminJobBatch(batch as unknown as { messages: readonly JobMessage[] }, withSearchSync(env, ctx) as never, ADMIN_JOB_HANDLERS);
 			return;
 		}
-		const wrapped = withSearchSync(env, ctx) as never;
-		const reaper = batch.messages.filter((m) => isReaperMessage(m.body));
-		const processing = batch.messages.filter((m) => !isReaperMessage(m.body));
-		if (processing.length) await handleProcessingCheckBatch({ messages: processing }, wrapped);
-		if (reaper.length) await handleReaperBatch({ messages: reaper }, wrapped);
+		const synced = withSearchSync(env, ctx) as never;
+		// The same queue carries the Short/video format backfill (lib/video-format/job.ts) and the upload reaper
+		const isFormat = (m: { body: unknown }) => (m.body as { kind?: unknown } | null)?.kind === VIDEO_FORMAT_JOB_KIND;
+		for (const msg of batch.messages.filter(isFormat)) await handleVideoFormatMessage(synced, msg);
+		const rest = batch.messages.filter((m) => !isFormat(m));
+		const reaper = rest.filter((m) => isReaperMessage(m.body));
+		const processing = rest.filter((m) => !isReaperMessage(m.body));
+		if (processing.length) await handleProcessingCheckBatch({ messages: processing }, synced);
+		if (reaper.length) await handleReaperBatch({ messages: reaper }, synced);
 	} catch (error) {
 		// The batch is retried by the queue; the failure is flagged on the admin Errors page
 		reportServerError('api-videos', env as never, ctx, error, { route: `queue:${batch.queue}`, extra: { messages: batch.messages.length } });

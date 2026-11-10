@@ -212,6 +212,8 @@ export const APPS: AppRule[] = [
 				INTERNAL_API_KEY,
 				{ kind: 'd1_databases', name: 'REPORTS_DB' },
 				{ kind: 'queue_producer', name: 'queue' },
+				// Short/video format backfill (admin "Video formats"; api-videos consumes it)
+				{ kind: 'queue_producer', name: 'PROCESSING_CHECK_QUEUE' },
 				// Contact us mail (lib/contact-email.ts), sent off the request path by its own queue
 				RESEND_API_KEY,
 				// Errors page: async ingest (queue + DLQ, consumed here), Retry of dead letters, private source maps
