@@ -5,6 +5,8 @@ import {
   errorRefFromDigest,
   fingerprint,
   isVersionSkewError,
+  stableFile,
+  parseUserAgent,
   newErrorRef,
   normalizeMessage,
   normalizeRoute,
@@ -577,5 +579,25 @@ describe('reporters', () => {
     r.needsAction({ key: 'upload:v1', source: 'upload', title: 'Upload finalisation failed', itemUrl: '/videos/v1' });
     r.flush();
     assert.equal(sent.at(-1)!.events[0].kind, 'action');
+  });
+});
+
+describe('stack parsing stays linear on hostile input', () => {
+  it('parses huge repetitive lines quickly', () => {
+    const t0 = Date.now();
+    parseStack(`at ${' '.repeat(50000)}x`);
+    parseStack('@'.repeat(20000) + '@a'.repeat(20000));
+    parseStack('at f (/a' + ':1'.repeat(20000) + ')');
+    stableFile('#'.repeat(50000));
+    parseUserAgent('Version/1' + ' '.repeat(50000));
+    isVersionSkewError('deployment'.repeat(5000));
+    assert.ok(Date.now() - t0 < 500);
+  });
+  it('still reads V8 frames with line and column', () => {
+    assert.deepEqual(parseStack('Error: x\n    at async Foo.bar (https://v.net/_next/static/chunks/a.js:10:20)\n    at https://v.net/b.js:1:2\n    at new X (<anonymous>)'), [
+      { fn: 'async Foo.bar', file: 'https://v.net/_next/static/chunks/a.js', line: 10, column: 20 },
+      { fn: '<anonymous>', file: 'https://v.net/b.js', line: 1, column: 2 },
+      { fn: 'new X', file: '<anonymous>' },
+    ]);
   });
 });
