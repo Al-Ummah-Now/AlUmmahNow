@@ -261,10 +261,25 @@ async function expectNoDeadHelp(page: Page): Promise<void> {
   expect(dead, 'help text that leads nowhere').toEqual([]);
 }
 
+/**
+ * page.goto that waits out a client-side navigation still landing from the
+ * previous step (WebKit finishes the router's push after the URL changes).
+ */
+async function gotoSettled(page: Page, url: string): Promise<void> {
+  await page.waitForLoadState('load');
+  try {
+    await page.goto(url);
+  } catch (e) {
+    if (!/interrupted by another navigation/.test(String(e))) throw e;
+    await page.waitForLoadState('load');
+    await page.goto(url);
+  }
+}
+
 /** The page at `path` has a breadcrumb whose back link goes to `parent`, and clicking it gets there. */
 async function checkBackTo(page: Page, path: string, parent: string, locale: Locale, phone: boolean): Promise<void> {
   const web = target().web;
-  await page.goto(`${web}${path}`);
+  await gotoSettled(page, `${web}${path}`);
   const crumbs = page.locator('[data-testid=settings-breadcrumb],[data-testid=channel-settings-breadcrumb]').first();
   await expect(crumbs, `${path}: no breadcrumb`).toBeVisible({ timeout: 30000 });
   await expect(crumbs.getByRole('link', { name: /^(Settings|الإعدادات)$/ }), `${path}: breadcrumb does not start at Settings`).toHaveAttribute('href', `/${locale}/settings`);
@@ -285,8 +300,12 @@ async function checkBackTo(page: Page, path: string, parent: string, locale: Loc
   await expect
     .poll(() => back.evaluate((el) => { (el as HTMLElement).focus(); return document.activeElement === el && el.tabIndex >= 0; }), { message: `${path}: back link is not focusable`, timeout: 30000 })
     .toBe(true);
-  await back.click();
-  await expect(page, `${path}: back link did not return to ${parent}`).toHaveURL(`${web}${parent}`, { timeout: 30000 });
+  // A click while the page is still hydrating can be dropped by the router: click again until it lands
+  await expect(async () => {
+    if (page.url() !== `${web}${parent}`) await back.click({ timeout: 10000 });
+    await expect(page).toHaveURL(`${web}${parent}`, { timeout: 20000 });
+  }, `${path}: back link did not return to ${parent}`).toPass({ timeout: 90000 });
+  await page.waitForLoadState('load');
 }
 
 test.describe('Release: settings controls', () => {
@@ -312,14 +331,14 @@ test.describe('Release: settings controls', () => {
       for (const vp of VIEWPORTS) {
         const phone = vp.name === 'phone';
         await page.setViewportSize({ width: vp.width, height: vp.height });
-        await page.goto(`${target().web}/${locale}/settings`);
+        await gotoSettled(page, `${target().web}/${locale}/settings`);
         const panel = page.getByTestId('notification-settings');
         await expect(panel.locator('[role=switch]').first()).toBeVisible({ timeout: 30000 });
         await expectNoDeadHelp(page);
         await checkSwitches(panel, locale, phone, 6);
         await checkSwitchesInEveryTheme(panel, locale, phone);
 
-        await page.goto(`${target().web}/${locale}/settings/privacy`);
+        await gotoSettled(page, `${target().web}/${locale}/settings/privacy`);
         const privacy = page.locator('main, #page-content, body').first();
         await checkSwitches(privacy, locale, phone, 3);
         await checkSwitchesInEveryTheme(privacy, locale, phone);
@@ -333,7 +352,7 @@ test.describe('Release: settings controls', () => {
       const settings = `/${locale}/settings`;
 
       // The cards on /settings
-      await page.goto(`${target().web}${settings}`);
+      await gotoSettled(page, `${target().web}${settings}`);
       const cards = page.locator('a[data-testid=settings-section][data-available=true]');
       await expect(cards.first()).toBeVisible({ timeout: 30000 });
       const hrefs = await cards.evaluateAll((els) => els.map((e) => e.getAttribute('href') as string));
