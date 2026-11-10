@@ -50,6 +50,12 @@ export interface AdminBindings {
   VIDEOS?: Fetcher;
   /** Local dev without the binding: base URL of a running api-videos */
   VIDEOS_API_URL?: string;
+  /** Moderation requests to auth (docs/admin/AUTH_MODERATION_REQUESTS.md): this app's auth client */
+  AUTH_MODERATION_CLIENT_ID?: string;
+  /** Worker secret: that client's secret (set by AlUmmahNowAuth rotate-client-secret.ts) */
+  AUTH_MODERATION_CLIENT_SECRET?: string | { get(): Promise<string> };
+  /** auth-moderation-requests[-env]: sends and status reads to auth, with retries (lib/authModerationQueue.ts) */
+  AUTH_REQUESTS_QUEUE?: Queue<import('../lib/authModerationQueue').AuthRequestMessage>;
 
   // WebSocket integration
   WEBSOCKET_URL?: string;

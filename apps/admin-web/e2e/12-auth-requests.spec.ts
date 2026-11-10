@@ -1,0 +1,175 @@
+/**
+ * Requests to auth, end to end on QA (docs/admin/AUTH_MODERATION_REQUESTS.md):
+ *   videos admin sends a request on a test user (queued: Sending… -> Sent)  ->  the auth admin sees it
+ *   reject with a note  ->  the videos admin shows "Rejected" and the note
+ *   approve "Delete account"  ->  auth deletes the account  ->  "Actioned"
+ * The test user is registered for this test (code from auth's E2E sink) and the
+ * approved delete removes it again, so nothing is left behind.
+ */
+import crypto from 'node:crypto';
+import { request as playwrightRequest, type Page } from '@playwright/test';
+import { test, expect } from './support/fixtures';
+import { ADMIN_WEB_URL, ADMIN_API_URL, OPENAUTH_URL, accounts } from './support/env';
+import { fillSecret } from './support/secret-fill';
+
+// Types passwords and test secrets: no traces for this file
+test.use({ trace: 'off' });
+
+const AUTH_ADMIN_URL = (process.env.AUTH_ADMIN_URL || 'https://admin.auth.qa.alummahnow.net').replace(/\/$/, '');
+const SINK_SECRET = process.env.E2E_CODE_SINK_SECRET || '';
+
+/** PR runs hit QA, which follows main: skip until admin-api has /api/auth-requests there. */
+async function authRequestsDeployed(): Promise<boolean> {
+  const ctx = await playwrightRequest.newContext();
+  try {
+    const res = await ctx.get(`${ADMIN_API_URL}/api/auth-requests`);
+    return res.status() !== 404;
+  } finally {
+    await ctx.dispose();
+  }
+}
+
+async function sinkCode(email: string): Promise<string> {
+  for (let i = 0; i < 40; i++) {
+    const res = await fetch(`${OPENAUTH_URL}/test/email/${encodeURIComponent(email)}?consume=1`, { headers: { 'X-E2E-Secret': SINK_SECRET } });
+    if (res.ok) {
+      const { code } = (await res.json()) as { code?: string };
+      if (code) return code;
+    } else if (res.status !== 404) {
+      throw new Error(`E2E code sink answered ${res.status}`);
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  throw new Error(`No sign-up code for ${email}`);
+}
+
+/** Registers a fresh auth user (no admin role) in its own context; returns its auth user id. */
+async function registerTestUser(browser: import('@playwright/test').Browser): Promise<{ id: string; email: string }> {
+  const email = `modreq-${Date.now()}-${crypto.randomBytes(3).toString('hex')}@e2e.alummahnow.net`;
+  const password = `Mr-${crypto.randomBytes(12).toString('base64url')}-1!`;
+  const context = await browser.newContext({ baseURL: ADMIN_WEB_URL, storageState: { cookies: [], origins: [] } });
+  try {
+    const page = await context.newPage();
+    await page.goto('/login');
+    await page.waitForURL((url) => url.href.startsWith(OPENAUTH_URL));
+    await page.click('a:has-text("Register")');
+    await page.locator('input[name="email"]').fill(email);
+    await fillSecret(page.locator('input[name="password"]'), password);
+    await fillSecret(page.locator('input[name="repeat"]'), password);
+    await page.locator('button[data-component="button"]').click();
+    await expect(page.locator('input[name="code"]')).toBeVisible({ timeout: 20_000 });
+    await fillSecret(page.locator('input[name="code"]'), await sinkCode(email));
+    await page.locator('button[data-component="button"]').click();
+    // Not an admin: admin-web refuses, but the auth account and session exist
+    await page.waitForURL((url) => url.pathname === '/access-denied', { timeout: 45_000 });
+    const res = await page.request.get(`${OPENAUTH_URL}/session/accounts`);
+    const { accounts: signedIn } = (await res.json()) as { accounts: Array<{ userId: string; email: string }> };
+    const me = signedIn.find((a) => a.email.toLowerCase() === email);
+    if (!me) throw new Error('The new user has no auth session');
+    return { id: me.userId, email };
+  } finally {
+    await context.close();
+  }
+}
+
+async function sendRequest(page: Page, userId: string, action: string, reason: string): Promise<string> {
+  await page.goto(`/auth-requests/users/${encodeURIComponent(userId)}`);
+  const panel = page.getByTestId('auth-requests-panel');
+  await expect(panel).toBeVisible();
+  const before = await panel.getByTestId('auth-request-row').count();
+  await page.getByTestId('auth-request-open').click();
+  const dialog = page.getByTestId('auth-request-dialog');
+  await expect(dialog).toBeVisible();
+  await dialog.getByTestId('auth-request-action').selectOption(action);
+  await dialog.getByTestId('auth-request-reason-category').selectOption('spam');
+  await dialog.getByTestId('auth-request-reason').fill(reason);
+  // The user's videos admin page is always attached as evidence
+  await expect(dialog.getByTestId('auth-request-evidence')).toContainText('user page');
+  await dialog.getByTestId('auth-request-submit').click();
+  await expect(page.getByTestId('auth-request-notice')).toBeVisible();
+  await expect(panel.getByTestId('auth-request-row')).toHaveCount(before + 1);
+  const row = panel.getByTestId('auth-request-row').first();
+  // Queued: "Sending…" until admin-api's queue delivers it, then auth's "Pending"
+  await expect(row).toHaveAttribute('data-delivery', /sending|sent/);
+  await expect(row).toHaveAttribute('data-delivery', 'sent', { timeout: 60_000 });
+  await expect(row).toHaveAttribute('data-status', 'pending');
+  await expect(row.getByTestId('auth-request-failed')).toHaveCount(0);
+  return (await row.getAttribute('data-request-id'))!;
+}
+
+/** Opens the request in the auth admin dashboard as the QA admin (SSO, or the password form). */
+async function openInAuthAdmin(page: Page, requestId: string) {
+  await page.goto(`${AUTH_ADMIN_URL}/moderation/${requestId}`);
+  await page.waitForURL((url) => url.href.startsWith(AUTH_ADMIN_URL) || url.href.startsWith(OPENAUTH_URL), { timeout: 45_000 });
+  if (page.url().startsWith(OPENAUTH_URL)) {
+    const email = page.locator('input[name="email"]');
+    if (await email.isVisible({ timeout: 5_000 }).catch(() => false)) {
+      await email.fill(accounts.admin.email);
+      await fillSecret(page.locator('input[name="password"]'), accounts.admin.password);
+      await page.locator('button[data-component="button"]').click();
+    } else {
+      await page.getByText(accounts.admin.email).first().click();
+    }
+    await page.waitForURL((url) => url.href.startsWith(AUTH_ADMIN_URL), { timeout: 45_000 });
+    if (!page.url().includes(`/moderation/${requestId}`)) await page.goto(`${AUTH_ADMIN_URL}/moderation/${requestId}`);
+  }
+  await expect(page.getByTestId('moderation-status')).toBeVisible({ timeout: 20_000 });
+}
+
+async function expectVideosStatus(page: Page, userId: string, requestId: string, status: string) {
+  await expect
+    .poll(
+      async () => {
+        await page.goto(`/auth-requests/users/${encodeURIComponent(userId)}`);
+        const row = page.locator(`[data-testid="auth-request-row"][data-request-id="${requestId}"]`);
+        await expect(row).toBeVisible();
+        return row.getAttribute('data-status');
+      },
+      // admin-api reads auth's status through its queue (queued on read, at most every 30 s)
+      { timeout: 120_000, intervals: [2_000, 5_000, 10_000] },
+    )
+    .toBe(status);
+}
+
+test.describe('Requests to auth', () => {
+  test.describe.configure({ timeout: 420_000 });
+
+  test('rejected, then an approved delete: the videos admin follows auth\'s decisions', async ({ page, browser }, testInfo) => {
+    // One cross-app flow per run is enough; it changes shared QA state
+    test.skip(testInfo.project.name !== 'chromium', 'runs once, on chromium');
+    test.skip(!SINK_SECRET, 'E2E_CODE_SINK_SECRET is not set');
+    if (process.env.GITHUB_EVENT_NAME === 'pull_request') {
+      test.skip(!(await authRequestsDeployed()), 'QA admin-api predates /api/auth-requests; runs once this PR is on QA');
+    }
+
+    const subject = await registerTestUser(browser);
+    const authAdmin = await page.context().newPage();
+
+    // 1) Rejected: auth's note comes back to the videos admin
+    const rejectedId = await sendRequest(page, subject.id, 'suspend_account', 'E2E: please suspend this account');
+    await openInAuthAdmin(authAdmin, rejectedId);
+    await expect(authAdmin.getByTestId('moderation-subject-email')).toHaveText(subject.email);
+    await expect(authAdmin.getByTestId('moderation-reason')).toContainText('E2E: please suspend');
+    await authAdmin.locator('textarea#note').fill('E2E: not enough evidence');
+    await authAdmin.getByRole('button', { name: 'Reject' }).first().click();
+    await expect(authAdmin.getByTestId('moderation-status')).toHaveText('Rejected', { timeout: 20_000 });
+    await expectVideosStatus(page, subject.id, rejectedId, 'rejected');
+    await expect(page.locator(`[data-request-id="${rejectedId}"]`).getByTestId('auth-request-decision')).toContainText('E2E: not enough evidence');
+
+    // 2) Approved: auth runs the action (deletes the test account) and the videos admin shows "Actioned"
+    const approvedId = await sendRequest(page, subject.id, 'delete_account', 'E2E: delete this test account');
+    await openInAuthAdmin(authAdmin, approvedId);
+    authAdmin.once('dialog', (dialog) => dialog.accept());
+    await authAdmin.getByRole('button', { name: 'Approve and run' }).click();
+    // Auth runs the action from its moderation-actions queue; its page refreshes while queued
+    await expect(authAdmin.getByTestId('moderation-status')).toHaveText('Actioned', { timeout: 90_000 });
+    await expect(authAdmin.getByTestId('moderation-action-failed')).toHaveCount(0);
+    await expectVideosStatus(page, subject.id, approvedId, 'actioned');
+
+    // The list page shows both, with their statuses
+    await page.goto('/auth-requests');
+    await expect(page.locator(`[data-testid="auth-requests-row"][data-request-id="${approvedId}"]`)).toHaveAttribute('data-status', 'actioned');
+    await expect(page.locator(`[data-testid="auth-requests-row"][data-request-id="${rejectedId}"]`)).toHaveAttribute('data-status', 'rejected');
+    await authAdmin.close();
+  });
+});

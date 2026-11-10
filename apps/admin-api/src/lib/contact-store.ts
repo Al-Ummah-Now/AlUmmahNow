@@ -20,7 +20,7 @@ export interface ContactMessageRow {
   assignee_email: string | null;
   notify_status: string | null;
   ack_status: string | null;
-  /** Set while a delivery of this message has finally failed (migration 0010) */
+  /** Set while a delivery of this message has finally failed (migration 0011) */
   send_failed_at: string | null;
   delivery_error: string | null;
   created_at: string;

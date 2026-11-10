@@ -10,9 +10,12 @@
 --   apps/admin-api/migrations/0008_contact_messages.sql
 --   apps/admin-api/migrations/0009_theme_packages.sql
 --   apps/admin-api/migrations/0010_contact_mail_failures.sql
+--   apps/admin-api/migrations/0011_auth_moderation_requests.sql
 
+CREATE TABLE admin_audit_log (id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, actor_email TEXT, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL, metadata TEXT, created_at TEXT NOT NULL);
 CREATE TABLE ai_budget_daily (day TEXT NOT NULL, feature TEXT NOT NULL, reserved REAL NOT NULL DEFAULT 0, PRIMARY KEY (day, feature));
 CREATE TABLE ai_usage_daily (day TEXT NOT NULL, model TEXT NOT NULL, feature TEXT NOT NULL DEFAULT 'moderation', calls INTEGER NOT NULL DEFAULT 0, input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0, neurons REAL NOT NULL DEFAULT 0, usd REAL NOT NULL DEFAULT 0, PRIMARY KEY (day, model, feature));
+CREATE TABLE auth_moderation_requests (id TEXT PRIMARY KEY, auth_request_id TEXT UNIQUE, subject_user_id TEXT NOT NULL, action TEXT NOT NULL, reason_category TEXT NOT NULL, reason TEXT NOT NULL, evidence TEXT NOT NULL DEFAULT '[]', requested_by_id TEXT NOT NULL, requested_by_name TEXT NOT NULL, idempotency_key TEXT NOT NULL UNIQUE, delivery_status TEXT NOT NULL, delivery_attempts INTEGER NOT NULL DEFAULT 0, delivery_error TEXT, status TEXT, decision_note TEXT, history TEXT NOT NULL DEFAULT '[]', pending_info TEXT, sync_error TEXT, sync_requested_at TEXT, synced_at TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE channel_verification_log (id TEXT PRIMARY KEY, channel_id TEXT NOT NULL, verified INTEGER NOT NULL, note TEXT, actor_id TEXT NOT NULL, created_at TEXT NOT NULL);
 CREATE TABLE contact_messages (id TEXT PRIMARY KEY, status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'open', 'replied', 'closed', 'spam')), topic TEXT NOT NULL CHECK (topic IN ('general', 'account', 'problem', 'content', 'partnership')), name TEXT NOT NULL, email TEXT NOT NULL, message TEXT NOT NULL, user_id TEXT, locale TEXT NOT NULL DEFAULT 'en' CHECK (locale IN ('en', 'ar')), page_url TEXT, user_agent TEXT, ip_hash TEXT NOT NULL, assignee_id TEXT, assignee_email TEXT, notify_status TEXT, ack_status TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, send_failed_at TEXT, delivery_error TEXT);
 CREATE TABLE contact_notes (id TEXT PRIMARY KEY, message_id TEXT NOT NULL REFERENCES contact_messages(id) ON DELETE CASCADE, kind TEXT NOT NULL CHECK (kind IN ('note', 'reply')), body TEXT NOT NULL, author_id TEXT NOT NULL, author_email TEXT, email_to TEXT, email_subject TEXT, email_status TEXT, email_id TEXT, created_at TEXT NOT NULL, email_error TEXT);
@@ -31,6 +34,11 @@ CREATE TABLE subscriptions (id TEXT PRIMARY KEY, subject_type TEXT NOT NULL CHEC
 CREATE TABLE theme_package_versions (theme_id TEXT NOT NULL, version TEXT NOT NULL, size_bytes INTEGER NOT NULL, published_by TEXT NOT NULL, published_at TEXT NOT NULL, PRIMARY KEY (theme_id, version));
 CREATE TABLE theme_packages (id TEXT PRIMARY KEY, name_en TEXT NOT NULL, name_ar TEXT NOT NULL, based_on TEXT, latest_version TEXT, draft_updated_by TEXT NOT NULL, draft_updated_at TEXT NOT NULL, created_by TEXT NOT NULL, created_at TEXT NOT NULL);
 CREATE TABLE usage_counters (subject_type TEXT NOT NULL, subject_id TEXT NOT NULL, key TEXT NOT NULL, period TEXT NOT NULL, value INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY (subject_type, subject_id, key, period));
+CREATE INDEX idx_admin_audit_created ON admin_audit_log(created_at);
+CREATE INDEX idx_admin_audit_target ON admin_audit_log(target_type, target_id, created_at);
+CREATE INDEX idx_auth_modreq_delivery ON auth_moderation_requests(delivery_status, created_at);
+CREATE INDEX idx_auth_modreq_status ON auth_moderation_requests(status, created_at);
+CREATE INDEX idx_auth_modreq_subject ON auth_moderation_requests(subject_user_id, created_at);
 CREATE INDEX idx_channel_verification_log_channel ON channel_verification_log (channel_id, created_at);
 CREATE INDEX idx_contact_messages_created ON contact_messages (created_at DESC);
 CREATE INDEX idx_contact_messages_ip ON contact_messages (ip_hash, created_at);

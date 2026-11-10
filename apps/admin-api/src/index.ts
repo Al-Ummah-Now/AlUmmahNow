@@ -12,6 +12,7 @@ import processingRouter from './routers/processing.router';
 import type { AdminBindings } from './base/types';
 import { contactSubmit } from './endpoints/contact/ContactSubmit';
 import { contactMailConsumer, type ContactMailJob, type QueueMessageLike } from './lib/contact-mail-queue';
+import { handleAuthRequestBatch, scheduleSyncs, type AuthRequestMessage } from './lib/authModerationQueue';
 
 // ==========================================
 // APP SETUP
@@ -161,13 +162,24 @@ app.get('/health', (c) => {
 // EXPORT
 // ==========================================
 
-/** HTTP (Hono) and the contact mail queue consumer (lib/contact-mail-queue.ts). */
+/**
+ * HTTP (Hono), the queue consumers and the cron:
+ *   - contact mail jobs (lib/contact-mail-queue.ts)
+ *   - requests to auth: auth-moderation-requests[-env] and its DLQ (lib/authModerationQueue.ts)
+ *   - every 5 minutes: queue status reads of open requests to auth
+ */
 export default {
   fetch: app.fetch,
   async queue(batch: { queue: string; messages: readonly QueueMessageLike<ContactMailJob>[] }, env: AdminBindings): Promise<void> {
     if (/(^|-)contact-mail(-|$)/.test(batch.queue)) return contactMailConsumer(batch, env);
+    if (/^auth-moderation-requests(-|$)/.test(batch.queue)) return handleAuthRequestBatch(batch as unknown as MessageBatch<AuthRequestMessage>, env);
     logger.error('[Queue] Batch for an unknown queue; retrying', { queue: batch.queue });
     for (const m of batch.messages) m.retry();
+  },
+  async scheduled(_event: ScheduledController, env: AdminBindings, ctx: ExecutionContext) {
+    ctx.waitUntil(
+      scheduleSyncs(env).catch((error) => logger.error('[AuthRequests] scheduled status reads failed', { error: String(error) }))
+    );
   },
 };
 

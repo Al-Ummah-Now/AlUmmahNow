@@ -92,7 +92,9 @@
 			// Contact us mail jobs (lib/contact-mail-queue.ts), consumed below
 			{ "binding": "CONTACT_MAIL_QUEUE", "queue": "al-ummah-now-contact-mail" },
 			// Final mail failures → platform DLQ (processor stores them in dead_letters)
-			{ "binding": "ERRORS_DLQ", "queue": "al-ummah-now-dlq" }
+			{ "binding": "ERRORS_DLQ", "queue": "al-ummah-now-dlq" },
+			// Requests to auth: sends, answers and status reads, with retries (src/lib/authModerationQueue.ts)
+			{ "binding": "AUTH_REQUESTS_QUEUE", "queue": "auth-moderation-requests" }
 		],
 		"consumers": [
 			{
@@ -102,9 +104,13 @@
 				"max_batch_timeout": 5,
 				"max_retries": 5,
 				"dead_letter_queue": "al-ummah-now-dlq"
-			}
+			},
+			{ "queue": "auth-moderation-requests", "max_batch_size": 10, "max_batch_timeout": 5, "max_retries": 6, "retry_delay": 30, "dead_letter_queue": "auth-moderation-requests-dlq" },
+			{ "queue": "auth-moderation-requests-dlq", "max_batch_size": 10, "max_batch_timeout": 5, "max_retries": 3 }
 		]
 	},
+	// Status reads of open requests to auth (every 5 minutes)
+	"triggers": { "crons": ["*/5 * * * *"] },
 
 	// api-videos owns the content data: /internal/* (processing health, content management)
 	"services": [{ "binding": "VIDEOS", "service": "videos" }],
@@ -119,6 +125,9 @@
 		"AI_MODERATION_DAILY_NEURON_CAP": "100000",
 		// Contact us: support inbox notified of new messages (Reply-To of mail to senders) and the inbox link
 		"CONTACT_INBOX": "support@alummahnow.net",
+		// Moderation requests to auth: this app's auth client (secret: worker secret
+		// AUTH_MODERATION_CLIENT_SECRET) and the admin web for evidence links
+		"AUTH_MODERATION_CLIENT_ID": "d7464de8-363d-4fc1-b1af-7c71653f0afc",
 		"ADMIN_WEB_URL": "https://admin.alummahnow.net"
 	},
 
@@ -206,7 +215,9 @@
 					// Contact us mail jobs (lib/contact-mail-queue.ts), consumed below
 					{ "binding": "CONTACT_MAIL_QUEUE", "queue": "al-ummah-now-contact-mail-stage" },
 					// Final mail failures → platform DLQ (processor stores them in dead_letters)
-					{ "binding": "ERRORS_DLQ", "queue": "al-ummah-now-dlq-stage" }
+					{ "binding": "ERRORS_DLQ", "queue": "al-ummah-now-dlq-stage" },
+					// Requests to auth: sends, answers and status reads, with retries (src/lib/authModerationQueue.ts)
+					{ "binding": "AUTH_REQUESTS_QUEUE", "queue": "auth-moderation-requests-stage" }
 				],
 				"consumers": [
 					{
@@ -216,10 +227,14 @@
 						"max_batch_timeout": 5,
 						"max_retries": 5,
 						"dead_letter_queue": "al-ummah-now-dlq-stage"
-					}
+					},
+					{ "queue": "auth-moderation-requests-stage", "max_batch_size": 10, "max_batch_timeout": 5, "max_retries": 6, "retry_delay": 30, "dead_letter_queue": "auth-moderation-requests-dlq-stage" },
+					{ "queue": "auth-moderation-requests-dlq-stage", "max_batch_size": 10, "max_batch_timeout": 5, "max_retries": 3 }
 				]
 			},
 			"services": [{ "binding": "VIDEOS", "service": "videos-stage" }],
+			// Status reads of open requests to auth (every 5 minutes)
+			"triggers": { "crons": ["*/5 * * * *"] },
 			"vars": {
 				"ENVIRONMENT": "stage",
 				"LOG_LEVEL": "info",
@@ -228,6 +243,7 @@
 				// Shown in admin when D1 has no cap; keep equal to the processor's value
 				"AI_MODERATION_DAILY_NEURON_CAP": "10000",
 				"CONTACT_INBOX": "support@alummahnow.net",
+				"AUTH_MODERATION_CLIENT_ID": "d7464de8-363d-4fc1-b1af-7c71653f0afc",
 				"ADMIN_WEB_URL": "https://admin.stage.alummahnow.net"
 			},
 			"secrets_store_secrets": [

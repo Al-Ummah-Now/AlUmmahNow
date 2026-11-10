@@ -49,6 +49,8 @@ jobs:
       VIDEOS_API_URL: https://videos.api.qa.alummahnow.net
       OPENAUTH_URL: https://auth.qa.alummahnow.net
       QA_SEED_PASSWORD: ${{ secrets.QA_SEED_PASSWORD }}
+      # 12-auth-requests.spec.ts registers a test user; its sign-up code comes from auth's E2E sink
+      E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET_QA }}
 
     steps:
       - name: Checkout code
@@ -117,6 +119,7 @@ jobs:
         run: >-
           python3 scripts/ci/scan-artifacts-for-secrets.py
           --env QA_SEED_PASSWORD
+          --env E2E_CODE_SINK_SECRET
           --remove apps/admin-web/playwright-report apps/admin-web/test-results
 
       - name: Upload HTML report

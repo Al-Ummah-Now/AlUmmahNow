@@ -33,6 +33,9 @@ const STAGE_GUARDS: Pick<EnvRule, 'forbiddenValues' | 'allowedHosts'> = {
 };
 const stageRule = (rule: Omit<EnvRule, 'env' | 'allowedHosts'>): EnvRule => ({ env: 'stage', ...STAGE_GUARDS, ...rule });
 
+/** The videos admin's auth client for moderation requests (AlUmmahNowAuth migration 0022): same id in every env. */
+const AUTH_MODERATION_CLIENT = 'd7464de8-363d-4fc1-b1af-7c71653f0afc';
+
 const INTERNAL_API_KEY: Binding = { kind: 'secrets_store_secrets', name: 'INTERNAL_API_KEY' };
 const RESEND_API_KEY: Binding = { kind: 'secrets_store_secrets', name: 'RESEND_API_KEY' };
 
@@ -197,7 +200,7 @@ export const APPS: AppRule[] = [
 		production: {
 			env: null,
 			name: 'al-ummah-admin-api',
-			vars: { ENVIRONMENT: 'production', WEBSOCKET_URL: 'https://realtime.alummahnow.net' },
+			vars: { ENVIRONMENT: 'production', WEBSOCKET_URL: 'https://realtime.alummahnow.net', AUTH_MODERATION_CLIENT_ID: AUTH_MODERATION_CLIENT, ADMIN_WEB_URL: 'https://admin.alummahnow.net' },
 			requiredBindings: [
 				INTERNAL_API_KEY,
 				{ kind: 'd1_databases', name: 'REPORTS_DB' },
@@ -209,9 +212,12 @@ export const APPS: AppRule[] = [
 				{ kind: 'queue_producer', name: 'CONTACT_MAIL_QUEUE' },
 				{ kind: 'queue_consumer', name: 'al-ummah-now-contact-mail' },
 				{ kind: 'queue_producer', name: 'ERRORS_DLQ' },
+				// Requests to auth (docs/admin/AUTH_MODERATION_REQUESTS.md)
+				{ kind: 'queue_producer', name: 'AUTH_REQUESTS_QUEUE' },
+				{ kind: 'queue_consumer', name: 'auth-moderation-requests' },
 			],
 			...PROD_GUARDS,
 		},
-		stage: stageRule({ name: 'al-ummah-admin-api-stage', requireRoutes: true, vars: { ENVIRONMENT: 'stage', WEBSOCKET_URL: STAGE_REALTIME, Issuer: STAGE_AUTH }, requiredBindings: [INTERNAL_API_KEY, { kind: 'd1_databases', name: 'REPORTS_DB' }, RESEND_API_KEY, { kind: 'r2_buckets', name: 'theme_packages' }, { kind: 'services', name: 'VIDEOS' }, { kind: 'queue_producer', name: 'CONTACT_MAIL_QUEUE' }, { kind: 'queue_consumer', name: 'al-ummah-now-contact-mail-stage' }, { kind: 'queue_producer', name: 'ERRORS_DLQ' }] }),
+		stage: stageRule({ name: 'al-ummah-admin-api-stage', requireRoutes: true, vars: { ENVIRONMENT: 'stage', WEBSOCKET_URL: STAGE_REALTIME, Issuer: STAGE_AUTH, AUTH_MODERATION_CLIENT_ID: AUTH_MODERATION_CLIENT, ADMIN_WEB_URL: 'https://admin.stage.alummahnow.net' }, requiredBindings: [INTERNAL_API_KEY, { kind: 'd1_databases', name: 'REPORTS_DB' }, RESEND_API_KEY, { kind: 'r2_buckets', name: 'theme_packages' }, { kind: 'services', name: 'VIDEOS' }, { kind: 'queue_producer', name: 'CONTACT_MAIL_QUEUE' }, { kind: 'queue_consumer', name: 'al-ummah-now-contact-mail-stage' }, { kind: 'queue_producer', name: 'ERRORS_DLQ' }, { kind: 'queue_producer', name: 'AUTH_REQUESTS_QUEUE' }, { kind: 'queue_consumer', name: 'auth-moderation-requests-stage' }] }),
 	},
 ];

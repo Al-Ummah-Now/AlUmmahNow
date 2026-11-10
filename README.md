@@ -151,6 +151,7 @@ The source of truth is [`scripts/release/secrets-manifest.ts`](scripts/release/s
 | | | `INTERNAL_API_KEY` → `internal-api-key` / `internal-api-key-qa` / `internal-api-key-stage` | `X-API-Key` for `/internal/*` and calls to other Workers |
 | admin-api | `al-ummah-admin-api` / `-qa` / `-stage` | `INTERNAL_API_KEY` | as above; also checks the Contact us route's `X-API-Key` on `/internal/contact` |
 | | | `RESEND_API_KEY` → `RESEND_API_KEY` (all envs; the auth server's send-only key) | Contact us: support-inbox notification, sender acknowledgement and staff replies |
+| | | `AUTH_MODERATION_CLIENT_SECRET` (worker secret, one value per env) | Client secret of `AUTH_MODERATION_CLIENT_ID`: moderation requests to auth ([docs/admin/AUTH_MODERATION_REQUESTS.md](docs/admin/AUTH_MODERATION_REQUESTS.md)) |
 | websocket-server | `al-ummah-now-comms` / `-qa` / `-stage` | `INTERNAL_API_KEY` | Authenticates broadcast calls from api-videos, processor and scheduler |
 | processor | `al-ummah-now-processor` / `-qa` / `-stage` | `INTERNAL_API_KEY` | as above |
 | scheduler | `al-ummah-scheduler` / `-qa` / `-stage` | `INTERNAL_API_KEY` | Scheduled-publish broadcasts. Needs wrangler 4: wrangler 3 silently drops `secrets_store_secrets` |
@@ -178,10 +179,11 @@ Skew protection (pages open during a deploy keep working) also sets `CF_WORKER_N
 | admin-web | `a24e39de-…` | `b24e39de-…` | `a24e39de-…` | Starts logins, so required |
 | api-videos | `b1770235-…` | `c1770235-…` | `b1770235-…` | Verification only; checked when set |
 | websocket-server, admin-api | not set | not set | not set | Verification only; checked when set |
+| admin-api `AUTH_MODERATION_CLIENT_ID` | `d7464de8-…` | `d7464de8-…` | `d7464de8-…` | "Videos Admin (moderation requests)", required |
 
 Stage's auth D1 registers the same client ids as production.
 
-No app in this repo uses an OAuth client *secret*. The M2M clients in auth D1 (API Videos, Admin API, Admin Web, WebSocket Server) have hashed secrets that no Worker consumes yet. If one starts using `client_credentials`, rotate its secret with `scripts/release/rotate-client-secret.ts` in AlUmmahNowAuth and add it to the manifest.
+Only admin-api uses an OAuth client *secret*: `AUTH_MODERATION_CLIENT_SECRET` for client `d7464de8-…` (set and rotated with `scripts/release/rotate-client-secret.ts` in AlUmmahNowAuth, `--worker al-ummah-admin-api[-qa|-stage]:AUTH_MODERATION_CLIENT_SECRET`). The other M2M clients in auth D1 (API Videos, Admin API, Admin Web, WebSocket Server) have hashed secrets that no Worker consumes yet. If one starts using `client_credentials`, rotate its secret with `scripts/release/rotate-client-secret.ts` in AlUmmahNowAuth and add it to the manifest.
 
 GitHub secrets:
 

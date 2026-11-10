@@ -48,6 +48,10 @@ export const PERMISSIONS = {
   'contact:manage': ADMIN_ROLE_IDS,
   /** Upload processing health: sync from Bunny, retry processing, mark failed. */
   'videos:processing': ADMIN_ROLE_IDS,
+  /** See the moderation requests sent to auth and their status. */
+  'auth_requests:read': MODERATOR_ROLE_IDS,
+  /** Send a moderation request to auth (suspend/delete the auth identity, …), retry it, answer auth. */
+  'auth_requests:send': ADMIN_ROLE_IDS,
 } as const satisfies Record<string, readonly string[]>;
 
 export type Permission = keyof typeof PERMISSIONS;
@@ -61,4 +65,9 @@ export function hasPermission(roles: readonly string[] | undefined, permission: 
 /** Every permission the roles grant (sorted), for clients that hide what they cannot do. */
 export function permissionsFor(roles: readonly string[] | undefined): Permission[] {
   return (Object.keys(PERMISSIONS) as Permission[]).filter((p) => hasPermission(roles, p)).sort();
+}
+
+/** Sending a moderation request to auth: the auth_requests:send permission (admins and super admins). */
+export function canRequestAuthAction(roles: readonly string[] | undefined): boolean {
+  return hasPermission(roles, 'auth_requests:send');
 }
