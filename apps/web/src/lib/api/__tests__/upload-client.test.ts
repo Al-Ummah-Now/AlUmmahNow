@@ -55,6 +55,15 @@ describe('upload-client (plain API calls, no Server Actions)', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
+  it('passes a creator-tier refusal\'s code and wait through, without retrying', async () => {
+    const fetchImpl = jest.fn().mockResolvedValue(json(429, { success: false, code: 'upload_limit', error: "You've reached the upload limit; try again later", retryAfter: 1380 }));
+    const res = await callUploadApi({ method: 'POST', path: '/x', channelId: 'c', retries: 3 }, 'fail', fetchImpl);
+    expect(res).toEqual({ success: false, code: 'upload_limit', retryAfter: 1380, error: "You've reached the upload limit; try again later" });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const invitation = jest.fn().mockResolvedValue(json(403, { success: false, code: 'uploads_by_invitation', error: 'Uploading is by invitation for now' }));
+    expect((await callUploadApi({ method: 'POST', path: '/x', channelId: 'c' }, 'fail', invitation)).code).toBe('uploads_by_invitation');
+  });
+
   it('fails cleanly when signed out', async () => {
     auth.mockResolvedValue({ accessToken: null });
     const fetchImpl = jest.fn();

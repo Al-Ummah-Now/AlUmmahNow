@@ -25200,6 +25200,37 @@
                           "resumable"
                         ]
                       }
+                    },
+                    "deferred": {
+                      "type": "object",
+                      "properties": {
+                        "count": {
+                          "type": "number",
+                          "description": "Videos not started: the creator tier's upload limit fits only the first result.length"
+                        },
+                        "indexes": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          },
+                          "description": "Positions (in the request's videos) of the deferred videos"
+                        },
+                        "retryAfter": {
+                          "type": "number",
+                          "description": "Seconds until the deferred videos can be initiated"
+                        },
+                        "retryAt": {
+                          "type": "string",
+                          "description": "ISO 8601 datetime when the deferred videos can be initiated"
+                        }
+                      },
+                      "required": [
+                        "count",
+                        "indexes",
+                        "retryAfter",
+                        "retryAt"
+                      ],
+                      "description": "Present when only part of the batch fits the upload limit"
                     }
                   },
                   "required": [

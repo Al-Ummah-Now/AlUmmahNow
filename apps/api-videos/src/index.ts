@@ -14,7 +14,10 @@ import { videosBanMiddleware } from "./middleware/videos-ban";
 import adminInternalRouter from "./routers/admin.router";
 import { loggingMiddleware } from "./middleware/logging";
 import { errorHandler } from "./middleware/error-handler";
-import { pruneRateLimits, rateLimitMiddleware, UPLOAD_CONTINUE_PATHS, UPLOAD_SESSION_PATHS, uploadContinueLimitMiddleware, uploadSessionLimitMiddleware } from "./middleware/rate-limit";
+import { pruneRateLimits, rateLimitMiddleware } from "./middleware/rate-limit";
+import { UPLOAD_CONTINUE_PATHS, UPLOAD_SESSION_PATHS, uploadContinueLimitMiddleware, uploadSessionLimitMiddleware } from "./middleware/upload-limits";
+import { pruneLimitHits } from "./lib/creatorTiers";
+import { channelCreateGate, handleCreatorAccess } from "./endpoints/creator/creatorAccess";
 import { logger } from './lib/logger';
 import { registerAllRouters } from './routers';
 import type { AppBindings } from './base';
@@ -169,15 +172,22 @@ app.use('/internal/admin/*', bunnySigningMiddleware);
 // RATE LIMITING
 // ==========================================
 
-// SECURITY: Limit new video upload SESSIONS, once per video (#290). The calls
-// that continue an initiated upload (TUS HEAD/PATCH/DELETE, resume) are not
-// counted: they need that upload's session, owned by the same user. Rejected
-// initiations are refused before any video record is created.
+// SECURITY: Uploading is by invitation (creator tiers, middleware/upload-limits.ts).
+// No tier: every session route, TUS create and complete answer 403. A tier's
+// limits count new upload SESSIONS, once per video (#290); the calls that
+// continue an initiated upload (TUS HEAD/PATCH/DELETE, resume) are not counted.
+// Rejected initiations are refused before any video record is created.
 const uploadSessionLimit = uploadSessionLimitMiddleware();
 for (const path of UPLOAD_SESSION_PATHS) app.use(path, uploadSessionLimit);
 // TUS create and complete: a looser per-user bucket so a session cannot be replayed without bound
 const uploadContinueLimit = uploadContinueLimitMiddleware();
 for (const path of UPLOAD_CONTINUE_PATHS) app.use(path, uploadContinueLimit);
+
+// Channel creation is by invitation too: a creator tier, within its channel limit
+app.use('/api/channels', channelCreateGate);
+app.use('/api/channels/', channelCreateGate);
+// What the signed-in user may do (Upload, Create channel) for the web UI
+app.get('/api/me/creator', authMiddleware, handleCreatorAccess);
 
 // SECURITY: Apply rate limiting to community media uploads
 app.use('/api/community/media/upload/images', rateLimitMiddleware('image_upload'));
@@ -486,6 +496,8 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 			try {
 				// Upload rate limits (AV-14): drop windows of users who stopped uploading and expired leases.
 				if (rawEnv.SEARCH_DB) await pruneRateLimits(rawEnv.SEARCH_DB);
+				// Upload-limit hits older than 30 days (the Creators page shows the last 7)
+				if (rawEnv.SEARCH_DB) await pruneLimitHits(rawEnv.SEARCH_DB);
 			} catch (error) {
 				logger.error('[RateLimit] Prune failed', { error: error instanceof Error ? error.message : String(error) });
 				reportJobFailure(rawEnv, ctx, 'rate-limit-prune', error);

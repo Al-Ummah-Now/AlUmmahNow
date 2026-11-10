@@ -21,6 +21,8 @@ import { checkImage, storeImage } from '../lib/admin/images';
 import { countJobs, getJob, listJobs, retryJob } from '../lib/admin/jobs';
 import { LegacyRestoreError } from '../lib/admin/legacy-restore';
 import { logger } from '../lib/logger';
+import { listCreators } from '../lib/admin/creators';
+import { assignTier, CreatorTierError, deleteTier, readAssignment, readTiers, saveTier } from '../lib/creatorTiers';
 
 type Env = { Bindings: admin.AdminServiceEnv & Record<string, unknown> };
 
@@ -122,6 +124,9 @@ const body = async (c: Context<Env>) => c.req.json().catch(() => ({}));
 const ok = (c: Context<Env>, result: unknown) => c.json({ success: true, result });
 
 app.onError((error, c) => {
+	if (error instanceof CreatorTierError) {
+		return c.json({ success: false, code: error.code, error: error.message }, error.status as 400);
+	}
 	if (error instanceof admin.AdminError) {
 		return c.json({ success: false, code: error.code, error: error.message }, error.status);
 	}
@@ -207,6 +212,42 @@ app.get('/legacy-profiles/plan', async (c) => ok(c, await admin.legacyRestorePla
 app.post('/legacy-profiles/restore', async (c) => {
 	const request = parse(LegacyRestoreRequest, await body(c));
 	return ok(c, await admin.startLegacyRestore(c.env, request.approved as never, actor(c), request.runId));
+});
+
+// Creator tiers (lib/creatorTiers.ts): who may upload and create channels.
+// admin-api checks creators:manage and writes the audit row.
+const CreatorQuery = z.object({
+	q: z.string().max(200).optional(),
+	filter: z.enum(['all', 'needs_tier', 'assigned', 'limited']).optional(),
+	tierId: z.string().max(40).optional(),
+	...page,
+});
+const TierAssign = z.object({ tierId: z.string().min(1).max(40).nullable(), source: z.enum(['admin', 'subscription']).optional() }).strict();
+const TierBody = z
+	.object({
+		id: z.string().max(40).optional(),
+		name: z.string().max(60).optional(),
+		unlimited: z.boolean().optional(),
+		perHour: z.coerce.number().optional(),
+		perDay: z.coerce.number().optional(),
+		maxConcurrent: z.coerce.number().optional(),
+		maxChannels: z.coerce.number().nullable().optional(),
+	})
+	.strict();
+const searchDb = (c: Context<Env>) => c.env.SEARCH_DB as D1Database;
+app.get('/creators', async (c) => ok(c, await listCreators(c.env as never, parse(CreatorQuery, c.req.query()))));
+app.get('/creator-tiers', async (c) => ok(c, { items: await readTiers(searchDb(c)) }));
+app.post('/creator-tiers', async (c) => {
+	const input = parse(TierBody, await body(c));
+	if (!input.id) throw new admin.AdminError(400, 'invalid_request', 'id: Required');
+	return ok(c, await saveTier(searchDb(c), input.id, input, actor(c), { create: true }));
+});
+app.put('/creator-tiers/:id', async (c) => ok(c, await saveTier(searchDb(c), c.req.param('id'), parse(TierBody, await body(c)), actor(c))));
+app.delete('/creator-tiers/:id', async (c) => ok(c, await deleteTier(searchDb(c), c.req.param('id'))));
+app.get('/users/:id/creator-tier', async (c) => ok(c, { assignment: await readAssignment(searchDb(c), c.req.param('id')) }));
+app.put('/users/:id/creator-tier', async (c) => {
+	const input = parse(TierAssign, await body(c));
+	return ok(c, await assignTier(searchDb(c), c.req.param('id'), input.tierId, actor(c), input.source ?? 'admin'));
 });
 
 // Admin jobs (heavy actions run from the admin-jobs queue; see lib/admin/jobs.ts)

@@ -9,6 +9,7 @@
 import { test, expect, type BrowserContext, type Page } from '@playwright/test';
 import { target } from './targets';
 import { apiFetch, createProfile, signUpOnWeb, type Locale } from './web-session';
+import { grantCreatorTier } from './creator-tier';
 
 // The signed-in test registers through the auth server: its trace would hold
 // the typed password and email code. Trace off for the file.
@@ -181,6 +182,8 @@ test.describe('Release: page frame', () => {
     await page.setViewportSize(DESKTOP);
     const user = await signUpOnWeb(page, 'rel-frame-upload');
     await createProfile(user);
+    // Uploading and creating channels are by invitation: an admin makes the new user a Creator
+    await grantCreatorTier(user);
 
     await page.goto(`${target().web}/en`);
     const upload = page.getByTestId('header-upload');

@@ -13,6 +13,8 @@ import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { VIDEO_UPLOAD_CONFIG, VIDEO_UPLOAD_ERRORS } from "@/lib/constants/uploadConfig";
 import { Upload, X, AlertCircle, Pause, Play, RotateCcw } from "lucide-react";
 import { initiateVideoUpload, completeVideoUpload, scheduleUploadedVideo } from "@/lib/api/upload-client";
+import { creatorRefusalMessage } from "@/lib/upload/friendly-error";
+import { refreshCreatorAccess } from "@/hooks/useCreatorAccess";
 import { useHoldReloadWhile } from "@/lib/version-skew/VersionSkewProvider";
 import { VideoFormatChoice, type VideoFormatChoiceValue } from "@/components/videoFormat/VideoFormatChoice";
 import { useLanguage } from "@/hooks/useLanguage";
@@ -232,7 +234,14 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
    * reference. Our own translated messages are kept; raw errors never shown.
    */
   const reportFailure = (error: unknown, step: UploadStep = uploadStepRef.current) => {
-    const e = (error ?? {}) as { message?: string; status?: number; serverRef?: string };
+    const e = (error ?? {}) as { message?: string; status?: number; serverRef?: string; refusal?: boolean };
+    // A creator-tier refusal (no tier, upload limit) is an expected answer, not
+    // a failure: its friendly message as is, nothing for the Errors page
+    if (e.refusal && e.message) {
+      setUploadProgress(prev => ({ percentage: prev?.percentage || 0, state: 'error', error: e.message }));
+      onError(e.message);
+      return;
+    }
     const ref = reportUploadError(step, error, {
       flow: 'single',
       ...(selectedFile ? { file: selectedFile } : {}),
@@ -352,6 +361,13 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
         );
 
         if (!initiateResult.success || !initiateResult.result) {
+          // A creator-tier refusal (no tier, upload limit) in the user's words; never the server's text
+          const refusal = creatorRefusalMessage(t, initiateResult);
+          if (refusal) {
+            logger.warn('[VideoUpload] Upload refused', { code: initiateResult.code, retryAfter: initiateResult.retryAfter });
+            if (initiateResult.code === 'uploads_by_invitation') void refreshCreatorAccess();
+            throw Object.assign(new Error(refusal), { refusal: true });
+          }
           throw Object.assign(new Error(initiateResult.error || VIDEO_UPLOAD_ERRORS.UPLOAD_FAILED), { status: initiateResult.status, serverRef: initiateResult.serverRef });
         }
 
@@ -466,6 +482,8 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
           );
 
           if (!completeResult.success) {
+            const refusal = creatorRefusalMessage(t, completeResult);
+            if (refusal) throw Object.assign(new Error(refusal), { refusal: true });
             throw Object.assign(new Error(completeResult.error || t.upload.completeFailed), { status: completeResult.status, serverRef: completeResult.serverRef });
           }
 

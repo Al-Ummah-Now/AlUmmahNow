@@ -15,6 +15,7 @@
  */
 import { test, expect } from '@playwright/test';
 import { apiFetch, createProfile, signUpOnWeb, type WebUser } from './web-session';
+import { grantCreatorTier } from './creator-tier';
 
 const VIEWS = 200;
 const WATCH_REPORTS = 120;
@@ -60,6 +61,8 @@ test.describe('Release: hot paths under parallel load', () => {
     test.setTimeout(6 * 60_000);
     const user = await signUpOnWeb(page, 'rel-load');
     await createProfile(user);
+    // Uploading and creating channels are by invitation: an admin makes the new user a Creator
+    await grantCreatorTier(user);
     const channelId = await createChannel(user);
 
     // A private video: only its owner can count views on it. Created the way

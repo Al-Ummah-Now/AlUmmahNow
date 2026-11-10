@@ -13,6 +13,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { target } from './targets';
 import { apiFetch, createProfile, signUpOnWeb, type WebUser } from './web-session';
+import { grantCreatorTier } from './creator-tier';
 import { expectLoadedImage, uploadThroughForm } from './profile-images';
 
 // Signs users in through the auth server: traces would hold the password and code
@@ -67,6 +68,8 @@ test.describe('Release: profile and channel images', () => {
   test('channel avatar and cover show on the channel page, the channel card and in the edit form', async ({ page }) => {
     const user = await signUpOnWeb(page, 'rel-chimg');
     await createProfile(user);
+    // Uploading and creating channels are by invitation: an admin makes the new user a Creator
+    await grantCreatorTier(user);
     await answerConsent(page);
     const name = `Release E2E channel images ${Date.now().toString(36)}`;
     const created = await apiFetch(user, '/api/channels', {

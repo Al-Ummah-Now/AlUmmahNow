@@ -17,6 +17,7 @@ import * as path from 'path';
 import { test, expect, type Page } from '@playwright/test';
 import { target } from './targets';
 import { apiFetch, createProfile, signUpOnWeb, type WebUser } from './web-session';
+import { grantCreatorTier } from './creator-tier';
 
 // Signs in through the auth server: traces would hold the typed password and code
 test.use({ trace: 'off' });
@@ -135,6 +136,8 @@ test.describe('Release: Short vs video', () => {
     test.setTimeout(15 * 60 * 1000);
     const user = await signUpOnWeb(page, 'rel-format');
     await createProfile(user);
+    // Uploading and creating channels are by invitation: an admin makes the new user a Creator
+    await grantCreatorTier(user);
     const stamp = Date.now().toString(36);
     const channelId = await createChannelInMenu(page, user, `Release E2E format ${stamp}`);
 

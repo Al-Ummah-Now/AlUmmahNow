@@ -688,6 +688,21 @@ export const AR_TRANSLATIONS: AppTranslations = {
     resultsLabel: 'نتائج البحث',
   },
 
+  creator: {
+    invitationTitle: 'الرفع بدعوة فقط حاليًا',
+    invitationMessage: 'رفع الفيديوهات وإنشاء القنوات متاحان لصنّاع المحتوى المدعوّين في هذه المرحلة. ما زال بإمكانك المشاهدة والمتابعة وحفظ الفيديوهات.',
+    invitationShort: 'الرفع بدعوة فقط حاليًا',
+    limitReached: 'بلغت حد الرفع؛ حاول مرة أخرى بعد {time}',
+    limitReachedSoon: 'بلغت حد الرفع؛ حاول مرة أخرى بعد قليل',
+    channelLimit: 'يمكنك امتلاك {max} قنوات كحد أقصى',
+    batchPartial: 'بدأ رفع {started} من {total} ملفات. سيبدأ رفع الـ{left} الباقية بعد {time} إن أبقيت هذه الصفحة مفتوحة.',
+    batchDeferredRow: 'بانتظار حد الرفع',
+    unavailable: 'الرفع غير متاح لحظيًا؛ حاول بعد قليل',
+    minutes: '{count} دقيقة',
+    minute: 'دقيقة واحدة',
+    hours: '{count} ساعات',
+    hour: 'ساعة واحدة',
+  },
   upload: {
     uploadTitle: 'رفع فيديو',
     uploadVideo: 'رفع فيديو',

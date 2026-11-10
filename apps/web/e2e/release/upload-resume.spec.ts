@@ -22,6 +22,7 @@ import { randomBytes } from 'crypto';
 import { test, expect, type Page, type Route } from '@playwright/test';
 import { target } from './targets';
 import { apiFetch, createProfile, signUpOnWeb, type WebUser } from './web-session';
+import { grantCreatorTier } from './creator-tier';
 import { fillSecret } from './secret-fill';
 
 // Signs users in through the auth server: traces would hold the password.
@@ -72,6 +73,8 @@ async function uploader(page: Page, prefix: string): Promise<Uploader> {
 
   const user = await signUpOnWeb(page, prefix);
   await createProfile(user);
+  // Uploading and creating channels are by invitation: an admin makes the new user a Creator
+  await grantCreatorTier(user);
   // The channel through the account menu (also refreshes the web session's channels)
   const channelName = `Release E2E resume ${Date.now().toString(36)}`;
   await page.goto(`${target().web}/en`);

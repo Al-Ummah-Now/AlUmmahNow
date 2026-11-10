@@ -408,6 +408,71 @@ app.post('/legacy-profiles/restore', async (c) => {
 });
 
 // ---------------------------------------------------------------------------
+// Creator tiers (videos-side; never Auth RBAC): who may upload and create
+// channels. Reads for every admin; changes need creators:manage (admins and
+// super admins) and are audited. A change applies to the user's next request.
+// ---------------------------------------------------------------------------
+
+interface TierAssignment { tierId: string; source: string }
+
+app.get('/creators', async (c) => ok(c, await videos(c, '/creators', { query: c.req.query() })));
+app.get('/creator-tiers', async (c) => ok(c, await videos(c, '/creator-tiers')));
+
+app.get('/creator-tiers/audit', async (c) => {
+  const tiers = await videos<{ items: Array<{ id: string }> }>(c, '/creator-tiers');
+  const entries = await Promise.all(tiers.items.map((t) => readAudit(c.env.REPORTS_DB, { kind: 'creator-tier', id: t.id, limit: 20 })));
+  return ok(c, { items: entries.flat().sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 50) });
+});
+
+app.post('/creator-tiers', async (c) => {
+  need(c, 'creators:manage');
+  const input = await body(c);
+  const id = typeof input.id === 'string' ? input.id : '';
+  return ok(c, await audited(c, { kind: 'creator-tier', id, action: 'create', details: input }, () =>
+    videos(c, '/creator-tiers', { method: 'POST', json: input })));
+});
+
+app.put('/creator-tiers/:id', async (c) => {
+  need(c, 'creators:manage');
+  const id = c.req.param('id');
+  const input = await body(c);
+  const current = (await videos<{ items: Array<Record<string, unknown>> }>(c, '/creator-tiers')).items.find((t) => t.id === id);
+  return ok(c, await audited(c, { kind: 'creator-tier', id, action: 'edit', details: input, previous: current ? previousOf(current as never, input) : undefined }, () =>
+    videos(c, `/creator-tiers/${encodeURIComponent(id)}`, { method: 'PUT', json: input })));
+});
+
+app.delete('/creator-tiers/:id', async (c) => {
+  need(c, 'creators:manage');
+  const id = c.req.param('id');
+  return ok(c, await audited(c, { kind: 'creator-tier', id, action: 'delete' }, () =>
+    videos(c, `/creator-tiers/${encodeURIComponent(id)}`, { method: 'DELETE' })));
+});
+
+app.get('/users/:id/creator-tier', async (c) => {
+  const id = c.req.param('id');
+  const [current, audit] = await Promise.all([
+    videos<{ assignment: TierAssignment | null }>(c, `/users/${encodeURIComponent(id)}/creator-tier`),
+    readAudit(c.env.REPORTS_DB, { kind: 'user', id, limit: 50 }),
+  ]);
+  return ok(c, { ...current, audit: audit.filter((e) => e.action === 'creator-tier') });
+});
+
+app.put('/users/:id/creator-tier', async (c) => {
+  need(c, 'creators:manage');
+  const id = c.req.param('id');
+  const input = await body(c);
+  const tierId = input.tierId === null || input.tierId === '' ? null : String(input.tierId ?? '');
+  if (tierId === '') return c.json({ success: false, code: 'invalid_request', error: 'tierId is required (null removes the tier)' }, 400);
+  const source = input.source === 'subscription' ? 'subscription' : 'admin';
+  const current = await videos<{ assignment: TierAssignment | null }>(c, `/users/${encodeURIComponent(id)}/creator-tier`);
+  return ok(c, await audited(c, {
+    kind: 'user', id, action: 'creator-tier',
+    details: { tierId, source },
+    previous: { tierId: current.assignment?.tierId ?? null, source: current.assignment?.source ?? null },
+  }, () => videos(c, `/users/${encodeURIComponent(id)}/creator-tier`, { method: 'PUT', json: { tierId, source } })));
+});
+
+// ---------------------------------------------------------------------------
 // Admin jobs: heavy actions (deletes, suspend/ban cascades, transfers, moves)
 // run from a queue in api-videos. Failed ones flag the admin here, with Retry.
 // ---------------------------------------------------------------------------

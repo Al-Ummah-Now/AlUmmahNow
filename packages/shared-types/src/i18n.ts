@@ -122,6 +122,22 @@ export interface UpdateTranslationsResponse {
  * All translations must implement this interface to ensure completeness
  */
 export interface AppTranslations {
+  /** Creator tiers: uploading and creating channels are by invitation */
+  creator: {
+    invitationTitle: string;
+    invitationMessage: string;
+    invitationShort: string;
+    limitReached: string;
+    limitReachedSoon: string;
+    channelLimit: string;
+    batchPartial: string;
+    batchDeferredRow: string;
+    unavailable: string;
+    minutes: string;
+    minute: string;
+    hours: string;
+    hour: string;
+  };
   imageCrop: {
     avatarTitle: string;
     coverTitle: string;

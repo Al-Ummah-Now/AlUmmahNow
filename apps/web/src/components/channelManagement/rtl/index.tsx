@@ -9,6 +9,8 @@ import { useChannels } from '@/hooks/useChannels';
 import { ChannelManagementSectionProps, CreateChannelFormData } from '../types';
 import { ChannelGridRTL } from './ChannelGrid';
 import { CreateChannelDialog } from '../CreateChannelDialog';
+import { mayCreateChannel, useCreatorAccess } from '@/hooks/useCreatorAccess';
+import { UploadsByInvitationNotice } from '../../VideosNotices';
 import { useLanguage } from '@/hooks/useLanguage';
 
 /**
@@ -27,6 +29,9 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
   const router = useRouter();
   const { user } = useAuth();
   const { t } = useLanguage();
+  // Creating channels is by invitation (creator tiers) and bounded by the tier's channel limit
+  const creatorAccess = useCreatorAccess();
+  const canCreate = mayCreateChannel(creatorAccess);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -111,7 +116,7 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
             إدارة قنواتك ومحتواك
           </p>
         </div>
-        {channels.length > 0 && (
+        {channels.length > 0 && canCreate && (
           <button
             onClick={() => setDialogOpen(true)}
             className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
@@ -128,6 +133,18 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
           </button>
         )}
       </div>
+
+      {!canCreate && creatorAccess.status === 'ready' && (
+        <div className="mb-6">
+          {creatorAccess.access.canUpload ? (
+            <p role="status" data-testid="channel-limit-reached" className="rounded-lg border border-border bg-card px-4 py-3 text-sm text-card-foreground">
+              {t.creator.channelLimit.replace('{max}', String(creatorAccess.access.maxChannels ?? ''))}
+            </p>
+          ) : (
+            <UploadsByInvitationNotice />
+          )}
+        </div>
+      )}
 
       {/* Error Message */}
       {error && (
@@ -157,7 +174,7 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
         onEdit={handleEditChannel}
         onDelete={handleDeleteChannel}
         onView={handleViewChannel}
-        onCreate={() => setDialogOpen(true)}
+        onCreate={canCreate ? () => setDialogOpen(true) : undefined}
         isLoading={isLoading}
       />
 

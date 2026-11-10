@@ -45,6 +45,7 @@ jest.mock('@/lib/version-skew/recovery', () => ({
   recoverFromVersionSkew: jest.fn((error: unknown) => /Server Action .* was not found/.test(String((error as Error)?.message))),
 }));
 jest.mock('@/hooks/useLanguage', () => ({ useLanguage: () => ({ t: EN_TRANSLATIONS, lang: 'en' }) }));
+jest.mock('@/hooks/useCreatorAccess', () => ({ refreshCreatorAccess: jest.fn(async () => undefined) }));
 
 import { useBatchUpload } from '../useBatchUpload';
 import { initiateBatchUpload, completeVideoUpload } from '@/lib/api/upload-client';
@@ -243,5 +244,48 @@ describe('useBatchUpload', () => {
     await uploadAll(hook);
     expect(onError).not.toHaveBeenCalled();
     expect(logger.error).toHaveBeenCalledWith('[useBatchUpload] complete failed', expect.objectContaining({ error: 'raw 500', videoId: 'v43' }));
+  });
+
+  it('a batch the upload limit fits in part: the first files start, the user is told how many and when, the rest start later', async () => {
+    jest.useFakeTimers({ advanceTimers: true });
+    try {
+      initiate.mockImplementationOnce(async (videos: unknown[]) => ({
+        success: true,
+        result: videos.slice(0, 4).map((_, i) => ({ videoId: `p${i}`, tusSessionId: `ps${i}`, expiresAt: '', chunkSize: 1024, resumable: true })),
+        deferred: { count: videos.length - 4, indexes: [], retryAfter: 23 * 60, retryAt: '' },
+      }));
+      const { hook, onError } = setup();
+      const files = Array.from({ length: 11 }, (_, i) => mp4(`f${i}.mp4`));
+      await act(async () => {
+        await hook.result.current.addFiles(files);
+      });
+      expect(hook.result.current.files).toHaveLength(4);
+      expect(onError).toHaveBeenCalledWith('4 of 11 files started. The other 7 will start in 23 minutes if you keep this page open.');
+      await act(async () => {
+        jest.advanceTimersByTime((23 * 60 + 2) * 1000);
+      });
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(initiate).toHaveBeenCalledTimes(2);
+      expect((initiate.mock.calls[1][0] as unknown[]).length).toBe(7);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('a refused batch shows the friendly message, never the server text', async () => {
+    initiate.mockResolvedValueOnce({ success: false, code: 'upload_limit', retryAfter: 1380, error: 'Rate limit exceeded: hour' });
+    const { hook, onError } = setup();
+    await act(async () => {
+      await hook.result.current.addFiles([mp4('x.mp4')]);
+    });
+    expect(onError).toHaveBeenCalledWith("You've reached the upload limit; try again in 23 minutes");
+    initiate.mockResolvedValueOnce({ success: false, code: 'uploads_by_invitation', error: 'Uploading is by invitation for now' });
+    await act(async () => {
+      await hook.result.current.addFiles([mp4('y.mp4')]);
+    });
+    expect(onError).toHaveBeenLastCalledWith('Uploading is by invitation for now');
+    expect(onError.mock.calls.flat().join(' ')).not.toMatch(/Rate limit exceeded/);
   });
 });

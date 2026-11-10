@@ -343,22 +343,23 @@ test.describe('Video Upload - Error Handling', () => {
     });
   });
 
-  test.describe('without a channel', () => {
+  test.describe('without a creator tier', () => {
     test.use({ storageState: AUTH_STATE.none });
 
-    test('should explain that a channel is required', async ({ page }) => {
+    test('should explain that uploading is by invitation', async ({ page }) => {
       await page.goto('/en/upload');
       const ui = uploadUi(page);
-      await expect(ui.channelRequired).toBeVisible();
-      await expect(page.getByTestId('upload-create-channel')).toBeVisible();
+      await expect(ui.byInvitation).toBeVisible();
+      await expect(ui.byInvitation.getByRole('heading')).toHaveText('Uploading is by invitation for now');
       await expect(ui.dropzone).toHaveCount(0);
+      await expect(page.getByTestId('header-upload')).toHaveCount(0);
     });
 
-    test('should explain that a channel is required in Arabic', async ({ page }) => {
+    test('should explain that uploading is by invitation in Arabic', async ({ page }) => {
       await page.goto('/ar/upload');
       const ui = uploadUi(page);
-      await expect(ui.channelRequired).toBeVisible();
-      await expect(ui.channelRequired.getByRole('heading')).toHaveText(ARABIC);
+      await expect(ui.byInvitation).toBeVisible();
+      await expect(ui.byInvitation.getByRole('heading')).toHaveText(ARABIC);
     });
   });
 });

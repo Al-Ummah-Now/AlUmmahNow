@@ -7,6 +7,7 @@ import { fillSecret } from './release/secret-fill';
 import { e2eUserPassword } from './test-utils/user-password';
 import { ensureChannels, ensureNoProfile, ensureProfile, purgeDisposableChannels, type UserChannelSpec } from './seed/seed-users';
 import { consentCookie } from './test-utils/consent';
+import { setCreatorTier } from './release/creator-tier';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -73,6 +74,17 @@ async function provisionAndRefreshSession(
     minAgeMs: user.disposableChannelGraceMs ?? 0,
   });
   if (purged.length > 0) ciLogger.warn(`[Setup] Deleted leftover throwaway channels of ${user.email}`, { purged });
+  // Creating channels and uploading are by invitation (creator tiers): users
+  // that own channels get the Creator tier from an admin (the release suite's
+  // promoted admin, or E2E_ADMIN_EMAIL); the no-channel user keeps no tier.
+  if (user.channels.length > 0) {
+    if (process.env.TEST_PROMOTE_SECRET || (process.env.E2E_ADMIN_EMAIL && process.env.E2E_ADMIN_PASSWORD)) {
+      await setCreatorTier({ email: user.email, accessToken: session.accessToken, userId: session.userId }, 'creator');
+      ciLogger.info(`[Setup] ${user.email} has the Creator tier`);
+    } else {
+      ciLogger.warn(`[Setup] No admin to give ${user.email} the Creator tier (TEST_PROMOTE_SECRET or E2E_ADMIN_EMAIL/PASSWORD): creating its channels is refused unless it already has one`);
+    }
+  }
   const { channels, created, extra } = await ensureChannels(api, session, user.channels);
   ciLogger.info(`[Setup] Provisioned ${user.email}`, {
     userId: session.userId,

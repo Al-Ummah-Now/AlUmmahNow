@@ -18,7 +18,8 @@ export interface ChannelGridProps {
   onEdit: (channel: Channel) => void;
   onDelete: (channelId: string) => void;
   onView: (channelId: string) => void;
-  onCreate: () => void;
+  /** Absent when the user may not create channels (no creator tier, or the tier's channel limit) */
+  onCreate?: () => void;
   isLoading?: boolean;
   lang?: 'en' | 'ar';
 }

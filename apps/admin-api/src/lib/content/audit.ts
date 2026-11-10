@@ -9,7 +9,7 @@
  */
 import type { AdminAuditEntry } from '@al-ummah/shared-types';
 
-export type ContentKind = 'channel' | 'video' | 'comment' | 'playlist' | 'post' | 'user';
+export type ContentKind = 'channel' | 'video' | 'comment' | 'playlist' | 'post' | 'user' | 'creator-tier';
 
 interface AuditDb {
   prepare(sql: string): {

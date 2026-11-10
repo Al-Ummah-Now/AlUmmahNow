@@ -721,6 +721,11 @@ export function useMultiAccount() {
   return context;
 }
 
+/** The active account's id, or null outside the provider (no throw: for hooks used in tests without it). */
+export function useActiveUserId(): string | null {
+  return useContext(MultiAccountContext)?.user?.id ?? null;
+}
+
 /**
  * Hook to get current user
  */

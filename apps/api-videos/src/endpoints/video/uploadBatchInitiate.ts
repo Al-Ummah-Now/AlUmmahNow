@@ -90,6 +90,12 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 								reused: z.boolean().optional().describe("True when an unfinished upload of the same file was reused (same videoId)"),
 								tusUploadId: z.string().optional().describe("Proxy upload id of the reused video's earlier upload: resume at /api/videos/tus/<tusUploadId>"),
 							})),
+							deferred: z.object({
+								count: z.number().describe("Videos not started: the creator tier's upload limit fits only the first result.length"),
+								indexes: z.array(z.number()).describe("Positions (in the request's videos) of the deferred videos"),
+								retryAfter: z.number().describe("Seconds until the deferred videos can be initiated"),
+								retryAt: z.string().describe("ISO 8601 datetime when the deferred videos can be initiated"),
+							}).optional().describe("Present when only part of the batch fits the upload limit"),
 						}),
 					},
 				},
@@ -118,10 +124,14 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 
 		try {
 			const request = await this.getValidatedData<typeof this.schema>();
-			const { videos, sharedMetadata } = request.body;
+			const { videos: requestedVideos, sharedMetadata } = request.body;
+			// The creator tier's limits fit only part of the batch: start the first
+			// `allowed` videos, tell the client which were deferred and when they can start
+			const allowance = c.get('uploadAllowance');
+			const videos = allowance && allowance.allowed < requestedVideos.length ? requestedVideos.slice(0, allowance.allowed) : requestedVideos;
 
 			// Validate every entry before creating anything in Bunny/R2
-			for (const video of videos) {
+			for (const video of requestedVideos) {
 				const validationError = validateBatchVideo(video);
 				if (validationError) {
 					return c.json({ success: false, error: validationError }, 400);
@@ -279,6 +289,19 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 				videoIds: results.map(r => r.videoId),
 			});
 
+			if (videos.length < requestedVideos.length) {
+				const retryAfter = allowance?.retryAfter ?? 60;
+				return c.json({
+					success: true,
+					result: results,
+					deferred: {
+						count: requestedVideos.length - videos.length,
+						indexes: requestedVideos.map((_, i) => i).slice(videos.length),
+						retryAfter,
+						retryAt: new Date(Date.now() + retryAfter * 1000).toISOString(),
+					},
+				});
+			}
 			return c.json({ success: true, result: results });
 		} catch (error) {
 			if (error instanceof UploadClaimBusyError) {

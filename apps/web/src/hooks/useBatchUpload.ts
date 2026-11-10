@@ -18,6 +18,8 @@ import { logger } from '@/lib/logger-client';
 import { holdReload, recoverFromVersionSkew } from '@/lib/version-skew/recovery';
 import { withoutErrorForwarding } from '@/lib/errors/reporter';
 import { reportUploadError, uploadErrorMessage, type UploadErrorContext, type UploadStep } from '@/lib/upload/report-upload-error';
+import { creatorRefusalMessage, formatWait } from '@/lib/upload/friendly-error';
+import { refreshCreatorAccess } from '@/hooks/useCreatorAccess';
 import { MAX_BATCH_FILES, planBatchSelection, remainingSlots } from '@/lib/upload/batch-selection';
 import { useLanguage } from '@/hooks/useLanguage';
 
@@ -50,6 +52,12 @@ export function useBatchUpload({
   useHoldReloadWhile(isInitiating || isUploading || hasActiveUploads(files));
 
   const batchManagerRef = useRef<BatchUploadManager | null>(null);
+  // Files the upload limit deferred: re-added when it allows (see addFiles)
+  const deferredTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const addFilesRef = useRef<((files: File[]) => Promise<void>) | null>(null);
+  useEffect(() => () => {
+    if (deferredTimerRef.current) clearTimeout(deferredTimerRef.current);
+  }, []);
   const optimizerRef = useRef<UploadOptimizer | null>(null);
 
   // Keep latest values for the long-lived manager callbacks
@@ -285,13 +293,42 @@ export function useBatchUpload({
         );
 
         if (!initiateResult.success || !initiateResult.result) {
+          // No tier or the upload limit: the user's words, not the server's (nothing for the Errors page)
+          const refusal = creatorRefusalMessage(t, initiateResult);
+          if (refusal) {
+            logger.warn('[useBatchUpload] Batch refused', { code: initiateResult.code, retryAfter: initiateResult.retryAfter, count: freshFiles.length });
+            if (initiateResult.code === 'uploads_by_invitation') void refreshCreatorAccess();
+            throw new FriendlyUploadError(refusal);
+          }
           initiateStatus = initiateResult.status;
           initiateRef = initiateResult.serverRef;
           throw new Error(initiateResult.error || 'Batch initiate failed');
         }
 
+        // The upload limit fits only part of the batch: the first files start,
+        // the rest start by themselves once the limit allows (page kept open)
+        const startedFiles = freshFiles.slice(0, initiateResult.result.length);
+        const deferred = initiateResult.deferred;
+        if (deferred && startedFiles.length < freshFiles.length) {
+          const waiting = freshFiles.slice(startedFiles.length);
+          const waitSeconds = Math.max(1, deferred.retryAfter);
+          logger.warn('[useBatchUpload] Batch partly deferred by the upload limit', { started: startedFiles.length, deferred: waiting.length, retryAfter: waitSeconds });
+          onError?.(
+            t.creator.batchPartial
+              .replace('{started}', String(startedFiles.length))
+              .replace('{total}', String(freshFiles.length))
+              .replace('{left}', String(waiting.length))
+              .replace('{time}', formatWait(t, waitSeconds)),
+          );
+          if (deferredTimerRef.current) clearTimeout(deferredTimerRef.current);
+          deferredTimerRef.current = setTimeout(() => {
+            deferredTimerRef.current = null;
+            void addFilesRef.current?.(waiting);
+          }, (waitSeconds + 2) * 1000);
+        }
+
         freshEntries = buildBatchUploadEntries({
-          files: freshFiles,
+          files: startedFiles,
           sessions: initiateResult.result,
           apiUrl,
           authorization: authHeaders['Authorization'],
@@ -323,6 +360,9 @@ export function useBatchUpload({
       setIsInitiating(false);
     }
   }, [channelId, sharedMetadata, onError, t, failUpload]);
+  useEffect(() => {
+    addFilesRef.current = addFiles;
+  }, [addFiles]);
 
   /**
    * Remove a file from the queue

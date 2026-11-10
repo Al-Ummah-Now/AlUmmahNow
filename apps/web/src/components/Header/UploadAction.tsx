@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
+import { mayUpload, useCreatorAccess } from '@/hooks/useCreatorAccess';
 
 const Icon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -15,7 +16,10 @@ export function UploadAction() {
   const { t, lang } = useLanguage();
   const { user } = useAuth();
   const { user: account } = useMultiAccount();
+  const creator = useCreatorAccess();
   const label = t.upload.uploadVideo;
+  // Uploading is by invitation: no Upload for a signed-in user without a creator tier
+  if (user && !mayUpload(creator)) return null;
   // Signed in without a channel: nowhere to upload to yet
   if (user && !account?.channel) {
     const why = t.upload.createChannelToUpload;
