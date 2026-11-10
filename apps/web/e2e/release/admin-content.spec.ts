@@ -20,6 +20,8 @@ test.use({ trace: 'off' });
 
 // channel.purge scans the playlists bucket in steps (no per-channel index): allow it a couple of minutes
 const JOB_TIMEOUT = 120000;
+/** admin-web content.queued (en): the answer to every queued action */
+const QUEUED_NOTICE = 'Queued. It runs in the background';
 
 async function signInAsAdmin(page: Page, prefix: string): Promise<void> {
   const email = sinkEmail(prefix);
@@ -124,7 +126,13 @@ async function confirm(page: Page, testId: string, opts: { reason?: string; type
     await input.fill((await input.getAttribute('data-confirm')) ?? '');
   }
   await dialog.getByTestId(`${testId}-confirm`).click();
-  await expect(page.getByTestId('content-action-error')).toHaveCount(0);
+  // The form's submit closes the dialog and starts the action
+  await expect(dialog, `${testId}: the confirm did not submit`).toBeHidden();
+  // This action's own answer (an earlier "Saved" may still be on screen): the queued notice, or its error
+  const queued = page.getByTestId('content-action-message').filter({ hasText: QUEUED_NOTICE });
+  const error = page.getByTestId('content-action-error');
+  await expect(queued.or(error).first(), `${testId}: no answer from the action`).toBeVisible({ timeout: 30000 });
+  if (await error.first().isVisible()) throw new Error(`${testId} failed: ${await error.first().innerText()}`);
 }
 
 test.describe('Release: admin content management', () => {
