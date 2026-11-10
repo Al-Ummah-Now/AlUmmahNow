@@ -169,8 +169,11 @@ test.describe('Requests to auth', () => {
     // 2) Approved: auth runs the action (deletes the test account) and the videos admin shows "Actioned"
     const { id: approvedId, authId: approvedAuthId } = await sendRequest(page, subject.id, 'delete_account', 'E2E: delete this test account');
     await openInAuthAdmin(authAdmin, approvedAuthId);
-    authAdmin.once('dialog', (dialog) => dialog.accept());
     await authAdmin.getByRole('button', { name: 'Approve and run' }).click();
+    // The auth admin confirms in its in-app dialog (never a browser prompt)
+    const confirm = authAdmin.getByRole('dialog');
+    await expect(confirm).toBeVisible();
+    await confirm.getByRole('button', { name: 'Approve', exact: true }).click();
     // Auth runs the action from its moderation-actions queue; its page refreshes while queued
     await expect(authAdmin.getByTestId('moderation-status')).toHaveText('Actioned', { timeout: 90_000 });
     await expect(authAdmin.getByTestId('moderation-action-failed')).toHaveCount(0);

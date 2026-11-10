@@ -64,10 +64,16 @@ test.describe('moderation queue', () => {
     await page.goto('/moderation');
     const status = page.getByLabel('Status');
     await status.focus();
-    // Changing the value fires change -> auto submit; also confirm Apply is reachable
-    await page.keyboard.press('Tab');
-    await page.keyboard.press('Tab');
-    await expect(page.getByRole('button', { name: 'Apply filters' })).toBeFocused();
+    // Changing the value fires change -> auto submit; also confirm Apply is reachable by Tab
+    // through the filters in order (status, content type, content and reporter autocompletes)
+    const apply = page.getByRole('button', { name: 'Apply filters' });
+    const passed: string[] = [];
+    for (let i = 0; i < 8 && !(await apply.evaluate((el) => el === document.activeElement)); i++) {
+      await page.keyboard.press('Tab');
+      passed.push(await page.evaluate(() => document.activeElement?.getAttribute('aria-label') ?? document.activeElement?.id ?? document.activeElement?.tagName ?? ''));
+    }
+    await expect(apply, `Tab order from Status: ${passed.join(' → ')}`).toBeFocused();
+    expect(passed.length, 'Apply is after the other filters').toBeGreaterThanOrEqual(2);
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/\/moderation\?/);
   });
