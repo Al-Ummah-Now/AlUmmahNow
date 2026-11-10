@@ -59,6 +59,28 @@ export async function findPlayableVideo(minSeconds = 8): Promise<PublicVideo | n
   return null;
 }
 
+/**
+ * A playable video whose picture is wider than tall, read from its HLS master playlist's first
+ * RESOLUTION (the API has no dimensions). Portrait videos have no theatre mode, so theatre specs
+ * need one of these; stage's "QA Lecture" seeds are 640x360. Null when the env has none.
+ */
+export async function findLandscapeVideo(minSeconds = 8): Promise<PublicVideo | null> {
+  const res = await fetch(`${target().api}/api/videos?limit=100`);
+  expect(res.ok, `GET /api/videos answered ${res.status}`).toBe(true);
+  const body = (await res.json()) as { data?: PublicVideo[] };
+  const playable = (body.data ?? []).filter(
+    (v) => v.uploadStatus === 'ready' && v.isPublic !== false && !v.isLive && (v.availableResolutions?.length ?? 0) > 0 && !!v.playUrl && (v.duration ?? 0) >= minSeconds,
+  );
+  for (const v of playable.slice(0, 20)) {
+    const master = await fetch(v.playUrl!).then((r) => (r.ok ? r.text() : ''), () => '');
+    const m = /RESOLUTION=(\d+)x(\d+)/.exec(master);
+    if (m && Number(m[1]) > Number(m[2])) return v;
+  }
+  return null;
+}
+
+export const NO_LANDSCAPE_VIDEO = 'no public, encoded landscape video in this environment (stage seeds "QA Lecture" videos at 640x360)';
+
 export function watchUrl(id: string, locale: 'en' | 'ar' = 'en'): string {
   return `${target().web}/${locale}/video/${id}`;
 }

@@ -168,7 +168,7 @@ The chrome sections of `video-player.css` that it replaces are deleted, so there
 | Live | No duration; live badge in place of time; speed menu hidden. A stream is live when Video.js's live tracker runs or its duration is unbounded: the tracker only starts once the seekable window passes 20s, so a stream with a shorter window or none would otherwise read as not live. "Behind" needs the tracker |
 | Shorts (portrait video) | Frame follows the video's 9:16 aspect up to 80vh; theatre hidden; bar compact |
 | Embed | Same skin; no theatre, no mini player; next only inside a playlist embed |
-| Theatre | Watch layout stacks: player at full content width with no radius, details and related videos below. Remembered in `localStorage` (`aun.player.theatre`), read safely |
+| Theatre | Watch layout stacks at every width the button shows, tablets included: player at full content width with no radius, details and related videos below. Remembered in `localStorage` (`aun.player.theatre`), read safely |
 | Fullscreen | Theatre and mini player off; bar padding grows by the safe-area insets |
 | Picture in picture | Bar shows the PiP button pressed |
 | Chapters | Markers on the progress bar; entering a chapter shows its title in a small toast at the top end corner for a few seconds, never over the bar |
