@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const PLAYER_TOKENS = [
-  'bar', 'bar-edge', 'bar-pad', 'bar-inset', 'bar-radius', 'blur',
+  'bar', 'bar-edge', 'bar-pad', 'bar-pad-compact', 'bar-inset', 'bar-radius', 'blur',
   'icon', 'dim',
   'track', 'track-edge', 'buffered', 'played', 'glow',
   'handle', 'handle-edge',

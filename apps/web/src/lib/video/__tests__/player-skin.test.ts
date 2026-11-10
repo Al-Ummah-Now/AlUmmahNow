@@ -154,8 +154,41 @@ describe('player skin CSS', () => {
 
   it('keeps 44px targets for touch and hides secondary controls in narrow players', () => {
     expect(mediaBlocks('(pointer: coarse)')).toMatch(/height:\s*44px/);
-    expect(uncommented).toMatch(/@container fanous-player \(max-width: 479px\)[\s\S]*vjs-picture-in-picture-control/);
-    expect(uncommented).toMatch(/@container fanous-player \(max-width: 359px\)[\s\S]*vjs-fanous-next/);
+    expect(mediaBlocks('(pointer: coarse)')).toMatch(/button::after[\s\S]*width:\s*44px/);
+  });
+
+  /** The body of `@container fanous-player (max-width: <px>)`. */
+  function containerBlock(px: number): string {
+    const at = uncommented.indexOf(`@container fanous-player (max-width: ${px}px)`);
+    expect(at).toBeGreaterThanOrEqual(0);
+    let depth = 0;
+    let i = uncommented.indexOf('{', at);
+    const start = i + 1;
+    for (; i < uncommented.length; i++) {
+      if (uncommented[i] === '{') depth++;
+      else if (uncommented[i] === '}' && --depth === 0) break;
+    }
+    return uncommented.slice(start, i);
+  }
+
+  it('keeps the control bar on one row by dropping controls as the player narrows (v2026.11.09.5)', () => {
+    // Each hide names .vjs-control.vjs-button, so it outranks the button rule's `display: grid`
+    // (a hide one class short never applied: picture in picture and theatre stayed and the bar wrapped)
+    expect(declarationsFor('.video-js.vjs-fanous .vjs-control-bar .vjs-control.vjs-button')).toMatch(/display:\s*grid/);
+    const hidden = (px: number, control: string) =>
+      expect(containerBlock(px)).toMatch(
+        new RegExp(`\\.video-js\\.vjs-fanous \\.vjs-control-bar \\.vjs-control\\.vjs-button\\.${control}[^{]*\\{[^}]*display:\\s*none`),
+      );
+    hidden(619, 'vjs-fanous-next');
+    expect(containerBlock(619)).toMatch(/\.vjs-control\.vjs-button\.vjs-picture-in-picture-control/);
+    hidden(439, 'vjs-fanous-theatre');
+    expect(containerBlock(539)).toMatch(/\.vjs-volume-control\.vjs-volume-horizontal\s*\{\s*display:\s*none/);
+    expect(containerBlock(359)).toMatch(/\.vjs-time-control\.vjs-duration\s*\{\s*display:\s*none/);
+    // Small players get the compact padding instead of the tall gradient, and smaller buttons;
+    // the sizes are set on the bar, because a container query never styles its own container
+    expect(containerBlock(539)).toMatch(/\.vjs-control-bar\s*\{\s*padding:\s*var\(--fanous-player-bar-pad-compact\)/);
+    expect(containerBlock(439)).toMatch(/\.video-js\.vjs-fanous \.vjs-control-bar\s*\{[^}]*--vjs-fanous-hit:\s*36px/);
+    expect(containerBlock(719)).toMatch(/vjs-fanous-live\s*\{\s*max-width:\s*120px/);
   });
 
   it('nudges play triangles by whole pixels, with a rounding the minifier keeps', () => {
