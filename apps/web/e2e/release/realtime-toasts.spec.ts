@@ -24,6 +24,9 @@ import { signUpOnWeb, createProfile, gotoSettled, type Locale } from './web-sess
 // Signs in through the auth server: a retained trace would hold the password and code
 test.use({ trace: 'off' });
 
+// Signs up/in: no trace or video, they would record the password (see secret-fill.ts)
+test.use({ trace: 'off', video: 'off' });
+
 const DESKTOP = { width: 1280, height: 800 };
 const PHONE = { width: 390, height: 844 };
 const BULK = 5;
