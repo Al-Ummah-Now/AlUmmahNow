@@ -91,29 +91,29 @@ Severity is the reported impact at scale. The status column links the fix.
 | ID | App | Severity | Defect | Status |
 |---|---|---|---|---|
 | AV-1 | api-videos | high | Blind view-counter write clobbers every other writer of the video JSON (known counter + the wider damage) | fixed in [#504](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/504) |
-| AV-2 | api-videos | high | Video comments embedded in the video JSON are written blind | open |
-| AV-3 | api-videos | med | Every other blind writer of the video JSON | open |
-| AV-4 | api-videos | high | Channel subscriptions embedded in the channel JSON, written blind by many users | open |
-| AV-5 | api-videos | med | Other blind writers of the channel JSON | open |
-| AV-6 | api-videos | med | Profile JSON written blind by several features (subscriptions reverse index, legacy watch history, profile edits) | open |
-| AV-7 | api-videos | low | watch_history entries written both with CAS and blind | open |
-| AV-8 | api-videos | high | Community post JSON: view counter on GET clobbers edits, deletes and counters | open |
-| AV-9 | api-videos | med | Community post JSON: other blind writers | open |
-| AV-10 | api-videos | high | Community comment indexes written blind → comments disappear from listings | open |
-| AV-11 | api-videos | med | Community comment JSON counters written blind (likes, repliesCount) and clobbered by edits/heart | open |
-| AV-12 | api-videos | low | Pinned comment: two pins at once leave two pinned comments | open |
-| AV-13 | api-videos | med | Channel handle claim is not atomic (duplicate handles) | open |
-| AV-14 | api-videos | high | KV upload rate limiter is racy, eventually consistent and fails open | open |
-| AV-15 | api-videos | high | Section indexes: stale-index stampede, each rebuild exceeds the subrequest budget, and rebuilds race | open |
-| AV-16 | api-videos | high for videosearch/subscriptionfeed/channel lists/about | Request-path full-bucket scans (fan-out beyond 1000 subrequests / memory) | open |
-| AV-17 | api-videos | high | D1 write amplification on the view path (and every content write) | open |
-| AV-18 | api-videos | low-med | Search index can end up older than R2 (cross-request ordering) | open |
-| AV-19 | api-videos | low-med | Playlists and watch-later written blind | open |
-| AV-20 | api-videos | low | Channel sections / tab config / upload templates: multi-key RMW without conditions | open |
-| AV-21 | api-videos | low | Report dedupe is check-then-act | open |
-| AV-22 | api-videos | low-med | Community likes/votes: per-user record is check-then-put | open |
-| AV-23 | api-videos | med for erasure | Retention / erasure / channel-deletion jobs rewrite objects blind | open |
-| AV-24 | api-videos | low | Bunny collection / TUS session / upload status minor races | open |
+| AV-2 | api-videos | high | Video comments embedded in the video JSON are written blind | fixed in [#509](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/509) |
+| AV-3 | api-videos | med | Every other blind writer of the video JSON | fixed in [#509](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/509) |
+| AV-4 | api-videos | high | Channel subscriptions embedded in the channel JSON, written blind by many users | fixed in [#512](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/512) |
+| AV-5 | api-videos | med | Other blind writers of the channel JSON | fixed in [#512](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/512) |
+| AV-6 | api-videos | med | Profile JSON written blind by several features (subscriptions reverse index, legacy watch history, profile edits) | fixed in [#520](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/520) |
+| AV-7 | api-videos | low | watch_history entries written both with CAS and blind | fixed in [#520](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/520) |
+| AV-8 | api-videos | high | Community post JSON: view counter on GET clobbers edits, deletes and counters | fixed in [#539](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/539) |
+| AV-9 | api-videos | med | Community post JSON: other blind writers | fixed in [#539](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/539) |
+| AV-10 | api-videos | high | Community comment indexes written blind → comments disappear from listings | fixed in [#539](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/539) |
+| AV-11 | api-videos | med | Community comment JSON counters written blind (likes, repliesCount) and clobbered by edits/heart | fixed in [#539](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/539) |
+| AV-12 | api-videos | low | Pinned comment: two pins at once leave two pinned comments | fixed in [#539](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/539) |
+| AV-13 | api-videos | med | Channel handle claim is not atomic (duplicate handles) | fixed in [#545](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/545) |
+| AV-14 | api-videos | high | KV upload rate limiter is racy, eventually consistent and fails open | fixed in [#522](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/522) |
+| AV-15 | api-videos | high | Section indexes: stale-index stampede, each rebuild exceeds the subrequest budget, and rebuilds race | fixed in [#554](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/554) |
+| AV-16 | api-videos | high for videosearch/subscriptionfeed/channel lists/about | Request-path full-bucket scans (fan-out beyond 1000 subrequests / memory) | fixed in [#554](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/554) |
+| AV-17 | api-videos | high | D1 write amplification on the view path (and every content write) | fixed in [#547](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/547) |
+| AV-18 | api-videos | low-med | Search index can end up older than R2 (cross-request ordering) | fixed in [#514](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/514) |
+| AV-19 | api-videos | low-med | Playlists and watch-later written blind | fixed in [#520](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/520) |
+| AV-20 | api-videos | low | Channel sections / tab config / upload templates: multi-key RMW without conditions | fixed in [#537](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/537) |
+| AV-21 | api-videos | low | Report dedupe is check-then-act | fixed in [#547](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/547) |
+| AV-22 | api-videos | low-med | Community likes/votes: per-user record is check-then-put | fixed in [#510](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/510), [#547](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/547) |
+| AV-23 | api-videos | med for erasure | Retention / erasure / channel-deletion jobs rewrite objects blind | fixed in [#509](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/509), [#512](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/512) |
+| AV-24 | api-videos | low | Bunny collection / TUS session / upload status minor races | fixed in [#547](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/547), [#512](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/512) |
 | PR-1 | processor | high | R2 read-modify-write serialised only in-isolate (`pendingByKey`) | fixed in [#505](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/505) |
 | PR-2 | processor | high | R2 read-modify-write of `posts/<channelId>/<postId>.json` with no `onlyIf` etag | fixed in [#510](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/510) |
 | PR-3 | processor | high for popular polls | every vote recounts the whole poll (list + one GET per vote doc) and blind-PUTs results.json | fixed in [#510](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/510) |
