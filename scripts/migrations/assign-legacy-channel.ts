@@ -41,6 +41,7 @@ import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
+import { execSync } from 'node:child_process';
 import { cfToken, DEFAULT_ACCOUNT_ID } from '../release/cf-api.ts';
 import { parseJsonc } from '../release/jsonc.ts';
 import {
@@ -100,6 +101,13 @@ class Api {
 				headers: { Authorization: `Bearer ${this.token}`, ...(init.contentType ? { 'Content-Type': init.contentType } : {}) },
 				body: init.body,
 			}).catch((error) => ({ ok: false, status: 599, error }) as unknown as Response);
+			if (res.status === 401 && attempt < 2 && !process.env.CLOUDFLARE_API_TOKEN) {
+				// The `wrangler login` token lasts about an hour; any wrangler command refreshes it
+				console.warn('  401: refreshing the wrangler OAuth token');
+				execSync('npx -y wrangler whoami', { stdio: 'ignore' });
+				this.token = cfToken() ?? this.token;
+				continue;
+			}
 			if ((res.status === 429 || res.status >= 500) && attempt < 10) {
 				const backoff = Math.min(120_000, 5_000 * 2 ** attempt);
 				console.warn(`  ${res.status} on ${method} ${path.split('?')[0]}; retrying in ${backoff / 1000}s`);
