@@ -12,7 +12,6 @@ import {
   CommentCreateRequest,
   CommentUpdateRequest,
   SearchFilters,
-  SearchSuggestion,
   RecommendationRequest
 } from "./types";
 import { isShort, type BatchUploadInitiateResponse } from "@al-ummah/shared-types";
@@ -741,41 +740,6 @@ async function discoveryHeaders(): Promise<Record<string, string>> {
     'Content-Type': 'application/json',
     ...(accessToken && { 'Authorization': `Bearer ${accessToken}` }),
   };
-}
-
-/**
- * Get Search Suggestions
- * GET /api/search/suggestions
- * Returns an empty list when nothing matches or the API is unavailable.
- */
-export async function getSearchSuggestions(
-  query: string,
-  limit: number = 5
-): Promise<SearchSuggestion[]> {
-  if (!query.trim()) return [];
-
-  try {
-    const queryParams = new URLSearchParams({
-      q: query.trim(),
-      limit: limit.toString()
-    });
-
-    const response = await fetch(
-      buildApiUrl(`/api/search/suggestions?${queryParams.toString()}`),
-      { method: 'GET', headers: { 'Content-Type': 'application/json' } }
-    );
-
-    if (!response.ok) {
-      logger.warn('[getSearchSuggestions] API error', { status: response.status });
-      return [];
-    }
-
-    const data = await response.json() as SearchSuggestion[] | { data?: SearchSuggestion[] };
-    return Array.isArray(data) ? data : data.data ?? [];
-  } catch (error) {
-    logger.error('[getSearchSuggestions] Request failed', { error });
-    return [];
-  }
 }
 
 /**

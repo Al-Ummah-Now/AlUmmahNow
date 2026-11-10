@@ -1,13 +1,15 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { Check } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Search } from 'lucide-react';
 import type { Playlist } from '@al-ummah/shared-types';
 import { getChannelPlaylists } from '@/lib/api/channels';
 import { pickLanguage } from '@/lib/format/pick-language';
 import { getPlaylistCoverUrl } from '@/lib/playlists/playlist-utils';
 import { useLanguage } from '@/hooks/useLanguage';
 import { logger } from '@/lib/logger-client';
+import { Autocomplete, type AutocompleteOption } from '@/components/ui/Autocomplete';
+import { fetchSuggestions } from '@/lib/search/suggest-client';
 import { SelectedList, type PickedItem } from './SelectedList';
 
 const PICKER_PAGE = 50;
@@ -57,6 +59,26 @@ export function PlaylistPicker({ channelId, value, onChange, max, testId, label 
   const selectedIds = useMemo(() => new Set(value.map((v) => v.id)), [value]);
   const full = !single && value.length >= max;
 
+  const [query, setQuery] = useState('');
+  const playlistOptions = useMemo<AutocompleteOption[]>(() => (playlists ?? []).map((playlist) => {
+    const item = toPickedPlaylist(playlist, locale);
+    return {
+      id: playlist.id, label: item.label, keywords: [playlist.name, playlist.title],
+      subtitle: t.channelSections.render.videosCount.replace('{count}', String(playlist.videosCount ?? 0)),
+      thumbnailUrl: item.thumbnailUrl ?? undefined, thumbnailShape: 'wide' as const, value: item,
+    };
+  }), [playlists, locale, t]);
+
+  // Playlists past the first page come from the search index (public ones only, like this list)
+  const loadMore = useCallback(async (q: string, signal: AbortSignal): Promise<AutocompleteOption[]> => {
+    const found = await fetchSuggestions(q, { types: ['playlist'], channelId, limit: 10, signal });
+    return found.filter((s) => s.id).map((s) => ({
+      id: s.id!, label: s.text, thumbnailUrl: s.thumbnailUrl, thumbnailShape: 'wide' as const,
+      subtitle: s.count !== undefined ? t.channelSections.render.videosCount.replace('{count}', String(s.count)) : undefined,
+      value: { id: s.id!, label: s.text, thumbnailUrl: s.thumbnailUrl } satisfies PickedItem,
+    }));
+  }, [channelId, t]);
+
   const toggle = (item: PickedItem) => {
     if (selectedIds.has(item.id)) onChange(value.filter((v) => v.id !== item.id));
     else if (single) onChange([item]);
@@ -71,45 +93,32 @@ export function PlaylistPicker({ channelId, value, onChange, max, testId, label 
           {full ? f.maxReached : f.selectedCount.replace('{count}', String(value.length)).replace('{max}', String(max))}
         </p>
       )}
-      <ul aria-label={label} className="max-h-72 space-y-1 overflow-y-auto rounded-md border border-border p-1" data-testid={`${testId}-options`}>
-        {playlists === null ? (
-          <li className="p-3 text-sm text-muted-foreground">{f.loading}</li>
-        ) : playlists.length === 0 ? (
-          <li className="p-3 text-sm text-muted-foreground">{f.noPlaylists}</li>
-        ) : (
-          playlists.map((playlist) => {
-            const item = toPickedPlaylist(playlist, locale);
-            const selected = selectedIds.has(playlist.id);
-            const disabled = !selected && full;
-            return (
-              <li key={playlist.id}>
-                <button
-                  type="button"
-                  disabled={disabled}
-                  aria-pressed={selected}
-                  onClick={() => toggle(item)}
-                  data-playlist-id={playlist.id}
-                  className={`flex w-full items-center gap-3 rounded p-1.5 text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${selected ? 'bg-brand-soft' : 'hover:bg-muted'}`}
-                >
-                  {item.thumbnailUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element -- small picker thumbnail
-                    <img src={item.thumbnailUrl} alt="" className="h-10 w-16 shrink-0 rounded bg-muted object-cover" />
-                  ) : (
-                    <span className="h-10 w-16 shrink-0 rounded bg-muted" />
-                  )}
-                  <span className="min-w-0 flex-1 text-sm text-foreground">
-                    <span className="block truncate" dir="auto">{item.label}</span>
-                    <span className="block text-xs text-muted-foreground">
-                      {t.channelSections.render.videosCount.replace('{count}', String(playlist.videosCount ?? 0))}
-                    </span>
-                  </span>
-                  {selected && <Check className="h-4 w-4 shrink-0 text-brand" aria-hidden="true" />}
-                </button>
-              </li>
-            );
-          })
-        )}
-      </ul>
+      <Autocomplete
+        mode="inline"
+        value={query}
+        onValueChange={setQuery}
+        options={playlistOptions}
+        emptyOptions={playlistOptions}
+        emptyText={playlists === null ? f.loading : f.noPlaylists}
+        load={loadMore}
+        loadKey={channelId}
+        maxOptions={PICKER_PAGE}
+        keepOpenOnSelect={!single}
+        onSelect={(option) => toggle(option.value as PickedItem)}
+        decorate={(option) => {
+          const selected = selectedIds.has(option.id);
+          return { selected, disabled: !selected && full };
+        }}
+        label={f.searchPlaylists}
+        listLabel={label}
+        testId={`${testId}-search`}
+        popupTestId={`${testId}-options`}
+        optionTestId={() => `${testId}-option`}
+        inputProps={{ type: 'search', placeholder: f.searchPlaylists }}
+        inputClassName="h-9 w-full rounded-md border border-input bg-transparent ps-9 pe-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <Search className="pointer-events-none absolute start-3 top-[1.125rem] h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+      </Autocomplete>
     </div>
   );
 }

@@ -199,17 +199,25 @@ test.describe('Header search', () => {
     const input = page.locator('[data-testid="header-search-input"][data-ready="true"]:visible');
     await input.pressSequentially('mosque', { delay: 20 });
     await expect(page.getByTestId('search-suggestion').first()).toBeVisible();
+    // Enter without choosing a suggestion runs the full search
+    await input.press('Enter');
+    await expect(page).toHaveURL(/\/en\/search\?.*q=mosque/);
+
+    await page.goto('/en/explore');
+    await input.pressSequentially('mosque', { delay: 20 });
+    await expect(page.getByTestId('search-suggestion').first()).toBeVisible();
     await input.press('ArrowDown');
     await expect(input).toHaveAttribute('aria-activedescendant', /opt-0$/);
+    // Choosing a suggestion opens that item (a category runs a category search)
     await input.press('Enter');
-    await expect(page).toHaveURL(/\/en\/search\?.*q=/);
+    await expect(page).toHaveURL(/\/en\/(video\?vid=|playlist\/|@|channels\/|c\/|search\?.*category=)/);
 
     await page.goto('/en/explore');
     await input.click();
     const items = page.getByTestId('search-history-item');
     await expect(items.first()).toBeVisible();
     const before = await items.count();
-    await items.first().getByTestId('search-history-remove').dispatchEvent('pointerdown');
+    await page.getByTestId('search-history-remove').first().click();
     await expect(items).toHaveCount(before - 1);
   });
 
@@ -223,6 +231,35 @@ test.describe('Header search', () => {
     await input.press('Enter');
     await expect(page).toHaveURL(/type=video/);
     await expect(page).toHaveURL(/q=adhan/);
+  });
+});
+
+test.describe('Autocomplete', () => {
+  test('SEARCH-AC-001 the header box is an ARIA combobox with grouped, announced, highlighted suggestions', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'Desktop header box');
+    await page.goto('/en/explore');
+    const input = page.locator('[data-testid="header-search-input"][data-ready="true"]:visible');
+    await expect(input).toHaveAttribute('role', 'combobox');
+    await expect(input).toHaveAttribute('aria-expanded', 'false');
+    await input.pressSequentially('Hadith', { delay: 20 });
+    await expect(input).toHaveAttribute('aria-expanded', 'true');
+    const listbox = page.locator(`#${await input.getAttribute('aria-controls')}`);
+    await expect(listbox).toHaveAttribute('role', 'listbox');
+    await expect(listbox.getByRole('group').first()).toBeVisible();
+    await expect(listbox.locator('mark').first()).toBeVisible();
+    await expect(page.getByTestId('autocomplete-status').first()).toContainText(/suggestion/);
+    await input.press('Escape');
+    await expect(input).toHaveAttribute('aria-expanded', 'false');
+    await expect(input).toHaveValue('Hadith');
+  });
+
+  test('SEARCH-AC-002 Arabic suggestions ignore diacritics and alef/taa marbuta spelling', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'Desktop header box');
+    await page.goto('/ar/explore');
+    const input = page.locator('[data-testid="header-search-input"][data-ready="true"]:visible');
+    await input.pressSequentially('الحَدِيث', { delay: 20 });
+    await expect(page.getByTestId('search-suggestion').first()).toBeVisible();
+    await expect(page.getByTestId('search-dropdown').locator('mark').first()).toBeVisible();
   });
 });
 

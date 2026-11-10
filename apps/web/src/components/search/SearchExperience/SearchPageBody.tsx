@@ -34,6 +34,7 @@ export function SearchPageBody({ model }: { model: SearchPageModel }) {
         onRemoveHistory={model.removeHistoryEntry}
         onClearHistory={model.clearHistory}
         autoFocus={!state.q}
+        channelId={state.channelId}
       />
       </div>
 

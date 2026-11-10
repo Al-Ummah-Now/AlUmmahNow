@@ -461,6 +461,9 @@ button.group:hover span.rounded-full{filter:brightness(1.12)}
 .search-dd{background:linear-gradient(var(--fanous-c-dialog-bg),var(--fanous-c-dialog-bg)) padding-box,var(--m-border) border-box!important;border:1px solid transparent!important;box-shadow:var(--m-raised-edge)!important;border-radius:var(--r-lg)!important;color:var(--fanous-color-text-primary)}
 .search-dd [role=option]{min-height:40px}.search-dd [role=option][aria-selected=true],.search-dd [role=option]:hover{background:var(--m-hover)!important}
 .search-dd :is(span,p,button){color:var(--fanous-color-text-primary)}.search-dd p,.search-dd .text-xs{color:var(--fanous-color-text-secondary)}
+/* Autocomplete (components/ui/Autocomplete): matched text is bold, not a yellow highlighter, in every theme */
+.ac-mark{background:transparent;color:inherit;font-weight:700}
+.ac-option[data-active]{background:var(--m-hover)}
 .ah-search-sheet{background:var(--fanous-c-nav-bg,var(--m-rail))!important;height:56px}.ah-search-sheet>div{flex:1 1 auto}
 @media(max-width:639px){.ah-search-wrap{display:none}.ah .ah-search-phone{display:inline-grid;justify-self:end}
 /* The phone header hides the inline search form; the sheet the search icon opens shows its own copy */

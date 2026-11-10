@@ -1,3 +1,4 @@
+import { rankSuggestions } from '@al-ummah/shared-types';
 /**
  * Playlists for new uploads (single and batch upload): which playlists each
  * video goes to, and what the uploader is told about the queued adds
@@ -42,9 +43,8 @@ export function togglePlaylist(ids: readonly string[], id: string): string[] {
 
 /** Playlists whose name contains the query (any case; the query trimmed). */
 export function filterPlaylists<T extends { title?: string; name?: string }>(playlists: readonly T[], query: string): T[] {
-  const q = query.trim().toLocaleLowerCase();
-  if (!q) return [...playlists];
-  return playlists.filter((p) => (p.name || p.title || '').toLocaleLowerCase().includes(q));
+  // Same normalisation and ranking as search suggestions (Arabic variants, word prefixes first)
+  return rankSuggestions(playlists, query, (p) => p.name || p.title || '', { alternates: (p) => [p.title] });
 }
 
 /** Whether an add still needs watching (its outcome is not known yet). */

@@ -1,11 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { Check, Search } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Search } from 'lucide-react';
 import { getLocalizedValue, type VideoObject } from '@al-ummah/shared-types';
 import { getChannelVideos } from '@/lib/api/channels';
 import { getVideoById } from '@/lib/api/videos';
 import { Input } from '@/components/ui/input';
+import { Autocomplete, type AutocompleteOption } from '@/components/ui/Autocomplete';
+import { fetchSuggestions } from '@/lib/search/suggest-client';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/hooks/useLanguage';
 import { logger } from '@/lib/logger-client';
@@ -62,12 +64,19 @@ export function VideoPicker({ channelId, value, onChange, max, anyChannel = fals
   const single = max === 1;
   const selectedIds = useMemo(() => new Set(value.map((v) => v.id)), [value]);
   const full = !single && value.length >= max;
-  const visible = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!videos) return [];
-    if (!q) return videos;
-    return videos.filter((video) => getLocalizedValue(video.titleLocalized, video.title, lang).toLowerCase().includes(q));
-  }, [videos, query, lang]);
+  // The latest uploads, matched as you type; older (and, for featured videos, other channels') public videos come from the search index
+  const videoOptions = useMemo<AutocompleteOption[]>(() => (videos ?? []).map((video) => {
+    const item = toPickedVideo(video, lang);
+    return { id: video.id, label: item.label, keywords: [video.title, ...Object.values(video.titleLocalized ?? {})], thumbnailUrl: video.thumbnailUrl, thumbnailShape: 'wide' as const, value: item };
+  }), [videos, lang]);
+
+  const loadMore = useCallback(async (q: string, signal: AbortSignal): Promise<AutocompleteOption[]> => {
+    const found = await fetchSuggestions(q, { types: ['video'], channelId: anyChannel ? undefined : channelId, limit: 10, signal });
+    return found.filter((s) => s.id).map((s) => ({
+      id: s.id!, label: s.text, subtitle: anyChannel ? s.subtitle : undefined, thumbnailUrl: s.thumbnailUrl, thumbnailShape: 'wide' as const,
+      value: { id: s.id!, label: s.text, thumbnailUrl: s.thumbnailUrl } satisfies PickedItem,
+    }));
+  }, [anyChannel, channelId]);
 
   const toggle = (item: PickedItem) => {
     if (selectedIds.has(item.id)) {
@@ -111,53 +120,32 @@ export function VideoPicker({ channelId, value, onChange, max, anyChannel = fals
         </p>
       )}
 
-      <div className="relative">
-        <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-        <Input
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={f.searchVideos}
-          aria-label={f.searchVideos}
-          className="ps-9"
-          data-testid={`${testId}-search`}
-        />
-      </div>
-
-      <ul
-        aria-label={label}
-        className="max-h-64 space-y-1 overflow-y-auto rounded-md border border-border p-1"
-        data-testid={`${testId}-options`}
+      <Autocomplete
+        mode="inline"
+        value={query}
+        onValueChange={setQuery}
+        options={videoOptions}
+        emptyOptions={videoOptions}
+        emptyText={videos === null ? f.loading : f.noVideos}
+        load={loadMore}
+        loadKey={`${channelId}:${anyChannel}`}
+        maxOptions={PICKER_PAGE}
+        keepOpenOnSelect={!single}
+        onSelect={(option) => toggle(option.value as PickedItem)}
+        decorate={(option) => {
+          const selected = selectedIds.has(option.id);
+          return { selected, disabled: !selected && full };
+        }}
+        label={f.searchVideos}
+        listLabel={label}
+        testId={`${testId}-search`}
+        popupTestId={`${testId}-options`}
+        optionTestId={() => `${testId}-option`}
+        inputProps={{ type: 'search', placeholder: f.searchVideos }}
+        inputClassName="h-9 w-full rounded-md border border-input bg-transparent ps-9 pe-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        {videos === null ? (
-          <li className="p-3 text-sm text-muted-foreground">{f.loading}</li>
-        ) : visible.length === 0 ? (
-          <li className="p-3 text-sm text-muted-foreground">{f.noVideos}</li>
-        ) : (
-          visible.map((video) => {
-            const item = toPickedVideo(video, lang);
-            const selected = selectedIds.has(video.id);
-            const disabled = !selected && full;
-            return (
-              <li key={video.id}>
-                <button
-                  type="button"
-                  disabled={disabled}
-                  aria-pressed={selected}
-                  onClick={() => toggle(item)}
-                  data-video-id={video.id}
-                  className={`flex w-full items-center gap-3 rounded p-1.5 text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${selected ? 'bg-brand-soft' : 'hover:bg-muted'}`}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element -- small picker thumbnail */}
-                  <img src={video.thumbnailUrl} alt="" className="h-10 w-16 shrink-0 rounded bg-muted object-cover" />
-                  <span className="min-w-0 flex-1 truncate text-sm text-foreground" dir="auto">{item.label}</span>
-                  {selected && <Check className="h-4 w-4 shrink-0 text-brand" aria-hidden="true" />}
-                </button>
-              </li>
-            );
-          })
-        )}
-      </ul>
+        <Search className="pointer-events-none absolute start-3 top-[1.125rem] h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+      </Autocomplete>
 
       <div className="space-y-1">
         <label htmlFor={`${testId}-paste`} className="text-xs font-medium text-muted-foreground">{f.pasteVideo}</label>

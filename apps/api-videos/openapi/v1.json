@@ -20895,7 +20895,7 @@
           "Search"
         ],
         "summary": "Search suggestions",
-        "description": "🔓 Public. Returns typeahead suggestions (channel names, video titles, categories) matching the query by word prefix, served from the search index with Arabic normalisation. Falls back to scanning stored videos when the index is not configured or fails.",
+        "description": "🔓 Public. Returns typeahead suggestions matching the query by word prefix, served from the search index with Arabic normalisation (tashkeel, alef forms, taa marbuta, alef maqsura). `types` picks the kinds (video, channel, playlist, category; default channel,video,category) and `channelId` limits videos and playlists to one channel. Only publicly visible items of visible channels are returned. Each suggestion carries the item's id, thumbnail and a subtitle (channel name, or the channel's @handle). Rate limited per client (429 with Retry-After). Falls back to scanning stored videos when the index is not configured or fails.",
         "operationId": "get_SearchSuggestionsGet",
         "parameters": [
           {
@@ -20916,6 +20916,26 @@
             "required": false,
             "description": "Maximum suggestions (1-20)",
             "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated kinds: video, channel, playlist, category"
+            },
+            "required": false,
+            "description": "Comma-separated kinds: video, channel, playlist, category",
+            "name": "types",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Only this channel's videos and playlists"
+            },
+            "required": false,
+            "description": "Only this channel's videos and playlists",
+            "name": "channelId",
             "in": "query"
           }
         ],
@@ -20938,8 +20958,24 @@
                           "query",
                           "channel",
                           "category",
-                          "video"
+                          "video",
+                          "playlist"
                         ]
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "thumbnailUrl": {
+                        "type": "string"
+                      },
+                      "subtitle": {
+                        "type": "string"
+                      },
+                      "handle": {
+                        "type": "string"
+                      },
+                      "verified": {
+                        "type": "boolean"
                       },
                       "count": {
                         "type": "number"
@@ -20954,6 +20990,28 @@
                       "type"
                     ]
                   }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many lookups; retry after Retry-After seconds",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
                 }
               }
             }

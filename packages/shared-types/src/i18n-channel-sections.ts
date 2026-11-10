@@ -62,6 +62,7 @@ export interface ChannelSectionsTranslations {
     channels: string;
     searchChannels: string;
     searchChannelsHint: string;
+    searchPlaylists: string;
     noChannelsFound: string;
     remove: string;
     moveUp: string;
@@ -205,6 +206,7 @@ export const CHANNEL_SECTIONS_EN: ChannelSectionsTranslations = {
     channels: 'Channels',
     searchChannels: 'Search channels by name or @handle',
     searchChannelsHint: 'Type at least 2 characters.',
+    searchPlaylists: 'Search playlists',
     noChannelsFound: 'No channels found.',
     remove: 'Remove',
     moveUp: 'Move up',
@@ -348,6 +350,7 @@ export const CHANNEL_SECTIONS_AR: ChannelSectionsTranslations = {
     channels: 'القنوات',
     searchChannels: 'ابحث عن القنوات بالاسم أو @المعرّف',
     searchChannelsHint: 'اكتب حرفين على الأقل.',
+    searchPlaylists: 'البحث في قوائم التشغيل',
     noChannelsFound: 'لا توجد قنوات.',
     remove: 'إزالة',
     moveUp: 'تحريك لأعلى',

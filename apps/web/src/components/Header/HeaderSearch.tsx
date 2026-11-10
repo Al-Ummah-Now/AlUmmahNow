@@ -23,6 +23,8 @@ function HeaderSearchInner() {
   const page = `/${lang}${HEADER_PATHS.search}`;
   const onSearchPage = pathname === page;
   const currentQuery = onSearchPage ? (params?.get('q') ?? '') : '';
+  // In-channel search keeps suggesting that channel's videos and playlists
+  const channelId = onSearchPage ? (params?.get('channelId') || undefined) : undefined;
   const [draft, setDraft] = useState(currentQuery);
   const [history, setHistory] = useState<SearchHistoryEntry[]>([]);
   const [phoneOpen, setPhoneOpen] = useState(false);
@@ -76,6 +78,7 @@ function HeaderSearchInner() {
       onRemoveHistory={(query) => void removeSearchHistoryEntry(query)}
       onClearHistory={() => void clearSearchHistory()}
       autoFocus={autoFocus}
+      channelId={channelId}
     />
   );
 

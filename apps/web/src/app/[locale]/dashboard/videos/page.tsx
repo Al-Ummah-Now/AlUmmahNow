@@ -1,10 +1,14 @@
 'use client';
 
+import { FilterCombobox, type FilterItem } from '@/components/ui/FilterCombobox';
+import { matchesSearch } from '@/lib/search/match';
+import { collectTags } from '@/lib/search/tags';
+import { getLocalizedValue } from '@al-ummah/shared-types';
 import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import { logger } from '@/lib/logger-client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, UploadCloud, Trash2, Eye, Edit, X, BarChart3, Pencil, RotateCcw, ListPlus } from 'lucide-react';
+import { UploadCloud, Trash2, Eye, Edit, X, BarChart3, Pencil, RotateCcw, ListPlus } from 'lucide-react';
 import AddToPlaylistDialog from '@/components/playlists/AddToPlaylistDialog';
 import { toPicked, type PickedVideo } from '@/components/playlists/VideoPicker';
 import { formatViews } from '@/lib/format/videoMeta';
@@ -176,6 +180,15 @@ export default function VideoDashboardPage() {
     };
   }, [user, multiAccountUser?.channels, multiAccountLoading, durationFilter, sortBy, privacyFilter]);
 
+  // Suggestions under the search box: this list's videos, in the viewer's language
+  const searchItems = useMemo<FilterItem[]>(() => videos.map((video) => ({
+    id: video.id,
+    label: getLocalizedValue(video.titleLocalized, video.title, lang),
+    keywords: [video.title, ...Object.values(video.titleLocalized ?? {})],
+    thumbnailUrl: video.thumbnailUrl || undefined,
+    thumbnailShape: 'wide' as const,
+  })), [videos, lang]);
+
   // Apply client-side search and status filtering
   useEffect(() => {
     let filtered = [...videos];
@@ -183,7 +196,7 @@ export default function VideoDashboardPage() {
     // Search filter (client-side for immediate feedback)
     if (searchQuery) {
       filtered = filtered.filter((video) =>
-        video.title.toLowerCase().includes(searchQuery.toLowerCase())
+        matchesSearch(searchQuery, video.title, ...Object.values(video.titleLocalized ?? {}))
       );
     }
 
@@ -415,28 +428,18 @@ export default function VideoDashboardPage() {
           {/* Search and Filters */}
           <div className="bg-white dark:bg-gray-800 rounded-lg p-4 space-y-4">
             {/* Search */}
-            <div className="relative">
-              <Search className="absolute start-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-              <input
-                type="search"
-                data-testid="dashboard-search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={t.video.searchVideos}
-                aria-label={t.video.searchVideos}
-                className="w-full ps-10 pe-10 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  data-testid="dashboard-search-clear"
-                  className="absolute end-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                  aria-label={t.video.clearSearch || t.search.clear}
-                >
-                  <X size={18} />
-                </button>
-              )}
-            </div>
+            <FilterCombobox
+              className="relative"
+              value={searchQuery}
+              onValueChange={setSearchQuery}
+              items={searchItems}
+              onPick={(item) => router.push(`/${lang}/video/${encodeURIComponent(item.id)}/edit`)}
+              label={t.video.searchVideos ?? t.search.searchInputLabel}
+              testId="dashboard-search"
+              clearTestId="dashboard-search-clear"
+              clearLabel={t.video.clearSearch || t.search.clear}
+              inputClassName="w-full ps-10 pe-10 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+            />
 
             {/* Filters Row */}
             <div className="flex flex-wrap gap-4">
@@ -735,7 +738,8 @@ export default function VideoDashboardPage() {
           videos={playlistTarget?.videos ?? []}
         />
 
-        <BulkEditDialog open={bulkEditOpen} count={selectedVideos.size} onOpenChange={setBulkEditOpen} onApply={applyBulkEdit} />
+        <BulkEditDialog open={bulkEditOpen} count={selectedVideos.size} onOpenChange={setBulkEditOpen} onApply={applyBulkEdit}
+          selectedTags={collectTags(videos.filter((v) => selectedVideos.has(v.id)))} knownTags={collectTags(videos)} />
 
         {/* Error Message Banner */}
         {errorMessage && (

@@ -122,6 +122,29 @@ export interface UpdateTranslationsResponse {
  * All translations must implement this interface to ensure completeness
  */
 export interface AppTranslations {
+  /** Live suggestions in every search and lookup input (components/ui/Autocomplete) */
+  autocomplete: {
+    resultsCount: string;
+    oneResult: string;
+    noResults: string;
+    noMatches: string;
+    loading: string;
+    unavailable: string;
+    groupVideos: string;
+    groupChannels: string;
+    groupPlaylists: string;
+    groupCategories: string;
+    groupRecent: string;
+    groupMatches: string;
+    removeRecent: string;
+    clearRecent: string;
+    recentCleared: string;
+    selected: string;
+    searchFor: string;
+    keyboardHint: string;
+    searchChannel: string;
+    closeSearch: string;
+  };
   /** Creator tiers: uploading and creating channels are by invitation */
   creator: {
     invitationTitle: string;

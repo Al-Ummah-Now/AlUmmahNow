@@ -44,6 +44,8 @@ export interface AppBindings {
   // KV Namespaces
   /** Workers rate limiting: watch-time reports per playback session (#235). Optional: unlimited without it. */
   WATCH_TIME_LIMITER?: RateLimit;
+  /** Typeahead lookups per signed-in user or client IP (GET /api/search/suggestions) */
+  SUGGEST_LIMITER?: RateLimit;
   TUS_SESSIONS: KVNamespace;
   /** Remote config: app version policies and feature flags (Epic 9.3 / 9.5). Optional: defaults without it. */
   APP_CONFIG?: KVNamespace;

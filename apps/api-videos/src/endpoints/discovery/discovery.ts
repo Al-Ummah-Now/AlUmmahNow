@@ -13,8 +13,8 @@ import {
   rankTrending,
   toVideoResponse,
 } from "../../lib/discovery";
-import type { SearchDb } from "@al-ummah/shared-types";
-import { suggestFromIndex } from "../../lib/search/query";
+import { parseSuggestionTypes, type SearchDb } from "@al-ummah/shared-types";
+import { suggestFromIndex, type IndexSuggestion } from "../../lib/search/query";
 import { isWatchHistoryPaused } from "../../lib/watch-history";
 import { waitUntilOf } from "../../lib/search/ownership";
 import { edgeCacheUrl, readEdgeCache, writeEdgeCache } from "../../lib/edge-cache";
@@ -31,10 +31,18 @@ const ErrorSchema = z.object({ success: z.boolean(), error: z.string() });
 
 const SuggestionSchema = z.object({
   text: z.string(),
-  type: z.enum(["query", "channel", "category", "video"]),
+  type: z.enum(["query", "channel", "category", "video", "playlist"]),
+  id: z.string().optional(),
+  thumbnailUrl: z.string().optional(),
+  subtitle: z.string().optional(),
+  handle: z.string().optional(),
+  verified: z.boolean().optional(),
   count: z.number().optional(),
   metadata: z.record(z.unknown()).optional(),
 });
+
+/** Longest input a suggestion lookup reads; longer text is cut (the index caps query words too). */
+const SUGGEST_MAX_QUERY = 100;
 
 const DiscoveryVideoSchema = z.object({
   id: z.string(),
@@ -53,17 +61,20 @@ function clampLimit(value: number | undefined, fallback: number, max: number): n
 
 /**
  * GET /api/search/suggestions
- * Typeahead suggestions from public video titles, tags, categories and channel names.
+ * Typeahead suggestions from public video titles, channel names and @handles,
+ * playlist names and categories.
  */
 export class SearchSuggestionsGet extends OptionalAuthRoute {
   schema = {
     tags: ["Search"],
     summary: "Search suggestions",
-    description: "🔓 Public. Returns typeahead suggestions (channel names, video titles, categories) matching the query by word prefix, served from the search index with Arabic normalisation. Falls back to scanning stored videos when the index is not configured or fails.",
+    description: "🔓 Public. Returns typeahead suggestions matching the query by word prefix, served from the search index with Arabic normalisation (tashkeel, alef forms, taa marbuta, alef maqsura). `types` picks the kinds (video, channel, playlist, category; default channel,video,category) and `channelId` limits videos and playlists to one channel. Only publicly visible items of visible channels are returned. Each suggestion carries the item's id, thumbnail and a subtitle (channel name, or the channel's @handle). Rate limited per client (429 with Retry-After). Falls back to scanning stored videos when the index is not configured or fails.",
     request: {
       query: z.object({
         q: Str({ description: "Partial search query" }),
         limit: Num({ description: "Maximum suggestions (1-20)", default: 5 }).optional(),
+        types: Str({ description: "Comma-separated kinds: video, channel, playlist, category" }).optional(),
+        channelId: Str({ description: "Only this channel's videos and playlists" }).optional(),
       }),
     },
     responses: {
@@ -71,21 +82,35 @@ export class SearchSuggestionsGet extends OptionalAuthRoute {
         description: "Suggestions (empty array when nothing matches)",
         content: { "application/json": { schema: z.array(SuggestionSchema) } },
       },
+      "429": { description: "Too many lookups; retry after Retry-After seconds", content: { "application/json": { schema: ErrorSchema } } },
       "500": { description: "Internal error", content: { "application/json": { schema: ErrorSchema } } },
     },
   };
 
   async handle(c: AppContext) {
     const { query } = await this.getValidatedData<typeof this.schema>();
-    const q = (query.q || "").trim();
+    const q = (query.q || "").trim().slice(0, SUGGEST_MAX_QUERY);
     const limit = clampLimit(query.limit, 5, 20);
+    const types = parseSuggestionTypes(query.types);
+    const channelId = query.channelId?.trim() || undefined;
     if (q.length < 1) return c.json([]);
+
+    // Typing sends a lookup per pause; this caps a client that hammers the endpoint
+    const limiter = c.env.SUGGEST_LIMITER as RateLimit | undefined;
+    if (limiter) {
+      const key = (c.get("userId") as string | undefined) || c.req.header("CF-Connecting-IP") || "anonymous";
+      const { success } = await limiter.limit({ key: `suggest:${key}` });
+      if (!success) {
+        logger.debug("[SearchSuggestions] Rate limited", { anonymous: !c.get("userId") });
+        return c.json({ success: false, error: "Too many suggestion lookups; try again shortly" }, 429, { "Retry-After": "60" });
+      }
+    }
 
     const db = c.env.SEARCH_DB as SearchDb | undefined;
     if (db) {
       try {
-        const suggestions = await suggestFromIndex(db, q, limit);
-        logger.debug("[SearchSuggestions] Served suggestions from index", { q, count: suggestions.length });
+        const suggestions = await withChannelHandles(c, await suggestFromIndex(db, q, limit, { types, channelId }));
+        logger.debug("[SearchSuggestions] Served suggestions from index", { q, types, channelId, count: suggestions.length });
         c.header("Cache-Control", "public, max-age=60");
         return c.json(suggestions);
       } catch (error) {
@@ -98,7 +123,11 @@ export class SearchSuggestionsGet extends OptionalAuthRoute {
         loadDiscoverableVideos(c.env.videos),
         loadChannels(c.env.channels),
       ]);
-      const suggestions = buildSuggestions(videos, channels, q, limit);
+      const scoped = channelId ? videos.filter(v => v.channelId === channelId) : videos;
+      const allowed = new Set<string>(types);
+      const suggestions = buildSuggestions(scoped, channelId ? [] : channels, q, limit * 2)
+        .filter(s => allowed.has(s.type))
+        .slice(0, limit);
       logger.debug("[SearchSuggestions] Served suggestions", { q, count: suggestions.length });
       c.header("Cache-Control", "public, max-age=60");
       return c.json(suggestions);
@@ -107,6 +136,30 @@ export class SearchSuggestionsGet extends OptionalAuthRoute {
       return c.json({ success: false, error: "Failed to load search suggestions" }, 500);
     }
   }
+}
+
+/**
+ * Channel rows indexed before the payload carried the @handle have none; read
+ * it from the channel object (at most a few per lookup) so pickers that need
+ * the handle (channel team invites) still work until the row is re-indexed.
+ */
+async function withChannelHandles(c: AppContext, suggestions: IndexSuggestion[]): Promise<IndexSuggestion[]> {
+  const missing = suggestions.filter(s => s.type === "channel" && s.id && !s.handle);
+  if (missing.length === 0 || !c.env.channels) return suggestions;
+  await Promise.all(missing.map(async (s) => {
+    try {
+      const object = await c.env.channels.get(s.id as string);
+      const channel = object ? await object.json<{ handle?: string; isDeleted?: boolean }>() : null;
+      const handle = channel && !channel.isDeleted && typeof channel.handle === "string" ? channel.handle.replace(/^@+/, "") : "";
+      if (handle) {
+        s.handle = handle;
+        s.subtitle = `@${handle}`;
+      }
+    } catch (error) {
+      logger.debug("[SearchSuggestions] Channel handle lookup failed", { channelId: s.id, error: error instanceof Error ? error.message : String(error) });
+    }
+  }));
+  return suggestions;
 }
 
 /**
