@@ -80,13 +80,31 @@ async function jobsIdle(page: Page): Promise<void> {
   await expect(page.locator('[data-testid="jobs-panel"] [data-active="true"]'), 'a job is still running on this page').toHaveCount(0, { timeout: JOB_TIMEOUT });
 }
 
+/**
+ * page.goto that waits for the DOM only and survives the app navigating on its own: the page
+ * being left can still hard-navigate (a jobs panel refreshing a just-purged record), and the
+ * session refresh redirects through /api/auth/refresh back to the same URL. WebKit reports
+ * either as an interrupted navigation (Chromium folds them in); settle and go again.
+ */
+async function gotoDom(page: Page, url: string): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await page.goto(url, { waitUntil: 'domcontentloaded' });
+      return;
+    } catch (error) {
+      if (attempt >= 3 || !/interrupted by another navigation/.test(String(error))) throw error;
+      await page.waitForLoadState('domcontentloaded').catch(() => undefined);
+    }
+  }
+}
+
 /** Opens a filtered list and waits until the item is in the admin index. */
 async function findInList(page: Page, url: string, row: ReturnType<Page['locator']>): Promise<void> {
   await jobsIdle(page);
   await expect
     .poll(
       async () => {
-        await page.goto(url, { waitUntil: 'domcontentloaded' });
+        await gotoDom(page, url);
         return row.count();
       },
       { message: `not listed at ${url}`, timeout: 60000, intervals: [2000, 5000] },
@@ -122,7 +140,7 @@ async function expectJobSucceeded(page: Page, kind: string, count = 1): Promise<
  * left Save disabled. React marks the DOM nodes it owns with __reactFiber keys.
  */
 async function openDetail(page: Page, path: string, actionsTestId: string): Promise<void> {
-  await page.goto(`${target().adminWeb}${path}`, { waitUntil: 'domcontentloaded' });
+  await gotoDom(page, `${target().adminWeb}${path}`);
   await page.waitForFunction(
     (id) => {
       const el = document.querySelector(`[data-testid="${id}"]`);
@@ -221,7 +239,7 @@ test.describe('Release: admin content management', () => {
       await expect
         .poll(
           async () => {
-            await page.goto(`${target().adminWeb}/videos?q=${encodeURIComponent(videoId)}`, { waitUntil: 'domcontentloaded' });
+            await gotoDom(page, `${target().adminWeb}/videos?q=${encodeURIComponent(videoId)}`);
             return videoRow.count();
           },
           { message: 'deleted video is still listed', timeout: JOB_TIMEOUT, intervals: [3000] },
