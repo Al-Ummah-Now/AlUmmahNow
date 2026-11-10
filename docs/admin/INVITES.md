@@ -104,7 +104,7 @@ invites from auth, so "Signed in" appears within minutes of the first sign-in.
 A revoke soft-deletes the auth account. Channels that were made or moved for
 the invite stay with that user id until the purge. The revoke dialog says so:
 transfer them first if they should go to someone else. The videos-side profile
-is not purged automatically yet (tracked as a GitHub issue).
+is not purged automatically yet (#716).
 
 ## Tables
 
