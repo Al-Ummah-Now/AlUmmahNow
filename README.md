@@ -159,6 +159,15 @@ The source of truth is [`scripts/release/secrets-manifest.ts`](scripts/release/s
 
 Stage shares the QA Bunny library and its keys; only `INTERNAL_API_KEY` has its own stage secret.
 
+**Build secrets** (GitHub Actions, read by the OpenNext build of web and admin-web; `BUILD_SECRETS` in the manifest):
+
+| Secret | Builds | Purpose |
+|---|---|---|
+| `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` | release (stage + production share the build) | Stable Server Action ids and encrypted action arguments across deploys |
+| `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY_QA` | `deploy.yml` (QA; PR builds get none) | as above, for QA |
+
+Skew protection (pages open during a deploy keep working) also sets `CF_WORKER_NAME` and `CF_PREVIEW_DOMAIN` vars on web and admin-web; see [docs/release-pipeline/SKEW-PROTECTION.md](docs/release-pipeline/SKEW-PROTECTION.md).
+
 **Must never be set:** `NEXT_PUBLIC_BUNNY_API_KEY` (and any other `NEXT_PUBLIC_*` secret). Next inlines `NEXT_PUBLIC_*` into the browser bundle.
 
 **OAuth client ids** (`ClientId` var) must exist, enabled, in that env's auth D1 (`oauth_clients` in AlUmmahNowAuth):

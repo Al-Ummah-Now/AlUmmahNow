@@ -14,4 +14,19 @@ import { defineCloudflareConfig } from "@opennextjs/cloudflare";
  * plus a tag cache (D1 or Durable Object) for revalidatePath/revalidateTag,
  * provisioned by the owner and bound in every wrangler config.
  */
-export default defineCloudflareConfig({});
+/**
+ * Skew protection (docs/release-pipeline/SKEW-PROTECTION.md): a page built by an
+ * older deploy sends its build's deployment id (NEXT_DEPLOYMENT_ID, set per CI
+ * build) with every RSC request, Server Action and chunk URL; the Worker serves
+ * it from the Worker version that built it, through that version's preview URL,
+ * for as long as the version is in CF_DEPLOYMENT_MAPPING (written at upload by
+ * scripts/release/skew-mapping.ts with the same retention as below). Older pages
+ * fall back to the current build, and the client recovers by reloading
+ * (src/lib/version-skew).
+ */
+export const SKEW_RETENTION = { maxNumberOfVersions: 20, maxVersionAgeDays: 7 };
+
+const config = defineCloudflareConfig({});
+config.cloudflare = { ...config.cloudflare, skewProtection: { enabled: true, ...SKEW_RETENTION } };
+
+export default config;

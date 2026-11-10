@@ -14,6 +14,11 @@
  * `wrangler deploy` instead: that also attaches its custom domain and applies its
  * Durable Object migrations. It has nothing to roll back to.
  * Writes release-result.json (previous and new version per worker).
+ *
+ * Skew protection (web, admin-web): each Next upload carries CF_DEPLOYMENT_MAPPING
+ * (skew-mapping.ts), so pages opened on the version serving now keep being
+ * served by it after the promote. Old versions are never deleted; a rollback
+ * re-deploys a version together with its own mapping.
  */
 import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
@@ -21,6 +26,8 @@ import { join, resolve } from 'node:path';
 import { createCfClient } from './cf-api.ts';
 import { ensureCustomDomains, expectedDomains } from './custom-domains.ts';
 import { runSmoke, HOSTS, VERSIONED_HEALTH, WORKERS, type CheckResult, type SmokeEnv } from './smoke.ts';
+import { computeMapping, mappingVarArgs, readDeploymentId, SKEW_APPS } from './skew-mapping.ts';
+import { captureBuild, checkOldBuildServed, type BuildSnapshot } from './skew-check.ts';
 
 export type ReleaseEnv = 'stage' | 'production';
 
@@ -114,6 +121,11 @@ export interface PromoteDeps {
 	waitForHosts: (env: ReleaseEnv) => Promise<void>;
 	/** Re-attaches each public hostname of `apps` that another worker owns (custom-domains.ts) */
 	ensureDomains: (env: ReleaseEnv, apps: string[]) => Promise<void>;
+	/** Extra upload args per app: the skew-protection mapping for the Next apps (none by default) */
+	skewArgs?: (app: ReleaseApp, previous: string | null) => Promise<string[]>;
+	/** Snapshot of the builds serving now (before 100%), checked after the promote (skew-check.ts) */
+	captureBuilds?: (env: ReleaseEnv, apps: string[]) => Promise<BuildSnapshot[]>;
+	checkSkew?: (snapshots: BuildSnapshot[]) => Promise<CheckResult[]>;
 	log: (line: string) => void;
 }
 
@@ -146,13 +158,14 @@ export async function promote(apps: ReleaseApp[], env: ReleaseEnv, message: stri
 			if (env === 'production') throw new Error(`${a.worker} does not exist in production; deploy it by hand once before releasing`);
 			previous = null;
 		}
+		const skew = (await deps.skewArgs?.(a, previous)) ?? [];
 		if (previous === null) {
-			const candidate = parseVersionId(run(a.cwd, ['deploy', ...a.configArgs, ...bundleArgs(a), '--message', `${message} (bootstrap)`]));
+			const candidate = parseVersionId(run(a.cwd, ['deploy', ...a.configArgs, ...bundleArgs(a), ...skew, '--message', `${message} (bootstrap)`]));
 			released.push({ app: a.app, worker: a.worker, previous, candidate });
 			log(`${a.worker}: created with ${candidate} (bootstrap)`);
 			continue;
 		}
-		const candidate = parseVersionId(run(a.cwd, ['versions', 'upload', ...a.configArgs, ...bundleArgs(a), '--message', message]));
+		const candidate = parseVersionId(run(a.cwd, ['versions', 'upload', ...a.configArgs, ...bundleArgs(a), ...skew, '--message', message]));
 		released.push({ app: a.app, worker: a.worker, previous, candidate });
 		log(`${a.worker}: uploaded ${candidate} (serving ${previous})`);
 	}
@@ -200,6 +213,12 @@ export async function promote(apps: ReleaseApp[], env: ReleaseEnv, message: stri
 	}
 
 	// 3. 100% traffic, triggers (crons, custom domains), and the smoke a user would see
+	let snapshots: BuildSnapshot[] = [];
+	try {
+		snapshots = (await deps.captureBuilds?.(env, promoted.map((p) => p.r.app))) ?? [];
+	} catch (error) {
+		log(`::warning::could not snapshot the serving builds, skew protection is not checked: ${(error as Error).message}`);
+	}
 	try {
 		for (const { r, a } of promoted) {
 			run(a.cwd, ['versions', 'deploy', `${r.candidate}@100%`, ...a.configArgs, '-y', '--message', message]);
@@ -209,6 +228,14 @@ export async function promote(apps: ReleaseApp[], env: ReleaseEnv, message: stri
 		const post = failures(await deps.smoke(env));
 		if (post.length) throw new Error(`post-promote smoke failed: ${post.join('; ')}`);
 		log('Promoted; smoke passed');
+		// Pages opened before the promote must keep loading the old build's chunks.
+		// Stage gates production, so there it fails the release; in production the
+		// new version works for everyone who reloads, so it is a loud warning.
+		const skewResults = (await deps.checkSkew?.(snapshots)) ?? [];
+		for (const r of skewResults) log(`${r.ok ? 'PASS' : 'FAIL'}  ${r.name}: ${r.detail}`);
+		const skew = failures(skewResults);
+		if (skew.length && env === 'stage') throw new Error(`skew protection check failed: ${skew.join('; ')}`);
+		if (skew.length) log(`::warning::skew protection check failed in production (no rollback): ${skew.join('; ')}`);
 	} catch (error) {
 		rollback((error as Error).message);
 		throw new ReleaseError((error as Error).message, released, true);
@@ -254,6 +281,21 @@ export async function waitForVersions(env: ReleaseEnv, wanted: Record<string, st
 	}
 }
 
+/** A public page of each Next app, served by that app (admin's root redirects to sign-in) */
+const SKEW_PAGES: Record<string, { host: 'web' | 'adminWeb'; path: string }> = {
+	web: { host: 'web', path: '/en' },
+	'admin-web': { host: 'adminWeb', path: '/access-denied' },
+};
+
+/** The skew-protection mapping for a Next app's upload; [] for the plain workers. */
+export async function skewArgsFor(a: ReleaseApp, previous: string | null, log: (line: string) => void): Promise<string[]> {
+	if (!SKEW_APPS.has(a.app)) return [];
+	const deploymentId = readDeploymentId(join(a.cwd, '.open-next'));
+	const mapping = previous === null ? { [deploymentId]: 'current' } : await computeMapping(createCfClient(), a.worker, deploymentId, previous);
+	log(`${a.worker}: build ${deploymentId}; open pages of ${Object.keys(mapping).length - 1} older build(s) stay on their version`);
+	return mappingVarArgs(mapping);
+}
+
 const isMain = process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.url).pathname);
 if (isMain) {
 	const argv = process.argv.slice(2);
@@ -275,6 +317,10 @@ if (isMain) {
 			waitForVersions,
 			waitForHosts,
 			ensureDomains: async (e, list) => void (await ensureCustomDomains(createCfClient(), expectedDomains(e, list), log)),
+			skewArgs: (a, previous) => skewArgsFor(a, previous, log),
+			captureBuilds: async (e, list) =>
+				Promise.all(Object.entries(SKEW_PAGES).filter(([app]) => list.includes(app)).map(([app, page]) => captureBuild(app, `${HOSTS[e][page.host]}${page.path}`))),
+			checkSkew: async (snapshots) => Promise.all(snapshots.map((s) => checkOldBuildServed(s))),
 			log,
 		});
 		writeResult({ env, status: 'promoted', released });

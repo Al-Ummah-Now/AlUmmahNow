@@ -9,7 +9,8 @@ import { useAuth } from "@/components/AuthProvider/authContext";
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { VIDEO_UPLOAD_CONFIG, VIDEO_UPLOAD_ERRORS } from "@/lib/constants/uploadConfig";
 import { Upload, X, AlertCircle, Pause, Play, RotateCcw } from "lucide-react";
-import { initiateVideoUpload, completeVideoUpload, getVideoUploadStatus } from "@/lib/actions/upload";
+import { initiateVideoUpload, completeVideoUpload, getVideoUploadStatus, scheduleUploadedVideo } from "@/lib/api/upload-client";
+import { useHoldReloadWhile } from "@/lib/version-skew/VersionSkewProvider";
 import { useLanguage } from "@/hooks/useLanguage";
 import { UploadButton } from "@/components/UploadButton";
 import { ThumbnailUploadSection, ThumbnailData } from "./ThumbnailUploadSection";
@@ -18,7 +19,6 @@ import { TemplateSelector } from "./TemplateSelector";
 import { ScheduleDateTimeSelector, ScheduleData } from "./ScheduleDateTimeSelector";
 import { VideoCategory } from "@al-ummah/shared-types";
 import type { ProcessedMetadata } from "@/lib/upload/template-variables";
-import { scheduleVideo } from "@/lib/api/scheduling";
 import { getApiUrl } from "@/lib/runtime-config";
 
 interface VideoUploadProps {
@@ -96,6 +96,8 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
   // Ask for confirmation before leaving while a transfer or processing is in
   // progress (leaving would abandon the upload)
   const uploadInFlight = uploadProgress?.state === 'uploading' || uploadProgress?.state === 'processing';
+  // A deploy while this runs must not reload the page under the upload
+  useHoldReloadWhile(uploadInFlight);
   useEffect(() => {
     if (!uploadInFlight) return;
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -431,12 +433,12 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
           // If scheduled, create schedule after upload
           if (scheduleData) {
             try {
-              const scheduleResult = await scheduleVideo(
+              const scheduleResult = await scheduleUploadedVideo(
                 videoId,
                 scheduleData.scheduledPublishDate,
                 scheduleData.timezone,
                 scheduleData.notifyOnPublish,
-                {  channelId }
+                channelId
               );
 
               if (scheduleResult?.success && scheduleResult.result) {

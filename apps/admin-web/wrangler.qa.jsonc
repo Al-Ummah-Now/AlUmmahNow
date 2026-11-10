@@ -1,7 +1,10 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "al-ummah-admin-web-qa",
-  "main": ".open-next/worker.js",
+  "main": "worker.ts",
+  // Skew protection: old pages are served by the Worker version that built
+  // them, through that version's preview URL (open-next.config.ts)
+  "preview_urls": true,
   "compatibility_date": "2025-04-12",
   "compatibility_flags": [
     "nodejs_compat",
@@ -14,7 +17,11 @@
   "keep_names": false,
   "assets": {
     "directory": ".open-next/assets",
-    "binding": "ASSETS"
+    "binding": "ASSETS",
+    // The Worker sees chunk requests first, so `?dpl=<old build>` reaches the
+    // old version's assets (skew protection). Must match in every config: the
+    // OpenNext build reads it from wrangler.jsonc.
+    "run_worker_first": ["/_next/static/*"]
   },
   "observability": {
     "enabled": true,
@@ -24,6 +31,8 @@
   },
   "upload_source_maps": true,
   "vars": {
+    "CF_WORKER_NAME": "al-ummah-admin-web-qa",
+    "CF_PREVIEW_DOMAIN": "mahmoud-s-darwish",
     "Issuer": "https://auth.qa.alummahnow.net",
     "OPENAUTH_ISSUER": "https://auth.qa.alummahnow.net",
     "NEXTJS_ENV": "qa",

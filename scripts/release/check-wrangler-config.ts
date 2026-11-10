@@ -11,6 +11,7 @@ import { APPS } from './apps.ts';
 import { parseJsonc } from './jsonc.ts';
 import { applyAccepted, checkApp, type AppRule, type WranglerConfig } from './wrangler-config.ts';
 import { checkDeployCommands, scanPackageScripts, scanWorkflow, type DeployCommand } from './deploy-commands.ts';
+import { checkSkewConfig } from './skew-config.ts';
 
 export interface CheckResult {
 	errors: string[];
@@ -46,6 +47,7 @@ export function runCheck(root: string, apps: AppRule[] = APPS): CheckResult {
 		}
 	}
 	errors.push(...checkDeployCommands(commands, apps));
+	if (apps === APPS) errors.push(...checkSkewConfig(root));
 	return { errors, accepted };
 }
 

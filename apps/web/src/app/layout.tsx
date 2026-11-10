@@ -32,6 +32,7 @@ import { ConsentBanner } from "@/components/consent/ConsentBanner";
 import SkipLinks from "@/components/SkipLinks";
 import { EMBED_REQUEST_HEADER } from "@/lib/embed/routes";
 import { getSiteTheme } from "@/lib/theme/site-theme";
+import { VersionSkewProvider } from "@/lib/version-skew/VersionSkewProvider";
 
 export const metadata: Metadata = {
   title: 'Al Ummah Now',
@@ -113,6 +114,7 @@ function EmbedDocument({ locale, nonce, theme, children }: { locale: string; non
         <RuntimeConfigScript nonce={nonce} />
       </head>
       <body className="font-inter">
+        <VersionSkewProvider />
         <QueryProvider>{children}</QueryProvider>
       </body>
     </html>
@@ -150,6 +152,8 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
       </head>
       <body className="font-inter">
         <SecurityBootstrap />
+        {/* A deploy while this page is open: notice + reload, never mid-upload */}
+        <VersionSkewProvider />
         <RuntimeConfigBootstrap config={serverRuntimeConfig()} />
         {/* No <Suspense> around the app: with one, the shell (and a 200 status)
             streamed before a page or layout could call notFound(), so unknown
