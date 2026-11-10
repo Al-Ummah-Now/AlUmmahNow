@@ -29,7 +29,7 @@ import { useAuth } from "@/components/AuthProvider/authContext";
 import { useLanguage } from "@/hooks/useLanguage";
 import { getLocalizedValue } from "@al-ummah/shared-types";
 import { enableWatchPageFeatures, getPlayerUi, subscribePlayerUi, updatePlayerUi } from "@/lib/video/player-ui";
-import { CommentsSkeleton, WatchDetailsSkeleton, type WatchHint } from "@/components/video/WatchPageSkeleton";
+import { CommentsSkeleton, WatchDetailsSkeleton } from "@/components/video/WatchPageSkeleton";
 
 type VideoState =
   | { status: 'loading' }
@@ -41,7 +41,11 @@ type VideoState =
  * /[locale]/video?vid= route, so both render the same player, actions,
  * comments and related videos (LTR or RTL variants by language).
  */
-export default function WatchPageContent({ videoId, hint }: { videoId: string; hint?: WatchHint }) {
+/**
+ * `skeleton` is the server's details placeholder (filled in with the video's
+ * title and poster when known); without one a plain placeholder is shown.
+ */
+export default function WatchPageContent({ videoId, skeleton }: { videoId: string; skeleton?: React.ReactNode }) {
   const [state, setState] = useState<VideoState>({ status: 'loading' });
   const [relatedVideos, setRelatedVideos] = useState<VideoInfo[]>([]);
   const [relatedLoading, setRelatedLoading] = useState(true);
@@ -169,7 +173,7 @@ export default function WatchPageContent({ videoId, hint }: { videoId: string; h
     <main id={MAIN_CONTENT_ID} className="flex flex-1 flex-col md:flex-row overflow-hidden" dir={isRTL ? 'rtl' : 'ltr'} data-theatre={theatre || undefined}>
       <div className={`flex flex-col ${theatre ? '' : 'lg:flex-row'} gap-4 p-4 w-full mt-0 lg:mt-0 overflow-hidden`} data-theatre={theatre || undefined} data-testid="watch-layout">
         <div className={`flex flex-col w-full ${theatre ? '' : 'lg:w-3/4'} overflow-hidden`}>
-          {!videoDetails && <WatchDetailsSkeleton hint={hint} />}
+          {!videoDetails && <div data-testid="watch-skeleton" className="w-full">{skeleton ?? <WatchDetailsSkeleton />}</div>}
           {videoDetails && (
             <div className="flex flex-col w-full mt-0 items-center">
               <section id={VIDEO_PLAYER_ID} className="w-full" tabIndex={-1}>
