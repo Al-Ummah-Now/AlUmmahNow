@@ -7,6 +7,7 @@ import { patchVideo } from '../../lib/videoWrites';
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
 import { logger } from '../../lib/logger';
+import { startProcessingLoop } from '../../lib/processing/loop';
 
 export class UploadCompleteEndpoint extends AuthenticatedRoute {
 	schema = {
@@ -143,6 +144,11 @@ export class UploadCompleteEndpoint extends AuthenticatedRoute {
 				duration,
 				timestamp: new Date().toISOString(),
 			});
+
+			// Check Bunny until the encode finishes (lib/processing/loop.ts)
+			await startProcessingLoop(c.env as never, videoId, { reason: 'upload-complete' }).catch((error) =>
+				logger.error('[UploadComplete] Could not start the processing check loop', { videoId, error: error instanceof Error ? error.message : String(error) }),
+			);
 
 			return c.json({
 				success: true,

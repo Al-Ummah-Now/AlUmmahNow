@@ -90,6 +90,25 @@ export const Video = z.object({
     fileSize: z.number().optional(),
     originalFormat: z.string().optional(),
     uploadStatus: z.enum(['initiated', 'uploading', 'processing', 'ready', 'failed']).optional(),
+    // Why processing did not finish (lib/processing): Bunny encode failure, an
+    // upload whose bytes never arrived (re-upload needed) or a stalled encode.
+    processingIssue: z.object({
+        kind: z.enum(['encode_failed', 'needs_reupload', 'stalled']),
+        reason: z.string().optional(),
+        at: z.string(),
+    }).optional(),
+    // Per-video processing-check loop (lib/processing/loop.ts); internal.
+    processingCheck: z.object({
+        loopId: z.string(),
+        startedAt: z.string(),
+        attempt: z.number(),
+        lastCheckedAt: z.string().optional(),
+        nextCheckAt: z.string().optional(),
+        finishedAt: z.string().optional(),
+        outcome: z.string().optional(),
+        bunnyStatus: z.number().optional(),
+        bunnyProgress: z.number().optional(),
+    }).optional(),
     tags: z.array(z.string()).default([]),
     category: z.nativeEnum(VideoCategory).optional(),
     language: z.enum(['en', 'ar', 'ur', 'fr']).optional(),

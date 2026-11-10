@@ -5,7 +5,7 @@
   "compatibility_date": "2025-04-12",
   "compatibility_flags": ["nodejs_compat"],
   "triggers": {
-    "crons": ["17 3 * * *", "47 * * * *"]
+    "crons": ["17 3 * * *", "47 * * * *", "*/10 * * * *"]
   },
   "observability": {
     "enabled": true,
@@ -109,8 +109,21 @@
     }
   ],
   "queues": {
-    "consumers": [],
+    // Per-video processing-check loop (src/lib/processing/loop.ts)
+    "consumers": [
+      {
+        "queue": "al-ummah-now-processing-check-qa",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 5,
+        "dead_letter_queue": "al-ummah-now-dlq-qa"
+      }
+    ],
     "producers": [
+      {
+        "queue": "al-ummah-now-processing-check-qa",
+        "binding": "PROCESSING_CHECK_QUEUE"
+      },
       {
         "queue": "al-ummah-now-videos-qa",
         "binding": "queue"
