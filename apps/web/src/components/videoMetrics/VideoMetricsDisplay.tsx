@@ -2,13 +2,14 @@ import { logger } from '@/lib/logger-client';
 
 import React, { useEffect, useState } from 'react';
 import { useRealTimeVideoMetrics, useRealTimePresence } from '@/hooks/useRealTimeVideoMetrics';
-import { Eye, Heart, MessageCircle, Users, ThumbsDown } from 'lucide-react';
+import { Eye, MessageCircle, Users, ThumbsUp, ThumbsDown } from 'lucide-react';
 import * as VideosAPI from '@/lib/api/videos';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import type { VideoReaction } from '@/components/VideoPagePlayer/interface';
 import { formatViews } from '@/lib/format/videoMeta';
+import { COMMENTS_ID } from '@/components/SkipLinks';
 
 interface VideoMetricsDisplayProps {
   videoId: string;
@@ -52,7 +53,7 @@ export function VideoMetricsDisplay({
     setIsDisliked(!!dislikes?.some((r) => r.channelId === reactorChannelId));
   }, [reactorChannelId, likes, dislikes]);
 
-  const { metrics, isConnected, updateMetrics } = useRealTimeVideoMetrics({
+  const { metrics, updateMetrics } = useRealTimeVideoMetrics({
     videoId,
     initialMetrics: {
       viewCount: initialViewCount,
@@ -136,64 +137,62 @@ export function VideoMetricsDisplay({
   return (
     <div
       data-testid="video-metrics"
-      className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400"
+      className="flex items-center gap-4 text-sm"
       role="group"
       aria-label={t.a11y.videoStats}
     >
       {/* View count */}
       <div className="flex items-center gap-1" data-testid="video-metrics-views">
         <Eye className="w-4 h-4" aria-hidden="true" />
-        <span className={`transition-colors duration-200 ${isConnected ? 'text-green-700 dark:text-green-400' : ''}`}>
+        <span>
           {formatViews(metrics.viewCount, lang)}
         </span>
       </div>
 
-      {/* Likes */}
-      <button
-        onClick={handleLike}
-        disabled={!user || isLoading || !reactorChannelId}
-        className={`flex items-center justify-center gap-1 min-h-11 min-w-11 px-2 rounded-md transition-all duration-200 active:scale-95 ${
-          !user ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:scale-110'
-        } ${isLiked ? 'text-red-600 dark:text-red-400' : ''}`}
-        title={!user ? t.a11y.signInToReact : isLiked ? t.a11y.unlikeVideo : t.a11y.likeVideo}
-        // Name includes the visible count (WCAG 2.5.3 Label in Name)
-        aria-label={`${isLiked ? t.a11y.unlikeVideo : t.a11y.likeVideo} ${formatNumber(metrics.likesCount)}`}
-        aria-pressed={isLiked}
-        aria-describedby={!user ? `metrics-signin-hint-${videoId}` : undefined}
-        data-testid="video-like-button"
-      >
-        <Heart className={`w-4 h-4 ${isLiked ? 'fill-current' : ''}`} aria-hidden="true" />
-        <span className={`transition-colors duration-200 ${isConnected ? 'text-green-700 dark:text-green-400' : ''}`}>
-          {formatNumber(metrics.likesCount)}
-        </span>
-      </button>
-
-      {/* Dislikes */}
-      <button
-        onClick={handleDislike}
-        disabled={!user || isLoading || !reactorChannelId}
-        className={`flex items-center justify-center gap-1 min-h-11 min-w-11 px-2 rounded-md transition-all duration-200 active:scale-95 ${
-          !user ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:scale-110'
-        } ${isDisliked ? 'text-blue-700 dark:text-blue-300' : ''}`}
-        title={!user ? t.a11y.signInToReact : isDisliked ? t.a11y.removeDislike : t.a11y.dislikeVideo}
-        aria-label={`${isDisliked ? t.a11y.removeDislike : t.a11y.dislikeVideo} ${formatNumber(metrics.dislikesCount)}`}
-        aria-pressed={isDisliked}
-        aria-describedby={!user ? `metrics-signin-hint-${videoId}` : undefined}
-        data-testid="video-dislike-button"
-      >
-        <ThumbsDown className={`w-4 h-4 ${isDisliked ? 'fill-current' : ''}`} aria-hidden="true" />
-        <span className={`transition-colors duration-200 ${isConnected ? 'text-green-700 dark:text-green-400' : ''}`}>
-          {formatNumber(metrics.dislikesCount)}
-        </span>
-      </button>
-
-      {/* Comments */}
-      <div className="flex items-center gap-1" aria-label={t.a11y.commentsCount.replace('{count}', String(metrics.commentsCount))}>
-        <MessageCircle className="w-4 h-4" aria-hidden="true" />
-        <span className={`transition-colors duration-200 ${isConnected ? 'text-green-700 dark:text-green-400' : ''}`}>
-          {formatNumber(metrics.commentsCount)}
-        </span>
+      {/* Like and dislike: one segmented pill with a matched thumbs pair.
+          Pressed state uses the theme's primary colour (watch-actions in theme/system.css). */}
+      <div className="wa-seg" role="group" data-testid="video-reactions">
+        <button
+          type="button"
+          onClick={handleLike}
+          disabled={!user || isLoading || !reactorChannelId}
+          className={!user ? 'cursor-not-allowed' : 'cursor-pointer'}
+          title={!user ? t.a11y.signInToReact : isLiked ? t.a11y.unlikeVideo : t.a11y.likeVideo}
+          // Name includes the visible count (WCAG 2.5.3 Label in Name)
+          aria-label={`${isLiked ? t.a11y.unlikeVideo : t.a11y.likeVideo} ${formatNumber(metrics.likesCount)}`}
+          aria-pressed={isLiked}
+          aria-describedby={!user ? `metrics-signin-hint-${videoId}` : undefined}
+          data-testid="video-like-button"
+        >
+          <ThumbsUp className={isLiked ? 'fill-current' : undefined} aria-hidden="true" data-icon="thumbs-up" />
+          <span>{formatNumber(metrics.likesCount)}</span>
+        </button>
+        <button
+          type="button"
+          onClick={handleDislike}
+          disabled={!user || isLoading || !reactorChannelId}
+          className={!user ? 'cursor-not-allowed' : 'cursor-pointer'}
+          title={!user ? t.a11y.signInToReact : isDisliked ? t.a11y.removeDislike : t.a11y.dislikeVideo}
+          aria-label={`${isDisliked ? t.a11y.removeDislike : t.a11y.dislikeVideo} ${formatNumber(metrics.dislikesCount)}`}
+          aria-pressed={isDisliked}
+          aria-describedby={!user ? `metrics-signin-hint-${videoId}` : undefined}
+          data-testid="video-dislike-button"
+        >
+          <ThumbsDown className={isDisliked ? 'fill-current' : undefined} aria-hidden="true" data-icon="thumbs-down" />
+          <span>{formatNumber(metrics.dislikesCount)}</span>
+        </button>
       </div>
+
+      {/* Comments: a pill like the other actions, jumping to the comments section */}
+      <a
+        href={`#${COMMENTS_ID}`}
+        className="wa-comments"
+        data-testid="video-comments-count"
+        aria-label={t.a11y.commentsCount.replace('{count}', String(metrics.commentsCount))}
+      >
+        <MessageCircle aria-hidden="true" />
+        <span>{formatNumber(metrics.commentsCount)}</span>
+      </a>
 
       {/* Live viewers (if available) */}
       {channelId && presenceConnected && viewerCount > 0 && (
@@ -212,15 +211,6 @@ export function VideoMetricsDisplay({
         </span>
       )}
 
-      {/* Connection status indicator */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className={`text-xs px-2 py-1 rounded ${
-          isConnected ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
-                     : 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
-        }`}>
-          {isConnected ? '🟢 Live' : '🔴 Static'}
-        </div>
-      )}
     </div>
   );
 }

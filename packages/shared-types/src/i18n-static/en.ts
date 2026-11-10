@@ -1816,6 +1816,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     dislikeVideo: 'Dislike this video',
     removeDislike: 'Remove dislike',
     signInToReact: 'Sign in to like or dislike',
+    moreVideoActions: 'More actions',
     watchingNow: '{count} watching now',
   },
 };

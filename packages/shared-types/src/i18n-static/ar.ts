@@ -1811,6 +1811,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     dislikeVideo: 'لم يعجبني هذا الفيديو',
     removeDislike: 'إزالة عدم الإعجاب',
     signInToReact: 'سجّل الدخول لإبداء الإعجاب أو عدمه',
+    moreVideoActions: 'إجراءات أخرى',
     watchingNow: '{count} يشاهدون الآن',
   },
 };

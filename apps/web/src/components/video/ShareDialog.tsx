@@ -105,10 +105,11 @@ export default function ShareDialog({ videoId, title, lang, getCurrentTime }: Sh
         <button
           type="button"
           data-testid="share-button"
+          title={s.share}
           className="inline-flex items-center gap-2 px-4 py-2 border dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors dark:text-white"
         >
           <Share2 size={20} aria-hidden="true" />
-          <span>{s.share}</span>
+          <span className="wa-label">{s.share}</span>
         </button>
       </DialogTrigger>
       <DialogContent dir={lang === 'ar' ? 'rtl' : 'ltr'} className="max-w-lg" data-testid="share-dialog">
