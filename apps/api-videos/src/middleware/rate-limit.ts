@@ -17,6 +17,18 @@
 
 import { Context } from 'hono';
 import { logger } from '../lib/logger';
+import { canClaimOfficialHandles } from '../lib/channelHandles';
+
+/**
+ * Super admins (the videos-side "Super Admin" role, the same check that
+ * guards the official handles) are never upload limited: no session, hourly,
+ * daily or concurrency limit. Owner decision 2026-11-10 after the prod
+ * "Rate limit exceeded: hour" on their own bulk upload.
+ */
+export function isUploadUnlimited(c: Context): boolean {
+  const auth = c.get('auth') as { payload?: { roles?: string[] } } | undefined;
+  return canClaimOfficialHandles(auth?.payload?.roles);
+}
 
 /**
  * Rate limit tiers with different quotas
@@ -133,6 +145,7 @@ export function uploadContinueLimitMiddleware() {
       return session === UPLOAD_SESSION_LIMITS.relaxed ? UPLOAD_CONTINUE_LIMITS.relaxed : UPLOAD_CONTINUE_LIMITS.standard;
     },
     methods: ['POST'],
+    exempt: isUploadUnlimited,
   });
 }
 
@@ -142,6 +155,7 @@ export function uploadSessionLimitMiddleware() {
     limits: (env) => uploadSessionLimits(env as { UPLOAD_RATE_LIMIT?: string; ENVIRONMENT?: string }),
     weight: uploadSessionWeight,
     methods: ['POST'],
+    exempt: isUploadUnlimited,
   });
 }
 
@@ -392,11 +406,14 @@ export interface RateLimitOptions {
   weight?: (c: Context) => Promise<number>;
   /** Only these methods are counted (default: all) */
   methods?: string[];
+  /** Requests this returns true for are not limited or counted */
+  exempt?: (c: Context) => boolean;
 }
 
 export function rateLimitMiddleware(operation: string, options: RateLimitOptions = {}) {
   return async (c: Context, next: () => Promise<void>) => {
     if (options.methods && !options.methods.includes(c.req.method)) return next();
+    if (options.exempt?.(c)) return next();
 
     const resolveLimits =
       options.limits ??

@@ -56,7 +56,8 @@ function harness(env: Record<string, unknown> = { UPLOAD_RATE_LIMIT: 'standard' 
     const user = c.req.header('x-test-user');
     if (user) {
       c.set('userId' as never, user as never);
-      c.set('auth' as never, { userId: user } as never);
+      const roles = c.req.header('x-test-roles')?.split(',');
+      c.set('auth' as never, { userId: user, payload: { sub: user, roles } } as never);
     }
     await next();
   });
@@ -85,8 +86,14 @@ function harness(env: Record<string, unknown> = { UPLOAD_RATE_LIMIT: 'standard' 
   };
   const request = (user: string, path: string, init: RequestInit = {}) =>
     app.request(path, { ...init, headers: { 'x-test-user': user, ...(init.headers as Record<string, string>) } }, fullEnv);
-  const initiate = (user: string) =>
-    request(user, '/api/videos/upload/initiate', { method: 'POST', body: '{}', headers: { 'content-type': 'application/json' } });
+  const initiate = (user: string, headers: Record<string, string> = {}) =>
+    request(user, '/api/videos/upload/initiate', { method: 'POST', body: '{}', headers: { 'content-type': 'application/json', ...headers } });
+  const batch = (user: string, count: number, headers: Record<string, string> = {}) =>
+    request(user, '/api/videos/upload/batch/initiate', {
+      method: 'POST',
+      body: JSON.stringify({ videos: Array.from({ length: count }, (_, i) => ({ title: `v${i}` })) }),
+      headers: { 'content-type': 'application/json', ...headers },
+    });
   const chunk = (user: string, uploadId: string, offset: number) =>
     request(user, `/api/videos/tus/${uploadId}`, {
       method: 'PATCH',
@@ -99,9 +106,9 @@ function harness(env: Record<string, unknown> = { UPLOAD_RATE_LIMIT: 'standard' 
       `tus:upload:${uploadId}`,
       JSON.stringify({ uploadId, userId: user, videoId: `vid-${uploadId}`, fileSize, uploadOffset: 0, bunnyUploadUrl: `https://bunny.test/tus/${uploadId}` }),
     );
-  const tusCreate = (user: string) =>
-    request(user, '/api/videos/tus', { method: 'POST', headers: { 'tus-resumable': '1.0.0', 'upload-length': '10' } });
-  return { request, initiate, chunk, startUpload, tusCreate, created, db };
+  const tusCreate = (user: string, headers: Record<string, string> = {}) =>
+    request(user, '/api/videos/tus', { method: 'POST', headers: { 'tus-resumable': '1.0.0', 'upload-length': '10', ...headers } });
+  return { request, initiate, batch, chunk, startUpload, tusCreate, created, db };
 }
 
 describe('upload rate limiting (#290)', () => {
@@ -358,6 +365,48 @@ describe('upload rate limits under parallel requests (AV-14)', () => {
     const users = (sqlite.db.prepare('SELECT DISTINCT user_id FROM upload_rate_windows').all() as { user_id: string }[]).map((r) => r.user_id);
     assert.deepEqual(users, ['recent']);
     assert.equal(sqlite.count('upload_rate_leases'), 0);
+  });
+
+  it('super admins are unlimited: a batch of 15 after 1,000 uploads in the hour still passes', async () => {
+    const h = harness();
+    const owner = 'usr_owner';
+    const superAdmin = { 'x-test-roles': 'Super Admin' };
+    // 1,000 uploads this hour, one minute's worth at a time
+    for (let i = 0; i < 1000; i++) {
+      if (i > 0 && i % 100 === 0) advance(1);
+      assert.equal((await h.initiate(owner, superAdmin)).status, 200, `upload ${i + 1}`);
+    }
+    // Even counters already far past every limit do not apply to them
+    const now = Math.floor(clock / 1000);
+    for (const period of ['minute', 'hour', 'day'] as const) {
+      const len = { minute: 60, hour: 3600, day: 86400 }[period];
+      h.db.db
+        .prepare('INSERT OR REPLACE INTO upload_rate_windows (user_id, operation, period, window_start, count) VALUES (?, ?, ?, ?, ?)')
+        .run(owner, 'video_upload_session', period, now - (now % len), 1000);
+    }
+    const res = await h.batch(owner, 15, superAdmin);
+    assert.equal(res.status, 200);
+    assert.equal(h.created.length, 1015);
+    // No concurrency limit either: 40 at once all pass, and TUS create is not bounded
+    const parallel = await Promise.all(Array.from({ length: 40 }, () => h.initiate(owner, superAdmin)));
+    assert.deepEqual([...new Set(parallel.map((r) => r.status))], [200]);
+    for (let i = 0; i < UPLOAD_CONTINUE_LIMITS.standard.perHour + 5; i++) {
+      assert.notEqual((await h.tusCreate(owner, superAdmin)).status, 429);
+    }
+    assert.equal(h.db.count('upload_rate_leases'), 0, 'nothing held');
+  });
+
+  it('only the super admin role is unlimited: admins and creators keep the limits', async () => {
+    const h = harness();
+    const { perHour, perMinute } = UPLOAD_SESSION_LIMITS.standard;
+    for (const [user, roles] of [['admin-user', 'Admin'], ['creator', '']] as const) {
+      let refused = 0;
+      for (let i = 0; i < perHour + 1; i++) {
+        if (i > 0 && i % perMinute === 0) advance(60);
+        if ((await h.initiate(user, roles ? { 'x-test-roles': roles } : {})).status === 429) refused++;
+      }
+      assert.equal(refused, 1, `${user} is limited`);
+    }
   });
 
   it('refuses the request (503, not counted) when D1 itself fails: an outage is never a bypass', async () => {
