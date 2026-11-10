@@ -18,6 +18,7 @@ import { randomBytes } from 'crypto';
 import { test, expect, type Page } from '@playwright/test';
 import { target } from './targets';
 import { apiFetch, createProfile, signInAgain, signUpOnWeb, type WebUser } from './web-session';
+import { grantCreatorTier } from './creator-tier';
 
 // Signs users in through the auth server: traces would hold the password.
 test.use({ trace: 'off' });
@@ -39,6 +40,8 @@ async function uploader(page: Page): Promise<{ user: WebUser; channelId: string 
   await page.context().addCookies([{ name: 'aun_consent', value: `v1.a0.e0.p0.${Date.now()}`, url: target().web, sameSite: 'Lax' }]);
   const user = await signUpOnWeb(page, 'rel-reuse');
   await createProfile(user);
+  // Creating a channel and uploading are by invitation: the Creator tier first
+  await grantCreatorTier(user);
   const channelName = `Release E2E reuse ${Date.now().toString(36)}`;
   await page.goto(`${target().web}/en`);
   await page.getByTestId('nav-menu-trigger').click();

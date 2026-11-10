@@ -21,6 +21,7 @@ import { promoteToAdmin } from './sink';
 import { releaseEnv, sinkEmail, target, TEST_PASSWORD } from './targets';
 import { apiFetch, completeRegistration, createProfile, signUpOnWeb, type Locale, type WebUser } from './web-session';
 import { fillSecret } from './secret-fill';
+import { grantCreatorTier } from './creator-tier';
 
 // Signs users in through the auth server: traces would hold the typed password and code
 test.use({ trace: 'off' });
@@ -79,6 +80,8 @@ test.describe('Release: AI category suggestions', () => {
       hookOnly();
       const user = await signUpOnWeb(page, `rel-cat-${locale}`, locale);
       await createProfile(user);
+      // Uploading is by invitation: an admin gives the fresh user the Creator tier
+      await grantCreatorTier(user);
       await acceptConsent(page);
       await openUploadForm(page, locale);
 
@@ -106,6 +109,7 @@ test.describe('Release: AI category suggestions', () => {
     hookOnly();
     const user = await signUpOnWeb(page, 'rel-cat-low', 'ar');
     await createProfile(user);
+    await grantCreatorTier(user);
     await acceptConsent(page);
     await openUploadForm(page, 'ar');
 
@@ -127,6 +131,7 @@ test.describe('Release: AI category suggestions', () => {
     test.setTimeout(6 * 60_000);
     const owner = await signUpOnWeb(page, 'rel-cat-owner');
     await createProfile(owner);
+    await grantCreatorTier(owner);
     const channelId = await createChannel(owner);
 
     // Initiated the way the upload page does, without a category (private; no file needed)
