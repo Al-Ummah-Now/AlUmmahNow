@@ -37,7 +37,7 @@ export async function ChannelPageShell({ channel, locale, isOwner, children }: C
           <a
             href={scholarPageUrl(www, locale, scholarSlug)}
             data-testid="channel-scholar-page"
-            className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
+            className="inline-flex items-center gap-2 text-sm font-medium text-[var(--fanous-color-link)] hover:underline"
           >
             {t.navigation.scholarPage}
             <span aria-hidden="true" className="rtl:rotate-180">→</span>

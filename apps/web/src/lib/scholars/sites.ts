@@ -10,8 +10,10 @@ function sibling(issuer: string | undefined, sub: 'cms' | 'www'): string {
   if (!issuer) return '';
   try {
     const url = new URL(issuer);
-    if (url.protocol !== 'https:' || !url.hostname.startsWith('auth.') || !url.hostname.endsWith('alummahnow.net')) return '';
-    return `https://${sub}.${url.hostname.slice('auth.'.length)}`;
+    // auth.alummahnow.net or auth.<env>.alummahnow.net, nothing else
+    const m = /^auth\.((?:[a-z0-9-]+\.)?alummahnow\.net)$/.exec(url.hostname);
+    if (url.protocol !== 'https:' || !m) return '';
+    return `https://${sub}.${m[1]}`;
   } catch {
     return '';
   }

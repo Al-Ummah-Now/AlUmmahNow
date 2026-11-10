@@ -6,6 +6,8 @@ describe('scholar links', () => {
     expect(deriveWwwUrl('https://auth.qa.alummahnow.net/')).toBe('https://www.qa.alummahnow.net');
     expect(deriveCmsUrl('http://localhost:8787')).toBe('');
     expect(deriveCmsUrl('https://auth.evil.test')).toBe('');
+    expect(deriveCmsUrl('https://auth.notalummahnow.net')).toBe('');
+    expect(deriveCmsUrl('https://auth.alummahnow.net.evil.test')).toBe('');
     expect(deriveCmsUrl(undefined, 'http://localhost:8585/')).toBe('http://localhost:8585');
   });
 
