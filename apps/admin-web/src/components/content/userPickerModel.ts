@@ -97,7 +97,9 @@ export function statusText(state: PickerState, t: Translator): string {
     case 'error':
       return t('channels.pickerError');
     case 'done':
-      return state.results.length === 0 ? t('channels.pickerEmpty', { query: state.query.trim() }) : t('channels.pickerResults', { count: state.results.length });
+      return state.results.length === 0 ? t('channels.pickerEmpty', { query: state.query.trim() }) : state.results.length === 1
+          ? t('channels.pickerResultsOne')
+          : t('channels.pickerResults', { count: state.results.length });
     default:
       return '';
   }
@@ -134,4 +136,13 @@ export function confirmMatches(typed: string, values: readonly string[]): boolea
   const v = typed.trim();
   if (!v) return false;
   return values.some((value) => (value.includes('@') && !value.startsWith('@') ? value.toLowerCase() === v.toLowerCase() : value === v));
+}
+
+/**
+ * Wraps a Latin value (name, email, @handle) in Unicode isolates (FSI…PDI) for
+ * Arabic text, so it keeps its own order: "@handle" stays "@handle" and a
+ * parenthesised email does not split across the sentence. Other locales: as is.
+ */
+export function bidiIsolate(value: string, locale: string): string {
+  return locale === 'ar' && value ? `\u2068${value}\u2069` : value;
 }
