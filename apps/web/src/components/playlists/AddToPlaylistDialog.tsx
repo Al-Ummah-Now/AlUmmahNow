@@ -49,6 +49,8 @@ export default function AddToPlaylistDialog({ open, onOpenChange, channelId, vid
   const { t, lang, isRTL } = useLanguage();
   const p = t.playlistTools;
   const [playlists, setPlaylists] = useState<PlaylistWithVideos[] | null>(null);
+  // Counts after an add here (the listed playlists predate it)
+  const [counts, setCounts] = useState<Map<string, number>>(() => new Map());
   const [loadFailed, setLoadFailed] = useState(false);
   const [chosen, setChosen] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
@@ -105,6 +107,12 @@ export default function AddToPlaylistDialog({ open, onOpenChange, channelId, vid
       }
     }));
     setSent((prev) => [...prev, ...results]);
+    // The rows show each playlist's count: take the new one from the add's answer
+    setCounts((prev) => {
+      const next = new Map(prev);
+      for (const r of results) if (r.outcome.kind === 'result') next.set(r.playlistId, r.outcome.result.videosCount);
+      return next;
+    });
     setChosen([]);
     setAdding(false);
   };
@@ -183,11 +191,11 @@ export default function AddToPlaylistDialog({ open, onOpenChange, channelId, vid
                     const title = titleOf(playlist);
                     const checked = chosen.includes(playlist.id);
                     const done = sentIds.has(playlist.id);
-                    const count = playlist.videos?.length ?? playlist.videosCount ?? 0;
+                    const count = counts.get(playlist.id) ?? playlist.videos?.length ?? playlist.videosCount ?? 0;
                     return (
                       <li key={playlist.id}>
-                        <label className={`pl-row flex items-center gap-3 p-2.5 ${done ? 'opacity-60' : 'cursor-pointer'}`} data-selected={checked || undefined}>
-                          <input type="checkbox" className="peer sr-only" checked={checked || done} disabled={done || adding} onChange={() => toggle(playlist.id)} data-testid="add-to-playlist-option" data-playlist-id={playlist.id} />
+                        <label className={`pl-row relative flex items-center gap-3 p-2.5 ${done ? 'opacity-60' : 'cursor-pointer'}`} data-selected={checked || undefined}>
+                          <input type="checkbox" className="peer pl-hit" checked={checked || done} disabled={done || adding} onChange={() => toggle(playlist.id)} data-testid="add-to-playlist-option" data-playlist-id={playlist.id} />
                           <span className="ck pl-ck" data-on={checked || done || undefined} aria-hidden="true">{(checked || done) && <Check />}</span>
                           <span className="min-w-0 flex-1">
                             <span className={`block truncate text-sm font-medium ${TEXT}`}>{title}</span>

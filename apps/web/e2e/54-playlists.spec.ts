@@ -14,12 +14,14 @@ import {
   findQaLecturesChannel,
   listChannelPlaylists,
   listPublicChannelVideos,
+  playlistToolsDeployed,
   tempName,
 } from './test-utils/channel-content';
 
 /**
  * Playlists: the channel playlist manager (/settings/channel/[id]/playlists:
- * create, rename, change visibility, delete) and the playlist page
+ * create, rename, change visibility, delete; adding videos is in
+ * 56-playlist-tools) and the playlist page
  * (/playlist/[id]: info, Play all, owner reorder/remove).
  *
  * Writes go to the single user's own channel; every playlist a test creates
@@ -34,7 +36,7 @@ async function openManager(page: Page, locale: 'en' | 'ar' = 'en') {
   await page.goto(`/${locale}/settings/channel/${channelId()}/playlists`);
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   // List finished loading (either rows or the empty state)
-  await expect(page.getByText(locale === 'ar' ? 'جاري التحميل...' : 'Loading...')).toHaveCount(0);
+  await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
 }
 
 /** Loaded and actually occupying space: a collapsed 0px box must fail this */
@@ -51,6 +53,9 @@ function managedRow(page: Page, title: string): Locator {
 
 test.describe('Playlist manager', () => {
   test.use({ storageState: AUTH_STATE.single });
+  test.beforeAll(async () => {
+    test.skip(!(await playlistToolsDeployed()), 'The playlist editor pages are not deployed on the target yet (they land with the PR that adds them)');
+  });
 
   test('PLAY-001 creates, renames, makes private and deletes a playlist (en)', async ({ page }) => {
     const title = tempName('Playlist');
@@ -59,31 +64,31 @@ test.describe('Playlist manager', () => {
       await openManager(page);
       await expect(page.getByRole('heading', { level: 1, name: 'Manage Playlists' })).toBeVisible();
 
-      await clickUntil(page.getByRole('button', { name: 'New playlist' }), async () =>
-        expect(page.getByRole('heading', { name: 'Create playlist' })).toBeVisible({ timeout: 3000 })
-      );
+      await page.getByRole('link', { name: 'New playlist' }).click();
+      await expect(page.getByRole('heading', { level: 1, name: 'New playlist' })).toBeVisible();
       await fillStable(page.getByLabel('Name'), title);
       await page.getByLabel('Description').fill('Created by an E2E test');
       await expect(page.getByRole('radio', { name: /^Public/ })).toBeChecked();
-      await page.getByRole('button', { name: 'Save' }).click();
+      await page.getByRole('button', { name: 'Create playlist' }).click();
 
-      const row = managedRow(page, title);
-      await expect(row).toBeVisible();
-      await expect(row).toContainText('0 videos');
-      await expect(row).toContainText('Public');
-      await expect(row.getByRole('link', { name: 'View playlist' })).toHaveAttribute('href', /^\/en\/playlist\/[\w-]+$/);
+      // The new playlist's editor
+      await expect(page.getByTestId('playlist-editor')).toBeVisible({ timeout: 20000 });
+      await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
       await expect.poll(async () => (await listChannelPlaylists(channelId())).some((p) => p.title === title)).toBe(true);
 
       // Rename + make private
-      await row.getByRole('button', { name: 'Edit playlist' }).click();
-      await expect(page.getByRole('heading', { name: 'Edit playlist' })).toBeVisible();
       await expect(page.getByLabel('Name')).toHaveValue(title);
       await page.getByLabel('Name').fill(renamed);
       await page.getByRole('radio', { name: /^Private/ }).check();
-      await page.getByRole('button', { name: 'Save' }).click();
+      await page.getByTestId('playlist-details-save').click();
+      await expect(page.getByText('Changes saved')).toBeVisible();
+
+      await page.getByRole('link', { name: 'All playlists' }).click();
       const renamedRow = managedRow(page, renamed);
       await expect(renamedRow).toBeVisible();
+      await expect(renamedRow).toContainText('0 videos');
       await expect(renamedRow).toContainText('Private');
+      await expect(renamedRow.getByRole('link', { name: 'View playlist' })).toHaveAttribute('href', /^\/en\/playlist\/[\w-]+$/);
 
       // Delete (confirm dialog)
       page.once('dialog', (dialog) => {
@@ -107,16 +112,14 @@ test.describe('Playlist manager', () => {
     const title = tempName('Keep');
     const { id } = await createPlaylist(owner, channelId(), { title });
     try {
-      await openManager(page);
-      await clickUntil(page.getByRole('button', { name: 'New playlist' }), async () =>
-        expect(page.getByLabel('Name')).toBeVisible({ timeout: 3000 })
-      );
+      await page.goto(`/en/settings/channel/${channelId()}/playlists/new`);
       await fillStable(page.getByLabel('Name'), '   ');
-      await page.getByRole('button', { name: 'Save' }).click();
+      await page.getByRole('button', { name: 'Create playlist' }).click();
       // (Next's route announcer is also role=alert)
       await expect(page.getByRole('alert').filter({ hasText: 'Please enter a playlist name' })).toBeVisible();
       await page.getByRole('button', { name: 'Cancel' }).click();
-      await expect(page.getByLabel('Name')).toHaveCount(0);
+      await expect(page.getByRole('heading', { level: 1, name: 'Manage Playlists' })).toBeVisible();
+      await expect(page.getByText('Loading...')).toHaveCount(0);
 
       const row = managedRow(page, title);
       page.once('dialog', (dialog) => void dialog.dismiss());
@@ -132,9 +135,8 @@ test.describe('Playlist manager', () => {
     await openManager(page, 'ar');
     await expectRtl(page);
     await expect(page.getByRole('heading', { level: 1, name: 'إدارة قوائم التشغيل' })).toBeVisible();
-    await clickUntil(page.getByRole('button', { name: 'قائمة تشغيل جديدة' }), async () =>
-      expect(page.getByRole('heading', { name: 'إنشاء قائمة تشغيل' })).toBeVisible({ timeout: 3000 })
-    );
+    await page.getByRole('link', { name: 'قائمة تشغيل جديدة' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'قائمة تشغيل جديدة' })).toBeVisible();
     await expect(page.getByLabel('الاسم')).toBeVisible();
     await expect(page.getByRole('radio', { name: /^عامة/ })).toBeChecked();
     await expect(page.locator('div[dir="rtl"]').filter({ has: page.getByRole('heading', { level: 1 }) }).first()).toBeVisible();

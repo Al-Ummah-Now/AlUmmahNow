@@ -125,7 +125,7 @@ function PlaylistItemRow({ item, index, total, manual, busy, onMove, onRemove }:
     <li
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform), transition }}
-      className="pl-row flex items-center gap-2 p-2 sm:gap-3"
+      className="pl-row flex flex-wrap items-center gap-x-2 gap-y-1 p-2 sm:flex-nowrap sm:gap-3"
       data-dragging={isDragging || undefined}
       data-unavailable={video ? undefined : true}
       data-testid="playlist-item"
@@ -167,7 +167,8 @@ function PlaylistItemRow({ item, index, total, manual, busy, onMove, onRemove }:
           <span className={`mt-0.5 block text-xs ${MUTED}`}>{p.unavailableHelp}</span>
         )}
       </span>
-      <span className="flex flex-none items-center">
+      {/* Phones: the actions wrap onto their own line so the title keeps the row's width */}
+      <span className="flex w-full flex-none items-center justify-end sm:w-auto">
         {manual && (
           <>
             <button type="button" className="b b-ghost b-icon" onClick={() => onMove(index, index - 1)} disabled={busy || index === 0} aria-label={fill(p.moveUpTitle, { title })} title={fill(p.moveUpTitle, { title })} data-testid="playlist-item-up">
@@ -479,14 +480,14 @@ export default function PlaylistEditor({ channelId, playlistId, initialJobId }: 
             ) : (
               <div className="grid grid-cols-3 gap-2" data-testid="playlist-cover-choices">
                 <label className="pl-cover grid aspect-video place-items-center p-1 text-center text-xs font-medium" data-checked={cover === null || undefined}>
-                  <input type="radio" name="playlist-cover" className="sr-only" checked={cover === null} onChange={() => setCover(null)} disabled={savingDetails} />
+                  <input type="radio" name="playlist-cover" className="pl-hit" checked={cover === null} onChange={() => setCover(null)} disabled={savingDetails} />
                   <span className={TEXT}>{p.coverAuto}</span>
                 </label>
                 {coverChoices.map((item) => {
                   const title = titleOf(item);
                   return (
                     <label key={item.id} className="pl-cover aspect-video" data-checked={cover === item.id || undefined} title={fill(p.coverUse, { title })}>
-                      <input type="radio" name="playlist-cover" className="sr-only" checked={cover === item.id} onChange={() => setCover(item.id)} aria-label={fill(p.coverUse, { title })} disabled={savingDetails} />
+                      <input type="radio" name="playlist-cover" className="pl-hit" checked={cover === item.id} onChange={() => setCover(item.id)} aria-label={fill(p.coverUse, { title })} disabled={savingDetails} />
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={item.video!.thumbnailUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
                     </label>

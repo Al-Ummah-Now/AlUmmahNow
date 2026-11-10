@@ -211,6 +211,20 @@ export async function createPlaylist(
   return { id };
 }
 
+/**
+ * Whether the target runs the playlist tools (editor, bulk add, sort modes):
+ * the manage-items route answers 401 signed out once deployed, 404 before.
+ * Specs for them skip until then (they land with the PR that adds them).
+ */
+export async function playlistToolsDeployed(): Promise<boolean> {
+  try {
+    const res = await fetchRetry(`${API_URL}/api/playlists/probe/items`);
+    return res.status !== 404;
+  } catch {
+    return false;
+  }
+}
+
 export async function deletePlaylistQuietly(user: AuthUser, channelId: string, playlistId: string) {
   await apiAs(user, 'DELETE', `/api/playlists/${playlistId}`, { channelId }).catch(() => undefined);
 }

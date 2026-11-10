@@ -194,10 +194,10 @@ export default function VideoPicker({ channelId, selected, onChange, excludeIds,
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <label className={`inline-flex cursor-pointer items-center gap-2 text-sm font-medium ${TEXT} ${selectable.length === 0 ? 'opacity-50' : ''}`}>
+        <label className={`relative inline-flex cursor-pointer items-center gap-2 text-sm font-medium ${TEXT} ${selectable.length === 0 ? 'opacity-50' : ''}`}>
           <input
             type="checkbox"
-            className="peer sr-only"
+            className="peer pl-hit"
             checked={allOnPage}
             disabled={selectable.length === 0 || loading}
             onChange={toggleAllOnPage}
@@ -238,14 +238,14 @@ export default function VideoPicker({ channelId, selected, onChange, excludeIds,
             return (
               <li key={video.id}>
                 <label
-                  className={`pl-row flex items-center gap-3 p-2 ${inPlaylist ? 'cursor-default opacity-60' : 'cursor-pointer'}`}
+                  className={`pl-row relative flex items-center gap-3 p-2 ${inPlaylist ? 'cursor-default opacity-60' : 'cursor-pointer'}`}
                   data-selected={checked || undefined}
                   data-testid="picker-video"
                   data-video-id={video.id}
                 >
                   <input
                     type="checkbox"
-                    className="peer sr-only"
+                    className="peer pl-hit"
                     checked={checked || inPlaylist}
                     disabled={inPlaylist}
                     onChange={() => toggle(video)}

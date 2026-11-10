@@ -1621,6 +1621,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     chooseAtLeastOne: 'Choose a playlist first.',
     done: 'Done',
     addToPlaylist: 'Add to playlist',
+    oneChannelOnly: 'Choose videos from one channel to add them to a playlist.',
     moreActions: 'More actions for {title}',
     noVideosChosen: 'Choose at least one video.',
     sortLabel: 'Order',

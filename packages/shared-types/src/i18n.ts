@@ -1694,6 +1694,8 @@ export interface AppTranslations {
     chooseAtLeastOne: string;
     done: string;
     addToPlaylist: string;
+    /** Video dashboard: a selection from several channels cannot go into one playlist */
+    oneChannelOnly: string;
     moreActions: string;
     noVideosChosen: string;
     sortLabel: string;

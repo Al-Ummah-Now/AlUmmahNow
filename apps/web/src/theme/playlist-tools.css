@@ -54,3 +54,5 @@
 
 @media(prefers-reduced-motion:reduce){.pl-choice,.pl-row,.pl-progress span{transition:none}}
 @media(forced-colors:active){.pl-choice,.pl-row,.pl-pill{border:1px solid ButtonText}.pl-choice[data-checked],.pl-row[data-selected]{outline:2px solid Highlight}}
+/* The native control fills its label, invisible: the pointer (and touch) lands on the real input, while the .ck/.rd sibling draws it */
+.pl-hit{position:absolute;inset:0;z-index:1;width:100%;height:100%;margin:0;opacity:0;cursor:inherit;appearance:none}

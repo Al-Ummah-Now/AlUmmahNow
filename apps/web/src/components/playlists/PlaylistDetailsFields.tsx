@@ -16,6 +16,7 @@ import {
 } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { FIELD, LABEL, MUTED, TEXT } from './styles';
+import '@/theme/playlist-tools.css';
 
 export interface PlaylistDetailsValue {
   title: string;
@@ -60,7 +61,7 @@ function ChoiceCard({ name, checked, onSelect, icon, title, help, disabled, test
       data-checked={checked || undefined}
       className={`pl-choice relative flex cursor-pointer items-start gap-3 rounded-[var(--r-md)] p-3 ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
     >
-      <input type="radio" name={name} checked={checked} onChange={onSelect} disabled={disabled} className="peer sr-only" />
+      <input type="radio" name={name} checked={checked} onChange={onSelect} disabled={disabled} className="peer pl-hit" />
       <span className="rd mt-0.5 flex-none" data-on={checked || undefined} aria-hidden="true" />
       <span className="min-w-0">
         <span className={`flex items-center gap-1.5 text-sm font-semibold ${TEXT}`}>
