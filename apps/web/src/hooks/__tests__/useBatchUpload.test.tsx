@@ -216,6 +216,24 @@ describe('useBatchUpload', () => {
     expect(onError).not.toHaveBeenCalled();
   });
 
+  it('a start that throws shows a friendly message and brings the actions back', async () => {
+    const { hook, onError } = setup();
+    await act(async () => {
+      await hook.result.current.addFiles([mp4('a.mp4')]);
+    });
+    const { BatchUploadManager } = jest.requireActual('@/lib/upload/BatchUploadManager');
+    const spy = jest.spyOn(BatchUploadManager.prototype, 'startUploads').mockRejectedValueOnce(new Error('raw boom'));
+    // The row is still pending, so isUploading stays true only while something is active
+    jest.spyOn(BatchUploadManager.prototype, 'getQueueState').mockReturnValueOnce(new Map());
+    await act(async () => {
+      await hook.result.current.startUpload();
+    });
+    expect(onError).toHaveBeenCalledWith(EN_TRANSLATIONS.errors.uploadFailed);
+    expect(onError).not.toHaveBeenCalledWith('raw boom');
+    expect(hook.result.current.isUploading).toBe(false);
+    spy.mockRestore();
+  });
+
   it('a failed complete call is reported, not shown (processing is tracked server-side)', async () => {
     const { hook, onError } = setup();
     complete.mockResolvedValue({ success: false, error: 'raw 500' });
