@@ -29,7 +29,7 @@ export type OwnershipKind = 'video' | 'channel' | 'profile' | 'playlist' | 'stre
  * Kinds the public endpoints read. Profiles are indexed for the admin's user
  * list only (apps/api-videos/migrations/search/0005_admin_content.sql).
  * Playlists and live streams (`livestream:<id>` in the videos bucket) back
- * the channel Playlists and Live tabs (migrations/search/0013_list_indexes.sql).
+ * the channel Playlists and Live tabs (migrations/search/0070_list_indexes.sql).
  */
 export const OWNERSHIP_KINDS: ReadonlyArray<OwnershipKind> = ['video', 'channel', 'playlist', 'stream'];
 export const ALL_OWNERSHIP_KINDS: ReadonlyArray<OwnershipKind> = ['video', 'channel', 'profile', 'playlist', 'stream'];
