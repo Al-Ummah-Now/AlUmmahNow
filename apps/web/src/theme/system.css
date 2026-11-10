@@ -4,7 +4,7 @@ html body{background:var(--m-page)!important;background-attachment:fixed!importa
 .demo-layer,.min-h-screen{background:transparent!important}
 :focus-visible{outline:2px solid var(--fanous-color-focus-ring);outline-offset:2px}
 h1,h2,h3{letter-spacing:-.01em}html[lang=ar] h1,html[lang=ar] h2,html[lang=ar] h3{letter-spacing:0}
-#page-content h1{font-weight:700;line-height:1.2}
+#page-content h1:not(.watch-title){font-weight:700;line-height:1.2}
 .ic{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border:0;border-radius:var(--r-pill);background:transparent;color:var(--fanous-c-nav-icon);cursor:pointer;transition:background-color 140ms,color 140ms}.ic svg{width:22px;height:22px;stroke-width:1.75}@media(hover:hover){.ic:hover{background:var(--fanous-c-nav-hover)}}
 /* Header */
 .ah{position:sticky;top:0;z-index:50;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,640px) minmax(0,1fr);gap:var(--fanous-spacing-lg);align-items:center;height:64px;padding-inline:var(--fanous-spacing-md);background:var(--m-header);box-shadow:var(--m-header-edge);color:var(--fanous-c-nav-text);-webkit-backdrop-filter:var(--m-blur);backdrop-filter:var(--m-blur)}

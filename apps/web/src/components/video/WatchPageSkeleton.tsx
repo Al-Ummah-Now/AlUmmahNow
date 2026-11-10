@@ -8,16 +8,17 @@ export interface WatchHint {
 
 const BLOCK = 'wsk-b animate-pulse rounded bg-muted';
 
-/** Player, title, channel, actions and description placeholders, at their final sizes. */
+/** Player, title, channel, actions and description placeholders, at their final sizes. The details use the real
+ * watch-details/watch-title/watch-channel classes so their spacing cannot drift from VideoDetails. */
 export function WatchDetailsSkeleton({ hint }: { hint?: WatchHint }) {
   return (
     <div role="status" aria-busy="true" className="flex flex-col w-full mt-0 items-center">
       <div className="wsk-player w-full aspect-video rounded-lg bg-muted bg-cover bg-center" style={hint?.poster ? { backgroundImage: `url("${hint.poster}")` } : undefined} />
-      <div className="wsk-details mt-4 w-full">
+      <div className="wsk-details watch-details">
         {hint?.title
-          ? <p className="wsk-title text-lg md:text-xl font-semibold text-foreground mb-3">{hint.title}</p>
-          : <div className={`wsk-title-b ${BLOCK} mb-3 h-7 w-3/4`} />}
-        <div className="wsk-channel flex items-center gap-3 min-h-11">
+          ? <p className="wsk-title watch-title">{hint.title}</p>
+          : <div className={`wsk-title-b ${BLOCK} w-3/4`} />}
+        <div className="wsk-channel watch-channel">
           {hint?.channelAvatar
             // eslint-disable-next-line @next/next/no-img-element
             ? <img src={hint.channelAvatar} alt="" className="wsk-avatar h-11 w-11 rounded-full object-cover" />
@@ -42,9 +43,11 @@ export function WatchDetailsSkeleton({ hint }: { hint?: WatchHint }) {
 /** Placeholder for the comments section until the video is known. */
 export function CommentsSkeleton() {
   return (
-    <div data-testid="comments-skeleton" aria-hidden="true" className="min-h-60 space-y-4">
-      <div className={`${BLOCK} h-7 w-40`} />
-      <div className={`${BLOCK} h-24 w-full !rounded-lg`} />
+    <div data-testid="comments-skeleton" aria-hidden="true" className="space-y-6">
+      {/* Heading row, sign-in or composer box and first comments, at the comments section's own sizes */}
+      <div className={`${BLOCK} h-[29px] w-40`} />
+      <div className={`${BLOCK} h-[102px] w-full !rounded-lg`} />
+      <div className={`${BLOCK} h-[72px] w-full !rounded-lg`} />
     </div>
   );
 }

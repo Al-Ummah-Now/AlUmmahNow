@@ -20,11 +20,19 @@ async function delayVideoAction(page: Page): Promise<void> {
   });
 }
 
-/** Layout-shift total: the browser's own score where it exists, otherwise the comments region's movement. */
+/**
+ * Layout-shift total: the browser's own score where it exists (Chromium). Firefox and WebKit have
+ * no layout-shift entries, so there the score is worked out the way the browser does it: only a
+ * laid-out element that moves counts (an element appearing or first getting a size is not a
+ * shift), and only for its part inside the viewport, as impact fraction x distance fraction.
+ * The tracked elements are the page's large blocks: player, title, channel row, actions,
+ * comments and the related shelves.
+ */
 async function trackShift(page: Page): Promise<void> {
   await page.addInitScript(() => {
-    const w = window as unknown as { __cls: number; __anchorTop?: number };
+    const w = window as unknown as { __cls: number; __shifts: string[] };
     w.__cls = 0;
+    w.__shifts = [];
     if (PerformanceObserver.supportedEntryTypes?.includes('layout-shift')) {
       new PerformanceObserver((list) => {
         for (const entry of list.getEntries() as unknown as { value: number; hadRecentInput: boolean }[]) {
@@ -33,16 +41,39 @@ async function trackShift(page: Page): Promise<void> {
       }).observe({ type: 'layout-shift', buffered: true });
       return;
     }
+    const SELECTORS = [
+      '#video-player', '.wsk-player', 'h1', '.wsk-title', '.wsk-title-b', '.wsk-channel',
+      '[data-testid="video-metrics"]', '.wsk-metrics', '[data-testid="share-button"]', '.wsk-actions',
+      '#comments', '[data-testid="watch-layout"] > div:last-child', 'main > div.lg\\:hidden',
+    ];
+    type Box = { top: number; left: number; width: number; height: number };
+    const last = new Map<Element, Box>();
     const tick = () => {
-      const anchor = document.getElementById('comments');
-      if (anchor) {
-        const rect = anchor.getBoundingClientRect();
-        const top = rect.top + window.scrollY;
-        if (w.__anchorTop !== undefined && top !== w.__anchorTop) {
-          w.__cls += (Math.abs(top - w.__anchorTop) / window.innerHeight) * Math.min(1, rect.height / window.innerHeight);
-        }
-        w.__anchorTop = top;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      let impact = 0;
+      let distance = 0;
+      for (const el of document.querySelectorAll(SELECTORS.join(','))) {
+        const r = el.getBoundingClientRect();
+        // Document coordinates, so the viewer scrolling is not a shift
+        const box = { top: r.top + window.scrollY, left: r.left + window.scrollX, width: r.width, height: r.height };
+        const prev = last.get(el);
+        last.set(el, box);
+        if (!prev || !prev.width || !prev.height || !box.width || !box.height) continue;
+        const dy = box.top - prev.top;
+        const dx = box.left - prev.left;
+        if (Math.abs(dx) < 1 && Math.abs(dy) < 1) continue;
+        // Visible union of the old and new positions
+        const top = Math.max(0, Math.min(prev.top, box.top) - window.scrollY);
+        const bottom = Math.min(vh, Math.max(prev.top + prev.height, box.top + box.height) - window.scrollY);
+        const left = Math.max(0, Math.min(prev.left, box.left) - window.scrollX);
+        const right = Math.min(vw, Math.max(prev.left + prev.width, box.left + box.width) - window.scrollX);
+        if (bottom <= top || right <= left) continue;
+        impact = Math.max(impact, ((bottom - top) * (right - left)) / (vw * vh));
+        distance = Math.max(distance, Math.max(Math.abs(dx), Math.abs(dy)) / Math.max(vw, vh));
+        w.__shifts.push(`${el.id || el.getAttribute('data-testid') || el.className} moved ${Math.round(dx)},${Math.round(dy)}`);
       }
+      w.__cls += Math.min(1, impact) * distance;
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
@@ -70,6 +101,35 @@ async function skeletonStats(page: Page): Promise<{ created: number; maxAtOnce: 
   });
 }
 
+/** Top and height of the player, title, channel row, actions (which hold the metrics) and comments. */
+async function blocks(page: Page): Promise<Record<string, number[]>> {
+  return page.evaluate(() => {
+    const pick = (...selectors: string[]) => {
+      for (const selector of selectors) {
+        // The first laid-out match: the redesign hides some skeleton parts (display: none)
+        const el = [...document.querySelectorAll(selector)].find((node) => node.getBoundingClientRect().height > 0);
+        if (el) {
+          const r = el.getBoundingClientRect();
+          return [Math.round(r.top + window.scrollY), Math.round(r.height)];
+        }
+      }
+      return [];
+    };
+    return {
+      player: pick('.wsk-player', '#video-player > div:first-child'),
+      title: pick('.wsk-title', '.wsk-title-b', 'h1'),
+      channel: pick('.wsk-channel', '#video-player h1 + div'),
+      actions: pick('.wsk-actions', '[data-testid="share-button"]'),
+      comments: pick('#comments').slice(0, 1),
+    };
+  });
+}
+
+const VIEWPORTS = [
+  { name: 'desktop', viewport: { width: 1440, height: 900 } },
+  { name: 'phone', viewport: { width: 390, height: 844 } },
+] as const;
+
 for (const lang of ['en', 'ar'] as const) {
   test.describe(`Watch page loading (${lang})`, () => {
     test.use({ storageState: ANONYMOUS_STATE });
@@ -86,15 +146,6 @@ for (const lang of ['en', 'ar'] as const) {
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     });
 
-    test(`WATCH-LOAD-002 the page does not jump while loading (${lang})`, async ({ page }) => {
-      await trackShift(page);
-      await delayVideoAction(page);
-      await page.goto(`/${lang}/video/${VIDEO}`, { waitUntil: 'domcontentloaded' });
-      await expect(page.getByTestId('comments-section')).toBeVisible({ timeout: 30000 });
-      await page.waitForTimeout(1500);
-      expect(await page.evaluate(() => (window as unknown as { __cls: number }).__cls)).toBeLessThan(0.1);
-    });
-
     for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
       test(`WATCH-LOAD-003 one comments skeleton, then the comments (${lang}, ${viewport.width})`, async ({ page }) => {
         await page.setViewportSize(viewport);
@@ -106,6 +157,54 @@ for (const lang of ['en', 'ar'] as const) {
         await expect(page.getByTestId('comments-skeleton')).toHaveCount(0);
         await expect(page.getByTestId('comments-section')).toHaveCount(1);
         expect(await skeletonStats(page)).toEqual({ created: 1, maxAtOnce: 1 });
+      });
+    }
+
+    for (const { name, viewport } of VIEWPORTS) {
+      test.describe(name, () => {
+        test.use({ viewport });
+
+        test(`WATCH-LOAD-002 the page does not jump while loading (${lang}, ${name})`, async ({ page }) => {
+          await trackShift(page);
+          await delayVideoAction(page);
+          await page.goto(`/${lang}/video/${VIDEO}`, { waitUntil: 'domcontentloaded' });
+          await expect(page.getByTestId('comments-section')).toBeVisible({ timeout: 30000 });
+          await page.waitForTimeout(1500);
+          const { cls, shifts } = await page.evaluate(() => {
+            const w = window as unknown as { __cls: number; __shifts: string[] };
+            return { cls: w.__cls, shifts: w.__shifts };
+          });
+          expect(cls, `shifts: ${shifts.join('; ')}`).toBeLessThan(0.1);
+        });
+
+        test(`WATCH-LOAD-004 the skeleton holds the player, title, channel row, actions and comments in place (${lang}, ${name})`, async ({ page }) => {
+          let release!: () => void;
+          const answered = new Promise<void>((resolve) => (release = resolve));
+          await page.route(/\/video(\/|\?|$)/, async (route) => {
+            const request = route.request();
+            if (request.method() === 'POST' && (await request.headerValue('next-action'))) await answered;
+            await route.continue();
+          });
+          await page.goto(`/${lang}/video/${VIDEO}`, { waitUntil: 'load' });
+          await expect(page.getByTestId('watch-skeleton').first()).toBeVisible();
+          await page.evaluate(() => document.fonts.ready);
+          const before = await blocks(page);
+          release();
+          await expect(page.getByTestId('comments-section')).toBeVisible({ timeout: 30000 });
+          await expect(page.getByTestId('watch-skeleton')).toHaveCount(0);
+          await page.evaluate(() => document.fonts.ready);
+          const after = await blocks(page);
+          for (const key of Object.keys(before)) {
+            expect(after[key], `${key} has no counterpart`).toHaveLength(before[key].length);
+            // The title is the hint's or a one-line bar in the skeleton; a long title may wrap, so only its top must hold
+            const [top, height] = before[key];
+            const [topAfter, heightAfter] = after[key];
+            expect(Math.abs(topAfter - top), `${key} top ${top} -> ${topAfter}`).toBeLessThanOrEqual(2);
+            if (key !== 'title' && key !== 'comments' && height !== undefined) {
+              expect(Math.abs(heightAfter - height), `${key} height ${height} -> ${heightAfter}`).toBeLessThanOrEqual(2);
+            }
+          }
+        });
       });
     }
   });
