@@ -22,7 +22,10 @@ browser (web, admin-web)        Workers (api-videos, processor, scheduler,
         │  X-Client-IP, UA)            │
         └──────────► admin-api POST /internal/errors ◄──┘
                      key check, ≤ 20 events / 64 KB, scrub again,
-                     per-client rate limit (60/min) → 202
+                     browser batches: app/user only as the proxy vouches
+                     (X-Report-App, X-Client-User-Id), counts capped, test
+                     only outside production, items namespaced, no retry;
+                     per-IP rate limit (60/min) → 202
                             │
                      queue al-ummah-now-errors[-stage|-qa]
                             │  consumer: admin-api (max_retries 5, backoff 10 s → 5 min)
