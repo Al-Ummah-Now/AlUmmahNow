@@ -46,6 +46,11 @@ export interface AdminBindings {
   Audience: string;
   ClientId: string;
 
+  /** api-videos (content data owner): /internal/admin/* over a service binding */
+  VIDEOS?: Fetcher;
+  /** Local dev without the binding: base URL of a running api-videos */
+  VIDEOS_API_URL?: string;
+
   // WebSocket integration
   WEBSOCKET_URL?: string;
   // A Secrets Store binding in deployed workers, a plain string var in local dev

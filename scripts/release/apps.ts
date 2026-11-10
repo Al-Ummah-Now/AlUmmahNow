@@ -202,9 +202,10 @@ export const APPS: AppRule[] = [
 				// Contact us mail (lib/contact-email.ts)
 				RESEND_API_KEY,
 				{ kind: 'r2_buckets', name: 'theme_packages' },
+				{ kind: 'services', name: 'VIDEOS' },
 			],
 			...PROD_GUARDS,
 		},
-		stage: stageRule({ name: 'al-ummah-admin-api-stage', requireRoutes: true, vars: { ENVIRONMENT: 'stage', WEBSOCKET_URL: STAGE_REALTIME, Issuer: STAGE_AUTH }, requiredBindings: [INTERNAL_API_KEY, { kind: 'd1_databases', name: 'REPORTS_DB' }, RESEND_API_KEY, { kind: 'r2_buckets', name: 'theme_packages' }] }),
+		stage: stageRule({ name: 'al-ummah-admin-api-stage', requireRoutes: true, vars: { ENVIRONMENT: 'stage', WEBSOCKET_URL: STAGE_REALTIME, Issuer: STAGE_AUTH }, requiredBindings: [INTERNAL_API_KEY, { kind: 'd1_databases', name: 'REPORTS_DB' }, RESEND_API_KEY, { kind: 'r2_buckets', name: 'theme_packages' }, { kind: 'services', name: 'VIDEOS' }] }),
 	},
 ];

@@ -404,3 +404,24 @@ export async function uploadProfileCover(formData: FormData): Promise<Profile | 
 
 // Note: Functions that call client-side callbacks (like setProfile)
 // have been moved to profiles-client.ts to avoid server/client conflicts
+/**
+ * Whether the signed-in user is banned on the videos platform (admin decision,
+ * enforced by api-videos; their Auth account is not affected). GET /api/profile
+ * answers 403 `videos_banned` for them.
+ */
+export async function getVideosBanStatus(): Promise<{ banned: boolean; reason: string | null }> {
+  const authContext = await getServerAuthContext();
+  if (!authContext?.accessToken) return { banned: false, reason: null };
+  try {
+    const res = await fetch(buildApiUrl('/api/profile'), {
+      headers: { Authorization: `Bearer ${authContext.accessToken}` },
+      cache: 'no-store',
+    });
+    if (res.status !== 403) return { banned: false, reason: null };
+    const body = (await res.json().catch(() => ({}))) as { code?: string; ban?: { reason?: string | null } };
+    return body.code === 'videos_banned' ? { banned: true, reason: body.ban?.reason ?? null } : { banned: false, reason: null };
+  } catch (error) {
+    logger.warn('[getVideosBanStatus] Could not read the ban state', { error: error instanceof Error ? error.message : String(error) });
+    return { banned: false, reason: null };
+  }
+}

@@ -31,6 +31,7 @@ import {
   syncSearchDocument,
 } from '@al-ummah/shared-types';
 import { logger } from '../logger';
+import { syncCommentIndex } from '../admin/commentIndex';
 
 /** R2 binding name → indexed entity type. */
 export const SEARCH_BUCKETS: Readonly<Record<string, SearchEntityType>> = {
@@ -141,8 +142,10 @@ async function syncOwnershipInline(db: SearchDb, queue: QueueBinding | undefined
   }
 }
 
-function wrapBucket(bucket: R2Bucket, type: SearchEntityType, queue: SearchSyncQueue, db: SearchDb, producer?: QueueBinding): R2Bucket {
+function wrapBucket(bucket: R2Bucket, type: SearchEntityType, queue: SearchSyncQueue, db: SearchDb, producer: QueueBinding | undefined, waitUntil: (p: Promise<unknown>) => void): R2Bucket {
   const tracksOwnership = ownershipKindFor(type) !== null;
+  // Admin comment list (lib/admin/commentIndex.ts): video comments mirrored in D1, after the response
+  const tracksComments = type === 'video';
   return new Proxy(bucket, {
     get(target, prop) {
       if (prop === 'put') {
@@ -169,6 +172,7 @@ function wrapBucket(bucket: R2Bucket, type: SearchEntityType, queue: SearchSyncQ
               }
             }
             if (tracksOwnership && decoded !== undefined) await syncOwnershipInline(db, producer, type, id, decoded, version);
+            if (tracksComments && decoded !== undefined) waitUntil(syncCommentIndex(db, id, decoded));
             queue.enqueue(type, id, decoded !== undefined
               ? async () => decoded
               : async () => {
@@ -187,7 +191,56 @@ function wrapBucket(bucket: R2Bucket, type: SearchEntityType, queue: SearchSyncQ
             const id = searchIdForKey(type, key);
             if (!id) continue;
             if (tracksOwnership) await syncOwnershipInline(db, producer, type, id, null, version);
+            if (tracksComments) waitUntil(syncCommentIndex(db, id, null));
             queue.enqueue(type, id, async () => null, version);
+          }
+        };
+      }
+      const value = Reflect.get(target, prop, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+}
+
+/**
+ * Profiles are not searchable, but the admin's user list reads them from the
+ * ownership index (kind 'profile'), so their puts and deletes keep that row current.
+ */
+function wrapProfiles(bucket: R2Bucket, db: SearchDb): R2Bucket {
+  const sync = async (id: string, object: unknown, version: number) => {
+    try {
+      await syncOwnership(db, 'profile', id, object, Date.now(), version);
+    } catch (error) {
+      // The next ownership pass rebuilds the profile rows
+      await invalidateOwnership(db, 'profile').catch(() => undefined);
+      logger.warn('[SearchSync] Profile index write failed; index marked incomplete', { id, error: error instanceof Error ? error.message : String(error) });
+    }
+  };
+  const idFor = (key: string) => (key && !key.includes('/') && !key.includes(':') ? key : null);
+  return new Proxy(bucket, {
+    get(target, prop) {
+      if (prop === 'put') {
+        return async (key: string, value: unknown, options?: R2PutOptions) => {
+          const result = await target.put(key, value as Parameters<R2Bucket['put']>[1], options);
+          const id = idFor(key);
+          if (id && result !== null) {
+            let decoded = decodeValue(value);
+            if (decoded === undefined) {
+              const stored = await target.get(key).catch(() => null);
+              decoded = stored ? await stored.json().catch(() => null) : null;
+            }
+            await sync(id, decoded, r2Version(result as { uploaded?: Date } | undefined) ?? Date.now());
+          }
+          return result;
+        };
+      }
+      if (prop === 'delete') {
+        return async (keys: string | string[]) => {
+          await target.delete(keys);
+          const version = Date.now();
+          for (const key of Array.isArray(keys) ? keys : [keys]) {
+            const id = idFor(key);
+            if (id) await sync(id, null, version);
           }
         };
       }
@@ -208,7 +261,9 @@ export function withSearchSync<E extends object>(env: E, ctx: Pick<ExecutionCont
   const wrapped: Record<string, unknown> = { ...(env as Record<string, unknown>) };
   for (const [binding, type] of Object.entries(SEARCH_BUCKETS)) {
     const bucket = wrapped[binding] as R2Bucket | undefined;
-    if (bucket && typeof bucket.put === 'function') wrapped[binding] = wrapBucket(bucket, type, queue, db, (env as { queue?: QueueBinding }).queue);
+    if (bucket && typeof bucket.put === 'function') wrapped[binding] = wrapBucket(bucket, type, queue, db, (env as { queue?: QueueBinding }).queue, promise => ctx.waitUntil(promise));
   }
+  const profiles = wrapped.profiles as R2Bucket | undefined;
+  if (profiles && typeof profiles.put === 'function') wrapped.profiles = wrapProfiles(profiles, db);
   return wrapped as E;
 }

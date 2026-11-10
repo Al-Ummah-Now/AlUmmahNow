@@ -30,8 +30,9 @@ import {
   projectOwnership,
 } from '@al-ummah/shared-types';
 import { logger } from '../logger';
+import { syncCommentIndex } from '../admin/commentIndex';
 
-const BUCKET_FOR_KIND: Record<OwnershipKind, string> = { video: 'videos', channel: 'channels' };
+const BUCKET_FOR_KIND: Record<OwnershipKind, string> = { video: 'videos', channel: 'channels', profile: 'profiles' };
 const INTERNAL_VIDEO_PREFIXES = ['index:', 'metadata:', 'livestream:'];
 
 export const OWNERSHIP_PAGE_SIZE = 100;
@@ -105,7 +106,8 @@ function orderAndLimit(newest?: number): string {
 export function ownedChannelIds(env: OwnershipEnv, userId: string): Promise<string[] | null> {
   return whenComplete(env, 'channel', async db => {
     const { results } = await db.prepare(
-      `SELECT id FROM ${OWNERSHIP_TABLE} WHERE kind = 'channel' AND owner_id = ? AND is_deleted = 0 AND is_hidden = 0 ORDER BY id`,
+      // Suspended channels stay in the owner's list (the endpoint shows them with the notice)
+      `SELECT id FROM ${OWNERSHIP_TABLE} WHERE kind = 'channel' AND owner_id = ? AND is_deleted = 0 AND (is_hidden = 0 OR is_suspended = 1) ORDER BY id`,
     ).bind(userId).all<{ id: string }>();
     return (results ?? []).map(r => r.id);
   });
@@ -320,6 +322,8 @@ export async function backfillOwnershipPage(
       const row = projectOwnership(kind, id, value);
       // Version = when this copy was written, so a newer write made meanwhile is kept
       if (row) statements.push(ownershipUpsertStatement(db, row, now, r2Version(stored) ?? 0));
+      // Admin comment list: rewritten only when the video's comments changed
+      if (row && kind === 'video') await syncCommentIndex(db, id, value);
     } catch (error) {
       failed++;
       logger.warn('[Ownership] Failed to read object during backfill', { kind, key: object.key, error: errorText(error) });
@@ -422,7 +426,8 @@ export async function reconcileOwnershipIndex(
 ): Promise<Record<OwnershipKind, OwnershipPassResult>> {
   const summary = {} as Record<OwnershipKind, OwnershipPassResult>;
   const db = dbOf(env);
-  for (const kind of ['channel', 'video'] as OwnershipKind[]) {
+  // Profiles are indexed for the admin's user list (0005_admin_content.sql)
+  for (const kind of ['channel', 'video', 'profile'] as OwnershipKind[]) {
     summary[kind] = { kind, pages: 0, scanned: 0, done: false, complete: false };
     if (!db || !env[BUCKET_FOR_KIND[kind]]) continue;
     // Share the self-heal lease so the cron and a heal never walk the same cursor at once.
@@ -497,7 +502,7 @@ export async function ownershipStats(db: SearchDb): Promise<Record<OwnershipKind
     `SELECT kind, COUNT(*) AS rows FROM ${OWNERSHIP_TABLE} GROUP BY kind`,
   ).all<{ kind: OwnershipKind; rows: number }>();
   const stats = {} as Record<OwnershipKind, { rows: number; complete: boolean }>;
-  for (const kind of ['video', 'channel'] as OwnershipKind[]) {
+  for (const kind of ['video', 'channel', 'profile'] as OwnershipKind[]) {
     stats[kind] = {
       rows: Number((results ?? []).find(r => r.kind === kind)?.rows) || 0,
       complete: await isOwnershipComplete(db, kind),

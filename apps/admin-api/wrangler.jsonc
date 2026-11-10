@@ -92,6 +92,9 @@
 		]
 	},
 
+	// api-videos owns the content data: /internal/admin/* (platform content management)
+	"services": [{ "binding": "VIDEOS", "service": "videos" }],
+
 	// Environment variables
 	"vars": {
 		"ENVIRONMENT": "production",
@@ -188,6 +191,7 @@
 					}
 				]
 			},
+			"services": [{ "binding": "VIDEOS", "service": "videos-stage" }],
 			"vars": {
 				"ENVIRONMENT": "stage",
 				"LOG_LEVEL": "info",
@@ -216,6 +220,7 @@
 				"ENVIRONMENT": "development",
 				"LOG_LEVEL": "debug",
 				"WEBSOCKET_URL": "http://localhost:3087",
+				"VIDEOS_API_URL": "http://127.0.0.1:3086",
 				"INTERNAL_API_KEY": "dev-internal-api-key",
 				"ADMIN_WEB_URL": "http://localhost:3091"
 			}

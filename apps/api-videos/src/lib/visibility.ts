@@ -39,3 +39,17 @@ export function isVideoPubliclyVisible(video: VisibilityFields | null | undefine
 	if (!video) return false;
 	return !isVideoRemoved(video) && video.isPublic !== false;
 }
+
+/**
+ * A channel an admin suspended stays visible to its owner (with the notice), as
+ * long as nothing else hides it: not moderation, not a ban of the owner.
+ */
+export function ownerSeesSuspendedChannel(
+	channel: { userId?: string; isSuspended?: boolean; isHidden?: boolean; isDeleted?: boolean; hiddenBeforeSuspension?: boolean; suspensionHolds?: unknown; id?: string } | null | undefined,
+	userId: string | null | undefined,
+): boolean {
+	if (!channel || !userId || channel.userId !== userId || channel.isDeleted || channel.isSuspended !== true) return false;
+	if (channel.hiddenBeforeSuspension === true) return false;
+	const holds = Array.isArray(channel.suspensionHolds) ? channel.suspensionHolds : [];
+	return holds.every((h) => h === `channel:${channel.id}`);
+}

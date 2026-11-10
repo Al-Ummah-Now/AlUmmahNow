@@ -30,8 +30,15 @@ export function transformVideoToView(
 
 // Transform a business channel to a view model
 export function transformChannelToView(channel: z.infer<typeof BusinessChannel>): z.infer<typeof ChannelView> {
+    // Admin bookkeeping stays out of every view (who suspended it, the holds)
+    const { suspension, suspensionHolds: _holds, hiddenBeforeSuspension: _before, ...rest } = channel as typeof channel & {
+        suspension?: { at?: string; reason?: string; by?: string };
+        suspensionHolds?: unknown;
+        hiddenBeforeSuspension?: unknown;
+    };
     return {
-        ...channel,
+        ...(rest as typeof channel),
+        ...(suspension ? { suspension: { at: suspension.at, ...(suspension.reason ? { reason: suspension.reason } : {}) } } : {}),
         playlistsCount: channel.playlists?.length || 0,
         videosCount: channel.videos?.length || 0,
         subscribersCount: channel.subscribers?.length || 0,

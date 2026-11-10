@@ -1,0 +1,403 @@
+/**
+ * Platform content management (/internal/admin/*, lib/admin/*) and videos bans
+ * (middleware/videos-ban.ts) over in-memory R2 and a real SQLite search DB.
+ */
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import { Hono } from 'hono';
+import { fromHono } from 'chanfana';
+import { applySuspensionHold, liftSuspensionHold, MessageType, VIDEOS_BANNED_CODE } from '@al-ummah/shared-types';
+import adminRouter from '../src/routers/admin.router';
+import { withSearchSync } from '../src/lib/search/sync';
+import { runOwnershipPass } from '../src/lib/search/ownership';
+import { videosBanMiddleware, isBlockedForBannedUser } from '../src/middleware/videos-ban';
+import { forgetCachedBan } from '../src/lib/admin/bans';
+import { projectComments, commentSignature } from '../src/lib/admin/commentIndex';
+import { ChannelFetch } from '../src/endpoints/channel/channelFetch';
+import { ChannelsList } from '../src/endpoints/channel/channelList';
+import { VideoFetch } from '../src/endpoints/video/videoFetch';
+import { ProfileCreate } from '../src/endpoints/profile/profileCreate';
+import { ProfileCurrentFetch } from '../src/endpoints/profile/profileCurrentFetch';
+import { CommentCreate } from '../src/endpoints/video/commentCreate';
+import { errorHandler } from '../src/middleware/error-handler';
+import { channelIdMiddleware, channelRefusesWrite } from '../src/middleware/auth';
+import { CreateCommunityPost } from '../src/endpoints/community/create-post';
+import { MemoryBucket, MemoryQueue, commentFixture, videoFixture } from './helpers';
+import { SqliteD1 } from './search-sqlite-d1';
+
+const OWNER = 'usr_owner';
+const OTHER = 'usr_other';
+
+function profile(id: string, overrides: Record<string, unknown> = {}) {
+	return { id, email: `${id}@example.com`, userName: id, displayName: `Name ${id}`, dateCreated: '2026-01-01T00:00:00.000Z', dateModified: '2026-01-01T00:00:00.000Z', channels: [], ...overrides };
+}
+function channel(id: string, overrides: Record<string, unknown> = {}) {
+	return { id, userId: OWNER, email: `${OWNER}@example.com`, name: `Channel ${id}`, handle: id, isMain: true, dateCreated: '2026-02-01T00:00:00.000Z', dateModified: '2026-02-01T00:00:00.000Z', playlists: [], subscribers: [], ...overrides };
+}
+
+/** A wrapped env (writes update the indexes) with complete ownership passes. */
+async function setup(seed: { profiles?: Record<string, unknown>; channels?: Record<string, unknown>; videos?: Record<string, unknown> } = {}) {
+	const db = new SqliteD1();
+	const pending: Promise<unknown>[] = [];
+	const raw = {
+		SEARCH_DB: db,
+		profiles: new MemoryBucket(seed.profiles ?? { [OWNER]: profile(OWNER, { channels: ['ch1'] }), [OTHER]: profile(OTHER) }),
+		channels: new MemoryBucket(seed.channels ?? { ch1: channel('ch1') }),
+		videos: new MemoryBucket(
+			seed.videos ?? {
+				v1: videoFixture({ id: 'v1', title: 'Tafsir lesson', userId: OWNER, channelId: 'ch1' }),
+				v2: videoFixture({ id: 'v2', title: 'Seerah talk', userId: OWNER, channelId: 'ch1', isHidden: true, moderationAction: 'removed' }),
+				legacy: videoFixture({ id: 'legacy', title: 'Old upload', userId: 'placeholder', channelId: null }),
+			},
+		),
+		playlists: new MemoryBucket(),
+		community_posts: new MemoryBucket(),
+		watch_history: new MemoryBucket(),
+		channel_tabs: new MemoryBucket(),
+		channel_sections: new MemoryBucket(),
+		'upload-defaults': new MemoryBucket(),
+		reports: new MemoryBucket(),
+		queue: new MemoryQueue(),
+	};
+	for (const kind of ['video', 'channel', 'profile'] as const) await runOwnershipPass(raw as never, kind, { maxPages: 10 });
+	const env = withSearchSync(raw, { waitUntil: (p: Promise<unknown>) => { pending.push(p); } });
+	const app = new Hono();
+	app.route('/internal/admin', adminRouter);
+	const call = async (method: string, path: string, body?: unknown) => {
+		const res = await app.request(`/internal/admin${path}`, {
+			method,
+			headers: { 'Content-Type': 'application/json', 'X-Admin-Actor': 'usr_admin' },
+			...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+		}, env);
+		await Promise.all(pending.splice(0));
+		return { status: res.status, body: (await res.json()) as any };
+	};
+	return { db, raw, env, call, flush: () => Promise.all(pending.splice(0)) };
+}
+
+/** The public api-videos routes a visitor or user would call, with the ban middleware. */
+function publicApp(env: unknown, userId: string | null) {
+	const app = new Hono();
+	app.onError(errorHandler);
+	app.use('*', async (c, next) => {
+		if (userId) {
+			c.set('auth' as never, { userId, email: `${userId}@example.com`, payload: {} } as never);
+			c.set('userId' as never, userId as never);
+		}
+		await next();
+	});
+	app.use('/api/*', videosBanMiddleware);
+	const router = fromHono(app);
+	router.get('/api/channels', ChannelsList);
+	router.get('/api/channels/:id', ChannelFetch);
+	router.get('/api/videos/:id', VideoFetch);
+	router.post('/api/videos/:id/comments', CommentCreate);
+	router.post('/api/profiles', ProfileCreate);
+	router.get('/api/profile', ProfileCurrentFetch);
+	return (method: string, path: string, body?: unknown, headers: Record<string, string> = {}) =>
+		app.request(path, { method, headers: { 'Content-Type': 'application/json', ...headers }, ...(body ? { body: JSON.stringify(body) } : {}) }, env as never);
+}
+
+describe('suspension holds', () => {
+	it('hide on the first hold and restore moderation\'s own decision on the last', () => {
+		const record: Record<string, unknown> = { isHidden: false };
+		assert.equal(applySuspensionHold(record, 'channel:c'), true);
+		assert.equal(applySuspensionHold(record, 'user:u'), true);
+		assert.equal(applySuspensionHold(record, 'user:u'), false);
+		assert.equal(record.isHidden, true);
+		liftSuspensionHold(record, 'channel:c');
+		assert.equal(record.isHidden, true, 'still held by the ban');
+		liftSuspensionHold(record, 'user:u');
+		assert.equal(record.isHidden, false);
+		assert.equal(record.suspensionHolds, undefined);
+
+		const moderated: Record<string, unknown> = { isHidden: true, moderationAction: 'removed' };
+		applySuspensionHold(moderated, 'channel:c');
+		liftSuspensionHold(moderated, 'channel:c');
+		assert.equal(moderated.isHidden, true, 'moderation-hidden content stays hidden');
+	});
+});
+
+describe('admin lists (ownership index)', () => {
+	it('search channels by name, handle and owner email; filter suspended', async () => {
+		const { call } = await setup({
+			profiles: { [OWNER]: profile(OWNER, { email: 'scholar@example.org' }), [OTHER]: profile(OTHER) },
+			channels: { ch1: channel('ch1', { name: 'Tafsir Circle', handle: 'tafsir' }), ch2: channel('ch2', { userId: OTHER, email: 'x@y.z', name: 'Fiqh', handle: 'fiqh', isMain: true }) },
+		});
+		assert.deepEqual((await call('GET', '/channels?q=circle')).body.result.items.map((c: any) => c.id), ['ch1']);
+		assert.deepEqual((await call('GET', '/channels?q=fiq')).body.result.items.map((c: any) => c.id), ['ch2']);
+		const byEmail = (await call('GET', '/channels?q=scholar@example')).body.result;
+		assert.deepEqual(byEmail.items.map((c: any) => c.id), ['ch1']);
+		assert.equal(byEmail.items[0].ownerEmail, 'scholar@example.org');
+		assert.equal(byEmail.indexComplete, true);
+		await call('POST', '/channels/ch2/suspend', { reason: 'spam' });
+		assert.deepEqual((await call('GET', '/channels?suspended=yes')).body.result.items.map((c: any) => c.id), ['ch2']);
+		assert.equal((await call('GET', '/channels?sort=name')).body.result.items[0].id, 'ch2');
+	});
+
+	it('lists videos across channels, including legacy videos without a channel', async () => {
+		const { call } = await setup();
+		const all = (await call('GET', '/videos')).body.result;
+		assert.equal(all.total, 3);
+		const legacy = (await call('GET', '/videos?noChannel=1')).body.result.items;
+		assert.deepEqual(legacy.map((v: any) => [v.id, v.channelId, v.channelName]), [['legacy', null, null]]);
+		assert.deepEqual((await call('GET', '/videos?q=tafsir')).body.result.items.map((v: any) => v.id), ['v1']);
+		assert.deepEqual((await call('GET', '/videos?hidden=yes')).body.result.items.map((v: any) => v.id), ['v2']);
+		assert.equal((await call('GET', '/videos?channelId=ch1&pageSize=1&page=2')).body.result.items.length, 1);
+		assert.equal((await call('GET', '/videos?status=bogus')).status, 400);
+	});
+
+	it('rebuilds rows written before the admin columns', async () => {
+		const { db, call } = await setup();
+		db.db.prepare("UPDATE content_ownership SET title = NULL, admin_cols = 0 WHERE kind = 'video'").run();
+		const result = (await call('GET', '/videos?q=seerah')).body.result;
+		assert.deepEqual(result.items.map((v: any) => v.id), ['v2']);
+		assert.equal(result.indexComplete, true);
+	});
+});
+
+describe('channel actions', () => {
+	it('suspend hides the channel and its videos from the public; the owner still lists it; unsuspend restores', async () => {
+		const { env, call } = await setup();
+		const visitor = publicApp(env, null);
+		const owner = publicApp(env, OWNER);
+		assert.equal((await visitor('GET', '/api/channels/ch1')).status, 200);
+		assert.equal((await visitor('GET', '/api/videos/v1')).status, 200);
+
+		const suspended = await call('POST', '/channels/ch1/suspend', { reason: 'Copyright' });
+		assert.equal(suspended.status, 200);
+		assert.equal(suspended.body.result.videos, 2);
+		assert.equal((await visitor('GET', '/api/channels/ch1')).status, 404);
+		assert.equal((await visitor('GET', '/api/videos/v1')).status, 404);
+		const mine = (await (await owner('GET', '/api/channels')).json()) as any;
+		assert.equal(mine.data.length, 1, 'the owner still sees the suspended channel');
+		assert.equal(mine.data[0].isSuspended, true);
+		assert.equal(mine.data[0].suspension.reason, 'Copyright');
+		assert.equal(mine.data[0].suspension.by, undefined, 'the admin id is not shown');
+
+		const detail = (await call('GET', '/channels/ch1')).body.result;
+		assert.equal(detail.isSuspended, true);
+		assert.equal(detail.suspension.by, 'usr_admin');
+
+		await call('POST', '/channels/ch1/unsuspend');
+		assert.equal((await visitor('GET', '/api/channels/ch1')).status, 200);
+		assert.equal((await visitor('GET', '/api/videos/v1')).status, 200);
+		assert.equal((await visitor('GET', '/api/videos/v2')).status, 404, 'moderation-hidden video stays hidden');
+	});
+
+	it('a suspended channel publishes nothing new; its owner can still watch, like and delete', async () => {
+		const { env, call } = await setup();
+		const app = new Hono();
+		app.onError(errorHandler);
+		app.use('*', async (c, next) => {
+			c.set('auth' as never, { userId: OWNER, email: `${OWNER}@example.com`, payload: {} } as never);
+			c.set('userId' as never, OWNER as never);
+			await next();
+		});
+		app.use('/api/*', channelIdMiddleware);
+		const router = fromHono(app);
+		router.post('/api/community/channels/:channelId/posts', CreateCommunityPost);
+		for (const [method, path] of [['POST', '/api/videos/upload/initiate'], ['POST', '/api/videos/v1/watch-time'], ['DELETE', '/api/videos/v1']]) {
+			app.on(method, path, (c) => c.json({ success: true }));
+		}
+		const asChannel = (method: string, path: string, body?: unknown) =>
+			app.request(path, { method, headers: { 'Content-Type': 'application/json', channelId: 'ch1' }, ...(body ? { body: JSON.stringify(body) } : {}) }, env as never);
+
+		assert.equal((await asChannel('POST', '/api/videos/upload/initiate')).status, 200);
+		await call('POST', '/channels/ch1/suspend', { reason: 'Copyright' });
+
+		const upload = await asChannel('POST', '/api/videos/upload/initiate');
+		assert.equal(upload.status, 403);
+		assert.equal(((await upload.json()) as any).code, 'channel_suspended');
+		const post = await asChannel('POST', '/api/community/channels/ch1/posts', { type: 'text', content: 'hello' });
+		assert.equal(post.status, 403);
+		assert.equal(((await post.json()) as any).code, 'channel_suspended');
+		assert.equal((await asChannel('POST', '/api/videos/v1/watch-time')).status, 200, 'watching still works');
+		assert.equal((await asChannel('DELETE', '/api/videos/v1')).status, 200, 'deleting their own video still works');
+
+		await call('POST', '/channels/ch1/unsuspend');
+		assert.equal((await asChannel('POST', '/api/videos/upload/initiate')).status, 200);
+	});
+
+	it('which channel requests count as publishing', () => {
+		for (const [method, path] of [['POST', '/api/videos'], ['POST', '/api/videos/upload'], ['POST', '/api/videos/upload/batch/initiate'], ['POST', '/api/videos/tus'], ['PATCH', '/api/videos/tus/abc'], ['POST', '/api/videos/v1/publish-now'], ['PATCH', '/api/videos/v1/schedule'], ['POST', '/api/live-streams'], ['POST', '/api/playlists'], ['POST', '/api/community/media/upload/images']]) {
+			assert.equal(channelRefusesWrite(method, path), true, `${method} ${path}`);
+		}
+		for (const [method, path] of [['GET', '/api/videos'], ['DELETE', '/api/videos/v1'], ['POST', '/api/videos/v1/likes'], ['POST', '/api/videos/v1/comments'], ['PUT', '/api/videos/v1'], ['POST', '/api/watch-history']]) {
+			assert.equal(channelRefusesWrite(method, path), false, `${method} ${path}`);
+		}
+	});
+
+	it('edits name, handle and description, and refuses a taken handle', async () => {
+		const { raw, call } = await setup({
+			channels: { ch1: channel('ch1'), ch2: channel('ch2', { userId: OTHER, handle: 'taken', isMain: true }) },
+		});
+		await raw.channel_tabs.put('channel-handles/taken', JSON.stringify({ handle: 'taken', channelId: 'ch2', userId: OTHER }));
+		const edited = await call('PATCH', '/channels/ch1', { name: 'New name', handle: 'newhandle', description: 'About' });
+		assert.equal(edited.status, 200);
+		const stored = JSON.parse(raw.channels.store.get('ch1')!);
+		assert.deepEqual([stored.name, stored.handle, stored.description], ['New name', 'newhandle', 'About']);
+		assert.ok(raw.channel_tabs.store.has('channel-handles/newhandle'));
+		const refused = await call('PATCH', '/channels/ch1', { handle: 'taken' });
+		assert.equal(refused.status, 409);
+		assert.equal(refused.body.code, 'handle_unavailable');
+		assert.equal((await call('PATCH', '/channels/ch1', { isVerified: true })).status, 400, 'unknown fields are refused');
+	});
+
+	it('transfers a channel with its videos to another videos user', async () => {
+		const { raw, call } = await setup();
+		const res = await call('POST', '/channels/ch1/transfer', { newOwnerId: OTHER });
+		assert.equal(res.status, 200);
+		assert.equal(res.body.result.previousOwnerId, OWNER);
+		assert.equal(JSON.parse(raw.channels.store.get('ch1')!).userId, OTHER);
+		assert.equal(JSON.parse(raw.videos.store.get('v1')!).userId, OTHER);
+		assert.deepEqual(JSON.parse(raw.profiles.store.get(OTHER)!).channels, ['ch1']);
+		assert.deepEqual(JSON.parse(raw.profiles.store.get(OWNER)!).channels, []);
+		assert.equal((await call('POST', '/channels/ch1/transfer', { newOwnerId: 'usr_nobody' })).status, 404);
+	});
+
+	it('delete soft-deletes the channel, erases its videos and frees the handle', async () => {
+		const { raw, db, call } = await setup();
+		await raw.channel_tabs.put('channel-handles/ch1', JSON.stringify({ handle: 'ch1', channelId: 'ch1', userId: OWNER }));
+		const res = await call('DELETE', '/channels/ch1');
+		assert.equal(res.status, 200);
+		const stored = JSON.parse(raw.channels.store.get('ch1')!);
+		assert.equal(stored.isDeleted, true);
+		assert.equal(stored.deletedBy, 'usr_admin');
+		assert.equal(raw.videos.store.has('v1'), false);
+		assert.equal(raw.videos.store.has('v2'), false);
+		assert.equal(raw.channel_tabs.store.has('channel-handles/ch1'), false);
+		assert.equal((db.db.prepare("SELECT COUNT(*) AS n FROM content_ownership WHERE kind = 'video' AND channel_id = 'ch1'").get() as any).n, 0);
+		assert.equal((await call('GET', '/channels')).body.result.total, 0);
+		assert.equal(raw.queue.messages.filter((m: any) => m.type === MessageType.VideoDelete).length, 2, 'one VideoDelete per erased video');
+	});
+});
+
+describe('video actions', () => {
+	it('edit, move, unpublish/republish and delete', async () => {
+		const { env, raw, call } = await setup({
+			channels: { ch1: channel('ch1'), ch2: channel('ch2', { userId: OTHER, isMain: true }) },
+		});
+		const visitor = publicApp(env, null);
+		assert.equal((await call('PATCH', '/videos/v1', { title: 'Renamed', isPublic: false })).status, 200);
+		let v1 = JSON.parse(raw.videos.store.get('v1')!);
+		assert.deepEqual([v1.title, v1.isPublic], ['Renamed', false]);
+
+		await call('POST', '/videos/legacy/move', { channelId: 'ch2' });
+		const legacy = JSON.parse(raw.videos.store.get('legacy')!);
+		assert.deepEqual([legacy.channelId, legacy.userId], ['ch2', OTHER]);
+		assert.equal((await call('GET', '/videos?channelId=ch2')).body.result.total, 1);
+
+		await call('PATCH', '/videos/v1', { isPublic: true });
+		await call('POST', '/videos/v1/unpublish');
+		assert.equal((await visitor('GET', '/api/videos/v1')).status, 404);
+		await call('POST', '/videos/v1/republish');
+		assert.equal((await visitor('GET', '/api/videos/v1')).status, 200);
+
+		assert.equal((await call('DELETE', '/videos/v1')).status, 200);
+		assert.equal(raw.videos.store.has('v1'), false);
+		assert.equal((await call('GET', '/videos/v1')).status, 404);
+		v1 = null;
+	});
+});
+
+describe('comments index', () => {
+	it('mirrors video comments for the global list, and admin deletes them', async () => {
+		const { env, call } = await setup();
+		const withComments = videoFixture({
+			id: 'v1', userId: OWNER, channelId: 'ch1',
+			comments: [commentFixture('c1', { text: 'JazakAllah khair', userId: OTHER, replies: [commentFixture('r1', { text: 'Ameen', parentCommentId: 'c1' })] })],
+		});
+		await env.videos.put('v1', JSON.stringify(withComments));
+		const listed = (await call('GET', '/comments?q=jazak')).body.result;
+		assert.deepEqual(listed.items.map((c: any) => [c.id, c.videoId, c.userId, c.videoTitle]), [['c1', 'v1', OTHER, 'Video']]);
+		assert.equal((await call('GET', '/comments?videoId=v1')).body.result.total, 2);
+		assert.equal((await call('DELETE', '/videos/v1/comments/r1')).status, 200);
+		assert.equal((await call('GET', '/comments?videoId=v1')).body.result.total, 1);
+		assert.equal((await call('DELETE', '/videos/v1/comments/r1')).status, 404);
+	});
+
+	it('signature changes only when comments change', () => {
+		const a = projectComments(videoFixture({ comments: [commentFixture('c1')] }));
+		const b = projectComments(videoFixture({ comments: [commentFixture('c1')], views: 99 }));
+		const c = projectComments(videoFixture({ comments: [commentFixture('c1', { text: 'edited' })] }));
+		assert.equal(commentSignature(a), commentSignature(b));
+		assert.notEqual(commentSignature(a), commentSignature(c));
+	});
+});
+
+describe('videos bans (users)', () => {
+	it('blocks a banned user\'s writes and profile, keeps public reads, and hides their content', async () => {
+		const { env, raw, call } = await setup();
+		const banned = publicApp(env, OWNER);
+		const visitor = publicApp(env, null);
+		const res = await call('POST', `/users/${OWNER}/ban`, { reason: 'Abuse' });
+		assert.equal(res.status, 200);
+		assert.equal(res.body.result.channels, 1);
+		forgetCachedBan(OWNER);
+
+		const comment = await banned('POST', '/api/videos/legacy/comments', { text: 'hi' }, { channelId: 'ch1' });
+		assert.equal(comment.status, 403);
+		assert.equal(((await comment.json()) as any).code, VIDEOS_BANNED_CODE);
+		const me = await banned('GET', '/api/profile');
+		assert.equal(me.status, 403);
+		assert.equal(((await me.json()) as any).ban.reason, 'Abuse');
+		assert.equal((await banned('GET', '/api/videos/legacy')).status, 200, 'public reads still work');
+		assert.equal((await visitor('GET', '/api/channels/ch1')).status, 404, 'their channel is hidden');
+		assert.equal((await visitor('GET', '/api/videos/v1')).status, 404, 'their videos are hidden');
+
+		const detail = (await call('GET', `/users/${OWNER}`)).body.result;
+		assert.equal(detail.isBanned, true);
+		assert.equal(detail.ban.bannedBy, 'usr_admin');
+		assert.equal(detail.channels.length, 1);
+
+		await call('POST', `/users/${OWNER}/unban`);
+		forgetCachedBan(OWNER);
+		assert.equal((await banned('GET', '/api/profile')).status, 200);
+		assert.equal((await visitor('GET', '/api/channels/ch1')).status, 200);
+		assert.equal(JSON.parse(raw.videos.store.get('v2')!).isHidden, true, 'moderation hide kept');
+	});
+
+	it('deleting a user\'s videos data removes it; they start fresh unless banned, and the ban survives', async () => {
+		const { env, raw, call } = await setup();
+		let erased = await call('POST', `/users/${OTHER}/delete-data`, {});
+		assert.equal(erased.status, 200);
+		while (!erased.body.result.complete) erased = await call('POST', `/users/${OTHER}/delete-data`, { resumeToken: erased.body.result.resumeToken });
+		assert.equal(raw.profiles.store.has(OTHER), false);
+		const fresh = publicApp(env, OTHER);
+		assert.equal((await fresh('GET', '/api/profile')).status, 404, 'no profile: the web app offers to create one');
+		const created = await fresh('POST', '/api/profiles', { email: `${OTHER}@example.com`, userName: 'again', displayName: 'Again', timezone: 'UTC' });
+		assert.ok(created.status < 300, `a fresh profile can be created (${created.status})`);
+
+		await call('POST', `/users/${OWNER}/ban`, { reason: 'Spam' });
+		erased = await call('POST', `/users/${OWNER}/delete-data`, {});
+		while (!erased.body.result.complete) erased = await call('POST', `/users/${OWNER}/delete-data`, { resumeToken: erased.body.result.resumeToken });
+		assert.equal(raw.profiles.store.has(OWNER), false);
+		assert.equal(raw.videos.store.has('v1'), false);
+		forgetCachedBan(OWNER);
+		const comeback = publicApp(env, OWNER);
+		const retry = await comeback('POST', '/api/profiles', { email: `${OWNER}@example.com`, userName: 'back', displayName: 'Back', timezone: 'UTC' });
+		assert.equal(retry.status, 403, 'a deleted and banned user cannot come back');
+		const users = (await call('GET', '/users?banned=yes')).body.result.items;
+		assert.deepEqual(users.map((u: any) => [u.id, u.isBanned, u.profileDeleted]), [[OWNER, true, true]]);
+		assert.equal((await call('GET', `/users/${OWNER}`)).body.result.ban.reason, 'Spam');
+	});
+
+	it('which requests a banned user may still make', () => {
+		assert.equal(isBlockedForBannedUser('GET', '/api/videos/v1'), false);
+		assert.equal(isBlockedForBannedUser('GET', '/api/profile'), true);
+		assert.equal(isBlockedForBannedUser('DELETE', '/api/privacy/data'), false);
+		assert.equal(isBlockedForBannedUser('POST', '/api/videos/upload/initiate'), true);
+		assert.equal(isBlockedForBannedUser('PUT', '/api/channels/ch1'), true);
+	});
+});
+
+describe('users list', () => {
+	it('searches videos profiles by name, user name and email', async () => {
+		const { call } = await setup();
+		assert.deepEqual((await call('GET', `/users?q=${OTHER}@`)).body.result.items.map((u: any) => u.id), [OTHER]);
+		assert.equal((await call('GET', '/users')).body.result.total, 2);
+		assert.equal((await call('PATCH', `/users/${OTHER}`, { displayName: 'Renamed' })).status, 200);
+		assert.deepEqual((await call('GET', '/users?q=renamed')).body.result.items.map((u: any) => u.id), [OTHER]);
+	});
+});

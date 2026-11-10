@@ -454,6 +454,14 @@ export interface AppTranslations {
     checkingProfile: string;
     redirectingToProfileCreation: string;
     redirecting: string;
+    /** Videos ban (admin): shown to the banned signed-in user */
+    videosBannedTitle: string;
+    videosBannedBody: string;
+    videosBannedReason: string;
+    /** Owner notice for a channel suspended by an admin */
+    channelSuspendedTitle: string;
+    channelSuspendedBody: string;
+    channelSuspendedReason: string;
     welcomeMessage: string;
     emailCannotBeChanged: string;
     firstName: string;

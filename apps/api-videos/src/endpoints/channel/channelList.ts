@@ -1,3 +1,4 @@
+import { ownerSeesSuspendedChannel } from "../../lib/visibility";
 import { Num, Str } from "chanfana";
 import { FALLBACK_SCAN_OBJECTS } from "../../lib/scanBudget";
 import { string, z } from "zod";
@@ -100,8 +101,8 @@ export class ChannelsList extends OptionalAuthRoute {
 				return false;
 			}
 
-			// Filter out moderation-hidden channels
-			if (channel.isHidden) {
+			// Filter out moderation-hidden channels (an owner still lists a channel an admin suspended)
+			if (channel.isHidden && !(mineOnly && ownerSeesSuspendedChannel(channel as never, userId))) {
 				return false;
 			}
 

@@ -17,9 +17,21 @@
 import { NOT_TOMBSTONED, type SearchDb, type SearchStatement } from './store';
 import type { SearchEntityType } from './documents';
 
-export type OwnershipKind = 'video' | 'channel';
+export type OwnershipKind = 'video' | 'channel' | 'profile';
 
+/**
+ * Kinds the public endpoints read. Profiles are indexed for the admin's user
+ * list only (apps/api-videos/migrations/search/0005_admin_content.sql).
+ */
 export const OWNERSHIP_KINDS: ReadonlyArray<OwnershipKind> = ['video', 'channel'];
+export const ALL_OWNERSHIP_KINDS: ReadonlyArray<OwnershipKind> = ['video', 'channel', 'profile'];
+
+/**
+ * Version of the admin columns (title, handle, email, verified, suspended,
+ * subscribers). Rows written before 0005 have admin_cols = 0 until the next
+ * ownership pass rewrites them; admin lists rebuild while any remain.
+ */
+export const OWNERSHIP_ADMIN_COLS_VERSION = 1;
 
 export const OWNERSHIP_TABLE = 'content_ownership';
 
@@ -52,6 +64,16 @@ export interface OwnershipRow {
   views: number;
   createdAt: number | null;
   updatedAt: number | null;
+  /** Admin columns: video title, channel name or profile display name. */
+  title?: string | null;
+  /** Channel @handle or profile userName. */
+  handle?: string | null;
+  /** Channel contact/owner email or profile email. */
+  email?: string | null;
+  isVerified?: boolean;
+  /** Channel suspended by an admin. */
+  isSuspended?: boolean;
+  subscribers?: number;
 }
 
 export type OwnershipSyncResult = 'upserted' | 'removed' | 'skipped';
@@ -75,9 +97,14 @@ function finite(value: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/** The ownership table only covers videos and channels. */
+/** The ownership table covers videos and channels (profiles are synced separately). */
 export function ownershipKindFor(type: SearchEntityType | string): OwnershipKind | null {
   return type === 'video' || type === 'channel' ? type : null;
+}
+
+function count(value: unknown): number {
+  if (Array.isArray(value)) return value.length;
+  return Math.max(0, Math.floor(finite(value) ?? 0));
 }
 
 /**
@@ -101,6 +128,25 @@ export function projectOwnership(kind: OwnershipKind, id: string, raw: unknown):
     createdAt: time(obj.dateCreated),
     updatedAt: time(obj.dateModified),
   };
+  if (kind === 'profile') {
+    const name = text(obj.displayName) ?? ([text(obj.firstName), text(obj.lastName)].filter(Boolean).join(' ') || null);
+    return {
+      ...common,
+      ownerId: id,
+      channelId: null,
+      isPublic: true,
+      isLive: false,
+      duration: null,
+      scheduleStatus: null,
+      uploadStatus: null,
+      title: name,
+      handle: text(obj.userName),
+      email: text(obj.email),
+      isVerified: false,
+      isSuspended: false,
+      subscribers: 0,
+    };
+  }
   if (kind === 'channel') {
     return {
       ...common,
@@ -110,6 +156,12 @@ export function projectOwnership(kind: OwnershipKind, id: string, raw: unknown):
       duration: null,
       scheduleStatus: null,
       uploadStatus: null,
+      title: text(obj.name),
+      handle: text(obj.handle),
+      email: text(obj.email),
+      isVerified: Boolean(obj.isVerified),
+      isSuspended: Boolean(obj.isSuspended),
+      subscribers: count(obj.subscriberCount ?? obj.subscribers),
     };
   }
   return {
@@ -120,6 +172,12 @@ export function projectOwnership(kind: OwnershipKind, id: string, raw: unknown):
     duration: finite(obj.duration),
     scheduleStatus: text(obj.scheduledPublishStatus),
     uploadStatus: text(obj.uploadStatus),
+    title: text(obj.title),
+    handle: null,
+    email: null,
+    isVerified: false,
+    isSuspended: false,
+    subscribers: 0,
   };
 }
 
@@ -138,19 +196,24 @@ export function ownershipTombstone(kind: OwnershipKind): string {
  */
 export function ownershipUpsertStatement(db: SearchDb, row: OwnershipRow, now: number, version = now): SearchStatement {
   return db.prepare(
-    `INSERT INTO ${OWNERSHIP_TABLE} (kind, id, owner_id, channel_id, is_public, is_hidden, is_deleted, is_live, duration, schedule_status, upload_status, views, created_at, updated_at, indexed_at, source_version)
-     SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    `INSERT INTO ${OWNERSHIP_TABLE} (kind, id, owner_id, channel_id, is_public, is_hidden, is_deleted, is_live, duration, schedule_status, upload_status, views, created_at, updated_at, indexed_at, source_version,
+       title, handle, email, is_verified, is_suspended, subscribers, admin_cols)
+     SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
      WHERE ${NOT_TOMBSTONED}
      ON CONFLICT(kind, id) DO UPDATE SET
        owner_id = excluded.owner_id, channel_id = excluded.channel_id, is_public = excluded.is_public,
        is_hidden = excluded.is_hidden, is_deleted = excluded.is_deleted, is_live = excluded.is_live,
        duration = excluded.duration, schedule_status = excluded.schedule_status, upload_status = excluded.upload_status,
        views = excluded.views, created_at = excluded.created_at, updated_at = excluded.updated_at,
-       indexed_at = excluded.indexed_at, source_version = excluded.source_version
+       indexed_at = excluded.indexed_at, source_version = excluded.source_version,
+       title = excluded.title, handle = excluded.handle, email = excluded.email, is_verified = excluded.is_verified,
+       is_suspended = excluded.is_suspended, subscribers = excluded.subscribers, admin_cols = excluded.admin_cols
      WHERE excluded.source_version >= ${OWNERSHIP_TABLE}.source_version`,
   ).bind(
     row.kind, row.id, row.ownerId, row.channelId, int(row.isPublic), int(row.isHidden), int(row.isDeleted),
     int(row.isLive), row.duration, row.scheduleStatus, row.uploadStatus, row.views, row.createdAt, row.updatedAt, now, version,
+    row.title ?? null, row.handle ?? null, row.email ?? null, int(row.isVerified === true), int(row.isSuspended === true),
+    row.subscribers ?? 0, OWNERSHIP_ADMIN_COLS_VERSION,
     ownershipTombstone(row.kind), row.id, version,
   );
 }

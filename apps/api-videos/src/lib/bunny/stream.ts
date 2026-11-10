@@ -102,6 +102,11 @@ export class BunnyStreamClient {
         return this.request<VideoModel>('POST', `/library/${libraryId}/videos/${videoId}`, { ...data, title: this.prefixed(data.title) });
     }
 
+    /** Encode the video again from its original upload (admin "reprocess"). */
+    async reencodeVideo(libraryId: number, videoId: string): Promise<VideoModel> {
+        return this.request<VideoModel>('POST', `/library/${libraryId}/videos/${videoId}/reencode`);
+    }
+
     // Delete a video
     async deleteVideo(libraryId: number, videoId: string): Promise<void> {
         return this.request<void>('DELETE', `/library/${libraryId}/videos/${videoId}`);

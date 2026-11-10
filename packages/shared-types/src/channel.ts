@@ -23,6 +23,9 @@ export interface Channel extends Timestamps, SoftDelete, Moderation {
   location?: string;
   isMain: boolean;
   isVerified?: boolean;
+  /** Suspended by a videos admin: hidden from everyone; only its owner gets it, to show the notice. */
+  isSuspended?: boolean;
+  suspension?: { at: string; reason?: string };
 
   // Privacy (user-controlled - owner + admins can access)
   isPrivate?: boolean;

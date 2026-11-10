@@ -62,6 +62,9 @@
     ]
   },
 
+  // api-videos owns the content data: /internal/admin/* (platform content management)
+  "services": [{ "binding": "VIDEOS", "service": "videos-qa" }],
+
   "vars": {
     "ENVIRONMENT": "qa",
     "LOG_LEVEL": "debug",
