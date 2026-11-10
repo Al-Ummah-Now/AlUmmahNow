@@ -1612,6 +1612,23 @@
                           "id": {
                             "type": "string"
                           },
+                          "isSuspended": {
+                            "type": "boolean"
+                          },
+                          "suspension": {
+                            "type": "object",
+                            "properties": {
+                              "at": {
+                                "type": "string"
+                              },
+                              "reason": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "at"
+                            ]
+                          },
                           "userId": {
                             "type": "string"
                           },
@@ -2059,6 +2076,23 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "isSuspended": {
+                      "type": "boolean"
+                    },
+                    "suspension": {
+                      "type": "object",
+                      "properties": {
+                        "at": {
+                          "type": "string"
+                        },
+                        "reason": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "at"
+                      ]
                     },
                     "userId": {
                       "type": "string"
@@ -3532,6 +3566,23 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "isSuspended": {
+                      "type": "boolean"
+                    },
+                    "suspension": {
+                      "type": "object",
+                      "properties": {
+                        "at": {
+                          "type": "string"
+                        },
+                        "reason": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "at"
+                      ]
                     },
                     "userId": {
                       "type": "string"
@@ -16220,6 +16271,23 @@
                         "properties": {
                           "id": {
                             "type": "string"
+                          },
+                          "isSuspended": {
+                            "type": "boolean"
+                          },
+                          "suspension": {
+                            "type": "object",
+                            "properties": {
+                              "at": {
+                                "type": "string"
+                              },
+                              "reason": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "at"
+                            ]
                           },
                           "userId": {
                             "type": "string"

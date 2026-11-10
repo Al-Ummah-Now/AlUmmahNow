@@ -7,6 +7,7 @@ import { logger } from './lib/logger';
 import { registerAllRouters } from './routers';
 import { publicSiteTheme } from './lib/siteSettings';
 import themesRouter, { publicThemes } from './routers/themes.router';
+import contentRouter from './routers/content.router';
 import type { AdminBindings } from './base/types';
 import { contactSubmit } from './endpoints/contact/ContactSubmit';
 
@@ -132,6 +133,10 @@ registerAllRouters(openapi);
 
 // Theme builder (zip and file bodies, so plain Hono): /api/themes
 app.route('/api/themes', themesRouter as never);
+
+// Platform content management (channels, videos, comments, playlists, posts,
+// videos users): permission-checked, audited proxy to api-videos
+app.route('/api/content', contentRouter);
 
 // ==========================================
 // HEALTH CHECK

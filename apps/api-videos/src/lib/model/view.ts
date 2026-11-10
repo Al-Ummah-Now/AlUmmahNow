@@ -173,6 +173,9 @@ export const PublicProfileView = z.object({
 // Fields returned for a channel to anyone (see lib/public-views.ts)
 export const PublicChannelView = z.object({
     id: Str(),
+    /** Set only on the owner's own suspended channel (admin suspension). */
+    isSuspended: z.boolean().optional(),
+    suspension: z.object({ at: z.string(), reason: z.string().optional() }).optional(),
     userId: Str(),
     name: Str(),
     nameLocalized: z.record(z.string()).optional(),

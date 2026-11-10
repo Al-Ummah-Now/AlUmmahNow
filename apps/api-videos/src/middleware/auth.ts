@@ -187,6 +187,30 @@ export function getUserId(c: Context): string | null {
   return auth?.userId || null;
 }
 
+export const CHANNEL_SUSPENDED_CODE = 'channel_suspended';
+
+/**
+ * Requests that publish something new for a channel: uploads (incl. tus),
+ * video create/schedule/publish, live streams, playlists and community posts.
+ * A suspended channel may not make them; everything else its owner does
+ * (watching, liking, editing or deleting their own content) still works.
+ */
+const PUBLISHING_ROUTES: RegExp[] = [
+  /^\/api\/videos\/?$/,
+  /^\/api\/videos\/upload(\/|$)/,
+  /^\/api\/videos\/tus(\/|$)/,
+  /^\/api\/videos\/[^/]+\/(publish-now|schedule)\/?$/,
+  /^\/api\/live-streams\/?$/,
+  /^\/api\/playlists\/?$/,
+  /^\/api\/community\/channels\/[^/]+\/posts\/?$/,
+  /^\/api\/community\/media\//,
+];
+
+export function channelRefusesWrite(method: string, path: string): boolean {
+  if (['GET', 'HEAD', 'OPTIONS', 'DELETE'].includes(method.toUpperCase())) return false;
+  return PUBLISHING_ROUTES.some((route) => route.test(path));
+}
+
 /**
  * Middleware to validate channelId header
  * Must be used AFTER authMiddleware
@@ -243,7 +267,7 @@ export async function channelIdMiddleware(c: Context, next: Next) {
     }
 
     // Parse channel data
-    const channelData = await channelObject.json() as { userId: string };
+    const channelData = await channelObject.json() as { userId: string; isSuspended?: boolean; isDeleted?: boolean };
 
     // Verify ownership
     if (channelData.userId !== auth.userId) {
@@ -251,6 +275,16 @@ export async function channelIdMiddleware(c: Context, next: Next) {
       return c.json({
         success: false,
         error: 'You do not have permission to perform actions on behalf of this channel'
+      }, 403);
+    }
+
+    // A channel an admin suspended (or deleted) publishes nothing new
+    if ((channelData.isSuspended || channelData.isDeleted) && channelRefusesWrite(c.req.method, c.req.path)) {
+      logger.warn(`User ${auth.userId} attempted a write as suspended channel ${channelId}`);
+      return c.json({
+        success: false,
+        code: CHANNEL_SUSPENDED_CODE,
+        error: 'This channel is suspended on Al Ummah Now videos'
       }, 403);
     }
 

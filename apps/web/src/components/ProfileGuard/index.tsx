@@ -4,6 +4,8 @@ import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { checkProfileExists } from '@/lib/api/profiles-client';
+import { getVideosBanStatus } from '@/lib/api/profiles';
+import { VideosBannedNotice } from '@/components/VideosNotices';
 import { useLanguage } from '@/hooks/useLanguage';
 
 // Whether a user has a profile almost never changes once it exists, so it is
@@ -44,6 +46,8 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children }) => {
   const [hasChecked, setHasChecked] = useState(false);
   const [lastCheckedUserId, setLastCheckedUserId] = useState<string | null>(null);
   const childrenShownRef = useRef(false);
+  // Banned on videos (admin): no profile flow, a notice instead (Auth is not affected)
+  const [ban, setBan] = useState<{ reason: string | null } | null>(null);
 
   logger.debug('[ProfileGuard] State:', {
     hasUser: !!user,
@@ -116,6 +120,18 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children }) => {
       logger.debug('[ProfileGuard] Starting profile check...');
       try {
         const exists = await checkProfileExists(user);
+        if (!exists) {
+          // GET /api/profile also answers "no profile" for a banned user: tell them apart
+          const status = await getVideosBanStatus();
+          if (status.banned) {
+            logger.info('[ProfileGuard] User is banned on videos; showing the notice instead of the profile flow');
+            setBan({ reason: status.reason });
+            setProfileExists(true);
+            setHasChecked(true);
+            return;
+          }
+        }
+        setBan(null);
         if (user?.id) rememberProfile(user.id, exists);
         logger.debug('[ProfileGuard] checkProfileExists returned:', exists);
         setProfileExists(exists);
@@ -177,6 +193,16 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children }) => {
       );
     }
 
+    // Banned on videos: the notice, and no profile form (creating one would be refused)
+    if (ban) {
+      return (
+        <>
+          <VideosBannedNotice reason={ban.reason} />
+          {!isProfileCreatePage && children}
+        </>
+      );
+    }
+
     // If on regular page and profile doesn't exist, show redirect message
     if (!isProfileCreatePage && profileExists === false) {
       logger.debug('[ProfileGuard] Rendering redirect message (regular page, no profile)');
@@ -204,7 +230,9 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children }) => {
     }
 
     logger.debug('[ProfileGuard] Rendering children (access allowed)');
-    return <>{children}</>;
+    return (
+      <>{children}</>
+    );
   })();
 
   return content;

@@ -1,3 +1,4 @@
+import { ownerSeesSuspendedChannel } from "../../lib/visibility";
 import { Str } from "chanfana";
 import { z } from "zod";
 import { Channel as BusinessChannel, ResponseError } from "../../lib/types";
@@ -32,7 +33,7 @@ export class ChannelOwnerFetch extends AuthenticatedRoute {
 
 		const channel = await new R2Repository<z.infer<typeof BusinessChannel>>(c.env.channels).getObject(id);
 		const isAdmin = isAdminRole(auth.payload?.roles);
-		if (!channel || channel.isDeleted || (channel.isHidden && !isAdmin)) {
+		if (!channel || channel.isDeleted || (channel.isHidden && !isAdmin && !ownerSeesSuspendedChannel(channel as never, auth.userId))) {
 			return c.json({ success: false, error: "Channel not found" }, 404);
 		}
 		if (channel.userId !== auth.userId && !isAdmin) {

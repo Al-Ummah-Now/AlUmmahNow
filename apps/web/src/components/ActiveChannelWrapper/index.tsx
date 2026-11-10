@@ -5,6 +5,7 @@ import { useAuth } from "@/components/AuthProvider/authContext";
 import { useMultiAccount } from "@/hooks/useMultiAccount";
 import { ActiveChannelProvider } from "@/contexts/ActiveChannelContext";
 import type { Channel } from "@al-ummah/shared-types";
+import { SuspendedChannelNotice } from "@/components/VideosNotices";
 
 interface ActiveChannelWrapperProps {
   children: React.ReactNode;
@@ -32,6 +33,7 @@ export function ActiveChannelWrapper({ children }: ActiveChannelWrapperProps) {
 
   return (
     <ActiveChannelProvider userChannels={channels} userId={user?.id}>
+      <SuspendedChannelNotice channels={channels} />
       {children}
     </ActiveChannelProvider>
   );

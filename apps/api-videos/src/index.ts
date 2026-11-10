@@ -8,6 +8,8 @@ import { bunnySigningMiddleware } from './middleware/bunny-signing';
 import { Hono } from "hono";
 import { cors } from 'hono/cors'
 import { authMiddleware, optionalAuthMiddleware, channelIdMiddleware } from "./middleware/auth";
+import { videosBanMiddleware } from "./middleware/videos-ban";
+import adminInternalRouter from "./routers/admin.router";
 import { loggingMiddleware } from "./middleware/logging";
 import { errorHandler } from "./middleware/error-handler";
 import { pruneRateLimits, rateLimitMiddleware, UPLOAD_CONTINUE_PATHS, UPLOAD_SESSION_PATHS, uploadContinueLimitMiddleware, uploadSessionLimitMiddleware } from "./middleware/rate-limit";
@@ -140,6 +142,9 @@ app.options('/api/*', (c) => {
 // Use authMiddleware for CUD operations (require authentication)
 app.use('/api/*', optionalAuthMiddleware);
 
+// Videos bans (admin-web Users): a banned usr_ id reads like a visitor and changes nothing.
+app.use('/api/*', videosBanMiddleware);
+
 // Validate channelId header when present
 // This middleware verifies that the channelId belongs to the authenticated user
 // It must run after auth middleware so the user context is available
@@ -240,6 +245,9 @@ openapi.original.use('*', loggingMiddleware);
 // ==========================================
 
 registerAllRouters(openapi);
+
+// Platform content management for admin-api (X-API-Key, see INTERNAL_PATHS)
+app.route('/internal/admin', adminInternalRouter);
 
 // ==========================================
 // OPENAPI CUSTOMIZATION

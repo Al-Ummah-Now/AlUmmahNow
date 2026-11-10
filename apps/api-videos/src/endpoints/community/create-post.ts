@@ -16,6 +16,7 @@ import { logger } from '../../lib/logger';
 import R2Repository, { rethrowBusy } from '../../lib/r2Repo';
 import { getChannelObject } from './post-comment-helpers';
 import { scanInBackground, communityPostScanText } from '../../lib/moderation-scan';
+import { CHANNEL_SUSPENDED_CODE } from '../../middleware/auth';
 
 // Sanitization configuration for community posts
 // Allows basic formatting while preventing XSS attacks
@@ -154,6 +155,11 @@ export class CreateCommunityPost extends AuthenticatedRoute {
       // Verify user owns this channel
       if (channel.userId !== userId) {
         return c.json({ error: 'User does not own this channel' }, 403);
+      }
+
+      // A suspended channel publishes nothing new (admin content management)
+      if (channel.isSuspended || (channel as { isDeleted?: boolean }).isDeleted) {
+        return c.json({ success: false, code: CHANNEL_SUSPENDED_CODE, error: 'This channel is suspended on Al Ummah Now videos' }, 403);
       }
 
       // Create post object with sanitized content

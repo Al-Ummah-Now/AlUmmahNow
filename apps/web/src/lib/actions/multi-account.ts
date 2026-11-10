@@ -443,6 +443,7 @@ export async function getActiveSessionInfo() {
         nameLocalized: ch.nameLocalized,
         avatarUrl: ch.avatarUrl,
         isMain: ch.isMain,
+        ...(ch.isSuspended ? { isSuspended: true, suspension: ch.suspension } : {}),
       })),
     },
     accounts: session.availableAccounts.map(acc => ({

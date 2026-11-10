@@ -15,7 +15,7 @@ import { subscriberCounts } from './subscription-store';
 import { channelVideoCountsFromIndex, OwnershipEnv } from './search/ownership';
 import { logger } from './logger';
 
-type StoredChannel = z.infer<typeof BusinessChannel> & { isVerified?: boolean };
+type StoredChannel = z.infer<typeof BusinessChannel> & { isVerified?: boolean; isSuspended?: boolean; suspension?: { at?: string; reason?: string } };
 type StoredProfile = z.infer<typeof BusinessProfile>;
 
 /**
@@ -46,6 +46,8 @@ export function toPublicChannel(channel: StoredChannel, subscribers?: number): z
 		subscribersCount: channel.subscribers?.length || 0,
 		subscriptionsCount: subscribers ?? (channel.subscriptions?.length || 0),
 		likesCount: channel.likes?.length || 0,
+		// Only the owner ever gets a suspended channel (my channels); the web app shows the notice
+		...(channel.isSuspended === true ? { isSuspended: true, suspension: { at: channel.suspension?.at ?? '', ...(channel.suspension?.reason ? { reason: channel.suspension.reason } : {}) } } : {}),
 	};
 }
 
