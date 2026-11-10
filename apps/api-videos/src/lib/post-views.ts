@@ -10,6 +10,14 @@
  *
  * Total views = the post's legacy `views` field (frozen at its value before
  * this change; nothing writes it any more) + the D1 sum, so no backfill.
+ *
+ * Batching (SCALABILITY-AUDIT AV-17): a view goes to a per-post Durable Object
+ * shard (`postviews:<postId>:<shard>` on the VIEW_COUNTER binding, see
+ * apps/websocket-server/src/post-view-counter.ts), which flushes its daily
+ * total into analytics_daily at most every 10 s (dim `counter:<shard>`, max-
+ * merged), so a busy post costs a few D1 writes per window, not one per view.
+ * Readers sum every dim. When the counter cannot be reached, the view is
+ * upserted directly (dim '') as before.
  */
 import { logger } from './logger';
 
@@ -20,8 +28,56 @@ interface WithViews {
 
 const CHUNK = 40;
 
-/** Counts one view of `postId` atomically. Never throws (a lost view is logged). */
-export async function recordPostView(db: D1Database | undefined, postId: string, now = new Date()): Promise<boolean> {
+export const POST_VIEW_COUNTER_SHARDS = 4;
+
+export function postViewCounterName(postId: string, shard: number): string {
+	return `postviews:${postId}:${shard}`;
+}
+
+export interface PostViewEnv {
+	NOTIFICATIONS_DB?: D1Database;
+	VIEW_COUNTER?: DurableObjectNamespace;
+}
+
+/** Views of this post counted but not yet in D1 (0 when counted directly). */
+export type RecordedPostView = { counted: boolean; unflushed: number };
+
+async function countWithCounter(ns: DurableObjectNamespace, postId: string, random: () => number): Promise<number> {
+	const shard = Math.floor(random() * POST_VIEW_COUNTER_SHARDS) % POST_VIEW_COUNTER_SHARDS;
+	const stub = ns.get(ns.idFromName(postViewCounterName(postId, shard)));
+	const response = await stub.fetch('http://view-counter/post-views/increment', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ postId, shard }),
+	});
+	if (!response.ok) throw new Error(`post view counter answered ${response.status}`);
+	const body = (await response.json()) as { unflushed?: unknown };
+	if (typeof body.unflushed !== 'number') throw new Error('post view counter sent no count');
+	return body.unflushed;
+}
+
+/**
+ * Counts one view of `postId`: through the post view counter when bound,
+ * otherwise (or when it fails) with one atomic D1 upsert. Never throws.
+ */
+export async function recordPostView(
+	env: PostViewEnv,
+	postId: string,
+	now = new Date(),
+	random: () => number = Math.random,
+): Promise<RecordedPostView> {
+	if (env.VIEW_COUNTER) {
+		try {
+			return { counted: true, unflushed: await countWithCounter(env.VIEW_COUNTER, postId, random) };
+		} catch (error) {
+			logger.warn('[PostViews] Counter unavailable, counting in D1 directly', { postId, error: String(error) });
+		}
+	}
+	return { counted: await recordPostViewDirect(env.NOTIFICATIONS_DB, postId, now), unflushed: 0 };
+}
+
+/** Counts one view of `postId` with one atomic upsert. Never throws (a lost view is logged). */
+export async function recordPostViewDirect(db: D1Database | undefined, postId: string, now = new Date()): Promise<boolean> {
 	if (!db) return false;
 	try {
 		await db

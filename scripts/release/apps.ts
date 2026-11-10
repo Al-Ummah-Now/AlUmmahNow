@@ -186,10 +186,12 @@ export const APPS: AppRule[] = [
 				{ kind: 'durable_objects', name: 'WEBSOCKET_DO' },
 				// The view counter flushes into the video JSON (SCALABILITY-AUDIT AV-1)
 				{ kind: 'r2_buckets', name: 'VIDEOS' },
+				// The post view counter flushes into analytics_daily (SCALABILITY-AUDIT AV-17)
+				{ kind: 'd1_databases', name: 'NOTIFICATIONS_DB' },
 			],
 			...PROD_GUARDS,
 		},
-		stage: stageRule({ name: 'al-ummah-now-comms-stage', requireRoutes: true, vars: { ENVIRONMENT: 'stage', WEBSOCKET_URL: STAGE_REALTIME, Issuer: STAGE_AUTH }, requiredBindings: [INTERNAL_API_KEY, { kind: 'durable_objects', name: 'WEBSOCKET_DO' }, { kind: 'r2_buckets', name: 'VIDEOS' }] }),
+		stage: stageRule({ name: 'al-ummah-now-comms-stage', requireRoutes: true, vars: { ENVIRONMENT: 'stage', WEBSOCKET_URL: STAGE_REALTIME, Issuer: STAGE_AUTH }, requiredBindings: [INTERNAL_API_KEY, { kind: 'durable_objects', name: 'WEBSOCKET_DO' }, { kind: 'r2_buckets', name: 'VIDEOS' }, { kind: 'd1_databases', name: 'NOTIFICATIONS_DB' }] }),
 	},
 	{
 		app: 'scheduler',

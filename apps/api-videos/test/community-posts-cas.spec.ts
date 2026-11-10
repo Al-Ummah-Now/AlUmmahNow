@@ -20,6 +20,7 @@ import { CreatePostComment } from '../src/endpoints/community/post-comment-creat
 import { DeletePostComment } from '../src/endpoints/community/post-comment-delete';
 import { MemoryBucket, MemoryQueue, SlowBucket, buildApp } from './helpers';
 import { createSqliteD1 } from './sqlite-d1';
+import { POST_VIEW_COUNTER_SHARDS, postViewCounterName, recordPostViewDirect } from '../src/lib/post-views';
 
 const CH = 'ch';
 const OWNER = 'owner';
@@ -83,6 +84,68 @@ describe('community post views (AV-8)', () => {
 		]);
 		assert.equal(e.community_posts.read(KEY).status, 'deleted', 'the delete stays');
 		assert.equal((await anon.request(`/api/channels/${CH}/posts/p1`, {}, e)).status, 404);
+	});
+});
+
+/** Stand-in for the VIEW_COUNTER namespace's post counters: counts per object name. */
+function fakePostCounter(opts: { fail?: boolean } = {}) {
+	const totals = new Map<string, number>();
+	const ns = {
+		idFromName: (name: string) => name,
+		get: (name: string) => ({
+			async fetch(url: string, init: RequestInit) {
+				if (opts.fail) return new Response('down', { status: 503 });
+				assert.equal(new URL(url).pathname, '/post-views/increment');
+				const body = JSON.parse(String(init.body));
+				assert.equal(name, postViewCounterName(body.postId, body.shard));
+				totals.set(name, (totals.get(name) ?? 0) + 1);
+				return Response.json({ unflushed: totals.get(name) });
+			},
+		}),
+	};
+	return { ns: ns as unknown as DurableObjectNamespace, totals };
+}
+
+async function d1Views(db: D1Database): Promise<number> {
+	const row = await db.prepare(`SELECT COALESCE(SUM(value), 0) AS n FROM analytics_daily WHERE entity_type = 'post' AND metric = 'views'`).first<{ n: number }>();
+	return Number(row?.n ?? 0);
+}
+
+describe('community post views are batched by the view counter (AV-17)', () => {
+	it('views go to the post counter shards, not one D1 write each; the viewer sees their view', async () => {
+		const counter = fakePostCounter();
+		const e = { ...env(), VIEW_COUNTER: counter.ns };
+		const random = Math.random;
+		let i = 0;
+		Math.random = () => (i++ % POST_VIEW_COUNTER_SHARDS) / POST_VIEW_COUNTER_SHARDS;
+		try {
+			const views = await Promise.all(Array.from({ length: 40 }, () => anon.request(`/api/channels/${CH}/posts/p1`, {}, e).then((r) => r.json() as Promise<any>)));
+			assert.equal(await d1Views(e.NOTIFICATIONS_DB), 0, 'no D1 write per view');
+			assert.equal([...counter.totals.values()].reduce((a, b) => a + b, 0), 40);
+			assert.equal(counter.totals.size, POST_VIEW_COUNTER_SHARDS, 'spread over every shard');
+			assert.ok(views.every((v) => v.views > 5), 'legacy count + the unflushed views of the shard');
+		} finally {
+			Math.random = random;
+		}
+	});
+
+	it('an unreachable counter falls back to one atomic D1 upsert per view', async () => {
+		const e = { ...env(), VIEW_COUNTER: fakePostCounter({ fail: true }).ns };
+		await Promise.all(Array.from({ length: 25 }, () => anon.request(`/api/channels/${CH}/posts/p1`, {}, e)));
+		assert.equal(await d1Views(e.NOTIFICATIONS_DB), 25);
+		const view = (await (await anon.request(`/api/channels/${CH}/posts/p1`, {}, e)).json()) as any;
+		assert.equal(view.views, 5 + 26);
+	});
+
+	it('counter rows (dim counter:<shard>) and direct rows add up for readers', async () => {
+		const e = env();
+		const day = new Date().toISOString().slice(0, 10);
+		await e.NOTIFICATIONS_DB.prepare(`INSERT INTO analytics_daily (entity_type, entity_id, day, metric, dim, value) VALUES ('post', 'p1', ?, 'views', 'counter:0', 7), ('post', 'p1', ?, 'views', 'counter:3', 4)`).bind(day, day).run();
+		const listed = (await (await anon.request(`/api/channels/${CH}/posts`, {}, e)).json()) as any;
+		assert.equal(listed.posts[0].views, 5 + 11);
+		assert.equal(await recordPostViewDirect(e.NOTIFICATIONS_DB, 'p1'), true);
+		const again = (await (await anon.request(`/api/channels/${CH}/posts`, {}, e)).json()) as any;
+		assert.equal(again.posts[0].views, 5 + 12);
 	});
 });
 

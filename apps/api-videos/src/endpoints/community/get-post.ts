@@ -67,8 +67,11 @@ export class GetCommunityPost extends OptionalAuthRoute {
       // Count the view atomically in D1 (SCALABILITY-AUDIT AV-8). Reads never
       // write the post JSON: a stale copy written back here used to undo
       // deletes, edits and the like / comment / poll counters.
-      await recordPostView(c.env.NOTIFICATIONS_DB, post.id || postId);
+      // The view counter batches the D1 writes (AV-17); its unflushed views are
+      // added so the viewer sees their own view at once.
+      const view = await recordPostView(c.env, post.id || postId);
       await withPostViews(c.env.NOTIFICATIONS_DB, [post]);
+      post.views = (Number(post.views) || 0) + view.unflushed;
 
       // Like / vote totals live in D1 (the processor no longer writes them into the document)
       await withPostCounts(c.env.NOTIFICATIONS_DB, [post]);
