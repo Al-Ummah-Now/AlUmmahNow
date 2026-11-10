@@ -268,6 +268,14 @@ jobs:
           (cd apps/web && pnpm exec playwright install --with-deps chromium)
           sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
 
+      # The seed imports workspace packages (e.g. @al-ummah/shared-types), whose
+      # dist/ only the build job makes; build them here as seed-qa.yml does.
+      - name: Build shared packages (stage seed)
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
+          pnpm --filter @al-ummah/theme-packages build
+
       - name: Seed stage (idempotent)
         working-directory: apps/web
         run: npx tsx e2e/seed/seed-qa.ts
