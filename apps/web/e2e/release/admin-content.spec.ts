@@ -69,8 +69,18 @@ async function createVideo(user: WebUser, channelId: string, title: string): Pro
 
 const publicStatus = async (path: string) => (await fetch(`${target().api}${path}`, { cache: 'no-store' })).status;
 
+/**
+ * Waits until the page's jobs panel stops re-reading the page (no job in
+ * progress). Navigating away while it does (router.refresh every 3s) crashed
+ * WebKit's page ("page.goto: Page crashed", and earlier on page.reload).
+ */
+async function jobsIdle(page: Page): Promise<void> {
+  await expect(page.locator('[data-testid="jobs-panel"] [data-active="true"]'), 'a job is still running on this page').toHaveCount(0, { timeout: JOB_TIMEOUT });
+}
+
 /** Opens a filtered list and waits until the item is in the admin index. */
 async function findInList(page: Page, url: string, row: ReturnType<Page['locator']>): Promise<void> {
+  await jobsIdle(page);
   await expect
     .poll(
       async () => {
@@ -87,9 +97,11 @@ async function findInList(page: Page, url: string, row: ReturnType<Page['locator
  * the jobs panel re-reads the page every 3s while a job runs, which is what an
  * admin sees (and reloading on top of that crashed WebKit's page).
  */
-async function expectJobSucceeded(page: Page, kind: string): Promise<void> {
-  const item = page.locator(`[data-testid="job-item"][data-job-kind="${kind}"]`).first();
-  await expect(item).toBeVisible({ timeout: 30000 });
+async function expectJobSucceeded(page: Page, kind: string, count = 1): Promise<void> {
+  const items = page.locator(`[data-testid="job-item"][data-job-kind="${kind}"]`);
+  // The newest is listed first; `count` waits for this action's job when an earlier one of the kind is listed
+  await expect(items.nth(count - 1)).toBeVisible({ timeout: 30000 });
+  const item = items.first();
   await expect
     .poll(
       async () => {
@@ -156,6 +168,8 @@ test.describe('Release: admin content management', () => {
       // Unsuspend: public again
       await page.getByTestId('channel-unsuspend').click();
       await expect(page.getByTestId('channel-suspended-banner')).toHaveCount(0);
+      // Its cascade is a second sync-holds job; leaving the page waits for it (jobsIdle)
+      await expectJobSucceeded(page, 'channel.sync-holds', 2);
       await expect.poll(() => publicStatus(`/api/channels/${channelId}`), { message: 'unsuspended channel not public', timeout: 30000 }).toBe(200);
 
       // The video: find, edit, delete
@@ -168,6 +182,8 @@ test.describe('Release: admin content management', () => {
       await page.getByTestId('video-edit-save').click();
       await expect(page.getByTestId('video-title')).toHaveText(newTitle, { timeout: 30000 });
       await confirm(page, 'video-delete', { typed: true });
+      // The purge job polls this page; leave once it is done (the record may be gone by then)
+      await jobsIdle(page);
       // The queued purge erases the record entirely: it leaves the admin list and the public API
       await expect
         .poll(

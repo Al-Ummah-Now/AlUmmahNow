@@ -106,8 +106,12 @@ test('a channel role shows under "Channels you manage" live, and disappears when
     await expect(member.page.locator('[data-testid="nav-channel-group-managed"]')).toContainText('Channels you manage');
     await expect(member.page.locator('[data-testid="nav-channel-group-owned"]')).toContainText('Your channels');
 
-    // Switching to the managed channel works
+    // Switching to the managed channel works. The switch is a Server Action
+    // whose response sets the session cookie: wait for the menu to mark the
+    // channel active before loading another page, or the navigation aborts the
+    // request and the cookie never arrives.
     await option.click();
+    await expect(option).toHaveAttribute('aria-checked', 'true', { timeout: 30000 });
     await expect(async () => {
       await member.page.goto(`${target().web}/en`, { waitUntil: 'load' });
       const trigger = member.page.locator('[data-testid="nav-menu-trigger"]:visible').first();
