@@ -7,6 +7,7 @@ import { getI18n } from '@/i18n/server';
 import { formatDate, translateDynamic } from '@/i18n/translate';
 import { ContactStatusChip, ErrorAlert, linkClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
+import { trashHref } from '@/lib/trash';
 import { ContactFilterBar } from './ContactFilterBar';
 import { CONTACT_PAGE_SIZE, contactHref, hasContactFilters, parseContactFilters } from './filters';
 
@@ -59,6 +60,9 @@ export default async function ContactInboxPage({ searchParams }: PageProps) {
             </span>
           )}
         </p>
+        <Link href={trashHref('contact-message')} className={`${linkClass} text-sm`} data-testid="contact-recently-deleted">
+          {t('trash.link')}
+        </Link>
       </div>
 
       <div className="mb-6">

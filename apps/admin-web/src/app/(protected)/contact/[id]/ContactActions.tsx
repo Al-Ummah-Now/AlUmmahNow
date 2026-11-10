@@ -6,10 +6,10 @@ import { addContactNote, deleteContactMessage, replyToContactMessage, updateCont
 import type { ActionResult } from '@/lib/api/errors';
 import type { ContactStatus } from '@/lib/api/types';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { useConfirm } from '@/components/content/actions';
 import { translateDynamic } from '@/i18n/translate';
 import { ErrorAlert, cardClass, fieldClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
+import { ConfirmButton } from '@/components/content/actions';
 import { CONTACT_STATUSES } from '../filters';
 
 interface Props {
@@ -28,7 +28,6 @@ const textareaClass = `${fieldClass} w-full resize-y`;
 export function ContactActions({ id, status, locale, assignedToMe, hasAssignee }: Props) {
   const router = useRouter();
   const { t } = useLanguage();
-  const { confirm, dialog: confirmDialog } = useConfirm();
   const ids = useId();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -63,7 +62,6 @@ export function ContactActions({ id, status, locale, assignedToMe, hasAssignee }
 
   return (
     <div className="space-y-6">
-      {confirmDialog}
       <section className={cardClass} aria-labelledby={`${ids}-manage`} data-testid="contact-actions">
         <h2 id={`${ids}-manage`} className="text-lg font-semibold text-fg mb-4">
           {t('contact.manage')}
@@ -124,29 +122,24 @@ export function ContactActions({ id, status, locale, assignedToMe, hasAssignee }
           >
             {isSpam ? t('contact.notSpam') : t('contact.markSpam')}
           </button>
-          <button
-            type="button"
-            className={`${smallButton} text-danger-fg`}
+          <ConfirmButton
+            label={t('contact.delete')}
+            title={t('contact.delete')}
+            body={t('contact.deleteConfirm')}
+            confirmLabel={t('contact.delete')}
+            withReason
+            danger
             disabled={!!busy}
-            onClick={async () => {
-              const confirmed = await confirm({
-                title: t('confirmDialog.contactDeleteTitle'),
-                body: t('contact.deleteConfirm'),
-                confirmLabel: t('contact.delete'),
-                danger: true,
-                testId: 'contact-delete-confirm',
-              });
-              if (!confirmed) return;
+            busy={busy === 'delete'}
+            testId="contact-delete"
+            onConfirm={async (reason) => {
               setBusy('delete');
-              const result = await deleteContactMessage(id).catch(() => ({ ok: false as const, status: 0, error: 'request failed' }));
+              const result = await deleteContactMessage(id, reason).catch(() => ({ ok: false as const, status: 0, error: 'request failed' }));
               setBusy(null);
               if (result.ok) router.push('/contact');
               else setError(t('contact.failed'));
             }}
-            data-testid="contact-delete"
-          >
-            {t('contact.delete')}
-          </button>
+          />
         </div>
       </section>
 

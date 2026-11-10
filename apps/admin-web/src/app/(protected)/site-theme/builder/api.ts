@@ -18,7 +18,8 @@ const json = (body: unknown): RequestInit => ({ body: JSON.stringify(body), head
 
 export const saveDraft = (id: string, theme: ThemePackage) => call<{ validation: Validation }>(`/${id}/draft`, { method: 'PUT', ...json(theme) });
 export const publish = (id: string) => call<{ version: string; validation: Validation }>(`/${id}/publish`, { method: 'POST' });
-export const removeTheme = (id: string) => call<void>(`/${id}`, { method: 'DELETE' });
+/** Soft delete (restorable for 30 days in Recently deleted). */
+export const removeTheme = (id: string, reason = '') => call<void>(`/${id}`, { method: 'DELETE', ...json({ reason }) });
 export const importZip = (zip: Uint8Array, rename?: string) =>
   call<{ id: string; validation: Validation }>(`/import${rename ? `?id=${encodeURIComponent(rename)}` : ''}`, { method: 'POST', body: zip as BodyInit, headers: { 'Content-Type': 'application/zip' } });
 export const uploadAsset = (id: string, path: string, file: Blob) =>
