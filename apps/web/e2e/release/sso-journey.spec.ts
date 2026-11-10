@@ -66,11 +66,14 @@ async function onSignInForm(page: Page): Promise<boolean> {
 }
 
 async function getJson(page: Page, path: string): Promise<{ status: number; body: Record<string, unknown> | null }> {
-  return page.evaluate(async (p) => {
-    const res = await fetch(p, { credentials: 'include', cache: 'no-store' }).catch(() => null);
-    if (!res) return { status: 0, body: null };
-    return { status: res.status, body: (await res.json().catch(() => null)) as Record<string, unknown> | null };
-  }, path);
+  return page
+    .evaluate(async (p) => {
+      const res = await fetch(p, { credentials: 'include', cache: 'no-store' }).catch(() => null);
+      if (!res) return { status: 0, body: null };
+      return { status: res.status, body: (await res.json().catch(() => null)) as Record<string, unknown> | null };
+    }, path)
+    // A silent sign-in may navigate the page mid-call (execution context destroyed): no answer yet, polls retry
+    .catch(() => ({ status: 0, body: null }));
 }
 
 async function videosUserId(page: Page): Promise<string> {
