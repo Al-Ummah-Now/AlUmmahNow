@@ -42,6 +42,10 @@ test.describe('Release: player controls', () => {
       // Before the first play only the big play button shows; the bar comes with playback
       await expect(page.locator(BAR)).toBeHidden();
 
+      // Click only once the player has set up and the stream's metadata is in:
+      // an earlier click can land before the source is attached and do nothing
+      await expect(page.locator('.vjs-volume-bar')).toHaveAttribute('aria-orientation', 'horizontal', { timeout: 15000 });
+      await page.waitForFunction(() => (document.querySelector<HTMLVideoElement>('.video-js video')?.readyState ?? 0) >= 1, null, { timeout: 45000 });
       // Muted first so the autoplay policy can never be the reason it stays paused
       await page.evaluate(() => { document.querySelector<HTMLVideoElement>('.video-js video')!.muted = true; });
       await bigPlay.click();
@@ -110,9 +114,23 @@ test.describe('Release: player controls', () => {
       await expect(menu).toHaveCount(0);
       await expect(settings).toHaveAttribute('aria-expanded', 'false');
 
-      // Theatre mode widens the watch layout and is a pressed toggle
-      await wake(page);
+      // Theatre mode widens the watch layout and is a pressed toggle. A portrait
+      // video (stage's seed is 360x640) has no theatre mode: the button is hidden
       const theatre = page.locator(`${BAR} .vjs-fanous-theatre`);
+      const portrait = await page.evaluate(() => {
+        const v = document.querySelector<HTMLVideoElement>('.video-js video')!;
+        return v.videoHeight > v.videoWidth;
+      });
+      const frame = page.locator('.custom-video-player');
+      if (portrait) await expect(frame).toHaveAttribute('data-portrait', 'true');
+      else await expect(frame).not.toHaveAttribute('data-portrait', /.*/);
+      if (portrait) {
+        await wake(page);
+        await expect(theatre).toBeHidden();
+        await expect(page.getByTestId('watch-layout')).not.toHaveAttribute('data-theatre', /.*/);
+        return;
+      }
+      await wake(page);
       await theatre.click();
       await expect(theatre).toHaveAttribute('aria-pressed', 'true');
       await expect(page.getByTestId('watch-layout')).toHaveAttribute('data-theatre', 'true');
