@@ -10,6 +10,7 @@ import type { AppTranslations } from '../i18n';
 import { LIBRARY_EN, NOTIFICATION_CENTER_EN } from '../i18n-library';
 import { BULK_EDIT_EN } from '../i18n-bulk-edit';
 import { COMMUNITY_GUIDELINES_EN } from '../i18n-community-guidelines';
+import { CONTACT_EN } from '../i18n-contact';
 
 export const EN_TRANSLATIONS: AppTranslations = {
   imageCrop: {
@@ -28,6 +29,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
   library: LIBRARY_EN,
   bulkEdit: BULK_EDIT_EN,
   communityGuidelines: COMMUNITY_GUIDELINES_EN,
+  contact: CONTACT_EN,
   notificationCenter: NOTIFICATION_CENTER_EN,
   common: {
     appName: 'Al Ummah Now',

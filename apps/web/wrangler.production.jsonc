@@ -37,6 +37,10 @@
       "bucket_name": "videos"
     }
   ],
+  "secrets_store_secrets": [
+    // X-API-Key for admin-api /internal/contact (app/api/contact/route.ts)
+    { "binding": "INTERNAL_API_KEY", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "internal-api-key" }
+  ],
   "env": {
     // Stage slot (docs/release-pipeline): same bindings as production, stage resources and hosts.
     "stage": {
@@ -63,6 +67,9 @@
           "binding": "videos",
           "bucket_name": "videos-stage"
         }
+      ],
+      "secrets_store_secrets": [
+        { "binding": "INTERNAL_API_KEY", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "internal-api-key-stage" }
       ]
     }
   }

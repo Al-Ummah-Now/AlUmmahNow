@@ -92,7 +92,10 @@
 		"WEBSOCKET_URL": "https://realtime.alummahnow.net",
 		"Issuer": "https://auth.alummahnow.net",
 		// Shown in admin when D1 has no cap; keep equal to the processor's value
-		"AI_MODERATION_DAILY_NEURON_CAP": "100000"
+		"AI_MODERATION_DAILY_NEURON_CAP": "100000",
+		// Contact us: support inbox notified of new messages (Reply-To of mail to senders) and the inbox link
+		"CONTACT_INBOX": "support@alummahnow.net",
+		"ADMIN_WEB_URL": "https://admin.alummahnow.net"
 	},
 
 	// Secrets Store
@@ -101,6 +104,12 @@
 			"binding": "INTERNAL_API_KEY",
 			"store_id": "f8eddc9944d041919ed8dc7d08d32308",
 			"secret_name": "internal-api-key"
+		},
+		{
+			// Contact us mail (lib/contact-email.ts); the auth server's Resend key
+			"binding": "RESEND_API_KEY",
+			"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+			"secret_name": "RESEND_API_KEY"
 		}
 	],
 
@@ -174,13 +183,20 @@
 				"WEBSOCKET_URL": "https://realtime.stage.alummahnow.net",
 				"Issuer": "https://auth.stage.alummahnow.net",
 				// Shown in admin when D1 has no cap; keep equal to the processor's value
-				"AI_MODERATION_DAILY_NEURON_CAP": "10000"
+				"AI_MODERATION_DAILY_NEURON_CAP": "10000",
+				"CONTACT_INBOX": "support@alummahnow.net",
+				"ADMIN_WEB_URL": "https://admin.stage.alummahnow.net"
 			},
 			"secrets_store_secrets": [
 				{
 					"binding": "INTERNAL_API_KEY",
 					"store_id": "f8eddc9944d041919ed8dc7d08d32308",
 					"secret_name": "internal-api-key-stage"
+				},
+				{
+					"binding": "RESEND_API_KEY",
+					"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+					"secret_name": "RESEND_API_KEY"
 				}
 			]
 		},
@@ -189,7 +205,8 @@
 				"ENVIRONMENT": "development",
 				"LOG_LEVEL": "debug",
 				"WEBSOCKET_URL": "http://localhost:3087",
-				"INTERNAL_API_KEY": "dev-internal-api-key"
+				"INTERNAL_API_KEY": "dev-internal-api-key",
+				"ADMIN_WEB_URL": "http://localhost:3091"
 			}
 		},
 		"staging": {

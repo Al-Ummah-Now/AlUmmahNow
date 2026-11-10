@@ -36,3 +36,27 @@ export function hasModeratorRole(roles: readonly string[] | undefined): boolean 
   const normalized = normalizeRoles(roles ?? []);
   return MODERATOR_ROLE_IDS.some((role) => normalized.includes(role));
 }
+
+/**
+ * Permissions of the videos admin (this service), granted per role. The auth
+ * server only names the roles; what a role may do here is decided here.
+ */
+export const PERMISSIONS = {
+  /** Read the Contact us inbox. */
+  'contact:read': ADMIN_ROLE_IDS,
+  /** Change status and assignee, add notes, reply to and delete contact messages. */
+  'contact:manage': ADMIN_ROLE_IDS,
+} as const satisfies Record<string, readonly string[]>;
+
+export type Permission = keyof typeof PERMISSIONS;
+
+/** True when any of the roles grants the permission. */
+export function hasPermission(roles: readonly string[] | undefined, permission: Permission): boolean {
+  const granted: readonly string[] = PERMISSIONS[permission];
+  return normalizeRoles(roles ?? []).some((role) => granted.includes(role));
+}
+
+/** Every permission the roles grant (sorted), for clients that hide what they cannot do. */
+export function permissionsFor(roles: readonly string[] | undefined): Permission[] {
+  return (Object.keys(PERMISSIONS) as Permission[]).filter((p) => hasPermission(roles, p)).sort();
+}

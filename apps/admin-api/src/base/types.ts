@@ -48,6 +48,16 @@ export interface AdminBindings {
   WEBSOCKET_URL?: string;
   // A Secrets Store binding in deployed workers, a plain string var in local dev
   INTERNAL_API_KEY?: string | { get(): Promise<string> };
+
+  // Contact us (lib/contact*.ts)
+  /** Resend API key: Secrets Store RESEND_API_KEY (the auth server's sender), plain string in local dev */
+  RESEND_API_KEY?: string | { get(): Promise<string> };
+  /** Support inbox notified of every new message, and the Reply-To of mail to senders */
+  CONTACT_INBOX?: string;
+  /** From address of contact mail; default "Al Ummah Now <support@alummahnow.net>" */
+  CONTACT_FROM?: string;
+  /** admin-web origin, for the inbox link in notifications */
+  ADMIN_WEB_URL?: string;
 }
 
 /**

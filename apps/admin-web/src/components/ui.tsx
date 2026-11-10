@@ -35,6 +35,27 @@ export function StatusChip({ status, label, large = false }: { status: ReportSta
   );
 }
 
+const contactChipClasses: Record<string, string> = {
+  new: chipClasses.pending,
+  open: chipClasses.reviewing,
+  replied: chipClasses.resolved,
+  closed: chipClasses.dismissed,
+  spam: 'bg-danger-bg text-danger-fg',
+};
+
+/** Contact message status (new, open, replied, closed, spam). */
+export function ContactStatusChip({ status, label, large = false }: { status: string; label: string; large?: boolean }) {
+  return (
+    <span
+      data-testid="contact-status-chip"
+      data-status={status}
+      className={`${large ? 'px-3 py-1' : 'px-2 py-1 text-sm'} rounded font-medium whitespace-nowrap ${contactChipClasses[status] ?? chipClasses.dismissed}`}
+    >
+      {label}
+    </span>
+  );
+}
+
 export const cardClass = 'bg-surface border border-border rounded-lg p-6';
 export const linkClass =
   'text-link hover:text-link-hover underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-focus rounded';

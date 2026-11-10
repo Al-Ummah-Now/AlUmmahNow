@@ -10,6 +10,7 @@ import type { AppTranslations } from '../i18n';
 import { LIBRARY_AR, NOTIFICATION_CENTER_AR } from '../i18n-library';
 import { BULK_EDIT_AR } from '../i18n-bulk-edit';
 import { COMMUNITY_GUIDELINES_AR } from '../i18n-community-guidelines';
+import { CONTACT_AR } from '../i18n-contact';
 
 export const AR_TRANSLATIONS: AppTranslations = {
   imageCrop: {
@@ -28,6 +29,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
   library: LIBRARY_AR,
   bulkEdit: BULK_EDIT_AR,
   communityGuidelines: COMMUNITY_GUIDELINES_AR,
+  contact: CONTACT_AR,
   notificationCenter: NOTIFICATION_CENTER_AR,
   common: {
     appName: 'الأمة الآن',

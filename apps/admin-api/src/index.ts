@@ -7,6 +7,7 @@ import { logger } from './lib/logger';
 import { registerAllRouters } from './routers';
 import { readSiteTheme } from './lib/siteSettings';
 import type { AdminBindings } from './base/types';
+import { contactSubmit } from './endpoints/contact/ContactSubmit';
 
 // ==========================================
 // APP SETUP
@@ -89,6 +90,9 @@ app.get('/public/site-theme', async (c) => {
   const { theme } = await readSiteTheme((c.env as AdminBindings).REPORTS_DB);
   return c.json({ theme }, 200, { 'Cache-Control': 'public, max-age=30' });
 });
+
+// Contact us messages from the videos site's server (X-API-Key; endpoints/contact/ContactSubmit.ts)
+app.post('/internal/contact', (c) => contactSubmit(c as never));
 
 // Apply auth + admin middleware to all API routes
 app.use('/api/*', authMiddleware);

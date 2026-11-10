@@ -13,6 +13,7 @@ export const SIDEBAR_PATHS = {
   liked: '/library/liked',
   privacy: '/settings/privacy',
   guidelines: '/community-guidelines',
+  contact: '/contact',
 } as const;
 
 export const ACCOUNT_MENU_PATHS = {

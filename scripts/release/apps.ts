@@ -34,6 +34,7 @@ const STAGE_GUARDS: Pick<EnvRule, 'forbiddenValues' | 'allowedHosts'> = {
 const stageRule = (rule: Omit<EnvRule, 'env' | 'allowedHosts'>): EnvRule => ({ env: 'stage', ...STAGE_GUARDS, ...rule });
 
 const INTERNAL_API_KEY: Binding = { kind: 'secrets_store_secrets', name: 'INTERNAL_API_KEY' };
+const RESEND_API_KEY: Binding = { kind: 'secrets_store_secrets', name: 'RESEND_API_KEY' };
 
 export const APPS: AppRule[] = [
 	{
@@ -52,10 +53,11 @@ export const APPS: AppRule[] = [
 				API_URL: VIDEOS_API,
 				WEBSOCKET_URL: 'wss://realtime.alummahnow.net/ws',
 			},
-			requiredBindings: [{ kind: 'r2_buckets', name: 'videos' }],
+			// INTERNAL_API_KEY: the Contact us route calls admin-api /internal/contact
+			requiredBindings: [{ kind: 'r2_buckets', name: 'videos' }, INTERNAL_API_KEY],
 			...PROD_GUARDS,
 		},
-		stage: stageRule({ name: 'al-ummah-now-stage', requireRoutes: true, vars: { Issuer: STAGE_AUTH, OPENAUTH_ISSUER: STAGE_AUTH, API_URL: STAGE_API, WEBSOCKET_URL: 'wss://realtime.stage.alummahnow.net/ws' }, requiredBindings: [{ kind: 'r2_buckets', name: 'videos' }] }),
+		stage: stageRule({ name: 'al-ummah-now-stage', requireRoutes: true, vars: { Issuer: STAGE_AUTH, OPENAUTH_ISSUER: STAGE_AUTH, API_URL: STAGE_API, WEBSOCKET_URL: 'wss://realtime.stage.alummahnow.net/ws' }, requiredBindings: [{ kind: 'r2_buckets', name: 'videos' }, INTERNAL_API_KEY] }),
 	},
 	{
 		app: 'admin-web',
@@ -189,9 +191,11 @@ export const APPS: AppRule[] = [
 				INTERNAL_API_KEY,
 				{ kind: 'd1_databases', name: 'REPORTS_DB' },
 				{ kind: 'queue_producer', name: 'queue' },
+				// Contact us mail (lib/contact-email.ts)
+				RESEND_API_KEY,
 			],
 			...PROD_GUARDS,
 		},
-		stage: stageRule({ name: 'al-ummah-admin-api-stage', requireRoutes: true, vars: { ENVIRONMENT: 'stage', WEBSOCKET_URL: STAGE_REALTIME, Issuer: STAGE_AUTH }, requiredBindings: [INTERNAL_API_KEY, { kind: 'd1_databases', name: 'REPORTS_DB' }] }),
+		stage: stageRule({ name: 'al-ummah-admin-api-stage', requireRoutes: true, vars: { ENVIRONMENT: 'stage', WEBSOCKET_URL: STAGE_REALTIME, Issuer: STAGE_AUTH }, requiredBindings: [INTERNAL_API_KEY, { kind: 'd1_databases', name: 'REPORTS_DB' }, RESEND_API_KEY] }),
 	},
 ];

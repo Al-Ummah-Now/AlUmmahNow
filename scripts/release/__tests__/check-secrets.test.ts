@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { checkWorker, type Deps } from '../check-secrets.ts';
+import { checkWorker, declaredInConfig, type Deps } from '../check-secrets.ts';
 import type { WorkerBinding } from '../cf-api.ts';
 import { SECRETS_MANIFEST, type WorkerSecrets } from '../secrets-manifest.ts';
 import { APPS } from '../apps.ts';
@@ -93,5 +93,29 @@ describe('secrets manifest', () => {
 				assert.equal(entry?.worker, rule[env]?.name, `${rule.app} ${env}`);
 			}
 		}
+	});
+
+	it('passes a secret the deployed worker lacks when this release binds it to an active secret', async () => {
+		const next = (store: { name: string; status?: string }[]): Deps => ({
+			...deps([], { store }),
+			declared: async (_e, name) => (name === 'INTERNAL_API_KEY' ? { store_id: 's', secret_name: 'internal-api-key' } : null),
+		});
+		const entry = { ...videos, clientIdVars: [] };
+		assert.deepEqual(failures(await checkWorker(entry, next([{ name: 'internal-api-key', status: 'active' }]))), []);
+		assert.deepEqual(failures(await checkWorker(entry, next([]))), ['secret INTERNAL_API_KEY']);
+		assert.deepEqual(failures(await checkWorker(entry, next([{ name: 'internal-api-key', status: 'disabled' }]))), ['secret INTERNAL_API_KEY']);
+	});
+});
+
+describe('declaredInConfig', () => {
+	it('reads the Secrets Store binding from the production and stage configs', () => {
+		const root = new URL('../../..', import.meta.url).pathname;
+		const web = (env: 'production' | 'stage' | 'qa') => SECRETS_MANIFEST.find((e) => e.app === 'web' && e.env === env)!;
+		assert.deepEqual(declaredInConfig(web('production'), 'INTERNAL_API_KEY', root)?.secret_name, 'internal-api-key');
+		assert.deepEqual(declaredInConfig(web('stage'), 'INTERNAL_API_KEY', root)?.secret_name, 'internal-api-key-stage');
+		assert.equal(declaredInConfig(web('qa'), 'INTERNAL_API_KEY', root), null);
+		const admin = SECRETS_MANIFEST.find((e) => e.app === 'admin-api' && e.env === 'production')!;
+		assert.equal(declaredInConfig(admin, 'RESEND_API_KEY', root)?.secret_name, 'RESEND_API_KEY');
+		assert.equal(declaredInConfig(admin, 'NOPE', root), null);
 	});
 });
