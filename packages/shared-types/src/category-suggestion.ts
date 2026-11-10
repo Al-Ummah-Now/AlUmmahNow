@@ -102,12 +102,24 @@ export function buildCategoryText(input: CategoryInput): string {
   return lines.join('\n').slice(0, CATEGORY_TEXT_LIMITS.total);
 }
 
+/** Drop WebVTT cue markup (<v Speaker>, <c>, <00:01.000>) in one linear pass. The text goes to the model, never into HTML. */
+function stripCueTags(line: string): string {
+  let out = '';
+  let inTag = false;
+  for (const ch of line) {
+    if (ch === '<') inTag = true;
+    else if (ch === '>' && inTag) inTag = false;
+    else if (!inTag) out += ch;
+  }
+  return out;
+}
+
 /** Strip WebVTT timing, cue ids and markup, leaving the spoken text. */
 export function vttToText(vtt: string): string {
   return vtt
     .split(/\r?\n/)
-    .filter((line) => line && !/^WEBVTT/.test(line) && !/-->/.test(line) && !/^(NOTE|STYLE|REGION)\b/.test(line) && !/^\d+$/.test(line.trim()))
-    .map((line) => line.replace(/<[^>]*>/g, '').trim())
+    .filter((line) => line && !line.startsWith('WEBVTT') && !line.includes('-->') && !/^(NOTE|STYLE|REGION)\b/.test(line) && !/^\d+$/.test(line.trim()))
+    .map((line) => stripCueTags(line).trim())
     .filter(Boolean)
     .join(' ');
 }
@@ -200,9 +212,11 @@ function toNumber(value: unknown): number {
 export function parseCategoryResponse(result: unknown): CategoryScore[] {
   let response = (result as { response?: unknown } | null)?.response ?? result;
   if (typeof response === 'string') {
-    const match = response.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error('Category model returned no JSON');
-    response = JSON.parse(match[0]);
+    // The outermost {...}: fenced or with prose around it (indexOf/lastIndexOf, linear)
+    const start = response.indexOf('{');
+    const end = response.lastIndexOf('}');
+    if (start < 0 || end <= start) throw new Error('Category model returned no JSON');
+    response = JSON.parse(response.slice(start, end + 1));
   }
   const r = response as { top?: unknown; category?: unknown; confidence?: unknown } | null;
   const entries: unknown[] = Array.isArray(r?.top) ? r!.top : r && typeof r === 'object' && 'category' in r ? [r] : [];
