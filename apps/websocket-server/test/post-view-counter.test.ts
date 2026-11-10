@@ -196,3 +196,10 @@ test('no NOTIFICATIONS_DB: keeps the views and retries later', async () => {
 	assert.equal(storage.alarmAt, clock.now + POST_RETRY_DELAY_MS);
 	assert.equal((storage.data.get('postViewCounter') as { days: Record<string, number> }).days['2026-11-10'], 1);
 });
+
+test('a view stored before the alarm could be set is still a success (no double count by the API fallback)', async () => {
+	const storage = new FakeStorage();
+	storage.setAlarm = async () => { throw new Error('alarm unavailable'); };
+	const counter = new PostViewCounter(storage, new FakeD1(), { now: () => DAY1 });
+	assert.deepEqual(await counter.increment('p8', '0'), { unflushed: 1 });
+});
