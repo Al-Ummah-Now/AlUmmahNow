@@ -47,17 +47,17 @@ export function WatchChannelMeta({ channelId, name, viewerId, authLoading, owner
   if (isOwner) {
     // No subscribing to your own channel (the channel page hides it too)
   } else if (!authLoading && !viewerId) {
-    // A link, not a button: it starts sign-in and comes back to this video
+    // A plain link, not a button or next/link: a full navigation to the login
+    // route, which starts sign-in and comes back to this video
     action = (
-      <Link
+      <a
         href={loginRoutePath(pathname || `/${lang}`, lang)}
-        prefetch={false}
         className="b b-primary b-sm watch-sub"
         data-testid="watch-subscribe"
         data-state="signed-out"
       >
         {t.channel.subscribe}
-      </Link>
+      </a>
     );
   } else {
     const busy = authLoading || isChecking || isUpdating;
