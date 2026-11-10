@@ -9,7 +9,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { target } from './targets';
 import { findPlayableVideo, NO_PLAYABLE_VIDEO, watchUrl } from './videos';
-import { signUpOnWeb, type Locale } from './web-session';
+import { createProfile, signUpOnWeb, type Locale } from './web-session';
 
 const WIDTHS = [768, 1024, 1280, 1440];
 /** Side-column rows: thumbnail beside the text, never a full-width card. */
@@ -166,7 +166,11 @@ test.describe('Release: watch page and header layout, tablet to desktop', () => 
     test(`player dominates, related stays compact, header aligned, signed in (${locale})`, async ({ page }) => {
       const id = await videoWithRelated();
       test.skip(!id, NO_PLAYABLE_VIDEO);
-      await signUpOnWeb(page, 'watch-layout', locale);
+      // With no video profile the app sends a new user to profile/create once
+      // its check answers, which can land between "player visible" and the
+      // measurements: create the profile the way the other signed-in specs do.
+      const user = await signUpOnWeb(page, 'watch-layout', locale);
+      await createProfile(user);
       await checkAllWidths(page, id!, locale);
     });
   }

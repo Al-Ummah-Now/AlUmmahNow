@@ -114,9 +114,14 @@ test.describe('Release: watch-page channel row', () => {
         await expectFullRow(page, width, locale);
       }
 
+      // The auth server keeps the request in a flow and answers /authorize with a
+      // redirect to /password/authorize?auth_flow=..., so the page that loads no
+      // longer carries redirect_uri: read it from the /authorize request itself.
+      const authorize = page.waitForRequest((r) => r.url().startsWith(`${target().auth}/authorize?`), { timeout: 30000 });
       await subscribe.click();
+      const authorizeUrl = new URL((await authorize).url());
+      expect(authorizeUrl.searchParams.get('redirect_uri'), 'sign-in does not come back to this site').toBe(`${target().web}/api/callback`);
       await expect(page).toHaveURL(new RegExp(`^${target().auth}`), { timeout: 30000 });
-      expect(new URL(page.url()).searchParams.get('redirect_uri'), 'sign-in does not come back to this site').toBe(`${target().web}/api/callback`);
       const back = (await context.cookies(target().web)).find((c) => c.name === 'auth_return');
       expect(back?.value && decodeURIComponent(back.value), 'sign-in does not return to the video').toBe(`/${locale}/video/${video!.id}`);
       // The auth server only accepts the environment's own callback, not a local WEB_APP_URL
