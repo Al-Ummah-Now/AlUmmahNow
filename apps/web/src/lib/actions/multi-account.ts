@@ -49,7 +49,7 @@ export async function addUserAccount(locale: string = 'en'): Promise<void> {
   // Bind the callback to this browser (login CSRF), with its PKCE verifier
   const nonce = newStateNonce();
   cookieStore.set(STATE_COOKIE, nonce, stateCookieOptions(protocol === "https"));
-  if (challenge.verifier) cookieStore.set(PKCE_COOKIE, pkceCookieValue(nonce, challenge.verifier), stateCookieOptions(protocol === "https"));
+  if (challenge?.verifier) cookieStore.set(PKCE_COOKIE, pkceCookieValue(nonce, challenge.verifier), stateCookieOptions(protocol === "https"));
 
   // prompt=login: without it the auth server's shared sign-in (__session)
   // answers with a code for the account that is already signed in, without a
