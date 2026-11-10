@@ -47,6 +47,22 @@ function report(e: ReturnType<typeof env>, userId = 'alice') {
 }
 
 describe('the browser reports an upload it cannot finish', () => {
+	it('a channel editor reports their failed upload on the owner\'s video; a moderator cannot', async () => {
+		const e = {
+			...env({ vid: videoFixture({ id: 'vid', userId: 'owner', uploadedBy: 'ed', channelId: 'team', title: 'Talk', uploadStatus: 'uploading' }) }),
+			channels: new MemoryBucket({ team: { id: 'team', userId: 'owner', name: 'Team', members: [
+				{ userId: 'ed', role: 'editor', addedBy: 'owner', addedAt: '2026-11-01T00:00:00.000Z' },
+				{ userId: 'mod', role: 'moderator', addedBy: 'owner', addedAt: '2026-11-01T00:00:00.000Z' },
+			] } }),
+		};
+		assert.equal((await report(e as never, 'mod')('vid')).status, 403);
+		assert.equal((await report(e as never, 'stranger')('vid')).status, 403);
+		assert.equal(e.videos.read('vid').uploadStatus, 'uploading');
+		assert.equal((await report(e as never, 'ed')('vid')).status, 200);
+		assert.equal(e.videos.read('vid').processingIssue.kind, 'needs_reupload');
+		assert.equal(e.videos.read('vid').userId, 'owner');
+	});
+
 	it('flags it needs_reupload once, notifies through the queue, and is idempotent', async () => {
 		const e = env({ vid: videoFixture({ id: 'vid', userId: 'alice', channelId: 'ch', title: 'Talk', uploadStatus: 'uploading' }) });
 		const res = await report(e)('vid', 'Upload service said the upload is gone');
