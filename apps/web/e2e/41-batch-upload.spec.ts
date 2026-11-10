@@ -46,7 +46,7 @@ test.afterAll(async () => {
 async function openBatch(page: Page, locale: 'en' | 'ar' = 'en') {
   await gotoUpload(page, locale);
   await page.getByTestId('upload-mode-batch').click();
-  await expect(page.getByTestId('upload-mode-batch')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('upload-mode-batch')).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByTestId('batch-dropzone')).toBeVisible();
 }
 
@@ -60,7 +60,7 @@ const items = (page: Page) => page.getByTestId('batch-file');
 test.describe('Batch upload - queue', () => {
   test('BATCH-001 switches to batch mode with its own drop zone and guideline (en)', async ({ page }) => {
     await openBatch(page);
-    await expect(page.getByTestId('upload-mode-single')).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByTestId('upload-mode-single')).toHaveAttribute('aria-selected', 'false');
     await expect(page.getByTestId('upload-dropzone')).toHaveCount(0);
     await expect(page.getByTestId('batch-dropzone')).toContainText('1-15');
     await expect(page.getByText('Batch uploads support 1-15 videos at once')).toBeVisible();

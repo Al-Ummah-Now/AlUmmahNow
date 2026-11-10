@@ -6,7 +6,8 @@ import { VideoObject } from "@/interfaces";
 import VideoUpload from "@/components/videoUpload";
 import { BatchUploadQueue } from "@/components/videoUpload/BatchUploadQueue";
 import { useRouter, useParams } from "next/navigation";
-import { CheckCircle, AlertCircle, Upload, FileVideo, FileStack, ShieldAlert } from "lucide-react";
+import { CheckCircle, AlertCircle, Upload, FileStack, ShieldAlert } from "lucide-react";
+import { UploadModeTabs, UPLOAD_MODE_PANEL_ID, UPLOAD_MODE_TAB_ID, type UploadMode } from "@/components/videoUpload/UploadModeTabs";
 import { VIDEO_UPLOAD_CONFIG } from "@/lib/constants/uploadConfig";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useBatchUpload } from "@/hooks/useBatchUpload";
@@ -16,7 +17,6 @@ import { useMultiAccount } from "@/hooks/useMultiAccount";
 import { login } from "@/lib/actions";
 import Link from "next/link";
 
-type UploadMode = 'single' | 'batch';
 
 const UploadPage: React.FC = () => {
   const { t, lang } = useLanguage();
@@ -234,58 +234,19 @@ const UploadPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Upload Mode Toggle */}
+        {/* Upload mode tabs: the panel below belongs to the selected tab */}
         {!uploadComplete && (
-          <div className="mb-6">
-            <div className="inline-flex rounded-lg border border-gray-200 dark:border-gray-700 p-1 bg-white dark:bg-gray-800">
-              <button
-                type="button"
-                aria-label={t.upload.uploadVideo}
-                aria-pressed={uploadMode === 'single'}
-                data-testid="upload-mode-single"
-                onClick={() => handleModeChange('single')}
-                className={`
-                  flex items-center gap-2
-                  px-3 py-2
-                  md:px-4 md:py-2.5
-                  text-sm font-medium
-                  rounded-md
-                  transition-colors
-                  ${
-                    uploadMode === 'single'
-                      ? 'bg-blue-600 text-white'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                  }
-                `}
-              >
-                <FileVideo size={18} />
-                <span className="hidden sm:inline">{t.upload.uploadVideo}</span>
-              </button>
-              <button
-                type="button"
-                aria-label={t.batch.batchUpload}
-                aria-pressed={uploadMode === 'batch'}
-                data-testid="upload-mode-batch"
-                onClick={() => handleModeChange('batch')}
-                className={`
-                  flex items-center gap-2
-                  px-3 py-2
-                  md:px-4 md:py-2.5
-                  text-sm font-medium
-                  rounded-md
-                  transition-colors
-                  ${
-                    uploadMode === 'batch'
-                      ? 'bg-blue-600 text-white'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                  }
-                `}
-              >
-                <FileStack size={18} />
-                <span className="hidden sm:inline">{t.batch.batchUpload}</span>
-              </button>
-            </div>
-          </div>
+          <UploadModeTabs
+            mode={uploadMode}
+            onChange={handleModeChange}
+            labels={{
+              group: t.upload.modeTabsLabel,
+              single: t.upload.modeSingle,
+              singleHint: t.upload.modeSingleHint,
+              batch: t.upload.modeBatch,
+              batchHint: t.upload.modeBatchHint,
+            }}
+          />
         )}
 
         {/* Upload Success State */}
@@ -330,6 +291,14 @@ const UploadPage: React.FC = () => {
           </div>
         )}
 
+        {!uploadComplete && (
+        <div
+          role="tabpanel"
+          id={UPLOAD_MODE_PANEL_ID[uploadMode]}
+          aria-labelledby={UPLOAD_MODE_TAB_ID[uploadMode]}
+          className="upload-mode-panel"
+          data-testid="upload-mode-panel"
+        >
         {/* Upload Error State */}
         {uploadError && (
           <div
@@ -360,7 +329,7 @@ const UploadPage: React.FC = () => {
         )}
 
         {/* Single Upload Mode */}
-        {uploadMode === 'single' && !uploadComplete && (
+        {uploadMode === 'single' && (
           <>
             {/* Upload Progress */}
             {uploadProgress > 0 && uploadProgress < 100 && !uploadError && (
@@ -404,7 +373,7 @@ const UploadPage: React.FC = () => {
         )}
 
         {/* Batch Upload Mode */}
-        {uploadMode === 'batch' && !uploadComplete && (
+        {uploadMode === 'batch' && (
           <>
             {/* Kept mounted outside the drop area so "Add Videos" can open it once the queue has files */}
             <input
@@ -513,6 +482,9 @@ const UploadPage: React.FC = () => {
               </div>
             )}
           </>
+        )}
+
+        </div>
         )}
 
         {/* Upload Guidelines */}

@@ -236,8 +236,15 @@ test.describe('Video Upload - Mobile', () => {
     await gotoUpload(page, 'en');
     const ui = uploadUi(page);
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-    // Mode toggle buttons keep an accessible name when their label is hidden
-    await expect(page.getByTestId('upload-mode-single')).toHaveAccessibleName(/.+/);
+    // Mode tabs keep their visible labels on phones and meet the 44px target size
+    for (const [id, name] of [['upload-mode-single', 'Single video'], ['upload-mode-batch', 'Batch upload']] as const) {
+      const tab = page.getByTestId(id);
+      await expect(tab).toHaveAccessibleName(name);
+      await expect(tab.getByText(name)).toBeVisible();
+      const box = await tab.boundingBox();
+      expect(box!.height).toBeGreaterThanOrEqual(44);
+      expect(box!.width).toBeGreaterThanOrEqual(44);
+    }
 
     await selectVideo(page, await helpers.createTestVideo('mobile-test.mp4', 16));
     await ui.titleEn.fill('Mobile Upload Test');
