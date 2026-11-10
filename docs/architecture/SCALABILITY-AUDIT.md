@@ -84,7 +84,7 @@ were lost.
 - **Check script.** `pnpm check:rollup-import --env qa|stage|production` is read-only. It exits 1
   if a document stays un-imported, or imported but not deleted, for more than 48 h.
 
-### Realtime (WS-1..WS-6), [#507](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/507) and [#PRNUM](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/PRNUM)
+### Realtime (WS-1..WS-6), [#507](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/507) and [#674](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/674)
 
 The old server kept every socket in one global Durable Object, with all state in instance fields
 under the Hibernation API, so a hibernated object lost track of every open socket.
@@ -172,7 +172,7 @@ Severity is the reported impact at scale. The status column links the fix.
 | PR-9 | processor | low | daily neuron cap is check-then-act (`SUM` then call AI then record). With autoscaled consumers (5 msgs × up to 250 invocations) the cap overshoots… | fixed in [#521](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/521) |
 | PR-10 | processor | low | at-least-once interaction: fan-out insert succeeds, then the invocation fails before pushes/enqueue; the retry's `INSERT OR IGNORE` returns zero… | fixed in [#513](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/513) |
 | WS-1 | websocket-server | critical | Hibernation API (`ctx.acceptWebSocket`) used, but all connection state lives only in instance fields | fixed in [#507](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/507) |
-| WS-2 | websocket-server | critical at scale | every socket, every broadcast and every stats call go to ONE global DO (`idFromName('websocket-instance')`) | fixed in [#507](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/507) (shards) and [#PRNUM](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/PRNUM) (topic router) |
+| WS-2 | websocket-server | critical at scale | every socket, every broadcast and every stats call go to ONE global DO (`idFromName('websocket-instance')`) | fixed in [#507](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/507) (shards) and [#674](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/674) (topic router) |
 | WS-3 | websocket-server | medium | presence session list is a KV read-modify-write without any conditional write | fixed in [#507](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/507) |
 | WS-4 | websocket-server | low/medium | broadcast loops over every subscriber and `JSON.stringify`s the message once per socket. With one global… | fixed in [#507](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/507) |
 | WS-5 | websocket-server | low | per-session rate limit is in-memory: it resets on every hibernation/eviction (WS-1) and is per-session, not per-user/IP, so a client can open many… | fixed in [#507](https://github.com/Al-Ummah-Now/AlUmmahNow/pull/507) |
