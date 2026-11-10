@@ -160,7 +160,13 @@ export function ConfirmDialog({ open, onCancel, onConfirm, title, body, confirmL
   return (
     <dialog
       ref={ref}
-      onClose={() => open && cancel()}
+      // Escape fires `cancel` synchronously: move to closed then, so an Enter on the
+      // opening button right after reopens it. `close` arrives a task later; it only
+      // cancels when nothing reopened the dialog meanwhile.
+      onCancel={() => cancel()}
+      onClose={() => {
+        if (open && !ref.current?.open) cancel();
+      }}
       onClick={(e) => {
         // A click on the backdrop (outside the form) cancels
         if (e.target === e.currentTarget) cancel();
