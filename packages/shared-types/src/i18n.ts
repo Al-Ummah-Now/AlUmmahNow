@@ -936,6 +936,9 @@ export interface AppTranslations {
     uploadSpeed: string;
     totalProgress: string;
     ofCompleted: string;
+    alreadyUploaded: string;
+    viewVideo: string;
+    clearFinished: string;
     errors: {
       tooFewFiles: string;
       tooManyFiles: string;
@@ -944,6 +947,8 @@ export interface AppTranslations {
       initiateFailed: string;
       deviceLimit: string;
       uploadFailed: string;
+      queueFull: string;
+      uploadFailedRetry: string;
     };
   };
 

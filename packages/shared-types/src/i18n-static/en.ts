@@ -797,6 +797,9 @@ export const EN_TRANSLATIONS: AppTranslations = {
     uploadSpeed: 'Upload Speed',
     totalProgress: 'Total Progress',
     ofCompleted: '{completed} of {total} completed',
+    alreadyUploaded: 'Already uploaded',
+    viewVideo: 'View video',
+    clearFinished: 'Clear finished',
     errors: {
       tooFewFiles: 'Please select at least 1 video file',
       tooManyFiles: 'Maximum 15 files allowed. You selected {count} files.',
@@ -805,6 +808,8 @@ export const EN_TRANSLATIONS: AppTranslations = {
       initiateFailed: 'Failed to initialize batch upload. Please try again.',
       deviceLimit: 'Your device may not have enough memory for {count} files. Try uploading {recommended} files at a time.',
       uploadFailed: 'Upload failed for {filename}',
+      queueFull: 'Up to {max} videos can wait in the queue. You can add {left} more now, or add more once these finish.',
+      uploadFailedRetry: 'This file could not be uploaded. Press Retry to try again.',
     },
   },
 

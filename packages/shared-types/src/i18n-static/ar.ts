@@ -797,6 +797,9 @@ export const AR_TRANSLATIONS: AppTranslations = {
     uploadSpeed: 'سرعة الرفع',
     totalProgress: 'التقدم الكلي',
     ofCompleted: '{completed} من {total} مكتمل',
+    alreadyUploaded: 'تم رفعه من قبل',
+    viewVideo: 'مشاهدة الفيديو',
+    clearFinished: 'مسح المكتملة',
     errors: {
       tooFewFiles: 'يرجى تحديد ملف فيديو واحد على الأقل',
       tooManyFiles: 'الحد الأقصى 15 ملفاً. لقد حددت {count} ملف.',
@@ -805,6 +808,8 @@ export const AR_TRANSLATIONS: AppTranslations = {
       initiateFailed: 'فشل في بدء الرفع الدفعي. يرجى المحاولة مرة أخرى.',
       deviceLimit: 'قد لا تتوفر في جهازك ذاكرة كافية لـ {count} ملفات. جرّب رفع {recommended} ملفات في كل مرة.',
       uploadFailed: 'فشل الرفع لـ {filename}',
+      queueFull: 'يمكن أن ينتظر في القائمة حتى {max} فيديو. يمكنك إضافة {left} الآن، أو إضافة المزيد بعد انتهاء هذه.',
+      uploadFailedRetry: 'تعذّر رفع هذا الملف. اضغط إعادة المحاولة للمحاولة مرة أخرى.',
     },
   },
 

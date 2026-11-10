@@ -11,12 +11,17 @@ import type { BatchUploadEntry } from '@/lib/upload/BatchUploadManager';
 import { hasActiveUploads } from '@/lib/upload/batch-status';
 import { initiateBatchUpload, completeVideoUpload } from '@/lib/api/upload-client';
 import { useHoldReloadWhile } from '@/lib/version-skew/VersionSkewProvider';
-import { holdReload } from '@/lib/version-skew/recovery';
 import { getClientAuthHeaders } from '@/lib/auth/client-token';
 import { getApiUrl } from '@/lib/runtime-config';
 import { logger } from '@/lib/logger-client';
+import { holdReload, recoverFromVersionSkew } from '@/lib/version-skew/recovery';
+import { reportUploadError } from '@/lib/upload/report-upload-error';
+import { MAX_BATCH_FILES, planBatchSelection, remainingSlots } from '@/lib/upload/batch-selection';
 import { useLanguage } from '@/hooks/useLanguage';
 
+
+/** An error whose message is already written for the user (translated). */
+class FriendlyUploadError extends Error {}
 
 interface UseBatchUploadOptions {
   userId?: string; // Optional - no longer needed for API calls
@@ -85,21 +90,25 @@ export function useBatchUpload({
       // tracked (same step the single-upload flow performs).
       batchManagerRef.current.onUploadSuccess(async (item) => {
         if (!item.videoId) return;
-        forgetUpload(item.file, channelIdRef.current);
+        // Kept (not forgotten): picking this file again shows "already
+        // uploaded" instead of creating a duplicate video
+        rememberUpload(item.file, channelIdRef.current, item.videoId);
         // The TUS transfer is done but the item is not finished until complete answers
         const release = holdReload();
         try {
           const result = await completeVideoUpload(item.videoId, channelIdRef.current, item.file.size);
           if (!result.success) {
-            logger.error('[useBatchUpload] Complete upload failed', { videoId: item.videoId, error: result.error });
-            onErrorRef.current?.(result.error || uploadFailedMessageRef.current);
+            // The bytes are at Bunny and the TUS proxy already moved the video
+            // to processing (queued, with the processing-check loop behind it):
+            // this call is only a backstop, so the user is not shown an error
+            reportUploadError('[useBatchUpload] Complete upload failed', { videoId: item.videoId, error: result.error });
             return;
           }
           logger.info('[useBatchUpload] Upload completed', { videoId: item.videoId });
           onUploadCompleteRef.current?.(item.videoId);
         } catch (error) {
-          logger.error('[useBatchUpload] Complete upload threw', { videoId: item.videoId, error });
-          onErrorRef.current?.(error instanceof Error ? error.message : uploadFailedMessageRef.current);
+          if (recoverFromVersionSkew(error, 'batch-complete')) return;
+          reportUploadError('[useBatchUpload] Complete upload threw', { videoId: item.videoId, error });
         } finally {
           release();
         }
@@ -122,26 +131,51 @@ export function useBatchUpload({
   const addFiles = useCallback(async (selectedFiles: File[]) => {
     if (!batchManagerRef.current || !optimizerRef.current) return;
 
+    const manager = batchManagerRef.current;
+    const syncFiles = () => setFiles(Array.from(manager.getQueueState().values()));
+
+    // Finished rows (completed, cancelled) stay visible but never block a new
+    // selection: files already uploaded here are marked "already uploaded",
+    // files already queued are skipped, and only unfinished rows count
+    // towards the 15-file limit.
+    const queue = Array.from(manager.getQueueState().values());
+    const plan = planBatchSelection(selectedFiles, queue);
+    for (const rowId of plan.alreadyUploadedRowIds) manager.markAlreadyUploaded(rowId);
+    const slots = remainingSlots(queue);
+    if (plan.toAdd.length > slots) {
+      syncFiles();
+      onError?.(
+        t.batch.errors.queueFull
+          .replace('{max}', String(MAX_BATCH_FILES))
+          .replace('{left}', String(slots))
+      );
+      return;
+    }
+    if (plan.toAdd.length === 0) {
+      syncFiles();
+      return;
+    }
+    const toAdd = plan.toAdd;
+
     setIsInitiating(true);
 
     try {
-      // Check device capability
-      const canHandle = optimizerRef.current.canHandleBatchUpload(selectedFiles.length);
+      // Check device capability (for the new files only)
+      const canHandle = optimizerRef.current.canHandleBatchUpload(toAdd.length);
       if (!canHandle) {
         const recommendedBatchSize = optimizerRef.current.getRecommendedBatchSize();
         onError?.(
           t.batch.errors.deviceLimit
-            .replace('{count}', String(selectedFiles.length))
+            .replace('{count}', String(toAdd.length))
             .replace('{recommended}', String(recommendedBatchSize))
         );
-        setIsInitiating(false);
         return;
       }
 
       // Browser uploads go straight to the API TUS proxy with the user's token
       const authHeaders = await getClientAuthHeaders();
       if (!authHeaders['Authorization']) {
-        throw new Error(t.errors.unauthorized);
+        throw new FriendlyUploadError(t.errors.unauthorized);
       }
       const apiUrl = getApiUrl();
       const endpoint = getTusProxyEndpoint(apiUrl);
@@ -151,7 +185,7 @@ export function useBatchUpload({
       // Bunny upload, at its offset) instead of becoming a new video.
       const resumedEntries: BatchUploadEntry[] = [];
       const freshFiles: File[] = [];
-      for (const file of selectedFiles) {
+      for (const file of toAdd) {
         const remembered = findRememberedUpload(file, channelId);
         if (!remembered) {
           freshFiles.push(file);
@@ -182,9 +216,10 @@ export function useBatchUpload({
           continue;
         }
         if (result?.kind === 'completed') {
-          forgetUpload(file, channelId);
+          // Uploaded before (an earlier visit): a finished "already uploaded"
+          // row with a link to the video, never a second video
           logger.info('[useBatchUpload] File was already uploaded', { videoId: remembered.videoId });
-          onUploadCompleteRef.current?.(remembered.videoId);
+          manager.addAlreadyUploaded(file, remembered.videoId, sharedMetadata);
           continue;
         }
         // The video is gone (deleted) or could not be checked: a new upload
@@ -213,7 +248,7 @@ export function useBatchUpload({
         );
 
         if (!initiateResult.success || !initiateResult.result) {
-          throw new Error(initiateResult.error || t.batch.errors.initiateFailed);
+          throw new Error(initiateResult.error || 'batch initiate failed');
         }
 
         freshEntries = buildBatchUploadEntries({
@@ -228,15 +263,20 @@ export function useBatchUpload({
 
       const entries = [...resumedEntries, ...freshEntries];
 
-      // Add videos to batch manager
-      await batchManagerRef.current.addVideos(entries, sharedMetadata);
-
-      // Update local state
-      const queueState = batchManagerRef.current.getQueueState();
-      setFiles(Array.from(queueState.values()));
+      // Add videos to batch manager (may be none: all already uploaded)
+      await manager.addVideos(entries, sharedMetadata);
+      syncFiles();
     } catch (error) {
-      logger.error('[useBatchUpload] Failed to add files', { error });
-      onError?.(error instanceof Error ? error.message : t.batch.errors.initiateFailed);
+      syncFiles();
+      // A deploy while the page was open: the version-skew notice reloads once
+      // uploads are idle (picked files resume from the remembered uploads)
+      if (recoverFromVersionSkew(error, 'batch-add')) return;
+      if (error instanceof FriendlyUploadError) {
+        onError?.(error.message);
+        return;
+      }
+      reportUploadError('[useBatchUpload] Failed to add files', { channelId, count: toAdd.length, error });
+      onError?.(t.batch.errors.initiateFailed);
     } finally {
       setIsInitiating(false);
     }
@@ -271,8 +311,9 @@ export function useBatchUpload({
         setIsUploading(false);
       }
     } catch (error) {
-      logger.error('Failed to start uploads:', error);
-      onError?.(error instanceof Error ? error.message : 'Failed to start uploads');
+      if (recoverFromVersionSkew(error, 'batch-start')) return;
+      reportUploadError('[useBatchUpload] Failed to start uploads', { error });
+      onError?.(uploadFailedMessageRef.current);
     }
   }, [onError]);
 
@@ -326,8 +367,8 @@ export function useBatchUpload({
     try {
       await batchManagerRef.current.retryUpload(fileId);
     } catch (error) {
-      logger.error('Failed to retry upload:', error);
-      onError?.(error instanceof Error ? error.message : 'Failed to retry upload');
+      reportUploadError('[useBatchUpload] Failed to retry upload', { fileId, error });
+      onError?.(uploadFailedMessageRef.current);
     }
   }, [onError]);
 
@@ -370,6 +411,17 @@ export function useBatchUpload({
   }, []);
 
   /**
+   * Remove completed and cancelled rows ("Clear finished")
+   */
+  const clearFinished = useCallback(() => {
+    if (!batchManagerRef.current) return;
+    batchManagerRef.current.clearFinished();
+    const items = Array.from(batchManagerRef.current.getQueueState().values());
+    setFiles(items);
+    if (items.length === 0) setOverallProgress(0);
+  }, []);
+
+  /**
    * Clear the entire queue
    */
   const clearQueue = useCallback(() => {
@@ -397,5 +449,6 @@ export function useBatchUpload({
     resumeAll,
     cancelAll,
     clearQueue,
+    clearFinished,
   };
 }

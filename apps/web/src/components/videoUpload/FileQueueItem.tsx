@@ -13,6 +13,7 @@ import {
   Clock,
   Loader2
 } from 'lucide-react';
+import Link from 'next/link';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useUploadResult } from '@/lib/notifications/upload-results';
 
@@ -33,7 +34,7 @@ export function FileQueueItem({
   onCancel,
   onRetry,
 }: FileQueueItemProps) {
-  const { t, isRTL: _isRTL } = useLanguage();
+  const { t, lang } = useLanguage();
   // Processing result pushed in real time; shown here instead of a toast (NotificationCenter)
   const processed = useUploadResult(file.status === 'completed' ? file.videoId : null);
 
@@ -202,11 +203,28 @@ export function FileQueueItem({
             </div>
           )}
 
-          {/* Error Message */}
-          {file.status === 'failed' && file.error && (
-            <div className="flex items-start gap-1.5 text-xs text-red-600 dark:text-red-400 mb-2">
+          {/* Picked again after it was uploaded: nothing re-sent, link to the video */}
+          {file.status === 'completed' && file.alreadyUploaded && (
+            <div data-testid="batch-file-already-uploaded" role="status" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--fanous-color-success-text)] mb-2">
+              <CheckCircle size={14} className="flex-shrink-0" />
+              <span>{t.batch.alreadyUploaded}</span>
+              {file.videoId && (
+                <Link
+                  href={`/${lang}/video/${file.videoId}`}
+                  data-testid="batch-file-view-video"
+                  className="underline font-medium"
+                >
+                  {t.batch.viewVideo}
+                </Link>
+              )}
+            </div>
+          )}
+
+          {/* Error Message: always a friendly line; the raw error goes to the logs only */}
+          {file.status === 'failed' && (
+            <div data-testid="batch-file-error" className="flex items-start gap-1.5 text-xs text-red-600 dark:text-red-400 mb-2">
               <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
-              <span>{file.error}</span>
+              <span>{t.batch.errors.uploadFailedRetry}</span>
             </div>
           )}
 

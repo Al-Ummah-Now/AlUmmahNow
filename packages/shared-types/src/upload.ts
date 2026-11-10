@@ -36,6 +36,7 @@ export interface UploadQueueItem {
   bytesUploaded: number;          // Bytes uploaded
   bytesTotal: number;             // Total file size
   reconnecting?: boolean;         // Retrying after a transient failure (progress kept)
+  alreadyUploaded?: boolean;      // Picked again after it was uploaded: shown as "already uploaded", nothing re-sent
 }
 
 /**

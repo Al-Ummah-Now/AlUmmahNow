@@ -11,6 +11,7 @@ import { UploadModeTabs, UPLOAD_MODE_PANEL_ID, UPLOAD_MODE_TAB_ID, type UploadMo
 import { VIDEO_UPLOAD_CONFIG } from "@/lib/constants/uploadConfig";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useBatchUpload } from "@/hooks/useBatchUpload";
+import { MAX_BATCH_FILES, isFinishedRow } from "@/lib/upload/batch-selection";
 import { useActiveChannel } from "@/contexts/ActiveChannelContext";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { useMultiAccount } from "@/hooks/useMultiAccount";
@@ -55,6 +56,7 @@ const UploadPage: React.FC = () => {
     resumeAll,
     cancelAll,
     clearQueue,
+    clearFinished,
   } = useBatchUpload({
     channelId: uploadChannelId,
     onUploadComplete: (videoId) => {
@@ -108,11 +110,17 @@ const UploadPage: React.FC = () => {
 
   const handleBatchFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(e.target.files || []);
+    // Reset now, so picking the same files again (after an error, or to see
+    // that they are already uploaded) still fires a change event
+    e.target.value = '';
     if (selectedFiles.length === 0) return;
+    // A new pick replaces the message of the previous one
+    setUploadError(null);
 
-    // Validate file count
+    // Validate file count (one selection; the hook also keeps the unfinished
+    // queue within the limit, finished rows never count)
     const MIN_FILES = 1;
-    const MAX_FILES = 15;
+    const MAX_FILES = MAX_BATCH_FILES;
 
     if (selectedFiles.length < MIN_FILES) {
       setUploadError(t.batch.errors.tooFewFiles);
@@ -141,11 +149,6 @@ const UploadPage: React.FC = () => {
 
     // Add files to queue
     await addFiles(selectedFiles);
-
-    // Reset input
-    if (e.target) {
-      e.target.value = '';
-    }
   }, [addFiles, t]);
 
   // Signed-out visitors get a sign-in prompt instead of the channel error
@@ -445,7 +448,7 @@ const UploadPage: React.FC = () => {
                   type="button"
                   data-testid="batch-start"
                   onClick={startUpload}
-                  disabled={isInitiating || files.every(f => f.status === 'completed' || f.status === 'cancelled')}
+                  disabled={isInitiating || !files.some(f => f.status === 'pending')}
                   className="
                     flex-1
                     bg-blue-600 text-white
@@ -479,6 +482,17 @@ const UploadPage: React.FC = () => {
                 >
                   {t.batch.addVideos}
                 </button>
+                {files.some(isFinishedRow) && (
+                  <button
+                    type="button"
+                    data-testid="batch-clear-finished"
+                    onClick={clearFinished}
+                    disabled={isInitiating}
+                    className="flex-1 bg-background text-foreground border border-border px-4 py-3 rounded-md hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-ring font-medium text-sm md:text-base"
+                  >
+                    {t.batch.clearFinished}
+                  </button>
+                )}
               </div>
             )}
           </>
