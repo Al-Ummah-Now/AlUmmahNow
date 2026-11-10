@@ -27,3 +27,5 @@ E2E Temp *
 !e2e-sample-40s.mp4
 # 4s VP8 WebM (no audio) for browsers without H.264 (Playwright Chromium) in frame-extraction tests
 !e2e-sample.webm
+# 4s 360x640 (9:16) VP8 WebM with a centred circle: thumbnails must keep the vertical aspect
+!e2e-sample-vertical-9x16.webm

@@ -54,10 +54,11 @@ export async function validateThumbnailFile(file: File): Promise<ThumbnailValida
   try {
     const dimensions = await getImageDimensions(file);
 
-    if (dimensions.width < MIN_WIDTH || dimensions.height < MIN_HEIGHT) {
+    // Orientation-independent: a vertical (9:16) thumbnail for a vertical video is fine
+    if (Math.max(dimensions.width, dimensions.height) < MIN_WIDTH || Math.min(dimensions.width, dimensions.height) < MIN_HEIGHT) {
       return {
         valid: false,
-        error: `Image dimensions too small. Minimum: ${MIN_WIDTH}x${MIN_HEIGHT}px`
+        error: `Image dimensions too small. Minimum: ${MIN_WIDTH}x${MIN_HEIGHT}px (or ${MIN_HEIGHT}x${MIN_WIDTH}px)`
       };
     }
 
@@ -70,8 +71,9 @@ export async function validateThumbnailFile(file: File): Promise<ThumbnailValida
     const aspectRatio = dimensions.width / dimensions.height;
     const recommendedRatio = RECOMMENDED_WIDTH / RECOMMENDED_HEIGHT;
 
+    // A thumbnail should match its video's shape; 16:9 is only the common case
     if (Math.abs(aspectRatio - recommendedRatio) > 0.1) {
-      warnings.push('Image aspect ratio differs from recommended 16:9');
+      warnings.push('Image aspect ratio differs from 16:9; it should match the video');
     }
   } catch (_error) {
     warnings.push('Unable to verify image dimensions');

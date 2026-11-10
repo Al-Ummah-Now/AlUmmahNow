@@ -779,7 +779,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     orUploadCustomThumbnail: 'أو ارفع صورة مصغرة مخصصة',
     thumbnailClickOrDrag: 'انقر للرفع أو اسحب الصورة وأفلتها',
     thumbnailDropHere: 'أفلت الصورة هنا',
-    thumbnailFormats: 'PNG أو JPEG أو WebP • الحد الأقصى 2 ميغابايت • المقاس الموصى به: 1280×720 بكسل',
+    thumbnailFormats: 'PNG أو JPEG أو WebP • الحد الأقصى 2 ميغابايت • بنفس شكل الفيديو (1280×720 للأفقي 16:9، و720×1280 للعمودي)',
     selectedThumbnail: 'الصورة المصغرة المختارة',
     thumbnailSelectedBadge: 'مختارة',
     clearThumbnailSelection: 'مسح الاختيار',

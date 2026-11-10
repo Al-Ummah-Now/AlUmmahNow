@@ -135,6 +135,17 @@ export const Video = z.object({
     }).optional(),
     isDeleted: z.boolean().optional(),
     deletedAt: z.string().optional(),
+    // Last thumbnail aspect check (lib/thumbnail/repair.ts); internal.
+    thumbnailCheck: z.object({
+        runId: z.string(),
+        at: z.string(),
+        dryRun: z.boolean(),
+        outcome: z.enum(['ok', 'replaced', 'would_replace', 'flagged', 'skipped', 'error']),
+        reason: z.string().optional(),
+        thumbnail: z.object({ width: z.number(), height: z.number() }).optional(),
+        video: z.object({ width: z.number(), height: z.number() }).optional(),
+        previousThumbnailUrl: z.string().optional(),
+    }).optional(),
     tags: z.array(z.string()).default([]),
     category: z.nativeEnum(VideoCategory).optional(),
     // Who set the category: the uploader, the AI (a reviewable suggestion) or an admin

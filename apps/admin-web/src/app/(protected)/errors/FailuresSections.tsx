@@ -72,6 +72,7 @@ export function hasFailures(f: Failures): boolean {
     f.data?.videos.length ||
     f.data?.deadLetters.length ||
     f.data?.erasureDeadLetters?.length ||
+    f.data?.thumbnailRuns?.length ||
     f.formatFlagged?.items.length ||
     f.contactFailed?.messages.length ||
     f.failedJobs?.length
@@ -84,7 +85,8 @@ export function hasFailures(f: Failures): boolean {
  * dead-lettered after their retries (each links to Processing health, where
  * it can be synced, retried or marked failed), and Contact us emails that
  * failed after the mail queue's retries (each links to the message, where it
- * can be retried), account erasure steps that dead-lettered, and admin jobs
+ * can be retried), account erasure steps that dead-lettered, thumbnail repair
+ * runs that failed after their retries, and admin jobs
  * (heavy content actions) that failed after their retries, with Retry.
  */
 export function FailuresSections({ failures, t, locale }: { failures: Failures; t: Awaited<ReturnType<typeof getI18n>>['t']; locale: Awaited<ReturnType<typeof getI18n>>['locale'] }) {
@@ -203,6 +205,45 @@ export function FailuresSections({ failures, t, locale }: { failures: Failures; 
                       <td className={tdClass}>{t(d.step === 'ContactDataErase' ? 'errorsPage.stepContact' : 'errorsPage.stepAccount')}</td>
                       <td className={`${tdClass} break-words`}>{d.failureReason || t('errorsPage.noReason')}</td>
                       <td className={tdClass}>{d.attempts}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+
+      {data && (
+        <section aria-labelledby="errors-thumbs">
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+            <h2 id="errors-thumbs" className="text-xl font-semibold text-fg">{t('errorsPage.thumbRunsTitle')}</h2>
+            <Link href="/processing" className={linkClass}>{t('errorsPage.openThumbnails')}</Link>
+          </div>
+          {(data.thumbnailRuns ?? []).length === 0 ? (
+            <div className={`${cardClass} text-center text-fg-muted`} data-testid="errors-thumbs-empty">{t('errorsPage.thumbRunsEmpty')}</div>
+          ) : (
+            <div className="bg-surface border border-border rounded-lg overflow-x-auto">
+              <table className="w-full" data-testid="errors-thumbs">
+                <caption className="sr-only">{t('errorsPage.thumbRunsCaption')}</caption>
+                <thead className="border-b border-border">
+                  <tr>
+                    <th className={thClass} scope="col">{t('errorsPage.colWhen')}</th>
+                    <th className={thClass} scope="col">{t('errorsPage.colRun')}</th>
+                    <th className={thClass} scope="col">{t('errorsPage.colReason')}</th>
+                    <th className={thClass} scope="col">{t('errorsPage.colAttempts')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(data.thumbnailRuns ?? []).map((r) => (
+                    <tr key={r.id} className="border-b border-border last:border-0" data-run-id={r.id}>
+                      <td className={tdClass}>{formatDate(r.finishedAt || r.updatedAt, locale, true)}</td>
+                      <td className={tdClass}>
+                        <div className="text-fg">{t(r.params.dryRun === false ? 'processing.thumbsModeFix' : 'processing.thumbsModeCheck')}</div>
+                        <div className="text-fg-muted text-xs" dir="ltr">{r.id}</div>
+                      </td>
+                      <td className={tdClass}>{r.lastError || t('errorsPage.noReason')}</td>
+                      <td className={tdClass}>{r.attempts}</td>
                     </tr>
                   ))}
                 </tbody>

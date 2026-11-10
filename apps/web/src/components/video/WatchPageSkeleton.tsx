@@ -13,7 +13,8 @@ const BLOCK = 'wsk-b animate-pulse rounded bg-muted';
 export function WatchDetailsSkeleton({ hint }: { hint?: WatchHint }) {
   return (
     <div role="status" aria-busy="true" className="flex flex-col w-full mt-0 items-center">
-      <div className="wsk-player w-full aspect-video rounded-lg bg-muted bg-cover bg-center" style={hint?.poster ? { backgroundImage: `url("${hint.poster}")` } : undefined} />
+      {/* contain, not cover: a vertical or square poster is letterboxed like the player shows it, not cropped */}
+      <div className="wsk-player w-full aspect-video rounded-lg bg-muted bg-contain bg-center bg-no-repeat" style={hint?.poster ? { backgroundImage: `url("${hint.poster}")` } : undefined} />
       <div className="wsk-details watch-details">
         {hint?.title
           ? <p className="wsk-title watch-title">{hint.title}</p>

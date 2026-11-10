@@ -6,7 +6,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import Image from 'next/image';
+import { FitImage } from '@/components/VideoThumbnail/FitImage';
 import { formatScheduledTime } from '@/utils/dateFormatters';
 import { Clock, Play, AlertCircle, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import type { ScheduledPublishStatus } from '@al-ummah/shared-types';
@@ -216,11 +216,9 @@ export function CalendarEvent({
       {/* Thumbnail */}
       {thumbnailUrl && !imageError ? (
         <div className="relative w-full h-36 overflow-hidden">
-          <Image
+          <FitImage
             src={thumbnailUrl}
             alt={title}
-            fill
-            className="object-cover"
             onError={() => setImageError(true)}
             sizes="280px"
           />

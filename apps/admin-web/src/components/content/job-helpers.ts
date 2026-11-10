@@ -22,9 +22,12 @@ export function canRetryJob(job: Pick<AdminJob, 'kind'>, permissions: readonly A
   return needed.every((p) => permissions.includes(p));
 }
 
-export function jobTargetHref(job: Pick<AdminJob, 'kind' | 'targetKind' | 'targetId'>): string {
+/** Where a job's target lives. Jobs spanning many targets open their own page. */
+export function jobTargetHref(job: Pick<AdminJob, 'targetKind' | 'targetId'> & Partial<Pick<AdminJob, 'kind'>>): string {
   // The legacy profile restore covers many profiles: it lives on its own page
   if (job.kind === 'profiles.restore-legacy') return '/legacy-profiles';
+  // The thumbnail shape check spans many videos: it opens Processing health
+  if (job.kind === 'videos.repair-thumbnails') return '/processing';
   const base = job.targetKind === 'channel' ? '/channels' : job.targetKind === 'video' ? '/videos' : '/users';
   return `${base}/${encodeURIComponent(job.targetId)}`;
 }

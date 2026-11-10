@@ -4,6 +4,7 @@
  */
 
 import BunnyStorageClient from '../bunny/storage';
+import { THUMBNAIL_SIZES, sizeQuery, thumbnailSizeUrls } from './processor';
 
 export interface ThumbnailStorageResult {
   url: string;
@@ -40,13 +41,8 @@ export class ThumbnailStorage {
     // Generate CDN URL
     const baseUrl = `${cdnBaseUrl}/${key}`;
 
-    // Generate URLs for different sizes using Bunny.net Image Optimizer
-    const thumbnailSizes: Record<string, string> = {
-      hd: `${baseUrl}?width=1280&height=720&quality=90&aspect_ratio=16:9`,
-      sd: `${baseUrl}?width=640&height=360&quality=85&aspect_ratio=16:9`,
-      mobile: `${baseUrl}?width=320&height=180&quality=80&aspect_ratio=16:9`,
-      thumb: `${baseUrl}?width=120&height=90&quality=75&aspect_ratio=16:9`,
-    };
+    // Size variants by width only: the image keeps its own aspect ratio
+    const thumbnailSizes = thumbnailSizeUrls(baseUrl);
 
     return {
       url: baseUrl,
@@ -83,13 +79,8 @@ export class ThumbnailStorage {
     // Generate CDN URL
     const baseUrl = `${cdnBaseUrl}/${path}`;
 
-    // Generate URLs for different sizes using Bunny.net Image Optimizer
-    const thumbnailSizes: Record<string, string> = {
-      hd: `${baseUrl}?width=1280&height=720&quality=90&aspect_ratio=16:9`,
-      sd: `${baseUrl}?width=640&height=360&quality=85&aspect_ratio=16:9`,
-      mobile: `${baseUrl}?width=320&height=180&quality=80&aspect_ratio=16:9`,
-      thumb: `${baseUrl}?width=120&height=90&quality=75&aspect_ratio=16:9`,
-    };
+    // Size variants by width only: the image keeps its own aspect ratio
+    const thumbnailSizes = thumbnailSizeUrls(baseUrl);
 
     return {
       url: baseUrl,
@@ -126,14 +117,8 @@ export class ThumbnailStorage {
     const key = `thumbnails/${videoId}/original.jpg`;
     const baseUrl = `${cdnBaseUrl}/${key}`;
 
-    const sizes = {
-      hd: `?width=1280&height=720&quality=90&aspect_ratio=16:9`,
-      sd: `?width=640&height=360&quality=85&aspect_ratio=16:9`,
-      mobile: `?width=320&height=180&quality=80&aspect_ratio=16:9`,
-      thumb: `?width=120&height=90&quality=75&aspect_ratio=16:9`,
-    };
-
-    return `${baseUrl}${sizes[size]}`;
+    const spec = THUMBNAIL_SIZES.find((s) => s.name === size) ?? THUMBNAIL_SIZES[0];
+    return `${baseUrl}${sizeQuery(spec)}`;
   }
 
   /**
@@ -143,14 +128,8 @@ export class ThumbnailStorage {
     const path = `thumbnails/${videoId}/custom.jpg`;
     const baseUrl = `${cdnBaseUrl}/${path}`;
 
-    const sizes = {
-      hd: `?width=1280&height=720&quality=90&aspect_ratio=16:9`,
-      sd: `?width=640&height=360&quality=85&aspect_ratio=16:9`,
-      mobile: `?width=320&height=180&quality=80&aspect_ratio=16:9`,
-      thumb: `?width=120&height=90&quality=75&aspect_ratio=16:9`,
-    };
-
-    return `${baseUrl}${sizes[size]}`;
+    const spec = THUMBNAIL_SIZES.find((s) => s.name === size) ?? THUMBNAIL_SIZES[0];
+    return `${baseUrl}${sizeQuery(spec)}`;
   }
 }
 

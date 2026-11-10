@@ -21,6 +21,7 @@ import type {
   ContactStatus,
   ProcessingErrorsResponse,
   ProcessingVideosResponse,
+  ThumbnailRun,
   SyncResponse,
   ContactMailKind,
   ReaperMode,
@@ -448,4 +449,19 @@ export async function retryNeedsAction(id: string): Promise<ActionResult<{ outco
 
 export async function dismissNeedsAction(id: string): Promise<ActionResult<{ action: NeedsActionItem }>> {
   return mutate(`/api/errors/actions/${encodeURIComponent(id)}`, 'PATCH', { status: 'dismissed' });
+}
+
+// Thumbnail aspect repair (admin job in api-videos; dry run first)
+
+export async function listThumbnailRuns(): Promise<{ runs: ThumbnailRun[] }> {
+  return fetchAdmin<{ runs: ThumbnailRun[] }>('/api/processing/thumbnails');
+}
+
+/** Queues a check over every video (or `ids`); dryRun only reports, apply replaces wrong-shape auto frames. */
+export async function startThumbnailRepair(dryRun: boolean, ids?: string[]): Promise<ActionResult<{ job: ThumbnailRun }>> {
+  return mutate('/api/processing/thumbnails', 'POST', { dryRun, ...(ids?.length ? { ids } : {}) });
+}
+
+export async function retryThumbnailRun(id: string): Promise<ActionResult<{ job: ThumbnailRun }>> {
+  return mutate(`/api/processing/thumbnails/${encodeURIComponent(id)}/retry`, 'POST', {});
 }

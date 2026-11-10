@@ -6,6 +6,7 @@ import { Upload, CheckCircle, AlertCircle } from 'lucide-react';
 import { extractVideoFrames } from '@/lib/utils/videoFrameExtractor';
 import { validateThumbnailFile, fileToBase64 } from '@/lib/utils/thumbnailValidator';
 import { useLanguage } from '@/hooks/useLanguage';
+import { FitImage } from '@/components/VideoThumbnail/FitImage';
 
 export interface ThumbnailData {
   type: 'auto' | 'custom';
@@ -264,12 +265,13 @@ export function ThumbnailUploadSection({
           <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
             {t.upload.selectedThumbnail}
           </h4>
-          <div className="relative rounded-lg overflow-hidden border-2 border-blue-500 dark:border-blue-400">
+          {/* The image at its own shape (a vertical frame stays vertical), capped in height, never stretched */}
+          <div className="relative flex justify-center rounded-lg overflow-hidden border-2 border-blue-500 dark:border-blue-400">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={selectedThumbnail.preview}
               alt={t.upload.selectedThumbnail}
-              className="w-full h-auto"
+              className="block h-auto w-auto max-w-full max-h-[28rem] object-contain"
             />
             <div className="absolute top-2 end-2 bg-blue-600 text-white px-2 py-1 rounded-md flex items-center text-xs">
               <CheckCircle size={12} className="me-1" />
@@ -322,8 +324,8 @@ function ThumbnailOption({ src, selected, onClick, disabled, label, ariaLabel }:
           : 'border-gray-300 dark:border-gray-600 hover:border-blue-300 dark:hover:border-blue-500'
       } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={src} alt="" className="w-full h-full object-cover" />
+      {/* Vertical/square frames are shown whole (letterboxed), never cropped or stretched */}
+      <FitImage src={src} alt="" sizes="200px" />
       {selected && (
         <div className="absolute inset-0 bg-blue-500 bg-opacity-20 flex items-center justify-center">
           <CheckCircle size={24} className="text-blue-600 dark:text-blue-300" />

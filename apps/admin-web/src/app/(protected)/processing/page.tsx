@@ -1,6 +1,6 @@
 import Link from 'next/link';
-import { listProcessingVideos } from '@/lib/api/admin';
-import type { ProcessingVideosResponse } from '@/lib/api/types';
+import { listProcessingVideos, listThumbnailRuns } from '@/lib/api/admin';
+import type { ProcessingVideosResponse, ThumbnailRun } from '@/lib/api/types';
 import { getAdminSession } from '@/lib/auth';
 import { canUseProcessing } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
@@ -9,6 +9,7 @@ import { ErrorAlert, cardClass, fieldClass, linkClass, secondaryButtonClass } fr
 import { logger } from '@/lib/logger';
 import { FILTER_LABEL, PROCESSING_FILTERS, parseFilter } from './labels';
 import { ProcessingTable } from './ProcessingTable';
+import { ThumbnailRepairPanel } from './ThumbnailRepairPanel';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +17,7 @@ interface PageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-/** Upload processing health: stuck uploads next to Bunny's state, with Sync / Retry / Mark failed. */
+/** Upload processing health: stuck uploads next to Bunny's state, with Sync / Retry / Mark failed, and the thumbnail shape check. */
 export default async function ProcessingHealthPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const filter = parseFilter(params.status);
@@ -26,11 +27,14 @@ export default async function ProcessingHealthPage({ searchParams }: PageProps) 
     return <ErrorAlert testId="processing-no-access">{t('processing.noAccess')}</ErrorAlert>;
   }
 
-  let data: ProcessingVideosResponse | null = null;
-  try {
-    data = await listProcessingVideos({ status: filter });
-  } catch (e) {
-    logger.error('[processing] Failed to load', { error: e instanceof Error ? e.message : String(e) });
+  const [videos, thumbs] = await Promise.allSettled([listProcessingVideos({ status: filter }), listThumbnailRuns()]);
+  const data: ProcessingVideosResponse | null = videos.status === 'fulfilled' ? videos.value : null;
+  if (videos.status === 'rejected') {
+    logger.error('[processing] Failed to load', { error: videos.reason instanceof Error ? videos.reason.message : String(videos.reason) });
+  }
+  const thumbnailRuns: ThumbnailRun[] | null = thumbs.status === 'fulfilled' ? thumbs.value.runs : null;
+  if (thumbs.status === 'rejected') {
+    logger.error('[processing] Failed to load thumbnail runs', { error: thumbs.reason instanceof Error ? thumbs.reason.message : String(thumbs.reason) });
   }
   const r = data?.reconciler;
 
@@ -56,6 +60,8 @@ export default async function ProcessingHealthPage({ searchParams }: PageProps) 
           <p className="text-fg-muted text-sm">{t('processing.reconcilerNever')}</p>
         )}
       </section>
+
+      <ThumbnailRepairPanel runs={thumbnailRuns} locale={locale} />
 
       <form method="get" className="mb-6 flex flex-wrap items-end gap-2" data-testid="processing-filter">
         <label className="flex flex-col gap-1 text-sm text-fg-muted">

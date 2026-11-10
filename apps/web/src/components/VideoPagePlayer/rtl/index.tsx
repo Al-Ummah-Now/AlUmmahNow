@@ -58,6 +58,7 @@ const VideoPlayerRTL: React.FC<WatchPlayerProps> = ({ options, startTime, onPlay
             userId={user?.id}
             sources={videoSources}
             poster={posterUrl}
+            initialPortrait={(options.height ?? 0) > (options.width ?? 0)}
             controls={true}
             autoplay={false}
             enableAnalytics={true}

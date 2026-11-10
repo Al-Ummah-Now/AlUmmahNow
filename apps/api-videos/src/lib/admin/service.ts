@@ -38,6 +38,7 @@ import { readAssignment } from '../creatorTiers';
 import { bansFor, deleteBan, readBan, writeBan } from './bans';
 import { createJob, type JobHandler, type JobOutcome, type JobQueue } from './jobs';
 import { approvedFromPlan, planLegacyRestore, runLegacyRestore, type ApprovedRestore, type AuthUsersDb } from './legacy-restore';
+import { runThumbnailRepairStep, type ThumbnailRepairEnv } from '../thumbnail/repair';
 import {
 	channelVideoStats,
 	contentIds,
@@ -1014,4 +1015,6 @@ export const ADMIN_JOB_HANDLERS: Record<AdminJobKind, JobHandler> = {
 	'user.sync-holds': (env, job) => syncUserHolds(env as AdminServiceEnv, job),
 	'user.delete-data': (env, job) => runUserDelete(env as AdminServiceEnv, job),
 	'profiles.restore-legacy': (env, job) => runLegacyRestore(env as AdminServiceEnv, job),
+	// Thumbnail aspect repair (lib/thumbnail/repair.ts), started from the admin Processing page
+	'videos.repair-thumbnails': (env, job) => runThumbnailRepairStep(env as ThumbnailRepairEnv, job) as unknown as Promise<JobOutcome>,
 };

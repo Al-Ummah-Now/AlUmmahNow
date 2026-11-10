@@ -219,7 +219,30 @@ export interface ProcessingErrorsResponse {
   deadLetters: ProcessingDeadLetter[];
   /** Absent from older api-videos builds */
   erasureDeadLetters?: ErasureDeadLetter[];
+  /** Thumbnail aspect repair runs that failed after their retries */
+  thumbnailRuns?: ThumbnailRun[];
   reconciler: ReconcilerStats | null;
+}
+/** Per-video result of the thumbnail aspect check (api-videos lib/thumbnail/repair.ts). */
+export type ThumbnailOutcome = 'ok' | 'replaced' | 'would_replace' | 'flagged' | 'skipped' | 'error';
+export interface ThumbnailRunResult {
+  dryRun: boolean;
+  checked: number;
+  counts: Partial<Record<ThumbnailOutcome, number>>;
+  items: { videoId: string; outcome: ThumbnailOutcome; reason?: string; previousThumbnailUrl?: string }[];
+}
+/** A thumbnail repair run: an admin job (queued, retried, failed runs land on Errors). */
+export interface ThumbnailRun {
+  id: string;
+  status: 'queued' | 'running' | 'retrying' | 'succeeded' | 'failed';
+  params: { dryRun?: boolean; ids?: string[] };
+  attempts: number;
+  lastError: string | null;
+  result: Partial<ThumbnailRunResult> | null;
+  actorId: string;
+  createdAt: string;
+  updatedAt: string;
+  finishedAt: string | null;
 }
 export interface SyncPreview {
   videoId: string;
