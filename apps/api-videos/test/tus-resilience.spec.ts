@@ -260,6 +260,18 @@ describe('TUS proxy resilience', () => {
 		assert.equal(completions(h), 1, 'processed once');
 	});
 
+	it('POST refuses a finished video (no content replacement with a long-lived session) and a deleted one', async () => {
+		for (const uploadStatus of ['processing', 'ready']) {
+			const h = harness();
+			h.videos.store.set('vid', JSON.stringify(videoFixture({ id: 'vid', userId: 'alice', uploadStatus })));
+			assert.equal((await h.post()).status, 409, uploadStatus);
+		}
+		const h = harness();
+		h.videos.store.delete('vid');
+		assert.equal((await h.post()).status, 404);
+		assert.equal(bunny.uploads, 0, 'Bunny never asked');
+	});
+
 	it('an upload id of another video or another user is refused', async () => {
 		const h = harness();
 		const id = await created(h);
