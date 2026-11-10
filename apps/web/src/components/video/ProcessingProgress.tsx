@@ -53,7 +53,7 @@ export function ProcessingProgress({
     <span
       data-testid="dashboard-video-progress"
       data-progress={progress}
-      className="inline-block px-2 py-1 rounded text-xs font-medium bg-amber-50 text-amber-900 dark:bg-amber-900/20 dark:text-amber-200"
+      className="inline-block px-2 py-1 rounded text-xs font-medium bg-muted text-muted-foreground"
     >
       {t.video.processingProgress.replace('{progress}', String(progress))}
     </span>

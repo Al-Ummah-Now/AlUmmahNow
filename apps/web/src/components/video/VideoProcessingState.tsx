@@ -69,7 +69,7 @@ export function VideoProcessingState({ video, isOwner, onReady }: Props) {
 
   return (
     <div
-      className="relative w-full aspect-video overflow-hidden rounded-xl bg-[var(--color-surface-2,#1f2937)]"
+      className="relative w-full aspect-video overflow-hidden rounded-xl border border-border bg-muted"
       data-testid="video-processing-state"
       data-status={video.uploadStatus ?? 'processing'}
       dir={isRTL ? 'rtl' : 'ltr'}
@@ -86,16 +86,16 @@ export function VideoProcessingState({ video, isOwner, onReady }: Props) {
           data-testid="video-processing-poster"
         />
       )}
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center text-white bg-black/50">
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center text-card-foreground bg-card/80">
         {failed ? (
-          <VideoOff className="h-12 w-12" aria-hidden="true" />
+          <VideoOff className="h-12 w-12 text-destructive" aria-hidden="true" />
         ) : (
-          <Loader2 className="h-12 w-12 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+          <Loader2 className="h-12 w-12 text-brand animate-spin motion-reduce:animate-none" aria-hidden="true" />
         )}
         <h2 className="text-xl font-semibold" role="status" aria-live="polite">
           {title}
         </h2>
-        <p className="max-w-md text-sm opacity-90">{description}</p>
+        <p className="max-w-md text-sm text-muted-foreground">{description}</p>
         {!failed && progress !== null && progress > 0 && progress < 100 && (
           <p className="text-sm font-medium" data-testid="video-processing-progress" data-progress={progress}>
             {t.video.processingProgress.replace('{progress}', String(progress))}
@@ -104,7 +104,7 @@ export function VideoProcessingState({ video, isOwner, onReady }: Props) {
         {failed && isOwner && (
           <Link
             href={`/${lang}/upload`}
-            className="mt-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            className="mt-2 rounded-full bg-brand px-4 py-2 text-sm font-semibold text-on-brand hover:bg-brand-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             data-testid="video-processing-reupload"
           >
             {t.video.processingReupload}
