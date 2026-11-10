@@ -28,6 +28,7 @@ import { isOwnershipComplete, readOwnershipDrift, reconcileOwnershipIndex, runOw
 import { OWNERSHIP_REBUILD_JOB, OWNERSHIP_REBUILD_TARGET, runOwnershipRebuildStep, startOwnershipRebuild } from '../src/lib/search/ownershipRebuild';
 import { handleAdminJobBatch, getJob, retryJob } from '../src/lib/admin/jobs';
 import { ADMIN_JOB_HANDLERS } from '../src/lib/admin/service';
+import { kickRepairJob } from '../src/lib/search/repairs';
 import { createProcessingInternalRouter } from '../src/endpoints/video/processingInternal';
 import { MemoryBucket } from './helpers';
 import { SqliteD1 } from './search-sqlite-d1';
@@ -163,20 +164,21 @@ describe('ownership pass keeps every stored object (2026-11-10 incident)', () =>
 	});
 });
 
-describe('a pass never marks a kind complete while listed objects were skipped', () => {
+describe('objects a pass cannot index are repaired one by one, never blocking the kind', () => {
 	function skippingEnv() {
 		const db = new SqliteD1();
 		const videos = new MemoryBucket({
 			ok1: appVideo('ok1', MAIN),
 			ok2: appVideo('ok2', MAIN),
-			// JSON under the key that is not this video: cannot be indexed
+			// JSON under the key that is not this video: not an entity, nothing to index
 			stray: { ...appVideo('ok1', MAIN) },
 		});
 		put(videos, appVideo('blocked', MAIN), Date.now() - 1000);
 		return { db, videos, env: { SEARCH_DB: db, videos } };
 	}
+	const repairs = (db: SqliteD1) => (db.db.prepare('SELECT entity, id, reason, status FROM index_repairs ORDER BY id').all() as Array<Record<string, unknown>>).map((r) => ({ ...r }));
 
-	it('counts unindexable and refused objects, drops the old marker and flags the drift', async () => {
+	it('queues a refused object for repair, keeps the kind complete and raises no drift', async () => {
 		const { db, env } = skippingEnv();
 		// An earlier pass's marker, and a delete (before the pass) newer than the stored copy of 'blocked'
 		db.db.prepare('INSERT INTO search_meta (key, value, updated_at) VALUES (?, ?, ?)').run(ownershipCompleteKey('video'), '1', 1);
@@ -184,41 +186,71 @@ describe('a pass never marks a kind complete while listed objects were skipped',
 
 		const pass = await runOwnershipPass(env as never, 'video');
 		assert.equal(pass.done, true);
-		assert.equal(pass.complete, false);
-		assert.equal(await isOwnershipComplete(db as never, 'video'), false, 'the earlier marker must not survive');
-		assert.ok(pass.drift);
-		assert.equal(pass.drift.stored, 4);
-		assert.equal(pass.drift.indexed, 2);
-		assert.equal(pass.drift.skipped, 2);
-		assert.equal(pass.drift.failed, 0);
-		assert.deepEqual(pass.drift.sampleIds, ['blocked', 'stray']);
-		const [flag] = await readOwnershipDrift(db as never);
-		assert.equal(flag.kind, 'video');
-		assert.equal(flag.skipped, 2);
+		assert.equal(pass.complete, true, 'one blocked object must not keep every reader on R2 scans');
+		assert.equal(pass.queuedRepairs, 1);
+		assert.equal(await isOwnershipComplete(db as never, 'video'), true);
+		assert.equal(pass.drift, null);
+		assert.deepEqual(await readOwnershipDrift(db as never), []);
+		assert.deepEqual(repairs(db), [{ entity: 'video', id: 'blocked', reason: 'pass-refused', status: 'pending' }]);
+
+		// The repair job: R2 holds the object, so it is written above the stale delete
+		const queue = new JobsQueue();
+		const jobs = { ...env, ADMIN_JOBS_QUEUE: queue };
+		await kickRepairJob(jobs as never);
+		await drain(jobs as never);
+		assert.ok(db.db.prepare(`SELECT 1 FROM content_ownership WHERE kind = 'video' AND id = 'blocked'`).get());
+		assert.deepEqual(repairs(db), []);
+		assert.equal(count(db, 'video'), 3);
 	});
 
-	it('counts unreadable objects and names them in the flag', async () => {
+	it('queues unreadable objects for repair and stays complete', async () => {
 		const db = new SqliteD1();
 		const videos = new MemoryBucket({ ok1: appVideo('ok1', MAIN), bad: appVideo('bad', MAIN) });
 		const get = videos.get.bind(videos);
-		videos.get = (async (key: string) => (key === 'bad' ? Promise.reject(new Error('R2 500')) : get(key))) as never;
+		let broken = true;
+		videos.get = (async (key: string) => (key === 'bad' && broken ? Promise.reject(new Error('R2 500')) : get(key))) as never;
 		const pass = await runOwnershipPass({ SEARCH_DB: db, videos } as never, 'video');
-		assert.equal(pass.complete, false);
-		assert.equal(pass.drift?.failed, 1);
-		assert.deepEqual(pass.drift?.sampleIds, ['bad']);
+		assert.equal(pass.complete, true);
+		assert.equal(pass.drift, null);
+		assert.deepEqual(repairs(db), [{ entity: 'video', id: 'bad', reason: 'pass-unreadable', status: 'pending' }]);
+		broken = false;
+		const queue = new JobsQueue();
+		const env = { SEARCH_DB: db, videos, ADMIN_JOBS_QUEUE: queue };
+		await kickRepairJob(env as never);
+		await drain(env as never);
+		assert.equal(count(db, 'video'), 2);
+		assert.deepEqual(repairs(db), []);
 	});
 
-	it('clears the flag and marks complete once every object is indexed', async () => {
-		const { db, videos, env } = skippingEnv();
-		await runOwnershipPass(env as never, 'video');
-		assert.equal((await readOwnershipDrift(db as never)).length, 1);
-		videos.store.delete('stray');
-		db.db.exec(`DELETE FROM search_tombstones WHERE id = 'blocked'`);
+	it('flags drift only for objects neither indexed nor queued, and a clean pass clears it', async () => {
+		const { db, env } = skippingEnv();
+		// A repair record that could not be written (D1 refused it): the pass is short and says so
+		const batch = db.batch.bind(db);
+		db.batch = (async (statements: any[]) => {
+			if (statements.some((st) => /index_repairs/.test(st.sql ?? ''))) throw new Error('D1 overloaded');
+			return batch(statements as never);
+		}) as never;
+		await db.batch([tombstoneStatement(db as never, ownershipTombstone('video'), 'blocked', Date.now() - 1) as never]);
+		await assert.rejects(runOwnershipPass(env as never, 'video'), /D1 overloaded/);
+		db.batch = batch as never;
+		// The next pass queues it and finds no drift
 		const pass = await runOwnershipPass(env as never, 'video');
 		assert.equal(pass.complete, true);
 		assert.equal(pass.drift, null);
+
+		// A drift flag from an earlier pass is cleared by a pass that accounts for every object
+		db.db.prepare('INSERT INTO search_meta (key, value, updated_at) VALUES (?, ?, ?)').run(ownershipDriftKey('video'), JSON.stringify({ kind: 'video', stored: 4, indexed: 2, skipped: 2, failed: 0, sampleIds: [], at: 'x' }), 1);
+		await runOwnershipPass(env as never, 'video');
 		assert.deepEqual(await readOwnershipDrift(db as never), []);
-		assert.equal(count(db, 'video'), 3);
+
+		// Rows really missing (a repair that failed for good is not on its way): drift
+		db.db.exec(`UPDATE index_repairs SET status = 'failed'`);
+		db.db.exec(`DELETE FROM content_ownership WHERE kind = 'video' AND id = 'blocked'`);
+		db.db.exec(`DELETE FROM index_repairs`);
+		const short = await runOwnershipPass({ ...env, videos: env.videos } as never, 'video');
+		// The pass queued 'blocked' again (refused by the tombstone): on its way, not drift
+		assert.equal(short.drift, null);
+		assert.equal(repairs(db).length, 1);
 	});
 
 	it('an object deleted while the pass runs is not drift', async () => {
@@ -270,17 +302,20 @@ async function drain(env: { ADMIN_JOBS_QUEUE: JobsQueue }, maxDeliveries = 50) {
 }
 
 describe('admin rebuild of the ownership index (Errors page flag + Retry)', () => {
-	it('the Errors response carries the drift flag; Rebuild queues one job that repairs the index', async () => {
+	it('the Errors response carries the drift flag and pending repairs; Rebuild queues one job that repairs the index', async () => {
 		const { db, env: base } = await productionBefore();
 		db.db.exec(`DELETE FROM content_ownership WHERE kind = 'video' AND channel_id = '${RESTORED}' AND upload_status IS NULL`);
-		// Inserting rows while marking them seen is what the fix does; a pass that cannot (tombstones) flags drift
+		// Inserting rows while marking them seen is what the fix does
 		const pass = await runOwnershipPass(base as never, 'video');
 		assert.equal(pass.complete, true, 'a fixed pass inserts the missing rows itself');
 
-		// Drift a pass cannot repair on its own (a stale delete blocks one video)
+		// A stale delete blocks one video: the pass queues it for repair (Errors page: pending)
 		db.db.exec(`DELETE FROM content_ownership WHERE kind = 'video' AND id = '${uuid(0)}'`);
 		await db.batch([tombstoneStatement(db as never, ownershipTombstone('video'), uuid(0), Date.now() - 1) as never]);
-		await runOwnershipPass(base as never, 'video');
+		const blocked = await runOwnershipPass(base as never, 'video');
+		assert.equal(blocked.complete, true);
+		// A drift flag a pass raised earlier (e.g. while repair records could not be written)
+		db.db.prepare('INSERT INTO search_meta (key, value, updated_at) VALUES (?, ?, ?)').run(ownershipDriftKey('video'), JSON.stringify({ kind: 'video', stored: 420, indexed: 419, skipped: 1, failed: 0, sampleIds: [uuid(0)], at: new Date().toISOString() }), Date.now());
 		const queue = new JobsQueue();
 		const env = { ...base, ADMIN_JOBS_QUEUE: queue, NOTIFICATIONS_DB: undefined };
 
@@ -288,13 +323,15 @@ describe('admin rebuild of the ownership index (Errors page flag + Retry)', () =
 		const errors = (await (await app.request('/errors', {}, env as never)).json()) as any;
 		assert.equal(errors.result.indexDrift.length, 1);
 		assert.equal(errors.result.indexDrift[0].kind, 'video');
-		assert.equal(errors.result.indexDrift[0].stored, 420);
-		assert.equal(errors.result.indexDrift[0].indexed, 419);
 		assert.deepEqual(errors.result.indexDrift[0].sampleIds, [uuid(0)]);
 		assert.equal(errors.result.indexDrift[0].rebuild, null);
+		assert.equal(errors.result.indexRepairs.pending, 1);
+		assert.deepEqual(errors.result.indexRepairs.failed, []);
 
 		const bad = await app.request('/index-rebuild', { method: 'POST', body: JSON.stringify({ kind: 'posts' }), headers: { 'content-type': 'application/json' } }, env as never);
 		assert.equal(bad.status, 400);
+		// Another pass holds the lease for good: the rebuild is retried, then failed (DLQ), listed for Retry
+		db.db.prepare('INSERT INTO search_meta (key, value, updated_at) VALUES (?, ?, ?)').run('ownership:heal:video', 'lease', Date.now() + 3600_000);
 		const res = await app.request('/index-rebuild', { method: 'POST', body: JSON.stringify({ kind: 'video', actorId: 'admin-1' }), headers: { 'content-type': 'application/json' } }, env as never);
 		assert.equal(res.status, 202);
 		const { job } = ((await res.json()) as any).result as { job: AdminJob };
@@ -306,25 +343,27 @@ describe('admin rebuild of the ownership index (Errors page flag + Retry)', () =
 		assert.equal(again.status, 200);
 		assert.equal(((await again.json()) as any).result.job.id, job.id);
 		assert.equal(queue.sent.length, 1);
-
-		// Still blocked: retried with backoff, then failed (DLQ) with the reason, listed for Retry
 		await drain(env);
 		const failed = await getJob(env as never, job.id);
 		assert.equal(failed?.status, 'failed');
-		assert.match(failed?.lastError ?? '', /still missing stored objects: 420 stored, 419 indexed, 1 skipped/);
-		assert.match(failed?.lastError ?? '', new RegExp(uuid(0)));
+		assert.match(failed?.lastError ?? '', /Another video index pass is running/);
 
-		// The cause is gone (the stale delete expired); Retry repairs the index and clears the flag
-		db.db.exec(`DELETE FROM search_tombstones WHERE id = '${uuid(0)}'`);
+		// The other pass is gone; Retry walks a fresh pass and clears the flag; the repair job fixes the blocked video
+		db.db.exec(`DELETE FROM search_meta WHERE key = 'ownership:heal:video'`);
 		await retryJob(env as never, job.id);
 		await drain(env);
 		const done = await getJob(env as never, job.id);
 		assert.equal(done?.status, 'succeeded');
+		assert.ok(Number(done?.result?.scanned) >= 420, 'progress is reported on the job');
+		await kickRepairJob(env as never);
+		await drain(env);
 		assert.equal(count(db, 'video'), 420);
 		assert.equal(await isOwnershipComplete(db as never, 'video'), true);
 		assert.deepEqual(await readOwnershipDrift(db as never), []);
 		const after = (await (await app.request('/errors', {}, env as never)).json()) as any;
 		assert.deepEqual(after.result.indexDrift, []);
+		assert.equal(after.result.indexRepairs.pending, 0);
+		assert.ok(after.result.indexMaintenance.some((m: any) => m.index === 'video' && m.job.status === 'succeeded'));
 	});
 
 	it('a rebuild walks a fresh pass in resumable steps and waits for a pass holding the lease', async () => {
@@ -344,7 +383,7 @@ describe('admin rebuild of the ownership index (Errors page flag + Retry)', () =
 
 		const first = await runOwnershipRebuildStep(env as never, job);
 		assert.equal(first.done, false);
-		assert.deepEqual('params' in first ? first.params : null, { kind: 'video', fresh: false, pages: 20 });
+		assert.deepEqual('params' in first ? first.params : null, { kind: 'video', fresh: false, pages: 20, scanned: 2000, queuedRepairs: 0 });
 		const second = await runOwnershipRebuildStep(env as never, { ...job, params: (first as { params: Record<string, unknown> }).params });
 		assert.equal(second.done, true);
 		assert.equal(count(db, 'video'), 2500);

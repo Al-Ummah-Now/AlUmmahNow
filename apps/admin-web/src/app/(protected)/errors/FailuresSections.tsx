@@ -10,8 +10,9 @@ import type { AdminContentPermission, AdminJob } from '@/lib/api/content-types';
 import { JobsTable } from '@/components/content/jobs';
 import { logger } from '@/lib/logger';
 import { ISSUE_LABEL, ourStatusLabel } from '../processing/labels';
-import { indexItemHref, thumbnailFixHref } from './filters';
+import { indexItemHref, jobProgress, repairHref, thumbnailFixHref } from './filters';
 import { IndexRebuildButton } from './IndexRebuildButton';
+import { IndexRepairRetryButton } from './IndexRepairRetryButton';
 import { JOB_STATUS_LABEL, isJobActive } from '@/lib/admin-jobs';
 import type { MessageKey } from '@/i18n/translate';
 
@@ -21,6 +22,42 @@ export const INDEX_KIND_LABEL: Record<'video' | 'channel' | 'profile', MessageKe
   channel: 'errorsPage.indexKindChannel',
   profile: 'errorsPage.indexKindProfile',
 };
+
+/** Label of each search table (Errors page, "Search index out of sync", repairs, maintenance). */
+export const SEARCH_ENTITY_LABEL: Record<'video' | 'channel' | 'playlist' | 'post', MessageKey> = {
+  video: 'errorsPage.searchKindVideo',
+  channel: 'errorsPage.searchKindChannel',
+  playlist: 'errorsPage.searchKindPlaylist',
+  post: 'errorsPage.searchKindPost',
+};
+
+/** Why a repair was recorded. */
+const REPAIR_REASON_LABEL: Partial<Record<string, MessageKey>> = {
+  'ownership-write': 'errorsPage.repairReasonOwnershipWrite',
+  'search-write': 'errorsPage.repairReasonSearchWrite',
+  reread: 'errorsPage.repairReasonReread',
+  'pass-unreadable': 'errorsPage.repairReasonUnreadable',
+  'pass-refused': 'errorsPage.repairReasonRefused',
+  'queue-dead-letter': 'errorsPage.repairReasonDeadLetter',
+  moderation: 'errorsPage.repairReasonModeration',
+};
+
+/** Label of an index named by the API: an ownership kind, or `search:<entity>`. */
+function indexLabel(t: Awaited<ReturnType<typeof getI18n>>['t'], index: string): string {
+  if (index.startsWith('search:')) {
+    const entity = index.slice('search:'.length) as keyof typeof SEARCH_ENTITY_LABEL;
+    return SEARCH_ENTITY_LABEL[entity] ? t(SEARCH_ENTITY_LABEL[entity]) : index;
+  }
+  const kind = index as keyof typeof INDEX_KIND_LABEL;
+  return INDEX_KIND_LABEL[kind] ? t(INDEX_KIND_LABEL[kind]) : index;
+}
+
+/** Label of a repair's entity (profiles are only in the admin lists index). */
+function repairEntityLabel(t: Awaited<ReturnType<typeof getI18n>>['t'], entity: string): string {
+  if (entity === 'profile') return t('errorsPage.indexKindProfile');
+  return indexLabel(t, `search:${entity}`);
+}
+
 
 const thClass = 'text-start px-4 py-3 text-fg-muted font-medium whitespace-nowrap';
 const tdClass = 'px-4 py-3 align-top text-sm';
@@ -86,6 +123,8 @@ export function hasFailures(f: Failures): boolean {
     f.data?.thumbnailRuns?.length ||
     f.data?.thumbnailFlagged?.items.length ||
     f.data?.indexDrift?.length ||
+    f.data?.searchDrift?.length ||
+    f.data?.indexRepairs?.failedTotal ||
     f.formatFlagged?.items.length ||
     f.contactFailed?.messages.length ||
     f.failedJobs?.length
@@ -101,7 +140,10 @@ export function hasFailures(f: Failures): boolean {
  * can be retried), account erasure steps that dead-lettered, thumbnail repair
  * runs that failed after their retries, thumbnails the daily check found of
  * another shape than their video (fixed by hand on the video page), indexes the
- * admin lists read that miss stored items (Rebuild queues the index rebuild job), and admin jobs
+ * admin lists read that miss stored items (Rebuild queues the index rebuild job), search tables
+ * that miss indexable items (Rebuild queues the search reconcile job), single
+ * objects whose index writes failed after the repair job's retries (Retry), the
+ * progress of index maintenance jobs, and admin jobs
  * (heavy content actions) that failed after their retries, with Retry.
  */
 export function FailuresSections({ failures, t, locale }: { failures: Failures; t: Awaited<ReturnType<typeof getI18n>>['t']; locale: Awaited<ReturnType<typeof getI18n>>['locale'] }) {
@@ -160,6 +202,159 @@ export function FailuresSections({ failures, t, locale }: { failures: Failures; 
                     </td>
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {!!data?.searchDrift?.length && (
+        <section aria-labelledby="errors-search-index" data-testid="errors-search-index-section">
+          <div className="mb-3">
+            <h2 id="errors-search-index" className="text-xl font-semibold text-fg">{t('errorsPage.searchIndexTitle')}</h2>
+            <p className="mt-1 text-sm text-fg-muted">{t('errorsPage.searchIndexHint', { when: formatDate(data.searchDrift[0].at, locale, true) })}</p>
+          </div>
+          <div className="bg-surface border border-border rounded-lg overflow-x-auto">
+            <table className="w-full" data-testid="errors-search-index">
+              <caption className="sr-only">{t('errorsPage.searchIndexCaption')}</caption>
+              <thead className="border-b border-border">
+                <tr>
+                  <th className={thClass} scope="col">{t('errorsPage.colIndex')}</th>
+                  <th className={thClass} scope="col">{t('errorsPage.colExpected')}</th>
+                  <th className={thClass} scope="col">{t('errorsPage.colIndexed')}</th>
+                  <th className={thClass} scope="col">{t('errorsPage.colUnreadable')}</th>
+                  <th className={thClass} scope="col">{t('errorsPage.colExamples')}</th>
+                  <th className={thClass} scope="col"><span className="sr-only">{t('errorsPage.rebuild')}</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.searchDrift.map((d) => (
+                  <tr key={d.entity} className="border-b border-border last:border-0" data-search-entity={d.entity}>
+                    <td className={tdClass}>
+                      <div className="text-fg">{t(SEARCH_ENTITY_LABEL[d.entity])}</div>
+                      <div className="text-fg-muted text-xs">{formatDate(d.at, locale, true)}</div>
+                    </td>
+                    <td className={tdClass}>{d.expected}</td>
+                    <td className={tdClass}>{d.indexed}</td>
+                    <td className={tdClass}>{d.failed}</td>
+                    <td className={tdClass}>
+                      <ul className="space-y-1">
+                        {d.sampleIds.slice(0, 5).map((id) => {
+                          const href = repairHref(d.entity, id);
+                          return (
+                            <li key={id}>
+                              {href ? (
+                                <Link href={href} className={linkClass}><span dir="ltr" className="text-xs">{id}</span></Link>
+                              ) : (
+                                <span dir="ltr" className="text-xs text-fg-muted">{id}</span>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </td>
+                    <td className={tdClass}>
+                      <IndexRebuildButton kind={`search:${d.entity}`} active={!!d.rebuild && isJobActive(d.rebuild.status)} />
+                      {d.rebuild && (
+                        <div className="mt-1 text-fg-muted text-xs" data-testid={`index-rebuild-status-search-${d.entity}`}>
+                          {t('errorsPage.rebuildStatus', { status: t(JOB_STATUS_LABEL[d.rebuild.status]) })}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {!!data?.indexRepairs && (data.indexRepairs.failedTotal > 0 || data.indexRepairs.pending > 0) && (
+        <section aria-labelledby="errors-index-repairs" data-testid="errors-index-repairs-section">
+          <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <h2 id="errors-index-repairs" className="text-xl font-semibold text-fg">{t('errorsPage.repairsTitle')}</h2>
+              <p className="mt-1 text-sm text-fg-muted">{t('errorsPage.repairsHint')}</p>
+              <p className="mt-1 text-sm text-fg" data-testid="index-repairs-counts">
+                {t('errorsPage.repairsCounts', { pending: data.indexRepairs.pending, failed: data.indexRepairs.failedTotal })}
+                {data.indexRepairs.job && ` · ${t('errorsPage.repairsJobStatus', { status: t(JOB_STATUS_LABEL[data.indexRepairs.job.status]) })}`}
+              </p>
+            </div>
+            {data.indexRepairs.failedTotal > 0 && <IndexRepairRetryButton />}
+          </div>
+          {data.indexRepairs.failed.length > 0 && (
+            <div className="bg-surface border border-border rounded-lg overflow-x-auto">
+              <table className="w-full" data-testid="errors-index-repairs">
+                <caption className="sr-only">{t('errorsPage.repairsCaption')}</caption>
+                <thead className="border-b border-border">
+                  <tr>
+                    <th className={thClass} scope="col">{t('errorsPage.colWhen')}</th>
+                    <th className={thClass} scope="col">{t('errorsPage.colIndex')}</th>
+                    <th className={thClass} scope="col">{t('errorsPage.colItem')}</th>
+                    <th className={thClass} scope="col">{t('errorsPage.colAttempts')}</th>
+                    <th className={thClass} scope="col">{t('errorsPage.colReason')}</th>
+                    <th className={thClass} scope="col"><span className="sr-only">{t('errorsPage.repairRetry')}</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.indexRepairs.failed.map((r) => {
+                    const href = repairHref(r.entity, r.id);
+                    return (
+                      <tr key={`${r.entity}:${r.id}`} className="border-b border-border last:border-0" data-repair={`${r.entity}:${r.id}`}>
+                        <td className={tdClass}>{formatDate(new Date(r.updatedAt).toISOString(), locale, true)}</td>
+                        <td className={tdClass}>{repairEntityLabel(t, r.entity)}</td>
+                        <td className={tdClass}>
+                          {href ? (
+                            <Link href={href} className={linkClass}><span dir="ltr" className="text-xs">{r.id}</span></Link>
+                          ) : (
+                            <span dir="ltr" className="text-xs text-fg">{r.id}</span>
+                          )}
+                        </td>
+                        <td className={tdClass}>{r.attempts}</td>
+                        <td className={tdClass}>
+                          <div className="text-fg">{t(REPAIR_REASON_LABEL[r.reason] ?? 'errorsPage.repairReasonOther')}</div>
+                          {r.lastError && <div className="text-fg-muted text-xs break-all" dir="ltr">{r.lastError}</div>}
+                        </td>
+                        <td className={tdClass}><IndexRepairRetryButton target={{ entity: r.entity, id: r.id }} /></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+
+      {!!data?.indexMaintenance?.some((m) => isJobActive(m.job.status)) && (
+        <section aria-labelledby="errors-index-maintenance" data-testid="errors-index-maintenance-section">
+          <div className="mb-3">
+            <h2 id="errors-index-maintenance" className="text-xl font-semibold text-fg">{t('errorsPage.maintenanceTitle')}</h2>
+            <p className="mt-1 text-sm text-fg-muted">{t('errorsPage.maintenanceHint')}</p>
+          </div>
+          <div className="bg-surface border border-border rounded-lg overflow-x-auto">
+            <table className="w-full" data-testid="errors-index-maintenance">
+              <caption className="sr-only">{t('errorsPage.maintenanceTitle')}</caption>
+              <thead className="border-b border-border">
+                <tr>
+                  <th className={thClass} scope="col">{t('errorsPage.colIndex')}</th>
+                  <th className={thClass} scope="col">{t('errorsPage.colStatus')}</th>
+                  <th className={thClass} scope="col">{t('errorsPage.colProgress')}</th>
+                  <th className={thClass} scope="col">{t('errorsPage.colUpdated')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.indexMaintenance.filter((m) => isJobActive(m.job.status)).map((m) => {
+                  const progress = jobProgress(m.job);
+                  return (
+                    <tr key={m.index} className="border-b border-border last:border-0" data-maintenance-index={m.index}>
+                      <td className={tdClass}>{indexLabel(t, m.index)}</td>
+                      <td className={tdClass}>{t(JOB_STATUS_LABEL[m.job.status])}</td>
+                      <td className={tdClass}>{t('errorsPage.maintenanceProgress', { scanned: progress.scanned, pages: progress.pages })}</td>
+                      <td className={tdClass}>{formatDate(m.job.updatedAt, locale, true)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

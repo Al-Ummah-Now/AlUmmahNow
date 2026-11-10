@@ -19,7 +19,7 @@ import { ChannelAbout } from '../src/endpoints/channel/channelHandle';
 import { VideoSearch } from '../src/endpoints/video/videoSearch';
 import { OwnershipBackfillPost } from '../src/endpoints/search/searchBackfill';
 import { AnalyticsChannelGet, AnalyticsSummaryGet } from '../src/endpoints/analytics/analyticsOwner';
-import { MemoryBucket, MemoryQueue, buildApp, videoFixture } from './helpers';
+import { JobsQueue, MemoryBucket, MemoryQueue, buildApp, drainJobs, videoFixture } from './helpers';
 import { SqliteD1 } from './search-sqlite-d1';
 import { MessageType } from '../src/lib/queue';
 
@@ -44,6 +44,7 @@ function ownershipEnv(initial: { videos?: Record<string, unknown>; channels?: Re
 		playlists: new MemoryBucket(),
 		community_posts: new MemoryBucket(),
 		queue: new MemoryQueue(),
+		ADMIN_JOBS_QUEUE: new JobsQueue(),
 	};
 	const env = withSearchSync(raw, { waitUntil: (p: Promise<unknown>) => { pending.push(p); } });
 	return { db, raw, env, flush: () => Promise.all(pending) };
@@ -135,8 +136,8 @@ describe('ownership index sync on R2 writes', () => {
 		assert.equal(db.count('content_ownership'), 0);
 	});
 
-	it('hands a write D1 rejects to the processor and keeps the index complete (AV-16)', async () => {
-		const { db, raw, env } = ownershipEnv();
+	it('records a write D1 rejects for the repair job and keeps the index complete', async () => {
+		const { db, raw, env, flush } = ownershipEnv();
 		await env.channels.put('c1', JSON.stringify(channel('c1')));
 		await runOwnershipPass(raw as never, 'channel');
 		assert.equal(await isOwnershipComplete(db, 'channel'), true);
@@ -145,22 +146,63 @@ describe('ownership index sync on R2 writes', () => {
 		await env.channels.put('c2', JSON.stringify(channel('c2')));
 		assert.ok(raw.channels.read('c2'), 'the R2 write still happened');
 		db.db.exec('ALTER TABLE content_ownership_away RENAME TO content_ownership');
-		assert.equal(await isOwnershipComplete(db, 'channel'), true, 'readers keep using the index');
+		await flush();
+		assert.equal(await isOwnershipComplete(db, 'channel'), true, 'readers keep using the index for every other channel');
+		const repair = { ...(db.db.prepare('SELECT entity, id, r2_key, reason, status FROM index_repairs').get() as object) };
+		assert.deepEqual(repair, { entity: 'channel', id: 'c2', r2_key: 'c2', reason: 'ownership-write', status: 'pending' });
+		assert.equal(raw.queue.messages.filter((m: any) => m.type === MessageType.SearchIndexSync).length, 0, 'recorded, so not also sent to the processor');
+		// The repair job (started by the failure) rewrites the one row from R2
+		assert.equal(raw.ADMIN_JOBS_QUEUE.sent.length, 1);
+		await drainJobs(raw as never);
+		assert.deepEqual(rows(db, 'channel').map(r => r.id), ['c1', 'c2']);
+		assert.equal(db.count('index_repairs'), 0);
+	});
+
+	it('hands the write to the processor when D1 refuses the repair record too', async () => {
+		const { db, raw, env, flush } = ownershipEnv();
+		await env.channels.put('c1', JSON.stringify(channel('c1')));
+		await runOwnershipPass(raw as never, 'channel');
+		db.db.exec('ALTER TABLE content_ownership RENAME TO content_ownership_away');
+		db.db.exec('ALTER TABLE index_repairs RENAME TO index_repairs_away');
+		await env.channels.put('c2', JSON.stringify(channel('c2')));
+		db.db.exec('ALTER TABLE content_ownership_away RENAME TO content_ownership');
+		db.db.exec('ALTER TABLE index_repairs_away RENAME TO index_repairs');
+		await flush();
+		assert.equal(await isOwnershipComplete(db, 'channel'), true);
 		const queued = raw.queue.messages.filter((m: any) => m.type === MessageType.SearchIndexSync);
 		assert.equal(queued.length, 1);
 		assert.deepEqual({ entity: queued[0].payload.entity, id: queued[0].payload.id, name: queued[0].payload.object.name }, { entity: 'channel', id: 'c2', name: channel('c2').name });
 		assert.ok(queued[0].payload.version > 0, 'with the version, so the processor applies it in order');
 	});
 
-	it('marks the index incomplete when the write cannot be queued either', async () => {
-		const { db, raw, env } = ownershipEnv();
+	it('never marks the index incomplete, even when the write cannot be queued at all', async () => {
+		const { db, raw, env, flush } = ownershipEnv();
 		await env.channels.put('c1', JSON.stringify(channel('c1')));
 		await runOwnershipPass(raw as never, 'channel');
 		raw.queue.send = async () => { throw new Error('queue unavailable'); };
 		db.db.exec('ALTER TABLE content_ownership RENAME TO content_ownership_away');
+		db.db.exec('ALTER TABLE index_repairs RENAME TO index_repairs_away');
 		await env.channels.put('c2', JSON.stringify(channel('c2')));
 		db.db.exec('ALTER TABLE content_ownership_away RENAME TO content_ownership');
-		assert.equal(await isOwnershipComplete(db, 'channel'), false);
+		db.db.exec('ALTER TABLE index_repairs_away RENAME TO index_repairs');
+		await flush();
+		// Logged as lost (alert); the next reconcile pass rewrites it. Other readers are unaffected.
+		assert.equal(await isOwnershipComplete(db, 'channel'), true);
+		await runOwnershipPass(raw as never, 'channel');
+		assert.deepEqual(rows(db, 'channel').map(r => r.id), ['c1', 'c2']);
+	});
+
+	it('a failed search-row write is queued for repair, not only logged', async () => {
+		const { db, raw, env, flush } = ownershipEnv();
+		db.db.exec('ALTER TABLE search_videos RENAME TO search_videos_away');
+		await env.videos.put('v1', JSON.stringify(videoFixture({ id: 'v1', uploadStatus: 'ready' })));
+		await flush();
+		db.db.exec('ALTER TABLE search_videos_away RENAME TO search_videos');
+		const repair = { ...(db.db.prepare('SELECT entity, id, reason FROM index_repairs').get() as object) };
+		assert.deepEqual(repair, { entity: 'video', id: 'v1', reason: 'search-write' });
+		await drainJobs(raw as never);
+		assert.equal(db.count('search_videos'), 1);
+		assert.equal(db.count('index_repairs'), 0);
 	});
 });
 
@@ -202,14 +244,17 @@ describe('ownership rebuild pass', () => {
 		assert.equal(busy.channel.pages, 1);
 	});
 
-	it('self-heal holds a lease so concurrent fallbacks start one pass', async () => {
+	it('a heal queues one rebuild job and reads nothing from R2 in the request', async () => {
 		const { db, raw } = ownershipEnv({ channels: { a: channel('a') } });
 		const tasks: Promise<unknown>[] = [];
 		scheduleOwnershipHeal(raw as never, p => tasks.push(p), 'channel');
 		scheduleOwnershipHeal(raw as never, p => tasks.push(p), 'channel');
 		await Promise.all(tasks);
+		assert.equal(raw.channels.calls, 0, 'no bucket work inside the request');
+		assert.equal(raw.ADMIN_JOBS_QUEUE.sent.length, 1, 'concurrent fallbacks queue one job');
+		assert.equal(await isOwnershipComplete(db, 'channel'), false);
+		await drainJobs(raw as never);
 		assert.equal(await isOwnershipComplete(db, 'channel'), true);
-		assert.equal(raw.channels.calls, 2, 'one list + one get: the second heal found the lease taken');
 	});
 
 	it('applies moderation made outside api-videos', async () => {
@@ -276,6 +321,8 @@ describe('endpoints served from the ownership index', () => {
 		assert.deepEqual(((await res.json()) as any).data.map((c: any) => c.id), ['mine1', 'mine2']);
 		assert.equal(background.length, 1, 'the fallback scheduled a heal');
 		await Promise.all(background);
+		assert.equal(raw.ADMIN_JOBS_QUEUE.sent.length, 1, 'the heal is a queued job');
+		await drainJobs(raw as never);
 		assert.equal(await isOwnershipComplete(db, 'channel'), true);
 		assert.deepEqual(await ownedChannelIds(raw as never, 'owner'), ['mine1', 'mine2']);
 	});

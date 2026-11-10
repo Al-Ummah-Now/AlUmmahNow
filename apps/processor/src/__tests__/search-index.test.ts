@@ -122,4 +122,51 @@ describe('search index sync', () => {
     }), env);
     expect(executed.some(e => e.sql.includes('search_'))).toBe(false);
   });
+
+  it('a failed ownership write is queued for repair (one object) and never marks the index incomplete', async () => {
+    const { env, processor, executed } = setup();
+    const db = (env as unknown as { SEARCH_DB: { prepare: jest.Mock } }).SEARCH_DB;
+    const real = db.prepare.getMockImplementation()!;
+    db.prepare.mockImplementation((sql: string) => {
+      const st = real(sql);
+      if (sql.includes('INSERT INTO content_ownership')) {
+        return { ...st, bind: () => ({ ...st, run: async () => { throw new Error('D1 overloaded'); } }) };
+      }
+      return st;
+    });
+    const video = { id: 'v1', title: 'x', isPublic: false, channelId: 'c1', userId: 'u1' };
+    const result = await processor.processMessage(message(MessageType.SearchIndexSync, { entity: 'video', id: 'v1', object: video, version: 5 }), env);
+    expect(result.success).toBe(true);
+    const repair = executed.find(e => e.sql.includes('INSERT INTO index_repairs'));
+    expect(repair?.values.slice(0, 4)).toEqual(['video', 'v1', 'v1', 'ownership-write']);
+    expect(executed.some(e => e.sql.includes('DELETE FROM search_meta'))).toBe(false);
+    expect(executed.some(e => e.sql.includes('ownership:invalidated'))).toBe(false);
+  });
+
+  it('retries the message (queue → DLQ) when the repair cannot be recorded either', async () => {
+    const { env, processor } = setup();
+    const db = (env as unknown as { SEARCH_DB: { prepare: jest.Mock } }).SEARCH_DB;
+    const real = db.prepare.getMockImplementation()!;
+    db.prepare.mockImplementation((sql: string) => {
+      const st = real(sql);
+      if (sql.includes('INSERT INTO content_ownership') || sql.includes('INSERT INTO index_repairs')) {
+        return { ...st, bind: () => ({ ...st, run: async () => { throw new Error('D1 down'); } }) };
+      }
+      return st;
+    });
+    const result = await processor.processMessage(message(MessageType.SearchIndexSync, { entity: 'video', id: 'v1', object: { id: 'v1', title: 'x' } }), env);
+    expect(result.success).toBe(false);
+    expect(result.shouldRetry).toBe(true);
+  });
+
+  it('a failed search-row write records a repair with the post key', async () => {
+    const { env, processor, executed } = setup();
+    const db = (env as unknown as { SEARCH_DB: { batch: jest.Mock } }).SEARCH_DB;
+    db.batch.mockImplementation(async () => { throw new Error('D1 overloaded'); });
+    const post = { id: 'p1', channelId: 'c9', content: 'hello', status: 'published', visibility: 'public' };
+    const result = await processor.processMessage(message(MessageType.SearchIndexSync, { entity: 'post', id: 'p1', object: post }), env);
+    expect(result.success).toBe(true);
+    const repair = executed.find(e => e.sql.includes('INSERT INTO index_repairs'));
+    expect(repair?.values.slice(0, 4)).toEqual(['post', 'p1', 'posts/c9/p1.json', 'search-write']);
+  });
 });

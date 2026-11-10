@@ -5,7 +5,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { canManageErrors, canReadErrors } from '../src/lib/roles';
-import { errorGroupsQuery, errorsBadgeCount, errorsHref, indexItemHref, parseErrorFilters, searchedRef, thumbnailFixHref } from '../src/app/(protected)/errors/filters';
+import { errorGroupsQuery, errorsBadgeCount, errorsHref, indexItemHref, jobProgress, parseErrorFilters, repairHref, searchedRef, thumbnailFixHref } from '../src/app/(protected)/errors/filters';
 import { shapesMatch } from '@al-ummah/shared-types';
 import { groupActionsFor, itemActionsFor, itemHref } from '../src/app/(protected)/errors/permissions';
 import en from '../src/i18n/messages/en';
@@ -182,6 +182,43 @@ describe('index out of sync (ownership index drift)', () => {
     for (const m of [en, ar]) {
       assert.match(m.errorsPage.indexHint, /\{when\}/);
       assert.match(m.errorsPage.rebuildStatus, /\{status\}/);
+    }
+  });
+});
+
+describe('search index drift, index repairs and maintenance', () => {
+  it('repairs link to admin pages where one exists', () => {
+    assert.equal(repairHref('video', 'v 1'), '/videos/v%201');
+    assert.equal(repairHref('channel', 'ch_1'), '/channels/ch_1');
+    assert.equal(repairHref('profile', 'usr_1'), '/users/usr_1');
+    assert.equal(repairHref('playlist', 'pl_1'), null);
+    assert.equal(repairHref('post', 'p_1'), null);
+  });
+
+  it('maintenance progress reads the latest result, else the step params', () => {
+    assert.deepEqual(jobProgress({ result: { pages: 3, scanned: 6000 }, params: { pages: 2, scanned: 4000 } }), { pages: 3, scanned: 6000 });
+    assert.deepEqual(jobProgress({ result: null, params: { pages: 2, scanned: 4000 } }), { pages: 2, scanned: 4000 });
+    assert.deepEqual(jobProgress({ result: null, params: {} }), { pages: 0, scanned: 0 });
+  });
+
+  it('sections, columns, reasons and Retry are labelled in English and Arabic', () => {
+    const keys = [
+      'searchIndexTitle', 'searchIndexHint', 'searchIndexCaption', 'searchKindVideo', 'searchKindChannel', 'searchKindPlaylist', 'searchKindPost',
+      'colExpected', 'repairsTitle', 'repairsHint', 'repairsCounts', 'repairsJobStatus', 'repairsCaption', 'colItem', 'colAttempts', 'repairRetry',
+      'repairRetryAll', 'repairRetrying', 'repairRetryQueued', 'repairRetryFailed', 'repairReasonOwnershipWrite', 'repairReasonSearchWrite',
+      'repairReasonReread', 'repairReasonUnreadable', 'repairReasonRefused', 'repairReasonDeadLetter', 'repairReasonModeration', 'repairReasonOther',
+      'maintenanceTitle', 'maintenanceHint', 'maintenanceProgress', 'colStatus', 'colProgress', 'colUpdated',
+    ] as const;
+    for (const key of keys) {
+      const e = (en.errorsPage as Record<string, string>)[key];
+      const a = (ar.errorsPage as Record<string, string>)[key];
+      assert.ok(e && !ARABIC.test(e), `en errorsPage.${key}`);
+      assert.ok(a && ARABIC.test(a), `ar errorsPage.${key}`);
+    }
+    for (const m of [en, ar]) {
+      assert.match(m.errorsPage.searchIndexHint, /\{when\}/);
+      assert.match(m.errorsPage.repairsCounts, /\{pending\}.*\{failed\}/);
+      assert.match(m.errorsPage.maintenanceProgress, /\{scanned\}.*\{pages\}|\{pages\}.*\{scanned\}/);
     }
   });
 });

@@ -40,6 +40,8 @@ import { createJob, type JobHandler, type JobOutcome, type JobQueue } from './jo
 import { approvedFromPlan, planLegacyRestore, runLegacyRestore, type ApprovedRestore, type AuthUsersDb } from './legacy-restore';
 import { runThumbnailRepairStep, type ThumbnailRepairEnv } from '../thumbnail/repair';
 import { runOwnershipRebuildStep, type OwnershipRebuildEnv } from '../search/ownershipRebuild';
+import { runIndexRepairStep, type RepairJobEnv } from '../search/repairs';
+import { runSearchReconcileStep, type SearchReconcileEnv } from '../search/backfill';
 import { runPlaylistAddStep, type PlaylistEnv } from '../playlistBulk';
 import {
 	channelVideoStats,
@@ -1025,4 +1027,8 @@ export const ADMIN_JOB_HANDLERS: Record<AdminJobKind, JobHandler> = {
 	'search.rebuild-ownership': (env, job) => runOwnershipRebuildStep(env as OwnershipRebuildEnv, job),
 	// Bulk adds to a channel playlist above the inline cap, or after an inline write failed (lib/playlistBulk.ts)
 	'playlist.add-videos': (env, job) => runPlaylistAddStep(env as PlaylistEnv, job),
+	// Objects whose index write failed, rewritten one by one from R2 (lib/search/repairs.ts)
+	'search.repair-objects': (env, job) => runIndexRepairStep(env as RepairJobEnv, job),
+	// A full search-table reconcile pass in queued steps (lib/search/backfill.ts), daily and from the Errors page
+	'search.reconcile': (env, job) => runSearchReconcileStep(env as SearchReconcileEnv, job),
 };

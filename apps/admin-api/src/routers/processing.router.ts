@@ -9,7 +9,8 @@
  * "Mark failed" flags the video for re-upload and tells the uploader;
  * "Check thumbnails" queues the thumbnail aspect repair job (dry run first);
  * "Rebuild index" (Errors page, "Index out of sync") queues the ownership
- * index rebuild job.
+ * index rebuild job or a search table's reconcile job; "Retry" on an index
+ * repair puts failed per-object repairs back in the repair job's queue.
  *
  * Every change writes its audit row (site_settings_log, key
  * `processing:video:<id>`) before calling api-videos and removes it again if
@@ -198,23 +199,42 @@ app.post('/thumbnails/:jobId/retry', async (c) => {
   return c.json({ success: true, result });
 });
 
-const INDEX_KINDS = ['video', 'channel', 'profile'];
+const INDEX_KINDS = ['video', 'channel', 'profile', 'search:video', 'search:channel', 'search:playlist', 'search:post'];
+const REPAIR_ENTITIES = ['video', 'channel', 'playlist', 'post', 'profile'];
 
 /**
- * Rebuild the ownership index of one kind (the admin's video, channel and user
- * lists read it): queues the admin job, or returns the one already running.
- * Audited under the fixed key processing:video:ownership-index.
+ * Rebuild one index: the ownership index of a kind (the admin's video,
+ * channel and user lists read it) or a search table (`search:<entity>`).
+ * Queues the admin job, or returns the one already running. Audited under
+ * the fixed key processing:video:ownership-index.
  */
 app.post('/index-rebuild', async (c) => {
   const input = await body(c);
   if (typeof input.kind !== 'string' || !INDEX_KINDS.includes(input.kind)) {
-    return c.json({ success: false, code: 'bad_request', error: 'kind must be video, channel or profile' }, 400);
+    return c.json({ success: false, code: 'bad_request', error: 'kind must be video, channel, profile or search:<video|channel|playlist|post>' }, 400);
   }
   const json = { kind: input.kind, actorId: actorOf(c) };
   const result = await audited(c, ['ownership-index'], 'rebuild_ownership_index', { kind: input.kind }, () =>
     callProcessing(c.env, '/index-rebuild', { method: 'POST', json }),
   );
   return c.json({ success: true, result }, 202);
+});
+
+/**
+ * Retry failed per-object index repairs (Errors page): one ({ entity, id }) or
+ * all of them ({}). Audited under processing:video:index-repairs.
+ */
+app.post('/index-repairs/retry', async (c) => {
+  const input = await body(c);
+  const one = input.entity !== undefined || input.id !== undefined;
+  if (one && (typeof input.entity !== 'string' || !REPAIR_ENTITIES.includes(input.entity) || typeof input.id !== 'string' || !/^[A-Za-z0-9_.:/-]{1,200}$/.test(input.id))) {
+    return c.json({ success: false, code: 'bad_request', error: 'entity and id name one repair (omit both to retry every failed one)' }, 400);
+  }
+  const json = one ? { entity: input.entity, id: input.id } : {};
+  const result = await audited(c, ['index-repairs'], 'retry_index_repairs', json, () =>
+    callProcessing(c.env, '/index-repairs/retry', { method: 'POST', json }),
+  );
+  return c.json({ success: true, result });
 });
 
 export default app;

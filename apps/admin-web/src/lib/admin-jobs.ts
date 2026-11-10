@@ -14,6 +14,8 @@ export const JOB_KIND_LABEL: Record<AdminJobKind, MessageKey> = {
   'videos.repair-thumbnails': 'adminJobs.kinds.videosRepairThumbnails',
   'search.rebuild-ownership': 'adminJobs.kinds.searchRebuildOwnership',
   'playlist.add-videos': 'adminJobs.kinds.playlistAddVideos',
+  'search.repair-objects': 'adminJobs.kinds.searchRepairObjects',
+  'search.reconcile': 'adminJobs.kinds.searchReconcile',
 };
 
 export const JOB_STATUS_LABEL: Record<AdminJobStatus, MessageKey> = {

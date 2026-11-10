@@ -127,6 +127,8 @@ describe('admin job helpers', () => {
     assert.equal(jobTargetHref(job({ kind: 'profiles.restore-legacy', targetKind: 'user', targetId: 'legacy-profiles' })), '/legacy-profiles');
     assert.equal(jobTargetHref(job({ kind: 'videos.repair-thumbnails', targetKind: 'video', targetId: 'thumbnail-repair' })), '/processing');
     assert.equal(jobTargetHref(job({ kind: 'search.rebuild-ownership', targetKind: 'channel', targetId: 'ownership-index' })), '/errors');
+    assert.equal(jobTargetHref(job({ kind: 'search.reconcile', targetKind: 'video', targetId: 'search-index:video' })), '/errors');
+    assert.equal(jobTargetHref(job({ kind: 'search.repair-objects', targetKind: 'video', targetId: 'index-repairs' })), '/errors');
   });
 });
 

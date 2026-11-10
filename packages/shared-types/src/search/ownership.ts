@@ -10,11 +10,13 @@
  * Projection is pure and shared so api-videos (inline on R2 writes) and the
  * processor (SearchIndexSync / moderation messages) write identical rows.
  * Readers trust the table only once a full pass of the bucket has completed
- * (`ownershipCompleteKey`); any failed write clears that marker so readers fall
- * back to scanning R2 until the next pass repairs the table.
+ * (`ownershipCompleteKey`). A failed write no longer clears that marker (one
+ * object sent every reader to R2 scans for days): the object is recorded in
+ * index_repairs (./repairs.ts) and the api-videos repair job rewrites it.
  */
 
 import { NOT_TOMBSTONED, type SearchDb, type SearchStatement } from './store';
+import { recordIndexRepair, type IndexRepairReason } from './repairs';
 import type { SearchEntityType } from './documents';
 import { isShort, type VideoFormatInput } from '../video-format';
 import { channelMembersOf } from '../channel-roles';
@@ -345,8 +347,11 @@ export async function syncOwnership(
 }
 
 /**
- * Mark the index incomplete so readers fall back to scanning R2 and the next
- * ownership pass (cron or self-heal) rebuilds it.
+ * Mark the index incomplete so readers fall back to scanning R2.
+ *
+ * @deprecated No write path calls this any more: a failed write is one
+ * object's problem (recordIndexRepair), never the whole kind's. Kept for
+ * workers built before the change during a rollout.
  */
 export async function invalidateOwnership(db: SearchDb, kind: OwnershipKind, now = Date.now()): Promise<void> {
   await db.batch([
@@ -360,11 +365,13 @@ export async function invalidateOwnership(db: SearchDb, kind: OwnershipKind, now
 
 export type SafeOwnershipResult =
   | { ok: true; result: OwnershipSyncResult }
-  | { ok: false; error: string; invalidated: boolean };
+  /** `queued`: the object is recorded in index_repairs for the repair job (false: D1 refused that too) */
+  | { ok: false; error: string; queued: boolean };
 
 /**
- * syncOwnership that never throws: on failure the index is invalidated (when
- * D1 still accepts that write) so a missed update cannot serve stale lists.
+ * syncOwnership that never throws. On failure the one object is recorded for
+ * the repair job (index_repairs); the kind stays complete, so readers keep
+ * using the index for every other object.
  */
 export async function syncOwnershipSafely(
   db: SearchDb,
@@ -373,18 +380,20 @@ export async function syncOwnershipSafely(
   object: unknown,
   now = Date.now(),
   version = now,
+  reason: IndexRepairReason = 'ownership-write',
 ): Promise<SafeOwnershipResult> {
   try {
     return { ok: true, result: await syncOwnership(db, kind, id, object, now, version) };
   } catch (error) {
-    let invalidated = false;
+    const message = error instanceof Error ? error.message : String(error);
+    let queued = false;
     try {
-      await invalidateOwnership(db, kind, now);
-      invalidated = true;
+      await recordIndexRepair(db, { entity: kind, id, reason, error: message }, now);
+      queued = true;
     } catch {
-      invalidated = false;
+      queued = false;
     }
-    return { ok: false, error: error instanceof Error ? error.message : String(error), invalidated };
+    return { ok: false, error: message, queued };
   }
 }
 
