@@ -72,15 +72,28 @@ test.describe('Release: player on a touch device', () => {
 
   test('control-bar buttons have a 44px hit area', async ({ page }) => {
     await openPlayer(page, 'en');
+    // The bar appears once playback has started (before that only the big play shows, #472);
+    // paused, it stays up
+    await playFor(page, 1);
+    await page.locator('.video-js video').evaluate((v: HTMLVideoElement) => v.pause());
+    await expect(page.locator('.video-js')).toHaveClass(/vjs-has-started/);
     await page.locator('.video-js').evaluate((el) => el.classList.remove('vjs-user-inactive'));
+    await expect(page.locator(`${CONTROLS} button:visible`).first()).toBeVisible();
+    // The hit area is the larger of the button's own box and its ::after target
     const hits = await page.locator(`${CONTROLS} button:visible`).evaluateAll((buttons) =>
       buttons.map((button) => {
+        const box = button.getBoundingClientRect();
         const after = getComputedStyle(button, '::after');
-        return `${after.width}x${after.height}`;
+        const width = Math.max(box.width, parseFloat(after.width) || 0);
+        const height = Math.max(box.height, parseFloat(after.height) || 0);
+        return { name: button.getAttribute('aria-label') || button.className, width, height };
       }),
     );
     expect(hits.length).toBeGreaterThan(0);
-    for (const hit of hits) expect(hit).toBe('44pxx44px');
+    for (const hit of hits) {
+      expect(hit.width, `${hit.name} hit width`).toBeGreaterThanOrEqual(44);
+      expect(hit.height, `${hit.name} hit height`).toBeGreaterThanOrEqual(44);
+    }
   });
 
   for (const [locale, text] of [

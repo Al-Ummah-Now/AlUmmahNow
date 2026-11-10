@@ -1744,6 +1744,33 @@
     height: 44px;
     margin-block: -12px;
   }
+
+  /* Touch targets (Story 1.5): every control-bar button carries a 44x44 hit area centred on it,
+     whatever size it draws at (the release touch spec measures this ::after) */
+  .video-js.vjs-fanous .vjs-control-bar button {
+    position: relative;
+  }
+
+  .video-js.vjs-fanous .vjs-control-bar button::after,
+  .video-js.vjs-fanous .vjs-control-bar .vjs-fanous-on::after {
+    content: "";
+    position: absolute;
+    z-index: 1;
+    top: 50%;
+    left: 50%;
+    right: auto;
+    bottom: auto;
+    width: 44px;
+    height: 44px;
+    border-radius: 0;
+    background: none;
+    transform: translate(-50%, -50%);
+  }
+
+  /* The "on" underline (theatre, captions) is drawn inside the hit area instead */
+  .video-js.vjs-fanous .vjs-control-bar .vjs-fanous-on::after {
+    background: linear-gradient(var(--fanous-player-accent), var(--fanous-player-accent)) no-repeat center bottom 7px / 18px 2px;
+  }
 }
 
 /* Viewers who ask for more contrast get an opaque bar and menu and outlined controls */
