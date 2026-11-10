@@ -263,6 +263,14 @@ jobs:
       # Idempotent stage data for the release E2E (accounts, channels, encoded
       # videos, playlists): everything already there is found and skipped. Stage
       # accounts register through the auth E2E code sink (apps/web/e2e/seed).
+      # The seed imports web code (test-utils → logger-client → errors reporter)
+      # that reads the workspace packages' dist, as seed-qa.yml builds them.
+      - name: Build shared packages (stage seed)
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
+          pnpm --filter @al-ummah/theme-packages build
+
       - name: Install Chromium and ffmpeg (stage seed)
         run: |
           (cd apps/web && pnpm exec playwright install --with-deps chromium)
