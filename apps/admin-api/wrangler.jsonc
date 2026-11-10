@@ -92,7 +92,7 @@
 		]
 	},
 
-	// api-videos owns the content data: /internal/admin/* (platform content management)
+	// api-videos owns the content data: /internal/* (processing health, content management)
 	"services": [{ "binding": "VIDEOS", "service": "videos" }],
 
 	// Environment variables

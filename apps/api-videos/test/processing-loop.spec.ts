@@ -10,9 +10,11 @@ import {
 	handleProcessingCheckBatch,
 	runProcessingCheck,
 	startProcessingLoop,
+	MAX_SWEEP_RESTARTS,
 	sweepProcessingVideos,
 	syncVideoFromBunny,
 } from '../src/lib/processing/loop';
+import { createProcessingInternalRouter } from '../src/endpoints/video/processingInternal';
 import { MessageType } from '@al-ummah/shared-types';
 import { MemoryBucket, videoFixture } from './helpers';
 
@@ -237,4 +239,67 @@ describe('processing-check loop', () => {
 		const stored = JSON.parse(await (await env.global_settings.get('ops/processing-reconciler.json')).text());
 		assert.equal(stored.lastRunAt, NOW.toISOString());
 	});
+
+	it('a loop that keeps dying is restarted a few times, then flagged for an admin', async () => {
+		const env = makeEnv();
+		const dead = (restarts: number) => stuck({ processingCheck: { loopId: 'old', startedAt: '2026-11-10T03:45:00.000Z', attempt: 3, nextCheckAt: '2026-11-10T04:00:00.000Z', restarts } });
+		await env.videos.put(ID, JSON.stringify(dead(1)));
+		const first = await sweepProcessingVideos(env, { now: NOW });
+		assert.equal(first.loopsStarted, 1);
+		assert.equal(JSON.parse(await (await env.videos.get(ID)).text()).processingCheck.restarts, 2);
+
+		await env.videos.put(ID, JSON.stringify(dead(MAX_SWEEP_RESTARTS)));
+		const capped = await sweepProcessingVideos(env, { now: NOW });
+		assert.equal(capped.loopsStarted, 0);
+		assert.equal(capped.flagged.stalled, 1);
+		const video = JSON.parse(await (await env.videos.get(ID)).text());
+		assert.equal(video.processingIssue.kind, 'stalled');
+	});
 });
+
+describe('internal processing endpoints', () => {
+	it('sync previews without writing and applies through the queue', async () => {
+		const env = makeEnv();
+		await env.videos.put(ID, JSON.stringify(stuck()));
+		bunnyResponses[ID] = { status: 200, body: FINISHED };
+		const app = createProcessingInternalRouter();
+		const preview = await (await app.request('/sync', { method: 'POST', body: JSON.stringify({ ids: [ID] }) }, env)).json() as any;
+		assert.equal(preview.result.dryRun, true);
+		assert.equal(preview.result.results[0].plan.outcome, 'ready');
+		assert.equal(env.PROCESSING_CHECK_QUEUE.sent.length, 0);
+		assert.equal(JSON.parse(await (await env.videos.get(ID)).text()).uploadStatus, 'processing');
+
+		const applied = await (await app.request('/sync', { method: 'POST', body: JSON.stringify({ ids: [ID], dryRun: false }) }, env)).json() as any;
+		assert.equal(applied.result.results[0].started, true);
+		assert.equal(env.PROCESSING_CHECK_QUEUE.sent.length, 1);
+		assert.equal(env.PROCESSING_CHECK_QUEUE.sent[0].delaySeconds, 0);
+	});
+
+	it('rejects bad ids', async () => {
+		const app = createProcessingInternalRouter();
+		const res = await app.request('/sync', { method: 'POST', body: JSON.stringify({ ids: ['../x'] }) }, makeEnv());
+		assert.equal(res.status, 400);
+	});
+
+	it('mark failed flags the video for re-upload and tells the uploader', async () => {
+		const env = makeEnv();
+		await env.videos.put(ID, JSON.stringify(stuck()));
+		const app = createProcessingInternalRouter();
+		const res = await (await app.request('/mark-failed', { method: 'POST', body: JSON.stringify({ ids: [ID], reason: 'Bytes incomplete' }) }, env)).json() as any;
+		assert.equal(res.result.results[0].changed, true);
+		const video = JSON.parse(await (await env.videos.get(ID)).text());
+		assert.equal(video.uploadStatus, 'failed');
+		assert.equal(video.processingIssue.kind, 'needs_reupload');
+		assert.ok(env.queue.sent.some((m: any) => m.body.type === MessageType.VideoUploadFailed));
+	});
+
+	it('errors lists failed and flagged videos with the reconciler run', async () => {
+		const env = makeEnv();
+		await env.videos.put(ID, JSON.stringify(stuck({ uploadStatus: 'failed', processingIssue: { kind: 'needs_reupload', reason: 'x', at: NOW.toISOString() } })));
+		await env.videos.put('ok-1', JSON.stringify(videoFixture({ id: 'ok-1', uploadStatus: 'ready' })));
+		const res = await (await createProcessingInternalRouter().request('/errors', {}, env)).json() as any;
+		assert.deepEqual(res.result.videos.map((v: any) => v.id), [ID]);
+		assert.deepEqual(res.result.deadLetters, []);
+	});
+});
+

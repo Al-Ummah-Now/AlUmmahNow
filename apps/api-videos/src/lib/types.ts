@@ -108,6 +108,7 @@ export const Video = z.object({
         outcome: z.string().optional(),
         bunnyStatus: z.number().optional(),
         bunnyProgress: z.number().optional(),
+        restarts: z.number().optional(),
     }).optional(),
     tags: z.array(z.string()).default([]),
     category: z.nativeEnum(VideoCategory).optional(),
