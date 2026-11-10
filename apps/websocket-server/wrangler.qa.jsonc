@@ -37,6 +37,8 @@
   	{ "name": "WS_MESSAGE_LIMITER", "namespace_id": "2313", "simple": { "limit": 600, "period": 60 } }
   ],
   "vars": {
+    // Error reports to the admin Errors page (docs/features/error-reporting.md)
+    "ERRORS_INGEST_URL": "https://admin.api.qa.alummahnow.net/internal/errors",
     "ENVIRONMENT": "qa",
     "WEBSOCKET_URL": "https://realtime.qa.alummahnow.net",
     "Issuer": "https://auth.qa.alummahnow.net"

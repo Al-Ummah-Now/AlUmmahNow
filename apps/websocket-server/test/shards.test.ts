@@ -192,3 +192,18 @@ test('400 sockets over shards, parallel broadcasts with random hibernation: ever
 	const unauth = await app.fetch(new Request('https://realtime.test/presence/u7'), env as any);
 	assert.equal(unauth.status, 401);
 });
+
+test('errors go to the admin Errors page: a 5xx carries an ERR- reference and no internals', async () => {
+  // Every binding read throws (except the reporter's own vars): the route crashes
+  const reporterKeys = new Set(['ERRORS_INGEST_URL', 'INTERNAL_API_KEY', 'ENVIRONMENT', 'CF_VERSION_METADATA']);
+  const brokenEnv = new Proxy({}, { get: (_t, k) => { if (typeof k === 'string' && reporterKeys.has(k)) return undefined; throw new TypeError('Cannot read properties of undefined (secret internals)'); } });
+  const res = await app.request('/stats', {}, brokenEnv as never);
+    assert.equal(res.status, 500);
+    const body = await res.json();
+    const text = JSON.stringify(body);
+    // Reported either by onError (crash: reference in the body) or by the 5xx middleware (header)
+    const ref = res.headers.get('X-Error-Ref');
+    assert.match(ref ?? '', /^ERR-[0-9A-Z]{4}-[0-9A-Z]{4}$/);
+    if (body.reference) assert.equal(body.reference, ref);
+    assert.doesNotMatch(text, /secret internals|TypeError/);
+});

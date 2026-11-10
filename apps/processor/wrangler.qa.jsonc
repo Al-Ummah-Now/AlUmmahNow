@@ -73,6 +73,8 @@
   },
 
   "vars": {
+    // Error reports to the admin Errors page (docs/features/error-reporting.md)
+    "ERRORS_INGEST_URL": "https://admin.api.qa.alummahnow.net/internal/errors",
     "ENVIRONMENT": "qa",
     "LOG_LEVEL": "debug",
     "WEBSOCKET_URL": "https://realtime.qa.alummahnow.net",

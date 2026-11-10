@@ -8,6 +8,7 @@ import { cors } from 'hono/cors';
 import { WebSocketDurableObject, MAX_BROADCAST_ITEMS } from './websocket';
 import { broadcastToShards, readAllShards, shardsInRandomOrder, type BroadcastItem } from './shards';
 import { createLogger } from '@al-ummah/logger';
+import { reportServerError, requestIdOf, type ErrorReporterEnv, type ExecutionContextLike } from '@al-ummah/shared-types';
 
 // Create logger instance
 const logger = createLogger('websocket-server', { logLevel: 'info', forceHttpLogging: true });
@@ -27,6 +28,36 @@ interface ShardStats {
 }
 
 const app = new Hono<{ Bindings: Env }>();
+
+function ctxOf(c: { executionCtx: ExecutionContextLike }): ExecutionContextLike | undefined {
+  try {
+    return c.executionCtx;
+  } catch {
+    return undefined; // app.request() in tests has no execution context
+  }
+}
+
+// Crashes and 5xx answers go to the admin Errors page; the caller gets only the reference
+app.use('*', async (c, next) => {
+  await next();
+  if (c.res.status >= 500 && !c.res.headers.has('X-Error-Ref') && c.res.status !== 101) {
+    const ref = reportServerError('websocket', c.env as unknown as ErrorReporterEnv, ctxOf(c), null, {
+      kind: 'http', route: c.req.path, method: c.req.method, status: c.res.status, requestId: requestIdOf(c.req.raw),
+    });
+    try {
+      c.res.headers.set('X-Error-Ref', ref);
+    } catch {
+      // immutable headers (a proxied Durable Object response): reported anyway
+    }
+  }
+});
+app.onError((err, c) => {
+  logger.error('Unhandled error', { path: c.req.path, error: err instanceof Error ? err.message : String(err) });
+  const ref = reportServerError('websocket', c.env as unknown as ErrorReporterEnv, ctxOf(c), err, {
+    route: c.req.path, method: c.req.method, status: 500, requestId: requestIdOf(c.req.raw),
+  });
+  return c.json({ success: false, error: 'Internal server error', reference: ref }, 500, { 'X-Error-Ref': ref });
+});
 
 // CORS middleware
 app.use('/*', cors({

@@ -57,6 +57,8 @@
     }
   ],
   "vars": {
+    // Error reports to the admin Errors page (docs/features/error-reporting.md)
+    "ERRORS_INGEST_URL": "https://admin.api.qa.alummahnow.net/internal/errors",
     "MAX_RETRIES": "3",
     "BATCH_SIZE": "50",
     "LOCK_TTL": "120",

@@ -78,6 +78,8 @@
 
 	// Environment variables
 	"vars": {
+		// Error reports to the admin Errors page (docs/features/error-reporting.md)
+		"ERRORS_INGEST_URL": "https://admin.api.alummahnow.net/internal/errors",
 		"ENVIRONMENT": "production",
 		"LOG_LEVEL": "info",
 		"WEBSOCKET_URL": "https://realtime.alummahnow.net",
@@ -162,6 +164,8 @@
 				]
 			},
 			"vars": {
+				// Error reports to the admin Errors page (docs/features/error-reporting.md)
+				"ERRORS_INGEST_URL": "https://admin.api.stage.alummahnow.net/internal/errors",
 				"ENVIRONMENT": "stage",
 				"LOG_LEVEL": "info",
 				"WEBSOCKET_URL": "https://realtime.stage.alummahnow.net",

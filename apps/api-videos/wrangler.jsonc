@@ -246,6 +246,8 @@
 	 */
 	// "vars": { "MY_VARIABLE": "production_value" },
 	"vars": {
+		// Error reports to the admin Errors page (docs/features/error-reporting.md)
+		"ERRORS_INGEST_URL": "https://admin.api.alummahnow.net/internal/errors",
 		"ENVIRONMENT": "production",
 		"ZONE": "al-ummah-now-images",
 		"ClientId": "b1770235-e4b6-42f3-9eb4-3c03ca111b02",
@@ -466,6 +468,8 @@
 				}
 			],
 			"vars": {
+				// Error reports to the admin Errors page (docs/features/error-reporting.md)
+				"ERRORS_INGEST_URL": "https://admin.api.stage.alummahnow.net/internal/errors",
 				"ENVIRONMENT": "stage",
 				"ZONE": "al-ummah-now-images",
 				"ClientId": "b1770235-e4b6-42f3-9eb4-3c03ca111b02",

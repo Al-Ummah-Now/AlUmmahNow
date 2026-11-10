@@ -94,6 +94,9 @@ export interface QueueEnvironment {
   WEBSOCKET_URL?: string;
   /** Secrets Store binding (or plain string in local dev) for websocket-server /broadcast */
   INTERNAL_API_KEY?: string | { get: () => Promise<string> };
+  /** admin-api error ingest (Errors page): crashes and dead letters are reported there */
+  ERRORS_INGEST_URL?: string;
+  CF_VERSION_METADATA?: { id?: string; tag?: string };
   /** Workers AI binding (Epic 28 moderation). Optional: scans are skipped when unbound. */
   AI?: { run(model: string, input: Record<string, unknown>, options?: Record<string, unknown>): Promise<unknown> };
   /** Env-level kill switch for AI moderation ("false" = off). */

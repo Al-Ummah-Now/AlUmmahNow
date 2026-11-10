@@ -244,3 +244,38 @@ describe('SC-4 and the whole run', () => {
     assert.deepEqual([m.publishedToday, m.failedToday, m.averageDelay], [4, 1, 10]);
   });
 });
+
+describe('failed scheduled publish: flagged for an admin, retried from the Errors page', () => {
+  it('reports a needs-action item when retries run out, and /failed/retry puts it back', async () => {
+    const { handleSchedulerRequest, scheduledPublishKey } = await import('../src/failed-retry');
+    const r2 = new FakeR2(0);
+    const video = { videoId: 'vid-77', scheduledPublishDate: '2026-11-09T10:00:00.000Z', retryCount: 3 } as unknown as ScheduledVideoMetadata;
+    r2.set(buildScheduleKey(new Date(video.scheduledPublishDate), video.videoId), video);
+    const posts: Array<{ events?: Array<{ action?: Record<string, unknown> }> }> = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (_u: unknown, init?: RequestInit) => {
+      if (init?.body) posts.push(JSON.parse(String(init.body)));
+      return new Response(null, { status: 202 });
+    }) as typeof fetch;
+    const pending: Promise<unknown>[] = [];
+    const env = { SCHEDULED_VIDEOS: r2, MAX_RETRIES: '3', INTERNAL_API_KEY: 'k', ERRORS_INGEST_URL: 'https://admin.api.qa.example/internal/errors', WEBSOCKET_URL: '' } as never;
+    try {
+      await scheduleRetries([{ video, error: new Error('R2 write failed') }], env, { waitUntil: (p) => void pending.push(p) });
+      await Promise.all(pending);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+    const item = posts.flatMap((p) => p.events ?? []).find((e) => e.action)?.action;
+    assert.equal(item?.key, scheduledPublishKey('vid-77'));
+    assert.deepEqual(item?.retry, { kind: 'service', service: 'scheduler', path: '/failed/retry', body: { videoId: 'vid-77', scheduledPublishDate: video.scheduledPublishDate } });
+
+    const call = (key: string, body: unknown) =>
+      handleSchedulerRequest(new Request('https://scheduler.internal/failed/retry', { method: 'POST', headers: { 'X-API-Key': key }, body: JSON.stringify(body) }), env);
+    assert.equal((await call('wrong', item?.retry && (item.retry as { body: unknown }).body)).status, 401);
+    assert.equal((await call('k', (item!.retry as { body: unknown }).body)).status, 200);
+    assert.ok(![...r2.data.keys()].some((k) => k.startsWith(FAILED_PREFIX)), 'no longer in failed/');
+    const back = [...r2.data.entries()].find(([k]) => k.endsWith('/vid-77.json'));
+    assert.equal(JSON.parse(back![1].body).retryCount, 0);
+    assert.equal((await call('k', (item!.retry as { body: unknown }).body)).status, 404, 'a second retry finds nothing');
+  });
+});

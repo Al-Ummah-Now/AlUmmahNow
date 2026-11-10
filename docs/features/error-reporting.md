@@ -150,7 +150,8 @@ and only what is registered there:
   up, and the inbox's own Retry closes it).
 - `{ kind: 'service', service, path, body }` — POST with the internal API key
   to an allowlisted path of a Worker admin-api has a service binding to
-  (`SERVICE_RETRIES`; today: `processor` `/dlq/replay`).
+  (`SERVICE_RETRIES`; today: `processor` `/dlq/replay` replays a dead letter,
+  `scheduler` `/failed/retry` puts a failed scheduled publish back on the schedule).
 
 To add a retry: register the handler or the service path, add the service
 binding to `apps/admin-api/wrangler*.jsonc` (production, stage and QA) and to

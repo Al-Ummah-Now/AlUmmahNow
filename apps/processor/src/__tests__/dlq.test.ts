@@ -188,3 +188,83 @@ describe('processor worker DLQ wiring', () => {
     expect((await listDeadLetters(db)).map((r) => r.id)).toEqual(['new']);
   });
 });
+
+describe('dead letters flag the admin Errors page', () => {
+  const realFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = realFetch;
+  });
+
+  it('reports a needs-action item with a Replay action, and resolves it when replayed', async () => {
+    const posts: Array<{ url: string; key: string | null; body: { events?: Array<{ kind: string; action?: Record<string, unknown> }>; resolved?: Array<{ key: string }> } }> = [];
+    global.fetch = jest.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      posts.push({ url: String(url), key: new Headers(init?.headers).get('X-API-Key'), body: JSON.parse(String(init?.body)) });
+      return new Response(null, { status: 202 });
+    }) as typeof fetch;
+    const pending: Promise<unknown>[] = [];
+    const ctx = { waitUntil: (p: Promise<unknown>) => void pending.push(p) };
+    const db = createSqliteD1();
+    const e = {
+      MESSAGE_QUEUE: { send: jest.fn().mockResolvedValue(undefined) },
+      NOTIFICATIONS_DB: db,
+      ENVIRONMENT: 'qa',
+      LOG_LEVEL: 'error',
+      INTERNAL_API_KEY: 'secret',
+      ERRORS_INGEST_URL: 'https://admin.api.qa.example/internal/errors',
+    } as unknown as QueueEnvironment;
+
+    await worker.queue({ queue: 'al-ummah-now-dlq-qa', messages: [queueMessage('q-9', videoMessage({ failureReason: 'D1 down' }), 4)] } as never, e, ctx);
+    await Promise.all(pending);
+    expect(posts).toHaveLength(1);
+    expect(posts[0].url).toBe('https://admin.api.qa.example/internal/errors');
+    expect(posts[0].key).toBe('secret');
+    const event = posts[0].body.events![0];
+    expect(event.kind).toBe('action');
+    expect(event.action).toEqual(
+      expect.objectContaining({
+        key: 'dlq:q-9',
+        source: 'dlq',
+        retry: { kind: 'service', service: 'processor', path: '/dlq/replay', body: { id: 'q-9' } },
+        retryLabel: 'Replay message',
+      })
+    );
+
+    const res = await handleDeadLetterRequest(
+      new Request('https://p/dlq/replay', { method: 'POST', headers: { 'X-API-Key': 'secret' }, body: JSON.stringify({ id: 'q-9' }) }),
+      new URL('https://p/dlq/replay'),
+      e,
+      logger,
+      ctx
+    );
+    expect(res.status).toBe(200);
+    await Promise.all(pending);
+    expect(posts[1].body.resolved).toEqual([{ key: 'dlq:q-9' }]);
+  });
+
+  it('stores a Contact us mail failure without a second item (admin-api flags it with its own Retry)', async () => {
+    const fetchMock = jest.fn(async () => new Response(null, { status: 202 }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const pending: Promise<unknown>[] = [];
+    const ctx = { waitUntil: (p: Promise<unknown>) => void pending.push(p) };
+    const e = {
+      NOTIFICATIONS_DB: createSqliteD1(),
+      ENVIRONMENT: 'qa',
+      LOG_LEVEL: 'error',
+      INTERNAL_API_KEY: 'secret',
+      ERRORS_INGEST_URL: 'https://admin.api.qa.example/internal/errors',
+    } as unknown as QueueEnvironment;
+    const body = { id: 'contact-ack-cm1', type: 'contact_mail', failureReason: 'refused', job: { v: 1, kind: 'ack', messageId: 'cm1' } };
+    await worker.queue({ queue: 'al-ummah-now-dlq-qa', messages: [queueMessage('q-c1', body as never, 1)] } as never, e, ctx);
+    await Promise.all(pending);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('answers a crash of the fetch handler with a reference, not the error', async () => {
+    global.fetch = jest.fn(async () => new Response(null, { status: 202 })) as typeof fetch;
+    const res = await worker.fetch(new Request('https://p/health'), null as unknown as QueueEnvironment, { waitUntil: () => undefined });
+    expect(res.status).toBe(500);
+    const body = (await res.json()) as { reference: string; error: string };
+    expect(body.reference).toMatch(/^ERR-/);
+    expect(JSON.stringify(body)).not.toMatch(/TypeError|Cannot read/);
+  });
+});

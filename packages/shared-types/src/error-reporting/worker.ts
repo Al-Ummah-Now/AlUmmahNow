@@ -95,6 +95,22 @@ export function reportServerError(
   details: ServerErrorDetails = {},
   fetchImpl: typeof fetch = fetch,
 ): string {
+  // Reporting must never break the caller (a broken env, an odd error object)
+  try {
+    return reportServerErrorOrThrow(app, env ?? {}, ctx, error, details, fetchImpl);
+  } catch {
+    return details.ref ?? newErrorRef();
+  }
+}
+
+function reportServerErrorOrThrow(
+  app: ErrorApp,
+  env: ErrorReporterEnv,
+  ctx: ExecutionContextLike | undefined,
+  error: unknown,
+  details: ServerErrorDetails,
+  fetchImpl: typeof fetch,
+): string {
   const event = buildServerEvent(app, error, details, env);
   if (!event) return details.ref ?? newErrorRef();
   const url = env.ERRORS_INGEST_URL;
@@ -117,7 +133,7 @@ export function reportServerError(
 
 /** Posts a batch to admin-api in the background (waitUntil). Never throws. */
 export function postReport(env: ErrorReporterEnv, ctx: ExecutionContextLike | undefined, batch: ErrorReportBatch, fetchImpl: typeof fetch = fetch): Promise<void> {
-  const url = env.ERRORS_INGEST_URL;
+  const url = env?.ERRORS_INGEST_URL;
   const work = (async () => {
     if (!url) return;
     const key = await resolveKey(env.INTERNAL_API_KEY);
@@ -162,6 +178,14 @@ export interface NeedsActionDetails extends NeedsActionInput {
  *   });
  */
 export function reportNeedsAction(app: ErrorApp, env: ErrorReporterEnv, ctx: ExecutionContextLike | undefined, d: NeedsActionDetails, fetchImpl: typeof fetch = fetch): string {
+  try {
+    return reportNeedsActionOrThrow(app, env ?? {}, ctx, d, fetchImpl);
+  } catch {
+    return '';
+  }
+}
+
+function reportNeedsActionOrThrow(app: ErrorApp, env: ErrorReporterEnv, ctx: ExecutionContextLike | undefined, d: NeedsActionDetails, fetchImpl: typeof fetch): string {
   const err = d.error instanceof Error ? d.error : null;
   const { message, error, route, userId, requestId, release, test, extra, ...action } = d;
   const event = scrubEvent({

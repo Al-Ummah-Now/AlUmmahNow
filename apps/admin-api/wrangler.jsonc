@@ -137,10 +137,11 @@
 	"triggers": { "crons": ["*/5 * * * *", "17 3 * * *"] },
 	// Private source maps uploaded by the release (lib/sourcemaps.ts) are in r2_buckets as SOURCEMAPS.
 	// VIDEOS: api-videos owns the content data: /internal/* (processing health, content management)
-	// PROCESSOR: Retry of dead-lettered messages on the Errors page (lib/errors-actions.ts)
+	// PROCESSOR, SCHEDULER: Retry actions on the Errors page (lib/errors-actions.ts): dead letters, failed scheduled publishes
 	"services": [
 		{ "binding": "VIDEOS", "service": "videos" },
-		{ "binding": "PROCESSOR", "service": "al-ummah-now-processor" }
+		{ "binding": "PROCESSOR", "service": "al-ummah-now-processor" },
+		{ "binding": "SCHEDULER", "service": "al-ummah-scheduler" }
 	],
 
 	// Environment variables
@@ -285,10 +286,11 @@
 			},
 			// Every 5 minutes: status reads of open requests to auth; 03:17 UTC: error data retention
 			"triggers": { "crons": ["*/5 * * * *", "17 3 * * *"] },
-			// Retry actions on the Errors page (lib/errors-actions.ts) and the videos service
+			// VIDEOS: content data; PROCESSOR, SCHEDULER: Retry actions on the Errors page (lib/errors-actions.ts)
 			"services": [
 				{ "binding": "VIDEOS", "service": "videos-stage" },
-				{ "binding": "PROCESSOR", "service": "al-ummah-now-processor-stage" }
+				{ "binding": "PROCESSOR", "service": "al-ummah-now-processor-stage" },
+				{ "binding": "SCHEDULER", "service": "al-ummah-scheduler-stage" }
 			],
 			"vars": {
 				"ENVIRONMENT": "stage",

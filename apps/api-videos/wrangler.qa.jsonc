@@ -186,6 +186,8 @@
     }
   ],
   "vars": {
+    // Error reports to the admin Errors page (docs/features/error-reporting.md)
+    "ERRORS_INGEST_URL": "https://admin.api.qa.alummahnow.net/internal/errors",
     // Upload-session limits enforced on QA with roomy numbers, so limiter bugs show here (#290)
     "UPLOAD_RATE_LIMIT": "relaxed",
     "ZONE": "al-ummah-now-images",

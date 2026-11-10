@@ -1,9 +1,10 @@
-import type { ScheduledVideoMetadata } from '@al-ummah/shared-types';
+import { reportNeedsAction, reportServerError, type ExecutionContextLike, type ScheduledVideoMetadata } from '@al-ummah/shared-types';
 import type { Env, FailedVideo } from './types';
 import { buildScheduleKey, markAsFailed } from './publisher';
 import { sendFailureNotification } from './notifier';
 import { logger } from './lib/logger';
 import { logEvent } from './monitoring';
+import { scheduledPublishKey } from './failed-retry';
 
 /**
  * Schedule retries for failed video publishes
@@ -12,7 +13,8 @@ import { logEvent } from './monitoring';
  */
 export async function scheduleRetries(
   failed: FailedVideo[],
-  env: Env
+  env: Env,
+  ctx?: ExecutionContextLike
 ): Promise<void> {
   const maxRetries = parseInt(env.MAX_RETRIES, 10);
 
@@ -25,9 +27,22 @@ export async function scheduleRetries(
       try {
         // Out of the schedule for good (SC-3), so the owner is told once
         await markAsFailed(env.SCHEDULED_VIDEOS, video, error);
+        // Flag it for an admin, with a Retry that puts it back on the schedule (failed-retry.ts)
+        reportNeedsAction('scheduler', env, ctx, {
+          key: scheduledPublishKey(video.videoId),
+          source: 'scheduler',
+          title: 'Scheduled publish failed',
+          message: `${error.message} (gave up after ${maxRetries} retries)`,
+          itemType: 'video',
+          itemId: video.videoId,
+          retry: { kind: 'service', service: 'scheduler', path: '/failed/retry', body: { videoId: video.videoId, scheduledPublishDate: video.scheduledPublishDate } },
+          retryLabel: 'Publish again',
+          extra: { scheduledFor: video.scheduledPublishDate },
+        });
         await sendFailureNotification(env, video, error);
       } catch (moveError) {
         logger.error(`Failed to move video ${video.videoId} to the failed list:`, moveError);
+        reportServerError('scheduler', env, ctx, moveError, { route: 'cron:mark-failed', extra: { videoId: video.videoId } });
       }
       continue;
     }
@@ -62,6 +77,7 @@ export async function scheduleRetries(
       });
     } catch (retryError) {
       logger.error(`Failed to schedule retry for video ${video.videoId}:`, retryError);
+      reportServerError('scheduler', env, ctx, retryError, { route: 'cron:reschedule', extra: { videoId: video.videoId } });
     }
   }
 }

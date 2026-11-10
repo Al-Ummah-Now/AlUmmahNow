@@ -29,6 +29,7 @@ type Fetcher = { fetch(input: string, init?: RequestInit): Promise<Response> };
 /** Service name in a retry spec → the binding and the paths Retry may POST to. */
 export const SERVICE_RETRIES: Record<string, { binding: keyof AdminBindings; paths: readonly string[] }> = {
   processor: { binding: 'PROCESSOR', paths: ['/dlq/replay'] },
+  scheduler: { binding: 'SCHEDULER', paths: ['/failed/retry'] },
 };
 
 export const BUILTIN_RETRIES: Record<string, (env: AdminBindings, args: Record<string, string>, attempt: string) => Promise<RetryOutcome>> = {
