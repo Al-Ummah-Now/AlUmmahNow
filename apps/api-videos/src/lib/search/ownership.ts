@@ -134,7 +134,8 @@ export async function columnsCurrent(db: SearchDb, kind: OwnershipKind): Promise
 
 /**
  * List orders. Every column is descending (or every one ascending), so a
- * page is one seek in the matching index of migration 0013, however deep.
+ * page is a bounded seek in the matching index of migration 0013, however
+ * deep (see keysetArms).
  */
 export type OwnershipSort = 'latest' | 'oldest' | 'popular' | 'updated' | 'live-first';
 
@@ -195,30 +196,68 @@ export interface KeysetPageQuery {
 }
 
 /**
+ * The keyset condition "after `values` in `columns` order", as one condition
+ * per arm: arm i fixes the first i columns to the position's values and
+ * takes column i past it. Every arm is a full seek of the list's index
+ * (equalities, then one range), and the arms cover disjoint, consecutive
+ * runs of the order, deepest first. One row-value comparison
+ * `(c0, c1) < (?, ?)` would say the same, but SQLite only seeks a row value
+ * on plain columns: over the COALESCE(created_at, 0) indexes it seeks
+ * `kind = ?` alone and walks every row before the position (a deep page
+ * then costs as much as the catalogue).
+ */
+export function keysetArms(columns: string[], direction: 'DESC' | 'ASC', values: unknown[]): Array<{ where: string; params: unknown[]; orderBy: string }> {
+  const op = direction === 'DESC' ? '<' : '>';
+  const arms: Array<{ where: string; params: unknown[]; orderBy: string }> = [];
+  for (let i = columns.length - 1; i >= 0; i--) {
+    const parts = columns.slice(0, i).map(c => `${c} = ?`);
+    parts.push(`${columns[i]} ${op} ?`);
+    // Only the free columns: SQLite does not treat `COALESCE(...) = ?` as a
+    // constant of the order and would sort the arm's rows
+    arms.push({ where: parts.join(' AND '), params: values.slice(0, i + 1), orderBy: columns.slice(i).map(c => `${c} ${direction}`).join(', ') });
+  }
+  return arms;
+}
+
+/**
  * One page of rows in `sort` order after `after`. Fetches `limit + 1` so the
  * caller knows if more exist. Rows inserted meanwhile before the position are
  * not repeated, and none after it is skipped.
+ *
+ * With a position the query is a UNION ALL of keysetArms, each arm limited
+ * to `limit + 1` rows in index order: at most columns × (limit + 1) index
+ * entries are read whatever the depth. Arms are concatenated in arm order
+ * (each one's rows come before every row of the next), so no sort runs.
  */
 export async function keysetPage(db: SearchDb, q: KeysetPageQuery): Promise<{ ids: string[]; last: KeysetPosition | null; hasMore: boolean }> {
   const { columns, direction } = SORT_COLUMNS[q.sort];
   const where = [`kind = ?`, ...q.where];
   const params: unknown[] = [q.kind, ...q.params];
-  if (q.after && q.after.sort === q.sort) {
-    // Row-value comparison: SQLite seeks the index to the position
-    where.push(`(${columns.join(', ')}) ${direction === 'DESC' ? '<' : '>'} (${columns.map(() => '?').join(', ')})`);
-    params.push(...q.after.values);
-  }
   const select = columns.map((c, i) => `${c} AS k${i}`).join(', ');
-  const offset = !q.after && q.offset ? ` OFFSET ${Math.max(0, Math.floor(q.offset))}` : '';
-  const { results } = await db.prepare(
-    `SELECT ${select} FROM ${OWNERSHIP_TABLE} WHERE ${where.join(' AND ')} ORDER BY ${columns.map(c => `${c} ${direction}`).join(', ')} LIMIT ?${offset}`,
-  ).bind(...params, q.limit + 1).all<Record<string, number | string>>();
-  const rows = (results ?? []).slice(0, q.limit);
+  const orderBy = columns.map(c => `${c} ${direction}`).join(', ');
+  let rowsAll: Array<Record<string, number | string>>;
+  if (q.after && q.after.sort === q.sort) {
+    const arms = keysetArms(columns, direction, q.after.values);
+    const sql = arms.map((arm, i) =>
+      `SELECT * FROM (SELECT ${i} AS arm, ${select} FROM ${OWNERSHIP_TABLE} WHERE ${[...where, arm.where].join(' AND ')} ORDER BY ${arm.orderBy} LIMIT ?)`,
+    ).join(' UNION ALL ');
+    const binds = arms.flatMap(arm => [...params, ...arm.params, q.limit + 1]);
+    const { results } = await db.prepare(sql).bind(...binds).all<Record<string, number | string>>();
+    // Array sort is stable: arm order, and index order within an arm
+    rowsAll = (results ?? []).map((r, n) => ({ r, n })).sort((a, b) => Number(a.r.arm) - Number(b.r.arm) || a.n - b.n).map(x => x.r).slice(0, q.limit + 1);
+  } else {
+    const offset = q.offset ? ` OFFSET ${Math.max(0, Math.floor(q.offset))}` : '';
+    const { results } = await db.prepare(
+      `SELECT ${select} FROM ${OWNERSHIP_TABLE} WHERE ${where.join(' AND ')} ORDER BY ${orderBy} LIMIT ?${offset}`,
+    ).bind(...params, q.limit + 1).all<Record<string, number | string>>();
+    rowsAll = results ?? [];
+  }
+  const rows = rowsAll.slice(0, q.limit);
   const lastRow = rows[rows.length - 1];
   return {
     ids: rows.map(r => String(r[`k${columns.length - 1}`])),
     last: lastRow ? { sort: q.sort, values: columns.map((_, i) => (i === columns.length - 1 ? String(lastRow[`k${i}`]) : Number(lastRow[`k${i}`]))) } : null,
-    hasMore: (results ?? []).length > q.limit,
+    hasMore: rowsAll.length > q.limit,
   };
 }
 

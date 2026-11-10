@@ -76,15 +76,35 @@ async function page(app: ReturnType<typeof buildApp>, url: string, env: unknown)
 	return { ids: (result.data as Array<{ id: string }>).map((v) => v.id), cursor: result.cursor as string };
 }
 
-/** Plans of the traced reads of content_ownership: each must seek an index, never sort the table. */
-function assertSeeks(db: SqliteD1, traced: TracedQuery[], table = 'content_ownership') {
+/**
+ * Plans of the traced reads of content_ownership: each must seek an index,
+ * never sort the table. A continued page (`continued`) must also seek to the
+ * cursor's position: every index search ends on a range of the sort key, and
+ * one of them reaches the id. A plan that seeks only the equalities
+ * (`kind=?`) walks every row before the position, so a deep page would cost
+ * as much as the catalogue.
+ */
+function assertSeeks(db: SqliteD1, traced: TracedQuery[], options: { continued?: boolean; table?: string } = {}) {
+	const table = options.table ?? 'content_ownership';
 	const reads = traced.filter((q) => /^\s*SELECT/i.test(q.sql) && q.sql.includes(table) && /ORDER BY/i.test(q.sql));
 	assert.ok(reads.length > 0, 'the request read the index');
+	let continuedReads = 0;
 	for (const q of reads) {
-		const plan = db.plan(q).join(' | ');
+		const steps = db.plan(q);
+		const plan = steps.join(' | ');
 		assert.match(plan, /USING (COVERING )?INDEX/, `${q.sql}\n${plan}`);
 		assert.doesNotMatch(plan, /TEMP B-TREE FOR ORDER BY/, `sorts instead of seeking:\n${q.sql}\n${plan}`);
+		if (!options.continued) continue;
+		const searches = steps.filter((s) => s.startsWith(`SEARCH ${table} `));
+		if (!searches.length) continue;
+		continuedReads++;
+		for (const s of searches) {
+			const constraints = /\(([^()]*(?:\([^()]*\)[^()]*)*)\)\s*$/.exec(s)?.[1] ?? '';
+			assert.match(constraints, /[<>]\?$|[<>]\(\?/, `seeks the equalities only, not the position:\n${q.sql}\n${plan}`);
+		}
+		assert.ok(searches.some((s) => /\bid[<>]\?/.test(s)), `no arm seeks to the cursor's id:\n${q.sql}\n${plan}`);
 	}
+	if (options.continued) assert.ok(continuedReads > 0, 'a continued page read the index from its position');
 }
 
 describe('home feed on a 30k-video catalogue', () => {
@@ -101,7 +121,7 @@ describe('home feed on a 30k-video catalogue', () => {
 			const result = await page(app, `/api/videos?limit=24${cursor ? `&cursor=${cursor}` : ''}`, env);
 			assert.equal(videos.calls - callsBefore, 24, `page ${p}: one get per video shown`);
 			assert.ok(db.queries - queriesBefore <= 3, `page ${p}: ${db.queries - queriesBefore} D1 queries`);
-			if (p === 0 || p === 39) assertSeeks(db, db.trace);
+			if (p === 0 || p === 39) assertSeeks(db, db.trace, { continued: p > 0 });
 			seen.push(...result.ids);
 			cursor = result.cursor;
 		}
@@ -120,7 +140,22 @@ describe('home feed on a 30k-video catalogue', () => {
 		const deep = await page(app, `/api/videos?limit=24&cursor=${cursor}`, env);
 		assert.equal(videos.calls - before, 24);
 		assert.deepEqual(deep.ids, expected.slice(13_000, 13_024));
-		assertSeeks(db, db.trace);
+		assertSeeks(db, db.trace, { continued: true });
+	});
+
+	it('deep pages of the popular order and of a channel seek to the cursor too', async () => {
+		const { db, env } = await seed();
+		const app = buildApp((r) => r.get('/api/videos', VideosList), null);
+		for (const url of ['/api/videos?sort=views&limit=50', '/api/videos?channelId=ch7&limit=10']) {
+			let cursor = '';
+			for (let p = 0; p < 6; p++) {
+				db.trace = [];
+				const result = await page(app, `${url}${cursor ? `&cursor=${cursor}` : ''}`, env);
+				if (p === 5) assertSeeks(db, db.trace, { continued: true });
+				cursor = result.cursor;
+				assert.ok(cursor, `${url}: page ${p} has a next cursor`);
+			}
+		}
 	});
 
 	it('pages with no duplicates or gaps while videos are added and removed meanwhile', async () => {
@@ -249,7 +284,7 @@ describe('playlists and live streams from the ownership index', () => {
 			const before = env.playlists.calls;
 			const result = await page(app, `/api/playlists?channelId=ch7&limit=12${cursor ? `&cursor=${cursor}` : ''}`, env);
 			assert.ok(env.playlists.calls - before <= 12, `one get per playlist (${env.playlists.calls - before})`);
-			if (p === 0) assertSeeks(db, db.trace);
+			if (p <= 1) assertSeeks(db, db.trace, { continued: p > 0 });
 			seen.push(...result.ids);
 			cursor = result.cursor;
 		}
@@ -300,7 +335,9 @@ describe('playlists and live streams from the ownership index', () => {
 		const live: string[] = [];
 		let cursor = '';
 		for (let p = 0; p < 100 && (p === 0 || cursor); p++) {
+			db.trace = [];
 			const result = await page(app, `/api/live?status=ended&limit=20${cursor ? `&cursor=${cursor}` : ''}`, env);
+			if (p === 5) assertSeeks(db, db.trace, { continued: true });
 			if (cursor) assert.ok(result.ids.length === 20 || !result.cursor, 'full pages until the last');
 			live.push(...result.ids);
 			cursor = result.cursor;
