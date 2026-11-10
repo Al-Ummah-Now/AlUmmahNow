@@ -105,9 +105,11 @@ describe('existing cookies on deploy (no expiresAt)', () => {
 describe('addAccount', () => {
   it('stores expiresAt for a new sign-in', async () => {
     apiRequestServer.mockResolvedValue(null);
-    const access = jwt('u1', Date.now(), 15 * MINUTE);
+    // One clock reading: two calls can straddle a second and miss by 1000ms
+    const now = Date.now();
+    const access = jwt('u1', now, 15 * MINUTE);
     await SessionManager.addAccount({ accessToken: access, refreshToken: 'r1', expiresIn: 900 }, { id: 'u1', email: 'u1@example.com', displayName: 'u1', createdAt: '', updatedAt: '' });
-    expect(stored().accounts.u1.expiresAt).toBe(Math.floor((Date.now() + 15 * MINUTE) / 1000) * 1000);
+    expect(stored().accounts.u1.expiresAt).toBe(Math.floor((now + 15 * MINUTE) / 1000) * 1000);
   });
 
   it('a new sign-in clears needsSignIn even over a legacy token that expires later', async () => {
