@@ -1,4 +1,6 @@
 import type { Page } from '@playwright/test';
+import { runId } from './test-utils/run-users';
+import { webRunUserAddress } from './test-utils/web-run-users';
 import { test, expect } from './fixtures';
 import { ANONYMOUS_STATE } from './test-utils/auth-state';
 import { SINK_DOMAIN } from './test-utils/code-sink';
@@ -12,7 +14,10 @@ import { fillSecret } from './release/secret-fill';
  * broken callback or a cookie a browser refuses.
  */
 const stamp = process.env.E2E_USERS_TIMESTAMP;
-const email = process.env.E2E_SIGNIN_EMAIL ?? (stamp ? `test-single-${stamp}@${SINK_DOMAIN}` : undefined);
+// CI run mode (E2E_RUN_ID): this job's own single-channel user (auth.setup.ts)
+const email =
+  process.env.E2E_SIGNIN_EMAIL ??
+  (runId() ? webRunUserAddress('single') : stamp ? `test-single-${stamp}@${SINK_DOMAIN}` : undefined);
 // Read when signing in, so collecting this file never needs the secret
 const password = () => process.env.E2E_SIGNIN_PASSWORD ?? e2eUserPassword();
 
@@ -51,7 +56,7 @@ test.use({ trace: 'off' });
 
 test.describe('Real sign-in', () => {
   test.use({ storageState: ANONYMOUS_STATE });
-  test.skip(!email, 'Needs E2E_USERS_TIMESTAMP or E2E_SIGNIN_EMAIL');
+  test.skip(!email, 'Needs E2E_RUN_ID, E2E_USERS_TIMESTAMP or E2E_SIGNIN_EMAIL');
 
   test('AUTH-REAL signs in, survives a reload, signs out and signs in again', async ({ page }) => {
     test.setTimeout(180000);

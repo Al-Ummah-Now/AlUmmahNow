@@ -18,12 +18,15 @@ import * as fs from 'fs';
 import { AUTH_STATE, type AuthUser } from './test-utils/auth-state';
 import { listOwnVideos, userApi, SEED_TITLES } from './test-utils/e2e-videos';
 import { ensureFreshSession } from './test-utils/fresh-session';
+import { runId } from './test-utils/run-users';
 
 const USERS: AuthUser[] = ['single', 'multi', 'none', 'scratch'];
 const SEED_TITLE_SET = new Set<string>(Object.values(SEED_TITLES));
 
 export interface CleanupOptions {
   keepSeed: boolean;
+  /** Default: the four channel users */
+  users?: AuthUser[];
   /**
    * Only delete videos created at least this long ago. The teardown passes a
    * grace period so it never deletes the in-flight disposable videos of other
@@ -39,7 +42,7 @@ export async function cleanupTestVideos(opts: CleanupOptions): Promise<number> {
   const log = opts.log ?? (() => undefined);
   let deleted = 0;
 
-  for (const user of USERS) {
+  for (const user of opts.users ?? USERS) {
     if (!fs.existsSync(AUTH_STATE[user])) {
       log(`[cleanup] no stored session for ${user}; skipping`);
       continue;
@@ -78,8 +81,59 @@ export async function cleanupTestVideos(opts: CleanupOptions): Promise<number> {
   return deleted;
 }
 
+const RUN_USERS: AuthUser[] = ['single', 'multi', 'none', 'scratch', 'fresh'];
+
+/**
+ * CI run mode (E2E_RUN_ID): the users are this job's own, so everything they
+ * own goes. Their videos first (the owner delete also removes the Bunny video),
+ * then DELETE /api/privacy/data (the GDPR erase: profile, channels, playlists,
+ * posts, history, subscriptions, likes; comments anonymised), repeated while
+ * it reports `complete: false`. The workflow's teardown then deletes the
+ * accounts on the auth server (scripts/e2e/teardown-run-users.ts). Returns
+ * the number of users erased; failures are logged, never thrown.
+ */
+export async function eraseRunUsers(log: (message: string) => void = () => undefined): Promise<number> {
+  if (!runId()) throw new Error('eraseRunUsers only runs in run mode (E2E_RUN_ID)');
+  await cleanupTestVideos({ keepSeed: false, minAgeMs: 0, log, users: RUN_USERS });
+  let erased = 0;
+  for (const user of RUN_USERS) {
+    if (!fs.existsSync(AUTH_STATE[user])) continue;
+    try {
+      await ensureFreshSession(AUTH_STATE[user]);
+      const u = userApi(user);
+      let resumeToken: string | undefined;
+      for (let round = 0; round < 20; round++) {
+        const res = await u.api.request<{ complete?: boolean; resumeToken?: string }>('/api/privacy/data', {
+          method: 'DELETE',
+          token: u.token,
+          json: { confirm: 'DELETE', ...(resumeToken ? { resumeToken } : {}) },
+          allowStatus: [400, 401, 403, 404, 500],
+        });
+        if (res.status >= 300) {
+          log(`[cleanup] privacy erase returned ${res.status} for ${user}`);
+          break;
+        }
+        const body = res.data as { complete?: boolean; resumeToken?: string; result?: { complete?: boolean; resumeToken?: string } };
+        const result = body?.result ?? body;
+        if (result?.complete !== false) {
+          erased++;
+          break;
+        }
+        resumeToken = result.resumeToken;
+      }
+    } catch (error) {
+      log(`[cleanup] erasing ${user} failed: ${(error as Error).message}`);
+    }
+  }
+  log(`[cleanup] erased ${erased} run user(s)`);
+  return erased;
+}
+
 /** Playwright globalTeardown: remove everything the run created, keep seed videos */
 export default async function globalTeardown(): Promise<void> {
+  // Run mode: the workflow's always() step erases the run users (it also runs
+  // when the job is cancelled, which globalTeardown does not)
+  if (runId()) return;
   try {
     // 30 minutes covers any test still running in a concurrent run
     await cleanupTestVideos({ keepSeed: true, minAgeMs: 30 * 60 * 1000, log: (m) => console.log(m) });
@@ -92,6 +146,11 @@ export default async function globalTeardown(): Promise<void> {
 if (require.main === module) {
   (async () => {
     const args = new Set(process.argv.slice(2));
+    // CI teardown step: erase this run's users from the stored sessions
+    if (args.has('--run-users')) {
+      await eraseRunUsers((m) => console.log(m));
+      return;
+    }
     if (!args.has('--skip-auth')) {
       const { default: globalSetup } = await import('./auth.setup');
       await globalSetup({ configFile: '', rootDir: process.cwd() } as Parameters<typeof globalSetup>[0]);

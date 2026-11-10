@@ -616,8 +616,8 @@ Never production: the specs create accounts, channels and videos. Each spec
 registers its own user with an `@e2e.alummahnow.net` address (the auth
 server's code sink stores its verification code instead of emailing it; QA and
 stage only) and creates the data it needs; there are no seeded users and no
-global setup. Passwords are random per run, so the accounts left behind
-(including promoted admins) cannot be signed into later.
+global setup. Passwords are random per run. In CI the addresses are run
+accounts (see [Per-run E2E accounts](#per-run-e2e-accounts)), deleted when the run ends.
 
 | Spec | Covers |
 |---|---|
@@ -682,11 +682,33 @@ channels, uploads or other content on production from a probe script.
 #### Legacy E2E suite
 
 `.github/workflows/e2e-tests.yml` (`apps/web/playwright.config.ts`, every other
-spec under `apps/web/e2e/`) is not a release gate. Its specs share pinned users
-and seeded data and are known to be flaky; fix them when touching their area,
-but gate on the release suite. Its `Auth Setup` job registers users with
-code-sink addresses (`E2E_CODE_SINK_SECRET` from `E2E_CODE_SINK_SECRET_QA`,
-#185), no longer through Resend.
+spec under `apps/web/e2e/`) is not a release gate. Its specs read seeded data
+and are known to be flaky; fix them when touching their area, but gate on the
+release suite. Each job registers its own run accounts in global setup
+(`auth.setup.ts`, code-sink addresses, `E2E_CODE_SINK_SECRET` from
+`E2E_CODE_SINK_SECRET_QA`).
+
+#### Per-run E2E accounts
+
+E2E Tests, Admin E2E and Release regressions never share test accounts between
+runs, so they run in parallel with no queue (GitHub keeps one pending job per
+concurrency group, which used to cancel most PR runs before they started):
+
+- **Accounts.** `E2E_RUN_ID=<run id>-<attempt>` turns run mode on. Every account is
+  `e2e+<run>-<attempt>-<name>@e2e.alummahnow.net` (`apps/web/e2e/test-utils/run-users.ts`),
+  listed in `E2E_RUN_USERS_FILE` before it is registered. Registration marks it as a
+  run account on the auth server (QA/stage only).
+- **Teardown.** An `always()` step erases the content (web: `cleanup-test-content.ts --run-users`),
+  then `scripts/e2e/teardown-run-users.ts` deletes the accounts. It uses the auth server's
+  QA/stage-only `POST /test/run-users/delete/:email` (soft delete, then immediate purge).
+  `e2e-run-users-sweep.yml` deletes run accounts older than 24 h that a dead runner left.
+- **Global state.** The few specs that change state no run owns (site theme, shared
+  translations, seed-video likes and comments, the shared error group) are in a
+  `shared-state` project per suite. It runs once per run under the `qa-global` lock
+  (`scripts/ci/qa-lock.ts`, a compare-and-swap git ref), which waits its turn rather
+  than replacing queued runs. Add a spec there only if it writes or asserts global state.
+- **Superseded heads.** A newer push to a PR cancels only that PR's older run
+  (concurrency group per `head_ref`); its teardown still runs.
 
 
 ## Development Workflow

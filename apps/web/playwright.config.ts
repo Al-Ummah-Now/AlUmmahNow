@@ -40,8 +40,18 @@ const DEDICATED_DIRS = [/e2e\/a11y\//, /e2e\/visual\//, /e2e\/release\//];
  */
 const UPLOAD_SPECS = /\/(12-video-upload|13-video-upload-tus-resume|17-tus-proxy-upload|18-tus-proxy-logs|40-upload-form|41-batch-upload|42-upload-templates)\.spec\.ts$/;
 const SKIP_UPLOAD_SPECS = process.env.E2E_SKIP_UPLOAD_SPECS === '1';
-/** testIgnore of a browser/device project: the dedicated dirs, plus the upload specs unless this project runs them. */
-const browserIgnore = (runsUploads: boolean) => (runsUploads && !SKIP_UPLOAD_SPECS ? DEDICATED_DIRS : [...DEDICATED_DIRS, UPLOAD_SPECS]);
+const OUTPUT_SUFFIX = /^[a-z0-9-]{1,32}$/.test(process.env.E2E_OUTPUT_SUFFIX ?? '') ? `-${process.env.E2E_OUTPUT_SUFFIX}` : '';
+/**
+ * Specs that write or assert state no run owns: likes and comments on the QA
+ * seed videos (exact counts), and the global site theme (admin-web's site-theme
+ * spec switches it). CI runs every other spec with the job's own accounts, in
+ * parallel with other runs; these run in the `shared-state` project only, which
+ * e2e-tests.yml runs under the cross-run lock (scripts/ci/qa-lock.ts, qa-global).
+ */
+const SHARED_STATE_SPECS = /\/(30-watch-page|32-comments|75-site-theme)\.spec\.ts$/;
+/** testIgnore of a browser/device project: the dedicated dirs and shared-state specs, plus the upload specs unless this project runs them. */
+const browserIgnore = (runsUploads: boolean) =>
+  runsUploads && !SKIP_UPLOAD_SPECS ? [...DEDICATED_DIRS, SHARED_STATE_SPECS] : [...DEDICATED_DIRS, SHARED_STATE_SPECS, UPLOAD_SPECS];
 
 export default defineConfig({
   testDir: './e2e',
@@ -76,10 +86,14 @@ export default defineConfig({
     timeout: 30000,
   },
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
+  // E2E_OUTPUT_SUFFIX: a second invocation in the same job (CI runs the
+  // shared-state project separately, under the lock) writes next to the first
+  // one's results instead of wiping them (test-results-<suffix>, playwright-report-<suffix>)
+  outputDir: `test-results${OUTPUT_SUFFIX}`,
   reporter: [
-    ['html'],
-    ['junit', { outputFile: 'test-results/junit.xml' }],
-    ['json', { outputFile: 'test-results/test-results.json' }],
+    ['html', { outputFolder: `playwright-report${OUTPUT_SUFFIX}` }],
+    ['junit', { outputFile: `test-results${OUTPUT_SUFFIX}/junit.xml` }],
+    ['json', { outputFile: `test-results${OUTPUT_SUFFIX}/test-results.json` }],
   ],
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
@@ -174,6 +188,15 @@ export default defineConfig({
       name: 'Mobile Safari',
       testIgnore: browserIgnore(false),
       use: { ...devices['iPhone 12'] },
+    },
+
+    /* Global-state specs (SHARED_STATE_SPECS): one run at a time, under the qa-global lock */
+    {
+      name: 'shared-state',
+      testMatch: SHARED_STATE_SPECS,
+      testIgnore: DEDICATED_DIRS,
+      fullyParallel: false,
+      use: { ...devices['Desktop Chrome'] },
     },
 
     /* axe-core WCAG 2.1 AA sweep of every page, en/ar x light/dark */

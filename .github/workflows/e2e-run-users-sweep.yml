@@ -1,0 +1,48 @@
+name: E2E run accounts sweep
+
+# Every E2E job (E2E Tests, Admin E2E, Release regressions) registers its own
+# accounts, e2e+<run>-<attempt>-<name>@e2e.alummahnow.net, and deletes them in an
+# always() step when it ends. A runner that dies before that step leaves them
+# behind: this deletes every run account older than 24 hours from the QA auth
+# server (soft delete + immediate purge through its QA-only route,
+# scripts/e2e/teardown-run-users.ts). Their content (channels, "E2E Seed" videos)
+# is junk to the daily QA cleanup (scripts/qa/e2e-leftovers.ts, throwaway accounts).
+# Stage needs no sweep of its own: release runs there one at a time and the
+# release workflow's E2E job deletes its accounts the same way.
+
+on:
+  schedule:
+    - cron: '23 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-run-users-sweep
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    name: Delete run accounts older than 24 h (QA)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            scripts/e2e
+            apps/web/e2e/test-utils
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Sweep
+        env:
+          E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET_QA }}
+          TEST_PROMOTE_SECRET: ${{ secrets.TEST_PROMOTE_SECRET_QA }}
+        run: >-
+          node --experimental-strip-types --no-warnings scripts/e2e/teardown-run-users.ts
+          --auth-url https://auth.qa.alummahnow.net --stale-hours 24 --strict

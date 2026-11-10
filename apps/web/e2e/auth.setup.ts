@@ -1,4 +1,6 @@
 import { chromium, type Browser, type BrowserContext, type FullConfig, type Page } from '@playwright/test';
+import { runId } from './test-utils/run-users';
+import { webRunUserEmail } from './test-utils/web-run-users';
 import { readSinkCode, SINK_DOMAIN } from './test-utils/code-sink';
 import { ApiClient } from './seed/seed-api';
 import { extractSession, loginOnPage } from './seed/seed-auth';
@@ -146,9 +148,16 @@ async function globalSetup(_config: FullConfig) {
   // parallel jobs never share accounts): log in to test-*-<n>, registering only
   // the users that don't exist yet (needs E2E_CODE_SINK_SECRET the first time).
   const pinnedTimestamp = process.env.E2E_USERS_TIMESTAMP;
+  // E2E_RUN_ID=<run id>-<attempt> (CI): this job registers its own users,
+  // e2e+<run>-<attempt>-web-<project>-<role>@e2e.alummahnow.net, recorded in
+  // E2E_RUN_USERS_FILE before registration and deleted by the workflow's
+  // always() teardown, so concurrent runs never share accounts
+  // (test-utils/run-users.ts).
+  const runMode = runId() !== null;
 
   // Verify required environment variables
   const sinkSecret = process.env.E2E_CODE_SINK_SECRET;
+  if (runMode && !sinkSecret) throw new Error('E2E_CODE_SINK_SECRET is required to register this run\'s users (E2E_RUN_ID is set)');
   if (!sinkSecret && !reuseTimestamp && !pinnedTimestamp) {
     throw new Error(
       'E2E_CODE_SINK_SECRET environment variable is required for test user registration ' +
@@ -187,16 +196,17 @@ async function globalSetup(_config: FullConfig) {
 
   // Generate unique emails per test run to avoid conflicts
   const timestamp = reuseTimestamp ? Number(reuseTimestamp) : pinnedTimestamp ? Number(pinnedTimestamp) : Date.now();
+  const emailFor = (role: string) => (runMode ? webRunUserEmail(role) : `test-${role}-${timestamp}@${SINK_DOMAIN}`);
   const testUsers: TestUser[] = [
     {
-      email: `test-single-${timestamp}@${SINK_DOMAIN}`,
+      email: emailFor('single'),
       password: e2eUserPassword(),
       name: 'Single Channel User',
       storageStatePath: path.join(authDir, 'user-single.json'),
       channels: [{ name: 'E2E Single Channel', description: 'E2E test channel (single-channel user)', isMain: true }],
     },
     {
-      email: `test-multi-${timestamp}@${SINK_DOMAIN}`,
+      email: emailFor('multi'),
       password: e2eUserPassword(),
       name: 'Multi Channel User',
       storageStatePath: path.join(authDir, 'user-multi.json'),
@@ -206,7 +216,7 @@ async function globalSetup(_config: FullConfig) {
       ],
     },
     {
-      email: `test-none-${timestamp}@${SINK_DOMAIN}`,
+      email: emailFor('none'),
       password: e2eUserPassword(),
       name: 'No Channels User',
       storageStatePath: path.join(authDir, 'user-none.json'),
@@ -215,7 +225,7 @@ async function globalSetup(_config: FullConfig) {
     {
       // Owns the throwaway channels specs create and delete (channel create /
       // delete / handle flows), so the users above keep a fixed channel set.
-      email: `test-scratch-${timestamp}@${SINK_DOMAIN}`,
+      email: emailFor('scratch'),
       password: e2eUserPassword(),
       name: 'Scratch Channel User',
       storageStatePath: path.join(authDir, 'user-scratch.json'),
@@ -227,7 +237,7 @@ async function globalSetup(_config: FullConfig) {
       // user ProfileGuard leaves on /profile/create. Specs must not create its
       // profile (setup deletes it again anyway). E2E_FRESH_EMAIL points it at
       // another existing account (local runs that cannot register users).
-      email: process.env.E2E_FRESH_EMAIL || `test-fresh-${timestamp}@${SINK_DOMAIN}`,
+      email: process.env.E2E_FRESH_EMAIL || emailFor('fresh'),
       password: e2eUserPassword(),
       name: 'No Profile User',
       storageStatePath: path.join(authDir, 'user-fresh.json'),
@@ -259,7 +269,8 @@ async function globalSetup(_config: FullConfig) {
 
       ciLogger.info(`[Setup] Starting OAuth flow for ${user.email}`);
       let loggedIn = false;
-      if (reuseTimestamp || pinnedTimestamp) {
+      // Run users never exist yet: register straight away
+      if (!runMode && (reuseTimestamp || pinnedTimestamp)) {
         const login = await loginOnPage(page, { issuerUrl: openAuthUrl, webUrl: webAppUrl, clientId }, user.email, user.password);
         if (login.ok) {
           loggedIn = true;

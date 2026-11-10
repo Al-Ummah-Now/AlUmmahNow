@@ -7,11 +7,13 @@
  * one without saving. Arabic renders right to left. The viewer's tier is put
  * back as it was afterwards.
  *
- * One project only: it changes one shared QA user's tier.
+ * One project only: it changes one shared QA user's tier. In run mode the
+ * viewer is this job's own run account (global-setup.ts), which has no videos
+ * profile until this spec creates one, so no other run sees the tier change.
  */
 import { test, expect } from './support/fixtures';
-import { adminApi } from './support/api';
-import { accounts } from './support/env';
+import { adminApi, readTokens } from './support/api';
+import { RUN_ID, VIDEOS_API_URL, accounts } from './support/env';
 import { expectDirection, expectNoAxeViolations, setPreferences } from './support/ui';
 
 interface Assignment { tierId: string; source: string; assignedBy: string }
@@ -19,6 +21,25 @@ interface CreatorsPage { items: { userId: string; email: string | null; assignme
 interface UserTier { assignment: Assignment | null; audit: { details: { tierId: string | null } | null; actorId: string }[] }
 
 const state: { userId?: string; previous?: Assignment | null } = {};
+
+/**
+ * Gives the run viewer a videos profile (the Creators list only has users with
+ * one) and waits for the processor to index it.
+ */
+async function ensureRunViewerProfile(email: string): Promise<void> {
+  const res = await fetch(`${VIDEOS_API_URL}/api/profiles`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${readTokens().reporter}` },
+    body: JSON.stringify({ email, userName: `e2e_admin_${crypto.randomUUID().slice(0, 8)}`, displayName: 'Admin E2E viewer', timezone: 'UTC' }),
+  });
+  expect(res.status, 'create the run viewer\'s videos profile').toBeLessThan(300);
+  await expect
+    .poll(async () => {
+      const { body } = await adminApi<CreatorsPage>(`/api/content/creators?q=${encodeURIComponent(email)}`);
+      return body.result?.items.some((item) => item.email?.toLowerCase() === email.toLowerCase()) ?? false;
+    }, { timeout: 90_000, intervals: [2_000, 5_000] })
+    .toBe(true);
+}
 
 test.describe.configure({ mode: 'serial' });
 
@@ -28,6 +49,11 @@ test.describe('creator tiers', () => {
     // PR runs hit QA, which follows main: skip until admin-api has the bulk route there
     const probe = await adminApi('/api/content/creators/tier', { method: 'POST', body: '{}' });
     test.skip(probe.status === 404, 'admin-api on QA does not have the creators UX yet');
+    if (RUN_ID) {
+      // The processor indexes the new profile asynchronously
+      test.setTimeout(180_000);
+      await ensureRunViewerProfile(accounts.nonadmin.email);
+    }
     const { body } = await adminApi<CreatorsPage>(`/api/content/creators?q=${encodeURIComponent(accounts.nonadmin.email)}`);
     const row = body.result?.items.find((item) => item.email?.toLowerCase() === accounts.nonadmin.email.toLowerCase());
     test.skip(!row, 'The seeded QA viewer has no videos profile');

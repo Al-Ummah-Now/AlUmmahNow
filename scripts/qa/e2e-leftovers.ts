@@ -77,7 +77,9 @@ const PINNED_E2E_EMAIL = new RegExp(
 /** The theme-demo accounts (kept with everything they own). */
 const THEME_DEMO_EMAIL = new RegExp(`^demo-(${THEME_DEMO_ACCOUNT_KEYS.join('|')})@delivered\\.resend\\.dev$`);
 /** Addresses the E2E, release and agent probe flows register (code sink or Resend test inboxes). */
-const THROWAWAY_EMAIL = /^(test|rel|probe)-[a-z0-9-]+@(e2e\.alummahnow\.net|delivered\.resend\.dev)$/;
+// e2e+<run>-<attempt>-<name>: per-run CI accounts (apps/web/e2e/test-utils/run-users.ts); their
+// teardown erases them, and what a killed runner left is junk like any throwaway's
+const THROWAWAY_EMAIL = /^((test|rel|probe)-[a-z0-9-]+|e2e\+\d+-\d+-[a-z0-9-]+)@(e2e\.alummahnow\.net|delivered\.resend\.dev)$/;
 
 export type AccountKind = 'seed' | 'demo' | 'pinned-e2e' | 'throwaway' | 'other' | 'unknown';
 

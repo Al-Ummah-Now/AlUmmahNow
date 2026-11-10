@@ -1,4 +1,5 @@
 import { appendFileSync } from 'fs';
+import { runId, runUserEmail } from '../test-utils/run-users';
 import { randomBytes } from 'crypto';
 
 /**
@@ -91,6 +92,10 @@ export function sinkEmail(prefix: string): string {
     appendFileSync(process.env.PROD_USER_FILE as string, `${email}\n`);
     return email;
   }
+  // CI (E2E_RUN_ID): a run account, recorded for the workflow's teardown, which
+  // deletes it from the auth server when the run ends (test-utils/run-users.ts)
+  // (unique part first: a long prefix is cut at 63 characters)
+  if (runId()) return runUserEmail(`rel-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}-${prefix}`);
   // CI's run tag (release-e2e.yml E2E_RUN_TAG) lets the upload budget count this run's users
   const tag = /^[a-z0-9]{1,24}$/.test(process.env.E2E_RUN_TAG ?? '') ? `${process.env.E2E_RUN_TAG}-` : '';
   return `${prefix}-${tag}${Date.now()}-${Math.random().toString(36).slice(2, 8)}@e2e.alummahnow.net`;

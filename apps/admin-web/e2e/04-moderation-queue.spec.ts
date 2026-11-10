@@ -17,7 +17,7 @@ test.describe('moderation queue', () => {
   });
 
   test('MOD-02 status filter narrows the list and is reflected in the URL', async ({ page, makeReport }) => {
-    // Own a pending report so the filtered list is never empty (teardown dismisses all e2e reports)
+    // Own a pending report so the filtered list is never empty (teardowns dismiss e2e reports)
     await makeReport({ label: 'status-filter' });
     await page.goto('/moderation');
     await page.getByLabel('Status').selectOption('pending');
@@ -46,10 +46,21 @@ test.describe('moderation queue', () => {
   });
 
   test('MOD-04 combined filters match admin-api totals and can be cleared', async ({ page }) => {
-    await page.goto('/moderation?status=pending&entity_type=comment');
-    const api = await listReports('status=pending&entity_type=comment&limit=1');
-    const shown = Number(await page.getByTestId('reports-total').getAttribute('data-total'));
-    expect(Math.abs(shown - api.total)).toBeLessThanOrEqual(10);
+    // Other jobs file and close pending comment reports (21 at a time in their
+    // setup) while this runs: bracket the page's total between admin-api reads
+    // taken just before and after it, and retry a burst that moved it further.
+    const query = 'status=pending&entity_type=comment&limit=1';
+    await expect
+      .poll(async () => {
+        const before = (await listReports(query)).total;
+        await page.goto('/moderation?status=pending&entity_type=comment');
+        const shown = Number(await page.getByTestId('reports-total').getAttribute('data-total'));
+        const after = (await listReports(query)).total;
+        const inRange = shown >= Math.min(before, after) - 10 && shown <= Math.max(before, after) + 10;
+        // The failure message shows the last reading
+        return inRange ? 'in range' : `page ${shown}, admin-api ${before} before and ${after} after`;
+      }, { timeout: 60_000, intervals: [2_000, 5_000] })
+      .toBe('in range');
     await expect(page.getByLabel('Status')).toHaveValue('pending');
     await expect(page.getByLabel('Content type')).toHaveValue('comment');
     await page.getByRole('link', { name: 'Clear filters' }).click();

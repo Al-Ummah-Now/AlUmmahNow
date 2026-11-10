@@ -1,27 +1,10 @@
 import { test, expect } from './support/fixtures';
-import { adminApi } from './support/api';
-import { VIDEOS_API_URL } from './support/env';
-import type { Page } from '@playwright/test';
+import { fetchJson, openEditor, row } from './support/translations';
 
 interface Metadata {
   version: string;
   locales: string[];
   sections: string[];
-}
-
-async function fetchJson<T>(path: string): Promise<T> {
-  const response = await fetch(`${VIDEOS_API_URL}${path}`, { cache: 'no-store' });
-  const body = (await response.json()) as { result: T };
-  return body.result;
-}
-
-async function openEditor(page: Page) {
-  await page.goto('/translations');
-  await expect(page.getByTestId('translation-editor')).toBeVisible({ timeout: 30_000 });
-}
-
-function row(page: Page, key: string) {
-  return page.locator(`[data-testid="translation-row"][data-key="${key}"]`);
 }
 
 test.describe('translations editor', () => {
@@ -96,62 +79,5 @@ test.describe('translations editor', () => {
     await page.unroute('**/translations');
     await page.getByRole('button', { name: 'Retry' }).click();
     await expect(page.getByTestId('translation-editor')).toBeVisible({ timeout: 30_000 });
-  });
-});
-
-test.describe('translations editor - save', () => {
-  // Writes the shared QA translation file: run once (chromium) and serially so
-  // concurrent read-modify-write merges cannot resurrect the temporary value.
-  test.describe.configure({ mode: 'serial' });
-  const SECTION = 'common';
-  const KEY = 'loading';
-  let original: string | undefined;
-
-  test.beforeAll(async ({}, testInfo) => {
-    test.skip(testInfo.project.name !== 'chromium', 'translation writes run in one project only');
-    const en = await fetchJson<{ translations: Record<string, Record<string, string>> }>('/api/i18n/translations/en');
-    original = en.translations[SECTION][KEY];
-  });
-
-  test.afterAll(async ({}, testInfo) => {
-    if (testInfo.project.name !== 'chromium' || original === undefined) return;
-    const en = await fetchJson<{ translations: Record<string, Record<string, string>> }>('/api/i18n/translations/en');
-    if (en.translations[SECTION][KEY] !== original) {
-      // Safety net: restore through admin-api if the UI revert did not happen
-      await adminApi('/api/i18n/translations/en', {
-        method: 'PUT',
-        body: JSON.stringify({ translations: { [SECTION]: { [KEY]: original } }, merge: true }),
-      });
-    }
-  });
-
-  test('TR-08 edit, save and revert a harmless key', async ({ page }) => {
-    const temporary = `${original} [e2e ${Date.now()}]`;
-    await openEditor(page);
-    const target = row(page, KEY);
-    await expect(target.getByTestId('translation-value')).toHaveText(original!);
-
-    await target.getByRole('button', { name: `Edit ${KEY}` }).click();
-    await target.getByRole('textbox').fill(temporary);
-    await target.getByRole('button', { name: `Save ${KEY}` }).click();
-    await expect(page.getByTestId('save-status')).toHaveText('Saved successfully!');
-    await expect(target.getByTestId('translation-value')).toHaveText(temporary);
-
-    // Persisted: a fresh load and the public API both show the new value
-    await page.reload();
-    await expect(row(page, KEY).getByTestId('translation-value')).toHaveText(temporary, { timeout: 30_000 });
-    const en = await fetchJson<{ translations: Record<string, Record<string, string>> }>('/api/i18n/translations/en');
-    expect(en.translations[SECTION][KEY]).toBe(temporary);
-    // Merge must not drop sibling keys
-    expect(en.translations[SECTION].appName).toBe('Al Ummah Now');
-
-    // Revert
-    await row(page, KEY).getByRole('button', { name: `Edit ${KEY}` }).click();
-    await row(page, KEY).getByRole('textbox').fill(original!);
-    await row(page, KEY).getByRole('button', { name: `Save ${KEY}` }).click();
-    await expect(page.getByTestId('save-status')).toHaveText('Saved successfully!');
-    await expect(row(page, KEY).getByTestId('translation-value')).toHaveText(original!);
-    const reverted = await fetchJson<{ translations: Record<string, Record<string, string>> }>('/api/i18n/translations/en');
-    expect(reverted.translations[SECTION][KEY]).toBe(original);
   });
 });
