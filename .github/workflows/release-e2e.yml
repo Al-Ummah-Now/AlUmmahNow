@@ -49,7 +49,7 @@ jobs:
   release-e2e:
     name: Release regressions (${{ inputs.env || 'qa' }})
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 45  # 163 tests on 4 workers took ~25 min with slow Bunny encodes (v2026.11.10.11)
     env:
       E2E_ENV: ${{ inputs.env || 'qa' }}
       PLAYWRIGHT_VERSION: 1.56.1  # keep in step with apps/web/package.json
