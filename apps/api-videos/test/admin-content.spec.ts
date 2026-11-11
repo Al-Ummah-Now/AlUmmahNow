@@ -164,7 +164,7 @@ async function setup(seed: { profiles?: Record<string, unknown>; channels?: Reco
 		const row = db.db.prepare('SELECT purge_job_id FROM admin_deletions WHERE kind = ? AND target_id = ?').get(kind, id) as { purge_job_id: string | null } | undefined;
 		return row?.purge_job_id ? (await call('GET', `/jobs/${row.purge_job_id}`)).body.result : null;
 	};
-	return { db, raw, env, call, jobs, jobOf, cleanup, purgeNow, flush: () => Promise.all(pending.splice(0)) };
+	return { db, raw, env, app, call, jobs, jobOf, cleanup, purgeNow, flush: () => Promise.all(pending.splice(0)) };
 }
 
 /** The public api-videos routes a visitor or user would call, with the ban middleware. */
@@ -255,6 +255,29 @@ describe('admin lists (ownership index)', () => {
 		const result = (await call('GET', '/videos?q=seerah')).body.result;
 		assert.deepEqual(result.items.map((v: any) => v.id), ['v2']);
 		assert.equal(result.indexComplete, true);
+	});
+});
+
+describe('admin lists never wait for an index pass', () => {
+	it('answers at once from the indexed rows, flagged incomplete, and passes the index after the response', async () => {
+		const { db, env, app } = await setup({
+			profiles: { [OWNER]: profile(OWNER) },
+			channels: { ch1: channel('ch1', { name: 'Tafsir Circle', handle: 'tafsir' }) },
+		});
+		// The profile index is incomplete (QA, 2026-11-11: 22k profiles, a pass restarted by any failed write)
+		db.db.prepare("DELETE FROM search_meta WHERE key LIKE 'ownership:complete:%profile'").run();
+		const later: Promise<unknown>[] = [];
+		const ctx = { waitUntil: (p: Promise<unknown>) => { later.push(p); }, passThroughOnException: () => {}, props: {} };
+		const list = async () => {
+			const res = await app.request('/internal/admin/channels?q=circle', { headers: { 'X-Admin-Actor': 'usr_admin' } }, env, ctx as never);
+			return ((await res.json()) as any).result;
+		};
+		const first = await list();
+		assert.deepEqual(first.items.map((c: any) => c.id), ['ch1'], 'listed from the rows already indexed');
+		assert.equal(first.indexComplete, false);
+		assert.ok(later.length > 0, 'the index pass runs after the response');
+		await Promise.all(later.splice(0));
+		assert.equal((await list()).indexComplete, true);
 	});
 });
 

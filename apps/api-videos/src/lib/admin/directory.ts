@@ -102,19 +102,38 @@ export async function adminIndexReady(db: SearchDb, kind: OwnershipKind): Promis
 	return !stale;
 }
 
-/** Advances the ownership pass for `kind` when the admin columns are not usable yet. */
-export async function ensureAdminIndex(env: AdminEnv, kind: OwnershipKind): Promise<boolean> {
+/** Runs work after the response has been sent (the request's executionCtx.waitUntil). */
+export type WaitUntil = (promise: Promise<unknown>) => void;
+
+/**
+ * Advances the ownership pass for `kind` when the admin columns are not usable yet.
+ *
+ * With `waitUntil` (the admin lists) the pass runs after the response and the list
+ * answers at once from the rows already indexed, flagged indexComplete: false. Awaiting
+ * it made every admin Channels page take ~40 s on QA (2026-11-11): the profile index
+ * (22k rows, mostly E2E accounts) rarely completes, since any failed sync write restarts
+ * the pass, so each request paid for one pass. Without `waitUntil` (callers that must
+ * not use an incomplete index) it still awaits.
+ */
+export async function ensureAdminIndex(env: AdminEnv, kind: OwnershipKind, waitUntil?: WaitUntil): Promise<boolean> {
 	const db = dbOf(env);
 	if (await adminIndexReady(db, kind)) return true;
 	if (await isOwnershipComplete(db, kind)) {
 		// Rows from before the admin columns: start a fresh pass that rewrites every row
 		await db.prepare("DELETE FROM search_meta WHERE key = ?").bind(ownershipCompleteKey(kind)).run();
 	}
-	try {
-		await scheduleOwnershipHeal(env, null, kind);
-	} catch (error) {
-		logger.warn('[AdminDirectory] Index pass failed', { kind, error: error instanceof Error ? error.message : String(error) });
+	const pass = (async () => {
+		try {
+			await scheduleOwnershipHeal(env, null, kind);
+		} catch (error) {
+			logger.warn('[AdminDirectory] Index pass failed', { kind, error: error instanceof Error ? error.message : String(error) });
+		}
+	})();
+	if (waitUntil) {
+		waitUntil(pass);
+		return false;
 	}
+	await pass;
 	return adminIndexReady(db, kind);
 }
 
@@ -129,9 +148,10 @@ const CHANNEL_SORT: Record<string, string> = {
 	views: 'total_views DESC, c.id',
 };
 
-export async function listChannels(env: AdminEnv, query: AdminChannelQuery): Promise<AdminPage<AdminChannelRow>> {
+export async function listChannels(env: AdminEnv, query: AdminChannelQuery, waitUntil?: WaitUntil): Promise<AdminPage<AdminChannelRow>> {
 	const db = dbOf(env);
-	const indexComplete = (await ensureAdminIndex(env, 'channel')) && (await ensureAdminIndex(env, 'profile'));
+	const [channelsReady, profilesReady] = await Promise.all([ensureAdminIndex(env, 'channel', waitUntil), ensureAdminIndex(env, 'profile', waitUntil)]);
+	const indexComplete = channelsReady && profilesReady;
 	const { page, pageSize, offset } = pageOf(query.page, query.pageSize);
 	const where: string[] = ["c.kind = 'channel'", 'c.is_deleted = 0'];
 	const binds: unknown[] = [];
@@ -218,9 +238,9 @@ const VIDEO_SORT: Record<string, string> = {
 	title: 'lower(v.admin_title) ASC, v.id',
 };
 
-export async function listVideos(env: AdminEnv, query: AdminVideoQuery): Promise<AdminPage<AdminVideoRow>> {
+export async function listVideos(env: AdminEnv, query: AdminVideoQuery, waitUntil?: WaitUntil): Promise<AdminPage<AdminVideoRow>> {
 	const db = dbOf(env);
-	const indexComplete = await ensureAdminIndex(env, 'video');
+	const indexComplete = await ensureAdminIndex(env, 'video', waitUntil);
 	const { page, pageSize, offset } = pageOf(query.page, query.pageSize);
 	const where: string[] = ["v.kind = 'video'", 'v.is_deleted = 0'];
 	const binds: unknown[] = [];
@@ -306,9 +326,9 @@ const USER_SORT: Record<string, string> = {
 	name: 'lower(display_name) ASC, id',
 };
 
-export async function listUsers(env: AdminEnv, query: AdminUserQuery): Promise<AdminPage<AdminUserRow>> {
+export async function listUsers(env: AdminEnv, query: AdminUserQuery, waitUntil?: WaitUntil): Promise<AdminPage<AdminUserRow>> {
 	const db = dbOf(env);
-	const indexComplete = await ensureAdminIndex(env, 'profile');
+	const indexComplete = await ensureAdminIndex(env, 'profile', waitUntil);
 	const { page, pageSize, offset } = pageOf(query.page, query.pageSize);
 	// Profiles, plus banned users whose profile was deleted (the ban outlives the data)
 	const base = `
@@ -369,9 +389,9 @@ export async function userRows(env: AdminEnv, ids: string[]): Promise<Map<string
 // Comments (admin_comments)
 // ---------------------------------------------------------------------------
 
-export async function listComments(env: AdminEnv, query: AdminCommentQuery): Promise<AdminPage<AdminCommentRow>> {
+export async function listComments(env: AdminEnv, query: AdminCommentQuery, waitUntil?: WaitUntil): Promise<AdminPage<AdminCommentRow>> {
 	const db = dbOf(env);
-	const indexComplete = await ensureAdminIndex(env, 'video');
+	const indexComplete = await ensureAdminIndex(env, 'video', waitUntil);
 	const { page, pageSize, offset } = pageOf(query.page, query.pageSize);
 	const where: string[] = ['1 = 1'];
 	const binds: unknown[] = [];
