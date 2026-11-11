@@ -25,7 +25,20 @@ export async function uiLogin(page: Page, account: Account, expectedPath: RegExp
  * (PreferencesControls: router.refresh() in a transition, aria-busy while
  * pending). Navigating while it is in flight is interrupted by it in WebKit.
  */
+/**
+ * The main navigation (sidebar). On phones it is a drawer behind the menu button and hidden from
+ * the accessibility tree until opened, so open it first; on wider screens it is always there.
+ */
+export async function openMainNav(page: Page) {
+  const nav = page.getByTestId('admin-sidebar');
+  const menu = page.getByTestId('nav-open');
+  if ((await menu.isVisible()) && !(await nav.isVisible())) await menu.click();
+  await expect(nav).toBeVisible();
+  return nav;
+}
+
 export async function chooseTheme(page: Page, theme: Theme) {
+  await openMainNav(page);
   const select = page.getByTestId('theme-select');
   await select.selectOption(theme);
   await expect(page.locator('[aria-busy]').filter({ has: select })).toHaveAttribute('aria-busy', 'false', { timeout: 15_000 });

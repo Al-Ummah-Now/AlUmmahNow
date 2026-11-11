@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useLanguage } from '@/i18n/I18nProvider';
+import { Icon } from '@/components/shell/icons';
 import { useConfirm } from '@/components/content/actions';
 import {
   fetchAuthAccounts,
@@ -105,9 +106,11 @@ export function AccountMenu({ issuer, currentEmail }: AccountMenuProps) {
         aria-expanded={open}
         aria-controls={menuId}
         onClick={() => setOpen((v) => !v)}
-        className="text-fg-muted hover:text-fg text-sm px-2 py-1 rounded border border-border focus:outline-none focus-visible:ring-2 focus-visible:ring-focus max-w-[16rem] truncate"
+        title={label}
+        className="flex h-10 items-center gap-2 rounded-lg px-2 text-sm text-nav-text hover:bg-nav-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-focus max-w-[16rem]"
       >
-        {label}
+        <Icon name="user" className="size-[18px] text-nav-icon" />
+        <span className="truncate max-md:sr-only">{label}</span>
       </button>
       {open && (
         <div

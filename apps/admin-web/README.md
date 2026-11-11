@@ -104,7 +104,8 @@ CI/CD deploys this app automatically:
 | `wrangler.production.jsonc` | Production environment config |
 | `open-next.config.ts` | OpenNext Cloudflare adapter config |
 | `next.config.ts` | Next.js configuration |
-| `tailwind.config.ts` | Tailwind CSS configuration |
+| `src/app/globals.css` | Tailwind v4 setup and the admin's colours, read from the site's active theme (Fanous tokens) |
+| `src/components/shell/` | The admin frame: grouped sidebar (rail, phone drawer), top bar with breadcrumbs, ⌘K search |
 
 ### Environment Variables (via wrangler.jsonc)
 

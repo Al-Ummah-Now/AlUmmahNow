@@ -1,6 +1,6 @@
 import { accounts } from './support/env';
 import { test, expect } from './support/fixtures';
-import { horizontalOverflow } from './support/ui';
+import { horizontalOverflow, openMainNav } from './support/ui';
 
 const PAGES = [
   { path: '/dashboard', nav: 'Dashboard', heading: 'Admin Dashboard' },
@@ -14,9 +14,12 @@ test.describe('navigation', () => {
     await page.goto('/dashboard');
     const nav = page.getByRole('navigation', { name: 'Main navigation' });
     for (const target of PAGES) {
+      // Phones: the sidebar is a drawer that closes on every page change
+      await openMainNav(page);
       await nav.getByRole('link', { name: target.nav, exact: true }).click();
       await expect(page).toHaveURL(new RegExp(`${target.path}$`));
       await expect(page.getByRole('heading', { level: 1, name: target.heading })).toBeVisible();
+      await openMainNav(page);
       await expect(nav.getByRole('link', { name: target.nav, exact: true })).toHaveAttribute('aria-current', 'page');
       await expect(nav.locator('[aria-current="page"]')).toHaveCount(1);
     }
@@ -24,6 +27,7 @@ test.describe('navigation', () => {
 
   test('NAV-02 brand link returns to the dashboard', async ({ page }) => {
     await page.goto('/translations');
+    await openMainNav(page);
     await page.getByRole('link', { name: /Al Ummah Now\s*Admin/ }).click();
     await expect(page).toHaveURL(/\/dashboard$/);
   });
@@ -31,7 +35,7 @@ test.describe('navigation', () => {
   test('NAV-03 report detail keeps Moderation highlighted', async ({ page, makeReport }) => {
     const report = await makeReport({ label: 'nav' });
     await page.goto(`/moderation/reports/${report.id}`);
-    const nav = page.getByRole('navigation', { name: 'Main navigation' });
+    const nav = await openMainNav(page);
     await expect(nav.getByRole('link', { name: 'Moderation', exact: true })).toHaveAttribute('aria-current', 'page');
   });
 
@@ -58,8 +62,10 @@ test.describe('navigation', () => {
   test('NAV-06 browser back/forward work across sections', async ({ page }) => {
     await page.goto('/dashboard');
     const nav = page.getByRole('navigation', { name: 'Main navigation' });
+    await openMainNav(page);
     await nav.getByRole('link', { name: 'Moderation', exact: true }).click();
     await expect(page).toHaveURL(/\/moderation$/);
+    await openMainNav(page);
     await nav.getByRole('link', { name: 'Translations', exact: true }).click();
     await expect(page).toHaveURL(/\/translations$/);
     await page.goBack();

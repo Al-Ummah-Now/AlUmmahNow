@@ -7,7 +7,10 @@ test.describe('theme', () => {
 
     test('THEME-01 follows a dark OS preference by default', async ({ page }) => {
       await page.goto('/dashboard');
-      await expect(page.locator('html')).not.toHaveAttribute('data-theme', /.+/);
+      // data-theme is the site's theme (the admin follows Site theme); the mode is separate
+      await expect(page.locator('html')).toHaveAttribute('data-theme', /^[a-z][a-z0-9-]+$/);
+      await expect(page.locator('html')).toHaveAttribute('data-color-mode', 'system');
+      await expect(page.locator('html')).toHaveClass(/\bdark\b/);
       await expect(page.getByTestId('theme-select')).toHaveValue('system');
       expect(isDark(await bodyBackground(page))).toBe(true);
     });
@@ -15,10 +18,10 @@ test.describe('theme', () => {
     test('THEME-02 an explicit light choice overrides the OS and persists', async ({ page }) => {
       await page.goto('/dashboard');
       await chooseTheme(page, 'light');
-      await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+      await expect(page.locator('html')).toHaveAttribute('data-color-mode', 'light');
       await expect.poll(async () => isDark(await bodyBackground(page))).toBe(false);
       await page.reload();
-      await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+      await expect(page.locator('html')).toHaveAttribute('data-color-mode', 'light');
       expect(isDark(await bodyBackground(page))).toBe(false);
     });
   });
@@ -34,7 +37,7 @@ test.describe('theme', () => {
     test('THEME-04 an explicit dark choice applies everywhere', async ({ page }) => {
       await page.goto('/moderation');
       await chooseTheme(page, 'dark');
-      await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+      await expect(page.locator('html')).toHaveAttribute('data-color-mode', 'dark');
       await expect.poll(async () => isDark(await bodyBackground(page))).toBe(true);
       for (const path of ['/dashboard', '/translations', '/indices']) {
         await page.goto(path);
@@ -46,7 +49,8 @@ test.describe('theme', () => {
       await setPreferences(page, { theme: 'dark' });
       await page.goto('/dashboard');
       await chooseTheme(page, 'system');
-      await expect(page.locator('html')).not.toHaveAttribute('data-theme', /.+/);
+      await expect(page.locator('html')).toHaveAttribute('data-color-mode', 'system');
+      await expect(page.locator('html')).not.toHaveClass(/\bdark\b/);
       await expect.poll(async () => isDark(await bodyBackground(page))).toBe(false);
     });
   });

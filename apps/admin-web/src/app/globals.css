@@ -1,130 +1,96 @@
 @import 'tailwindcss';
-@import '../../../../packages/fanous-tokens/generated/lantern/web/tokens.css';
+/* The site's themes: the admin follows the site theme set on Site theme. Built-in themes are
+   compiled from packages/theme-packages into these two files; a custom package's CSS is inlined
+   by the root layout. html[data-theme] is the theme id and the .dark class the mode. */
+@import '../../../web/src/theme/site-themes.css';
+@import '../../../web/src/theme/materials.css';
 
-@config '../../tailwind.config.ts';
 
 /*
-  Theme tokens. Light is the base; dark applies when the OS prefers dark and
-  the user has not forced light, or when the user explicitly picks dark
-  (data-theme is set on <html> by the server from the admin_theme cookie).
-  All colour pairs below meet WCAG AA (4.5:1) for normal text.
+  The admin's semantic colours, read from the active theme's tokens. Light and dark come from the
+  theme (html.dark), set from the admin_theme cookie, or from the system setting when it is
+  "system" (the inline script in layout.tsx). Pages use these names (bg-surface, text-fg...);
+  pnpm check:theme-colors keeps literal colours out.
 */
 :root {
   color-scheme: light;
-  --bg: #f3f4f6;
-  --surface: #ffffff;
-  --surface-2: #f9fafb;
-  --surface-hover: #eef2f7;
-  --border: #d1d5db;
-  --fg: #111827;
-  --fg-muted: #374151;
-  --fg-subtle: #4b5563;
-  --link: #1d4ed8;
-  --link-hover: #1e3a8a;
-  --accent: #1d4ed8;
-  --accent-hover: #1e40af;
-  --on-accent: #ffffff;
-  --focus: #2563eb;
-  --danger-bg: #fef2f2;
-  --danger-border: #dc2626;
-  --danger-fg: #991b1b;
-  --success-fg: #166534;
-  --warning-fg: #92400e;
-  --info-fg: #1e40af;
+  --bg: var(--fanous-color-background);
+  --surface: var(--fanous-color-surface);
+  --surface-2: var(--fanous-color-surface-raised);
+  --surface-hover: color-mix(in srgb, var(--fanous-color-text-primary) 7%, var(--fanous-color-surface));
+  --border: var(--fanous-c-form-input-border);
+  --fg: var(--fanous-color-text-primary);
+  --fg-muted: var(--fanous-color-text-secondary);
+  --fg-subtle: var(--fanous-color-text-muted);
+  --link: var(--fanous-c-link-text);
+  --link-hover: var(--fanous-color-text-primary);
+  --accent: var(--fanous-color-primary);
+  --accent-hover: var(--fanous-color-primary-hover);
+  --on-accent: var(--fanous-color-on-primary);
+  --focus: var(--fanous-color-focus-ring);
+  --danger-bg: color-mix(in srgb, var(--fanous-color-error-fill) 12%, var(--fanous-color-surface));
+  --danger-border: var(--fanous-color-error-fill);
+  --danger-fg: var(--fanous-color-error-text);
+  --success-fg: var(--fanous-color-success-text);
+  --warning-fg: var(--fanous-color-accent);
+  --info-fg: var(--fanous-color-link);
+  /* Status chips: a tint carries the meaning, the text stays the primary text colour (AA in every theme) */
+  --chip-pending-bg: color-mix(in srgb, var(--fanous-color-accent) 22%, var(--fanous-color-surface));
+  --chip-pending-fg: var(--fanous-color-text-primary);
+  --chip-reviewing-bg: color-mix(in srgb, var(--fanous-color-link) 22%, var(--fanous-color-surface));
+  --chip-reviewing-fg: var(--fanous-color-text-primary);
+  --chip-resolved-bg: color-mix(in srgb, var(--fanous-color-success-text) 22%, var(--fanous-color-surface));
+  --chip-resolved-fg: var(--fanous-color-text-primary);
+  --chip-dismissed-bg: color-mix(in srgb, var(--fanous-color-text-muted) 18%, var(--fanous-color-surface));
+  --chip-dismissed-fg: var(--fanous-color-text-primary);
+  /* Report outcome buttons carry white text: fills that pair with white in every theme */
+  --btn-warning: var(--fanous-color-secondary);
+  --btn-warning-hover: color-mix(in srgb, var(--fanous-color-secondary) 85%, var(--fanous-brand-night));
+  --btn-removed: var(--fanous-color-error-fill);
+  --btn-removed-hover: color-mix(in srgb, var(--fanous-color-error-fill) 85%, var(--fanous-brand-night));
+  --btn-banned: color-mix(in srgb, var(--fanous-color-error-fill) 80%, var(--fanous-brand-night));
+  --btn-banned-hover: color-mix(in srgb, var(--fanous-color-error-fill) 65%, var(--fanous-brand-night));
+  --btn-dismissed: var(--fanous-color-secondary);
+  --btn-dismissed-hover: color-mix(in srgb, var(--fanous-color-secondary) 85%, var(--fanous-brand-night));
   /* Two chart series (Delivery comparison: Bunny vs R2), from tokens that meet 4.5:1 on --surface in both themes */
   --chart-1: var(--link);
   --chart-2: var(--warning-fg);
-  --chip-pending-bg: #fef3c7;
-  --chip-pending-fg: #92400e;
-  --chip-reviewing-bg: #dbeafe;
-  --chip-reviewing-fg: #1e40af;
-  --chip-resolved-bg: #dcfce7;
-  --chip-resolved-fg: #166534;
-  --chip-dismissed-bg: #e5e7eb;
-  --chip-dismissed-fg: #374151;
-  --btn-warning: #a16207;
-  --btn-warning-hover: #854d0e;
-  --btn-removed: #c2410c;
-  --btn-removed-hover: #9a3412;
-  --btn-banned: #b91c1c;
-  --btn-banned-hover: #991b1b;
-  --btn-dismissed: #4b5563;
-  --btn-dismissed-hover: #374151;
-  --scrollbar-track: #e5e7eb;
-  --scrollbar-thumb: #9ca3af;
+  --scrollbar-track: var(--fanous-color-surface);
+  --scrollbar-thumb: var(--fanous-color-outline);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    color-scheme: dark;
-    --bg: #111827;
-    --surface: #1f2937;
-    --surface-2: #111827;
-    --surface-hover: #374151;
-    --border: #4b5563;
-    --fg: #f9fafb;
-    --fg-muted: #d1d5db;
-    --fg-subtle: #9ca3af;
-    --link: #93c5fd;
-    --link-hover: #bfdbfe;
-    --accent: #2563eb;
-    --accent-hover: #1d4ed8;
-    --on-accent: #ffffff;
-    --focus: #60a5fa;
-    --danger-bg: #450a0a;
-    --danger-border: #ef4444;
-    --danger-fg: #fecaca;
-    --success-fg: #4ade80;
-    --warning-fg: #facc15;
-    --info-fg: #93c5fd;
-    --chip-pending-bg: #422006;
-    --chip-pending-fg: #fde047;
-    --chip-reviewing-bg: #172554;
-    --chip-reviewing-fg: #93c5fd;
-    --chip-resolved-bg: #052e16;
-    --chip-resolved-fg: #86efac;
-    --chip-dismissed-bg: #374151;
-    --chip-dismissed-fg: #e5e7eb;
-    --scrollbar-track: #1f2937;
-    --scrollbar-thumb: #4b5563;
-  }
-}
-
-:root[data-theme='dark'] {
+html.dark {
   color-scheme: dark;
-  --bg: #111827;
-  --surface: #1f2937;
-  --surface-2: #111827;
-  --surface-hover: #374151;
-  --border: #4b5563;
-  --fg: #f9fafb;
-  --fg-muted: #d1d5db;
-  --fg-subtle: #9ca3af;
-  --link: #93c5fd;
-  --link-hover: #bfdbfe;
-  --accent: #2563eb;
-  --accent-hover: #1d4ed8;
-  --on-accent: #ffffff;
-  --focus: #60a5fa;
-  --danger-bg: #450a0a;
-  --danger-border: #ef4444;
-  --danger-fg: #fecaca;
-  --success-fg: #4ade80;
-  --warning-fg: #facc15;
-  --info-fg: #93c5fd;
-  --chip-pending-bg: #422006;
-  --chip-pending-fg: #fde047;
-  --chip-reviewing-bg: #172554;
-  --chip-reviewing-fg: #93c5fd;
-  --chip-resolved-bg: #052e16;
-  --chip-resolved-fg: #86efac;
-  --chip-dismissed-bg: #374151;
-  --chip-dismissed-fg: #e5e7eb;
-  --scrollbar-track: #1f2937;
-  --scrollbar-thumb: #4b5563;
 }
 
 @theme inline {
+  --color-nav-bg: var(--fanous-c-nav-bg);
+  --color-nav-border: var(--fanous-c-nav-border);
+  --color-nav-text: var(--fanous-c-nav-text);
+  --color-nav-icon: var(--fanous-c-nav-icon);
+  --color-nav-hover: var(--fanous-c-nav-hover);
+  --color-nav-active-bg: var(--fanous-c-nav-active-bg);
+  --color-nav-active-text: var(--fanous-c-nav-active-text);
+  --color-nav-indicator: var(--fanous-c-nav-indicator);
+  --color-nav-search-bg: var(--fanous-c-nav-search-bg);
+  --color-nav-search-border: var(--fanous-c-nav-search-border);
+  --color-nav-search-text: var(--fanous-c-nav-search-text);
+  --color-nav-search-placeholder: var(--fanous-c-nav-search-placeholder);
+  --color-drawer-bg: var(--fanous-c-drawer-bg);
+  --color-drawer-text: var(--fanous-c-drawer-text);
+  --color-drawer-icon: var(--fanous-c-drawer-icon);
+  --color-drawer-active-bg: var(--fanous-c-drawer-active-bg);
+  --color-drawer-active-text: var(--fanous-c-drawer-active-text);
+  --color-drawer-divider: var(--fanous-c-drawer-divider);
+  --color-menu-bg: var(--fanous-c-menu-bg);
+  --color-menu-text: var(--fanous-c-menu-text);
+  --color-menu-hover: var(--fanous-c-menu-hover);
+  --color-menu-border: var(--fanous-c-menu-border);
+  --color-menu-muted: var(--fanous-c-menu-muted);
+  --color-badge-bg: var(--fanous-c-badge-status-bg);
+  --color-badge-text: var(--fanous-c-badge-status-text);
+  --color-error-fill: var(--fanous-color-error-fill);
+  --color-on-error-fill: var(--fanous-color-on-error-fill);
   --color-bg: var(--bg);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
@@ -145,8 +111,6 @@
   --color-success-fg: var(--success-fg);
   --color-warning-fg: var(--warning-fg);
   --color-info-fg: var(--info-fg);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
   --color-chip-pending-bg: var(--chip-pending-bg);
   --color-chip-pending-fg: var(--chip-pending-fg);
   --color-chip-reviewing-bg: var(--chip-reviewing-bg);
@@ -163,6 +127,8 @@
   --color-btn-banned-hover: var(--btn-banned-hover);
   --color-btn-dismissed: var(--btn-dismissed);
   --color-btn-dismissed-hover: var(--btn-dismissed-hover);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
 }
 
 @layer base {
@@ -176,9 +142,62 @@
 }
 
 body {
-  background: var(--bg);
+  background: var(--m-page, var(--bg));
+  background-color: var(--bg);
+  background-attachment: fixed;
   color: var(--fg);
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Tahoma, 'Noto Sans Arabic', Roboto, sans-serif;
+  font-family: var(--fanous-font-latin), system-ui, sans-serif;
+}
+
+:lang(ar) body,
+body:lang(ar) {
+  font-family: var(--fanous-font-arabic), system-ui, sans-serif;
+}
+
+/* The shell's materials: the same surfaces as the site's header, rail and selected item */
+.shell-header {
+  background: var(--m-header, var(--fanous-c-nav-bg));
+  box-shadow: var(--m-header-edge, none);
+  -webkit-backdrop-filter: var(--m-blur, none);
+  backdrop-filter: var(--m-blur, none);
+}
+
+.shell-rail {
+  background: var(--m-rail, var(--fanous-c-drawer-bg));
+  box-shadow: var(--m-rail-edge, none);
+  -webkit-backdrop-filter: var(--m-blur, none);
+  backdrop-filter: var(--m-blur, none);
+}
+
+/* On phones the sidebar is a drawer over the page: a solid surface, whatever the theme's material */
+@media (max-width: 767px) {
+  .shell-rail {
+    background: var(--fanous-c-drawer-bg);
+  }
+}
+
+.shell-item-active {
+  background: var(--m-sel, var(--fanous-c-drawer-active-bg));
+  box-shadow: var(--m-sel-edge, none);
+}
+
+.shell-item-active::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-start-end-radius: 3px;
+  border-end-end-radius: 3px;
+  background: var(--m-sel-bar, var(--fanous-c-nav-indicator));
+  box-shadow: var(--m-sel-glow, none);
+}
+
+.shell-primary {
+  background: var(--m-primary, var(--fanous-color-primary));
+  color: var(--fanous-c-button-primary-text);
+  box-shadow: var(--m-primary-edge, none);
 }
 
 @media (prefers-reduced-motion: reduce) {

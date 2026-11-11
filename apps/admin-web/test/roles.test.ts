@@ -72,7 +72,7 @@ describe('creator tiers in the admin', () => {
 
   it('the nav lists Creators, and its strings exist in English and Arabic', async () => {
     const { readFileSync } = await import('node:fs');
-    const nav = readFileSync(new URL('../src/components/AdminNav.tsx', import.meta.url), 'utf8');
+    const nav = readFileSync(new URL('../src/components/shell/nav-model.ts', import.meta.url), 'utf8');
     assert.match(nav, /href: '\/creators', label: 'nav\.creators'/);
     const en = (await import('../src/i18n/messages/en')).default;
     const ar = (await import('../src/i18n/messages/ar')).default;
