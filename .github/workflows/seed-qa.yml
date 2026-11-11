@@ -99,8 +99,10 @@ jobs:
           pnpm --filter @al-ummah/theme-packages build
 
       - name: Install Playwright (chromium only)
-        working-directory: apps/web
-        run: pnpm exec playwright install --with-deps chromium
+        uses: ./.github/actions/playwright-install
+        with:
+          working-directory: apps/web
+          browsers: chromium
 
       - name: Install ffmpeg and fonts
         run: |
