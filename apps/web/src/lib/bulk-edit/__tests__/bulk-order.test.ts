@@ -4,7 +4,9 @@
  * reducer, numbering in the chosen order, and "continue numbering after".
  */
 import {
+  hasOrderValue,
   highestNumber,
+  missingOrderValues,
   naturalCompare,
   orderReducer,
   orderedSubjects,
@@ -58,6 +60,49 @@ describe('sort keys', () => {
   it('sorts by the Arabic title when asked, falling back to English', () => {
     // c has no Arabic title: its English one is compared, and Arabic collation puts Latin after Arabic
     expect(sortIds(subjects, 'title', 'asc', 'ar')).toEqual(['b', 'a', 'c']);
+  });
+});
+
+describe('direction (2026-11-11 "not ordering items asc and desc when dir button is clicked")', () => {
+  const same = (id: string, i: number, over: Partial<RenameSubject> = {}): RenameSubject => ({ id, title: { en: 'Same title', ar: '' }, listIndex: i, ...over });
+  const list = [same('p', 0), same('q', 1), same('r', 2)];
+
+  it('reverses equal values: desc is the exact reverse of asc', () => {
+    expect(sortIds(list, 'title')).toEqual(['p', 'q', 'r']);
+    expect(sortIds(list, 'title', 'desc')).toEqual(['r', 'q', 'p']);
+  });
+
+  it('reverses when nobody has a value (no file name, not published, not encoded)', () => {
+    for (const key of ['filename', 'published', 'duration'] as const) {
+      expect(sortIds(list, key)).toEqual(['p', 'q', 'r']);
+      expect(sortIds(list, key, 'desc')).toEqual(['r', 'q', 'p']);
+    }
+  });
+
+  it('keeps missing values last both ways, reversed among themselves', () => {
+    const mixed = [same('p', 0), same('q', 1, { duration: 20 }), same('r', 2), same('s', 3, { duration: 10 })];
+    expect(sortIds(mixed, 'duration')).toEqual(['s', 'q', 'p', 'r']);
+    expect(sortIds(mixed, 'duration', 'desc')).toEqual(['q', 's', 'r', 'p']);
+  });
+
+  it('flips natural and Arabic orders exactly', () => {
+    for (const lang of ['en', 'ar'] as const) {
+      const asc = sortIds(subjects, 'title', 'asc', lang);
+      expect(sortIds(subjects, 'title', 'desc', lang)).toEqual([...asc].reverse());
+    }
+    const ar: RenameSubject[] = [
+      { id: 'x', title: { en: '', ar: 'الدرس ١٠' } },
+      { id: 'y', title: { en: '', ar: 'الدرس ٢' } },
+      { id: 'z', title: { en: '', ar: 'الدرس 1' } },
+    ];
+    expect(sortIds(ar, 'title', 'asc', 'ar')).toEqual(['z', 'y', 'x']);
+    expect(sortIds(ar, 'title', 'desc', 'ar')).toEqual(['x', 'y', 'z']);
+  });
+
+  it('counts what has nothing to sort by', () => {
+    expect(missingOrderValues(subjects, 'published')).toBe(1);
+    expect(missingOrderValues(subjects, 'list')).toBe(0);
+    expect(hasOrderValue(list[0], 'filename')).toBe(false);
   });
 });
 

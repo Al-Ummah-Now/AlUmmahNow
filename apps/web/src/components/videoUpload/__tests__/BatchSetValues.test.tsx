@@ -160,6 +160,25 @@ describe('upload queue "Set values"', () => {
     expect(reorderQueue).toHaveBeenCalledWith(['c', 'a', 'b']);
   });
 
+  it('the direction button reverses the order and the numbers follow it', () => {
+    const named = [row('a', 'part 10.mp4'), row('b', 'part 2.mp4'), row('c', 'part 1.mp4')];
+    render(<Harness files={named} />);
+    fireEvent.click(screen.getByTestId('batch-set-values'));
+    fireEvent.click(screen.getByTestId('bulk-set-tick-title'));
+    fireEvent.change(screen.getByTestId('rename-pattern-en'), { target: { value: 'Lesson {n}' } });
+    const ids = () => screen.getAllByTestId('bulk-set-preview-row').map((r) => r.getAttribute('data-id'));
+    fireEvent.change(screen.getByTestId('bulk-set-preview-order-key'), { target: { value: 'filename' } });
+    fireEvent.click(screen.getByTestId('bulk-set-preview-order-dir'));
+    expect(ids()).toEqual(['a', 'b', 'c']);
+    expect(screen.getByTestId('bulk-set-preview-order-dir')).toHaveAttribute('aria-label', 'Descending');
+    fireEvent.click(screen.getByTestId('bulk-set-preview-order-dir'));
+    expect(ids()).toEqual(['c', 'b', 'a']);
+    fireEvent.change(screen.getByTestId('bulk-set-preview-order-key'), { target: { value: 'list' } });
+    fireEvent.click(screen.getByTestId('bulk-set-preview-order-dir'));
+    expect(ids()).toEqual(['c', 'b', 'a']);
+    expect(screen.getAllByTestId('bulk-set-preview-after').map((el) => el.textContent)).toEqual(['Lesson 1', 'Lesson 2', 'Lesson 3']);
+  });
+
   it('sets the English and Arabic titles of every file in one pass, to different values', async () => {
     render(<Harness files={files} />);
     fireEvent.click(screen.getByTestId('batch-set-values'));
