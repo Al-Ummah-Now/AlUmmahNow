@@ -2,6 +2,8 @@
  * Presentational pieces of the Errors pages (server and client safe).
  */
 
+import { chartLocale, compactNumber, labelIndices, niceScale } from '@al-ummah/shared-types';
+
 /** "TypeError: message", without repeating a name the message already starts with. */
 export function errorTitle(g: { name: string | null; message: string }): string {
   return g.name && !g.message.startsWith(g.name) ? `${g.name}: ${g.message}` : g.message;
@@ -51,24 +53,103 @@ export function Sparkline({ values, label, width = 112, height = 28 }: { values:
   );
 }
 
-/** Hourly occurrences as bars, oldest on the left. Each bar carries its own title for hover. */
-export function HourlyChart({ hours, label, barTitle }: { hours: { hour: string; occurrences: number }[]; label: string; barTitle: (h: { hour: string; occurrences: number }) => string }) {
-  const width = 480;
-  const height = 96;
-  const max = Math.max(1, ...hours.map((h) => h.occurrences));
-  const slot = hours.length ? width / hours.length : width;
-  const bar = Math.max(1, slot - 2);
+/**
+ * Hourly occurrences as bars with a 0-based value axis and hour ticks. Time
+ * runs from the axis side (left to right in English, right to left in Arabic),
+ * like the Studio charts. Server-rendered: hover shows each bar's hour and
+ * count (CSS), and a <details> table is the text alternative.
+ */
+export function HourlyChart({
+  hours,
+  label,
+  barTitle,
+  locale,
+  hourLabel,
+  tableLabel,
+  hourHeading,
+  countHeading,
+  emptyText,
+}: {
+  hours: { hour: string; occurrences: number }[];
+  label: string;
+  barTitle: (h: { hour: string; occurrences: number }) => string;
+  locale: string;
+  /** Short label for an hour on the time axis */
+  hourLabel: (hour: string) => string;
+  tableLabel: string;
+  hourHeading: string;
+  countHeading: string;
+  emptyText: string;
+}) {
+  const scale = niceScale(hours.map((h) => h.occurrences), { integer: true, target: 3 });
+  const tick = compactNumber(locale);
+  const number = new Intl.NumberFormat(chartLocale(locale));
+  const empty = hours.every((h) => !h.occurrences);
+  const y = (value: number) => 100 - (value / scale.top) * 100;
+  const ticksAt = labelIndices(hours.length, 4);
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={label} className="w-full h-24 text-accent" preserveAspectRatio="none" style={{ direction: 'ltr' }} data-testid="error-hourly-chart">
-      <line x1="0" y1={height - 0.5} x2={width} y2={height - 0.5} className="stroke-border" strokeWidth="1" />
-      {hours.map((h, i) => {
-        const barHeight = h.occurrences ? Math.max(2, (h.occurrences / max) * (height - 4)) : 0;
-        return (
-          <rect key={h.hour} x={i * slot + 1} y={height - barHeight} width={bar} height={barHeight} fill="currentColor" rx="1">
-            <title>{barTitle(h)}</title>
-          </rect>
-        );
-      })}
-    </svg>
+    <figure className="m-0" data-testid="error-hourly-chart">
+      <div className="flex gap-2">
+        <div className="relative h-24 shrink-0 text-xs tabular-nums text-fg-muted" aria-hidden="true" data-testid="error-hourly-y-axis">
+          <div className="invisible whitespace-nowrap">{scale.ticks.map((v) => <div key={v} className="h-0 leading-none">{tick(v)}</div>)}</div>
+          {scale.ticks.map((v) => (
+            <span key={v} className="absolute end-0 -translate-y-1/2 whitespace-nowrap leading-none" style={{ top: `${y(v)}%` }} data-testid="error-hourly-y-tick">
+              {tick(v)}
+            </span>
+          ))}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="relative h-24" role="img" aria-label={label}>
+            {scale.ticks.map((v) => (
+              <div key={v} className={`absolute inset-x-0 border-t ${v === 0 ? 'border-fg-muted' : 'border-dashed border-border'}`} style={{ top: `${y(v)}%` }} aria-hidden="true" />
+            ))}
+            <div className="absolute inset-0 flex items-end gap-px">
+              {hours.map((h) => (
+                <div key={h.hour} className="group relative flex h-full flex-1 items-end" title={barTitle(h)}>
+                  <div className="w-full rounded-t-sm bg-accent group-hover:opacity-80" style={{ height: h.occurrences ? `max(2px, ${(h.occurrences / scale.top) * 100}%)` : 0 }} />
+                  <span
+                    className="pointer-events-none absolute bottom-full start-1/2 z-10 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded border border-border bg-surface px-2 py-1 text-xs text-fg shadow group-hover:block rtl:translate-x-1/2"
+                    aria-hidden="true"
+                  >
+                    {barTitle(h)}
+                  </span>
+                </div>
+              ))}
+            </div>
+            {empty && <p className="absolute inset-0 flex items-center justify-center text-sm text-fg-muted" data-testid="error-hourly-empty">{emptyText}</p>}
+          </div>
+          <div className="relative mt-1 h-4 text-xs text-fg-muted" aria-hidden="true">
+            {ticksAt.map((index, order) => {
+              const at = ((index + 0.5) / hours.length) * 100;
+              const shift = order === 0 ? '0' : order === ticksAt.length - 1 ? '-100%' : '-50%';
+              return (
+                <span key={index} className="absolute whitespace-nowrap" style={{ insetInlineStart: `${order === 0 ? 0 : order === ticksAt.length - 1 ? 100 : at}%`, transform: `translateX(${shift})` }} data-testid="error-hourly-x-tick">
+                  {hourLabel(hours[index].hour)}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+      <details className="mt-2 text-sm">
+        <summary className="cursor-pointer text-fg-muted underline">{tableLabel}</summary>
+        <table className="mt-2 w-full">
+          <thead>
+            <tr className="text-fg-muted">
+              <th scope="col" className="p-1 text-start font-medium">{hourHeading}</th>
+              <th scope="col" className="p-1 text-end font-medium">{countHeading}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {hours.map((h) => (
+              <tr key={h.hour} className="border-t border-border">
+                <td className="p-1">{hourLabel(h.hour)}</td>
+                <td className="p-1 text-end tabular-nums">{number.format(h.occurrences)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </details>
+    </figure>
   );
 }

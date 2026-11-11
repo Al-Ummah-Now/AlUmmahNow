@@ -21,6 +21,7 @@ import {
   loadRollups,
   parseRange,
   rankTopVideos,
+  sumSeries,
   videoAnalytics,
 } from "../../lib/analytics";
 
@@ -73,11 +74,12 @@ const errorResponses = {
   "403": { description: "Not the owner", content: { "application/json": { schema: ErrorSchema } } },
   "404": { description: "Not found", content: { "application/json": { schema: ErrorSchema } } },
   "500": { description: "Internal error", content: { "application/json": { schema: ErrorSchema } } },
+  "503": { description: "index_rebuilding: the ownership index is healing and the totals would be incomplete; try again shortly", content: { "application/json": { schema: ErrorSchema } } },
 };
 
 interface Scope {
   ok: boolean;
-  status?: 403 | 404;
+  status?: 403 | 404 | 503;
   error?: string;
   channels: AnalyticsChannel[];
   videos: AnalyticsVideo[];
@@ -108,9 +110,14 @@ async function loadScope(c: AppContext, userId: string, channelId?: string): Pro
     }
     channels = [match];
   }
+  let incomplete = false;
   const videos = channels.length
-    ? await loadOwnedVideos(c.env.videos, ownerId, new Set(channels.map(ch => ch.id)), undefined, lookup)
+    ? await loadOwnedVideos(c.env.videos, ownerId, new Set(channels.map(ch => ch.id)), undefined, lookup, () => { incomplete = true; })
     : [];
+  // While the ownership index heals, a bounded scan can miss videos: totals would be silently low
+  // (QA 2026-11-11: 1 of 7 videos, 1,987 of 6,379 views). Answer like Top content does, so clients retry.
+  // Without an index at all (local dev, previews) the bounded scan is the designed behaviour
+  if (incomplete && (c.env as { SEARCH_DB?: unknown }).SEARCH_DB) return { ok: false, status: 503, error: "index_rebuilding", channels: [], videos: [] };
   return { ok: true, channels, videos };
 }
 
@@ -238,13 +245,19 @@ export class AnalyticsVideoGet extends AuthenticatedRoute {
   schema = addAuthToSchema({
     tags: ["Analytics"],
     summary: "Video analytics",
-    description: "🔒 Owner only. Lifetime counters; watch time and average view duration for the range.",
+    description: "🔒 Owner only. Lifetime counters; watch time, average view duration, range counts and the daily series for the range.",
     request: {
       params: z.object({ videoId: Str() }),
       query: z.object(RangeQuery),
     },
     responses: {
-      "200": { description: "Video analytics", content: { "application/json": { schema: VideoAnalyticsSchema.extend({ traffic: TrafficSchema }) } } },
+      "200": { description: "Video analytics", content: { "application/json": { schema: VideoAnalyticsSchema.extend({
+        rangeViews: z.number().describe("Tracked views in the requested range (views, likes and comments are lifetime)"),
+        rangeLikes: z.number().describe("Likes given in the requested range"),
+        rangeComments: z.number().describe("Comments posted in the requested range"),
+        recentMetrics: z.array(MetricSchema).describe("One entry per UTC day of the range, zero-filled"),
+        traffic: TrafficSchema,
+      }) } } },
       ...errorResponses,
     },
   });
@@ -261,7 +274,16 @@ export class AnalyticsVideoGet extends AuthenticatedRoute {
       }
       const range = parseRange(query.dateFrom, query.dateTo);
       const rollups = await loadRollups(c.env, "video", [video.id], range);
-      return c.json({ ...videoAnalytics(video, rollups), traffic: buildTraffic(rollups, range) });
+      const daily = buildDailySeries(range, [video], [], rollups);
+      const inRange = sumSeries(daily);
+      return c.json({
+        ...videoAnalytics(video, rollups, range),
+        rangeViews: inRange.views,
+        rangeLikes: inRange.likes,
+        rangeComments: inRange.comments,
+        recentMetrics: daily,
+        traffic: buildTraffic(rollups, range),
+      });
     } catch (error) {
       logger.error("[Analytics] Video analytics failed", { userId, videoId: params.videoId, error });
       return c.json({ success: false, error: "Failed to load video analytics" }, 500);

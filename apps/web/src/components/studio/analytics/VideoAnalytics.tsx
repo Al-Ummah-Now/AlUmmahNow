@@ -8,9 +8,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getStudioVideoAnalytics, getVideoRetention, type RetentionCurve, type StudioVideoAnalytics } from '@/lib/api/studio-analytics';
 import { logger } from '@/lib/logger-client';
+import { chartLocale, formatDuration, formatWatchTime, watchTimeUnit } from '@al-ummah/shared-types';
 import { RANGE_PRESETS, rangeDates, type RangePreset } from '@/lib/studio/analytics';
 import { LineChart } from './LineChart';
-import { formatSeconds, StatCard, TrafficSources } from './parts';
+import { StatCard, TrafficSources } from './parts';
 
 interface Props {
   locale: string;
@@ -58,9 +59,12 @@ export function VideoAnalytics({ locale, channelId, videoId, title, duration, ba
     void load();
   }, [load]);
 
-  const number = new Intl.NumberFormat(locale);
-  const percent = new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 });
-  const position = (bucket: number) => (duration ? formatSeconds((bucket / 20) * duration) : percent.format(bucket / 20));
+  const number = new Intl.NumberFormat(chartLocale(locale));
+  const percent = new Intl.NumberFormat(chartLocale(locale), { style: 'percent', maximumFractionDigits: 0 });
+  const date = new Intl.DateTimeFormat(chartLocale(locale), { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  const clock = formatDuration(locale);
+  const position = (bucket: number) => (duration ? clock((bucket / 20) * duration) : percent.format(bucket / 20));
+  const lifetime = (count: number) => text.lifetimeViews.replace('{count}', number.format(count));
 
   return (
     <div data-testid="studio-video-analytics">
@@ -85,12 +89,31 @@ export function VideoAnalytics({ locale, channelId, videoId, title, duration, ba
       ) : (
         <div className="space-y-6">
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-            <StatCard label={text.metrics.views} value={number.format(data.views)} />
-            <StatCard label={text.metrics.watchTime} value={formatSeconds(data.watchTime)} />
-            <StatCard label={text.metrics.avgViewDuration} value={formatSeconds(data.avgViewDuration)} />
-            <StatCard label={text.metrics.likes} value={number.format(data.likes)} />
-            <StatCard label={text.metrics.comments} value={number.format(data.comments)} />
+            {/* The range's numbers, like the chart and the channel page; the lifetime total stays as a note */}
+            <StatCard locale={locale} label={text.metrics.views} value={number.format(data.rangeViews ?? data.views)} note={data.rangeViews === undefined ? undefined : lifetime(data.views)} />
+            <StatCard locale={locale} label={text.metrics.watchTime} value={formatWatchTime(locale, watchTimeUnit(data.watchTime))(data.watchTime)} />
+            <StatCard locale={locale} label={text.metrics.avgViewDuration} value={clock(data.avgViewDuration)} />
+            <StatCard locale={locale} label={text.metrics.likes} value={number.format(data.rangeLikes ?? data.likes)} />
+            <StatCard locale={locale} label={text.metrics.comments} value={number.format(data.rangeComments ?? data.comments)} />
           </div>
+
+          {data.recentMetrics && (
+            <section aria-labelledby="studio-video-views" data-testid="studio-video-views">
+              <h2 id="studio-video-views" className="mb-3 text-base font-semibold text-foreground">{text.viewsChart}</h2>
+              <LineChart
+                title={text.metrics.views}
+                locale={locale}
+                points={data.recentMetrics.map((entry) => ({ label: date.format(new Date(entry.date)), value: entry.views || 0 }))}
+                format={(value) => number.format(value)}
+                emptyText={text.emptyBy.views}
+                summaryTemplate={text.chartSummary}
+                tableLabel={text.chartTable}
+                xHeading={text.dateHeading}
+                showTable={text.showTable}
+                hideTable={text.hideTable}
+              />
+            </section>
+          )}
 
           <section aria-labelledby="studio-retention" data-testid="studio-retention">
             <h2 id="studio-retention" className="mb-1 text-base font-semibold text-foreground">{text.retention.title}</h2>
@@ -98,9 +121,13 @@ export function VideoAnalytics({ locale, channelId, videoId, title, duration, ba
             {retention?.points ? (
               <LineChart
                 title={text.retention.series}
+                locale={locale}
                 points={retention.points.map((point) => ({ label: position(point.bucket), value: point.share }))}
                 max={1}
+                integer={false}
                 format={(value) => percent.format(value)}
+                axisFormat={(value) => percent.format(value)}
+                summaryTemplate={text.chartSummary}
                 tableLabel={text.chartTable}
                 xHeading={text.retention.positionHeading}
                 showTable={text.showTable}

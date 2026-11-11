@@ -7,14 +7,17 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getStudioChannelAnalytics, getTopContent, type StudioChannelAnalytics, type TopContentItem } from '@/lib/api/studio-analytics';
 import { logger } from '@/lib/logger-client';
+import { chartLocale, formatDuration, formatInUnit, formatWatchTime, watchTimeInUnit, watchTimeUnit } from '@al-ummah/shared-types';
 import { changePercent, RANGE_PRESETS, rangeDates, sumMetrics, type DailyMetric, type RangePreset } from '@/lib/studio/analytics';
 import { LineChart } from './LineChart';
-import { formatSeconds, StatCard, TrafficSources } from './parts';
+import { StatCard, TrafficSources } from './parts';
 
 type Metric = 'views' | 'watchTime' | 'likes' | 'comments' | 'subscribers';
 type SortKey = 'views' | 'watchTime' | 'avgViewDuration';
 
 const METRICS: Metric[] = ['views', 'watchTime', 'likes', 'comments', 'subscribers'];
+/** Wait before the automatic second try of a section that failed. */
+const AUTO_RETRY_MS = 2000;
 
 interface Props {
   locale: string;
@@ -67,6 +70,28 @@ export function ChannelAnalytics({ locale, channelId, channelCreated }: Props) {
     void load();
   }, [load]);
 
+  /** Top content alone, so its Retry doesn't reload the whole page. */
+  const loadTop = useCallback(async () => {
+    const id = request.current;
+    setTopFailed(false);
+    const content = await getTopContent(channelId, windows.current).catch(() => null);
+    if (id !== request.current) return;
+    setTop(content?.items ?? []);
+    setTopCursor(content?.cursor ?? null);
+    setTopFailed(!content);
+  }, [channelId, windows]);
+
+  // One automatic second try per range: the API answers 503 while the channel's index heals,
+  // which takes seconds. A second failure leaves the Retry buttons.
+  const retried = useRef<string | null>(null);
+  useEffect(() => {
+    const key = `${channelId}/${windows.current.dateFrom}/${windows.current.dateTo}`;
+    if (loading || (!overviewFailed && !topFailed) || retried.current === key) return;
+    retried.current = key;
+    const timer = setTimeout(() => void (overviewFailed ? load() : loadTop()), AUTO_RETRY_MS);
+    return () => clearTimeout(timer);
+  }, [loading, overviewFailed, topFailed, channelId, windows, load, loadTop]);
+
   const loadMore = async () => {
     if (!topCursor) return;
     const content = await getTopContent(channelId, windows.current, topCursor).catch(() => null);
@@ -75,15 +100,21 @@ export function ChannelAnalytics({ locale, channelId, channelCreated }: Props) {
     setTopCursor(content.cursor);
   };
 
-  const number = new Intl.NumberFormat(locale);
-  const date = new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', timeZone: 'UTC' });
-  const metricFormat = (value: number) => (metric === 'watchTime' ? formatSeconds(value) : number.format(value));
+  const number = new Intl.NumberFormat(chartLocale(locale));
+  const date = new Intl.DateTimeFormat(chartLocale(locale), { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  const duration = formatDuration(locale);
   const series: DailyMetric[] = overview?.recentMetrics ?? [];
   const totals = sumMetrics(series);
+  // Watch time is charted in minutes or hours, so the axis ticks are round in that unit
+  const unit = watchTimeUnit(Math.max(0, ...series.map((entry) => entry.watchTime || 0)));
+  const chart = metric === 'watchTime'
+    ? { value: (entry: DailyMetric) => watchTimeInUnit(entry.watchTime, unit), format: formatInUnit(locale, unit), integer: false }
+    : { value: (entry: DailyMetric) => entry[metric] || 0, format: (value: number) => number.format(value), integer: true };
   const before = previous ? sumMetrics(previous.recentMetrics) : undefined;
   const sorted = [...top].sort((a, b) => b[sort] - a[sort]);
   const videoHref = (id: string) => `/${locale}/studio/${encodeURIComponent(channelId)}/content/videos/${encodeURIComponent(id)}/analytics`;
   const retry = <Button variant="outline" onClick={() => void load()}>{text.retry}</Button>;
+  const retryTop = <Button variant="outline" onClick={() => void loadTop()}>{text.retry}</Button>;
   const sortHeader = (key: SortKey, label: string) => (
     <th className="p-2 text-end font-medium" aria-sort={sort === key ? 'descending' : 'none'}>
       <button type="button" className="min-h-11 hover:text-foreground" onClick={() => setSort(key)}>{label}</button>
@@ -114,12 +145,12 @@ export function ChannelAnalytics({ locale, channelId, channelCreated }: Props) {
           ) : (
             <>
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
-                <StatCard label={text.metrics.views} value={number.format(totals.views)} change={changePercent(totals.views, before?.views)} />
-                <StatCard label={text.metrics.watchTime} value={formatSeconds(totals.watchTime)} change={changePercent(totals.watchTime, before?.watchTime)} />
-                <StatCard label={text.metrics.avgViewDuration} value={formatSeconds(totals.avgViewDuration)} change={changePercent(totals.avgViewDuration, before?.avgViewDuration)} />
-                <StatCard label={text.metrics.likes} value={number.format(totals.likes)} change={changePercent(totals.likes, before?.likes)} />
-                <StatCard label={text.metrics.comments} value={number.format(totals.comments)} change={changePercent(totals.comments, before?.comments)} />
-                <StatCard label={text.metrics.subscribers} value={number.format(totals.subscribers)} change={changePercent(totals.subscribers, before?.subscribers)} />
+                <StatCard locale={locale} label={text.metrics.views} value={number.format(totals.views)} change={changePercent(totals.views, before?.views)} />
+                <StatCard locale={locale} label={text.metrics.watchTime} value={formatWatchTime(locale, watchTimeUnit(totals.watchTime))(totals.watchTime)} change={changePercent(totals.watchTime, before?.watchTime)} />
+                <StatCard locale={locale} label={text.metrics.avgViewDuration} value={duration(totals.avgViewDuration)} change={changePercent(totals.avgViewDuration, before?.avgViewDuration)} />
+                <StatCard locale={locale} label={text.metrics.likes} value={number.format(totals.likes)} change={changePercent(totals.likes, before?.likes)} />
+                <StatCard locale={locale} label={text.metrics.comments} value={number.format(totals.comments)} change={changePercent(totals.comments, before?.comments)} />
+                <StatCard locale={locale} label={text.metrics.subscribers} value={number.format(totals.subscribers)} change={changePercent(totals.subscribers, before?.subscribers)} />
               </div>
 
               <section>
@@ -130,19 +161,22 @@ export function ChannelAnalytics({ locale, channelId, channelCreated }: Props) {
                     </Button>
                   ))}
                 </div>
-                {totals.views + totals.likes + totals.comments + totals.subscribers === 0 ? (
-                  <p className="py-8 text-center text-muted-foreground" data-testid="studio-analytics-empty">{text.empty}</p>
-                ) : (
-                  <LineChart
-                    title={text.metrics[metric]}
-                    points={series.map((entry) => ({ label: date.format(new Date(entry.date)), value: entry[metric] || 0 }))}
-                    format={metricFormat}
-                    tableLabel={text.chartTable}
-                    xHeading={text.dateHeading}
-                    showTable={text.showTable}
-                    hideTable={text.hideTable}
-                  />
-                )}
+                <LineChart
+                  key={metric}
+                  title={text.metrics[metric]}
+                  locale={locale}
+                  points={series.map((entry) => ({ label: date.format(new Date(entry.date)), value: chart.value(entry) }))}
+                  integer={chart.integer}
+                  format={chart.format}
+                  axisFormat={metric === 'watchTime' ? chart.format : undefined}
+                  emptyText={text.emptyBy[metric]}
+                  emptyTestId="studio-analytics-empty"
+                  summaryTemplate={text.chartSummary}
+                  tableLabel={text.chartTable}
+                  xHeading={text.dateHeading}
+                  showTable={text.showTable}
+                  hideTable={text.hideTable}
+                />
                 <p className="mt-2 text-xs text-muted-foreground">{text.watchTimeNote}</p>
               </section>
 
@@ -155,7 +189,7 @@ export function ChannelAnalytics({ locale, channelId, channelCreated }: Props) {
             {topFailed ? (
               <div className="py-4">
                 <p className="mb-3 text-foreground">{text.loadFailed}</p>
-                {retry}
+                {retryTop}
               </div>
             ) : sorted.length === 0 ? (
               <p className="text-sm text-muted-foreground">{text.empty}</p>
@@ -177,8 +211,8 @@ export function ChannelAnalytics({ locale, channelId, channelCreated }: Props) {
                           <Link href={videoHref(item.videoId)} dir="auto" className="text-foreground hover:underline">{item.title}</Link>
                         </td>
                         <td className="p-2 text-end tabular-nums">{number.format(item.views)}</td>
-                        <td className="p-2 text-end tabular-nums">{formatSeconds(item.watchTime)}</td>
-                        <td className="p-2 text-end tabular-nums">{formatSeconds(item.avgViewDuration)}</td>
+                        <td className="p-2 text-end tabular-nums">{formatWatchTime(locale, watchTimeUnit(item.watchTime))(item.watchTime)}</td>
+                        <td className="p-2 text-end tabular-nums">{duration(item.avgViewDuration)}</td>
                       </tr>
                     ))}
                   </tbody>

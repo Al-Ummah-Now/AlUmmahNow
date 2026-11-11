@@ -680,6 +680,28 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "index_rebuilding: the ownership index is healing and the totals would be incomplete; try again shortly",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
           }
         }
       }
@@ -965,6 +987,28 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "index_rebuilding: the ownership index is healing and the totals would be incomplete; try again shortly",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
           }
         }
       }
@@ -1203,6 +1247,28 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "index_rebuilding: the ownership index is healing and the totals would be incomplete; try again shortly",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
           }
         }
       }
@@ -1213,7 +1279,7 @@
           "Analytics"
         ],
         "summary": "Video analytics",
-        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\n🔒 Owner only. Lifetime counters; watch time and average view duration for the range.",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\n🔒 Owner only. Lifetime counters; watch time, average view duration, range counts and the daily series for the range.",
         "operationId": "get_AnalyticsVideoGet",
         "parameters": [
           {
@@ -1296,6 +1362,59 @@
                     "thumbnailUrl": {
                       "type": "string"
                     },
+                    "rangeViews": {
+                      "type": "number",
+                      "description": "Tracked views in the requested range (views, likes and comments are lifetime)"
+                    },
+                    "rangeLikes": {
+                      "type": "number",
+                      "description": "Likes given in the requested range"
+                    },
+                    "rangeComments": {
+                      "type": "number",
+                      "description": "Comments posted in the requested range"
+                    },
+                    "recentMetrics": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "date": {
+                            "type": "string"
+                          },
+                          "views": {
+                            "type": "number"
+                          },
+                          "likes": {
+                            "type": "number"
+                          },
+                          "comments": {
+                            "type": "number"
+                          },
+                          "shares": {
+                            "type": "number"
+                          },
+                          "subscribers": {
+                            "type": "number",
+                            "description": "New subscribers that day"
+                          },
+                          "watchTime": {
+                            "type": "number",
+                            "description": "Seconds"
+                          }
+                        },
+                        "required": [
+                          "date",
+                          "views",
+                          "likes",
+                          "comments",
+                          "shares",
+                          "subscribers",
+                          "watchTime"
+                        ]
+                      },
+                      "description": "One entry per UTC day of the range, zero-filled"
+                    },
                     "traffic": {
                       "type": "object",
                       "properties": {
@@ -1347,6 +1466,10 @@
                     "clickThroughRate",
                     "engagementRate",
                     "dateCreated",
+                    "rangeViews",
+                    "rangeLikes",
+                    "rangeComments",
+                    "recentMetrics",
                     "traffic"
                   ]
                 }
@@ -1419,6 +1542,28 @@
           },
           "500": {
             "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "index_rebuilding: the ownership index is healing and the totals would be incomplete; try again shortly",
             "content": {
               "application/json": {
                 "schema": {
@@ -1587,6 +1732,28 @@
           },
           "500": {
             "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "index_rebuilding: the ownership index is healing and the totals would be incomplete; try again shortly",
             "content": {
               "application/json": {
                 "schema": {

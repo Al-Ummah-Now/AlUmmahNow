@@ -1,8 +1,7 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { STUDIO_EN } from '@al-ummah/shared-types';
 import { ChannelAnalytics } from '../ChannelAnalytics';
 import { VideoAnalytics } from '../VideoAnalytics';
-import { LineChart } from '../LineChart';
 
 const channel = jest.fn();
 const top = jest.fn();
@@ -72,10 +71,46 @@ describe('ChannelAnalytics', () => {
     expect(await screen.findAllByTestId('studio-top-row')).toHaveLength(2);
   });
 
-  it('shows the empty message with no activity', async () => {
-    channel.mockResolvedValue({ recentMetrics: [{ date: 'x', views: 0, likes: 0, comments: 0, subscribers: 0, watchTime: 0 }], traffic: { totalViews: 0, sources: {}, externalHosts: [] } });
+  it('keeps the axes and says what is missing with no activity', async () => {
+    channel.mockResolvedValue({ recentMetrics: [{ date: '2026-11-08', views: 0, likes: 0, comments: 0, subscribers: 0, watchTime: 0 }], traffic: { totalViews: 0, sources: {}, externalHosts: [] } });
     renderOverview();
-    expect(await screen.findByTestId('studio-analytics-empty')).toHaveTextContent(text.empty);
+    expect(await screen.findByTestId('studio-analytics-empty')).toHaveTextContent(text.emptyBy.views);
+    expect(screen.getAllByTestId('chart-y-tick').map((tick) => tick.textContent)).toEqual(['0', '1']);
+    fireEvent.click(screen.getByRole('button', { name: text.metrics.likes, pressed: false }));
+    expect(screen.getByTestId('studio-analytics-empty')).toHaveTextContent(text.emptyBy.likes);
+  });
+
+  it('draws the views chart with a value axis and a date tooltip', async () => {
+    channel.mockResolvedValue({ recentMetrics: [day(10), { ...day(1500), date: '2026-11-09' }], traffic });
+    renderOverview();
+    const hit = await screen.findByTestId('chart-hit');
+    expect(screen.getAllByTestId('chart-y-tick').map((tick) => tick.textContent)).toEqual(['0', '500', '1K', '1.5K']);
+    hit.getBoundingClientRect = () => ({ left: 0, width: 100 }) as DOMRect;
+    fireEvent.mouseMove(hit, { clientX: 99 });
+    expect(screen.getByTestId('chart-tooltip')).toHaveTextContent('Nov 9');
+    expect(screen.getByTestId('chart-tooltip')).toHaveTextContent('1,500');
+  });
+
+  it('charts watch time in minutes with the unit on the axis and the card', async () => {
+    channel.mockResolvedValue({ recentMetrics: [{ ...day(1), watchTime: 183 }], traffic });
+    renderOverview();
+    const stats = await screen.findAllByTestId('studio-stat');
+    expect(stats[1]).toHaveTextContent('3.1 min');
+    fireEvent.click(screen.getByRole('button', { name: text.metrics.watchTime, pressed: false }));
+    expect(screen.getAllByTestId('chart-y-tick').map((tick) => tick.textContent)).toEqual(['0 min', '1 min', '2 min', '3 min', '4 min']);
+  });
+
+  it('asks again by itself when the API is rebuilding its index', async () => {
+    jest.useFakeTimers();
+    try {
+      channel.mockReset().mockResolvedValueOnce(null).mockResolvedValue({ recentMetrics: [day(10)], traffic });
+      renderOverview();
+      expect(await screen.findByText(text.loadFailed)).toBeInTheDocument();
+      await act(async () => { jest.advanceTimersByTime(2500); });
+      expect(await screen.findAllByTestId('studio-stat')).toHaveLength(6);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });
 
@@ -90,9 +125,11 @@ describe('VideoAnalytics', () => {
   it('draws the retention curve', async () => {
     retention.mockResolvedValue({ starts: 20, points: Array.from({ length: 20 }, (_, bucket) => ({ bucket, share: 1 - bucket / 20 })) });
     view();
-    expect(await screen.findByRole('img', { name: new RegExp(text.retention.series) })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: text.showTable }));
-    expect(screen.getByRole('table')).toHaveTextContent('0:05');
+    const retentionSection = await screen.findByTestId('studio-retention');
+    expect(within(retentionSection).getByRole('group', { name: new RegExp(text.retention.series) })).toBeInTheDocument();
+    expect(within(retentionSection).getAllByTestId('chart-y-tick').map((tick) => tick.textContent)).toEqual(['0%', '25%', '50%', '75%', '100%']);
+    fireEvent.click(within(retentionSection).getByRole('button', { name: text.showTable }));
+    expect(within(retentionSection).getByRole('table')).toHaveTextContent('0:05');
   });
 
   it('says when there is not enough data', async () => {
@@ -101,33 +138,26 @@ describe('VideoAnalytics', () => {
     expect(await screen.findByTestId('studio-retention-empty')).toHaveTextContent(text.retention.notEnough);
   });
 
+  it('shows the range numbers with the lifetime total, and a views chart', async () => {
+    video.mockResolvedValue({
+      title: 'T', views: 1500, likes: 9, comments: 4, watchTime: 30, avgViewDuration: 10, traffic,
+      rangeViews: 12, rangeLikes: 2, rangeComments: 1,
+      recentMetrics: [day(5), day(7)],
+    });
+    retention.mockResolvedValue({ starts: 3, points: null });
+    view();
+    const stats = await screen.findAllByTestId('studio-stat');
+    expect(stats[0]).toHaveTextContent('12');
+    expect(stats[0]).toHaveTextContent(text.lifetimeViews.replace('{count}', '1,500'));
+    expect(stats[3]).toHaveTextContent('2');
+    const chart = screen.getByTestId('studio-video-views');
+    expect(within(chart).getAllByTestId('chart-y-tick').length).toBeGreaterThan(1);
+  });
+
   it('offers Retry when stats fail', async () => {
     video.mockResolvedValue(null);
     retention.mockResolvedValue(null);
     view();
     expect(await screen.findByRole('button', { name: text.retry })).toBeInTheDocument();
-  });
-});
-
-describe('LineChart', () => {
-  it('reads out the point that was tapped, and keeps it until the next tap', () => {
-    render(<LineChart title="Views" points={[{ label: 'a', value: 1 }, { label: 'b', value: 2 }]} format={String} tableLabel="t" xHeading="x" showTable="show" hideTable="hide" />);
-    const hit = screen.getByTestId('chart-hit');
-    hit.getBoundingClientRect = () => ({ left: 0, width: 100 }) as DOMRect;
-    fireEvent.click(hit, { clientX: 90 });
-    expect(screen.getByTestId('chart-readout')).toHaveTextContent('b: 2');
-    expect(screen.getByTestId('chart-crosshair')).toBeInTheDocument();
-    fireEvent.click(hit, { clientX: 5 });
-    expect(screen.getByTestId('chart-readout')).toHaveTextContent('a: 1');
-  });
-
-  it('reads out the point under the pointer', () => {
-    render(<LineChart title="Views" points={[{ label: 'a', value: 1 }, { label: 'b', value: 2 }]} format={String} tableLabel="t" xHeading="x" showTable="show" hideTable="hide" />);
-    const hit = screen.getByTestId('chart-hit');
-    hit.getBoundingClientRect = () => ({ left: 0, width: 100 }) as DOMRect;
-    fireEvent.mouseMove(hit, { clientX: 95 });
-    expect(screen.getByTestId('chart-readout')).toHaveTextContent('b: 2');
-    fireEvent.mouseLeave(hit);
-    expect(screen.getByTestId('chart-readout')).toHaveTextContent('');
   });
 });

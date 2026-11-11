@@ -48,7 +48,7 @@ describe('StudioDashboard', () => {
 
   it('shows watch time on the latest video with stats access', async () => {
     show();
-    expect(await screen.findByTestId('studio-dash-latest')).toHaveTextContent('1:30');
+    expect(await screen.findByTestId('studio-dash-latest')).toHaveTextContent('1.5 min');
   });
 
   it('orders Next scheduled soonest first', async () => {
@@ -67,7 +67,7 @@ describe('StudioDashboard', () => {
 
   it('gives an editor no stats', async () => {
     show('editor');
-    expect(await screen.findByTestId('studio-dash-latest')).not.toHaveTextContent('1:30');
+    expect(await screen.findByTestId('studio-dash-latest')).not.toHaveTextContent('1.5 min');
     expect(screen.queryByTestId('studio-dash-totals')).toBeNull();
     expect(channel).not.toHaveBeenCalled();
     expect(video).not.toHaveBeenCalled();
