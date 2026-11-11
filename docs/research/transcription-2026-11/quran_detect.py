@@ -1,15 +1,4 @@
-"""Research prototype (2026-11-11), not production code.
-
-Finds Quran quotations in Arabic ASR text and replaces them with the official
-Tanzil text. Used for the measurements in ../TRANSCRIPTION-TRANSLATION-RESEARCH.md.
-
-Inputs (download from https://tanzil.net/download/, CC BY 3.0, verbatim, credit
-"Tanzil Project"): dl/quran-simple-clean.txt, dl/quran-simple.txt and
-dl/quran-uthmani.txt in "sura|aya|text" format.
-
-    from quran_detect import detect, merge, replace_merged
-    h, spans = detect(asr_text)   # spans: from/to (surah, ayah), conf, words
-"""
+"""Research prototype (2026-11-11): Tanzil XML loader (basmala kept out of ayah text) and fuzzy n-gram detector. Not production code."""
 import re,json,sys
 from difflib import SequenceMatcher
 D=re.compile('[ؐ-ًؚ-ٰٟۖ-ۭـ]')
@@ -18,11 +7,12 @@ def norm(s):
     s=re.sub('[إأآٱا]','ا',s); s=s.replace('ى','ي').replace('ة','ه').replace('ؤ','و').replace('ئ','ي').replace('ء','')
     s=re.sub('[^ء-ي\\s]',' ',s)
     return s.split()
+import xml.etree.ElementTree as ET
 def load(p):
-    out={}
-    for l in open(p,encoding='utf-8'):
-        p_=l.rstrip('\n').split('|')
-        if len(p_)==3 and p_[0].isdigit(): out[(int(p_[0]),int(p_[1]))]=p_[2]
+    """Tanzil XML: the basmala is an attribute of aya 1, never part of the ayah text (except 1:1)."""
+    p=p.replace('.txt','.xml'); out={}
+    for sura in ET.parse(p).getroot():
+        for aya in sura: out[(int(sura.get('index')),int(aya.get('index')))]=aya.get('text')
     return out
 CLEAN=load('dl/quran-simple-clean.txt'); UTH=load('dl/quran-uthmani.txt'); SIMPLE=load('dl/quran-simple.txt')
 W=[];POS=[]
@@ -71,7 +61,7 @@ def wer(ref,hyp):
         p=d[:]; d[0]=i
         for j in range(1,len(hh)+1): d[j]=min(p[j]+1,d[j-1]+1,p[j-1]+(r[i-1]!=hh[j-1]))
     return d[len(hh)]/max(1,len(r))
-def replace(text, src=None):
+def replace(text,src=None):
     h,spans=detect(text); out=[];i=0
     for s in spans:
         out+=h[i:s['h'][0]]; t,_=official(s,src); out.append('⟦'+t+'⟧'); i=s['h'][1]

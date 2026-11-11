@@ -1,0 +1,376 @@
+{
+ "rows": [
+  {
+   "clip": "r1_husary_kahf",
+   "truth": 10,
+   "ok": 10,
+   "wrong": [],
+   "extra_words": 0,
+   "missing_words": 0,
+   "truth_words": 105,
+   "review": 0,
+   "review_true": 0,
+   "review_false": [],
+   "confirmed": 1,
+   "context": 0,
+   "basmala": 0
+  },
+  {
+   "clip": "r2_minshawy_mj_fajr",
+   "truth": 16,
+   "ok": 13,
+   "wrong": [],
+   "extra_words": 0,
+   "missing_words": 26,
+   "truth_words": 73,
+   "review": 0,
+   "review_true": 0,
+   "review_false": [],
+   "confirmed": 1,
+   "context": 0,
+   "basmala": 0
+  },
+  {
+   "clip": "r3_sudais_kursi",
+   "truth": 3,
+   "ok": 3,
+   "wrong": [],
+   "extra_words": 0,
+   "missing_words": 3,
+   "truth_words": 98,
+   "review": 0,
+   "review_true": 0,
+   "review_false": [],
+   "confirmed": 3,
+   "context": 1,
+   "basmala": 0
+  },
+  {
+   "clip": "r4_maher_yasin",
+   "truth": 12,
+   "ok": 12,
+   "wrong": [],
+   "extra_words": 0,
+   "missing_words": 0,
+   "truth_words": 83,
+   "review": 0,
+   "review_true": 0,
+   "review_false": [],
+   "confirmed": 1,
+   "context": 0,
+   "basmala": 0
+  },
+  {
+   "clip": "r5_ghamdi_hashr",
+   "truth": 4,
+   "ok": 4,
+   "wrong": [],
+   "extra_words": 0,
+   "missing_words": 0,
+   "truth_words": 67,
+   "review": 0,
+   "review_true": 0,
+   "review_false": [],
+   "confirmed": 1,
+   "context": 0,
+   "basmala": 0
+  },
+  {
+   "clip": "r6_husary_mj_falaq_nas",
+   "truth": 11,
+   "ok": 9,
+   "wrong": [],
+   "extra_words": 0,
+   "missing_words": 8,
+   "truth_words": 43,
+   "review": 1,
+   "review_true": 3,
+   "review_false": [],
+   "confirmed": 2,
+   "context": 0,
+   "basmala": 0
+  },
+  {
+   "clip": "r7_hudhaify_fatiha",
+   "truth": 7,
+   "ok": 7,
+   "wrong": [],
+   "extra_words": 0,
+   "missing_words": 0,
+   "truth_words": 29,
+   "review": 0,
+   "review_true": 0,
+   "review_false": [],
+   "confirmed": 1,
+   "context": 0,
+   "basmala": 0
+  },
+  {
+   "clip": "r8_ajamy_baqarah_end",
+   "truth": 2,
+   "ok": 2,
+   "wrong": [],
+   "extra_words": 0,
+   "missing_words": 0,
+   "truth_words": 76,
+   "review": 0,
+   "review_true": 0,
+   "review_false": [],
+   "confirmed": 1,
+   "context": 0,
+   "basmala": 0
+  },
+  {
+   "clip": "q_mulk",
+   "truth": 13,
+   "ok": 13,
+   "wrong": [],
+   "extra_words": 0,
+   "missing_words": 0,
+   "truth_words": 140,
+   "review": 0,
+   "review_true": 0,
+   "review_false": [],
+   "confirmed": 1,
+   "context": 0,
+   "basmala": 0
+  },
+  {
+   "clip": "q_rahman_mujawwad",
+   "truth": 25,
+   "ok": 16,
+   "wrong": [],
+   "extra_words": 0,
+   "missing_words": 37,
+   "truth_words": 95,
+   "review": 1,
+   "review_true": 2,
+   "review_false": [],
+   "confirmed": 1,
+   "context": 0,
+   "basmala": 0
+  },
+  {
+   "clip": "p1_afasy_67_3w5_5w4",
+   "truth": 3,
+   "ok": 3,
+   "wrong": [],
+   "extra_words": 0,
+   "missing_words": 1,
+   "truth_words": 28,
+   "review": 0,
+   "review_true": 0,
+   "review_false": [],
+   "confirmed": 1,
+   "context": 0,
+   "basmala": 0
+  },
+  {
+   "clip": "p2_afasy_67_15w3_16w5",
+   "truth": 2,
+   "ok": 2,
+   "wrong": [],
+   "extra_words": 0,
+   "missing_words": 0,
+   "truth_words": 17,
+   "review": 0,
+   "review_true": 0,
+   "review_false": [],
+   "confirmed": 1,
+   "context": 0,
+   "basmala": 0
+  },
+  {
+   "clip": "p3_afasy_67_2w1_6",
+   "truth": 1,
+   "ok": 1,
+   "wrong": [],
+   "extra_words": 0,
+   "missing_words": 0,
+   "truth_words": 6,
+   "review": 0,
+   "review_true": 0,
+   "review_false": [],
+   "confirmed": 1,
+   "context": 0,
+   "basmala": 0
+  },
+  {
+   "clip": "m1_lecture_quote_67_2",
+   "truth": 1,
+   "ok": 1,
+   "wrong": [],
+   "extra_words": 0,
+   "missing_words": 0,
+   "truth_words": 6,
+   "review": 0,
+   "review_true": 0,
+   "review_false": [],
+   "confirmed": 1,
+   "context": 0,
+   "basmala": 0
+  },
+  {
+   "clip": "ar_duat3",
+   "truth": 3,
+   "ok": 3,
+   "wrong": [],
+   "extra_words": 0,
+   "missing_words": 0,
+   "truth_words": null,
+   "review": 1,
+   "review_true": 1,
+   "review_false": [],
+   "confirmed": 2,
+   "context": 0,
+   "basmala": 0
+  },
+  {
+   "clip": "ar_tahinu",
+   "truth": 1,
+   "ok": 1,
+   "wrong": [],
+   "extra_words": 0,
+   "missing_words": 0,
+   "truth_words": null,
+   "review": 0,
+   "review_true": 0,
+   "review_false": [],
+   "confirmed": 1,
+   "context": 0,
+   "basmala": 0
+  },
+  {
+   "clip": "en_gooddeeds1",
+   "truth": 1,
+   "ok": 1,
+   "wrong": [],
+   "extra_words": 0,
+   "missing_words": 0,
+   "truth_words": null,
+   "review": 0,
+   "review_true": 0,
+   "review_false": [],
+   "confirmed": 1,
+   "context": 0,
+   "basmala": 0
+  },
+  {
+   "clip": "x_ashura2",
+   "truth": 0,
+   "ok": 0,
+   "wrong": [],
+   "extra_words": 0,
+   "missing_words": 0,
+   "truth_words": null,
+   "review": 4,
+   "review_true": 0,
+   "review_false": [
+    [
+     2,
+     143
+    ],
+    [
+     7,
+     59
+    ],
+    [
+     12,
+     50
+    ],
+    [
+     91,
+     13
+    ]
+   ],
+   "confirmed": 0,
+   "context": 0,
+   "basmala": 0
+  },
+  {
+   "clip": "ar_gaza16",
+   "truth": 0,
+   "ok": 0,
+   "wrong": [],
+   "extra_words": 0,
+   "missing_words": 0,
+   "truth_words": null,
+   "review": 4,
+   "review_true": 0,
+   "review_false": [
+    [
+     2,
+     190
+    ],
+    [
+     2,
+     246
+    ],
+    [
+     3,
+     157
+    ]
+   ],
+   "confirmed": 0,
+   "context": 0,
+   "basmala": 0
+  },
+  {
+   "clip": "x_shahrour1",
+   "truth": 0,
+   "ok": 0,
+   "wrong": [],
+   "extra_words": 0,
+   "missing_words": 0,
+   "truth_words": null,
+   "review": 0,
+   "review_true": 0,
+   "review_false": [],
+   "confirmed": 0,
+   "context": 0,
+   "basmala": 0
+  }
+ ],
+ "timing": [
+  [
+   "start",
+   "p1_afasy_67_3w5_5w4",
+   -1230
+  ],
+  [
+   "end",
+   "p1_afasy_67_3w5_5w4",
+   -30
+  ],
+  [
+   "start",
+   "p2_afasy_67_15w3_16w5",
+   0
+  ],
+  [
+   "end",
+   "p2_afasy_67_15w3_16w5",
+   -693
+  ],
+  [
+   "start",
+   "p3_afasy_67_2w1_6",
+   0
+  ],
+  [
+   "end",
+   "p3_afasy_67_2w1_6",
+   -180
+  ],
+  [
+   "start",
+   "m1_lecture_quote_67_2",
+   -500
+  ],
+  [
+   "end",
+   "m1_lecture_quote_67_2",
+   -100
+  ]
+ ]
+}

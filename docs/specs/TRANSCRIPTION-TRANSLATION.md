@@ -1,7 +1,7 @@
 # Transcription, translation and inline metadata translation (Quran-aware)
 
 **Status:** Draft v1 for review
-**Date:** 2026-11-11
+**Date:** 2026-11-11 (v2 the same day: zero-mistake Quran design, QF Content Sync as the Quran source, measured DeepL, full price comparison)
 **Epic:** new, proposed as `AUN-CAPTIONS` (relates to Epic 8 video content features, Epic 18/19 native Studio, Epic 27 entitlements, Epic 28 moderation, wiki decision D10)
 **Research and measurements:** [docs/research/TRANSCRIPTION-TRANSLATION-RESEARCH.md](../research/TRANSCRIPTION-TRANSLATION-RESEARCH.md). Section numbers written `R§n` refer to it.
 **Related:** subtitles API (`apps/api-videos/src/endpoints/video/subtitles*.ts`), Epic 27 plan (`EPIC-27-PLAN.md`), CMS AI provider layer (AlUmmahNowCMS `src/lib/ai/`, `docs/AI_ASSIST_SPEC.md`), AI moderation (`AI-MODERATION.md`)
@@ -18,22 +18,25 @@ The owner asked for:
 | Topic | Recommendation | Why (evidence) |
 |---|---|---|
 | Speech-to-text default | **Workers AI `@cf/openai/whisper-large-v3-turbo`**, VAD off, explicit language, `initial_prompt`, chunks of 10 minutes or less | $0.00051/min measured. It matched or beat Bunny on every test clip. VAD deleted speech in 2 of 3 cases (R§2). |
-| Speech-to-text fallback | **ElevenLabs Scribe v3** ($0.20/h), admin-enabled, for "high accuracy" jobs and when the default fails | Best-documented Arabic and dialect results, and cheap. **Not measured yet**: needs the key (owner decision O1). |
+| Speech-to-text, high accuracy | **DeepL Voice** (on the owner's DeepL API Pro account, $1.85/h), admin-enabled for higher tiers and as the Quran second opinion. **ElevenLabs Scribe v3** ($0.20/h) stays a candidate once measured | Measured: best Arabic (Al-Mulk 2.1% WER vs 6.2% for Workers AI), and al-Fajr mujawwad 16/16 ayat vs 13/16. But it is real-time streaming only (≤ 2× real time) and 54× the default's cost (R§9). Scribe is still unmeasured (O1). |
 | Not used | Bunny built-in transcription ($0.10 per language-minute, Whisper-based, no glossary); Cloudflare Stream captions (no Arabic); Workers AI nova-3 (no Arabic); Media Transformations audio extraction ($0.03/min, 10-minute limit) | R§2, R§5 |
 | Transcript translation | **DeepSeek V4.1 Flash** on Workers AI, falling back to Gemma 4 26B | Cue-accurate and honorific-correct at $0.0004 per video-minute. It is already the CMS default (R§3.2). |
 | Inline title/description translation | **Gemma 4 26B** on Workers AI, falling back to DeepSeek V4.1 Flash. DeepL is an optional adapter. | p50 1.0 s, p95 2.1 s, $0.00002 per title, quality equal to DeepSeek (R§3.1) |
+| Premium translation path | **DeepL API Pro** with a glossary, opt-in on higher tiers (transcripts and titles) | Measured: fastest (titles p50 0.56 s), and its glossary fixed names and terms. It also made meaning slips the default didn't: «فصامه موسى شكرا» → "so thank you"; "He is the One" → «هو المخلص»; «نشيد» → «أغاني» without the glossary. Quran stays masked either way (R§9). |
+| Dubbing (later) | DeepL speech-to-speech is technically viable (a 52 s clip became a 59 s English voice track) | It spoke a machine translation of the ayat. Quran spans must keep the original audio and are never synthesised (principle 3). |
 | Never | m2m100 (unusable: invented hadith, repetition loops), gpt-oss (answers instead of translating) | R§3.1, CMS §1.5 |
-| Quran text | **Tanzil Uthmani 1.1**, stored offline, verbatim, credited | CC BY 3.0 allows offline storage. Quran Foundation's terms forbid a static cache (R§5). |
-| Quran translations | **QuranEnc** editions per language, stored offline: English `english_saheeh` (Noor International) by default, `english_rwwad` as the alternative | Republishing allowed with attribution and version. The Clear Quran and other Saheeh sources need written permission. |
+| Quran display | **Official text only, never ASR**: a span shows the stored official text for an exact word range after creator confirmation, or a reference with no text | Measured 0 wrong ayat and 0 extra words on 20 clips (R§8) |
+| Quran text | **Quran Foundation Content Sync** (`quran_core:1`, `mushafs:4`), a local copy synced at least every 7 days. Tanzil XML is the fallback | The QF terms allow offline copies kept through Content Sync (quoted in §9.4). Needs Developer Console registration (O12) |
+| Quran translations | **QF Content Sync `translations:<id>`** for editions QF publishes as syncable; **QuranEnc** offline files for anything QF doesn't offer. English default: Saheeh International | Which translation ids are public for sync is only visible with credentials (O12). QuranEnc terms allow republishing with attribution and version (§9.4). |
 | Metering | One "caption minute" per video-minute per language produced; plan allowance plus add-on packs plus admin grants | §6 |
 | Inline title translation | **Free on every tier, with a fair-use cap** | 100,000 title translations cost about $2 (§6.4) |
-| Cost at scale | 1,000 h/month of jobs ≈ **$58** with the default stack; 10,000 h ≈ $578, which breaks the cap, so it is bounded by tier minutes and a budget stop | §7 |
+| Cost at scale | 1,000 h/month of jobs ≈ **$59** with the default stack; 10,000 h ≈ $590, which breaks the cap, so it is bounded by tier minutes and a budget stop | §7 |
 
 ## 2. Principles
 
 1. **On demand, never automatic.** Nothing is transcribed or translated unless a creator (or an admin acting for them) asks. The "transcribe after processing" upload flag counts as asking.
 2. **Never silent.** Machine output is a **draft** until the creator publishes it. Inline translations are **suggestions** in the form. Machine text shown to viewers is labelled.
-3. **Quran is never machine-translated.** Detected Quran is shown in the official Uthmani text, and its translation is a recognised edition with attribution.
+3. **Quran is never machine-written.** ASR text is never shown for Quran, and Quran is never machine-translated or machine-spoken (no text-to-speech or dubbing of ayat). Only the official text from the synced store is rendered, after creator confirmation. Translations are recognised editions with attribution.
 4. **Workers AI first.** Third-party providers are pluggable adapters. An admin turns them on per environment, and their keys live in Secrets Store (product constraints).
 5. **Tier-aware.** Every limit is an Epic 27 entitlement key edited in admin-web. Nothing is hard-coded.
 6. **Inside the $500/month cap.** A hard monthly budget per environment stops spending and queues work. It never fails jobs silently.
@@ -76,8 +79,9 @@ The owner asked for:
 - **Layout:** cue list with timestamps beside the video, plus waveform scrubbing. Click a cue to seek.
 - **Editing:** edit text, merge or split cues, nudge start and end by ±0.1 s. There is undo/redo, and drafts autosave per version.
 - **Quran detections** are shown inline as a highlighted range with a chip such as `Quran 3:166–167 · 95%`. Actions:
-  - **Accept:** the text becomes the official Uthmani text, which then can't be edited, only rejected.
-  - **Reject:** keep the ASR text.
+  - **Accept:** the span renders the official Uthmani text from the store. It can't be edited, only rejected or re-referenced.
+  - **Reject:** "Not Quran" (the ASR text stays as ordinary speech) or "Different reference" (a picker).
+  - Unconfirmed spans are never shown as Arabic text, only as a reference suggestion (§5.5).
   - **Change reference:** a search picker over surah/ayah, using the autocomplete standard.
   - **Mark selection as Quran:** for short quotes below the detection threshold.
   - Ambiguous matches (the same words in more than one place) show "Appears in 7:59, 7:65, 7:73 …", and the creator picks one.
@@ -134,7 +138,7 @@ Studio (web/native) ──POST /api/videos/:id/captions/jobs──▶ api-videos
      │   mono chunks in R2)          | …), per chunk            DeepL | …)
      │                               ▼
      │                 post-process: hallucination filter → cue builder →
-     │                 Quran detection (offline Tanzil index) → glossary
+     │                 Quran detection (offline QF-synced index) → glossary
      │                               ▼
      └──────────── R2 subtitles bucket: draft JSON + VTT; D1 job/track rows; usage commit
 
@@ -183,28 +187,69 @@ Inline translate: Studio ──POST /api/translate──▶ api-videos (sync, �
 4. **Glossary** normalisation, as suggestions only, never silent (§8).
 5. **Honorifics:** Arabic transcripts keep the spoken form («صلى الله عليه وسلم»). A per-channel setting "Show ﷺ symbol in Arabic subtitles" is off by default.
 
-### 5.5 Quran detection and replacement
-- **Offline data:** Tanzil Uthmani 1.1 plus Simple-Clean, built at deploy time into a compact 3-gram index in R2 (about 2 MB) and loaded by the processor. A word-level Uthmani table handles partial quotes; source and licence are confirmed in O9. There are no runtime calls to third parties.
-- **Normalisation:** strip diacritics and tatweel; unify alef forms (أ إ آ ٱ → ا), ى → ي, ة → ه; drop the hamza carriers ؤ ئ ء. That last rule fixes the 19:66 miss.
-- **Matching** runs on the **whole transcript word stream**, not per cue, and the result is mapped back to cues through word timestamps. Per-cue matching missed a 3-cue ayah (R§3.2).
-  1. Find 3-gram seeds.
-  2. Extend each seed greedily with fuzzy word matching (Levenshtein ratio ≥ 0.7, at most 2 misses in a row).
-  3. Map the span to a surah:ayah range plus word offsets.
-  4. Merge spans within 2 ayat of each other in the same surah, filling the gap.
-- **Thresholds**, from measurements and tunable in admin settings:
+### 5.5 Quran: zero wrong text by construction
 
-  | Level | Rule | Editor shows |
-  |---|---|---|
-  | `suggested` | ≥ 6 words and confidence ≥ 0.9, unique location | pre-highlighted, "Accept" |
-  | `possible` | ≥ 5 words or confidence ≥ 0.8 | dotted highlight, never pre-accepted |
-  | `ambiguous` | the matched words occur at more than one location | location picker |
+The owner's rule (2026-11-11): **zero mistakes in any Quran text we show.** Fuzzy replacement still left 2.8–4.9% WER (R§2.1), so the design changed.
 
-- **Phrase-frequency penalty:** n-grams that occur in many places (e.g. «في سبيل الله», «قال رسول الله») can't open a span on their own. This removes the false positives we measured (R§4).
-- **Replacement on accept:** the cue text for that word range becomes the official text.
-  - Full ayat use the Uthmani text.
-  - Partial ayat use the word-level Uthmani slice. A partial quote is shown as such, never as a "whole verse".
-- **Recitation videos:** when Quran covers more than 70% of the transcript, the creator sees "This looks like a recitation of 55:1–25. Use the official text for all?" as one action.
-- **Cost:** CPU only. A 1-hour transcript takes well under the Worker CPU limit.
+**Display rule.** ASR output is never displayed for Quran. A Quran span is either:
+- rendered from the official text for an exact `(surah, ayah, word)` range, or
+- shown as a reference only: "Quran 55:13 (unconfirmed)" with no Arabic text.
+
+ASR can then never put a wrong *letter* on screen. What remains is the risk of choosing the wrong *passage*, measured below.
+
+| Risk | What could go wrong | Control | Measured on 20 clips (R§8) |
+|---|---|---|---|
+| (a) Identification | the wrong surah:ayah is shown | auto-suggest only when the span is ≥ 6 words at ≥ 0.9 agreement (or ≥ 20 words at ≥ 0.75) **and** the words occur at exactly one place in the Quran. Repeated phrases use verse-order context from neighbouring confirmed spans, or go to review | **0 wrong ayat shown**; 96 of 110 recited ayat (87%) auto-suggested; all false candidates (7 in lectures) went to review, none shown |
+| (b) Boundaries | words shown that weren't said, or recited words left out | the word range is exactly the matched range; left-extension recovers garbled first words; a spoken-letters table handles muqatta'at («يا سين» → يس); the basmala is a separate segment, never glued to an ayah | **0 extra words shown**; 91.3% of recited words shown; the omissions (mostly mujawwad) are flagged for review |
+| (c) Timing | the right text in the wrong place | cue times from ASR word timestamps, snapped to the nearest recitation pause (adaptive `silencedetect`) | ayah starts: median error 33 ms, p90 278 ms, 88% within 300 ms (Whisper alone: median 445 ms) |
+
+**Pipeline**
+1. **Offline Quran store**
+   - Built from the **QF Content Sync** copy (§9.4): `quran_core:1` for verse and word text, `mushafs:4` for word-level Uthmani text.
+   - The detection index (normalised word stream plus a 3-gram index, about 2 MB) is rebuilt after every sync.
+   - Tanzil XML is the fallback source. Use the **XML**, not the TXT export: the TXT download glues the basmala onto ayah 1 of every surah (`18|1|بسم الله الرحمن الرحيم الحمد لله…`), which would itself be wrong text. The XML keeps it in a `bismillah` attribute.
+2. **Normalisation:** strip diacritics and tatweel; unify alef forms; ى → ي, ة → ه; drop ؤ ئ ء.
+3. **Spoken letters:** ASR word sequences for the muqatta'at are mapped to the letters as written (يا سين → يس, الف لام ميم → الم, حا ميم → حم, …).
+4. **Candidates:** run over the whole transcript word stream, then map back to cues by word timestamps:
+   - 3-gram seeds;
+   - greedy fuzzy extension to the right (Levenshtein ≥ 0.7, at most 2 misses in a row);
+   - extension to the left over garbled first words.
+5. **Uniqueness:** count every place the matched official word sequence occurs (`occ`).
+   - `occ > 1` → ambiguous, e.g. «فبأي آلاء ربكما تكذبان» occurs 31 times.
+   - Then **verse-order context** decides: if exactly one candidate lies within 2 ayat after the previous confirmed span (or before the next one) in the same surah, it is taken as `context`; otherwise the span goes to review.
+6. **Classes**
+
+   | Class | Rule | Shown to viewers before the creator acts? | Editor |
+   |---|---|---|---|
+   | `confirmed` | unique, (≥ 6 words and agreement ≥ 0.9) or (≥ 20 words and ≥ 0.75) | **No.** Every Quran span needs creator acceptance before publish (owner rule: mandatory confirmation) | pre-selected "Accept" with the reference chip and audio scrub |
+   | `context` | an ambiguous span resolved by verse order | No | pre-selected, labelled "resolved by order" |
+   | `basmala` | the basmala just before ayah 1 of a confirmed surah | No | shown as basmala, not as an ayah |
+   | `review` | possible (4–5 words or lower agreement), ambiguous, or gaps inside a recitation | No | reference suggestion **without text**: "Possible Quran 2:143?" with Accept, Change reference, or Not Quran |
+   | dropped | under 4 words | – | the creator can still "Mark as Quran" by hand |
+
+7. **Accepting** stores `(surah, ayahStart, wordStart) → (surah, ayahEnd, wordEnd)` plus the edition id and sync version. The text is **rendered at publish time from the store**, never copied from ASR, and it can't be edited by hand.
+   - **Rejecting** offers two choices:
+     - "Not Quran": the ASR text stays as ordinary speech.
+     - "Different reference": a picker; the text again comes from the store.
+   - **Unreviewed Quran spans:** a track can't be published while it has any. "Publish without Quran text" is the escape hatch: those spans then show the reference only.
+8. **Second opinion (optional, high-accuracy tier).** For recitation videos where coverage is under 100%, the Quran spans alone are re-run through a second ASR (DeepL Voice measured best on mujawwad: al-Fajr went from 13/16 to 16/16 ayat).
+   - Spans where both agree are auto-suggested.
+   - Spans where they disagree go to review.
+   - Cost is only the Quran minutes (≈ $1.85/h on DeepL).
+9. **Timing:** the cue start is the matched first word's timestamp, snapped to the nearest pause end within ±2 s. The pause threshold adapts per clip (−40 to −20 dB, the loosest that finds ≥ n−1 pauses).
+   - **Better timing, later (P5):** forced alignment with an Apache-2.0 Quran aligner (Quran-Lab `mfa-quran-hafs`, published phone-boundary error 10–20 ms) on Quran spans only, in the audio container.
+   - **Reciters in QF's audio:** use QF `chapter_recitations` word segments directly.
+10. **Recitation videos:** when Quran covers more than 70% of the transcript, the editor offers "Recitation of 89:1–16 — accept all confirmed ayat". Gaps stay as review items. The text is never invented for them.
+
+**Not chosen, with reasons (R§10)**
+- **Tarteel:** "we currently do not offer a public API".
+- **Quran-tuned Whisper/wav2vec2 models** (the best published is about 3–8% WER on recitation): they would still need the same display rule, and need a GPU.
+- **Audio fingerprinting:** only identifies copies of known recordings, not a lecturer reciting.
+- **Commercial Quran captioners** (e.g. AyahFlow): consumer tools with no API.
+- **MMS / ctc-forced-aligner default models:** licensed CC-BY-NC.
+- **whisper-timestamped:** AGPL.
+
+**Cost:** Worker CPU for matching, plus one `silencedetect` pass in the audio container already running for extraction: about $0.001 per hour of audio. The second opinion is optional and only covers Quran minutes.
 
 ### 5.6 Storage and data model
 
@@ -224,14 +269,14 @@ Inline translate: Studio ──POST /api/translate──▶ api-videos (sync, �
       "segments": [
         { "type": "speech", "text": "الله عز وجل قال" },
         { "type": "quran", "surah": 3, "ayahStart": 166, "ayahEnd": 167, "wordStart": 0, "wordEnd": null,
-          "textEdition": "tanzil-uthmani@1.1", "translationEdition": null,
-          "confidence": 0.95, "status": "suggested" | "possible" | "ambiguous" | "accepted" | "rejected",
+          "textEdition": "qf:quran_core:1@<syncSeq>", "translationEdition": null,
+          "confidence": 0.95, "status": "confirmed" | "context" | "basmala" | "review" | "accepted" | "rejected",
           "alternatives": [] }
       ] }
   ]
 }
 ```
-- In translations, a `quran` segment carries `translationEdition` (e.g. `quranenc:english_saheeh@1.1.2`) and the text verbatim from that edition.
+- In translations, a `quran` segment carries `translationEdition` (e.g. `qf:translations:<id>@<syncSeq>` or `quranenc:english_saheeh@1.1.2`) and the text verbatim from that edition.
 - `SubtitleTrack` (existing type) gains `origin: "upload" | "machine" | "machine_edited"`, `status: "draft" | "published"`, `version` and `editions[]`. The existing `isAutoGenerated` becomes true for machine origins.
 
 **D1 tables** (`SEARCH_DB` in api-videos, which already holds `admin_deletions`; new migration plus snapshot):
@@ -256,7 +301,7 @@ Inline translate: Studio ──POST /api/translate──▶ api-videos (sync, �
 - **Masking:** Quran segments (accepted, or suggested and not rejected) are replaced by tokens `⟦Q1⟧`. The model is told to keep tokens verbatim.
 - **Batches:** cues are sent as a JSON array, at most 6,000 characters per call (the CMS-proven chunk size), with the previous 3 cues as read-only context.
 - **Output validation:** the array is the same length, every token is present exactly once, the output is in the target script, and the length ratio is between 0.4 and 2.5. On a failure: retry once, then use the fallback model, then fail the batch.
-- **Token substitution:** the edition text for the target language, from QuranEnc offline data.
+- **Token substitution:** the edition text for the target language, from the QF-synced store (QuranEnc offline data as fallback).
   - **Arabic target:** the Uthmani text itself.
   - **No edition for the language:** the cue shows the Arabic text plus the reference, and never MT.
   - **Long ayat:** if the ayah translation runs longer than the cue, the cue is extended or split across the speech span. The text is never trimmed (licence).
@@ -333,40 +378,70 @@ These are seeds for admins to edit; plans stay admin-managed.
   - 100,000 title translations a month ≈ $2–7;
   - a description of about 600 characters costs about $0.0003;
   - bulk-translating 1,000 videos (title plus description) ≈ $0.37.
-- **Why not meter it:** metering it in caption minutes would cost more in user friction than it saves. So it's free on every tier, with `translate.inline.dailyItems` as abuse protection, cache hits not counted, and the global budget (§7.3) as the backstop.
-- **DeepL** (if enabled) costs about €0.0016 per title, roughly 70 times more. It stays opt-in per environment and doesn't change entitlements.
+- **Why not meter it:** metering it in caption minutes would cost more in user friction than it saves. So it's free on every tier, with `translate.inline.dailyItems` as abuse protection, cache hits not counted, and the global budget (§7.4) as the backstop.
+- **DeepL** (API Pro) costs about $0.002 per title, about 100 times more. It was fast in our test (p50 0.56 s), and its glossary fixed the names it got wrong. Titles still had meaning slips (R§9). It is offered as an opt-in "DeepL with glossary" path on higher tiers, counted against `translate.inline.dailyItems` at 20×.
 
 ## 7. Cost model
 
-### 7.1 Per video-minute (list prices, 2026-11-11, plus our measurements)
+Prices: provider pages fetched 2026-11-11 (R§5), the owner's DeepL plan terms (2026-11-11), and our own measurements. One hour of speech ≈ **36,500 characters** of transcript (measured: 609 characters per minute).
 
-| Item | Default stack | Notes |
+### 7.1 Unit prices
+
+**Transcription**
+
+| Provider | Per hour of audio | Notes |
 |---|---|---|
-| Speech-to-text | $0.00051 | Workers AI turbo, 46.6 Neurons/min measured |
-| Audio extraction | ≈ $0.00005 | Containers, mostly inside the monthly allowance |
-| Queue, R2, D1, KV | < $0.00001 | |
-| Quran detection, glossary | ≈ 0 | Worker CPU |
-| **Transcription total** | **≈ $0.00056/min ($0.034/h)** | |
-| Translation, per target language | **$0.00040/min ($0.024/h)** with DeepSeek; $0.00012 with Gemma | measured, 609 characters per minute of speech |
-| Inline title | $0.00002–0.00007 per title | measured |
+| **Workers AI Whisper turbo** (default) | **$0.031**, + ≈ $0.003 extraction = **$0.034** | measured 46.6 Neurons/min |
+| ElevenLabs Scribe v3 | $0.20 (+ $0.05 keyterms) | not measured |
+| DeepL Voice STT (API Pro) | **$1.85** | measured; real-time streaming only, ≤ 2× real time |
+| Google STT dynamic batch / OpenAI gpt-4o-mini-transcribe / Azure batch | $0.18 | benchmarks |
+| Speechmatics Melia | $0.24 | benchmark |
+| Bunny transcribe | $6.00 **per language** | measured, not used |
 
-### 7.2 Monthly scenarios (transcription plus 1 translation language per job)
+**Translation**
 
-| Stack | 100 h/month | 1,000 h | 10,000 h |
+| Provider | Per 1K characters | Per hour of speech, per language | Notes |
 |---|---|---|---|
-| **Default (Workers AI ASR + DeepSeek)** | **$6** | **$58** | **$578** |
-| Workers AI ASR only | $3 | $34 | $338 |
-| ElevenLabs Scribe + Workers AI translation | $22 | $224 | $2,240 |
-| Google dynamic batch / gpt-4o-mini-transcribe + Workers AI translation | $20 | $204 | $2,040 |
-| Speechmatics Melia + Workers AI translation | $26 | $264 | $2,640 |
-| Workers AI ASR + DeepL (1 language) | ≈ €84 | ≈ €838 | ≈ €8,377 |
-| Bunny transcribe + translate | $1,200 | $12,000 | $120,000 |
+| **Workers AI DeepSeek V4.1 Flash** (default, transcripts) | $0.00066 | **$0.024** | measured |
+| **Workers AI Gemma 4 26B** (default, titles) | $0.0002 | $0.007 | measured |
+| **DeepL API Pro** | **$0.0275** | **$1.00** | measured; $5.49/month base |
+| Google NMT / Azure Translator / AWS Translate | $0.020 / $0.010 / $0.015 | $0.73 / $0.37 / $0.55 | benchmarks |
 
-### 7.3 Where the $500 cap bites, and how it stays sustainable
-- **Default stack:** 10,000 h/month (~$578) alone breaks the cap. The platform also pays for delivery, workers and other AI.
-- **Proposed captions budget:** `monthlyBudgetUsd` defaults to **$100** (max $500), the same pattern as the CMS. That buys ≈ **1,700 h/month** on the default stack, or ≈ 450 h on Scribe.
+**Quran pipeline (§5.5):** ≈ $0.001 per hour of audio. That covers Worker CPU for matching and a pause scan in the existing container. QF Content Sync has no price on its docs page; the sync job runs at least weekly. The optional second opinion with DeepL Voice costs $1.85 per hour of *Quran* audio only.
+
+**Inline titles** (about 73 characters each):
+
+| Provider | Per title | Per 100,000 titles |
+|---|---|---|
+| Gemma | $0.00002 | $2 |
+| DeepSeek | $0.00007 | $7 |
+| DeepL Pro | $0.0020 | $200 |
+
+### 7.2 Monthly totals (transcription plus 1 translation language per job, including the Quran pipeline)
+
+| Stack | Per hour | 100 h/month | 1,000 h | 10,000 h |
+|---|---|---|---|---|
+| **A. Default: Workers AI ASR + Workers AI DeepSeek** | $0.059 | **$6** | **$59** | **$590** |
+| B. Workers AI ASR + **DeepL Pro** translation | $1.04 | $109 | $1,044 | $10,393 |
+| C. **DeepL Voice STT + DeepL translation** (Pro) | $2.85 | $291 | $2,859 | $28,543 |
+| D. Same as C on DeepL **Growth** ($32.50/month incl. 1M chars + 10 STT h) | – | $272 | $2,840 | **not possible**: caps of 300 voice h and 50M chars/month |
+| E. ElevenLabs Scribe + Workers AI translation | $0.228 | $23 | $228 | $2,280 |
+| F. ElevenLabs Scribe + DeepL Pro translation | $1.21 | $126 | $1,214 | $12,085 |
+| G. Default + DeepL Voice second opinion on Quran minutes (assume 10% of audio is Quran) | $0.244 | $24 | $244 | $2,440 |
+| H. Bunny transcribe + translate | $12.00 | $1,200 | $12,000 | $120,000 |
+
+### 7.3 DeepL: API Pro (current) vs Growth
+- **API Pro:** $5.49/month plus $27.50 per 1M characters and $1.85 per STT hour. **No volume cap**, so DeepL STT is not capped at 300 h on Pro. It is just 54× the Workers AI price.
+- **Growth:** $32.50/month **including** 1M characters, 10 STT hours and 5 speech-to-speech hours, with caps of 50M characters and 300 voice hours a month. Above the allowance it costs the same per unit as Pro.
+- **When Growth pays off:** it costs $27.01 more in base fee. It pays off once a month uses more than that much of the allowance at Pro prices: about **0.98M characters**, or for example 0.5M characters plus 7.2 STT hours. The most it saves is about $19/month (1M characters + 10 STT h = $46 of usage), plus the STS hours.
+- **At our scale** DeepL is a premium path in either plan. Growth's caps rule it out as a bulk default.
+
+### 7.4 Where the $500 cap bites, and how it stays sustainable
+- **Default stack:** 10,000 h/month (~$590) alone breaks the cap. The platform also pays for delivery, workers and other AI.
+- **Proposed captions budget:** `monthlyBudgetUsd` defaults to **$100** (max $500), the same pattern as the CMS. That buys ≈ **1,700 h/month** on the default stack, ≈ 450 h on Scribe, or ≈ 96 h on DeepL Pro translation.
   - **Daily slices:** spending is recorded in the existing `ai_budget_daily` with feature `captions`, plus `inline-translate` with its own $20 default. A daily slice (monthly ÷ days remaining × 1.5) stops one day's spike from using the whole month.
   - **When reached:** new jobs go to `waiting_budget` with the en/ar message "Busy right now; your subtitles will start within 24 h". Reserved minutes aren't charged while waiting. An admin alert goes through the cost-monitoring hooks (AUN-COST).
+- **DeepL jobs** (high-accuracy STT, DeepL translation) use their own per-provider monthly cap (§10). On a tier that includes them, they use **caption minutes at 30×** (DeepL Voice STT) and **20×** (DeepL translation), matching their cost ratio to the default.
 - **What bounds exposure:** the sum of all plan allowances. If 2,000 free channels each used all 60 minutes, that's 120,000 caption minutes ≈ $58 a month.
 - **Add-ons:** paid packs priced at ≥ 6× the default-stack cost make extra volume self-funding.
 - **Revisit:** when monthly usage passes 5,000 h, revisit the self-hosted GPU option from the 2025 research doc.
@@ -409,11 +484,54 @@ These are seeds for admins to edit; plans stay admin-managed.
 - **Reports:** a report on a video can cite a cue (time link).
 - **Quran content** is excluded from violence and hate classifiers (AI-MODERATION principle 3). Detected Quran segments are tagged so the classifier skips them.
 
-### 9.4 Licence obligations (shown in the UI and docs)
-- **Tanzil:** text verbatim and unchanged; "Quran text: Tanzil Project (tanzil.net), CC BY 3.0, v1.1" shown with a link wherever Quran text appears (watch-page subtitle info, editor footer). Update notices from tanzil.net/updates are watched.
-- **QuranEnc:** no changes to the text. Credit, for example "Translation of the meanings: Noor International Center (Saheeh International), QuranEnc.com, v1.1.2". Keep the version up to date, using a monthly job that compares `/translations/list` versions and flags updates for the admin. Never place inappropriate ads next to it. Whether footnote markers "[n]" may be dropped is open (O9); until then they are kept, with the footnotes available on hover.
-- **Quran Foundation API** (if used for timestamps or search): cache at most 1 week, credit Quran Foundation, no model training.
-- **Not used** (licence not cleared): The Clear Quran, Tanzil translations, and alquran.cloud.
+### 9.4 Quran sources, licences and obligations
+
+Every statement below quotes its source. Both pages were fetched on 2026-11-11.
+
+**Quran Foundation (QF) Content Sync: primary source.**
+
+Source: [Developer Terms](https://api-docs.quran.foundation/legal/developer-terms/) ("Last updated: 2026-10-11"), §3.1.
+- **Storage beyond a week:** "Cache or store QF Content longer than 1 week unless it is obtained and maintained through the Content Sync APIs listed under Content Available for Offline Sync, or consists of font files or Mushaf images cached or bundled as described below."
+- **The only path to an offline copy:** "If a content resource is available through Content Sync, Content Sync is the only permitted path for obtaining and maintaining an offline copy of that resource; do not build an offline copy from regular API responses."
+- **Weekly refresh:** "When using Content Sync, you must perform a next sync at least every 7 days when connectivity to QF permits and apply all available changes. This ongoing obligation applies to copies kept on a backend or an offline device."
+- **Fonts and Mushaf images:** "A Developer may cache or bundle font files and Mushaf images obtained through QF APIs or documented CDN URLs for use in an Application if the Developer maintains an active account in the Developer Console and credits Quran Foundation in a reasonably accessible place in the Application or its associated credits."
+- **No prepackaged bundles:** "The Content Sync storage exception does not itself authorize distributing a prepackaged database or build-time bundle of QF Content." So the store is filled by the sync job at runtime, never committed to the repo or bundled into a build.
+- **Unmodified text:** "The text of the Quran is not modified in any way." The matching index is normalised internally, but what is displayed is the synced text, verbatim.
+- **Indexes count as derived content:** the definitions say "Derived Materials: Outputs made from or using QF Content, including excerpts, compilations, indexes, embeddings, … An output that reproduces or permits reconstruction of QF Content remains subject to the restrictions on that content." So the detection index is rebuilt from, and lives only as long as, the synced copy.
+- **Videos shared outside the platform:** "Incorporating QF Content into a social-media video is an end-user use, not redistribution, provided that the Developer credits Quran Foundation in a reasonably accessible place, such as in the video itself or its caption, description, or credits."
+- **Serving from our backend:** "Serving QF Content from a Developer-controlled backend within the Application's end-user experience is not, by itself, redistribution. Offering QF Content or raw API data to others as data remains subject to the separate commercial-license requirement above."
+- **No model training:** "Use QF Content or User Data to build … machine-learning models without written consent" is prohibited. We don't train on it.
+
+Source: [Getting Started with Content Sync](https://api-docs.quran.foundation/docs/tutorials/content-sync/getting-started/), "Content Available for Offline Sync".
+- **Resource groups:** "Content Sync supports these resource groups: `quran_core`, `mushafs`, `translations`, `word_by_word_translations`, `word_by_word_transliterations`, `tafsirs`, `recitations`, `chapter_recitations`, and `articles`."
+- **Quran text:** `quran_core:1` holds "canonical Uthmani verse text, word-level IndoPak Nastaleeq, IndoPak, Uthmani Tajweed, and Imla'i text, Surah metadata, and Juz/Hizb/Rub-el-Hizb boundaries". The core snapshot has "114 chapter, 6,236 verse, 83,665 word" records.
+- **Word-level Uthmani** (needed for partial quotes): "For word-level Uthmani text, sync `mushafs:4` (Uthmani Hafs): its mushaf_word rows carry each word's Uthmani text in text (the same value as the Content API's word-level `text_uthmani`)".
+- **Recitation timings** (useful for timing and checking): `chapter_recitations` holds "Chapter audio file rows and associated verse and word timing segment rows."
+- **Only public resources:** "Bootstrap returns only public resources matching your filter. A snapshot request for a resource that is not public returns `snapshot_not_found` (404)." Which `translations:<id>` are public can only be checked with credentials (O12).
+- **The basmala:** "Positioned words do not include surah headings or the bismillah". It is placed separately, which matches §5.5.
+
+**What we need from QF:**
+
+| Need | QF group | Status |
+|---|---|---|
+| Uthmani text with full diacritics | `quran_core:1` | syncable |
+| Word-level Uthmani text (partial quotes) | `mushafs:4` | syncable |
+| Translations | `translations:<id>` | syncable if QF marks the edition public; to confirm per edition (O12) |
+| Reciter word timings | `chapter_recitations:<id>` | syncable |
+
+**Fallback sources** (for anything QF doesn't offer offline, or while registration is pending):
+- **Tanzil XML:** [licence](https://tanzil.net/docs/text_license) "Permission is granted to copy and distribute verbatim copies of this text, but CHANGING IT IS NOT ALLOWED." It can be used in apps "provided that its source (Tanzil Project) is clearly indicated", with a link to tanzil.net.
+- **QuranEnc:** [API page](https://quranenc.com/en/home/api/) "Contents of the translations can be downloaded and re-published, with the following terms and conditions": no modification, credit the publisher and QuranEnc.com, mention the version number, keep the translation updated, no inappropriate advertisements.
+
+**Obligations we take on:**
+- **Attribution:** credit Quran Foundation, plus the translation edition name, wherever Quran text or translations appear:
+  - the watch page's Subtitles info;
+  - the editor footer;
+  - the description of any export or social-media post.
+- **Sync job:** runs **daily**, which beats the "at least every 7 days" rule. After each sync it rebuilds the index and re-renders any published track whose ayat changed. Changes are audited.
+- **Developer Console:** keep an active account (O12).
+- **Subtitle files must not become a data feed.** VTT files with Quran text are served to our player and embeds. We don't offer a bulk transcript or VTT download API. Whether a per-video "download subtitles" button counts as "offering QF Content … as data" is a question for QF (O13). Until answered, Quran-bearing tracks have no download button.
+- **Never used:** The Clear Quran (needs written consent from the publisher), Tanzil translations ("for non-commercial purposes only", https://tanzil.net/trans/), and alquran.cloud ("any non-commercial purpose").
 
 ## 10. Provider routing (admin-configurable)
 
@@ -430,7 +548,7 @@ These are seeds for admins to edit; plans stay admin-managed.
   | Phase | Adapters |
   |---|---|
   | P1 | Workers AI (Whisper, LLMs) |
-  | P3 | ElevenLabs Scribe, DeepL |
+  | P3 | DeepL (text and Voice; the owner has API Pro), ElevenLabs Scribe after measurement |
   | Later | generic HTTP (config-only, as in the CMS) |
 
 ## 11. Native Studio and on-device transcription
@@ -448,7 +566,7 @@ These are seeds for admins to edit; plans stay admin-managed.
 
 | Phase | Scope | Exit criteria |
 |---|---|---|
-| **P0: foundations** | provider interfaces plus Workers AI adapters; Quran data build (Tanzil plus QuranEnc en/ar), index and detector with unit tests on the R§4 cases; glossary tables plus seed; `TRANSLATION_CACHE`; `entitlement_grants`; catalogue keys | detector reproduces R§4 (5 TP, 0 FP at `suggested`); licences credited |
+| **P0: foundations** | provider interfaces plus Workers AI adapters; QF Developer Console registration and a Content Sync job (`quran_core:1`, `mushafs:4`, chosen `translations`), at least every 7 days, with index rebuild; the zero-mistake detector with unit tests on the R§8 clips; glossary tables plus seed; `TRANSLATION_CACHE`; `entitlement_grants`; catalogue keys | detector reproduces R§8: 0 wrong ayat, 0 extra words; sync job green; attribution visible |
 | **P1: inline title translation** | `POST /api/translate`; Translate buttons on title/description in the upload form, Studio editor and "Set values"; Quran-aware titles; fair-use counters | p95 ≤ 2 s on QA; 67-title set ≥ 90% acceptable; en/ar UI |
 | **P2: on-demand transcription** | jobs API, queue, Container extraction, ASR, post-processing, Quran detection, drafts, editor v1, publish, metering with reserve/commit/refund, usage meter, 402 hard stop, budget stop, purge coverage | QA run on the 8 R§1 clips meets R§2 numbers; refund on forced failure; idempotent double-click |
 | **P3: translation of transcripts** | cue-batch translation with Quran tokens and QuranEnc editions; retranslate on source change; bulk Transcribe/Translate; upload flag; admin grants UI | Quran cues carry the edition text verbatim; attribution visible |
@@ -467,14 +585,18 @@ Every phase ships behind an environment flag. Tests go into the release E2E suit
 
 | # | Decision | Recommendation |
 |---|---|---|
-| O1 | ElevenLabs key: which plan do we have, and may we measure Scribe on the R§1 clips (≈ 20 minutes of audio, a few cents)? | Yes; it becomes the high-accuracy fallback only if it beats the default |
-| O2 | DeepL: do we have an account (Growth costs €29.75/month)? | Not needed for launch; add as an optional adapter if wanted for languages beyond en/ar |
+| O1 | ElevenLabs key: which plan do we have, and may we measure Scribe on the same clips (a few cents)? | Yes; it becomes an option only if it beats DeepL Voice on Arabic and Quran |
+| O2 | DeepL: stay on API Pro or move to Growth? | Stay on **Pro** (no volume cap). Growth only pays off above ≈ 1M characters a month (§7.3). Add a `deepl-api-key` to Secrets Store (`AI_KEY_DEEPL`) when P3 starts |
 | O3 | Caption-minute allowances per tier (§6.1 seeds) and pack prices (§6.3) | Accept the seeds; admins can edit them |
 | O4 | Captions monthly budget | $100/month (≈ 1,700 h on the default stack), inline translation $20 |
 | O5 | Inline title translation free with fair use, or metered | Free with fair use (§6.4) |
 | O6 | Viewer-side machine-translated titles (labelled, cached, never overwriting) | Yes, after P3, opt-out per channel |
-| O7 | Default Quran translation editions per language | en: QuranEnc `english_saheeh` (Noor International), alternative `english_rwwad`; other languages from QuranEnc's list; ar: the Uthmani text |
+| O7 | Default Quran translation editions per language | en: Saheeh International via QF sync if public there, else QuranEnc `english_saheeh`; alternative `english_rwwad`; ar: the Uthmani text itself |
 | O8 | Extract the CMS provider layer into a shared package now, or mirror it | Mirror in P0–P2, extract once both use it |
-| O9 | Licence follow-ups: ask QuranEnc whether footnote markers may be hidden, and confirm the source and licence of the word-level Uthmani data for partial quotes (QUL vs QF) | Email both before P3 |
+| O9 | QuranEnc follow-up, only if it is used as fallback: may footnote markers "[n]" be hidden? | Email before P3 |
 | O10 | "ﷺ" symbol in Arabic subtitles: off by default (keep the spoken words), per-channel setting | As recommended |
 | O11 | On-device transcription in native desktop Studio as a free path (D10 hybrid) | Yes, in P5 |
+| O12 | Register a Quran Foundation Developer Console app (production access, Content Sync scopes) and confirm which `translations:<id>` are public for sync | Yes, now. It blocks P0 |
+| O13 | Ask QF: are per-video VTT downloads that contain Quran text "offering QF Content as data"? Is our private matching index fine as a Derived Material kept in step with the sync? | Email developers@quran.com with the P0 registration |
+| O14 | Every Quran span needs creator confirmation before publish (no auto-publish of Quran), with "Publish without Quran text" (reference only) as the escape hatch | Yes: this is what makes "zero mistakes" a guarantee rather than a statistic |
+| O15 | DeepL Voice as the paid high-accuracy STT and the Quran second opinion on higher tiers | Yes, behind the per-provider cap; never for speech-to-speech of Quran |
