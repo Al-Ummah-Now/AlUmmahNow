@@ -4,8 +4,8 @@ import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { checkProfileExists } from '@/lib/api/profiles-client';
-import { getVideosBanStatus } from '@/lib/api/profiles';
-import { VideosBannedNotice } from '@/components/VideosNotices';
+import { getVideosAccountStatus } from '@/lib/api/profiles';
+import { VideosBannedNotice, VideosPendingDeletionNotice } from '@/components/VideosNotices';
 import { useLanguage } from '@/hooks/useLanguage';
 
 // Whether a user has a profile almost never changes once it exists, so it is
@@ -48,6 +48,8 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children }) => {
   const childrenShownRef = useRef(false);
   // Banned on videos (admin): no profile flow, a notice instead (Auth is not affected)
   const [ban, setBan] = useState<{ reason: string | null } | null>(null);
+  // An admin deletion of their videos data is pending (30 days): a notice, and no profile flow either
+  const [pendingDeletion, setPendingDeletion] = useState(false);
 
   logger.debug('[ProfileGuard] State:', {
     hasUser: !!user,
@@ -121,17 +123,20 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children }) => {
       try {
         const exists = await checkProfileExists(user);
         if (!exists) {
-          // GET /api/profile also answers "no profile" for a banned user: tell them apart
-          const status = await getVideosBanStatus();
-          if (status.banned) {
-            logger.debug('[ProfileGuard] User is banned on videos; showing the notice instead of the profile flow');
-            setBan({ reason: status.reason });
+          // GET /api/profile also answers "no profile" for a banned user, or one
+          // whose videos data an admin deleted (pending): tell them apart
+          const status = await getVideosAccountStatus();
+          if (status.banned || status.pendingDeletion) {
+            logger.debug('[ProfileGuard] Videos account is not active; showing the notice instead of the profile flow', { banned: status.banned });
+            setBan(status.banned ? { reason: status.reason } : null);
+            setPendingDeletion(!status.banned && status.pendingDeletion);
             setProfileExists(true);
             setHasChecked(true);
             return;
           }
         }
         setBan(null);
+        setPendingDeletion(false);
         if (user?.id) rememberProfile(user.id, exists);
         logger.debug('[ProfileGuard] checkProfileExists returned:', exists);
         setProfileExists(exists);
@@ -206,6 +211,16 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children }) => {
       return (
         <>
           <VideosBannedNotice reason={ban.reason} />
+          {!isProfileCreatePage && children}
+        </>
+      );
+    }
+
+    // Videos data deleted by an admin (pending): one notice; pages stay readable, the create form is not shown
+    if (pendingDeletion) {
+      return (
+        <>
+          <VideosPendingDeletionNotice />
           {!isProfileCreatePage && children}
         </>
       );

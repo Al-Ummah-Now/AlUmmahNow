@@ -3,7 +3,7 @@
  * the server's raw text. Creator tiers answer with a `code` (and `retryAfter`
  * for a limit); everything else falls back to the caller's generic message.
  */
-import { CREATOR_ERROR_CODES } from '@al-ummah/shared-types';
+import { CREATOR_ERROR_CODES, VIDEOS_ACCOUNT_PENDING_DELETION_CODE } from '@al-ummah/shared-types';
 import type { AppTranslations } from '@al-ummah/shared-types';
 
 export interface RefusedCall {
@@ -31,6 +31,8 @@ export function creatorRefusalMessage(t: Pick<AppTranslations, 'creator'>, call:
         : t.creator.limitReachedSoon;
     case CREATOR_ERROR_CODES.channelLimit:
       return t.creator.channelLimit.replace('{max}', String(call.maxChannels ?? ''));
+    case VIDEOS_ACCOUNT_PENDING_DELETION_CODE:
+      return t.creator.accountPendingDeletion;
     case 'upload_limits_unavailable':
     case 'creator_access_unavailable':
       return t.creator.unavailable;

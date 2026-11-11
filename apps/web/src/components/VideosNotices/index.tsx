@@ -18,6 +18,33 @@ export function VideosBannedNotice({ reason }: { reason: string | null }) {
   );
 }
 
+/**
+ * Shown to a signed-in user while an admin deletion of their videos data is
+ * pending (30 days, #701): they can sign in and watch, but every change is
+ * refused (api-videos 403 `videos_account_pending_deletion`). One notice for
+ * the whole site (ProfileGuard) and, with `page`, in place of the upload page.
+ */
+export function VideosPendingDeletionNotice({ page = false }: { page?: boolean }) {
+  const { t, lang } = useLanguage();
+  if (!page) {
+    return (
+      <div role="alert" data-testid="videos-pending-deletion-notice" className={boxClass}>
+        <p className="font-semibold">{t.profile.videosPendingDeletionTitle}</p>
+        <p className="mt-1 text-sm">{t.profile.videosPendingDeletionBody}</p>
+      </div>
+    );
+  }
+  return (
+    <div role="alert" data-testid="videos-pending-deletion-page" className="mx-auto w-full max-w-2xl rounded-lg border border-destructive border-s-4 bg-card p-8 text-center text-card-foreground shadow-sm md:p-12">
+      <h1 className="mb-4 text-2xl font-bold md:text-3xl">{t.profile.videosPendingDeletionTitle}</h1>
+      <p className="mb-8 text-base text-muted-foreground md:text-lg">{t.profile.videosPendingDeletionBody}</p>
+      <a href={`/${lang}`} className="inline-flex items-center justify-center rounded-lg bg-primary px-6 py-3 font-medium text-primary-foreground hover:opacity-90">
+        {t.upload.goHome}
+      </a>
+    </div>
+  );
+}
+
 /** Shown to the owner of each channel an admin suspended (their own channels only reach them). */
 export function SuspendedChannelNotice({ channels }: { channels: Channel[] }) {
   const { t, lang } = useLanguage();

@@ -39165,7 +39165,63 @@
   },
   "components": {
     "parameters": {},
-    "schemas": {},
+    "schemas": {
+      "AccountStateError": {
+        "type": "object",
+        "description": "403 for a signed-in user whose videos account is not active. `videos_banned`: an admin banned them (reads still work). `videos_account_pending_deletion`: an admin deleted their videos data, restorable for 30 days; they can sign in and read, every write is refused and GET /api/profile answers it, until an admin restores it (lifted at once) or the cleanup erases it (then they start with a new profile). Show a single account-state screen, never the create-profile flow.",
+        "required": [
+          "success",
+          "code",
+          "error"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "videos_banned",
+              "videos_account_pending_deletion"
+            ]
+          },
+          "error": {
+            "type": "string",
+            "description": "English text; clients show their own localized message for `code`."
+          },
+          "ban": {
+            "type": "object",
+            "properties": {
+              "reason": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "bannedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          },
+          "deletion": {
+            "type": "object",
+            "properties": {
+              "deletedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "purgeAfter": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When the data is erased unless restored first"
+              }
+            }
+          }
+        }
+      }
+    },
     "securitySchemes": {
       "BearerAuth": {
         "type": "http",

@@ -2,14 +2,14 @@
  * Platform content management (/internal/admin/*, lib/admin/*) and videos bans
  * (middleware/videos-ban.ts) over in-memory R2 and a real SQLite search DB.
  */
-import { after, before, describe, it } from 'node:test';
+import { after, afterEach, before, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { Hono } from 'hono';
 import { fromHono } from 'chanfana';
-import { applySuspensionHold, deletionDaysLeft, deletionStatusOf, isPurgeDue, liftSuspensionHold, MessageType, purgeAfterOf, VIDEOS_BANNED_CODE } from '@al-ummah/shared-types';
+import { applySuspensionHold, deletionDaysLeft, deletionStatusOf, isPurgeDue, liftSuspensionHold, MessageType, purgeAfterOf, VIDEOS_ACCOUNT_PENDING_DELETION_CODE, VIDEOS_ACCOUNT_PENDING_DELETION_MESSAGE, VIDEOS_BANNED_CODE } from '@al-ummah/shared-types';
 import { canViewPlaylist } from '../src/lib/playlists';
 import { ownershipCompleteKey } from '@al-ummah/shared-types';
 import { CHANNEL_HANDLE_PREFIX_SQL, LIVE_PROFILE_IDS_SQL, PROFILE_BY_EMAIL_SQL, PROFILE_BY_HANDLE_SQL, PROFILE_BY_ID_SQL } from '../src/lib/admin/userSearch';
@@ -18,6 +18,9 @@ import { withSearchSync } from '../src/lib/search/sync';
 import { runOwnershipPass } from '../src/lib/search/ownership';
 import { videosBanMiddleware, isBlockedForBannedUser } from '../src/middleware/videos-ban';
 import { forgetCachedBan } from '../src/lib/admin/bans';
+import { videosPendingDeletionMiddleware, isBlockedForPendingDeletion } from '../src/middleware/videos-pending-deletion';
+import { cachedPendingUserDeletion, NOT_PENDING_CACHE_MS } from '../src/lib/admin/pendingUserDeletion';
+import { handleCreatorAccess } from '../src/endpoints/creator/creatorAccess';
 import { projectComments, commentSignature } from '../src/lib/admin/commentIndex';
 import { ChannelFetch } from '../src/endpoints/channel/channelFetch';
 import { ChannelsList } from '../src/endpoints/channel/channelList';
@@ -181,6 +184,8 @@ function publicApp(env: unknown, userId: string | null) {
 		await next();
 	});
 	app.use('/api/*', videosBanMiddleware);
+	app.use('/api/*', videosPendingDeletionMiddleware);
+	app.get('/api/me/creator', handleCreatorAccess);
 	const router = fromHono(app);
 	router.get('/api/channels', ChannelsList);
 	router.get('/api/channels/:id', ChannelFetch);
@@ -716,6 +721,137 @@ describe('videos bans (users)', () => {
 		assert.equal(isBlockedForBannedUser('DELETE', '/api/privacy/data'), false);
 		assert.equal(isBlockedForBannedUser('POST', '/api/videos/upload/initiate'), true);
 		assert.equal(isBlockedForBannedUser('PUT', '/api/channels/ch1'), true);
+	});
+});
+
+describe('pending "Delete videos data" (#701): sign in and read, no writes', () => {
+	const json = async (res: Response) => (await res.json()) as any;
+	const comment = (as: ReturnType<typeof publicApp>) => as('POST', '/api/videos/legacy/comments', { text: 'salam' }, { channelId: 'ch1' });
+	// Bans are cached per isolate (module), and earlier tests banned these users
+	beforeEach(() => [OWNER, OTHER].forEach(forgetCachedBan));
+	afterEach(() => [OWNER, OTHER].forEach(forgetCachedBan));
+
+	it('refuses every write with the typed code while pending, keeps reads, and a restore lifts it at once', async () => {
+		const { env, call } = await setup();
+		const user = publicApp(env, OWNER);
+		const other = publicApp(env, OTHER);
+		// A write before the delete leaves a "not pending" answer in this isolate's cache
+		assert.ok((await comment(user)).status < 300, 'writes work before the delete');
+		assert.equal((await call('POST', `/users/${OWNER}/delete-data`, { reason: 'Requested' })).status, 200);
+
+		const refused = await comment(user);
+		assert.equal(refused.status, 403, 'blocked at once, despite the cached answer');
+		assert.equal(refused.headers.get('Cache-Control'), 'private, no-store');
+		const body = await json(refused);
+		assert.equal(body.code, VIDEOS_ACCOUNT_PENDING_DELETION_CODE);
+		assert.equal(body.error, VIDEOS_ACCOUNT_PENDING_DELETION_MESSAGE);
+		assert.equal(body.deletion.purgeAfter, purgeAfterOf(body.deletion.deletedAt));
+		const create = await user('POST', '/api/profiles', { email: `${OWNER}@example.com`, userName: 'again', displayName: 'Again', timezone: 'UTC' });
+		assert.equal(create.status, 403, 'no new profile over the hidden one');
+		const me = await user('GET', '/api/profile');
+		assert.equal(me.status, 403);
+		assert.equal((await json(me)).code, VIDEOS_ACCOUNT_PENDING_DELETION_CODE, 'the profile answers the state, not "create one"');
+		const creator = (await json(await user('GET', '/api/me/creator'))).result;
+		assert.deepEqual([creator.canUpload, creator.canCreateChannel, creator.pendingDeletion], [false, false, true]);
+
+		assert.equal((await user('GET', '/api/videos/legacy')).status, 200, 'reads still work');
+		assert.equal((await user('GET', '/api/channels')).status, 200);
+		assert.ok((await comment(other)).status < 300, 'other users are not affected');
+
+		assert.equal((await call('POST', `/deletions/user/${OWNER}/restore`)).status, 200);
+		assert.ok((await comment(user)).status < 300, 'a restore lifts the block at once (no cache to wait out)');
+		assert.equal((await user('GET', '/api/profile')).status, 200);
+		assert.equal((await json(await user('GET', '/api/me/creator'))).result.pendingDeletion, undefined);
+	});
+
+	it('after the purge the user starts fresh', async () => {
+		const { env, call, purgeNow } = await setup();
+		const user = publicApp(env, OTHER);
+		await call('POST', `/users/${OTHER}/delete-data`, {});
+		assert.equal((await user('POST', '/api/profiles', { email: `${OTHER}@example.com`, userName: 'x', displayName: 'X', timezone: 'UTC' })).status, 403);
+		assert.equal((await purgeNow('user', OTHER)).status, 'succeeded');
+		assert.equal((await user('GET', '/api/profile')).status, 404, 'no profile: the web app offers to create one');
+		const created = await user('POST', '/api/profiles', { email: `${OTHER}@example.com`, userName: 'fresh', displayName: 'Fresh', timezone: 'UTC' });
+		assert.ok(created.status < 300, `a fresh profile can be created (${created.status})`);
+	});
+
+	it('a ban wins over a pending deletion', async () => {
+		const { env, call } = await setup();
+		await call('POST', `/users/${OWNER}/ban`, { reason: 'Spam' });
+		await call('POST', `/users/${OWNER}/delete-data`, {});
+		forgetCachedBan(OWNER);
+		assert.equal((await json(await comment(publicApp(env, OWNER)))).code, VIDEOS_BANNED_CODE);
+	});
+
+	it('uploads (new, resumed, retried, TUS) and every other write are refused; playback signals and privacy are not', async () => {
+		const { env, call } = await setup();
+		await call('POST', `/users/${OWNER}/delete-data`, {});
+		// The real middleware in front of a stand-in for every route
+		const app = new Hono();
+		app.use('*', async (c, next) => {
+			c.set('auth' as never, { userId: OWNER } as never);
+			await next();
+		});
+		app.use('/api/*', videosPendingDeletionMiddleware);
+		app.all('*', (c) => c.json({ success: true }));
+		const blocked: Array<[string, string]> = [
+			['POST', '/api/videos/upload/initiate'],
+			['POST', '/api/videos/upload/batch/initiate'],
+			['GET', '/api/videos/upload/resume/v1'],
+			['POST', '/api/videos/tus'],
+			['PATCH', '/api/videos/tus/abc'],
+			['POST', '/api/videos/upload/complete'],
+			['POST', '/api/videos/upload/failed/v1'],
+			['POST', '/api/videos/v1/comments'],
+			['POST', '/api/videos/v1/likes'],
+			['POST', '/api/channels/ch1/subscriptions'],
+			['POST', '/api/channels'],
+			['PUT', '/api/channels/ch1'],
+			['PATCH', '/api/videos/v1'],
+			['POST', '/api/playlists'],
+			['POST', '/api/community/channels/ch1/posts'],
+			['PATCH', '/api/videos/bulk'],
+			['POST', '/api/videos/bulk-delete'],
+			['PUT', '/api/profile'],
+			['POST', '/api/watch-history/v1/progress'],
+		];
+		for (const [method, path] of blocked) {
+			const res = await app.request(path, { method }, env as never);
+			assert.equal(res.status, 403, `${method} ${path}`);
+			assert.equal(((await res.json()) as any).code, VIDEOS_ACCOUNT_PENDING_DELETION_CODE, `${method} ${path}`);
+		}
+		const allowed: Array<[string, string]> = [
+			['GET', '/api/videos/v1'],
+			['GET', '/api/channels/ch1'],
+			['HEAD', '/api/videos/tus/abc'],
+			['POST', '/api/videos/v1/view'],
+			['POST', '/api/videos/v1/watch-time'],
+			['POST', '/api/analytics/events'],
+			['PUT', '/api/devices/install-1'],
+			['GET', '/api/privacy/export'],
+			['DELETE', '/api/privacy/data'],
+		];
+		for (const [method, path] of allowed) assert.equal((await app.request(path, { method }, env as never)).status, 200, `${method} ${path}`);
+		assert.equal(isBlockedForPendingDeletion('post', '/api/videos/upload/initiate'), true, 'method case does not matter');
+	});
+
+	it('looks up with one indexed point read, and remembers only "not pending"', async () => {
+		const { env, call, db } = await setup();
+		const plan = db.db.prepare("EXPLAIN QUERY PLAN SELECT deleted_at FROM admin_deletions WHERE kind = 'user' AND target_id = ? AND purged_at IS NULL").all('x') as { detail: string }[];
+		assert.match(plan.map((p) => p.detail).join(' '), /USING PRIMARY KEY|USING INDEX/, 'never a table scan');
+		const searchDb = (env as any).SEARCH_DB;
+		let reads = 0;
+		const counting = { prepare: (sql: string) => { reads++; return searchDb.prepare(sql); } };
+		const t0 = 1_000_000;
+		assert.equal(await cachedPendingUserDeletion(counting as never, 'usr_cache', t0), null);
+		assert.equal(await cachedPendingUserDeletion(counting as never, 'usr_cache', t0 + 1000), null);
+		assert.equal(reads, 1, '"not pending" is remembered');
+		assert.equal(await cachedPendingUserDeletion(counting as never, 'usr_cache', t0 + NOT_PENDING_CACHE_MS + 1), null);
+		assert.equal(reads, 2, 'and read again after the window');
+		await call('POST', `/users/${OWNER}/delete-data`, {});
+		assert.ok(await cachedPendingUserDeletion(counting as never, OWNER));
+		assert.ok(await cachedPendingUserDeletion(counting as never, OWNER));
+		assert.equal(reads, 4, '"pending" is read every time, so a restore applies at once');
 	});
 });
 

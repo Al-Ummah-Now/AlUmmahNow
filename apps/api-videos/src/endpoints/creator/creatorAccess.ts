@@ -2,7 +2,8 @@
  * Creator tiers on the public API (lib/creatorTiers.ts):
  *
  *   GET  /api/me/creator  what the signed-in user may do (the web shows or hides
- *                         Upload and Create channel from it)
+ *                         Upload and Create channel from it); nothing while an
+ *                         admin deletion of their videos data is pending
  *   POST /api/channels    gated by channelCreateGate: no tier -> 403
  *                         `uploads_by_invitation`; the tier's channel limit
  *                         reached -> 403 `channel_limit`
@@ -11,6 +12,7 @@ import type { Context, Next } from 'hono';
 import { CREATOR_ERROR_CODES, type CreatorAccess } from '@al-ummah/shared-types';
 import { countChannelSlots, reserveChannelSlot, resolveCreator, settleChannelSlot } from '../../lib/creatorTiers';
 import { logger } from '../../lib/logger';
+import { cachedPendingUserDeletion } from '../../lib/admin/pendingUserDeletion';
 import { invitationOnly, UPLOAD_SESSION_OPERATION } from '../../middleware/upload-limits';
 import { windowStart } from '../../middleware/rate-limit';
 
@@ -60,7 +62,10 @@ export async function handleCreatorAccess(c: Context) {
 	const userId = c.get('userId') as string | undefined;
 	if (!userId) return c.json({ success: false, error: 'Authentication required' }, 401);
 	try {
-		return c.json({ success: true, result: await creatorAccess(c.env.SEARCH_DB, userId, rolesOf(c)) });
+		const [access, deletion] = await Promise.all([creatorAccess(c.env.SEARCH_DB, userId, rolesOf(c)), cachedPendingUserDeletion(c.env.SEARCH_DB, userId)]);
+		// A pending admin deletion of their videos data refuses every upload and create (#701)
+		const result: CreatorAccess = deletion ? { ...access, canUpload: false, canCreateChannel: false, pendingDeletion: true } : access;
+		return c.json({ success: true, result });
 	} catch (error) {
 		logger.error('[Creator] Access lookup failed', { userId, error: error instanceof Error ? error.message : String(error) });
 		return unavailable(c);

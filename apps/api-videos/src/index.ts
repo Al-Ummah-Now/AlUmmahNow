@@ -20,6 +20,7 @@ import { Hono } from "hono";
 import { cors } from 'hono/cors'
 import { authMiddleware, optionalAuthMiddleware, channelIdMiddleware } from "./middleware/auth";
 import { videosBanMiddleware } from "./middleware/videos-ban";
+import { videosPendingDeletionMiddleware } from "./middleware/videos-pending-deletion";
 import adminInternalRouter from "./routers/admin.router";
 import { loggingMiddleware } from "./middleware/logging";
 import { withLogging } from "@al-ummah/logger";
@@ -169,6 +170,8 @@ app.use('/api/*', optionalAuthMiddleware);
 
 // Videos bans (admin-web Users): a banned usr_ id reads like a visitor and changes nothing.
 app.use('/api/*', videosBanMiddleware);
+// A pending admin "Delete videos data" (30 days, #701): signs in and reads, changes nothing; restore lifts it.
+app.use('/api/*', videosPendingDeletionMiddleware);
 
 // Validate channelId header when present
 // This middleware verifies that the channelId belongs to the authenticated user

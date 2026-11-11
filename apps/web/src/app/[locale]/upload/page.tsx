@@ -25,7 +25,7 @@ import { useActiveChannel } from "@/contexts/ActiveChannelContext";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { useMultiAccount } from "@/hooks/useMultiAccount";
 import { useCreatorAccess } from "@/hooks/useCreatorAccess";
-import { UploadsByInvitationNotice } from "@/components/VideosNotices";
+import { UploadsByInvitationNotice, VideosPendingDeletionNotice } from "@/components/VideosNotices";
 import { login } from "@/lib/actions";
 import Link from "next/link";
 import { can } from "@al-ummah/shared-types";
@@ -430,6 +430,15 @@ const UploadPage: React.FC = () => {
             {t.navigation.signIn}
           </button>
         </div>
+      </main>
+    );
+  }
+
+  // An admin deletion of their videos data is pending: nothing can be uploaded (or resumed) until it is restored
+  if (creator.status === 'ready' && creator.access.pendingDeletion) {
+    return (
+      <main className="flex flex-col p-4 md:p-6 lg:p-8 w-full min-h-screen bg-background">
+        <VideosPendingDeletionNotice page />
       </main>
     );
   }
