@@ -470,3 +470,26 @@
   .upload-action-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
 @media (prefers-reduced-motion: reduce) { .upload-action { transition: none; } }
+
+/*
+  Font Awesome's all.min.css (CDN link in app/layout.tsx) defines its own .sr-only,
+  outside any cascade layer. An unlayered rule beats every rule in Tailwind's
+  @layer utilities, so `sr-only md:not-sr-only` stayed hidden on desktop: Studio's
+  Videos table had no column headers and its "Select all on this page" checkbox
+  was a 1px clipped box under the first row (release E2E bulk-rename-order,
+  2026-11-11). Unlayered too, with two classes, so it wins whichever sheet loads
+  first.
+*/
+@media (min-width: 48rem) {
+  .md\:not-sr-only.md\:not-sr-only {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    padding: 0;
+    overflow: visible;
+    clip: auto;
+    clip-path: none;
+    white-space: normal;
+  }
+}
