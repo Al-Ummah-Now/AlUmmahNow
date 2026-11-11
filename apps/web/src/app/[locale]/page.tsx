@@ -12,6 +12,10 @@ import { useAuth } from "@/components/AuthProvider/authContext";
 import { useLanguage } from "@/hooks/useLanguage";
 import { ContinueWatchingShelf } from "@/components/history/ContinueWatchingShelf";
 import { HomeHero, HomeHeroPlaceholder } from "@/components/ThemeDemo/HomeHero";
+import { pickHomeFeatured } from "@/lib/video/hero";
+
+/** Never featured on the home hero (kept from the original pick). */
+const HOME_HERO_EXCLUDED: ReadonlySet<string> = new Set(["e42e5deb-c86a-40b0-b8ec-6072fc550dba"]);
 
 const VideosPage: React.FC = () => {
   const { t, isRTL } = useLanguage();
@@ -67,7 +71,8 @@ const VideosPage: React.FC = () => {
     fetchVideos(null);
   }, [fetchVideos]);
 
-  const featured = videos.find((v) => v.id !== 'e42e5deb-c86a-40b0-b8ec-6072fc550dba');
+  // A ready landscape video unless an editor featured one (lib/video/hero.ts)
+  const featured = pickHomeFeatured(videos, HOME_HERO_EXCLUDED);
 
   const handleNextPage = () => {
     if (nextCursor) {

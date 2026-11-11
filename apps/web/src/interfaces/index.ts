@@ -44,6 +44,12 @@ export interface VideoObject {
     /** Who set the category: the owner, the AI (a suggestion nobody confirmed yet) or an admin */
     categorySource?: 'uploader' | 'ai' | 'admin';
     thumbnailType?: 'auto' | 'custom';
+    /** Width-only variants of a custom thumbnail (aspect kept) */
+    thumbnailSizes?: { hd?: string; sd?: string; mobile?: string; thumb?: string };
+    /** Featured by an editor */
+    isFeatured?: boolean;
+    /** Saved but not published */
+    isDraft?: boolean;
     uploadStatus?: 'initiated' | 'uploading' | 'processing' | 'ready' | 'failed' | 'deleted';
     /** Set when the video needs the owner's action (e.g. the upload must be redone). */
     processingIssue?: { kind: 'encode_failed' | 'needs_reupload' | 'stalled'; reason?: string; at?: string };

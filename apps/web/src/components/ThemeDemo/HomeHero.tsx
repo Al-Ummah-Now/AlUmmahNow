@@ -1,25 +1,84 @@
 'use client';
-// Prototype only: the featured video at the top of the home page.
+// The featured video at the top of the home page, and the 16:9 frame it shares with the channel Spotlight.
+import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { Play } from 'lucide-react';
 import type { VideoObject } from '@/interfaces';
 import { getLocalizedValue } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
+import { resolveUrl } from '@/lib/utility';
+import { aspectOf } from '@/lib/video/aspect';
+import { heroSrcSet, heroThumbFit, type HeroThumbnailSizes, type HeroVideo } from '@/lib/video/hero';
 
 const heroCopy = (lang: string) => (lang === 'ar' ? { tag: 'مختارات', watch: 'شاهد الآن' } : { tag: 'Featured', watch: 'Watch now' });
+
+/** The frame takes about 60% of the hero beside the text from 768px, the full width below. */
+const HERO_SIZES = '(max-width: 767px) 100vw, 60vw';
+
+interface HeroThumbProps {
+  video: HeroVideo & { thumbnailUrl?: string; thumbnailSizes?: HeroThumbnailSizes };
+  href: string;
+  /** The link's accessible name when it differs from the image's alt (the title) */
+  label?: string;
+  alt: string;
+  children?: ReactNode;
+}
+
+/**
+ * The hero's 16:9 thumbnail link (lib/video/hero.ts). A real image, not a CSS background, so it
+ * has alt text, a responsive size and a high fetch priority (it is the page's largest image). A
+ * landscape thumbnail fills the frame; a vertical or square one (a Short) is shown whole
+ * (`data-fit="contain"`) over a blurred, dimmed copy of itself.
+ */
+export function HeroThumb({ video, href, label, alt, children }: HeroThumbProps) {
+  const src = video.thumbnailUrl ? resolveUrl(video.thumbnailUrl) : '';
+  // Keyed by src: a new image is measured again
+  const [measured, setMeasured] = useState<{ src: string; aspect?: number } | null>(null);
+  const fit = heroThumbFit(video, measured?.src === src ? measured.aspect : undefined);
+  const width = video.width && video.width > 0 ? video.width : 1280;
+  const height = video.height && video.height > 0 ? video.height : 720;
+
+  return (
+    <Link href={href} className="home-hero-t" aria-label={label} data-fit={fit} data-testid="hero-thumb">
+      {src && fit === 'contain' && (
+        // eslint-disable-next-line @next/next/no-img-element -- decorative backdrop, the smallest variant is enough under the blur
+        <img className="home-hero-bd" src={video.thumbnailSizes?.mobile || src} alt="" aria-hidden="true" data-testid="hero-thumb-backdrop" />
+      )}
+      {src && (
+        // eslint-disable-next-line @next/next/no-img-element -- Bunny serves the variants; next/image would re-encode them
+        <img
+          className="home-hero-img"
+          src={src}
+          srcSet={heroSrcSet(video.thumbnailSizes)}
+          sizes={HERO_SIZES}
+          width={width}
+          height={height}
+          alt={alt}
+          fetchPriority="high"
+          loading="eager"
+          decoding="async"
+          data-testid="hero-thumb-image"
+          onLoad={(e) => setMeasured({ src, aspect: aspectOf(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight) })}
+        />
+      )}
+      {children}
+    </Link>
+  );
+}
 
 export function HomeHero({ video }: { video: VideoObject }) {
   const { lang } = useLanguage();
   const title = getLocalizedValue(video.titleLocalized, video.title, lang);
   const copy = heroCopy(lang);
+  const href = `/${lang}/video?vid=${video.id}`;
   return (
     <section className="home-hero">
-      <Link href={`/${lang}/video?vid=${video.id}`} className="home-hero-t" aria-label={title} style={{ backgroundImage: `url("${video.thumbnailUrl}")` }} />
+      <HeroThumb video={video} href={href} alt={title} />
       <div className="home-hero-b">
         <span className="home-hero-tag">{copy.tag}</span>
         <h2>{title}</h2>
         <p>{video.channelName || video.channel}</p>
-        <Link href={`/${lang}/video?vid=${video.id}`} className="b b-primary"><Play aria-hidden="true" />{copy.watch}</Link>
+        <Link href={href} className="b b-primary"><Play aria-hidden="true" />{copy.watch}</Link>
       </div>
     </section>
   );

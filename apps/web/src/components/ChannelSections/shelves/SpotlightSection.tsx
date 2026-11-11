@@ -9,6 +9,7 @@ import { getChannelSubscriptionStatus } from '@/lib/api/channels';
 import { removeUnwantedChars } from '@/lib/utility';
 import { useLanguage } from '@/hooks/useLanguage';
 import { logger } from '@/lib/logger-client';
+import { HeroThumb } from '@/components/ThemeDemo/HomeHero';
 
 interface SpotlightProps {
   channelId: string;
@@ -72,16 +73,11 @@ export function SpotlightSection({ channelId, trailer, returning }: SpotlightPro
   return (
     <section data-section="spotlight" data-testid="section-spotlight" data-spotlight-kind={kind} aria-label={title}>
       <div className="home-hero">
-        <Link
-          href={href}
-          className="home-hero-t"
-          aria-label={`${r.watch}: ${title}`}
-          style={{ backgroundImage: video.thumbnailUrl ? `url("${video.thumbnailUrl}")` : undefined }}
-        >
+        <HeroThumb video={video} href={href} label={`${r.watch}: ${title}`} alt={title}>
           <span className="spotlight-play" aria-hidden="true">
             <Play />
           </span>
-        </Link>
+        </HeroThumb>
         <div className="home-hero-b">
           <span className="home-hero-tag">{kind === 'trailer' ? r.trailer : r.forSubscribers}</span>
           <h2 dir="auto">{title}</h2>
