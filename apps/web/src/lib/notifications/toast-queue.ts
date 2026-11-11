@@ -138,7 +138,7 @@ export function groupText(group: ToastGroup, texts: NotificationToastTranslation
     return { title: first.title, message: first.message, href: first.href, action: texts.view };
   }
   const table = isGroupedKind(group.kind) ? texts.grouped[group.kind] : texts.grouped.other;
-  const target = UPLOAD_KINDS.has(group.kind) ? '/dashboard/videos' : '/notifications';
+  const target = UPLOAD_KINDS.has(group.kind) ? '/studio/go/content/videos' : '/notifications';
   return {
     title: first.title,
     message: pluralText(table, group.entries.length, lang),

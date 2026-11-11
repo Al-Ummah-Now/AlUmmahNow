@@ -124,10 +124,10 @@ test.describe('Release: upload processing', () => {
       expect(ready.availableResolutions?.length ?? 0, 'ready video has resolutions').toBeGreaterThan(0);
 
       // Thumbnail really loads (signed URL, right library host)
-      await page.goto(`${target().web}/en/dashboard/videos`);
-      const card = page.getByTestId('dashboard-video-card').filter({ hasText: title }).first();
+      // Studio's Videos list (the creator home); a ready public upload is under Published
+      await page.goto(`${target().web}/en/studio/go/content/videos`);
+      const card = page.getByTestId('studio-video-row').filter({ hasText: title }).first();
       await expect(card).toBeVisible({ timeout: 30000 });
-      await expect(card).toHaveAttribute('data-status', 'ready');
       const thumbnail = card.locator('img').first();
       await expect
         .poll(() => thumbnail.evaluate((img: HTMLImageElement) => (img.complete ? img.naturalWidth : 0)), {

@@ -19,6 +19,7 @@ export interface PublicVideo {
   playUrl?: string;
   channelId?: string;
   thumbnailUrl?: string;
+  dateCreated?: string;
 }
 
 /**
@@ -35,6 +36,27 @@ export const HISTORY_MIN_SECONDS = 40;
  * Shorts never resume (lib/video/resume.ts); pass `{ excludeShorts: true }`.
  */
 export const RESUME_MIN_VIDEO_SECONDS = 75;
+
+/**
+ * Videos other specs create for themselves (and delete while this one runs):
+ * never pick those. The list is newest first, so a temp upload of a parallel
+ * spec used to be the first pick, then "Video not found" mid-test.
+ */
+const SUITE_TITLE = /^(Release E2E|E2E |rel-|e2e-)/i;
+
+/** Long-lived videos first: not the suites' own, oldest first, still there right now. */
+export async function stableVideos<T extends PublicVideo>(candidates: T[]): Promise<T[]> {
+  const sorted = candidates
+    .filter((v) => !SUITE_TITLE.test(v.title ?? ''))
+    .sort((a, b) => Date.parse(a.dateCreated ?? '') - Date.parse(b.dateCreated ?? '') || 0);
+  const out: T[] = [];
+  for (const v of sorted) {
+    const res = await fetch(`${target().api}/api/videos/${encodeURIComponent(v.id)}`, { cache: 'no-store' });
+    if (res.ok) out.push(v);
+    if (out.length >= 3) break;
+  }
+  return out;
+}
 
 export const NO_PLAYABLE_VIDEO = 'no public, encoded video in this environment (seed one; see CLAUDE.md "Release regressions")';
 
@@ -55,7 +77,8 @@ export async function findPlayableVideo(minSeconds = 8, opts: { excludeShorts?: 
         (v.duration ?? 0) >= minSeconds &&
         !(opts.excludeShorts && v.isShort),
     );
-    if (playable.length > 0) return playable[0];
+    const [stable] = await stableVideos(playable);
+    if (stable) return stable;
     if (!body.cursor || (body.data ?? []).length === 0) return null;
     cursor = body.cursor;
   }
@@ -74,7 +97,7 @@ export async function findLandscapeVideo(minSeconds = 8): Promise<PublicVideo | 
   const playable = (body.data ?? []).filter(
     (v) => v.uploadStatus === 'ready' && v.isPublic !== false && !v.isLive && (v.availableResolutions?.length ?? 0) > 0 && !!v.playUrl && (v.duration ?? 0) >= minSeconds,
   );
-  for (const v of playable.slice(0, 20)) {
+  for (const v of (await stableVideos(playable)).concat(playable).slice(0, 20)) {
     const master = await fetch(v.playUrl!).then((r) => (r.ok ? r.text() : ''), () => '');
     const m = /RESOLUTION=(\d+)x(\d+)/.exec(master);
     if (m && Number(m[1]) > Number(m[2])) return v;

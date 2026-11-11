@@ -214,7 +214,8 @@ test.describe('Release: page frame', () => {
     await expect(upload).toHaveAttribute('data-state', 'ready', { timeout: 30000 });
     await expect(upload).toHaveAccessibleName('Upload Video');
     await upload.click();
-    await expect(page).toHaveURL(`${target().web}/en/upload`);
+    // Upload opens on the active channel (the picker reads ?channel=)
+    await expect(page).toHaveURL(new RegExp(`^${target().web}/en/upload\\?channel=[^&]+$`));
     await expect(page.getByTestId('upload-dropzone')).toBeVisible({ timeout: 30000 });
   });
 });
