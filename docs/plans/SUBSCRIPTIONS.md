@@ -3,7 +3,7 @@
 **Status:** proposal for the owner to review (2026-11-11). Nothing here is implemented.
 **Why:** each feature has been inventing its own tiers: creator tiers, the Epic 27 seed plans, caption minutes, social limits and AI moderation. The owner, on caption-minute tiers: *"what free tier? this needs planning with all subs on the site"*.
 **Constraints (owner, standing):** never Stripe (T2, O4). Every feature is tiered and admin-managed through plans and entitlements (T1, O3). Whole-platform infra stays under **$500/month** at "millions of viewers / thousands of videos" (O1). No monetisation at launch (D4). Uploads and channel creation are invite-only (O25).
-**Wiki:** [SUBS-PLAN](https://github.com/Al-Ummah-Now/AlUmmahNowWiki/blob/main/epics/SUBS-PLAN-subscriptions.md) (short summary and decision list).
+**Wiki:** [AUN-SUBS](https://github.com/Al-Ummah-Now/AlUmmahNowWiki/blob/main/epics/AUN-SUBS-subscriptions-plan.md) (short summary and decision list).
 
 ---
 
