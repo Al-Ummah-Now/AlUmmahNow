@@ -6,6 +6,7 @@
 import { test, expect } from '@playwright/test';
 import { target } from './targets';
 import { watchUrl } from './videos';
+import { fixtureVideo } from './fixtures';
 
 type ChapterList = Array<{ startTime: number; title: string }>;
 interface Chaptered { id: string; chapters?: ChapterList | { chapters?: ChapterList }; uploadStatus?: string; isPublic?: boolean; playUrl?: string }
@@ -13,18 +14,16 @@ interface Chaptered { id: string; chapters?: ChapterList | { chapters?: ChapterL
 /** Stored either as an array or as { chapters: [...] }. */
 const chaptersOf = (v: Chaptered): ChapterList => (Array.isArray(v.chapters) ? v.chapters : v.chapters?.chapters ?? []);
 
+/** The seeded lecture carries the seed's four chapters (seed-config.ts withSubtitlesAndChapters). */
 async function findChapteredVideo(): Promise<Chaptered | null> {
-  let cursor = '';
-  for (let page = 0; page < 5; page++) {
-    const res = await fetch(`${target().api}/api/videos?limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`);
-    expect(res.ok, `GET /api/videos answered ${res.status}`).toBe(true);
-    const body = (await res.json()) as { data?: Chaptered[]; cursor?: string };
-    const hit = (body.data ?? []).find((v) => chaptersOf(v).length >= 2 && v.isPublic !== false && !!v.playUrl);
-    if (hit) return hit;
-    if (!body.cursor || (body.data ?? []).length === 0) return null;
-    cursor = body.cursor;
-  }
-  return null;
+  const { id } = await fixtureVideo('landscape');
+  // The list omits chapters: read the video itself
+  const res = await fetch(`${target().api}/api/videos/${encodeURIComponent(id)}`, { cache: 'no-store' });
+  expect(res.ok, `GET /api/videos/${id} answered ${res.status}`).toBe(true);
+  const body = (await res.json()) as Chaptered & { result?: Chaptered };
+  const video = body.result ?? body;
+  expect(chaptersOf(video).length, 'the seeded lecture lost its chapters: re-run the seed').toBeGreaterThanOrEqual(2);
+  return video;
 }
 
 test.describe('Release: chapter navigation', () => {

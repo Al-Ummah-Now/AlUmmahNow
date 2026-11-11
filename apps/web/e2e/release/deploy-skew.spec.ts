@@ -18,6 +18,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { target } from './targets';
 import { apiFetch, createProfile, signUpOnWeb, type WebUser } from './web-session';
 import { grantCreatorTier } from './creator-tier';
+import { submitNewChannelInMenu } from './account-menu';
 
 // Signs users in through the auth server: traces would hold the password and code
 test.use({ trace: 'off' });
@@ -87,15 +88,7 @@ test.describe('Release: a deploy while the page is open', () => {
     // A channel, created the way users do (it also refreshes the web session's channels)
     const channelName = `Release E2E skew ${Date.now().toString(36)}`;
     await gotoBuildA(page, `${target().web}/en`);
-    await page.getByTestId('nav-menu-trigger').click();
-    const switchChannel = page.getByTestId('nav-switch-channel');
-    await switchChannel.or(page.getByTestId('nav-create-channel')).first().waitFor();
-    if (await switchChannel.isVisible()) await switchChannel.click();
-    await page.getByTestId('nav-create-channel').click();
-    const nameInput = page.locator('[role="menu"] input[type="text"]').first();
-    await nameInput.fill(channelName);
-    await nameInput.press('Enter');
-    await expect(nameInput).toBeHidden({ timeout: 30000 });
+    await submitNewChannelInMenu(page, channelName);
     let channelId = '';
     await expect
       .poll(async () => {

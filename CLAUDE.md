@@ -642,9 +642,28 @@ accounts (see [Per-run E2E accounts](#per-run-e2e-accounts)), deleted when the r
 
 Playback specs (`*player.spec.ts`) run in the `player` project on branded
 Chrome (`channel: 'chrome'`): Playwright's bundled Chromium cannot decode the
-H.264 HLS streams. They pick a public, encoded video from `GET /api/videos`
-and skip with a reason when the environment has none (seed stage with at
-least one public video of 8s or more).
+H.264 HLS streams.
+
+**Reliability rules** (a red run must mean a real bug):
+- **Data.** A spec creates what it changes (its own run account, channel, uploads) and reads
+  only seeded fixtures otherwise: `e2e/release/fixtures.ts` finds the seed's ready, public
+  landscape lecture (with chapters), a second lecture and the vertical Short by their seed
+  titles (`e2e/seed/seed-config.ts`). Never "the newest public video" or `limit=1` of a
+  shared list: that is another spec's upload, still encoding or about to be deleted. A
+  missing fixture fails with "run the seed", never a skip.
+- **Waits.** No sleeps for readiness: wait for the thing itself. Sign-in helpers in
+  `web-session.ts` end only when the app is done redirecting (`settleSignIn`: no
+  `session_updated`, `/profile/create` included); the header menu is opened with
+  `openMenuUntil`, channels made with `submitNewChannelInMenu` (`account-menu.ts`),
+  `expectHydrated(locator)` waits until React has attached a control's handlers, and
+  `fillSecret` waits for the field first. Fixed waits remain only as observation windows
+  ("nothing else happens for N s").
+- **Retries stay at one.** A test that needed its retry is listed as flaky in the job
+  summary and as a warning (`e2e/release/outcome-reporter.ts`). `release-e2e-nightly.yml`
+  runs the suite 3x with no retries and keeps one issue (label `e2e-flaky-nightly`) listing
+  every test that was not 3/3. Quarantine (`test.fixme`) needs
+  `quarantined: #<issue> @<owner>` in the call (`scripts/ci/check-quarantine.ts`, run by
+  the job).
 
 The suite needs only `@playwright/test` (no monorepo install), so keep its
 imports inside `e2e/release/`, `e2e/test-utils/code-sink.ts` and

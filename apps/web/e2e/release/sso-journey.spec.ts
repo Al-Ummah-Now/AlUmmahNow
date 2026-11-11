@@ -18,9 +18,8 @@
 import { test, expect, type BrowserContext, type Cookie, type Page } from '@playwright/test';
 import { grantCreatorTier } from './creator-tier';
 import { promoteToAdmin } from './sink';
-import { target, TEST_PASSWORD } from './targets';
-import { fillSecret } from './secret-fill';
-import { apiFetch, createProfile, signUpOnWeb, type Locale } from './web-session';
+import { target } from './targets';
+import { apiFetch, createProfile, signUpOnWeb, type Locale, submitPasswordSignIn } from './web-session';
 
 // Types the password on the auth server: traces would hold it
 test.use({ trace: 'off' });
@@ -190,9 +189,7 @@ test.describe('Release: SSO journey across every app', () => {
       }
       // The sign-in page follows the site language
       await expect(page.locator('html')).toHaveAttribute('lang', locale);
-      await page.fill('input[name="email"]', user.email);
-      await fillSecret(page.locator('input[name="password"]'), TEST_PASSWORD);
-      await page.click('button[data-component="button"]');
+      await submitPasswordSignIn(page, user.email);
       await page.waitForURL((u) => u.origin === target().web && !u.pathname.startsWith('/api/'), { timeout: 45000 });
       await settle(page);
       if (deepLinkSignIn) expect(inStudio(page.url()), `sign-in did not come back to the studio deep link (${page.url()})`).toBe(true);

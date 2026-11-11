@@ -8,7 +8,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { promoteToAdmin } from './sink';
 import { sinkEmail, target, TEST_PASSWORD } from './targets';
-import { completeRegistration, expectNoErrorHop, recordNavigations, signUpOnWeb } from './web-session';
+import { completeRegistration, expectNoErrorHop, recordNavigations, signUpOnWeb, submitPasswordSignIn } from './web-session';
 import { fillSecret } from './secret-fill';
 
 // This file signs users in through the auth server: its traces would hold the
@@ -77,9 +77,7 @@ test.describe('Release: admin-web access', () => {
     await context.clearCookies();
     const navigations = recordNavigations(page);
     await openAdminSignIn(page);
-    await page.fill('input[name="email"]', email);
-    await fillSecret(page.locator('input[name="password"]'), TEST_PASSWORD);
-    await page.click('button[data-component="button"]');
+    await submitPasswordSignIn(page, email);
     await expect(page).toHaveURL(`${target().adminWeb}/dashboard`, { timeout: 30000 });
     await page.reload();
     await expect(page).toHaveURL(`${target().adminWeb}/dashboard`);

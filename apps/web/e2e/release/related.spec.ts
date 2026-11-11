@@ -40,10 +40,7 @@ test.describe('Release: related videos on the watch page', () => {
     test(`related shelf is never empty on a public video (${locale})`, async ({ page }) => {
       const video = await findPlayableVideo();
       test.skip(!video, NO_PLAYABLE_VIDEO);
-      const res = await fetch(`${target().api}/api/videos?limit=2`);
-      expect(res.ok, `GET /api/videos answered ${res.status}`).toBe(true);
-      const { data = [] } = (await res.json()) as { data?: Array<{ id: string }> };
-      test.skip(!data.some((v) => v.id !== video!.id), 'the catalogue has no other public video');
+      // The seed has other public videos on the same channel, so a shelf exists to show
 
       await page.goto(watchUrl(video!.id, locale));
       const links = page.locator(`[data-testid="related-videos-list"]:visible a[href*="/${locale}/video?vid="]`);

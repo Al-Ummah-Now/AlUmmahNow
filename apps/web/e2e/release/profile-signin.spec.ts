@@ -4,9 +4,8 @@
  * client registry or redirect_uri mistake there shows up only here.
  */
 import { test, expect } from '@playwright/test';
-import { sinkEmail, target, TEST_PASSWORD } from './targets';
-import { completeRegistration, expectNoErrorHop, recordNavigations } from './web-session';
-import { fillSecret } from './secret-fill';
+import { sinkEmail, target } from './targets';
+import { completeRegistration, expectNoErrorHop, recordNavigations, submitPasswordSignIn } from './web-session';
 import { openProfileSignIn } from './profile-app';
 
 // This file signs users in through the auth server: its traces would hold the
@@ -26,9 +25,7 @@ test.describe('Release: profile app sign-up and sign-in', () => {
 
     await context.clearCookies();
     await openProfileSignIn(page);
-    await page.fill('input[name="email"]', email);
-    await fillSecret(page.locator('input[name="password"]'), TEST_PASSWORD);
-    await page.click('button[data-component="button"]');
+    await submitPasswordSignIn(page, email);
     await expect(loggedIn).toBeVisible({ timeout: 30000 });
     await expect(loggedIn).toContainText(email);
 

@@ -24,6 +24,10 @@ on:
         type: choice
         options: [qa, stage]
         default: qa
+      repeat:
+        description: 'Run every test this many times, no retries (the nightly flake hunt uses 3)'
+        type: number
+        default: 1
   workflow_call:
     inputs:
       env:
@@ -35,6 +39,11 @@ on:
         type: string
         required: false
         default: ''
+      repeat:
+        description: 'Run every test this many times, no retries (1 = the normal gate: one retry, flaky reported)'
+        type: number
+        required: false
+        default: 1
     secrets:
       E2E_CODE_SINK_SECRET:
         description: 'Auth server code sink secret for the target env'
@@ -55,8 +64,8 @@ jobs:
     name: Release regressions (${{ inputs.env || 'qa' }})
     runs-on: ubuntu-24.04
     # 163 tests on 4 workers took ~25 min with slow Bunny encodes (v2026.11.10.11);
-    # plus up to 40 min waiting for the shared-state lock
-    timeout-minutes: 100
+    # plus up to 40 min waiting for the shared-state lock. Repeat runs (nightly) take longer.
+    timeout-minutes: ${{ (inputs.repeat || 1) > 1 && 240 || 100 }}
     permissions:
       contents: write  # only the trusted qa-lock steps get the token (a git ref is the lock)
       actions: read  # qa-lock: is the lock's holder run still going?
@@ -67,6 +76,10 @@ jobs:
       # recorded before it exists and deleted by the teardown step below
       # (apps/web/e2e/test-utils/run-users.ts)
       E2E_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+      # --repeat-each for the nightly flake hunt; a repeat run has no retries, so every
+      # attempt counts (outcome-reporter.ts writes release-outcomes*.json per test and repeat)
+      E2E_REPEAT: ${{ inputs.repeat || 1 }}
+      E2E_RETRIES: ${{ (inputs.repeat || 1) > 1 && '0' || '1' }}
       AUTH_URL: ${{ (inputs.env || 'qa') == 'stage' && 'https://auth.stage.alummahnow.net' || 'https://auth.qa.alummahnow.net' }}
     steps:
       - name: Check target
@@ -94,6 +107,11 @@ jobs:
             scripts/e2e
             apps/web/e2e/test-utils
           persist-credentials: false
+
+      # Quarantine needs an issue and an owner: a test.fixme in the release suite must say
+      # "quarantined: #<issue> @<owner>" (scripts/ci/check-quarantine.ts)
+      - name: Quarantined specs have an issue and an owner
+        run: node --experimental-strip-types --no-warnings "$GITHUB_WORKSPACE/.ci-trusted/scripts/ci/check-quarantine.ts" apps/web/e2e/release
 
       - name: Run accounts file
         run: echo "E2E_RUN_USERS_FILE=$RUNNER_TEMP/run-users.txt" >> "$GITHUB_ENV"
@@ -140,7 +158,7 @@ jobs:
           E2E_RUN_TAG: g${{ github.run_id }}a${{ github.run_attempt }}
           # The shared-state specs run below, under the lock
           E2E_SHARED_STATE: skip
-        run: npx playwright test -c playwright.release.config.ts
+        run: npx playwright test -c playwright.release.config.ts --repeat-each="$E2E_REPEAT"
 
       # errors.spec.ts and site-theme.spec.ts change state no run owns (the shared
       # test error group, the global site theme): one run at a time per
@@ -165,7 +183,7 @@ jobs:
           E2E_RUN_TAG: g${{ github.run_id }}a${{ github.run_attempt }}
           E2E_SHARED_STATE: only
           E2E_OUTPUT_SUFFIX: shared-state
-        run: npx playwright test -c playwright.release.config.ts
+        run: npx playwright test -c playwright.release.config.ts --repeat-each="$E2E_REPEAT"
 
       - name: Release the ${{ env.E2E_ENV }}-global lock
         if: always() && steps.lock.outputs.holder != ''
@@ -215,6 +233,7 @@ jobs:
         run: >-
           python3 -I - --env E2E_TEST_PASSWORD --env E2E_CODE_SINK_SECRET --env TEST_PROMOTE_SECRET
           --remove "$SUITE/release-report" "$SUITE/test-results" "$SUITE/release-report-shared-state" "$SUITE/test-results-shared-state"
+          "$SUITE/release-outcomes.json" "$SUITE/release-outcomes-shared-state.json"
           < "$GITHUB_WORKSPACE/.ci-trusted/scripts/ci/scan-artifacts-for-secrets.py"
 
       - uses: actions/upload-artifact@v4
@@ -227,3 +246,15 @@ jobs:
             ${{ env.SUITE }}/release-report-shared-state/
             ${{ env.SUITE }}/test-results-shared-state/
           retention-days: 14
+
+      # Per-test outcomes (titles and first error lines, scanned above), pass or fail:
+      # the nightly job reads them to file flaky specs (release-e2e-nightly.yml)
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-outcomes-${{ env.E2E_ENV }}
+          path: |
+            ${{ env.SUITE }}/release-outcomes.json
+            ${{ env.SUITE }}/release-outcomes-shared-state.json
+          if-no-files-found: ignore
+          retention-days: 30

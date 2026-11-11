@@ -1,6 +1,6 @@
 import { expect, type Page } from '@playwright/test';
 import { target } from './targets';
-import { apiFetch, type WebUser } from './web-session';
+import { apiFetch, menuTrigger, openMenuUntil, type WebUser } from './web-session';
 
 /**
  * Clicks a first-level item of the videos header's account menu (Add account,
@@ -9,14 +9,7 @@ import { apiFetch, type WebUser } from './web-session';
  */
 export async function clickAccountMenuItem(page: Page, testId: string): Promise<void> {
   const item = page.locator(`[data-testid="${testId}"]:visible`).first();
-  await expect(async () => {
-    if (!(await item.isVisible())) {
-      const back = page.locator('[data-testid="nav-menu-back"]:visible').first();
-      if (await back.isVisible()) await back.click();
-      else await page.locator('[data-testid="nav-menu-trigger"]:visible').first().click();
-    }
-    await expect(item).toBeVisible({ timeout: 3000 });
-  }).toPass({ timeout: 30000 });
+  await openMenuUntil(page, item);
   await item.click();
 }
 
@@ -30,18 +23,7 @@ export async function createChannelInMenu(page: Page, user: WebUser, name: strin
   // Consent already answered, so the banner does not cover the account menu
   await page.context().addCookies([{ name: 'aun_consent', value: `v1.a0.e0.p0.${Date.now()}`, url: target().web, sameSite: 'Lax' }]);
   await page.goto(`${target().web}/en`);
-  await page.getByTestId('nav-menu-trigger').click();
-  // Create sits in the channel switcher once the account has channels
-  const switchChannel = page.getByTestId('nav-switch-channel');
-  await switchChannel.or(page.getByTestId('nav-create-channel')).first().waitFor();
-  if (await switchChannel.isVisible()) await switchChannel.click();
-  await page.getByTestId('nav-create-channel').click();
-  const nameInput = page.locator('[role="menu"] input[type="text"]').first();
-  await nameInput.fill(name);
-  await nameInput.press('Enter');
-  // The form closes once the channel exists and the session's channels are
-  // reloaded; navigating before that loses the reload
-  await expect(nameInput).toBeHidden({ timeout: 30000 });
+  await submitNewChannelInMenu(page, name);
   let channelId = '';
   await expect
     .poll(async () => {
@@ -52,4 +34,32 @@ export async function createChannelInMenu(page: Page, user: WebUser, name: strin
     }, { message: 'the channel created in the account menu is not in GET /api/channels', timeout: 30000 })
     .not.toBe('');
   return channelId;
+}
+
+/**
+ * Account menu → (Switch channel →) Create channel → name → Enter, on the page
+ * already open, and waits until the form closes: the channel exists and the
+ * session's channels are reloaded (navigating before that loses the reload).
+ * Opening is retried until Create shows: right after a page load the header's
+ * click handlers may not be attached yet, and a dropped click used to leave the
+ * spec waiting 15 s for a menu that never opened.
+ */
+export async function submitNewChannelInMenu(page: Page, name: string): Promise<void> {
+  const create = page.locator('[data-testid="nav-create-channel"]:visible').first();
+  // Create sits in the channel switcher once the account has channels
+  const switchChannel = page.locator('[data-testid="nav-switch-channel"]:visible').first();
+  await expect(async () => {
+    if (!(await create.isVisible())) {
+      if (await switchChannel.isVisible()) await switchChannel.click({ timeout: 5000 });
+      else await menuTrigger(page).click({ timeout: 10000 });
+    }
+    await expect(create).toBeVisible({ timeout: 3000 });
+  }).toPass({ timeout: 45000 });
+  await create.click();
+  const nameInput = page.locator('[role="menu"] input[type="text"]:visible').first();
+  await expect(nameInput).toBeEditable({ timeout: 15000 });
+  await nameInput.fill(name);
+  await expect(nameInput).toHaveValue(name);
+  await nameInput.press('Enter');
+  await expect(nameInput).toBeHidden({ timeout: 30000 });
 }

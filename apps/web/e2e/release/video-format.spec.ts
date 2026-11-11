@@ -18,6 +18,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { target } from './targets';
 import { apiFetch, createProfile, signUpOnWeb, type WebUser } from './web-session';
 import { grantCreatorTier } from './creator-tier';
+import { submitNewChannelInMenu } from './account-menu';
 
 // Signs in through the auth server: traces would hold the typed password and code
 test.use({ trace: 'off' });
@@ -34,15 +35,7 @@ async function createChannelInMenu(page: Page, user: WebUser, name: string): Pro
     { name: 'aun_consent', value: `v1.a0.e0.p0.${Date.now()}`, url: target().web, sameSite: 'Lax' },
   ]);
   await page.goto(`${target().web}/en`);
-  await page.getByTestId('nav-menu-trigger').click();
-  const switchChannel = page.getByTestId('nav-switch-channel');
-  await switchChannel.or(page.getByTestId('nav-create-channel')).first().waitFor();
-  if (await switchChannel.isVisible()) await switchChannel.click();
-  await page.getByTestId('nav-create-channel').click();
-  const nameInput = page.locator('[role="menu"] input[type="text"]').first();
-  await nameInput.fill(name);
-  await nameInput.press('Enter');
-  await expect(nameInput).toBeHidden({ timeout: 30000 });
+  await submitNewChannelInMenu(page, name);
 
   let channelId = '';
   await expect

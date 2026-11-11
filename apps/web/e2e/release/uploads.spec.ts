@@ -12,6 +12,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { target } from './targets';
 import { apiFetch, createProfile, signUpOnWeb, type WebUser } from './web-session';
 import { grantCreatorTier } from './creator-tier';
+import { submitNewChannelInMenu } from './account-menu';
 
 // This file signs users in through the auth server: its traces would hold the
 // typed password and email code (fillSecret args, form POST bodies). Trace off.
@@ -74,18 +75,7 @@ async function createChannelInMenu(page: Page, user: WebUser, channelName: strin
     { name: 'aun_consent', value: `v1.a0.e0.p0.${Date.now()}`, url: target().web, sameSite: 'Lax' },
   ]);
   await page.goto(`${target().web}/en`);
-  await page.getByTestId('nav-menu-trigger').click();
-  // Builds before the submenu show Create on the first level
-  const switchChannel = page.getByTestId('nav-switch-channel');
-  await switchChannel.or(page.getByTestId('nav-create-channel')).first().waitFor();
-  if (await switchChannel.isVisible()) await switchChannel.click();
-  await page.getByTestId('nav-create-channel').click();
-  const nameInput = page.locator('[role="menu"] input[type="text"]').first();
-  await nameInput.fill(channelName);
-  await nameInput.press('Enter');
-  // The form closes once the channel exists and the session's channels are
-  // reloaded; navigating before that loses the reload
-  await expect(nameInput).toBeHidden({ timeout: 30000 });
+  await submitNewChannelInMenu(page, channelName);
 
   let channelId = '';
   await expect
@@ -159,12 +149,13 @@ test.describe('Release: uploads', () => {
         .not.toBe('');
 
       // Studio's Videos list shows it (Processing until encoded, then Published)
+      // The list is client-rendered: it is read once it shows rows or its empty state (never mid-load)
+      const listed = page.locator('[data-testid="studio-video-row"], [data-testid="studio-videos-empty"]').first();
       await expect
         .poll(async () => {
           for (const status of ['processing', 'published']) {
             await page.goto(`${target().web}/en/studio/${channelId}/content/videos?status=${status}`);
-            await page.getByTestId('studio-videos').waitFor();
-            await page.waitForLoadState('networkidle').catch(() => {});
+            await expect(listed).toBeVisible({ timeout: 30000 });
             if (await page.getByTestId('studio-video-row').filter({ hasText: title }).count()) return true;
           }
           return false;

@@ -12,10 +12,9 @@
  */
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import { promoteToAdmin } from './sink';
-import { sinkEmail, target, TEST_PASSWORD } from './targets';
-import { apiFetch, completeRegistration, createProfile, signUpOnWeb, type WebUser } from './web-session';
+import { sinkEmail, target } from './targets';
+import { apiFetch, completeRegistration, createProfile, signUpOnWeb, type WebUser, submitPasswordSignIn } from './web-session';
 import { grantCreatorTier } from './creator-tier';
-import { fillSecret } from './secret-fill';
 
 // Signs users in through the auth server: traces would hold the password and code
 test.use({ trace: 'off' });
@@ -38,9 +37,7 @@ async function signInAsAdmin(page: Page, prefix: string): Promise<void> {
   await page.context().clearCookies();
   await gotoDom(page, `${target().adminWeb}/login`);
   await expect(page).toHaveURL(new RegExp(`^${target().auth}`), { timeout: 30000 });
-  await page.fill('input[name="email"]', email);
-  await fillSecret(page.locator('input[name="password"]'), TEST_PASSWORD);
-  await page.click('button[data-component="button"]');
+  await submitPasswordSignIn(page, email);
   await expect(page).toHaveURL(`${target().adminWeb}/dashboard`, { timeout: 30000 });
 }
 

@@ -21,9 +21,9 @@ import * as path from 'path';
 import { randomBytes } from 'crypto';
 import { test, expect, type Page, type Route } from '@playwright/test';
 import { target } from './targets';
-import { apiFetch, createProfile, signUpOnWeb, type WebUser } from './web-session';
+import { apiFetch, createProfile, signUpOnWeb, type WebUser, submitPasswordSignIn } from './web-session';
 import { grantCreatorTier } from './creator-tier';
-import { fillSecret } from './secret-fill';
+import { submitNewChannelInMenu } from './account-menu';
 
 // Signs users in through the auth server: traces would hold the password.
 test.use({ trace: 'off' });
@@ -62,9 +62,7 @@ async function uploader(page: Page, prefix: string): Promise<Uploader> {
     await page.locator('button[aria-haspopup="menu"]').first().click();
     await page.locator('[role="menu"] form button[type="submit"]').first().click();
     await expect(page).toHaveURL(new RegExp(`^${target().auth}`), { timeout: 30000 });
-    await page.fill('input[name="email"]', email);
-    await fillSecret(page.locator('input[name="password"]'), password);
-    await page.click('button[data-component="button"]');
+    await submitPasswordSignIn(page, email, password);
     await expect(page).toHaveURL(new RegExp(`^${target().web}/en`), { timeout: 30000 });
     const info = await page.evaluate(async () => (await (await fetch('/api/auth/token')).json()) as { accessToken: string; userId: string; channelId: string });
     expect(info.channelId, 'the local upload account has no channel').toBeTruthy();
@@ -78,15 +76,7 @@ async function uploader(page: Page, prefix: string): Promise<Uploader> {
   // The channel through the account menu (also refreshes the web session's channels)
   const channelName = `Release E2E resume ${Date.now().toString(36)}`;
   await page.goto(`${target().web}/en`);
-  await page.getByTestId('nav-menu-trigger').click();
-  const switchChannel = page.getByTestId('nav-switch-channel');
-  await switchChannel.or(page.getByTestId('nav-create-channel')).first().waitFor();
-  if (await switchChannel.isVisible()) await switchChannel.click();
-  await page.getByTestId('nav-create-channel').click();
-  const nameInput = page.locator('[role="menu"] input[type="text"]').first();
-  await nameInput.fill(channelName);
-  await nameInput.press('Enter');
-  await expect(nameInput).toBeHidden({ timeout: 30000 });
+  await submitNewChannelInMenu(page, channelName);
   let channelId = '';
   await expect
     .poll(async () => {

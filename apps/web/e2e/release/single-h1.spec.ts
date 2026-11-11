@@ -14,24 +14,16 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { promoteToAdmin } from './sink';
-import { sinkEmail, target, TEST_PASSWORD } from './targets';
-import { completeRegistration } from './web-session';
-import { fillSecret } from './secret-fill';
+import { sinkEmail, target } from './targets';
+import { completeRegistration, submitPasswordSignIn } from './web-session';
 import { watchUrl } from './videos';
+import { seeded } from './fixtures';
 
 // Signs up/in: no trace or video, they would record the password (see secret-fill.ts)
 test.use({ trace: 'off', video: 'off' });
 
 type Locale = 'en' | 'ar';
 const LOCALES: Locale[] = ['en', 'ar'];
-
-async function firstPublicId(path: string): Promise<string> {
-  const res = await fetch(`${target().api}${path}`);
-  expect(res.ok, `GET ${path} answered ${res.status}`).toBe(true);
-  const id = ((await res.json()) as { data?: Array<{ id?: string }> }).data?.find((row) => row.id)?.id;
-  expect(id, `GET ${path} listed nothing`).toBeTruthy();
-  return id!;
-}
 
 /** Asserts the page shows exactly one h1 (soft, so one run lists every offender). */
 async function expectSingleH1(page: Page, name: string): Promise<void> {
@@ -47,7 +39,9 @@ test.describe('Release: one h1 per page', () => {
   test('videos site pages (en, ar)', async ({ page }) => {
     test.setTimeout(300000);
     const web = target().web;
-    const [videoId, channelId] = await Promise.all([firstPublicId('/api/videos?limit=1'), firstPublicId('/api/channels?limit=1')]);
+    // Seeded fixtures: never the newest item of a shared list (another spec's upload, still encoding)
+    const { videos, lecturesChannelId: channelId } = await seeded();
+    const videoId = videos.landscape.id;
     for (const locale of LOCALES) {
       const pages: Array<[string, string]> = [
         ['home', `${web}/${locale}`],
@@ -84,9 +78,7 @@ test.describe('Release: one h1 per page', () => {
     await context.clearCookies();
     await page.goto(`${adminWeb}/login`);
     await expect(page).toHaveURL(new RegExp(`^${auth}`), { timeout: 30000 });
-    await page.fill('input[name="email"]', email);
-    await fillSecret(page.locator('input[name="password"]'), TEST_PASSWORD);
-    await page.click('button[data-component="button"]');
+    await submitPasswordSignIn(page, email);
     await expect(page).toHaveURL(`${adminWeb}/dashboard`, { timeout: 30000 });
 
     const host = new URL(adminWeb).hostname;

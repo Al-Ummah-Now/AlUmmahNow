@@ -1,10 +1,11 @@
 /**
- * Finds a playable video in the target environment through the public API
- * (GET /api/videos), so the suite never depends on hard-coded ids. Stage is
- * seeded separately; with no playable video the caller skips with a reason.
+ * Playback helpers. The video every playback spec uses is a seeded fixture
+ * (fixtures.ts), found by its seed title, so the suite never depends on
+ * hard-coded ids nor on what other specs uploaded.
  */
 import { expect, type Page } from '@playwright/test';
 import { target } from './targets';
+import { fixtureVideo } from './fixtures';
 
 export interface PublicVideo {
   id: string;
@@ -60,49 +61,21 @@ export async function stableVideos<T extends PublicVideo>(candidates: T[]): Prom
 
 export const NO_PLAYABLE_VIDEO = 'no public, encoded video in this environment (seed one; see CLAUDE.md "Release regressions")';
 
-/** A public, encoded, non-live video of at least `minSeconds`, or null when the env has none. */
+/**
+ * A public, encoded, non-live video of at least `minSeconds`: the seeded lecture
+ * (fixtures.ts), never whatever a shared list returns first. Null only when it is
+ * shorter than asked (no caller asks for more than the seed's 75 s).
+ */
 export async function findPlayableVideo(minSeconds = 8, opts: { excludeShorts?: boolean } = {}): Promise<PublicVideo | null> {
-  let cursor = '';
-  for (let page = 0; page < 5; page++) {
-    const res = await fetch(`${target().api}/api/videos?limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`);
-    expect(res.ok, `GET /api/videos answered ${res.status}`).toBe(true);
-    const body = (await res.json()) as { data?: PublicVideo[]; cursor?: string };
-    const playable = (body.data ?? []).filter(
-      (v) =>
-        v.uploadStatus === 'ready' &&
-        v.isPublic !== false &&
-        !v.isLive &&
-        (v.availableResolutions?.length ?? 0) > 0 &&
-        !!v.playUrl &&
-        (v.duration ?? 0) >= minSeconds &&
-        !(opts.excludeShorts && v.isShort),
-    );
-    const [stable] = await stableVideos(playable);
-    if (stable) return stable;
-    if (!body.cursor || (body.data ?? []).length === 0) return null;
-    cursor = body.cursor;
-  }
-  return null;
+  const video = await fixtureVideo('landscape');
+  expect(video.duration ?? 0, `the seeded lecture is shorter than ${minSeconds}s`).toBeGreaterThanOrEqual(minSeconds);
+  if (opts.excludeShorts) expect(video.isShort, 'the seeded lecture is listed as a Short').not.toBe(true);
+  return video;
 }
 
-/**
- * A playable video whose picture is wider than tall, read from its HLS master playlist's first
- * RESOLUTION (the API has no dimensions). Portrait videos have no theatre mode, so theatre specs
- * need one of these; stage's "QA Lecture" seeds are 640x360. Null when the env has none.
- */
+/** A playable landscape video (theatre mode needs one): the seeded 640x360 lecture. */
 export async function findLandscapeVideo(minSeconds = 8): Promise<PublicVideo | null> {
-  const res = await fetch(`${target().api}/api/videos?limit=100`);
-  expect(res.ok, `GET /api/videos answered ${res.status}`).toBe(true);
-  const body = (await res.json()) as { data?: PublicVideo[] };
-  const playable = (body.data ?? []).filter(
-    (v) => v.uploadStatus === 'ready' && v.isPublic !== false && !v.isLive && (v.availableResolutions?.length ?? 0) > 0 && !!v.playUrl && (v.duration ?? 0) >= minSeconds,
-  );
-  for (const v of (await stableVideos(playable)).concat(playable).slice(0, 20)) {
-    const master = await fetch(v.playUrl!).then((r) => (r.ok ? r.text() : ''), () => '');
-    const m = /RESOLUTION=(\d+)x(\d+)/.exec(master);
-    if (m && Number(m[1]) > Number(m[2])) return v;
-  }
-  return null;
+  return findPlayableVideo(minSeconds);
 }
 
 export const NO_LANDSCAPE_VIDEO = 'no public, encoded landscape video in this environment (stage seeds "QA Lecture" videos at 640x360)';

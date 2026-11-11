@@ -10,7 +10,9 @@
  * - resumes the earlier Bunny upload at its offset (no second TUS POST);
  * - finishes, and the channel has exactly one video for the file.
  *
- * Small file in 5 MB chunks (the `aun:tus-chunk-size` override).
+ * Small file in 5 MB chunks (the `aun:tus-chunk-size` override). The first
+ * attempt is cut after exactly two chunks (later chunks are held), so the
+ * retry always has an unfinished upload to resume (#799).
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -19,6 +21,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { target } from './targets';
 import { apiFetch, createProfile, signInAgain, signUpOnWeb, type WebUser } from './web-session';
 import { grantCreatorTier } from './creator-tier';
+import { submitNewChannelInMenu } from './account-menu';
 
 // Signs users in through the auth server: traces would hold the password.
 test.use({ trace: 'off' });
@@ -44,15 +47,7 @@ async function uploader(page: Page): Promise<{ user: WebUser; channelId: string 
   await grantCreatorTier(user);
   const channelName = `Release E2E reuse ${Date.now().toString(36)}`;
   await page.goto(`${target().web}/en`);
-  await page.getByTestId('nav-menu-trigger').click();
-  const switchChannel = page.getByTestId('nav-switch-channel');
-  await switchChannel.or(page.getByTestId('nav-create-channel')).first().waitFor();
-  if (await switchChannel.isVisible()) await switchChannel.click();
-  await page.getByTestId('nav-create-channel').click();
-  const nameInput = page.locator('[role="menu"] input[type="text"]').first();
-  await nameInput.fill(channelName);
-  await nameInput.press('Enter');
-  await expect(nameInput).toBeHidden({ timeout: 30000 });
+  await submitNewChannelInMenu(page, channelName);
   let channelId = '';
   await expect
     .poll(async () => {
@@ -111,14 +106,28 @@ test.describe('Release: retried uploads reuse their video', () => {
     watch(page, firstLog);
     page.on('dialog', (d) => void d.accept());
 
+    // The interruption must land mid-upload. Closing the context once "at least 2 chunks"
+    // were seen raced the upload itself: on a fast runner the rest (or all) of the file was
+    // already sent, so Bunny had it whole and the retry either found nothing to resume (no
+    // PATCH, offset -1) or a finished video to replace (a second video id) (#799). Now the
+    // first two chunks go through and every later chunk is held, as when the connection
+    // drops, so Bunny has exactly two chunks when the context goes away.
+    let chunksAllowed = 2;
+    await page.route(/\/api\/videos\/tus\/[^/?]+/, async (route) => {
+      if (route.request().method() === 'PATCH' && chunksAllowed-- <= 0) return; // held until the context closes
+      await route.continue();
+    });
+
     let videoId = '';
     try {
       await startUpload(page, file, title);
-      await expect.poll(() => firstLog.patches.length, { timeout: 120000 }).toBeGreaterThanOrEqual(2);
+      await expect.poll(() => firstLog.patches.length, { timeout: 120000 }).toBe(2);
       videoId = firstLog.initiates[0]?.videoId ?? '';
       expect(videoId, 'the first initiate returned no video').toBeTruthy();
       expect(firstLog.initiates[0].reused).toBe(false);
       const ackedBefore = Math.max(...firstLog.patches.map((p) => p.acked));
+      expect(ackedBefore, 'the interruption left part of the file at Bunny').toBeGreaterThan(0);
+      expect(ackedBefore, 'the interruption left part of the file at Bunny').toBeLessThan(fs.statSync(file).size);
       // Interrupt: the whole browser context goes away mid-upload
       await first.close();
 

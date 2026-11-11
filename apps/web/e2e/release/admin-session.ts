@@ -8,17 +8,14 @@
  */
 import { chromium, expect, type Browser, type BrowserContext, type Page } from '@playwright/test';
 import { promoteToAdmin } from './sink';
-import { sinkEmail, target, TEST_PASSWORD } from './targets';
-import { completeRegistration } from './web-session';
-import { fillSecret } from './secret-fill';
+import { sinkEmail, target } from './targets';
+import { completeRegistration, submitPasswordSignIn } from './web-session';
 
 export async function signInAsAdmin(page: Page, prefix = 'rel-admin'): Promise<void> {
   if (process.env.E2E_ADMIN_EMAIL && process.env.E2E_ADMIN_PASSWORD) {
     await page.goto(`${target().adminWeb}/login`);
     await expect(page).toHaveURL(new RegExp(`^${target().auth}`), { timeout: 30000 });
-    await page.fill('input[name="email"]', process.env.E2E_ADMIN_EMAIL);
-    await fillSecret(page.locator('input[name="password"]'), process.env.E2E_ADMIN_PASSWORD);
-    await page.click('button[data-component="button"]');
+    await submitPasswordSignIn(page, process.env.E2E_ADMIN_EMAIL, process.env.E2E_ADMIN_PASSWORD);
     await expect(page).toHaveURL(`${target().adminWeb}/dashboard`, { timeout: 30000 });
     return;
   }
@@ -32,9 +29,7 @@ export async function signInAsAdmin(page: Page, prefix = 'rel-admin'): Promise<v
   await page.context().clearCookies();
   await page.goto(`${target().adminWeb}/login`);
   await expect(page).toHaveURL(new RegExp(`^${target().auth}`), { timeout: 30000 });
-  await page.fill('input[name="email"]', email);
-  await fillSecret(page.locator('input[name="password"]'), TEST_PASSWORD);
-  await page.click('button[data-component="button"]');
+  await submitPasswordSignIn(page, email);
   await expect(page).toHaveURL(`${target().adminWeb}/dashboard`, { timeout: 30000 });
 }
 

@@ -9,9 +9,11 @@
  */
 import { test, expect, type BrowserContext, type Page } from '@playwright/test';
 import { target } from './targets';
-import { stableVideos, watchUrl, type PublicVideo } from './videos';
+import { watchUrl } from './videos';
 import { apiFetch, createProfile, signUpOnWeb, type Locale } from './web-session';
 import { grantCreatorTier } from './creator-tier';
+import { fixtureVideo } from './fixtures';
+import { submitNewChannelInMenu } from './account-menu';
 
 // The signed-in test registers through the auth server: its trace would hold
 // the typed password and email code. Trace off for the file.
@@ -33,12 +35,9 @@ async function answerConsent(context: BrowserContext): Promise<void> {
 
 /** A public video that belongs to a channel (legacy imports have channelId null and no Subscribe). */
 async function findChannelVideo(): Promise<ChannelVideo | null> {
-  const res = await fetch(`${target().api}/api/videos?limit=100`);
-  expect(res.ok, `GET /api/videos answered ${res.status}`).toBe(true);
-  const body = (await res.json()) as { data?: Array<PublicVideo & { channelId?: string | null }> };
-  // A long-lived video, not one a parallel spec is about to delete
-  const [video] = await stableVideos((body.data ?? []).filter((v) => !!v.channelId && v.isPublic !== false));
-  return video ? { id: video.id, channelId: video.channelId as string } : null;
+  // The seeded lecture: on the seed's channel, never deleted by a parallel spec
+  const video = await fixtureVideo('landscape');
+  return { id: video.id, channelId: video.channelId as string };
 }
 
 /** Subscribe in the channel row, by role and name: a link signed out, a toggle button signed in. */
@@ -145,15 +144,7 @@ test.describe('Release: watch-page channel row', () => {
     // menu), which puts it in the web session.
     const channelName = `Release E2E sub ${Date.now().toString(36)}`;
     await page.goto(`${target().web}/ar`);
-    await page.getByTestId('nav-menu-trigger').click();
-    const switchChannel = page.getByTestId('nav-switch-channel');
-    await switchChannel.or(page.getByTestId('nav-create-channel')).first().waitFor();
-    if (await switchChannel.isVisible()) await switchChannel.click();
-    await page.getByTestId('nav-create-channel').click();
-    const nameInput = page.locator('[role="menu"] input[type="text"]').first();
-    await nameInput.fill(channelName);
-    await nameInput.press('Enter');
-    await expect(nameInput).toBeHidden({ timeout: 30000 });
+    await submitNewChannelInMenu(page, channelName);
     await expect
       .poll(async () => {
         const res = await apiFetch(user, '/api/channels?limit=100');
