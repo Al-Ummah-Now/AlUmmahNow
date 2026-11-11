@@ -53,7 +53,7 @@ export function tally(rows: OutcomeRow[], repeat: number): TestTally[] {
     .sort((a, b) => a.passed - b.passed || a.id.localeCompare(b.id));
 }
 
-const cell = (s: string) => s.replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
+const cell = (s: string) => s.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
 
 export function issueBody(bad: TestTally[], runUrl: string, date: string): string {
   return [

@@ -23,5 +23,7 @@ describe('nightly-flaky-issue', () => {
   it('renders a table that keeps pipes out of the cells', () => {
     const body = issueBody([{ id: 'x | y', passed: 2, runs: 3, errors: ['a|b'] }], 'https://run', '2026-11-11');
     assert.match(body, /\| x \\\| y \| 2\/3 \| a\\\|b \|/);
+    // A backslash is escaped first, so it cannot un-escape the pipe after it
+    assert.ok(issueBody([{ id: String.raw`p\|q`, passed: 0, runs: 3, errors: [] }], 'u', 'd').includes(String.raw`| p\\\|q |`));
   });
 });
