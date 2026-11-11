@@ -222,7 +222,7 @@ export async function refreshBunnySession(env: LiveEnv, session: LiveSessionRow,
 	return (await readSession(d1, session.id))!;
 }
 
-export function sessionState(stream: { id: string; status: string }, session: LiveSessionRow | null, now = Date.now()): LiveStreamState {
+export function sessionState(stream: { id: string; status: string }, session: LiveSessionRow | null, now = Date.now(), bitrateKbps: number | null = null): LiveStreamState {
 	return {
 		streamId: stream.id,
 		sessionId: session?.id ?? null,
@@ -233,8 +233,26 @@ export function sessionState(stream: { id: string; status: string }, session: Li
 		vodUrl: session?.vod_ready_at ? session.vod_url : null,
 		startedAt: session?.first_segment_at ? new Date(session.first_segment_at).toISOString() : null,
 		endedAt: session?.ended_at ? new Date(session.ended_at).toISOString() : null,
-		bitrateKbps: null,
+		bitrateKbps,
 	};
+}
+
+/**
+ * The encoder's current bitrate: self-hosted from the top rendition's segments
+ * of the last 30 s (bytes / media seconds), Bunny from its last bitrate poll.
+ */
+export async function currentBitrateKbps(db: D1Database, session: LiveSessionRow, now = Date.now()): Promise<number | null> {
+	if (session.status !== 'live') return null;
+	if (session.provider === 'bunny') {
+		const row = await db.prepare("SELECT value FROM live_events WHERE session_id = ? AND kind = 'bitrate' ORDER BY at DESC LIMIT 1").bind(session.id).first<{ value: number }>();
+		return row?.value != null ? Math.round(row.value) : null;
+	}
+	const { results } = await db
+		.prepare('SELECT rendition, SUM(bytes) AS bytes, SUM(duration) AS seconds FROM live_segments WHERE session_id = ? AND received_at > ? AND bytes > 0 AND duration > 0 GROUP BY rendition')
+		.bind(session.id, now - 30_000)
+		.all<{ rendition: string; bytes: number; seconds: number }>();
+	const rates = (results ?? []).filter((r) => r.seconds > 0).map((r) => (r.bytes * 8) / r.seconds / 1000);
+	return rates.length ? Math.round(Math.max(...rates)) : null;
 }
 
 /**

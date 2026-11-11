@@ -12,7 +12,7 @@ import R2Repository from '../r2Repo';
 import { logger } from '../logger';
 import { announceLiveStarted } from '../notification-events';
 import type { LiveEnv } from './providers';
-import { endSession, provisionSession, refreshBunnySession, sessionIngest, sessionState, startSession, setOnSessionEnded } from './service';
+import { currentBitrateKbps, endSession, provisionSession, refreshBunnySession, sessionIngest, sessionState, startSession, setOnSessionEnded } from './service';
 import { readSession, type LiveSessionRow } from './store';
 
 export interface LiveStreamRecord {
@@ -122,7 +122,8 @@ export async function streamState(env: StreamsEnv, stream: LiveStreamRecord, now
 		}
 	}
 	const fresh = session && session.status === 'live' && stream.status !== 'live' ? { ...stream, status: 'live' as const } : stream;
-	return sessionState(fresh, session, now);
+	const bitrate = session && env.SEARCH_DB ? await currentBitrateKbps(env.SEARCH_DB, session, now).catch(() => null) : null;
+	return sessionState(fresh, session, now, bitrate);
 }
 
 /** First segment / Bunny publishing: the stream is live (once), subscribers are told. */
