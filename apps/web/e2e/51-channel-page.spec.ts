@@ -112,7 +112,7 @@ test.describe('Channel header - owner', () => {
       // Owner actions: Customize / Manage videos, settings in the "More actions" menu
       const actions = header.getByTestId('channel-owner-actions');
       await expect(actions.getByTestId('channel-customize')).toHaveAttribute('href', `/${locale}/settings/channel/${main.id}/edit`);
-      await expect(actions.getByTestId('channel-manage-videos')).toHaveAttribute('href', `/${locale}/settings/channel/${main.id}/videos`);
+      await expect(actions.getByTestId('channel-manage-videos')).toHaveAttribute('href', `/${locale}/studio/${main.id}/content/videos`);
       const more = actions.getByRole('button', { name: locale === 'ar' ? 'إجراءات أخرى' : 'More actions' });
       const link = page.getByTestId('channel-settings-link');
       await clickUntil(more, async () => expect(link).toBeVisible({ timeout: 3000 }));

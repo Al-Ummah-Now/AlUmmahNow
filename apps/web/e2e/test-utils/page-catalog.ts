@@ -84,12 +84,14 @@ export function catalog(d: CatalogData): CatalogPage[] {
     { id: 'feed-anon', path: '/subscriptions', role: 'anon' },
     { id: 'subscriptions-anon', path: '/subscriptions/manage', role: 'anon' },
     { id: 'history-anon', path: '/history', role: 'anon' },
-    { id: 'analytics-anon', path: '/analytics', role: 'anon' },
+    { id: 'analytics-anon', path: '/studio/go/analytics', role: 'anon' },
     // Signed-in creator (profile + one channel)
     { id: 'upload', path: '/upload', role: 'single' },
-    { id: 'dashboard', path: '/dashboard/videos', role: 'single' },
-    { id: 'scheduled', path: '/scheduled-videos', role: 'single' },
-    { id: 'video-edit', path: `/video/${d.singleSeedVideoId}/edit`, role: 'single' },
+    // Creator pages live in Studio (old paths 301 there)
+    { id: 'dashboard', path: '/studio/go/content/videos', role: 'single' },
+    { id: 'scheduled', path: '/studio/go/content/videos?status=scheduled&view=calendar', role: 'single' },
+    { id: 'video-edit', path: `/studio/video/${d.singleSeedVideoId}/edit`, role: 'single' },
+    { id: 'studio-dashboard', path: '/studio', role: 'single' },
     { id: 'profile', path: '/profile', role: 'single' },
     { id: 'profile-edit', path: '/profile/edit', role: 'single' },
     { id: 'settings', path: '/settings', role: 'single' },
@@ -101,15 +103,15 @@ export function catalog(d: CatalogData): CatalogPage[] {
     { id: 'channel-settings-playlists', path: `${ch}/playlists`, role: 'single' },
     { id: 'channel-settings-community', path: `${ch}/community`, role: 'single' },
     { id: 'channel-settings-community-new', path: `${ch}/community/new`, role: 'single' },
-    { id: 'channel-settings-videos', path: `${ch}/videos`, role: 'single' },
-    { id: 'analytics', path: '/analytics', role: 'single' },
+    { id: 'channel-settings-videos', path: `/studio/${d.singleChannelId}/content/videos`, role: 'single' },
+    { id: 'analytics', path: '/studio/go/analytics', role: 'single' },
     { id: 'feed', path: '/subscriptions', role: 'single' },
     { id: 'subscriptions', path: '/subscriptions/manage', role: 'single' },
     { id: 'history', path: '/history', role: 'single' },
     { id: 'channels-signed-in', path: '/channels', role: 'single' },
     // Profile without a channel
     { id: 'upload-no-channel', path: '/upload', role: 'none' },
-    { id: 'analytics-no-channel', path: '/analytics', role: 'none' },
+    { id: 'analytics-no-channel', path: '/studio/go/analytics', role: 'none' },
   ];
   if (d.playlistId) pages.push({ id: 'playlist', path: `/playlist/${d.playlistId}`, role: 'anon' });
   return pages;

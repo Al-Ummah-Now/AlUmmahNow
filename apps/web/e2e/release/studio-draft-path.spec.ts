@@ -5,6 +5,9 @@ import { skipUntilStudioDeployed, studioOwner } from './studio';
 import { apiFetch } from './web-session';
 import { target } from './targets';
 
+// Sign-in pages carry the test password: never record them
+test.use({ trace: 'off', video: 'off' });
+
 const VIDEO = path.join(__dirname, '..', 'test-fixtures', 'e2e-sample.mp4');
 
 test.describe('Release: Studio draft path', () => {

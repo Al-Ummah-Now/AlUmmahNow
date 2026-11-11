@@ -8,7 +8,8 @@ import { menuTrigger, openAccountMenu, openSideDrawer, showMenuView } from './te
  * switching/creation is covered in 09, account switching in 11.
  */
 
-const SIGNED_IN_LINKS = ['analytics', 'settings'];
+// Analytics lives in Studio (the creator home)
+const SIGNED_IN_LINKS = ['studio', 'settings'];
 
 test.describe('Account menu - links', () => {
   test.use({ storageState: AUTH_STATE.single });
@@ -21,7 +22,7 @@ test.describe('Account menu - links', () => {
       await expect(menu.locator(`a[role="menuitem"][href="/en/${path}"]`)).toBeVisible();
     }
     await expect(menu.getByRole('menuitem', { name: 'Settings', exact: true })).toHaveAttribute('href', '/en/settings');
-    await expect(menu.getByRole('menuitem', { name: 'Analytics', exact: true })).toHaveAttribute('href', '/en/analytics');
+    await expect(menu.getByRole('menuitem', { name: 'Studio', exact: true })).toHaveAttribute('href', '/en/studio');
   });
 
   for (const [path, heading] of [
@@ -41,7 +42,7 @@ test.describe('Account menu - links', () => {
   test('NAV-052 Arabic menu links use the Arabic locale and labels', async ({ page }) => {
     await page.goto('/ar');
     const menu = await openAccountMenu(page);
-    await expect(menu.getByRole('menuitem', { name: 'التحليلات', exact: true })).toHaveAttribute('href', '/ar/analytics');
+    await expect(menu.getByRole('menuitem', { name: 'الاستوديو', exact: true })).toHaveAttribute('href', '/ar/studio');
     await expect(menu.getByRole('menuitem', { name: 'الإعدادات', exact: true })).toHaveAttribute('href', '/ar/settings');
   });
 
