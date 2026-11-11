@@ -146,7 +146,9 @@ test.describe('Release: the upload page shows and follows the chosen channel', (
       await page.getByTestId(`upload-channel-option-${channelB}`).click();
       await page.getByTestId('upload-channel-switch-confirm').click();
       await expect(picker).toHaveAttribute('data-channel-id', channelB);
-      await expect(page.getByTestId('batch-queue')).toHaveAttribute('data-total', '1');
+      // The queued file is added again on B (its placeholder video is now on B)
+      await expect(page.getByTestId('batch-queue')).toHaveAttribute('data-total', '1', { timeout: 60000 });
+      await expect(picker).toHaveAttribute('data-disabled', 'false');
     } finally {
       await page.goto('about:blank');
       for (const u of uploads) {

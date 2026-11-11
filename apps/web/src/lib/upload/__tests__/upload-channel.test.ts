@@ -6,6 +6,7 @@
 import {
   channelChangeState,
   initialUploadChannel,
+  requeueableRows,
   readRememberedUploadChannel,
   rememberUploadChannel,
   roleOn,
@@ -96,6 +97,8 @@ describe('channelChangeState', () => {
   it('asks first when files are chosen but not started', () => {
     expect(channelChangeState({ ...idle, singleHasFile: true })).toBe('confirm');
     expect(channelChangeState({ ...idle, rows: [{ status: 'pending' }] })).toBe('confirm');
+    // Adding to the batch creates the placeholder video at once: still only queued
+    expect(channelChangeState({ ...idle, rows: [{ status: 'pending', videoId: 'v0', bytesUploaded: 0 }] })).toBe('confirm');
     expect(channelChangeState({ ...idle, rows: [{ status: 'completed', videoId: 'v1' }, { status: 'cancelled', videoId: 'v2' }] })).toBe('confirm');
     expect(channelChangeState({ ...idle, rows: [{ status: 'failed' }] })).toBe('confirm');
   });
@@ -106,7 +109,20 @@ describe('channelChangeState', () => {
     for (const status of ['initiating', 'uploading', 'paused', 'processing']) {
       expect(channelChangeState({ ...idle, rows: [{ status }] })).toBe('locked');
     }
+    expect(channelChangeState({ ...idle, rows: [{ status: 'pending', videoId: 'v0', bytesUploaded: 1024 }] })).toBe('locked');
     // A failed row whose video exists still belongs to its channel
     expect(channelChangeState({ ...idle, rows: [{ status: 'failed', videoId: 'v1' }] })).toBe('locked');
+  });
+});
+
+describe('requeueableRows', () => {
+  it('moves only queued rows with nothing sent', () => {
+    const rows = [
+      { id: 'a', status: 'pending', videoId: 'v1', bytesUploaded: 0 },
+      { id: 'b', status: 'pending', videoId: 'v2', bytesUploaded: 10 },
+      { id: 'c', status: 'completed', videoId: 'v3', bytesUploaded: 99 },
+      { id: 'd', status: 'pending' },
+    ];
+    expect(requeueableRows(rows).map((r) => r.id)).toEqual(['a', 'd']);
   });
 });
