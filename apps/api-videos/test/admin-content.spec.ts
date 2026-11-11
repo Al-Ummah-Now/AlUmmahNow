@@ -11,6 +11,7 @@ import { Hono } from 'hono';
 import { fromHono } from 'chanfana';
 import { applySuspensionHold, deletionDaysLeft, deletionStatusOf, isPurgeDue, liftSuspensionHold, MessageType, purgeAfterOf, VIDEOS_BANNED_CODE } from '@al-ummah/shared-types';
 import { canViewPlaylist } from '../src/lib/playlists';
+import { ownershipCompleteKey } from '@al-ummah/shared-types';
 import adminRouter from '../src/routers/admin.router';
 import { withSearchSync } from '../src/lib/search/sync';
 import { runOwnershipPass } from '../src/lib/search/ownership';
@@ -602,6 +603,26 @@ describe('comments index', () => {
 });
 
 describe('videos bans (users)', () => {
+	it('a user\'s page answers from the ownership index while a pass rebuilds it, never scanning the buckets (INV-01)', async () => {
+		const { db, raw, call } = await setup();
+		// The state QA was in on 2026-11-11 (#860): the video and channel passes not marked complete
+		for (const kind of ['video', 'channel'] as const) db.db.prepare('DELETE FROM search_meta WHERE key = ?').run(ownershipCompleteKey(kind));
+		let listed = 0;
+		for (const bucket of [raw.videos, raw.channels]) {
+			const list = bucket.list.bind(bucket);
+			bucket.list = (async (...args: Parameters<typeof list>) => {
+				listed += 1;
+				return list(...args);
+			}) as typeof bucket.list;
+		}
+		const res = await call('GET', `/users/${OWNER}`);
+		assert.equal(res.status, 200, JSON.stringify(res.body));
+		const detail = res.body.result;
+		assert.deepEqual(detail.channels.map((c: { id: string }) => c.id), ['ch1'], 'the owned channel, from the index');
+		assert.equal(detail.counts.videos, 2, 'video count, from the index');
+		assert.equal(listed, 0, 'no full listing of the videos or channels bucket on a read');
+	});
+
 	it('blocks a banned user\'s writes and profile, keeps public reads, and hides their content', async () => {
 		const { env, raw, call, jobOf } = await setup();
 		const banned = publicApp(env, OWNER);
