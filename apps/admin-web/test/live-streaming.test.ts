@@ -214,16 +214,14 @@ describe('live streaming: page render', () => {
       overrides: [{ channelId: 'ch_1', channelName: 'Test channel', provider: 'bunny' as const, note: null, updatedBy: 'a', updatedAt: '2026-11-11T00:00:00Z' }],
     };
     const render = (locale: 'en' | 'ar', canManage: boolean) => {
-      const Provider = I18nProvider as unknown as React.FC<{ locale: string; theme: string; children?: React.ReactNode }>;
-      return renderToStaticMarkup(
-        React.createElement(Provider, { locale, theme: 'light' },
-          React.createElement(LiveStreamingView as unknown as React.FC<Record<string, unknown>>, {
-            initial: { view, active: [], recent: [], comparison: null, audit: [] },
-            loadFailed: false,
-            range: { from: '2026-11-01', to: '2026-11-11', tests: false },
-            canManage,
-          })),
-      );
+      // Casts as in confirm-dialog.test.ts: the linked install has two @types/react
+      const child = React.createElement(LiveStreamingView as never, {
+        initial: { view, active: [], recent: [], comparison: null, audit: [] },
+        loadFailed: false,
+        range: { from: '2026-11-01', to: '2026-11-11', tests: false },
+        canManage,
+      } as never);
+      return renderToStaticMarkup(React.createElement(I18nProvider as never, { locale, theme: 'light' } as never, child) as never);
     };
     const html = render('en', true);
     assert.ok(html.includes(en.live.appliesNote));
