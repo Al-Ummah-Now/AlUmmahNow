@@ -1,5 +1,5 @@
 // pnpm --filter @al-ummah/app-icons build crop --candidates <dir> --logo <logo.png>   (refresh assets/crops)
-// pnpm --filter @al-ummah/app-icons build --app <id> --out <dir> [--base /icons/] [--legacy-png]
+// pnpm --filter @al-ummah/app-icons build --app <id> --out <dir> [--base /icons/]
 // pnpm --filter @al-ummah/app-icons build --app <id> --format ts --out <file.ts>
 // pnpm --filter @al-ummah/app-icons build --app tools --format ico --out <app-icon.ico>
 // pnpm --filter @al-ummah/app-icons build --sheet <file.html>
@@ -22,7 +22,7 @@ if (args[0] === 'crop') {
   mkdirSync(CROPS, { recursive: true });
   for (const app of APP_IDS) {
     const src = sources[app];
-    const crop = src === 'logo' ? await logoCrop(logo) : await cropFile(join(dir, src));
+    const crop = src === 'logo' ? await logoCrop(logo) : await cropFile(join(dir, src), app);
     // stored at 512 px (the largest output), lossless
     await sharp(crop).resize(512, 512, { kernel: 'lanczos3' }).webp({ lossless: true, effort: 6 }).toFile(join(CROPS, `${app}.webp`));
     console.log(`${app.padEnd(14)} <- ${src}`);
@@ -40,7 +40,7 @@ if (sheet) {
 const app = flag('app') as AppId | undefined;
 const outArg = flag('out');
 if (!app || !APP_IDS.includes(app) || !outArg) {
-  console.error(`usage: crop | --app <${APP_IDS.join('|')}> --out <dir|file> [--format files|ts|ico] [--base /icons/] [--start-url /] [--legacy-png] | --sheet <file.html>`);
+  console.error(`usage: crop | --app <${APP_IDS.join('|')}> --out <dir|file> [--format files|ts|ico] [--base /icons/] [--start-url /] | --sheet <file.html>`);
   process.exit(2);
 }
 const out = resolve(cwd, outArg);
@@ -50,7 +50,7 @@ if (flag('format') === 'ico') {
   console.log(`wrote ${out}`);
   process.exit(0);
 }
-const files = await buildApp(app, { base: flag('base'), startUrl: flag('start-url'), legacyPng: args.includes('--legacy-png') });
+const files = await buildApp(app, { base: flag('base'), startUrl: flag('start-url') });
 if (flag('format') === 'ts') {
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, asModule(app, files));
