@@ -55,7 +55,8 @@ describe('StudioFrame', () => {
   it('offers no Upload to a moderator', () => {
     frame('moderator');
     expect(screen.queryByText('Upload')).toBeNull();
-    expect(screen.queryByTestId('studio-nav-content')).toBeNull();
+    // Content opens on Live, the only tab a moderator has
+    expect(screen.getByTestId('studio-nav-content')).toHaveAttribute('href', '/en/studio/c1/content/live');
   });
 
   it('marks the current page and tab', () => {

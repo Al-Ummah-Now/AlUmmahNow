@@ -49,8 +49,8 @@ export const STUDIO_NAV: readonly StudioNavItem[] = [
     requires: [],
     tabs: [
       { id: 'videos', requires: ['video.view_private'] },
-      // No creator page for live streams or comment moderation yet: hidden until built
-      { id: 'live', requires: ['live.manage', 'live.moderate'], available: false },
+      // Live streams (either provider, D3); a stream's Go live page needs live.manage
+      { id: 'live', requires: ['live.manage', 'live.moderate'] },
       { id: 'posts', requires: ['post.manage'] },
     ],
   },
@@ -117,6 +117,12 @@ export function checkPath(role: StudioRole, segments: readonly string[]): PathAc
   const tab = item.tabs.find((candidate) => candidate.id === tabId);
   if (!tab || tab.available === false) return { status: 'unknown' };
   if (!meets(role, tab.requires)) return { status: 'forbidden' };
+
+  // A stream's Go live page (content/live/{streamId}) shows encoder settings
+  if (item.id === 'content' && tab.id === 'live' && segments.length > 2) {
+    if (segments.length !== 3) return { status: 'unknown' };
+    if (!can(role, 'live.manage')) return { status: 'forbidden' };
+  }
 
   // Per-video pages under the Videos tab have their own capability
   if (item.id === 'content' && tab.id === 'videos' && action) {

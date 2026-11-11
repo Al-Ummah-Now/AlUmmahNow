@@ -83,8 +83,8 @@ export async function announceLiveStarted(
 		entityId: stream.id,
 		isHighlight: true,
 		params: { channelName: await channelName(env, stream.channelId), streamTitle: stream.title || '' },
-		// The live watch page `/live/{id}` is Story 29.17; link to the live listing until then
-		actionUrl: `/live`,
+		// The live watch page (web /[locale]/live/[id])
+		actionUrl: `/live/${stream.id}`,
 		actorUserId: stream.userId,
 	});
 }

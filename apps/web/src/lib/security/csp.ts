@@ -18,6 +18,12 @@
 
 export const CSP_REPORT_PATH = '/api/security/csp-report';
 
+/**
+ * Self-hosted live edges (api-videos LIVE_PUBLIC_HOST per environment): live
+ * HLS playlists/segments, recordings and the /time clock for QoE latency.
+ */
+export const LIVE_EDGE_ORIGINS = ['https://live.alummahnow.net', 'https://live.stage.alummahnow.net', 'https://live.qa.alummahnow.net'] as const;
+
 export interface CspEnv {
   apiUrl?: string;
   websocketUrl?: string;
@@ -85,6 +91,7 @@ export function buildContentSecurityPolicy({ isDevelopment, insecureOrigin = fal
     bunny,
     apiOrigin,
     authOrigin,
+    ...LIVE_EDGE_ORIGINS,
     ...(isDevelopment
       ? ['http://127.0.0.1:*', 'http://localhost:*', 'ws://localhost:*', 'wss://localhost:*', 'ws://127.0.0.1:*']
       : websocketOrigins(env.websocketUrl)),
@@ -103,7 +110,7 @@ export function buildContentSecurityPolicy({ isDevelopment, insecureOrigin = fal
     // Inline event-handler attributes are never needed: React attaches handlers via addEventListener.
     "script-src-attr 'none'",
     "style-src 'self' 'unsafe-inline' https://vjs.zencdn.net https://cdnjs.cloudflare.com",
-    `media-src 'self' https://cdn.bunny.net https://bunny-cdn.b-cdn.net https://*.b-cdn.net ${MEDIA_HOSTS.join(' ')} blob:`,
+    `media-src 'self' https://cdn.bunny.net https://bunny-cdn.b-cdn.net https://*.b-cdn.net ${MEDIA_HOSTS.join(' ')} ${LIVE_EDGE_ORIGINS.join(' ')} blob:`,
     `connect-src ${Array.from(new Set(connectSrc)).join(' ')}`,
     "img-src 'self' data: https: blob:",
     "font-src 'self' data: https://cdnjs.cloudflare.com",

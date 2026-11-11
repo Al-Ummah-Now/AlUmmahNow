@@ -2300,6 +2300,8 @@ export interface AppTranslations {
    * Explore page (Epic 29, Story 29.7)
    */
   studio: import('./i18n-studio').StudioTranslations;
+  /** Live watch page (web /[locale]/live/[id]) */
+  liveWatch: import('./i18n-live').LiveWatchTranslations;
   explore: {
     title: string;
     subtitle: string;

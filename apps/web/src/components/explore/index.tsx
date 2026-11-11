@@ -17,8 +17,7 @@ export default function Explore() {
     <div dir="ltr" lang="en" className="w-full">
       <ExploreBody
         model={model}
-        // The live watch page (/live/{id}) ships with story 29.17; until then cards open the live listing.
-        renderLiveCard={stream => <LiveStreamCard stream={stream} variant="compact" onPlay={() => router.push('/en/live')} />}
+        renderLiveCard={stream => <LiveStreamCard stream={stream} variant="compact" onPlay={() => router.push(`/en/live/${encodeURIComponent(stream.id)}`)} />}
       />
     </div>
   );

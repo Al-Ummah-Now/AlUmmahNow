@@ -18,8 +18,7 @@ export default function ExploreRTL() {
     <div dir="rtl" lang="ar" className="w-full">
       <ExploreBody
         model={model}
-        // The live watch page (/live/{id}) ships with story 29.17; until then cards open the live listing.
-        renderLiveCard={stream => <LiveStreamCardRTL stream={stream} variant="compact" onPlay={() => router.push('/ar/live')} />}
+        renderLiveCard={stream => <LiveStreamCardRTL stream={stream} variant="compact" onPlay={() => router.push(`/ar/live/${encodeURIComponent(stream.id)}`)} />}
       />
     </div>
   );

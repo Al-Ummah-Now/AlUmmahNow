@@ -7,6 +7,7 @@
  *   GET  /api/live-streams/:id/ingest   owner: encoder settings (provisions a session)
  *   POST /api/live-streams/:id/start    owner: Go live
  *   POST /api/live-streams/:id/end      owner: End stream (VOD follows)
+ *   DELETE /api/live-streams/:id        owner: delete (ends a session still open)
  *   POST /api/live-streams/:id/qoe      sampled player beacon
  */
 import { Str } from 'chanfana';
@@ -18,7 +19,7 @@ import { CHANNEL_SUSPENDED_CODE } from '../../middleware/auth';
 import { liveStreamIsFrozen } from '../../lib/admin/frozen';
 import { LiveProviderError } from '../../lib/live/providers';
 import { LiveRefusedError } from '../../lib/live/service';
-import { readStream, streamEnd, streamIngest, streamStart, streamState, type LiveStreamRecord, type StreamsEnv } from '../../lib/live/streams';
+import { deleteStream, readStream, streamEnd, streamIngest, streamStart, streamState, type LiveStreamRecord, type StreamsEnv } from '../../lib/live/streams';
 import { readLiveRouting } from '../../lib/live/store';
 import { parseBeacon, QoeRejected, recordBeacon } from '../../lib/live/qoe';
 import { bunnyDirectoryToken, signedBunnyUrl, tokenExpiry } from '../../lib/bunny-signing';
@@ -120,7 +121,8 @@ export class LiveStreamStateGet extends OptionalAuthRoute {
 		c.header('cache-control', 'no-store');
 		return {
 			success: true,
-			result: { ...state, vodUrl: await signVod(c, state.vodUrl), provider: stream.provider ?? null, qoe: { sampleRate: settings?.qoeSampleRate ?? 0 } },
+			// serverNow: the player's clock offset for glass-to-glass latency (QoE beacons)
+			result: { ...state, vodUrl: await signVod(c, state.vodUrl), provider: stream.provider ?? null, qoe: { sampleRate: settings?.qoeSampleRate ?? 0 }, serverNow: Date.now() },
 		};
 	}
 }
@@ -183,6 +185,23 @@ export class LiveStreamEnd extends AuthenticatedRoute {
 		if (stream instanceof Response) return stream;
 		const out = await streamEnd(env(c), stream, 'owner');
 		return { success: true, result: { state: await streamState(env(c), out.stream) } };
+	}
+}
+
+export class LiveStreamDelete extends AuthenticatedRoute {
+	schema = addAuthToSchema({
+		tags: ['Live Streams'],
+		summary: 'Delete a live stream (owner)',
+		description: '🔒 Ends the stream\'s session when one is still open (provisioned or live), then removes the stream. Analytics rows stay for the provider comparison.',
+		request: { params: Params },
+		responses: { '200': Ok(z.object({ deleted: z.boolean() }), 'Deleted'), '403': Err('Not the owner'), '404': Err('Not found') },
+	});
+	async handle(c: AppContext) {
+		const { params } = await this.getValidatedData<typeof this.schema>();
+		const stream = await ownedStream(c, params.id, this.getUserId(c));
+		if (stream instanceof Response) return stream;
+		await deleteStream(env(c), stream);
+		return { success: true, result: { deleted: true } };
 	}
 }
 
