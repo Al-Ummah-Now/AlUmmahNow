@@ -21,6 +21,10 @@ export const MAX_INDEX_PAGE = 100;
  * index column); beyond it the sort covers the channel's newest videos only.
  */
 export const MAX_IN_MEMORY_SORT = 200;
+/** Smallest index page read while filling (a small `limit` still reads ahead). */
+const MIN_INDEX_PAGE = 24;
+/** Most ids loaded to fill one response. */
+const MAX_FILL_IDS = 500;
 /** Object loads run at once. */
 const LOAD_CONCURRENCY = 25;
 
@@ -77,16 +81,36 @@ export async function channelVideosFromIndex<T>(
 		return listed;
 	};
 
+	// The index filters visibility in SQL, so `isListed` rarely drops a video
+	// (a stale row). Read ids in pages larger than a small `limit`, load them in
+	// small batches, and stop at the id that fills the page: the cursor is the
+	// position after the last id consumed, so nothing is skipped or repeated.
 	const filledPages = async (): Promise<ChannelVideoIndexResult<T> | null> => {
 		const videos: T[] = [];
+		const pageSize = Math.min(MAX_INDEX_PAGE, Math.max(limit, MIN_INDEX_PAGE));
 		let next = offset;
-		for (let page = 0; page < MAX_FILL_PAGES; page++) {
-			const ids = await channelVideoIds(env, channelId, { ...query, sort: query.sort ?? 'latest', offset: next, limit });
+		let read = 0;
+		for (let page = 0; page < MAX_FILL_PAGES && read < MAX_FILL_IDS; page++) {
+			const ids = await channelVideoIds(env, channelId, { ...query, sort: query.sort ?? 'latest', offset: next, limit: pageSize });
 			if (!ids) return null;
-			videos.push(...(await loadListed(ids.ids)));
-			next += limit;
-			if (!ids.hasMore) return { videos, cursor: '' };
+			let consumed = 0;
+			while (consumed < ids.ids.length && videos.length < limit) {
+				const batch = ids.ids.slice(consumed, consumed + Math.min(LOAD_CONCURRENCY, Math.max(limit - videos.length, 4)));
+				const loaded = await Promise.all(batch.map(id => load(id)));
+				read += batch.length;
+				for (const video of loaded) {
+					consumed++;
+					if (isListed(video)) videos.push(video);
+					if (videos.length >= limit) break;
+				}
+			}
+			next += consumed;
+			const more = consumed < ids.ids.length || ids.hasMore;
+			if (!more) return { videos, cursor: '' };
 			if (videos.length >= limit) break;
+		}
+		if (videos.length < limit) {
+			logger.warn('[ChannelVideoIndex] Page not filled within the read bound', { channelId, limit, returned: videos.length, read });
 		}
 		return { videos, cursor: `${INDEX_CURSOR_PREFIX}${next}` };
 	};

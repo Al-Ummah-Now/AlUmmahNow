@@ -5,6 +5,7 @@ import { LiveStream as BusinessLiveStream, PaginationResponse, ResponseError } f
 import { LiveStreamView } from "../../lib/model/view";
 import R2Repository from "../../lib/r2Repo";
 import { logger } from '../../lib/logger';
+import { scanFill } from '../../lib/listFill';
 
 export class LiveStreamsList extends OptionalAuthRoute {
 	schema = {
@@ -64,53 +65,38 @@ export class LiveStreamsList extends OptionalAuthRoute {
 			type LiveStreamType = z.infer<typeof BusinessLiveStream>;
 			const repository = new R2Repository<LiveStreamType>(bucket);
 
-			// List live streams with livestream: prefix
-			// Since R2Repository doesn't support prefix directly, we'll need to use the R2 bucket directly for listing
-			const listResult = await bucket.list({
-				prefix: "livestream:",
-				cursor: cursor || undefined,
-				limit,
-			});
-
-			let streams: LiveStreamType[] = [];
-
-			// Fetch the actual stream data
-			if (listResult.objects) {
-				for (const obj of listResult.objects) {
-					if (obj.key && obj.key.startsWith('livestream:')) {
-						try {
-							const stream = await repository.getObject(obj.key);
-							if (stream) {
-								streams.push(stream);
-							}
-						} catch (error) {
-							logger.error(`Error loading stream ${obj.key}:`, error);
-							// Continue with other streams
-						}
-					}
-				}
-			}
-
-			// Apply filters
-			if (status) {
-				streams = streams.filter(stream => stream.status === status);
-			}
-			if (channelId) {
-				streams = streams.filter(stream => stream.channelId === channelId);
-			}
-
-			// Filter out private streams for non-authenticated users
+			// Filled page of live streams (lib/listFill.ts): filtering a cut listing
+			// returned empty pages with a cursor when the first streams were private,
+			// hidden or of another status/channel.
 			const auth = c.get('auth');
-			// Hidden streams (suspended channel, banned owner, moderation) reach their owner only
-			streams = streams.filter(stream => !(stream as { isHidden?: boolean }).isHidden || (!!auth && stream.userId === auth.userId));
-			if (!auth) {
-				streams = streams.filter(stream => !stream.isPrivate);
-			} else {
-				// Show private streams only if user owns the channel
-				streams = streams.filter(stream => 
-					!stream.isPrivate || stream.userId === auth.userId
-				);
-			}
+			const isListed = (stream: LiveStreamType | null): stream is LiveStreamType => {
+				if (!stream) return false;
+				if (status && stream.status !== status) return false;
+				if (channelId && stream.channelId !== channelId) return false;
+				const isOwner = !!auth && stream.userId === auth.userId;
+				// Hidden streams (suspended channel, banned owner, moderation) reach their owner only
+				if ((stream as { isHidden?: boolean }).isHidden && !isOwner) return false;
+				// Private streams only for their owner
+				if (stream.isPrivate && !isOwner) return false;
+				return true;
+			};
+			const scan = await scanFill<LiveStreamType>({
+				bucket,
+				cursor,
+				limit,
+				prefix: "livestream:",
+				load: async key => {
+					try {
+						return await repository.getObject(key);
+					} catch (error) {
+						logger.error(`Error loading stream ${key}:`, error);
+						return null;
+					}
+				},
+				isListed,
+				label: 'LiveStreamsList',
+			});
+			const streams = scan.items;
 
 			// Transform to view models
 			const streamViews = streams.map(stream => ({
@@ -139,7 +125,7 @@ export class LiveStreamsList extends OptionalAuthRoute {
 			return {
 				success: true,
 				result: {
-					cursor: listResult.truncated ? listResult.cursor || "" : "",
+					cursor: scan.cursor,
 					limit,
 					data: streamViews,
 				},
