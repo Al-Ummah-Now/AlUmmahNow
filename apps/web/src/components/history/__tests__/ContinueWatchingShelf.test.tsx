@@ -59,7 +59,7 @@ describe('ContinueWatchingShelf (#242)', () => {
 
     const tiles = screen.getAllByTestId('continue-watching-video');
     expect(tiles).toHaveLength(2);
-    expect(tiles[0]).toHaveAttribute('href', '/en/video?vid=a');
+    expect(tiles[0]).toHaveAttribute('href', '/en/video/a');
     const bar = screen.getAllByRole('progressbar')[0];
     expect(bar).toHaveAttribute('aria-valuenow', '42');
     expect(bar).toHaveAccessibleName('42% watched');
@@ -69,7 +69,7 @@ describe('ContinueWatchingShelf (#242)', () => {
     mockLang = 'ar';
     render(<ContinueWatchingShelf />);
     expect(await screen.findByRole('heading', { name: 'متابعة المشاهدة' })).toBeInTheDocument();
-    expect(screen.getAllByTestId('continue-watching-video')[0]).toHaveAttribute('href', '/ar/video?vid=a');
+    expect(screen.getAllByTestId('continue-watching-video')[0]).toHaveAttribute('href', '/ar/video/a');
   });
 
   it('renders nothing for a signed-out visitor and never calls the API', () => {
