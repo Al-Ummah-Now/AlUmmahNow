@@ -34,6 +34,14 @@ export function HeroThumb({ video, href, label, alt, children }: HeroThumbProps)
   const src = video.thumbnailUrl ? resolveUrl(video.thumbnailUrl) : '';
   // Keyed by src: a new image is measured again
   const [measured, setMeasured] = useState<{ src: string; aspect?: number } | null>(null);
+  // The hero image is server-rendered with a high fetch priority, so it often finishes loading
+  // before React hydrates, and React never replays that load event: a vertical image in a
+  // landscape-sized video then stayed 'cover' (cropped to a strip). Measure on mount too.
+  const measure = (img: HTMLImageElement | null, loaded = false) => {
+    if (!img || !(loaded || img.complete) || img.naturalWidth <= 0 || img.naturalHeight <= 0) return;
+    const aspect = aspectOf(img.naturalWidth, img.naturalHeight);
+    setMeasured((m) => (m?.src === src && m.aspect === aspect ? m : { src, aspect }));
+  };
   const fit = heroThumbFit(video, measured?.src === src ? measured.aspect : undefined);
   const width = video.width && video.width > 0 ? video.width : 1280;
   const height = video.height && video.height > 0 ? video.height : 720;
@@ -58,7 +66,8 @@ export function HeroThumb({ video, href, label, alt, children }: HeroThumbProps)
           loading="eager"
           decoding="async"
           data-testid="hero-thumb-image"
-          onLoad={(e) => setMeasured({ src, aspect: aspectOf(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight) })}
+          ref={measure}
+          onLoad={(e) => measure(e.currentTarget, true)}
         />
       )}
       {children}

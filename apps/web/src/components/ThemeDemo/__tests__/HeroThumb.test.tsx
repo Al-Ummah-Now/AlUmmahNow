@@ -60,6 +60,24 @@ describe('HeroThumb', () => {
     expect(screen.getAllByRole('img')).toHaveLength(1);
   });
 
+  it('measures an image that finished loading before hydration (no load event comes)', () => {
+    const proto = HTMLImageElement.prototype;
+    const saved = ['complete', 'naturalWidth', 'naturalHeight'].map((k) => [k, Object.getOwnPropertyDescriptor(proto, k)] as const);
+    Object.defineProperty(proto, 'complete', { configurable: true, get: () => true });
+    Object.defineProperty(proto, 'naturalWidth', { configurable: true, get: () => 720 });
+    Object.defineProperty(proto, 'naturalHeight', { configurable: true, get: () => 1280 });
+    try {
+      render(<HeroThumb video={video({ width: 1920, height: 1080 })} href="/x" alt="Loaded early" />);
+      expect(screen.getByTestId('hero-thumb')).toHaveAttribute('data-fit', 'contain');
+      expect(screen.getByTestId('hero-thumb-backdrop')).toBeInTheDocument();
+    } finally {
+      for (const [k, d] of saved) {
+        if (d) Object.defineProperty(proto, k, d);
+        else delete (proto as unknown as Record<string, unknown>)[k];
+      }
+    }
+  });
+
   it("switches to the loaded image's own shape", () => {
     render(<HeroThumb video={video({ width: 1920, height: 1080 })} href="/x" alt="Vertical thumb" />);
     const frame = screen.getByTestId('hero-thumb');
