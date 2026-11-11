@@ -49,7 +49,7 @@ import {
   type PlaylistManagePage,
 } from '@/lib/api/playlists';
 import { reportError } from '@/lib/errors/reporter';
-import { pickLanguage } from '@/lib/format/pick-language';
+import { pairOf, pairPayload, playlistName } from '@/lib/playlists/playlist-names';
 import { getPlaylistHref } from '@/lib/playlists/playlist-utils';
 import '@/theme/playlist-tools.css';
 import BulkAddNotice, { type BulkAddOutcome } from './BulkAddNotice';
@@ -75,9 +75,14 @@ type Status = { tone: 'success' | 'error'; message: string; ref?: string } | nul
 interface Notice { key: string; outcome: BulkAddOutcome; videoIds: string[]; justCreated?: boolean }
 
 function detailsOf(meta: Meta): PlaylistDetailsValue {
+  // A playlist from before bilingual names: its name goes to the language it's written in
+  const name = pairOf(meta.title, meta.titleLocalized);
+  const about = pairOf(meta.description, meta.descriptionLocalized);
   return {
-    title: meta.title,
-    description: meta.description ?? '',
+    titleEn: name.en,
+    titleAr: name.ar,
+    descriptionEn: about.en,
+    descriptionAr: about.ar,
     isPublic: meta.isPublic,
     sortMode: meta.sortMode,
     sortField: meta.sortField,
@@ -122,10 +127,20 @@ function PlaylistItemRow({ item, index, total, manual, busy, onMove, onRemove }:
   const video = item.video;
   const title = video ? localTitle(video, lang) : p.unavailable;
   const duration = formatDuration(video?.duration);
+  // Alt+↑ / Alt+↓ anywhere on the row moves it (the bulk-rename order's shortcut)
+  const onKeyDown = (event: React.KeyboardEvent) => {
+    if (!manual || busy || !event.altKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return;
+    event.preventDefault();
+    const to = event.key === 'ArrowUp' ? index - 1 : index + 1;
+    if (to < 0 || to >= total) return;
+    onMove(index, to);
+    requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-testid="playlist-item"][data-video-id="${item.id.replace(/["\\]/g, '\\$&')}"] [data-testid="playlist-item-handle"]`)?.focus());
+  };
   return (
     <li
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform), transition }}
+      onKeyDown={onKeyDown}
       className="pl-row flex flex-wrap items-center gap-x-2 gap-y-1 p-2 sm:flex-nowrap sm:gap-3"
       data-dragging={isDragging || undefined}
       data-unavailable={video ? undefined : true}
@@ -255,15 +270,17 @@ export default function PlaylistEditor({ channelId, playlistId, initialJobId }: 
   const manual = meta?.sortMode !== 'auto';
   const inPlaylist = useMemo(() => new Set(items.map((item) => item.id)), [items]);
   const titleOf = (item: PlaylistManageItem) => (item.video ? localTitle(item.video, lang) : p.unavailable);
-  const playlistTitle = meta ? pickLanguage(meta.title, lang) : '';
+  const playlistTitle = meta ? playlistName(meta, lang) : '';
 
   // ── Details ───────────────────────────────────────────────────────────
   const saveDetails = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!details || !meta) return;
-    const title = details.title.trim();
+    const name = pairPayload({ en: details.titleEn, ar: details.titleAr });
+    const about = pairPayload({ en: details.descriptionEn, ar: details.descriptionAr });
+    const title = name.base;
     if (!title) {
-      setDetailsStatus({ tone: 'error', message: t.playlist.nameRequired });
+      setDetailsStatus({ tone: 'error', message: p.nameOneLanguage });
       return;
     }
     setSavingDetails(true);
@@ -271,12 +288,15 @@ export default function PlaylistEditor({ channelId, playlistId, initialJobId }: 
     try {
       const answer = await savePlaylist(playlistId, {
         title,
-        description: details.description.trim(),
+        // Sent whole: an emptied language is cleared (it then shows the other)
+        titleLocalized: name.localized,
+        description: about.base,
+        descriptionLocalized: about.localized,
         isPublic: details.isPublic,
         coverVideoId: cover,
       }, { channelId });
       if (answer.ok) {
-        setMeta({ ...meta, title, description: details.description.trim(), isPublic: details.isPublic, coverVideoId: cover ?? undefined });
+        setMeta({ ...meta, title, titleLocalized: name.localized, description: about.base, descriptionLocalized: about.localized, isPublic: details.isPublic, coverVideoId: cover ?? undefined });
         setDetailsStatus({ tone: 'success', message: p.detailsSaved });
       } else {
         const ref = reportError(new Error('Saving playlist details failed'), { shown: true, status: answer.status ?? undefined, extra: { step: 'playlist-details-save', playlistId } });

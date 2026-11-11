@@ -305,7 +305,7 @@ export default function ChannelVideosPage() {
               onPick={(item) => router.push(`/${locale}/video/${encodeURIComponent(item.id)}/edit`)}
               label={t.video.searchVideos ?? t.search.searchInputLabel}
               testId="channel-videos-search"
-              inputClassName="f-input w-full py-2 pe-10 ps-10"
+              inputClassName="f-input f-icon-start f-icon-end w-full py-2"
               icon={<Search className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-[var(--fanous-color-text-muted)]" size={20} aria-hidden="true" />}
             />
 

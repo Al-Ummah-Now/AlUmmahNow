@@ -132,6 +132,9 @@ export interface Playlist {
     title: string;
     name: string; // Required for compatibility with shared-types
     description?: string;
+    /** Name and description per language ('en', 'ar'); a missing language shows title/description */
+    titleLocalized?: Record<string, string>;
+    descriptionLocalized?: Record<string, string>;
     thumbnailUrl?: string;
     cover?: { videoId: string; thumbnailUrl: string }; // Derived by the API when thumbnailUrl is not set
     userId: string; // Made required to match API spec

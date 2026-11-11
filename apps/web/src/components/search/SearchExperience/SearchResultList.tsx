@@ -5,7 +5,7 @@
  * community post cards.
  */
 
-import { pickLanguage } from '@/lib/format/pick-language';
+import { playlistDescription, playlistName } from '@/lib/playlists/playlist-names';
 import React from 'react';
 import Link from '@/components/common/AppLink';
 import Image from 'next/image';
@@ -70,8 +70,9 @@ export function SearchResultCard({ item }: { item: SearchResultItem }) {
         <PlaylistCard
           {...({
             id: item.playlist.id,
-            name: pickLanguage(item.playlist.name, lang),
-            description: item.playlist.description ? pickLanguage(item.playlist.description, lang) : item.playlist.description,
+            // The viewer's language: its own name when the playlist has one, else the base name
+            name: playlistName(item.playlist, lang),
+            description: playlistDescription(item.playlist, lang) || undefined,
             thumbnailUrl: item.playlist.thumbnailUrl,
             cover: item.playlist.cover,
             videosCount: item.playlist.videosCount,

@@ -1783,6 +1783,24 @@ export interface AppTranslations {
     autoNoDrag: string;
     sortSaved: string;
     sortFailed: string;
+    dialogDescriptionSelected: string;
+    searchPlaylists: string;
+    chosenPlaylists: string;
+    removeChosen: string;
+    newWithOne: string;
+    newWithOther: string;
+    newPlaylistHelpSelected: string;
+    videosInOrder: string;
+    backToPlaylists: string;
+    namesLegend: string;
+    nameEnglish: string;
+    nameArabic: string;
+    namePlaceholderEnglish: string;
+    namePlaceholderArabic: string;
+    descriptionsLegend: string;
+    descriptionEnglish: string;
+    descriptionArabic: string;
+    nameOneLanguage: string;
   };
 
   /**

@@ -6,6 +6,7 @@
  */
 
 import { pickLanguage } from '@/lib/format/pick-language';
+import { playlistDescription, playlistName } from '@/lib/playlists/playlist-names';
 import React, { useCallback, useEffect, useState } from 'react';
 import Link from '@/components/common/AppLink';
 import { ArrowDown, ArrowUp, ListVideo, Lock, Play, Trash2 } from 'lucide-react';
@@ -145,7 +146,7 @@ export default function PlaylistView({ playlistId }: PlaylistViewProps) {
     );
   }
 
-  const title = pickLanguage(playlist.name || playlist.title || '', lang);
+  const title = playlistName(playlist, lang);
   const playAllHref = getPlayAllHref(lang, videos);
 
   return (
@@ -180,7 +181,7 @@ export default function PlaylistView({ playlistId }: PlaylistViewProps) {
                 </p>
               )}
               {playlist.description && (
-                <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-line">{pickLanguage(playlist.description, lang)}</p>
+                <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-line">{playlistDescription(playlist, lang)}</p>
               )}
               {playAllHref && (
                 <Link

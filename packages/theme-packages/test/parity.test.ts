@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { compilePackage } from '../src/compile.ts';
 import { BUILT_IN, THEMES_DIR, loadPackageDir } from '../scripts/load.ts';
+import { OPTIONAL_MATERIAL_VARS } from '../src/components.ts';
 
 const baseline = (f: string) => readFileSync(new URL(`./parity-baseline/${f}`, import.meta.url), 'utf8');
 const stripComments = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, '');
@@ -46,7 +47,11 @@ test('design tokens are byte-identical to the pre-package stylesheet (comments a
 });
 
 test('materials: every theme sets the same --r-* and --m-* values on the same selector', () => {
-  assert.deepEqual(plain(declarationMap(compiled.map((c) => c.out.materials).join(''))), plain(declarationMap(baseline('materials.css'))));
+  // Optional fields added after the conversion (OPTIONAL_MATERIAL_VARS) are not in the baseline
+  const added = new Set(OPTIONAL_MATERIAL_VARS.map(([, prop]) => prop));
+  const now = declarationMap(compiled.map((c) => c.out.materials).join(''));
+  for (const decls of now.values()) for (const prop of added) decls.delete(prop);
+  assert.deepEqual(plain(now), plain(declarationMap(baseline('materials.css'))));
 });
 
 test('body fonts: the same rules for the same selectors (font faces moved to font-faces.css)', () => {

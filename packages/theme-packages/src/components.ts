@@ -79,8 +79,19 @@ export const MATERIAL_VARS: [string, string][] = [
   ['components.player.style.ring', '--m-player-ring'],
 ];
 
+/**
+ * Optional material fields: emitted only when the package sets them (packages made before
+ * they existed keep the old look through the CSS fallback). Dialog edge: an opaque `line`
+ * drawn as a real border, so the rounded corners stay one continuous line (a translucent
+ * box-shadow ring left gaps at the corners), and a `shadow` without a ring.
+ */
+export const OPTIONAL_MATERIAL_VARS: [string, string][] = [
+  ['components.dialog.style.line', '--m-dialog-line'],
+  ['components.dialog.style.shadow', '--m-dialog-shadow'],
+];
+
 /** Names a {material.*} reference may use: the --m-* properties above, without the prefix. */
-export const MATERIAL_NAMES = new Set(MATERIAL_VARS.map(([, v]) => v).filter((v) => v.startsWith('--m-')).map((v) => v.slice(4)));
+export const MATERIAL_NAMES = new Set([...MATERIAL_VARS, ...OPTIONAL_MATERIAL_VARS].map(([, v]) => v).filter((v) => v.startsWith('--m-')).map((v) => v.slice(4)));
 
 /** Player chrome fields. `bar-pad-compact` is optional (packages made before it fall back to `bar-pad`). */
 export const PLAYER_TOKENS = [

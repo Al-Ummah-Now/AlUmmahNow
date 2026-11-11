@@ -3,6 +3,7 @@
 import Link from '@/components/common/AppLink';
 import { PlaylistCover } from '@/components/PlaylistCover';
 import { pickLanguage } from '@/lib/format/pick-language';
+import { playlistName } from '@/lib/playlists/playlist-names';
 import { useLanguage } from '@/hooks/useLanguage';
 import { Shelf } from './Shelf';
 import type { SectionPlaylist } from '../sectionData';
@@ -17,7 +18,7 @@ export function PlaylistShelf({ playlists }: { playlists: SectionPlaylist[] }) {
       items={playlists}
       getKey={(playlist) => playlist.id}
       renderItem={(playlist) => {
-        const name = pickLanguage(playlist.name || playlist.title || '', locale);
+        const name = playlistName(playlist, locale);
         const count = playlist.videosCount ?? playlist.videos?.length ?? 0;
         return (
           <Link

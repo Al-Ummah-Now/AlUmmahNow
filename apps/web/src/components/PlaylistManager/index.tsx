@@ -6,7 +6,7 @@
  * form with the video picker. Delete stays here.
  */
 
-import { pickLanguage } from '@/lib/format/pick-language';
+import { playlistName } from '@/lib/playlists/playlist-names';
 import React, { useCallback, useEffect, useState } from 'react';
 import Link from '@/components/common/AppLink';
 import { AlertTriangle, ArrowDownUp, ExternalLink, ListVideo, Lock, Pencil, Plus, Trash2 } from 'lucide-react';
@@ -62,7 +62,7 @@ export default function PlaylistManager({ channelId }: PlaylistManagerProps) {
   }, [load]);
 
   const handleDelete = async (playlist: PlaylistWithVideos) => {
-    const title = pickLanguage(playlist.name || playlist.title || '', lang);
+    const title = playlistName(playlist, lang);
     const confirmed = await confirm({
       title: t.confirmDialog.deletePlaylistTitle,
       description: t.playlist.confirmDelete.replace('{title}', title),
@@ -125,7 +125,7 @@ export default function PlaylistManager({ channelId }: PlaylistManagerProps) {
       ) : (
         <ul className={`c !p-0 ${DIVIDE}`} data-testid="playlist-manager-list">
           {playlists.map((playlist) => {
-            const title = pickLanguage(playlist.name || playlist.title || '', lang);
+            const title = playlistName(playlist, lang);
             const count = playlist.videos?.length ?? playlist.videosCount ?? 0;
             const sort = playlistSortOf(playlist);
             const editHref = managePlaylistsHref(lang, channelId, playlist.id);

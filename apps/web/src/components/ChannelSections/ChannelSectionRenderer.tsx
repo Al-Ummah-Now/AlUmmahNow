@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 import { ChannelTileRow } from '@/components/ChannelTile';
 import { getLocalizedValue } from '@al-ummah/shared-types';
-import { pickLanguage } from '@/lib/format/pick-language';
+import { playlistName } from '@/lib/playlists/playlist-names';
 import { useLanguage } from '@/hooks/useLanguage';
 import { SectionHeader } from './SectionHeader';
 import { VideoShelf } from './shelves/VideoShelf';
@@ -48,7 +48,7 @@ export function ChannelSectionRenderer({ section, channelId }: ChannelSectionRen
 
   const fallbackTitle =
     section.type === 'single_playlist' && content.playlist
-      ? pickLanguage(content.playlist.name || content.playlist.title || '', locale)
+      ? playlistName(content.playlist, locale)
       : t.channelSections.labels[sectionLabelKey(section)];
   const title = resolveSectionTitle(getLocalizedValue(section.titleLocalized, section.title, locale), fallbackTitle);
 

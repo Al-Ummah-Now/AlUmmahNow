@@ -12,7 +12,13 @@ export interface PlaylistCover {
 export interface Playlist extends Timestamps, SoftDelete, Moderation {
   id: string;
   name: string;
+  /** The API's name field (`name` is its alias) */
+  title?: string;
   description?: string;
+  /** The name per language ('en', 'ar'); a missing language shows `name`/`title` */
+  titleLocalized?: Record<string, string>;
+  /** The description per language; a missing language shows `description` */
+  descriptionLocalized?: Record<string, string>;
   userId: string;
   channelId?: string;
   /** The creator's custom image only; never derived */
@@ -36,6 +42,8 @@ export interface Playlist extends Timestamps, SoftDelete, Moderation {
 export interface PlaylistCreateRequest {
   name: string;
   description?: string;
+  titleLocalized?: Record<string, string>;
+  descriptionLocalized?: Record<string, string>;
   channelId?: string;
   thumbnailUrl?: string;
   isPublic?: boolean;
@@ -44,6 +52,9 @@ export interface PlaylistCreateRequest {
 export interface PlaylistUpdateRequest {
   name?: string;
   description?: string;
+  /** Replaces the stored names ({} clears them) */
+  titleLocalized?: Record<string, string>;
+  descriptionLocalized?: Record<string, string>;
   thumbnailUrl?: string;
   isPublic?: boolean;
 }

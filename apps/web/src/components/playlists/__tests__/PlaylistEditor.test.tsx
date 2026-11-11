@@ -61,6 +61,18 @@ it('Move down saves the new order at once; the stored order wins', async () => {
   expect(screen.getByRole('button', { name: 'Move Lesson b up' })).toBeDisabled();
 });
 
+it('Alt+Down on a row moves it (the bulk-rename shortcut) and saves', async () => {
+  await renderEditor();
+  (reorderPlaylistVideos as jest.Mock).mockResolvedValue({ ok: true, data: { videos: ['b', 'a', 'gone'] } });
+  const row = screen.getAllByTestId('playlist-item')[0];
+  await act(async () => { fireEvent.keyDown(row, { key: 'ArrowDown', altKey: true }); });
+  expect(reorderPlaylistVideos).toHaveBeenCalledWith('pl', ['b', 'a', 'gone'], { channelId: 'ch' });
+  // Without Alt the arrows are left to the drag handle
+  (reorderPlaylistVideos as jest.Mock).mockClear();
+  await act(async () => { fireEvent.keyDown(screen.getAllByTestId('playlist-item')[0], { key: 'ArrowDown' }); });
+  expect(reorderPlaylistVideos).not.toHaveBeenCalled();
+});
+
 it('a failed reorder puts the order back and says so', async () => {
   await renderEditor();
   (reorderPlaylistVideos as jest.Mock).mockResolvedValue({ ok: false, status: 500 });
@@ -115,14 +127,32 @@ it('add videos: the picker marks what is already in it, then one bulk add and a 
   expect(order()).toEqual(['a', 'b', 'gone', 'd']);
 });
 
+it('details: an existing single-language name fills its language; the other stays empty', async () => {
+  await renderEditor();
+  expect(screen.getByRole('textbox', { name: 'Name (English)' })).toHaveValue('Tafsir');
+  expect(screen.getByRole('textbox', { name: 'Name (Arabic)' })).toHaveValue('');
+});
+
+it('details: English and Arabic names and descriptions are saved separately', async () => {
+  await renderEditor({ titleLocalized: { en: 'Tafsir', ar: 'تفسير' }, description: 'About', descriptionLocalized: { en: 'About' } });
+  expect(screen.getByRole('textbox', { name: 'Name (Arabic)' })).toHaveValue('تفسير');
+  (savePlaylist as jest.Mock).mockResolvedValue({ ok: true, data: { playlist: {} } });
+  fireEvent.change(screen.getByRole('textbox', { name: 'Name (Arabic)' }), { target: { value: 'التفسير' } });
+  fireEvent.change(screen.getByRole('textbox', { name: 'Description (Arabic)' }), { target: { value: 'نبذة' } });
+  await act(async () => { fireEvent.click(screen.getByTestId('playlist-details-save')); });
+  expect(savePlaylist).toHaveBeenCalledWith('pl', expect.objectContaining({
+    title: 'Tafsir', titleLocalized: { en: 'Tafsir', ar: 'التفسير' }, description: 'About', descriptionLocalized: { en: 'About', ar: 'نبذة' },
+  }), { channelId: 'ch' });
+});
+
 it('details: saves name, visibility and the chosen cover video', async () => {
   await renderEditor();
   (savePlaylist as jest.Mock).mockResolvedValue({ ok: true, data: { playlist: {} } });
-  fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Tafsir 2' } });
+  fireEvent.change(screen.getByRole('textbox', { name: 'Name (English)' }), { target: { value: 'Tafsir 2' } });
   fireEvent.click(screen.getByRole('radio', { name: /^Private/ }));
   fireEvent.click(screen.getByRole('radio', { name: 'Use the thumbnail of Lesson b' }));
   await act(async () => { fireEvent.click(screen.getByTestId('playlist-details-save')); });
-  expect(savePlaylist).toHaveBeenCalledWith('pl', { title: 'Tafsir 2', description: '', isPublic: false, coverVideoId: 'b' }, { channelId: 'ch' });
+  expect(savePlaylist).toHaveBeenCalledWith('pl', { title: 'Tafsir 2', titleLocalized: { en: 'Tafsir 2' }, description: '', descriptionLocalized: {}, isPublic: false, coverVideoId: 'b' }, { channelId: 'ch' });
   expect(screen.getByText('Changes saved')).toBeInTheDocument();
 });
 

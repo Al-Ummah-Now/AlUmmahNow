@@ -8,7 +8,7 @@
  * the user create a new playlist that the video is added to immediately.
  */
 
-import { pickLanguage } from '@/lib/format/pick-language';
+import { playlistName } from '@/lib/playlists/playlist-names';
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ListPlus, Lock, Plus, X } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -117,7 +117,7 @@ export default function SaveToPlaylist({ videoId, channelId: channelIdProp, clas
   const toggle = async (playlist: PlaylistWithVideos) => {
     if (!channelId || pendingId) return;
     const contains = (playlist.videos || []).includes(videoId);
-    const title = playlist.name || playlist.title;
+    const title = playlistName(playlist, isRTL ? 'ar' : 'en');
     setPendingId(playlist.id);
     setMessage(null);
 
@@ -241,7 +241,7 @@ export default function SaveToPlaylist({ videoId, channelId: channelIdProp, clas
                           onChange={() => toggle(playlist)}
                         />
                         <span className="flex-1 min-w-0 truncate text-sm text-gray-900 dark:text-white">
-                          {pickLanguage(playlist.name || playlist.title || '', isRTL ? 'ar' : 'en')}
+                          {playlistName(playlist, isRTL ? 'ar' : 'en')}
                         </span>
                         {playlist.isPublic === false && (
                           <Lock className="w-3.5 h-3.5 text-gray-400" aria-label={t.playlist.privateLabel} />

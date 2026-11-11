@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import { getChannelById } from '@/lib/api/channels';
 import { getPlaylistById } from '@/lib/api/playlists';
 import { getTranslations } from '@/lib/i18n';
-import { pickLanguage } from '@/lib/format/pick-language';
+import { playlistName } from '@/lib/playlists/playlist-names';
 import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
 import PlaylistEditor from '@/components/playlists/PlaylistEditor';
 
@@ -19,7 +19,7 @@ export default async function ChannelPlaylistEditorPage({ params, searchParams }
   if (!channel) notFound();
   const t = getTranslations(locale as 'en' | 'ar');
   const displayName = channel.nameLocalized?.[locale] || channel.name;
-  const title = playlist ? pickLanguage(playlist.name || playlist.title || '', locale) : t.playlist.editPlaylist;
+  const title = playlist ? playlistName(playlist, locale) : t.playlist.editPlaylist;
   const jobId = typeof job === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(job) ? job : undefined;
 
   return (

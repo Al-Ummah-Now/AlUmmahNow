@@ -541,6 +541,10 @@
           "muted": "{color.textSecondary}",
           "border": "{color.divider}"
         }
+      },
+      "style": {
+        "line": "color-mix(in srgb,white 30%,{component.dialog.bg})",
+        "shadow": "0 24px 44px -18px rgb(5 40 48/.6)"
       }
     },
     "toast": {

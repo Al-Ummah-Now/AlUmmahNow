@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import type { Playlist } from '@al-ummah/shared-types';
 import { getChannelPlaylists } from '@/lib/api/channels';
-import { pickLanguage } from '@/lib/format/pick-language';
+import { playlistName } from '@/lib/playlists/playlist-names';
 import { getPlaylistCoverUrl } from '@/lib/playlists/playlist-utils';
 import { useLanguage } from '@/hooks/useLanguage';
 import { Autocomplete, type AutocompleteOption, type AutocompletePage } from '@/components/ui/Autocomplete';
@@ -28,7 +28,7 @@ type PickerPlaylist = Playlist & { title?: string; cover?: { thumbnailUrl?: stri
 export function toPickedPlaylist(playlist: PickerPlaylist, locale: string): PickedItem {
   return {
     id: playlist.id,
-    label: pickLanguage(playlist.name || playlist.title || '', locale),
+    label: playlistName(playlist, locale),
     thumbnailUrl: getPlaylistCoverUrl(playlist),
   };
 }
