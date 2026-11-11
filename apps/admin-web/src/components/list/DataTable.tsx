@@ -11,7 +11,6 @@
  * a phone (fold what matters into the primary cell instead); `label` shows
  * before the value in card layout.
  */
-import { forwardRef } from 'react';
 import { useLanguage } from '@/i18n/I18nProvider';
 
 export interface DataColumn<T> {
@@ -48,19 +47,21 @@ export interface DataTableProps<T extends { id: string }> {
   currentId?: string | null;
   /** Rows on screen are a previous page while the next one loads. */
   stale?: boolean;
+  /** The table element (the keyboard finds rows in it). */
+  tableRef?: React.Ref<HTMLTableElement>;
 }
 
 const th = 'text-start px-3 sm:px-4 py-3 text-fg-muted font-medium whitespace-nowrap text-sm';
 const td = 'px-3 sm:px-4 md:py-3 align-top';
 
-function DataTableInner<T extends { id: string }>({ rows, columns, caption, testId, rowProps, selection, currentId, stale }: DataTableProps<T>, ref: React.ForwardedRef<HTMLTableElement>) {
+export function DataTable<T extends { id: string }>({ rows, columns, caption, testId, rowProps, selection, currentId, stale, tableRef }: DataTableProps<T>) {
   const { t } = useLanguage();
   const allSelected = !!selection && rows.length > 0 && rows.every((r) => selection.selected.has(r.id));
   const someSelected = !!selection && !allSelected && rows.some((r) => selection.selected.has(r.id));
 
   return (
     <div className={`bg-transparent md:bg-surface md:border md:border-border md:rounded-lg transition-opacity ${stale ? 'opacity-60' : ''}`} aria-busy={stale || undefined}>
-      <table ref={ref} role="table" className="block md:table w-full" data-testid={testId}>
+      <table ref={tableRef} role="table" className="block md:table w-full" data-testid={testId}>
         <caption className="sr-only">
           {caption}
           {selection && `. ${t('list.keyboardHint')}`}
@@ -133,4 +134,3 @@ function DataTableInner<T extends { id: string }>({ rows, columns, caption, test
   );
 }
 
-export const DataTable = forwardRef(DataTableInner) as <T extends { id: string }>(props: DataTableProps<T> & { ref?: React.Ref<HTMLTableElement> }) => React.ReactElement;

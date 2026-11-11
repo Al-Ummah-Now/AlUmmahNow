@@ -345,7 +345,7 @@ export function VideosList() {
       />
 
       <FiltersBar
-        ref={filtersRef}
+        formRef={filtersRef}
         label={t('videos.title')}
         testId="videos-filters"
         fields={fields}
@@ -369,7 +369,7 @@ export function VideosList() {
             <ListEmpty title={t('videos.emptyTitle')} body={t('videos.emptyBody')} filtered={filtered} onClear={clear} />
           ) : (
             <DataTable
-              ref={tableRef}
+              tableRef={tableRef}
               rows={rows}
               columns={columns}
               caption={t('videos.tableCaption')}

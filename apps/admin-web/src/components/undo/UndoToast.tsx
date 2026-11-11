@@ -14,7 +14,7 @@
  *   const undoable = useUndoableAction();
  *   undoable.run({ action: () => hide(id), undo: () => unhide(id), message: t('...') });
  */
-import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
+import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { listKeyAction } from '@/lib/list/keyboard';
 import { latestUndoable, nextExpiry, undoReducer, type UndoToast } from '@/lib/list/undo';
@@ -112,9 +112,7 @@ export function UndoToastProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo(() => ({ show }), [show]);
 
-  return (
-    <UndoContext.Provider value={value}>
-      {children}
+  const toastsRegion = (
       <section
         aria-label={t('undo.region')}
         className="fixed z-50 inset-x-4 top-4 sm:top-auto sm:bottom-4 sm:inset-x-auto sm:end-4 sm:w-96 flex flex-col gap-2 pointer-events-none"
@@ -137,8 +135,11 @@ export function UndoToastProvider({ children }: { children: React.ReactNode }) {
           ))}
         </div>
       </section>
-    </UndoContext.Provider>
   );
+
+  // createElement rather than JSX for the Provider (as in I18nProvider): with the hoisted
+  // node_modules layout the global JSX namespace comes from another @types/react
+  return createElement(UndoContext.Provider, { value }, children as never, toastsRegion as never) as unknown as React.ReactElement;
 }
 
 function ToastItem({ toast, undoneMessage, errorRef, onUndo, onDismiss }: { toast: UndoToast; undoneMessage?: string; errorRef?: string; onUndo: () => void; onDismiss: () => void }) {
