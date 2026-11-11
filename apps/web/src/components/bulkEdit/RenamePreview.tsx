@@ -5,14 +5,15 @@
  * new title for each chosen language (each in its own direction), flags for
  * empty / too long / duplicate, and Move up / Move down. Alt+↑ / Alt+↓ on a
  * row moves it too; every move is announced ("Moved to position 3 of 12").
- * Above the list: quick sorts (ascending or descending) and "Continue
+ * Above the list: quick sorts (ascending or descending; the direction
+ * button re-sorts at once and, after a move by hand, replaces that order) and "Continue
  * numbering after", which finds the highest number the channel already used
  * for this pattern.
  */
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { AlertTriangle, ArrowRight, ArrowLeft, ChevronUp, ChevronDown, GripVertical, ArrowDownUp } from 'lucide-react';
+import { AlertTriangle, ArrowRight, ArrowLeft, ChevronUp, ChevronDown, GripVertical, ArrowDownNarrowWide, ArrowDownWideNarrow } from 'lucide-react';
 import {
   DndContext,
   PointerSensor,
@@ -26,7 +27,9 @@ import { CSS } from '@dnd-kit/utilities';
 import { useLanguage } from '@/hooks/useLanguage';
 import { logger } from '@/lib/logger-client';
 import {
+  hasOrderValue,
   highestNumber,
+  missingOrderValues,
   orderReducer,
   renameSummary,
   sortIds,
@@ -100,8 +103,17 @@ export function RenamePreview({ rows, subjects, rename, onRenameChange, orderKey
     logger.debug('[RenamePreview] Moved', { position, total: next.length });
   };
 
-  const sortBy = (key: OrderKey, dir: 'asc' | 'desc') =>
+  // A quick sort or a new direction always sorts again by the field, dropping a move by hand
+  const sortBy = (key: OrderKey, dir: 'asc' | 'desc') => {
     setOrder(sortIds(subjects, key, dir, sortLanguage), false, { orderKey: key, orderDir: dir });
+    logger.debug('[RenamePreview] Sorted', { key, dir, replacedManual: rename.orderCustom, count: subjects.length });
+  };
+  const flipDirection = () => sortBy(rename.orderKey, rename.orderDir === 'asc' ? 'desc' : 'asc');
+  const DirIcon = rename.orderDir === 'asc' ? ArrowDownNarrowWide : ArrowDownWideNarrow;
+  const dirLabel = rename.orderDir === 'asc' ? r.ascending : r.descending;
+  // Sorts nothing can be sorted by are offered disabled; the rest say how many sit at the end
+  const usable = (key: OrderKey) => subjects.some((s) => hasOrderValue(s, key, sortLanguage));
+  const missing = rename.orderCustom ? 0 : missingOrderValues(subjects, rename.orderKey, sortLanguage);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
   const onDragEnd = ({ active, over }: DragEndEvent) => {
@@ -141,20 +153,23 @@ export function RenamePreview({ rows, subjects, rename, onRenameChange, orderKey
             data-testid={`${testId}-order-key`}
           >
             {rename.orderCustom && <option value="">{r.customOrder}</option>}
-            {orderKeys.map((key) => <option key={key} value={key}>{r.orderKeys[key]}</option>)}
+            {orderKeys.map((key) => {
+              const ok = usable(key) || key === rename.orderKey;
+              return <option key={key} value={key} disabled={!ok}>{ok ? r.orderKeys[key] : r.orderKeyUnavailable.replace('{field}', r.orderKeys[key])}</option>;
+            })}
           </select>
         </label>
         <button
           type="button"
           className="b b-secondary b-sm min-h-11"
-          onClick={() => sortBy(rename.orderKey, rename.orderDir === 'asc' ? 'desc' : 'asc')}
-          aria-label={`${r.orderBy}: ${rename.orderDir === 'asc' ? r.ascending : r.descending}`}
-          aria-pressed={rename.orderDir === 'desc'}
+          onClick={flipDirection}
+          aria-label={dirLabel}
+          aria-describedby={rename.orderCustom ? `${testId}-order-manual` : undefined}
           data-testid={`${testId}-order-dir`}
           data-dir={rename.orderDir}
         >
-          <ArrowDownUp aria-hidden="true" />
-          {rename.orderDir === 'asc' ? r.ascending : r.descending}
+          <DirIcon aria-hidden="true" data-testid={`${testId}-order-dir-icon`} data-icon={rename.orderDir} />
+          {dirLabel}
         </button>
         {loadExistingTitles && numberedPatterns(rename).length > 0 && (
           <button type="button" className="b b-ghost b-sm min-h-11" onClick={() => void findHighest()} disabled={found.state === 'loading'} data-testid={`${testId}-continue`}>
@@ -170,6 +185,14 @@ export function RenamePreview({ rows, subjects, rename, onRenameChange, orderKey
               {r.continueUse.replace('{next}', fmt((found.n as number) + Math.max(1, rename.step)))}
             </button>
           )}
+        </p>
+      )}
+      {rename.orderCustom && (
+        <p className="mt-1 text-xs text-[var(--fanous-color-text-secondary)]" id={`${testId}-order-manual`} data-testid={`${testId}-order-manual`}>{r.orderReplacesManual}</p>
+      )}
+      {missing > 0 && (
+        <p className="mt-1 text-xs text-[var(--fanous-color-text-secondary)]" data-testid={`${testId}-order-missing`} data-missing={missing}>
+          {r.orderMissing.replace('{count}', fmt(missing)).replace('{field}', r.orderKeys[rename.orderKey])}
         </p>
       )}
       <p className="mt-1 text-xs text-[var(--fanous-color-text-secondary)]" id={`${testId}-hint`}>{r.orderHint}</p>

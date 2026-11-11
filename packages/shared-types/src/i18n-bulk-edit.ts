@@ -63,6 +63,12 @@ export interface BulkRenameTranslations {
   descending: string;
   customOrder: string;
   orderHint: string;
+  /** Under the direction button after a move by hand: sorting again drops it */
+  orderReplacesManual: string;
+  /** Some subjects have nothing to sort by ({count}, {field}) */
+  orderMissing: string;
+  /** A sort no subject has a value for ({field}); the option is disabled */
+  orderKeyUnavailable: string;
   dragHandle: string;
   moveUp: string;
   moveDown: string;
@@ -262,6 +268,9 @@ const RENAME_EN: BulkRenameTranslations = {
   ascending: 'Ascending',
   descending: 'Descending',
   customOrder: 'Your own order',
+  orderReplacesManual: 'You moved rows by hand. Choosing a sort or a direction sorts again and replaces that order.',
+  orderMissing: '{count} have no “{field}” and stay at the end.',
+  orderKeyUnavailable: '{field} (none to sort by)',
   orderHint: 'Numbers follow this order. Drag a row, use its arrows, or press Alt+↑ / Alt+↓.',
   dragHandle: 'Drag to reorder “{title}”',
   moveUp: 'Move “{title}” up',
@@ -331,6 +340,9 @@ const RENAME_AR: BulkRenameTranslations = {
   ascending: 'تصاعدي',
   descending: 'تنازلي',
   customOrder: 'ترتيبك الخاص',
+  orderReplacesManual: 'نقلت صفوفًا بيدك. اختيار ترتيب أو اتجاه يعيد الترتيب ويستبدل ترتيبك.',
+  orderMissing: '{count} بلا «{field}» وتبقى في الآخر.',
+  orderKeyUnavailable: '{field} (لا شيء للترتيب به)',
   orderHint: 'تتبع الأرقام هذا الترتيب. اسحب صفًا، أو استخدم أسهمه، أو اضغط Alt+↑ / Alt+↓.',
   dragHandle: 'اسحب لإعادة ترتيب «{title}»',
   moveUp: 'نقل «{title}» إلى أعلى',

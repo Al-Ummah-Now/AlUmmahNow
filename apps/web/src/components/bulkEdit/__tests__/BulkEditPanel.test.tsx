@@ -184,6 +184,76 @@ describe('BulkEditPanel (Studio "Edit selected")', () => {
       expect(rowIds()).toEqual(['v2', 'v3', 'v1']);
     });
 
+    it('the direction button re-sorts at once, flips its icon and label, even when the values tie or are missing', () => {
+      const same: BulkPanelVideo[] = [
+        { id: 'p', title: 'Lecture', channelId: 'ch' },
+        { id: 'q', title: 'Lecture', channelId: 'ch' },
+        { id: 'r', title: 'Lecture', channelId: 'ch' },
+      ];
+      render(<BulkEditPanel open onOpenChange={jest.fn()} videos={same} />);
+      renameLessons();
+      const dir = screen.getByTestId('bulk-edit-preview-order-dir');
+      for (const key of ['list', 'title', 'uploaded', 'duration']) {
+        fireEvent.change(screen.getByTestId('bulk-edit-preview-order-key'), { target: { value: key } });
+        expect(rowIds()).toEqual(['p', 'q', 'r']);
+        expect(dir).toHaveAttribute('aria-label', 'Ascending');
+        fireEvent.click(dir);
+        expect(rowIds()).toEqual(['r', 'q', 'p']);
+        expect(afterTexts()).toEqual(['Lesson 1', 'Lesson 2', 'Lesson 3']);
+        expect(dir).toHaveAttribute('aria-label', 'Descending');
+        expect(dir).toHaveAttribute('data-dir', 'desc');
+        expect(screen.getByTestId('bulk-edit-preview-order-dir-icon')).toHaveAttribute('data-icon', 'desc');
+        fireEvent.click(dir);
+        expect(rowIds()).toEqual(['p', 'q', 'r']);
+      }
+      // Nothing to sort by: offered disabled, and the ones without a value are named
+      const option = (v: string) => screen.getByTestId('bulk-edit-preview-order-key').querySelector(`option[value="${v}"]`) as HTMLOptionElement;
+      expect(option('filename').disabled).toBe(true);
+      expect(option('filename')).toHaveTextContent('File name (none to sort by)');
+      expect(option('title').disabled).toBe(false);
+    });
+
+    it('says how many have nothing to sort by', () => {
+      const mixed: BulkPanelVideo[] = [
+        { id: 'p', title: 'a', channelId: 'ch', duration: 20 },
+        { id: 'q', title: 'b', channelId: 'ch' },
+        { id: 'r', title: 'c', channelId: 'ch', duration: 10 },
+      ];
+      render(<BulkEditPanel open onOpenChange={jest.fn()} videos={mixed} />);
+      renameLessons();
+      fireEvent.change(screen.getByTestId('bulk-edit-preview-order-key'), { target: { value: 'duration' } });
+      expect(rowIds()).toEqual(['r', 'p', 'q']);
+      expect(screen.getByTestId('bulk-edit-preview-order-missing')).toHaveTextContent('1 have no “Duration” and stay at the end.');
+      fireEvent.click(screen.getByTestId('bulk-edit-preview-order-dir'));
+      expect(rowIds()).toEqual(['p', 'r', 'q']);
+    });
+
+    it('after a move by hand, says sorting replaces it; the direction button re-sorts by the field', () => {
+      render(<BulkEditPanel open onOpenChange={jest.fn()} videos={videos} />);
+      renameLessons();
+      fireEvent.change(screen.getByTestId('bulk-edit-preview-order-key'), { target: { value: 'title' } });
+      expect(screen.queryByTestId('bulk-edit-preview-order-manual')).toBeNull();
+      fireEvent.click(screen.getAllByTestId('bulk-edit-preview-up')[2]);
+      expect(rowIds()).toEqual(['v1', 'v2', 'v3']);
+      expect(screen.getByTestId('bulk-edit-preview-order-manual')).toHaveTextContent('You moved rows by hand');
+      expect(screen.getByTestId('bulk-edit-preview-order-dir')).toHaveAttribute('aria-describedby', 'bulk-edit-preview-order-manual');
+      fireEvent.click(screen.getByTestId('bulk-edit-preview-order-dir'));
+      expect(rowIds()).toEqual(['v2', 'v3', 'v1']);
+      expect(screen.getByTestId('bulk-edit-preview-order-key')).toHaveValue('title');
+      expect(screen.queryByTestId('bulk-edit-preview-order-manual')).toBeNull();
+    });
+
+    it('names the direction in Arabic', () => {
+      mockLang = 'ar';
+      render(<BulkEditPanel open onOpenChange={jest.fn()} videos={videos} />);
+      fireEvent.click(screen.getByTestId('bulk-edit-tick-title'));
+      const dir = screen.getByTestId('bulk-edit-preview-order-dir');
+      expect(dir).toHaveAttribute('aria-label', 'تصاعدي');
+      fireEvent.click(dir);
+      expect(dir).toHaveAttribute('aria-label', 'تنازلي');
+      expect(rowIds()).toEqual(['v3', 'v2', 'v1']);
+    });
+
     it('moves a row with Alt+arrow keys and the arrow buttons, and announces it', () => {
       render(<BulkEditPanel open onOpenChange={jest.fn()} videos={videos} />);
       renameLessons();

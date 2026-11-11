@@ -45,40 +45,62 @@ function timeOf(value: string | Date | null | undefined): number | null {
   return Number.isNaN(t) ? null : t;
 }
 
+function textOf(s: RenameSubject, key: OrderKey, language: TitleLanguage): string | null {
+  if (key === 'title') return (s.title[language] || s.title[language === 'en' ? 'ar' : 'en'] || '') || null;
+  if (key === 'filename') return s.filename || null;
+  return null;
+}
+
+function numberOf(s: RenameSubject, key: OrderKey): number | null {
+  if (key === 'uploaded') return timeOf(s.uploadedAt ?? s.date);
+  if (key === 'published') return timeOf(s.publishedAt);
+  if (key === 'duration') return typeof s.duration === 'number' && Number.isFinite(s.duration) ? s.duration : null;
+  return null;
+}
+
+/** Whether a subject has a value to sort by for `key` ("As listed" always has). */
+export function hasOrderValue(subject: RenameSubject, key: OrderKey, language: TitleLanguage = 'en'): boolean {
+  if (key === 'list') return true;
+  return key === 'title' || key === 'filename' ? textOf(subject, key, language) !== null : numberOf(subject, key) !== null;
+}
+
+/** How many subjects have nothing to sort by for `key` (no file name, not published, not encoded yet). */
+export function missingOrderValues(subjects: readonly RenameSubject[], key: OrderKey, language: TitleLanguage = 'en'): number {
+  return subjects.filter((s) => !hasOrderValue(s, key, language)).length;
+}
+
 /**
  * The subjects' ids sorted by `key`. The language picks which title is
- * compared (falling back to the other one). Missing values go last in both
- * directions; ties keep the list order.
+ * compared (falling back to the other one); titles sort naturally (Lesson 2
+ * before Lesson 10) with the language's collation.
+ *
+ * The direction applies to the whole order, ties included: equal values keep
+ * the list order ascending and reverse it descending, so "desc" is always the
+ * exact reverse of "asc" for the subjects that have a value. (Ties broken by
+ * list order in both directions made the direction button do nothing when
+ * every value was equal or missing: 2026-11-11 "not ordering items asc and
+ * desc when dir button is clicked".) Subjects with no value go last in both
+ * directions, in the same direction among themselves.
  */
 export function sortIds(subjects: readonly RenameSubject[], key: OrderKey, direction: OrderDirection = 'asc', language: TitleLanguage = 'en'): string[] {
   const indexed = subjects.map((s, i) => ({ s, i: s.listIndex ?? i }));
   const sign = direction === 'desc' ? -1 : 1;
-  const textOf = (s: RenameSubject): string | null => {
-    if (key === 'title') return (s.title[language] || s.title[language === 'en' ? 'ar' : 'en'] || '') || null;
-    if (key === 'filename') return s.filename || null;
-    return null;
-  };
-  const numberOf = (s: RenameSubject): number | null => {
-    if (key === 'uploaded') return timeOf(s.uploadedAt ?? s.date);
-    if (key === 'published') return timeOf(s.publishedAt);
-    if (key === 'duration') return typeof s.duration === 'number' && Number.isFinite(s.duration) ? s.duration : null;
-    return null;
-  };
   indexed.sort((x, y) => {
-    if (key === 'list') return sign * (x.i - y.i);
+    const byList = sign * (x.i - y.i);
+    if (key === 'list') return byList;
     let cmp = 0;
     if (key === 'title' || key === 'filename') {
-      const a = textOf(x.s);
-      const b = textOf(y.s);
-      if (a === null || b === null) return a === b ? x.i - y.i : a === null ? 1 : -1;
+      const a = textOf(x.s, key, language);
+      const b = textOf(y.s, key, language);
+      if (a === null || b === null) return a === b ? byList : a === null ? 1 : -1;
       cmp = naturalCompare(a, b, language);
     } else {
-      const a = numberOf(x.s);
-      const b = numberOf(y.s);
-      if (a === null || b === null) return a === b ? x.i - y.i : a === null ? 1 : -1;
+      const a = numberOf(x.s, key);
+      const b = numberOf(y.s, key);
+      if (a === null || b === null) return a === b ? byList : a === null ? 1 : -1;
       cmp = a - b;
     }
-    return cmp !== 0 ? sign * cmp : x.i - y.i;
+    return cmp !== 0 ? sign * cmp : byList;
   });
   return indexed.map(({ s }) => s.id);
 }

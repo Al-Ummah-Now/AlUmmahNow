@@ -8,6 +8,12 @@
  * rename with `Lesson {n}`, order by title (natural: 1, 2, 3, 10), then move
  * "10" up one with Alt+↑. The preview and the stored titles follow that
  * order: 1 → Lesson 1, 2 → Lesson 2, 10 → Lesson 3, 3 → Lesson 4.
+ *
+ * The direction button (2026-11-11 "not ordering items asc and desc when
+ * dir button is clicked"): by upload date and by title it reverses the
+ * preview at once and the numbers follow; its label says the direction. A
+ * sort none of the videos can be sorted by (duration: nothing is encoded)
+ * is offered disabled (builds with the fix; older ones are annotated).
  * Deleted afterwards. Skips while the build has no order control.
  */
 import { test, expect, type Page } from '@playwright/test';
@@ -79,12 +85,40 @@ test.describe('Release: bulk rename order', () => {
         test.skip(true, 'this build has no order control in the rename preview yet');
       }
       await page.getByTestId('rename-pattern-en').or(page.getByTestId('rename-pattern')).fill('Lesson {n}');
-      await orderKey.selectOption('title');
 
       const rows = page.getByTestId('bulk-edit-preview-row');
       await expect(rows).toHaveCount(4);
       const order = async () => rows.evaluateAll((els) => els.map((el) => el.getAttribute('data-id')));
-      expect(await order()).toEqual([ids['1'], ids['2'], ids['3'], ids['10']]);
+      const lessons = page.locator('[data-testid="bulk-edit-preview-after"][data-language="en"]');
+      const dir = page.getByTestId('bulk-edit-preview-order-dir');
+      const flip = async (expected: string[], label: RegExp) => {
+        await dir.click();
+        await expect.poll(order, { message: `the direction button should re-sort to ${label}` }).toEqual(expected);
+        await expect(dir).toHaveAttribute('aria-label', label);
+        await expect(lessons).toHaveText(['Lesson 1', 'Lesson 2', 'Lesson 3', 'Lesson 4']);
+      };
+      const created = [ids['10'], ids['2'], ids['1'], ids['3']];
+      const natural = [ids['1'], ids['2'], ids['3'], ids['10']];
+
+      // Upload date: created 10, 2, 1, 3; the direction button reverses it and back
+      await orderKey.selectOption('uploaded');
+      await expect.poll(order).toEqual(created);
+      await flip([...created].reverse(), /Descending$/);
+      await flip(created, /Ascending$/);
+
+      // Nothing is encoded, so there is no duration to sort by
+      const durationOption = orderKey.locator('option[value="duration"]');
+      if (await durationOption.evaluate((o) => (o as HTMLOptionElement).disabled)) {
+        await expect(durationOption).toHaveText('Duration (none to sort by)');
+      } else {
+        test.info().annotations.push({ type: 'not-deployed', description: 'this build still offers sorts with no values (the direction did nothing there)' });
+      }
+
+      // Title (natural), both ways
+      await orderKey.selectOption('title');
+      await expect.poll(order).toEqual(natural);
+      await flip([...natural].reverse(), /Descending$/);
+      await flip(natural, /Ascending$/);
 
       // Move "10" up one with the keyboard; the move is announced
       const handle10 = page.locator(`[data-testid="bulk-edit-preview-handle"][data-id="${ids['10']}"]`);
