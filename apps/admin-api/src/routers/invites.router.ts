@@ -173,7 +173,7 @@ app.post('/', async (c) => {
   await limit(c);
 
   if (tierId) {
-    const tiers = await videos<{ items?: Array<{ id: string }> } | Array<{ id: string }>>(c, '/creator-tiers');
+    const tiers = await videos<{ items?: Array<{ id: string }> } | Array<{ id: string }>>(c, '/creator-tiers', { query: { counts: '0' } });
     const list = Array.isArray(tiers) ? tiers : tiers.items ?? [];
     if (!list.some((t) => t.id === tierId)) throw new HttpError(400, 'unknown_plan', 'This plan does not exist');
   }

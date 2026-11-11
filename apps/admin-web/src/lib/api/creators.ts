@@ -38,6 +38,14 @@ export async function listCreatorTiers(): Promise<CreatorTiersList> {
   return fetchAdmin<CreatorTiersList>('/api/content/creator-tiers');
 }
 
+/**
+ * The tier definitions only (?counts=0), for pages that pick a tier: the counts scan every
+ * profile and assignment and only the Creators overview and Tiers pages show them.
+ */
+export async function listCreatorTierDefinitions(): Promise<CreatorTiersList['items']> {
+  return (await fetchAdmin<{ items: CreatorTiersList['items'] }>('/api/content/creator-tiers?counts=0')).items;
+}
+
 export async function creatorTierAudit(): Promise<AdminAuditEntry[]> {
   return (await fetchAdmin<{ items: AdminAuditEntry[] }>('/api/content/creator-tiers/audit')).items;
 }

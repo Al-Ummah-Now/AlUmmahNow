@@ -543,6 +543,9 @@ describe('content endpoints: creator tiers', () => {
     assert.equal((await call('/api/content/creators?filter=needs_tier', { roles: 'moderator' })).status, 200);
     assert.equal(calls.find((c) => c.path === '/creators')?.search, '?filter=needs_tier');
     assert.equal((await call('/api/content/creator-tiers', { roles: 'moderator' })).status, 200);
+    assert.equal(calls.at(-1)?.search, '', 'the overview pages still get the counts');
+    assert.equal((await call('/api/content/creator-tiers?counts=0', { roles: 'moderator' })).status, 200);
+    assert.equal(calls.at(-1)?.search, '?counts=0', 'a tier picker asks for the definitions only');
     const read = async (roles: string) => ((await (await call('/api/content/permissions', { roles })).json()) as { result: { permissions: string[] } }).result.permissions;
     assert.ok((await read('admin')).includes('creators:manage'));
     assert.ok(!(await read('moderator')).includes('creators:manage'));

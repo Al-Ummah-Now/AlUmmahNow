@@ -1,5 +1,5 @@
 import { creatorTierOrigin, type AdminAuditEntry, type CreatorTier, type CreatorTierAssignment } from '@al-ummah/shared-types';
-import { getUserCreatorTier, listCreatorTiers, setUserCreatorTier } from '@/lib/api/creators';
+import { getUserCreatorTier, listCreatorTierDefinitions, setUserCreatorTier } from '@/lib/api/creators';
 import { getI18n } from '@/i18n/server';
 import { formatDate } from '@/i18n/translate';
 import { ErrorAlert, cardClass } from '@/components/ui';
@@ -12,8 +12,8 @@ export async function UserCreatorTierPanel({ userId, userName, canManage }: { us
   let tiers: CreatorTier[] = [];
   let current: { assignment: CreatorTierAssignment | null; audit: (AdminAuditEntry & { previous?: Record<string, unknown> | null })[] } | null = null;
   try {
-    const [list, user] = await Promise.all([listCreatorTiers(), getUserCreatorTier(userId)]);
-    tiers = list.items;
+    const [list, user] = await Promise.all([listCreatorTierDefinitions(), getUserCreatorTier(userId)]);
+    tiers = list;
     current = user;
   } catch (e) {
     logger.error('[creators] Failed to load the user tier', { userId, error: e instanceof Error ? e.message : String(e) });
