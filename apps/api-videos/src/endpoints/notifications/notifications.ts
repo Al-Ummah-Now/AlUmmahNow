@@ -8,7 +8,7 @@
  * POST   /api/notifications/read-all              mark all read
  * DELETE /api/notifications/:id                   delete one
  * GET    /api/notifications/settings              per-category settings
- * PUT    /api/notifications/settings              { settings: { category: boolean } }
+ * PUT    /api/notifications/settings              { settings?: { category: boolean }, email?: { account?, locale? } }
  * GET    /api/notifications/channels/:channelId/bell   { bell, subscribed }
  * PUT    /api/notifications/channels/:channelId/bell   { bell: all|highlights|none }
  */
@@ -19,12 +19,21 @@ import { AuthenticatedRoute, AppContext } from "../../base";
 import { isSubscribedTo } from '../../lib/subscription-store';
 import R2Repository from "../../lib/r2Repo";
 import { logger } from "../../lib/logger";
-import { CHANNEL_BELL_LEVELS, NOTIFICATION_CATEGORIES } from "@al-ummah/shared-types";
+import {
+	ALWAYS_ON_NOTIFICATION_CATEGORIES,
+	CHANNEL_BELL_LEVELS,
+	NOTIFICATION_CATEGORIES,
+	NOTIFICATION_EMAIL_LOCALES,
+	OPTIONAL_NOTIFICATION_CATEGORIES,
+	type NotificationSettingsResult,
+} from "@al-ummah/shared-types";
 import {
 	countUnread,
 	deleteNotification,
 	getBell,
+	getEmailSettings,
 	getSettings,
+	updateEmailSettings,
 	listNotifications,
 	markAllRead,
 	markRead,
@@ -156,12 +165,27 @@ export class NotificationSettingsGet extends AuthenticatedRoute {
 	async handle(c: AppContext) {
 		const db = c.env.NOTIFICATIONS_DB;
 		if (!db) return storeUnavailable(c);
-		return { success: true, result: { settings: await getSettings(db, this.getUserId(c)), categories: NOTIFICATION_CATEGORIES } };
+		const userId = this.getUserId(c);
+		return { success: true, result: await settingsResult(db, userId) };
 	}
 }
 
+async function settingsResult(db: D1Database, userId: string): Promise<NotificationSettingsResult> {
+	const [settings, email] = await Promise.all([getSettings(db, userId), getEmailSettings(db, userId)]);
+	return { settings, categories: NOTIFICATION_CATEGORIES, alwaysOn: ALWAYS_ON_NOTIFICATION_CATEGORIES, email };
+}
+
+// Always-on categories (account notices) are not settable
 const SettingsBody = z.object({
-	settings: z.object(Object.fromEntries(NOTIFICATION_CATEGORIES.map((cat) => [cat, z.boolean().optional()])) as Record<string, z.ZodOptional<z.ZodBoolean>>),
+	settings: z
+		.object(Object.fromEntries(OPTIONAL_NOTIFICATION_CATEGORIES.map((cat) => [cat, z.boolean().optional()])) as Record<string, z.ZodOptional<z.ZodBoolean>>)
+		.optional(),
+	email: z
+		.object({
+			account: z.boolean().optional().describe('Email me about my account (warnings and other account notices)'),
+			locale: z.enum(NOTIFICATION_EMAIL_LOCALES).optional().describe('Language of the emails'),
+		})
+		.optional(),
 });
 
 export class NotificationSettingsUpdate extends AuthenticatedRoute {
@@ -177,9 +201,11 @@ export class NotificationSettingsUpdate extends AuthenticatedRoute {
 		if (!db) return storeUnavailable(c);
 		const { body } = await this.getValidatedData<typeof this.schema>();
 		const userId = this.getUserId(c);
-		const settings = await updateSettings(db, userId, body.settings);
-		logger.debug("[Notifications] Settings updated", { userId, settings });
-		return { success: true, result: { settings, categories: NOTIFICATION_CATEGORIES } };
+		if (body.settings) await updateSettings(db, userId, body.settings);
+		if (body.email) await updateEmailSettings(db, userId, body.email);
+		const result = await settingsResult(db, userId);
+		logger.debug("[Notifications] Settings updated", { userId, settings: result.settings, email: result.email });
+		return { success: true, result };
 	}
 }
 

@@ -13,6 +13,7 @@ import {
   NOTIFICATION_KEYS,
   NOTIFICATION_RETENTION_DAYS,
   DEFAULT_CHANNEL_BELL,
+  isAlwaysOnNotificationCategory,
   type NotificationCreatePayload,
   type NotificationFanoutPayload,
   type NotificationKey,
@@ -56,10 +57,13 @@ export async function insertNotification(
   now = Date.now(),
 ): Promise<StoredNotification | null> {
   const category = NOTIFICATION_KEY_CATEGORY[payload.notificationKey];
-  const disabled = await db
-    .prepare('SELECT enabled FROM notification_settings WHERE user_id = ? AND category = ?')
-    .bind(payload.recipientUserId, category)
-    .first<{ enabled: number }>();
+  // Account notices (a moderator's warning) cannot be turned off
+  const disabled = isAlwaysOnNotificationCategory(category)
+    ? null
+    : await db
+        .prepare('SELECT enabled FROM notification_settings WHERE user_id = ? AND category = ?')
+        .bind(payload.recipientUserId, category)
+        .first<{ enabled: number }>();
   if (disabled && disabled.enabled === 0) {
     logger.debug('Notification skipped: category disabled', { userId: payload.recipientUserId, category });
     return null;

@@ -610,20 +610,27 @@ export function newLinkToken(): string {
 }
 
 /**
+ * The videos web app's origin: VIDEOS_WEB_URL if set, else the admin host
+ * with admin. → videos. (admin.qa.alummahnow.net → videos.qa…); null if neither.
+ */
+export function videosWebOrigin(env: { VIDEOS_WEB_URL?: string; ADMIN_WEB_URL?: string }): string | null {
+  if (env.VIDEOS_WEB_URL) return env.VIDEOS_WEB_URL.replace(/\/$/, '');
+  if (!env.ADMIN_WEB_URL) return null;
+  try {
+    const url = new URL(env.ADMIN_WEB_URL);
+    return url.hostname.startsWith('admin.') ? `${url.protocol}//videos.${url.hostname.slice('admin.'.length)}` : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Where the invite's "Continue" goes: the videos web app's sign-in, landing on
  * the home page in the invite's language. VIDEOS_WEB_URL if set, else the
  * admin host with admin. → videos. (admin.qa.alummahnow.net → videos.qa…).
  */
 export function signInUrl(env: { VIDEOS_WEB_URL?: string; ADMIN_WEB_URL?: string }, locale: 'en' | 'ar'): string | null {
-  let base = env.VIDEOS_WEB_URL;
-  if (!base && env.ADMIN_WEB_URL) {
-    try {
-      const url = new URL(env.ADMIN_WEB_URL);
-      if (url.hostname.startsWith('admin.')) base = `${url.protocol}//videos.${url.hostname.slice('admin.'.length)}`;
-    } catch {
-      base = undefined;
-    }
-  }
+  const base = videosWebOrigin(env);
   if (!base) return null;
   const url = new URL('/api/auth/login', base);
   url.searchParams.set('prompt', 'login');

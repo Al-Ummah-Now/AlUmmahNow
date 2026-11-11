@@ -269,6 +269,34 @@ describe('Notifications API', () => {
 		assert.equal(body.result.settings.replies, true);
 	});
 
+	it('keeps account notices always on: reported on, not settable, a stray row ignored', async () => {
+		const e = env();
+		const app = buildApp(notificationRoutes, { userId: 'me' });
+		const defaults = (await (await app.request('/api/notifications/settings', {}, e)).json()) as any;
+		assert.equal(defaults.result.settings.account, true);
+		assert.deepEqual(defaults.result.alwaysOn, ['account']);
+		const res = await app.request('/api/notifications/settings', { ...json({ settings: { account: false, uploads: false } }), method: 'PUT' }, e);
+		const body = (await res.json()) as any;
+		assert.equal(body.result.settings.account, true);
+		assert.equal(body.result.settings.uploads, false);
+		assert.deepEqual(e.NOTIFICATIONS_DB.rows("SELECT category FROM notification_settings WHERE user_id = 'me'"), [{ category: 'uploads' }]);
+		e.NOTIFICATIONS_DB.raw.prepare("INSERT INTO notification_settings VALUES ('me', 'account', 0, 0)").run();
+		const after = (await (await app.request('/api/notifications/settings', {}, e)).json()) as any;
+		assert.equal(after.result.settings.account, true);
+	});
+
+	it('reads and updates the email preferences (account email default on, language not picked)', async () => {
+		const e = env();
+		const app = buildApp(notificationRoutes, { userId: 'me' });
+		const defaults = (await (await app.request('/api/notifications/settings', {}, e)).json()) as any;
+		assert.deepEqual(defaults.result.email, { account: true, locale: null });
+		const put = (email: unknown) => app.request('/api/notifications/settings', { ...json({ email }), method: 'PUT' }, e);
+		assert.deepEqual(((await (await put({ account: false })).json()) as any).result.email, { account: false, locale: null });
+		assert.deepEqual(((await (await put({ locale: 'ar' })).json()) as any).result.email, { account: false, locale: 'ar' });
+		assert.equal((await put({ locale: 'fr' })).status, 400);
+		assert.deepEqual(e.NOTIFICATIONS_DB.rows("SELECT account_email, email_locale FROM notification_email_prefs WHERE user_id = 'me'"), [{ account_email: 0, email_locale: 'ar' }]);
+	});
+
 	it('manages the per-channel bell for subscribed channels only', async () => {
 		const e = env({ channels: new MemoryBucket({ ch1: { id: 'ch1', subscriptions: [{ userId: 'me', channelId: 'mine' }] }, ch2: { id: 'ch2', subscriptions: [] } }) });
 		const app = buildApp(notificationRoutes, { userId: 'me' });

@@ -7,7 +7,7 @@
  */
 
 /** Settings categories a user can turn on/off. */
-export const NOTIFICATION_CATEGORIES = [
+export const OPTIONAL_NOTIFICATION_CATEGORIES = [
   'new_videos',
   'live',
   'replies',
@@ -15,7 +15,26 @@ export const NOTIFICATION_CATEGORIES = [
   'subscribers',
   'uploads',
 ] as const;
+export type OptionalNotificationCategory = (typeof OPTIONAL_NOTIFICATION_CATEGORIES)[number];
+
+/**
+ * Categories a user cannot turn off: account and safety notices (a moderator's
+ * warning) always arrive in-app. Settings report them as on and ignore changes.
+ */
+export const ALWAYS_ON_NOTIFICATION_CATEGORIES = ['account'] as const;
+export type AlwaysOnNotificationCategory = (typeof ALWAYS_ON_NOTIFICATION_CATEGORIES)[number];
+
+/** Every category a stored notification can have. */
+export const NOTIFICATION_CATEGORIES = [...OPTIONAL_NOTIFICATION_CATEGORIES, ...ALWAYS_ON_NOTIFICATION_CATEGORIES] as const;
 export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
+
+export function isAlwaysOnNotificationCategory(category: unknown): category is AlwaysOnNotificationCategory {
+  return typeof category === 'string' && (ALWAYS_ON_NOTIFICATION_CATEGORIES as readonly string[]).includes(category);
+}
+
+export function isOptionalNotificationCategory(category: unknown): category is OptionalNotificationCategory {
+  return typeof category === 'string' && (OPTIONAL_NOTIFICATION_CATEGORIES as readonly string[]).includes(category);
+}
 
 /** Translation keys a stored notification can carry. */
 export const NOTIFICATION_KEYS = [
@@ -26,6 +45,8 @@ export const NOTIFICATION_KEYS = [
   'newSubscriber',
   'uploadReady',
   'uploadFailed',
+  /** A moderator warned the account (params: reason = ReportReason code, count = warnings so far). */
+  'accountWarning',
 ] as const;
 export type NotificationKey = (typeof NOTIFICATION_KEYS)[number];
 
@@ -38,6 +59,7 @@ export const NOTIFICATION_KEY_CATEGORY: Record<NotificationKey, NotificationCate
   newSubscriber: 'subscribers',
   uploadReady: 'uploads',
   uploadFailed: 'uploads',
+  accountWarning: 'account',
 };
 
 /** Legacy realtime notification type (drives the toast icon). */
@@ -51,6 +73,7 @@ export const NOTIFICATION_KEY_TYPE: Record<NotificationKey, RealtimeNotification
   newSubscriber: 'subscription',
   uploadReady: 'upload',
   uploadFailed: 'upload',
+  accountWarning: 'system',
 };
 
 /** Per-channel bell: every upload & live, highlights (long-form uploads & live), or nothing. */
@@ -139,3 +162,34 @@ export interface NotificationListResponse {
 }
 
 export type NotificationSettings = Record<NotificationCategory, boolean>;
+
+/** Languages of the emails sent to a user. */
+export const NOTIFICATION_EMAIL_LOCALES = ['en', 'ar'] as const;
+export type NotificationEmailLocale = (typeof NOTIFICATION_EMAIL_LOCALES)[number];
+/** Emails go in English until the user picks a language. */
+export const DEFAULT_NOTIFICATION_EMAIL_LOCALE: NotificationEmailLocale = 'en';
+
+/** Email preferences (notification_email_prefs; a missing row = the defaults). */
+export interface NotificationEmailSettings {
+  /** "Email me about my account" (warnings and other account notices); default on. */
+  account: boolean;
+  /** The language the user picked for emails; null = not picked (DEFAULT_NOTIFICATION_EMAIL_LOCALE is used). */
+  locale: NotificationEmailLocale | null;
+}
+
+export const DEFAULT_NOTIFICATION_EMAIL_SETTINGS: NotificationEmailSettings = { account: true, locale: null };
+
+/** GET/PUT /api/notifications/settings result. */
+export interface NotificationSettingsResult {
+  settings: NotificationSettings;
+  /** Every category; the ones in alwaysOn cannot be turned off. */
+  categories: readonly NotificationCategory[];
+  alwaysOn: readonly NotificationCategory[];
+  email: NotificationEmailSettings;
+}
+
+/** PUT /api/notifications/settings body: any subset. */
+export interface NotificationSettingsUpdateRequest {
+  settings?: Partial<Record<OptionalNotificationCategory, boolean>>;
+  email?: Partial<NotificationEmailSettings>;
+}

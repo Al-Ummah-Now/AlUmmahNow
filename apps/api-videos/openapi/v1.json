@@ -13259,10 +13259,11 @@
                         "replies",
                         "comments",
                         "subscribers",
-                        "uploads"
+                        "uploads",
+                        "account"
                       ]
                     },
-                    "maxItems": 6
+                    "maxItems": 7
                   }
                 },
                 "required": [
@@ -16549,11 +16550,25 @@
                         "type": "boolean"
                       }
                     }
+                  },
+                  "email": {
+                    "type": "object",
+                    "properties": {
+                      "account": {
+                        "type": "boolean",
+                        "description": "Email me about my account (warnings and other account notices)"
+                      },
+                      "locale": {
+                        "type": "string",
+                        "enum": [
+                          "en",
+                          "ar"
+                        ],
+                        "description": "Language of the emails"
+                      }
+                    }
                   }
-                },
-                "required": [
-                  "settings"
-                ]
+                }
               }
             }
           }

@@ -78,7 +78,8 @@ export type RealtimeNotificationKey =
   | 'uploadFailed'
   | 'newVideo'
   | 'liveStarted'
-  | 'commentReply';
+  | 'commentReply'
+  | 'accountWarning';
 
 export interface NotificationEvent {
   type: 'notification';

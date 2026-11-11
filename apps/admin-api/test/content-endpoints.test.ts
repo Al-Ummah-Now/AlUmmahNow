@@ -198,7 +198,8 @@ describe('content endpoints: permissions', () => {
   it('the permissions endpoint lists what the caller may do', async () => {
     const call = appFor({ REPORTS_DB: fakeDb().db, VIDEOS: fakeVideos().fetcher });
     const read = async (roles: string) => ((await (await call('/api/content/permissions', { roles })).json()) as { result: { permissions: string[] } }).result.permissions;
-    assert.deepEqual(await read('moderator'), []);
+    assert.deepEqual(await read('moderator'), ['users:warn']);
+    assert.ok((await read('admin')).includes('users:warn'));
     assert.ok(!(await read('admin')).includes('channels:transfer'));
     assert.ok((await read('super_admin')).includes('channels:transfer'));
   });

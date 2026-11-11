@@ -4,6 +4,8 @@
  * the api-videos translation seed).
  */
 
+import type { ReportReason } from './moderation';
+
 export interface LibraryTranslations {
   title: string;
   description: string;
@@ -124,6 +126,26 @@ export interface NotificationCenterTranslations {
     noneDescription: string;
     saved: string;
     error: string;
+  };
+  /**
+   * Account warning from the moderators (notification key accountWarning).
+   * `{reason}` is filled from `reasons`, `{count}` is the account's warning count.
+   */
+  accountWarning: {
+    title: string;
+    message: string;
+    reasons: Record<ReportReason, string>;
+  };
+  /** Settings: email about the account (warnings and other account notices). */
+  emailSettings: {
+    title: string;
+    description: string;
+    account: string;
+    accountDescription: string;
+    language: string;
+    languageDescription: string;
+    languages: { en: string; ar: string };
+    alwaysInApp: string;
   };
   justNow: string;
   minutesAgo: string;
@@ -260,6 +282,28 @@ export const NOTIFICATION_CENTER_EN: NotificationCenterTranslations = {
     saved: 'Channel notifications updated',
     error: 'Could not update channel notifications',
   },
+  accountWarning: {
+    title: 'Your account received a warning',
+    message: 'Reason: {reason}. Warnings on your account: {count}. Please read the community guidelines to keep your account in good standing.',
+    reasons: {
+      inappropriate: 'inappropriate content',
+      spam: 'spam or misleading content',
+      harassment: 'harassment or bullying',
+      copyright: 'copyright infringement',
+      misinformation: 'false or misleading information',
+      other: 'breaking the community guidelines',
+    },
+  },
+  emailSettings: {
+    title: 'Email',
+    description: 'Emails about your account',
+    account: 'Email me about my account',
+    accountDescription: 'Warnings and other notices about your account. They always arrive here in your notifications too.',
+    language: 'Email language',
+    languageDescription: 'The language of emails we send you',
+    languages: { en: 'English', ar: 'العربية' },
+    alwaysInApp: 'Account notices always appear in your notifications.',
+  },
   justNow: 'Just now',
   minutesAgo: '{count} min ago',
   hoursAgo: '{count} h ago',
@@ -331,6 +375,28 @@ export const NOTIFICATION_CENTER_AR: NotificationCenterTranslations = {
     noneDescription: 'لا إشعارات من هذه القناة',
     saved: 'تم تحديث إشعارات القناة',
     error: 'تعذّر تحديث إشعارات القناة',
+  },
+  accountWarning: {
+    title: 'تلقّى حسابك تحذيرًا',
+    message: 'السبب: {reason}. عدد التحذيرات على حسابك: {count}. يُرجى قراءة إرشادات المجتمع للحفاظ على حسابك في وضع جيد.',
+    reasons: {
+      inappropriate: 'محتوى غير لائق',
+      spam: 'محتوى مزعج أو مضلِّل',
+      harassment: 'التحرش أو التنمر',
+      copyright: 'انتهاك حقوق النشر',
+      misinformation: 'معلومات خاطئة أو مضلِّلة',
+      other: 'مخالفة إرشادات المجتمع',
+    },
+  },
+  emailSettings: {
+    title: 'البريد الإلكتروني',
+    description: 'رسائل البريد الإلكتروني المتعلقة بحسابك',
+    account: 'راسلني بالبريد بشأن حسابي',
+    accountDescription: 'التحذيرات والإشعارات الأخرى المتعلقة بحسابك. تصلك دائمًا هنا في إشعاراتك أيضًا.',
+    language: 'لغة البريد الإلكتروني',
+    languageDescription: 'لغة الرسائل التي نرسلها إليك',
+    languages: { en: 'English', ar: 'العربية' },
+    alwaysInApp: 'تظهر إشعارات الحساب دائمًا في إشعاراتك.',
   },
   justNow: 'الآن',
   minutesAgo: 'منذ {count} دقيقة',

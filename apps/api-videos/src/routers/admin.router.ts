@@ -16,9 +16,11 @@ import {
 	ADMIN_JOB_STATUSES,
 	ADMIN_CREATOR_FILTERS,
 	MAX_BULK_CREATOR_TIER,
+	type AccountNoticeRequest,
 } from '@al-ummah/shared-types';
 import { listChannels, listComments, listUsers, listVideos, type WaitUntil } from '../lib/admin/directory';
 import { searchUsers } from '../lib/admin/userSearch';
+import { AccountNoticeBody, accountEmailContact, accountNotice } from '../lib/admin/accountNotices';
 import * as admin from '../lib/admin/service';
 import { checkImage, checkThumbnailShapeFor, storeImage } from '../lib/admin/images';
 import { countJobs, getJob, listJobs, retryJob } from '../lib/admin/jobs';
@@ -243,6 +245,9 @@ app.patch('/users/:id', async (c) => ok(c, await admin.updateUser(c.env, c.req.p
 app.post('/users/:id/ban', async (c) => ok(c, await admin.banUser(c.env, c.req.param('id'), actor(c), parse(Reason, await body(c)).reason)));
 app.post('/users/:id/unban', async (c) => ok(c, await admin.unbanUser(c.env, c.req.param('id'), actor(c))));
 app.post('/users/:id/delete-data', async (c) => ok(c, await admin.deleteUserData(c.env, c.req.param('id'), actor(c), parse(Reason, await body(c)).reason)));
+// Account notices (warn-user): the in-app notice, and what an account email needs (admin-api sends it)
+app.post('/users/:id/account-notices', async (c) => ok(c, await accountNotice(c.env as never, c.req.param('id'), parse(AccountNoticeBody, await body(c)) as AccountNoticeRequest)));
+app.get('/users/:id/account-email', async (c) => ok(c, await accountEmailContact(c.env as never, c.req.param('id'))));
 
 // Soft deletes (lib/admin/deletions.ts): "Recently deleted", restore, "Delete permanently now"
 const DeletionQuery = z.object({
