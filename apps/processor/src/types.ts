@@ -82,6 +82,12 @@ export interface QueueEnvironment {
     send: (message: AlUmmahMessage) => Promise<void>;
   };
   MESSAGES_BUCKET: R2Bucket;
+  /**
+   * Which queue messages are archived to MESSAGES_BUCKET: "all" (default), "client-analytics"
+   * (only ClientAnalyticsEvent, whose archive is its only store) or "off". Nothing reads the
+   * archive of the other types; QA/stage use "client-analytics" (~180k R2 writes a day on QA).
+   */
+  MESSAGE_ARCHIVE?: string;
   community_posts: R2Bucket;
   REPORTS_DB: D1Database;
   /** Notification center + library indexes (Epic 29). Optional: features are skipped when unbound. */

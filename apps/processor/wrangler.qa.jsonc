@@ -85,6 +85,8 @@
     // Error reports to the admin Errors page (docs/features/error-reporting.md)
     "ERRORS_INGEST_URL": "https://admin.api.qa.alummahnow.net/internal/errors",
     "ENVIRONMENT": "qa",
+    // Archive only client analytics to R2 (apps/processor/src/types.ts MESSAGE_ARCHIVE)
+    "MESSAGE_ARCHIVE": "client-analytics",
     // Logging policy (docs/operations/logging.md): warn on production, stage and QA (only warnings, errors, slow requests); debug locally
     "LOG_LEVEL": "warn",
     "WEBSOCKET_URL": "https://realtime.qa.alummahnow.net",
