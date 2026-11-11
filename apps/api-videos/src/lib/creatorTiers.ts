@@ -432,13 +432,20 @@ const CHANNEL_RESERVATION = 'channel_create';
 const RESERVATION_TTL_SECONDS = 24 * 60 * 60;
 
 /** Channels the user owns plus creates in flight or not indexed yet. */
+/**
+ * Channels the user owns plus channel creates still in flight (a reservation whose channel is
+ * not indexed yet). The in-flight check is a correlated NOT EXISTS on the primary key: the
+ * earlier `lease_id NOT IN (SELECT id … WHERE kind = 'channel')` built the list of every
+ * channel on each call (~6k rows read per call on QA, 63k calls a day, 2026-11-11), which
+ * helped exhaust the search database ("D1 DB is overloaded").
+ */
 export async function countChannelSlots(db: D1Database, userId: string, nowMs = Date.now()): Promise<number> {
 	const row = await db
 		.prepare(
 			`SELECT
 			   (SELECT COUNT(*) FROM content_ownership WHERE kind = 'channel' AND owner_id = ?1 AND is_deleted = 0)
-			 + (SELECT COUNT(*) FROM upload_rate_leases WHERE user_id = ?1 AND operation = ?2 AND expires_at > ?3
-			      AND lease_id NOT IN (SELECT id FROM content_ownership WHERE kind = 'channel')) AS n`,
+			 + (SELECT COUNT(*) FROM upload_rate_leases l WHERE l.user_id = ?1 AND l.operation = ?2 AND l.expires_at > ?3
+			      AND NOT EXISTS (SELECT 1 FROM content_ownership c WHERE c.kind = 'channel' AND c.id = l.lease_id)) AS n`,
 		)
 		.bind(userId, CHANNEL_RESERVATION, Math.floor(nowMs / 1000))
 		.first<{ n: number }>();
@@ -454,8 +461,8 @@ export async function reserveChannelSlot(db: D1Database, userId: string, max: nu
 			`INSERT INTO upload_rate_leases (user_id, operation, lease_id, expires_at)
 			 SELECT ?1, ?2, ?3, ?4
 			 WHERE (SELECT COUNT(*) FROM content_ownership WHERE kind = 'channel' AND owner_id = ?1 AND is_deleted = 0)
-			     + (SELECT COUNT(*) FROM upload_rate_leases WHERE user_id = ?1 AND operation = ?2 AND expires_at > ?5
-			          AND lease_id NOT IN (SELECT id FROM content_ownership WHERE kind = 'channel')) < ?6`,
+			     + (SELECT COUNT(*) FROM upload_rate_leases l WHERE l.user_id = ?1 AND l.operation = ?2 AND l.expires_at > ?5
+			          AND NOT EXISTS (SELECT 1 FROM content_ownership c WHERE c.kind = 'channel' AND c.id = l.lease_id)) < ?6`,
 		)
 		.bind(userId, CHANNEL_RESERVATION, id, now + RESERVATION_TTL_SECONDS, now, max)
 		.run();
