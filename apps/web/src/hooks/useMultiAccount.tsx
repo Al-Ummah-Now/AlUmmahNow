@@ -415,14 +415,21 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       loadSessionData();
     };
 
-    // Listen for popstate (browser back/forward)
-    window.addEventListener('popstate', handleRouteChange);
+    // Not on popstate: Back/Forward inside the app never changes the session, and its server
+    // actions, dispatched while the router was still applying the popstate, committed the page
+    // being left back into history (Studio: Back from Dashboard stayed on Dashboard or went
+    // home). A cross-document Back remounts and loads; a page restored from the back/forward
+    // cache keeps old state, so that one reloads.
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) handleRouteChange();
+    };
+    window.addEventListener('pageshow', handlePageShow);
 
     // Listen for custom navigation events (for client-side navigation)
     window.addEventListener('session-login', handleRouteChange);
 
     return () => {
-      window.removeEventListener('popstate', handleRouteChange);
+      window.removeEventListener('pageshow', handlePageShow);
       window.removeEventListener('session-login', handleRouteChange);
     };
   }, [loadSessionData]);
