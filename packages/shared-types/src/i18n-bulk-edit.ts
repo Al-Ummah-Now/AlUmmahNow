@@ -55,6 +55,23 @@ export interface BulkRenameTranslations {
   excluded: string;
   summary: string;
   showMore: string;
+  /** Order of the rename (numbers follow it) */
+  orderBy: string;
+  orderKeys: { list: string; title: string; filename: string; uploaded: string; published: string; duration: string };
+  ascending: string;
+  descending: string;
+  customOrder: string;
+  orderHint: string;
+  dragHandle: string;
+  moveUp: string;
+  moveDown: string;
+  moved: string;
+  position: string;
+  continueFind: string;
+  continueLoading: string;
+  continueFound: string;
+  continueUse: string;
+  continueNone: string;
 }
 
 export interface BulkFieldTranslations {
@@ -76,6 +93,8 @@ export interface BulkFieldTranslations {
   playlists: string;
   addToPlaylists: string;
   removeFromPlaylists: string;
+  alsoOrderPlaylist: string;
+  alsoOrderPlaylistHint: string;
   tags: string;
   tagsMode: string;
   tagsAdd: string;
@@ -142,6 +161,8 @@ export interface BulkEditTranslations {
   undoing: string;
   undone: string;
   undoPartial: string;
+  playlistOrdered: string;
+  playlistOrderSkipped: string;
   reasons: Record<string, string>;
 
   /** Selection in Studio */
@@ -228,6 +249,22 @@ const RENAME_EN: BulkRenameTranslations = {
   excluded: 'Left out',
   summary: '{applies} will change, {blocked} blocked, {duplicates} duplicates, {unchanged} unchanged',
   showMore: 'Show all {count} rows',
+  orderBy: 'Order',
+  orderKeys: { list: 'As listed', title: 'Current title', filename: 'File name', uploaded: 'Upload date', published: 'Publish date', duration: 'Duration' },
+  ascending: 'Ascending',
+  descending: 'Descending',
+  customOrder: 'Your own order',
+  orderHint: 'Numbers follow this order. Drag a row, use its arrows, or press Alt+↑ / Alt+↓.',
+  dragHandle: 'Drag to reorder “{title}”',
+  moveUp: 'Move “{title}” up',
+  moveDown: 'Move “{title}” down',
+  moved: 'Moved to position {position} of {total}',
+  position: '{position}.',
+  continueFind: 'Continue numbering after…',
+  continueLoading: 'Looking through the channel’s titles…',
+  continueFound: 'Highest existing number for this pattern: {n}',
+  continueUse: 'Start at {next}',
+  continueNone: 'No existing title matches this pattern.',
 };
 
 const RENAME_AR: BulkRenameTranslations = {
@@ -280,6 +317,22 @@ const RENAME_AR: BulkRenameTranslations = {
   excluded: 'مستبعد',
   summary: 'سيتغير {applies}، ومحظور {blocked}، ومكرر {duplicates}، وبدون تغيير {unchanged}',
   showMore: 'عرض كل الصفوف ({count})',
+  orderBy: 'الترتيب',
+  orderKeys: { list: 'كما في القائمة', title: 'العنوان الحالي', filename: 'اسم الملف', uploaded: 'تاريخ الرفع', published: 'تاريخ النشر', duration: 'المدة' },
+  ascending: 'تصاعدي',
+  descending: 'تنازلي',
+  customOrder: 'ترتيبك الخاص',
+  orderHint: 'تتبع الأرقام هذا الترتيب. اسحب صفًا، أو استخدم أسهمه، أو اضغط Alt+↑ / Alt+↓.',
+  dragHandle: 'اسحب لإعادة ترتيب «{title}»',
+  moveUp: 'نقل «{title}» إلى أعلى',
+  moveDown: 'نقل «{title}» إلى أسفل',
+  moved: 'نُقل إلى الموضع {position} من {total}',
+  position: '{position}',
+  continueFind: 'متابعة الترقيم بعد…',
+  continueLoading: 'جارٍ البحث في عناوين القناة…',
+  continueFound: 'أعلى رقم موجود لهذا النمط: {n}',
+  continueUse: 'ابدأ من {next}',
+  continueNone: 'لا يوجد عنوان يطابق هذا النمط.',
 };
 
 const FIELDS_EN: BulkFieldTranslations = {
@@ -301,6 +354,8 @@ const FIELDS_EN: BulkFieldTranslations = {
   playlists: 'Playlists',
   addToPlaylists: 'Add to playlists',
   removeFromPlaylists: 'Remove from playlists',
+  alsoOrderPlaylist: 'Also order in playlist',
+  alsoOrderPlaylistHint: 'The videos are placed together in the playlist, in the order above.',
   tags: 'Tags',
   tagsMode: 'How',
   tagsAdd: 'Add',
@@ -337,6 +392,8 @@ const FIELDS_AR: BulkFieldTranslations = {
   playlists: 'قوائم التشغيل',
   addToPlaylists: 'إضافة إلى قوائم التشغيل',
   removeFromPlaylists: 'إزالة من قوائم التشغيل',
+  alsoOrderPlaylist: 'رتّبها في قائمة التشغيل أيضًا',
+  alsoOrderPlaylistHint: 'توضع المقاطع متجاورة في قائمة التشغيل بالترتيب الظاهر أعلاه.',
   tags: 'الوسوم',
   tagsMode: 'الطريقة',
   tagsAdd: 'إضافة',
@@ -400,6 +457,8 @@ export const BULK_EDIT_EN: BulkEditTranslations = {
   undoing: 'Undoing…',
   undone: 'Undone. {count} videos are back as they were.',
   undoPartial: 'Undone for {restored}. {kept} kept newer changes made since.',
+  playlistOrdered: 'Ordered in the playlist too.',
+  playlistOrderSkipped: 'The playlist sorts itself automatically, so its order was left as it is.',
   reasons: {
     not_found: 'Video not found',
     forbidden: 'You can’t edit this video',
@@ -493,6 +552,8 @@ export const BULK_EDIT_AR: BulkEditTranslations = {
   undoing: 'جارٍ التراجع…',
   undone: 'تم التراجع. عاد {count} من المقاطع كما كانت.',
   undoPartial: 'تم التراجع عن {restored}. واحتفظ {kept} بتغييرات أحدث أُجريت بعده.',
+  playlistOrdered: 'رُتّبت في قائمة التشغيل أيضًا.',
+  playlistOrderSkipped: 'قائمة التشغيل مرتبة تلقائيًا، فبقي ترتيبها كما هو.',
   reasons: {
     not_found: 'المقطع غير موجود',
     forbidden: 'لا يمكنك تعديل هذا المقطع',

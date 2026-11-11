@@ -16,11 +16,13 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { logger } from '@/lib/logger-client';
 import { reportError } from '@/lib/errors/reporter';
 import { bulkEditVideos, undoBulkEdit } from '@/lib/api/videos';
-import type { RenameSubject, TitleLanguage } from '@al-ummah/shared-types';
+import { getPlaylistById, reorderPlaylistVideos } from '@/lib/api/playlists';
+import { placeInOrder, type RenameSubject, type TitleLanguage } from '@al-ummah/shared-types';
 import {
   buildBulkRequest,
   emptyBulkForm,
   isEmptyRequest,
+  orderedForRename,
   readyFields,
   renamePreview,
   type BulkEditRequest,
@@ -39,6 +41,9 @@ export interface BulkPanelVideo {
   channelName?: Partial<Record<TitleLanguage, string>>;
   dateCreated?: string;
   originalFilename?: string;
+  /** For ordering: when it went (or goes) public, and its length in seconds */
+  publishedAt?: string | null;
+  duration?: number | null;
 }
 
 export const STUDIO_BULK_FIELDS: BulkField[] = ['title', 'description', 'category', 'language', 'visibility', 'playlists', 'tags', 'comments'];
@@ -52,6 +57,10 @@ interface RunState {
   progress: RunProgress;
   cancelled: boolean;
   undo?: { restored: number; kept: number; failed: number } | null;
+  /** The rename order, and whether the playlists added to follow it */
+  order: string[];
+  playlistOrder: boolean;
+  playlistNotice?: string;
 }
 
 interface BulkEditPanelProps {
@@ -66,19 +75,25 @@ interface BulkEditPanelProps {
   fields?: BulkField[];
   /** After a run or an undo: the videos that changed (refresh them) */
   onApplied?: (changedIds: string[]) => void;
+  /** Titles already on the channel, for "Continue numbering after" */
+  loadExistingTitles?: () => Promise<string[]>;
 }
 
-export function toSubject(video: BulkPanelVideo): RenameSubject {
+export function toSubject(video: BulkPanelVideo, listIndex = 0): RenameSubject {
   return {
     id: video.id,
     title: { en: video.titleLocalized?.en || video.title || '', ar: video.titleLocalized?.ar || '' },
     filename: video.originalFilename,
     date: video.dateCreated ?? null,
     channel: video.channelName,
+    listIndex,
+    uploadedAt: video.dateCreated ?? null,
+    publishedAt: video.publishedAt ?? null,
+    duration: video.duration ?? null,
   };
 }
 
-export function BulkEditPanel({ open, onOpenChange, videos, playlists = null, knownTags = [], selectedTags = [], fields = STUDIO_BULK_FIELDS, onApplied }: BulkEditPanelProps) {
+export function BulkEditPanel({ open, onOpenChange, videos, playlists = null, knownTags = [], selectedTags = [], fields = STUDIO_BULK_FIELDS, onApplied, loadExistingTitles }: BulkEditPanelProps) {
   const { t, lang } = useLanguage();
   const b = t.bulkEdit;
   const ui: TitleLanguage = lang === 'ar' ? 'ar' : 'en';
@@ -89,7 +104,7 @@ export function BulkEditPanel({ open, onOpenChange, videos, playlists = null, kn
   const [busyUndo, setBusyUndo] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const subjects = useMemo(() => videos.map(toSubject), [videos]);
+  const subjects = useMemo(() => videos.map((v, i) => toSubject(v, i)), [videos]);
   const byId = useMemo(() => new Map(videos.map((v) => [v.id, v])), [videos]);
   const offered = useMemo(() => fields.filter((f) => f !== 'playlists' || !!playlists), [fields, playlists]);
   const hideTokens = videos.some((v) => v.originalFilename) ? [] : ['{filename}'];
@@ -121,7 +136,7 @@ export function BulkEditPanel({ open, onOpenChange, videos, playlists = null, kn
     return (ui === 'ar' ? v?.titleLocalized?.ar : v?.titleLocalized?.en) || v?.title || id;
   };
 
-  const execute = async (ids: string[], state: Pick<RunState, 'operationId' | 'request'>, previous?: Map<string, BulkOutcome>) => {
+  const execute = async (ids: string[], state: Pick<RunState, 'operationId' | 'request' | 'order' | 'playlistOrder'>, previous?: Map<string, BulkOutcome>) => {
     const controller = new AbortController();
     abortRef.current = controller;
     const total = ids.length;
@@ -147,14 +162,44 @@ export function BulkEditPanel({ open, onOpenChange, videos, playlists = null, kn
     abortRef.current = null;
     logger.info('[BulkEditPanel] Bulk edit finished', { operationId: state.operationId, succeeded, failed, cancelled: result.cancelled });
     if (failed > 0 && succeeded === 0) reportError(new Error('Bulk edit failed for every video'), { shown: true, extra: { operationId: state.operationId, failed, reasons: failureReasons(outcomes.values()).map((r) => `${r.code}:${r.count}`).join(',') } });
+    if (state.playlistOrder && !result.cancelled) {
+      const playlistNotice = await orderPlaylists(state, outcomes);
+      setRun((r) => (r ? { ...r, playlistNotice } : r));
+    }
     const changed = Array.from(result.outcomes.values()).filter((o) => o.success && o.changed).map((o) => o.videoId);
     if (changed.length) onApplied?.(changed);
   };
 
+  /** "Also order in playlist": the edited videos together, in the rename order, in each playlist they were added to. */
+  const orderPlaylists = async (state: Pick<RunState, 'request' | 'order'>, outcomes: Map<string, BulkOutcome>): Promise<string> => {
+    const selection = state.order.filter((id) => outcomes.get(id)?.success);
+    const channelId = byId.get(selection[0] ?? '')?.channelId || '';
+    let skipped = false;
+    for (const playlistId of state.request.changes.addPlaylists ?? []) {
+      try {
+        const playlist = await getPlaylistById(playlistId);
+        if (!playlist) continue;
+        if (playlist.sortMode === 'auto') {
+          skipped = true;
+          continue;
+        }
+        const saved = await reorderPlaylistVideos(playlistId, placeInOrder(playlist.videos ?? [], selection), { channelId });
+        logger.info('[BulkEditPanel] Playlist ordered', { playlistId, count: selection.length, ok: saved.ok });
+        if (!saved.ok) skipped = true;
+      } catch (error) {
+        logger.warn('[BulkEditPanel] Playlist order failed', { playlistId, error: error instanceof Error ? error.message : String(error) });
+        skipped = true;
+      }
+    }
+    return skipped ? b.playlistOrderSkipped : b.playlistOrdered;
+  };
+
+  // Sent in the rename order: playlist adds append in it too
+  const orderedIds = () => orderedForRename(form, subjects).map((s) => s.id);
   const idsToSend = (request: BulkEditRequest) => {
     // With only titles changing, a video without an applicable new title is left out
-    if (Object.keys(request.changes).length === 0 && Object.keys(request.publishAt).length === 0) return videos.map((v) => v.id).filter((id) => request.titles[id]);
-    return videos.map((v) => v.id);
+    if (Object.keys(request.changes).length === 0 && Object.keys(request.publishAt).length === 0) return orderedIds().filter((id) => request.titles[id]);
+    return orderedIds();
   };
 
   const start = () => {
@@ -163,12 +208,13 @@ export function BulkEditPanel({ open, onOpenChange, videos, playlists = null, kn
       setError(b.nothingToApply);
       return;
     }
-    void execute(idsToSend(request), { operationId: newOperationId(), request });
+    void execute(idsToSend(request), { operationId: newOperationId(), request, order: orderedIds(), playlistOrder: form.playlistOrder && !!request.changes.addPlaylists?.length });
   };
 
   const retryFailed = () => {
     if (!run) return;
-    const failedIds = Array.from(run.outcomes.values()).filter((o) => !o.success).map((o) => o.videoId);
+    // In the rename order, so playlist adds keep it
+    const failedIds = run.order.filter((id) => run.outcomes.get(id)?.success === false);
     const notSent = run.cancelled ? idsToSend(run.request).filter((id) => !run.outcomes.has(id)) : [];
     const kept = new Map(Array.from(run.outcomes).filter(([, o]) => o.success));
     void execute([...failedIds, ...notSent], run, kept);
@@ -235,7 +281,7 @@ export function BulkEditPanel({ open, onOpenChange, videos, playlists = null, kn
 
       {step === 'form' && (
         <BulkFieldsForm variant="edit" form={form} onChange={setForm} subjects={subjects} fields={offered}
-          playlists={playlists} knownTags={knownTags} selectedTags={selectedTags} hideTokens={hideTokens} />
+          playlists={playlists} knownTags={knownTags} selectedTags={selectedTags} hideTokens={hideTokens} loadExistingTitles={loadExistingTitles} />
       )}
 
       {step === 'confirm' && (
@@ -320,6 +366,7 @@ export function BulkEditPanel({ open, onOpenChange, videos, playlists = null, kn
             )}
           </div>
           {progress.succeeded > 0 && !run.undo && <p id="bulk-edit-undo-hint" className="text-xs text-[var(--fanous-color-text-secondary)]">{b.undoHint}</p>}
+          {run.playlistNotice && <p role="status" className="text-sm" data-testid="bulk-edit-playlist-order-result">{run.playlistNotice}</p>}
           {run.undo && (
             <p role="status" className="text-sm" data-testid="bulk-edit-undone" data-restored={run.undo.restored} data-kept={run.undo.kept}>
               {run.undo.kept

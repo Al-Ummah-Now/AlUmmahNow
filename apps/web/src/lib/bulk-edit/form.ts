@@ -5,10 +5,13 @@
  * (initial values of queued files). Only ticked fields ever leave the form.
  */
 import {
+  orderedSubjects,
   previewRename,
   renamedTitles,
   staggeredTimes,
   type DigitStyle,
+  type OrderDirection,
+  type OrderKey,
   type RenameRule,
   type RenameRow,
   type RenameSubject,
@@ -42,6 +45,12 @@ export interface RenameState {
   arabicDigits: DigitStyle;
   /** Rows left out of the rename (subject ids) */
   excluded: string[];
+  /** The order {n} follows: the last quick sort chosen, and the ids in order (empty: list order) */
+  orderKey: OrderKey;
+  orderDir: OrderDirection;
+  order: string[];
+  /** Moved by hand since the last quick sort */
+  orderCustom: boolean;
 }
 
 export interface DescriptionState {
@@ -59,6 +68,8 @@ export interface BulkFormState {
   visibility: 'public' | 'private';
   playlistsAdd: string[];
   playlistsRemove: string[];
+  /** Also put the selection, in the rename order, together in the playlists it is added to */
+  playlistOrder: boolean;
   tagsMode: TagsMode;
   tags: string;
   /** datetime-local value (the creator's zone) */
@@ -83,6 +94,10 @@ export const EMPTY_RENAME: RenameState = {
   languages: ['en'],
   arabicDigits: 'latin',
   excluded: [],
+  orderKey: 'list',
+  orderDir: 'asc',
+  order: [],
+  orderCustom: false,
 };
 
 export function emptyBulkForm(uiLanguage: TitleLanguage = 'en'): BulkFormState {
@@ -98,6 +113,7 @@ export function emptyBulkForm(uiLanguage: TitleLanguage = 'en'): BulkFormState {
     visibility: 'private',
     playlistsAdd: [],
     playlistsRemove: [],
+    playlistOrder: false,
     tagsMode: 'add',
     tags: '',
     scheduleStart: '',
@@ -121,9 +137,14 @@ export function ruleOf(rename: RenameState): RenameRule {
   }
 }
 
-/** The rename preview rows for the subjects (title field ticked or not). */
+/** The subjects in the order the rename numbers them. */
+export function orderedForRename<T extends RenameSubject>(form: BulkFormState, subjects: readonly T[]): T[] {
+  return orderedSubjects(subjects, form.rename.order);
+}
+
+/** The rename preview rows for the subjects, in the chosen order. */
 export function renamePreview(form: BulkFormState, subjects: readonly RenameSubject[]): RenameRow[] {
-  return previewRename(subjects, {
+  return previewRename(orderedForRename(form, subjects), {
     rule: ruleOf(form.rename),
     languages: form.rename.languages,
     arabicDigits: form.rename.arabicDigits,
@@ -236,8 +257,10 @@ export function buildBulkRequest(form: BulkFormState, subjects: readonly RenameS
     else changes.replaceTags = tags;
   }
   if (ready.has('schedule')) {
-    const times = staggeredTimes(new Date(form.scheduleStart), subjects.length, form.scheduleEvery, form.scheduleUnit);
-    subjects.forEach((s, i) => {
+    // Staggered in the same order the titles are numbered
+    const ordered = orderedForRename(form, subjects);
+    const times = staggeredTimes(new Date(form.scheduleStart), ordered.length, form.scheduleEvery, form.scheduleUnit);
+    ordered.forEach((s, i) => {
       publishAt[s.id] = times[i];
     });
   }

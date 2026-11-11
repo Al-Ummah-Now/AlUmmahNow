@@ -14,7 +14,7 @@ import { TagAutocomplete } from '@/components/ui/TagAutocomplete';
 import { PlaylistPicker } from '@/components/videoUpload/PlaylistPicker';
 import type { PlaylistWithVideos } from '@/lib/api/playlists';
 import type { NewPlaylistInput } from '@/lib/api/upload-playlists-client';
-import type { RenameSubject, TitleLanguage } from '@al-ummah/shared-types';
+import type { OrderKey, RenameSubject, TitleLanguage } from '@al-ummah/shared-types';
 import {
   CONTENT_LANGUAGES,
   fieldProblem,
@@ -45,9 +45,13 @@ interface BulkFieldsFormProps {
   knownTags?: string[];
   selectedTags?: string[];
   hideTokens?: string[];
+  /** Quick sorts offered in the rename order */
+  orderKeys?: OrderKey[];
+  /** Titles already on the channel ("Continue numbering after") */
+  loadExistingTitles?: () => Promise<string[]>;
 }
 
-export function BulkFieldsForm({ variant, form, onChange, subjects, fields, playlists, knownTags = [], selectedTags = [], hideTokens }: BulkFieldsFormProps) {
+export function BulkFieldsForm({ variant, form, onChange, subjects, fields, playlists, knownTags = [], selectedTags = [], hideTokens, orderKeys = ['list', 'title', 'filename', 'uploaded', 'published', 'duration'], loadExistingTitles }: BulkFieldsFormProps) {
   const { t } = useLanguage();
   const b = t.bulkEdit;
   const f = b.fields;
@@ -83,11 +87,12 @@ export function BulkFieldsForm({ variant, form, onChange, subjects, fields, play
             <RenameFields value={form.rename} onChange={(rename) => set('rename', rename)} hideTokens={hideTokens} idPrefix={`bulk-${variant}-rename`} />
             <RenamePreview
               rows={preview}
+              subjects={subjects}
+              rename={form.rename}
+              onRenameChange={(rename) => set('rename', rename)}
+              orderKeys={orderKeys}
+              loadExistingTitles={loadExistingTitles}
               testId={`bulk-${variant}-preview`}
-              onToggle={(id, include) => set('rename', {
-                ...form.rename,
-                excluded: include ? form.rename.excluded.filter((x) => x !== id) : Array.from(new Set([...form.rename.excluded, id])),
-              })}
             />
           </div>
         );
@@ -185,6 +190,16 @@ export function BulkFieldsForm({ variant, form, onChange, subjects, fields, play
             <PlaylistPicker id={`bulk-${variant}-playlists-add`} testId={`bulk-${variant}-playlists-add`} label={f.addToPlaylists}
               playlists={playlists.list} loading={playlists.loading} failed={playlists.failed}
               selected={form.playlistsAdd} onChange={(ids) => set('playlistsAdd', ids)} onCreate={playlists.create} compact />
+            {variant === 'edit' && form.playlistsAdd.length > 0 && (
+              <label className="flex min-h-11 items-start gap-2 text-sm text-[var(--fanous-color-text-primary)]">
+                <input type="checkbox" checked={form.playlistOrder} onChange={(e) => set('playlistOrder', e.target.checked)}
+                  className="mt-1 h-4 w-4 accent-[var(--fanous-color-primary)]" aria-describedby={`bulk-${variant}-playlist-order-hint`} data-testid={`bulk-${variant}-playlist-order`} />
+                <span>
+                  {f.alsoOrderPlaylist}
+                  <span id={`bulk-${variant}-playlist-order-hint`} className="block text-xs text-[var(--fanous-color-text-secondary)]">{f.alsoOrderPlaylistHint}</span>
+                </span>
+              </label>
+            )}
             {variant === 'edit' && (
               <PlaylistPicker id={`bulk-${variant}-playlists-remove`} testId={`bulk-${variant}-playlists-remove`} label={f.removeFromPlaylists}
                 playlists={playlists.list} loading={playlists.loading} failed={playlists.failed}

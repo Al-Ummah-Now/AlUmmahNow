@@ -20,6 +20,12 @@ jest.mock('@/lib/api/videos', () => ({
   undoBulkEdit: (...args: unknown[]) => mockUndo(...args),
 }));
 jest.mock('@/lib/errors/reporter', () => ({ reportError: jest.fn() }));
+const mockGetPlaylist = jest.fn();
+const mockReorder = jest.fn();
+jest.mock('@/lib/api/playlists', () => ({
+  getPlaylistById: (...args: unknown[]) => mockGetPlaylist(...args),
+  reorderPlaylistVideos: (...args: unknown[]) => mockReorder(...args),
+}));
 
 const videos: BulkPanelVideo[] = [
   { id: 'v1', title: 'clip one', titleLocalized: { en: 'clip one', ar: 'مقطع' }, channelId: 'ch', originalFilename: 'one.mp4' },
@@ -62,7 +68,7 @@ describe('BulkEditPanel (Studio "Edit selected")', () => {
     fireEvent.click(screen.getByTestId('bulk-edit-tick-title'));
     fireEvent.click(screen.getByTestId('rename-lang-ar'));
     fireEvent.change(screen.getByTestId('rename-pattern'), { target: { value: 'درس' } });
-    const arRows = screen.getAllByTestId('bulk-edit-preview-row').filter((r) => r.getAttribute('data-language') === 'ar');
+    const arRows = screen.getAllByTestId('bulk-edit-preview-cell').filter((r) => r.getAttribute('data-language') === 'ar');
     expect(arRows).toHaveLength(3);
     expect(arRows.every((r) => r.getAttribute('data-problems')?.includes('duplicate'))).toBe(true);
     expect(within(arRows[0]).getByTestId('bulk-edit-preview-after')).toHaveAttribute('dir', 'rtl');
@@ -155,5 +161,93 @@ describe('BulkEditPanel (Studio "Edit selected")', () => {
     render(<BulkEditPanel open onOpenChange={jest.fn()} videos={videos} />);
     expect(screen.getByTestId('bulk-edit-panel-title')).toHaveTextContent(/تعديل (3|٣) من المقاطع/);
     expect(screen.getByTestId('bulk-edit-panel')).toHaveAttribute('dir', 'rtl');
+  });
+
+  describe('order of the rename', () => {
+    const afterTexts = () => screen.getAllByTestId('bulk-edit-preview-after').map((el) => el.textContent);
+    const rowIds = () => screen.getAllByTestId('bulk-edit-preview-row').map((el) => el.getAttribute('data-id'));
+
+    function renameLessons() {
+      fireEvent.click(screen.getByTestId('bulk-edit-tick-title'));
+      fireEvent.change(screen.getByTestId('rename-pattern'), { target: { value: 'Lesson {n}' } });
+    }
+
+    it('sorts by title (natural) both ways; numbers follow the order shown', () => {
+      render(<BulkEditPanel open onOpenChange={jest.fn()} videos={videos} />);
+      renameLessons();
+      expect(rowIds()).toEqual(['v1', 'v2', 'v3']);
+      fireEvent.change(screen.getByTestId('bulk-edit-preview-order-key'), { target: { value: 'title' } });
+      expect(rowIds()).toEqual(['v1', 'v3', 'v2']);
+      expect(afterTexts()).toEqual(['Lesson 1', 'Lesson 2', 'Lesson 3']);
+      fireEvent.click(screen.getByTestId('bulk-edit-preview-order-dir'));
+      expect(rowIds()).toEqual(['v2', 'v3', 'v1']);
+    });
+
+    it('moves a row with Alt+arrow keys and the arrow buttons, and announces it', () => {
+      render(<BulkEditPanel open onOpenChange={jest.fn()} videos={videos} />);
+      renameLessons();
+      fireEvent.keyDown(screen.getAllByTestId('bulk-edit-preview-handle')[0], { key: 'ArrowDown', altKey: true });
+      expect(rowIds()).toEqual(['v2', 'v1', 'v3']);
+      expect(screen.getByTestId('bulk-edit-preview-moved')).toHaveTextContent('Moved to position 2 of 3');
+      expect(screen.getByTestId('bulk-edit-preview-order-key')).toHaveValue('');
+      expect(afterTexts()[0]).toBe('Lesson 1');
+      // A plain arrow key does nothing
+      fireEvent.keyDown(screen.getAllByTestId('bulk-edit-preview-handle')[0], { key: 'ArrowDown' });
+      expect(rowIds()).toEqual(['v2', 'v1', 'v3']);
+      fireEvent.click(screen.getAllByTestId('bulk-edit-preview-up')[2]);
+      expect(rowIds()).toEqual(['v2', 'v3', 'v1']);
+      expect(screen.getAllByTestId('bulk-edit-preview-up')[0]).toBeDisabled();
+      expect(screen.getAllByTestId('bulk-edit-preview-down')[2]).toBeDisabled();
+    });
+
+    it('sends the videos in the chosen order with their numbers', async () => {
+      mockBulkEdit.mockResolvedValue(results(['v3', 'v1', 'v2']));
+      render(<BulkEditPanel open onOpenChange={jest.fn()} videos={videos} />);
+      renameLessons();
+      fireEvent.click(screen.getAllByTestId('bulk-edit-preview-up')[2]);
+      fireEvent.click(screen.getAllByTestId('bulk-edit-preview-up')[1]);
+      expect(rowIds()).toEqual(['v3', 'v1', 'v2']);
+      fireEvent.click(screen.getByTestId('bulk-edit-review'));
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('bulk-edit-apply'));
+      });
+      await screen.findByTestId('bulk-edit-result');
+      const [req] = mockBulkEdit.mock.calls[0];
+      expect(req.ids).toEqual(['v3', 'v1', 'v2']);
+      expect(req.perVideo).toEqual({ v3: { title: { en: 'Lesson 1' } }, v1: { title: { en: 'Lesson 2' } }, v2: { title: { en: 'Lesson 3' } } });
+    });
+
+    it('continues the numbering after the highest existing number', async () => {
+      const load = jest.fn().mockResolvedValue(['Lesson 35', 'Lesson ٣٦', 'Other 99']);
+      render(<BulkEditPanel open onOpenChange={jest.fn()} videos={videos} loadExistingTitles={load} />);
+      renameLessons();
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('bulk-edit-preview-continue'));
+      });
+      expect(await screen.findByTestId('bulk-edit-preview-continue-result')).toHaveAttribute('data-found', '36');
+      fireEvent.click(screen.getByTestId('bulk-edit-preview-continue-use'));
+      expect(afterTexts()).toEqual(['Lesson 37', 'Lesson 38', 'Lesson 39']);
+      expect(screen.getByTestId('rename-start')).toHaveValue(37);
+    });
+
+    it('also orders the videos in the playlist they are added to', async () => {
+      mockBulkEdit.mockResolvedValue(results(['v2', 'v1', 'v3']));
+      mockGetPlaylist.mockResolvedValue({ id: 'p1', videos: ['x', 'v1', 'y'], sortMode: 'manual' });
+      mockReorder.mockResolvedValue({ ok: true, data: { videos: [] } });
+      const playlists = { list: [{ id: 'p1', title: 'P', name: 'P', isPublic: true, videos: [] }], create: jest.fn() } as never;
+      render(<BulkEditPanel open onOpenChange={jest.fn()} videos={videos} playlists={playlists} />);
+      renameLessons();
+      fireEvent.click(screen.getAllByTestId('bulk-edit-preview-up')[1]);
+      fireEvent.click(screen.getByTestId('bulk-edit-tick-playlists'));
+      fireEvent.click(screen.getByTestId('bulk-edit-playlists-add-toggle'));
+      fireEvent.click(screen.getAllByTestId('bulk-edit-playlists-add-option')[0].querySelector('input') as HTMLInputElement);
+      fireEvent.click(screen.getByTestId('bulk-edit-playlist-order'));
+      fireEvent.click(screen.getByTestId('bulk-edit-review'));
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('bulk-edit-apply'));
+      });
+      expect(await screen.findByTestId('bulk-edit-playlist-order-result')).toHaveTextContent('Ordered in the playlist too.');
+      expect(mockReorder).toHaveBeenCalledWith('p1', ['x', 'v2', 'v1', 'v3', 'y'], { channelId: 'ch' });
+    });
   });
 });

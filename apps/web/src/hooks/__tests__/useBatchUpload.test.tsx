@@ -97,6 +97,15 @@ describe('useBatchUpload', () => {
     (logger.error as jest.Mock).mockClear();
   });
 
+  it('queues picked files in natural file name order, not the order the OS handed them over in', async () => {
+    const { hook } = setup();
+    await act(async () => {
+      await hook.result.current.addFiles([mp4('Lesson 10.mp4'), mp4('Lesson 2.mp4'), mp4('Lesson 1.mp4')]);
+    });
+    expect(initiate.mock.calls[0][0].map((v: { title: string }) => v.title)).toEqual(['Lesson 1', 'Lesson 2', 'Lesson 10']);
+    expect(hook.result.current.files.map((f) => f.file.name)).toEqual(['Lesson 1.mp4', 'Lesson 2.mp4', 'Lesson 10.mp4']);
+  });
+
   it('adds and uploads more files after a batch finished, again and again', async () => {
     const { hook, onError } = setup();
     for (let round = 0; round < 3; round++) {
@@ -243,7 +252,7 @@ describe('useBatchUpload', () => {
     });
     await uploadAll(hook);
     expect(onError).not.toHaveBeenCalled();
-    expect(logger.error).toHaveBeenCalledWith('[useBatchUpload] complete failed', expect.objectContaining({ error: 'raw 500', videoId: 'v43' }));
+    expect(logger.error).toHaveBeenCalledWith('[useBatchUpload] complete failed', expect.objectContaining({ error: 'raw 500', videoId: expect.stringMatching(/^v\d+$/) }));
   });
 
   it('a batch the upload limit fits in part: the first files start, the user is told how many and when, the rest start later', async () => {

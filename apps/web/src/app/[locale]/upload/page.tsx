@@ -145,6 +145,7 @@ const UploadPage: React.FC = () => {
     cancelAll,
     clearQueue,
     clearFinished,
+    reorderQueue,
   } = useBatchUpload({
     channelId: uploadChannelId,
     sharedMetadata: batchSharedMetadata,
@@ -291,6 +292,7 @@ const UploadPage: React.FC = () => {
     batchPlaylists,
     setBatchCategory,
     setRowCategories,
+    reorderQueue,
     disabled: isInitiating,
   });
   const renderRowCategory = (file: UploadQueueItem) => {

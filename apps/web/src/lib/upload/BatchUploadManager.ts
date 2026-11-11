@@ -172,6 +172,21 @@ export class BatchUploadManager {
   }
 
   /**
+   * Put the queue in this order (ids first, any others after, as they were).
+   * Uploads start in queue order, so this is also the upload order.
+   */
+  reorder(ids: readonly string[]): void {
+    const next = new Map<string, UploadQueueItem>();
+    for (const id of ids) {
+      const item = this.queue.get(id);
+      if (item) next.set(id, item);
+    }
+    for (const [id, item] of this.queue) if (!next.has(id)) next.set(id, item);
+    this.queue = next;
+    this.notifyProgressUpdate();
+  }
+
+  /**
    * Start all uploads in the queue
    */
   async startUploads(): Promise<void> {

@@ -178,6 +178,27 @@ describe('PATCH /api/videos/bulk', () => {
 		assert.equal(w.kv.ttl.get(key), 86400, 'undo kept for 24 hours');
 	});
 
+	it('appends to a playlist in the order the request lists the videos (the rename order)', async () => {
+		// The first-listed video finishes last (slow read): the playlist still follows the request
+		const videos = new MemoryBucket({
+			v1: videoFixture({ id: 'v1', channelId: 'owner-ch' }),
+			v2: videoFixture({ id: 'v2', channelId: 'owner-ch' }),
+			v3: videoFixture({ id: 'v3', channelId: 'owner-ch' }),
+		});
+		const realGet = videos.get.bind(videos);
+		(videos as any).get = async (key: string, ...rest: unknown[]) => {
+			if (key === 'v3') await new Promise((resolve) => setTimeout(resolve, 20));
+			return realGet(key, ...(rest as []));
+		};
+		const w = world({}, {
+			videos,
+			playlists: new MemoryBucket({ p: { id: 'p', title: 'P', userId: 'owner', channelId: 'owner-ch', videos: [], isPublic: true } }),
+		});
+		const res = (await (await patch(w, 'owner', { ids: ['v3', 'v1', 'v2'], changes: { addPlaylists: ['p'] } })).json()) as any;
+		assert.equal(res.summary.succeeded, 3);
+		assert.deepEqual(w.playlists.read('p').videos, ['v3', 'v1', 'v2']);
+	});
+
 	it('adds to and removes from playlists the caller manages, on the video\'s channel only', async () => {
 		const w = world({
 			a: videoFixture({ id: 'a', channelId: 'owner-ch' }),

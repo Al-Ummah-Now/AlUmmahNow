@@ -65,6 +65,11 @@ export interface RenameSubject {
   date?: string | Date | null;
   /** Channel name per language */
   channel?: Partial<Record<TitleLanguage, string>>;
+  /** For ordering (bulk-order.ts): position in the creator's list, dates, length in seconds */
+  listIndex?: number;
+  uploadedAt?: string | Date | null;
+  publishedAt?: string | Date | null;
+  duration?: number | null;
 }
 
 export interface RenameOptions {

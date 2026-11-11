@@ -60,8 +60,18 @@ export function editRow(row: RowState, field: RowField, values: Partial<RowValue
   return { values: { ...row.values, ...values }, touched: row.touched.includes(field) ? row.touched : [...row.touched, field] };
 }
 
-export function subjectOf(ref: QueueRowRef, row: RowState, channel?: Partial<Record<TitleLanguage, string>>): RenameSubject {
-  return { id: ref.id, title: { en: row.values.titleEn, ar: row.values.titleAr }, filename: ref.fileName, date: ref.addedAt ?? null, channel };
+export function subjectOf(ref: QueueRowRef, row: RowState, channel?: Partial<Record<TitleLanguage, string>>, listIndex?: number): RenameSubject {
+  return { id: ref.id, title: { en: row.values.titleEn, ar: row.values.titleAr }, filename: ref.fileName, date: ref.addedAt ?? null, channel, ...(listIndex !== undefined ? { listIndex } : {}) };
+}
+
+/**
+ * The queue order after ordering `subset` (some of its rows): the subset's
+ * rows take the subset's positions in the new order; other rows stay put.
+ */
+export function reorderWithin(queue: readonly string[], subsetInOrder: readonly string[]): string[] {
+  const inSubset = new Set(subsetInOrder);
+  let next = 0;
+  return queue.map((id) => (inSubset.has(id) ? subsetInOrder[next++] : id));
 }
 
 export interface SetResult {
