@@ -31,6 +31,32 @@ function hasBrowserBoundSignIn(): Promise<boolean> {
   return browserBoundSignIn;
 }
 
+let clientLists: Promise<boolean> | undefined;
+
+/**
+ * The shared client lists (Videos first): admin-web serves the content
+ * pass-through /api/content/*, which answers a signed-out request with JSON
+ * 401. Builds before it answer 404.
+ */
+function hasClientLists(): Promise<boolean> {
+  clientLists ??= (async () => {
+    const ctx = await playwrightRequest.newContext();
+    try {
+      const res = await ctx.get(`${ADMIN_WEB_URL}/api/content/permissions`, { maxRedirects: 0 });
+      return res.status() !== 404;
+    } finally {
+      await ctx.dispose();
+    }
+  })();
+  return clientLists;
+}
+
+/** Skips the current test on a PR run while QA's admin-web predates the client lists. */
+export async function skipUntilClientListsDeployed(): Promise<void> {
+  if (process.env.GITHUB_EVENT_NAME !== 'pull_request') return;
+  test.skip(!(await hasClientLists()), `${ADMIN_WEB_URL} predates the client lists (GET /api/content/permissions is 404); runs once this PR is on QA`);
+}
+
 /** Skips the current test on a PR run while QA's admin-web predates browser-bound sign-in. */
 export async function skipUntilSignInDeployed(): Promise<void> {
   if (process.env.GITHUB_EVENT_NAME !== 'pull_request') return;
