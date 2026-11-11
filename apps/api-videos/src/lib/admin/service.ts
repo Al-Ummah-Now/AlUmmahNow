@@ -43,6 +43,7 @@ import { bansFor, deleteBan, readBan, writeBan } from './bans';
 import { createJob, type JobHandler, type JobOutcome, type JobQueue } from './jobs';
 import { pendingDeletion, recordDeletion, removeDeletion, requestPurge, type PurgeOutcome } from './deletions';
 import { approvedFromPlan, planLegacyRestore, runLegacyRestore, type ApprovedRestore, type AuthUsersDb } from './legacy-restore';
+import { OWNER_DELETED_HOLD } from '../videoTrashMarks';
 import { runThumbnailRepairStep, type ThumbnailRepairEnv } from '../thumbnail/repair';
 import { runOwnershipRebuildStep, type OwnershipRebuildEnv } from '../search/ownershipRebuild';
 import { runPlaylistAddStep, type PlaylistEnv } from '../playlistBulk';
@@ -815,11 +816,15 @@ const ADMIN_DELETED_HOLD = 'admin:deleted';
 export async function restoreVideo(env: AdminServiceEnv, id: string): Promise<Row> {
 	await restorable(env, 'video', id);
 	const saved = await repo(env.videos).updateObject(id, (fresh) => {
-		if (!fresh.adminDeletion) return false;
+		// An admin restores admin deletes and creator deletes (lib/videoTrash.ts) alike
+		if (!fresh.adminDeletion && !fresh.ownerDeletion) return false;
 		fresh.isDeleted = false;
 		delete fresh.deletedAt;
+		delete fresh.deletedBy;
 		delete fresh.adminDeletion;
+		delete fresh.ownerDeletion;
 		liftSuspensionHold(fresh as SuspendableRecord, ADMIN_DELETED_HOLD);
+		liftSuspensionHold(fresh as SuspendableRecord, OWNER_DELETED_HOLD);
 		fresh.dateModified = now();
 		return true;
 	});
@@ -988,11 +993,15 @@ export async function deletePlaylist(env: AdminServiceEnv, id: string, actorId =
 export async function restorePlaylist(env: AdminServiceEnv, id: string): Promise<void> {
 	await restorable(env, 'playlist', id);
 	const saved = await repo(env.playlists).updateObject(id, (fresh) => {
-		if (!fresh.adminDeletion) return false;
+		// An admin restores admin deletes and creator deletes (lib/videoTrash.ts) alike
+		if (!fresh.adminDeletion && !fresh.ownerDeletion) return false;
 		fresh.isDeleted = false;
 		delete fresh.deletedAt;
+		delete fresh.deletedBy;
 		delete fresh.adminDeletion;
+		delete fresh.ownerDeletion;
 		liftSuspensionHold(fresh as SuspendableRecord, ADMIN_DELETED_HOLD);
+		liftSuspensionHold(fresh as SuspendableRecord, OWNER_DELETED_HOLD);
 		fresh.dateModified = now();
 		return true;
 	});

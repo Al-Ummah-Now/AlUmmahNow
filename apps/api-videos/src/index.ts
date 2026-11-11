@@ -471,7 +471,7 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 					reportJobFailure(rawEnv, ctx, 'subscription-import', error);
 				}),
 		);
-		// Hourly: admin soft deletes that are due (30 days up, or queued with
+		// Hourly: admin and creator soft deletes (lib/videoTrash.ts) that are due (30 days up, or queued with
 		// "Delete permanently now") are purged (lib/admin/deletions.ts). Through
 		// the search-sync wrapper so purged content leaves the indexes.
 		ctx.waitUntil(

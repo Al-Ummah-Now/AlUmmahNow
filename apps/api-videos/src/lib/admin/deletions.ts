@@ -147,32 +147,6 @@ export async function listDeletions(db: SearchDb, query: { kind?: AdminDeletionK
 	};
 }
 
-/** One channel's pending deletions of a kind (Studio's Recently deleted), newest first. */
-export async function listChannelDeletions(
-	db: SearchDb,
-	query: { kind: AdminDeletionKind; channelId: string; cursor?: string | null; pageSize?: number },
-): Promise<{ items: AdminDeletion[]; nextCursor: string | null }> {
-	const pageSize = Math.min(Math.max(query.pageSize ?? 30, 1), 100);
-	const where = ['kind = ?', 'channel_id = ?', 'purged_at IS NULL'];
-	const args: unknown[] = [query.kind, query.channelId];
-	if (query.cursor) {
-		const split = query.cursor.lastIndexOf('|');
-		if (split > 0) {
-			where.push('(deleted_at < ? OR (deleted_at = ? AND target_id < ?))');
-			const at = query.cursor.slice(0, split);
-			args.push(at, at, query.cursor.slice(split + 1));
-		}
-	}
-	const { results } = await db
-		.prepare(`SELECT ${COLUMNS} FROM admin_deletions WHERE ${where.join(' AND ')} ORDER BY deleted_at DESC, target_id DESC LIMIT ?`)
-		.bind(...args, pageSize + 1)
-		.all<DeletionRow>();
-	const rows = results ?? [];
-	const items = rows.slice(0, pageSize).map(toDeletion);
-	const last = items[items.length - 1];
-	return { items, nextCursor: rows.length > pageSize && last ? `${last.deletedAt}|${last.id}` : null };
-}
-
 /** Restore: the row goes (the audit log in admin-api keeps the history). */
 export async function removeDeletion(db: SearchDb, kind: AdminDeletionKind, id: string): Promise<void> {
 	await db.prepare('DELETE FROM admin_deletions WHERE kind = ? AND target_id = ? AND purged_at IS NULL').bind(kind, id).run();
@@ -231,6 +205,67 @@ async function writeLastRun(db: SearchDb, run: AdminDeletionCleanupRun): Promise
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error)).slice(0, 500);
 
 /**
+ * One cleanup step for one row: check its running purge job, or start the
+ * purge. Never throws: a failure is recorded on the row (attempts,
+ * last_error) and retried by the next run.
+ */
+async function processDeletion(env: JobEnv, db: SearchDb, d: AdminDeletion, purge: Purger, now: number, run: AdminDeletionCleanupRun): Promise<void> {
+	try {
+		if (d.purgeJobId) {
+			// A purge job is running: finish the row when it succeeded, start over when it failed
+			const job = await getJob(env, d.purgeJobId);
+			if (job?.status === 'succeeded') {
+				await update(db, d, { purged_at: new Date(now).toISOString(), last_error: null });
+				run.purged++;
+			} else if (!job || job.status === 'failed') {
+				await update(db, d, { purge_job_id: null, attempts: d.attempts + 1, last_error: job?.lastError ?? 'purge job missing' });
+				run.failed++;
+				logger.warn('[DeletionCleanup] Purge job failed; retried next run', { kind: d.kind, id: d.id, jobId: d.purgeJobId, attempts: d.attempts + 1 });
+			}
+			return;
+		}
+		const startedAt = d.purgeStartedAt ?? new Date(now).toISOString();
+		await update(db, d, { purge_started_at: startedAt });
+		const outcome = await purge({ ...d, purgeStartedAt: startedAt });
+		if (outcome.state === 'started') {
+			await update(db, d, { purge_job_id: outcome.jobId });
+			run.started++;
+		} else {
+			await update(db, d, { purged_at: new Date(now).toISOString(), last_error: outcome.state === 'skipped' ? outcome.reason : null });
+			if (outcome.state === 'purged') run.purged++;
+			else run.skipped++;
+		}
+	} catch (error) {
+		run.failed++;
+		await update(db, d, { attempts: d.attempts + 1, last_error: errorText(error) }).catch(() => undefined);
+		logger.error('[DeletionCleanup] Purge failed; retried next run', { kind: d.kind, id: d.id, attempts: d.attempts + 1, error: errorText(error) });
+	}
+}
+
+/**
+ * "Delete permanently now" for a creator (lib/videoTrash.ts): queues the row
+ * like requestPurge, then starts its purge at once instead of waiting for the
+ * next hourly run. A failed start is left queued, so the cleanup retries it.
+ */
+export async function purgeDeletionNow(
+	env: JobEnv & { SEARCH_DB?: SearchDb },
+	kind: AdminDeletionKind,
+	id: string,
+	actorId: string,
+	purge: Purger,
+	now = Date.now(),
+): Promise<AdminDeletion | null> {
+	const db = env.SEARCH_DB;
+	if (!db) return null;
+	await requestPurge(db, kind, id, actorId, new Date(now).toISOString());
+	const d = await pendingDeletion(db, kind, id);
+	if (!d) return null;
+	const run: AdminDeletionCleanupRun = { at: new Date(now).toISOString(), due: 1, purged: 0, started: 0, failed: 0, skipped: 0 };
+	if (!d.purgeStartedAt) await processDeletion(env, db, d, purge, now, run);
+	return getDeletion(db, kind, id);
+}
+
+/**
  * One cleanup run (hourly cron). Idempotent and safe to retry: each purge step
  * is idempotent, a row is marked purged only after its purge finished, and a
  * failed purge is retried on the next run (attempts, last_error).
@@ -246,38 +281,7 @@ export async function runDeletionCleanup(
 	if (!db) return run;
 	const due = await dueDeletions(db, now, opts.limit);
 	run.due = due.length;
-	for (const d of due) {
-		try {
-			if (d.purgeJobId) {
-				// A purge job is running: finish the row when it succeeded, start over when it failed
-				const job = await getJob(env, d.purgeJobId);
-				if (job?.status === 'succeeded') {
-					await update(db, d, { purged_at: new Date(now).toISOString(), last_error: null });
-					run.purged++;
-				} else if (!job || job.status === 'failed') {
-					await update(db, d, { purge_job_id: null, attempts: d.attempts + 1, last_error: job?.lastError ?? 'purge job missing' });
-					run.failed++;
-					logger.warn('[DeletionCleanup] Purge job failed; retried next run', { kind: d.kind, id: d.id, jobId: d.purgeJobId, attempts: d.attempts + 1 });
-				}
-				continue;
-			}
-			const startedAt = d.purgeStartedAt ?? new Date(now).toISOString();
-			await update(db, d, { purge_started_at: startedAt });
-			const outcome = await purge({ ...d, purgeStartedAt: startedAt });
-			if (outcome.state === 'started') {
-				await update(db, d, { purge_job_id: outcome.jobId });
-				run.started++;
-			} else {
-				await update(db, d, { purged_at: new Date(now).toISOString(), last_error: outcome.state === 'skipped' ? outcome.reason : null });
-				if (outcome.state === 'purged') run.purged++;
-				else run.skipped++;
-			}
-		} catch (error) {
-			run.failed++;
-			await update(db, d, { attempts: d.attempts + 1, last_error: errorText(error) }).catch(() => undefined);
-			logger.error('[DeletionCleanup] Purge failed; retried next run', { kind: d.kind, id: d.id, attempts: d.attempts + 1, error: errorText(error) });
-		}
-	}
+	for (const d of due) await processDeletion(env, db, d, purge, now, run);
 	await writeLastRun(db, run).catch((error) => logger.warn('[DeletionCleanup] Could not save the run summary', { error: errorText(error) }));
 	if (run.due > 0) logger.info('[DeletionCleanup] Run finished', { ...run, metric: 'admin_deletions_cleanup' });
 	return run;

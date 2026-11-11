@@ -5427,6 +5427,7 @@
           "Channels"
         ],
         "summary": "List a channel's recently deleted videos",
+        "description": "Creator deletes still restorable (within 30 days, purge not started), newest first; admin removals are not listed. A page can hold fewer items than `limit`: follow `cursor` until it is null. GET /api/channels/{id}/deleted-videos returns the same with full video views.",
         "operationId": "get_ChannelDeletedVideos",
         "parameters": [
           {
@@ -5493,6 +5494,9 @@
                               "purgeAfter": {
                                 "type": "string"
                               },
+                              "restorableUntil": {
+                                "type": "string"
+                              },
                               "status": {
                                 "type": "string",
                                 "enum": [
@@ -5509,6 +5513,7 @@
                               "deletedAt",
                               "deletedBy",
                               "purgeAfter",
+                              "restorableUntil",
                               "status"
                             ]
                           }
@@ -5781,6 +5786,479 @@
                     },
                     "message": {
                       "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/channels/{id}/deleted-videos": {
+      "get": {
+        "tags": [
+          "Channels"
+        ],
+        "summary": "List a channel's deleted videos",
+        "description": "Videos deleted from this channel that can still be restored, newest first, each with `deletedAt` and `restorableUntil`. Videos removed by an administrator are not listed. The owner, or a channel role with video.delete (an editor sees their own uploads).",
+        "operationId": "get_ChannelDeletedVideosList",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Channel id"
+            },
+            "required": true,
+            "description": "Channel id",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "number",
+              "description": "Items per page (1-100, default 20)"
+            },
+            "required": false,
+            "description": "Items per page (1-100, default 20)",
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Cursor from the previous page"
+            },
+            "required": false,
+            "description": "Cursor from the previous page",
+            "name": "cursor",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of deleted videos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "result": {
+                      "type": "object",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "description": {
+                                "type": "string"
+                              },
+                              "thumbnailUrl": {
+                                "type": "string"
+                              },
+                              "videoUrl": {
+                                "type": "string"
+                              },
+                              "playUrl": {
+                                "type": "string"
+                              },
+                              "userId": {
+                                "type": "string"
+                              },
+                              "channelId": {
+                                "type": "string"
+                              },
+                              "channelName": {
+                                "type": "string"
+                              },
+                              "channelAvatarUrl": {
+                                "type": "string"
+                              },
+                              "channelCoverUrl": {
+                                "type": "string"
+                              },
+                              "channelIsVerified": {
+                                "type": "boolean"
+                              },
+                              "dateCreated": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "dateModified": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "views": {
+                                "type": "number"
+                              },
+                              "width": {
+                                "type": "number"
+                              },
+                              "height": {
+                                "type": "number"
+                              },
+                              "availableResolutions": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "likesCount": {
+                                "type": "number"
+                              },
+                              "dislikesCount": {
+                                "type": "number"
+                              },
+                              "commentsCount": {
+                                "type": "number"
+                              },
+                              "commentSettings": {
+                                "type": "string",
+                                "enum": [
+                                  "on",
+                                  "held",
+                                  "off"
+                                ],
+                                "description": "Comments: on, held for review, off"
+                              },
+                              "isPublic": {
+                                "type": "boolean"
+                              },
+                              "isLive": {
+                                "type": "boolean"
+                              },
+                              "titleLocalized": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "string"
+                                }
+                              },
+                              "descriptionLocalized": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "string"
+                                }
+                              },
+                              "thumbnailType": {
+                                "type": "string",
+                                "enum": [
+                                  "auto",
+                                  "custom"
+                                ]
+                              },
+                              "thumbnailSizes": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "string"
+                                }
+                              },
+                              "tags": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "category": {
+                                "type": "string"
+                              },
+                              "categorySource": {
+                                "type": "string",
+                                "enum": [
+                                  "uploader",
+                                  "ai",
+                                  "admin"
+                                ],
+                                "description": "Who set the category; 'ai' = an AI suggestion the owner has not confirmed"
+                              },
+                              "language": {
+                                "type": "string"
+                              },
+                              "duration": {
+                                "type": "number"
+                              },
+                              "uploadStatus": {
+                                "type": "string",
+                                "enum": [
+                                  "initiated",
+                                  "uploading",
+                                  "processing",
+                                  "ready",
+                                  "failed"
+                                ]
+                              },
+                              "processingIssueKind": {
+                                "type": "string",
+                                "enum": [
+                                  "encode_failed",
+                                  "needs_reupload",
+                                  "stalled"
+                                ],
+                                "description": "Why processing did not finish"
+                              },
+                              "format": {
+                                "type": "string",
+                                "enum": [
+                                  "short",
+                                  "video"
+                                ],
+                                "description": "Uploader's choice of Short or video; absent = detected"
+                              },
+                              "isShort": {
+                                "type": "boolean",
+                                "description": "Short (≤ 3 min and vertical or square, or chosen by the uploader); shared rule"
+                              },
+                              "isDeleted": {
+                                "type": "boolean"
+                              },
+                              "deletedAt": {
+                                "type": "string",
+                                "description": "ISO time of the delete"
+                              },
+                              "markedForDeletion": {
+                                "type": "boolean"
+                              },
+                              "markedForDeletionAt": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "isHidden": {
+                                "type": "boolean"
+                              },
+                              "hiddenAt": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "hiddenByUserId": {
+                                "type": "string"
+                              },
+                              "hiddenReason": {
+                                "type": "string"
+                              },
+                              "comments": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "userId": {
+                                      "type": "string"
+                                    },
+                                    "channelId": {
+                                      "type": "string"
+                                    },
+                                    "videoId": {
+                                      "type": "string"
+                                    },
+                                    "text": {
+                                      "type": "string"
+                                    },
+                                    "dateCreated": {
+                                      "type": "string",
+                                      "format": "date-time"
+                                    },
+                                    "dateModified": {
+                                      "type": "string",
+                                      "format": "date-time"
+                                    },
+                                    "likesCount": {
+                                      "type": "number"
+                                    },
+                                    "dislikesCount": {
+                                      "type": "number"
+                                    },
+                                    "repliesCount": {
+                                      "type": "number"
+                                    },
+                                    "isEdited": {
+                                      "type": "boolean"
+                                    },
+                                    "isPinned": {
+                                      "type": "boolean"
+                                    },
+                                    "isDeleted": {
+                                      "type": "boolean"
+                                    },
+                                    "deletedAt": {
+                                      "type": "string",
+                                      "format": "date-time"
+                                    },
+                                    "markedForDeletion": {
+                                      "type": "boolean"
+                                    },
+                                    "markedForDeletionAt": {
+                                      "type": "string",
+                                      "format": "date-time"
+                                    },
+                                    "isHidden": {
+                                      "type": "boolean"
+                                    },
+                                    "hiddenAt": {
+                                      "type": "string",
+                                      "format": "date-time"
+                                    },
+                                    "hiddenByUserId": {
+                                      "type": "string"
+                                    },
+                                    "hiddenReason": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "userId",
+                                    "channelId",
+                                    "videoId",
+                                    "text",
+                                    "dateCreated",
+                                    "likesCount",
+                                    "dislikesCount",
+                                    "repliesCount",
+                                    "isEdited",
+                                    "isPinned"
+                                  ]
+                                }
+                              },
+                              "restorableUntil": {
+                                "type": "string",
+                                "description": "ISO time until which it can be restored"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "title",
+                              "userId",
+                              "channelId",
+                              "channelName",
+                              "dateCreated",
+                              "dateModified",
+                              "views",
+                              "availableResolutions",
+                              "likesCount",
+                              "dislikesCount",
+                              "commentsCount",
+                              "isPublic",
+                              "isLive",
+                              "isDeleted",
+                              "deletedAt",
+                              "restorableUntil"
+                            ]
+                          }
+                        },
+                        "cursor": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "description": "Next page cursor; null on the last page"
+                        }
+                      },
+                      "required": [
+                        "items",
+                        "cursor"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "result"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - no role on this channel that may delete videos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "video_not_found | forbidden | not_deleted | deleted_by_admin | restore_window_expired | trash_unavailable"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Channel not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "video_not_found | forbidden | not_deleted | deleted_by_admin | restore_window_expired | trash_unavailable"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The trash is unavailable right now",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "video_not_found | forbidden | not_deleted | deleted_by_admin | restore_window_expired | trash_unavailable"
                     }
                   },
                   "required": [
@@ -24512,6 +24990,7 @@
           "Videos"
         ],
         "summary": "Delete multiple videos (soft: restorable for 30 days)",
+        "description": "Moves up to 50 videos to the channel trash (owner, or a channel role with video.delete; an editor only their own uploads). Each successful result carries `restorableUntil`; a video already in the trash counts as deleted. Undo with POST /api/videos/bulk-restore or POST /api/videos/{id}/restore.",
         "operationId": "post_VideoBulkDelete",
         "parameters": [
           {
@@ -24572,6 +25051,14 @@
                           },
                           "error": {
                             "type": "string"
+                          },
+                          "code": {
+                            "type": "string",
+                            "description": "Why it failed (see TrashError codes)"
+                          },
+                          "restorableUntil": {
+                            "type": "string",
+                            "description": "ISO time until which the video can be restored (delete only)"
                           }
                         },
                         "required": [
@@ -24715,6 +25202,14 @@
                           },
                           "error": {
                             "type": "string"
+                          },
+                          "code": {
+                            "type": "string",
+                            "description": "Why it failed (see TrashError codes)"
+                          },
+                          "restorableUntil": {
+                            "type": "string",
+                            "description": "ISO time until which the video can be restored (delete only)"
                           }
                         },
                         "required": [
@@ -24811,6 +25306,7 @@
           "Videos"
         ],
         "summary": "Restore deleted videos (within 30 days, before permanent deletion starts)",
+        "description": "Restores up to 50 videos from the channel trash (owner, or a channel role with video.delete; an editor only their own uploads). Videos removed by an administrator are refused (code deleted_by_admin); past 30 days or once the purge started: code restore_window_expired.",
         "operationId": "post_VideoBulkRestore",
         "requestBody": {
           "content": {
@@ -24858,6 +25354,14 @@
                           },
                           "error": {
                             "type": "string"
+                          },
+                          "code": {
+                            "type": "string",
+                            "description": "Why it failed (see TrashError codes)"
+                          },
+                          "restorableUntil": {
+                            "type": "string",
+                            "description": "ISO time until which the video can be restored (delete only)"
                           }
                         },
                         "required": [
@@ -30575,7 +31079,8 @@
         "tags": [
           "Videos"
         ],
-        "summary": "Delete a Video (soft: restorable for 30 days)",
+        "summary": "Delete a video (restorable for 30 days)",
+        "description": "Moves the video to the channel's trash: it disappears from every list and search at once and can be restored with POST /api/videos/{id}/restore until `restorableUntil` (30 days). After that it is deleted for good (media included). DELETE /api/videos/{id}/permanent deletes it now. Allowed for the owner and channel roles with video.delete (an editor: own uploads). Deleting a video already in the trash answers its existing times (`alreadyDeleted: true`).",
         "operationId": "delete_VideoDelete",
         "parameters": [
           {
@@ -30601,26 +31106,37 @@
         ],
         "responses": {
           "200": {
-            "description": "Returns if the video was deleted successfully",
+            "description": "The video was moved to the trash",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "series": {
-                      "type": "object",
-                      "properties": {
-                        "success": {
-                          "type": "boolean"
-                        }
-                      },
-                      "required": [
-                        "success"
-                      ]
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "videoId": {
+                      "type": "string"
+                    },
+                    "deletedAt": {
+                      "type": "string",
+                      "description": "ISO time of the delete"
+                    },
+                    "restorableUntil": {
+                      "type": "string",
+                      "description": "ISO time until which the video can be restored"
+                    },
+                    "alreadyDeleted": {
+                      "type": "boolean",
+                      "description": "true: it was already in the trash"
                     }
                   },
                   "required": [
-                    "series"
+                    "success",
+                    "videoId",
+                    "deletedAt",
+                    "restorableUntil",
+                    "alreadyDeleted"
                   ]
                 }
               }
@@ -30642,6 +31158,10 @@
                     },
                     "message": {
                       "type": "string"
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "video_not_found | forbidden | not_deleted | deleted_by_admin | restore_window_expired | trash_unavailable"
                     }
                   },
                   "required": [
@@ -30652,7 +31172,7 @@
             }
           },
           "403": {
-            "description": "Forbidden - the video belongs to another user",
+            "description": "Forbidden - not your video, or removed by an administrator (code deleted_by_admin)",
             "content": {
               "application/json": {
                 "schema": {
@@ -30667,6 +31187,10 @@
                     },
                     "message": {
                       "type": "string"
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "video_not_found | forbidden | not_deleted | deleted_by_admin | restore_window_expired | trash_unavailable"
                     }
                   },
                   "required": [
@@ -30692,6 +31216,10 @@
                     },
                     "message": {
                       "type": "string"
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "video_not_found | forbidden | not_deleted | deleted_by_admin | restore_window_expired | trash_unavailable"
                     }
                   },
                   "required": [
@@ -30717,6 +31245,39 @@
                     },
                     "message": {
                       "type": "string"
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "video_not_found | forbidden | not_deleted | deleted_by_admin | restore_window_expired | trash_unavailable"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Deleting is unavailable right now",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "video_not_found | forbidden | not_deleted | deleted_by_admin | restore_window_expired | trash_unavailable"
                     }
                   },
                   "required": [
@@ -33159,6 +33720,149 @@
         }
       }
     },
+    "/api/v1/videos/{id}/permanent": {
+      "delete": {
+        "tags": [
+          "Videos"
+        ],
+        "summary": "Delete a video permanently now",
+        "description": "Deletes a video for good (record and media) without waiting for the 30 days; it can no longer be restored. Works on a video in the trash or a live one. Owner only. The purge runs in the background and is retried until done.",
+        "operationId": "delete_VideoPermanentDelete",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Video id"
+            },
+            "required": true,
+            "description": "Video id",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The permanent delete was started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "videoId": {
+                      "type": "string"
+                    },
+                    "purgeRequestedAt": {
+                      "type": "string",
+                      "description": "ISO time"
+                    },
+                    "purgeStarted": {
+                      "type": "boolean",
+                      "description": "false: queued, the hourly cleanup starts it"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "videoId",
+                    "purgeRequestedAt",
+                    "purgeStarted"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - not the owner, or removed by an administrator (code deleted_by_admin)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "video_not_found | forbidden | not_deleted | deleted_by_admin | restore_window_expired | trash_unavailable"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Video not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "video_not_found | forbidden | not_deleted | deleted_by_admin | restore_window_expired | trash_unavailable"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Deleting is unavailable right now",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "video_not_found | forbidden | not_deleted | deleted_by_admin | restore_window_expired | trash_unavailable"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/videos/{id}/publish-now": {
       "post": {
         "tags": [
@@ -33336,6 +34040,202 @@
                     },
                     "message": {
                       "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/videos/{id}/restore": {
+      "post": {
+        "tags": [
+          "Videos"
+        ],
+        "summary": "Restore a deleted video",
+        "description": "Brings back a video deleted with DELETE /api/videos/{id} while it is restorable: within 30 days and before its permanent deletion has started (a queued \"Delete permanently\" is undone). It is listed and searchable again as before. Same access as delete: the owner, or a channel role with video.delete (an editor: own uploads). A video removed by an administrator cannot be restored here.",
+        "operationId": "post_VideoRestore",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Video id"
+            },
+            "required": true,
+            "description": "Video id",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The video was restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "videoId": {
+                      "type": "string"
+                    },
+                    "restoredAt": {
+                      "type": "string",
+                      "description": "ISO time"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "videoId",
+                    "restoredAt"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - not your video, or removed by an administrator (code deleted_by_admin)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "video_not_found | forbidden | not_deleted | deleted_by_admin | restore_window_expired | trash_unavailable"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Video not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "video_not_found | forbidden | not_deleted | deleted_by_admin | restore_window_expired | trash_unavailable"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The video is not deleted (code not_deleted)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "video_not_found | forbidden | not_deleted | deleted_by_admin | restore_window_expired | trash_unavailable"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Past the 30-day window, or its permanent deletion has started (code restore_window_expired)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "video_not_found | forbidden | not_deleted | deleted_by_admin | restore_window_expired | trash_unavailable"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Restoring is unavailable right now",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "video_not_found | forbidden | not_deleted | deleted_by_admin | restore_window_expired | trash_unavailable"
                     }
                   },
                   "required": [
