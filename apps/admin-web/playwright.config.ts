@@ -9,7 +9,7 @@ import { SPEC_PLACEMENT } from '../web/e2e/test-utils/placement';
  * under a cross-run lock; every other spec only touches this job's own
  * accounts and reports, so the device projects run concurrently with other runs.
  */
-const SHARED_STATE_SPECS = /(06-translations-save|11-site-theme|12-legacy-profiles)\.spec\.ts$/;
+const SHARED_STATE_SPECS = /(06-translations-save|11-site-theme|12-legacy-profiles|17-live-streaming)\.spec\.ts$/;
 
 /**
  * E2E_ENV=local: the local E2E stack (docs/testing/LOCAL-STACK.md) the job booted. Only the specs

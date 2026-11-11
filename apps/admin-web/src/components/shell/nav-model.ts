@@ -91,6 +91,8 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/indices', label: 'nav.indices', icon: 'database', group: 'operations' },
   { href: '/video-formats', label: 'nav.videoFormats', icon: 'file', group: 'operations', requires: (a) => a.contact },
   { href: '/delivery', label: 'nav.delivery', icon: 'film', group: 'operations', requires: (a) => a.media },
+  // Live providers (D3): routing, providers, overrides, sessions, comparison; every admin reads, live:manage changes
+  { href: '/live-streaming', label: 'nav.liveStreaming', icon: 'activity', group: 'operations' },
 
   { href: '/site-theme', label: 'nav.siteTheme', icon: 'palette', group: 'site' },
   { href: '/deleted', label: 'nav.deleted', icon: 'trash', group: 'site' },
