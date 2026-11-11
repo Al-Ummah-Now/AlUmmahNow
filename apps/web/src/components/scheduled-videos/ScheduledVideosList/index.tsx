@@ -310,7 +310,7 @@ export function ScheduledVideosList({
                     <div className="mt-4 flex flex-wrap gap-2">
                       {canEdit && (
                         <Link
-                          href={`/${locale}/video/${video.id}/edit`}
+                          href={`/${locale}/studio/video/${video.id}/edit`}
                           data-testid="scheduled-video-edit"
                           className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
                         >

@@ -73,7 +73,7 @@ describe('UploadProcessingCard (single upload)', () => {
   it('links a failed video to its edit page and shows no raw error', () => {
     card('failed');
     expect(screen.getByRole('heading', { name: "Your video couldn't be processed" })).toBeInTheDocument();
-    expect(screen.getByTestId('upload-edit-video')).toHaveAttribute('href', '/en/video/vid-1/edit');
+    expect(screen.getByTestId('upload-edit-video')).toHaveAttribute('href', '/en/studio/video/vid-1/edit');
     expect(screen.queryByTestId('upload-view-video')).toBeNull();
     expect(document.body.textContent).not.toMatch(/error:|exception|status code|undefined/i);
   });
@@ -187,7 +187,7 @@ describe('BatchUploadQueue processing status', () => {
     expect(within(ready).getByTestId('batch-file-status')).toHaveTextContent('Ready');
     expect(within(ready).getByTestId('batch-file-view')).toHaveAttribute('href', '/en/video/v1');
     expect(within(failed).getByTestId('batch-file-status')).toHaveTextContent("Couldn't be processed");
-    expect(within(failed).getByTestId('batch-file-edit')).toHaveAttribute('href', '/en/video/v2/edit');
+    expect(within(failed).getByTestId('batch-file-edit')).toHaveAttribute('href', '/en/studio/video/v2/edit');
     // One polite announcement region for the queue
     expect(screen.getByTestId('batch-processing-announcement')).toHaveAttribute('aria-live', 'polite');
     expect(screen.getByTestId('batch-processing-announcement').textContent).toMatch(/Lesson [12]/);

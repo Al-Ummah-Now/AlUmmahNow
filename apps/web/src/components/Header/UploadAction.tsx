@@ -5,6 +5,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { mayUpload, useCreatorAccess } from '@/hooks/useCreatorAccess';
+import { studioUploadHref } from '@/lib/studio/links';
 
 const Icon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -29,9 +30,11 @@ export function UploadAction() {
       </span>
     );
   }
-  // Signed out goes to the upload page too, which asks them to sign in first
+  // Studio's upload for the active channel (the page's picker preselects it);
+  // signed out goes to the upload page too, which asks them to sign in first
+  const href = account?.channel?.id ? studioUploadHref(lang, account.channel.id) : `/${lang}/upload`;
   return (
-    <Link href={`/${lang}/upload`} className="upload-action" aria-label={label} title={label} data-testid="header-upload" data-state={user ? 'ready' : 'signed-out'}>
+    <Link href={href} className="upload-action" aria-label={label} title={label} data-testid="header-upload" data-state={user ? 'ready' : 'signed-out'}>
       <Icon /><span className="upload-action-label">{label}</span>
     </Link>
   );
