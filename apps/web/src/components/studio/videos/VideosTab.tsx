@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -23,7 +23,10 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/hooks/useLanguage';
-import { getChannelContentCounts, listChannelContent, type BulkSummary, type StudioVideo } from '@/lib/api/studio-content';
+import type { BulkSummary, StudioVideo } from '@/lib/api/studio-content';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
+import { fetchContentCounts, fetchContentPage, STUDIO_LIST_STALE_MS, studioContentKey, studioCountsKey, studioListKey } from '@/lib/studio/content-client';
+import { rememberListUrl } from '@/lib/studio/list-return';
 import { BulkScheduleDialog } from './BulkDialogs';
 import { DeletedVideos } from './DeletedVideos';
 import { cancelSchedule, publishNow } from '@/lib/api/scheduling';
@@ -63,11 +66,6 @@ export function VideosTab({ locale, channelId, role }: Props) {
   const query = useMemo(() => parseVideosQuery(new URLSearchParams(searchParams.toString())), [searchParams]);
   const queryKey = videosQueryString({ ...query, view: 'list', calendarView: 'month' });
 
-  const [items, setItems] = useState<StudioVideo[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [counts, setCounts] = useState<Record<StudioVideoStatus, number> | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [notice, setNotice] = useState('');
   const [pendingDelete, setPendingDelete] = useState<Pending>(null);
@@ -75,7 +73,6 @@ export function VideosTab({ locale, channelId, role }: Props) {
   const [bulkDialog, setBulkDialog] = useState<'playlist' | 'schedule' | null>(null);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [search, setSearch] = useState(query.q);
-  const requestRef = useRef(0);
 
   const update = useCallback((changes: Partial<VideosQuery>) => {
     const next = videosQueryString({ ...query, ...changes });
@@ -85,51 +82,48 @@ export function VideosTab({ locale, channelId, role }: Props) {
   const showingCalendar = query.status === 'scheduled' && query.view === 'calendar';
   const showingDeleted = query.status === 'deleted';
 
+  // Rows and counts from the API, cached (lib/studio/content-client.ts): a return to the
+  // list shows the cached rows at once and revalidates in the background
+  const queryClient = useQueryClient();
+  const refreshEvery = query.status === 'processing' ? PROCESSING_REFRESH_MS : false;
+  const listQuery = useInfiniteQuery({
+    queryKey: studioListKey(channelId, `${queryKey}|${showingCalendar ? 'calendar' : 'list'}`),
+    queryFn: ({ pageParam, signal }) => fetchContentPage(channelId, { ...query, view: undefined, calendarView: undefined, status: query.status, cursor: pageParam ?? undefined, limit: showingCalendar ? CALENDAR_PAGE : PAGE }, signal),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.cursor,
+    enabled: !showingDeleted,
+    staleTime: STUDIO_LIST_STALE_MS,
+    refetchInterval: refreshEvery,
+    retry: 1,
+  });
+  const countsQuery = useQuery({
+    queryKey: studioCountsKey(channelId),
+    queryFn: ({ signal }) => fetchContentCounts(channelId, signal),
+    staleTime: STUDIO_LIST_STALE_MS,
+    refetchInterval: refreshEvery,
+    retry: 1,
+  });
+  const items: StudioVideo[] = useMemo(() => listQuery.data?.pages.flatMap((page) => page.items) ?? [], [listQuery.data]);
+  const cursor = listQuery.hasNextPage ? 'more' : null;
+  const loading = listQuery.isPending && !showingDeleted;
+  const failed = listQuery.isError && !listQuery.data;
+  const counts = countsQuery.data ?? null;
+  useEffect(() => {
+    if (listQuery.error) logger.error('[Studio] Could not load videos', { channelId, error: listQuery.error });
+  }, [channelId, listQuery.error]);
+
+  /** Load the next page, or (no argument) refetch this channel's lists and counts after a change. */
   const load = useCallback(async (more?: string) => {
-    if (query.status === 'deleted') {
-      // Recently deleted loads its own list; only refresh the counts here
-      const nextCounts = await getChannelContentCounts(channelId).catch(() => null);
-      if (nextCounts) setCounts(nextCounts);
-      setLoading(false);
+    if (more) {
+      await listQuery.fetchNextPage();
       return;
     }
-    const request = ++requestRef.current;
-    if (!more) setLoading(true);
-    setFailed(false);
-    try {
-      const [page, nextCounts] = await Promise.all([
-        listChannelContent(channelId, { ...query, status: query.status as StudioVideoStatus, cursor: more, limit: showingCalendar ? CALENDAR_PAGE : PAGE }),
-        more ? Promise.resolve(undefined) : getChannelContentCounts(channelId),
-      ]);
-      if (request !== requestRef.current) return;
-      if (!page) {
-        setFailed(true);
-        return;
-      }
-      setItems((previous) => (more ? [...previous, ...page.items] : page.items));
-      setCursor(page.cursor);
-      if (nextCounts) setCounts(nextCounts);
-    } catch (error) {
-      logger.error('[Studio] Could not load videos', { channelId, error });
-      if (request === requestRef.current) setFailed(true);
-    } finally {
-      if (request === requestRef.current) setLoading(false);
-    }
-    // queryKey covers the fields of query the list depends on
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [channelId, queryKey, showingCalendar]);
+    await queryClient.invalidateQueries({ queryKey: studioContentKey(channelId) });
+  }, [channelId, listQuery, queryClient]);
 
   useEffect(() => {
     setSelected(new Set());
-    void load();
-  }, [load]);
-
-  // Uploads move on by themselves while this status is open
-  useEffect(() => {
-    if (query.status !== 'processing') return;
-    const timer = setInterval(() => void load(), PROCESSING_REFRESH_MS);
-    return () => clearInterval(timer);
-  }, [load, query.status]);
+  }, [channelId, queryKey]);
 
   // Search as the person pauses typing
   useEffect(() => {
@@ -156,10 +150,10 @@ export function VideosTab({ locale, channelId, role }: Props) {
   const selectAllMatching = async () => {
     setSelectingAll(true);
     const found = new Map(items.map((v) => [v.id, v]));
-    let next = cursor;
+    let next = listQuery.data?.pages.at(-1)?.cursor ?? null;
     try {
       while (next && found.size < MAX_BULK_EDIT_SELECTION) {
-        const page = await listChannelContent(channelId, { ...query, status: query.status as StudioVideoStatus, cursor: next, limit: 100 });
+        const page = await fetchContentPage(channelId, { ...query, view: undefined, calendarView: undefined, cursor: next, limit: 100 });
         if (!page) break;
         page.items.forEach((v) => found.set(v.id, v));
         next = page.cursor;
@@ -469,7 +463,7 @@ export function VideosTab({ locale, channelId, role }: Props) {
                         </div>
                         <div className="min-w-0">
                           {edit && actions.includes('edit') ? (
-                            <Link href={edit} dir="auto" className="block truncate font-medium text-foreground hover:underline" data-testid="studio-video-title">{video.title}</Link>
+                            <Link href={edit} onClick={() => rememberListUrl(channelId, edit)} onMouseEnter={() => router.prefetch(edit)} onFocus={() => router.prefetch(edit)} dir="auto" className="block truncate font-medium text-foreground hover:underline" data-testid="studio-video-title">{video.title}</Link>
                           ) : (
                             <span dir="auto" className="block truncate font-medium text-foreground" data-testid="studio-video-title">{video.title}</span>
                           )}
@@ -497,7 +491,7 @@ export function VideosTab({ locale, channelId, role }: Props) {
                             {actions.map((action) => {
                               const href = actionHref(action, video);
                               return href ? (
-                                <DropdownMenuItem key={action} asChild><Link href={href}>{text.actions[action]}</Link></DropdownMenuItem>
+                                <DropdownMenuItem key={action} asChild><Link href={href} onClick={() => { if (href.startsWith(base)) rememberListUrl(channelId, href); }}>{text.actions[action]}</Link></DropdownMenuItem>
                               ) : (
                                 <DropdownMenuItem key={action} onSelect={() => onAction(action, video)}>{text.actions[action]}</DropdownMenuItem>
                               );

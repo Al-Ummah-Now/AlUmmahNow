@@ -108,6 +108,14 @@ describe('GET /api/channels/:id/content', () => {
 		assert.deepEqual(await ids(await list(env, '?duration=short')), ['pub2']);
 	});
 
+	it('reports where the time goes (Server-Timing: access, heal, index, r2)', async () => {
+		const env = await setup(SAMPLE);
+		const res = await list(env, '');
+		const timing = res.headers.get('server-timing') ?? '';
+		for (const span of ['access;dur=', 'heal;dur=', 'index;dur=', 'r2;dur=']) assert.ok(timing.includes(span), timing);
+		assert.equal(res.headers.get('timing-allow-origin'), '*');
+	});
+
 	it('sorts', async () => {
 		const env = await setup(SAMPLE);
 		assert.deepEqual(await ids(await list(env, '?sort=oldest')), ['pub1', 'pub2']);
