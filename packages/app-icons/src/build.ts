@@ -1,5 +1,6 @@
 // Builds each app's icon set by downscaling its crop (assets/crops/<app>.webp, made by `crop`).
 // Production files are the crop and nothing else; QA and stage SVGs add the environment dot.
+// Every tab size is its own exact downscale, linked with `sizes`; see README for the <link> tags.
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
@@ -17,8 +18,6 @@ export interface IconFile { path: string; type: string; body: Uint8Array }
 export interface BuildOptions {
   /** URL prefix the icons are served under, used in the manifest (default "/"). */
   base?: string;
-  /** Also write favicon-16x16.png and favicon-32x32.png, for sites that already link them. */
-  legacyPng?: boolean;
   startUrl?: string;
 }
 
@@ -31,10 +30,18 @@ export async function downscale(app: AppId, size: number): Promise<Uint8Array> {
   return new Uint8Array(buf);
 }
 
-/** favicon.svg: the 64 px downscale wrapped in SVG; QA and stage add a corner dot. */
-export function svgWrap(png64: Uint8Array, env: Env = 'prod'): string {
-  const dot = env === 'prod' ? '' : `<circle cx="52.8" cy="11.2" r="9.8" fill="#fff"/><circle cx="52.8" cy="11.2" r="7.2" fill="${ENV_DOT[env]}"/>`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 64 64"><image width="64" height="64" href="data:image/png;base64,${Buffer.from(png64).toString('base64')}"/>${dot}</svg>\n`;
+/** Tab sizes served as PNGs, each its own downscale (Lanczos), linked with `sizes`. */
+export const TAB_SIZES = [16, 32, 48, 96] as const;
+/** The image inside the QA/stage SVGs: 2.7x the largest tab draw (16 px at 3x), so it stays sharp. */
+export const DOT_SVG_SIZE = 128;
+
+/**
+ * favicon-qa.svg / favicon-stage.svg: the art with an environment dot. There is no production SVG:
+ * browsers prefer an SVG over sized PNGs and then shrink its image with a soft filter.
+ */
+export function svgWrap(png: Uint8Array, env: Exclude<Env, 'prod'>): string {
+  const dot = `<circle cx="52.8" cy="11.2" r="9.8" fill="#fff"/><circle cx="52.8" cy="11.2" r="7.2" fill="${ENV_DOT[env]}"/>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 64 64"><image width="64" height="64" href="data:image/png;base64,${Buffer.from(png).toString('base64')}"/>${dot}</svg>\n`;
 }
 
 export function manifest(app: AppId, opts: BuildOptions = {}): string {
@@ -59,19 +66,18 @@ export async function desktopIco(app: AppId): Promise<Uint8Array> {
 }
 
 export async function buildApp(app: AppId, opts: BuildOptions = {}): Promise<IconFile[]> {
-  const [p16, p32, p48, p64, p180, p192, p512] = await Promise.all([16, 32, 48, 64, 180, 192, 512].map((s) => downscale(app, s)));
-  const files: IconFile[] = [
-    { path: 'favicon.svg', type: 'image/svg+xml', body: enc(svgWrap(p64)) },
-    { path: 'favicon-qa.svg', type: 'image/svg+xml', body: enc(svgWrap(p64, 'qa')) },
-    { path: 'favicon-stage.svg', type: 'image/svg+xml', body: enc(svgWrap(p64, 'stage')) },
-    { path: 'favicon.ico', type: 'image/x-icon', body: ico([p16, p32, p48]) },
-    { path: 'apple-touch-icon.png', type: 'image/png', body: p180 },
-    { path: 'icon-192.png', type: 'image/png', body: p192 },
-    { path: 'icon-512.png', type: 'image/png', body: p512 },
+  const sizes = [...TAB_SIZES, DOT_SVG_SIZE, 180, 192, 512];
+  const png = new Map(await Promise.all(sizes.map(async (s) => [s, await downscale(app, s)] as const)));
+  return [
+    { path: 'favicon.ico', type: 'image/x-icon', body: ico([png.get(16)!, png.get(32)!, png.get(48)!]) },
+    ...TAB_SIZES.map((s) => ({ path: `favicon-${s}x${s}.png`, type: 'image/png', body: png.get(s)! })),
+    { path: 'favicon-qa.svg', type: 'image/svg+xml', body: enc(svgWrap(png.get(DOT_SVG_SIZE)!, 'qa')) },
+    { path: 'favicon-stage.svg', type: 'image/svg+xml', body: enc(svgWrap(png.get(DOT_SVG_SIZE)!, 'stage')) },
+    { path: 'apple-touch-icon.png', type: 'image/png', body: png.get(180)! },
+    { path: 'icon-192.png', type: 'image/png', body: png.get(192)! },
+    { path: 'icon-512.png', type: 'image/png', body: png.get(512)! },
     { path: 'site.webmanifest', type: 'application/manifest+json', body: enc(manifest(app, opts)) },
   ];
-  if (opts.legacyPng) files.push({ path: 'favicon-16x16.png', type: 'image/png', body: p16 }, { path: 'favicon-32x32.png', type: 'image/png', body: p32 });
-  return files;
 }
 
 /** The set as one TypeScript module, for Workers that have no static assets (served from code). */

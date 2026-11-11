@@ -1,6 +1,6 @@
 // Contact sheet: each app's crop at 512/180/64/32/16 (real pixels), then light and dark tab bars.
 import { APP_IDS, APPS } from './crop.ts';
-import { downscale, svgWrap } from './build.ts';
+import { DOT_SVG_SIZE, downscale, svgWrap } from './build.ts';
 
 const uri = (b: Uint8Array, type = 'image/png') => `data:${type};base64,${Buffer.from(b).toString('base64')}`;
 
@@ -14,7 +14,7 @@ export async function contactSheet(): Promise<string> {
     const tab = (src: string) => `<div class="tab"><img src="${src}" width="16" height="16"><span>${APPS[app].short}</span></div>`;
     tabs.light.push(tab(s16));
     tabs.dark.push(tab(s16));
-    tabs.qa.push(tab(uri(new TextEncoder().encode(svgWrap(await downscale(app, 64), 'qa')), 'image/svg+xml')));
+    tabs.qa.push(tab(uri(new TextEncoder().encode(svgWrap(await downscale(app, DOT_SVG_SIZE), 'qa')), 'image/svg+xml')));
   }
   return `<!doctype html><meta charset="utf-8"><title>Al Ummah Now icons</title><style>
 body{margin:0;font:13px -apple-system,system-ui,sans-serif;background:#fff;color:#1f1f1f;width:1420px;padding-bottom:20px}

@@ -30,6 +30,20 @@ export const MAPPING: Record<AppId, string> = {
   tools: 'setC-staff-ring-octagon.png',
 };
 
+/**
+ * The owner's choice (2026-11-11): framing inside the frame-free square, as fractions of it
+ * (left, top, size), so the mark reads in a 16 px tab. Measured on the 512 px square:
+ * videos the lit windows with the play button, sign in the lantern with its keyhole, account
+ * the lantern body and dome, CMS the lantern with its pen. The rest keep the whole square: the
+ * admins' octagon frame is their mark.
+ */
+export const FRAMING: Partial<Record<AppId, readonly [left: number, top: number, size: number]>> = {
+  videos: [115 / 512, 180 / 512, 300 / 512],
+  auth: [40 / 512, 92 / 512, 420 / 512],
+  profile: [60 / 512, 45 / 512, 400 / 512],
+  cms: [30 / 512, 82 / 512, 430 / 512],
+};
+
 /** Other names the owner may use for an app in a file name (setC-<name>-*.png). */
 const ALIASES: Record<string, AppId> = {
   signin: 'auth', 'sign-in': 'auth', account: 'profile', 'accounts-admin': 'auth-admin', 'account-admin': 'auth-admin',
@@ -115,7 +129,14 @@ export async function logoCrop(file: string): Promise<Buffer> {
     .composite([{ input: trimmed, left: (size - width) >> 1, top: (size - height) >> 1 }]).png().toBuffer();
 }
 
-export async function cropFile(file: string): Promise<Buffer> {
-  const box = await cropBox(file);
+/** The app's square: the frame-free crop, then the app's framing inside it (if any). */
+export function framed(box: { left: number; top: number; size: number }, framing?: readonly [number, number, number]) {
+  if (!framing) return { left: box.left, top: box.top, size: box.size };
+  const [l, t, s] = framing;
+  return { left: box.left + Math.round(l * box.size), top: box.top + Math.round(t * box.size), size: Math.round(s * box.size) };
+}
+
+export async function cropFile(file: string, app?: AppId): Promise<Buffer> {
+  const box = framed(await cropBox(file), app && FRAMING[app]);
   return sharp(file).extract({ left: box.left, top: box.top, width: box.size, height: box.size }).png().toBuffer();
 }

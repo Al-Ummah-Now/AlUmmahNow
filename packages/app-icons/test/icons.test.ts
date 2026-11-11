@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import sharp from 'sharp';
-import { asModule, buildApp, desktopIco, ENV_DOT, manifest, svgWrap } from '../src/build.ts';
-import { APP_IDS, appOfName, cropBox, MAPPING, sourcesIn } from '../src/crop.ts';
+import { asModule, buildApp, desktopIco, DOT_SVG_SIZE, ENV_DOT, manifest, svgWrap, TAB_SIZES } from '../src/build.ts';
+import { APP_IDS, appOfName, cropBox, FRAMING, framed, MAPPING, sourcesIn } from '../src/crop.ts';
 import { ico, pngSize } from '../src/ico.ts';
 
 const entries = (body: Uint8Array) => {
@@ -52,23 +52,40 @@ test('the crop is a square inside a baked-in rounded frame, clear of its corners
   rmSync(file);
 });
 
-test('production SVG is the art alone; QA and stage add the corner dot', () => {
+test('the owner\'s framing is a square inside the frame-free crop', () => {
+  const box = { left: 100, top: 50, size: 512 };
+  assert.deepEqual(framed(box), box);
+  assert.deepEqual(framed(box, FRAMING.videos), { left: 215, top: 230, size: 300 });
+  for (const [app, [l, t, s]] of Object.entries(FRAMING)) assert.ok(l >= 0 && t >= 0 && l + s <= 1 && t + s <= 1, app);
+  // the admins' octagon frame is their mark: never reframed
+  for (const app of ['videos-admin', 'auth-admin', 'tools', 'www'] as const) assert.equal(FRAMING[app], undefined);
+});
+
+test('QA and stage SVGs add the corner dot', () => {
   const png = new Uint8Array([1, 2, 3]);
-  assert.ok(!svgWrap(png).includes('<circle'));
   assert.ok(svgWrap(png, 'qa').includes(ENV_DOT.qa));
   assert.ok(svgWrap(png, 'stage').includes(ENV_DOT.stage));
 });
 
 test('every app builds every size from its crop', async () => {
   for (const app of APP_IDS) {
-    const files = new Map((await buildApp(app, { legacyPng: true })).map((f) => [f.path, f.body]));
+    const files = new Map((await buildApp(app)).map((f) => [f.path, f.body]));
     assert.deepEqual(entries(files.get('favicon.ico')!), [16, 32, 48], app);
-    for (const [path, size] of [['apple-touch-icon.png', 180], ['icon-192.png', 192], ['icon-512.png', 512], ['favicon-16x16.png', 16]] as const) {
+    const pngs = [['apple-touch-icon.png', 180], ['icon-192.png', 192], ['icon-512.png', 512], ...TAB_SIZES.map((s) => [`favicon-${s}x${s}.png`, s])] as const;
+    for (const [path, size] of pngs) {
       assert.deepEqual(pngSize(files.get(path)!), { width: size, height: size }, `${app} ${path}`);
     }
     assert.ok(!files.has('icon-maskable-512.png'));
+    // no production SVG: browsers would prefer it over the exact-size PNGs and blur it
+    assert.ok(!files.has('favicon.svg'), `${app} favicon.svg`);
+    for (const env of ['qa', 'stage'] as const) {
+      const svg = new TextDecoder().decode(files.get(`favicon-${env}.svg`)!);
+      const inner = Buffer.from(svg.match(/base64,([^"]+)"/)![1], 'base64');
+      assert.deepEqual(pngSize(inner), { width: DOT_SVG_SIZE, height: DOT_SVG_SIZE }, `${app} ${env} svg image`);
+      assert.ok(svg.includes(ENV_DOT[env]));
+    }
     // true colour (RGB or RGBA), never a quantised palette: the art is used as is
-    for (const path of ['apple-touch-icon.png', 'icon-192.png', 'icon-512.png']) assert.ok([2, 6].includes(files.get(path)![25]), `${app} ${path} colour type`);
+    for (const [path] of pngs) assert.ok([2, 6].includes(files.get(path)![25]), `${app} ${path} colour type`);
   }
 });
 
@@ -77,7 +94,7 @@ test('manifest, Tools desktop ICO and the TS module', async () => {
   assert.equal(m.name, 'Al Ummah Now CMS');
   assert.deepEqual(m.icons.map((i: { src: string }) => i.src), ['/icons/icon-192.png', '/icons/icon-512.png']);
   assert.deepEqual(entries(await desktopIco('tools')), [16, 24, 32, 48, 64, 128, 256]);
-  assert.match(asModule('auth', await buildApp('auth')), /'\/favicon\.svg': \{ type: 'image\/svg\+xml', body: '/);
+  assert.match(asModule('auth', await buildApp('auth')), /'\/favicon-32x32\.png': \{ type: 'image\/png', body: '/);
 });
 
 test('ico rejects oversize entries', () => {
