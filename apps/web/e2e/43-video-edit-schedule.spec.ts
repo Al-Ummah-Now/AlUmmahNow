@@ -185,9 +185,9 @@ test.describe('Edit page - theme, locale and access', () => {
   });
 
   test('EDIT-104 reports a video that does not exist', async ({ page }) => {
-    await page.goto('/en/video/00000000-0000-0000-0000-000000000000/edit');
-    await expect(page.getByTestId('video-edit-page-error')).toBeVisible();
-    await expect(page.getByTestId('video-edit-page-error').getByRole('link')).toHaveAttribute('href', '/en/dashboard/videos');
+    // The editor lives in Studio; a video that does not exist has no Studio to open in
+    const res = await page.goto('/en/video/00000000-0000-0000-0000-000000000000/edit');
+    expect(res?.status()).toBe(404);
   });
 
   test.describe('signed out', () => {

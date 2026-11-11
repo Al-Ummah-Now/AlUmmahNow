@@ -97,11 +97,12 @@ test.describe('Unified Navigation - English (LTR)', () => {
   test('lists navigation links for a channel owner', async ({ page }) => {
     const menu = await openAccountMenu(page);
 
-    for (const href of ['/en/analytics', '/en/settings', '/en/dashboard/videos', '/en/scheduled-videos']) {
+    // My videos, Scheduled and Analytics are one Studio entry (the creator home)
+    for (const href of ['/en/studio', '/en/settings']) {
       await showMenuView(menu, 'main');
       await expect(menu.locator(`a[role="menuitem"][href="${href}"]`)).toBeVisible();
     }
-    await expect(menu.getByRole('menuitem', { name: 'My Videos' })).toBeVisible();
+    await expect(menu.getByRole('menuitem', { name: 'Studio', exact: true })).toBeVisible();
   });
 
   test('navigates to the profile page from the context card', async ({ page }) => {
@@ -113,12 +114,12 @@ test.describe('Unified Navigation - English (LTR)', () => {
     await expect(menu).toBeHidden();
   });
 
-  test('navigates to My Videos', async ({ page }) => {
+  test('navigates to Studio', async ({ page }) => {
     const menu = await openAccountMenu(page);
     await showMenuView(menu, 'main');
-    await menu.locator('a[role="menuitem"][href="/en/dashboard/videos"]').click();
+    await menu.locator('a[role="menuitem"][href="/en/studio"]').click();
 
-    await expect(page).toHaveURL(/\/en\/dashboard\/videos$/);
+    await expect(page).toHaveURL(/\/en\/studio\/[^/]+\/dashboard$/);
   });
 
   test('lists the account with its channel and the main-channel crown', async ({ page }) => {
@@ -203,7 +204,7 @@ test.describe('Unified Navigation - no channels', () => {
     await showMenuView(menu, 'main');
     await expect(menu.locator('a[role="menuitem"][href="/en/settings"]')).toBeVisible();
     await showMenuView(menu, 'main');
-    await expect(menu.locator('a[role="menuitem"][href="/en/dashboard/videos"]')).toHaveCount(0);
+    await expect(menu.locator('a[role="menuitem"][href="/en/studio"]')).toHaveCount(0);
   });
 });
 
@@ -228,7 +229,7 @@ test.describe('Unified Navigation - Arabic (RTL)', () => {
 
     await expect(menu.getByTestId('nav-switch-channel')).toHaveText('تبديل القناة');
     await expect(menu.getByTestId('nav-switch-account')).toHaveText('تبديل الحساب');
-    await expect(menu.getByRole('menuitem', { name: 'فيديوهاتي' })).toHaveAttribute('href', '/ar/dashboard/videos');
+    await expect(menu.getByRole('menuitem', { name: 'الاستوديو' })).toHaveAttribute('href', '/ar/studio');
     await showMenuView(menu, 'main');
     await expect(menu.locator('a[role="menuitem"][href="/ar/settings"]')).toBeVisible();
   });

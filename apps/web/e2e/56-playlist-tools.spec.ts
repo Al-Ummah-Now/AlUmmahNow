@@ -196,25 +196,18 @@ test.describe('Playlist tools', () => {
     }
   });
 
-  test('PLT-005 Video dashboard: add a video to a playlist from its card and the selection', async ({ page }) => {
-    const title = tempName('Tools Dashboard');
-    const { id } = await createPlaylist(owner, channelId(), { title });
+  test('PLT-005 Studio videos: add the selection to a playlist', async ({ page }) => {
+    const title = tempName('Tools Studio');
+    const { id } = await createPlaylist(owner, channelId(), { title, videoIds: [seeds[0].id] });
     try {
-      await page.goto('/en/dashboard/videos');
-      await expect(page.getByTestId('dashboard-loading')).toHaveCount(0, { timeout: 20000 });
-      const card = (video: E2EVideo) => page.locator(`[data-testid="dashboard-video-card"][data-video-id="${video.id}"]`);
-      await card(seeds[0]).getByTestId('dashboard-video-add-to-playlist').click();
+      await page.goto(`/en/studio/${channelId()}/content/videos`);
+      await expect(page.getByTestId('studio-videos-loading')).toHaveCount(0, { timeout: 20000 });
+      const select = (video: E2EVideo) => page.locator(`[data-testid="studio-video-select"][data-video-id="${video.id}"]`);
+      // One already in the playlist is skipped, not added twice
+      await select(seeds[0]).check();
+      await select(seeds[1]).check();
+      await page.getByTestId('studio-bulk-playlist').click();
       const dialog = page.getByTestId('add-to-playlist-dialog');
-      await expect(dialog.getByRole('heading', { name: 'Add 1 video to playlists' })).toBeVisible();
-      await dialog.locator(`[data-testid="add-to-playlist-option"][data-playlist-id="${id}"]`).check();
-      await dialog.getByTestId('add-to-playlist-submit').click();
-      await expect(dialog.getByTestId('bulk-add-notice')).toContainText(`Added 1 video to ${title}.`);
-      await dialog.getByTestId('add-to-playlist-done').click();
-
-      // The selection: one already in the playlist is skipped, not added twice
-      await card(seeds[0]).getByTestId('dashboard-video-select').check();
-      await card(seeds[1]).getByTestId('dashboard-video-select').check();
-      await page.getByTestId('dashboard-add-to-playlist').click();
       await dialog.locator(`[data-testid="add-to-playlist-option"][data-playlist-id="${id}"]`).check();
       await dialog.getByTestId('add-to-playlist-submit').click();
       await expect(dialog.getByTestId('bulk-add-notice')).toContainText(`Added 1 video to ${title}.`);

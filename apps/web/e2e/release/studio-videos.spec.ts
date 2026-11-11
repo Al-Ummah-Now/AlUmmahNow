@@ -3,6 +3,9 @@ import { expect, test } from '@playwright/test';
 import { skipUntilStudioDeployed, studioOwner } from './studio';
 import { target } from './targets';
 
+// Sign-in pages carry the test password: never record them
+test.use({ trace: 'off', video: 'off' });
+
 test.describe('Release: Studio Videos tab', () => {
   test.beforeEach(skipUntilStudioDeployed);
 
