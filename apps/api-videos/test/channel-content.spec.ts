@@ -72,7 +72,7 @@ const ids = async (res: Response) => ((await res.json()) as any).result.items.ma
 
 const SAMPLE = [
 	{ id: 'pub1', title: 'Alpha lecture', views: 5, duration: 600, dateCreated: '2026-01-01T00:00:00.000Z' },
-	{ id: 'pub2', title: 'Beta talk', views: 50, duration: 30, dateCreated: '2026-02-01T00:00:00.000Z', isPublic: false },
+	{ id: 'pub2', title: 'Beta talk', views: 50, duration: 30, format: 'short', dateCreated: '2026-02-01T00:00:00.000Z', isPublic: false },
 	{ id: 'draft', title: 'Draft', isDraft: true },
 	{ id: 'sched', title: 'Soon', scheduledPublishStatus: 'scheduled' },
 	{ id: 'proc', title: 'Busy', uploadStatus: 'processing' },

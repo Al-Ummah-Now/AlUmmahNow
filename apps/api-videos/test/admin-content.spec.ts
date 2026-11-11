@@ -211,21 +211,12 @@ describe('suspension holds', () => {
 });
 
 describe('search migrations', () => {
-	it('apply over a database that already has the Creator Studio columns (QA ran that preview migration)', () => {
+	it('apply in order, the Creator Studio columns included (QA applied that file from a preview under the same name)', () => {
 		const dir = join(__dirname, '..', 'migrations', 'search');
 		const db = new DatabaseSync(':memory:');
-		for (const file of readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()) {
-			db.exec(readFileSync(join(dir, file), 'utf8'));
-			// The Studio branch's 0003_content_studio_columns.sql, as applied on QA
-			if (file.startsWith('0002_')) {
-				db.exec(`ALTER TABLE content_ownership ADD COLUMN studio_status TEXT;
-					ALTER TABLE content_ownership ADD COLUMN title TEXT;
-					ALTER TABLE content_ownership ADD COLUMN category TEXT;
-					ALTER TABLE content_ownership ADD COLUMN language TEXT;`);
-			}
-		}
+		for (const file of readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()) db.exec(readFileSync(join(dir, file), 'utf8'));
 		const columns = (db.prepare("SELECT name FROM pragma_table_info('content_ownership')").all() as { name: string }[]).map((c) => c.name);
-		assert.ok(columns.includes('admin_title') && columns.includes('title'));
+		assert.ok(['admin_title', 'title', 'studio_status', 'category', 'language'].every((c) => columns.includes(c)));
 	});
 });
 

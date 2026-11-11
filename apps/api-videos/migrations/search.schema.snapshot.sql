@@ -2,6 +2,7 @@
 -- Schema after applying, in order:
 --   apps/api-videos/migrations/search/0001_search_index.sql
 --   apps/api-videos/migrations/search/0002_content_ownership.sql
+--   apps/api-videos/migrations/search/0003_content_studio_columns.sql
 --   apps/api-videos/migrations/search/0003_source_versions.sql
 --   apps/api-videos/migrations/search/0004_upload_rate_limits.sql
 --   apps/api-videos/migrations/search/0005_admin_content.sql
@@ -13,7 +14,7 @@
 --   apps/api-videos/migrations/search/0011_creator_tiers.sql
 --   apps/api-videos/migrations/search/0015_admin_deletions.sql
 --   apps/api-videos/migrations/search/0016_creator_tier_soft_delete.sql
---   apps/api-videos/migrations/search/0017_content_studio_columns.sql
+--   apps/api-videos/migrations/search/0017_deletions_by_channel.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
@@ -21,7 +22,7 @@ CREATE TABLE admin_deletions (kind TEXT NOT NULL, target_id TEXT NOT NULL, paren
 CREATE TABLE admin_jobs (id TEXT PRIMARY KEY, kind TEXT NOT NULL, target_kind TEXT NOT NULL, target_id TEXT NOT NULL, params TEXT NOT NULL DEFAULT '{}', status TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, result TEXT, actor_id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, finished_at TEXT);
 CREATE TABLE category_suggestions (subject_id TEXT PRIMARY KEY, subject_type TEXT NOT NULL, user_id TEXT, channel_id TEXT, reason TEXT NOT NULL, status TEXT NOT NULL, input_hash TEXT, category TEXT, confidence REAL, options_json TEXT, model TEXT, prompt_version TEXT, threshold REAL, applied INTEGER NOT NULL DEFAULT 0, previous_category TEXT, previous_source TEXT, outcome TEXT NOT NULL DEFAULT 'pending', final_category TEXT, reviewed_by TEXT, reviewed_at INTEGER, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
 CREATE TABLE channel_access (channel_id TEXT NOT NULL, user_id TEXT NOT NULL, role TEXT NOT NULL, source_version INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (channel_id, user_id));
-CREATE TABLE content_ownership (kind TEXT NOT NULL, id TEXT NOT NULL, owner_id TEXT, channel_id TEXT, is_public INTEGER NOT NULL DEFAULT 1, is_hidden INTEGER NOT NULL DEFAULT 0, is_deleted INTEGER NOT NULL DEFAULT 0, is_live INTEGER NOT NULL DEFAULT 0, duration REAL, schedule_status TEXT, upload_status TEXT, views INTEGER NOT NULL DEFAULT 0, created_at INTEGER, updated_at INTEGER, indexed_at INTEGER NOT NULL DEFAULT 0, source_version INTEGER NOT NULL DEFAULT 0, admin_title TEXT, handle TEXT, email TEXT, is_verified INTEGER NOT NULL DEFAULT 0, is_suspended INTEGER NOT NULL DEFAULT 0, subscribers INTEGER NOT NULL DEFAULT 0, admin_cols INTEGER NOT NULL DEFAULT 0, is_short INTEGER NOT NULL DEFAULT 0, needs_format INTEGER NOT NULL DEFAULT 0, studio_status TEXT, category TEXT, language TEXT, PRIMARY KEY (kind, id));
+CREATE TABLE content_ownership (kind TEXT NOT NULL, id TEXT NOT NULL, owner_id TEXT, channel_id TEXT, is_public INTEGER NOT NULL DEFAULT 1, is_hidden INTEGER NOT NULL DEFAULT 0, is_deleted INTEGER NOT NULL DEFAULT 0, is_live INTEGER NOT NULL DEFAULT 0, duration REAL, schedule_status TEXT, upload_status TEXT, views INTEGER NOT NULL DEFAULT 0, created_at INTEGER, updated_at INTEGER, indexed_at INTEGER NOT NULL DEFAULT 0, studio_status TEXT, title TEXT, category TEXT, language TEXT, source_version INTEGER NOT NULL DEFAULT 0, admin_title TEXT, handle TEXT, email TEXT, is_verified INTEGER NOT NULL DEFAULT 0, is_suspended INTEGER NOT NULL DEFAULT 0, subscribers INTEGER NOT NULL DEFAULT 0, admin_cols INTEGER NOT NULL DEFAULT 0, is_short INTEGER NOT NULL DEFAULT 0, needs_format INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (kind, id));
 CREATE TABLE creator_tier_assignments (user_id TEXT PRIMARY KEY, tier_id TEXT NOT NULL, source TEXT NOT NULL DEFAULT 'admin' CHECK (source IN ('admin', 'subscription')), assigned_by TEXT NOT NULL, assigned_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE creator_tiers (id TEXT PRIMARY KEY, name TEXT NOT NULL, unlimited INTEGER NOT NULL DEFAULT 0, per_hour INTEGER NOT NULL, per_day INTEGER NOT NULL, max_concurrent INTEGER NOT NULL, max_channels INTEGER, updated_at TEXT, updated_by TEXT, deleted_at TEXT, deleted_by TEXT, delete_reason TEXT, purge_requested_at TEXT, purge_requested_by TEXT) WITHOUT ROWID;
 CREATE TABLE search_channels (rowid INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE, channel_id TEXT, visible INTEGER NOT NULL DEFAULT 1, language TEXT, category TEXT, duration INTEGER, is_verified INTEGER NOT NULL DEFAULT 0, is_live INTEGER NOT NULL DEFAULT 0, views INTEGER NOT NULL DEFAULT 0, created_at INTEGER, popularity REAL NOT NULL DEFAULT 0, payload TEXT NOT NULL, content_hash TEXT, indexed_at INTEGER NOT NULL DEFAULT 0, source_version INTEGER NOT NULL DEFAULT 0, is_short INTEGER NOT NULL DEFAULT 0);
@@ -60,6 +61,7 @@ CREATE TABLE upload_rate_windows (user_id TEXT NOT NULL, operation TEXT NOT NULL
 CREATE TABLE videos_bans (user_id TEXT PRIMARY KEY, reason TEXT, banned_by TEXT NOT NULL, banned_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE INDEX idx_admin_comments_created ON admin_comments (created_at);
 CREATE INDEX idx_admin_comments_user ON admin_comments (user_id, created_at);
+CREATE INDEX idx_admin_deletions_channel ON admin_deletions (kind, channel_id, purged_at, deleted_at);
 CREATE INDEX idx_admin_deletions_due ON admin_deletions (purged_at, deleted_at);
 CREATE INDEX idx_admin_deletions_list ON admin_deletions (kind, purged_at, deleted_at);
 CREATE INDEX idx_admin_deletions_requested ON admin_deletions (purged_at, purge_requested_at);

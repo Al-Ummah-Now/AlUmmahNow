@@ -1,6 +1,6 @@
 /**
  * Backfill and check for the content_ownership columns the Studio Videos tab
- * filters on (migrations/search/0017_content_studio_columns.sql).
+ * filters on (migrations/search/0003_content_studio_columns.sql).
  *
  * Runs after the new api-videos is live, so every new write already fills the
  * columns and only older rows are left. It selects rows still missing them, so
@@ -11,7 +11,8 @@
  */
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { projectOwnership } from '../../packages/shared-types/src/search/ownership.ts';
+import { fileURLToPath } from 'node:url';
+import { studioVideoStatus } from '../../packages/shared-types/src/studio-status.ts';
 import { cfToken, createCfClient, d1Query, type CfClient } from './cf-api.ts';
 import { parseJsonc } from './jsonc.ts';
 
@@ -34,6 +35,16 @@ export interface BackfillIo {
 }
 
 const READ_ATTEMPTS = 3;
+
+const text = (value: unknown) => (typeof value === 'string' && value ? value : null);
+
+/** The Studio columns of one stored video (as projectOwnership writes them), or null when it is gone or not a video. */
+export function studioColumns(id: string, object: unknown): ColumnRow | null {
+	if (!object || typeof object !== 'object' || Array.isArray(object)) return null;
+	const video = object as Record<string, unknown>;
+	if (video.id !== undefined && video.id !== id) return null;
+	return { id, studioStatus: studioVideoStatus(video), title: text(video.title), category: text(video.category), language: text(video.language) };
+}
 
 interface Options {
 	batch?: number;
@@ -68,13 +79,13 @@ export async function runBackfill(io: BackfillIo, options: Options = {}): Promis
 
 		await Promise.all(ids.map(async (id) => {
 			const object = await readWithRetry(io, id, delayMs);
-			const row = object === null ? null : projectOwnership('video', id, object);
-			if (!row?.studioStatus) {
+			const row = studioColumns(id, object);
+			if (!row) {
 				await io.removeRow(id);
 				removed++;
 				return;
 			}
-			await io.setColumns({ id, studioStatus: row.studioStatus, title: row.title, category: row.category, language: row.language });
+			await io.setColumns(row);
 			updated++;
 		}));
 		log(`Backfilled ${updated}, removed ${removed}`);
@@ -90,7 +101,7 @@ export async function runCheck(io: BackfillIo): Promise<{ ok: boolean; missing: 
 type Config = Record<string, unknown> & { env?: Record<string, Record<string, unknown>> };
 
 function readConfig(env: ContentEnv): Config {
-	const root = resolve(new URL('../..', import.meta.url).pathname);
+	const root = fileURLToPath(new URL('../..', import.meta.url));
 	return parseJsonc(readFileSync(join(root, 'apps/api-videos', env === 'qa' ? 'wrangler.qa.jsonc' : 'wrangler.jsonc'), 'utf8')) as Config;
 }
 
@@ -134,7 +145,7 @@ function liveIo(cf: CfClient, target: { databaseId: string; bucket: string }): B
 	};
 }
 
-const isMain = process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.url).pathname);
+const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
 	const argv = process.argv.slice(2);
 	const env = argv[argv.indexOf('--env') + 1] as ContentEnv;

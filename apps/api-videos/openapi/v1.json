@@ -5421,6 +5421,222 @@
         }
       }
     },
+    "/api/v1/channels/{id}/content/deleted": {
+      "get": {
+        "tags": [
+          "Channels"
+        ],
+        "summary": "List a channel's recently deleted videos",
+        "operationId": "get_ChannelDeletedVideos",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Channel id"
+            },
+            "required": true,
+            "description": "Channel id",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted videos and the cursor of the next page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "result": {
+                      "type": "object",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "deletedAt": {
+                                "type": "string"
+                              },
+                              "deletedBy": {
+                                "type": "string"
+                              },
+                              "purgeAfter": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "deleted",
+                                  "queued",
+                                  "purging",
+                                  "purged"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "title",
+                              "deletedAt",
+                              "deletedBy",
+                              "purgeAfter",
+                              "status"
+                            ]
+                          }
+                        },
+                        "cursor": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "items",
+                        "cursor"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "result"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No access to this channel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Channel not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/channels/{id}/content/summary": {
       "get": {
         "tags": [
@@ -24295,7 +24511,7 @@
         "tags": [
           "Videos"
         ],
-        "summary": "Delete multiple videos",
+        "summary": "Delete multiple videos (soft: restorable for 30 days)",
         "operationId": "post_VideoBulkDelete",
         "parameters": [
           {
@@ -24446,22 +24662,19 @@
         }
       }
     },
-    "/api/v1/videos/bulk-playlist": {
+    "/api/v1/videos/bulk-purge": {
       "post": {
         "tags": [
-          "Playlists"
+          "Videos"
         ],
-        "summary": "Add several videos to a playlist",
-        "operationId": "post_VideoBulkPlaylist",
+        "summary": "Queue deleted videos for permanent deletion",
+        "operationId": "post_VideoBulkPurge",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
                 "properties": {
-                  "playlistId": {
-                    "type": "string"
-                  },
                   "videoIds": {
                     "type": "array",
                     "items": {
@@ -24472,7 +24685,6 @@
                   }
                 },
                 "required": [
-                  "playlistId",
                   "videoIds"
                 ]
               }
@@ -24565,8 +24777,126 @@
               }
             }
           },
-          "403": {
-            "description": "Not your playlist",
+          "401": {
+            "description": "Sign in required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/videos/bulk-restore": {
+      "post": {
+        "tags": [
+          "Videos"
+        ],
+        "summary": "Restore deleted videos (within 30 days, before permanent deletion starts)",
+        "operationId": "post_VideoBulkRestore",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "videoIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "minItems": 1,
+                    "maxItems": 50
+                  }
+                },
+                "required": [
+                  "videoIds"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Result per video",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "videoId": {
+                            "type": "string"
+                          },
+                          "success": {
+                            "type": "boolean"
+                          },
+                          "error": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "videoId",
+                          "success"
+                        ]
+                      }
+                    },
+                    "summary": {
+                      "type": "object",
+                      "properties": {
+                        "total": {
+                          "type": "number"
+                        },
+                        "succeeded": {
+                          "type": "number"
+                        },
+                        "failed": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "total",
+                        "succeeded",
+                        "failed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "results",
+                    "summary"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
             "content": {
               "application/json": {
                 "schema": {
@@ -24590,8 +24920,8 @@
               }
             }
           },
-          "404": {
-            "description": "Playlist not found",
+          "401": {
+            "description": "Sign in required",
             "content": {
               "application/json": {
                 "schema": {
@@ -30245,7 +30575,7 @@
         "tags": [
           "Videos"
         ],
-        "summary": "Delete a Video",
+        "summary": "Delete a Video (soft: restorable for 30 days)",
         "operationId": "delete_VideoDelete",
         "parameters": [
           {

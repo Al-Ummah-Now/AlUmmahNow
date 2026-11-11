@@ -4,7 +4,7 @@ import type { VideoObject } from "@al-ummah/shared-types";
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { MAX_BULK_VIDEOS } from "../../lib/bulkEdit";
 import { logger } from "../../lib/logger";
-import { Playlist as BusinessPlaylist, ResponseError } from "../../lib/types";
+import { ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import { announceSchedule, applySchedule, scheduleDateProblem, scheduleRefusal } from "../../lib/videoSchedule";
 import { canOnVideo } from "../../lib/channelAccess";
@@ -90,51 +90,6 @@ export class VideoBulkSchedule extends AuthenticatedRoute {
 				return { videoId, success: false, error: "Schedule failed" };
 			}
 		}));
-		return summarize(results);
-	}
-}
-
-/** POST /api/videos/bulk-playlist: adds videos to one of the caller's playlists. */
-export class VideoBulkPlaylist extends AuthenticatedRoute {
-	schema = {
-		tags: ["Playlists"],
-		summary: "Add several videos to a playlist",
-		request: {
-			body: { content: { "application/json": { schema: z.object({ playlistId: Str(), videoIds }) } } },
-		},
-		responses: {
-			"200": { description: "Result per video", content: { "application/json": { schema: Results } } },
-			"400": { description: "Invalid input", content: { "application/json": { schema: ResponseError } } },
-			"403": { description: "Not your playlist", content: { "application/json": { schema: ResponseError } } },
-			"404": { description: "Playlist not found", content: { "application/json": { schema: ResponseError } } },
-		},
-	};
-
-	async handle(c: AppContext) {
-		const { body } = await this.getValidatedData<typeof this.schema>();
-		const userId = this.getUserId(c) as string;
-		type PlaylistType = z.infer<typeof BusinessPlaylist>;
-		const playlists = new R2Repository<PlaylistType>(c.env.playlists);
-		const playlist = await playlists.getObject(body.playlistId);
-		if (!playlist) return c.json({ success: false, error: "Playlist not found" }, 404);
-		if (playlist.userId !== userId) return c.json({ success: false, error: "Forbidden" }, 403);
-
-		const repository = new R2Repository<VideoObject>(c.env.videos);
-		const ids = Array.from(new Set(body.videoIds));
-		const checks = await Promise.all(ids.map((id) => repository.getObject(id)));
-		const present = new Set(playlist.videos);
-		const added: string[] = [];
-		const results = ids.map((videoId, index): Result => {
-			const video = checks[index];
-			if (!video) return { videoId, success: false, error: "Video not found" };
-			if (video.userId !== userId) return { videoId, success: false, error: "Forbidden" };
-			if (!present.has(videoId)) added.push(videoId);
-			return { videoId, success: true };
-		});
-
-		if (added.length > 0) {
-			await playlists.putObject(body.playlistId, { ...playlist, videos: [...playlist.videos, ...added], dateModified: new Date().toISOString() });
-		}
 		return summarize(results);
 	}
 }

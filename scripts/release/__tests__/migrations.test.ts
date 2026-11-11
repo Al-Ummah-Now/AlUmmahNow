@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, rmSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { buildSchema } from '../d1-schema.ts';
-import { checkMigrations, NEVER_APPLIED_FIXES, parseNameStatus, sha256 } from '../migration-guard.ts';
+import { checkMigrations, NEVER_APPLIED_FIXES, PREVIEW_APPLIED, parseNameStatus, sha256 } from '../migration-guard.ts';
 import { discover, snapshotDiffs } from '../schema-snapshot.ts';
 
 const ROOT = resolve(import.meta.dirname, '../../..');
@@ -50,6 +50,21 @@ describe('migration guard', () => {
 	it('every recorded never-applied fix matches the committed file', () => {
 		for (const [path, fix] of Object.entries(NEVER_APPLIED_FIXES)) {
 			assert.equal(sha256(readFileSync(join(ROOT, path), 'utf8')), fix.sha256, path);
+		}
+	});
+
+	it('lets a migration a preview applied on QA land under its name, only as pinned', () => {
+		const path = 'apps/api-videos/migrations/search/0001_late.sql';
+		const pinned = { [path]: { sha256: sha256('ALTER TABLE t ADD COLUMN c TEXT;') } };
+		const added = parseNameStatus(`A\t${path}`);
+		assert.deepEqual(checkMigrations(added, base, () => 'ALTER TABLE t ADD COLUMN c TEXT;', {}, pinned), []);
+		assert.equal(checkMigrations(added, base, () => 'ALTER TABLE t ADD COLUMN d TEXT;', {}, pinned).length, 1);
+		assert.equal(checkMigrations(added, base, () => 'x', {}, {}).length, 1);
+	});
+
+	it('every preview-applied migration matches the committed file', () => {
+		for (const [path, entry] of Object.entries(PREVIEW_APPLIED)) {
+			assert.equal(sha256(readFileSync(join(ROOT, path), 'utf8')), entry.sha256, path);
 		}
 	});
 

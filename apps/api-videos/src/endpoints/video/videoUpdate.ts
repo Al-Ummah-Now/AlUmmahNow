@@ -219,7 +219,7 @@ export class VideoUpdate extends AuthenticatedRoute {
 			}
 			Object.assign(fresh, next);
 			// A draft made public is no longer a draft
-			if (previous.isDraft && fresh.isPublic !== false) delete (fresh as { isDraft?: boolean }).isDraft;
+			if (previous.isDraft && fresh.isPublic !== false) fresh.isDraft = false;
 			return true;
 		});
 		if (!updatedVideo) {

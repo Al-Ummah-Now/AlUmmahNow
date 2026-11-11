@@ -2,6 +2,7 @@
 -- studio_status holds the one status a video is in; the rule lives in
 -- studioVideoStatus (packages/shared-types/src/search/ownership.ts).
 ALTER TABLE content_ownership ADD COLUMN studio_status TEXT;
+ALTER TABLE content_ownership ADD COLUMN title TEXT;
 ALTER TABLE content_ownership ADD COLUMN category TEXT;
 ALTER TABLE content_ownership ADD COLUMN language TEXT;
 
@@ -11,3 +12,7 @@ CREATE INDEX IF NOT EXISTS idx_content_ownership_channel_status
 -- Existing rows are filled by scripts/release/content-columns.ts after the new
 -- worker is live. The ownership index stays trusted throughout, because no
 -- existing column changes.
+
+-- Kept under its first name on purpose: QA applied it from a PR preview
+-- (2026-11-09), so d1_migrations there already lists it, and stage and
+-- production apply it as new. `title` is unused (admin_title, 0005, holds it).

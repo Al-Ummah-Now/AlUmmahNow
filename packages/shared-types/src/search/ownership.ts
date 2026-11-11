@@ -93,30 +93,8 @@ export function ownershipInvalidatedKey(kind: OwnershipKind): string {
   return `ownership:invalidated:${kind}`;
 }
 
-export type StudioVideoStatus = 'published' | 'scheduled' | 'drafts' | 'processing' | 'failed';
-
-export const STUDIO_VIDEO_STATUSES: readonly StudioVideoStatus[] = ['published', 'scheduled', 'drafts', 'processing', 'failed'];
-
-/** The one status a video has in Studio. The first match wins. */
-export function studioVideoStatus(video: {
-  uploadStatus?: unknown;
-  processingStatus?: unknown;
-  scheduledPublishStatus?: unknown;
-  isDraft?: unknown;
-}): StudioVideoStatus {
-  const { uploadStatus, processingStatus, scheduledPublishStatus, isDraft } = video;
-  if (uploadStatus === 'failed' || processingStatus === 'failed' || scheduledPublishStatus === 'failed') return 'failed';
-  if (uploadStatus === 'initiated' || uploadStatus === 'uploading' || uploadStatus === 'processing') return 'processing';
-  if (processingStatus === 'pending' || processingStatus === 'processing' || processingStatus === 'transcoding') return 'processing';
-  if (scheduledPublishStatus === 'scheduled' || scheduledPublishStatus === 'publishing') return 'scheduled';
-  return isDraft === true ? 'drafts' : 'published';
-}
-
-/** What a Retry on a failed video should do. Null when the video hasn't failed. */
-export function studioFailureKind(video: { uploadStatus?: unknown; processingStatus?: unknown; scheduledPublishStatus?: unknown }): 'upload' | 'publish' | null {
-  if (video.uploadStatus === 'failed' || video.processingStatus === 'failed') return 'upload';
-  return video.scheduledPublishStatus === 'failed' ? 'publish' : null;
-}
+import { studioVideoStatus, type StudioVideoStatus } from '../studio-status';
+export { STUDIO_VIDEO_STATUSES, studioFailureKind, studioVideoStatus, type StudioVideoStatus } from '../studio-status';
 
 export interface OwnershipRow {
   kind: OwnershipKind;
@@ -134,7 +112,7 @@ export interface OwnershipRow {
   duration: number | null;
   scheduleStatus: string | null;
   uploadStatus: string | null;
-  /** Studio Videos tab columns (migrations/search/0017_content_studio_columns.sql); videos only. */
+  /** Studio Videos tab columns (migrations/search/0003_content_studio_columns.sql); videos only. */
   studioStatus: StudioVideoStatus | null;
   category: string | null;
   language: string | null;

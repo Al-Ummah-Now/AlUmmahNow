@@ -2,7 +2,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { MessageType } from '@al-ummah/shared-types';
-import { VideoBulkPlaylist, VideoBulkSchedule } from '../src/endpoints/video/videoBulkStudio';
+import { VideoBulkSchedule } from '../src/endpoints/video/videoBulkStudio';
 import { VideoScheduleCreate } from '../src/endpoints/video/scheduleCreate';
 import { VideoScheduleDelete } from '../src/endpoints/video/scheduleDelete';
 import { VideoSchedulePublishNow } from '../src/endpoints/video/schedulePublishNow';
@@ -15,7 +15,6 @@ const json = { 'Content-Type': 'application/json' };
 const inAnHour = () => new Date(Date.now() + 60 * 60 * 1000).toISOString();
 
 function routes(r: any) {
-	r.post('/api/videos/bulk-playlist', VideoBulkPlaylist);
 	r.post('/api/videos/bulk-schedule', VideoBulkSchedule);
 	r.post('/api/videos/bulk-update', VideoBulkUpdate);
 	r.post('/api/videos/:id/schedule', VideoScheduleCreate);
@@ -102,24 +101,5 @@ describe('POST /api/videos/bulk-schedule', () => {
 		assert.equal(((await soon.json()) as any).summary.failed, 1);
 		const many = await send(e, 'POST', '/api/videos/bulk-schedule', { videoIds: Array.from({ length: 51 }, (_, i) => `v${i}`), startAt: inAnHour(), timezone: 'UTC' });
 		assert.equal(many.status, 400);
-	});
-});
-
-describe('POST /api/videos/bulk-playlist', () => {
-	const playlist = (videos: string[] = ['have'], userId = 'owner') => ({ p1: { id: 'p1', userId, title: 'P', videos, dateCreated: 'x', dateModified: 'x' } });
-
-	it('adds videos once and reports the rest', async () => {
-		const e = env({ a: {}, have: {}, theirs: { userId: 'other' } }, playlist());
-		const res = await send(e, 'POST', '/api/videos/bulk-playlist', { playlistId: 'p1', videoIds: ['a', 'have', 'theirs', 'gone'] });
-		assert.equal(res.status, 200, await res.clone().text());
-		const body = (await res.json()) as any;
-		assert.deepEqual(body.summary, { total: 4, succeeded: 2, failed: 2 });
-		assert.deepEqual(JSON.parse(e.playlists.store.get('p1') as string).videos, ['have', 'a']);
-	});
-
-	it('refuses someone else\'s playlist, and a missing one', async () => {
-		const e = env({ a: {} }, playlist(['have'], 'other'));
-		assert.equal((await send(e, 'POST', '/api/videos/bulk-playlist', { playlistId: 'p1', videoIds: ['a'] })).status, 403);
-		assert.equal((await send(e, 'POST', '/api/videos/bulk-playlist', { playlistId: 'nope', videoIds: ['a'] })).status, 404);
 	});
 });

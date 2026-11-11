@@ -7,6 +7,7 @@
 import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { VideoBulkDelete } from '../src/endpoints/video/videoBulkDelete';
+import { SqliteD1 } from './search-sqlite-d1';
 import { VideoDelete } from '../src/endpoints/video/videoDelete';
 import {
 	BUNNY_DELETE_KIND,
@@ -128,8 +129,10 @@ afterEach(() => {
 	globalThis.fetch = realFetch;
 });
 
-describe('owner delete queues the Bunny delete', () => {
-	it('DELETE /api/videos/:id removes the record and queues a bunny-delete for the same id', async () => {
+describe('owner delete never erases at once', () => {
+	// Creator deletes are soft (lib/creatorDeletions.ts, test/creator-soft-delete.spec.ts):
+	// the Bunny video goes with the cleanup's purge job, never with the delete itself.
+	it('DELETE /api/videos/:id keeps the record and queues no bunny-delete', async () => {
 		const id = uuid(1);
 		const videos = new MemoryBucket({ [id]: videoFixture({ id, userId: 'owner', channelId: 'owner-ch' }) });
 		const processing = new DelayQueue();
@@ -139,16 +142,14 @@ describe('owner delete queues the Bunny delete', () => {
 			channels: new MemoryBucket(),
 			queue: new MemoryQueue(),
 			PROCESSING_CHECK_QUEUE: processing,
+			SEARCH_DB: new SqliteD1(),
 		} as never);
 		assert.equal(res.status, 200);
-		assert.equal(videos.read(id), null);
-		assert.equal(processing.sent.length, 1);
-		assert.equal(processing.sent[0].body.kind, BUNNY_DELETE_KIND);
-		assert.equal(processing.sent[0].body.videoId, id);
-		assert.equal(processing.sent[0].body.reason, 'owner-delete');
+		assert.equal((videos.read(id) as any)?.isDeleted, true);
+		assert.equal(processing.sent.length, 0);
 	});
 
-	it('bulk delete queues a bunny-delete for each owned video only', async () => {
+	it('bulk delete keeps the records of owned videos only and queues no bunny-delete', async () => {
 		const videos = new MemoryBucket({
 			[uuid(1)]: videoFixture({ id: uuid(1), userId: 'owner' }),
 			[uuid(2)]: videoFixture({ id: uuid(2), userId: 'someone-else' }),
@@ -158,11 +159,12 @@ describe('owner delete queues the Bunny delete', () => {
 		const res = await app.request(
 			'/api/videos/bulk-delete',
 			{ method: 'POST', headers: { 'Content-Type': 'application/json', channelId: 'owner-ch' }, body: JSON.stringify({ videoIds: [uuid(1), uuid(2)] }) },
-			{ videos, queue: new MemoryQueue(), PROCESSING_CHECK_QUEUE: processing } as never,
+			{ videos, channels: new MemoryBucket(), queue: new MemoryQueue(), PROCESSING_CHECK_QUEUE: processing, SEARCH_DB: new SqliteD1() } as never,
 		);
 		assert.equal(res.status, 200);
-		assert.deepEqual(processing.sent.map((s) => s.body.videoId), [uuid(1)]);
-		assert.equal(processing.sent[0].body.reason, 'bulk-delete');
+		assert.equal((videos.read(uuid(1)) as any)?.isDeleted, true);
+		assert.notEqual((videos.read(uuid(2)) as any)?.isDeleted, true);
+		assert.equal(processing.sent.length, 0);
 	});
 
 	it('enqueue never throws (no binding, send failure)', async () => {

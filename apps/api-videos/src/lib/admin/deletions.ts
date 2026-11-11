@@ -147,6 +147,32 @@ export async function listDeletions(db: SearchDb, query: { kind?: AdminDeletionK
 	};
 }
 
+/** One channel's pending deletions of a kind (Studio's Recently deleted), newest first. */
+export async function listChannelDeletions(
+	db: SearchDb,
+	query: { kind: AdminDeletionKind; channelId: string; cursor?: string | null; pageSize?: number },
+): Promise<{ items: AdminDeletion[]; nextCursor: string | null }> {
+	const pageSize = Math.min(Math.max(query.pageSize ?? 30, 1), 100);
+	const where = ['kind = ?', 'channel_id = ?', 'purged_at IS NULL'];
+	const args: unknown[] = [query.kind, query.channelId];
+	if (query.cursor) {
+		const split = query.cursor.lastIndexOf('|');
+		if (split > 0) {
+			where.push('(deleted_at < ? OR (deleted_at = ? AND target_id < ?))');
+			const at = query.cursor.slice(0, split);
+			args.push(at, at, query.cursor.slice(split + 1));
+		}
+	}
+	const { results } = await db
+		.prepare(`SELECT ${COLUMNS} FROM admin_deletions WHERE ${where.join(' AND ')} ORDER BY deleted_at DESC, target_id DESC LIMIT ?`)
+		.bind(...args, pageSize + 1)
+		.all<DeletionRow>();
+	const rows = results ?? [];
+	const items = rows.slice(0, pageSize).map(toDeletion);
+	const last = items[items.length - 1];
+	return { items, nextCursor: rows.length > pageSize && last ? `${last.deletedAt}|${last.id}` : null };
+}
+
 /** Restore: the row goes (the audit log in admin-api keeps the history). */
 export async function removeDeletion(db: SearchDb, kind: AdminDeletionKind, id: string): Promise<void> {
 	await db.prepare('DELETE FROM admin_deletions WHERE kind = ? AND target_id = ? AND purged_at IS NULL').bind(kind, id).run();
