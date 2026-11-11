@@ -99,7 +99,7 @@ export function UploadProcessingCard({ videoId, title, phase, onUploadAnother }:
           </Link>
         )}
         {phase === 'failed' && (
-          <Link href={`/${lang}/video/${videoId}/edit`} className="b b-primary" data-testid="upload-edit-video">
+          <Link href={`/${lang}/studio/video/${videoId}/edit`} className="b b-primary" data-testid="upload-edit-video">
             {s.editVideo}
           </Link>
         )}

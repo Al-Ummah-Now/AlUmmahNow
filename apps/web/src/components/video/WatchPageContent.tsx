@@ -223,7 +223,7 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
                   {user && <SaveToPlaylistControl videoId={videoId} />}
                   {isOwnVideo && (
                     <Link
-                      href={`/${lang}/video/${videoId}/edit`}
+                      href={`/${lang}/studio/video/${videoId}/edit`}
                       data-testid="video-owner-edit-link"
                       title={t.video.editVideo}
                     >

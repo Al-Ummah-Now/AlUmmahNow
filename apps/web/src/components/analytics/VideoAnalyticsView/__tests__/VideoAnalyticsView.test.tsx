@@ -47,7 +47,7 @@ describe('VideoAnalyticsView (#241)', () => {
     expect(screen.getByText('2.5 h')).toBeInTheDocument();
     expect(screen.getByText('1:15')).toBeInTheDocument();
     expect(screen.getByText('4.6%')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Back to analytics/ })).toHaveAttribute('href', '/en/analytics');
+    expect(screen.getByRole('link', { name: /Back to analytics/ })).toHaveAttribute('href', '/en/studio/go/analytics');
   });
 
   it('shows an error with retry when the API answers nothing, and recovers', async () => {
@@ -72,6 +72,6 @@ describe('VideoAnalyticsView (#241)', () => {
     await screen.findByRole('heading', { level: 1, name: 'Tafsir lesson' });
     expect(screen.getByTestId('video-analytics')).toHaveAttribute('dir', 'rtl');
     expect(screen.getByText('متوسط مدة المشاهدة')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /العودة إلى الإحصاءات/ })).toHaveAttribute('href', '/ar/analytics');
+    expect(screen.getByRole('link', { name: /العودة إلى الإحصاءات/ })).toHaveAttribute('href', '/ar/studio/go/analytics');
   });
 });

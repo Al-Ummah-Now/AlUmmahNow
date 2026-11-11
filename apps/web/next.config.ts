@@ -1,5 +1,6 @@
 import { createRequire } from "node:module";
 import path from "node:path";
+import { STUDIO_REDIRECTS } from "./src/lib/studio/redirects";
 
 // jose's default Node build verifies JWTs through node:crypto, and workerd's
 // node:crypto EC support makes ES256 signature checks fail on Cloudflare
@@ -45,6 +46,11 @@ const nextConfig = {
         serverActions: {
             bodySizeLimit: '10mb',
         },
+    },
+
+    // Creator pages that moved into Studio (301; src/lib/studio/redirects.ts)
+    async redirects() {
+        return STUDIO_REDIRECTS;
     },
 
     images: {

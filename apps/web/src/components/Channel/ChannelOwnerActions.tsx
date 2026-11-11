@@ -44,6 +44,8 @@ export function ChannelOwnerActions({ channel, role = 'owner', variant = 'header
   const { t, lang, isRTL, dir } = useLanguage();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const base = `/${lang}/settings/channel/${channel.id}`;
+  // Studio is the channel's creator home (manage = Studio)
+  const studio = `/${lang}/studio/${encodeURIComponent(channel.id)}`;
   const channelName = channel.nameLocalized?.[lang] || channel.name;
   const canCustomize = can(role, 'channel.edit');
   const canManageVideos = can(role, 'video.edit');
@@ -66,7 +68,7 @@ export function ChannelOwnerActions({ channel, role = 'owner', variant = 'header
             </Link>
           )}
           {canManageVideos && (
-            <Link href={`${base}/videos`} className={buttonClass} data-testid="channel-manage-videos">
+            <Link href={`${studio}/content/videos`} className={buttonClass} data-testid="channel-manage-videos">
               <Video className="w-4 h-4" aria-hidden="true" />
               {t.channel.manageVideos}
             </Link>
@@ -74,7 +76,7 @@ export function ChannelOwnerActions({ channel, role = 'owner', variant = 'header
         </>
       ) : (
         <Link
-          href={canCustomize ? `${base}/edit` : base}
+          href={`${studio}/dashboard`}
           className={buttonClass}
           aria-label={`${t.channel.manage}: ${channelName}`}
           data-testid="channel-card-manage"

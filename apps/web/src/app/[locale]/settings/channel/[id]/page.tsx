@@ -121,7 +121,7 @@ export default async function ChannelSettingsPage({ params }: ChannelSettingsPag
           {/* Manage Videos */}
           {canOpenSettingsPage(role, 'videos') && (
             <Link
-              href={`/${locale}/settings/channel/${id}/videos`}
+              href={`/${locale}/studio/${id}/content/videos`}
               className="block p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg hover:shadow-lg transition-shadow"
             >
               <div className={`flex items-start gap-4`}>

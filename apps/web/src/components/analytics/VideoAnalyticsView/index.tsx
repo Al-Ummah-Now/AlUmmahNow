@@ -52,7 +52,7 @@ export function VideoAnalyticsView({ videoId }: { videoId: string }) {
 
   return (
     <div className="container mx-auto px-4 py-8" dir={isRTL ? 'rtl' : 'ltr'} data-testid="video-analytics">
-      <Link href={`/${lang}/analytics`} className="text-sm font-medium text-blue-700 hover:underline dark:text-blue-300">
+      <Link href={`/${lang}/studio/go/analytics`} className="text-sm font-medium text-blue-700 hover:underline dark:text-blue-300">
         {isRTL ? '→' : '←'} {d.backToAnalytics}
       </Link>
 

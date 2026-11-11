@@ -27,8 +27,6 @@ import {
   Tv,
   Crown,
   Video,
-  Calendar,
-  BarChart3,
   Settings,
   ChevronRight,
   ArrowLeft,
@@ -266,11 +264,10 @@ export function UnifiedNavigation() {
       { label: t.navigation.writeArticle, icon: PenLine, href: cms.write },
       { label: t.navigation.myArticles, icon: FileText, href: cms.articles },
     ] : []),
+    // Studio is the creator home: videos, scheduling and analytics all live there
     ...(channels.length > 0 ? [
-      { label: t.video.myVideos || 'My Videos', icon: Video, href: `/${lang}${ACCOUNT_MENU_PATHS.myVideos}` },
-      { label: t.schedule?.scheduledVideos || 'Scheduled Videos', icon: Calendar, href: `/${lang}${ACCOUNT_MENU_PATHS.scheduled}` },
+      { label: t.studio.title, icon: Video, href: `/${lang}${ACCOUNT_MENU_PATHS.studio}` },
     ] : []),
-    { label: t.navigation.analytics, icon: BarChart3, href: `/${lang}${ACCOUNT_MENU_PATHS.analytics}` },
     { label: t.header.settings, icon: Settings, href: `/${lang}${ACCOUNT_MENU_PATHS.settings}` },
   ];
 

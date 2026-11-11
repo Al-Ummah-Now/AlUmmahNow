@@ -259,7 +259,7 @@ export function FileQueueItem({
             </Link>
           )}
           {processingPhase === 'failed' && file.videoId && (
-            <Link href={`/${lang}/video/${file.videoId}/edit`} className="ups-row-link" data-testid="batch-file-edit">
+            <Link href={`/${lang}/studio/video/${file.videoId}/edit`} className="ups-row-link" data-testid="batch-file-edit">
               {t.uploadStatus.editVideo}
             </Link>
           )}

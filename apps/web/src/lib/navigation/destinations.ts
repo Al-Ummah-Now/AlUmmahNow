@@ -17,9 +17,8 @@ export const SIDEBAR_PATHS = {
 } as const;
 
 export const ACCOUNT_MENU_PATHS = {
-  myVideos: '/dashboard/videos',
-  scheduled: '/scheduled-videos',
-  analytics: '/analytics',
+  /** The creator home: videos, scheduling, analytics, channel settings (/studio opens the active channel) */
+  studio: '/studio',
   settings: '/settings',
 } as const;
 
