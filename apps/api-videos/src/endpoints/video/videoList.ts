@@ -10,7 +10,8 @@ import { OptionalAuthRoute, AppContext } from '../../base';
 import { logger } from "../../lib/logger";
 import { isInternalRecord, isVideoListedFor } from "../../lib/visibility";
 import { waitUntilOf } from "../../lib/search/ownership";
-import { INDEX_CURSOR_PREFIX, channelVideosFromIndex } from "../../lib/search/channelVideoIndex";
+import { channelVideosFromIndex } from "../../lib/search/channelVideoIndex";
+import { scanFill } from "../../lib/listFill";
 import { edgeCacheUrl, readEdgeCache, writeEdgeCache } from "../../lib/edge-cache";
 
 /** Seconds the anonymous first page of the general feed is reused. */
@@ -218,21 +219,20 @@ export class VideosList extends OptionalAuthRoute {
 			filteredVideos.push(...indexed.videos);
 			nextCursor = indexed.cursor;
 		} else {
-			// R2's native cursor pagination cuts the page before visibility filtering,
-			// so a page full of private/internal records used to come back nearly
-			// empty (the home page showed 1-3 videos and a "Load More" button). Keep
-			// reading whole R2 pages until `limit` visible videos are collected or the
-			// bucket is exhausted; the cursor always points after the last page read,
-			// so nothing is skipped (a response may hold up to 2*limit-1 videos).
-			const MAX_PAGES = 5;
-			// An index cursor cannot resume an R2 listing (index became unavailable).
-			if (nextCursor?.startsWith(INDEX_CURSOR_PREFIX)) nextCursor = undefined;
-			for (let page = 0; page < MAX_PAGES; page++) {
-				const batch = await repository.listObjects(limit, nextCursor);
-				filteredVideos.push(...(batch.items || []).filter(isVisible));
-				nextCursor = batch.cursor || "";
-				if (!nextCursor || filteredVideos.length >= limit) break;
-			}
+			// Bucket scan: keep reading until `limit` visible videos are found or the
+			// bucket is exhausted (lib/listFill.ts). Filtering after cutting an R2
+			// page returned `data: []` with a cursor whenever the first keys were
+			// private, processing or internal records (stage, limit=1, 2026-11-11).
+			const page = await scanFill<VideoType>({
+				bucket,
+				cursor: nextCursor,
+				limit,
+				load: key => repository.getObject(key),
+				isListed: (video): video is VideoType => !!video && Boolean(isVisible(video)),
+				label: 'VideosList',
+			});
+			filteredVideos.push(...page.items);
+			nextCursor = page.cursor;
 			filteredVideos.sort(compareVideos);
 		}
 		logger.debug('[VideosList] Listed videos', { channelId: filterChannelId, source, count: filteredVideos.length });

@@ -1,5 +1,5 @@
 import { Num, Str } from "chanfana";
-import { FALLBACK_SCAN_OBJECTS } from "../../lib/scanBudget";
+import { scanFill } from "../../lib/listFill";
 import { string, z } from "zod";
 import { Playlist as BusinessPlaylist, Channel as BusinessChannel, PaginationResponse, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
@@ -133,46 +133,29 @@ export class ChannelPlaylistsList extends OptionalAuthRoute {
 			type PlaylistType = z.infer<typeof BusinessPlaylist>;
 			const repository = new R2Repository<PlaylistType>(bucket);
 
-			// Use R2's native cursor pagination to get all playlists
-			const playlists = await repository.listObjects(Math.min(limit * 10, FALLBACK_SCAN_OBJECTS), cursor); // Get more to filter
-
-			// Filter playlists for this channel and based on privacy settings
-			let channelPlaylists = (playlists.items || []).filter(playlist => {
-				// Must belong to this channel
-				if (playlist.channelId !== channelId) {
-					return false;
-				}
-
-				// Filter out soft-deleted playlists
-				if (playlist.isDeleted) {
-					return false;
-				}
-
-				// Filter out moderation-hidden playlists
-				if (playlist.isHidden) {
-					return false;
-				}
-
-				// If playlist is explicitly private (false), only show if user is channel owner
-				if (playlist.isPublic === false) {
-					return userId && channel.userId === userId;
-				}
-
-				// If playlist is public (true) or undefined/null (default to public), show it
-				return true;
+			// Bounded scan that keeps reading until the page is full (lib/listFill.ts):
+			// filtering after cutting an R2 slice returned short or empty pages.
+			const isOwner = Boolean(userId && channel.userId === userId);
+			const scan = await scanFill<PlaylistType>({
+				bucket,
+				cursor,
+				limit,
+				load: key => repository.getObject(key),
+				isListed: (playlist): playlist is PlaylistType => Boolean(playlist)
+					&& playlist.channelId === channelId
+					// Soft-deleted and moderation-hidden playlists are never listed
+					&& !playlist.isDeleted
+					&& !playlist.isHidden
+					// Private playlists (isPublic === false) only for the channel owner
+					&& (playlist.isPublic !== false || isOwner),
+				label: 'ChannelPlaylistsList',
 			});
 
 			// Sort by latest first
-			channelPlaylists.sort((a, b) => {
-				return new Date(b.dateCreated || 0).getTime() - new Date(a.dateCreated || 0).getTime();
-			});
-
-			// Limit to requested amount
-			const limitedPlaylists = channelPlaylists.slice(0, limit);
-
-			// Return response with custom cursor for pagination
-			const hasMore = channelPlaylists.length > limit;
-			const nextCursor = hasMore ? playlists.cursor : "";
+			const limitedPlaylists = scan.items.sort((a, b) =>
+				new Date(b.dateCreated || 0).getTime() - new Date(a.dateCreated || 0).getTime());
+			const nextCursor = scan.cursor;
+			const hasMore = Boolean(nextCursor);
 
 			const response = {
 				cursor: nextCursor || "",
@@ -184,7 +167,7 @@ export class ChannelPlaylistsList extends OptionalAuthRoute {
 			logger.debug('Successfully fetched channel playlists', {
 				channelId,
 				playlistsCount: limitedPlaylists.length,
-				totalFiltered: channelPlaylists.length,
+				scanned: scan.scanned,
 				hasMore,
 				duration
 			});

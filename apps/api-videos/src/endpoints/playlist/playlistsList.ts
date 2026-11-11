@@ -8,6 +8,7 @@ import { toPlaylistResponse, canViewPlaylist } from "../../lib/playlists";
 import { withPlaylistCovers } from "../../lib/playlistCovers";
 import { logger } from "../../lib/logger";
 import { isSystemPlaylist } from "../../lib/library";
+import { scanFill } from "../../lib/listFill";
 
 // Bounds for scanning the playlists bucket when filtering by channel
 const CHANNEL_SCAN_PAGE_SIZE = 100;
@@ -101,14 +102,22 @@ export class PlaylistsList extends OptionalAuthRoute {
             };
         }
 
-        const playlists = !cursor ? await repository.listObjects(limit) : await repository.listObjects(limit, cursor);
-        // System playlists (Watch later) are listed in the Library, not with user playlists
-        const visible = (playlists.items || []).filter((playlist) => canViewPlaylist(playlist, userId) && !isSystemPlaylist(playlist));
+        // Fill the page: filtering a cut R2 page returned empty pages with a
+        // cursor when the first keys were private or system playlists (lib/listFill.ts).
+        const scan = await scanFill<PlaylistType>({
+            bucket: c.env.playlists,
+            cursor,
+            limit,
+            load: key => repository.getObject(key),
+            // System playlists (Watch later) are listed in the Library, not with user playlists
+            isListed: (playlist): playlist is PlaylistType => Boolean(playlist) && canViewPlaylist(playlist, userId) && !isSystemPlaylist(playlist),
+            label: 'PlaylistsList',
+        });
 
         const response = {
-            cursor: playlists.cursor || "",
+            cursor: scan.cursor,
             limit,
-            data: await withPlaylistCovers(c.env, visible.map(toPlaylistResponse), userId),
+            data: await withPlaylistCovers(c.env, scan.items.map(toPlaylistResponse), userId),
         };
 
         return response;
