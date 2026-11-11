@@ -14,7 +14,8 @@ test.describe('Release: Studio draft path', () => {
   test.beforeEach(skipUntilStudioDeployed);
 
   test('upload, save draft, schedule, cancel, draft, publish', async ({ page }) => {
-    test.setTimeout(420000);
+    // Bunny's encode (up to ~9 min on a busy library) comes first: a draft is listed once encoded
+    test.setTimeout(15 * 60_000);
     const { user, channelId } = await studioOwner(page, 'rel-studio-draft');
     const videos = `${target().web}/en/studio/${channelId}/content/videos`;
     const title = `Release E2E draft ${Date.now().toString(36)}`;
@@ -25,10 +26,10 @@ test.describe('Release: Studio draft path', () => {
       await expect
         .poll(async () => {
           await page.goto(`${videos}?status=${status}`);
-          await page.getByTestId('studio-videos').waitFor();
-          await page.waitForLoadState('networkidle');
+          // Client-rendered: read once it shows rows or its empty state, never mid-load
+          await expect(page.locator('[data-testid="studio-video-row"], [data-testid="studio-videos-empty"]').first()).toBeVisible({ timeout: 30000 });
           return row().count();
-        }, { message: `the video never reached ${status}`, timeout: 180000, intervals: [5000] })
+        }, { message: `the video never reached ${status}`, timeout: 90000, intervals: [3000] })
         .toBe(1);
     };
     // A row action runs a server action; navigating before it has been sent cancels it
@@ -50,10 +51,27 @@ test.describe('Release: Studio draft path', () => {
       await page.getByTestId('upload-submit').click();
       await expect(page.getByTestId('upload-success')).toBeVisible({ timeout: 150000 });
 
+      // Studio lists a video under Drafts once it is encoded (studioVideoStatus: Processing
+      // until then). Wait for that on the video itself, so Bunny's encode time is not
+      // mistaken for a Studio defect; then Studio must list it promptly.
+      await expect
+        .poll(async () => {
+          const res = await apiFetch(user, `/api/videos/search?limit=100&isOwner=true&channelIds=${channelId}`, { headers: { channelId } });
+          videoId = ((await res.json().catch(() => ({}))) as { data?: Array<{ id: string; title: string }> }).data?.find((v) => v.title === title)?.id ?? '';
+          return videoId;
+        }, { message: 'the uploaded draft is not in the owner\'s videos', timeout: 60000 })
+        .not.toBe('');
+      await expect
+        .poll(async () => {
+          const res = await apiFetch(user, `/api/videos/${videoId}/upload-status`, { headers: { channelId } });
+          return ((await res.json().catch(() => ({}))) as { result?: { status?: string } }).result?.status ?? '';
+        }, { message: 'the draft never finished encoding', timeout: 9 * 60_000, intervals: [5000] })
+        .toBe('ready');
+
       await openStatus('drafts');
       const listed = await apiFetch(user, `/api/channels/${channelId}/content?status=drafts`);
-      videoId = ((await listed.json()) as { result: { items: Array<{ id: string; title: string }> } }).result.items.find((v) => v.title === title)?.id ?? '';
-      expect(videoId, 'draft not returned by the API').toBeTruthy();
+      const drafts = ((await listed.json()) as { result: { items: Array<{ id: string; title: string }> } }).result.items;
+      expect(drafts.map((v) => v.id), 'draft not returned by the API').toContain(videoId);
 
       // Schedule it
       await row().getByRole('checkbox').check();
