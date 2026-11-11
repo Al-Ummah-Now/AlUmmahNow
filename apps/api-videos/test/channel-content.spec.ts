@@ -150,8 +150,25 @@ describe('GET /api/channels/:id/content', () => {
 		assert.equal((await list(env, '', OWNER, 'gone')).status, 404);
 	});
 
-	it('answers 503 while the index is rebuilding', async () => {
-		assert.equal((await list(await setup(SAMPLE, false))).status, 503);
+	it('answers from the index while it is rebuilding, flagged incomplete (#859: it was a 503 for every channel)', async () => {
+		const res = await list(await setup(SAMPLE, false));
+		assert.equal(res.status, 200, await res.clone().text());
+		const body = (await res.json()) as any;
+		assert.equal(body.result.indexComplete, false);
+		assert.deepEqual(body.result.items.map((v: any) => v.id), ['pub2', 'pub1']);
+		const summary = (await (await buildApp(routes, OWNER).request('/api/channels/c1/content/summary', {}, (await setup(SAMPLE, false)) as never)).json()) as any;
+		assert.equal(summary.result.indexComplete, false);
+		assert.equal(summary.result.counts.published, 2);
+	});
+
+	it('says complete when the index is', async () => {
+		assert.equal(((await (await list(await setup(SAMPLE))).json()) as any).result.indexComplete, true);
+	});
+
+	it('answers 503 only when the index cannot be read at all', async () => {
+		const env = await setup(SAMPLE);
+		env.SEARCH_DB.db.exec('DROP TABLE content_ownership');
+		assert.equal((await list(env)).status, 503);
 	});
 });
 

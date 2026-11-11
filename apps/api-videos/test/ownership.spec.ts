@@ -4,6 +4,8 @@ import { applyOwnershipModeration, invalidateOwnership, projectOwnership, syncOw
 import { withSearchSync } from '../src/lib/search/sync';
 import {
 	channelTotalsFromIndex,
+	hasCompleteMarker,
+	healDirtyOwnership,
 	isOwnershipComplete,
 	ownedChannelIds,
 	reconcileOwnershipIndex,
@@ -188,6 +190,53 @@ describe('ownership rebuild pass', () => {
 		assert.equal(result.complete, false);
 		// The next full pass starts after the failure and can be trusted.
 		assert.equal((await runOwnershipPass(raw as never, 'channel', { maxPages: 5, now: () => Date.now() + 10 })).complete, true);
+	});
+
+	it('a failed write marks only its row (#859): the pass in progress still completes, the heal re-syncs the row', async () => {
+		const { db, raw } = ownershipEnv({ channels: { a: channel('a'), b: channel('b') } });
+		await runOwnershipPass(raw as never, 'channel', { maxPages: 1, pageSize: 1 });
+		// A write of b failed while the pass ran: before #859 this voided the whole pass, and under steady writes it never finished
+		raw.channels.store.set('b', JSON.stringify(channel('b', { name: 'Renamed' })));
+		await invalidateOwnership(db, 'channel', Date.now() + 1, 'b');
+		const result = await runOwnershipPass(raw as never, 'channel', { maxPages: 5, pageSize: 1 });
+		assert.equal(result.done, true);
+		assert.equal(result.complete, true, 'the pass is not thrown away');
+		assert.equal(await hasCompleteMarker(db, 'channel'), true);
+		// Readers that must never serve a stale row still see the kind as incomplete until the row is re-synced
+		raw.channels.store.set('b', JSON.stringify(channel('b', { name: 'Renamed again' })));
+		await invalidateOwnership(db, 'channel', Date.now() + 2, 'b');
+		assert.equal(await isOwnershipComplete(db, 'channel'), false);
+		assert.equal(await healDirtyOwnership(raw as never, 'channel'), 1);
+		assert.equal(await isOwnershipComplete(db, 'channel'), true);
+		assert.equal(rows(db, 'channel').find(r => r.id === 'b')?.admin_title, 'Renamed again', 're-read from R2, the source of truth');
+	});
+
+	it('the heal removes the row of a dirty object that is gone, and keeps a mark that fails again', async () => {
+		const { db, raw } = ownershipEnv({ channels: { a: channel('a') } });
+		await runOwnershipPass(raw as never, 'channel');
+		await syncOwnership(db, 'channel', 'z', channel('z'), NOW);
+		await invalidateOwnership(db, 'channel', Date.now(), 'z');
+		assert.equal(await healDirtyOwnership(raw as never, 'channel'), 1);
+		assert.deepEqual(rows(db, 'channel').map(r => r.id), ['a']);
+
+		await invalidateOwnership(db, 'channel', Date.now(), 'a');
+		const get = raw.channels.get.bind(raw.channels);
+		raw.channels.get = async () => { throw new Error('R2 unavailable'); };
+		assert.equal(await healDirtyOwnership(raw as never, 'channel'), 0);
+		assert.equal(await isOwnershipComplete(db, 'channel'), false, 'the mark stays for the next heal');
+		raw.channels.get = get;
+		assert.equal(await healDirtyOwnership(raw as never, 'channel'), 1);
+		assert.equal(await isOwnershipComplete(db, 'channel'), true);
+	});
+
+	it('the self-heal re-syncs dirty rows without a full pass when the marker is there', async () => {
+		const { db, raw } = ownershipEnv({ channels: { a: channel('a') } });
+		await runOwnershipPass(raw as never, 'channel');
+		raw.channels.store.set('a', JSON.stringify(channel('a', { name: 'Fresh' })));
+		await invalidateOwnership(db, 'channel', Date.now(), 'a');
+		await scheduleOwnershipHeal(raw as never, null, 'channel');
+		assert.equal(await isOwnershipComplete(db, 'channel'), true);
+		assert.equal(rows(db, 'channel')[0]?.admin_title, 'Fresh');
 	});
 
 	it('runs from the daily reconcile and skips a kind whose heal is in progress', async () => {

@@ -58,7 +58,7 @@ export async function handleSearchIndexSync(message: AlUmmahMessage, env: QueueE
   if (kind) {
     const ownership = await syncOwnershipSafely(db, kind, id, object ?? null, Date.now(), version);
     if (ownership.ok === false) {
-      logger.warn('Ownership index write failed; index marked incomplete', { entity, id, error: ownership.error, invalidated: ownership.invalidated });
+      logger.warn('Ownership index write failed; row marked for re-sync', { entity, id, error: ownership.error, invalidated: ownership.invalidated });
     }
   }
   const result = await syncSearchDocument(db, entity, id, object ?? null, { version });
@@ -80,12 +80,12 @@ export async function applyModerationToSearchIndex(
     try {
       await applyOwnershipModeration(db, kind, payload.entityId, { hidden: true, deleted: payload.action === 'banned' });
     } catch (error) {
-      logger.warn('Ownership moderation update failed; marking index incomplete', {
+      logger.warn('Ownership moderation update failed; row marked for re-sync', {
         kind,
         id: payload.entityId,
         error: error instanceof Error ? error.message : String(error),
       });
-      await invalidateOwnership(db, kind).catch(() => undefined);
+      await invalidateOwnership(db, kind, Date.now(), payload.entityId).catch(() => undefined);
     }
   }
   const result = await removeSearchDocument(db, type, payload.entityId);

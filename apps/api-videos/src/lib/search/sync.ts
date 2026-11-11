@@ -137,8 +137,9 @@ async function syncOwnershipInline(db: SearchDb, queue: QueueBinding | undefined
         logger.warn('[SearchSync] Could not queue the ownership write', { kind, id, error: sendError instanceof Error ? sendError.message : String(sendError) });
       }
     }
-    await invalidateOwnership(db, kind).catch(() => undefined);
-    logger.warn('[SearchSync] Ownership index write failed; index marked incomplete', { kind, id, error: reason });
+    // Only this row is marked for re-sync (#859); the rest of the index stays usable
+    await invalidateOwnership(db, kind, Date.now(), id).catch(() => undefined);
+    logger.warn('[SearchSync] Ownership index write failed; row marked for re-sync', { kind, id, error: reason });
   }
 }
 
@@ -168,7 +169,7 @@ function wrapBucket(bucket: R2Bucket, type: SearchEntityType, queue: SearchSyncQ
                   id,
                   error: error instanceof Error ? error.message : String(error),
                 });
-                await invalidateOwnership(db, ownershipKindFor(type)!).catch(() => undefined);
+                await invalidateOwnership(db, ownershipKindFor(type)!, Date.now(), id).catch(() => undefined);
               }
             }
             if (tracksOwnership && decoded !== undefined) await syncOwnershipInline(db, producer, type, id, decoded, version);
@@ -211,9 +212,9 @@ function wrapProfiles(bucket: R2Bucket, db: SearchDb): R2Bucket {
     try {
       await syncOwnership(db, 'profile', id, object, Date.now(), version);
     } catch (error) {
-      // The next ownership pass rebuilds the profile rows
-      await invalidateOwnership(db, 'profile').catch(() => undefined);
-      logger.warn('[SearchSync] Profile index write failed; index marked incomplete', { id, error: error instanceof Error ? error.message : String(error) });
+      // The heal re-reads this profile from R2 (#859)
+      await invalidateOwnership(db, 'profile', Date.now(), id).catch(() => undefined);
+      logger.warn('[SearchSync] Profile index write failed; row marked for re-sync', { id, error: error instanceof Error ? error.message : String(error) });
     }
   };
   const idFor = (key: string) => (key && !key.includes('/') && !key.includes(':') ? key : null);

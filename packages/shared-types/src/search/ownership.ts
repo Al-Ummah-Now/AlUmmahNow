@@ -89,6 +89,16 @@ export interface OwnershipDrift {
  * that started before then may have read the stale row, so it must not mark
  * the kind complete.
  */
+/** Prefix of the per-row re-sync marks of a kind (ownership:dirty:<kind>:<id>). */
+export function ownershipDirtyPrefix(kind: OwnershipKind): string {
+  return `ownership:dirty:${kind}:`;
+}
+
+/** A row whose last write failed: the heal re-reads it from R2 (api-videos lib/search/ownership.ts). */
+export function ownershipDirtyKey(kind: OwnershipKind, id: string): string {
+  return `${ownershipDirtyPrefix(kind)}${id}`;
+}
+
 export function ownershipInvalidatedKey(kind: OwnershipKind): string {
   return `ownership:invalidated:${kind}`;
 }
@@ -364,10 +374,30 @@ export async function syncOwnership(
 }
 
 /**
- * Mark the index incomplete so readers fall back to scanning R2 and the next
- * ownership pass (cron or self-heal) rebuilds it.
+ * A write for `kind` failed. With the row's `id`, only that row is marked for
+ * re-sync (ownership:dirty:<kind>:<id>): readers that need a complete index
+ * treat the kind as incomplete until the heal has re-read it from R2, and a
+ * rebuild pass in progress is not thrown away. Before #859 every failed write
+ * deleted the complete marker and voided the pass; under steady writes and a
+ * few transient D1 errors the pass never finished, and Studio's lists answered
+ * 503 for every channel.
+ *
+ * Without an id, or when even the mark cannot be written, the whole kind is
+ * marked incomplete: readers fall back to scanning R2 and the next ownership
+ * pass (cron or self-heal) rebuilds it.
  */
-export async function invalidateOwnership(db: SearchDb, kind: OwnershipKind, now = Date.now()): Promise<void> {
+export async function invalidateOwnership(db: SearchDb, kind: OwnershipKind, now = Date.now(), id?: string): Promise<void> {
+  if (id) {
+    try {
+      await db.prepare(
+        `INSERT INTO search_meta (key, value, updated_at) VALUES (?, ?, ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+      ).bind(ownershipDirtyKey(kind, id), String(now), now).run();
+      return;
+    } catch {
+      // Fall back to marking the whole kind incomplete
+    }
+  }
   await db.batch([
     db.prepare('DELETE FROM search_meta WHERE key = ?').bind(ownershipCompleteKey(kind)),
     db.prepare(
@@ -398,7 +428,7 @@ export async function syncOwnershipSafely(
   } catch (error) {
     let invalidated = false;
     try {
-      await invalidateOwnership(db, kind, now);
+      await invalidateOwnership(db, kind, now, id);
       invalidated = true;
     } catch {
       invalidated = false;

@@ -5,7 +5,7 @@ import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import { AnalyticsVideo, daysInRange, loadRollups, parseRange, type MonthlyRollup } from "../../lib/analytics";
 import R2Repository from "../../lib/r2Repo";
 import { channelContentIds } from "../../lib/search/ownership";
-import { rebuilding, requireContentAccess, healRows } from "./channelContent";
+import { healLater, rebuilding, requireContentAccess, healRows } from "./channelContent";
 
 const MAX_PAGE = 50;
 
@@ -48,7 +48,7 @@ export class ChannelTopContent extends AuthenticatedRoute {
 			},
 			"403": { description: "No access", content: { "application/json": { schema: ResponseError } } },
 			"404": { description: "Channel not found", content: { "application/json": { schema: ResponseError } } },
-			"503": { description: "Index being rebuilt", content: { "application/json": { schema: ResponseError } } },
+			"503": { description: "The index cannot be read right now; try again shortly", content: { "application/json": { schema: ResponseError } } },
 		},
 	};
 
@@ -56,12 +56,15 @@ export class ChannelTopContent extends AuthenticatedRoute {
 		const { params, query } = await this.getValidatedData<typeof this.schema>();
 		const denied = await requireContentAccess(c, params.id, this.getUserId(c) as string);
 		if (denied) return denied;
-		if (!(await healRows(c, params.id))) return rebuilding(c);
+		const rowsReady = await healRows(c, params.id);
 
 		const limit = Math.min(Math.max(1, query.limit ?? 20), MAX_PAGE);
 		const offset = Number(query.cursor ?? 0);
-		const ids = await channelContentIds(c.env as never, { channelId: params.id, status: "published", sort: "views", limit: limit + 1, offset });
-		if (!ids) return rebuilding(c);
+		const read = await channelContentIds(c.env as never, { channelId: params.id, status: "published", sort: "views", limit: limit + 1, offset });
+		if (!read) return rebuilding(c);
+		const ids = read.value;
+		const indexComplete = rowsReady && read.complete;
+		if (!indexComplete) healLater(c);
 
 		const range = parseRange(query.dateFrom, query.dateTo);
 		const days = new Set(daysInRange(range));
@@ -81,6 +84,6 @@ export class ChannelTopContent extends AuthenticatedRoute {
 			};
 		}))).filter(Boolean);
 
-		return { success: true, result: { items, cursor: ids.length > limit ? String(offset + limit) : null } };
+		return { success: true, result: { items, cursor: ids.length > limit ? String(offset + limit) : null, indexComplete } };
 	}
 }
