@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { findSourceMaps, objectKey, parseArgs, uploadSourceMaps } from '../upload-sourcemaps.ts';
+import { findSourceMaps, objectKey, parseArgs, uploadSourceMaps, keyPath } from '../upload-sourcemaps.ts';
 
 function assets() {
 	const dir = mkdtempSync(join(tmpdir(), 'maps-'));
@@ -37,5 +37,12 @@ describe('upload-sourcemaps', () => {
 		assert.throws(() => parseArgs(['--env', 'prod', '--app', 'web', '--release', 'x']), /--env/);
 		assert.throws(() => parseArgs(['--env', 'qa', '--app', 'cms', '--release', 'x']), /--app/);
 		assert.deepEqual(parseArgs(['--env', 'qa', '--app', 'admin-web', '--release', 'abc']).dir, 'apps/admin-web/.open-next/assets');
+	});
+});
+
+describe('keyPath', () => {
+	it('encodes each segment, dots included, so a catch-all route\'s "..." is never a path segment', () => {
+		assert.equal(keyPath('web/abc/_next/static/chunks/app/[locale]/studio/[channelId]/[...rest]/page-1.js.map'),
+			'web/abc/_next/static/chunks/app/%5Blocale%5D/studio/%5BchannelId%5D/%5B%2E%2E%2Erest%5D/page-1%2Ejs%2Emap');
 	});
 });
