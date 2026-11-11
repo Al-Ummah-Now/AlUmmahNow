@@ -93,4 +93,24 @@ describe('MultiAccountProvider - session reloads', () => {
     expect(getActiveSessionInfo).toHaveBeenCalledTimes(2);
     expect(result.current.loading).toBe(false);
   });
+
+  it('does not reload on Back/Forward inside the app, only on a back/forward cache restore', async () => {
+    (getActiveSessionInfo as jest.Mock).mockResolvedValue(session(channelOne));
+    renderHook(() => useMultiAccount(), { wrapper });
+    await waitFor(() => expect(getActiveSessionInfo).toHaveBeenCalledTimes(1));
+
+    // Server actions during the router's popstate committed the page being left back into history
+    act(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(getActiveSessionInfo).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      const restored = new Event('pageshow') as PageTransitionEvent;
+      Object.defineProperty(restored, 'persisted', { value: true });
+      window.dispatchEvent(restored);
+    });
+    await waitFor(() => expect(getActiveSessionInfo).toHaveBeenCalledTimes(2));
+  });
 });
