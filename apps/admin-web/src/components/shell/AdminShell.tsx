@@ -2,7 +2,7 @@
 
 import Link from '@/components/AppLink';
 import { usePathname } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { PreferencesControls } from '@/components/PreferencesControls';
 import { AccountMenu } from '@/components/AccountMenu';
@@ -28,7 +28,7 @@ interface AdminShellProps {
   badges: NavBadges;
   /** From the admin_nav cookie, so the first paint has the right width */
   initialRail: boolean;
-  children: ReactNode;
+  children: React.ReactNode;
 }
 
 const focusRing = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-focus';
