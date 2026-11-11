@@ -134,6 +134,19 @@ async function idsOf(env: AdminServiceEnv, kind: 'video' | 'channel', by: { chan
 	return ids;
 }
 
+/**
+ * Ids for a read-only view (the admin user page): always from the ownership index, even while a
+ * pass is rebuilding it, as the admin lists do (#860). idsOf's fallback lists and reads every
+ * object in the bucket and ensureAdminIndex runs a heal step inline; on QA's buckets that made the
+ * user page take over 40 s for every user (INV-01, 2026-11-11). The lists keep the index healing,
+ * and every write updates its row (withSearchSync), so a new channel shows within seconds.
+ * Cascades (ban, delete, transfer) keep idsOf, which stays exact.
+ */
+async function indexedIdsOf(env: AdminServiceEnv, kind: 'video' | 'channel', by: { channelId?: string; ownerId?: string }): Promise<string[]> {
+	if (!env.SEARCH_DB) return idsOf(env, kind, by);
+	return contentIds(env.SEARCH_DB, kind, by);
+}
+
 /** Live stream records scanned per cascade (they are few; this bounds one request). */
 const LIVE_STREAM_SCAN_LIMIT = 2000;
 
@@ -1153,7 +1166,7 @@ export async function userDetail(env: AdminServiceEnv, userId: string): Promise<
 	const db = env.SEARCH_DB!;
 	const [profile, ban] = await Promise.all([repo(env.profiles).getObject(userId), readBan(db, userId)]);
 	if (!profile && !ban) throw new AdminError(404, 'user_not_found');
-	const channelIds = await idsOf(env, 'channel', { ownerId: userId });
+	const channelIds = await indexedIdsOf(env, 'channel', { ownerId: userId });
 	const channelRows = channelIds.length
 		? await hydrateChannels(
 				env,
@@ -1170,7 +1183,7 @@ export async function userDetail(env: AdminServiceEnv, userId: string): Promise<
 		: [];
 	const channels = [...(await readMany(env.channels, channelIds)).values()];
 	const [videos, watchHistory, subscriptions, comments] = await Promise.all([
-		idsOf(env, 'video', { ownerId: userId }).then((ids) => ids.length),
+		indexedIdsOf(env, 'video', { ownerId: userId }).then((ids) => ids.length),
 		countPrefix(env.watch_history, `${userId}:`),
 		subscribedChannelIds(env.NOTIFICATIONS_DB, userId, profile?.subscribedTo ?? []).then((ids) => ids.length).catch(() => 0),
 		db.prepare('SELECT COUNT(*) AS n FROM admin_comments WHERE user_id = ?').bind(userId).first<{ n: number }>().then((r) => Number(r?.n) || 0),

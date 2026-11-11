@@ -88,7 +88,9 @@ test.describe('invite creators', () => {
     await expect(page.getByTestId('invite-status-invited').or(page.getByTestId('invite-status-sending')).first()).toBeVisible();
     await shot(page, testInfo, '3-user-page-invited-with-channel');
 
-    const { body } = await adminApi<{ channels: Array<{ id: string; name: string }> }>(`/api/content/users/${state.userId}`);
+    const { status, body } = await adminApi<{ channels: Array<{ id: string; name: string }> }>(`/api/content/users/${state.userId}`);
+    // A failed read used to surface as "Cannot read properties of undefined (reading 'channels')"
+    expect(status, `GET /api/content/users/${state.userId}`).toBe(200);
     const channel = body.result!.channels.find((c) => c.name === CHANNEL);
     expect(channel, 'the new channel is owned by the invited user').toBeTruthy();
     state.channelId = channel!.id;
