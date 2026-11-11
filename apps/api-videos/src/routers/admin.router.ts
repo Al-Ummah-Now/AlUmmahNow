@@ -285,6 +285,11 @@ const TierBody = z
 const searchDb = (c: Context<Env>) => c.env.SEARCH_DB as D1Database;
 app.get('/creators', async (c) => ok(c, await listCreators(c.env as never, parse(CreatorQuery, c.req.query()))));
 app.get('/creator-tiers', async (c) => {
+	// ?counts=0: the definitions only. The counts scan every profile and every assignment
+	// (on QA 2026-11-11: ~38k + 11k rows per call, 1,700 calls in 17 min from the admin user
+	// page's tier control, the top reader of the search database while it was overloaded),
+	// and only the Creators overview and Tiers pages show them.
+	if (c.req.query('counts') === '0') return ok(c, { items: await readTiers(searchDb(c)) });
 	const [items, counts, limitHits7d] = await Promise.all([readTiers(searchDb(c)), tierCounts(searchDb(c)), limitHitsSince(searchDb(c))]);
 	return ok(c, { items, counts, limitHits7d });
 });

@@ -487,10 +487,11 @@ app.post('/legacy-profiles/restore', async (c) => {
 type TierAssignment = Pick<CreatorTierAssignment, 'tierId' | 'source'> & Partial<Pick<CreatorTierAssignment, 'assignedBy' | 'assignedAt'>>;
 
 app.get('/creators', async (c) => ok(c, await videos(c, '/creators', { query: c.req.query() })));
-app.get('/creator-tiers', async (c) => ok(c, await videos(c, '/creator-tiers')));
+// ?counts=0 passes through: the definitions without the (full-table) counts
+app.get('/creator-tiers', async (c) => ok(c, await videos(c, '/creator-tiers', { query: c.req.query() })));
 
 app.get('/creator-tiers/audit', async (c) => {
-  const tiers = await videos<{ items: Array<{ id: string }> }>(c, '/creator-tiers');
+  const tiers = await videos<{ items: Array<{ id: string }> }>(c, '/creator-tiers', { query: { counts: '0' } });
   const entries = await Promise.all(tiers.items.map((t) => readAudit(c.env.REPORTS_DB, { kind: 'creator-tier', id: t.id, limit: 20 })));
   return ok(c, { items: entries.flat().sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 50) });
 });
@@ -507,7 +508,7 @@ app.put('/creator-tiers/:id', async (c) => {
   need(c, 'creators:manage');
   const id = c.req.param('id');
   const input = await body(c);
-  const current = (await videos<{ items: Array<Record<string, unknown>> }>(c, '/creator-tiers')).items.find((t) => t.id === id);
+  const current = (await videos<{ items: Array<Record<string, unknown>> }>(c, '/creator-tiers', { query: { counts: '0' } })).items.find((t) => t.id === id);
   return ok(c, await audited(c, { kind: 'creator-tier', id, action: 'edit', details: input, previous: current ? previousOf(current as never, input) : undefined }, () =>
     videos(c, `/creator-tiers/${encodeURIComponent(id)}`, { method: 'PUT', json: input })));
 });
