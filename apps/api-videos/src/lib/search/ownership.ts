@@ -710,12 +710,13 @@ export async function reconcileOwnershipIndex(
     summary[kind] = { kind, pages: 0, scanned: 0, done: false, complete: false };
     if (!db || !env[BUCKET_FOR_KIND[kind]]) continue;
     // Share the self-heal lease so the cron and a heal never walk the same cursor at once.
-    if (!(await acquireHealLease(db, kind, (options.now ?? Date.now)()))) continue;
+    const lease = await acquireHealLease(db, kind, (options.now ?? Date.now)());
+    if (lease === null) continue;
     try {
       await healDirtyOwnership(env, kind);
       summary[kind] = await runOwnershipPass(env, kind, { maxPages: options.pagesPerKind ?? 20, pageSize: options.pageSize, now: options.now });
     } finally {
-      await db.prepare('DELETE FROM search_meta WHERE key = ?').bind(leaseKey(kind)).run();
+      await releaseHealLease(db, kind, lease);
     }
   }
   logger.info('[Ownership] Reconcile finished', summary);
@@ -727,14 +728,24 @@ export async function reconcileOwnershipIndex(
  * falls back to a scan asks for it, so a held lease is seen with a read first
  * and only a free (or expired) one costs a write (SCALABILITY-AUDIT AV-17).
  */
-async function acquireHealLease(db: SearchDb, kind: OwnershipKind, now: number): Promise<boolean> {
+async function acquireHealLease(db: SearchDb, kind: OwnershipKind, now: number): Promise<number | null> {
   const held = await db.prepare('SELECT updated_at FROM search_meta WHERE key = ?').bind(leaseKey(kind)).first<{ updated_at: number }>();
-  if (held && Number(held.updated_at) >= now - OWNERSHIP_HEAL_LEASE_MS) return false;
+  if (held && Number(held.updated_at) >= now - OWNERSHIP_HEAL_LEASE_MS) return null;
   const outcome = await db.prepare(
     `INSERT INTO search_meta (key, value, updated_at) VALUES (?, 'lease', ?)
      ON CONFLICT(key) DO UPDATE SET updated_at = excluded.updated_at WHERE search_meta.updated_at < ?`,
   ).bind(leaseKey(kind), now, now - OWNERSHIP_HEAL_LEASE_MS).run() as { meta?: { changes?: number } };
-  return Number(outcome?.meta?.changes) > 0;
+  return Number(outcome?.meta?.changes) > 0 ? now : null;
+}
+
+/**
+ * Release the lease taken at `acquiredAt`, and only that one. A step that overran its lease
+ * (or a lease an operator set) must not be deleted by an earlier holder finishing: before, any
+ * finishing heal deleted whatever lease was there (QA reset 2026-11-11: an in-flight heal removed
+ * the operator's hold and new heals started during the rebuild).
+ */
+async function releaseHealLease(db: SearchDb, kind: OwnershipKind, acquiredAt: number): Promise<void> {
+  await db.prepare('DELETE FROM search_meta WHERE key = ? AND updated_at = ?').bind(leaseKey(kind), acquiredAt).run();
 }
 
 /**
@@ -745,11 +756,12 @@ async function acquireHealLease(db: SearchDb, kind: OwnershipKind, now: number):
 export async function withOwnershipLease<T>(env: OwnershipEnv, kind: OwnershipKind, task: () => Promise<T>, now = Date.now()): Promise<T | null> {
   const db = dbOf(env);
   if (!db) throw new Error('SEARCH_DB is not bound');
-  if (!(await acquireHealLease(db, kind, now))) return null;
+  const lease = await acquireHealLease(db, kind, now);
+  if (lease === null) return null;
   try {
     return await task();
   } finally {
-    await db.prepare('DELETE FROM search_meta WHERE key = ?').bind(leaseKey(kind)).run();
+    await releaseHealLease(db, kind, lease);
   }
 }
 
@@ -801,7 +813,8 @@ export function scheduleOwnershipHeal(
   if (!db || !env[BUCKET_FOR_KIND[kind]]) return null;
   const task = (async () => {
     try {
-      if (!(await acquireHealLease(db, kind, Date.now()))) return;
+      const lease = await acquireHealLease(db, kind, Date.now());
+      if (lease === null) return;
       // Released only after a step that worked. A failed step keeps the lease until it expires, so
       // the next fallback waits OWNERSHIP_HEAL_LEASE_MS: freed at once, every reader started a new
       // pass into an overloaded D1 (QA 2026-11-11: 34 failed heals in 100 s, each adding to the load).
@@ -810,7 +823,7 @@ export function scheduleOwnershipHeal(
         const result = await runOwnershipPass(env, kind, { maxPages: OWNERSHIP_HEAL_PAGES });
         logger.info('[Ownership] Self-heal step finished', { ...result });
       }
-      await db.prepare('DELETE FROM search_meta WHERE key = ?').bind(leaseKey(kind)).run();
+      await releaseHealLease(db, kind, lease);
     } catch (error) {
       logger.warn('[Ownership] Self-heal failed', { kind, error: errorText(error) });
     }
