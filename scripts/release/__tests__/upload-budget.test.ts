@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DATABASES, formatReport, parseArgs, toSnapshot, uploadDelta } from '../upload-budget.ts';
+import { DATABASES, formatReport, likeMatcher, likePrefix, parseArgs, toSnapshot, uploadDelta } from '../upload-budget.ts';
 
 const DAY = 1794268800;
 
@@ -37,4 +37,16 @@ test('arguments: qa or stage only (never production), a safe LIKE pattern, an in
 	assert.throws(() => parseArgs(['--emails', "x' OR 1=1 --"]), /LIKE pattern/);
 	assert.throws(() => parseArgs(['--emails', 'rel-%', '--max', '-1']), /non-negative/);
 	assert.equal(parseArgs(['--emails', '%-g9a1-%', '--max', '40']).max, 40);
+});
+
+test('a run pattern longer than D1\'s 50-byte LIKE limit is a prefix range plus an exact match', () => {
+	const pattern = 'e2e+43116467775-1-web-chromium-%@e2e.alummahnow.net';
+	assert.ok(pattern.length > 50, 'D1 refused this pattern: "LIKE or GLOB pattern too complex"');
+	assert.equal(likePrefix(pattern), 'e2e+43116467775-1-web-chromium-');
+	const matches = likeMatcher(pattern);
+	assert.equal(matches('e2e+43116467775-1-web-chromium-single@e2e.alummahnow.net'), true);
+	assert.equal(matches('E2E+43116467775-1-web-chromium-single@E2E.alummahnow.net'), true, 'LIKE is case-insensitive');
+	assert.equal(matches('e2e+43116467775-1-web-chromium-single@e2eXalummahnow.net'), false, '. is literal');
+	assert.equal(matches('e2e+43116467775-1-web-chromium-a@e2e.alummahnow.net.x'), false, 'anchored');
+	assert.equal(likeMatcher('a_c')('abc'), true);
 });

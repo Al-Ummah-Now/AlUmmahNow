@@ -112,7 +112,23 @@ async function provisionAndRefreshSession(
  *
  * Set SKIP_AUTH_SETUP=true to skip registration (when auth state is pre-loaded from artifacts).
  */
+/** An Error's message and the top of its stack (JSON.stringify(Error) is `{}`, which hid every cause). */
+function describeError(error: unknown): unknown {
+  if (error instanceof Error) return { message: error.message, stack: error.stack?.split('\n').slice(0, 4).join('\n') };
+  return error;
+}
+
+/** api-videos' "briefly unavailable" answers (503 with retryAfter), e.g. while its search index is rebuilt. */
+function retryAfterMs(error: unknown): number | null {
+  const e = error as { status?: number; body?: { retryAfter?: number } } | null;
+  if (!e || e.status !== 503) return null;
+  return Math.min(Math.max(Number(e.body?.retryAfter) || 10, 5), 30) * 1000;
+}
+
 async function globalSetup(_config: FullConfig) {
+  // Set when a SKIP_AUTH_SETUP job finds some state files missing: only those users are redone,
+  // and they are signed in first, as the earlier setup step may have registered them already
+  let onlyMissing = false;
   // Skip auth setup if auth state files already exist (from centralized auth job)
   if (process.env.SKIP_AUTH_SETUP === 'true') {
     ciLogger.info('[Global Setup] SKIP_AUTH_SETUP=true, checking for existing auth state...');
@@ -133,7 +149,8 @@ async function globalSetup(_config: FullConfig) {
       return;
     }
 
-    ciLogger.warn('[Global Setup] Auth files missing despite SKIP_AUTH_SETUP=true, proceeding with registration');
+    ciLogger.warn('[Global Setup] Auth files missing despite SKIP_AUTH_SETUP=true: redoing only the missing users');
+    onlyMissing = true;
   }
 
   ciLogger.info('[Global Setup] Starting test user registration...');
@@ -253,7 +270,10 @@ async function globalSetup(_config: FullConfig) {
   let successCount = 0;
   const errors: Array<{ email: string; error: unknown }> = [];
 
-  for (const user of testUsers) {
+  // A re-run setup (SKIP_AUTH_SETUP with files missing) redoes only the users without state: before,
+  // it re-registered all five, and the four that existed failed (PR #869, run 43116467775)
+  const todo = onlyMissing ? testUsers.filter((u) => !fs.existsSync(u.storageStatePath)) : testUsers;
+  for (const user of todo) {
     ciLogger.info(`[Setup] Registering user: ${user.email}`);
 
     const context = await browser.newContext({
@@ -270,10 +290,12 @@ async function globalSetup(_config: FullConfig) {
       ciLogger.info(`[Setup] Starting OAuth flow for ${user.email}`);
       let loggedIn = false;
       // Run users never exist yet: register straight away
-      if (!runMode && (reuseTimestamp || pinnedTimestamp)) {
+      if ((!runMode && (reuseTimestamp || pinnedTimestamp)) || onlyMissing) {
         const login = await loginOnPage(page, { issuerUrl: openAuthUrl, webUrl: webAppUrl, clientId }, user.email, user.password);
         if (login.ok) {
           loggedIn = true;
+        } else if (onlyMissing) {
+          ciLogger.info(`[Setup] ${user.email} could not sign in (${login.message}); registering it`);
         } else if (reuseTimestamp) {
           throw new Error(`Login for existing user ${user.email} failed: ${login.message}`);
         } else {
@@ -353,7 +375,17 @@ async function globalSetup(_config: FullConfig) {
       // Ensure profile + channels exist and refresh the web session so the
       // al_ummah_session cookie caches them (new users otherwise get sent to
       // /profile/create and have no channels for upload specs).
-      const refreshed = await provisionAndRefreshSession(browser, page, user, { openAuthUrl, webAppUrl, clientId, apiUrl });
+      let refreshed: BrowserContext | undefined;
+      for (let attempt = 1; !refreshed; attempt++) {
+        try {
+          refreshed = await provisionAndRefreshSession(browser, page, user, { openAuthUrl, webAppUrl, clientId, apiUrl });
+        } catch (error) {
+          const wait = retryAfterMs(error);
+          if (wait === null || attempt >= 3) throw error;
+          ciLogger.warn(`[Setup] Provisioning ${user.email} is briefly unavailable; retrying in ${wait / 1000}s`, describeError(error));
+          await page.waitForTimeout(wait);
+        }
+      }
 
       // Save authenticated state
       ciLogger.info(`[Setup] Saving authentication state for ${user.email} to ${user.storageStatePath}`);
@@ -375,8 +407,8 @@ async function globalSetup(_config: FullConfig) {
       await new Promise(resolve => setTimeout(resolve, 2000));
 
     } catch (error) {
-      ciLogger.error(`[Setup] ❌ Failed to register ${user.email}`, { error });
-      errors.push({ email: user.email, error });
+      ciLogger.error(`[Setup] ❌ Failed to register ${user.email}`, { error: describeError(error) });
+      errors.push({ email: user.email, error: describeError(error) });
 
       // Take screenshot for debugging
       try {
@@ -398,7 +430,7 @@ async function globalSetup(_config: FullConfig) {
 
   // Summary
   ciLogger.info('[Global Setup] Registration Summary', {
-    total: testUsers.length,
+    total: todo.length,
     success: successCount,
     failed: errors.length
   });
