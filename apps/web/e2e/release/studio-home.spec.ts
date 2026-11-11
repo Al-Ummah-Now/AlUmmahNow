@@ -27,7 +27,10 @@ test.describe('Release: Studio is the creator home', () => {
     ] as const) {
       const first = await fetch(`${web}${old}`, { redirect: 'manual' });
       expect(first.status, `${old} answers 301`).toBe(301);
-      await page.goto(`${web}${old}`);
+      // WebKit reports the redirect's follow-up as an interrupted navigation: that is the landing itself
+      await page.goto(`${web}${old}`).catch((e: unknown) => {
+        if (!/interrupted by another navigation/.test(String(e))) throw e;
+      });
       await expect(page, `${old} lands in Studio`).toHaveURL(landing);
       await expect(page.getByTestId('studio-frame')).toBeVisible();
     }
