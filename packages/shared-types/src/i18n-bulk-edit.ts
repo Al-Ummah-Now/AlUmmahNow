@@ -195,6 +195,12 @@ export interface BulkEditTranslations {
   rowSaved: string;
   rowSaveFailed: string;
 
+  /** English/Arabic pairs */
+  translateFromEnglish: string;
+  translateFromArabic: string;
+  numberingShared: string;
+  numberingSharedHint: string;
+
   rename: BulkRenameTranslations;
   fields: BulkFieldTranslations;
 }
@@ -502,6 +508,11 @@ export const BULK_EDIT_EN: BulkEditTranslations = {
   rowSaved: 'Saved',
   rowSaveFailed: 'Not saved, will retry',
 
+  translateFromEnglish: 'Translate from English',
+  translateFromArabic: 'Translate from Arabic',
+  numberingShared: 'Numbering (both languages)',
+  numberingSharedHint: 'A video gets the same {n} in English and Arabic.',
+
   rename: RENAME_EN,
   fields: FIELDS_EN,
 };
@@ -596,6 +607,11 @@ export const BULK_EDIT_AR: BulkEditTranslations = {
   rowSaving: 'جارٍ الحفظ…',
   rowSaved: 'تم الحفظ',
   rowSaveFailed: 'لم يُحفظ، ستُعاد المحاولة',
+
+  translateFromEnglish: 'ترجمة من الإنجليزية',
+  translateFromArabic: 'ترجمة من العربية',
+  numberingShared: 'الترقيم (للغتين)',
+  numberingSharedHint: 'يأخذ المقطع الرقم {n} نفسه بالإنجليزية والعربية.',
 
   rename: RENAME_AR,
   fields: FIELDS_AR,

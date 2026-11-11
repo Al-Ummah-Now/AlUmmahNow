@@ -1,4 +1,4 @@
-import { emptyBulkForm, type BulkFormState } from '@/lib/bulk-edit/form';
+import { EMPTY_RULE, emptyBulkForm, type BulkFormState } from '@/lib/bulk-edit/form';
 import { fileResumeKey } from '@/lib/upload/resume-store';
 import {
   applySetValues,
@@ -21,7 +21,7 @@ const rowsOf = (): Record<string, RowState> => Object.fromEntries(refs.map((r) =
 
 function patternForm(pattern: string, extra: Partial<BulkFormState> = {}): BulkFormState {
   const form = emptyBulkForm('en');
-  return { ...form, ...extra, ticked: ['title', ...(extra.ticked ?? [])], rename: { ...form.rename, pattern, pad: 2, languages: ['en', 'ar'] } };
+  return { ...form, ...extra, ticked: ['title', ...(extra.ticked ?? [])], rename: { ...form.rename, rules: { en: { ...EMPTY_RULE, pattern }, ar: { ...EMPTY_RULE, pattern } }, pad: 2, languages: ['en', 'ar'] } };
 }
 
 describe('set values for queued files', () => {

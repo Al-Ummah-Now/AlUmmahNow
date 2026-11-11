@@ -73,7 +73,13 @@ export interface RenameSubject {
 }
 
 export interface RenameOptions {
+  /** The rule for every chosen language (unless `rules` gives that language its own) */
   rule: RenameRule;
+  /**
+   * A rule per language: English and Arabic changed in one pass to different
+   * values ("Lesson {n}" / "الدرس {n}"). A video gets the same {n} in both.
+   */
+  rules?: Partial<Record<TitleLanguage, RenameRule>>;
   /** Which title fields change; the others are left alone */
   languages: TitleLanguage[];
   /** Digits for {n} and {date} in the Arabic field. English always uses Latin digits. */
@@ -229,11 +235,13 @@ export function previewRename(subjects: readonly RenameSubject[], options: Renam
   for (const language of TITLE_LANGUAGES) {
     if (!options.languages.includes(language)) continue;
     const digits: DigitStyle = language === 'ar' ? options.arabicDigits ?? 'latin' : 'latin';
+    const rule = options.rules?.[language] ?? options.rule;
+    // Every language counts the same included videos in the same order: one {n} per video
     let index = 0;
     for (const subject of subjects) {
       const before = subject.title[language] ?? '';
       const isExcluded = excluded.has(subject.id);
-      const after = isExcluded ? before : renameOne(subject, language, options.rule, index++, digits);
+      const after = isExcluded ? before : renameOne(subject, language, rule, index++, digits);
       rows.push({ id: subject.id, language, before, after, excluded: isExcluded, changed: !isExcluded && after !== before, problems: [] });
     }
   }

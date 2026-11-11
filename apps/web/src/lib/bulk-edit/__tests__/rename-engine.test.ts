@@ -179,3 +179,41 @@ describe('descriptions and schedules', () => {
     expect(staggeredTimes('2026-12-01T18:00:00Z', 2, 1, 'days')).toHaveLength(2);
   });
 });
+
+describe('English and Arabic in one pass, each with its own rule', () => {
+  const pair: RenameSubject[] = [
+    { id: 'a', title: { en: 'Fiqh class one', ar: 'درس الفقه الأول' } },
+    { id: 'b', title: { en: 'Fiqh class two', ar: 'درس الفقه الثاني' } },
+    { id: 'c', title: { en: 'Fiqh class three', ar: 'درس الفقه الثالث' } },
+  ];
+
+  it('gives each video the same {n} in both languages, with Arabic-Indic digits only in Arabic', () => {
+    const rows = previewRename(pair, {
+      rule: { kind: 'pattern', pattern: 'Lesson {n}' },
+      rules: { en: { kind: 'pattern', pattern: 'Lesson {n}', start: 5, pad: 2 }, ar: { kind: 'pattern', pattern: 'الدرس {n}', start: 5, pad: 2 } },
+      languages: ['en', 'ar'],
+      arabicDigits: 'arabic-indic',
+      excluded: ['b'],
+    });
+    const byLang = (lang: 'en' | 'ar') => rows.filter((r) => r.language === lang).map((r) => [r.id, r.after]);
+    expect(byLang('en')).toEqual([['a', 'Lesson 05'], ['b', 'Fiqh class two'], ['c', 'Lesson 06']]);
+    expect(byLang('ar')).toEqual([['a', 'الدرس ٠٥'], ['b', 'درس الفقه الثاني'], ['c', 'الدرس ٠٦']]);
+  });
+
+  it('finds and replaces, and adds prefixes, per language', () => {
+    const rows = previewRename(pair, {
+      rule: { kind: 'case', mode: 'upper' },
+      rules: { en: { kind: 'replace', find: 'fiqh class', replace: 'Fiqh Lesson', ignoreCase: true }, ar: { kind: 'affix', prefix: 'سلسلة: ' } },
+      languages: ['en', 'ar'],
+    });
+    expect(rows.filter((r) => r.language === 'en').map((r) => r.after)).toEqual(['Fiqh Lesson one', 'Fiqh Lesson two', 'Fiqh Lesson three']);
+    expect(rows.filter((r) => r.language === 'ar').map((r) => r.after)).toEqual(['سلسلة: درس الفقه الأول', 'سلسلة: درس الفقه الثاني', 'سلسلة: درس الفقه الثالث']);
+  });
+
+  it('changes only the ticked language', () => {
+    const rows = previewRename(pair, { rule: { kind: 'pattern', pattern: 'X' }, rules: { ar: { kind: 'pattern', pattern: 'الدرس {n}' } }, languages: ['ar'] });
+    expect(rows.every((r) => r.language === 'ar')).toBe(true);
+    expect(renamedTitles(rows)).toEqual({ a: { ar: 'الدرس 1' }, b: { ar: 'الدرس 2' }, c: { ar: 'الدرس 3' } });
+  });
+});
+

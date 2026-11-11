@@ -88,7 +88,7 @@ describe('upload queue "Set values"', () => {
     if (opts.overwrite) fireEvent.click(screen.getByTestId('batch-set-overwrite'));
     // The panel starts from the values last set for all files
     if (!(screen.getByTestId('bulk-set-tick-title') as HTMLInputElement).checked) fireEvent.click(screen.getByTestId('bulk-set-tick-title'));
-    fireEvent.change(screen.getByTestId('rename-pattern'), { target: { value: pattern } });
+    fireEvent.change(screen.getByTestId('rename-pattern-en'), { target: { value: pattern } });
     fireEvent.click(screen.getByTestId('batch-set-apply'));
   }
 
@@ -146,7 +146,7 @@ describe('upload queue "Set values"', () => {
     render(<Harness files={named} />);
     fireEvent.click(screen.getByTestId('batch-set-values'));
     fireEvent.click(screen.getByTestId('bulk-set-tick-title'));
-    fireEvent.change(screen.getByTestId('rename-pattern'), { target: { value: 'Lesson {n}' } });
+    fireEvent.change(screen.getByTestId('rename-pattern-en'), { target: { value: 'Lesson {n}' } });
     // Files have no upload date, publish date or duration yet
     expect(Array.from((screen.getByTestId('bulk-set-preview-order-key') as HTMLSelectElement).options).map((o) => o.value)).toEqual(['list', 'title', 'filename']);
     fireEvent.change(screen.getByTestId('bulk-set-preview-order-key'), { target: { value: 'filename' } });
@@ -159,4 +159,31 @@ describe('upload queue "Set values"', () => {
     expect(screen.getByTestId('title-b')).toHaveTextContent('Lesson 3');
     expect(reorderQueue).toHaveBeenCalledWith(['c', 'a', 'b']);
   });
+
+  it('sets the English and Arabic titles of every file in one pass, to different values', async () => {
+    render(<Harness files={files} />);
+    fireEvent.click(screen.getByTestId('batch-set-values'));
+    fireEvent.click(screen.getByTestId('bulk-set-tick-title'));
+    fireEvent.click(screen.getByTestId('rename-lang-ar'));
+    fireEvent.change(screen.getByTestId('rename-pattern-en'), { target: { value: 'Lesson {n}' } });
+    fireEvent.change(screen.getByTestId('rename-pattern-ar'), { target: { value: 'الدرس {n}' } });
+    fireEvent.click(screen.getByTestId('batch-set-apply'));
+    expect((screen.getAllByTestId('batch-file-title-en') as HTMLInputElement[]).map((i) => i.value)).toEqual(['Lesson 1', 'Lesson 2', 'Lesson 3']);
+    expect((screen.getAllByTestId('batch-file-title-ar') as HTMLInputElement[]).map((i) => i.value)).toEqual(['الدرس 1', 'الدرس 2', 'الدرس 3']);
+    await act(async () => {
+      jest.advanceTimersByTime(800);
+    });
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalledWith('vid-a', { titleLocalized: { en: 'Lesson 1', ar: 'الدرس 1' }, title: 'Lesson 1' }, { channelId: 'ch' }));
+  });
+
+  it('gives each row its own English and Arabic description', () => {
+    render(<Harness files={files} />);
+    const ar = screen.getAllByTestId('batch-file-description-ar')[0];
+    expect(ar).toHaveAttribute('dir', 'rtl');
+    expect(ar).toHaveAttribute('lang', 'ar');
+    fireEvent.change(ar, { target: { value: 'وصف' } });
+    expect(screen.getAllByTestId('batch-file-description-en')[0]).toHaveValue('');
+    expect(ar).toHaveValue('وصف');
+  });
 });
+

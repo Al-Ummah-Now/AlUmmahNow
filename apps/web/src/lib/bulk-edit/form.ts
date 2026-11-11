@@ -29,18 +29,26 @@ export const CONTENT_LANGUAGES: readonly ContentLanguage[] = ['en', 'ar', 'ur', 
 export type CommentSetting = 'on' | 'held' | 'off';
 export type TagsMode = 'add' | 'remove' | 'replace';
 
-export interface RenameState {
+/** How one language's title changes: English and Arabic each have their own. */
+export interface LanguageRule {
   mode: RenameMode;
   pattern: string;
-  start: number;
-  step: number;
-  pad: number;
   find: string;
   replace: string;
   ignoreCase: boolean;
   prefix: string;
   suffix: string;
   caseMode: 'upper' | 'lower' | 'title' | 'sentence';
+}
+
+export interface RenameState {
+  /** Each language's own rule ("Lesson {n}" / "الدرس {n}") */
+  rules: Record<TitleLanguage, LanguageRule>;
+  /** Shared by both languages: a video gets the same {n} in each */
+  start: number;
+  step: number;
+  pad: number;
+  /** The title fields that change (each language ticked on its own) */
   languages: TitleLanguage[];
   arabicDigits: DigitStyle;
   /** Rows left out of the rename (subject ids) */
@@ -79,18 +87,22 @@ export interface BulkFormState {
   comments: CommentSetting;
 }
 
-export const EMPTY_RENAME: RenameState = {
+export const EMPTY_RULE: LanguageRule = {
   mode: 'pattern',
   pattern: '{filename}',
-  start: 1,
-  step: 1,
-  pad: 1,
   find: '',
   replace: '',
   ignoreCase: false,
   prefix: '',
   suffix: '',
   caseMode: 'title',
+};
+
+export const EMPTY_RENAME: RenameState = {
+  rules: { en: { ...EMPTY_RULE }, ar: { ...EMPTY_RULE } },
+  start: 1,
+  step: 1,
+  pad: 1,
   languages: ['en'],
   arabicDigits: 'latin',
   excluded: [],
@@ -103,7 +115,7 @@ export const EMPTY_RENAME: RenameState = {
 export function emptyBulkForm(uiLanguage: TitleLanguage = 'en'): BulkFormState {
   return {
     ticked: [],
-    rename: { ...EMPTY_RENAME, languages: [uiLanguage] },
+    rename: { ...EMPTY_RENAME, rules: { en: { ...EMPTY_RULE }, ar: { ...EMPTY_RULE } }, languages: [uiLanguage] },
     description: {
       en: { enabled: uiLanguage === 'en', mode: 'append', text: '' },
       ar: { enabled: uiLanguage === 'ar', mode: 'append', text: '' },
@@ -123,18 +135,33 @@ export function emptyBulkForm(uiLanguage: TitleLanguage = 'en'): BulkFormState {
   };
 }
 
-export function ruleOf(rename: RenameState): RenameRule {
-  switch (rename.mode) {
+/** One language's rule, with the shared numbering. */
+export function ruleOf(rename: RenameState, language: TitleLanguage = 'en'): RenameRule {
+  const rule = rename.rules[language];
+  switch (rule.mode) {
     case 'pattern':
-      return { kind: 'pattern', pattern: rename.pattern, start: rename.start, step: rename.step, pad: rename.pad };
+      return { kind: 'pattern', pattern: rule.pattern, start: rename.start, step: rename.step, pad: rename.pad };
     case 'replace':
-      return { kind: 'replace', find: rename.find, replace: rename.replace, ignoreCase: rename.ignoreCase };
+      return { kind: 'replace', find: rule.find, replace: rule.replace, ignoreCase: rule.ignoreCase };
     case 'affix':
-      return { kind: 'affix', prefix: rename.prefix, suffix: rename.suffix };
+      return { kind: 'affix', prefix: rule.prefix, suffix: rule.suffix };
     case 'case':
     default:
-      return { kind: 'case', mode: rename.caseMode };
+      return { kind: 'case', mode: rule.caseMode };
   }
+}
+
+/** Whether a language's rule says anything yet. */
+export function ruleIsEmpty(rule: LanguageRule): boolean {
+  if (rule.mode === 'pattern') return !rule.pattern;
+  if (rule.mode === 'replace') return !rule.find;
+  if (rule.mode === 'affix') return !rule.prefix && !rule.suffix;
+  return false;
+}
+
+/** The patterns with {n} among the ticked languages (for "Continue numbering after"). */
+export function numberedPatterns(rename: RenameState): string[] {
+  return rename.languages.map((l) => rename.rules[l]).filter((r) => r.mode === 'pattern' && r.pattern.includes('{n}')).map((r) => r.pattern);
 }
 
 /** The subjects in the order the rename numbers them. */
@@ -145,7 +172,8 @@ export function orderedForRename<T extends RenameSubject>(form: BulkFormState, s
 /** The rename preview rows for the subjects, in the chosen order. */
 export function renamePreview(form: BulkFormState, subjects: readonly RenameSubject[]): RenameRow[] {
   return previewRename(orderedForRename(form, subjects), {
-    rule: ruleOf(form.rename),
+    rule: ruleOf(form.rename, 'en'),
+    rules: { en: ruleOf(form.rename, 'en'), ar: ruleOf(form.rename, 'ar') },
     languages: form.rename.languages,
     arabicDigits: form.rename.arabicDigits,
     excluded: form.rename.excluded,
@@ -172,9 +200,7 @@ export function fieldProblem(form: BulkFormState, field: BulkField, preview?: Re
   switch (field) {
     case 'title': {
       if (form.rename.languages.length === 0) return 'rename_empty';
-      if (form.rename.mode === 'pattern' && !form.rename.pattern) return 'rename_empty';
-      if (form.rename.mode === 'replace' && !form.rename.find) return 'rename_empty';
-      if (form.rename.mode === 'affix' && !form.rename.prefix && !form.rename.suffix) return 'rename_empty';
+      if (form.rename.languages.some((l) => ruleIsEmpty(form.rename.rules[l]))) return 'rename_empty';
       if (preview && Object.keys(renamedTitles(preview)).length === 0) return 'no_titles';
       return '';
     }

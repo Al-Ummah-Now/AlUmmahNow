@@ -95,7 +95,11 @@ test.describe('Release: bulk rename and bulk edit', () => {
       await page.getByTestId('batch-set-scope-all').check();
       await page.getByTestId('bulk-set-tick-title').check();
       await page.getByTestId('rename-lang-ar').check();
-      await page.getByTestId('rename-pattern').fill(`Bulk ${stamp} {n}`);
+      // Both title fields get the pattern (one per language since 2026-11-11; one shared field before)
+      const enPattern = page.getByTestId('rename-pattern-en').or(page.getByTestId('rename-pattern'));
+      await enPattern.fill(`Bulk ${stamp} {n}`);
+      const arPattern = page.getByTestId('rename-pattern-ar');
+      if (await arPattern.isVisible().catch(() => false)) await arPattern.fill(`Bulk ${stamp} {n}`);
       await page.getByTestId('rename-pad').fill('2');
       const preview = page.getByTestId('bulk-set-preview-row');
       await expect(preview).toHaveCount(3);

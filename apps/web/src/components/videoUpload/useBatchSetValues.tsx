@@ -170,6 +170,35 @@ export function useBatchSetValues({ seed, files, channelId, channelName, playlis
             </div>
           );
         })}
+        {/* The row's own descriptions, English and Arabic side by side */}
+        <details className="sm:col-span-2" data-testid="batch-file-descriptions">
+          <summary className="cursor-pointer text-xs font-medium text-[var(--fanous-color-text-secondary)]">{t.bulkEdit.fields.description}</summary>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            {(['en', 'ar'] as TitleLanguage[]).map((l) => {
+              const field = l === 'en' ? 'descriptionEn' : 'descriptionAr';
+              const id = `batch-desc-${l}-${file.id}`;
+              return (
+                <div key={l}>
+                  <label htmlFor={id} className="flex items-center gap-2 text-xs font-medium text-[var(--fanous-color-text-secondary)]">
+                    {l === 'en' ? t.bulkEdit.fields.descriptionEn : t.bulkEdit.fields.descriptionAr}
+                    {row.touched.includes(field) && <span className="rounded-full border border-[var(--fanous-color-outline)] px-1.5 text-[var(--fanous-color-text-primary)]">{b.rowEdited}</span>}
+                  </label>
+                  <textarea
+                    id={id}
+                    dir={l === 'ar' ? 'rtl' : 'ltr'}
+                    lang={l}
+                    rows={3}
+                    maxLength={5000}
+                    value={row.values[field]}
+                    onChange={(e) => edit(file.id, field, { [field]: e.target.value })}
+                    className={`${inputClass} py-2`}
+                    data-testid={`batch-file-description-${l}`}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </details>
         {state && (
           <p role="status" className={`text-xs sm:col-span-2 ${state === 'failed' ? 'text-[var(--fanous-color-error-text)]' : 'text-[var(--fanous-color-text-secondary)]'}`}
             data-testid="batch-file-values-save" data-state={state}>

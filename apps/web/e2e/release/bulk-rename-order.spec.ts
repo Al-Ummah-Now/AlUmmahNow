@@ -47,11 +47,11 @@ async function createVideo(user: WebUser, channelId: string, title: string): Pro
   return id;
 }
 
-async function titleOf(user: WebUser, channelId: string, id: string): Promise<string> {
+async function titleOf(user: WebUser, channelId: string, id: string, language: 'en' | 'ar' = 'en'): Promise<string> {
   const res = await apiFetch(user, `/api/videos/${id}`, { headers: { channelId } });
   // The video view itself (GET /api/videos/:id)
   const v = (await res.json().catch(() => ({}))) as { title?: string; titleLocalized?: Record<string, string> };
-  return v?.titleLocalized?.en || v?.title || '';
+  return language === 'ar' ? v?.titleLocalized?.ar || '' : v?.titleLocalized?.en || v?.title || '';
 }
 
 test.describe('Release: bulk rename order', () => {
@@ -78,7 +78,7 @@ test.describe('Release: bulk rename order', () => {
         test.info().annotations.push({ type: 'not-deployed', description: 'this build has no order control in the rename preview yet' });
         test.skip(true, 'this build has no order control in the rename preview yet');
       }
-      await page.getByTestId('rename-pattern').fill('Lesson {n}');
+      await page.getByTestId('rename-pattern-en').or(page.getByTestId('rename-pattern')).fill('Lesson {n}');
       await orderKey.selectOption('title');
 
       const rows = page.getByTestId('bulk-edit-preview-row');
@@ -92,7 +92,17 @@ test.describe('Release: bulk rename order', () => {
       await page.keyboard.press('Alt+ArrowUp');
       await expect(page.getByTestId('bulk-edit-preview-moved')).toHaveText('Moved to position 3 of 4');
       expect(await order()).toEqual([ids['1'], ids['2'], ids['10'], ids['3']]);
-      await expect(page.getByTestId('bulk-edit-preview-after')).toHaveText(['Lesson 1', 'Lesson 2', 'Lesson 3', 'Lesson 4']);
+      // The Arabic title in the same pass, its own pattern, same numbers (builds with a rule per language)
+      const arPattern = page.getByTestId('rename-pattern-ar');
+      await page.getByTestId('rename-lang-ar').check();
+      const bilingual = await arPattern.isVisible().catch(() => false);
+      if (bilingual) {
+        await arPattern.fill('الدرس {n}');
+        await expect(page.locator('[data-testid="bulk-edit-preview-after"][data-language="ar"]')).toHaveText(['الدرس 1', 'الدرس 2', 'الدرس 3', 'الدرس 4']);
+      } else {
+        await page.getByTestId('rename-lang-ar').uncheck();
+      }
+      await expect(page.locator('[data-testid="bulk-edit-preview-after"][data-language="en"]')).toHaveText(['Lesson 1', 'Lesson 2', 'Lesson 3', 'Lesson 4']);
 
       await page.getByTestId('bulk-edit-review').click();
       await page.getByTestId('bulk-edit-apply').click();
@@ -103,6 +113,10 @@ test.describe('Release: bulk rename order', () => {
       const expected: Record<string, string> = { '1': 'Lesson 1', '2': 'Lesson 2', '10': 'Lesson 3', '3': 'Lesson 4' };
       for (const [n, title] of Object.entries(expected)) {
         await expect.poll(() => titleOf(user, channelId, ids[n]), { message: `"${n}" should be renamed "${title}"`, timeout: 30000 }).toBe(title);
+        if (bilingual) {
+          const ar = title.replace('Lesson', 'الدرس');
+          await expect.poll(() => titleOf(user, channelId, ids[n], 'ar'), { message: `"${n}" should be renamed "${ar}" in Arabic`, timeout: 30000 }).toBe(ar);
+        }
       }
     } finally {
       for (const id of Object.values(ids)) await apiFetch(user, `/api/videos/${id}`, { method: 'DELETE', headers: { channelId } });
