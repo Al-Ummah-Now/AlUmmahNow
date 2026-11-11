@@ -5,7 +5,7 @@ import { canManageCreators } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
 import { CreatorTiersView } from '@/components/creators/CreatorTiersView';
 import { logger } from '@/lib/logger';
-import Link from 'next/link';
+import Link from '@/components/AppLink';
 import { linkClass } from '@/components/ui';
 import { trashHref } from '@/lib/trash';
 

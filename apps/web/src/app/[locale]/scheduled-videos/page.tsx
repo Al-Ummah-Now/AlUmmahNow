@@ -13,7 +13,7 @@ import { CalendarControls } from '@/components/calendar/CalendarControls';
 import { ScheduledVideosList } from '@/components/scheduled-videos/ScheduledVideosList';
 import { navigateNext, navigatePrevious, type ViewType } from '@/components/calendar/utils/dateFormatters';
 import { Loader } from 'lucide-react';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { View, NavigateAction } from 'react-big-calendar';
 import { signInAndReturnHere } from '@/lib/auth/silent-sign-in';

@@ -2,7 +2,7 @@
 // The theme builder's editor for one custom theme: every token and component section, files,
 // inline validation, save draft, publish and use as the site theme.
 import { useCallback, useMemo, useRef, useState, useTransition } from 'react';
-import Link from 'next/link';
+import Link from '@/components/AppLink';
 import { useRouter } from 'next/navigation';
 import {
   BASE, BRAND_NAMES, COMPONENT_PARTS, ELEVATION_NAMES, MATERIAL_VARS, PLAYER_TOKENS, RADIUS_NAMES, brandUsage, linkBrandColors, unlinkedBrandColors, validatePackage,

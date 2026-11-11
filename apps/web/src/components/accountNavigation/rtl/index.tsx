@@ -2,7 +2,7 @@
 import React, { useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import IcoButton from "@/components/iconButton";
-import Link from "next/link";
+import Link from '@/components/common/AppLink';
 import { AccountNavigationProps, NavItem } from "./../interfaces";
 import { useTheme } from "next-themes"
 import LoginWrapper from "@/components/login/loginButton/rtl";

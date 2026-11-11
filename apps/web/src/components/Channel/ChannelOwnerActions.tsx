@@ -9,7 +9,7 @@
  */
 
 import React, { useState } from 'react';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { MoreVertical, Pencil, Settings, Trash2, Video } from 'lucide-react';
 import {
   DropdownMenu,

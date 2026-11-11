@@ -8,7 +8,7 @@
 
 import { pickLanguage } from '@/lib/format/pick-language';
 import React, { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { AlertTriangle, ArrowDownUp, ExternalLink, ListVideo, Lock, Pencil, Plus, Trash2 } from 'lucide-react';
 import { playlistSortOf } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';

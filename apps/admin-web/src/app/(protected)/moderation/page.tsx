@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/AppLink';
 import { listReports } from '@/lib/api/admin';
 import type { ListReportsResponse } from '@/lib/api/types';
 import { getI18n } from '@/i18n/server';

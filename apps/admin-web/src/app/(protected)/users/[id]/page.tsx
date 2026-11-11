@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/AppLink';
 import { notFound } from 'next/navigation';
 import { getContentPermissions, getUser } from '@/lib/api/content';
 import type { AdminContentPermission, UserDetailView } from '@/lib/api/content-types';

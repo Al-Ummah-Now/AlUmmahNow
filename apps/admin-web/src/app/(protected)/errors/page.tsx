@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/AppLink';
 import { redirect } from 'next/navigation';
 import { findErrorRef, getErrorCounts, getErrorFacets, listErrorGroups } from '@/lib/api/admin';
 import type { ErrorCounts, ErrorFacets, ErrorGroupList } from '@/lib/api/error-groups-types';

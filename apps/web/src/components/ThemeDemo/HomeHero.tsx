@@ -1,7 +1,7 @@
 'use client';
 // The featured video at the top of the home page, and the 16:9 frame it shares with the channel Spotlight.
 import { useState, type ReactNode } from 'react';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { Play } from 'lucide-react';
 import type { VideoObject } from '@/interfaces';
 import { getLocalizedValue } from '@al-ummah/shared-types';

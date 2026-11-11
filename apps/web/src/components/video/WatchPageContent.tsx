@@ -5,7 +5,7 @@ import { RelativeDate } from '@/components/RelativeDate';
 import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Player } from "video.js";
-import Link from "next/link";
+import Link from '@/components/common/AppLink';
 import { Edit, Flag, MoreHorizontal, VideoOff } from "lucide-react";
 import { logger } from '@/lib/logger-client';
 import VideoPlayer from "@/components/VideoPagePlayer/index";

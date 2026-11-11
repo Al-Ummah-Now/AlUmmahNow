@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/AppLink';
 import type { AdminAuditEntry, CreatorTiersList } from '@al-ummah/shared-types';
 import type { Locale } from '@/i18n/config';
 import { formatDate, formatNumber, type MessageKey, type Translator } from '@/i18n/translate';

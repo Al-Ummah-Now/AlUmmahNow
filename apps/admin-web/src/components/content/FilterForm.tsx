@@ -1,7 +1,7 @@
 'use client';
 
 import Form from 'next/form';
-import Link from 'next/link';
+import Link from '@/components/AppLink';
 import { useId } from 'react';
 import { useLanguage } from '@/i18n/I18nProvider';
 import type { AdminSuggestKind } from '@al-ummah/shared-types';

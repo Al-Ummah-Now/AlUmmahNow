@@ -3,7 +3,7 @@ import { logger } from '@/lib/logger-client';
 
 import React, { useState, useRef, useEffect } from "react";
 import Image from "next/image";
-import Link from "next/link";
+import Link from '@/components/common/AppLink';
 import { Channel } from "@al-ummah/shared-types";
 import { useActiveChannel } from "@/contexts/ActiveChannelContext";
 import { ChevronDown, Check } from "lucide-react";

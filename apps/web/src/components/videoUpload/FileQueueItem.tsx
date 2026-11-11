@@ -13,7 +13,7 @@ import {
   Clock,
   Loader2
 } from 'lucide-react';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useUploadResult } from '@/lib/notifications/upload-results';
 import type { ProcessingPhase } from '@/lib/upload/processing-status';

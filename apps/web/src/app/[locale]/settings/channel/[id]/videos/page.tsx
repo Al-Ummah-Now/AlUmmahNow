@@ -14,7 +14,7 @@ import { listVideos, deleteVideo } from '@/lib/api/videos';
 import { channelAllows } from '@/lib/channel-utils';
 import { getChannelById } from '@/lib/api/channels';
 import { FitImage } from '@/components/VideoThumbnail/FitImage';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
 import { logger } from '@/lib/logger-client';
 import { formatViews } from '@/lib/format/videoMeta';

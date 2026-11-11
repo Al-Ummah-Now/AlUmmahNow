@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/AppLink';
 import { listInvites } from '@/lib/api/invites';
 import { getContentPermissions } from '@/lib/api/content';
 import { INVITE_STATUSES, type InviteListStatus, type InviteView } from '@/lib/api/invite-types';

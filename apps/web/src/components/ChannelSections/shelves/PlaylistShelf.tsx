@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { PlaylistCover } from '@/components/PlaylistCover';
 import { pickLanguage } from '@/lib/format/pick-language';
 import { useLanguage } from '@/hooks/useLanguage';

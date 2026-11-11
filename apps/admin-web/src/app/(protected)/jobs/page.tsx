@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/AppLink';
 import { ADMIN_JOB_STATUSES } from '@al-ummah/shared-types';
 import { getContentPermissions, getJobCounts, listJobs } from '@/lib/api/content';
 import type { AdminContentPermission, AdminJob, JobCounts } from '@/lib/api/content-types';

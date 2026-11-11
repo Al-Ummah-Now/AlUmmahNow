@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import Image from 'next/image';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { formatWatchTime, watchTimeUnit, type StudioVideoStatus } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';

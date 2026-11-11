@@ -7,7 +7,7 @@
  * details. Shown only when the viewer's channel role may open that settings
  * page (the same rule the settings pages enforce); visitors see nothing.
  */
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { Pencil } from 'lucide-react';
 import type { ChannelTab } from './index';
 import { useChannelViewer } from '@/components/Channel/ChannelViewerContext';

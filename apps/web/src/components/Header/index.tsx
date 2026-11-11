@@ -2,7 +2,7 @@
 import React from "react";
 import { HeaderSearch } from '@/components/Header/HeaderSearch';
 import IcoButton from '@/components/iconButton';
-import Link from "next/link";
+import Link from '@/components/common/AppLink';
 import { HeaderProps } from "./interfaces";
 import { UnifiedNavigation } from '@/components/UnifiedNavigation';
 import { useLanguage } from '@/hooks/useLanguage';

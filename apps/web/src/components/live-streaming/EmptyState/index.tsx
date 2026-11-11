@@ -9,7 +9,7 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { VideoOff, Calendar, Clock, Search, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { EmptyStateProps, EmptyStateVariant, EmptyStateAction } from './types';

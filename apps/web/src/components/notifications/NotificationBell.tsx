@@ -2,7 +2,7 @@
 
 import { unreadBadge } from '@/lib/navigation/destinations';
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { Bell, Settings } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useLanguage } from '@/hooks/useLanguage';

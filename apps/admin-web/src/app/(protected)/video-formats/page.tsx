@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/AppLink';
 import { getLatestVideoFormatRun, listFlaggedVideoFormats } from '@/lib/api/admin';
 import type { FlaggedVideoList, VideoFormatRunView } from '@/lib/api/types';
 import { getI18n } from '@/i18n/server';

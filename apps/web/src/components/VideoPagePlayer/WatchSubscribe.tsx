@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { usePathname } from 'next/navigation';
 import { Bell } from 'lucide-react';
 import { useChannelSubscription } from '@/hooks/useChannelSubscription';

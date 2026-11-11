@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { cn } from '@/lib/utils';
 
 interface UploadButtonProps {

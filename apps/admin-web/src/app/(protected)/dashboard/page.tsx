@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/AppLink';
 import type { ReportStats } from '@al-ummah/shared-types';
 import { getStats } from '@/lib/api/admin';
 import { getI18n } from '@/i18n/server';

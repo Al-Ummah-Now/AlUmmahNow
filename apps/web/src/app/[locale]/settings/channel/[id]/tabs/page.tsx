@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { ChannelTabConfig } from '@al-ummah/shared-types';
 import TabManagement from '@/components/TabManagement';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { Button } from '@/components/ui/button';
 import { getChannelTabConfig, updateChannelTabConfig } from '@/lib/api/channel-tabs';
 import { channelAllows } from '@/lib/channel-utils';

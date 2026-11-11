@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import Link from "next/link";
+import Link from '@/components/common/AppLink';
 import VideoThumbnail from "@/components/VideoThumbnail";
 import { ProcessingBadge } from "./ProcessingBadge";
 import { VideoObject, getLocalizedValue } from "@al-ummah/shared-types";

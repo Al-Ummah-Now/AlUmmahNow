@@ -2,7 +2,7 @@
 
 import { CommunityPost } from '@al-ummah/shared-types';
 import { cn } from '@/lib/utils';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 
 interface VideoPostProps {
   post: CommunityPost;

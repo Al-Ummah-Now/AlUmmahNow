@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { BarChart3, Heart, MessageCircle, Pin } from 'lucide-react';
 import { RelativeDate } from '@/components/RelativeDate';
 import { useLanguage } from '@/hooks/useLanguage';

@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/AppLink';
 import { deletePost, getContentPermissions, listPosts } from '@/lib/api/content';
 import type { AdminContentPermission, AdminPostRow, CursorPage } from '@/lib/api/content-types';
 import { getI18n } from '@/i18n/server';

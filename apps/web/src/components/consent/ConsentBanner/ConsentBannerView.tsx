@@ -11,7 +11,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { useLanguage } from '@/hooks/useLanguage';
 import { ConsentManager, type ConsentChoices } from '@/lib/consent/ConsentManager';
 import { ConsentPreferences } from '../ConsentPreferences';

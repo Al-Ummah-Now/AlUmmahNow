@@ -57,6 +57,18 @@ const eslintConfig = [
       ],
     },
   },
+  {
+    // Links prefetch on intent, not on sight (Cloudflare usage, 2026-11-11): import
+    // Link from the wrapper (src/components/AppLink.tsx), never next/link
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/components/AppLink.tsx", "**/__tests__/**", "**/*.test.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        { paths: [{ name: "next/link", message: "Import Link from '@/components/AppLink': it prefetches on hover/focus instead of whenever the link is visible." }] },
+      ],
+    },
+  },
 ];
 
 export default eslintConfig;

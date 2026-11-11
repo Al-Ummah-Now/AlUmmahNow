@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { EditableAvatar, EditableCover } from '@/components/media/ProfileImages';
 import { getChannelForOwner } from '@/lib/api/channels';
 import { uploadFileDirect } from '@/lib/api/direct-upload';

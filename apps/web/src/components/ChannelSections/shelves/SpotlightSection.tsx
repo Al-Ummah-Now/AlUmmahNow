@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { Play } from 'lucide-react';
 import { getLocalizedValue, type VideoObject } from '@al-ummah/shared-types';
 import { useAuth } from '@/components/AuthProvider/authContext';

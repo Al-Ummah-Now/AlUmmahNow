@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import Image from 'next/image';
 import { BadgeCheck } from 'lucide-react';
 import { getLocalizedValue } from '@al-ummah/shared-types';

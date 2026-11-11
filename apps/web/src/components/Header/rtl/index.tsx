@@ -3,7 +3,7 @@ import React from "react";
 import { HeaderSearch } from '@/components/Header/HeaderSearch';
 import Image from 'next/image';
 import IcoButton from '@/components/iconButton';
-import Link from "next/link";
+import Link from '@/components/common/AppLink';
 import { HeaderProps } from "../interfaces";
 import { UnifiedNavigationRTL } from '@/components/UnifiedNavigation/rtl';
 import { useLanguage } from '@/hooks/useLanguage';

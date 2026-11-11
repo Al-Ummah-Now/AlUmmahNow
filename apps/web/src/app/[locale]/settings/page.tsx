@@ -11,7 +11,7 @@
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { SignInPrompt } from '@/components/common/SignInPrompt';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { NotificationSettingsPanel } from '@/components/notifications/NotificationSettingsPanel';
 import {
   Settings,

@@ -2,7 +2,7 @@
 
 import { pickLanguage } from '@/lib/format/pick-language';
 import React from 'react';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { PlaylistCover } from '@/components/PlaylistCover';
 import { Playlist } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';

@@ -7,7 +7,7 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { getVideoAnalytics } from '@/lib/api/analytics';
 import type { VideoAnalyticsData } from '@/lib/api/types';
 import { useLanguage } from '@/hooks/useLanguage';

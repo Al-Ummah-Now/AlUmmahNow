@@ -7,7 +7,7 @@
  * picker (moved to the invited user with a transfer job).
  */
 import { useId, useState } from 'react';
-import Link from 'next/link';
+import Link from '@/components/AppLink';
 import type { AdminSuggestion } from '@al-ummah/shared-types';
 import { createInvite, lookupInviteEmail } from '@/lib/api/invites';
 import type { InviteLookup, InviteView } from '@/lib/api/invite-types';

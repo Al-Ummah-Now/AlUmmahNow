@@ -23,7 +23,7 @@ import { BulkEditDialog } from '@/components/bulkEdit/BulkEditDialog';
 import { applyChangesLocally, type BulkVideoChanges } from '@/lib/dashboard/bulk-edit';
 import { ProcessingProgress } from '@/components/video/ProcessingProgress';
 import VideoThumbnail from '@/components/VideoThumbnail';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { compareDashboardVideos, type DashboardSort } from '@/lib/dashboard/sort-videos';
 import { needsReupload, reuploadHref } from '@/lib/dashboard/reupload';
 import { signInAndReturnHere } from '@/lib/auth/silent-sign-in';

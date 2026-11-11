@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import Link from 'next/link';
+import Link from '@/components/AppLink';
 import type { Report } from '@al-ummah/shared-types';
 import { getReport } from '@/lib/api/admin';
 import { AdminApiError } from '@/lib/api/errors';
