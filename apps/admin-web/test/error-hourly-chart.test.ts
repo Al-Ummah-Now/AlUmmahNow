@@ -7,7 +7,8 @@ import { formatHour, hourDate } from '../src/i18n/translate';
 
 // tsx compiles the component's JSX to React.createElement (Next uses the automatic runtime)
 (globalThis as { React?: unknown }).React = React;
-let HourlyChart: typeof import('../src/app/(protected)/errors/ui').HourlyChart;
+type Chart = typeof import('../src/app/(protected)/errors/ui').HourlyChart;
+let HourlyChart: Chart;
 before(async () => {
   ({ HourlyChart } = await import('../src/app/(protected)/errors/ui'));
 });
@@ -15,7 +16,7 @@ before(async () => {
 const hours = (counts: number[]) => counts.map((occurrences, i) => ({ hour: `2026-11-11T${String(i).padStart(2, '0')}`, occurrences }));
 
 function render(counts: number[], locale: 'en' | 'ar' = 'en') {
-  return renderToStaticMarkup(React.createElement(HourlyChart, {
+  return renderToStaticMarkup(React.createElement(HourlyChart as unknown as React.FC<Parameters<Chart>[0]>, {
     hours: hours(counts),
     label: 'Occurrences',
     barTitle: (h: { hour: string; occurrences: number }) => `${formatHour(h.hour, locale)}: ${h.occurrences}`,
