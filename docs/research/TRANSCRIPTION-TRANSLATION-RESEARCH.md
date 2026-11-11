@@ -425,3 +425,37 @@ v1 said QF "forbids a static cache". That left out the exception. Quotes, fetche
 - **API calls:** 64 searches and 519 verse fetches for 75 snippets. In production these are deduplicated per job and edge-cached for at most 7 days.
 - **Compared with a local index (mode A):** 27/55 with 0 wrong.
 - **Terms:** a full local index built from regular API responses isn't allowed (Content Sync is "the only permitted path for obtaining and maintaining an offline copy" of `quran_core`). So mode A needs Content Sync access (spec §5.5, O12/O13).
+
+
+## 14. ElevenLabs Scribe v3, measured (2026-11-11)
+
+**Setup:**
+- **Key:** test-only, restricted to Speech to Text. It wasn't wired into any environment.
+- **Request:** `POST https://api.elevenlabs.io/v1/speech-to-text` with `model_id=scribe_v3`, `language_code=ar`, `diarize=true`, `timestamps_granularity=word`.
+- **Audio:** 6 clips, 16.7 min ≈ **$0.06** at $0.20/h, inside the plan's included hours. The key can't read usage (it lacks the `user_read` permission).
+
+**Quran recitation** (Tanzil text as test reference; Workers AI and DeepL results from §8–9):
+
+| Clip | Raw WER: Workers AI / DeepL / **Scribe** | Ayat auto-suggested: Workers AI / DeepL / **Scribe** | Wrong shown |
+|---|---|---|---|
+| Al-Mulk (Alafasy) | 6.2% / 3.6% / **1.4%** | 13/13 / 13/13 / **13/13** | 0 |
+| al-Fajr (Minshawy, mujawwad) | – / 17.8% / **1.4%** | 13/16 / 16/16 / **16/16** | 0 |
+| Ar-Rahman (Abdul Basit, mujawwad) | 32.3% / 61.1% / **1.1%** | 16/25 / 7/25 / **25/25** | 0 |
+
+**Lectures** (adjudicated reference, §12; built from Workers AI, DeepL, whisper.cpp and Bunny, **without Scribe**, so the reference leans against it):
+
+| Lecture | Workers AI | DeepL | **Scribe** |
+|---|---|---|---|
+| ar_duat3 | 3.7% | 6.5% | 6.5% |
+| x_ashura2 | 3.4% | 3.1% | 4.5% |
+| ar_gaza16 (first 90 s) | 3.4% | 0.7% | 1.4% |
+| pooled (610 words) | 3.4% | 3.1% | 4.1% |
+
+- **Quran detection on lectures:** identical to the other engines (3:166–167 and 5:82 confirmed; the same review items).
+- **Timestamps:** Minshawy ayah starts were a median **95 ms** off raw (Whisper: 445 ms) and 38 ms after pause snapping.
+- **Diarization:** all three single-speaker lectures were labelled as one speaker (`speaker_0`), with no false splits. Multi-speaker audio wasn't tested.
+- **Latency:** the batch API answered in **2–5 s per clip** (52 s to 5.8 min of audio). DeepL Voice streams at 2× real time at most (1–2 min per clip).
+
+**Conclusion:**
+- Scribe v3 is the best engine measured for Quran recitation, the hardest case, and clearly better than DeepL there. On lectures it is close to the others, within this reference's bias.
+- It is the preferred optional high-accuracy provider and the preferred Quran second opinion: off by default, never in tests or QA, and production use needs a paid ElevenLabs plan (spec §7.3a).
