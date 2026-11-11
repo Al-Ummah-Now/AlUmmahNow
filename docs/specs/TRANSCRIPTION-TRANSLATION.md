@@ -18,7 +18,7 @@ The owner asked for:
 | Topic | Recommendation | Why (evidence) |
 |---|---|---|
 | Speech-to-text default | **Workers AI `@cf/openai/whisper-large-v3-turbo`**, VAD off, explicit language, `initial_prompt`, chunks of 10 minutes or less | $0.00051/min measured. It matched or beat Bunny on every test clip. VAD deleted speech in 2 of 3 cases (R§2). |
-| Speech-to-text, high accuracy | **DeepL: optional and OFF by default (owner decision 2/13, 2026-11-11).** Workers AI is the default for all transcription. An admin can enable DeepL Voice per environment and per language in provider routing (§10), on the existing DeepL **API Pro** plan ($5.49/month + usage), with no plan upgrade. ElevenLabs Scribe is still unmeasured (O1) | Measured: best on Arabic recitation (Al-Mulk 2.1% WER vs 6.2%); at parity on lectures (3.1% vs 3.4%); real-time streaming only; 54× the default's cost (R§9, R§12) |
+| Speech-to-text, high accuracy | **ElevenLabs Scribe v3 is the preferred optional provider**, ahead of DeepL Voice. Both are **off by default** (2/13) and never used in tests, QA or stage (§7.5). **Production use of Scribe needs an ElevenLabs plan upgrade:** the current key is test-only. DeepL stays available on the existing API Pro plan | Measured 2026-11-11 (R§14): Quran recitation WER 1.1–1.4%, and **all 54 recited ayat auto-suggested with 0 wrong**, including Abdul Basit mujawwad (25/25 vs Workers AI 16/25, DeepL 7/25). Lectures 4.1% (reference bias against it, R§14). Batch API answers in 2–5 s per clip; $0.20/h vs DeepL $1.85/h |
 | Not used | Bunny built-in transcription ($0.10 per language-minute, Whisper-based, no glossary); Cloudflare Stream captions (no Arabic); Workers AI nova-3 (no Arabic); Media Transformations audio extraction ($0.03/min, 10-minute limit) | R§2, R§5 |
 | Transcript translation | **DeepSeek V4.1 Flash** on Workers AI, falling back to Gemma 4 26B | Cue-accurate and honorific-correct at $0.0004 per video-minute. It is already the CMS default (R§3.2). |
 | Inline title/description translation | **Gemma 4 26B** on Workers AI, falling back to DeepSeek V4.1 Flash. DeepL is an optional adapter. | p50 1.0 s, p95 2.1 s, $0.00002 per title, quality equal to DeepSeek (R§3.1) |
@@ -286,7 +286,7 @@ The terms decide which mode is allowed. A local match index is a "Derived Materi
      - "Different reference": a picker; the text again comes from the store.
    - **Before publishing:** every `confirmed`/`context` span must be confirmed (one by one, or with "Confirm all suggested").
    - **Spans still in review at publish** are published as **reference only** ("Possible Quran: Al-Baqarah 2:143", with a quran.com link). They never show text.
-8. **Second opinion (optional, high-accuracy tier).** For recitation videos where coverage is under 100%, the Quran spans alone are re-run through a second ASR (DeepL Voice measured best on mujawwad: al-Fajr went from 13/16 to 16/16 ayat).
+8. **Second opinion (optional provider, off by default).** For recitation videos where coverage is under 100%, the Quran spans alone are re-run through a second ASR. **ElevenLabs Scribe v3 measured best**: Ar-Rahman mujawwad 25/25 ayat (Workers AI 16/25, DeepL 7/25), al-Fajr 16/16. DeepL Voice is the alternative.
    - Spans where both agree are auto-suggested.
    - Spans where they disagree go to review.
    - Cost is only the Quran minutes (≈ $1.85/h on DeepL).
@@ -451,7 +451,7 @@ Prices: provider pages fetched 2026-11-11 (R§5), the owner's DeepL plan terms (
 | Provider | Per hour of audio | Notes |
 |---|---|---|
 | **Workers AI Whisper turbo** (default) | **$0.031**, + ≈ $0.003 extraction = **$0.034** | measured 46.6 Neurons/min |
-| ElevenLabs Scribe v3 | $0.20 (+ $0.05 keyterms) | not measured |
+| ElevenLabs Scribe v3 | $0.20 (+ 20% for keyterms), within plan hours | measured: best on Quran; needs a paid plan for production (§7.3a) |
 | DeepL Voice STT (API Pro) | **$1.85** | measured; real-time streaming only, ≤ 2× real time |
 | Google STT dynamic batch / OpenAI gpt-4o-mini-transcribe / Azure batch | $0.18 | benchmarks |
 | Speechmatics Melia | $0.24 | benchmark |
@@ -494,6 +494,26 @@ Prices: provider pages fetched 2026-11-11 (R§5), the owner's DeepL plan terms (
 - **Growth:** $32.50/month **including** 1M characters, 10 STT hours and 5 speech-to-speech hours, with caps of 50M characters and 300 voice hours a month. Above the allowance it costs the same per unit as Pro.
 - **When Growth pays off:** it costs $27.01 more in base fee. It pays off once a month uses more than that much of the allowance at Pro prices: about **0.98M characters**, or for example 0.5M characters plus 7.2 STT hours. The most it saves is about $19/month (1M characters + 10 STT h = $46 of usage), plus the STS hours.
 - **At our scale** DeepL is a premium path in either plan. Growth's caps rule it out as a bulk default.
+
+### 7.3a ElevenLabs plan needed for production Scribe
+
+The owner said: "this is for testing only, if we want to use it we need a higher plan". [Pricing page](https://elevenlabs.io/pricing/api), fetched 2026-11-11, for Scribe batch STT at **$0.20/hour**:
+
+| Plan | Price per month | Scribe batch hours included |
+|---|---|---|
+| Starter | $6 | 30 h |
+| Creator | $22 | 110 h |
+| Pro | $99 | 495 h |
+| Scale | $299 | 1,495 h |
+| Business | $990 | 4,950 h |
+
+- **The page doesn't say whether usage beyond the included hours is allowed on each plan.** Confirm with ElevenLabs before relying on it.
+- **Choosing a plan:** Scribe is an optional provider for a share of jobs, so size the plan to the expected optional volume:
+  - up to ~100 h/month → **Creator, $22**
+  - ~100–500 h → **Pro, $99**
+  - ~500–1,500 h → **Scale, $299**
+- **Quran second opinion only:** using Scribe just as the second check on Quran minutes (§5.5 step 8), at about 10% of 1,000 h, fits Creator.
+- **Budget:** the plan fee counts against the AI budget (§7.4).
 
 ### 7.4 Where the $500 cap bites, and how it stays sustainable
 - **Default stack:** 10,000 h/month (~$590) alone breaks the cap. The platform also pays for delivery, workers and other AI.
@@ -712,7 +732,7 @@ Every phase ships behind an environment flag. Tests go into the release E2E suit
 
 | # | Decision | Recommendation |
 |---|---|---|
-| O1 | ElevenLabs key: which plan do we have, and may we measure Scribe on the same clips (a few cents)? | Yes; it becomes an option only if it beats DeepL Voice on Arabic and Quran |
+| O1 | ElevenLabs Scribe | **Measured 2026-11-11 (R§14), best on Quran.** It is the preferred optional high-accuracy STT, off by default, never in tests or QA. The current key is test-only (owner): production needs a plan (§7.3a). Secret `elevenlabs-api-key` to be deleted after the test |
 | O2 | DeepL plan | **Decided 2026-11-11 (2/13):** stay on API Pro ($5.49/month), no upgrade. DeepL is optional and off by default; admins enable it per environment or language. Add the key to Secrets Store as `AI_KEY_DEEPL` when an admin first enables it |
 | O3 | Caption allowances and pack pricing | **Decided 3/13:** set by the site-wide subscription plan (pending, planned with all subscriptions on the site). Until then, captions are available by admin grant only |
 | O4 | Captions monthly budget | **Decided 4/13 (2026-11-11), as proposed:** captions $100/month and inline translation $20/month, both admin-editable per environment (max $500); daily slices; on reaching the budget, jobs wait in `waiting_budget` and admins get an alert (§7.4) |
@@ -724,6 +744,6 @@ Every phase ships behind an environment flag. Tests go into the release E2E suit
 | O10 | ﷺ in Arabic subtitles | **Decided 2026-11-11:** keep the spoken words by default; each channel can switch on the ﷺ symbol |
 | O11 | On-device transcription in native desktop Studio as a free path (D10 hybrid) | Yes, in P5 |
 | O12 | QF API access | **Closed except Search (2026-11-11):** both clients get the granular Content scopes, and production Content Sync works. **Owner to request:** the **Search API** permission (`search` scope) for both the pre-production and production apps at https://dev-console.quran.foundation/projects. It is only needed for mode B and review suggestions |
-| O13 | Send the partner-permission email to QF (`docs/research/transcription-2026-11/QF-PERMISSION-EMAIL-DRAFT.md`): Search/Content use per job, live display with an edge cache ≤ 7 days, Content Sync production access for the match index, storing text in captions, and VTT downloads | Owner reviews and sends. Until QF answers: references stored, text fetched live, mode B identification |
+| O13 | QF partner-permission email | **Sent 2026-11-11 to developers@quran.com, awaiting reply.** Until QF answers: references only, live fetch, edge cache ≤ 7 days, and identification as decided (§5.5) |
 | O14 | **Decided 2026-11-11:** the creator confirms Quran spans before publish; "Confirm all suggested" covers high-confidence matches; unsure matches publish as a reference plus a quran.com link | Done |
 | O15 | DeepL Voice for high-accuracy STT and the Quran second opinion | **Decided (2/13):** optional, off by default, enabled per environment or language by an admin under the per-provider cap; never used for speech-to-speech of Quran |
