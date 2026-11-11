@@ -93,6 +93,8 @@
 		// Error reports to the admin Errors page (docs/features/error-reporting.md)
 		"ERRORS_INGEST_URL": "https://admin.api.alummahnow.net/internal/errors",
 		"ENVIRONMENT": "production",
+		// Which queue messages are archived to R2 (apps/processor/src/types.ts MESSAGE_ARCHIVE)
+		"MESSAGE_ARCHIVE": "all",
 		// Logging policy (docs/operations/logging.md): warn on production, stage and QA (only warnings, errors, slow requests); debug locally
 		"LOG_LEVEL": "warn",
 		"WEBSOCKET_URL": "https://realtime.alummahnow.net",
@@ -193,6 +195,8 @@
 				// Error reports to the admin Errors page (docs/features/error-reporting.md)
 				"ERRORS_INGEST_URL": "https://admin.api.stage.alummahnow.net/internal/errors",
 				"ENVIRONMENT": "stage",
+				// Archive only client analytics to R2 (apps/processor/src/types.ts MESSAGE_ARCHIVE)
+				"MESSAGE_ARCHIVE": "client-analytics",
 				// Logging policy (docs/operations/logging.md): warn on production, stage and QA (only warnings, errors, slow requests); debug locally
 				"LOG_LEVEL": "warn",
 				"WEBSOCKET_URL": "https://realtime.stage.alummahnow.net",

@@ -82,8 +82,8 @@ export class MessageProcessor {
         throw new Error('Invalid message structure');
       }
 
-      // Save message to R2 bucket first
-      await this.saveMessageToR2(message, env);
+      // Archive the message to R2 first (MESSAGE_ARCHIVE decides which types)
+      if (shouldArchiveMessage(message.type, env.MESSAGE_ARCHIVE)) await this.saveMessageToR2(message, env);
 
       // Process based on message type
       await this.processByType(message, env);
@@ -262,7 +262,7 @@ export class MessageProcessor {
         break;
 
       // Client-side telemetry (A/B test exposures, web vitals, player performance).
-      // Persisted by saveMessageToR2; nothing else to do.
+      // Persisted by saveMessageToR2 (kept with MESSAGE_ARCHIVE=client-analytics); nothing else to do.
       case MessageType.ClientAnalyticsEvent:
         this.logger.debug('Client analytics batch stored', {
           kind: (message.payload as { kind?: string }).kind,
@@ -991,4 +991,14 @@ export class MessageProcessor {
     // Retry for other types of errors (network issues, temporary failures, etc.)
     return true;
   }
+}
+
+/**
+ * MESSAGE_ARCHIVE: "all" (default, also for unknown values) archives every message,
+ * "client-analytics" only ClientAnalyticsEvent (the archive is its only store), "off" none.
+ */
+export function shouldArchiveMessage(type: MessageType, mode: string | undefined): boolean {
+  if (mode === 'off') return false;
+  if (mode === 'client-analytics') return type === MessageType.ClientAnalyticsEvent;
+  return true;
 }
