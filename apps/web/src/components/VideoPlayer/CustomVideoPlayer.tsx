@@ -627,19 +627,37 @@ export default function CustomVideoPlayer({
         if (autoplayIntentRef.current) {
           const extended = player as ExtendedPlayer;
           const attempt = () => Promise.resolve(extended.play());
-          attempt().catch((error: unknown) => {
-            if ((error as { name?: string } | null)?.name !== 'NotAllowedError' || extended.isDisposed()) return;
-            logger.debug('[CustomVideoPlayer] Unmuted autoplay refused; playing muted', { videoId });
-            markAutoMuted(extended, true);
-            extended.muted(true);
-            attempt()
-              .then(() => { if (!extended.isDisposed()) setMutedAutoplay(true); })
-              .catch(() => {
-                // Even muted play was refused: the big play button stays, and the viewer's sound comes back
-                markAutoMuted(extended, false);
-                if (!extended.isDisposed()) applySavedVolume(extended);
-              });
-          });
+          let retried = false;
+          const start = () => {
+            if (extended.isDisposed()) return;
+            attempt().catch((error: unknown) => {
+              const name = (error as { name?: string } | null)?.name;
+              if (extended.isDisposed()) return;
+              // The source was still being attached (Firefox aborts that play): once more when it can play
+              if (name === 'AbortError' && !retried) {
+                retried = true;
+                extended.one('canplay', start);
+                return;
+              }
+              if (name !== 'NotAllowedError') {
+                logger.debug('[CustomVideoPlayer] Autoplay did not start', { videoId, name });
+                return;
+              }
+              logger.debug('[CustomVideoPlayer] Unmuted autoplay refused; playing muted', { videoId });
+              markAutoMuted(extended, true);
+              extended.muted(true);
+              attempt()
+                .then(() => { if (!extended.isDisposed()) setMutedAutoplay(true); })
+                .catch(() => {
+                  // Even muted play was refused: the big play button stays, and the viewer's sound comes back
+                  markAutoMuted(extended, false);
+                  if (!extended.isDisposed()) applySavedVolume(extended);
+                });
+            });
+          };
+          // Once the source is ready (docs/specs/PLAYLIST-PLAYBACK.md section 4.1)
+          if ((extended.readyState?.() ?? 0) >= 1) start();
+          else extended.one('loadedmetadata', start);
         }
 
         // Start position: applied once the duration is known (seeking earlier is ignored)
