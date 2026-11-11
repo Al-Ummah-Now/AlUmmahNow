@@ -53,6 +53,7 @@ export const EDITABLE_FIELDS = [
   'titleLocalized',
   'description',
   'descriptionLocalized',
+  'isDraft',
 ] as const;
 export type EditableField = (typeof EDITABLE_FIELDS)[number];
 

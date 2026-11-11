@@ -149,6 +149,8 @@ export interface BulkEditTranslations {
   selectAllMatching: string;
   clearSelection: string;
   selectedCount: string;
+  loadingMatching: string;
+  otherActionsLimit: string;
 
   /** Upload queue: setting values, not editing */
   setValues: string;
@@ -417,6 +419,8 @@ export const BULK_EDIT_EN: BulkEditTranslations = {
   selectAllMatching: 'Select all {count} matching',
   clearSelection: 'Clear selection',
   selectedCount: '{count} selected',
+  loadingMatching: 'Selecting all matching videos…',
+  otherActionsLimit: 'Add to playlist, Schedule and Delete take up to {max} at a time; Edit takes them all.',
 
   setValues: 'Set values',
   setValuesTitle: 'Set values for files',
@@ -508,6 +512,8 @@ export const BULK_EDIT_AR: BulkEditTranslations = {
   selectAllMatching: 'تحديد كل المطابق ({count})',
   clearSelection: 'إلغاء التحديد',
   selectedCount: 'تم تحديد {count}',
+  loadingMatching: 'جارٍ تحديد كل المقاطع المطابقة…',
+  otherActionsLimit: 'الإضافة إلى قائمة تشغيل والجدولة والحذف تقبل {max} كحد أقصى في المرة الواحدة؛ أما التعديل فيقبلها كلها.',
 
   setValues: 'تعيين القيم',
   setValuesTitle: 'تعيين قيم للملفات',

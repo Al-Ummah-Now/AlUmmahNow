@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { STUDIO_EN } from '@al-ummah/shared-types';
+import { BULK_EDIT_EN, STUDIO_EN } from '@al-ummah/shared-types';
 import { VideosTab } from '../VideosTab';
 
 const replace = jest.fn();
@@ -19,7 +19,7 @@ jest.mock('next/dynamic', () => function mockDynamic() {
   };
 });
 jest.mock('next/image', () => ({ __esModule: true, default: () => <span /> }));
-jest.mock('@/hooks/useLanguage', () => ({ useLanguage: () => ({ t: { studio: mockStudio, bulkEdit: {} }, lang: 'en', isRTL: false }) }));
+jest.mock('@/hooks/useLanguage', () => ({ useLanguage: () => ({ t: { studio: mockStudio, bulkEdit: mockBulkEdit }, lang: 'en', isRTL: false }) }));
 jest.mock('@/lib/api/studio-content', () => ({
   listChannelContent: (...args: unknown[]) => list(...args),
   getChannelContentCounts: (...args: unknown[]) => counts(...args),
@@ -27,7 +27,15 @@ jest.mock('@/lib/api/studio-content', () => ({
 jest.mock('@/lib/api/videos', () => ({ bulkDeleteVideos: (...args: unknown[]) => bulkDelete(...args), bulkUpdateVideos: jest.fn() }));
 jest.mock('@/lib/api/scheduling', () => ({ cancelSchedule: jest.fn(), publishNow: jest.fn() }));
 jest.mock('@/lib/logger-client', () => ({ logger: { error: jest.fn(), info: jest.fn() } }));
-jest.mock('@/components/bulkEdit/BulkEditDialog', () => ({ BulkEditDialog: () => null }));
+const panel = jest.fn();
+jest.mock('@/components/bulkEdit/BulkEditPanel', () => ({
+  BulkEditPanel: (props: { open: boolean; videos: Array<{ id: string }> }) => {
+    panel(props);
+    return props.open ? <div data-testid="bulk-edit-panel">{props.videos.map((v) => v.id).join(',')}</div> : null;
+  },
+}));
+jest.mock('@/hooks/useMultiAccount', () => ({ useMultiAccount: () => ({ user: { channels: [{ id: 'c1', name: 'Noor', nameLocalized: { ar: 'نور' } }] } }) }));
+jest.mock('@/hooks/useChannelPlaylists', () => ({ useChannelPlaylists: () => ({ playlists: [{ id: 'p1' }], loading: false, failed: false, create: jest.fn() }) }));
 jest.mock('@/components/playlists/AddToPlaylistDialog', () => ({
   __esModule: true,
   default: ({ open, videos }: { open: boolean; videos: Array<{ id: string }> }) =>
@@ -43,6 +51,7 @@ jest.mock('@/components/calendar/CalendarControls', () => ({ CalendarControls: (
 jest.mock('@/components/calendar/utils/dateFormatters', () => ({ navigateNext: jest.fn(), navigatePrevious: jest.fn() }));
 
 const mockStudio = STUDIO_EN;
+const mockBulkEdit = BULK_EDIT_EN;
 const video = (id: string, extra = {}) => ({ id, title: `Video ${id}`, dateCreated: '2026-01-01T00:00:00.000Z', views: 3, commentsCount: 1, likesCount: 2, isPublic: true, studioStatus: 'published', ...extra });
 const ZERO = { published: 2, scheduled: 0, drafts: 0, processing: 0, failed: 0 };
 
@@ -170,5 +179,35 @@ describe('VideosTab', () => {
     renderTab();
     expect(await screen.findByTestId('calendar')).toBeInTheDocument();
     expect(list.mock.calls[0][1]).toMatchObject({ status: 'scheduled', limit: 100 });
+  });
+
+  it('opens the bulk edit panel from the one bulk bar with the selected videos', async () => {
+    renderTab();
+    await screen.findAllByTestId('studio-video-row');
+    fireEvent.click(screen.getAllByTestId('studio-video-select')[1]);
+    fireEvent.click(within(screen.getByTestId('studio-bulk-bar')).getByTestId('studio-bulk-edit'));
+    expect(await screen.findByTestId('bulk-edit-panel')).toHaveTextContent('b');
+    const props = panel.mock.calls[panel.mock.calls.length - 1][0];
+    expect(props.videos[0]).toMatchObject({ id: 'b', channelId: 'c1', channelName: { en: 'Noor', ar: 'نور' } });
+    expect(props.playlists.list).toEqual([{ id: 'p1' }]);
+    expect(screen.getAllByTestId('studio-bulk-bar')).toHaveLength(1);
+  });
+
+  it('selects every video matching the filter across pages, for Edit only beyond 50', async () => {
+    counts.mockResolvedValue({ ...ZERO, published: 70 });
+    const page = (from: number, n: number) => Array.from({ length: n }, (_, i) => video(`v${from + i}`));
+    list.mockImplementation((_c: string, params: { cursor?: string }) => Promise.resolve(
+      params.cursor === 'p2' ? { items: page(30, 40), cursor: null } : { items: page(0, 30), cursor: 'p2' },
+    ));
+    renderTab();
+    await screen.findAllByTestId('studio-video-row');
+    fireEvent.click(screen.getByTestId('studio-select-all'));
+    fireEvent.click(await screen.findByTestId('studio-select-all-matching'));
+    await waitFor(() => expect(screen.getByTestId('studio-bulk-bar')).toHaveTextContent('70 selected'));
+    expect(list).toHaveBeenLastCalledWith('c1', expect.objectContaining({ cursor: 'p2' }));
+    expect(screen.getByTestId('studio-bulk-delete')).toBeDisabled();
+    expect(screen.getByTestId('studio-bulk-other-limit')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('studio-bulk-edit'));
+    expect((await screen.findByTestId('bulk-edit-panel')).textContent?.split(',')).toHaveLength(70);
   });
 });
