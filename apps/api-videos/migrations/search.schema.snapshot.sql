@@ -102,6 +102,7 @@ CREATE INDEX idx_search_channels_indexed ON search_channels (indexed_at);
 CREATE INDEX idx_search_channels_popular ON search_channels (visible, views, popularity);
 CREATE INDEX idx_search_playlists_channel ON search_playlists (channel_id);
 CREATE INDEX idx_search_playlists_channel_created ON search_playlists (channel_id, created_at);
+CREATE INDEX idx_search_playlists_created ON search_playlists (visible, created_at);
 CREATE INDEX idx_search_playlists_indexed ON search_playlists (indexed_at);
 CREATE INDEX idx_search_posts_channel ON search_posts (channel_id);
 CREATE INDEX idx_search_posts_indexed ON search_posts (indexed_at);
