@@ -169,7 +169,20 @@ export async function getVideoUploadStatus(videoId: string, channelId: string): 
 }
 
 export async function initiateBatchUpload(
-  videos: Array<{ title: string; description?: string; fileSize: number; mimeType: string; isPublic: boolean; tags?: string; fingerprint?: UploadFingerprint }>,
+  videos: Array<{
+    title: string;
+    description?: string;
+    fileSize: number;
+    mimeType: string;
+    isPublic: boolean;
+    tags?: string;
+    fingerprint?: UploadFingerprint;
+    titleLocalized?: { en?: string; ar?: string };
+    descriptionLocalized?: { en?: string; ar?: string };
+    language?: string;
+    commentSettings?: string;
+    fileName?: string;
+  }>,
   channelId: string,
   sharedMetadata?: { channelId?: string; category?: string; isPublic?: boolean }
 ): Promise<BatchUploadInitiateResponse & Pick<ApiResult<unknown>, 'status' | 'serverRef' | 'code' | 'retryAfter' | 'deferred'>> {

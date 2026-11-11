@@ -31,6 +31,12 @@ interface FileQueueItemProps {
   categorySlot?: React.ReactNode;
   /** This row's playlists (batch uploader) */
   playlistSlot?: React.ReactNode;
+  /** The row's checkbox for "Set values" on ticked files */
+  selectSlot?: React.ReactNode;
+  /** The row's own title fields (en/ar) */
+  titleSlot?: React.ReactNode;
+  /** Shown instead of the file name once the row has a title */
+  displayTitle?: string;
 }
 
 export function FileQueueItem({
@@ -43,6 +49,9 @@ export function FileQueueItem({
   onRetry,
   categorySlot,
   playlistSlot,
+  selectSlot,
+  titleSlot,
+  displayTitle,
 }: FileQueueItemProps) {
   const { t, lang } = useLanguage();
   // Processing result pushed in real time (shown here instead of a toast, NotificationCenter)
@@ -140,6 +149,7 @@ export function FileQueueItem({
       transition-shadow
     ">
       <div className="flex items-start gap-3">
+        {selectSlot && <div className="flex-shrink-0 mt-0.5">{selectSlot}</div>}
         {/* File Icon */}
         <div className="flex-shrink-0 mt-1">
           <FileVideo size={24} className="text-gray-400 dark:text-gray-500" />
@@ -155,7 +165,7 @@ export function FileQueueItem({
                 text-gray-900 dark:text-white
                 truncate
               ">
-                {file.metadata.title || file.file.name}
+                <bdi>{displayTitle || file.metadata.title || file.file.name}</bdi>
               </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                 {formatBytes(file.bytesTotal)}
@@ -179,6 +189,12 @@ export function FileQueueItem({
               </div>
             )}
           </div>
+
+          {titleSlot && (
+            <div className="mb-3" data-testid="batch-file-titles">
+              {titleSlot}
+            </div>
+          )}
 
           {categorySlot && (
             <div className="mb-3 max-w-md" data-testid="batch-file-category">

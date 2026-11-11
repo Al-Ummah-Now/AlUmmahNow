@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { UploadQueueItem, VideoCategory } from '@al-ummah/shared-types';
 import { getCategorySuggestion, saveVideoCategory } from '@/lib/api/category-suggestion-client';
-import { applyBatchDefault, newBatchRow, pickRow, waitsForSuggestion, withSuggestion, type BatchRowCategory } from '@/lib/category-suggestion/batch';
+import { applyBatchDefault, newBatchRow, pickRow, setRowCategory, waitsForSuggestion, withSuggestion, type BatchRowCategory } from '@/lib/category-suggestion/batch';
 import { logger } from '@/lib/logger-client';
 
 export const ROW_POLL_MS = 4000;
@@ -89,5 +89,24 @@ export function useBatchCategories(files: UploadQueueItem[], batchDefault: Video
     void save(videoId, category);
   }, [save]);
 
-  return { rows, pick };
+  /** "Set values" for these rows' videos; rows picked by hand keep theirs unless `overwrite`. Returns how many were kept. */
+  const setFor = useCallback((videoIds: string[], category: VideoCategory, overwrite: boolean): number => {
+    let kept = 0;
+    const toSave: string[] = [];
+    const next = { ...rowsRef.current };
+    for (const videoId of videoIds) {
+      const row = next[videoId];
+      if (!row) continue;
+      if (row.touched && !overwrite) kept++;
+      const applied = setRowCategory(row, category, overwrite);
+      next[videoId] = applied.row;
+      if (applied.save) toSave.push(videoId);
+    }
+    rowsRef.current = next;
+    setRows(next);
+    toSave.forEach((videoId) => void save(videoId, category));
+    return kept;
+  }, [save]);
+
+  return { rows, pick, setFor };
 }

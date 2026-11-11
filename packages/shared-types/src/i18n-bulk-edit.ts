@@ -1,7 +1,97 @@
 /**
- * Bulk edit of a creator's videos (Epic 5.3), en/ar. Shared by the web static
- * fallback and the api-videos translation seed, like i18n-library.ts.
+ * Bulk rename and bulk edit (Epic 5.3), en/ar: Studio's "Edit selected"
+ * panel and the upload queue's "Set for all / set for selected files". Shared
+ * by the web static fallback and the api-videos translation seed, like
+ * i18n-library.ts.
  */
+
+export interface BulkRenameTranslations {
+  section: string;
+  modeLabel: string;
+  modePattern: string;
+  modeReplace: string;
+  modeAffix: string;
+  modeCase: string;
+  pattern: string;
+  patternHint: string;
+  insertToken: string;
+  tokenN: string;
+  tokenFilename: string;
+  tokenTitle: string;
+  tokenDate: string;
+  tokenChannel: string;
+  start: string;
+  step: string;
+  pad: string;
+  find: string;
+  replaceWith: string;
+  ignoreCase: string;
+  prefix: string;
+  suffix: string;
+  caseMode: string;
+  caseUpper: string;
+  caseLower: string;
+  caseTitle: string;
+  caseSentence: string;
+  languages: string;
+  languagesHint: string;
+  langEn: string;
+  langAr: string;
+  arabicDigits: string;
+  digitsLatin: string;
+  digitsArabic: string;
+  preview: string;
+  previewCaption: string;
+  colInclude: string;
+  colField: string;
+  colBefore: string;
+  colAfter: string;
+  include: string;
+  emptyValue: string;
+  problemEmpty: string;
+  problemTooLong: string;
+  problemDuplicate: string;
+  unchanged: string;
+  excluded: string;
+  summary: string;
+  showMore: string;
+}
+
+export interface BulkFieldTranslations {
+  title: string;
+  description: string;
+  descriptionEn: string;
+  descriptionAr: string;
+  descriptionMode: string;
+  append: string;
+  prepend: string;
+  replace: string;
+  category: string;
+  categoryPlaceholder: string;
+  language: string;
+  languageNames: { en: string; ar: string; ur: string; fr: string };
+  visibility: string;
+  public: string;
+  private: string;
+  playlists: string;
+  addToPlaylists: string;
+  removeFromPlaylists: string;
+  tags: string;
+  tagsMode: string;
+  tagsAdd: string;
+  tagsRemove: string;
+  tagsReplace: string;
+  schedule: string;
+  scheduleStart: string;
+  scheduleEvery: string;
+  scheduleEveryHint: string;
+  hours: string;
+  days: string;
+  comments: string;
+  commentsOn: string;
+  commentsHeld: string;
+  commentsOff: string;
+}
 
 export interface BulkEditTranslations {
   button: string;
@@ -23,7 +113,239 @@ export interface BulkEditTranslations {
   done: string;
   partial: string;
   failed: string;
+
+  /** Studio "Edit selected" panel */
+  panelTitle: string;
+  panelIntro: string;
+  changeField: string;
+  untouched: string;
+  willChange: string;
+  close: string;
+  review: string;
+  confirmTitle: string;
+  confirmBody: string;
+  confirmApply: string;
+  back: string;
+  progress: string;
+  cancelRun: string;
+  cancelled: string;
+  resultTitle: string;
+  failedList: string;
+  retryFailed: string;
+  undo: string;
+  undoHint: string;
+  undoing: string;
+  undone: string;
+  undoPartial: string;
+  reasons: Record<string, string>;
+
+  /** Selection in Studio */
+  selectAllShown: string;
+  selectAllMatching: string;
+  clearSelection: string;
+  selectedCount: string;
+
+  /** Upload queue: setting values, not editing */
+  setValues: string;
+  setValuesTitle: string;
+  setValuesIntro: string;
+  scopeLabel: string;
+  scopeAll: string;
+  scopeSelected: string;
+  setField: string;
+  overwrite: string;
+  overwriteHint: string;
+  applySet: string;
+  setDone: string;
+  setSkipped: string;
+  selectFile: string;
+  selectAllFiles: string;
+  rowTitleEn: string;
+  rowTitleAr: string;
+  rowEdited: string;
+  rowSaving: string;
+  rowSaved: string;
+  rowSaveFailed: string;
+
+  rename: BulkRenameTranslations;
+  fields: BulkFieldTranslations;
 }
+
+const RENAME_EN: BulkRenameTranslations = {
+  section: 'Titles',
+  modeLabel: 'How to rename',
+  modePattern: 'Pattern',
+  modeReplace: 'Find and replace',
+  modeAffix: 'Add prefix or suffix',
+  modeCase: 'Change case',
+  pattern: 'Pattern',
+  patternHint: 'Use the buttons to insert a token. Anything else is kept as you type it.',
+  insertToken: 'Insert {token}',
+  tokenN: 'Number',
+  tokenFilename: 'File name',
+  tokenTitle: 'Current title',
+  tokenDate: 'Date',
+  tokenChannel: 'Channel',
+  start: 'Start at',
+  step: 'Step',
+  pad: 'Digits',
+  find: 'Find',
+  replaceWith: 'Replace with',
+  ignoreCase: 'Ignore case',
+  prefix: 'Prefix',
+  suffix: 'Suffix',
+  caseMode: 'Case',
+  caseUpper: 'UPPERCASE',
+  caseLower: 'lowercase',
+  caseTitle: 'Title Case',
+  caseSentence: 'Sentence case',
+  languages: 'Title fields to change',
+  languagesHint: 'Each language is changed on its own; English and Arabic are never mixed.',
+  langEn: 'English title',
+  langAr: 'Arabic title',
+  arabicDigits: 'Numbers in Arabic titles',
+  digitsLatin: 'Latin (1, 2, 3)',
+  digitsArabic: 'Arabic-Indic (١، ٢، ٣)',
+  preview: 'Preview',
+  previewCaption: 'Current and new titles. Untick a row to leave it out.',
+  colInclude: 'Include',
+  colField: 'Field',
+  colBefore: 'Current',
+  colAfter: 'New',
+  include: 'Include “{title}”',
+  emptyValue: '(empty)',
+  problemEmpty: 'Empty',
+  problemTooLong: 'Over {max} characters',
+  problemDuplicate: 'Duplicate',
+  unchanged: 'No change',
+  excluded: 'Left out',
+  summary: '{applies} will change, {blocked} blocked, {duplicates} duplicates, {unchanged} unchanged',
+  showMore: 'Show all {count} rows',
+};
+
+const RENAME_AR: BulkRenameTranslations = {
+  section: 'العناوين',
+  modeLabel: 'طريقة إعادة التسمية',
+  modePattern: 'نمط',
+  modeReplace: 'بحث واستبدال',
+  modeAffix: 'إضافة بادئة أو لاحقة',
+  modeCase: 'تغيير حالة الأحرف',
+  pattern: 'النمط',
+  patternHint: 'استخدم الأزرار لإدراج رمز. يبقى أي نص آخر كما تكتبه.',
+  insertToken: 'إدراج {token}',
+  tokenN: 'رقم',
+  tokenFilename: 'اسم الملف',
+  tokenTitle: 'العنوان الحالي',
+  tokenDate: 'التاريخ',
+  tokenChannel: 'القناة',
+  start: 'يبدأ من',
+  step: 'الزيادة',
+  pad: 'عدد الخانات',
+  find: 'ابحث عن',
+  replaceWith: 'استبدل بـ',
+  ignoreCase: 'تجاهل حالة الأحرف',
+  prefix: 'بادئة',
+  suffix: 'لاحقة',
+  caseMode: 'حالة الأحرف',
+  caseUpper: 'أحرف كبيرة',
+  caseLower: 'أحرف صغيرة',
+  caseTitle: 'أول كل كلمة كبير',
+  caseSentence: 'أول الجملة كبير',
+  languages: 'حقول العناوين التي تتغير',
+  languagesHint: 'تتغير كل لغة وحدها، ولا يُخلط العنوان العربي بالإنجليزي أبدًا.',
+  langEn: 'العنوان الإنجليزي',
+  langAr: 'العنوان العربي',
+  arabicDigits: 'الأرقام في العناوين العربية',
+  digitsLatin: 'لاتينية (1، 2، 3)',
+  digitsArabic: 'هندية (١، ٢، ٣)',
+  preview: 'معاينة',
+  previewCaption: 'العناوين الحالية والجديدة. ألغِ تحديد صف لاستبعاده.',
+  colInclude: 'تضمين',
+  colField: 'الحقل',
+  colBefore: 'الحالي',
+  colAfter: 'الجديد',
+  include: 'تضمين «{title}»',
+  emptyValue: '(فارغ)',
+  problemEmpty: 'فارغ',
+  problemTooLong: 'أطول من {max} حرفًا',
+  problemDuplicate: 'مكرر',
+  unchanged: 'بدون تغيير',
+  excluded: 'مستبعد',
+  summary: 'سيتغير {applies}، ومحظور {blocked}، ومكرر {duplicates}، وبدون تغيير {unchanged}',
+  showMore: 'عرض كل الصفوف ({count})',
+};
+
+const FIELDS_EN: BulkFieldTranslations = {
+  title: 'Titles',
+  description: 'Description',
+  descriptionEn: 'English description',
+  descriptionAr: 'Arabic description',
+  descriptionMode: 'How',
+  append: 'Add at the end',
+  prepend: 'Add at the start',
+  replace: 'Replace',
+  category: 'Category',
+  categoryPlaceholder: 'Type to find a category',
+  language: 'Language',
+  languageNames: { en: 'English', ar: 'Arabic', ur: 'Urdu', fr: 'French' },
+  visibility: 'Visibility',
+  public: 'Public',
+  private: 'Private',
+  playlists: 'Playlists',
+  addToPlaylists: 'Add to playlists',
+  removeFromPlaylists: 'Remove from playlists',
+  tags: 'Tags',
+  tagsMode: 'How',
+  tagsAdd: 'Add',
+  tagsRemove: 'Remove',
+  tagsReplace: 'Replace all',
+  schedule: 'Publish time',
+  scheduleStart: 'First video publishes at',
+  scheduleEvery: 'Then one every',
+  scheduleEveryHint: '0 publishes them all at the same time.',
+  hours: 'hours',
+  days: 'days',
+  comments: 'Comments',
+  commentsOn: 'On',
+  commentsHeld: 'Held for review',
+  commentsOff: 'Off',
+};
+
+const FIELDS_AR: BulkFieldTranslations = {
+  title: 'العناوين',
+  description: 'الوصف',
+  descriptionEn: 'الوصف الإنجليزي',
+  descriptionAr: 'الوصف العربي',
+  descriptionMode: 'الطريقة',
+  append: 'إضافة في النهاية',
+  prepend: 'إضافة في البداية',
+  replace: 'استبدال',
+  category: 'التصنيف',
+  categoryPlaceholder: 'اكتب للبحث عن تصنيف',
+  language: 'اللغة',
+  languageNames: { en: 'الإنجليزية', ar: 'العربية', ur: 'الأردية', fr: 'الفرنسية' },
+  visibility: 'الظهور',
+  public: 'عام',
+  private: 'خاص',
+  playlists: 'قوائم التشغيل',
+  addToPlaylists: 'إضافة إلى قوائم التشغيل',
+  removeFromPlaylists: 'إزالة من قوائم التشغيل',
+  tags: 'الوسوم',
+  tagsMode: 'الطريقة',
+  tagsAdd: 'إضافة',
+  tagsRemove: 'إزالة',
+  tagsReplace: 'استبدال الكل',
+  schedule: 'وقت النشر',
+  scheduleStart: 'يُنشر أول مقطع في',
+  scheduleEvery: 'ثم مقطع كل',
+  scheduleEveryHint: 'القيمة 0 تنشرها كلها في الوقت نفسه.',
+  hours: 'ساعات',
+  days: 'أيام',
+  comments: 'التعليقات',
+  commentsOn: 'مفعّلة',
+  commentsHeld: 'تُراجع قبل النشر',
+  commentsOff: 'معطّلة',
+};
 
 export const BULK_EDIT_EN: BulkEditTranslations = {
   button: 'Edit',
@@ -43,8 +365,74 @@ export const BULK_EDIT_EN: BulkEditTranslations = {
   cancel: 'Cancel',
   nothingToApply: 'Choose at least one change.',
   done: '{count} videos updated',
-  partial: '{succeeded} videos updated; {failed} could not be changed',
+  partial: '{succeeded} updated, {failed} failed',
   failed: 'The videos could not be updated. Please try again.',
+
+  panelTitle: 'Edit {count} videos',
+  panelIntro: 'Tick the fields to change. Everything else stays as it is.',
+  changeField: 'Change {field}',
+  untouched: 'Stays as it is',
+  willChange: 'Will change',
+  close: 'Close',
+  review: 'Review changes',
+  confirmTitle: 'Apply to {count} videos?',
+  confirmBody: 'These fields change: {fields}. You can undo this for 24 hours.',
+  confirmApply: 'Apply',
+  back: 'Back',
+  progress: 'Updating {done} of {total}…',
+  cancelRun: 'Stop',
+  cancelled: 'Stopped. {done} of {total} were updated before you stopped.',
+  resultTitle: 'Result',
+  failedList: 'Not updated',
+  retryFailed: 'Retry the {count} that failed',
+  undo: 'Undo',
+  undoHint: 'You can undo this edit for 24 hours.',
+  undoing: 'Undoing…',
+  undone: 'Undone. {count} videos are back as they were.',
+  undoPartial: 'Undone for {restored}. {kept} kept newer changes made since.',
+  reasons: {
+    not_found: 'Video not found',
+    forbidden: 'You can’t edit this video',
+    scheduled: 'Visibility follows its schedule',
+    too_many_tags: 'Too many tags',
+    title_empty: 'Title would be empty',
+    title_too_long: 'Title would be too long',
+    description_too_long: 'Description would be too long',
+    playlist_other_channel: 'Playlist is on another channel',
+    playlist_full: 'Playlist is full',
+    schedule_invalid: 'Publish time isn’t possible',
+    already_published: 'Already published',
+    failed: 'Something went wrong',
+  },
+
+  selectAllShown: 'Select all shown ({count})',
+  selectAllMatching: 'Select all {count} matching',
+  clearSelection: 'Clear selection',
+  selectedCount: '{count} selected',
+
+  setValues: 'Set values',
+  setValuesTitle: 'Set values for files',
+  setValuesIntro: 'Choose the fields to set. Each file’s own changes are kept unless you choose to overwrite them.',
+  scopeLabel: 'Set for',
+  scopeAll: 'All files ({count})',
+  scopeSelected: 'Selected files ({count})',
+  setField: 'Set {field}',
+  overwrite: 'Overwrite my changes',
+  overwriteHint: 'Also replace values you typed on a file yourself.',
+  applySet: 'Set values',
+  setDone: 'Values set for {count} files.',
+  setSkipped: '{count} values you changed by hand were kept.',
+  selectFile: 'Select {name}',
+  selectAllFiles: 'Select all files',
+  rowTitleEn: 'English title',
+  rowTitleAr: 'Arabic title',
+  rowEdited: 'Changed by you',
+  rowSaving: 'Saving…',
+  rowSaved: 'Saved',
+  rowSaveFailed: 'Not saved, will retry',
+
+  rename: RENAME_EN,
+  fields: FIELDS_EN,
 };
 
 export const BULK_EDIT_AR: BulkEditTranslations = {
@@ -65,6 +453,72 @@ export const BULK_EDIT_AR: BulkEditTranslations = {
   cancel: 'إلغاء',
   nothingToApply: 'اختر تغييرًا واحدًا على الأقل.',
   done: 'تم تحديث {count} من المقاطع',
-  partial: 'تم تحديث {succeeded} من المقاطع، وتعذّر تغيير {failed}',
+  partial: 'تم تحديث {succeeded}، وتعذّر {failed}',
   failed: 'تعذّر تحديث المقاطع. حاول مرة أخرى.',
+
+  panelTitle: 'تعديل {count} من المقاطع',
+  panelIntro: 'حدّد الحقول التي تريد تغييرها. يبقى كل ما عداها كما هو.',
+  changeField: 'تغيير {field}',
+  untouched: 'يبقى كما هو',
+  willChange: 'سيتغير',
+  close: 'إغلاق',
+  review: 'مراجعة التغييرات',
+  confirmTitle: 'تطبيق على {count} من المقاطع؟',
+  confirmBody: 'تتغير هذه الحقول: {fields}. يمكنك التراجع خلال 24 ساعة.',
+  confirmApply: 'تطبيق',
+  back: 'رجوع',
+  progress: 'جارٍ تحديث {done} من {total}…',
+  cancelRun: 'إيقاف',
+  cancelled: 'تم الإيقاف. حُدِّث {done} من {total} قبل الإيقاف.',
+  resultTitle: 'النتيجة',
+  failedList: 'لم تُحدَّث',
+  retryFailed: 'إعادة محاولة {count} تعذّر تحديثها',
+  undo: 'تراجع',
+  undoHint: 'يمكنك التراجع عن هذا التعديل خلال 24 ساعة.',
+  undoing: 'جارٍ التراجع…',
+  undone: 'تم التراجع. عاد {count} من المقاطع كما كانت.',
+  undoPartial: 'تم التراجع عن {restored}. واحتفظ {kept} بتغييرات أحدث أُجريت بعده.',
+  reasons: {
+    not_found: 'المقطع غير موجود',
+    forbidden: 'لا يمكنك تعديل هذا المقطع',
+    scheduled: 'ظهوره يتبع جدوله',
+    too_many_tags: 'الوسوم أكثر من المسموح',
+    title_empty: 'سيصبح العنوان فارغًا',
+    title_too_long: 'سيصبح العنوان أطول من المسموح',
+    description_too_long: 'سيصبح الوصف أطول من المسموح',
+    playlist_other_channel: 'قائمة التشغيل في قناة أخرى',
+    playlist_full: 'قائمة التشغيل ممتلئة',
+    schedule_invalid: 'وقت النشر غير ممكن',
+    already_published: 'منشور بالفعل',
+    failed: 'حدث خطأ ما',
+  },
+
+  selectAllShown: 'تحديد كل المعروض ({count})',
+  selectAllMatching: 'تحديد كل المطابق ({count})',
+  clearSelection: 'إلغاء التحديد',
+  selectedCount: 'تم تحديد {count}',
+
+  setValues: 'تعيين القيم',
+  setValuesTitle: 'تعيين قيم للملفات',
+  setValuesIntro: 'اختر الحقول التي تريد تعيينها. تبقى تغييراتك على كل ملف ما لم تختر استبدالها.',
+  scopeLabel: 'التعيين لـ',
+  scopeAll: 'كل الملفات ({count})',
+  scopeSelected: 'الملفات المحددة ({count})',
+  setField: 'تعيين {field}',
+  overwrite: 'استبدال تغييراتي',
+  overwriteHint: 'استبدل أيضًا القيم التي كتبتها بنفسك على ملف.',
+  applySet: 'تعيين القيم',
+  setDone: 'عُيِّنت القيم لـ {count} من الملفات.',
+  setSkipped: 'بقيت {count} من القيم التي غيّرتها بنفسك.',
+  selectFile: 'تحديد {name}',
+  selectAllFiles: 'تحديد كل الملفات',
+  rowTitleEn: 'العنوان الإنجليزي',
+  rowTitleAr: 'العنوان العربي',
+  rowEdited: 'غيّرته بنفسك',
+  rowSaving: 'جارٍ الحفظ…',
+  rowSaved: 'تم الحفظ',
+  rowSaveFailed: 'لم يُحفظ، ستُعاد المحاولة',
+
+  rename: RENAME_AR,
+  fields: FIELDS_AR,
 };

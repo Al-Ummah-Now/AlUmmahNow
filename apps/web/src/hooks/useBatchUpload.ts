@@ -31,6 +31,12 @@ interface UseBatchUploadOptions {
   userId?: string; // Optional - no longer needed for API calls
   channelId: string;
   sharedMetadata?: Partial<VideoUploadMetadata>;
+  /**
+   * The values each new file's video is created with (titles and the rest
+   * set for all files on the upload page, lib/upload/set-values.ts). Files
+   * without one get their file name as the title.
+   */
+  initiateValuesFor?: (files: File[]) => Array<Record<string, unknown> & { title: string }>;
   onUploadComplete?: (videoId: string) => void;
   onError?: (error: string) => void;
 }
@@ -39,9 +45,14 @@ export function useBatchUpload({
   userId: _userId, // Deprecated - no longer used
   channelId,
   sharedMetadata = {},
+  initiateValuesFor,
   onUploadComplete,
   onError,
 }: UseBatchUploadOptions) {
+  const initiateValuesRef = useRef(initiateValuesFor);
+  useEffect(() => {
+    initiateValuesRef.current = initiateValuesFor;
+  }, [initiateValuesFor]);
   const { t, lang } = useLanguage();
   const [files, setFiles] = useState<UploadQueueItem[]>([]);
   const [overallProgress, setOverallProgress] = useState(0);
@@ -273,15 +284,17 @@ export function useBatchUpload({
         // Fingerprints: the same file picked again (another tab or browser,
         // storage cleared) reuses its unfinished video instead of a new one
         const fingerprints = await Promise.all(freshFiles.map((file) => tryFileFingerprint(file)));
+        // Values set for all files on the page go in with the video's creation
+        const values = initiateValuesRef.current?.(freshFiles) ?? [];
         // Initiate batch upload with backend (one TUS proxy session per file)
         const initiateResult = await initiateBatchUpload(
           freshFiles.map((file, index) => ({
-            title: file.name.replace(/\.[^/.]+$/, ''),
             fileSize: file.size,
             mimeType: file.type,
             isPublic: sharedMetadata.isPublic ?? true,
             description: sharedMetadata.description,
             tags: sharedMetadata.tags?.join(','),
+            ...(values[index] ?? { title: file.name.replace(/\.[^/.]+$/, '') }),
             ...(fingerprints[index] ? { fingerprint: fingerprints[index] } : {}),
           })),
           channelId,
