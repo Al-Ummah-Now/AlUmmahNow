@@ -236,12 +236,12 @@ describe('logging policy', () => {
 		(env ? config.env![env].vars : config.vars) as Record<string, string>;
 	const loadQa = (app: string) => parseJsonc(readFileSync(join(ROOT, rule(app).qaConfigPath!), 'utf8')) as WranglerConfig;
 
-	it('every app sets LOG_LEVEL: production warn, stage info, QA debug', () => {
+	it('every app sets LOG_LEVEL warn on production, stage and QA', () => {
 		for (const app of APPS) {
 			const config = load(app.app);
 			assert.equal(resolveEnv(config, app.production.env).vars.LOG_LEVEL, 'warn', `${app.app} production`);
-			assert.equal(resolveEnv(config, 'stage').vars.LOG_LEVEL, 'info', `${app.app} stage`);
-			assert.equal(resolveEnv(loadQa(app.app), null).vars.LOG_LEVEL, 'debug', `${app.app} QA`);
+			assert.equal(resolveEnv(config, 'stage').vars.LOG_LEVEL, 'warn', `${app.app} stage`);
+			assert.equal(resolveEnv(loadQa(app.app), null).vars.LOG_LEVEL, 'warn', `${app.app} QA`);
 		}
 	});
 
@@ -267,6 +267,18 @@ describe('logging policy', () => {
 		const config = load('websocket-server');
 		(config.observability as { logs: { head_sampling_rate: number } }).logs.head_sampling_rate = 0.1;
 		assert.ok(has(checkApp(rule('websocket-server'), config), 'head_sampling_rate must be 1'));
+	});
+
+	it('fails when stage or QA samples invocations or keeps invocation logs', () => {
+		const config = load('web');
+		const stage = (config.env as Record<string, { observability: { logs: { head_sampling_rate: number; invocation_logs?: boolean } } }>).stage;
+		stage.observability.logs.head_sampling_rate = 0.1;
+		assert.ok(has(checkApp(rule('web'), config), 'env.stage', 'head_sampling_rate must be 1'));
+		delete stage.observability.logs.invocation_logs;
+		assert.ok(has(checkApp(rule('web'), config), 'env.stage', 'invocation_logs must be false'));
+		const qa = loadQa('processor');
+		(qa.observability as { logs: { invocation_logs?: boolean } }).logs.invocation_logs = true;
+		assert.ok(has(checkLogPolicy('processor', resolveEnv(qa, null), 'qa'), 'QA config', 'invocation_logs must be false'));
 	});
 
 	it('fails when observability logs are off', () => {

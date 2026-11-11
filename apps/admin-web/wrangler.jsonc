@@ -28,7 +28,7 @@
   },
   "upload_source_maps": true,
   "vars": {
-    // Logging policy (docs/operations/logging.md): production warn, stage info, QA/dev debug
+    // Logging policy (docs/operations/logging.md): warn on production, stage and QA (only warnings, errors, slow requests); debug locally
     "LOG_LEVEL": "debug",
     "Issuer": "https://auth.alummahnow.net",
     "NEXTJS_ENV": "development",

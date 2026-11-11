@@ -59,8 +59,8 @@
   "vars": {
     // Error reports to the admin Errors page (docs/features/error-reporting.md)
     "ERRORS_INGEST_URL": "https://admin.api.qa.alummahnow.net/internal/errors",
-    // Logging policy (docs/operations/logging.md): production warn, stage info, QA/dev debug
-    "LOG_LEVEL": "debug",
+    // Logging policy (docs/operations/logging.md): warn on production, stage and QA (only warnings, errors, slow requests); debug locally
+    "LOG_LEVEL": "warn",
     "ENVIRONMENT": "qa",
     "MAX_RETRIES": "3",
     "BATCH_SIZE": "50",
@@ -69,9 +69,11 @@
   },
   "observability": {
     "enabled": true,
-    // Workers Logs bills per line: log 10% of invocations (sampling drops errors too)
-    "head_sampling_rate": 0.1,
-    "logs": { "enabled": true, "head_sampling_rate": 0.1 }
+    // Workers Logs bills per line (docs/operations/logging.md): keep every invocation
+    // (head sampling would drop errors too), no automatic per-invocation log, and
+    // LOG_LEVEL warn below, so only warnings, errors and slow requests are written
+    "head_sampling_rate": 1,
+    "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": false }
   },
   "dev": {
     "ip": "127.0.0.1",

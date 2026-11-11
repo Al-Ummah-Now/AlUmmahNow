@@ -1,6 +1,6 @@
 /**
  * admin-api logger. Level comes from the logging policy (@al-ummah/logger/policy):
- * production warn, stage info, QA/dev debug, overridable with the LOG_LEVEL var.
+ * warn on production, stage and QA (only warnings, errors, slow requests); debug locally, overridable with the LOG_LEVEL var.
  */
 import { appLogger } from '@al-ummah/logger';
 

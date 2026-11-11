@@ -272,14 +272,16 @@ export function checkParity(app: string, prod: ResolvedEnv, stage: ResolvedEnv):
 export type LogTier = 'production' | 'stage' | 'qa';
 export const LOG_LEVEL_POLICY: Record<LogTier, { default: string; allowed: string[] }> = {
 	production: { default: 'warn', allowed: ['warn', 'error'] },
-	stage: { default: 'info', allowed: ['info', 'warn', 'error'] },
-	qa: { default: 'debug', allowed: ['trace', 'debug', 'info', 'warn', 'error'] },
+	stage: { default: 'warn', allowed: ['info', 'warn', 'error'] },
+	qa: { default: 'warn', allowed: ['trace', 'debug', 'info', 'warn', 'error'] },
 };
 
 /**
- * LOG_LEVEL is set and allowed for the tier, and production samples every
+ * LOG_LEVEL is set and allowed for the tier, and every tier samples every
  * invocation (head sampling is decided before the outcome, so a lower rate drops
  * error lines too; volume is controlled by levels and invocation_logs instead).
+ * QA and stage also turn the per-invocation log off: under E2E load it was most
+ * of the account's Workers Logs bill (2026-11-11).
  */
 export function checkLogPolicy(app: string, resolved: ResolvedEnv, tier: LogTier): string[] {
 	const where = `${app} (${tier === 'qa' ? 'QA config' : resolved.envName === null ? 'top level' : `env.${resolved.envName}`})`;
@@ -292,15 +294,21 @@ export function checkLogPolicy(app: string, resolved: ResolvedEnv, tier: LogTier
 		errors.push(`${where}: vars.LOG_LEVEL ${JSON.stringify(level)} is not allowed in ${tier} (allowed: ${policy.allowed.join(', ')}; default ${policy.default})`);
 	}
 	const obs = resolved.config.observability as
-		| { enabled?: boolean; head_sampling_rate?: number; logs?: { enabled?: boolean; head_sampling_rate?: number } }
+		| { enabled?: boolean; head_sampling_rate?: number; logs?: { enabled?: boolean; head_sampling_rate?: number; invocation_logs?: boolean } }
 		| undefined;
 	if (!obs?.enabled && !obs?.logs?.enabled) {
 		errors.push(`${where}: observability logs are off; warn/error lines would be lost`);
-	} else if (tier === 'production') {
+	} else {
 		const rates = [obs.head_sampling_rate, obs.logs?.head_sampling_rate].filter((r): r is number => typeof r === 'number');
 		if (rates.some((r) => r < 1)) {
-			errors.push(`${where}: production head_sampling_rate must be 1 so no error line is dropped (found ${rates.join(', ')}); cut volume with LOG_LEVEL / invocation_logs`);
+			errors.push(`${where}: head_sampling_rate must be 1 so no error line is dropped (found ${rates.join(', ')}); cut volume with LOG_LEVEL / invocation_logs`);
 		}
+		if (tier !== 'production' && obs.logs?.invocation_logs !== false) {
+			errors.push(`${where}: logs.invocation_logs must be false on ${tier} (one log line per request; the request summary covers slow and failed ones)`);
+		}
+	}
+	if (tier !== 'production' && resolved.config.logpush === true) {
+		errors.push(`${where}: logpush must be off on ${tier}: no Logpush job reads it and every request is billed (Workers Logs has the lines)`);
 	}
 	return errors;
 }

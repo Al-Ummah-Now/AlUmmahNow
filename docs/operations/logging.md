@@ -9,8 +9,14 @@ scheduler, websocket-server) and the browser. It lives in
 | Environment | Default `LOG_LEVEL` | Allowed in config | Emitted |
 |---|---|---|---|
 | production | `warn` | `warn`, `error` | warnings, errors, slow requests/jobs |
-| stage | `info` | `info`, `warn`, `error` | + one summary line per request/job |
-| QA / dev / preview | `debug` | any | + diagnostic detail |
+| stage | `warn` | `info`, `warn`, `error` | same as production |
+| QA | `warn` | any | same as production |
+| dev / preview | `debug` | any | + one summary line per request/job, diagnostic detail |
+
+To debug on QA or stage, raise that worker's `LOG_LEVEL` (`info` adds the request
+summaries, `debug` the detail) in a PR and lower it again when done: under E2E
+load QA serves ~10M requests a day, so a chatty level is quickly the biggest
+line on the bill.
 
 - Every deployed wrangler env sets `vars.LOG_LEVEL`; `pnpm check:config` fails
   when it is missing or not allowed for the tier (production, `env.stage`, and the
@@ -98,7 +104,17 @@ so Cloudflare cannot sample successes and keep every error. We therefore:
   high-volume production workers: web, api-videos, websocket-server, processor and
   scheduler (every minute). The request/job summaries replace it for slow and
   failed invocations. admin-api and admin-web (admins only) keep it;
-- leave stage and QA at `head_sampling_rate: 0.1` (unchanged), with invocation logs.
+- stage and QA work like production since 2026-11-11: `head_sampling_rate: 1`,
+  `invocation_logs: false`, `LOG_LEVEL` warn and `logpush: false`, all checked by
+  `pnpm check:config`. Before, QA ran at `debug` with invocation logs and 10 %
+  sampling, which dropped 90 % of its errors and still wrote most of the
+  account's ~92M billed log lines a month (E2E traffic).
+
+## Logpush
+
+No Logpush job reads Worker trace events, and every request to a Worker with
+`logpush: true` is billed. Stage and QA keep it off (checked); production web,
+admin-web and auth still have it on.
 
 ## Before / after (estimates, from code paths on main, 2026-11-10)
 

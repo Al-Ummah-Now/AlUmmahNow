@@ -90,7 +90,7 @@
 	"vars": {
 		// Error reports to the admin Errors page (docs/features/error-reporting.md)
 		"ERRORS_INGEST_URL": "https://admin.api.alummahnow.net/internal/errors",
-		// Logging policy (docs/operations/logging.md): production warn, stage info, QA/dev debug
+		// Logging policy (docs/operations/logging.md): warn on production, stage and QA (only warnings, errors, slow requests); debug locally
 		"LOG_LEVEL": "warn",
 		"ENVIRONMENT": "production",
 		"MAX_RETRIES": "3",
@@ -155,8 +155,8 @@
 			"vars": {
 				// Error reports to the admin Errors page (docs/features/error-reporting.md)
 				"ERRORS_INGEST_URL": "https://admin.api.stage.alummahnow.net/internal/errors",
-				// Logging policy (docs/operations/logging.md): production warn, stage info, QA/dev debug
-				"LOG_LEVEL": "info",
+				// Logging policy (docs/operations/logging.md): warn on production, stage and QA (only warnings, errors, slow requests); debug locally
+				"LOG_LEVEL": "warn",
 				"ENVIRONMENT": "stage",
 				"MAX_RETRIES": "3",
 				"BATCH_SIZE": "50",
