@@ -1,4 +1,6 @@
 'use client';
+import { BilingualPair } from '@/components/bulkEdit/BilingualPair';
+import { inputClass } from '@/components/bulkEdit/RenameFields';
 import { TagAutocomplete } from '@/components/ui/TagAutocomplete';
 import { useChannelTags } from '@/hooks/useChannelTags';
 import { logger } from '@/lib/logger-client';
@@ -66,7 +68,6 @@ export default function VideoEdit({
   const { confirm: confirmDiscard, dialog: discardDialog } = useConfirm();
   // The channel's own tags, suggested as you type a new one
   const knownTags = useChannelTags([video.channelId || channelId]);
-  const [activeTab, setActiveTab] = useState<'en' | 'ar'>('en');
   const [isSaving, setIsSaving] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -293,102 +294,52 @@ export default function VideoEdit({
           />
         </div>
 
-        {/* Language Tabs for Title and Description */}
-        <div>
-          <div className="flex gap-2 border-b dark:border-gray-700 mb-4" role="tablist">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'en'}
-              data-testid="video-edit-tab-en"
-              onClick={() => setActiveTab('en')}
-              className="tab-item"
-            >
-              {t.languages.english}
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'ar'}
-              data-testid="video-edit-tab-ar"
-              onClick={() => setActiveTab('ar')}
-              className="tab-item"
-            >
-              {t.languages.arabic}
-            </button>
-          </div>
-
-          {/* English Tab */}
-          {activeTab === 'en' && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2 dark:text-white">
-                  {t.video.titleEnglish}
-                </label>
-                <input
-                  type="text"
-                  value={formData.titleEn}
-                  data-testid="video-edit-title-en"
-                  aria-label={t.video.titleEnglish}
-                  onChange={(e) => handleInputChange('titleEn', e.target.value)}
-                  className="w-full px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-white"
-                  placeholder={t.video.enterTitleEnglish}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2 dark:text-white">
-                  {t.video.descriptionEnglish}
-                </label>
-                <textarea
-                  value={formData.descriptionEn}
-                  data-testid="video-edit-description-en"
-                  aria-label={t.video.descriptionEnglish}
-                  onChange={(e) => handleInputChange('descriptionEn', e.target.value)}
-                  rows={6}
-                  className="w-full px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-white resize-none"
-                  placeholder={t.video.enterDescriptionEnglish}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Arabic Tab */}
-          {activeTab === 'ar' && (
-            <div className="space-y-4" dir="rtl">
-              <div>
-                <label className="block text-sm font-medium mb-2 dark:text-white">
-                  {t.video.titleArabic}
-                </label>
-                <input
-                  type="text"
-                  value={formData.titleAr}
-                  data-testid="video-edit-title-ar"
-                  aria-label={t.video.titleArabic}
-                  dir="rtl"
-                  onChange={(e) => handleInputChange('titleAr', e.target.value)}
-                  className="w-full px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-white"
-                  placeholder={t.video.enterTitleArabic}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2 dark:text-white">
-                  {t.video.descriptionArabic}
-                </label>
-                <textarea
-                  value={formData.descriptionAr}
-                  data-testid="video-edit-description-ar"
-                  aria-label={t.video.descriptionArabic}
-                  dir="rtl"
-                  onChange={(e) => handleInputChange('descriptionAr', e.target.value)}
-                  rows={6}
-                  className="w-full px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-white resize-none"
-                  placeholder={t.video.enterDescriptionArabic}
-                />
-              </div>
-            </div>
-          )}
+        {/* Titles and descriptions: English and Arabic side by side */}
+        <div className="space-y-4" data-testid="video-edit-bilingual">
+          <BilingualPair
+            legend={t.bulkEdit.rename.section}
+            labels={{ en: t.video.titleEnglish ?? t.bulkEdit.rename.langEn, ar: t.video.titleArabic ?? t.bulkEdit.rename.langAr }}
+            textOf={(lang) => (lang === 'en' ? formData.titleEn : formData.titleAr)}
+            onTranslated={(lang, text) => handleInputChange(lang === 'en' ? 'titleEn' : 'titleAr', text)}
+            idPrefix="video-edit-title"
+            testId="video-edit-title-pair"
+          >
+            {(lang, { heading }) => (
+              <input
+                type="text"
+                value={lang === 'en' ? formData.titleEn : formData.titleAr}
+                data-testid={`video-edit-title-${lang}`}
+                aria-labelledby={heading}
+                dir={lang === 'ar' ? 'rtl' : 'ltr'}
+                lang={lang}
+                onChange={(e) => handleInputChange(lang === 'en' ? 'titleEn' : 'titleAr', e.target.value)}
+                className={inputClass}
+                placeholder={lang === 'en' ? t.video.enterTitleEnglish : t.video.enterTitleArabic}
+              />
+            )}
+          </BilingualPair>
+          <BilingualPair
+            legend={t.bulkEdit.fields.description}
+            labels={{ en: t.video.descriptionEnglish ?? t.bulkEdit.fields.descriptionEn, ar: t.video.descriptionArabic ?? t.bulkEdit.fields.descriptionAr }}
+            textOf={(lang) => (lang === 'en' ? formData.descriptionEn : formData.descriptionAr)}
+            onTranslated={(lang, text) => handleInputChange(lang === 'en' ? 'descriptionEn' : 'descriptionAr', text)}
+            idPrefix="video-edit-description"
+            testId="video-edit-description-pair"
+          >
+            {(lang, { heading }) => (
+              <textarea
+                value={lang === 'en' ? formData.descriptionEn : formData.descriptionAr}
+                data-testid={`video-edit-description-${lang}`}
+                aria-labelledby={heading}
+                dir={lang === 'ar' ? 'rtl' : 'ltr'}
+                lang={lang}
+                onChange={(e) => handleInputChange(lang === 'en' ? 'descriptionEn' : 'descriptionAr', e.target.value)}
+                rows={6}
+                className={`${inputClass} resize-y py-2`}
+                placeholder={lang === 'en' ? t.video.enterDescriptionEnglish : t.video.enterDescriptionArabic}
+              />
+            )}
+          </BilingualPair>
         </div>
 
         {/* Thumbnail Selector */}

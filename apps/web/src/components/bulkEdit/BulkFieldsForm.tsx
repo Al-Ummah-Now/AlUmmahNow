@@ -26,6 +26,7 @@ import {
 import { RenameFields, hintClass, inputClass, labelClass } from './RenameFields';
 import { RenamePreview } from './RenamePreview';
 import { CategoryAutocomplete } from './CategoryAutocomplete';
+import { BilingualPair } from './BilingualPair';
 
 export interface PlaylistSource {
   list: PlaylistWithVideos[];
@@ -97,50 +98,51 @@ export function BulkFieldsForm({ variant, form, onChange, subjects, fields, play
           </div>
         );
       case 'description':
+        // English and Arabic side by side, each with its own tick, way and text
         return (
-          <div className="space-y-4">
-            {(['en', 'ar'] as TitleLanguage[]).map((lang) => {
+          <BilingualPair
+            legend={f.description}
+            labels={{ en: f.descriptionEn, ar: f.descriptionAr }}
+            ticked={{ en: form.description.en.enabled, ar: form.description.ar.enabled }}
+            onTick={(lang, on) => setDescription(lang, { enabled: on })}
+            tickTestId={(lang) => `bulk-${variant}-desc-${lang}-enabled`}
+            textOf={(lang) => form.description[lang].text}
+            onTranslated={(lang, text) => setDescription(lang, { text })}
+            idPrefix={`bulk-${variant}-desc-pair`}
+            testId={`bulk-${variant}-desc-pair`}
+          >
+            {(lang) => {
               const d = form.description[lang];
               const id = `bulk-${variant}-desc-${lang}`;
               return (
-                <fieldset key={lang} className="space-y-2">
-                  <legend className="sr-only">{lang === 'en' ? f.descriptionEn : f.descriptionAr}</legend>
-                  <label className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-[var(--fanous-color-text-primary)]">
-                    <input type="checkbox" checked={d.enabled} onChange={(e) => setDescription(lang, { enabled: e.target.checked })}
-                      className="h-4 w-4 accent-[var(--fanous-color-primary)]" data-testid={`${id}-enabled`} />
-                    {lang === 'en' ? f.descriptionEn : f.descriptionAr}
-                  </label>
-                  {d.enabled && (
-                    <>
-                      {variant === 'edit' && (
-                        <div className="flex flex-wrap gap-4" role="radiogroup" aria-label={f.descriptionMode}>
-                          {(['append', 'prepend', 'replace'] as const).map((mode) => (
-                            <label key={mode} className="inline-flex min-h-11 items-center gap-2 text-sm text-[var(--fanous-color-text-primary)]">
-                              <input type="radio" name={`${id}-mode`} checked={d.mode === mode} onChange={() => setDescription(lang, { mode })}
-                                className="h-4 w-4 accent-[var(--fanous-color-primary)]" data-testid={`${id}-${mode}`} />
-                              {f[mode]}
-                            </label>
-                          ))}
-                        </div>
-                      )}
-                      <textarea
-                        id={id}
-                        aria-label={lang === 'en' ? f.descriptionEn : f.descriptionAr}
-                        dir={lang === 'ar' ? 'rtl' : 'ltr'}
-                        lang={lang}
-                        rows={3}
-                        maxLength={5000}
-                        value={d.text}
-                        onChange={(e) => setDescription(lang, { text: e.target.value })}
-                        className={`${inputClass} py-2`}
-                        data-testid={`${id}-text`}
-                      />
-                    </>
+                <>
+                  {variant === 'edit' && (
+                    <div className="flex flex-wrap gap-x-4" role="radiogroup" aria-label={`${f.descriptionMode} (${lang === 'en' ? f.descriptionEn : f.descriptionAr})`}>
+                      {(['append', 'prepend', 'replace'] as const).map((mode) => (
+                        <label key={mode} className="inline-flex min-h-11 items-center gap-2 text-sm text-[var(--fanous-color-text-primary)]">
+                          <input type="radio" name={`${id}-mode`} checked={d.mode === mode} onChange={() => setDescription(lang, { mode })}
+                            className="h-4 w-4 accent-[var(--fanous-color-primary)]" data-testid={`${id}-${mode}`} />
+                          {f[mode]}
+                        </label>
+                      ))}
+                    </div>
                   )}
-                </fieldset>
+                  <textarea
+                    id={id}
+                    aria-label={lang === 'en' ? f.descriptionEn : f.descriptionAr}
+                    dir={lang === 'ar' ? 'rtl' : 'ltr'}
+                    lang={lang}
+                    rows={4}
+                    maxLength={5000}
+                    value={d.text}
+                    onChange={(e) => setDescription(lang, { text: e.target.value })}
+                    className={`${inputClass} py-2`}
+                    data-testid={`${id}-text`}
+                  />
+                </>
               );
-            })}
-          </div>
+            }}
+          </BilingualPair>
         );
       case 'category':
         return (

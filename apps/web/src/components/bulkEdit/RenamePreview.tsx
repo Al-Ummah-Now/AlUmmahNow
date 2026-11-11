@@ -36,7 +36,7 @@ import {
   type RenameSubject,
   type TitleLanguage,
 } from '@al-ummah/shared-types';
-import type { RenameState } from '@/lib/bulk-edit/form';
+import { numberedPatterns, type RenameState } from '@/lib/bulk-edit/form';
 
 const PAGE = 50;
 
@@ -114,7 +114,9 @@ export function RenamePreview({ rows, subjects, rename, onRenameChange, orderKey
     setFound({ state: 'loading', n: null });
     try {
       const titles = await loadExistingTitles();
-      setFound({ state: 'done', n: highestNumber(rename.pattern, titles) });
+      // The highest number any ticked language's pattern already used
+      const found = numberedPatterns(rename).map((p) => highestNumber(p, titles)).filter((n): n is number => n !== null);
+      setFound({ state: 'done', n: found.length ? Math.max(...found) : null });
     } catch (error) {
       logger.warn('[RenamePreview] Could not read the channel titles', { error: error instanceof Error ? error.message : String(error) });
       setFound({ state: 'done', n: null });
@@ -154,7 +156,7 @@ export function RenamePreview({ rows, subjects, rename, onRenameChange, orderKey
           <ArrowDownUp aria-hidden="true" />
           {rename.orderDir === 'asc' ? r.ascending : r.descending}
         </button>
-        {loadExistingTitles && rename.mode === 'pattern' && rename.pattern.includes('{n}') && (
+        {loadExistingTitles && numberedPatterns(rename).length > 0 && (
           <button type="button" className="b b-ghost b-sm min-h-11" onClick={() => void findHighest()} disabled={found.state === 'loading'} data-testid={`${testId}-continue`}>
             {found.state === 'loading' ? r.continueLoading : r.continueFind}
           </button>
@@ -279,16 +281,17 @@ function SortableRow({ id, index, total, rows, title, testId, fmt, Arrow, proble
         className="mt-3 h-5 w-5 accent-[var(--fanous-color-primary)]"
         data-testid={`${testId}-include`}
       />
-      <div className="min-w-0 space-y-1">
+      {/* English and Arabic side by side (stacked on phones) */}
+      <div className={`min-w-0 grid gap-2 ${rows.length > 1 ? 'md:grid-cols-2' : ''}`}>
         {rows.map((row) => {
           const blocked = row.problems.some((p) => p !== 'duplicate');
           return (
-            <div key={row.language} className="grid grid-cols-1 gap-x-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]" data-testid={`${testId}-cell`} data-language={row.language} data-problems={row.problems.join(' ')}>
-              <span className="text-xs text-[var(--fanous-color-text-secondary)] sm:col-span-3">{row.language === 'ar' ? r.langAr : r.langEn}</span>
+            <div key={row.language} className="grid grid-cols-1 gap-x-2 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]" data-testid={`${testId}-cell`} data-language={row.language} data-problems={row.problems.join(' ')}>
+              <span className="text-xs text-[var(--fanous-color-text-secondary)] lg:col-span-3">{row.language === 'ar' ? r.langAr : r.langEn}</span>
               <span className="break-words text-sm text-[var(--fanous-color-text-secondary)]" dir={dirOf(row.language)} lang={row.language}>
                 <bdi>{row.before || r.emptyValue}</bdi>
               </span>
-              <Arrow className="hidden h-4 w-4 self-center text-[var(--fanous-color-text-muted)] sm:block" aria-hidden="true" />
+              <Arrow className="hidden h-4 w-4 self-center text-[var(--fanous-color-text-muted)] lg:block" aria-hidden="true" />
               <span
                 dir={dirOf(row.language)}
                 lang={row.language}
@@ -298,7 +301,7 @@ function SortableRow({ id, index, total, rows, title, testId, fmt, Arrow, proble
               >
                 <bdi>{row.excluded ? row.before || r.emptyValue : row.after || r.emptyValue}</bdi>
               </span>
-              <span className="flex flex-wrap gap-1 sm:col-span-3">
+              <span className="flex flex-wrap gap-1 lg:col-span-3">
                 {row.excluded && <Badge>{r.excluded}</Badge>}
                 {!row.excluded && !row.changed && row.problems.length === 0 && <Badge>{r.unchanged}</Badge>}
                 {row.problems.map((p) => (

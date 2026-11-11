@@ -1,6 +1,7 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { BulkEditPanel, type BulkPanelVideo } from '../BulkEditPanel';
+import { registerTranslator } from '@/lib/i18n/translate-text';
 
 let mockLang: 'en' | 'ar' = 'en';
 jest.mock('@/hooks/useLanguage', () => ({
@@ -53,7 +54,7 @@ describe('BulkEditPanel (Studio "Edit selected")', () => {
 
     fireEvent.click(screen.getByTestId('bulk-edit-tick-title'));
     expect(screen.getByTestId('bulk-edit-state-title')).toHaveTextContent('Will change');
-    fireEvent.change(screen.getByTestId('rename-pattern'), { target: { value: 'Lesson {n}' } });
+    fireEvent.change(screen.getByTestId('rename-pattern-en'), { target: { value: 'Lesson {n}' } });
     fireEvent.change(screen.getByTestId('rename-pad'), { target: { value: '2' } });
     const after = screen.getAllByTestId('bulk-edit-preview-after').map((el) => el.textContent);
     expect(after).toEqual(['Lesson 01', 'Lesson 02', 'Lesson 03']);
@@ -67,7 +68,7 @@ describe('BulkEditPanel (Studio "Edit selected")', () => {
     render(<BulkEditPanel open onOpenChange={jest.fn()} videos={videos} />);
     fireEvent.click(screen.getByTestId('bulk-edit-tick-title'));
     fireEvent.click(screen.getByTestId('rename-lang-ar'));
-    fireEvent.change(screen.getByTestId('rename-pattern'), { target: { value: 'درس' } });
+    fireEvent.change(screen.getByTestId('rename-pattern-ar'), { target: { value: 'درس' } });
     const arRows = screen.getAllByTestId('bulk-edit-preview-cell').filter((r) => r.getAttribute('data-language') === 'ar');
     expect(arRows).toHaveLength(3);
     expect(arRows.every((r) => r.getAttribute('data-problems')?.includes('duplicate'))).toBe(true);
@@ -122,9 +123,9 @@ describe('BulkEditPanel (Studio "Edit selected")', () => {
     mockBulkEdit.mockResolvedValue(results(['v1', 'v3']));
     render(<BulkEditPanel open onOpenChange={jest.fn()} videos={videos} />);
     fireEvent.click(screen.getByTestId('bulk-edit-tick-title'));
-    fireEvent.click(screen.getByTestId('rename-mode-replace'));
-    fireEvent.change(screen.getByTestId('rename-find'), { target: { value: 'clip' } });
-    fireEvent.change(screen.getByTestId('rename-replace'), { target: { value: 'Part' } });
+    fireEvent.click(screen.getByTestId('rename-mode-replace-en'));
+    fireEvent.change(screen.getByTestId('rename-find-en'), { target: { value: 'clip' } });
+    fireEvent.change(screen.getByTestId('rename-replace-en'), { target: { value: 'Part' } });
     fireEvent.click(screen.getAllByTestId('bulk-edit-preview-include')[1]);
     fireEvent.click(screen.getByTestId('bulk-edit-review'));
     await act(async () => {
@@ -169,7 +170,7 @@ describe('BulkEditPanel (Studio "Edit selected")', () => {
 
     function renameLessons() {
       fireEvent.click(screen.getByTestId('bulk-edit-tick-title'));
-      fireEvent.change(screen.getByTestId('rename-pattern'), { target: { value: 'Lesson {n}' } });
+      fireEvent.change(screen.getByTestId('rename-pattern-en'), { target: { value: 'Lesson {n}' } });
     }
 
     it('sorts by title (natural) both ways; numbers follow the order shown', () => {
@@ -250,4 +251,83 @@ describe('BulkEditPanel (Studio "Edit selected")', () => {
       expect(mockReorder).toHaveBeenCalledWith('p1', ['x', 'v2', 'v1', 'v3', 'y'], { channelId: 'ch' });
     });
   });
+
+  describe('English and Arabic at the same time, to different values', () => {
+    const cells = (lang: 'en' | 'ar') => screen.getAllByTestId('bulk-edit-preview-after').filter((el) => el.getAttribute('data-language') === lang).map((el) => el.textContent);
+
+    it('renames both titles in one pass with their own patterns and one shared number', async () => {
+      mockBulkEdit.mockResolvedValue(results(['v1', 'v2', 'v3']));
+      render(<BulkEditPanel open onOpenChange={jest.fn()} videos={videos} />);
+      fireEvent.click(screen.getByTestId('bulk-edit-tick-title'));
+      fireEvent.click(screen.getByTestId('rename-lang-ar'));
+      fireEvent.change(screen.getByTestId('rename-pattern-en'), { target: { value: 'Lesson {n}' } });
+      fireEvent.change(screen.getByTestId('rename-pattern-ar'), { target: { value: 'الدرس {n}' } });
+      fireEvent.change(screen.getByTestId('rename-start'), { target: { value: '10' } });
+      fireEvent.click(screen.getByTestId('rename-digits-arabic-indic'));
+      expect(screen.getByTestId('rename-pattern-ar')).toHaveAttribute('dir', 'rtl');
+      expect(screen.getByTestId('rename-pattern-ar')).toHaveAttribute('lang', 'ar');
+      expect(screen.getByTestId('rename-pattern-en')).toHaveAttribute('dir', 'ltr');
+      expect(cells('en')).toEqual(['Lesson 10', 'Lesson 11', 'Lesson 12']);
+      expect(cells('ar')).toEqual(['الدرس ١٠', 'الدرس ١١', 'الدرس ١٢']);
+
+      fireEvent.click(screen.getByTestId('bulk-edit-review'));
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('bulk-edit-apply'));
+      });
+      await screen.findByTestId('bulk-edit-result');
+      const [req] = mockBulkEdit.mock.calls[0];
+      expect(req.perVideo).toEqual({
+        v1: { title: { en: 'Lesson 10', ar: 'الدرس ١٠' } },
+        v2: { title: { en: 'Lesson 11', ar: 'الدرس ١١' } },
+        v3: { title: { en: 'Lesson 12', ar: 'الدرس ١٢' } },
+      });
+    });
+
+    it('finds and replaces in one language while the other keeps its own rule, or stays untouched', () => {
+      render(<BulkEditPanel open onOpenChange={jest.fn()} videos={videos} />);
+      fireEvent.click(screen.getByTestId('bulk-edit-tick-title'));
+      fireEvent.click(screen.getByTestId('rename-mode-replace-en'));
+      fireEvent.change(screen.getByTestId('rename-find-en'), { target: { value: 'clip' } });
+      fireEvent.change(screen.getByTestId('rename-replace-en'), { target: { value: 'Part' } });
+      expect(cells('en')).toEqual(['Part one', 'Part two', 'Part three']);
+      expect(cells('ar')).toEqual([]);
+      fireEvent.click(screen.getByTestId('rename-lang-ar'));
+      fireEvent.click(screen.getByTestId('rename-mode-affix-ar'));
+      fireEvent.change(screen.getByTestId('rename-prefix-ar'), { target: { value: 'سلسلة: ' } });
+      expect(cells('ar')[0]).toBe('سلسلة: مقطع');
+      expect(cells('en')[0]).toBe('Part one');
+    });
+
+    it('sets both descriptions side by side, each with its own way', async () => {
+      mockBulkEdit.mockResolvedValue(results(['v1', 'v2', 'v3']));
+      render(<BulkEditPanel open onOpenChange={jest.fn()} videos={videos} />);
+      fireEvent.click(screen.getByTestId('bulk-edit-tick-description'));
+      fireEvent.click(screen.getByTestId('bulk-edit-desc-ar-enabled'));
+      fireEvent.change(screen.getByTestId('bulk-edit-desc-en-text'), { target: { value: 'Footer' } });
+      fireEvent.click(screen.getByTestId('bulk-edit-desc-ar-replace'));
+      fireEvent.change(screen.getByTestId('bulk-edit-desc-ar-text'), { target: { value: 'وصف جديد' } });
+      expect(screen.getByTestId('bulk-edit-desc-ar-text')).toHaveAttribute('dir', 'rtl');
+      fireEvent.click(screen.getByTestId('bulk-edit-review'));
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('bulk-edit-apply'));
+      });
+      await screen.findByTestId('bulk-edit-result');
+      expect(mockBulkEdit.mock.calls[0][0].changes).toEqual({ description: { en: { mode: 'append', text: 'Footer' }, ar: { mode: 'replace', text: 'وصف جديد' } } });
+    });
+
+    it('offers Translate only once a translator is registered', async () => {
+      render(<BulkEditPanel open onOpenChange={jest.fn()} videos={videos} />);
+      fireEvent.click(screen.getByTestId('bulk-edit-tick-title'));
+      fireEvent.click(screen.getByTestId('rename-lang-ar'));
+      expect(screen.queryByTestId('rename-pair-translate-ar')).toBeNull();
+      act(() => registerTranslator(async (text, from, to) => (from === 'en' && to === 'ar' ? text.replace('Lesson', 'الدرس') : text)));
+      fireEvent.change(screen.getByTestId('rename-pattern-en'), { target: { value: 'Lesson {n}' } });
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('rename-pair-translate-ar'));
+      });
+      expect(screen.getByTestId('rename-pattern-ar')).toHaveValue('الدرس {n}');
+      act(() => registerTranslator(null));
+    });
+  });
 });
+

@@ -227,6 +227,39 @@ describe('PATCH /api/videos/bulk', () => {
 	});
 });
 
+describe('English and Arabic in one request', () => {
+	it('writes both titles and both descriptions atomically, and one undo puts both back', async () => {
+		const w = world({
+			a: videoFixture({ id: 'a', title: 'Old', titleLocalized: { en: 'Old', ar: 'قديم' }, description: 'Body', descriptionLocalized: { en: 'Body', ar: 'نص' } }),
+		});
+		const res = (await (await patch(w, 'owner', {
+			ids: ['a'],
+			operationId: 'op-bilingual',
+			perVideo: { a: { title: { en: 'Lesson 1', ar: 'الدرس ١' } } },
+			changes: { description: { en: { mode: 'append', text: 'Footer' }, ar: { mode: 'replace', text: 'وصف' } } },
+		})).json()) as any;
+		assert.deepEqual(res.summary, { total: 1, succeeded: 1, failed: 0 });
+		const after = w.videos.read('a');
+		assert.deepEqual(after.titleLocalized, { en: 'Lesson 1', ar: 'الدرس ١' });
+		assert.equal(after.title, 'Lesson 1');
+		assert.deepEqual(after.descriptionLocalized, { en: 'Body\n\nFooter', ar: 'وصف' });
+
+		await undo(w, 'owner', { operationId: 'op-bilingual', ids: ['a'] });
+		const back = w.videos.read('a');
+		assert.deepEqual(back.titleLocalized, { en: 'Old', ar: 'قديم' });
+		assert.equal(back.title, 'Old');
+		assert.deepEqual(back.descriptionLocalized, { en: 'Body', ar: 'نص' });
+		assert.equal(back.description, 'Body');
+	});
+
+	it('refuses the whole video when one language is invalid (nothing half-written)', async () => {
+		const w = world({ a: videoFixture({ id: 'a', title: 'Old', titleLocalized: { en: 'Old', ar: 'قديم' } }) });
+		const res = (await (await patch(w, 'owner', { ids: ['a'], perVideo: { a: { title: { en: 'Fine', ar: '   ' } } } })).json()) as any;
+		assert.equal(res.results[0].code, 'title_empty');
+		assert.deepEqual(w.videos.read('a').titleLocalized, { en: 'Old', ar: 'قديم' });
+	});
+});
+
 describe('POST /api/videos/bulk/undo', () => {
 	it('restores the previous values, keeps newer edits, and is a no-op when repeated', async () => {
 		const w = world({
