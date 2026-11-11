@@ -8,8 +8,9 @@
  * At send time it reads the user's address and email preferences from
  * api-videos (GET /internal/admin/users/:id/account-email), so a user who
  * turned "Email me about my account" off since the warning gets no email.
- * The email is in the language the user picked for emails (English until they
- * pick one). Failures worth retrying back off like contact mail; a final
+ * The email is in exactly one language: the warning's `locale`, chosen by the
+ * moderator when warning (the admin UI preselects the user's saved email
+ * language). Failures worth retrying back off like contact mail; a final
  * failure is recorded on the warning and flagged on the admin Errors page
  * with Retry ("warning-email" in lib/errors-actions.ts).
  */
@@ -215,7 +216,8 @@ export async function processWarningMailJob(
       }
       throw error;
     }
-    const decision = accountEmailDecision(contact);
+    // One language only: the one chosen when warning (kept on the row, so a Retry resends in it)
+    const decision = accountEmailDecision(contact, warning.locale === 'ar' ? 'ar' : 'en');
     if ('status' in decision) {
       await recordWarningEmail(db, warningId, decision.status, { now: now() });
       logger.debug('[WarningMail] Not sent', { warningId, status: decision.status });

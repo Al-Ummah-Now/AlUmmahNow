@@ -40,6 +40,7 @@ import {
   type AccountNoticeResult,
   type IssueUserWarningRequest,
   type IssueUserWarningResult,
+  type NotificationEmailLocale,
   type UserWarningList,
 } from '@al-ummah/shared-types';
 import {
@@ -387,18 +388,19 @@ app.get('/users/:id', async (c) => {
   const id = c.req.param('id');
   const user = await videos<AdminUserDetail>(c, `/users/${encodeURIComponent(id)}`);
   const owned = await videos<AdminPage<AdminVideoRow>>(c, '/videos', { query: { ownerId: id, pageSize: 100 } });
-  const [reports, audit, jobs] = await Promise.all([
+  const [reports, audit, jobs, emailLanguage] = await Promise.all([
     recentReports(c.env.REPORTS_DB, [
       { type: 'channel', ids: user.channels.map((ch) => ch.id) },
       { type: 'video', ids: owned.items.map((v) => v.id) },
     ]),
     readAudit(c.env.REPORTS_DB, { kind: 'user', id, limit: 20 }),
     jobsFor(c, 'user', id),
+    savedEmailLanguage(c, id),
   ]);
   const [withInvite] = await withWarningCounts(c, await withInvites(c, [user]));
   // An invited user's page reads the invite's status again (queued; "Signed in" within seconds)
   if (withInvite.invite) await syncInvitesOnRead(c.env as unknown as InviteQueueEnv, [withInvite.invite.id]);
-  return ok(c, { ...withInvite, reports, audit, jobs });
+  return ok(c, { ...withInvite, emailLanguage, reports, audit, jobs });
 });
 
 // ---------------------------------------------------------------------------
@@ -414,10 +416,28 @@ const issuerName = (c: C) => {
   return (typeof name === 'string' && name.trim()) || a?.email || a?.userId || 'unknown';
 };
 
+/**
+ * The user's saved email language (the Warn dialog preselects it); null when
+ * never picked, or when it cannot be read (logged; the dialog then falls back
+ * to the admin's UI language).
+ */
+async function savedEmailLanguage(c: C, userId: string): Promise<NotificationEmailLocale | null> {
+  try {
+    return (await videos<AccountEmailContact>(c, `/users/${encodeURIComponent(userId)}/account-email`)).savedLocale ?? null;
+  } catch (error) {
+    if (!(error instanceof VideosError && error.status === 404)) {
+      logger.warn('[Content] Could not read the user\'s email language', { userId, error: error instanceof Error ? error.message : String(error) });
+    }
+    return null;
+  }
+}
+
 app.get('/users/:id/warnings', async (c) => {
   need(c, 'users:warn');
-  const list: UserWarningList = await listWarnings(c.env.REPORTS_DB, c.req.param('id'));
-  return ok(c, list);
+  const id = c.req.param('id');
+  const [list, emailLanguage] = await Promise.all([listWarnings(c.env.REPORTS_DB, id), savedEmailLanguage(c, id)]);
+  const result: UserWarningList = { ...list, emailLanguage };
+  return ok(c, result);
 });
 
 app.post('/users/:id/warnings', async (c) => {
@@ -448,7 +468,7 @@ app.post('/users/:id/warnings', async (c) => {
     kind: 'user',
     id,
     action: 'warn',
-    details: { warningId, reasonCode: input.reasonCode, ordinal, ...(input.note ? { note: input.note } : {}), ...(input.reportId ? { reportId: input.reportId } : {}), ...(input.entityKind ? { entityKind: input.entityKind, entityId: input.entityId } : {}) },
+    details: { warningId, reasonCode: input.reasonCode, ordinal, locale: input.locale, ...(input.note ? { note: input.note } : {}), ...(input.reportId ? { reportId: input.reportId } : {}), ...(input.entityKind ? { entityKind: input.entityKind, entityId: input.entityId } : {}) },
   }, () => insertWarning(db, row));
   const count = await countWarnings(db, id);
 

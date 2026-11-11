@@ -7,12 +7,14 @@
  * tested against the real migrations (test/d1-sqlite.ts).
  */
 import {
+  NOTIFICATION_EMAIL_LOCALES,
   REPORT_REASONS,
   REPORTABLE_ENTITY_TYPES,
   USER_WARNING_EMAIL_STATUSES,
   USER_WARNING_NOTE_MAX,
   warningEscalation,
   type IssueUserWarningRequest,
+  type NotificationEmailLocale,
   type ReportReason,
   type ReportableEntityType,
   type UserWarning,
@@ -35,6 +37,7 @@ export interface WarningRow {
   issued_by: string;
   issued_by_name: string;
   created_at: string;
+  locale: string;
   in_app_sent: number;
   email_status: string | null;
   email_error: string | null;
@@ -49,7 +52,8 @@ export class WarningInputError extends Error {
 
 const isReason = (v: unknown): v is ReportReason => typeof v === 'string' && (REPORT_REASONS as readonly string[]).includes(v);
 const isEntityKind = (v: unknown): v is ReportableEntityType => typeof v === 'string' && (REPORTABLE_ENTITY_TYPES as readonly string[]).includes(v);
-const isEmailStatus = (v: unknown): v is UserWarningEmailStatus => typeof v === 'string' && (USER_WARNING_EMAIL_STATUSES as readonly string[]).includes(v);
+const isLocale = (v: unknown): v is NotificationEmailLocale => typeof v === 'string' && (NOTIFICATION_EMAIL_LOCALES as readonly string[]).includes(v);
+const isEmailStatus =(v: unknown): v is UserWarningEmailStatus => typeof v === 'string' && (USER_WARNING_EMAIL_STATUSES as readonly string[]).includes(v);
 const optionalId = (v: unknown, name: string): string | null => {
   if (v === undefined || v === null || v === '') return null;
   if (typeof v !== 'string' || v.length > 200) throw new WarningInputError('invalid_request', `${name} must be a string of at most 200 characters`);
@@ -68,8 +72,10 @@ export function parseWarningRequest(body: Record<string, unknown>): IssueUserWar
   const entityId = optionalId(body.entityId, 'entityId');
   if ((entityKind === null) !== (entityId === null)) throw new WarningInputError('invalid_request', 'entityKind and entityId go together');
   const reportId = optionalId(body.reportId, 'reportId');
+  if (!isLocale(body.locale)) throw new WarningInputError('invalid_locale', `locale (the email language) must be one of ${NOTIFICATION_EMAIL_LOCALES.join(', ')}`);
   return {
     reasonCode: body.reasonCode,
+    locale: body.locale,
     ...(note ? { note } : {}),
     ...(reportId ? { reportId } : {}),
     ...(entityKind && entityId ? { entityKind, entityId } : {}),
@@ -95,6 +101,7 @@ export function toWarning(row: WarningRow, ordinal: number): UserWarning {
     issuedByName: row.issued_by_name,
     createdAt: row.created_at,
     ordinal,
+    locale: isLocale(row.locale) ? row.locale : 'en',
     inAppSent: row.in_app_sent === 1,
     emailStatus: isEmailStatus(row.email_status) ? row.email_status : null,
   };
@@ -111,10 +118,10 @@ export interface NewWarning extends IssueUserWarningRequest {
 export async function insertWarning(db: D1Database, w: NewWarning): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO user_warnings (id, user_id, reason_code, note, report_id, entity_kind, entity_id, issued_by, issued_by_name, created_at, in_app_sent, email_status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL)`,
+      `INSERT INTO user_warnings (id, user_id, reason_code, note, report_id, entity_kind, entity_id, issued_by, issued_by_name, created_at, locale, in_app_sent, email_status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL)`,
     )
-    .bind(w.id, w.userId, w.reasonCode, w.note ?? null, w.reportId ?? null, w.entityKind ?? null, w.entityId ?? null, w.issuedBy, w.issuedByName, w.createdAt)
+    .bind(w.id, w.userId, w.reasonCode, w.note ?? null, w.reportId ?? null, w.entityKind ?? null, w.entityId ?? null, w.issuedBy, w.issuedByName, w.createdAt, w.locale)
     .run();
 }
 
@@ -141,7 +148,7 @@ export async function warningCounts(db: D1Database, userIds: string[]): Promise<
 }
 
 /** The user's warnings, newest first, each with its place in the history. */
-export async function listWarnings(db: D1Database, userId: string, limit = WARNING_HISTORY_MAX): Promise<UserWarningList> {
+export async function listWarnings(db: D1Database, userId: string, limit = WARNING_HISTORY_MAX): Promise<Omit<UserWarningList, 'emailLanguage'>> {
   const [count, { results = [] }] = await Promise.all([
     countWarnings(db, userId),
     db

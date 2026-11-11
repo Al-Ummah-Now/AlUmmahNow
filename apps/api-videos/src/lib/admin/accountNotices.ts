@@ -56,5 +56,6 @@ export async function accountEmailContact(env: Env, userId: string): Promise<Acc
 		displayName: row.displayName,
 		accountEmail: prefs?.account ?? true,
 		locale: prefs?.locale ?? DEFAULT_NOTIFICATION_EMAIL_LOCALE,
+		savedLocale: prefs?.locale ?? null,
 	};
 }
