@@ -24984,6 +24984,345 @@
         }
       }
     },
+    "/api/v1/videos/bulk": {
+      "patch": {
+        "tags": [
+          "Videos"
+        ],
+        "summary": "Edit metadata of multiple videos",
+        "operationId": "patch_VideoBulkUpdate",
+        "parameters": [
+          {
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Channel ID"
+            },
+            "required": false,
+            "description": "Channel ID",
+            "name": "channelId",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "minItems": 1,
+                    "maxItems": 50
+                  },
+                  "videoIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "minItems": 1,
+                    "maxItems": 50
+                  },
+                  "operationId": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]{8,64}$"
+                  },
+                  "changes": {
+                    "type": "object",
+                    "properties": {
+                      "isPublic": {
+                        "type": "boolean"
+                      },
+                      "category": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "enum": [
+                          "quran_recitation",
+                          "quran_tafsir",
+                          "hadith_studies",
+                          "islamic_history",
+                          "fiqh",
+                          "aqeedah",
+                          "dawah",
+                          "khutbah",
+                          "islamic_lectures",
+                          "islamic_nasheed",
+                          "islamic_kids",
+                          "islamic_news",
+                          "hajj_umrah",
+                          "ramadan",
+                          "islamic_lifestyle"
+                        ]
+                      },
+                      "addTags": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 50
+                        },
+                        "maxItems": 30
+                      },
+                      "removeTags": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 50
+                        },
+                        "maxItems": 30
+                      },
+                      "replaceTags": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 50
+                        },
+                        "maxItems": 30,
+                        "description": "The whole tag list (not with addTags/removeTags)"
+                      },
+                      "language": {
+                        "type": "string",
+                        "enum": [
+                          "en",
+                          "ar",
+                          "ur",
+                          "fr"
+                        ]
+                      },
+                      "commentSettings": {
+                        "type": "string",
+                        "enum": [
+                          "on",
+                          "held",
+                          "off"
+                        ]
+                      },
+                      "description": {
+                        "type": "object",
+                        "properties": {
+                          "en": {
+                            "type": "object",
+                            "properties": {
+                              "mode": {
+                                "type": "string",
+                                "enum": [
+                                  "append",
+                                  "prepend",
+                                  "replace"
+                                ]
+                              },
+                              "text": {
+                                "type": "string",
+                                "maxLength": 5000
+                              }
+                            },
+                            "required": [
+                              "mode",
+                              "text"
+                            ]
+                          },
+                          "ar": {
+                            "type": "object",
+                            "properties": {
+                              "mode": {
+                                "type": "string",
+                                "enum": [
+                                  "append",
+                                  "prepend",
+                                  "replace"
+                                ]
+                              },
+                              "text": {
+                                "type": "string",
+                                "maxLength": 5000
+                              }
+                            },
+                            "required": [
+                              "mode",
+                              "text"
+                            ]
+                          }
+                        },
+                        "description": "Per language: append, prepend or replace"
+                      },
+                      "addPlaylists": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "maxItems": 10
+                      },
+                      "removePlaylists": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "maxItems": 10
+                      }
+                    },
+                    "default": {}
+                  },
+                  "perVideo": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "object",
+                      "properties": {
+                        "title": {
+                          "type": "object",
+                          "properties": {
+                            "en": {
+                              "type": "string",
+                              "maxLength": 1000
+                            },
+                            "ar": {
+                              "type": "string",
+                              "maxLength": 1000
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Per-video results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "operationId": {
+                      "type": "string"
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "videoId": {
+                            "type": "string"
+                          },
+                          "success": {
+                            "type": "boolean"
+                          },
+                          "changed": {
+                            "type": "boolean"
+                          },
+                          "replayed": {
+                            "type": "boolean"
+                          },
+                          "code": {
+                            "type": "string"
+                          },
+                          "error": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "videoId",
+                          "success"
+                        ]
+                      }
+                    },
+                    "summary": {
+                      "type": "object",
+                      "properties": {
+                        "total": {
+                          "type": "number"
+                        },
+                        "succeeded": {
+                          "type": "number"
+                        },
+                        "failed": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "total",
+                        "succeeded",
+                        "failed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "results",
+                    "summary"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No change requested, or invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A playlist the caller can't manage",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/videos/bulk-delete": {
       "post": {
         "tags": [
@@ -25637,6 +25976,14 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "minItems": 1,
+                    "maxItems": 50
+                  },
                   "videoIds": {
                     "type": "array",
                     "items": {
@@ -25644,6 +25991,10 @@
                     },
                     "minItems": 1,
                     "maxItems": 50
+                  },
+                  "operationId": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]{8,64}$"
                   },
                   "changes": {
                     "type": "object",
@@ -25691,14 +26042,121 @@
                           "maxLength": 50
                         },
                         "maxItems": 30
+                      },
+                      "replaceTags": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 50
+                        },
+                        "maxItems": 30,
+                        "description": "The whole tag list (not with addTags/removeTags)"
+                      },
+                      "language": {
+                        "type": "string",
+                        "enum": [
+                          "en",
+                          "ar",
+                          "ur",
+                          "fr"
+                        ]
+                      },
+                      "commentSettings": {
+                        "type": "string",
+                        "enum": [
+                          "on",
+                          "held",
+                          "off"
+                        ]
+                      },
+                      "description": {
+                        "type": "object",
+                        "properties": {
+                          "en": {
+                            "type": "object",
+                            "properties": {
+                              "mode": {
+                                "type": "string",
+                                "enum": [
+                                  "append",
+                                  "prepend",
+                                  "replace"
+                                ]
+                              },
+                              "text": {
+                                "type": "string",
+                                "maxLength": 5000
+                              }
+                            },
+                            "required": [
+                              "mode",
+                              "text"
+                            ]
+                          },
+                          "ar": {
+                            "type": "object",
+                            "properties": {
+                              "mode": {
+                                "type": "string",
+                                "enum": [
+                                  "append",
+                                  "prepend",
+                                  "replace"
+                                ]
+                              },
+                              "text": {
+                                "type": "string",
+                                "maxLength": 5000
+                              }
+                            },
+                            "required": [
+                              "mode",
+                              "text"
+                            ]
+                          }
+                        },
+                        "description": "Per language: append, prepend or replace"
+                      },
+                      "addPlaylists": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "maxItems": 10
+                      },
+                      "removePlaylists": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "maxItems": 10
+                      }
+                    },
+                    "default": {}
+                  },
+                  "perVideo": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "object",
+                      "properties": {
+                        "title": {
+                          "type": "object",
+                          "properties": {
+                            "en": {
+                              "type": "string",
+                              "maxLength": 1000
+                            },
+                            "ar": {
+                              "type": "string",
+                              "maxLength": 1000
+                            }
+                          }
+                        }
                       }
                     }
                   }
-                },
-                "required": [
-                  "videoIds",
-                  "changes"
-                ]
+                }
               }
             }
           }
@@ -25714,6 +26172,9 @@
                     "success": {
                       "type": "boolean"
                     },
+                    "operationId": {
+                      "type": "string"
+                    },
                     "results": {
                       "type": "array",
                       "items": {
@@ -25727,6 +26188,12 @@
                           },
                           "changed": {
                             "type": "boolean"
+                          },
+                          "replayed": {
+                            "type": "boolean"
+                          },
+                          "code": {
+                            "type": "string"
                           },
                           "error": {
                             "type": "string"
@@ -25768,7 +26235,192 @@
             }
           },
           "400": {
-            "description": "No change requested or invalid input",
+            "description": "No change requested, or invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A playlist the caller can't manage",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/videos/bulk/undo": {
+      "post": {
+        "tags": [
+          "Videos"
+        ],
+        "summary": "Undo a bulk edit",
+        "operationId": "post_VideoBulkUndo",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "operationId": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]{8,64}$"
+                  },
+                  "ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "minItems": 1,
+                    "maxItems": 50
+                  }
+                },
+                "required": [
+                  "operationId",
+                  "ids"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Per-video results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "operationId": {
+                      "type": "string"
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "videoId": {
+                            "type": "string"
+                          },
+                          "success": {
+                            "type": "boolean"
+                          },
+                          "changed": {
+                            "type": "boolean"
+                          },
+                          "replayed": {
+                            "type": "boolean"
+                          },
+                          "code": {
+                            "type": "string"
+                          },
+                          "error": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "videoId",
+                          "success"
+                        ]
+                      }
+                    },
+                    "summary": {
+                      "type": "object",
+                      "properties": {
+                        "total": {
+                          "type": "number"
+                        },
+                        "succeeded": {
+                          "type": "number"
+                        },
+                        "failed": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "total",
+                        "succeeded",
+                        "failed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "results",
+                    "summary"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No change requested, or invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A playlist the caller can't manage",
             "content": {
               "application/json": {
                 "schema": {
@@ -28776,6 +29428,58 @@
                         "tags": {
                           "type": "string",
                           "description": "Comma-separated tags"
+                        },
+                        "titleLocalized": {
+                          "type": "object",
+                          "properties": {
+                            "en": {
+                              "type": "string",
+                              "maxLength": 1000
+                            },
+                            "ar": {
+                              "type": "string",
+                              "maxLength": 1000
+                            }
+                          },
+                          "description": "Titles per language (set for all / per file on the upload page)"
+                        },
+                        "descriptionLocalized": {
+                          "type": "object",
+                          "properties": {
+                            "en": {
+                              "type": "string",
+                              "maxLength": 5000
+                            },
+                            "ar": {
+                              "type": "string",
+                              "maxLength": 5000
+                            }
+                          },
+                          "description": "Descriptions per language"
+                        },
+                        "language": {
+                          "type": "string",
+                          "enum": [
+                            "en",
+                            "ar",
+                            "ur",
+                            "fr"
+                          ],
+                          "description": "Primary language of the video"
+                        },
+                        "commentSettings": {
+                          "type": "string",
+                          "enum": [
+                            "on",
+                            "held",
+                            "off"
+                          ],
+                          "description": "Comments: on, held for review, or off"
+                        },
+                        "fileName": {
+                          "type": "string",
+                          "maxLength": 255,
+                          "description": "The file's name as picked (kept for bulk rename's {filename})"
                         },
                         "format": {
                           "type": "string",

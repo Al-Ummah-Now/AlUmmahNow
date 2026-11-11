@@ -116,6 +116,28 @@ describe('single and bulk initiate write the same record', () => {
 		}
 	});
 
+	it('bulk initiate stores the values set for all files (titles per language, language, comments, file name)', async () => {
+		const e = env();
+		const batch = buildApp((r) => r.post('/api/videos/upload/batch/initiate', UploadBatchInitiateEndpoint), { userId: OWNER });
+		const b = await batch.request('/api/videos/upload/batch/initiate', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json', channelId: CHANNEL },
+			body: JSON.stringify({ videos: [{
+				title: 'Lesson 01', fileSize: 10, mimeType: 'video/mp4', isPublic: false,
+				titleLocalized: { en: 'Lesson 01', ar: 'درس ٠١' }, descriptionLocalized: { en: 'About', ar: '' },
+				language: 'ar', commentSettings: 'held', fileName: 'lesson-1.mp4',
+			}] }),
+		}, e);
+		assert.equal(b.status, 200, await b.clone().text());
+		const [record] = [...e.videos.store.values()].map((v: string) => JSON.parse(v));
+		assert.deepEqual(record.titleLocalized, { en: 'Lesson 01', ar: 'درس ٠١' });
+		assert.deepEqual(record.descriptionLocalized, { en: 'About' }, 'an empty language is left out');
+		assert.equal(record.language, 'ar');
+		assert.equal(record.commentSettings, 'held');
+		assert.equal(record.originalFilename, 'lesson-1.mp4');
+		assert.equal(record.isPublic, false);
+	});
+
 	it('a thumbnail stored with a single upload is kept (custom)', () => {
 		const r = createUploadRecord({
 			videoId: 'v', title: 't', userId: OWNER, channelId: CHANNEL, bunnyHostname: HOST,

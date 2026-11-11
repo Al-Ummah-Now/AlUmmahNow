@@ -6,7 +6,7 @@ import { VideoCreate } from '../endpoints/video/videoCreate';
 import { VideoUpdate } from '../endpoints/video/videoUpdate';
 import { VideoDelete } from '../endpoints/video/videoDelete';
 import { VideoBulkDelete } from '../endpoints/video/videoBulkDelete';
-import { VideoBulkUpdate } from '../endpoints/video/videoBulkUpdate';
+import { VideoBulkUpdate, VideoBulkUndo } from '../endpoints/video/videoBulkUpdate';
 import { VideoFetch } from '../endpoints/video/videoFetch';
 import { CategorySuggestionGet, CategorySuggestionRequest } from '../endpoints/video/categorySuggestions';
 import { VideosList } from '../endpoints/video/videoList';
@@ -91,6 +91,10 @@ videoRouter.post('/', VideoCreate);
 // AI category suggestions for the upload/edit forms (before /:id, which would match it)
 videoRouter.post('/category-suggestions', CategorySuggestionRequest);
 videoRouter.get('/category-suggestions', CategorySuggestionGet);
+
+// Bulk edit and its undo (before the /:id routes)
+videoRouter.patch('/bulk', VideoBulkUpdate);
+videoRouter.post('/bulk/undo', VideoBulkUndo);
 
 // Get single video (public)
 videoRouter.get('/:id', VideoFetch);

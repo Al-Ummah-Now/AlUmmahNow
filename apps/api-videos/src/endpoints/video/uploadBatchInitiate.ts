@@ -26,6 +26,11 @@ const BatchVideoSchema = z.object({
 	mimeType: Str({ description: "MIME type of the video file", required: true }),
 	isPublic: z.boolean().optional(),
 	tags: z.string().optional().describe("Comma-separated tags"),
+	titleLocalized: z.object({ en: z.string().max(1000).optional(), ar: z.string().max(1000).optional() }).optional().describe("Titles per language (set for all / per file on the upload page)"),
+	descriptionLocalized: z.object({ en: z.string().max(5000).optional(), ar: z.string().max(5000).optional() }).optional().describe("Descriptions per language"),
+	language: z.enum(['en', 'ar', 'ur', 'fr']).optional().describe("Primary language of the video"),
+	commentSettings: z.enum(['on', 'held', 'off']).optional().describe("Comments: on, held for review, or off"),
+	fileName: z.string().max(255).optional().describe("The file's name as picked (kept for bulk rename's {filename})"),
 	format: z.enum(['short', 'video', 'auto']).optional().describe("Upload as a Short or as a video; 'auto' (default) detects it from length and shape"),
 	fingerprint: UploadFingerprintSchema.optional().describe("File fingerprint (name, size, lastModified, SHA-256 of the first and last MiB): retrying the same file reuses its unfinished video"),
 });
@@ -37,6 +42,11 @@ const SharedMetadataSchema = z.object({
 });
 
 type BatchVideo = z.infer<typeof BatchVideoSchema>;
+
+/** {en, ar} without the empty languages (an empty Arabic title is "none", not ""). */
+function dropEmpty(values: { en?: string; ar?: string }): Record<string, string> {
+	return Object.fromEntries(Object.entries(values).filter(([, v]) => typeof v === 'string' && v.trim() !== '')) as Record<string, string>;
+}
 
 /**
  * Validate a single batch entry. Returns an error message or null.
@@ -205,6 +215,11 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 							channelId,
 							isPublic: videoData.isPublic ?? sharedMetadata?.isPublic ?? true,
 							tags: videoData.tags,
+							...(videoData.titleLocalized ? { titleLocalized: dropEmpty(videoData.titleLocalized) } : {}),
+							...(videoData.descriptionLocalized ? { descriptionLocalized: dropEmpty(videoData.descriptionLocalized) } : {}),
+							...(videoData.language ? { language: videoData.language } : {}),
+							...(videoData.commentSettings ? { commentSettings: videoData.commentSettings } : {}),
+							...(videoData.fileName ? { originalFilename: videoData.fileName } : {}),
 							category: sharedMetadata?.category,
 							format: videoData.format,
 							...(sharedMetadata?.category ? { categorySource: 'uploader' as const } : {}),

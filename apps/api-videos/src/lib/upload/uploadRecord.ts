@@ -35,6 +35,11 @@ export interface UploadRecordInput {
 	format?: string;
 	fileSize?: number;
 	mimeType?: string;
+	/** Primary language of the video, as set on upload */
+	language?: 'en' | 'ar' | 'ur' | 'fr';
+	commentSettings?: 'on' | 'held' | 'off';
+	/** The file's name as picked (bulk rename's {filename}) */
+	originalFilename?: string;
 	/** A thumbnail stored with the upload (image storage), if any */
 	customThumbnail?: { url: string; type: 'auto' | 'custom'; sizes?: Record<string, string> };
 	/** CDN host of the Bunny library the video is uploaded to */
@@ -74,5 +79,8 @@ export function createUploadRecord(input: UploadRecordInput): VideoRecord {
 		uploadStatus: 'uploading',
 		...(input.fileSize ? { fileSize: input.fileSize } : {}),
 		...(input.mimeType ? { originalFormat: input.mimeType } : {}),
+		...(input.language ? { language: input.language } : {}),
+		...(input.commentSettings ? { commentSettings: input.commentSettings } : {}),
+		...(input.originalFilename ? { originalFilename: input.originalFilename } : {}),
 	} as VideoRecord;
 }
