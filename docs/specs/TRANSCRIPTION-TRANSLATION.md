@@ -30,7 +30,7 @@ The owner asked for:
 | Quran identification | **Mode B now** (QF Search + Content fetch + our verification, no stored index); **mode A** (local index from Content Sync) once granted | Measured mode B: 22/55 auto, 0 wrong, 0/20 false. A full-Quran index built from regular API responses isn't allowed (§5.5) |
 | Quran translations | QF `translations` by resource id, fetched live (English: Saheeh International) | quran.com only |
 | Metering | One "caption minute" per video-minute per language produced; plan allowance plus add-on packs plus admin grants | §6 |
-| Inline title translation | **Free on every tier, with a fair-use cap** | 100,000 title translations cost about $2 (§6.4) |
+| Inline title translation | **Availability set by the site-wide subscription plan (pending)**; admin grants until then. Recommended input to the plan: free with a fair-use cap, because it is so cheap | 100,000 title translations cost about $2 (§6.4) |
 | Cost at scale | 1,000 h/month of jobs ≈ **$59** with the default stack; 10,000 h ≈ $590, which breaks the cap, so it is bounded by tier minutes and a budget stop | §7 |
 
 ## 2. Principles
@@ -387,17 +387,20 @@ The terms decide which mode is allowed. A local match index is a "Derived Materi
 
 ### 6.1 Keys (catalogue `packages/shared-types/src/entitlements.ts`)
 
-| Key | Type | Meaning | Suggested seed: Free / Plus / Pro / Institution |
+| Key | Type | Meaning | Value per plan |
 |---|---|---|---|
-| `captions.monthlyMinutes` | number | caption minutes per month (1 per video-minute per language produced) | 60 / 600 / 3,000 / 15,000 |
-| `captions.maxTargetLanguages` | number | translation targets per job | 1 / 3 / 10 / unlimited |
-| `captions.highAccuracy` | boolean | may choose the fallback (third-party) provider | false / false / true / true |
-| `captions.editor` | boolean | transcript editor (always true; kept as a key for parity) | true |
-| `translate.inline.dailyItems` | number | inline translations per user per day (fair use) | 200 / 1,000 / 5,000 / 20,000 |
-| `translate.bulk.maxItems` | number | items per bulk translate | 50 / 200 / 1,000 / 5,000 |
-| `translate.viewerAuto` | boolean | channel's titles may be auto-translated for viewers (if O6) | true |
+| `captions.monthlyMinutes` | number | caption minutes per month (1 per video-minute per language produced) | **set by the site-wide subscription plan (pending)** |
+| `captions.maxTargetLanguages` | number | translation targets per job | set by the site-wide subscription plan (pending) |
+| `captions.highAccuracy` | boolean | may use an admin-enabled optional provider (e.g. DeepL) | set by the site-wide subscription plan (pending) |
+| `captions.editor` | boolean | transcript editor | set by the site-wide subscription plan (pending) |
+| `translate.inline.dailyItems` | number | inline translations per user per day (fair use) | set by the site-wide subscription plan (pending) |
+| `translate.bulk.maxItems` | number | items per bulk translate | set by the site-wide subscription plan (pending) |
+| `translate.viewerAuto` | boolean | channel's titles may be auto-translated for viewers (if O6) | set by the site-wide subscription plan (pending) |
 
-These are seeds for admins to edit; plans stay admin-managed.
+**Owner decision 3/13 (2026-11-11):** "what free tier? this needs planning with all subs on the site".
+- There are no per-tier numbers here. Allowances and pack pricing are **set by the site-wide subscription plan (pending)**, which covers every subscription on the site.
+- **Until that plan exists, captions are available only through admin grants** (§6.3). Every plan's code default for `captions.monthlyMinutes` is `0`. Inline title translation follows the same rule: `translate.inline.dailyItems` defaults to `0` until the plan sets it, and admins can grant it.
+- The cost facts the plan needs are in §6.4 and §7.
 
 ### 6.2 Metering
 - **Counter:** `usage_counters` row `(channel, id, "captions.minutes", "YYYY-MM")`.
@@ -416,17 +419,18 @@ These are seeds for admins to edit; plans stay admin-managed.
   - Unused "until_used" pack minutes are consumed after the plan minutes.
 - **Admin-web:** Plans → Grants. The admin grants or revokes minutes per **user or channel** with a search picker, never a raw id (admin-pickers rule). A reason is required, and `plan_audit_log` is written in the same batch.
 - **Payment:** add-on purchases go through the pluggable payment providers when they exist (never Stripe; Epic 27 payments are deferred). Until then the admin grants manually: `source:"admin"`, with a reference to an invoice or receipt.
-- **Suggested pack prices** (admin-editable), covering the fallback provider and payment fees:
+- **Pack pricing:** set by the site-wide subscription plan (pending). For that planning, here is our cost per 1,000 caption minutes:
 
-  | Pack | Price | Our cost on the default stack | Our cost on the fallback (Scribe) |
-  |---|---|---|---|
-  | 1,000 caption minutes | **$3** | ≈ $0.48 | ≈ $3.40 if all were transcription |
-  | 5,000 | $12 | ≈ $2.40 | ≈ $17 |
-  | 20,000 | $40 | ≈ $9.60 | ≈ $68 |
+  | Stack | Our cost per 1,000 caption minutes |
+  |---|---|
+  | Default (Workers AI) | ≈ $0.48 (transcription ≈ $0.56, translation ≈ $0.40) |
+  | DeepL Voice STT (optional) | ≈ $30.8 |
+  | DeepL translation (optional) | ≈ $16.7 (609 characters per minute × $27.50 per 1M) |
+  | ElevenLabs Scribe (not measured) | ≈ $3.4 |
 
-  **High-accuracy jobs use 3× minutes**, because the Scribe-based cost is ≈ 7× the default.
+  Optional-provider jobs should count at a multiple of the default that matches their cost ratio (§7.4). The multiple is for the plan to set.
 
-### 6.4 Inline title translation: free with fair use (recommended)
+### 6.4 Inline title translation: cost facts for the subscription plan
 - **What it costs us:**
   - a title is about 73 characters and costs about $0.00002 (Gemma) to $0.00007 (DeepSeek);
   - 100,000 title translations a month ≈ $2–7;
@@ -496,8 +500,8 @@ Prices: provider pages fetched 2026-11-11 (R§5), the owner's DeepL plan terms (
   - **Daily slices:** spending is recorded in the existing `ai_budget_daily` with feature `captions`, plus `inline-translate` with its own $20 default. A daily slice (monthly ÷ days remaining × 1.5) stops one day's spike from using the whole month.
   - **When reached:** new jobs go to `waiting_budget` with the en/ar message "Busy right now; your subtitles will start within 24 h". Reserved minutes aren't charged while waiting. An admin alert goes through the cost-monitoring hooks (AUN-COST).
 - **DeepL jobs** (high-accuracy STT, DeepL translation) use their own per-provider monthly cap (§10). On a tier that includes them, they use **caption minutes at 30×** (DeepL Voice STT) and **20×** (DeepL translation), matching their cost ratio to the default.
-- **What bounds exposure:** the sum of all plan allowances. If 2,000 free channels each used all 60 minutes, that's 120,000 caption minutes ≈ $58 a month.
-- **Add-ons:** paid packs priced at ≥ 6× the default-stack cost make extra volume self-funding.
+- **What bounds exposure:** the sum of all plan allowances and grants. For planning, 120,000 caption minutes a month ≈ $58 on the default stack.
+- **Add-ons:** pricing comes from the site-wide subscription plan (pending). Any price at or above cost (above) makes extra volume self-funding.
 - **Revisit:** when monthly usage passes 5,000 h, revisit the self-hosted GPU option from the 2025 research doc.
 
 ## 8. Glossary and terminology
@@ -666,9 +670,9 @@ Every phase ships behind an environment flag. Tests go into the release E2E suit
 |---|---|---|
 | O1 | ElevenLabs key: which plan do we have, and may we measure Scribe on the same clips (a few cents)? | Yes; it becomes an option only if it beats DeepL Voice on Arabic and Quran |
 | O2 | DeepL plan | **Decided 2026-11-11 (2/13):** stay on API Pro ($5.49/month), no upgrade. DeepL is optional and off by default; admins enable it per environment or language. Add the key to Secrets Store as `AI_KEY_DEEPL` when an admin first enables it |
-| O3 | Caption-minute allowances per tier (§6.1 seeds) and pack prices (§6.3) | Accept the seeds; admins can edit them |
+| O3 | Caption allowances and pack pricing | **Decided 3/13:** set by the site-wide subscription plan (pending, planned with all subscriptions on the site). Until then, captions are available by admin grant only |
 | O4 | Captions monthly budget | $100/month (≈ 1,700 h on the default stack), inline translation $20 |
-| O5 | Inline title translation free with fair use, or metered | Free with fair use (§6.4) |
+| O5 | Inline title translation: free with fair use, or metered | Part of the site-wide subscription plan (3/13). Recommendation: free with a fair-use cap; admin grants until then |
 | O6 | Viewer-side machine-translated titles (labelled, cached, never overwriting) | Yes, after P3, opt-out per channel |
 | O7 | Default Quran translation edition per language (QF `translations` ids) | en: Saheeh International (QF id to confirm with production scopes); ar: the Uthmani text itself |
 | O8 | Extract the CMS provider layer into a shared package now, or mirror it | Mirror in P0–P2, extract once both use it |
