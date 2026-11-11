@@ -101,8 +101,8 @@ export async function startSignIn(page: Page, locale: Locale): Promise<void> {
 /**
  * Waits until the web app has finished the navigations it makes on its own after
  * the OAuth callback: /api/callback redirects to the start page (or, for a new
- * user, /<locale>/profile/create) with ?session_updated=true, and the client then
- * drops that parameter once it has hydrated. A page.goto before that is
+ * user, /<locale>/profile/create) with ?session_updated=true; on any other page the
+ * client then drops that parameter once it has hydrated. A page.goto before that is
  * "interrupted by another navigation" (WebKit, Firefox) or lands on a page the
  * redirect replaces. Every sign-in helper ends here, so specs never wait for it.
  */
@@ -112,7 +112,10 @@ export async function settleSignIn(page: Page, locale: Locale, timeout = 45000):
     .poll(
       () => {
         const url = new URL(page.url());
-        return url.origin === web && url.pathname.startsWith(`/${locale}`) && !url.searchParams.has('session_updated');
+        if (url.origin !== web || !url.pathname.startsWith(`/${locale}`)) return false;
+        // A new user's /profile/create keeps the parameter (nothing there drops it): that page is
+        // where the chain ends. Anywhere else the client drops it once it has hydrated.
+        return url.pathname.startsWith(`/${locale}/profile/create`) || !url.searchParams.has('session_updated');
       },
       { message: `the web app did not settle after sign-in (at ${page.url()})`, timeout },
     )

@@ -21,9 +21,16 @@ export async function skipUntilStudioDeployed(): Promise<void> {
  * from a settled page. The post-sign-up redirect itself is waited for by
  * signUpOnWeb (web-session.ts settleSignIn).
  */
-export async function settleSession(page: Page, locale: Locale = 'en'): Promise<void> {
-  await page.goto(`${target().web}/${locale}`);
-  await expect(menuTrigger(page)).toBeVisible({ timeout: 45000 });
+export async function settleSession(page: Page, locale: Locale = 'en', channelId?: string): Promise<void> {
+  // A channel made through the API reaches the web session when the header (re)loads the
+  // session's channels on a page load; Studio's /studio/go resolves from the session
+  const sessionChannel = () =>
+    page.evaluate(async () => ((await (await fetch('/api/auth/token', { credentials: 'same-origin' })).json()) as { channelId?: string | null }).channelId ?? null);
+  await expect(async () => {
+    await page.goto(`${target().web}/${locale}`);
+    await expect(menuTrigger(page)).toBeVisible({ timeout: 30000 });
+    if (channelId) await expect.poll(sessionChannel, { message: 'the new channel is not in the web session yet', timeout: 10000 }).toBe(channelId);
+  }).toPass({ timeout: 90000 });
 }
 
 export async function studioOwner(page: Page, prefix: string, locale: Locale = 'en'): Promise<{ user: WebUser; channelId: string }> {
@@ -40,7 +47,7 @@ export async function studioOwner(page: Page, prefix: string, locale: Locale = '
   expect(res.status, `POST /api/channels: ${text}`).toBeLessThan(300);
   const channelId = (JSON.parse(text) as { result?: { channel?: { id?: string } } }).result?.channel?.id;
   expect(channelId, 'channel create returned no id').toBeTruthy();
-  await settleSession(page, locale);
+  await settleSession(page, locale, channelId as string);
   return { user, channelId: channelId as string };
 }
 
