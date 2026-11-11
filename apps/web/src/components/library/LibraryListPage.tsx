@@ -2,7 +2,9 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import Link from '@/components/common/AppLink';
-import { ArrowDown, ArrowUp, Bookmark, Clock, ThumbsUp, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Bookmark, Clock, Play, ThumbsUp, Trash2 } from 'lucide-react';
+import { watchHref } from '@/lib/playlists/playback';
+import { storedIndexOf } from '@/lib/playlists/playlist-utils';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { LibraryService, type LibraryVideo, type SavedPost } from '@/services/api/library';
@@ -36,6 +38,9 @@ export function LibraryListPage({ kind, dir }: Props) {
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [loadingMore, setLoadingMore] = useState(false);
   const [message, setMessage] = useState('');
+  // Watch later's stored order (its URL indexes); Liked is played newest first, as listed
+  const [storedIds, setStoredIds] = useState<string[] | null>(null);
+  const listAlias = kind === 'watch-later' ? 'WL' : kind === 'liked' ? 'LL' : null;
 
   const fetchPage = useCallback(
     (next: string | null) => {
@@ -56,6 +61,7 @@ export function LibraryListPage({ kind, dir }: Props) {
     setItems(page.items as Item[]);
     setCursor(page.nextCursor);
     setTotal(page.total);
+    setStoredIds('videoIds' in page && Array.isArray(page.videoIds) ? page.videoIds : null);
     setStatus('ready');
   }, [fetchPage]);
 
@@ -147,6 +153,18 @@ export function LibraryListPage({ kind, dir }: Props) {
         )}
       </h1>
 
+      {listAlias && status === 'ready' && items.length > 0 && (
+        // Plays the whole list in place, starting with its first video (docs/specs/PLAYLIST-PLAYBACK.md)
+        <Link
+          href={watchHref(lang, items[0].id, { list: listAlias, index: storedIndexOf(storedIds, items[0].id, 0) })}
+          data-testid="library-play-all"
+          className="mb-6 inline-flex items-center gap-2 rounded-lg bg-[var(--fanous-color-primary)] px-4 py-2 font-medium text-[var(--fanous-color-on-primary)] hover:bg-[var(--fanous-color-primary-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fanous-color-focus-ring)]"
+        >
+          <Play className="h-4 w-4 rtl:-scale-x-100" aria-hidden="true" />
+          {t.playlist.playAll}
+        </Link>
+      )}
+
       <p className="sr-only" role="status" aria-live="polite">{message}</p>
 
       {status === 'loading' ? (
@@ -179,6 +197,7 @@ export function LibraryListPage({ kind, dir }: Props) {
             <li key={video.id} className="flex flex-col gap-2" data-testid="library-list-item" data-video-id={video.id}>
               <LibraryVideoTile
                 video={video as unknown as LibraryTileVideo}
+                href={listAlias ? watchHref(lang, video.id, { list: listAlias, index: storedIndexOf(storedIds, video.id, index) }) : undefined}
                 subtitle={video.likedAt ? fillTemplate(texts.likedOn, { date: new Date(video.likedAt).toLocaleDateString(lang) }) : undefined}
               />
               {kind === 'watch-later' && (

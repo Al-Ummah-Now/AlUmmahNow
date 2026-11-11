@@ -36,13 +36,25 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (!url) return json({ error: 'Missing url parameter' }, 400);
 
   const origin = requestOrigin(request);
-  const ref = parseContentUrl(url, new URL(origin).host);
+  let ref = parseContentUrl(url, new URL(origin).host);
   if (!ref) return json({ error: 'URL not recognised' }, 404);
 
   let size = fitSize(searchParams.get('maxwidth'), searchParams.get('maxheight'));
   let content: OEmbedContent | null = null;
 
-  if (ref.kind === 'video') {
+  // A video inside a public playlist embeds the playlist, starting at that video (PLAYLIST-PLAYBACK.md 2.5)
+  if (ref.kind === 'video' && ref.list) {
+    const playlist = await loadPublicPlaylist(ref.list);
+    const at = playlist ? playlist.videos.findIndex((v) => v.id === ref.id) : -1;
+    if (playlist && at >= 0) {
+      ref = { kind: 'playlist', id: playlist.id, index: at };
+      content = { title: playlist.title, authorName: playlist.channelName || undefined, thumbnailUrl: playlist.videos[at].poster };
+    }
+  }
+
+  if (content) {
+    logger.debug('[oembed] Video in a playlist: playlist embed', { playlistId: ref.id, index: ref.index });
+  } else if (ref.kind === 'video') {
     const video = await loadPublicVideo(ref.id);
     if (video) {
       // the video's own ratio (a Short is 9:16), not always 16:9

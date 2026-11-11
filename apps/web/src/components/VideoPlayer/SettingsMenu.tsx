@@ -10,7 +10,9 @@
 import { createElement, useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import type { Player } from 'video.js';
-import { AudioLines, Captions, Check, ChevronLeft, ChevronRight, Gauge, Keyboard, SlidersHorizontal, Type, type LucideIcon } from 'lucide-react';
+import { AudioLines, Captions, Check, ChevronLeft, ChevronRight, Gauge, Keyboard, ListVideo, SlidersHorizontal, Type, type LucideIcon } from 'lucide-react';
+import { getPlayerUi } from '@/lib/video/player-ui';
+import { readAutoplayNext, writeAutoplayNext } from '@/lib/playlists/playback';
 import { SETTINGS_TOGGLE_EVENT } from '@/lib/video/components';
 import { PLAYER_LAYER_ATTR } from '@/lib/video/player-layer';
 import { isLivePlayback } from '@/lib/video/live-state';
@@ -364,6 +366,23 @@ export function SettingsMenu({ player, lang, onShowShortcuts }: SettingsMenuProp
             {r.id !== 'shortcuts' && <span className="vjs-fanous-mi-end" aria-hidden="true">{dir === 'rtl' ? <ChevronLeft /> : <ChevronRight />}</span>}
           </button>
         ))}
+        {panel === 'root' && getPlayerUi().theatreAvailable && (
+          // Watch page only (embeds and previews have no up next): the next video starts on its own (D8)
+          <button
+            type="button"
+            role="menuitemcheckbox"
+            aria-checked={readAutoplayNext()}
+            className="vjs-fanous-mi vjs-fanous-mi-row"
+            data-row="autoplay-next"
+            data-testid="player-autoplay-next"
+            tabIndex={-1}
+            onClick={() => { writeAutoplayNext(!readAutoplayNext()); refresh(); }}
+          >
+            <span className="vjs-fanous-mi-icon" aria-hidden="true"><ListVideo /></span>
+            <span className="vjs-fanous-mi-label">{t.chrome.autoplayNext}</span>
+            <span className="vjs-fanous-mi-end vjs-fanous-mi-check" aria-hidden="true">{readAutoplayNext() && <Check />}</span>
+          </button>
+        )}
         {panel === 'quality' && sub(t.controls.quality, qualities, qualityId, (id) => selectQuality(levels, id))}
         {panel === 'speed' && sub(t.controls.speed, speedOptions(rates, t.speed.normal), String(p.playbackRate()), (id) => p.playbackRate(Number(id)))}
         {panel === 'captions' && sub(t.controls.captions, captions, captionId, (id) => selectCaption(text, id), captionStyle?.open ? { label: t.chrome.captionStyle, run: () => captionStyle.open?.() } : undefined)}

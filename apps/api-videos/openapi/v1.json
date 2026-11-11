@@ -19522,6 +19522,118 @@
         }
       }
     },
+    "/api/v1/playlists/{id}/queue": {
+      "get": {
+        "tags": [
+          "Playlists"
+        ],
+        "summary": "Playback queue of a playlist, Watch later (WL) or Liked videos (LL), in its saved order",
+        "operationId": "get_PlaylistQueue",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Playlist id, or WL / LL for the caller's Watch later / Liked videos"
+            },
+            "required": true,
+            "description": "Playlist id, or WL / LL for the caller's Watch later / Liked videos",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "The playing video: the first page is a window around it"
+            },
+            "required": false,
+            "description": "The playing video: the first page is a window around it",
+            "name": "video",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0,
+              "description": "The video's place in the list from the URL (0-based); picks the occurrence and the next item when the video left the list"
+            },
+            "required": false,
+            "description": "The video's place in the list from the URL (0-based); picks the occurrence and the next item when the video left the list",
+            "name": "index",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0,
+              "description": "Explicit page start (visible position)"
+            },
+            "required": false,
+            "description": "Explicit page start (visible position)",
+            "name": "offset",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Channel ID"
+            },
+            "required": false,
+            "description": "Channel ID",
+            "name": "channelId",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The queue page: playlist summary, total, the video's position and items in order"
+          },
+          "404": {
+            "description": "Not found, or not visible to the caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/playlists/{id}/videos": {
       "post": {
         "tags": [

@@ -155,6 +155,18 @@ export async function listLikedIds(
 	};
 }
 
+/**
+ * Every liked video id, newest like first, for the playback queue (`list=LL`).
+ * Bounded like Watch later.
+ */
+export async function listAllLikedIds(db: D1Database, userId: string, max = WATCH_LATER_MAX_ITEMS): Promise<string[]> {
+	const { results } = await db
+		.prepare('SELECT video_id FROM liked_videos WHERE user_id = ? ORDER BY liked_at DESC, video_id DESC LIMIT ?')
+		.bind(userId, max)
+		.all<{ video_id: string }>();
+	return (results || []).map((r) => r.video_id);
+}
+
 // ---------------------------------------------------------------------------
 // Saved posts
 // ---------------------------------------------------------------------------

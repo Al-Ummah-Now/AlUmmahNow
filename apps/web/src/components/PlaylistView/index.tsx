@@ -9,6 +9,7 @@ import { pickLanguage } from '@/lib/format/pick-language';
 import { playlistDescription, playlistName } from '@/lib/playlists/playlist-names';
 import React, { useCallback, useEffect, useState } from 'react';
 import Link from '@/components/common/AppLink';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowDown, ArrowUp, ListVideo, Lock, Play, Trash2 } from 'lucide-react';
 import { getLocalizedValue } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -24,7 +25,7 @@ import {
   updatePlaylist,
   type PlaylistWithVideos,
 } from '@/lib/api/playlists';
-import { formatDuration, getPlayAllHref, getWatchHref, moveItem } from '@/lib/playlists/playlist-utils';
+import { formatDuration, getPlayAllHref, getWatchHref, moveItem, storedIndexOf } from '@/lib/playlists/playlist-utils';
 import type { VideoObject } from '@/interfaces';
 
 interface PlaylistViewProps {
@@ -65,6 +66,15 @@ export default function PlaylistView({ playlistId }: PlaylistViewProps) {
   }, [load]);
 
   const isOwner = !!user && !!playlist && playlist.userId === user.id;
+
+  // ?play=1 (a card's "Play all"): go on to the first video this viewer may watch, as the list
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const playRequested = searchParams?.get('play') === '1';
+  const startHref = playlist ? getPlayAllHref(lang, videos, playlist.id, playlist.videos) : null;
+  useEffect(() => {
+    if (playRequested && !loading && startHref) router.replace(startHref);
+  }, [playRequested, loading, startHref, router]);
 
   const handleMove = async (from: number, to: number) => {
     if (!playlist || busy) return;
@@ -147,7 +157,7 @@ export default function PlaylistView({ playlistId }: PlaylistViewProps) {
   }
 
   const title = playlistName(playlist, lang);
-  const playAllHref = getPlayAllHref(lang, videos);
+  const playAllHref = getPlayAllHref(lang, videos, playlist.id, playlist.videos);
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8" dir={isRTL ? 'rtl' : 'ltr'}>
@@ -186,6 +196,7 @@ export default function PlaylistView({ playlistId }: PlaylistViewProps) {
               {playAllHref && (
                 <Link
                   href={playAllHref}
+                  data-testid="playlist-play-all"
                   className="inline-flex w-full items-center justify-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors"
                 >
                   {/* Media icons never mirror in RTL: play points right in Arabic too */}
@@ -217,7 +228,7 @@ export default function PlaylistView({ playlistId }: PlaylistViewProps) {
                 return (
                   <li key={video.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/60">
                     <span className="w-6 text-center text-sm text-gray-500 flex-shrink-0">{index + 1}</span>
-                    <Link href={getWatchHref(lang, video.id)} className="flex flex-1 min-w-0 items-center gap-3 group">
+                    <Link href={getWatchHref(lang, video.id, { id: playlist.id, index: storedIndexOf(playlist.videos, video.id, index) })} className="flex flex-1 min-w-0 items-center gap-3 group" data-testid="playlist-video-link">
                       <div className="w-32 sm:w-40 flex-shrink-0 rounded overflow-hidden">
                         <VideoThumbnail src={video.thumbnailUrl} alt={videoTitle} sizes="160px" style={THUMBNAIL_16_9}>
                           {duration && (

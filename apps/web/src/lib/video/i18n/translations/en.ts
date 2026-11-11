@@ -143,6 +143,9 @@ export const EN_TRANSLATIONS: VideoPlayerTranslations = {
     backToVideo: 'Back to video',
     reportProblem: 'Report a problem',
     seekValue: '{current} of {total}',
+    tapToUnmute: 'Tap to unmute',
+    autoplayNext: 'Autoplay next',
+    replayPlaylist: 'Replay playlist',
   },
 
   quality: {
@@ -282,6 +285,7 @@ export const EN_TRANSLATIONS: VideoPlayerTranslations = {
   resume: {
     startOverButton: 'Start from beginning',
     resumingAt: 'Resuming at {time}',
+    resumeAtButton: 'Resume at {time}',
   },
 
   pluralization: {

@@ -6,7 +6,8 @@ import Link from '@/components/common/AppLink';
 import { PlaylistCover } from '@/components/PlaylistCover';
 import { Playlist } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
-import { getPlaylistDisplayName, getPlaylistVideoCount } from '@/lib/playlists/playlist-utils';
+import { getPlayAllEntryHref, getPlaylistDisplayName, getPlaylistVideoCount } from '@/lib/playlists/playlist-utils';
+import { PlayAllOverlay } from '@/components/PlaylistCover/PlayAllOverlay';
 import { RelativeDate } from '@/components/RelativeDate';
 
 export function PlaylistCard(playlist: Playlist) {
@@ -17,9 +18,10 @@ export function PlaylistCard(playlist: Playlist) {
   const count = getPlaylistVideoCount(playlist as Playlist & { videos?: unknown });
 
   return (
+    <div className="relative group">
     <Link
       href={`/${lang}/playlist/${playlist.id}`}
-      className="block group"
+      className="block"
       data-testid="playlist-card"
     >
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-all duration-300">
@@ -47,5 +49,7 @@ export function PlaylistCard(playlist: Playlist) {
         </div>
       </div>
     </Link>
+    {count > 0 && <PlayAllOverlay href={getPlayAllEntryHref(lang, playlist.id)} label={t.playlist.playAll} />}
+    </div>
   );
 }

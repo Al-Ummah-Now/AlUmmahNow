@@ -113,6 +113,7 @@ describe('snippets', () => {
     expect(embedUrl(HOST, 'playlist', 'p1')).toBe(`${HOST}/embed/p/p1`);
     expect(watchPageUrl(HOST, 'ar', 'v1', 90)).toBe(`${HOST}/ar/video/v1?t=90`);
     expect(watchPageUrl(HOST, 'en', 'v1', 0)).toBe(`${HOST}/en/video/v1`);
+    expect(watchPageUrl(HOST, 'en', 'v1', 30, { id: 'pl1', index: 2 })).toBe(`${HOST}/en/video/v1?list=pl1&index=2&t=30`);
     expect(oembedEndpointUrl(HOST, `${HOST}/en/video/v1`))
       .toBe(`${HOST}/oembed?url=${encodeURIComponent(`${HOST}/en/video/v1`)}&format=json`);
   });
@@ -199,6 +200,10 @@ describe('oEmbed', () => {
     [`${HOST}/embed/v/v1?start=30`, { kind: 'video', id: 'v1', start: 30 }],
     [`${HOST}/en/playlist/p1`, { kind: 'playlist', id: 'p1' }],
     [`${HOST}/embed/p/p1`, { kind: 'playlist', id: 'p1' }],
+    // A video in a public playlist keeps the list; the viewer's private aliases never do
+    [`${HOST}/en/video/v1?list=p1&index=2`, { kind: 'video', id: 'v1', list: 'p1' }],
+    [`${HOST}/en/video/v1?list=WL&index=2`, { kind: 'video', id: 'v1' }],
+    [`${HOST}/en/video/v1?list=LL`, { kind: 'video', id: 'v1' }],
   ])('recognises %s', (url, expected) => {
     expect(parseContentUrl(url, host)).toEqual(expected);
   });
@@ -213,6 +218,12 @@ describe('oEmbed', () => {
     'not a url',
   ])('refuses %s', (url) => {
     expect(parseContentUrl(url, host)).toBeNull();
+  });
+
+  it('a playlist embed starts at the given item', () => {
+    const doc = buildOEmbed(HOST, { kind: 'playlist', id: 'p1', index: 2 }, { width: 640, height: 360 }, { title: 'List' });
+    expect(doc.html).toContain('/embed/p/p1?index=2');
+    expect(doc.aun_playlist_id).toBe('p1');
   });
 
   it('fits 16:9 sizes within the limits', () => {

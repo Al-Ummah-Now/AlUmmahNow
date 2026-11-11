@@ -29,7 +29,7 @@ function formatDuration(seconds: number | undefined, locale: string): string | n
 }
 
 /** Compact video tile used by the Library hub and lists. */
-export function LibraryVideoTile({ video, subtitle, testId = 'library-video' }: { video: LibraryTileVideo; subtitle?: string; testId?: string }) {
+export function LibraryVideoTile({ video, subtitle, testId = 'library-video', href }: { video: LibraryTileVideo; subtitle?: string; testId?: string; href?: string }) {
   const { lang, t } = useLanguage();
   const percent =
     typeof video.percentWatched === 'number' && Number.isFinite(video.percentWatched)
@@ -39,7 +39,7 @@ export function LibraryVideoTile({ video, subtitle, testId = 'library-video' }: 
   const duration = formatDuration(video.duration, lang);
   return (
     <Link
-      href={`/${lang}/video?vid=${encodeURIComponent(video.id)}`}
+      href={href ?? `/${lang}/video/${encodeURIComponent(video.id)}`}
       data-testid={testId}
       data-video-id={video.id}
       className="group block rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"

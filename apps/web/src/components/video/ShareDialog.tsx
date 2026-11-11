@@ -34,6 +34,8 @@ export interface ShareDialogProps {
   lang: 'en' | 'ar';
   /** Current playback position in seconds (read when the dialog opens) */
   getCurrentTime: () => number;
+  /** The public playlist playing (shared with the link); never the viewer's WL / LL */
+  list?: { id: string; index: number | null } | null;
 }
 
 type SizeChoice = number | 'responsive';
@@ -64,7 +66,7 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
-export default function ShareDialog({ videoId, title, lang, getCurrentTime }: ShareDialogProps) {
+export default function ShareDialog({ videoId, title, lang, getCurrentTime, list }: ShareDialogProps) {
   const s = embedStrings(lang);
   const [open, setOpen] = useState(false);
   const [time, setTime] = useState(0);
@@ -74,7 +76,7 @@ export default function ShareDialog({ videoId, title, lang, getCurrentTime }: Sh
 
   const origin = typeof window === 'undefined' ? '' : window.location.origin;
   const start = atTime && time >= 1 ? Math.floor(time) : 0;
-  const link = origin ? watchPageUrl(origin, lang, videoId, start) : '';
+  const link = origin ? watchPageUrl(origin, lang, videoId, start, list) : '';
   const snippet = useMemo(() => {
     if (!origin) return '';
     const src = embedUrl(origin, 'video', videoId, { start, lang });

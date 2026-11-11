@@ -181,6 +181,12 @@ export interface VideoPlayerTranslations {
     reportProblem: string;
     /** Seek slider value, "{current} of {total}" */
     seekValue: string;
+    /** Shown over a playlist video that had to start muted (browser autoplay policy) */
+    tapToUnmute: string;
+    /** Settings menu toggle: the next video starts on its own after the countdown */
+    autoplayNext: string;
+    /** End of a playlist: start it again from the first video */
+    replayPlaylist: string;
   };
 
   /**
@@ -277,6 +283,8 @@ export interface VideoPlayerTranslations {
     startOverButton: string;
     /** Polite announcement when the player opens at a saved position; {time} = m:ss */
     resumingAt: string;
+    /** Playlist items start at 0 and offer the saved position instead; {time} = m:ss */
+    resumeAtButton: string;
   };
 }
 

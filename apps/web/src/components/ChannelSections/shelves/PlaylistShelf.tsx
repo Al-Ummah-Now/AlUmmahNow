@@ -7,6 +7,8 @@ import { playlistName } from '@/lib/playlists/playlist-names';
 import { useLanguage } from '@/hooks/useLanguage';
 import { Shelf } from './Shelf';
 import type { SectionPlaylist } from '../sectionData';
+import { PlayAllOverlay } from '@/components/PlaylistCover/PlayAllOverlay';
+import { getPlayAllEntryHref } from '@/lib/playlists/playlist-utils';
 
 /** Playlists as cover cards linking to the playlist page */
 export function PlaylistShelf({ playlists }: { playlists: SectionPlaylist[] }) {
@@ -21,6 +23,7 @@ export function PlaylistShelf({ playlists }: { playlists: SectionPlaylist[] }) {
         const name = playlistName(playlist, locale);
         const count = playlist.videosCount ?? playlist.videos?.length ?? 0;
         return (
+          <div className="relative">
           <Link
             href={`/${locale}/playlist/${playlist.id}`}
             data-testid="section-playlist-card"
@@ -40,6 +43,8 @@ export function PlaylistShelf({ playlists }: { playlists: SectionPlaylist[] }) {
               )}
             </div>
           </Link>
+          {count > 0 && <PlayAllOverlay href={getPlayAllEntryHref(locale, playlist.id)} label={t.playlist.playAll} />}
+          </div>
         );
       }}
     />

@@ -23,6 +23,8 @@ export const IFRAME_ALLOW = 'autoplay; fullscreen; picture-in-picture; encrypted
 
 export interface EmbedUrlOptions {
   start?: number;
+  /** Playlist embeds: the item to start with (0-based) */
+  index?: number;
   autoplay?: boolean;
   lang?: EmbedLang;
 }
@@ -34,13 +36,22 @@ function trimHost(host: string): string {
 export function embedUrl(host: string, kind: EmbedKind, id: string, options: EmbedUrlOptions = {}): string {
   const url = new URL(`${trimHost(host)}/embed/${kind === 'video' ? 'v' : 'p'}/${encodeURIComponent(id)}`);
   if (options.start && options.start > 0) url.searchParams.set('start', String(Math.floor(options.start)));
+  if (kind === 'playlist' && options.index && options.index > 0) url.searchParams.set('index', String(Math.floor(options.index)));
   if (options.autoplay) url.searchParams.set('autoplay', '1');
   if (options.lang === 'ar') url.searchParams.set('lang', 'ar');
   return url.toString();
 }
 
-export function watchPageUrl(host: string, locale: string, videoId: string, startSeconds?: number): string {
+/**
+ * Watch page URL. `list` keeps a public playlist with the shared video (docs/specs/PLAYLIST-PLAYBACK.md
+ * section 2.4); callers drop the viewer's private aliases (WL / LL) before passing one.
+ */
+export function watchPageUrl(host: string, locale: string, videoId: string, startSeconds?: number, list?: { id: string; index: number | null } | null): string {
   const url = new URL(`${trimHost(host)}/${locale}/video/${encodeURIComponent(videoId)}`);
+  if (list?.id) {
+    url.searchParams.set('list', list.id);
+    if (list.index != null && list.index >= 0) url.searchParams.set('index', String(list.index));
+  }
   if (startSeconds && startSeconds > 0) url.searchParams.set('t', String(Math.floor(startSeconds)));
   return url.toString();
 }

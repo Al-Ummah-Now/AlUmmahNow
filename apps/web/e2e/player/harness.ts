@@ -88,6 +88,9 @@ export interface HarnessOptions {
   siteTheme?: boolean;
   /** Titles of the three fixture chapters */
   chapterTitles?: [string, string, string];
+  /** Playlist playback: the list in the URL (its queue is served by the spec) and the item's index */
+  list?: string;
+  index?: number;
 }
 
 const THEMES_CSS = path.resolve(__dirname, '../../../../packages/fanous-tokens/generated-player');
@@ -171,6 +174,8 @@ export async function openHarness(page: Page, opts: HarnessOptions = {}): Promis
   q.set('src', opts.src ?? 'bright');
   if (opts.watch === false) q.set('watch', '0');
   if (opts.width) q.set('width', String(opts.width));
+  if (opts.list) q.set('list', opts.list);
+  if (opts.index !== undefined) q.set('index', String(opts.index));
   await page.goto(`/${opts.lang ?? 'en'}/dev/player?${q}`);
   // The site theme picks the page fonts (theme/fonts.css), which the player's layers inherit. The
   // server renders its own theme and the page sets it again once loaded, so this one is kept pinned.

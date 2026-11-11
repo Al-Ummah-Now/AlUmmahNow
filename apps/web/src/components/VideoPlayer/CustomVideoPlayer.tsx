@@ -65,7 +65,7 @@ import {
   setupFullscreenPiP,
   lockOrientationLandscape
 } from '@/lib/video/fullscreen-pip';
-import { initializeVolumeControls } from '@/lib/video/volume-control';
+import { applySavedVolume, initializeVolumeControls, markAutoMuted } from '@/lib/video/volume-control';
 import { setupKeyboardShortcuts } from '@/lib/video/keyboard-shortcuts';
 import { setupMobileTouchControls, isMobileDevice } from '@/lib/video/mobile-touch';
 import { showGestureHintOnce } from '@/lib/video/gesture-hint';
@@ -74,7 +74,8 @@ import { createPerformanceMonitor } from '@/lib/video/performance-monitor';
 import { ErrorDisplay } from './ErrorDisplay';
 import { SettingsMenu } from './SettingsMenu';
 import { ProgressTooltip } from './ProgressTooltip';
-import { EndScreen, MiniPlayerButtons } from './PlayerOverlays';
+import { AUTO_ADVANCE_SECONDS, EndScreen, MiniPlayerButtons } from './PlayerOverlays';
+import { readAutoplayNext } from '@/lib/playlists/playback';
 import { getPlayerUi, subscribePlayerUi } from '@/lib/video/player-ui';
 import { keepFrameInView, stickyTopInset } from '@/lib/video/theatre-scroll';
 import { MINI_ENTER_BELOW, MINI_LEAVE_ABOVE, nextMini } from '@/lib/video/mini-player';
@@ -85,7 +86,7 @@ import { setupTouchFeedback } from '@/lib/touch/touch-feedback';
 import { useVideoPlayerI18n } from '@/lib/video/i18n';
 import { useVideoWebSocket } from '@/hooks/useVideoWebSocket';
 import { useWatchProgress } from '@/hooks/useWatchProgress';
-import { formatResumeTime, resumePosition, startOverStillRelevant } from '@/lib/video/resume';
+import { START_OVER_GRACE_SECONDS, formatResumeTime, resumePosition, startOverStillRelevant } from '@/lib/video/resume';
 import '@/theme/player-themes.css';
 import '@/styles/video-player.css';
 import '@/styles/player-skin.css';
@@ -136,6 +137,14 @@ export interface CustomVideoPlayerProps {
   muted?: boolean;
   /** Playback surface sent with analytics batches (embeds tag source/origin) */
   analyticsContext?: AnalyticsContext;
+  /**
+   * The page asks for playback to start once loaded (playlist playback, an in-app advance;
+   * docs/specs/PLAYLIST-PLAYBACK.md section 4.1). Unmuted first; when the browser refuses
+   * (NotAllowedError) it plays muted with a "Tap to unmute" button.
+   */
+  autoplayIntent?: boolean;
+  /** Inside a playlist: start at 0 and offer the saved position ("Resume at") instead of seeking */
+  offerResume?: boolean;
 }
 
 /**
@@ -164,6 +173,8 @@ export default function CustomVideoPlayer({
   startTime,
   muted,
   analyticsContext,
+  autoplayIntent = false,
+  offerResume = false,
 }: CustomVideoPlayerProps) {
   const { t, dir } = useVideoPlayerI18n(lang);
   const playerRef = useRef<Player | null>(null);
@@ -192,6 +203,9 @@ export default function CustomVideoPlayer({
   const playerUi = useSyncExternalStore(subscribePlayerUi, getPlayerUi, getPlayerUi);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isKeyboardHelpOpen, setIsKeyboardHelpOpen] = useState(false);
+  // Autoplay's muted fallback is on: the "Tap to unmute" button shows
+  const [mutedAutoplay, setMutedAutoplay] = useState(false);
+  const autoplayIntentRef = useRef(autoplayIntent);
   const touchFeedbackCleanupRef = useRef<(() => void) | null>(null);
 
   // Phase 3: Advanced analytics state tracking
@@ -235,6 +249,8 @@ export default function CustomVideoPlayer({
   const [resumeAt, setResumeAt] = useState<number | null>(null);
   const [showStartOver, setShowStartOver] = useState(false);
   const [resumeAnnouncement, setResumeAnnouncement] = useState('');
+  // Inside a playlist the saved position is offered, not jumped to (D12)
+  const [resumeOffer, setResumeOffer] = useState<number | null>(null);
   const resumeDecidedForRef = useRef<string | null>(null);
   useEffect(() => {
     if (!playerReady || !loadedProgress || loadedProgress.videoId !== videoId) return;
@@ -244,6 +260,10 @@ export default function CustomVideoPlayer({
     if (!player || (startTime && startTime > 0)) return;
     const position = resumePosition(loadedProgress, isLive, isShort);
     if (position === null) return;
+    if (offerResume) {
+      setResumeOffer(position);
+      return;
+    }
 
     const seekToResume = () => {
       try {
@@ -273,7 +293,59 @@ export default function CustomVideoPlayer({
     const needed = viaMse ? 2 : 1;
     if ((player.readyState?.() ?? 0) >= needed) seekToResume();
     else player.one(viaMse ? 'loadeddata' : 'loadedmetadata', seekToResume);
-  }, [playerReady, loadedProgress, videoId, isLive, isShort, startTime, t]);
+  }, [playerReady, loadedProgress, videoId, isLive, isShort, startTime, t, offerResume]);
+
+  // The offer goes once the viewer is well into the video (or took it)
+  useEffect(() => {
+    const player = playerRef.current;
+    if (resumeOffer === null || !player) return undefined;
+    const onTimeUpdate = () => {
+      let time: number;
+      try {
+        time = player.currentTime() ?? 0;
+      } catch {
+        return;
+      }
+      if (time > START_OVER_GRACE_SECONDS) setResumeOffer(null);
+    };
+    player.on('timeupdate', onTimeUpdate);
+    return () => {
+      player.off('timeupdate', onTimeUpdate);
+    };
+  }, [resumeOffer]);
+
+  const handleTakeResume = useCallback(() => {
+    const player = playerRef.current;
+    const at = resumeOffer;
+    setResumeOffer(null);
+    if (!player || at === null) return;
+    player.currentTime(at);
+    if (player.paused()) void Promise.resolve(player.play()).catch(() => undefined);
+    (player.el() as HTMLElement | null)?.focus?.();
+  }, [resumeOffer]);
+
+  // The muted fallback ends when the viewer turns the sound on (button, key or volume control)
+  useEffect(() => {
+    const player = playerRef.current as ExtendedPlayer | null;
+    if (!mutedAutoplay || !player) return undefined;
+    const onVolume = () => {
+      if (!player.muted()) setMutedAutoplay(false);
+    };
+    player.on('volumechange', onVolume);
+    return () => {
+      player.off('volumechange', onVolume);
+    };
+  }, [mutedAutoplay]);
+
+  const handleUnmute = useCallback(() => {
+    const player = playerRef.current as ExtendedPlayer | null;
+    setMutedAutoplay(false);
+    if (!player) return;
+    markAutoMuted(player, false);
+    player.muted(false);
+    if (player.volume() === 0) player.volume(0.7);
+    (player.el() as HTMLElement | null)?.focus?.();
+  }, []);
 
   // The pill goes once playback is well past the resume point or back at 0
   useEffect(() => {
@@ -545,7 +617,30 @@ export default function CustomVideoPlayer({
         // Phase 2.5: Initialize volume controls
         volumeControlsCleanupRef.current = initializeVolumeControls(player, lang);
         // Muted start wins over the remembered volume (browsers only autoplay muted)
-        if (muted) (player as ExtendedPlayer).muted(true);
+        if (muted) {
+          markAutoMuted(player, true);
+          (player as ExtendedPlayer).muted(true);
+        }
+
+        // The page asked for playback (a playlist, an in-app advance): unmuted first, as the
+        // viewer's earlier gesture in this document allows; muted when the browser refuses
+        if (autoplayIntentRef.current) {
+          const extended = player as ExtendedPlayer;
+          const attempt = () => Promise.resolve(extended.play());
+          attempt().catch((error: unknown) => {
+            if ((error as { name?: string } | null)?.name !== 'NotAllowedError' || extended.isDisposed()) return;
+            logger.debug('[CustomVideoPlayer] Unmuted autoplay refused; playing muted', { videoId });
+            markAutoMuted(extended, true);
+            extended.muted(true);
+            attempt()
+              .then(() => { if (!extended.isDisposed()) setMutedAutoplay(true); })
+              .catch(() => {
+                // Even muted play was refused: the big play button stays, and the viewer's sound comes back
+                markAutoMuted(extended, false);
+                if (!extended.isDisposed()) applySavedVolume(extended);
+              });
+          });
+        }
 
         // Start position: applied once the duration is known (seeking earlier is ignored)
         if (startTime && startTime > 0) {
@@ -1110,7 +1205,44 @@ export default function CustomVideoPlayer({
           </button>
         )}
 
-        {ended && <EndScreen upNext={playerUi.upNext} onReplay={replay} t={t} dir={dir === 'rtl' ? 'rtl' : 'ltr'} />}
+        {resumeOffer !== null && !showStartOver && (
+          <button
+            type="button"
+            className="vjs-start-over"
+            data-testid="player-resume-offer"
+            onClick={handleTakeResume}
+          >
+            <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="16" height="16" className="vjs-start-over-icon">
+              <path fill="currentColor" d="M8 5v14l11-7z" />
+            </svg>
+            <span>{t.resume.resumeAtButton.replace('{time}', formatResumeTime(resumeOffer))}</span>
+          </button>
+        )}
+
+        {mutedAutoplay && !ended && (
+          <button
+            type="button"
+            className="vjs-tap-unmute"
+            data-testid="player-tap-unmute"
+            onClick={handleUnmute}
+          >
+            <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M11 5L6 9H2v6h4l5 4V5zM23 9l-6 6M17 9l6 6" />
+            </svg>
+            <span>{t.chrome.tapToUnmute}</span>
+          </button>
+        )}
+
+        {ended && (
+          <EndScreen
+            upNext={playerUi.upNext}
+            onReplay={replay}
+            onReplayList={playerUi.replayList ?? undefined}
+            t={t}
+            dir={dir === 'rtl' ? 'rtl' : 'ltr'}
+            autoAdvanceSeconds={readAutoplayNext() ? AUTO_ADVANCE_SECONDS : 0}
+          />
+        )}
         {mini && <MiniPlayerButtons onClose={closeMini} onReturn={returnFromMini} t={t} />}
 
         {/* Real-time viewer count (WebSocket) */}

@@ -25,7 +25,11 @@ const startEdge = (b: Box, dir: 'ltr' | 'rtl') => (dir === 'ltr' ? b.x : b.right
 const count = (end: Locator) => end.locator('.vjs-fanous-next-count');
 const seconds = async (end: Locator) => Number(await count(end).textContent());
 
-async function reachEnd(page: Page, player: Locator) {
+/**
+ * Seeks to the end and waits for the end screen. The countdown is 3 s (docs/specs/PLAYLIST-PLAYBACK.md
+ * D7), so `hold` (the default, for measurements) rests the pointer on the card at once, which pauses it.
+ */
+async function reachEnd(page: Page, player: Locator, { hold = true }: { hold?: boolean } = {}) {
   if (!/vjs-has-started/.test((await player.getAttribute('class')) ?? '')) await startPlayback(page, player);
   await page.mouse.move(1, 1);
   await page.evaluate(() => {
@@ -34,6 +38,8 @@ async function reachEnd(page: Page, player: Locator) {
   });
   const end = page.getByTestId('player-end-screen');
   await expect(end).toBeVisible({ timeout: 20_000 });
+  const thumb = page.getByTestId('player-next-thumb');
+  if (hold && (await thumb.count()) > 0) await thumb.hover();
   return end;
 }
 
@@ -183,7 +189,7 @@ for (const dpr of [1, 2]) {
         expect(luminance(shot.at(4, 4)), 'scrim darkens the bright last frame').toBeLessThan(0.2);
         // Play now carries the ring with the seconds left, centred in it
         await expect(end.getByTestId('player-next-ring')).toBeVisible();
-        await expect(count(end)).toHaveText(/^[1-8]$/);
+        await expect(count(end)).toHaveText(/^[1-3]$/);
         await expect(end.getByTestId('player-cancel-next')).toBeVisible();
         await freeze(page);
         const ring = await layoutBox(end.getByTestId('player-next-ring'));
@@ -217,24 +223,36 @@ for (const dpr of [1, 2]) {
 test.describe('end screen behaviour', () => {
   test('moves focus to Play now and announces the countdown once', async ({ page }) => {
     const player = await openHarness(page, { src: 'dark' });
-    const end = await reachEnd(page, player);
+    const end = await reachEnd(page, player, { hold: false });
     await expect(end.getByTestId('player-play-next')).toBeFocused();
     const status = end.getByRole('status');
-    await expect(status).toHaveText('Next video in 8 seconds');
+    await expect(status).toHaveText('Next video in 3 seconds');
     const first = await seconds(end);
-    await expect.poll(() => seconds(end), { timeout: 4_000 }).toBeLessThan(first);
-    await expect(status).toHaveText('Next video in 8 seconds');
+    await expect.poll(() => seconds(end), { timeout: 3_000 }).toBeLessThan(first);
+    await expect(status).toHaveText('Next video in 3 seconds');
   });
 
-  test('counts down and plays the next video on its own', async ({ page }) => {
+  test('counts down, then the next video loads and plays on its own', async ({ page }) => {
     const player = await openHarness(page, { src: 'dark' });
-    await reachEnd(page, player);
-    await expect(page).toHaveURL(/src=bright/, { timeout: 12_000 });
+    await reachEnd(page, player, { hold: false });
+    await expect(page).toHaveURL(/src=bright/, { timeout: 8_000 });
+    // The advance asked the next page to play: its media time moves without a press
+    await expect.poll(() => page.evaluate(() => document.querySelector<HTMLVideoElement>('.video-js video')?.currentTime ?? 0), { timeout: 30_000 }).toBeGreaterThan(0.5);
+  });
+
+  test('Autoplay next off: no countdown, the screen waits for Play now', async ({ page }) => {
+    await page.addInitScript(() => window.localStorage.setItem('aun.player.autoplayNext', '0'));
+    const player = await openHarness(page, { src: 'dark' });
+    const end = await reachEnd(page, player, { hold: false });
+    await expect(count(end)).toHaveCount(0);
+    await page.waitForTimeout(4_000);
+    await expect(page).toHaveURL(/src=dark/);
+    await expect(end.getByTestId('player-play-next')).toBeVisible();
   });
 
   test('pauses while the pointer is on the card and resumes when it leaves', async ({ page }) => {
     const player = await openHarness(page, { src: 'dark' });
-    const end = await reachEnd(page, player);
+    const end = await reachEnd(page, player, { hold: false });
     await page.getByTestId('player-next-thumb').hover();
     const held = await seconds(end);
     await page.waitForTimeout(2_000);
@@ -246,12 +264,12 @@ test.describe('end screen behaviour', () => {
   for (const how of ['Tab', 'Escape', 'Cancel'] as const) {
     test(`${how} stops the countdown and leaves the screen in place`, async ({ page }) => {
       const player = await openHarness(page, { src: 'dark' });
-      const end = await reachEnd(page, player);
+      const end = await reachEnd(page, player, { hold: false });
       if (how === 'Cancel') await end.getByTestId('player-cancel-next').click();
       else await page.keyboard.press(how);
       await expect(count(end)).toHaveCount(0);
       await expect(end.getByTestId('player-cancel-next')).toHaveCount(0);
-      await page.waitForTimeout(9_000);
+      await page.waitForTimeout(4_000);
       await expect(page).toHaveURL(/src=dark/);
       await expect(end).toBeVisible();
       await expect(end.getByTestId('player-play-next')).toBeVisible();
@@ -263,7 +281,7 @@ test.describe('end screen behaviour', () => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     const player = await openHarness(page, { src: 'dark' });
     const end = await reachEnd(page, player);
-    await expect(count(end)).toHaveText(/^[1-8]$/);
+    await expect(count(end)).toHaveText(/^[1-3]$/);
     await expect(end.locator('.vjs-fanous-next-ring-fill')).toBeHidden();
   });
 

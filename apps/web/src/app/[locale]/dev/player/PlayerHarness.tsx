@@ -5,13 +5,18 @@
  *   &watch=0                      an embed-like surface: no theatre, mini player or up next
  *   &width=320                    a fixed player width, for small-player checks
  *   &start=12                     a start position, for the start-over pill
+ *   &list=fixtures&index=0        playlist playback: the real pane, up next and autoplay over a
+ *                                 queue the spec serves (GET /api/playlists/fixtures/queue)
  * Fixtures live under e2e/player/fixtures and are never deployed.
  */
-import { useEffect, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { VIDEO_PLAYER_ID } from '@/components/SkipLinks/SkipLinksBase';
 import { VideoPlayerWithChapters } from '@/components/VideoPagePlayer/VideoPlayerWithChapters';
 import { enableWatchPageFeatures, getPlayerUi, subscribePlayerUi, updatePlayerUi } from '@/lib/video/player-ui';
+import { PlaylistPane } from '@/components/video/PlaylistPane';
+import { usePlaylistPlayback } from '@/hooks/usePlaylistPlayback';
+import { clearAutoplayIntent, hasAutoplayIntent, requestAutoplay } from '@/lib/video/autoplay-intent';
 
 const SOURCES = ['bright', 'dark', 'short', 'live'] as const;
 type Source = (typeof SOURCES)[number];
@@ -24,16 +29,36 @@ export function PlayerHarness({ lang }: { lang: 'en' | 'ar' }) {
   const width = Number(params.get('width')) || undefined;
   const start = Number(params.get('start')) || undefined;
   const { theatre } = useSyncExternalStore(subscribePlayerUi, getPlayerUi, getPlayerUi);
+  const buildHref = useCallback(
+    (id: string, list: string, index: number) => `/${lang}/dev/player?src=${encodeURIComponent(id)}&list=${encodeURIComponent(list)}&index=${index}`,
+    [lang],
+  );
+  const playback = usePlaylistPlayback(src, lang, { buildHref });
+  const autoplayIntent = useMemo(() => !!playback.list || hasAutoplayIntent(src), [src, playback.list]);
+  useEffect(() => clearAutoplayIntent(src), [src]);
 
   useEffect(() => (watch ? enableWatchPageFeatures() : undefined), [watch]);
   useEffect(() => {
     if (!watch) return;
+    if (playback.active) {
+      updatePlayerUi({ upNext: playback.upNext, replayList: playback.replayList, reportProblem: null });
+      return;
+    }
     const next = src === 'dark' ? 'bright' : 'dark';
     updatePlayerUi({
-      upNext: { title: `Next: the ${next} fixture`, channel: 'Player harness', go: () => router.push(`/${lang}/dev/player?src=${next}`) },
+      upNext: {
+        title: `Next: the ${next} fixture`,
+        channel: 'Player harness',
+        // As on the watch page: the advance asks the next video to play
+        go: () => {
+          requestAutoplay(next);
+          router.push(`/${lang}/dev/player?src=${next}`);
+        },
+      },
+      replayList: null,
       reportProblem: () => document.getElementById('harness-report')?.focus(),
     });
-  }, [watch, src, lang, router]);
+  }, [watch, src, lang, router, playback.active, playback.upNext, playback.replayList]);
 
   return (
     <main className="py-6" data-testid="player-harness">
@@ -55,6 +80,8 @@ export function PlayerHarness({ lang }: { lang: 'en' | 'ar' }) {
             ariaLabel={lang === 'ar' ? 'مشغل الاختبار' : 'Test player'}
             title={`Harness ${src}`}
             startTime={start}
+            autoplayIntent={autoplayIntent}
+            offerResume={playback.active}
             enableChapters={src !== 'live' && src !== 'short'}
             enableSubtitles={src !== 'live'}
           />
@@ -63,6 +90,24 @@ export function PlayerHarness({ lang }: { lang: 'en' | 'ar' }) {
           <button id="harness-report" type="button" className="mt-2 text-sm underline">Report</button>
         </div>
         <aside className={`w-full ${theatre ? 'lg:w-full' : 'lg:w-1/4'}`} data-testid="harness-aside">
+          {playback.active && playback.list && (
+            <PlaylistPane
+              queue={playback.queue}
+              listId={playback.list}
+              loop={playback.loop}
+              shuffle={playback.shuffle}
+              collapsed={playback.collapsed}
+              canPrevious={playback.canPrevious}
+              canNext={playback.canNext}
+              onToggleLoop={playback.toggleLoop}
+              onToggleShuffle={playback.toggleShuffle}
+              onToggleCollapsed={playback.toggleCollapsed}
+              onPrevious={playback.previous}
+              onNext={playback.next}
+              onPlay={playback.play}
+              hrefFor={playback.hrefFor}
+            />
+          )}
           {Array.from({ length: 6 }, (_, i) => (
             <div key={i} className="mb-3 h-20 rounded-lg bg-gray-200 dark:bg-gray-800" />
           ))}

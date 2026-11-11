@@ -15,12 +15,12 @@
  * typing elsewhere on the page keeps their place.
  */
 import { useEffect, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react';
-import { Maximize2, Play, RotateCcw, SkipForward, X } from 'lucide-react';
+import { ListRestart, Maximize2, Play, RotateCcw, SkipForward, X } from 'lucide-react';
 import type { UpNext } from '@/lib/video/player-ui';
 import type { VideoPlayerTranslations } from '@/lib/video/i18n/types';
 
 /** Seconds before the next video starts on its own */
-export const AUTO_ADVANCE_SECONDS = 8;
+export const AUTO_ADVANCE_SECONDS = 3;
 const RING_RADIUS = 9;
 const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
 const MODIFIERS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'CapsLock']);
@@ -28,13 +28,15 @@ const MODIFIERS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'CapsLock']);
 interface EndScreenProps {
   upNext: UpNext | null;
   onReplay: () => void;
+  /** End of a playlist with loop off: start the playlist again (docs/specs/PLAYLIST-PLAYBACK.md D9) */
+  onReplayList?: () => void;
   t: VideoPlayerTranslations;
   dir: 'ltr' | 'rtl';
   /** Seconds before advancing; 0 turns auto-advance off */
   autoAdvanceSeconds?: number;
 }
 
-export function EndScreen({ upNext, onReplay, t, dir, autoAdvanceSeconds = AUTO_ADVANCE_SECONDS }: EndScreenProps) {
+export function EndScreen({ upNext, onReplay, onReplayList, t, dir, autoAdvanceSeconds = AUTO_ADVANCE_SECONDS }: EndScreenProps) {
   const [elapsed, setElapsed] = useState(0);
   const [stopped, setStopped] = useState(autoAdvanceSeconds <= 0);
   const [hovered, setHovered] = useState(false);
@@ -103,6 +105,12 @@ export function EndScreen({ upNext, onReplay, t, dir, autoAdvanceSeconds = AUTO_
           <RotateCcw aria-hidden="true" />
           <span className="vjs-fanous-btn-label">{t.chrome.watchAgain}</span>
         </button>
+        {onReplayList && (
+          <button type="button" className="vjs-fanous-btn vjs-fanous-btn-secondary" onClick={onReplayList} data-testid="player-replay-playlist">
+            <ListRestart aria-hidden="true" />
+            <span className="vjs-fanous-btn-label">{t.chrome.replayPlaylist}</span>
+          </button>
+        )}
       </div>
     );
   }
@@ -123,7 +131,10 @@ export function EndScreen({ upNext, onReplay, t, dir, autoAdvanceSeconds = AUTO_
       onBlur={onBlur}
     >
       <div className="vjs-fanous-next-card" onPointerEnter={() => setHovered(true)} onPointerLeave={() => setHovered(false)}>
-        <p className="vjs-fanous-next-kicker">{t.chrome.upNext}</p>
+        <p className="vjs-fanous-next-kicker">
+          {t.chrome.upNext}
+          {upNext.badge && <span className="vjs-fanous-next-badge" data-testid="player-next-badge"> · {upNext.badge}</span>}
+        </p>
         <button
           type="button"
           className="vjs-fanous-next-thumb"

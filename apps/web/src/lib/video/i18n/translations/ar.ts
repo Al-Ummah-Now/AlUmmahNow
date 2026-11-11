@@ -144,6 +144,9 @@ export const AR_TRANSLATIONS: VideoPlayerTranslations = {
     backToVideo: 'العودة إلى الفيديو',
     reportProblem: 'الإبلاغ عن مشكلة',
     seekValue: '{current} من {total}',
+    tapToUnmute: 'اضغط لتشغيل الصوت',
+    autoplayNext: 'التشغيل التلقائي للتالي',
+    replayPlaylist: 'إعادة تشغيل القائمة',
   },
 
   quality: {
@@ -283,6 +286,7 @@ export const AR_TRANSLATIONS: VideoPlayerTranslations = {
   resume: {
     startOverButton: 'البدء من البداية',
     resumingAt: 'الاستئناف من {time}',
+    resumeAtButton: 'المتابعة من {time}',
   },
 
   pluralization: {

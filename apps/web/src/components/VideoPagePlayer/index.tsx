@@ -17,9 +17,13 @@ interface WatchPlayerProps {
   startTime?: number;
   /** Gives the watch page the Video.js player (share "start at current time") */
   onPlayerReady?: (player: Player) => void;
+  /** Start playing once loaded (playlist playback or an in-app advance; muted fallback when the browser refuses) */
+  autoplayIntent?: boolean;
+  /** Inside a playlist: start at 0 and offer the saved position instead of jumping to it */
+  offerResume?: boolean;
 }
 
-const VideoPlayer: React.FC<WatchPlayerProps> = ({ options, startTime, onPlayerReady }) => {
+const VideoPlayer: React.FC<WatchPlayerProps> = ({ options, startTime, onPlayerReady, autoplayIntent, offerResume }) => {
   const { user } = useAuth();
   const { lang, t } = useLanguage();
   const locale = lang;
@@ -55,6 +59,8 @@ const VideoPlayer: React.FC<WatchPlayerProps> = ({ options, startTime, onPlayerR
             title={removeUnwantedChars(title)}
             startTime={startTime}
             onPlayerReady={handlePlayerReady}
+            autoplayIntent={autoplayIntent}
+            offerResume={offerResume}
           />
         </div>
       </div>

@@ -1250,7 +1250,8 @@
 
 /* ---------- Overlays: start over, end screen, mini player ---------- */
 
-.video-js.vjs-fanous .vjs-start-over {
+.video-js.vjs-fanous .vjs-start-over,
+.video-js.vjs-fanous .vjs-tap-unmute {
   position: absolute;
   z-index: 4;
   top: 12px;
@@ -1272,19 +1273,29 @@
   backdrop-filter: blur(10px);
 }
 
-.video-js.vjs-fanous .vjs-start-over svg {
+/* Autoplay's muted fallback: the same pill on the other top corner, above the big play button */
+.video-js.vjs-fanous .vjs-tap-unmute {
+  inset-inline-start: auto;
+  inset-inline-end: 12px;
+  z-index: 5;
+}
+
+.video-js.vjs-fanous .vjs-start-over svg,
+.video-js.vjs-fanous .vjs-tap-unmute svg {
   width: 15px;
   height: 15px;
   color: var(--fanous-player-accent);
 }
 
 @media (hover: hover) {
-  .video-js.vjs-fanous .vjs-start-over:hover {
+  .video-js.vjs-fanous .vjs-start-over:hover,
+  .video-js.vjs-fanous .vjs-tap-unmute:hover {
     border-color: var(--fanous-player-accent);
   }
 }
 
-.video-js.vjs-fanous .vjs-start-over:focus-visible {
+.video-js.vjs-fanous .vjs-start-over:focus-visible,
+.video-js.vjs-fanous .vjs-tap-unmute:focus-visible {
   outline: 2px solid var(--fanous-player-accent);
   outline-offset: 2px;
 }
@@ -1298,6 +1309,18 @@
   (portrait, fullscreen on a phone), the thumbnail stacks above the text. Every selector is scoped under
   `.video-js.vjs-fanous`: Video.js's `.video-js button` reset outranks single-class rules.
 */
+/* End of a playlist: Watch again and Replay playlist side by side */
+.video-js.vjs-fanous .vjs-fanous-end.vjs-fanous-end-replay {
+  grid-auto-flow: column;
+  justify-content: center;
+  align-content: center;
+  gap: 12px;
+}
+
+.video-js.vjs-fanous .vjs-fanous-next-badge {
+  font-variant-numeric: tabular-nums;
+}
+
 .video-js.vjs-fanous .vjs-fanous-end {
   container: fanous-end / size;
   position: absolute;

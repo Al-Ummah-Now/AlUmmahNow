@@ -2,7 +2,7 @@
 
 import { formatViews } from '@/lib/format/videoMeta';
 import { RelativeDate } from '@/components/RelativeDate';
-import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Player } from "video.js";
 import Link from '@/components/common/AppLink';
@@ -33,6 +33,17 @@ import { useLanguage } from "@/hooks/useLanguage";
 import { getLocalizedValue } from "@al-ummah/shared-types";
 import { enableWatchPageFeatures, getPlayerUi, subscribePlayerUi, updatePlayerUi } from "@/lib/video/player-ui";
 import { CommentsSkeleton, WatchDetailsSkeleton } from "@/components/video/WatchPageSkeleton";
+import { PlaylistPane } from "@/components/video/PlaylistPane";
+import { usePlaylistPlayback } from "@/hooks/usePlaylistPlayback";
+import { shareableList } from "@/lib/playlists/playback";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { clearAutoplayIntent, hasAutoplayIntent, requestAutoplay } from "@/lib/video/autoplay-intent";
+
+/** The list a share link carries: public playlists only, never the viewer's WL / LL (spec 2.4) */
+function shareListOf(list: string | null, index: number | null): { id: string; index: number | null } | null {
+  const id = shareableList(list);
+  return id ? { id, index } : null;
+}
 
 type VideoState =
   | { status: 'loading' }
@@ -90,23 +101,60 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
   const nextTitle = next?.title;
   const nextChannel = next?.channelName || '';
   const nextThumbnail = next?.thumbnail;
+  // Playlist playback (docs/specs/PLAYLIST-PLAYBACK.md): with a list in the URL, up next is the
+  // list's next item and the related video never follows the list
+  const playback = usePlaylistPlayback(videoId, lang);
+  const playlistUpNext = playback.upNext;
+  const playlistReplay = playback.replayList;
+  // Autoplay: a usable list in the URL, or an in-app advance asked for it (never a plain link, D3)
+  const autoplayIntent = useMemo(() => !!playback.list || hasAutoplayIntent(videoId), [videoId, playback.list]);
+  useEffect(() => clearAutoplayIntent(videoId), [videoId]);
   useEffect(() => {
+    if (playback.active) {
+      updatePlayerUi({ upNext: playlistUpNext, replayList: playlistReplay });
+      return;
+    }
     updatePlayerUi({
+      replayList: null,
       upNext: nextId
         ? {
             title: nextTitle ?? '',
             channel: nextChannel,
             thumbnail: nextThumbnail,
-            go: () => routerRef.current.push(`/${lang}/video/${encodeURIComponent(nextId)}`),
+            go: () => {
+              requestAutoplay(nextId);
+              routerRef.current.push(`/${lang}/video/${encodeURIComponent(nextId)}`);
+            },
           }
         : null,
     });
-  }, [nextId, nextTitle, nextChannel, nextThumbnail, lang]);
+  }, [playback.active, playlistUpNext, playlistReplay, nextId, nextTitle, nextChannel, nextThumbnail, lang]);
   useEffect(() => {
     updatePlayerUi({
       reportProblem: () => setReportOpen(true),
     });
   }, []);
+  // One pane, placed by width: the side column from lg (the related column), else under the player
+  const wide = useMediaQuery('(min-width: 1024px)');
+  const renderPane = (slot: 'side' | 'below') =>
+    playback.active && playback.list && (slot === 'side') === wide ? (
+      <PlaylistPane
+        queue={playback.queue}
+        listId={playback.list}
+        loop={playback.loop}
+        shuffle={playback.shuffle}
+        collapsed={playback.collapsed}
+        canPrevious={playback.canPrevious}
+        canNext={playback.canNext}
+        onToggleLoop={playback.toggleLoop}
+        onToggleShuffle={playback.toggleShuffle}
+        onToggleCollapsed={playback.toggleCollapsed}
+        onPrevious={playback.previous}
+        onNext={playback.next}
+        onPlay={playback.play}
+        hrefFor={playback.hrefFor}
+      />
+    ) : null;
   const renderRelated = (keyPrefix: string) =>
     isRTL
       ? <RelatedVideosSectionRTL relatedVideos={related} loading={relatedLoading} onRetry={retryRelated} />
@@ -194,6 +242,8 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
                     options={videoDetails}
                     startTime={startTime}
                     onPlayerReady={handlePlayerReady}
+                    autoplayIntent={autoplayIntent}
+                    offerResume={playback.active}
                   />
                 )}
               </section>
@@ -216,6 +266,7 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
                     title={getLocalizedValue(videoDetails.titleLocalized, videoDetails.title, lang)}
                     lang={lang === 'ar' ? 'ar' : 'en'}
                     getCurrentTime={getCurrentTime}
+                    list={playback.active ? shareListOf(playback.list, playback.queue.items.find((i) => i.position === playback.queue.position)?.index ?? null) : null}
                   />
                   {user && <WatchLaterButton videoId={videoId} />}
                   {user && <SaveToPlaylistControl videoId={videoId} />}
@@ -262,6 +313,9 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
             </div>
           )}
 
+          {/* Below lg the playlist pane sits under the player, above the comments */}
+          <div className="w-full mt-4 empty:hidden">{renderPane('below')}</div>
+
           <div className="flex flex-col w-full mt-6 gap-6 overflow-auto">
             <div id={COMMENTS_ID} tabIndex={-1} className="w-full max-w-4xl mx-auto px-4">
               {videoDetails ? (
@@ -277,6 +331,7 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
         </div>
 
         <div className={`hidden lg:block ${theatre ? 'lg:w-full' : 'lg:flex-none lg:w-[clamp(300px,30%,402px)]'} pt-4 overflow-auto`} data-testid="watch-secondary">
+          {renderPane('side')}
           {renderRelated("t_")}
         </div>
       </div>
