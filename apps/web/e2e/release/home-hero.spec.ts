@@ -11,10 +11,19 @@
  *   (object-fit: contain) over a blurred copy of itself;
  * - the text column sits beside the frame on desktop and below it on a phone;
  * - the page does not shift while the hero loads (CLS under 0.1).
- * The vertical case swaps the featured video's thumbnail for a Short's real
- * (vertical) thumbnail in the browser, so it runs on any environment with one
- * Short. en and ar, desktop and phone. Anonymous: nothing is created.
+ *
+ * Deterministic (release v2026.11.11.4 failed here on what stage happened to
+ * feature): the images are fixtures this suite owns. Every off-site image the
+ * page loads (the hero's thumbnail and its size variants, whichever video is
+ * featured) is answered with e2e/test-fixtures/hero-landscape-1280x720.png or
+ * hero-portrait-720x1280.png, so "vertical" really is a portrait image
+ * (natural height > width), never a Short's thumbnail that Bunny made 16:9.
+ * Which video is featured is read back from the API (ready, public, not a
+ * Short), not compared with a list another spec's upload can change.
+ * en and ar, desktop and phone. Anonymous: nothing is created.
  */
+import * as fs from 'fs';
+import * as path from 'path';
 import { test, expect, type Page } from '@playwright/test';
 import { target } from './targets';
 
@@ -23,6 +32,10 @@ const VIEWPORTS = {
   phone: { width: 390, height: 844 },
 } as const;
 const FRAME_ASPECT = 16 / 9;
+const FIXTURE_IMAGES = {
+  landscape: path.join(__dirname, '..', 'test-fixtures', 'hero-landscape-1280x720.png'),
+  vertical: path.join(__dirname, '..', 'test-fixtures', 'hero-portrait-720x1280.png'),
+} as const;
 
 interface HomeVideo {
   id: string;
@@ -38,13 +51,27 @@ interface HomeVideo {
 
 const upright = (v: HomeVideo) => v.isShort === true || (!!v.width && !!v.height && v.height >= v.width);
 const ready = (v: HomeVideo) => (v.uploadStatus === undefined || v.uploadStatus === 'ready') && v.isPublic !== false;
-const base = (url: string) => url.split('?')[0];
 
-/** The home page's first page (15, newest first) as an anonymous visitor gets it. */
-async function homeVideos(): Promise<HomeVideo[]> {
-  const res = await fetch(`${target().api}/api/videos?limit=15`);
-  expect(res.ok, `GET /api/videos answered ${res.status}`).toBe(true);
-  return (((await res.json()) as { data?: HomeVideo[] }).data ?? []).filter(ready);
+/** The video as stored now, or null once it is gone. */
+async function videoById(id: string): Promise<HomeVideo | null> {
+  const res = await fetch(`${target().api}/api/videos/${encodeURIComponent(id)}`, { cache: 'no-store' });
+  if (res.status === 404) return null;
+  expect(res.ok, `GET /api/videos/${id} answered ${res.status}`).toBe(true);
+  const body = (await res.json()) as HomeVideo & { result?: HomeVideo };
+  return body.result ?? body;
+}
+
+/** Every image from another origin (Bunny thumbnails and their variants) is the fixture. */
+async function serveFixtureImages(page: Page, file: string): Promise<void> {
+  const body = fs.readFileSync(file);
+  const web = new URL(target().web).origin;
+  await page.route(
+    (url) => url.origin !== web,
+    async (route) => {
+      if (route.request().resourceType() !== 'image') return route.fallback();
+      await route.fulfill({ status: 200, contentType: 'image/png', body, headers: { 'Cache-Control': 'no-store' } }).catch(() => undefined);
+    },
+  );
 }
 
 /** Layout shifts without recent input, summed from the first paint (as Lighthouse's CLS). */
@@ -64,45 +91,35 @@ for (const [device, viewport] of Object.entries(VIEWPORTS)) {
   for (const locale of ['en', 'ar'] as const) {
     for (const kind of ['landscape', 'vertical'] as const) {
       test(`home hero keeps the ${kind} video's shape (${locale}, ${device})`, async ({ page }, testInfo) => {
-        const videos = await homeVideos();
-        const featured = videos.find((v) => v.isFeatured) ?? videos.find((v) => !upright(v));
-        test.skip(!featured?.thumbnailUrl, 'no ready landscape video with a thumbnail on the home page of this environment');
-        const short = videos.find((v) => upright(v) && v.thumbnailUrl);
-        test.skip(kind === 'vertical' && !short, 'no Short with a thumbnail on the home page of this environment');
-
         await page.setViewportSize(viewport);
         await page.context().addCookies([
           { name: 'aun_consent', value: `v1.a0.e0.p0.${Date.now()}`, url: target().web, sameSite: 'Lax' },
         ]);
         await watchLayoutShift(page);
-        if (kind === 'vertical') {
-          // The featured video's thumbnail (any size variant) becomes the Short's vertical one
-          const landscapeThumb = base(featured!.thumbnailUrl!);
-          await page.route((url) => base(url.href) === landscapeThumb, async (route) => {
-            // The test may end (skip) while an image is in flight: nothing left to answer then
-            const res = await route.fetch({ url: short!.thumbnailUrl! }).catch(() => null);
-            if (res) await route.fulfill({ response: res }).catch(() => undefined);
-          });
-        }
+        await serveFixtureImages(page, FIXTURE_IMAGES[kind]);
 
-        await page.goto(`${target().web}/${locale}`);
         const hero = page.locator('section.home-hero:not([data-testid=home-hero-loading])').first();
-        await expect(hero).toBeVisible({ timeout: 30000 });
-        if ((await hero.getByTestId('hero-thumb').count()) === 0) {
-          testInfo.annotations.push({ type: 'skip', description: 'this build predates the 16:9 hero frame (lib/video/hero.ts)' });
-          await page.unrouteAll({ behavior: 'ignoreErrors' });
-          test.skip(true, 'this build predates the 16:9 hero frame');
-        }
-
-        // A newer Short is passed over for the newest ready landscape video
         const frame = hero.getByTestId('hero-thumb');
-        // Parallel specs upload too: a newer landscape video may become the featured one between
-        // reading the list and loading the page, so either the one before or the one after is right
-        await expect(frame).toHaveAttribute('href', /vid=[\w-]+$/);
-        const shownId = (await frame.getAttribute('href'))!.split('vid=')[1];
-        const now = await homeVideos();
-        const featuredNow = now.find((v) => v.isFeatured) ?? now.find((v) => !upright(v));
-        expect([featured!.id, featuredNow?.id], `the hero shows ${shownId}`).toContain(shownId);
+        // The featured video is whatever the environment features right now; it only has to be a
+        // ready, public, landscape one (a newer Short is passed over). Read back from the API: if it
+        // was deleted in between (another spec's upload), the page is loaded again.
+        for (let attempt = 1; ; attempt++) {
+          await page.goto(`${target().web}/${locale}`);
+          await expect(hero).toBeVisible({ timeout: 30000 });
+          if ((await hero.getByTestId('hero-thumb').count()) === 0) {
+            testInfo.annotations.push({ type: 'skip', description: 'this build predates the 16:9 hero frame (lib/video/hero.ts)' });
+            await page.unrouteAll({ behavior: 'ignoreErrors' });
+            test.skip(true, 'this build predates the 16:9 hero frame');
+          }
+          await expect(frame).toHaveAttribute('href', /vid=[\w-]+$/);
+          const shownId = (await frame.getAttribute('href'))!.split('vid=')[1];
+          const shown = await videoById(shownId);
+          if (!shown && attempt < 3) continue;
+          expect(shown, `the hero shows ${shownId}, which is gone`).not.toBeNull();
+          expect(ready(shown!), `the hero shows ${shownId}, which is not ready and public`).toBe(true);
+          if (!shown!.isFeatured) expect(upright(shown!), `the hero shows ${shownId}, a Short or vertical video`).toBe(false);
+          break;
+        }
         const img = frame.getByTestId('hero-thumb-image');
         await expect(img).toHaveAttribute('fetchpriority', 'high');
         await expect(img).toHaveAttribute('alt', /\S/);
@@ -140,7 +157,7 @@ for (const [device, viewport] of Object.entries(VIEWPORTS)) {
           expect(crop, `a ${g.natural.toFixed(2)}:1 thumbnail loses ${(crop * 100).toFixed(0)}%`).toBeLessThan(0.15);
           expect(g.backdrop).toBe(false);
         } else {
-          expect(g.natural, 'the swapped-in thumbnail is not vertical').toBeLessThanOrEqual(1);
+          expect(g.natural, 'the fixture image did not reach the hero').toBeCloseTo(720 / 1280, 2);
           expect(g.fit, 'a vertical thumbnail is cropped').toBe('contain');
           expect(g.backdrop, 'no blurred backdrop behind the letterboxed thumbnail').toBe(true);
         }
