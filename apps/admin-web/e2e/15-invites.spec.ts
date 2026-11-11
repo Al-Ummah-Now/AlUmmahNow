@@ -63,6 +63,9 @@ test.describe('invite creators', () => {
   });
 
   test('INV-01 invite with a new channel: the user exists at once, with the channel', async ({ page }, testInfo) => {
+    // Creating the invite and rendering the new user's page are server work on a shared QA: under
+    // the suite's parallel load each has taken 15+ s (run 42930750385), so this test waits longer
+    test.setTimeout(150_000);
     await page.goto('/users/invites/new');
     await page.getByTestId('invite-email').fill(EMAIL);
     await page.getByTestId('invite-name').fill('E2E Invited Creator');
@@ -72,7 +75,7 @@ test.describe('invite creators', () => {
     await shot(page, testInfo, '1-invite-form');
     await page.getByTestId('invite-submit').click();
     const created = page.getByTestId('invite-created');
-    await expect(created).toBeVisible({ timeout: 30_000 });
+    await expect(created).toBeVisible({ timeout: 45_000 });
     state.userId = (await created.getAttribute('data-user-id'))!;
     state.inviteId = (await created.getAttribute('data-invite-id'))!;
     expect(state.userId).toMatch(/^usr_[0-9a-f]{32}$/);
@@ -80,7 +83,8 @@ test.describe('invite creators', () => {
     await shot(page, testInfo, '2-invited');
 
     await page.getByTestId('invite-open-user').click();
-    await expect(page.getByTestId('user-detail')).toHaveAttribute('data-user-id', state.userId);
+    await page.waitForURL(`**/users/${state.userId}`, { timeout: 45_000 });
+    await expect(page.getByTestId('user-detail')).toHaveAttribute('data-user-id', state.userId, { timeout: 30_000 });
     await expect(page.getByTestId('invite-status-invited').or(page.getByTestId('invite-status-sending')).first()).toBeVisible();
     await shot(page, testInfo, '3-user-page-invited-with-channel');
 
