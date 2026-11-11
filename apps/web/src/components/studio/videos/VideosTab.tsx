@@ -8,7 +8,10 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { MoreVertical, UploadCloud } from 'lucide-react';
 import type { View } from 'react-big-calendar';
 import { VIDEO_CATEGORIES, type StudioVideoStatus } from '@al-ummah/shared-types';
-import { BulkEditDialog } from '@/components/bulkEdit/BulkEditDialog';
+import { BulkEditPanel, type BulkPanelVideo } from '@/components/bulkEdit/BulkEditPanel';
+import { useChannelPlaylists } from '@/hooks/useChannelPlaylists';
+import { useMultiAccount } from '@/hooks/useMultiAccount';
+import { collectTags } from '@/lib/search/tags';
 import { CalendarControls } from '@/components/calendar/CalendarControls';
 import { ViewSwitcher } from '@/components/calendar/ViewSwitcher';
 import { navigateNext, navigatePrevious } from '@/components/calendar/utils/dateFormatters';
@@ -24,13 +27,12 @@ import { getChannelContentCounts, listChannelContent, type BulkSummary, type Stu
 import { BulkScheduleDialog } from './BulkDialogs';
 import { DeletedVideos } from './DeletedVideos';
 import { cancelSchedule, publishNow } from '@/lib/api/scheduling';
-import { bulkDeleteVideos, bulkUpdateVideos } from '@/lib/api/videos';
-import type { BulkVideoChanges } from '@/lib/dashboard/bulk-edit';
+import { bulkDeleteVideos } from '@/lib/api/videos';
 import { logger } from '@/lib/logger-client';
 import { isLimitRefusal, limitRefusalMessage, type LimitRefusal } from '@/lib/studio/limits';
 import { can, type StudioRole } from '@/lib/studio/permissions';
 import { studioReuploadHref, studioUploadHref } from '@/lib/studio/links';
-import { MAX_BULK_SELECTION, parseVideosQuery, rowActions, videosQueryString, type VideoRowAction, type VideosQuery } from '@/lib/studio/videos';
+import { MAX_BULK_EDIT_SELECTION, MAX_BULK_SELECTION, parseVideosQuery, rowActions, videosQueryString, type VideoRowAction, type VideosQuery } from '@/lib/studio/videos';
 import { isShortOrFlag } from '@al-ummah/shared-types';
 
 const ScheduledVideoCalendar = dynamic(
@@ -140,13 +142,62 @@ export function VideosTab({ locale, channelId, role }: Props) {
     setSelected((previous) => {
       const next = new Set(previous);
       if (next.has(id)) next.delete(id);
-      else if (next.size < MAX_BULK_SELECTION) next.add(id);
+      else if (next.size < MAX_BULK_EDIT_SELECTION) next.add(id);
       return next;
     });
   };
 
   const allSelected = items.length > 0 && items.every((video) => selected.has(video.id));
-  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(items.slice(0, MAX_BULK_SELECTION).map((video) => video.id)));
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(items.slice(0, MAX_BULK_EDIT_SELECTION).map((video) => video.id)));
+
+  // "Select all matching": every page of the current filter (up to the Edit limit)
+  const [matching, setMatching] = useState<Map<string, StudioVideo>>(new Map());
+  const [selectingAll, setSelectingAll] = useState(false);
+  const selectAllMatching = async () => {
+    setSelectingAll(true);
+    const found = new Map(items.map((v) => [v.id, v]));
+    let next = cursor;
+    try {
+      while (next && found.size < MAX_BULK_EDIT_SELECTION) {
+        const page = await listChannelContent(channelId, { ...query, status: query.status as StudioVideoStatus, cursor: next, limit: 100 });
+        if (!page) break;
+        page.items.forEach((v) => found.set(v.id, v));
+        next = page.cursor;
+      }
+    } catch (error) {
+      logger.error('[Studio] Could not select all matching videos', { channelId, error });
+    }
+    const ids = Array.from(found.keys()).slice(0, MAX_BULK_EDIT_SELECTION);
+    logger.info('[Studio] Selected all matching videos', { channelId, count: ids.length, more: !!next });
+    setMatching(found);
+    setSelected(new Set(ids));
+    setSelectingAll(false);
+  };
+  const overOtherLimit = selected.size > MAX_BULK_SELECTION;
+
+  // The bulk edit panel: the selected videos with what it needs to preview titles
+  const { user: sessionUser } = useMultiAccount();
+  const channelInfo = sessionUser?.channels?.find((c) => c.id === channelId);
+  const channelPlaylists = useChannelPlaylists(bulkEditOpen ? channelId : '');
+  const panelVideos = useMemo<BulkPanelVideo[]>(() => {
+    if (!bulkEditOpen) return [];
+    const known = new Map([...matching, ...items.map((v) => [v.id, v] as const)]);
+    return [...selected].flatMap((id) => {
+      const v = known.get(id);
+      if (!v) return [];
+      return [{
+        id,
+        title: v.title,
+        titleLocalized: v.titleLocalized,
+        channelId: v.channelId || channelId,
+        channelName: channelInfo ? { en: channelInfo.nameLocalized?.en || channelInfo.name, ar: channelInfo.nameLocalized?.ar || channelInfo.name } : undefined,
+        dateCreated: v.dateCreated,
+        originalFilename: (v as { originalFilename?: string }).originalFilename,
+      }];
+    });
+  }, [bulkEditOpen, selected, items, matching, channelId, channelInfo]);
+  const panelTags = useMemo(() => (bulkEditOpen ? collectTags(items.filter((v) => selected.has(v.id))) : []), [bulkEditOpen, items, selected]);
+  const knownTags = useMemo(() => (bulkEditOpen ? collectTags(items) : []), [bulkEditOpen, items]);
 
   const run = async (work: () => Promise<unknown>, success: string) => {
     try {
@@ -177,20 +228,6 @@ export function VideosTab({ locale, channelId, role }: Props) {
     }
     setSelected(new Set());
     await load();
-  };
-
-  const applyBulkEdit = async (changes: BulkVideoChanges): Promise<boolean> => {
-    const result = await bulkUpdateVideos([...selected], changes, { channelId });
-    if (!result) {
-      setNotice(t.bulkEdit.failed);
-      return false;
-    }
-    const { succeeded, failed: failedCount } = result.summary;
-    setNotice(failedCount === 0
-      ? t.bulkEdit.done.replace('{count}', String(succeeded))
-      : t.bulkEdit.partial.replace('{succeeded}', String(succeeded)).replace('{failed}', String(failedCount)));
-    await load();
-    return succeeded > 0;
   };
 
   const finishBulk = async (summary: BulkSummary | LimitRefusal | null) => {
@@ -241,6 +278,7 @@ export function VideosTab({ locale, channelId, role }: Props) {
 
   const canBulkEdit = can(role, 'video.edit');
   const canBulkDelete = can(role, 'video.delete');
+  const canBulkPlaylists = can(role, 'playlist.manage');
 
   return (
     <div data-testid="studio-videos">
@@ -344,12 +382,18 @@ export function VideosTab({ locale, channelId, role }: Props) {
       {selected.size > 0 && (
         <div className="sticky bottom-0 z-10 mb-3 flex flex-wrap items-center gap-2 rounded-md border border-border bg-card p-2 md:static" data-testid="studio-bulk-bar">
           <span className="text-sm font-medium">{text.bulk.selected.replace('{count}', numberFormat.format(selected.size))}</span>
-          {canBulkEdit && <Button variant="outline" onClick={() => setBulkEditOpen(true)} className="min-h-11">{text.bulk.edit}</Button>}
-          {can(role, 'playlist.manage') && <Button variant="outline" onClick={() => setBulkDialog('playlist')} className="min-h-11" data-testid="studio-bulk-playlist">{text.bulk.addToPlaylist}</Button>}
-          {can(role, 'video.schedule') && <Button variant="outline" onClick={() => setBulkDialog('schedule')} className="min-h-11">{text.bulk.schedule}</Button>}
-          {canBulkDelete && <Button variant="outline" onClick={() => setPendingDelete({ ids: [...selected] })} className="min-h-11" data-testid="studio-bulk-delete">{text.bulk.delete}</Button>}
+          {canBulkEdit && <Button variant="outline" onClick={() => setBulkEditOpen(true)} className="min-h-11" data-testid="studio-bulk-edit">{text.bulk.edit}</Button>}
+          {can(role, 'playlist.manage') && <Button variant="outline" onClick={() => setBulkDialog('playlist')} disabled={overOtherLimit} className="min-h-11" data-testid="studio-bulk-playlist">{text.bulk.addToPlaylist}</Button>}
+          {can(role, 'video.schedule') && <Button variant="outline" onClick={() => setBulkDialog('schedule')} disabled={overOtherLimit} className="min-h-11">{text.bulk.schedule}</Button>}
+          {canBulkDelete && <Button variant="outline" onClick={() => setPendingDelete({ ids: [...selected] })} disabled={overOtherLimit} className="min-h-11" data-testid="studio-bulk-delete">{text.bulk.delete}</Button>}
+          {allSelected && cursor && canBulkEdit && selected.size < MAX_BULK_EDIT_SELECTION && (
+            <Button variant="ghost" onClick={() => void selectAllMatching()} disabled={selectingAll} className="min-h-11" data-testid="studio-select-all-matching">
+              {selectingAll ? t.bulkEdit.loadingMatching : t.bulkEdit.selectAllMatching.replace('{count}', counts ? numberFormat.format(Math.min(counts[query.status as StudioVideoStatus] ?? 0, MAX_BULK_EDIT_SELECTION)) : '…')}
+            </Button>
+          )}
           <Button variant="ghost" onClick={() => setSelected(new Set())} className="min-h-11">{text.bulk.clear}</Button>
-          {selected.size >= MAX_BULK_SELECTION && <span className="text-sm text-muted-foreground">{text.bulk.limit.replace('{max}', String(MAX_BULK_SELECTION))}</span>}
+          {overOtherLimit && <span className="text-sm text-muted-foreground" data-testid="studio-bulk-other-limit">{t.bulkEdit.otherActionsLimit.replace('{max}', String(MAX_BULK_SELECTION))}</span>}
+          {selected.size >= MAX_BULK_EDIT_SELECTION && <span className="text-sm text-muted-foreground">{text.bulk.limit.replace('{max}', String(MAX_BULK_EDIT_SELECTION))}</span>}
         </div>
       )}
 
@@ -477,7 +521,17 @@ export function VideosTab({ locale, channelId, role }: Props) {
       </>
       )}
 
-      <BulkEditDialog open={bulkEditOpen} count={selected.size} onOpenChange={setBulkEditOpen} onApply={applyBulkEdit} />
+      <BulkEditPanel
+        open={bulkEditOpen}
+        onOpenChange={(open) => {
+          setBulkEditOpen(open);
+          if (!open) void load();
+        }}
+        videos={panelVideos}
+        playlists={canBulkPlaylists ? { list: channelPlaylists.playlists, loading: channelPlaylists.loading, failed: channelPlaylists.failed, create: channelPlaylists.create } : null}
+        knownTags={knownTags}
+        selectedTags={panelTags}
+      />
       <AddToPlaylistDialog
         open={bulkDialog === 'playlist'}
         onOpenChange={(open) => setBulkDialog(open ? 'playlist' : null)}

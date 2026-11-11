@@ -5,6 +5,8 @@ import { can, type StudioRole } from './permissions';
 
 /** POST /api/videos/bulk-* takes at most this many. */
 export const MAX_BULK_SELECTION = 50;
+/** Edit runs in batches (PATCH /api/videos/bulk), so it takes a larger selection. */
+export const MAX_BULK_EDIT_SELECTION = 500;
 
 /** 'deleted' is Recently deleted (soft deletes, restorable for 30 days). */
 const STATUSES = ['published', 'scheduled', 'drafts', 'processing', 'failed', 'deleted'] as const;

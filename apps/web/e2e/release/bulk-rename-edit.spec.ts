@@ -48,7 +48,7 @@ async function createChannelInMenu(page: Page, user: WebUser, name: string): Pro
   return channelId;
 }
 
-interface OwnVideo { id: string; title: string; titleLocalized?: Record<string, string>; category?: string }
+interface OwnVideo { id: string; title: string; titleLocalized?: Record<string, string>; category?: string; uploadStatus?: string }
 
 async function ownVideos(user: WebUser, channelId: string): Promise<OwnVideo[]> {
   const out: OwnVideo[] = [];
@@ -68,7 +68,7 @@ async function videoRecord(user: WebUser, id: string, channelId: string): Promis
 
 test.describe('Release: bulk rename and bulk edit', () => {
   test('3 queued files renamed with a pattern upload with those titles; Studio bulk-changes category and playlist', async ({ page }) => {
-    test.setTimeout(12 * 60_000);
+    test.setTimeout(20 * 60_000);
     const user = await signUpOnWeb(page, 'rel-bulk-edit');
     await createProfile(user);
     await grantCreatorTier(user);
@@ -138,19 +138,33 @@ test.describe('Release: bulk rename and bulk edit', () => {
         headers: { 'Content-Type': 'application/json', channelId },
         body: JSON.stringify({ title: `Bulk playlist ${stamp}`, isPublic: false, channelId }),
       });
-      playlistId = ((await created.json().catch(() => ({}))) as { result?: { id?: string }; data?: { id?: string }; id?: string }).result?.id ?? '';
+      playlistId = ((await created.json().catch(() => ({}))) as { result?: { playlist?: { id?: string } } }).result?.playlist?.id ?? '';
       expect(playlistId, 'playlist created').not.toBe('');
 
-      await page.goto(`${target().web}/en/studio/${channelId}/content/videos`);
+      // Studio lists a video under "processing" until it is ready: wait for all 3 (encoding is short)
+      await expect
+        .poll(async () => (await ownVideos(user, channelId)).filter((v) => !v.uploadStatus || v.uploadStatus === 'ready').length, {
+          message: 'the 3 uploads should become ready (a Bunny encoder stall fails here)',
+          timeout: 8 * 60_000,
+          intervals: [5000],
+        })
+        .toBe(3);
+      await page.goto(`${target().web}/en/studio/${channelId}/content/videos?status=published&q=${encodeURIComponent(`Bulk ${stamp}`)}`);
       const bar = page.getByTestId('studio-bulk-bar');
       const rows = page.getByTestId('studio-video-select');
-      if (!(await rows.first().isVisible({ timeout: 30000 }).catch(() => false))) {
+      if (!(await rows.first().isVisible({ timeout: 30000 }).catch(() => false)) || !(await page.getByTestId('studio-select-all').isVisible())) {
         test.info().annotations.push({ type: 'not-deployed', description: 'Studio Content → Videos is not on this build yet' });
         return;
       }
+      await expect(rows).toHaveCount(3, { timeout: 30000 });
       await page.getByTestId('studio-select-all').check();
       await expect(bar).toBeVisible();
-      await bar.getByTestId('studio-bulk-edit').click();
+      const editButton = bar.getByTestId('studio-bulk-edit');
+      if (!(await editButton.isVisible().catch(() => false))) {
+        test.info().annotations.push({ type: 'not-deployed', description: 'Studio has no bulk edit panel on this build yet' });
+        return;
+      }
+      await editButton.click();
       const edit = page.getByTestId('bulk-edit-panel');
       await expect(edit).toBeVisible();
       await expect(page.getByTestId('bulk-edit-state-title')).toHaveText('Stays as it is');
@@ -159,8 +173,10 @@ test.describe('Release: bulk rename and bulk edit', () => {
       await page.getByTestId('bulk-edit-category').getByRole('combobox').fill('Fiqh');
       await page.getByTestId('bulk-edit-category-option-fiqh').click();
       await page.getByTestId('bulk-edit-tick-playlists').check();
-      await page.getByTestId('bulk-edit-playlists-add').getByRole('combobox').fill(`Bulk playlist ${stamp}`);
-      await page.getByTestId('bulk-edit-playlists-add').getByRole('option').first().click();
+      await page.getByTestId('bulk-edit-playlists-add-toggle').click();
+      await page.getByTestId('bulk-edit-playlists-add-search').fill(`Bulk playlist ${stamp}`);
+      await page.getByTestId('bulk-edit-playlists-add-option').filter({ hasText: `Bulk playlist ${stamp}` }).locator('input').check();
+      await expect(page.getByTestId('bulk-edit-playlists-add-chip')).toHaveCount(1);
       await page.getByTestId('bulk-edit-review').click();
       await expect(page.getByTestId('bulk-edit-confirm-category')).toHaveAttribute('data-changes', 'true');
       await expect(page.getByTestId('bulk-edit-confirm-title')).toHaveAttribute('data-changes', 'false');
@@ -173,8 +189,8 @@ test.describe('Release: bulk rename and bulk edit', () => {
         await expect.poll(async () => (await videoRecord(user, id, channelId))?.category, { timeout: 30000 }).toBe('fiqh');
       }
       const playlist = await apiFetch(user, `/api/playlists/${playlistId}`, { headers: { channelId } });
-      const body = (await playlist.json().catch(() => ({}))) as { result?: { videos?: Array<string | { id: string }> }; data?: { videos?: Array<string | { id: string }> } };
-      const inPlaylist = (body.result?.videos ?? body.data?.videos ?? []).map((v) => (typeof v === 'string' ? v : v.id));
+      const body = (await playlist.json().catch(() => ({}))) as { videos?: string[]; result?: { videos?: string[] } };
+      const inPlaylist = [...(body.videos ?? body.result?.videos ?? [])];
       expect(inPlaylist.sort()).toEqual([...ids].sort());
     } finally {
       for (const id of ids) await apiFetch(user, `/api/videos/${id}`, { method: 'DELETE', headers: { channelId } });
