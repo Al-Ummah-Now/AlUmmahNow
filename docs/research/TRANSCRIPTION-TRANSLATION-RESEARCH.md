@@ -24,7 +24,7 @@ Prices come from each provider's own pages, fetched on 2026-11-11 (sources in §
 Gaps:
 - **No nasheed.** None is public on QA or prod.
 - **No real English lecture.** Every English-titled prod video turned out to be Arabic speech, and the QA seed videos are silent. The two LibriVox readings stand in for English.
-- **ElevenLabs and DeepL weren't measured.** No keys are in the Secrets Store, and the owner didn't answer the key request in time. Their rows below use vendor and independent figures.
+- **ElevenLabs wasn't measured** (no key). DeepL was measured in the follow-up on the owner's API Pro account (§9).
 
 WER is word error rate on normalised text. For Arabic, normalisation strips diacritics and tatweel and unifies alef, ya and ta marbuta. Lower is better.
 
@@ -152,9 +152,9 @@ A short quote such as «لتكونوا شهداء على الناس» (4 words, 
 
 | Source | Use | Licence |
 |---|---|---|
-| **Tanzil Uthmani 1.1** | detection index and replacement text, stored offline | CC BY 3.0, **verbatim only**; credit "Tanzil Project" with a link, keep the notice, watch for updates |
+| **Tanzil Uthmani 1.1** | fallback text source. **Use the XML export**: the TXT export glues the basmala onto ayah 1 of every surah (§8) | CC BY 3.0, **verbatim only**; credit "Tanzil Project" with a link, keep the notice, watch for updates |
 | **QuranEnc** `english_saheeh` 1.1.2 (Noor International), `english_rwwad` 1.0.21, `english_hilali_khan` 1.1.3, plus other languages | official translation per language, stored offline (SQLite download) | republishing allowed: no changes, credit publisher and QuranEnc with the version number, keep it updated, no inappropriate ads next to it |
-| Quran Foundation (quran.com) Content API v4 | verse/word timestamps, search, live fallback | OAuth2 client credentials; **cache ≤ 1 week**; offline copies only through Content Sync with a 7-day refresh; no ML training without consent; in-video use allowed with credit |
+| **Quran Foundation Content Sync** (corrected in v2, §11) | primary source for the Uthmani text, word-level text, translations and reciter timings | an offline copy is allowed when kept through Content Sync, with a next sync at least every 7 days; Developer Console account; credit QF. The v1 text here said "cache ≤ 1 week" without the Content Sync exception, which was wrong. |
 | alquran.cloud | – | non-commercial; doesn't clear translation rights |
 | Tanzil translations | – | **non-commercial only** |
 | The Clear Quran (Khattab) | – | needs written consent from Al-Furqaan Foundation |
@@ -168,7 +168,7 @@ A short quote such as «لتكونوا شهداء على الناس» (4 words, 
 3. **Bunny's built-in transcription isn't worth it.** It is Whisper-based too, at $0.10 per language-minute, so a single 1,000-hour month is $6,000 just to transcribe. Its translations read well, but they spell honorifics out and can't be steered with a glossary.
 4. **ElevenLabs Scribe is the best-documented Arabic option** at $0.20/h, cheap enough to be the fallback. It needs a key to measure before we rely on it.
 5. **Translation: Gemma 4 26B for inline titles** (fast, cheapest) and **DeepSeek V4.1 Flash for transcripts** (proven in the CMS). Each falls back to the other. m2m100 must not be used, including where the processor's moderation still uses it.
-6. **Quran sources:** Tanzil Uthmani for the Arabic text and QuranEnc for translations, both stored offline. Quran Foundation's terms forbid a static cache, so their API is only for timestamps, search and live fallback.
+6. **Quran sources (corrected in v2):** Quran Foundation Content Sync is the primary source for the Arabic text, word-level text, translations and timings, kept as a local synced copy. Tanzil XML and QuranEnc are fallbacks (§11).
 
 ## 7. Sources (all fetched 2026-11-11)
 
@@ -182,3 +182,163 @@ A short quote such as «لتكونوا شهداء على الناس» (4 words, 
 - Benchmarks: https://cloud.google.com/speech-to-text/pricing · https://docs.cloud.google.com/speech-to-text/docs/models/chirp-3 · https://cloud.google.com/translate/pricing · https://prices.azure.com/api/retail/prices · https://aws.amazon.com/transcribe/pricing/ · https://docs.aws.amazon.com/transcribe/latest/dg/supported-languages.html · https://aws.amazon.com/translate/pricing/ · https://deepgram.com/pricing · https://developers.deepgram.com/docs/models-languages-overview · https://www.assemblyai.com/pricing · https://developers.openai.com/api/docs/pricing · https://www.speechmatics.com/pricing · https://www.speechmatics.com/speech-to-text/arabic · https://huggingface.co/spaces/elmresearchcenter/open_universal_arabic_asr_leaderboard · https://artificialanalysis.ai/speech-to-text · https://arxiv.org/abs/2605.19069
 - Quran: https://api-docs.quran.foundation/docs/quickstart/ · https://api-docs.quran.foundation/legal/developer-terms/ · https://api-docs.quran.foundation/docs/tutorials/content-sync/getting-started/ · https://tanzil.net/download/ · https://tanzil.net/docs/text_license · https://tanzil.net/trans/ · https://alquran.cloud/terms-and-conditions · https://quranenc.com/en/home/api/ · https://quranenc.com/api/v1/translations/list/en · https://huggingface.co/tarteel-ai/whisper-base-ar-quran · https://huggingface.co/basharalrfooh/whisper-small-quran · https://github.com/cpfair/quran-align · https://qul.tarteel.ai/faq · https://github.com/adelpro/quran-search-engine
 - Test audio: https://everyayah.com/data/ (Alafasy_128kbps, Abdul_Basit_Mujawwad_128kbps) · https://archive.org/details/meaning_glorious_koran_0810_librivox · https://archive.org/details/spiritofislam_2601_librivox
+
+---
+
+# v2 follow-up (2026-11-11): zero-mistake Quran, DeepL measured, Quran-specialised alternatives, QF Content Sync
+
+## 8. Zero-mistake Quran: design measured
+
+**Rule tested:** ASR text is never shown for Quran. A span shows only the official text for an exact `(surah, ayah, word)` range when it is auto-suggested; everything else becomes a reference-only review item. The code is in [`transcription-2026-11/quran_zero.py`](transcription-2026-11/quran_zero.py), the evaluator in `eval_zero.py`, and per-clip results in `zero_eval_results.json`.
+
+### 8.1 Test set, extended
+
+| Clip | Reciter / style | Ayat | Ground truth |
+|---|---|---|---|
+| `r1_husary_kahf` | Husary, murattal | 18:1–10 | EveryAyah per-ayah files, so ayah boundaries are exact |
+| `r2_minshawy_mj_fajr` | Minshawy, **mujawwad** | 89:1–16 | same |
+| `r3_sudais_kursi` | Sudais, murattal (reverberant) | 2:255–257 | same |
+| `r4_maher_yasin` | Maher al-Muaiqly | 36:1–12 (starts with muqatta'at يس) | same |
+| `r5_ghamdi_hashr` | Saad al-Ghamdi (40 kbps) | 59:21–24 | same |
+| `r6_husary_mj_falaq_nas` | Husary, **mujawwad** | 113:1–5 + 114:1–6 (both open «قل أعوذ برب») | same |
+| `r7_hudhaify_fatiha` | Hudhaify | 1:1–7 | same |
+| `r8_ajamy_baqarah_end` | al-Ajamy | 2:285–286 (long ayat) | same |
+| `q_mulk`, `q_rahman_mujawwad` | Alafasy; Abdul Basit mujawwad | 67:1–13; 55:1–25 | same (from v1) |
+| `p1`, `p2`, `p3` | Alafasy (Quran.com chapter audio) | **partial ayat**: 67:3 w5 → 67:5 w4; 67:15 w3 → 67:16 w5; 67:2 w1–6 | QF word segments, millisecond word timings |
+| `m1_lecture_quote_67_2` | lecture speech + a 6-word quote of 67:2 + lecture speech | 67:2 w1–6 | same |
+| 6 prod lectures (v1) | MSA/Egyptian | known quotes | judged by hand |
+
+ASR: Workers AI Whisper turbo, `language: ar`, no VAD, no prompt (the generic pipeline).
+
+### 8.2 Bug found in the source data
+The Tanzil **TXT** export prepends the basmala to ayah 1 of every surah (`18|1|بسم الله الرحمن الرحيم الحمد لله…`). Displaying that as 18:1 would itself be a wrong-text error. The **XML** export keeps it in a separate `bismillah` attribute. QF's `mushafs` positioned words likewise "do not include surah headings or the bismillah". All v2 numbers use the XML.
+
+### 8.3 Results (Workers AI ASR)
+
+| Clip | Ayat auto-suggested / recited | **Wrong ayat shown** | **Extra words shown** | Recited words not shown | Review items |
+|---|---|---|---|---|---|
+| r1 Husary Kahf | 10/10 | 0 | 0 | 0 | 0 |
+| r2 Minshawy mujawwad Fajr | 13/16 | 0 | 0 | 26 | 0 |
+| r3 Sudais Kursi | 3/3 | 0 | 0 | 3 | 0 (one repeated phrase resolved by verse order) |
+| r4 Maher Yasin | 12/12 | 0 | 0 | 0 | 0 (يس via the spoken-letters table) |
+| r5 Ghamdi Hashr | 4/4 | 0 | 0 | 0 | 0 |
+| r6 Husary mujawwad Falaq+Nas | 9/11 | 0 | 0 | 8 | 1 |
+| r7 Hudhaify Fatiha | 7/7 | 0 | 0 | 0 | 0 |
+| r8 Ajamy Baqarah 285–286 | 2/2 | 0 | 0 | 0 | 0 |
+| q_mulk | 13/13 | 0 | 0 | 0 | 0 |
+| q_rahman mujawwad | 16/25 | 0 | 0 | 37 | 1 (the refrain repeats 31× in the surah) |
+| p1/p2/p3 partial ayat | 6/6 | 0 | 0 | 1 (p1's first word) | 0 |
+| m1 lecture + quote | 1/1 | 0 | 0 | 0 | 0 |
+| **Recitation + partial total** | **96/110 (87.3%)** | **0** | **0** | 75 of 866 (91.3% of words shown) | 2 |
+
+**Lectures (6 clips):**
+- **Auto-suggested:** 5 true quotes (3:166–167, 5:82, 3:139, 35:7, plus 67:2 in m1), all correct.
+- **Sent to review:** 3 true quotes. They are too short (2:143, 4 words) or occur in several places (7:59 = 7:65 = 7:73 …, and a 3:167 fragment).
+- **False candidates:** 6, all sent to review, **none shown** («في سبيل الله…» ×3, «فقال لهم رسول الله», «قال ارجع إلى ربك»).
+
+**Identification:** **0 wrong ayat shown** across 20 clips. 87% of recited ayat were auto-suggested. The rest are omissions that a person reviews; none are errors.
+
+**Boundaries:** **0 extra words** shown, so text was never shown for something not recited. Omitted words are concentrated in mujawwad, where the ASR garbles elongations.
+
+### 8.4 Timing (ayah start vs ground truth, 52 ayat in 8 clips)
+
+| Method | Median error | p90 | ≤ 300 ms | ≤ 100 ms |
+|---|---|---|---|---|
+| Whisper word timestamps | 445 ms | 1,517 ms | 33% | – |
+| + snap to the nearest pause (fixed −35 dB) | 37 ms | 492 ms | 73% | 63% |
+| **+ snap to the nearest pause (adaptive −40…−20 dB)** | **33 ms** | **278 ms** | **88%** | **71%** |
+
+**Partial-quote word timing** (QF word segments as truth): start errors 0 to −1,230 ms, end errors −30 to −693 ms (Whisper timestamps without snapping). Forced alignment (§10) is the next step if word-level highlighting is wanted.
+
+### 8.5 DeepL ASR in the same pipeline (§9)
+
+| Clip | Workers AI | DeepL Voice |
+|---|---|---|
+| q_mulk | 13/13 | 13/13 (raw WER 3.6%, normalised the same way) |
+| Minshawy mujawwad | 13/16 | **16/16** |
+| Abdul Basit mujawwad Rahman | **16/25** | 7/25 |
+| wrong ayat shown | 0 | 0 |
+
+The two engines fail on different clips, which is why the spec proposes DeepL as a "second opinion" on Quran spans for the high-accuracy tier.
+
+## 9. DeepL measured (owner's API Pro account, 2026-11-11)
+
+**Usage for the whole test** (`/v2/usage` after the runs):
+- **13,365 characters** → $0.37
+- **20 speech-to-text minutes** → $0.62 (includes one 408-timeout session; minutes round up per session)
+- **2 speech-to-speech minutes** (one timed out, one completed); the Pro plan lists no STS price, so ask DeepL
+
+**Total ≈ $1.00** plus STS. The test glossary was deleted afterwards.
+
+### 9.1 Speech-to-text (Voice API)
+- **How it works:**
+  - The interface is `POST /v3/voice/realtime`, which returns a session URL; audio then streams over WebSocket at **2× real time at most** ([Voice API requirements](https://developers.deepl.com/docs/voice/voice-api-requirements.md): "Audio stream speed: maximum 2x real-time").
+  - There is no batch file upload. Our wall time was 0.54–0.62× the audio length.
+- **Arabic:** transcription is "provided by an external service partner" and must be given an explicit source language ([Supported Voice Languages](https://developers.deepl.com/docs/voice/supported-voice-languages.md)).
+
+| Clip | DeepL | Workers AI | Bunny |
+|---|---|---|---|
+| q_mulk WER | **2.1%** | 6.2% | 11.1% |
+| ar_duat3 | «التقى الجمعان», «المؤمنين» correct (Whisper had «انتقل», «المؤنين») | | |
+| x_ashura2 | clean, with punctuation; «عاشوراء» correct | 7% word disagreement | |
+| en_pickthall WER | 15.0% | 12.7% (Workers AI nova-3: 4.8%) | 16.4% |
+| Mujawwad | Minshawy good (16/16 ayat via the pipeline); Rahman poor (61% raw WER) | | |
+
+### 9.2 Translation (quality_optimized; 67 titles × 2 runs and 2 transcripts)
+- **Speed:** titles p50 0.56 s and p95 0.68 s; with a glossary 0.59 s and 0.84 s. A 49-cue transcript in 0.8 s.
+- **What the glossary fixed:**
+  - "Shahrour" (it had written «شهور», which means "months"); «الحويني» (Hawini → Huwaini);
+  - «المداخلة» ("critics" → "the Madkhalis"); "Nasheed" («أغاني», songs → «أنشودات»);
+  - "Musa", "ﷺ", "Tawakkul", "Friday Khutbah".
+- **Errors that remained** (the default LLM did not make these):
+  - «فصامه موسى شكرا» → "Moses fasted, so thank you"
+  - "He is the One…" → «هو المخلص» ("the Saviour")
+  - «فوجد اليهود صياما» → the "he found" was dropped
+  - «رضي الله عنهما» + glossary → "may Allah be pleased with him and her": the glossary matched a sub-phrase
+  - a quoted verse turned from a question into a statement (19:66)
+  - "Year 11" / "Part 3" invented
+- **Quran:** like every MT, DeepL "translated" the ayat itself, which reinforces masking Quran before any MT.
+
+### 9.3 Speech-to-speech (one 52 s Arabic clip → English voice)
+- **Output:** 59 s of coherent English speech (Ogg/Opus, preset voice). Speaker match isn't offered for partner-provided Arabic.
+- **Content check:** we transcribed the output. «أو ادفعوا» became "or pay the ransom", it said "God" and "Allah" inconsistently, and it **spoke a machine translation of 3:166–167 and 5:82**.
+- **Usable as a future dubbing option** only if Quran spans keep the original audio.
+
+## 10. Quran-specialised alternatives (researched 2026-11-11)
+
+| Option | What it is | Accuracy (published) | Licence / access | Verdict |
+|---|---|---|---|---|
+| Tarteel | Quran recitation app (NVIDIA NeMo CitriNet) | "4 percent word-error rate" (NVIDIA case study) | "we currently do not offer a public API" ([support](https://support.tarteel.ai/en/articles/12414464-do-you-have-an-api-i-can-use)) | not available |
+| tarteel-ai/whisper-base-ar-quran, whisper-tiny-ar-quran | Whisper fine-tunes | WER 5.75 / 7.05 (unnamed eval set) | Apache-2.0 | candidate second-opinion ASR on a GPU; not needed given §8 |
+| wav2vec2 / XLS-R fine-tunes (arXiv 2606.19747) | Quran ASR study | WER 0.08 on EveryAyah | paper | research only |
+| obadx Muaalem / HisnLabs tajweed-v2 | phoneme-level recitation checking | PER 0.21% (own test) / 7.0% on QDAT; tajweed-v2 runs on CPU, about 28 ms per 4 s | CC BY 4.0 paper / Apache-2.0 model | a future per-word verifier for mujawwad gaps |
+| QV Finder (IJEECS 2025) | Whisper + Levenshtein verse search | "100% verse retrieval" with 2.5% false positives | paper | the same family as ours; their false positives are why we need review classes |
+| Tadabur (arXiv 2604.18932) | ASR + embeddings vs fuzzy | 96.63% vs 86.03% coverage | data CC BY-NC | not usable commercially |
+| Audio fingerprinting | match against known recordings | no Quran study found | – | identifies copies of famous reciters only |
+| **Quran-Lab mfa-quran-hafs** | Montreal Forced Aligner Quran model | phone boundaries 10–20 ms median | **Apache-2.0** | **P5 forced alignment**, on CPU in the container |
+| cpfair/quran-align | PocketSphinx per reciter | mean < 73 ms | MIT / CC BY 4.0 | older |
+| ctc-forced-aligner (MMS), torchaudio MMS_FA | multilingual aligners | – | **CC-BY-NC** model; MMS_FA removed in torchaudio 2.9 | excluded |
+| whisper-timestamped | Whisper attention DTW | – | **AGPL-3.0** | excluded |
+| QF `chapter_recitations` segments | word timings for QF reciters | ms-level, as used for our p1–p3 truth | Content Sync (§11) | exact timings when the video uses a QF recitation |
+| AyahFlow, Quran Caption, Minbar Caption | Quran video captioners | – | consumer apps / open source, no API | none caption lectures with verified references |
+
+Sources: the subagent report of 2026-11-11, which fetched every URL listed in its table (Tarteel support pages, the Hugging Face model cards, arXiv 2606.19747, 2509.00094, 2604.18932, the IJEECS QV Finder PDF, Quran-Lab/mfa-quran-hafs, github.com/cpfair/quran-align, github.com/MahmoudAshraf97/ctc-forced-aligner, the pytorch audio docs, github.com/linto-ai/whisper-timestamped, ayahflow.ai, github.com/zonetecde/qurancaption, minbarcaption.com).
+
+## 11. Quran Foundation Content Sync (corrects v1 §5)
+
+v1 said QF "forbids a static cache". That left out the exception. Quotes, fetched 2026-11-11:
+- **Developer Terms** (https://api-docs.quran.foundation/legal/developer-terms/, "Last updated: 2026-10-11"), §3.1: "Cache or store QF Content longer than 1 week **unless it is obtained and maintained through the Content Sync APIs** listed under Content Available for Offline Sync, or consists of font files or Mushaf images cached or bundled as described below." Also: "When using Content Sync, you must perform a next sync at least every 7 days when connectivity to QF permits and apply all available changes."
+- **Content Sync guide** (https://api-docs.quran.foundation/docs/tutorials/content-sync/getting-started/): "Content Sync supports these resource groups: quran_core, mushafs, translations, word_by_word_translations, word_by_word_transliterations, tafsirs, recitations, chapter_recitations, and articles."
+
+| Need | Group | Syncable? |
+|---|---|---|
+| Uthmani verse text with diacritics, word-level Imla'i/IndoPak/Tajweed text, juz/hizb boundaries | `quran_core:1` | yes ("canonical Uthmani verse text, word-level IndoPak Nastaleeq, IndoPak, Uthmani Tajweed, and Imla'i text") |
+| Word-level Uthmani text | `mushafs:4` | yes ("For word-level Uthmani text, sync mushafs:4 (Uthmani Hafs)") |
+| Translations (per edition) | `translations:<id>` | yes for **public** resources: "Bootstrap returns only public resources matching your filter" (the list needs credentials) |
+| Word-by-word translation / transliteration | `word_by_word_*` | yes, for eligible resources |
+| Reciter chapter audio + verse/word timings | `chapter_recitations:<id>` | yes ("Chapter audio file rows and associated verse and word timing segment rows") |
+| Fonts, Mushaf images | not in sync | may be bundled with an active Developer Console account and QF credit (Terms §3.1) |
+
+**Conditions we must meet (quoted in spec §9.4):** sync at least every 7 days; no prepackaged or build-time bundle; Quran text not modified; credit QF; no ML training without consent. Derived Materials, which explicitly include "indexes", follow the same restrictions.
+
+**Not verifiable without credentials:** which translation ids are public for sync, and the rate limits. These are owner decisions O12 and O13 in the spec.
