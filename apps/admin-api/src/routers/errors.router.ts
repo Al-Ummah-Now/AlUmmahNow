@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { fromHono } from 'chanfana';
 import {
   ErrorCounts,
+  ErrorQueue,
   ErrorFacets,
   ErrorGroupAddNote,
   ErrorGroupGet,
@@ -19,6 +20,8 @@ const errorsRouter = fromHono(app, { base: '' });
 // Errors page (admin-web /errors)
 errorsRouter.get('/groups', ErrorGroupList);
 errorsRouter.get('/counts', ErrorCounts);
+// Action needed / History tabs (docs/admin/QUEUES.md)
+errorsRouter.get('/queue', ErrorQueue);
 errorsRouter.get('/facets', ErrorFacets);
 errorsRouter.get('/refs/:ref', ErrorRefLookup);
 errorsRouter.get('/groups/:id', ErrorGroupGet);

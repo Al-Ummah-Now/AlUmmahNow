@@ -126,8 +126,21 @@ function actionStatement(db: D1Like, input: ActionInput, now: string) {
     );
 }
 
+/** The reviewer: an id, or the id and email (the email names them on the History tab when no profile does). */
+export type Reviewer = string | { id: string; email?: string | null | undefined };
+const reviewerOf = (r: Reviewer) => (typeof r === 'string' ? { id: r, email: null } : { id: r.id, email: r.email ?? null });
+
+/** Records the reviewer's latest decision on the signal: it moves to the History tab (docs/admin/QUEUES.md). */
+function handledStatement(db: D1Like, signalId: string, action: 'agree' | 'disagree' | 'hide' | 'restore', reviewer: Reviewer, iso: string) {
+  const r = reviewerOf(reviewer);
+  return db
+    .prepare('UPDATE moderation_signals SET handled_action = ?, handled_by_id = ?, handled_by_email = ?, handled_at = ? WHERE id = ?')
+    .bind(action, r.id, r.email, iso, signalId);
+}
+
 /** Feedback label (spec §6): the reviewer agrees or disagrees with the AI. */
-export async function reviewSignal(db: D1Like, id: string, verdict: 'agree' | 'disagree', reviewerId: string, note?: string, now = new Date()) {
+export async function reviewSignal(db: D1Like, id: string, verdict: 'agree' | 'disagree', reviewer: Reviewer, note?: string, now = new Date()) {
+  const reviewerId = reviewerOf(reviewer).id;
   const row = await db.prepare('SELECT id, subject_type, subject_id FROM moderation_signals WHERE id = ?').bind(id).first<{ id: string; subject_type: string; subject_id: string }>();
   if (!row) return null;
   const iso = now.toISOString();
@@ -136,6 +149,7 @@ export async function reviewSignal(db: D1Like, id: string, verdict: 'agree' | 'd
       .prepare('UPDATE moderation_signals SET review_status = ?, reviewer_id = ?, reviewer_decision = ?, reviewed_at = ? WHERE id = ?')
       .bind(verdict === 'agree' ? 'agreed' : 'disagreed', reviewerId, verdict, iso, id),
     actionStatement(db, { signalId: id, subjectType: row.subject_type, subjectId: row.subject_id, action: verdict, actorId: reviewerId, reason: note }, iso),
+    handledStatement(db, id, verdict, reviewer, iso),
   ]);
   return { id, review_status: verdict === 'agree' ? 'agreed' : 'disagreed' };
 }
@@ -213,7 +227,7 @@ export async function setCommentHidden(
   videos: R2Like,
   signalId: string,
   hidden: boolean,
-  reviewerId: string,
+  reviewer: Reviewer,
   reason?: string,
   now = new Date()
 ): Promise<{ ok: true; changed: boolean } | { ok: false; error: 'not_found' | 'unsupported' | 'subject_missing' }> {
@@ -246,11 +260,15 @@ export async function setCommentHidden(
   });
   if (missing || !result) return { ok: false, error: 'subject_missing' };
 
-  await actionStatement(
-    db,
-    { signalId, subjectType: row.subject_type, subjectId: row.subject_id, action: hidden ? 'hide' : 'restore', actorId: reviewerId, reason, details: { changed } },
-    now.toISOString()
-  ).run();
+  const iso = now.toISOString();
+  await db.batch([
+    actionStatement(
+      db,
+      { signalId, subjectType: row.subject_type, subjectId: row.subject_id, action: hidden ? 'hide' : 'restore', actorId: reviewerOf(reviewer).id, reason, details: { changed } },
+      iso
+    ),
+    handledStatement(db, signalId, hidden ? 'hide' : 'restore', reviewer, iso),
+  ]);
   return { ok: true, changed };
 }
 

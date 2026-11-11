@@ -23,6 +23,10 @@ export interface ContactMessageRow {
   /** Set while a delivery of this message has finally failed (migration 0011) */
   send_failed_at: string | null;
   delivery_error: string | null;
+  /** Who moved it to replied, closed or spam, and when (migration 0019; the History tab) */
+  handled_by_id?: string | null;
+  handled_by_email?: string | null;
+  handled_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -47,7 +51,7 @@ const changes = (meta: unknown) => Number((meta as { changes?: number } | undefi
 
 /** Every column except ip_hash, which never leaves the database. */
 const MESSAGE_COLUMNS =
-  'id, status, topic, name, email, message, user_id, locale, page_url, user_agent, assignee_id, assignee_email, notify_status, ack_status, send_failed_at, delivery_error, created_at, updated_at';
+  'id, status, topic, name, email, message, user_id, locale, page_url, user_agent, assignee_id, assignee_email, notify_status, ack_status, send_failed_at, delivery_error, handled_by_id, handled_by_email, handled_at, created_at, updated_at';
 
 export interface NewContactMessage extends ContactInput {
   id: string;
@@ -204,7 +208,12 @@ export interface ContactPatch {
   status?: ContactStatus;
   /** undefined: unchanged; null: unassign */
   assignee?: { id: string; email: string | null } | null;
+  /** Who made the change: recorded as the handler when the status moves to replied, closed or spam (History tab) */
+  actor?: { id: string; email: string | null };
 }
+
+/** Statuses on the contact queue's History tab (docs/admin/QUEUES.md). */
+export const CONTACT_HANDLED_STATUSES: readonly ContactStatus[] = ['replied', 'closed', 'spam'];
 
 /** Applies the patch; false when the message does not exist. */
 export async function updateContactMessage(db: D1Database, id: string, patch: ContactPatch, now: Date): Promise<boolean> {
@@ -213,6 +222,15 @@ export async function updateContactMessage(db: D1Database, id: string, patch: Co
   if (patch.status) {
     sets.push('status = ?');
     args.push(patch.status);
+    if (CONTACT_HANDLED_STATUSES.includes(patch.status)) {
+      // Only a real change records a handler: re-saving "closed" keeps who closed it
+      sets.push(
+        'handled_by_id = CASE WHEN status = ? THEN handled_by_id ELSE ? END',
+        'handled_by_email = CASE WHEN status = ? THEN handled_by_email ELSE ? END',
+        'handled_at = CASE WHEN status = ? THEN handled_at ELSE ? END',
+      );
+      args.push(patch.status, patch.actor?.id ?? null, patch.status, patch.actor?.email ?? null, patch.status, now.toISOString());
+    }
   }
   if (patch.assignee !== undefined) {
     sets.push('assignee_id = ?', 'assignee_email = ?');
@@ -264,7 +282,16 @@ export async function recordDelivery(
         .bind(d.status, d.providerId ?? null, error, d.noteId ?? '', d.messageId),
     );
     if (d.status === 'sent' || d.status === 'sunk') {
-      statements.push(db.prepare("UPDATE contact_messages SET status = 'replied', updated_at = ? WHERE id = ? AND status <> 'spam'").bind(now, d.messageId));
+      // The reply's author handled the message (History tab)
+      statements.push(
+        db
+          .prepare(
+            `UPDATE contact_messages SET status = 'replied', updated_at = ?, handled_at = ?,
+               handled_by_id = (SELECT author_id FROM contact_notes WHERE id = ?), handled_by_email = (SELECT author_email FROM contact_notes WHERE id = ?)
+             WHERE id = ? AND status <> 'spam'`,
+          )
+          .bind(now, now, d.noteId ?? '', d.noteId ?? '', d.messageId),
+      );
     }
   } else {
     statements.push(db.prepare(`UPDATE contact_messages SET ${d.kind === 'notify' ? 'notify_status' : 'ack_status'} = ? WHERE id = ?`).bind(d.status, d.messageId));

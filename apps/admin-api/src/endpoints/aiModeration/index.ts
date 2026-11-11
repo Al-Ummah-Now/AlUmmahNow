@@ -21,9 +21,14 @@ import {
   type D1Like,
   type R2Like,
 } from '../../lib/aiModeration';
+import { AI_QUEUE_OUTCOMES, AI_QUEUE_SORTS, MODERATION_EXTENSION_CATEGORIES, LLAMA_GUARD_CATEGORIES } from '@al-ummah/shared-types';
+import { listAiQueue } from '../../lib/queue/ai-queue';
+import { queueQuery, toFilters } from '../../lib/queue/schema';
 
 const ok = (description: string) => ({ '200': { description } });
 const db = (c: AppContext) => c.env.REPORTS_DB as unknown as D1Like;
+/** The reviewer as the History tab names them: id, and email when there is no profile name. */
+const reviewerOf = (auth: { userId: string; email?: string }) => ({ id: auth.userId, email: auth.email || null });
 
 export class AiSignalsList extends AdminRoute {
   schema = addAuthToSchema({
@@ -46,6 +51,31 @@ export class AiSignalsList extends AdminRoute {
   async handle(c: AppContext) {
     const { query } = await this.getValidatedData<typeof this.schema>();
     return { success: true, result: await listSignals(db(c), query) };
+  }
+}
+
+const AI_CATEGORIES = [...Object.keys(LLAMA_GUARD_CATEGORIES), ...MODERATION_EXTENSION_CATEGORIES] as unknown as [string, ...string[]];
+
+export class AiQueueList extends AdminRoute {
+  schema = addAuthToSchema({
+    tags: ['AI Moderation'],
+    summary: 'AI moderation flags as a queue: Action needed / History (docs/admin/QUEUES.md)',
+    description:
+      'tab=action: flags awaiting review, oldest first. tab=history: reviewed flags (agree, disagree, hide, restore) with who and when, newest first. q searches the flagged item\'s title or text, its author and channel names (search index) and the category; type = surface, category = signal category, outcome = what the reviewer did, actor = who (id or me). Rows carry names and a link target. counts holds both tabs under the same filters.',
+    request: {
+      query: queueQuery(AI_QUEUE_SORTS, AI_QUEUE_OUTCOMES).extend({
+        type: z.enum(['video_comment', 'community_post', 'post_comment', 'video_metadata']).optional(),
+        category: z.enum(AI_CATEGORIES).optional(),
+      }),
+    },
+    responses: ok('AdminQueuePage<AiQueueItem>'),
+  });
+
+  async handle(c: AppContext) {
+    const { query } = await this.getValidatedData<typeof this.schema>();
+    const result = await listAiQueue(c.env.REPORTS_DB, c.env.SEARCH_DB, toFilters(query, this.getUserId(c)));
+    logger.debug('[AiModeration] Queue listed', { tab: query.tab, total: result.total, searched: !!query.q });
+    return { success: true, result };
   }
 }
 
@@ -87,7 +117,7 @@ export class AiSignalReview extends AdminRoute {
 
   async handle(c: AppContext) {
     const { params, body } = await this.getValidatedData<typeof this.schema>();
-    const result = await reviewSignal(db(c), params.id, body.verdict, this.getUserId(c), body.note);
+    const result = await reviewSignal(db(c), params.id, body.verdict, reviewerOf(this.getAuth(c)), body.note);
     if (!result) return c.json({ success: false, error: 'not_found' }, 404);
     logger.info('[AiModeration] Signal reviewed', { id: params.id, verdict: body.verdict, reviewerId: this.getUserId(c) });
     return { success: true, result };
@@ -107,7 +137,7 @@ export class AiSignalVisibility extends AdminRoute {
 
   async handle(c: AppContext) {
     const { params, body } = await this.getValidatedData<typeof this.schema>();
-    const result = await setCommentHidden(db(c), c.env.videos as unknown as R2Like, params.id, body.hidden, this.getUserId(c), body.reason);
+    const result = await setCommentHidden(db(c), c.env.videos as unknown as R2Like, params.id, body.hidden, reviewerOf(this.getAuth(c)), body.reason);
     if ('error' in result) {
       const status = result.error === 'not_found' || result.error === 'subject_missing' ? 404 : 400;
       return c.json({ success: false, error: result.error }, status);

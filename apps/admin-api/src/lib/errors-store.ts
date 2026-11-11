@@ -64,6 +64,10 @@ export interface ErrorGroupRow {
   last_alert_at: string | null;
   test: number;
   updated_at: string;
+  /** Who resolved or ignored the group, and when (migration 0019; the History tab) */
+  handled_by_id?: string | null;
+  handled_by_email?: string | null;
+  handled_at?: string | null;
 }
 
 export interface ErrorEventRow {
@@ -513,6 +517,22 @@ export function likePattern(q: string): string {
   return `%${q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
 }
 
+/**
+ * Search on error groups (alias g): message, culprit, route, error name, group
+ * id, a reference ERR-XXXX-XXXX and a request id. With `withApp`, the app name
+ * too (the queue's search box; the list has an app filter instead).
+ */
+export function errorSearchCondition(q: string, withApp = false): { sql: string; args: unknown[] } {
+  const term = q.trim();
+  const ref = /^ERR-[0-9A-Z]{4}-[0-9A-Z]{4}$/i.test(term) ? term.toUpperCase() : null;
+  const p = likePattern(q);
+  return {
+    sql: `(g.message LIKE ? ESCAPE '\\' OR g.culprit LIKE ? ESCAPE '\\' OR g.route LIKE ? ESCAPE '\\' OR g.name LIKE ? ESCAPE '\\' OR g.id = ?${withApp ? " OR g.app LIKE ? ESCAPE '\\'" : ''}${ref ? ' OR g.id IN (SELECT group_id FROM error_refs WHERE ref = ?)' : ''}
+        OR g.id IN (SELECT group_id FROM error_events WHERE request_id = ?))`,
+    args: [p, p, p, p, term, ...(withApp ? [p] : []), ...(ref ? [ref] : []), term],
+  };
+}
+
 export interface ErrorGroupListItem extends ErrorGroupRow {
   /** Open needs-action items in the group */
   open_actions: number;
@@ -557,13 +577,9 @@ export async function listErrorGroups(db: D1Database, f: ErrorGroupFilters, now 
   if (!f.includeTest) where.push('g.test = 0');
   if (f.needsAction) where.push("EXISTS (SELECT 1 FROM error_actions a WHERE a.group_id = g.id AND a.status IN ('open', 'retrying'))");
   if (f.q) {
-    const ref = /^ERR-[0-9A-Z]{4}-[0-9A-Z]{4}$/i.test(f.q.trim()) ? f.q.trim().toUpperCase() : null;
-    const p = likePattern(f.q);
-    where.push(
-      `(g.message LIKE ? ESCAPE '\\' OR g.culprit LIKE ? ESCAPE '\\' OR g.route LIKE ? ESCAPE '\\' OR g.name LIKE ? ESCAPE '\\' OR g.id = ?${ref ? ' OR g.id IN (SELECT group_id FROM error_refs WHERE ref = ?)' : ''}
-        OR g.id IN (SELECT group_id FROM error_events WHERE request_id = ?))`,
-    );
-    args.push(p, p, p, p, f.q.trim(), ...(ref ? [ref] : []), f.q.trim());
+    const search = errorSearchCondition(f.q);
+    where.push(search.sql);
+    args.push(...search.args);
   }
   const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const total = await db.prepare(`SELECT COUNT(*) AS n FROM error_groups g ${clause}`).bind(...args).first<{ n: number }>();
@@ -676,6 +692,10 @@ export async function setErrorStatus(db: D1Database, groupId: string, status: Er
     status === 'resolved'
       ? db.prepare('UPDATE error_groups SET status = ?, resolved_at = ?, resolved_release = last_release, updated_at = ? WHERE id = ?').bind(status, nowIso, nowIso, groupId)
       : db.prepare('UPDATE error_groups SET status = ?, resolved_at = NULL, resolved_release = NULL, updated_at = ? WHERE id = ?').bind(status, nowIso, groupId),
+    // Resolved and ignored groups are on the History tab with who did it (docs/admin/QUEUES.md)
+    ...(status === 'resolved' || status === 'ignored'
+      ? [db.prepare('UPDATE error_groups SET handled_by_id = ?, handled_by_email = ?, handled_at = ? WHERE id = ?').bind(actor.id, actor.email, nowIso, groupId)]
+      : []),
     db
       .prepare("INSERT INTO error_group_activity (id, group_id, kind, from_status, to_status, actor_id, actor_email, created_at) VALUES (?, ?, 'status', ?, ?, ?, ?, ?)")
       .bind(id('ega'), groupId, group.status, status, actor.id, actor.email, nowIso),
