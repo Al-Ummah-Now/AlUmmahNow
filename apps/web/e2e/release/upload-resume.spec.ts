@@ -224,7 +224,7 @@ test.describe('Release: bulk upload categories', () => {
         await expect.poll(() => storedCategory(u, videoIds[0]), { timeout: 30000 }).toBe('aqeedah:uploader');
         await expect.poll(() => storedCategory(u, videoIds[1]), { timeout: 30000 }).toBe('ramadan:uploader');
       } finally {
-        for (const videoId of videoIds) await apiFetch(u.user, `/api/videos/${videoId}`, { method: 'DELETE', headers: { channelId: u.channelId } });
+        for (const videoId of videoIds) await apiFetch(u.user, `/api/videos/${videoId}/permanent`, { method: 'DELETE', headers: { channelId: u.channelId } });
       }
     });
   }
@@ -292,7 +292,7 @@ test.describe('Release: uploads resume', () => {
       );
     } finally {
       for (const id of new Set([videoId, ...log.posts.map((p) => p.videoId)].filter(Boolean))) {
-        await apiFetch(u.user, `/api/videos/${id}`, { method: 'DELETE', headers: { channelId: u.channelId } });
+        await apiFetch(u.user, `/api/videos/${id}/permanent`, { method: 'DELETE', headers: { channelId: u.channelId } });
       }
     }
   });
@@ -342,7 +342,7 @@ test.describe('Release: uploads resume', () => {
       }
     } finally {
       for (const videoId of new Set(log.posts.map((p) => p.videoId).filter(Boolean))) {
-        await apiFetch(u.user, `/api/videos/${videoId}`, { method: 'DELETE', headers: { channelId: u.channelId } });
+        await apiFetch(u.user, `/api/videos/${videoId}/permanent`, { method: 'DELETE', headers: { channelId: u.channelId } });
       }
     }
   });
@@ -400,7 +400,7 @@ test.describe('Release: uploads resume', () => {
       await expect.poll(() => videoStatus(u, videoId), { timeout: 60000 }).toMatch(/^(processing|ready)$/);
     } finally {
       for (const id of new Set([videoId, ...log.posts.map((p) => p.videoId)].filter(Boolean))) {
-        await apiFetch(u.user, `/api/videos/${id}`, { method: 'DELETE', headers: { channelId: u.channelId } });
+        await apiFetch(u.user, `/api/videos/${id}/permanent`, { method: 'DELETE', headers: { channelId: u.channelId } });
       }
     }
   });

@@ -222,7 +222,7 @@ test.describe('Release: AI category suggestions', () => {
       expect({ outcome: afterBody.result?.outcome, source: afterBody.result?.categorySource }).toEqual({ outcome: 'accepted', source: 'admin' });
     } finally {
       await adminContext.close();
-      await apiFetch(owner, `/api/videos/${videoId}`, { method: 'DELETE', headers: { channelId } });
+      await apiFetch(owner, `/api/videos/${videoId}/permanent`, { method: 'DELETE', headers: { channelId } });
     }
   });
 });

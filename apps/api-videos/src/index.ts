@@ -3,7 +3,7 @@ import { SUBSCRIPTION_IMPORT_CRON, importPendingSubscriptions } from './lib/subs
 import { handleProcessingCheckBatch, sweepProcessingVideos } from './lib/processing/loop';
 import { handleReaperBatch, isReaperMessage, sweepStaleUploads } from './lib/uploads/reaper';
 import { handleBunnyDeleteBatch, isBunnyDeleteMessage } from './lib/uploads/bunnyDelete';
-import { handlePurgeBatch, isPurgeMessage } from './lib/uploads/testLibraryPurge';
+import { handlePurgeBatch, isPurgeMessage, startScheduledPurge } from './lib/uploads/testLibraryPurge';
 import { handlePlaylistAddBatch, isPlaylistAddMessage } from './lib/playlistUploadAdds';
 import { createPlaylistAddsInternalRouter } from './endpoints/playlist/playlistAddsInternal';
 
@@ -462,6 +462,9 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 				logger.error('[UploadReaper] Sweep failed', { error: error instanceof Error ? error.message : String(error) }),
 			),
 		);
+		// Hourly, QA / stage only: purge the test library's leaked Bunny videos (no record,
+		// or a record soft-deleted 30+ min ago; lib/uploads/testLibraryPurge.ts)
+		ctx.waitUntil(startScheduledPurge(rawEnv as never).then(() => undefined));
 		// Hourly: move legacy channel subscriptions into D1 (SCALABILITY-AUDIT AV-4)
 		ctx.waitUntil(
 			importPendingSubscriptions(rawEnv as never)

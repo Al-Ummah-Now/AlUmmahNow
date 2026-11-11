@@ -190,7 +190,7 @@ test.describe('Release: bulk rename and bulk edit', () => {
       const inPlaylist = [...(body.videos ?? body.result?.videos ?? [])];
       expect(inPlaylist.sort()).toEqual([...ids].sort());
     } finally {
-      for (const id of ids) await apiFetch(user, `/api/videos/${id}`, { method: 'DELETE', headers: { channelId } });
+      for (const id of ids) await apiFetch(user, `/api/videos/${id}/permanent`, { method: 'DELETE', headers: { channelId } });
       if (playlistId) await apiFetch(user, `/api/playlists/${playlistId}`, { method: 'DELETE', headers: { channelId } });
     }
   });

@@ -93,7 +93,7 @@ test.describe('Release: Studio draft path', () => {
       await openStatus('published');
       await expect(row()).not.toContainText('Private');
     } finally {
-      if (videoId) await apiFetch(user, `/api/videos/${videoId}`, { method: 'DELETE', headers: { channelId } });
+      if (videoId) await apiFetch(user, `/api/videos/${videoId}/permanent`, { method: 'DELETE', headers: { channelId } });
     }
   });
 });

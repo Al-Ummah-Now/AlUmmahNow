@@ -117,7 +117,7 @@ test.describe('Release: creator tiers', () => {
       await page.goto(`${target().web}/en/upload`);
       await expect(page.getByTestId('upload-by-invitation')).toBeVisible({ timeout: 30000 });
     } finally {
-      if (videoId) await apiFetch(user, `/api/videos/${videoId}`, { method: 'DELETE', headers: { channelId } });
+      if (videoId) await apiFetch(user, `/api/videos/${videoId}/permanent`, { method: 'DELETE', headers: { channelId } });
     }
   });
 });

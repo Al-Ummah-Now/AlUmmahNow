@@ -264,7 +264,7 @@ test.describe('Release: admin content management', () => {
       expect(await publicStatus(`/api/channels/${channelId}`), 'deleted channel still public').toBe(404);
     } finally {
       // Self-cleaning: whatever the admin did not delete, the creator does
-      await apiFetch(creator, `/api/videos/${videoId}`, { method: 'DELETE', headers: { channelId } }).catch(() => undefined);
+      await apiFetch(creator, `/api/videos/${videoId}/permanent`, { method: 'DELETE', headers: { channelId } }).catch(() => undefined);
       await apiFetch(creator, `/api/channels/${channelId}`, { method: 'DELETE', headers: { channelId } }).catch(() => undefined);
       await creatorContext.close();
     }
