@@ -20,6 +20,7 @@
 --   apps/api-videos/migrations/search/0023_media_originals.sql
 --   apps/api-videos/migrations/search/0024_playback_fallbacks.sql
 --   apps/api-videos/migrations/search/0026_suggest_initial.sql
+--   apps/api-videos/migrations/search/0027_live_providers.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
@@ -31,6 +32,13 @@ CREATE TABLE content_ownership (kind TEXT NOT NULL, id TEXT NOT NULL, owner_id T
 CREATE TABLE creator_tier_assignments (user_id TEXT PRIMARY KEY, tier_id TEXT NOT NULL, source TEXT NOT NULL DEFAULT 'admin' CHECK (source IN ('admin', 'subscription')), assigned_by TEXT NOT NULL, assigned_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE creator_tiers (id TEXT PRIMARY KEY, name TEXT NOT NULL, unlimited INTEGER NOT NULL DEFAULT 0, per_hour INTEGER NOT NULL, per_day INTEGER NOT NULL, max_concurrent INTEGER NOT NULL, max_channels INTEGER, updated_at TEXT, updated_by TEXT, deleted_at TEXT, deleted_by TEXT, delete_reason TEXT, purge_requested_at TEXT, purge_requested_by TEXT) WITHOUT ROWID;
 CREATE TABLE delivery_cost_daily (day TEXT NOT NULL, provider TEXT NOT NULL, metric TEXT NOT NULL, value REAL NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (day, provider, metric));
+CREATE TABLE live_channel_overrides (channel_id TEXT PRIMARY KEY, provider TEXT NOT NULL CHECK (provider IN ('bunny', 'selfhosted')), note TEXT, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL) WITHOUT ROWID;
+CREATE TABLE live_counters (name TEXT PRIMARY KEY, value INTEGER NOT NULL DEFAULT 0) WITHOUT ROWID;
+CREATE TABLE live_events (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, provider TEXT NOT NULL, kind TEXT NOT NULL, at INTEGER NOT NULL, value REAL, detail TEXT) WITHOUT ROWID;
+CREATE TABLE live_qoe (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, stream_id TEXT NOT NULL, provider TEXT NOT NULL, viewer_key TEXT NOT NULL, kind TEXT NOT NULL, at INTEGER NOT NULL, startup_ms INTEGER, latency_p50_ms INTEGER, latency_max_ms INTEGER, latency_samples TEXT, live_edge_sec REAL, rebuffer_count INTEGER NOT NULL DEFAULT 0, rebuffer_ms INTEGER NOT NULL DEFAULT 0, watch_ms INTEGER NOT NULL DEFAULT 0, bitrate_kbps INTEGER, switches INTEGER NOT NULL DEFAULT 0, dropped_frames INTEGER NOT NULL DEFAULT 0, errors INTEGER NOT NULL DEFAULT 0, error_code TEXT, colo TEXT, is_test INTEGER NOT NULL DEFAULT 0) WITHOUT ROWID;
+CREATE TABLE live_segments (session_id TEXT NOT NULL, rendition TEXT NOT NULL, seq INTEGER NOT NULL, uri TEXT NOT NULL, duration REAL NOT NULL, bytes INTEGER NOT NULL DEFAULT 0, received_at INTEGER NOT NULL, PRIMARY KEY (session_id, rendition, seq)) WITHOUT ROWID;
+CREATE TABLE live_sessions (id TEXT PRIMARY KEY, stream_id TEXT NOT NULL, channel_id TEXT, provider TEXT NOT NULL CHECK (provider IN ('bunny', 'selfhosted')), provider_ref TEXT, status TEXT NOT NULL DEFAULT 'provisioned' CHECK (status IN ('provisioned', 'live', 'ended', 'failed')), reason TEXT NOT NULL, preferred TEXT, seq INTEGER, failover_from TEXT, failover_error TEXT, key_version INTEGER NOT NULL DEFAULT 1, low_latency INTEGER NOT NULL DEFAULT 0, is_test INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, start_requested_at INTEGER, ingest_connected_at INTEGER, first_segment_at INTEGER, last_segment_at INTEGER, ended_at INTEGER, end_reason TEXT, vod_ready_at INTEGER, vod_url TEXT, playback_url TEXT, ingest_bytes INTEGER NOT NULL DEFAULT 0, segments INTEGER NOT NULL DEFAULT 0, reconnects INTEGER NOT NULL DEFAULT 0, edge_requests INTEGER NOT NULL DEFAULT 0, delivered_bytes INTEGER NOT NULL DEFAULT 0, cache_hits INTEGER NOT NULL DEFAULT 0, r2_reads INTEGER NOT NULL DEFAULT 0, r2_writes INTEGER NOT NULL DEFAULT 0, stored_bytes INTEGER NOT NULL DEFAULT 0, peak_viewers INTEGER NOT NULL DEFAULT 0, viewer_seconds INTEGER NOT NULL DEFAULT 0, error TEXT) WITHOUT ROWID;
+CREATE TABLE live_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_by TEXT, updated_at TEXT) WITHOUT ROWID;
 CREATE TABLE media_jobs (video_id TEXT PRIMARY KEY, job_id TEXT NOT NULL, status TEXT NOT NULL, access TEXT NOT NULL, reason TEXT, attempts INTEGER NOT NULL DEFAULT 0, queued_at TEXT NOT NULL, started_at TEXT, ready_at TEXT, failed_at TEXT, error TEXT, duration_seconds REAL, bytes INTEGER, objects INTEGER, rungs TEXT, container_seconds INTEGER, instance_type TEXT, bunny_ready_at TEXT, updated_at TEXT NOT NULL);
 CREATE TABLE media_originals (video_id TEXT PRIMARY KEY, upload_id TEXT NOT NULL, bytes INTEGER NOT NULL, parts INTEGER NOT NULL, completed_at TEXT NOT NULL, deleted_at TEXT);
 CREATE TABLE playback_fallback_daily (day TEXT NOT NULL, requested TEXT NOT NULL, actual TEXT NOT NULL, reason TEXT NOT NULL, server_fallbacks INTEGER NOT NULL DEFAULT 0, qoe_sessions INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, requested, actual, reason));
@@ -94,6 +102,13 @@ CREATE INDEX idx_content_ownership_needs_format ON content_ownership (kind, need
 CREATE INDEX idx_content_ownership_owner ON content_ownership (kind, owner_id);
 CREATE INDEX idx_creator_tier_assignments_tier ON creator_tier_assignments (tier_id);
 CREATE INDEX idx_creator_tiers_deleted ON creator_tiers (deleted_at) WHERE deleted_at IS NOT NULL;
+CREATE INDEX idx_live_events_kind ON live_events (kind, at);
+CREATE INDEX idx_live_events_session ON live_events (session_id, at);
+CREATE INDEX idx_live_qoe_at ON live_qoe (at, provider);
+CREATE INDEX idx_live_qoe_session ON live_qoe (session_id, at);
+CREATE INDEX idx_live_sessions_created ON live_sessions (created_at, provider);
+CREATE INDEX idx_live_sessions_status ON live_sessions (status, provider);
+CREATE INDEX idx_live_sessions_stream ON live_sessions (stream_id, created_at);
 CREATE INDEX idx_media_jobs_queued ON media_jobs (queued_at);
 CREATE INDEX idx_media_jobs_status ON media_jobs (status, updated_at);
 CREATE INDEX idx_media_originals_due ON media_originals (deleted_at, completed_at);

@@ -209,6 +209,7 @@ const PUBLISHING_ROUTES: RegExp[] = [
   /^\/api\/videos\/tus(\/|$)/,
   /^\/api\/videos\/[^/]+\/(publish-now|schedule)\/?$/,
   /^\/api\/live-streams(\/[^/]+)?\/?$/,
+  /^\/api\/live-streams\/[^/]+\/start\/?$/,
   /^\/api\/playlists\/?$/,
   /^\/api\/community\/channels\/[^/]+\/posts\/?$/,
   /^\/api\/community\/media\//,

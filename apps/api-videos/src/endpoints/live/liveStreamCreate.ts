@@ -1,4 +1,3 @@
-import { uploadCollection } from "../../lib/channelCollection";
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { Bool, Str } from "chanfana";
 import { z } from "zod";
@@ -6,10 +5,10 @@ import { LiveStream as BusinessLiveStream, ResponseError } from "../../lib/types
 import { LiveStreamInput } from "../../lib/model/input";
 import { LiveStreamView } from "../../lib/model/view";
 import R2Repository from "../../lib/r2Repo";
-import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
 import { addAuthToSchema } from "../../lib/openapi-auth";
-import { requireSecret } from "../../lib/env-helpers";
+import { attachSession, type LiveStreamRecord, type StreamsEnv } from "../../lib/live/streams";
+import { LiveRefusedError } from "../../lib/live/service";
 import { logger } from '../../lib/logger';
 import { PUBLIC_DISLIKES_COUNT } from "../../lib/reactions";
 
@@ -99,42 +98,31 @@ export class LiveStreamCreate extends AuthenticatedRoute {
 			comments: [],
 		};
 
-		// Generate stream key and RTMP URL for the live stream
-		const streamKey = crypto.randomUUID();
-		const rtmpUrl = `rtmp://ingest.bunny.net/live/${streamKey}`;
-		
-		liveStream.streamKey = streamKey;
-		liveStream.rtmpUrl = rtmpUrl;
-
-		// Create the live stream in Bunny Stream if possible
-		try {
-			const key = await requireSecret(c.env["bunny-stream-key"], 'bunny-stream-key');
-			if (key) {
-				const libraryIdStr = await requireSecret(c.env.bunny_stream_library_id, 'bunny_stream_library_id');
-				const libraryId = parseInt(libraryIdStr);
-				const bunnyStream = new stream(key).forEnv(c.env);
-				
-				// Create a video entry for the live stream, in the channel's Bunny
-				// collection (lib/channelCollection.ts). The channel id itself is
-				// not a collection id: Bunny rejects it or files it nowhere.
-				const collectionId = await uploadCollection(c.env, bunnyStream, libraryId, liveStream.channelId, userId);
-				const bunnyVideo = await bunnyStream.createVideo(libraryId, {
-					title: liveStream.title,
-					...(collectionId ? { collectionId } : {}),
-				});
-
-				liveStream.streamUrl = `https://iframe.mediadelivery.net/embed/${libraryId}/${bunnyVideo.guid}`;
-			}
-		} catch (error) {
-			logger.error("Error creating Bunny stream:", error);
-			// Continue without Bunny integration - the stream will still work with basic functionality
-		}
-
-		// Save the live stream to the repository
-		const bucket = c.env.videos; // Using videos bucket for now, could be separate livestreams bucket
+		// Save, then assign a provider (round-robin / weighted / override, lib/live/*)
+		// and provision its first session. A refusal (no provider may take a
+		// stream: off, at capacity or over budget) removes the record again.
+		const bucket = c.env.videos;
 		type LiveStreamType = z.infer<typeof BusinessLiveStream>;
 		const repository = new R2Repository<LiveStreamType>(bucket);
-		await repository.putObject(`livestream:${liveStream.id}`, liveStream);
+		const isTest = c.req.header('x-live-test') === '1' && (c.env as { ENVIRONMENT?: string }).ENVIRONMENT !== 'production';
+		await repository.putObject(`livestream:${liveStream.id}`, { ...liveStream, ...(isTest ? { isTest: true } : {}) } as LiveStreamType);
+		let attached: Awaited<ReturnType<typeof attachSession>>;
+		try {
+			attached = await attachSession(c.env as unknown as StreamsEnv, { ...(liveStream as unknown as LiveStreamRecord), isTest });
+		} catch (error) {
+			await repository.deleteObject(`livestream:${liveStream.id}`).catch(() => undefined);
+			if (error instanceof LiveRefusedError) {
+				const message = error.code === 'live_budget'
+					? 'Live streaming has reached its budget for this month. Try again later.'
+					: error.code === 'live_capacity'
+						? 'Live streaming is at capacity right now. Try again in a few minutes.'
+						: 'Live streaming is not available right now.';
+				return c.json({ success: false, code: error.code, error: message }, 503);
+			}
+			logger.error('[Live] Provisioning the first session failed', { streamId: liveStream.id, error: error instanceof Error ? error.message : String(error) });
+			return c.json({ success: false, code: 'live_provider_error', error: 'The live service could not be reached. Try again.' }, 502);
+		}
+		Object.assign(liveStream, { provider: attached.session.provider, sessionId: attached.session.id, playbackUrl: attached.session.playback_url });
 
 		// Send queue message for live stream creation
 		const queue = new Queue(c.env.queue);

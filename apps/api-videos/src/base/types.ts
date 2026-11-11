@@ -87,6 +87,12 @@ export interface AppBindings {
   BUNNY_LEGACY_TOKEN_KEY?: { get(): Promise<string> } | string;
   WEBSOCKET_URL?: string;
   CORS_ORIGINS?: string;
+  // Live providers (lib/live/*)
+  LIVE_MEDIA?: R2Bucket;
+  LIVE_INGEST_SECRET?: { get(): Promise<string> } | string;
+  LIVE_PUBLIC_HOST?: string;
+  BUNNY_LIVE_INGEST_URL?: string;
+  BUNNY_LIVE_ENABLED?: string;
 }
 
 /**

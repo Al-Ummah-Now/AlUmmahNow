@@ -5,7 +5,7 @@
   "compatibility_date": "2025-04-12",
   "compatibility_flags": ["nodejs_compat"],
   "triggers": {
-    "crons": ["17 3 * * *", "47 * * * *", "*/10 * * * *"]
+    "crons": ["17 3 * * *", "47 * * * *", "*/10 * * * *", "* * * * *"]
   },
   "observability": {
     "enabled": true,
@@ -92,7 +92,12 @@
     { "binding": "MEDIA", "bucket_name": "al-ummah-now-media-qa" },
     { "binding": "MEDIA_PRIVATE", "bucket_name": "al-ummah-now-media-private-qa" },
     // Uploads as received, for the R2 transcode (docs/media-delivery/ORIGINALS.md)
-    { "binding": "MEDIA_ORIGINALS", "bucket_name": "al-ummah-now-media-originals-qa" }
+    { "binding": "MEDIA_ORIGINALS", "bucket_name": "al-ummah-now-media-originals-qa" },
+    {
+      // Self-hosted live HLS (lib/live/edge.ts), served on LIVE_PUBLIC_HOST; test content expires after 30 days (lifecycle rule)
+      "binding": "LIVE_MEDIA",
+      "bucket_name": "al-ummah-now-live-qa"
+    }
   ],
   "d1_databases": [
     {
@@ -188,6 +193,12 @@
   },
   "secrets_store_secrets": [
     {
+      // HMAC key of self-hosted live stream keys (lib/live/providers.ts)
+      "binding": "LIVE_INGEST_SECRET",
+      "store_id": "f8eddc9944d041919ed8dc7d08d32308",
+      "secret_name": "live-ingest-secret-qa"
+    },
+    {
       "binding": "image_storage_key",
       "store_id": "f8eddc9944d041919ed8dc7d08d32308",
       "secret_name": "al-ummah-now-images-key"
@@ -232,6 +243,8 @@
     }
   ],
   "vars": {
+    // Self-hosted live edge host (custom domain on this worker, attached with the Workers domains API like videos.api.qa)
+    "LIVE_PUBLIC_HOST": "live.qa.alummahnow.net",
     // Error reports to the admin Errors page (docs/features/error-reporting.md)
     "ERRORS_INGEST_URL": "https://admin.api.qa.alummahnow.net/internal/errors",
     // R2 delivery host (public renditions direct from R2, private ones via apps/media)

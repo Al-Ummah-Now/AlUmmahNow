@@ -56,6 +56,7 @@ const API_VIDEOS_SECRETS: RequiredSecret[] = [
 	{ name: 'bunny_stream_library_id', purpose: 'Secrets Store; Bunny Stream library id' },
 	{ name: 'BUNNY_TOKEN_KEY', purpose: 'Secrets Store; signs Bunny CDN playback and thumbnail URLs' },
 	{ name: 'image_storage_key', purpose: 'Secrets Store; Bunny Storage key for thumbnails and avatars' },
+	{ name: 'LIVE_INGEST_SECRET', purpose: 'Secrets Store live-ingest-secret[-qa|-stage]; HMAC key of self-hosted live stream keys (lib/live/providers.ts)' },
 	INTERNAL_API_KEY,
 	{ name: 'MEDIA_SIGN_KEY', purpose: 'Secrets Store media-sign-key[-qa|-stage]; path tokens of private R2 renditions (shared with apps/media)' },
 ];

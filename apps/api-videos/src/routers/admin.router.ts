@@ -17,6 +17,7 @@ import {
 	ADMIN_CREATOR_FILTERS,
 	MAX_BULK_CREATOR_TIER,
 	type AccountNoticeRequest,
+	LIVE_PROVIDERS,
 } from '@al-ummah/shared-types';
 import { listChannels, listComments, listUsers, listVideos, type WaitUntil } from '../lib/admin/directory';
 import { searchUsers } from '../lib/admin/userSearch';
@@ -28,6 +29,12 @@ import { countJobs, getJob, listJobs, retryJob } from '../lib/admin/jobs';
 import { LegacyRestoreError } from '../lib/admin/legacy-restore';
 import { isDeletionKind, listDeletions } from '../lib/admin/deletions';
 import { logger } from '../lib/logger';
+import R2Repository from '../lib/r2Repo';
+import type { LiveEnv } from '../lib/live/providers';
+import { providerUsage } from '../lib/live/service';
+import { listChannelOverrides, readLiveRouting, readSession, removeChannelOverride, setChannelOverride, writeLiveRouting } from '../lib/live/store';
+import { compareProviders } from '../lib/live/qoe';
+import { readStream, streamEnd, type LiveStreamRecord } from '../lib/live/streams';
 import { bulkAssignTier, limitHitsSince, listCreators, tierCounts } from '../lib/admin/creators';
 import { createChannelFor, lookupAccount, provisionProfile } from '../lib/admin/invites';
 import { assignTier, CreatorTierError, deleteTier, purgeTiers, readAssignment, readDeletedTiers, readTiers, requestTierPurge, restoreTier, saveTier } from '../lib/creatorTiers';
@@ -370,6 +377,91 @@ app.post('/jobs/:id/retry', async (c) => {
 	if (!existing) throw new admin.AdminError(404, 'job_not_found');
 	if (existing.status !== 'failed') throw new admin.AdminError(409, 'job_not_failed', 'Only failed jobs can be retried');
 	return ok(c, await retryJob(c.env, existing.id));
+});
+
+// ---------------------------------------------------------------------------
+// Live streaming providers (D3; lib/live/*). admin-api checks the permission
+// and writes the audit rows. Settings apply to new streams within 15 s and
+// never touch a session that is live.
+// ---------------------------------------------------------------------------
+const LiveOverride = z.object({ provider: z.enum(LIVE_PROVIDERS), note: z.string().max(500).nullable().optional() }).strict();
+const LiveMove = z.object({ provider: z.enum(LIVE_PROVIDERS).nullable() }).strict();
+const LiveCompareQuery = z.object({
+	from: z.string().regex(/^\d{4}-\d{2}-\d{2}/).optional(),
+	to: z.string().regex(/^\d{4}-\d{2}-\d{2}/).optional(),
+	tests: z.enum(['1', '0']).optional(),
+});
+const LiveSessionsQuery = z.object({
+	status: z.enum(['active', 'recent']).optional(),
+	provider: z.enum(LIVE_PROVIDERS).optional(),
+	limit: z.coerce.number().int().min(1).max(200).optional(),
+});
+const liveEnv = (c: Context<Env>) => c.env as unknown as LiveEnv & { videos: R2Bucket };
+
+app.get('/live/settings', async (c) => {
+	const settings = await readLiveRouting(searchDb(c));
+	const [usage, overrides] = await Promise.all([providerUsage(liveEnv(c), settings), listChannelOverrides(searchDb(c))]);
+	return ok(c, { settings, usage, overrides });
+});
+app.put('/live/settings', async (c) => {
+	const out = await writeLiveRouting(searchDb(c), await body(c), actor(c));
+	return ok(c, out);
+});
+app.put('/live/overrides/:channelId', async (c) => {
+	const input = parse(LiveOverride, await body(c));
+	const channelId = c.req.param('channelId');
+	const out = await setChannelOverride(searchDb(c), channelId, input.provider, input.note?.trim() || null, actor(c));
+	return ok(c, { channelId, provider: input.provider, ...out });
+});
+app.delete('/live/overrides/:channelId', async (c) => {
+	const channelId = c.req.param('channelId');
+	return ok(c, { channelId, ...(await removeChannelOverride(searchDb(c), channelId)) });
+});
+/** The stream's next session goes to `provider` (null cancels). A live session is never moved. */
+app.post('/live/streams/:id/move', async (c) => {
+	const input = parse(LiveMove, await body(c));
+	const id = c.req.param('id');
+	let previous: string | null = null;
+	const updated = await new R2Repository<LiveStreamRecord>(liveEnv(c).videos).updateObject(`livestream:${id}`, (fresh) => {
+		previous = fresh.providerMove ?? null;
+		fresh.providerMove = input.provider;
+	});
+	if (!updated) throw new admin.AdminError(404, 'not_found', 'Live stream not found');
+	return ok(c, { id, providerMove: input.provider, previous, currentProvider: updated.provider ?? null });
+});
+app.get('/live/sessions', async (c) => {
+	const q = parse(LiveSessionsQuery, c.req.query());
+	const where: string[] = [];
+	const binds: unknown[] = [];
+	if (q.status === 'active') where.push("s.status IN ('provisioned', 'live')");
+	if (q.provider) {
+		where.push('s.provider = ?');
+		binds.push(q.provider);
+	}
+	const { results } = await searchDb(c)
+		.prepare(
+			`SELECT s.*, ch.admin_title AS channel_name FROM live_sessions s
+			   LEFT JOIN content_ownership ch ON ch.kind = 'channel' AND ch.id = s.channel_id
+			  ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY s.created_at DESC LIMIT ?`,
+		)
+		.bind(...binds, q.limit ?? 50)
+		.all();
+	return ok(c, { items: results ?? [] });
+});
+app.get('/live/compare', async (c) => {
+	const q = parse(LiveCompareQuery, c.req.query());
+	const now = Date.now();
+	const to = q.to ? Date.parse(q.to) + 86_400_000 : now;
+	const from = q.from ? Date.parse(q.from) : to - 30 * 86_400_000;
+	const settings = await readLiveRouting(searchDb(c));
+	return ok(c, await compareProviders(searchDb(c), settings, from, to, { includeTests: q.tests === '1', now }));
+});
+/** End a session (admin). Used for stuck sessions; the owner normally ends their own. */
+app.post('/live/sessions/:id/end', async (c) => {
+	const session = await readSession(searchDb(c), c.req.param('id'));
+	if (!session) throw new admin.AdminError(404, 'not_found', 'Session not found');
+	const out = await streamEnd(liveEnv(c) as never, { ...((await readStream(liveEnv(c) as never, session.stream_id)) ?? { id: session.stream_id, title: '', userId: '', status: 'live' }), sessionId: session.id } as LiveStreamRecord, 'admin');
+	return ok(c, { session: out.session });
 });
 
 export default app;

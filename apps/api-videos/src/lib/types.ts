@@ -333,6 +333,13 @@ export const LiveStream = z.object({
     streamUrl: Str().optional(),
     rtmpUrl: Str().optional(),
     streamKey: Str().optional(),
+    // Live provider (D3, lib/live/*): set when a session is provisioned
+    provider: z.enum(['bunny', 'selfhosted']).optional(),
+    sessionId: Str().optional().nullable(),
+    playbackUrl: Str().optional().nullable(),
+    vodUrl: Str().optional().nullable(),
+    providerMove: z.enum(['bunny', 'selfhosted']).optional().nullable(),
+    isTest: z.boolean().optional(),
     views: z.number().default(0),
     likes: z.array(Like).default([]),
     dislikes: z.array(Dislike).default([]),

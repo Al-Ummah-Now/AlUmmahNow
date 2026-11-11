@@ -1,0 +1,211 @@
+/**
+ * Live stream sessions (D3): the same endpoints whichever provider serves the
+ * stream (lib/live/*).
+ *
+ *   GET  /api/live-streams/:id          public stream (owner: everything)
+ *   GET  /api/live-streams/:id/state    live state for Studio and the watch page
+ *   GET  /api/live-streams/:id/ingest   owner: encoder settings (provisions a session)
+ *   POST /api/live-streams/:id/start    owner: Go live
+ *   POST /api/live-streams/:id/end      owner: End stream (VOD follows)
+ *   POST /api/live-streams/:id/qoe      sampled player beacon
+ */
+import { Str } from 'chanfana';
+import { z } from 'zod';
+import { AppContext, AuthenticatedRoute, OptionalAuthRoute, PublicRoute } from '../../base';
+import { addAuthToSchema } from '../../lib/openapi-auth';
+import { logger } from '../../lib/logger';
+import { CHANNEL_SUSPENDED_CODE } from '../../middleware/auth';
+import { liveStreamIsFrozen } from '../../lib/admin/frozen';
+import { LiveProviderError } from '../../lib/live/providers';
+import { LiveRefusedError } from '../../lib/live/service';
+import { readStream, streamEnd, streamIngest, streamStart, streamState, type LiveStreamRecord, type StreamsEnv } from '../../lib/live/streams';
+import { readLiveRouting } from '../../lib/live/store';
+import { parseBeacon, QoeRejected, recordBeacon } from '../../lib/live/qoe';
+import { bunnyDirectoryToken, signedBunnyUrl, tokenExpiry } from '../../lib/bunny-signing';
+import { getSecret } from '../../lib/env-helpers';
+
+const Params = z.object({ id: Str({ description: 'Live stream id' }) });
+const Ok = (schema: z.ZodTypeAny, description: string) => ({ description, content: { 'application/json': { schema: z.object({ success: z.boolean(), result: schema }) } } });
+const Err = (description: string) => ({ description, content: { 'application/json': { schema: z.object({ success: z.boolean(), code: z.string().optional(), error: z.string() }) } } });
+
+const env = (c: AppContext) => c.env as unknown as StreamsEnv;
+const fail = (c: AppContext, status: number, code: string, error: string) => c.json({ success: false, code, error }, status as 400);
+
+/** Public fields of a stream; encoder settings never leave the owner endpoints. */
+export function publicStream(s: LiveStreamRecord, isOwner: boolean) {
+	const { streamKey: _k, rtmpUrl: _r, providerMove, isTest: _t, likes, dislikes, comments, ...rest } = s as LiveStreamRecord & { likes?: unknown[]; dislikes?: unknown[]; comments?: unknown[] };
+	return {
+		...rest,
+		likesCount: Array.isArray(likes) ? likes.length : 0,
+		dislikesCount: Array.isArray(dislikes) ? dislikes.length : 0,
+		commentsCount: Array.isArray(comments) ? comments.length : 0,
+		...(isOwner ? { providerMove: providerMove ?? null } : {}),
+	};
+}
+
+async function visibleStream(c: AppContext, id: string, userId: string | undefined): Promise<LiveStreamRecord | Response> {
+	const stream = await readStream(env(c), id);
+	const isOwner = !!stream && !!userId && stream.userId === userId;
+	if (!stream || ((stream.isPrivate || stream.isHidden) && !isOwner)) return fail(c, 404, 'not_found', 'Live stream not found');
+	return stream;
+}
+
+async function ownedStream(c: AppContext, id: string, userId: string): Promise<LiveStreamRecord | Response> {
+	const stream = await readStream(env(c), id);
+	if (!stream) return fail(c, 404, 'not_found', 'Live stream not found');
+	if (stream.userId !== userId) return fail(c, 403, 'forbidden', 'Insufficient permissions for this stream');
+	return stream;
+}
+
+function providerFailure(c: AppContext, error: unknown, where: string) {
+	if (error instanceof LiveRefusedError) {
+		const message = error.code === 'live_budget'
+			? 'Live streaming has reached its budget for this month. Try again later.'
+			: error.code === 'live_capacity'
+				? 'Live streaming is at capacity right now. Try again in a few minutes.'
+				: 'Live streaming is not available right now.';
+		return fail(c, 503, error.code, message);
+	}
+	if (error instanceof LiveProviderError) {
+		logger.error(`[Live] ${where} failed at the provider`, { provider: error.provider, code: error.code });
+		return fail(c, 502, 'live_provider_error', 'The live service could not be reached. Try again.');
+	}
+	throw error;
+}
+
+/** Bunny recordings on a token-auth library need a signed playlist URL. */
+async function signVod(c: AppContext, url: string | null): Promise<string | null> {
+	const host = (c.env as { BUNNY_SIGN_HOSTNAME?: string; bunny_hostname?: string }).BUNNY_SIGN_HOSTNAME || (c.env as { bunny_hostname?: string }).bunny_hostname;
+	if (!url || !host || (c.env as { BUNNY_SIGN_URLS?: string }).BUNNY_SIGN_URLS !== 'true') return url;
+	const m = new RegExp(`^https://${host.replace(/\./g, '\\.')}/([0-9a-f-]{36})/playlist\\.m3u8$`).exec(url);
+	if (!m) return url;
+	const key = await getSecret((c.env as { BUNNY_TOKEN_KEY?: unknown }).BUNNY_TOKEN_KEY, 'BUNNY_TOKEN_KEY');
+	if (!key) return url;
+	const expires = tokenExpiry();
+	return signedBunnyUrl(host, m[1], 'playlist.m3u8', await bunnyDirectoryToken(key, m[1], expires), expires);
+}
+
+export class LiveStreamGet extends OptionalAuthRoute {
+	schema = {
+		tags: ['Live Streams'],
+		summary: 'Get a live stream',
+		request: { params: Params },
+		responses: { '200': Ok(z.object({ stream: z.record(z.any()) }), 'The stream'), '404': Err('Not found') },
+	};
+	async handle(c: AppContext) {
+		const { params } = await this.getValidatedData<typeof this.schema>();
+		const userId = this.getUserId(c);
+		const stream = await visibleStream(c, params.id, userId);
+		if (stream instanceof Response) return stream;
+		const view = publicStream(stream, stream.userId === userId);
+		return { success: true, result: { stream: { ...view, vodUrl: await signVod(c, (view.vodUrl as string | null) ?? null) } } };
+	}
+}
+
+export class LiveStreamStateGet extends OptionalAuthRoute {
+	schema = {
+		tags: ['Live Streams'],
+		summary: 'Live state of a stream',
+		description: 'Polled by Studio (every 5 s) and the watch page. `qoe` tells the player whether to send QoE beacons.',
+		request: { params: Params },
+		responses: { '200': Ok(z.record(z.any()), 'The state'), '404': Err('Not found') },
+	};
+	async handle(c: AppContext) {
+		const { params } = await this.getValidatedData<typeof this.schema>();
+		const stream = await visibleStream(c, params.id, this.getUserId(c));
+		if (stream instanceof Response) return stream;
+		const state = await streamState(env(c), stream);
+		const settings = env(c).SEARCH_DB ? await readLiveRouting(env(c).SEARCH_DB!) : null;
+		c.header('cache-control', 'no-store');
+		return {
+			success: true,
+			result: { ...state, vodUrl: await signVod(c, state.vodUrl), provider: stream.provider ?? null, qoe: { sampleRate: settings?.qoeSampleRate ?? 0 } },
+		};
+	}
+}
+
+export class LiveStreamIngestGet extends AuthenticatedRoute {
+	schema = addAuthToSchema({
+		tags: ['Live Streams'],
+		summary: 'Encoder settings (owner)',
+		description: '🔒 The ingest URL, stream key and a ready ffmpeg command for the stream\'s current session. Provisions a session when the stream has none.',
+		request: { params: Params },
+		responses: { '200': Ok(z.record(z.any()), 'Ingest settings'), '403': Err('Not the owner'), '404': Err('Not found'), '503': Err('No provider available') },
+	});
+	async handle(c: AppContext) {
+		const { params } = await this.getValidatedData<typeof this.schema>();
+		const stream = await ownedStream(c, params.id, this.getUserId(c));
+		if (stream instanceof Response) return stream;
+		try {
+			const out = await streamIngest(env(c), stream);
+			c.header('cache-control', 'no-store');
+			return { success: true, result: { ingest: out.ingest, state: await streamState(env(c), out.stream) } };
+		} catch (error) {
+			return providerFailure(c, error, 'Ingest');
+		}
+	}
+}
+
+export class LiveStreamStart extends AuthenticatedRoute {
+	schema = addAuthToSchema({
+		tags: ['Live Streams'],
+		summary: 'Go live (owner)',
+		description: '🔒 Opens ingest for the stream. The stream shows as live when the encoder\'s first video arrives.',
+		request: { params: Params },
+		responses: { '200': Ok(z.record(z.any()), 'Started'), '403': Err('Not the owner or suspended'), '404': Err('Not found'), '503': Err('No provider available') },
+	});
+	async handle(c: AppContext) {
+		const { params } = await this.getValidatedData<typeof this.schema>();
+		const stream = await ownedStream(c, params.id, this.getUserId(c));
+		if (stream instanceof Response) return stream;
+		if (await liveStreamIsFrozen(c.env, stream as Record<string, unknown>)) return fail(c, 403, CHANNEL_SUSPENDED_CODE, 'This channel is suspended on Al Ummah Now videos');
+		try {
+			const out = await streamStart(env(c), stream);
+			return { success: true, result: { ingest: out.ingest, state: await streamState(env(c), out.stream) } };
+		} catch (error) {
+			return providerFailure(c, error, 'Start');
+		}
+	}
+}
+
+export class LiveStreamEnd extends AuthenticatedRoute {
+	schema = addAuthToSchema({
+		tags: ['Live Streams'],
+		summary: 'End the stream (owner)',
+		description: '🔒 Stops ingest and publishes the recording.',
+		request: { params: Params },
+		responses: { '200': Ok(z.record(z.any()), 'Ended'), '403': Err('Not the owner'), '404': Err('Not found') },
+	});
+	async handle(c: AppContext) {
+		const { params } = await this.getValidatedData<typeof this.schema>();
+		const stream = await ownedStream(c, params.id, this.getUserId(c));
+		if (stream instanceof Response) return stream;
+		const out = await streamEnd(env(c), stream, 'owner');
+		return { success: true, result: { state: await streamState(env(c), out.stream) } };
+	}
+}
+
+export class LiveStreamQoe extends PublicRoute {
+	schema = {
+		tags: ['Live Streams'],
+		summary: 'Player QoE beacon',
+		description: 'Sampled player statistics for the provider comparison (no user data). 204 when stored.',
+		request: { params: Params, body: { content: { 'application/json': { schema: z.record(z.any()) } } } },
+		responses: { '204': { description: 'Stored' }, '400': Err('Rejected') },
+	};
+	async handle(c: AppContext) {
+		const { params } = await this.getValidatedData<typeof this.schema>();
+		const db = env(c).SEARCH_DB;
+		if (!db) return new Response(null, { status: 204 });
+		try {
+			const beacon = parseBeacon(await c.req.json().catch(() => null));
+			if (beacon.streamId !== params.id) throw new QoeRejected('stream mismatch');
+			const colo = (c.req.raw as { cf?: { colo?: string } }).cf?.colo ?? null;
+			await recordBeacon(db, beacon, { colo, isTest: c.req.header('x-live-test') === '1' });
+			return new Response(null, { status: 204 });
+		} catch (error) {
+			if (error instanceof QoeRejected) return fail(c, 400, 'rejected', error.message);
+			throw error;
+		}
+	}
+}
