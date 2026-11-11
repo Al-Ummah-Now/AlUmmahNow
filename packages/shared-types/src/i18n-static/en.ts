@@ -11,6 +11,7 @@ import { DISLIKES_DISABLED_MESSAGE } from '../video-reactions';
 import { LIBRARY_EN, NOTIFICATION_CENTER_EN } from '../i18n-library';
 import { BULK_EDIT_EN } from '../i18n-bulk-edit';
 import { STUDIO_EN } from '../i18n-studio';
+import { LIVE_WATCH_EN } from '../i18n-live';
 import { COMMUNITY_GUIDELINES_EN } from '../i18n-community-guidelines';
 import { CONTACT_EN } from '../i18n-contact';
 import { UPLOAD_STATUS_EN } from '../i18n-upload-status';
@@ -2159,4 +2160,5 @@ export const EN_TRANSLATIONS: AppTranslations = {
     deleteNotificationBody: 'This notification is removed from your list.',
   },
   studio: STUDIO_EN,
+  liveWatch: LIVE_WATCH_EN,
 };

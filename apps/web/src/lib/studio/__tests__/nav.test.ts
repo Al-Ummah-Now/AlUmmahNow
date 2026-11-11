@@ -9,17 +9,17 @@ describe('navigation per role', () => {
     ['owner', ['dashboard', 'content', 'analytics', 'playlists', 'customisation', 'settings']],
     ['admin', ['dashboard', 'content', 'analytics', 'playlists', 'customisation', 'settings']],
     ['editor', ['dashboard', 'content', 'playlists']],
-    // Comments and Live have no creator page yet
-    ['moderator', ['dashboard']],
+    // Comments has no creator page yet; a moderator reaches Content → Live (live.moderate)
+    ['moderator', ['dashboard', 'content']],
   ])('%s sees exactly its items', (role, expected) => {
     expect(ids(role)).toEqual(expected);
   });
 
   it.each<[StudioRole, string[]]>([
-    ['owner', ['videos', 'posts']],
-    ['admin', ['videos', 'posts']],
+    ['owner', ['videos', 'live', 'posts']],
+    ['admin', ['videos', 'live', 'posts']],
     ['editor', ['videos', 'posts']],
-    ['moderator', []],
+    ['moderator', ['live']],
   ])('%s sees exactly its Content tabs', (role, expected) => {
     expect(tabs(role, 'content')).toEqual(expected);
   });
@@ -53,7 +53,12 @@ describe('checkPath', () => {
     ['owner', ['customisation'], 'redirect'],
     ['owner', ['settings'], 'redirect'],
     ['owner', ['content', 'videos'], 'ok'],
-    ['editor', ['content', 'live'], 'unknown'],
+    ['editor', ['content', 'live'], 'forbidden'],
+    ['owner', ['content', 'live'], 'ok'],
+    ['moderator', ['content', 'live'], 'ok'],
+    ['admin', ['content', 'live', 's1'], 'ok'],
+    ['moderator', ['content', 'live', 's1'], 'forbidden'],
+    ['owner', ['content', 'live', 's1', 'x'], 'unknown'],
     ['moderator', ['content', 'videos'], 'forbidden'],
     ['editor', ['analytics'], 'forbidden'],
     ['editor', ['content', 'videos', 'v1', 'edit'], 'ok'],

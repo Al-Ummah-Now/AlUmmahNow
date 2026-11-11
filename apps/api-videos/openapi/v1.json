@@ -15476,6 +15476,128 @@
           }
         }
       },
+      "delete": {
+        "tags": [
+          "Live Streams"
+        ],
+        "summary": "Delete a live stream (owner)",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\n🔒 Ends the stream's session when one is still open (provisioned or live), then removes the stream. Analytics rows stay for the provider comparison.",
+        "operationId": "delete_LiveStreamDelete",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Live stream id"
+            },
+            "required": true,
+            "description": "Live stream id",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "result": {
+                      "type": "object",
+                      "properties": {
+                        "deleted": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "deleted"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "result"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not the owner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
       "patch": {
         "tags": [
           "Live Streams"

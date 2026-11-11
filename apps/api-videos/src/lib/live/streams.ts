@@ -155,6 +155,17 @@ export async function markStreamEnded(env: StreamsEnv, streamId: string, session
 	});
 }
 
+/**
+ * Owner deletes a stream: a session still open (provisioned or live) is ended
+ * first, so the provider stops ingest and the comparison keeps its rows; then
+ * the record goes.
+ */
+export async function deleteStream(env: StreamsEnv, stream: LiveStreamRecord, now = Date.now()): Promise<void> {
+	const session = stream.sessionId && env.SEARCH_DB ? await readSession(env.SEARCH_DB, stream.sessionId) : null;
+	if (session && (session.status === 'provisioned' || session.status === 'live')) await endSession(env, session, 'deleted', now);
+	await repo(env).deleteObject(streamKey(stream.id));
+}
+
 /** Wires idle ends (cron) to the stream record. */
 export function registerLiveStreamHooks(): void {
 	setOnSessionEnded(async (env, session) => {

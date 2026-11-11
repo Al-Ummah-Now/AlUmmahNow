@@ -11,6 +11,7 @@ import { DISLIKES_DISABLED_MESSAGE } from '../video-reactions';
 import { LIBRARY_AR, NOTIFICATION_CENTER_AR } from '../i18n-library';
 import { BULK_EDIT_AR } from '../i18n-bulk-edit';
 import { STUDIO_AR } from '../i18n-studio';
+import { LIVE_WATCH_AR } from '../i18n-live';
 import { COMMUNITY_GUIDELINES_AR } from '../i18n-community-guidelines';
 import { CONTACT_AR } from '../i18n-contact';
 import { UPLOAD_STATUS_AR } from '../i18n-upload-status';
@@ -2154,4 +2155,5 @@ export const AR_TRANSLATIONS: AppTranslations = {
     deleteNotificationBody: 'سيُزال هذا الإشعار من قائمتك.',
   },
   studio: STUDIO_AR,
+  liveWatch: LIVE_WATCH_AR,
 };

@@ -61,6 +61,7 @@ export * from './notifications';
 export * from './i18n-library';
 export * from './i18n-bulk-edit';
 export * from './i18n-studio';
+export * from './i18n-live';
 export * from './bulk-rename';
 export * from './bulk-order';
 export * from './i18n-community-guidelines';

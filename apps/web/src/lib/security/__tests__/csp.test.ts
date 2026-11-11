@@ -51,6 +51,11 @@ describe('buildContentSecurityPolicy (production)', () => {
     expect(d['connect-src']).not.toContain('http://localhost:*');
   });
 
+  it('allows the self-hosted live edges for live HLS (fetched and played natively)', () => {
+    expect(d['connect-src']).toEqual(expect.arrayContaining(['https://live.alummahnow.net', 'https://live.qa.alummahnow.net']));
+    expect(d['media-src']).toEqual(expect.arrayContaining(['https://live.stage.alummahnow.net']));
+  });
+
   it('reports violations and upgrades insecure requests', () => {
     expect(d['report-uri']).toEqual([CSP_REPORT_PATH]);
     expect(d['upgrade-insecure-requests']).toEqual([]);
