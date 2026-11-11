@@ -49,6 +49,7 @@ import {
   uploadEligibleChannels,
   type RememberedUploadChannel,
 } from "@/lib/upload/upload-channel";
+import { useBatchSetValues, useSetValuesSeed } from "@/components/videoUpload/useBatchSetValues";
 
 
 const UploadPage: React.FC = () => {
@@ -123,6 +124,9 @@ const UploadPage: React.FC = () => {
   const [batchCategory, setBatchCategory] = useState<VideoCategory | undefined>(undefined);
   const batchSharedMetadata = useMemo(() => ({ category: batchCategory }), [batchCategory]);
 
+  // "Set values": values set for all files go in when each file's video is created
+  const setValuesSeed = useSetValuesSeed();
+
   // Batch upload hook
   const {
     files,
@@ -144,6 +148,7 @@ const UploadPage: React.FC = () => {
   } = useBatchUpload({
     channelId: uploadChannelId,
     sharedMetadata: batchSharedMetadata,
+    initiateValuesFor: setValuesSeed.initiateValuesFor,
     onUploadComplete: (videoId) => {
       logger.debug('Video uploaded:', videoId);
     },
@@ -271,7 +276,23 @@ const UploadPage: React.FC = () => {
   const pendingChannel = pendingChannelId ? uploadChannels.find((c) => c.id === pendingChannelId) : undefined;
   const pendingChannelName = pendingChannel ? channelDisplayName(pendingChannel, lang) : '';
 
-  const { rows: categoryRows, pick: pickRowCategory } = useBatchCategories(files, batchCategory, uploadChannelId);
+  const { rows: categoryRows, pick: pickRowCategory, setFor: setRowCategories } = useBatchCategories(files, batchCategory, uploadChannelId);
+  // {channel} in a title pattern: the upload's channel, per title language
+  const uploadChannelName = useMemo(() => (uploadChannel ? {
+    en: channelDisplayName(uploadChannel, 'en'),
+    ar: channelDisplayName(uploadChannel, 'ar'),
+  } : undefined), [uploadChannel]);
+  const batchSetValues = useBatchSetValues({
+    seed: setValuesSeed,
+    files,
+    channelId: uploadChannelId,
+    channelName: uploadChannelName,
+    playlists: singlePlaylists,
+    batchPlaylists,
+    setBatchCategory,
+    setRowCategories,
+    disabled: isInitiating,
+  });
   const renderRowCategory = (file: UploadQueueItem) => {
     const row = file.videoId ? categoryRows[file.videoId] : undefined;
     if (!file.videoId || !row) return null;
@@ -685,6 +706,10 @@ const UploadPage: React.FC = () => {
                   disabled={isInitiating}
                 />
               </div>
+              {/* Titles, description and the rest for all files, including files picked later */}
+              <button type="button" className="b b-secondary b-sm mt-4" onClick={batchSetValues.openPanel} disabled={isInitiating} data-testid="batch-settings-set-values">
+                {t.bulkEdit.setValues}
+              </button>
             </section>
 
             {/* File Selection Area */}
@@ -738,6 +763,10 @@ const UploadPage: React.FC = () => {
                   onRetryFile={retryUpload}
                   renderCategory={renderRowCategory}
                   renderPlaylists={renderRowPlaylists}
+                  renderSelect={batchSetValues.renderSelect}
+                  renderTitles={batchSetValues.renderTitles}
+                  titleOf={batchSetValues.titleOf}
+                  toolbar={batchSetValues.toolbar}
                 />
               </div>
             )}
@@ -854,6 +883,7 @@ const UploadPage: React.FC = () => {
         danger={false}
         testId="upload-channel-switch"
       />
+      {batchSetValues.panel}
     </main>
   );
 };
