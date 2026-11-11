@@ -119,7 +119,7 @@ test.describe('Release: bulk rename order', () => {
         }
       }
     } finally {
-      for (const id of Object.values(ids)) await apiFetch(user, `/api/videos/${id}`, { method: 'DELETE', headers: { channelId } });
+      for (const id of Object.values(ids)) await apiFetch(user, `/api/videos/${id}/permanent`, { method: 'DELETE', headers: { channelId } });
     }
   });
 });

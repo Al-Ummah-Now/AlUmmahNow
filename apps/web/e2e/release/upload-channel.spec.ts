@@ -152,7 +152,7 @@ test.describe('Release: the upload page shows and follows the chosen channel', (
     } finally {
       await page.goto('about:blank');
       for (const u of uploads) {
-        if (u.videoId) await apiFetch(user, `/api/videos/${u.videoId}`, { method: 'DELETE', headers: { channelId: u.channelId } });
+        if (u.videoId) await apiFetch(user, `/api/videos/${u.videoId}/permanent`, { method: 'DELETE', headers: { channelId: u.channelId } });
       }
     }
   });

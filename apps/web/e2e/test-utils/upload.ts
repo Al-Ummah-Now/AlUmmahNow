@@ -175,7 +175,7 @@ export async function deleteVideos(page: Page, videoIds: Iterable<string>, user:
   if (!token) return;
   for (const id of ids) {
     await page.request
-      .delete(`${API_URL}/api/videos/${id}`, {
+      .delete(`${API_URL}/api/videos/${id}/permanent`, {
         headers: { Authorization: `Bearer ${token}`, ...(channelId ? { channelId } : {}) },
         failOnStatusCode: false,
       })

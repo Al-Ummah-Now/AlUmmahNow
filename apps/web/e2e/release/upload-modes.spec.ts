@@ -112,7 +112,7 @@ test.describe('Release: single and bulk uploads behave the same', () => {
         .poll(async () => (await channelList(channelId)).map((v) => v.id).sort().join(','), { timeout: 60000 })
         .toBe([...ids].sort().join(','));
     } finally {
-      for (const id of ids) await apiFetch(user, `/api/videos/${id}`, { method: 'DELETE', headers: { channelId } });
+      for (const id of ids) await apiFetch(user, `/api/videos/${id}/permanent`, { method: 'DELETE', headers: { channelId } });
     }
   });
 });

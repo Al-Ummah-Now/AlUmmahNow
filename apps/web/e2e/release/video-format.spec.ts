@@ -185,7 +185,7 @@ test.describe('Release: Short vs video', () => {
       await setFormat(user, channelId, landscape, 'auto');
       await expectTabs(user, channelId, [vertical], [landscape]);
     } finally {
-      for (const id of created) await apiFetch(user, `/api/videos/${id}`, { method: 'DELETE', headers: { channelId } });
+      for (const id of created) await apiFetch(user, `/api/videos/${id}/permanent`, { method: 'DELETE', headers: { channelId } });
     }
   });
 });

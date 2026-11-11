@@ -134,7 +134,7 @@ test.describe('Release: upload processing', () => {
       await expect(page.getByTestId('video-processing-state')).toHaveCount(0);
       expect(await playFor(page, 2)).toBeGreaterThan(1);
     } finally {
-      if (videoId) await apiFetch(user, `/api/videos/${videoId}`, { method: 'DELETE', headers: { channelId } });
+      if (videoId) await apiFetch(user, `/api/videos/${videoId}/permanent`, { method: 'DELETE', headers: { channelId } });
     }
   });
 });

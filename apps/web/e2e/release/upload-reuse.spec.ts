@@ -168,7 +168,7 @@ test.describe('Release: retried uploads reuse their video', () => {
         .toEqual([videoId]);
       await second.close();
     } finally {
-      if (videoId) await apiFetch(u.user, `/api/videos/${videoId}`, { method: 'DELETE', headers: { channelId: u.channelId } });
+      if (videoId) await apiFetch(u.user, `/api/videos/${videoId}/permanent`, { method: 'DELETE', headers: { channelId: u.channelId } });
     }
   });
 });

@@ -29,6 +29,10 @@ import {
 	PURGE_PAGE_SIZE,
 	purgeAllowed,
 	readPurgeState,
+	SCHEDULED_PURGE_ACTOR,
+	SOFT_DELETED_MIN_AGE_MS,
+	softDeletedAt,
+	startScheduledPurge,
 	runPurgePage,
 	startPurge,
 	stopPurge,
@@ -236,6 +240,27 @@ describe('test-library purge rules', () => {
 		assert.deepEqual(decidePurge({ ...base, liveStreamRef: true, video: video() }), { action: 'keep', reason: 'live-stream' });
 	});
 
+	it('2026-11-11: a record soft-deleted 30+ min ago no longer keeps its Bunny video; a live or just-deleted one does', () => {
+		const old = NOW.getTime() - SOFT_DELETED_MIN_AGE_MS - 1000;
+		const recent = NOW.getTime() - SOFT_DELETED_MIN_AGE_MS + 60_000;
+		assert.equal(decidePurge({ ...base, hasRecord: true, deletedAt: old, video: video() }).action, 'delete');
+		assert.deepEqual(decidePurge({ ...base, hasRecord: true, deletedAt: recent, video: video() }), { action: 'keep', reason: 'recently-deleted' });
+		assert.deepEqual(decidePurge({ ...base, hasRecord: true, deletedAt: Number.NaN, video: video() }), { action: 'keep', reason: 'recently-deleted' });
+		assert.deepEqual(decidePurge({ ...base, hasRecord: true, deletedAt: null, video: video() }), { action: 'keep', reason: 'has-record' });
+		// Still never another environment's, a young upload or a live stream's
+		assert.equal(decidePurge({ ...base, hasRecord: true, deletedAt: old, video: video({ title: '[stage] x' }) }).action, 'keep');
+		assert.equal(decidePurge({ ...base, hasRecord: true, deletedAt: old, liveStreamRef: true, video: video() }).action, 'keep');
+	});
+
+	it('softDeletedAt reads deletedAt, then ownerDeletion.at; live records are null', () => {
+		assert.equal(softDeletedAt(null), null);
+		assert.equal(softDeletedAt({}), null);
+		assert.equal(softDeletedAt({ isDeleted: false, deletedAt: ago(H) }), null);
+		assert.equal(softDeletedAt({ isDeleted: true, deletedAt: ago(H) }), NOW.getTime() - H);
+		assert.equal(softDeletedAt({ isDeleted: true, ownerDeletion: { at: ago(2 * H) } }), NOW.getTime() - 2 * H);
+		assert.ok(Number.isNaN(softDeletedAt({ isDeleted: true })));
+	});
+
 	it('re-lists the same page after deletes, advances otherwise, stops at the end', () => {
 		assert.equal(nextPurgePage({ page: 3, listed: 50, deleted: 25, total: 500, dryRun: false }), 3);
 		// Fewer than half deleted: move on (the next lap catches what moved up)
@@ -395,6 +420,44 @@ describe('test-library purge run', () => {
 		assert.equal(bunny.videos.filter((v) => v.title === 'E2E leaked').length, 0, 'every leaked video is gone after the laps');
 		assert.equal(bunny.videos.length, 30);
 		assert.ok((state?.lap ?? 1) >= 1);
+	});
+
+	it('2026-11-11: deletes the Bunny videos of records soft-deleted 30+ min ago, keeps live and just-deleted ones', async () => {
+		const bunny = bunnyStub();
+		const env = makeEnv();
+		const at = (ms: number) => new Date(Date.now() - ms).toISOString();
+		const add = (n: number) => {
+			bunny.videos.push({ guid: uuid(n), title: 'E2E', status: 2, dateUploaded: at(3 * H) });
+			return uuid(n);
+		};
+		const oldDeleted = [add(1), add(2)];
+		for (const id of oldDeleted) await env.videos.put(id, JSON.stringify(videoFixture({ id, isDeleted: true, deletedAt: at(H) } as never)));
+		const justDeleted = add(3);
+		await env.videos.put(justDeleted, JSON.stringify(videoFixture({ id: justDeleted, isDeleted: true, deletedAt: at(60_000) } as never)));
+		const live = add(4);
+		await env.videos.put(live, JSON.stringify(videoFixture({ id: live })));
+		const unreadable = add(5);
+		await env.videos.put(unreadable, 'not json');
+		await startPurge(env, { actor: 'a', dryRun: false });
+		await drain(env);
+		assert.deepEqual([...bunny.deleted].sort(), oldDeleted);
+		assert.ok((env.videos.read(oldDeleted[0]) as any)?.isDeleted, 'the record stays for the 30-day cleanup');
+		const state = await readPurgeState(env);
+		assert.equal(state?.kept['recently-deleted'], 1);
+		assert.equal(state?.kept['has-record'], 2);
+	});
+
+	it('hourly cron starts a live run unless one is running; supersedes a run idle for 3 hours; never on production', async () => {
+		bunnyStub();
+		const env = makeEnv();
+		const first = await startScheduledPurge(env, NOW);
+		assert.equal(first?.startedBy, SCHEDULED_PURGE_ACTOR);
+		assert.equal(first?.dryRun, false);
+		assert.equal(await startScheduledPurge(env, new Date(NOW.getTime() + H)), null, 'one run at a time');
+		const later = await startScheduledPurge(env, new Date(NOW.getTime() + 4 * H));
+		assert.ok(later && later.runId !== first!.runId, 'an idle run is superseded');
+		assert.equal(await startScheduledPurge(makeEnv({ ENVIRONMENT: 'production' }), NOW), null);
+		assert.equal(await startScheduledPurge(makeEnv({ BUNNY_TEST_LIBRARY: 'false' }), NOW), null);
 	});
 
 	it('refuses to start on production, and a production worker drops a run', async () => {

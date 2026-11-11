@@ -466,7 +466,7 @@ async function ensureVideos(session: SessionTokens, channelId: string, defs: See
         continue;
       }
       log.warn('Replacing stale seed upload', { title: def.title, videoId: video.id, status });
-      await api.request(`/api/videos/${video.id}`, { method: 'DELETE', token: session.accessToken, channelId });
+      await api.request(`/api/videos/${video.id}/permanent`, { method: 'DELETE', token: session.accessToken, channelId });
     } else if (MODE === 'check') {
       record('video', def.title, 'missing');
       continue;

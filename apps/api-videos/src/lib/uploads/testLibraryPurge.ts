@@ -18,7 +18,19 @@
  *
  * Kept: another environment's video (name prefix rule), younger than
  * MIN_AGE_MS (an upload in flight writes its record seconds after creating
- * the Bunny video), a video with a record, a video a live stream refers to.
+ * the Bunny video), a video with a live record, a video a live stream refers to.
+ *
+ * Soft-deleted records (2026-11-11 incident): since creator deletes became
+ * restorable for 30 days (lib/videoTrash.ts) the record stays and nothing
+ * deletes its Bunny video until the 30-day cleanup. Every E2E cleanup is such
+ * a delete, so the library grew from ~300 to ~3,900 videos in 18 hours and
+ * the throwaway encodes held the encoding queue again (stage uploads stayed
+ * "processing"). In a test library the Bunny video of a record deleted more
+ * than SOFT_DELETED_MIN_AGE_MS ago is deleted too: a restore after that
+ * brings back the record without its video, which only QA / stage accept.
+ *
+ * Scheduled: the hourly cron starts a live run (startScheduledPurge) when none
+ * is running, so a leak can never pile up for more than an hour or so.
  * Idempotent: deleting a video already gone (404) is fine; a stopped or
  * superseded run's message is dropped; every message re-reads the state.
  * A failing page retries with backoff; after the last delivery the run is
@@ -54,6 +66,10 @@ const RECENT_LIMIT = 50;
 export const PURGE_LAP_MIN_DELETES = 50;
 /** …up to this many laps. */
 export const PURGE_MAX_LAPS = 5;
+/** A soft-deleted record's Bunny video goes once the delete is this old (tests restore within minutes). */
+export const SOFT_DELETED_MIN_AGE_MS = 30 * 60 * 1000;
+/** Actor of the runs the hourly cron starts. */
+export const SCHEDULED_PURGE_ACTOR = 'cron:hourly';
 
 export type PurgeStatus = 'running' | 'stopped' | 'finished' | 'failed';
 
@@ -113,7 +129,21 @@ export function purgeAllowed(env: Pick<PurgeEnv, 'BUNNY_TEST_LIBRARY' | 'ENVIRON
 	return env.BUNNY_TEST_LIBRARY === 'true' && (env.ENVIRONMENT ?? '').toLowerCase() !== 'production';
 }
 
-export type PurgeDecision = { action: 'delete'; reason: string } | { action: 'keep'; reason: 'other-env' | 'young' | 'has-record' | 'live-stream' | 'no-id' | 'status-later' };
+export type PurgeDecision =
+	| { action: 'delete'; reason: string }
+	| { action: 'keep'; reason: 'other-env' | 'young' | 'has-record' | 'recently-deleted' | 'live-stream' | 'no-id' | 'status-later' };
+
+/** What the purge needs from a video record: whether it is soft-deleted, and since when. */
+export type RecordView = { isDeleted?: unknown; deletedAt?: unknown; ownerDeletion?: { at?: unknown } } | null;
+
+/** When the record was soft-deleted (ms), or null for a live record. */
+export function softDeletedAt(record: RecordView): number | null {
+	if (!record || record.isDeleted !== true) return null;
+	const at = typeof record.deletedAt === 'string' ? record.deletedAt : typeof record.ownerDeletion?.at === 'string' ? record.ownerDeletion.at : '';
+	const ms = Date.parse(at);
+	// Deleted but undated: treat as just deleted (kept until the record says more)
+	return Number.isFinite(ms) ? ms : Number.NaN;
+}
 
 /**
  * Bunny statuses that hold the library's encoding slots: 0 Created, 1 Uploaded,
@@ -123,17 +153,33 @@ export type PurgeDecision = { action: 'delete'; reason: string } | { action: 'ke
 export const STUCK_STATUSES = [0, 1, 2, 3, 7] as const;
 
 /** Pure: what to do with one Bunny video. */
-export function decidePurge(input: { video: BunnyView; prefix: string; now: number; hasRecord: boolean; liveStreamRef: boolean; minAgeMs?: number; statuses?: readonly number[] }): PurgeDecision {
+export function decidePurge(input: {
+	video: BunnyView;
+	prefix: string;
+	now: number;
+	hasRecord: boolean;
+	/** The record's soft delete time (ms) when it is soft-deleted (softDeletedAt) */
+	deletedAt?: number | null;
+	liveStreamRef: boolean;
+	minAgeMs?: number;
+	statuses?: readonly number[];
+}): PurgeDecision {
 	const { video } = input;
 	if (!video.guid) return { action: 'keep', reason: 'no-id' };
 	if (!belongsToEnv(video.title, input.prefix)) return { action: 'keep', reason: 'other-env' };
 	const created = Date.parse(video.dateUploaded || '');
 	// Unknown age counts as young: never delete what may be in flight
 	if (!Number.isFinite(created) || input.now - created < (input.minAgeMs ?? PURGE_MIN_AGE_MS)) return { action: 'keep', reason: 'young' };
-	if (input.hasRecord) return { action: 'keep', reason: 'has-record' };
+	let reason = 'No record';
+	if (input.hasRecord) {
+		const deletedAt = input.deletedAt;
+		if (deletedAt === null || deletedAt === undefined) return { action: 'keep', reason: 'has-record' };
+		if (!Number.isFinite(deletedAt) || input.now - deletedAt < SOFT_DELETED_MIN_AGE_MS) return { action: 'keep', reason: 'recently-deleted' };
+		reason = 'Record soft-deleted';
+	}
 	if (input.liveStreamRef) return { action: 'keep', reason: 'live-stream' };
 	if (input.statuses && !input.statuses.includes(video.status ?? -1)) return { action: 'keep', reason: 'status-later' };
-	return { action: 'delete', reason: `No record; Bunny status ${video.status}` };
+	return { action: 'delete', reason: `${reason}; Bunny status ${video.status}` };
 }
 
 /** Next page after one page: the same one when deletes moved the rest up. */
@@ -247,6 +293,48 @@ async function liveStreamTexts(env: Pick<PurgeEnv, 'videos'>): Promise<string[]>
 	return texts;
 }
 
+/**
+ * The record of a Bunny video: undefined when there is none; null when it
+ * exists but cannot be parsed (counts as live: never delete what we cannot read).
+ */
+async function readRecord(env: Pick<PurgeEnv, 'videos'>, id: string): Promise<RecordView | undefined> {
+	const object = await env.videos.get(id);
+	if (!object) return undefined;
+	try {
+		const parsed = (await object.json()) as RecordView;
+		return parsed && typeof parsed === 'object' ? parsed : {};
+	} catch {
+		return {};
+	}
+}
+
+/**
+ * Hourly cron (QA / stage only): a live run with the default options unless
+ * one is running. A run that stopped answering (no update for 3 hours) is
+ * superseded. Never throws.
+ */
+export async function startScheduledPurge(env: PurgeEnv, now = new Date()): Promise<PurgeState | null> {
+	if (!purgeAllowed(env) || !env.PROCESSING_CHECK_QUEUE) return null;
+	try {
+		const previous = await readPurgeState(env);
+		if (previous?.status === 'running') {
+			const idle = now.getTime() - (Date.parse(previous.updatedAt) || 0);
+			if (idle < 3 * 3600 * 1000) return null;
+			await repo(env).updateObject(PURGE_STATE_KEY, (fresh) => {
+				if (fresh.runId !== previous.runId || fresh.status !== 'running') return false;
+				fresh.status = 'stopped';
+				fresh.stoppedBy = SCHEDULED_PURGE_ACTOR;
+				fresh.updatedAt = now.toISOString();
+				return true;
+			});
+		}
+		return await startPurge(env, { actor: SCHEDULED_PURGE_ACTOR, dryRun: false, now });
+	} catch (error) {
+		logger.error('[TestLibraryPurge] Scheduled start failed', { error: error instanceof Error ? error.message : String(error) });
+		return null;
+	}
+}
+
 /** One page of a run. Throws on transient trouble (the queue retries). */
 export async function runPurgePage(env: PurgeEnv, message: PurgeMessage, now = new Date()): Promise<{ next: number | null; deleted: number } | null> {
 	const state = await readPurgeState(env);
@@ -280,8 +368,17 @@ export async function runPurgePage(env: PurgeEnv, message: PurgeMessage, now = n
 	// retries it, and videos already deleted answer 404 (done).
 	const one = async (video: BunnyView): Promise<void> => {
 		const id = video.guid ?? '';
-		const hasRecord = id ? !!(await env.videos.head(id)) : false;
-		const decision = decidePurge({ video, prefix, now: now.getTime(), hasRecord, liveStreamRef: !!id && lives.some((t) => t.includes(id)), minAgeMs, statuses: state.statuses });
+		const record = id ? await readRecord(env, id) : undefined;
+		const decision = decidePurge({
+			video,
+			prefix,
+			now: now.getTime(),
+			hasRecord: record !== undefined,
+			deletedAt: record === undefined ? null : softDeletedAt(record),
+			liveStreamRef: !!id && lives.some((t) => t.includes(id)),
+			minAgeMs,
+			statuses: state.statuses,
+		});
 		if (decision.action === 'keep') {
 			kept[decision.reason] = (kept[decision.reason] ?? 0) + 1;
 			if (decision.reason === 'other-env') otherEnv[String(video.status)] = (otherEnv[String(video.status)] ?? 0) + 1;
@@ -292,8 +389,9 @@ export async function runPurgePage(env: PurgeEnv, message: PurgeMessage, now = n
 			byStatus[String(video.status)] = (byStatus[String(video.status)] ?? 0) + 1;
 			return;
 		}
-		// Re-check right before the delete: a record may have landed since the head
-		if (await env.videos.head(id)) {
+		// Re-check right before the delete: a record may have landed (or been restored) since the read
+		const fresh = await readRecord(env, id);
+		if (fresh !== undefined && softDeletedAt(fresh) === null) {
 			kept['has-record'] = (kept['has-record'] ?? 0) + 1;
 			return;
 		}

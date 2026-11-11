@@ -162,7 +162,7 @@ test.describe('Release: uploads', () => {
         }, { message: 'the upload is not in Studio\'s Videos list', timeout: 90000, intervals: [3000] })
         .toBe(true);
     } finally {
-      if (videoId) await apiFetch(user, `/api/videos/${videoId}`, { method: 'DELETE', headers: { channelId } });
+      if (videoId) await apiFetch(user, `/api/videos/${videoId}/permanent`, { method: 'DELETE', headers: { channelId } });
     }
   });
   // 2026-11-10 "single video upload, thumbs dont match aspect": frames were drawn
@@ -220,7 +220,7 @@ test.describe('Release: uploads', () => {
       expect(pixels, 'stored thumbnail is not a readable JPEG/PNG').not.toBeNull();
       expect(pixels!.width / pixels!.height, `stored thumbnail is ${pixels!.width}x${pixels!.height}`).toBeCloseTo(9 / 16, 2);
     } finally {
-      if (videoId) await apiFetch(user, `/api/videos/${videoId}`, { method: 'DELETE', headers: { channelId } });
+      if (videoId) await apiFetch(user, `/api/videos/${videoId}/permanent`, { method: 'DELETE', headers: { channelId } });
     }
   });
 });

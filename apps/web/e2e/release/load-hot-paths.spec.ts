@@ -141,7 +141,7 @@ test.describe('Release: hot paths under parallel load', () => {
         .poll(analytics, { message: 'analytics_daily totals through GET /api/analytics', timeout: ANALYTICS_TIMEOUT_MS, intervals: [10000] })
         .toEqual({ views: VIEWS, watchTime: WATCH_REPORTS * SECONDS_PER_REPORT });
     } finally {
-      await apiFetch(user, `/api/videos/${videoId}`, { method: 'DELETE', headers: { channelId } });
+      await apiFetch(user, `/api/videos/${videoId}/permanent`, { method: 'DELETE', headers: { channelId } });
     }
   });
 });
