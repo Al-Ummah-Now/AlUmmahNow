@@ -1,6 +1,6 @@
 # Playlist playback: URL, queue, autoplay and the playlist pane
 
-Status: **design, awaiting owner approval.** No code merges until the open decisions (section 9) are settled.
+Status: **approved by the owner 2026-11-11** with two changes: the countdown is 3 s everywhere (D7) and the list stops after the last item unless loop is on (D9). Every other decision as recommended.
 
 Owner reports (2026-11-11):
 - "when you hit play all on playlist, or when you hit play next or it goes there auto, shouldnt it auto play the video?"
@@ -141,8 +141,8 @@ Inventory from the code (no guesses):
 
 ### 4.2 End of list
 
-- Last item ends, loop off → the end screen shows **Watch again** and **Replay playlist**. There is no countdown and no related video: the list stops.
-- Loop on → item 0 follows with the normal countdown.
+- Last item ends, loop off → playback **stops**. The end screen shows **Watch again** and **Replay playlist**, with no countdown and no related video.
+- Loop on → item 0 follows with the normal countdown, and so on around the list.
 - Embeds: unchanged (stop at the end; `loop` still means single-video loop, per the contract).
 
 ## 5. The playlist pane (web watch page, Shorts, harness)
@@ -161,7 +161,7 @@ Inventory from the code (no guesses):
 
 - **Views and analytics.** Each item mounts a new player, which creates a new `VideoAnalytics` and sends its own `ready` → one view per item, as for a normal watch. Watch time, quartiles and completion are per item. A muted autoplay counts the same way. Analytics batches gain `context.source = 'playlist'` and `playlistId` (never the WL/LL ids), so creators can see playlist plays later. An item skipped within 1 s of loading still counts one view (unchanged rule; this matches how a quick click on a related video counts today).
 - **Resume.** Today a watched video reopens at its saved time (lib/video/resume.ts rules) with a "Start from beginning" pill. Inside a playlist, items start at 0 instead (a list is watched in order), and when the same rules would have resumed, a "Resume at 3:42" pill is offered (D12). Explicit `t=` still wins. Shorts never resume (unchanged).
-- **Up next countdown.** The existing EndScreen: an 8 s ring today. In playlist mode the countdown is 5 s (D7), and the card shows the next playlist item and its "4 / 12". Cancel works as today (Cancel, Escape, any key, hover and focus pause it). Cancelled → stays on the end screen with "Play now".
+- **Up next countdown.** The existing EndScreen, with an 8 s ring before this change. It is now **3 s everywhere**, playlists and related videos alike (D7), and the card shows the next playlist item and its "4 / 12". Cancel works as today (Cancel, Escape, any key, hover and focus pause it). Cancelled → stays on the end screen with "Play now".
 - **User setting: Autoplay next.** None exists today: the related countdown always runs. Add one toggle in the player's settings menu: **Autoplay next** (default on), stored per device (localStorage). It applies to both the playlist countdown and the related countdown. Off → end screen with "Play now", no countdown. Synced to the profile later if Settings gains a playback section (D8).
 - **Queue changes while playing.** The pane refetches its window when the tab regains focus. A removed current item stays playing ("Not in this playlist"); a reorder takes effect at the next advance.
 - **Errors.** A queue fetch failure plays the video alone and shows the pane's retry state (`FriendlyError`, reported with `reportError`).
@@ -185,7 +185,7 @@ Each phase is its own PR; phase 1 can be split into API and web.
 - **Release E2E (QA):** `playlist-playback.player.spec.ts`: a run account makes a playlist of the seed's two lectures and the Short, reorders it, opens the playlist page → Play all → pane order equals the saved order → media plays → seek to end → the next item **in the saved order** plays and the highlight moves; en and ar. The run account and its playlist are deleted afterwards.
 - **Native (phase 3):** Core queue tests in `aun-player` (already has fixtures); each app's UI test drives a fixture queue.
 
-## 9. Open decisions for the owner
+## 9. Decisions (approved 2026-11-11)
 
 | # | Decision | Recommendation |
 |---|---|---|
@@ -195,9 +195,9 @@ Each phase is its own PR; phase 1 can be split into API and web.
 | D4 | Shuffle and loop | Per tab, not in the URL, so shared links always start in the saved order. |
 | D5 | Back button | Push one history entry per video; replace only for corrections. |
 | D6 | Private lists | Aliases `WL` (Watch later) and `LL` (Liked), resolved from the session; shares drop them. |
-| D7 | Countdown | 5 s inside a playlist, 8 s for related; cancellable as today. |
+| D7 | Countdown | **Approved as changed:** 3 s in playlists and for related videos; cancellable as today. |
 | D8 | Autoplay-next setting | A per-device "Autoplay next" toggle in the player settings, default on, covering playlist and related. |
-| D9 | After the last item | Stop with Watch again / Replay playlist; no related video afterwards. |
+| D9 | After the last item | **Approved as changed:** stop after the last item unless loop is on; with loop on, restart from the first item. No related video after a list. |
 | D10 | Queue API | A new paginated `GET /api/playlists/{listId}/queue` used by every player, with no 200 cap. |
 | D11 | Native apps | Phase 3, after web, on Core's existing queue model. |
 | D12 | Resume inside a playlist | Start items at 0 and offer a "Resume at…" pill, rather than jumping to saved progress. |
