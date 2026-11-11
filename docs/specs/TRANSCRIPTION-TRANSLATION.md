@@ -40,7 +40,7 @@ The owner asked for:
 3. **Quran is never machine-written.** ASR text is never shown for Quran, and Quran is never machine-translated or machine-spoken (no text-to-speech or dubbing of ayat). Only the official text from the synced store is rendered, after creator confirmation. Translations are recognised editions with attribution.
 4. **Workers AI first.** Third-party providers are pluggable adapters. An admin turns them on per environment, and their keys live in Secrets Store (product constraints).
 5. **Tier-aware.** Every limit is an Epic 27 entitlement key edited in admin-web. Nothing is hard-coded.
-6. **Inside the $500/month cap.** A hard monthly budget per environment stops spending and queues work. It never fails jobs silently.
+6. **Inside the $500/month cap.** A hard monthly budget per environment stops spending and queues work. It never fails jobs silently. Tests never spend it: automated suites use mocked providers (§7.5).
 7. **Arabic and English parity.** Every UI string, error and notification exists in en and ar, RTL-correct.
 
 ## 3. User experience
@@ -503,6 +503,27 @@ Prices: provider pages fetched 2026-11-11 (R§5), the owner's DeepL plan terms (
 - **What bounds exposure:** the sum of all plan allowances and grants. For planning, 120,000 caption minutes a month ≈ $58 on the default stack.
 - **Add-ons:** pricing comes from the site-wide subscription plan (pending). Any price at or above cost (above) makes extra volume self-funding.
 - **Revisit:** when monthly usage passes 5,000 h, revisit the self-hosted GPU option from the 2025 research doc.
+
+### 7.5 Hard rule: tests never burn the budget
+
+Owner, 2026-11-11: "dont burn it on qa with testing".
+- **Automated tests use mocked providers only.** CI, unit and E2E tests, the release suite, and stage tests never call a paid or metered provider: Workers AI, DeepL, ElevenLabs or the Quran Foundation API.
+  - They use a **mocked provider** with recorded fixtures: transcripts, translations, QF passages and search results.
+  - This follows the existing "E2E (local, mocked Workers AI)" job.
+  - The mock is selected by environment (`AI_PROVIDER_MODE=mock` in test configs) or by a per-request test flag. The run accounts used by E2E (`e2e+…@e2e.alummahnow.net`) always get the mock.
+- **Guard, which fails loudly:**
+  - Every provider adapter checks the mode before any network call.
+  - A request in test mode, or from an E2E run account, that would reach a real provider throws `RealProviderInTestMode`. It is reported as an error and returns 500, never silently passing.
+  - A unit test asserts that the guard exists for every adapter.
+  - `pnpm check:config` fails if a test or stage config has the real-provider mode for an automated suite.
+- **Separate small budgets per environment:**
+  - QA **$5/month** and stage **$5/month** (admin-editable), each with its own `ai_budget_daily` rows.
+  - They never draw on production's $100 (captions) and $20 (inline translation) budgets.
+  - When reached, QA and stage jobs wait in `waiting_budget` like production.
+- **Real-provider smoke checks:** at most one small **manual** check per release, with a few seconds of audio and one title.
+  - It runs only behind an explicit flag (`REAL_PROVIDER_SMOKE=1` plus a manual `workflow_dispatch`), never on PRs or schedules.
+  - Its cost is logged against the environment's budget.
+- **DeepL is never enabled on QA or stage by default.** An admin may turn it on there temporarily for a planned test, which is audited, and the $5 cap still applies.
 
 ## 8. Glossary and terminology
 
