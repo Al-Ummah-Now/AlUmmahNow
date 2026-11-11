@@ -16,6 +16,7 @@ import { logger } from "../../lib/logger";
 import { canViewVideo, isSameVideoSet, VideoType } from "../../lib/playlists";
 import {
 	addToWatchLater,
+	clearWatchLaterChannel,
 	newWatchLater,
 	pageIds,
 	removeFromWatchLater,
@@ -26,7 +27,8 @@ import {
 } from "../../lib/library";
 import { ResponseError } from "../../lib/types";
 
-const OptionalChannelHeader = z.object({ channelId: Str({ description: "Active channel ID" }).optional().nullable() });
+// Accepted for older clients and ignored: Watch later belongs to the user, not the active channel
+const OptionalChannelHeader = z.object({ channelId: Str({ description: "Ignored (Watch later is per user, the same for every channel)" }).optional().nullable() });
 
 const errorResponses = {
 	"401": { description: "Authentication required", content: { "application/json": { schema: ResponseError } } },
@@ -114,7 +116,7 @@ export class WatchLaterAdd extends AuthenticatedRoute {
 	};
 
 	async handle(c: AppContext) {
-		const { body, headers } = await this.getValidatedData<typeof this.schema>();
+		const { body } = await this.getValidatedData<typeof this.schema>();
 		const userId = this.getUserId(c);
 		const video = await new R2Repository<VideoType>(c.env.videos).getObject(body.videoId);
 		if (!video || !canViewVideo(video, userId)) {
@@ -125,11 +127,14 @@ export class WatchLaterAdd extends AuthenticatedRoute {
 		// several videos at once keeps all of them; the list is created once.
 		let added = false;
 		const { data: playlist, rejected } = await repo(c).updateObjectOrReject<"full">(watchLaterId(userId), (fresh) => {
+			// Per user, never per channel: the active channel is not recorded,
+			// and a list made before that fix loses its channel on this write
+			const cleared = clearWatchLaterChannel(fresh);
 			const outcome = addToWatchLater(fresh, body.videoId);
 			added = outcome.added;
 			if (outcome.full) return { reject: "full" };
-			return outcome.added;
-		}, { initial: () => newWatchLater(userId, headers.channelId || undefined) });
+			return outcome.added || cleared;
+		}, { initial: () => newWatchLater(userId) });
 		if (rejected === "full") {
 			return c.json({ success: false, error: "watch_later_full", limit: WATCH_LATER_MAX_ITEMS }, 409);
 		}
@@ -153,8 +158,9 @@ export class WatchLaterRemove extends AuthenticatedRoute {
 		// Conditional write on the fresh list (SCALABILITY-AUDIT AV-19)
 		let removed = false;
 		const playlist = await repo(c).updateObject(watchLaterId(userId), (fresh) => {
+			const cleared = clearWatchLaterChannel(fresh);
 			removed = removeFromWatchLater(fresh, params.videoId);
-			return removed;
+			return removed || cleared;
 		});
 
 		logger.debug("[WatchLater] Remove", { userId, videoId: params.videoId, removed });
@@ -184,6 +190,7 @@ export class WatchLaterReorder extends AuthenticatedRoute {
 		// video saved meanwhile is not dropped by an order that lacks it
 		const { data: playlist, rejected } = await repo(c).updateObjectOrReject<true>(watchLaterId(userId), (fresh) => {
 			if (!isSameVideoSet(fresh.videos || [], body.videoIds)) return { reject: true };
+			clearWatchLaterChannel(fresh);
 			fresh.videos = [...body.videoIds];
 			fresh.dateModified = new Date().toISOString();
 			return true;

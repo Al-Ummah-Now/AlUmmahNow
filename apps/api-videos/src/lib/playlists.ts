@@ -32,7 +32,15 @@ export function toPlaylistResponse(playlist: PlaylistType) {
         ...playlistSortOf(playlist),
         videos: playlist.videos || [],
         videosCount: playlist.videos?.length || 0,
+        // Watch later is the user's, never a channel's (lists made before the
+        // fix still carry the channel active at their first save)
+        ...(isWatchLaterRecord(playlist) ? { channelId: '' } : {}),
     };
+}
+
+/** Same rule as lib/library.ts isSystemPlaylist (not imported: library imports this module). */
+function isWatchLaterRecord(playlist: { id?: string; systemType?: unknown }): boolean {
+    return typeof playlist.systemType === 'string' || (typeof playlist.id === 'string' && playlist.id.startsWith('watch-later-'));
 }
 
 /**

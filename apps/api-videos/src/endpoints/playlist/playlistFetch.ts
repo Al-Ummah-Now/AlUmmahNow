@@ -93,7 +93,8 @@ export class PlaylistFetch extends OptionalAuthRoute {
             videoItems?: ReturnType<typeof transformVideoToView>[];
         } = toPlaylistResponse(playlist);
 
-        if (playlist.channelId) {
+        // A system playlist (Watch later) belongs to its user, not to a channel
+        if (playlist.channelId && !isSystemPlaylist(playlist)) {
             try {
                 const channelRepo = new R2Repository<z.infer<typeof BusinessChannel>>(c.env.channels);
                 const channel = await channelRepo.getObject(playlist.channelId);

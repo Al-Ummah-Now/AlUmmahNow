@@ -71,7 +71,7 @@ function notificationRoutes(r: any) {
 
 describe('library helpers', () => {
 	it('adds newest first, idempotently, up to the limit', () => {
-		const wl = newWatchLater('u1', 'ch');
+		const wl = newWatchLater('u1');
 		assert.equal(wl.id, 'watch-later-u1');
 		assert.equal(wl.isPublic, false);
 		assert.deepEqual(addToWatchLater(wl, 'a'), { added: true, full: false });
