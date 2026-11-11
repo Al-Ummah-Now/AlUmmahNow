@@ -103,3 +103,5 @@ export * from './video-reactions';
 export * from './media-delivery';
 // Admin queues: Action needed / History tabs, shared query and page shape (docs/admin/QUEUES.md)
 export * from './admin-queue';
+// Live providers (D3): routing settings, assignment, QoE beacons, comparison
+export * from './live-providers';

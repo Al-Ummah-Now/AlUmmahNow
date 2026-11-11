@@ -14,7 +14,9 @@ import { handlePlaylistAddBatch, isPlaylistAddMessage } from './lib/playlistUplo
 import { createPlaylistAddsInternalRouter } from './endpoints/playlist/playlistAddsInternal';
 
 /** Every 10 minutes: start a processing-check loop for any video stuck without one */
-export const PROCESSING_SWEEP_CRON = '*/10 * * * *';
+const PROCESSING_SWEEP_CRON = '*/10 * * * *';
+/** Every minute: live sessions (idle timeout, Bunny polling); lib/live/service.ts */
+const LIVE_SWEEP_CRON = '* * * * *';
 import { fromHono } from "chanfana";
 import { bunnySigningMiddleware } from './middleware/bunny-signing';
 import { Hono } from "hono";
@@ -23,6 +25,11 @@ import { authMiddleware, optionalAuthMiddleware, channelIdMiddleware } from "./m
 import { videosBanMiddleware } from "./middleware/videos-ban";
 import { videosPendingDeletionMiddleware } from "./middleware/videos-pending-deletion";
 import adminInternalRouter from "./routers/admin.router";
+import { handleLiveEdge, isLiveHost } from "./lib/live/edge";
+import type { LiveEnv } from "./lib/live/providers";
+import { sweepLiveSessions } from "./lib/live/service";
+import { markStreamLive, registerLiveStreamHooks, type StreamsEnv } from "./lib/live/streams";
+import { pruneLiveData } from "./lib/live/qoe";
 import { loggingMiddleware } from "./middleware/logging";
 import { withLogging } from "@al-ummah/logger";
 import { errorHandler } from "./middleware/error-handler";
@@ -455,6 +462,15 @@ app.get("/", async (c) => {
  * See src/lib/privacy/retention.ts and docs/compliance/GDPR.md.
  */
 async function scheduled(controller: ScheduledController, rawEnv: AppBindings, ctx: ExecutionContext): Promise<void> {
+	if (controller?.cron === LIVE_SWEEP_CRON) {
+		// Every minute: end self-hosted sessions whose encoder went quiet, poll live Bunny sessions (lib/live/service.ts)
+		ctx.waitUntil(
+			sweepLiveSessions(rawEnv as unknown as LiveEnv)
+				.then((r) => (r.idleEnded || r.bunnyPolled ? logger.info('[Live] Sweep', r) : undefined))
+				.catch((error) => logger.error('[Live] Sweep failed', { error: error instanceof Error ? error.message : String(error) })),
+		);
+		return;
+	}
 	if (controller?.cron === PROCESSING_SWEEP_CRON) {
 		// Safety net for the per-video processing-check loop (lib/processing/loop.ts)
 		ctx.waitUntil(
@@ -562,6 +578,12 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 			} catch (error) {
 				logger.error('[ThumbnailRepair] Daily run failed to start', { error: error instanceof Error ? error.message : String(error) });
 				reportJobFailure(rawEnv, ctx, 'thumbnail-check', error);
+			}
+			try {
+				// Live QoE, events and segment indexes past 90 days (lib/live/qoe.ts)
+				if (rawEnv.SEARCH_DB) await pruneLiveData(rawEnv.SEARCH_DB);
+			} catch (error) {
+				logger.error('[Live] Prune failed', { error: error instanceof Error ? error.message : String(error) });
 			}
 			try {
 				// Upload rate limits (AV-14): drop windows of users who stopped uploading and expired leases.
@@ -675,8 +697,31 @@ function reportJobFailure(env: AppBindings, ctx: ExecutionContext, job: string, 
 }
 
 // Uncaught exceptions and 5xx answers are reported to the admin Errors page (docs/features/error-reporting.md)
-export default withLogging({
+const loggedWorker = withLogging({
 	fetch: withErrorReporting<AppBindings & ErrorReporterEnv, ExecutionContext>('api-videos', handleFetch as never),
 	scheduled,
 	queue,
 });
+
+registerLiveStreamHooks();
+
+/**
+ * The live host (LIVE_PUBLIC_HOST) is the self-hosted live edge (lib/live/edge.ts):
+ * HLS segment ingest and delivery, answered before the API stack so a
+ * segment costs one Worker request and no per-request log line.
+ */
+export default {
+	...loggedWorker,
+	async fetch(request: Request, env: AppBindings, ctx: ExecutionContext): Promise<Response> {
+		const liveEnv = env as unknown as LiveEnv;
+		if (isLiveHost(liveEnv, new URL(request.url).hostname)) {
+			try {
+				return await handleLiveEdge(request, liveEnv, ctx, { onLive: (e, session) => markStreamLive(e as unknown as StreamsEnv, session.stream_id) });
+			} catch (error) {
+				logger.error('[LiveEdge] Request failed', { method: request.method, error: error instanceof Error ? error.message : String(error) });
+				return new Response('Live edge error', { status: 500, headers: { 'access-control-allow-origin': '*' } });
+			}
+		}
+		return (loggedWorker.fetch as (r: Request, e: AppBindings, c: ExecutionContext) => Promise<Response>)(request, env, ctx);
+	},
+};
