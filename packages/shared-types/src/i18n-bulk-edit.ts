@@ -120,6 +120,11 @@ export interface BulkEditTranslations {
   changeField: string;
   untouched: string;
   willChange: string;
+  /** Upload queue: a ticked field / an unticked one */
+  willSet: string;
+  leftToFiles: string;
+  /** A ticked field with nothing chosen yet */
+  fieldIncomplete: string;
   close: string;
   review: string;
   confirmTitle: string;
@@ -373,6 +378,9 @@ export const BULK_EDIT_EN: BulkEditTranslations = {
   changeField: 'Change {field}',
   untouched: 'Stays as it is',
   willChange: 'Will change',
+  willSet: 'Will be set',
+  leftToFiles: 'Each file keeps its own',
+  fieldIncomplete: 'Fill this in, or untick it.',
   close: 'Close',
   review: 'Review changes',
   confirmTitle: 'Apply to {count} videos?',
@@ -461,6 +469,9 @@ export const BULK_EDIT_AR: BulkEditTranslations = {
   changeField: 'تغيير {field}',
   untouched: 'يبقى كما هو',
   willChange: 'سيتغير',
+  willSet: 'سيُعيَّن',
+  leftToFiles: 'يحتفظ كل ملف بقيمته',
+  fieldIncomplete: 'أكمل هذا الحقل أو ألغِ تحديده.',
   close: 'إغلاق',
   review: 'مراجعة التغييرات',
   confirmTitle: 'تطبيق على {count} من المقاطع؟',

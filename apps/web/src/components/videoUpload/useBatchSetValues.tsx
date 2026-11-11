@@ -145,7 +145,7 @@ export function useBatchSetValues({ seed, files, channelId, channelName, playlis
             <div key={l}>
               <label htmlFor={id} className="flex items-center gap-2 text-xs font-medium text-[var(--fanous-color-text-secondary)]">
                 {l === 'en' ? b.rowTitleEn : b.rowTitleAr}
-                {row.touched.includes(field) && <span className="text-[var(--fanous-color-primary)]" data-testid="batch-file-title-edited">{b.rowEdited}</span>}
+                {row.touched.includes(field) && <span className="rounded-full border border-[var(--fanous-color-outline)] px-1.5 text-[var(--fanous-color-text-primary)]" data-testid="batch-file-title-edited">{b.rowEdited}</span>}
               </label>
               <input
                 id={id}

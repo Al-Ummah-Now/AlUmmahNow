@@ -246,7 +246,7 @@ export function BulkEditPanel({ open, onOpenChange, videos, playlists = null, kn
             {offered.map((f) => (
               <li key={f} className="flex justify-between gap-2 border-b border-[var(--fanous-color-divider)] py-1" data-testid={`bulk-edit-confirm-${f}`} data-changes={ready.includes(f) ? 'true' : 'false'}>
                 <span>{names[f]}</span>
-                <span className={ready.includes(f) ? 'font-medium text-[var(--fanous-color-primary)]' : 'text-[var(--fanous-color-text-muted)]'}>
+                <span className={ready.includes(f) ? 'font-semibold text-[var(--fanous-color-text-primary)]' : 'text-[var(--fanous-color-text-secondary)]'}>
                   {ready.includes(f) ? b.willChange : b.untouched}
                 </span>
               </li>
