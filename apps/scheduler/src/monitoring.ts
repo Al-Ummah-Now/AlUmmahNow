@@ -103,6 +103,8 @@ export interface RunMetrics {
   failed: number;
   /** Sum of publish delays (seconds) of the published videos */
   delaySeconds: number;
+  /** Runs that ended early on a transient R2/KV error (storage-outage.ts) */
+  storageErrors?: number;
 }
 
 /**
@@ -111,7 +113,7 @@ export interface RunMetrics {
  * video from up to ten parallel publishes (lost counts, 429s on the key).
  */
 export async function recordRunMetrics(env: Env, run: RunMetrics, at: Date = new Date()): Promise<void> {
-  if (run.published === 0 && run.failed === 0) return;
+  if (run.published === 0 && run.failed === 0 && !run.storageErrors) return;
   try {
     const key = dailyMetricsKey(at);
     const stored = await env.SCHEDULER_METRICS.get(key);
@@ -121,6 +123,7 @@ export async function recordRunMetrics(env: Env, run: RunMetrics, at: Date = new
     const totalDelay = metrics.averageDelay * metrics.publishedToday + run.delaySeconds;
     metrics.publishedToday += run.published;
     metrics.failedToday += run.failed;
+    if (run.storageErrors) metrics.storageErrorsToday = (metrics.storageErrorsToday ?? 0) + run.storageErrors;
     metrics.averageDelay = metrics.publishedToday > 0 ? totalDelay / metrics.publishedToday : 0;
     await env.SCHEDULER_METRICS.put(key, JSON.stringify(metrics), { expirationTtl: 2 * 86400 });
   } catch (error) {
