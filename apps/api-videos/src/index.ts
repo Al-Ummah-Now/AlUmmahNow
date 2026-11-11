@@ -4,6 +4,7 @@ import { handleProcessingCheckBatch, sweepProcessingVideos } from './lib/process
 import { handleReaperBatch, isReaperMessage, sweepStaleUploads } from './lib/uploads/reaper';
 import { handleBunnyDeleteBatch, isBunnyDeleteMessage } from './lib/uploads/bunnyDelete';
 import { handlePurgeBatch, isPurgeMessage, startScheduledPurge } from './lib/uploads/testLibraryPurge';
+import { sweepRunUsers } from './lib/e2e/runUserSweep';
 import { handlePlaylistAddBatch, isPlaylistAddMessage } from './lib/playlistUploadAdds';
 import { createPlaylistAddsInternalRouter } from './endpoints/playlist/playlistAddsInternal';
 
@@ -451,6 +452,9 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 				logger.error('[ProcessingSweep] Run failed', { error: error instanceof Error ? error.message : String(error) }),
 			),
 		);
+		// QA / stage only: erase the videos data (profile, channels, videos and their Bunny media) of
+		// E2E run accounts the auth server has deleted (lib/e2e/runUserSweep.ts)
+		ctx.waitUntil(sweepRunUsers(withSearchSync(rawEnv, ctx) as never).then(() => undefined));
 		return;
 	}
 	if (controller?.cron === SUBSCRIPTION_IMPORT_CRON) {
