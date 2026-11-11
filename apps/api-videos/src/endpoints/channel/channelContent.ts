@@ -36,6 +36,26 @@ export function healRows(c: AppContext, channelId: string): Promise<boolean> {
 	return healChannelContentRows(c.env as never, channelId, (id) => repository.getObject(id));
 }
 
+/**
+ * Server-Timing for the Studio lists (seen in the browser's Network panel; Timing-Allow-Origin
+ * lets the page read it). Workers' clock moves across I/O, so each span is that I/O's wait.
+ */
+export function serverTimer() {
+	const spans: string[] = [];
+	let last = Date.now();
+	return {
+		mark(name: string, desc?: string) {
+			const now = Date.now();
+			spans.push(`${name};dur=${now - last}${desc ? `;desc="${desc}"` : ""}`);
+			last = now;
+		},
+		apply(c: AppContext) {
+			c.header("Server-Timing", spans.join(", "));
+			c.header("Timing-Allow-Origin", "*");
+		},
+	};
+}
+
 export function rebuilding(c: AppContext): Response {
 	scheduleOwnershipHeal(c.env as never, waitUntilOf(c as never), "video");
 	return c.json({ success: false, error: "index_rebuilding" }, 503);
@@ -72,27 +92,33 @@ export class ChannelContentList extends AuthenticatedRoute {
 
 	async handle(c: AppContext) {
 		const { params, query } = await this.getValidatedData<typeof this.schema>();
+		const timer = serverTimer();
 		const denied = await requireContentAccess(c, params.id, this.getUserId(c) as string);
+		timer.mark("access", "channel record (R2)");
 		if (denied) return denied;
 
 		if (!(await healRows(c, params.id))) return rebuilding(c);
+		timer.mark("heal", "rows missing Studio columns (D1)");
 
 		const limit = Math.min(Math.max(1, query.limit ?? 30), MAX_PAGE);
 		const offset = Number(query.cursor ?? 0);
 		// One extra row tells whether there's a next page
 		const ids = await channelContentIds(c.env as never, { ...query, status: query.status ?? "published", channelId: params.id, limit: limit + 1, offset });
+		timer.mark("index", "page of ids (D1)");
 		if (!ids) return rebuilding(c);
 
 		type VideoType = z.infer<typeof BusinessVideo>;
 		const repository = new R2Repository<VideoType>(c.env.videos);
 		const page = ids.slice(0, limit);
 		const loaded = await Promise.all(page.map((id) => repository.getObject(id)));
+		timer.mark("r2", `${page.length} video records, in parallel`);
 		const items = loaded
 			.filter((video): video is VideoType => !!video && !video.isDeleted)
 			.map((video) => ({ ...transformVideoToView(video), isDraft: video.isDraft === true, uploadStatus: video.uploadStatus, studioStatus: studioVideoStatus(video), failureKind: studioFailureKind(video) }));
 
 		logger.info("[ChannelContent] Listed", { channelId: params.id, status: query.status, count: items.length });
-		return { success: true, result: { items, cursor: ids.length > limit ? String(offset + limit) : null } };
+		timer.apply(c);
+		return c.json({ success: true, result: { items, cursor: ids.length > limit ? String(offset + limit) : null } });
 	}
 }
 
@@ -113,11 +139,16 @@ export class ChannelContentSummary extends AuthenticatedRoute {
 
 	async handle(c: AppContext) {
 		const { params } = await this.getValidatedData<typeof this.schema>();
+		const timer = serverTimer();
 		const denied = await requireContentAccess(c, params.id, this.getUserId(c) as string);
+		timer.mark("access", "channel record (R2)");
 		if (denied) return denied;
 		if (!(await healRows(c, params.id))) return rebuilding(c);
+		timer.mark("heal", "rows missing Studio columns (D1)");
 		const counts = await channelContentCounts(c.env as never, params.id);
+		timer.mark("index", "counts per status (D1)");
 		if (!counts) return rebuilding(c);
-		return { success: true, result: { counts } };
+		timer.apply(c);
+		return c.json({ success: true, result: { counts } });
 	}
 }

@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { BULK_EDIT_EN, STUDIO_EN } from '@al-ummah/shared-types';
 import { VideosTab } from '../VideosTab';
@@ -20,9 +21,11 @@ jest.mock('next/dynamic', () => function mockDynamic() {
 });
 jest.mock('next/image', () => ({ __esModule: true, default: () => <span /> }));
 jest.mock('@/hooks/useLanguage', () => ({ useLanguage: () => ({ t: { studio: mockStudio, bulkEdit: mockBulkEdit }, lang: 'en', isRTL: false }) }));
-jest.mock('@/lib/api/studio-content', () => ({
-  listChannelContent: (...args: unknown[]) => list(...args),
-  getChannelContentCounts: (...args: unknown[]) => counts(...args),
+jest.mock('@/lib/studio/content-client', () => ({
+  ...jest.requireActual('@/lib/studio/content-client'),
+  // The tab reads the API directly (no Server Actions); a null page is a failed request
+  fetchContentPage: (...args: unknown[]) => list(...args).then((page: unknown) => { if (!page) throw new Error('failed'); return page; }),
+  fetchContentCounts: (...args: unknown[]) => counts(...args),
 }));
 jest.mock('@/lib/api/videos', () => ({ bulkDeleteVideos: (...args: unknown[]) => bulkDelete(...args), bulkUpdateVideos: jest.fn() }));
 jest.mock('@/lib/api/scheduling', () => ({ cancelSchedule: jest.fn(), publishNow: jest.fn() }));
@@ -56,7 +59,8 @@ const video = (id: string, extra = {}) => ({ id, title: `Video ${id}`, dateCreat
 const ZERO = { published: 2, scheduled: 0, drafts: 0, processing: 0, failed: 0 };
 
 function renderTab(role: 'owner' | 'editor' = 'owner') {
-  return render(<VideosTab locale="en" channelId="c1" role={role} />);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<QueryClientProvider client={client}><VideosTab locale="en" channelId="c1" role={role} /></QueryClientProvider>);
 }
 
 describe('VideosTab', () => {
@@ -99,9 +103,10 @@ describe('VideosTab', () => {
   });
 
   it('shows Retry when loading fails, and recovers', async () => {
-    list.mockResolvedValueOnce(null);
+    // The list retries once by itself before showing Retry
+    list.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
     renderTab();
-    fireEvent.click(await screen.findByRole('button', { name: STUDIO_EN.videos.retry }));
+    fireEvent.click(await screen.findByRole('button', { name: STUDIO_EN.videos.retry }, { timeout: 4000 }));
     expect(await screen.findAllByTestId('studio-video-row')).toHaveLength(2);
   });
 
