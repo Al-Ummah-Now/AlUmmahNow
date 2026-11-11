@@ -62,6 +62,9 @@ async function deleteVideos(ids: readonly string[], reason?: string): Promise<Bu
   return result;
 }
 
+/** A view's count: undefined while loading, null when it could not be read. */
+const countOf = (q: { data?: number; isError: boolean }) => (q.isError ? null : q.data);
+
 export function VideosList() {
   const { t, locale } = useLanguage();
   const router = useRouter();
@@ -110,11 +113,11 @@ export function VideosList() {
   });
 
   const views: SavedViewTab[] = [
-    { id: 'all', label: t('list.views.all'), count: useAdminCount(VIDEO_RESOURCE, VIDEO_LIST_SPEC, {}).data },
-    { id: 'processing', label: t('videos.statusLabels.processing'), count: useAdminCount(VIDEO_RESOURCE, VIDEO_LIST_SPEC, { status: 'processing' }).data, countTestId: 'processing-count' },
-    { id: 'failed', label: t('videos.statusLabels.failed'), count: useAdminCount(VIDEO_RESOURCE, VIDEO_LIST_SPEC, { status: 'failed' }).data, alertWhenNonZero: true, countTestId: 'failed-count' },
-    { id: 'reported', label: t('list.views.reported'), count: useAdminCount(VIDEO_RESOURCE, VIDEO_LIST_SPEC, { reported: 'yes' }).data },
-    { id: 'private', label: t('videos.private'), count: useAdminCount(VIDEO_RESOURCE, VIDEO_LIST_SPEC, { visibility: 'private' }).data },
+    { id: 'all', label: t('list.views.all'), count: countOf(useAdminCount(VIDEO_RESOURCE, VIDEO_LIST_SPEC, {})) },
+    { id: 'processing', label: t('videos.statusLabels.processing'), count: countOf(useAdminCount(VIDEO_RESOURCE, VIDEO_LIST_SPEC, { status: 'processing' })), countTestId: 'processing-count' },
+    { id: 'failed', label: t('videos.statusLabels.failed'), count: countOf(useAdminCount(VIDEO_RESOURCE, VIDEO_LIST_SPEC, { status: 'failed' })), alertWhenNonZero: true, countTestId: 'failed-count' },
+    { id: 'reported', label: t('list.views.reported'), count: countOf(useAdminCount(VIDEO_RESOURCE, VIDEO_LIST_SPEC, { reported: 'yes' })) },
+    { id: 'private', label: t('videos.private'), count: countOf(useAdminCount(VIDEO_RESOURCE, VIDEO_LIST_SPEC, { visibility: 'private' })) },
   ];
 
   const statusLabel = (s: string | null) => (s ? t(`videos.statusLabels.${s}` as MessageKey) : t('content.none'));
