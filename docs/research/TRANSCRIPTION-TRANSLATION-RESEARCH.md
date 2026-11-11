@@ -168,7 +168,9 @@ A short quote such as «لتكونوا شهداء على الناس» (4 words, 
 3. **Bunny's built-in transcription isn't worth it.** It is Whisper-based too, at $0.10 per language-minute, so a single 1,000-hour month is $6,000 just to transcribe. Its translations read well, but they spell honorifics out and can't be steered with a glossary.
 4. **ElevenLabs Scribe is the best-documented Arabic option** at $0.20/h, cheap enough to be the fallback. It needs a key to measure before we rely on it.
 5. **Translation: Gemma 4 26B for inline titles** (fast, cheapest) and **DeepSeek V4.1 Flash for transcripts** (proven in the CMS). Each falls back to the other. m2m100 must not be used, including where the processor's moderation still uses it.
-6. **Quran sources (corrected in v2):** Quran Foundation Content Sync is the primary source for the Arabic text, word-level text, translations and timings, kept as a local synced copy. Tanzil XML and QuranEnc are fallbacks (§11).
+6. **Quran sources (v2, owner clarification):** identifying and storing are separate steps.
+   - **Identify:** local fuzzy search decides; QF search can suggest candidates for review (§8.6).
+   - **Store:** captions keep references plus text from a storage-cleared source. That is Tanzil XML and QuranEnc until QF confirms in writing; QF Content Sync can render after that, provided it stays in step with every sync (§11).
 
 ## 7. Sources (all fetched 2026-11-11)
 
@@ -239,6 +241,22 @@ The Tanzil **TXT** export prepends the basmala to ayah 1 of every surah (`18|1|�
 **Identification:** **0 wrong ayat shown** across 20 clips. 87% of recited ayat were auto-suggested. The rest are omissions that a person reviews; none are errors.
 
 **Boundaries:** **0 extra words** shown, so text was never shown for something not recited. Omitted words are concentrated in mujawwad, where the ASR garbles elongations.
+
+### 8.6 Identification: QF Search API vs local fuzzy search
+
+- **Test set:** 55 snippets of up to 10 noisy Whisper words, one per recited ayah, cut by the EveryAyah ayah timings across the 8 new recitation clips. Plus 20 non-Quran snippets (8 words each) from the `x_shahrour1` lecture.
+- **QF endpoint used:** the legacy unauthenticated `https://api.quran.com/api/v4/search?q=…` (2026-11-11). Production would use the authenticated QF Search API, which needs a `search` scope.
+
+| Method | Right verse | Wrong verse | Non-Quran snippets given a verse | Confidence signal |
+|---|---|---|---|---|
+| QF search, top result | 44/55 (80%) | 11 | **20/20** | none: at most 3 words are highlighted, for right and wrong answers alike |
+| Local fuzzy + uniqueness gate (auto-confirm class) | 27/55 | **0** | **0** | length, agreement, number of occurrences |
+| QF search on the 28 snippets local search didn't auto-confirm | 17 right | 11 wrong | – | – |
+| Local "review" class and QF search agreeing | 6/6 right | 0 | – | – |
+
+- **QF search is a good candidate generator but can't decide.** It always returns a verse, including for non-Quran speech, and gives no usable score.
+- **Local search** decides, with QF suggestions offered only inside review.
+- **On whole transcripts** (§8.3) local search auto-suggests 87% of ayat with 0 wrong. Short isolated snippets are the hard case.
 
 ### 8.4 Timing (ayah start vs ground truth, 52 ayat in 8 clips)
 
