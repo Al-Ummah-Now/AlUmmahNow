@@ -44,16 +44,41 @@ async function resendCode(email: string, after: number): Promise<string> {
   throw new Error(`no verification email for ${email} in Resend`);
 }
 
+/**
+ * Submits auth's password form. The click must not own the cross-site redirect chain that
+ * follows (POST -> app callback -> code exchange -> app page): with the 15 s action timeout a
+ * slow chain right after a promote failed the release (v2026.11.11.3) with no way to tell where
+ * it stopped. The caller's toHaveURL waits for where it ends, and `chain()` says how it got there.
+ */
 async function password(page: Page) {
   await page.fill('input[name="email"]', EMAIL);
   await page.fill('input[name="password"]', PASSWORD);
-  await page.click('button[data-component="button"]');
+  await page.click('button[data-component="button"]', { noWaitAfter: true });
+}
+
+/** Every main-frame navigation request with its time since the test started (redirect hops included). */
+const navLog: string[] = [];
+const t0 = Date.now();
+const chain = () => navLog.slice(-12).join(' -> ');
+
+/** toHaveURL that reports the navigation chain (read when it fails) instead of only "timeout". */
+async function landsOn(page: Page, url: string, what: string, timeout = 30000) {
+  try {
+    await expect(page).toHaveURL(url, { timeout });
+  } catch (error) {
+    throw new Error(`${what}: did not reach ${url} (now ${page.url()}). Chain: ${chain()}\n${String(error).split('\n')[0]}`);
+  }
 }
 
 test('production: sign-up, sign-in on web, profile sign-in, admin refuses', async ({ page, context }) => {
   test.setTimeout(240000);
   const hops: string[] = [];
   page.on('framenavigated', (f) => f === page.mainFrame() && hops.push(f.url()));
+  page.on('request', (r) => {
+    if (!r.isNavigationRequest() || r.frame() !== page.mainFrame()) return;
+    const u = new URL(r.url());
+    navLog.push(`${((Date.now() - t0) / 1000).toFixed(1)}s ${r.method()} ${u.origin}${u.pathname}`);
+  });
 
   // Web: register through the real sign-in menu
   await page.goto(`${H.web}/en`);
@@ -101,9 +126,9 @@ test('production: sign-up, sign-in on web, profile sign-in, admin refuses', asyn
   await page.goto(`${H.adminWeb}/login`);
   await expect(page).toHaveURL(new RegExp(`^${H.auth}`), { timeout: 30000 });
   await password(page);
-  await expect(page).toHaveURL(`${H.adminWeb}/access-denied`, { timeout: 30000 });
+  await landsOn(page, `${H.adminWeb}/access-denied`, 'admin-web sign-in of a non-admin', 45000);
   await page.goto(`${H.adminWeb}/dashboard`);
-  await expect(page).toHaveURL(`${H.adminWeb}/access-denied`, { timeout: 30000 });
+  await landsOn(page, `${H.adminWeb}/access-denied`, 'admin-web dashboard for a non-admin');
   expect((await context.cookies()).some((c) => c.name === 'admin_session')).toBe(false);
 
   const bad = hops.filter((u) => /[?&]error=|\/auth\/error\b/.test(u));
