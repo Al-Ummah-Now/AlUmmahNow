@@ -24,6 +24,7 @@ import { contactMailConsumer, type ContactMailJob, type QueueMessageLike } from 
 import { handleAuthRequestBatch, scheduleSyncs, type AuthRequestMessage } from './lib/authModerationQueue';
 import { consumeErrorQueue, errorsIngest, reportAdminApiError } from './endpoints/errors/ErrorsIngest';
 import { runErrorRetention } from './lib/errors-retention';
+import { purgeE2eReports } from './lib/report-stats';
 
 // ==========================================
 // APP SETUP
@@ -211,7 +212,8 @@ app.get('/health', (c) => {
  *     and of open invites (lib/invites.ts)
  *   - 03:17 UTC daily: retention of error data and old source maps (lib/errors-retention.ts)
  *   - hourly (the 5-minute tick at the top of each UTC hour): soft-delete cleanup, the only hard
- *     delete of contact messages, themes and creator tiers (lib/trash.ts)
+ *     delete of contact messages, themes and creator tiers (lib/trash.ts); on QA/stage also the
+ *     admin E2E suite's old reports (lib/report-stats.ts purgeE2eReports)
  */
 async function scheduled(controller: ScheduledController, env: AdminBindings, ctx: ExecutionContext): Promise<void> {
   if (controller.cron === '17 3 * * *') {
@@ -219,7 +221,14 @@ async function scheduled(controller: ScheduledController, env: AdminBindings, ct
     return;
   }
   ctx.waitUntil(scheduleSyncs(env).catch((error) => logger.error('[AuthRequests] scheduled status reads failed', { error: String(error) })));
-  if (isHourlyTick(controller.scheduledTime)) ctx.waitUntil(runTrashCleanup(env as never).then(() => undefined));
+  if (isHourlyTick(controller.scheduledTime)) {
+    ctx.waitUntil(runTrashCleanup(env as never).then(() => undefined));
+    ctx.waitUntil(
+      purgeE2eReports(env.REPORTS_DB as never, env.ENVIRONMENT)
+        .then((purged) => { if (purged > 0) logger.info('[Reports] Purged E2E reports', { purged }); })
+        .catch((error) => logger.error('[Reports] E2E report purge failed', { error: String(error) })),
+    );
+  }
   ctx.waitUntil(scheduleInviteSyncs(env as never).catch((error) => logger.error('[Invites] scheduled status reads failed', { error: String(error) })));
 }
 
