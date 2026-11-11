@@ -37,7 +37,7 @@ function firstLine(text: string | undefined): string {
 }
 
 function escapeCell(text: string): string {
-  return text.replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
+  return text.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
 }
 
 export default class OutcomeReporter implements Reporter {
