@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyOwnershipModeration, invalidateOwnership, projectOwnership, syncOwnership } from '@al-ummah/shared-types';
+import { applyOwnershipModeration, invalidateOwnership, ownershipUpsertStatement, projectOwnership, syncOwnership } from '@al-ummah/shared-types';
 import { withSearchSync } from '../src/lib/search/sync';
 import {
 	channelTotalsFromIndex,
@@ -518,6 +518,25 @@ describe('owner lookups and the D1 planner', () => {
 		const lookup = seen.filter((sql) => /owner_id = \?/.test(sql));
 		assert.ok(lookup.length > 0);
 		for (const sql of lookup) assert.doesNotMatch(sql, /ORDER BY id/);
+	});
+});
+
+describe('ownership upsert write cost', () => {
+	it('an unchanged row at the same version is not rewritten (a pass re-reading it); a newer version always is; an older one never', async () => {
+		const db = new SqliteD1();
+		const row = projectOwnership('channel', 'c1', channel('c1'))!;
+		const write = async (r: typeof row, version: number) =>
+			Number(((await ownershipUpsertStatement(db as never, r, NOW, version).run()) as { meta?: { changes?: number } }).meta?.changes ?? 0);
+		assert.equal(await write(row, 100), 1, 'first write inserts');
+		// QA 2026-11-11: every pass rewrote every unchanged row and its index entries (442k row writes an hour)
+		assert.equal(await write(row, 100), 0, 'same data, same version: nothing written');
+		assert.equal(await write(row, 200), 1, 'same data, newer version: the version moves forward');
+		const renamed = projectOwnership('channel', 'c1', channel('c1', { name: 'Older name' }))!;
+		assert.equal(await write(renamed, 150), 0, 'an older snapshot never overwrites a newer one, even with different data');
+		assert.equal(rows(db, 'channel')[0].source_version, 200);
+		const newer = projectOwnership('channel', 'c1', channel('c1', { name: 'New name' }))!;
+		assert.equal(await write(newer, 200), 1, 'changed data at the same version is written');
+		assert.equal(rows(db, 'channel')[0].admin_title, 'New name');
 	});
 });
 
