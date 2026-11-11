@@ -13,9 +13,9 @@ import {
   contactCounts,
   softDeleteContactMessage,
   getContactMessage,
+  getContactThread,
   insertContactNote,
   listContactMessages,
-  listContactNotes,
   updateContactMessage,
   deliveryStatus,
   recordDelivery,
@@ -95,9 +95,9 @@ export class ContactGet extends ContactRoute {
     const denied = this.deny(c, 'contact:read');
     if (denied) return denied;
     const { params } = await this.getValidatedData<typeof this.schema>();
-    const message = await getContactMessage(c.env.REPORTS_DB, params.id);
-    if (!message) return c.json({ success: false, error: 'Message not found' }, 404);
-    return { success: true, result: { message, notes: await listContactNotes(c.env.REPORTS_DB, params.id) } };
+    const thread = await getContactThread(c.env.REPORTS_DB, params.id);
+    if (!thread) return c.json({ success: false, error: 'Message not found' }, 404);
+    return { success: true, result: thread };
   }
 }
 
@@ -218,8 +218,8 @@ export class ContactReply extends ContactRoute {
       await reportContactMailFailure(c.env, { v: 1, kind: 'reply', messageId: params.id, noteId: id }, 'could not queue the email', 0);
     }
     logger.info('[Contact] Reply queued', { id: params.id, noteId: id, by: auth.userId });
-    const notes = await listContactNotes(db, params.id);
-    return { success: true, result: { note: notes.find((n) => n.id === id) ?? note, message: await getContactMessage(db, params.id) } };
+    const thread = await getContactThread(db, params.id);
+    return { success: true, result: { note: thread?.notes.find((n) => n.id === id) ?? note, message: thread?.message ?? null } };
   }
 }
 
@@ -260,7 +260,8 @@ export class ContactRetryDelivery extends ContactRoute {
     }
     logger.info('[Contact] Delivery retried', { id: params.id, kind: body.kind, noteId: body.noteId, by: this.getUserId(c) });
     await resolveContactMailItem(c.env, job);
-    return { success: true, result: { message: await getContactMessage(db, params.id), notes: await listContactNotes(db, params.id) } };
+    const thread = await getContactThread(db, params.id);
+    return { success: true, result: { message: thread?.message ?? null, notes: thread?.notes ?? [] } };
   }
 }
 

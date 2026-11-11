@@ -184,6 +184,22 @@ export async function listContactNotes(db: D1Database, messageId: string): Promi
   return results ?? [];
 }
 
+/**
+ * A message and its notes from one D1 batch (one transaction, so one snapshot).
+ * Read separately, a reply delivered between the two reads showed its note as
+ * sent while the message still said "open"; the admin page stops re-reading once
+ * nothing is queued, so it stayed "open" until a manual reload.
+ */
+export async function getContactThread(db: D1Database, id: string): Promise<{ message: ContactMessageRow; notes: ContactNoteRow[] } | null> {
+  const [message, notes] = await db.batch([
+    db.prepare(`SELECT ${MESSAGE_COLUMNS} FROM contact_messages WHERE id = ? AND deleted_at IS NULL`).bind(id),
+    db.prepare('SELECT * FROM contact_notes WHERE message_id = ? ORDER BY created_at ASC, id ASC').bind(id),
+  ]);
+  const row = (message.results?.[0] as ContactMessageRow | undefined) ?? null;
+  if (!row) return null;
+  return { message: row, notes: (notes.results ?? []) as ContactNoteRow[] };
+}
+
 export interface ContactPatch {
   status?: ContactStatus;
   /** undefined: unchanged; null: unassign */
