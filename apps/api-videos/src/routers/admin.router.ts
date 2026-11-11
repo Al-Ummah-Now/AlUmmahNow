@@ -17,7 +17,7 @@ import {
 	ADMIN_CREATOR_FILTERS,
 	MAX_BULK_CREATOR_TIER,
 } from '@al-ummah/shared-types';
-import { listChannels, listComments, listUsers, listVideos } from '../lib/admin/directory';
+import { listChannels, listComments, listUsers, listVideos, type WaitUntil } from '../lib/admin/directory';
 import { searchUsers } from '../lib/admin/userSearch';
 import * as admin from '../lib/admin/service';
 import { checkImage, checkThumbnailShapeFor, storeImage } from '../lib/admin/images';
@@ -30,6 +30,16 @@ import { createChannelFor, lookupAccount, provisionProfile } from '../lib/admin/
 import { assignTier, CreatorTierError, deleteTier, purgeTiers, readAssignment, readDeletedTiers, readTiers, requestTierPurge, restoreTier, saveTier } from '../lib/creatorTiers';
 
 type Env = { Bindings: admin.AdminServiceEnv & Record<string, unknown> };
+
+/** The request's waitUntil (index passes run after the response); none outside a Worker request. */
+const waitUntilOf = (c: { executionCtx: { waitUntil(p: Promise<unknown>): void } }): WaitUntil | undefined => {
+	try {
+		const ctx = c.executionCtx;
+		return (p) => ctx.waitUntil(p);
+	} catch {
+		return undefined;
+	}
+};
 
 const app = new Hono<Env>();
 
@@ -153,7 +163,7 @@ app.onError((error, c) => {
 });
 
 // Channels
-app.get('/channels', async (c) => ok(c, await listChannels(c.env, parse(ChannelQuery, c.req.query()) as never)));
+app.get('/channels', async (c) => ok(c, await listChannels(c.env, parse(ChannelQuery, c.req.query()) as never, waitUntilOf(c))));
 app.get('/channels/:id', async (c) => ok(c, await admin.channelDetail(c.env, c.req.param('id'))));
 app.patch('/channels/:id', async (c) => ok(c, await admin.updateChannel(c.env, c.req.param('id'), parse(ChannelEdit, await body(c)))));
 app.post('/channels/:id/images/:kind', async (c) => {
@@ -173,7 +183,7 @@ app.post('/channels/:id/transfer', async (c) => {
 app.delete('/channels/:id', async (c) => ok(c, await admin.deleteChannel(c.env, c.req.param('id'), actor(c), parse(Reason, await body(c)).reason)));
 
 // Videos
-app.get('/videos', async (c) => ok(c, await listVideos(c.env, parse(VideoQuery, c.req.query()) as never)));
+app.get('/videos', async (c) => ok(c, await listVideos(c.env, parse(VideoQuery, c.req.query()) as never, waitUntilOf(c))));
 app.get('/videos/:id', async (c) => ok(c, await admin.videoDetail(c.env, c.req.param('id'))));
 app.patch('/videos/:id', async (c) => ok(c, await admin.updateVideo(c.env, c.req.param('id'), parse(VideoEdit, await body(c)))));
 app.post('/videos/:id/thumbnail', async (c) => {
@@ -193,7 +203,7 @@ app.post('/videos/:id/reprocess', async (c) => ok(c, await admin.reprocessVideo(
 app.delete('/videos/:id', async (c) => ok(c, await admin.deleteVideo(c.env, c.req.param('id'), actor(c), parse(Reason, await body(c)).reason)));
 
 // Comments, playlists, community posts
-app.get('/comments', async (c) => ok(c, await listComments(c.env, parse(CommentQuery, c.req.query()))));
+app.get('/comments', async (c) => ok(c, await listComments(c.env, parse(CommentQuery, c.req.query()), waitUntilOf(c))));
 app.delete('/videos/:videoId/comments/:commentId', async (c) => {
 	const { deletion } = await admin.deleteComment(c.env, c.req.param('videoId'), c.req.param('commentId'), actor(c), parse(Reason, await body(c)).reason);
 	return ok(c, { deleted: true, deletion });
@@ -210,7 +220,7 @@ app.delete('/posts/:channelId/:postId', async (c) => {
 });
 
 // Users (videos profiles)
-app.get('/users', async (c) => ok(c, await listUsers(c.env, parse(UserQuery, c.req.query()) as never)));
+app.get('/users', async (c) => ok(c, await listUsers(c.env, parse(UserQuery, c.req.query()) as never, waitUntilOf(c))));
 app.get('/users/search', async (c) => ok(c, await searchUsers(c.env, parse(UserSearchQuery, c.req.query()) as never)));
 // Invited creators (docs/admin/INVITES.md): who has an email, the invited user's
 // profile (create-only) and channels made for them
