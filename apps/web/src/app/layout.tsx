@@ -59,15 +59,15 @@ const metadata: Metadata = {
   openGraph: {
     title: 'Al Ummah Now',
     description: 'Excerpts from scholars\' clips about the state of the nation today',
-    url: 'https://alummahnow.com',
-    images: ['/favicon-16x16.png'],
+    // The share image is the app icon at full size; url and metadataBase are set per request.
+    images: [{ url: '/icon-512.png', width: 512, height: 512, alt: 'Al Ummah Now Videos' }],
     type: 'website',
   },
   twitter: {
-    card: 'summary_large_image',
+    card: 'summary',
     title: 'Al Ummah Now',
     description: 'Excerpts from scholars\' clips about the state of the nation today',
-    images: ['/favicon-16x16.png'],
+    images: ['/icon-512.png'],
     site: '@alummahnow',
     creator: '@alummahnow',
   },
@@ -80,7 +80,26 @@ const metadata: Metadata = {
 /** Per request: the tab icon marks QA and stage (same build as production, so read at runtime). */
 export async function generateMetadata(): Promise<Metadata> {
   const { environment } = await errorReportingContext();
-  return { ...metadata, icons: appIcons(environment) };
+  const origin = await requestOrigin();
+  return {
+    ...metadata,
+    icons: appIcons(environment),
+    // Without a base, Next resolves relative share images against localhost:3000.
+    ...(origin ? { metadataBase: new URL(origin), openGraph: { ...metadata.openGraph, url: origin } } : {}),
+  };
+}
+
+/** This deployment's public origin, from the request (QA, stage and production share one build). */
+async function requestOrigin(): Promise<string | undefined> {
+  try {
+    const h = await headers();
+    const host = h.get('x-forwarded-host') || h.get('host');
+    if (!host) return undefined;
+    const proto = h.get('x-forwarded-proto') || (host.startsWith('localhost') ? 'http' : 'https');
+    return `${proto}://${host}`;
+  } catch {
+    return undefined;
+  }
 }
 
 export const viewport: Viewport = {
