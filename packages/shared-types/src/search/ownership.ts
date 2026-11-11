@@ -274,6 +274,21 @@ export function ownershipTombstone(kind: OwnershipKind): string {
  * Upsert one row, applied only if `version` is not older than the row's and
  * than the item's last delete (SCALABILITY-AUDIT PR-8; see store.ts).
  */
+/**
+ * True when the incoming row differs from the stored one in anything but indexed_at and
+ * source_version (null-safe). A rebuild pass re-reads unchanged objects at the same version:
+ * without this check every one of them rewrote its row and its eight index entries (9 rows
+ * written). On QA (2026-11-11) that was 442k row writes an hour, which overloaded the search
+ * database ("D1 DB is overloaded"). The pass marks unchanged rows seen with its own cheap
+ * UPDATE of indexed_at (ownershipSeenStatement). A newer version still always writes, so a
+ * delayed older snapshot can never overwrite it.
+ */
+const OWNERSHIP_CHANGED = `(${[
+  'owner_id', 'channel_id', 'is_public', 'is_hidden', 'is_deleted', 'is_live', 'duration', 'schedule_status', 'upload_status',
+  'views', 'created_at', 'updated_at', 'admin_title', 'handle', 'email', 'is_verified', 'is_suspended', 'subscribers',
+  'admin_cols', 'is_short', 'needs_format', 'studio_status', 'category', 'language',
+].map((c) => `${OWNERSHIP_TABLE}.${c} IS NOT excluded.${c}`).join(' OR ')})`;
+
 export function ownershipUpsertStatement(db: SearchDb, row: OwnershipRow, now: number, version = now): SearchStatement {
   return db.prepare(
     `INSERT INTO ${OWNERSHIP_TABLE} (kind, id, owner_id, channel_id, is_public, is_hidden, is_deleted, is_live, duration, schedule_status, upload_status, views, created_at, updated_at, indexed_at, source_version,
@@ -290,7 +305,8 @@ export function ownershipUpsertStatement(db: SearchDb, row: OwnershipRow, now: n
        admin_title = excluded.admin_title, handle = excluded.handle, email = excluded.email, is_verified = excluded.is_verified,
        is_suspended = excluded.is_suspended, subscribers = excluded.subscribers, admin_cols = excluded.admin_cols, is_short = excluded.is_short, needs_format = excluded.needs_format,
        studio_status = excluded.studio_status, category = excluded.category, language = excluded.language
-     WHERE excluded.source_version >= ${OWNERSHIP_TABLE}.source_version`,
+     WHERE excluded.source_version >= ${OWNERSHIP_TABLE}.source_version
+       AND (excluded.source_version > ${OWNERSHIP_TABLE}.source_version OR ${OWNERSHIP_CHANGED})`,
   ).bind(
     row.kind, row.id, row.ownerId, row.channelId, int(row.isPublic), int(row.isHidden), int(row.isDeleted),
     int(row.isLive), row.duration, row.scheduleStatus, row.uploadStatus, row.views, row.createdAt, row.updatedAt, now, version,
@@ -388,15 +404,14 @@ export async function syncOwnership(
  */
 export async function invalidateOwnership(db: SearchDb, kind: OwnershipKind, now = Date.now(), id?: string): Promise<void> {
   if (id) {
-    try {
-      await db.prepare(
-        `INSERT INTO search_meta (key, value, updated_at) VALUES (?, ?, ?)
-         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
-      ).bind(ownershipDirtyKey(kind, id), String(now), now).run();
-      return;
-    } catch {
-      // Fall back to marking the whole kind incomplete
-    }
+    // No fallback to the whole kind: when even this mark fails the database is overloaded, and
+    // voiding the rebuild in progress made it rewrite everything again (QA 2026-11-11, a loop).
+    // The caller keeps the write durable another way (the processor's queue retry) or logs it.
+    await db.prepare(
+      `INSERT INTO search_meta (key, value, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+    ).bind(ownershipDirtyKey(kind, id), String(now), now).run();
+    return;
   }
   await db.batch([
     db.prepare('DELETE FROM search_meta WHERE key = ?').bind(ownershipCompleteKey(kind)),

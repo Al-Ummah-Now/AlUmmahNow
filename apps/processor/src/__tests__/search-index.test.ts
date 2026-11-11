@@ -73,6 +73,28 @@ describe('search index sync', () => {
     expect(result.shouldRetry).toBe(false);
   });
 
+  it('an ownership write D1 rejects is retried through the queue, not by voiding the whole index (#859)', async () => {
+    const { env, processor, executed } = setup();
+    const db = (env as unknown as { SEARCH_DB: { prepare: jest.Mock } }).SEARCH_DB;
+    const prepare = db.prepare.getMockImplementation() as (sql: string) => { bind: (...v: unknown[]) => { run: () => Promise<unknown> } };
+    let failed = false;
+    db.prepare.mockImplementation((sql: string) => {
+      const stmt = prepare(sql);
+      if (!failed && sql.includes('INSERT INTO content_ownership')) {
+        failed = true;
+        return { ...stmt, bind: () => ({ run: async () => { throw new Error('D1_ERROR: D1 DB is overloaded. Too many resources consumed within a 10 second window.'); } }) };
+      }
+      return stmt;
+    });
+    const video = { id: 'v9', title: 'Seerah', isPublic: true, channelId: 'c1' };
+    const result = await processor.processMessage(message(MessageType.SearchIndexSync, { entity: 'video', id: 'v9', object: video }), env);
+    expect(result.success).toBe(false);
+    expect(result.shouldRetry).toBe(true);
+    // Only the row is marked; the complete marker is never deleted (that restarted the rebuild under load)
+    expect(executed.some(e => e.sql.includes('DELETE FROM search_meta'))).toBe(false);
+    expect(executed.some(e => e.values.includes('ownership:dirty:video:v9'))).toBe(true);
+  });
+
   it('skips quietly when SEARCH_DB is not bound', async () => {
     const { env, processor } = setup(false);
     const result = await processor.processMessage(message(MessageType.SearchIndexSync, { entity: 'video', id: 'v1' }), env);

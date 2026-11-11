@@ -58,7 +58,10 @@ export async function handleSearchIndexSync(message: AlUmmahMessage, env: QueueE
   if (kind) {
     const ownership = await syncOwnershipSafely(db, kind, id, object ?? null, Date.now(), version);
     if (ownership.ok === false) {
-      logger.warn('Ownership index write failed; row marked for re-sync', { entity, id, error: ownership.error, invalidated: ownership.invalidated });
+      // Retried by the queue (then the dead-letter queue): the durable way to get this write in.
+      // The row is also marked for re-sync when the mark could be written.
+      logger.warn('Ownership index write failed; retrying through the queue', { entity, id, error: ownership.error, marked: ownership.invalidated });
+      throw new Error(`Ownership index write failed for ${entity} ${id}: ${ownership.error}`);
     }
   }
   const result = await syncSearchDocument(db, entity, id, object ?? null, { version });
