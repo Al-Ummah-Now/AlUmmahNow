@@ -38,7 +38,7 @@
   },
   "upload_source_maps": true,
   "vars": {
-    // Logging policy (docs/operations/logging.md): production warn, stage info, QA/dev debug
+    // Logging policy (docs/operations/logging.md): warn on production, stage and QA (only warnings, errors, slow requests); debug locally
     "LOG_LEVEL": "warn",
     "CF_WORKER_NAME": "al-ummah-now-production",
     "CF_PREVIEW_DOMAIN": "mahmoud-s-darwish",
@@ -66,8 +66,10 @@
   "env": {
     // Stage slot (docs/release-pipeline): same bindings as production, stage resources and hosts.
     "stage": {
-      // Workers Logs bills per line: log 10% of invocations (sampling drops errors too)
-      "observability": { "enabled": true, "head_sampling_rate": 0.1, "logs": { "enabled": true, "head_sampling_rate": 0.1 } },
+      // No Logpush job reads these logs; Workers Logs covers them
+      "logpush": false,
+      // Workers Logs bills per line: every invocation kept (sampling would drop errors), no invocation log, LOG_LEVEL warn
+      "observability": { "enabled": true, "head_sampling_rate": 1, "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": false } },
       "name": "al-ummah-now-stage",
       "preview_urls": true,
       "routes": [
@@ -77,8 +79,8 @@
         }
       ],
       "vars": {
-        // Logging policy (docs/operations/logging.md): production warn, stage info, QA/dev debug
-        "LOG_LEVEL": "info",
+        // Logging policy (docs/operations/logging.md): warn on production, stage and QA (only warnings, errors, slow requests); debug locally
+        "LOG_LEVEL": "warn",
         "CF_WORKER_NAME": "al-ummah-now-stage",
         "CF_PREVIEW_DOMAIN": "mahmoud-s-darwish",
         "Issuer": "https://auth.stage.alummahnow.net",
