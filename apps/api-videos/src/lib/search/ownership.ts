@@ -154,9 +154,20 @@ async function whenComplete<T>(env: OwnershipEnv, kind: OwnershipKind, query: (d
 // Reads
 // ---------------------------------------------------------------------------
 
-/** Key order, or with `newest` only that many rows, newest first (a bounded read, SCALABILITY-AUDIT AV-16). */
+/**
+ * With `newest`, only that many rows, newest first (a bounded read, SCALABILITY-AUDIT AV-16).
+ * Without it no ORDER BY: callers sort the ids (byKey). `ORDER BY id` made D1's planner walk
+ * the primary key (kind, id) to skip a sort, reading every row of the kind instead of the
+ * owner's few through idx_content_ownership_owner; on QA (2026-11-11) that was ~10k rows per
+ * creator lookup and exhausted the database ("D1 DB is overloaded").
+ */
 function orderAndLimit(newest?: number): string {
-  return newest ? 'ORDER BY created_at DESC, id LIMIT ?' : 'ORDER BY id';
+  return newest ? 'ORDER BY created_at DESC, id LIMIT ?' : '';
+}
+
+/** R2 key order (SQLite's BINARY collation), sorted in the Worker instead of by D1 (see orderAndLimit). */
+export function byKey(ids: string[]): string[] {
+  return ids.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 }
 
 /** Ids of the user's channels that are not deleted or hidden, in R2 key order. */
@@ -164,9 +175,10 @@ export function ownedChannelIds(env: OwnershipEnv, userId: string): Promise<stri
   return whenComplete(env, 'channel', async db => {
     const { results } = await db.prepare(
       // Suspended channels stay in the owner's list (the endpoint shows them with the notice)
-      `SELECT id FROM ${OWNERSHIP_TABLE} WHERE kind = 'channel' AND owner_id = ? AND is_deleted = 0 AND (is_hidden = 0 OR is_suspended = 1) ORDER BY id`,
+      // No ORDER BY: it made D1 scan every channel (see orderAndLimit)
+      `SELECT id FROM ${OWNERSHIP_TABLE} WHERE kind = 'channel' AND owner_id = ? AND is_deleted = 0 AND (is_hidden = 0 OR is_suspended = 1)`,
     ).bind(userId).all<{ id: string }>();
-    return (results ?? []).map(r => r.id);
+    return byKey((results ?? []).map(r => r.id));
   });
 }
 
@@ -198,7 +210,8 @@ export function ownerContentIds(env: OwnershipEnv, kind: OwnershipKind, userId: 
     const { results } = await db.prepare(
       `SELECT id FROM ${OWNERSHIP_TABLE} WHERE kind = ? AND owner_id = ? AND is_deleted = 0${channelFilter} ${orderAndLimit(newest)}`,
     ).bind(kind, userId, ...(channelFilter ? channelIds ?? [] : []), ...(newest ? [newest] : [])).all<{ id: string }>();
-    return (results ?? []).map(r => r.id);
+    const ids = (results ?? []).map(r => r.id);
+    return newest ? ids : byKey(ids);
   });
 }
 
@@ -213,8 +226,8 @@ export function ownerScheduledVideoIds(env: OwnershipEnv, userId: string, filter
     const binds: unknown[] = [userId];
     if (filter.channelId) { clauses.push('channel_id = ?'); binds.push(filter.channelId); }
     if (filter.status) { clauses.push('schedule_status = ?'); binds.push(filter.status); }
-    const { results } = await db.prepare(`SELECT id FROM ${OWNERSHIP_TABLE} WHERE ${clauses.join(' AND ')} ORDER BY id`).bind(...binds).all<{ id: string }>();
-    return (results ?? []).map(r => r.id);
+    const { results } = await db.prepare(`SELECT id FROM ${OWNERSHIP_TABLE} WHERE ${clauses.join(' AND ')}`).bind(...binds).all<{ id: string }>();
+    return byKey((results ?? []).map(r => r.id));
   });
 }
 

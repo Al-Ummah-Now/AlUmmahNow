@@ -503,3 +503,21 @@ describe('endpoints served from the ownership index', () => {
 		assert.equal(indexed.channels.calls, 3 * 2, 'one GET per owned channel per request; no list');
 	});
 });
+
+describe('owner lookups and the D1 planner', () => {
+	it('send no ORDER BY id (D1 then scanned every row of the kind, #859) and still answer in key order', async () => {
+		const { db, raw } = ownershipEnv({ channels: { c: channel('c'), a: channel('a'), b: channel('b', { userId: 'u2' }), d: channel('d') } });
+		await runOwnershipPass(raw as never, 'channel');
+		const seen: string[] = [];
+		const prepare = db.prepare.bind(db);
+		(db as unknown as { prepare: (sql: string) => unknown }).prepare = (sql: string) => {
+			seen.push(sql);
+			return prepare(sql);
+		};
+		assert.deepEqual(await ownedChannelIds(raw as never, 'owner'), ['a', 'c', 'd']);
+		const lookup = seen.filter((sql) => /owner_id = \?/.test(sql));
+		assert.ok(lookup.length > 0);
+		for (const sql of lookup) assert.doesNotMatch(sql, /ORDER BY id/);
+	});
+});
+
