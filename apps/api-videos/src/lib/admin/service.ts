@@ -46,6 +46,7 @@ import { readAssignment } from '../creatorTiers';
 import { bansFor, deleteBan, readBan, writeBan } from './bans';
 import { createJob, type JobHandler, type JobOutcome, type JobQueue } from './jobs';
 import { pendingDeletion, recordDeletion, removeDeletion, requestPurge, type PurgeOutcome } from './deletions';
+import { forgetPendingUserDeletion } from './pendingUserDeletion';
 import { approvedFromPlan, planLegacyRestore, runLegacyRestore, type ApprovedRestore, type AuthUsersDb } from './legacy-restore';
 import { OWNER_DELETED_HOLD } from '../videoTrashMarks';
 import { runThumbnailRepairStep, type ThumbnailRepairEnv } from '../thumbnail/repair';
@@ -1317,6 +1318,8 @@ export async function deleteUserData(env: AdminServiceEnv, userId: string, actor
 		reason: mark.reason,
 		deletedAt: at,
 	});
+	// Writes are refused from now on (middleware/videos-pending-deletion.ts)
+	forgetPendingUserDeletion(userId);
 	await send(env, MessageType.ProfileUpdate, { userId, action: 'deleted' });
 	return { deletion, job: await createJob(env, { kind: 'user.sync-holds', targetKind: 'user', targetId: userId, actorId }) };
 }

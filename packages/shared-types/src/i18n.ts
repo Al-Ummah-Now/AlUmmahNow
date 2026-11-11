@@ -162,6 +162,8 @@ export interface AppTranslations {
     invitationTitle: string;
     invitationMessage: string;
     invitationShort: string;
+    /** A write refused with `videos_account_pending_deletion` */
+    accountPendingDeletion: string;
     limitReached: string;
     limitReachedSoon: string;
     channelLimit: string;
@@ -528,6 +530,9 @@ export interface AppTranslations {
     videosBannedTitle: string;
     videosBannedBody: string;
     videosBannedReason: string;
+    /** A pending admin "Delete videos data" (30 days): writes are refused */
+    videosPendingDeletionTitle: string;
+    videosPendingDeletionBody: string;
     /** Owner notice for a channel suspended by an admin */
     channelSuspendedTitle: string;
     channelSuspendedBody: string;

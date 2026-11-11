@@ -14,7 +14,33 @@
  * `openapi/v1.json` is generated from this (`pnpm openapi:generate`) and a unit
  * test fails when it drifts from the routes.
  */
+import { VIDEOS_ACCOUNT_PENDING_DELETION_CODE, VIDEOS_BANNED_CODE } from '@al-ummah/shared-types';
 import { CONTRACT_VERSION, CURRENT_API_VERSION, DEPRECATIONS } from './api-version';
+
+/**
+ * 403 a signed-in client can get from any route because of the account's
+ * videos state (middleware/videos-ban.ts, middleware/videos-pending-deletion.ts;
+ * docs/native-apps/videos-account-states.md). Clients switch on `code`.
+ */
+const ACCOUNT_STATE_ERROR = {
+	type: 'object',
+	description:
+		'403 for a signed-in user whose videos account is not active. `videos_banned`: an admin banned them (reads still work). ' +
+		'`videos_account_pending_deletion`: an admin deleted their videos data, restorable for 30 days; they can sign in and read, ' +
+		'every write is refused and GET /api/profile answers it, until an admin restores it (lifted at once) or the cleanup erases it ' +
+		'(then they start with a new profile). Show a single account-state screen, never the create-profile flow.',
+	required: ['success', 'code', 'error'],
+	properties: {
+		success: { type: 'boolean', const: false },
+		code: { type: 'string', enum: [VIDEOS_BANNED_CODE, VIDEOS_ACCOUNT_PENDING_DELETION_CODE] },
+		error: { type: 'string', description: 'English text; clients show their own localized message for `code`.' },
+		ban: { type: 'object', properties: { reason: { type: ['string', 'null'] }, bannedAt: { type: 'string', format: 'date-time' } } },
+		deletion: {
+			type: 'object',
+			properties: { deletedAt: { type: 'string', format: 'date-time' }, purgeAfter: { type: 'string', format: 'date-time', description: 'When the data is erased unless restored first' } },
+		},
+	},
+} as const;
 
 /** Internal routes under /api/* that are guarded by X-API-Key, not part of the public contract. */
 export const NON_CONTRACT_PATHS: readonly string[] = ['/api/i18n/sync'];
@@ -77,6 +103,9 @@ export function buildContractDocument(rawDoc: any, options: ContractOptions = {}
 			description: 'Access token from the Al Ummah Now auth server (OAuth 2.0 + PKCE, or the device flow on TVs).',
 		},
 	};
+
+	// Answers any signed-in route can give that are not in a route's own responses
+	components.schemas = { ...(components.schemas ?? {}), AccountStateError: ACCOUNT_STATE_ERROR };
 
 	return {
 		openapi: rawDoc.openapi ?? '3.1.0',

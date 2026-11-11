@@ -131,6 +131,20 @@ export interface SuspensionInfo {
 /** Error code api-videos answers to a banned user's signed-in requests. */
 export const VIDEOS_BANNED_CODE = 'videos_banned';
 
+/**
+ * Error code (403) api-videos answers to a signed-in user whose videos data an
+ * admin deleted, while that deletion is pending (restorable for 30 days): every
+ * write is refused, and GET /api/profile answers it too so clients show the
+ * state instead of "create your profile". Reads and sign-in keep working; an
+ * admin restore lifts it at once; after the purge the user starts fresh.
+ * Body: { success: false, code, error, deletion: { deletedAt, purgeAfter } }.
+ * Contract for web and the native apps: docs/native-apps/videos-account-states.md.
+ */
+export const VIDEOS_ACCOUNT_PENDING_DELETION_CODE = 'videos_account_pending_deletion';
+
+/** The English text sent with VIDEOS_ACCOUNT_PENDING_DELETION_CODE (clients show their own en/ar words). */
+export const VIDEOS_ACCOUNT_PENDING_DELETION_MESSAGE = 'Your videos account is scheduled for deletion. Contact support.';
+
 // ---------------------------------------------------------------------------
 // List queries and rows (admin-api ↔ api-videos ↔ admin-web)
 // ---------------------------------------------------------------------------

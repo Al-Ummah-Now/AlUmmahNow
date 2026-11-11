@@ -10,6 +10,7 @@ import {
   logApiAuth
 } from "./logger";
 import { logger } from '@/lib/logger-server';
+import { VIDEOS_ACCOUNT_PENDING_DELETION_CODE, VIDEOS_BANNED_CODE } from '@al-ummah/shared-types';
 
 /**
  * Get the current authenticated user's profile
@@ -404,24 +405,38 @@ export async function uploadProfileCover(formData: FormData): Promise<Profile | 
 
 // Note: Functions that call client-side callbacks (like setProfile)
 // have been moved to profiles-client.ts to avoid server/client conflicts
+export interface VideosAccountStatus {
+  /** Banned on the videos platform (admin decision; their Auth account is not affected) */
+  banned: boolean;
+  /** The ban's reason, when banned */
+  reason: string | null;
+  /** An admin deleted their videos data; restorable for 30 days, and nothing can be changed meanwhile (#701) */
+  pendingDeletion: boolean;
+}
+
+const ACTIVE: VideosAccountStatus = { banned: false, reason: null, pendingDeletion: false };
+
 /**
- * Whether the signed-in user is banned on the videos platform (admin decision,
- * enforced by api-videos; their Auth account is not affected). GET /api/profile
- * answers 403 `videos_banned` for them.
+ * Whether the signed-in user may use the videos platform. api-videos answers
+ * GET /api/profile with 403 `videos_banned` for a banned user and 403
+ * `videos_account_pending_deletion` while an admin deletion of their videos
+ * data is pending (a ban wins).
  */
-export async function getVideosBanStatus(): Promise<{ banned: boolean; reason: string | null }> {
+export async function getVideosAccountStatus(): Promise<VideosAccountStatus> {
   const authContext = await getServerAuthContext();
-  if (!authContext?.accessToken) return { banned: false, reason: null };
+  if (!authContext?.accessToken) return ACTIVE;
   try {
     const res = await fetch(buildApiUrl('/api/profile'), {
       headers: { Authorization: `Bearer ${authContext.accessToken}` },
       cache: 'no-store',
     });
-    if (res.status !== 403) return { banned: false, reason: null };
+    if (res.status !== 403) return ACTIVE;
     const body = (await res.json().catch(() => ({}))) as { code?: string; ban?: { reason?: string | null } };
-    return body.code === 'videos_banned' ? { banned: true, reason: body.ban?.reason ?? null } : { banned: false, reason: null };
+    if (body.code === VIDEOS_BANNED_CODE) return { ...ACTIVE, banned: true, reason: body.ban?.reason ?? null };
+    if (body.code === VIDEOS_ACCOUNT_PENDING_DELETION_CODE) return { ...ACTIVE, pendingDeletion: true };
+    return ACTIVE;
   } catch (error) {
-    logger.warn('[getVideosBanStatus] Could not read the ban state', { error: error instanceof Error ? error.message : String(error) });
-    return { banned: false, reason: null };
+    logger.warn('[getVideosAccountStatus] Could not read the account state', { error: error instanceof Error ? error.message : String(error) });
+    return ACTIVE;
   }
 }

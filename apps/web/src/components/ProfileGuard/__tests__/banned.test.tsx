@@ -9,7 +9,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 let mockPathname = '/en/';
 const push = jest.fn();
 const checkProfileExists = jest.fn();
-const getVideosBanStatus = jest.fn();
+const getVideosAccountStatus = jest.fn();
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
@@ -22,7 +22,7 @@ jest.mock('@/lib/api/profiles-client', () => ({
   checkProfileExists: (...args: unknown[]) => checkProfileExists(...args),
 }));
 jest.mock('@/lib/api/profiles', () => ({
-  getVideosBanStatus: () => getVideosBanStatus(),
+  getVideosAccountStatus: () => getVideosAccountStatus(),
 }));
 jest.mock('@/hooks/useLanguage', () => ({
   useLanguage: () => ({
@@ -35,6 +35,8 @@ jest.mock('@/hooks/useLanguage', () => ({
         videosBannedTitle: 'You are banned on Al Ummah Now videos',
         videosBannedBody: 'You can still watch.',
         videosBannedReason: 'Reason: {reason}',
+        videosPendingDeletionTitle: 'Your videos account is scheduled for deletion. Contact support.',
+        videosPendingDeletionBody: 'You can still watch.',
       },
     },
   }),
@@ -47,7 +49,7 @@ describe('ProfileGuard for a user banned on videos', () => {
   beforeEach(() => {
     push.mockReset();
     checkProfileExists.mockReset().mockResolvedValue(false);
-    getVideosBanStatus.mockReset().mockResolvedValue({ banned: true, reason: 'Spam' });
+    getVideosAccountStatus.mockReset().mockResolvedValue({ banned: true, reason: 'Spam', pendingDeletion: false });
   });
 
   it('shows the banned notice above the page and does not send them to create a profile', async () => {
@@ -67,9 +69,28 @@ describe('ProfileGuard for a user banned on videos', () => {
     expect(push).not.toHaveBeenCalled();
   });
 
+  it('a pending deletion of their videos data shows its notice, never the create flow (#701)', async () => {
+    mockPathname = '/en/';
+    getVideosAccountStatus.mockResolvedValue({ banned: false, reason: null, pendingDeletion: true });
+    render(<ProfileGuard><p>home content</p></ProfileGuard>);
+    expect(await screen.findByTestId('videos-pending-deletion-notice')).toHaveTextContent('Your videos account is scheduled for deletion. Contact support.');
+    expect(screen.getByText('home content')).toBeInTheDocument();
+    expect(screen.queryByTestId('videos-banned-notice')).not.toBeInTheDocument();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('a pending deletion hides the create form on the create page', async () => {
+    mockPathname = '/en/profile/create';
+    getVideosAccountStatus.mockResolvedValue({ banned: false, reason: null, pendingDeletion: true });
+    render(<ProfileGuard><p>create form</p></ProfileGuard>);
+    expect(await screen.findByTestId('videos-pending-deletion-notice')).toBeInTheDocument();
+    expect(screen.queryByText('create form')).not.toBeInTheDocument();
+    expect(push).not.toHaveBeenCalled();
+  });
+
   it('a user who is not banned is still sent to create a profile', async () => {
     mockPathname = '/en/';
-    getVideosBanStatus.mockResolvedValue({ banned: false, reason: null });
+    getVideosAccountStatus.mockResolvedValue({ banned: false, reason: null, pendingDeletion: false });
     render(<ProfileGuard><p>home content</p></ProfileGuard>);
     await waitFor(() => expect(push).toHaveBeenCalledWith('/en/profile/create'));
     expect(screen.queryByTestId('videos-banned-notice')).not.toBeInTheDocument();

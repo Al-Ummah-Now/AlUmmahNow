@@ -106,6 +106,8 @@ export interface CreatorAccess {
   maxChannels: number | null;
   limits: { perHour: number; perDay: number; maxConcurrent: number } | null;
   usage: { hour: number; day: number };
+  /** Set while an admin deletion of the user's videos data is pending: nothing can be uploaded or created */
+  pendingDeletion?: boolean;
 }
 
 /** Error codes the upload and channel-create paths answer with (the web maps them to en/ar messages). */
