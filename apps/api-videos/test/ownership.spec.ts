@@ -314,6 +314,18 @@ describe('ownership rebuild pass', () => {
 		assert.equal(db.db.prepare("SELECT 1 FROM search_meta WHERE key = 'ownership:heal:channel'").get(), undefined, 'released after a step that worked');
 	});
 
+	it('a finishing heal releases only its own lease, never one taken after it', async () => {
+		const { db, raw } = ownershipEnv({ channels: { a: channel('a') } });
+		const get = raw.channels.get.bind(raw.channels);
+		raw.channels.get = async (key: string) => {
+			// While this heal runs, its lease is replaced (it overran, or an operator holds the index)
+			db.db.prepare("UPDATE search_meta SET updated_at = ? WHERE key = 'ownership:heal:channel'").run(Date.now() + 3_600_000);
+			return get(key);
+		};
+		await scheduleOwnershipHeal(raw as never, null, 'channel');
+		assert.ok(db.db.prepare("SELECT 1 FROM search_meta WHERE key = 'ownership:heal:channel'").get(), 'the newer lease survives');
+	});
+
 	it('applies moderation made outside api-videos', async () => {
 		const { db } = ownershipEnv();
 		await syncOwnership(db, 'video', 'v1', videoFixture({ id: 'v1' }));
