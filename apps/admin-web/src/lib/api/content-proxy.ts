@@ -25,6 +25,13 @@ export const CONTENT_PROXY_RULES: readonly Rule[] = [
   // Videos list: inline and bulk actions (admin-api audits each one)
   { method: 'POST', path: new RegExp(`^videos/${ID}/(unpublish|republish)$`) },
   { method: 'DELETE', path: new RegExp(`^videos/${ID}$`) },
+  // Live streaming page (admin-api checks live:manage and audits each change)
+  { method: 'GET', path: /^live\/(settings|sessions|compare|audit)$/ },
+  { method: 'PUT', path: /^live\/settings$/ },
+  { method: 'PUT', path: new RegExp(`^live/overrides/${ID}$`) },
+  { method: 'DELETE', path: new RegExp(`^live/overrides/${ID}$`) },
+  { method: 'POST', path: new RegExp(`^live/streams/${ID}/move$`) },
+  { method: 'POST', path: new RegExp(`^live/sessions/${ID}/end$`) },
 ];
 
 /** True when `segments` are a path the pass-through serves for `method`. */

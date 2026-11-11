@@ -11,6 +11,7 @@ This Next.js 16 application is deployed as a Cloudflare Worker via @opennextjs/c
 - Content moderation dashboard (review flagged videos, channels, profiles)
 - User and channel management
 - Platform settings configuration
+- Live streaming (`/live-streaming`): which provider new live streams go to (round-robin, weighted split or one provider), per-provider switches, caps and rates, channel overrides, sessions, and a side-by-side provider comparison
 - TanStack Query for server-state management and caching
 - OpenAuth authentication (JWT/OAuth2)
 - Deployed as a Cloudflare Worker via OpenNext

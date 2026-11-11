@@ -140,3 +140,13 @@ export function canManageCreators(role?: string): boolean {
   const r = normalizeRole(role);
   return r === 'admin' || r === 'super_admin';
 }
+
+/**
+ * Live streaming: changing provider routing, overrides and moves, and ending
+ * a stuck session mirror the live:manage content permission (admins and super
+ * admins). Moderators see the page read-only.
+ */
+export function canManageLive(role?: string): boolean {
+  const r = normalizeRole(role);
+  return r === 'admin' || r === 'super_admin';
+}
