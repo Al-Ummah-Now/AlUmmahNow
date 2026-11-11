@@ -77,7 +77,8 @@ function providerFailure(c: AppContext, error: unknown, where: string) {
 async function signVod(c: AppContext, url: string | null): Promise<string | null> {
 	const host = (c.env as { BUNNY_SIGN_HOSTNAME?: string; bunny_hostname?: string }).BUNNY_SIGN_HOSTNAME || (c.env as { bunny_hostname?: string }).bunny_hostname;
 	if (!url || !host || (c.env as { BUNNY_SIGN_URLS?: string }).BUNNY_SIGN_URLS !== 'true') return url;
-	const m = new RegExp(`^https://${host.replace(/\./g, '\\.')}/([0-9a-f-]{36})/playlist\\.m3u8$`).exec(url);
+	const escaped = host.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+	const m = new RegExp(`^https://${escaped}/([0-9a-f-]{36})/playlist\\.m3u8$`).exec(url);
 	if (!m) return url;
 	const key = await getSecret((c.env as { BUNNY_TOKEN_KEY?: unknown }).BUNNY_TOKEN_KEY, 'BUNNY_TOKEN_KEY');
 	if (!key) return url;
@@ -189,8 +190,8 @@ export class LiveStreamQoe extends PublicRoute {
 	schema = {
 		tags: ['Live Streams'],
 		summary: 'Player QoE beacon',
-		description: 'Sampled player statistics for the provider comparison (no user data). 204 when stored.',
-		request: { params: Params, body: { content: { 'application/json': { schema: z.record(z.any()) } } } },
+		description: 'Sampled player statistics for the provider comparison (no user data). 204 when stored. The body is JSON; it may be sent as text/plain (navigator.sendBeacon, no CORS preflight).',
+		request: { params: Params },
 		responses: { '204': { description: 'Stored' }, '400': Err('Rejected') },
 	};
 	async handle(c: AppContext) {
@@ -198,7 +199,15 @@ export class LiveStreamQoe extends PublicRoute {
 		const db = env(c).SEARCH_DB;
 		if (!db) return new Response(null, { status: 204 });
 		try {
-			const beacon = parseBeacon(await c.req.json().catch(() => null));
+			const raw = await c.req.text().catch(() => '');
+			if (raw.length > 16_384) throw new QoeRejected('too large');
+			let parsed: unknown = null;
+			try {
+				parsed = JSON.parse(raw);
+			} catch {
+				throw new QoeRejected('invalid json');
+			}
+			const beacon = parseBeacon(parsed);
 			if (beacon.streamId !== params.id) throw new QoeRejected('stream mismatch');
 			const colo = (c.req.raw as { cf?: { colo?: string } }).cf?.colo ?? null;
 			await recordBeacon(db, beacon, { colo, isTest: c.req.header('x-live-test') === '1' });

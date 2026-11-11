@@ -16106,7 +16106,7 @@
           "Live Streams"
         ],
         "summary": "Player QoE beacon",
-        "description": "Sampled player statistics for the provider comparison (no user data). 204 when stored.",
+        "description": "Sampled player statistics for the provider comparison (no user data). 204 when stored. The body is JSON; it may be sent as text/plain (navigator.sendBeacon, no CORS preflight).",
         "operationId": "post_LiveStreamQoe",
         "parameters": [
           {
@@ -16120,16 +16120,6 @@
             "in": "path"
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "additionalProperties": {}
-              }
-            }
-          }
-        },
         "responses": {
           "204": {
             "description": "Stored"
