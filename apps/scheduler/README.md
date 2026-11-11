@@ -115,6 +115,14 @@ pnpm deploy:staging
 - Error message stored in metadata
 - User notified via email/in-app notification
 
+### Transient R2/KV errors
+R2 sometimes fails a call with an internal error that works a moment later
+(`list: We encountered an internal error. Please try again. (10001)`).
+- `list`, `get` and `delete` on the schedule bucket are retried twice with a short jittered backoff (`src/lib/storage-retry.ts`).
+- If it still fails, the run ends cleanly: a `SCHEDULER_STORAGE_UNAVAILABLE` warning with the error code, `storageErrorsToday` in the day's metrics, and a consecutive count in `SCHEDULER_LOCKS` (`storage_outage`). Nothing is lost: the next run scans the same entries.
+- Only 5 consecutive runs like that are reported to the admin Errors page (then once an hour while it lasts). The first run that gets through clears the count (`src/storage-outage.ts`).
+- Other errors (a missing binding, a bad argument) are not retried and are reported at once, as before.
+
 ## Testing
 
 ```bash

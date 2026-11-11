@@ -7,6 +7,8 @@ import { scheduleRetries } from './retry';
 import { sendNotification } from './notifier';
 import { logEvent, sendAlert, recordRunMetrics, type RunMetrics } from './monitoring';
 import { logger } from './lib/logger';
+import { isTransientStorageError } from './lib/storage-retry';
+import { clearStorageOutage, recordStorageOutage } from './storage-outage';
 import { withLogging } from '@al-ummah/logger';
 
 // Export the Durable Object class for Cloudflare Workers runtime
@@ -29,6 +31,7 @@ export default withLogging({
       const now = new Date();
       const batchSize = parseInt(env.BATCH_SIZE, 10) || 50;
       const scan = await listDueSchedules(env.SCHEDULED_VIDEOS, now, { limit: batchSize });
+      await clearStorageOutage(env);
       const allVideos = [...new Map(scan.due.map((v) => [v.videoId, v])).values()];
 
       if (allVideos.length === 0) {
@@ -59,6 +62,12 @@ export default withLogging({
         durationMs: Date.now() - startTime,
       });
     } catch (error) {
+      // R2/KV briefly unavailable even after retries: nothing is lost (the next
+      // run scans the same entries), so end cleanly; escalates only if it lasts
+      if (isTransientStorageError(error)) {
+        await recordStorageOutage(env, ctx, error);
+        return;
+      }
       logger.error('[Scheduler] Run failed', { error, durationMs: Date.now() - startTime });
       sendAlert(error);
       reportServerError('scheduler', env, ctx, error, { route: 'cron:scheduler' });

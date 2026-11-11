@@ -279,3 +279,120 @@ describe('failed scheduled publish: flagged for an admin, retried from the Error
     assert.equal((await call('k', (item!.retry as { body: unknown }).body)).status, 404, 'a second retry finds nothing');
   });
 });
+
+describe('transient R2 errors (2026-11-11 "list: We encountered an internal error. Please try again. (10001)")', async () => {
+  const { STORAGE_RETRY, isTransientStorageError, withStorageRetry, TransientStorageError } = await import('../src/lib/storage-retry');
+  const { OUTAGE_KEY, ESCALATE_AFTER } = await import('../src/storage-outage');
+  STORAGE_RETRY.baseDelayMs = 1;
+  const r2Error = (code = '10001') => new Error(`list: We encountered an internal error. Please try again. (${code})`);
+
+  /** R2 whose list fails the first `failLists` calls (Infinity: always) */
+  class FlakyR2 extends FakeR2 {
+    constructor(public failLists = 0) { super(0); }
+    override async list(opts: { limit?: number; cursor?: string; prefix?: string } = {}) {
+      if (this.failLists > 0) { this.failLists--; this.lists++; throw r2Error(); }
+      return super.list(opts);
+    }
+  }
+
+  function runEnv(scheduled: unknown, videos = new FakeR2(0)) {
+    const kv = new Map<string, string>();
+    const KV = {
+      get: async (k: string) => kv.get(k) ?? null,
+      put: async (k: string, v: string) => void kv.set(k, v),
+      delete: async (k: string) => void kv.delete(k),
+    };
+    const lockNs = {
+      idFromName: (n: string) => n,
+      get: () => ({ fetch: async (url: string) => Response.json(url.endsWith('/acquire') ? { acquired: true, token: 't' } : { released: true }) }),
+    };
+    const env = {
+      VIDEOS: videos, SCHEDULED_VIDEOS: scheduled, QUEUE: { send: async () => undefined },
+      SCHEDULER_LOCKS: KV, SCHEDULER_METRICS: KV, SCHEDULER_LOCK: lockNs,
+      MAX_RETRIES: '3', BATCH_SIZE: '50', LOCK_TTL: '120', WEBSOCKET_URL: '',
+      INTERNAL_API_KEY: 'k', ERRORS_INGEST_URL: 'https://admin.api.qa.example/internal/errors',
+    };
+    const reports: string[] = [];
+    const run = async () => {
+      const waits: Promise<unknown>[] = [];
+      const realFetch = globalThis.fetch;
+      globalThis.fetch = (async (_u: unknown, init?: RequestInit) => {
+        for (const e of JSON.parse(String(init?.body ?? '{}')).events ?? []) reports.push(String(e.message));
+        return new Response(null, { status: 202 });
+      }) as typeof fetch;
+      try {
+        await scheduler.scheduled({} as never, env as never, { waitUntil: (p: Promise<unknown>) => void waits.push(p) } as never);
+        await Promise.all(waits);
+      } finally {
+        globalThis.fetch = realFetch;
+      }
+    };
+    return { env, kv, reports, run };
+  }
+
+  it('classifies: R2 internal error is transient; a bad binding or another R2 code is not', () => {
+    assert.equal(isTransientStorageError(r2Error()), true);
+    assert.equal(isTransientStorageError(r2Error('10058')), true);
+    assert.equal(isTransientStorageError(new TypeError("Cannot read properties of undefined (reading 'list')")), false);
+    assert.equal(isTransientStorageError(new Error('get: The specified bucket does not exist. (10006)')), false);
+  });
+
+  it('retries a transient error, gives up after 2 retries, never retries a non-transient one', async () => {
+    let calls = 0;
+    assert.equal(await withStorageRetry('list', async () => { if (++calls === 1) throw r2Error(); return 'ok'; }), 'ok');
+    assert.equal(calls, 2);
+    calls = 0;
+    await assert.rejects(withStorageRetry('list', async () => { calls++; throw r2Error(); }), (e: unknown) => e instanceof TransientStorageError && e.code === '10001');
+    assert.equal(calls, 3);
+    calls = 0;
+    await assert.rejects(withStorageRetry('list', async () => { calls++; throw new TypeError('bad binding'); }), TypeError);
+    assert.equal(calls, 1);
+  });
+
+  it('a transient list error then success: the run publishes, nothing is reported', async () => {
+    const at = new Date(Date.now() - 60_000);
+    const scheduled = new FlakyR2(1);
+    scheduled.set(buildScheduleKey(at, 'v1'), meta('v1', at));
+    const videos = new FakeR2(0);
+    videos.set('v1', { id: 'v1', isPublic: false, scheduledPublishStatus: 'scheduled' });
+    const { kv, reports, run } = runEnv(scheduled, videos);
+    await run();
+    assert.equal(videos.read('v1').isPublic, true);
+    assert.equal(scheduled.data.size, 0);
+    assert.equal(kv.has(OUTAGE_KEY), false);
+    assert.deepEqual(reports, []);
+  });
+
+  it('list failing every time: each run ends cleanly and counts; reported once, at the 5th run; a good run resets', async () => {
+    const at = new Date(Date.now() - 60_000);
+    const scheduled = new FlakyR2(Infinity);
+    scheduled.set(buildScheduleKey(at, 'v1'), meta('v1', at));
+    const videos = new FakeR2(0);
+    videos.set('v1', { id: 'v1', isPublic: false, scheduledPublishStatus: 'scheduled' });
+    const { kv, reports, run } = runEnv(scheduled, videos);
+    for (let i = 1; i <= ESCALATE_AFTER + 1; i++) {
+      await run(); // does not throw
+      assert.equal(JSON.parse(kv.get(OUTAGE_KEY)!).count, i);
+      assert.equal(JSON.parse(kv.get(OUTAGE_KEY)!).code, '10001');
+      assert.equal(reports.length, i >= ESCALATE_AFTER ? 1 : 0, `reports after run ${i}`);
+    }
+    assert.equal(scheduled.lists, 3 * (ESCALATE_AFTER + 1), 'one try and two retries per run');
+    assert.match(reports[0], /storage unavailable for 5 consecutive runs/);
+    assert.equal(JSON.parse(kv.get(dailyMetricsKey(new Date()))!).storageErrorsToday, ESCALATE_AFTER + 1);
+
+    scheduled.failLists = 0;
+    await run();
+    assert.equal(kv.has(OUTAGE_KEY), false, 'the count is reset by a run that gets through');
+    assert.equal(videos.read('v1').isPublic, true, 'and the due video is published');
+    scheduled.failLists = Infinity;
+    await run();
+    assert.equal(JSON.parse(kv.get(OUTAGE_KEY)!).count, 1, 'a new outage counts from 1');
+  });
+
+  it('a non-transient error (missing binding) is reported at once and not counted', async () => {
+    const { kv, reports, run } = runEnv(undefined);
+    await run();
+    assert.equal(kv.has(OUTAGE_KEY), false);
+    assert.equal(reports.length, 1);
+  });
+});

@@ -1,6 +1,7 @@
 import { MessageType } from '@al-ummah/shared-types';
 import type { ScheduledVideoMetadata, SearchIndexSyncPayload, VideoObject } from '@al-ummah/shared-types';
 import { logger } from './lib/logger';
+import { isTransientStorageError, withStorageRetry } from './lib/storage-retry';
 
 /** Schedule entries live at `YYYY-MM-DD/HH/<videoId>.json`: key order is time order. */
 const SCHEDULE_KEY = /^(\d{4}-\d{2}-\d{2})\/(\d{2})\/([^/]+)\.json$/;
@@ -131,7 +132,8 @@ export async function listDueSchedules(
   let operations = 0;
   let cursor: string | undefined;
   for (;;) {
-    const listed = await scheduledBucket.list({ limit: pageSize, ...(cursor ? { cursor } : {}) });
+    // A transient R2 error is retried; if it persists it ends the scan (index.ts ends the run cleanly)
+    const listed = await withStorageRetry('list', () => scheduledBucket.list({ limit: pageSize, ...(cursor ? { cursor } : {}) }));
     operations++;
     for (const object of listed.objects) {
       const match = SCHEDULE_KEY.exec(object.key);
@@ -139,13 +141,18 @@ export async function listDueSchedules(
       if (`${match[1]}/${match[2]}` > currentHour) return { due, operations, truncated: false };
       if (due.length >= limit || operations >= maxReads) return { due, operations, truncated: true };
       try {
-        const entry = await scheduledBucket.get(object.key);
+        const body = await withStorageRetry('get', async () => {
+          const entry = await scheduledBucket.get(object.key);
+          return entry ? entry.text() : null;
+        });
         operations++;
-        if (!entry) continue;
-        const metadata: ScheduledVideoMetadata = JSON.parse(await entry.text());
+        if (body === null) continue;
+        const metadata: ScheduledVideoMetadata = JSON.parse(body);
         if (new Date(metadata.scheduledPublishDate) < windowEnd) due.push(metadata);
       } catch (error) {
-        logger.error(`Failed to read schedule entry ${object.key}:`, error);
+        // One unreadable entry is skipped for this run, never the whole scan; the next run reads it again
+        if (isTransientStorageError(error)) logger.warn(`Schedule entry ${object.key} unreadable for now; next run retries`, { error });
+        else logger.error(`Failed to read schedule entry ${object.key}:`, error);
       }
     }
     if (!listed.truncated) return { due, operations, truncated: false };
@@ -161,7 +168,8 @@ export async function removeSchedule(
   metadata: ScheduledVideoMetadata
 ): Promise<void> {
   try {
-    await scheduledBucket.delete(buildScheduleKey(new Date(metadata.scheduledPublishDate), metadata.videoId));
+    const key = buildScheduleKey(new Date(metadata.scheduledPublishDate), metadata.videoId);
+    await withStorageRetry('delete', () => scheduledBucket.delete(key));
     logger.debug(`Removed schedule for video ${metadata.videoId}`);
   } catch (error) {
     logger.error(`Failed to remove schedule for video ${metadata.videoId}:`, error);
@@ -187,6 +195,6 @@ export async function markAsFailed(
   await scheduledBucket.put(`${FAILED_PREFIX}${key}`, JSON.stringify(updatedMetadata), {
     httpMetadata: { contentType: 'application/json' },
   });
-  await scheduledBucket.delete(key);
+  await withStorageRetry('delete', () => scheduledBucket.delete(key));
   logger.warn(`Moved video ${metadata.videoId} schedule to ${FAILED_PREFIX} after permanent failure`);
 }

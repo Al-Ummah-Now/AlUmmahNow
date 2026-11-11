@@ -51,4 +51,6 @@ export interface Metrics {
   failedToday: number;
   averageDelay: number;
   queueDepth: number;
+  /** Runs today that ended early on a transient R2/KV error */
+  storageErrorsToday?: number;
 }
