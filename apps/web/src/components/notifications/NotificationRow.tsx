@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from '@/components/common/AppLink';
-import { Bell, MessageCircle, Radio, Trash2, UserPlus, Video, AlertCircle, Check } from 'lucide-react';
+import { Bell, MessageCircle, Radio, Trash2, UserPlus, Video, AlertCircle, Check, ShieldAlert } from 'lucide-react';
 import type { NotificationItem } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { localizeActionUrl, relativeTime, renderNotification } from '@/lib/notifications/render';
@@ -32,6 +32,8 @@ function Icon({ item }: { item: NotificationItem }) {
       return <UserPlus className={cls} aria-hidden="true" />;
     case 'uploadFailed':
       return <AlertCircle className={cls} aria-hidden="true" />;
+    case 'accountWarning':
+      return <ShieldAlert className={cls} aria-hidden="true" />;
     default:
       return <Bell className={cls} aria-hidden="true" />;
   }

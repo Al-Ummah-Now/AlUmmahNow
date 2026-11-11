@@ -34,7 +34,28 @@ import {
   type CreatorTierAssignment,
   type CreatorTierBulkResult,
   cleanTrashReason,
+  warningEscalation,
+  type AccountEmailContact,
+  type AccountNoticeRequest,
+  type AccountNoticeResult,
+  type IssueUserWarningRequest,
+  type IssueUserWarningResult,
+  type UserWarningList,
 } from '@al-ummah/shared-types';
+import {
+  countWarnings,
+  getWarning,
+  insertWarning,
+  listWarnings,
+  markInAppSent,
+  newWarningId,
+  parseWarningRequest,
+  recordWarningEmail,
+  toWarning,
+  warningCounts,
+  WarningInputError,
+} from '../lib/content/warnings';
+import { enqueueWarningMail, flagWarningMailFailure } from '../lib/warning-mail';
 import { callVideos, VideosError, type VideosCall, type VideosClientEnv } from '../lib/content/videosClient';
 import { dropAudit, readAudit, writeAudit, type AuditAction, type ContentKind } from '../lib/content/audit';
 import { openReportCounts, recentReports, reportedIds, type ReportEntity } from '../lib/content/reports';
@@ -337,9 +358,20 @@ async function withInvites<T extends { id: string }>(c: C, items: T[]): Promise<
   return items.map((i) => ({ ...i, invite: byUser.get(i.id) ?? null }));
 }
 
+/** Users carry their warning count ("2 warnings" in lists and the report triage); left out when it cannot be read. */
+async function withWarningCounts<T extends { id: string }>(c: C, items: T[]): Promise<Array<T & { warningCount?: number }>> {
+  try {
+    const counts = await warningCounts(c.env.REPORTS_DB, items.map((i) => i.id));
+    return items.map((i) => ({ ...i, warningCount: counts.get(i.id) ?? 0 }));
+  } catch (error) {
+    logger.warn('[Content] Could not read warning counts', { users: items.length, error: error instanceof Error ? error.message : String(error) });
+    return items;
+  }
+}
+
 app.get('/users', async (c) => {
   const page = await videos<AdminPage<{ id: string }>>(c, '/users', { query: c.req.query() });
-  return ok(c, Array.isArray(page?.items) ? { ...page, items: await withInvites(c, page.items) } : page);
+  return ok(c, Array.isArray(page?.items) ? { ...page, items: await withWarningCounts(c, await withInvites(c, page.items)) } : page);
 });
 
 /** The new-owner picker of a channel transfer: a few users by email, name, @handle or id. */
@@ -363,10 +395,83 @@ app.get('/users/:id', async (c) => {
     readAudit(c.env.REPORTS_DB, { kind: 'user', id, limit: 20 }),
     jobsFor(c, 'user', id),
   ]);
-  const [withInvite] = await withInvites(c, [user]);
+  const [withInvite] = await withWarningCounts(c, await withInvites(c, [user]));
   // An invited user's page reads the invite's status again (queued; "Signed in" within seconds)
   if (withInvite.invite) await syncInvitesOnRead(c.env as unknown as InviteQueueEnv, [withInvite.invite.id]);
   return ok(c, { ...withInvite, reports, audit, jobs });
+});
+
+// ---------------------------------------------------------------------------
+// Warnings (users:warn: moderators, admins, super admins). The record lives
+// here (user_warnings); the user is told in-app (api-videos notification
+// accountWarning, always on) and by email unless they turned it off.
+// ---------------------------------------------------------------------------
+
+/** The issuer's name as their token gives it (name, else email, else id). */
+const issuerName = (c: C) => {
+  const a = auth(c);
+  const name = a?.payload?.name;
+  return (typeof name === 'string' && name.trim()) || a?.email || a?.userId || 'unknown';
+};
+
+app.get('/users/:id/warnings', async (c) => {
+  need(c, 'users:warn');
+  const list: UserWarningList = await listWarnings(c.env.REPORTS_DB, c.req.param('id'));
+  return ok(c, list);
+});
+
+app.post('/users/:id/warnings', async (c) => {
+  need(c, 'users:warn');
+  const id = c.req.param('id');
+  let input: IssueUserWarningRequest;
+  try {
+    input = parseWarningRequest(await body(c));
+  } catch (error) {
+    if (error instanceof WarningInputError) return c.json({ success: false, code: error.code, error: error.message }, 400);
+    throw error;
+  }
+  // 404 for someone who is not a videos user (no profile to notify)
+  await videos<AccountEmailContact>(c, `/users/${encodeURIComponent(id)}/account-email`);
+
+  const db = c.env.REPORTS_DB;
+  const warningId = newWarningId();
+  const ordinal = (await countWarnings(db, id)) + 1;
+  const row = {
+    id: warningId,
+    userId: id,
+    ...input,
+    issuedBy: actorOf(c),
+    issuedByName: issuerName(c),
+    createdAt: new Date().toISOString(),
+  };
+  await audited(c, {
+    kind: 'user',
+    id,
+    action: 'warn',
+    details: { warningId, reasonCode: input.reasonCode, ordinal, ...(input.note ? { note: input.note } : {}), ...(input.reportId ? { reportId: input.reportId } : {}), ...(input.entityKind ? { entityKind: input.entityKind, entityId: input.entityId } : {}) },
+  }, () => insertWarning(db, row));
+  const count = await countWarnings(db, id);
+
+  // In-app notice: best effort, the warning stands either way (inAppSent shows it)
+  try {
+    const notice: AccountNoticeRequest = { kind: 'warning', noticeId: warningId, reasonCode: input.reasonCode, count: ordinal };
+    const result = await videos<AccountNoticeResult>(c, `/users/${encodeURIComponent(id)}/account-notices`, { method: 'POST', json: notice });
+    if (result?.queued) await markInAppSent(db, warningId);
+  } catch (error) {
+    logger.error('[Content] Warning notice not delivered in-app', { warningId, userId: id, error: error instanceof Error ? error.message : String(error) });
+  }
+
+  // Email: queued; the consumer checks the user's preference and language at send time
+  await recordWarningEmail(db, warningId, 'queued');
+  if (!(await enqueueWarningMail(c.env, warningId))) {
+    await recordWarningEmail(db, warningId, 'failed', { error: 'could not queue the email' });
+    await flagWarningMailFailure(c.env, warningId, id, 'could not queue the email');
+  }
+
+  const stored = await getWarning(db, warningId);
+  const { suggestBan } = warningEscalation(count);
+  const result: IssueUserWarningResult = { warning: toWarning(stored!, ordinal), count, ordinal, suggestBan };
+  return ok(c, result);
 });
 
 app.patch('/users/:id', async (c) => {

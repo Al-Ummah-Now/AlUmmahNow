@@ -3,7 +3,8 @@ import type { AppTranslations } from '@/lib/i18n/types';
 
 type RealtimeTexts = AppTranslations['notifications']['realtime'];
 
-const KEY_TO_TEXT: Record<RealtimeNotificationKey, { title: keyof RealtimeTexts; message: keyof RealtimeTexts }> = {
+// accountWarning reads t.notificationCenter.accountWarning (its reason is translated too)
+const KEY_TO_TEXT: Record<Exclude<RealtimeNotificationKey, 'accountWarning'>, { title: keyof RealtimeTexts; message: keyof RealtimeTexts }> = {
   newComment: { title: 'newCommentTitle', message: 'newCommentMessage' },
   newSubscriber: { title: 'newSubscriberTitle', message: 'newSubscriberMessage' },
   uploadReady: { title: 'uploadReadyTitle', message: 'uploadReadyMessage' },
@@ -38,7 +39,16 @@ export function resolveNotificationText(
     };
   }
 
-  const mapping = event.notificationKey ? KEY_TO_TEXT[event.notificationKey] : undefined;
+  // A moderator's warning: the reason code becomes words in the viewer's language
+  const warning = t.notificationCenter?.accountWarning;
+  if (warning && event.notificationKey === 'accountWarning') {
+    const code = String(event.params?.reason ?? 'other');
+    const reasons = warning.reasons as Record<string, string>;
+    const params = { ...event.params, reason: reasons[code] ?? reasons.other };
+    return { title: interpolate(warning.title, params), message: interpolate(warning.message, params) };
+  }
+
+  const mapping = event.notificationKey && event.notificationKey !== 'accountWarning' ? KEY_TO_TEXT[event.notificationKey] : undefined;
   if (mapping) {
     const texts = t.notifications.realtime;
     return {

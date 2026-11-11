@@ -20,6 +20,7 @@ import { logger } from './logger';
 import { isSinkAddress } from './contact';
 import { getContactMessage, deliveryStatus, recordDelivery, type MailKind } from './contact-store';
 import { renderAcknowledgement, renderInboxNotification, renderReply, replyLocaleOf, sendContactEmail } from './contact-email';
+import { isWarningMailJob, processWarningMailJob, type WarningMailJob } from './warning-mail';
 
 export const CONTACT_MAIL_VERSION = 1;
 /** Keep equal to max_retries + 1 of the contact-mail consumer in wrangler*.jsonc. */
@@ -204,10 +205,15 @@ export async function processContactMailJob(env: AdminBindings, msg: QueueMessag
   }
 }
 
-/** Queue consumer for CONTACT_MAIL_QUEUE. */
-export async function contactMailConsumer(batch: { messages: readonly QueueMessageLike<ContactMailJob>[] }, env: AdminBindings): Promise<void> {
+/**
+ * Queue consumer for CONTACT_MAIL_QUEUE: Contact us mail, and account warning
+ * emails (`kind: 'warning'`, lib/warning-mail.ts), which share the sender.
+ */
+export async function contactMailConsumer(batch: { messages: readonly QueueMessageLike<ContactMailJob | WarningMailJob>[] }, env: AdminBindings): Promise<void> {
   for (const msg of batch.messages) {
-    const outcome = await processContactMailJob(env, msg);
+    const outcome = isWarningMailJob(msg.body)
+      ? await processWarningMailJob(env, msg as QueueMessageLike<WarningMailJob>)
+      : await processContactMailJob(env, msg as QueueMessageLike<ContactMailJob>);
     if (outcome === 'retry') msg.retry({ delaySeconds: backoffSeconds(msg.attempts) });
     else msg.ack();
   }

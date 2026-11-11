@@ -15,6 +15,8 @@ import type { NeedsActionRetry, NeedsActionStatus } from '@al-ummah/shared-types
 import type { AdminBindings } from '../base/types';
 import { deliveryStatus, recordDelivery, type MailKind } from './contact-store';
 import { CONTACT_MAIL_VERSION, enqueueContactMail, type ContactMailJob } from './contact-mail-queue';
+import { getWarning, recordWarningEmail } from './content/warnings';
+import { enqueueWarningMail } from './warning-mail';
 import { logger } from './logger';
 
 export interface RetryOutcome {
@@ -48,6 +50,20 @@ export const BUILTIN_RETRIES: Record<string, (env: AdminBindings, args: Record<s
     const job: ContactMailJob = { v: CONTACT_MAIL_VERSION, kind, messageId: id, ...(args.noteId ? { noteId: args.noteId } : {}) };
     if (!(await enqueueContactMail(env, [job]))) {
       await recordDelivery(env.REPORTS_DB, { messageId: id, kind, noteId: args.noteId, status: 'failed', error: 'could not queue the email', now });
+      return { ok: false, status: 'open', result: 'Could not queue the email' };
+    }
+    return { ok: true, status: 'resolved', result: 'Queued again' };
+  },
+  /** Queues an account warning email that failed for good again; a new failure reopens the item. */
+  'warning-email': async (env, args) => {
+    const id = args.id;
+    if (!id) return { ok: false, status: 'open', result: 'Not a warning email' };
+    const warning = await getWarning(env.REPORTS_DB, id);
+    if (!warning) return { ok: false, status: 'dismissed', result: 'Warning no longer exists' };
+    if (warning.email_status !== 'failed') return { ok: true, status: 'resolved', result: `Nothing to resend (${warning.email_status ?? 'pending'})` };
+    await recordWarningEmail(env.REPORTS_DB, id, 'queued');
+    if (!(await enqueueWarningMail(env, id))) {
+      await recordWarningEmail(env.REPORTS_DB, id, 'failed', { error: 'could not queue the email' });
       return { ok: false, status: 'open', result: 'Could not queue the email' };
     }
     return { ok: true, status: 'resolved', result: 'Queued again' };

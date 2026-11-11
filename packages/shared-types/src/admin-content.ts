@@ -33,18 +33,21 @@ export const ADMIN_CONTENT_PERMISSIONS = [
   'users:manage',
   /** Assign creator tiers to users and edit the tier definitions (videos-side; never Auth RBAC). */
   'creators:manage',
+  /** Warn a videos user (notice in-app and by email) and read their warning history. */
+  'users:warn',
 ] as const;
 
 export type AdminContentPermission = (typeof ADMIN_CONTENT_PERMISSIONS)[number];
 
 /**
  * Role → permissions. Roles are the existing admin roles (snake_case ids);
- * moderators can browse every list and detail page but change nothing here.
+ * moderators can browse every list and detail page and warn users, but
+ * change nothing else here.
  */
 export const ROLE_CONTENT_PERMISSIONS: Readonly<Record<string, readonly AdminContentPermission[]>> = {
   super_admin: ADMIN_CONTENT_PERMISSIONS,
-  admin: ['channels:manage', 'videos:manage', 'content:delete', 'content:purge', 'users:manage', 'creators:manage'],
-  moderator: [],
+  admin: ['channels:manage', 'videos:manage', 'content:delete', 'content:purge', 'users:manage', 'creators:manage', 'users:warn'],
+  moderator: ['users:warn'],
 };
 
 /** Every permission granted by any of the roles (display names or ids). */
@@ -377,6 +380,8 @@ export interface AdminUserRow {
    * sending/failed (the auth account is being made / could not be).
    */
   invite?: { id: string; status: 'sending' | 'failed' | 'invited' | 'active' | 'expired' | 'revoked' } | null;
+  /** Set by admin-api: the user's warnings so far (user_warnings); absent when it could not be read. */
+  warningCount?: number;
 }
 
 /** User search for pickers (channel ownership transfer): 2+ characters, a few best matches. */

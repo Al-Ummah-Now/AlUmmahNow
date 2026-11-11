@@ -10,7 +10,7 @@
  * - POST   /api/notifications/read-all
  * - DELETE /api/notifications/:id
  * - GET    /api/notifications/settings
- * - PUT    /api/notifications/settings             { settings }
+ * - PUT    /api/notifications/settings             { settings?, email? }
  * - GET    /api/notifications/channels/:id/bell
  * - PUT    /api/notifications/channels/:id/bell    { bell }
  */
@@ -18,7 +18,7 @@
 import { logger } from '@/lib/logger-client';
 import { getApiUrl } from '@/lib/runtime-config';
 import { getClientAuthHeaders } from '@/lib/auth/client-token';
-import type { ChannelBellLevel, NotificationItem, NotificationSettings } from '@al-ummah/shared-types';
+import type { ChannelBellLevel, NotificationItem, NotificationSettingsResult, NotificationSettingsUpdateRequest } from '@al-ummah/shared-types';
 
 const apiBase = (): string => getApiUrl();
 
@@ -74,18 +74,17 @@ export const NotificationsService = {
     return request<{ id: string; unreadCount: number }>(`/api/notifications/${encodeURIComponent(id)}`, { method: 'DELETE' }, 'Delete');
   },
 
-  async settings(): Promise<NotificationSettings | null> {
-    const result = await request<{ settings: NotificationSettings }>('/api/notifications/settings', {}, 'Get settings');
-    return result ? result.settings : null;
+  /** Category switches and email preferences. */
+  settings(): Promise<NotificationSettingsResult | null> {
+    return request<NotificationSettingsResult>('/api/notifications/settings', {}, 'Get settings');
   },
 
-  async updateSettings(settings: Partial<NotificationSettings>): Promise<NotificationSettings | null> {
-    const result = await request<{ settings: NotificationSettings }>(
+  updateSettings(changes: NotificationSettingsUpdateRequest): Promise<NotificationSettingsResult | null> {
+    return request<NotificationSettingsResult>(
       '/api/notifications/settings',
-      { method: 'PUT', body: JSON.stringify({ settings }) },
+      { method: 'PUT', body: JSON.stringify(changes) },
       'Update settings',
     );
-    return result ? result.settings : null;
   },
 
   channelBell(channelId: string) {

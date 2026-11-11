@@ -129,6 +129,23 @@ describe('notification center (processor)', () => {
     expect(rows('SELECT * FROM notifications')).toEqual([]);
   });
 
+  it('always stores account warnings, even when a row turns the account category off', async () => {
+    // Settings never write it, but a stray row must not silence an account notice
+    db.raw.prepare("INSERT INTO notification_settings VALUES ('u', 'account', 0, 0)").run();
+    const stored = await insertNotification(db, {
+      notificationId: 'w1',
+      recipientUserId: 'u',
+      notificationKey: 'accountWarning',
+      params: { reason: 'spam', count: 2 },
+      actionUrl: '/community-guidelines',
+      dedupeKey: 'warning:wrn_1',
+    });
+    expect(stored).toEqual({ id: 'w1', user_id: 'u' });
+    expect(rows('SELECT category, notification_type, notification_key, params_json, action_url FROM notifications')).toEqual([
+      { category: 'account', notification_type: 'system', notification_key: 'accountWarning', params_json: '{"reason":"spam","count":2}', action_url: '/community-guidelines' },
+    ]);
+  });
+
   it('rejects malformed NotificationCreate without retrying', async () => {
     const result = await processor().processMessage(message(MessageType.NotificationCreate, { recipientUserId: 'u', notificationKey: 'bogus', notificationId: 'n' }), env());
     expect(result.success).toBe(false);

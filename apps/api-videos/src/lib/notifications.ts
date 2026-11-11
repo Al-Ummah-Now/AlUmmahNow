@@ -7,9 +7,16 @@
  */
 
 import {
+	ALWAYS_ON_NOTIFICATION_CATEGORIES,
 	CHANNEL_BELL_LEVELS,
 	DEFAULT_CHANNEL_BELL,
+	DEFAULT_NOTIFICATION_EMAIL_SETTINGS,
 	MessageType,
+	NOTIFICATION_EMAIL_LOCALES,
+	isOptionalNotificationCategory,
+	type AccountNoticeRequest,
+	type NotificationEmailLocale,
+	type NotificationEmailSettings,
 	NOTIFICATION_CATEGORIES,
 	NOTIFICATION_KEY_CATEGORY,
 	NOTIFICATION_KEYS,
@@ -175,8 +182,10 @@ export async function getSettings(db: D1Database, userId: string): Promise<Notif
 		.bind(userId)
 		.all<{ category: string; enabled: number }>();
 	for (const row of results || []) {
-		if (isNotificationCategory(row.category)) settings[row.category] = row.enabled === 1;
+		// Always-on categories (account notices) stay on whatever a row says
+		if (isOptionalNotificationCategory(row.category)) settings[row.category] = row.enabled === 1;
 	}
+	for (const category of ALWAYS_ON_NOTIFICATION_CATEGORIES) settings[category] = true;
 	return settings;
 }
 
@@ -187,7 +196,7 @@ export async function updateSettings(
 	now = Date.now(),
 ): Promise<NotificationSettings> {
 	const statements = Object.entries(changes)
-		.filter(([category, value]) => isNotificationCategory(category) && typeof value === 'boolean')
+		.filter(([category, value]) => isOptionalNotificationCategory(category) && typeof value === 'boolean')
 		.map(([category, value]) =>
 			db
 				.prepare(
@@ -201,6 +210,7 @@ export async function updateSettings(
 }
 
 export async function isCategoryEnabled(db: D1Database, userId: string, category: NotificationCategory): Promise<boolean> {
+	if (!isOptionalNotificationCategory(category)) return true;
 	const row = await db
 		.prepare('SELECT enabled FROM notification_settings WHERE user_id = ? AND category = ?')
 		.bind(userId, category)
@@ -260,6 +270,61 @@ export async function enqueueFanout(env: NotificationsEnv, payload: Notification
 		logger.warn('[Notifications] Failed to enqueue fan-out', { kind: payload.kind, error });
 		return false;
 	}
+}
+
+export function isEmailLocale(value: unknown): value is NotificationEmailLocale {
+	return typeof value === 'string' && (NOTIFICATION_EMAIL_LOCALES as readonly string[]).includes(value);
+}
+
+/** The user's email preferences (a missing row = the defaults: account emails on, no language picked). */
+export async function getEmailSettings(db: D1Database, userId: string): Promise<NotificationEmailSettings> {
+	const row = await db
+		.prepare('SELECT account_email, email_locale FROM notification_email_prefs WHERE user_id = ?')
+		.bind(userId)
+		.first<{ account_email: number; email_locale: string | null }>();
+	if (!row) return { ...DEFAULT_NOTIFICATION_EMAIL_SETTINGS };
+	return { account: row.account_email !== 0, locale: isEmailLocale(row.email_locale) ? row.email_locale : null };
+}
+
+/** Saves the given email preferences (the others keep their value) and returns them all. */
+export async function updateEmailSettings(
+	db: D1Database,
+	userId: string,
+	changes: Partial<Record<string, unknown>>,
+	now = Date.now(),
+): Promise<NotificationEmailSettings> {
+	const current = await getEmailSettings(db, userId);
+	const next: NotificationEmailSettings = {
+		account: typeof changes.account === 'boolean' ? changes.account : current.account,
+		locale: isEmailLocale(changes.locale) ? changes.locale : current.locale,
+	};
+	if (next.account === current.account && next.locale === current.locale) return current;
+	await db
+		.prepare(
+			`INSERT INTO notification_email_prefs (user_id, account_email, email_locale, updated_at) VALUES (?, ?, ?, ?)
+			 ON CONFLICT(user_id) DO UPDATE SET account_email = excluded.account_email, email_locale = excluded.email_locale, updated_at = excluded.updated_at`,
+		)
+		.bind(userId, next.account ? 1 : 0, next.locale, now)
+		.run();
+	return next;
+}
+
+/** Where an account notice links: the community guidelines (the web prefixes the viewer's locale). */
+export const ACCOUNT_NOTICE_URL = '/community-guidelines';
+
+/** The in-app notice of a moderator's warning (category account: always delivered). */
+export function accountNoticePayload(userId: string, notice: AccountNoticeRequest, now = Date.now()): NotificationCreatePayload {
+	return {
+		notificationId: crypto.randomUUID(),
+		recipientUserId: userId,
+		notificationKey: 'accountWarning',
+		params: { reason: notice.reasonCode, count: notice.count },
+		actionUrl: ACCOUNT_NOTICE_URL,
+		entityId: notice.noticeId,
+		// One notice per warning, however often admin-api retries
+		dedupeKey: `warning:${notice.noticeId}`,
+		createdAt: now,
+	};
 }
 
 export function categoryOf(key: NotificationKey): NotificationCategory {

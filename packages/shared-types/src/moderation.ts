@@ -1,10 +1,12 @@
 // Content Moderation Types - Shared across services
 
 // Entity types that can be reported
-export type ReportableEntityType = 'video' | 'comment' | 'channel' | 'livestream' | 'playlist' | 'post';
+export const REPORTABLE_ENTITY_TYPES = ['video', 'comment', 'channel', 'livestream', 'playlist', 'post'] as const;
+export type ReportableEntityType = (typeof REPORTABLE_ENTITY_TYPES)[number];
 
 // Reasons for reporting content
-export type ReportReason = 'inappropriate' | 'spam' | 'harassment' | 'copyright' | 'misinformation' | 'other';
+export const REPORT_REASONS = ['inappropriate', 'spam', 'harassment', 'copyright', 'misinformation', 'other'] as const;
+export type ReportReason = (typeof REPORT_REASONS)[number];
 
 // Status of a report
 export type ReportStatus = 'pending' | 'reviewing' | 'resolved' | 'dismissed';

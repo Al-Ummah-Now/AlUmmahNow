@@ -16,6 +16,7 @@
 --   apps/admin-api/migrations/0014_creator_invites.sql
 --   apps/admin-api/migrations/0015_seed_analytics_entitlements.sql
 --   apps/admin-api/migrations/0016_seed_studio_limits.sql
+--   apps/admin-api/migrations/0018_user_warnings.sql
 
 CREATE TABLE admin_audit_log (id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, actor_email TEXT, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL, metadata TEXT, created_at TEXT NOT NULL);
 CREATE TABLE ai_budget_daily (day TEXT NOT NULL, feature TEXT NOT NULL, reserved REAL NOT NULL DEFAULT 0, PRIMARY KEY (day, feature));
@@ -50,6 +51,7 @@ CREATE TABLE subscriptions (id TEXT PRIMARY KEY, subject_type TEXT NOT NULL CHEC
 CREATE TABLE theme_package_versions (theme_id TEXT NOT NULL, version TEXT NOT NULL, size_bytes INTEGER NOT NULL, published_by TEXT NOT NULL, published_at TEXT NOT NULL, PRIMARY KEY (theme_id, version));
 CREATE TABLE theme_packages (id TEXT PRIMARY KEY, name_en TEXT NOT NULL, name_ar TEXT NOT NULL, based_on TEXT, latest_version TEXT, draft_updated_by TEXT NOT NULL, draft_updated_at TEXT NOT NULL, created_by TEXT NOT NULL, created_at TEXT NOT NULL, deleted_at TEXT, deleted_by TEXT, delete_reason TEXT, purge_requested_at TEXT, purge_requested_by TEXT, purge_started_at TEXT);
 CREATE TABLE usage_counters (subject_type TEXT NOT NULL, subject_id TEXT NOT NULL, key TEXT NOT NULL, period TEXT NOT NULL, value INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY (subject_type, subject_id, key, period));
+CREATE TABLE user_warnings (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, reason_code TEXT NOT NULL, note TEXT, report_id TEXT, entity_kind TEXT, entity_id TEXT, issued_by TEXT NOT NULL, issued_by_name TEXT NOT NULL, created_at TEXT NOT NULL, in_app_sent INTEGER NOT NULL DEFAULT 0, email_status TEXT, email_error TEXT, email_updated_at TEXT);
 CREATE INDEX idx_admin_audit_created ON admin_audit_log(created_at);
 CREATE INDEX idx_admin_audit_target ON admin_audit_log(target_type, target_id, created_at);
 CREATE INDEX idx_auth_modreq_delivery ON auth_moderation_requests(delivery_status, created_at);
@@ -100,3 +102,4 @@ CREATE INDEX idx_site_settings_log_key ON site_settings_log (key, created_at);
 CREATE UNIQUE INDEX idx_subscriptions_live ON subscriptions(subject_type, subject_id) WHERE status IN ('trialing', 'active', 'past_due');
 CREATE INDEX idx_subscriptions_plan ON subscriptions(plan_id, plan_version);
 CREATE INDEX idx_theme_packages_deleted ON theme_packages (deleted_at) WHERE deleted_at IS NOT NULL;
+CREATE INDEX idx_user_warnings_user ON user_warnings(user_id, created_at DESC, id DESC);
