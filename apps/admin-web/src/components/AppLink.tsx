@@ -1,11 +1,10 @@
 'use client';
 
-import NextLink, { type LinkProps as NextLinkProps } from 'next/link';
-import { forwardRef, useState, type AnchorHTMLAttributes, type FocusEvent, type MouseEvent, type ReactNode, type TouchEvent } from 'react';
+import NextLink from 'next/link';
+import { useState, type ComponentProps, type FocusEvent, type MouseEvent, type TouchEvent } from 'react';
 
-// The same props next/link accepts
-type LinkProps = Omit<AnchorHTMLAttributes<HTMLAnchorElement>, keyof NextLinkProps> &
-  NextLinkProps & { children?: ReactNode };
+// Exactly the props next/link accepts (ref included: React 19)
+type LinkProps = ComponentProps<typeof NextLink>;
 
 /**
  * next/link that prefetches on intent (hover, focus, touch) instead of whenever
@@ -15,12 +14,9 @@ type LinkProps = Omit<AnchorHTMLAttributes<HTMLAnchorElement>, keyof NextLinkPro
  * the page views on QA, most of the account's Workers requests and CPU).
  *
  * A link that passes `prefetch` explicitly keeps exactly that behaviour.
- * Import this instead of `next/link` (lint enforces it).
+ * Import this instead of `next/link` (lint enforces it). React 19: `ref` is a plain prop.
  */
-const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
-  { prefetch, onMouseEnter, onFocus, onTouchStart, ...props },
-  ref,
-) {
+export default function Link({ prefetch, onMouseEnter, onFocus, onTouchStart, ref, ...props }: LinkProps) {
   const [intent, setIntent] = useState(false);
   return (
     <NextLink
@@ -43,6 +39,4 @@ const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
       }}
     />
   );
-});
-
-export default Link;
+}
