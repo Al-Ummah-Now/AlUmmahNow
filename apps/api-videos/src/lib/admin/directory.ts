@@ -25,7 +25,7 @@ import {
 	type OwnershipKind,
 	type SearchDb,
 } from '@al-ummah/shared-types';
-import { isOwnershipComplete, scheduleOwnershipHeal, type OwnershipEnv } from '../search/ownership';
+import { isOwnershipComplete, scheduleOwnershipHeal, type OwnershipEnv, byKey } from '../search/ownership';
 import { subscriberCounts } from '../subscription-store';
 import { bansFor } from './bans';
 import { logger } from '../logger';
@@ -434,10 +434,11 @@ export async function channelVideoStats(db: SearchDb, channelId: string): Promis
 export async function contentIds(db: SearchDb, kind: OwnershipKind, by: { channelId?: string; ownerId?: string }): Promise<string[]> {
 	const column = by.channelId ? 'channel_id' : 'owner_id';
 	const { results } = await db
-		.prepare(`SELECT id FROM ${OWNERSHIP_TABLE} WHERE kind = ? AND ${column} = ? AND is_deleted = 0 ORDER BY id`)
+		// Sorted here, not by D1: ORDER BY id made it scan every row of the kind (ownership.ts orderAndLimit)
+		.prepare(`SELECT id FROM ${OWNERSHIP_TABLE} WHERE kind = ? AND ${column} = ? AND is_deleted = 0`)
 		.bind(kind, by.channelId ?? by.ownerId)
 		.all<{ id: string }>();
-	return (results ?? []).map((r) => r.id);
+	return byKey((results ?? []).map((r) => r.id));
 }
 
 export async function countPrefix(bucket: R2Bucket | undefined, prefix: string, max = 10000): Promise<number> {
