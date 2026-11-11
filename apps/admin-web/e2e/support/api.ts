@@ -127,12 +127,21 @@ export async function waitForReport(
 ): Promise<AdminReport> {
   const deadline = Date.now() + timeoutMs;
   let last: AdminReport | null = null;
+  let networkError = '';
   while (Date.now() < deadline) {
-    last = await getReport(id);
+    try {
+      last = await getReport(id);
+      networkError = '';
+    } catch (error) {
+      // A dropped connection (fetch failed: ECONNRESET) is a moment of network, not an answer:
+      // keep polling until the deadline. An HTTP error status is an answer and still fails at once.
+      if (!(error instanceof TypeError)) throw error;
+      networkError = `${error.message}${error.cause instanceof Error ? ` (${error.cause.message})` : ''}`;
+    }
     if (last && predicate(last)) return last;
     await sleep(1_000);
   }
-  throw new Error(`Report ${id} did not reach the expected state in ${timeoutMs}ms (last: ${JSON.stringify(last)})`);
+  throw new Error(`Report ${id} did not reach the expected state in ${timeoutMs}ms (last: ${JSON.stringify(last)}${networkError ? `; last network error: ${networkError}` : ''})`);
 }
 
 export async function dismissReport(id: string, notes = `${E2E_DESCRIPTION_TAG} cleanup`): Promise<number> {
