@@ -7,6 +7,7 @@ import { canReadErrors, canUseContactInbox, canUseProcessing, canManageVideosUse
 import { ErrorReportingIdentity } from '@/lib/errors/ErrorReportingProvider';
 import { errorsBadgeCount } from './errors/filters';
 import { logger } from '@/lib/logger';
+import { UndoToastProvider } from '@/components/undo/UndoToast';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,7 +47,7 @@ export default async function ProtectedLayout({
   const navCookie = (await cookies()).get(NAV_COOKIE)?.value;
 
   return (
-    <>
+    <UndoToastProvider>
       <ErrorReportingIdentity userId={session.user.id} />
       <AdminShell
         userEmail={session.user.email}
@@ -65,6 +66,6 @@ export default async function ProtectedLayout({
       >
         {children}
       </AdminShell>
-    </>
+    </UndoToastProvider>
   );
 }

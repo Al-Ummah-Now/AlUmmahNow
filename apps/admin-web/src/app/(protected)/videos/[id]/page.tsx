@@ -14,6 +14,7 @@ import { canManageMedia } from '@/lib/roles';
 import { VideoActions } from './VideoActions';
 import { VideoPlayer } from './VideoPlayer';
 import { ProcessingCard } from './ProcessingCard';
+import { LIST_RETURN_PARAM, videosBackHref } from '../list-spec';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,10 +61,11 @@ async function ErasedVideo({ id, back }: { id: string; back: React.ReactNode }) 
   );
 }
 
-export default async function VideoPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function VideoPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { id } = await params;
   const { t, locale } = await getI18n();
-  const back = <BackLink href="/videos" label={t('content.back', { section: t('videos.title') })} />;
+  // Back returns to the list as it was filtered (the row's link carries its query)
+  const back = <BackLink href={videosBackHref((await searchParams)[LIST_RETURN_PARAM])} label={t('content.back', { section: t('videos.title') })} />;
 
   let video: VideoDetailView | null = null;
   let permissions: AdminContentPermission[] = [];

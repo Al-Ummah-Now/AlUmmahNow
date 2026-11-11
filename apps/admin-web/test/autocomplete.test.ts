@@ -263,8 +263,9 @@ describe('filters ask for names, never raw ids', () => {
   it('every list page filters by picked names, and no FilterForm field takes raw text', () => {
     const page = (path: string) => readFileSync(new URL(`../src/app/(protected)/${path}`, import.meta.url), 'utf8');
     const picks: [string, string, string][] = [
-      ['videos/page.tsx', 'channelId', 'channel'],
-      ['videos/page.tsx', 'ownerId', 'user'],
+      // The Videos list is a client list (shared list foundation): its filters are in VideosList.tsx
+      ['videos/VideosList.tsx', 'channelId', 'channel'],
+      ['videos/VideosList.tsx', 'ownerId', 'user'],
       ['playlists/page.tsx', 'channelId', 'channel'],
       ['playlists/page.tsx', 'ownerId', 'user'],
       ['community/page.tsx', 'channelId', 'channel'],
@@ -273,7 +274,7 @@ describe('filters ask for names, never raw ids', () => {
       ['channels/page.tsx', 'ownerId', 'user'],
     ];
     for (const [file, name, kind] of picks) assert.match(page(file), new RegExp(`kind: 'pick', name: '${name}', [^}]*suggest: '${kind}'`), `${file} ${name}`);
-    for (const file of ['videos', 'playlists', 'community', 'comments', 'channels', 'users'].map((p) => `${p}/page.tsx`)) {
+    for (const file of ['videos/VideosList.tsx', ...['playlists', 'community', 'comments', 'channels', 'users'].map((p) => `${p}/page.tsx`)]) {
       assert.doesNotMatch(page(file), /kind: 'text'/, file);
       assert.match(page(file), /kind: 'search', name: 'q', [^}]*suggest: '/, file);
     }

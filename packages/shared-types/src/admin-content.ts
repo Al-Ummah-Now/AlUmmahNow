@@ -254,6 +254,8 @@ export interface AdminVideoRow {
   channelId: string | null;
   channelName: string | null;
   ownerId: string | null;
+  /** The uploader's display name (from the admin index); absent from older API builds. */
+  ownerName?: string | null;
   status: string | null;
   isPublic: boolean;
   isHidden: boolean;

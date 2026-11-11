@@ -345,8 +345,9 @@ export async function listVideos(env: AdminEnv, query: AdminVideoQuery, waitUnti
 	const total = query.noTotal ? null : await db.prepare(`SELECT COUNT(*) AS n FROM ${OWNERSHIP_TABLE} v WHERE ${whereSql}`).bind(...binds).first<{ n: number }>();
 	const { results } = await db
 		.prepare(
-			`SELECT v.*, ch.admin_title AS channel_name FROM ${OWNERSHIP_TABLE} v
+			`SELECT v.*, ch.admin_title AS channel_name, ow.admin_title AS owner_name FROM ${OWNERSHIP_TABLE} v
 			 LEFT JOIN ${OWNERSHIP_TABLE} ch ON ch.kind = 'channel' AND ch.id = v.channel_id
+			 LEFT JOIN ${OWNERSHIP_TABLE} ow ON ow.kind = 'profile' AND ow.id = v.owner_id
 			 WHERE ${whereSql} ORDER BY ${VIDEO_SORT[query.sort ?? 'newest'] ?? VIDEO_SORT.newest} LIMIT ${pageSize} OFFSET ${offset}`,
 		)
 		.bind(...binds)
@@ -364,6 +365,7 @@ export async function hydrateVideos(env: AdminEnv, rows: Row[]): Promise<AdminVi
 			channelId: r.channel_id ?? null,
 			channelName: r.channel_name ?? null,
 			ownerId: r.owner_id ?? null,
+			ownerName: r.owner_name ?? null,
 			status: r.upload_status ?? ((v.uploadStatus as string) || null),
 			isPublic: r.is_public === 1,
 			isHidden: r.is_hidden === 1,
