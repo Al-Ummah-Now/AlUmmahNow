@@ -20,6 +20,12 @@ export interface StudioVideoAnalytics {
   comments: number;
   watchTime: number;
   avgViewDuration: number;
+  /** In the range (views, likes and comments above are lifetime). Absent before the API had them. */
+  rangeViews?: number;
+  rangeLikes?: number;
+  rangeComments?: number;
+  /** One entry per UTC day of the range. */
+  recentMetrics?: DailyMetric[];
   traffic: TrafficData;
 }
 

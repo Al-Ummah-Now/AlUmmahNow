@@ -6,7 +6,7 @@ import type { ErrorActivity, ErrorEvent, ErrorGroupDetail } from '@/lib/api/erro
 import { getAdminSession } from '@/lib/auth';
 import { canManageErrors, canReadErrors } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
-import { formatDate, formatNumber, translateDynamic, type Translator } from '@/i18n/translate';
+import { formatDate, formatHour, formatNumber, hourDate, translateDynamic, type Translator } from '@/i18n/translate';
 import type { Locale } from '@/i18n/config';
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
@@ -157,7 +157,13 @@ export default async function ErrorGroupPage({ params, searchParams }: PageProps
           <HourlyChart
             hours={hourly}
             label={t('errorsPage.timeline')}
-            barTitle={(h) => t('errorsPage.timelineHour', { hour: formatDate(h.hour, locale, true), count: h.occurrences })}
+            barTitle={(h) => t('errorsPage.timelineHour', { hour: formatDate(hourDate(h.hour), locale, true), count: formatNumber(h.occurrences, locale) })}
+            locale={locale}
+            hourLabel={(hour) => formatHour(hour, locale)}
+            tableLabel={t('errorsPage.timelineTable')}
+            hourHeading={t('errorsPage.timelineHourHeading')}
+            countHeading={t('errorsPage.colOccurrences')}
+            emptyText={t('errorsPage.timelineEmpty')}
           />
         </section>
         <section className={cardClass} aria-labelledby="releases-heading">

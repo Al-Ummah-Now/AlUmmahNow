@@ -201,14 +201,20 @@ export interface VideoAnalyticsResult {
  * Lifetime counters for a video plus watch time from the rollups provided.
  * Average view duration is watch time over the views that reported it (rollup views).
  */
-export function videoAnalytics(video: AnalyticsVideo, rollups: MonthlyRollup[] = []): VideoAnalyticsResult {
+/**
+ * Lifetime counters, plus watch time and average view duration for `range`.
+ * Rollups are whole months (legacy documents), so days outside the range are skipped.
+ */
+export function videoAnalytics(video: AnalyticsVideo, rollups: MonthlyRollup[] = [], range?: DateRange): VideoAnalyticsResult {
   const views = video.views || 0;
   const likes = video.likes?.length || 0;
   const comments = activeComments(video);
+  const inRange = range ? new Set(daysInRange(range)) : null;
   let rollupViews = 0;
   let watchTime = 0;
   for (const rollup of rollups) {
-    for (const entry of Object.values(rollup?.days || {})) {
+    for (const [day, entry] of Object.entries(rollup?.days || {})) {
+      if (inRange && !inRange.has(day)) continue;
       rollupViews += entry.views || 0;
       watchTime += entry.watchTime || 0;
     }
@@ -341,7 +347,9 @@ export async function loadOwnedVideos(
   userId: string,
   channelIds: Set<string>,
   maxObjects = FALLBACK_SCAN_OBJECTS,
-  lookup?: OwnershipLookup
+  lookup?: OwnershipLookup,
+  /** Called when the fallback scan stopped at its bound, so the list may miss videos. */
+  onIncomplete?: () => void
 ): Promise<AnalyticsVideo[]> {
   const isOwned = (video: AnalyticsVideo | null): video is AnalyticsVideo =>
     !!video?.id && !video.isDeleted && video.userId === userId && (!video.channelId || channelIds.has(video.channelId));
@@ -363,6 +371,7 @@ export async function loadOwnedVideos(
     videos.push(...items.filter(isOwned));
     cursor = page.truncated ? page.cursor : undefined;
   } while (cursor && scanned < maxObjects);
+  if (cursor) onIncomplete?.();
   return videos;
 }
 

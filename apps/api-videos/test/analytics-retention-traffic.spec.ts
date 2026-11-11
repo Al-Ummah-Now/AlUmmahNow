@@ -2,7 +2,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { AnalyticsChannelGet, AnalyticsRetentionGet, AnalyticsVideoGet } from '../src/endpoints/analytics/analyticsOwner';
-import { MIN_RETENTION_STARTS, buildRetentionCurve, buildTraffic, parseRange } from '../src/lib/analytics';
+import { MIN_RETENTION_STARTS, buildRetentionCurve, buildTraffic, loadOwnedVideos, parseRange, videoAnalytics } from '../src/lib/analytics';
 import { MemoryBucket, buildApp, videoFixture } from './helpers';
 import { createSqliteD1 } from './sqlite-d1';
 
@@ -131,5 +131,68 @@ describe('traffic on the analytics responses', () => {
 		const res = await buildApp(routes, { userId: 'owner' }).request(`/api/analytics/channels/c1${QUERY}`, {}, env());
 		assert.equal(res.status, 200, await res.clone().text());
 		assert.deepEqual(((await res.json()) as any).traffic.sources, { home: 4 });
+	});
+});
+
+describe('video analytics for a range', () => {
+	it('counts only the days in range from a whole-month document', () => {
+		const r = parseRange('2026-11-05', '2026-11-09');
+		const result = videoAnalytics(
+			videoFixture({ id: 'v1', views: 50 }) as never,
+			[{ days: { '2026-11-01': { views: 10, watchTime: 1000 }, '2026-11-06': { views: 2, watchTime: 60 } } }],
+			r,
+		);
+		assert.equal(result.watchTime, 60);
+		assert.equal(result.avgViewDuration, 30);
+		assert.equal(result.views, 50, 'views stay the lifetime counter');
+	});
+
+	it('returns range counts and a zero-filled daily series whose sum is the range total', async () => {
+		const e = env();
+		e.videos = new MemoryBucket({
+			v1: videoFixture({
+				id: 'v1', userId: 'owner', channelId: 'c1', views: 40,
+				likes: [{ dateCreated: '2026-11-03T10:00:00Z' }, { dateCreated: '2026-10-01T10:00:00Z' }],
+				comments: [{ dateCreated: '2026-11-04T10:00:00Z' }, { dateCreated: '2026-11-04T11:00:00Z', isDeleted: true }],
+			}),
+		});
+		const res = await buildApp(routes, { userId: 'owner' }).request(`/api/analytics/videos/v1${QUERY}`, {}, e);
+		assert.equal(res.status, 200, await res.clone().text());
+		const body = (await res.json()) as any;
+		assert.equal(body.views, 40);
+		assert.equal(body.likes, 2);
+		assert.equal(body.rangeViews, 3);
+		assert.equal(body.rangeLikes, 1);
+		assert.equal(body.rangeComments, 1);
+		assert.equal(body.recentMetrics.length, 9, 'one entry per day, 1 to 9 November');
+		assert.equal(body.recentMetrics[0].date, '2026-11-01');
+		assert.equal(body.recentMetrics.reduce((sum: number, d: any) => sum + d.views, 0), body.rangeViews);
+		assert.equal(body.recentMetrics.find((d: any) => d.date === day).views, 3);
+	});
+
+	it('channel series total equals the traffic total', async () => {
+		const res = await buildApp(routes, { userId: 'owner' }).request(`/api/analytics/channels/c1${QUERY}`, {}, env());
+		const body = (await res.json()) as any;
+		assert.equal(body.recentMetrics.reduce((sum: number, d: any) => sum + d.views, 0), body.traffic.totalViews);
+	});
+});
+
+describe('loadOwnedVideos without the ownership index', () => {
+	const bucket = () => new MemoryBucket(Object.fromEntries(
+		Array.from({ length: 105 }, (_, i) => [`v${String(i).padStart(3, '0')}`, videoFixture({ id: `v${String(i).padStart(3, '0')}`, userId: 'owner', channelId: 'c1' })]),
+	));
+
+	it('says when the bounded scan stopped early, so totals are not served as complete', async () => {
+		let incomplete = false;
+		const videos = await loadOwnedVideos(bucket() as never, 'owner', new Set(['c1']), 100, undefined, () => { incomplete = true; });
+		assert.equal(videos.length, 100);
+		assert.equal(incomplete, true);
+	});
+
+	it('stays quiet when the scan saw everything', async () => {
+		let incomplete = false;
+		const videos = await loadOwnedVideos(bucket() as never, 'owner', new Set(['c1']), 300, undefined, () => { incomplete = true; });
+		assert.equal(videos.length, 105);
+		assert.equal(incomplete, false);
 	});
 });

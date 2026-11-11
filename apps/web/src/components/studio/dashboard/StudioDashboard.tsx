@@ -3,10 +3,9 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import type { StudioVideoStatus } from '@al-ummah/shared-types';
+import { formatWatchTime, watchTimeUnit, type StudioVideoStatus } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { formatSeconds } from '@/components/studio/analytics/parts';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getStudioChannelAnalytics, getStudioVideoAnalytics, type StudioChannelAnalytics } from '@/lib/api/studio-analytics';
 import { getChannelContentCounts, listChannelContent, type StudioVideo } from '@/lib/api/studio-content';
@@ -185,7 +184,7 @@ export function StudioDashboard({ locale, channelId, role }: Props) {
                 <p className="mt-1 text-muted-foreground">
                   {text.counts.replace('{views}', number.format(latest.views ?? 0)).replace('{likes}', number.format(latest.likesCount ?? 0)).replace('{comments}', number.format(latest.commentsCount ?? 0))}
                 </p>
-                {latestWatchTime !== null && <p className="text-muted-foreground">{text.watchTime.replace('{time}', formatSeconds(latestWatchTime))}</p>}
+                {latestWatchTime !== null && <p className="text-muted-foreground">{text.watchTime.replace('{time}', formatWatchTime(locale, watchTimeUnit(latestWatchTime))(latestWatchTime))}</p>}
               </div>
             </div>
           </Card>

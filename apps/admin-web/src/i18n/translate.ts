@@ -66,6 +66,18 @@ export function formatDate(value: string | number | Date, locale: Locale, withTi
   }).format(date);
 }
 
+/** An hour bucket key ("2026-11-11T14", which Date alone can't parse) as a Date. */
+export function hourDate(hour: string): Date {
+  return new Date(/T\d{2}$/.test(hour) ? `${hour}:00:00Z` : hour);
+}
+
+/** An hour bucket ("2026-11-11T14") as a short UTC day and hour, for chart axes. */
+export function formatHour(hour: string, locale: Locale): string {
+  const date = hourDate(hour);
+  if (Number.isNaN(date.getTime())) return hour;
+  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', hour: 'numeric', timeZone: 'UTC' }).format(date);
+}
+
 export function formatNumber(value: number, locale: Locale): string {
   return new Intl.NumberFormat(locale).format(value);
 }
