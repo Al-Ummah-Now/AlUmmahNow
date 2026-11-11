@@ -206,7 +206,7 @@ export class PlaylistManageItems extends AuthenticatedRoute {
 						schema: z.object({
 							success: z.boolean(),
 							result: z.object({
-								playlist: z.object({ id: z.string(), title: z.string(), description: z.string().optional(), isPublic: z.boolean(), thumbnailUrl: z.string().optional(), coverVideoId: z.string().optional(), channelId: z.string(), videosCount: z.number(), sortMode: z.enum(["manual", "auto"]), sortField: z.string(), sortDirection: z.enum(["asc", "desc"]) }),
+								playlist: z.object({ id: z.string(), title: z.string(), titleLocalized: z.record(z.string()).optional(), description: z.string().optional(), descriptionLocalized: z.record(z.string()).optional(), isPublic: z.boolean(), thumbnailUrl: z.string().optional(), coverVideoId: z.string().optional(), channelId: z.string(), videosCount: z.number(), sortMode: z.enum(["manual", "auto"]), sortField: z.string(), sortDirection: z.enum(["asc", "desc"]) }),
 								items: z.array(z.object({ id: z.string(), position: z.number(), video: z.object({ id: z.string(), title: z.string() }).passthrough().nullable() })),
 								nextOffset: z.number().nullable(),
 							}),
@@ -235,7 +235,9 @@ export class PlaylistManageItems extends AuthenticatedRoute {
 				playlist: {
 					id: playlist.id,
 					title: playlist.title,
+					...(playlist.titleLocalized ? { titleLocalized: playlist.titleLocalized } : {}),
 					...(playlist.description ? { description: playlist.description } : {}),
+					...(playlist.descriptionLocalized ? { descriptionLocalized: playlist.descriptionLocalized } : {}),
 					isPublic: playlist.isPublic !== false,
 					...(playlist.thumbnailUrl ? { thumbnailUrl: playlist.thumbnailUrl } : {}),
 					...(playlist.coverVideoId ? { coverVideoId: playlist.coverVideoId } : {}),

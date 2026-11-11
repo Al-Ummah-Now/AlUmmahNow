@@ -1,4 +1,5 @@
 import Link from '@/components/AppLink';
+import { localizedPlaylistText } from '@al-ummah/shared-types';
 import { deletePlaylist, getContentPermissions, listPlaylists } from '@/lib/api/content';
 import type { AdminContentPermission, AdminPlaylistRow, CursorPage } from '@/lib/api/content-types';
 import { getI18n } from '@/i18n/server';
@@ -60,7 +61,7 @@ export default async function PlaylistsPage({ searchParams }: { searchParams: Pr
               {data.items.map((p) => (
                 <tr key={p.id} className="border-b border-border last:border-0" data-testid="playlist-row" data-playlist-id={p.id}>
                   <td className={tdClass}>
-                    <span className="block font-medium text-fg break-words" dir="auto">{p.title || p.id}</span>
+                    <span className="block font-medium text-fg break-words" dir="auto">{localizedPlaylistText(p.title, p.titleLocalized, locale) || p.id}</span>
                     <span className="block"><MonoId value={p.id} /></span>
                     <div className="mt-1 flex flex-wrap gap-1">
                       <Chip tone="neutral">{p.isPublic ? t('videos.public') : t('videos.private')}</Chip>

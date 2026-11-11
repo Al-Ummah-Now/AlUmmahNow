@@ -7,6 +7,7 @@ export * from './channel-section';
 export * from './channel-tabs';
 export * from './user';
 export * from './playlist';
+export * from './playlist-title';
 export * from './comment';
 export * from './analytics';
 export * from './analytics-collection';

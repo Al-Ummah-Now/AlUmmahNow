@@ -143,6 +143,8 @@ export function transformPlaylistToView(
         id: playlist.id,
         title: playlist.title,
         description: playlist.description,
+        ...(playlist.titleLocalized ? { titleLocalized: playlist.titleLocalized } : {}),
+        ...(playlist.descriptionLocalized ? { descriptionLocalized: playlist.descriptionLocalized } : {}),
         thumbnailUrl: playlist.thumbnailUrl,
         userId: playlist.userId,
         channelId: playlist.channelId,

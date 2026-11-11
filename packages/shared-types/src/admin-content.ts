@@ -317,6 +317,8 @@ export interface AdminCommentQuery {
 export interface AdminPlaylistRow {
   id: string;
   title: string;
+  /** Per-language names ('en', 'ar'); show with localizedPlaylistText (playlist-title.ts) */
+  titleLocalized?: Record<string, string>;
   channelId: string | null;
   ownerId: string | null;
   isPublic: boolean;

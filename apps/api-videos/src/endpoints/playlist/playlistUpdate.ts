@@ -7,10 +7,10 @@ import { transformPlaylistToView } from "../../lib/transformations";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from "../../base";
-import { isSameVideoSet } from "../../lib/playlists";
+import { PLAYLIST_DESCRIPTION_MAX, PLAYLIST_TITLE_MAX, isSameVideoSet } from "../../lib/playlists";
 import { canManagePlaylist } from "../../lib/playlistBulk";
 import { loadPlaylistVideos, orderOf, persistAutoOrder } from "../../lib/playlistOrder";
-import { playlistSortOf } from "@al-ummah/shared-types";
+import { normalizePlaylistLocalized, playlistSortOf } from "@al-ummah/shared-types";
 
 export class PlaylistUpdate extends AuthenticatedRoute {
     schema = {
@@ -111,7 +111,15 @@ export class PlaylistUpdate extends AuthenticatedRoute {
         // The order: manual, or automatic by a field and direction. Switching
         // to automatic sorts now; switching back to manual keeps the current
         // automatic order as the starting manual order. Both need the videos.
-        const { sortMode, sortField, sortDirection, coverVideoId, ...fields } = updateData;
+        const { sortMode, sortField, sortDirection, coverVideoId, titleLocalized, descriptionLocalized, ...fields } = updateData;
+        if (fields.title !== undefined) {
+            fields.title = fields.title.trim().slice(0, PLAYLIST_TITLE_MAX);
+            if (!fields.title) delete fields.title;
+        }
+        if (fields.description !== undefined) fields.description = fields.description.slice(0, PLAYLIST_DESCRIPTION_MAX);
+        // Bilingual name and description: a sent map replaces the stored one ({} clears it)
+        const names = titleLocalized !== undefined ? normalizePlaylistLocalized(titleLocalized, PLAYLIST_TITLE_MAX) ?? null : undefined;
+        const descriptions = descriptionLocalized !== undefined ? normalizePlaylistLocalized(descriptionLocalized, PLAYLIST_DESCRIPTION_MAX) ?? null : undefined;
         const sortChange = sortMode !== undefined || sortField !== undefined || sortDirection !== undefined;
         const before = playlistSortOf(existingPlaylist);
         const after = playlistSortOf({ ...before, ...(sortMode ? { sortMode } : {}), ...(sortField ? { sortField } : {}), ...(sortDirection ? { sortDirection } : {}) });
@@ -136,6 +144,19 @@ export class PlaylistUpdate extends AuthenticatedRoute {
                 return { reject: { status: 400, error: "coverVideoId must be a video of this playlist" } };
             }
             Object.assign(fresh, fields, { dateModified: new Date().toISOString() });
+            if (names !== undefined) {
+                if (names) fresh.titleLocalized = names;
+                else delete fresh.titleLocalized;
+                if (fields.title === undefined) fresh.title = names?.en || names?.ar || fresh.title;
+            }
+            if (descriptions !== undefined) {
+                if (descriptions) fresh.descriptionLocalized = descriptions;
+                else delete fresh.descriptionLocalized;
+                if (fields.description === undefined) {
+                    const fallback = descriptions?.en || descriptions?.ar;
+                    if (fallback) fresh.description = fallback;
+                }
+            }
             if (coverVideoId === null) delete fresh.coverVideoId;
             else if (coverVideoId) fresh.coverVideoId = coverVideoId;
             if (sortChange) {

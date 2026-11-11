@@ -70,7 +70,10 @@ export interface SearchChannelPayload {
 export interface SearchPlaylistPayload {
   id: string;
   name: string;
+  /** Per-language names ('en', 'ar'); a language without one shows `name` */
+  titleLocalized?: Record<string, string>;
   description?: string;
+  descriptionLocalized?: Record<string, string>;
   thumbnailUrl?: string;
   /** Set on search responses when there is no custom thumbnailUrl */
   cover?: { videoId: string; thumbnailUrl: string };
@@ -161,6 +164,11 @@ function localized(value: unknown): Record<string, string> | undefined {
     if (typeof text === 'string' && text.trim()) out[lang] = text;
   }
   return Object.keys(out).length ? out : undefined;
+}
+
+function truncateLocalized(map: Record<string, string> | undefined): Record<string, string> | undefined {
+  if (!map) return undefined;
+  return Object.fromEntries(Object.entries(map).map(([lang, text]) => [lang, truncate(text, DESCRIPTION_LIMIT) ?? text]));
 }
 
 function truncate(text: string | undefined, max: number): string | undefined {
@@ -346,6 +354,8 @@ export function projectPlaylist(raw: unknown): SearchRow<'playlist'> | null {
   if (obj.isPublic !== true || isRemoved(obj)) return null;
   if (obj.isSystem === true || str(obj.systemType) || (str(obj.visibility) && obj.visibility !== 'public')) return null;
   const description = str(obj.description);
+  const titleLocalized = localized(obj.titleLocalized);
+  const descriptionLocalized = localized(obj.descriptionLocalized);
   const videosCount = countOf(obj.videos, obj.videosCount);
   if (videosCount === 0) return null;
   const views = Math.max(num(obj.viewsCount), 0);
@@ -364,12 +374,14 @@ export function projectPlaylist(raw: unknown): SearchRow<'playlist'> | null {
     views,
     createdAt: timeOf(obj.dateCreated, obj.createdAt),
     popularity: round(log10p(views) * 0.3 + log10p(videosCount) * 0.2),
-    titleText: buildIndexText(name),
-    bodyText: limitBody(buildIndexText(description)),
+    titleText: buildIndexText(name, Object.values(titleLocalized ?? {})),
+    bodyText: limitBody(buildIndexText(description, Object.values(descriptionLocalized ?? {}))),
     payload: {
       id,
       name,
+      titleLocalized,
       description: truncate(description, DESCRIPTION_LIMIT),
+      descriptionLocalized: truncateLocalized(descriptionLocalized),
       thumbnailUrl: str(obj.thumbnailUrl),
       coverVideoIds: Array.isArray(obj.videos) ? coverCandidates(obj.videos, obj.coverVideoId) : undefined,
       videosCount,

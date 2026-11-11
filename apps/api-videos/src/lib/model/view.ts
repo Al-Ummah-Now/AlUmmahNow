@@ -115,6 +115,9 @@ export const PlaylistView = z.object({
     id: Str(),
     title: Str(),
     description: Str().optional(),
+    /** Per-language names/descriptions ('en', 'ar'); a language without one shows title/description */
+    titleLocalized: z.record(z.string()).optional(),
+    descriptionLocalized: z.record(z.string()).optional(),
     thumbnailUrl: Str().optional(),
     userId: Str(),
     channelId: Str(),
