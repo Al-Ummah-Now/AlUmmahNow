@@ -15,7 +15,9 @@ import type { RenameSubject, TitleLanguage, UploadQueueItem, VideoCategory } fro
 import { useLanguage } from '@/hooks/useLanguage';
 import { editableRow, useBatchRowValues } from '@/hooks/useBatchRowValues';
 import type { BulkFormState } from '@/lib/bulk-edit/form';
-import { defaultsForNewFiles, initiateFields, subjectOf, type QueueRowRef, type RowValues } from '@/lib/upload/set-values';
+import { defaultsForNewFiles, initiateFields, reorderWithin, subjectOf, type QueueRowRef, type RowValues } from '@/lib/upload/set-values';
+import { loadChannelTitles } from '@/lib/bulk-edit/channel-titles';
+import { orderedSubjects } from '@al-ummah/shared-types';
 import { inputClass } from '@/components/bulkEdit/RenameFields';
 import type { PlaylistSource } from '@/components/bulkEdit/BulkFieldsForm';
 import { BatchSetValuesPanel, type SetScope } from './BatchSetValuesPanel';
@@ -56,10 +58,12 @@ interface UseBatchSetValuesInput {
   };
   setBatchCategory: (category: VideoCategory | undefined) => void;
   setRowCategories: (videoIds: string[], category: VideoCategory, overwrite: boolean) => number;
+  /** Put the queue in this order (uploads and batch playlist adds follow it) */
+  reorderQueue?: (rowIds: string[]) => void;
   disabled?: boolean;
 }
 
-export function useBatchSetValues({ seed, files, channelId, channelName, playlists, batchPlaylists, setBatchCategory, setRowCategories, disabled }: UseBatchSetValuesInput) {
+export function useBatchSetValues({ seed, files, channelId, channelName, playlists, batchPlaylists, setBatchCategory, setRowCategories, reorderQueue, disabled }: UseBatchSetValuesInput) {
   const { t, lang } = useLanguage();
   const b = t.bulkEdit;
   const fmt = (n: number) => n.toLocaleString(lang === 'ar' ? 'ar' : 'en-US');
@@ -75,12 +79,18 @@ export function useBatchSetValues({ seed, files, channelId, channelName, playlis
 
   const editable = useMemo(() => files.filter(editableRow), [files]);
   const refs = useMemo<QueueRowRef[]>(() => editable.map((f) => ({ id: f.id, fileName: f.file.name, addedAt: f.startedAt ? new Date(f.startedAt).toISOString() : undefined })), [editable]);
-  const subjects = useMemo<RenameSubject[]>(() => refs.filter((r) => rows[r.id]).map((r) => subjectOf(r, rows[r.id], channelName)), [refs, rows, channelName]);
+  const subjects = useMemo<RenameSubject[]>(() => refs.filter((r) => rows[r.id]).map((r, i) => subjectOf(r, rows[r.id], channelName, i)), [refs, rows, channelName]);
   const chosen = subjects.filter((s) => selected.has(s.id));
 
   const apply = (form: BulkFormState, scope: SetScope, overwrite: boolean) => {
-    const targets = scope === 'all' ? refs : refs.filter((r) => selected.has(r.id));
+    // In the order chosen in the panel: numbers, publish times and the upload order follow it
+    const targets = orderedSubjects(scope === 'all' ? refs : refs.filter((r) => selected.has(r.id)), form.rename.order);
     const result = setValues(targets, form, { overwrite, channel: channelName });
+    if (form.rename.order.length && reorderQueue) {
+      const queueIds = files.map((f) => f.id);
+      const next = reorderWithin(queueIds, targets.map((r) => r.id).filter((id) => queueIds.includes(id)));
+      if (next.some((id, i) => id !== queueIds[i])) reorderQueue(next);
+    }
     let kept = result.skipped;
     const targetFiles = editable.filter((f) => targets.some((r) => r.id === f.id));
     if (form.ticked.includes('category') && form.category) {
@@ -196,7 +206,8 @@ export function useBatchSetValues({ seed, files, channelId, channelName, playlis
 
   const panel = (
     <BatchSetValuesPanel open={open} onOpenChange={setOpen} all={subjects} selected={chosen} initial={seed.defaultsRef.current}
-      playlists={playlists} onApply={apply} />
+      playlists={playlists} onApply={apply}
+      loadExistingTitles={channelId ? () => loadChannelTitles(channelId, new Set(files.flatMap((f) => (f.videoId ? [f.videoId] : [])))) : undefined} />
   );
 
   return { renderSelect, renderTitles, titleOf, toolbar, panel, openPanel: () => setOpen(true) };

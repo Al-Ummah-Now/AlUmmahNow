@@ -40,6 +40,7 @@ function row(id: string, name: string, overrides: Partial<UploadQueueItem> = {})
 
 const setRowCategories = jest.fn(() => 0);
 const setBatchCategory = jest.fn();
+const reorderQueue = jest.fn();
 
 function Harness({ files }: { files: UploadQueueItem[] }) {
   const seed = useSetValuesSeed();
@@ -51,6 +52,7 @@ function Harness({ files }: { files: UploadQueueItem[] }) {
     batchPlaylists: { setBatchPlaylists: jest.fn(), overrides: {}, setRowPlaylists: jest.fn(), committed: {} },
     setBatchCategory,
     setRowCategories,
+    reorderQueue,
   });
   return (
     <div>
@@ -137,5 +139,24 @@ describe('upload queue "Set values"', () => {
     expect(screen.getAllByTestId('batch-file-title-ar')[0]).toHaveAttribute('dir', 'rtl');
     expect(screen.getAllByTestId('batch-file-title-en')[0]).toHaveAttribute('dir', 'ltr');
     expect(screen.getByTestId('batch-set-values')).toHaveTextContent('تعيين القيم');
+  });
+
+  it('numbers the files in the order chosen by file name (natural) and uploads in that order', async () => {
+    const named = [row('a', 'part 10.mp4'), row('b', 'part 2.mp4'), row('c', 'part 1.mp4')];
+    render(<Harness files={named} />);
+    fireEvent.click(screen.getByTestId('batch-set-values'));
+    fireEvent.click(screen.getByTestId('bulk-set-tick-title'));
+    fireEvent.change(screen.getByTestId('rename-pattern'), { target: { value: 'Lesson {n}' } });
+    // Files have no upload date, publish date or duration yet
+    expect(Array.from((screen.getByTestId('bulk-set-preview-order-key') as HTMLSelectElement).options).map((o) => o.value)).toEqual(['list', 'title', 'filename']);
+    fireEvent.change(screen.getByTestId('bulk-set-preview-order-key'), { target: { value: 'filename' } });
+    expect(screen.getAllByTestId('bulk-set-preview-row').map((r) => r.getAttribute('data-id'))).toEqual(['c', 'b', 'a']);
+    fireEvent.keyDown(screen.getAllByTestId('bulk-set-preview-handle')[2], { key: 'ArrowUp', altKey: true });
+    expect(screen.getByTestId('bulk-set-preview-moved')).toHaveTextContent('Moved to position 2 of 3');
+    fireEvent.click(screen.getByTestId('batch-set-apply'));
+    expect(screen.getByTestId('title-c')).toHaveTextContent('Lesson 1');
+    expect(screen.getByTestId('title-a')).toHaveTextContent('Lesson 2');
+    expect(screen.getByTestId('title-b')).toHaveTextContent('Lesson 3');
+    expect(reorderQueue).toHaveBeenCalledWith(['c', 'a', 'b']);
   });
 });

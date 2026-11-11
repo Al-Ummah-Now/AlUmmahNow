@@ -98,7 +98,7 @@ test.describe('Release: bulk rename and bulk edit', () => {
       await page.getByTestId('rename-pattern').fill(`Bulk ${stamp} {n}`);
       await page.getByTestId('rename-pad').fill('2');
       const preview = page.getByTestId('bulk-set-preview-row');
-      await expect(preview).toHaveCount(6);
+      await expect(preview).toHaveCount(3);
       await expect(page.getByTestId('bulk-set-preview-after').first()).toHaveText(`Bulk ${stamp} 01`);
       await page.getByTestId('batch-set-apply').click();
       await expect(panel).toBeHidden();

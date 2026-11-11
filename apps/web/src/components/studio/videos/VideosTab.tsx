@@ -12,6 +12,7 @@ import { BulkEditPanel, type BulkPanelVideo } from '@/components/bulkEdit/BulkEd
 import { useChannelPlaylists } from '@/hooks/useChannelPlaylists';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { collectTags } from '@/lib/search/tags';
+import { loadChannelTitles } from '@/lib/bulk-edit/channel-titles';
 import { CalendarControls } from '@/components/calendar/CalendarControls';
 import { ViewSwitcher } from '@/components/calendar/ViewSwitcher';
 import { navigateNext, navigatePrevious } from '@/components/calendar/utils/dateFormatters';
@@ -187,9 +188,14 @@ export function VideosTab({ locale, channelId, role }: Props) {
         channelName: channelInfo ? { en: channelInfo.nameLocalized?.en || channelInfo.name, ar: channelInfo.nameLocalized?.ar || channelInfo.name } : undefined,
         dateCreated: v.dateCreated,
         originalFilename: (v as { originalFilename?: string }).originalFilename,
+        // Publish time: the schedule's, or when a public video went up
+        publishedAt: v.scheduledPublishDate || (v.isPublic !== false ? v.dateCreated : null),
+        duration: v.duration ?? null,
       }];
     });
   }, [bulkEditOpen, selected, items, matching, channelId, channelInfo]);
+  // "Continue numbering after": every title on the channel except the selection
+  const loadExistingTitles = useCallback(() => loadChannelTitles(channelId, selected), [channelId, selected]);
   const panelTags = useMemo(() => (bulkEditOpen ? collectTags(items.filter((v) => selected.has(v.id))) : []), [bulkEditOpen, items, selected]);
   const knownTags = useMemo(() => (bulkEditOpen ? collectTags(items) : []), [bulkEditOpen, items]);
 
@@ -525,6 +531,7 @@ export function VideosTab({ locale, channelId, role }: Props) {
         playlists={canBulkPlaylists ? { list: channelPlaylists.playlists, loading: channelPlaylists.loading, failed: channelPlaylists.failed, create: channelPlaylists.create } : null}
         knownTags={knownTags}
         selectedTags={panelTags}
+        loadExistingTitles={loadExistingTitles}
       />
       <AddToPlaylistDialog
         open={bulkDialog === 'playlist'}

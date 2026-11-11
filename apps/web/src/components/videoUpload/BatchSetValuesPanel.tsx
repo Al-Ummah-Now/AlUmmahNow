@@ -9,10 +9,13 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLanguage } from '@/hooks/useLanguage';
-import type { RenameSubject, TitleLanguage } from '@al-ummah/shared-types';
+import type { OrderKey, RenameSubject, TitleLanguage } from '@al-ummah/shared-types';
 import { emptyBulkForm, readyFields, renamePreview, type BulkField, type BulkFormState } from '@/lib/bulk-edit/form';
 import { BulkDrawer } from '@/components/bulkEdit/BulkDrawer';
 import { BulkFieldsForm, type PlaylistSource } from '@/components/bulkEdit/BulkFieldsForm';
+
+/** Files not uploaded yet have no upload date, publish date or duration to sort by */
+export const UPLOAD_ORDER_KEYS: OrderKey[] = ['list', 'title', 'filename'];
 
 export const UPLOAD_SET_FIELDS: BulkField[] = ['title', 'description', 'category', 'language', 'visibility', 'playlists', 'tags', 'schedule', 'comments'];
 
@@ -30,9 +33,11 @@ interface BatchSetValuesPanelProps {
   playlists?: PlaylistSource | null;
   knownTags?: string[];
   onApply: (form: BulkFormState, scope: SetScope, overwrite: boolean) => void;
+  /** Titles already on the channel ("Continue numbering after") */
+  loadExistingTitles?: () => Promise<string[]>;
 }
 
-export function BatchSetValuesPanel({ open, onOpenChange, all, selected, initial, playlists, knownTags = [], onApply }: BatchSetValuesPanelProps) {
+export function BatchSetValuesPanel({ open, onOpenChange, all, selected, initial, playlists, knownTags = [], onApply, loadExistingTitles }: BatchSetValuesPanelProps) {
   const { t, lang } = useLanguage();
   const b = t.bulkEdit;
   const ui: TitleLanguage = lang === 'ar' ? 'ar' : 'en';
@@ -97,7 +102,7 @@ export function BatchSetValuesPanel({ open, onOpenChange, all, selected, initial
           </span>
         </label>
         <BulkFieldsForm variant="set" form={form} onChange={setForm} subjects={subjects} fields={UPLOAD_SET_FIELDS.filter((f) => f !== 'playlists' || !!playlists)}
-          playlists={playlists} knownTags={knownTags} />
+          playlists={playlists} knownTags={knownTags} orderKeys={UPLOAD_ORDER_KEYS} loadExistingTitles={loadExistingTitles} />
       </div>
     </BulkDrawer>
   );

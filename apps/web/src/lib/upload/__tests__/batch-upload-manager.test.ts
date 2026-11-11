@@ -54,6 +54,16 @@ describe('BatchUploadManager', () => {
     jest.clearAllMocks();
   });
 
+  it('uploads in the order the queue was put in (rename order)', async () => {
+    const m = new BatchUploadManager();
+    await m.addVideos([entry(1), entry(2), entry(3)], {});
+    const ids = rows(m).map((r) => r.id);
+    m.reorder([ids[2], ids[0]]);
+    expect(rows(m).map((r) => r.videoId)).toEqual(['v3', 'v1', 'v2']);
+    await m.startUploads();
+    expect(tus.started.map((id) => m.getQueueState().get(id)!.videoId)).toEqual(['v3', 'v1', 'v2']);
+  });
+
   it('takes more files after a batch finished and uploads only the new ones', async () => {
     const m = new BatchUploadManager();
     const succeeded: string[] = [];

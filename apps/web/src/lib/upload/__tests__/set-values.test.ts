@@ -6,6 +6,7 @@ import {
   editRow,
   initialRow,
   initiateFields,
+  reorderWithin,
   updateFor,
   type QueueRowRef,
   type RowState,
@@ -98,5 +99,10 @@ describe('set values for queued files', () => {
     const before = fileResumeKey(file, 'ch');
     applySetValues(rowsOf(), refs, patternForm('Renamed {n}'), { overwrite: true });
     expect(fileResumeKey(file, 'ch')).toBe(before);
+  });
+
+  it('orders the ticked rows within their own positions, leaving the rest in place', () => {
+    expect(reorderWithin(['a', 'b', 'c', 'd'], ['d', 'b'])).toEqual(['a', 'd', 'c', 'b']);
+    expect(reorderWithin(['a', 'b'], ['b', 'a'])).toEqual(['b', 'a']);
   });
 });

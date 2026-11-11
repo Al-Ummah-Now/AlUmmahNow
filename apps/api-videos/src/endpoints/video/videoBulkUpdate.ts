@@ -251,7 +251,9 @@ export class VideoBulkUpdate extends AuthenticatedRoute {
 		const doneById = new Map(done.map((d) => [d.videoId, d]));
 		for (const [playlistId, playlist] of playlists) {
 			const adding = (changes.addPlaylists ?? []).includes(playlistId);
-			const ids = done.filter((d) => !adding || d.video.channelId === playlist.channelId).map((d) => d.videoId);
+			// In the order the request listed them (the rename order): adds append in it
+			const ids = done.filter((d) => !adding || d.video.channelId === playlist.channelId).map((d) => d.videoId)
+				.sort((x, y) => videoIds.indexOf(x) - videoIds.indexOf(y));
 			if (ids.length === 0) continue;
 			const before = new Set(playlist.videos ?? []);
 			try {

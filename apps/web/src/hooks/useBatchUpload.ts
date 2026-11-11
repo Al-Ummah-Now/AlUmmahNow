@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { UploadQueueItem, VideoUploadMetadata } from '@al-ummah/shared-types';
+import { naturalCompare, UploadQueueItem, VideoUploadMetadata } from '@al-ummah/shared-types';
 import { BatchUploadManager } from '@/lib/upload/BatchUploadManager';
 import { UploadOptimizer } from '@/lib/upload/UploadOptimizer';
 import { buildBatchUploadEntries, getTusProxyEndpoint } from '@/lib/upload/batch-entries';
@@ -174,8 +174,10 @@ export function useBatchUpload({
   /**
    * Add files to the upload queue
    */
-  const addFiles = useCallback(async (selectedFiles: File[]) => {
+  const addFiles = useCallback(async (pickedFiles: File[]) => {
     if (!batchManagerRef.current || !optimizerRef.current) return;
+    // Natural file name order ("Lesson 2" before "Lesson 10"), not the order the OS handed them over in
+    const selectedFiles = [...pickedFiles].sort((a, b) => naturalCompare(a.name, b.name, langRef.current === 'ar' ? 'ar' : 'en'));
 
     const manager = batchManagerRef.current;
     const syncFiles = () => setFiles(Array.from(manager.getQueueState().values()));
@@ -377,6 +379,13 @@ export function useBatchUpload({
     addFilesRef.current = addFiles;
   }, [addFiles]);
 
+  /** Put the queue in this order (row ids); uploads and batch playlist adds follow it. */
+  const reorderQueue = useCallback((ids: string[]) => {
+    if (!batchManagerRef.current) return;
+    batchManagerRef.current.reorder(ids);
+    setFiles(Array.from(batchManagerRef.current.getQueueState().values()));
+  }, []);
+
   /**
    * Remove a file from the queue
    */
@@ -550,5 +559,6 @@ export function useBatchUpload({
     cancelAll,
     clearQueue,
     clearFinished,
+    reorderQueue,
   };
 }
