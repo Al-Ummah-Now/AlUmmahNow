@@ -64,8 +64,9 @@ jobs:
     name: Release regressions (${{ inputs.env || 'qa' }})
     runs-on: ubuntu-24.04
     # 163 tests on 4 workers took ~25 min with slow Bunny encodes (v2026.11.10.11);
-    # plus up to 40 min waiting for the shared-state lock. Repeat runs (nightly) take longer.
-    timeout-minutes: ${{ (inputs.repeat || 1) > 1 && 240 || 100 }}
+    # plus up to 40 min waiting for the shared-state lock and 60 for an encode slot.
+    # Repeat runs (nightly) take longer.
+    timeout-minutes: ${{ (inputs.repeat || 1) > 1 && 300 || 180 }}
     permissions:
       contents: write  # only the trusted qa-lock steps get the token (a git ref is the lock)
       actions: read  # qa-lock: is the lock's holder run still going?
@@ -159,9 +160,41 @@ jobs:
           TEST_PROMOTE_SECRET: ${{ secrets.TEST_PROMOTE_SECRET || (inputs.env == 'stage' && secrets.TEST_PROMOTE_SECRET_STAGE) || secrets.TEST_PROMOTE_SECRET_QA }}
           # In every throwaway user's email (targets.ts sinkEmail): the upload budget finds this run's users
           E2E_RUN_TAG: g${{ github.run_id }}a${{ github.run_attempt }}
-          # The shared-state specs run below, under the lock
+          # The shared-state specs and the encode-waiting specs run below, each under its lock
           E2E_SHARED_STATE: skip
+          E2E_ENCODE: skip
         run: npx playwright test -c playwright.release.config.ts --repeat-each="$E2E_REPEAT"
+
+      # The specs that wait for Bunny to encode an upload share one encode queue with
+      # every other run on the QA/stage library: at most two runs encode at once
+      # (scripts/ci/qa-lock.ts --slots, #838). Waiting is a queue, never a failure.
+      - name: Acquire an ${{ env.E2E_ENV }}-encode slot
+        id: encode-lock
+        if: '!cancelled()'
+        timeout-minutes: 65
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node --experimental-strip-types --no-warnings "$GITHUB_WORKSPACE/.ci-trusted/scripts/ci/qa-lock.ts" acquire "$E2E_ENV-encode" --slots 2 --ttl-min 40 --max-wait-min 60
+
+      - name: Run encode-waiting specs
+        if: steps.encode-lock.outputs.holder != '' && !cancelled()
+        working-directory: ${{ env.SUITE }}
+        timeout-minutes: 40
+        env:
+          CI: 'true'
+          E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET || (inputs.env == 'stage' && secrets.E2E_CODE_SINK_SECRET_STAGE) || secrets.E2E_CODE_SINK_SECRET_QA }}
+          TEST_PROMOTE_SECRET: ${{ secrets.TEST_PROMOTE_SECRET || (inputs.env == 'stage' && secrets.TEST_PROMOTE_SECRET_STAGE) || secrets.TEST_PROMOTE_SECRET_QA }}
+          E2E_RUN_TAG: g${{ github.run_id }}a${{ github.run_attempt }}
+          E2E_SHARED_STATE: skip
+          E2E_ENCODE: only
+          E2E_OUTPUT_SUFFIX: encode
+        run: npx playwright test -c playwright.release.config.ts --repeat-each="$E2E_REPEAT"
+
+      - name: Release the ${{ env.E2E_ENV }}-encode slot
+        if: always() && steps.encode-lock.outputs.holder != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node --experimental-strip-types --no-warnings "$GITHUB_WORKSPACE/.ci-trusted/scripts/ci/qa-lock.ts" release "${{ steps.encode-lock.outputs.lock }}" --holder "${{ steps.encode-lock.outputs.holder }}"
 
       # errors.spec.ts and site-theme.spec.ts change state no run owns (the shared
       # test error group, the global site theme): one run at a time per
@@ -237,6 +270,7 @@ jobs:
           python3 -I - --env E2E_TEST_PASSWORD --env E2E_CODE_SINK_SECRET --env TEST_PROMOTE_SECRET
           --remove "$SUITE/release-report" "$SUITE/test-results" "$SUITE/release-report-shared-state" "$SUITE/test-results-shared-state"
           "$SUITE/release-outcomes.json" "$SUITE/release-outcomes-shared-state.json"
+          "$SUITE/release-report-encode" "$SUITE/test-results-encode" "$SUITE/release-outcomes-encode.json"
           < "$GITHUB_WORKSPACE/.ci-trusted/scripts/ci/scan-artifacts-for-secrets.py"
 
       - uses: actions/upload-artifact@v4
@@ -248,6 +282,8 @@ jobs:
             ${{ env.SUITE }}/test-results/
             ${{ env.SUITE }}/release-report-shared-state/
             ${{ env.SUITE }}/test-results-shared-state/
+            ${{ env.SUITE }}/release-report-encode/
+            ${{ env.SUITE }}/test-results-encode/
           retention-days: 14
 
       # Per-test outcomes (titles and first error lines, scanned above), pass or fail:
@@ -259,5 +295,6 @@ jobs:
           path: |
             ${{ env.SUITE }}/release-outcomes.json
             ${{ env.SUITE }}/release-outcomes-shared-state.json
+            ${{ env.SUITE }}/release-outcomes-encode.json
           if-no-files-found: ignore
           retention-days: 30

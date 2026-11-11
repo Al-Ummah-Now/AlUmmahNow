@@ -30,6 +30,20 @@ const BAR_ROW = /player-(bar-row|track)\.player\.spec\.ts$/;
  */
 const SHARED_STATE = /\/(errors|site-theme)\.spec\.ts$/;
 const SHARED_MODE = process.env.E2E_SHARED_STATE;
+/**
+ * Specs that wait for Bunny to encode an upload (ready within ~9 min). They share
+ * one encode queue with every other run on the QA/stage library, so CI
+ * (release-e2e.yml) runs them in their own step under a cross-run lock with a
+ * few slots (scripts/ci/qa-lock.ts --slots, #838): E2E_ENCODE=skip in the main
+ * step, =only in that step. Unset (local runs): everything together.
+ */
+const ENCODE_SPECS = '(bulk-rename-edit|upload-modes|studio-draft-path)\\.spec\\.ts|processing\\.player\\.spec\\.ts';
+const ENCODE = new RegExp(`/(${ENCODE_SPECS})$`);
+const NOT_ENCODE = new RegExp(`^(?!.*/(${ENCODE_SPECS})$)`);
+const ENCODE_MODE = process.env.E2E_ENCODE;
+/** The encode split applied to a project's ignore list. */
+const encodeIgnore = (ignore: RegExp[]): RegExp[] =>
+  ENCODE_MODE === 'skip' ? [...ignore, ENCODE] : ENCODE_MODE === 'only' ? [...ignore, NOT_ENCODE] : ignore;
 const OUTPUT_SUFFIX = /^[a-z0-9-]{1,32}$/.test(process.env.E2E_OUTPUT_SUFFIX ?? '') ? `-${process.env.E2E_OUTPUT_SUFFIX}` : '';
 const EXTRA_BROWSERS = (process.env.RELEASE_PLAYER_BROWSERS ?? '').split(',').map((b) => b.trim()).filter(Boolean);
 const EXTRA_DEVICES = {
@@ -65,7 +79,7 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
-  projects: SHARED_MODE === 'only' ? [{ name: 'shared-state', testMatch: SHARED_STATE, use: { ...devices['Desktop Chrome'] } }] : [
+  projects: SHARED_MODE === 'only' ? [{ name: 'shared-state', testMatch: SHARED_STATE, use: { ...devices['Desktop Chrome'] } }] : ([
     {
       name: 'auth-flows',
       testIgnore: SHARED_MODE === 'skip' ? [PLAYER, ALL_BROWSERS, SHARED_STATE] : [PLAYER, ALL_BROWSERS],
@@ -101,5 +115,8 @@ export default defineConfig({
           ]
         : [{ name: `player-${b}`, testMatch: BAR_ROW, use: { ...EXTRA_DEVICES[b] } }],
     ),
-  ],
+  ] as Array<{ name: string; testIgnore?: RegExp | RegExp[] } & Record<string, unknown>>).map((project) => ({
+    ...project,
+    testIgnore: encodeIgnore(project.testIgnore === undefined ? [] : ([] as RegExp[]).concat(project.testIgnore)),
+  })),
 });

@@ -65,4 +65,4 @@ jobs:
         run: >-
           node --experimental-strip-types --no-warnings scripts/ci/nightly-flaky-issue.ts
           --repeat 3 --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          outcomes/release-outcomes.json outcomes/release-outcomes-shared-state.json
+          outcomes/release-outcomes.json outcomes/release-outcomes-shared-state.json outcomes/release-outcomes-encode.json

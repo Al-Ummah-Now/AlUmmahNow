@@ -659,6 +659,11 @@ H.264 HLS streams.
   `expectHydrated(locator)` waits until React has attached a control's handlers, and
   `fillSecret` waits for the field first. Fixed waits remain only as observation windows
   ("nothing else happens for N s").
+- **Encodes.** Specs that wait for Bunny to encode an upload (`bulk-rename-edit`,
+  `upload-modes`, `studio-draft-path`, `processing.player`) share the QA/stage library's
+  encode queue with every other run. CI runs them in their own step (`E2E_ENCODE=only`)
+  under a 2-slot cross-run lock (`qa-lock.ts --slots 2`, `<env>-encode`); a new
+  encode-waiting spec goes in `ENCODE_SPECS` in `playwright.release.config.ts` (#838).
 - **Retries stay at one.** A test that needed its retry is listed as flaky in the job
   summary and as a warning (`e2e/release/outcome-reporter.ts`). `release-e2e-nightly.yml`
   runs the suite 3x with no retries and keeps one issue (label `e2e-flaky-nightly`) listing
