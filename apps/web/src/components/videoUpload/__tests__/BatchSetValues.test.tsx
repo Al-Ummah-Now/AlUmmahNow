@@ -185,5 +185,23 @@ describe('upload queue "Set values"', () => {
     expect(screen.getAllByTestId('batch-file-description-en')[0]).toHaveValue('');
     expect(ar).toHaveValue('وصف');
   });
+
+  it('skips the Arabic title of files that have none when the pattern uses {title}', () => {
+    render(<Harness files={files} />);
+    fireEvent.change(screen.getAllByTestId('batch-file-title-ar')[1], { target: { value: 'درس' } });
+    fireEvent.click(screen.getByTestId('batch-set-values'));
+    fireEvent.click(screen.getByTestId('bulk-set-tick-title'));
+    fireEvent.click(screen.getByTestId('rename-lang-ar'));
+    fireEvent.change(screen.getByTestId('rename-pattern-en'), { target: { value: 'Series {n}: {title}' } });
+    fireEvent.change(screen.getByTestId('rename-pattern-ar'), { target: { value: 'سلسلة {n}: {title}' } });
+    const skipped = screen.getAllByTestId('bulk-set-preview-cell').filter((c) => c.getAttribute('data-skipped') === 'no_title');
+    expect(skipped.map((c) => c.getAttribute('data-language'))).toEqual(['ar', 'ar']);
+    expect(skipped[0]).toHaveTextContent('Skipped: no Arabic title');
+    expect(screen.getByTestId('bulk-set-preview-summary')).toHaveAttribute('data-skipped', '2');
+    fireEvent.click(screen.getByTestId('batch-set-apply'));
+    // Files without an Arabic title keep it empty; the one typed by hand is the creator's own (kept, no overwrite)
+    expect((screen.getAllByTestId('batch-file-title-ar') as HTMLInputElement[]).map((i) => i.value)).toEqual(['', 'درس', '']);
+    expect((screen.getAllByTestId('batch-file-title-en') as HTMLInputElement[]).map((i) => i.value)).toEqual(['Series 1: one', 'Series 2: two', 'Series 3: three']);
+  });
 });
 

@@ -10,6 +10,7 @@ import {
   formatTokenDate,
   previewRename,
   renamedTitles,
+  tidyEmptyTokens,
   renameSummary,
   replaceText,
   staggeredTimes,
@@ -37,12 +38,8 @@ describe('tokens', () => {
       'Noor 2: Tafsir Al-Fatiha.part2 (clip-two)',
       'Noor 3: noext (clip-three)',
     ]);
-    // {title} in the Arabic field is the Arabic title only (empty stays empty)
-    expect(ar).toEqual([
-      'نور 1: Tafsir Al-Fatiha.part1 ()',
-      'نور 2: Tafsir Al-Fatiha.part2 (درس)',
-      'نور 3: noext ()',
-    ]);
+    // {title} in the Arabic field is the Arabic title only: no Arabic title, the row is skipped (never borrowed)
+    expect(ar).toEqual(['', 'نور 2: Tafsir Al-Fatiha.part2 (درس)', '']);
   });
 
   it('leaves unknown tokens as typed', () => {
@@ -140,7 +137,7 @@ describe('problems', () => {
     expect(renamedTitles([...rows, ...long])).toEqual({});
     // Duplicates are a warning: they still apply
     expect(Object.keys(renamedTitles(dup))).toEqual(['1', '2', '3']);
-    expect(renameSummary(dup)).toEqual({ applies: 3, blocked: 0, duplicates: 3, unchanged: 0, excluded: 0 });
+    expect(renameSummary(dup)).toEqual({ applies: 3, blocked: 0, duplicates: 3, unchanged: 0, excluded: 0, skipped: 0 });
   });
 
   it('judges duplicates per language, ignoring case and outer spaces only', () => {
@@ -214,6 +211,45 @@ describe('English and Arabic in one pass, each with its own rule', () => {
     const rows = previewRename(pair, { rule: { kind: 'pattern', pattern: 'X' }, rules: { ar: { kind: 'pattern', pattern: 'الدرس {n}' } }, languages: ['ar'] });
     expect(rows.every((r) => r.language === 'ar')).toBe(true);
     expect(renamedTitles(rows)).toEqual({ a: { ar: 'الدرس 1' }, b: { ar: 'الدرس 2' }, c: { ar: 'الدرس 3' } });
+  });
+});
+
+describe('empty source values', () => {
+  const mixed: RenameSubject[] = [
+    { id: 'a', title: { en: 'Intro', ar: 'مقدمة' }, channel: { en: 'Noor', ar: 'نور' } },
+    { id: 'b', title: { en: 'Seerah', ar: '' } },
+    { id: 'c', title: { en: '', ar: 'فقه' } },
+  ];
+
+  it('skips a language whose {title} is empty, in Arabic and in English, keeping the numbers aligned', () => {
+    const rows = previewRename(mixed, {
+      rule: { kind: 'pattern', pattern: 'Series {n}: {title}' },
+      rules: { en: { kind: 'pattern', pattern: 'Series {n}: {title}' }, ar: { kind: 'pattern', pattern: 'سلسلة {n}: {title}' } },
+      languages: ['en', 'ar'],
+    });
+    const cell = (id: string, lang: 'en' | 'ar') => rows.find((r) => r.id === id && r.language === lang)!;
+    expect(cell('b', 'ar')).toMatchObject({ skipped: 'no_title', changed: false, after: '', problems: [] });
+    expect(cell('c', 'en')).toMatchObject({ skipped: 'no_title', changed: false });
+    expect(cell('b', 'en').after).toBe('Series 2: Seerah');
+    expect(cell('c', 'ar').after).toBe('سلسلة 3: فقه');
+    expect(renamedTitles(rows)).toEqual({ a: { en: 'Series 1: Intro', ar: 'سلسلة 1: مقدمة' }, b: { en: 'Series 2: Seerah' }, c: { ar: 'سلسلة 3: فقه' } });
+    expect(renameSummary(rows)).toEqual({ applies: 4, blocked: 0, duplicates: 0, unchanged: 0, excluded: 0, skipped: 2 });
+  });
+
+  it('drops the separators left by any other token that comes out empty', () => {
+    const rows = previewRename(mixed, { rule: { kind: 'pattern', pattern: '{channel} – Lesson {n}' }, languages: ['en'] });
+    expect(rows.map((r) => r.after)).toEqual(['Noor – Lesson 1', 'Lesson 2', 'Lesson 3']);
+    const tail = previewRename([{ id: 'x', title: { en: 'A' } }], { rule: { kind: 'pattern', pattern: 'Lesson {n} – {filename}' }, languages: ['en'] });
+    expect(tail[0].after).toBe('Lesson 1');
+  });
+
+  it('tidies only what the empty token left, never the text the creator typed', () => {
+    const E = '\u0000';
+    expect(tidyEmptyTokens(`A – ${E} – B`)).toBe('A – B');
+    expect(tidyEmptyTokens(`${E}: Title`)).toBe('Title');
+    expect(tidyEmptyTokens(`Lesson 1 (${E})`)).toBe('Lesson 1');
+    expect(tidyEmptyTokens(`الدرس ١ – ${E}`)).toBe('الدرس ١');
+    expect(tidyEmptyTokens('A – – B (x)')).toBe('A – – B (x)');
   });
 });
 

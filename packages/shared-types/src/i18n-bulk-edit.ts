@@ -53,6 +53,7 @@ export interface BulkRenameTranslations {
   problemDuplicate: string;
   unchanged: string;
   excluded: string;
+  skippedNoTitle: { en: string; ar: string };
   summary: string;
   showMore: string;
   /** Order of the rename (numbers follow it) */
@@ -253,7 +254,8 @@ const RENAME_EN: BulkRenameTranslations = {
   problemDuplicate: 'Duplicate',
   unchanged: 'No change',
   excluded: 'Left out',
-  summary: '{applies} will change, {blocked} blocked, {duplicates} duplicates, {unchanged} unchanged',
+  skippedNoTitle: { en: 'Skipped: no English title', ar: 'Skipped: no Arabic title' },
+  summary: '{applies} will change, {skipped} skipped, {blocked} blocked, {duplicates} duplicates, {unchanged} unchanged',
   showMore: 'Show all {count} rows',
   orderBy: 'Order',
   orderKeys: { list: 'As listed', title: 'Current title', filename: 'File name', uploaded: 'Upload date', published: 'Publish date', duration: 'Duration' },
@@ -321,7 +323,8 @@ const RENAME_AR: BulkRenameTranslations = {
   problemDuplicate: 'مكرر',
   unchanged: 'بدون تغيير',
   excluded: 'مستبعد',
-  summary: 'سيتغير {applies}، ومحظور {blocked}، ومكرر {duplicates}، وبدون تغيير {unchanged}',
+  skippedNoTitle: { en: 'تُرك: لا يوجد عنوان إنجليزي', ar: 'تُرك: لا يوجد عنوان عربي' },
+  summary: 'سيتغير {applies}، ومتروك {skipped}، ومحظور {blocked}، ومكرر {duplicates}، وبدون تغيير {unchanged}',
   showMore: 'عرض كل الصفوف ({count})',
   orderBy: 'الترتيب',
   orderKeys: { list: 'كما في القائمة', title: 'العنوان الحالي', filename: 'اسم الملف', uploaded: 'تاريخ الرفع', published: 'تاريخ النشر', duration: 'المدة' },
