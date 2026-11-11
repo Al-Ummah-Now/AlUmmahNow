@@ -55,3 +55,14 @@ export function applyBatchDefault(row: BatchRowCategory, batchDefault: VideoCate
   if (row.touched || !batchDefault || row.category === batchDefault && !row.aiApplied) return { row, save: false };
   return { row: { ...row, category: batchDefault, aiApplied: false, fromDefault: true, save: 'saving' }, save: true };
 }
+
+/**
+ * "Set values" on the upload page gave rows a category. Like a batch
+ * default, it is not a pick by hand: a row picked by hand keeps its own
+ * unless `overwrite`. Returns the row and whether its video must be saved.
+ */
+export function setRowCategory(row: BatchRowCategory, category: VideoCategory, overwrite: boolean): { row: BatchRowCategory; save: boolean } {
+  if (row.touched && !overwrite) return { row, save: false };
+  if (row.category === category && !row.aiApplied) return { row, save: false };
+  return { row: { ...row, category, aiApplied: false, touched: false, fromDefault: true, save: 'saving' }, save: true };
+}

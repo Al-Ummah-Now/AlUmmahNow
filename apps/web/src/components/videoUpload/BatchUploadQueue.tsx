@@ -28,6 +28,12 @@ interface BatchUploadQueueProps {
   renderCategory?: (file: UploadQueueItem) => React.ReactNode;
   /** Playlist picker for a row (batch uploader: the batch's playlists or its own) */
   renderPlaylists?: (file: UploadQueueItem) => React.ReactNode;
+  /** A row's checkbox and its own title fields ("Set values") */
+  renderSelect?: (file: UploadQueueItem) => React.ReactNode;
+  renderTitles?: (file: UploadQueueItem) => React.ReactNode;
+  titleOf?: (file: UploadQueueItem) => string | undefined;
+  /** Above the rows: select all, "Set values" */
+  toolbar?: React.ReactNode;
 }
 
 export function BatchUploadQueue({
@@ -46,6 +52,10 @@ export function BatchUploadQueue({
   onRetryFile,
   renderCategory,
   renderPlaylists,
+  renderSelect,
+  renderTitles,
+  titleOf,
+  toolbar,
 }: BatchUploadQueueProps) {
   const { t, isRTL: _isRTL } = useLanguage();
 
@@ -71,11 +81,11 @@ export function BatchUploadQueue({
       const phase = processingPhases[file.videoId];
       if ((phase === 'ready' || phase === 'failed') && announcedRef.current[file.videoId] !== phase) {
         announcedRef.current[file.videoId] = phase;
-        const title = file.metadata.title || file.file.name;
+        const title = titleOf?.(file) || file.metadata.title || file.file.name;
         setAnnouncement((phase === 'ready' ? t.uploadStatus.announceReady : t.uploadStatus.announceFailed).replace('{title}', title));
       }
     }
-  }, [files, processingPhases, t]);
+  }, [files, processingPhases, t, titleOf]);
 
   const noticeText =
     notice === 'keepOpen'
@@ -284,6 +294,8 @@ export function BatchUploadQueue({
         )}
       </div>
 
+      {toolbar}
+
       {/* File List */}
       <div className="space-y-3">
         {files.length === 0 ? (
@@ -303,6 +315,9 @@ export function BatchUploadQueue({
               onRetry={() => onRetryFile(file.id)}
               categorySlot={renderCategory?.(file)}
               playlistSlot={renderPlaylists?.(file)}
+              selectSlot={renderSelect?.(file)}
+              titleSlot={renderTitles?.(file)}
+              displayTitle={titleOf?.(file)}
             />
           ))
         )}

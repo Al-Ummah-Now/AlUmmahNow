@@ -212,31 +212,46 @@ export async function bulkDeleteVideos(
   }
 }
 
-/**
- * Bulk Edit Videos (Epic 5.3)
- * POST /api/videos/bulk-update
- */
-export async function bulkUpdateVideos(
-  videoIds: string[],
-  changes: { isPublic?: boolean; category?: string | null; addTags?: string[]; removeTags?: string[] },
-  headers: Required<Pick<ApiHeaders, 'channelId'>>
-): Promise<{
+/** Per-video result of a bulk edit or its undo. */
+export interface BulkEditOutcome {
+  videoId: string;
   success: boolean;
-  results: Array<{ videoId: string; success: boolean; changed?: boolean; error?: string }>;
+  changed?: boolean;
+  replayed?: boolean;
+  code?: string;
+  error?: string;
+}
+
+export interface BulkEditResponse {
+  success: boolean;
+  operationId?: string;
+  results: BulkEditOutcome[];
   summary: { total: number; succeeded: number; failed: number };
-} | null> {
+}
+
+/**
+ * Bulk edit of videos: PATCH /api/videos/bulk. `changes` apply to every
+ * video; `perVideo` carries the values that differ (renamed titles). The
+ * same `operationId` on every batch of one edit makes retries safe and lets
+ * one undo cover them all.
+ */
+export async function bulkEditVideos(
+  input: {
+    ids: string[];
+    operationId?: string;
+    changes: Record<string, unknown>;
+    perVideo?: Record<string, { title?: { en?: string; ar?: string } }>;
+  },
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
+): Promise<BulkEditResponse | null> {
   try {
-    logger.debug('[bulkUpdateVideos] Editing videos', { count: videoIds.length, fields: Object.keys(changes) });
-    return apiRequestServer<{
-      success: boolean;
-      results: Array<{ videoId: string; success: boolean; changed?: boolean; error?: string }>;
-      summary: { total: number; succeeded: number; failed: number };
-    }>(
+    logger.debug('[bulkEditVideos] Editing videos', { count: input.ids.length, operationId: input.operationId, fields: Object.keys(input.changes), titles: Object.keys(input.perVideo ?? {}).length });
+    return apiRequestServer<BulkEditResponse>(
       {
-        method: 'POST',
-        url: buildApiUrl('/api/videos/bulk-update'),
-        body: { videoIds, changes },
-        functionName: 'bulkUpdateVideos',
+        method: 'PATCH',
+        url: buildApiUrl('/api/videos/bulk'),
+        body: input,
+        functionName: 'bulkEditVideos',
       },
       async () => ({
         channelId: headers.channelId,
@@ -245,9 +260,45 @@ export async function bulkUpdateVideos(
       true
     );
   } catch (error) {
-    logger.error('bulkUpdateVideos error:', error);
+    logger.error('bulkEditVideos error:', error);
     return null;
   }
+}
+
+/** Undo of one bulk edit (24 hours): POST /api/videos/bulk/undo. */
+export async function undoBulkEdit(
+  operationId: string,
+  ids: string[],
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
+): Promise<BulkEditResponse | null> {
+  try {
+    logger.debug('[undoBulkEdit] Undoing bulk edit', { operationId, count: ids.length });
+    return apiRequestServer<BulkEditResponse>(
+      {
+        method: 'POST',
+        url: buildApiUrl('/api/videos/bulk/undo'),
+        body: { operationId, ids },
+        functionName: 'undoBulkEdit',
+      },
+      async () => ({
+        channelId: headers.channelId,
+        accessToken: (await getServerAuthContext())?.accessToken || '',
+      }),
+      true
+    );
+  } catch (error) {
+    logger.error('undoBulkEdit error:', error);
+    return null;
+  }
+}
+
+/** Older call shape (visibility, category, tags), kept for the existing bulk dialog. */
+export async function bulkUpdateVideos(
+  videoIds: string[],
+  changes: { isPublic?: boolean; category?: string | null; addTags?: string[]; removeTags?: string[] },
+  headers: Required<Pick<ApiHeaders, 'channelId'>>
+): Promise<BulkEditResponse | null> {
+  return bulkEditVideos({ ids: videoIds, changes }, headers);
 }
 
 /**
