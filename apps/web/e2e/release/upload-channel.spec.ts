@@ -34,8 +34,19 @@ async function switchChannelInHeader(page: Page, channelId: string): Promise<voi
   await switchChannel.click();
   const option = page.locator(`[data-testid="nav-channel-option"][data-channel-id="${channelId}"]:visible`).first();
   await expect(option).toBeVisible({ timeout: 30000 });
+  // The switch is a Server Action whose response sets the session cookie: see
+  // it take effect on this page (the menu closes) before navigating away
   await option.click();
-  await expect(page.locator(`[data-testid="nav-channel-option"][data-channel-id="${channelId}"]`).first()).toHaveAttribute('aria-checked', 'true', { timeout: 30000 });
+  const activeChannel = page.locator('[data-testid="nav-active-channel"]:visible').first();
+  await expect(async () => {
+    if (!(await activeChannel.isVisible())) {
+      const back = page.locator('[data-testid="nav-menu-back"]:visible').first();
+      if (await back.isVisible()) await back.click();
+      else await page.locator('[data-testid="nav-menu-trigger"]:visible').first().click({ timeout: 3000 });
+    }
+    await expect(activeChannel).toHaveAttribute('href', new RegExp(`/channels/${channelId}$`), { timeout: 3000 });
+  }).toPass({ timeout: 45000 });
+  await page.keyboard.press('Escape');
 }
 
 /** Uploads the clip in single mode; returns the new video id and the channelId header initiate was sent with. */
