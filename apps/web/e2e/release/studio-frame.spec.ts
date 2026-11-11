@@ -26,7 +26,8 @@ test.describe('Release: Studio frame', () => {
     const studio = `${target().web}/en/studio/${channelId}`;
     await page.goto(`${studio}/dashboard`);
 
-    for (const item of ['dashboard', 'content', 'analytics', 'comments', 'playlists', 'customisation', 'settings']) {
+    // Comments and Live are hidden until they have a creator page (#771)
+    for (const item of ['dashboard', 'content', 'analytics', 'playlists', 'customisation', 'settings']) {
       await expect(page.getByTestId(`studio-nav-${item}`)).toBeVisible();
     }
     await expect(page.getByTestId('studio-nav-dashboard')).toHaveAttribute('aria-current', 'page');
@@ -52,8 +53,11 @@ test.describe('Release: Studio frame', () => {
     const { channelId } = await studioOwner(page, 'rel-studio-ar', 'ar');
     await page.goto(`${target().web}/ar/studio/${channelId}/dashboard`);
     await expect(page.getByTestId('studio-frame')).toBeVisible();
-    const box = await page.locator('aside').boundingBox();
-    const width = page.viewportSize()?.width ?? 0;
-    expect((box?.x ?? 0) + (box?.width ?? 0)).toBeGreaterThan(width - 2);
+    // Studio's rail sits on the inline start (right) of Studio's content; the site's own rail may sit beyond it
+    const frame = page.getByTestId('studio-frame');
+    const rail = await frame.locator('aside').boundingBox();
+    const main = await frame.locator('main').boundingBox();
+    expect(rail && main, 'Studio rail and content').toBeTruthy();
+    expect(rail!.x).toBeGreaterThanOrEqual(main!.x + main!.width - 2);
   });
 });

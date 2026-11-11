@@ -178,7 +178,7 @@ test.describe('Release: SSO journey across every app', () => {
       await consent();
       // Studio deep link (no channel in it; the old /dashboard/videos 301s here)
       const studio = `${target().web}/${locale}/studio/go/content/videos`;
-      const inStudio = (u: string) => new RegExp(`^/${locale}/studio/[^/]+/content/videos$`).test(new URL(u).pathname);
+      const inStudio = (u: string) => new RegExp(`^/${locale}/studio/(?!go/)[^/]+/content/videos$`).test(new URL(u).pathname);
       await page.goto(studio);
       await expect(page).toHaveURL(new RegExp(`^${target().auth}`), { timeout: 30000 }).catch(() => {});
       const deepLinkSignIn = await onSignInForm(page);
