@@ -11,7 +11,7 @@
  * elsewhere (a saved view, Clear) re-mounts the uncontrolled fields while the
  * box being typed in keeps its focus.
  */
-import { forwardRef, useId } from 'react';
+import { useId } from 'react';
 import { useLanguage } from '@/i18n/I18nProvider';
 import type { FilterField } from '@/components/content/FilterForm';
 import { Autocomplete } from '@/components/search/Autocomplete';
@@ -30,6 +30,8 @@ interface FiltersBarProps {
   /** Bump to re-mount the fields after a change made outside the form. */
   resetKey?: number;
   testId: string;
+  /** The form element (the list focuses its search box with `/`). */
+  formRef?: React.Ref<HTMLFormElement>;
 }
 
 function fieldText(field: FilterField, value: string, on: string): string {
@@ -38,7 +40,7 @@ function fieldText(field: FilterField, value: string, on: string): string {
   return value;
 }
 
-export const FiltersBar = forwardRef<HTMLFormElement, FiltersBarProps>(function FiltersBar({ label, fields, values, onChange, onText, onClear, resetKey = 0, testId }, ref) {
+export function FiltersBar({ label, fields, values, onChange, onText, onClear, resetKey = 0, testId, formRef }: FiltersBarProps) {
   const { t } = useLanguage();
   const id = useId();
   const textNames = new Set(fields.filter((f) => f.kind === 'search').map((f) => f.name));
@@ -58,7 +60,7 @@ export const FiltersBar = forwardRef<HTMLFormElement, FiltersBarProps>(function 
   return (
     <div className="mb-4 space-y-3">
       <form
-        ref={ref}
+        ref={formRef}
         key={key}
         role="search"
         aria-label={label}
@@ -156,4 +158,4 @@ export const FiltersBar = forwardRef<HTMLFormElement, FiltersBarProps>(function 
       )}
     </div>
   );
-});
+}
