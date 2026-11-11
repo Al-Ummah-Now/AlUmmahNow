@@ -15,6 +15,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { target } from './targets';
 import { apiFetch, createProfile, signUpOnWeb, type WebUser } from './web-session';
 import { grantCreatorTier } from './creator-tier';
+import { submitNewChannelInMenu } from './account-menu';
 
 test.use({ trace: 'off' });
 
@@ -23,15 +24,7 @@ const CLIP = path.join(__dirname, '..', 'test-fixtures', 'e2e-sample-40s.mp4');
 async function createChannelInMenu(page: Page, user: WebUser, name: string): Promise<string> {
   await page.context().addCookies([{ name: 'aun_consent', value: `v1.a0.e0.p0.${Date.now()}`, url: target().web, sameSite: 'Lax' }]);
   await page.goto(`${target().web}/en`);
-  await page.getByTestId('nav-menu-trigger').click();
-  const switchChannel = page.getByTestId('nav-switch-channel');
-  await switchChannel.or(page.getByTestId('nav-create-channel')).first().waitFor();
-  if (await switchChannel.isVisible()) await switchChannel.click();
-  await page.getByTestId('nav-create-channel').click();
-  const nameInput = page.locator('[role="menu"] input[type="text"]').first();
-  await nameInput.fill(name);
-  await nameInput.press('Enter');
-  await expect(nameInput).toBeHidden({ timeout: 30000 });
+  await submitNewChannelInMenu(page, name);
   let channelId = '';
   await expect
     .poll(async () => {
@@ -100,8 +93,10 @@ test.describe('Release: single and bulk uploads behave the same', () => {
       for (const v of ownerView) {
         if (v.uploadStatus !== 'ready') {
           expect(v.thumbnailUrl, `${v.title}: thumbnail URL before ready`).toBeFalsy();
-          const visitor = (await channelList(channelId)).map((x) => x.id);
-          expect(visitor, `${v.title} is listed to a visitor before it is ready`).not.toContain(v.id);
+          // The clip may become ready between the owner's read and the visitor's: what the
+          // visitor's own list says about it is what counts (a ready item is allowed)
+          const seen = (await channelList(channelId)).find((x) => x.id === v.id);
+          expect(seen?.uploadStatus ?? 'not listed', `${v.title} is listed to a visitor before it is ready`).toMatch(/^(not listed|ready)$/);
         }
       }
 

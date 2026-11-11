@@ -7,7 +7,6 @@
  * stay compact, RTL mirrors the columns, and header items never overlap.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { target } from './targets';
 import { findPlayableVideo, NO_PLAYABLE_VIDEO, watchUrl } from './videos';
 import { createProfile, signUpOnWeb, type Locale } from './web-session';
 import { grantCreatorTier } from './creator-tier';
@@ -154,12 +153,9 @@ async function checkAllWidths(page: Page, videoId: string, locale: Locale): Prom
   }
 }
 
+/** The seeded lecture: its channel has other seeded lectures, so the related column is never empty. */
 async function videoWithRelated(): Promise<string | null> {
-  const video = await findPlayableVideo();
-  if (!video) return null;
-  const res = await fetch(`${target().api}/api/videos?limit=2`);
-  const { data = [] } = (await res.json()) as { data?: Array<{ id: string }> };
-  return data.some((v) => v.id !== video.id) ? video.id : null;
+  return (await findPlayableVideo())?.id ?? null;
 }
 
 test.describe('Release: watch page and header layout, tablet to desktop', () => {

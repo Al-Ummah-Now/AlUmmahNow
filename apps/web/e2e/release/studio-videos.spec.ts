@@ -2,6 +2,7 @@
 import { expect, test } from '@playwright/test';
 import { skipUntilStudioDeployed, studioOwner } from './studio';
 import { target } from './targets';
+import { expectHydrated } from './web-session';
 
 // Sign-in pages carry the test password: never record them
 test.use({ trace: 'off', video: 'off' });
@@ -15,16 +16,19 @@ test.describe('Release: Studio Videos tab', () => {
     await page.goto(url);
     await expect(page.getByTestId('studio-videos-empty')).toBeVisible();
 
+    // Clicks and typing before React has hydrated the controls are lost (WebKit)
+    await expectHydrated(page.getByTestId('studio-status-failed'));
     await page.getByTestId('studio-status-failed').click();
     await expect(page).toHaveURL(`${url}?status=failed`);
     await expect(page.getByTestId('studio-videos-empty')).toContainText('No failed uploads');
 
     await page.reload();
     await expect(page.getByTestId('studio-status-failed')).toHaveAttribute('aria-pressed', 'true');
-    // The list is rendered by the client: once it shows, the page is hydrated and typing is seen
     await expect(page.getByTestId('studio-videos-empty')).toBeVisible();
 
-    await page.getByTestId('studio-videos-search').fill('nothing here');
+    const search = page.getByTestId('studio-videos-search');
+    await expectHydrated(search);
+    await search.fill('nothing here');
     await expect(page).toHaveURL(/q=nothing/);
     await expect(page.getByTestId('studio-videos-empty')).toContainText('No videos match');
   });

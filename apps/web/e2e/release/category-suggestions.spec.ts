@@ -18,9 +18,8 @@
 import * as path from 'path';
 import { test, expect, type Page, type TestInfo } from '@playwright/test';
 import { promoteToAdmin } from './sink';
-import { releaseEnv, sinkEmail, target, TEST_PASSWORD } from './targets';
-import { apiFetch, completeRegistration, createProfile, signUpOnWeb, type Locale, type WebUser } from './web-session';
-import { fillSecret } from './secret-fill';
+import { releaseEnv, sinkEmail, target } from './targets';
+import { apiFetch, completeRegistration, createProfile, signUpOnWeb, type Locale, type WebUser, submitPasswordSignIn } from './web-session';
 import { grantCreatorTier } from './creator-tier';
 import { createChannelInMenu } from './account-menu';
 
@@ -199,9 +198,7 @@ test.describe('Release: AI category suggestions', () => {
       await adminContext.clearCookies();
       await admin.goto(`${target().adminWeb}/login`);
       await expect(admin).toHaveURL(new RegExp(`^${target().auth}`), { timeout: 30000 });
-      await admin.fill('input[name="email"]', email);
-      await fillSecret(admin.locator('input[name="password"]'), TEST_PASSWORD);
-      await admin.click('button[data-component="button"]');
+      await submitPasswordSignIn(admin, email);
       await expect(admin).toHaveURL(`${target().adminWeb}/dashboard`, { timeout: 30000 });
 
       await admin.goto(`${target().adminWeb}/category-suggestions?view=review&video=${videoId}`);

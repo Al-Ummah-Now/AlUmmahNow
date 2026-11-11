@@ -17,15 +17,7 @@
 import { test, expect, type BrowserContext, type ConsoleMessage, type Page, type Response } from '@playwright/test';
 import { target } from './targets';
 import { watchUrl } from './videos';
-
-/** The first public item of a public list endpoint (any video or channel will do: nothing plays). */
-async function firstPublicId(path: string): Promise<string> {
-  const res = await fetch(`${target().api}${path}`);
-  expect(res.ok, `GET ${path} answered ${res.status}`).toBe(true);
-  const id = ((await res.json()) as { data?: Array<{ id?: string }> }).data?.find((row) => row.id)?.id;
-  expect(id, `GET ${path} listed nothing`).toBeTruthy();
-  return id!;
-}
+import { seeded } from './fixtures';
 
 /** How long a page may stay quiet after the probe before it counts as settled. */
 const SETTLE_MS = 3000;
@@ -73,7 +65,9 @@ test.describe('Release: signed-out visitors get a clean console', () => {
   test('home, watch, channel and search', async ({ browser }) => {
     test.setTimeout(240000);
     const web = target().web;
-    const [videoId, channelId] = await Promise.all([firstPublicId('/api/videos?limit=1'), firstPublicId('/api/channels?limit=1')]);
+    // Seeded fixtures: never the newest item of a shared list (another spec's upload, still encoding)
+    const { videos, lecturesChannelId: channelId } = await seeded();
+    const videoId = videos.landscape.id;
     const pages: Array<[string, string]> = [
       ['home', `${web}/en`],
       ['watch', watchUrl(videoId)],

@@ -7,9 +7,8 @@
  * the UI and fails on any error hop.
  */
 import { test, expect } from '@playwright/test';
-import { sinkEmail, TEST_PASSWORD } from './targets';
-import { completeRegistration, expectNoErrorHop, expectSignedIn, recordNavigations, startSignIn } from './web-session';
-import { fillSecret } from './secret-fill';
+import { sinkEmail } from './targets';
+import { completeRegistration, expectNoErrorHop, expectSignedIn, recordNavigations, startSignIn, submitPasswordSignIn } from './web-session';
 
 // This file signs users in through the auth server: its traces would hold the
 // typed password and email code (fillSecret args, form POST bodies). Trace off.
@@ -29,9 +28,7 @@ test.describe('Release R1: web sign-up and sign-in', () => {
       // Sign-in with no session to fall back on: a full authorize → code → exchange
       await context.clearCookies();
       await startSignIn(page, locale);
-      await page.fill('input[name="email"]', email);
-      await fillSecret(page.locator('input[name="password"]'), TEST_PASSWORD);
-      await page.click('button[data-component="button"]');
+      await submitPasswordSignIn(page, email);
       await expectSignedIn(page, locale);
       expect(page.url()).not.toContain('/auth/error');
 

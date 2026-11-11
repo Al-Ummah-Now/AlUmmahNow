@@ -12,9 +12,8 @@
 import { test, expect, type Page } from '@playwright/test';
 import { adminConfirm, confirmInApp } from './in-app-confirm';
 import { promoteToAdmin } from './sink';
-import { sinkEmail, target, TEST_PASSWORD } from './targets';
-import { completeRegistration, createProfile, signUpOnWeb, type Locale } from './web-session';
-import { fillSecret } from './secret-fill';
+import { sinkEmail, target } from './targets';
+import { completeRegistration, createProfile, signUpOnWeb, type Locale, submitPasswordSignIn } from './web-session';
 
 // Signs in through the auth server: the trace would hold the password and code
 test.use({ trace: 'off' });
@@ -190,8 +189,6 @@ async function signInAsAdmin(page: Page, context: import('@playwright/test').Bro
   await context.clearCookies();
   await page.goto(`${target().adminWeb}/login`);
   await expect(page).toHaveURL(new RegExp(`^${target().auth}`), { timeout: 30000 });
-  await page.fill('input[name="email"]', email);
-  await fillSecret(page.locator('input[name="password"]'), TEST_PASSWORD);
-  await page.click('button[data-component="button"]');
+  await submitPasswordSignIn(page, email);
   await expect(page).toHaveURL(`${target().adminWeb}/dashboard`, { timeout: 30000 });
 }

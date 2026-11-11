@@ -2,7 +2,7 @@
  * Web app session helpers for the release suite. Every spec registers its own
  * sink user through the real UI and OAuth round trip; nothing is seeded.
  */
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 import { fillSecret } from './secret-fill';
 import { readSinkCode } from './sink';
 import { sinkEmail, target, TEST_PASSWORD } from './targets';
@@ -49,17 +49,81 @@ export function expectNoErrorHop(urls: string[]): void {
   expect(bad, `navigation went through an error: ${bad.join(' → ')}`).toEqual([]);
 }
 
+/**
+ * Waits until React has hydrated `locator`'s element (its event handlers are
+ * attached): React keeps the props of every element it hydrated under a
+ * `__reactProps$<id>` key. A click on server-rendered markup before that is
+ * lost or becomes a full page load. Web-first: no sleeps, no networkidle.
+ */
+export async function expectHydrated(locator: Locator, timeout = 30000): Promise<void> {
+  await expect(locator).toBeVisible({ timeout });
+  await expect
+    .poll(() => locator.evaluate((el) => Object.keys(el).some((k) => k.startsWith('__reactProps$'))).catch(() => false), {
+      message: 'the element was never hydrated by React',
+      timeout,
+    })
+    .toBe(true);
+}
+
+/**
+ * The header's account menu trigger. It renders once the client has loaded the
+ * session (a pulse placeholder before that), so it is also the header's
+ * "hydrated and session known" marker.
+ */
+export function menuTrigger(page: Page) {
+  return page.locator('[data-testid="nav-menu-trigger"]:visible').first();
+}
+
+/**
+ * Opens the header's account menu until `item` shows (a click before the
+ * header's handlers are attached is dropped, so it is retried, never slept on).
+ */
+export async function openMenuUntil(page: Page, item: Locator, timeout = 45000): Promise<void> {
+  await expect(async () => {
+    if (!(await item.isVisible())) {
+      const back = page.locator('[data-testid="nav-menu-back"]:visible').first();
+      if (await back.isVisible()) await back.click({ timeout: 5000 });
+      else await menuTrigger(page).click({ timeout: 10000 });
+    }
+    await expect(item).toBeVisible({ timeout: 3000 });
+  }).toPass({ timeout });
+}
+
 /** Opens the anonymous menu and starts sign-in (the login() server action). */
 export async function startSignIn(page: Page, locale: Locale): Promise<void> {
   await page.goto(`${target().web}/${locale}`);
-  await page.locator('button[aria-haspopup="menu"]').first().click();
-  await page.locator('[role="menu"] form button[type="submit"]').first().click();
+  const signIn = page.locator('[role="menu"] form button[type="submit"]:visible').first();
+  await openMenuUntil(page, signIn);
+  await signIn.click();
   await expect(page).toHaveURL(new RegExp(`^${target().auth}`), { timeout: 30000 });
 }
 
-/** The web app is back with a session (the callback redirects with session_updated). */
+/**
+ * Waits until the web app has finished the navigations it makes on its own after
+ * the OAuth callback: /api/callback redirects to the start page (or, for a new
+ * user, /<locale>/profile/create) with ?session_updated=true, and the client then
+ * drops that parameter once it has hydrated. A page.goto before that is
+ * "interrupted by another navigation" (WebKit, Firefox) or lands on a page the
+ * redirect replaces. Every sign-in helper ends here, so specs never wait for it.
+ */
+export async function settleSignIn(page: Page, locale: Locale, timeout = 45000): Promise<void> {
+  const web = new URL(target().web).origin;
+  await expect
+    .poll(
+      () => {
+        const url = new URL(page.url());
+        return url.origin === web && url.pathname.startsWith(`/${locale}`) && !url.searchParams.has('session_updated');
+      },
+      { message: `the web app did not settle after sign-in (at ${page.url()})`, timeout },
+    )
+    .toBe(true);
+  await page.waitForLoadState('load');
+}
+
+/** The web app is back with a session, and done redirecting. */
 export async function expectSignedIn(page: Page, locale: Locale): Promise<void> {
-  await expect(page).toHaveURL(new RegExp(`^${target().web}/${locale}(/|\\?|$)`), { timeout: 30000 });
+  await expect(page).toHaveURL(new RegExp(`^${target().web}/${locale}(/|\\?|$)`), { timeout: 45000 });
+  await settleSignIn(page, locale);
   const cookies = await page.context().cookies(target().web);
   expect(
     cookies.map((c) => c.name).some((n) => /session|access_token/i.test(n)),
@@ -67,18 +131,73 @@ export async function expectSignedIn(page: Page, locale: Locale): Promise<void> 
   ).toBe(true);
 }
 
-/** On the auth server's register form: email + password → code from the sink. */
+/**
+ * Submits the auth server's email-code form and waits until the browser has left
+ * it. The forms are plain HTML (openauth ui/password.tsx): Enter in the field
+ * submits, with none of a button click's actionability waits. A code page that
+ * comes back (the POST was lost) is filled and submitted again, at most twice.
+ */
+export async function submitEmailCode(page: Page, email: string, sentAfter: number): Promise<void> {
+  const code = page.locator('input[name="code"]');
+  await expect(code).toBeVisible({ timeout: 30000 });
+  const value = await readSinkCode(email, 30000, sentAfter);
+  const auth = new URL(target().auth).origin;
+  for (let attempt = 1; ; attempt++) {
+    await fillSecret(code, value);
+    await code.press('Enter');
+    try {
+      await expect.poll(() => new URL(page.url()).origin, { timeout: 20000 }).not.toBe(auth);
+      return;
+    } catch (e) {
+      if (attempt >= 3 || !(await code.isVisible().catch(() => false))) throw e;
+    }
+  }
+}
+
+/**
+ * On the auth server's sign-in form: email + password, submitted with Enter, and
+ * waits until the browser has left the auth server. A sign-in form that comes
+ * back with nothing filled (the POST was lost while the page was still arriving)
+ * is filled and submitted again, at most twice; a wrong password is never retried
+ * (the form comes back with an error, and that fails here).
+ */
+export async function submitPasswordSignIn(page: Page, email: string, password: string = TEST_PASSWORD): Promise<void> {
+  const auth = new URL(target().auth).origin;
+  const emailField = page.locator('input[name="email"]');
+  const passwordField = page.locator('input[name="password"]');
+  for (let attempt = 1; ; attempt++) {
+    await expect(emailField).toBeEditable({ timeout: 30000 });
+    await emailField.fill(email);
+    await fillSecret(passwordField, password);
+    await passwordField.press('Enter');
+    try {
+      await expect.poll(() => new URL(page.url()).origin, { timeout: 20000 }).not.toBe(auth);
+      return;
+    } catch (e) {
+      const error = await page.locator('[data-component="form-alert"]').filter({ hasText: /\S/ }).first().isVisible().catch(() => false);
+      if (attempt >= 3 || error || !(await passwordField.isVisible().catch(() => false))) throw e;
+    }
+  }
+}
+
+/** On the auth server's sign-in form: opens the register form, email + password → code from the sink. */
 export async function completeRegistration(page: Page, email: string): Promise<void> {
   // By href: the link text is Arabic when the auth pages follow the site language (#293).
-  await page.click('a[href*="register"]');
-  await page.fill('input[name="email"]', email);
+  // Clicked until the register form is there: a click while the sign-in form is still
+  // arriving (the /authorize redirects) is lost, and the old wait then filled the
+  // sign-in form's own email/password fields (#753, #798)
+  const register = page.locator('a[href*="register"]').first();
+  const repeat = page.locator('input[name="repeat"]');
+  await expect(async () => {
+    if (!(await repeat.isVisible())) await register.click({ timeout: 10000 });
+    await expect(repeat).toBeVisible({ timeout: 5000 });
+  }).toPass({ timeout: 45000 });
+  await page.locator('input[name="email"]').fill(email);
   await fillSecret(page.locator('input[name="password"]'), TEST_PASSWORD);
-  await fillSecret(page.locator('input[name="repeat"]'), TEST_PASSWORD);
+  await fillSecret(repeat, TEST_PASSWORD);
   const sentAfter = Date.now();
-  await page.click('button[data-component="button"]');
-  await expect(page.locator('input[name="code"]')).toBeVisible({ timeout: 20000 });
-  await fillSecret(page.locator('input[name="code"]'), await readSinkCode(email, 20000, sentAfter));
-  await page.click('button[data-component="button"]');
+  await repeat.press('Enter');
+  await submitEmailCode(page, email, sentAfter);
 }
 
 /** The active account's access token, from the web app's same-origin token endpoint. */
@@ -104,9 +223,7 @@ export async function signUpOnWeb(page: Page, prefix: string, locale: Locale = '
 export async function signInAgain(page: Page, email: string, locale: Locale = 'en'): Promise<WebUser> {
   await page.context().clearCookies();
   await startSignIn(page, locale);
-  await page.fill('input[name="email"]', email);
-  await fillSecret(page.locator('input[name="password"]'), TEST_PASSWORD);
-  await page.click('button[data-component="button"]');
+  await submitPasswordSignIn(page, email);
   await expectSignedIn(page, locale);
   return { email, ...(await webAccessToken(page)) };
 }

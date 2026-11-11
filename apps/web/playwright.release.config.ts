@@ -47,13 +47,18 @@ export default defineConfig({
   testDir: './e2e/release',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
+  // One retry, never more. A test that needs it is reported as flaky (job summary, annotation) and
+  // the nightly 3x run files an issue for it. The nightly run itself has no retries (E2E_RETRIES=0).
+  retries: process.env.CI ? (process.env.E2E_RETRIES === '0' ? 0 : 1) : 0,
   workers: 4,
   timeout: 180000,
   expect: { timeout: 20000 },
   // A second invocation in the same job (the shared-state specs) writes next to the first one's output
   outputDir: `test-results${OUTPUT_SUFFIX}`,
-  reporter: process.env.CI ? [['github'], ['list'], ['html', { outputFolder: `release-report${OUTPUT_SUFFIX}`, open: 'never' }]] : [['list']],
+  // outcome-reporter: failed and flaky tests in the job summary, release-outcomes*.json for the nightly job
+  reporter: process.env.CI
+    ? [['github'], ['list'], ['html', { outputFolder: `release-report${OUTPUT_SUFFIX}`, open: 'never' }], ['./e2e/release/outcome-reporter.ts']]
+    : [['list'], ['./e2e/release/outcome-reporter.ts']],
   use: {
     actionTimeout: 15000,
     navigationTimeout: 30000,

@@ -1,0 +1,68 @@
+name: Release regressions nightly (3x)
+
+# The flake hunt: every night the release E2E suite runs against QA with every
+# test repeated 3 times and no retries (release-e2e.yml, repeat: 3). Any test that
+# is not 3/3 is listed in one issue (label e2e-flaky-nightly), created or updated
+# by scripts/ci/nightly-flaky-issue.ts; a night where everything is 3/3 closes it.
+# A flaky test is a defect: fix it, or quarantine it with an issue and an owner
+# (scripts/ci/check-quarantine.ts). Retries in the gate stay at one.
+
+on:
+  schedule:
+    # 02:30 UTC, outside the working day's PR traffic on QA
+    - cron: '30 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-e2e-nightly
+  cancel-in-progress: false
+
+jobs:
+  suite:
+    name: Suite x3 (qa)
+    permissions:
+      contents: write # release-e2e.yml's qa-global lock is a git ref
+      actions: read
+    uses: ./.github/workflows/release-e2e.yml
+    with:
+      env: qa
+      repeat: 3
+    secrets:
+      E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET_QA }}
+      TEST_PROMOTE_SECRET: ${{ secrets.TEST_PROMOTE_SECRET_QA }}
+
+  report:
+    name: File tests that are not 3/3
+    needs: suite
+    if: always() && needs.suite.result != 'cancelled'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/ci
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-outcomes-qa
+          path: outcomes
+        continue-on-error: true # none at all is reported by the script as a failure
+
+      - name: Create or update the flaky-tests issue
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          node --experimental-strip-types --no-warnings scripts/ci/nightly-flaky-issue.ts
+          --repeat 3 --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          outcomes/release-outcomes.json outcomes/release-outcomes-shared-state.json

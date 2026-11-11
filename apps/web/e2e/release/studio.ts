@@ -1,6 +1,6 @@
 /** Shared helpers for the Studio release specs. */
 import { expect, test } from '@playwright/test';
-import { apiFetch, createProfile, signUpOnWeb, type Locale, type WebUser } from './web-session';
+import { apiFetch, createProfile, menuTrigger, signUpOnWeb, type Locale, type WebUser } from './web-session';
 import { target } from './targets';
 import { grantCreatorTier } from './creator-tier';
 import type { Page } from '@playwright/test';
@@ -15,18 +15,15 @@ export async function skipUntilStudioDeployed(): Promise<void> {
 }
 
 /**
- * Right after sign-up the web app still makes one client-side hop (the callback's
- * ?session_updated=true, or /profile/create before the profile exists), which
- * interrupts the spec's next page.goto (WebKit/Firefox flakes on stage). Land on
- * the home page and let that hop finish first.
+ * After the spec changed the account behind the app's back (profile, tier and
+ * channel made through the API), loads the home page and waits until the header
+ * has loaded that session (its account menu shows), so the next page.goto starts
+ * from a settled page. The post-sign-up redirect itself is waited for by
+ * signUpOnWeb (web-session.ts settleSignIn).
  */
 export async function settleSession(page: Page, locale: Locale = 'en'): Promise<void> {
-  await page.goto(`${target().web}/${locale}`).catch((e: unknown) => {
-    if (!/interrupted by another navigation/.test(String(e))) throw e;
-  });
-  await page.waitForLoadState('load');
-  await expect.poll(() => new URL(page.url()).search.includes('session_updated') || new URL(page.url()).pathname.includes('/profile/create'), { timeout: 15000 }).toBe(false);
-  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.goto(`${target().web}/${locale}`);
+  await expect(menuTrigger(page)).toBeVisible({ timeout: 45000 });
 }
 
 export async function studioOwner(page: Page, prefix: string, locale: Locale = 'en'): Promise<{ user: WebUser; channelId: string }> {

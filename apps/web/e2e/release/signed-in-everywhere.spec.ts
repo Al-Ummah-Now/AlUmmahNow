@@ -24,7 +24,7 @@
 import { test, expect, type APIRequestContext, type BrowserContext, type Page } from '@playwright/test';
 import { clickAccountMenuItem } from './account-menu';
 import { sinkEmail, target } from './targets';
-import { completeRegistration, createProfile, signUpOnWeb, type WebUser } from './web-session';
+import { completeRegistration, createProfile, settleSignIn, signUpOnWeb, type WebUser } from './web-session';
 
 // This file signs users in through the auth server: its traces would hold the
 // typed password and email code (fillSecret args, form POST bodies). Trace off.
@@ -181,7 +181,7 @@ async function addAccountB(page: Page, prefix: string): Promise<WebUser> {
   await expect(page.locator('input[name="password"]')).toBeVisible({ timeout: 20000 });
   const email = sinkEmail(prefix);
   await completeRegistration(page, email);
-  await page.waitForURL((u) => u.origin === target().web && !u.pathname.startsWith('/api/'), { timeout: 30000 });
+  await settleSignIn(page, 'en');
   const userId = await videosUserId(page);
   const b: WebUser = { email, userId, accessToken: '' };
   const token = await page.evaluate(async () => ((await (await fetch('/api/auth/token')).json()) as { accessToken?: string }).accessToken ?? '');

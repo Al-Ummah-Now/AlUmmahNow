@@ -18,9 +18,9 @@
  * lacking prompt=login). Stage release runs never skip.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { clickAccountMenuItem } from './account-menu';
+import { clickAccountMenuItem, submitNewChannelInMenu } from './account-menu';
 import { sinkEmail, target } from './targets';
-import { completeRegistration, createProfile, expectNoErrorHop, recordNavigations, signUpOnWeb, webAccessToken } from './web-session';
+import { completeRegistration, createProfile, expectNoErrorHop, openMenuUntil, recordNavigations, settleSignIn, signUpOnWeb, webAccessToken } from './web-session';
 import { grantCreatorTier } from './creator-tier';
 
 // This file signs users in through the auth server: its traces would hold the
@@ -32,11 +32,7 @@ const BROWSER_COOKIE_LIMIT = 4096;
 /** Opens the header's account menu (retried until the header has hydrated). */
 async function openAccountMenu(page: Page): Promise<void> {
   // Builds before the submenu list accounts on the first level
-  const accounts = page.locator('[data-testid="nav-switch-account"]:visible, [data-testid="nav-account"]:visible');
-  await expect(async () => {
-    if (!(await accounts.first().isVisible())) await page.locator('[data-testid="nav-menu-trigger"]:visible').first().click();
-    await expect(accounts.first()).toBeVisible({ timeout: 3000 });
-  }).toPass({ timeout: 30000 });
+  await openMenuUntil(page, page.locator('[data-testid="nav-switch-account"]:visible, [data-testid="nav-account"]:visible').first());
 }
 
 /**
@@ -47,15 +43,7 @@ async function openAccountMenu(page: Page): Promise<void> {
 async function createChannelsInMenu(page: Page, prefix: string, count: number): Promise<void> {
   for (let i = 1; i <= count; i++) {
     await page.goto(`${target().web}/en`, { waitUntil: 'load' });
-    await openAccountMenu(page);
-    const switchChannel = page.locator('[data-testid="nav-switch-channel"]:visible').first();
-    if (await switchChannel.isVisible()) await switchChannel.click();
-    await page.locator('[data-testid="nav-create-channel"]:visible').first().click();
-    const nameInput = page.locator('[role="menu"] input[type="text"]:visible').first();
-    await nameInput.fill(`Release E2E ${prefix} channel ${i} ${Date.now().toString(36)}`);
-    await nameInput.press('Enter');
-    // The form closes once the channel exists and the session's channels are reloaded
-    await expect(nameInput).toBeHidden({ timeout: 30000 });
+    await submitNewChannelInMenu(page, `Release E2E ${prefix} channel ${i} ${Date.now().toString(36)}`);
   }
 }
 
@@ -98,6 +86,8 @@ test.describe('Release: several accounts at once', () => {
   });
 
   test('add a second account: the switcher lists both, switching works, signing out of one keeps the other', async ({ page }) => {
+    // Two sign-ups, two tier grants and six channels made in the UI: about two minutes on stage
+    test.setTimeout(300000);
     const a = await signUpOnWeb(page, 'rel-multi-a');
     await createProfile(a);
     // Uploading and creating channels are by invitation: an admin makes the new user a Creator
@@ -120,7 +110,7 @@ test.describe('Release: several accounts at once', () => {
     const navigations = recordNavigations(page);
     const bEmail = sinkEmail('rel-multi-b');
     await completeRegistration(page, bEmail);
-    await page.waitForURL((u) => u.origin === target().web && !u.pathname.startsWith('/api/'), { timeout: 30000 });
+    await settleSignIn(page, 'en');
     expectNoErrorHop(navigations);
     const b = { email: bEmail, ...(await webAccessToken(page)) };
     expect(b.userId).not.toBe(a.userId);

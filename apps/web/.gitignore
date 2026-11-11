@@ -9,3 +9,4 @@ e2e/.auth/
 .env.test.local
 test-results-player/
 playwright-report-player/
+release-outcomes*.json
