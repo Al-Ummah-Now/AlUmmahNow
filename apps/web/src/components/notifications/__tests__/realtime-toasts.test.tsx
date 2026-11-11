@@ -58,7 +58,7 @@ describe('NotificationCenter toasts', () => {
     expect(toasts).toHaveLength(1);
     expect(toasts[0]).toHaveAttribute('data-count', '3');
     expect(within(toasts[0]).getByTestId('realtime-toast-message')).toHaveTextContent('3 videos finished processing');
-    expect(within(toasts[0]).getByTestId('realtime-toast-action')).toHaveAttribute('href', '/en/dashboard/videos');
+    expect(within(toasts[0]).getByTestId('realtime-toast-action')).toHaveAttribute('href', '/en/studio/go/content/videos');
     expect(within(toasts[0]).getByTestId('realtime-toast-action')).toHaveTextContent('View all');
   });
 
@@ -127,7 +127,7 @@ describe('NotificationCenter toasts', () => {
     [1, 2].forEach((n) => push(ready(n)));
     const toast = screen.getByTestId('realtime-toast');
     expect(toast).toHaveTextContent('اكتملت معالجة مقطعي فيديو');
-    expect(within(toast).getByTestId('realtime-toast-action')).toHaveAttribute('href', '/ar/dashboard/videos');
+    expect(within(toast).getByTestId('realtime-toast-action')).toHaveAttribute('href', '/ar/studio/go/content/videos');
     expect(screen.getByRole('button', { name: 'إغلاق الإشعار' })).toBeInTheDocument();
   });
 
