@@ -5,7 +5,7 @@ import { useCallback, useMemo, useRef, useState, useTransition } from 'react';
 import Link from '@/components/AppLink';
 import { useRouter } from 'next/navigation';
 import {
-  BASE, BRAND_NAMES, COMPONENT_PARTS, ELEVATION_NAMES, MATERIAL_VARS, PLAYER_TOKENS, RADIUS_NAMES, brandUsage, linkBrandColors, unlinkedBrandColors, validatePackage,
+  BASE, BRAND_NAMES, COMPONENT_PARTS, ELEVATION_NAMES, MATERIAL_VARS, OPTIONAL_MATERIAL_VARS, PLAYER_TOKENS, RADIUS_NAMES, brandUsage, linkBrandColors, unlinkedBrandColors, validatePackage,
   type Issue, type Mode, type ThemePackage,
 } from '@al-ummah/theme-packages';
 import { useLanguage } from '@/i18n/I18nProvider';
@@ -173,7 +173,8 @@ export function ThemeEditor({ initial, assets: initialAssets, latestVersion: ini
 
   const readOnly = !canEdit;
   const componentNames = Object.keys(COMPONENT_PARTS);
-  const styleFields = MATERIAL_VARS.map(([p]) => p).filter((p) => p.startsWith(`components.${component}.style.`)).map((p) => p.split('.').pop()!);
+  // Optional fields too (dialog line and shadow): an empty one is left out of the package
+  const styleFields = [...MATERIAL_VARS, ...OPTIONAL_MATERIAL_VARS].map(([p]) => p).filter((p) => p.startsWith(`components.${component}.style.`)).map((p) => p.split('.').pop()!);
   const partNames = (group: string) => BASE.parts.filter((p) => p.part.slice(0, p.part.lastIndexOf('.')) === group).map((p) => p.part.slice(p.part.lastIndexOf('.') + 1));
 
   return (

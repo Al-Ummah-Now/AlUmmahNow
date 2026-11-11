@@ -2,7 +2,7 @@
 // (--r-*, --m-*), body fonts and player chrome (--fanous-player-*), all scoped to
 // html[data-theme='<id>'] so several themes can share one stylesheet.
 import { BASE } from './base.generated.ts';
-import { BRAND_NAMES, COMPONENT_PARTS, ELEVATION_NAMES, MATERIAL_VARS, PLAYER_SHARED, PLAYER_TOKENS, RADIUS_NAMES, get } from './components.ts';
+import { BRAND_NAMES, COMPONENT_PARTS, ELEVATION_NAMES, MATERIAL_VARS, OPTIONAL_MATERIAL_VARS, PLAYER_SHARED, PLAYER_TOKENS, RADIUS_NAMES, get } from './components.ts';
 import { kebab, toCss } from './refs.ts';
 import { MODES, type Mode, type ThemePackage } from './types.ts';
 
@@ -123,6 +123,10 @@ ${modeBlock('light')}
 
 function materialsCss(pkg: ThemePackage, assetUrl: (p: string) => string): string {
   const decls = MATERIAL_VARS.map(([path, prop]) => `${prop}:${toCss(String(get(pkg, path)), assetUrl)}`);
+  for (const [path, prop] of OPTIONAL_MATERIAL_VARS) {
+    const value = get(pkg, path);
+    if (value !== undefined && value !== '') decls.push(`${prop}:${toCss(String(value), assetUrl)}`);
+  }
   return `${scopeOf(pkg.id)}{${decls.join(';')}}\n`;
 }
 

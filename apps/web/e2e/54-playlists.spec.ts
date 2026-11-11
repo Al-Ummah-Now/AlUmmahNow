@@ -58,6 +58,9 @@ function managedRow(page: Page, title: string): Locator {
   return page.getByRole('listitem').filter({ has: page.getByRole('heading', { level: 3, name: title, exact: true }) });
 }
 
+/** The playlist name: English and Arabic fields (2026-11-11), or the single Name field the target may still have */
+const nameField = (page: Page) => page.getByRole('textbox', { name: 'Name (English)' }).or(page.getByRole('textbox', { name: 'Name', exact: true })).first();
+
 test.describe('Playlist manager', () => {
   test.use({ storageState: AUTH_STATE.single });
   test.beforeAll(async () => {
@@ -73,8 +76,8 @@ test.describe('Playlist manager', () => {
 
       await page.getByRole('link', { name: 'New playlist' }).click();
       await expect(page.getByRole('heading', { level: 1, name: 'New playlist' })).toBeVisible();
-      await fillStable(page.getByLabel('Name'), title);
-      await page.getByLabel('Description').fill('Created by an E2E test');
+      await fillStable(nameField(page), title);
+      await page.getByRole('textbox', { name: 'Description (English)' }).or(page.getByLabel('Description', { exact: true })).first().fill('Created by an E2E test');
       await expect(page.getByRole('radio', { name: /^Public/ })).toBeChecked();
       await page.getByRole('button', { name: 'Create playlist' }).click();
 
@@ -84,8 +87,8 @@ test.describe('Playlist manager', () => {
       await expect.poll(async () => (await listChannelPlaylists(channelId())).some((p) => p.title === title)).toBe(true);
 
       // Rename + make private
-      await expect(page.getByLabel('Name')).toHaveValue(title);
-      await page.getByLabel('Name').fill(renamed);
+      await expect(nameField(page)).toHaveValue(title);
+      await nameField(page).fill(renamed);
       await page.getByRole('radio', { name: /^Private/ }).check();
       await page.getByTestId('playlist-details-save').click();
       await expect(page.getByText('Changes saved')).toBeVisible();
@@ -118,10 +121,10 @@ test.describe('Playlist manager', () => {
     const { id } = await createPlaylist(owner, channelId(), { title });
     try {
       await page.goto(`/en/settings/channel/${channelId()}/playlists/new`);
-      await fillStable(page.getByLabel('Name'), '   ');
+      await fillStable(nameField(page), '   ');
       await page.getByRole('button', { name: 'Create playlist' }).click();
       // (Next's route announcer is also role=alert)
-      await expect(page.getByRole('alert').filter({ hasText: 'Please enter a playlist name' })).toBeVisible();
+      await expect(page.getByRole('alert').filter({ hasText: /Please enter a playlist name|Enter a name in English or Arabic\./ })).toBeVisible();
       await page.getByRole('button', { name: 'Cancel' }).click();
       await expect(page.getByRole('heading', { level: 1, name: 'Manage Playlists' })).toBeVisible();
       await expect(page.locator('[aria-busy="true"]')).toHaveCount(0, { timeout: PLAYLIST_LIST_TIMEOUT });

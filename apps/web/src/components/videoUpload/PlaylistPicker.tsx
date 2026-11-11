@@ -10,7 +10,7 @@ import { Highlight } from '@/components/ui/Autocomplete';
 import React, { useId, useMemo, useState } from 'react';
 import { ChevronDown, ListVideo, Lock, Plus, X } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
-import { pickLanguage } from '@/lib/format/pick-language';
+import { playlistName } from '@/lib/playlists/playlist-names';
 import { normalizePlaylistTitle } from '@/lib/playlists/playlist-utils';
 import { filterPlaylists, togglePlaylist } from '@/lib/upload/playlist-adds';
 import type { PlaylistWithVideos } from '@/lib/api/playlists';
@@ -75,7 +75,7 @@ export function PlaylistPicker({
   const [isPublic, setIsPublic] = useState(true);
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
 
-  const nameOf = (p: Pick<PlaylistWithVideos, 'name' | 'title'>) => pickLanguage(p.name || p.title || '', lang === 'ar' ? 'ar' : 'en');
+  const nameOf = (p: Pick<PlaylistWithVideos, 'name' | 'title'>) => playlistName(p, lang === 'ar' ? 'ar' : 'en');
   const byId = useMemo(() => new Map(playlists.map((p) => [p.id, p])), [playlists]);
   const chosen = selected.map((pid) => byId.get(pid)).filter((p): p is PlaylistWithVideos => !!p);
   const matches = filterPlaylists(playlists, query);

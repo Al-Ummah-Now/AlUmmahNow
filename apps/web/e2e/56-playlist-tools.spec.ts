@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures';
 import type { Locator, Page } from '@playwright/test';
-import { expectRtl, fillStable, keyboardMoveDown, playlistToolsDeployed } from './test-utils/channel-content';
+import { expectRtl, fillStable, keyboardMoveDown, playlistToolsDeployed, pointerDrag } from './test-utils/channel-content';
 import { ns, useOwnData, type CreatedVideo, type Creator } from './release/builders';
 import { apiFetch, expectHydrated } from './release/web-session';
 
@@ -14,6 +14,14 @@ import { apiFetch, expectHydrated } from './release/web-session';
  *   drag and Move buttons), automatic order, remove
  * - Studio Content › Videos (Video Management moved there, 3883fa94): the
  *   selection's "Add to playlist", to an existing playlist or a new one
+ * - (owner, 2026-11-11) names in English and Arabic; a manual order set right
+ *   in the create form (drag, Alt+arrows, Move buttons) and saved; "Add to
+ *   playlist" from a selection searches the channel's playlists (autocomplete,
+ *   several at once) and appends to a manual playlist; its New playlist has no
+ *   video picker; the dialog's edge is one continuous border
+ *
+ * UI that lands with a pull request skips, with a reason, until the target
+ * runs it (E2E on a pull request may test the deployed site).
  *
  * Own data (release/builders.ts): a creator with one channel and three
  * private videos (not waited on: the tools list videos still processing too),
@@ -34,7 +42,7 @@ const tag = () => `E2E PLT ${ns()} ${Date.now().toString(36)}`;
 /** #909: GET /api/playlists?channelId= scans every playlist on QA */
 const PLAYLIST_LIST_MS = 60000;
 
-interface PlaylistRecord { id: string; title: string; videos: string[]; sortMode?: string; sortField?: string; sortDirection?: string; isPublic?: boolean }
+interface PlaylistRecord { id: string; title: string; titleLocalized?: Record<string, string>; videos: string[]; sortMode?: string; sortField?: string; sortDirection?: string; isPublic?: boolean }
 
 async function api<T>(method: string, path: string, body?: unknown): Promise<{ status: number; body: T }> {
   const res = await apiFetch(owner.user, path, {
@@ -60,6 +68,8 @@ function adopt(id: string) {
 /** The picker row of a video (searched by its title) */
 async function pick(scope: Locator, video: CreatedVideo) {
   await fillStable(scope.getByTestId('picker-search'), video.title);
+  // The search is an autocomplete: close its suggestions so they don't cover the grid
+  await scope.getByTestId('picker-search').press('Escape');
   const row = scope.locator(`[data-testid="picker-video"][data-video-id="${video.id}"]`);
   await expect(row).toBeVisible({ timeout: 30000 });
   await row.getByRole('checkbox').check();
@@ -70,17 +80,41 @@ async function pick(scope: Locator, video: CreatedVideo) {
  * Opens Studio's video list on the tab the videos are in now (Processing until
  * they are encoded, then Published) and waits for their select boxes
  */
-async function openStudioWith(page: Page, wanted: CreatedVideo[]) {
+async function openStudioWith(page: Page, wanted: CreatedVideo[], locale: 'en' | 'ar' = 'en') {
   const select = (video: CreatedVideo) => page.locator(`[data-testid="studio-video-select"][data-video-id="${video.id}"]`);
   await expect(async () => {
     const { body } = await api<{ uploadStatus?: string }>('GET', `/api/videos/${wanted[0].id}`);
     const status = body.uploadStatus && body.uploadStatus !== 'ready' ? 'processing' : 'published';
-    await page.goto(`/en/studio/${channelId}/content/videos?status=${status}`);
+    await page.goto(`/${locale}/studio/${channelId}/content/videos?status=${status}`);
     await expect(page.getByTestId('studio-videos-loading')).toHaveCount(0, { timeout: 20000 });
     for (const video of wanted) await expect(select(video)).toBeVisible({ timeout: 5000 });
   }).toPass({ timeout: 90000 });
   for (const video of wanted) await expectHydrated(select(video));
   return select;
+}
+
+/** The create form's order list (manual order before saving) */
+const createOrder = (scope: Locator | Page) => scope.getByTestId('create-order-row').evaluateAll((rows) => rows.map((r) => r.getAttribute('data-video-id')));
+
+/** English and Arabic name fields (owner, 2026-11-11); skips while the target still has one Name field */
+async function skipUntilBilingualForm(scope: Locator | Page) {
+  const english = scope.getByRole('textbox', { name: 'Name (English)' });
+  await expect(english.or(scope.getByRole('textbox', { name: 'Name', exact: true })).first()).toBeVisible({ timeout: 20000 });
+  test.skip(!(await english.isVisible()), 'Bilingual playlist names and ordering in the create form are not deployed on the target yet (they land with the PR that adds them)');
+}
+
+/** The search-and-pick "Add to playlist" dialog (owner, 2026-11-11); skips while the target has the old list */
+async function skipUntilSearchDialog(dialog: Locator) {
+  await expect(dialog.getByTestId('add-to-playlist-new')).toBeVisible({ timeout: 20000 });
+  test.skip(!(await dialog.getByTestId('add-to-playlist-search').isVisible()), 'The search-and-pick Add to playlist dialog is not deployed on the target yet (it lands with the PR that adds it)');
+}
+
+/** The dialog's option for a playlist, found by searching its title (the list loads slowly on QA, #909) */
+async function playlistOption(dialog: Locator, title: string) {
+  await fillStable(dialog.getByRole('combobox', { name: 'Search your playlists' }), title);
+  const option = dialog.getByTestId('add-to-playlist-option').filter({ hasText: title });
+  await expect(option).toBeVisible({ timeout: PLAYLIST_LIST_MS });
+  return option;
 }
 
 const itemOrder = (page: Page) => page.getByTestId('playlist-item').evaluateAll((rows) => rows.map((r) => r.getAttribute('data-video-id')));
@@ -106,8 +140,9 @@ test.describe('Playlist tools', () => {
     }
   });
 
-  test('PLT-001 creates a playlist with picked videos in pick order (en)', async ({ page }) => {
+  test('PLT-001 creates a playlist named in English and Arabic, its picked videos put in order before saving', async ({ page }) => {
     const title = `${tag()} Create`;
+    const arabic = `قائمة ${title.slice(-6)}`;
     await page.goto(`/en/settings/channel/${channelId}/playlists`);
     const newLink = page.getByTestId('new-playlist-link');
     await expectHydrated(newLink);
@@ -115,29 +150,50 @@ test.describe('Playlist tools', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'New playlist' })).toBeVisible();
     const form = page.getByTestId('create-playlist-form');
     await expectHydrated(form.getByTestId('picker-search'));
-    await fillStable(page.getByLabel('Name'), title);
+    await skipUntilBilingualForm(page);
+    await fillStable(page.getByRole('textbox', { name: 'Name (English)' }), title);
+    await fillStable(page.getByRole('textbox', { name: 'Name (Arabic)' }), arabic);
+    await expect(page.getByRole('textbox', { name: 'Name (Arabic)' })).toHaveAttribute('dir', 'rtl');
     await expect(page.getByRole('radio', { name: /Manual/ })).toBeChecked();
 
-    await pick(form, videos[1]);
-    await pick(form, videos[0]);
-    await expect(form.getByTestId('picker-tray-item')).toHaveCount(2);
-    await expect(page.getByTestId('create-playlist-submit')).toHaveText('Create with 2 videos');
+    for (const video of videos) await pick(form, video);
+    await expect.poll(() => createOrder(form)).toEqual([videos[0].id, videos[1].id, videos[2].id]);
+
+    // Manual order before saving: Move down, Alt+Up on a row, and a pointer drag by the handle
+    await form.getByTestId('create-order-row').first().getByTestId('create-order-down').click();
+    await expect.poll(() => createOrder(form)).toEqual([videos[1].id, videos[0].id, videos[2].id]);
+    await form.getByTestId('create-order-handle').last().focus();
+    await page.keyboard.press('Alt+ArrowUp');
+    await expect.poll(() => createOrder(form)).toEqual([videos[1].id, videos[2].id, videos[0].id]);
+    await expect(form.getByTestId('create-order-handle').nth(1)).toBeFocused();
+    await pointerDrag(page, form.getByTestId('create-order-handle').first(), form.getByTestId('create-order-row').last());
+    await expect.poll(() => createOrder(form)).toEqual([videos[2].id, videos[0].id, videos[1].id]);
+    // The numbers follow, live
+    await expect(form.getByTestId('create-order-position')).toHaveText(['1', '2', '3']);
+    await expect(page.getByTestId('create-playlist-submit')).toHaveText('Create with 3 videos');
     await page.getByTestId('create-playlist-submit').click();
 
-    // Lands on the new playlist's editor with the videos in pick order
+    // Lands on the new playlist's editor with the videos in that order, saved
     const editorUrl = new RegExp(`/en/settings/channel/${channelId}/playlists/([\\w-]+)$`);
     await expect(page).toHaveURL(editorUrl, { timeout: 30000 });
     const id = editorUrl.exec(page.url())![1];
     adopt(id);
     await expect(page.getByTestId('playlist-editor')).toBeVisible({ timeout: 30000 });
-    await expect.poll(() => itemOrder(page)).toEqual([videos[1].id, videos[0].id]);
-    await expect(page.getByTestId('playlist-item-count')).toHaveText('2 videos');
+    const order = [videos[2].id, videos[0].id, videos[1].id];
+    await expect.poll(() => itemOrder(page)).toEqual(order);
+    await expect(page.getByTestId('playlist-item-count')).toHaveText('3 videos');
     // Still there: the page stays on the editor (it snapped back to an empty New playlist form, #995)
     await expect(page).toHaveURL(editorUrl);
     const record = await stored(id);
     expect(record.title).toBe(title);
-    expect(record.videos).toEqual([videos[1].id, videos[0].id]);
+    expect(record.titleLocalized).toEqual({ en: title, ar: arabic });
+    expect(record.videos).toEqual(order);
     expect(record.sortMode ?? 'manual').toBe('manual');
+    // Each viewer sees their language
+    await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
+    await page.goto(`/ar/settings/channel/${channelId}/playlists/${id}`);
+    await expectRtl(page);
+    await expect(page.getByRole('heading', { level: 1, name: arabic })).toBeVisible({ timeout: 30000 });
   });
 
   test('PLT-002 editor: add with the picker, reorder by keyboard and buttons, automatic order, remove', async ({ page }) => {
@@ -159,6 +215,7 @@ test.describe('Playlist tools', () => {
     // Adding again is idempotent: the picker marks them as in the playlist
     await page.getByTestId('playlist-add-videos').click();
     await fillStable(panel.getByTestId('picker-search'), videos[0].title);
+    await panel.getByTestId('picker-search').press('Escape');
     await expect(panel.locator(`[data-testid="picker-video"][data-video-id="${videos[0].id}"]`).getByRole('checkbox')).toBeDisabled({ timeout: 30000 });
     await panel.getByRole('button', { name: 'Cancel' }).first().click();
 
@@ -171,6 +228,17 @@ test.describe('Playlist tools', () => {
     await page.getByTestId('playlist-item').last().getByTestId('playlist-item-up').click();
     await expect.poll(() => itemOrder(page)).toEqual([videos[1].id, videos[2].id, videos[0].id]);
     await expect(page.getByText('Order saved')).toBeVisible();
+
+    // Alt+Down / Alt+Up on a row (the bulk-rename shortcut), where the target has it
+    if (await page.getByText(/press Alt with the Up or Down arrow/).isVisible()) {
+      await page.getByTestId('playlist-item-handle').first().focus();
+      await page.keyboard.press('Alt+ArrowDown');
+      await expect.poll(() => itemOrder(page)).toEqual([videos[2].id, videos[1].id, videos[0].id]);
+      await expect.poll(async () => (await stored(id)).videos).toEqual([videos[2].id, videos[1].id, videos[0].id]);
+      await page.getByTestId('playlist-item-handle').nth(1).focus();
+      await page.keyboard.press('Alt+ArrowUp');
+      await expect.poll(async () => (await stored(id)).videos).toEqual([videos[1].id, videos[2].id, videos[0].id]);
+    }
 
     // Automatic: title A to Z (no handles), then back to manual keeps that order
     await page.getByRole('radio', { name: /Automatic/ }).check();
@@ -195,31 +263,49 @@ test.describe('Playlist tools', () => {
     await expect.poll(async () => (await stored(id)).videos).toEqual(byTitle.slice(1));
   });
 
-  test('PLT-003 Studio videos: create a playlist inline from the selection', async ({ page }) => {
+  test('PLT-003 Studio videos: New playlist from the selection, named in both languages and ordered there (no video picker)', async ({ page }) => {
     const newTitle = `${tag()} Inline`;
-    const select = await openStudioWith(page, [videos[0]]);
+    const select = await openStudioWith(page, [videos[0], videos[1]]);
+    await select(videos[1]).check();
     await select(videos[0]).check();
     await page.getByTestId('studio-bulk-playlist').click();
     const dialog = page.getByTestId('add-to-playlist-dialog');
-    await expect(dialog.getByRole('heading', { name: 'Add 1 video to playlists' })).toBeVisible();
-    // New playlist inline: its picker starts with the selected video
+    await expect(dialog.getByRole('heading', { name: 'Add 2 videos to playlists' })).toBeVisible();
+    await skipUntilSearchDialog(dialog);
+    // The videos are already chosen: no video picker here
+    await expect(dialog.getByTestId('video-picker')).toHaveCount(0);
     await dialog.getByTestId('add-to-playlist-new').click();
-    await expect(dialog.getByTestId('picker-tray-item')).toHaveCount(1);
-    await fillStable(dialog.getByLabel('Name'), newTitle);
+    await expect(dialog.getByRole('heading', { name: 'New playlist with 2 videos' })).toBeVisible();
+    await expect(dialog.getByText('Videos (optional)')).toHaveCount(0);
+    await expect(dialog.getByTestId('video-picker')).toHaveCount(0);
+    const selected = await createOrder(dialog);
+    expect([...selected].sort()).toEqual([videos[0].id, videos[1].id].sort());
+    // Back to the playlists keeps nothing half made
+    await dialog.getByRole('button', { name: 'Back to playlists' }).click();
+    await expect(dialog.getByRole('heading', { name: 'Add 2 videos to playlists' })).toBeVisible();
+    await dialog.getByTestId('add-to-playlist-new').click();
+    // Ordered right there, then saved in that order
+    await dialog.getByTestId('create-order-row').first().getByTestId('create-order-down').click();
+    const order = [selected[1], selected[0]];
+    await expect.poll(() => createOrder(dialog)).toEqual(order);
+    await fillStable(dialog.getByRole('textbox', { name: 'Name (English)' }), newTitle);
+    await fillStable(dialog.getByRole('textbox', { name: 'Name (Arabic)' }), 'قائمة جديدة');
     await dialog.getByRole('radio', { name: /^Private/ }).check();
     await dialog.getByTestId('create-playlist-submit').click();
-    await expect(dialog.getByTestId('bulk-add-notice')).toContainText(`Added 1 video to ${newTitle}.`);
-    // The new playlist heads the dialog's list, ticked
-    const created = dialog.locator('label').filter({ hasText: newTitle }).getByTestId('add-to-playlist-option');
-    await expect(created).toBeChecked({ timeout: PLAYLIST_LIST_MS });
-    const id = (await created.getAttribute('data-playlist-id'))!;
+    await expect(dialog.getByTestId('bulk-add-notice')).toContainText(`Added 2 videos to ${newTitle}.`);
+    // The new playlist joins the dialog's list, marked as done
+    const created = await playlistOption(dialog, newTitle);
+    await expect(created).toHaveAttribute('aria-checked', 'true');
+    const id = (await created.getAttribute('data-option-id'))!;
     adopt(id);
-    await expect.poll(async () => (await stored(id)).videos).toEqual([videos[0].id]);
-    expect((await stored(id)).title).toBe(newTitle);
-    expect((await stored(id)).isPublic).toBe(false);
+    await expect.poll(async () => (await stored(id)).videos).toEqual(order);
+    const record = await stored(id);
+    expect(record.title).toBe(newTitle);
+    expect(record.titleLocalized).toEqual({ en: newTitle, ar: 'قائمة جديدة' });
+    expect(record.isPublic).toBe(false);
   });
 
-  test('PLT-005 Studio videos: add the selection to a playlist', async ({ page }) => {
+  test('PLT-005 Studio videos: search and add the selection to a manual playlist (appended at the end)', async ({ page }) => {
     const title = `${tag()} Studio`;
     const id = await data.createPlaylist(owner.user, channelId, { title, videoIds: [videos[0].id] });
     const select = await openStudioWith(page, [videos[0], videos[1]]);
@@ -230,9 +316,15 @@ test.describe('Playlist tools', () => {
     const dialog = page.getByTestId('add-to-playlist-dialog');
     await expect(dialog.getByRole('heading', { name: 'Add 2 videos to playlists' })).toBeVisible();
     // The dialog lists the channel's playlists once they have loaded (#909: slow on QA)
-    const option = dialog.locator(`[data-testid="add-to-playlist-option"][data-playlist-id="${id}"]`);
-    await expect(option).toBeEnabled({ timeout: PLAYLIST_LIST_MS });
-    await option.check();
+    await skipUntilSearchDialog(dialog);
+    await expect(dialog.getByTestId('video-picker')).toHaveCount(0);
+    // Search the channel's playlists and tick this one
+    const option = await playlistOption(dialog, title);
+    await expect(option).toHaveAttribute('data-option-id', id);
+    await option.click();
+    await expect(option).toHaveAttribute('aria-checked', 'true');
+    await expect(dialog.getByTestId('add-to-playlist-chosen')).toContainText(title);
+    await expect(dialog.getByTestId('add-to-playlist-submit')).toHaveText('Add to 1 playlist');
     await dialog.getByTestId('add-to-playlist-submit').click();
     await expect(dialog.getByTestId('bulk-add-notice')).toContainText(`Added 1 video to ${title}.`);
     await expect(dialog.getByTestId('bulk-add-notice')).toContainText('1 already in the playlist.');
@@ -247,5 +339,62 @@ test.describe('Playlist tools', () => {
     await expect(page.getByRole('heading', { name: 'الفيديوهات في هذه القائمة' })).toBeVisible();
     await expect(page.getByRole('radio', { name: /يدوي/ })).toBeChecked();
     await expect(page.getByTestId('playlist-add-videos')).toHaveText('إضافة فيديوهات');
+
+    // The Add to playlist dialog in Arabic: translated, right to left, both name fields
+    const select = await openStudioWith(page, [videos[0]], 'ar');
+    await select(videos[0]).check();
+    await page.getByTestId('studio-bulk-playlist').click();
+    const dialog = page.getByTestId('add-to-playlist-dialog');
+    await skipUntilSearchDialog(dialog);
+    await expect(dialog).toHaveAttribute('dir', 'rtl');
+    await expect(dialog.getByRole('heading', { name: 'إضافة فيديو واحد إلى قوائم التشغيل' })).toBeVisible();
+    await expect(dialog.getByRole('combobox', { name: 'ابحث في قوائم التشغيل' })).toBeVisible();
+    await dialog.getByTestId('add-to-playlist-new').click();
+    await expect(dialog.getByRole('heading', { name: 'قائمة تشغيل جديدة بفيديو واحد' })).toBeVisible();
+    await expect(dialog.getByRole('textbox', { name: 'الاسم (بالعربية)' })).toHaveAttribute('dir', 'rtl');
+    await expect(dialog.getByRole('textbox', { name: 'الاسم (بالإنجليزية)' })).toHaveAttribute('dir', 'ltr');
+  });
+
+  test('PLT-006 the dialog fits the viewport, its edge is one border, and option cards read clearly (desktop and phone)', async ({ page }, testInfo) => {
+    for (const size of [{ width: 1366, height: 768 }, { width: 390, height: 844 }]) {
+      await page.setViewportSize(size);
+      const select = await openStudioWith(page, [videos[0]]);
+      await select(videos[0]).check();
+      await page.getByTestId('studio-bulk-playlist').click();
+      const dialog = page.getByTestId('add-to-playlist-dialog');
+      await skipUntilSearchDialog(dialog);
+      await dialog.getByTestId('add-to-playlist-new').click();
+      await expect(dialog.getByTestId('create-playlist-form')).toBeVisible();
+
+      // Inside the viewport, with its actions reachable
+      const box = (await dialog.boundingBox())!;
+      expect(box.y).toBeGreaterThanOrEqual(0);
+      expect(box.y + box.height).toBeLessThanOrEqual(size.height + 1);
+      await dialog.getByTestId('create-playlist-submit').scrollIntoViewIfNeeded();
+      await expect(dialog.getByTestId('create-playlist-submit')).toBeInViewport();
+
+      // The edge is a real border (one continuous line round the corners), not a box-shadow ring
+      const edge = await dialog.evaluate((el) => {
+        const cs = getComputedStyle(el);
+        return { width: cs.borderTopWidth, style: cs.borderTopStyle, radius: cs.borderTopLeftRadius, shadow: cs.boxShadow };
+      });
+      expect(edge.width).toBe('1px');
+      expect(edge.style).toBe('solid');
+      expect(edge.shadow).not.toMatch(/\b0px 0px 0px 1px\b/);
+      // Close-ups of two corners, for review (Firefox and WebKit run this nightly)
+      const r = parseFloat(edge.radius) + 8;
+      for (const [name, x, y] of [['top-start', box.x - 4, box.y - 4], ['bottom-end', box.x + box.width - r + 4, box.y + box.height - r + 4]] as const) {
+        const shot = await page.screenshot({ clip: { x: Math.max(0, x), y: Math.max(0, y), width: r, height: r }, scale: 'device' });
+        await testInfo.attach(`dialog-corner-${name}-${size.width}`, { body: shot, contentType: 'image/png' });
+      }
+
+      // Selected option cards: solid tint, primary border and a check mark
+      const selected = dialog.locator('.ocard[data-checked]').first();
+      await expect(selected.locator('.ocard-mark svg')).toBeVisible();
+      expect(await selected.evaluate((el) => getComputedStyle(el).backgroundImage)).toBe('none');
+      await testInfo.attach(`dialog-${size.width}`, { body: await dialog.screenshot(), contentType: 'image/png' });
+      await page.keyboard.press('Escape');
+      await expect(dialog).toHaveCount(0);
+    }
   });
 });

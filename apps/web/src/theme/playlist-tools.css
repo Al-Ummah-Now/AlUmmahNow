@@ -4,11 +4,6 @@
    depth and radii come from each theme's tokens and materials; logical
    properties keep it right in RTL. */
 
-/* Choice card (visibility, order mode): a visually hidden radio drives it */
-.pl-choice{border:1px solid var(--fanous-color-divider);background:var(--m-control);box-shadow:var(--m-control-edge);transition:background-color 140ms,border-color 140ms,box-shadow 140ms}
-@media(hover:hover){.pl-choice:hover{background:var(--m-hover)}}
-.pl-choice[data-checked]{border-color:transparent;background:linear-gradient(var(--m-sel),var(--m-sel)) padding-box,var(--m-border) border-box;box-shadow:var(--m-card-edge)}
-.pl-choice:has(input:focus-visible){outline:2px solid var(--fanous-color-focus-ring);outline-offset:2px}
 
 /* Checkbox box: a number shows the order a video was chosen in */
 .pl-ck{flex:none}
@@ -52,7 +47,7 @@
 .pl-cover[data-checked]{box-shadow:0 0 0 2px var(--fanous-color-primary),var(--m-thumb-edge)}
 .pl-cover:has(input:focus-visible){outline:2px solid var(--fanous-color-focus-ring);outline-offset:2px}
 
-@media(prefers-reduced-motion:reduce){.pl-choice,.pl-row,.pl-progress span{transition:none}}
-@media(forced-colors:active){.pl-choice,.pl-row,.pl-pill{border:1px solid ButtonText}.pl-choice[data-checked],.pl-row[data-selected]{outline:2px solid Highlight}}
+@media(prefers-reduced-motion:reduce){.pl-row,.pl-progress span{transition:none}}
+@media(forced-colors:active){.pl-row,.pl-pill{border:1px solid ButtonText}.pl-row[data-selected]{outline:2px solid Highlight}}
 /* The native control fills its label, invisible: the pointer (and touch) lands on the real input, while the .ck/.rd sibling draws it */
 .pl-hit{position:absolute;inset:0;z-index:1;width:100%;height:100%;margin:0;opacity:0;cursor:inherit;appearance:none}

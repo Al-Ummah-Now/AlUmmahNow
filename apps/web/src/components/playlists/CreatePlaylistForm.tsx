@@ -1,10 +1,15 @@
 'use client';
 
 /**
- * Create a playlist with its videos in one flow: name, description,
- * visibility, order, and the videos picked from the channel (in the order
- * they were picked). One request creates the playlist and adds the videos;
- * the API validates every id.
+ * Create a playlist with its videos in one flow: name and description in
+ * English and Arabic, visibility, order, and its videos. With a manual order
+ * the videos can be put in order (drag, keyboard, Move buttons) before
+ * saving; that order is saved. One request creates the playlist and adds the
+ * videos; the API validates every id.
+ *
+ * Videos come from the picker (Manage Playlists → New playlist), or, when the
+ * form opens with a selection (Video Management → Add to playlist → New
+ * playlist), are that selection: no picker, just the ordered list.
  *
  * What the caller gets (onCreated):
  *   the new playlist, and what happened to its videos: added, queued for the
@@ -25,7 +30,9 @@ import { reportError } from '@/lib/errors/reporter';
 import PlaylistDetailsFields, { EMPTY_PLAYLIST_DETAILS, type PlaylistDetailsValue } from './PlaylistDetailsFields';
 import VideoPicker, { type PickedVideo } from './VideoPicker';
 import { counted, fill } from './text';
-import { LABEL, NOTICE } from './styles';
+import { LABEL, NOTICE, TEXT } from './styles';
+import SortableVideoList from './SortableVideoList';
+import { pairPayload } from '@/lib/playlists/playlist-names';
 
 export interface CreatedPlaylist {
   playlist: PlaylistWithVideos;
@@ -39,6 +46,12 @@ interface Props {
   channelId: string;
   /** Videos chosen before the form opened (Video Management selection). */
   initialVideos?: PickedVideo[];
+  /** The videos are the selection: no picker (they can still be ordered or taken out). */
+  fixedVideos?: boolean;
+  /** Called as the selection changes (the dialog's title counts it) */
+  onVideosChange?: (videos: PickedVideo[]) => void;
+  /** Label of the cancel button (default "Cancel") */
+  cancelLabel?: string;
   /** Inline create ("Add to playlist"): no description, a shorter picker page. */
   compact?: boolean;
   onCreated: (created: CreatedPlaylist) => void;
@@ -46,19 +59,30 @@ interface Props {
   idPrefix?: string;
 }
 
-export default function CreatePlaylistForm({ channelId, initialVideos, compact, onCreated, onCancel, idPrefix = 'new-playlist' }: Props) {
+export default function CreatePlaylistForm({ channelId, initialVideos, fixedVideos, onVideosChange, cancelLabel, compact, onCreated, onCancel, idPrefix = 'new-playlist' }: Props) {
   const { t } = useLanguage();
   const p = t.playlistTools;
   const [details, setDetails] = useState<PlaylistDetailsValue>(EMPTY_PLAYLIST_DETAILS);
-  const [videos, setVideos] = useState<PickedVideo[]>(initialVideos ?? []);
+  const [videos, setVideosState] = useState<PickedVideo[]>(initialVideos ?? []);
+  const setVideos = (next: PickedVideo[]) => {
+    setVideosState(next);
+    onVideosChange?.(next);
+  };
+  const manual = details.sortMode === 'manual';
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<{ message: string; ref?: string } | null>(null);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    const title = details.title.trim();
+    const name = pairPayload({ en: details.titleEn, ar: details.titleAr });
+    const about = pairPayload({ en: details.descriptionEn, ar: details.descriptionAr });
+    const title = name.base;
     if (!title) {
-      setError({ message: t.playlist.nameRequired });
+      setError({ message: p.nameOneLanguage });
+      return;
+    }
+    if (fixedVideos && videos.length === 0) {
+      setError({ message: p.noVideosChosen });
       return;
     }
     setSaving(true);
@@ -68,7 +92,9 @@ export default function CreatePlaylistForm({ channelId, initialVideos, compact, 
       const answer = await createManagedPlaylist({
         name: title,
         title,
-        description: details.description.trim() || undefined,
+        titleLocalized: name.localized,
+        description: about.base || undefined,
+        descriptionLocalized: about.localized,
         isPublic: details.isPublic,
         sortMode: details.sortMode,
         sortField: details.sortField,
@@ -100,8 +126,26 @@ export default function CreatePlaylistForm({ channelId, initialVideos, compact, 
       <PlaylistDetailsFields value={details} onChange={setDetails} idPrefix={idPrefix} compact={compact} disabled={saving} />
 
       <section aria-labelledby={`${idPrefix}-videos-label`} className="space-y-2">
-        <h3 id={`${idPrefix}-videos-label`} className={LABEL}>{p.addVideosOptional}</h3>
-        <VideoPicker channelId={channelId} selected={videos} onChange={setVideos} idPrefix={`${idPrefix}-picker`} pageSize={compact ? 12 : 24} />
+        {fixedVideos ? (
+          <>
+            <h3 id={`${idPrefix}-videos-label`} className={LABEL}>{p.videosInOrder}</h3>
+            <SortableVideoList videos={videos} onChange={setVideos} manual={manual} removable disabled={saving} labelledBy={`${idPrefix}-videos-label`} testId="create-order" />
+          </>
+        ) : (
+          <>
+            <h3 id={`${idPrefix}-videos-label`} className={LABEL}>{p.addVideosOptional}</h3>
+            <VideoPicker channelId={channelId} selected={videos} onChange={setVideos} idPrefix={`${idPrefix}-picker`} pageSize={compact ? 12 : 24} hideTray={videos.length > 0} />
+            {videos.length > 0 && (
+              <div className="pl-tray space-y-2 rounded-[var(--r-md)] p-3" data-testid="picker-tray">
+                <div className="flex items-center justify-between gap-2">
+                  <h4 id={`${idPrefix}-order-label`} className={`text-sm font-semibold ${TEXT}`}>{p.selectedHeading}</h4>
+                  <button type="button" className="b b-ghost b-sm" onClick={() => setVideos([])} disabled={saving}>{p.clearSelection}</button>
+                </div>
+                <SortableVideoList videos={videos} onChange={setVideos} manual={manual} removable disabled={saving} labelledBy={`${idPrefix}-order-label`} testId="create-order" />
+              </div>
+            )}
+          </>
+        )}
       </section>
 
       {error && (
@@ -117,7 +161,7 @@ export default function CreatePlaylistForm({ channelId, initialVideos, compact, 
       <div className="flex flex-wrap justify-end gap-2">
         {onCancel && (
           <button type="button" className="b b-secondary" onClick={onCancel} disabled={saving}>
-            {t.playlist.upload.cancel}
+            {cancelLabel ?? t.playlist.upload.cancel}
           </button>
         )}
         <button type="submit" className="b b-primary" disabled={saving} data-testid="create-playlist-submit">

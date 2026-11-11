@@ -40,7 +40,8 @@ html[lang=ar] .ct-title{line-height:1.45}
 .ct-topic:hover{background:var(--m-hover);border-color:color-mix(in srgb,var(--fanous-color-primary) 45%,var(--fanous-color-divider))}
 .ct-topic input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
 .ct-topic:has(input:focus-visible){outline:2px solid var(--fanous-color-focus-ring);outline-offset:2px}
-.ct-topic[data-checked]{background:var(--m-sel);border-color:var(--fanous-color-primary);box-shadow:var(--m-sel-edge),var(--m-sel-glow)}
+/* Selected: the shared option-card style (system.css .ocard) */
+.ct-topic[data-checked],.ct-topic[data-checked]:hover{background:color-mix(in srgb,var(--fanous-color-primary) 12%,var(--fanous-color-surface));border-color:var(--fanous-color-primary);box-shadow:inset 0 0 0 1px var(--fanous-color-primary)}
 .ct-topic-icon{flex:none;display:grid;place-items:center;width:34px;height:34px;border-radius:var(--r-md,10px);background:color-mix(in srgb,var(--fanous-color-primary) 14%,transparent);color:var(--fanous-color-link)}
 .ct-topic[data-checked] .ct-topic-icon{background:var(--m-primary);box-shadow:var(--m-primary-edge);color:var(--fanous-color-on-primary)}
 .ct-topic-icon svg{width:18px;height:18px}

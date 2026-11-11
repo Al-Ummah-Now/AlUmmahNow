@@ -4,6 +4,7 @@ import { logger } from '@/lib/logger-client';
 import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, X, AlertCircle, Info } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
+import { OptionCard } from '@/components/ui/OptionCard';
 
 export interface ScheduleData {
   scheduledPublishDate: string; // ISO 8601 UTC
@@ -182,47 +183,24 @@ export const ScheduleDateTimeSelector: React.FC<ScheduleDateTimeSelectorProps> =
         </p>
 
         <div className="space-y-2" role="radiogroup" aria-labelledby="upload-schedule-options-label">
-          {/* Publish Immediately */}
-          <label className="flex items-center p-3 border rounded-lg cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-gray-700">
-            <input
-              type="radio"
-              name="publishOption"
-              checked={!isScheduled}
-              onChange={() => handleToggleSchedule(false)}
-              disabled={disabled}
-              data-testid="upload-schedule-now"
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-            />
-            <div className="ms-3">
-              <div className="text-sm font-medium text-gray-900 dark:text-white">
-                {t.schedule?.publishImmediately || 'Publish immediately'}
-              </div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">
-                {t.schedule?.publishNow || 'Publish now'}
-              </div>
-            </div>
-          </label>
-
-          {/* Schedule for Later */}
-          <label className="flex items-center p-3 border rounded-lg cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-gray-700">
-            <input
-              type="radio"
-              name="publishOption"
-              checked={isScheduled}
-              onChange={() => handleToggleSchedule(true)}
-              disabled={disabled}
-              data-testid="upload-schedule-later"
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-            />
-            <div className="ms-3">
-              <div className="text-sm font-medium text-gray-900 dark:text-white">
-                {t.schedule?.scheduleLater || 'Schedule for later'}
-              </div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">
-                {t.schedule?.selectDateTime || 'Select date and time'}
-              </div>
-            </div>
-          </label>
+          <OptionCard
+            name="publishOption"
+            checked={!isScheduled}
+            onSelect={() => handleToggleSchedule(false)}
+            disabled={disabled}
+            inputTestId="upload-schedule-now"
+            title={t.schedule?.publishImmediately || 'Publish immediately'}
+            help={t.schedule?.publishNow || 'Publish now'}
+          />
+          <OptionCard
+            name="publishOption"
+            checked={isScheduled}
+            onSelect={() => handleToggleSchedule(true)}
+            disabled={disabled}
+            inputTestId="upload-schedule-later"
+            title={t.schedule?.scheduleLater || 'Schedule for later'}
+            help={t.schedule?.selectDateTime || 'Select date and time'}
+          />
         </div>
       </div>
 

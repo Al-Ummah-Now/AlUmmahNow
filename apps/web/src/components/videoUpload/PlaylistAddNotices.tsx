@@ -9,7 +9,7 @@
 import React from 'react';
 import { ListVideo } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
-import { pickLanguage } from '@/lib/format/pick-language';
+import { playlistName } from '@/lib/playlists/playlist-names';
 import type { PlaylistAddNotice } from '@/lib/upload/playlist-adds';
 import type { PlaylistWithVideos } from '@/lib/api/playlists';
 
@@ -24,7 +24,7 @@ export function PlaylistAddNotices({ notices, playlists }: Props) {
   const s = t.playlist.upload;
   const titleOf = (id: string) => {
     const p = playlists.find((x) => x.id === id);
-    return p ? pickLanguage(p.name || p.title || '', lang === 'ar' ? 'ar' : 'en') : t.playlist.playlist;
+    return p ? playlistName(p, lang === 'ar' ? 'ar' : 'en') : t.playlist.playlist;
   };
   const text = (n: PlaylistAddNotice) => {
     const template = n.kind === 'retrying' ? (n.count === 1 ? s.willRetryOne : s.willRetry) : n.count === 1 ? s.notAddedOne : s.notAdded;

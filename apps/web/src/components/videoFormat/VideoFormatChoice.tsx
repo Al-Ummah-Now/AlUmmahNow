@@ -6,6 +6,7 @@
  * video-format.ts); the other two always win over detection.
  */
 import React from 'react';
+import { OptionCard } from '@/components/ui/OptionCard';
 import { useLanguage } from '@/hooks/useLanguage';
 
 export type VideoFormatChoiceValue = 'auto' | 'short' | 'video';
@@ -39,24 +40,16 @@ export function VideoFormatChoice({ value, onChange, name = 'videoFormat', testI
       <p className="text-sm text-[var(--fanous-color-text-secondary)] mb-2">{t.video.formatHelp}</p>
       <div className="space-y-2">
         {OPTIONS.map((option) => (
-          <label
+          <OptionCard
             key={option}
-            className="flex items-center gap-3 p-3 border border-[var(--fanous-color-divider)] rounded-lg cursor-pointer hover:bg-[var(--fanous-color-surface-raised)]"
-          >
-            <input
-              type="radio"
-              name={name}
-              value={option}
-              checked={value === option}
-              onChange={() => onChange(option)}
-              className="w-4 h-4"
-              data-testid={`${testIdPrefix}-${option}`}
-            />
-            <div>
-              <div className="font-medium text-[var(--fanous-color-text-primary)]">{label(option)}</div>
-              <div className="text-sm text-[var(--fanous-color-text-secondary)]">{hint(option)}</div>
-            </div>
-          </label>
+            name={name}
+            value={option}
+            checked={value === option}
+            onSelect={() => onChange(option)}
+            title={label(option)}
+            help={hint(option)}
+            inputTestId={`${testIdPrefix}-${option}`}
+          />
         ))}
       </div>
     </fieldset>

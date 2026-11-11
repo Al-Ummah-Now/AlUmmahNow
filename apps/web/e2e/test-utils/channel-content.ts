@@ -444,6 +444,22 @@ export async function centerX(locator: Locator): Promise<number> {
   return box.x + box.width / 2;
 }
 
+/**
+ * Drags a dnd-kit sortable row by its handle onto another row with the
+ * pointer (the pointer sensor starts after a few pixels of movement).
+ */
+export async function pointerDrag(page: Page, handle: Locator, onto: Locator) {
+  const from = (await handle.boundingBox())!;
+  const to = (await onto.boundingBox())!;
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2 + 10, { steps: 4 });
+  await page.mouse.move(from.x + from.width / 2, to.y + to.height / 2 + 4, { steps: 12 });
+  await page.waitForTimeout(250);
+  await page.mouse.up();
+  await page.waitForTimeout(250);
+}
+
 export async function expectRtl(page: Page) {
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   await expect(page.locator('html')).toHaveAttribute('lang', 'ar');

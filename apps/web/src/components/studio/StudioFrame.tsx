@@ -178,7 +178,7 @@ export function StudioFrame({ locale, role, channel, children }: Props) {
         <span className="truncate text-sm font-medium">{title}</span>
       </div>
       <Dialog open={drawerOpen} onOpenChange={setDrawerOpen}>
-        <DialogContent className="top-0 h-full max-w-xs translate-x-0 translate-y-0 rounded-none border-e p-0 ltr:left-0 rtl:left-auto rtl:right-0">
+        <DialogContent data-slot="sheet-content" className="top-0 h-full max-w-xs translate-x-0 translate-y-0 rounded-none border-e p-0 ltr:left-0 rtl:left-auto rtl:right-0">
           <DialogTitle className="sr-only">{t.studio.title}</DialogTitle>
           <Rail locale={locale} role={role} channel={channel} segments={segments} onNavigate={() => setDrawerOpen(false)} />
         </DialogContent>

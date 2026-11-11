@@ -11,7 +11,7 @@ import React, { useState } from 'react';
 import Link from '@/components/common/AppLink';
 import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/hooks/useLanguage';
-import { pickLanguage } from '@/lib/format/pick-language';
+import { playlistName } from '@/lib/playlists/playlist-names';
 import '@/theme/playlist-tools.css';
 import BulkAddNotice from './BulkAddNotice';
 import CreatePlaylistForm, { type CreatedPlaylist } from './CreatePlaylistForm';
@@ -43,7 +43,7 @@ export default function NewPlaylistPage({ channelId }: { channelId: string }) {
         <div className="c space-y-4">
           <BulkAddNotice
             playlistId={stuck.playlist.id}
-            playlistTitle={pickLanguage(stuck.playlist.name || stuck.playlist.title || '', lang)}
+            playlistTitle={playlistName(stuck.playlist, lang)}
             channelId={channelId}
             outcome={{ kind: 'result', result: stuck.add! }}
             videoIds={stuck.videoIds}

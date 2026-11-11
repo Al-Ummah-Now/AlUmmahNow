@@ -1,29 +1,37 @@
 'use client';
 
 /**
- * "Add to playlist" for one or many videos (Video Management: a row's menu,
- * or the selection's bulk bar). Choose one or more of the channel's
- * playlists, or create one inline (with the same video picker, starting
- * from the chosen videos, in their order). Each playlist then shows what
- * happened: added, queued for the background with progress, or not added
- * with Retry. Adds are idempotent, so nothing lands twice.
+ * "Add to playlist" for one or many videos (Video Management or Studio: a
+ * row's menu, or the selection's bulk bar).
+ *
+ * With videos chosen: search the channel's playlists (the standard live
+ * autocomplete, several can be ticked) and add the videos to every ticked
+ * one; a manual playlist gets them at its end. Or "New playlist with N
+ * videos": the create form with that selection, which can be put in order
+ * before saving (no video picker: they are already chosen).
+ * Opened with no videos: the create form with the video picker.
+ *
+ * Each playlist then shows what happened: added, queued for the background
+ * with progress, or not added with Retry. Adds are idempotent, so nothing
+ * lands twice.
  *
  * Exported for the upload flows too.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Check, ListPlus, Lock, Plus } from 'lucide-react';
+import { ListPlus, Lock, Plus, Search, X } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { addVideosToPlaylist, listPlaylists, type PlaylistWithVideos } from '@/lib/api/playlists';
 import { reportError } from '@/lib/errors/reporter';
-import { pickLanguage } from '@/lib/format/pick-language';
+import { playlistName } from '@/lib/playlists/playlist-names';
+import { Autocomplete, type AutocompleteOption } from '@/components/ui/Autocomplete';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import '@/theme/playlist-tools.css';
 import BulkAddNotice, { type BulkAddOutcome } from './BulkAddNotice';
 import CreatePlaylistForm, { type CreatedPlaylist } from './CreatePlaylistForm';
 import type { PickedVideo } from './VideoPicker';
-import { counted } from './text';
-import { MUTED, NOTICE, TEXT } from './styles';
+import { counted, fill } from './text';
+import { FAINT, MUTED, NOTICE, TEXT } from './styles';
 
 interface Props {
   open: boolean;
@@ -53,7 +61,10 @@ export default function AddToPlaylistDialog({ open, onOpenChange, channelId, vid
   const [counts, setCounts] = useState<Map<string, number>>(() => new Map());
   const [loadFailed, setLoadFailed] = useState(false);
   const [chosen, setChosen] = useState<string[]>([]);
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState(videos.length === 0);
+  const [query, setQuery] = useState('');
+  // The create form's selection (videos can be taken out there): its title counts it
+  const [createCount, setCreateCount] = useState(videos.length);
   const [adding, setAdding] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
   const [sent, setSent] = useState<Sent[]>([]);
@@ -75,15 +86,18 @@ export default function AddToPlaylistDialog({ open, onOpenChange, channelId, vid
   useEffect(() => {
     if (!open) return;
     setChosen([]);
-    setCreating(false);
+    setCreating(videos.length === 0);
+    setCreateCount(videos.length);
+    setQuery('');
     setHint(null);
     setSent([]);
     setPlaylists(null);
     void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a fresh start per opening, not per selection change
   }, [open, load]);
 
   const videoIds = videos.map((v) => v.id);
-  const titleOf = (playlist: PlaylistWithVideos) => pickLanguage(playlist.name || playlist.title || '', lang);
+  const titleOf = (playlist: PlaylistWithVideos) => playlistName(playlist, lang);
   const toggle = (id: string) => setChosen((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
   const addToChosen = async () => {
@@ -119,7 +133,7 @@ export default function AddToPlaylistDialog({ open, onOpenChange, channelId, vid
 
   const created = ({ playlist, videoIds: ids, add }: CreatedPlaylist) => {
     setCreating(false);
-    const title = pickLanguage(playlist.name || playlist.title || '', lang);
+    const title = playlistName(playlist, lang);
     setPlaylists((prev) => [playlist, ...(prev ?? [])]);
     const outcome: BulkAddOutcome = add
       ? { kind: 'result', result: add }
@@ -129,19 +143,37 @@ export default function AddToPlaylistDialog({ open, onOpenChange, channelId, vid
   };
 
   const sentIds = new Set(sent.map((s) => s.playlistId));
-  const dialogTitle = counted(videos.length, p.dialogTitleOne, p.dialogTitleOther);
+  const fromSelection = videos.length > 0;
+  const dialogTitle = !creating
+    ? counted(videos.length, p.dialogTitleOne, p.dialogTitleOther)
+    : fromSelection
+      ? counted(createCount, p.newWithOne, p.newWithOther)
+      : p.newPlaylistHeading;
+  const dialogText = !creating ? p.dialogDescriptionSelected : fromSelection ? p.newPlaylistHelpSelected : p.newPlaylistHelp;
+
+  const countOf = (playlist: PlaylistWithVideos) => counts.get(playlist.id) ?? playlist.videos?.length ?? playlist.videosCount ?? 0;
+  const options: AutocompleteOption[] = (playlists ?? []).map((playlist) => ({
+    id: playlist.id,
+    label: titleOf(playlist),
+    subtitle: `${playlist.isPublic === false ? t.playlist.privateLabel : t.playlist.publicLabel} · ${counted(countOf(playlist), p.countOne, p.countOther)}`,
+    icon: playlist.isPublic === false ? <Lock className="h-4 w-4" /> : <ListPlus className="h-4 w-4" />,
+    // Both names match a search, whichever language is typed
+    keywords: [playlist.name, playlist.title, ...Object.values(playlist.titleLocalized ?? {})].filter((k): k is string => typeof k === 'string'),
+    value: playlist,
+  }));
+  const chosenPlaylists = (playlists ?? []).filter((pl) => chosen.includes(pl.id));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="dl flex max-h-[min(90vh,52rem)] w-[calc(100%-2rem)] flex-col gap-4 overflow-hidden !p-0"
+        className="flex max-h-[min(90vh,52rem)] w-[calc(100%-2rem)] flex-col gap-4 overflow-hidden !p-0"
         style={{ maxWidth: creating ? '48rem' : '34rem' }}
         dir={isRTL ? 'rtl' : 'ltr'}
         data-testid="add-to-playlist-dialog"
       >
         <div className="px-6 pt-6">
           <DialogTitle className={`pe-10 text-lg font-bold ${TEXT}`}>{dialogTitle}</DialogTitle>
-          <DialogDescription className={`mt-1 text-sm ${MUTED}`}>{creating ? p.newPlaylistHelp : p.dialogDescription}</DialogDescription>
+          <DialogDescription className={`mt-1 text-sm ${MUTED}`}>{dialogText}</DialogDescription>
         </div>
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-2">
@@ -166,14 +198,18 @@ export default function AddToPlaylistDialog({ open, onOpenChange, channelId, vid
             <CreatePlaylistForm
               channelId={channelId}
               initialVideos={videos}
+              fixedVideos={fromSelection}
+              onVideosChange={(next) => setCreateCount(next.length)}
               compact
               idPrefix="inline-playlist"
               onCreated={created}
-              onCancel={() => setCreating(false)}
+              // From a selection, back to the playlists; without one there is nowhere to go back to
+              onCancel={fromSelection ? () => setCreating(false) : () => onOpenChange(false)}
+              cancelLabel={fromSelection ? p.backToPlaylists : undefined}
             />
           ) : (
-            <fieldset className="space-y-2">
-              <legend className={`mb-2 text-sm font-semibold ${TEXT}`}>{p.yourPlaylists}</legend>
+            <div className="space-y-3">
+              <label htmlFor="add-to-playlist-search" className={`block text-sm font-semibold ${TEXT}`}>{p.yourPlaylists}</label>
               {playlists === null ? (
                 <ul className="space-y-2" aria-busy="true">
                   {Array.from({ length: 3 }, (_, i) => <li key={i} className="sk h-12" />)}
@@ -186,37 +222,58 @@ export default function AddToPlaylistDialog({ open, onOpenChange, channelId, vid
               ) : playlists.length === 0 ? (
                 <p className={`text-sm ${MUTED}`}>{p.noPlaylistsYet}</p>
               ) : (
-                <ul className="space-y-1" data-testid="add-to-playlist-options">
-                  {playlists.map((playlist) => {
-                    const title = titleOf(playlist);
-                    const checked = chosen.includes(playlist.id);
-                    const done = sentIds.has(playlist.id);
-                    const count = counts.get(playlist.id) ?? playlist.videos?.length ?? playlist.videosCount ?? 0;
-                    return (
-                      <li key={playlist.id}>
-                        <label className={`pl-row relative flex items-center gap-3 p-2.5 ${done ? 'opacity-60' : 'cursor-pointer'}`} data-selected={checked || undefined}>
-                          <input type="checkbox" className="peer pl-hit" checked={checked || done} disabled={done || adding} onChange={() => toggle(playlist.id)} data-testid="add-to-playlist-option" data-playlist-id={playlist.id} />
-                          <span className="ck pl-ck" data-on={checked || done || undefined} aria-hidden="true">{(checked || done) && <Check />}</span>
-                          <span className="min-w-0 flex-1">
-                            <span className={`block truncate text-sm font-medium ${TEXT}`}>{title}</span>
-                            <span className={`flex items-center gap-1 text-xs ${MUTED}`}>
-                              {playlist.isPublic === false && <Lock className="h-3 w-3" aria-hidden="true" />}
-                              {playlist.isPublic === false ? t.playlist.privateLabel : t.playlist.publicLabel}
-                              <span aria-hidden="true">·</span>
-                              {counted(count, p.countOne, p.countOther)}
-                            </span>
-                          </span>
-                        </label>
-                      </li>
-                    );
-                  })}
-                </ul>
+                // The standard live autocomplete, listed in place: type to narrow, tick several
+                <Autocomplete
+                  mode="inline"
+                  value={query}
+                  onValueChange={setQuery}
+                  options={options}
+                  emptyOptions={options}
+                  maxOptions={MAX_PLAYLISTS}
+                  keepOpenOnSelect
+                  onSelect={(option) => {
+                    if (sentIds.has(option.id) || adding) return;
+                    setHint(null);
+                    toggle(option.id);
+                  }}
+                  decorate={(option) => ({ selected: chosen.includes(option.id) || sentIds.has(option.id), disabled: sentIds.has(option.id) || adding })}
+                  label={p.searchPlaylists}
+                  listLabel={p.yourPlaylists}
+                  inputId="add-to-playlist-search"
+                  inputProps={{ type: 'search', placeholder: p.searchPlaylists }}
+                  inputClassName="f-input f-icon-start w-full py-2 text-sm"
+                  testId="add-to-playlist-search"
+                  popupTestId="add-to-playlist-options"
+                  optionTestId={() => 'add-to-playlist-option'}
+                >
+                  <Search className={`pointer-events-none absolute start-3 top-[22px] h-4 w-4 -translate-y-1/2 ${FAINT}`} aria-hidden="true" />
+                </Autocomplete>
               )}
-              <button type="button" className="b b-ghost mt-1 w-full justify-start" onClick={() => setCreating(true)} data-testid="add-to-playlist-new">
+
+              {chosenPlaylists.length > 0 && (
+                <div className="space-y-1.5" data-testid="add-to-playlist-chosen">
+                  <h3 className={`text-xs font-semibold ${MUTED}`}>{p.chosenPlaylists}</h3>
+                  <ul className="flex flex-wrap gap-2">
+                    {chosenPlaylists.map((playlist) => {
+                      const title = titleOf(playlist);
+                      return (
+                        <li key={playlist.id} className="pl-pill inline-flex max-w-full items-center gap-1 ps-3" data-playlist-id={playlist.id}>
+                          <span className={`max-w-[16rem] truncate text-sm ${TEXT}`} dir="auto">{title}</span>
+                          <button type="button" className="pl-pill-x" onClick={() => toggle(playlist.id)} disabled={adding} aria-label={fill(p.removeChosen, { title })}>
+                            <X className="h-3.5 w-3.5" aria-hidden="true" />
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+
+              <button type="button" className="b b-secondary w-full justify-center" onClick={() => setCreating(true)} disabled={adding} data-testid="add-to-playlist-new">
                 <Plus className="h-4 w-4" aria-hidden="true" />
-                {p.newPlaylistInline}
+                {counted(videos.length, p.newWithOne, p.newWithOther)}
               </button>
-            </fieldset>
+            </div>
           )}
 
           {hint && <p role="alert" className="text-sm text-[var(--fanous-color-error-text)]">{hint}</p>}

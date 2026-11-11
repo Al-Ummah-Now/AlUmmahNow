@@ -123,6 +123,9 @@ function createBody(data: NewPlaylistRequest) {
     // The API stores the playlist name as `title`
     title: data.title || data.name,
     description: data.description,
+    // English and Arabic names and descriptions (lib/playlists/playlist-names.ts)
+    ...(data.titleLocalized && Object.keys(data.titleLocalized).length ? { titleLocalized: data.titleLocalized } : {}),
+    ...(data.descriptionLocalized && Object.keys(data.descriptionLocalized).length ? { descriptionLocalized: data.descriptionLocalized } : {}),
     thumbnailUrl: data.thumbnailUrl,
     isPublic: data.isPublic,
     // The order (manual when left out)
@@ -176,6 +179,8 @@ function patchBody(data: PlaylistPatch): Record<string, unknown> {
   const title = data.title ?? data.name;
   if (title !== undefined) body.title = title;
   if (data.description !== undefined) body.description = data.description;
+  if (data.titleLocalized !== undefined) body.titleLocalized = data.titleLocalized;
+  if (data.descriptionLocalized !== undefined) body.descriptionLocalized = data.descriptionLocalized;
   if (data.thumbnailUrl !== undefined) body.thumbnailUrl = data.thumbnailUrl;
   if (data.isPublic !== undefined) body.isPublic = data.isPublic;
   if (data.videos !== undefined) body.videos = data.videos;
@@ -304,7 +309,7 @@ export async function reorderPlaylistVideos(
 }
 
 export interface PlaylistManagePage {
-  playlist: PlaylistSort & { id: string; title: string; description?: string; isPublic: boolean; thumbnailUrl?: string; coverVideoId?: string; channelId: string; videosCount: number };
+  playlist: PlaylistSort & { id: string; title: string; description?: string; titleLocalized?: Record<string, string>; descriptionLocalized?: Record<string, string>; isPublic: boolean; thumbnailUrl?: string; coverVideoId?: string; channelId: string; videosCount: number };
   items: PlaylistManageItem[];
   nextOffset: number | null;
 }

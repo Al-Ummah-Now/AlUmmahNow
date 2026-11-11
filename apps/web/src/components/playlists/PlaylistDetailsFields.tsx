@@ -1,7 +1,8 @@
 'use client';
 
 /**
- * The playlist's own fields: name, description, visibility and order (manual,
+ * The playlist's own fields: name and description in English and Arabic,
+ * visibility and order (manual,
  * or automatic by a field in either direction). Shared by the create form,
  * the inline create in "Add to playlist" and the playlist editor.
  */
@@ -15,12 +16,17 @@ import {
   type PlaylistSortMode,
 } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
-import { FIELD, LABEL, MUTED, TEXT } from './styles';
+import { OptionCard } from '@/components/ui/OptionCard';
+import { BilingualPair } from '@/components/bulkEdit/BilingualPair';
+import { FIELD, LABEL, MUTED } from './styles';
 import '@/theme/playlist-tools.css';
 
 export interface PlaylistDetailsValue {
-  title: string;
-  description: string;
+  /** Name and description in each language (an empty one shows the other to its readers) */
+  titleEn: string;
+  titleAr: string;
+  descriptionEn: string;
+  descriptionAr: string;
   isPublic: boolean;
   sortMode: PlaylistSortMode;
   sortField: PlaylistSortField;
@@ -28,8 +34,10 @@ export interface PlaylistDetailsValue {
 }
 
 export const EMPTY_PLAYLIST_DETAILS: PlaylistDetailsValue = {
-  title: '',
-  description: '',
+  titleEn: '',
+  titleAr: '',
+  descriptionEn: '',
+  descriptionAr: '',
   isPublic: true,
   sortMode: 'manual',
   sortField: 'added',
@@ -51,27 +59,11 @@ interface Props {
   disabled?: boolean;
 }
 
-/** Choice card: a visually hidden radio drives the card (keyboard and screen readers use the radio). */
+/** A choice card in the app's shared option-card style. */
 function ChoiceCard({ name, checked, onSelect, icon, title, help, disabled, testId }: {
   name: string; checked: boolean; onSelect: () => void; icon: React.ReactNode; title: string; help: string; disabled?: boolean; testId?: string;
 }) {
-  return (
-    <label
-      data-testid={testId}
-      data-checked={checked || undefined}
-      className={`pl-choice relative flex cursor-pointer items-start gap-3 rounded-[var(--r-md)] p-3 ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
-    >
-      <input type="radio" name={name} checked={checked} onChange={onSelect} disabled={disabled} className="peer pl-hit" />
-      <span className="rd mt-0.5 flex-none" data-on={checked || undefined} aria-hidden="true" />
-      <span className="min-w-0">
-        <span className={`flex items-center gap-1.5 text-sm font-semibold ${TEXT}`}>
-          {icon}
-          {title}
-        </span>
-        <span className={`mt-0.5 block text-xs ${MUTED}`}>{help}</span>
-      </span>
-    </label>
-  );
+  return <OptionCard name={name} checked={checked} onSelect={onSelect} icon={icon} title={title} help={help} disabled={disabled} testId={testId} />;
 }
 
 /** The direction labels read naturally for each field ("Newest first", "A to Z"…). */
@@ -169,38 +161,65 @@ export function PlaylistSortFields({ value, onChange, idPrefix, disabled }: Omit
 
 export default function PlaylistDetailsFields({ value, onChange, idPrefix, compact, hideSort, disabled }: Props) {
   const { t } = useLanguage();
+  const p = t.playlistTools;
   const set = (patch: Partial<PlaylistDetailsValue>) => onChange({ ...value, ...patch });
   return (
     <div className="space-y-4">
-      <div>
-        <label htmlFor={`${idPrefix}-title`} className={LABEL}>{t.playlist.nameLabel}</label>
-        <input
-          id={`${idPrefix}-title`}
-          type="text"
-          value={value.title}
-          maxLength={PLAYLIST_TITLE_MAX}
-          required
-          disabled={disabled}
-          onChange={(e) => set({ title: e.target.value })}
-          placeholder={t.playlist.namePlaceholder}
-          className={FIELD}
-        />
-      </div>
+      {/* English and Arabic side by side, like video titles; Translate shows once a translator is registered */}
+      <BilingualPair
+        legend={p.namesLegend}
+        labels={{ en: p.nameEnglish, ar: p.nameArabic }}
+        textOf={(language) => (language === 'en' ? value.titleEn : value.titleAr)}
+        onTranslated={(language, text) => set(language === 'en' ? { titleEn: text } : { titleAr: text })}
+        idPrefix={`${idPrefix}-title`}
+        testId={`${idPrefix}-title-pair`}
+      >
+        {(language, { heading }) => (
+          <input
+            id={`${idPrefix}-title-${language}`}
+            type="text"
+            value={language === 'en' ? value.titleEn : value.titleAr}
+            maxLength={PLAYLIST_TITLE_MAX}
+            disabled={disabled}
+            onChange={(e) => set(language === 'en' ? { titleEn: e.target.value } : { titleAr: e.target.value })}
+            placeholder={language === 'en' ? p.namePlaceholderEnglish : p.namePlaceholderArabic}
+            aria-labelledby={heading}
+            aria-describedby={`${idPrefix}-title-help`}
+            dir={language === 'ar' ? 'rtl' : 'ltr'}
+            lang={language}
+            className={FIELD}
+            data-testid={`${idPrefix}-title-${language}`}
+          />
+        )}
+      </BilingualPair>
+      <p id={`${idPrefix}-title-help`} className={`-mt-2 text-xs ${MUTED}`}>{p.nameOneLanguage}</p>
 
       {!compact && (
-        <div>
-          <label htmlFor={`${idPrefix}-description`} className={LABEL}>{t.playlist.descriptionLabel}</label>
-          <textarea
-            id={`${idPrefix}-description`}
-            value={value.description}
-            rows={3}
-            maxLength={PLAYLIST_DESCRIPTION_MAX}
-            disabled={disabled}
-            onChange={(e) => set({ description: e.target.value })}
-            placeholder={t.playlist.descriptionPlaceholder}
-            className={`${FIELD} resize-y`}
-          />
-        </div>
+        <BilingualPair
+          legend={p.descriptionsLegend}
+          labels={{ en: p.descriptionEnglish, ar: p.descriptionArabic }}
+          textOf={(language) => (language === 'en' ? value.descriptionEn : value.descriptionAr)}
+          onTranslated={(language, text) => set(language === 'en' ? { descriptionEn: text } : { descriptionAr: text })}
+          idPrefix={`${idPrefix}-description`}
+          testId={`${idPrefix}-description-pair`}
+        >
+          {(language, { heading }) => (
+            <textarea
+              id={`${idPrefix}-description-${language}`}
+              value={language === 'en' ? value.descriptionEn : value.descriptionAr}
+              rows={3}
+              maxLength={PLAYLIST_DESCRIPTION_MAX}
+              disabled={disabled}
+              onChange={(e) => set(language === 'en' ? { descriptionEn: e.target.value } : { descriptionAr: e.target.value })}
+              placeholder={t.playlist.descriptionPlaceholder}
+              aria-labelledby={heading}
+              dir={language === 'ar' ? 'rtl' : 'ltr'}
+              lang={language}
+              className={`${FIELD} resize-y`}
+              data-testid={`${idPrefix}-description-${language}`}
+            />
+          )}
+        </BilingualPair>
       )}
 
       <fieldset>

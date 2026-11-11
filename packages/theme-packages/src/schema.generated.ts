@@ -910,13 +910,26 @@ export const SCHEMA: Record<string, any> = {
                 "dark"
               ],
               "description": "Colours for `dialog.*`, per mode. A hex value or a reference such as {color.surface}."
+            },
+            "style": {
+              "type": "object",
+              "properties": {
+                "line": {
+                  "$ref": "#/$defs/cssValue"
+                },
+                "shadow": {
+                  "$ref": "#/$defs/cssValue"
+                }
+              },
+              "additionalProperties": false,
+              "description": "Optional material. `line`: the dialog's 1px edge colour (an opaque colour reads as one continuous line around the rounded corners). `shadow`: its shadow and glow, without an edge ring. Absent: dialogs use the menu's raised edge."
             }
           },
           "additionalProperties": false,
           "required": [
             "colors"
           ],
-          "description": "Dialogs."
+          "description": "Dialogs. They share the menu's raised surface; `style` gives them their own edge line and shadow."
         },
         "toast": {
           "type": "object",

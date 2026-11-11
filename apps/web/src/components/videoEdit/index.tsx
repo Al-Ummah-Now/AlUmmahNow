@@ -1,5 +1,6 @@
 'use client';
 import { BilingualPair } from '@/components/bulkEdit/BilingualPair';
+import { OptionCard } from '@/components/ui/OptionCard';
 import { inputClass } from '@/components/bulkEdit/RenameFields';
 import { TagAutocomplete } from '@/components/ui/TagAutocomplete';
 import { useChannelTags } from '@/hooks/useChannelTags';
@@ -423,34 +424,22 @@ export default function VideoEdit({
             {t.video.videoPrivacy}
           </label>
           <div className="space-y-2">
-            <label className="flex items-center gap-3 p-4 border dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
-              <input
-                type="radio"
-                name="privacy"
-                checked={formData.isPublic}
-                data-testid="video-edit-privacy-public"
-                onChange={() => handleInputChange('isPublic', true)}
-                className="w-4 h-4"
-              />
-              <div>
-                <div className="font-medium dark:text-white">{t.video.public}</div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">{t.video.publicVideo}</div>
-              </div>
-            </label>
-            <label className="flex items-center gap-3 p-4 border dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
-              <input
-                type="radio"
-                name="privacy"
-                checked={!formData.isPublic}
-                data-testid="video-edit-privacy-private"
-                onChange={() => handleInputChange('isPublic', false)}
-                className="w-4 h-4"
-              />
-              <div>
-                <div className="font-medium dark:text-white">{t.video.private}</div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">{t.video.privateVideo}</div>
-              </div>
-            </label>
+            <OptionCard
+              name="privacy"
+              checked={formData.isPublic}
+              onSelect={() => handleInputChange('isPublic', true)}
+              inputTestId="video-edit-privacy-public"
+              title={t.video.public}
+              help={t.video.publicVideo}
+            />
+            <OptionCard
+              name="privacy"
+              checked={!formData.isPublic}
+              onSelect={() => handleInputChange('isPublic', false)}
+              inputTestId="video-edit-privacy-private"
+              title={t.video.private}
+              help={t.video.privateVideo}
+            />
           </div>
         </div>
 

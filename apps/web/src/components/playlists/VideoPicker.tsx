@@ -10,7 +10,7 @@
  * upload flows can use it too.
  */
 
-import { Highlight } from '@/components/ui/Autocomplete';
+import { Autocomplete, Highlight, type AutocompleteOption } from '@/components/ui/Autocomplete';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Search, X, Film, Check } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -42,6 +42,8 @@ interface Props {
   pageSize?: number;
   /** Prefix for element ids. */
   idPrefix?: string;
+  /** The caller shows the selection itself (the create form's reorderable list) */
+  hideTray?: boolean;
 }
 
 /** Fetches per page at most, while a title search keeps coming back short. */
@@ -60,7 +62,7 @@ export function toPicked(video: Pick<VideoObject, 'id' | 'title' | 'titleLocaliz
   };
 }
 
-export default function VideoPicker({ channelId, selected, onChange, excludeIds, pageSize = 24, idPrefix = 'picker' }: Props) {
+export default function VideoPicker({ channelId, selected, onChange, excludeIds, pageSize = 24, idPrefix = 'picker', hideTray }: Props) {
   const { t, lang, isRTL } = useLanguage();
   const p = t.playlistTools;
   const [query, setQuery] = useState('');
@@ -133,6 +135,19 @@ export default function VideoPicker({ channelId, selected, onChange, excludeIds,
     onChange(selectedIds.has(video.id) ? selected.filter((v) => v.id !== video.id) : [...selected, toPicked(video)]);
   };
 
+  const suggest = useCallback(async (q: string, signal: AbortSignal): Promise<AutocompleteOption[]> => {
+    const result = await listVideos({ channelId, limit: 8, q, ...(format !== 'all' ? { format } : {}) }, { channelId });
+    if (signal.aborted || !result) return [];
+    return (result.data || []).map((video) => ({
+      id: video.id,
+      label: localTitle(video, lang),
+      subtitle: [video.isShort ? p.shortBadge : null, formatDuration(video.duration) || null].filter(Boolean).join(' · ') || undefined,
+      thumbnailUrl: video.thumbnailUrl,
+      thumbnailShape: 'wide' as const,
+      value: video,
+    }));
+  }, [channelId, format, lang, p.shortBadge]);
+
   const toggleAllOnPage = () => {
     if (allOnPage) {
       const drop = new Set(selectable.map((v) => v.id));
@@ -165,19 +180,33 @@ export default function VideoPicker({ channelId, selected, onChange, excludeIds,
       <p className={`text-sm ${MUTED}`}>{p.pickerHelp}</p>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
-          <Search className={`pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 ${FAINT}`} aria-hidden="true" />
-          <label htmlFor={`${idPrefix}-search`} className="sr-only">{p.searchLabel}</label>
-          <input
-            id={`${idPrefix}-search`}
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={p.searchLabel}
-            className="f-input w-full py-2 pe-3 ps-9 text-sm"
-            data-testid="picker-search"
-          />
-        </div>
+        {/* The standard live autocomplete: suggestions as you type (tick one to select it), and the
+            grid below filters to the same text */}
+        <Autocomplete
+          className="flex-1"
+          value={query}
+          onValueChange={setQuery}
+          load={suggest}
+          loadKey={`${channelId}:${format}`}
+          minChars={1}
+          maxOptions={8}
+          keepOpenOnSelect
+          onSelect={(option) => toggle(option.value as VideoObject)}
+          onSubmit={() => undefined}
+          decorate={(option) => {
+            const excluded = excludeIds?.has(option.id) ?? false;
+            return { selected: selectedIds.has(option.id) || excluded, disabled: excluded };
+          }}
+          label={p.searchLabel}
+          inputId={`${idPrefix}-search`}
+          inputProps={{ type: 'search', placeholder: p.searchLabel }}
+          inputClassName="f-input f-icon-start w-full py-2 text-sm"
+          testId="picker-search"
+          popupTestId="picker-suggestions"
+          optionTestId={() => 'picker-suggestion'}
+        >
+          <Search className={`pointer-events-none absolute start-3 top-[22px] h-4 w-4 -translate-y-1/2 ${FAINT}`} aria-hidden="true" />
+        </Autocomplete>
         <div role="group" aria-label={p.formatLabel} className="flex flex-wrap gap-2">
           {formats.map((f) => (
             <button
@@ -207,7 +236,7 @@ export default function VideoPicker({ channelId, selected, onChange, excludeIds,
           <span className="ck pl-ck" data-on={allOnPage || undefined} aria-hidden="true">{allOnPage && <Check />}</span>
           {p.selectAllOnPage}
         </label>
-        {/* A searchable checklist (several can be ticked), so not a combobox: the match count is announced */}
+        {/* The grid's match count is announced (the autocomplete announces its own suggestions) */}
         <span className="sr-only" role="status" aria-live="polite" data-testid="picker-match-count">
           {debounced && !loading && page ? (selectable.length === 1 ? t.search.foundOneResult : t.search.foundResults.replace('{count}', String(selectable.length))) : ''}
         </span>
@@ -296,7 +325,7 @@ export default function VideoPicker({ channelId, selected, onChange, excludeIds,
         </button>
       </nav>
 
-      {selected.length > 0 && (
+      {selected.length > 0 && !hideTray && (
         <div className="pl-tray rounded-[var(--r-md)] p-3" data-testid="picker-tray">
           <div className="mb-2 flex items-center justify-between gap-2">
             <h4 className={`text-sm font-semibold ${TEXT}`}>{p.selectedHeading}</h4>
