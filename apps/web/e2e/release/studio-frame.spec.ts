@@ -10,13 +10,21 @@ test.use({ trace: 'off', video: 'off' });
 test.describe('Release: Studio frame', () => {
   test.beforeEach(skipUntilStudioDeployed);
 
-  test('asks a signed-out visitor to sign in', async ({ page }) => {
-    await page.goto(`${target().web}/en/studio`);
-    await expect(page.getByRole('heading', { name: 'Sign in to use Studio' })).toBeVisible();
+  test('sends a signed-out visitor to sign in, and back to Studio after', async ({ page, context }) => {
+    await page.goto(`${target().web}/en/studio`).catch((e: unknown) => {
+      // The page hands over to sign-in at once; that hop can interrupt this load
+      if (!/interrupted by another navigation/.test(String(e))) throw e;
+    });
+    await expect(page).toHaveURL(new RegExp(`^${target().auth}`), { timeout: 30000 });
+    const back = (await context.cookies(target().web)).find((c) => c.name === 'auth_return');
+    expect(back?.value && decodeURIComponent(back.value), 'sign-in does not return to Studio').toBe('/en/studio');
   });
 
   test('offers to create a channel when there is none', async ({ page }) => {
-    await signUpOnWeb(page, 'rel-studio-none');
+    const user = await signUpOnWeb(page, 'rel-studio-none');
+    // A profile, then let the post-sign-up hop finish before opening Studio
+    await createProfile(user);
+    await settleSession(page);
     await page.goto(`${target().web}/en/studio`);
     await expect(page.getByTestId('studio-create-channel')).toBeVisible();
   });
