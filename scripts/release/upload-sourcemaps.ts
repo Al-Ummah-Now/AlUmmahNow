@@ -57,11 +57,26 @@ export function parseArgs(argv: string[]) {
 	return { env, app, release, dir: get('dir') ?? `apps/${app}/.open-next/assets` };
 }
 
+/**
+ * One key segment for the R2 API path. Dots are encoded too: a catch-all
+ * route's chunk (app/[locale]/studio/[channelId]/[...rest]/page-x.js.map)
+ * has "..." in a segment, which the API refuses (403) as path traversal.
+ */
+export function keyPath(key: string): string {
+	return key.split('/').map((segment) => encodeURIComponent(segment).replace(/\./g, '%2E')).join('/');
+}
+
 async function put(token: string, accountId: string, bucket: string, key: string, body: Uint8Array): Promise<void> {
-	const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/r2/buckets/${bucket}/objects/${key.split('/').map(encodeURIComponent).join('/')}`;
+	const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/r2/buckets/${bucket}/objects/${keyPath(key)}`;
 	for (let attempt = 1; ; attempt++) {
 		const res = await fetch(url, { method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body });
 		if (res.ok) return;
+		// A catch-all route's map the API still refuses: skip it (that route's stacks stay
+		// unsymbolicated) rather than fail the deploy
+		if (res.status === 403 && key.includes('...')) {
+			process.stderr.write(`Skipped ${bucket}/${key}: refused by the R2 API (403)\n`);
+			return;
+		}
 		if (attempt >= 3 || (res.status < 500 && res.status !== 429)) throw new Error(`PUT ${bucket}/${key} -> ${res.status}`);
 		await new Promise((r) => setTimeout(r, attempt * 1000));
 	}
