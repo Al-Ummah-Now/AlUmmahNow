@@ -1,7 +1,7 @@
 'use client';
 import { logger } from '@/lib/logger-client';
 
-import { use, useState } from 'react';
+import { use, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PostType, PostVisibility, CreateCommunityPostRequest } from '@al-ummah/shared-types';
 import Link from 'next/link';
@@ -20,6 +20,7 @@ import { VideoPostForm } from '@/components/Community/management/forms/VideoPost
 import { GifPostForm, GifData } from '@/components/Community/management/forms/GifPostForm';
 import { createCommunityPost } from '@/lib/api/community-posts';
 import { ArrowLeft, Loader2 } from 'lucide-react';
+import { getChannelById } from '@/lib/api/channels';
 
 interface NewPostPageProps {
   params: Promise<{
@@ -34,6 +35,20 @@ export default function NewPostPage({ params }: NewPostPageProps) {
   const { locale, id } = use(params);
   const isRTL = locale === 'ar';
   const [loading, setLoading] = useState(false);
+  // The breadcrumb starts at the channel (<channel> › Settings › Community › New post)
+  const [channelName, setChannelName] = useState('');
+  const [channelHandle, setChannelHandle] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    getChannelById(id)
+      .then((channel) => {
+        if (!live || !channel) return;
+        setChannelName(channel.nameLocalized?.[locale] || channel.name || '');
+        setChannelHandle(channel.handle ?? null);
+      })
+      .catch((error) => logger.error('Failed to load channel', { error, channelId: id }));
+    return () => { live = false; };
+  }, [id, locale]);
   const [error, setError] = useState<string>('');
 
   const [selectedType, setSelectedType] = useState<PostType | null>(null);
@@ -188,7 +203,7 @@ export default function NewPostPage({ params }: NewPostPageProps) {
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 md:px-6">
-        <ChannelSettingsBreadcrumb channelId={id} locale={locale} currentPage="communityNew" />
+        <ChannelSettingsBreadcrumb channelId={id} channelName={channelName} channelHandle={channelHandle} locale={locale} currentPage="communityNew" />
       </div>
       <div className="
         border-b
