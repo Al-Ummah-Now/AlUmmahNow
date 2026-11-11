@@ -182,7 +182,8 @@ test.describe('Release: AI category suggestions', () => {
 
       // The owner sees it in the edit form as the AI's suggestion
       await acceptConsent(page);
-      await page.goto(`${target().web}/en/video/${videoId}/edit`);
+      // The editor lives in Studio (the old /video/:id/edit 301s there)
+      await page.goto(`${target().web}/en/studio/${channelId}/content/videos/${videoId}/edit`);
       await expect(page.getByTestId('category-select')).toHaveValue('hadith_studies', { timeout: 30000 });
       await expect(page.getByTestId('category-ai-suggested')).toBeVisible({ timeout: 30000 });
       await page.getByTestId('category-ai-suggested').scrollIntoViewIfNeeded();

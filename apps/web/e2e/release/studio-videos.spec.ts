@@ -21,6 +21,8 @@ test.describe('Release: Studio Videos tab', () => {
 
     await page.reload();
     await expect(page.getByTestId('studio-status-failed')).toHaveAttribute('aria-pressed', 'true');
+    // The list is rendered by the client: once it shows, the page is hydrated and typing is seen
+    await expect(page.getByTestId('studio-videos-empty')).toBeVisible();
 
     await page.getByTestId('studio-videos-search').fill('nothing here');
     await expect(page).toHaveURL(/q=nothing/);

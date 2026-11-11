@@ -96,7 +96,13 @@ for (const [device, viewport] of Object.entries(VIEWPORTS)) {
 
         // A newer Short is passed over for the newest ready landscape video
         const frame = hero.getByTestId('hero-thumb');
-        await expect(frame).toHaveAttribute('href', new RegExp(`vid=${featured!.id}$`));
+        // Parallel specs upload too: a newer landscape video may become the featured one between
+        // reading the list and loading the page, so either the one before or the one after is right
+        await expect(frame).toHaveAttribute('href', /vid=[\w-]+$/);
+        const shownId = (await frame.getAttribute('href'))!.split('vid=')[1];
+        const now = await homeVideos();
+        const featuredNow = now.find((v) => v.isFeatured) ?? now.find((v) => !upright(v));
+        expect([featured!.id, featuredNow?.id], `the hero shows ${shownId}`).toContain(shownId);
         const img = frame.getByTestId('hero-thumb-image');
         await expect(img).toHaveAttribute('fetchpriority', 'high');
         await expect(img).toHaveAttribute('alt', /\S/);
