@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/AppLink';
 import { getProcessingErrors, listContactMessages, listFlaggedVideoFormats } from '@/lib/api/admin';
 import type { ContactListResponse, FlaggedVideoList, ProcessingErrorsResponse } from '@/lib/api/types';
 import { canUseContactInbox, canUseProcessing } from '@/lib/roles';

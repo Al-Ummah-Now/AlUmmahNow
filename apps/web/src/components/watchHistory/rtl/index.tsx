@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { FitImage } from '@/components/VideoThumbnail/FitImage';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { History, Trash2, X, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/components/AuthProvider/authContext';

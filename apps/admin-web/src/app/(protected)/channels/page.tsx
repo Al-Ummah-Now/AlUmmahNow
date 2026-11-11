@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/AppLink';
 import { ADMIN_CHANNEL_SORTS } from '@al-ummah/shared-types';
 import { listChannels } from '@/lib/api/content';
 import type { AdminChannelRow, AdminPage } from '@/lib/api/content-types';

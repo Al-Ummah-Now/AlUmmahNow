@@ -12,7 +12,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { usePathname } from 'next/navigation';
 import { AlertCircle, Bell, Heart, MessageCircle, Radio, UserPlus, Video, X } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';

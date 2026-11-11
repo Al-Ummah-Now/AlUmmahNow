@@ -3,7 +3,7 @@ import { ListFilter } from 'lucide-react';
 import { ThemedSelect } from '@/components/ui/ThemedSelect';
 import { logger } from '@/lib/logger-client';
 import React, { useId, useState } from "react";
-import Link from "next/link";
+import Link from '@/components/common/AppLink';
 import CommentLTR, { CommentProps } from "@/components/comment";
 import CommentRTL from "@/components/comment/rtl";
 import ReportContentButton from "@/components/moderation/ReportContentButton";

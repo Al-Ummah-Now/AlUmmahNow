@@ -2,7 +2,7 @@
 
 import { useMemo, useState, type ReactNode } from 'react';
 import Image from 'next/image';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { usePathname, useRouter } from 'next/navigation';
 import { Check, ChevronsUpDown, ExternalLink, Menu, Plus, UploadCloud } from 'lucide-react';
 import { Button } from '@/components/ui/button';

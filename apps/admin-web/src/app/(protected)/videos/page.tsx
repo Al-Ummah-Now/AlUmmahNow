@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/AppLink';
 import { ADMIN_VIDEO_SORTS, ADMIN_VIDEO_STATUSES } from '@al-ummah/shared-types';
 import { getContentPermissions, listVideos } from '@/lib/api/content';
 import type { AdminContentPermission, AdminPage, AdminVideoRow } from '@/lib/api/content-types';

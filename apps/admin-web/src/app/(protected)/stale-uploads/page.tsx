@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/AppLink';
 import { getStaleUploads } from '@/lib/api/admin';
 import type { StaleUploadsResponse } from '@/lib/api/types';
 import { getAdminSession } from '@/lib/auth';

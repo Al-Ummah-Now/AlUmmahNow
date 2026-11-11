@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { useLanguage } from '@/hooks/useLanguage';
 import { login } from '@/lib/actions';
 import { MAIN_CONTENT_ID } from '@/components/SkipLinks';

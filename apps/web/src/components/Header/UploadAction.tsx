@@ -1,6 +1,6 @@
 'use client';
 // The one Upload action: in the top bar after the logo, before the search box, outlined, and a 44px icon button on phones.
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useMultiAccount } from '@/hooks/useMultiAccount';

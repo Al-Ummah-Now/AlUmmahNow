@@ -10,7 +10,7 @@
  * a page opened directly has nothing to go back to.
  */
 
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';

@@ -14,7 +14,7 @@ import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { MenuBackdrop } from './MenuBackdrop';
 import { mayCreateChannel, refreshCreatorAccess, useCreatorAccess } from '@/hooks/useCreatorAccess';
 import { useLanguage } from '@/hooks/useLanguage';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { login } from '@/lib/actions';
 import { fetchProfile } from '@/lib/api/profiles-client';
 import type { Profile } from '@/interfaces';

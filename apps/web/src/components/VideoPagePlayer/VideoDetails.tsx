@@ -2,7 +2,7 @@
 
 import { useCallback, useRef } from 'react';
 import Image from 'next/image';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { removeUnwantedChars } from '@/lib/utility';

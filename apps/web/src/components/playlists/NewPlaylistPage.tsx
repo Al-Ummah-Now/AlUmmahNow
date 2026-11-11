@@ -8,7 +8,7 @@
  */
 
 import React, { useState } from 'react';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/hooks/useLanguage';
 import { pickLanguage } from '@/lib/format/pick-language';

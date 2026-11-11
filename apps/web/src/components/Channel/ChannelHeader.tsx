@@ -8,7 +8,7 @@ import { useChannelSubscription } from '@/hooks/useChannelSubscription';
 import { cn } from '@/lib/utils';
 import { logger } from '@/lib/logger-client';
 import { getTranslations } from '@/lib/i18n';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { ChannelBellMenu } from '@/components/notifications/ChannelBellMenu';
 import { ChannelOwnerActions } from '@/components/Channel/ChannelOwnerActions';
 import { formatHandle } from '@/lib/channel-url';

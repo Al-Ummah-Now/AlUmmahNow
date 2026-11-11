@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { Loader2, VideoOff } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { fetchVideoById, getVideoUploadStatusApi } from '@/lib/api/videos';

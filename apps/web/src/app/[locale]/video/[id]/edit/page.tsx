@@ -9,7 +9,7 @@ import { useAuth } from '@/components/AuthProvider/authContext';
 import { VideoObject } from '@/interfaces';
 import { getVideoById } from '@/lib/api/videos';
 import VideoEdit from '@/components/videoEdit/index';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { can } from '@al-ummah/shared-types';
 import { fetchChannelAccess } from '@/lib/channels/access';
 import { signInAndReturnHere } from '@/lib/auth/silent-sign-in';

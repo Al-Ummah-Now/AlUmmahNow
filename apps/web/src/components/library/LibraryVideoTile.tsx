@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import VideoThumbnail, { THUMBNAIL_16_9 } from '@/components/VideoThumbnail';
 import { getLocalizedValue } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';

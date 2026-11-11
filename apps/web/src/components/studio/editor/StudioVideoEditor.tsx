@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, type MouseEvent } from 'react';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { useQueryClient } from '@tanstack/react-query';
 import { applySavedVideo } from '@/lib/studio/content-client';
 import { listReturn, type ListReturn } from '@/lib/studio/list-return';

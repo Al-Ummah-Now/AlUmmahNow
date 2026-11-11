@@ -2,7 +2,7 @@
 import { SIDEBAR_PATHS } from '@/lib/navigation/destinations';
 import React, { useEffect } from "react";
 import IcoButton from "@/components/iconButton";
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import { useTheme } from 'next-themes';
 import { useLanguage } from '@/hooks/useLanguage';

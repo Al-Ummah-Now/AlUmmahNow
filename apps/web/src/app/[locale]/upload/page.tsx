@@ -27,7 +27,7 @@ import { useMultiAccount } from "@/hooks/useMultiAccount";
 import { useCreatorAccess } from "@/hooks/useCreatorAccess";
 import { UploadsByInvitationNotice } from "@/components/VideosNotices";
 import { login } from "@/lib/actions";
-import Link from "next/link";
+import Link from '@/components/common/AppLink';
 import { can } from "@al-ummah/shared-types";
 import { useChannelPlaylists } from "@/hooks/useChannelPlaylists";
 import { usePlaylistAdds } from "@/hooks/usePlaylistAdds";

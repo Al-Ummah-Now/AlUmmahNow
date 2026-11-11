@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/AppLink';
 import type { Locale } from '@/i18n/config';
 import { formatNumber, type Translator } from '@/i18n/translate';
 import { linkClass } from '@/components/ui';

@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/AppLink';
 import { notFound } from 'next/navigation';
 import { getErrorGroup } from '@/lib/api/admin';
 import { AdminApiError } from '@/lib/api/errors';

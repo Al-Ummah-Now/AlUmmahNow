@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import { VideoInfo } from "@/interfaces";
-import Link from "next/link";
+import Link from '@/components/common/AppLink';
 import { removeUnwantedChars, resolveUrl } from "@/lib/utility";
 import { useLanguage } from "@/hooks/useLanguage";
 import { formatViews } from '@/lib/format/videoMeta';

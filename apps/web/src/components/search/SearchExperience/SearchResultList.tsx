@@ -7,7 +7,7 @@
 
 import { pickLanguage } from '@/lib/format/pick-language';
 import React from 'react';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import Image from 'next/image';
 import { BadgeCheck, Heart, MessageSquare } from 'lucide-react';
 import type { Playlist, SearchPostPayload, SearchResultItem } from '@al-ummah/shared-types';

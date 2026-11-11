@@ -4,7 +4,7 @@ import { logger } from '@/lib/logger-client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PostType, PostVisibility, CreateCommunityPostRequest } from '@al-ummah/shared-types';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { Button } from '@/components/ui/button';
 import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
 import { useLanguage } from '@/hooks/useLanguage';

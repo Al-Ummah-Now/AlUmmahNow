@@ -2,7 +2,7 @@
 // Prototype only: the redesigned application shell. One component for both directions.
 import { HeaderSearch } from '@/components/Header/HeaderSearch';
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { Bookmark, Clock, Compass, Heart, History, Home, Languages, Menu, Moon, ShieldCheck, Sun, Tv, BookOpen, Mail, X, type LucideIcon } from 'lucide-react';

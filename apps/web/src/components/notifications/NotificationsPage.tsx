@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { Bell, Settings } from 'lucide-react';
 import type { NotificationItem } from '@al-ummah/shared-types';
 import { useAuth } from '@/components/AuthProvider/authContext';

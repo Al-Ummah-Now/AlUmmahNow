@@ -3,7 +3,7 @@ import { canOpenSettingsPage } from '@/lib/channels/permissions';
 import { getChannelById } from '@/lib/api/channels';
 import { notFound } from 'next/navigation';
 import { getTranslations } from '@/lib/i18n';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import Image from 'next/image';
 import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
 

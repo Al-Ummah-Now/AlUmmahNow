@@ -17,7 +17,7 @@ import { cancelSchedule, publishNow } from '@/lib/api/scheduling';
 import type { VideoObject } from '@/interfaces';
 import type { ScheduledPublishStatus } from '@al-ummah/shared-types';
 import { Calendar, Clock, Edit, Trash2, PlayCircle, AlertCircle, Loader } from 'lucide-react';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { FitImage } from '@/components/VideoThumbnail/FitImage';
 import { usePathname } from 'next/navigation';
 

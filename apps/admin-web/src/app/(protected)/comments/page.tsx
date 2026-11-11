@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/AppLink';
 import { deleteComment, getContentPermissions, listComments } from '@/lib/api/content';
 import type { AdminCommentRow, AdminContentPermission, AdminPage } from '@/lib/api/content-types';
 import { getI18n } from '@/i18n/server';

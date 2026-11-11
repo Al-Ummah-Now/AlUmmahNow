@@ -7,7 +7,7 @@
 
 import { pickLanguage } from '@/lib/format/pick-language';
 import React, { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { ArrowDown, ArrowUp, ListVideo, Lock, Play, Trash2 } from 'lucide-react';
 import { getLocalizedValue } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';

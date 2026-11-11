@@ -9,7 +9,7 @@ import VideoCardRTL from '@/components/videoCard/rtl';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, Users } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { getSubscriptionFeed } from '@/lib/api/channels';
 import { SignInPrompt } from '@/components/common/SignInPrompt';
 

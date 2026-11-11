@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/AppLink';
 import { notFound } from 'next/navigation';
 import { getChannel, getContentPermissions } from '@/lib/api/content';
 import type { AdminContentPermission, ChannelDetailView } from '@/lib/api/content-types';

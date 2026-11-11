@@ -7,7 +7,7 @@
  * fresh while a job is still in progress.
  */
 import { useAdminLive } from '@/lib/live/useAdminLive';
-import Link from 'next/link';
+import Link from '@/components/AppLink';
 import { useRouter } from 'next/navigation';
 import { retryJob } from '@/lib/api/content';
 import type { AdminContentPermission, AdminJob } from '@/lib/api/content-types';

@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/AppLink';
 import { ADMIN_USER_SORTS } from '@al-ummah/shared-types';
 import { listUsers } from '@/lib/api/content';
 import type { AdminPage, AdminUserRow } from '@/lib/api/content-types';

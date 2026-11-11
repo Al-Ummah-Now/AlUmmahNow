@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { AlertCircle, Check, CheckCircle2, Loader2, X } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import type { ProcessingPhase } from '@/lib/upload/processing-status';

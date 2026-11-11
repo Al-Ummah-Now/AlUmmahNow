@@ -1,7 +1,7 @@
 'use client';
 // Every theme, built-in and custom: duplicate one as a starting point, edit, export, import, delete.
 import { useRef, useState, useTransition } from 'react';
-import Link from 'next/link';
+import Link from '@/components/AppLink';
 import { useRouter } from 'next/navigation';
 import { ID_PATTERN } from '@al-ummah/theme-packages';
 import { useLanguage } from '@/i18n/I18nProvider';

@@ -2,7 +2,7 @@
  * Presentational pieces shared by the content pages (server and client).
  * They take translated strings, like components/ui.tsx.
  */
-import Link from 'next/link';
+import Link from '@/components/AppLink';
 import type { Locale } from '@/i18n/config';
 import { formatDate, type Translator } from '@/i18n/translate';
 import type { ContentAuditEntry, ContentReport } from '@/lib/api/content-types';

@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/AppLink';
 import { VIDEO_CATEGORIES } from '@al-ummah/shared-types';
 import { getCategorySuggestionStats, listCategorySuggestions } from '@/lib/api/admin';
 import type { CategorySuggestionList, CategorySuggestionQueue, CategorySuggestionStats } from '@/lib/api/types';

@@ -1,7 +1,7 @@
 'use client';
 
 import { useId, useState } from 'react';
-import Link from 'next/link';
+import Link from '@/components/AppLink';
 import { useRouter } from 'next/navigation';
 import type { AdminCreatorRow, CreatorTier, CreatorTierBulkResult } from '@al-ummah/shared-types';
 import type { ActionResult } from '@/lib/api/errors';

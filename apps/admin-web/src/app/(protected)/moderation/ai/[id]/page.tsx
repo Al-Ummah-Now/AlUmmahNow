@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import Link from 'next/link';
+import Link from '@/components/AppLink';
 import { getAiSignal } from '@/lib/api/admin';
 import { AdminApiError } from '@/lib/api/errors';
 import type { AiSignalDetail } from '@/lib/api/types';

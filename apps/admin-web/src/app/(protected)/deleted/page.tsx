@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/AppLink';
 import { ADMIN_DELETION_KINDS, TRASH_KINDS, deletionDaysLeft } from '@al-ummah/shared-types';
 import { trashHref } from '@/lib/trash';
 import { getContentPermissions, listDeletions } from '@/lib/api/content';
