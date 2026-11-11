@@ -285,7 +285,10 @@ test.describe('watch page - owner', () => {
       await expect(edit).toHaveText('Edit Video');
       await expect(page.getByRole('button', { name: 'Report', exact: true })).toHaveCount(0);
 
-      await clickAndWaitForURL(page, edit, new RegExp(`/en/video/${video.id}/edit$`));
+      // The edit link opens Studio's editor: /studio/video/{id}/edit resolves the video's channel
+      // and redirects to /studio/{channelId}/content/videos/{id}/edit (the old /video/{id}/edit is gone)
+      await expect(edit).toHaveAttribute('href', `/en/studio/video/${video.id}/edit`);
+      await clickAndWaitForURL(page, edit, new RegExp(`/en/studio/[^/]+/content/videos/${video.id}/edit$`));
     });
   }
 
@@ -293,7 +296,7 @@ test.describe('watch page - owner', () => {
     const video = seed[SEED_TITLES.singleVideo];
     await openWatch(page, video, 'ar');
     await expect(page.getByTestId('video-owner-edit-link')).toHaveText('تعديل الفيديو');
-    await expect(page.getByTestId('video-owner-edit-link')).toHaveAttribute('href', `/ar/video/${video.id}/edit`);
+    await expect(page.getByTestId('video-owner-edit-link')).toHaveAttribute('href', `/ar/studio/video/${video.id}/edit`);
   });
 });
 
