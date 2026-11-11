@@ -167,7 +167,7 @@ export function applyBulkChanges<T extends Editable>(
   // Titles: each language on its own; the legacy `title` follows English
   const titles = perVideo.title ?? {};
   if (Object.keys(titles).length > 0) {
-    const localized = { en: englishTitle(video), ...(video.titleLocalized ?? {}) } as Record<string, string>;
+    const localized = { ...(video.titleLocalized ?? {}), en: englishTitle(video) } as Record<string, string>;
     for (const [lang, value] of Object.entries(titles) as [TitleLanguage, string | undefined][]) {
       if (value === undefined) continue;
       if (value.trim() === '') return { ok: false, error: 'title_empty' };
@@ -181,7 +181,7 @@ export function applyBulkChanges<T extends Editable>(
   // Descriptions: append, prepend or replace per language
   const edits = changes.description ?? {};
   if (Object.keys(edits).length > 0) {
-    const localized = { en: englishDescription(video), ...(video.descriptionLocalized ?? {}) } as Record<string, string>;
+    const localized = { ...(video.descriptionLocalized ?? {}), en: englishDescription(video) } as Record<string, string>;
     for (const [lang, edit] of Object.entries(edits) as [TitleLanguage, TextEdit | undefined][]) {
       if (!edit) continue;
       const value = applyTextEdit(lang === 'en' ? englishDescription(video) : localized[lang], edit);
