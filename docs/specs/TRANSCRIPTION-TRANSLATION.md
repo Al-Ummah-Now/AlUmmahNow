@@ -578,6 +578,31 @@ Source: [Getting Started with Content Sync](https://api-docs.quran.foundation/do
   | P3 | DeepL (text and Voice; the owner has API Pro), ElevenLabs Scribe after measurement |
   | Later | generic HTTP (config-only, as in the CMS) |
 
+### 10.1 Quran Foundation API configuration
+
+The credentials were added 2026-11-11 to the al-ummah Secrets Store `f8eddc9944d041919ed8dc7d08d32308`.
+
+| Environment | OAuth host | API host | Client id secret | Client secret secret |
+|---|---|---|---|---|
+| QA, stage | `https://prelive-oauth2.quran.foundation` | `https://apis-prelive.quran.foundation` | `quran-foundation-preprod-client-id` | `quran-foundation-preprod-client-secret` |
+| production | `https://oauth2.quran.foundation` | `https://apis.quran.foundation` | `quran-foundation-prod-client-id` | `quran-foundation-prod-client-secret` |
+
+- **Bindings:** the processor (jobs) and api-videos (inline title lookup) bind these through `secrets_store_secrets` in each `wrangler.<env>.jsonc`. The hosts go in vars (`QF_OAUTH_HOST`, `QF_API_HOST`), so `pnpm check:config` can assert that production never points at prelive. Add both names to `scripts/release/secrets-manifest.ts`.
+- **Status (2026-11-11):**
+  - Both clients obtain client-credentials tokens.
+  - Neither is allowed the `content` scope yet: requesting it returns `invalid_scope`, and content calls return "insufficient scopes".
+  - The owner is enabling Content and Search API access in the Developer Console.
+  - Until then the QF calls stay behind an admin flag and the pipeline uses local search with Tanzil/QuranEnc (§5.5). Nothing on the default path depends on QF.
+- **Prelive data:** prelive holds only part of the Quran ("its data covers only surahs 1–2" per the QF quickstart), so QA tests of QF search must use those surahs.
+- **Token handling:**
+  - `POST {QF_OAUTH_HOST}/oauth2/token` with `grant_type=client_credentials`, HTTP Basic auth, and the needed scopes (`search`, `content`), as listed in the Developer Console.
+  - Every API call sends `x-auth-token` and `x-client-id`.
+  - **Cache** the token in KV per environment and scope set for its lifetime (about 1 h; `expires_in` is 3600) and **renew early** at 50 minutes (or `expires_in` − 10 min).
+  - A single in-flight refresh per isolate stops a burst of callers from each fetching a token.
+  - **Retry once on 401:** drop the cached token, fetch a new one, repeat the call once. A second 401, or a 403 / insufficient scopes, fails that call with a typed `auth` error. The job then carries on without QF suggestions; it never fails the caption job.
+  - **429/5xx:** exponential backoff, at most 3 attempts, then continue without QF.
+  - Tokens and secrets are never logged.
+
 ## 11. Native Studio and on-device transcription
 
 - **What Core can already do:** whisper.cpp in Core 0.2.0 (`aun-media` `transcribe`), with the large-v3-turbo q5_0 model at 574 MB.
@@ -623,7 +648,7 @@ Every phase ships behind an environment flag. Tests go into the release E2E suit
 | O9 | QuranEnc follow-up, only if it is used as fallback: may footnote markers "[n]" be hidden? | Email before P3 |
 | O10 | "ﷺ" symbol in Arabic subtitles: off by default (keep the spoken words), per-channel setting | As recommended |
 | O11 | On-device transcription in native desktop Studio as a free path (D10 hybrid) | Yes, in P5 |
-| O12 | Register a Quran Foundation Developer Console app (search scope; Content Sync scopes if storage is cleared) | Yes. It only blocks the optional QF search suggestions and QF rendering; P0 can start on Tanzil/QuranEnc |
+| O12 | QF Developer Console apps exist (preprod and prod credentials in Secrets Store, §10.1). Enable the Search and Content API scopes, plus Content Sync if storage is cleared | Owner is enabling them now. They only block the optional QF suggestions and QF rendering; P0 runs on Tanzil/QuranEnc |
 | O13 | Send the partner-permission email to QF (draft in PR #819): (a) use the Search/Content APIs during on-demand jobs; (b) keep verse text and translations inside stored captions, with attribution; also ask about VTT downloads | Owner reviews and sends. Until QF answers, captions render from Tanzil/QuranEnc |
 | O14 | Every Quran span needs creator confirmation before publish (no auto-publish of Quran), with "Publish without Quran text" (reference only) as the escape hatch | Yes: this is what makes "zero mistakes" a guarantee rather than a statistic |
 | O15 | DeepL Voice as the paid high-accuracy STT and the Quran second opinion on higher tiers | Yes, behind the per-provider cap; never for speech-to-speech of Quran |
