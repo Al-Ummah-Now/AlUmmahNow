@@ -93,6 +93,19 @@ export function uploadDelta(current: Snapshot, baseline: Snapshot = {}): UploadD
 	};
 }
 
+/** The literal text before a LIKE pattern's first wildcard. */
+export function likePrefix(pattern: string): string {
+	const i = pattern.search(/[%_]/);
+	return i < 0 ? pattern : pattern.slice(0, i);
+}
+
+/** SQL LIKE semantics (ASCII case-insensitive, % any run, _ one character) as a predicate. */
+export function likeMatcher(pattern: string): (value: string) => boolean {
+	const source = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/%/g, '.*').replace(/_/g, '.');
+	const re = new RegExp(`^${source}$`, 'i');
+	return (value) => re.test(value);
+}
+
 export function parseArgs(argv: string[]) {
 	const get = (name: string) => {
 		const i = argv.indexOf(`--${name}`);
@@ -110,7 +123,13 @@ export function parseArgs(argv: string[]) {
 
 async function readCounters(cf: CfClient, env: UploadEnv, emailPattern: string): Promise<Snapshot> {
 	const db = DATABASES[env];
-	const users = await d1Query<{ id: string }>(cf, db.auth, 'SELECT id FROM users WHERE email LIKE ? LIMIT 5000', [emailPattern]);
+	// D1 refuses LIKE patterns over 50 bytes ("LIKE or GLOB pattern too complex"), and a run's pattern
+	// (e2e+<run>-<attempt>-web-<project>-%@e2e.alummahnow.net) is longer: range-scan the literal prefix
+	// and match the whole pattern here
+	const prefix = likePrefix(emailPattern);
+	const candidates = await d1Query<{ id: string; email: string }>(cf, db.auth, 'SELECT id, email FROM users WHERE email >= ? AND email < ? LIMIT 5000', [prefix, `${prefix}\uffff`]);
+	const matches = likeMatcher(emailPattern);
+	const users = candidates.filter((u) => matches(u.email));
 	const rows: CounterRow[] = [];
 	for (let i = 0; i < users.length; i += 90) {
 		const ids = users.slice(i, i + 90).map((u) => u.id);
