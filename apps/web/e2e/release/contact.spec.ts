@@ -40,6 +40,9 @@ test.beforeAll(async () => {
 
 async function sendMessage(page: Page, locale: Locale, opts: { name: string; email?: string; topic: string }): Promise<void> {
   await page.goto(`${target().web}/${locale}/contact?from=${encodeURIComponent(`/${locale}/explore`)}`);
+  // Exactly one page body once rendered (retried: a strict-mode lookup threw at once on a
+  // transient second copy while the signed-in page re-rendered, #803)
+  await expect(page.getByTestId('contact-page')).toHaveCount(1);
   await expect(page.getByTestId('contact-page')).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
   await expect(page.getByTestId('contact-page-url')).toContainText(`/${locale}/explore`);
 
