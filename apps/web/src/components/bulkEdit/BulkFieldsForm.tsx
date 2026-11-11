@@ -263,13 +263,13 @@ export function BulkFieldsForm({ variant, form, onChange, subjects, fields, play
                   className="h-5 w-5 accent-[var(--fanous-color-primary)]" data-testid={`bulk-${variant}-tick-${field}`} />
                 {tickLabel(field)}
               </label>
-              <span className={`text-xs ${on ? 'font-medium text-[var(--fanous-color-primary)]' : 'text-[var(--fanous-color-text-muted)]'}`} data-testid={`bulk-${variant}-state-${field}`}>
-                {on ? b.willChange : b.untouched}
+              <span className={`text-xs ${on ? 'font-semibold text-[var(--fanous-color-text-primary)]' : 'text-[var(--fanous-color-text-secondary)]'}`} data-testid={`bulk-${variant}-state-${field}`}>
+                {variant === 'edit' ? (on ? b.willChange : b.untouched) : (on ? b.willSet : b.leftToFiles)}
               </span>
             </div>
             {on && <div className="mt-3">{body(field)}</div>}
             {on && problem && problem !== 'no_titles' && (
-              <p className="mt-2 text-xs text-[var(--fanous-color-error-text)]" data-testid={`bulk-${variant}-problem-${field}`}>{b.nothingToApply}</p>
+              <p className="mt-2 text-xs text-[var(--fanous-color-error-text)]" data-testid={`bulk-${variant}-problem-${field}`}>{b.fieldIncomplete}</p>
             )}
           </section>
         );
