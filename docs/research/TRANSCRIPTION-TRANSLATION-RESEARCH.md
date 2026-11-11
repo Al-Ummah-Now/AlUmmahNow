@@ -360,3 +360,68 @@ v1 said QF "forbids a static cache". That left out the exception. Quotes, fetche
 **Conditions we must meet (quoted in spec §9.4):** sync at least every 7 days; no prepackaged or build-time bundle; Quran text not modified; credit QF; no ML training without consent. Derived Materials, which explicitly include "indexes", follow the same restrictions.
 
 **Not verifiable without credentials:** which translation ids are public for sync, and the rate limits. These are owner decisions O12 and O13 in the spec.
+
+---
+
+# v3 follow-up (2026-11-11): DeepL on lectures, quran.com-only identification
+
+## 12. Lectures: Workers AI vs DeepL vs local whisper.cpp vs Bunny
+
+**DeepL usage for this round:**
+- 14 STT minutes, about **$0.43**. That covers `ar_gaza16`, `x_shahrour1`, `en_gooddeeds1` (each about 3 min) and the first 3 min of `ar_tahinu`. One session hung and was restarted with a timeout guard, and it was billed.
+- **Account total across all tests:** 34 STT minutes (≈ $1.05), 13,365 characters (≈ $0.37) and 2 STS minutes.
+
+**Reference transcripts (5.3 min of speech: `ar_duat3` 52 s, `x_ashura2` 177 s, `ar_gaza16` first 90 s).** No human listened to these. They were built as follows:
+1. Word-level alignment of 3–4 independent transcripts: Workers AI, DeepL, local whisper.cpp, and Bunny where available.
+2. Majority vote.
+3. Manual adjudication of every disagreement, on Arabic grammar and sense and on the canonical wording of the quoted hadith (Ashura: «نحن أحق وأولى بموسى منكم», «فصامه رسول الله ﷺ وأمر بصيامه», «فاسأله التخفيف», «إني قد بلوت بني إسرائيل»; Gaza: «ما شحب وجه ولا اغبرت قدم في عمل تبتغى فيه درجات الجنة…») and the Quran (3:166 «التقى الجمعان»).
+4. 11 spots that couldn't be resolved are wildcards, matching any word.
+
+**Bias:** the draft used Workers AI as its backbone, and two of the voters are Whisper models, so the reference leans toward Workers AI. A native speaker should spot-check the files (`lecture_refs.json`, 610 words) before these numbers are quoted outside the team.
+
+| Lecture | Workers AI | DeepL | local whisper.cpp | Bunny |
+|---|---|---|---|---|
+| ar_duat3 (MSA, Egyptian accent, Quran quotes) | 3.7% | 6.5% | 9.3% | 38.9% |
+| x_ashura2 (hadith + commentary) | 3.4% | 3.1% | 6.2% | 30.4% |
+| ar_gaza16, first 90 s (khutbah style) | 3.4% | **0.7%** | – | – |
+| **Pooled, 610 words** | **3.4%** | **3.1%** | 6.9% (463 words) | 32.4% (463 words) |
+
+**What differs between the two leaders:**
+- **Workers AI:**
+  - produced «عاشراء» for «عاشوراء» and «انتقل/المؤنين» in the 3:166 quote;
+  - **hallucinated a subtitle credit at the end** («ترجمة نانسي قنقر»), a known Whisper failure (§5.4 filter);
+  - turned «ولا اغبرت قدم» into «ولغ برت قدم».
+- **DeepL:**
+  - got the hadith and Quran wording right («بموسى منكم», «فاسأله», «بني إسرائيل», «التقى الجمعان»);
+  - added punctuation;
+  - dropped a few short words (للمنافقين…).
+
+**Lectures without a reference** (word disagreement between Workers AI and DeepL): x_shahrour1 11.7%, en_gooddeeds1 7.8%, ar_tahinu 0–3 min 14.3% (the most colloquial and emotional delivery).
+
+**Dialect:** the 6 production lectures are MSA with an Egyptian accent and some colloquial phrases. The library has no strongly dialectal clip, so dialect accuracy is still untested.
+
+**Quran detection** gave identical results on DeepL and Workers AI transcripts for all 6 lectures: the same confirmed and review spans, and 0 wrong.
+
+**Conclusion:** on lectures the two engines are at parity (≈ 3% WER). DeepL is better on formulaic religious wording (hadith and Quran). Workers AI stays the default at 1/54 of the cost; DeepL remains the high-accuracy option.
+
+**DeepL translation errors, for the record (§9.2):**
+- The meaning errors were in **titles and lecture sentences**: «فصامه موسى شكرا» → "so thank you"; "He is the One" → «هو المخلص»; a dropped "he found".
+- One title error was on a **Quran verse quoted inside a title** (19:66, a question turned into a statement).
+- The design never sends Quran to any MT (§5.5). Quran in titles and captions is a reference plus QF text fetched live, so that class of error can't reach viewers.
+
+## 13. quran.com-only identification (mode B: QF Search + Content fetch + local verification, no stored index)
+
+**Method, per snippet:**
+1. QF search, top 10 (legacy `api.quran.com/api/v4/search`).
+2. Fetch each candidate verse (`verses/by_key/{key}?fields=text_imlaei_simple`), held only for the run.
+3. Our fuzzy matcher aligns the ASR words to each candidate.
+4. Auto-suggest only if exactly one candidate passes: ≥ 6 matched words, ≥ 75% of the snippet, ≥ 90% inside the span.
+
+| Set | Auto-suggested | Wrong | Review items with the correct suggestion |
+|---|---|---|---|
+| 55 per-ayah snippets (8 reciters) | 22 | **0** | 17 of 33 |
+| 20 non-Quran snippets (lecture) | 0 | – | – |
+
+- **API calls:** 64 searches and 519 verse fetches for 75 snippets. In production these are deduplicated per job and edge-cached for at most 7 days.
+- **Compared with a local index (mode A):** 27/55 with 0 wrong.
+- **Terms:** a full local index built from regular API responses isn't allowed (Content Sync is "the only permitted path for obtaining and maintaining an offline copy" of `quran_core`). So mode A needs Content Sync access (spec §5.5, O12/O13).

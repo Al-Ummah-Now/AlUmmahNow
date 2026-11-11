@@ -8,7 +8,7 @@
 
 Assalamu alaykum,
 
-We're registering an application in the QF Developer Console (client id to follow once created). We'd like written confirmation, or a partner permission, for the following use of the Quran Foundation APIs.
+We have registered applications in the QF Developer Console (pre-production and production clients; ids below). Both currently get `invalid_scope` for `content`. We'd like written confirmation, or a partner permission, for the following use of the Quran Foundation APIs.
 
 **What the application does**
 - Creators of videos can request captions on demand.
@@ -17,16 +17,13 @@ We're registering an application in the QF Developer Console (client id to follo
 - A translated caption carries a recognised translation edition for those verses, never machine translation.
 
 **What we're asking permission for**
-1. **Search and Content APIs during on-demand jobs.** We want to call the Search API (and, where useful, the Content API) from our backend while a captioning job runs, to suggest verse references for segments our own matcher couldn't confirm. Calls happen only when a creator requests captions.
-2. **Keeping verse text and translations in stored captions.** Once a creator publishes a caption, its text includes the Uthmani text of the confirmed ayat and, for translated tracks, the text of a translation edition. The caption files are stored and served to viewers in our player and embeds for as long as the video is published.
-   - Developer Terms §3.1 limits storage of QF Content to one week unless it is maintained through Content Sync.
-   - Our plan is to sync `quran_core:1`, `mushafs:4` and selected `translations:<id>` through Content Sync at least daily, and to re-render every stored caption whose ayat change after a sync.
-   - Could you confirm that captions kept up to date this way satisfy §3.1? If not, could you grant permission to keep the verse text and translation text inside stored captions?
-3. **Attribution.** We'd credit Quran Foundation, and the translation edition by name, on every video page with such a caption, and in the description of any video export. Please tell us the exact wording you'd like.
-4. **Two clarifications**
-   - **Downloads:** would offering viewers a per-video subtitle file download, containing those verses, count as "offering QF Content … as data" under §2.2? Until you advise, we won't offer downloads for captions that contain QF text.
-   - **Our matching index:** we build a private, internal index from the synced text (normalised words), used only to match speech-recognition output to verses. It is never exposed and is rebuilt after every sync. Is this acceptable as a Derived Material under the Terms?
-5. **Timing data.** We won't store QF recitation timing data in captions. Our caption timings come from our own alignment.
+1. **Search and Content APIs during on-demand jobs.** While a captioning job runs, our backend calls the Search API for candidate verses, then fetches those verses by key from the Content API to verify them against the speech-recognition output. Calls happen only when a creator requests captions. The fetched text is held only for the job, and cached for at most 7 days.
+2. **Live display with an edge cache.** Our captions store only verse references (surah, ayah and word range) and a translation resource id, never Quran text. When a viewer plays the video, our server fetches the Uthmani text and the chosen translation for that range from the Content API with our server-side token. The response is cached at our edge for at most 6 days. We read Developer Terms §3.1 as allowing this ("longer than 1 week" being the limit); please confirm.
+3. **Content Sync access for our matching index.** To identify verses without a search call for every passage, we'd like production access to Content Sync for `quran_core:1` and `mushafs:4`. We'd keep a private, internal normalised index built from the synced copy, rebuilt after every sync (at least daily), never exposed, and deleted if syncing stops. Is this acceptable as a Derived Material?
+4. **Optional: keeping text inside stored captions.** If you'd allow it, we'd prefer to keep the confirmed verse text and translation text inside stored captions, re-rendered after each sync. Until you permit it, we won't store any.
+5. **Attribution.** We'd credit Quran Foundation (quran.com), and the translation edition by name, wherever these verses appear. Please tell us the exact wording you'd like.
+6. **Downloads.** Would offering viewers a per-video subtitle file download, with the verses filled in at download time, count as "offering QF Content … as data" under §2.2? Until you advise, we won't offer downloads for captions that contain Quran.
+7. **Timing data.** We won't store QF recitation timing data. Our caption timings come from our own alignment.
 
 **Which translation editions**
 - English: Saheeh International.
