@@ -67,6 +67,12 @@ export function UploadChannelPicker({ channels, value, onChange, userId, disable
       subtitle: subtitle || undefined,
       thumbnailUrl: channel.avatarUrl,
       thumbnailShape: 'round',
+      // No avatar: the channel's initial, like the card and the account menu
+      icon: (
+        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--fanous-c-button-primary-bg)] text-sm font-semibold text-[var(--fanous-c-button-primary-text)]">
+          {(name.trim()[0] ?? '?').toUpperCase()}
+        </span>
+      ),
       group: role && role !== 'owner' ? 'managed' : 'owned',
       keywords: [channel.handle, channel.handle ? `@${channel.handle}` : null, channel.name, ...Object.values(channel.nameLocalized ?? {})],
       value: channel.id,
