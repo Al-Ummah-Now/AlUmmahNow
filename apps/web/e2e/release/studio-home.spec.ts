@@ -7,6 +7,7 @@ import { expect, test } from '@playwright/test';
 import { skipUntilStudioDeployed, studioDraftRecord, studioOwner } from './studio';
 import { apiFetch } from './web-session';
 import { target } from './targets';
+import { fetchRetry } from './net';
 
 // Sign-in pages carry the test password: never record them
 test.use({ trace: 'off', video: 'off' });
@@ -25,7 +26,7 @@ test.describe('Release: Studio is the creator home', () => {
       ['/en/scheduled-videos', `${studio}/content/videos?status=scheduled&view=calendar`],
       ['/en/dashboard', `${studio}/dashboard`],
     ] as const) {
-      const first = await fetch(`${web}${old}`, { redirect: 'manual' });
+      const first = await fetchRetry(`${web}${old}`, { redirect: 'manual' });
       expect(first.status, `${old} answers 301`).toBe(301);
       // WebKit reports the redirect's follow-up as an interrupted navigation: that is the landing itself
       await page.goto(`${web}${old}`).catch((e: unknown) => {

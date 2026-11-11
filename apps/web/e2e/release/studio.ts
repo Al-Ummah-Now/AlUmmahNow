@@ -4,13 +4,14 @@ import { apiFetch, createProfile, menuTrigger, signUpOnWeb, type Locale, type We
 import { target } from './targets';
 import { grantCreatorTier } from './creator-tier';
 import type { Page } from '@playwright/test';
+import { fetchRetry } from './net';
 
 /**
  * PR checks run against QA, which follows main, so a Studio spec can run before
  * its pages are deployed. Skip with a reason until /studio answers there.
  */
 export async function skipUntilStudioDeployed(): Promise<void> {
-  const res = await fetch(`${target().web}/en/studio`, { redirect: 'manual' });
+  const res = await fetchRetry(`${target().web}/en/studio`, { redirect: 'manual' });
   test.skip(res.status === 404, 'Studio is not deployed to this environment yet');
 }
 

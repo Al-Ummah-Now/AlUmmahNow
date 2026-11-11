@@ -1,3 +1,4 @@
+import { fetchRetry } from './net';
 /**
  * Reads the auth server's verification code for a Resend test address
  * (…@delivered.resend.dev) through the Resend API (RESEND_API_KEY): production
@@ -10,14 +11,14 @@ export async function readResendCode(email: string, sentAfter: number, timeoutMs
   const auth = { Authorization: `Bearer ${key}` };
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const res = await fetch('https://api.resend.com/emails?limit=50', { headers: auth });
+    const res = await fetchRetry('https://api.resend.com/emails?limit=50', { headers: auth });
     if (res.ok) {
       const list = (await res.json()) as { data?: { id: string; to: string[] | string; created_at: string }[] };
       const hit = (list.data ?? []).find(
         (e) => [e.to].flat().includes(email) && Date.parse(e.created_at.replace(' ', 'T').replace(/\+00$/, 'Z')) >= sentAfter - 5000,
       );
       if (hit) {
-        const mail = (await (await fetch(`https://api.resend.com/emails/${hit.id}`, { headers: auth })).json()) as { html?: string; text?: string };
+        const mail = (await (await fetchRetry(`https://api.resend.com/emails/${hit.id}`, { headers: auth })).json()) as { html?: string; text?: string };
         const code = `${mail.text ?? ''} ${(mail.html ?? '').replace(/<[^>]+>/g, ' ')}`.match(/\b(\d{6})\b/)?.[1];
         if (code) return code;
       }

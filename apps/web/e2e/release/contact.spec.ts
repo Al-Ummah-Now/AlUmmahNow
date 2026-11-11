@@ -14,6 +14,7 @@ import { adminConfirm, confirmInApp } from './in-app-confirm';
 import { promoteToAdmin } from './sink';
 import { sinkEmail, target } from './targets';
 import { completeRegistration, createProfile, signUpOnWeb, type Locale, submitPasswordSignIn } from './web-session';
+import { fetchRetry } from './net';
 
 // Signs in through the auth server: the trace would hold the password and code
 test.use({ trace: 'off' });
@@ -32,7 +33,7 @@ const MESSAGE = {
 };
 
 test.beforeAll(async () => {
-  const res = await fetch(`${target().web}/en/contact`, { redirect: 'manual' });
+  const res = await fetchRetry(`${target().web}/en/contact`, { redirect: 'manual' });
   // Pull requests run against QA, which gets the page only once this change is on main
   test.skip(res.status === 404 && process.env.GITHUB_EVENT_NAME === 'pull_request', 'Contact us is not deployed on QA yet');
   expect(res.status, 'GET /en/contact').toBe(200);

@@ -8,6 +8,7 @@ import { test, expect } from '@playwright/test';
 import { target } from './targets';
 import { findPlayableVideo, HISTORY_MIN_SECONDS, NO_PLAYABLE_VIDEO, pause, playFor, watchUrl } from './videos';
 import { apiFetch, createProfile, signUpOnWeb } from './web-session';
+import { fetchRetry } from './net';
 
 // This file signs users in through the auth server: its traces would hold the
 // typed password and email code (fillSecret args, form POST bodies). Trace off.
@@ -22,7 +23,7 @@ interface HistoryEntry {
 /** The channel's display name, or null for a video without a (still existing) channel. */
 async function channelName(channelId: string | undefined): Promise<string | null> {
   if (!channelId) return null;
-  const res = await fetch(`${target().api}/api/channels/${encodeURIComponent(channelId)}`);
+  const res = await fetchRetry(`${target().api}/api/channels/${encodeURIComponent(channelId)}`);
   if (!res.ok) return null;
   const body = (await res.json()) as { result?: { name?: string }; name?: string };
   return (body.result ?? body).name || null;

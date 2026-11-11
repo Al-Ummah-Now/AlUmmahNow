@@ -6,6 +6,7 @@
 import { expect, type Page } from '@playwright/test';
 import { target } from './targets';
 import { fixtureVideo } from './fixtures';
+import { fetchRetry } from './net';
 
 export interface PublicVideo {
   id: string;
@@ -52,7 +53,7 @@ export async function stableVideos<T extends PublicVideo>(candidates: T[]): Prom
     .sort((a, b) => Date.parse(a.dateCreated ?? '') - Date.parse(b.dateCreated ?? '') || 0);
   const out: T[] = [];
   for (const v of sorted) {
-    const res = await fetch(`${target().api}/api/videos/${encodeURIComponent(v.id)}`, { cache: 'no-store' });
+    const res = await fetchRetry(`${target().api}/api/videos/${encodeURIComponent(v.id)}`, { cache: 'no-store' });
     if (res.ok) out.push(v);
     if (out.length >= 3) break;
   }

@@ -12,6 +12,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { adminConfirm, confirmInApp } from './in-app-confirm';
 import { target } from './targets';
 import { signInAsAdmin } from './admin-session';
+import { fetchRetry } from './net';
 
 // Signs in through the auth server: the trace would hold the password and code
 test.use({ trace: 'off' });
@@ -22,14 +23,14 @@ type Theme = (typeof THEMES)[number];
 const PROPAGATION_MS = 120000;
 
 async function publicTheme(): Promise<string | undefined> {
-  const res = await fetch(`${target().adminApi}/public/site-theme`, { cache: 'no-store' });
+  const res = await fetchRetry(`${target().adminApi}/public/site-theme`, { cache: 'no-store' });
   expect(res.status, 'GET /public/site-theme').toBe(200);
   return ((await res.json()) as { theme?: string }).theme;
 }
 
 /** The theme in the first HTML of a fresh visit (server-rendered, so no client state). */
 async function renderedTheme(): Promise<string | undefined> {
-  const html = await (await fetch(`${target().web}/en?theme-check=${Date.now()}`, { cache: 'no-store' })).text();
+  const html = await (await fetchRetry(`${target().web}/en?theme-check=${Date.now()}`, { cache: 'no-store' })).text();
   return /<html[^>]*data-theme="([a-z][a-z0-9-]*)"/.exec(html)?.[1];
 }
 
@@ -198,7 +199,7 @@ test.describe('Release: theme builder', () => {
     }
     await expect.poll(publicTheme, { timeout: PROPAGATION_MS, intervals: [5000] }).toBe(original);
     await expect.poll(renderedTheme, { timeout: PROPAGATION_MS, intervals: [5000] }).toBe(original);
-    const gone = await fetch(`${target().adminApi}/public/themes/${id}/1.0.0/theme.css`);
+    const gone = await fetchRetry(`${target().adminApi}/public/themes/${id}/1.0.0/theme.css`);
     expect(gone.status, 'the deleted theme is no longer served').toBe(404);
   });
 });

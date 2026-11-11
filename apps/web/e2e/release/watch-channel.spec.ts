@@ -14,6 +14,7 @@ import { apiFetch, createProfile, signUpOnWeb, type Locale } from './web-session
 import { grantCreatorTier } from './creator-tier';
 import { fixtureVideo } from './fixtures';
 import { submitNewChannelInMenu } from './account-menu';
+import { fetchRetry } from './net';
 
 // The signed-in test registers through the auth server: its trace would hold
 // the typed password and email code. Trace off for the file.
@@ -48,7 +49,7 @@ function subscribeIn(page: Page, locale: Locale) {
 }
 
 async function subscriberCount(channelId: string): Promise<number> {
-  const res = await fetch(`${target().api}/api/channels/${channelId}/subscriptions/status`);
+  const res = await fetchRetry(`${target().api}/api/channels/${channelId}/subscriptions/status`);
   expect(res.ok, `GET subscriptions/status answered ${res.status}`).toBe(true);
   return ((await res.json()) as { result: { subscriberCount: number } }).result.subscriberCount;
 }

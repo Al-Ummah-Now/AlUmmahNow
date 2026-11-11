@@ -10,6 +10,7 @@
 import { test, expect } from '@playwright/test';
 import { target } from './targets';
 import { fixtureVideo } from './fixtures';
+import { fetchRetry } from './net';
 
 interface ListedVideo {
   id: string;
@@ -30,7 +31,7 @@ const MAX_SHORTS_PAGES = 5;
 
 /** The video as stored now (uncached), or null once it is gone. */
 async function currentVideo(id: string): Promise<ListedVideo | null> {
-  const res = await fetch(`${target().api}/api/videos/${id}`, { cache: 'no-store' });
+  const res = await fetchRetry(`${target().api}/api/videos/${id}`, { cache: 'no-store' });
   if (res.status === 404) return null;
   expect(res.ok, `GET /api/videos/:id answered ${res.status}`).toBe(true);
   const body = (await res.json()) as ListedVideo & { result?: ListedVideo };
@@ -42,7 +43,7 @@ async function shortsTabIds(channelId: string): Promise<string[]> {
   const ids: string[] = [];
   let cursor = '';
   for (let page = 0; page < MAX_SHORTS_PAGES; page++) {
-    const res = await fetch(`${target().api}/api/channels/${channelId}/shorts?limit=50${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`);
+    const res = await fetchRetry(`${target().api}/api/channels/${channelId}/shorts?limit=50${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`);
     expect(res.ok, `GET /api/channels/:id/shorts answered ${res.status}`).toBe(true);
     const body = (await res.json()) as { data?: Array<{ id: string }>; cursor?: string };
     ids.push(...(body.data ?? []).map((v) => v.id));
@@ -62,7 +63,7 @@ test.describe('Release: channel shorts', () => {
     const listed = (await shortsTabIds(short!.channelId!)).includes(short!.id);
     expect(listed, `short ${short!.id} (public, ${short!.duration}s) is on its channel's Shorts list`).toBe(true);
 
-    const channel = await fetch(`${target().api}/api/channels/${short!.channelId}`);
+    const channel = await fetchRetry(`${target().api}/api/channels/${short!.channelId}`);
     const body = (await channel.json()) as { result?: { videosCount?: number }; videosCount?: number };
     expect((body.result ?? body).videosCount ?? 0, 'channel videosCount counts its public videos').toBeGreaterThan(0);
   });

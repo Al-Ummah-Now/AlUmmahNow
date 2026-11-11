@@ -12,12 +12,13 @@
 import { test, expect, type Page } from '@playwright/test';
 import { target } from './targets';
 import { findPlayableVideo, NO_PLAYABLE_VIDEO, watchUrl } from './videos';
+import { fetchRetry } from './net';
 
 const HOST_PAGE = 'https://embed-host.release.test/page';
 
 async function embedDeployed(): Promise<boolean> {
   // A build without /embed redirects it to /{locale}/embed/... and then 404s
-  const res = await fetch(`${target().web}/embed/v/release-probe`);
+  const res = await fetchRetry(`${target().web}/embed/v/release-probe`);
   return res.status !== 404 && new URL(res.url).pathname.startsWith('/embed/');
 }
 
@@ -68,11 +69,11 @@ test.describe('Release: embeds', () => {
   });
 
   test('embed responses allow any framer; watch pages do not', async () => {
-    const embed = await fetch(`${target().web}/embed/v/release-probe`);
+    const embed = await fetchRetry(`${target().web}/embed/v/release-probe`);
     expect(embed.headers.get('content-security-policy') ?? '').toMatch(/frame-ancestors \*/);
     expect(embed.headers.get('x-frame-options')).toBeNull();
 
-    const app = await fetch(`${target().web}/en`);
+    const app = await fetchRetry(`${target().web}/en`);
     const appCsp = app.headers.get('content-security-policy') ?? '';
     expect(appCsp.includes('frame-ancestors *')).toBe(false);
   });
@@ -81,7 +82,7 @@ test.describe('Release: embeds', () => {
     const video = await findPlayableVideo();
     test.skip(!video, NO_PLAYABLE_VIDEO);
 
-    const res = await fetch(`${target().web}/oembed?format=json&url=${encodeURIComponent(watchUrl(video!.id))}`);
+    const res = await fetchRetry(`${target().web}/oembed?format=json&url=${encodeURIComponent(watchUrl(video!.id))}`);
     expect(res.status).toBe(200);
     expect(res.headers.get('access-control-allow-origin')).toBe('*');
     const body = (await res.json()) as Record<string, unknown>;

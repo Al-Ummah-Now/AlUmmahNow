@@ -15,6 +15,7 @@ import { promoteToAdmin } from './sink';
 import { sinkEmail, target } from './targets';
 import { apiFetch, completeRegistration, createProfile, signUpOnWeb, type WebUser, submitPasswordSignIn } from './web-session';
 import { grantCreatorTier } from './creator-tier';
+import { fetchRetry } from './net';
 
 // Signs users in through the auth server: traces would hold the password and code
 test.use({ trace: 'off' });
@@ -70,7 +71,7 @@ async function createVideo(user: WebUser, channelId: string, title: string): Pro
   return id as string;
 }
 
-const publicStatus = async (path: string) => (await fetch(`${target().api}${path}`, { cache: 'no-store' })).status;
+const publicStatus = async (path: string) => (await fetchRetry(`${target().api}${path}`, { cache: 'no-store' })).status;
 
 /**
  * Waits until the page's jobs panel stops re-reading the page (no job in

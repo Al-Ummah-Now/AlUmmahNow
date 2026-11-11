@@ -26,6 +26,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { test, expect, type Page } from '@playwright/test';
 import { target } from './targets';
+import { fetchRetry } from './net';
 
 const VIEWPORTS = {
   desktop: { width: 1280, height: 800 },
@@ -54,7 +55,7 @@ const ready = (v: HomeVideo) => (v.uploadStatus === undefined || v.uploadStatus 
 
 /** The video as stored now, or null once it is gone. */
 async function videoById(id: string): Promise<HomeVideo | null> {
-  const res = await fetch(`${target().api}/api/videos/${encodeURIComponent(id)}`, { cache: 'no-store' });
+  const res = await fetchRetry(`${target().api}/api/videos/${encodeURIComponent(id)}`, { cache: 'no-store' });
   if (res.status === 404) return null;
   expect(res.ok, `GET /api/videos/${id} answered ${res.status}`).toBe(true);
   const body = (await res.json()) as HomeVideo & { result?: HomeVideo };
