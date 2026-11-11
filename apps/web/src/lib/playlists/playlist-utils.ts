@@ -1,10 +1,19 @@
 /**
  * Pure helpers for playlist UI.
  */
+import { watchHref } from './playback';
 
-/** Watch page URL for a video (matches VideoCard links). */
-export function getWatchHref(locale: string, videoId: string): string {
-  return `/${locale}/video?vid=${encodeURIComponent(videoId)}`;
+/** Watch page URL for a video, inside a list when one is given (docs/specs/PLAYLIST-PLAYBACK.md). */
+export function getWatchHref(locale: string, videoId: string, list?: { id: string; index: number } | null): string {
+  return watchHref(locale, videoId, list ? { list: list.id, index: list.index } : {});
+}
+
+/**
+ * "Play all" from a card that has no video list: the playlist page with `?play=1`, which goes on
+ * to the first video this viewer may watch, played as the list.
+ */
+export function getPlayAllEntryHref(locale: string, playlistId: string): string {
+  return `${getPlaylistHref(locale, playlistId)}?play=1`;
 }
 
 /** Playlist page URL. */
@@ -12,13 +21,26 @@ export function getPlaylistHref(locale: string, playlistId: string): string {
   return `/${locale}/playlist/${encodeURIComponent(playlistId)}`;
 }
 
+/** A video's place in the stored list (the URL index), falling back to its place in the shown list. */
+export function storedIndexOf(storedIds: readonly string[] | null | undefined, videoId: string, shownIndex: number): number {
+  const at = storedIds ? storedIds.indexOf(videoId) : -1;
+  return at >= 0 ? at : shownIndex;
+}
+
 /**
- * "Play all" target: the first playable video in playlist order, or null
- * when the playlist has no viewable videos.
+ * "Play all" target: the first playable video in playlist order, played as
+ * the list (`?list=&index=`), or null when the playlist has no viewable videos.
  */
-export function getPlayAllHref(locale: string, videos: Array<{ id: string }>): string | null {
-  const first = videos.find((video) => !!video?.id);
-  return first ? getWatchHref(locale, first.id) : null;
+export function getPlayAllHref(
+  locale: string,
+  videos: Array<{ id: string }>,
+  listId: string,
+  storedIds?: readonly string[] | null,
+): string | null {
+  const at = videos.findIndex((video) => !!video?.id);
+  if (at === -1) return null;
+  const first = videos[at];
+  return getWatchHref(locale, first.id, { id: listId, index: storedIndexOf(storedIds, first.id, at) });
 }
 
 /**

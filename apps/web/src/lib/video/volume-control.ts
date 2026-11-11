@@ -35,6 +35,21 @@ export interface VolumeState {
 }
 
 /**
+ * Players muted by the page rather than by the viewer (autoplay's muted fallback, embed autoplay).
+ * Their mute is never saved, so the viewer's remembered volume survives a muted start.
+ */
+const autoMuted = new WeakSet<object>();
+
+export function markAutoMuted(player: object, on: boolean): void {
+  if (on) autoMuted.add(player);
+  else autoMuted.delete(player);
+}
+
+export function isAutoMuted(player: object): boolean {
+  return autoMuted.has(player);
+}
+
+/**
  * Save volume and mute state to localStorage
  *
  * Note: Volume preferences are stored unencrypted as they are not sensitive data.
@@ -414,9 +429,11 @@ export function setupVolumeChangeListener(
     const volume = extPlayer.volume();
     const muted = extPlayer.muted();
 
-    // Save to localStorage (synchronous now)
+    // Unmuted: the page's muted start is over
+    if (!muted) markAutoMuted(player, false);
+    // Save to localStorage (synchronous now), except a mute the page made
     try {
-      saveVolumeState(volume, muted);
+      if (!isAutoMuted(player)) saveVolumeState(volume, muted);
     } catch (error) {
       logger.error('[VolumeControl] Failed to save volume state:', error);
     }

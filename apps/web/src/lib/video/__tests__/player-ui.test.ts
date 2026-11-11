@@ -17,7 +17,7 @@ beforeEach(() => {
 
 describe('player-ui store', () => {
   it('starts with every page feature off (embeds and previews)', () => {
-    expect(getPlayerUi()).toEqual({ theatreAvailable: false, theatre: false, miniPlayerAvailable: false, upNext: null, reportProblem: null, chapters: [] });
+    expect(getPlayerUi()).toEqual({ theatreAvailable: false, theatre: false, miniPlayerAvailable: false, upNext: null, replayList: null, reportProblem: null, chapters: [] });
   });
 
   it('notifies only on a real change', () => {
@@ -45,7 +45,7 @@ describe('player-ui store', () => {
     expect(window.localStorage.getItem(THEATRE_STORAGE_KEY)).toBe('0');
     updatePlayerUi({ upNext: { title: 'Next', channel: 'C', go: jest.fn() } });
     cleanup();
-    expect(getPlayerUi()).toEqual({ theatreAvailable: false, theatre: false, miniPlayerAvailable: false, upNext: null, reportProblem: null, chapters: [] });
+    expect(getPlayerUi()).toEqual({ theatreAvailable: false, theatre: false, miniPlayerAvailable: false, upNext: null, replayList: null, reportProblem: null, chapters: [] });
   });
 
   it('survives storage that throws (private mode, blocked site data)', () => {

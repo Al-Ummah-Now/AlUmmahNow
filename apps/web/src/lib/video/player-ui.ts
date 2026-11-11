@@ -9,6 +9,8 @@ export interface UpNext {
   title: string;
   channel: string;
   thumbnail?: string;
+  /** Where the next video sits in its playlist, e.g. "4 / 12" */
+  badge?: string;
   /** Navigates to the next video */
   go: () => void;
 }
@@ -20,6 +22,8 @@ export interface PlayerUiState {
   /** The page floats the player while it plays off screen (watch page only) */
   miniPlayerAvailable: boolean;
   upNext: UpNext | null;
+  /** At the end of a playlist (loop off): starts it again from its first video */
+  replayList: (() => void) | null;
   /** Opens the page's report flow from the player's error panel */
   reportProblem: (() => void) | null;
   /** Chapter starts and titles (in the page language), for the progress bar's hover tooltip */
@@ -35,7 +39,7 @@ export const THEATRE_STORAGE_KEY = 'aun.player.theatre';
 
 type Listener = () => void;
 const listeners = new Set<Listener>();
-let state: PlayerUiState = { theatreAvailable: false, theatre: false, miniPlayerAvailable: false, upNext: null, reportProblem: null, chapters: [] };
+let state: PlayerUiState = { theatreAvailable: false, theatre: false, miniPlayerAvailable: false, upNext: null, replayList: null, reportProblem: null, chapters: [] };
 
 /** The viewer's remembered theatre choice. Storage can be missing or throw (private mode). */
 export function readTheatrePreference(storage: Pick<Storage, 'getItem'> | undefined = safeStorage()): boolean {
@@ -87,11 +91,11 @@ export function setTheatre(on: boolean): void {
 /** The watch page turns its features on while mounted. Returns the cleanup. */
 export function enableWatchPageFeatures(): () => void {
   updatePlayerUi({ theatreAvailable: true, miniPlayerAvailable: true, theatre: readTheatrePreference() });
-  return () => updatePlayerUi({ theatreAvailable: false, miniPlayerAvailable: false, theatre: false, upNext: null, reportProblem: null });
+  return () => updatePlayerUi({ theatreAvailable: false, miniPlayerAvailable: false, theatre: false, upNext: null, replayList: null, reportProblem: null });
 }
 
 /** Test helper: back to the initial state. */
 export function resetPlayerUi(): void {
-  state = { theatreAvailable: false, theatre: false, miniPlayerAvailable: false, upNext: null, reportProblem: null, chapters: [] };
+  state = { theatreAvailable: false, theatre: false, miniPlayerAvailable: false, upNext: null, replayList: null, reportProblem: null, chapters: [] };
   listeners.forEach((l) => l());
 }

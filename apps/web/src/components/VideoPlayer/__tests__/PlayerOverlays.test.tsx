@@ -47,11 +47,12 @@ function renderEnd(opts: { upNext?: boolean } = {}) {
 describe('EndScreen', () => {
   it('counts real seconds and plays the next video at zero', () => {
     const { go, seconds } = renderEnd();
+    expect(AUTO_ADVANCE_SECONDS).toBe(3);
     expect(seconds()).toBe(String(AUTO_ADVANCE_SECONDS));
-    elapse(3_000);
-    expect(seconds()).toBe(String(AUTO_ADVANCE_SECONDS - 3));
+    elapse(1_000);
+    expect(seconds()).toBe(String(AUTO_ADVANCE_SECONDS - 1));
     expect(go).not.toHaveBeenCalled();
-    elapse((AUTO_ADVANCE_SECONDS - 3) * 1000);
+    elapse((AUTO_ADVANCE_SECONDS - 1) * 1000);
     expect(go).toHaveBeenCalledTimes(1);
     elapse(2_000);
     expect(go).toHaveBeenCalledTimes(1);
@@ -61,10 +62,10 @@ describe('EndScreen', () => {
     const { seconds } = renderEnd();
     expect(screen.getByTestId('player-play-next')).toHaveFocus();
     const status = screen.getByRole('status');
-    expect(status).toHaveTextContent('Next video in 8 seconds');
-    elapse(2_000);
-    expect(seconds()).toBe('6');
-    expect(status).toHaveTextContent('Next video in 8 seconds');
+    expect(status).toHaveTextContent('Next video in 3 seconds');
+    elapse(1_000);
+    expect(seconds()).toBe('2');
+    expect(status).toHaveTextContent('Next video in 3 seconds');
   });
 
   it('leaves focus alone when the viewer is elsewhere on the page', () => {
@@ -80,18 +81,18 @@ describe('EndScreen', () => {
     const card = document.querySelector('.vjs-fanous-next-card')!;
     fireEvent.pointerEnter(card);
     elapse(10_000);
-    expect(seconds()).toBe('8');
+    expect(seconds()).toBe('3');
     expect(go).not.toHaveBeenCalled();
     fireEvent.pointerLeave(card);
     elapse(1_000);
-    expect(seconds()).toBe('7');
+    expect(seconds()).toBe('2');
   });
 
   it('pauses while focus the viewer moved is inside', () => {
     const { seconds } = renderEnd();
     act(() => screen.getByTestId('player-watch-again').focus());
     elapse(3_000);
-    expect(seconds()).toBe('8');
+    expect(seconds()).toBe('3');
   });
 
   it.each([
@@ -113,7 +114,7 @@ describe('EndScreen', () => {
   it('ignores a bare modifier key', () => {
     const { seconds } = renderEnd();
     fireEvent.keyDown(screen.getByTestId('player-play-next'), { key: 'Shift' });
-    expect(seconds()).toBe('8');
+    expect(seconds()).toBe('3');
   });
 
   it('Watch again stops the countdown and replays', () => {

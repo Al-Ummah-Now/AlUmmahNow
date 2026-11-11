@@ -67,7 +67,10 @@ describe('Watch later page', () => {
   it('lists saved videos, reorders with buttons and removes', async () => {
     render(<LibraryListPage kind="watch-later" dir="ltr" />);
     await waitFor(() => expect(screen.getAllByTestId('library-list-item')).toHaveLength(2));
-    expect(screen.getAllByTestId('library-video')[0]).toHaveAttribute('href', '/en/video?vid=a');
+    // Played as the viewer's Watch later list (docs/specs/PLAYLIST-PLAYBACK.md: WL alias, stored index)
+    expect(screen.getAllByTestId('library-video')[0]).toHaveAttribute('href', '/en/video/a?list=WL&index=0');
+    expect(screen.getAllByTestId('library-video')[1]).toHaveAttribute('href', '/en/video/b?list=WL&index=1');
+    expect(screen.getByTestId('library-play-all')).toHaveAttribute('href', '/en/video/a?list=WL&index=0');
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Move down: Video a' }));

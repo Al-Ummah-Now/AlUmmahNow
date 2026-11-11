@@ -15,6 +15,10 @@ export interface ContentRef {
   kind: EmbedKind;
   id: string;
   start?: number;
+  /** A watch URL's public playlist (`?list=`): the oEmbed answers with that playlist's embed */
+  list?: string;
+  /** Playlist embeds: the item to start with (0-based, the embed contract's `index`) */
+  index?: number;
 }
 
 /**
@@ -35,12 +39,20 @@ export function parseContentUrl(raw: string, host: string): ContentRef | null {
   const start = parseTime(url.searchParams.get('t') ?? url.searchParams.get('start')) ?? undefined;
   const withStart = (ref: ContentRef): ContentRef => (start ? { ...ref, start } : ref);
 
-  let match = path.match(/^\/(?:en|ar)\/video\/([^/]+)$/) || path.match(/^\/embed\/v\/([^/]+)$/);
+  // A watch URL inside a playlist (docs/specs/PLAYLIST-PLAYBACK.md section 2.5); the viewer's
+  // private lists (WL / LL) never become embeds
+  const listParam = url.searchParams.get('list');
+  const list = listParam && listParam !== 'WL' && listParam !== 'LL' && isValidContentId(listParam) ? listParam : undefined;
+  const withList = (ref: ContentRef): ContentRef => (list ? { ...ref, list } : ref);
+
+  let match = path.match(/^\/(?:en|ar)\/video\/([^/]+)$/);
+  if (match) return isValidContentId(match[1]) ? withList(withStart({ kind: 'video', id: match[1] })) : null;
+  match = path.match(/^\/embed\/v\/([^/]+)$/);
   if (match) return isValidContentId(match[1]) ? withStart({ kind: 'video', id: match[1] }) : null;
 
   if (/^\/(?:en|ar)\/video$/.test(path)) {
     const vid = url.searchParams.get('vid');
-    return isValidContentId(vid) ? withStart({ kind: 'video', id: vid }) : null;
+    return isValidContentId(vid) ? withList(withStart({ kind: 'video', id: vid })) : null;
   }
 
   match = path.match(/^\/(?:en|ar)\/playlist\/([^/]+)$/) || path.match(/^\/embed\/p\/([^/]+)$/);
@@ -113,7 +125,7 @@ export interface OEmbedResponse {
 }
 
 export function buildOEmbed(origin: string, ref: ContentRef, size: EmbedSize, content: OEmbedContent): OEmbedResponse {
-  const src = embedUrl(origin, ref.kind, ref.id, { start: ref.start });
+  const src = embedUrl(origin, ref.kind, ref.id, { start: ref.start, index: ref.index });
   const response: OEmbedResponse = {
     version: '1.0',
     type: 'video',
