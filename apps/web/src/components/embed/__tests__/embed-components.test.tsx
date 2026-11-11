@@ -7,6 +7,7 @@ import EmbedPlayer from '../EmbedPlayer';
 import UnavailableFrame from '../UnavailableFrame';
 import ShareDialog from '@/components/video/ShareDialog';
 import { parseEmbedParams } from '@/lib/embed/params';
+import { getPlayerUi } from '@/lib/video/player-ui';
 import type { EmbedVideo } from '@/lib/embed/content';
 
 jest.mock('@/lib/logger-client', () => ({ logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() } }));
@@ -28,7 +29,7 @@ jest.mock('@/components/VideoPagePlayer/VideoPlayerWithChapters', () => ({
       data-video={String(props.videoId)}
       data-start={String(props.startTime)}
       data-muted={String(props.muted)}
-      data-autoplay={String(props.autoplay)}
+      data-autoplay={String(props.autoplayIntent ?? props.autoplay)}
       data-lang={String(props.lang)}
       data-context={JSON.stringify(props.analyticsContext)}
       data-websocket={String(props.enableWebSocket)}
@@ -224,6 +225,25 @@ describe('EmbedPlayer', () => {
     expect(list).toHaveTextContent('Series');
     fireEvent.click(screen.getByText('Title c'));
     expect(screen.getByTestId('mock-player')).toHaveAttribute('data-video', 'c');
+  });
+
+  it('the end screen offers the next item in order, and stops after the last (PLAYLIST-PLAYBACK D9)', () => {
+    render(
+      <EmbedPlayer
+        videos={[video('a', { listIndex: 0 }), video('b', { listIndex: 3 }), video('c', { listIndex: 4 })]}
+        params={parseEmbedParams({ index: '1' })}
+        playlist={{ id: 'p1', title: 'Series' }}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('embed-facade'));
+    const upNext = getPlayerUi().upNext;
+    expect(upNext?.title).toBe('Title c');
+    expect(upNext?.badge).toBe('3 / 3');
+    // "Watch on" continues the list on the watch page at this item's stored index
+    expect(screen.getByTestId('embed-watch-link').getAttribute('href')).toBe('/en/video/b?list=p1&index=3');
+    act(() => upNext!.go());
+    expect(screen.getByTestId('mock-player')).toHaveAttribute('data-video', 'c');
+    expect(getPlayerUi().upNext).toBeNull();
   });
 });
 

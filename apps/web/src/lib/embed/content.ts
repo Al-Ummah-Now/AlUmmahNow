@@ -39,6 +39,8 @@ export interface EmbedVideo {
   width?: number;
   height?: number;
   isShort?: boolean;
+  /** Inside a playlist: the item's place in the stored list (the watch URL's `index`) */
+  listIndex?: number;
 }
 
 export interface EmbedPlaylist {
@@ -163,8 +165,46 @@ interface ApiPlaylist {
   videoItems?: ApiVideo[];
 }
 
+interface ApiQueuePage {
+  result?: {
+    playlist?: { id?: string; title?: string; isPublic?: boolean; channelName?: string };
+    total?: number;
+    items?: Array<ApiVideo & { index?: number }>;
+    nextOffset?: number | null;
+  };
+}
+
+/** Longest list an embed loads (pages of QUEUE_PAGE). */
+export const EMBED_PLAYLIST_MAX = 500;
+const QUEUE_PAGE = 100;
+
+/**
+ * A public playlist's public videos in the playlist's saved order, from the playback queue API
+ * (docs/specs/PLAYLIST-PLAYBACK.md section 3; the same order every player uses, no 200 cap).
+ * Before that API is deployed the older expanded playlist read is used.
+ */
 export const loadPublicPlaylist = cache(async (playlistId: string): Promise<EmbedPlaylist | null> => {
-  const playlist = await anonymousGet<ApiPlaylist>(`/api/playlists/${encodeURIComponent(playlistId)}?includeVideos=true`);
+  const id = encodeURIComponent(playlistId);
+  const first = await anonymousGet<ApiQueuePage>(`/api/playlists/${id}/queue?offset=0&limit=${QUEUE_PAGE}`);
+  if (first?.result?.playlist) {
+    const summary = first.result.playlist;
+    if (!summary.id || summary.isPublic === false) return null;
+    const items = [...(first.result.items ?? [])];
+    let next = first.result.nextOffset ?? null;
+    while (next !== null && items.length < EMBED_PLAYLIST_MAX) {
+      const page = await anonymousGet<ApiQueuePage>(`/api/playlists/${id}/queue?offset=${next}&limit=${QUEUE_PAGE}`);
+      if (!page?.result) break;
+      items.push(...(page.result.items ?? []));
+      next = page.result.nextOffset ?? null;
+    }
+    const videos = items.slice(0, EMBED_PLAYLIST_MAX).flatMap((item) => {
+      const video = toEmbedVideo({ ...item, channelName: item.channelName });
+      return video ? [{ ...video, listIndex: item.index }] : [];
+    });
+    return { id: summary.id, title: summary.title || '', channelName: summary.channelName, videos };
+  }
+
+  const playlist = await anonymousGet<ApiPlaylist>(`/api/playlists/${id}?includeVideos=true`);
   if (!playlist || !playlist.id || playlist.isPublic === false) return null;
   const videos = (playlist.videoItems || []).map(toEmbedVideo).filter((v): v is EmbedVideo => v !== null);
   return {

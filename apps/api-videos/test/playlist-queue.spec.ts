@@ -20,7 +20,7 @@ const ids = (n: number) => Array.from({ length: n }, (_, i) => `v${String(i).pad
 function setup(opts: { videos?: number; playlists?: Record<string, unknown>; extraVideos?: Record<string, unknown>; liked?: Array<[string, string, number]> } = {}) {
 	const videos: Record<string, unknown> = {};
 	for (const [i, id] of ids(opts.videos ?? 10).entries()) {
-		videos[id] = videoFixture({ id, title: `Lesson ${String.fromCharCode(97 + (i % 26))}${i}`, userId: OWNER, channelId: 'ch', views: i * 10, duration: 60 + i });
+		videos[id] = videoFixture({ id, title: `Lesson ${String.fromCharCode(97 + (i % 26))}${i}`, userId: OWNER, channelId: 'ch', views: i * 10, duration: 60 + i, playUrl: `https://cdn.example/${id}/playlist.m3u8` });
 	}
 	Object.assign(videos, opts.extraVideos ?? {});
 	const db = createSqliteD1();
@@ -102,6 +102,7 @@ describe('GET /api/playlists/:id/queue', () => {
 		assert.equal(first.body.result.playlist.channelName, 'Lessons channel');
 		assert.equal(first.body.result.playlist.channelHandle, 'lessons');
 		assert.equal(first.body.result.items[0].channelName, 'Lessons channel');
+		assert.equal(first.body.result.items[0].playUrl, 'https://cdn.example/v0003/playlist.m3u8', 'players that play in place get the stream');
 		assert.equal(first.headers.get('cache-control'), 'private, no-cache');
 
 		const reordered = await call(env, OWNER, 'PUT', '/api/playlists/pl/videos/order', { videoIds: ['v0000', 'v0002', 'v0003', 'v0001'] }, { channelId: 'ch' });

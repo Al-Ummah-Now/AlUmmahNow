@@ -48,6 +48,9 @@ export interface QueueItem {
 	channelId?: string;
 	channelName?: string;
 	isShort: boolean;
+	/** HLS playlist (signed by the bunny-signing middleware like every response), for players that play the list in place (embeds, native apps) */
+	playUrl?: string;
+	uploadStatus?: string;
 }
 
 export interface QueueWindow {
@@ -152,7 +155,7 @@ export async function queueItems(
 	const names = await channelNames([...new Set(visible.map((x) => x.video.channelId).filter(Boolean) as string[])]);
 	return visible.map(({ entry, position, video }) => {
 		// The public fields hide a thumbnail that is not ready yet
-		const extra = publicVideoFields(video) as VideoType & { titleLocalized?: Record<string, string>; thumbnailUrl?: string; duration?: number | null };
+		const extra = publicVideoFields(video) as VideoType & { titleLocalized?: Record<string, string>; thumbnailUrl?: string; duration?: number | null; playUrl?: string; uploadStatus?: string };
 		return {
 			id: entry.id,
 			index: entry.index,
@@ -164,6 +167,8 @@ export async function queueItems(
 			channelId: video.channelId,
 			channelName: names.get(video.channelId) ?? '',
 			isShort: isShort(video as never),
+			...(extra.playUrl ? { playUrl: extra.playUrl } : {}),
+			...(extra.uploadStatus ? { uploadStatus: extra.uploadStatus } : {}),
 		};
 	});
 }
