@@ -4,6 +4,7 @@
  */
 import { expect, type Locator, type Page } from '@playwright/test';
 import { fillSecret } from './secret-fill';
+import { fetchRetry } from './net';
 import { readSinkCode } from './sink';
 import { sinkEmail, target, TEST_PASSWORD } from './targets';
 
@@ -235,7 +236,8 @@ export async function signInAgain(page: Page, email: string, locale: Locale = 'e
 export async function apiFetch(user: Pick<WebUser, 'accessToken'>, path: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
   headers.set('Authorization', `Bearer ${user.accessToken}`);
-  return fetch(`${target().api}${path}`, { ...init, headers });
+  // A dropped connection is retried for requests that are safe to repeat (net.ts)
+  return fetchRetry(`${target().api}${path}`, { ...init, headers });
 }
 
 /** Creates the user's video profile (new users are sent to the create-profile page otherwise). */
