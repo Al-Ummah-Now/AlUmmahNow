@@ -1,4 +1,4 @@
-import { checkPath, itemPath, STUDIO_NAV, switchedPath, visibleNav, visibleTabs } from '../nav';
+import { checkPath, itemPath, legacyHref, STUDIO_NAV, switchedPath, visibleNav, visibleTabs } from '../nav';
 import { can, roleForChannel, type StudioRole } from '../permissions';
 
 const ids = (role: StudioRole) => visibleNav(role).map((item) => item.id);
@@ -6,32 +6,42 @@ const tabs = (role: StudioRole, id: string) => visibleTabs(role, STUDIO_NAV.find
 
 describe('navigation per role', () => {
   it.each<[StudioRole, string[]]>([
-    ['owner', ['dashboard', 'content', 'analytics', 'comments', 'playlists', 'customisation', 'settings']],
-    ['admin', ['dashboard', 'content', 'analytics', 'comments', 'playlists', 'customisation', 'settings']],
+    ['owner', ['dashboard', 'content', 'analytics', 'playlists', 'customisation', 'settings']],
+    ['admin', ['dashboard', 'content', 'analytics', 'playlists', 'customisation', 'settings']],
     ['editor', ['dashboard', 'content', 'playlists']],
-    ['moderator', ['dashboard', 'content', 'comments']],
+    // Comments and Live have no creator page yet
+    ['moderator', ['dashboard']],
   ])('%s sees exactly its items', (role, expected) => {
     expect(ids(role)).toEqual(expected);
   });
 
   it.each<[StudioRole, string[]]>([
-    ['owner', ['videos', 'live', 'posts']],
-    ['admin', ['videos', 'live', 'posts']],
+    ['owner', ['videos', 'posts']],
+    ['admin', ['videos', 'posts']],
     ['editor', ['videos', 'posts']],
-    ['moderator', ['live']],
+    ['moderator', []],
   ])('%s sees exactly its Content tabs', (role, expected) => {
     expect(tabs(role, 'content')).toEqual(expected);
   });
 
-  it('hides the Permissions tab until channel roles ship', () => {
-    expect(tabs('owner', 'settings')).toEqual(['general']);
-    expect(checkPath('owner', ['settings', 'permissions'])).toEqual({ status: 'unknown' });
+  it('shows the Permissions tab to roles that can see members', () => {
+    expect(tabs('owner', 'settings')).toEqual(['general', 'permissions']);
+    expect(checkPath('owner', ['settings', 'permissions'])).toEqual({ status: 'ok' });
+  });
+
+  it('opens the existing channel settings pages for sections Studio has not rebuilt', () => {
+    expect(legacyHref('ar', 'c1', 'playlists')).toBe('/ar/settings/channel/c1/playlists');
+    expect(legacyHref('en', 'c1', 'content/posts/new')).toBe('/en/settings/channel/c1/community/new');
+    expect(legacyHref('en', 'c1', 'customisation/profile')).toBe('/en/settings/channel/c1/edit');
+    expect(legacyHref('en', 'c1', 'settings/general')).toBe('/en/settings/channel/c1');
+    expect(legacyHref('en', 'c1', 'settings/permissions')).toBe('/en/settings/channel/c1/team');
+    expect(legacyHref('en', 'c1', 'content/videos')).toBeNull();
   });
 
   it('opens Content on the first tab the role can use', () => {
     const content = STUDIO_NAV.find((item) => item.id === 'content')!;
     expect(itemPath('owner', content)).toBe('content/videos');
-    expect(itemPath('moderator', content)).toBe('content/live');
+    expect(itemPath('editor', content)).toBe('content/videos');
   });
 });
 
@@ -43,7 +53,7 @@ describe('checkPath', () => {
     ['owner', ['customisation'], 'redirect'],
     ['owner', ['settings'], 'redirect'],
     ['owner', ['content', 'videos'], 'ok'],
-    ['editor', ['content', 'live'], 'forbidden'],
+    ['editor', ['content', 'live'], 'unknown'],
     ['moderator', ['content', 'videos'], 'forbidden'],
     ['editor', ['analytics'], 'forbidden'],
     ['editor', ['content', 'videos', 'v1', 'edit'], 'ok'],
@@ -94,7 +104,12 @@ describe('permissions', () => {
     expect(can('moderator', 'analytics.view')).toBe(false);
   });
 
-  it('treats only the channel owner as having a role', () => {
+  it('gives channel members their role from the channel record', () => {
+    const channel = { userId: 'u1', members: [{ userId: 'u3', role: 'editor', addedAt: '2026-01-01T00:00:00.000Z', addedBy: 'u1' }] };
+    expect(roleForChannel(channel, 'u3')).toBe('editor');
+  });
+
+  it('treats the owner as owner and a stranger as no role', () => {
     expect(roleForChannel({ userId: 'u1' }, 'u1')).toBe('owner');
     expect(roleForChannel({ userId: 'u1' }, 'u2')).toBeNull();
     expect(roleForChannel(null, 'u1')).toBeNull();

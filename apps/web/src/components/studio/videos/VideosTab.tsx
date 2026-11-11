@@ -1,6 +1,5 @@
 'use client';
 
-import { reuploadHref } from '@/lib/dashboard/reupload';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
@@ -13,30 +12,26 @@ import { BulkEditDialog } from '@/components/bulkEdit/BulkEditDialog';
 import { CalendarControls } from '@/components/calendar/CalendarControls';
 import { ViewSwitcher } from '@/components/calendar/ViewSwitcher';
 import { navigateNext, navigatePrevious } from '@/components/calendar/utils/dateFormatters';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import AddToPlaylistDialog from '@/components/playlists/AddToPlaylistDialog';
+import { toPicked } from '@/components/playlists/VideoPicker';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getChannelContentCounts, listChannelContent, type BulkSummary, type StudioVideo } from '@/lib/api/studio-content';
-import { BulkPlaylistDialog, BulkScheduleDialog } from './BulkDialogs';
+import { BulkScheduleDialog } from './BulkDialogs';
+import { DeletedVideos } from './DeletedVideos';
 import { cancelSchedule, publishNow } from '@/lib/api/scheduling';
 import { bulkDeleteVideos, bulkUpdateVideos } from '@/lib/api/videos';
 import type { BulkVideoChanges } from '@/lib/dashboard/bulk-edit';
 import { logger } from '@/lib/logger-client';
 import { isLimitRefusal, limitRefusalMessage, type LimitRefusal } from '@/lib/studio/limits';
 import { can, type StudioRole } from '@/lib/studio/permissions';
+import { studioReuploadHref, studioUploadHref } from '@/lib/studio/links';
 import { MAX_BULK_SELECTION, parseVideosQuery, rowActions, videosQueryString, type VideoRowAction, type VideosQuery } from '@/lib/studio/videos';
+import { isShortOrFlag } from '@al-ummah/shared-types';
 
 const ScheduledVideoCalendar = dynamic(
   () => import('@/components/calendar/ScheduledVideoCalendar').then((mod) => ({ default: mod.ScheduledVideoCalendar })),
@@ -86,14 +81,22 @@ export function VideosTab({ locale, channelId, role }: Props) {
   }, [pathname, query, router]);
 
   const showingCalendar = query.status === 'scheduled' && query.view === 'calendar';
+  const showingDeleted = query.status === 'deleted';
 
   const load = useCallback(async (more?: string) => {
+    if (query.status === 'deleted') {
+      // Recently deleted loads its own list; only refresh the counts here
+      const nextCounts = await getChannelContentCounts(channelId).catch(() => null);
+      if (nextCounts) setCounts(nextCounts);
+      setLoading(false);
+      return;
+    }
     const request = ++requestRef.current;
     if (!more) setLoading(true);
     setFailed(false);
     try {
       const [page, nextCounts] = await Promise.all([
-        listChannelContent(channelId, { ...query, cursor: more, limit: showingCalendar ? CALENDAR_PAGE : PAGE }),
+        listChannelContent(channelId, { ...query, status: query.status as StudioVideoStatus, cursor: more, limit: showingCalendar ? CALENDAR_PAGE : PAGE }),
         more ? Promise.resolve(undefined) : getChannelContentCounts(channelId),
       ]);
       if (request !== requestRef.current) return;
@@ -224,7 +227,7 @@ export function VideosTab({ locale, channelId, role }: Props) {
     if (action === 'analytics') return `${base}/${id}/analytics`;
     if (action === 'view') return watchHref(video.id);
     // Re-upload into the same video, details kept (lib/dashboard/reupload.ts)
-    if (action === 'retryUpload') return reuploadHref(locale, video);
+    if (action === 'retryUpload') return studioReuploadHref(locale, channelId, video);
     return null;
   };
 
@@ -257,8 +260,23 @@ export function VideosTab({ locale, channelId, role }: Props) {
             {text.statuses[status]}{counts ? ` (${numberFormat.format(counts[status])})` : ''}
           </Button>
         ))}
+        {canBulkDelete && (
+          <Button
+            variant={showingDeleted ? 'default' : 'outline'}
+            aria-pressed={showingDeleted}
+            onClick={() => update({ status: 'deleted' })}
+            data-testid="studio-status-deleted"
+            className="min-h-11 whitespace-nowrap"
+          >
+            {text.trash.tab}
+          </Button>
+        )}
       </div>
 
+      {showingDeleted ? (
+        <DeletedVideos locale={locale} channelId={channelId} onChanged={() => void load()} />
+      ) : (
+      <>
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Input
           type="search"
@@ -327,9 +345,9 @@ export function VideosTab({ locale, channelId, role }: Props) {
         <div className="sticky bottom-0 z-10 mb-3 flex flex-wrap items-center gap-2 rounded-md border border-border bg-card p-2 md:static" data-testid="studio-bulk-bar">
           <span className="text-sm font-medium">{text.bulk.selected.replace('{count}', numberFormat.format(selected.size))}</span>
           {canBulkEdit && <Button variant="outline" onClick={() => setBulkEditOpen(true)} className="min-h-11">{text.bulk.edit}</Button>}
-          {can(role, 'post.manage') && <Button variant="outline" onClick={() => setBulkDialog('playlist')} className="min-h-11">{text.bulk.addToPlaylist}</Button>}
+          {can(role, 'playlist.manage') && <Button variant="outline" onClick={() => setBulkDialog('playlist')} className="min-h-11" data-testid="studio-bulk-playlist">{text.bulk.addToPlaylist}</Button>}
           {can(role, 'video.schedule') && <Button variant="outline" onClick={() => setBulkDialog('schedule')} className="min-h-11">{text.bulk.schedule}</Button>}
-          {canBulkDelete && <Button variant="outline" onClick={() => setPendingDelete({ ids: [...selected] })} className="min-h-11">{text.bulk.delete}</Button>}
+          {canBulkDelete && <Button variant="outline" onClick={() => setPendingDelete({ ids: [...selected] })} className="min-h-11" data-testid="studio-bulk-delete">{text.bulk.delete}</Button>}
           <Button variant="ghost" onClick={() => setSelected(new Set())} className="min-h-11">{text.bulk.clear}</Button>
           {selected.size >= MAX_BULK_SELECTION && <span className="text-sm text-muted-foreground">{text.bulk.limit.replace('{max}', String(MAX_BULK_SELECTION))}</span>}
         </div>
@@ -346,12 +364,12 @@ export function VideosTab({ locale, channelId, role }: Props) {
         </div>
       ) : items.length === 0 ? (
         <div className="py-12 text-center" data-testid="studio-videos-empty">
-          <p className="mb-3 text-muted-foreground">{filtered ? text.empty.filtered : text.empty[query.status]}</p>
+          <p className="mb-3 text-muted-foreground">{filtered ? text.empty.filtered : text.empty[query.status as StudioVideoStatus]}</p>
           {filtered ? (
             <Button variant="outline" onClick={clearFilters}>{text.filters.clear}</Button>
           ) : query.status === 'published' && can(role, 'video.upload') ? (
             <Button asChild>
-              <Link href={`/${locale}/upload`}>
+              <Link href={studioUploadHref(locale, channelId)}>
                 <UploadCloud aria-hidden="true" className="me-2 h-4 w-4" />
                 {t.studio.upload}
               </Link>
@@ -372,7 +390,7 @@ export function VideosTab({ locale, channelId, role }: Props) {
             <thead className="sr-only md:not-sr-only md:table-header-group">
               <tr className="border-b border-border text-start text-xs text-muted-foreground">
                 <th className="p-2">
-                  <input type="checkbox" aria-label={text.selectAll} checked={allSelected} onChange={toggleAll} className="h-5 w-5" />
+                  <input type="checkbox" aria-label={text.selectAll} checked={allSelected} onChange={toggleAll} className="h-5 w-5" data-testid="studio-select-all" />
                 </th>
                 <th className="p-2 text-start font-medium">{text.columns.video}</th>
                 <th className="p-2 text-start font-medium">{text.columns.date}</th>
@@ -396,6 +414,8 @@ export function VideosTab({ locale, channelId, role }: Props) {
                         checked={selected.has(video.id)}
                         onChange={() => toggle(video.id)}
                         className="h-5 w-5"
+                        data-testid="studio-video-select"
+                        data-video-id={video.id}
                       />
                     </td>
                     <td className="block md:table-cell md:p-2">
@@ -412,7 +432,7 @@ export function VideosTab({ locale, channelId, role }: Props) {
                           <span className="mt-1 flex gap-1 text-xs text-muted-foreground">
                             {video.isPublic === false && <span className="rounded bg-muted px-1">{text.badges.private}</span>}
                             {video.isLive && <span className="rounded bg-muted px-1">{text.badges.live}</span>}
-                            {typeof video.duration === 'number' && video.duration > 0 && video.duration <= 60 && <span className="rounded bg-muted px-1">{text.badges.short}</span>}
+                            {isShortOrFlag(video as never) && <span className="rounded bg-muted px-1">{text.badges.short}</span>}
                           </span>
                         </div>
                       </div>
@@ -454,23 +474,27 @@ export function VideosTab({ locale, channelId, role }: Props) {
           )}
         </>
       )}
+      </>
+      )}
 
       <BulkEditDialog open={bulkEditOpen} count={selected.size} onOpenChange={setBulkEditOpen} onApply={applyBulkEdit} />
-      <BulkPlaylistDialog open={bulkDialog === 'playlist'} channelId={channelId} videoIds={[...selected]} onOpenChange={(open) => setBulkDialog(open ? 'playlist' : null)} onDone={finishBulk} />
+      <AddToPlaylistDialog
+        open={bulkDialog === 'playlist'}
+        onOpenChange={(open) => setBulkDialog(open ? 'playlist' : null)}
+        channelId={channelId}
+        videos={items.filter((video) => selected.has(video.id)).map(toPicked)}
+      />
       <BulkScheduleDialog open={bulkDialog === 'schedule'} videoIds={[...selected]} onOpenChange={(open) => setBulkDialog(open ? 'schedule' : null)} onDone={finishBulk} />
 
-      <AlertDialog open={pendingDelete !== null} onOpenChange={(open) => { if (!open) setPendingDelete(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{pendingDelete && pendingDelete.ids.length > 1 ? text.confirmDelete.bulkTitle.replace('{count}', String(pendingDelete.ids.length)) : text.confirmDelete.title}</AlertDialogTitle>
-            <AlertDialogDescription>{text.confirmDelete.body}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{text.confirmDelete.cancel}</AlertDialogCancel>
-            <AlertDialogAction onClick={() => void deleteConfirmed()} data-testid="studio-confirm-delete">{text.confirmDelete.confirm}</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onResult={(confirmed) => { if (confirmed) void deleteConfirmed(); else setPendingDelete(null); }}
+        title={pendingDelete && pendingDelete.ids.length > 1 ? text.confirmDelete.bulkTitle.replace('{count}', String(pendingDelete.ids.length)) : text.confirmDelete.title}
+        description={text.confirmDelete.body}
+        confirmLabel={text.confirmDelete.confirm}
+        cancelLabel={text.confirmDelete.cancel}
+        testId="studio-confirm-delete"
+      />
     </div>
   );
 }
