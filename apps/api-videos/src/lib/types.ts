@@ -153,6 +153,8 @@ export const Video = z.object({
     // Who set the category: the uploader, the AI (a reviewable suggestion) or an admin
     categorySource: z.enum(['uploader', 'ai', 'admin']).optional(),
     language: z.enum(['en', 'ar', 'ur', 'fr']).optional(),
+    // The file's name as picked on upload (bulk rename's {filename})
+    originalFilename: z.string().optional(),
     availableResolutions: z.array(z.string()).default([]),
     comments: z.array(Comment).default([]),
     likes: z.array(Like).default([]),
