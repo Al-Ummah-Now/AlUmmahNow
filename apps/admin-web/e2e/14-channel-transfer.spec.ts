@@ -181,7 +181,10 @@ test.describe('channel transfer', () => {
     await option(page, creator.id).click();
     await page.getByTestId('channel-transfer-submit').click();
     const dialog = page.getByTestId('channel-transfer-submit-dialog');
-    await expect(dialog).toContainText(`نقل هذه القناة إلى ${creator.displayName} (${creator.email})؟`);
+    // In Arabic the name and email are wrapped in Unicode isolates (FSI U+2068 … PDI U+2069), so the
+    // Latin text and its parentheses stay in place inside the right-to-left sentence
+    const iso = (value: string) => `\u2068${value}\u2069`;
+    await expect(dialog).toContainText(`نقل هذه القناة إلى ${iso(creator.displayName)} (${iso(creator.email!)})؟`);
     await page.getByTestId('channel-transfer-submit-typed').fill(creator.email!);
     await page.getByTestId('channel-transfer-submit-confirm').click();
     await expect(page.getByTestId('channel-transfer-status')).toHaveAttribute('data-status', 'succeeded', { timeout: 60_000 });
