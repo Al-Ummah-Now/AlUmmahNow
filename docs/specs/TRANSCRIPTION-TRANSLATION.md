@@ -26,8 +26,8 @@ The owner asked for:
 | Dubbing (later) | DeepL speech-to-speech is technically viable (a 52 s clip became a 59 s English voice track) | It spoke a machine translation of the ayat. Quran spans must keep the original audio and are never synthesised (principle 3). |
 | Never | m2m100 (unusable: invented hadith, repetition loops), gpt-oss (answers instead of translating) | R§3.1, CMS §1.5 |
 | Quran display | **Official text only, never ASR**: a span shows the stored official text for an exact word range after creator confirmation, or a reference with no text | Measured 0 wrong ayat and 0 extra words on 20 clips (R§8) |
-| Quran text | **Quran Foundation Content Sync** (`quran_core:1`, `mushafs:4`), a local copy synced at least every 7 days. Tanzil XML is the fallback | The QF terms allow offline copies kept through Content Sync (quoted in §9.4). Needs Developer Console registration (O12) |
-| Quran translations | **QF Content Sync `translations:<id>`** for editions QF publishes as syncable; **QuranEnc** offline files for anything QF doesn't offer. English default: Saheeh International | Which translation ids are public for sync is only visible with credentials (O12). QuranEnc terms allow republishing with attribution and version (§9.4). |
+| Quran: identify vs store | **Identify** with local fuzzy search (QF Search API only as a review suggestion). **Store** in captions: references, plus text rendered from a storage-cleared source: Tanzil/QuranEnc until QF confirms in writing, then optionally QF Content Sync | Measured: QF search gives 20% wrong top results and answers every non-Quran snippet; local gave 0 wrong (§5.5). The terms on storage are quoted in §9.4 |
+| Quran translations | **QuranEnc** offline files (default, storage cleared); QF Content Sync `translations:<id>` once QF confirms storage in captions. English default: Saheeh International | Which translation ids are public for sync is only visible with credentials (O12). QuranEnc terms allow republishing with attribution and version (§9.4). |
 | Metering | One "caption minute" per video-minute per language produced; plan allowance plus add-on packs plus admin grants | §6 |
 | Inline title translation | **Free on every tier, with a fair-use cap** | 100,000 title translations cost about $2 (§6.4) |
 | Cost at scale | 1,000 h/month of jobs ≈ **$59** with the default stack; 10,000 h ≈ $590, which breaks the cap, so it is bounded by tier minutes and a budget stop | §7 |
@@ -203,9 +203,35 @@ ASR can then never put a wrong *letter* on screen. What remains is the risk of c
 | (b) Boundaries | words shown that weren't said, or recited words left out | the word range is exactly the matched range; left-extension recovers garbled first words; a spoken-letters table handles muqatta'at («يا سين» → يس); the basmala is a separate segment, never glued to an ayah | **0 extra words shown**; 91.3% of recited words shown; the omissions (mostly mujawwad) are flagged for review |
 | (c) Timing | the right text in the wrong place | cue times from ASR word timestamps, snapped to the nearest recitation pause (adaptive `silencedetect`) | ayah starts: median error 33 ms, p90 278 ms, 88% within 300 ms (Whisper alone: median 445 ms) |
 
+**Two separate steps (owner, 2026-11-11)**
+
+| Step | What | Allowed sources | Decision |
+|---|---|---|---|
+| **1. Identify** which verses (and words) were said | a transient lookup during an on-demand job | **local fuzzy search** over a Quran text index, and/or the **QF Search API** per job | **Local search decides.** QF search is only an optional *suggestion* for review items (measured, research §8.6). |
+| **2. Store** the Quran text and translations inside the caption, kept indefinitely | what ends up in R2 drafts, published VTTs and the transcript index | a source whose terms allow permanent storage: **QF via Content Sync** (and only while kept in step with it), **QF written permission**, or **Tanzil** (Arabic) / **QuranEnc** (translations) | see "What a caption stores" below |
+
+**Measured** (55 per-ayah snippets of noisy Whisper text from 8 recitations, plus 20 non-Quran lecture snippets):
+
+| Method | Right verse | Wrong verse | Non-Quran snippets given a verse | Usable confidence signal |
+|---|---|---|---|---|
+| QF search (legacy `api.quran.com/api/v4/search`) | 44/55 (80%) as top result | 11 (20%) | **20/20** | none: highlighting caps at 3 words |
+| **Local fuzzy, uniqueness-gated** | 27/55 auto-confirmed | **0** | **0** | yes: length, agreement, number of occurrences |
+
+- **Why QF search can't decide:** it always returns a verse and gives no score we can threshold.
+- **Where it helps:** on the 28 snippets local search didn't auto-confirm, QF search suggested the right verse 17 times. That makes it a helpful **reference suggestion inside review** ("Possible Quran 55:13?"). It is never auto-accepted and never shown as text.
+- **Local search is already strong on whole transcripts:** run over the full transcript (not short snippets) it auto-suggested 87% of ayat with 0 wrong (§8.3).
+- **Privacy:** QF search is only called for public videos. Private and unlisted videos use local search alone, because the call sends ASR text to a third party.
+
+**What a caption stores**
+- **The canonical record:** **references only**: `(surah, ayahStart, wordStart) → (surah, ayahEnd, wordEnd)`, the edition id, our own aligned timestamps, and the creator's acceptance. Our timestamps (from our ASR, pause snapping or our own forced alignment) are ours to keep.
+- **The text in drafts and published VTTs** is rendered from a storage-cleared source:
+  - **Default until QF confirms in writing:** Arabic from the Tanzil Uthmani XML, translations from QuranEnc. Both allow republishing verbatim with attribution (quoted in §9.4).
+  - **QF Content Sync as the rendering source:** only after QF confirms (the email in O13), or provided every caption holding QF text is treated as part of the synced copy. That means re-rendered from the store after every sync that changes those ayat, and deleted if we stop syncing. The terms say "Derived Materials … that … permit reconstruction of QF Content remain subject to the same restrictions".
+- **QF timing data** (`chapter_recitations` segments) is never copied into captions. If used at all, it is read from the synced store at alignment time, and only our own resulting timestamps are kept.
+
 **Pipeline**
 1. **Offline Quran store**
-   - Built from the **QF Content Sync** copy (§9.4): `quran_core:1` for verse and word text, `mushafs:4` for word-level Uthmani text.
+   - **Matching index:** built from whichever source renders the text (above). Tanzil XML by default; the QF Content Sync copy (`quran_core:1`, `mushafs:4`) once cleared.
    - The detection index (normalised word stream plus a 3-gram index, about 2 MB) is rebuilt after every sync.
    - Tanzil XML is the fallback source. Use the **XML**, not the TXT export: the TXT download glues the basmala onto ayah 1 of every surah (`18|1|بسم الله الرحمن الرحيم الحمد لله…`), which would itself be wrong text. The XML keeps it in a `bismillah` attribute.
 2. **Normalisation:** strip diacritics and tatweel; unify alef forms; ى → ي, ة → ه; drop ؤ ئ ء.
@@ -269,14 +295,14 @@ ASR can then never put a wrong *letter* on screen. What remains is the risk of c
       "segments": [
         { "type": "speech", "text": "الله عز وجل قال" },
         { "type": "quran", "surah": 3, "ayahStart": 166, "ayahEnd": 167, "wordStart": 0, "wordEnd": null,
-          "textEdition": "qf:quran_core:1@<syncSeq>", "translationEdition": null,
+          "textEdition": "tanzil-uthmani-xml@1.1", "translationEdition": null,   // or "qf:quran_core:1@<syncSeq>" once cleared
           "confidence": 0.95, "status": "confirmed" | "context" | "basmala" | "review" | "accepted" | "rejected",
           "alternatives": [] }
       ] }
   ]
 }
 ```
-- In translations, a `quran` segment carries `translationEdition` (e.g. `qf:translations:<id>@<syncSeq>` or `quranenc:english_saheeh@1.1.2`) and the text verbatim from that edition.
+- In translations, a `quran` segment carries `translationEdition` (e.g. `quranenc:english_saheeh@1.1.2`, or `qf:translations:<id>@<syncSeq>` once cleared) and the text verbatim from that edition.
 - `SubtitleTrack` (existing type) gains `origin: "upload" | "machine" | "machine_edited"`, `status: "draft" | "published"`, `version` and `editions[]`. The existing `isAutoGenerated` becomes true for machine origins.
 
 **D1 tables** (`SEARCH_DB` in api-videos, which already holds `admin_deletions`; new migration plus snapshot):
@@ -301,7 +327,7 @@ ASR can then never put a wrong *letter* on screen. What remains is the risk of c
 - **Masking:** Quran segments (accepted, or suggested and not rejected) are replaced by tokens `⟦Q1⟧`. The model is told to keep tokens verbatim.
 - **Batches:** cues are sent as a JSON array, at most 6,000 characters per call (the CMS-proven chunk size), with the previous 3 cues as read-only context.
 - **Output validation:** the array is the same length, every token is present exactly once, the output is in the target script, and the length ratio is between 0.4 and 2.5. On a failure: retry once, then use the fallback model, then fail the batch.
-- **Token substitution:** the edition text for the target language, from the QF-synced store (QuranEnc offline data as fallback).
+- **Token substitution:** the edition text for the target language, from the storage-cleared source (§5.5): QuranEnc offline data by default, QF-synced translations once cleared.
   - **Arabic target:** the Uthmani text itself.
   - **No edition for the language:** the cue shows the Arabic text plus the reference, and never MT.
   - **Long ayat:** if the ayah translation runs longer than the cue, the cue is extended or split across the speech span. The text is never trimmed (licence).
@@ -488,7 +514,7 @@ Prices: provider pages fetched 2026-11-11 (R§5), the owner's DeepL plan terms (
 
 Every statement below quotes its source. Both pages were fetched on 2026-11-11.
 
-**Quran Foundation (QF) Content Sync: primary source.**
+**Quran Foundation (QF): Search for identifying; Content Sync for storage only once cleared (§5.5).**
 
 Source: [Developer Terms](https://api-docs.quran.foundation/legal/developer-terms/) ("Last updated: 2026-10-11"), §3.1.
 - **Storage beyond a week:** "Cache or store QF Content longer than 1 week unless it is obtained and maintained through the Content Sync APIs listed under Content Available for Offline Sync, or consists of font files or Mushaf images cached or bundled as described below."
@@ -519,7 +545,7 @@ Source: [Getting Started with Content Sync](https://api-docs.quran.foundation/do
 | Translations | `translations:<id>` | syncable if QF marks the edition public; to confirm per edition (O12) |
 | Reciter word timings | `chapter_recitations:<id>` | syncable |
 
-**Fallback sources** (for anything QF doesn't offer offline, or while registration is pending):
+**Default storage sources** (until QF confirms in writing that synced text and translations may live inside stored captions):
 - **Tanzil XML:** [licence](https://tanzil.net/docs/text_license) "Permission is granted to copy and distribute verbatim copies of this text, but CHANGING IT IS NOT ALLOWED." It can be used in apps "provided that its source (Tanzil Project) is clearly indicated", with a link to tanzil.net.
 - **QuranEnc:** [API page](https://quranenc.com/en/home/api/) "Contents of the translations can be downloaded and re-published, with the following terms and conditions": no modification, credit the publisher and QuranEnc.com, mention the version number, keep the translation updated, no inappropriate advertisements.
 
@@ -528,7 +554,8 @@ Source: [Getting Started with Content Sync](https://api-docs.quran.foundation/do
   - the watch page's Subtitles info;
   - the editor footer;
   - the description of any export or social-media post.
-- **Sync job:** runs **daily**, which beats the "at least every 7 days" rule. After each sync it rebuilds the index and re-renders any published track whose ayat changed. Changes are audited.
+- **Sync job** (if QF is used for storage): runs **daily**, which beats the "at least every 7 days" rule. After each sync it rebuilds the index and re-renders every stored caption whose ayat changed. Changes are audited. If syncing stops, QF-rendered caption text is re-rendered from Tanzil/QuranEnc.
+- **QF timing data** is never stored in captions (§5.5).
 - **Developer Console:** keep an active account (O12).
 - **Subtitle files must not become a data feed.** VTT files with Quran text are served to our player and embeds. We don't offer a bulk transcript or VTT download API. Whether a per-video "download subtitles" button counts as "offering QF Content … as data" is a question for QF (O13). Until answered, Quran-bearing tracks have no download button.
 - **Never used:** The Clear Quran (needs written consent from the publisher), Tanzil translations ("for non-commercial purposes only", https://tanzil.net/trans/), and alquran.cloud ("any non-commercial purpose").
@@ -566,7 +593,7 @@ Source: [Getting Started with Content Sync](https://api-docs.quran.foundation/do
 
 | Phase | Scope | Exit criteria |
 |---|---|---|
-| **P0: foundations** | provider interfaces plus Workers AI adapters; QF Developer Console registration and a Content Sync job (`quran_core:1`, `mushafs:4`, chosen `translations`), at least every 7 days, with index rebuild; the zero-mistake detector with unit tests on the R§8 clips; glossary tables plus seed; `TRANSLATION_CACHE`; `entitlement_grants`; catalogue keys | detector reproduces R§8: 0 wrong ayat, 0 extra words; sync job green; attribution visible |
+| **P0: foundations** | provider interfaces plus Workers AI adapters; Quran store from Tanzil XML and QuranEnc (references in captions, text rendered at publish); QF Developer Console app (search scope); a Content Sync job only once QF confirms storage (O13); the zero-mistake detector with unit tests on the R§8 clips; glossary tables plus seed; `TRANSLATION_CACHE`; `entitlement_grants`; catalogue keys | detector reproduces R§8: 0 wrong ayat, 0 extra words; sync job green; attribution visible |
 | **P1: inline title translation** | `POST /api/translate`; Translate buttons on title/description in the upload form, Studio editor and "Set values"; Quran-aware titles; fair-use counters | p95 ≤ 2 s on QA; 67-title set ≥ 90% acceptable; en/ar UI |
 | **P2: on-demand transcription** | jobs API, queue, Container extraction, ASR, post-processing, Quran detection, drafts, editor v1, publish, metering with reserve/commit/refund, usage meter, 402 hard stop, budget stop, purge coverage | QA run on the 8 R§1 clips meets R§2 numbers; refund on forced failure; idempotent double-click |
 | **P3: translation of transcripts** | cue-batch translation with Quran tokens and QuranEnc editions; retranslate on source change; bulk Transcribe/Translate; upload flag; admin grants UI | Quran cues carry the edition text verbatim; attribution visible |
@@ -596,7 +623,7 @@ Every phase ships behind an environment flag. Tests go into the release E2E suit
 | O9 | QuranEnc follow-up, only if it is used as fallback: may footnote markers "[n]" be hidden? | Email before P3 |
 | O10 | "ﷺ" symbol in Arabic subtitles: off by default (keep the spoken words), per-channel setting | As recommended |
 | O11 | On-device transcription in native desktop Studio as a free path (D10 hybrid) | Yes, in P5 |
-| O12 | Register a Quran Foundation Developer Console app (production access, Content Sync scopes) and confirm which `translations:<id>` are public for sync | Yes, now. It blocks P0 |
-| O13 | Ask QF: are per-video VTT downloads that contain Quran text "offering QF Content as data"? Is our private matching index fine as a Derived Material kept in step with the sync? | Email developers@quran.com with the P0 registration |
+| O12 | Register a Quran Foundation Developer Console app (search scope; Content Sync scopes if storage is cleared) | Yes. It only blocks the optional QF search suggestions and QF rendering; P0 can start on Tanzil/QuranEnc |
+| O13 | Send the partner-permission email to QF (draft in PR #819): (a) use the Search/Content APIs during on-demand jobs; (b) keep verse text and translations inside stored captions, with attribution; also ask about VTT downloads | Owner reviews and sends. Until QF answers, captions render from Tanzil/QuranEnc |
 | O14 | Every Quran span needs creator confirmation before publish (no auto-publish of Quran), with "Publish without Quran text" (reference only) as the escape hatch | Yes: this is what makes "zero mistakes" a guarantee rather than a statistic |
 | O15 | DeepL Voice as the paid high-accuracy STT and the Quran second opinion on higher tiers | Yes, behind the per-provider cap; never for speech-to-speech of Quran |
