@@ -19,6 +19,11 @@
  *     → prints holder=<sha> to $GITHUB_OUTPUT (the release step's input)
  *   node --experimental-strip-types scripts/ci/qa-lock.ts release <name> --holder <sha>
  *
+ * --slots N (acquire): a semaphore of N locks <name>-1 … <name>-N; the first free
+ * one is taken and its name printed as lock=<name>-<k> (pass that to release).
+ * The encode-waiting release specs use it (at most N runs encoding at once on the
+ * shared Bunny library, #838). Without --slots, lock=<name>.
+ *
  * Env: GITHUB_TOKEN (contents: write, actions: read), GITHUB_REPOSITORY,
  * GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT, GITHUB_JOB; GITHUB_API_URL / GITHUB_GRAPHQL_URL optional.
  */
@@ -183,17 +188,25 @@ interface Opts {
 	ttlMin: number;
 	maxWaitMin: number;
 	holder: string;
+	slots: number;
+}
+
+/** The lock names a --slots N acquire tries, in order. */
+export function slotNames(name: string, slots: number): string[] {
+	return slots > 1 ? Array.from({ length: slots }, (_, i) => `${name}-${i + 1}`) : [name];
 }
 
 function parseOpts(argv: string[]): Opts {
-	const o: Opts = { ttlMin: 60, maxWaitMin: 120, holder: '' };
+	const o: Opts = { ttlMin: 60, maxWaitMin: 120, holder: '', slots: 1 };
 	for (let i = 0; i < argv.length; i++) {
 		if (argv[i] === '--ttl-min') o.ttlMin = Number(argv[++i]);
 		else if (argv[i] === '--max-wait-min') o.maxWaitMin = Number(argv[++i]);
 		else if (argv[i] === '--holder') o.holder = argv[++i] ?? '';
+		else if (argv[i] === '--slots') o.slots = Number(argv[++i]);
 		else throw new Error(`unknown argument ${argv[i]}`);
 	}
 	if (!(o.ttlMin > 0) || !(o.maxWaitMin > 0)) throw new Error('--ttl-min and --max-wait-min must be > 0');
+	if (!Number.isInteger(o.slots) || o.slots < 1 || o.slots > 9) throw new Error('--slots must be 1-9');
 	return o;
 }
 
@@ -203,9 +216,11 @@ async function main(): Promise<void> {
 	const repo = env.GITHUB_REPOSITORY ?? '';
 	if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) throw new Error('GITHUB_REPOSITORY is required');
 	const log = (line: string) => process.stdout.write(`${line}\n`);
-	const lock = new Lock(createGh(env), repo, name ?? '', log);
 	lockRef(name ?? '');
 	const opts = parseOpts(rest);
+	const lock = new Lock(createGh(env), repo, name ?? '', log);
+	const slots = slotNames(name ?? '', opts.slots).map((slot) => ({ slot, lock: slot === name ? lock : new Lock(createGh(env), repo, slot, log) }));
+	slots.forEach(({ slot }) => lockRef(slot));
 
 	if (cmd === 'release') {
 		if (!/^[0-9a-f]{40}$/.test(opts.holder)) {
@@ -229,12 +244,14 @@ async function main(): Promise<void> {
 	};
 	for (;;) {
 		if (Date.now() - started > opts.maxWaitMin * 60_000) throw new Error(`waited ${opts.maxWaitMin} min for the ${name} lock`);
-		// The expiry counts from the moment we take it
-		const got = await lock.tryAcquire(() => lock.makeHolder({ ...holder, expiresAt: Date.now() + opts.ttlMin * 60_000 }, tree), Date.now());
-		if (got) {
-			log(`[qa-lock] acquired ${name} after ${Math.round((Date.now() - started) / 1000)} s`);
-			if (env.GITHUB_OUTPUT) appendFileSync(env.GITHUB_OUTPUT, `holder=${got}\n`);
-			return;
+		for (const { slot, lock: l } of slots) {
+			// The expiry counts from the moment we take it
+			const got = await l.tryAcquire(() => l.makeHolder({ ...holder, expiresAt: Date.now() + opts.ttlMin * 60_000 }, tree), Date.now());
+			if (got) {
+				log(`[qa-lock] acquired ${slot} after ${Math.round((Date.now() - started) / 1000)} s`);
+				if (env.GITHUB_OUTPUT) appendFileSync(env.GITHUB_OUTPUT, `holder=${got}\nlock=${slot}\n`);
+				return;
+			}
 		}
 		// 60-90 s with jitter: waiters do not poll in step
 		await new Promise((r) => setTimeout(r, 60_000 + Math.floor(Math.random() * 30_000)));

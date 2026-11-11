@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { holderMessage, isStale, Lock, lockRef, parseHolder, ZERO, type Gh, type Holder } from '../../ci/qa-lock.ts';
+import { holderMessage, isStale, Lock, lockRef, parseHolder, ZERO, type Gh, type Holder, slotNames } from '../../ci/qa-lock.ts';
 
 /** In-memory GitHub: refs with compare-and-swap, commits, run statuses. */
 function fakeGh() {
@@ -84,4 +84,11 @@ describe('qa-lock', () => {
 		assert.equal(await a.release(mineA), false);
 		assert.equal(await b.current(), mineB);
 	});
+});
+
+describe('qa-lock --slots', () => {
+  it('names one lock per slot, or the lock itself without slots', () => {
+    assert.deepEqual(slotNames('qa-encode', 2), ['qa-encode-1', 'qa-encode-2']);
+    assert.deepEqual(slotNames('qa-global', 1), ['qa-global']);
+  });
 });
