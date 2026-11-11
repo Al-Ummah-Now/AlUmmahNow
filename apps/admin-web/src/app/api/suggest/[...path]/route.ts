@@ -1,6 +1,7 @@
 /**
  * The admin autocomplete's reads (components/search/Autocomplete.tsx):
  *   GET /api/suggest/:kind?q=…   suggestions while the admin types
+ *   GET /api/suggest/:kind?q=&cursor=…  a picker's page before anything is typed
  *   GET /api/suggest/:kind/:id   one item, for the chip of a chosen id
  * Passed to admin-api with the session's bearer token, so the browser never
  * holds the admin API token. A route handler rather than a server action, so
@@ -24,7 +25,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ path
   const target =
     path.length === 2
       ? `${ADMIN_API_URL}/api/suggest/${kind}/${encodeURIComponent(id)}`
-      : `${ADMIN_API_URL}/api/suggest/${kind}?${new URLSearchParams({ q: (url.searchParams.get('q') ?? '').slice(0, 200) })}`;
+      : `${ADMIN_API_URL}/api/suggest/${kind}?${new URLSearchParams({
+          q: (url.searchParams.get('q') ?? '').slice(0, 200),
+          // An empty q: a picker's page before anything is typed (cursor: the page after the loaded ones)
+          ...(url.searchParams.get('cursor') ? { cursor: url.searchParams.get('cursor')!.slice(0, 2000) } : {}),
+        })}`;
   try {
     const upstream = await fetch(target, { headers: { Authorization: `Bearer ${session.accessToken}` }, cache: 'no-store', signal: request.signal });
     return new Response(upstream.body, { status: upstream.status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });

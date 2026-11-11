@@ -14,7 +14,7 @@ import {
   toVideoResponse,
 } from "../../lib/discovery";
 import { parseSuggestionTypes, type SearchDb } from "@al-ummah/shared-types";
-import { suggestFromIndex, type IndexSuggestion } from "../../lib/search/query";
+import { initialSuggestionsFromIndex, suggestFromIndex, type IndexSuggestion } from "../../lib/search/query";
 import { isWatchHistoryPaused } from "../../lib/watch-history";
 import { waitUntilOf } from "../../lib/search/ownership";
 import { edgeCacheUrl, readEdgeCache, writeEdgeCache } from "../../lib/edge-cache";
@@ -43,6 +43,8 @@ const SuggestionSchema = z.object({
 
 /** Longest input a suggestion lookup reads; longer text is cut (the index caps query words too). */
 const SUGGEST_MAX_QUERY = 100;
+/** Deepest page a picker can scroll to (OFFSET reads the skipped rows; past this, type to search). */
+const INITIAL_MAX_OFFSET = 500;
 
 const DiscoveryVideoSchema = z.object({
   id: z.string(),
@@ -68,10 +70,11 @@ export class SearchSuggestionsGet extends OptionalAuthRoute {
   schema = {
     tags: ["Search"],
     summary: "Search suggestions",
-    description: "🔓 Public. Returns typeahead suggestions matching the query by word prefix, served from the search index with Arabic normalisation (tashkeel, alef forms, taa marbuta, alef maqsura). `types` picks the kinds (video, channel, playlist, category; default channel,video,category) and `channelId` limits videos and playlists to one channel. Only publicly visible items of visible channels are returned. Each suggestion carries the item's id, thumbnail and a subtitle (channel name, or the channel's @handle). Rate limited per client (429 with Retry-After). Falls back to scanning stored videos when the index is not configured or fails.",
+    description: "🔓 Public. Returns typeahead suggestions matching the query by word prefix, served from the search index with Arabic normalisation (tashkeel, alef forms, taa marbuta, alef maqsura). `types` picks the kinds (video, channel, playlist, category; default channel,video,category) and `channelId` limits videos and playlists to one channel. Only publicly visible items of visible channels are returned. Each suggestion carries the item's id, thumbnail and a subtitle (channel name, or the channel's @handle). Rate limited per client (429 with Retry-After). Falls back to scanning stored videos when the index is not configured or fails. An empty `q` returns a picker's first page instead (pickers open with content): most viewed channels, or with `channelId` that channel's newest videos and playlists (newest public videos without it); page with `offset`, a page shorter than `limit` is the last.",
     request: {
       query: z.object({
-        q: Str({ description: "Partial search query" }),
+        q: Str({ description: "Partial search query; empty for a picker's first page" }).optional().nullable(),
+        offset: Num({ description: "Empty q only: suggestions to skip (the next page)" }).optional().nullable(),
         limit: Num({ description: "Maximum suggestions (1-20)", default: 5 }).optional(),
         types: Str({ description: "Comma-separated kinds: video, channel, playlist, category" }).optional(),
         channelId: Str({ description: "Only this channel's videos and playlists" }).optional(),
@@ -93,7 +96,6 @@ export class SearchSuggestionsGet extends OptionalAuthRoute {
     const limit = clampLimit(query.limit, 5, 20);
     const types = parseSuggestionTypes(query.types);
     const channelId = query.channelId?.trim() || undefined;
-    if (q.length < 1) return c.json([]);
 
     // Typing sends a lookup per pause; this caps a client that hammers the endpoint
     const limiter = c.env.SUGGEST_LIMITER as RateLimit | undefined;
@@ -107,6 +109,20 @@ export class SearchSuggestionsGet extends OptionalAuthRoute {
     }
 
     const db = c.env.SEARCH_DB as SearchDb | undefined;
+    if (!q) {
+      // A picker opening: an index-backed first page; no scan fallback (that would read every video)
+      if (!db) return c.json([]);
+      const offset = Math.min(Math.max(Math.floor(Number(query.offset) || 0), 0), INITIAL_MAX_OFFSET);
+      try {
+        const suggestions = await withChannelHandles(c, await initialSuggestionsFromIndex(db, limit, { types, channelId, offset }));
+        logger.debug("[SearchSuggestions] Served initial suggestions", { types, channelId, offset, count: suggestions.length });
+        c.header("Cache-Control", "public, max-age=60");
+        return c.json(suggestions);
+      } catch (error) {
+        logger.error("[SearchSuggestions] Initial suggestions failed", { types, channelId, error: error instanceof Error ? error.message : String(error) });
+        return c.json({ success: false, error: "Failed to load suggestions" }, 500);
+      }
+    }
     if (db) {
       try {
         const suggestions = await withChannelHandles(c, await suggestFromIndex(db, q, limit, { types, channelId }));

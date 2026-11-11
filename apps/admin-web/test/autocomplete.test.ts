@@ -17,15 +17,19 @@ import { Autocomplete, type AutocompleteProps } from '../src/components/search/A
 import type { FilterField } from '../src/components/content/FilterForm';
 import {
   MIN_QUERY,
+  addPage,
   failed,
   hrefFor,
   initialState,
+  initialUrl,
   keyDown,
   looksLikeId,
   optionsFor,
   received,
+  showInitial,
   typed,
   type AutocompleteState,
+  type InitialList,
 } from '../src/components/search/autocomplete-model';
 import { entitySuggestKind, moderationHref, parseModerationFilters } from '../src/app/(protected)/moderation/filters';
 
@@ -79,6 +83,56 @@ describe('autocomplete: typing and answers', () => {
   it('tells ids from words', () => {
     for (const id of ['usr_8f3a2b', 'ch_123456', '2b1f6c1e-7d7c-4a7a-9d5e-1f0a8c3b6e21', 'V1StGXR8_Z5jdHi6B-myT']) assert.equal(looksLikeId(id), true, id);
     for (const word of ['mostafa', 'Tafsir', 'two words_1', 'ab_1', '']) assert.equal(looksLikeId(word), false, word);
+  });
+});
+
+describe('autocomplete: opens with results (pick fields list the newest before anything is typed)', () => {
+  const page: InitialList = { items: SUGGESTIONS, next: '2', status: 'ready' };
+
+  it('asks for the first page with an empty q, and the next with its cursor', () => {
+    assert.equal(initialUrl('channel', null), '/api/suggest/channel?q=');
+    assert.equal(initialUrl('playlist', 'k 2'), '/api/suggest/playlist?q=&cursor=k%202');
+  });
+
+  it('opens with results: an empty box shows the whole first page; while it loads the list is loading', () => {
+    const loading = showInitial({ ...initialState(), open: true }, { items: [], next: null, status: 'loading' });
+    assert.equal(loading.status, 'loading');
+    assert.equal(loading.open, true);
+    const shown = showInitial({ ...initialState(), open: true }, page);
+    assert.equal(shown.status, 'ready');
+    assert.deepEqual(shown.options.map((o) => (o.type === 'suggestion' ? o.suggestion.id : o.type)), ['ch_1', 'ch_2']);
+  });
+
+  it('one typed character filters what is loaded; from MIN_QUERY the server is asked as before', () => {
+    const one = typed(initialState(), 'e', page);
+    assert.equal(one.open, true);
+    assert.deepEqual(one.options.map((o) => (o.type === 'suggestion' ? o.suggestion.id : '')), ['ch_2'], '"Elbadry" contains e; "Mostafa" does not');
+    const two = typed(one, 'mo', page);
+    assert.equal(two.status, 'loading');
+    assert.equal('mo'.length, MIN_QUERY);
+    // Clearing the box brings the first page back
+    assert.equal(typed(two, '', page).options.length, 2);
+  });
+
+  it('pages append without duplicates; a failure keeps what is shown and says so only when nothing is', () => {
+    const more = addPage(page, { items: [channel('ch_2', 'Mostafa Elbadry'), channel('ch_3', 'Third')], next: null }, true);
+    assert.deepEqual(more.items.map((s) => s.id), ['ch_1', 'ch_2', 'ch_3']);
+    assert.equal(more.next, null);
+    assert.equal(showInitial({ ...initialState(), open: true }, { ...more, status: 'error' }).status, 'ready');
+    assert.equal(showInitial({ ...initialState(), open: true }, { items: [], next: null, status: 'error' }).status, 'error');
+  });
+
+  it('search boxes keep their old behaviour (the list below already shows the newest)', () => {
+    const state = typed(initialState(), 'a');
+    assert.equal(state.open, false);
+    assert.equal(state.status, 'idle');
+  });
+
+  it('every new string exists in both languages', () => {
+    for (const key of ['loadingList', 'emptyList', 'listFailed', 'retry', 'loadingMore', 'current', 'recent'] as const) {
+      assert.ok(en.autocomplete[key], key);
+      assert.match(ar.autocomplete[key], ARABIC, key);
+    }
   });
 });
 

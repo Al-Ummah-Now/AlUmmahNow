@@ -10,6 +10,12 @@
  *   input named `name`, so a GET filter form keeps the id in the URL. A chosen
  *   value shows as a chip with its picture and name.
  *
+ * Initial results (pick mode by default; owner rule 2026-11-11): the box opens
+ * with the newest items of its kind before anything is typed, pages on as the
+ * list is scrolled (or arrowed) to its end, and shows a skeleton while loading,
+ * a note when there is nothing and a retry when it fails. The current value is
+ * marked when the admin changes it.
+ *
  * Accessibility: WAI-ARIA 1.2 combobox with a listbox popup (see
  * autocomplete-model.ts for the keys). The result count is announced in a
  * polite live region. Layout uses logical properties, so it is correct in RTL;
@@ -25,10 +31,13 @@ import { logger } from '@/lib/logger-client';
 import {
   DEBOUNCE_MS,
   MIN_QUERY,
+  addPage,
   closed,
   failed,
   hrefFor,
   initialState,
+  initialUrl,
+  showInitial,
   keyDown,
   received,
   resolveUrl,
@@ -37,6 +46,7 @@ import {
   type AutocompleteMode,
   type AutocompleteOption,
   type AutocompleteState,
+  type InitialList,
 } from './autocomplete-model';
 
 export interface AutocompleteProps {
@@ -58,6 +68,8 @@ export interface AutocompleteProps {
   testId?: string;
   className?: string;
   disabled?: boolean;
+  /** Open with the newest items before anything is typed (default: pick mode yes, search mode no: the list below already shows them) */
+  initialResults?: boolean;
 }
 
 const KIND_LABEL: Record<AdminSuggestKind, MessageKey> = {
@@ -95,7 +107,9 @@ export function Autocomplete({
   testId,
   className = '',
   disabled = false,
+  initialResults,
 }: AutocompleteProps) {
+  const initialOn = initialResults ?? mode === 'pick';
   const { t } = useLanguage();
   const ids = useId();
   const inputId = `${ids}-input`;
@@ -112,6 +126,50 @@ export function Autocomplete({
     mode === 'pick' && defaultValue ? { id: defaultValue, item: defaultItem?.id === defaultValue ? defaultItem : null, missing: false } : null,
   );
   const [editing, setEditing] = useState(false);
+  // Initial results: loaded on first open, kept for the life of the box
+  const [initial, setInitial] = useState<InitialList | null>(null);
+  const initialRef = useRef<InitialList | null>(null);
+  const initialAbort = useRef<AbortController | null>(null);
+
+  const loadInitial = useCallback(
+    (cursor: string | null) => {
+      initialAbort.current?.abort();
+      const controller = new AbortController();
+      initialAbort.current = controller;
+      const loading: InitialList = cursor && initialRef.current ? { ...initialRef.current, status: 'more' } : { items: [], next: null, status: 'loading' };
+      initialRef.current = loading;
+      setInitial(loading);
+      if (!cursor) setState((s) => showInitial(s, loading));
+      getJson<{ items: AdminSuggestion[]; next?: string | null }>(initialUrl(kind, cursor), controller.signal)
+        .then(({ items, next }) => {
+          const list = addPage(initialRef.current, { items, next: next ?? null }, !!cursor);
+          initialRef.current = list;
+          setInitial(list);
+          setState((s) => showInitial(s, list));
+        })
+        .catch((error: unknown) => {
+          if (controller.signal.aborted) return;
+          logger.warn('[Autocomplete] Initial results failed', { kind, error: error instanceof Error ? error.message : String(error) });
+          const list: InitialList = { ...(initialRef.current ?? { items: [], next: null }), status: 'error' };
+          initialRef.current = list;
+          setInitial(list);
+          setState((s) => showInitial(s, list));
+        });
+    },
+    [kind],
+  );
+  useEffect(() => () => initialAbort.current?.abort(), []);
+
+  const openInitial = useCallback(() => {
+    if (!initialOn) return;
+    setState((s) => (s.query.trim().length >= MIN_QUERY ? { ...s, open: s.options.length > 0 } : showInitial({ ...s, open: true }, initialRef.current)));
+    if (!initialRef.current || (initialRef.current.status === 'error' && initialRef.current.items.length === 0)) loadInitial(null);
+  }, [initialOn, loadInitial]);
+
+  const loadMore = useCallback(() => {
+    const list = initialRef.current;
+    if (list && list.status === 'ready' && list.next && state.query.trim().length === 0) loadInitial(list.next);
+  }, [loadInitial, state.query]);
 
   // Look up the name of an id that came from the URL, for the chip
   useEffect(() => {
@@ -148,6 +206,11 @@ export function Autocomplete({
     };
   }, [kind, mode, query]);
 
+  // Arrowing onto the last option of the initial list asks for the next page
+  useEffect(() => {
+    if (initialOn && state.active >= 0 && state.active >= state.options.length - 1) loadMore();
+  }, [initialOn, state.active, state.options.length, loadMore]);
+
   // Keep the active option in view while arrowing through a long list
   useEffect(() => {
     if (state.active < 0) return;
@@ -169,6 +232,7 @@ export function Autocomplete({
         setEditing(false);
         setState(initialState());
       });
+      if (initialRef.current) setState((s) => showInitial(s, initialRef.current));
       onChange?.(id, item);
       if (submitOnChange) submitForm();
     },
@@ -213,15 +277,22 @@ export function Autocomplete({
   const activeId = expanded && state.active >= 0 ? optionId(state.active) : undefined;
 
   const suggestionCount = state.options.filter((o) => o.type === 'suggestion').length;
+  // The box shows the initial list (nothing, or one character, typed)
+  const showingInitial = initialOn && state.query.trim().length < MIN_QUERY;
+  const emptyInitial = showingInitial && !state.query.trim() && state.status === 'ready' && suggestionCount === 0;
   const announcement = !expanded
     ? ''
     : state.status === 'loading' && state.options.length === 0
-      ? t('autocomplete.searching')
+      ? t(showingInitial ? 'autocomplete.loadingList' : 'autocomplete.searching')
       : state.status === 'error'
-        ? t('autocomplete.failed')
-        : suggestionCount === 0
-          ? t('autocomplete.noMatches')
-          : t('autocomplete.count', { count: suggestionCount });
+        ? t(showingInitial ? 'autocomplete.listFailed' : 'autocomplete.failed')
+        : emptyInitial
+          ? t('autocomplete.emptyList')
+          : suggestionCount === 0
+            ? t('autocomplete.noMatches')
+            : showingInitial && !state.query.trim()
+              ? t('autocomplete.recent', { count: suggestionCount })
+              : t('autocomplete.count', { count: suggestionCount });
 
   return (
     <div className={`flex flex-col gap-1 ${className}`} data-testid={testId} data-mode={mode} data-kind={kind}>
@@ -263,25 +334,40 @@ export function Autocomplete({
             disabled={disabled}
             value={state.query}
             placeholder={placeholder ?? t(mode === 'search' ? 'autocomplete.searchPlaceholder' : 'autocomplete.pickPlaceholder')}
-            onChange={(e) => setState((s) => typed(s, e.target.value))}
+            onChange={(e) => setState((s) => (initialOn ? typed(s, e.target.value, initialRef.current) : typed(s, e.target.value)))}
             onKeyDown={onKeyDown}
             onBlur={() => {
               setState(closed);
               // Leaving the box while changing a chosen value, with nothing typed, keeps the old value
               if (mode === 'pick' && picked && !state.query.trim()) setEditing(false);
             }}
-            onFocus={() => setState((s) => (s.options.length > 0 && s.query.trim().length >= MIN_QUERY ? { ...s, open: true } : s))}
+            onFocus={() => (initialOn ? openInitial() : setState((s) => (s.options.length > 0 && s.query.trim().length >= MIN_QUERY ? { ...s, open: true } : s)))}
+            onClick={() => {
+              if (initialOn && !state.open) openInitial();
+            }}
             className={`${fieldClass} w-full`}
             data-testid={testId ? `${testId}-input` : undefined}
           />
+          <div
+            hidden={!expanded}
+            className="absolute start-0 top-full z-30 mt-1 w-full min-w-72 overflow-hidden rounded border border-border bg-surface shadow-lg"
+            data-testid={testId ? `${testId}-popup` : undefined}
+            // A press on the list (its scrollbar too) must not blur the input and close it
+            onMouseDown={(e) => e.preventDefault()}
+          >
           <ul
             ref={listRef}
             id={listId}
             role="listbox"
             aria-label={label}
+            aria-busy={(showingInitial && (state.status === 'loading' || initial?.status === 'more')) || undefined}
             hidden={!expanded}
-            className="absolute start-0 top-full z-30 mt-1 max-h-80 w-full min-w-72 overflow-auto rounded border border-border bg-surface py-1 shadow-lg"
+            className="max-h-80 overflow-auto py-1"
             data-testid={testId ? `${testId}-list` : undefined}
+            onScroll={(e) => {
+              const el = e.currentTarget;
+              if (showingInitial && el.scrollTop + el.clientHeight >= el.scrollHeight - 48) loadMore();
+            }}
           >
             {state.options.map((option, i) => (
               <li
@@ -301,11 +387,52 @@ export function Autocomplete({
                 data-option={option.type}
                 data-id={option.type === 'suggestion' ? option.suggestion.id : undefined}
               >
-                <OptionContent option={option} kind={kind} />
+                <OptionContent option={option} kind={kind} current={picked?.id} />
               </li>
             ))}
-            {state.status === 'loading' && state.options.length === 0 && <li role="presentation" className="px-3 py-2 text-sm text-fg-muted">{t('autocomplete.searching')}</li>}
+            {state.status === 'loading' && state.options.length === 0 &&
+              (showingInitial ? (
+                [0, 1, 2, 3].map((i) => (
+                  <li key={`sk-${i}`} role="presentation" aria-hidden="true" className="flex items-center gap-3 px-3 py-2" data-testid={testId ? `${testId}-skeleton` : undefined}>
+                    <span className="h-9 w-9 shrink-0 animate-pulse rounded bg-surface-2 motion-reduce:animate-none" />
+                    <span className="flex flex-1 flex-col gap-1.5">
+                      <span className="h-3 w-3/4 animate-pulse rounded bg-surface-2 motion-reduce:animate-none" />
+                      <span className="h-2.5 w-1/3 animate-pulse rounded bg-surface-2 motion-reduce:animate-none" />
+                    </span>
+                  </li>
+                ))
+              ) : (
+                <li role="presentation" className="px-3 py-2 text-sm text-fg-muted">{t('autocomplete.searching')}</li>
+              ))}
           </ul>
+          {emptyInitial && (
+            <p className="px-3 py-2 text-sm text-fg-muted" data-testid={testId ? `${testId}-empty` : undefined}>
+              {t('autocomplete.emptyList')}
+            </p>
+          )}
+          {showingInitial && initial?.status === 'more' && (
+            <p className="px-3 py-2 text-xs text-fg-muted" data-testid={testId ? `${testId}-loading-more` : undefined}>
+              {t('autocomplete.loadingMore')}
+            </p>
+          )}
+          {showingInitial && initial?.status === 'error' && (
+            <div className="flex items-center justify-between gap-2 border-t border-border px-3 py-2 text-sm text-fg-muted" data-testid={testId ? `${testId}-error` : undefined}>
+              <span>{t('autocomplete.listFailed')}</span>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  loadInitial(initial.items.length ? initial.next : null);
+                  inputRef.current?.focus();
+                }}
+                className="rounded border border-border px-2 py-1 text-xs text-fg hover:bg-surface-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+                data-testid={testId ? `${testId}-retry` : undefined}
+              >
+                {t('autocomplete.retry')}
+              </button>
+            </div>
+          )}
+          </div>
         </div>
       )}
       {hint && (
@@ -334,7 +461,7 @@ function Thumb({ suggestion }: { suggestion: Pick<AdminSuggestion, 'kind' | 'ima
   );
 }
 
-function OptionContent({ option, kind }: { option: AutocompleteOption; kind: AdminSuggestKind }) {
+function OptionContent({ option, kind, current }: { option: AutocompleteOption; kind: AdminSuggestKind; current?: string }) {
   const { t } = useLanguage();
   if (option.type === 'searchAll') {
     return (
@@ -364,6 +491,11 @@ function OptionContent({ option, kind }: { option: AutocompleteOption; kind: Adm
             {s.label}
           </span>
           <InvitedBadge suggestion={s} />
+          {current === s.id && (
+            <span className="shrink-0 rounded-full border border-border bg-surface-2 px-2 text-xs text-fg-muted" data-testid="autocomplete-current">
+              {t('autocomplete.current')}
+            </span>
+          )}
         </span>
         <span className="flex min-w-0 gap-2 text-xs text-fg-muted">
           {s.secondary && (

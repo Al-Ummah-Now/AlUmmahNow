@@ -110,6 +110,9 @@ export function pageOf(page?: number, pageSize?: number): { page: number; pageSi
 }
 
 /** `%term%` with LIKE wildcards in the term escaped (use with ESCAPE '\'). */
+/** The COUNT row, or -1 when the caller skipped it (noTotal). */
+const totalOf = (row: { n: number } | null | undefined): number => (row === null ? -1 : Number(row?.n) || 0);
+
 export function likeTerm(q: string): string {
 	return `%${q.trim().toLowerCase().replace(/[\\%_]/g, (m) => `\\${m}`)}%`;
 }
@@ -240,7 +243,7 @@ export async function listChannels(env: AdminEnv, query: AdminChannelQuery, wait
 		where.push(`c.created_at <= ${n()}`);
 	}
 	const whereSql = where.join(' AND ');
-	const total = await db.prepare(`SELECT COUNT(*) AS n FROM ${OWNERSHIP_TABLE} c WHERE ${whereSql}`).bind(...binds).first<{ n: number }>();
+	const total = query.noTotal ? null : await db.prepare(`SELECT COUNT(*) AS n FROM ${OWNERSHIP_TABLE} c WHERE ${whereSql}`).bind(...binds).first<{ n: number }>();
 	const { results } = await db
 		.prepare(
 			`SELECT c.*, (SELECT COALESCE(SUM(v.views), 0) FROM ${OWNERSHIP_TABLE} v WHERE v.kind = 'video' AND v.channel_id = c.id AND v.is_deleted = 0) AS total_views
@@ -249,7 +252,7 @@ export async function listChannels(env: AdminEnv, query: AdminChannelQuery, wait
 		.bind(...binds)
 		.all<Row>();
 	const rows = results ?? [];
-	return { items: await hydrateChannels(env, rows), total: Number(total?.n) || 0, page, pageSize, indexComplete };
+	return { items: await hydrateChannels(env, rows), total: totalOf(total), page, pageSize, indexComplete };
 }
 
 /** Index rows → AdminChannelRow, with R2 for names/avatars and D1 for subscriber counts. */
@@ -339,7 +342,7 @@ export async function listVideos(env: AdminEnv, query: AdminVideoQuery, waitUnti
 		where.push(`v.created_at <= ${n()}`);
 	}
 	const whereSql = where.join(' AND ');
-	const total = await db.prepare(`SELECT COUNT(*) AS n FROM ${OWNERSHIP_TABLE} v WHERE ${whereSql}`).bind(...binds).first<{ n: number }>();
+	const total = query.noTotal ? null : await db.prepare(`SELECT COUNT(*) AS n FROM ${OWNERSHIP_TABLE} v WHERE ${whereSql}`).bind(...binds).first<{ n: number }>();
 	const { results } = await db
 		.prepare(
 			`SELECT v.*, ch.admin_title AS channel_name FROM ${OWNERSHIP_TABLE} v
@@ -348,7 +351,7 @@ export async function listVideos(env: AdminEnv, query: AdminVideoQuery, waitUnti
 		)
 		.bind(...binds)
 		.all<Row>();
-	return { items: await hydrateVideos(env, results ?? []), total: Number(total?.n) || 0, page, pageSize, indexComplete };
+	return { items: await hydrateVideos(env, results ?? []), total: totalOf(total), page, pageSize, indexComplete };
 }
 
 export async function hydrateVideos(env: AdminEnv, rows: Row[]): Promise<AdminVideoRow[]> {
@@ -412,6 +415,23 @@ export async function listUsers(env: AdminEnv, query: AdminUserQuery, waitUntil?
 	const db = dbOf(env);
 	const indexComplete = await ensureAdminIndex(env, 'profile', waitUntil);
 	const { page, pageSize, offset } = pageOf(query.page, query.pageSize);
+	// A picker's first pages (no query, no filter, newest first): profiles straight off
+	// idx_content_ownership_created, not the sorted union below (which reads every profile twice)
+	if (query.noTotal && !query.q?.trim() && !query.banned && (query.sort ?? 'newest') === 'newest') {
+		const { results } = await db
+			.prepare(
+				`SELECT p.id AS id, p.admin_title AS display_name, p.handle AS user_name, p.email AS email, p.created_at AS created_at,
+				        EXISTS (SELECT 1 FROM videos_bans b WHERE b.user_id = p.id) AS banned
+				 FROM ${OWNERSHIP_TABLE} p
+				 WHERE p.kind = 'profile' AND p.is_deleted = 0
+				   AND NOT EXISTS (SELECT 1 FROM admin_deletions d WHERE d.kind = 'user' AND d.target_id = p.id AND d.purged_at IS NULL)
+				 ORDER BY p.created_at DESC LIMIT ${pageSize} OFFSET ${offset}`,
+			)
+			.all<Row>();
+		const rows = results ?? [];
+		const profiles = await readMany(env.profiles, rows.map((r) => r.id));
+		return { items: rows.map((r) => toUserRow(r.id, profiles.get(r.id) ?? null, r.banned === 1, r)), total: -1, page, pageSize, indexComplete };
+	}
 	// Profiles, plus banned users whose profile was deleted (the ban outlives the data)
 	const base = `
 		SELECT p.id AS id, p.admin_title AS display_name, p.handle AS user_name, p.email AS email, p.created_at AS created_at,
@@ -431,7 +451,8 @@ export async function listUsers(env: AdminEnv, query: AdminUserQuery, waitUntil?
 	}
 	if (query.banned) where.push(`banned = ${query.banned === 'yes' ? 1 : 0}`);
 	const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
-	const total = await cachedCount(db, `users:${query.banned ?? ''}:${(query.q ?? '').trim().toLowerCase().slice(0, 80)}`, () =>
+	// noTotal: a picker's page never shows the total, so it skips the count
+	const total = query.noTotal ? -1 : await cachedCount(db, `users:${query.banned ?? ''}:${(query.q ?? '').trim().toLowerCase().slice(0, 80)}`, () =>
 		db.prepare(`SELECT COUNT(*) AS n FROM (${base}) ${whereSql}`).bind(...binds).first<{ n: number }>().then((r) => Number(r?.n) || 0));
 	const { results } = await db
 		.prepare(`SELECT * FROM (${base}) ${whereSql} ORDER BY ${USER_SORT[query.sort ?? 'newest'] ?? USER_SORT.newest} LIMIT ${pageSize} OFFSET ${offset}`)
@@ -492,7 +513,7 @@ export async function listComments(env: AdminEnv, query: AdminCommentQuery, wait
 		where.push(`c.user_id = ${n()}`);
 	}
 	const whereSql = where.join(' AND ');
-	const total = await db.prepare(`SELECT COUNT(*) AS n FROM admin_comments c WHERE ${whereSql}`).bind(...binds).first<{ n: number }>();
+	const total = query.noTotal ? null : await db.prepare(`SELECT COUNT(*) AS n FROM admin_comments c WHERE ${whereSql}`).bind(...binds).first<{ n: number }>();
 	const { results } = await db
 		.prepare(
 			`SELECT c.*, v.admin_title AS video_title FROM admin_comments c
@@ -514,7 +535,7 @@ export async function listComments(env: AdminEnv, query: AdminCommentQuery, wait
 			status: r.status ?? null,
 			createdAt: r.created_at ?? '',
 		})),
-		total: Number(total?.n) || 0,
+		total: totalOf(total),
 		page,
 		pageSize,
 		indexComplete,

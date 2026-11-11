@@ -44,7 +44,12 @@ const waitUntilOf = (c: { executionCtx: { waitUntil(p: Promise<unknown>): void }
 const app = new Hono<Env>();
 
 const yesNo = z.enum(['yes', 'no']).optional();
-const page = { page: z.coerce.number().int().min(1).optional(), pageSize: z.coerce.number().int().min(1).max(100).optional() };
+const page = {
+	page: z.coerce.number().int().min(1).optional(),
+	pageSize: z.coerce.number().int().min(1).max(100).optional(),
+	// A picker's page (admin-api /api/suggest with an empty query): no COUNT over the whole list
+	noTotal: z.enum(['1', 'true']).optional().transform((v) => !!v),
+};
 const ids = z
 	.string()
 	.optional()

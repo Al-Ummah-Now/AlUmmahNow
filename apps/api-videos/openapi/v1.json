@@ -22629,17 +22629,30 @@
           "Search"
         ],
         "summary": "Search suggestions",
-        "description": "🔓 Public. Returns typeahead suggestions matching the query by word prefix, served from the search index with Arabic normalisation (tashkeel, alef forms, taa marbuta, alef maqsura). `types` picks the kinds (video, channel, playlist, category; default channel,video,category) and `channelId` limits videos and playlists to one channel. Only publicly visible items of visible channels are returned. Each suggestion carries the item's id, thumbnail and a subtitle (channel name, or the channel's @handle). Rate limited per client (429 with Retry-After). Falls back to scanning stored videos when the index is not configured or fails.",
+        "description": "🔓 Public. Returns typeahead suggestions matching the query by word prefix, served from the search index with Arabic normalisation (tashkeel, alef forms, taa marbuta, alef maqsura). `types` picks the kinds (video, channel, playlist, category; default channel,video,category) and `channelId` limits videos and playlists to one channel. Only publicly visible items of visible channels are returned. Each suggestion carries the item's id, thumbnail and a subtitle (channel name, or the channel's @handle). Rate limited per client (429 with Retry-After). Falls back to scanning stored videos when the index is not configured or fails. An empty `q` returns a picker's first page instead (pickers open with content): most viewed channels, or with `channelId` that channel's newest videos and playlists (newest public videos without it); page with `offset`, a page shorter than `limit` is the last.",
         "operationId": "get_SearchSuggestionsGet",
         "parameters": [
           {
             "schema": {
-              "type": "string",
-              "description": "Partial search query"
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Partial search query; empty for a picker's first page"
             },
-            "required": true,
-            "description": "Partial search query",
+            "required": false,
+            "description": "Partial search query; empty for a picker's first page",
             "name": "q",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "number",
+              "description": "Empty q only: suggestions to skip (the next page)"
+            },
+            "required": false,
+            "description": "Empty q only: suggestions to skip (the next page)",
+            "name": "offset",
             "in": "query"
           },
           {

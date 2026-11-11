@@ -1,21 +1,20 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import { getLocalizedValue, type VideoObject } from '@al-ummah/shared-types';
 import { getChannelVideos } from '@/lib/api/channels';
 import { getVideoById } from '@/lib/api/videos';
 import { Input } from '@/components/ui/input';
-import { Autocomplete, type AutocompleteOption } from '@/components/ui/Autocomplete';
+import { Autocomplete, type AutocompleteOption, type AutocompletePage } from '@/components/ui/Autocomplete';
 import { fetchSuggestions } from '@/lib/search/suggest-client';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/hooks/useLanguage';
-import { logger } from '@/lib/logger-client';
 import { SelectedList, type PickedItem } from './SelectedList';
 import { extractVideoId, isPublicVideo } from './videoIds';
 
-/** Videos listed in the picker; older ones can still be added by link */
-const PICKER_PAGE = 50;
+/** Videos per page; the list pages on as it is scrolled, older ones can still be added by link */
+const PICKER_PAGE = 30;
 
 interface VideoPickerProps {
   channelId: string;
@@ -34,41 +33,37 @@ export function toPickedVideo(video: Pick<VideoObject, 'id' | 'title' | 'titleLo
 }
 
 /**
- * Pick videos from the channel's latest uploads (searchable by title), or
- * by pasting a link. With `max` 1 a pick replaces the current one.
+ * Pick videos from the channel's latest uploads (listed as soon as it opens,
+ * paged on scroll, searchable by title), or by pasting a link. Already chosen
+ * videos are ticked. With `max` 1 a pick replaces the current one.
  */
 export function VideoPicker({ channelId, value, onChange, max, anyChannel = false, testId, label }: VideoPickerProps) {
   const { t, lang } = useLanguage();
   const f = t.channelSections.form;
-  const [videos, setVideos] = useState<VideoObject[] | null>(null);
   const [query, setQuery] = useState('');
   const [paste, setPaste] = useState('');
   const [pasteError, setPasteError] = useState(false);
   const [pasting, setPasting] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    getChannelVideos(channelId, { limit: PICKER_PAGE, sort: 'latest' })
-      .then((page) => {
-        if (!cancelled) setVideos((page?.data ?? []).filter(isPublicVideo) as VideoObject[]);
-      })
-      .catch((error) => {
-        logger.warn('VideoPicker: channel videos unavailable', { channelId, error });
-        if (!cancelled) setVideos([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [channelId]);
 
   const single = max === 1;
   const selectedIds = useMemo(() => new Set(value.map((v) => v.id)), [value]);
   const full = !single && value.length >= max;
-  // The latest uploads, matched as you type; older (and, for featured videos, other channels') public videos come from the search index
-  const videoOptions = useMemo<AutocompleteOption[]>(() => (videos ?? []).map((video) => {
+  const toOption = useCallback((video: VideoObject): AutocompleteOption => {
     const item = toPickedVideo(video, lang);
     return { id: video.id, label: item.label, keywords: [video.title, ...Object.values(video.titleLocalized ?? {})], thumbnailUrl: video.thumbnailUrl, thumbnailShape: 'wide' as const, value: item };
-  }), [videos, lang]);
+  }, [lang]);
+
+  // The channel's latest uploads as soon as it opens, a page at a time; typing matches them at once
+  const loadInitial = useCallback(async (cursor: string | null): Promise<AutocompletePage> => {
+    const page = await getChannelVideos(channelId, { limit: PICKER_PAGE, sort: 'latest', ...(cursor ? { cursor } : {}) });
+    // The API helper answers null on any failure
+    if (!page) throw new Error('channel videos unavailable');
+    const next = (page as { cursor?: string }).cursor || page.pagination?.nextCursor || null;
+    return { options: ((page.data ?? []).filter(isPublicVideo) as VideoObject[]).map(toOption), next };
+  }, [channelId, toOption]);
+
+  // Older (and, for featured videos, other channels') public videos come from the search index
 
   const loadMore = useCallback(async (q: string, signal: AbortSignal): Promise<AutocompleteOption[]> => {
     const found = await fetchSuggestions(q, { types: ['video'], channelId: anyChannel ? undefined : channelId, limit: 10, signal });
@@ -124,11 +119,10 @@ export function VideoPicker({ channelId, value, onChange, max, anyChannel = fals
         mode="inline"
         value={query}
         onValueChange={setQuery}
-        options={videoOptions}
-        emptyOptions={videoOptions}
-        emptyText={videos === null ? f.loading : f.noVideos}
+        loadInitial={loadInitial}
+        emptyText={f.noVideos}
         load={loadMore}
-        loadKey={`${channelId}:${anyChannel}`}
+        loadKey={`${channelId}:${anyChannel}:${lang}`}
         maxOptions={PICKER_PAGE}
         keepOpenOnSelect={!single}
         onSelect={(option) => toggle(option.value as PickedItem)}
