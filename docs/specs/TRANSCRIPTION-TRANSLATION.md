@@ -236,8 +236,8 @@ Owner's words: "quran should only be from quran .com". Every Quran text and tran
 
 The terms decide which mode is allowed. A local match index is a "Derived Material": the definitions list "indexes, embeddings" and say an output that "permits reconstruction of QF Content remains subject to the restrictions on that content". A normalised full-Quran index permits reconstruction, so it must follow the storage rules:
 - **Not allowed:** building it from regular API responses, even for under a week. Its source, `quran_core`, is Content Sync-available: "If a content resource is available through Content Sync, Content Sync is the only permitted path for obtaining and maintaining an offline copy of that resource; do not build an offline copy from regular API responses."
-- **Allowed, mode A (target):** a **local index built from the Content Sync copy** of `quran_core:1` (plus `mushafs:4` for word-level Uthmani), kept in step by a sync at least every 7 days and rebuilt after each one. This needs QF to grant Content Sync, which the Content Sync docs describe as "approved production access" for the complete `quran_core` (O12).
-- **Allowed now, mode B (until A is granted): per job, no stored index.** For each candidate stretch of the transcript:
+- **Allowed, mode A (available on production now; §10.1):** a **local index built from the Content Sync copy** of `quran_core:1` (plus `mushafs:4` for word-level Uthmani), kept in step by a sync at least every 7 days and rebuilt after each one. This needs QF to grant Content Sync, which the Content Sync docs describe as "approved production access" for the complete `quran_core` (O12).
+- **Allowed, mode B (needs the `search` scope, not yet granted): per job, no stored index.** For each candidate stretch of the transcript:
   1. QF Search (top 10);
   2. fetch those candidate verses by key from the Content API (kept only for the job, and at most 7 days in cache);
   3. our matcher verifies the ASR words against each candidate.
@@ -641,11 +641,33 @@ The credentials were added 2026-11-11 to the al-ummah Secrets Store `f8eddc9944d
 | production | `https://oauth2.quran.foundation` | `https://apis.quran.foundation` | `quran-foundation-prod-client-id` | `quran-foundation-prod-client-secret` |
 
 - **Bindings:** the processor (jobs) and api-videos (inline title lookup) bind these through `secrets_store_secrets` in each `wrangler.<env>.jsonc`. The hosts go in vars (`QF_OAUTH_HOST`, `QF_API_HOST`), so `pnpm check:config` can assert that production never points at prelive. Add both names to `scripts/release/secrets-manifest.ts`.
-- **Status (2026-11-11):**
-  - Both clients obtain client-credentials tokens.
-  - Neither is allowed the `content` scope yet: requesting it returns `invalid_scope`, and content calls return "insufficient scopes".
-  - The owner is enabling Content and Search API access in the Developer Console.
-  - Until the scopes are enabled, Quran identification and display are switched off by an admin flag. Detected spans then publish as reference-only suggestions, because quran.com is the only allowed source.
+- **Scopes (tested 2026-11-11 with both clients, through a throwaway probe Worker that bound the secrets and never returned tokens):**
+  - **Granular scopes:** new Backend/server apps can't request `scope=content` (QF quickstart: "asking for `content` returns `invalid_scope`"). They request granular scopes, space-separated.
+
+    | Scope | preprod client | prod client |
+    |---|---|---|
+    | `content` | `invalid_scope` | `invalid_scope` |
+    | `content.quran.read` + `content.translations.read` | granted | granted |
+    | `content.metadata.read` | granted | granted |
+    | `content.sync.read` | granted | granted |
+    | `content.audio.read` | granted | granted |
+    | `search` | **`invalid_scope`** ("The OAuth 2.0 Client is not allowed to request scope 'search'") | **`invalid_scope`** |
+
+  - **Verified calls (prod):**
+    - `GET /content/api/v4/verses/by_key/67:1?fields=text_uthmani&translations=20` → 200, Uthmani text plus Saheeh International.
+    - `…?words=true&word_fields=text_uthmani` gives word-level text for partial quotes. Note: word text can include pause marks, e.g. «عَمَلًۭا ۚ».
+    - The search API with a content-only token → 403 `insufficient_scope`.
+  - **Translation ids:** **Saheeh International = 20** (prod). Prelive has only 14 translations and **no 20**, so QA uses 85 (Abdel Haleem) and surahs 1–2.
+  - **Content Sync works on production now** with `content.sync.read`. `bootstrap=true` returned `RESOURCE_CREATE` for `quran_core:1`, `mushafs:4` and `translations:20`, and snapshots return 200. Combined filters returned one resource per page, so follow `next_page_url`.
+  - **Content Sync on prelive:** bootstrap returned nothing (partial dataset).
+  - **What follows:**
+    - **Mode A identification (a local index from the Content Sync copy) is available on production now.**
+    - Mode B needs the `search` scope, which is missing. Until it's granted, QA, stage and production use mode A or the review flow.
+    - Display stays live per the owner rule (§5.5): Content Sync would also allow storing, but the owner's decision for captions is references plus a live fetch until QF answers the email (O13).
+  - **Client code:**
+    - Request only the granular scopes it needs: `content.quran.read content.translations.read` for display; `content.sync.read` for the sync job.
+    - If `@quranjs/api` is used, it must be ≥ 3.17 with `contentScopeMode: "granular"`.
+    - Cache one token per scope set.
 - **Prelive data:** prelive holds only part of the Quran ("its data covers only surahs 1–2" per the QF quickstart), so QA tests of QF search must use those surahs.
 - **Token handling:**
   - `POST {QF_OAUTH_HOST}/oauth2/token` with `grant_type=client_credentials`, HTTP Basic auth, and the needed scopes (`search`, `content`), as listed in the Developer Console.
@@ -701,7 +723,7 @@ Every phase ships behind an environment flag. Tests go into the release E2E suit
 | O9 | (withdrawn: QuranEnc is no longer used) | – |
 | O10 | ﷺ in Arabic subtitles | **Decided 2026-11-11:** keep the spoken words by default; each channel can switch on the ﷺ symbol |
 | O11 | On-device transcription in native desktop Studio as a free path (D10 hybrid) | Yes, in P5 |
-| O12 | QF Developer Console apps exist (preprod and prod credentials in Secrets Store, §10.1). Enable the Search and Content API scopes, plus Content Sync if storage is cleared | Owner is enabling them now. They only block the optional QF suggestions and QF rendering; P0 runs on Tanzil/QuranEnc |
+| O12 | QF API access | **Closed except Search (2026-11-11):** both clients get the granular Content scopes, and production Content Sync works. **Owner to request:** the **Search API** permission (`search` scope) for both the pre-production and production apps at https://dev-console.quran.foundation/projects. It is only needed for mode B and review suggestions |
 | O13 | Send the partner-permission email to QF (`docs/research/transcription-2026-11/QF-PERMISSION-EMAIL-DRAFT.md`): Search/Content use per job, live display with an edge cache ≤ 7 days, Content Sync production access for the match index, storing text in captions, and VTT downloads | Owner reviews and sends. Until QF answers: references stored, text fetched live, mode B identification |
 | O14 | **Decided 2026-11-11:** the creator confirms Quran spans before publish; "Confirm all suggested" covers high-confidence matches; unsure matches publish as a reference plus a quran.com link | Done |
 | O15 | DeepL Voice for high-accuracy STT and the Quran second opinion | **Decided (2/13):** optional, off by default, enabled per environment or language by an admin under the per-provider cap; never used for speech-to-speech of Quran |
