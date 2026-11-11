@@ -170,14 +170,15 @@ export class ContactAddNote extends ContactRoute {
   }
 }
 
-const ReplyBody = z.object({ body: z.string().trim().min(1).max(CONTACT_LIMITS.replyMax) });
+/** locale: the language the admin picked next to Send; the message's language when left out. */
+const ReplyBody = z.object({ body: z.string().trim().min(1).max(CONTACT_LIMITS.replyMax), locale: z.enum(['en', 'ar']).optional() });
 
 export class ContactReply extends ContactRoute {
   schema = addAuthToSchema({
     tags: TAGS,
     summary: 'Reply to the sender by email',
     description:
-      "Records the reply in the thread and queues the email (in the message's language, original quoted, from the platform sender). The mail queue retries; a reply that finally fails is flagged on the message for a retry. Spam cannot be replied to. Needs contact:manage.",
+      "Records the reply in the thread and queues the email (in ONE language: `locale`, picked by the admin next to Send, else the message's language; original quoted, from the platform sender). The mail queue retries; a reply that finally fails is flagged on the message for a retry. Spam cannot be replied to. Needs contact:manage.",
     request: { params: IdParams, body: { content: { 'application/json': { schema: ReplyBody } } } },
     responses: {
       '200': { description: 'The recorded reply; note.email_status is queued (or failed if it could not be queued)' },
@@ -206,7 +207,8 @@ export class ContactReply extends ContactRoute {
       author_id: auth.userId,
       author_email: auth.email || null,
       email_to: message.email,
-      email_subject: renderReply(message, body.body, { environment: c.env.ENVIRONMENT }).subject,
+      // The subject records the chosen language: the queue (and any retry) sends in it
+      email_subject: renderReply(message, body.body, { environment: c.env.ENVIRONMENT, locale: body.locale }).subject,
       email_status: 'queued',
       email_id: null,
       created_at: now.toISOString(),

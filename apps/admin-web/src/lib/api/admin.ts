@@ -254,8 +254,9 @@ export async function addContactNote(id: string, body: string): Promise<ActionRe
   return mutate(`/api/contact/messages/${encodeURIComponent(id)}/notes`, 'POST', { body });
 }
 
-export async function replyToContactMessage(id: string, body: string): Promise<ActionResult<{ note: ContactNote; message: ContactMessage }>> {
-  return mutate(`/api/contact/messages/${encodeURIComponent(id)}/reply`, 'POST', { body });
+/** locale: the reply email's one language, picked next to Send. */
+export async function replyToContactMessage(id: string, body: string, locale?: 'en' | 'ar'): Promise<ActionResult<{ note: ContactNote; message: ContactMessage }>> {
+  return mutate(`/api/contact/messages/${encodeURIComponent(id)}/reply`, 'POST', locale ? { body, locale } : { body });
 }
 
 /** Queue a failed email (support notification, acknowledgement or a reply) again. */

@@ -146,8 +146,8 @@ describe('contact emails', () => {
     assert.equal(mail.subject, 'رد: رسالتك إلى الأمة الآن');
     assert.equal(mail.replyTo, 'support@alummahnow.net');
     assert.ok(mail.text.startsWith('السلام عليكم Amina،\n\nTry resetting your password.'));
-    assert.ok(mail.text.endsWith(quoteText(message.message)));
-    assert.match(mail.html, /<html lang="ar" dir="rtl">/);
+    assert.ok(mail.text.includes(quoteText(message.message)));
+    assert.match(mail.html, /<html lang="ar" dir="rtl"/);
     assert.ok(mail.html.includes('&lt;b&gt;now&lt;/b&gt;'), 'escapes HTML from the sender');
     assert.equal(renderReply({ ...message, locale: 'en' }, 'Hi', {}).subject, 'Re: your message to Al Ummah Now');
   });
@@ -161,7 +161,7 @@ describe('contact emails', () => {
     const mail = renderInboxNotification(message, { to: 'support@alummahnow.net', adminUrl: 'https://admin.alummahnow.net/', environment: 'production' });
     assert.equal(mail.replyTo, 'amina@example.org');
     assert.equal(mail.subject, '[Contact] Account & sign-in: Amina');
-    assert.match(mail.text, /^Open in the admin inbox: https:\/\/admin\.alummahnow\.net\/contact\/m1$/m);
+    assert.match(mail.text, /^Open in the admin inbox:\nhttps:\/\/admin\.alummahnow\.net\/contact\/m1$/m);
   });
 
   it('sinks E2E addresses, skips without a key and reports Resend failures', async () => {

@@ -6,6 +6,7 @@ import { addContactNote, deleteContactMessage, replyToContactMessage, updateCont
 import type { ActionResult } from '@/lib/api/errors';
 import type { ContactStatus } from '@/lib/api/types';
 import { useLanguage } from '@/i18n/I18nProvider';
+import { EmailLanguageChoice, type EmailLanguage } from '@/components/EmailLanguageChoice';
 import { translateDynamic } from '@/i18n/translate';
 import { ErrorAlert, cardClass, fieldClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
@@ -36,6 +37,8 @@ export function ContactActions({ id, status, locale, assignedToMe, hasAssignee }
   useEffect(() => setNextStatus(status), [status]);
   const [note, setNote] = useState('');
   const [reply, setReply] = useState('');
+  // The reply email's one language: the sender's (the language they wrote in) until changed
+  const [replyLocale, setReplyLocale] = useState<EmailLanguage>(locale);
 
   async function run<T>(name: string, action: () => Promise<ActionResult<T>>, after?: (data: T) => void): Promise<boolean> {
     setBusy(name);
@@ -157,7 +160,7 @@ export function ContactActions({ id, status, locale, assignedToMe, hasAssignee }
             e.preventDefault();
             const body = reply.trim();
             if (!body) return;
-            await run('reply', () => replyToContactMessage(id, body), (data) => {
+            await run('reply', () => replyToContactMessage(id, body, replyLocale), (data) => {
               setReply('');
               // The email is sent by the mail queue; only a failure to queue it shows here
               if (data.note.email_status === 'failed') setError(t('contact.replyNotDelivered'));
@@ -173,15 +176,18 @@ export function ContactActions({ id, status, locale, assignedToMe, hasAssignee }
             onChange={(e) => setReply(e.target.value)}
             rows={6}
             maxLength={10000}
-            dir={locale === 'ar' ? 'rtl' : 'auto'}
+            dir={replyLocale === 'ar' ? 'rtl' : 'auto'}
             disabled={isSpam}
             aria-describedby={`${ids}-reply-hint`}
             className={textareaClass}
             data-testid="contact-reply-body"
           />
-          <button type="submit" className={`${primaryButtonClass} w-full mt-3 disabled:opacity-60`} disabled={isSpam || !!busy || !reply.trim()} data-testid="contact-reply-send">
-            {busy === 'reply' ? t('contact.working') : t('contact.replySend')}
-          </button>
+          <div className="mt-3 flex flex-col gap-2">
+            <EmailLanguageChoice value={replyLocale} onChange={setReplyLocale} disabled={isSpam || !!busy} testId="contact-reply-locale" />
+            <button type="submit" className={`${primaryButtonClass} w-full disabled:opacity-60`} disabled={isSpam || !!busy || !reply.trim()} data-testid="contact-reply-send">
+              {busy === 'reply' ? t('contact.working') : t('contact.replySend')}
+            </button>
+          </div>
         </form>
       </section>
 

@@ -17,6 +17,7 @@ import { fieldClass, linkClass, primaryButtonClass } from '@/components/ui';
 import { Autocomplete } from '@/components/search/Autocomplete';
 import { ActionFeedback, useContentAction } from '@/components/content/actions';
 import { Notice, SectionCard, smallButtonClass } from '@/components/content/parts';
+import { EmailLanguageChoice, type EmailLanguage } from '@/components/EmailLanguageChoice';
 
 /** One @, something before it, a dotted domain after it, no spaces; linear time (no backtracking regex). */
 function isEmailAddress(value: string): boolean {
@@ -36,7 +37,7 @@ interface Props {
 }
 
 export function InviteForm({ tiers, canPlan, canCreateChannels, canTransfer }: Props) {
-  const { t } = useLanguage();
+  const { t, locale: uiLocale } = useLanguage();
   const ids = useId();
   const { run, busy, error, message } = useContentAction();
   const [email, setEmail] = useState('');
@@ -44,7 +45,8 @@ export function InviteForm({ tiers, canPlan, canCreateChannels, canTransfer }: P
   const [role, setRole] = useState<'creator' | 'viewer'>('creator');
   const [tierId, setTierId] = useState(tiers[0]?.id ?? '');
   const [scholar, setScholar] = useState(false);
-  const [locale, setLocale] = useState<'en' | 'ar'>('en');
+  // The email's one language: picked next to Send, the admin UI's language until changed
+  const [locale, setLocale] = useState<EmailLanguage>(uiLocale === 'ar' ? 'ar' : 'en');
   const [note, setNote] = useState('');
   const [days, setDays] = useState(14);
   const [newChannels, setNewChannels] = useState<Array<{ key: number; name: string; handle: string }>>([]);
@@ -164,13 +166,6 @@ export function InviteForm({ tiers, canPlan, canCreateChannels, canTransfer }: P
             <input id={`${ids}-name`} value={name} onChange={(e) => setName(e.target.value)} dir="auto" maxLength={100} className={fieldClass} data-testid="invite-name" />
           </div>
           <div className="flex flex-col gap-1">
-            <label htmlFor={`${ids}-locale`} className="text-sm text-fg-muted">{t('invites.language')}</label>
-            <select id={`${ids}-locale`} value={locale} onChange={(e) => setLocale(e.target.value === 'ar' ? 'ar' : 'en')} className={fieldClass} data-testid="invite-locale">
-              <option value="en">{t('invites.langEn')}</option>
-              <option value="ar">{t('invites.langAr')}</option>
-            </select>
-          </div>
-          <div className="flex flex-col gap-1">
             <label htmlFor={`${ids}-role`} className="text-sm text-fg-muted">{t('invites.role')}</label>
             <select id={`${ids}-role`} value={role} onChange={(e) => setRole(e.target.value === 'viewer' ? 'viewer' : 'creator')} className={fieldClass} data-testid="invite-role">
               <option value="creator">{t('invites.roleCreator')}</option>
@@ -281,9 +276,12 @@ export function InviteForm({ tiers, canPlan, canCreateChannels, canTransfer }: P
       )}
 
       <ActionFeedback error={error} message={message} />
-      <button type="submit" className={primaryButtonClass} disabled={!!busy || blocked || !isEmailAddress(email.trim().toLowerCase())} data-testid="invite-submit">
-        {busy ? t('content.working') : t('invites.submit')}
-      </button>
+      <div className="flex flex-wrap items-center gap-3">
+        <button type="submit" className={primaryButtonClass} disabled={!!busy || blocked || !isEmailAddress(email.trim().toLowerCase())} data-testid="invite-submit">
+          {busy ? t('content.working') : t('invites.submit')}
+        </button>
+        <EmailLanguageChoice value={locale} onChange={setLocale} disabled={!!busy} testId="invite-locale" />
+      </div>
     </form>
   );
 }

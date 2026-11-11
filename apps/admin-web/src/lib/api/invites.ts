@@ -42,8 +42,9 @@ export async function createInvite(input: NewInviteInput): Promise<ActionResult<
   return mutate('/api/invites', 'POST', input);
 }
 
-export async function resendInvite(id: string): Promise<ActionResult<InviteView>> {
-  return mutate(`/api/invites/${enc(id)}/resend`, 'POST', {});
+/** locale: the language of the email, picked next to Resend. */
+export async function resendInvite(id: string, locale?: 'en' | 'ar'): Promise<ActionResult<InviteView>> {
+  return mutate(`/api/invites/${enc(id)}/resend`, 'POST', locale ? { locale } : {});
 }
 
 /** A new single-use link, shown once (its hash goes to auth). */

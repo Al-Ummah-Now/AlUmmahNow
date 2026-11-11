@@ -19,7 +19,7 @@ import { newErrorRef, scrubEvent } from '@al-ummah/shared-types';
 import { logger } from './logger';
 import { isSinkAddress } from './contact';
 import { getContactMessage, deliveryStatus, recordDelivery, type MailKind } from './contact-store';
-import { renderAcknowledgement, renderInboxNotification, renderReply, sendContactEmail } from './contact-email';
+import { renderAcknowledgement, renderInboxNotification, renderReply, replyLocaleOf, sendContactEmail } from './contact-email';
 
 export const CONTACT_MAIL_VERSION = 1;
 /** Keep equal to max_retries + 1 of the contact-mail consumer in wrangler*.jsonc. */
@@ -170,9 +170,14 @@ export async function processContactMailJob(env: AdminBindings, msg: QueueMessag
     } else if (job.kind === 'ack') {
       result = await sendContactEmail(env, renderAcknowledgement(message, { replyTo: inbox, environment: env.ENVIRONMENT }), { idempotencyKey: `contact-ack-${message.id}` });
     } else {
-      const note = await db.prepare('SELECT body FROM contact_notes WHERE id = ? AND message_id = ?').bind(job.noteId ?? '', job.messageId).first<{ body: string }>();
+      const note = await db
+        .prepare('SELECT body, email_subject FROM contact_notes WHERE id = ? AND message_id = ?')
+        .bind(job.noteId ?? '', job.messageId)
+        .first<{ body: string; email_subject: string | null }>();
       if (!note) return 'done';
-      result = await sendContactEmail(env, renderReply(message, note.body, { replyTo: inbox, environment: env.ENVIRONMENT }), { idempotencyKey: `contact-reply-${job.noteId}` });
+      // In the language the admin picked when sending (kept in the stored subject)
+      const locale = replyLocaleOf(note.email_subject) ?? undefined;
+      result = await sendContactEmail(env, renderReply(message, note.body, { replyTo: inbox, environment: env.ENVIRONMENT, locale }), { idempotencyKey: `contact-reply-${job.noteId}` });
     }
 
     if (result.status !== 'failed') {
