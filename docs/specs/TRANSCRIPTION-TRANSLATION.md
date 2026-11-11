@@ -401,7 +401,7 @@ These are seeds for admins to edit; plans stay admin-managed.
   - `metadata_translations` rows;
   - FTS rows;
   - `captions-work/{jobId}/**`.
-- **Gap found:** today's purge has no step for the subtitles bucket. It is fixed under its own issue (§13) and covered by this spec's tests.
+- **Gap found:** today's purge has no step for the subtitles bucket. It is fixed in [#814](https://github.com/Al-Ummah-Now/AlUmmahNow/issues/814) and covered by this spec's tests.
 - **Third-party copies:** jobs at a third-party provider are deleted through its API after success, where the API allows it.
 
 ### 9.3 Moderation
@@ -457,10 +457,10 @@ These are seeds for admins to edit; plans stay admin-managed.
 
 Every phase ships behind an environment flag. Tests go into the release E2E suite: inline translate en/ar; transcribe a seeded 40 s clip on QA; editor accept Quran; publish; player shows the track.
 
-## 13. Follow-ups found during research (issues to file)
+## 13. Follow-ups found during research
 
-1. **The processor's moderation translates with `@cf/meta/m2m100-1.2b`**, which R§3.1 and CMS §1.5 show is unusable for Arabic. It should move to the shared translation provider.
-2. **The purge job doesn't delete the subtitles bucket objects** for a video (§9.2).
+1. **The processor's moderation translates with `@cf/meta/m2m100-1.2b`**, which R§3.1 and CMS §1.5 show is unusable for Arabic. It should move to the shared translation provider: [#813](https://github.com/Al-Ummah-Now/AlUmmahNow/issues/813).
+2. **The purge job doesn't delete the subtitles bucket objects** for a video (§9.2): [#814](https://github.com/Al-Ummah-Now/AlUmmahNow/issues/814).
 3. **`docs/research/transcription-and-search-architecture.md` (2025)** compares RunPod and Bunny at old prices. Mark it superseded by R§5.
 
 ## 14. Open decisions for the owner
