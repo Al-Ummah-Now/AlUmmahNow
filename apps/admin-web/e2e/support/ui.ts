@@ -28,13 +28,37 @@ export async function uiLogin(page: Page, account: Account, expectedPath: RegExp
 /**
  * The main navigation (sidebar). On phones it is a drawer behind the menu button and hidden from
  * the accessibility tree until opened, so open it first; on wider screens it is always there.
+ * PR runs test the deployed QA build, which may still have the old top nav (no admin-sidebar):
+ * then the nav is the always-visible "Main navigation" landmark.
  */
 export async function openMainNav(page: Page) {
-  const nav = page.getByTestId('admin-sidebar');
+  const sidebar = page.getByTestId('admin-sidebar');
+  if ((await sidebar.count()) === 0) {
+    const legacy = page.getByRole('navigation', { name: /^(Main navigation|التنقل الرئيسي)$/ });
+    await expect(legacy).toBeVisible();
+    return legacy;
+  }
   const menu = page.getByTestId('nav-open');
-  if ((await menu.isVisible()) && !(await nav.isVisible())) await menu.click();
-  await expect(nav).toBeVisible();
-  return nav;
+  if ((await menu.isVisible()) && !(await sidebar.isVisible())) await menu.click();
+  await expect(sidebar).toBeVisible();
+  return sidebar;
+}
+
+/**
+ * The light/dark preference on <html>: data-color-mode (with the .dark class) since the shell
+ * follows the site theme; the deployed QA build may still use data-theme for it.
+ */
+export async function expectColorMode(page: Page, mode: Theme) {
+  const html = page.locator('html');
+  if (await html.getAttribute('data-color-mode')) {
+    await expect(html).toHaveAttribute('data-color-mode', mode);
+    if (mode === 'dark') await expect(html).toHaveClass(/\bdark\b/);
+    if (mode === 'light') await expect(html).not.toHaveClass(/\bdark\b/);
+  } else if (mode === 'system') {
+    await expect(html).not.toHaveAttribute('data-theme', /^(light|dark)$/);
+  } else {
+    await expect(html).toHaveAttribute('data-theme', mode);
+  }
 }
 
 export async function chooseTheme(page: Page, theme: Theme) {
