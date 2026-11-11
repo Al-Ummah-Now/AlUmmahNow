@@ -6,6 +6,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { VideoBulkDelete } from '../src/endpoints/video/videoBulkDelete';
 import { MemoryBucket, MemoryQueue, buildApp, videoFixture } from './helpers';
+import { SqliteD1 } from './search-sqlite-d1';
 
 function routes(r: any) {
 	r.post('/api/videos/bulk-delete', VideoBulkDelete);
@@ -19,7 +20,7 @@ function bulkDelete(app: ReturnType<typeof buildApp>, videoIds: string[], videos
 			headers: { 'Content-Type': 'application/json', channelId: 'owner-ch' },
 			body: JSON.stringify({ videoIds }),
 		},
-		{ videos, queue },
+		{ videos, queue, channels: new MemoryBucket(), SEARCH_DB: new SqliteD1() } as never,
 	);
 }
 
@@ -41,9 +42,9 @@ describe('POST /api/videos/bulk-delete ownership', () => {
 		assert.equal(byId.missing.success, false);
 		assert.deepEqual(body.summary, { total: 3, succeeded: 1, failed: 2 });
 
-		assert.equal(videos.read('mine'), null);
-		assert.notEqual(videos.read('theirs'), null, 'another user\'s video must survive');
-		assert.equal(queue.messages.length, 1, 'only the owned video is queued for deletion');
+		// Soft delete (lib/creatorDeletions.ts): the owned video is hidden and restorable
+		assert.equal((videos.read('mine') as any).isDeleted, true);
+		assert.notEqual((videos.read('theirs') as any).isDeleted, true, 'another user\'s video must survive');
 	});
 
 	it('deletes nothing for an intruder holding the owner\'s channelId', async () => {
@@ -56,8 +57,8 @@ describe('POST /api/videos/bulk-delete ownership', () => {
 
 		const body = (await res.json()) as any;
 		assert.deepEqual(body.summary, { total: 2, succeeded: 0, failed: 2 });
-		assert.notEqual(videos.read('a'), null);
-		assert.notEqual(videos.read('b'), null);
+		assert.notEqual((videos.read('a') as any).isDeleted, true);
+		assert.notEqual((videos.read('b') as any).isDeleted, true);
 		assert.equal(queue.messages.length, 0);
 	});
 
@@ -67,7 +68,7 @@ describe('POST /api/videos/bulk-delete ownership', () => {
 		const res = await bulkDelete(buildApp(routes, null), ['a'], videos, queue);
 
 		assert.notEqual(res.status, 200);
-		assert.notEqual(videos.read('a'), null);
+		assert.notEqual((videos.read('a') as any).isDeleted, true);
 		assert.equal(queue.messages.length, 0);
 	});
 });

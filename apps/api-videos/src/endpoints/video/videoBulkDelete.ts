@@ -1,15 +1,13 @@
 import { Bool, Str } from "chanfana";
 import { z } from "zod";
-import { Video as BusinessVideo, ResponseError } from "../../lib/types";
-import R2Repository from "../../lib/r2Repo";
-import Queue, { MessageType } from "../../lib/queue";
-import { enqueueBunnyDelete } from "../../lib/uploads/bunnyDelete";
+import { ResponseError } from "../../lib/types";
+import { softDeleteForCreator } from "../../lib/creatorDeletions";
 import { AuthenticatedRoute, AppContext } from '../../base';
 
 export class VideoBulkDelete extends AuthenticatedRoute {
 	schema = {
 		tags: ["Videos"],
-		summary: "Delete multiple videos",
+		summary: "Delete multiple videos (soft: restorable for 30 days)",
 		request: {
 			body: {
 				content: {
@@ -70,68 +68,19 @@ export class VideoBulkDelete extends AuthenticatedRoute {
 
 		const { videoIds } = request.body;
 		const userId = this.getUserId(c);
-		const { channelId } = request.headers;
 
-		// Get the repository
-		const bucket = c.env.videos;
-		type VideoType = z.infer<typeof BusinessVideo>;
-		const repository = new R2Repository<VideoType>(bucket);
-		const queue = new Queue(c.env.queue);
-
-		// Process each video deletion
+		// Soft deletes, restorable for 30 days (lib/creatorDeletions.ts)
 		const results = await Promise.allSettled(
-			videoIds.map(async (videoId) => {
-				try {
-					// Get the video before deletion to verify it exists
-					const video = await repository.getObject(videoId);
-
-					if (!video) {
-						return {
-							videoId,
-							success: false,
-							error: "Video not found",
-						};
-					}
-
-					// Only the owner may delete a video
-					if (!userId || video.userId !== userId) {
-						return {
-							videoId,
-							success: false,
-							error: "Forbidden - you can only delete your own videos",
-						};
-					}
-
-					// Send queue message for video deletion
-					await queue.send(MessageType.VideoDelete, {
-						videoId: videoId,
-						userId: userId,
-						channelId: channelId,
-						timestamp: new Date().toISOString(),
-					});
-
-					// Delete the video, then its Bunny video (queued; lib/uploads/bunnyDelete.ts)
-					await repository.deleteObject(videoId);
-					await enqueueBunnyDelete(c.env.PROCESSING_CHECK_QUEUE, videoId, 'bulk-delete');
-
-					return {
-						videoId,
-						success: true,
-					};
-				} catch (error) {
-					return {
-						videoId,
-						success: false,
-						error: error instanceof Error ? error.message : "Unknown error",
-					};
-				}
-			})
+			videoIds.map((videoId) => userId
+				? softDeleteForCreator(c.env as never, videoId, userId)
+				: Promise.resolve({ videoId, success: false, error: "Forbidden - you can only delete your own videos" })),
 		);
 
 		// Process results
 		const processedResults = results.map((result, index) => {
 			if (result.status === "fulfilled") {
-				return result.value;
+				const { videoId, success, error } = result.value;
+				return { videoId, success, ...(error ? { error } : {}) };
 			} else {
 				return {
 					videoId: videoIds[index],

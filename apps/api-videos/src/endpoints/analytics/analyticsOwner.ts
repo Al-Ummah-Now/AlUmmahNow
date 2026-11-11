@@ -294,7 +294,7 @@ export class AnalyticsRetentionGet extends AuthenticatedRoute {
       const object = await c.env.videos.get(params.videoId);
       const video = object ? await object.json<AnalyticsVideo>() : null;
       if (!video || video.isDeleted) return c.json({ success: false, error: "Video not found" }, 404);
-      if (video.userId !== userId) {
+      if (!(await canOnVideo(c.env as never, video as never, userId, 'analytics.view'))) {
         return c.json({ success: false, error: "You can only view analytics for your own videos" }, 403);
       }
       const range = parseRange(query.dateFrom, query.dateTo);

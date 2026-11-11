@@ -14,7 +14,8 @@ import { VideoSearch } from '../endpoints/video/videoSearch';
 import { VideoView } from '../endpoints/video/videoView';
 import { VideoWatchTime } from '../endpoints/video/videoWatchTime';
 import { VideoRetention } from '../endpoints/video/videoRetention';
-import { VideoBulkPlaylist, VideoBulkSchedule } from '../endpoints/video/videoBulkStudio';
+import { VideoBulkSchedule } from '../endpoints/video/videoBulkStudio';
+import { VideoBulkPurge, VideoBulkRestore } from '../endpoints/video/videoTrash';
 import { VideoUploadStatus } from '../endpoints/video/videoUploadStatus';
 import { VideoThumbnailUpload } from '../endpoints/video/videoThumbnailUpload';
 
@@ -102,7 +103,8 @@ videoRouter.delete('/:id', VideoDelete);
 videoRouter.post('/bulk-delete', VideoBulkDelete);
 videoRouter.post('/bulk-update', VideoBulkUpdate);
 videoRouter.post('/bulk-schedule', VideoBulkSchedule);
-videoRouter.post('/bulk-playlist', VideoBulkPlaylist);
+videoRouter.post('/bulk-restore', VideoBulkRestore);
+videoRouter.post('/bulk-purge', VideoBulkPurge);
 
 // Get video upload status (authenticated)
 videoRouter.get('/:id/upload-status', VideoUploadStatus);

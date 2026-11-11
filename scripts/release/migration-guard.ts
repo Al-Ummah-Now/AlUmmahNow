@@ -52,6 +52,20 @@ export const NEVER_APPLIED_FIXES: Readonly<Record<string, { sha256: string; reas
   },
 };
 
+/**
+ * The other escape: a migration that a PR preview already applied on QA under
+ * its own name (so QA's d1_migrations lists it) keeps that name when it lands,
+ * even though it sorts before newer ones. Wrangler applies every name it has
+ * not recorded, so stage and production run it as new and QA skips it; a
+ * renamed copy would fail on QA with "duplicate column". Pinned by sha256.
+ */
+export const PREVIEW_APPLIED: Readonly<Record<string, { sha256: string; reason: string }>> = {
+  'apps/api-videos/migrations/search/0003_content_studio_columns.sql': {
+    sha256: 'df5749a1e87ee1af2e53430553ad2a89ee5e058146780ca352bed47ea7a058b2',
+    reason: '2026-11-09: applied on QA search DB by the Creator Studio PR preview (#499); QA has studio_status, title, category, language. Landed 2026-11-10 with the Studio (#498).',
+  },
+};
+
 export const sha256 = (text: string) => createHash('sha256').update(text).digest('hex');
 
 /**
@@ -64,6 +78,7 @@ export function checkMigrations(
 	/** Content of a file at head, for the NEVER_APPLIED_FIXES check. */
 	headContent: (path: string) => string | null = () => null,
 	fixes: Readonly<Record<string, { sha256: string }>> = NEVER_APPLIED_FIXES,
+	previewApplied: Readonly<Record<string, { sha256: string }>> = PREVIEW_APPLIED,
 ): string[] {
 	const errors: string[] = [];
 	const latest = new Map<string, string>();
@@ -84,6 +99,8 @@ export function checkMigrations(
 		else if (c.status === 'R') errors.push(`${c.from} → ${c.path}: existing migration renamed.`);
 		else if (c.status === 'A' || c.status === 'C') {
 			const last = latest.get(dirOf(c.path));
+			const pinned = previewApplied[c.path];
+			if (pinned && sha256(headContent(c.path) ?? '') === pinned.sha256) continue;
 			if (last && nameOf(c.path) <= last) {
 				errors.push(`${c.path}: new migration sorts before the latest existing one (${last}); it may never run where ${last} already ran.`);
 			}

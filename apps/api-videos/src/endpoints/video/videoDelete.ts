@@ -1,16 +1,15 @@
+import { softDeleteForCreator } from "../../lib/creatorDeletions";
 import { canOnVideo } from "../../lib/channelAccess";
 import { Bool, Str } from "chanfana";
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
-import Queue, { MessageType } from "../../lib/queue";
-import { enqueueBunnyDelete } from "../../lib/uploads/bunnyDelete";
 import { AuthenticatedRoute, AppContext } from '../../base';
 
 export class VideoDelete extends AuthenticatedRoute {
 	schema = {
 		tags: ["Videos"],
-		summary: "Delete a Video",
+		summary: "Delete a Video (soft: restorable for 30 days)",
 		request: {
 			params: z.object({
 				// Must match the router's '/:id' segment
@@ -75,13 +74,12 @@ export class VideoDelete extends AuthenticatedRoute {
 		// Retrieve the validated slug
 		const { id: videoId } = request.params;
 		const userId = this.getUserId(c);
-		const { channelId } = request.headers;
 
 		// Get the video before deletion
 		const bucket = c.env.videos;
 		type VideoType = z.infer<typeof BusinessVideo>;
 		const repository = new R2Repository<VideoType>(bucket);
-		let video = await repository.getObject(videoId);
+		const video = await repository.getObject(videoId);
 
 		if (!video) {
 			return c.json({
@@ -98,20 +96,11 @@ export class VideoDelete extends AuthenticatedRoute {
 			}, 403);
 		}
 
-		// Send queue message for video deletion
-		const queue = new Queue(c.env.queue);
-		await queue.send(MessageType.VideoDelete, {
-			videoId: videoId,
-			userId: userId,
-			channelId: channelId,
-			timestamp: new Date().toISOString(),
-		});
-
-		// Delete the video
-		await repository.deleteObject(videoId);
-		// …and its Bunny video (queued, retried): without this every deleted
-		// upload stayed in the library and was still encoded (lib/uploads/bunnyDelete.ts)
-		await enqueueBunnyDelete(c.env.PROCESSING_CHECK_QUEUE, videoId, 'owner-delete');
+		// Soft delete: hidden at once, restorable for 30 days (lib/creatorDeletions.ts)
+		const result = await softDeleteForCreator(c.env as never, videoId, userId);
+		if (!result.success) {
+			return c.json({ success: false, error: result.error ?? "Delete failed" }, 500);
+		}
 
 		return {
 			success: true,

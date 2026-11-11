@@ -1,6 +1,6 @@
 import { Num, Str } from "chanfana";
 import { z } from "zod";
-import { STUDIO_VIDEO_STATUSES, studioFailureKind, studioVideoStatus, type StudioVideoStatus } from "@al-ummah/shared-types";
+import { can, channelRoleOf, STUDIO_VIDEO_STATUSES, studioFailureKind, studioVideoStatus, type StudioVideoStatus } from "@al-ummah/shared-types";
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { Channel as BusinessChannel, ResponseError, Video as BusinessVideo } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
@@ -25,7 +25,8 @@ export async function requireContentAccess(c: AppContext, channelId: string, use
 	type ChannelType = z.infer<typeof BusinessChannel>;
 	const channel = await new R2Repository<ChannelType>(c.env.channels).getObject(channelId);
 	if (!channel || channel.isDeleted) return c.json({ success: false, error: "Channel not found" }, 404);
-	if (channel.userId !== userId) return c.json({ success: false, error: "Forbidden" }, 403);
+	// The owner or a channel member who may see private videos (shared channel roles); a site role never grants it
+	if (!can(channelRoleOf(channel, userId), "video.view_private")) return c.json({ success: false, error: "Forbidden" }, 403);
 	return null;
 }
 
