@@ -16,6 +16,7 @@ import { renderAcknowledgement, renderInboxNotification, renderReply, sendContac
 import {
   contactCounts,
   getContactMessage,
+  getContactThread,
   listDeletedContactMessages,
   purgeContactMessages,
   requestContactPurge,
@@ -257,6 +258,11 @@ describe('contact store (D1)', () => {
     await insertContactNote(db, { id: 'n1', message_id: 'm2', kind: 'note', body: 'checking', author_id: 'adm', author_email: null, email_to: null, email_subject: null, email_status: null, email_id: null, created_at: '2026-11-09T10:00:00Z' });
     await insertContactNote(db, { id: 'n2', message_id: 'm2', kind: 'reply', body: 'done', author_id: 'adm', author_email: null, email_to: 'bilal@example.org', email_subject: 's', email_status: 'sunk', email_id: null, created_at: '2026-11-09T10:01:00Z' });
     assert.deepEqual((await listContactNotes(db, 'm2')).map((n) => n.id), ['n1', 'n2']);
+    // One snapshot: the message and its notes come from the same batch
+    const thread = await getContactThread(db, 'm2');
+    assert.equal(thread?.message.id, 'm2');
+    assert.deepEqual(thread?.notes.map((n) => n.id), ['n1', 'n2']);
+    assert.equal(await getContactThread(db, 'missing'), null);
 
     // Delete is soft: hidden from the list, the counts and the detail; the thread stays until the purge
     const deletedAt = new Date('2026-11-10T08:00:00Z');
