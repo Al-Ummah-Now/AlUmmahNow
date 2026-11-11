@@ -34,7 +34,8 @@ test.describe('Release: Studio frame', () => {
 
     await page.goto(`${studio}/content`);
     await expect(page).toHaveURL(`${studio}/content/videos`);
-    for (const tab of ['videos', 'live', 'posts']) await expect(page.getByTestId(`studio-tab-${tab}`)).toBeVisible();
+    for (const tab of ['videos', 'posts']) await expect(page.getByTestId(`studio-tab-${tab}`)).toBeVisible();
+    await expect(page.getByTestId('studio-tab-live')).toHaveCount(0);
 
     const missing = await page.goto(`${studio}/nope`);
     expect(missing?.status()).toBe(404);
