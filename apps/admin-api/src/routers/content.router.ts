@@ -42,6 +42,13 @@ import {
   type IssueUserWarningResult,
   type NotificationEmailLocale,
   type UserWarningList,
+  cleanLiveRoutingPatch,
+  isLiveProvider,
+  livePatchPrevious,
+  type LiveChannelOverride,
+  type LiveProviderId,
+  type LiveProviderUsage,
+  type LiveRoutingSettings,
 } from '@al-ummah/shared-types';
 import {
   countWarnings,
@@ -58,7 +65,7 @@ import {
 } from '../lib/content/warnings';
 import { enqueueWarningMail, flagWarningMailFailure } from '../lib/warning-mail';
 import { callVideos, VideosError, type VideosCall, type VideosClientEnv } from '../lib/content/videosClient';
-import { dropAudit, readAudit, writeAudit, type AuditAction, type ContentKind } from '../lib/content/audit';
+import { dropAudit, readAudit, setAuditPrevious, writeAudit, type AuditAction, type ContentKind } from '../lib/content/audit';
 import { banVideosUser } from '../lib/content/userBan';
 import { openReportCounts, recentReports, reportedIds, type ReportEntity } from '../lib/content/reports';
 import { logger } from '../lib/logger';
@@ -110,11 +117,13 @@ const isDeletionKind = (kind: string): kind is AdminDeletionKind => (ADMIN_DELET
  * again when the change fails, so the log never misses a change and never
  * records one that did not happen.
  */
-async function audited<T>(c: C, entry: Omit<AuditAction, 'actorId'>, run: () => Promise<T>): Promise<T> {
+async function audited<T>(c: C, entry: Omit<AuditAction, 'actorId'>, run: () => Promise<T>, previousFrom?: (result: T) => Record<string, unknown>): Promise<T> {
   const db = c.env.REPORTS_DB;
   const auditId = await writeAudit(db, { ...entry, actorId: actorOf(c) });
   try {
     const result = await run();
+    // Only api-videos knows some previous values (a stream's move): record them once it answers
+    if (previousFrom) await setAuditPrevious(db, auditId, previousFrom(result)).catch((e) => logger.warn('[Content] Could not record the previous value', { auditId, error: String(e) }));
     logger.info('[Content] Action', { kind: entry.kind, id: entry.id, action: entry.action, actorId: actorOf(c) });
     return result;
   } catch (error) {
@@ -739,6 +748,101 @@ app.post('/jobs/:id/retry', async (c) => {
   for (const permission of ADMIN_JOB_PERMISSIONS[job.kind] ?? ['content:delete']) need(c, permission);
   return ok(c, await audited(c, { kind: job.targetKind, id: job.targetId, action: 'job-retry', details: { jobId, jobKind: job.kind } }, () =>
     videos(c, `/jobs/${encodeURIComponent(jobId)}/retry`, { method: 'POST' })));
+});
+
+// ---------------------------------------------------------------------------
+// Live streaming providers (D3): which provider new live streams go to. Reads
+// for every admin; changes need live:manage (admins and super admins) and are
+// audited with the values they replace, so the page's Undo and the history
+// can put them back. Changes apply to new streams within 15 s (api-videos
+// cache) and never cut a session that is live.
+// ---------------------------------------------------------------------------
+
+interface LiveSettingsView {
+  settings: LiveRoutingSettings;
+  usage: Record<LiveProviderId, LiveProviderUsage>;
+  overrides: LiveChannelOverride[];
+}
+
+const LIVE_ID = /^[A-Za-z0-9_-]{1,128}$/;
+const badRequest = (c: C, error: string) => c.json({ success: false, code: 'invalid_request', error }, 400);
+const liveNote = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 500) : null);
+
+app.get('/live/settings', async (c) => ok(c, await videos<LiveSettingsView>(c, '/live/settings')));
+
+app.get('/live/sessions', async (c) => {
+  const q = c.req.query();
+  const query: Record<string, string> = {};
+  if (q.status === 'active' || q.status === 'recent') query.status = q.status;
+  if (isLiveProvider(q.provider)) query.provider = q.provider;
+  if (q.limit && /^\d{1,3}$/.test(q.limit)) query.limit = q.limit;
+  return ok(c, await videos(c, '/live/sessions', { query }));
+});
+
+app.get('/live/compare', async (c) => {
+  const q = c.req.query();
+  const query: Record<string, string> = { tests: q.tests === '1' ? '1' : '0' };
+  for (const k of ['from', 'to'] as const) if (q[k] && /^\d{4}-\d{2}-\d{2}$/.test(q[k])) query[k] = q[k];
+  return ok(c, await videos(c, '/live/compare', { query }));
+});
+
+/** The live streaming changes, newest first (the page's History). */
+app.get('/live/audit', async (c) => {
+  const limit = Math.min(200, Math.max(1, Number(c.req.query('limit')) || 50));
+  return ok(c, { items: await readAudit(c.env.REPORTS_DB, { live: true, limit }) });
+});
+
+/** A partial change (mode, split, a provider's toggles or caps, rates, self-hosted options, QoE rate). */
+app.put('/live/settings', async (c) => {
+  need(c, 'live:manage');
+  const patch = cleanLiveRoutingPatch(await body(c));
+  if (!patch) return badRequest(c, 'Nothing to change');
+  const current = await videos<LiveSettingsView>(c, '/live/settings');
+  return ok(c, await audited(c, { kind: 'live-settings', id: 'routing', action: 'edit', details: patch as Record<string, unknown>, previous: livePatchPrevious(current.settings, patch) as Record<string, unknown> }, () =>
+    videos(c, '/live/settings', { method: 'PUT', json: patch })));
+});
+
+app.put('/live/overrides/:channelId', async (c) => {
+  need(c, 'live:manage');
+  const channelId = c.req.param('channelId');
+  const input = await body(c);
+  if (!LIVE_ID.test(channelId) || !isLiveProvider(input.provider)) return badRequest(c, 'A channel and a provider (bunny or selfhosted) are required');
+  const note = liveNote(input.note);
+  const before = (await videos<LiveSettingsView>(c, '/live/settings')).overrides.find((o) => o.channelId === channelId);
+  return ok(c, await audited(c, {
+    kind: 'live-override', id: channelId, action: 'set',
+    details: { provider: input.provider, note },
+    previous: { provider: before?.provider ?? null, note: before?.note ?? null },
+  }, () => videos(c, `/live/overrides/${encodeURIComponent(channelId)}`, { method: 'PUT', json: { provider: input.provider, note } })));
+});
+
+app.delete('/live/overrides/:channelId', async (c) => {
+  need(c, 'live:manage');
+  const channelId = c.req.param('channelId');
+  if (!LIVE_ID.test(channelId)) return badRequest(c, 'Invalid channel');
+  const before = (await videos<LiveSettingsView>(c, '/live/settings')).overrides.find((o) => o.channelId === channelId);
+  return ok(c, await audited(c, { kind: 'live-override', id: channelId, action: 'remove', previous: { provider: before?.provider ?? null, note: before?.note ?? null } }, () =>
+    videos(c, `/live/overrides/${encodeURIComponent(channelId)}`, { method: 'DELETE' })));
+});
+
+/** The stream's next session goes to `provider` (null cancels). The audit row gets the previous move once api-videos reports it. */
+app.post('/live/streams/:id/move', async (c) => {
+  need(c, 'live:manage');
+  const id = c.req.param('id');
+  const input = await body(c);
+  if (!LIVE_ID.test(id) || !(input.provider === null || isLiveProvider(input.provider))) return badRequest(c, 'provider must be bunny, selfhosted or null');
+  return ok(c, await audited(c, { kind: 'live-stream', id, action: 'move', details: { provider: input.provider } },
+    () => videos<{ previous: LiveProviderId | null; currentProvider: LiveProviderId | null }>(c, `/live/streams/${encodeURIComponent(id)}/move`, { method: 'POST', json: { provider: input.provider } }),
+    (out) => ({ provider: out.previous ?? null })));
+});
+
+/** End a stuck session (confirmed in the page). Not undoable: the creator starts a new session. */
+app.post('/live/sessions/:id/end', async (c) => {
+  need(c, 'live:manage');
+  const id = c.req.param('id');
+  if (!LIVE_ID.test(id)) return badRequest(c, 'Invalid session');
+  return ok(c, await audited(c, { kind: 'live-session', id, action: 'end' }, () =>
+    videos(c, `/live/sessions/${encodeURIComponent(id)}/end`, { method: 'POST', json: {} })));
 });
 
 export default app;
