@@ -28,9 +28,9 @@ The owner asked for:
 | Quran display | **Official text only, never ASR**: a span shows the stored official text for an exact word range after creator confirmation, or a reference with no text | Measured 0 wrong ayat and 0 extra words on 20 clips (R§8) |
 | Quran source | **quran.com (Quran Foundation API) only**. Captions store references; the player fetches the text and translation live (edge cache ≤ 7 days); QF down → reference plus a quran.com link | Owner rule. Per-passage caching ≤ 1 week is within the Developer Terms (§9.4) |
 | Quran identification | **Mode B now** (QF Search + Content fetch + our verification, no stored index); **mode A** (local index from Content Sync) once granted | Measured mode B: 22/55 auto, 0 wrong, 0/20 false. A full-Quran index built from regular API responses isn't allowed (§5.5) |
-| Quran translations | QF `translations` by resource id, fetched live (English: Saheeh International) | quran.com only |
+| Quran translations | QF `translations` by id, fetched live. **Each channel picks its edition per language** from the QF list; platform default Saheeh International (en), changeable by admins; edition name shown (O7) | quran.com only |
 | Metering | One "caption minute" per video-minute per language produced; plan allowance plus add-on packs plus admin grants | §6 |
-| Inline title translation | **Availability set by the site-wide subscription plan (pending)**; admin grants until then. Recommended input to the plan: free with a fair-use cap, because it is so cheap | 100,000 title translations cost about $2 (§6.4) |
+| Inline title translation | **Free on every tier with a daily fair-use limit** (decided O5); the $20/month budget is the backstop | 100,000 title translations cost about $2–7 (§6.4) |
 | Cost at scale | 1,000 h/month of jobs ≈ **$59** with the default stack; 10,000 h ≈ $590, which breaks the cap, so it is bounded by tier minutes and a budget stop | §7 |
 
 ## 2. Principles
@@ -119,7 +119,7 @@ The owner asked for:
 - The editor previews the QF translation fetched live. It goes into the stored title only once QF permission covers storage (O13), because quran.com is the only Quran source (§5.5).
 - We measured 10 of 13 verse titles found uniquely, 2 correctly flagged as appearing in two places, and 1 missed (R§4).
 
-**Viewer side (owner decision O6)**
+**Viewer side (decided O6)**
 - When a video has no title in the viewer's language, the viewer would see a cached machine translation, labelled with a small "Translated" marker and a "Show original" toggle.
 - It is stored separately from creator text (§5.9) and never overwrites it. The creator can "Adopt" it into their own field, or turn auto-translation off for the channel.
 
@@ -187,7 +187,7 @@ Inline translate: Studio ──POST /api/translate──▶ api-videos (sync, �
    - Arabic cues get RLM marks (as Core's `to_webvtt` already does).
 3. **Quran detection** (§5.5).
 4. **Glossary** normalisation, as suggestions only, never silent (§8).
-5. **Honorifics:** Arabic transcripts keep the spoken form («صلى الله عليه وسلم»). A per-channel setting "Show ﷺ symbol in Arabic subtitles" is off by default.
+5. **Honorifics (decided O10):** Arabic transcripts keep the spoken form («صلى الله عليه وسلم»). A per-channel setting "Show ﷺ symbol in Arabic subtitles" is off by default.
 
 ### 5.5 Quran: zero wrong text by construction
 
@@ -344,6 +344,7 @@ The terms decide which mode is allowed. A local match index is a "Derived Materi
 - `caption_tracks`: `video_id`, `lang`, `kind`, `status`, `version`, `source_version`, `origin`, `published_at`, `published_by`.
 - `glossary_terms`: `id`, `scope global|channel`, `channel_id`, `src_lang`, `tgt_lang`, `source`, `target`, `note`, `created_by`, `updated_at`.
 - `quran_translation_defaults` (admin config): `lang`, `qf_translation_id`, `title`, `attribution`, `enabled`, `is_default`.
+- `channel_quran_translations` (channel setting, O7): `channel_id`, `lang`, `qf_translation_id`. Picked in Studio → Settings from the QF translations list, with search; it falls back to the platform default.
 
 **KV `TRANSLATION_CACHE`:**
 - **Key:** `sha256(normalisedSourceText, srcLang, tgtLang, glossaryVersion, promptVersion, model)` → `{ text, provider, model, at }`.
@@ -371,7 +372,7 @@ The terms decide which mode is allowed. A local match index is a "Derived Materi
 - **Latency budget:** 2 s p95. Measured p95 is 2.1 s for Gemma, and a cache hit takes about 10 ms. Past 2.5 s the client shows "Still translating…" and lets the creator cancel.
 - **Fair use and audit:** fair-use counters (§6.4), and an audit row (actor, video, field, chars, provider, cost). Text is not stored in the audit.
 
-### 5.9 Viewer-side metadata translation (if O6 = yes)
+### 5.9 Viewer-side metadata translation (decided O6)
 - **Store:** `metadata_translations(video_id, field, lang, text, source_hash, provider, model, created_at)` in D1. It is filled lazily on the first view in that language, or in a nightly batch for popular videos, and capped by the budget.
 - **Read path:**
   - Search and cards read creator text first, then the machine translation if the channel allows it, then the original.
@@ -393,13 +394,13 @@ The terms decide which mode is allowed. A local match index is a "Derived Materi
 | `captions.maxTargetLanguages` | number | translation targets per job | set by the site-wide subscription plan (pending) |
 | `captions.highAccuracy` | boolean | may use an admin-enabled optional provider (e.g. DeepL) | set by the site-wide subscription plan (pending) |
 | `captions.editor` | boolean | transcript editor | set by the site-wide subscription plan (pending) |
-| `translate.inline.dailyItems` | number | inline translations per user per day (fair use) | set by the site-wide subscription plan (pending) |
+| `translate.inline.dailyItems` | number | inline translations per user per day (fair use) | on every tier (O5); the daily limit is admin-editable |
 | `translate.bulk.maxItems` | number | items per bulk translate | set by the site-wide subscription plan (pending) |
 | `translate.viewerAuto` | boolean | channel's titles may be auto-translated for viewers (if O6) | set by the site-wide subscription plan (pending) |
 
 **Owner decision 3/13 (2026-11-11):** "what free tier? this needs planning with all subs on the site".
 - There are no per-tier numbers here. Allowances and pack pricing are **set by the site-wide subscription plan (pending)**, which covers every subscription on the site.
-- **Until that plan exists, captions are available only through admin grants** (§6.3). Every plan's code default for `captions.monthlyMinutes` is `0`. Inline title translation follows the same rule: `translate.inline.dailyItems` defaults to `0` until the plan sets it, and admins can grant it.
+- **Until that plan exists, captions are available only through admin grants** (§6.3). Every plan's code default for `captions.monthlyMinutes` is `0`. Exception (O5): inline title and description translation is free on every tier with a daily fair-use limit. `translate.inline.dailyItems` has a non-zero code default that the site-wide plan may tune.
 - The cost facts the plan needs are in §6.4 and §7.
 
 ### 6.2 Metering
@@ -430,7 +431,7 @@ The terms decide which mode is allowed. A local match index is a "Derived Materi
 
   Optional-provider jobs should count at a multiple of the default that matches their cost ratio (§7.4). The multiple is for the plan to set.
 
-### 6.4 Inline title translation: cost facts for the subscription plan
+### 6.4 Inline title translation: free with fair use (decided O5)
 - **What it costs us:**
   - a title is about 73 characters and costs about $0.00002 (Gemma) to $0.00007 (DeepSeek);
   - 100,000 title translations a month ≈ $2–7;
@@ -693,12 +694,12 @@ Every phase ships behind an environment flag. Tests go into the release E2E suit
 | O2 | DeepL plan | **Decided 2026-11-11 (2/13):** stay on API Pro ($5.49/month), no upgrade. DeepL is optional and off by default; admins enable it per environment or language. Add the key to Secrets Store as `AI_KEY_DEEPL` when an admin first enables it |
 | O3 | Caption allowances and pack pricing | **Decided 3/13:** set by the site-wide subscription plan (pending, planned with all subscriptions on the site). Until then, captions are available by admin grant only |
 | O4 | Captions monthly budget | **Decided 4/13 (2026-11-11), as proposed:** captions $100/month and inline translation $20/month, both admin-editable per environment (max $500); daily slices; on reaching the budget, jobs wait in `waiting_budget` and admins get an alert (§7.4) |
-| O5 | Inline title translation: free with fair use, or metered | Part of the site-wide subscription plan (3/13). Recommendation: free with a fair-use cap; admin grants until then |
-| O6 | Viewer-side machine-translated titles (labelled, cached, never overwriting) | Yes, after P3, opt-out per channel |
-| O7 | Default Quran translation edition per language (QF `translations` ids) | en: Saheeh International (QF id to confirm with production scopes); ar: the Uthmani text itself |
+| O5 | Inline title/description translation | **Decided 2026-11-11:** free on every tier with a daily fair-use limit (`translate.inline.dailyItems`); the $20/month inline-translation budget is the backstop |
+| O6 | Viewer-side machine-translated titles | **Decided 2026-11-11: yes.** Labelled "auto-translated", cached, never overwriting creator text; each channel can opt out (§5.9) |
+| O7 | Quran translation edition | **Decided 2026-11-11:** each channel picks its edition per language from the QF translations list. The platform default is Saheeh International (en), changeable by admins. The edition name is shown on screen |
 | O8 | Extract the CMS provider layer into a shared package now, or mirror it | Mirror in P0–P2, extract once both use it |
 | O9 | (withdrawn: QuranEnc is no longer used) | – |
-| O10 | "ﷺ" symbol in Arabic subtitles: off by default (keep the spoken words), per-channel setting | As recommended |
+| O10 | ﷺ in Arabic subtitles | **Decided 2026-11-11:** keep the spoken words by default; each channel can switch on the ﷺ symbol |
 | O11 | On-device transcription in native desktop Studio as a free path (D10 hybrid) | Yes, in P5 |
 | O12 | QF Developer Console apps exist (preprod and prod credentials in Secrets Store, §10.1). Enable the Search and Content API scopes, plus Content Sync if storage is cleared | Owner is enabling them now. They only block the optional QF suggestions and QF rendering; P0 runs on Tanzil/QuranEnc |
 | O13 | Send the partner-permission email to QF (`docs/research/transcription-2026-11/QF-PERMISSION-EMAIL-DRAFT.md`): Search/Content use per job, live display with an edge cache ≤ 7 days, Content Sync production access for the match index, storing text in captions, and VTT downloads | Owner reviews and sends. Until QF answers: references stored, text fetched live, mode B identification |
