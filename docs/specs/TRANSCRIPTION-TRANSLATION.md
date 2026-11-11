@@ -18,7 +18,7 @@ The owner asked for:
 | Topic | Recommendation | Why (evidence) |
 |---|---|---|
 | Speech-to-text default | **Workers AI `@cf/openai/whisper-large-v3-turbo`**, VAD off, explicit language, `initial_prompt`, chunks of 10 minutes or less | $0.00051/min measured. It matched or beat Bunny on every test clip. VAD deleted speech in 2 of 3 cases (R§2). |
-| Speech-to-text, high accuracy | **DeepL Voice** (on the owner's DeepL API Pro account, $1.85/h), admin-enabled for higher tiers and as the Quran second opinion. **ElevenLabs Scribe v3** ($0.20/h) stays a candidate once measured | Measured: best Arabic (Al-Mulk 2.1% WER vs 6.2% for Workers AI), and al-Fajr mujawwad 16/16 ayat vs 13/16. But it is real-time streaming only (≤ 2× real time) and 54× the default's cost (R§9). Scribe is still unmeasured (O1). |
+| Speech-to-text, high accuracy | **DeepL: optional and OFF by default (owner decision 2/13, 2026-11-11).** Workers AI is the default for all transcription. An admin can enable DeepL Voice per environment and per language in provider routing (§10), on the existing DeepL **API Pro** plan ($5.49/month + usage), with no plan upgrade. ElevenLabs Scribe is still unmeasured (O1) | Measured: best on Arabic recitation (Al-Mulk 2.1% WER vs 6.2%); at parity on lectures (3.1% vs 3.4%); real-time streaming only; 54× the default's cost (R§9, R§12) |
 | Not used | Bunny built-in transcription ($0.10 per language-minute, Whisper-based, no glossary); Cloudflare Stream captions (no Arabic); Workers AI nova-3 (no Arabic); Media Transformations audio extraction ($0.03/min, 10-minute limit) | R§2, R§5 |
 | Transcript translation | **DeepSeek V4.1 Flash** on Workers AI, falling back to Gemma 4 26B | Cue-accurate and honorific-correct at $0.0004 per video-minute. It is already the CMS default (R§3.2). |
 | Inline title/description translation | **Gemma 4 26B** on Workers AI, falling back to DeepSeek V4.1 Flash. DeepL is an optional adapter. | p50 1.0 s, p95 2.1 s, $0.00002 per title, quality equal to DeepSeek (R§3.1) |
@@ -592,7 +592,7 @@ Source: [Getting Started with Content Sync](https://api-docs.quran.foundation/do
 - **Admin screen:** admin-web → AI → Captions & Translation, one row per environment. It mirrors the CMS `ai_settings` behaviour: version check, audit to `ai_settings_audit`, and keys referenced by Secrets Store name `AI_KEY_*`, never stored.
 - **Per feature:**
   - **features:** `asr`, `transcript_translate`, `inline_translate`, `quran_lookup`
-  - **routing:** primary `{provider, model}`, fallback, and per-language overrides (e.g. `asr.ar → elevenlabs` once measured, `inline_translate.fr → deepl`)
+  - **routing:** primary `{provider, model}`, fallback, and per-language overrides (e.g. `asr.ar → deepl`, `inline_translate.fr → deepl`). **Workers AI is the default everywhere. DeepL (on the existing API Pro plan) is off until an admin enables it for an environment or a language** (owner decision 2/13)
   - **limits:** enabled flag, per-provider monthly cap in USD
   - **privacy:** retention class
   - **tuning:** thresholds (Quran confidence) and the prompt version
@@ -665,7 +665,7 @@ Every phase ships behind an environment flag. Tests go into the release E2E suit
 | # | Decision | Recommendation |
 |---|---|---|
 | O1 | ElevenLabs key: which plan do we have, and may we measure Scribe on the same clips (a few cents)? | Yes; it becomes an option only if it beats DeepL Voice on Arabic and Quran |
-| O2 | DeepL: stay on API Pro or move to Growth? | Stay on **Pro** (no volume cap). Growth only pays off above ≈ 1M characters a month (§7.3). Add a `deepl-api-key` to Secrets Store (`AI_KEY_DEEPL`) when P3 starts |
+| O2 | DeepL plan | **Decided 2026-11-11 (2/13):** stay on API Pro ($5.49/month), no upgrade. DeepL is optional and off by default; admins enable it per environment or language. Add the key to Secrets Store as `AI_KEY_DEEPL` when an admin first enables it |
 | O3 | Caption-minute allowances per tier (§6.1 seeds) and pack prices (§6.3) | Accept the seeds; admins can edit them |
 | O4 | Captions monthly budget | $100/month (≈ 1,700 h on the default stack), inline translation $20 |
 | O5 | Inline title translation free with fair use, or metered | Free with fair use (§6.4) |
@@ -678,4 +678,4 @@ Every phase ships behind an environment flag. Tests go into the release E2E suit
 | O12 | QF Developer Console apps exist (preprod and prod credentials in Secrets Store, §10.1). Enable the Search and Content API scopes, plus Content Sync if storage is cleared | Owner is enabling them now. They only block the optional QF suggestions and QF rendering; P0 runs on Tanzil/QuranEnc |
 | O13 | Send the partner-permission email to QF (`docs/research/transcription-2026-11/QF-PERMISSION-EMAIL-DRAFT.md`): Search/Content use per job, live display with an edge cache ≤ 7 days, Content Sync production access for the match index, storing text in captions, and VTT downloads | Owner reviews and sends. Until QF answers: references stored, text fetched live, mode B identification |
 | O14 | **Decided 2026-11-11:** the creator confirms Quran spans before publish; "Confirm all suggested" covers high-confidence matches; unsure matches publish as a reference plus a quran.com link | Done |
-| O15 | DeepL Voice as the paid high-accuracy STT and the Quran second opinion on higher tiers | Yes, behind the per-provider cap; never for speech-to-speech of Quran |
+| O15 | DeepL Voice for high-accuracy STT and the Quran second opinion | **Decided (2/13):** optional, off by default, enabled per environment or language by an admin under the per-provider cap; never used for speech-to-speech of Quran |
