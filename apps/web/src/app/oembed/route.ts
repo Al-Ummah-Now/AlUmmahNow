@@ -45,8 +45,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   // A video inside a public playlist embeds the playlist, starting at that video (PLAYLIST-PLAYBACK.md 2.5)
   if (ref.kind === 'video' && ref.list) {
+    const videoId = ref.id;
     const playlist = await loadPublicPlaylist(ref.list);
-    const at = playlist ? playlist.videos.findIndex((v) => v.id === ref.id) : -1;
+    const at = playlist ? playlist.videos.findIndex((v) => v.id === videoId) : -1;
     if (playlist && at >= 0) {
       ref = { kind: 'playlist', id: playlist.id, index: at };
       content = { title: playlist.title, authorName: playlist.channelName || undefined, thumbnailUrl: playlist.videos[at].poster };

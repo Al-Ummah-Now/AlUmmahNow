@@ -16,6 +16,9 @@ import { studioOwner } from './studio';
 import { target } from './targets';
 import { apiFetch } from './web-session';
 
+// The spec signs up (a run account): traces and videos would record its session
+test.use({ trace: 'off', video: 'off' });
+
 const VIDEO = '.video-js video';
 
 const mediaTime = (page: Page) => page.evaluate((sel) => document.querySelector<HTMLVideoElement>(sel)?.currentTime ?? 0, VIDEO);
