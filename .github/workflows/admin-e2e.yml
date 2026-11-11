@@ -142,14 +142,11 @@ jobs:
         run: node --experimental-strip-types --no-warnings scripts/ci/qa-lock.ts acquire qa-global --ttl-min 50 --max-wait-min 85
 
       - name: Install Playwright browsers
-        working-directory: apps/admin-web
         # Global setup always logs in with Chromium; WebKit only for its project
-        run: |
-          if [ "${{ matrix.project }}" = "webkit" ]; then
-            pnpm exec playwright install --with-deps chromium webkit
-          else
-            pnpm exec playwright install --with-deps chromium
-          fi
+        uses: ./.github/actions/playwright-install
+        with:
+          working-directory: apps/admin-web
+          browsers: ${{ matrix.project == 'webkit' && 'chromium webkit' || 'chromium' }}
 
       - name: Run admin-web E2E suite
         working-directory: apps/admin-web

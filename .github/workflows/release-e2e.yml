@@ -137,8 +137,11 @@ jobs:
       # chromium for the auth flows, branded Chrome for real H.264 playback,
       # firefox and webkit for the cross-browser specs (ALL_BROWSERS in the config)
       - name: Install browsers
-        working-directory: ${{ env.SUITE }}
-        run: npx playwright install --with-deps chromium chrome firefox webkit
+        uses: ./.github/actions/playwright-install
+        with:
+          working-directory: ${{ env.SUITE }}
+          runner: npx
+          browsers: chromium chrome firefox webkit
 
       # One password for this run's throwaway users, known to the workflow so
       # the artifact scan below can look for it (targets.ts TEST_PASSWORD).

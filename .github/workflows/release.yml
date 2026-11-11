@@ -280,10 +280,14 @@ jobs:
       # Idempotent stage data for the release E2E (accounts, channels, encoded
       # videos, playlists): everything already there is found and skipped. Stage
       # accounts register through the auth E2E code sink (apps/web/e2e/seed).
-      - name: Install Chromium and ffmpeg (stage seed)
-        run: |
-          (cd apps/web && pnpm exec playwright install --with-deps chromium)
-          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
+      - name: Install Chromium (stage seed)
+        uses: ./.github/actions/playwright-install
+        with:
+          working-directory: apps/web
+          browsers: chromium
+
+      - name: Install ffmpeg (stage seed)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
 
       - name: Seed stage (idempotent)
         working-directory: apps/web
@@ -465,7 +469,10 @@ jobs:
           pnpm release:content-columns --env production --check
 
       - name: Install Chromium
-        run: (cd apps/web && pnpm exec playwright install --with-deps chromium)
+        uses: ./.github/actions/playwright-install
+        with:
+          working-directory: apps/web
+          browsers: chromium
 
       # One test-release-*@delivered.resend.dev account signs up (code via the
       # Resend API), signs in on web and profile, and is refused by admin.

@@ -128,15 +128,11 @@ jobs:
           pnpm --filter @al-ummah/theme-packages build
 
       - name: Install Playwright browsers
-        working-directory: apps/web
         # chromium is always needed (auth setup fallback); webkit serves Mobile Safari
-        run: |
-          case "${{ matrix.project }}" in
-            firefox) B=firefox ;;
-            webkit|'Mobile Safari') B=webkit ;;
-            *) B= ;;
-          esac
-          pnpm exec playwright install --with-deps chromium $B
+        uses: ./.github/actions/playwright-install
+        with:
+          working-directory: apps/web
+          browsers: ${{ matrix.project == 'firefox' && 'chromium firefox' || ((matrix.project == 'webkit' || matrix.project == 'Mobile Safari') && 'chromium webkit' || 'chromium') }}
 
       - name: Record E2E start
         id: e2e-start
@@ -378,8 +374,10 @@ jobs:
           pnpm --filter @al-ummah/theme-packages build
 
       - name: Install Playwright browsers
-        working-directory: apps/web
-        run: pnpm exec playwright install --with-deps chromium
+        uses: ./.github/actions/playwright-install
+        with:
+          working-directory: apps/web
+          browsers: chromium
 
       - name: Acquire the qa-global lock
         id: lock
@@ -489,8 +487,10 @@ jobs:
           pnpm --filter @al-ummah/theme-packages build
 
       - name: Install Playwright browsers
-        working-directory: apps/web
-        run: pnpm exec playwright install --with-deps chromium
+        uses: ./.github/actions/playwright-install
+        with:
+          working-directory: apps/web
+          browsers: chromium
 
       - name: Regenerate snapshots
         working-directory: apps/web

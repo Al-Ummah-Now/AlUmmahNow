@@ -99,8 +99,10 @@ jobs:
 
       - name: Install Playwright browsers
         if: matrix.browsers != ''
-        working-directory: apps/web
-        run: pnpm exec playwright install --with-deps ${{ matrix.browsers }}
+        uses: ./.github/actions/playwright-install
+        with:
+          working-directory: apps/web
+          browsers: ${{ matrix.browsers }}
 
       # Firefox on Linux decodes H.264 (the HLS fixtures) through the system's libavcodec, which the
       # runner image does not ship: without it every fixture fails with a format error
