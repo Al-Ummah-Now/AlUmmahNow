@@ -108,9 +108,10 @@ jobs:
       # runner image does not ship: without it every fixture fails with a format error
       - name: Install H.264 decoding for Firefox
         if: startsWith(matrix.project, 'firefox')
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q --no-install-recommends ffmpeg
+        uses: ./.github/actions/apt-install
+        with:
+          packages: ffmpeg
+          no-install-recommends: 'true'
 
       - name: Locate the installed Firefox
         if: matrix.project == 'firefox-stable'

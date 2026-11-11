@@ -286,8 +286,10 @@ jobs:
           working-directory: apps/web
           browsers: chromium
 
-      - name: Install ffmpeg (stage seed)
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
+      - name: Install ffmpeg and fonts (stage seed)
+        uses: ./.github/actions/apt-install
+        with:
+          packages: ffmpeg fonts-dejavu-core
 
       - name: Seed stage (idempotent)
         working-directory: apps/web
