@@ -118,7 +118,8 @@ export function typed(state: AutocompleteState, query: string, initial?: Initial
     query,
     open: asks,
     active: -1,
-    options: asks ? state.options : [],
+    // Suggestions for a shorter query stay while the next answer comes; the initial list does not (it isn't a match)
+    options: asks && state.query.trim().length >= MIN_QUERY ? state.options : [],
     status: asks ? 'loading' : 'idle',
   };
 }
