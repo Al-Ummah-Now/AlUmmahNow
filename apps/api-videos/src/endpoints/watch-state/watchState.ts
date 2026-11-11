@@ -112,9 +112,12 @@ export class WatchStatePut extends AuthenticatedRoute {
 		);
 		if (!entry) return c.json({ error: 'Video not found' }, 404);
 
-		if (applied) {
+		const eventType = entry.percentageWatched >= COMPLETED_PERCENT ? 'watch_completed' : initial ? 'watch_started' : 'watch_progress';
+		// watch_progress is not queued: the processor only logged it, and it was one queue
+		// message (3 billed operations) every 10 s of signed-in playback
+		if (applied && eventType !== 'watch_progress') {
 			const event: WatchHistoryEvent = {
-				type: entry.percentageWatched >= COMPLETED_PERCENT ? 'watch_completed' : initial ? 'watch_started' : 'watch_progress',
+				type: eventType,
 				userId,
 				videoId,
 				progress: body.position,

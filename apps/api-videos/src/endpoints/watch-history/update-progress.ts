@@ -139,17 +139,19 @@ export class UpdateWatchProgress extends AuthenticatedRoute {
         return c.json({ error: "Watch history entry not found. Create one first by recording a watch." }, 404);
       }
 
-      // Queue progress event
-      const event: WatchHistoryEvent = {
-        type: completed ? "watch_completed" : "watch_progress",
-        userId: userId,
-        videoId,
-        progress,
-        duration,
-        timestamp: now,
-      };
-
-      await queueWatchHistoryEvent(c.env.queue, event);
+      // Only completion is queued: the processor does nothing with watch_progress, which
+      // was one queue message (3 billed operations) every 10 s of signed-in playback
+      if (completed) {
+        const event: WatchHistoryEvent = {
+          type: "watch_completed",
+          userId: userId,
+          videoId,
+          progress,
+          duration,
+          timestamp: now,
+        };
+        await queueWatchHistoryEvent(c.env.queue, event);
+      }
 
       return c.json(
         {
