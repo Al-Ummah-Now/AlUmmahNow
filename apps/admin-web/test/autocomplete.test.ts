@@ -112,6 +112,7 @@ describe('autocomplete: opens with results (pick fields list the newest before a
     assert.equal('mo'.length, MIN_QUERY);
     // Clearing the box brings the first page back
     assert.equal(typed(two, '', page).options.length, 2);
+    assert.equal(two.options.length, 0, 'the first page is not a match: nothing stale to click while the search runs');
   });
 
   it('pages append without duplicates; a failure keeps what is shown and says so only when nothing is', () => {
