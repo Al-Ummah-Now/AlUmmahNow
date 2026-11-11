@@ -57,8 +57,12 @@ Unknown params are ignored. Invalid values fall back to the default.
   shown for private, scheduled (not yet published), deleted, moderation-hidden, still-processing and non-existent
   videos, so the frame never reveals which one it is. The HTTP status is 200 either way (so the host page shows the
   frame instead of a browser error page); use oEmbed (404) to check availability from code.
-- **Playlist:** the player plus a list of the playlist's public videos. It moves to the next video when one ends.
-  Private videos inside a public playlist are skipped. A private or missing playlist shows the unavailable frame.
+- **Playlist:** the player plus a list of the playlist's public videos in the playlist's saved order (manual, or its
+  automatic sort), read from the playback queue API (`GET /api/playlists/{id}/queue`, up to 500 videos). When a video
+  ends, a 3-second "Up next" countdown (cancellable) plays the next one, which starts on its own (muted if the
+  browser refuses sound); after the last video the playlist stops. "Watch on Al Ummah Now" opens the watch page
+  inside the playlist (`?list=&index=`). Private videos inside a public playlist are skipped. A private or missing
+  playlist shows the unavailable frame. See docs/specs/PLAYLIST-PLAYBACK.md.
 
 Only **public, published** videos and playlists ever play in an embed. The embed never uses the viewer's
 Al Ummah Now session, even when the host is a subdomain of `alummahnow.net` (where the browser would send the
@@ -277,7 +281,8 @@ Anonymous (no `Authorization`) endpoints a picker needs. They return only public
 | `GET {api}/api/videos?limit=20&cursor=…` | Recent public videos (`data[]`; pass the returned `cursor` back for the next page) |
 | `GET {api}/api/search?q=…&type=video` | Search (`results[].video`) |
 | `GET {api}/api/videos/{id}` | One video (404 if not public) |
-| `GET {api}/api/playlists/{id}?includeVideos=true` | One public playlist with its public videos |
+| `GET {api}/api/playlists/{id}/queue` | One public playlist's public videos in its saved order, paged (`offset`, `limit`) |
+| `GET {api}/api/playlists/{id}?includeVideos=true` | One public playlist with its public videos (first 200) |
 | `GET {host}/oembed?url=…` | Embed HTML, title, thumbnail, duration in one call |
 
 Store the **video id** (or the watch URL) in the CMS, not the iframe HTML, and build the iframe at render time from

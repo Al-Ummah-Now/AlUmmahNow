@@ -12,7 +12,9 @@
  *   allow="autoplay" play with sound, so it plays unmuted; only if the browser
  *   refuses (NotAllowedError) does it mute and show "Tap to unmute".
  * - start / end / loop parameters, "Watch on Al Ummah Now" at the current time.
- * - Playlists: the same frame with a list drawer; moves on when a video ends.
+ * - Playlists: the same frame with a list drawer, in the playlist's saved order (the playback
+ *   queue API); when a video ends the 3 s "Up next" countdown plays the next one (cancellable),
+ *   (each item starts like the first: see the autoplay rules above).
  * - postMessage events and commands through useEmbedMessaging.
  */
 
@@ -31,6 +33,8 @@ import type { EmbedVideo } from '@/lib/embed/content';
 import { videoAspect } from '@/lib/embed/aspect';
 import type { ExtendedPlayer } from '@/lib/video/videojs';
 import type { AnalyticsContext } from '@al-ummah/shared-types';
+import { updatePlayerUi } from '@/lib/video/player-ui';
+import { watchHref as listWatchHref } from '@/lib/playlists/playback';
 import { useEmbedMessaging } from './useEmbedMessaging';
 // Black backdrop and a player that fills the host's frame, in every theme and mode
 import './embed-frame.css';
@@ -129,6 +133,24 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
     }
   }, [index, videos.length]);
 
+  // The end screen's "Up next" (and its countdown) plays the next item in the list; the list stops
+  // after its last item (docs/specs/PLAYLIST-PLAYBACK.md D9)
+  const nextVideo = playlist ? videos[index + 1] : undefined;
+  useEffect(() => {
+    updatePlayerUi({
+      upNext: nextVideo
+        ? {
+            title: titleOf(nextVideo, lang),
+            channel: nextVideo.channelName ? removeUnwantedChars(nextVideo.channelName) : '',
+            thumbnail: nextVideo.poster,
+            badge: `${(index + 2).toLocaleString(lang)} / ${videos.length.toLocaleString(lang)}`,
+            go: goToNext,
+          }
+        : null,
+    });
+  }, [nextVideo, index, videos.length, lang, goToNext]);
+  useEffect(() => () => updatePlayerUi({ upNext: null }), []);
+
   const handlePlayerReady = useCallback((readyPlayer: Player) => {
     const player = readyPlayer as unknown as ExtendedPlayer;
     playerRef.current = player;
@@ -137,10 +159,8 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
 
     player.on('play', () => emit('play'));
     player.on('pause', () => emit('pause'));
-    player.on('ended', () => {
-      emit('ended');
-      goToNext();
-    });
+    // The next item follows through the end screen's countdown (upNext above)
+    player.on('ended', () => emit('ended'));
     player.on('error', () => emit('error', { code: 'media', message: player.error()?.message }));
     // Unmuted by any means (the control bar, a host command): the unmute control goes
     player.on('volumechange', () => {
@@ -187,12 +207,14 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
         emit('timeupdate');
       }
     });
-  }, [emit, goToNext, index, params.end, params.index, params.loop, playlist]);
+  }, [emit, index, params.end, params.index, params.loop, playlist]);
 
-  const watchHref = useCallback((seconds: number) => {
-    const path = `/${lang}/video/${encodeURIComponent(video.id)}`;
-    return seconds >= 1 ? `${path}?t=${Math.floor(seconds)}` : path;
-  }, [lang, video.id]);
+  // Inside a playlist the watch page continues the list from this item
+  const watchHref = useCallback((seconds: number) => listWatchHref(lang, video.id, {
+    list: playlist?.id ?? null,
+    index: playlist ? (video.listIndex ?? index) : null,
+    t: seconds,
+  }), [lang, video.id, video.listIndex, playlist, index]);
 
   const onWatchClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
     const seconds = playerRef.current ? playerRef.current.currentTime() || 0 : pendingStartRef.current;
