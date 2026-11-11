@@ -23,7 +23,7 @@ afterEach(() => {
 });
 
 async function setup(email = 'amina@example.org', environment = 'production') {
-  const db = sqliteD1(['0008_contact_messages.sql', '0009_theme_packages.sql', '0010_contact_mail_failures.sql', '0013_admin_soft_delete.sql']);
+  const db = sqliteD1();
   await insertContactMessage(db, { id: 'm1', name: 'Amina', email, topic: 'general', message: 'A message long enough.', locale: 'ar', pageUrl: null, userId: null, userAgent: null, ipHash: 'ip', now: new Date('2026-11-09T10:00:00Z') }, roomy);
   const reports: Record<string, unknown>[] = [];
   const env = {
@@ -144,7 +144,8 @@ describe('contact mail queue', () => {
     const { env, reports } = await setup();
     assert.equal(await processContactMailJob(env, msg({ v: 1, kind: 'ack', messageId: 'gone' })), 'done');
     assert.equal(await processContactMailJob(env, msg({ v: 2 as 1, kind: 'ack', messageId: 'm1' })), 'done');
-    assert.equal(calls.length, 0);
+    // No contact email (the error tables are migrated too, so the reported failure may send its error alert)
+    assert.equal(calls.filter((c) => !c.key?.startsWith('error-alert-')).length, 0);
     assert.equal(reports.length, 1);
   });
 });

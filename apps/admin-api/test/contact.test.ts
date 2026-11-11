@@ -206,11 +206,11 @@ function newMessage(id: string, over: Partial<Parameters<typeof insertContactMes
 }
 
 describe('contact store (D1)', () => {
-  const MIGRATION = ['0008_contact_messages.sql', '0009_theme_packages.sql', '0010_contact_mail_failures.sql', '0013_admin_soft_delete.sql'];
+  // Every migration: 0019 adds the History columns to contact_messages with the other queues
   const limits = { perIpHour: 2, perIpDay: 3, perUserHour: 1, perUserDay: 5 };
 
   it('rate-limits per IP per hour and per day', async () => {
-    const db = sqliteD1(MIGRATION);
+    const db = sqliteD1();
     assert.equal(await insertContactMessage(db, newMessage('a'), limits), true);
     assert.equal(await insertContactMessage(db, newMessage('b'), limits), true);
     assert.equal(await insertContactMessage(db, newMessage('c'), limits), false, 'third in an hour');
@@ -223,14 +223,14 @@ describe('contact store (D1)', () => {
   });
 
   it('rate-limits per account across IPs', async () => {
-    const db = sqliteD1(MIGRATION);
+    const db = sqliteD1();
     assert.equal(await insertContactMessage(db, newMessage('a', { userId: 'u1' }), limits), true);
     assert.equal(await insertContactMessage(db, newMessage('b', { userId: 'u1', ipHash: 'ip-z' }), limits), false);
     assert.equal(await insertContactMessage(db, newMessage('c', { userId: 'u2', ipHash: 'ip-z' }), limits), true);
   });
 
   it('lists with filters, search, pagination and counts; updates, notes and deletes', async () => {
-    const db = sqliteD1(MIGRATION);
+    const db = sqliteD1();
     const roomy = { perIpHour: 99, perIpDay: 99, perUserHour: 99, perUserDay: 99 };
     await insertContactMessage(db, newMessage('m1', { topic: 'problem', message: 'The player 100% froze', now: new Date('2026-11-01T09:00:00Z') }), roomy);
     await insertContactMessage(db, newMessage('m2', { name: 'Bilal', email: 'bilal@example.org', now: new Date('2026-11-05T09:00:00Z') }), roomy);

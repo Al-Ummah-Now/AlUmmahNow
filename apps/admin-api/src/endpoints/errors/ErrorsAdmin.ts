@@ -5,7 +5,9 @@
  * activity log (audit + timeline).
  */
 import { z } from 'zod';
-import { ERROR_APPS, ERROR_STATUSES, parseErrorRef } from '@al-ummah/shared-types';
+import { ERROR_APPS, ERROR_KINDS, ERROR_QUEUE_OUTCOMES, ERROR_QUEUE_SORTS, ERROR_STATUSES, parseErrorRef } from '@al-ummah/shared-types';
+import { listErrorQueue } from '../../lib/queue/errors-queue';
+import { assigneeParam, queueQuery, toFilters } from '../../lib/queue/schema';
 import { AdminRoute, AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { logger } from '../../lib/logger';
@@ -91,6 +93,41 @@ export class ErrorGroupList extends ErrorsRoute {
       viewerId: this.getUserId(c),
     });
     return { success: true, result: { ...result, limit: query.limit, offset: query.offset } };
+  }
+}
+
+export class ErrorQueue extends ErrorsRoute {
+  schema = addAuthToSchema({
+    tags: TAGS,
+    summary: 'Errors as a queue: Action needed / History (docs/admin/QUEUES.md)',
+    description:
+      'tab=action: new and acknowledged groups and any group with an open needs-action item, oldest first. tab=history: resolved and ignored groups with who and when, newest first. q searches message, culprit, route, error name, app, reference ERR-XXXX-XXXX and request id; type = error kind, app, environment, outcome = resolved|ignored, actor = who (id or me), assignee = me|unassigned|id. Assignees and actors are names. counts holds both tabs under the same filters. Needs errors:read.',
+    request: {
+      query: queueQuery(ERROR_QUEUE_SORTS, ERROR_QUEUE_OUTCOMES).extend({
+        type: z.enum(ERROR_KINDS).optional(),
+        app: z.enum(ERROR_APPS).optional(),
+        environment: z.string().regex(/^[a-z0-9-]{1,30}$/).optional(),
+        assignee: assigneeParam,
+        includeTest: z.enum(['0', '1']).optional(),
+      }),
+    },
+    responses: { '200': { description: 'AdminQueuePage<ErrorQueueItem>' }, '403': { description: 'errors:read required' } },
+  });
+
+  async handle(c: AppContext) {
+    const denied = this.deny(c, 'errors:read');
+    if (denied) return denied;
+    const { query } = await this.getValidatedData<typeof this.schema>();
+    // A pasted reference finds its group even when typed loosely, test groups included
+    const ref = query.q ? parseErrorRef(query.q) : null;
+    const result = await listErrorQueue(c.env.REPORTS_DB, c.env.SEARCH_DB, {
+      ...toFilters({ ...query, q: ref ?? query.q }, this.getUserId(c)),
+      app: query.app,
+      environment: query.environment,
+      includeTest: query.includeTest === '1' || !!ref,
+    });
+    logger.debug('[Errors] Queue listed', { tab: query.tab, total: result.total, searched: !!query.q });
+    return { success: true, result };
   }
 }
 

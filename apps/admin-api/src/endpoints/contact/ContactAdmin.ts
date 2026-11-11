@@ -24,6 +24,9 @@ import {
 import { renderReply } from '../../lib/contact-email';
 import { cleanTrashReason } from '@al-ummah/shared-types';
 import { writeTrashAudit } from '../../lib/trash-audit';
+import { CONTACT_QUEUE_OUTCOMES, CONTACT_QUEUE_SORTS } from '@al-ummah/shared-types';
+import { listContactQueue } from '../../lib/queue/contact-queue';
+import { assigneeParam, queueQuery, toFilters } from '../../lib/queue/schema';
 import { enqueueContactMail, reportContactMailFailure, resolveContactMailItem } from '../../lib/contact-mail-queue';
 
 const TAGS = ['Contact'];
@@ -65,6 +68,28 @@ export class ContactList extends ContactRoute {
     const { query } = await this.getValidatedData<typeof this.schema>();
     const result = await listContactMessages(c.env.REPORTS_DB, { ...query, q: query.q || undefined, viewerId: this.getUserId(c) });
     return { success: true, result: { ...result, limit: query.limit, offset: query.offset } };
+  }
+}
+
+export class ContactQueue extends ContactRoute {
+  schema = addAuthToSchema({
+    tags: TAGS,
+    summary: 'Contact messages as a queue: Action needed / History (docs/admin/QUEUES.md)',
+    description:
+      'tab=action: new and open messages and any with a failed delivery, oldest first. tab=history: replied, closed and spam messages with who handled them and when, newest first. q searches sender name and email, message text and topic; category = topic, outcome = replied|closed|spam, actor = who handled it (id or me), assignee = me|unassigned|id. Assignees and handlers are names. counts holds both tabs under the same filters. Needs contact:read.',
+    request: {
+      query: queueQuery(CONTACT_QUEUE_SORTS, CONTACT_QUEUE_OUTCOMES).extend({ category: z.enum(CONTACT_TOPICS).optional(), assignee: assigneeParam }),
+    },
+    responses: { '200': { description: 'AdminQueuePage<ContactQueueItem>' }, '403': { description: 'contact:read required' } },
+  });
+
+  async handle(c: AppContext) {
+    const denied = this.deny(c, 'contact:read');
+    if (denied) return denied;
+    const { query } = await this.getValidatedData<typeof this.schema>();
+    const result = await listContactQueue(c.env.REPORTS_DB, c.env.SEARCH_DB, toFilters(query, this.getUserId(c)));
+    logger.debug('[Contact] Queue listed', { tab: query.tab, total: result.total, searched: !!query.q });
+    return { success: true, result };
   }
 }
 
@@ -127,7 +152,7 @@ export class ContactUpdate extends ContactRoute {
     const { params, body } = await this.getValidatedData<typeof this.schema>();
     const auth = this.getAuth(c);
     const assignee = body.assignee === undefined ? undefined : body.assignee === 'me' ? { id: auth.userId, email: auth.email || null } : null;
-    const found = await updateContactMessage(c.env.REPORTS_DB, params.id, { status: body.status, assignee }, new Date());
+    const found = await updateContactMessage(c.env.REPORTS_DB, params.id, { status: body.status, assignee, actor: { id: auth.userId, email: auth.email || null } }, new Date());
     if (!found) return c.json({ success: false, error: 'Message not found' }, 404);
     logger.info('[Contact] Message updated', { id: params.id, status: body.status, assignee: body.assignee, by: auth.userId });
     return { success: true, result: { message: await getContactMessage(c.env.REPORTS_DB, params.id) } };

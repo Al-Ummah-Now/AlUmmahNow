@@ -99,3 +99,5 @@ export * from './admin-trash';
 export * from './video-reactions';
 // Video delivery on R2 + Cloudflare CDN beside Bunny (epic #687): keys, private tokens, delivery switch
 export * from './media-delivery';
+// Admin queues: Action needed / History tabs, shared query and page shape (docs/admin/QUEUES.md)
+export * from './admin-queue';

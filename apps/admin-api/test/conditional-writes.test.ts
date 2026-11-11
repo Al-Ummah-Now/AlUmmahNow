@@ -39,7 +39,13 @@ function sqlite(dir: string) {
     };
     return st;
   };
-  return { raw, prepare, queries: () => queries };
+  // D1 batch: the statements in order (one transaction on D1)
+  const batch = async (statements: { run(): Promise<unknown> }[]) => {
+    const out = [];
+    for (const st of statements) out.push(await st.run());
+    return out;
+  };
+  return { raw, prepare, batch, queries: () => queries };
 }
 
 /** A writer elsewhere (api-videos) appending a comment with a conditional write. */
