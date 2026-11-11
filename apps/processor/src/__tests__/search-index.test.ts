@@ -127,14 +127,24 @@ describe('search index sync', () => {
     expect(executed.some(e => e.sql.includes('content_ownership'))).toBe(false);
   });
 
-  it('flags banned content as hidden and deleted in the ownership index', async () => {
+  it('flags permanently removed (deleted) content as hidden and deleted in the ownership index', async () => {
+    const { env, processor, executed } = setup();
+    await processor.processMessage(message(MessageType.ReportResolve, {
+      reportId: 'r1', entityType: 'channel', entityId: 'c9', moderatorId: 'mod', action: 'deleted', timestamp: new Date().toISOString(),
+    }), env);
+    const update = executed.find(e => e.sql.startsWith('UPDATE content_ownership'));
+    expect(update?.sql).toContain('is_hidden = 1, is_deleted = 1');
+    expect(update?.values.slice(1)).toEqual(['channel', 'c9']);
+  });
+
+  it('hides (but does not delete) content whose owner a report banned', async () => {
     const { env, processor, executed } = setup();
     await processor.processMessage(message(MessageType.ReportResolve, {
       reportId: 'r1', entityType: 'channel', entityId: 'c9', moderatorId: 'mod', action: 'banned', timestamp: new Date().toISOString(),
     }), env);
     const update = executed.find(e => e.sql.startsWith('UPDATE content_ownership'));
-    expect(update?.sql).toContain('is_hidden = 1, is_deleted = 1');
-    expect(update?.values.slice(1)).toEqual(['channel', 'c9']);
+    expect(update?.sql).toContain('is_hidden = 1');
+    expect(update?.sql).not.toContain('is_deleted');
   });
 
   it('leaves the index alone for warnings', async () => {

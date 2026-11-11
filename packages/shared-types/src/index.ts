@@ -41,6 +41,8 @@ export * from './d1';
 // Moderation types
 export * from './moderation';
 export * from './ai-moderation';
+// Reports queue: Action needed / History tabs (admin-api /api/moderation/queue)
+export * from './report-queue';
 
 // AI category suggestions (upload/edit forms, backfill, admin review)
 export * from './category-suggestion';

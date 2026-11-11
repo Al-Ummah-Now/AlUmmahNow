@@ -8,7 +8,8 @@
  *
  * Behind authMiddleware + adminMiddleware (src/index.ts). Content kinds are
  * readable by every admin role, like the content lists; contact messages need
- * contact:read and error groups errors:read. Suggestions are reads, so they
+ * contact:read and error groups errors:read. Reported items (`report`) are
+ * read from the reports DB like the reports queue, by every admin role. Suggestions are reads, so they
  * write no audit row (the lists they mirror do not either).
  *
  * Content comes from the same api-videos admin lists the list pages use (they
@@ -35,6 +36,7 @@ import { getContactMessage, listContactMessages, type ContactMessageRow } from '
 import { getErrorGroup, listErrorGroups, type ErrorGroupRow } from '../lib/errors-store';
 import { hasPermission, type Permission } from '../lib/roles';
 import { logger } from '../lib/logger';
+import { parseItemKey, suggestItem, suggestItems, type ItemCopy } from '../lib/moderation/reportQueue';
 import { getInvite, inviteStatusByUser, listInvites, toView, type InviteView } from '../lib/invites';
 import type { AdminBindings, AuthContext } from '../base/types';
 
@@ -144,6 +146,17 @@ const fromError = (r: ErrorGroupRow): AdminSuggestion => ({
   imageUrl: null,
 });
 
+/** A reported item (the group of its reports): the queue opens the item when it is chosen. */
+const fromReportItem = (r: ItemCopy & { open_count: number }): AdminSuggestion => ({
+  kind: 'report',
+  id: `${r.entity_type}:${r.entity_id}`,
+  label: clip(r.entity_title) ?? r.entity_id,
+  secondary: [r.channel_name, r.owner_name].map(clip).filter(Boolean).join(' · ') || null,
+  imageUrl: null,
+  parentId: r.entity_parent_id,
+  count: Number(r.open_count) || 0,
+});
+
 // ---------------------------------------------------------------------------
 // Sources
 // ---------------------------------------------------------------------------
@@ -171,6 +184,10 @@ async function search(c: C, kind: AdminSuggestKind, q: string, limit: number): P
   if (kind === 'invite') {
     const { items } = await listInvites(c.env.REPORTS_DB, { q, limit });
     return items.map(fromInvite);
+  }
+  if (kind === 'report') {
+    // Same fields as the queue search (item title, channel, uploader, reporter, reason, report text, moderator)
+    return (await suggestItems(c.env.REPORTS_DB, q, limit)).map(fromReportItem);
   }
   const page = await callVideos<AdminPage<unknown>>(c.env, CONTENT_PATH[kind], {
     query: { q, pageSize: limit },
@@ -239,6 +256,11 @@ async function byId(c: C, kind: AdminSuggestKind, id: string): Promise<AdminSugg
   if (kind === 'invite') {
     const row = await getInvite(c.env.REPORTS_DB, id);
     return row ? fromInvite(toView(row)) : null;
+  }
+  if (kind === 'report') {
+    const key = parseItemKey(id);
+    const row = key ? await suggestItem(c.env.REPORTS_DB, key.type, key.id) : null;
+    return row ? fromReportItem(row) : null;
   }
   // Every content list matches an exact id in q except comments, which have no page of their own
   if (kind === 'comment') return null;

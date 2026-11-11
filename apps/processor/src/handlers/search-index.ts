@@ -6,7 +6,8 @@
  * admin-api moderation) notify the processor instead:
  * - SearchIndexSync { entity, id, object? }: project the object into the index
  *   (no object = deleted)
- * - ReportResolve with action removed/banned: drop the moderated item
+ * - ReportResolve with action removed/banned/deleted: drop the moderated item
+ *   (deleted = removed permanently; banned = its owner was banned, the item hidden)
  *
  * Videos and channels also update the ownership index (content_ownership,
  * every object including private ones) that api-videos uses for owner and
@@ -68,20 +69,20 @@ export async function handleSearchIndexSync(message: AlUmmahMessage, env: QueueE
   logger.debug('Search index synced', { entity, id, version, result });
 }
 
-/** Remove content a moderator removed or banned from the search index. */
+/** Remove content a moderator removed, deleted or whose owner a moderator banned from the search index. */
 export async function applyModerationToSearchIndex(
   payload: { entityType?: string | undefined; entityId?: string | undefined; action?: string | undefined },
   env: QueueEnvironment,
   logger: Logger,
 ): Promise<void> {
-  if (payload.action !== 'removed' && payload.action !== 'banned') return;
+  if (payload.action !== 'removed' && payload.action !== 'banned' && payload.action !== 'deleted') return;
   const type = payload.entityType ? REPORT_ENTITY_TYPES[payload.entityType] : undefined;
   const db = searchDb(env);
   if (!type || !payload.entityId || !db) return;
   const kind = ownershipKindFor(type);
   if (kind) {
     try {
-      await applyOwnershipModeration(db, kind, payload.entityId, { hidden: true, deleted: payload.action === 'banned' });
+      await applyOwnershipModeration(db, kind, payload.entityId, { hidden: true, deleted: payload.action === 'deleted' });
     } catch (error) {
       logger.warn('Ownership moderation update failed; row marked for re-sync', {
         kind,

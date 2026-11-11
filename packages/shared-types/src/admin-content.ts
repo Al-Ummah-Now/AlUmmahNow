@@ -588,7 +588,7 @@ export const ADMIN_JOB_MAX_RETRIES = 5;
  * lookup box in the admin suggests these as the admin types, so nobody has to
  * know or paste a raw id.
  */
-export const ADMIN_SUGGEST_KINDS = ['channel', 'user', 'video', 'playlist', 'post', 'comment', 'contact', 'error', 'invite'] as const;
+export const ADMIN_SUGGEST_KINDS = ['channel', 'user', 'video', 'playlist', 'post', 'comment', 'contact', 'error', 'invite', 'report'] as const;
 export type AdminSuggestKind = (typeof ADMIN_SUGGEST_KINDS)[number];
 
 export interface AdminSuggestion {
@@ -601,6 +601,8 @@ export interface AdminSuggestion {
   imageUrl: string | null;
   /** The item this one belongs to (a comment's video, a post's channel), for its link */
   parentId?: string | null;
+  /** Reports: open reports on the item (the suggestion id is the group key `${type}:${id}`). */
+  count?: number;
   /** Users: invited and not signed in yet (docs/admin/INVITES.md), shown as an "Invited" badge */
   badge?: 'invited' | null;
 }

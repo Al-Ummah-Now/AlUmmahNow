@@ -38,6 +38,12 @@ const actionOptions: {
     color: 'bg-btn-banned hover:bg-btn-banned-hover',
   },
   {
+    value: 'deleted',
+    label: 'actions.deletedLabel',
+    description: 'actions.deletedDescription',
+    color: 'bg-btn-banned hover:bg-btn-banned-hover',
+  },
+  {
     value: 'dismissed',
     label: 'actions.dismissedLabel',
     description: 'actions.dismissedDescription',

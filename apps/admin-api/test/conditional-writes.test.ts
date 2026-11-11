@@ -57,12 +57,12 @@ const addComment = (bucket: MemoryR2, id: string, n: number) =>
   }, { maxAttempts: 200 });
 
 describe('conditional writes against concurrent writers', () => {
-  it('AA-1: a ban during 150 concurrent comment writes keeps every comment and stays banned', async () => {
+  it('AA-1: a permanent removal during 150 concurrent comment writes keeps every comment and stays removed', async () => {
     const videos = new MemoryR2(4);
     videos.set('v1', { id: 'v1', title: 'T', comments: [] });
     await Promise.all([
       ...Array.from({ length: 150 }, (_, n) => addComment(videos, 'v1', n)),
-      applyContentModeration(videos, 'v1', 'banned', { moderatorId: 'mod' }),
+      applyContentModeration(videos, 'v1', 'deleted', { moderatorId: 'mod' }),
     ]);
     const video = videos.read('v1');
     assert.equal(video.comments.length, 150);

@@ -59,6 +59,7 @@ import {
 import { enqueueWarningMail, flagWarningMailFailure } from '../lib/warning-mail';
 import { callVideos, VideosError, type VideosCall, type VideosClientEnv } from '../lib/content/videosClient';
 import { dropAudit, readAudit, writeAudit, type AuditAction, type ContentKind } from '../lib/content/audit';
+import { banVideosUser } from '../lib/content/userBan';
 import { openReportCounts, recentReports, reportedIds, type ReportEntity } from '../lib/content/reports';
 import { logger } from '../lib/logger';
 import { inviteStatusByUser, syncInvitesOnRead, type InviteQueueEnv } from '../lib/invites';
@@ -507,8 +508,8 @@ app.post('/users/:id/ban', async (c) => {
   need(c, 'users:manage');
   const id = c.req.param('id');
   const { reason } = await body(c);
-  return ok(c, await audited(c, { kind: 'user', id, action: 'ban', details: { reason: reason ?? null } }, () =>
-    videos(c, `/users/${encodeURIComponent(id)}/ban`, { method: 'POST', json: { reason } })));
+  // The same path a report's "banned" outcome takes (lib/content/userBan.ts)
+  return ok(c, await banVideosUser(c.env, { userId: id, actorId: actorOf(c), reason: typeof reason === 'string' ? reason : null }));
 });
 
 app.post('/users/:id/unban', async (c) => {
