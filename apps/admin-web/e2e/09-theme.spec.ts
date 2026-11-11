@@ -1,5 +1,5 @@
 import { test, expect } from './support/fixtures';
-import { bodyBackground, chooseTheme, isDark, setPreferences } from './support/ui';
+import { bodyBackground, chooseTheme, expectColorMode, isDark, setPreferences } from './support/ui';
 
 test.describe('theme', () => {
   test.describe('system preference: dark', () => {
@@ -7,10 +7,7 @@ test.describe('theme', () => {
 
     test('THEME-01 follows a dark OS preference by default', async ({ page }) => {
       await page.goto('/dashboard');
-      // data-theme is the site's theme (the admin follows Site theme); the mode is separate
-      await expect(page.locator('html')).toHaveAttribute('data-theme', /^[a-z][a-z0-9-]+$/);
-      await expect(page.locator('html')).toHaveAttribute('data-color-mode', 'system');
-      await expect(page.locator('html')).toHaveClass(/\bdark\b/);
+      await expectColorMode(page, 'system');
       await expect(page.getByTestId('theme-select')).toHaveValue('system');
       expect(isDark(await bodyBackground(page))).toBe(true);
     });
@@ -18,10 +15,10 @@ test.describe('theme', () => {
     test('THEME-02 an explicit light choice overrides the OS and persists', async ({ page }) => {
       await page.goto('/dashboard');
       await chooseTheme(page, 'light');
-      await expect(page.locator('html')).toHaveAttribute('data-color-mode', 'light');
+      await expectColorMode(page, 'light');
       await expect.poll(async () => isDark(await bodyBackground(page))).toBe(false);
       await page.reload();
-      await expect(page.locator('html')).toHaveAttribute('data-color-mode', 'light');
+      await expectColorMode(page, 'light');
       expect(isDark(await bodyBackground(page))).toBe(false);
     });
   });
@@ -37,7 +34,7 @@ test.describe('theme', () => {
     test('THEME-04 an explicit dark choice applies everywhere', async ({ page }) => {
       await page.goto('/moderation');
       await chooseTheme(page, 'dark');
-      await expect(page.locator('html')).toHaveAttribute('data-color-mode', 'dark');
+      await expectColorMode(page, 'dark');
       await expect.poll(async () => isDark(await bodyBackground(page))).toBe(true);
       for (const path of ['/dashboard', '/translations', '/indices']) {
         await page.goto(path);
@@ -49,8 +46,7 @@ test.describe('theme', () => {
       await setPreferences(page, { theme: 'dark' });
       await page.goto('/dashboard');
       await chooseTheme(page, 'system');
-      await expect(page.locator('html')).toHaveAttribute('data-color-mode', 'system');
-      await expect(page.locator('html')).not.toHaveClass(/\bdark\b/);
+      await expectColorMode(page, 'system');
       await expect.poll(async () => isDark(await bodyBackground(page))).toBe(false);
     });
   });

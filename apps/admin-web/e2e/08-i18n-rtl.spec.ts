@@ -48,7 +48,9 @@ test.describe('language and direction', () => {
       await expectDirection(page, 'ar');
       await expect(page.getByRole('heading', { level: 1 })).toHaveText(target.heading);
       // The top bar, and the sidebar's text (on phones the closed drawer has no innerText)
-      const navText = `${await page.locator('header').innerText()} ${await page.getByTestId('admin-sidebar').textContent()}`;
+      const sidebar = page.getByTestId('admin-sidebar');
+      const sidebarText = (await sidebar.count()) ? await sidebar.textContent() : '';
+      const navText = `${await page.locator('header').innerText()} ${sidebarText}`;
       for (const english of ENGLISH_UI_STRINGS) {
         expect(navText, `nav should not contain "${english}"`).not.toContain(english);
       }
