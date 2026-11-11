@@ -59,6 +59,8 @@ test.describe('Release: Studio draft path', () => {
       const local = new Date(tomorrow.getTime() - tomorrow.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
       await page.getByLabel('Publish the first video at').fill(local);
       await page.getByRole('dialog').getByRole('button', { name: 'Schedule' }).click();
+      // The bulk result names any refusal (time, plan, permission) instead of a bare timeout below
+      await expect(page.getByRole('status').filter({ hasText: /done|could not|didn't work|plan/ })).toHaveText('1 done.', { timeout: 30000 });
       await openStatus('scheduled');
 
       // Cancel: back to Drafts
