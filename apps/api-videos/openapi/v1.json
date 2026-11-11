@@ -5112,7 +5112,7 @@
             }
           },
           "503": {
-            "description": "Index being rebuilt",
+            "description": "The index cannot be read right now; try again shortly",
             "content": {
               "application/json": {
                 "schema": {
@@ -5394,7 +5394,7 @@
             }
           },
           "503": {
-            "description": "The index is being rebuilt; try again shortly",
+            "description": "The index cannot be read right now; try again shortly (an incomplete index is served with indexComplete: false)",
             "content": {
               "application/json": {
                 "schema": {
@@ -5771,7 +5771,7 @@
             }
           },
           "503": {
-            "description": "The index is being rebuilt; try again shortly",
+            "description": "The index cannot be read right now; try again shortly (an incomplete index is served with indexComplete: false)",
             "content": {
               "application/json": {
                 "schema": {

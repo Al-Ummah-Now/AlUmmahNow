@@ -157,7 +157,7 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 			// Studio drafts are limited per plan (lib/studioLimits.ts)
 			if (isDraft && channelId !== userId) {
 				const counts = await channelContentCounts(c.env as never, channelId);
-				const limit = await checkDraftAllowed(c.env, { userId, channelId, drafts: counts?.drafts ?? 0 });
+				const limit = await checkDraftAllowed(c.env, { userId, channelId, drafts: counts?.value.drafts ?? 0 });
 				if (limit) return c.json(limit, 402);
 			}
 

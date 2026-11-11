@@ -32,7 +32,9 @@ import {
   tombstoneStatement,
   ownershipTombstone,
   ownershipInvalidatedKey,
+  ownershipDirtyPrefix,
   ownershipUpsertStatement,
+  syncOwnership,
   projectOwnership,
   STUDIO_VIDEO_STATUSES,
   StudioVideoStatus,
@@ -73,9 +75,32 @@ export function ownershipIdForKey(kind: OwnershipKind, key: string): string | nu
 // Completeness marker
 // ---------------------------------------------------------------------------
 
-export async function isOwnershipComplete(db: SearchDb, kind: OwnershipKind): Promise<boolean> {
+/** The kind's last full pass finished complete (rows may still be marked dirty since). */
+export async function hasCompleteMarker(db: SearchDb, kind: OwnershipKind): Promise<boolean> {
   const row = await db.prepare('SELECT value FROM search_meta WHERE key = ?').bind(ownershipCompleteKey(kind)).first<{ value: string }>();
   return !!row;
+}
+
+/** Rows of `kind` whose last write failed and are waiting for the heal to re-read them (#859). */
+export async function hasDirtyRows(db: SearchDb, kind: OwnershipKind): Promise<boolean> {
+  const prefix = ownershipDirtyPrefix(kind);
+  const row = await db.prepare('SELECT 1 AS x FROM search_meta WHERE key > ? AND key < ? LIMIT 1').bind(prefix, `${prefix}\u007f`).first<{ x: number }>();
+  return !!row;
+}
+
+/**
+ * Complete = the last full pass was complete and no row has failed a write
+ * since. Readers that must not serve a stale row (public lists, which fall
+ * back to scanning R2) use this.
+ */
+export async function isOwnershipComplete(db: SearchDb, kind: OwnershipKind): Promise<boolean> {
+  // One query (it runs on every indexed read): the marker, and no row marked for re-sync
+  const prefix = ownershipDirtyPrefix(kind);
+  const row = await db.prepare(
+    `SELECT EXISTS (SELECT 1 FROM search_meta WHERE key = ?1) AS complete,
+            EXISTS (SELECT 1 FROM search_meta WHERE key > ?2 AND key < ?3) AS dirty`,
+  ).bind(ownershipCompleteKey(kind), prefix, `${prefix}\u007f`).first<{ complete: number; dirty: number }>();
+  return Number(row?.complete) === 1 && Number(row?.dirty) === 0;
 }
 
 async function setMeta(db: SearchDb, key: string, value: string, now: number): Promise<void> {
@@ -83,6 +108,30 @@ async function setMeta(db: SearchDb, key: string, value: string, now: number): P
     `INSERT INTO search_meta (key, value, updated_at) VALUES (?, ?, ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
   ).bind(key, value, now).run();
+}
+
+/** An index read and whether the index was complete when it was made. */
+export interface IndexRead<T> {
+  value: T;
+  complete: boolean;
+}
+
+/**
+ * Run `query` whatever the index's state, for readers that have no R2 fallback
+ * (Studio's lists): an incomplete index is served with complete: false (and a
+ * heal scheduled by the caller) instead of no answer. Null only when SEARCH_DB
+ * is unbound or D1 fails.
+ */
+async function fromIndex<T>(env: OwnershipEnv, kind: OwnershipKind, query: (db: SearchDb) => Promise<T>): Promise<IndexRead<T> | null> {
+  const db = dbOf(env);
+  if (!db) return null;
+  try {
+    const [complete, value] = await Promise.all([isOwnershipComplete(db, kind), query(db)]);
+    return { value, complete };
+  } catch (error) {
+    logger.warn('[Ownership] Index query failed', { kind, error: errorText(error) });
+    return null;
+  }
 }
 
 /**
@@ -629,6 +678,7 @@ export async function reconcileOwnershipIndex(
     // Share the self-heal lease so the cron and a heal never walk the same cursor at once.
     if (!(await acquireHealLease(db, kind, (options.now ?? Date.now)()))) continue;
     try {
+      await healDirtyOwnership(env, kind);
       summary[kind] = await runOwnershipPass(env, kind, { maxPages: options.pagesPerKind ?? 20, pageSize: options.pageSize, now: options.now });
     } finally {
       await db.prepare('DELETE FROM search_meta WHERE key = ?').bind(leaseKey(kind)).run();
@@ -669,6 +719,40 @@ export async function withOwnershipLease<T>(env: OwnershipEnv, kind: OwnershipKi
   }
 }
 
+/** Dirty rows one heal step re-reads (a Worker's subrequest budget). */
+export const OWNERSHIP_DIRTY_HEAL_LIMIT = 100;
+
+/**
+ * Re-sync rows whose last write failed (#859): read each object from R2 (the
+ * source of truth) and write its row, or delete the row when the object is
+ * gone. A mark is cleared only if no newer failure re-marked the row meanwhile.
+ * Returns how many were healed; a row that fails again keeps its mark.
+ */
+export async function healDirtyOwnership(env: OwnershipEnv, kind: OwnershipKind, limit = OWNERSHIP_DIRTY_HEAL_LIMIT): Promise<number> {
+  const db = dbOf(env);
+  const bucket = env[BUCKET_FOR_KIND[kind]] as R2Bucket | undefined;
+  if (!db || !bucket) return 0;
+  const prefix = ownershipDirtyPrefix(kind);
+  const { results } = await db.prepare('SELECT key, updated_at FROM search_meta WHERE key > ? AND key < ? ORDER BY updated_at LIMIT ?')
+    .bind(prefix, `${prefix}\u007f`, limit).all<{ key: string; updated_at: number }>();
+  let healed = 0;
+  for (const mark of results ?? []) {
+    const id = mark.key.slice(prefix.length);
+    try {
+      const stored = await bucket.get(id);
+      const value = stored ? await stored.json<Record<string, unknown>>() : null;
+      const now = Date.now();
+      await syncOwnership(db, kind, id, value, now, stored ? (r2Version(stored) ?? now) : now);
+      await db.prepare('DELETE FROM search_meta WHERE key = ? AND updated_at <= ?').bind(mark.key, mark.updated_at).run();
+      healed++;
+    } catch (error) {
+      logger.warn('[Ownership] Could not re-sync a dirty row', { kind, id, error: errorText(error) });
+    }
+  }
+  if (healed) logger.info('[Ownership] Dirty rows re-synced', { kind, healed, seen: (results ?? []).length });
+  return healed;
+}
+
 /**
  * Called by a reader that fell back to an R2 scan: advance the rebuild pass in
  * the background (one heal at a time per kind). Returns the background
@@ -685,6 +769,9 @@ export function scheduleOwnershipHeal(
     try {
       if (!(await acquireHealLease(db, kind, Date.now()))) return;
       try {
+        // Failed single-row writes first: usually all that is wrong, and a full pass is not needed for them
+        await healDirtyOwnership(env, kind);
+        if (await hasCompleteMarker(db, kind)) return;
         const result = await runOwnershipPass(env, kind, { maxPages: OWNERSHIP_HEAL_PAGES });
         logger.info('[Ownership] Self-heal step finished', { ...result });
       } finally {
@@ -753,8 +840,8 @@ const MEDIUM_MIN_SECONDS = 240;
 const LONG_MIN_SECONDS = 1200;
 
 /** Ids of one page of a channel's videos in a status, or null while the index isn't usable. */
-export function channelContentIds(env: OwnershipEnv, query: ChannelContentQuery): Promise<string[] | null> {
-  return whenComplete(env, 'video', async db => {
+export function channelContentIds(env: OwnershipEnv, query: ChannelContentQuery): Promise<IndexRead<string[]> | null> {
+  return fromIndex(env, 'video', async db => {
     const where = [`kind = 'video'`, 'channel_id = ?', 'is_deleted = 0', 'studio_status = ?'];
     const values: unknown[] = [query.channelId, query.status];
     if (query.q) { where.push('instr(lower(admin_title), ?) > 0'); values.push(query.q.toLowerCase()); }
@@ -775,9 +862,9 @@ export function channelContentIds(env: OwnershipEnv, query: ChannelContentQuery)
   });
 }
 
-/** Videos per status in a channel, zero for empty ones, or null while the index isn't usable. */
-export function channelContentCounts(env: OwnershipEnv, channelId: string): Promise<Record<StudioVideoStatus, number> | null> {
-  return whenComplete(env, 'video', async db => {
+/** Videos per status in a channel, zero for empty ones (complete: false while the index is being healed), or null when D1 can't be read. */
+export function channelContentCounts(env: OwnershipEnv, channelId: string): Promise<IndexRead<Record<StudioVideoStatus, number>> | null> {
+  return fromIndex(env, 'video', async db => {
     const { results } = await db.prepare(
       `SELECT studio_status AS status, COUNT(*) AS total FROM ${OWNERSHIP_TABLE}
        WHERE kind = 'video' AND channel_id = ? AND is_deleted = 0 GROUP BY studio_status`,

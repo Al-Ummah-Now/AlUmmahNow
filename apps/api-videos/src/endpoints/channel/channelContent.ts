@@ -14,7 +14,7 @@ const errors = {
 	"401": { description: "Sign in required", content: { "application/json": { schema: ResponseError } } },
 	"403": { description: "No access to this channel", content: { "application/json": { schema: ResponseError } } },
 	"404": { description: "Channel not found", content: { "application/json": { schema: ResponseError } } },
-	"503": { description: "The index is being rebuilt; try again shortly", content: { "application/json": { schema: ResponseError } } },
+	"503": { description: "The index cannot be read right now; try again shortly (an incomplete index is served with indexComplete: false)", content: { "application/json": { schema: ResponseError } } },
 };
 
 /**
@@ -56,6 +56,18 @@ export function serverTimer() {
 	};
 }
 
+/**
+ * The index answered but is not complete (rows marked for re-sync, a rebuild
+ * in progress, rows not yet given their Studio columns): the list is served
+ * as it is, flagged indexComplete: false, and the heal is advanced after the
+ * response. Before #859 these answered 503 index_rebuilding for every channel
+ * until a full pass finished, which under steady writes it never did.
+ */
+export function healLater(c: AppContext): void {
+	scheduleOwnershipHeal(c.env as never, waitUntilOf(c as never), "video");
+}
+
+/** D1 could not be read at all: the one case still answered with 503. */
 export function rebuilding(c: AppContext): Response {
 	scheduleOwnershipHeal(c.env as never, waitUntilOf(c as never), "video");
 	return c.json({ success: false, error: "index_rebuilding" }, 503);
@@ -97,15 +109,18 @@ export class ChannelContentList extends AuthenticatedRoute {
 		timer.mark("access", "channel record (R2)");
 		if (denied) return denied;
 
-		if (!(await healRows(c, params.id))) return rebuilding(c);
+		const rowsReady = await healRows(c, params.id);
 		timer.mark("heal", "rows missing Studio columns (D1)");
 
 		const limit = Math.min(Math.max(1, query.limit ?? 30), MAX_PAGE);
 		const offset = Number(query.cursor ?? 0);
 		// One extra row tells whether there's a next page
-		const ids = await channelContentIds(c.env as never, { ...query, status: query.status ?? "published", channelId: params.id, limit: limit + 1, offset });
+		const read = await channelContentIds(c.env as never, { ...query, status: query.status ?? "published", channelId: params.id, limit: limit + 1, offset });
 		timer.mark("index", "page of ids (D1)");
-		if (!ids) return rebuilding(c);
+		if (!read) return rebuilding(c);
+		const ids = read.value;
+		const indexComplete = rowsReady && read.complete;
+		if (!indexComplete) healLater(c);
 
 		type VideoType = z.infer<typeof BusinessVideo>;
 		const repository = new R2Repository<VideoType>(c.env.videos);
@@ -118,7 +133,7 @@ export class ChannelContentList extends AuthenticatedRoute {
 
 		logger.info("[ChannelContent] Listed", { channelId: params.id, status: query.status, count: items.length });
 		timer.apply(c);
-		return c.json({ success: true, result: { items, cursor: ids.length > limit ? String(offset + limit) : null } });
+		return c.json({ success: true, result: { items, cursor: ids.length > limit ? String(offset + limit) : null, indexComplete } });
 	}
 }
 
@@ -143,12 +158,14 @@ export class ChannelContentSummary extends AuthenticatedRoute {
 		const denied = await requireContentAccess(c, params.id, this.getUserId(c) as string);
 		timer.mark("access", "channel record (R2)");
 		if (denied) return denied;
-		if (!(await healRows(c, params.id))) return rebuilding(c);
+		const rowsReady = await healRows(c, params.id);
 		timer.mark("heal", "rows missing Studio columns (D1)");
-		const counts = await channelContentCounts(c.env as never, params.id);
+		const read = await channelContentCounts(c.env as never, params.id);
 		timer.mark("index", "counts per status (D1)");
-		if (!counts) return rebuilding(c);
+		if (!read) return rebuilding(c);
+		const indexComplete = rowsReady && read.complete;
+		if (!indexComplete) healLater(c);
 		timer.apply(c);
-		return c.json({ success: true, result: { counts } });
+		return c.json({ success: true, result: { counts: read.value, indexComplete } });
 	}
 }

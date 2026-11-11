@@ -303,7 +303,8 @@ describe('sweep candidates', () => {
 				queries.push(sql);
 				const stmt = {
 					bind: () => stmt,
-					first: async () => (/search_meta/.test(sql) ? { value: '1' } : null),
+					// The completeness check (marker present, no row marked for re-sync)
+					first: async () => (/search_meta/.test(sql) ? { value: '1', complete: 1, dirty: 0 } : null),
 					all: async () => ({ results: /upload_status IN/.test(sql) ? [{ id: ID }] : [] }),
 				};
 				return stmt;
