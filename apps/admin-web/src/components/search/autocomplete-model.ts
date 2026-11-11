@@ -97,6 +97,11 @@ export function hrefFor(s: Pick<AdminSuggestion, 'kind' | 'id' | 'parentId'>): s
       return `/community?q=${id}`;
     case 'comment':
       return s.parentId ? `/comments?videoId=${encodeURIComponent(s.parentId)}` : `/comments`;
+    case 'report': {
+      // The id is the reported item's group key `${type}:${id}`: the queue filtered to that item
+      const at = s.id.indexOf(':');
+      return `/moderation?entity_type=${encodeURIComponent(s.id.slice(0, at))}&entity_id=${encodeURIComponent(s.id.slice(at + 1))}`;
+    }
   }
 }
 

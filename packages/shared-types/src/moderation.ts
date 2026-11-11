@@ -12,7 +12,9 @@ export type ReportReason = (typeof REPORT_REASONS)[number];
 export type ReportStatus = 'pending' | 'reviewing' | 'resolved' | 'dismissed';
 
 // Moderation actions that can be taken
-export type ModerationAction = 'warning' | 'removed' | 'banned' | 'dismissed';
+// Moderation actions that can be taken (report-queue.ts REPORT_OUTCOMES explains each).
+// 'banned' bans the content's owner and hides the content; 'deleted' removes the content permanently.
+export type ModerationAction = 'warning' | 'removed' | 'banned' | 'deleted' | 'dismissed';
 
 // Report record as stored in D1 database
 export interface Report {
@@ -29,6 +31,18 @@ export interface Report {
   created_at: string;
   updated_at?: string | null;
   resolved_at?: string | null;
+  /** Copies for the reports queue search (migration 0017), filled after the report is filed. */
+  entity_title?: string | null;
+  entity_parent_id?: string | null;
+  channel_id?: string | null;
+  channel_name?: string | null;
+  owner_id?: string | null;
+  owner_name?: string | null;
+  reporter_name?: string | null;
+  moderator_name?: string | null;
+  meta_synced_at?: string | null;
+  /** The user a 'banned' outcome banned. */
+  banned_user_id?: string | null;
 }
 
 // Input for creating a report

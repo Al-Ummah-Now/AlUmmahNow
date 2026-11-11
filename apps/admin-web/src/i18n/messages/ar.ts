@@ -444,6 +444,7 @@ const ar: Messages = {
     warning: 'تحذير',
     removed: 'تمت الإزالة',
     banned: 'محظور',
+    deleted: 'أُزيل نهائيًا',
     dismissed: 'مرفوض',
   },
   report: {
@@ -471,7 +472,9 @@ const ar: Messages = {
     removedLabel: 'إزالة المحتوى',
     removedDescription: 'إخفاء المحتوى عن العامة',
     bannedLabel: 'حظر المحتوى',
-    bannedDescription: 'إزالة المحتوى نهائيًا',
+    bannedDescription: 'حظر صاحب المحتوى (يُخفي كل محتواه) وإخفاء هذا العنصر',
+    deletedLabel: 'إزالة نهائية',
+    deletedDescription: 'إزالة المحتوى نهائيًا',
     dismissedLabel: 'رفض البلاغ',
     dismissedDescription: 'لا يلزم أي إجراء، رفض البلاغ',
     notesLabel: 'ملاحظات (اختياري)',
@@ -1296,6 +1299,7 @@ const ar: Messages = {
       contact: 'رسالة',
       error: 'خطأ',
       invite: 'دعوة',
+      report: 'عنصر مُبلَّغ عنه',
     },
   },
   content: {

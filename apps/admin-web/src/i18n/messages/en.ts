@@ -445,6 +445,7 @@ const en = {
     warning: 'Warning',
     removed: 'Removed',
     banned: 'Banned',
+    deleted: 'Removed permanently',
     dismissed: 'Dismissed',
   },
   report: {
@@ -472,7 +473,9 @@ const en = {
     removedLabel: 'Remove Content',
     removedDescription: 'Hide content from public view',
     bannedLabel: 'Ban Content',
-    bannedDescription: 'Permanently remove content',
+    bannedDescription: 'Ban the owner (hides all their content) and hide this item',
+    deletedLabel: 'Remove Permanently',
+    deletedDescription: 'Permanently remove content',
     dismissedLabel: 'Dismiss Report',
     dismissedDescription: 'No action needed, dismiss report',
     notesLabel: 'Notes (optional)',
@@ -1297,6 +1300,7 @@ const en = {
       contact: 'message',
       error: 'error',
       invite: 'invite',
+      report: 'reported item',
     },
   },
   content: {

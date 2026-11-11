@@ -43,7 +43,7 @@ export const ReportSchema = z.object({
   description: Str().optional().nullable(),
   status: z.enum(['pending', 'reviewing', 'resolved', 'dismissed']).default('pending'),
   moderator_id: Str().optional().nullable(),
-  action: z.enum(['warning', 'removed', 'banned', 'dismissed']).optional().nullable(),
+  action: z.enum(['warning', 'removed', 'banned', 'deleted', 'dismissed']).optional().nullable(),
   moderator_notes: Str().optional().nullable(),
   created_at: Str(),
   updated_at: Str().optional().nullable(),

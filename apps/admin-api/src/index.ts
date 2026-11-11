@@ -10,6 +10,8 @@ import { publicSiteTheme } from './lib/siteSettings';
 import themesRouter, { publicThemes } from './routers/themes.router';
 import contentRouter from './routers/content.router';
 import suggestRouter from './routers/suggest.router';
+import reportQueueRouter from './routers/reportQueue.router';
+import { scheduledReportMetaSync } from './lib/moderation/reportMeta';
 import invitesRouter from './routers/invites.router';
 import { scheduleInviteSyncs } from './lib/invites';
 import processingRouter from './routers/processing.router';
@@ -168,6 +170,9 @@ app.route('/api/themes', themesRouter as never);
 // videos users): permission-checked, audited proxy to api-videos
 app.route('/api/content', contentRouter);
 
+// Reports queue: Action needed (grouped per item) and History, with search (shared-types report-queue.ts)
+app.route('/api/moderation/queue', reportQueueRouter as never);
+
 // Admin autocomplete: suggestions for every search and lookup box in admin-web
 app.route('/api/suggest', suggestRouter);
 // Invite creators: pre-provisioned accounts, plan and channels before first sign-in (docs/admin/INVITES.md)
@@ -209,7 +214,7 @@ app.get('/health', (c) => {
 /**
  * Cron (wrangler triggers.crons):
  *   - every 5 minutes: queue status reads of open requests to auth (lib/authModerationQueue.ts)
- *     and of open invites (lib/invites.ts)
+ *     and of open invites (lib/invites.ts); fill the name copies of new reports (lib/moderation/reportMeta.ts)
  *   - 03:17 UTC daily: retention of error data and old source maps (lib/errors-retention.ts)
  *   - hourly (the 5-minute tick at the top of each UTC hour): soft-delete cleanup, the only hard
  *     delete of contact messages, themes and creator tiers (lib/trash.ts); on QA/stage also the
@@ -229,6 +234,7 @@ async function scheduled(controller: ScheduledController, env: AdminBindings, ct
         .catch((error) => logger.error('[Reports] E2E report purge failed', { error: String(error) })),
     );
   }
+  ctx.waitUntil(scheduledReportMetaSync(env as never));
   ctx.waitUntil(scheduleInviteSyncs(env as never).catch((error) => logger.error('[Invites] scheduled status reads failed', { error: String(error) })));
 }
 

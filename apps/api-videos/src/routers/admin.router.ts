@@ -21,6 +21,7 @@ import {
 import { listChannels, listComments, listUsers, listVideos, type WaitUntil } from '../lib/admin/directory';
 import { searchUsers } from '../lib/admin/userSearch';
 import { AccountNoticeBody, accountEmailContact, accountNotice } from '../lib/admin/accountNotices';
+import { cleanLookup, lookup } from '../lib/admin/lookup';
 import * as admin from '../lib/admin/service';
 import { checkImage, checkThumbnailShapeFor, storeImage } from '../lib/admin/images';
 import { countJobs, getJob, listJobs, retryJob } from '../lib/admin/jobs';
@@ -168,6 +169,9 @@ app.onError((error, c) => {
 	logger.error('[AdminInternal] Request failed', { path: c.req.path, error: error instanceof Error ? error.message : String(error) });
 	return c.json({ success: false, code: 'internal_error', error: 'Internal error' }, 500);
 });
+
+// Batch lookup for the admin reports queue: titles, channels, owners and user names of a page in one call
+app.post('/lookup', async (c) => ok(c, await lookup(c.env, cleanLookup(await body(c)))));
 
 // Channels
 app.get('/channels', async (c) => ok(c, await listChannels(c.env, parse(ChannelQuery, c.req.query()) as never, waitUntilOf(c))));

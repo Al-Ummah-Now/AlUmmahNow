@@ -18,6 +18,7 @@
 --   apps/admin-api/migrations/0016_seed_studio_limits.sql
 --   apps/admin-api/migrations/0018_user_warnings.sql
 --   apps/admin-api/migrations/0019_admin_queues.sql
+--   apps/admin-api/migrations/0020_reports_queue.sql
 
 CREATE TABLE admin_audit_log (id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, actor_email TEXT, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL, metadata TEXT, created_at TEXT NOT NULL);
 CREATE TABLE ai_budget_daily (day TEXT NOT NULL, feature TEXT NOT NULL, reserved REAL NOT NULL DEFAULT 0, PRIMARY KEY (day, feature));
@@ -45,7 +46,7 @@ CREATE TABLE moderation_signals (id TEXT PRIMARY KEY, subject_type TEXT NOT NULL
 CREATE TABLE plan_audit_log (id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, action TEXT NOT NULL, entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, before_json TEXT, after_json TEXT, reason TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')));
 CREATE TABLE plan_entitlements (plan_id TEXT NOT NULL REFERENCES plans(id), plan_version INTEGER NOT NULL, key TEXT NOT NULL, value_json TEXT NOT NULL, PRIMARY KEY (plan_id, plan_version, key));
 CREATE TABLE plans (id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, name_en TEXT NOT NULL, name_ar TEXT NOT NULL, description_en TEXT, description_ar TEXT, audience TEXT NOT NULL CHECK (audience IN ('creator', 'organisation', 'viewer', 'everyone')), status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'archived')), is_public INTEGER NOT NULL DEFAULT 0, is_default INTEGER NOT NULL DEFAULT 0, sort_order INTEGER NOT NULL DEFAULT 0, version INTEGER NOT NULL DEFAULT 1, created_by TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')));
-CREATE TABLE reports (id TEXT PRIMARY KEY, entity_type TEXT NOT NULL CHECK (entity_type IN ('video', 'comment', 'channel', 'livestream', 'playlist', 'post')), entity_id TEXT NOT NULL, reporter_id TEXT NOT NULL, reason TEXT NOT NULL CHECK (reason IN ('inappropriate', 'spam', 'harassment', 'copyright', 'misinformation', 'other')), description TEXT, status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'reviewing', 'resolved', 'dismissed')), moderator_id TEXT, action TEXT CHECK (action IN ('warning', 'removed', 'banned', 'dismissed')), moderator_notes TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT, resolved_at TEXT);
+CREATE TABLE "reports" (id TEXT PRIMARY KEY, entity_type TEXT NOT NULL CHECK (entity_type IN ('video', 'comment', 'channel', 'livestream', 'playlist', 'post')), entity_id TEXT NOT NULL, reporter_id TEXT NOT NULL, reason TEXT NOT NULL CHECK (reason IN ('inappropriate', 'spam', 'harassment', 'copyright', 'misinformation', 'other')), description TEXT, status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'reviewing', 'resolved', 'dismissed')), moderator_id TEXT, action TEXT CHECK (action IN ('warning', 'removed', 'banned', 'deleted', 'dismissed')), moderator_notes TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT, resolved_at TEXT, entity_title TEXT, entity_parent_id TEXT, channel_id TEXT, channel_name TEXT, owner_id TEXT, owner_name TEXT, reporter_name TEXT, moderator_name TEXT, meta_synced_at TEXT, banned_user_id TEXT);
 CREATE TABLE site_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE site_settings_log (id TEXT PRIMARY KEY, key TEXT NOT NULL, old_value TEXT, new_value TEXT NOT NULL, actor_id TEXT NOT NULL, created_at TEXT NOT NULL);
 CREATE TABLE subscriptions (id TEXT PRIMARY KEY, subject_type TEXT NOT NULL CHECK (subject_type IN ('channel', 'organisation', 'user')), subject_id TEXT NOT NULL, plan_id TEXT NOT NULL REFERENCES plans(id), plan_version INTEGER NOT NULL, status TEXT NOT NULL CHECK (status IN ('trialing', 'active', 'past_due', 'canceled', 'expired')), current_period_start TEXT, current_period_end TEXT, provider TEXT NOT NULL DEFAULT 'manual', provider_subscription_ref TEXT, assigned_by TEXT NOT NULL, reason TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')));
@@ -101,9 +102,15 @@ CREATE INDEX idx_modsig_review ON moderation_signals(review_status, priority DES
 CREATE INDEX idx_modsig_subject ON moderation_signals(subject_type, subject_id);
 CREATE INDEX idx_plan_audit_entity ON plan_audit_log(entity_type, entity_id, created_at);
 CREATE UNIQUE INDEX idx_plans_one_default ON plans(is_default) WHERE is_default = 1;
+CREATE INDEX idx_reports_closed ON reports(status, resolved_at);
 CREATE INDEX idx_reports_created_at ON reports(created_at);
 CREATE INDEX idx_reports_entity ON reports(entity_type, entity_id);
+CREATE INDEX idx_reports_entity_id ON reports(entity_id);
 CREATE INDEX idx_reports_entity_type ON reports(entity_type);
+CREATE INDEX idx_reports_meta ON reports(meta_synced_at);
+CREATE INDEX idx_reports_moderator ON reports(moderator_id, resolved_at);
+CREATE INDEX idx_reports_open_entity ON reports(status, entity_type, entity_id, created_at);
+CREATE INDEX idx_reports_owner ON reports(owner_id);
 CREATE INDEX idx_reports_reporter_id ON reports(reporter_id);
 CREATE INDEX idx_reports_status ON reports(status);
 CREATE INDEX idx_site_settings_log_key ON site_settings_log (key, created_at);

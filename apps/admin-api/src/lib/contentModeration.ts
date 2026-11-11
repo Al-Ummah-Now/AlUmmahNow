@@ -7,19 +7,24 @@
  */
 import { updateJson, type CasBucket, type CasResult } from './r2Cas';
 
-export type ContentModerationAction = 'removed' | 'warning' | 'banned';
+/**
+ * removed: hidden (restorable); warning: flagged, still visible;
+ * banned: the owner was banned (the user ban is applied by the caller), the
+ * item is hidden like `removed`; deleted: removed permanently.
+ */
+export type ContentModerationAction = 'removed' | 'warning' | 'banned' | 'deleted';
 
 export function applyModerationFlags(
 	entity: Record<string, unknown>,
 	action: ContentModerationAction,
 	opts: { moderatorId: string; notes?: string | undefined; at: string },
 ): void {
-	if (action === 'removed') {
+	if (action === 'removed' || action === 'banned') {
 		Object.assign(entity, {
 			isHidden: true,
 			hiddenAt: opts.at,
 			hiddenByUserId: opts.moderatorId,
-			hiddenReason: opts.notes || 'Content removed by moderator',
+			hiddenReason: opts.notes || (action === 'banned' ? 'Owner banned by moderator' : 'Content removed by moderator'),
 		});
 	} else if (action === 'warning') {
 		Object.assign(entity, {
@@ -34,7 +39,7 @@ export function applyModerationFlags(
 			isHidden: true,
 			hiddenAt: opts.at,
 			hiddenByUserId: opts.moderatorId,
-			hiddenReason: opts.notes || 'Content banned by moderator',
+			hiddenReason: opts.notes || 'Content permanently removed by moderator',
 		});
 	}
 }
