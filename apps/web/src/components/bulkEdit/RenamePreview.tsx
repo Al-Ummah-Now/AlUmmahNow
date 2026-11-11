@@ -175,9 +175,10 @@ export function RenamePreview({ rows, subjects, rename, onRenameChange, orderKey
       <p className="mt-1 text-xs text-[var(--fanous-color-text-secondary)]" id={`${testId}-hint`}>{r.orderHint}</p>
 
       <p className="mt-2 text-xs text-[var(--fanous-color-text-secondary)]" role="status" aria-live="polite" data-testid={`${testId}-summary`}
-        data-applies={summary.applies} data-blocked={summary.blocked} data-duplicates={summary.duplicates}>
+        data-applies={summary.applies} data-blocked={summary.blocked} data-duplicates={summary.duplicates} data-skipped={summary.skipped}>
         {r.summary
           .replace('{applies}', fmt(summary.applies))
+          .replace('{skipped}', fmt(summary.skipped))
           .replace('{blocked}', fmt(summary.blocked))
           .replace('{duplicates}', fmt(summary.duplicates))
           .replace('{unchanged}', fmt(summary.unchanged))}
@@ -286,7 +287,7 @@ function SortableRow({ id, index, total, rows, title, testId, fmt, Arrow, proble
         {rows.map((row) => {
           const blocked = row.problems.some((p) => p !== 'duplicate');
           return (
-            <div key={row.language} className="grid grid-cols-1 gap-x-2 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]" data-testid={`${testId}-cell`} data-language={row.language} data-problems={row.problems.join(' ')}>
+            <div key={row.language} className="grid grid-cols-1 gap-x-2 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]" data-testid={`${testId}-cell`} data-language={row.language} data-problems={row.problems.join(' ')} data-skipped={row.skipped ?? ''}>
               <span className="text-xs text-[var(--fanous-color-text-secondary)] lg:col-span-3">{row.language === 'ar' ? r.langAr : r.langEn}</span>
               <span className="break-words text-sm text-[var(--fanous-color-text-secondary)]" dir={dirOf(row.language)} lang={row.language}>
                 <bdi>{row.before || r.emptyValue}</bdi>
@@ -303,7 +304,8 @@ function SortableRow({ id, index, total, rows, title, testId, fmt, Arrow, proble
               </span>
               <span className="flex flex-wrap gap-1 lg:col-span-3">
                 {row.excluded && <Badge>{r.excluded}</Badge>}
-                {!row.excluded && !row.changed && row.problems.length === 0 && <Badge>{r.unchanged}</Badge>}
+                {row.skipped && <Badge tone="warn">{r.skippedNoTitle[row.language]}</Badge>}
+                {!row.excluded && !row.skipped && !row.changed && row.problems.length === 0 && <Badge>{r.unchanged}</Badge>}
                 {row.problems.map((p) => (
                   <Badge key={p} tone={blocked && p !== 'duplicate' ? 'error' : 'warn'}>
                     <AlertTriangle className="h-3 w-3" aria-hidden="true" />

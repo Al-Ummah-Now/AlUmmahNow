@@ -99,6 +99,12 @@ export interface RenameRow {
   excluded: boolean;
   changed: boolean;
   problems: RenameProblem[];
+  /**
+   * Left as it is for this language: the pattern uses {title} and this
+   * language has no title (renaming it would give "Series 3: " with nothing
+   * after the colon). The video still takes its number.
+   */
+  skipped?: 'no_title';
 }
 
 /** Problems that stop a row from being applied (a duplicate is only a warning). */
@@ -151,8 +157,42 @@ export function formatTokenDate(date: string | Date | null | undefined, language
 
 const TOKEN = /\{(n|filename|title|date|channel)\}/g;
 
+/** Marks where a token came out empty (removed by tidyEmptyTokens). */
+const EMPTY = '\u0000';
+/** Separator characters a vanished token takes with it. */
+const SEP = '[\\s\\-\u2013\u2014:|\u00b7\u2022,\u060c/_.]*';
+const AROUND_EMPTY = new RegExp(`(${SEP})${EMPTY}(${SEP})`, 'gu');
+
+/**
+ * Removes the tokens that came out empty with the separators left around
+ * them: "Lesson 1 – {filename}" without a file name is "Lesson 1", not
+ * "Lesson 1 – "; "A – {channel} – B" is "A – B"; empty brackets go too.
+ * Text the creator typed is never touched.
+ */
+export function tidyEmptyTokens(text: string): string {
+  if (!text.includes(EMPTY)) return text;
+  let out = text.replace(AROUND_EMPTY, (_m, left: string, right: string, offset: number, whole: string) => {
+    const atStart = offset === 0;
+    const atEnd = offset + _m.length === whole.length;
+    if (atStart || atEnd) return '';
+    // Between two pieces of text: keep one separator (the more telling of the two)
+    const keep = right.trim() ? right : left.trim() ? left : left || right;
+    return keep || ' ';
+  });
+  out = out.replace(/\(\s*\)|\[\s*\]|\{\s*\}|«\s*»|"\s*"/gu, '').replace(/ {2,}/g, ' ');
+  return out.replace(new RegExp(EMPTY, 'g'), '').trim();
+}
+
 function applyPattern(rule: PatternRule, subject: RenameSubject, language: TitleLanguage, index: number, digits: DigitStyle): string {
-  return rule.pattern.replace(TOKEN, (_match, token: string) => {
+  const filled = rule.pattern.replace(TOKEN, (_match, token: string) => {
+    const value = tokenValue(token, rule, subject, language, index, digits);
+    return value === '' ? EMPTY : value;
+  });
+  return tidyEmptyTokens(filled);
+}
+
+function tokenValue(token: string, rule: PatternRule, subject: RenameSubject, language: TitleLanguage, index: number, digits: DigitStyle): string {
+  {
     switch (token) {
       case 'n':
         return formatNumber(index, rule, digits);
@@ -167,7 +207,12 @@ function applyPattern(rule: PatternRule, subject: RenameSubject, language: Title
       default:
         return '';
     }
-  });
+  }
+}
+
+/** Whether a rule needs this language's current title to say anything. */
+export function needsTitle(rule: RenameRule): boolean {
+  return rule.kind === 'pattern' && rule.pattern.includes('{title}');
 }
 
 function escapeRegExp(text: string): string {
@@ -241,21 +286,31 @@ export function previewRename(subjects: readonly RenameSubject[], options: Renam
     for (const subject of subjects) {
       const before = subject.title[language] ?? '';
       const isExcluded = excluded.has(subject.id);
-      const after = isExcluded ? before : renameOne(subject, language, rule, index++, digits);
-      rows.push({ id: subject.id, language, before, after, excluded: isExcluded, changed: !isExcluded && after !== before, problems: [] });
+      if (isExcluded) {
+        rows.push({ id: subject.id, language, before, after: before, excluded: true, changed: false, problems: [] });
+        continue;
+      }
+      // A {title} pattern with no title in this language: left as it is (the video keeps its number)
+      if (needsTitle(rule) && before.trim() === '') {
+        index++;
+        rows.push({ id: subject.id, language, before, after: before, excluded: false, changed: false, problems: [], skipped: 'no_title' });
+        continue;
+      }
+      const after = renameOne(subject, language, rule, index++, digits);
+      rows.push({ id: subject.id, language, before, after, excluded: false, changed: after !== before, problems: [] });
     }
   }
   // Problems are judged on the included rows only, per language
   const seen = new Map<string, number>();
   for (const row of rows) {
-    if (row.excluded) continue;
+    if (row.excluded || row.skipped) continue;
     if (row.after.trim() === '') row.problems.push('empty');
     if (charCount(row.after) > max) row.problems.push('too_long');
     const key = `${row.language}\u0000${duplicateKey(row.after, row.language)}`;
     if (row.after.trim() !== '') seen.set(key, (seen.get(key) ?? 0) + 1);
   }
   for (const row of rows) {
-    if (row.excluded || row.after.trim() === '') continue;
+    if (row.excluded || row.skipped || row.after.trim() === '') continue;
     if ((seen.get(`${row.language}\u0000${duplicateKey(row.after, row.language)}`) ?? 0) > 1) row.problems.push('duplicate');
   }
   return rows;
@@ -283,14 +338,16 @@ export function renameSummary(rows: readonly RenameRow[]) {
   let duplicates = 0;
   let unchanged = 0;
   let excluded = 0;
+  let skipped = 0;
   for (const row of rows) {
     if (row.excluded) excluded++;
+    else if (row.skipped) skipped++;
     else if (row.problems.some((p) => BLOCKING_PROBLEMS.includes(p))) blocked++;
     else if (!row.changed) unchanged++;
     else applies++;
     if (row.problems.includes('duplicate')) duplicates++;
   }
-  return { applies, blocked, duplicates, unchanged, excluded };
+  return { applies, blocked, duplicates, unchanged, excluded, skipped };
 }
 
 // ---------------------------------------------------------------------------
