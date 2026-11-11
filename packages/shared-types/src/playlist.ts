@@ -13,6 +13,9 @@ export interface Playlist extends Timestamps, SoftDelete, Moderation {
   id: string;
   name: string;
   description?: string;
+  /** Per-language names ('en', 'ar'); a language without one shows `name` (playlist-title.ts) */
+  titleLocalized?: Record<string, string>;
+  descriptionLocalized?: Record<string, string>;
   userId: string;
   channelId?: string;
   /** The creator's custom image only; never derived */
@@ -36,6 +39,8 @@ export interface Playlist extends Timestamps, SoftDelete, Moderation {
 export interface PlaylistCreateRequest {
   name: string;
   description?: string;
+  titleLocalized?: Record<string, string>;
+  descriptionLocalized?: Record<string, string>;
   channelId?: string;
   thumbnailUrl?: string;
   isPublic?: boolean;
@@ -44,6 +49,9 @@ export interface PlaylistCreateRequest {
 export interface PlaylistUpdateRequest {
   name?: string;
   description?: string;
+  /** Replaces the stored map when sent; {} clears it */
+  titleLocalized?: Record<string, string>;
+  descriptionLocalized?: Record<string, string>;
   thumbnailUrl?: string;
   isPublic?: boolean;
 }

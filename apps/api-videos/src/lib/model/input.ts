@@ -28,8 +28,10 @@ export const VideoInput = z.object({
 });
 
 export const PlaylistInput = z.object({
-    title: Str({ description: "Playlist title" }),
-    description: Str({ required: false, description: "Playlist description" }),
+    title: Str({ required: false, description: "Playlist title (the original name). May be omitted when titleLocalized has a value: then it is the English name, else the Arabic one" }),
+    description: Str({ required: false, description: "Playlist description (defaults to descriptionLocalized's English, else Arabic, value)" }),
+    titleLocalized: z.record(z.string()).optional().describe("Names per language: only 'en' and 'ar' are kept, trimmed, empty ones dropped (e.g. {'en': 'Lessons', 'ar': 'دروس'})"),
+    descriptionLocalized: z.record(z.string()).optional().describe("Descriptions per language: only 'en' and 'ar' are kept, trimmed, empty ones dropped"),
     thumbnailUrl: Str({ required: false, description: "Playlist thumbnail URL" }),
     videos: z.array(Str()).optional().describe("Videos of the channel to add, in order (validated; above 200 the rest is added by a background job)"),
     isPublic: z.boolean().optional(),
@@ -87,6 +89,8 @@ export const VideoUpdateInput = z.object({
 export const PlaylistUpdateInput = z.object({
     title: Str({ required: false, description: "Playlist title" }),
     description: Str({ required: false, description: "Playlist description" }),
+    titleLocalized: z.record(z.string()).optional().describe("Names per language: only 'en' and 'ar' are kept, trimmed, empty ones dropped; replaces the stored map ({} clears it) (e.g. {'en': 'Lessons', 'ar': 'دروس'})"),
+    descriptionLocalized: z.record(z.string()).optional().describe("Descriptions per language: only 'en' and 'ar' are kept, trimmed, empty ones dropped; replaces the stored map ({} clears it)"),
     thumbnailUrl: Str({ required: false, description: "Playlist thumbnail URL" }),
     isPublic: z.boolean().optional(),
     videos: z.array(Str()).optional().describe("Reorder videos: the playlist's current video IDs in the new order (manual order only)"),

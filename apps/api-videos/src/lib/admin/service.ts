@@ -970,6 +970,10 @@ const includesText = (q: string | undefined, ...fields: unknown[]) => {
 	return fields.some((f) => typeof f === 'string' && f.toLowerCase().includes(needle));
 };
 
+/** The string values of a per-language map (titleLocalized and the like). */
+const localizedValues = (map: unknown): string[] =>
+	map && typeof map === 'object' ? Object.values(map as Record<string, unknown>).filter((v): v is string => typeof v === 'string' && v.trim() !== '') : [];
+
 export async function listPlaylists(env: AdminServiceEnv, query: { q?: string; channelId?: string; ownerId?: string; cursor?: string | null; pageSize?: number }) {
 	const { values, nextCursor } = await scanMatching(env.playlists, {
 		cursor: query.cursor,
@@ -980,12 +984,13 @@ export async function listPlaylists(env: AdminServiceEnv, query: { q?: string; c
 			// A channel's playlists never include a user's Watch later
 			(!query.channelId || (p.channelId === query.channelId && !isSystemPlaylist(p as never))) &&
 			(!query.ownerId || p.userId === query.ownerId) &&
-			includesText(query.q, p.title, p.description, p.id),
+			includesText(query.q, p.title, p.description, p.id, ...localizedValues(p.titleLocalized), ...localizedValues(p.descriptionLocalized)),
 	});
 	return {
 		items: values.map(({ key, value: p }) => ({
 			id: (p.id as string) || key,
 			title: p.title ?? '',
+			...(localizedValues(p.titleLocalized).length ? { titleLocalized: p.titleLocalized as Record<string, string> } : {}),
 			channelId: p.channelId ?? null,
 			ownerId: p.userId ?? null,
 			isPublic: p.isPublic !== false,

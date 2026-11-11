@@ -87,6 +87,18 @@ describe('suggest endpoints', () => {
     assert.deepEqual((await call('/api/suggest/comment?q=gre')).body.result.items?.[0], { kind: 'comment', id: 'c_1', label: 'Great', secondary: 'Tafsir', imageUrl: null, parentId: 'v_1' });
   });
 
+  it('shows a bilingual playlist\'s other names, none for a one-language playlist', async () => {
+    const { fetcher } = fakeVideos({
+      '/playlists': [
+        { id: 'pl_1', title: 'Lessons', titleLocalized: { en: 'Lessons', ar: 'دروس' }, channelId: 'ch_1' },
+        { id: 'pl_2', title: 'Seerah', channelId: 'ch_1' },
+      ],
+    });
+    const items = (await appFor({ VIDEOS: fetcher })('/api/suggest/playlist?q=les')).body.result.items;
+    assert.deepEqual(items?.[0], { kind: 'playlist', id: 'pl_1', label: 'Lessons', secondary: 'دروس', imageUrl: null, parentId: 'ch_1' });
+    assert.equal(items?.[1]?.secondary, null);
+  });
+
   it('puts an exact id match first', async () => {
     const { fetcher } = fakeVideos({ '/channels': [channel('ch_2', 'Other ch_1 fan'), channel('ch_1', 'Mostafa')] });
     const { body } = await appFor({ VIDEOS: fetcher })('/api/suggest/channel?q=ch_1');

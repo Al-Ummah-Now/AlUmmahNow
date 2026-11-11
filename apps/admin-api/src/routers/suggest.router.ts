@@ -87,11 +87,17 @@ const fromVideo = (r: AdminVideoRow): AdminSuggestion => ({
   parentId: r.channelId,
 });
 
+/** A bilingual playlist's other names (EN/AR), so either language can be recognised in the list. */
+const otherPlaylistNames = (r: AdminPlaylistRow): string | null => {
+  const names = [...new Set(Object.values(r.titleLocalized ?? {}).map((n) => n.trim()))].filter((n) => n && n !== r.title?.trim());
+  return clip(names.join(' · ')) ?? null;
+};
+
 const fromPlaylist = (r: AdminPlaylistRow): AdminSuggestion => ({
   kind: 'playlist',
   id: r.id,
   label: clip(r.title) ?? r.id,
-  secondary: null,
+  secondary: otherPlaylistNames(r),
   imageUrl: null,
   parentId: r.channelId,
 });

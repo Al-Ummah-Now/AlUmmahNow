@@ -363,12 +363,13 @@ function videoSuggestion(row: IndexRow, q: string, lang: string | undefined): Ra
   }];
 }
 
-function playlistSuggestion(row: IndexRow): RankedSuggestion[] {
+/** With a query: the playlist's name in whichever language matches it best (English, Arabic or the base). */
+function playlistSuggestion(row: IndexRow, q = '', lang?: string): RankedSuggestion[] {
   const playlist = parseJson<SearchPlaylistPayload>(row.payload);
   if (!playlist?.id) return [];
   const channel = channelInfo(row.channel_payload);
   return [{
-    text: playlist.name,
+    text: q ? bestText(playlist.name, playlist.titleLocalized, q, lang) : pickLocalized(playlist.name, playlist.titleLocalized, lang),
     type: 'playlist' as const,
     id: playlist.id,
     thumbnailUrl: playlist.thumbnailUrl ?? playlist.cover?.thumbnailUrl,
@@ -414,7 +415,7 @@ export async function suggestFromIndex(db: SearchDb, q: string, limit: number, o
 
   if (want.has('channel')) rank('channel', rowsOf('channel').flatMap(row => channelSuggestion(row, q, lang)));
   if (want.has('video')) rank('video', rowsOf('video').flatMap(row => videoSuggestion(row, q, lang)));
-  if (want.has('playlist')) rank('playlist', rowsOf('playlist').flatMap(row => playlistSuggestion(row)));
+  if (want.has('playlist')) rank('playlist', rowsOf('playlist').flatMap(row => playlistSuggestion(row, q, lang)));
   if (want.has('category')) {
     const items = VIDEO_CATEGORIES.map(category => ({
       text: lang === 'ar' ? category.label.ar : category.label.en,

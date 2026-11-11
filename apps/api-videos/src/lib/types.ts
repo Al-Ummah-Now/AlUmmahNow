@@ -181,6 +181,9 @@ export const Playlist = z.object({
     id: Str(),
     title: Str(),
     description: Str().optional(),
+    /** Per-language names/descriptions ('en', 'ar'); a language without one shows title/description */
+    titleLocalized: z.record(z.string()).optional(),
+    descriptionLocalized: z.record(z.string()).optional(),
     thumbnailUrl: Str().optional(),
     userId: Str(),
     /** The channel member who created it, when not the channel's owner (`userId`) */

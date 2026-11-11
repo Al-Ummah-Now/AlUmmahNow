@@ -7860,6 +7860,18 @@
                           "description": {
                             "type": "string"
                           },
+                          "titleLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "descriptionLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
                           "thumbnailUrl": {
                             "type": "string"
                           },
@@ -16799,6 +16811,18 @@
                           "description": {
                             "type": "string"
                           },
+                          "titleLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "descriptionLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
                           "thumbnailUrl": {
                             "type": "string"
                           },
@@ -16992,11 +17016,25 @@
                 "properties": {
                   "title": {
                     "type": "string",
-                    "description": "Playlist title"
+                    "description": "Playlist title (the original name). May be omitted when titleLocalized has a value: then it is the English name, else the Arabic one"
                   },
                   "description": {
                     "type": "string",
-                    "description": "Playlist description"
+                    "description": "Playlist description (defaults to descriptionLocalized's English, else Arabic, value)"
+                  },
+                  "titleLocalized": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "description": "Names per language: only 'en' and 'ar' are kept, trimmed, empty ones dropped (e.g. {'en': 'Lessons', 'ar': 'دروس'})"
+                  },
+                  "descriptionLocalized": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "description": "Descriptions per language: only 'en' and 'ar' are kept, trimmed, empty ones dropped"
                   },
                   "thumbnailUrl": {
                     "type": "string",
@@ -17039,10 +17077,7 @@
                     ],
                     "description": "Automatic order direction"
                   }
-                },
-                "required": [
-                  "title"
-                ]
+                }
               }
             }
           }
@@ -17072,6 +17107,18 @@
                             },
                             "description": {
                               "type": "string"
+                            },
+                            "titleLocalized": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              }
+                            },
+                            "descriptionLocalized": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              }
                             },
                             "thumbnailUrl": {
                               "type": "string"
@@ -17613,6 +17660,18 @@
                     "description": {
                       "type": "string"
                     },
+                    "titleLocalized": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "descriptionLocalized": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
                     "thumbnailUrl": {
                       "type": "string"
                     },
@@ -17938,6 +17997,20 @@
                     "type": "string",
                     "description": "Playlist description"
                   },
+                  "titleLocalized": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "description": "Names per language: only 'en' and 'ar' are kept, trimmed, empty ones dropped; replaces the stored map ({} clears it) (e.g. {'en': 'Lessons', 'ar': 'دروس'})"
+                  },
+                  "descriptionLocalized": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "description": "Descriptions per language: only 'en' and 'ar' are kept, trimmed, empty ones dropped; replaces the stored map ({} clears it)"
+                  },
                   "thumbnailUrl": {
                     "type": "string",
                     "description": "Playlist thumbnail URL"
@@ -18017,6 +18090,18 @@
                             },
                             "description": {
                               "type": "string"
+                            },
+                            "titleLocalized": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              }
+                            },
+                            "descriptionLocalized": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              }
                             },
                             "thumbnailUrl": {
                               "type": "string"
@@ -18288,8 +18373,20 @@
                             "title": {
                               "type": "string"
                             },
+                            "titleLocalized": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              }
+                            },
                             "description": {
                               "type": "string"
+                            },
+                            "descriptionLocalized": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              }
                             },
                             "isPublic": {
                               "type": "boolean"
@@ -18877,6 +18974,18 @@
                             },
                             "description": {
                               "type": "string"
+                            },
+                            "titleLocalized": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              }
+                            },
+                            "descriptionLocalized": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              }
                             },
                             "thumbnailUrl": {
                               "type": "string"
@@ -19640,6 +19749,18 @@
                             },
                             "description": {
                               "type": "string"
+                            },
+                            "titleLocalized": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              }
+                            },
+                            "descriptionLocalized": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              }
                             },
                             "thumbnailUrl": {
                               "type": "string"

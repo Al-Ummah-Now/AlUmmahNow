@@ -7,7 +7,7 @@ import { transformPlaylistToView, createEntityDefaults } from "../../lib/transfo
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from "../../base";
-import { PLAYLIST_BULK_MAX, can, playlistSortOf, uniqueVideoIds, type ChannelRole, type PlaylistBulkAddResult } from "@al-ummah/shared-types";
+import { PLAYLIST_BULK_MAX, can, normalizePlaylistLocalized, playlistSortOf, uniqueVideoIds, type ChannelRole, type PlaylistBulkAddResult } from "@al-ummah/shared-types";
 import { uploadIdentity } from "../../lib/channelAccess";
 import { PLAYLIST_DESCRIPTION_MAX, PLAYLIST_TITLE_MAX } from "../../lib/playlists";
 import { bulkAddVideos, type PlaylistEnv } from "../../lib/playlistBulk";
@@ -97,15 +97,22 @@ export class PlaylistCreate extends AuthenticatedRoute {
         // added below, so a bad id never lands in the playlist)
         const entityDefaults = createEntityDefaults();
         
-        const title = (playlistInput.title || '').trim();
+        // Bilingual name and description (EN and AR edited together, like video
+        // titles): the original `title` defaults to the English name, else the Arabic
+        const titleLocalized = normalizePlaylistLocalized(playlistInput.titleLocalized, PLAYLIST_TITLE_MAX);
+        const descriptionLocalized = normalizePlaylistLocalized(playlistInput.descriptionLocalized, PLAYLIST_DESCRIPTION_MAX);
+        const title = (playlistInput.title || '').trim() || titleLocalized?.en || titleLocalized?.ar || '';
         if (!title) {
             return c.json({ success: false, error: "Playlist title is required" }, 400);
         }
+        const description = playlistInput.description ?? (descriptionLocalized?.en || descriptionLocalized?.ar);
 
         const businessPlaylist = {
             ...entityDefaults,
             title: title.slice(0, PLAYLIST_TITLE_MAX),
-            description: playlistInput.description?.slice(0, PLAYLIST_DESCRIPTION_MAX),
+            description: description?.slice(0, PLAYLIST_DESCRIPTION_MAX),
+            ...(titleLocalized ? { titleLocalized } : {}),
+            ...(descriptionLocalized ? { descriptionLocalized } : {}),
             thumbnailUrl: playlistInput.thumbnailUrl,
             userId: ownerId,
             ...(uploadedBy ? { createdBy: uploadedBy } : {}),
