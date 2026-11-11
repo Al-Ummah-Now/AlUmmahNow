@@ -45,7 +45,7 @@ export async function finalizeSelfHosted(env: LiveEnv, session: LiveSessionRow, 
 	const now = opts.now ?? Date.now();
 	const base = prefix(session.id);
 	const { results } = await d1
-		.prepare('SELECT rendition, seq, uri, duration, bytes, received_at FROM live_segments WHERE session_id = ? ORDER BY rendition, seq')
+		.prepare('SELECT rendition, seq, uri, duration, bytes, received_at FROM live_segments WHERE session_id = ? AND duration > 0 ORDER BY rendition, seq')
 		.bind(session.id)
 		.all<SegRow>();
 	const byRendition = new Map<string, SegRow[]>();
@@ -71,6 +71,11 @@ export async function finalizeSelfHosted(env: LiveEnv, session: LiveSessionRow, 
 			writes++;
 		}
 	}
+	// Ingest totals from the segment index (authoritative across isolates)
+	await d1
+		.prepare('UPDATE live_sessions SET segments = ?, ingest_bytes = ? WHERE id = ?')
+		.bind(results?.length ?? 0, (results ?? []).reduce((n, r) => n + (r.bytes || 0), 0), session.id)
+		.run();
 	if (!opts.recordVod || !byRendition.size) {
 		if (!opts.recordVod) await deletePrefix(bucket, base);
 		await d1.prepare('UPDATE live_sessions SET r2_writes = r2_writes + ? WHERE id = ?').bind(writes, session.id).run();

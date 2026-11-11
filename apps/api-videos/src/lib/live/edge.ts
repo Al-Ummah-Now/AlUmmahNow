@@ -74,9 +74,6 @@ export async function flushEdgeCounters(db: D1Database, force = false, now = Dat
 	}
 }
 
-/** Segment sizes seen at ingest, by session/rendition/uri, for the segment index. */
-const segmentBytes = new Map<string, number>();
-
 export interface EdgeHooks {
 	/** The session's first segment arrived: mark the stream live (lib/live/streams.ts). */
 	onLive(env: LiveEnv, session: SessionInfo): Promise<void>;
@@ -140,10 +137,18 @@ async function ingest(request: Request, env: LiveEnv, ctx: ExecutionContext, par
 			cacheControl: isPlaylist ? 'public, max-age=1' : 'public, max-age=31536000, immutable',
 		},
 	});
-	count(sessionId, { ingest_bytes: body.byteLength, r2_writes: 1 });
+	count(sessionId, { r2_writes: 1 });
 	if (kind === 'segment') {
-		segmentBytes.set(`${sessionId}/${rendition}/${rest[1]}`, body.byteLength);
-		if (segmentBytes.size > 5000) segmentBytes.delete(segmentBytes.keys().next().value!);
+		// The segment's size is recorded now (the playlist that lists it may reach another isolate);
+		// its duration arrives with the playlist (indexMediaPlaylist).
+		const seq = Number(/seg_(\d+)\./.exec(rest[1])![1]);
+		ctx.waitUntil(
+			db
+				.prepare('INSERT INTO live_segments (session_id, rendition, seq, uri, duration, bytes, received_at) VALUES (?, ?, ?, ?, 0, ?, ?) ON CONFLICT(session_id, rendition, seq) DO UPDATE SET bytes = excluded.bytes')
+				.bind(sessionId, rendition, seq, rest[1], body.byteLength, now)
+				.run()
+				.catch((e) => logger.warn('[LiveEdge] Segment size record failed', { sessionId, error: String(e) })),
+		);
 	}
 	if (!session.ingest_connected_at) {
 		session.ingest_connected_at = now;
@@ -197,8 +202,11 @@ async function indexMediaPlaylist(env: LiveEnv, ctx: ExecutionContext, session: 
 	const db = env.SEARCH_DB!;
 	const { segments, targetDuration } = parseMediaPlaylist(playlist);
 	if (!segments.length) return;
-	const stmt = db.prepare('INSERT OR IGNORE INTO live_segments (session_id, rendition, seq, uri, duration, bytes, received_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
-	await db.batch(segments.map((s) => stmt.bind(session.id, rendition, s.seq, s.uri, s.duration, segmentBytes.get(`${session.id}/${rendition}/${s.uri}`) ?? 0, now)));
+	// Only rows still without a duration are written (a playlist lists the same segment up to 6 times).
+	const stmt = db.prepare(
+		'INSERT INTO live_segments (session_id, rendition, seq, uri, duration, bytes, received_at) VALUES (?, ?, ?, ?, ?, 0, ?) ON CONFLICT(session_id, rendition, seq) DO UPDATE SET duration = excluded.duration, uri = excluded.uri WHERE live_segments.duration = 0',
+	);
+	await db.batch(segments.map((s) => stmt.bind(session.id, rendition, s.seq, s.uri, s.duration, now)));
 	// One rendition drives the session clock (the first one the encoder lists), so a reconnect is counted once.
 	const fresh = await sessionInfo(db, session.id, now, true);
 	if (!fresh) return;

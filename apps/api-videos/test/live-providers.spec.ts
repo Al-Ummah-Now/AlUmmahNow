@@ -287,3 +287,27 @@ describe('QoE and comparison', () => {
 		assert.equal(cmp.days.length, 2);
 	});
 });
+
+describe('current bitrate', () => {
+	it('self-hosted: the top rendition over the last 30 s; Bunny: the last poll', async () => {
+		const { currentBitrateKbps } = await import('../src/lib/live/service');
+		const db = new SqliteD1() as unknown as D1Database;
+		const raw = (db as unknown as SqliteD1).db;
+		const now = Date.UTC(2026, 10, 11, 12);
+		const base = { stream_id: 's', channel_id: null, provider_ref: null, reason: 'round_robin', preferred: null, seq: 0, failover_from: null, failover_error: null, low_latency: 0, is_test: 0, playback_url: null };
+		await insertSession(db, { ...base, id: 'sh', provider: 'selfhosted', created_at: now });
+		await insertSession(db, { ...base, id: 'bn', provider: 'bunny', created_at: now });
+		raw.prepare("UPDATE live_sessions SET status = 'live'").run();
+		const seg = raw.prepare('INSERT INTO live_segments (session_id, rendition, seq, uri, duration, bytes, received_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
+		for (let i = 0; i < 5; i++) {
+			seg.run('sh', '720', i, `seg_${i}.m4s`, 2, 750_000, now - 10_000 + i * 2000); // 3000 kbps
+			seg.run('sh', '360', i, `seg_${i}.m4s`, 2, 175_000, now - 10_000 + i * 2000); // 700 kbps
+		}
+		seg.run('sh', '720', 99, 'seg_99.m4s', 2, 9_000_000, now - 120_000); // too old
+		raw.prepare("INSERT INTO live_events (id, session_id, provider, kind, at, value) VALUES ('b1', 'bn', 'bunny', 'bitrate', ?, 4480.4)").run(now - 5000);
+		assert.equal(await currentBitrateKbps(db, (await readSession(db, 'sh'))!, now), 3000);
+		assert.equal(await currentBitrateKbps(db, (await readSession(db, 'bn'))!, now), 4480);
+		raw.prepare("UPDATE live_sessions SET status = 'ended' WHERE id = 'sh'").run();
+		assert.equal(await currentBitrateKbps(db, (await readSession(db, 'sh'))!, now), null);
+	});
+});
