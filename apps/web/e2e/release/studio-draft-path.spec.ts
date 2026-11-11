@@ -31,9 +31,12 @@ test.describe('Release: Studio draft path', () => {
         }, { message: `the video never reached ${status}`, timeout: 180000, intervals: [5000] })
         .toBe(1);
     };
-    const act = async (name: string, on: Page = page): Promise<void> => {
+    // A row action runs a server action; navigating before it has been sent cancels it
+    // (Firefox and WebKit dispatch it later than Chromium), so wait for its result notice
+    const act = async (name: string, done: string, on: Page = page): Promise<void> => {
       await row().getByTestId('studio-video-actions').click();
       await on.getByRole('menuitem', { name }).click();
+      await expect(on.getByRole('status').filter({ hasText: new RegExp(`${done}|didn't work`) })).toHaveText(done, { timeout: 30000 });
     };
 
     try {
@@ -64,11 +67,11 @@ test.describe('Release: Studio draft path', () => {
       await openStatus('scheduled');
 
       // Cancel: back to Drafts
-      await act('Cancel schedule');
+      await act('Cancel schedule', 'Schedule cancelled.');
       await openStatus('drafts');
 
       // Publish
-      await act('Publish now');
+      await act('Publish now', 'Published.');
       await openStatus('published');
       await expect(row()).not.toContainText('Private');
     } finally {
