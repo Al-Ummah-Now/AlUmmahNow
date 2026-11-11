@@ -16,6 +16,8 @@ import { VideoWatchTime } from '../endpoints/video/videoWatchTime';
 import { VideoRetention } from '../endpoints/video/videoRetention';
 import { VideoBulkSchedule } from '../endpoints/video/videoBulkStudio';
 import { VideoBulkPurge, VideoBulkRestore } from '../endpoints/video/videoTrash';
+import { VideoRestore } from '../endpoints/video/videoRestore';
+import { VideoPermanentDelete } from '../endpoints/video/videoPermanentDelete';
 import { VideoUploadStatus } from '../endpoints/video/videoUploadStatus';
 import { VideoThumbnailUpload } from '../endpoints/video/videoThumbnailUpload';
 
@@ -105,6 +107,9 @@ videoRouter.post('/bulk-update', VideoBulkUpdate);
 videoRouter.post('/bulk-schedule', VideoBulkSchedule);
 videoRouter.post('/bulk-restore', VideoBulkRestore);
 videoRouter.post('/bulk-purge', VideoBulkPurge);
+// Creator trash, one video (lib/videoTrash.ts)
+videoRouter.post('/:id/restore', VideoRestore);
+videoRouter.delete('/:id/permanent', VideoPermanentDelete);
 
 // Get video upload status (authenticated)
 videoRouter.get('/:id/upload-status', VideoUploadStatus);

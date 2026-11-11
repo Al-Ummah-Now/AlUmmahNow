@@ -137,6 +137,8 @@ const MEMBER_WRITE_ROUTES: ReadonlyArray<{ methods: ReadonlyArray<string>; path:
 	{ methods: ['POST', 'PUT', 'DELETE'], path: /^\/api\/videos\/[^/]+\/subtitles(?:\/|$)/, capability: 'video.edit' },
 	{ methods: ['POST', 'PATCH', 'DELETE'], path: /^\/api\/videos\/[^/]+\/(?:schedule|publish-now)\/?$/, capability: 'video.schedule' },
 	{ methods: ['DELETE'], path: /^\/api\/videos\/(?!bulk-|upload|tus)[^/]+\/?$/, capability: 'video.delete' },
+	// Restoring a deleted video (bulk-restore and DELETE …/permanent stay owner only)
+	{ methods: ['POST'], path: /^\/api\/videos\/(?!bulk-|upload|tus)[^/]+\/restore\/?$/, capability: 'video.delete' },
 	// Editing the channel itself
 	{ methods: ['PUT'], path: /^\/api\/channels\/(?!handles|by-handle|access)[^/]+\/?$/, capability: 'channel.edit' },
 	{ methods: ['PUT'], path: /^\/api\/channels\/[^/]+\/(?:avatar|cover|tabs)\/?$/, capability: 'channel.edit' },

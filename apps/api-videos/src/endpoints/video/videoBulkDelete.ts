@@ -1,13 +1,16 @@
 import { Bool, Str } from "chanfana";
 import { z } from "zod";
 import { ResponseError } from "../../lib/types";
-import { softDeleteForCreator } from "../../lib/creatorDeletions";
+import { softDeleteForCreator, type CreatorDeletionResult } from "../../lib/creatorDeletions";
+import { BulkItemResult } from "./videoTrashSchemas";
 import { AuthenticatedRoute, AppContext } from '../../base';
 
 export class VideoBulkDelete extends AuthenticatedRoute {
 	schema = {
 		tags: ["Videos"],
 		summary: "Delete multiple videos (soft: restorable for 30 days)",
+		description:
+			"Moves up to 50 videos to the channel trash (owner, or a channel role with video.delete; an editor only their own uploads). Each successful result carries `restorableUntil`; a video already in the trash counts as deleted. Undo with POST /api/videos/bulk-restore or POST /api/videos/{id}/restore.",
 		request: {
 			body: {
 				content: {
@@ -29,11 +32,7 @@ export class VideoBulkDelete extends AuthenticatedRoute {
 					"application/json": {
 						schema: z.object({
 							success: Bool(),
-							results: z.array(z.object({
-								videoId: Str(),
-								success: Bool(),
-								error: Str().optional(),
-							})),
+							results: z.array(BulkItemResult),
 							summary: z.object({
 								total: z.number(),
 								succeeded: z.number(),
@@ -79,8 +78,8 @@ export class VideoBulkDelete extends AuthenticatedRoute {
 		// Process results
 		const processedResults = results.map((result, index) => {
 			if (result.status === "fulfilled") {
-				const { videoId, success, error } = result.value;
-				return { videoId, success, ...(error ? { error } : {}) };
+				const { videoId, success, error, code, restorableUntil } = result.value as CreatorDeletionResult;
+				return { videoId, success, ...(error ? { error } : {}), ...(code ? { code } : {}), ...(restorableUntil ? { restorableUntil } : {}) };
 			} else {
 				return {
 					videoId: videoIds[index],

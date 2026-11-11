@@ -16,6 +16,7 @@ import { ChannelAccessList, ChannelMemberAdd, ChannelMemberRemove, ChannelMember
 
 // Channel content endpoints
 import { ChannelVideosList } from '../endpoints/channel/channelVideosList';
+import { ChannelDeletedVideosList } from '../endpoints/channel/channelDeletedVideosList';
 import { ChannelShortsList } from '../endpoints/channel/channelShortsList';
 import { ChannelLiveList } from '../endpoints/channel/channelLiveList';
 import { ChannelPlaylistsList } from '../endpoints/channel/channelPlaylistsList';
@@ -85,6 +86,9 @@ channelRouter.delete('/:id', ChannelDelete);
 
 // Get channel videos (public)
 channelRouter.get('/:id/videos', ChannelVideosList);
+
+// The channel's deleted videos as full video views, restorable for 30 days (owner or video.delete role)
+channelRouter.get('/:id/deleted-videos', ChannelDeletedVideosList);
 
 // Studio: the Videos tab
 channelRouter.get('/:id/content/summary', ChannelContentSummary);
