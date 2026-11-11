@@ -69,11 +69,13 @@ describe('account notices (warn-user)', () => {
 			displayName: 'Amina',
 			accountEmail: true,
 			locale: 'en',
+			savedLocale: null,
 		});
 		env.NOTIFICATIONS_DB.raw.prepare("INSERT INTO notification_email_prefs VALUES ('usr_1', 0, 'ar', 0)").run();
 		const changed = (await call('GET', '/users/usr_1/account-email')).body.result;
 		assert.equal(changed.accountEmail, false);
 		assert.equal(changed.locale, 'ar');
+		assert.equal(changed.savedLocale, 'ar');
 		assert.equal((await call('GET', '/users/usr_noemail/account-email')).body.result.email, null);
 		assert.equal((await call('GET', '/users/usr_gone/account-email')).status, 404);
 	});

@@ -422,6 +422,8 @@ export interface AdminUserDetail extends AdminUserRow {
   creatorTier?: CreatorTierAssignment | null;
   channels: AdminChannelRow[];
   counts: { videos: number; playlists: number; watchHistory: number; subscriptions: number; comments: number };
+  /** Set by admin-api: the user's saved email language (null = never picked or unreadable); the Warn dialog preselects it. */
+  emailLanguage?: 'en' | 'ar' | null;
 }
 
 /** Result of a cascade (suspension, ban, delete) over a user's or channel's content. */

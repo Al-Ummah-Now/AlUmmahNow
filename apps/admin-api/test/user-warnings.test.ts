@@ -34,7 +34,7 @@ function fakeVideos(contacts: Record<string, Partial<AccountEmailContact>>) {
       const contact = match ? contacts[decodeURIComponent(match[1])] : undefined;
       const answer = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
       if (match && !contact) return answer(404, { success: false, code: 'user_not_found', error: 'user_not_found' });
-      if (match?.[2] === 'account-email') return answer(200, { success: true, result: { userId: match[1], email: null, displayName: '', accountEmail: true, locale: 'en', ...contact } });
+      if (match?.[2] === 'account-email') return answer(200, { success: true, result: { userId: match[1], email: null, displayName: '', accountEmail: true, locale: 'en', savedLocale: null, ...contact } });
       if (match?.[2] === 'account-notices') return answer(200, { success: true, result: { queued: true } });
       return answer(200, { success: true, result: {} });
     },
@@ -87,7 +87,7 @@ describe('warn user: permissions', () => {
 
   it('a caller without users:warn can neither issue nor read warnings', async () => {
     const { call, videos } = setup();
-    assert.equal((await call('/api/content/users/usr_1/warnings', { method: 'POST', roles: 'viewer', json: { reasonCode: 'spam' } })).status, 403);
+    assert.equal((await call('/api/content/users/usr_1/warnings', { method: 'POST', roles: 'viewer', json: { reasonCode: 'spam', locale: 'en' } })).status, 403);
     assert.equal((await call('/api/content/users/usr_1/warnings', { roles: 'viewer' })).status, 403);
     assert.equal(videos.calls.length, 0);
   });
@@ -107,10 +107,10 @@ describe('warn user: escalation', () => {
 
 describe('warn user: request', () => {
   it('accepts a reason with optional note, report and content; refuses the rest', () => {
-    assert.deepEqual(parseWarningRequest({ reasonCode: 'spam', note: '  repeat links ', reportId: 'r1', entityKind: 'video', entityId: 'v1' }), {
-      reasonCode: 'spam', note: 'repeat links', reportId: 'r1', entityKind: 'video', entityId: 'v1',
+    assert.deepEqual(parseWarningRequest({ reasonCode: 'spam', note: '  repeat links ', reportId: 'r1', entityKind: 'video', entityId: 'v1', locale: 'ar' }), {
+      reasonCode: 'spam', locale: 'ar', note: 'repeat links', reportId: 'r1', entityKind: 'video', entityId: 'v1',
     });
-    assert.deepEqual(parseWarningRequest({ reasonCode: 'other' }), { reasonCode: 'other' });
+    assert.deepEqual(parseWarningRequest({ reasonCode: 'other', locale: 'en' }), { reasonCode: 'other', locale: 'en' });
     const code = (b: Record<string, unknown>) => {
       try {
         parseWarningRequest(b);
@@ -119,17 +119,21 @@ describe('warn user: request', () => {
         return e instanceof WarningInputError ? e.code : 'thrown';
       }
     };
-    assert.equal(code({ reasonCode: 'rude' }), 'invalid_reason');
-    assert.equal(code({ reasonCode: 'spam', note: 'x'.repeat(1001) }), 'note_too_long');
-    assert.equal(code({ reasonCode: 'spam', entityKind: 'user', entityId: 'u' }), 'invalid_entity_kind');
-    assert.equal(code({ reasonCode: 'spam', entityKind: 'video' }), 'invalid_request');
+    assert.equal(code({ reasonCode: 'rude', locale: 'en' }), 'invalid_reason');
+    assert.equal(code({ reasonCode: 'spam', locale: 'en', note: 'x'.repeat(1001) }), 'note_too_long');
+    assert.equal(code({ reasonCode: 'spam', locale: 'en', entityKind: 'user', entityId: 'u' }), 'invalid_entity_kind');
+    assert.equal(code({ reasonCode: 'spam', locale: 'en', entityKind: 'video' }), 'invalid_request');
+    // The email language is chosen at the click: required, one language only
+    assert.equal(code({ reasonCode: 'spam' }), 'invalid_locale');
+    assert.equal(code({ reasonCode: 'spam', locale: 'fr' }), 'invalid_locale');
+    assert.equal(code({ reasonCode: 'spam', locale: 'en,ar' }), 'invalid_locale');
   });
 });
 
 describe('warn user: endpoints', () => {
   it('a moderator warns: record, audit row, in-app notice, queued email; the 3rd suggests a ban', async () => {
     const { db, call, videos, mail } = setup();
-    const issue = () => call('/api/content/users/usr_1/warnings', { method: 'POST', roles: 'moderator', json: { reasonCode: 'harassment', note: 'insults in comments', reportId: 'rep_1', entityKind: 'comment', entityId: 'c_9' } });
+    const issue = () => call('/api/content/users/usr_1/warnings', { method: 'POST', roles: 'moderator', json: { reasonCode: 'harassment', note: 'insults in comments', reportId: 'rep_1', entityKind: 'comment', entityId: 'c_9', locale: 'ar' } });
 
     const first = await issue();
     assert.equal(first.status, 200);
@@ -144,6 +148,7 @@ describe('warn user: endpoints', () => {
     assert.equal(r.warning.inAppSent, true);
     assert.equal(r.warning.emailStatus, 'queued');
     assert.equal(r.warning.entityKind, 'comment');
+    assert.equal(r.warning.locale, 'ar');
 
     const notice = videos.calls.find((c) => c.path === '/users/usr_1/account-notices');
     assert.deepEqual(notice?.body, { kind: 'warning', noticeId: r.warning.id, reasonCode: 'harassment', count: 1 });
@@ -155,7 +160,7 @@ describe('warn user: endpoints', () => {
     assert.equal(audit[0].actor_id, 'mod-1');
     const value = JSON.parse(audit[0].new_value);
     assert.equal(value.action, 'warn');
-    assert.deepEqual(value.details, { warningId: r.warning.id, reasonCode: 'harassment', ordinal: 1, note: 'insults in comments', reportId: 'rep_1', entityKind: 'comment', entityId: 'c_9' });
+    assert.deepEqual(value.details, { warningId: r.warning.id, reasonCode: 'harassment', ordinal: 1, locale: 'ar', note: 'insults in comments', reportId: 'rep_1', entityKind: 'comment', entityId: 'c_9' });
 
     assert.equal((await issue()).body.result.suggestBan, false);
     const third = (await issue()).body.result;
@@ -165,13 +170,15 @@ describe('warn user: endpoints', () => {
   });
 
   it('reads the history newest first with ordinals and issuer names', async () => {
-    const { call } = setup();
-    await call('/api/content/users/usr_1/warnings', { method: 'POST', roles: 'admin', json: { reasonCode: 'spam' } });
+    const { call } = setup({ usr_1: { email: 'amina@example.org', displayName: 'Amina', savedLocale: 'ar' } });
+    await call('/api/content/users/usr_1/warnings', { method: 'POST', roles: 'admin', json: { reasonCode: 'spam', locale: 'en' } });
     await new Promise((r) => setTimeout(r, 5));
-    await call('/api/content/users/usr_1/warnings', { method: 'POST', roles: 'moderator', json: { reasonCode: 'copyright' } });
+    await call('/api/content/users/usr_1/warnings', { method: 'POST', roles: 'moderator', json: { reasonCode: 'copyright', locale: 'ar' } });
     const list = (await call('/api/content/users/usr_1/warnings', { roles: 'moderator' })).body.result;
     assert.equal(list.count, 2);
     assert.equal(list.suggestBan, false);
+    assert.equal(list.emailLanguage, 'ar', 'the saved email language, for the Warn dialog to preselect');
+    assert.deepEqual(list.items.map((w: { locale: string }) => w.locale), ['ar', 'en']);
     assert.deepEqual(list.items.map((w: { reasonCode: string; ordinal: number; issuedByName: string }) => [w.reasonCode, w.ordinal, w.issuedByName]), [
       ['copyright', 2, 'Mod One'],
       ['spam', 1, 'Mod One'],
@@ -180,9 +187,9 @@ describe('warn user: endpoints', () => {
 
   it('refuses an unknown user and a bad reason without a record or an audit row', async () => {
     const { db, call, mail } = setup();
-    const unknown = await call('/api/content/users/usr_gone/warnings', { method: 'POST', roles: 'moderator', json: { reasonCode: 'spam' } });
+    const unknown = await call('/api/content/users/usr_gone/warnings', { method: 'POST', roles: 'moderator', json: { reasonCode: 'spam', locale: 'en' } });
     assert.equal(unknown.status, 404);
-    const bad = await call('/api/content/users/usr_1/warnings', { method: 'POST', roles: 'moderator', json: { reasonCode: 'rude' } });
+    const bad = await call('/api/content/users/usr_1/warnings', { method: 'POST', roles: 'moderator', json: { reasonCode: 'rude', locale: 'en' } });
     assert.equal(bad.status, 400);
     assert.equal(bad.body.code, 'invalid_reason');
     assert.equal(((await auditRows(db)).results ?? []).length, 0);
@@ -231,9 +238,9 @@ describe('warn user: email', () => {
     return Object.assign(m, { ack: () => { m.acked = true; }, retry: (o?: { delaySeconds?: number }) => { m.retried = o ?? {}; } });
   }
 
-  async function warned(contacts: Record<string, Partial<AccountEmailContact>>) {
+  async function warned(contacts: Record<string, Partial<AccountEmailContact>>, locale: 'en' | 'ar' = 'en') {
     const s = setup(contacts);
-    const res = await s.call('/api/content/users/usr_1/warnings', { method: 'POST', roles: 'moderator', json: { reasonCode: 'spam' } });
+    const res = await s.call('/api/content/users/usr_1/warnings', { method: 'POST', roles: 'moderator', json: { reasonCode: 'spam', locale } });
     return { ...s, warningId: res.body.result.warning.id as string };
   }
 
@@ -241,6 +248,7 @@ describe('warn user: email', () => {
     assert.deepEqual(accountEmailDecision({ email: 'a@b.c', accountEmail: false, locale: 'en' }), { send: false, status: 'disabled' });
     assert.deepEqual(accountEmailDecision({ email: null, accountEmail: true, locale: 'en' }), { send: false, status: 'no_address' });
     assert.deepEqual(accountEmailDecision({ email: ' a@b.c ', accountEmail: true, locale: 'ar' }), { send: true, to: 'a@b.c', locale: 'ar' });
+    assert.deepEqual(accountEmailDecision({ email: 'a@b.c', accountEmail: true, locale: 'ar' }, 'en'), { send: true, to: 'a@b.c', locale: 'en' }, 'a chosen language wins');
   });
 
   it('renders in English and Arabic with the reason in plain words and the guidelines link', () => {
@@ -257,14 +265,15 @@ describe('warn user: email', () => {
     assert.match(ar.html, /dir="rtl"/);
   });
 
-  it('sends in the user language through the contact mail queue consumer, once', async () => {
-    const { env, db, warningId } = await warned({ usr_1: { email: 'amina@example.org', displayName: 'Amina', locale: 'ar' } });
+  it('sends in the one language chosen when warning (not the saved one) through the contact mail queue consumer, once', async () => {
+    const { env, db, warningId } = await warned({ usr_1: { email: 'amina@example.org', displayName: 'Amina', locale: 'en', savedLocale: 'en' } }, 'ar');
     const m = msg(warningMailJob(warningId));
     await contactMailConsumer({ messages: [m] }, env as never);
     assert.ok(m.acked);
     assert.equal(sent.length, 1);
     assert.deepEqual(sent[0].body.to, ['amina@example.org']);
     assert.equal(sent[0].body.subject, 'تلقّى حسابك في الأمة الآن تحذيرًا');
+    assert.doesNotMatch(String(sent[0].body.text), /Assalamu|Reason|warning/i, 'Arabic only, never bilingual');
     assert.equal(sent[0].key, `warning-${warningId}`);
     assert.equal((await getWarning(db, warningId))?.email_status, 'sent');
     assert.equal(await processWarningMailJob(env as never, msg(warningMailJob(warningId))), 'done');
@@ -282,7 +291,7 @@ describe('warn user: email', () => {
   });
 
   it('retries a passing failure, then records the failure and flags it on the Errors page; Retry queues it again', async () => {
-    const { env, db, ingest, mail, warningId } = await warned({ usr_1: { email: 'amina@example.org' } });
+    const { env, db, ingest, mail, warningId } = await warned({ usr_1: { email: 'amina@example.org' } }, 'ar');
     respond = () => new Response('busy', { status: 503 });
     assert.equal(await processWarningMailJob(env as never, msg(warningMailJob(warningId), 1)), 'retry');
     assert.equal(await processWarningMailJob(env as never, msg(warningMailJob(warningId), 6)), 'failed');
@@ -297,5 +306,9 @@ describe('warn user: email', () => {
     assert.equal(outcome.status, 'resolved');
     assert.equal((await getWarning(db, warningId))?.email_status, 'queued');
     assert.deepEqual(mail.at(-1), { v: 1, kind: 'warning', warningId });
+    respond = () => new Response(JSON.stringify({ id: 're_2' }), { status: 200 });
+    sent = [];
+    assert.equal(await processWarningMailJob(env as never, msg(warningMailJob(warningId))), 'done');
+    assert.equal(sent[0].body.subject, 'تلقّى حسابك في الأمة الآن تحذيرًا', 'the Retry resends in the language chosen when warning');
   });
 });

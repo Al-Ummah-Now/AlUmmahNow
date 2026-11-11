@@ -31,6 +31,13 @@ export interface IssueUserWarningRequest {
   /** The content the warning is about. */
   entityKind?: ReportableEntityType;
   entityId?: string;
+  /**
+   * The one language the warning email is written in, chosen at the click.
+   * The admin UI preselects the user's saved email language
+   * (`UserWarningList.emailLanguage` / `AdminUserDetail.emailLanguage`), else
+   * the admin's own UI language. Never bilingual.
+   */
+  locale: NotificationEmailLocale;
 }
 
 /** One warning on a user's record. */
@@ -51,6 +58,8 @@ export interface UserWarning {
   ordinal: number;
   /** Whether the in-app notice was handed to the notification pipeline. */
   inAppSent: boolean;
+  /** The one language the email was (or is to be) written in, as chosen when warning; a Retry resends in it. */
+  locale: NotificationEmailLocale;
   emailStatus: UserWarningEmailStatus | null;
 }
 
@@ -70,6 +79,8 @@ export interface UserWarningList {
   items: UserWarning[];
   count: number;
   suggestBan: boolean;
+  /** The user's saved email language, null when they never picked one (or it could not be read): preselect it. */
+  emailLanguage: NotificationEmailLocale | null;
 }
 
 export interface UserWarningEscalation {
@@ -109,18 +120,27 @@ export interface AccountEmailContact {
   displayName: string;
   /** "Email me about my account". */
   accountEmail: boolean;
-  /** The language to write in (the user's pick, else the default). */
+  /** The language for automatic emails (the user's pick, else the default). */
   locale: NotificationEmailLocale;
+  /** The user's saved email language; null = never picked. */
+  savedLocale: NotificationEmailLocale | null;
 }
 
 export type AccountEmailDecision =
   | { send: true; to: string; locale: NotificationEmailLocale }
   | { send: false; status: Extract<UserWarningEmailStatus, 'disabled' | 'no_address'> };
 
-/** Whether to email the user about their account, and in which language. */
-export function accountEmailDecision(contact: Pick<AccountEmailContact, 'email' | 'accountEmail' | 'locale'>): AccountEmailDecision {
+/**
+ * Whether to email the user about their account, and in which one language:
+ * `language` when the sender chose one (a warning's emailLanguage), else the
+ * user's language for automatic emails.
+ */
+export function accountEmailDecision(
+  contact: Pick<AccountEmailContact, 'email' | 'accountEmail' | 'locale'>,
+  language?: NotificationEmailLocale,
+): AccountEmailDecision {
   if (!contact.accountEmail) return { send: false, status: 'disabled' };
   const to = contact.email?.trim();
   if (!to || !to.includes('@')) return { send: false, status: 'no_address' };
-  return { send: true, to, locale: contact.locale };
+  return { send: true, to, locale: language ?? contact.locale };
 }

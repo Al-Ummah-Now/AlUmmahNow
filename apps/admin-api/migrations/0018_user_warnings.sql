@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS user_warnings (
     issued_by TEXT NOT NULL,              -- staff user id
     issued_by_name TEXT NOT NULL,         -- their name (or email) when they issued it
     created_at TEXT NOT NULL,
+    locale TEXT NOT NULL DEFAULT 'en' CHECK (locale IN ('en', 'ar')),  -- the one email language chosen when warning (a Retry resends in it)
     in_app_sent INTEGER NOT NULL DEFAULT 0,
     email_status TEXT,                    -- queued | sent | sunk | disabled | no_address | failed
     email_error TEXT,
