@@ -496,7 +496,7 @@ Prices: provider pages fetched 2026-11-11 (R§5), the owner's DeepL plan terms (
 
 ### 7.4 Where the $500 cap bites, and how it stays sustainable
 - **Default stack:** 10,000 h/month (~$590) alone breaks the cap. The platform also pays for delivery, workers and other AI.
-- **Proposed captions budget:** `monthlyBudgetUsd` defaults to **$100** (max $500), the same pattern as the CMS. That buys ≈ **1,700 h/month** on the default stack, ≈ 450 h on Scribe, or ≈ 96 h on DeepL Pro translation.
+- **Captions budget (decided 4/13):** `monthlyBudgetUsd` defaults to **$100** (admin-editable, max $500), the same pattern as the CMS. Inline translation has its own **$20** budget, also admin-editable. That buys ≈ **1,700 h/month** on the default stack, ≈ 450 h on Scribe, or ≈ 96 h on DeepL Pro translation.
   - **Daily slices:** spending is recorded in the existing `ai_budget_daily` with feature `captions`, plus `inline-translate` with its own $20 default. A daily slice (monthly ÷ days remaining × 1.5) stops one day's spike from using the whole month.
   - **When reached:** new jobs go to `waiting_budget` with the en/ar message "Busy right now; your subtitles will start within 24 h". Reserved minutes aren't charged while waiting. An admin alert goes through the cost-monitoring hooks (AUN-COST).
 - **DeepL jobs** (high-accuracy STT, DeepL translation) use their own per-provider monthly cap (§10). On a tier that includes them, they use **caption minutes at 30×** (DeepL Voice STT) and **20×** (DeepL translation), matching their cost ratio to the default.
@@ -671,7 +671,7 @@ Every phase ships behind an environment flag. Tests go into the release E2E suit
 | O1 | ElevenLabs key: which plan do we have, and may we measure Scribe on the same clips (a few cents)? | Yes; it becomes an option only if it beats DeepL Voice on Arabic and Quran |
 | O2 | DeepL plan | **Decided 2026-11-11 (2/13):** stay on API Pro ($5.49/month), no upgrade. DeepL is optional and off by default; admins enable it per environment or language. Add the key to Secrets Store as `AI_KEY_DEEPL` when an admin first enables it |
 | O3 | Caption allowances and pack pricing | **Decided 3/13:** set by the site-wide subscription plan (pending, planned with all subscriptions on the site). Until then, captions are available by admin grant only |
-| O4 | Captions monthly budget | $100/month (≈ 1,700 h on the default stack), inline translation $20 |
+| O4 | Captions monthly budget | **Decided 4/13 (2026-11-11), as proposed:** captions $100/month and inline translation $20/month, both admin-editable per environment (max $500); daily slices; on reaching the budget, jobs wait in `waiting_budget` and admins get an alert (§7.4) |
 | O5 | Inline title translation: free with fair use, or metered | Part of the site-wide subscription plan (3/13). Recommendation: free with a fair-use cap; admin grants until then |
 | O6 | Viewer-side machine-translated titles (labelled, cached, never overwriting) | Yes, after P3, opt-out per channel |
 | O7 | Default Quran translation edition per language (QF `translations` ids) | en: Saheeh International (QF id to confirm with production scopes); ar: the Uthmani text itself |
