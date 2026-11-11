@@ -1,5 +1,5 @@
 import { test, expect } from './support/fixtures';
-import { expectDirection, horizontalOverflow, setPreferences } from './support/ui';
+import { expectDirection, horizontalOverflow, openMainNav, setPreferences } from './support/ui';
 import { storageStatePath } from './support/env';
 
 const AR_PAGES = [
@@ -15,6 +15,7 @@ test.describe('language and direction', () => {
   test('I18N-01 the language switcher flips to Arabic RTL and persists', async ({ page }) => {
     await page.goto('/dashboard');
     await expectDirection(page, 'en');
+    await openMainNav(page);
     await page.getByTestId('language-select').selectOption('ar');
     await expectDirection(page, 'ar');
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('لوحة تحكم الإدارة');
@@ -24,6 +25,7 @@ test.describe('language and direction', () => {
     await expectDirection(page, 'ar');
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('لوحة تحكم الإدارة');
 
+    await openMainNav(page);
     await page.getByTestId('language-select').selectOption('en');
     await expectDirection(page, 'en');
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Admin Dashboard');
@@ -45,7 +47,8 @@ test.describe('language and direction', () => {
       await page.goto(target.path);
       await expectDirection(page, 'ar');
       await expect(page.getByRole('heading', { level: 1 })).toHaveText(target.heading);
-      const navText = await page.locator('header').innerText();
+      // The top bar, and the sidebar's text (on phones the closed drawer has no innerText)
+      const navText = `${await page.locator('header').innerText()} ${await page.getByTestId('admin-sidebar').textContent()}`;
       for (const english of ENGLISH_UI_STRINGS) {
         expect(navText, `nav should not contain "${english}"`).not.toContain(english);
       }

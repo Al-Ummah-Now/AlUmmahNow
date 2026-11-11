@@ -27,7 +27,7 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
   }, () => undefined);
 
   return (
-    <html lang={locale} dir={locale === 'ar' ? 'rtl' : 'ltr'} data-theme={theme} suppressHydrationWarning>
+    <html lang={locale} dir={locale === 'ar' ? 'rtl' : 'ltr'} data-color-mode={theme} className={theme === 'dark' ? 'dark' : undefined} suppressHydrationWarning>
       <body className="min-h-screen bg-bg text-fg">
         <BoundaryError error={error} reset={reset} locale={locale} />
       </body>

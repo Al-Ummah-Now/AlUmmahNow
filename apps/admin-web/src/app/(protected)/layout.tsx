@@ -1,5 +1,7 @@
 import { requireAdminRole } from '@/lib/auth';
-import { AdminNav } from '@/components/AdminNav';
+import { cookies } from 'next/headers';
+import { AdminShell } from '@/components/shell/AdminShell';
+import { NAV_COOKIE } from '@/components/shell/nav-model';
 import { getContactCounts, getErrorCounts } from '@/lib/api/admin';
 import { canReadErrors, canUseContactInbox, canUseProcessing, canManageVideosUsers, canUseStaleUploads, canManageMedia } from '@/lib/roles';
 import { ErrorReportingIdentity } from '@/lib/errors/ErrorReportingProvider';
@@ -40,22 +42,28 @@ export default async function ProtectedLayout({
     }
   }
 
+  const role = session.user.role;
+  const navCookie = (await cookies()).get(NAV_COOKIE)?.value;
+
   return (
     <>
       <ErrorReportingIdentity userId={session.user.id} />
-      <AdminNav
+      <AdminShell
         userEmail={session.user.email}
         authIssuer={process.env.Issuer}
-        contactNew={contactNew}
-        canProcess={canUseProcessing(session.user.role)}
-        canManageUsers={canManageVideosUsers(session.user.role)}
-        canStaleUploads={canUseStaleUploads(session.user.role)}
-        canManageMedia={canManageMedia(session.user.role)}
-        errorsBadge={errorsBadge}
-      />
-      <main id="main-content" tabIndex={-1} className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 focus:outline-none">
+        initialRail={navCookie === 'rail'}
+        access={{
+          contact: contactNew !== null,
+          processing: canUseProcessing(role),
+          errors: errorsBadge !== null,
+          manageUsers: canManageVideosUsers(role),
+          staleUploads: canUseStaleUploads(role),
+          media: canManageMedia(role),
+        }}
+        badges={{ contact: contactNew, errors: errorsBadge }}
+      >
         {children}
-      </main>
+      </AdminShell>
     </>
   );
 }

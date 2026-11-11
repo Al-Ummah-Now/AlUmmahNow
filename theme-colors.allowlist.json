@@ -1,7 +1,6 @@
 {
   "apps/admin-web/src/app/(protected)/moderation/reports/[id]/actions.tsx": 1,
   "apps/admin-web/src/app/(protected)/translations/components/TranslationEditor.tsx": 1,
-  "apps/admin-web/src/app/globals.css": 98,
   "apps/web/src/app/[locale]/analytics/page.tsx": 26,
   "apps/web/src/app/[locale]/analytics/videos/[id]/page.tsx": 11,
   "apps/web/src/app/[locale]/channels/ChannelsPageClient.tsx": 18,

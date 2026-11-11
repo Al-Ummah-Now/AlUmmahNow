@@ -2,6 +2,7 @@ import { test, expect } from './support/fixtures';
 import { adminApi, getReport, waitForReport } from './support/api';
 import { E2E_DESCRIPTION_TAG, storageStatePath } from './support/env';
 import type { Page } from '@playwright/test';
+import { openMainNav } from './support/ui';
 
 const ACTION_VALUES: Record<string, string> = {
   'Issue Warning': 'warning',
@@ -55,7 +56,7 @@ test.describe('report detail', () => {
     await expect(page.getByTestId('report-not-found')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Report not found' })).toBeVisible();
     // Still inside the admin shell
-    await expect(page.getByRole('navigation', { name: 'Main navigation' })).toBeVisible();
+    await openMainNav(page);
   });
 });
 

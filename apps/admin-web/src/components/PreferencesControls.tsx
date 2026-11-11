@@ -3,6 +3,7 @@
 import { useId, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/i18n/I18nProvider';
+import { applyColorMode } from '@/lib/color-mode';
 import {
   LOCALE_COOKIE,
   PREFERENCE_COOKIE_MAX_AGE,
@@ -19,17 +20,12 @@ function writeCookie(name: string, value: string) {
 }
 
 export function applyTheme(theme: Theme) {
-  const root = document.documentElement;
-  if (theme === 'system') {
-    root.removeAttribute('data-theme');
-  } else {
-    root.setAttribute('data-theme', theme);
-  }
+  applyColorMode(theme);
 }
 
 /**
  * Language and theme switchers. Preferences are persisted in cookies so the
- * server renders the right `lang`/`dir`/`data-theme` on the next request.
+ * server renders the right `lang`/`dir`/`data-color-mode` on the next request.
  */
 export function PreferencesControls({ className = '' }: { className?: string }) {
   const { t, locale, theme } = useLanguage();
