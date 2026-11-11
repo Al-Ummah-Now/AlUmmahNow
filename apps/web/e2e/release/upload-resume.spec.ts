@@ -387,11 +387,14 @@ test.describe('Release: uploads resume', () => {
       await expect.poll(() => reports, { message: 'the browser did not report the failed upload', timeout: 30000 }).toContain(200);
       await expect.poll(() => videoStatus(u, videoId), { timeout: 30000 }).toBe('failed');
 
-      // The studio shows why and offers Re-upload into the same video
+      // Studio lists it under Failed and offers "Upload again" into the same video, on its channel
       broken = false;
-      await page.goto(`${target().web}/en/dashboard/videos`);
-      const reupload = page.locator(`[data-testid="dashboard-video-reupload"][href*="resume=${videoId}"]`);
-      await expect(reupload).toBeVisible({ timeout: 60000 });
+      await page.goto(`${target().web}/en/studio/${u.channelId}/content/videos?status=failed`);
+      const row = page.getByTestId('studio-video-row').filter({ hasText: title });
+      await expect(row).toBeVisible({ timeout: 60000 });
+      await row.getByTestId('studio-video-actions').click();
+      const reupload = page.getByTestId('studio-video-action-retryUpload');
+      await expect(reupload).toHaveAttribute('href', new RegExp(`resume=${videoId}.*channel=${u.channelId}`));
       await reupload.click();
       await expect(page.getByTestId('upload-reupload-banner')).toHaveAttribute('data-video-id', videoId, { timeout: 30000 });
 

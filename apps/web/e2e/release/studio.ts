@@ -14,6 +14,21 @@ export async function skipUntilStudioDeployed(): Promise<void> {
   test.skip(res.status === 404, 'Studio is not deployed to this environment yet');
 }
 
+/**
+ * Right after sign-up the web app still makes one client-side hop (the callback's
+ * ?session_updated=true, or /profile/create before the profile exists), which
+ * interrupts the spec's next page.goto (WebKit/Firefox flakes on stage). Land on
+ * the home page and let that hop finish first.
+ */
+export async function settleSession(page: Page, locale: Locale = 'en'): Promise<void> {
+  await page.goto(`${target().web}/${locale}`).catch((e: unknown) => {
+    if (!/interrupted by another navigation/.test(String(e))) throw e;
+  });
+  await page.waitForLoadState('load');
+  await expect.poll(() => new URL(page.url()).search.includes('session_updated') || new URL(page.url()).pathname.includes('/profile/create'), { timeout: 15000 }).toBe(false);
+  await page.waitForLoadState('networkidle').catch(() => {});
+}
+
 export async function studioOwner(page: Page, prefix: string, locale: Locale = 'en'): Promise<{ user: WebUser; channelId: string }> {
   const user = await signUpOnWeb(page, prefix, locale);
   await createProfile(user);
@@ -28,6 +43,7 @@ export async function studioOwner(page: Page, prefix: string, locale: Locale = '
   expect(res.status, `POST /api/channels: ${text}`).toBeLessThan(300);
   const channelId = (JSON.parse(text) as { result?: { channel?: { id?: string } } }).result?.channel?.id;
   expect(channelId, 'channel create returned no id').toBeTruthy();
+  await settleSession(page, locale);
   return { user, channelId: channelId as string };
 }
 
