@@ -109,7 +109,7 @@ export async function eraseRunUsers(log: (message: string) => void = () => undef
   }
   let erased = 0;
   // Bounded: the workflow's account delete runs after this step and must get its turn
-  const deadline = Date.now() + 8 * 60 * 1000;
+  const deadline = Date.now() + 8 * 60 * 1000; // the CLI also stops at 9 min, the step at 10
   for (const user of RUN_USERS) {
     if (!fs.existsSync(AUTH_STATE[user])) continue;
     if (Date.now() > deadline) {
@@ -121,12 +121,17 @@ export async function eraseRunUsers(log: (message: string) => void = () => undef
       const u = userApi(user);
       let resumeToken: string | undefined;
       for (let round = 0; round < 20; round++) {
-        const res = await u.api.request<{ complete?: boolean; resumeToken?: string }>('/api/privacy/data', {
-          method: 'DELETE',
-          token: u.token,
-          json: { confirm: 'DELETE', ...(resumeToken ? { resumeToken } : {}) },
-          allowStatus: [400, 401, 403, 404, 500],
-        });
+        if (Date.now() > deadline) throw new Error('out of time');
+        const res = await withTimeout(
+          u.api.request<{ complete?: boolean; resumeToken?: string }>('/api/privacy/data', {
+            method: 'DELETE',
+            token: u.token,
+            json: { confirm: 'DELETE', ...(resumeToken ? { resumeToken } : {}) },
+            allowStatus: [400, 401, 403, 404, 500],
+          }),
+          60_000,
+          `erasing ${user}'s data`,
+        );
         if (res.status >= 300) {
           log(`[cleanup] privacy erase returned ${res.status} for ${user}`);
           break;
@@ -166,7 +171,10 @@ if (require.main === module) {
     const args = new Set(process.argv.slice(2));
     // CI teardown step: erase this run's users from the stored sessions
     if (args.has('--run-users')) {
-      await eraseRunUsers((m) => console.log(m));
+      // Whatever hangs, the step ends in time for the account delete after it
+      await withTimeout(eraseRunUsers((m) => console.log(m)), 9 * 60 * 1000, 'erasing the run users').catch((error: Error) =>
+        console.log(`[cleanup] ${error.message}; the QA cleanup removes what is left`),
+      );
       // A browser or socket left open by a session refresh must not keep the step alive
       process.exit(0);
     }

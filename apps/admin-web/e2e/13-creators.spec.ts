@@ -22,23 +22,32 @@ interface UserTier { assignment: Assignment | null; audit: { details: { tierId: 
 
 const state: { userId?: string; previous?: Assignment | null } = {};
 
+/** The Creators search for the viewer: its user id in run mode (exact match; a new profile's email may not be indexed yet). */
+const searchTerm = () => (RUN_ID ? state.userId! : accounts.nonadmin.email);
+
 /**
  * Gives the run viewer a videos profile (the Creators list only has users with
- * one) and waits for the processor to index it.
+ * one) and waits until the list has it. Returns its user id. Looked up by id,
+ * not email: the list takes the email from the search index's profile row,
+ * which a brand-new profile may not carry yet.
  */
-async function ensureRunViewerProfile(email: string): Promise<void> {
+async function ensureRunViewerProfile(email: string): Promise<string> {
   const res = await fetch(`${VIDEOS_API_URL}/api/profiles`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${readTokens().reporter}` },
     body: JSON.stringify({ email, userName: `e2e_admin_${crypto.randomUUID().slice(0, 8)}`, displayName: 'Admin E2E viewer', timezone: 'UTC' }),
   });
   expect(res.status, 'create the run viewer\'s videos profile').toBeLessThan(300);
+  const created = (await res.json()) as { result?: { profile?: { id?: string } } };
+  const userId = created.result?.profile?.id;
+  expect(userId, 'the created profile\'s id').toBeTruthy();
   await expect
     .poll(async () => {
-      const { body } = await adminApi<CreatorsPage>(`/api/content/creators?q=${encodeURIComponent(email)}`);
-      return body.result?.items.some((item) => item.email?.toLowerCase() === email.toLowerCase()) ?? false;
+      const { body } = await adminApi<CreatorsPage>(`/api/content/creators?q=${encodeURIComponent(userId!)}`);
+      return body.result?.items.some((item) => item.userId === userId) ?? false;
     }, { timeout: 90_000, intervals: [2_000, 5_000] })
     .toBe(true);
+  return userId!;
 }
 
 test.describe.configure({ mode: 'serial' });
@@ -49,13 +58,17 @@ test.describe('creator tiers', () => {
     // PR runs hit QA, which follows main: skip until admin-api has the bulk route there
     const probe = await adminApi('/api/content/creators/tier', { method: 'POST', body: '{}' });
     test.skip(probe.status === 404, 'admin-api on QA does not have the creators UX yet');
+    let runViewerId: string | undefined;
     if (RUN_ID) {
       // The processor indexes the new profile asynchronously
       test.setTimeout(180_000);
-      await ensureRunViewerProfile(accounts.nonadmin.email);
+      runViewerId = await ensureRunViewerProfile(accounts.nonadmin.email);
     }
-    const { body } = await adminApi<CreatorsPage>(`/api/content/creators?q=${encodeURIComponent(accounts.nonadmin.email)}`);
-    const row = body.result?.items.find((item) => item.email?.toLowerCase() === accounts.nonadmin.email.toLowerCase());
+    const q = runViewerId ?? accounts.nonadmin.email;
+    const { body } = await adminApi<CreatorsPage>(`/api/content/creators?q=${encodeURIComponent(q)}`);
+    const row = body.result?.items.find((item) =>
+      runViewerId ? item.userId === runViewerId : item.email?.toLowerCase() === accounts.nonadmin.email.toLowerCase(),
+    );
     test.skip(!row, 'The seeded QA viewer has no videos profile');
     state.userId = row!.userId;
     state.previous = row!.assignment;
@@ -72,7 +85,7 @@ test.describe('creator tiers', () => {
   });
 
   test('CRE-01 give the Creator tier from the row: the confirmation states the effect, the change is audited', async ({ page }) => {
-    await page.goto(`/creators?q=${encodeURIComponent(accounts.nonadmin.email)}`);
+    await page.goto(`/creators?q=${encodeURIComponent(searchTerm())}`);
     const row = page.locator(`[data-testid="creator-row"][data-user-id="${state.userId}"]`);
     await expect(row).toBeVisible();
     await row.getByTestId('creator-tier-select').selectOption('creator');
@@ -90,7 +103,7 @@ test.describe('creator tiers', () => {
   });
 
   test('CRE-02 removing the tier warns that started uploads finish and new ones are refused; Cancel changes nothing', async ({ page }) => {
-    await page.goto(`/creators?q=${encodeURIComponent(accounts.nonadmin.email)}`);
+    await page.goto(`/creators?q=${encodeURIComponent(searchTerm())}`);
     const row = page.locator(`[data-testid="creator-row"][data-user-id="${state.userId}"]`);
     const select = row.getByTestId('creator-tier-select');
     await select.selectOption('');
@@ -119,7 +132,7 @@ test.describe('creator tiers', () => {
   test('CRE-04 Arabic: the Creators page is right to left and translated', async ({ page }) => {
     await page.goto('/creators');
     await setPreferences(page, { locale: 'ar' });
-    await page.goto(`/creators?q=${encodeURIComponent(accounts.nonadmin.email)}`);
+    await page.goto(`/creators?q=${encodeURIComponent(searchTerm())}`);
     await expectDirection(page, 'ar');
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('صنّاع المحتوى');
     await expectNoAxeViolations(page, '/creators (ar)');
