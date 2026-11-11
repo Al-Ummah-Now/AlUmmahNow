@@ -482,7 +482,27 @@ export async function backfillOwnershipPage(
     ).bind(kind, now, ...chunk).all<{ id: string }>();
     for (const r of results ?? []) seen.add(r.id);
   }
-  const refused = expected.filter(id => !seen.has(id));
+  let refused = expected.filter(id => !seen.has(id));
+  // A row refused because the object was deleted while the page ran (tombstoned, and gone from R2
+  // now) is a delete, not a gap: counted as skipped it kept every pass on a busy index from marking
+  // the kind complete (QA 2026-11-11: two videos deleted by E2E cleanup mid-pass). A tombstone over
+  // an object that is still stored stays a skip: that is drift.
+  if (refused.length) {
+    const tombstoned: string[] = [];
+    for (let i = 0; i < refused.length; i += VERIFY_CHUNK) {
+      const chunk = refused.slice(i, i + VERIFY_CHUNK);
+      const { results } = await db.prepare(
+        `SELECT id FROM search_tombstones WHERE entity = ? AND id IN (${chunk.map(() => '?').join(', ')})`,
+      ).bind(ownershipTombstone(kind), ...chunk).all<{ id: string }>();
+      for (const r of results ?? []) tombstoned.push(r.id);
+    }
+    const deleted = new Set<string>();
+    await Promise.all(tombstoned.map(async id => {
+      if (!(await bucket.head(id))) deleted.add(id);
+    }));
+    removed += deleted.size;
+    refused = refused.filter(id => !deleted.has(id));
+  }
   const skippedIds = [...unindexable, ...refused];
   if (skippedIds.length) {
     logger.warn('[Ownership] Listed objects not indexed', { kind, unindexable: unindexable.slice(0, 5), refused: refused.slice(0, 5), count: skippedIds.length });
@@ -601,13 +621,14 @@ export async function runOwnershipPass(
       result.done = true;
       break;
     }
+    // Saved after every page: a step that fails or is cancelled (D1 overloaded, waitUntil budget)
+    // loses one page, not all of them. Saved only at the end, QA's video pass restarted from the
+    // same cursor for 45 minutes on 2026-11-11 while every attempt failed partway.
+    await setMeta(db, passKey(kind), JSON.stringify(state), clock());
   }
 
   const now = clock();
-  if (!result.done) {
-    await setMeta(db, passKey(kind), JSON.stringify(state), now);
-    return result;
-  }
+  if (!result.done) return result;
   const invalidated = await db.prepare('SELECT updated_at FROM search_meta WHERE key = ?')
     .bind(ownershipInvalidatedKey(kind)).first<{ updated_at: number }>();
   const skipped = state.skipped ?? 0;
@@ -781,15 +802,15 @@ export function scheduleOwnershipHeal(
   const task = (async () => {
     try {
       if (!(await acquireHealLease(db, kind, Date.now()))) return;
-      try {
-        // Failed single-row writes first: usually all that is wrong, and a full pass is not needed for them
-        await healDirtyOwnership(env, kind);
-        if (await hasCompleteMarker(db, kind)) return;
+      // Released only after a step that worked. A failed step keeps the lease until it expires, so
+      // the next fallback waits OWNERSHIP_HEAL_LEASE_MS: freed at once, every reader started a new
+      // pass into an overloaded D1 (QA 2026-11-11: 34 failed heals in 100 s, each adding to the load).
+      await healDirtyOwnership(env, kind);
+      if (!(await hasCompleteMarker(db, kind))) {
         const result = await runOwnershipPass(env, kind, { maxPages: OWNERSHIP_HEAL_PAGES });
         logger.info('[Ownership] Self-heal step finished', { ...result });
-      } finally {
-        await db.prepare('DELETE FROM search_meta WHERE key = ?').bind(leaseKey(kind)).run();
       }
+      await db.prepare('DELETE FROM search_meta WHERE key = ?').bind(leaseKey(kind)).run();
     } catch (error) {
       logger.warn('[Ownership] Self-heal failed', { kind, error: errorText(error) });
     }

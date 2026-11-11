@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyOwnershipModeration, invalidateOwnership, ownershipUpsertStatement, projectOwnership, syncOwnership } from '@al-ummah/shared-types';
+import { applyOwnershipModeration, invalidateOwnership, ownershipTombstone, ownershipUpsertStatement, projectOwnership, syncOwnership } from '@al-ummah/shared-types';
 import { withSearchSync } from '../src/lib/search/sync';
 import {
 	channelTotalsFromIndex,
@@ -259,6 +259,59 @@ describe('ownership rebuild pass', () => {
 		await Promise.all(tasks);
 		assert.equal(await isOwnershipComplete(db, 'channel'), true);
 		assert.equal(raw.channels.calls, 2, 'one list + one get: the second heal found the lease taken');
+	});
+
+	it('an object deleted while its page ran is a delete, not a skip: the pass still marks the kind complete', async () => {
+		const { db, raw } = ownershipEnv({ channels: { a: channel('a'), b: channel('b'), c: channel('c') } });
+		const get = raw.channels.get.bind(raw.channels);
+		raw.channels.get = async (key: string) => {
+			const copy = await get(key);
+			if (key === 'b') {
+				// The owner deletes b after the pass read it and before the pass wrote its row
+				raw.channels.store.delete('b');
+				db.db.prepare('INSERT INTO search_tombstones (entity, id, version) VALUES (?, ?, ?)').run(ownershipTombstone('channel'), 'b', Date.now() + 60_000);
+			}
+			return copy;
+		};
+		const result = await runOwnershipPass(raw as never, 'channel', { maxPages: 5 });
+		assert.equal(result.done, true);
+		assert.equal(result.drift, null);
+		assert.equal(result.complete, true);
+		assert.deepEqual(rows(db, 'channel').map(r => r.id), ['a', 'c']);
+	});
+
+	it('a step that fails partway keeps the pages it finished', async () => {
+		const { db, raw } = ownershipEnv({ channels: { a: channel('a'), b: channel('b'), c: channel('c') } });
+		const list = raw.channels.list.bind(raw.channels);
+		let lists = 0;
+		raw.channels.list = async (options?: never) => {
+			if (++lists === 3) throw new Error('D1_ERROR: D1 DB is overloaded');
+			return list(options);
+		};
+		await assert.rejects(runOwnershipPass(raw as never, 'channel', { maxPages: 5, pageSize: 1 }));
+		const saved = JSON.parse((db.db.prepare("SELECT value FROM search_meta WHERE key = 'ownership:sweep:channel'").get() as { value: string }).value);
+		assert.equal(saved.stored, 2, 'a and b are not walked again');
+		const rest = await runOwnershipPass(raw as never, 'channel', { maxPages: 5, pageSize: 1 });
+		assert.equal(rest.pages, 1);
+		assert.equal(rest.complete, true);
+	});
+
+	it('a failed self-heal keeps its lease, so the next fallback waits instead of adding load', async () => {
+		const { db, raw } = ownershipEnv({ channels: { a: channel('a') } });
+		const list = raw.channels.list.bind(raw.channels);
+		raw.channels.list = async () => { throw new Error('D1_ERROR: D1 DB is overloaded'); };
+		await scheduleOwnershipHeal(raw as never, null, 'channel');
+		assert.ok(db.db.prepare("SELECT 1 FROM search_meta WHERE key = 'ownership:heal:channel'").get(), 'the lease is kept');
+		raw.channels.list = list;
+		const calls = raw.channels.calls;
+		await scheduleOwnershipHeal(raw as never, null, 'channel');
+		assert.equal(raw.channels.calls, calls, 'no new pass while the lease runs');
+		assert.equal(await isOwnershipComplete(db, 'channel'), false);
+		// Once it expires the next fallback heals
+		db.db.prepare("UPDATE search_meta SET updated_at = 0 WHERE key = 'ownership:heal:channel'").run();
+		await scheduleOwnershipHeal(raw as never, null, 'channel');
+		assert.equal(await isOwnershipComplete(db, 'channel'), true);
+		assert.equal(db.db.prepare("SELECT 1 FROM search_meta WHERE key = 'ownership:heal:channel'").get(), undefined, 'released after a step that worked');
 	});
 
 	it('applies moderation made outside api-videos', async () => {
