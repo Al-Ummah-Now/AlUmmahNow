@@ -135,10 +135,10 @@ describe('toast copy', () => {
     expect(groupText(q.groups[0], en, 'en')).toEqual({
       title: 'Video Ready',
       message: '3 videos finished processing',
-      href: '/en/dashboard/videos',
+      href: '/en/studio/go/content/videos',
       action: 'View all',
     });
-    expect(groupText(q.groups[0], ar, 'ar')).toMatchObject({ href: '/ar/dashboard/videos', action: 'عرض الكل' });
+    expect(groupText(q.groups[0], ar, 'ar')).toMatchObject({ href: '/ar/studio/go/content/videos', action: 'عرض الكل' });
   });
 
   it('sends non-upload groups to the notification center', () => {

@@ -9,7 +9,7 @@
  */
 import { test, expect, type BrowserContext, type Page } from '@playwright/test';
 import { target } from './targets';
-import { watchUrl } from './videos';
+import { stableVideos, watchUrl, type PublicVideo } from './videos';
 import { apiFetch, createProfile, signUpOnWeb, type Locale } from './web-session';
 import { grantCreatorTier } from './creator-tier';
 
@@ -35,8 +35,9 @@ async function answerConsent(context: BrowserContext): Promise<void> {
 async function findChannelVideo(): Promise<ChannelVideo | null> {
   const res = await fetch(`${target().api}/api/videos?limit=100`);
   expect(res.ok, `GET /api/videos answered ${res.status}`).toBe(true);
-  const body = (await res.json()) as { data?: Array<{ id: string; channelId?: string | null; isPublic?: boolean }> };
-  const video = (body.data ?? []).find((v) => !!v.channelId && v.isPublic !== false);
+  const body = (await res.json()) as { data?: Array<PublicVideo & { channelId?: string | null }> };
+  // A long-lived video, not one a parallel spec is about to delete
+  const [video] = await stableVideos((body.data ?? []).filter((v) => !!v.channelId && v.isPublic !== false));
   return video ? { id: video.id, channelId: video.channelId as string } : null;
 }
 

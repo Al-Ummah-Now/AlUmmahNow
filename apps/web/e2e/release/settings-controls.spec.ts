@@ -277,7 +277,9 @@ async function checkBackTo(page: Page, path: string, parent: string, locale: Loc
   await expect(crumbs, `${path}: no breadcrumb`).toBeVisible({ timeout: 30000 });
   const settingsLink = crumbs.getByRole('link', { name: /^(Settings|الإعدادات)$/ });
   if (channelSettings) {
-    await expect(settingsLink, `${path}: Settings should be the channel's settings`).toHaveAttribute('href', channelSettings);
+    // On the overview itself, Settings is the current crumb (text), not a link to the page it is on
+    if (path === channelSettings) await expect(crumbs.getByText(/^(Settings|الإعدادات)$/), `${path}: no Settings crumb`).toBeVisible();
+    else await expect(settingsLink, `${path}: Settings should be the channel's settings`).toHaveAttribute('href', channelSettings);
     await expect(crumbs.locator(`a[href="/${locale}/settings"]`), `${path}: channel settings must not link to the user's Settings`).toHaveCount(0);
     const first = crumbs.locator('.sb-list a').first();
     await expect(first, `${path}: breadcrumb does not start at the channel`).not.toHaveAttribute('href', channelSettings);
@@ -365,7 +367,8 @@ test.describe('Release: settings controls', () => {
       const pages: Array<[string, string, string?]> = [
         ...hrefs.map((h): [string, string] => [h, settings]),
         [channel, 'channel', channel],
-        ...['edit', 'videos', 'playlists', 'tabs', 'sections', 'community'].map((s): [string, string, string] => [`${channel}/${s}`, channel, channel]),
+        // Videos moved into Studio (301 to /studio/<id>/content/videos): checked below, no breadcrumb there
+        ...['edit', 'playlists', 'tabs', 'sections', 'community'].map((s): [string, string, string] => [`${channel}/${s}`, channel, channel]),
         [`${channel}/community/new`, `${channel}/community`, channel],
       ];
       const seen = new Set<string>();
@@ -377,6 +380,10 @@ test.describe('Release: settings controls', () => {
           await checkBackTo(page, path, parent, locale, vp.name === 'phone', channelSettings);
         }
       }
+
+      // The channel's videos are managed in Studio; the old settings page redirects there
+      await gotoSettled(page, `${target().web}${channel}/videos`);
+      await expect(page).toHaveURL(new RegExp(`/${locale}/studio/[^/]+/content/videos`));
     });
   }
 });

@@ -176,7 +176,9 @@ test.describe('Release: SSO journey across every app', () => {
       // A fresh browser: open the studio deep link signed out, sign in once
       await context.clearCookies();
       await consent();
-      const studio = `${target().web}/${locale}/dashboard/videos`;
+      // Studio deep link (no channel in it; the old /dashboard/videos 301s here)
+      const studio = `${target().web}/${locale}/studio/go/content/videos`;
+      const inStudio = (u: string) => new RegExp(`^/${locale}/studio/[^/]+/content/videos$`).test(new URL(u).pathname);
       await page.goto(studio);
       await expect(page).toHaveURL(new RegExp(`^${target().auth}`), { timeout: 30000 }).catch(() => {});
       const deepLinkSignIn = await onSignInForm(page);
@@ -193,7 +195,7 @@ test.describe('Release: SSO journey across every app', () => {
       await page.click('button[data-component="button"]');
       await page.waitForURL((u) => u.origin === target().web && !u.pathname.startsWith('/api/'), { timeout: 45000 });
       await settle(page);
-      if (deepLinkSignIn) expect(new URL(page.url()).pathname, 'sign-in did not come back to the studio deep link').toBe(`/${locale}/dashboard/videos`);
+      if (deepLinkSignIn) expect(inStudio(page.url()), `sign-in did not come back to the studio deep link (${page.url()})`).toBe(true);
       expect(await videosUserId(page)).toBe(user.userId);
 
       // admin-web: signed in silently, as an admin
@@ -232,7 +234,7 @@ test.describe('Release: SSO journey across every app', () => {
         ['videos studio', studio],
       ] as const) {
         await open(page, url);
-        const signedOut = (await onSignInForm(page)) || (app === 'videos studio' && new URL(page.url()).pathname !== `/${locale}/dashboard/videos`);
+        const signedOut = (await onSignInForm(page)) || (app === 'videos studio' && !inStudio(page.url()));
         expect(signedOut, `${app} is still signed in after single sign-out (${page.url()})`).toBe(true);
       }
       await open(page, `${target().www}/${locale}`);
