@@ -16,6 +16,7 @@ import { target } from './targets';
 import { apiFetch, createProfile, signUpOnWeb, type WebUser } from './web-session';
 import { grantCreatorTier } from './creator-tier';
 import { submitNewChannelInMenu } from './account-menu';
+import { fetchRetry } from './net';
 
 test.use({ trace: 'off' });
 
@@ -41,10 +42,10 @@ interface Listed { id: string; title: string; uploadStatus?: string; thumbnailUr
 
 async function channelList(channelId: string, user?: WebUser): Promise<Listed[]> {
   const url = `/api/channels/${channelId}/videos?limit=100`;
-  const res = user ? await apiFetch(user, url) : await fetch(`${target().api}${url}`);
+  const res = user ? await apiFetch(user, url) : await fetchRetry(`${target().api}${url}`);
   const shorts = user
     ? await apiFetch(user, `/api/channels/${channelId}/shorts?limit=100`)
-    : await fetch(`${target().api}/api/channels/${channelId}/shorts?limit=100`);
+    : await fetchRetry(`${target().api}/api/channels/${channelId}/shorts?limit=100`);
   const a = ((await res.json().catch(() => ({}))) as { data?: Listed[] }).data ?? [];
   const b = ((await shorts.json().catch(() => ({}))) as { data?: Listed[] }).data ?? [];
   return [...a, ...b];

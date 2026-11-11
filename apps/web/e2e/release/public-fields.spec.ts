@@ -5,6 +5,7 @@
  */
 import { test, expect } from '@playwright/test';
 import { target } from './targets';
+import { fetchRetry } from './net';
 
 const EMAIL_LIKE = /[A-Z0-9._%+-]+@[A-Z0-9-]+(\.[A-Z0-9-]+)+/i;
 
@@ -14,7 +15,7 @@ interface PublicBody {
 }
 
 async function anonymousJson(path: string): Promise<PublicBody> {
-  const res = await fetch(`${target().api}${path}`);
+  const res = await fetchRetry(`${target().api}${path}`);
   expect(res.ok, `GET ${path} answered ${res.status}`).toBe(true);
   return (await res.json()) as PublicBody;
 }
@@ -28,7 +29,7 @@ function expectPublic(path: string, body: unknown) {
 test.describe('Release: anonymous responses carry only public fields', () => {
   // PR runs hit the already-deployed QA, which gets this API only after merge.
   test.beforeAll(async () => {
-    const res = await fetch(`${target().api}/api/channels/release-probe/owner`);
+    const res = await fetchRetry(`${target().api}/api/channels/release-probe/owner`);
     test.skip(res.status === 404, 'target API does not serve the owner routes yet');
   });
 

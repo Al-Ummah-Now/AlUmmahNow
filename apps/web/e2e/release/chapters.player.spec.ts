@@ -7,6 +7,7 @@ import { test, expect } from '@playwright/test';
 import { target } from './targets';
 import { watchUrl } from './videos';
 import { fixtureVideo } from './fixtures';
+import { fetchRetry } from './net';
 
 type ChapterList = Array<{ startTime: number; title: string }>;
 interface Chaptered { id: string; chapters?: ChapterList | { chapters?: ChapterList }; uploadStatus?: string; isPublic?: boolean; playUrl?: string }
@@ -18,7 +19,7 @@ const chaptersOf = (v: Chaptered): ChapterList => (Array.isArray(v.chapters) ? v
 async function findChapteredVideo(): Promise<Chaptered | null> {
   const { id } = await fixtureVideo('landscape');
   // The list omits chapters: read the video itself
-  const res = await fetch(`${target().api}/api/videos/${encodeURIComponent(id)}`, { cache: 'no-store' });
+  const res = await fetchRetry(`${target().api}/api/videos/${encodeURIComponent(id)}`, { cache: 'no-store' });
   expect(res.ok, `GET /api/videos/${id} answered ${res.status}`).toBe(true);
   const body = (await res.json()) as Chaptered & { result?: Chaptered };
   const video = body.result ?? body;

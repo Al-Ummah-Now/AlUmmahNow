@@ -14,6 +14,7 @@ import { adminConfirm, confirmInApp } from './in-app-confirm';
 import { promoteToAdmin } from './sink';
 import { releaseEnv, sinkEmail, target } from './targets';
 import { completeRegistration, submitPasswordSignIn } from './web-session';
+import { fetchRetry } from './net';
 
 test.use({ trace: 'off' });
 test.describe.configure({ mode: 'serial' });
@@ -26,7 +27,7 @@ const refs: Array<{ mode: 'client' | 'server'; locale: 'en' | 'ar'; ref: string 
 
 test.beforeAll(async () => {
   test.skip(releaseEnv() === 'production', 'The error-test page does not exist in production');
-  const res = await fetch(`${target().web}/en/dev/error-test`, { redirect: 'manual' });
+  const res = await fetchRetry(`${target().web}/en/dev/error-test`, { redirect: 'manual' });
   test.skip(res.status === 404 && process.env.GITHUB_EVENT_NAME === 'pull_request', 'Error test page is not deployed on QA yet');
   expect(res.status, 'GET /en/dev/error-test').toBe(200);
 });
@@ -61,7 +62,7 @@ test.describe('Release: friendly errors and the admin Errors page', () => {
   test('an admin finds each error by its reference, resolves it and deletes the test group', async ({ page, context }) => {
     test.skip(!process.env.TEST_PROMOTE_SECRET, 'TEST_PROMOTE_SECRET is not set: cannot create an admin user');
     test.skip(refs.length === 0, 'no references from the visitor tests');
-    const adminProbe = await fetch(`${target().adminWeb}/errors`, { redirect: 'manual' });
+    const adminProbe = await fetchRetry(`${target().adminWeb}/errors`, { redirect: 'manual' });
     test.skip(adminProbe.status === 404 && process.env.GITHUB_EVENT_NAME === 'pull_request', 'The admin Errors page is not deployed on QA yet');
     await signInAsAdmin(page, context);
 

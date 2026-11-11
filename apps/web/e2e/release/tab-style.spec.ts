@@ -8,6 +8,7 @@
  */
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import { target } from './targets';
+import { fetchRetry } from './net';
 
 const SELECTED = '[aria-selected="true"],[data-active="true"],[data-state="active"]';
 
@@ -138,7 +139,7 @@ async function checkRow(page: Page, row: Locator, select: boolean): Promise<stri
 }
 
 async function channelId(): Promise<string> {
-  const res = await fetch(`${target().api}/api/channels?limit=10`);
+  const res = await fetchRetry(`${target().api}/api/channels?limit=10`);
   const body = (await res.json()) as { data?: { id: string }[] };
   const id = body.data?.[0]?.id;
   if (!id) throw new Error('no public channel to open');

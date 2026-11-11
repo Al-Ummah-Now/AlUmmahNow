@@ -20,6 +20,7 @@ import { grantCreatorTier } from './creator-tier';
 import { promoteToAdmin } from './sink';
 import { target } from './targets';
 import { apiFetch, createProfile, signUpOnWeb, type Locale, submitPasswordSignIn } from './web-session';
+import { fetchRetry } from './net';
 
 // Types the password on the auth server: traces would hold it
 test.use({ trace: 'off' });
@@ -124,7 +125,7 @@ function heldRefreshTokens(cookies: Cookie[]): HeldRefreshToken[] {
 }
 
 async function refreshStillWorks(held: HeldRefreshToken): Promise<boolean> {
-  const res = await fetch(`${target().auth}/token`, {
+  const res = await fetchRetry(`${target().auth}/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: held.token, client_id: held.clientId }),

@@ -13,6 +13,7 @@ import { target } from './targets';
 import { apiFetch, createProfile, signUpOnWeb, type WebUser } from './web-session';
 import { grantCreatorTier } from './creator-tier';
 import { submitNewChannelInMenu } from './account-menu';
+import { fetchRetry } from './net';
 
 // This file signs users in through the auth server: its traces would hold the
 // typed password and email code (fillSecret args, form POST bodies). Trace off.
@@ -45,7 +46,7 @@ function imageForm(): FormData {
 
 async function expectServedImage(url: string | undefined): Promise<void> {
   expect(url, 'no image URL saved').toBeTruthy();
-  const res = await fetch(url as string);
+  const res = await fetchRetry(url as string);
   expect(res.status, `GET ${url}`).toBe(200);
   expect(res.headers.get('content-type') ?? '').toMatch(/^image\//);
 }
@@ -214,7 +215,7 @@ test.describe('Release: uploads', () => {
       const body = (await res.json().catch(() => ({}))) as { result?: { thumbnailUrl?: string; video?: { thumbnailUrl?: string } }; thumbnailUrl?: string };
       const thumbnailUrl = body.result?.video?.thumbnailUrl ?? body.result?.thumbnailUrl ?? body.thumbnailUrl ?? initiated.result?.thumbnailUrl;
       expect(thumbnailUrl, 'no thumbnail stored for the upload').toBeTruthy();
-      const image = await fetch(thumbnailUrl as string);
+      const image = await fetchRetry(thumbnailUrl as string);
       expect(image.status, `GET ${thumbnailUrl}`).toBe(200);
       const pixels = imagePixels(new Uint8Array(await image.arrayBuffer()));
       expect(pixels, 'stored thumbnail is not a readable JPEG/PNG').not.toBeNull();

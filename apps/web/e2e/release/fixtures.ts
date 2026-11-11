@@ -15,6 +15,7 @@
 import { expect } from '@playwright/test';
 import { target } from './targets';
 import type { PublicVideo } from './videos';
+import { fetchRetry } from './net';
 
 /** Seed titles (seed-config.ts SEED_CHANNELS): change both together. */
 export const FIXTURE_TITLES = {
@@ -49,7 +50,7 @@ async function lookUp(): Promise<SeededFixtures> {
   let cursor = '';
   // The seed's videos are old: every page is read until all are found (bounded)
   for (let page = 0; page < 20 && Object.keys(found).length < wanted.size; page++) {
-    const res = await fetch(`${target().api}/api/videos?limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`, { cache: 'no-store' });
+    const res = await fetchRetry(`${target().api}/api/videos?limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`, { cache: 'no-store' });
     expect(res.ok, `GET /api/videos answered ${res.status}`).toBe(true);
     const body = (await res.json()) as { data?: PublicVideo[]; cursor?: string | null };
     for (const v of body.data ?? []) {
