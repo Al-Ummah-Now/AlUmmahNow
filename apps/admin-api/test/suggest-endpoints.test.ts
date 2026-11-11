@@ -93,12 +93,49 @@ describe('suggest endpoints', () => {
     assert.deepEqual(body.result.items?.map((i) => i.id), ['ch_1', 'ch_2']);
   });
 
-  it('answers an empty query with no suggestions and no api-videos call', async () => {
-    const { fetcher, calls } = fakeVideos({});
-    const { status, body } = await appFor({ VIDEOS: fetcher })('/api/suggest/video?q=%20%20');
+  it('answers an empty query with the newest page, without the list total, and a cursor for the next page', async () => {
+    const many = Array.from({ length: 20 }, (_, i) => channel(`ch_${i}`, `Channel ${i}`));
+    const { fetcher, calls } = fakeVideos({ '/channels': many, '/users': [{ id: 'usr_1', displayName: 'Omar', userName: 'omar', email: null, avatarUrl: null }] });
+    const run = appFor({ VIDEOS: fetcher });
+    const first = await run('/api/suggest/channel?q=%20%20');
+    assert.equal(first.status, 200);
+    assert.equal(first.body.result.items?.length, 20);
+    assert.equal((first.body.result as { next?: string | null }).next, '2');
+    assert.equal(calls[0].path, '/channels');
+    assert.equal(calls[0].search.get('q'), null);
+    assert.equal(calls[0].search.get('noTotal'), '1');
+    assert.equal(calls[0].search.get('sort'), 'newest');
+    assert.equal(calls[0].search.get('page'), '1');
+    assert.equal(calls[0].search.get('pageSize'), '20');
+    // The next page; a short page is the last
+    const users = await run('/api/suggest/user?cursor=3');
+    assert.equal(calls[1].path, '/users');
+    assert.equal(calls[1].search.get('page'), '3');
+    assert.equal((users.body.result as { next?: string | null }).next, null);
+    assert.deepEqual(users.body.result.items?.map((i) => i.id), ['usr_1']);
+  });
+
+  it('pages playlists and posts with the store cursor on an empty query', async () => {
+    const fetcher = {
+      calls: [] as URL[],
+      async fetch(input: string) {
+        const url = new URL(input);
+        this.calls.push(url);
+        const result = { items: [{ id: 'pl_1', title: 'Seerah', channelId: 'ch_1' }], nextCursor: 'k2' };
+        return new Response(JSON.stringify({ success: true, result }), { headers: { 'content-type': 'application/json' } });
+      },
+    };
+    const { body } = await appFor({ VIDEOS: fetcher })('/api/suggest/playlist?q=&cursor=k1');
+    assert.equal(fetcher.calls[0].searchParams.get('cursor'), 'k1');
+    assert.deepEqual(body.result.items?.map((i) => i.id), ['pl_1']);
+    assert.equal((body.result as { next?: string | null }).next, 'k2');
+  });
+
+  it('lists the newest contact messages to an admin on an empty query', async () => {
+    const { status, body } = await appFor({})('/api/suggest/contact?q=');
     assert.equal(status, 200);
-    assert.deepEqual(body.result.items, []);
-    assert.equal(calls.length, 0);
+    assert.deepEqual(body.result.items?.map((i) => i.id), ['msg_1']);
+    assert.equal((await appFor({})('/api/suggest/contact?q=', 'moderator')).status, 403);
   });
 
   it('refuses an unknown kind', async () => {

@@ -19,6 +19,14 @@
  * normalisation as the search index (Arabic tashkeel, alef forms, taa marbuta,
  * alef maqsura); `load` is a remote lookup, debounced, cancelled when a newer
  * keystroke arrives, and cached per query for this input.
+ *
+ * Initial results (`loadInitial`): pickers open with content. The first page
+ * is fetched when the list first opens (at once in inline mode), shown before
+ * anything is typed, and the next page loads as the list is scrolled (or
+ * arrowed) to its end. Typing filters what is loaded at once and the remote
+ * `load` adds the rest. A skeleton shows while the first page loads, the
+ * caller's `emptyText` when there is nothing, and an error with a retry
+ * button when it fails.
  */
 
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState, type InputHTMLAttributes, type ReactNode } from 'react';
@@ -52,6 +60,12 @@ export interface AutocompleteOption {
   value?: unknown;
 }
 
+/** One page of initial results; `next` is the caller's cursor for the page after it (null: no more). */
+export interface AutocompletePage {
+  options: AutocompleteOption[];
+  next?: string | null;
+}
+
 export interface AutocompleteGroup {
   key: string;
   label: string;
@@ -73,6 +87,11 @@ export interface AutocompleteProps {
   /** Remote lookup; keep `loadKey` in sync with anything it closes over */
   load?: (query: string, signal: AbortSignal) => Promise<AutocompleteOption[]>;
   loadKey?: string;
+  /**
+   * Initial results: the page of options after `cursor` (null: the first page),
+   * shown while the input is empty. Keep `loadKey` in sync with what it closes over.
+   */
+  loadInitial?: (cursor: string | null, signal: AbortSignal) => Promise<AutocompletePage>;
   /** Options shown while the input is empty (recent searches, or the whole local list) */
   emptyOptions?: AutocompleteOption[];
   /** Above the options while the input is empty (e.g. "Recent searches · Clear") */
@@ -165,7 +184,7 @@ function setRef<T>(ref: React.Ref<T> | undefined, value: T) {
 
 export function Autocomplete(props: AutocompleteProps) {
   const {
-    value, onValueChange, onSelect, onSubmit, options, load, loadKey, emptyOptions, emptyHeader, emptyFooter,
+    value, onValueChange, onSelect, onSubmit, options, load, loadKey, loadInitial, emptyOptions, emptyHeader, emptyFooter,
     emptyText, groups, decorate, queryOf, debounceMs = DEFAULT_DEBOUNCE_MS, maxOptions = 12, keepOpenOnSelect, onRemove,
     hideNoMatches, mode = 'overlay', label, listLabel, inputId, inputClassName, className, popupClassName,
     testId, popupTestId, optionTestId, removeTestId, inputRef, inputProps, children, renderTrailing, popupHost,
@@ -188,6 +207,14 @@ export function Autocomplete(props: AutocompleteProps) {
   const loadRef = useRef(load);
   loadRef.current = load;
   const cacheRef = useRef(new Map<string, AutocompleteOption[]>());
+  const loadInitialRef = useRef(loadInitial);
+  loadInitialRef.current = loadInitial;
+  const hasInitial = !!loadInitial;
+  // Initial results: what is loaded so far, the cursor of the next page, and where the loading is
+  const [initial, setInitial] = useState<{ options: AutocompleteOption[]; next: string | null; status: 'idle' | 'loading' | 'more' | 'ready' | 'error' }>(
+    { options: [], next: null, status: 'idle' },
+  );
+  const initialAbortRef = useRef<AbortController | null>(null);
 
   const query = (queryOf ? queryOf(value) : value).trim();
   const inline = mode === 'inline';
@@ -196,7 +223,46 @@ export function Autocomplete(props: AutocompleteProps) {
   useEffect(() => {
     cacheRef.current.clear();
     setRemote(null);
+    initialAbortRef.current?.abort();
+    setInitial({ options: [], next: null, status: 'idle' });
   }, [loadKey]);
+
+  useEffect(() => () => initialAbortRef.current?.abort(), []);
+
+  /** Fetch the first page (cursor null) or the page after the loaded ones. */
+  const fetchInitial = useCallback((cursor: string | null) => {
+    const run = loadInitialRef.current;
+    if (!run) return;
+    initialAbortRef.current?.abort();
+    const controller = new AbortController();
+    initialAbortRef.current = controller;
+    setInitial((s) => ({ ...s, status: cursor ? 'more' : 'loading' }));
+    run(cursor, controller.signal)
+      .then((page) => {
+        if (controller.signal.aborted) return;
+        setInitial((s) => {
+          const base = cursor ? s.options : [];
+          const seen = new Set(base.map((o) => o.id));
+          return { options: [...base, ...page.options.filter((o) => !seen.has(o.id))], next: page.next ?? null, status: 'ready' };
+        });
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        logger.warn('[Autocomplete] Initial results failed', { error });
+        // A failed later page keeps what is shown; the end of the list offers the retry
+        setInitial((s) => ({ ...s, status: 'error' }));
+      });
+  }, []);
+
+  // The first page loads when the list first opens (inline lists are always open)
+  useEffect(() => {
+    if (hasInitial && (inline || open) && initial.status === 'idle') fetchInitial(null);
+  }, [hasInitial, inline, open, initial.status, fetchInitial]);
+
+  const loadMore = useCallback(() => {
+    if (initial.status === 'ready' && initial.next) fetchInitial(initial.next);
+  }, [initial.status, initial.next, fetchInitial]);
+  const retryInitial = () => fetchInitial(initial.options.length ? initial.next : null);
 
   useEffect(() => {
     if (!loadRef.current) return;
@@ -240,25 +306,32 @@ export function Autocomplete(props: AutocompleteProps) {
 
   const ordered = useMemo(() => {
     let list: AutocompleteOption[];
-    if (!query) list = emptyOptions ?? [];
-    else {
-      // Local matches first; a remote lookup adds what the local list doesn't have
-      const local = options ? rankSuggestions(options, query, (o) => o.label, { alternates: (o) => [o.subtitle, ...(o.keywords ?? [])] }) : [];
+    if (!query) {
+      const pinned = emptyOptions ?? [];
+      const seen = new Set(pinned.map((o) => o.id));
+      // Initial results are paged, so they are not cut at maxOptions
+      list = [...pinned.slice(0, maxOptions), ...initial.options.filter((o) => !seen.has(o.id))];
+    } else {
+      // Local matches first (including the initial results already loaded); a remote lookup adds what they don't have
+      const known = new Set((options ?? []).map((o) => o.id));
+      const candidates = [...(options ?? []), ...initial.options.filter((o) => !known.has(o.id))];
+      const local = candidates.length ? rankSuggestions(candidates, query, (o) => o.label, { alternates: (o) => [o.subtitle, ...(o.keywords ?? [])] }) : [];
       const fetched = load && query.length >= minChars ? remote?.options ?? [] : [];
       const seen = new Set(local.map((o) => o.id));
-      list = [...local, ...fetched.filter((o) => !seen.has(o.id))];
+      list = [...local, ...fetched.filter((o) => !seen.has(o.id))].slice(0, maxOptions);
     }
-    list = list.slice(0, maxOptions);
     if (decorate) list = list.map((o) => ({ ...o, ...decorate(o) }));
     if (!groups?.length) return list;
     const known = new Set(groups.map((g) => g.key));
     return [...groups.flatMap((g) => list.filter((o) => o.group === g.key)), ...list.filter((o) => !o.group || !known.has(o.group))];
-  }, [query, emptyOptions, load, minChars, remote, options, maxOptions, groups, decorate]);
+  }, [query, emptyOptions, load, minChars, remote, options, maxOptions, groups, decorate, initial.options]);
 
-  const settled = !load || !query || !loading;
+  const initialLoading = hasInitial && !query && (initial.status === 'idle' || initial.status === 'loading');
+  const initialFailed = hasInitial && !query && initial.status === 'error';
+  const settled = (!load || !query || !loading) && !initialLoading;
   const showNoMatches = !!query && query.length >= minChars && settled && ordered.length === 0 && !hideNoMatches;
-  const showEmptyChrome = !query && (!!emptyHeader || !!emptyFooter || (!!emptyText && ordered.length === 0));
-  const expanded = (inline || open) && (ordered.length > 0 || showNoMatches || showEmptyChrome);
+  const showEmptyChrome = !query && (!!emptyHeader || !!emptyFooter || (!!emptyText && ordered.length === 0 && !initialLoading && !initialFailed));
+  const expanded = (inline || open) && (ordered.length > 0 || showNoMatches || showEmptyChrome || initialLoading || initialFailed);
 
   // Keep the highlighted option valid as the list changes
   useEffect(() => {
@@ -271,6 +344,15 @@ export function Autocomplete(props: AutocompleteProps) {
     const count = ordered.length;
     setStatus(count === 0 ? (query ? a.noResults : '') : count === 1 ? a.oneResult : a.resultsCount.replace('{count}', String(count)));
   }, [expanded, settled, ordered.length, query, a]);
+
+  useEffect(() => {
+    if (initialFailed) setStatus(a.loadFailed);
+  }, [initialFailed, a]);
+
+  // Arrowing onto the last loaded option asks for the next page
+  useEffect(() => {
+    if (!query && hasInitial && active >= 0 && active >= ordered.length - 1) loadMore();
+  }, [active, ordered.length, query, hasInitial, loadMore]);
 
   useEffect(() => {
     if (active < 0) return;
@@ -382,7 +464,19 @@ export function Autocomplete(props: AutocompleteProps) {
   const activeId = expanded && active >= 0 ? `${baseId}-opt-${active}` : undefined;
 
   const list = (
-    <ul id={listId} role="listbox" aria-label={listLabel ?? label} className="max-h-80 overflow-y-auto py-1">
+    <ul
+      id={listId}
+      role="listbox"
+      aria-label={listLabel ?? label}
+      aria-busy={(initialLoading || (!query && initial.status === 'more')) || undefined}
+      className="max-h-80 overflow-y-auto py-1"
+      onScroll={(event) => {
+        if (query || !hasInitial) return;
+        const el = event.currentTarget;
+        // Near the end: the next page
+        if (el.scrollTop + el.clientHeight >= el.scrollHeight - 48) loadMore();
+      }}
+    >
       {runs.map((run, runIndex) => {
         const items = run.items.map(({ option, index }) => {
           const isActive = index === active;
@@ -453,8 +547,43 @@ export function Autocomplete(props: AutocompleteProps) {
         : `search-dd absolute inset-x-0 top-full z-[var(--z-popover,1000)] mt-1 overflow-hidden text-start ${popupClassName ?? ''}`}
     >
       {!query && emptyHeader}
-      {!query && ordered.length === 0 && emptyText && <p className="px-4 pb-3 pt-1 text-sm text-[var(--fanous-color-text-secondary)]">{emptyText}</p>}
+      {!query && ordered.length === 0 && emptyText && !initialLoading && !initialFailed && (
+        <p className="px-4 pb-3 pt-1 text-sm text-[var(--fanous-color-text-secondary)]" data-testid="autocomplete-empty">{emptyText}</p>
+      )}
+      {initialLoading && ordered.length === 0 && (
+        <div aria-hidden="true" className="space-y-1 py-1" data-testid="autocomplete-skeleton">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="flex items-center gap-3 px-3 py-2">
+              <span className="sk h-8 w-8 shrink-0 rounded" />
+              <span className="flex-1 space-y-1.5">
+                <span className="sk block h-3 w-3/4 rounded" />
+                <span className="sk block h-2.5 w-1/3 rounded" />
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
       {list}
+      {!query && initial.status === 'more' && (
+        <p className="px-4 py-2 text-xs text-[var(--fanous-color-text-secondary)]" data-testid="autocomplete-loading-more">{a.loadingMore}</p>
+      )}
+      {initialFailed && (
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm text-[var(--fanous-color-text-secondary)]" data-testid="autocomplete-error">
+          <span>{a.loadFailed}</span>
+          <button
+            type="button"
+            onPointerDown={(event) => event.preventDefault()}
+            onClick={() => {
+              retryInitial();
+              ownInputRef.current?.focus();
+            }}
+            className="rounded-md border border-[var(--fanous-color-outline)] px-3 py-1 text-xs font-semibold text-[var(--fanous-color-text-primary)] hover:bg-[var(--m-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            data-testid="autocomplete-retry"
+          >
+            {a.retry}
+          </button>
+        </div>
+      )}
       {showNoMatches && (
         <p className="px-4 py-3 text-sm text-[var(--fanous-color-text-secondary)]" data-testid="autocomplete-no-matches">
           {a.noMatches.replace('{query}', query)}

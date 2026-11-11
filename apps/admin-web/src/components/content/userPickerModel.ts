@@ -24,7 +24,10 @@ export interface PickerState {
 export const initialPickerState: PickerState = { query: '', status: 'idle', results: [], active: -1, open: false, answered: '' };
 
 export type PickerAction =
-  | { type: 'type'; query: string }
+  /** browse: an empty box lists the picker's first page (search('')) instead of closing */
+  | { type: 'type'; query: string; browse?: boolean }
+  /** The box was focused or clicked with nothing typed: list the first page (pickers open with content) */
+  | { type: 'browse' }
   | { type: 'loading'; query: string }
   | { type: 'results'; query: string; results: AdminUserSearchItem[] }
   | { type: 'failed'; query: string }
@@ -59,6 +62,7 @@ export function step(results: AdminUserSearchItem[], from: number, by: 1 | -1): 
 export function pickerReducer(state: PickerState, action: PickerAction): PickerState {
   switch (action.type) {
     case 'type': {
+      if (action.browse && action.query.trim() === '') return pickerReducer({ ...state, query: action.query, active: -1 }, { type: 'browse' });
       const status: SearchStatus = action.query.trim() === '' ? 'idle' : canSearch(action.query) ? 'loading' : 'short';
       return { ...state, query: action.query, status, open: action.query.trim() !== '', active: -1, ...(status === 'loading' ? {} : { results: [], answered: '' }) };
     }
@@ -78,6 +82,11 @@ export function pickerReducer(state: PickerState, action: PickerAction): PickerS
     }
     case 'hover':
       return state.results[action.index] && selectable(state.results[action.index]) ? { ...state, active: action.index } : state;
+    case 'browse':
+      if (state.query.trim() !== '') return { ...state, open: true };
+      // The first page is already here (answered for the empty query): just show it
+      if (state.status === 'done' && state.answered === '') return { ...state, open: true };
+      return { ...state, status: 'loading', results: [], answered: '\u0000', open: true, active: -1 };
     case 'open':
       return { ...state, open: state.query.trim() !== '' };
     case 'close':
@@ -97,6 +106,8 @@ export function statusText(state: PickerState, t: Translator): string {
     case 'error':
       return t('channels.pickerError');
     case 'done':
+      // Nothing typed: the first page (the channel's team for a transfer)
+      if (state.query.trim() === '') return state.results.length === 0 ? t('channels.pickerNoTeam') : t('channels.pickerTeam', { count: state.results.length });
       return state.results.length === 0 ? t('channels.pickerEmpty', { query: state.query.trim() }) : state.results.length === 1
           ? t('channels.pickerResultsOne')
           : t('channels.pickerResults', { count: state.results.length });

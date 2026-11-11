@@ -153,7 +153,9 @@ describe('SectionForm payloads', () => {
     const onSubmit = renderForm({ sectionType: 'featured_videos' });
     submit();
     expect(await screen.findByText(cs.form.pickRequired)).toBeInTheDocument();
-    const options = await screen.findByTestId('video-picker-options');
+    // Pickers open with their first page loaded
+    await screen.findAllByTestId('video-picker-option');
+    const options = screen.getByTestId('video-picker-options');
     expect(options.querySelector('[data-option-id="private"]')).toBeNull();
     fireEvent.click(options.querySelector('[data-option-id="v2"]')!);
     fireEvent.click(options.querySelector('[data-option-id="v1"]')!);
@@ -204,7 +206,9 @@ describe('SectionForm payloads', () => {
 
   it('single and multiple playlists use the playlist picker', async () => {
     const onSubmit = renderForm({ sectionType: 'single_playlist' });
-    const options = await screen.findByTestId('playlist-picker-options');
+    // Pickers open with their first page loaded
+    await screen.findAllByTestId('playlist-picker-option');
+    const options = screen.getByTestId('playlist-picker-options');
     expect(options.querySelector('[data-option-id="hidden"]')).toBeNull();
     fireEvent.click(options.querySelector('[data-option-id="p1"]')!);
     fireEvent.click(options.querySelector('[data-option-id="p2"]')!);
@@ -214,7 +218,9 @@ describe('SectionForm payloads', () => {
 
   it('featured playlists need a title', async () => {
     const onSubmit = renderForm({ sectionType: 'multiple_playlists' });
-    const options = await screen.findByTestId('playlist-picker-options');
+    // Pickers open with their first page loaded
+    await screen.findAllByTestId('playlist-picker-option');
+    const options = screen.getByTestId('playlist-picker-options');
     fireEvent.click(options.querySelector('[data-option-id="p2"]')!);
     fireEvent.click(options.querySelector('[data-option-id="p1"]')!);
     submit();

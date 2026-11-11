@@ -722,6 +722,10 @@ export const AR_TRANSLATIONS: AppTranslations = {
     keyboardHint: 'اكتب لعرض الاقتراحات',
     searchChannel: 'البحث في هذه القناة',
     closeSearch: 'إغلاق البحث',
+    loadFailed: 'تعذّر تحميل القائمة.',
+    retry: 'أعد المحاولة',
+    loadingMore: 'جارٍ تحميل المزيد…',
+    alreadyAdded: 'مضاف بالفعل',
   },
 
   creator: {

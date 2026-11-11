@@ -139,6 +139,7 @@ export const ADMIN_PAGE_SIZES = [20, 50, 100] as const;
 
 export interface AdminPage<T> {
   items: T[];
+  /** -1 when the caller asked for `noTotal` (a picker's page: no COUNT over the whole list) */
   total: number;
   page: number;
   pageSize: number;
@@ -161,6 +162,8 @@ export interface AdminChannelQuery {
   sort?: AdminChannelSort;
   page?: number;
   pageSize?: number;
+  /** Skip the total (COUNT over the list): pickers page through and never show it */
+  noTotal?: boolean;
 }
 
 export interface AdminChannelRow {
@@ -211,6 +214,8 @@ export interface AdminVideoQuery {
   sort?: AdminVideoSort;
   page?: number;
   pageSize?: number;
+  /** Skip the total (COUNT over the list): pickers page through and never show it */
+  noTotal?: boolean;
 }
 
 /** A video's R2 rendition state as the admin list shows it (from the video record's `r2`; null = never queued). */
@@ -291,6 +296,8 @@ export interface AdminCommentQuery {
   userId?: string;
   page?: number;
   pageSize?: number;
+  /** Skip the total (COUNT over the list): pickers page through and never show it */
+  noTotal?: boolean;
 }
 
 export interface AdminPlaylistRow {
@@ -331,6 +338,8 @@ export interface AdminUserQuery {
   sort?: AdminUserSort;
   page?: number;
   pageSize?: number;
+  /** Skip the total (COUNT over the list): pickers page through and never show it */
+  noTotal?: boolean;
 }
 
 /** A videos user: the api-videos profile keyed by the token's usr_ id. */
@@ -573,6 +582,9 @@ export interface AdminSuggestion {
 
 /** Suggestions per request: enough to choose from, small enough to read at a glance. */
 export const ADMIN_SUGGEST_LIMIT = 8;
+
+/** A picker's page before anything is typed (pickers open with content; more load on scroll). */
+export const ADMIN_SUGGEST_INITIAL_LIMIT = 20;
 
 // ---------------------------------------------------------------------------
 // Soft delete (owner rule 2026-11-10): every admin delete is restorable for 30

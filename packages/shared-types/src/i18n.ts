@@ -150,6 +150,12 @@ export interface AppTranslations {
     keyboardHint: string;
     searchChannel: string;
     closeSearch: string;
+    /** Initial results (pickers open with a first page): the first page failed */
+    loadFailed: string;
+    retry: string;
+    loadingMore: string;
+    /** Marks an item that is already added (shown, not pickable again) */
+    alreadyAdded: string;
   };
   /** Creator tiers: uploading and creating channels are by invitation */
   creator: {

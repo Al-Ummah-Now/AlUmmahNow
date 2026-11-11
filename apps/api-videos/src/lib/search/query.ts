@@ -328,6 +328,56 @@ function bestText(base: string, localized: Record<string, string> | undefined, q
   return best;
 }
 
+type RankedSuggestion = IndexSuggestion & { alt?: string[] };
+
+function channelSuggestion(row: IndexRow, q: string, lang: string | undefined): RankedSuggestion[] {
+  const channel = parseJson<SearchChannelPayload>(row.payload);
+  if (!channel?.id) return [];
+  const handle = channel.handle?.replace(/^@+/, '') || undefined;
+  return [{
+    text: q ? bestText(channel.name, channel.nameLocalized, q, lang) : channel.name,
+    type: 'channel' as const,
+    id: channel.id,
+    thumbnailUrl: channel.avatarUrl,
+    subtitle: handle ? `@${handle}` : undefined,
+    handle,
+    verified: channel.isVerified === true,
+    count: channel.subscribersCount,
+    metadata: { channelId: channel.id, avatarUrl: channel.avatarUrl },
+    alt: handle ? [handle] : [],
+  }];
+}
+
+function videoSuggestion(row: IndexRow, q: string, lang: string | undefined): RankedSuggestion[] {
+  const video = parseJson<SearchVideoPayload>(row.payload);
+  if (!video?.id) return [];
+  const channel = channelInfo(row.channel_payload);
+  return [{
+    text: q ? bestText(video.title, video.titleLocalized, q, lang) : video.title,
+    type: 'video' as const,
+    id: video.id,
+    thumbnailUrl: video.thumbnailUrl,
+    subtitle: channel?.name ?? video.channelName,
+    verified: channel?.isVerified === true,
+    metadata: { videoId: video.id, channelId: video.channelId, isShort: video.isShort === true, duration: video.duration },
+  }];
+}
+
+function playlistSuggestion(row: IndexRow): RankedSuggestion[] {
+  const playlist = parseJson<SearchPlaylistPayload>(row.payload);
+  if (!playlist?.id) return [];
+  const channel = channelInfo(row.channel_payload);
+  return [{
+    text: playlist.name,
+    type: 'playlist' as const,
+    id: playlist.id,
+    thumbnailUrl: playlist.thumbnailUrl ?? playlist.cover?.thumbnailUrl,
+    subtitle: channel?.name,
+    count: playlist.videosCount,
+    metadata: { playlistId: playlist.id, channelId: playlist.channelId },
+  }];
+}
+
 /** Most of each kind in one response; videos fill whatever is left of `limit`. */
 const GROUP_CAPS: Record<SuggestionType, number> = { channel: 3, playlist: 3, category: 2, query: 0, video: SEARCH_MAX_LIMIT };
 
@@ -362,57 +412,9 @@ export async function suggestFromIndex(db: SearchDb, q: string, limit: number, o
       .map(({ alt: _alt, ...s }) => s));
   };
 
-  if (want.has('channel')) {
-    rank('channel', rowsOf('channel').flatMap(row => {
-      const channel = parseJson<SearchChannelPayload>(row.payload);
-      if (!channel?.id) return [];
-      const handle = channel.handle?.replace(/^@+/, '') || undefined;
-      return [{
-        text: bestText(channel.name, channel.nameLocalized, q, lang),
-        type: 'channel' as const,
-        id: channel.id,
-        thumbnailUrl: channel.avatarUrl,
-        subtitle: handle ? `@${handle}` : undefined,
-        handle,
-        verified: channel.isVerified === true,
-        count: channel.subscribersCount,
-        metadata: { channelId: channel.id, avatarUrl: channel.avatarUrl },
-        alt: handle ? [handle] : [],
-      }];
-    }));
-  }
-  if (want.has('video')) {
-    rank('video', rowsOf('video').flatMap(row => {
-      const video = parseJson<SearchVideoPayload>(row.payload);
-      if (!video?.id) return [];
-      const channel = channelInfo(row.channel_payload);
-      return [{
-        text: bestText(video.title, video.titleLocalized, q, lang),
-        type: 'video' as const,
-        id: video.id,
-        thumbnailUrl: video.thumbnailUrl,
-        subtitle: channel?.name ?? video.channelName,
-        verified: channel?.isVerified === true,
-        metadata: { videoId: video.id, channelId: video.channelId, isShort: video.isShort === true, duration: video.duration },
-      }];
-    }));
-  }
-  if (want.has('playlist')) {
-    rank('playlist', rowsOf('playlist').flatMap(row => {
-      const playlist = parseJson<SearchPlaylistPayload>(row.payload);
-      if (!playlist?.id) return [];
-      const channel = channelInfo(row.channel_payload);
-      return [{
-        text: playlist.name,
-        type: 'playlist' as const,
-        id: playlist.id,
-        thumbnailUrl: playlist.thumbnailUrl ?? playlist.cover?.thumbnailUrl,
-        subtitle: channel?.name,
-        count: playlist.videosCount,
-        metadata: { playlistId: playlist.id, channelId: playlist.channelId },
-      }];
-    }));
-  }
+  if (want.has('channel')) rank('channel', rowsOf('channel').flatMap(row => channelSuggestion(row, q, lang)));
+  if (want.has('video')) rank('video', rowsOf('video').flatMap(row => videoSuggestion(row, q, lang)));
+  if (want.has('playlist')) rank('playlist', rowsOf('playlist').flatMap(row => playlistSuggestion(row)));
   if (want.has('category')) {
     const items = VIDEO_CATEGORIES.map(category => ({
       text: lang === 'ar' ? category.label.ar : category.label.en,
@@ -445,6 +447,50 @@ export async function suggestFromIndex(db: SearchDb, q: string, limit: number, o
     }
   }
   return SUGGESTION_GROUP_ORDER.flatMap(type => capped.get(type) ?? []).slice(0, limit);
+}
+
+export interface InitialSuggestOptions {
+  /** One kind for a picker; several are listed one after another */
+  types?: SuggestionType[];
+  /** Only this channel's videos and playlists (newest first) */
+  channelId?: string;
+  /** Rows to skip (the picker's next page) */
+  offset?: number;
+  now?: number;
+}
+
+/**
+ * What a picker shows before anything is typed (owner rule 2026-11-11:
+ * pickers open with content). Read from the search index, visible items of
+ * visible channels only, each kind on an index and limited, never a scan:
+ *   channel: most viewed channels (idx_search_channels_popular)
+ *   video / playlist with channelId: that channel's newest (idx_search_*_channel_created)
+ *   video without channelId: newest public videos (idx_search_videos_created)
+ *   category: every category, in display order
+ * Page with `offset`; a page shorter than `limit` is the last one.
+ */
+export async function initialSuggestionsFromIndex(db: SearchDb, limit: number, options: InitialSuggestOptions = {}): Promise<IndexSuggestion[]> {
+  const types = (options.types?.length ? options.types : DEFAULT_SUGGESTION_TYPES)
+    .filter(t => !(options.channelId && (t === 'channel' || t === 'category')));
+  const offset = Math.max(0, Math.floor(options.offset ?? 0));
+  const now = options.now ?? Date.now();
+  const indexed = (['channel', 'video', 'playlist'] as const).filter(t => types.includes(t) && !(t === 'playlist' && !options.channelId));
+  const statements = indexed.map(t => buildTypeStatement(db, t, {
+    ...(options.channelId ? { channelId: options.channelId } : {}),
+    sort: t === 'channel' ? 'popular' : 'date',
+  }, null, limit, offset, now));
+  const batches = statements.length ? (await db.batch(statements)) as Array<{ results?: IndexRow[] }> : [];
+  const out: IndexSuggestion[] = [];
+  for (const type of SUGGESTION_GROUP_ORDER) {
+    const rows = batches[indexed.indexOf(type as typeof indexed[number])]?.results ?? [];
+    if (type === 'channel' && indexed.includes('channel')) out.push(...rows.flatMap(row => channelSuggestion(row, '', undefined)));
+    if (type === 'video' && indexed.includes('video')) out.push(...rows.flatMap(row => videoSuggestion(row, '', undefined)));
+    if (type === 'playlist' && indexed.includes('playlist')) out.push(...rows.flatMap(row => playlistSuggestion(row)));
+    if (type === 'category' && types.includes('category')) {
+      out.push(...VIDEO_CATEGORIES.slice(offset, offset + limit).map(category => ({ text: category.label.en, type: 'category' as const, metadata: { category: category.value } })));
+    }
+  }
+  return out.map(({ alt: _alt, ...s }: RankedSuggestion) => s);
 }
 
 /** Number of public videos per category (optionally in one language). */

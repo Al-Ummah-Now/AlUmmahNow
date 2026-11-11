@@ -93,6 +93,35 @@ describe('user picker search rules', () => {
   });
 });
 
+describe('user picker opens with content (the channel\'s team)', () => {
+  it('focusing an empty box lists the first page; it is fetched once, then shown again', () => {
+    const browsing = run([{ type: 'browse' }]);
+    assert.equal(browsing.status, 'loading');
+    assert.equal(browsing.open, true);
+    const listed = pickerReducer(browsing, { type: 'results', query: '', results: [user('a')] });
+    assert.equal(listed.status, 'done');
+    assert.equal(listed.active, 0);
+    const reopened = pickerReducer(pickerReducer(listed, { type: 'close' }), { type: 'browse' });
+    assert.equal(reopened.status, 'done', 'no second request');
+    assert.equal(reopened.open, true);
+  });
+
+  it('clearing the text goes back to the first page when browsing; without it the box closes as before', () => {
+    const typedThenCleared = run([{ type: 'type', query: 'am', browse: true }, { type: 'type', query: '', browse: true }]);
+    assert.equal(typedThenCleared.status, 'loading');
+    assert.equal(typedThenCleared.open, true);
+    assert.equal(run([{ type: 'type', query: 'am' }, { type: 'type', query: '' }]).open, false);
+  });
+
+  it('says what the first page is, in English and Arabic', () => {
+    const team = run([{ type: 'browse' }, { type: 'results', query: '', results: [user('a'), user('c')] }]);
+    assert.match(statusText(team, tEn), /2 people on this channel/);
+    assert.match(statusText(team, tAr), /[؀-ۿ]/);
+    const none = run([{ type: 'browse' }, { type: 'results', query: '', results: [] }]);
+    assert.match(statusText(none, tEn), /Type a name/);
+  });
+});
+
 describe('user picker keyboard', () => {
   const results = [user('a'), user('b', { isBanned: true }), user('c')];
   const listed = run([{ type: 'type', query: 'xx' }, { type: 'results', query: 'xx', results }]);

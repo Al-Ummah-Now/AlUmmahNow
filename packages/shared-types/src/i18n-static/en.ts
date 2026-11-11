@@ -722,6 +722,10 @@ export const EN_TRANSLATIONS: AppTranslations = {
     keyboardHint: 'Type to see suggestions',
     searchChannel: 'Search this channel',
     closeSearch: 'Close search',
+    loadFailed: 'Couldn’t load the list.',
+    retry: 'Try again',
+    loadingMore: 'Loading more…',
+    alreadyAdded: 'Already added',
   },
 
   creator: {

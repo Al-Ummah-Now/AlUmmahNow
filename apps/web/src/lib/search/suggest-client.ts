@@ -60,6 +60,28 @@ export async function fetchSuggestions(query: string, request: SuggestRequest = 
   }
 }
 
+/**
+ * A picker's first page (and the pages after it) before anything is typed:
+ * GET /api/search/suggestions with an empty q. Most viewed channels, or with
+ * `channelId` that channel's newest videos/playlists. Unlike fetchSuggestions
+ * it rejects when the API fails, so the picker can show an error and a retry.
+ * `next` is the offset of the following page, null after the last one.
+ */
+export async function fetchInitialSuggestions(
+  request: SuggestRequest & { offset?: number },
+): Promise<{ items: SearchSuggestion[]; next: number | null }> {
+  const limit = request.limit ?? 20;
+  const offset = request.offset ?? 0;
+  const params = new URLSearchParams({ q: '', limit: String(limit), offset: String(offset) });
+  if (request.types?.length) params.set('types', request.types.join(','));
+  if (request.channelId) params.set('channelId', request.channelId);
+  const response = await fetch(`${getApiUrl().replace(/\/$/, '')}/api/search/suggestions?${params}`, { method: 'GET', signal: request.signal });
+  if (!response.ok) throw new Error(`Suggestions answered ${response.status}`);
+  const data = (await response.json()) as SearchSuggestion[] | { data?: SearchSuggestion[] };
+  const items = Array.isArray(data) ? data : data.data ?? [];
+  return { items, next: items.length >= limit ? offset + limit : null };
+}
+
 /** Where picking a suggestion goes; null for kinds that run a search instead (category, query). */
 export function suggestionHref(suggestion: SearchSuggestion, locale: string): string | null {
   const id = suggestion.id;

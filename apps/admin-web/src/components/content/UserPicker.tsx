@@ -26,6 +26,8 @@ interface Props {
   onChange: (user: AdminUserSearchItem | null) => void;
   disabled?: boolean;
   testId: string;
+  /** Open with search('') before anything is typed (the transfer lists the channel's team). Default on. */
+  initialResults?: boolean;
 }
 
 function Avatar({ user }: { user: AdminUserSearchItem }) {
@@ -68,7 +70,7 @@ function UserSummary({ user }: { user: AdminUserSearchItem }) {
   );
 }
 
-export function UserPicker({ label, hint, search, value, onChange, disabled, testId }: Props) {
+export function UserPicker({ label, hint, search, value, onChange, disabled, testId, initialResults = true }: Props) {
   const { t } = useLanguage();
   const ids = useId();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -199,9 +201,12 @@ export function UserPicker({ label, hint, search, value, onChange, disabled, tes
         placeholder={t('channels.newOwnerPlaceholder')}
         value={state.query}
         disabled={disabled}
-        onChange={(e) => dispatch({ type: 'type', query: e.target.value })}
+        onChange={(e) => dispatch({ type: 'type', query: e.target.value, browse: initialResults })}
         onKeyDown={onKeyDown}
-        onFocus={() => dispatch({ type: 'open' })}
+        onFocus={() => dispatch(initialResults ? { type: 'browse' } : { type: 'open' })}
+        onClick={() => {
+          if (initialResults && !state.open) dispatch({ type: 'browse' });
+        }}
         onBlur={() => dispatch({ type: 'close' })}
         className={`${fieldClass} w-full`}
         data-testid={`${testId}-input`}

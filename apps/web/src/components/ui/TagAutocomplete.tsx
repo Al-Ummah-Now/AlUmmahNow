@@ -5,6 +5,8 @@
  * single: one tag at a time (picked or Enter adds it through onAdd);
  * list: a comma-separated field where the tag after the last comma is
  * completed. Any text is still allowed: suggestions never block a new tag.
+ * It opens with the creator's most used tags (those not on the item yet)
+ * before anything is typed.
  */
 
 import { useMemo } from 'react';
@@ -47,6 +49,8 @@ export function TagAutocomplete({
       onValueChange={onValueChange}
       options={options}
       queryOf={list ? lastTagSegment : undefined}
+      // Before anything is typed: the most used tags not on the item yet
+      emptyOptions={options}
       maxOptions={8}
       hideNoMatches
       onSelect={(option) => {

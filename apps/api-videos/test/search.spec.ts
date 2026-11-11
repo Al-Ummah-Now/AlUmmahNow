@@ -18,7 +18,7 @@ import { SearchGet } from '../src/endpoints/search/searchGet';
 import { ExploreGet } from '../src/endpoints/search/exploreGet';
 import { SearchBackfillPost } from '../src/endpoints/search/searchBackfill';
 import { SearchSuggestionsGet } from '../src/endpoints/discovery/discovery';
-import { decodeCursor, searchIndex, suggestFromIndex } from '../src/lib/search/query';
+import { decodeCursor, initialSuggestionsFromIndex, searchIndex, suggestFromIndex } from '../src/lib/search/query';
 import { searchIdForKey, withSearchSync } from '../src/lib/search/sync';
 import { backfillSearchPage, reconcileSearchIndex } from '../src/lib/search/backfill';
 import { activeSeasonalRails, SEASONAL_CONFIG_KEY } from '../src/lib/search/explore';
@@ -295,6 +295,40 @@ describe('searchIndex (D1 FTS5)', () => {
 		const own = await suggestFromIndex(db, 'seer', 8, { types: ['video', 'playlist'], channelId: 'ch-en', now: NOW });
 		assert.ok(own.length >= 2 && own.every(s => s.type === 'video' || s.type === 'playlist'));
 		assert.deepEqual(await suggestFromIndex(db, 'tafsir', 8, { types: ['video', 'channel', 'playlist'], now: NOW }), []);
+	});
+
+	it('initial suggestions (empty query): a channel\'s newest videos and playlists, most viewed channels, paged', async () => {
+		const db = seededDb();
+		await seed(db);
+		// The channel's newest first; hidden channels' content never shows
+		const videos = await initialSuggestionsFromIndex(db, 5, { types: ['video'], channelId: 'ch-en', now: NOW });
+		assert.deepEqual(videos.map(s => s.id), ['v-seerah2', 'v-seerah']);
+		const page2 = await initialSuggestionsFromIndex(db, 1, { types: ['video'], channelId: 'ch-en', offset: 1, now: NOW });
+		assert.deepEqual(page2.map(s => s.id), ['v-seerah']);
+		const playlists = await initialSuggestionsFromIndex(db, 5, { types: ['playlist'], channelId: 'ch-en', now: NOW });
+		assert.deepEqual(playlists.map(s => s.id), ['pl-seerah']);
+		assert.equal(playlists[0].subtitle, 'Seerah Studies');
+		// Channels: visible ones only, with handle/subtitle like typed suggestions
+		const channels = await initialSuggestionsFromIndex(db, 10, { types: ['channel'], now: NOW });
+		assert.ok(channels.length >= 2 && channels.every(s => s.type === 'channel' && s.id !== 'ch-private'));
+		// Newest public videos without a channel, never a hidden channel's
+		const recent = await initialSuggestionsFromIndex(db, 10, { types: ['video'], now: NOW });
+		assert.equal(recent[0].id, 'v-salah');
+		assert.ok(!recent.some(s => s.id === 'v-hidden-channel'));
+	});
+
+	it('GET /api/search/suggestions with an empty q returns the first page (offset pages)', async () => {
+		const db = seededDb();
+		await seed(db);
+		const routes = buildApp(r => r.get('/api/search/suggestions', SearchSuggestionsGet));
+		const env = { SEARCH_DB: db, videos: new MemoryBucket(), channels: new MemoryBucket() } as any;
+		const first = await (await routes.request('/api/search/suggestions?q=&types=video&channelId=ch-en&limit=1', {}, env)).json() as any[];
+		assert.deepEqual(first.map(s => s.id), ['v-seerah2']);
+		const next = await (await routes.request('/api/search/suggestions?types=video&channelId=ch-en&limit=1&offset=1', {}, env)).json() as any[];
+		assert.deepEqual(next.map(s => s.id), ['v-seerah']);
+		// No index: nothing rather than a scan
+		const none = await (await routes.request('/api/search/suggestions?q=&types=video', {}, { ...env, SEARCH_DB: undefined })).json() as any[];
+		assert.deepEqual(none, []);
 	});
 
 	it('suggests a channel by its localized name and @handle', async () => {

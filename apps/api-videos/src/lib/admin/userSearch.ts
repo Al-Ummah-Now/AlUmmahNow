@@ -63,9 +63,11 @@ function rank(user: AdminUserRow, term: string, ownsHandle: boolean): number {
 
 export async function searchUsers(env: AdminEnv, query: AdminUserSearchQuery): Promise<{ items: AdminUserSearchItem[] }> {
 	const term = searchTerm(query.q);
-	if (term.length < ADMIN_USER_SEARCH_MIN_LENGTH) return { items: [] };
 	const limit = Math.min(Math.max(query.limit ?? ADMIN_USER_SEARCH_MAX_RESULTS, 1), 20);
 	const exclude = new Set(query.exclude ?? []);
+	// Nothing typed yet (pickers open with content): the channel's team, on channel_access's primary key
+	if (term.length === 0 && query.channelId) return channelTeam(env, query.channelId, exclude, limit);
+	if (term.length < ADMIN_USER_SEARCH_MIN_LENGTH) return { items: [] };
 	const db = env.SEARCH_DB;
 	if (!db) throw new Error('SEARCH_DB is not bound');
 
@@ -94,19 +96,50 @@ export async function searchUsers(env: AdminEnv, query: AdminUserSearchQuery): P
 	}
 	const page = { items: [...(await userRows(env, matched)).values()] };
 
+	const missing = ownerIds.filter((id) => !page.items.some((u) => u.id === id));
+	const owners = missing.length ? await userRows(env, missing) : new Map<string, AdminUserRow>();
+	return withCountsAndRoles(env, db, query.channelId, rankedUsers(page.items, ownerIds, exactHandleOwners, owners, exclude, term, limit));
+}
+
+function rankedUsers(
+	listed: AdminUserRow[],
+	ownerIds: string[],
+	exactHandleOwners: Set<string>,
+	owners: Map<string, AdminUserRow>,
+	exclude: Set<string>,
+	term: string,
+	limit: number,
+): AdminUserRow[] {
 	const byId = new Map<string, AdminUserRow>();
-	for (const user of page.items) if (!user.profileDeleted) byId.set(user.id, user);
-	const missing = ownerIds.filter((id) => !byId.has(id));
-	if (missing.length) {
-		for (const [id, user] of await userRows(env, missing)) if (!user.profileDeleted) byId.set(id, user);
+	for (const user of listed) if (!user.profileDeleted) byId.set(user.id, user);
+	for (const id of ownerIds) {
+		const user = owners.get(id);
+		if (user && !user.profileDeleted && !byId.has(id)) byId.set(id, user);
 	}
 
-	const users = [...byId.values()]
+	return [...byId.values()]
 		.filter((u) => !exclude.has(u.id))
 		.map((u, i) => ({ u, i, r: rank(u, term, exactHandleOwners.has(u.id)) }))
 		.sort((a, b) => a.r - b.r || a.i - b.i)
 		.slice(0, limit)
 		.map((x) => x.u);
+}
+
+/** The channel's members (owners, editors, moderators…), the transfer picker's first page. */
+async function channelTeam(env: AdminEnv, channelId: string, exclude: Set<string>, limit: number): Promise<{ items: AdminUserSearchItem[] }> {
+	const db = env.SEARCH_DB;
+	if (!db) throw new Error('SEARCH_DB is not bound');
+	const { results } = await db
+		.prepare('SELECT user_id AS id FROM channel_access WHERE channel_id = ? LIMIT ?')
+		.bind(channelId, limit + exclude.size)
+		.all<{ id: string }>();
+	const ids = (results ?? []).map((r) => r.id).filter((id) => !exclude.has(id));
+	const rows = await userRows(env, ids);
+	const users = ids.map((id) => rows.get(id)).filter((u): u is AdminUserRow => !!u && !u.profileDeleted).slice(0, limit);
+	return withCountsAndRoles(env, db, channelId, users);
+}
+
+async function withCountsAndRoles(env: AdminEnv, db: NonNullable<AdminEnv['SEARCH_DB']>, channelId: string | undefined, users: AdminUserRow[]): Promise<{ items: AdminUserSearchItem[] }> {
 	if (users.length === 0) return { items: [] };
 
 	const ids = JSON.stringify(users.map((u) => u.id));
@@ -118,10 +151,10 @@ export async function searchUsers(env: AdminEnv, query: AdminUserSearchQuery): P
 			)
 			.bind(ids)
 			.all<Row>(),
-		query.channelId
+		channelId
 			? db
 					.prepare('SELECT user_id AS id, role FROM channel_access WHERE channel_id = ? AND user_id IN (SELECT value FROM json_each(?))')
-					.bind(query.channelId, ids)
+					.bind(channelId, ids)
 					.all<Row>()
 			: Promise.resolve({ results: [] as Row[] }),
 	]);

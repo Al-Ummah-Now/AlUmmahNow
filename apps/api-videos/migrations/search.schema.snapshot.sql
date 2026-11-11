@@ -19,6 +19,7 @@
 --   apps/api-videos/migrations/search/0021_user_search_indexes.sql
 --   apps/api-videos/migrations/search/0023_media_originals.sql
 --   apps/api-videos/migrations/search/0024_playback_fallbacks.sql
+--   apps/api-videos/migrations/search/0026_suggest_initial.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
@@ -98,13 +99,16 @@ CREATE INDEX idx_media_jobs_status ON media_jobs (status, updated_at);
 CREATE INDEX idx_media_originals_due ON media_originals (deleted_at, completed_at);
 CREATE INDEX idx_search_channels_created ON search_channels (visible, created_at);
 CREATE INDEX idx_search_channels_indexed ON search_channels (indexed_at);
+CREATE INDEX idx_search_channels_popular ON search_channels (visible, views, popularity);
 CREATE INDEX idx_search_playlists_channel ON search_playlists (channel_id);
+CREATE INDEX idx_search_playlists_channel_created ON search_playlists (channel_id, created_at);
 CREATE INDEX idx_search_playlists_indexed ON search_playlists (indexed_at);
 CREATE INDEX idx_search_posts_channel ON search_posts (channel_id);
 CREATE INDEX idx_search_posts_indexed ON search_posts (indexed_at);
 CREATE INDEX idx_search_tombstones_version ON search_tombstones (version);
 CREATE INDEX idx_search_videos_category ON search_videos (category, created_at);
 CREATE INDEX idx_search_videos_channel ON search_videos (channel_id);
+CREATE INDEX idx_search_videos_channel_created ON search_videos (channel_id, created_at);
 CREATE INDEX idx_search_videos_created ON search_videos (created_at);
 CREATE INDEX idx_search_videos_indexed ON search_videos (indexed_at);
 CREATE INDEX idx_search_videos_language ON search_videos (language, created_at);

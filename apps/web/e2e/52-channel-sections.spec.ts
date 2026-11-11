@@ -216,6 +216,35 @@ test.describe('Section manager', () => {
     });
   }
 
+  // Owner rule 2026-11-11: every picker opens with content before anything is typed
+  for (const locale of ['en', 'ar'] as const) {
+    test(`SECT-012 pickers open with results: featured channels and videos list before typing, typing filters (${locale})`, async ({ page }) => {
+      await openManager(page, locale);
+      const dialog = await openAddDialog(page, locale);
+      await dialog.locator('[data-section-card="featured_channels"]').click();
+      const channels = dialog.getByTestId('channel-picker-options');
+      // Most viewed channels, without typing; never this channel itself
+      await expect(channels.getByTestId('channel-picker-option').first()).toBeVisible({ timeout: 15_000 });
+      await expect(dialog.getByTestId('channel-picker-search')).toHaveValue('');
+      await expect(channels.locator(`[data-option-id="${channelId()}"]`)).toHaveCount(0);
+      const count = await channels.getByTestId('channel-picker-option').count();
+      expect(count).toBeGreaterThan(0);
+      // The list is announced and busy only while loading
+      await expect(channels.getByRole('listbox')).not.toHaveAttribute('aria-busy', 'true');
+      // Picking one marks it and keeps it from being added twice
+      const first = channels.getByTestId('channel-picker-option').first();
+      await first.click();
+      await expect(first).toHaveAttribute('aria-checked', 'true');
+      await expect(first).toHaveAttribute('aria-disabled', 'true');
+      // Typing filters live
+      const name = ((await channels.getByTestId('channel-picker-option').nth(Math.min(1, count - 1)).locator('span[dir="auto"]').first().textContent()) ?? '').trim();
+      if (name.length >= 2) {
+        await fillStable(dialog.getByTestId('channel-picker-search'), name.slice(0, Math.min(6, name.length)));
+        await expect(channels.getByTestId('channel-picker-option').first()).toBeVisible();
+      }
+    });
+  }
+
   test('SECT-003 validates picks and titles before saving', async ({ page }) => {
     await openManager(page);
     const dialog = await openAddDialog(page);
@@ -445,8 +474,9 @@ const pickPasted = (testId: string, id: () => string) => async (dialog: Locator)
 };
 
 const pickPlaylist = async (dialog: Locator, fx: Fixtures) => {
-  await dialog.getByTestId('playlist-picker-options').locator(`[data-playlist-id="${fx.playlistId}"]`).click();
-  await expect(dialog.getByTestId('playlist-picker-options').locator(`[data-playlist-id="${fx.playlistId}"]`)).toHaveAttribute('aria-pressed', 'true');
+  // The picker opens with the channel's playlists listed (no typing needed)
+  await dialog.getByTestId('playlist-picker-options').locator(`[data-option-id="${fx.playlistId}"]`).click();
+  await expect(dialog.getByTestId('playlist-picker-options').locator(`[data-option-id="${fx.playlistId}"]`)).toHaveAttribute('aria-checked', 'true');
 };
 
 const videoLink = (section: Locator, videoId: string) => section.locator(`a[href*="vid=${videoId}"]`).first();
@@ -538,9 +568,9 @@ const TYPE_CASES = (fx: () => Fixtures): TypeCase[] => [
     title: tempName('Channels'),
     fill: async (dialog, f) => {
       await fillStable(dialog.getByTestId('channel-picker-search'), f.lecturesChannelName);
-      const option = dialog.getByTestId('channel-picker-options').locator(`[data-channel-id="${f.lecturesChannelId}"]`);
+      const option = dialog.getByTestId('channel-picker-options').locator(`[data-option-id="${f.lecturesChannelId}"]`);
       await option.click();
-      await expect(option).toHaveAttribute('aria-pressed', 'true');
+      await expect(option).toHaveAttribute('aria-checked', 'true');
     },
     expect: 'content',
     content: async (section) => {

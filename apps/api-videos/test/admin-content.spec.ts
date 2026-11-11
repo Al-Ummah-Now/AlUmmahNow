@@ -495,6 +495,11 @@ describe('channel actions', () => {
 		assert.equal(bilal.channelCount, 1);
 		assert.equal(bilal.email, 'bilal@example.com');
 		assert.equal((await search('owner@example.com'))[0].channelCount, 2);
+		// Nothing typed (the transfer picker opening): the channel's team, without the owner being replaced
+		const team = await search('', `&exclude=${OWNER}&channelId=ch3`);
+		assert.deepEqual(team.map((u) => u.id), ['usr_amina'], "the channel's members first");
+		assert.equal(team[0].channelRole, 'editor');
+		assert.deepEqual(await search(''), [], 'no channel, nothing typed: nothing');
 		const banned = await call('POST', '/users/usr_bilal/ban', {});
 		assert.equal(banned.status, 200);
 		assert.equal((await search('bilal@example.com'))[0].isBanned, true, 'banned users are listed as such');

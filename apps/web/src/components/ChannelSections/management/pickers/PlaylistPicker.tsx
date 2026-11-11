@@ -1,18 +1,18 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import type { Playlist } from '@al-ummah/shared-types';
 import { getChannelPlaylists } from '@/lib/api/channels';
 import { pickLanguage } from '@/lib/format/pick-language';
 import { getPlaylistCoverUrl } from '@/lib/playlists/playlist-utils';
 import { useLanguage } from '@/hooks/useLanguage';
-import { logger } from '@/lib/logger-client';
-import { Autocomplete, type AutocompleteOption } from '@/components/ui/Autocomplete';
+import { Autocomplete, type AutocompleteOption, type AutocompletePage } from '@/components/ui/Autocomplete';
 import { fetchSuggestions } from '@/lib/search/suggest-client';
 import { SelectedList, type PickedItem } from './SelectedList';
 
-const PICKER_PAGE = 50;
+/** Playlists per page; the list pages on as it is scrolled */
+const PICKER_PAGE = 30;
 
 interface PlaylistPickerProps {
   channelId: string;
@@ -33,41 +33,37 @@ export function toPickedPlaylist(playlist: PickerPlaylist, locale: string): Pick
   };
 }
 
-/** Pick from the channel's public playlists; with `max` 1 a pick replaces the current one */
+/**
+ * Pick from the channel's public playlists, listed as soon as it opens (paged
+ * on scroll, searchable); chosen ones are ticked. With `max` 1 a pick replaces
+ * the current one.
+ */
 export function PlaylistPicker({ channelId, value, onChange, max, testId, label }: PlaylistPickerProps) {
   const { t, locale } = useLanguage();
   const f = t.channelSections.form;
-  const [playlists, setPlaylists] = useState<PickerPlaylist[] | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    getChannelPlaylists(channelId, { limit: PICKER_PAGE })
-      .then((page) => {
-        const list = ((page?.data ?? []) as PickerPlaylist[]).filter((p) => p.isPublic !== false);
-        if (!cancelled) setPlaylists(list);
-      })
-      .catch((error) => {
-        logger.warn('PlaylistPicker: channel playlists unavailable', { channelId, error });
-        if (!cancelled) setPlaylists([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [channelId]);
 
   const single = max === 1;
   const selectedIds = useMemo(() => new Set(value.map((v) => v.id)), [value]);
   const full = !single && value.length >= max;
 
   const [query, setQuery] = useState('');
-  const playlistOptions = useMemo<AutocompleteOption[]>(() => (playlists ?? []).map((playlist) => {
+  const toOption = useCallback((playlist: PickerPlaylist): AutocompleteOption => {
     const item = toPickedPlaylist(playlist, locale);
     return {
       id: playlist.id, label: item.label, keywords: [playlist.name, playlist.title],
       subtitle: t.channelSections.render.videosCount.replace('{count}', String(playlist.videosCount ?? 0)),
       thumbnailUrl: item.thumbnailUrl ?? undefined, thumbnailShape: 'wide' as const, value: item,
     };
-  }), [playlists, locale, t]);
+  }, [locale, t]);
+
+  // The channel's public playlists as soon as it opens, a page at a time
+  const loadInitial = useCallback(async (cursor: string | null): Promise<AutocompletePage> => {
+    const page = await getChannelPlaylists(channelId, { limit: PICKER_PAGE, ...(cursor ? { cursor } : {}) });
+    if (!page) throw new Error('channel playlists unavailable');
+    const next = (page as { cursor?: string }).cursor || page.pagination?.nextCursor || null;
+    return { options: ((page.data ?? []) as PickerPlaylist[]).filter((p) => p.isPublic !== false).map(toOption), next };
+  }, [channelId, toOption]);
 
   // Playlists past the first page come from the search index (public ones only, like this list)
   const loadMore = useCallback(async (q: string, signal: AbortSignal): Promise<AutocompleteOption[]> => {
@@ -97,11 +93,10 @@ export function PlaylistPicker({ channelId, value, onChange, max, testId, label 
         mode="inline"
         value={query}
         onValueChange={setQuery}
-        options={playlistOptions}
-        emptyOptions={playlistOptions}
-        emptyText={playlists === null ? f.loading : f.noPlaylists}
+        loadInitial={loadInitial}
+        emptyText={f.noPlaylists}
         load={loadMore}
-        loadKey={channelId}
+        loadKey={`${channelId}:${locale}`}
         maxOptions={PICKER_PAGE}
         keepOpenOnSelect={!single}
         onSelect={(option) => toggle(option.value as PickedItem)}

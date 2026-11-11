@@ -2,6 +2,8 @@
  * /api/suggest/* — the admin autocomplete.
  *
  *   GET /api/suggest/:kind?q=…&limit=…  suggestions while the admin types
+ *   GET /api/suggest/:kind?q=&cursor=…   a picker's page before anything is typed
+ *                                       (newest first; `next` is the cursor of the page after)
  *   GET /api/suggest/:kind/:id          one item by id (the chip of an active filter)
  *
  * Behind authMiddleware + adminMiddleware (src/index.ts). Content kinds are
@@ -16,6 +18,7 @@
 import { Hono, type Context } from 'hono';
 import {
   ADMIN_SUGGEST_KINDS,
+  ADMIN_SUGGEST_INITIAL_LIMIT,
   ADMIN_SUGGEST_LIMIT,
   type AdminChannelRow,
   type AdminCommentRow,
@@ -171,6 +174,44 @@ async function search(c: C, kind: AdminSuggestKind, q: string, limit: number): P
   return kind === 'user' ? withInviteBadges(c, suggestions) : suggestions;
 }
 
+/**
+ * A picker opening (owner rule 2026-11-11: pickers open with content): the
+ * newest items of the kind, a page at a time. Content kinds ask api-videos for
+ * the list without its total (`noTotal`), so each page is one indexed, limited
+ * read (users come straight off the profiles' created_at index); playlists and
+ * posts page with the store's cursor. `next` is null after the last page.
+ */
+async function initialPage(c: C, kind: AdminSuggestKind, cursor: string, limit: number): Promise<{ items: AdminSuggestion[]; next: string | null }> {
+  const page = Math.max(1, Math.floor(Number(cursor) || 1));
+  const offset = (page - 1) * limit;
+  const nextPage = (count: number) => (count >= limit ? String(page + 1) : null);
+  if (kind === 'contact') {
+    const { messages } = await listContactMessages(c.env.REPORTS_DB, { limit, offset });
+    return { items: messages.map(fromContact), next: nextPage(messages.length) };
+  }
+  if (kind === 'error') {
+    const { groups } = await listErrorGroups(c.env.REPORTS_DB, { limit, offset });
+    return { items: groups.map(fromError), next: nextPage(groups.length) };
+  }
+  if (kind === 'invite') {
+    const { items, nextCursor } = await listInvites(c.env.REPORTS_DB, { limit, ...(cursor ? { cursor } : {}) });
+    return { items: items.map(fromInvite), next: nextCursor };
+  }
+  if (kind === 'playlist' || kind === 'post') {
+    const result = await callVideos<{ items: unknown[]; nextCursor: string | null }>(c.env, CONTENT_PATH[kind], {
+      query: { pageSize: limit, ...(cursor ? { cursor } : {}) },
+      actorId: c.get('auth')?.userId,
+    });
+    return { items: result.items.map(CONTENT_MAP[kind]), next: result.nextCursor ?? null };
+  }
+  const result = await callVideos<AdminPage<unknown>>(c.env, CONTENT_PATH[kind], {
+    query: { pageSize: limit, page, sort: 'newest', noTotal: '1' },
+    actorId: c.get('auth')?.userId,
+  });
+  const suggestions = result.items.map(CONTENT_MAP[kind]);
+  return { items: kind === 'user' ? await withInviteBadges(c, suggestions) : suggestions, next: nextPage(result.items.length) };
+}
+
 /** Invited users who have not signed in yet are pickable like any user, with an "Invited" badge. */
 async function withInviteBadges(c: C, suggestions: AdminSuggestion[]): Promise<AdminSuggestion[]> {
   const invites = await inviteStatusByUser(c.env.REPORTS_DB, suggestions.map((s) => s.id)).catch(() => new Map());
@@ -232,7 +273,17 @@ app.get('/:kind', async (c) => {
   const refused = refuse(c, kind);
   if (refused) return refused;
   const q = (c.req.query('q') ?? '').trim().slice(0, MAX_QUERY);
-  if (!q) return c.json({ success: true, result: { items: [] } });
+  if (!q) {
+    // A picker opening: its first page (or the page at `cursor`) instead of nothing
+    const limit = Math.min(Math.max(Number(c.req.query('limit')) || ADMIN_SUGGEST_INITIAL_LIMIT, 1), 50);
+    try {
+      const { items, next } = await initialPage(c, kind as AdminSuggestKind, (c.req.query('cursor') ?? '').slice(0, 2000), limit);
+      logger.debug('[Suggest] Initial page', { kind, count: items.length, more: !!next });
+      return c.json({ success: true, result: { items, next } });
+    } catch (error) {
+      return failed(c, kind, error);
+    }
+  }
   const limit = Math.min(Math.max(Number(c.req.query('limit')) || ADMIN_SUGGEST_LIMIT, 1), 20);
   try {
     const items = exactFirst(await search(c, kind as AdminSuggestKind, q, limit), q).slice(0, limit);
