@@ -153,9 +153,13 @@ async function checkBurst(page: Page, locale: Locale, label: string): Promise<vo
 }
 
 /** Opens the account menu; every visible item must be what a click at its centre hits. */
-async function checkMenuOnTop(page: Page, label: string): Promise<void> {
+async function checkMenuOnTop(page: Page, rt: ReturnType<typeof fakeRealtime>, tag: string, label: string): Promise<void> {
   // Hovering the toasts pauses them; move away so the menu opens normally
   await page.mouse.move(5, 5);
+  // Toasts live 8 s (TOAST_TTL_MS) and the burst checks before this can take that long on a busy
+  // runner: one more ready event renews the bulk toast, so it is up for the whole menu check
+  rt.push('uploadReady', { videoTitle: `Good Deeds ${tag}-renew` }, `/video/e2e-${tag}-renew`);
+  await expect(page.locator(TOAST).first()).toBeVisible();
   await page.locator('[data-testid="nav-menu-trigger"]:visible').first().click();
   const menu = page.locator('[data-testid="nav-menu"]:visible').first();
   await expect(menu).toBeVisible();
@@ -195,7 +199,7 @@ test.describe('Release: real-time toasts stay out of the way during a bulk uploa
       await waitForToasts(page, rt);
       pushBurst(rt, `${locale}-d`);
       await checkBurst(page, locale, `${locale}-desktop`);
-      await checkMenuOnTop(page, `${locale}-desktop`);
+      await checkMenuOnTop(page, rt, `${locale}-d`, `${locale}-desktop`);
 
       // Phone: above the tab bar, below the header
       await page.setViewportSize(PHONE);
@@ -203,7 +207,7 @@ test.describe('Release: real-time toasts stay out of the way during a bulk uploa
       await waitForToasts(page, rt);
       pushBurst(rt, `${locale}-p`);
       await checkBurst(page, locale, `${locale}-phone`);
-      await checkMenuOnTop(page, `${locale}-phone`);
+      await checkMenuOnTop(page, rt, `${locale}-p`, `${locale}-phone`);
     });
   }
 });
