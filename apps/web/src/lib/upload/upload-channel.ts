@@ -122,7 +122,7 @@ export function rememberUploadChannel(userId: string | undefined, value: Remembe
 
 export interface UploadPageWork {
   /** Batch rows (any status) */
-  rows: ReadonlyArray<{ status: string; videoId?: string }>;
+  rows: ReadonlyArray<{ status: string; videoId?: string; bytesUploaded?: number }>;
   /** A file is chosen in single mode */
   singleHasFile: boolean;
   /** The single upload is sending, paused or finishing */
@@ -144,12 +144,25 @@ export function channelChangeState(work: UploadPageWork): 'locked' | 'confirm' |
   if (work.singleBusy || work.singleDone) return 'locked';
   const started = work.rows.some((row) => {
     if (row.status === 'initiating' || row.status === 'uploading' || row.status === 'paused' || row.status === 'processing') return true;
-    // A row with a video record that has not finished still belongs to its channel
+    // Queued, nothing sent: its placeholder video is dropped and the file re-added
+    // on the new channel (requeueableRows). A failed row with a video, or any
+    // bytes sent, still belongs to its channel.
+    if (row.status === 'pending') return (row.bytesUploaded ?? 0) > 0;
     return !!row.videoId && row.status !== 'completed' && row.status !== 'cancelled';
   });
   if (started) return 'locked';
   if (work.singleHasFile || work.rows.length > 0) return 'confirm';
   return 'free';
+}
+
+/**
+ * Batch rows that move to a newly picked channel: queued, nothing sent yet.
+ * Adding a file to the batch already creates its placeholder video on the
+ * current channel, so these are removed and their files added again (the
+ * upload reaper clears the empty placeholders).
+ */
+export function requeueableRows<T extends { status: string; bytesUploaded?: number }>(rows: readonly T[]): T[] {
+  return rows.filter((row) => row.status === 'pending' && !((row.bytesUploaded ?? 0) > 0));
 }
 
 /** The channel's name in the page language. */

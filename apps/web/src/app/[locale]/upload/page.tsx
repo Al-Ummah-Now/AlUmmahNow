@@ -44,6 +44,7 @@ import {
   initialUploadChannel,
   readRememberedUploadChannel,
   rememberUploadChannel,
+  requeueableRows,
   roleOn,
   uploadEligibleChannels,
   type RememberedUploadChannel,
@@ -216,15 +217,28 @@ const UploadPage: React.FC = () => {
   const pickerLocked = changeState === 'locked' || isUploading || isInitiating || !!resumeVideoId;
   const [pendingChannelId, setPendingChannelId] = useState<string | null>(null);
   const resetBatchPlaylists = batchPlaylists.reset;
+  // Queued batch files waiting to be added again on the newly picked channel
+  const [requeue, setRequeue] = useState<{ channelId: string; files: File[] } | null>(null);
+  useEffect(() => {
+    if (!requeue || requeue.channelId !== uploadChannelId) return;
+    setRequeue(null);
+    logger.debug('[UploadPage] Re-adding queued files on the picked channel', { channelId: uploadChannelId, count: requeue.files.length });
+    void addFiles(requeue.files);
+  }, [requeue, uploadChannelId, addFiles]);
 
   const applyChannel = useCallback((channelId: string) => {
     logger.info('[UploadPage] Upload channel picked', { channelId, from: uploadChannelId });
     setPickedChannelId(channelId);
     rememberUploadChannel(userId, { channelId, navChannelId: navChannelId ?? sessionChannelId });
-    // Playlists and categories belong to the old channel; finished rows stay on it
+    // Playlists and categories belong to the old channel; finished rows stay on
+    // it. Queued rows already have a placeholder video there: drop them and add
+    // their files again once the new channel is in effect.
     setBatchCategory(undefined);
     resetBatchPlaylists();
     clearFinished();
+    const queued = requeueableRows(files);
+    for (const row of queued) removeFile(row.id);
+    setRequeue(queued.length ? { channelId, files: queued.map((row) => row.file) } : null);
     setSingleFormKey((k) => k + 1);
     setSingleWork({ hasFile: false, busy: false });
     setUploadError(null);
@@ -237,7 +251,7 @@ const UploadPage: React.FC = () => {
         window.history.replaceState(window.history.state, '', url.toString());
       }
     }
-  }, [uploadChannelId, userId, navChannelId, sessionChannelId, resetBatchPlaylists, clearFinished]);
+  }, [uploadChannelId, userId, navChannelId, sessionChannelId, resetBatchPlaylists, clearFinished, files, removeFile]);
 
   const handleChannelPick = useCallback((channelId: string) => {
     if (pickerLocked || channelId === uploadChannelId) return;
