@@ -1,3 +1,4 @@
+import { renderReply } from '../src/lib/contact-email';
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { MAX_ATTEMPTS, backoffSeconds, contactMailConsumer, processContactMailJob, type ContactMailJob } from '../src/lib/contact-mail-queue';
@@ -126,6 +127,17 @@ describe('contact mail queue', () => {
     assert.equal((await getContactMessage(db, 'm1'))?.status, 'replied');
     assert.equal(calls.at(-1)?.key, 'contact-reply-n1');
     assert.match(String(calls.at(-1)?.body.text), /> A message long enough\./);
+  });
+
+  it('sends a reply in the language the admin picked, which the stored subject keeps for retries', async () => {
+    const { db, env } = await setup();
+    const message = (await getContactMessage(db, 'm1'))!;
+    const picked = message.locale === 'ar' ? 'en' : 'ar';
+    const subject = renderReply(message as never, 'x', { locale: picked, environment: env.ENVIRONMENT }).subject;
+    await insertContactNote(db, { id: 'n2', message_id: 'm1', kind: 'reply', body: 'Hello', author_id: 'adm', author_email: null, email_to: 'amina@example.org', email_subject: subject, email_status: 'queued', email_id: null, created_at: '2026-11-09T11:00:00Z' });
+    assert.equal(await processContactMailJob(env, msg({ v: 1, kind: 'reply', messageId: 'm1', noteId: 'n2' })), 'done');
+    assert.match(String(calls.at(-1)?.body.html), new RegExp(`<html lang="${picked}"`));
+    assert.equal(calls.at(-1)?.body.subject, subject);
   });
 
   it('drops jobs for deleted messages and malformed jobs', async () => {

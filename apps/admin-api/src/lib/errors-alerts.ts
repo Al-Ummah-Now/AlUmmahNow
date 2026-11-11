@@ -6,7 +6,8 @@
  * at most one alert per group every 6 hours and ERROR_ALERT_LIMITS.perHour
  * mails per hour in all (the rest are recorded in the group's activity only).
  */
-import { escapeHtml, sendContactEmail, type MailerEnv, type RenderedEmail } from './contact-email';
+import { sendContactEmail, type MailerEnv, type RenderedEmail } from './contact-email';
+import { renderEmail, type EmailDoc } from './email/layout';
 import { bumpRate, recordAlert, type ErrorGroupRow, type IngestOutcome } from './errors-store';
 import { logger } from './logger';
 import type { D1Database } from './types';
@@ -57,22 +58,19 @@ export function renderErrorAlert(group: ErrorGroupRow, reason: 'new' | 'spike', 
     ['Release', group.last_release || '-'],
     ['First seen', group.first_seen],
   ];
-  const text = [
-    `${what} in ${group.app} (${group.environment})`,
-    '',
-    `${group.name || 'Error'}: ${group.message}`,
-    '',
-    ...facts.map(([k, v]) => `${k}: ${v}`),
-    ...(link ? ['', `Open in the admin: ${link}`] : []),
-  ].join('\n');
-  const rows = facts.map(([k, v]) => `<tr><td style="padding:2px 12px 2px 0;opacity:.7">${escapeHtml(k)}</td><td>${escapeHtml(v)}</td></tr>`).join('');
-  const html = `<!doctype html><html lang="en"><body style="margin:0;padding:24px;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:15px;line-height:1.6">
-<h2 style="margin:0 0 8px">${escapeHtml(what)} in ${escapeHtml(group.app)}</h2>
-<p style="margin:0 0 16px;font-family:ui-monospace,Menlo,monospace;font-size:14px">${escapeHtml(`${group.name || 'Error'}: ${group.message}`)}</p>
-<table style="border-collapse:collapse;font-size:14px">${rows}</table>
-${link ? `<p style="margin-top:20px"><a href="${escapeHtml(link)}">Open in the admin Errors page</a></p>` : ''}
-</body></html>`;
-  return { to: opts.to, subject, text, html };
+  const doc: EmailDoc = {
+    locale: 'en',
+    subject,
+    preheader: `${group.occurrences} occurrence${group.occurrences === 1 ? '' : 's'}, ${group.users} user${group.users === 1 ? '' : 's'} affected in ${group.environment}.`,
+    heading: `${what} in ${group.app} (${group.environment})`,
+    blocks: [
+      { kind: 'notice', tone: 'warning', text: `${group.name || 'Error'}: ${group.message}` },
+      { kind: 'facts', rows: facts },
+    ],
+    ...(link ? { cta: { label: 'Open in the admin Errors page', url: link } } : {}),
+    reason: `You got this email because this address receives Al Ummah Now error alerts (ERRORS_ALERT_TO, else the support inbox). Spike alerts for one error repeat at most every ${ERROR_ALERT_LIMITS.perGroupHours} hours.`,
+  };
+  return { to: opts.to, ...renderEmail(doc) };
 }
 
 /** Sends the alerts an ingest batch earned. Never throws. */

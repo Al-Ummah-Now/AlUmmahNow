@@ -7,6 +7,9 @@ const en = {
     title: 'Al Ummah Now - Admin',
     description: 'Admin dashboard for Al Ummah Now platform',
   },
+  emailLanguage: {
+    legend: 'Email language',
+  },
   common: {
     appName: 'Al Ummah Now',
     adminPanel: 'Admin Panel',
@@ -728,7 +731,7 @@ const en = {
     delete: 'Delete message',
     deleteConfirm: 'Delete this message and its notes? It moves to Recently deleted, where it can be restored for 30 days.',
     replyTitle: 'Reply by email',
-    replyHint: 'Queued and sent from the platform address in {language}, with the message quoted. The sender can reply to it.',
+    replyHint: 'Queued and sent from the platform address in the language you choose (they wrote in {language}), with the message quoted. The sender can reply to it.',
     replyLabel: 'Reply',
     replySend: 'Send reply',
     replySpam: 'Spam cannot be replied to.',
@@ -1662,9 +1665,6 @@ const en = {
     planHint: 'Plans are the creator tiers managed under Creators.',
     planNone: 'No plan',
     scholar: 'Scholar (writes articles on www)',
-    language: 'Language of the invite email',
-    langEn: 'English',
-    langAr: 'Arabic',
     note: 'Note to them (optional)',
     expires: 'Link works for (days)',
     expiresHint: 'After that they can still sign in with this email; the link is only a shortcut.',

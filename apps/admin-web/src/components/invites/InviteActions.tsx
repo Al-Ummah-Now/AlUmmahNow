@@ -9,6 +9,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import type { InviteView } from '@/lib/api/invite-types';
 import { copyInviteLink, purgeInvite, resendInvite, restoreInvite, retryInvite, revokeInvite } from '@/lib/api/invites';
 import { useLanguage } from '@/i18n/I18nProvider';
+import { EmailLanguageChoice, type EmailLanguage } from '@/components/EmailLanguageChoice';
 import { fieldClass } from '@/components/ui';
 import { ActionFeedback, ConfirmButton, useContentAction } from '@/components/content/actions';
 import { smallButtonClass } from '@/components/content/parts';
@@ -69,6 +70,8 @@ export function InviteActions({ invite, canManage }: { invite: InviteView; canMa
   const { t } = useLanguage();
   const { run, busy, error, message } = useContentAction();
   const [link, setLink] = useState<string | null>(null);
+  // A resend defaults to the language the invite was sent in (the recipient's known language)
+  const [emailLocale, setEmailLocale] = useState<EmailLanguage>(invite.locale === 'ar' ? 'ar' : 'en');
   if (!canManage) return null;
   const open = invite.status === 'invited' || invite.status === 'expired';
   const revoked = !!invite.deletedAt;
@@ -77,9 +80,12 @@ export function InviteActions({ invite, canManage }: { invite: InviteView; canMa
       <div className="flex flex-wrap gap-2">
         {open && (
           <>
-            <button type="button" className={smallButtonClass} disabled={!!busy} onClick={() => run('resend', () => resendInvite(invite.id), { success: t('invites.resent') })} data-testid="invite-resend">
-              {busy === 'resend' ? t('content.working') : t('invites.resend')}
-            </button>
+            <span className="inline-flex flex-wrap items-center gap-2">
+              <button type="button" className={smallButtonClass} disabled={!!busy} onClick={() => run('resend', () => resendInvite(invite.id, emailLocale), { success: t('invites.resent') })} data-testid="invite-resend">
+                {busy === 'resend' ? t('content.working') : t('invites.resend')}
+              </button>
+              <EmailLanguageChoice value={emailLocale} onChange={setEmailLocale} disabled={!!busy} testId="invite-resend-locale" />
+            </span>
             <button
               type="button"
               className={smallButtonClass}

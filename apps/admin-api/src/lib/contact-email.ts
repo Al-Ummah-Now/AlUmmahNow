@@ -1,10 +1,11 @@
 /**
  * Contact us emails: the support-inbox notification, the sender's
  * acknowledgement and staff replies. Sent through Resend (the platform's
- * sender, same account as the auth server's codes). No imports beyond
- * ./contact, so rendering and the send decision are unit tested.
+ * sender, same account as the auth server's codes), in the shared design
+ * (./email/layout.ts). Rendering and the send decision are unit tested.
  */
 import { isSinkAddress, type ContactLocale, type ContactTopic } from './contact';
+import { escapeHtml, formatEmailDate, renderEmail, type EmailDoc } from './email/layout';
 
 export const DEFAULT_CONTACT_FROM = 'Al Ummah Now <support@alummahnow.net>';
 
@@ -47,9 +48,7 @@ export interface MessageForEmail {
   created_at: string;
 }
 
-export function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]!);
-}
+export { escapeHtml };
 
 /** "> " before every line, as mail clients quote. */
 export function quoteText(s: string): string {
@@ -59,109 +58,142 @@ export function quoteText(s: string): string {
     .join('\n');
 }
 
-function formatDate(iso: string, locale: ContactLocale): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar' : 'en-GB', { dateStyle: 'long', timeStyle: 'short', timeZone: 'UTC' }).format(date) + ' UTC';
-}
-
-function htmlDocument(locale: ContactLocale, inner: string): string {
-  const dir = locale === 'ar' ? 'rtl' : 'ltr';
-  return `<!doctype html><html lang="${locale}" dir="${dir}"><body style="margin:0;padding:24px;font-family:system-ui,-apple-system,'Segoe UI',Tahoma,sans-serif;font-size:15px;line-height:1.6">${inner}</body></html>`;
-}
-
-const paragraphs = (s: string) => escapeHtml(s).replace(/\n/g, '<br>');
-const blockquote = (s: string) =>
-  `<blockquote style="margin:16px 0 0;padding:0 12px;border-inline-start:3px solid currentColor;opacity:.75">${paragraphs(s)}</blockquote>`;
-
 /** Environment tag in subjects outside production, so QA mail is never mistaken for real mail. */
-const envTag = (environment: string | undefined) => (environment && environment !== 'production' ? `[${environment}] ` : '');
+export const envTag = (environment: string | undefined) => (environment && environment !== 'production' ? `[${environment}] ` : '');
 
+const withEnv = (doc: EmailDoc, environment: string | undefined): EmailDoc => ({ ...doc, subject: `${envTag(environment)}${doc.subject}` });
+
+/** Staff only (the support inbox), always English. */
 export function renderInboxNotification(m: MessageForEmail, opts: { to: string; adminUrl?: string; environment?: string }): RenderedEmail {
   const link = opts.adminUrl ? `${opts.adminUrl.replace(/\/$/, '')}/contact/${encodeURIComponent(m.id)}` : '';
-  const lines = [
-    `New Contact us message (${topicLabel(m.topic, 'en')})`,
-    '',
-    `From: ${m.name} <${m.email}>${m.user_id ? ` (signed in, user ${m.user_id})` : ' (signed out)'}`,
-    `Language: ${m.locale}`,
-    m.page_url ? `Page: ${m.page_url}` : '',
-    `Received: ${formatDate(m.created_at, 'en')}`,
-    '',
-    m.message,
-    '',
-    link ? `Open in the admin inbox: ${link}` : '',
-  ].filter((line, i, all) => line !== '' || all[i - 1] !== '');
-  const html = htmlDocument(
-    'en',
-    `<p><strong>New Contact us message</strong> (${escapeHtml(topicLabel(m.topic, 'en'))})</p>
-<p>From: ${escapeHtml(m.name)} &lt;${escapeHtml(m.email)}&gt;${m.user_id ? ` (signed in)` : ' (signed out)'}<br>Language: ${m.locale}${
-      m.page_url ? `<br>Page: ${escapeHtml(m.page_url)}` : ''
-    }<br>Received: ${escapeHtml(formatDate(m.created_at, 'en'))}</p>
-<div dir="auto">${paragraphs(m.message)}</div>${link ? `<p><a href="${escapeHtml(link)}">Open in the admin inbox</a></p>` : ''}`,
+  const topic = topicLabel(m.topic, 'en');
+  const doc = withEnv(
+    {
+      locale: 'en',
+      subject: `[Contact] ${topic}: ${m.name}`.slice(0, 200),
+      preheader: `${m.name} wrote about ${topic.toLowerCase()}: ${m.message.replace(/\s+/g, ' ').slice(0, 90)}`,
+      heading: `New Contact us message (${topic})`,
+      blocks: [
+        {
+          kind: 'facts',
+          rows: [
+            ['From', `${m.name} <${m.email}>`],
+            ['Account', m.user_id ? `Signed in (user ${m.user_id})` : 'Signed out'],
+            ['Language', m.locale === 'ar' ? 'Arabic' : 'English'],
+            ...(m.page_url ? ([['Page', m.page_url]] as [string, string][]) : []),
+            ['Received', formatEmailDate(m.created_at, 'en', true)],
+          ],
+        },
+        { kind: 'quote', label: 'Message', text: m.message },
+      ],
+      ...(link ? { cta: { label: 'Open in the admin inbox', url: link } } : {}),
+      reason: 'You got this email because this address is the Al Ummah Now support inbox. Reply from the admin so the thread is recorded (replying here goes straight to the sender).',
+      automated: false,
+    },
+    opts.environment,
   );
-  return {
-    to: opts.to,
-    subject: `${envTag(opts.environment)}[Contact] ${topicLabel(m.topic, 'en')}: ${m.name}`.slice(0, 200),
-    text: lines.join('\n'),
-    html,
-    replyTo: m.email,
-  };
+  return { to: opts.to, ...renderEmail(doc), replyTo: m.email };
 }
 
 const ACK = {
   en: {
     subject: 'We received your message',
+    preheader: 'Thank you for contacting Al Ummah Now. We will reply to this address.',
     greeting: (name: string) => `Assalamu alaikum ${name},`,
     body: 'Thank you for contacting Al Ummah Now. We have received your message and will reply to this address as soon as we can.',
     topic: 'Topic',
-    yours: 'Your message:',
+    yours: 'Your message',
     sign: 'Al Ummah Now support',
+    reason: 'You got this email because this address was used on the Al Ummah Now Contact us form.',
   },
   ar: {
     subject: 'وصلتنا رسالتك',
+    preheader: 'شكرًا لتواصلك مع الأمة الآن. سنرد عليك على هذا العنوان.',
     greeting: (name: string) => `السلام عليكم ${name}،`,
     body: 'شكرًا لتواصلك مع الأمة الآن. وصلتنا رسالتك وسنرد عليك على هذا العنوان في أقرب وقت ممكن.',
     topic: 'الموضوع',
-    yours: 'رسالتك:',
+    yours: 'رسالتك',
     sign: 'فريق دعم الأمة الآن',
+    reason: 'وصلتك هذه الرسالة لأن هذا العنوان استُخدم في نموذج «تواصل معنا» في الأمة الآن.',
   },
 };
 
+/** To the sender, in the language of the Contact us page they wrote from. */
 export function renderAcknowledgement(m: MessageForEmail, opts: { replyTo?: string; environment?: string }): RenderedEmail {
-  const s = ACK[m.locale];
-  const text = [s.greeting(m.name), '', s.body, '', `${s.topic}: ${topicLabel(m.topic, m.locale)}`, s.yours, quoteText(m.message), '', `— ${s.sign}`].join('\n');
-  const html = htmlDocument(
-    m.locale,
-    `<p>${escapeHtml(s.greeting(m.name))}</p><p>${escapeHtml(s.body)}</p><p>${escapeHtml(s.topic)}: ${escapeHtml(topicLabel(m.topic, m.locale))}</p><p>${escapeHtml(s.yours)}</p>${blockquote(m.message)}<p>— ${escapeHtml(s.sign)}</p>`,
+  const locale = m.locale === 'ar' ? 'ar' : 'en';
+  const s = ACK[locale];
+  const doc = withEnv(
+    {
+      locale,
+      subject: s.subject,
+      preheader: s.preheader,
+      greeting: s.greeting(m.name),
+      blocks: [
+        { kind: 'p', text: s.body },
+        { kind: 'facts', rows: [[s.topic, topicLabel(m.topic, locale)]] },
+        { kind: 'quote', label: s.yours, text: m.message },
+      ],
+      signoff: `— ${s.sign}`,
+      reason: s.reason,
+      automated: false,
+    },
+    opts.environment,
   );
-  return { to: m.email, subject: `${envTag(opts.environment)}${s.subject}`, text, html, replyTo: opts.replyTo };
+  return { to: m.email, ...renderEmail(doc), replyTo: opts.replyTo };
 }
 
 const REPLY = {
   en: {
     subject: 'Re: your message to Al Ummah Now',
+    preheader: (reply: string) => reply.replace(/\s+/g, ' ').slice(0, 110),
     greeting: (name: string) => `Assalamu alaikum ${name},`,
-    wrote: (date: string) => `On ${date}, you wrote:`,
+    wrote: (date: string) => `On ${date}, you wrote`,
     sign: 'Al Ummah Now support',
+    reason: 'You got this email because you wrote to Al Ummah Now through the Contact us form. You can reply to this email.',
   },
   ar: {
     subject: 'رد: رسالتك إلى الأمة الآن',
+    preheader: (reply: string) => reply.replace(/\s+/g, ' ').slice(0, 110),
     greeting: (name: string) => `السلام عليكم ${name}،`,
-    wrote: (date: string) => `في ${date}، كتبت:`,
+    wrote: (date: string) => `في ${date}، كتبت`,
     sign: 'فريق دعم الأمة الآن',
+    reason: 'وصلتك هذه الرسالة لأنك راسلت الأمة الآن عبر نموذج «تواصل معنا». يمكنك الرد على هذه الرسالة.',
   },
 };
 
-/** A staff reply in the message's language, with the original message quoted under it. */
-export function renderReply(m: MessageForEmail, reply: string, opts: { replyTo?: string; environment?: string }): RenderedEmail {
-  const s = REPLY[m.locale];
-  const date = formatDate(m.created_at, m.locale);
-  const text = [s.greeting(m.name), '', reply, '', `— ${s.sign}`, '', s.wrote(date), quoteText(m.message)].join('\n');
-  const html = htmlDocument(
-    m.locale,
-    `<p>${escapeHtml(s.greeting(m.name))}</p><div dir="auto">${paragraphs(reply)}</div><p>— ${escapeHtml(s.sign)}</p><p style="margin-top:24px">${escapeHtml(s.wrote(date))}</p>${blockquote(m.message)}`,
+/**
+ * The language a reply was sent in, from its stored subject (contact_notes.email_subject,
+ * rendered when the admin pressed Send), so a retry keeps the admin's choice.
+ */
+export function replyLocaleOf(subject: string | null | undefined): ContactLocale | null {
+  const bare = (subject ?? '').replace(/^\[[^\]]*\]\s*/, '');
+  if (bare === REPLY.ar.subject) return 'ar';
+  if (bare === REPLY.en.subject) return 'en';
+  return null;
+}
+
+/**
+ * A staff reply in ONE language: the one the admin picked next to Send
+ * (default: the message's language), with the original message quoted under it.
+ */
+export function renderReply(m: MessageForEmail, reply: string, opts: { replyTo?: string; environment?: string; locale?: ContactLocale }): RenderedEmail {
+  const locale: ContactLocale = opts.locale ?? (m.locale === 'ar' ? 'ar' : 'en');
+  const s = REPLY[locale];
+  const doc = withEnv(
+    {
+      locale,
+      subject: s.subject,
+      preheader: s.preheader(reply),
+      greeting: s.greeting(m.name),
+      blocks: [{ kind: 'p', text: reply }],
+      signoff: `— ${s.sign}`,
+      after: [{ kind: 'quote', label: s.wrote(formatEmailDate(m.created_at, locale, true)), text: m.message }],
+      reason: s.reason,
+      automated: false,
+    },
+    opts.environment,
   );
-  return { to: m.email, subject: `${envTag(opts.environment)}${s.subject}`, text, html, replyTo: opts.replyTo };
+  return { to: m.email, ...renderEmail(doc), replyTo: opts.replyTo };
 }
 
 /** queued: waiting in the mail queue; failed: gave up after retries (flagged for an admin). */
