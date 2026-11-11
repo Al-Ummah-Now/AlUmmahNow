@@ -9,7 +9,26 @@
  */
 import type { AdminAuditEntry } from '@al-ummah/shared-types';
 
-export type ContentKind = 'channel' | 'video' | 'comment' | 'playlist' | 'post' | 'user' | 'creator-tier';
+export type ContentKind =
+  | 'channel'
+  | 'video'
+  | 'comment'
+  | 'playlist'
+  | 'post'
+  | 'user'
+  | 'creator-tier'
+  /** Live streaming routing settings (id 'routing'). */
+  | 'live-settings'
+  /** A channel forced to one live provider (id = channel id). */
+  | 'live-override'
+  /** A stream's next session moved to a provider (id = stream id). */
+  | 'live-stream'
+  /** A live session ended by an admin (id = session id). */
+  | 'live-session';
+
+/** Every live streaming audit key starts with this ('content:live-'); the range ends before 'content:live.'. */
+export const LIVE_AUDIT_PREFIX = `content:live-`;
+const LIVE_AUDIT_END = `content:live.`;
 
 interface AuditDb {
   prepare(sql: string): {
@@ -51,6 +70,11 @@ export async function writeAudit(db: AuditDb, entry: AuditAction, now = new Date
   return id;
 }
 
+/** Fills in the previous values once the change has told us what they were (a stream's move). */
+export async function setAuditPrevious(db: AuditDb, id: string, previous: Record<string, unknown>): Promise<void> {
+  await db.prepare('UPDATE site_settings_log SET old_value = ? WHERE id = ?').bind(JSON.stringify(previous), id).run();
+}
+
 export async function dropAudit(db: AuditDb, id: string): Promise<void> {
   await db.prepare('DELETE FROM site_settings_log WHERE id = ?').bind(id).run();
 }
@@ -80,9 +104,14 @@ export function toAuditEntry(row: LogRow): AdminAuditEntry & { previous: Record<
   };
 }
 
-/** One item's history, or (without kind/id) the latest content actions, newest first. */
-export async function readAudit(db: AuditDb, opts: { kind?: ContentKind; id?: string; limit: number }) {
-  const statement = opts.kind && opts.id
+/**
+ * One item's history, the live streaming history (`live: true`: every live-*
+ * kind), or (without kind/id) the latest content actions, newest first.
+ */
+export async function readAudit(db: AuditDb, opts: { kind?: ContentKind; id?: string; live?: boolean; limit: number }) {
+  const statement = opts.live
+    ? db.prepare('SELECT id, key, old_value, new_value, actor_id, created_at FROM site_settings_log WHERE key >= ? AND key < ? ORDER BY created_at DESC, id DESC LIMIT ?').bind(LIVE_AUDIT_PREFIX, LIVE_AUDIT_END, opts.limit)
+    : opts.kind && opts.id
     ? db.prepare('SELECT id, key, old_value, new_value, actor_id, created_at FROM site_settings_log WHERE key = ? ORDER BY created_at DESC, id DESC LIMIT ?').bind(auditKey(opts.kind, opts.id), opts.limit)
     : db.prepare('SELECT id, key, old_value, new_value, actor_id, created_at FROM site_settings_log WHERE key >= ? AND key < ? ORDER BY created_at DESC, id DESC LIMIT ?').bind(CONTENT_AUDIT_PREFIX, CONTENT_AUDIT_END, opts.limit);
   const { results = [] } = await statement.all<LogRow>();

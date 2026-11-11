@@ -35,6 +35,8 @@ export const ADMIN_CONTENT_PERMISSIONS = [
   'creators:manage',
   /** Warn a videos user (notice in-app and by email) and read their warning history. */
   'users:warn',
+  /** Change live streaming provider routing, channel overrides and stream moves, and end stuck sessions (videos admin "Live streaming"). */
+  'live:manage',
 ] as const;
 
 export type AdminContentPermission = (typeof ADMIN_CONTENT_PERMISSIONS)[number];
@@ -46,7 +48,7 @@ export type AdminContentPermission = (typeof ADMIN_CONTENT_PERMISSIONS)[number];
  */
 export const ROLE_CONTENT_PERMISSIONS: Readonly<Record<string, readonly AdminContentPermission[]>> = {
   super_admin: ADMIN_CONTENT_PERMISSIONS,
-  admin: ['channels:manage', 'videos:manage', 'content:delete', 'content:purge', 'users:manage', 'creators:manage', 'users:warn'],
+  admin: ['channels:manage', 'videos:manage', 'content:delete', 'content:purge', 'users:manage', 'creators:manage', 'users:warn', 'live:manage'],
   moderator: ['users:warn'],
 };
 

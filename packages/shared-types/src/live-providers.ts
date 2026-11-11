@@ -421,3 +421,75 @@ export function percentile(values: readonly number[], p: number): number | null 
   const rank = Math.min(v.length, Math.max(1, Math.ceil((p / 100) * v.length)));
   return v[rank - 1];
 }
+
+// ---------------------------------------------------------------------------
+// Admin changes (videos admin "Live streaming" page). A change is a partial
+// settings document: api-videos merges it per provider, admin-api audits it
+// with the values it replaces, and the page's Undo sends those values back.
+// ---------------------------------------------------------------------------
+
+export interface LiveRoutingPatch {
+  mode?: LiveRoutingMode;
+  bunnyPercent?: number;
+  fallback?: boolean;
+  providers?: Partial<Record<LiveProviderId, Partial<LiveProviderControls>>>;
+  rates?: Partial<Record<LiveProviderId, Partial<LiveProviderRates>>>;
+  selfhosted?: Partial<LiveSelfHostedOptions>;
+  qoeSampleRate?: number;
+}
+
+const PATCH_SCALARS = ['mode', 'bunnyPercent', 'fallback', 'qoeSampleRate'] as const;
+const CONTROL_KEYS: readonly (keyof LiveProviderControls)[] = ['enabled', 'draining', 'note', 'maxConcurrent', 'monthlyBudgetUsd'];
+const RATE_KEYS: readonly (keyof LiveProviderRates)[] = ['perStreamHourUsd', 'perDeliveredGbUsd', 'perMillionRequestsUsd', 'perStoredGbMonthUsd'];
+const SELFHOSTED_KEYS: readonly (keyof LiveSelfHostedOptions)[] = ['lowLatency', 'idleTimeoutSec', 'recordVod'];
+
+function pickKeys<K extends string>(src: unknown, keys: readonly K[]): Partial<Record<K, unknown>> | undefined {
+  if (!src || typeof src !== 'object' || Array.isArray(src)) return undefined;
+  const out: Partial<Record<K, unknown>> = {};
+  for (const k of keys) if (k in (src as object)) out[k] = (src as Record<string, unknown>)[k];
+  return Object.keys(out).length ? out : undefined;
+}
+
+/**
+ * Keeps only the fields an admin may change (never updatedAt/updatedBy or an
+ * unknown key). Values are checked and clamped by normaliseLiveRouting in
+ * api-videos. Null when nothing is left.
+ */
+export function cleanLiveRoutingPatch(input: unknown): LiveRoutingPatch | null {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
+  const src = input as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const k of PATCH_SCALARS) if (k in src) out[k] = src[k];
+  for (const [key, keys] of [['providers', CONTROL_KEYS], ['rates', RATE_KEYS]] as const) {
+    const group: Record<string, unknown> = {};
+    for (const p of LIVE_PROVIDERS) {
+      const picked = pickKeys((src[key] as Record<string, unknown> | undefined)?.[p], keys as readonly string[]);
+      if (picked) group[p] = picked;
+    }
+    if (Object.keys(group).length) out[key] = group;
+  }
+  const sh = pickKeys(src.selfhosted, SELFHOSTED_KEYS);
+  if (sh) out.selfhosted = sh;
+  return Object.keys(out).length ? (out as LiveRoutingPatch) : null;
+}
+
+/** The current values of exactly the fields a patch changes (the audit's "previous", and Undo's patch). */
+export function livePatchPrevious(settings: LiveRoutingSettings, patch: LiveRoutingPatch): LiveRoutingPatch {
+  const out: LiveRoutingPatch = {};
+  for (const k of PATCH_SCALARS) if (k in patch) (out as Record<string, unknown>)[k] = settings[k];
+  for (const key of ['providers', 'rates'] as const) {
+    const group = patch[key] as Record<string, Record<string, unknown>> | undefined;
+    if (!group) continue;
+    const prev: Record<string, Record<string, unknown>> = {};
+    for (const p of LIVE_PROVIDERS) {
+      if (!group[p]) continue;
+      const current = settings[key][p] as unknown as Record<string, unknown>;
+      prev[p] = Object.fromEntries(Object.keys(group[p]).map((f) => [f, current[f] ?? null]));
+    }
+    (out as Record<string, unknown>)[key] = prev;
+  }
+  if (patch.selfhosted) {
+    out.selfhosted = Object.fromEntries(Object.keys(patch.selfhosted).map((f) => [f, settings.selfhosted[f as keyof LiveSelfHostedOptions]])) as Partial<LiveSelfHostedOptions>;
+  }
+  return out;
+}
