@@ -491,9 +491,9 @@ export function VideosTab({ locale, channelId, role }: Props) {
                             {actions.map((action) => {
                               const href = actionHref(action, video);
                               return href ? (
-                                <DropdownMenuItem key={action} asChild><Link href={href} onClick={() => { if (href.startsWith(base)) rememberListUrl(channelId, href); }}>{text.actions[action]}</Link></DropdownMenuItem>
+                                <DropdownMenuItem key={action} asChild><Link data-testid={`studio-video-action-${action}`} href={href} onClick={() => { if (href.startsWith(base)) rememberListUrl(channelId, href); }}>{text.actions[action]}</Link></DropdownMenuItem>
                               ) : (
-                                <DropdownMenuItem key={action} onSelect={() => onAction(action, video)}>{text.actions[action]}</DropdownMenuItem>
+                                <DropdownMenuItem key={action} data-testid={`studio-video-action-${action}`} onSelect={() => onAction(action, video)}>{text.actions[action]}</DropdownMenuItem>
                               );
                             })}
                           </DropdownMenuContent>

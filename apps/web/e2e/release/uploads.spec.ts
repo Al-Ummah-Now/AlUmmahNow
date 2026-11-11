@@ -158,8 +158,18 @@ test.describe('Release: uploads', () => {
         )
         .not.toBe('');
 
-      await page.goto(`${target().web}/en/dashboard/videos`);
-      await expect(page.getByText(title).first()).toBeVisible({ timeout: 30000 });
+      // Studio's Videos list shows it (Processing until encoded, then Published)
+      await expect
+        .poll(async () => {
+          for (const status of ['processing', 'published']) {
+            await page.goto(`${target().web}/en/studio/${channelId}/content/videos?status=${status}`);
+            await page.getByTestId('studio-videos').waitFor();
+            await page.waitForLoadState('networkidle').catch(() => {});
+            if (await page.getByTestId('studio-video-row').filter({ hasText: title }).count()) return true;
+          }
+          return false;
+        }, { message: 'the upload is not in Studio\'s Videos list', timeout: 90000, intervals: [3000] })
+        .toBe(true);
     } finally {
       if (videoId) await apiFetch(user, `/api/videos/${videoId}`, { method: 'DELETE', headers: { channelId } });
     }

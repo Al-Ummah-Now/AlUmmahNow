@@ -1,7 +1,7 @@
 /** The Studio frame: resolver, navigation per owner, tabs, access errors, RTL (docs/specs/CREATOR-STUDIO.md §3-5). */
 import { expect, test } from '@playwright/test';
-import { skipUntilStudioDeployed, studioOwner } from './studio';
-import { signUpOnWeb } from './web-session';
+import { settleSession, skipUntilStudioDeployed, studioOwner } from './studio';
+import { createProfile, signUpOnWeb } from './web-session';
 import { target } from './targets';
 
 // Sign-in pages carry the test password: never record them
@@ -44,7 +44,10 @@ test.describe('Release: Studio frame', () => {
   test('gives 404 for a channel that isn\'t yours', async ({ page, browser }) => {
     const { channelId } = await studioOwner(page, 'rel-studio-a');
     const other = await (await browser.newContext()).newPage();
-    await signUpOnWeb(other, 'rel-studio-b');
+    const stranger = await signUpOnWeb(other, 'rel-studio-b');
+    // A profile, so the profile guard doesn't redirect mid-check
+    await createProfile(stranger);
+    await settleSession(other);
     const res = await other.goto(`${target().web}/en/studio/${channelId}/dashboard`);
     expect(res?.status()).toBe(404);
     await expect(other.getByTestId('studio-frame')).toHaveCount(0);
