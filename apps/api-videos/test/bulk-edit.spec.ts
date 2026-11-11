@@ -77,6 +77,13 @@ describe('applyBulkChanges: titles, descriptions, fields', () => {
 		assert.deepEqual(en.ok && en.fields.sort(), ['title', 'titleLocalized']);
 	});
 
+	it('keeps the legacy English title when only the Arabic one changes and titleLocalized.en is empty', () => {
+		const r = applyBulkChanges({ title: 'English', titleLocalized: { en: '', ar: 'قديم' } }, {}, now, { title: { ar: 'جديد' } });
+		assert.deepEqual(r.ok && [r.video.title, r.video.titleLocalized], ['English', { en: 'English', ar: 'جديد' }]);
+		const d = applyBulkChanges({ description: 'Body', descriptionLocalized: { en: '' } }, { description: { ar: { mode: 'replace', text: 'نص' } } }, now);
+		assert.deepEqual(d.ok && [d.video.description, d.video.descriptionLocalized], ['Body', { en: 'Body', ar: 'نص' }]);
+	});
+
 	it('refuses empty and too-long titles', () => {
 		assert.deepEqual(applyBulkChanges({ title: 'A' }, {}, now, { title: { en: '  ' } }), { ok: false, error: 'title_empty' });
 		assert.deepEqual(applyBulkChanges({ title: 'A' }, {}, now, { title: { en: 'x'.repeat(101) } }), { ok: false, error: 'title_too_long' });
