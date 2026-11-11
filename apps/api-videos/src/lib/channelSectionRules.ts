@@ -17,6 +17,7 @@ import {
 import R2Repository from './r2Repo';
 import { isVideoPubliclyVisible } from './visibility';
 import { canGrantSectionConsent } from './channelSectionAccess';
+import { isSystemPlaylist } from './library';
 
 export type SectionErrorCode =
   | 'validation_failed'
@@ -73,7 +74,8 @@ export function isListableVideo(video: StoredVideo | null | undefined): video is
 }
 
 export function isListablePlaylist(playlist: StoredPlaylist | null | undefined): playlist is StoredPlaylist {
-  return !!playlist && !playlist.isDeleted && !playlist.isHidden && playlist.isPublic !== false;
+  // Never a system playlist (Watch later): it is the user's, not the channel's
+  return !!playlist && !playlist.isDeleted && !playlist.isHidden && playlist.isPublic !== false && !isSystemPlaylist(playlist);
 }
 
 /** Not deleted, not hidden by moderation or a ban, not suspended, not private */

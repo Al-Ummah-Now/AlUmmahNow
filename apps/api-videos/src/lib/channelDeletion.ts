@@ -17,6 +17,7 @@
 import { sectionOrderKey } from './channelSectionOrder';
 import R2Repository from './r2Repo';
 import { logger } from './logger';
+import { isSystemPlaylist } from './library';
 
 export interface OwnedChannelSummary {
 	id: string;
@@ -100,7 +101,8 @@ async function softDeleteIfOwned(bucket: R2Bucket, key: string, channelId: strin
 	let marked = false;
 	await new R2Repository<Record<string, unknown>>(bucket).updateObject(key, (record) => {
 		marked = false;
-		if (!record || record.channelId !== channelId || record.isDeleted === true) return false;
+		// Watch later belongs to its user: deleting a channel never takes it
+		if (!record || record.channelId !== channelId || record.isDeleted === true || isSystemPlaylist(record)) return false;
 		Object.assign(record, { isDeleted: true, deletedAt: now, markedForDeletion: true, markedForDeletionAt: now });
 		marked = true;
 		return true;
@@ -114,7 +116,7 @@ async function softDeleteIfOwned(bucket: R2Bucket, key: string, channelId: strin
  */
 async function hardDeleteIfOwned(bucket: R2Bucket, key: string, channelId: string): Promise<boolean> {
 	const record = await new R2Repository<Record<string, unknown>>(bucket).getObject(key);
-	if (!record || record.channelId !== channelId) return false;
+	if (!record || record.channelId !== channelId || isSystemPlaylist(record)) return false;
 	await bucket.delete(key);
 	return true;
 }

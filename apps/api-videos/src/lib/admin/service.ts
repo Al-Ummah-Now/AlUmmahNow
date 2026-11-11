@@ -29,6 +29,7 @@ import {
 } from '@al-ummah/shared-types';
 import R2Repository from '../r2Repo';
 import { logger } from '../logger';
+import { isSystemPlaylist } from '../library';
 import Queue, { MessageType } from '../queue';
 import { claimHandle, handleKey, normalizeHandleInput, releaseHandle, releaseReplacedHandle } from '../channelHandles';
 import { pickNewMainChannel, removeChannelPostsAndSections, softDeleteChannelObjectsStep, type OwnedChannelSummary } from '../channelDeletion';
@@ -963,7 +964,8 @@ export async function listPlaylists(env: AdminServiceEnv, query: { q?: string; c
 		keyFilter: (k) => !k.includes('/') && !k.includes(':'),
 		match: (p) =>
 			p.isDeleted !== true &&
-			(!query.channelId || p.channelId === query.channelId) &&
+			// A channel's playlists never include a user's Watch later
+			(!query.channelId || (p.channelId === query.channelId && !isSystemPlaylist(p as never))) &&
 			(!query.ownerId || p.userId === query.ownerId) &&
 			includesText(query.q, p.title, p.description, p.id),
 	});

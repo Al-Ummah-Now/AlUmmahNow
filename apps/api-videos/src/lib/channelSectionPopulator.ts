@@ -25,7 +25,7 @@ import {
 } from '@al-ummah/shared-types';
 import { logger } from './logger';
 import { channelVideosFromIndex } from './search/channelVideoIndex';
-import { listLikedIds } from './library';
+import { isSystemPlaylist, listLikedIds } from './library';
 import { toPlaylistResponse } from './playlists';
 import { withPlaylistCovers } from './playlistCovers';
 import { withPostCounts } from './post-counters';
@@ -390,7 +390,7 @@ async function getChannelPlaylists(channelId: string, limit: number, env: any): 
   const repo = new R2Repository<StoredPlaylist>(env.playlists);
   const page = await repo.listObjects(FALLBACK_SCAN_OBJECTS);
   const own = (page.items || [])
-    .filter((p) => isListablePlaylist(p) && p.channelId === channelId && !(p as { systemType?: string }).systemType)
+    .filter((p) => isListablePlaylist(p) && p.channelId === channelId && !isSystemPlaylist(p))
     .sort((a, b) => new Date(b.dateCreated || 0).getTime() - new Date(a.dateCreated || 0).getTime())
     .slice(0, limit);
   return (await withPlaylistCovers(env, own.map((p) => toPlaylistResponse(p as never)))) as unknown as Record<string, unknown>[];

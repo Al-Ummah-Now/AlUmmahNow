@@ -6,6 +6,7 @@ import R2Repository from "../../lib/r2Repo";
 import { logger } from '../../lib/logger';
 import { toPlaylistResponse } from "../../lib/playlists";
 import { withPlaylistCovers } from "../../lib/playlistCovers";
+import { isSystemPlaylist } from "../../lib/library";
 import { OptionalAuthRoute, AppContext } from "../../base";
 
 export class ChannelPlaylistsList extends OptionalAuthRoute {
@@ -143,6 +144,8 @@ export class ChannelPlaylistsList extends OptionalAuthRoute {
 				load: key => repository.getObject(key),
 				isListed: (playlist): playlist is PlaylistType => Boolean(playlist)
 					&& playlist.channelId === channelId
+					// Watch later is the user's, never a channel's playlist
+					&& !isSystemPlaylist(playlist)
 					// Soft-deleted and moderation-hidden playlists are never listed
 					&& !playlist.isDeleted
 					&& !playlist.isHidden

@@ -31,18 +31,34 @@ export function isSystemPlaylist(playlist: { systemType?: unknown; id?: string }
 	return !!playlist && (typeof playlist.systemType === 'string' || (typeof playlist.id === 'string' && playlist.id.startsWith('watch-later-')));
 }
 
-export function newWatchLater(userId: string, channelId: string | undefined, now = new Date().toISOString()): WatchLaterPlaylist {
+/**
+ * A new Watch later list. It belongs to the user, never to a channel: its
+ * `channelId` is always empty, so it is the same whichever channel is active
+ * and never shows in a channel's playlists (lists made before this fix carried
+ * the channel active at the first save; see clearWatchLaterChannel).
+ */
+export function newWatchLater(userId: string, now = new Date().toISOString()): WatchLaterPlaylist {
 	return {
 		id: watchLaterId(userId),
 		title: 'Watch later',
 		userId,
-		channelId: channelId || '',
+		channelId: '',
 		dateCreated: now,
 		dateModified: now,
 		videos: [],
 		isPublic: false,
 		systemType: WATCH_LATER_SYSTEM_TYPE,
 	} as WatchLaterPlaylist;
+}
+
+/**
+ * Clears the channel a Watch later list made before the fix carried. True when
+ * it changed (callers write it back). Idempotent.
+ */
+export function clearWatchLaterChannel(playlist: { channelId?: string | null }): boolean {
+	if (!playlist.channelId) return false;
+	playlist.channelId = '';
+	return true;
 }
 
 /** Add a video (newest first). Idempotent: returns false when already present. */

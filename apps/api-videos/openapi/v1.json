@@ -14304,10 +14304,10 @@
                 "string",
                 "null"
               ],
-              "description": "Active channel ID"
+              "description": "Ignored (Watch later is per user, the same for every channel)"
             },
             "required": false,
-            "description": "Active channel ID",
+            "description": "Ignored (Watch later is per user, the same for every channel)",
             "name": "channelId",
             "in": "header"
           }
@@ -14381,10 +14381,10 @@
                 "string",
                 "null"
               ],
-              "description": "Active channel ID"
+              "description": "Ignored (Watch later is per user, the same for every channel)"
             },
             "required": false,
-            "description": "Active channel ID",
+            "description": "Ignored (Watch later is per user, the same for every channel)",
             "name": "channelId",
             "in": "header"
           }
@@ -14502,10 +14502,10 @@
                 "string",
                 "null"
               ],
-              "description": "Active channel ID"
+              "description": "Ignored (Watch later is per user, the same for every channel)"
             },
             "required": false,
-            "description": "Active channel ID",
+            "description": "Ignored (Watch later is per user, the same for every channel)",
             "name": "channelId",
             "in": "header"
           }
@@ -14634,10 +14634,10 @@
                 "string",
                 "null"
               ],
-              "description": "Active channel ID"
+              "description": "Ignored (Watch later is per user, the same for every channel)"
             },
             "required": false,
-            "description": "Active channel ID",
+            "description": "Ignored (Watch later is per user, the same for every channel)",
             "name": "channelId",
             "in": "header"
           }
@@ -14719,10 +14719,10 @@
                 "string",
                 "null"
               ],
-              "description": "Active channel ID"
+              "description": "Ignored (Watch later is per user, the same for every channel)"
             },
             "required": false,
-            "description": "Active channel ID",
+            "description": "Ignored (Watch later is per user, the same for every channel)",
             "name": "channelId",
             "in": "header"
           }
