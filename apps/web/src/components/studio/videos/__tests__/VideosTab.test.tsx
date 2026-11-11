@@ -28,8 +28,13 @@ jest.mock('@/lib/api/videos', () => ({ bulkDeleteVideos: (...args: unknown[]) =>
 jest.mock('@/lib/api/scheduling', () => ({ cancelSchedule: jest.fn(), publishNow: jest.fn() }));
 jest.mock('@/lib/logger-client', () => ({ logger: { error: jest.fn(), info: jest.fn() } }));
 jest.mock('@/components/bulkEdit/BulkEditDialog', () => ({ BulkEditDialog: () => null }));
+jest.mock('@/components/playlists/AddToPlaylistDialog', () => ({
+  __esModule: true,
+  default: ({ open, videos }: { open: boolean; videos: Array<{ id: string }> }) =>
+    open ? <div data-testid="add-to-playlist">{videos.map((v) => v.id).join(',')}</div> : null,
+}));
+jest.mock('../DeletedVideos', () => ({ DeletedVideos: () => <div data-testid="studio-deleted" /> }));
 jest.mock('../BulkDialogs', () => ({
-  BulkPlaylistDialog: () => null,
   BulkScheduleDialog: ({ open, onDone }: { open: boolean; onDone: (result: unknown) => void }) =>
     open ? <button onClick={() => onDone({ entitlement: 'studio.bulkSchedule', limit: null, current: null })}>refused</button> : null,
 }));
@@ -97,9 +102,35 @@ describe('VideosTab', () => {
     fireEvent.click(within(rows[0]).getByRole('checkbox'));
     expect(screen.getByTestId('studio-bulk-bar')).toHaveTextContent('1 selected');
     fireEvent.click(within(screen.getByTestId('studio-bulk-bar')).getByRole('button', { name: STUDIO_EN.videos.bulk.delete }));
-    fireEvent.click(await screen.findByTestId('studio-confirm-delete'));
+    expect(await screen.findByTestId('studio-confirm-delete')).toHaveTextContent(STUDIO_EN.videos.confirmDelete.body);
+    fireEvent.click(screen.getByTestId('studio-confirm-delete-confirm'));
     await waitFor(() => expect(bulkDelete).toHaveBeenCalledWith(['a'], { channelId: 'c1' }));
-    expect(await screen.findByRole('status')).toHaveTextContent('1 deleted.');
+    expect(await screen.findByRole('status')).toHaveTextContent('1 moved to Recently deleted.');
+  });
+
+  it('cancelling the confirmation deletes nothing', async () => {
+    renderTab();
+    const rows = await screen.findAllByTestId('studio-video-row');
+    fireEvent.click(within(rows[0]).getByRole('checkbox'));
+    fireEvent.click(screen.getByTestId('studio-bulk-delete'));
+    fireEvent.click(await screen.findByTestId('studio-confirm-delete-cancel'));
+    await waitFor(() => expect(screen.queryByTestId('studio-confirm-delete')).not.toBeInTheDocument());
+    expect(bulkDelete).not.toHaveBeenCalled();
+  });
+
+  it('adds the selection to a playlist with the shared playlist dialog', async () => {
+    renderTab();
+    fireEvent.click(await screen.findByRole('checkbox', { name: STUDIO_EN.videos.selectAll }));
+    fireEvent.click(screen.getByTestId('studio-bulk-playlist'));
+    expect(await screen.findByTestId('add-to-playlist')).toHaveTextContent('a,b');
+  });
+
+  it('opens Recently deleted for roles that can delete, and only for them', async () => {
+    search = 'status=deleted';
+    renderTab();
+    expect(await screen.findByTestId('studio-deleted')).toBeInTheDocument();
+    expect(screen.getByTestId('studio-status-deleted')).toHaveAttribute('aria-pressed', 'true');
+    expect(list).not.toHaveBeenCalled();
   });
 
   it('reports a partial delete', async () => {
@@ -107,7 +138,7 @@ describe('VideosTab', () => {
     renderTab();
     fireEvent.click(await screen.findByRole('checkbox', { name: STUDIO_EN.videos.selectAll }));
     fireEvent.click(within(screen.getByTestId('studio-bulk-bar')).getByRole('button', { name: STUDIO_EN.videos.bulk.delete }));
-    fireEvent.click(await screen.findByTestId('studio-confirm-delete'));
+    fireEvent.click(await screen.findByTestId('studio-confirm-delete-confirm'));
     expect(await screen.findByText('1 deleted, 1 could not be deleted.')).toBeInTheDocument();
   });
 

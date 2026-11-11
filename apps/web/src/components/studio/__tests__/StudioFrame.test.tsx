@@ -26,8 +26,17 @@ describe('StudioFrame', () => {
 
   it('shows the owner every item, linking to the first tab', () => {
     frame('owner');
-    expect(rail().getAllByRole('link').map((a) => a.textContent)).toEqual(['Dashboard', 'Content', 'Analytics', 'Comments', 'Playlists', 'Customisation', 'Settings']);
+    expect(rail().getAllByRole('link').map((a) => a.textContent)).toEqual(['Dashboard', 'Content', 'Analytics', 'Playlists', 'Customisation', 'Settings']);
     expect(screen.getByTestId('studio-nav-content')).toHaveAttribute('href', '/en/studio/c1/content/videos');
+    // Sections Studio hasn't rebuilt open the channel settings page, never a dead end
+    expect(screen.getByTestId('studio-nav-playlists')).toHaveAttribute('href', '/en/settings/channel/c1/playlists');
+    expect(screen.getByTestId('studio-nav-settings')).toHaveAttribute('href', '/en/settings/channel/c1');
+    expect(screen.getByTestId('studio-tab-posts')).toHaveAttribute('href', '/en/settings/channel/c1/community');
+  });
+
+  it('uploads to this channel', () => {
+    frame('owner');
+    expect(screen.getAllByTestId('studio-upload')[0]).toHaveAttribute('href', '/en/upload?channel=c1');
   });
 
   it('removes what a role can\'t reach', () => {
@@ -39,7 +48,7 @@ describe('StudioFrame', () => {
   it('offers no Upload to a moderator', () => {
     frame('moderator');
     expect(screen.queryByText('Upload')).toBeNull();
-    expect(screen.getByTestId('studio-nav-content')).toHaveAttribute('href', '/en/studio/c1/content/live');
+    expect(screen.queryByTestId('studio-nav-content')).toBeNull();
   });
 
   it('marks the current page and tab', () => {

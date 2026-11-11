@@ -13,6 +13,8 @@ import { getChannelContentCounts, listChannelContent, type StudioVideo } from '@
 import { logger } from '@/lib/logger-client';
 import { changePercent, rangeDates, sumMetrics } from '@/lib/studio/analytics';
 import { can, type StudioRole } from '@/lib/studio/permissions';
+import { legacyHref } from '@/lib/studio/nav';
+import { studioUploadHref } from '@/lib/studio/links';
 
 interface Props {
   locale: string;
@@ -85,9 +87,9 @@ export function StudioDashboard({ locale, channelId, role }: Props) {
   const base = `/${locale}/studio/${encodeURIComponent(channelId)}`;
   const number = new Intl.NumberFormat(locale);
   const quickLinks = [
-    can(role, 'video.upload') && { label: text.quick.upload, href: `/${locale}/upload` },
-    can(role, 'post.manage') && { label: text.quick.newPost, href: `${base}/content/posts/new` },
-    can(role, 'channel.edit') && { label: text.quick.customise, href: `${base}/customisation/profile` },
+    can(role, 'video.upload') && { label: text.quick.upload, href: studioUploadHref(locale, channelId) },
+    can(role, 'post.manage') && { label: text.quick.newPost, href: legacyHref(locale, channelId, 'content/posts/new')! },
+    can(role, 'channel.edit') && { label: text.quick.customise, href: legacyHref(locale, channelId, 'customisation/profile')! },
   ].filter((link): link is { label: string; href: string } => Boolean(link));
 
   const heading = <h1 className="mb-4 text-xl font-bold text-foreground">{t.studio.nav.dashboard}</h1>;
@@ -116,7 +118,6 @@ export function StudioDashboard({ locale, channelId, role }: Props) {
         {heading}
         <Card title={text.moderator.title} testId="studio-dash-moderator">
           <p className="mb-3 text-sm text-muted-foreground">{text.moderator.body}</p>
-          <Button asChild variant="outline" className="min-h-11"><Link href={`${base}/comments`}>{t.studio.nav.comments}</Link></Button>
         </Card>
       </div>
     );
@@ -130,7 +131,7 @@ export function StudioDashboard({ locale, channelId, role }: Props) {
         <div className="rounded-md border border-border bg-card p-6 text-center" data-testid="studio-dash-welcome">
           <h2 className="mb-2 text-lg font-semibold text-foreground">{text.welcome.title}</h2>
           <p className="mb-4 text-sm text-muted-foreground">{text.welcome.body}</p>
-          {can(role, 'video.upload') && <Button asChild className="min-h-11"><Link href={`/${locale}/upload`}>{text.welcome.upload}</Link></Button>}
+          {can(role, 'video.upload') && <Button asChild className="min-h-11"><Link href={studioUploadHref(locale, channelId)}>{text.welcome.upload}</Link></Button>}
         </div>
       </div>
     );

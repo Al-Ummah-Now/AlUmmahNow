@@ -63,12 +63,39 @@ async function postBulk(path: string, functionName: string, body: unknown): Prom
   return response?.summary ?? refusal;
 }
 
-/** POST /api/videos/bulk-playlist */
-export async function bulkAddToPlaylist(playlistId: string, videoIds: string[]): Promise<BulkSummary | LimitRefusal | null> {
-  return postBulk('/api/videos/bulk-playlist', 'bulkAddToPlaylist', { playlistId, videoIds });
-}
-
 /** POST /api/videos/bulk-schedule */
 export async function bulkScheduleVideos(input: { videoIds: string[]; startAt: string; intervalMinutes: number; timezone: string }): Promise<BulkSummary | LimitRefusal | null> {
   return postBulk('/api/videos/bulk-schedule', 'bulkScheduleVideos', input);
+}
+
+export interface DeletedVideo {
+  id: string;
+  title: string;
+  deletedAt: string;
+  deletedBy: string;
+  /** When the cleanup erases it unless restored first */
+  purgeAfter: string;
+  /** deleted: restorable; queued: "Delete permanently" chosen; purging: erasing now */
+  status: 'deleted' | 'queued' | 'purging' | 'purged';
+}
+
+/** GET /api/channels/:id/content/deleted (Studio's Recently deleted) */
+export async function listDeletedVideos(channelId: string, cursor?: string): Promise<{ items: DeletedVideo[]; cursor: string | null } | null> {
+  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+  const response = await apiRequestServer<{ result: { items: DeletedVideo[]; cursor: string | null } }>({
+    method: 'GET',
+    url: buildApiUrl(`/api/channels/${encodeURIComponent(channelId)}/content/deleted${query}`),
+    functionName: 'listDeletedVideos',
+  }, getServerAuthContext, true);
+  return response?.result ?? null;
+}
+
+/** POST /api/videos/bulk-restore */
+export async function restoreVideos(videoIds: string[]): Promise<BulkSummary | LimitRefusal | null> {
+  return postBulk('/api/videos/bulk-restore', 'restoreVideos', { videoIds });
+}
+
+/** POST /api/videos/bulk-purge: queued for permanent deletion at the next cleanup */
+export async function purgeVideos(videoIds: string[]): Promise<BulkSummary | LimitRefusal | null> {
+  return postBulk('/api/videos/bulk-purge', 'purgeVideos', { videoIds });
 }

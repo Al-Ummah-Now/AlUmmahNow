@@ -15,11 +15,32 @@ export interface StudioTab {
 export interface StudioNavItem {
   id: 'dashboard' | 'content' | 'analytics' | 'comments' | 'playlists' | 'customisation' | 'settings';
   requires: Requires;
+  /** Hidden until the work behind it ships */
+  available?: boolean;
   tabs?: readonly StudioTab[];
 }
 
-/** The Permissions tab arrives with channel roles (PR #462). */
-const PERMISSIONS_AVAILABLE = false;
+/**
+ * Studio sections whose page is still the channel settings page that came
+ * before Studio. Studio links there (and its own URL redirects there), so no
+ * Studio link is a dead end; each moves into Studio when it is rebuilt.
+ */
+const LEGACY_PAGES: Readonly<Record<string, string>> = {
+  'content/posts': 'community',
+  'content/posts/new': 'community/new',
+  playlists: 'playlists',
+  'customisation/profile': 'edit',
+  'customisation/layout': 'sections',
+  'settings/general': '',
+  'settings/permissions': 'team',
+};
+
+/** The existing page a Studio path opens, or null when Studio has its own. */
+export function legacyHref(locale: string, channelId: string, path: string): string | null {
+  const page = LEGACY_PAGES[path.replace(/^\/+|\/+$/g, '')];
+  if (page === undefined) return null;
+  return `/${locale}/settings/channel/${encodeURIComponent(channelId)}${page ? `/${page}` : ''}`;
+}
 
 export const STUDIO_NAV: readonly StudioNavItem[] = [
   { id: 'dashboard', requires: [] },
@@ -28,13 +49,14 @@ export const STUDIO_NAV: readonly StudioNavItem[] = [
     requires: [],
     tabs: [
       { id: 'videos', requires: ['video.view_private'] },
-      { id: 'live', requires: ['live.manage', 'live.moderate'] },
+      // No creator page for live streams or comment moderation yet: hidden until built
+      { id: 'live', requires: ['live.manage', 'live.moderate'], available: false },
       { id: 'posts', requires: ['post.manage'] },
     ],
   },
   { id: 'analytics', requires: ['analytics.view'] },
-  { id: 'comments', requires: ['comment.moderate'] },
-  { id: 'playlists', requires: ['post.manage'] },
+  { id: 'comments', requires: ['comment.moderate'], available: false },
+  { id: 'playlists', requires: ['playlist.manage'] },
   {
     id: 'customisation',
     requires: ['channel.edit'],
@@ -48,7 +70,7 @@ export const STUDIO_NAV: readonly StudioNavItem[] = [
     requires: ['channel.view_private'],
     tabs: [
       { id: 'general', requires: ['channel.view_private'] },
-      { id: 'permissions', requires: ['members.view'], available: PERMISSIONS_AVAILABLE },
+      { id: 'permissions', requires: ['members.view'] },
     ],
   },
 ];
@@ -63,7 +85,7 @@ export function visibleTabs(role: StudioRole, item: StudioNavItem): StudioTab[] 
 
 /** The items this role sees. An item with tabs needs at least one tab it can open. */
 export function visibleNav(role: StudioRole): StudioNavItem[] {
-  return STUDIO_NAV.filter((item) => meets(role, item.requires) && (!item.tabs || visibleTabs(role, item).length > 0));
+  return STUDIO_NAV.filter((item) => item.available !== false && meets(role, item.requires) && (!item.tabs || visibleTabs(role, item).length > 0));
 }
 
 /** Path below the channel that opens this item: its first tab the role can use. */
@@ -82,7 +104,7 @@ export type PathAccess =
 export function checkPath(role: StudioRole, segments: readonly string[]): PathAccess {
   const [itemId, tabId, , action] = segments;
   const item = STUDIO_NAV.find((candidate) => candidate.id === itemId);
-  if (!item) return { status: 'unknown' };
+  if (!item || item.available === false) return { status: 'unknown' };
 
   if (!item.tabs) {
     if (segments.length > 1) return { status: 'unknown' };

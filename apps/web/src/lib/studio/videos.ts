@@ -6,7 +6,10 @@ import { can, type StudioRole } from './permissions';
 /** POST /api/videos/bulk-* takes at most this many. */
 export const MAX_BULK_SELECTION = 50;
 
-const STATUSES = ['published', 'scheduled', 'drafts', 'processing', 'failed'] as const;
+/** 'deleted' is Recently deleted (soft deletes, restorable for 30 days). */
+const STATUSES = ['published', 'scheduled', 'drafts', 'processing', 'failed', 'deleted'] as const;
+
+export type VideosStatus = StudioVideoStatus | 'deleted';
 const SORTS = ['newest', 'oldest', 'views', 'title'] as const;
 const VISIBILITY = ['all', 'public', 'private'] as const;
 const TYPES = ['all', 'videos', 'shorts'] as const;
@@ -15,7 +18,7 @@ const VIEWS = ['list', 'calendar'] as const;
 const CALENDAR_VIEWS = ['month', 'week', 'day'] as const;
 
 export interface VideosQuery {
-  status: StudioVideoStatus;
+  status: VideosStatus;
   q: string;
   sort: (typeof SORTS)[number];
   visibility: (typeof VISIBILITY)[number];
@@ -59,7 +62,7 @@ export function videosQueryString(query: VideosQuery): string {
 export type VideoRowAction = 'edit' | 'view' | 'analytics' | 'copyLink' | 'schedule' | 'reschedule' | 'publishNow' | 'cancelSchedule' | 'retryUpload' | 'retryPublish' | 'delete';
 
 /** Row actions in display order. The server still decides, per video. */
-export function rowActions(status: StudioVideoStatus, role: StudioRole, isPublic = false, failure: 'upload' | 'publish' | null = null): VideoRowAction[] {
+export function rowActions(status: VideosStatus, role: StudioRole, isPublic = false, failure: 'upload' | 'publish' | null = null): VideoRowAction[] {
   const edit: VideoRowAction[] = can(role, 'video.edit') ? ['edit'] : [];
   const schedule = can(role, 'video.schedule');
   const remove: VideoRowAction[] = can(role, 'video.delete') ? ['delete'] : [];
@@ -76,5 +79,8 @@ export function rowActions(status: StudioVideoStatus, role: StudioRole, isPublic
     }
     case 'processing':
       return remove;
+    case 'deleted':
+      // Restore and Delete permanently live in Recently deleted's own rows
+      return [];
   }
 }

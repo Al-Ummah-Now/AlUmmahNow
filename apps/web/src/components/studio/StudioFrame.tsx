@@ -17,7 +17,8 @@ import {
 import { useLanguage } from '@/hooks/useLanguage';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { channelPath, formatHandle } from '@/lib/channel-url';
-import { itemPath, STUDIO_NAV, switchedPath, visibleNav, visibleTabs } from '@/lib/studio/nav';
+import { itemPath, legacyHref, STUDIO_NAV, switchedPath, visibleNav, visibleTabs } from '@/lib/studio/nav';
+import { studioUploadHref } from '@/lib/studio/links';
 import { can, roleForChannel, type StudioRole } from '@/lib/studio/permissions';
 import { cn } from '@/lib/utils';
 
@@ -51,10 +52,10 @@ function ChannelSwitcher({ locale, channel, segments }: { locale: string; channe
   const { user, switchToChannel } = useMultiAccount();
   const channels = user?.channels ?? [];
 
-  const open = async (id: string, ownerId: string) => {
+  const open = async (id: string, ownerId: string, listedRole?: StudioRole | null) => {
     if (!user || id === channel.id) return;
     await switchToChannel(id);
-    const role = roleForChannel({ userId: ownerId }, user.id);
+    const role = listedRole ?? roleForChannel({ userId: ownerId }, user.id);
     const path = role ? switchedPath(segments, role) : 'dashboard';
     router.push(`/${locale}/studio/${encodeURIComponent(id)}/${path}`);
   };
@@ -75,7 +76,7 @@ function ChannelSwitcher({ locale, channel, segments }: { locale: string; channe
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-64">
         {channels.map((item) => (
-          <DropdownMenuItem key={item.id} onSelect={() => void open(item.id, item.userId)}>
+          <DropdownMenuItem key={item.id} onSelect={() => void open(item.id, item.userId, (item as { role?: StudioRole | null }).role)}>
             <span dir="auto" className="flex-1 truncate">{item.nameLocalized?.[locale] || item.name}</span>
             {item.id === channel.id && <Check aria-hidden="true" className="h-4 w-4" />}
           </DropdownMenuItem>
@@ -107,7 +108,7 @@ function NavLinks({ locale, role, channelId, active, onNavigate }: { locale: str
     return (
       <Link
         key={item.id}
-        href={`/${locale}/studio/${encodeURIComponent(channelId)}/${itemPath(role, item)}`}
+        href={legacyHref(locale, channelId, itemPath(role, item)) ?? `/${locale}/studio/${encodeURIComponent(channelId)}/${itemPath(role, item)}`}
         aria-current={current ? 'page' : undefined}
         onClick={onNavigate}
         data-testid={`studio-nav-${item.id}`}
@@ -135,7 +136,7 @@ function Rail({ locale, role, channel, segments, onNavigate }: { locale: string;
       <ChannelSwitcher locale={locale} channel={channel} segments={segments} />
       {can(role, 'video.upload') && (
         <Button asChild>
-          <Link href={`/${locale}/upload`} onClick={onNavigate}>
+          <Link href={studioUploadHref(locale, channel.id)} onClick={onNavigate} data-testid="studio-upload">
             <UploadCloud aria-hidden="true" className="me-2 h-4 w-4" />
             {t.studio.upload}
           </Link>
@@ -192,7 +193,7 @@ export function StudioFrame({ locale, role, channel, children }: Props) {
               return (
                 <Link
                   key={tab.id}
-                  href={`${base}/${item.id}/${tab.id}`}
+                  href={legacyHref(locale, channel.id, `${item.id}/${tab.id}`) ?? `${base}/${item.id}/${tab.id}`}
                   aria-current={current ? 'page' : undefined}
                   data-testid={`studio-tab-${tab.id}`}
                   className={cn(
