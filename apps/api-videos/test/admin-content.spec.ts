@@ -825,6 +825,32 @@ describe('admin jobs (queue, retry, DLQ)', () => {
 		assert.deepEqual(job.result, { n: 3 });
 	});
 
+	it('every status change is published to admin:jobs (live admin pages)', async () => {
+		const { env, jobs } = await setup();
+		const published: Array<{ url: string; events: any[] }> = [];
+		const realFetch = globalThis.fetch;
+		globalThis.fetch = (async (url: string, init: RequestInit) => {
+			const body = JSON.parse(String(init.body));
+			published.push({ url, events: body.items.flatMap((i: any) => i.channel === 'admin:jobs' ? i.message.data.events : []) });
+			return new Response('{}', { status: 200 });
+		}) as typeof fetch;
+		try {
+			const liveEnv = Object.assign(env, { WEBSOCKET_URL: 'https://realtime.test', INTERNAL_API_KEY: 'k' });
+			const created = await createJob(liveEnv as never, { kind: 'user.delete-data', targetKind: 'user', targetId: OTHER, actorId: 'usr_admin' });
+			jobs.pending.splice(0);
+			await jobs.send({ id: 'm', type: MessageType.AdminJob, payload: { jobId: created.id }, timestamp: 0 });
+			const handlers = { 'user.delete-data': async () => ({ done: true as const }) };
+			const d = jobs.pending.shift()!;
+			await handleAdminJobBatch({ messages: [{ body: d.body, attempts: 1, ack() {}, retry() {} }] }, liveEnv as never, handlers);
+		} finally {
+			globalThis.fetch = realFetch;
+		}
+		assert.ok(published.every((p) => p.url === 'https://realtime.test/broadcast'));
+		const events = published.flatMap((p) => p.events);
+		assert.deepEqual(events.map((e) => e.status), ['queued', 'running', 'succeeded']);
+		assert.ok(events.every((e) => e.kind === 'job' && e.key.startsWith('job:') && e.jobKind === 'user.delete-data' && e.targetId === OTHER));
+	});
+
 	it('backoff doubles from 10s and caps at 5 minutes', () => {
 		assert.deepEqual([1, 2, 3, 4, 5, 6, 9].map(backoffSeconds), [10, 20, 40, 80, 160, 300, 300]);
 	});

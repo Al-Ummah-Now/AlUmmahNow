@@ -60,4 +60,22 @@ describe('ReportResolve', () => {
     expect(args[0]).toBe('resolved');
     expect(args[3]).toBe('spam');
   });
+
+  it('tells the live admin pages that the Reports queue changed', async () => {
+    const { env, processor } = setup();
+    const fetchMock = jest.fn().mockResolvedValue({ ok: true });
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    try {
+      Object.assign(env, { WEBSOCKET_URL: 'https://realtime.test', INTERNAL_API_KEY: 'k' });
+      await processor.processMessage(message({ action: 'dismissed', status: 'dismissed' }), env);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+    const [url, init] = fetchMock.mock.calls[fetchMock.mock.calls.length - 1];
+    expect(url).toBe('https://realtime.test/broadcast');
+    const item = JSON.parse(init.body).items[0];
+    expect(item.channel).toBe('admin:moderation');
+    expect(item.message.data.events).toEqual([{ kind: 'changed', key: 'reports', queue: 'reports' }]);
+  });
 });

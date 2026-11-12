@@ -11,6 +11,7 @@ import type { AdminBindings } from '../../base/types';
 import { logger } from '../../lib/logger';
 import { verifyAccessToken } from '../../middleware/auth';
 import { type ContactInput, CONTACT_LIMITS, hashIp, isLikelyBot, rateLimitsFor, safeEqual, validateContactInput } from '../../lib/contact';
+import { publishAdminLiveInBackground } from '../../lib/admin-live';
 import { insertContactMessage, recordDelivery } from '../../lib/contact-store';
 import { enqueueContactMail, reportContactMailFailure } from '../../lib/contact-mail-queue';
 
@@ -77,5 +78,6 @@ export async function contactSubmit(c: Context<{ Bindings: AdminBindings }>): Pr
       await reportContactMailFailure(env, job, 'could not queue the email', 0);
     }
   }
+  publishAdminLiveInBackground(c, 'moderation', { kind: 'changed', key: 'contact', queue: 'contact' });
   return c.json({ success: true, result: { id } }, 201);
 }

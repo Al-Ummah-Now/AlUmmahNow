@@ -12,7 +12,7 @@
  *
  * Rows live in SEARCH_DB.admin_jobs (migration search/0006).
  */
-import { ADMIN_JOB_MAX_RETRIES, MessageType, type AdminJob, type AdminJobKind, type AdminJobStatus, type AdminJobTarget } from '@al-ummah/shared-types';
+import { ADMIN_JOB_MAX_RETRIES, MessageType, publishAdminLive, type AdminLiveEnv, type AdminJob, type AdminJobKind, type AdminJobStatus, type AdminJobTarget } from '@al-ummah/shared-types';
 import { logger } from '../logger';
 import type { SearchDb } from '@al-ummah/shared-types';
 
@@ -20,7 +20,7 @@ export interface JobQueue {
 	send(message: unknown, options?: { delaySeconds?: number }): Promise<void>;
 }
 
-export interface JobEnv {
+export interface JobEnv extends AdminLiveEnv {
 	SEARCH_DB?: SearchDb;
 	ADMIN_JOBS_QUEUE?: JobQueue;
 	/** Run-account erasures (#887): their own queue, consumed with a concurrency cap */
@@ -120,12 +120,21 @@ export async function countJobs(env: JobEnv, status: AdminJobStatus): Promise<nu
 	return Number(row?.n ?? 0);
 }
 
-async function setStatus(env: JobEnv, id: string, fields: Partial<{ status: AdminJobStatus; attempts: number; last_error: string | null; result: string | null; params: string; finished_at: string | null }>): Promise<void> {
+type JobRef = Pick<AdminJob, 'id' | 'kind' | 'targetKind' | 'targetId'>;
+
+/** The admin:jobs live event of a status change (docs/admin/LIVE_OPS.md): a hint, pages refetch the job. */
+export function jobLiveEvent(job: JobRef, status: AdminJobStatus, attempts?: number) {
+	return { kind: 'job', key: `job:${job.id}`, id: job.id, jobKind: job.kind, status, targetType: job.targetKind, targetId: job.targetId, ...(attempts !== undefined ? { attempts } : {}) };
+}
+
+async function setStatus(env: JobEnv, job: JobRef, fields: Partial<{ status: AdminJobStatus; attempts: number; last_error: string | null; result: string | null; params: string; finished_at: string | null }>): Promise<void> {
 	const entries = Object.entries(fields);
 	await db(env)
 		.prepare(`UPDATE admin_jobs SET ${entries.map(([k]) => `${k} = ?`).join(', ')}, updated_at = ? WHERE id = ?`)
-		.bind(...entries.map(([, v]) => v), now(), id)
+		.bind(...entries.map(([, v]) => v), now(), job.id)
 		.run();
+	// Never throws, gives up after a few seconds: a live update never fails or stalls the job
+	if (fields.status) await publishAdminLive(env, 'jobs', jobLiveEvent(job, fields.status, fields.attempts));
 }
 
 const message = (jobId: string) => ({ id: crypto.randomUUID(), type: MessageType.AdminJob, payload: { jobId }, timestamp: Date.now() });
@@ -140,7 +149,7 @@ async function enqueue(env: JobEnv, job: AdminJob, delaySeconds?: number): Promi
 	} catch (error) {
 		const reason = `Could not queue the job: ${error instanceof Error ? error.message : String(error)}`;
 		logger.error('[AdminJobs] Enqueue failed', { alert: 'admin_job_failed', jobId: job.id, kind: job.kind, error: reason });
-		await setStatus(env, job.id, { status: 'failed', last_error: reason, finished_at: now() });
+		await setStatus(env, job, { status: 'failed', last_error: reason, finished_at: now() });
 		return { ...job, status: 'failed', lastError: reason };
 	}
 }
@@ -166,6 +175,7 @@ export async function createJob(env: JobEnv, input: { kind: AdminJobKind; target
 		.prepare(`INSERT INTO admin_jobs (${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 		.bind(job.id, job.kind, job.targetKind, job.targetId, JSON.stringify(job.params), job.status, 0, null, null, job.actorId, at, at, null)
 		.run();
+	await publishAdminLive(env, 'jobs', jobLiveEvent(job, 'queued'));
 	return enqueue(env, job);
 }
 
@@ -173,7 +183,7 @@ export async function createJob(env: JobEnv, input: { kind: AdminJobKind; target
 export async function retryJob(env: JobEnv, id: string): Promise<AdminJob | null> {
 	const job = await getJob(env, id);
 	if (!job || job.status !== 'failed') return job;
-	await setStatus(env, id, { status: 'queued', attempts: 0, last_error: null, finished_at: null });
+	await setStatus(env, job, { status: 'queued', attempts: 0, last_error: null, finished_at: null });
 	return enqueue(env, { ...job, status: 'queued', attempts: 0, lastError: null, finishedAt: null });
 }
 
@@ -217,26 +227,26 @@ export async function handleAdminJobBatch(batch: { messages: readonly JobMessage
 		}
 		const handler = handlers[job.kind];
 		if (!handler) {
-			await setStatus(env, job.id, { status: 'failed', last_error: `No handler for ${job.kind}`, finished_at: now() });
+			await setStatus(env, job, { status: 'failed', last_error: `No handler for ${job.kind}`, finished_at: now() });
 			msg.ack();
 			continue;
 		}
-		await setStatus(env, job.id, { status: 'running', attempts: msg.attempts });
+		await setStatus(env, job, { status: 'running', attempts: msg.attempts });
 		try {
 			const outcome = await handler(env, { ...job, attempts: msg.attempts });
 			if (!('params' in outcome)) {
-				await setStatus(env, job.id, { status: 'succeeded', result: outcome.result ? JSON.stringify(outcome.result) : null, last_error: null, finished_at: now() });
+				await setStatus(env, job, { status: 'succeeded', result: outcome.result ? JSON.stringify(outcome.result) : null, last_error: null, finished_at: now() });
 				logger.info('[AdminJobs] Job succeeded', { jobId: job.id, kind: job.kind, target: job.targetId, attempts: msg.attempts });
 			} else {
 				// Resumable work: store the next step and queue it as a fresh delivery
-				await setStatus(env, job.id, { status: 'queued', params: JSON.stringify(outcome.params), result: outcome.result ? JSON.stringify(outcome.result) : null });
+				await setStatus(env, job, { status: 'queued', params: JSON.stringify(outcome.params), result: outcome.result ? JSON.stringify(outcome.result) : null });
 				await jobQueueFor(env, job.kind)!.send(message(job.id));
 			}
 			msg.ack();
 		} catch (error) {
 			const reason = error instanceof Error ? error.message : String(error);
 			const last = msg.attempts > ADMIN_JOB_MAX_RETRIES;
-			await setStatus(env, job.id, last ? { status: 'failed', last_error: reason, finished_at: now() } : { status: 'retrying', last_error: reason }).catch(() => undefined);
+			await setStatus(env, job, last ? { status: 'failed', last_error: reason, finished_at: now() } : { status: 'retrying', last_error: reason }).catch(() => undefined);
 			if (last) {
 				// Flags the admin: the job shows "failed — Retry", and this alert reaches the logs
 				logger.error('[AdminJobs] Job failed after retries', { alert: 'admin_job_failed', jobId: job.id, kind: job.kind, target: job.targetId, attempts: msg.attempts, error: reason });
