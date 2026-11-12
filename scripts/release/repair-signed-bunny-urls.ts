@@ -17,9 +17,10 @@
  * else in a record is touched. The default is a dry run that prints counts.
  *
  * Usage (repo root):
- *   node --experimental-strip-types --no-warnings scripts/release/repair-signed-bunny-urls.ts --env qa|stage|production [--apply]
+ *   node --experimental-strip-types --no-warnings scripts/release/repair-signed-bunny-urls.ts --env qa|stage|production [--apply] [--only videos,channels,search]
  * Production also needs --allow-production with --apply.
  */
+import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { cfToken, DEFAULT_ACCOUNT_ID } from './cf-api.ts';
 import { unsignedBunnyUrl } from '../../apps/api-videos/src/lib/bunny-signing.ts';
@@ -81,9 +82,24 @@ export function repairText(text: string): { text: string; urls: number } | null 
 	return changed ? { text: JSON.stringify(value), urls: changed } : null;
 }
 
+/** Bearer token, re-read after a refresh: a `wrangler login` OAuth token lasts about an hour */
+let bearer = '';
+function refreshToken(): void {
+	// Any authenticated wrangler command refreshes the OAuth token on disk
+	if (!process.env.CLOUDFLARE_API_TOKEN) execFileSync('npx', ['wrangler', 'whoami'], { stdio: 'ignore' });
+	bearer = cfToken() ?? '';
+}
+
 async function fetchRetry(url: string, init: RequestInit, attempts = 10): Promise<Response> {
+	let refreshed = false;
 	for (let i = 1; ; i++) {
-		const res = await fetch(url, init);
+		const res = await fetch(url, { ...init, headers: { ...(init.headers as Record<string, string>), Authorization: `Bearer ${bearer}` } });
+		if (res.status === 401 && !refreshed) {
+			refreshed = true;
+			refreshToken();
+			i--;
+			continue;
+		}
 		if (i >= attempts || (res.status !== 429 && res.status < 500)) return res;
 		await new Promise((r) => setTimeout(r, Math.min(1000 * 2 ** i, 30000)));
 	}
@@ -94,17 +110,20 @@ async function main(argv: string[]): Promise<void> {
 	if (!['qa', 'stage', 'production'].includes(env)) throw new Error('usage: --env qa|stage|production [--apply] [--allow-production]');
 	const apply = argv.includes('--apply');
 	if (apply && env === 'production' && !argv.includes('--allow-production')) throw new Error('production --apply needs --allow-production');
-	const token = cfToken();
-	if (!token) throw new Error('No Cloudflare credentials');
+	bearer = cfToken() ?? '';
+	if (!bearer) throw new Error('No Cloudflare credentials');
+	// --only videos,channels,search: resume part of a run (bucket base names; "search" = the D1 rows)
+	const only = argv.includes('--only') ? new Set(argv[argv.indexOf('--only') + 1].split(',')) : null;
 	const account = process.env.CLOUDFLARE_ACCOUNT_ID || DEFAULT_ACCOUNT_ID;
 	const api = `https://api.cloudflare.com/client/v4/accounts/${account}`;
-	const headers = { Authorization: `Bearer ${token}` };
+	const headers: Record<string, string> = {};
 	console.log(`${apply ? 'APPLY' : 'DRY RUN'} on ${env}`);
 
 	let totalRecords = 0;
 	let totalUrls = 0;
 	let totalUnread = 0;
 	for (const base of BUCKETS) {
+		if (only && !only.has(base)) continue;
 		const bucket = bucketName(base, env);
 		const objectUrl = (key: string) => `${api}/r2/buckets/${bucket}/objects/${key.split('/').map(encodeURIComponent).join('/')}`;
 		const keys: string[] = [];
@@ -162,7 +181,7 @@ async function main(argv: string[]): Promise<void> {
 		if (!res.ok || !json.success) throw new Error(`D1 query -> HTTP ${res.status}`);
 		return json.result?.[0]?.results ?? [];
 	};
-	for (const table of SEARCH_TABLES) {
+	for (const table of only && !only.has('search') ? [] : SEARCH_TABLES) {
 		const rows = await d1<{ id: string; payload: string }>(`SELECT id, payload FROM ${table} WHERE payload LIKE '%token=%'`);
 		let fixed = 0;
 		let urls = 0;
