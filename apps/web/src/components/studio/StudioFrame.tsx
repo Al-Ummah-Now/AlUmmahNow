@@ -62,11 +62,13 @@ function ChannelSwitcher({ locale, channel, segments }: { locale: string; channe
 
   return (
     <DropdownMenu>
+      {/* Named by its content (WCAG 2.5.3): an aria-label would replace the visible channel name.
+          The sr-only prefix still tells screen-reader users what the button does. */}
       <DropdownMenuTrigger
-        aria-label={t.studio.switcher.label}
         data-testid="studio-switcher"
         className="flex min-h-11 w-full items-center gap-2 rounded-md p-2 text-start hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
+        <span className="sr-only">{t.studio.switcher.label}: </span>
         <Avatar url={channel.avatarUrl} name={channel.name} />
         <span className="min-w-0 flex-1">
           <span dir="auto" className="block truncate text-sm font-medium text-foreground">{channel.name}</span>

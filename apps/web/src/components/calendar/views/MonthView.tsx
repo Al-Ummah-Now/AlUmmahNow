@@ -14,7 +14,7 @@ import 'react-big-calendar/lib/css/react-big-calendar.css';
 import '../calendar.css';
 import { useLanguage } from '@/hooks/useLanguage';
 import { CustomMonthDateHeader } from '../shared/CustomHeaders';
-import { EventWrapper, CalendarEventData } from '../shared/EventWrapper';
+import { EventWrapper, RowEventWrapper, CalendarEventData } from '../shared/EventWrapper';
 
 // Type cast to fix React 19 compatibility issue with react-big-calendar
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -95,6 +95,7 @@ export function MonthView({
         components={{
           toolbar: CustomToolbar,
           event: EventComponent,
+          eventWrapper: RowEventWrapper,
           month: {
             dateHeader: MonthDateHeader,
           },

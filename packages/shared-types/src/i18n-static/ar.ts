@@ -2082,7 +2082,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     skipToComments: 'انتقل إلى التعليقات',
     openNavigationMenu: 'فتح قائمة التنقل',
     closeNavigationMenu: 'إغلاق قائمة التنقل',
-    goToHomePage: 'الصفحة الرئيسية للأمة الآن',
+    goToHomePage: 'الأمة الآن - الصفحة الرئيسية',
     videoPlayerFor: 'فيديو: {title}',
     channelAvatar: 'صورة قناة {channel}',
     videoStats: 'إحصائيات الفيديو',
