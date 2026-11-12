@@ -17,6 +17,7 @@
 --   apps/api-videos/migrations/search/0017_deletions_by_channel.sql
 --   apps/api-videos/migrations/search/0020_media_delivery.sql
 --   apps/api-videos/migrations/search/0021_user_search_indexes.sql
+--   apps/api-videos/migrations/search/0023_media_originals.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
@@ -29,6 +30,7 @@ CREATE TABLE creator_tier_assignments (user_id TEXT PRIMARY KEY, tier_id TEXT NO
 CREATE TABLE creator_tiers (id TEXT PRIMARY KEY, name TEXT NOT NULL, unlimited INTEGER NOT NULL DEFAULT 0, per_hour INTEGER NOT NULL, per_day INTEGER NOT NULL, max_concurrent INTEGER NOT NULL, max_channels INTEGER, updated_at TEXT, updated_by TEXT, deleted_at TEXT, deleted_by TEXT, delete_reason TEXT, purge_requested_at TEXT, purge_requested_by TEXT) WITHOUT ROWID;
 CREATE TABLE delivery_cost_daily (day TEXT NOT NULL, provider TEXT NOT NULL, metric TEXT NOT NULL, value REAL NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (day, provider, metric));
 CREATE TABLE media_jobs (video_id TEXT PRIMARY KEY, job_id TEXT NOT NULL, status TEXT NOT NULL, access TEXT NOT NULL, reason TEXT, attempts INTEGER NOT NULL DEFAULT 0, queued_at TEXT NOT NULL, started_at TEXT, ready_at TEXT, failed_at TEXT, error TEXT, duration_seconds REAL, bytes INTEGER, objects INTEGER, rungs TEXT, container_seconds INTEGER, instance_type TEXT, bunny_ready_at TEXT, updated_at TEXT NOT NULL);
+CREATE TABLE media_originals (video_id TEXT PRIMARY KEY, upload_id TEXT NOT NULL, bytes INTEGER NOT NULL, parts INTEGER NOT NULL, completed_at TEXT NOT NULL, deleted_at TEXT);
 CREATE TABLE playback_qoe_daily (day TEXT NOT NULL, provider TEXT NOT NULL, device TEXT NOT NULL, country TEXT NOT NULL, sessions INTEGER NOT NULL DEFAULT 0, started INTEGER NOT NULL DEFAULT 0, startup_ms_sum INTEGER NOT NULL DEFAULT 0, rebuffers INTEGER NOT NULL DEFAULT 0, rebuffer_ms INTEGER NOT NULL DEFAULT 0, watch_ms INTEGER NOT NULL DEFAULT 0, kbps_watch_s REAL NOT NULL DEFAULT 0, peak_kbps_sum INTEGER NOT NULL DEFAULT 0, switches INTEGER NOT NULL DEFAULT 0, errors INTEGER NOT NULL DEFAULT 0, fallbacks INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, provider, device, country));
 CREATE TABLE search_channels (rowid INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE, channel_id TEXT, visible INTEGER NOT NULL DEFAULT 1, language TEXT, category TEXT, duration INTEGER, is_verified INTEGER NOT NULL DEFAULT 0, is_live INTEGER NOT NULL DEFAULT 0, views INTEGER NOT NULL DEFAULT 0, created_at INTEGER, popularity REAL NOT NULL DEFAULT 0, payload TEXT NOT NULL, content_hash TEXT, indexed_at INTEGER NOT NULL DEFAULT 0, source_version INTEGER NOT NULL DEFAULT 0, is_short INTEGER NOT NULL DEFAULT 0);
 CREATE VIRTUAL TABLE search_channels_fts USING fts5 (title, body, tokenize = 'unicode61 remove_diacritics 2', prefix = '2 3');
@@ -91,6 +93,7 @@ CREATE INDEX idx_creator_tier_assignments_tier ON creator_tier_assignments (tier
 CREATE INDEX idx_creator_tiers_deleted ON creator_tiers (deleted_at) WHERE deleted_at IS NOT NULL;
 CREATE INDEX idx_media_jobs_queued ON media_jobs (queued_at);
 CREATE INDEX idx_media_jobs_status ON media_jobs (status, updated_at);
+CREATE INDEX idx_media_originals_due ON media_originals (deleted_at, completed_at);
 CREATE INDEX idx_search_channels_created ON search_channels (visible, created_at);
 CREATE INDEX idx_search_channels_indexed ON search_channels (indexed_at);
 CREATE INDEX idx_search_playlists_channel ON search_playlists (channel_id);

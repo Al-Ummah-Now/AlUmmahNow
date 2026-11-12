@@ -142,7 +142,9 @@
 		// R2 delivery beside Bunny (epic #687): renditions written by apps/media; api-videos
 		// moves them on visibility changes and deletes them at purge
 		{ "binding": "MEDIA", "bucket_name": "al-ummah-now-media" },
-		{ "binding": "MEDIA_PRIVATE", "bucket_name": "al-ummah-now-media-private" }
+		{ "binding": "MEDIA_PRIVATE", "bucket_name": "al-ummah-now-media-private" },
+		// Uploads as received, for the R2 transcode (docs/media-delivery/ORIGINALS.md)
+		{ "binding": "MEDIA_ORIGINALS", "bucket_name": "al-ummah-now-media-originals" }
 	],
 	"d1_databases": [
 		{
@@ -283,7 +285,10 @@
 		// R2 delivery host (public renditions direct from R2, private ones via apps/media). The
 		// viewer switch (admin Delivery page) defaults to Bunny; uploads are dual-written to R2.
 		"MEDIA_PUBLIC_HOST": "media.alummahnow.net",
-		"MEDIA_BUCKET_NAMES": "al-ummah-now-media,al-ummah-now-media-private",
+		"MEDIA_BUCKET_NAMES": "al-ummah-now-media,al-ummah-now-media-private,al-ummah-now-media-originals",
+		// Kept originals: at least this many days, and until the R2 rendition is ready; never past the ceiling
+		"ORIGINALS_RETENTION_DAYS": "30",
+		"ORIGINALS_MAX_DAYS": "90",
 		// Logging policy (docs/operations/logging.md): production warn, stage info, QA/dev debug
 		"LOG_LEVEL": "warn",
 		"ENVIRONMENT": "production",
@@ -412,7 +417,8 @@
 					"bucket_name": "admin-backups-stage"
 				},
 				{ "binding": "MEDIA", "bucket_name": "al-ummah-now-media-stage" },
-				{ "binding": "MEDIA_PRIVATE", "bucket_name": "al-ummah-now-media-private-stage" }
+				{ "binding": "MEDIA_PRIVATE", "bucket_name": "al-ummah-now-media-private-stage" },
+				{ "binding": "MEDIA_ORIGINALS", "bucket_name": "al-ummah-now-media-originals-stage" }
 			],
 			"d1_databases": [
 				{
@@ -535,7 +541,9 @@
 				// Error reports to the admin Errors page (docs/features/error-reporting.md)
 				"ERRORS_INGEST_URL": "https://admin.api.stage.alummahnow.net/internal/errors",
 				"MEDIA_PUBLIC_HOST": "media.stage.alummahnow.net",
-				"MEDIA_BUCKET_NAMES": "al-ummah-now-media-stage,al-ummah-now-media-private-stage",
+				"MEDIA_BUCKET_NAMES": "al-ummah-now-media-stage,al-ummah-now-media-private-stage,al-ummah-now-media-originals-stage",
+				"ORIGINALS_RETENTION_DAYS": "30",
+				"ORIGINALS_MAX_DAYS": "90",
 				// Logging policy (docs/operations/logging.md): production warn, stage info, QA/dev debug
 				"LOG_LEVEL": "info",
 				"ENVIRONMENT": "stage",

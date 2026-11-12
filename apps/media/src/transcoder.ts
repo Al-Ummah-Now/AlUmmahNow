@@ -10,6 +10,7 @@ import { mediaCacheControl, mediaContentType, sanitizeFailure, type TranscodeFai
 import { bucketFor, errorText, log, type Env } from './env';
 import { containerSeconds, keyAllowed, newJob, onFailure, onMessage, watchdogVerdict, WATCHDOG_SECONDS, type JobState } from './jobs';
 import { reportEvent, sourceCandidates } from './videos-api';
+import { serveOriginal } from './originals';
 
 /** Source URL that answered, per video (isolate memory; a miss just re-probes). */
 const chosenSource = new Map<string, string>();
@@ -55,6 +56,12 @@ export class Transcoder extends Container<Env> {
 		 */
 		async source(req: Request, env: Env, ctx: OutboundHandlerContext<{ videoId: string }>): Promise<Response> {
 			if (req.method !== 'GET' && req.method !== 'HEAD') return new Response('method', { status: 405 });
+			// Our own kept original first (docs/media-delivery/ORIGINALS.md): no wait for Bunny, full quality
+			const own = await serveOriginal(env, ctx.params.videoId, req.headers.get('range')).catch((error) => {
+				log.warn('[Transcoder] Kept original unreadable; using Bunny', { videoId: ctx.params.videoId, error: errorText(error) });
+				return null;
+			});
+			if (own) return own;
 			const urls = await sourceCandidates(env, ctx.params.videoId);
 			if (!urls.length) return new Response('source_missing', { status: 404 });
 			const headers = new Headers();

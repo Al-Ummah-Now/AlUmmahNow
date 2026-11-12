@@ -33,6 +33,7 @@ import {
 } from '@al-ummah/shared-types';
 import { getSecret } from '../env-helpers';
 import { fetchBunnyVideo } from '../processing/loop';
+import { deleteOriginal } from './originals';
 import { logger } from '../logger';
 import R2Repository from '../r2Repo';
 import { bunnyDirectoryToken, signedBunnyUrl, tokenExpiry } from '../bunny-signing';
@@ -513,6 +514,8 @@ export async function purgeVideoMedia(env: MediaEnv, videoId: string): Promise<n
 		n += keys.length;
 	}
 	if (n) await purgeCdnPrefix(env, `${videoId}/`);
+	// The kept original (docs/media-delivery/ORIGINALS.md)
+	n += await deleteOriginal(env as never, videoId);
 	return n;
 }
 

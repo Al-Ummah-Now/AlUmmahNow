@@ -129,6 +129,7 @@ export const APPS: AppRule[] = [
 				{ kind: 'r2_buckets', name: 'MEDIA_PRIVATE' },
 				{ kind: 'queue_producer', name: 'TRANSCODE_QUEUE' },
 				{ kind: 'secrets_store_secrets', name: 'MEDIA_SIGN_KEY' },
+				{ kind: 'r2_buckets', name: 'MEDIA_ORIGINALS' },
 				{ kind: 'queue_consumer', name: 'al-ummah-now-processing-check' },
 				// Heavy admin actions run as queued jobs (lib/admin/jobs.ts)
 				{ kind: 'queue_producer', name: 'ADMIN_JOBS_QUEUE' },

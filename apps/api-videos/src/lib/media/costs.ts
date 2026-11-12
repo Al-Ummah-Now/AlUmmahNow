@@ -15,6 +15,7 @@
  *                    host requests, bytes and cache hits
  * Every part is best effort: a missing input leaves its metric out, never fails the run.
  */
+import { originalsStoredBytes } from './originals';
 import { getSecret, requireSecret } from '../env-helpers';
 import { logger } from '../logger';
 
@@ -52,6 +53,8 @@ export function metricsFromRecords(input: {
 	qoe: { provider: string; watchMs: number; kbpsWatchS: number }[];
 	bunnyStoredBytes?: number;
 	r2StoredBytes?: number;
+	/** Kept originals (al-ummah-now-media-originals; docs/media-delivery/ORIGINALS.md) */
+	originalsStoredBytes?: number;
 	r2ClassB?: number;
 }): Metric[] {
 	const out: Metric[] = [];
@@ -73,11 +76,12 @@ export function metricsFromRecords(input: {
 	add('r2', 'class_a_ops', input.jobs.objects);
 	add('r2', 'class_b_ops', input.r2ClassB);
 	add('r2', 'stored_gb', storedR2 / GB);
+	if (input.originalsStoredBytes !== undefined) add('r2', 'originals_stored_gb', input.originalsStoredBytes / GB);
 	add('r2', 'viewer_hours', r2.hours);
 	add('r2', 'delivered_gb', r2.gb);
 	const r2Cost =
 		input.jobs.containerSeconds * PRICES.containerInstanceSecond +
-		(storedR2 / GB) * (PRICES.r2GbMonth / 30) +
+		((storedR2 + (input.originalsStoredBytes ?? 0)) / GB) * (PRICES.r2GbMonth / 30) +
 		(input.jobs.objects / 1e6) * PRICES.r2ClassAPerMillion +
 		((input.r2ClassB ?? 0) / 1e6) * PRICES.r2ClassBPerMillion;
 	add('r2', 'cost_usd', r2Cost);
@@ -201,6 +205,7 @@ export async function collectDeliveryCosts(env: CostEnv, now = new Date()): Prom
 				qoe: qoe ?? [],
 				bunnyStoredBytes: bunnyBytes,
 				r2StoredBytes: cf.r2StoredBytes,
+				originalsStoredBytes: await originalsStoredBytes(env as never),
 				r2ClassB: cf.r2ClassB,
 			}),
 			...cf.extra,
