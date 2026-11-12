@@ -9,7 +9,7 @@ import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Hono } from 'hono';
-import { CREATOR_ERROR_CODES, DEFAULT_CREATOR_TIER } from '@al-ummah/shared-types';
+import { CREATOR_ERROR_CODES, DEFAULT_CREATOR_TIER, syncOwnership, type SearchDb } from '@al-ummah/shared-types';
 import {
   continueLimitsOf,
   countReused,
@@ -113,6 +113,8 @@ async function harness(opts: Options = {}) {
   const indexChannel = (id: string, owner: string) =>
     db.db.prepare("INSERT INTO content_ownership (kind, id, owner_id) VALUES ('channel', ?, ?)").run(id, owner);
   const deleteChannel = (id: string) => db.db.prepare("UPDATE content_ownership SET is_deleted = 1 WHERE kind = 'channel' AND id = ?").run(id);
+  /** What DELETE /api/channels/:id leaves in the index: no row, a tombstone (syncOwnership) */
+  const removeChannel = async (id: string) => syncOwnership(db as unknown as SearchDb, 'channel', id, null, clock);
   // Stand-ins for the initiate handlers: each records the video it would create
   app.post('/api/videos/upload/initiate', (c) => {
     if (opts.initiateAnswer) {
@@ -177,7 +179,7 @@ async function harness(opts: Options = {}) {
         | { count: number }
         | undefined)?.count ?? 0,
     );
-  return { db, d1, request, initiate, batch, chunk, startUpload, tusCreate, complete, createChannel, created, hour, channelsCreated, indexChannel, deleteChannel };
+  return { db, d1, request, initiate, batch, chunk, startUpload, tusCreate, complete, createChannel, created, hour, channelsCreated, indexChannel, deleteChannel, removeChannel };
 }
 
 describe('creator tiers: who may upload', () => {
@@ -472,6 +474,18 @@ describe('creator tiers: channels, access and admin', () => {
     // A deleted channel frees its slot
     h.deleteChannel(h.channelsCreated[0]);
     assert.equal((await h.createChannel('alice')).status, 200);
+  });
+
+  it('a channel deleted the day it was created frees its slot at once (its reservation does not count again)', async () => {
+    const h = await harness();
+    assert.equal((await h.createChannel('alice')).status, 200);
+    assert.equal((await h.createChannel('alice')).status, 200);
+    assert.equal((await h.createChannel('alice')).status, 403);
+    // The delete removes the index row and leaves a tombstone; the settled reservation is still within its 24 h
+    await h.removeChannel(h.channelsCreated[0]);
+    assert.equal((await creatorAccess(h.d1, 'alice', [])).channelsOwned, 1);
+    assert.equal((await h.createChannel('alice')).status, 200);
+    assert.equal((await h.createChannel('alice')).status, 403);
   });
 
   it('a failed channel create gives its slot back', async () => {
