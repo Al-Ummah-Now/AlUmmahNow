@@ -1,7 +1,7 @@
 # Local E2E stack
 
 Most E2E specs run against a stack that each CI job boots for itself, not against the shared QA
-environment. That keeps them isolated, so jobs run in parallel and shard. `docs/testing/E2E-PLACEMENT.md`
+environment. That keeps them isolated, so jobs run in parallel and shard. the placement table (`node --experimental-strip-types --no-warnings scripts/e2e/placement-doc.ts`, also in the Local E2E build job's summary)
 lists which specs run here (**local**) and which still need QA/stage (**deployed**).
 
 ## What runs

@@ -1,5 +1,5 @@
 /**
- * Where every E2E spec runs (docs/testing/E2E-PLACEMENT.md, generated from this file).
+ * Where every E2E spec runs (the table: scripts/e2e/placement-doc.ts, generated from this file, never committed).
  *
  * - local: UI behaviour and our own API logic. Runs against a local stack that CI boots per job
  *   (web, admin-web, api-videos, admin-api, processor, websocket-server under wrangler/miniflare,

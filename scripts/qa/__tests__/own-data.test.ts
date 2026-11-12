@@ -34,7 +34,7 @@ export const FORBIDDEN: { name: string; pattern: RegExp }[] = [
 ];
 
 /**
- * Files that break the rule today, and the batch that moves them (docs/testing/E2E-PLACEMENT.md).
+ * Files that break the rule today, and the batch that moves them (placement.ts; table: scripts/e2e/placement-doc.ts).
  * Only ever remove lines.
  */
 export const ALLOWED: Record<string, string> = {
