@@ -1,3 +1,4 @@
+import { uploadCollection } from "../../lib/channelCollection";
 import { uploadIdentity } from "../../lib/channelAccess";
 import { Bool, Str } from "chanfana";
 import { z } from "zod";
@@ -113,32 +114,13 @@ export class VideoCreate extends AuthenticatedRoute {
 		const libraryId = parseInt(libraryIdStr);
 		const bunnyStream = new stream(key).forEnv(c.env);
 
-		let collectionId = null;
-		// check if collection exists
-		try {
-			const collection = await bunnyStream.getCollection(libraryId, video.channelId);
-			collectionId = collection.guid;
-		} catch (e) {
-			if (e.statusCode === 404) {
-				// create the collection
-				var result = await bunnyStream.createCollection(libraryId, { name: video.channelId });
-				collectionId = result.guid;
-			} else {
-				// Handle other errors
-				logger.error("Error fetching collection:", e);
-				return c.json(
-					{
-						success: false,
-						error: "Error fetching collection",
-					},
-					500
-				);
-			}
-		}
+		// The channel's (or, for a user-level video, the owner's) Bunny collection
+		// (lib/channelCollection.ts). The channel id itself is not a collection id.
+		const collectionId = await uploadCollection(c.env, bunnyStream, libraryId, channelId, ownerId);
 
 		const videoId = await bunnyStream.createVideo(libraryId, {
 			title: video.title,
-			collectionId: collectionId,
+			...(collectionId ? { collectionId } : {}),
 		});
 
 		// Save the video to the repository

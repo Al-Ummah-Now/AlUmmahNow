@@ -7,6 +7,7 @@
 
 import { logger } from '../logger';
 import { fetchBunnyVideo, ProcessingEnv } from '../processing/loop';
+import { bunnyLibraries, pickLibrary, type BunnyLibrariesEnv, type LibraryHints } from '../bunny/libraries';
 import { bunnyPhase } from '../processing/sync';
 import { generateTUSConfig, createTusProxySession, TUS_PROXY_SESSION_TTL_SECONDS } from '../bunny/tus';
 import { buildTusUploadId, type VideoTusUpload } from '../../endpoints/video/tus/tusProxy';
@@ -47,7 +48,11 @@ export async function checkReusable(
 	}
 	if (video.isDeleted || video.abandoned) return { kind: 'replace', why: 'abandoned' };
 	if (video.uploadStatus === 'ready' || video.uploadStatus === 'processing') return { kind: 'replace', why: 'finished' };
-	const bunny = await fetchBunnyVideo(env as ProcessingEnv, videoId);
+	// New uploads go to the primary library: an unfinished video left in another
+	// (legacy) library is not resumed there (lib/bunny/libraries.ts)
+	const libraries = await bunnyLibraries(env as BunnyLibrariesEnv);
+	if (pickLibrary(libraries, video as LibraryHints)?.libraryId !== libraries[0].libraryId) return { kind: 'replace', why: 'other library' };
+	const bunny = await fetchBunnyVideo(env as ProcessingEnv, videoId, video as LibraryHints);
 	if (!bunny) return { kind: 'replace', why: 'deleted at Bunny' };
 	const phase = bunnyPhase(bunny);
 	if (phase === 'ready' || phase === 'encoding') return { kind: 'replace', why: 'finished at Bunny' };

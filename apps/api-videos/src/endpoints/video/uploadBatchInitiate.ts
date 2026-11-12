@@ -1,4 +1,4 @@
-import { uploadCollection } from "../../lib/channelCollection";
+import { fileReusedVideo, uploadCollection } from "../../lib/channelCollection";
 import { uploadIdentity } from "../../lib/channelAccess";
 import { Str, Num } from "chanfana";
 import { createUploadRecord } from '../../lib/upload/uploadRecord';
@@ -275,6 +275,8 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 
 				let stored: PlaceholderRecord | null = null;
 				if (reused) {
+					// The earlier initiate may have left it outside its collection (bulk uploads did until 2026-11-12)
+					await fileReusedVideo(c.env, bunnyStream, libraryId, videoId, channelId, ownerId, (collection ??= uploadCollection(c.env, bunnyStream, libraryId, channelId, ownerId)));
 					const nowIso = new Date().toISOString();
 					const result = await patchVideo(repository, videoId, (fresh) => {
 						const fields = reuseFields(fresh as unknown as PlaceholderRecord, metadata, nowIso);
