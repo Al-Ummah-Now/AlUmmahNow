@@ -1,6 +1,6 @@
 import { expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { OPENAUTH_URL, type Account } from './env';
+import { ADMIN_WEB_URL, OPENAUTH_URL, type Account } from './env';
 import { fillSecret } from './secret-fill';
 import type { Locale, Theme } from '../../src/i18n/config';
 
@@ -70,7 +70,7 @@ export async function chooseTheme(page: Page, theme: Theme) {
 
 /** Persist UI preferences the same way the preference selects do. */
 export async function setPreferences(page: Page, prefs: { locale?: Locale; theme?: Theme }) {
-  const url = new URL(page.url() === 'about:blank' ? process.env.ADMIN_WEB_URL || 'https://admin.qa.alummahnow.net' : page.url());
+  const url = new URL(page.url() === 'about:blank' ? ADMIN_WEB_URL : page.url());
   const cookies = [];
   if (prefs.locale) cookies.push({ name: 'admin_locale', value: prefs.locale, domain: url.hostname, path: '/' });
   if (prefs.theme) cookies.push({ name: 'admin_theme', value: prefs.theme, domain: url.hostname, path: '/' });

@@ -2,19 +2,21 @@
  * Channel ownership transfer, end to end on QA (the 2026-11-10 report: "it
  * should let you search for the user, not a text box, and you can't confirm").
  *
- * As the seeded super admin: the new-owner picker finds the seeded QA creator
- * by email, by name and by @handle (and never offers the current owner); the
+ * As the super admin: the new-owner picker finds a creator by email, by name
+ * and by @handle (and never offers the current owner); the
  * confirm dialog names the user and needs the channel @handle or their email
  * typed; the queued job is followed to "done" and the page shows the new
  * owner. The same flow by keyboard only, and in Arabic (right to left). An
  * admin without the super admin role sees no transfer section.
  *
  * Each test transfers its own throwaway channel (created as the super admin,
- * deleted afterwards). Chromium only: the tests change channel ownership.
+ * deleted afterwards) to a creator this spec registers (run mode; outside it,
+ * the seeded qa-creator). Chromium only: the tests change channel ownership.
  */
 import { test, expect, type Page } from '@playwright/test';
 import { adminApi, readTokens } from './support/api';
-import { VIDEOS_API_URL, accounts, storageStatePath } from './support/env';
+import { LOCAL_RUN_ROLES, RUN_ID, VIDEOS_API_URL, accounts, storageStatePath } from './support/env';
+import { createRunUser, createVideosProfile } from './support/profiles';
 import { expectDirection, expectNoAxeViolations, setPreferences } from './support/ui';
 
 interface SearchItem { id: string; displayName: string; userName: string | null; email: string | null }
@@ -56,15 +58,26 @@ test.use({ storageState: storageStatePath('superadmin') });
 test.describe.configure({ mode: 'serial' });
 
 test.describe('channel transfer', () => {
-  test.beforeAll(async ({}, testInfo) => {
+  test.beforeAll(async ({ browser }, testInfo) => {
     test.skip(testInfo.project.name !== 'chromium', 'One project only: the tests change channel ownership');
+    test.setTimeout(180_000);
+    // The local stack's super admin is this job's own account: it needs a videos profile to own channels
+    if (LOCAL_RUN_ROLES) await createVideosProfile(superToken(), accounts.superadmin.email, 'Admin E2E super admin');
     // PR runs hit QA, which follows main: skip until admin-api has the user search there
     const probe = await adminApi<{ items: SearchItem[] }>(`/api/content/users/search?q=${encodeURIComponent(accounts.superadmin.email)}`, { token: superToken() });
     test.skip(probe.status === 404, 'admin-api on QA does not have the transfer user search yet');
     expect(probe.status, 'the super admin may search users').toBe(200);
-    const { body } = await adminApi<{ items: SearchItem[] }>(`/api/content/users/search?q=${encodeURIComponent('qa-creator@delivered.resend.dev')}`, { token: superToken() });
-    const found = body.result?.items.find((u) => u.email === 'qa-creator@delivered.resend.dev');
-    test.skip(!found, 'The seeded QA creator has no videos profile');
+    // The new owner: this job's own creator (run mode), else the seeded QA creator
+    const email = RUN_ID ? (await createRunUser(browser, 'creator', `E2E Creator ${Date.now().toString(36)}`)).email : 'qa-creator@delivered.resend.dev';
+    let found: SearchItem | undefined;
+    // A new profile reaches the search index asynchronously (processor)
+    await expect
+      .poll(async () => {
+        const { body } = await adminApi<{ items: SearchItem[] }>(`/api/content/users/search?q=${encodeURIComponent(email)}`, { token: superToken() });
+        found = body.result?.items.find((u) => u.email === email);
+        return !!found;
+      }, { timeout: RUN_ID ? 90_000 : 10_000, intervals: [2_000, 5_000] })
+      .toBe(true);
     creator = found!;
   });
 
@@ -197,11 +210,16 @@ test.describe('channel transfer', () => {
 test.describe('channel transfer permissions', () => {
   test.use({ storageState: storageStatePath('admin') });
 
+  test.afterAll(async () => {
+    for (const id of created.splice(0)) {
+      await adminApi(`/api/content/channels/${encodeURIComponent(id)}`, { method: 'DELETE', token: superToken() }).catch(() => undefined);
+    }
+  });
+
   test('TRANSFER-05 an admin who is not a super admin sees no transfer section', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== 'chromium', 'One project only');
-    const { body } = await adminApi<{ items: { id: string }[] }>('/api/content/channels?pageSize=1');
-    const id = body.result?.items[0]?.id;
-    test.skip(!id, 'No channel on QA');
+    // A channel of this spec's own (the super admin's), deleted afterwards
+    const { id } = await createChannel('perm');
     await page.goto(`/channels/${id}`);
     await expect(page.getByTestId('channel-detail')).toBeVisible();
     await expect(page.getByTestId('channel-transfer')).toHaveCount(0);

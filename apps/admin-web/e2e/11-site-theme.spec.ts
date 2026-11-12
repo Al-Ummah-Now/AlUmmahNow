@@ -1,12 +1,12 @@
 import { test, expect } from './support/fixtures';
-import { storageStatePath } from './support/env';
+import { WEB_APP_URL, storageStatePath } from './support/env';
 
 /**
  * The admin chooses the theme and the public site follows, within the cache
  * lifetime. The site theme is global, so this runs only in the shared-state
  * project (playwright.config.ts), once per CI run under a cross-run lock.
  */
-const WEB_URL = process.env.WEB_APP_URL ?? 'https://videos.qa.alummahnow.net';
+const WEB_URL = WEB_APP_URL;
 
 const siteTheme = async (request: import('@playwright/test').APIRequestContext) => {
   const html = await (await request.get(`${WEB_URL}/en`)).text();
