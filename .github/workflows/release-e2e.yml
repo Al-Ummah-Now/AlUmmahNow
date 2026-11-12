@@ -264,6 +264,19 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$code"
 
+      # The run accounts' ids, before they are deleted: the leftover check below looks for their rows
+      - name: Record the run accounts
+        if: always()
+        continue-on-error: true
+        run: |
+          echo "E2E_RUN_USER_IDS_FILE=$RUNNER_TEMP/run-user-ids.txt" >> "$GITHUB_ENV"
+          S="$GITHUB_WORKSPACE/.ci-trusted/scripts/e2e/run-leftovers.ts"
+          if [ ! -f "$S" ]; then echo "run-leftovers.ts is not on the base branch yet"; exit 0; fi
+          E2E_RUN_USER_IDS_FILE="$RUNNER_TEMP/run-user-ids.txt" node --experimental-strip-types --no-warnings "$S" --env "$E2E_ENV" --marker "$E2E_RUN_ID" --collect-ids
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
       - name: Delete the run accounts
         if: always()
         continue-on-error: true
@@ -274,6 +287,19 @@ jobs:
         run: >-
           node --experimental-strip-types --no-warnings "$GITHUB_WORKSPACE/.ci-trusted/scripts/e2e/teardown-run-users.ts"
           --auth-url "$AUTH_URL" --file "$E2E_RUN_USERS_FILE"
+
+      # Nothing this run created may be left (owner rule): its accounts, the videos, channels,
+      # playlists and posts they owned (ownership index; a video left = its Bunny video left), their
+      # creator tiers. Deleted content whose purge is queued is reported, not failed. Read-only.
+      - name: Leftovers
+        if: always()
+        run: |
+          S="$GITHUB_WORKSPACE/.ci-trusted/scripts/e2e/run-leftovers.ts"
+          if [ ! -f "$S" ]; then echo "run-leftovers.ts is not on the base branch yet"; exit 0; fi
+          node --experimental-strip-types --no-warnings "$S" --env "$E2E_ENV" --marker "$E2E_RUN_ID"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       # Uploads this run sent (its own users, by E2E_RUN_TAG): every upload with
       # bytes is a Bunny encode in the library QA and stage share. Informational
