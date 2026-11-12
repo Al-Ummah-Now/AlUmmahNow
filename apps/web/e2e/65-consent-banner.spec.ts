@@ -61,7 +61,7 @@ test.describe('Consent banner - first visit', () => {
     await expect(banner(page)).toBeHidden();
     expect(await consentValue(context)).toMatch(/^v1\.a0\.e0\.p0\.\d+$/);
     await page.reload();
-    await expect(own.card(page)).toBeVisible();
+    await own.showCard(page);
     await expect(banner(page)).toHaveCount(0);
   });
 

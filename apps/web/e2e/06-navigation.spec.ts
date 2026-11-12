@@ -19,7 +19,7 @@ const own = ownPublicVideos(test, 'nav');
 test.describe('Navigation - English Routes', () => {
   test('navigates from the homepage to a video page by clicking a card', async ({ page }) => {
     await page.goto('/en/');
-    const card = own.card(page);
+    const card = await own.showCard(page);
     await expect(card).toBeVisible();
     const id = await card.getAttribute('data-video-id');
 
@@ -79,7 +79,7 @@ test.describe('Navigation - Arabic Routes', () => {
 
   test('Arabic card links stay in the Arabic locale', async ({ page }) => {
     await page.goto('/ar/');
-    const card = own.card(page);
+    const card = await own.showCard(page);
     await clickAndWaitForURL(page, card, /\/ar\/video\?vid=/);
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   });
@@ -107,11 +107,12 @@ test.describe('Navigation - Browser Controls', () => {
 
   test('client-side navigation works with back', async ({ page }) => {
     await page.goto('/en/');
-    await clickAndWaitForURL(page, own.card(page), /\/en\/video\?vid=/);
+    await clickAndWaitForURL(page, await own.showCard(page), /\/en\/video\?vid=/);
 
     await page.goBack();
-    await expect(page).toHaveURL(/\/en\/?$/);
-    await expect(own.card(page)).toBeVisible();
+    // Home, at the page of the grid the card was on ("Load More" keeps its cursor in the URL)
+    await expect(page).toHaveURL(/\/en\/?(\?cursor=[^&]*)?$/);
+    await own.showCard(page);
   });
 
   test('reloads correctly', async ({ page }) => {
@@ -168,7 +169,7 @@ test.describe('Navigation - Responsive Behavior', () => {
     await page.setViewportSize({ width: 375, height: 667 });
 
     await page.goto('/en/');
-    const card = own.card(page);
+    const card = await own.showCard(page);
     await clickAndWaitForURL(page, card, /\/en\/video\?vid=/);
   });
 

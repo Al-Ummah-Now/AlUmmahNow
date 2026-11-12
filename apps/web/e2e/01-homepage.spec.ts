@@ -59,7 +59,7 @@ test.describe('Homepage - English', () => {
     ]) {
       await page.setViewportSize(viewport);
       await page.goto('/en/');
-      await expect(own.card(page)).toBeVisible();
+      await own.showCard(page);
       await expectNoHorizontalScroll(page);
     }
   });
@@ -80,7 +80,7 @@ test.describe('Homepage - Arabic (RTL)', () => {
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     const main = page.getByRole('main');
     await expect(main).toHaveCSS('direction', 'rtl');
-    await expect(own.card(page)).toHaveAttribute('href', /^\/ar\/video\?vid=/);
+    await expect(await own.showCard(page)).toHaveAttribute('href', /^\/ar\/video\?vid=/);
   });
 });
 

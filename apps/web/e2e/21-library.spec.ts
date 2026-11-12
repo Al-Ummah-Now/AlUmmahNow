@@ -138,7 +138,7 @@ test.describe('Library (signed in)', () => {
   test('saves from a video card overflow menu with the keyboard', async ({ page, request }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('Mobile'), SHARED_STATE_REASON);
     await page.goto('/en');
-    const card = own.card(page);
+    const card = await own.showCard(page);
     await expect(card).toBeVisible();
     const videoId = (await card.getAttribute('data-video-id')) as string;
     await removeFromWatchLater(request, videoId);
@@ -174,7 +174,7 @@ test.describe('Library (anonymous)', () => {
     await page.goto('/en/library');
     await expect(page.getByTestId('library-signed-out')).toBeVisible();
     await page.goto('/en');
-    await expect(own.card(page)).toBeVisible();
+    await own.showCard(page);
     await expect(page.getByTestId('video-card-menu')).toHaveCount(0);
   });
 

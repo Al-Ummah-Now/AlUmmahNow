@@ -20,7 +20,7 @@ import {
   keyboardMoveDown,
   withLock,
 } from './test-utils/channel-content';
-import { setupPublicDisposable } from './test-utils/e2e-videos';
+import { setupPublicDisposable, userApi } from './test-utils/e2e-videos';
 import { ownPublicVideos } from './test-utils/own-public-video';
 
 /**
@@ -610,7 +610,8 @@ function homeSection(page: Page, c: TypeCase): Locator {
 
 async function openHome(page: Page, locale: Locale) {
   await page.goto(`/${locale}/channels/${channelId()}`);
-  await expect(page.getByTestId('tabpanel-home')).toBeVisible();
+  // Attached, not visible: a Home tab whose only sections have nothing to show renders empty
+  await expect(page.getByTestId('tabpanel-home')).toBeAttached();
   // The sections load after the page: wait for the list (or for no list, when a visitor has none)
   await expect(page.getByTestId('channel-sections-loading')).toHaveCount(0, { timeout: 20_000 });
 }
@@ -644,6 +645,9 @@ test.describe('Each section type: add, render, remove', () => {
     const playlist = await createPlaylist(owner, channelId(), { title: playlistTitle, isPublic: true, videoIds: [video.id] });
     const postMarker = tempName('Sections post');
     await createTextPost(owner, channelId(), postMarker);
+    // The owner's own like, so the liked-videos section has something of this file's to show
+    const u = userApi(owner);
+    await u.api.post(`/api/videos/${video.id}/likes`, {}, { token: u.token, channelId: channelId() });
     fx = {
       ownVideoId: video.id,
       otherVideoId: other.id,
@@ -658,6 +662,8 @@ test.describe('Each section type: add, render, remove', () => {
   test.afterAll(async () => {
     test.setTimeout(120_000);
     if (fx) {
+      const u = userApi(owner);
+      await u.api.request(`/api/videos/${fx.ownVideoId}/likes`, { method: 'DELETE', token: u.token, channelId: channelId(), allowStatus: [400, 404] });
       await deletePlaylistQuietly(owner, channelId(), fx.playlistId);
       await deletePostsContaining(owner, channelId(), fx.postMarker);
     }

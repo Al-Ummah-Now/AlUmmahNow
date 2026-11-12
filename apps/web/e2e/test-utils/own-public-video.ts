@@ -43,6 +43,11 @@ export interface OwnPublicVideos {
   postIds: () => string[];
   /** The card of the spec's newest own video in a listing (never another run's or the seed's). */
   card: (page: Page) => Locator;
+  /**
+   * The card in a "Load More" listing (home, all videos): other specs on the same stack upload
+   * newer videos while this file runs, so it can be past the first page. Loads more until it shows.
+   */
+  showCard: (page: Page) => Promise<Locator>;
   data: DataScope;
 }
 
@@ -61,7 +66,8 @@ export function ownPublicVideos(test: AnyTest, label: string, specs: OwnVideoSpe
   const videos: OwnVideo[] = [];
 
   test.beforeAll(async ({ browser }) => {
-    test.setTimeout(180_000);
+    // Sign-up, channel, uploads and their encodes (16 for the home grid)
+    test.setTimeout(120_000 + specs.length * 20_000);
     const context = await browser.newContext({ storageState: { cookies: [], origins: [] } });
     try {
       const page = await context.newPage();
@@ -70,7 +76,8 @@ export function ownPublicVideos(test: AnyTest, label: string, specs: OwnVideoSpe
       await data.grantCreator(owner);
       channelId = await data.createChannel(owner, { name: channelName });
       for (const spec of specs) {
-        const video: OwnVideo = await data.createVideo(owner, channelId, { clip: 'landscape40', isPublic: true, title: spec.title && `${spec.title} ${ns()}` });
+        // Readiness is awaited below, for all of them: uploads go first so the stack encodes them together
+        const video: OwnVideo = await data.createVideo(owner, channelId, { clip: 'landscape40', isPublic: true, title: spec.title && `${spec.title} ${ns()}`, waitReady: false });
         const update: Record<string, unknown> = {};
         if (spec.category) update.category = spec.category;
         if (spec.titleAr) update.titleLocalized = video.titleLocalized = { en: video.title, ar: spec.titleAr };
@@ -84,8 +91,33 @@ export function ownPublicVideos(test: AnyTest, label: string, specs: OwnVideoSpe
         }
         videos.push(video);
       }
+      for (const video of videos) await data.waitReady(video.id, video.title);
       if (channel.playlist) playlistId = await data.createPlaylist(owner, channelId, { title: `E2E playlist ${channelName}`, videoIds: videos.map((v) => v.id) });
       for (let i = 0; i < (channel.posts ?? 0); i++) postIds.push(await data.createPost(owner, channelId, { text: `E2E post ${i + 1} of ${channelName}` }));
+      if (channel.nameAr || channel.description || channel.descriptionAr) {
+        // Arabic name and descriptions (what the channel header specs check), read back until they hold
+        const res = await apiFetch(owner, `/api/channels/${channelId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', channelId },
+          body: JSON.stringify({
+            ...(channel.description ? { description: channel.description } : {}),
+            nameLocalized: { en: channelName, ar: channel.nameAr ?? '' },
+            descriptionLocalized: { en: channel.description ?? '', ar: channel.descriptionAr ?? '' },
+          }),
+        });
+        expect(res.status, `channel update: ${await res.clone().text()}`).toBeLessThan(300);
+        await expect
+          .poll(async () => {
+            const body = (await (await fetch(`${target().api}/api/channels/${channelId}`, { cache: 'no-store' })).json().catch(() => ({}))) as {
+              result?: { description?: string; nameLocalized?: Record<string, string> };
+              description?: string;
+              nameLocalized?: Record<string, string>;
+            };
+            const ch = body.result ?? body;
+            return { description: ch.description ?? '', ar: ch.nameLocalized?.ar ?? '' };
+          }, { message: 'the channel update did not stick (GET /api/channels/:id)', timeout: 30_000 })
+          .toEqual({ description: channel.description ?? '', ar: channel.nameAr ?? '' });
+      }
       // The anonymous first page of GET /api/videos is edge-cached for 30 s (videoList.ts): wait until
       // it lists the newest one, so pages that read it (home, all videos) show this file's videos on the first load
       await expect
@@ -100,6 +132,8 @@ export function ownPublicVideos(test: AnyTest, label: string, specs: OwnVideoSpe
     }
   });
 
+  const cardOf = (page: Page) => page.locator(`[data-testid="video-card"][data-video-id="${videos[videos.length - 1]?.id ?? 'not-created'}"]`);
+
   return {
     videos: () => {
       expect(videos.length, 'the spec\'s own public videos were not created').toBeGreaterThan(0);
@@ -113,7 +147,21 @@ export function ownPublicVideos(test: AnyTest, label: string, specs: OwnVideoSpe
     channelName: () => channelName,
     playlistId: () => playlistId,
     postIds: () => postIds,
-    card: (page: Page) => page.locator(`[data-testid="video-card"][data-video-id="${videos[videos.length - 1]?.id ?? 'not-created'}"]`),
+    card: (page: Page) => cardOf(page),
+    showCard: async (page: Page) => {
+      const card = cardOf(page);
+      const cards = page.getByTestId('video-card');
+      const more = page.getByRole('main').getByRole('button', { name: /^(Load More|تحميل المزيد|View All)$/ });
+      await expect(cards.first()).toBeVisible();
+      for (let i = 0; i < 10 && !(await card.isVisible()); i++) {
+        if (!(await more.isVisible()) || !(await more.isEnabled())) break;
+        const before = await cards.count();
+        await more.click();
+        await expect.poll(() => cards.count(), { message: '"Load More" appended nothing', timeout: 30_000 }).toBeGreaterThan(before);
+      }
+      await expect(card, 'this file\'s own video card in the listing').toBeVisible();
+      return card;
+    },
     data,
   };
 }
