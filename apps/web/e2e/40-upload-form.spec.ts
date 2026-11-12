@@ -41,14 +41,14 @@ test.describe('Upload form - metadata', () => {
     const tabs = page.getByRole('tablist', { name: 'How many videos' });
     await expect(tabs.getByRole('tab')).toHaveCount(2);
     await expect(page.getByRole('tab', { name: 'Single video', selected: true })).toBeVisible();
-    await expect(page.getByRole('tabpanel', { name: 'Single video', exact: true })).toContainText(/./);
+    await expect(page.getByRole('tabpanel', { name: /^Single video/ })).toContainText(/./);
     // Roving tabindex: arrows move focus, Enter selects
     await page.getByTestId('upload-mode-single').focus();
     await page.keyboard.press('ArrowRight');
     await expect(page.getByTestId('upload-mode-batch')).toBeFocused();
     await expect(page.getByTestId('upload-mode-single')).toHaveAttribute('aria-selected', 'true');
     await page.keyboard.press('Enter');
-    await expect(page.getByRole('tabpanel', { name: 'Batch upload', exact: true })).toBeVisible();
+    await expect(page.getByRole('tabpanel', { name: /^Batch upload/ })).toBeVisible();
     await page.keyboard.press('ArrowLeft');
     await page.keyboard.press('Space');
     await expect(page.getByTestId('upload-mode-single')).toHaveAttribute('aria-selected', 'true');
