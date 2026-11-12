@@ -16,7 +16,6 @@ import { runId } from './run-users';
 export const API_URL = (process.env.API_URL || 'https://videos.api.qa.alummahnow.net').replace(/\/$/, '');
 
 /** qa-creator's seeded public channel name prefix (read-only) */
-export const QA_LECTURES_CHANNEL_NAME = 'Al Ummah Now QA — Lectures';
 
 export const TEMP_PREFIX = 'E2E Temp';
 
@@ -101,36 +100,6 @@ export interface PublicChannel {
   name: string;
   nameLocalized?: Record<string, string>;
   userId: string;
-}
-
-/**
- * qa-creator's seeded Lectures channel (public videos, a playlist, posts).
- * Found by name through search, then read whole (search results carry no userId). Paging
- * /api/channels (50 a page, every E2E sign-up adds a channel) stopped at 5,000 channels while
- * QA held ~19,000 (2026-11-12: "Seed channel … not found" on a11y and visual), so the cursor
- * walk is only the fallback when search does not have it.
- */
-export async function findQaLecturesChannel(): Promise<PublicChannel> {
-  const found = await apiGet<{ results?: Array<{ channel?: { id?: string; name?: string } }> }>(
-    `/api/search?q=${encodeURIComponent(QA_LECTURES_CHANNEL_NAME)}&type=channel`
-  ).catch(() => null);
-  const hit = found?.results?.find((r) => r.channel?.name === QA_LECTURES_CHANNEL_NAME)?.channel;
-  if (hit?.id) {
-    const record = await apiGet<PublicChannel & { result?: PublicChannel }>(`/api/channels/${encodeURIComponent(hit.id)}`);
-    const channel = record.result ?? record;
-    if (channel?.id && channel.userId) return channel;
-  }
-  let cursor: string | undefined;
-  for (let page = 0; page < 100; page++) {
-    const body = await apiGet<{ data?: PublicChannel[]; cursor?: string | null }>(
-      `/api/channels?limit=50${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`
-    );
-    const channel = (body.data ?? []).find((c) => c.name === QA_LECTURES_CHANNEL_NAME);
-    if (channel) return channel;
-    if (!body.cursor || !body.data?.length) break;
-    cursor = body.cursor;
-  }
-  throw new Error(`Seed channel "${QA_LECTURES_CHANNEL_NAME}" not found (run the Seed QA workflow)`);
 }
 
 export interface PublicPlaylist {

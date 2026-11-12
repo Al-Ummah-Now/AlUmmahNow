@@ -6,14 +6,13 @@ import { AUTH_STATE, type AuthUser } from './auth-state';
 import { runId } from './run-users';
 
 /**
- * Real QA videos for the E2E users.
+ * Real videos of the run's E2E users.
  *
  * The web app fetches videos through server actions, so browser route mocks
- * never reach api-videos. Specs instead work against videos that really exist
- * in the target environment:
+ * never reach api-videos. Specs instead upload the videos they need:
  *
- * - Seed videos (ensureSeedVideos): a fixed, idempotent set per user, matched
- *   by title. Read-only for specs; never edit or delete them in a test.
+ * - Studio videos (own-studio-videos.ts): a fixed set per spec file, made in its
+ *   beforeAll and deleted in its afterAll.
  * - Disposable videos (createDisposableVideo): created by a spec for edit /
  *   delete flows and removed again (deleteVideoQuietly) when it is done.
  *
@@ -30,8 +29,6 @@ const SAMPLES = {
   long: { file: LONG_SAMPLE_VIDEO, duration: 40 },
 } as const;
 export type SampleVideo = keyof typeof SAMPLES;
-const LOCK_DIR = path.join(__dirname, '..', '.auth', '.seed-lock');
-const LOCK_STALE_MS = 5 * 60 * 1000;
 
 export interface E2EVideo {
   id: string;
@@ -55,19 +52,9 @@ export interface UserApi {
   channelIds: string[];
 }
 
-interface SeedSpec {
-  title: string;
-  titleAr: string;
-  channelIndex: number;
-  isPublic: boolean;
-  /** Days from now the video is scheduled to publish */
-  scheduleInDays?: number;
-}
-
 /**
- * Seed videos are all private so they never surface in public listings (home
- * "recent", search). Specs that need a public video create a disposable one
- * (createDisposableVideo(..., { isPublic: true })) and delete it afterwards.
+ * Base titles of the run user's Studio videos (own-studio-videos.ts makes them per spec file, with
+ * the run tag). Specs that need a public video create a disposable one and delete it afterwards.
  */
 export const SEED_TITLES = {
   singleVideo: 'E2E Seed Video',
@@ -76,21 +63,6 @@ export const SEED_TITLES = {
   multiOne: 'E2E Seed Multi Channel One Video',
   multiTwo: 'E2E Seed Multi Channel Two Video',
 } as const;
-
-const SEED: Partial<Record<AuthUser, SeedSpec[]>> = {
-  single: [
-    { title: SEED_TITLES.singleVideo, titleAr: 'فيديو اختبار', channelIndex: 0, isPublic: false },
-    { title: SEED_TITLES.singlePrivate, titleAr: 'فيديو اختبار خاص', channelIndex: 0, isPublic: false },
-    { title: SEED_TITLES.singleScheduled, titleAr: 'فيديو اختبار مجدول', channelIndex: 0, isPublic: false, scheduleInDays: 10 },
-  ],
-  multi: [
-    { title: SEED_TITLES.multiOne, titleAr: 'فيديو القناة الأولى', channelIndex: 0, isPublic: false },
-    { title: SEED_TITLES.multiTwo, titleAr: 'فيديو القناة الثانية', channelIndex: 1, isPublic: false },
-  ],
-};
-
-/** Seed titles from earlier versions of this file (public); removed when found */
-const RETIRED_SEED_TITLES = ['E2E Seed Public Video'];
 
 interface StoredState {
   cookies: Array<{ name: string; value: string }>;
@@ -209,89 +181,6 @@ async function setLocalizedMetadata(
   descriptionLocalized: Record<string, string>,
 ): Promise<void> {
   await u.api.put(`/api/videos/${video.id}`, { titleLocalized, descriptionLocalized }, { token: u.token, channelId: video.channelId });
-}
-
-async function ensureSchedule(u: UserApi, video: E2EVideo, days: number): Promise<void> {
-  const minLead = 2 * 24 * 60 * 60 * 1000;
-  const current = video.scheduledPublishDate ? new Date(video.scheduledPublishDate).getTime() : 0;
-  if (video.scheduledPublishStatus === 'scheduled' && current - Date.now() > minLead) return;
-  const when = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
-  when.setUTCHours(12, 0, 0, 0);
-  if (video.scheduledPublishStatus === 'scheduled') {
-    await u.api.request(`/api/videos/${video.id}/schedule`, {
-      method: 'DELETE',
-      token: u.token,
-      channelId: video.channelId,
-      allowStatus: [404],
-    });
-  }
-  await u.api.post(
-    `/api/videos/${video.id}/schedule`,
-    { scheduledPublishDate: when.toISOString(), timezone: 'UTC', notifyOnPublish: false },
-    { token: u.token, channelId: video.channelId },
-  );
-}
-
-async function withSeedLock<T>(fn: () => Promise<T>): Promise<T> {
-  const deadline = Date.now() + LOCK_STALE_MS;
-  for (;;) {
-    try {
-      fs.mkdirSync(LOCK_DIR);
-      break;
-    } catch {
-      const age = Date.now() - (fs.statSync(LOCK_DIR, { throwIfNoEntry: false })?.mtimeMs ?? Date.now());
-      if (age > LOCK_STALE_MS || Date.now() > deadline) {
-        fs.rmSync(LOCK_DIR, { recursive: true, force: true });
-        continue;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-    }
-  }
-  try {
-    return await fn();
-  } finally {
-    fs.rmSync(LOCK_DIR, { recursive: true, force: true });
-  }
-}
-
-/**
- * Ensures the fixed seed videos exist for a user (idempotent, by title) and
- * returns them keyed by title. Safe to call from many workers at once.
- */
-export async function ensureSeedVideos(user: AuthUser): Promise<Record<string, E2EVideo>> {
-  const specs = SEED[user] || [];
-  if (specs.length === 0) return {};
-  return withSeedLock(async () => {
-    const u = userApi(user);
-    const existing = await listOwnVideos(u);
-    const result: Record<string, E2EVideo> = {};
-    for (const spec of specs) {
-      const channelId = u.channelIds[spec.channelIndex];
-      // Matched by title + channel only: api-videos currently maps Bunny's
-      // "finished" code to uploadStatus "failed", so status is not a usable signal.
-      let video = existing.find((v) => v.title === spec.title && v.channelId === channelId);
-      if (!video) {
-        video = await uploadVideo(u, { title: spec.title, titleAr: spec.titleAr, isPublic: spec.isPublic, channelIndex: spec.channelIndex });
-      } else if (video.titleLocalized?.ar !== spec.titleAr || video.titleLocalized?.en !== spec.title) {
-        const description = (video as E2EVideo & { description?: string }).description || '';
-        await setLocalizedMetadata(u, video, { en: spec.title, ar: spec.titleAr }, { en: description, ar: '' });
-      }
-      if (video.isPublic !== spec.isPublic && !spec.scheduleInDays) {
-        await u.api.put(`/api/videos/${video.id}`, { isPublic: spec.isPublic }, { token: u.token, channelId: video.channelId });
-      }
-      if (spec.scheduleInDays) {
-        const fresh = (await getVideo(u, video.id)) || video;
-        await ensureSchedule(u, fresh, spec.scheduleInDays);
-      }
-      result[spec.title] = (await getVideo(u, video.id)) || video;
-    }
-    // Retired (public) seeds and leftovers from aborted runs; never fails the seed
-    for (const v of existing.filter((x) => RETIRED_SEED_TITLES.includes(x.title))) {
-      await deleteVideoQuietly(user, v);
-    }
-    await purgeStaleDisposables(user).catch(() => undefined);
-    return result;
-  });
 }
 
 /**

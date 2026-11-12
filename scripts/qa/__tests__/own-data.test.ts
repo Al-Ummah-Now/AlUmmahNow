@@ -43,11 +43,6 @@ export const ALLOWED: Record<string, string> = {
   'apps/admin-web/e2e/15-invites.spec.ts': 'admin-web batch',
   'apps/admin-web/e2e/support/env.ts': 'admin-web batch',
   'apps/web/e2e/player/end-screen.spec.ts': 'web batch 2',
-  'apps/web/e2e/test-utils/channel-content.ts': 'web batch 2',
-  'apps/web/e2e/test-utils/e2e-videos.ts': 'web batch 2',
-  'apps/web/e2e/test-utils/page-catalog.ts': 'web batch 2',
-  'apps/web/e2e/test-utils/qa-content.ts': 'web batch 2',
-  'apps/web/e2e/test-utils/watch-page.ts': 'web batch 2',
 };
 
 function files(dir: string): string[] {

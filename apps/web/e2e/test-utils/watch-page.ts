@@ -4,9 +4,9 @@ import { runId } from './run-users';
 /**
  * Helpers for the watch page / player / comments / history specs (30-35).
  *
- * Read-only player tests use the public, processed "QA Lecture …" seed videos
- * (owned by qa-creator). Tests that react or comment on one of them always
- * undo it again (afterEach) and only assert on what they created.
+ * The specs open their own videos (release/own-videos.ts, own-public-video.ts);
+ * tests that react or comment undo it again (afterEach) and only assert on what
+ * they created.
  */
 
 export const API_URL = (process.env.API_URL || 'https://videos.api.qa.alummahnow.net').replace(/\/$/, '');
@@ -24,66 +24,6 @@ export interface QaVideo {
   dislikes?: Array<{ userId?: string; channelId?: string }>;
   /** Always 0 since 2026-11-11 */
   dislikesCount?: number;
-}
-
-let cache: QaVideo[] | null = null;
-
-/** Public processed QA seed lectures, sorted by title ("QA Lecture 1 …", "QA Lecture 2 …", …) */
-export async function qaLectures(request: APIRequestContext): Promise<QaVideo[]> {
-  if (cache) return cache;
-  // The newest 100 public videos stop including the older seed lectures once
-  // enough E2E uploads land after a seed; search finds every seed lecture.
-  const found = new Map<string, QaVideo>();
-  const res = await request.get(`${API_URL}/api/videos?limit=100`);
-  expect(res.ok(), 'GET /api/videos').toBe(true);
-  for (const v of ((await res.json()) as { data?: QaVideo[] }).data ?? []) {
-    if (v.title.startsWith('QA Lecture')) found.set(v.id, v);
-  }
-  const search = await request.get(`${API_URL}/api/search?q=${encodeURIComponent('QA Lecture')}&type=video&limit=20`);
-  if (search.ok()) {
-    const hits = ((await search.json()) as { results?: Array<{ id: string; video?: { title?: string } }> }).results ?? [];
-    for (const hit of hits) {
-      if (found.has(hit.id) || !hit.video?.title?.startsWith('QA Lecture')) continue;
-      // The full video (playUrl, likes, owner) as the list returns it
-      const one = await request.get(`${API_URL}/api/videos/${encodeURIComponent(hit.id)}`);
-      if (!one.ok()) continue;
-      const video = (await one.json()) as QaVideo & { isPublic?: boolean };
-      if (video.isPublic !== false && video.playUrl) found.set(video.id, video);
-    }
-  }
-  const lectures = [...found.values()].sort((a, b) => a.title.localeCompare(b.title));
-  if (lectures.length === 0) throw new Error('No "QA Lecture" seed videos on QA (run the Seed QA workflow)');
-  cache = lectures;
-  return lectures;
-}
-
-/** A specific lecture by its number in the title (falls back to the first one) */
-export async function qaLecture(request: APIRequestContext, n: number): Promise<QaVideo> {
-  const lectures = await qaLectures(request);
-  return lectures.find((v) => v.title.startsWith(`QA Lecture ${n}`)) ?? lectures[0];
-}
-
-/**
- * A public QA seed video ("QA Lecture …" / "QA Nasheed …") reserved for the
- * current Playwright project, so projects running in parallel with the same
- * shared account never toggle state (likes) on the same video.
- */
-export async function qaVideoForProject(
-  request: APIRequestContext,
-  projectName: string,
-  opts: { fromEnd?: boolean } = {},
-): Promise<QaVideo> {
-  const order = ['chromium', 'webkit', 'Mobile Chrome', 'Mobile Safari', 'firefox'];
-  const res = await request.get(`${API_URL}/api/videos?limit=100`);
-  expect(res.ok(), 'GET /api/videos').toBe(true);
-  const body = (await res.json()) as { data?: QaVideo[] };
-  const seeds = (body.data ?? [])
-    .filter((v) => /^QA (Lecture|Nasheed) /.test(v.title))
-    .sort((a, b) => a.title.localeCompare(b.title));
-  const index = Math.max(0, order.indexOf(projectName));
-  if (seeds.length <= index) throw new Error(`Need ${index + 1} public QA seed videos, found ${seeds.length}`);
-  // fromEnd: a second writer (e.g. comments vs likes) takes videos from the other end of the list
-  return opts.fromEnd ? seeds[seeds.length - 1 - index] : seeds[index];
 }
 
 export async function fetchVideo(request: APIRequestContext, id: string): Promise<QaVideo> {
