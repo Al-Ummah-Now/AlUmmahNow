@@ -4,6 +4,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { AUTH_STATE } from './test-utils/auth-state';
 import {
+  BUNNY_BACKLOG,
+  BUNNY_WAIT_MS,
   SEED_TITLES,
   createDisposableVideo,
   deleteVideoQuietly,
@@ -31,10 +33,10 @@ const THUMBNAIL_JPG = path.join(__dirname, 'test-fixtures', 'e2e-thumbnail.jpg')
 let seed: Record<string, E2EVideo> = {};
 
 test.beforeAll(async () => {
-  test.setTimeout(240000);
+  test.setTimeout(BUNNY_WAIT_MS + 60000);
   seed = await ensureSeedVideos('single');
-  // The seed video is encoded once and reused, so this is normally immediate
-  await waitForThumbnails('single', seed[SEED_TITLES.singleVideo].id, 180000);
+  // Run accounts upload their seeds at the start of each run: wait once, capped (#929)
+  await waitForThumbnails('single', seed[SEED_TITLES.singleVideo].id);
 });
 
 async function openEditor(page: Page, video: E2EVideo, locale: 'en' | 'ar' = 'en') {
@@ -85,8 +87,8 @@ test.describe('Thumbnail - saving', () => {
   });
 
   test('should save a selected auto-generated frame', async ({ page }) => {
-    test.setTimeout(300000);
-    expect(await waitForThumbnails('single', video!.id, 240000)).toBe(true);
+    test.setTimeout(BUNNY_WAIT_MS + 120000);
+    expect(await waitForThumbnails('single', video!.id), `no Bunny frames after ${BUNNY_WAIT_MS / 1000} s: ${BUNNY_BACKLOG}?`).toBe(true);
     await openEditor(page, video!);
 
     const option = page.getByTestId('thumbnail-auto-option').first();

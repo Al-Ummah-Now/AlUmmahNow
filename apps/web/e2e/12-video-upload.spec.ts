@@ -12,6 +12,7 @@ import {
   trackUploads,
   uploadUi,
 } from './test-utils/upload';
+import { BUNNY_BACKLOG, BUNNY_WAIT_MS } from './test-utils/e2e-videos';
 
 /**
  * Video Upload Flow E2E Tests
@@ -65,8 +66,8 @@ test.describe('Video Upload Flow', () => {
   });
 
   test('says the video is processing after the upload, then Ready, and notifies the uploader', async ({ page }) => {
-    // Waits for Bunny to encode a real (tiny) video: minutes, not seconds
-    test.setTimeout(12 * 60_000);
+    // Waits for Bunny to encode a real (tiny) video, capped (BUNNY_WAIT_MS, #929)
+    test.setTimeout(BUNNY_WAIT_MS + 2 * 60_000);
     const title = `Processing notice E2E ${Date.now().toString(36)}`;
     await gotoUpload(page, 'en');
     await helpers.uploadTestVideo(page, {
@@ -87,7 +88,7 @@ test.describe('Video Upload Flow', () => {
     expect(videoId).not.toBe('');
 
     // Processing finishes on the server (check loop); the card follows it
-    await expect(ui.success).toHaveAttribute('data-phase', 'ready', { timeout: 10 * 60_000 });
+    await expect(ui.success, `not ready after ${BUNNY_WAIT_MS / 1000} s: ${BUNNY_BACKLOG}?`).toHaveAttribute('data-phase', 'ready', { timeout: BUNNY_WAIT_MS });
     await expect(ui.processingStatus).toHaveText(`"${title}" is ready to watch`);
     await expect(ui.viewVideo).toHaveAttribute('href', `/en/video/${videoId}`);
 
