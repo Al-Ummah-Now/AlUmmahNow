@@ -25,6 +25,7 @@
 import * as path from 'path';
 import { encoding, untilEncoded } from './encode';
 import { test, expect, type Page } from '@playwright/test';
+import { trackRunUploads } from './run-videos';
 import { releaseEnv, target } from './targets';
 import { apiFetch, createProfile, signUpOnWeb, type WebUser } from './web-session';
 import { grantCreatorTier } from './creator-tier';
@@ -33,6 +34,10 @@ import { fetchRetry } from './net';
 
 // Signs in through the auth server: traces would hold the password and code
 test.use({ trace: 'off' });
+// Real Bunny uploads: no retry (a failed upload is reported, never uploaded again) and every
+// upload recorded for the run's upload cap (run-videos.ts, release-e2e.yml)
+test.describe.configure({ retries: 0 });
+test.beforeEach(({ page }) => trackRunUploads(page));
 
 // The 3 s sample: the least container time
 const CLIP = path.join(__dirname, '..', 'test-fixtures', 'e2e-sample.mp4');

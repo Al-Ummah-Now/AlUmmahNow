@@ -20,6 +20,7 @@
  */
 import { test, expect, type Browser, type Frame, type Page } from '@playwright/test';
 import { useOwnData, type Clip, type CreatedVideo } from './builders';
+import { runVideo, sharedRunVideosOn } from './run-videos';
 import { releaseEnv, target } from './targets';
 
 // The creator signs up through the real issuer (password, sink code): no trace or video of it
@@ -35,6 +36,12 @@ const videos = {} as Record<Clip, CreatedVideo>;
 
 test.beforeAll(async ({ browser }: { browser: Browser }) => {
   test.setTimeout(30 * 60_000);
+  // QA/stage encode part: the run's shared clips (run-videos.ts), so the browser projects and
+  // retries of this spec upload nothing; locally, its own
+  if (sharedRunVideosOn()) {
+    for (const clip of ['landscape40', 'vertical', 'square'] as const) videos[clip] = await runVideo(clip);
+    return;
+  }
   const creator = await data.createCreator(browser, 'embed');
   const channelId = creator.channelIds[0]!;
   for (const clip of ['landscape40', 'vertical', 'square'] as const) {

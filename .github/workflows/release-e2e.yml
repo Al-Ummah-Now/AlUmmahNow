@@ -206,6 +206,10 @@ jobs:
           E2E_SHARED_STATE: skip
           E2E_ENCODE: only
           E2E_OUTPUT_SUFFIX: encode
+          # One set of clips for the whole part, uploaded once in the global setup and deleted at
+          # the end (e2e/release/run-videos.ts): retries, workers and projects never re-upload
+          E2E_SHARED_RUN_VIDEOS: '1'
+          E2E_RUN_VIDEOS_FILE: ${{ runner.temp }}/run-videos.json
         run: npx playwright test -c playwright.release.config.ts --repeat-each="$E2E_REPEAT" --pass-with-no-tests
 
       - name: Release the ${{ env.E2E_ENV }}-encode slot
@@ -295,6 +299,23 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$code"
+
+      # Real Bunny uploads are capped (owner, 2026-11-12: a full QA run made 200-300 and ~9,000 piled up
+      # in the shared test library). Every upload is in the run resource file: the builders' videos and
+      # the upload page's (trackRunUploads). Expected per release: 8 (3 shared clips + 5 upload specs).
+      - name: Bunny upload cap
+        if: always()
+        env:
+          UPLOAD_CAP: 10
+        run: |
+          n=0
+          if [ -f "$E2E_RUN_RESOURCES_FILE" ]; then n=$(awk '$1 == "video" { print $2 }' "$E2E_RUN_RESOURCES_FILE" | sort -u | wc -l | tr -d ' '); fi
+          echo "### Bunny uploads (${{ matrix.part }} part): $n of at most $UPLOAD_CAP" >> "$GITHUB_STEP_SUMMARY"
+          echo "Real Bunny uploads in this part: $n (cap $UPLOAD_CAP)"
+          if [ "$n" -gt "$UPLOAD_CAP" ]; then
+            echo "::error::$n real Bunny uploads in this run part, over the cap of $UPLOAD_CAP: a spec uploads its own video where a shared run video (e2e/release/run-videos.ts) would do, or retries re-upload"
+            exit 1
+          fi
 
       # The run accounts' ids, before they are deleted: the leftover check below looks for their rows
       - name: Record the run accounts
