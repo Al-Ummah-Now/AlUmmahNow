@@ -211,6 +211,8 @@ export const WORKERS: StackWorker[] = [
       E2E_CODE_SINK_SECRET: LOCAL_SECRETS.E2E_CODE_SINK_SECRET,
       TEST_PROMOTE_SECRET: LOCAL_SECRETS.TEST_PROMOTE_SECRET,
       E2E_RUN_USERS: 'enabled',
+      // Must resolve before a code goes to the sink; any real send goes to the Resend fake
+      RESEND_API_KEY: LOCAL_SECRETS.RESEND_API_KEY,
     },
   },
   {
