@@ -27,10 +27,10 @@ html[data-theme='zujaj']{--r-sm:3px;--r-md:6px;--r-lg:8px;--r-xl:12px;--r-pill:8
 --m-header:linear-gradient(180deg,color-mix(in srgb,var(--fanous-c-nav-bg) 92%,white 8%),color-mix(in srgb,var(--fanous-c-nav-bg) 86%,transparent));
 --m-header-edge:inset 0 -1px 0 color-mix(in srgb,white 18%,transparent),0 8px 28px -18px rgb(5 40 48/.7);
 --m-rail:color-mix(in srgb,var(--fanous-color-surface) 76%,transparent);--m-rail-edge:inset -1px 0 0 color-mix(in srgb,white 22%,transparent);
---m-card:linear-gradient(135deg,color-mix(in srgb,white 16%,transparent),transparent 46%),color-mix(in srgb,var(--fanous-color-surface) 84%,transparent);
+--m-card:linear-gradient(135deg,color-mix(in srgb,white 16%,transparent),transparent 46%),linear-gradient(color-mix(in srgb,var(--fanous-color-surface) 84%,transparent),color-mix(in srgb,var(--fanous-color-surface) 84%,transparent));
 --m-border:linear-gradient(transparent,transparent);
 --m-card-edge:inset 0 0 0 1px color-mix(in srgb,white 26%,transparent),inset 0 1px 0 color-mix(in srgb,white 46%,transparent),0 18px 36px -24px rgb(5 40 48/.6);
---m-raised:linear-gradient(135deg,color-mix(in srgb,white 14%,transparent),transparent 50%),color-mix(in srgb,var(--fanous-color-surface-raised) 92%,transparent);--m-raised-edge:inset 0 0 0 1px color-mix(in srgb,white 30%,transparent),0 24px 44px -18px rgb(5 40 48/.6);
+--m-raised:linear-gradient(135deg,color-mix(in srgb,white 14%,transparent),transparent 50%),linear-gradient(color-mix(in srgb,var(--fanous-color-surface-raised) 92%,transparent),color-mix(in srgb,var(--fanous-color-surface-raised) 92%,transparent));--m-raised-edge:inset 0 0 0 1px color-mix(in srgb,white 30%,transparent),0 24px 44px -18px rgb(5 40 48/.6);
 --m-control:color-mix(in srgb,var(--fanous-color-background) 72%,transparent);--m-control-edge:inset 0 0 0 1px color-mix(in srgb,white 14%,transparent);
 --m-primary:linear-gradient(180deg,color-mix(in srgb,var(--fanous-color-primary-hover) 62%,var(--fanous-color-primary)),var(--fanous-color-primary));--m-primary-hover:var(--fanous-color-primary-hover);--m-primary-press:var(--fanous-color-primary-pressed);
 --m-primary-edge:inset 0 1px 0 color-mix(in srgb,white 44%,transparent),inset 0 0 0 1px color-mix(in srgb,white 14%,transparent);
