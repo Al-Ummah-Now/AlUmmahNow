@@ -17,7 +17,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { AUTH_DIR, E2E_ENTITY_PREFIX, LOCAL_STACK, OPENAUTH_URL, RUN_ID, VIDEOS_API_URL, runPassword, type Account } from './env';
 import { getAccessToken } from './oauth';
-import { eraseRowsMentioning, runCron, stackR2, stackR2Keys, stackSql, topOfHour } from './local-stack';
+import { eraseRowsMentioning, runCron, stackLeftovers, stackR2, stackR2Keys, stackSql, topOfHour } from './local-stack';
 import { adminApi } from './api';
 
 const LEDGER = path.join(AUTH_DIR, 'run-ledger.jsonl');
@@ -164,6 +164,27 @@ async function eraseLocalCopies(users: LedgerUser[]): Promise<void> {
   }
 }
 
+/** Revocations outlive the tokens on purpose (the job's leftover check allows them too). */
+const KEPT_ON_PURPOSE = (h: { store: string; location: string }) =>
+  h.store === 'kv:TOKEN_REVOCATIONS' || (h.store === 'd1:al-ummah-now-d1' && h.location.startsWith('user_revocations'));
+
+/**
+ * Waits (up to 90 s) until the stack holds nothing of this run but revocations, so queued erasure
+ * steps finish before the leftover check. Never fails the teardown: the check reports what is left.
+ */
+async function waitForErasure(users: LedgerUser[], log: (line: string) => void, timeoutMs = 90_000): Promise<void> {
+  if (!LOCAL_STACK || !RUN_ID) return;
+  const ids = users.map((u) => u.userId);
+  const deadline = Date.now() + timeoutMs;
+  let left: { store: string; location: string }[] = [];
+  do {
+    left = (await stackLeftovers(RUN_ID, ids)).filter((h) => !KEPT_ON_PURPOSE(h));
+    if (!left.length) return;
+    await new Promise((r) => setTimeout(r, 3000));
+  } while (Date.now() < deadline);
+  log(`[teardown] still on the stack after ${timeoutMs / 1000} s: ${left.slice(0, 10).map((h) => `${h.store} ${h.location}`).join('; ')}`);
+}
+
 /**
  * The job's whole teardown (global-teardown.ts). Accounts go last: the admin's token is what the
  * report and row clean-ups use.
@@ -202,6 +223,9 @@ export async function teardownRun(log: (line: string) => void = () => undefined)
     // Roles and tiers once more: deleting the account may have re-read them
     await eraseLocalRows(users).catch((error) => problems.push(`local rows: ${(error as Error).message}`));
     await eraseLocalCopies(users).catch((error) => problems.push(`local copies: ${(error as Error).message}`));
+    // The erasure's processor steps (UserDataErased: invites, error rows, category suggestions) run
+    // from the queue: wait until they are done before the job's leftover check looks
+    await waitForErasure(users, log).catch((error) => log(`[teardown] could not wait for the erasure: ${(error as Error).message}`));
   }
   if (problems.length) throw new Error(`teardown left things behind:\n${problems.join('\n')}`);
 }

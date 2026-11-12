@@ -100,6 +100,14 @@ export async function eraseRowsMentioning(database: string, table: string, marke
   return erased;
 }
 
+/** What the end-of-job leftover check would report for this run (GET /__stack/leftovers). */
+export async function stackLeftovers(marker: string, userIds: string[]): Promise<{ store: string; location: string }[]> {
+  const qs = new URLSearchParams({ marker, ids: userIds.join(',') });
+  const res = await fetch(`${control()}/__stack/leftovers?${qs}`);
+  if (!res.ok) throw new Error(`leftovers -> ${res.status}`);
+  return ((await res.json()) as { hits: { store: string; location: string }[] }).hits;
+}
+
 /** An object in a stack R2 bucket (bucket_name of the app's top-level wrangler config). */
 export function stackR2(method: 'GET' | 'PUT' | 'DELETE', bucket: string, key: string, body?: unknown): Promise<Response> {
   return fetch(`${control()}/__stack/r2/${encodeURIComponent(bucket)}/${encodeURIComponent(key)}`, {
