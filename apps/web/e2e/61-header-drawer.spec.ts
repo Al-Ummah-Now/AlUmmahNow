@@ -4,7 +4,7 @@ import { clickAndWaitForURL } from './test-utils/qa-content';
 import { closeSideDrawer, expectSideDrawerClosed, isDrawerLayout, openSideDrawer } from './test-utils/navigation';
 import type { Page } from '@playwright/test';
 
-const HOME_LINK = { en: 'Al Ummah Now home', ar: 'الصفحة الرئيسية للأمة الآن' } as const;
+const HOME_LINK = { en: 'Al Ummah Now home', ar: 'الأمة الآن - الصفحة الرئيسية' } as const;
 
 /**
  * The top bar reads: menu button, logo, Upload, search, then bell and account.
@@ -56,7 +56,7 @@ test.describe('Header', () => {
   test('NAV-002 Arabic header is RTL with Arabic labels', async ({ page }) => {
     await page.goto('/ar');
     const header = page.getByRole('banner');
-    await expect(header.getByRole('link', { name: 'الصفحة الرئيسية للأمة الآن' })).toHaveAttribute('href', /^\/ar\/?$/);
+    await expect(header.getByRole('link', { name: 'الأمة الآن - الصفحة الرئيسية' })).toHaveAttribute('href', /^\/ar\/?$/);
     await expect(page.getByTestId('nav-drawer-toggle')).toHaveAccessibleName('القائمة');
     const direction = await header.evaluate((el) => getComputedStyle(el).direction);
     expect(direction).toBe('rtl');

@@ -42,3 +42,18 @@ export const EventWrapper: React.FC<EventWrapperProps> = ({ event, onClick, loca
     />
   );
 };
+
+/**
+ * react-big-calendar `eventWrapper` for month and all-day rows.
+ *
+ * react-big-calendar marks each week's `.rbc-row-content` as role="row", but
+ * renders the events inside it as plain divs, so our role="button" event
+ * becomes a direct child of the row, which ARIA does not allow (a row owns
+ * cells; axe aria-required-children). Giving the event's `.rbc-event` box the
+ * gridcell role makes the tree valid: row > gridcell > button. Time-grid
+ * events (type "time") sit outside any row and are left alone.
+ */
+export const RowEventWrapper: React.FC<{ type?: 'date' | 'time'; children?: React.ReactNode }> = ({ type, children }) => {
+  if (type !== 'date' || !React.isValidElement<{ role?: string }>(children)) return <>{children}</>;
+  return React.cloneElement(children, { role: 'gridcell' });
+};

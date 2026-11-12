@@ -14,7 +14,7 @@ import 'react-big-calendar/lib/css/react-big-calendar.css';
 import '../calendar.css';
 import { useLanguage } from '@/hooks/useLanguage';
 import { CustomWeekHeader } from '../shared/CustomHeaders';
-import { EventWrapper, CalendarEventData } from '../shared/EventWrapper';
+import { EventWrapper, RowEventWrapper, CalendarEventData } from '../shared/EventWrapper';
 import { TimeGutterHeader } from '../shared/TimeComponents';
 import { formatTime } from '../utils/dateFormatters';
 
@@ -113,6 +113,7 @@ export function DayView({
         components={{
           toolbar: CustomToolbar,
           event: EventComponent,
+          eventWrapper: RowEventWrapper,
           day: {
             header: DayHeader,
           },

@@ -34,6 +34,13 @@ describe('StudioFrame', () => {
     expect(screen.getByTestId('studio-tab-posts')).toHaveAttribute('href', '/en/settings/channel/c1/community');
   });
 
+  it('names the channel switcher by its visible channel name (WCAG 2.5.3 label in name)', () => {
+    frame('owner');
+    const switcher = screen.getAllByTestId('studio-switcher')[0];
+    expect(switcher).not.toHaveAttribute('aria-label');
+    expect(switcher).toHaveAccessibleName(`${STUDIO_EN.switcher.label}: My channel @mine`);
+  });
+
   it('uploads to this channel', () => {
     frame('owner');
     expect(screen.getAllByTestId('studio-upload')[0]).toHaveAttribute('href', '/en/upload?channel=c1');
