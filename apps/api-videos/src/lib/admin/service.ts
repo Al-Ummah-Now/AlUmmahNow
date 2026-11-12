@@ -699,6 +699,10 @@ export async function videoDetail(env: AdminServiceEnv, id: string): Promise<Adm
 		suspensionHolds: Array.isArray(video.suspensionHolds) ? video.suspensionHolds : [],
 		moderationAction: video.moderationAction ?? null,
 		processing,
+		processingIssue:
+			video.processingIssue && typeof video.processingIssue === 'object' && typeof video.processingIssue.kind === 'string'
+				? { kind: video.processingIssue.kind, ...(typeof video.processingIssue.reason === 'string' ? { reason: video.processingIssue.reason.slice(0, 300) } : {}), at: String(video.processingIssue.at ?? '') }
+				: null,
 		r2: adminR2Detail(video),
 	};
 }

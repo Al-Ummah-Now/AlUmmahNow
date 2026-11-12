@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { TranscodeJobMessage } from '@al-ummah/shared-types';
-import { ATTEMPT_LIMIT_MS, containerSeconds, keyAllowed, MAX_ATTEMPTS, newJob, onFailure, onMessage, SILENCE_LIMIT_MS, watchdogVerdict } from '../src/jobs';
+import { ATTEMPT_LIMIT_MS, containerSeconds, keyAllowed, MAX_ATTEMPTS, newJob, onFailure, onMessage, onProgressEvent, PROGRESS_REPORT_MS, SILENCE_LIMIT_MS, watchdogVerdict } from '../src/jobs';
 
 const msg = (over: Partial<TranscodeJobMessage> = {}): TranscodeJobMessage => ({
 	kind: 'transcode',
@@ -68,5 +68,40 @@ describe('keyAllowed', () => {
 		assert.ok(!keyAllowed(prefix, `${prefix}/a/b/c`));
 		assert.ok(!keyAllowed(prefix, 'pub/vid-12345678/otherrev0000000/master.m3u8'));
 		assert.ok(!keyAllowed(prefix, `${prefix}x/master.m3u8`));
+	});
+});
+
+describe('progress reports to api-videos', () => {
+	const enc = (p: number) => ['360p', '720p'].map((name) => ({ name, state: 'encoding', progress: p }));
+
+	it('passes the rung states through, validated', () => {
+		const job = newJob(msg(), 0);
+		const step = onProgressEvent(job, { progress: 0.3, rungs: [...enc(0.3), { name: '<script>', state: 'done' }, { name: '480p', state: 'bogus' }] }, undefined, 1000);
+		assert.deepEqual(step.report, { type: 'progress', progress: 0.3, rungs: enc(0.3) });
+		assert.deepEqual(job.rungs, enc(0.3));
+		assert.equal(job.progress, 0.3);
+		assert.deepEqual(step.last, { at: 1000, states: '360p:encoding,720p:encoding' });
+	});
+
+	it('reports at most every 10 s while only the % moves', () => {
+		const job = newJob(msg(), 0);
+		const first = onProgressEvent(job, { progress: 0.1, rungs: enc(0.1) }, undefined, 1000);
+		assert.ok(first.report);
+		const soon = onProgressEvent(job, { progress: 0.2, rungs: enc(0.2) }, first.last, 1000 + PROGRESS_REPORT_MS - 1);
+		assert.equal(soon.report, null);
+		assert.equal(job.progress, 0.2, 'the job still keeps the latest figure');
+		assert.ok(onProgressEvent(job, { progress: 0.3, rungs: enc(0.3) }, first.last, 1000 + PROGRESS_REPORT_MS).report);
+	});
+
+	it('reports a rung state change at once', () => {
+		const job = newJob(msg(), 0);
+		const first = onProgressEvent(job, { progress: 0.99, rungs: enc(0.99) }, undefined, 1000);
+		const step = onProgressEvent(job, { progress: 0.99, rungs: [{ name: '360p', state: 'uploading', progress: 0.1 }, { name: '720p', state: 'pending' }] }, first.last, 1001);
+		assert.deepEqual(step.report?.rungs, [{ name: '360p', state: 'uploading', progress: 0.1 }, { name: '720p', state: 'pending' }]);
+	});
+
+	it('an event without rungs (an older container) still reports the %', () => {
+		const job = newJob(msg(), 0);
+		assert.deepEqual(onProgressEvent(job, { progress: 0.5 }, undefined, 1).report, { type: 'progress', progress: 0.5 });
 	});
 });

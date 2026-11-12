@@ -122,6 +122,7 @@ describe('R2 dual write', () => {
 		await applyJobEvent(env, undefined, ev(job, { type: 'ready', result: RESULT, containerSeconds: 42 }));
 		const r2 = videos.read(ID).r2;
 		assert.equal(r2.status, 'ready');
+		assert.deepEqual(r2.rungs, [{ name: '360p', state: 'done' }], 'ready: every rung done');
 		assert.equal(r2.containerSeconds, 42);
 		const urls = await r2Urls(env, videos.read(ID));
 		assert.match(urls!.playUrl, new RegExp(`^https://media\\.qa\\.alummahnow\\.net/priv/\\d{10}\\.[A-Za-z0-9_-]{32}/${ID}/${r2.rev}/master\\.m3u8$`));
@@ -314,11 +315,15 @@ describe('R2 state on the admin video views', () => {
 		assert.deepEqual(adminR2Badge({ r2: { status: 'failed', error: 'source_unavailable' } }), { status: 'failed', error: 'source_unavailable' });
 	});
 
-	it('the detail keeps the failure and drops the transcode result', () => {
+	it('the detail keeps the failure and the rung states, summarises the transcode result, drops the bookkeeping', () => {
+		const rungs = [{ name: '360p', state: 'done' }, { name: '720p', state: 'failed' }];
 		const detail = adminR2Detail({
-			r2: { status: 'failed', jobId: 'j', rev: 'r', access: 'priv', attempts: 2, queuedAt: 'q', failedAt: 'f', error: 'ffmpeg exited 1', failure, result: RESULT, previous: { rev: 'p', access: 'pub' } },
+			r2: { status: 'failed', jobId: 'j', rev: 'r', access: 'priv', attempts: 2, queuedAt: 'q', failedAt: 'f', error: 'ffmpeg exited 1', failure, containerSeconds: 90, rungs, result: { ...RESULT, source: { ...RESULT.source, file: 'play_720p.mp4' } }, previous: { rev: 'p', access: 'pub' } },
 		});
-		assert.deepEqual(detail, { status: 'failed', jobId: 'j', rev: 'r', access: 'priv', attempts: 2, queuedAt: 'q', failedAt: 'f', error: 'ffmpeg exited 1', failure });
+		assert.deepEqual(detail, {
+			status: 'failed', jobId: 'j', rev: 'r', access: 'priv', attempts: 2, queuedAt: 'q', failedAt: 'f', error: 'ffmpeg exited 1', failure, containerSeconds: 90, rungs,
+			result: { rungs: [{ name: '360p', width: 640, height: 360, bytes: 10 }], source: { width: 640, height: 360, file: 'play_720p.mp4' }, timings: RESULT.timings },
+		});
 		assert.equal(adminR2Detail({ r2: null }), null);
 	});
 });
@@ -411,6 +416,47 @@ describe('failure details', () => {
 		assert.match(d.error.stack!, /ffmpeg \(last lines\):\nframe= 120 fps=30\nKilled/);
 		assert.equal(d.extra.stage, 'encode');
 		assert.ok(Object.keys(d.extra).length <= 12, 'Errors page keeps at most 12 extra keys');
+	});
+});
+
+describe('per-rung progress', () => {
+	it('stores the rung states of progress and failed events, validated, and a new attempt clears them', async () => {
+		const { env, raw, videos } = setup();
+		await enqueueTranscode(env, ID, 'upload');
+		const job = raw.TRANSCODE_QUEUE.messages[0] as TranscodeJobMessage;
+		await applyJobEvent(env, undefined, ev(job, { type: 'started' }));
+		const rungs = [
+			{ name: '360p', state: 'done' as const },
+			{ name: '480p', state: 'uploading' as const, progress: 0.4567 },
+			{ name: '720p', state: 'pending' as const },
+			{ name: 'evil', state: 'done' as const },
+		];
+		await applyJobEvent(env, undefined, ev(job, { type: 'progress', progress: 0.99, rungs }));
+		assert.deepEqual(videos.read(ID).r2.rungs, [{ name: '360p', state: 'done' }, { name: '480p', state: 'uploading', progress: 0.457 }, { name: '720p', state: 'pending' }]);
+		await applyJobEvent(env, undefined, ev(job, { type: 'failed', error: 'put HTTP 500', final: false, rungs: [{ name: '360p', state: 'done' }, { name: '480p', state: 'failed' }, { name: '720p', state: 'failed' }] }));
+		assert.deepEqual(videos.read(ID).r2.rungs.map((r: { state: string }) => r.state), ['done', 'failed', 'failed']);
+		await applyJobEvent(env, undefined, ev(job, { type: 'started', attempt: 2 }));
+		assert.equal(videos.read(ID).r2.rungs, undefined);
+	});
+
+	it('carries compact rung states on the live job event, well under 2 KB', async () => {
+		const { mediaJobEvent } = await import('../src/lib/media/r2-delivery');
+		const rungs = [
+			{ name: '360p', state: 'done' as const },
+			{ name: '480p', state: 'done' as const },
+			{ name: '720p', state: 'uploading' as const, progress: 0.4049 },
+			{ name: '1080p', state: 'pending' as const },
+		];
+		const failure = { stage: 'upload' as const, error: 'x'.repeat(300), attempt: 2, elapsedMs: 1, at: 'x', stderrTail: Array.from({ length: 20 }, () => 'y'.repeat(240)) };
+		const e = mediaJobEvent({ id: ID, r2: { status: 'transcoding', jobId: '0b3c2a1e-1111-2222-3333-444455556666', rev: 'r', access: 'pub', attempts: 2, queuedAt: 'q', progress: 0.99, rungs, failure } })!;
+		assert.deepEqual(e.rungs, [['360p', 'done'], ['480p', 'done'], ['720p', 'uploading', 0.4], ['1080p', 'pending']]);
+		const size = JSON.stringify(e).length;
+		assert.ok(size < 1024, `job event is ${size} characters`);
+		// The most it can carry: eight rungs, all with a %
+		const most = mediaJobEvent({ id: ID, r2: { status: 'transcoding', jobId: 'j', rev: 'r', access: 'pub', attempts: 99, queuedAt: 'q', progress: 0.123456, failure, rungs: Array.from({ length: 12 }, (_, i) => ({ name: `${1000 + i}p`, state: 'uploading' as const, progress: 0.123456 })) } })!;
+		assert.equal((most.rungs as unknown[]).length, 8);
+		assert.ok(JSON.stringify(most).length < 1024);
+		assert.equal(mediaJobEvent({ id: ID, r2: { status: 'queued', jobId: 'j', rev: 'r', access: 'pub', attempts: 0, queuedAt: 'q' } })!.rungs, undefined);
 	});
 });
 

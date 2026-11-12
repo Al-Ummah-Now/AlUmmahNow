@@ -13,7 +13,7 @@ import { getAdminSession } from '@/lib/auth';
 import { canManageMedia } from '@/lib/roles';
 import { VideoActions } from './VideoActions';
 import { VideoPlayer } from './VideoPlayer';
-import { VideoR2Panel } from './VideoR2Panel';
+import { ProcessingCard } from './ProcessingCard';
 
 export const dynamic = 'force-dynamic';
 
@@ -88,7 +88,6 @@ export default async function VideoPage({ params }: { params: Promise<{ id: stri
   const statusLabel = v.status ? t(`videos.statusLabels.${v.status}` as MessageKey) : t('content.none');
   const holds = v.suspensionHolds.map((h) => HOLD_LABEL[h.split(':')[0]]).filter(Boolean);
   const unpublished = v.suspensionHolds.includes('admin:unpublished');
-  const resolutions = v.processing?.resolutions.length ? v.processing.resolutions : v.availableResolutions;
 
   return (
     <div data-testid="video-detail" data-video-id={v.id} data-hidden={v.isHidden ? 'true' : 'false'} data-status={v.status ?? ''}>
@@ -122,44 +121,20 @@ export default async function VideoPage({ params }: { params: Promise<{ id: stri
             <VideoPlayer playUrl={v.playUrl} videoUrl={v.videoUrl} poster={v.thumbnailUrl} title={v.title} />
           </section>
 
-          {/* Processing is shown up front: stuck and failed uploads are what admins come here for */}
+          {/* Processing is shown up front: stuck and failed uploads are what admins come here for. Bunny and R2 side by side */}
           <SectionCard title={t('videos.processingTitle')} id="video-processing" testId="video-processing">
-            <dl className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-              <div>
-                <dt className="text-fg-muted">{t('videos.status')}</dt>
-                <dd><Chip tone={statusTone(v.status)}>{statusLabel}</Chip></dd>
-              </div>
-              <div>
-                <dt className="text-fg-muted">{t('videos.bunnyStatus')}</dt>
-                <dd className="text-fg" data-testid="video-bunny-status">
-                  {v.processing ? (
-                    <>
-                      <span dir="ltr">{v.processing.status}</span>
-                      {v.processing.encodeProgress !== null && v.processing.encodeProgress < 100 && (
-                        <span className="block text-fg-muted">{t('videos.encodeProgress', { progress: v.processing.encodeProgress })}</span>
-                      )}
-                    </>
-                  ) : (
-                    <span className="text-fg-muted">{t('videos.bunnyUnavailable')}</span>
-                  )}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-fg-muted">{t('videos.resolutions')}</dt>
-                <dd className="flex flex-wrap gap-1">
-                  {resolutions.length ? resolutions.map((r) => <Chip key={r} tone="info">{r}</Chip>) : <span className="text-fg-muted">{t('videos.noResolutions')}</span>}
-                </dd>
-              </div>
-            </dl>
-          </SectionCard>
-
-          {/* R2 delivery beside Bunny (the R2 delivery epic): absent from an older api-videos, so undefined shows as unavailable */}
-          <SectionCard title={t('mediaDelivery.r2Title')} id="video-r2" testId="video-r2-section">
-            {v.r2 === undefined ? (
-              <p className="text-sm text-fg-muted">{t('mediaDelivery.r2Unavailable')}</p>
-            ) : (
-              <VideoR2Panel videoId={v.id} r2={v.r2} canManage={canManageMedia(session?.user.role)} />
-            )}
+            <p className="mb-4 flex flex-wrap items-center gap-2 text-sm">
+              <span className="text-fg-muted">{t('videos.status')}:</span>
+              <Chip tone={statusTone(v.status)}>{statusLabel}</Chip>
+            </p>
+            <ProcessingCard
+              videoId={v.id}
+              processing={v.processing}
+              processingIssue={v.processingIssue ?? null}
+              fallbackResolutions={v.availableResolutions}
+              r2={v.r2}
+              canManage={canManageMedia(session?.user.role)}
+            />
           </SectionCard>
 
           <SectionCard title={t('videos.detailsTitle')} id="video-details">

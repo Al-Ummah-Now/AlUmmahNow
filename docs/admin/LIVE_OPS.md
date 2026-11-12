@@ -155,7 +155,7 @@ These come later, in the order of cost spec Phases 1–3: CDN by host, container
 | Topic | Who may subscribe | Events (`data.kind`) | Producer |
 | --- | --- | --- | --- |
 | `admin:jobs` | admins | `job` {id, kind, status, progress?, targetType, targetId} for purges, transfers, erasures, rebuilds, repairs | api-videos admin-jobs consumer |
-| `admin:media` | admins | `transcode` {videoId, status, provider}, `transcoding` {running, max, queued} | api-videos `/internal/media` (job status writes) |
+| `admin:media` | admins | `job` {videoId, jobId, status, attempt, progress?, rungs? `[['720p','uploading',0.4], …]`, failure? {stage, error, attempt}}, `live` {transcoding, queued, maxTranscodes?, oldestQueuedAt?} | api-videos `/internal/media` (job status writes) |
 | `admin:queues` | admins | `backlog` {queue, messages} | transcode backlog from `media_jobs` (live); others from the collector (hourly) |
 | `admin:uploads` | admins | `upload` {videoId, status, encodeProgress?} | api-videos processing / Bunny webhook path |
 | `admin:errors` | admins | `error` {groupId, isNew, kind, app}, `counts` {open, actionNeeded} | admin-api errors ingest |
