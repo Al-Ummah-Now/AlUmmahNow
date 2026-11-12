@@ -146,9 +146,17 @@ test.describe('Section manager', () => {
           await expect(again.locator('[data-section-card="recent_uploads"]')).toContainText('Already on your channel');
           await page.keyboard.press('Escape');
 
-          // Channel Home, as the owner: the section heading uses the owner's title (a note when there's nothing to show)
-          await page.goto(`/en/channels/${channelId()}`);
-          await expect(page.getByTestId('channel-section-recent_uploads').getByRole('heading', { name: title })).toBeVisible();
+          // Channel Home, as the owner, who sees it as visitors do: drawn under the owner's title when the
+          // channel has public videos; an empty section isn't drawn and the manager marks it Hidden. The seed
+          // videos are private, so it is usually empty here (other specs' public videos come and go).
+          // (a fresh load: the populated list arrives whole, badges included)
+          await openManager(page);
+          await expect(row).toBeVisible();
+          const hidden = (await row.getByTestId('section-hidden-badge').count()) > 0;
+          await openHome(page, 'en');
+          const home = page.getByTestId('channel-section-recent_uploads');
+          if (hidden) await expect(home).toHaveCount(0);
+          else await expect(home.getByRole('heading', { name: title })).toBeVisible();
         } finally {
           await deleteSectionsTitled(owner, channelId(), title);
         }
@@ -273,12 +281,17 @@ test.describe('Section manager', () => {
     test(`SECT-005 reorders sections with the keyboard and publishes the order (${locale})`, async ({ page }) => {
       const first = tempName('First');
       const second = tempName('Second');
+      // The Home tab draws only sections with something to show: a featured channel and a post of
+      // this test (the seed videos are private, so an automatic video section would be empty)
+      const postMarker = tempName('Reorder post');
       await withLock(
         'sections',
         async () => {
           try {
-            await deleteSectionsOfType(owner, channelId(), ['recent_uploads', 'community_posts']);
-            await createSection(owner, channelId(), { type: 'recent_uploads', title: first });
+            const lectures = await findQaLecturesChannel();
+            await deleteSectionsOfType(owner, channelId(), ['featured_channels', 'community_posts']);
+            await createTextPost(owner, channelId(), postMarker);
+            await createSection(owner, channelId(), { type: 'featured_channels', title: first, channelIds: [lectures.id] });
             await createSection(owner, channelId(), { type: 'community_posts', title: second });
             await openManager(page, locale);
 
@@ -306,13 +319,14 @@ test.describe('Section manager', () => {
             await expect
               .poll(async () =>
                 (await homeOrder.evaluateAll((els) => els.map((e) => e.getAttribute('data-section-type')))).filter(
-                  (t) => t === 'recent_uploads' || t === 'community_posts'
+                  (t) => t === 'featured_channels' || t === 'community_posts'
                 )
               )
-              .toEqual(['community_posts', 'recent_uploads']);
+              .toEqual(['community_posts', 'featured_channels']);
           } finally {
             await deleteSectionsTitled(owner, channelId(), first);
             await deleteSectionsTitled(owner, channelId(), second);
+            await deletePostsContaining(owner, channelId(), postMarker);
           }
         },
         LOCK_WAIT
@@ -369,8 +383,9 @@ test.describe('Section manager', () => {
 
   test('SECT-008 breadcrumb runs right-to-left in Arabic', async ({ page }) => {
     await openManager(page, 'ar');
+    // <channel> › Settings › Manage Sections (channel settings belong to the channel, not the user's Settings)
     const items = page.getByTestId('channel-settings-breadcrumb').getByRole('listitem');
-    await expect(items).toHaveCount(4);
+    await expect(items).toHaveCount(3);
     const boxes = await items.evaluateAll((els) =>
       els.map((e) => {
         const r = e.getBoundingClientRect();
@@ -378,7 +393,7 @@ test.describe('Section manager', () => {
       })
     );
     const listRight = await page.getByTestId('channel-settings-breadcrumb').getByRole('list').evaluate((e) => e.getBoundingClientRect().right);
-    // The first crumb (Settings) starts at the inline start, i.e. the right edge
+    // The first crumb (the channel) starts at the inline start, i.e. the right edge
     expect(Math.abs(listRight - boxes[0].right)).toBeLessThan(2);
     // Crumbs on the same line run right to left (the list may wrap on phones)
     for (let i = 1; i < boxes.length; i++) {
