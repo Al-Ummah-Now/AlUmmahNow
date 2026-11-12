@@ -50,6 +50,8 @@ export const PERMISSIONS = {
   'videos:uploads': ADMIN_ROLE_IDS,
   /** Short/video formats: run the backfill, list unclassifiable videos, set a video's format. */
   'videos:format': ADMIN_ROLE_IDS,
+  /** Delivery comparison (epic #687): the Bunny/R2 switch, transcode jobs and retry, QoE and cost. */
+  'media:manage': ADMIN_ROLE_IDS,
 } as const satisfies Record<string, readonly string[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

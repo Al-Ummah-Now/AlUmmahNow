@@ -31,6 +31,9 @@
   --success-fg: #166534;
   --warning-fg: #92400e;
   --info-fg: #1e40af;
+  /* Two chart series (Delivery comparison: Bunny vs R2), from tokens that meet 4.5:1 on --surface in both themes */
+  --chart-1: var(--link);
+  --chart-2: var(--warning-fg);
   --chip-pending-bg: #fef3c7;
   --chip-pending-fg: #92400e;
   --chip-reviewing-bg: #dbeafe;
@@ -142,6 +145,8 @@
   --color-success-fg: var(--success-fg);
   --color-warning-fg: var(--warning-fg);
   --color-info-fg: var(--info-fg);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
   --color-chip-pending-bg: var(--chip-pending-bg);
   --color-chip-pending-fg: var(--chip-pending-fg);
   --color-chip-reviewing-bg: var(--chip-reviewing-bg);

@@ -22,6 +22,8 @@ interface AdminNavProps {
   canManageUsers?: boolean;
   /** Shows Stale uploads (the user has videos:uploads). */
   canStaleUploads?: boolean;
+  /** Shows Delivery (Bunny vs R2 comparison; the user has media:manage). */
+  canManageMedia?: boolean;
   /** New error groups plus open needs-action items; null hides Errors (no errors:read). */
   errorsBadge?: number | null;
 }
@@ -44,6 +46,7 @@ const NAV_ITEMS: { href: string; label: MessageKey }[] = [
   { href: '/contact', label: 'nav.contact' },
   { href: '/processing', label: 'nav.processing' },
   { href: '/stale-uploads', label: 'nav.staleUploads' },
+  { href: '/delivery', label: 'nav.delivery' },
   { href: '/errors', label: 'nav.errors' },
   { href: '/jobs', label: 'nav.jobs' },
   { href: '/creators', label: 'nav.creators' },
@@ -52,7 +55,7 @@ const NAV_ITEMS: { href: string; label: MessageKey }[] = [
   { href: '/video-formats', label: 'nav.videoFormats' },
 ];
 
-export function AdminNav({ userEmail, authIssuer, contactNew = null, canProcess = false, canManageUsers = false, canStaleUploads = false, errorsBadge = null }: AdminNavProps) {
+export function AdminNav({ userEmail, authIssuer, contactNew = null, canProcess = false, canManageUsers = false, canStaleUploads = false, canManageMedia = false, errorsBadge = null }: AdminNavProps) {
   const pathname = usePathname();
   const { t } = useLanguage();
   // Errors is one hub: error groups (errors:read) and failed uploads/processing (videos:processing).
@@ -64,7 +67,8 @@ export function AdminNav({ userEmail, authIssuer, contactNew = null, canProcess 
       (i.href !== '/processing' || canProcess) &&
       (i.href !== '/errors' || canProcess || errorsBadge !== null) &&
       (i.href !== '/legacy-profiles' || canManageUsers) &&
-      (i.href !== '/stale-uploads' || canStaleUploads),
+      (i.href !== '/stale-uploads' || canStaleUploads) &&
+      (i.href !== '/delivery' || canManageMedia),
   );
 
   // Most specific match wins, so /moderation/ai does not also highlight /moderation

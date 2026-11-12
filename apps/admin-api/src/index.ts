@@ -13,6 +13,7 @@ import suggestRouter from './routers/suggest.router';
 import invitesRouter from './routers/invites.router';
 import { scheduleInviteSyncs } from './lib/invites';
 import processingRouter from './routers/processing.router';
+import mediaRouter from './routers/media.router';
 import staleUploadsRouter from './routers/staleUploads.router';
 import trashRouter from './routers/trash.router';
 import { isHourlyTick, runTrashCleanup } from './lib/trash';
@@ -172,6 +173,9 @@ app.route('/api/invites', invitesRouter);
 
 // Upload processing health (sync from Bunny, retry, mark failed): permission-checked, audited proxy to api-videos
 app.route('/api/processing', processingRouter);
+
+// Delivery comparison (Bunny vs R2, epic #687): the switch, transcode jobs, QoE and cost; permission-checked, audited proxy to api-videos
+app.route('/api/media', mediaRouter);
 
 // Stale uploads (abandoned placeholders, Bunny orphans): permission-checked, audited proxy to api-videos
 app.route('/api/uploads/stale', staleUploadsRouter as never);

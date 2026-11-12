@@ -78,6 +78,16 @@ export function canUseProcessing(role?: string): boolean {
 }
 
 /**
+ * Delivery comparison (Bunny vs R2, epic #687): mirrors admin-api PERMISSIONS
+ * (media:manage is granted to admins and super admins, not moderators).
+ * admin-api enforces it; this only hides what the user cannot open.
+ */
+export function canManageMedia(role?: string): boolean {
+  const r = normalizeRole(role);
+  return r === 'admin' || r === 'super_admin';
+}
+
+/**
  * Videos users tools (Restore legacy profile fields): mirrors the users:manage
  * content permission (shared-types ROLE_CONTENT_PERMISSIONS: admins and super
  * admins). admin-api enforces it; this only hides what the user cannot use.
