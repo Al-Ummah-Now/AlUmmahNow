@@ -138,7 +138,11 @@
 			// Private pre-change copies written by admin jobs (legacy profile restore); never public
 			"binding": "ADMIN_BACKUPS",
 			"bucket_name": "admin-backups"
-		}
+		},
+		// R2 delivery beside Bunny (epic #687): renditions written by apps/media; api-videos
+		// moves them on visibility changes and deletes them at purge
+		{ "binding": "MEDIA", "bucket_name": "al-ummah-now-media" },
+		{ "binding": "MEDIA_PRIVATE", "bucket_name": "al-ummah-now-media-private" }
 	],
 	"d1_databases": [
 		{
@@ -215,6 +219,11 @@
 			{
 				"queue": "al-ummah-now-admin-jobs",
 				"binding": "ADMIN_JOBS_QUEUE"
+			},
+			{
+				// R2 transcodes (apps/media consumes)
+				"queue": "al-ummah-now-transcode",
+				"binding": "TRANSCODE_QUEUE"
 			}
 		]
 	},
@@ -244,6 +253,12 @@
 		"binding": "BUNNY_TOKEN_KEY",
 		"store_id": "f8eddc9944d041919ed8dc7d08d32308",
 		"secret_name": "bunny-stream-token-key"
+	  },
+	  {
+		// Path tokens of private R2 renditions (shared with apps/media)
+		"binding": "MEDIA_SIGN_KEY",
+		"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+		"secret_name": "media-sign-key"
 	  }
 	],
 	/**
@@ -254,6 +269,10 @@
 	"vars": {
 		// Error reports to the admin Errors page (docs/features/error-reporting.md)
 		"ERRORS_INGEST_URL": "https://admin.api.alummahnow.net/internal/errors",
+		// R2 delivery host (public renditions direct from R2, private ones via apps/media). The
+		// viewer switch (admin Delivery page) defaults to Bunny; uploads are dual-written to R2.
+		"MEDIA_PUBLIC_HOST": "media.alummahnow.net",
+		"MEDIA_BUCKET_NAMES": "al-ummah-now-media,al-ummah-now-media-private",
 		// Logging policy (docs/operations/logging.md): production warn, stage info, QA/dev debug
 		"LOG_LEVEL": "warn",
 		"ENVIRONMENT": "production",
@@ -380,7 +399,9 @@
 				{
 					"binding": "ADMIN_BACKUPS",
 					"bucket_name": "admin-backups-stage"
-				}
+				},
+				{ "binding": "MEDIA", "bucket_name": "al-ummah-now-media-stage" },
+				{ "binding": "MEDIA_PRIVATE", "bucket_name": "al-ummah-now-media-private-stage" }
 			],
 			"d1_databases": [
 				{
@@ -449,6 +470,10 @@
 					{
 						"queue": "al-ummah-now-admin-jobs-stage",
 						"binding": "ADMIN_JOBS_QUEUE"
+					},
+					{
+						"queue": "al-ummah-now-transcode-stage",
+						"binding": "TRANSCODE_QUEUE"
 					}
 				]
 			},
@@ -477,11 +502,18 @@
 					"binding": "BUNNY_TOKEN_KEY",
 					"store_id": "f8eddc9944d041919ed8dc7d08d32308",
 					"secret_name": "bunny-stream-token-key-qa"
+				},
+				{
+					"binding": "MEDIA_SIGN_KEY",
+					"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+					"secret_name": "media-sign-key-stage"
 				}
 			],
 			"vars": {
 				// Error reports to the admin Errors page (docs/features/error-reporting.md)
 				"ERRORS_INGEST_URL": "https://admin.api.stage.alummahnow.net/internal/errors",
+				"MEDIA_PUBLIC_HOST": "media.stage.alummahnow.net",
+				"MEDIA_BUCKET_NAMES": "al-ummah-now-media-stage,al-ummah-now-media-private-stage",
 				// Logging policy (docs/operations/logging.md): production warn, stage info, QA/dev debug
 				"LOG_LEVEL": "info",
 				"ENVIRONMENT": "stage",
