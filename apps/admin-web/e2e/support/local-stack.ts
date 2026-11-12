@@ -53,9 +53,6 @@ export async function grantRole(email: string, roleId: 'role_admin' | 'role_mode
  */
 export async function runCron(app: 'api-videos' | 'admin-api', cron: string, time = new Date()): Promise<void> {
   const res = await fetch(`${control()}/__stack/scheduled/${app}?cron=${encodeURIComponent(cron)}&time=${encodeURIComponent(time.toISOString())}`, { method: 'POST' });
-  // A stack without the scheduled trigger (it comes with the leftover check, #993): the purges stay
-  // queued, as on a deployed environment until its next cron
-  if (res.status === 404) return;
   const body = (await res.json().catch(() => ({}))) as { outcome?: string; error?: string };
   if (!res.ok || body.outcome !== 'ok') throw new Error(`${app} cron ${cron} -> ${res.status} ${body.outcome ?? body.error ?? ''}`);
 }
