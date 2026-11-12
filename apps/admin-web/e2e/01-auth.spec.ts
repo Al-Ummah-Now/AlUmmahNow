@@ -45,7 +45,9 @@ test.describe('authentication - signed out', () => {
     const cookies = await page.context().cookies();
     const session = cookies.find((c) => c.name === 'admin_session');
     expect(session?.httpOnly).toBe(true);
-    expect(session?.secure).toBe(ADMIN_WEB_URL.startsWith('https'));
+    // Every target is a production build (deployed, or OpenNext on the local stack), which always sets
+    // Secure (session-cookie.ts); browsers keep Secure cookies on http://localhost
+    expect(session?.secure).toBe(true);
   });
 
   test('AUTH-04 moderator can log in through the auth server', async ({ page }) => {
