@@ -7,7 +7,7 @@
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,
   "version_metadata": { "binding": "CF_VERSION_METADATA" },
-  "observability": { "enabled": true, "head_sampling_rate": 0.1, "logs": { "enabled": true, "head_sampling_rate": 0.1, "invocation_logs": false } },
+  "observability": { "enabled": true, "head_sampling_rate": 1, "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": false } },
   "triggers": { "crons": ["10 * * * *", "30 3 * * *"] },
   "d1_databases": [
     { "binding": "COSTS_DB", "database_name": "al-ummah-now-costs-qa", "database_id": "a83d0ca5-6186-43df-8bc0-90b36561f42d", "migrations_dir": "migrations" }
@@ -18,7 +18,7 @@
   ],
   "vars": {
     "ENVIRONMENT": "qa",
-    "LOG_LEVEL": "debug",
+    "LOG_LEVEL": "warn",
     "CLOUDFLARE_ACCOUNT_ID": "0e4b6e7f9faf280c3c9bf95995edc64f",
     "COLLECT_ENVS": "qa",
     "ERRORS_INGEST_URL": "https://admin.api.qa.alummahnow.net/internal/errors"

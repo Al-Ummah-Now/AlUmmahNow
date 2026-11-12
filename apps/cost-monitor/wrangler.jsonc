@@ -36,7 +36,7 @@
 			"name": "al-ummah-cost-monitor-stage",
 			"workers_dev": false,
 			"version_metadata": { "binding": "CF_VERSION_METADATA" },
-			"observability": { "enabled": true, "head_sampling_rate": 0.1, "logs": { "enabled": true, "head_sampling_rate": 0.1, "invocation_logs": false } },
+			"observability": { "enabled": true, "head_sampling_rate": 1, "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": false } },
 			"triggers": { "crons": ["10 * * * *", "30 3 * * *"] },
 			"d1_databases": [
 				{ "binding": "COSTS_DB", "database_name": "al-ummah-now-costs-stage", "database_id": "d4c4d007-c691-4f92-a728-b2ecd706a3ae", "migrations_dir": "migrations" }
@@ -47,7 +47,7 @@
 			],
 			"vars": {
 				"ENVIRONMENT": "stage",
-				"LOG_LEVEL": "info",
+				"LOG_LEVEL": "warn",
 				"CLOUDFLARE_ACCOUNT_ID": "0e4b6e7f9faf280c3c9bf95995edc64f",
 				"COLLECT_ENVS": "stage",
 				"ERRORS_INGEST_URL": "https://admin.api.stage.alummahnow.net/internal/errors"
