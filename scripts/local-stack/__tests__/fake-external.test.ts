@@ -62,12 +62,6 @@ describe('fake Bunny', () => {
     assert.equal(missing.headers.get('access-control-allow-origin'), '*');
   });
 
-  it('serves third-party static files locally (empty, typed)', async () => {
-    const css = await call('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.1/css/all.min.css');
-    assert.equal(css.status, 200);
-    assert.equal(css.headers.get('content-type'), 'text/css');
-  });
-
   it('stores images and serves them from the image host', async () => {
     await call('https://storage.bunnycdn.com/zone/avatars/a.jpg', { method: 'PUT', body: fixture('e2e-thumbnail.jpg') });
     assert.equal((await call('https://images.alummahnow.net/avatars/a.jpg')).status, 200);

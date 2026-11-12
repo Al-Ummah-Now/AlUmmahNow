@@ -61,6 +61,14 @@ describe('buildContentSecurityPolicy (production)', () => {
   });
 });
 
+describe('buildContentSecurityPolicy (a page served over plain http)', () => {
+  it('does not upgrade insecure requests (WebKit would upgrade localhost subresources to https)', () => {
+    const d = directives(buildContentSecurityPolicy({ isDevelopment: false, insecureOrigin: true, env }));
+    expect(d['upgrade-insecure-requests']).toBeUndefined();
+    expect(d['report-uri']).toEqual([CSP_REPORT_PATH]);
+  });
+});
+
 describe('buildContentSecurityPolicy (development)', () => {
   it('keeps eval for the Next.js dev server and allows localhost', () => {
     const d = directives(buildContentSecurityPolicy({ isDevelopment: true, env }));
