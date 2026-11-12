@@ -19,7 +19,8 @@ need to touch the store.
 | web `useTranslationsQuery` | Takes only the `overrides` keys over its own bundled repo text. A web deploy shows new repo text even before api-videos deploys. |
 | admin-api save | Adds each saved key to `overrides`. Saving a key back to its repo value removes it, which hands the key back to the repo. |
 | api-videos `POST /api/i18n/sync` | Rewrites the store from the repo and keeps the `overrides` keys. |
-| `scripts/release/seed-translations.ts` (deploy / release) | Creates missing files with an empty `overrides` list. It never rewrites existing files. |
+| `scripts/release/sync-translations.ts` (every QA deploy, and every release for stage and production, after api-videos deploys) | Sets every key that is not on the `overrides` list to the repo value, drops keys the repo removed, keeps override keys, and seeds missing files with an empty list. Writes `translations: N updated, M kept` to the job summary. |
+| `sync-translations.ts --check` (smoke step right after) | Read-only. Fails the deploy when a locale file is missing, has no `overrides` list, or holds a non-override key that differs from the repo; also checks that the API serves both locales. |
 
 The helpers are in `packages/shared-types/src/i18n-overrides.ts`.
 
@@ -50,6 +51,6 @@ pnpm exec tsx scripts/release/repair-translation-store.ts --env production --app
 It needs full git history and a Cloudflare token (`CLOUDFLARE_API_TOKEN` or `wrangler login`).
 It refuses to write if a locale file changed after it was read.
 
-Run 2026-11-12: QA and stage were applied (en 9, ar 10 stale keys, 0 admin edits). Production's
-dry run gave the same 9 + 10 stale keys and 0 edits; the production apply waits for the owner's
-approval.
+Run 2026-11-12 on QA, stage and production (production with the owner's approval): en had 9
+stale keys and ar had 10, with 0 admin edits. All three stores now carry the list, so the deploy
+sync keeps them current from here on.
