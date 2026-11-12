@@ -46,7 +46,11 @@ export interface PlaybackChoice {
 
 /** 0..99 drawn per request (assign = view). Statistics only, but never Math.random. */
 function drawBucket(): number {
-	return crypto.getRandomValues(new Uint32Array(1))[0]! % 100;
+	// Rejection sampling: bytes 200..255 would make low buckets likelier
+	const byte = new Uint8Array(1);
+	do crypto.getRandomValues(byte);
+	while (byte[0]! >= 200);
+	return byte[0]! % 100;
 }
 
 export async function choosePlayback(
