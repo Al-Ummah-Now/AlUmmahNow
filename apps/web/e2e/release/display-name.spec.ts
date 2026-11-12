@@ -12,7 +12,7 @@
 import { expect } from '@playwright/test';
 import { test, ns } from './builders';
 import { signInAsAdmin } from './admin-session';
-import { target } from './targets';
+import { releaseEnv, target } from './targets';
 import { apiFetch, gotoSettled, openMenuUntil, type WebUser } from './web-session';
 import { watchUrl } from './videos';
 
@@ -31,6 +31,7 @@ async function namesOnly(user: WebUser, first: string, last: string): Promise<vo
 
 test.describe('display name falls back to first + last', () => {
   test('header, comment author and admin user list show the first and last name, not the email', async ({ browser, page, ownData }) => {
+    test.fixme(releaseEnv() === 'local', 'quarantined: #1021 @meywd: commenting answers "Channel not found" on the local stack');
     test.setTimeout(240000);
     const stamp = Date.now().toString(36);
     const first = `Firstname${stamp}`;
