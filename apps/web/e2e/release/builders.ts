@@ -385,19 +385,20 @@ export function useOwnData(test: typeof base): DataScope {
  *   test('…', async ({ page, ownData }) => { const user = await ownData.createUser(page, 'x'); … });
  */
 export const test = base.extend<{ ownData: DataScope }, { workerData: DataScope }>({
-  ownData: async ({}, use) => {
+  // (the fixture callback is not React's use(): named `provide` for the hooks lint rule)
+  ownData: async ({}, provide) => {
     const scope = new DataScope();
     try {
-      await use(scope);
+      await provide(scope);
     } finally {
       await scope.cleanup();
     }
   },
   workerData: [
-    async ({}, use) => {
+    async ({}, provide) => {
       const scope = new DataScope();
       try {
-        await use(scope);
+        await provide(scope);
       } finally {
         await scope.cleanup();
       }
