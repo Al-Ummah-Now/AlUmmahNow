@@ -48,7 +48,7 @@ Until a batch is moved, every spec still runs where it runs today; the local job
 | themes | `apps/web/playwright.themes.config.ts` (theme-visibility.yml) | 5 | 0 |
 | player | `apps/web/playwright.player.config.ts` (player-e2e.yml) | 10 | 0 |
 | release-prod | `apps/web/playwright.release-prod.config.ts` (prod-signed-in.yml) | 0 | 1 |
-| **all** | | **155** | **9** |
+| **all** | | **156** | **9** |
 
 ## Deployed (QA and stage)
 
