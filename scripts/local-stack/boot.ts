@@ -488,10 +488,10 @@ async function main(): Promise<void> {
   });
   setStackHooks({
     leftovers: (marker) => scanLeftovers(mf, prepared, marker),
-    scheduled: async (app, cron) => {
+    scheduled: async (app, cron, time) => {
       const p = prepared.find((x) => x.worker.app === app || x.name === app);
       if (!p) throw new Error(`no worker ${app} (${prepared.map((x) => x.worker.app).join(', ')})`);
-      return (await mf.getWorker(p.name)).scheduled({ cron, scheduledTime: new Date() });
+      return (await mf.getWorker(p.name)).scheduled({ cron, scheduledTime: time });
     },
   });
   await timed('secrets', () => fillSecrets(mf, prepared));

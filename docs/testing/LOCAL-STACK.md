@@ -70,7 +70,8 @@ listens on its own port:
     `GET /__stack/r2/<bucket name>?prefix=<p>[&cursor=<c>]` lists keys (`{ keys, cursor }`, 1000 a page).
   - `GET /__stack/leftovers?marker=<run id>`, which lists every D1 row, R2 object, KV entry and fake
     Bunny video or image that still holds the run id or a run user's id;
-  - `POST /__stack/scheduled/<app>?cron=<expr>`, which runs that worker's scheduled handler now. Teardowns
+  - `POST /__stack/scheduled/<app>?cron=<expr>[&time=<ISO>]`, which runs that worker's scheduled handler now,
+    with that scheduled time (default now; hourly-tick work needs the top of an hour). Teardowns
     use it for purges that the APIs only queue for the hourly cron.
 - **Leftover check.** `scripts/local-stack/leftovers.ts --marker "$E2E_RUN_ID"` runs at the end of every
   local job, after the run accounts are deleted, and fails when anything the run created is still there.

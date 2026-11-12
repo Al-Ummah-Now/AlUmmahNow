@@ -288,7 +288,7 @@ export function setStackR2(fn: StackR2): void {
 /** Leftover scan and scheduled-handler trigger (boot.ts sets them once Miniflare is up). */
 export interface StackHooks {
   leftovers?: (marker: string) => Promise<unknown>;
-  scheduled?: (app: string, cron: string) => Promise<unknown>;
+  scheduled?: (app: string, cron: string, time: Date) => Promise<unknown>;
 }
 const hooks: StackHooks = {};
 export function setStackHooks(next: StackHooks): void {
@@ -320,8 +320,9 @@ async function readBody(req: IncomingMessage): Promise<string> {
  * - GET /__stack/r2/<bucket name>?prefix=<p>[&cursor=<c>]: { keys, cursor } (teardowns find what a run wrote)
  * - GET /__stack/leftovers?marker=<run id>: every row, object, key or fake video that still holds the
  *   marker or the id of a run user (leftovers.ts)
- * - POST /__stack/scheduled/<app>?cron=<expr>: runs that worker's scheduled handler now (purges that
- *   the APIs only queue for the hourly cron)
+ * - POST /__stack/scheduled/<app>?cron=<expr>[&time=<ISO>]: runs that worker's scheduled handler now,
+ *   with that scheduled time (default now; e.g. the top of an hour for hourly-tick work), for purges
+ *   the APIs only queue for the cron
  */
 async function control(req: IncomingMessage, url: URL): Promise<Response> {
   if (url.pathname.startsWith('/__stack/d1/')) {
@@ -360,7 +361,9 @@ async function control(req: IncomingMessage, url: URL): Promise<Response> {
   if (url.pathname.startsWith('/__stack/scheduled/')) {
     if (req.method !== 'POST' || !hooks.scheduled) return json({ error: 'POST once the stack is up' }, 405);
     try {
-      return json(await hooks.scheduled(decodeURIComponent(url.pathname.slice('/__stack/scheduled/'.length)), url.searchParams.get('cron') ?? '* * * * *'));
+      const time = new Date(url.searchParams.get('time') ?? Date.now());
+      if (Number.isNaN(time.getTime())) return json({ error: 'time must be an ISO date' }, 400);
+      return json(await hooks.scheduled(decodeURIComponent(url.pathname.slice('/__stack/scheduled/'.length)), url.searchParams.get('cron') ?? '* * * * *', time));
     } catch (error) {
       return json({ error: (error as Error).message }, 400);
     }
