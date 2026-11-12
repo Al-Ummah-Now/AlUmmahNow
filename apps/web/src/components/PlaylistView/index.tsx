@@ -187,7 +187,8 @@ export default function PlaylistView({ playlistId }: PlaylistViewProps) {
                   href={playAllHref}
                   className="inline-flex w-full items-center justify-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors"
                 >
-                  <Play className={`w-4 h-4 ${isRTL ? 'rotate-180' : ''}`} />
+                  {/* Media icons never mirror in RTL: play points right in Arabic too */}
+                  <Play className="w-4 h-4" aria-hidden="true" />
                   {t.playlist.playAll}
                 </Link>
               )}
