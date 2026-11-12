@@ -7,11 +7,28 @@
 # secrets (scripts/qa/bunny-qa-status/worker.js), calls it once with a random
 # bearer token and deletes it. The key never reaches the runner or the log.
 # QA only: the bindings name the QA secrets and the QA videos bucket, and the
-# worker refuses any library id other than QA_LIBRARY_ID.
+# worker refuses to delete in any library other than QA_LIBRARY_ID.
+#
+# sweep: pages through the library (newest first, 100 a call) and deletes every
+# QA video (no "[env] " name prefix, so never stage's) that no live QA record
+# refers to: no record, or a record soft-deleted over 30 min ago. Kept: the
+# theme-demo / pinned content (scripts/qa/theme-demo-keep.ts), anything younger
+# than 1 h, live-stream references, unreadable records.
+# timed_upload: apps/web/e2e/seed/timed-upload.ts.
 name: Bunny QA Status
 
 on:
   workflow_dispatch:
+    inputs:
+      sweep:
+        description: 'Delete QA videos no live QA record refers to (theme-demo keep list, other env, < 1 h and live streams kept). apply needs QA_LIBRARY_ID.'
+        type: choice
+        options: [none, dry-run, apply]
+        default: none
+      timed_upload:
+        description: 'Upload one 10 s clip as qa-creator through the QA API and time it until ready (deleted after)'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -79,6 +96,48 @@ jobs:
           test "$code" = 200
           { echo '### QA Bunny library'; echo '```json'; cat "$RUNNER_TEMP/status.json" | python3 -m json.tool; echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
 
+      - name: Sweep the library (${{ inputs.sweep }})
+        if: inputs.sweep != 'none'
+        env:
+          SWEEP: ${{ inputs.sweep }}
+        run: |
+          set -euo pipefail
+          apply=0; [ "$SWEEP" = apply ] && apply=1
+          page=1; calls=0; total_deleted=0; total_candidates=0
+          : > "$RUNNER_TEMP/sweep.jsonl"
+          while [ $calls -lt 400 ]; do
+            calls=$((calls+1))
+            code=$(curl -sS -o "$RUNNER_TEMP/page.json" -w '%{http_code}' --max-time 120 -H "Authorization: Bearer $PROBE_TOKEN" "$PROBE_URL/sweep?page=$page&apply=$apply" || true)
+            if [ "$code" != 200 ]; then echo "page $page: HTTP $code $(head -c 300 "$RUNNER_TEMP/page.json")"; sleep 5; continue; fi
+            cat "$RUNNER_TEMP/page.json" >> "$RUNNER_TEMP/sweep.jsonl"; echo >> "$RUNNER_TEMP/sweep.jsonl"
+            read -r listed deleted candidates <<<"$(python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));print(d["listed"],d["deleted"],d["candidates"])' "$RUNNER_TEMP/page.json")"
+            echo "page $page: listed $listed, candidates $candidates, deleted $deleted"
+            total_deleted=$((total_deleted+deleted)); total_candidates=$((total_candidates+candidates))
+            [ "$listed" = 0 ] && break
+            # A page that lost videos gets the next ones moved up: list it again
+            if [ "$deleted" -eq 0 ]; then page=$((page+1)); fi
+          done
+          python3 - "$RUNNER_TEMP/sweep.jsonl" "$SWEEP" <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json, sys, collections
+          rows = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
+          kept, would, deleted, failed = collections.Counter(), collections.Counter(), collections.Counter(), []
+          for r in rows:
+              kept.update(r['kept']); deleted.update(r['deletedByStatus']); failed += r['failed']
+              if sys.argv[2] != 'apply': would.update(r['wouldByStatus'])
+          print(f'### Sweep ({sys.argv[2]})')
+          print(f'- calls: {len(rows)}')
+          print(f'- kept: {dict(kept)}')
+          print(f'- would delete by status: {dict(would)} (total {sum(would.values())})' if sys.argv[2] != 'apply' else f'- deleted by status: {dict(deleted)} (total {sum(deleted.values())})')
+          print(f'- failed: {len(failed)} {failed[:5]}')
+          samples = [s for r in rows for s in r.get('sample', [])][:10]
+          print('- sample:'); [print(f"  - {s['guid']} {s['status']} {s['title']}") for s in samples]
+          PY
+
+      - name: Read the library after the sweep
+        if: inputs.sweep == 'apply'
+        run: |
+          curl -sS --max-time 120 -H "Authorization: Bearer $PROBE_TOKEN" "$PROBE_URL/status" | python3 -c 'import json,sys;d=json.load(sys.stdin);print("### After the sweep");[print(f"- {k}: {d.get(k)}") for k in ("total","storageGB","byStatus","pendingCount","qaPendingByRecord")]' | tee -a "$GITHUB_STEP_SUMMARY"
+
       - name: Bunny status page
         if: always()
         run: |
@@ -104,3 +163,38 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx -y wrangler@4.161.0 delete --name "$PROBE" --force || true
+
+  timed-upload:
+    name: Timed QA upload
+    if: inputs.timed_upload
+    needs: status
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install the seed's tools
+        working-directory: apps/web
+        run: |
+          mkdir -p "$RUNNER_TEMP/tools" && cd "$RUNNER_TEMP/tools" && npm init -y >/dev/null
+          npm i --no-audit --no-fund @playwright/test@1.56.1 tsx@4.20.6 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+          echo "NODE_PATH=$RUNNER_TEMP/tools/node_modules" >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/tools/node_modules/.bin" >> "$GITHUB_PATH"
+
+      - name: Install ffmpeg
+        uses: ./.github/actions/apt-install
+        with:
+          packages: ffmpeg fonts-dejavu-core
+
+      - name: Upload and time
+        working-directory: apps/web
+        env:
+          QA_SEED_PASSWORD: ${{ secrets.QA_SEED_PASSWORD }}
+        run: |
+          ln -sfn "$RUNNER_TEMP/tools/node_modules" node_modules
+          tsx e2e/seed/timed-upload.ts
