@@ -84,7 +84,8 @@ export function UploadModeTabs({ mode, onChange, labels }: UploadModeTabsProps) 
                   painted, aria-hidden or not: a name of just the label, with the hint aria-hidden,
                   fails label-content-name-mismatch. The sr-only separator keeps them apart when read; it
                   sits inside the hint, so where the hint is hidden (phones) the name is just the label. */}
-              <span className="upload-mode-tab__label">{m === 'single' ? labels.single : labels.batch}</span>
+              {/* The id names the mode's panel (upload page: aria-labelledby `<tab id>-label`) */}
+              <span id={`${UPLOAD_MODE_TAB_ID[m]}-label`} className="upload-mode-tab__label">{m === 'single' ? labels.single : labels.batch}</span>
               <span className="upload-mode-tab__hint">
                 <span className="sr-only">{labels.separator ?? ', '}</span>
                 {m === 'single' ? labels.singleHint : labels.batchHint}

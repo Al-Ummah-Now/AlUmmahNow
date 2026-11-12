@@ -40,6 +40,17 @@ describe('UploadModeTabs', () => {
     expect(single).not.toHaveAttribute('aria-pressed');
   });
 
+  it('gives each mode a label element the upload page names its panel with', () => {
+    render(
+      <>
+        <UploadModeTabs mode="single" onChange={jest.fn()} labels={labels} />
+        <div role="tabpanel" id="upload-mode-panel-single" aria-labelledby="upload-mode-tab-single-label" />
+      </>,
+    );
+    expect(screen.getByRole('tabpanel')).toHaveAccessibleName('Single video');
+    expect(document.getElementById('upload-mode-tab-batch-label')).toHaveTextContent('Batch upload');
+  });
+
   it('keeps only the selected tab in the tab order', () => {
     const { single, batch } = setup('batch');
     expect(batch).toHaveAttribute('tabindex', '0');
