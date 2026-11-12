@@ -205,7 +205,8 @@ export const WORKERS: StackWorker[] = [
       PROFILE_APP_URL: `${url('profile')}/`,
       SIGN_IN_FALLBACK_URL: `${url('profile')}/`,
       ALLOWED_ORIGINS: 'localhost,127.0.0.1',
-      FRONTCHANNEL_LOGOUT_URLS: [`${url('profile')}/logout`, `${url('web')}/api/logout/frontchannel`, `${url('admin-web')}/api/logout/frontchannel`].join(','),
+      // Same apps and paths as QA/stage/production (the Auth repo's wrangler configs); www and the CMS only when booted
+      FRONTCHANNEL_LOGOUT_URLS: [`${url('profile')}/logout`, `${url('auth-admin')}/logout`, `${url('web')}/api/auth/logout`, `${url('admin-web')}/api/auth/logout`].join(','),
       CLIENT_REGISTRY_MODE: 'enforce',
       // The E2E code sink (codes stored in KV instead of emailed) and the test routes, as on QA/stage
       E2E_CODE_SINK_SECRET: LOCAL_SECRETS.E2E_CODE_SINK_SECRET,
