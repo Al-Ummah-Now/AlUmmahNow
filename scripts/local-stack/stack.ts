@@ -145,6 +145,9 @@ export const WORKERS: StackWorker[] = [
     vars: {
       ...COMMON_VARS,
       Issuer: url('auth'),
+      // The videos web app invites continue to (lib/invites.ts videosWebOrigin): on the stack it cannot
+      // be derived from ADMIN_WEB_URL (no "admin." host), so an invite fell back to the profile app
+      VIDEOS_WEB_URL: url('web'),
       // A worker secret when deployed; its client's hash is set by boot (LOCAL_CLIENT_SECRETS)
       AUTH_MODERATION_CLIENT_SECRET: LOCAL_SECRETS.AUTH_MODERATION_CLIENT_SECRET,
       WEBSOCKET_URL: url('websocket'),
