@@ -140,6 +140,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/release/deploy-skew.spec.ts': { placement: 'local', reason: 'skew simulated by route interception against build under test' },
   'apps/web/e2e/release/embed.player.spec.ts': { placement: 'local', reason: 'embed iframe/headers/oEmbed on fake origin via page.route' },
   'apps/web/e2e/release/errors.spec.ts': { placement: 'local', reason: 'dev error-test page + admin Errors page' },
+  'apps/web/e2e/release/header-name.spec.ts': { placement: 'local', reason: 'header account menu names a names-only profile by first + last, en/ar' },
   'apps/web/e2e/release/home-hero.spec.ts': { placement: 'local', reason: 'hero layout; off-site images already route-intercepted' },
   'apps/web/e2e/release/load-hot-paths.spec.ts': { placement: 'deployed', reason: 'pipeline: DO view flush + queue/processor into D1 under real load', load: true },
   'apps/web/e2e/release/multi-account.spec.ts': { placement: 'local', reason: 'web cookie split and account switcher; mock issuer must honour prompt=login' },

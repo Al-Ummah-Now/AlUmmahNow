@@ -43,12 +43,12 @@ Until a batch is moved, every spec still runs where it runs today; the local job
 | Suite | Config | Local | Deployed |
 |---|---|---:|---:|
 | web | `apps/web/playwright.config.ts` (e2e-tests.yml) | 61 | 1 |
-| release | `apps/web/playwright.release.config.ts` (release-e2e.yml, release.yml) | 57 | 7 |
+| release | `apps/web/playwright.release.config.ts` (release-e2e.yml, release.yml) | 58 | 7 |
 | admin | `apps/admin-web/playwright.config.ts` (admin-e2e.yml) | 24 | 0 |
 | themes | `apps/web/playwright.themes.config.ts` (theme-visibility.yml) | 5 | 0 |
 | player | `apps/web/playwright.player.config.ts` (player-e2e.yml) | 10 | 0 |
 | release-prod | `apps/web/playwright.release-prod.config.ts` (prod-signed-in.yml) | 0 | 1 |
-| **all** | | **157** | **9** |
+| **all** | | **158** | **9** |
 
 ## Deployed (QA and stage)
 
@@ -166,6 +166,7 @@ Until a batch is moved, every spec still runs where it runs today; the local job
 | `release/deploy-skew.spec.ts` | skew simulated by route interception against build under test |  |
 | `release/embed.player.spec.ts` | embed iframe/headers/oEmbed on fake origin via page.route |  |
 | `release/errors.spec.ts` | dev error-test page + admin Errors page |  |
+| `release/header-name.spec.ts` | header account menu names a names-only profile by first + last, en/ar |  |
 | `release/home-hero.spec.ts` | hero layout; off-site images already route-intercepted |  |
 | `release/multi-account.spec.ts` | web cookie split and account switcher; mock issuer must honour prompt=login |  |
 | `release/network-error.player.spec.ts` | player retry UI with CDN aborted by route |  |
