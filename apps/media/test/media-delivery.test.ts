@@ -74,3 +74,16 @@ describe('delivery switch', () => {
 		assert.equal(deliveryBucket('x'), deliveryBucket('x'));
 	});
 });
+
+describe('failure details are scrubbed', () => {
+	it('strips Bunny tokens, signed query strings, API keys and URL paths', async () => {
+		const { scrubMediaText, sanitizeFailure } = await import('@al-ummah/shared-types');
+		const dirty = 'GET https://vz-215a1ffd-a5a.b-cdn.net/bcdn_token=SECRET&expires=1794474000&token_path=%2Fx%2F/x/original 403; X-API-Key: abc123; https://m.example/priv/1999999999.AAAA/v/r/master.m3u8?token=zzz';
+		const clean = scrubMediaText(dirty, 1000);
+		for (const secret of ['SECRET', 'abc123', 'zzz', '1999999999.AAAA', '/x/original']) assert.ok(!clean.includes(secret), `${secret} in ${clean}`);
+		const f = sanitizeFailure({ stage: 'encode', error: 'ffmpeg exited 1', attempt: 2, elapsedMs: 1234.5, at: 'now', stderrTail: Array.from({ length: 30 }, (_, i) => `line ${i} https://h.example/a?token=t${i}`) });
+		assert.equal(f.stderrTail?.length, 20);
+		assert.ok(f.stderrTail!.every((l) => !/token=t/.test(l)));
+		assert.equal(f.elapsedMs, 1235);
+	});
+});

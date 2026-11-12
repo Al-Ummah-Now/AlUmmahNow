@@ -18,12 +18,15 @@ import {
 	pickDeliverySource,
 	reportNeedsAction,
 	resolveNeedsAction,
+	sanitizeFailure,
+	scrubMediaText,
 	MEDIA_MASTER,
 	MEDIA_THUMBNAIL,
 	type DeliverySettings,
 	type ErrorReporterEnv,
 	type ExecutionContextLike,
 	type MediaAccess,
+	type TranscodeFailure,
 	type TranscodeJobEvent,
 	type TranscodeJobMessage,
 	type VideoR2State,
@@ -266,6 +269,55 @@ async function isE2eUploader(env: MediaEnv, userId: string): Promise<boolean> {
 	}
 }
 
+const STAGE_LABELS: Record<string, string> = {
+	start: 'starting',
+	fetch_source: 'fetching the source',
+	probe: 'reading the source',
+	encode: 'encoding',
+	stills: 'making thumbnails',
+	upload: 'uploading to R2',
+	container: 'container stopped',
+};
+
+/** Errors-page text for a final failure: one summary line, a details block (shown as the item's stack), and small keys. */
+export function failureDetails(ev: Pick<TranscodeJobEvent, 'videoId' | 'jobId' | 'attempt' | 'error'>, f: TranscodeFailure | undefined): { summary: string; error: Error; extra: Record<string, string | number | boolean | null> } {
+	const err = scrubMediaText(ev.error ?? 'failed', 200);
+	const stage = f ? STAGE_LABELS[f.stage] ?? f.stage : 'unknown stage';
+	const secs = f ? Math.round(f.elapsedMs / 1000) : null;
+	const summary = `Failed while ${stage}${f?.stageDetail ? ` (${f.stageDetail})` : ''}: ${err} (attempt ${f?.attempt ?? ev.attempt}${secs !== null ? `, after ${secs} s` : ''})`;
+	const mb = f?.source?.bytes !== undefined ? `${(f.source.bytes / 1048576).toFixed(1)} MB` : 'unknown size';
+	const lines = [
+		`stage: ${f?.stage ?? 'unknown'}${f?.stageDetail ? ` (${f.stageDetail})` : ''}`,
+		`error: ${err}`,
+		`attempt: ${f?.attempt ?? ev.attempt}`,
+		`elapsed: ${secs ?? '?'} s`,
+		`source: ${f?.source?.file ?? 'unknown'} (${mb})`,
+		...(f?.exitCode !== undefined ? [`exit code: ${f.exitCode}`] : []),
+		...(f?.stopReason ? [`stop reason: ${f.stopReason}`] : []),
+		...(f?.instanceId ? [`instance: ${f.instanceId}`] : []),
+		`job: ${ev.jobId}`,
+		...(f?.stderrTail?.length ? ['', 'ffmpeg (last lines):', ...f.stderrTail] : []),
+	];
+	const error = new Error(summary);
+	error.name = 'R2TranscodeFailed';
+	error.stack = lines.join('\n');
+	return {
+		summary,
+		error,
+		extra: {
+			videoId: ev.videoId,
+			jobId: ev.jobId,
+			attempt: f?.attempt ?? ev.attempt,
+			stage: f?.stage ?? null,
+			elapsedS: secs,
+			sourceFile: f?.source?.file ?? null,
+			sourceMB: f?.source?.bytes !== undefined ? Math.round(f.source.bytes / 104857.6) / 10 : null,
+			exitCode: f?.exitCode ?? null,
+			instanceId: f?.instanceId ? f.instanceId.slice(0, 64) : null,
+		},
+	};
+}
+
 const needsActionKey = (videoId: string) => `media-transcode:${videoId}`;
 
 /** An event from apps/media. Events of an older job are ignored. */
@@ -309,7 +361,8 @@ export async function applyJobEvent(
 			previous = r2.previous;
 			delete r2.previous;
 		} else if (ev.type === 'failed') {
-			r2.error = (ev.error ?? 'failed').slice(0, 500);
+			r2.error = scrubMediaText(ev.error ?? 'failed', 500);
+			if (ev.failure) r2.failure = sanitizeFailure(ev.failure);
 			if (ev.final) {
 				r2.status = 'failed';
 				r2.failedAt = ev.at;
@@ -331,17 +384,21 @@ export async function applyJobEvent(
 		if (drift) await queueMediaMove(env, ev.videoId, drift);
 	}
 	if (ev.type === 'failed' && ev.final) {
+		const failure = ev.failure ? sanitizeFailure(ev.failure) : undefined;
+		const details = failureDetails(ev, failure);
 		reportNeedsAction('api-videos', env, ctx, {
 			key: needsActionKey(ev.videoId),
 			source: 'processing',
 			title: 'R2 transcode failed (Bunny unaffected)',
-			message: ev.error?.slice(0, 500),
+			message: details.summary,
+			// The Errors page shows this as the item's details (expandable)
+			error: details.error,
 			itemType: 'video',
 			itemId: ev.videoId,
 			itemUrl: `/videos/${ev.videoId}`,
 			retry: { kind: 'service', service: 'api-videos', path: '/internal/media/retry', body: { ids: [ev.videoId] } },
 			retryLabel: 'Transcode again',
-			extra: { videoId: ev.videoId, jobId: ev.jobId, attempt: ev.attempt },
+			extra: details.extra,
 		});
 	}
 	return { applied: true };

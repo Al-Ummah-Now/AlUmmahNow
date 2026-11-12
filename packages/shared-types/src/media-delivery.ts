@@ -42,6 +42,58 @@ export interface TranscodeResult {
 	preview?: string;
 }
 
+/** Where a transcode attempt was when it failed. */
+export type TranscodeStage = 'start' | 'fetch_source' | 'probe' | 'encode' | 'stills' | 'upload' | 'container';
+
+/** What we know about a failed attempt: stored on the record, shown on the Errors page and the admin badge. */
+export interface TranscodeFailure {
+	stage: TranscodeStage;
+	/** e.g. the rungs being encoded: "360p,480p,720p,1080p" */
+	stageDetail?: string;
+	/** e.g. source_unavailable, container_stopped, "ffmpeg exited 1" */
+	error: string;
+	attempt: number;
+	/** Attempt start → failure */
+	elapsedMs: number;
+	at: string;
+	source?: { file?: string; bytes?: number };
+	/** Container exit code and stop reason, when the container stopped */
+	exitCode?: number;
+	stopReason?: string;
+	instanceId?: string;
+	/** Last ≤ 20 FFmpeg stderr lines, tokens and URLs stripped */
+	stderrTail?: string[];
+}
+
+/** Remove anything that could carry a credential: Bunny tokens, query strings, API keys, full URLs. */
+export function scrubMediaText(text: string, max = 300): string {
+	return text
+		.replace(/bcdn_token=[^&/\s]+/gi, 'bcdn_token=…')
+		.replace(/([?&](token|expires|token_path|sig|signature|key|X-API-Key)=)[^&\s]+/gi, '$1…')
+		.replace(/(x-api-key|authorization|accesskey)\s*[:=]\s*\S+/gi, '$1: …')
+		.replace(/https?:\/\/([^/\s]+)[^\s]*/gi, 'https://$1/…')
+		.replace(/\/priv\/[^/\s]+\//g, '/priv/…/')
+		.slice(0, max);
+}
+
+/** Bounded, scrubbed copy of a failure (what the record and the Errors page store). */
+export function sanitizeFailure(f: TranscodeFailure): TranscodeFailure {
+	const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+	return {
+		stage: f.stage,
+		...(f.stageDetail ? { stageDetail: scrubMediaText(f.stageDetail, 80) } : {}),
+		error: scrubMediaText(String(f.error ?? 'failed'), 300),
+		attempt: n(f.attempt) ?? 1,
+		elapsedMs: Math.max(0, Math.round(n(f.elapsedMs) ?? 0)),
+		at: String(f.at ?? new Date().toISOString()),
+		...(f.source ? { source: { ...(f.source.file ? { file: scrubMediaText(f.source.file, 40) } : {}), ...(n(f.source.bytes) !== undefined ? { bytes: n(f.source.bytes) } : {}) } } : {}),
+		...(n(f.exitCode) !== undefined ? { exitCode: n(f.exitCode) } : {}),
+		...(f.stopReason ? { stopReason: scrubMediaText(f.stopReason, 120) } : {}),
+		...(f.instanceId ? { instanceId: scrubMediaText(f.instanceId, 80) } : {}),
+		...(Array.isArray(f.stderrTail) && f.stderrTail.length ? { stderrTail: f.stderrTail.slice(-20).map((l) => scrubMediaText(String(l), 240)) } : {}),
+	};
+}
+
 /** The R2 side of a video record (api-videos). `r2PlayUrl` is derived from it. */
 export interface VideoR2State {
 	status: R2RenditionStatus;
@@ -62,6 +114,8 @@ export interface VideoR2State {
 	moving?: { to: MediaAccess; jobId: string; at: string };
 	/** 0..1 while transcoding */
 	progress?: number;
+	/** The latest failed attempt (kept after a later attempt succeeds, for the history) */
+	failure?: TranscodeFailure;
 	/** A re-transcode: the rendition set that keeps playing until this one is ready (then deleted) */
 	previous?: { rev: string; access: MediaAccess };
 }
@@ -93,6 +147,8 @@ export interface TranscodeJobEvent {
 	error?: string;
 	/** failed only: true when no retry will follow */
 	final?: boolean;
+	/** failed only: where and why */
+	failure?: TranscodeFailure;
 }
 
 export const MEDIA_ACCESS_FOR = (visibility: { isPublic?: boolean; visibility?: string } | null | undefined): MediaAccess => {
