@@ -54,7 +54,8 @@ test.describe('navigation', () => {
       await expect(trigger).toHaveAccessibleName(/.+: .+/);
       await trigger.click();
       const menu = page.getByTestId('account-menu');
-      await expect(menu.getByTestId('account-sign-out-all')).toBeVisible();
+      // The one sign-out entry is in the menu (visible only: this test ends no session)
+      await expect(menu.getByRole('menuitem', { name: /^Sign out$/ })).toBeVisible();
       // The other apps, never this one
       await expect(menu.getByTestId('account-menu-apps').locator('[data-app="admin"]')).toHaveCount(0);
     }
