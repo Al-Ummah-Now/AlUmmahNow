@@ -1,5 +1,6 @@
 import { bunnyClientForVideo, type LibraryHints } from '../../lib/bunny/libraries';
 import { verifyThumbnailUrl } from "../../lib/thumbnail/repair";
+import { unsignedBunnyUrl } from "../../lib/bunny-signing";
 import { canOnVideo } from "../../lib/channelAccess";
 import { applyFormatChoice } from "@al-ummah/shared-types";
 import { Bool, Str } from "chanfana";
@@ -109,6 +110,9 @@ export class VideoUpdate extends AuthenticatedRoute {
 		const { id } = request.params;
 		const { channelId } = request.headers;
 		const videoUpdateInput = request.body;
+		// Clients echo back the signed URLs they were given; tokens expire, so
+		// only the unsigned form is stored (responses sign it again)
+		if (typeof videoUpdateInput.thumbnailUrl === 'string') videoUpdateInput.thumbnailUrl = unsignedBunnyUrl(videoUpdateInput.thumbnailUrl);
 
 		// Get authenticated user ID
 		const effectiveUserId = this.getUserId(c);

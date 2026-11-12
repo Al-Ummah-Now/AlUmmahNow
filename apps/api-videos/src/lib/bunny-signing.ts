@@ -61,6 +61,39 @@ export async function bunnyFileToken(securityKey: string, path: string, expires:
 	return base64Url(await crypto.subtle.digest('SHA-256', data));
 }
 
+/** Path-form token segment: /bcdn_token=<t>&expires=<ts>&token_path=<encoded path>/ */
+const PATH_TOKEN = /^(https:\/\/[^/?#]+)\/bcdn_token=[^/?#]*\/(.*)$/;
+/** Token query parameters a Bunny URL may carry */
+const TOKEN_PARAMS = new Set(['token', 'expires', 'token_path', 'token_countries', 'token_countries_blocked']);
+
+/**
+ * The unsigned form of a Bunny URL: drops a path-form directory token and the
+ * query-form token parameters. Tokens expire, so a signed URL must never be
+ * stored; responses sign it again (signBunnyUrlsInText). Any other URL is
+ * returned unchanged.
+ */
+export function unsignedBunnyUrl(url: string): string {
+	if (typeof url !== 'string' || !url.includes('token')) return url;
+	let out = url;
+	const path = PATH_TOKEN.exec(out);
+	if (path) out = `${path[1]}/${path[2]}`;
+	const q = out.indexOf('?');
+	if (q >= 0) {
+		const hash = out.indexOf('#', q);
+		const query = out.slice(q + 1, hash >= 0 ? hash : undefined);
+		const kept = query.split('&').filter((pair) => pair && !TOKEN_PARAMS.has(decodeURIComponent(pair.split('=')[0]).toLowerCase()));
+		if (kept.length !== query.split('&').filter(Boolean).length) {
+			out = out.slice(0, q) + (kept.length ? `?${kept.join('&')}` : '') + (hash >= 0 ? out.slice(hash) : '');
+		}
+	}
+	return out;
+}
+
+/** True when the URL carries a Bunny token (path or query form) */
+export function isSignedBunnyUrl(url: string): boolean {
+	return unsignedBunnyUrl(url) !== url;
+}
+
 function escapeRegExp(value: string): string {
 	return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -107,17 +140,21 @@ export async function signBunnyUrlsInText(
 	const directoryTokens = new Map<string, string>();
 	let changed = false;
 
-	const signImage = async (url: string, owners: Set<string>): Promise<string> => {
+	// A stored URL may already carry a token (Studio once saved signed frame
+	// URLs): sign its unsigned form again, so an old token never reaches a client
+	const signImage = async (stored: string, owners: Set<string>): Promise<string> => {
+		const url = unsignedBunnyUrl(stored);
 		const match = urlPattern.exec(url);
-		if (!match || !owners.has(match[1]) || !IMAGE_FILE.test(match[2]) || match[2].includes('..')) return url;
+		if (!match || !owners.has(match[1]) || !IMAGE_FILE.test(match[2]) || match[2].includes('..')) return stored;
 		const path = `/${match[1]}/${match[2]}`;
 		changed = true;
 		return `https://${host}${path}?token=${await bunnyFileToken(securityKey, path, expires)}&expires=${expires}`;
 	};
 
-	const signPlaylist = async (url: string, owners: Set<string>): Promise<string> => {
+	const signPlaylist = async (stored: string, owners: Set<string>): Promise<string> => {
+		const url = unsignedBunnyUrl(stored);
 		const match = urlPattern.exec(url);
-		if (!match || !owners.has(match[1]) || match[2] !== PLAYLIST_FILE) return url;
+		if (!match || !owners.has(match[1]) || match[2] !== PLAYLIST_FILE) return stored;
 		const videoId = match[1];
 		if (!directoryTokens.has(videoId)) {
 			directoryTokens.set(videoId, await bunnyDirectoryToken(securityKey, videoId, expires));
