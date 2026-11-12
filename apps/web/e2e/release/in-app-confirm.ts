@@ -16,8 +16,12 @@ export async function confirmInApp(page: Page, ids: { dialog: string; confirm: s
   // theme-delete-confirm-dialog): act on the open one only. A plain getByTestId matched them all, the
   // strict-mode error read as "no dialog" and the delete was never confirmed.
   const dialog = page.getByTestId(ids.dialog).filter({ visible: true });
+  // 15 s: on a slow admin page the dialog opens late (a click just after navigation lands before
+  // React hydrates). With 5 s the helper gave up, the typed id was never entered, the confirm stayed
+  // disabled and the theme was not deleted (site-theme, main run 43245388363); old builds without
+  // the dialog only cost the wait.
   const shown = await dialog
-    .waitFor({ state: 'visible', timeout: 5000 })
+    .waitFor({ state: 'visible', timeout: 15000 })
     .then(() => true, () => false);
   if (!shown) return;
   if (ids.typedField && typed !== undefined) await dialog.getByTestId(ids.typedField).fill(typed);
