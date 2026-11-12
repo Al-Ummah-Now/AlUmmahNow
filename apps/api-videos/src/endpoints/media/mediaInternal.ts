@@ -15,6 +15,8 @@
  */
 import { Hono } from 'hono';
 import { isMediaVideoId, type DeliverySettings, type TranscodeJobEvent } from '@al-ummah/shared-types';
+import R2Repository from '../../lib/r2Repo';
+import { pushMediaLive, type MediaVideo } from '../../lib/media/r2-delivery';
 import { applyJobEvent, enqueueTranscode, readDeliverySettings, sourceCandidates, writeDeliverySettings, type MediaEnv } from '../../lib/media/r2-delivery';
 
 const MAX_IDS = 50;
@@ -98,7 +100,12 @@ export function createMediaInternalRouter() {
 		const ids = Array.isArray(body?.ids) ? body!.ids.filter((x): x is string => typeof x === 'string' && isMediaVideoId(x)).slice(0, MAX_IDS) : [];
 		if (!ids.length) return c.json({ success: false, error: `ids must be 1-${MAX_IDS} video ids` }, 400);
 		const results = [];
-		for (const id of ids) results.push({ videoId: id, ...(await enqueueTranscode(c.env, id, 'retry', { force: true })) });
+		for (const id of ids) {
+			const r = await enqueueTranscode(c.env, id, 'retry', { force: true });
+			results.push({ videoId: id, ...r });
+			// Live admin view: the job is queued again
+			if (r.queued) pushMediaLive(c.env as never, c.executionCtx as never, await new R2Repository<MediaVideo>(c.env.videos).getObject(id));
+		}
 		return c.json({ success: true, result: { results } });
 	});
 
