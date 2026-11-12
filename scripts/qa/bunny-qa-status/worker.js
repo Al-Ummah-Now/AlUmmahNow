@@ -1,0 +1,133 @@
+/**
+ * Throwaway probe for QA's Bunny Stream library (issue #929), deployed and
+ * deleted by .github/workflows/bunny-qa-status.yml. Reads the library through
+ * the Stream API with the QA Secrets Store key and returns a summary. The key
+ * never leaves the worker. QA only: the Secrets Store bindings name the QA
+ * secrets, and when QA_LIBRARY_ID is set any other library id is refused.
+ */
+const API = 'https://video.bunnycdn.com';
+const STATUS = { 0: 'created', 1: 'uploaded', 2: 'processing', 3: 'transcoding', 4: 'finished', 5: 'error', 6: 'upload-failed', 7: 'jit-segmenting', 8: 'jit-playlists-created' };
+const SETTING_KEYS = ['Name', 'VideoCount', 'StorageUsage', 'TrafficUsage', 'EnabledResolutions', 'KeepOriginalFiles', 'AllowEarlyPlay', 'EnableMP4Fallback', 'EnableTranscribing', 'EnableTranscribingTitleGeneration', 'EnableContentTagging', 'JitEncodingEnabled', 'EnableMultiAudioTrackSupport', 'OutputCodecs', 'EncodingTier', 'PremiumEncoding', 'EnableDRM', 'Bitrate240p', 'Bitrate360p', 'Bitrate480p', 'Bitrate720p', 'Bitrate1080p', 'Bitrate1440p', 'Bitrate2160p', 'WatermarkPositionLeft', 'RememberPlayerPosition', 'Replication', 'ReplicationRegions', 'StorageZoneId', 'PullZoneId'];
+
+async function secret(binding) {
+	return typeof binding === 'string' ? binding : await binding.get();
+}
+
+function envOf(title) {
+	const m = /^\[([^\]]{1,32})\]\s/.exec(title || '');
+	return m ? m[1] : 'qa';
+}
+
+async function bunny(key, path) {
+	const r = await fetch(API + path, { headers: { AccessKey: key, accept: 'application/json' } });
+	const text = await r.text();
+	let body = null;
+	try { body = JSON.parse(text); } catch { body = text.slice(0, 200); }
+	return { status: r.status, body };
+}
+
+async function status(key, libraryId, videosBucket) {
+	const videos = [];
+	for (let page = 1; page < 200; page++) {
+		const r = await bunny(key, `/library/${libraryId}/videos?page=${page}&itemsPerPage=1000&orderBy=date`);
+		if (r.status !== 200) throw new Error(`list page ${page}: HTTP ${r.status}`);
+		videos.push(...(r.body.items || []));
+		if (!r.body.items?.length || videos.length >= r.body.totalItems) break;
+	}
+	const byStatus = {};
+	const byEnvStatus = {};
+	let storage = 0;
+	const now = Date.now();
+	for (const v of videos) {
+		const s = STATUS[v.status] ?? String(v.status);
+		byStatus[s] = (byStatus[s] || 0) + 1;
+		const e = envOf(v.title);
+		byEnvStatus[e] ??= {};
+		byEnvStatus[e][s] = (byEnvStatus[e][s] || 0) + 1;
+		storage += v.storageSize || 0;
+	}
+	const pending = videos.filter((v) => [0, 1, 2, 3, 7].includes(v.status));
+	pending.sort((a, b) => Date.parse(a.dateUploaded) - Date.parse(b.dateUploaded));
+	// Which pending QA videos still have a live record (the record key is the Bunny guid)
+	const recordClass = {};
+	const qaPending = pending.filter((v) => envOf(v.title) === 'qa').slice(0, 600); // subrequest budget
+	const classOf = new Map();
+	for (let i = 0; i < qaPending.length; i += 25) {
+		await Promise.all(qaPending.slice(i, i + 25).map(async (v) => {
+			const object = await videosBucket.get(v.guid);
+			let c = 'no-record';
+			if (object) {
+				let r = {};
+				try { r = await object.json(); } catch { r = {}; }
+				c = r.isDeleted === true ? 'soft-deleted' : `live:${r.uploadStatus ?? r.status ?? '?'}`;
+			}
+			classOf.set(v.guid, c);
+			recordClass[c] = (recordClass[c] || 0) + 1;
+		}));
+	}
+	const view = (v) => ({ guid: v.guid, title: (v.title || '').slice(0, 60), status: STATUS[v.status] ?? v.status, encodeProgress: v.encodeProgress, ageMin: Math.round((now - Date.parse(v.dateUploaded + (v.dateUploaded?.endsWith('Z') ? '' : 'Z'))) / 60000), length: v.length, storageSize: v.storageSize, availableResolutions: v.availableResolutions, record: classOf?.get(v.guid) });
+	// Encode speed: recently finished videos (dateUploaded → now is not encode time, so only the age and length are shown)
+	const recentFinished = videos.filter((v) => v.status === 4).slice(0, 10).map(view);
+	const recentAny = videos.slice(0, 15).map(view);
+	const inProgress = videos.filter((v) => v.status === 3 || (v.status === 2 && v.encodeProgress > 0)).map(view);
+	const resolutions = {};
+	for (const v of videos) if (v.status === 4) resolutions[v.availableResolutions || ''] = (resolutions[v.availableResolutions || ''] || 0) + 1;
+
+	const settings = {};
+	for (const path of [`/library/${libraryId}`, `/library/${libraryId}/statistics`]) {
+		const r = await bunny(key, path);
+		settings[path.replace(libraryId, '<id>')] = { http: r.status, body: r.body && typeof r.body === 'object' ? pick(r.body) : r.body };
+	}
+	const acct = await fetch(`https://api.bunny.net/videolibrary/${libraryId}`, { headers: { AccessKey: key, accept: 'application/json' } });
+	let acctBody = null;
+	if (acct.ok) acctBody = pick(await acct.json());
+	settings['api.bunny.net/videolibrary/<id>'] = { http: acct.status, body: acctBody };
+
+	return {
+		libraryId,
+		at: new Date().toISOString(),
+		total: videos.length,
+		storageBytes: storage,
+		storageGB: +(storage / 1e9).toFixed(2),
+		byStatus,
+		byEnvStatus,
+		pendingCount: pending.length,
+		qaPendingByRecord: recordClass,
+		oldestPending: pending.slice(0, 25).map(view),
+		newestPending: pending.slice(-10).map(view),
+		inProgress: inProgress.slice(0, 25),
+		recentFinished,
+		recentAny,
+		finishedResolutions: resolutions,
+		settings,
+	};
+}
+
+function pick(body) {
+	if (Array.isArray(body)) return { array: body.length };
+	const out = {};
+	for (const k of Object.keys(body)) {
+		if (/key|token|secret|password|apikey/i.test(k)) continue;
+		if (SETTING_KEYS.includes(k) || typeof body[k] !== 'object') out[k] = body[k];
+	}
+	return out;
+}
+
+export default {
+	async fetch(request, env) {
+		const auth = request.headers.get('authorization') || '';
+		const expected = await secret(env.PROBE_TOKEN);
+		if (!expected || auth !== `Bearer ${expected}`) return new Response('forbidden', { status: 403 });
+		const key = await secret(env.BUNNY_KEY);
+		const libraryId = String(await secret(env.BUNNY_LIBRARY_ID)).trim();
+		if (!/^\d+$/.test(libraryId)) return Response.json({ error: 'library id is not numeric' }, { status: 500 });
+		if (env.QA_LIBRARY_ID && libraryId !== env.QA_LIBRARY_ID) return Response.json({ error: `refusing library ${libraryId}: not QA (${env.QA_LIBRARY_ID})` }, { status: 403 });
+		const url = new URL(request.url);
+		try {
+			if (url.pathname === '/status') return Response.json(await status(key, libraryId, env.videos));
+			return new Response('not found', { status: 404 });
+		} catch (e) {
+			return Response.json({ error: String(e?.message || e) }, { status: 500 });
+		}
+	},
+};
