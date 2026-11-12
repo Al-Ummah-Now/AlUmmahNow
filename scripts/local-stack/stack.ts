@@ -215,7 +215,9 @@ export const WORKERS: StackWorker[] = [
       OPENAUTH_ISSUER: url('auth'),
       PROFILE_APP_URL: `${url('profile')}/`,
       SIGN_IN_FALLBACK_URL: `${url('profile')}/`,
-      ALLOWED_ORIGINS: 'localhost,127.0.0.1',
+      // Exact origins (the issuer matches them exactly; wildcards are https only): every app that
+      // calls the session API with credentials (/session/accounts: the silent sign-in probe)
+      ALLOWED_ORIGINS: [url('web'), url('admin-web'), url('profile'), url('auth-admin')].join(','),
       // Same apps and paths as QA/stage/production (the Auth repo's wrangler configs); www and the CMS only when booted
       FRONTCHANNEL_LOGOUT_URLS: [`${url('profile')}/logout`, `${url('auth-admin')}/logout`, `${url('web')}/api/auth/logout`, `${url('admin-web')}/api/auth/logout`].join(','),
       CLIENT_REGISTRY_MODE: 'enforce',
