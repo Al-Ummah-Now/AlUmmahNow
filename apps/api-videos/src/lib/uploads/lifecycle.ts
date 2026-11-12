@@ -24,6 +24,7 @@ import { bunnyTusRequestHeaders } from '../bunny/tus';
 import { startProcessingLoop, type ProcessingEnv } from '../processing/loop';
 import { refundUploadSession } from '../../middleware/upload-limits';
 import { enqueueTranscode, type MediaEnv } from '../media/r2-delivery';
+import { completeOriginal } from '../media/originals';
 
 export interface VideoTusUpload {
   sessionId: string;
@@ -106,6 +107,9 @@ export async function markUploadComplete(
       timestamp: new Date().toISOString(),
     });
     // Dual write: the same upload transcoded to R2 by apps/media (lib/media/r2-delivery.ts; never throws)
+    // Our own original (TUS PATCH copies, docs/media-delivery/ORIGINALS.md): when it covers the file, the
+    // R2 transcode reads it now instead of waiting for Bunny's encode
+    await completeOriginal(env as never, upload.videoId, upload.fileSize);
     await enqueueTranscode(env as unknown as MediaEnv, upload.videoId, 'upload', { uploaderId: upload.userId });
     // Check Bunny until the encode finishes (lib/processing/loop.ts)
     await startProcessingLoop(env as unknown as ProcessingEnv, upload.videoId, { reason: 'upload-complete' }).catch((error) =>

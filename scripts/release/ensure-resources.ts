@@ -27,7 +27,7 @@ export function resourcesFor(env: ResourceEnv): Resources {
 		// Private source maps of the web apps (apps/admin-api lib/sourcemaps.ts; upload-sourcemaps.ts)
 		// Renditions served from media.<env>.alummahnow.net (docs/media-delivery/R2-DELIVERY-PLAN.md)
 		// (public, behind the R2 custom domain) and private/unlisted ones (no public access; the media Worker serves them)
-		buckets: [`al-ummah-now-sourcemaps${s}`, `al-ummah-now-media${s}`, `al-ummah-now-media-private${s}`],
+		buckets: [`al-ummah-now-sourcemaps${s}`, `al-ummah-now-media${s}`, `al-ummah-now-media-private${s}`, `al-ummah-now-media-originals${s}`],
 	};
 }
 

@@ -29,7 +29,9 @@
 	// unlisted ones (priv/…), with no public access at all: only /priv/ (token checked) reads it.
 	"r2_buckets": [
 		{ "binding": "MEDIA", "bucket_name": "al-ummah-now-media" },
-		{ "binding": "MEDIA_PRIVATE", "bucket_name": "al-ummah-now-media-private" }
+		{ "binding": "MEDIA_PRIVATE", "bucket_name": "al-ummah-now-media-private" },
+		// Uploads as received (read only): the transcode source (docs/media-delivery/ORIGINALS.md)
+		{ "binding": "MEDIA_ORIGINALS", "bucket_name": "al-ummah-now-media-originals" }
 	],
 	"services": [{ "binding": "VIDEOS", "service": "videos" }],
 	"queues": {
@@ -69,7 +71,8 @@
 			"migrations": [{ "tag": "v1", "new_sqlite_classes": ["Transcoder"] }],
 			"r2_buckets": [
 				{ "binding": "MEDIA", "bucket_name": "al-ummah-now-media-stage" },
-				{ "binding": "MEDIA_PRIVATE", "bucket_name": "al-ummah-now-media-private-stage" }
+				{ "binding": "MEDIA_PRIVATE", "bucket_name": "al-ummah-now-media-private-stage" },
+				{ "binding": "MEDIA_ORIGINALS", "bucket_name": "al-ummah-now-media-originals-stage" }
 			],
 			"services": [{ "binding": "VIDEOS", "service": "videos-stage" }],
 			"queues": {

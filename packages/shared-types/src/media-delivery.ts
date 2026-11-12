@@ -344,3 +344,74 @@ export function pickDeliverySource(settings: DeliverySettings, r2Ready: boolean,
 	if (settings.mode === 'r2') return 'r2';
 	return deliveryBucket(drawKey) < settings.r2Percent ? 'r2' : 'bunny';
 }
+
+// ---------------------------------------------------------------------------
+// Originals: the upload as received, kept in al-ummah-now-media-originals[-env]
+// (docs/media-delivery/ORIGINALS.md). One object per TUS PATCH, keyed by offset.
+// ---------------------------------------------------------------------------
+
+export const ORIGINALS_PREFIX = 'src/';
+
+export function originalPrefix(videoId: string): string {
+	return `${ORIGINALS_PREFIX}${videoId}/`;
+}
+export function originalManifestKey(videoId: string): string {
+	return `${originalPrefix(videoId)}manifest.json`;
+}
+export function originalPartKey(videoId: string, uploadId: string, offset: number): string {
+	return `${originalPrefix(videoId)}${uploadId}/${String(Math.max(0, Math.floor(offset))).padStart(15, '0')}`;
+}
+
+export interface OriginalPart {
+	key: string;
+	offset: number;
+	size: number;
+}
+
+export interface OriginalManifest {
+	uploadId: string;
+	size: number;
+	parts: number;
+	completedAt: string;
+}
+
+/** Parts of one upload id from a bucket listing (keys …/<uploadId>/<offset>). */
+export function partsFromKeys(objects: { key: string; size: number }[], videoId: string, uploadId: string): OriginalPart[] {
+	const prefix = `${originalPrefix(videoId)}${uploadId}/`;
+	return objects
+		.filter((o) => o.key.startsWith(prefix) && /^\d{15}$/.test(o.key.slice(prefix.length)))
+		.map((o) => ({ key: o.key, offset: Number(o.key.slice(prefix.length)), size: o.size }))
+		.sort((a, b) => a.offset - b.offset);
+}
+
+/** Do the parts cover [0, size) with no gap? Overlaps (a resumed PATCH) are fine. */
+export function partsCover(parts: OriginalPart[], size: number): { complete: boolean; firstGapAt?: number } {
+	let covered = 0;
+	for (const p of parts) {
+		if (p.offset > covered) return { complete: false, firstGapAt: covered };
+		covered = Math.max(covered, p.offset + p.size);
+		if (covered >= size) return { complete: true };
+	}
+	return size <= 0 ? { complete: true } : { complete: false, firstGapAt: covered };
+}
+
+/**
+ * Which part byte ranges make up [start, end] (inclusive) of the original, in order,
+ * each byte taken once (later parts only fill what earlier ones did not).
+ */
+export function planOriginalRange(parts: OriginalPart[], start: number, end: number): { key: string; from: number; to: number }[] {
+	const out: { key: string; from: number; to: number }[] = [];
+	let pos = start;
+	for (const p of parts) {
+		if (pos > end) break;
+		const pEnd = p.offset + p.size - 1;
+		if (pEnd < pos || p.offset > pos) {
+			if (p.offset > pos) return out; // a gap: the caller treats the original as unusable
+			continue;
+		}
+		const to = Math.min(pEnd, end);
+		out.push({ key: p.key, from: pos - p.offset, to: to - p.offset });
+		pos = to + 1;
+	}
+	return out;
+}

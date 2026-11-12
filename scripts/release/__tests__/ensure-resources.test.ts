@@ -24,14 +24,14 @@ describe('ensure-resources', () => {
 	it('names each environment', () => {
 		assert.deepEqual(resourcesFor('production'), {
 			queues: ['al-ummah-now-errors', 'al-ummah-now-errors-dlq', 'al-ummah-now-transcode', 'al-ummah-now-transcode-dlq'],
-			buckets: ['al-ummah-now-sourcemaps', 'al-ummah-now-media', 'al-ummah-now-media-private'],
+			buckets: ['al-ummah-now-sourcemaps', 'al-ummah-now-media', 'al-ummah-now-media-private', 'al-ummah-now-media-originals'],
 		});
 		assert.deepEqual(resourcesFor('qa').queues, ['al-ummah-now-errors-qa', 'al-ummah-now-errors-dlq-qa', 'al-ummah-now-transcode-qa', 'al-ummah-now-transcode-dlq-qa']);
-		assert.deepEqual(resourcesFor('stage').buckets, ['al-ummah-now-sourcemaps-stage', 'al-ummah-now-media-stage', 'al-ummah-now-media-private-stage']);
+		assert.deepEqual(resourcesFor('stage').buckets, ['al-ummah-now-sourcemaps-stage', 'al-ummah-now-media-stage', 'al-ummah-now-media-private-stage', 'al-ummah-now-media-originals-stage']);
 	});
 
 	it('creates only what is missing', async () => {
-		const { cf, calls } = fakeCf(['al-ummah-now-errors-qa', 'al-ummah-now-transcode-qa', 'al-ummah-now-transcode-dlq-qa'], ['al-ummah-now-media-qa', 'al-ummah-now-media-private-qa']);
+		const { cf, calls } = fakeCf(['al-ummah-now-errors-qa', 'al-ummah-now-transcode-qa', 'al-ummah-now-transcode-dlq-qa'], ['al-ummah-now-media-qa', 'al-ummah-now-media-private-qa', 'al-ummah-now-media-originals-qa']);
 		const { created } = await ensureResources(cf, resourcesFor('qa'), () => undefined);
 		assert.deepEqual(created, ['queue al-ummah-now-errors-dlq-qa', 'bucket al-ummah-now-sourcemaps-qa']);
 		assert.ok(calls.includes('POST /queues {"queue_name":"al-ummah-now-errors-dlq-qa"}'));

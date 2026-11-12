@@ -6,6 +6,7 @@ import { handleBunnyDeleteBatch, isBunnyDeleteMessage } from './lib/uploads/bunn
 import { handlePurgeBatch, isPurgeMessage, startScheduledPurge } from './lib/uploads/testLibraryPurge';
 import { handleMediaMoveBatch, isMediaMoveMessage, sweepMediaJobs } from './lib/media/r2-delivery';
 import { collectDeliveryCosts } from './lib/media/costs';
+import { sweepOriginals } from './lib/media/originals';
 import { createMediaInternalRouter } from './endpoints/media/mediaInternal';
 import { sweepRunUsers } from './lib/e2e/runUserSweep';
 import { handlePlaylistAddBatch, isPlaylistAddMessage } from './lib/playlistUploadAdds';
@@ -528,6 +529,13 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 			} catch (error) {
 				logger.error('[Ownership] Reconcile failed', { error: error instanceof Error ? error.message : String(error) });
 				reportJobFailure(rawEnv, ctx, 'ownership-reconcile', error);
+			}
+			try {
+				// Kept originals past their retention (lib/media/originals.ts)
+				const swept = await sweepOriginals(rawEnv as never);
+				if (swept.deleted) logger.info('[Originals] Retention run', swept);
+			} catch (error) {
+				logger.error('[Originals] Retention run failed', { error: error instanceof Error ? error.message : String(error) });
 			}
 			try {
 				// R2 vs Bunny cost inputs for yesterday (lib/media/costs.ts; never throws)

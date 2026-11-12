@@ -25,7 +25,9 @@
   // unlisted ones (priv/…), with no public access at all: only /priv/ (token checked) reads it.
   "r2_buckets": [
     { "binding": "MEDIA", "bucket_name": "al-ummah-now-media-qa" },
-    { "binding": "MEDIA_PRIVATE", "bucket_name": "al-ummah-now-media-private-qa" }
+    { "binding": "MEDIA_PRIVATE", "bucket_name": "al-ummah-now-media-private-qa" },
+    // Uploads as received (read only): the transcode source (docs/media-delivery/ORIGINALS.md)
+    { "binding": "MEDIA_ORIGINALS", "bucket_name": "al-ummah-now-media-originals-qa" }
   ],
   "services": [{ "binding": "VIDEOS", "service": "videos-qa" }],
   "queues": {

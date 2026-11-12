@@ -19,6 +19,7 @@ import { z } from 'zod';
 import { getAuthContext } from '../../../middleware/auth';
 import { bunnyTusRequestHeaders } from '../../../lib/bunny/tus';
 import { markUploadComplete } from '../../../lib/uploads/lifecycle';
+import { teePatch } from '../../../lib/media/originals';
 import R2Repository, { rethrowBusy } from '../../../lib/r2Repo';
 import { Video as BusinessVideo } from '../../../lib/types';
 import Queue, { MessageType } from '../../../lib/queue';
@@ -573,6 +574,16 @@ export class TusProxy {
         return c.json({ error: 'No request body' }, 400);
       }
 
+      // Our own copy of the upload (docs/media-delivery/ORIGINALS.md): the body is teed, one branch to
+      // Bunny exactly as before, one to R2 keyed by this PATCH's offset. Bunny's answer is the response.
+      const lengthHeader = c.req.header('Content-Length');
+      const copy = teePatch(this.env, requestBody, {
+        videoId: session.videoId,
+        uploadId: parseTusUploadId(uploadId)?.sessionId ?? uploadId,
+        offset: parseInt(uploadOffset || '0', 10),
+        length: lengthHeader !== undefined && /^\d+$/.test(lengthHeader) ? parseInt(lengthHeader, 10) : null,
+      });
+
       let bunnyResponse: Response;
       try {
         const bunnyHeaders = await this.createBunnyHeaders(session.videoId);
@@ -585,7 +596,7 @@ export class TusProxy {
             'Upload-Offset': uploadOffset || '0',
             'Tus-Resumable': TUS_VERSION,
           },
-          body: requestBody, // Stream directly
+          body: copy.body, // Stream directly (the other tee branch goes to R2)
           // @ts-ignore - Cloudflare Workers specific
           duplex: 'half', // Required for streaming in Workers
         });
@@ -614,6 +625,9 @@ export class TusProxy {
         if (isTransientUpstreamStatus(bunnyResponse.status)) return this.retryLater('Upload service busy, retry');
         return c.json({ error: 'Upload failed' }, bunnyResponse.status);
       }
+
+      // The R2 copy of this chunk is written (or given up on) before we answer
+      await copy.stored;
 
       // Get updated offset from Bunny
       const newOffset = bunnyResponse.headers.get('Upload-Offset') || uploadOffset;

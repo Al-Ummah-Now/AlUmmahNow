@@ -9,6 +9,8 @@ export interface Env {
 	MEDIA: R2Bucket;
 	/** al-ummah-now-media-private[-env]: private and unlisted renditions (priv/…), no public access */
 	MEDIA_PRIVATE: R2Bucket;
+	/** al-ummah-now-media-originals[-env]: uploads as received (read only here) */
+	MEDIA_ORIGINALS?: R2Bucket;
 	TRANSCODER: DurableObjectNamespace<Transcoder>;
 	/** api-videos (service binding): source URL, job events */
 	VIDEOS: Fetcher;

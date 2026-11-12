@@ -1,3 +1,5 @@
+import { completeOriginal, putWholeOriginal } from '../../lib/media/originals';
+import { enqueueTranscode } from '../../lib/media/r2-delivery';
 import { uploadIdentity } from "../../lib/channelAccess";
 import { OpenAPIRoute, Str } from "chanfana";
 import { AuthenticatedRoute, AppContext } from '../../base';
@@ -224,6 +226,13 @@ export class VideoUpload extends AuthenticatedRoute {
 
                     uploadResult = await bunnyStream.uploadVideo(libraryId, videoId, fileBlob);
                     uploadUrl = `https://video.bunnycdn.com/library/${libraryId}/videos/${videoId}`;
+
+                    // Our own copy for the R2 transcode (docs/media-delivery/ORIGINALS.md); never fails the upload
+                    if (await putWholeOriginal(c.env as never, videoId, 'direct', fileBuffer)) {
+                        if (await completeOriginal(c.env as never, videoId, fileBuffer.byteLength)) {
+                            await enqueueTranscode(c.env as never, videoId, 'upload', { uploaderId: userId });
+                        }
+                    }
                 }
             } catch (error) {
                 logger.error("Bunny Stream upload error:", error);

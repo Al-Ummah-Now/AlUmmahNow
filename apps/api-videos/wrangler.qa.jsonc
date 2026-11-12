@@ -88,7 +88,9 @@
     // R2 delivery beside Bunny (epic #687): renditions written by apps/media; api-videos
     // moves them on visibility changes and deletes them at purge
     { "binding": "MEDIA", "bucket_name": "al-ummah-now-media-qa" },
-    { "binding": "MEDIA_PRIVATE", "bucket_name": "al-ummah-now-media-private-qa" }
+    { "binding": "MEDIA_PRIVATE", "bucket_name": "al-ummah-now-media-private-qa" },
+    // Uploads as received, for the R2 transcode (docs/media-delivery/ORIGINALS.md)
+    { "binding": "MEDIA_ORIGINALS", "bucket_name": "al-ummah-now-media-originals-qa" }
   ],
   "d1_databases": [
     {
@@ -233,7 +235,9 @@
     // R2 delivery host (public renditions direct from R2, private ones via apps/media)
     "MEDIA_PUBLIC_HOST": "media.qa.alummahnow.net",
     // Cloudflare analytics filters for the daily cost inputs (lib/media/costs.ts)
-    "MEDIA_BUCKET_NAMES": "al-ummah-now-media-qa,al-ummah-now-media-private-qa",
+    "MEDIA_BUCKET_NAMES": "al-ummah-now-media-qa,al-ummah-now-media-private-qa,al-ummah-now-media-originals-qa",
+    "ORIGINALS_RETENTION_DAYS": "30",
+    "ORIGINALS_MAX_DAYS": "90",
     // Logging policy (docs/operations/logging.md): production warn, stage info, QA/dev debug
     "LOG_LEVEL": "debug",
     // Upload limits enforced (any value but "off"): the numbers come from each user's creator tier, edited in the videos admin (middleware/upload-limits.ts)
