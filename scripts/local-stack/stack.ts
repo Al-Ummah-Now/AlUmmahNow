@@ -53,6 +53,7 @@ export const LOCAL_SECRETS: Record<string, string> = {
   MEDIA_ANALYTICS_TOKEN: 'local-stack-fake',
   RESEND_API_KEY: 'local-stack-fake-resend',
   AUTH_MODERATION_CLIENT_SECRET: 'local-stack-moderation-secret',
+  AUTH_ADMIN_CLIENT_SECRET: 'local-stack-auth-admin-secret',
   'bunny-stream-key': 'local-stack-fake-bunny',
   bunny_stream_library_id: '424242',
   BUNNY_TOKEN_KEY: 'local-stack-fake-bunny-token',
@@ -63,9 +64,14 @@ export const LOCAL_SECRETS: Record<string, string> = {
  * Confidential OAuth clients of the local issuer and the local secret each one's caller uses: boot
  * stores their hash (deployed environments set it with the Auth repo's rotate-client-secret.ts).
  */
+/** The auth admin dashboard's OAuth client (apps/admin wrangler.json ADMIN_CLIENT_ID, production id). */
+export const AUTH_ADMIN_CLIENT_ID = '1448ed27-39a6-417d-b4c8-07f881e81269';
+
 export const LOCAL_CLIENT_SECRETS: Record<string, string> = {
   // admin-api's machine client for requests to auth and invites (AUTH_MODERATION_CLIENT_ID)
   'd7464de8-363d-4fc1-b1af-7c71653f0afc': LOCAL_SECRETS.AUTH_MODERATION_CLIENT_SECRET,
+  // The auth admin dashboard's client (Auth migration 0004): its sign-in and its M2M calls to the issuer
+  [AUTH_ADMIN_CLIENT_ID]: LOCAL_SECRETS.AUTH_ADMIN_CLIENT_SECRET,
 };
 
 /** The secret value for a Secrets Store binding: by binding name, then by secret name. */
@@ -242,7 +248,8 @@ export const WORKERS: StackWorker[] = [
     dir: 'apps/admin/build/server',
     config: 'wrangler.json',
     requires: 'index.js',
-    vars: { AUTH_SERVER_URL: url('auth'), APP_URL: url('auth-admin') },
+    // ADMIN_CLIENT_SECRET is a worker secret when deployed; its client's hash is set by boot (LOCAL_CLIENT_SECRETS)
+    vars: { AUTH_SERVER_URL: url('auth'), APP_URL: url('auth-admin'), ADMIN_CLIENT_ID: AUTH_ADMIN_CLIENT_ID, ADMIN_CLIENT_SECRET: LOCAL_SECRETS.AUTH_ADMIN_CLIENT_SECRET },
   },
 ];
 
