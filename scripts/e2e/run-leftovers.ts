@@ -21,7 +21,11 @@
  *   E2E_RUN_RESOURCES_FILE, plus those Bunny videos): thumbnails, renditions, originals, src/ parts.
  *   A video whose purge is queued is allowed (grace), reported.
  * Run users = the auth lookup plus E2E_RUN_USER_IDS_FILE / --user-ids-file (ids recorded while the
- * accounts existed). Exits 1 when anything is left. Read-only: it never deletes anything.
+ * accounts existed). Content and tiers of a run user whose auth account the teardown already
+ * deleted are reported as erase pending, not counted: the api-videos run-user sweep
+ * (lib/e2e/runUserSweep.ts, every 10 min) erases a deleted run account's data, so right after the
+ * teardown they are always still there. Those of an account that still exists fail.
+ * Exits 1 when anything is left. Read-only: it never deletes anything.
  * Needs CLOUDFLARE_API_TOKEN (D1 read); without it, warns and exits 0.
  */
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';
@@ -35,6 +39,8 @@ export interface Leftovers {
   accounts: string[];
   content: { kind: string; id: string; owner: string; state: string }[];
   pendingPurge: { kind: string; id: string }[];
+  /** Content and tiers of run users whose auth account is deleted: the run-user sweep erases them (reported, not counted) */
+  erasePending: { kind: string; id: string; owner: string }[];
   tiers: string[];
   /** QA Bunny library: videos and collections whose title/name holds the run id (probe) */
   bunnyVideos: { guid: string; title: string; status: number }[];
@@ -64,6 +70,17 @@ export function applyPurgeGrace(l: Leftovers, purging: Set<string>): { allowed: 
   return { allowed: before - l.bunnyVideos.length - l.r2Objects.length };
 }
 
+/**
+ * Splits content and tiers by their owner's auth account: an account the teardown deleted is
+ * erased by the run-user sweep (erase pending); one that still exists is a leftover.
+ */
+export function splitByAccount(l: Leftovers, liveIds: Set<string>): void {
+  for (const c of l.content.filter((c) => !liveIds.has(c.owner))) l.erasePending.push({ kind: c.kind, id: c.id, owner: c.owner });
+  for (const t of l.tiers.filter((t) => !liveIds.has(t))) l.erasePending.push({ kind: 'creator tier', id: t, owner: t });
+  l.content = l.content.filter((c) => liveIds.has(c.owner));
+  l.tiers = l.tiers.filter((t) => liveIds.has(t));
+}
+
 export function failing(l: Leftovers): number {
   return l.accounts.length + l.content.length + l.tiers.length + l.bunnyVideos.length + l.bunnyCollections.length + l.r2Objects.length;
 }
@@ -79,7 +96,7 @@ export function parseArgs(argv: string[]): { env: UploadEnv; marker: string; idF
 
 export function report(marker: string, l: Leftovers): string[] {
   return [
-    `Leftovers of run ${marker}: ${failing(l)}${l.pendingPurge.length ? ` (+${l.pendingPurge.length} deleted, purge queued)` : ''}`,
+    `Leftovers of run ${marker}: ${failing(l)}${l.pendingPurge.length ? ` (+${l.pendingPurge.length} deleted, purge queued)` : ''}${l.erasePending.length ? ` (+${l.erasePending.length} of deleted run accounts, erase pending)` : ''}`,
     ...l.accounts.map((a) => `  - auth account ${a}`),
     ...l.content.map((c) => `  - ${c.kind} ${c.id} of ${c.owner} (${c.state})`),
     ...l.tiers.map((t) => `  - creator tier of ${t}`),
@@ -87,6 +104,7 @@ export function report(marker: string, l: Leftovers): string[] {
     ...l.bunnyCollections.map((c) => `  - Bunny collection ${c.guid}: ${c.name}`),
     ...l.r2Objects.slice(0, 40).map((o) => `  - R2 ${o.bucket}/${o.key}`),
     ...l.pendingPurge.slice(0, 20).map((p) => `  · ${p.kind} ${p.id}: purge queued`),
+    ...l.erasePending.slice(0, 20).map((e) => `  · ${e.kind} ${e.id} of ${e.owner}: account deleted, the run-user sweep erases it`),
   ];
 }
 
@@ -110,7 +128,7 @@ async function main(): Promise<void> {
   }
   const recorded = idFiles.filter((f) => existsSync(f)).flatMap((f) => readFileSync(f, 'utf8').split('\n').map((l) => l.trim()));
   const ids = [...new Set([...accounts.map((a) => a.id), ...recorded])].filter((id) => SAFE_ID.test(id));
-  const leftovers: Leftovers = { accounts: accounts.map((a) => a.email), content: [], pendingPurge: [], tiers: [], bunnyVideos: [], bunnyCollections: [], r2Objects: [] };
+  const leftovers: Leftovers = { accounts: accounts.map((a) => a.email), content: [], pendingPurge: [], erasePending: [], tiers: [], bunnyVideos: [], bunnyCollections: [], r2Objects: [] };
   const resourceFile = process.env.E2E_RUN_RESOURCES_FILE;
   const resources = readResources(resourceFile && existsSync(resourceFile) ? readFileSync(resourceFile, 'utf8') : '');
   if (ids.length) {
@@ -127,6 +145,8 @@ async function main(): Promise<void> {
       else leftovers.content.push({ kind: row.kind, id: row.id, owner: row.owner_id, state: row.is_deleted ? 'in the trash, no purge' : row.upload_status ?? 'live' });
     }
     leftovers.tiers = (await d1Query<{ user_id: string }>(cf, db.search, `SELECT user_id FROM creator_tier_assignments WHERE user_id IN (${list})`, ids)).map((r) => r.user_id);
+    // The accounts still alive (the auth lookup above: deleted_at IS NULL)
+    splitByAccount(leftovers, new Set(accounts.map((a) => a.id)));
   }
   // QA's Bunny library and R2, through the read-only probe the workflow deployed for this run
   const probe = process.env.LEFTOVERS_PROBE_URL;
