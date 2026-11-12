@@ -269,12 +269,20 @@ export async function enqueueTranscode(
 }
 
 const E2E_RUN_EMAIL = /^e2e\+[^@]+@e2e\.alummahnow\.net$/;
+/**
+ * The one run account that is transcoded: the release gate for R2 delivery
+ * (apps/web/e2e/release/media-delivery.spec.ts, #960) names its user …-media-gate.
+ * One short clip per release run.
+ */
+const E2E_MEDIA_GATE_EMAIL = /^e2e\+[^@]+-media-gate@e2e\.alummahnow\.net$/;
 
 async function isE2eUploader(env: MediaEnv, userId: string): Promise<boolean> {
 	try {
 		const profile = (await (await env.profiles?.get(userId))?.json<{ email?: string }>()) ?? null;
+		if (typeof profile?.email !== 'string') return false;
+		const email = profile.email.toLowerCase();
 		// Same rule as lib/e2e/runUserSweep.ts (not imported: that module imports admin/service, which imports this one)
-		return typeof profile?.email === 'string' && E2E_RUN_EMAIL.test(profile.email.toLowerCase());
+		return E2E_RUN_EMAIL.test(email) && !E2E_MEDIA_GATE_EMAIL.test(email);
 	} catch {
 		return false;
 	}
@@ -485,6 +493,51 @@ export async function r2Urls(env: MediaEnv, video: Pick<MediaVideo, 'id' | 'r2'>
 	return {
 		playUrl: await mediaPlayUrl(env.MEDIA_PUBLIC_HOST, r2.access, video.id, r2.rev, MEDIA_MASTER, sign),
 		thumbnailUrl: await mediaPlayUrl(env.MEDIA_PUBLIC_HOST, r2.access, video.id, r2.rev, MEDIA_THUMBNAIL, sign),
+	};
+}
+
+/**
+ * The owner's view of the R2 side (GET /api/videos/:id/upload-status), without
+ * container timings or costs. The release gate (apps/web/e2e/release/media-delivery.spec.ts)
+ * waits on `status` and fetches `playUrl`, which is there whatever the delivery switch says.
+ */
+export interface OwnerR2View {
+	status: VideoR2State['status'];
+	access: MediaAccess;
+	rev: string;
+	attempts: number;
+	queuedAt: string;
+	startedAt?: string;
+	readyAt?: string;
+	failedAt?: string;
+	error?: string;
+	/** Rungs the transcode wrote (720p, 480p, ...) */
+	renditions: string[];
+	/** Master playlist, signed when private; ready only */
+	playUrl?: string;
+}
+
+export async function ownerR2View(env: MediaEnv, video: Pick<MediaVideo, 'id' | 'r2'> | null | undefined): Promise<OwnerR2View | undefined> {
+	const r2 = video?.r2;
+	if (!video || !r2) return undefined;
+	let playUrl: string | undefined;
+	try {
+		playUrl = (await r2Urls(env, video))?.playUrl;
+	} catch (error) {
+		logger.warn('[Media] Could not build the R2 play URL', { videoId: video.id, error: error instanceof Error ? error.message : String(error) });
+	}
+	return {
+		status: r2.status,
+		access: r2.access,
+		rev: r2.rev,
+		attempts: r2.attempts ?? 0,
+		queuedAt: r2.queuedAt,
+		...(r2.startedAt ? { startedAt: r2.startedAt } : {}),
+		...(r2.readyAt ? { readyAt: r2.readyAt } : {}),
+		...(r2.failedAt ? { failedAt: r2.failedAt } : {}),
+		...(r2.error ? { error: r2.error } : {}),
+		renditions: r2.result?.rungs.map((rung) => rung.name) ?? [],
+		...(playUrl ? { playUrl } : {}),
 	};
 }
 

@@ -11,6 +11,7 @@ import {
 	desiredAccess,
 	enqueueTranscode,
 	moveMedia,
+	ownerR2View,
 	purgeVideoMedia,
 	r2Urls,
 	sourceUrl,
@@ -111,6 +112,17 @@ describe('R2 dual write', () => {
 		assert.equal(raw.TRANSCODE_QUEUE.messages.length, 1);
 	});
 
+	it('still transcodes the release gate\'s run account (…-media-gate, #960)', async () => {
+		const { env, raw } = setup();
+		(env as Record<string, unknown>).profiles = new MemoryBucket({
+			'u-gate': { email: 'e2e+123-1-rel-abc123-media-gate@e2e.alummahnow.net' },
+			'u-other': { email: 'e2e+123-1-media-gate-not@e2e.alummahnow.net' },
+		});
+		assert.equal((await enqueueTranscode(env, ID, 'upload', { uploaderId: 'u-other' })).why, 'E2E run account');
+		assert.equal((await enqueueTranscode(env, ID, 'upload', { uploaderId: 'u-gate' })).queued, true);
+		assert.equal(raw.TRANSCODE_QUEUE.messages.length, 1);
+	});
+
 	it('applies started → ready, ignores stale jobs, and exposes signed private URLs', async () => {
 		const { env, raw, videos } = setup({ isPublic: false });
 		await enqueueTranscode(env, ID, 'upload');
@@ -127,6 +139,26 @@ describe('R2 dual write', () => {
 		assert.match(urls!.playUrl, new RegExp(`^https://media\\.qa\\.alummahnow\\.net/priv/\\d{10}\\.[A-Za-z0-9_-]{32}/${ID}/${r2.rev}/master\\.m3u8$`));
 		// A late failure of the same job does not undo ready
 		assert.equal((await applyJobEvent(env, undefined, ev(job, { type: 'failed', final: true, error: 'x' }))).applied, false);
+	});
+
+	it('gives the owner the R2 state and a signed play URL whatever the delivery switch says (#960)', async () => {
+		const { env, raw, videos } = setup({ isPublic: false });
+		assert.equal(await ownerR2View(env, videos.read(ID)), undefined);
+		await enqueueTranscode(env, ID, 'upload');
+		const job = raw.TRANSCODE_QUEUE.messages[0] as TranscodeJobMessage;
+		const queued = await ownerR2View(env, videos.read(ID));
+		assert.equal(queued!.status, 'queued');
+		assert.deepEqual(queued!.renditions, []);
+		assert.equal(queued!.playUrl, undefined);
+		await applyJobEvent(env, undefined, ev(job, { type: 'started' }));
+		await applyJobEvent(env, undefined, ev(job, { type: 'ready', result: RESULT, containerSeconds: 42 }));
+		const ready = await ownerR2View(env, videos.read(ID));
+		assert.equal(ready!.status, 'ready');
+		assert.equal(ready!.access, 'priv');
+		assert.deepEqual(ready!.renditions, RESULT.rungs.map((r) => r.name));
+		assert.match(ready!.playUrl!, new RegExp(`^https://media\\.qa\\.alummahnow\\.net/priv/\\d{10}\\.[A-Za-z0-9_-]{32}/${ID}/${ready!.rev}/master\\.m3u8$`));
+		// No costs or timings for the owner
+		assert.equal((ready as Record<string, unknown>).containerSeconds, undefined);
 	});
 
 	it('keeps transcoding on a retryable failure and marks failed on the final one', async () => {
