@@ -41,8 +41,12 @@ test.describe('recently deleted', () => {
       await page.keyboard.press('Escape');
       await expect(dialog).toBeHidden();
       await expect(row).toHaveAttribute('data-status', 'deleted');
-    } else {
+    } else if ((await page.getByTestId('deleted-row').count()) === 0) {
       await expect(page.getByText('Nothing was deleted in the last 30 days.')).toBeVisible();
+    } else {
+      // Rows already queued for or being purged have no "Delete permanently" button (QA's run-account
+      // and test-upload cleanups keep some there); the list is not empty, so no empty state
+      await expect(page.getByTestId('deleted-row').first()).toHaveAttribute('data-status', /^(queued|purging|purged)$/);
     }
     await expectNoAxeViolations(page, 'recently deleted');
   });
