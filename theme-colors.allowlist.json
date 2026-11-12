@@ -161,8 +161,6 @@
   "apps/web/src/components/login/logoutButton/rtl/index.tsx": 2,
   "apps/web/src/components/moderation/ReportContentButton.tsx": 24,
   "apps/web/src/components/notifications/ChannelBellMenu.tsx": 6,
-  "apps/web/src/components/notifications/NotificationBell.tsx": 31,
-  "apps/web/src/components/notifications/NotificationRow.tsx": 29,
   "apps/web/src/components/notifications/NotificationSettingsPanel.tsx": 19,
   "apps/web/src/components/notifications/NotificationsPage.tsx": 33,
   "apps/web/src/components/privacySettings/PrivacySettingsView.tsx": 42,

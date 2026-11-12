@@ -10,3 +10,4 @@ e2e/.auth/
 test-results-player/
 playwright-report-player/
 release-outcomes*.json
+test-results-themes/
