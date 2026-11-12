@@ -203,7 +203,15 @@ describe('bunny signing', () => {
 				playlist: { id: 'pl', cover: { videoId: ids[1], thumbnailUrl: pathSigned('thumbnail_3.jpg').replaceAll(VID, ids[1]) } },
 			};
 			const out = await signBunnyUrlsInText(JSON.stringify(body), HOST, KEY, NOW);
-			const urls = out.match(new RegExp(`https://${HOST.replace(/\./g, '\\.')}[^"]*`, 'g')) ?? [];
+			const urls: string[] = [];
+			const collect = (v: unknown): void => {
+				if (typeof v === 'string') {
+					if (v.startsWith(`https://${HOST}/`)) urls.push(v);
+				} else if (v && typeof v === 'object') {
+					Object.values(v).forEach(collect);
+				}
+			};
+			collect(JSON.parse(out));
 			assert.ok(urls.length >= 30, `found ${urls.length} URLs`);
 			for (const url of urls) {
 				const expires = /expires=(\d+)/.exec(url);
