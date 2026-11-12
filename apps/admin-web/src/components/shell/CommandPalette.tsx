@@ -14,11 +14,11 @@ import { asksForEntities, matchPages, move, paletteKinds, paletteOptions, type P
 const english = createTranslator('en');
 
 const KIND_ICON: Record<AdminSuggestKind, IconName> = {
-  user: 'user', channel: 'tv', video: 'film', playlist: 'list', post: 'people', comment: 'chat', contact: 'inbox', error: 'alert', invite: 'key',
+  user: 'user', channel: 'tv', video: 'film', playlist: 'list', post: 'people', comment: 'chat', contact: 'inbox', error: 'alert', invite: 'key', report: 'flag',
 };
 const KIND_GROUP: Record<AdminSuggestKind, MessageKey> = {
   user: 'palette.groups.user', channel: 'palette.groups.channel', video: 'palette.groups.video', playlist: 'palette.groups.playlist',
-  post: 'palette.groups.post', comment: 'palette.groups.comment', contact: 'palette.groups.contact', error: 'palette.groups.error', invite: 'palette.groups.invite',
+  post: 'palette.groups.post', comment: 'palette.groups.comment', contact: 'palette.groups.contact', error: 'palette.groups.error', invite: 'palette.groups.invite', report: 'palette.groups.report',
 };
 
 type Results = Partial<Record<AdminSuggestKind, AdminSuggestion[]>>;

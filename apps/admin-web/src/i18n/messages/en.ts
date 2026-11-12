@@ -87,6 +87,7 @@ const en = {
       contact: 'Contact messages',
       error: 'Errors',
       invite: 'Invites',
+      report: 'Reported items',
     },
   },
   preferences: {

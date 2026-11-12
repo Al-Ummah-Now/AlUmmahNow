@@ -88,8 +88,8 @@ describe('command palette model', () => {
   });
 
   it('searches contact messages and errors only for those who can open them', () => {
-    assert.deepEqual(paletteKinds(moderator), ['user', 'channel', 'video', 'playlist']);
-    assert.deepEqual(paletteKinds(admin), ['user', 'channel', 'video', 'playlist', 'contact', 'error']);
+    assert.deepEqual(paletteKinds(moderator), ['user', 'channel', 'video', 'playlist', 'report']);
+    assert.deepEqual(paletteKinds(admin), ['user', 'channel', 'video', 'playlist', 'report', 'contact', 'error']);
   });
 
   it('puts pages first, then each kind in order, at most four of each', () => {

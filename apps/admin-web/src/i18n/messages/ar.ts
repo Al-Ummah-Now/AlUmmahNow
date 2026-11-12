@@ -86,6 +86,7 @@ const ar: Messages = {
       contact: 'رسائل التواصل',
       error: 'الأخطاء',
       invite: 'الدعوات',
+      report: 'العناصر المُبلَّغ عنها',
     },
   },
   preferences: {

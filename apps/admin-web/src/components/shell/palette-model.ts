@@ -18,7 +18,7 @@ export type PaletteOption =
 
 /** Kinds this admin may search, in the order they are shown. */
 export function paletteKinds(access: NavAccess): AdminSuggestKind[] {
-  const kinds: AdminSuggestKind[] = ['user', 'channel', 'video', 'playlist'];
+  const kinds: AdminSuggestKind[] = ['user', 'channel', 'video', 'playlist', 'report'];
   if (access.contact) kinds.push('contact');
   if (access.errors) kinds.push('error');
   return kinds;
