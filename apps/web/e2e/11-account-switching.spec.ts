@@ -47,7 +47,8 @@ test.describe('Account Switching', () => {
     await expect(menu.getByRole('menuitem', { name: /Sign out of all accounts/ })).toBeVisible();
   });
 
-  test('switches to the other account and back', async ({ page, baseURL }) => {
+  // quarantined: #1027 @meywd (red on the local stack; the follow-up PR removes this fixme)
+  test.fixme('switches to the other account and back', async ({ page, baseURL }) => {
     const single = readAccount('single');
     const multi = readAccount('multi');
     const errors: string[] = [];

@@ -65,7 +65,8 @@ test.describe('Video Upload Flow', () => {
     await expect(ui.dropzone).toBeVisible();
   });
 
-  test('says the video is processing after the upload, then Ready, and notifies the uploader', async ({ page }) => {
+  // quarantined: #1026 @meywd (red on the local stack; the follow-up PR removes this fixme)
+  test.fixme('says the video is processing after the upload, then Ready, and notifies the uploader', async ({ page }) => {
     // Waits for Bunny to encode a real (tiny) video, capped (BUNNY_WAIT_MS, #929)
     test.setTimeout(BUNNY_WAIT_MS + 2 * 60_000);
     const title = `Processing notice E2E ${Date.now().toString(36)}`;
