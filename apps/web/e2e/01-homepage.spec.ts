@@ -1,12 +1,19 @@
 import { test, expect } from './fixtures';
 import type { Page } from '@playwright/test';
 import { ANONYMOUS_STATE } from './test-utils/auth-state';
+import { usePublicVideos } from './test-utils/own-public-video';
 
 /**
  * Homepage E2E Tests (anonymous visitor, real QA content)
  */
 
 test.use({ storageState: ANONYMOUS_STATE });
+
+// One worker runs this file's tests in order, so its own data (beforeAll) is made once
+test.describe.configure({ mode: 'default' });
+
+/** This file's own public video, so the home grid has a card of ours (no seed, no other run's uploads) */
+const own = usePublicVideos(test, 'home');
 
 async function expectNoHorizontalScroll(page: Page) {
   const { scrollWidth, innerWidth } = await page.evaluate(() => ({
@@ -52,7 +59,7 @@ test.describe('Homepage - English', () => {
     ]) {
       await page.setViewportSize(viewport);
       await page.goto('/en/');
-      await expect(page.getByTestId('video-card').first()).toBeVisible();
+      await expect(own.card(page)).toBeVisible();
       await expectNoHorizontalScroll(page);
     }
   });
@@ -73,7 +80,7 @@ test.describe('Homepage - Arabic (RTL)', () => {
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     const main = page.getByRole('main');
     await expect(main).toHaveCSS('direction', 'rtl');
-    await expect(page.getByTestId('video-card').first()).toHaveAttribute('href', /^\/ar\/video\?vid=/);
+    await expect(own.card(page)).toHaveAttribute('href', /^\/ar\/video\?vid=/);
   });
 });
 

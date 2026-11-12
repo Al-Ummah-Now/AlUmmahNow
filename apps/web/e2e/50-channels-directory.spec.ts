@@ -2,17 +2,46 @@ import { test, expect } from './fixtures';
 import type { Page } from '@playwright/test';
 import { ANONYMOUS_STATE, AUTH_STATE } from './test-utils/auth-state';
 import { apiGet, channelsOf, expectRtl, clickUntil, fillStable, type PublicChannel } from './test-utils/channel-content';
+import { useOwnData } from './release/builders';
 
 /**
  * Channel directory (/[locale]/channels) and the "Create channel" dialog of
  * the profile page's channel management section.
  *
- * Read-only against QA except the dialog, which is only validated and
- * cancelled here (channel creation itself is covered by 09-channel-switching,
- * which deletes what it creates).
+ * The directory gets its own content: in beforeAll a new creator (the Unlimited tier, so it may
+ * own more channels than a page holds) makes PAGE_SIZE + 1 channels, so there is always a second
+ * page; afterAll deletes them. The dialog is only validated and cancelled here (channel creation
+ * itself is covered by 09-channel-switching, which deletes what it creates).
  */
 
 const PAGE_SIZE = 24;
+const LOCAL_STACK_SQL = `${process.env.LOCAL_STACK_CONTROL_URL || 'http://127.0.0.1:3190'}/__stack/d1/al-ummah-now-search`;
+// One worker runs this file's tests in order, so its own data (beforeAll) is made once
+test.describe.configure({ mode: 'default' });
+
+const data = useOwnData(test as never);
+
+test.beforeAll(async ({ browser }) => {
+  test.setTimeout(240_000);
+  const context = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+  try {
+    const owner = await data.createUser(await context.newPage(), 'directory');
+    if (process.env.E2E_ENV === 'local') {
+      // The Unlimited tier (the Creator tier owns at most 3 channels), straight into the stack's database
+      const userId = owner.userId.replace(/[^A-Za-z0-9_:-]/g, '');
+      const res = await fetch(LOCAL_STACK_SQL, {
+        method: 'POST',
+        body: `INSERT OR REPLACE INTO creator_tier_assignments (user_id, tier_id, source, assigned_by, assigned_at) VALUES ('${userId}', 'unlimited', 'admin', 'e2e-directory', '${new Date().toISOString()}')`,
+      });
+      expect(res.ok, `unlimited tier: ${await res.text()}`).toBe(true);
+    } else {
+      await data.grantCreator(owner);
+    }
+    for (let i = 0; i <= PAGE_SIZE; i++) await data.createChannel(owner, { name: `E2E directory ${Date.now().toString(36)} ${i}`, isMain: i === 0 });
+  } finally {
+    await context.close();
+  }
+});
 
 /**
  * The directory lists GET /api/channels?scope=all page by page, newest first.
@@ -65,7 +94,7 @@ test.describe('Channels directory', () => {
 
   test('CHL-002 "Load More" appends the next page without duplicates', async ({ page }) => {
     const apiPage = await apiGet<{ cursor?: string; data: Array<{ id: string }> }>(`/api/channels?limit=${PAGE_SIZE}`);
-    test.skip(!apiPage.cursor, 'QA has a single page of channels; pagination cannot be exercised');
+    expect(apiPage.cursor, 'beforeAll made more channels than a page holds').toBeTruthy();
 
     await openDirectory(page, 'en');
     const tiles = page.getByTestId('channel-tile');
