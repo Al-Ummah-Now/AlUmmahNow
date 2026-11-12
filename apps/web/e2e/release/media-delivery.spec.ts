@@ -115,7 +115,7 @@ test.describe('Release: R2 delivery', () => {
   test('an upload is transcoded through the queue and its signed HLS is served by the media Worker', async ({ page }) => {
     const env = releaseEnv();
     const mediaHost = MEDIA_HOST[env] ?? '';
-    test.skip(!mediaHost, `${env} has no R2 delivery yet (no media host): nothing to gate`);
+    test.skip(!mediaHost, `${env} has no media host (R2 delivery is not wired for this target)`);
     test.setTimeout(16 * 60_000);
 
     // …-media-gate: the one run account api-videos transcodes
@@ -154,7 +154,12 @@ test.describe('Release: R2 delivery', () => {
         .poll(async () => (first = (await uploadStatus(user, videoId, channelId)).r2)?.status ?? 'none', { timeout: R2_PRESENT_TIMEOUT_MS, intervals: [3_000] })
         .not.toBe('none')
         .catch(() => undefined);
-      test.skip(!first, `${env}: upload-status has no r2 for a new upload: no R2 dual write here (transcode switched off, or api-videos predates #960)`);
+      // QA, stage and production all deliver from R2 (#948, v2026.11.12.3). Only a PR run may skip here (its
+      // target can predate a change); a release or main run fails, so a transcode switched off in the admin
+      // Delivery settings (global_settings/ops/media-delivery.json) can never pass a release silently.
+      const noR2 = `${env}: upload-status has no r2 for a new upload: no R2 transcode queued (Delivery settings "transcode" off, or api-videos predates #960)`;
+      if (process.env.GITHUB_EVENT_NAME === 'pull_request') test.skip(!first, noR2);
+      expect(first, noR2).toBeTruthy();
       expect(first!.access, 'a private upload is transcoded to the private prefix').toBe('priv');
       test.info().annotations.push({ type: 'r2-first-status', description: first!.status });
 
