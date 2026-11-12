@@ -59,7 +59,8 @@ test.describe('Video Player', () => {
     await openOwnVideo(page, request);
 
     await expect(page.getByTestId('video-metrics')).toBeVisible();
-    await expect(page.getByTestId('video-metrics-views')).toHaveText(/\d+(\.\d)?[KM]? views?/);
+    // This file's own video is new: "No views" until someone watches it
+    await expect(page.getByTestId('video-metrics-views')).toHaveText(/^(No views|\d+(\.\d)?[KM]? views?)$/);
     // Anonymous viewers can't like
     await expect(page.getByTestId('video-like-button')).toBeDisabled();
     // The accessible name includes the visible count (WCAG 2.5.3); the sign-in hint is a description

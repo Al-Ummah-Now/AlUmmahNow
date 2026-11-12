@@ -41,8 +41,9 @@ const studioSingle = ownStudioVideos(test, 'single');
 test.beforeAll(async () => {
   test.setTimeout(BUNNY_WAIT_MS + 60000);
   seed = studioSingle.videos();
-  // Run accounts upload their seeds at the start of each run: wait once, capped (#929)
-  await waitForThumbnails('single', seed[SEED_TITLES.singleVideo].id);
+  // The local stack's fake Bunny has the frames once the video is ready (ownStudioVideos waits for
+  // that), and its CDN host only resolves in the browser; QA: wait once, capped (#929)
+  if (process.env.E2E_ENV !== 'local') await waitForThumbnails('single', seed[SEED_TITLES.singleVideo].id);
 });
 
 async function openEditor(page: Page, video: E2EVideo, locale: 'en' | 'ar' = 'en') {
