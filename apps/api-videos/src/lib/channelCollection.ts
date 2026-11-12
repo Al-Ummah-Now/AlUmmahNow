@@ -11,7 +11,8 @@
  *
  * - Created lazily on the first upload to that library (uploadCollection).
  * - Renamed with the channel or profile (renameCollectionsFor).
- * - Soft delete keeps them; purge removes them (removeCollectionsFor).
+ * - Soft delete keeps them; purge, erasure and the owner's channel delete
+ *   (which removes the record) remove them (removeCollectionsFor).
  *
  * Parallel first uploads to a channel without a collection each create one;
  * only the first to store its id in the channel JSON (conditional write)

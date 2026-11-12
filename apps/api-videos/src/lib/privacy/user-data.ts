@@ -428,6 +428,8 @@ export interface ErasureHooks {
 	onVideoDeleted?: (videoId: string, video?: { bunnyLibraryId?: number | string | null; playUrl?: string | null; thumbnailUrl?: string | null }) => Promise<void>;
 	/** Remove what the profile owned outside R2 (its Bunny collections) just before it is deleted. Must not throw. */
 	onProfileDeleted?: (userId: string, profile: unknown) => Promise<void>;
+	/** Remove what an owned channel holds outside R2 (its Bunny collections) just before its record is deleted. Must not throw. */
+	onChannelDeleted?: (channelId: string, channel: unknown) => Promise<void>;
 }
 
 function bump(map: Record<string, number>, key: string, by = 1): void {
@@ -661,9 +663,16 @@ export async function eraseUserData(
 		deleteUserRecords('votes/', 'pollVotes'),
 		deleteUserRecords('comment-likes/', 'communityCommentLikes'),
 
-		// Owned channels themselves (after their videos and posts)
+		// Owned channels themselves (after their videos and posts), each after its hook
 		async (ctx) => {
-			bump(summary.deleted, 'channels', await deleteKeys(asBucket(env.channels), ctx.checkpoint.k, ctx.budget));
+			const channels = asBucket(env.channels);
+			for (const key of ctx.checkpoint.k) {
+				const channel = await readJson<Json>(channels, key, ctx.budget);
+				// Gone already: a resumed pass deleted it (and ran its hook) before
+				if (!channel) continue;
+				if (hooks.onChannelDeleted) await hooks.onChannelDeleted(channel.id ?? key, channel);
+				bump(summary.deleted, 'channels', await deleteKeys(channels, [key], ctx.budget));
+			}
 		},
 
 		// Playlists

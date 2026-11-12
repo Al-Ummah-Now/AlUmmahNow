@@ -13,6 +13,7 @@
  *   keyed prefixes: watch_history/{userId}:, upload-defaults/{userId}/,
  *     channel_sections/{channelId}/, community posts/{channelId}/
  *   NOTIFICATIONS_DB subscriptions, then the profile
+ *   (hooks remove Bunny media and the channels' and profile's collections)
  *
  * Not covered, by design (run accounts only): reactions and comments on
  * content the account did not own, reports it filed, and posts or playlists
@@ -167,6 +168,8 @@ export async function eraseRunUserData(
 					const entry = await readJson<Json>(tabs, handleKey, budget);
 					if (entry?.channelId === channelId) await deleteKeys(tabs, [handleKey], budget);
 				}
+				// Its Bunny collections (lib/channelCollection.ts) go with the record
+				if (channel && hooks.onChannelDeleted) await hooks.onChannelDeleted(channelId, channel);
 				bump('channels', await deleteKeys(channelsBucket, [channelId], budget));
 			}
 		},

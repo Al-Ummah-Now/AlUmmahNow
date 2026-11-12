@@ -1378,6 +1378,10 @@ async function runRunUserErase(env: AdminServiceEnv, job: AdminJob): Promise<Job
 			onProfileDeleted: async (id: string, profile: unknown) => {
 				await removeCollectionsFor(env as never, id, profile as never);
 			},
+			// Each owned channel's collections go with its record (never throws)
+			onChannelDeleted: async (id: string, channel: unknown) => {
+				await removeCollectionsFor(env as never, id, channel as never);
+			},
 		},
 		Number(job.params.step) || 0,
 	);
@@ -1408,6 +1412,10 @@ async function eraseUserStep(env: AdminServiceEnv & Record<string, unknown>, use
 			// The user's Bunny collections go with the profile (lib/channelCollection.ts)
 			onProfileDeleted: async (id: string, profile: unknown) => {
 				await removeCollectionsFor(env as never, id, profile as never);
+			},
+			// Each owned channel's collections go with its record (never throws)
+			onChannelDeleted: async (id: string, channel: unknown) => {
+				await removeCollectionsFor(env as never, id, channel as never);
 			},
 		},
 		{ resumeToken },
