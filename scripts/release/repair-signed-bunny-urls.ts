@@ -81,7 +81,7 @@ export function repairText(text: string): { text: string; urls: number } | null 
 	return changed ? { text: JSON.stringify(value), urls: changed } : null;
 }
 
-async function fetchRetry(url: string, init: RequestInit, attempts = 6): Promise<Response> {
+async function fetchRetry(url: string, init: RequestInit, attempts = 10): Promise<Response> {
 	for (let i = 1; ; i++) {
 		const res = await fetch(url, init);
 		if (i >= attempts || (res.status !== 429 && res.status < 500)) return res;
@@ -103,6 +103,7 @@ async function main(argv: string[]): Promise<void> {
 
 	let totalRecords = 0;
 	let totalUrls = 0;
+	let totalUnread = 0;
 	for (const base of BUCKETS) {
 		const bucket = bucketName(base, env);
 		const objectUrl = (key: string) => `${api}/r2/buckets/${bucket}/objects/${key.split('/').map(encodeURIComponent).join('/')}`;
@@ -121,12 +122,16 @@ async function main(argv: string[]): Promise<void> {
 
 		let records = 0;
 		let urls = 0;
+		let unread = 0;
 		const queue = [...keys];
 		const worker = async () => {
 			for (let key = queue.shift(); key !== undefined; key = queue.shift()) {
 				const res = await fetchRetry(objectUrl(key), { headers });
 				if (!res.ok) {
-					if (res.status !== 404) console.warn(`  GET ${bucket}/${key} -> HTTP ${res.status}`);
+					if (res.status !== 404) {
+						unread++;
+						console.warn(`  GET ${bucket}/${key} -> HTTP ${res.status}`);
+					}
 					continue;
 				}
 				const repaired = repairText(await res.text());
@@ -140,8 +145,9 @@ async function main(argv: string[]): Promise<void> {
 				}
 			}
 		};
-		await Promise.all(Array.from({ length: 8 }, worker));
-		console.log(`${bucket}: ${keys.length} objects scanned, ${records} with signed URLs (${urls} URLs)`);
+		await Promise.all(Array.from({ length: 4 }, worker));
+		console.log(`${bucket}: ${keys.length} objects scanned, ${records} with signed URLs (${urls} URLs)${unread ? `, ${unread} UNREAD (run again)` : ''}`);
+		totalUnread += unread;
 		totalRecords += records;
 		totalUrls += urls;
 	}
@@ -172,7 +178,8 @@ async function main(argv: string[]): Promise<void> {
 		totalRecords += fixed;
 		totalUrls += urls;
 	}
-	console.log(`${apply ? 'Repaired' : 'Would repair'} ${totalRecords} records/rows, ${totalUrls} URLs on ${env}`);
+	console.log(`${apply ? 'Repaired' : 'Would repair'} ${totalRecords} records/rows, ${totalUrls} URLs on ${env}${totalUnread ? `; ${totalUnread} objects unread` : ''}`);
+	if (totalUnread) process.exitCode = 2;
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {

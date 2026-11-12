@@ -278,7 +278,7 @@ describe('viewContextFromBatch', () => {
 describe('toEmbedVideo (visibility)', () => {
   const base = { id: 'v1', title: 'T', playUrl: 'https://vz.b-cdn.net/tok/v1/playlist.m3u8', isPublic: true, uploadStatus: 'ready', duration: '75' };
   it('maps a public, ready video', () => {
-    expect(toEmbedVideo(base)).toMatchObject({ id: 'v1', duration: 75, poster: 'https://vz.b-cdn.net/tok/v1/thumbnail.jpg' });
+    expect(toEmbedVideo(base)).toMatchObject({ id: 'v1', duration: 75, poster: '/thumb/v1.jpg', thumbnailSource: 'https://vz.b-cdn.net/tok/v1/thumbnail.jpg' });
   });
   it.each([
     ['private', { isPublic: false }],
@@ -292,6 +292,10 @@ describe('toEmbedVideo (visibility)', () => {
   });
   it('keeps legacy videos without an upload status', () => {
     expect(toEmbedVideo({ ...base, uploadStatus: undefined })).not.toBeNull();
+  });
+  it('prefers the API thumbnail (custom thumbnails, the chosen source) over the playlist directory', () => {
+    expect(posterFor('https://vz/t/v1/playlist.m3u8', 'https://images.alummahnow.net/t/v1/a.webp')).toBe('https://images.alummahnow.net/t/v1/a.webp');
+    expect(toEmbedVideo({ ...base, playUrl: 'https://vz/t/v1/playlist.m3u8', thumbnailUrl: undefined })?.thumbnailSource).toBe('https://vz/t/v1/thumbnail.jpg');
   });
   it('derives posters', () => {
     expect(posterFor(undefined, 'cdn.example/x.jpg')).toBe('https://cdn.example/x.jpg');
@@ -344,6 +348,26 @@ describe('player box ratio', () => {
     expect(videoAspect({ isShort: true })).toBeCloseTo(9 / 16);
     expect(videoAspect({})).toBeNull();
     expect(toEmbedVideo({ id: 'v', playUrl: 'https://vz/t/v/playlist.m3u8', isPublic: true, width: 0, height: 720 })).not.toHaveProperty('width');
+  });
+});
+
+describe('share images', () => {
+  // 2026-11-12: crawlers cache og:image / twitter:image; a signed Bunny URL breaks once its token expires
+  it('og:image and twitter:image are the stable /thumb URL, never a signed CDN URL', () => {
+    for (const thumbnailUrl of [
+      'https://vz-215a1ffd-a5a.b-cdn.net/bcdn_token=T&expires=1794459600&token_path=%2Fv1%2F/v1/thumbnail_1.jpg',
+      'https://vz-215a1ffd-a5a.b-cdn.net/v1/thumbnail.jpg?token=T&expires=1794459600',
+    ]) {
+      const signed = toEmbedVideo({
+        id: 'v1', title: 'T', isPublic: true, thumbnailUrl,
+        playUrl: 'https://vz-215a1ffd-a5a.b-cdn.net/bcdn_token=P&expires=1794535200&token_path=%2Fv1%2F/v1/playlist.m3u8',
+      });
+      const meta = buildWatchMetadata(signed, 'en', HOST);
+      const images = JSON.stringify([meta.openGraph?.images, meta.twitter?.images]);
+      expect(images).not.toMatch(/bcdn_token|token=/);
+      expect(meta.openGraph?.images).toEqual([expect.objectContaining({ url: `${HOST}/thumb/v1.jpg` })]);
+      expect(meta.twitter?.images).toEqual([`${HOST}/thumb/v1.jpg`]);
+    }
   });
 });
 

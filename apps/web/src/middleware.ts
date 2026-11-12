@@ -29,7 +29,7 @@ import {
   generateNonce,
   SECURITY_HEADERS,
 } from '@/lib/security/csp';
-import { EMBED_REQUEST_HEADER, isEmbedPath, isOEmbedPath } from '@/lib/embed/routes';
+import { EMBED_REQUEST_HEADER, isEmbedPath, isOEmbedPath, isShareImagePath } from '@/lib/embed/routes';
 import { parseEmbedLang } from '@/lib/embed/params';
 import { NONCE_HEADER } from '@/lib/security/nonce-header';
 import { handleRewritePath } from '@/lib/channel-url';
@@ -133,6 +133,11 @@ function routeRequest(request: NextRequest): NextResponse {
 
   // oEmbed endpoint (route handler with its own CORS/caching headers): no locale redirect
   if (isOEmbedPath(pathname)) {
+    return NextResponse.next();
+  }
+
+  // Stable share images (route handler with its own caching headers): no locale redirect
+  if (isShareImagePath(pathname)) {
     return NextResponse.next();
   }
 

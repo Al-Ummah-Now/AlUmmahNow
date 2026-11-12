@@ -28,6 +28,8 @@ const content = require('@/lib/embed/content') as {
 };
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { GET, OPTIONS } = require('@/app/oembed/route') as typeof import('@/app/oembed/route');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const thumbRoute = require('@/app/thumb/[file]/route') as typeof import('@/app/thumb/[file]/route');
 
 const HOST = 'videos.qa.alummahnow.net';
 
@@ -71,6 +73,12 @@ describe('middleware', () => {
 
   it('does not locale-redirect /oembed', async () => {
     const response = await middleware(request('/oembed?url=x'));
+    expect(response.headers.get('location')).toBeNull();
+    expect(response.status).toBe(200);
+  });
+
+  it('does not locale-redirect /thumb/<id>.jpg', async () => {
+    const response = await middleware(request('/thumb/0174501b-cbc9-41b4-b386-93f9bb8429a7.jpg'));
     expect(response.headers.get('location')).toBeNull();
     expect(response.status).toBe(200);
   });
@@ -127,7 +135,7 @@ describe('GET /oembed', () => {
   it('answers a public playlist', async () => {
     content.loadPublicPlaylist.mockResolvedValue({ id: 'p1', title: 'Series', channelName: 'QA', videos: [video] });
     const body = await (await call(`url=${encodeURIComponent(`https://${HOST}/embed/p/p1`)}`)).json();
-    expect(body).toMatchObject({ title: 'Series', aun_playlist_id: 'p1', thumbnail_url: video.poster });
+    expect(body).toMatchObject({ title: 'Series', aun_playlist_id: 'p1', thumbnail_url: `https://${HOST}/thumb/v1.jpg` });
     expect(body.html).toContain(`https://${HOST}/embed/p/p1`);
   });
 
@@ -135,5 +143,67 @@ describe('GET /oembed', () => {
     const response = OPTIONS();
     expect(response.status).toBe(204);
     expect(response.headers.get('access-control-allow-origin')).toBe('*');
+  });
+});
+
+// 2026-11-12: share previews must survive crawler caches, so no image that
+// leaves our pages may carry a Bunny token (they expire after hours)
+describe('oEmbed thumbnails', () => {
+  const signed = 'https://vz-215a1ffd-a5a.b-cdn.net/bcdn_token=T&expires=1794459600&token_path=%2Fv1%2F/v1/thumbnail_1.jpg';
+  it('point at the stable /thumb URL, never a signed CDN URL', async () => {
+    content.loadPublicVideo.mockResolvedValue({ id: 'v1', title: 'T', playUrl: 'https://vz/t/v1/playlist.m3u8', poster: '/thumb/v1.jpg', thumbnailSource: signed });
+    const response = await GET(new NextRequest(new URL(`https://${HOST}/oembed?url=${encodeURIComponent(`https://${HOST}/en/video/v1`)}`), { headers: { host: HOST } }));
+    const text = await response.text();
+    expect(text).not.toMatch(/bcdn_token|token=/);
+    expect(JSON.parse(text).thumbnail_url).toBe(`https://${HOST}/thumb/v1.jpg`);
+  });
+});
+
+describe('GET /thumb/<id>.jpg', () => {
+  const ID = '0174501b-cbc9-41b4-b386-93f9bb8429a7';
+  const realFetch = global.fetch;
+  const fetchMock = jest.fn();
+  const call = (file: string) => thumbRoute.GET(new Request(`https://${HOST}/thumb/${file}`), { params: Promise.resolve({ file }) });
+
+  beforeEach(() => {
+    content.loadPublicVideo.mockReset();
+    fetchMock.mockReset();
+    global.fetch = fetchMock as unknown as typeof fetch;
+  });
+  afterAll(() => {
+    global.fetch = realFetch;
+  });
+
+  it('streams the current thumbnail of a public video from its freshly signed source', async () => {
+    const source = `https://vz-215a1ffd-a5a.b-cdn.net/${ID}/thumbnail_1.jpg?token=fresh&expires=1999999999`;
+    content.loadPublicVideo.mockResolvedValue({ id: ID, title: 'T', playUrl: 'x', poster: `/thumb/${ID}.jpg`, thumbnailSource: source });
+    fetchMock.mockResolvedValue(new Response(new Uint8Array([0xff, 0xd8, 0xff]), { status: 200, headers: { 'content-type': 'image/jpeg' } }));
+    const response = await call(`${ID}.jpg`);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('image/jpeg');
+    expect(response.headers.get('cache-control')).toBe('public, max-age=3600, s-maxage=3600');
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(new Uint8Array([0xff, 0xd8, 0xff]));
+    expect(fetchMock).toHaveBeenCalledWith(source, expect.anything());
+    expect(content.loadPublicVideo).toHaveBeenCalledWith(ID);
+  });
+
+  it('404s for a video that is not public (the anonymous API has none) without fetching anything', async () => {
+    content.loadPublicVideo.mockResolvedValue(null);
+    expect((await call(`${ID}.jpg`)).status).toBe(404);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('404s for bad ids and never proxies another host', async () => {
+    expect((await call('..%2Fx.jpg')).status).toBe(404);
+    expect((await call(`${ID}.png`)).status).toBe(404);
+    content.loadPublicVideo.mockResolvedValue({ id: ID, title: 'T', playUrl: 'x', poster: `/thumb/${ID}.jpg`, thumbnailSource: 'https://evil.example/x.jpg' });
+    expect((await call(`${ID}.jpg`)).status).toBe(404);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('404s when the source is not an image', async () => {
+    content.loadPublicVideo.mockResolvedValue({ id: ID, title: 'T', playUrl: 'x', poster: `/thumb/${ID}.jpg`, thumbnailSource: `https://media.alummahnow.net/pub/${ID}/r/thumb.jpg` });
+    fetchMock.mockResolvedValue(new Response('<html>', { status: 200, headers: { 'content-type': 'text/html' } }));
+    expect((await call(`${ID}.jpg`)).status).toBe(404);
   });
 });
