@@ -298,7 +298,12 @@ export class DataScope {
 
     if (opts.chapters) {
       await ok(
-        await apiFetch(user, `/api/videos/${id}/chapters`, { method: 'PUT', headers: { 'Content-Type': 'application/json', channelId }, body: JSON.stringify({ chapters: CHAPTERS }) }),
+        await apiFetch(user, `/api/videos/${id}/chapters`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', channelId },
+          // Every chapter needs its own id
+          body: JSON.stringify({ chapters: CHAPTERS.map((chapter) => ({ id: crypto.randomUUID(), ...chapter })) }),
+        }),
         'PUT chapters',
       );
     }
