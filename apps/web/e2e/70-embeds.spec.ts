@@ -57,6 +57,8 @@ test.afterAll(async () => {
 /** This file's own public videos (release/own-videos.ts: made in beforeAll, deleted afterwards) */
 const own = useOwnVideos(test as never);
 const ownLecture = async () => (await own('landscape')) as Awaited<ReturnType<typeof own>> & { titleLocalized?: { en?: string; ar?: string } };
+/** An id no video has (the unavailable-frame check) */
+const NO_SUCH_VIDEO = '00000000-0000-4000-8000-000000000000';
 const NO_CODEC = 'bundled Chromium has no H.264 decoder for the HLS stream; run with webkit or A11Y_CHROME_CHANNEL=chrome';
 
 function baseOrigin(testInfo: TestInfo): string {
@@ -180,7 +182,7 @@ test.describe('embed player', () => {
 test.describe('unavailable videos', () => {
   test('EMBED-005 an unknown video shows the unavailable frame and reports it', async ({ page }, testInfo) => {
     const origin = baseOrigin(testInfo);
-    await openHostPage(page, playerFrame(origin, `${origin}/embed/v/00000000-0000-4000-8000-000000000000`));
+    await openHostPage(page, playerFrame(origin, `${origin}/embed/v/${NO_SUCH_VIDEO}`));
     const frame = page.frameLocator('#aun');
     await expect(frame.getByTestId('embed-unavailable')).toBeVisible({ timeout: 30000 });
     await expect(frame.locator('.video-js')).toHaveCount(0);
