@@ -99,6 +99,13 @@ jobs:
           browsers: ${{ matrix.browsers }}
           working-directory: apps/web
 
+      # Diagnostic while WebKit's load event never fires on the stack: what is it still waiting on
+      - name: Pending requests (WebKit)
+        if: matrix.project == 'webkit'
+        continue-on-error: true
+        timeout-minutes: 3
+        run: node scripts/local-stack/pending-requests.mjs webkit http://localhost:3001/en
+
       - name: Run
         working-directory: apps/web
         run: |
