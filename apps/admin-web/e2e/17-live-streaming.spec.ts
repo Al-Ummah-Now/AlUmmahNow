@@ -15,9 +15,11 @@
  * real stream is affected. Data: one throwaway channel made by the seeded
  * super admin and deleted afterwards. PR runs skip while QA predates the page.
  */
-import { test, expect, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { test, expect } from './support/fixtures';
 import { adminApi, readTokens } from './support/api';
-import { RUN_ID, VIDEOS_API_URL, ADMIN_WEB_URL } from './support/env';
+import { RUN_ID, VIDEOS_API_URL, ADMIN_WEB_URL, accounts } from './support/env';
+import { createVideosProfile } from './support/profiles';
 
 interface LiveSettings {
   mode: string;
@@ -62,11 +64,18 @@ test.describe('live streaming', () => {
 
     const tag = `${RUN_ID || 'local'}-${Date.now().toString(36)}`;
     channelName = `E2E live ${tag}`;
-    const res = await fetch(`${VIDEOS_API_URL}/api/channels`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${superToken()}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ name: channelName, description: '[e2e-admin] live streaming override', isMain: false }),
-    });
+    const createChannel = () =>
+      fetch(`${VIDEOS_API_URL}/api/channels`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${superToken()}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ name: channelName, description: '[e2e-admin] live streaming override', isMain: false }),
+      });
+    let res = await createChannel();
+    // The shared-state job starts on a fresh stack: the super admin has no videos profile there yet
+    if (res.status === 404) {
+      await createVideosProfile(superToken(), accounts.superadmin.email, 'E2E super admin');
+      res = await createChannel();
+    }
     const created = (await res.json().catch(() => ({}))) as { result?: { channel?: { id?: string } } };
     channelId = created.result?.channel?.id ?? '';
     expect(channelId, `channel create -> ${res.status}`).toBeTruthy();
