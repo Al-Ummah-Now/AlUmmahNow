@@ -15,6 +15,9 @@ name: Admin Web E2E (QA)
 # under the cross-run qa-global lock (scripts/ci/qa-lock.ts), which waits its
 # turn instead of replacing a queued run the way a concurrency group did.
 
+# Every admin spec is placed `local` (apps/web/e2e/test-utils/placement.ts): pull requests run the
+# suite on the local stack (local-e2e.yml, "Local admin suite" jobs), not against QA. This workflow
+# stays for a manual run against a deployed admin-web; it runs on no PR or schedule.
 on:
   workflow_dispatch:
     inputs:
@@ -22,14 +25,6 @@ on:
         description: 'admin-web base URL'
         required: false
         default: 'https://admin.qa.alummahnow.net'
-  pull_request:
-    branches: [main, develop, integrate/qa-features]
-    paths:
-      - 'apps/admin-web/**'
-      - 'apps/admin-api/**'
-      - '.github/workflows/admin-e2e.yml'
-  schedule:
-    - cron: '30 3 * * *'
 
 permissions:
   contents: read
