@@ -7,7 +7,7 @@
  * State is polled every 5 s (GET /api/live-streams/:id/state).
  */
 import { useCallback, useEffect, useId, useState } from 'react';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { ArrowLeft } from 'lucide-react';
 import type { LiveIngest, LiveStreamState } from '@al-ummah/shared-types';
 import { Badge } from '@/components/ui/badge';

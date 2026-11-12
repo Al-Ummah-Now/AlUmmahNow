@@ -37,7 +37,7 @@ test.describe('Release: Studio frame', () => {
     const studio = `${target().web}/en/studio/${channelId}`;
     await page.goto(`${studio}/dashboard`);
 
-    // Comments and Live are hidden until they have a creator page (#771)
+    // Comments stays hidden until it has a creator page (#771); Live has one (Content → Live, D3)
     for (const item of ['dashboard', 'content', 'analytics', 'playlists', 'customisation', 'settings']) {
       await expect(page.getByTestId(`studio-nav-${item}`)).toBeVisible();
     }
@@ -45,8 +45,7 @@ test.describe('Release: Studio frame', () => {
 
     await page.goto(`${studio}/content`);
     await expect(page).toHaveURL(`${studio}/content/videos`);
-    for (const tab of ['videos', 'posts']) await expect(page.getByTestId(`studio-tab-${tab}`)).toBeVisible();
-    await expect(page.getByTestId('studio-tab-live')).toHaveCount(0);
+    for (const tab of ['videos', 'posts', 'live']) await expect(page.getByTestId(`studio-tab-${tab}`)).toBeVisible();
 
     const missing = await page.goto(`${studio}/nope`);
     expect(missing?.status()).toBe(404);
