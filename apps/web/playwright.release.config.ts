@@ -76,7 +76,7 @@ const releaseSpecs = (placement: 'local' | 'deployed') =>
     .filter((p) => p.startsWith('apps/web/e2e/release/') && SPEC_PLACEMENT[p].placement === placement)
     .map((p) => escape(p.slice('apps/web/e2e/release/'.length)));
 const DEPLOYED_ONLY = new RegExp(`/(${releaseSpecs('deployed').join('|')})$`);
-const LOCAL_USE = LOCAL ? { proxy: { server: 'http://127.0.0.1:3191', bypass: '<-loopback>' }, ignoreHTTPSErrors: true } : {};
+const LOCAL_USE = LOCAL ? { proxy: { server: 'http://127.0.0.1:3191', bypass: 'localhost,127.0.0.1' }, ignoreHTTPSErrors: true } : {};
 
 const LOAD_TAG = /@load/;
 const LOAD_ONLY = process.env.E2E_LOAD === 'only';
