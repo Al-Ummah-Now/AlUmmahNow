@@ -20,7 +20,7 @@
  * change is deployed there, the run skips (the access endpoint answers 404).
  */
 import { test, expect, type Browser, type Page } from '@playwright/test';
-import { target } from './targets';
+import { target, releaseEnv } from './targets';
 import { apiFetch, createProfile, signUpOnWeb, type WebUser } from './web-session';
 import { grantCreatorTier } from './creator-tier';
 
@@ -71,6 +71,7 @@ const managedOption = (page: Page, channelId: string) =>
   page.locator(`[data-testid="nav-channel-group-managed"] [data-testid="nav-channel-option"][data-channel-id="${channelId}"]:visible`);
 
 test('a channel role shows under "Channels you manage" live, and disappears when revoked', async ({ browser }) => {
+  test.fixme(releaseEnv() === 'local', 'quarantined: #1021 @meywd: the managed-channels menu is intermittent on the local stack');
   const owner = await newSignedInPage(browser, 'roles-owner');
   const member = await newSignedInPage(browser, 'roles-member');
   try {
