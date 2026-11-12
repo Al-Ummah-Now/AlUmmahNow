@@ -13,6 +13,7 @@ import { waitUntilOf } from "../../lib/search/ownership";
 import { channelVideosFromIndex } from "../../lib/search/channelVideoIndex";
 import { scanFill } from "../../lib/listFill";
 import { edgeCacheUrl, readEdgeCache, writeEdgeCache } from "../../lib/edge-cache";
+import { PUBLIC_DISLIKES_COUNT } from "../../lib/reactions";
 
 /** Seconds the anonymous first page of the general feed is reused. */
 const LIST_FIRST_PAGE_TTL = 30;
@@ -270,7 +271,7 @@ export class VideosList extends OptionalAuthRoute {
 				channelName: channel?.name || "",
 				channelAvatarUrl: channel?.avatarUrl,
 				likesCount: video.likes?.length || 0,
-				dislikesCount: video.dislikes?.length || 0,
+				dislikesCount: PUBLIC_DISLIKES_COUNT,
 				isShort: isShort(video),
 				commentsCount: video.comments?.length || 0,
 			};

@@ -205,10 +205,8 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
                   channelId={videoDetails.channelId || undefined}
                   initialViewCount={parseInt(videoDetails.views?.replace(/[^\d]/g, '') || '0')}
                   initialLikesCount={videoDetails.likesCount || 0}
-                  initialDislikesCount={videoDetails.dislikesCount || 0}
                   initialCommentsCount={videoDetails.commentsCount || 0}
                   likes={videoDetails.likes}
-                  dislikes={videoDetails.dislikes}
                   onMetricsUpdate={(metrics) => {
                     logger.debug('[WatchPage] Video metrics updated', { metrics });
                   }}

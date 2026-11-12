@@ -10,6 +10,7 @@ import { OptionalAuthRoute, AppContext } from "../../base";
 import { waitUntilOf } from "../../lib/search/ownership";
 import { channelVideosFromIndex } from "../../lib/search/channelVideoIndex";
 import { scanFill } from "../../lib/listFill";
+import { PUBLIC_DISLIKES_COUNT } from "../../lib/reactions";
 
 export class ChannelLiveList extends OptionalAuthRoute {
 	schema = {
@@ -171,7 +172,7 @@ export class ChannelLiveList extends OptionalAuthRoute {
 				channelName: channel.name || "",
 				channelAvatarUrl: channel.avatarUrl || undefined,
 				likesCount: video.likes?.length || 0,
-				dislikesCount: video.dislikes?.length || 0,
+				dislikesCount: PUBLIC_DISLIKES_COUNT,
 				isShort: isShort(video),
 				commentsCount: video.comments?.length || 0,
 			});

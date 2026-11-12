@@ -1336,6 +1336,8 @@ export interface AppTranslations {
     fileTooLarge: string;
     reportReasonRequired: string;
     loginRequired: string;
+    /** API code dislikes_disabled (410 on POST /api/videos/{id}/dislikes) */
+    dislikesDisabled: string;
   };
 
   /**
@@ -2305,8 +2307,6 @@ export interface AppTranslations {
     commentsCount: string;
     likeVideo: string;
     unlikeVideo: string;
-    dislikeVideo: string;
-    removeDislike: string;
     signInToReact: string;
     moreVideoActions: string;
     watchingNow: string;

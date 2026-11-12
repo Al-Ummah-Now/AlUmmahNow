@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Al Ummah Now API",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "Public API v1 for Al Ummah Now apps. Additive changes ship in v1; breaking changes ship as a new version. Deprecated operations answer with Deprecation and Sunset headers. See API_VERSIONING.md."
   },
   "servers": [
@@ -6087,7 +6087,8 @@
                                 "type": "number"
                               },
                               "dislikesCount": {
-                                "type": "number"
+                                "type": "number",
+                                "description": "Always 0: dislikes are hidden and not accepted since 2026-11-11 (kept for older clients)"
                               },
                               "commentsCount": {
                                 "type": "number"
@@ -6584,7 +6585,8 @@
                             "type": "number"
                           },
                           "dislikesCount": {
-                            "type": "number"
+                            "type": "number",
+                            "description": "Always 0: dislikes are hidden and not accepted since 2026-11-11 (kept for older clients)"
                           },
                           "commentsCount": {
                             "type": "number"
@@ -8201,7 +8203,8 @@
                             "type": "number"
                           },
                           "dislikesCount": {
-                            "type": "number"
+                            "type": "number",
+                            "description": "Always 0: dislikes are hidden and not accepted since 2026-11-11 (kept for older clients)"
                           },
                           "commentsCount": {
                             "type": "number"
@@ -9560,7 +9563,8 @@
                             "type": "number"
                           },
                           "dislikesCount": {
-                            "type": "number"
+                            "type": "number",
+                            "description": "Always 0: dislikes are hidden and not accepted since 2026-11-11 (kept for older clients)"
                           },
                           "commentsCount": {
                             "type": "number"
@@ -14940,7 +14944,8 @@
                                 "type": "number"
                               },
                               "dislikesCount": {
-                                "type": "number"
+                                "type": "number",
+                                "description": "Always 0: dislikes are hidden and not accepted since 2026-11-11 (kept for older clients)"
                               },
                               "commentsCount": {
                                 "type": "number"
@@ -15222,7 +15227,8 @@
                               "type": "number"
                             },
                             "dislikesCount": {
-                              "type": "number"
+                              "type": "number",
+                              "description": "Always 0: dislikes are hidden and not accepted since 2026-11-11 (kept for older clients)"
                             },
                             "commentsCount": {
                               "type": "number"
@@ -15541,7 +15547,8 @@
                               "type": "number"
                             },
                             "dislikesCount": {
-                              "type": "number"
+                              "type": "number",
+                              "description": "Always 0: dislikes are hidden and not accepted since 2026-11-11 (kept for older clients)"
                             },
                             "commentsCount": {
                               "type": "number"
@@ -24323,7 +24330,8 @@
                             "type": "number"
                           },
                           "dislikesCount": {
-                            "type": "number"
+                            "type": "number",
+                            "description": "Always 0: dislikes are hidden and not accepted since 2026-11-11 (kept for older clients)"
                           },
                           "commentsCount": {
                             "type": "number"
@@ -24828,7 +24836,8 @@
                               "type": "number"
                             },
                             "dislikesCount": {
-                              "type": "number"
+                              "type": "number",
+                              "description": "Always 0: dislikes are hidden and not accepted since 2026-11-11 (kept for older clients)"
                             },
                             "commentsCount": {
                               "type": "number"
@@ -27619,7 +27628,8 @@
                             "type": "number"
                           },
                           "dislikesCount": {
-                            "type": "number"
+                            "type": "number",
+                            "description": "Always 0: dislikes are hidden and not accepted since 2026-11-11 (kept for older clients)"
                           },
                           "commentsCount": {
                             "type": "number"
@@ -31005,7 +31015,8 @@
                       "type": "number"
                     },
                     "dislikesCount": {
-                      "type": "number"
+                      "type": "number",
+                      "description": "Always 0: dislikes are hidden and not accepted since 2026-11-11 (kept for older clients)"
                     },
                     "commentsCount": {
                       "type": "number"
@@ -31549,7 +31560,8 @@
                               "type": "number"
                             },
                             "dislikesCount": {
-                              "type": "number"
+                              "type": "number",
+                              "description": "Always 0: dislikes are hidden and not accepted since 2026-11-11 (kept for older clients)"
                             },
                             "commentsCount": {
                               "type": "number"
@@ -34216,7 +34228,9 @@
         "tags": [
           "Dislikes"
         ],
-        "summary": "Dislike a video",
+        "summary": "Dislike a video (disabled: always 410 dislikes_disabled)",
+        "description": "Dislikes were turned off on 2026-11-11. This always answers 410 Gone with code `dislikes_disabled` and stores nothing. Use DELETE /api/videos/{id}/dislikes to clear an old dislike.",
+        "deprecated": true,
         "operationId": "post_DislikeCreate",
         "parameters": [
           {
@@ -34244,18 +34258,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Returns success status",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "success": true
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad request - invalid input data",
+          "410": {
+            "description": "Dislikes are turned off (code dislikes_disabled). `error` is in the language asked for with ?lang=ar, English otherwise.",
             "content": {
               "application/json": {
                 "schema": {
@@ -34270,35 +34274,34 @@
                     },
                     "message": {
                       "type": "string"
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "dislikes_disabled"
+                      ]
+                    },
+                    "messages": {
+                      "type": "object",
+                      "properties": {
+                        "en": {
+                          "type": "string"
+                        },
+                        "ar": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "en",
+                        "ar"
+                      ],
+                      "description": "The message in both site languages"
                     }
                   },
                   "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "default": false
-                    },
-                    "error": {
-                      "type": "string"
-                    },
-                    "message": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
+                    "error",
+                    "code",
+                    "messages"
                   ]
                 }
               }
@@ -34311,6 +34314,7 @@
           "Dislikes"
         ],
         "summary": "Remove dislike from a video",
+        "description": "Clears a dislike stored before dislikes were turned off (2026-11-11). Idempotent. Liking the video clears it too.",
         "operationId": "delete_DislikeDelete",
         "parameters": [
           {

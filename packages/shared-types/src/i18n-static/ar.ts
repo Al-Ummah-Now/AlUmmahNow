@@ -7,6 +7,7 @@
  */
 
 import type { AppTranslations } from '../i18n';
+import { DISLIKES_DISABLED_MESSAGE } from '../video-reactions';
 import { LIBRARY_AR, NOTIFICATION_CENTER_AR } from '../i18n-library';
 import { BULK_EDIT_AR } from '../i18n-bulk-edit';
 import { STUDIO_AR } from '../i18n-studio';
@@ -1291,6 +1292,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     fileTooLarge: 'الملف كبير جداً.',
     reportReasonRequired: 'يرجى تحديد سبب الإبلاغ عن هذا المحتوى.',
     loginRequired: 'يجب تسجيل الدخول لتنفيذ هذا الإجراء.',
+    dislikesDisabled: DISLIKES_DISABLED_MESSAGE.ar,
   },
 
   success: {
@@ -2088,9 +2090,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     commentsCount: '{count} تعليق',
     likeVideo: 'أعجبني هذا الفيديو',
     unlikeVideo: 'إزالة الإعجاب',
-    dislikeVideo: 'لم يعجبني هذا الفيديو',
-    removeDislike: 'إزالة عدم الإعجاب',
-    signInToReact: 'سجّل الدخول لإبداء الإعجاب أو عدمه',
+    signInToReact: 'سجّل الدخول لإبداء الإعجاب',
     moreVideoActions: 'إجراءات أخرى',
     watchingNow: '{count} يشاهدون الآن',
   },

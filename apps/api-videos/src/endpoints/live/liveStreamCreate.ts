@@ -10,6 +10,7 @@ import Queue, { MessageType } from "../../lib/queue";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import { requireSecret } from "../../lib/env-helpers";
 import { logger } from '../../lib/logger';
+import { PUBLIC_DISLIKES_COUNT } from "../../lib/reactions";
 
 export class LiveStreamCreate extends AuthenticatedRoute {
 	schema = addAuthToSchema({
@@ -146,7 +147,7 @@ export class LiveStreamCreate extends AuthenticatedRoute {
 		const streamView = {
 			...liveStream,
 			likesCount: liveStream.likes.length,
-			dislikesCount: liveStream.dislikes.length,
+			dislikesCount: PUBLIC_DISLIKES_COUNT,
 			commentsCount: liveStream.comments.length,
 		};
 

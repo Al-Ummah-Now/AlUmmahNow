@@ -1,7 +1,7 @@
 /**
  * Video Engagement Service
  *
- * Handles video engagement actions (like, dislike, share, view tracking)
+ * Handles video engagement actions (like, share, view tracking)
  * with optimistic updates and error recovery.
  *
  * Features:
@@ -26,7 +26,7 @@ export type SharePlatform = 'twitter' | 'facebook' | 'email' | 'copy';
 /**
  * Engagement action types for analytics
  */
-export type EngagementAction = 'like' | 'unlike' | 'dislike' | 'remove_dislike' | 'share' | 'view';
+export type EngagementAction = 'like' | 'unlike' | 'share' | 'view';
 
 /**
  * Result of an engagement operation
@@ -320,78 +320,6 @@ export class VideoEngagementService {
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to unlike video'
-      };
-    }
-  }
-
-  /**
-   * Dislike a video with optimistic update
-   *
-   * @param videoId - The video ID
-   * @param channelId - User's channel ID (required for API)
-   * @returns Promise resolving to success status
-   */
-  async dislikeVideo(
-    videoId: string,
-    channelId: string
-  ): Promise<EngagementResult> {
-    // Security: Validate video ID format
-    if (!isValidVideoId(videoId)) {
-      return {
-        success: false,
-        error: 'Invalid video ID format'
-      };
-    }
-
-    try {
-      const result = await VideosAPI.dislikeVideo(videoId, { channelId });
-
-      if (!result || !result.success) {
-        throw new Error('Failed to dislike video');
-      }
-
-      return { success: true };
-    } catch (error) {
-      logger.error('[VideoEngagementService] Failed to dislike video:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to dislike video'
-      };
-    }
-  }
-
-  /**
-   * Remove dislike from a video with optimistic update
-   *
-   * @param videoId - The video ID
-   * @param channelId - User's channel ID (required for API)
-   * @returns Promise resolving to success status
-   */
-  async removeDislike(
-    videoId: string,
-    channelId: string
-  ): Promise<EngagementResult> {
-    // Security: Validate video ID format
-    if (!isValidVideoId(videoId)) {
-      return {
-        success: false,
-        error: 'Invalid video ID format'
-      };
-    }
-
-    try {
-      const result = await VideosAPI.removeVideoDislike(videoId, { channelId });
-
-      if (!result || !result.success) {
-        throw new Error('Failed to remove dislike');
-      }
-
-      return { success: true };
-    } catch (error) {
-      logger.error('[VideoEngagementService] Failed to remove dislike:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to remove dislike'
       };
     }
   }

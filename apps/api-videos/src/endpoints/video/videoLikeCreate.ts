@@ -6,7 +6,7 @@ import Queue, { MessageType } from "../../lib/queue";
 import { broadcastInBackground } from "../../lib/websocket-notify";
 import { recordLike } from "../../lib/library";
 import { AuthenticatedRoute, AppContext } from '../../base';
-import { ReactorHeaders, applyVideoReaction, reactorId } from "../../lib/reactions";
+import { PUBLIC_DISLIKES_COUNT, ReactorHeaders, applyVideoReaction, reactorId } from "../../lib/reactions";
 
 export class LikeCreate extends AuthenticatedRoute {
     schema = {
@@ -63,6 +63,17 @@ export class LikeCreate extends AuthenticatedRoute {
         // Per-user liked-videos index (Library, Story 29.6); idempotent
         await recordLike(c.env.NOTIFICATIONS_DB, userId, id);
 
+        // Liking takes back a dislike stored before dislikes were turned off (2026-11-11)
+        if (result.clearedDislike) {
+            await new Queue(c.env.queue).send(MessageType.VideoUndislike, {
+                dislikeId: result.clearedDislike.id,
+                videoId: id,
+                userId,
+                channelId,
+                timestamp: new Date().toISOString(),
+            });
+        }
+
         // Liking twice is a no-op: no second event or broadcast
         if (result.changed) {
             await new Queue(c.env.queue).send(MessageType.VideoLike, {
@@ -76,7 +87,7 @@ export class LikeCreate extends AuthenticatedRoute {
                 videoId: id,
                 userId,
                 likesCount: result.video.likes.length,
-                dislikesCount: result.video.dislikes.length,
+                dislikesCount: PUBLIC_DISLIKES_COUNT,
             });
         }
 

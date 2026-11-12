@@ -11,8 +11,6 @@ export {
   deleteVideoComment,
   likeVideo,
   unlikeVideo,
-  dislikeVideo,
-  removeVideoDislike,
   likeVideoComment,
   unlikeVideoComment,
   dislikeVideoComment,
@@ -61,9 +59,7 @@ import {
   updateVideoComment,
   deleteVideoComment,
   likeVideo,
-  unlikeVideo,
-  dislikeVideo,
-  removeVideoDislike
+  unlikeVideo
 } from './videos';
 import { getProfileCurrent, createProfileAPI, updateProfileAPI, deleteProfileAPI } from './profiles';
 import {
@@ -120,8 +116,6 @@ export class APIClient {
       deleteComment: (videoId: string, commentId: string, headers?: ApiHeaders) => deleteVideoComment(videoId, commentId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId'>>),
       like: (videoId: string, headers?: ApiHeaders) => likeVideo(videoId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId'>>),
       unlike: (videoId: string, headers?: ApiHeaders) => unlikeVideo(videoId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId'>>),
-      dislike: (videoId: string, headers?: ApiHeaders) => dislikeVideo(videoId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId'>>),
-      removeDislike: (videoId: string, headers?: ApiHeaders) => removeVideoDislike(videoId, { ...this.headers, ...headers } as Required<Pick<ApiHeaders, 'channelId'>>),
     };
   }
 

@@ -7,6 +7,7 @@ import { VideoView, ChannelView, ProfileView, PlaylistView, CommentView } from "
 import { can, channelRoleOf, isShort, type ChannelRoleSource } from "@al-ummah/shared-types";
 import { isVideoReady } from './visibility';
 import { getCommentSettings, isCommentVisible, StoredComment } from './comments';
+import { PUBLIC_DISLIKES_COUNT } from './reactions';
 
 /**
  * The stored video without server-only processing fields, as every video view
@@ -14,12 +15,16 @@ import { getCommentSettings, isCommentVisible, StoredComment } from './comments'
  * (processingIssue → processingIssueKind), and no auto thumbnail URL until the
  * video is ready and Bunny's image exists (it would 404: clients show their
  * placeholder). Used by the detail view and every list view.
+ * Dislikes are hidden (owner decision 2026-11-11): a stored `dislikes` list
+ * goes out empty (the field stays for older clients), and `dislikesCount`
+ * is PUBLIC_DISLIKES_COUNT (0).
  */
 export function publicVideoFields<T extends Record<string, any>>(video: T): Omit<T, 'processingCheck' | 'processingIssue' | 'thumbnailPending'> & { processingIssueKind?: 'encode_failed' | 'needs_reupload' | 'stalled' } {
     const { processingCheck: _check, processingIssue, thumbnailPending, ...rest } = video as Record<string, any>;
     const hideThumbnail = (thumbnailPending || !isVideoReady(video)) && video.thumbnailType !== 'custom';
     return {
         ...rest,
+        ...(Array.isArray(rest.dislikes) ? { dislikes: [] } : {}),
         ...(processingIssue ? { processingIssueKind: processingIssue.kind } : {}),
         ...(hideThumbnail ? { thumbnailUrl: undefined, thumbnailSizes: undefined } : {}),
     } as never;
@@ -67,7 +72,7 @@ export function transformVideoToView(
         // Set only by admins (admin-api channel verification); not in the business schema
         channelIsVerified: (channel as { isVerified?: boolean } | null | undefined)?.isVerified === true,
         likesCount: video.likes?.length || 0,
-        dislikesCount: video.dislikes?.length || 0,
+        dislikesCount: PUBLIC_DISLIKES_COUNT,
         commentsCount: publicComments.length,
         isShort: isShort(video),
     };

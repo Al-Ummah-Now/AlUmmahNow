@@ -90,3 +90,4 @@ export * from './thumbnail-crop';
 export * from './roles';
 // Soft delete of admin-managed configuration (contact messages, themes, creator tiers)
 export * from './admin-trash';
+export * from './video-reactions';

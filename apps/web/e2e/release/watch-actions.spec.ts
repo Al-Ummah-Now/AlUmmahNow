@@ -1,8 +1,9 @@
 /**
  * Release regression: the watch page's action row is one design system.
- * - Every visible action (the like/dislike pair, comments, share, watch later,
- *   save, more) is a pill of the same height, radius, fill, border and icon size.
- * - Like and dislike are a matched pair: thumbs up and thumbs down.
+ * - Every visible action (like, comments, share, watch later, save, more) is a
+ *   pill of the same height, radius, fill, border and icon size.
+ * - Like is a thumbs up, and there is no dislike control (dislikes are turned
+ *   off, owner decision 2026-11-11).
  * - The row stays on one line at every width from 320 to 1920 (labels give way
  *   to icons first), inside the page, with no sideways scroll.
  * - Report is reachable: in the row, or in the "more" menu, and opens its dialog.
@@ -22,12 +23,11 @@ const THEMES = ['fawanees', 'nahas'] as const;
 const REPORT = /report|إبلاغ/i;
 
 interface Pill { name: string; top: number; bottom: number; left: number; right: number; height: number; radius: string; bg: string; border: string; icon: number }
-interface Row { pills: Pill[]; row: { left: number; right: number; overflow: number }; pageOverflow: number; like: string; dislike: string }
+interface Row { pills: Pill[]; row: { left: number; right: number; overflow: number }; pageOverflow: number; like: string; dislikeControls: number }
 
 /**
- * Every visible action in the row: an icon's closest pill (the joined
- * like/dislike group counts as one), or the icon's own wrapper when it has no
- * button around it. Menus and popovers opened from the row are left out.
+ * Every visible action in the row: an icon's closest pill, or the icon's own
+ * wrapper when it has no button around it. Menus and popovers opened from the row are left out.
  */
 const readRow = (page: Page): Promise<Row> =>
   page.evaluate(() => {
@@ -39,7 +39,7 @@ const readRow = (page: Page): Promise<Row> =>
     const items = new Set<HTMLElement>();
     row.querySelectorAll('svg').forEach((svg) => {
       if (svg.closest('[role=menu],[role=dialog]') || !shown(svg)) return;
-      const item = (svg.closest('[data-testid=video-reactions]') ?? svg.closest('button, a') ?? svg.parentElement) as HTMLElement;
+      const item = (svg.closest('button, a') ?? svg.parentElement) as HTMLElement;
       if (row.contains(item) && item !== row) items.add(item);
     });
     const pills = [...items].map((e) => {
@@ -59,7 +59,8 @@ const readRow = (page: Page): Promise<Row> =>
       row: { left: rr.left, right: rr.right, overflow: row.scrollWidth - row.clientWidth },
       pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
       like: icon('video-like-button'),
-      dislike: icon('video-dislike-button'),
+      // Any dislike control left in the row: the old test id, a thumbs-down icon, or a "dislike" name
+      dislikeControls: row.querySelectorAll('[data-testid=video-dislike-button], .lucide-thumbs-down, [data-icon=thumbs-down], [aria-label*=islike], [aria-label*="عدم الإعجاب"], [aria-label*="لم يعجبني"]').length,
     };
   });
 
@@ -119,6 +120,21 @@ function rowProblems(r: Row, where: string): string[] {
   return out;
 }
 
+/**
+ * Whether the target's API has dislikes turned off (2026-11-11): its public
+ * contract marks POST /videos/{id}/dislikes deprecated. Web and API deploy
+ * together, so a build without it still shows the dislike button. Only a PR
+ * run (against QA, which follows main) may meet such a build; stage and the
+ * nightly runs always check.
+ */
+async function dislikesTurnedOff(): Promise<boolean> {
+  if (process.env.GITHUB_EVENT_NAME !== 'pull_request') return true;
+  const res = await fetch(`${target().api}/api/openapi.json`).catch(() => null);
+  if (!res?.ok) return true;
+  const doc = await res.json().catch(() => null) as { paths?: Record<string, { post?: { deprecated?: boolean } }> } | null;
+  return doc?.paths?.['/api/v1/videos/{id}/dislikes']?.post?.deprecated === true;
+}
+
 /** Report, directly in the row or through its "more" menu; opens the report dialog and closes it. */
 async function openReport(page: Page, where: string): Promise<void> {
   const row = page.locator('.watch-actions');
@@ -158,6 +174,11 @@ for (const locale of ['en', 'ar'] as Locale[]) {
     // Signed-in actions have rendered
     await expect(page.getByTestId('watch-later-button')).toBeAttached({ timeout: 20000 });
 
+    const dislikesOff = await dislikesTurnedOff();
+    if (!dislikesOff) {
+      test.info().annotations.push({ type: 'not-deployed', description: 'QA still has dislikes (its API predates 2026-11-11); the no-dislike check is skipped' });
+    }
+
     const problems: string[] = [];
     for (const theme of THEMES) {
       for (const dark of [true, false]) {
@@ -174,8 +195,9 @@ for (const locale of ['en', 'ar'] as Locale[]) {
             await test.info().attach(`row ${locale} 1000px`, { path: shot, contentType: 'image/png' });
           }
           problems.push(...rowProblems(r, where));
-          if (!/thumbs-up/.test(r.like) || !/thumbs-down/.test(r.dislike)) {
-            problems.push(`${where}: like/dislike icons are not a matched pair (${r.like} / ${r.dislike})`);
+          if (!/thumbs-up/.test(r.like)) problems.push(`${where}: the like button has no thumbs-up icon (${r.like})`);
+          if (r.dislikeControls > 0 && dislikesOff) {
+            problems.push(`${where}: a dislike control is shown (${r.dislikeControls}); dislikes are turned off`);
           }
         }
       }

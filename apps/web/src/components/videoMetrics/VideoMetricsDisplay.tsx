@@ -2,7 +2,7 @@ import { logger } from '@/lib/logger-client';
 
 import React, { useEffect, useState } from 'react';
 import { useRealTimeVideoMetrics, useRealTimePresence } from '@/hooks/useRealTimeVideoMetrics';
-import { Eye, MessageCircle, Users, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { Eye, MessageCircle, Users, ThumbsUp } from 'lucide-react';
 import * as VideosAPI from '@/lib/api/videos';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -16,11 +16,9 @@ interface VideoMetricsDisplayProps {
   channelId?: string;
   initialViewCount?: number;
   initialLikesCount?: number;
-  initialDislikesCount?: number;
   initialCommentsCount?: number;
   /** Existing reactions on the video (from GET /api/videos/:id) */
   likes?: VideoReaction[];
-  dislikes?: VideoReaction[];
   onMetricsUpdate?: (metrics: unknown) => void;
 }
 
@@ -29,10 +27,8 @@ export function VideoMetricsDisplay({
   channelId,
   initialViewCount = 0,
   initialLikesCount = 0,
-  initialDislikesCount = 0,
   initialCommentsCount = 0,
   likes,
-  dislikes,
   onMetricsUpdate
 }: VideoMetricsDisplayProps) {
   const { user } = useAuth();
@@ -43,22 +39,19 @@ export function VideoMetricsDisplay({
   // and then have the restored state reset once the channel is known.
   const reactorChannelId = accountLoading ? '' : (account?.channel?.id || user?.id || '');
   const [isLiked, setIsLiked] = useState(false);
-  const [isDisliked, setIsDisliked] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   // Restore the viewer's existing reaction (after a reload the API still has it)
   useEffect(() => {
     if (!reactorChannelId) return;
     setIsLiked(!!likes?.some((r) => r.channelId === reactorChannelId));
-    setIsDisliked(!!dislikes?.some((r) => r.channelId === reactorChannelId));
-  }, [reactorChannelId, likes, dislikes]);
+  }, [reactorChannelId, likes]);
 
   const { metrics, updateMetrics } = useRealTimeVideoMetrics({
     videoId,
     initialMetrics: {
       viewCount: initialViewCount,
       likesCount: initialLikesCount,
-      dislikesCount: initialDislikesCount,
       commentsCount: initialCommentsCount
     },
     onMetricsUpdate
@@ -76,63 +69,46 @@ export function VideoMetricsDisplay({
     return num.toString();
   };
 
-  type Reaction = 'like' | 'dislike' | null;
-
   /**
-   * Toggle the viewer's reaction. Updates optimistically, then calls the API
-   * (removing the opposite reaction first) and restores the previous counts
-   * and state when any call fails (the API helpers return null on failure).
+   * Toggle the viewer's like. Updates optimistically, then calls the API and
+   * shows what the server has when the call fails (the API helpers return
+   * null on failure). Dislikes are turned off (owner decision 2026-11-11);
+   * liking also clears a dislike the viewer left before then (API side).
    */
-  const setReaction = async (target: Exclude<Reaction, null>) => {
+  const handleLike = async () => {
     if (!user || !reactorChannelId || isLoading) return;
 
-    const previous: Reaction = isLiked ? 'like' : isDisliked ? 'dislike' : null;
-    const next: Reaction = previous === target ? null : target;
-    const before = { likesCount: metrics.likesCount, dislikesCount: metrics.dislikesCount };
+    const wasLiked = isLiked;
+    const before = metrics.likesCount;
     const headers = { channelId: reactorChannelId };
 
     setIsLoading(true);
-    updateMetrics({
-      likesCount: Math.max(0, before.likesCount - (previous === 'like' ? 1 : 0) + (next === 'like' ? 1 : 0)),
-      dislikesCount: Math.max(0, before.dislikesCount - (previous === 'dislike' ? 1 : 0) + (next === 'dislike' ? 1 : 0)),
-    });
-    setIsLiked(next === 'like');
-    setIsDisliked(next === 'dislike');
+    updateMetrics({ likesCount: Math.max(0, before + (wasLiked ? -1 : 1)) });
+    setIsLiked(!wasLiked);
 
     try {
-      // Run every step even if one reports failure, then verify against the server
-      const results: unknown[] = [];
-      if (previous === 'like') results.push(await VideosAPI.unlikeVideo(videoId, headers));
-      if (previous === 'dislike') results.push(await VideosAPI.removeVideoDislike(videoId, headers));
-      if (next === 'like') results.push(await VideosAPI.likeVideo(videoId, headers));
-      if (next === 'dislike') results.push(await VideosAPI.dislikeVideo(videoId, headers));
-      if (results.some((result) => !result)) throw new Error('reaction request failed');
-      logger.debug('[VideoMetricsDisplay] Reaction updated', { videoId, previous, next });
+      const result = wasLiked
+        ? await VideosAPI.unlikeVideo(videoId, headers)
+        : await VideosAPI.likeVideo(videoId, headers);
+      if (!result) throw new Error('reaction request failed');
+      logger.debug('[VideoMetricsDisplay] Like updated', { videoId, liked: !wasLiked });
     } catch (error) {
-      logger.error('[VideoMetricsDisplay] Failed to update reaction', { videoId, previous, next, error });
+      logger.error('[VideoMetricsDisplay] Failed to update like', { videoId, liked: !wasLiked, error });
       // A failed response does not prove the change was not stored: show what
       // the server actually has, and fall back to the previous state if that
       // cannot be read either.
       const fresh = await VideosAPI.getVideoById(videoId).catch(() => null);
       if (fresh) {
         setIsLiked(!!fresh.likes?.some((r) => r.channelId === reactorChannelId));
-        setIsDisliked(!!fresh.dislikes?.some((r) => r.channelId === reactorChannelId));
-        updateMetrics({
-          likesCount: fresh.likes?.length ?? fresh.likesCount ?? before.likesCount,
-          dislikesCount: fresh.dislikes?.length ?? fresh.dislikesCount ?? before.dislikesCount,
-        });
+        updateMetrics({ likesCount: fresh.likes?.length ?? fresh.likesCount ?? before });
       } else {
-        updateMetrics(before);
-        setIsLiked(previous === 'like');
-        setIsDisliked(previous === 'dislike');
+        updateMetrics({ likesCount: before });
+        setIsLiked(wasLiked);
       }
     } finally {
       setIsLoading(false);
     }
   };
-
-  const handleLike = () => setReaction('like');
-  const handleDislike = () => setReaction('dislike');
 
   return (
     <div
@@ -149,39 +125,23 @@ export function VideoMetricsDisplay({
         </span>
       </div>
 
-      {/* Like and dislike: one segmented pill with a matched thumbs pair.
-          Pressed state uses the theme's primary colour (watch-actions in theme/system.css). */}
-      <div className="wa-seg" role="group" data-testid="video-reactions">
-        <button
-          type="button"
-          onClick={handleLike}
-          disabled={!user || isLoading || !reactorChannelId}
-          className={!user ? 'cursor-not-allowed' : 'cursor-pointer'}
-          title={!user ? t.a11y.signInToReact : isLiked ? t.a11y.unlikeVideo : t.a11y.likeVideo}
-          // Name includes the visible count (WCAG 2.5.3 Label in Name)
-          aria-label={`${isLiked ? t.a11y.unlikeVideo : t.a11y.likeVideo} ${formatNumber(metrics.likesCount)}`}
-          aria-pressed={isLiked}
-          aria-describedby={!user ? `metrics-signin-hint-${videoId}` : undefined}
-          data-testid="video-like-button"
-        >
-          <ThumbsUp className={isLiked ? 'fill-current' : undefined} aria-hidden="true" data-icon="thumbs-up" />
-          <span>{formatNumber(metrics.likesCount)}</span>
-        </button>
-        <button
-          type="button"
-          onClick={handleDislike}
-          disabled={!user || isLoading || !reactorChannelId}
-          className={!user ? 'cursor-not-allowed' : 'cursor-pointer'}
-          title={!user ? t.a11y.signInToReact : isDisliked ? t.a11y.removeDislike : t.a11y.dislikeVideo}
-          aria-label={`${isDisliked ? t.a11y.removeDislike : t.a11y.dislikeVideo} ${formatNumber(metrics.dislikesCount)}`}
-          aria-pressed={isDisliked}
-          aria-describedby={!user ? `metrics-signin-hint-${videoId}` : undefined}
-          data-testid="video-dislike-button"
-        >
-          <ThumbsDown className={isDisliked ? 'fill-current' : undefined} aria-hidden="true" data-icon="thumbs-down" />
-          <span>{formatNumber(metrics.dislikesCount)}</span>
-        </button>
-      </div>
+      {/* Like: a pill like the other actions (watch-actions in theme/system.css); pressed uses the
+          theme's primary colour. No dislike control: dislikes are turned off (2026-11-11). */}
+      <button
+        type="button"
+        onClick={handleLike}
+        disabled={!user || isLoading || !reactorChannelId}
+        className={!user ? 'cursor-not-allowed' : 'cursor-pointer'}
+        title={!user ? t.a11y.signInToReact : isLiked ? t.a11y.unlikeVideo : t.a11y.likeVideo}
+        // Name includes the visible count (WCAG 2.5.3 Label in Name)
+        aria-label={`${isLiked ? t.a11y.unlikeVideo : t.a11y.likeVideo} ${formatNumber(metrics.likesCount)}`}
+        aria-pressed={isLiked}
+        aria-describedby={!user ? `metrics-signin-hint-${videoId}` : undefined}
+        data-testid="video-like-button"
+      >
+        <ThumbsUp className={isLiked ? 'fill-current' : undefined} aria-hidden="true" data-icon="thumbs-up" />
+        <span>{formatNumber(metrics.likesCount)}</span>
+      </button>
 
       {/* Comments: a pill like the other actions, jumping to the comments section */}
       <a

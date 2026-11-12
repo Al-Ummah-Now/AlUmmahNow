@@ -14,6 +14,7 @@
 import { logger } from './logger';
 import { isVideoPubliclyVisible } from './visibility';
 import { detectTextLanguage } from '@al-ummah/shared-types';
+import { PUBLIC_DISLIKES_COUNT } from "./reactions";
 
 export interface DiscoveryVideo {
   id: string;
@@ -450,7 +451,7 @@ export function toVideoResponse(video: DiscoveryVideo, channels: Map<string, Dis
     updatedAt: video.dateModified,
     views: video.views || 0,
     likesCount: Array.isArray(video.likes) ? video.likes.length : 0,
-    dislikesCount: Array.isArray(video.dislikes) ? video.dislikes.length : 0,
+    dislikesCount: PUBLIC_DISLIKES_COUNT,
     commentsCount: Array.isArray(video.comments) ? video.comments.filter(c => !c?.isDeleted).length : 0,
     duration: video.duration,
     category: video.category,

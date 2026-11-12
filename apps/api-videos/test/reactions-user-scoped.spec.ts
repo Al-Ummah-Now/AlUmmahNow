@@ -79,34 +79,34 @@ describe('idempotent video reactions (#305)', () => {
 		delete (video as any).dislikes;
 		const e = env(video);
 		const app = appWith(routes);
-		for (const [method, path] of [['DELETE', 'dislikes'], ['DELETE', 'likes'], ['POST', 'dislikes'], ['POST', 'likes']]) {
+		for (const [method, path] of [['DELETE', 'dislikes'], ['DELETE', 'likes'], ['POST', 'likes']]) {
 			const res = await app.request(`/api/videos/v1/${path}`, { method, headers: { channelId: 'my-ch' } }, e);
 			assert.ok(res.status < 300, `${method} ${path}: ${res.status} ${await res.clone().text()}`);
 		}
 	});
 
-	it('adding the same like or dislike twice stores one and queues one event', async () => {
+	it('adding the same like twice stores one and queues one event', async () => {
 		const e = env();
 		const app = appWith(routes);
-		for (const path of ['likes', 'likes', 'dislikes', 'dislikes']) {
+		for (const path of ['likes', 'likes']) {
 			const res = await app.request(`/api/videos/v1/${path}`, { method: 'POST', headers: { channelId: 'my-ch' } }, e);
 			assert.ok(res.status < 300, `${path}: ${res.status}`);
 		}
 		const stored = e.videos.read('v1');
 		assert.equal(stored.likes.length, 1);
-		assert.equal(stored.dislikes.length, 1);
-		assert.equal(e.queue.messages.length, 2);
+		assert.equal(e.queue.messages.length, 1);
 	});
 
-	it('removing twice queues one event', async () => {
-		const e = env();
+	it('removing an old dislike twice queues one event', async () => {
+		const video = videoFixture();
+		(video as any).dislikes = [{ id: 'd-old', userId: USER, channelId: 'my-ch', entityId: 'v1', dateCreated: '2026-01-01T00:00:00.000Z' }];
+		const e = env(video);
 		const app = appWith(routes);
-		await app.request('/api/videos/v1/dislikes', { method: 'POST', headers: { channelId: 'my-ch' } }, e);
 		await app.request('/api/videos/v1/dislikes', { method: 'DELETE', headers: { channelId: 'my-ch' } }, e);
 		const again = await app.request('/api/videos/v1/dislikes', { method: 'DELETE', headers: { channelId: 'my-ch' } }, e);
 		assert.equal(again.status, 200);
 		assert.equal(e.videos.read('v1').dislikes.length, 0);
-		assert.equal(e.queue.messages.length, 2);
+		assert.equal(e.queue.messages.length, 1);
 	});
 });
 
@@ -123,11 +123,13 @@ describe('members without a channel react as themselves (#292)', () => {
 		assert.equal(e.videos.read('v1').likes.length, 0);
 	});
 
-	it('dislikes a video with no channelId header at all', async () => {
-		const e = env();
-		const res = await appWith(routes).request('/api/videos/v1/dislikes', { method: 'POST' }, e);
-		assert.ok(res.status < 300, `dislike: ${res.status} ${await res.clone().text()}`);
-		assert.deepEqual(e.videos.read('v1').dislikes.map((d: any) => d.channelId), [USER]);
+	it('clears their old dislike with no channelId header at all', async () => {
+		const video = videoFixture();
+		(video as any).dislikes = [{ id: 'd-old', userId: USER, channelId: USER, entityId: 'v1', dateCreated: '2026-01-01T00:00:00.000Z' }];
+		const e = env(video);
+		const res = await appWith(routes).request('/api/videos/v1/dislikes', { method: 'DELETE' }, e);
+		assert.ok(res.status < 300, `remove dislike: ${res.status} ${await res.clone().text()}`);
+		assert.deepEqual(e.videos.read('v1').dislikes, []);
 	});
 
 	it('likes and dislikes a comment as themselves', async () => {

@@ -6,10 +6,15 @@ import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { ReactorHeaders, applyVideoReaction, reactorId } from "../../lib/reactions";
 
+/**
+ * Still enabled after dislikes were turned off (owner decision 2026-11-11, see
+ * videoDislikeCreate.ts): a member can clear a dislike stored before then.
+ */
 export class DislikeDelete extends AuthenticatedRoute {
 	schema = {
 		tags: ["Dislikes"],
 		summary: "Remove dislike from a video",
+		description: "Clears a dislike stored before dislikes were turned off (2026-11-11). Idempotent. Liking the video clears it too.",
 		request: {
 			params: z.object({
 				id: Str({ description: "Video id" }),

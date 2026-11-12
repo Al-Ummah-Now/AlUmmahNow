@@ -32,11 +32,21 @@ function historyRoutes(r: any) {
 }
 
 describe('video likes / dislikes', () => {
-	it('like, unlike, dislike and remove dislike all answer 2xx and update the video', async () => {
-		const videos = new MemoryBucket({ v1: videoFixture() });
+	it('like, unlike and remove dislike answer 2xx and update the video; dislike is refused (410)', async () => {
+		const stored = videoFixture();
+		(stored as any).dislikes = [{ id: 'd-old', userId: 'me', channelId: 'my-ch', entityId: 'v1', dateCreated: '2026-01-01T00:00:00.000Z' }];
+		const videos = new MemoryBucket({ v1: stored });
 		const e = { videos, queue: new MemoryQueue() };
 		const app = buildApp(reactionRoutes, { userId: 'me' });
 		const headers = { channelId: 'my-ch' };
+
+		const dislike = await app.request('/api/videos/v1/dislikes', { method: 'POST', headers }, e);
+		assert.equal(dislike.status, 410);
+		assert.equal(videos.read('v1').dislikes.length, 1, 'a refused dislike stores nothing');
+
+		const undislike = await app.request('/api/videos/v1/dislikes', { method: 'DELETE', headers }, e);
+		assert.ok(undislike.status < 300, `remove dislike status ${undislike.status}`);
+		assert.equal(videos.read('v1').dislikes.length, 0);
 
 		const like = await app.request('/api/videos/v1/likes', { method: 'POST', headers }, e);
 		assert.ok(like.status < 300, `like status ${like.status}`);
@@ -46,14 +56,6 @@ describe('video likes / dislikes', () => {
 		const unlike = await app.request('/api/videos/v1/likes', { method: 'DELETE', headers }, e);
 		assert.ok(unlike.status < 300, `unlike status ${unlike.status}`);
 		assert.equal(videos.read('v1').likes.length, 0);
-
-		const dislike = await app.request('/api/videos/v1/dislikes', { method: 'POST', headers }, e);
-		assert.ok(dislike.status < 300, `dislike status ${dislike.status}`);
-		assert.equal(videos.read('v1').dislikes.length, 1);
-
-		const undislike = await app.request('/api/videos/v1/dislikes', { method: 'DELETE', headers }, e);
-		assert.ok(undislike.status < 300, `remove dislike status ${undislike.status}`);
-		assert.equal(videos.read('v1').dislikes.length, 0);
 	});
 });
 

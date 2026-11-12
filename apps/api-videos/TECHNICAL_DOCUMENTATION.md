@@ -243,10 +243,10 @@ PUT    /api/videos/:id         # Update video
 DELETE /api/videos/:id         # Delete video
 
 # User Interactions
-POST   /api/videos/:id/likes   # Like video
+POST   /api/videos/:id/likes   # Like video (also clears the member's dislike from before 2026-11-11)
 DELETE /api/videos/:id/likes   # Remove like
-POST   /api/videos/:id/dislikes # Dislike video
-DELETE /api/videos/:id/dislikes # Remove dislike
+POST   /api/videos/:id/dislikes # Disabled: always 410 dislikes_disabled (deprecated, see below)
+DELETE /api/videos/:id/dislikes # Clear a dislike stored before 2026-11-11
 
 # Comments
 POST   /api/videos/:id/comments # Create comment
@@ -272,6 +272,26 @@ DELETE /api/playlists/:id       # Delete playlist
 # Authentication Test
 GET    /auth-test               # Test JWT authentication
 ```
+
+#### Video dislikes are turned off (owner decision 2026-11-11)
+
+Dislikes are hidden and not accepted. Re-enable only with an owner decision.
+
+- `POST /api/videos/{id}/dislikes` stays registered (old clients get a clear answer, not a 404) and
+  always answers **410 Gone**, storing nothing:
+  `{ "success": false, "code": "dislikes_disabled", "error": "Dislikes are turned off", "messages": { "en": "Dislikes are turned off", "ar": "تم إيقاف عدم الإعجاب" } }`.
+  `error` is Arabic with `?lang=ar`. The contract marks it `deprecated` and responses carry
+  `Deprecation`/`Sunset` headers (`DEPRECATIONS` in `src/lib/api-version.ts`). The code and both
+  messages are exported from `@al-ummah/shared-types` (`DISLIKES_DISABLED_CODE`, `DISLIKES_DISABLED_MESSAGE`).
+- `DELETE /api/videos/{id}/dislikes` still clears a dislike stored before that date, and
+  `POST /api/videos/{id}/likes` clears the member's old dislike in the same write.
+- Public video payloads keep `dislikesCount` for older clients, **always 0**, and a stored
+  `dislikes` list goes out empty (`[]`). Realtime `video_liked`/`video_unliked` events send
+  `dislikesCount: 0`. Stored dislikes stay in R2 untouched (historical data); the owner's own
+  analytics (`GET /api/analytics…`) and the privacy export still count them.
+- The processor acknowledges a `VideoDislike` message still in the queue without counting it.
+- Comment dislikes are unchanged (out of scope of this decision).
+
 
 ## Authentication & Security
 
