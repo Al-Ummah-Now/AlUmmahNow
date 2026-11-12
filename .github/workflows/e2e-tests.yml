@@ -58,6 +58,9 @@ jobs:
   # (scripts/ci/qa-lock.ts), which waits its turn instead of replacing anyone.
   e2e:
     name: E2E - ${{ matrix.project }}
+    # A PR labelled skip-qa-e2e (spec-only fixes while main's E2E is being made green) sends no
+    # traffic to QA: those specs are proven by the verification run on main
+    if: ${{ github.event_name != 'pull_request' || !contains(github.event.pull_request.labels.*.name, 'skip-qa-e2e') }}
     runs-on: ubuntu-24.04
     # specs (100) + shared-state (up to 85 waiting + 40) + teardown (15); the
     # teardown steps must always get their turn
