@@ -4,6 +4,12 @@
  * startup (play request → first frame), rebuffers after the first frame,
  * watch time, time-weighted average and peak bitrate, rendition switches,
  * errors and whether R2 fell back to Bunny. Video.js events only.
+ *
+ * Live view (admin Delivery page, last 60 minutes and "now"): while the
+ * session goes on, `heartbeat()` (every 30 s from the player, and at once at
+ * the first frame, a fallback and the first error) sends `kind: 'heartbeat'`
+ * with `live`, the deltas since the previous report; the final report carries
+ * the last deltas. The daily rollup still counts only the final report.
  */
 import type { DeviceClass } from './delivery';
 
@@ -21,6 +27,24 @@ export interface QoeReport {
   switches: number;
   errors: number;
   fallback: boolean;
+  kind?: 'final' | 'heartbeat';
+  /** Source delivering the session now (bunny after a fallback) */
+  serving?: 'bunny' | 'r2';
+  playing?: boolean;
+  live?: QoeLiveDelta;
+}
+
+/** What changed since the session's previous report (live view). */
+export interface QoeLiveDelta {
+  attempt?: boolean;
+  started?: boolean;
+  startupMs?: number;
+  watchMs: number;
+  rebufferMs: number;
+  rebuffers: number;
+  avgKbps?: number;
+  errored?: boolean;
+  fallback?: boolean;
 }
 
 /** The parts of a Video.js player the tracker uses. */
@@ -52,11 +76,22 @@ export class QoeTracker {
   private fallback = false;
   private seeking = false;
   private sent = false;
+  private cursor = { watchMs: 0, kbpsMs: 0, rebufferMs: 0, rebuffers: 0 };
+  private told = { attempt: false, started: false, errored: false, fallback: false };
+  private lastPlaying = false;
   private readonly handlers: [string, () => void][];
 
   constructor(
     private player: QoePlayer,
-    private readonly opts: { sessionId: string; source: 'bunny' | 'r2'; device: DeviceClass; send: (r: QoeReport) => void; now?: Clock },
+    private readonly opts: {
+      sessionId: string;
+      source: 'bunny' | 'r2';
+      device: DeviceClass;
+      send: (r: QoeReport) => void;
+      /** Live heartbeats (optional: without it the tracker sends only the final report) */
+      beat?: (r: QoeReport) => void;
+      now?: Clock;
+    },
   ) {
     this.source = opts.source;
     const now = opts.now ?? (() => performance.now());
@@ -64,9 +99,11 @@ export class QoeTracker {
       ['play', () => { if (this.playRequestedAt === undefined) this.playRequestedAt = now(); }],
       ['playing', () => {
         const t = now();
+        let firstFrame = false;
         if (this.firstFrameAt === undefined) {
           this.firstFrameAt = t;
           if (this.playRequestedAt !== undefined) this.startupMs = Math.max(0, Math.round(t - this.playRequestedAt));
+          firstFrame = true;
         }
         if (this.waitingSince !== undefined) {
           this.rebufferMs += t - this.waitingSince;
@@ -75,6 +112,8 @@ export class QoeTracker {
         this.seeking = false;
         this.sampleBitrate();
         this.playingSince ??= t;
+        // Plays started show in the live view at once
+        if (firstFrame) this.heartbeat();
       }],
       ['waiting', () => {
         const t = now();
@@ -93,7 +132,10 @@ export class QoeTracker {
         this.waitingSince = undefined;
       }],
       ['seeked', () => { this.seeking = false; }],
-      ['error', () => { this.errors++; }],
+      ['error', () => {
+        this.errors++;
+        if (this.errors === 1) this.heartbeat();
+      }],
       ['timeupdate', () => this.sampleBitrate()],
     ];
     for (const [e, fn] of this.handlers) player.on(e, fn);
@@ -133,6 +175,44 @@ export class QoeTracker {
     this.fallback = true;
     this.source = 'bunny';
     this.lastKbps = undefined;
+    this.heartbeat();
+  }
+
+  /** Deltas since the previous report (moves the cursor). */
+  private liveDelta(r: QoeReport): QoeLiveDelta {
+    const kbpsMs = this.kbpsMs;
+    const d: QoeLiveDelta = {
+      watchMs: Math.max(0, r.watchMs - this.cursor.watchMs),
+      rebufferMs: Math.max(0, r.rebufferMs - this.cursor.rebufferMs),
+      rebuffers: Math.max(0, r.rebuffers - this.cursor.rebuffers),
+    };
+    const dk = kbpsMs - this.cursor.kbpsMs;
+    if (d.watchMs > 0 && dk > 0) d.avgKbps = Math.round(dk / d.watchMs);
+    if (!this.told.attempt && this.playRequestedAt !== undefined) d.attempt = this.told.attempt = true;
+    if (!this.told.started && r.started) {
+      d.started = this.told.started = true;
+      if (r.startupMs !== undefined) d.startupMs = r.startupMs;
+    }
+    if (!this.told.errored && r.errors > 0) d.errored = this.told.errored = true;
+    if (!this.told.fallback && r.fallback) d.fallback = this.told.fallback = true;
+    this.cursor = { watchMs: r.watchMs, kbpsMs, rebufferMs: r.rebufferMs, rebuffers: r.rebuffers };
+    return d;
+  }
+
+  /**
+   * Live heartbeat: the deltas since the last report, while the session goes
+   * on. Nothing before play was asked for, after the final report, or when
+   * nothing changed on a paused player.
+   */
+  heartbeat(): void {
+    if (this.sent || this.playRequestedAt === undefined || !this.opts.beat) return;
+    const r = this.report();
+    const playing = !this.player.paused() && this.firstFrameAt !== undefined;
+    const live = this.liveDelta(r);
+    const changed = playing || playing !== this.lastPlaying || live.watchMs > 0 || live.rebufferMs > 0 || live.attempt || live.started || live.errored || live.fallback;
+    this.lastPlaying = playing;
+    if (!changed) return;
+    this.opts.beat({ ...r, kind: 'heartbeat', serving: this.source, playing, live });
   }
 
   report(): QoeReport {
@@ -166,7 +246,8 @@ export class QoeTracker {
   flush(): void {
     if (this.sent || this.playRequestedAt === undefined) return;
     this.sent = true;
-    this.opts.send(this.report());
+    const r = this.report();
+    this.opts.send(this.opts.beat ? { ...r, serving: this.source, live: this.liveDelta(r) } : r);
   }
 
   detach(): void {

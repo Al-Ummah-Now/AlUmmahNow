@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { getDeliverySettings, getMediaSummary, listMediaJobs } from '@/lib/api/admin';
+import { getDeliverySettings, getMediaQoeLive, getMediaSummary, listMediaJobs } from '@/lib/api/admin';
 import type { DeliverySettings, MediaJob, MediaSummary } from '@/lib/api/types';
 import { getAdminSession } from '@/lib/auth';
 import { canManageMedia } from '@/lib/roles';
@@ -10,6 +10,7 @@ import { logger } from '@/lib/logger';
 import { DeliverySwitch } from './DeliverySwitch';
 import { JobsTable } from './JobsTable';
 import { LiveTranscodes } from './LiveTranscodes';
+import { LiveQoe } from './LiveQoe';
 import { CostSection, PlaybackSection, SpeedSection } from './sections';
 import { JOB_FILTERS, JOB_STATUS_LABEL, PERIODS, parseJobFilter, parsePeriod } from './metrics';
 
@@ -43,11 +44,13 @@ export default async function DeliveryComparisonPage({ searchParams }: PageProps
     return <ErrorAlert testId="delivery-no-access">{t('mediaDelivery.noAccess')}</ErrorAlert>;
   }
 
-  const [summaryResult, jobsResult, settingsResult] = await Promise.allSettled([
+  const [summaryResult, jobsResult, settingsResult, qoeLiveResult] = await Promise.allSettled([
     getMediaSummary(days),
     listMediaJobs({ status: filter === 'all' ? undefined : filter, limit: 50 }),
     getDeliverySettings(),
+    getMediaQoeLive(),
   ]);
+  const qoeLive = qoeLiveResult.status === 'fulfilled' && qoeLiveResult.value.ok ? qoeLiveResult.value.data : null;
   const summary: MediaSummary | null = settled(summaryResult, 'summary');
   const jobs: MediaJob[] | null = settled(jobsResult, 'jobs');
   const settings: DeliverySettings | null = settled(settingsResult, 'settings');
@@ -84,6 +87,7 @@ export default async function DeliveryComparisonPage({ searchParams }: PageProps
       {summary ? (
         <>
           <LiveTranscodes initial={summary.live ?? null} />
+          <LiveQoe initial={qoeLive} />
           <SpeedSection summary={summary} t={t} locale={locale} />
           <PlaybackSection summary={summary} t={t} locale={locale} />
           <CostSection summary={summary} t={t} locale={locale} />

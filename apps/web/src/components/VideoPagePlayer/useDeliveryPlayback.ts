@@ -16,6 +16,9 @@ import { QoeTracker, sendQoeBeacon } from "@/lib/video/qoe";
 export const HLS = 'application/x-mpegURL';
 
 /** One id per play session (statistics only, but never Math.random) */
+/** How often a playing session reports to the live view (admin Delivery page "now"; the server forgets a session after 75 s). */
+const QOE_HEARTBEAT_MS = 30_000;
+
 function qoeSessionId(): string {
   if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
   return Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
@@ -61,9 +64,13 @@ export function useDeliveryPlayback(options: PlayerOptions, onPlayerReady?: (pla
     const videoId = options.id;
     const tracker = new QoeTracker(
       { on: (e, fn) => player.on(e, fn), off: (e, fn) => player.off(e, fn), paused: () => player.paused(), bandwidth: () => vhsBandwidth(player) },
-      { sessionId: qoeSessionId(), source: delivery.provider, device: deviceClass(), send: (r) => sendQoeBeacon(videoId, r) },
+      { sessionId: qoeSessionId(), source: delivery.provider, device: deviceClass(), send: (r) => sendQoeBeacon(videoId, r), beat: (r) => sendQoeBeacon(videoId, r) },
     );
     trackerRef.current = tracker;
+    // Live view of the admin Delivery page: a heartbeat every 30 s while the page is visible
+    const beat = window.setInterval(() => {
+      if (document.visibilityState === 'visible') tracker.heartbeat();
+    }, QOE_HEARTBEAT_MS);
     const onDispose = () => tracker.flush();
     player.on('dispose', onDispose);
     const fallbackSrc = delivery.provider === 'r2' ? delivery.fallbackSrc : undefined;
@@ -84,6 +91,7 @@ export function useDeliveryPlayback(options: PlayerOptions, onPlayerReady?: (pla
     };
     if (fallbackSrc) player.on('error', onError);
     return () => {
+      window.clearInterval(beat);
       tracker.flush();
       tracker.detach();
       player.off('dispose', onDispose);

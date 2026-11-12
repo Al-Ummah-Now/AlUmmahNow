@@ -72,4 +72,60 @@ describe('QoeTracker', () => {
     tracker.detach();
     expect(player.count()).toBe(0);
   });
+
+  describe('live heartbeats', () => {
+    function live(source: 'bunny' | 'r2' = 'r2') {
+      let t = 0;
+      let paused = false;
+      const sent: QoeReport[] = [];
+      const beats: QoeReport[] = [];
+      const player = fakePlayer();
+      player.paused = () => paused;
+      const tracker = new QoeTracker(player, { sessionId: 'session-1', source, device: 'desktop', send: (r) => sent.push(r), beat: (r) => beats.push(r), now: () => t });
+      return { player, tracker, sent, beats, at: (ms: number) => { t = ms; }, pause: (p: boolean) => { paused = p; } };
+    }
+
+    it('reports the first frame at once, then only deltas; the final report carries the rest', () => {
+      const { player, tracker, sent, beats, at } = live();
+      at(0); player.emit('play');
+      player.setBandwidth(2_000_000);
+      at(600); player.emit('playing');
+      expect(beats).toHaveLength(1);
+      expect(beats[0]).toMatchObject({ kind: 'heartbeat', serving: 'r2', playing: true, live: { attempt: true, started: true, startupMs: 600, watchMs: 0 } });
+      at(30_600); tracker.heartbeat();
+      expect(beats[1].live).toEqual({ watchMs: 30_000, rebufferMs: 0, rebuffers: 0, avgKbps: 2000 });
+      at(40_600); tracker.flush();
+      expect(sent[0]).toMatchObject({ watchMs: 40_000, serving: 'r2', live: { watchMs: 10_000, rebufferMs: 0, rebuffers: 0, avgKbps: 2000 } });
+      expect(sent[0].kind).toBeUndefined();
+      tracker.heartbeat();
+      expect(beats).toHaveLength(2);
+    });
+
+    it('a fallback and the first error are reported at once; the session is then served by Bunny', () => {
+      const { player, tracker, beats, at } = live('r2');
+      at(0); player.emit('play'); player.emit('error');
+      expect(beats[0].live).toMatchObject({ attempt: true, errored: true });
+      tracker.markFallback();
+      expect(beats[1]).toMatchObject({ source: 'r2', serving: 'bunny', live: { fallback: true } });
+      player.emit('error');
+      expect(beats).toHaveLength(2);
+    });
+
+    it('a paused player with nothing new sends nothing after saying it stopped', () => {
+      const { player, tracker, beats, at, pause } = live('bunny');
+      at(0); player.emit('play'); at(500); player.emit('playing');
+      at(10_000); pause(true); player.emit('pause');
+      tracker.heartbeat();
+      expect(beats[beats.length - 1]).toMatchObject({ playing: false });
+      const n = beats.length;
+      at(40_000); tracker.heartbeat();
+      expect(beats).toHaveLength(n);
+    });
+
+    it('nothing before play is asked for', () => {
+      const { tracker, beats } = live();
+      tracker.heartbeat();
+      expect(beats).toHaveLength(0);
+    });
+  });
 });

@@ -9,6 +9,7 @@
  *   GET  /summary?days=     time to playable, QoE per source per day, cost inputs, the switch, and
  *                           live (transcoding now, waiting, max concurrent, oldest wait)
  *   GET  /summary?only=live just the live figures (the Delivery page polls them every 30 s)
+ *   GET  /qoe-live?minutes= playback quality per provider per minute (last 60 by default) and plays now
  *   GET  /jobs?status=&limit=  recent R2 transcode jobs
  *   POST /retry { ids }     transcode again (audited per video, key media:video:<id>)
  *   GET  /settings          the delivery switch
@@ -88,6 +89,12 @@ app.get('/summary', async (c) => {
   const days = Math.min(Math.max(parseInt(c.req.query('days') || '30', 10) || 30, 1), 120);
   const only = c.req.query('only') === 'live' ? 'live' : undefined;
   const result = await callVideosInternal(c.env, '/internal/media/summary', { query: { days: String(days), only } });
+  return c.json({ success: true, result });
+});
+
+app.get('/qoe-live', async (c) => {
+  const minutes = Math.min(Math.max(parseInt(c.req.query('minutes') || '60', 10) || 60, 1), 2880);
+  const result = await callVideosInternal(c.env, '/internal/media/qoe-live', { query: { minutes: String(minutes) } });
   return c.json({ success: true, result });
 });
 

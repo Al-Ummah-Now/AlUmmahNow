@@ -514,6 +514,33 @@ export interface MediaLive {
   at: string;
 }
 
+/** One provider's sums in one minute (realtime worker qoe-live.ts); ratios are derived on the page. */
+export interface QoeLiveBucket {
+  attempts: number;
+  plays: number;
+  startupMsSum: number;
+  watchMs: number;
+  rebufferMs: number;
+  rebuffers: number;
+  kbpsWatchS: number;
+  errorSessions: number;
+  fallbacks: number;
+}
+
+export interface QoeLiveMinute {
+  /** UTC minute, e.g. 2026-11-12T10:41 */
+  minute: string;
+  bunny: QoeLiveBucket;
+  r2: QoeLiveBucket;
+}
+
+/** The Delivery page's live playback view: the last 60 minutes and the plays now per serving source. */
+export interface QoeLiveData {
+  minutes: QoeLiveMinute[];
+  now: { bunny: number; r2: number };
+  at: string;
+}
+
 export interface MediaSummary {
   days: number;
   jobs: MediaJobsSummary | null;

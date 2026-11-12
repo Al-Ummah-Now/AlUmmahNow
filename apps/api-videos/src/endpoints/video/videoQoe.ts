@@ -4,6 +4,7 @@ import { OptionalAuthRoute, AppContext } from "../../base";
 import { ResponseError } from "../../lib/types";
 import { logger } from "../../lib/logger";
 import { recordQoe, QOE_DEVICES } from "../../lib/media/qoe";
+import { recordQoeLive } from "../../lib/media/qoe-live";
 
 /**
  * POST /api/videos/:id/qoe
@@ -11,6 +12,12 @@ import { recordQoe, QOE_DEVICES } from "../../lib/media/qoe";
  * epic #687): startup, rebuffering, bitrate, switches, errors and fallback.
  * Summed per day, source, device class and country in D1 (one upsert per
  * session). Shares the WATCH_TIME_LIMITER binding under its own key.
+ *
+ * Live view (Delivery page, last 60 minutes and "now"): while it plays the
+ * player also sends `kind: "heartbeat"` every 30 s (and at first frame,
+ * fallback and first error) with `live`, the deltas since its last report.
+ * Heartbeats go only to the realtime worker's live object, never to D1; the
+ * final report carries the last deltas the same way.
  */
 export class VideoQoe extends OptionalAuthRoute {
 	schema = {
@@ -37,6 +44,23 @@ export class VideoQoe extends OptionalAuthRoute {
 							switches: z.number().int().min(0).max(10_000).default(0),
 							errors: z.number().int().min(0).max(1_000).default(0),
 							fallback: z.boolean().default(false).describe("R2 failed and the player switched to Bunny"),
+							kind: z.enum(["final", "heartbeat"]).default("final").describe("final: the session's totals (daily rollup); heartbeat: live deltas only"),
+							serving: z.enum(["bunny", "r2"]).optional().describe("Source delivering the session now (bunny after a fallback)"),
+							playing: z.boolean().optional().describe("Playing at the time of the report"),
+							live: z
+								.object({
+									attempt: z.boolean().optional(),
+									started: z.boolean().optional(),
+									startupMs: z.number().int().min(0).max(120_000).optional(),
+									watchMs: z.number().int().min(0).max(600_000).optional(),
+									rebufferMs: z.number().int().min(0).max(600_000).optional(),
+									rebuffers: z.number().int().min(0).max(1_000).optional(),
+									avgKbps: z.number().min(0).max(200_000).optional(),
+									errored: z.boolean().optional(),
+									fallback: z.boolean().optional(),
+								})
+								.optional()
+								.describe("Deltas since the session's previous report, for the live view"),
 						}),
 					},
 				},
@@ -55,11 +79,32 @@ export class VideoQoe extends OptionalAuthRoute {
 		const body = request.body;
 		if (c.env.WATCH_TIME_LIMITER) {
 			try {
-				const { success } = await c.env.WATCH_TIME_LIMITER.limit({ key: `qoe:${body.sessionId}:${id}` });
+				// Heartbeats (every 30 s, plus a few events) have their own budget, apart from the one final report
+				const { success } = await c.env.WATCH_TIME_LIMITER.limit({ key: `${body.kind === "heartbeat" ? "qoe-hb" : "qoe"}:${body.sessionId}:${id}` });
 				if (!success) return c.json({ success: false, error: "Too many reports" }, 429);
 			} catch (error) {
 				logger.warn("[qoe] rate limiter unavailable", { error });
 			}
+		}
+		const live = body.live
+			? recordQoeLive(c.env as never, {
+					sessionId: body.sessionId,
+					source: body.source,
+					serving: body.serving ?? (body.fallback ? "bunny" : body.source),
+					playing: body.kind === "heartbeat" ? (body.playing ?? false) : false,
+					ended: body.kind !== "heartbeat",
+					live: body.live,
+				})
+			: undefined;
+		if (body.kind === "heartbeat") {
+			if (live) {
+				try {
+					c.executionCtx.waitUntil(live);
+				} catch {
+					await live;
+				}
+			}
+			return c.json({ success: true }, 202);
 		}
 		const country = body.country ?? ((c.req.raw as { cf?: { country?: string } }).cf?.country ?? "XX").slice(0, 2).toUpperCase();
 		const write = recordQoe(c.env as never, {
@@ -73,10 +118,11 @@ export class VideoQoe extends OptionalAuthRoute {
 			country,
 			day: new Date().toISOString().slice(0, 10),
 		});
+		const work = live ? Promise.all([write, live]) : write;
 		try {
-			c.executionCtx.waitUntil(write);
+			c.executionCtx.waitUntil(work);
 		} catch {
-			await write;
+			await work;
 		}
 		return c.json({ success: true }, 202);
 	}
