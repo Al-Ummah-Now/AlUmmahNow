@@ -167,8 +167,10 @@ test.describe('Profile - edit', () => {
     await page.getByRole('button', { name: /^(Arabic|العربية)$/ }).click();
     await page.locator('input[name="displayNameAr"]').fill(`اسم مؤقت ${suffix}`);
     await expect(page.locator('textarea[name="bioAr"]')).toHaveAttribute('dir', 'rtl');
-    await page.locator('form button[type="submit"]').click();
-    await expect(page.locator('form button[type="submit"]')).toHaveText(/Saved!/);
+    // The profile form's own Save (the header search is a form with a submit button too)
+    const save = page.locator('form').filter({ has: page.locator('input[name="displayNameEn"]') }).locator('button[type="submit"]');
+    await save.click();
+    await expect(save).toHaveText(/Saved!/);
 
     const saved = await getProfile();
     expect(saved.displayNameLocalized?.en).toBe(`E2E Temp Name ${suffix}`);

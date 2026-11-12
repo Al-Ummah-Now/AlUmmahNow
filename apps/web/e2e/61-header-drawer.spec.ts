@@ -4,7 +4,13 @@ import { clickAndWaitForURL } from './test-utils/qa-content';
 import { closeSideDrawer, expectSideDrawerClosed, isDrawerLayout, openSideDrawer } from './test-utils/navigation';
 import type { Page } from '@playwright/test';
 
-const HOME_LINK = { en: 'Al Ummah Now home', ar: 'الأمة الآن - الصفحة الرئيسية' } as const;
+/**
+ * The logo link's name holds the visible app name (WCAG 2.5.3, label in name). The
+ * rest of the label is editable copy: an environment's translation store can hold an
+ * older or edited wording (QA's Arabic still reads 'الصفحة الرئيسية للأمة الآن'), so
+ * the spec matches the app name, not one wording.
+ */
+const HOME_LINK = { en: /Al Ummah Now/, ar: /الأمة الآن/ } as const;
 
 /**
  * The top bar reads: menu button, logo, Upload, search, then bell and account.
@@ -13,7 +19,7 @@ const HOME_LINK = { en: 'Al Ummah Now home', ar: 'الأمة الآن - الصف
  */
 async function expectUploadAfterLogo(page: Page, lang: 'en' | 'ar', rtl: boolean): Promise<void> {
   const banner = page.getByRole('banner');
-  const logo = await banner.getByRole('link', { name: HOME_LINK[lang], exact: true }).boundingBox();
+  const logo = await banner.getByRole('link', { name: HOME_LINK[lang] }).boundingBox();
   const upload = await banner.getByTestId('header-upload').boundingBox();
   const searchInput = banner.getByTestId('header-search-input');
   const search = await ((await searchInput.isVisible()) ? searchInput : banner.getByTestId('header-search-open')).boundingBox();
@@ -56,7 +62,7 @@ test.describe('Header', () => {
   test('NAV-002 Arabic header is RTL with Arabic labels', async ({ page }) => {
     await page.goto('/ar');
     const header = page.getByRole('banner');
-    await expect(header.getByRole('link', { name: 'الأمة الآن - الصفحة الرئيسية' })).toHaveAttribute('href', /^\/ar\/?$/);
+    await expect(header.getByRole('link', { name: HOME_LINK.ar })).toHaveAttribute('href', /^\/ar\/?$/);
     await expect(page.getByTestId('nav-drawer-toggle')).toHaveAccessibleName('القائمة');
     const direction = await header.evaluate((el) => getComputedStyle(el).direction);
     expect(direction).toBe('rtl');

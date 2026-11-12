@@ -21,6 +21,7 @@ import {
   logoutAllAccounts,
   getActiveSessionInfo,
 } from '@/lib/actions/multi-account';
+import { clearClientAuthToken } from '@/lib/auth/client-token';
 import type { AccessibleChannel, Channel, ChannelCreateRequest, ChannelRole } from '@al-ummah/shared-types';
 import { ChannelAccessError, fetchChannelAccess } from '@/lib/channels/access';
 import { cacheChannels, toSessionChannel } from '@/lib/channels/session-cache';
@@ -343,6 +344,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
               return;
             }
             await switchUserAccount(follow.userId, window.location.pathname);
+            clearClientAuthToken();
             const switched = await getActiveSessionInfo();
             if (switched && mountedRef.current) {
               applySessionUser(switched.user);
@@ -492,6 +494,9 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       // Get current pathname to pass to server action for profile check
       const currentPath = window.location.pathname;
       const result = await switchUserAccount(userId, currentPath);
+      // The cached access token is the previous account's: API calls from here
+      // on (creator access, the Upload button) must use this one's
+      clearClientAuthToken();
 
       logger.debug('[MultiAccountProvider] Account switched successfully');
       logger.debug('[MultiAccountProvider] Current path:', currentPath);
@@ -653,6 +658,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       if (next.kind === 'switch-local') {
         await switchUserAccount(next.userId, window.location.pathname);
       }
+      clearClientAuthToken();
       await loadSessionData();
       router.refresh();
     } catch (err) {

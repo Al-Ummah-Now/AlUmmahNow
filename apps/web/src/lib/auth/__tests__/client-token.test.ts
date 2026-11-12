@@ -44,6 +44,25 @@ describe('client-token', () => {
     expect(f).toHaveBeenCalledTimes(2);
   });
 
+  it('after a clear (account switch) reads the new account\'s token, even when a read was running', async () => {
+    let releaseOld!: (value: unknown) => void;
+    const f = jest.fn()
+      .mockReturnValueOnce(new Promise((resolve) => (releaseOld = resolve)))
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ accessToken: 'second-account', channelId: null }) });
+    global.fetch = f as unknown as typeof fetch;
+
+    const before = fetchClientAuthToken();
+    clearClientAuthToken();
+    const after = fetchClientAuthToken();
+    releaseOld({ ok: true, json: async () => ({ accessToken: 'first-account', channelId: null }) });
+
+    expect(await before).toBe('first-account');
+    expect(await after).toBe('second-account');
+    // The read from before the switch did not overwrite the cache
+    expect(await fetchClientAuthToken()).toBe('second-account');
+    expect(f).toHaveBeenCalledTimes(2);
+  });
+
   it('returns null when not authenticated', async () => {
     global.fetch = mockFetch(401, { accessToken: null }) as unknown as typeof fetch;
     expect(await fetchClientAuthToken()).toBeNull();
