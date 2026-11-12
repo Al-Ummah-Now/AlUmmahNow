@@ -1,5 +1,5 @@
 "use client";
-import React, { useMemo } from "react";
+import React from "react";
 import type { Player } from "video.js";
 import { removeUnwantedChars } from "@/lib/utility";
 import { PlayerOptions } from "../interface";
@@ -9,6 +9,7 @@ import { getLocalizedValue } from "@al-ummah/shared-types";
 import { useLanguage } from "@/hooks/useLanguage";
 import { VideoDetails } from "@/components/VideoPagePlayer/VideoDetails";
 import { playerChannelHref, playerChannelName } from "@/lib/video/player-channel";
+import { useDeliveryPlayback } from "../useDeliveryPlayback";
 
 interface WatchPlayerProps {
   options: PlayerOptions;
@@ -24,29 +25,8 @@ const VideoPlayerRTL: React.FC<WatchPlayerProps> = ({ options, startTime, onPlay
 
   const title = getLocalizedValue(options.titleLocalized, options.title, 'ar');
 
-  // Convert PlayerOptions to CustomVideoPlayer props. Same source resolution as
-  // the LTR variant (API playUrl first) and memoized so re-renders don't hand
-  // the player a new sources array, which would reload the video.
-  const videoSources = useMemo(() => [
-    {
-      src: options.playUrl || '',
-      type: 'application/x-mpegURL'
-    }
-  ], [options.playUrl, options.id]);
-
-  // Use poster from options (API-provided thumbnail URL) or fallback to default pattern
-  const posterUrl = useMemo(() => {
-    // Bunny keeps the thumbnail next to the playlist, so derive it from this
-    // video's own library (QA/prod differ) rather than a hard-coded host.
-    const derived = options.playUrl?.endsWith('/playlist.m3u8')
-      ? options.playUrl.replace(/playlist\.m3u8$/, 'thumbnail.jpg')
-      : '';
-    const poster = options.poster || derived;
-    if (poster && !poster.startsWith('http://') && !poster.startsWith('https://')) {
-      return `https://${poster}`;
-    }
-    return poster;
-  }, [options.poster, options.id]);
+  // Bunny or R2 per the admin switch, one-time fallback to Bunny, QoE: same hook as the LTR player
+  const { videoSources, posterUrl, handlePlayerReady } = useDeliveryPlayback(options, onPlayerReady);
 
   return (
     <>
@@ -71,7 +51,7 @@ const VideoPlayerRTL: React.FC<WatchPlayerProps> = ({ options, startTime, onPlay
             ariaLabel={t.a11y.videoPlayerFor.replace('{title}', removeUnwantedChars(title))}
             title={removeUnwantedChars(title)}
             startTime={startTime}
-            onPlayerReady={onPlayerReady}
+            onPlayerReady={handlePlayerReady}
           />
         </div>
       </div>
