@@ -210,3 +210,16 @@ describe('reply lookup without listing (AV-16)', () => {
 		assert.equal(counter.lists, 0, 'found through the pointer');
 	});
 });
+
+describe('a user without a channel comments as themselves', () => {
+	it('no channelId header: the comment carries the profile\'s resolved name (first + last), never the email', async () => {
+		const e = { ...env(), profiles: new MemoryBucket({ solo: { id: 'solo', email: 'solo@example.org', displayName: '', firstName: 'Mahmoud', lastName: 'Darwish' } }) };
+		const res = await as('solo').request(BASE, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: 'Salam' }) }, e);
+		const text = await res.text();
+		assert.equal(res.status, 201, text);
+		const body = JSON.parse(text) as { comment: { userDisplayName: string; channelId: string } };
+		assert.equal(body.comment.userDisplayName, 'Mahmoud Darwish');
+		assert.equal(body.comment.channelId, 'solo');
+		assert.ok(!text.includes('solo@example.org'));
+	});
+});

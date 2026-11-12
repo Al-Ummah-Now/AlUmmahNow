@@ -50,7 +50,7 @@ const createCommentSchema = {
       postId: Str({ description: 'Post ID' }),
     }),
     headers: z.object({
-      channelId: z.string().optional().describe('Actor channel ID (the channel posting the comment)'),
+      channelId: z.string().optional().nullable().describe('Actor channel ID (the channel posting the comment); none: the user comments as themselves'),
     }),
     body: {
       content: {

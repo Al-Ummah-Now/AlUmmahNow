@@ -10824,11 +10824,14 @@
           },
           {
             "schema": {
-              "type": "string",
-              "description": "Actor channel ID (the channel posting the comment)"
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Actor channel ID (the channel posting the comment); none: the user comments as themselves"
             },
             "required": false,
-            "description": "Actor channel ID (the channel posting the comment)",
+            "description": "Actor channel ID (the channel posting the comment); none: the user comments as themselves",
             "name": "channelId",
             "in": "header"
           }
