@@ -47,8 +47,7 @@ test.describe('Account Switching', () => {
     await expect(menu.getByRole('menuitem', { name: /Sign out of all accounts/ })).toBeVisible();
   });
 
-  // quarantined: #1027 @meywd (red on the local stack; the follow-up PR removes this fixme)
-  test.fixme('switches to the other account and back', async ({ page, baseURL }) => {
+  test('switches to the other account and back', async ({ page, baseURL }) => {
     const single = readAccount('single');
     const multi = readAccount('multi');
     const errors: string[] = [];
@@ -96,8 +95,7 @@ test.describe('Account Switching', () => {
     await expect(account(reopened, multi.email)).toHaveAttribute('data-active', 'true');
   });
 
-  // quarantined: #1027 @meywd (account switching on the local stack)
-  test.fixme('keeps the active channel per account', async ({ page }) => {
+  test('keeps the active channel per account', async ({ page }) => {
     const single = readAccount('single');
     const multi = readAccount('multi');
     await page.goto('/en');
