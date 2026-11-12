@@ -3,6 +3,8 @@
 import { test as base, expect, type BrowserContext, type Page } from '@playwright/test';
 import { ANONYMOUS_STATE, AUTH_STATE } from './test-utils/auth-state';
 import { ensureFreshSessions } from './test-utils/fresh-session';
+import { usePublicVideos } from './test-utils/own-public-video';
+
 
 // The stored session must still be signed in (see test-utils/fresh-session.ts)
 const test = base.extend<{ freshSessions: void }>({
@@ -14,6 +16,12 @@ const test = base.extend<{ freshSessions: void }>({
     { auto: true },
   ],
 });
+
+// One worker runs this file's tests in order, so its own data (beforeAll) is made once
+test.describe.configure({ mode: 'default' });
+
+/** This file's own public video, so the home grid has a card of ours (no seed, no other run's uploads) */
+const own = usePublicVideos(test, 'consent');
 
 /**
  * Cookie / tracking consent banner (GDPR): shown on a first visit without the
@@ -53,7 +61,7 @@ test.describe('Consent banner - first visit', () => {
     await expect(banner(page)).toBeHidden();
     expect(await consentValue(context)).toMatch(/^v1\.a0\.e0\.p0\.\d+$/);
     await page.reload();
-    await expect(page.getByTestId('video-card').first()).toBeVisible();
+    await expect(own.card(page)).toBeVisible();
     await expect(banner(page)).toHaveCount(0);
   });
 

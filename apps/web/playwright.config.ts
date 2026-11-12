@@ -1,6 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 import dotenv from 'dotenv';
 import path from 'path';
+import { LOCAL_WEB_SPECS } from './e2e/test-utils/local-web-specs';
 
 /**
  * Read environment variables from .env.test.local file.
@@ -14,6 +15,20 @@ dotenv.config({ path: path.resolve(__dirname, '.env.test.local') });
  */
 const baseURL = process.env.WEB_APP_URL || 'http://localhost:3001';
 const isRemoteTarget = baseURL.startsWith('https://');
+
+/**
+ * E2E_ENV=local: the local E2E stack (docs/testing/LOCAL-STACK.md) that the job booted and seeded
+ * itself (local-e2e.yml). Only the specs moved there run (e2e/test-utils/local-web-specs.ts), and
+ * the QA runs leave those out. The browser goes through the stack's proxy, which answers the faked
+ * third-party HTTPS hosts (Bunny CDN, image host) and refuses every other non-local host;
+ * localhost bypasses it (Next refuses Server Actions through `<-loopback>`).
+ */
+const LOCAL = process.env.E2E_ENV === 'local';
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const MOVED = `/e2e/(${LOCAL_WEB_SPECS.map(escapeRe).join('|')})$`;
+/** Local runs ignore every spec not moved yet; QA runs ignore the moved ones. */
+const PLACEMENT_IGNORE = LOCAL ? new RegExp(`^(?!.*${MOVED}).*$`) : new RegExp(MOVED);
+const LOCAL_USE = LOCAL ? { proxy: { server: 'http://127.0.0.1:3191', bypass: 'localhost,127.0.0.1' }, ignoreHTTPSErrors: true } : {};
 
 /**
  * See https://playwright.dev/docs/test-configuration.
@@ -83,7 +98,8 @@ export default defineConfig({
   /* Retry on CI only (1 retry — 2 tripled the cost of every broken test) */
   retries: process.env.CI ? 1 : 0,
   /* Opt out of parallel tests on CI. Limit workers for upload tests */
-  workers: process.env.CI ? 1 : 2,
+  // The local stack is this job's own: E2E_WORKERS runs it wider (QA runs stay at one)
+  workers: process.env.E2E_WORKERS ? Number(process.env.E2E_WORKERS) : process.env.CI ? 1 : 2,
   /* Timeout for each test (3 minutes for video uploads) */
   timeout: 180000,
   /*
@@ -125,7 +141,8 @@ export default defineConfig({
      * live QA session cookies in request headers. CI output is a public artifact (this repo is
      * public), and the pre-upload secret scan cannot recognise cookies. Failure video,
      * screenshot and error context still upload. */
-    trace: process.env.CI ? 'off' : 'on-first-retry',
+    // Local-stack sessions are throwaway accounts on a stack that dies with the job: traces are safe there
+    trace: LOCAL ? 'retain-on-failure' : process.env.CI ? 'off' : 'on-first-retry',
 
     /* Screenshot on failure */
     screenshot: 'only-on-failure',
@@ -135,10 +152,12 @@ export default defineConfig({
 
     /* Accept downloads for file upload tests */
     acceptDownloads: true,
+
+    ...LOCAL_USE,
   },
 
   /* Configure projects for major browsers */
-  projects: [
+  projects: ([
     // Setup project - runs global setup to register users
     {
       name: 'setup',
@@ -236,10 +255,14 @@ export default defineConfig({
     //   name: 'Google Chrome',
     //   use: { ...devices['Desktop Chrome'], channel: 'chrome' },
     // },
-  ],
+  ] as Array<{ name: string; testIgnore?: RegExp | RegExp[] } & Record<string, unknown>>).map((project) => ({
+    ...project,
+    testIgnore: [...(project.testIgnore === undefined ? DEDICATED_DIRS : ([] as RegExp[]).concat(project.testIgnore)), PLACEMENT_IGNORE],
+  })),
 
   /* Run your local dev server before starting the tests (only for local development) */
-  webServer: isRemoteTarget
+  // The local stack (E2E_ENV=local) is already running: never start a dev server for it
+  webServer: isRemoteTarget || LOCAL
     ? undefined
     : {
         command: 'pnpm dev',

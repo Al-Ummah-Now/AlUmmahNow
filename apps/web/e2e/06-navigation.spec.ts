@@ -2,6 +2,7 @@ import { test, expect } from './fixtures';
 import { ANONYMOUS_STATE } from './test-utils/auth-state';
 import { clickAndWaitForURL } from './test-utils/qa-content';
 import { openSideDrawer } from './test-utils/navigation';
+import { usePublicVideos } from './test-utils/own-public-video';
 
 /**
  * Navigation and Routing E2E Tests (anonymous visitor)
@@ -9,10 +10,16 @@ import { openSideDrawer } from './test-utils/navigation';
 
 test.use({ storageState: ANONYMOUS_STATE });
 
+// One worker runs this file's tests in order, so its own data (beforeAll) is made once
+test.describe.configure({ mode: 'default' });
+
+/** This file's own public video, so the home grid has a card of ours (no seed, no other run's uploads) */
+const own = usePublicVideos(test, 'nav');
+
 test.describe('Navigation - English Routes', () => {
   test('navigates from the homepage to a video page by clicking a card', async ({ page }) => {
     await page.goto('/en/');
-    const card = page.getByTestId('video-card').first();
+    const card = own.card(page);
     await expect(card).toBeVisible();
     const id = await card.getAttribute('data-video-id');
 
@@ -72,7 +79,7 @@ test.describe('Navigation - Arabic Routes', () => {
 
   test('Arabic card links stay in the Arabic locale', async ({ page }) => {
     await page.goto('/ar/');
-    const card = page.getByTestId('video-card').first();
+    const card = own.card(page);
     await clickAndWaitForURL(page, card, /\/ar\/video\?vid=/);
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   });
@@ -100,11 +107,11 @@ test.describe('Navigation - Browser Controls', () => {
 
   test('client-side navigation works with back', async ({ page }) => {
     await page.goto('/en/');
-    await clickAndWaitForURL(page, page.getByTestId('video-card').first(), /\/en\/video\?vid=/);
+    await clickAndWaitForURL(page, own.card(page), /\/en\/video\?vid=/);
 
     await page.goBack();
     await expect(page).toHaveURL(/\/en\/?$/);
-    await expect(page.getByTestId('video-card').first()).toBeVisible();
+    await expect(own.card(page)).toBeVisible();
   });
 
   test('reloads correctly', async ({ page }) => {
@@ -161,7 +168,7 @@ test.describe('Navigation - Responsive Behavior', () => {
     await page.setViewportSize({ width: 375, height: 667 });
 
     await page.goto('/en/');
-    const card = page.getByTestId('video-card').first();
+    const card = own.card(page);
     await clickAndWaitForURL(page, card, /\/en\/video\?vid=/);
   });
 

@@ -2,14 +2,22 @@ import { test, expect } from './fixtures';
 import { ANONYMOUS_STATE } from './test-utils/auth-state';
 import { clickAndWaitForURL } from './test-utils/qa-content';
 import { openSideDrawer } from './test-utils/navigation';
+import { usePublicVideos } from './test-utils/own-public-video';
 
 /**
- * Explore page (Epic 29, Story 29.7) against seeded QA content:
+ * Explore page (Epic 29, Story 29.7) against this file's own content (a creator, its channel and a
+ * public Quran Tafsir video, made in beforeAll and deleted afterwards):
  * trending, category grid, live now, new channels, language switch and
  * navigation entry in LTR and RTL.
  */
 
 test.use({ storageState: ANONYMOUS_STATE });
+
+const TAFSIR_TITLE = `E2E Tafsir explore ${Date.now().toString(36)}`;
+// One worker runs this file's tests in order, so its own data (beforeAll) is made once
+test.describe.configure({ mode: 'default' });
+
+const own = usePublicVideos(test, 'explore', [{ title: TAFSIR_TITLE, category: 'quran_tafsir' }]);
 
 test.describe('Explore - English (LTR)', () => {
   test('shows every section', async ({ page }) => {
@@ -34,13 +42,14 @@ test.describe('Explore - English (LTR)', () => {
 
     await clickAndWaitForURL(page, tafsir, /\/en\/search\?type=video&category=quran_tafsir/);
     await expect(page.getByTestId('active-filter-category')).toContainText('Quran Tafsir');
-    await expect(page.getByTestId('search-result').filter({ hasText: 'Tafsir' }).first()).toBeVisible();
+    await expect(page.getByTestId('search-result').filter({ hasText: own.videos()[0].title })).toBeVisible();
   });
 
-  test('new channels include the seeded channels', async ({ page }) => {
+  test('new channels include this file\'s channel', async ({ page }) => {
     await page.goto('/en/explore');
     const section = page.getByTestId('explore-new-channels');
     await expect(section.getByTestId('channel-tile').first()).toBeVisible();
+    await expect(section.locator(`[data-testid="channel-tile"][href*="${own.channelId()}"]`)).toBeVisible();
   });
 
   test('content language switch updates the URL', async ({ page }) => {

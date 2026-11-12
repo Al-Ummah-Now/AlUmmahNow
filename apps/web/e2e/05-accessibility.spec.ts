@@ -2,6 +2,14 @@ import { test, expect } from './fixtures';
 import type { Locator } from '@playwright/test';
 import { ANONYMOUS_STATE, AUTH_STATE } from './test-utils/auth-state';
 import { menuTrigger } from './test-utils/navigation';
+import { usePublicVideos } from './test-utils/own-public-video';
+
+// One worker runs this file's tests in order, so its own data (beforeAll) is made once
+test.describe.configure({ mode: 'default' });
+
+/** This file's own public video, so the home grid has a card of ours (no seed, no other run's uploads) */
+const own = usePublicVideos(test, 'a11y');
+
 
 /**
  * Accessibility E2E Tests (WCAG basics)
@@ -37,7 +45,7 @@ test.describe('Accessibility - Semantic HTML', () => {
 
   test('images have alt text', async ({ page }) => {
     await page.goto('/en/');
-    await expect(page.getByTestId('video-card').first()).toBeVisible();
+    await expect(own.card(page)).toBeVisible();
 
     await page.waitForLoadState('networkidle').catch(() => undefined);
     // One pass over the images present now: the feed re-renders cards while it
@@ -76,7 +84,7 @@ test.describe('Accessibility - Keyboard Navigation', () => {
 
   test('video cards are keyboard-focusable links', async ({ page }) => {
     await page.goto('/en/');
-    const card = page.getByTestId('video-card').first();
+    const card = own.card(page);
     await expect(card).toBeVisible();
 
     // Retried: the grid can re-render (client data load, other runs adding
