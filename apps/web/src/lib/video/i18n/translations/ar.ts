@@ -149,7 +149,7 @@ export const AR_TRANSLATIONS: VideoPlayerTranslations = {
     autoplay: 'التشغيل التلقائي',
     autoplayOn: 'التشغيل التلقائي مفعّل',
     autoplayOff: 'التشغيل التلقائي متوقف',
-    moreVideos: 'فيديوهات أخرى',
+    moreVideos: 'مرئيات أخرى',
     replayPlaylist: 'إعادة تشغيل القائمة',
   },
 
