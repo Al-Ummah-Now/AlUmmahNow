@@ -238,16 +238,12 @@ jobs:
       # Owner rule: nothing the job created may be left on its stack. This gates. Allowed:
       # - revocations (auth user_revocations, TOKEN_REVOCATIONS u:<id>), kept on purpose to outlive the
       #   tokens; they hold the user id only, never the email (AlUmmahNowAuth#326);
-      # - until #1059 is fixed (GDPR erase misses them): category suggestions, upload-reaper markers and
-      #   TUS sessions of the erased users' videos, and accepted creator invites. Drop these with the fix;
       # - until AlUmmahNowAuth#335 is released (#334): auth's user_invites rows and the E2E invite sink entry.
       - name: Leftovers
         if: always()
         run: >-
           node --experimental-strip-types --no-warnings scripts/local-stack/leftovers.ts --marker "$E2E_RUN_ID"
           --allow d1:al-ummah-now-d1:user_revocations --allow kv:TOKEN_REVOCATIONS
-          --allow d1:al-ummah-now-search:category_suggestions --allow r2:global-settings:ops/upload-reaper/created/
-          --allow kv:TUS_SESSIONS --allow d1:al-ummah-now-reports:creator_invites
           --allow d1:al-ummah-now-d1:user_invites --allow kv:AUTH_STORAGE:test:invite:
 
       - name: Stack log
