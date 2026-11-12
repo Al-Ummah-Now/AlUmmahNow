@@ -160,7 +160,7 @@ export function LibraryListPage({ kind, dir }: Props) {
           data-testid="library-play-all"
           className="mb-6 inline-flex items-center gap-2 rounded-lg bg-[var(--fanous-color-primary)] px-4 py-2 font-medium text-[var(--fanous-color-on-primary)] hover:bg-[var(--fanous-color-primary-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fanous-color-focus-ring)]"
         >
-          <Play className="h-4 w-4 rtl:-scale-x-100" aria-hidden="true" />
+          <Play className="h-4 w-4" aria-hidden="true" />
           {t.playlist.playAll}
         </Link>
       )}
