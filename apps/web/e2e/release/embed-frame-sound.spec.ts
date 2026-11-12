@@ -22,6 +22,9 @@ import { test, expect, type Browser, type Frame, type Page } from '@playwright/t
 import { useOwnData, type Clip, type CreatedVideo } from './builders';
 import { releaseEnv, target } from './targets';
 
+// The creator signs up through the real issuer (password, sink code): no trace or video of it
+test.use({ trace: 'off', video: 'off' });
+
 const HOST_PAGE = `${releaseEnv() === 'local' ? 'http' : 'https'}://embed-host.release.test/frame`;
 const ON_PR = process.env.GITHUB_EVENT_NAME === 'pull_request';
 
