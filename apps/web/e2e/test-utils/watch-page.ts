@@ -30,12 +30,27 @@ let cache: QaVideo[] | null = null;
 /** Public processed QA seed lectures, sorted by title ("QA Lecture 1 …", "QA Lecture 2 …", …) */
 export async function qaLectures(request: APIRequestContext): Promise<QaVideo[]> {
   if (cache) return cache;
+  // The newest 100 public videos stop including the older seed lectures once
+  // enough E2E uploads land after a seed; search finds every seed lecture.
+  const found = new Map<string, QaVideo>();
   const res = await request.get(`${API_URL}/api/videos?limit=100`);
   expect(res.ok(), 'GET /api/videos').toBe(true);
-  const body = (await res.json()) as { data?: QaVideo[] };
-  const lectures = (body.data ?? [])
-    .filter((v) => v.title.startsWith('QA Lecture'))
-    .sort((a, b) => a.title.localeCompare(b.title));
+  for (const v of ((await res.json()) as { data?: QaVideo[] }).data ?? []) {
+    if (v.title.startsWith('QA Lecture')) found.set(v.id, v);
+  }
+  const search = await request.get(`${API_URL}/api/search?q=${encodeURIComponent('QA Lecture')}&type=video&limit=20`);
+  if (search.ok()) {
+    const hits = ((await search.json()) as { results?: Array<{ id: string; video?: { title?: string } }> }).results ?? [];
+    for (const hit of hits) {
+      if (found.has(hit.id) || !hit.video?.title?.startsWith('QA Lecture')) continue;
+      // The full video (playUrl, likes, owner) as the list returns it
+      const one = await request.get(`${API_URL}/api/videos/${encodeURIComponent(hit.id)}`);
+      if (!one.ok()) continue;
+      const video = (await one.json()) as QaVideo & { isPublic?: boolean };
+      if (video.isPublic !== false && video.playUrl) found.set(video.id, video);
+    }
+  }
+  const lectures = [...found.values()].sort((a, b) => a.title.localeCompare(b.title));
   if (lectures.length === 0) throw new Error('No "QA Lecture" seed videos on QA (run the Seed QA workflow)');
   cache = lectures;
   return lectures;
