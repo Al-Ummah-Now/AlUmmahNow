@@ -147,6 +147,7 @@ async function refreshUser(user: WebUser, refreshToken: string | undefined): Pro
   try {
     const res = await fetch(`${target().auth}/token`, {
       method: 'POST',
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken, client_id: WEB_CLIENT_ID[releaseEnv()] }),
     });
@@ -160,18 +161,46 @@ async function refreshUser(user: WebUser, refreshToken: string | undefined): Pro
 }
 
 /**
+ * Cleanup is bounded so it can never time out a test that passed. Stage, v2026.11.12.7: the
+ * teardown of a user with no content ran past the 3-minute test timeout (header-name.spec.ts);
+ * the privacy erase scans every channel, video and community object of the environment, so its
+ * resumable rounds grow with the environment, not with the user.
+ * Each request has REQUEST_TIMEOUT_MS, the erase loop ERASE_BUDGET_MS, a whole cleanup
+ * CLEANUP_BUDGET_MS; the fixtures get their own teardown time on top of the test's. Whatever is
+ * left belongs to a run account: the run teardown (cleanup-test-content.ts --run-users, then
+ * teardown-run-users.ts) erases it and the leftover check reports it.
+ */
+const REQUEST_TIMEOUT_MS = 30_000;
+const ERASE_BUDGET_MS = 60_000;
+const CLEANUP_BUDGET_MS = 120_000;
+/** The budget, plus one request that started just before the deadline, plus room to spare. */
+const FIXTURE_TIMEOUT_MS = CLEANUP_BUDGET_MS + REQUEST_TIMEOUT_MS + 30_000;
+
+/**
  * Erases a user completely: DELETE /api/privacy/data (profile, channels, videos with their Bunny
  * media, playlists, posts, history, subscriptions, likes; resumable) as the user, then the account
  * and its sessions on the auth server (QA/stage/local test route, run accounts only). 404 = gone.
+ * The erase stops after ERASE_BUDGET_MS; the account is deleted either way.
  */
 async function eraseUser(user: WebUser): Promise<Response | undefined> {
   let resumeToken: string | undefined;
+  const deadline = Date.now() + ERASE_BUDGET_MS;
   for (let round = 0; round < 20; round++) {
+    const left = deadline - Date.now();
+    if (left <= 0) {
+      console.warn(`[builders] privacy erase of ${user.email} still incomplete after ${ERASE_BUDGET_MS / 1000} s: left to the run teardown`);
+      break;
+    }
     const res = await apiFetch(user, '/api/privacy/data', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ confirm: 'DELETE', ...(resumeToken ? { resumeToken } : {}) }),
+      signal: AbortSignal.timeout(Math.min(left, REQUEST_TIMEOUT_MS)),
+    }).catch((error: Error) => {
+      console.warn(`[builders] privacy erase of ${user.email} failed: ${error.message} (left to the run teardown)`);
+      return undefined;
     });
+    if (!res) break;
     if (res.status >= 300) {
       if (res.status !== 404 && res.status !== 401) console.warn(`[builders] privacy erase of ${user.email} answered ${res.status}`);
       break;
@@ -191,6 +220,7 @@ async function deleteAccount(email: string): Promise<Response | undefined> {
   if (!isRunUserEmail(email) || !sink || !promote || releaseEnv() === 'production') return undefined;
   return fetch(`${target().auth}/test/run-users/delete/${encodeURIComponent(email)}`, {
     method: 'POST',
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     headers: { 'X-E2E-Secret': sink, 'X-Test-Secret': promote, 'User-Agent': 'al-ummah-e2e-builders' },
   });
 }
@@ -415,15 +445,33 @@ export class DataScope {
     this.undo.push({ what, run });
   }
 
-  /** Deletes everything this scope created, newest first. Failures are reported, never thrown. */
+  /**
+   * Deletes everything this scope created, newest first, within CLEANUP_BUDGET_MS. Failures are
+   * reported, never thrown; a step still running at the deadline is reported and left to the run
+   * teardown, and so are the steps after it.
+   */
   async cleanup(): Promise<void> {
-    for (const [user, refreshToken] of this.sessions) this.sessions.set(user, await refreshUser(user, refreshToken));
+    const deadline = Date.now() + CLEANUP_BUDGET_MS;
+    for (const [user, refreshToken] of this.sessions) {
+      if (Date.now() < deadline) this.sessions.set(user, await refreshUser(user, refreshToken));
+    }
     for (const step of this.undo.reverse()) {
+      const left = deadline - Date.now();
+      if (left <= 0) {
+        console.warn(`[builders] cleanup budget (${CLEANUP_BUDGET_MS / 1000} s) spent: ${step.what} left to the run teardown`);
+        continue;
+      }
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const overrun = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`still running after ${Math.round(left / 1000)} s, left to the run teardown`)), left);
+      });
       try {
-        const res = (await step.run()) as Response | undefined;
+        const res = (await Promise.race([step.run(), overrun])) as Response | undefined;
         if (res && res.status >= 400 && res.status !== 404) console.warn(`[builders] cleanup of ${step.what} answered ${res.status}`);
       } catch (error) {
         console.warn(`[builders] cleanup of ${step.what} failed: ${(error as Error).message}`);
+      } finally {
+        clearTimeout(timer);
       }
     }
     this.undo = [];
@@ -447,14 +495,18 @@ export function useOwnData(test: typeof base): DataScope {
  */
 export const test = base.extend<{ ownData: DataScope }, { workerData: DataScope }>({
   // (the fixture callback is not React's use(): named `provide` for the hooks lint rule)
-  ownData: async ({}, provide) => {
-    const scope = new DataScope();
-    try {
-      await provide(scope);
-    } finally {
-      await scope.cleanup();
-    }
-  },
+  // A fixture timeout gives the teardown its own time: cleanup never counts against the test's
+  ownData: [
+    async ({}, provide) => {
+      const scope = new DataScope();
+      try {
+        await provide(scope);
+      } finally {
+        await scope.cleanup();
+      }
+    },
+    { timeout: FIXTURE_TIMEOUT_MS },
+  ],
   workerData: [
     async ({}, provide) => {
       const scope = new DataScope();
@@ -464,6 +516,6 @@ export const test = base.extend<{ ownData: DataScope }, { workerData: DataScope 
         await scope.cleanup();
       }
     },
-    { scope: 'worker' },
+    { scope: 'worker', timeout: FIXTURE_TIMEOUT_MS },
   ],
 });
