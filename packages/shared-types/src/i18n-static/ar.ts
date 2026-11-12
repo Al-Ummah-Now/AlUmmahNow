@@ -92,6 +92,15 @@ export const AR_TRANSLATIONS: AppTranslations = {
   },
 
   navigation: {
+    appsSection: 'تطبيقات الأمة الآن',
+    appWww: 'الموقع',
+    appVideos: 'المرئيات',
+    appProfile: 'ملفك الشخصي',
+    appCms: 'إدارة المحتوى',
+    appAdmin: 'إدارة المرئيات',
+    appAuthAdmin: 'إدارة الحسابات',
+    currentAccount: 'الحساب الحالي',
+    switchToAccount: 'التبديل إلى {name}',
     writeArticle: 'اكتب مقالًا',
     myArticles: 'مقالاتي',
     scholarPage: 'صفحة العالم',

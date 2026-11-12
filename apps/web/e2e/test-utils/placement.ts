@@ -190,6 +190,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/release/watch-history.player.spec.ts': { placement: 'local', reason: 'signed-in watch reaches history' },
   'apps/web/e2e/release/watch-layout.spec.ts': { placement: 'local', reason: 'watch page/header layout tablet to desktop' },
   'apps/web/e2e/themes/builder-preview.spec.ts': { placement: 'local', reason: 'already local: the builder preview document in page.setContent, no server' },
+  'apps/web/e2e/themes/account-menu.spec.ts': { placement: 'local', reason: 'already local: next dev + mock-server.mjs + cookie signIn (shared nav, docs/design/NAV.md)' },
   'apps/web/e2e/themes/notifications.spec.ts': { placement: 'local', reason: 'already local: next dev + mock-server.mjs + cookie signIn' },
   'apps/web/e2e/themes/pages.spec.ts': { placement: 'local', reason: 'already local: next dev + mock-server.mjs' },
   'apps/web/e2e/themes/phone-menu.spec.ts': { placement: 'local', reason: 'already local: mocked API and routed WebSocket' },

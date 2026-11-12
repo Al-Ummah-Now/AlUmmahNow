@@ -50,11 +50,9 @@ test.describe('Account menu - links', () => {
     await page.goto('/en');
     const trigger = menuTrigger(page);
     await expect(trigger).toHaveAttribute('aria-haspopup', 'menu');
-    // The header trigger is the avatar and chevron at every width (the name
-    // block stays hidden, f4dec1c4): no visible text, so it is named
-    // "Navigation menu" and the account shows in the menu's context card
-    await expect(trigger.locator('.nav-trigger-name')).toBeHidden();
-    await expect(trigger).toHaveAccessibleName('Navigation menu');
+    // Shared nav (docs/design/NAV.md): avatar + display name (the name hides on phones and
+    // stays in the accessible name); the deployed build may still be the avatar-only trigger
+    await expect(trigger).toHaveAccessibleName(/Navigation menu/);
     await expect(trigger).toHaveAttribute('aria-expanded', 'false');
     await openAccountMenu(page);
     await expect(trigger).toHaveAttribute('aria-expanded', 'true');

@@ -103,3 +103,5 @@ export * from './video-reactions';
 export * from './media-delivery';
 // Admin queues: Action needed / History tabs, shared query and page shape (docs/admin/QUEUES.md)
 export * from './admin-queue';
+// The account menu's "Al Ummah Now apps" links, same order and role gates in every app (docs/design/NAV.md)
+export * from './app-links';

@@ -1,6 +1,6 @@
 import { accounts } from './support/env';
 import { test, expect } from './support/fixtures';
-import { horizontalOverflow, openMainNav } from './support/ui';
+import { accountControl, horizontalOverflow, openMainNav } from './support/ui';
 
 const PAGES = [
   { path: '/dashboard', nav: 'Dashboard', heading: 'Admin Dashboard' },
@@ -39,14 +39,26 @@ test.describe('navigation', () => {
     await expect(nav.getByRole('link', { name: 'Moderation', exact: true })).toHaveAttribute('aria-current', 'page');
   });
 
-  test('NAV-04 the nav shows the signed-in email on wide screens and fits narrow ones', async ({ page, isMobile }) => {
+  test('NAV-04 the nav shows the signed-in account and fits narrow ones', async ({ page, isMobile }) => {
     await page.goto('/dashboard');
-    if (isMobile) {
-      await expect(page.getByTestId('user-email')).toBeHidden();
+    const trigger = page.getByTestId('account-menu-trigger');
+    if (await page.getByTestId('logout-button').isVisible().catch(() => false)) {
+      // Deployed build before the shared nav: the email beside a separate "Log out"
+      if (isMobile) await expect(page.getByTestId('user-email')).toBeHidden();
+      else await expect(page.getByTestId('user-email')).toHaveText(accounts.admin.email);
     } else {
-      await expect(page.getByTestId('user-email')).toHaveText(accounts.admin.email);
+      // Shared nav (docs/design/NAV.md): avatar + name (the email only without one); the name
+      // hides on phones and stays the button's accessible name
+      await expect(trigger).toBeVisible();
+      await expect(page.getByTestId('user-email')).toHaveCount(0);
+      await expect(trigger).toHaveAccessibleName(/.+: .+/);
+      await trigger.click();
+      const menu = page.getByTestId('account-menu');
+      await expect(menu.getByTestId('account-sign-out-all')).toBeVisible();
+      // The other apps, never this one
+      await expect(menu.getByTestId('account-menu-apps').locator('[data-app="admin"]')).toHaveCount(0);
     }
-    await expect(page.getByTestId('logout-button')).toBeVisible();
+    await expect(await accountControl(page)).toBeVisible();
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
   });
 

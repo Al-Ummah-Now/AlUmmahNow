@@ -4,6 +4,8 @@
    by the root layout. html[data-theme] is the theme id and the .dark class the mode. */
 @import '../../../web/src/theme/site-themes.css';
 @import '../../../web/src/theme/materials.css';
+/* Header account button and menus: the shared nav contract (docs/design/NAV.md) */
+@import '../../../../packages/fanous-tokens/nav/aun-nav.css';
 
 
 /*

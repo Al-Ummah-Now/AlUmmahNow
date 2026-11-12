@@ -1,6 +1,8 @@
 @import 'tailwindcss';
 @import "tw-animate-css";
 @import "../theme/site-themes.css";
+/* Header account button and menus: the shared nav contract (docs/design/NAV.md) */
+@import "../../../../packages/fanous-tokens/nav/aun-nav.css";
 /*
   ---break---
 */

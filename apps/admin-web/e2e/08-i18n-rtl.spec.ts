@@ -1,5 +1,5 @@
 import { test, expect } from './support/fixtures';
-import { expectDirection, horizontalOverflow, openMainNav, setPreferences } from './support/ui';
+import { accountControl, expectDirection, horizontalOverflow, openMainNav, setPreferences } from './support/ui';
 import { storageStatePath } from './support/env';
 
 const AR_PAGES = [
@@ -58,7 +58,7 @@ test.describe('language and direction', () => {
       if (!isMobile) {
         // Brand sits on the inline-start side, which is the right in RTL
         const brand = await page.getByRole('link', { name: /الأمة الآن/ }).first().boundingBox();
-        const logout = await page.getByTestId('logout-button').boundingBox();
+        const logout = await (await accountControl(page)).boundingBox();
         expect(brand!.x).toBeGreaterThan(logout!.x);
       }
     });
