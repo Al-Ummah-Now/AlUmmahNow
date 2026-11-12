@@ -12,8 +12,17 @@ import type { EmbedVideo } from '@/lib/embed/content';
 jest.mock('@/lib/logger-client', () => ({ logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() } }));
 
 // The real player needs Video.js + MSE; record the props the frame passes instead
+// A test may hand the frame a fake Video.js player (globalThis.__fakePlayer) as if it became ready
 jest.mock('@/components/VideoPagePlayer/VideoPlayerWithChapters', () => ({
-  VideoPlayerWithChapters: (props: Record<string, unknown>) => (
+  VideoPlayerWithChapters: (props: Record<string, unknown>) => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useEffect } = require('react') as typeof import('react');
+    useEffect(() => {
+      const fake = (globalThis as { __fakePlayer?: unknown }).__fakePlayer;
+      if (fake) (props.onPlayerReady as (p: unknown) => void)(fake);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+    return (
     <div
       data-testid="mock-player"
       data-video={String(props.videoId)}
@@ -24,8 +33,51 @@ jest.mock('@/components/VideoPagePlayer/VideoPlayerWithChapters', () => ({
       data-context={JSON.stringify(props.analyticsContext)}
       data-websocket={String(props.enableWebSocket)}
     />
-  ),
+    );
+  },
 }));
+
+/** A minimal Video.js player: play() resolves, or rejects with `refuse` (e.g. NotAllowedError) while unmuted. */
+function fakePlayer(refuse?: string) {
+  const handlers: Record<string, Array<() => void>> = {};
+  let muted = false;
+  let volume = 1;
+  const calls: Array<{ muted: boolean }> = [];
+  const player = {
+    calls,
+    on: (e: string, fn: () => void) => { (handlers[e] ??= []).push(fn); },
+    one: (e: string, fn: () => void) => { (handlers[e] ??= []).push(fn); },
+    off: () => undefined,
+    fire: (e: string) => (handlers[e] ?? []).forEach((fn) => fn()),
+    muted: (v?: boolean) => {
+      if (v === undefined) return muted;
+      muted = v;
+      (handlers.volumechange ?? []).forEach((fn) => fn());
+      return undefined;
+    },
+    volume: (v?: number) => (v === undefined ? volume : ((volume = v), undefined)),
+    play: () => {
+      calls.push({ muted });
+      if (refuse && !muted) {
+        const err = new Error('refused');
+        err.name = refuse;
+        return Promise.reject(err);
+      }
+      return Promise.resolve();
+    },
+    paused: () => false,
+    pause: () => undefined,
+    currentTime: () => 0,
+    duration: () => 75,
+    loop: () => undefined,
+    error: () => null,
+    isDisposed: () => false,
+  };
+  return player;
+}
+afterEach(() => {
+  delete (globalThis as { __fakePlayer?: unknown }).__fakePlayer;
+});
 
 const video = (id: string, extra: Partial<EmbedVideo> = {}): EmbedVideo => ({
   id,
@@ -74,6 +126,55 @@ describe('EmbedPlayer', () => {
     const player = screen.getByTestId('mock-player');
     expect(player).toHaveAttribute('data-muted', 'true');
     expect(JSON.parse(player.getAttribute('data-context')!)).toEqual({ source: 'embed', embedOrigin: 'https://www.alummahnow.net' });
+  });
+
+  it('autoplay=1&gesture=1 (a click on the host page) plays with sound, no unmute control', async () => {
+    const player = fakePlayer();
+    (globalThis as { __fakePlayer?: unknown }).__fakePlayer = player;
+    render(<EmbedPlayer videos={[video('v1')]} params={parseEmbedParams({ autoplay: '1', gesture: '1' })} />);
+    const el = screen.getByTestId('mock-player');
+    // The frame starts it itself (Video.js autoplay off), unmuted
+    expect(el).toHaveAttribute('data-autoplay', 'false');
+    expect(el).toHaveAttribute('data-muted', 'false');
+    await act(async () => undefined);
+    expect(player.calls).toEqual([{ muted: false }]);
+    expect(player.muted()).toBe(false);
+    expect(screen.queryByTestId('embed-unmute')).toBeNull();
+  });
+
+  it('gesture start refused by the browser: plays muted and shows "Tap to unmute", which unmutes', async () => {
+    const player = fakePlayer('NotAllowedError');
+    (globalThis as { __fakePlayer?: unknown }).__fakePlayer = player;
+    render(<EmbedPlayer videos={[video('v1')]} params={parseEmbedParams({ autoplay: '1', gesture: '1', lang: 'ar' })} />);
+    await act(async () => undefined);
+    expect(player.calls).toEqual([{ muted: false }, { muted: true }]);
+    const unmute = await screen.findByTestId('embed-unmute');
+    expect(unmute).toHaveTextContent('اضغط لتشغيل الصوت');
+    fireEvent.click(unmute);
+    expect(player.muted()).toBe(false);
+    expect(screen.queryByTestId('embed-unmute')).toBeNull();
+  });
+
+  it('gesture start that fails for another reason (source still loading) tries once more when it can play', async () => {
+    const player = fakePlayer('AbortError');
+    (globalThis as { __fakePlayer?: unknown }).__fakePlayer = player;
+    render(<EmbedPlayer videos={[video('v1')]} params={parseEmbedParams({ autoplay: '1', gesture: '1' })} />);
+    await act(async () => undefined);
+    expect(player.calls).toHaveLength(1);
+    await act(async () => player.fire('canplay'));
+    expect(player.calls).toEqual([{ muted: false }, { muted: false }]);
+    expect(screen.queryByTestId('embed-unmute')).toBeNull();
+  });
+
+  it('plain autoplay=1 stays muted (third-party autoplay) and offers "Tap to unmute" once playing', async () => {
+    const player = fakePlayer();
+    (globalThis as { __fakePlayer?: unknown }).__fakePlayer = player;
+    render(<EmbedPlayer videos={[video('v1')]} params={parseEmbedParams({ autoplay: '1' })} />);
+    expect(screen.getByTestId('mock-player')).toHaveAttribute('data-autoplay', 'true');
+    player.muted(true); // CustomVideoPlayer applies the muted prop
+    await act(async () => player.fire('playing'));
+    expect(screen.getByTestId('embed-unmute')).toHaveTextContent('Tap to unmute');
+    expect(player.calls).toEqual([]);
   });
 
   it('renders Arabic right to left with the Arabic title', () => {

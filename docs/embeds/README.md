@@ -39,6 +39,7 @@ Below, `{host}` is the embed host and `{api}` the videos API.
 | `start` | v, p | seconds (`754`) or `1h2m34s` / `12m34s` / `34s` | `0` | Start position. Ignored if it is past the end. |
 | `end` | v | seconds or `12m34s` | none | Pause at this position. Ignored unless it is after `start`. |
 | `autoplay` | v, p | `1` | off | Starts playing as soon as it loads, **always muted** (browsers block autoplay with sound). |
+| `gesture` | v, p | `1` | off | With `autoplay=1`: the host page inserted the frame from the viewer's own click (www's video facade does), so the player tries to play **with sound**; if the browser refuses (Safari/WebKit does not carry a parent click into a cross-origin frame) it plays muted and shows "Tap to unmute". Only send it for a real click: without one the browser refuses sound anyway. |
 | `loop` | v | `1` | off | Restart when the video ends. |
 | `title` | v, p | `0` | shown | `0` hides the title bar over the player. |
 | `index` | p | 0-based integer | `0` | Which playlist item plays first. |

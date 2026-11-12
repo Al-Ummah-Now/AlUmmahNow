@@ -13,8 +13,14 @@ export interface EmbedParams {
   start: number;
   /** Pause position in seconds, only when after `start` */
   end: number | null;
-  /** Autoplay, always muted */
+  /** Autoplay; muted unless `gesture` (third-party autoplay must be muted) */
   autoplay: boolean;
+  /**
+   * gesture=1 with autoplay=1: the host page started playback from the viewer's own click (www's
+   * video facade), so the player tries to play with sound first and mutes only if the browser
+   * refuses (then shows "Tap to unmute").
+   */
+  gesture: boolean;
   loop: boolean;
   /** Title bar over the player */
   showTitle: boolean;
@@ -84,6 +90,7 @@ export function parseEmbedParams(raw: RawParams): EmbedParams {
     start,
     end: endValue !== null && endValue > start ? endValue : null,
     autoplay: flag(first(raw, 'autoplay')),
+    gesture: flag(first(raw, 'autoplay')) && flag(first(raw, 'gesture')),
     loop: flag(first(raw, 'loop')),
     showTitle: first(raw, 'title') !== '0',
     index: Number.isInteger(indexValue) && indexValue >= 0 ? indexValue : 0,
