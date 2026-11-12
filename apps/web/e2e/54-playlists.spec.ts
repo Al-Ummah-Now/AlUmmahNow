@@ -32,11 +32,18 @@ import {
 const owner = 'single' as const;
 const channelId = () => channelsOf(owner).main.id;
 
+/**
+ * The manager lists the channel's playlists with GET /api/playlists?channelId=,
+ * which scans the whole playlists bucket: about 13 s on a quiet QA and over
+ * 30 s while the E2E jobs run (#909). Waits on that list allow for it.
+ */
+const PLAYLIST_LIST_TIMEOUT = 90_000;
+
 async function openManager(page: Page, locale: 'en' | 'ar' = 'en') {
   await page.goto(`/${locale}/settings/channel/${channelId()}/playlists`);
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   // List finished loading (either rows or the empty state)
-  await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+  await expect(page.locator('[aria-busy="true"]')).toHaveCount(0, { timeout: PLAYLIST_LIST_TIMEOUT });
 }
 
 /** Loaded and actually occupying space: a collapsed 0px box must fail this */
@@ -85,7 +92,7 @@ test.describe('Playlist manager', () => {
 
       await page.getByRole('link', { name: 'All playlists' }).click();
       const renamedRow = managedRow(page, renamed);
-      await expect(renamedRow).toBeVisible();
+      await expect(renamedRow).toBeVisible({ timeout: PLAYLIST_LIST_TIMEOUT });
       await expect(renamedRow).toContainText('0 videos');
       await expect(renamedRow).toContainText('Private');
       await expect(renamedRow.getByRole('link', { name: 'View playlist' })).toHaveAttribute('href', /^\/en\/playlist\/[\w-]+$/);
@@ -117,9 +124,10 @@ test.describe('Playlist manager', () => {
       await expect(page.getByRole('alert').filter({ hasText: 'Please enter a playlist name' })).toBeVisible();
       await page.getByRole('button', { name: 'Cancel' }).click();
       await expect(page.getByRole('heading', { level: 1, name: 'Manage Playlists' })).toBeVisible();
-      await expect(page.getByText('Loading...')).toHaveCount(0);
+      await expect(page.locator('[aria-busy="true"]')).toHaveCount(0, { timeout: PLAYLIST_LIST_TIMEOUT });
 
       const row = managedRow(page, title);
+      await expect(row).toBeVisible();
       await row.getByRole('button', { name: 'Delete playlist' }).click();
       await page.getByTestId('playlist-delete-dialog-cancel').click();
       await expect(row).toBeVisible();

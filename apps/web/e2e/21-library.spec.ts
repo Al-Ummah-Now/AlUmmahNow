@@ -37,8 +37,10 @@ const HUB_SECTIONS = ['history', 'watch-later', 'liked', 'playlists', 'saved-pos
 async function expectSeeAllMatchesContent(page: Page, id: (typeof HUB_SECTIONS)[number]) {
   const section = page.getByTestId(`library-section-${id}`);
   const empty = page.getByTestId(`library-empty-${id}`);
-  // Loaded: items or the empty text (an error state fails here)
-  await expect(section.locator('ul > li').or(empty).first()).toBeVisible();
+  // Loaded: items or the empty text (an error state fails here). Playlists come
+  // from GET /api/playlists?channelId=, which scans the whole bucket: about 13 s
+  // on a quiet QA, over 30 s while the E2E jobs run (#909)
+  await expect(section.locator('ul > li').or(empty).first()).toBeVisible({ timeout: id === 'playlists' ? 90_000 : undefined });
   const items = await section.locator('ul > li').count();
   if (items > 0) await expect(page.getByTestId(`library-see-all-${id}`)).toBeVisible();
   else {
