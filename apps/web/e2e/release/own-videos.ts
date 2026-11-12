@@ -15,7 +15,7 @@
  */
 import { expect, type test as base } from '@playwright/test';
 import { useOwnData } from './builders';
-import { runVideo, runVideos, sharedRunVideosOn, type RunVideos } from './run-videos';
+import { runVideo, runVideos, runVideosReady, sharedRunVideosOn, type RunVideos } from './run-videos';
 import { target } from './targets';
 import type { PublicVideo } from './videos';
 
@@ -43,7 +43,13 @@ export function useOwnVideos(test: typeof base): ((key: OwnVideoKey) => Promise<
   // (test files load before the global setup runs: only the flag here, the file is read in the tests)
   const shared = sharedRunVideosOn();
   test.beforeAll(async ({ browser }) => {
-    if (shared) return;
+    if (shared) {
+      // The run's clips were uploaded in the global setup: wait for their encodes here, with the
+      // same allowance as an upload, not inside a test's 3 minutes
+      test.setTimeout(10 * 60 * 1000);
+      await runVideosReady();
+      return;
+    }
     // Sign-up, channel and three uploads: allow for a slow environment
     test.setTimeout(10 * 60 * 1000);
     const context = await browser.newContext();
