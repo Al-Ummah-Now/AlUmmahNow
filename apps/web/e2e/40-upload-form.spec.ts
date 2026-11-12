@@ -373,7 +373,11 @@ test.describe('Upload form - playlists', () => {
     const picker = page.getByTestId('upload-playlists');
     await picker.getByTestId('upload-playlists-toggle').click();
     await picker.getByTestId('upload-playlists-search').fill(`${prefix} exi`);
-    await picker.getByLabel(`${prefix} existing`).check();
+    // The picker lists the channel's playlists with GET /api/playlists?channelId=, which
+    // scans the whole bucket: 13 s on a quiet QA, over 30 s under the E2E jobs (#909)
+    const existingOption = picker.getByLabel(`${prefix} existing`);
+    await expect(existingOption).toBeVisible({ timeout: 90_000 });
+    await existingOption.check();
     await picker.getByTestId('upload-playlists-new').click();
     await picker.getByTestId('upload-playlists-name').fill(`${prefix} created`);
     await picker.getByTestId('upload-playlists-visibility-private').check();
