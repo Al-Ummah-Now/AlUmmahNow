@@ -62,11 +62,13 @@ test.describe('TUS upload logging - browser', () => {
     await startUpload(page, await helpers.createTestVideo('log-error-test.mp4', 64), 'Log Error Test');
     await expect(uploadUi(page).error).toBeVisible();
 
+    // The failure is logged at error level with its step (7d757143: reportFailure)
     await expect
-      .poll(() => consoleLines.filter((l) => l.startsWith('error') && l.includes('TUS upload error')).length)
+      .poll(() => consoleLines.filter((l) => l.startsWith('error') && l.includes('[VideoUpload] tus failed')).length)
       .toBeGreaterThan(0);
-    // The visible error carries the proxy response so users/support can act on it
-    await expect(uploadUi(page).error).toContainText('403');
+    // Users never see the raw response: the visible error carries the Errors-page
+    // reference that support looks the 403 up by
+    await expect(uploadUi(page).error).toContainText(/Reference: ERR-[A-Z0-9]{4}-[A-Z0-9]{4}/);
   });
 
   test('never writes credentials or upload sessions to the console', async ({ page }) => {
