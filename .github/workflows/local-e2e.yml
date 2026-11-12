@@ -235,16 +235,14 @@ jobs:
           E2E_CODE_SINK_SECRET: local-stack-sink-secret
           TEST_PROMOTE_SECRET: local-stack-promote-secret
 
-      # Owner rule: nothing the job created may be left on its stack. This gates. Allowed:
-      # - revocations (auth user_revocations, TOKEN_REVOCATIONS u:<id>), kept on purpose to outlive the
-      #   tokens; they hold the user id only, never the email (AlUmmahNowAuth#326);
-      # - until AlUmmahNowAuth#335 is released (#334): auth's user_invites rows and the E2E invite sink entry.
+      # Owner rule: nothing the job created may be left on its stack. This gates. Allowed: revocations
+      # (auth user_revocations, TOKEN_REVOCATIONS u:<id>), kept on purpose to outlive the tokens; they
+      # hold the user id only, never the email (AlUmmahNowAuth#326).
       - name: Leftovers
         if: always()
         run: >-
           node --experimental-strip-types --no-warnings scripts/local-stack/leftovers.ts --marker "$E2E_RUN_ID"
           --allow d1:al-ummah-now-d1:user_revocations --allow kv:TOKEN_REVOCATIONS
-          --allow d1:al-ummah-now-d1:user_invites --allow kv:AUTH_STORAGE:test:invite:
 
       # Teardown, pass or fail (owner rule: test sets clean up every resource they use): the run
       # accounts' content goes (videos with their media, then the GDPR erase of profile, channels,
