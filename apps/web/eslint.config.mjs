@@ -47,6 +47,14 @@ const eslintConfig = [
     },
   },
   {
+    // E2E specs are Playwright, not React: fixtures call `use(...)` and the own-data builders are
+    // `useOwnData(test)` at a spec's top level, which the React hooks rule misreads as hooks
+    files: ["e2e/**/*.ts"],
+    rules: {
+      "react-hooks/rules-of-hooks": "off",
+    },
+  },
+  {
     // Logging policy (docs/operations/logging.md): production code logs through the logger, never console.log/info/debug
     files: ["src/**/*.{ts,tsx}", "worker.ts"],
     ignores: ["**/__tests__/**", "**/*.test.{ts,tsx}", "**/*.spec.{ts,tsx}", "src/test/**"],
