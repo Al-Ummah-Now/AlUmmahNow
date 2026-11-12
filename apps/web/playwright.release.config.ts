@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { SPEC_PLACEMENT } from './e2e/test-utils/placement';
 
 /**
  * Release regressions: small, independent of the legacy suite's seeded users and
@@ -62,6 +63,21 @@ const EXTRA_DEVICES = {
  * Owner rule 2026-11-12: functionality gates, load does not. Every run leaves them out; a run
  * with E2E_LOAD=only runs just them (non-blocking jobs: continue-on-error, nightly and releases).
  */
+/**
+ * E2E_ENV=local: the local E2E stack (docs/testing/LOCAL-STACK.md), booted by the job itself. Only
+ * the specs placed `local` (e2e/test-utils/placement.ts) run there; the browser goes through the
+ * stack's proxy, which answers the faked third-party HTTPS hosts (Bunny CDN, image host) with a
+ * self-signed certificate and refuses every other non-local host.
+ */
+const LOCAL = process.env.E2E_ENV === 'local';
+const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const releaseSpecs = (placement: 'local' | 'deployed') =>
+  Object.keys(SPEC_PLACEMENT)
+    .filter((p) => p.startsWith('apps/web/e2e/release/') && SPEC_PLACEMENT[p].placement === placement)
+    .map((p) => escape(p.slice('apps/web/e2e/release/'.length)));
+const DEPLOYED_ONLY = new RegExp(`/(${releaseSpecs('deployed').join('|')})$`);
+const LOCAL_USE = LOCAL ? { proxy: { server: 'http://127.0.0.1:3191', bypass: '<-loopback>' }, ignoreHTTPSErrors: true } : {};
+
 const LOAD_TAG = /@load/;
 const LOAD_ONLY = process.env.E2E_LOAD === 'only';
 
@@ -87,6 +103,7 @@ export default defineConfig({
     navigationTimeout: 30000,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
+    ...LOCAL_USE,
   },
   projects: SHARED_MODE === 'only' ? [{ name: 'shared-state', testMatch: SHARED_STATE, use: { ...devices['Desktop Chrome'] } }] : ([
     {
@@ -126,6 +143,6 @@ export default defineConfig({
     ),
   ] as Array<{ name: string; testIgnore?: RegExp | RegExp[] } & Record<string, unknown>>).map((project) => ({
     ...project,
-    testIgnore: encodeIgnore(project.testIgnore === undefined ? [] : ([] as RegExp[]).concat(project.testIgnore)),
+    testIgnore: encodeIgnore([...(project.testIgnore === undefined ? [] : ([] as RegExp[]).concat(project.testIgnore)), ...(LOCAL ? [DEPLOYED_ONLY] : [])]),
   })),
 });
