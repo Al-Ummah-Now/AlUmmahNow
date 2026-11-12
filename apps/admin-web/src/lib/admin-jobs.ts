@@ -10,6 +10,7 @@ export const JOB_KIND_LABEL: Record<AdminJobKind, MessageKey> = {
   'video.purge': 'adminJobs.kinds.videoPurge',
   'user.sync-holds': 'adminJobs.kinds.userSyncHolds',
   'user.delete-data': 'adminJobs.kinds.userDeleteData',
+  'user.erase-run': 'adminJobs.kinds.userEraseRun',
   'profiles.restore-legacy': 'adminJobs.kinds.profilesRestoreLegacy',
   'videos.repair-thumbnails': 'adminJobs.kinds.videosRepairThumbnails',
   'search.rebuild-ownership': 'adminJobs.kinds.searchRebuildOwnership',
