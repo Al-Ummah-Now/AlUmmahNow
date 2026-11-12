@@ -12,13 +12,16 @@ import type { Page } from '@playwright/test';
  * `typed`: text to type first for a type-to-confirm dialog.
  */
 export async function confirmInApp(page: Page, ids: { dialog: string; confirm: string; typedField?: string }, typed?: string): Promise<void> {
-  const shown = await page
-    .getByTestId(ids.dialog)
+  // A list renders one closed dialog per row under the same test id (every theme row has its own
+  // theme-delete-confirm-dialog): act on the open one only. A plain getByTestId matched them all, the
+  // strict-mode error read as "no dialog" and the delete was never confirmed.
+  const dialog = page.getByTestId(ids.dialog).filter({ visible: true });
+  const shown = await dialog
     .waitFor({ state: 'visible', timeout: 5000 })
     .then(() => true, () => false);
   if (!shown) return;
-  if (ids.typedField && typed !== undefined) await page.getByTestId(ids.typedField).fill(typed);
-  await page.getByTestId(ids.confirm).click();
+  if (ids.typedField && typed !== undefined) await dialog.getByTestId(ids.typedField).fill(typed);
+  await dialog.getByTestId(ids.confirm).click();
 }
 
 /** admin-web ConfirmDialog test ids for a base id. */

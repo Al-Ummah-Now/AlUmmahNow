@@ -117,6 +117,16 @@ test.describe('Release: theme builder', () => {
     const original = currentId.replace('site-theme-', '') as Theme;
     expect(THEMES, 'the run starts from a built-in theme').toContain(original);
 
+    // Themes an earlier run could not delete (a cancelled run, or the confirm bug below in
+    // in-app-confirm.ts) pile up in the library: remove a few each run. Only this spec's own
+    // rel-theme-* themes, never the active one; the shared-state lock keeps other runs out.
+    const leftovers = await page.locator('[data-testid^="theme-row-rel-theme-"][data-active="false"]').evaluateAll((rows) => rows.map((r) => r.getAttribute('data-testid')!.replace('theme-row-', '')));
+    for (const stale of leftovers.slice(0, 10)) {
+      await page.getByTestId(`theme-delete-${stale}`).click();
+      await confirmInApp(page, adminConfirm('theme-delete-confirm'), stale);
+      await expect(page.getByTestId(`theme-row-${stale}`)).toHaveCount(0, { timeout: 30000 });
+    }
+
     let created = false;
     let activated = false;
     try {
