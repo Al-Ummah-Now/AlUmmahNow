@@ -9,7 +9,8 @@
  * Needs the realtime worker of the stack (REALTIME_URL, default
  * http://127.0.0.1:3087) and its internal key (INTERNAL_API_KEY).
  */
-import { test, expect, type Page, type WebSocket } from '@playwright/test';
+import type { Page, WebSocket } from '@playwright/test';
+import { test, expect } from './support/fixtures';
 import { ADMIN_WEB_URL, storageStatePath } from './support/env';
 
 const REALTIME_URL = (process.env.REALTIME_URL || 'http://127.0.0.1:3087').replace(/\/$/, '');
