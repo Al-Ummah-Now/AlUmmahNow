@@ -7,7 +7,7 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { fillSecret } from './secret-fill';
-import { target, TEST_PASSWORD } from './targets';
+import { target, TEST_PASSWORD, releaseEnv } from './targets';
 import { signUpOnWeb } from './web-session';
 
 // Types the password: its trace would hold it (fillSecret args, form POST body). Trace off.
@@ -37,7 +37,8 @@ test('a direct /password/authorize sign-in shows "Start sign-in again" (en + ar)
     await expect(button, `no restart page (${query || 'en'}) at ${page.url()}`).toBeVisible({ timeout: 15000 });
     await expect(page.locator('body')).not.toHaveText(RAW_ERROR);
     await expect(button).toHaveText(label);
-    expect(await button.getAttribute('href')).toMatch(/^https:\/\//);
+    // An absolute link to the profile app (plain http only on the local stack)
+    expect(await button.getAttribute('href')).toMatch(releaseEnv() === 'local' ? /^http:\/\/localhost:\d+\// : /^https:\/\//);
     if (dir === 'rtl') await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   }
 });

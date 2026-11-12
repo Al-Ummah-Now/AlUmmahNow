@@ -10,11 +10,12 @@
  * target yet, PR runs skip with that reason. Stage release runs never skip.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { target } from './targets';
+import { target, releaseEnv } from './targets';
 import { findPlayableVideo, NO_PLAYABLE_VIDEO, watchUrl } from './videos';
 import { fetchRetry } from './net';
 
-const HOST_PAGE = 'https://embed-host.release.test/page';
+// Same scheme as the site under test: an https host page cannot frame the local stack's plain http (mixed content)
+const HOST_PAGE = `${releaseEnv() === 'local' ? 'http' : 'https'}://embed-host.release.test/page`;
 
 async function embedDeployed(): Promise<boolean> {
   // A build without /embed redirects it to /{locale}/embed/... and then 404s
