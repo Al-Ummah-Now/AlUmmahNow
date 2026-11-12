@@ -34,6 +34,8 @@ export const COLLECTION_BACKFILL_KIND = 'bunny-collection-backfill';
 export const COLLECTION_BACKFILL_PREFIX = 'ops/bunny-collections/';
 const PAGE_SIZE = 25;
 const PAGE_DELAY_SECONDS = 5;
+/** Bunny / R2 calls in flight per page */
+const CONCURRENCY = 6;
 const JSON_META = { httpMetadata: { contentType: 'application/json' } };
 
 export interface CollectionBackfillMessage {
@@ -120,6 +122,21 @@ function emptyCounts(): CollectionBackfillCounts {
 function libCounts(counts: CollectionBackfillCounts, libraryId: number): LibraryCounts {
 	const key = String(libraryId);
 	return (counts.byLibrary[key] ??= { videos: 0, alreadyPlaced: 0, moved: 0, missingInBunny: 0, errors: 0 });
+}
+
+/** Runs `task` over `items`, `limit` at a time; results in input order */
+async function eachLimited<T, R>(items: T[], limit: number, task: (item: T) => Promise<R>): Promise<R[]> {
+	const out: R[] = new Array(items.length);
+	let next = 0;
+	await Promise.all(
+		Array.from({ length: Math.min(limit, items.length) }, async () => {
+			while (next < items.length) {
+				const i = next++;
+				out[i] = await task(items[i]);
+			}
+		}),
+	);
+	return out;
 }
 
 function errorText(error: unknown): string {
@@ -219,16 +236,21 @@ export async function runCollectionBackfillPage(
 	/** channelId:libraryId → collection id (undefined in a dry run when it would be created) */
 	const targets = new Map<string, string | undefined>();
 
-	for (const object of listing.objects) {
-		// Video records only (no livestream:, comment or other keyed objects)
-		if (object.key.includes(':') || object.key.includes('/')) continue;
-		let video: BackfillVideo | null;
+	// Video records only (no livestream:, comment or other keyed objects), read in parallel
+	const keys = listing.objects.map((o) => o.key).filter((key) => !key.includes(':') && !key.includes('/'));
+	const records = await eachLimited(keys, CONCURRENCY, async (key) => {
 		try {
-			video = await videos.getObject(object.key);
+			return await videos.getObject(key);
 		} catch (error) {
-			errors.push({ id: object.key, error: errorText(error) });
-			continue;
+			errors.push({ id: key, error: errorText(error) });
+			return null;
 		}
+	});
+
+	// 1. Sequential: each video's library and its channel's collection there
+	//    (one create/adopt per channel and library, never raced)
+	const work: { video: BackfillVideo; library: BunnyLibrary; counts: LibraryCounts; target: string | undefined }[] = [];
+	for (const video of records) {
 		if (!video?.id) continue;
 		counts.scanned++;
 		if (!video.channelId || video.channelId === video.userId) {
@@ -272,32 +294,42 @@ export async function runCollectionBackfillPage(
 							target = await ensureChannelCollection(channels, client, libraryId, video.channelId, channel.name || `Channel ${video.channelId}`);
 							if (target) counts.collectionsCreated.push(pair);
 						}
-						// Later videos of the channel on this page see the stored id
+						// Later videos of the channel see the stored id
 						channelCache.set(video.channelId, await channels.getObject(video.channelId));
 					}
 				}
 				targets.set(pair, target);
 			}
-			const target = targets.get(pair);
-			const current = await bunnyCollectionOf(client, libraryId, video.id);
-			if (!current) {
-				c.missingInBunny++;
-				continue;
-			}
-			if (target && current.collectionId === target) {
-				c.alreadyPlaced++;
-				continue;
-			}
-			c.moved++;
-			if (!message.dryRun) {
-				if (!target) throw new Error('no collection for the channel');
-				await client.updateVideo(libraryId, video.id, { collectionId: target });
-			}
+			work.push({ video, library, counts: c, target: targets.get(pair) });
 		} catch (error) {
 			c.errors++;
 			errors.push({ id: video.id, error: errorText(error) });
 		}
 	}
+
+	// 2. Parallel: Bunny's current collection of each video, moved when it differs
+	await eachLimited(work, CONCURRENCY, async ({ video, library, counts: c, target }) => {
+		try {
+			const client = clientOf(library);
+			const current = await bunnyCollectionOf(client, library.libraryId, video.id);
+			if (!current) {
+				c.missingInBunny++;
+				return;
+			}
+			if (target && current.collectionId === target) {
+				c.alreadyPlaced++;
+				return;
+			}
+			c.moved++;
+			if (!message.dryRun) {
+				if (!target) throw new Error('no collection for the channel');
+				await client.updateVideo(library.libraryId, video.id, { collectionId: target });
+			}
+		} catch (error) {
+			c.errors++;
+			errors.push({ id: video.id, error: errorText(error) });
+		}
+	});
 	return { counts, nextCursor: listing.truncated ? listing.cursor ?? null : null, errors };
 }
 
