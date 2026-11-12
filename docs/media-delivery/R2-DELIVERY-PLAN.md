@@ -32,7 +32,7 @@ Not in this epic: migrating the existing catalogue (planned below, not run) and 
 
  Viewers ─► media.<env>.alummahnow.net
               /pub/<videoId>/<rev>/…   R2 custom domain + Cache Rule (no Worker)
-              /priv/<token>/<videoId>/<rev>/…  Worker route: HMAC check → R2 → edge cache
+              /priv/<token>/<videoId>/<rev>/…  Worker route: HMAC check → private bucket → edge cache
 ```
 
 ### Why these choices
@@ -55,19 +55,25 @@ Not in this epic: migrating the existing catalogue (planned below, not run) and 
   key, not by token, so every viewer of a private video shares one cached copy.
 - **`rev` in every key** (a random id per transcode): a re-transcode never serves a mix of old and
   new segments, and segments can be cached immutable for a year.
-- **Visibility changes move objects.** Public → private/unlisted copies `pub/…` to `priv/…`, then
-  deletes the originals and purges the old prefix from the cache. Private → public goes the other
+- **Private renditions live in their own bucket** (`al-ummah-now-media-private[-env]`, no public
+  access). An R2 custom domain serves every key in its bucket, so keeping `priv/…` out of the public
+  bucket means a detached Worker route can never expose a private video.
+- **Visibility changes move objects.** Public → private/unlisted copies `pub/…` (public bucket) to
+  `priv/…` (private bucket), then deletes the originals and purges the old prefix from the cache. Private → public goes the other
   way. A queue job does the move, and the record keeps playing from the old place until the move is
   done.
 
 ### Bucket layout
 
 ```
-pub|priv/<videoId>/<rev>/master.m3u8
-                        /<rung>/index.m3u8, init.mp4, seg_00001.m4s …   (fMP4 HLS, 6 s segments, 2 s GOP)
-                        /thumb.jpg, thumb_640.jpg, preview.webp
-                        /manifest.json   (rungs, bytes, durations, job timings; written last)
+pub/<videoId>/<rev>/master.m3u8     (al-ummah-now-media[-env]; priv/… in al-ummah-now-media-private[-env])
+                    /<rung>/index.m3u8, init_<n>.mp4, seg_00000.m4s …   (fMP4 HLS, 6 s segments, 2 s GOP)
+                    /thumb.jpg, thumb_640.jpg, preview.webp
 ```
+
+Segments, stills and rendition playlists are written first and `master.m3u8` last, so a player
+never sees a playlist whose segments aren't in R2 yet. Sizes and timings go to the video record
+(`r2.result`).
 
 Ladder (H.264 high, AAC 128k): 360p, 480p, 720p, 1080p, never above the source. Shorts (portrait)
 use the same rungs by short side (360×640 … 1080×1920). CRF 23 with `maxrate` caps per rung:
@@ -89,11 +95,11 @@ use the same rungs by short side (360×640 … 1080×1920). CRF 23 with `maxrate
 
 | Item | How | Who |
 |---|---|---|
-| Buckets `al-ummah-now-media-qa`, `-stage`, `al-ummah-now-media` | `scripts/release/ensure-resources.ts` (runs on every deploy) | CI |
+| Buckets `al-ummah-now-media[-qa\|-stage]` (public) and `al-ummah-now-media-private[-qa\|-stage]` | `scripts/release/ensure-resources.ts` (runs on every deploy) | CI |
 | Custom domain `media.qa.alummahnow.net`, `media.stage…`, `media.alummahnow.net` | `scripts/media-cdn/apply.ts domains` (R2 custom-domain API) | Agent for QA/stage; **production only after the owner says go** (it creates a DNS record) |
 | Cache Rule on the media hosts: cache everything; segments and init 1 year, playlists 10 s (VOD playlists don't change, `rev` makes them immutable), `manifest.json` bypass | `scripts/media-cdn/apply.ts cache` (Rulesets API, phase `http_request_cache_settings`, one rule per env, matched by its ref) | Needs a token with Zone → Cache Rules Edit (see Owner actions) |
 | Smart Tiered Cache on | `scripts/media-cdn/apply.ts tiered` | Same token (Zone Settings Edit) |
-| CORS on the bucket (players on www, videos, admin, native apps) | `wrangler r2 bucket cors set` from `scripts/media-cdn/cors.json` | Agent |
+| CORS on the public bucket (players on www, videos, admin, embeds, native apps) | `scripts/media-cdn/apply.ts` | Agent |
 | Worker route `media.<env>/priv/*` → al-ummah-now-media | wrangler config | CI |
 | Secrets Store `media-sign-key[-qa\|-stage]` (HMAC for `/priv/` tokens), shared by api-videos and the media Worker | `wrangler secrets-store secret create` + `scripts/release/secrets-manifest.ts` | Agent |
 | Queues `al-ummah-now-transcode[-env]` and `al-ummah-now-transcode-dlq[-env]` | ensure-resources.ts | CI |
