@@ -88,7 +88,10 @@ test.describe('Upload templates - settings page', () => {
     await dialog.getByLabel('Template Name (English)').fill(name);
     await dialog.getByLabel('Template Name (Arabic)').fill('قالب جديد');
     await dialog.getByLabel('Title (English)').fill('Friday khutbah {{date}}');
-    await dialog.getByLabel('Tags').fill('khutbah, friday');
+    // Tags is a live autocomplete (01e81c4f): its suggestion listbox is also named "Tags"
+    const tags = dialog.getByRole('combobox', { name: 'Tags' });
+    await tags.fill('khutbah, friday');
+    await tags.press('Tab'); // closes the suggestions without picking one
     await chooseThemedOption(dialog.getByLabel('Category'), 'khutbah');
     await chooseThemedOption(dialog.getByLabel('Visibility'), 'private');
     await dialog.getByTestId('template-editor-save').click();
