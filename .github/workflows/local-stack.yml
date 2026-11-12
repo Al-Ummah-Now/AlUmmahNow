@@ -116,6 +116,12 @@ jobs:
           browsers: chromium
           working-directory: apps/web
 
+      # The seed generates its clips with ffmpeg (titles drawn with DejaVu)
+      - name: Install ffmpeg and fonts
+        uses: ./.github/actions/apt-install
+        with:
+          packages: ffmpeg fonts-dejavu-core
+
       # The deterministic fixtures: the QA seed (e2e/seed/seed-qa.ts) run against the stack. Accounts
       # sign up through the real local issuer (codes from its E2E sink), videos are real TUS uploads
       # that the fake Bunny encodes, roles and tiers go through the stack's local SQL endpoint.
