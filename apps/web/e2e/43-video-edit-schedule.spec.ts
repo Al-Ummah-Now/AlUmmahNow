@@ -14,7 +14,7 @@ import { ARABIC, expectDarkSurface, getSchedule, scheduleVideoApi } from './test
 import { chooseThemedOption, themedTrigger } from './test-utils/themed-select';
 
 /**
- * Video edit page (/[locale]/video/[id]/edit): the Schedule Publication
+ * Studio's video editor (/[locale]/video/[id]/edit 301s to it): the Schedule Publication
  * section (ScheduleSection), the category selector, theming, localization and
  * access states. Anything that schedules, publishes or saves works on a
  * disposable video the test uploads and deletes; read-only checks use the
@@ -193,9 +193,17 @@ test.describe('Edit page - theme, locale and access', () => {
   test.describe('signed out', () => {
     test.use({ storageState: ANONYMOUS_STATE });
 
-    test('EDIT-105 sends anonymous visitors to the home page', async ({ page }) => {
-      await page.goto(`/en/video/${seed[SEED_TITLES.singleVideo].id}/edit`);
-      await expect(page).toHaveURL(/\/en\/?$/);
+    test('EDIT-105 sends anonymous visitors to sign in, returning to the editor', async ({ page }) => {
+      // The editor is in Studio now: a signed-out Studio link goes straight to
+      // sign-in and comes back to the editor (StudioSignIn), no longer home
+      const id = seed[SEED_TITLES.singleVideo].id;
+      const login = page.waitForRequest((r) => {
+        const url = new URL(r.url());
+        return url.pathname === '/api/auth/login' && url.searchParams.get('return') === `/en/studio/video/${id}/edit`;
+      });
+      await page.goto(`/en/video/${id}/edit`);
+      await login;
+      await expect(page).toHaveURL(/\/authorize/);
       await expect(page.getByTestId('video-edit-form')).toHaveCount(0);
     });
   });
