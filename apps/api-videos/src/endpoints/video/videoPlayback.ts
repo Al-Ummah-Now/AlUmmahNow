@@ -83,6 +83,6 @@ export class VideoPlayback extends OptionalAuthRoute {
 		const view = applyPlayback(transformVideoToView(video), choice);
 		c.header("Cache-Control", "private, no-store");
 		// `id` lets the URL-signing middleware sign Bunny's URLs for this video
-		return { id: view.id, playUrl: view.playUrl, thumbnailUrl: view.thumbnailUrl, delivery: view.delivery };
+		return { id: view.id, playUrl: view.playUrl, thumbnailUrl: view.thumbnailUrl, delivery: { source: choice.source } };
 	}
 }
