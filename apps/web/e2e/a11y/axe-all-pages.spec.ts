@@ -22,8 +22,7 @@ const ROLES: CatalogRole[] = ['anon', 'single', 'none'];
 
 let data: CatalogData;
 
-// One worker runs this file's tests in order, so its own data (beforeAll) is made once
-test.describe.configure({ mode: 'default' });
+// Not one group: its ~180 page scans spread over the shards (each worker makes its own data)
 
 /**
  * This file's own content (made in beforeAll, deleted afterwards): a creator's channel with a
