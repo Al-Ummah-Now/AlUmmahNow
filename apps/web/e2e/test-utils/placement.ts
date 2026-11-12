@@ -71,6 +71,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/20-accessibility-axe.spec.ts': { placement: 'local', reason: 'axe/keyboard on watch page+player; needs H.264 fixture, branded Chrome' },
   'apps/web/e2e/21-channel-handles-owner.spec.ts': { placement: 'local', reason: 'handle URLs, owner actions, delete flow on scratch channel' },
   'apps/web/e2e/21-library.spec.ts': { placement: 'local', reason: 'watch later, likes, library pages via api-videos' },
+  'apps/web/e2e/21-watch-later-per-user.spec.ts': { placement: 'local', reason: 'Watch later per user: library API across active channels, channel playlist listings, channel Playlists tab' },
   'apps/web/e2e/21-search-v2.spec.ts': { placement: 'local', reason: 'search index results, filters, Arabic normalisation on seeded content' },
   'apps/web/e2e/22-explore.spec.ts': { placement: 'local', reason: 'explore page rendering and navigation' },
   'apps/web/e2e/22-notifications.spec.ts': { placement: 'local', reason: 'bell/inbox UI; subscribe→processor notification uses local queues' },
