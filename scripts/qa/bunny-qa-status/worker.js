@@ -229,6 +229,17 @@ export default {
 		if (env.QA_LIBRARY_ID && libraryId !== env.QA_LIBRARY_ID) return Response.json({ error: `refusing library ${libraryId}: not QA (${env.QA_LIBRARY_ID})` }, { status: 403 });
 		const url = new URL(request.url);
 		try {
+			if (url.pathname === '/list') {
+				// Compact listing for the per-run census (no keys, no URLs)
+				const rows = [];
+				for (let page = 1; page < 200; page++) {
+					const r = await bunny(key, `/library/${libraryId}/videos?page=${page}&itemsPerPage=1000&orderBy=date`);
+					if (r.status !== 200) throw new Error(`list page ${page}: HTTP ${r.status}`);
+					for (const v of r.body.items || []) rows.push([v.guid, v.title || '', v.dateUploaded || '', v.status, v.encodeProgress ?? null]);
+					if (!r.body.items?.length || rows.length >= r.body.totalItems) break;
+				}
+				return Response.json({ libraryId, at: new Date().toISOString(), rows });
+			}
 			if (url.pathname === '/status') return Response.json(await status(key, libraryId, env.videos));
 			if (url.pathname === '/sweep') {
 				const apply = url.searchParams.get('apply') === '1';
