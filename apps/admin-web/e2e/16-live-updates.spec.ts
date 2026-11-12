@@ -14,6 +14,12 @@ import { ADMIN_WEB_URL, storageStatePath } from './support/env';
 
 const REALTIME_URL = (process.env.REALTIME_URL || 'http://127.0.0.1:3087').replace(/\/$/, '');
 const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || 'dev-internal-api-key';
+/**
+ * Publishing to /broadcast needs the stack's realtime worker and its internal key. A deployed
+ * target (QA) has neither on the runner, so the publish test runs only on a local stack (or
+ * when REALTIME_URL and INTERNAL_API_KEY are given explicitly).
+ */
+const CAN_PUBLISH = /^https?:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/.test(ADMIN_WEB_URL) || (!!process.env.REALTIME_URL && !!process.env.INTERNAL_API_KEY);
 
 /** Opens `path` and resolves with the page's realtime socket and the frames it received. */
 async function openLive(page: Page, path: string): Promise<{ ws: WebSocket; frames: string[] }> {
@@ -50,6 +56,7 @@ test.describe('live admin pages (admin)', () => {
   test.use({ storageState: storageStatePath('superadmin') });
 
   test('the Jobs page subscribes to admin:jobs and re-renders on an update, without a reload', async ({ page }) => {
+    test.skip(!CAN_PUBLISH, 'publishes through the local stack\'s realtime worker (REALTIME_URL + INTERNAL_API_KEY); not available against a deployed target');
     const { frames } = await openLive(page, '/jobs');
     await expect.poll(() => received(frames, (m) => m.type === 'subscribed' && m.channel === 'admin:jobs'), { timeout: 15_000 }).toBe(true);
 
