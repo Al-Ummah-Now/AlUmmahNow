@@ -126,7 +126,6 @@ export const WORKERS: StackWorker[] = [
       // The fake Bunny CDN (fake-external.ts FAKE_CDN_HOST): workers reach it through the outbound
       // fakes, the browser through Playwright routes to PORTS['fake-cdn']
       bunny_hostname: 'vz-local-stack.b-cdn.net',
-      BUNNY_SIGN_HOSTNAME: 'vz-local-stack.b-cdn.net',
       BUNNY_TEST_LIBRARY: 'true',
     },
   },
