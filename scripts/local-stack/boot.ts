@@ -334,18 +334,18 @@ interface Hit { store: string; location: string; sample: string }
  * auth user whose email starts with e2e+<marker>): every D1 table, every R2 object (bodies up to
  * 256 KB), every KV key and value, the fake Bunny and image store. The seed never matches.
  */
-async function scanLeftovers(mf: MiniflareInstance, prepared: Prepared[], marker: string): Promise<{ marker: string; runUserIds: string[]; hits: Hit[]; truncated: boolean }> {
+async function scanLeftovers(mf: MiniflareInstance, prepared: Prepared[], marker: string, recordedIds: string[] = []): Promise<{ marker: string; runUserIds: string[]; hits: Hit[]; truncated: boolean }> {
   const hits: Hit[] = [];
   const MAX = 300;
   const add = (hit: Hit) => {
     if (hits.length < MAX) hits.push({ ...hit, sample: hit.sample.slice(0, 200) });
   };
   const auth = prepared.find((p) => p.worker.app === 'auth');
-  const runUserIds: string[] = [];
+  const runUserIds: string[] = [...recordedIds];
   if (auth) {
     const db = await mf.getD1Database('AUTH_DB', auth.name);
     const { results } = await db.prepare("SELECT id FROM users WHERE email LIKE 'e2e+' || ? || '%'").bind(marker).all<{ id: string }>();
-    runUserIds.push(...results.map((r) => r.id));
+    for (const { id } of results) if (!runUserIds.includes(id)) runUserIds.push(id);
   }
   const needles = [marker, ...runUserIds];
   const holds = (text: string) => needles.some((n) => text.includes(n));
@@ -487,7 +487,7 @@ async function main(): Promise<void> {
     return object ? { status: 200, body: await object.text() } : { status: 404 };
   });
   setStackHooks({
-    leftovers: (marker) => scanLeftovers(mf, prepared, marker),
+    leftovers: (marker, ids) => scanLeftovers(mf, prepared, marker, ids),
     scheduled: async (app, cron, time) => {
       const p = prepared.find((x) => x.worker.app === app || x.name === app);
       if (!p) throw new Error(`no worker ${app} (${prepared.map((x) => x.worker.app).join(', ')})`);
