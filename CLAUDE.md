@@ -734,14 +734,15 @@ channels, uploads or other content on production from a probe script.
 
 #### Legacy E2E suite
 
-`.github/workflows/e2e-tests.yml` (`apps/web/playwright.config.ts`, every other
-spec under `apps/web/e2e/`) against QA runs **by hand only** (workflow_dispatch):
-no schedule, no PR runs, no run after a Release. Those specs run on the local
-stack in Local E2E (every PR, every push to main, nightly, and inside every
-release); QA and stage run only the deployed specs (release-e2e.yml). Use it for
-a one-off check against QA or to update the visual baselines (`update_snapshots`).
-Each job registers its own run accounts in global setup (`auth.setup.ts`,
-code-sink addresses, `E2E_CODE_SINK_SECRET` from `E2E_CODE_SINK_SECRET_QA`).
+`.github/workflows/e2e-tests.yml` (`apps/web/playwright.config.ts`) runs against QA **nightly and
+by hand only**, never per PR or after a release, and only for the web specs still placed on QA: the
+config leaves out every spec moved to the local stack (`e2e/test-utils/local-web-specs.ts`), which
+Local E2E runs on every PR, push to main, nightly and in every release. No spec may stop running:
+a spec leaves this run only by moving to the local list. Nothing gates on it; a red night is a
+report to act on. `07-performance` (`@load`) stays here as a non-blocking load step. Use
+`workflow_dispatch` for a one-off QA run or to update the visual baselines (`update_snapshots`).
+Each job registers its own run accounts in global setup (`auth.setup.ts`, code-sink addresses,
+`E2E_CODE_SINK_SECRET` from `E2E_CODE_SINK_SECRET_QA`).
 
 #### Per-run E2E accounts
 
