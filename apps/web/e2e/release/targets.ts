@@ -10,7 +10,7 @@ import { randomBytes } from 'crypto';
  * them all afterwards (scripts/release/delete-test-user.ts). The other specs
  * create data and never run there.
  */
-export type ReleaseEnv = 'qa' | 'stage' | 'production';
+export type ReleaseEnv = 'qa' | 'stage' | 'production' | 'local';
 
 export interface Target {
   web: string;
@@ -49,6 +49,19 @@ const TARGETS: Record<ReleaseEnv, Target> = {
     www: 'https://www.stage.alummahnow.net',
     cms: 'https://cms.stage.alummahnow.net',
   },
+  // The local E2E stack (scripts/local-stack, docs/testing/LOCAL-STACK.md): this PR's code, the
+  // Auth repo at its last release, everything on localhost; www and the CMS only where booted
+  local: {
+    web: 'http://localhost:3001',
+    api: 'http://localhost:3086',
+    adminWeb: 'http://localhost:3091',
+    adminApi: 'http://localhost:3090',
+    auth: 'http://localhost:3301',
+    profile: 'http://localhost:3302',
+    authAdmin: 'http://localhost:3303',
+    www: 'http://localhost:3401',
+    cms: 'http://localhost:3402',
+  },
   production: {
     web: 'https://videos.alummahnow.net',
     api: 'https://videos.api.alummahnow.net',
@@ -69,7 +82,7 @@ export function releaseEnv(): ReleaseEnv {
     if (!process.env.PROD_USER_FILE) throw new Error('E2E_ENV=production needs PROD_USER_FILE (prod-signed-in.yml)');
     return env;
   }
-  if (env !== 'qa' && env !== 'stage') throw new Error(`E2E_ENV must be qa, stage or production, got "${env}"`);
+  if (env !== 'qa' && env !== 'stage' && env !== 'local') throw new Error(`E2E_ENV must be qa, stage, local or production, got "${env}"`);
   return env;
 }
 
