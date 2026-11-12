@@ -1,5 +1,6 @@
 import { test, expect } from './support/fixtures';
-import { WEB_APP_URL, storageStatePath } from './support/env';
+import { LOCAL_STACK, WEB_APP_URL, storageStatePath } from './support/env';
+import { stackSql } from './support/local-stack';
 
 /**
  * The admin chooses the theme and the public site follows, within the cache
@@ -13,8 +14,29 @@ const siteTheme = async (request: import('@playwright/test').APIRequestContext) 
   return /<html[^>]*data-theme="(\w+)"/.exec(html)?.[1];
 };
 
+interface SettingRow { key: string; value: string; updated_by: string; updated_at: string }
+const KEY = 'site.theme';
+let before: SettingRow | null | undefined;
+
 test.describe('site theme', () => {
   test.use({ storageState: storageStatePath('admin') });
+
+  // Local stack: the setting row goes back exactly as it was (value, who and when), so nothing of
+  // this run's admin is left in it; on QA the UI restore below is all there is
+  test.beforeAll(async () => {
+    if (!LOCAL_STACK) return;
+    before = (await stackSql<SettingRow>('al-ummah-now-reports', `SELECT * FROM site_settings WHERE key = '${KEY}'`))[0] ?? null;
+  });
+
+  test.afterAll(async () => {
+    if (!LOCAL_STACK || before === undefined) return;
+    if (before === null) {
+      await stackSql('al-ummah-now-reports', `DELETE FROM site_settings WHERE key = '${KEY}'`);
+      return;
+    }
+    const q = (v: string) => `'${v.replace(/'/g, "''")}'`;
+    await stackSql('al-ummah-now-reports', `UPDATE site_settings SET value = ${q(before.value)}, updated_by = ${q(before.updated_by)}, updated_at = ${q(before.updated_at)} WHERE key = '${KEY}'`);
+  });
 
   test('THEME-01 an admin change reaches the site in the first HTML, and is restored', async ({ page, request }) => {
     test.setTimeout(240000);

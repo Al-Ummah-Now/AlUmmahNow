@@ -64,6 +64,37 @@ export function topOfHour(now = new Date()): Date {
   return t;
 }
 
+/** Every key of a stack R2 bucket under `prefix` (GET /__stack/r2/<bucket>?prefix=). */
+export async function stackR2Keys(bucket: string, prefix = ''): Promise<string[]> {
+  const keys: string[] = [];
+  let cursor: string | null = null;
+  do {
+    const qs = new URLSearchParams({ prefix, ...(cursor ? { cursor } : {}) });
+    const res = await fetch(`${control()}/__stack/r2/${encodeURIComponent(bucket)}?${qs}`);
+    const body = (await res.json().catch(() => ({}))) as { keys?: string[]; cursor?: string | null; error?: string };
+    if (!res.ok) throw new Error(`listing ${bucket}/${prefix} -> ${res.status} ${body.error ?? ''}`);
+    keys.push(...(body.keys ?? []));
+    cursor = body.cursor ?? null;
+  } while (cursor);
+  return keys;
+}
+
+/**
+ * Deletes every row of `table` whose text columns contain one of `markers` (the run id, the run
+ * users' ids). For history tables the product never deletes from (jobs, deletions, tombstones,
+ * search rows of purged content); returns how many rows went.
+ */
+export async function eraseRowsMentioning(database: string, table: string, markers: string[]): Promise<number> {
+  const safe = markers.filter((m) => /^[A-Za-z0-9_:.+@-]{6,128}$/.test(m));
+  if (!safe.length || !/^[a-z_][a-z0-9_]*$/i.test(table)) return 0;
+  const columns = (await stackSql<{ name: string; type: string }>(database, `PRAGMA table_info(${table})`)).filter((c) => /TEXT|^$/i.test(c.type)).map((c) => c.name);
+  if (!columns.length) return 0;
+  const where = columns.flatMap((c) => safe.map((m) => `instr(CAST("${c}" AS TEXT), '${m}') > 0`)).join(' OR ');
+  const [{ n }] = await stackSql<{ n: number }>(database, `SELECT count(*) AS n FROM ${table} WHERE ${where}`);
+  if (n) await stackSql(database, `DELETE FROM ${table} WHERE ${where}`);
+  return n;
+}
+
 /** An object in a stack R2 bucket (bucket_name of the app's top-level wrangler config). */
 export function stackR2(method: 'GET' | 'PUT' | 'DELETE', bucket: string, key: string, body?: unknown): Promise<Response> {
   return fetch(`${control()}/__stack/r2/${encodeURIComponent(bucket)}/${encodeURIComponent(key)}`, {

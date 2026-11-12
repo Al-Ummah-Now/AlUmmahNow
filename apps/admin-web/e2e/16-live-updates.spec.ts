@@ -65,7 +65,8 @@ test.describe('live admin pages (admin)', () => {
     const refresh = page.waitForRequest((r) => new URL(r.url()).pathname === '/jobs' && !!r.headers()['rsc'], { timeout: 10_000 });
     await publish('jobs', [{ kind: 'job', key: 'job:e2e-live', id: 'e2e-live', status: 'running' }]);
     await refresh;
-    expect(received(frames, (m) => m.type === 'admin.update' && m.data?.events?.[0]?.key === 'job:e2e-live')).toBe(true);
+    // The refresh and the frame event arrive in either order (the poll fallback may refresh first)
+    await expect.poll(() => received(frames, (m) => m.type === 'admin.update' && m.data?.events?.[0]?.key === 'job:e2e-live'), { timeout: 10_000 }).toBe(true);
     expect(navigations, 'no full reload').toBe(0);
   });
 

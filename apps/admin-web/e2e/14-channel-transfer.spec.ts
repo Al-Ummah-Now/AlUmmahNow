@@ -97,7 +97,8 @@ test.describe('channel transfer', () => {
     await search(page, creator.email!);
     await expect(option(page, creator.id)).toBeVisible();
     await expect(option(page, creator.id)).toContainText(creator.email!);
-    await expect(option(page, creator.id)).toContainText(/Owns \d+ channels?/);
+    // The creator is this spec's own new user: it may own no channel yet
+    await expect(option(page, creator.id)).toContainText(/Owns (no|\d+) channels?/);
     await expect(picker(page)).toHaveAttribute('aria-expanded', 'true');
 
     await search(page, creator.displayName);
