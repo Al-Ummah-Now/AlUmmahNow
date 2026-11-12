@@ -58,6 +58,21 @@ export async function loadCatalogData(): Promise<CatalogData> {
   return cached;
 }
 
+/**
+ * The catalog ids from a spec file's own data (local stack): its own creator's public video,
+ * channel and playlist (own-public-video.ts) and the single user's own Studio video
+ * (own-studio-videos.ts). No seed, no other run's rows.
+ */
+export function catalogFromOwnData(own: { videoId: string; channelId: string; playlistId: string | null; singleVideoId: string }): CatalogData {
+  return {
+    lectureVideoId: own.videoId,
+    lecturesChannelId: own.channelId,
+    playlistId: own.playlistId,
+    singleChannelId: channelsOf('single').main.id,
+    singleSeedVideoId: own.singleVideoId,
+  };
+}
+
 /** The full page inventory for a role */
 export function catalog(d: CatalogData): CatalogPage[] {
   const ch = `/settings/channel/${d.singleChannelId}`;
