@@ -36,6 +36,8 @@ on:
 
 permissions:
   contents: read
+  # census: map run ids in titles to workflow runs
+  actions: read
 
 concurrency:
   group: bunny-qa-status
@@ -104,6 +106,27 @@ jobs:
           done
           test "$code" = 200
           { echo '### QA Bunny library'; echo '```json'; cat "$RUNNER_TEMP/status.json" | python3 -m json.tool; echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Census by run (before any delete)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          curl -sS --fail --max-time 300 -H "Authorization: Bearer $PROBE_TOKEN" "$PROBE_URL/list" -o "$RUNNER_TEMP/listing.json"
+          since=$(python3 -c 'import json,sys;r=json.load(open(sys.argv[1]))["rows"];d=min((x[2] for x in r if x[2]),default="2026-11-01");print(d[:10])' "$RUNNER_TEMP/listing.json")
+          # Runs that could have uploaded: every workflow run since the oldest video (a day earlier for long runs)
+          since=$(date -u -d "$since -1 day" +%Y-%m-%d)
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs?created=>=$since&per_page=100" \
+            --jq '[.workflow_runs[] | {id, name, event, run_started_at, updated_at, run_attempt, head_branch}]' | python3 -c 'import json,sys;print(json.dumps([r for l in sys.stdin if l.strip() for r in json.loads(l)]))' > "$RUNNER_TEMP/runs.json"
+          python3 scripts/qa/bunny-qa-status/census.py "$RUNNER_TEMP/listing.json" "$RUNNER_TEMP/runs.json" "$GITHUB_REPOSITORY" | tee "$RUNNER_TEMP/census.md" >> "$GITHUB_STEP_SUMMARY"
+          mkdir -p census && cp "$RUNNER_TEMP/listing.json" "$RUNNER_TEMP/runs.json" "$RUNNER_TEMP/census.md" census/
+
+      - name: Keep the census
+        uses: actions/upload-artifact@v4
+        with:
+          name: bunny-census-${{ github.run_id }}
+          path: census/
+          retention-days: 30
 
       - name: Guard (more than ${{ env.GUARD_MAX }} videos)
         id: guard
