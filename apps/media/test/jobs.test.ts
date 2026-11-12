@@ -24,6 +24,7 @@ describe('job decisions', () => {
 		assert.equal(onMessage(job, msg()), 'duplicate');
 		assert.equal(onMessage(job, msg({ jobId: 'job-2' })), 'supersede');
 		assert.equal(onMessage({ ...job, status: 'ready' }, msg({ jobId: 'job-2' })), 'start');
+		assert.equal(onMessage({ ...job, status: 'stopping' }, msg({ jobId: 'job-2' })), 'supersede');
 	});
 	it('retries with growing delays, never past the attempt limit, never on fatal errors', () => {
 		const job = newJob(msg(), 0);
@@ -33,7 +34,8 @@ describe('job decisions', () => {
 		assert.deepEqual(onFailure(job, 'source_missing', true), { retry: false });
 		// No source yet (Bunny still encoding its MP4 fallback): wait in 5-minute steps, up to an hour
 		assert.deepEqual(onFailure({ ...job, attempt: 5 }, 'source_unavailable', false), { retry: true, delaySeconds: 300 });
-		assert.deepEqual(onFailure({ ...job, attempt: 12 }, 'source_unavailable', false), { retry: false });
+		assert.deepEqual(onFailure({ ...job, attempt: 12 }, 'source_unavailable', false), { retry: true, delaySeconds: 300 });
+		assert.deepEqual(onFailure({ ...job, attempt: 24 }, 'source_unavailable', false), { retry: false });
 	});
 	it('counts container seconds across attempts', () => {
 		const job = { ...newJob(msg(), 1000), priorSeconds: 30 };

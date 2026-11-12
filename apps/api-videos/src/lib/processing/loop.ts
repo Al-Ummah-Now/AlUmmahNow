@@ -213,6 +213,11 @@ export async function syncVideoFromBunny(
 		// Same downstream path as the uploader's status poll: uploader
 		// notification, subscriber fan-out (processor de-duplicates per video).
 		await announceAndRecordProcessingResult(env as never, { ...saved, id: videoId }, transition);
+		// R2 beside Bunny (epic #687): the transcode reads Bunny's encoded MP4, which exists now
+		if (transition === 'ready') {
+			const { requeueAfterBunnyReady } = await import('../media/r2-delivery');
+			await requeueAfterBunnyReady(env as never, videoId);
+		}
 	}
 	return { videoId, found: true, dryRun: false, plan, bunny: bunnyView, ours: summary(saved ?? video), changed: !!saved };
 }

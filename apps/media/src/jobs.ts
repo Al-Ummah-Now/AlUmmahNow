@@ -11,7 +11,8 @@ export const SILENCE_LIMIT_MS = 20 * 60 * 1000;
 export const ATTEMPT_LIMIT_MS = 4 * 60 * 60 * 1000;
 export const WATCHDOG_SECONDS = 60;
 
-export type JobStatus = 'running' | 'waiting_retry' | 'ready' | 'failed';
+/** stopping: a failed attempt is being torn down (its container's stop is ours, not a crash) */
+export type JobStatus = 'running' | 'stopping' | 'waiting_retry' | 'ready' | 'failed';
 
 export interface JobState {
 	videoId: string;
@@ -56,7 +57,7 @@ export function newJob(msg: TranscodeJobMessage, now: number): JobState {
 export function onMessage(current: JobState | undefined, msg: TranscodeJobMessage): 'start' | 'duplicate' | 'supersede' {
 	if (!current) return 'start';
 	if (current.jobId === msg.jobId) return 'duplicate';
-	return current.status === 'running' || current.status === 'waiting_retry' ? 'supersede' : 'start';
+	return current.status === 'running' || current.status === 'stopping' || current.status === 'waiting_retry' ? 'supersede' : 'start';
 }
 
 export function containerSeconds(job: JobState, now: number): number {
@@ -65,8 +66,12 @@ export function containerSeconds(job: JobState, now: number): number {
 }
 
 /** After an attempt failed: retry (with delay) or give up. Fatal errors (no source, no video stream) never retry. */
-/** No source yet (Bunny still making its MP4 fallback): wait for it this long, in 5-minute steps. */
-export const SOURCE_WAIT_ATTEMPTS = 12;
+/**
+ * No source yet: Bunny's CDN never serves /original, so the transcode reads Bunny's MP4
+ * fallback, which exists only once Bunny has encoded. Wait for it in 5-minute steps, up
+ * to 2 h (api-videos also re-queues the job when Bunny reports the encode finished).
+ */
+export const SOURCE_WAIT_ATTEMPTS = 24;
 
 export function onFailure(job: JobState, error: string, fatal: boolean): { retry: false } | { retry: true; delaySeconds: number } {
 	if (fatal) return { retry: false };

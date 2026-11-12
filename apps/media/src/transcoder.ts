@@ -184,6 +184,11 @@ export class Transcoder extends Container<Env> {
 		const now = Date.now();
 		job.priorSeconds = containerSeconds(job, now);
 		job.error = error;
+		// Before destroy(): its onStop must see our own teardown, not a crash. Without this the
+		// stop re-entered here as 'container_stopped' and replaced the real error (2026-11-12:
+		// a 'no source yet' wait gave up after 3 quick attempts instead of waiting for Bunny).
+		job.status = 'stopping';
+		await this.save(job);
 		await deletePrefix(bucketFor(this.env, job.prefix), `${job.prefix}/`).catch((e) => log.warn('[Transcoder] Cleanup failed', { videoId: job.videoId, error: errorText(e) }));
 		await this.destroy().catch(() => undefined);
 		const next = onFailure(job, error, fatal);
