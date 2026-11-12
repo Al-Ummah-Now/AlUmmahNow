@@ -43,12 +43,12 @@ Until a batch is moved, every spec still runs where it runs today; the local job
 | Suite | Config | Local | Deployed |
 |---|---|---:|---:|
 | web | `apps/web/playwright.config.ts` (e2e-tests.yml) | 61 | 1 |
-| release | `apps/web/playwright.release.config.ts` (release-e2e.yml, release.yml) | 58 | 7 |
+| release | `apps/web/playwright.release.config.ts` (release-e2e.yml, release.yml) | 59 | 7 |
 | admin | `apps/admin-web/playwright.config.ts` (admin-e2e.yml) | 24 | 0 |
 | themes | `apps/web/playwright.themes.config.ts` (theme-visibility.yml) | 5 | 0 |
 | player | `apps/web/playwright.player.config.ts` (player-e2e.yml) | 10 | 0 |
 | release-prod | `apps/web/playwright.release-prod.config.ts` (prod-signed-in.yml) | 0 | 1 |
-| **all** | | **158** | **9** |
+| **all** | | **159** | **9** |
 
 ## Deployed (QA and stage)
 
@@ -164,6 +164,7 @@ Until a batch is moved, every spec still runs where it runs today; the local job
 | `release/core-web.spec.ts` | i18n, 404, live comments via local websocket; auth-lang test needs issuer locale |  |
 | `release/creator-tiers.spec.ts` | tier gating server+UI, admin-web tier control |  |
 | `release/deploy-skew.spec.ts` | skew simulated by route interception against build under test |  |
+| `release/display-name.spec.ts` | names-only profile shown by first + last in header, comment author, admin user list; fake encode suffices |  |
 | `release/embed.player.spec.ts` | embed iframe/headers/oEmbed on fake origin via page.route |  |
 | `release/errors.spec.ts` | dev error-test page + admin Errors page |  |
 | `release/header-name.spec.ts` | header account menu names a names-only profile by first + last, en/ar |  |

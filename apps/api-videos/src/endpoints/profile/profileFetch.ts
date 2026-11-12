@@ -1,3 +1,4 @@
+import { nameLangField, nameLocale } from "../../lib/name-locale";
 import { Bool, Str } from "chanfana";
 import { z } from "zod";
 import { Profile as BusinessProfile, ResponseError } from "../../lib/types";
@@ -14,6 +15,7 @@ export class ProfileFetch extends OptionalAuthRoute {
 			params: z.object({
 				id: Str({ description: "Profile id" }),
 			}),
+			query: z.object({ lang: nameLangField }),
 		},
 		responses: {
 			"200": {
@@ -84,7 +86,7 @@ export class ProfileFetch extends OptionalAuthRoute {
 			// No queue message per profile read: the processor only logged it.
 
 			// Transform to view model for response
-			const profileView = toPublicProfile(profile);
+			const profileView = toPublicProfile(profile, nameLocale(c));
 
 			return {
 				success: true,

@@ -1,3 +1,4 @@
+import { nameLangField, nameLocale } from "../../lib/name-locale";
 import { Bool } from "chanfana";
 import { z } from "zod";
 import { Profile as BusinessProfile, ResponseError } from "../../lib/types";
@@ -12,6 +13,7 @@ export class ProfileCurrentFetch extends AuthenticatedRoute {
 		tags: ["Profiles"],
 		summary: "Get the current user's profile",
 		security: [{ bearerAuth: [] }],
+		request: { query: z.object({ lang: nameLangField }) },
 		responses: {
 			"200": {
 				description: "The current user's profile",
@@ -27,6 +29,6 @@ export class ProfileCurrentFetch extends AuthenticatedRoute {
 		if (!profile) {
 			return c.json({ success: false, error: "Profile not found" }, 404);
 		}
-		return c.json({ success: true, result: { profile: transformProfileToView(profile) } }, 200, { "Cache-Control": "private, no-store" });
+		return c.json({ success: true, result: { profile: transformProfileToView(profile, nameLocale(c)) } }, 200, { "Cache-Control": "private, no-store" });
 	}
 }

@@ -6,6 +6,7 @@
  */
 
 import { PUBLIC_DISLIKES_COUNT } from './reactions';
+import { resolveDisplayName, type NameFields } from '@al-ummah/shared-types';
 
 export interface StoredReaction {
 	id: string;
@@ -211,18 +212,16 @@ export function removeStoredComment<T extends StoredComment>(comments: T[], comm
 export function resolveCommentAuthor(
 	comment: Pick<StoredComment, 'userId' | 'channelId'>,
 	channel: { name?: string; avatarUrl?: string } | null | undefined,
-	profile: { displayName?: string; firstName?: string; lastName?: string; userName?: string; avatarUrl?: string } | null | undefined,
+	profile: (NameFields & { avatarUrl?: string }) | null | undefined,
+	locale?: string,
 ): CommentAuthor {
-	const profileName = profile
-		? profile.displayName
-			|| [profile.firstName, profile.lastName].filter(Boolean).join(' ')
-			|| profile.userName
-		: undefined;
+	// The channel the comment was posted as, else the user's name (resolveDisplayName: display name, else first + last; never the email)
+	const profileName = resolveDisplayName(profile, locale);
 
 	return {
 		userId: comment.userId,
 		channelId: comment.channelId,
-		displayName: channel?.name || profileName || '',
+		displayName: channel?.name?.trim() || profileName || '',
 		avatarUrl: channel?.avatarUrl || profile?.avatarUrl || undefined,
 	};
 }

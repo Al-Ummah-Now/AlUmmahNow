@@ -63,6 +63,7 @@ import {
 	type AdminEnv,
 	adminR2Detail,
 } from './directory';
+import { resolveDisplayName, type NameFields } from '@al-ummah/shared-types';
 
 type Row = Record<string, any>;
 
@@ -1317,7 +1318,7 @@ export async function deleteUserData(env: AdminServiceEnv, userId: string, actor
 	const deletion = await recordDeletion(env.SEARCH_DB!, {
 		kind: 'user',
 		id: userId,
-		title: (profile?.displayName as string | undefined) || (profile?.userName as string | undefined) || userId,
+		title: resolveDisplayName(profile as NameFields | null) || userId,
 		ownerId: userId,
 		deletedBy: actorId,
 		reason: mark.reason,

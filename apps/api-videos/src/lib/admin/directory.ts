@@ -33,6 +33,7 @@ import { isOwnershipComplete, scheduleOwnershipHeal, type OwnershipEnv, byKey } 
 import { subscriberCounts } from '../subscription-store';
 import { bansFor } from './bans';
 import { logger } from '../logger';
+import { resolveDisplayName, type NameFields } from '@al-ummah/shared-types';
 
 export interface AdminEnv extends OwnershipEnv {
 	SEARCH_DB?: SearchDb;
@@ -472,7 +473,8 @@ export async function listUsers(env: AdminEnv, query: AdminUserQuery, waitUntil?
 }
 
 export function toUserRow(id: string, profile: Row | null, isBanned: boolean, indexRow?: Row): AdminUserRow {
-	const name = (profile?.displayName as string) || [profile?.firstName, profile?.lastName].filter(Boolean).join(' ') || indexRow?.display_name || '';
+	// resolveDisplayName: display name, else first + last; the email has its own column
+	const name = resolveDisplayName(profile as NameFields | null) || indexRow?.display_name || '';
 	return {
 		id,
 		displayName: name,

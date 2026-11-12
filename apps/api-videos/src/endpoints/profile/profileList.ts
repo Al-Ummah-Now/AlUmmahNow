@@ -1,3 +1,4 @@
+import { nameLangField, nameLocale } from "../../lib/name-locale";
 import { Bool, Num } from "chanfana";
 import { string, z } from "zod";
 import { Profile as BusinessProfile, PaginationResponse, ResponseError } from "../../lib/types";
@@ -19,6 +20,7 @@ export class ProfilesList extends PublicRoute {
 				cursor: string({
 					description: "The last cursor returned from the previous request",
 				}).optional(),
+				lang: nameLangField,
 			}),
 		},
 		responses: {
@@ -74,7 +76,7 @@ export class ProfilesList extends PublicRoute {
 		
 		// Transform profiles to view models
 		// Profiles whose data an admin deleted (restorable for 30 days) are left out
-		const profileViews = (profiles.items || []).filter((profile) => !(profile as { adminDeletion?: unknown }).adminDeletion).map(profile => toPublicProfile(profile));
+		const profileViews = (profiles.items || []).filter((profile) => !(profile as { adminDeletion?: unknown }).adminDeletion).map(profile => toPublicProfile(profile, nameLocale(c)));
 
 		return {
 			success: true,

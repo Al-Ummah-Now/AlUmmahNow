@@ -1,3 +1,4 @@
+import { nameLocale } from "../../lib/name-locale";
 import { Bool } from "chanfana";
 import { z } from "zod";
 import { Profile as BusinessProfile, ResponseError } from "../../lib/types";
@@ -98,7 +99,7 @@ export class ProfileCreate extends AuthenticatedRoute {
 		});
 
 		// Transform to view model for response
-		const profileView = transformProfileToView(stored ?? businessProfile);
+		const profileView = transformProfileToView(stored ?? businessProfile, nameLocale(c));
 
 		// Return the new profile
 		return {

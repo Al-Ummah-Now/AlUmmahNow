@@ -183,7 +183,8 @@ describe('user picker text', () => {
     assert.equal(userMeta(user('a', { channelCount: 3, channelRole: 'editor' }), tEn), 'Owns 3 channels · Channel editor here');
     assert.match(userMeta(user('a', { isBanned: true }), tEn), /Banned/);
     assert.match(userMeta(user('a', { channelRole: 'moderator' }), tAr), /مشرف/);
-    assert.equal(userName(user('a', { displayName: '' })), '@a');
+    // No @handle for users (handles belong to channels): an unnamed user is called by their email
+    assert.equal(userName(user('a', { displayName: '' })), 'a@example.com');
     assert.equal(userName(user('a', { displayName: '', userName: null })), 'a@example.com');
   });
 });

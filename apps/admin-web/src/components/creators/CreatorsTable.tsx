@@ -14,6 +14,7 @@ import { logger } from '@/lib/logger-client';
 import { reportError } from '@/lib/errors/reporter';
 import { CreatorTierControl, type SetTierAction } from './CreatorTierControl';
 import { TierChangeDialog } from './TierChangeDialog';
+import { adminUserName } from '@/lib/user-name';
 
 const NONE = '__none__';
 
@@ -150,7 +151,7 @@ export function CreatorsTable({ items, tiers, canManage, setTier, bulkSetTier }:
               </tr>
             )}
             {items.map((row) => {
-              const name = row.displayName || row.userName || row.userId;
+              const name = adminUserName(row);
               const tier = row.assignment ? tierById.get(row.assignment.tierId) ?? null : null;
               const limited = tier && !tier.unlimited ? tier : null;
               return (

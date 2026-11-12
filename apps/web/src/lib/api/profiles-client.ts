@@ -59,7 +59,8 @@ export const fetchProfile = async (user: User | null | undefined, setProfile: (p
             const defaultProfile = {
                 id: user.id,
                 email: user.email,
-                firstName: user.email?.split('@')[0] || 'User',
+                // No made-up name: the header falls back to the email (userDisplayName)
+                firstName: '',
                 lastName: '',
                 avatarUrl: '/avatar.png',
                 coverUrl: undefined

@@ -13,6 +13,7 @@ import { useConfirm } from '@/components/ui/confirm-dialog';
 import { getBrowserTimezone, COMMON_TIMEZONES, localizedTimezoneLabel, localizedTimezoneRegion, getTimezoneDisplayName, isListedTimezone } from '@/utils/timezoneUtils';
 import SaveButton, { SaveButtonState } from '@/components/SaveButton';
 import { SignInPrompt } from '@/components/common/SignInPrompt';
+import { userDisplayName } from '@/lib/display-name';
 
 const ProfileEditPage = () => {
   const { t, lang: locale } = useLanguage();
@@ -153,25 +154,19 @@ const ProfileEditPage = () => {
     router.push(`/${locale}/`);
   };
 
-  // Get localized name or fall back to default
-  const getLocalizedName = (
-    defaultValue: string | undefined,
-    localizedValues: Record<string, string> | undefined
-  ): string => {
-    if (localizedValues && localizedValues[locale]) {
-      return localizedValues[locale];
-    }
-    return defaultValue || '';
-  };
+  // Display name, else first + last; the email only as the last resort
+  const welcomeName = userDisplayName(profile, locale, profile?.email);
 
-  const displayFirstName = getLocalizedName(profile?.firstName, profile?.firstNameLocalized);
-  const displayLastName = getLocalizedName(profile?.lastName, profile?.lastNameLocalized);
-  // First/last names are optional: fall back to the display name, then the email
-  const welcomeName =
-    `${displayFirstName} ${displayLastName}`.trim() ||
-    getLocalizedName(profile?.displayName, profile?.displayNameLocalized) ||
-    profile?.email ||
-    '';
+  // An empty display name field shows what others will see instead (first + last, per language)
+  const formNames = {
+    displayName: displayNameEn,
+    firstName: firstNameEn,
+    lastName: lastNameEn,
+    firstNameLocalized: { en: firstNameEn, ar: firstNameAr },
+    lastNameLocalized: { en: lastNameEn, ar: lastNameAr },
+  };
+  const displayNameHintEn = displayNameEn.trim() ? '' : userDisplayName(formNames, 'en');
+  const displayNameHintAr = displayNameAr.trim() ? '' : userDisplayName({ ...formNames, displayNameLocalized: { en: displayNameEn } }, 'ar');
 
   if (!auth?.user) {
     return <SignInPrompt title={t.profile.signInTitle} message={t.profile.signInMessage} />;
@@ -337,7 +332,8 @@ const ProfileEditPage = () => {
                   type="text"
                   id="profile-displayName" name="displayNameEn"
                   className="mt-1 block w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-colors"
-                  placeholder={t.profile.displayNameOptional}
+                  placeholder={displayNameHintEn || t.profile.displayNameOptional}
+                  data-testid="profile-display-name-en"
                   value={displayNameEn}
                   onChange={(e) => setDisplayNameEn(e.target.value)}
                 />
@@ -347,11 +343,15 @@ const ProfileEditPage = () => {
                   type="text"
                   id="profile-displayName" name="displayNameAr"
                   className="mt-1 block w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-colors"
-                  placeholder={t.profile.displayNameArabic}
+                  placeholder={displayNameHintAr || t.profile.displayNameArabic}
+                  data-testid="profile-display-name-ar"
                   value={displayNameAr}
                   onChange={(e) => setDisplayNameAr(e.target.value)}
                   dir="rtl"
                 />
+              )}
+              {(activeTab === 'en' ? !displayNameEn.trim() : !displayNameAr.trim()) && (
+                <p className="text-sm text-[var(--fanous-color-text-secondary)] mt-1">{t.profile.displayNameEmpty}</p>
               )}
             </div>
 

@@ -21,6 +21,7 @@
 import R2Repository from './r2Repo';
 import { logger } from './logger';
 import { bunnyClient, bunnyLibraries, bunnyLibraryForVideo, type BunnyLibrariesEnv, type LibraryHints } from './bunny/libraries';
+import { resolveDisplayName, type NameFields } from '@al-ummah/shared-types';
 
 export interface CollectionClient {
 	createCollection(libraryId: number, data: { name?: string }): Promise<{ guid?: string | null }>;
@@ -187,17 +188,21 @@ export async function deleteChannelCollections(
 }
 
 /** Profile fields a user collection is named after */
-export interface CollectionProfile extends CollectionChannel {
+export interface CollectionProfile extends CollectionChannel, NameFields {
 	displayName?: string;
 	userName?: string;
 }
 
-/** Name of a user's collection: display name, else @handle, else the user id */
+/**
+ * Name of a user's Bunny collection (an internal storage label): the resolved
+ * display name (display name, else first + last), else the stored legacy
+ * userName as before, else the user id
+ */
 export function userCollectionName(profile: CollectionProfile | null | undefined, userId: string): string {
-	const display = profile?.displayName?.trim();
-	if (display) return display;
-	const handle = profile?.userName?.trim();
-	if (handle) return `@${handle.replace(/^@/, '')}`;
+	const name = resolveDisplayName(profile);
+	if (name) return name;
+	const legacy = profile?.userName?.trim();
+	if (legacy) return `@${legacy.replace(/^@/, '')}`;
 	return `User ${userId}`;
 }
 

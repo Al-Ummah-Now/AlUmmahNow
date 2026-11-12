@@ -36,6 +36,7 @@ import { logger } from "../../lib/logger";
 import { FALLBACK_SCAN_OBJECTS } from "../../lib/scanBudget";
 import { normalizeHandleInput, resolveHandle } from "../../lib/channelHandles";
 import { memberChannelRoles, ownedChannelIds, scheduleOwnershipHeal, waitUntilOf } from "../../lib/search/ownership";
+import { resolveDisplayName, type NameFields } from '@al-ummah/shared-types';
 
 type ChannelType = z.infer<typeof BusinessChannel> & { isSuspended?: boolean; suspension?: { at?: string; reason?: string } };
 
@@ -177,7 +178,7 @@ async function profileSummary(c: AppContext, userId: string): Promise<{ displayN
 		if (!object) return {};
 		const p = await object.json<Record<string, unknown>>();
 		const text = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
-		const displayName = text(p.displayName) ?? ([text(p.firstName), text(p.lastName)].filter(Boolean).join(' ') || text(p.userName));
+		const displayName = resolveDisplayName(p as NameFields) || undefined;
 		const avatarUrl = text(p.avatarUrl) ?? text(p.photoUrl);
 		return { ...(displayName ? { displayName } : {}), ...(avatarUrl ? { avatarUrl } : {}) };
 	} catch (error) {

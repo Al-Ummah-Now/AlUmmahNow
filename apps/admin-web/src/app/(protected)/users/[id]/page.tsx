@@ -15,6 +15,7 @@ import { UserCreatorTierPanel } from '@/components/creators/UserCreatorTierPanel
 import { logger } from '@/lib/logger';
 import { UserActions } from './UserActions';
 import { InviteStatusChip } from '@/components/invites/InviteStatusChip';
+import { adminUserName } from '@/lib/user-name';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,7 +60,7 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
           <span aria-hidden="true" className="h-16 w-16 rounded-full bg-surface-2 block" />
         )}
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl sm:text-3xl font-bold text-fg break-words" dir="auto" data-testid="user-name">{u.displayName || u.userName || u.id}</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-fg break-words" dir="auto" data-testid="user-name">{adminUserName(u)}</h1>
           <p className="text-sm text-fg-muted flex flex-wrap gap-x-3">
             {u.userName && <span dir="ltr">@{u.userName}</span>}
             {u.email && <span dir="ltr">{u.email}</span>}
@@ -86,7 +87,7 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
         </Notice>
       )}
 
-      <UserCreatorTierPanel userId={u.id} userName={u.displayName || u.userName || u.id} canManage={canManageCreators(role)} />
+      <UserCreatorTierPanel userId={u.id} userName={adminUserName(u)} canManage={canManageCreators(role)} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">

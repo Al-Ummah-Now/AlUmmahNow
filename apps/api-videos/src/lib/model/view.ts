@@ -145,8 +145,9 @@ export const ProfileView = z.object({
     firstNameLocalized: z.record(z.string()).optional().describe("Multi-language first names"),
     lastName: Str().optional(),
     lastNameLocalized: z.record(z.string()).optional().describe("Multi-language last names"),
-    displayName: Str().optional(), // Computed field (firstName + lastName or userName)
+    displayName: Str().optional().describe("The display name the user typed (may be empty); use resolvedDisplayName to show the user"),
     displayNameLocalized: z.record(z.string()).optional().describe("Multi-language display names"),
+    resolvedDisplayName: Str().describe("The name to show for the user (resolveDisplayName in @al-ummah/shared-types: display name in the request language (?lang), plain display name, first + last). Empty when the profile has no name; never the email"),
     bio: Str().optional(),
     bioLocalized: z.record(z.string()).optional().describe("Multi-language bios"),
     avatarUrl: Str().optional(),
@@ -168,8 +169,9 @@ export const ProfileView = z.object({
 export const PublicProfileView = z.object({
     id: Str(),
     userName: Str().optional(),
-    displayName: Str().optional(),
+    displayName: Str().optional().describe("The name to show for the user: the resolved display name (display name, else first + last); never the email"),
     displayNameLocalized: z.record(z.string()).optional(),
+    resolvedDisplayName: Str().describe("Same as displayName; the field name every profile response shares"),
     bio: Str().optional(),
     bioLocalized: z.record(z.string()).optional(),
     avatarUrl: Str().optional(),

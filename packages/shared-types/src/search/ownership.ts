@@ -19,6 +19,7 @@ import type { SearchEntityType } from './documents';
 import { isShort, type VideoFormatInput } from '../video-format';
 import { channelMembersOf } from '../channel-roles';
 import { hasOpenFormatIssue } from '../video-format-ops';
+import { resolveDisplayName, type NameFields } from '../display-name';
 
 export type OwnershipKind = 'video' | 'channel' | 'profile';
 
@@ -194,7 +195,8 @@ export function projectOwnership(kind: OwnershipKind, id: string, raw: unknown):
     updatedAt: time(obj.dateModified),
   };
   if (kind === 'profile') {
-    const name = text(obj.displayName) ?? ([text(obj.firstName), text(obj.lastName)].filter(Boolean).join(' ') || null);
+    // The admin title: display name, else first + last (resolveDisplayName)
+    const name = resolveDisplayName(obj as NameFields) || null;
     return {
       ...common,
       ownerId: id,

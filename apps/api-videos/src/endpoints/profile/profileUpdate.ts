@@ -1,3 +1,4 @@
+import { nameLocale } from "../../lib/name-locale";
 import { renameCollectionsForUser, userCollectionName } from "../../lib/channelCollection";
 import { inBackground } from "../../lib/websocket-notify";
 import { Bool } from "chanfana";
@@ -108,7 +109,7 @@ export class ProfileUpdate extends AuthenticatedRoute {
         });
 
         // Transform to view model for response
-        const profileView = transformProfileToView(updatedProfile);
+        const profileView = transformProfileToView(updatedProfile, nameLocale(c));
 
         return {
             success: true,
