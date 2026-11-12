@@ -286,6 +286,7 @@ async function readBody(req: IncomingMessage): Promise<string> {
  * - GET /__fake/resend/emails
  * - POST /__stack/d1/<database name> with SQL as the body: { results } (seed, fast-path fixtures)
  * - GET | PUT | DELETE /__stack/r2/<bucket name>/<key>: one object (fixtures a spec seeds in R2)
+ * - GET /__stack/r2/<bucket name>?prefix=<p>[&cursor=<c>]: { keys, cursor } (teardowns find what a run wrote)
  */
 async function control(req: IncomingMessage, url: URL): Promise<Response> {
   if (url.pathname.startsWith('/__stack/d1/')) {
@@ -300,6 +301,14 @@ async function control(req: IncomingMessage, url: URL): Promise<Response> {
     const [bucket, ...rest] = url.pathname.slice('/__stack/r2/'.length).split('/');
     const key = decodeURIComponent(rest.join('/'));
     if (!stackR2) return json({ error: 'R2 is available once the stack is up' }, 405);
+    if (bucket && !key && req.method === 'GET') {
+      try {
+        const listed = await stackR2(decodeURIComponent(bucket), '', 'LIST', JSON.stringify({ prefix: url.searchParams.get('prefix') ?? '', cursor: url.searchParams.get('cursor') ?? undefined }));
+        return new Response(listed.body ?? '{}', { status: listed.status, headers: { 'content-type': 'application/json' } });
+      } catch (error) {
+        return json({ error: (error as Error).message }, 400);
+      }
+    }
     if (!bucket || !key || !['GET', 'PUT', 'DELETE'].includes(req.method ?? '')) return json({ error: 'GET, PUT or DELETE /__stack/r2/<bucket>/<key>' }, 400);
     try {
       const out = await stackR2(decodeURIComponent(bucket), key, req.method!, req.method === 'PUT' ? await readBody(req) : undefined);
