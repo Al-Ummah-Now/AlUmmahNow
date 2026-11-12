@@ -5,6 +5,7 @@
  * reference → group map, and reopens a resolved group when it recurs in a
  * newer release. The admin Errors page reads and updates groups here.
  */
+import { containsPattern } from '@al-ummah/shared-types';
 import {
   culprit as culpritOf,
   fingerprint as fingerprintOf,
@@ -513,8 +514,9 @@ const SORT_SQL: Record<ErrorSort, string> = {
   first_seen: 'g.first_seen DESC',
 };
 
+/** LIKE pattern with the wildcard characters escaped, within D1's pattern limit. */
 export function likePattern(q: string): string {
-  return `%${q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
+  return containsPattern(q);
 }
 
 /**

@@ -17,6 +17,7 @@
 import { logger } from './logger';
 import type { D1Database } from './types';
 import { AuthApiError, AuthModerationClient, audit, isPermanentAuthError } from './authModeration';
+import { containsPattern } from '@al-ummah/shared-types';
 
 export type InviteRole = 'creator' | 'viewer';
 export type InviteDelivery = 'sending' | 'sent' | 'failed';
@@ -243,9 +244,10 @@ export async function listInvites(db: D1Database, params: ListParams, now = Date
   }
   const q = params.q?.trim().toLowerCase();
   if (q) {
-    where.push("(email LIKE ? ESCAPE '\\' OR lower(COALESCE(name, '')) LIKE ? ESCAPE '\\' OR id = ? OR user_id = ?)");
-    const like = `%${q.replace(/[\\%_]/g, (m) => `\\${m}`)}%`;
-    binds.push(like, like, params.q!.trim(), params.q!.trim());
+    // email = ?: an exact hit on a long address the cut-down LIKE pattern only approximates
+    where.push("(email LIKE ? ESCAPE '\\' OR lower(COALESCE(name, '')) LIKE ? ESCAPE '\\' OR email = ? OR id = ? OR user_id = ?)");
+    const like = containsPattern(q);
+    binds.push(like, like, q, params.q!.trim(), params.q!.trim());
   }
   if (params.cursor) {
     const [at, id] = params.cursor.split('|');
