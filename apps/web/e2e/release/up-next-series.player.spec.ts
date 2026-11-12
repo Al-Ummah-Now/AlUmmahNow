@@ -2,52 +2,50 @@
  * Release regression: numbered series continue in order (the owner, 2026-11-11: "not 1 leading to
  * 11 and 2 leading to 11"; docs/specs/PLAYLIST-PLAYBACK.md phase 1b).
  *
- * The seed's lectures channel holds "QA Series — Lesson 1", "Lesson 11" and "Lesson 2" (uploaded in
- * that order, so neither upload order nor text order gives the right answer). Watching Lesson 1,
- * GET /api/recommendations puts Lesson 2 first with `seriesNext`, and the watch page shows it first
- * in Up next; when Lesson 1 ends, Lesson 2 is what plays.
- *
- * The series videos come from the seed (e2e/seed/seed-config.ts). The QA seed runs by hand
- * (seed-qa.yml): until it has run with them this spec is skipped with that reason; stage seeds
- * itself in every release, so there it always runs.
+ * A run creator uploads "Lesson 1", "Lesson 11" and "Lesson 2" of one series, in that order, so
+ * neither upload order nor text order gives the right answer (builders.ts: the spec makes its own
+ * data and removes it afterwards). Watching Lesson 1, GET /api/recommendations puts Lesson 2 first
+ * with `seriesNext`, the watch page shows it first in Up next, and when Lesson 1 ends Lesson 2 is
+ * what plays.
  */
-import { expect, test } from '@playwright/test';
+import { expect } from '@playwright/test';
+import { test } from './builders';
 import { target } from './targets';
-import type { PublicVideo } from './videos';
+import { apiFetch } from './web-session';
 
-const LESSON_1 = 'QA Series — Lesson 1';
-const LESSON_2 = 'QA Series — Lesson 2';
+// The spec signs up (a run account): traces and videos would record its session
+test.use({ trace: 'off', video: 'off' });
 
-async function findSeries(): Promise<Record<string, PublicVideo>> {
-  const found: Record<string, PublicVideo> = {};
-  let cursor = '';
-  for (let page = 0; page < 20 && Object.keys(found).length < 2; page++) {
-    const res = await fetch(`${target().api}/api/videos?limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`, { cache: 'no-store' });
-    expect(res.ok, `GET /api/videos answered ${res.status}`).toBe(true);
-    const body = (await res.json()) as { data?: PublicVideo[]; cursor?: string | null };
-    for (const v of body.data ?? []) {
-      if ((v.title === LESSON_1 || v.title === LESSON_2) && v.uploadStatus === 'ready' && !found[v.title]) found[v.title] = v;
-    }
-    if (!body.cursor) break;
-    cursor = body.cursor;
-  }
-  return found;
-}
+interface Recommended { id: string; title: string; seriesNext?: boolean }
 
 test.describe('Release: Up next continues a numbered series', () => {
-  test('watching "Lesson 1", Up next is "Lesson 2" (not "Lesson 11"), and it is what plays next', async ({ page }) => {
-    test.setTimeout(180_000);
-    const series = await findSeries();
-    test.skip(!series[LESSON_1] || !series[LESSON_2], 'the seeded series ("QA Series — Lesson 1/2/11") is not here yet: run seed-qa.yml (apply) for this environment');
-    const one = series[LESSON_1];
-    const two = series[LESSON_2];
+  test('watching "Lesson 1", Up next is "Lesson 2" (not "Lesson 11"), and it is what plays next', async ({ page, browser, ownData }) => {
+    test.setTimeout(900_000);
+    const creator = await ownData.createCreator(browser, 'up-next-series');
+    const user = creator.user;
+    const channelId = creator.channelIds[0];
 
-    const rec = await fetch(`${target().api}/api/recommendations?videoId=${encodeURIComponent(one.id)}&limit=15`, { cache: 'no-store' });
-    expect(rec.ok).toBe(true);
-    const body = (await rec.json()) as { data: Array<{ id: string; title: string; seriesNext?: boolean }> };
-    test.skip(!body.data.some((v) => v.seriesNext), 'the series rule is not deployed to this environment yet');
-    expect(body.data[0].id, `first recommendation is "${body.data[0]?.title}"`).toBe(two.id);
-    expect(body.data[0].seriesNext).toBe(true);
+    // The build predates the rule (it ships with GET /api/profile/playback)
+    const playback = await apiFetch(user, '/api/profile/playback');
+    test.skip(playback.status === 404, 'the series rule is not deployed to this environment yet');
+
+    const series = `E2E Series ${Date.now().toString(36)}`;
+    const one = await ownData.createVideo(user, channelId, { clip: 'landscape40', title: `${series} — Lesson 1` });
+    await ownData.createVideo(user, channelId, { clip: 'landscape40', title: `${series} — Lesson 11` });
+    const two = await ownData.createVideo(user, channelId, { clip: 'landscape40', title: `${series} — Lesson 2` });
+
+    // The search index is updated asynchronously: wait until it lists the series. A new limit on
+    // every poll, so no edge-cached answer from before the index caught up is read (and the watch
+    // page's own request, limit 15, is never one of them)
+    let limit = 49;
+    let first: Recommended | undefined;
+    await expect.poll(async () => {
+      limit = limit > 20 ? limit - 1 : 49;
+      const res = await fetch(`${target().api}/api/recommendations?videoId=${encodeURIComponent(one.id)}&limit=${limit}`, { cache: 'no-store' });
+      const body = (await res.json().catch(() => ({}))) as { data?: Recommended[] };
+      first = body.data?.[0];
+      return first?.seriesNext === true ? first.id : null;
+    }, { message: 'Lesson 2 never came first with seriesNext', timeout: 180_000, intervals: [2_000, 5_000, 10_000] }).toBe(two.id);
 
     // The watch page lists it first in Up next, and the end of Lesson 1 plays it
     await page.goto(`${target().web}/en/video/${one.id}`);
@@ -67,7 +65,7 @@ test.describe('Release: Up next continues a numbered series', () => {
       v.currentTime = Math.max(0, v.duration - 0.6);
     });
     await expect(page.getByTestId('player-end-screen')).toBeVisible({ timeout: 45_000 });
-    await expect(page.getByTestId('player-end-screen').locator('.vjs-fanous-next-title')).toHaveText(LESSON_2);
+    await expect(page.getByTestId('player-end-screen').locator('.vjs-fanous-next-title')).toHaveText(two.title);
     await expect(page).toHaveURL(new RegExp(`/en/video/${two.id}`), { timeout: 20_000 });
   });
 });
