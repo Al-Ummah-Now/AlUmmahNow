@@ -23133,7 +23133,7 @@
           "Search"
         ],
         "summary": "Recommended videos",
-        "description": "🔓 Authentication optional. Recommends public videos related to `videoId` (same category, channel, tags). When signed in, the viewer's recent watch history also seeds the profile and `excludeWatched=true` ranks videos already watched last, listing them only to fill the limit.",
+        "description": "🔓 Authentication optional. Recommends public videos related to `videoId` (same category, channel, tags). When `videoId`'s title is numbered (\"Lesson 1\", \"الدرس ٢\"), the next video of that series in its channel comes first with `seriesNext: true` (n+1, else the next higher number; never a text match like 1 → 11). When signed in, the viewer's recent watch history also seeds the profile and `excludeWatched=true` ranks videos already watched last, listing them only to fill the limit.",
         "operationId": "get_RecommendationsGet",
         "parameters": [
           {
@@ -23203,6 +23203,10 @@
                           },
                           "commentsCount": {
                             "type": "number"
+                          },
+                          "seriesNext": {
+                            "type": "boolean",
+                            "description": "Recommendations only: the next video of the seed's numbered series (always first); players play it next"
                           }
                         },
                         "required": [
@@ -23240,6 +23244,10 @@
                           },
                           "commentsCount": {
                             "type": "number"
+                          },
+                          "seriesNext": {
+                            "type": "boolean",
+                            "description": "Recommendations only: the next video of the seed's numbered series (always first); players play it next"
                           }
                         },
                         "required": [
@@ -24047,6 +24055,10 @@
                           },
                           "commentsCount": {
                             "type": "number"
+                          },
+                          "seriesNext": {
+                            "type": "boolean",
+                            "description": "Recommendations only: the next video of the seed's numbered series (always first); players play it next"
                           }
                         },
                         "required": [
@@ -24084,6 +24096,10 @@
                           },
                           "commentsCount": {
                             "type": "number"
+                          },
+                          "seriesNext": {
+                            "type": "boolean",
+                            "description": "Recommendations only: the next video of the seed's numbered series (always first); players play it next"
                           }
                         },
                         "required": [

@@ -83,7 +83,8 @@ describe('GET /api/recommendations', () => {
 		const env = await setup(Array.from({ length: 120 }, (_, i) => video(`v${i}`)));
 		env.videos.calls = 0;
 		await get(env, 'videoId=v0&limit=10');
-		assert.ok(env.videos.calls <= 15, `made ${env.videos.calls} R2 calls`);
+		// The winners (limit + buffer), plus the series continuation ("Lecture v1" follows "Lecture v0")
+		assert.ok(env.videos.calls <= 16, `made ${env.videos.calls} R2 calls`);
 	});
 
 	it('bounds the candidates read per source', async () => {
@@ -229,6 +230,41 @@ describe('GET /api/recommendations', () => {
 		env.watch_history.calls = 0;
 		await get(env, 'videoId=seed', 'u1');
 		assert.equal(env.watch_history.calls, 1);
+	});
+});
+
+describe('GET /api/recommendations: numbered series continue in order (the owner, 2026-11-11)', () => {
+	const lesson = (n: number, extra: Record<string, unknown> = {}) =>
+		video(`l${n}`, { title: `Lesson ${n}`, dateCreated: `2026-01-${String(n).padStart(2, '0')}T00:00:00.000Z`, ...extra });
+
+	it('Lesson 1 → Lesson 2 first, flagged, never Lesson 11', async () => {
+		const env = await setup([lesson(1), lesson(11), lesson(2), lesson(3), video('other', { title: 'Lesson 1 notes' })]);
+		const body = (await (await get(env, 'videoId=l1&limit=5')).json()) as Body & { data: Array<{ id: string; seriesNext?: boolean }> };
+		assert.equal(body.data[0].id, 'l2');
+		assert.equal(body.data[0].seriesNext, true);
+		assert.equal(body.data.filter((v) => v.seriesNext).length, 1);
+		assert.ok(!ids(body).includes('l1'));
+	});
+
+	it('a continuation outside the ranked shelf is still put first, within the limit', async () => {
+		const many = Array.from({ length: 40 }, (_, i) => video(`x${i}`, { title: `Talk on ${'abcdefghij'[i % 10]}`, channelId: 'busy' }));
+		const env = await setup([lesson(4, { channelId: 'series', category: 'other' }), lesson(5, { channelId: 'series', category: 'other' }), ...many]);
+		const body = (await (await get(env, 'videoId=l4&limit=3')).json()) as Body & { data: Array<{ id: string; seriesNext?: boolean }> };
+		assert.equal(body.data[0].id, 'l5');
+		assert.equal(body.data.length, 3);
+	});
+
+	it('the series end: no flag, the normal ranking', async () => {
+		const env = await setup([lesson(1), lesson(2), lesson(11)]);
+		const body = (await (await get(env, 'videoId=l11&limit=5')).json()) as Body & { data: Array<{ id: string; seriesNext?: boolean }> };
+		assert.ok(body.data.every((v) => !v.seriesNext));
+	});
+
+	it('reads the channel from the index, not the bucket', async () => {
+		const env = await setup([lesson(1), lesson(2), ...Array.from({ length: 60 }, (_, i) => video(`v${i}`))]);
+		env.videos.calls = 0;
+		await get(env, 'videoId=l1&limit=5');
+		assert.ok(env.videos.calls <= 12, `made ${env.videos.calls} R2 calls`);
 	});
 });
 

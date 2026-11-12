@@ -43,6 +43,9 @@ export function toVideoInfo(video: ApiVideo): VideoInfo {
     likesCount: video.likesCount ?? 0,
     dislikesCount: video.dislikesCount ?? 0,
     commentsCount: video.commentsCount ?? 0,
+    ...(typeof video.duration === 'number' ? { duration: video.duration } : {}),
+    ...(typeof (video as { isShort?: unknown }).isShort === 'boolean' ? { isShort: (video as { isShort: boolean }).isShort } : {}),
+    ...((video as { seriesNext?: unknown }).seriesNext === true ? { seriesNext: true } : {}),
   };
 }
 

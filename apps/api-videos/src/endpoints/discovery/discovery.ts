@@ -25,6 +25,7 @@ import {
   loadCandidatePool,
   loadRecentHistory,
   recommendationsCachePath,
+  seriesNextFromIndex,
 } from "../../lib/recommendations";
 
 const ErrorSchema = z.object({ success: z.boolean(), error: z.string() });
@@ -54,6 +55,7 @@ const DiscoveryVideoSchema = z.object({
   views: z.number(),
   likesCount: z.number(),
   commentsCount: z.number(),
+  seriesNext: z.boolean().optional().describe("Recommendations only: the next video of the seed's numbered series (always first); players play it next"),
 }).passthrough();
 
 function clampLimit(value: number | undefined, fallback: number, max: number): number {
@@ -293,7 +295,7 @@ export class RecommendationsGet extends OptionalAuthRoute {
   schema = {
     tags: ["Search"],
     summary: "Recommended videos",
-    description: "🔓 Authentication optional. Recommends public videos related to `videoId` (same category, channel, tags). When signed in, the viewer's recent watch history also seeds the profile and `excludeWatched=true` ranks videos already watched last, listing them only to fill the limit.",
+    description: "🔓 Authentication optional. Recommends public videos related to `videoId` (same category, channel, tags). When `videoId`'s title is numbered (\"Lesson 1\", \"الدرس ٢\"), the next video of that series in its channel comes first with `seriesNext: true` (n+1, else the next higher number; never a text match like 1 → 11). When signed in, the viewer's recent watch history also seeds the profile and `excludeWatched=true` ranks videos already watched last, listing them only to fill the limit.",
     request: {
       query: z.object({
         videoId: Str({ description: "Seed video id" }).optional(),
@@ -380,8 +382,35 @@ export class RecommendationsGet extends OptionalAuthRoute {
         });
         winners.push(...await hydrateRanked(c.env.videos, backfill, missing));
       }
+      // A numbered series continues in order (lib/series.ts): its next video leads the shelf,
+      // flagged so every player (web, embed, native) plays it next
+      let seriesId: string | null = null;
+      const searchDb = c.env.SEARCH_DB as SearchDb | undefined;
+      if (query.videoId && searchDb) {
+        try {
+          seriesId = await seriesNextFromIndex(searchDb, c.env.videos, query.videoId);
+        } catch (error) {
+          logger.warn("[Recommendations] Series lookup failed", { videoId: query.videoId, error });
+        }
+      }
+      if (seriesId) {
+        const at = winners.findIndex(w => w.video.id === seriesId);
+        const series = at >= 0
+          ? winners.splice(at, 1)[0]
+          : (await hydrateRanked(c.env.videos, [{ video: { id: seriesId } as DiscoveryVideo, score: 0 }], 1))[0];
+        if (series) {
+          winners.unshift(series);
+          winners.splice(limit);
+        } else {
+          seriesId = null;
+        }
+      }
       const channels = await loadChannelMap(c.env.channels, winners.map(r => r.video.channelId || ""));
-      const data = winners.map(({ video, score }) => ({ ...toVideoResponse(video, channels), recommendationScore: score }));
+      const data = winners.map(({ video, score }) => ({
+        ...toVideoResponse(video, channels),
+        recommendationScore: score,
+        ...(video.id === seriesId ? { seriesNext: true } : {}),
+      }));
       const body: RecommendationsBody = { success: true, data, videos: data, basedOn };
       if (data.length > 0) {
         const fullTtl = userId ? PERSONAL_RECOMMENDATIONS_TTL : ANONYMOUS_RECOMMENDATIONS_TTL;

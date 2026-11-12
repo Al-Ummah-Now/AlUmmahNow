@@ -26,6 +26,13 @@ describe('Up next outside a playlist (the owner\'s "auto play like youtube")', (
     expect(pickUpNext(long('now'), [long('l1')], ['l1']).next).toBeNull();
   });
 
+  it('the series continuation the API flags plays next, even if watched before', () => {
+    const related = [long('l11'), { ...long('l2'), seriesNext: true }, long('x')];
+    const { next, ordered } = pickUpNext(long('l1'), related, ['l2']);
+    expect(next?.id).toBe('l2');
+    expect(ordered.map((v) => v.id)).toEqual(['l2', 'l11', 'x']);
+  });
+
   it('an explicit isShort flag wins over the dimensions', () => {
     expect(pickUpNext({ id: 'now', isShort: true }, [long('l1'), { id: 'x', isShort: true }], []).next?.id).toBe('x');
   });
