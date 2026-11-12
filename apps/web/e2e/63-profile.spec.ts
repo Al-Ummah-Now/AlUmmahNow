@@ -3,6 +3,7 @@ import type { Page } from '@playwright/test';
 import { ANONYMOUS_STATE, AUTH_STATE, readAccount } from './test-utils/auth-state';
 import { createTestFile } from './test-utils/upload';
 import { openAccountMenu } from './test-utils/navigation';
+import { themedNative } from './test-utils/themed-select';
 
 /**
  * Profile pages: /profile, /profile/create, /profile/edit.
@@ -58,8 +59,9 @@ async function openEditForm(page: Page, stored: ApiProfile, locale: 'en' | 'ar' 
   const local = (v: unknown) => (v as Record<string, string> | undefined)?.en;
   await expect(firstName).toHaveValue(local(stored.firstNameLocalized) || (stored.firstName as string) || '');
   await expect(page.locator('input[name="displayNameEn"]')).toHaveValue(local(stored.displayNameLocalized) || stored.displayName || '');
-  // The timezone is only set once the profile has loaded
-  await expect(page.locator('#profile-timezone')).toHaveValue((stored.timezone as string) || /.+/);
+  // The timezone is only set once the profile has loaded. #profile-timezone is the themed
+  // dropdown's trigger button; the form value lives in its native <select>.
+  await expect(themedNative(page.locator('#profile-timezone'))).toHaveValue((stored.timezone as string) || /.+/);
   return firstName;
 }
 
