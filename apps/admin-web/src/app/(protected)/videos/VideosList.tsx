@@ -8,7 +8,7 @@
  * a soft delete restorable for 30 days), keyboard support, cards on a phone.
  */
 import { R2Badge } from '@/components/content/r2';
-import Link from 'next/link';
+import Link from '@/components/AppLink';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
