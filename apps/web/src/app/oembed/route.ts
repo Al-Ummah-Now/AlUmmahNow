@@ -9,6 +9,7 @@ import { loadPublicPlaylist, loadPublicVideo, localizedTitle, videoAspect } from
 import { buildOEmbed, fitSize, parseContentUrl, type OEmbedContent } from '@/lib/embed/oembed';
 import { channelPath } from '@/lib/channel-url';
 import { requestOrigin } from '@/lib/embed/request-origin';
+import { shareImageUrl } from '@/lib/embed/share-image';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -53,7 +54,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         authorUrl: video.channelId
           ? `${origin}${channelPath('en', { id: video.channelId, handle: video.channelHandle ?? undefined })}`
           : undefined,
-        thumbnailUrl: video.poster,
+        thumbnailUrl: video.poster ? shareImageUrl(origin, video.id) : undefined,
         duration: video.duration,
       };
     }
@@ -63,7 +64,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       content = {
         title: playlist.title,
         authorName: playlist.channelName || undefined,
-        thumbnailUrl: playlist.videos[0].poster,
+        thumbnailUrl: playlist.videos[0].poster ? shareImageUrl(origin, playlist.videos[0].id) : undefined,
       };
     }
   }

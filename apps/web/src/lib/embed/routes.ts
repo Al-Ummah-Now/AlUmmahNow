@@ -13,3 +13,8 @@ export function isEmbedPath(pathname: string): boolean {
 export function isOEmbedPath(pathname: string): boolean {
   return pathname === '/oembed' || pathname === '/oembed/';
 }
+
+/** Stable share images: /thumb/<videoId>.jpg (lib/embed/share-image.ts) */
+export function isShareImagePath(pathname: string): boolean {
+  return /^\/thumb\/[^/]+\.jpg$/.test(pathname);
+}

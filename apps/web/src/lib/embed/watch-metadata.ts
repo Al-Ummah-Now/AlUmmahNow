@@ -7,6 +7,7 @@
 import type { Metadata } from 'next';
 import { videoAspect, type EmbedVideo } from './content';
 import { embedUrl, oembedEndpointUrl, watchPageUrl } from './snippets';
+import { shareImageUrl } from './share-image';
 
 const PLAYER_WIDTH = 1280;
 const PLAYER_HEIGHT = 720;
@@ -37,7 +38,9 @@ export function buildWatchMetadata(video: EmbedVideo | null, locale: string, ori
   const pageUrl = watchPageUrl(origin, lang, video.id);
   const player = embedUrl(origin, 'video', video.id, { lang });
   const size = declaredPlayerSize(video);
-  const images = video.poster ? [{ url: video.poster, width: size.width, height: size.height, alt: title }] : undefined;
+  // Stable image on our domain: crawlers cache it, so never a signed CDN URL
+  const image = video.poster ? shareImageUrl(origin, video.id) : undefined;
+  const images = image ? [{ url: image, width: size.width, height: size.height, alt: title }] : undefined;
 
   return {
     title,
@@ -61,7 +64,7 @@ export function buildWatchMetadata(video: EmbedVideo | null, locale: string, ori
       card: 'player',
       title,
       description,
-      images: video.poster ? [video.poster] : undefined,
+      images: image ? [image] : undefined,
       players: [{ playerUrl: player, streamUrl: player, width: size.width, height: size.height }],
     },
   };

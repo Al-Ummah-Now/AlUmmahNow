@@ -11,6 +11,7 @@
 import { cache } from 'react';
 import { logger } from '@/lib/logger-server';
 import { getLocalizedValue } from '@al-ummah/shared-types';
+import { shareImagePath } from './share-image';
 
 export interface EmbedVideo {
   id: string;
@@ -19,7 +20,13 @@ export interface EmbedVideo {
   description?: string;
   descriptionLocalized?: Record<string, string>;
   playUrl: string;
+  /**
+   * Poster for pages, meta tags and embeds: the stable same-origin share image
+   * (/thumb/<id>.jpg, lib/embed/share-image.ts), never a signed CDN URL
+   */
   poster?: string;
+  /** The current thumbnail at its (signed, expiring) source: only the /thumb route fetches it */
+  thumbnailSource?: string;
   duration?: number;
   channelId?: string | null;
   channelName?: string;
@@ -72,13 +79,15 @@ function apiBase(): string {
 }
 
 /**
- * Poster: Bunny keeps the thumbnail next to the HLS playlist (same signed
- * path), which is what the watch page uses; fall back to the API thumbnail.
+ * The thumbnail's current source: the API's thumbnailUrl (the chosen
+ * source's, custom thumbnails included, freshly signed per response), else
+ * Bunny's thumbnail next to the HLS playlist. Signed URLs expire: this is
+ * fetched by the /thumb route and never put in a page.
  */
 export function posterFor(playUrl: string | undefined, thumbnailUrl: string | undefined): string | undefined {
+  if (thumbnailUrl) return /^https?:\/\//.test(thumbnailUrl) ? thumbnailUrl : `https://${thumbnailUrl}`;
   if (playUrl && /\/playlist\.m3u8$/.test(playUrl)) return playUrl.replace(/playlist\.m3u8$/, 'thumbnail.jpg');
-  if (!thumbnailUrl) return undefined;
-  return /^https?:\/\//.test(thumbnailUrl) ? thumbnailUrl : `https://${thumbnailUrl}`;
+  return undefined;
 }
 
 /**
@@ -95,6 +104,7 @@ export function toEmbedVideo(video: ApiVideo | null | undefined): EmbedVideo | n
   if (video.isPublic === false || video.isDeleted === true || video.isHidden === true) return null;
   if (video.uploadStatus && NOT_PLAYABLE_STATUSES.has(video.uploadStatus)) return null;
   const duration = Number(video.duration);
+  const thumbnailSource = posterFor(video.playUrl, video.thumbnailUrl);
   return {
     id: video.id,
     title: video.title || '',
@@ -102,7 +112,8 @@ export function toEmbedVideo(video: ApiVideo | null | undefined): EmbedVideo | n
     description: video.description,
     descriptionLocalized: video.descriptionLocalized,
     playUrl: video.playUrl,
-    poster: posterFor(video.playUrl, video.thumbnailUrl),
+    poster: thumbnailSource ? shareImagePath(video.id) : undefined,
+    thumbnailSource,
     duration: Number.isFinite(duration) && duration > 0 ? duration : undefined,
     channelId: video.channelId ?? null,
     channelName: video.channelName,
