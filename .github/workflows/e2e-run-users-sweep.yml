@@ -12,7 +12,7 @@ name: E2E run accounts sweep
 
 on:
   schedule:
-    - cron: '23 */6 * * *'
+    - cron: '53 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -26,7 +26,7 @@ jobs:
   sweep:
     name: Delete run accounts older than 24 h (QA)
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
         with:

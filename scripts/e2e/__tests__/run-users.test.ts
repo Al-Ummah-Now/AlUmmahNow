@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { isRunUserEmail, parseRunUsers, runId, runUserAddress, runUserEmail, runUserName } from '../../../apps/web/e2e/test-utils/run-users.ts';
-import { assertAuthUrl, deleteRunUser, parseArgs, run } from '../teardown-run-users.ts';
+import { assertAuthUrl, deleteRunUser, parseArgs, run, STALE_PAGE } from '../teardown-run-users.ts';
 
 const ENV = { E2E_RUN_ID: '42887909300-2' } as NodeJS.ProcessEnv;
 const SECRETS = { E2E_CODE_SINK_SECRET: 'sink-secret-value', TEST_PROMOTE_SECRET: 'promote-secret-value' } as NodeJS.ProcessEnv;
@@ -115,5 +115,18 @@ describe('teardown-run-users', () => {
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
 		}
+	});
+
+	it('lists stale accounts again while a listing comes back full (#929)', async () => {
+		const page = (from: number, n: number) => Array.from({ length: n }, (_, i) => `e2e+9-1-s${from + i}@e2e.alummahnow.net`);
+		const responses: Array<{ status: number; body?: unknown }> = [{ status: 200, body: { emails: page(0, STALE_PAGE) } }];
+		for (let i = 0; i < STALE_PAGE; i++) responses.push({ status: 200, body: { found: 1 } });
+		responses.push({ status: 200, body: { emails: page(STALE_PAGE, 3) } });
+		const { calls, deps } = fakeDeps(responses);
+		const counts = await run(parseArgs(['--auth-url', 'https://auth.qa.alummahnow.net', '--stale-hours', '24']), SECRETS, deps);
+		assert.equal(counts.deleted, STALE_PAGE + 3);
+		// 2 listings, 203 deletes; the short second listing ends the run
+		assert.equal(calls.filter((c) => c.url.includes('/stale')).length, 2);
+		assert.equal(calls.length, STALE_PAGE + 3 + 2);
 	});
 });
