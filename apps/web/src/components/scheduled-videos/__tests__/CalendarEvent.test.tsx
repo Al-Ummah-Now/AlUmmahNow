@@ -202,12 +202,18 @@ describe('CalendarEvent', () => {
       expect(event).toBeInTheDocument();
     });
 
-    it('should have proper aria-label', () => {
+    it('is named by its visible title first, then the status (WCAG 2.5.3 label in name)', () => {
       render(<CalendarEvent {...defaultProps} />);
 
       const event = screen.getByRole('button');
-      expect(event).toHaveAttribute('aria-label');
-      expect(event.getAttribute('aria-label')).toContain('Test Video Title');
+      expect(event).not.toHaveAttribute('aria-label');
+      expect(event).toHaveAccessibleName(/^Test Video Title\b.*, Scheduled, /);
+    });
+
+    it('names the event in Arabic on Arabic pages', () => {
+      render(<CalendarEvent {...defaultProps} locale="ar" />);
+
+      expect(screen.getByRole('button')).toHaveAccessibleName(/^Test Video Title\b.*، مجدول، /);
     });
 
     it('should be keyboard focusable', () => {

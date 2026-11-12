@@ -70,8 +70,9 @@ test.describe('Upload form - metadata', () => {
     // Mode tabs: Arabic names, first tab on the right, ArrowLeft moves to the next tab in RTL
     const single = page.getByTestId('upload-mode-single');
     const batch = page.getByTestId('upload-mode-batch');
-    await expect(single).toHaveAccessibleName('فيديو واحد');
-    await expect(batch).toHaveAccessibleName('رفع جماعي');
+    // Named by content: the visible label first, then the visible hint (WCAG 2.5.3)
+    await expect(single).toHaveAccessibleName(/^فيديو واحد\s*، \S/);
+    await expect(batch).toHaveAccessibleName(/^رفع جماعي\s*، \S/);
     const [singleBox, batchBox] = [await single.boundingBox(), await batch.boundingBox()];
     expect(singleBox!.x).toBeGreaterThan(batchBox!.x);
     await single.focus();

@@ -568,6 +568,7 @@ const UploadPage: React.FC = () => {
               singleHint: t.upload.modeSingleHint,
               batch: t.upload.modeBatch,
               batchHint: t.upload.modeBatchHint,
+              separator: locale === 'ar' ? '، ' : ', ',
             }}
           />
         )}

@@ -70,30 +70,30 @@ interface EditableCoverProps {
 
 /**
  * Edit-form cover: the current cover as a preview, with Change and Remove on top.
- * The whole area opens the picker (mouse and keyboard); Remove stops that.
+ *
+ * The cover itself is not a control: Change and Remove are real buttons, and
+ * ARIA does not allow buttons inside another button (axe nested-interactive).
+ * Keyboard and screen-reader users reach the picker through the Change button;
+ * a mouse click anywhere on the cover still opens it, as a shortcut.
  */
 export function EditableCover({ url, alt, onPick, onRemove, labels, testId, imageTestId, busy, className = '', children }: EditableCoverProps) {
   const hasImage = !!normalizeImageUrl(url);
   return (
+    // Mouse-only shortcut; the Change button below is the keyboard and screen-reader path
     <div
       className={`media-cover relative overflow-hidden cursor-pointer ${className}`}
-      role="button"
-      tabIndex={0}
-      aria-label={labels.pick}
       aria-busy={busy || undefined}
       data-testid={testId}
       onClick={onPick}
-      onKeyDown={(e) => {
-        if (e.target !== e.currentTarget) return;
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onPick();
-        }
-      }}
     >
       {/* Wrappers carry the position: themed buttons are position:relative */}
       <div className="absolute top-3 end-3 z-[2] flex flex-wrap justify-end gap-2">
-        <button type="button" tabIndex={-1} className="b b-secondary b-sm" onClick={(e) => { e.stopPropagation(); onPick(); }}>
+        <button
+          type="button"
+          className="b b-secondary b-sm"
+          data-testid={`${testId}-change`}
+          onClick={(e) => { e.stopPropagation(); onPick(); }}
+        >
           <Camera aria-hidden="true" />
           {hasImage ? labels.change : labels.pick}
         </button>

@@ -24,6 +24,8 @@ interface UploadModeTabsProps {
     singleHint: string;
     batch: string;
     batchHint: string;
+    /** Spoken between the label and the hint (sr-only): ", " in English, "، " in Arabic */
+    separator?: string;
   };
 }
 
@@ -67,8 +69,6 @@ export function UploadModeTabs({ mode, onChange, labels }: UploadModeTabsProps) 
             id={UPLOAD_MODE_TAB_ID[m]}
             aria-selected={selected}
             aria-controls={selected ? UPLOAD_MODE_PANEL_ID[m] : undefined}
-            aria-labelledby={`${UPLOAD_MODE_TAB_ID[m]}-label`}
-            aria-describedby={`${UPLOAD_MODE_TAB_ID[m]}-hint`}
             tabIndex={selected ? 0 : -1}
             data-testid={`upload-mode-${m}`}
             className="upload-mode-tab"
@@ -79,11 +79,13 @@ export function UploadModeTabs({ mode, onChange, labels }: UploadModeTabsProps) 
           >
             <Icon aria-hidden="true" className="upload-mode-tab__icon" />
             <span className="upload-mode-tab__text">
-              <span id={`${UPLOAD_MODE_TAB_ID[m]}-label`} className="upload-mode-tab__label">{m === 'single' ? labels.single : labels.batch}</span>
-              {/* aria-hidden: the hint reaches screen readers once, as the description (aria-describedby).
-                  Left in the content, it would also be read as part of the name, and the name would no
-                  longer contain the visible text (WCAG 2.5.3, axe label-content-name-mismatch). */}
-              <span id={`${UPLOAD_MODE_TAB_ID[m]}-hint`} className="upload-mode-tab__hint" aria-hidden="true">{m === 'single' ? labels.singleHint : labels.batchHint}</span>
+              {/* Named by its content, label first then hint ("Single video, One file …"), so the name
+                  holds all the visible text in order (WCAG 2.5.3). axe compares against everything
+                  painted, aria-hidden or not: a name of just the label, with the hint aria-hidden,
+                  fails label-content-name-mismatch. The sr-only separator keeps them apart when read. */}
+              <span className="upload-mode-tab__label">{m === 'single' ? labels.single : labels.batch}</span>
+              <span className="sr-only">{labels.separator ?? ', '}</span>
+              <span className="upload-mode-tab__hint">{m === 'single' ? labels.singleHint : labels.batchHint}</span>
             </span>
           </button>
         );
