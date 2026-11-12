@@ -46,6 +46,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/admin-web/e2e/15-invites.spec.ts': { placement: 'local', reason: 'invite link and sign-up on the real issuer (local), lands signed in on web' },
   'apps/admin-web/e2e/15-recently-deleted-config.spec.ts': { placement: 'local', reason: 'Creator tier trash: delete, restore, purge queue dialogs' },
   'apps/admin-web/e2e/16-live-updates.spec.ts': { placement: 'local', reason: 'Admin pages over the local realtime worker: subscribe, live re-render, moderator topics, token route' },
+  'apps/admin-web/e2e/16-operations.spec.ts': { placement: 'local', reason: 'Operations page vs admin-api /api/ops; empty COSTS_DB shows the no-data notice' },
   'apps/web/e2e/01-homepage.spec.ts': { placement: 'local', reason: 'anonymous home page layout and content' },
   'apps/web/e2e/02-video-player.spec.ts': { placement: 'local', reason: 'player loads a seed video; any playable HLS will do' },
   'apps/web/e2e/03-profile.spec.ts': { placement: 'local', reason: 'profile page and profile guard with stored sessions' },
