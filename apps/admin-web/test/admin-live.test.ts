@@ -232,3 +232,20 @@ describe('realtime ticket', () => {
     assert.equal(tokenExpiry('garbage'), undefined);
   });
 });
+
+describe('Delivery page live figures from admin:media', () => {
+  it('a live event becomes the figures; the queue age comes from the server clock', async () => {
+    const { mediaLiveFromEvent } = await import('../src/app/(protected)/delivery/live-event');
+    assert.deepEqual(
+      mediaLiveFromEvent({ kind: 'live', key: 'live', transcoding: 2, queued: 5, maxTranscodes: 4, oldestQueuedAt: '2026-11-12T10:00:00.000Z', at: '2026-11-12T10:01:30.000Z' }),
+      { transcoding: 2, queued: 5, maxTranscodes: 4, oldestQueuedAt: '2026-11-12T10:00:00.000Z', oldestQueuedSeconds: 90, at: '2026-11-12T10:01:30.000Z' },
+    );
+    assert.deepEqual(
+      mediaLiveFromEvent({ kind: 'live', key: 'live', transcoding: 0, queued: 0, at: '2026-11-12T10:00:00.000Z' }),
+      { transcoding: 0, queued: 0, maxTranscodes: null, oldestQueuedAt: null, oldestQueuedSeconds: null, at: '2026-11-12T10:00:00.000Z' },
+    );
+    assert.equal(mediaLiveFromEvent({ kind: 'job', key: 'job:v1', status: 'ready' }), null);
+    assert.equal(mediaLiveFromEvent({ kind: 'live', key: 'live', truncated: true }), null);
+    assert.equal(mediaLiveFromEvent({ kind: 'live', key: 'live', transcoding: '2', queued: 1, at: 'x' }), null);
+  });
+});
