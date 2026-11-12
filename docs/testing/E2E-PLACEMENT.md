@@ -32,11 +32,11 @@ Until a batch is moved, every spec still runs where it runs today; the local job
 |---|---|---:|---:|
 | web | `apps/web/playwright.config.ts` (e2e-tests.yml) | 60 | 1 |
 | release | `apps/web/playwright.release.config.ts` (release-e2e.yml, release.yml) | 57 | 7 |
-| admin | `apps/admin-web/playwright.config.ts` (admin-e2e.yml) | 20 | 0 |
+| admin | `apps/admin-web/playwright.config.ts` (admin-e2e.yml) | 21 | 0 |
 | themes | `apps/web/playwright.themes.config.ts` (theme-visibility.yml) | 5 | 0 |
 | player | `apps/web/playwright.player.config.ts` (player-e2e.yml) | 10 | 0 |
 | release-prod | `apps/web/playwright.release-prod.config.ts` (prod-signed-in.yml) | 0 | 1 |
-| **all** | | **152** | **9** |
+| **all** | | **153** | **9** |
 
 ## Deployed (QA and stage)
 
@@ -217,6 +217,7 @@ Until a batch is moved, every spec still runs where it runs today; the local job
 | `15-invites.spec.ts` | invite link and sign-up on the real issuer (local), lands signed in on web |  |
 | `15-recently-deleted-config.spec.ts` | Creator tier trash: delete, restore, purge queue dialogs |  |
 | `16-live-updates.spec.ts` | Admin pages over the local realtime worker: subscribe, live re-render, moderator topics, token route |  |
+| `16-operations.spec.ts` | Operations page vs admin-api /api/ops; empty COSTS_DB shows the no-data notice |  |
 
 ### themes
 

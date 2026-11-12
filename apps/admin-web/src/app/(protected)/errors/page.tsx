@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { findErrorRef, getErrorCounts, getErrorFacets, listErrorGroups } from '@/lib/api/admin';
 import type { ErrorCounts, ErrorFacets, ErrorGroupList } from '@/lib/api/error-groups-types';
 import { getAdminSession } from '@/lib/auth';
-import { canReadErrors, canUseProcessing } from '@/lib/roles';
+import { canReadErrors, canReadOps, canUseProcessing } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
 import { formatDate, formatNumber, translateDynamic } from '@/i18n/translate';
 import { ErrorAlert, linkClass } from '@/components/ui';
@@ -95,6 +95,11 @@ export default async function ErrorsPage({ searchParams }: PageProps) {
             </span>
           )}
         </p>
+        {canReadOps(role) && (
+          <p className="mt-1 text-sm">
+            <Link href="/operations" className={linkClass} data-testid="errors-operations-link">{t('operations.openLink')}</Link>
+          </p>
+        )}
       </div>
 
       <nav aria-label={t('errorsPage.tabsLabel')} className="flex gap-2 border-b border-border mb-6">

@@ -88,6 +88,16 @@ export function canManageMedia(role?: string): boolean {
 }
 
 /**
+ * Operations page (platform analytics, docs/admin/LIVE_OPS.md): mirrors admin-api
+ * PERMISSIONS (ops:read is granted to admins and super admins, not moderators).
+ * admin-api enforces it; this only hides what the user cannot open.
+ */
+export function canReadOps(role?: string): boolean {
+  const r = normalizeRole(role);
+  return r === 'admin' || r === 'super_admin';
+}
+
+/**
  * Videos users tools (Restore legacy profile fields): mirrors the users:manage
  * content permission (shared-types ROLE_CONTENT_PERMISSIONS: admins and super
  * admins). admin-api enforces it; this only hides what the user cannot use.
