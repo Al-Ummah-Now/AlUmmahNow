@@ -119,6 +119,11 @@ export async function listStale(authUrl: string, hours: number, env: NodeJS.Proc
 	return (body.emails ?? []).filter(isRunUserEmail);
 }
 
+/** The auth server's stale listing returns at most this many addresses (#929, #1067). */
+export const STALE_PAGE = 200;
+/** Stale listings per run at most. */
+export const STALE_MAX_PASSES = 100;
+
 export async function run(args: Args, env: NodeJS.ProcessEnv, deps: Deps): Promise<Record<Outcome, number>> {
 	const emails = new Set<string>();
 	for (const file of args.files) {
@@ -128,18 +133,35 @@ export async function run(args: Args, env: NodeJS.ProcessEnv, deps: Deps): Promi
 		}
 		for (const e of parseRunUsers(readFileSync(file, 'utf8'))) emails.add(e);
 	}
+	let stale: string[] | null = null;
 	if (args.staleHours !== null) {
-		const stale = await listStale(args.authUrl, args.staleHours, env, deps);
+		stale = await listStale(args.authUrl, args.staleHours, env, deps);
 		if (stale === null) deps.log('::warning::the auth server has no /test/run-users/stale route here');
 		for (const e of stale ?? []) emails.add(e);
 	}
 	const counts: Record<Outcome, number> = { deleted: 0, absent: 0, unavailable: 0, failed: 0 };
-	for (const email of emails) {
-		const outcome = await deleteRunUser(args.authUrl, email, env, deps);
-		counts[outcome]++;
-		deps.log(`[teardown] ${email}: ${outcome}`);
+	const done = new Set<string>();
+	const deleteAll = async (list: Iterable<string>) => {
+		for (const email of list) {
+			if (done.has(email)) continue;
+			done.add(email);
+			const outcome = await deleteRunUser(args.authUrl, email, env, deps);
+			counts[outcome]++;
+			deps.log(`[teardown] ${email}: ${outcome}`);
+		}
+	};
+	await deleteAll(emails);
+	// A full listing means more are waiting: list again until one is not full or
+	// brings nothing new. At one listing per 6 h the backlog only grew (8,244 live
+	// run accounts on QA on 2026-11-12, holding ~2,100 Bunny test videos).
+	for (let pass = 2; args.staleHours !== null && stale && stale.length >= STALE_PAGE && pass <= STALE_MAX_PASSES; pass++) {
+		stale = await listStale(args.authUrl, args.staleHours, env, deps);
+		const fresh = (stale ?? []).filter((e) => !done.has(e));
+		if (!fresh.length) break;
+		deps.log(`[teardown] stale pass ${pass}: ${fresh.length} run account(s)`);
+		await deleteAll(fresh);
 	}
-	deps.log(`[teardown] ${emails.size} run account(s): ${JSON.stringify(counts)}`);
+	deps.log(`[teardown] ${done.size} run account(s): ${JSON.stringify(counts)}`);
 	if (counts.unavailable) deps.log(`::warning::${counts.unavailable} run account(s) not deleted: the auth server has no run-account teardown route (left for the sweeper)`);
 	if (counts.failed) deps.log(`::warning::${counts.failed} run account(s) could not be deleted`);
 	return counts;
