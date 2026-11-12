@@ -92,7 +92,7 @@ export function useAdminList<T extends { id: string }>({ resource, spec, values,
   useEffect(() => {
     if (!items || overrides.length === 0) return;
     const pruned = pruneOverrides(overrides, items, Date.now());
-    if (pruned.length !== overrides.length) setOverrides<T>(client, resource, () => pruned);
+    if (pruned.length !== overrides.length || pruned.some((o, i) => o !== overrides[i])) setOverrides<T>(client, resource, () => pruned);
   }, [client, items, overrides, resource, now]);
 
   useEffect(() => {

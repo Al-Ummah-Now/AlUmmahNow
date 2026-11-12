@@ -132,3 +132,21 @@ export function selectView(spec: ListSpec, views: readonly SavedView[], values: 
   if (!view) return values;
   return parseListParams(spec, { ...view.params, ...(values.sort ? { sort: values.sort } : {}) });
 }
+
+/** The part of window.history the list writes through (a stand-in in the unit tests). */
+export interface ListHistory {
+  replaceState(data: unknown, unused: string, url?: string | URL | null): void;
+}
+
+/**
+ * Writes a list URL in place (no new history entry, no reload).
+ *
+ * The state passed is null on purpose: the App Router patches replaceState and
+ * syncs the new URL into useSearchParams only for a call that does not carry
+ * its own internal state (`__NA`), copying that state over itself. Passing
+ * window.history.state (which has `__NA`) makes the router treat the call as
+ * its own, so the address bar changes but the list never sees the new filters.
+ */
+export function replaceListUrl(history: ListHistory, url: string): void {
+  history.replaceState(null, '', url);
+}
