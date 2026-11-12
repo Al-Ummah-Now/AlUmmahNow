@@ -230,6 +230,37 @@ importers:
         specifier: ^4.1.10
         version: 4.1.10(@types/node@24.10.0)(@vitest/ui@4.1.10)(jsdom@26.1.0)(vite@7.2.2(@types/node@24.10.0)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.16.9)(tsx@4.20.6)(yaml@2.8.1))
 
+  apps/media:
+    dependencies:
+      '@al-ummah/shared-types':
+        specifier: workspace:*
+        version: link:../../packages/shared-types
+      '@cloudflare/containers':
+        specifier: 0.3.7
+        version: 0.3.7
+    devDependencies:
+      '@cloudflare/workers-types':
+        specifier: ^4.20251106.1
+        version: 4.20251115.0
+      '@eslint/js':
+        specifier: ^9.39.1
+        version: 9.39.1
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.25
+      eslint:
+        specifier: 9.39.1
+        version: 9.39.1(jiti@2.6.1)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      typescript-eslint:
+        specifier: ^8.46.4
+        version: 8.46.4(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.3)
+      wrangler:
+        specifier: ^4.108.0
+        version: 4.108.0(@cloudflare/workers-types@4.20251115.0)
+
   apps/processor:
     dependencies:
       '@al-ummah/logger':
@@ -1374,6 +1405,9 @@ packages:
 
   '@bunny.net/storage-sdk@0.3.0':
     resolution: {integrity: sha512-fRtYdztE01tVdQFX25GlYYnjCeTrW44ZsVlUNOcczKzPg6ellZ/awCzg+WsqY7bwIlUD7dTgy/Jtj8qOTmAs+Q==}
+
+  '@cloudflare/containers@0.3.7':
+    resolution: {integrity: sha512-DM9dm3FnIBSyiSJ1FLavKwl/lk3oAmTaynCzZQ9pZR0ncRPquSxkxd8Nu2MFILxmDDsPkxKsSNEh9mHHMty4Fw==}
 
   '@cloudflare/kv-asset-handler@0.3.4':
     resolution: {integrity: sha512-YLPHc8yASwjNkmcDMQMY35yiWjoKAKnhUbPRszBRS0YgH+IXtsMp61j+yTcnCE3oO2DgP0U3iejLC8FTtKDC8Q==}
@@ -9047,6 +9081,8 @@ snapshots:
     dependencies:
       dotenv: 16.6.1
       zod: 3.25.76
+
+  '@cloudflare/containers@0.3.7': {}
 
   '@cloudflare/kv-asset-handler@0.3.4':
     dependencies:

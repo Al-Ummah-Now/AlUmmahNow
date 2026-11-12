@@ -22,13 +22,16 @@ function fakeCf(queues: string[], buckets: string[]) {
 
 describe('ensure-resources', () => {
 	it('names each environment', () => {
-		assert.deepEqual(resourcesFor('production'), { queues: ['al-ummah-now-errors', 'al-ummah-now-errors-dlq'], buckets: ['al-ummah-now-sourcemaps'] });
-		assert.deepEqual(resourcesFor('qa').queues, ['al-ummah-now-errors-qa', 'al-ummah-now-errors-dlq-qa']);
-		assert.deepEqual(resourcesFor('stage').buckets, ['al-ummah-now-sourcemaps-stage']);
+		assert.deepEqual(resourcesFor('production'), {
+			queues: ['al-ummah-now-errors', 'al-ummah-now-errors-dlq', 'al-ummah-now-transcode', 'al-ummah-now-transcode-dlq'],
+			buckets: ['al-ummah-now-sourcemaps', 'al-ummah-now-media', 'al-ummah-now-media-private'],
+		});
+		assert.deepEqual(resourcesFor('qa').queues, ['al-ummah-now-errors-qa', 'al-ummah-now-errors-dlq-qa', 'al-ummah-now-transcode-qa', 'al-ummah-now-transcode-dlq-qa']);
+		assert.deepEqual(resourcesFor('stage').buckets, ['al-ummah-now-sourcemaps-stage', 'al-ummah-now-media-stage', 'al-ummah-now-media-private-stage']);
 	});
 
 	it('creates only what is missing', async () => {
-		const { cf, calls } = fakeCf(['al-ummah-now-errors-qa'], []);
+		const { cf, calls } = fakeCf(['al-ummah-now-errors-qa', 'al-ummah-now-transcode-qa', 'al-ummah-now-transcode-dlq-qa'], ['al-ummah-now-media-qa', 'al-ummah-now-media-private-qa']);
 		const { created } = await ensureResources(cf, resourcesFor('qa'), () => undefined);
 		assert.deepEqual(created, ['queue al-ummah-now-errors-dlq-qa', 'bucket al-ummah-now-sourcemaps-qa']);
 		assert.ok(calls.includes('POST /queues {"queue_name":"al-ummah-now-errors-dlq-qa"}'));
