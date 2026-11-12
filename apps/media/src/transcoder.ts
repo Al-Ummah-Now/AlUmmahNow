@@ -6,9 +6,9 @@
  * start to this job's video, prefix and id.
  */
 import { Container, type OutboundHandlerContext } from '@cloudflare/containers';
-import { mediaCacheControl, mediaContentType, sanitizeFailure, type TranscodeFailure, type TranscodeJobEvent, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
+import { failRungs, mediaCacheControl, mediaContentType, sanitizeFailure, sanitizeRungs, type R2RungProgress, type TranscodeFailure, type TranscodeJobEvent, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
 import { bucketFor, errorText, log, type Env } from './env';
-import { containerSeconds, keyAllowed, newJob, onFailure, onMessage, watchdogVerdict, WATCHDOG_SECONDS, type JobState } from './jobs';
+import { containerSeconds, keyAllowed, newJob, onFailure, onMessage, onProgressEvent, watchdogVerdict, WATCHDOG_SECONDS, type JobState } from './jobs';
 import { reportEvent, sourceCandidates } from './videos-api';
 import { serveOriginal } from './originals';
 
@@ -17,14 +17,12 @@ const chosenSource = new Map<string, string>();
 
 type ContainerEvent =
 	| { type: 'started'; jobId: string }
-	| { type: 'progress'; jobId: string; progress: number }
+	| { type: 'progress'; jobId: string; progress: number; rungs?: R2RungProgress[] }
 	| { type: 'ready'; jobId: string; result: TranscodeResult }
-	| { type: 'failed'; jobId: string; error: string; fatal?: boolean; failure?: Partial<TranscodeFailure> };
+	| { type: 'failed'; jobId: string; error: string; fatal?: boolean; failure?: Partial<TranscodeFailure>; rungs?: R2RungProgress[] };
 
 /** What finishFailed adds to the container's own report (attempt, timing, instance). */
 type FailureParts = Partial<TranscodeFailure>;
-
-const PROGRESS_REPORT_MS = 60_000;
 
 /** Delete every object under a prefix (a failed attempt's leftovers). */
 export async function deletePrefix(bucket: R2Bucket, prefix: string): Promise<number> {
@@ -129,6 +127,7 @@ export class Transcoder extends Container<Env> {
 		}
 		const job = newJob(msg, Date.now());
 		await this.save(job);
+		await this.ctx.storage.delete('progressReported');
 		try {
 			await this.launch(job);
 		} catch (error) {
@@ -164,17 +163,19 @@ export class Transcoder extends Container<Env> {
 		const now = Date.now();
 		job.lastSeenAt = now;
 		if (ev.type === 'progress') {
-			const last = (await this.ctx.storage.get<number>('progressReportedAt')) ?? 0;
-			job.progress = ev.progress;
+			// At most one report per 10 s, but every rung state change at once (the admin chips)
+			const step = onProgressEvent(job, ev, await this.ctx.storage.get<{ at: number; states: string }>('progressReported'), now);
 			await this.save(job);
-			if (now - last > PROGRESS_REPORT_MS) {
-				await this.ctx.storage.put('progressReportedAt', now);
-				await this.report(job, { type: 'progress', progress: ev.progress }).catch(() => undefined);
+			if (step.report) {
+				await this.ctx.storage.put('progressReported', step.last);
+				await this.report(job, step.report).catch(() => undefined);
 			}
 			return;
 		}
 		if (ev.type === 'started') return this.save(job);
 		if (ev.type === 'ready') return this.finishReady(job, ev.result);
+		const rungs = sanitizeRungs(ev.rungs);
+		if (rungs) job.rungs = rungs;
 		return this.finishFailed(job, ev.error, !!ev.fatal, ev.failure ?? {});
 	}
 
@@ -184,6 +185,7 @@ export class Transcoder extends Container<Env> {
 		job.status = 'ready';
 		job.progress = 1;
 		job.result = result;
+		job.rungs = result.rungs.map((r) => ({ name: r.name, state: 'done' }));
 		job.finishedAt = now;
 		await this.save(job);
 		await this.report(job, { type: 'ready', result });
@@ -205,6 +207,8 @@ export class Transcoder extends Container<Env> {
 		log.warn('[Transcoder] Attempt failed', { videoId: job.videoId, jobId: job.jobId, ...failure, stderrTail: undefined });
 		job.priorSeconds = containerSeconds(job, now);
 		job.error = error;
+		// Whatever was not finished failed with the attempt (the chips show the reason)
+		job.rungs = failRungs(job.rungs);
 		// Before destroy(): its onStop must see our own teardown, not a crash. Without this the
 		// stop re-entered here as 'container_stopped' and replaced the real error (2026-11-12:
 		// a 'no source yet' wait gave up after 3 quick attempts instead of waiting for Bunny).
@@ -216,7 +220,7 @@ export class Transcoder extends Container<Env> {
 		if (next.retry) {
 			job.status = 'waiting_retry';
 			await this.save(job);
-			await this.report(job, { type: 'failed', error, final: false, failure });
+			await this.report(job, { type: 'failed', error, final: false, failure, ...(job.rungs ? { rungs: job.rungs } : {}) });
 			await this.schedule(next.delaySeconds, 'retry', job.jobId);
 			return;
 		}
@@ -224,7 +228,7 @@ export class Transcoder extends Container<Env> {
 		job.finishedAt = now;
 		await this.save(job);
 		log.error('[Transcoder] Job failed', { videoId: job.videoId, jobId: job.jobId, attempt: job.attempt, error });
-		await this.report(job, { type: 'failed', error, final: true, failure });
+		await this.report(job, { type: 'failed', error, final: true, failure, ...(job.rungs ? { rungs: job.rungs } : {}) });
 	}
 
 	/** schedule() callback: next attempt of a failed job. */
@@ -236,6 +240,8 @@ export class Transcoder extends Container<Env> {
 		job.attemptStartedAt = Date.now();
 		job.lastSeenAt = job.attemptStartedAt;
 		job.progress = 0;
+		delete job.rungs;
+		await this.ctx.storage.delete('progressReported');
 		await this.save(job);
 		try {
 			await this.launch(job);
@@ -294,7 +300,7 @@ export class Transcoder extends Container<Env> {
 	// Reports to api-videos: kept until delivered (the watchdog resends)
 	// -----------------------------------------------------------------------
 
-	private async report(job: JobState, ev: Pick<TranscodeJobEvent, 'type' | 'progress' | 'result' | 'error' | 'final' | 'failure'>): Promise<void> {
+	private async report(job: JobState, ev: Pick<TranscodeJobEvent, 'type' | 'progress' | 'result' | 'error' | 'final' | 'failure' | 'rungs'>): Promise<void> {
 		const event: TranscodeJobEvent = {
 			videoId: job.videoId,
 			jobId: job.jobId,

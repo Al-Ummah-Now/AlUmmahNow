@@ -13,6 +13,7 @@ import { createWriteStream } from 'node:fs';
 import { mkdir, readdir, readFile, rm, stat } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { bandwidthOf, displaySize, ffmpegArgs, ladderFor, progressSeconds, stillsArgs } from './ladder.mjs';
+import { RungTracker, uploadByPlan, uploadPlan } from './rungs.mjs';
 
 const PORT = 8080;
 const WORK = '/tmp/work';
@@ -26,6 +27,8 @@ let current = null;
 /** Where the current job is, for failure reports: fetch_source | probe | encode | stills | upload */
 let stage = { name: 'start', detail: undefined };
 let sourceBytesSoFar = 0;
+/** Per-rung state of the current job (null before the probe) */
+let tracker = null;
 function setStage(name, detail) {
 	stage = { name, detail };
 }
@@ -148,19 +151,6 @@ async function put(key, file) {
 	return body.length;
 }
 
-async function uploadAll(prefix, outDir, files) {
-	let bytes = 0;
-	const queue = [...files];
-	const workers = Array.from({ length: UPLOAD_CONCURRENCY }, async () => {
-		for (let f = queue.shift(); f; f = queue.shift()) {
-			const n = await put(`${prefix}/${relative(outDir, f)}`, f);
-			bytes += n; // read after the await: workers run concurrently
-		}
-	});
-	await Promise.all(workers);
-	return bytes;
-}
-
 async function runJob(job) {
 	const t0 = Date.now();
 	const src = join(WORK, 'source');
@@ -172,6 +162,7 @@ async function runJob(job) {
 	setStage('fetch_source');
 	sourceFile = undefined;
 	sourceBytesSoFar = 0;
+	tracker = null;
 	setStage('start');
 	const sourceBytes = await download(src);
 	const tDownload = Date.now();
@@ -184,15 +175,17 @@ async function runJob(job) {
 	current.status = 'transcoding';
 	setStage('encode', rungs.map((r) => r.name).join(','));
 	for (const r of rungs) await mkdir(join(out, r.name), { recursive: true });
-	let lastReport = 0;
+	// One pass encodes every rung: all 'encoding' with the shared %
+	tracker = new RungTracker(rungs);
+	const progressEvent = () => event({ type: 'progress', jobId: job.jobId, progress: current.progress, rungs: tracker.snapshot() });
+	tracker.setAll('encoding', 0);
+	if (tracker.due(Date.now())) await progressEvent();
 	await run('ffmpeg', ffmpegArgs({ input: src, out, rungs, hasAudio: info.hasAudio, fps: info.fps }), (line) => {
 		const s = progressSeconds(line);
 		if (s === null || !(info.durationSeconds > 0)) return;
 		current.progress = Math.min(0.99, s / info.durationSeconds);
-		if (Date.now() - lastReport > 15_000) {
-			lastReport = Date.now();
-			event({ type: 'progress', jobId: job.jobId, progress: current.progress });
-		}
+		tracker.setAll('encoding', current.progress);
+		if (tracker.due(Date.now())) progressEvent();
 	});
 	setStage('stills');
 	const stills = stillsArgs({ input: src, out, durationSeconds: info.durationSeconds });
@@ -211,12 +204,18 @@ async function runJob(job) {
 	current.status = 'uploading';
 	setStage('upload');
 	const files = await walk(out);
-	const isMaster = (f) => relative(out, f) === 'master.m3u8';
-	const isPlaylist = (f) => f.endsWith('.m3u8');
-	// Segments and stills first, then rendition playlists, the master last: a
-	// player can never fetch a playlist whose segments are not in R2 yet.
-	let bytes = await uploadAll(job.prefix, out, files.filter((f) => !isPlaylist(f)));
-	bytes += await uploadAll(job.prefix, out, files.filter((f) => isPlaylist(f) && !isMaster(f)));
+	if (!files.some((f) => relative(out, f) === 'master.m3u8')) throw new Error('ffmpeg wrote no master playlist');
+	// Encoded: every rung waits to upload, then goes up one at a time, lowest first.
+	// Stills first, each rung's segments before its playlist, the master last (uploadPlan).
+	tracker.setAll('pending');
+	const bytes = await uploadByPlan({
+		plan: uploadPlan(files.map((f) => relative(out, f)), rungs),
+		put: (rel) => put(`${job.prefix}/${rel}`, join(out, rel)),
+		size: async (rel) => (await stat(join(out, rel))).size,
+		tracker,
+		emit: progressEvent,
+		concurrency: UPLOAD_CONCURRENCY,
+	});
 
 	const rungStats = [];
 	for (const r of rungs) {
@@ -236,9 +235,6 @@ async function runJob(job) {
 		thumbnail: 'thumb.jpg',
 		...(preview ? { preview } : {}),
 	};
-	const master = files.find(isMaster);
-	if (!master) throw new Error('ffmpeg wrote no master playlist');
-	bytes += await put(`${job.prefix}/master.m3u8`, master);
 	result.bytes = bytes;
 	await rm(WORK, { recursive: true, force: true });
 	return result;
@@ -277,12 +273,14 @@ const server = createServer(async (req, res) => {
 			async (error) => {
 				current.status = 'failed';
 				current.error = String(error?.message || error);
+				tracker?.fail();
 				log('failed', { error: current.error });
 				await event({
 					type: 'failed',
 					jobId: job.jobId,
 					error: current.error,
 					fatal: !!error?.fatal,
+					...(tracker ? { rungs: tracker.snapshot() } : {}),
 					failure: {
 						stage: stage.name,
 						...(stage.detail ? { stageDetail: stage.detail } : {}),

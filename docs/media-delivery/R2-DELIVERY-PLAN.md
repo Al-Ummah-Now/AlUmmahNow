@@ -35,6 +35,19 @@ Not in this epic: migrating the existing catalogue (planned below, not run) and 
               /priv/<token>/<videoId>/<rev>/…  Worker route: HMAC check → private bucket → edge cache
 ```
 
+### Per-rung progress (the admin Processing card)
+
+The container reports each rung's state: during the one FFmpeg pass every rung is
+`encoding` with the shared %; then rungs upload one at a time, lowest first
+(`uploading` with the rung's byte %, then `done`). Stills go first, each rung's
+segments before its playlist, the master last. A failure marks unfinished rungs
+`failed`. The container emits at least every 15 s and on each state change; the
+Transcoder DO reports to api-videos at most every 10 s, except state changes.
+api-videos keeps them on `r2.rungs` and sends them compactly on the `admin:media`
+`job` event (`rungs: [['720p','uploading',0.4], …]`, well under the 2 KB cap).
+The video page's Processing card shows Bunny and R2 side by side with resolution
+chips sorted by height.
+
 ### Why these choices
 
 - **Source from Bunny's kept original.** Upload bytes already stream through our TUS proxy to Bunny.

@@ -23,6 +23,8 @@ import {
 	type AdminVideoQuery,
 	type AdminVideoR2,
 	type AdminVideoR2Badge,
+	type AdminVideoR2Result,
+	sanitizeRungs,
 	type AdminVideoRow,
 	type OwnershipKind,
 	type SearchDb,
@@ -64,7 +66,7 @@ export function adminR2Badge(video: Row | null | undefined): AdminVideoR2Badge |
 	};
 }
 
-/** The video page's R2 panel: the record's `r2` without the transcode result (rungs, timings) or the move/previous bookkeeping. */
+/** The video page's Processing card: the record's `r2` with the transcode result summarised (rungs, source, timings), without the move/previous bookkeeping. */
 export function adminR2Detail(video: Row | null | undefined): AdminVideoR2 | null {
 	const r2 = r2Of(video);
 	if (!r2) return null;
@@ -72,6 +74,29 @@ export function adminR2Detail(video: Row | null | undefined): AdminVideoR2 | nul
 	for (const key of ['startedAt', 'readyAt', 'failedAt', 'error'] as const) if (typeof r2[key] === 'string' && r2[key]) out[key] = r2[key];
 	if (typeof r2.progress === 'number') out.progress = r2.progress;
 	if (r2.failure && typeof r2.failure === 'object') out.failure = r2.failure;
+	if (typeof r2.containerSeconds === 'number') out.containerSeconds = r2.containerSeconds;
+	const rungs = sanitizeRungs(r2.rungs);
+	if (rungs?.length) out.rungs = rungs;
+	const result = r2.result as Row | undefined;
+	if (result && Array.isArray(result.rungs)) {
+		const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+		const summary: AdminVideoR2Result = {
+			rungs: result.rungs.slice(0, 8).map((r: Row) => ({
+				name: String(r?.name ?? ''),
+				width: num(r?.width) ?? 0,
+				height: num(r?.height) ?? 0,
+				...(num(r?.bandwidth) !== undefined ? { bandwidth: num(r.bandwidth) } : {}),
+				...(num(r?.bytes) !== undefined ? { bytes: num(r.bytes) } : {}),
+			})),
+			source: {
+				width: num(result.source?.width) ?? 0,
+				height: num(result.source?.height) ?? 0,
+				...(typeof result.source?.file === 'string' && result.source.file ? { file: result.source.file.slice(0, 60) } : {}),
+			},
+			...(result.timings && typeof result.timings === 'object' ? { timings: result.timings } : {}),
+		};
+		out.result = summary;
+	}
 	return out as AdminVideoR2;
 }
 

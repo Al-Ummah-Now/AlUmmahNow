@@ -7,6 +7,7 @@ import type { AdminVideoR2, AdminVideoR2Badge, TranscodeFailure, TranscodeStage 
 import type { MessageKey, Translator } from '@/i18n/translate';
 import { deliveryFormats } from '@/app/(protected)/delivery/format';
 import { Chip, type ChipTone } from './parts';
+import { R2Extras } from './processing';
 
 export type R2BadgeState = AdminVideoR2Badge['status'] | 'none';
 
@@ -121,7 +122,8 @@ export function R2FailureDetails({ failure, t, locale, last = false }: { failure
 
 /**
  * The video page's R2 block: badge, a progress bar while transcoding, the
- * error, when it was queued/started/ready/failed, and the failure details
+ * error, when it was queued/started/ready/failed, the resolution chips, the
+ * source used, time to ready and container time, and the failure details
  * (for a failed job, or a queued/transcoding one whose earlier attempt failed).
  */
 export function R2Status({ r2, t, locale }: { r2: AdminVideoR2 | null | undefined; t: Translator; locale: string }) {
@@ -187,6 +189,7 @@ export function R2Status({ r2, t, locale }: { r2: AdminVideoR2 | null | undefine
             </div>
           ))}
       </dl>
+      <R2Extras r2={r2} t={t} locale={locale} />
       {showFailure && r2.failure && <R2FailureDetails failure={r2.failure} t={t} locale={locale} last={r2.status !== 'failed'} />}
     </div>
   );

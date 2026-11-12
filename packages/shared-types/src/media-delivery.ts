@@ -29,6 +29,63 @@ export interface MediaRung {
 	segments?: number;
 }
 
+/** Where one rung of a running transcode is (the admin Processing card's chips). */
+export type R2RungState = 'pending' | 'encoding' | 'uploading' | 'done' | 'failed';
+
+export const R2_RUNG_STATES: readonly R2RungState[] = ['pending', 'encoding', 'uploading', 'done', 'failed'];
+
+/** One rung's state while a job runs. `progress` is 0..1 (encoding: the shared one-pass figure; uploading: bytes of this rung). */
+export interface R2RungProgress {
+	name: string;
+	state: R2RungState;
+	progress?: number;
+}
+
+/** Compact form for the admin live channel: [name, state, progress?]. */
+export type R2RungTuple = [string, R2RungState] | [string, R2RungState, number];
+
+const RUNG_NAME = /^[0-9]{2,4}p$/;
+/** At most this many rungs travel on events and records (the ladder has four). */
+export const MAX_RUNGS = 8;
+
+/** Bounded, validated rung states (from the container, an event or a live message). */
+export function sanitizeRungs(input: unknown): R2RungProgress[] | undefined {
+	if (!Array.isArray(input)) return undefined;
+	const out: R2RungProgress[] = [];
+	for (const raw of input.slice(0, MAX_RUNGS)) {
+		const r = Array.isArray(raw) ? { name: raw[0], state: raw[1], progress: raw[2] } : (raw as Partial<R2RungProgress> | null);
+		if (!r || typeof r.name !== 'string' || !RUNG_NAME.test(r.name) || !R2_RUNG_STATES.includes(r.state as R2RungState)) continue;
+		const p = typeof r.progress === 'number' && Number.isFinite(r.progress) ? Math.round(Math.min(1, Math.max(0, r.progress)) * 1000) / 1000 : undefined;
+		out.push({ name: r.name, state: r.state as R2RungState, ...(p !== undefined && (r.state === 'encoding' || r.state === 'uploading') ? { progress: p } : {}) });
+	}
+	return out;
+}
+
+/** Rungs as tuples for a live event, progress to two decimals: [['720p','uploading',0.4], …]. */
+export function compactRungs(rungs: R2RungProgress[] | undefined): R2RungTuple[] | undefined {
+	if (!rungs?.length) return undefined;
+	return rungs.slice(0, MAX_RUNGS).map((r) => (typeof r.progress === 'number' ? [r.name, r.state, Math.round(r.progress * 100) / 100] : [r.name, r.state]));
+}
+
+/** Rung height from its name ("720p" → 720); NaN when the name carries none. */
+export function rungHeight(name: string): number {
+	const m = /(\d{2,4})p/i.exec(name);
+	return m ? Number(m[1]) : Number.NaN;
+}
+
+/** Ascending by height (240p, 360p, … 1080p); names without a height last, in their order. */
+export function sortByResolution<T>(items: readonly T[], nameOf: (item: T) => string): T[] {
+	return items
+		.map((item, i) => ({ item, i, h: rungHeight(nameOf(item)) }))
+		.sort((a, b) => (Number.isNaN(a.h) ? Infinity : a.h) - (Number.isNaN(b.h) ? Infinity : b.h) || a.i - b.i)
+		.map((x) => x.item);
+}
+
+/** Every non-finished rung failed (the attempt stopped). */
+export function failRungs(rungs: R2RungProgress[] | undefined): R2RungProgress[] | undefined {
+	return rungs?.map((r) => (r.state === 'done' ? r : { name: r.name, state: 'failed' }));
+}
+
 /** Timings and sizes the container reports with a finished job. */
 export interface TranscodeResult {
 	rungs: MediaRung[];
@@ -114,6 +171,8 @@ export interface VideoR2State {
 	moving?: { to: MediaAccess; jobId: string; at: string };
 	/** 0..1 while transcoding */
 	progress?: number;
+	/** Per-rung state of the current attempt (all done once ready) */
+	rungs?: R2RungProgress[];
 	/** The latest failed attempt (kept after a later attempt succeeds, for the history) */
 	failure?: TranscodeFailure;
 	/** A re-transcode: the rendition set that keeps playing until this one is ready (then deleted) */
@@ -141,6 +200,8 @@ export interface TranscodeJobEvent {
 	attempt: number;
 	/** 0..1 */
 	progress?: number;
+	/** progress and failed: per-rung state */
+	rungs?: R2RungProgress[];
 	containerSeconds?: number;
 	instanceType?: string;
 	result?: TranscodeResult;

@@ -2,7 +2,7 @@
  * Transcode job state and decisions (pure; tested in test/jobs.test.ts). The
  * Transcoder Durable Object (transcoder.ts) keeps one JobState per video.
  */
-import { mediaPrefix, type MediaAccess, type TranscodeFailure, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
+import { mediaPrefix, sanitizeRungs, type MediaAccess, type R2RungProgress, type TranscodeFailure, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
 
 export const MAX_ATTEMPTS = 3;
 /** No word from the container for this long while it runs → treat as dead. */
@@ -28,6 +28,8 @@ export interface JobState {
 	attemptStartedAt: number;
 	lastSeenAt: number;
 	progress: number;
+	/** Per-rung state from the container's latest progress event */
+	rungs?: R2RungProgress[];
 	/** Container seconds of finished attempts */
 	priorSeconds: number;
 	error?: string;
@@ -108,4 +110,39 @@ export function keyAllowed(prefix: string, key: string): boolean {
 	if (!key.startsWith(`${prefix}/`)) return false;
 	const rest = key.slice(prefix.length + 1);
 	return /^[A-Za-z0-9_.-]+(\/[A-Za-z0-9_.-]+)?$/.test(rest) && !rest.split('/').some((p) => p === '.' || p === '..');
+}
+
+/** Progress reports to api-videos: at most one per this interval, except when a rung changes state. */
+export const PROGRESS_REPORT_MS = 10_000;
+
+/** The rung states without their % ("360p:done,720p:uploading"): a change in it is a state change. */
+export function rungStatesKey(rungs: R2RungProgress[] | undefined): string {
+	return (rungs ?? []).map((r) => `${r.name}:${r.state}`).join(',');
+}
+
+/** Should this progress event go to api-videos now? `last` is the previous report (time and rung states). */
+export function progressReportDue(last: { at: number; states: string } | undefined, rungs: R2RungProgress[] | undefined, now: number): boolean {
+	if (!last) return true;
+	if (rungStatesKey(rungs) !== last.states) return true;
+	return now - last.at >= PROGRESS_REPORT_MS;
+}
+
+/**
+ * A container progress event: updates the job (progress, rung states) and says
+ * what to report to api-videos now, if anything, and the new `last` to keep.
+ */
+export function onProgressEvent(
+	job: JobState,
+	ev: { progress: number; rungs?: unknown },
+	last: { at: number; states: string } | undefined,
+	now: number,
+): { report: { type: 'progress'; progress: number; rungs?: R2RungProgress[] } | null; last?: { at: number; states: string } } {
+	const rungs = sanitizeRungs(ev.rungs);
+	if (typeof ev.progress === 'number' && Number.isFinite(ev.progress)) job.progress = ev.progress;
+	if (rungs) job.rungs = rungs;
+	if (!progressReportDue(last, job.rungs, now)) return { report: null };
+	return {
+		report: { type: 'progress', progress: job.progress, ...(job.rungs ? { rungs: job.rungs } : {}) },
+		last: { at: now, states: rungStatesKey(job.rungs) },
+	};
 }

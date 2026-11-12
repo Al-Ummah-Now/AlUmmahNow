@@ -20,7 +20,9 @@ import {
 	pickDeliverySource,
 	reportNeedsAction,
 	resolveNeedsAction,
+	compactRungs,
 	sanitizeFailure,
+	sanitizeRungs,
 	scrubMediaText,
 	MEDIA_MASTER,
 	MEDIA_THUMBNAIL,
@@ -345,12 +347,16 @@ export async function applyJobEvent(
 		r2.attempts = Math.max(r2.attempts ?? 0, ev.attempt ?? 1);
 		if (ev.containerSeconds !== undefined) r2.containerSeconds = ev.containerSeconds;
 		if (ev.instanceType) r2.instanceType = ev.instanceType;
+		const rungs = sanitizeRungs(ev.rungs);
 		if (ev.type === 'started') {
 			r2.status = 'transcoding';
 			r2.startedAt ??= ev.at;
+			// A new attempt (sent at launch, before the container's first progress): the last one's rung states no longer apply
+			delete r2.rungs;
 		} else if (ev.type === 'progress') {
 			r2.status = 'transcoding';
 			r2.progress = ev.progress;
+			if (rungs) r2.rungs = rungs;
 		} else if (ev.type === 'ready') {
 			if (!ev.result) {
 				why = 'ready without result';
@@ -359,6 +365,7 @@ export async function applyJobEvent(
 			r2.status = 'ready';
 			r2.readyAt = ev.at;
 			r2.result = ev.result;
+			r2.rungs = ev.result.rungs.map((r) => ({ name: r.name, state: 'done' as const }));
 			delete r2.error;
 			delete r2.progress;
 			previous = r2.previous;
@@ -366,6 +373,7 @@ export async function applyJobEvent(
 		} else if (ev.type === 'failed') {
 			r2.error = scrubMediaText(ev.error ?? 'failed', 500);
 			if (ev.failure) r2.failure = sanitizeFailure(ev.failure);
+			if (rungs) r2.rungs = rungs;
 			if (ev.final) {
 				r2.status = 'failed';
 				r2.failedAt = ev.at;
@@ -743,6 +751,8 @@ export function mediaJobEvent(video: Pick<MediaVideo, 'id' | 'r2'>): AdminLiveEv
 		status: r2.status,
 		attempt: r2.attempts ?? 0,
 		...(r2.progress !== undefined ? { progress: r2.progress } : {}),
+		// [['360p','done'],['720p','uploading',0.4], …]: four rungs are ~120 characters
+		...(r2.rungs?.length ? { rungs: compactRungs(r2.rungs) } : {}),
 		...(f && r2.status !== 'ready' ? { failure: { stage: f.stage, error: f.error.slice(0, 120), attempt: f.attempt } } : {}),
 		at: new Date().toISOString(),
 	};
