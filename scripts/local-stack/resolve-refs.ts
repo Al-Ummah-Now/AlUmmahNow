@@ -35,7 +35,27 @@ export function releasedRun(runs: WorkflowRun[], released: 'main' | 'tag'): Work
   );
 }
 
-async function resolve(name: Sibling): Promise<{ sha: string; ref: string }> {
+/** Released commits of a sibling, newest first (successful Release runs). */
+export async function releasedRefs(name: Sibling): Promise<{ sha: string; ref: string }[]> {
+  const { repo, workflow, released } = SIBLINGS[name];
+  const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+  const query = released === 'main' ? 'branch=main&' : '';
+  const res = await fetch(`https://api.github.com/repos/${repo}/actions/workflows/${workflow}/runs?${query}status=success&event=push&per_page=50`, {
+    headers: { Accept: 'application/vnd.github+json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+  });
+  if (!res.ok) throw new Error(`${repo}: GitHub answered ${res.status} for its ${workflow} runs`);
+  const { workflow_runs: runs } = (await res.json()) as { workflow_runs: WorkflowRun[] };
+  const out: { sha: string; ref: string }[] = [];
+  for (let rest = runs; ; ) {
+    const run = releasedRun(rest, released);
+    if (!run) break;
+    if (!out.some((r) => r.sha === run.head_sha)) out.push({ sha: run.head_sha, ref: run.head_branch ?? run.head_sha });
+    rest = rest.slice(rest.indexOf(run) + 1);
+  }
+  return out;
+}
+
+export async function resolveSibling(name: Sibling): Promise<{ sha: string; ref: string }> {
   const { repo, workflow, released } = SIBLINGS[name];
   const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
   const query = released === 'main' ? 'branch=main&' : '';
@@ -53,7 +73,7 @@ if (import.meta.main) {
   const names = process.argv.slice(2) as Sibling[];
   for (const name of names.length ? names : (['auth'] as Sibling[])) {
     if (!(name in SIBLINGS)) throw new Error(`unknown sibling ${name} (${Object.keys(SIBLINGS).join(', ')})`);
-    const { sha, ref } = await resolve(name);
+    const { sha, ref } = await resolveSibling(name);
     process.stdout.write(`${name}_sha=${sha}\n${name}_ref=${ref}\n`);
   }
 }

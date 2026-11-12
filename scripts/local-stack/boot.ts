@@ -121,7 +121,22 @@ function prepare(workers: StackWorker[]): Prepared[] {
   });
 }
 
+/**
+ * A released Auth bundle (fetch-auth.ts: the Auth repo's local-stack.tar.gz) ships its workers
+ * prebuilt under bundles/<app>: those are used as they are, nothing of that repo is built here.
+ */
+function prebuilt(p: Prepared): string | null {
+  if (p.worker.repo !== 'auth') return null;
+  const dir = join(AUTH_DIR, 'bundles', p.worker.app);
+  return existsSync(join(dir, 'index.js')) ? dir : null;
+}
+
 function bundle(p: Prepared): void {
+  const ready = prebuilt(p);
+  if (ready) {
+    p.outDir = ready;
+    return;
+  }
   rmSync(p.outDir, { recursive: true, force: true });
   const result = spawnSync(process.execPath, [wranglerBin(p.worker), 'deploy', '--dry-run', '--outdir', p.outDir, '-c', LOCAL_CONFIG], {
     cwd: appDir(p.worker),
@@ -149,7 +164,7 @@ function bundleModules(outDir: string): { type: string; path: string }[] {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const path = join(dir, entry.name);
       if (entry.isDirectory()) walk(path);
-      else if (!entry.name.endsWith('.map') && entry.name !== 'README.md') files.push(path);
+      else if (!entry.name.endsWith('.map') && entry.name !== 'README.md' && entry.name !== '__local_stack_entry.mjs') files.push(path);
     }
   };
   walk(outDir);

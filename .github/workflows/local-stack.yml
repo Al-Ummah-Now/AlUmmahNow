@@ -5,9 +5,10 @@ name: Local stack
 # one Miniflare with local D1/R2/KV/queues/Secrets Store. No deployed environment is touched: no
 # Cloudflare token, no QA secrets. The E2E jobs that run specs on this stack reuse the same steps.
 
-# Pull requests only: the job checks out a second repo (the Auth repo), and in a default-branch
-# context (push, workflow_dispatch) every later step could poison caches that the default branch
-# trusts (CodeQL actions/cache-poisoning).
+# The Auth repo comes as its published local-stack bundle (scripts/local-stack/fetch-auth.ts: the
+# prebuilt workers, configs and migrations of its last released commit, sha256-checked), never as a
+# checkout or install, so main pushes and releases run nothing of a second repo (CodeQL
+# actions/cache-poisoning) and this workflow can run there too.
 on:
   pull_request:
     branches: [main]
@@ -17,10 +18,18 @@ on:
       - 'apps/*/wrangler*.json*'
       - 'apps/*/migrations*/**'
       - 'apps/api-videos/migrations/**'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/local-stack/**'
+      - '.github/workflows/local-stack.yml'
+      - 'apps/*/wrangler*.json*'
+      - 'apps/*/migrations*/**'
+  workflow_dispatch:
 
 permissions:
   contents: read
-  # pnpm installs @al-ummah-now/openauth from GitHub Packages (this repo and the Auth repo)
+  # pnpm installs @al-ummah-now/openauth from GitHub Packages
   packages: read
 
 concurrency:
@@ -37,42 +46,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Released refs of the sibling repos
+      - name: The Auth repo's last released bundle
         id: refs
-        run: node --experimental-strip-types --no-warnings scripts/local-stack/resolve-refs.ts auth | tee -a "$GITHUB_OUTPUT"
+        run: node --experimental-strip-types --no-warnings scripts/local-stack/fetch-auth.ts | tee -a "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ github.token }}
-
-      - name: Check out the Auth repo at its last release
-        uses: actions/checkout@v4
-        with:
-          repository: Al-Ummah-Now/AlUmmahNowAuth
-          ref: ${{ steps.refs.outputs.auth_sha }}
-          path: .local-stack/repos/auth
-          persist-credentials: false
 
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           version: 9.15.4
 
-      # No dependency cache: this job checks out a second repo, and a cache written here would be
-      # trusted by default-branch runs (CodeQL actions/cache-poisoning)
       - uses: actions/setup-node@v6
         with:
           node-version: '22'
 
       - name: Install
         run: pnpm install --frozen-lockfile
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Install the Auth repo
-        working-directory: .local-stack/repos/auth
-        run: |
-          echo "@al-ummah-now:registry=https://npm.pkg.github.com" >> .npmrc
-          echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}" >> .npmrc
-          pnpm install --frozen-lockfile
-          (cd apps/admin && pnpm build)
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -148,7 +137,7 @@ jobs:
           {
             echo "### Local stack"
             echo
-            echo "Auth at \`${{ steps.refs.outputs.auth_sha }}\` (last release). Builds: ${BUILD_SECONDS:-n/a}. Seed: ${SEED_SECONDS:-n/a} s."
+            echo "Auth at \`${{ steps.refs.outputs.auth_sha }}\` (last released bundle). Builds: ${BUILD_SECONDS:-n/a}. Seed: ${SEED_SECONDS:-n/a} s."
             echo
             if [ -f .local-stack/stack.json ]; then
               node -e 'const s=require("./.local-stack/stack.json");console.log("| step | seconds |\n|---|---:|");for(const[k,v]of Object.entries(s.timings))console.log(`| ${k} | ${(v/1000).toFixed(1)} |`);console.log("\n| app | url | health |\n|---|---|---:|");for(const[k,a]of Object.entries(s.apps))console.log(`| ${k} | ${a.url} | ${a.health} |`)'
