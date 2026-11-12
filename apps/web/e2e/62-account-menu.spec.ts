@@ -66,14 +66,13 @@ test.describe('Account menu - links', () => {
 test.describe('Account menu - no channel', () => {
   test.use({ storageState: AUTH_STATE.none });
 
-  test('NAV-054 signed-in links are offered without a channel', async ({ page }) => {
+  test('NAV-054 settings is offered without a channel; Studio is not', async ({ page }) => {
     await page.goto('/en');
     const menu = await openAccountMenu(page);
-    for (const path of SIGNED_IN_LINKS) {
-      await showMenuView(menu, 'main');
-      await expect(menu.locator(`a[role="menuitem"][href="/en/${path}"]`)).toBeVisible();
-    }
     await showMenuView(menu, 'main');
+    await expect(menu.locator('a[role="menuitem"][href="/en/settings"]')).toBeVisible();
+    // Studio is the creator home (3883fa94): only listed once the account has a channel
+    await expect(menu.locator('a[role="menuitem"][href="/en/studio"]')).toHaveCount(0);
     await expect(menu.locator('a[role="menuitem"][href="/en/scheduled-videos"]')).toHaveCount(0);
   });
 });
@@ -114,7 +113,8 @@ test.describe('Account menu - two accounts', () => {
     await expect(menu.getByTestId('nav-active-channel')).toHaveAttribute('href', `/en/channels/${single.channels[0].id}`);
     await page.keyboard.press('Escape');
     const upload = page.getByRole('banner').getByRole('link', { name: /Upload Video/ });
-    await expect(upload).toHaveAttribute('href', '/en/upload');
+    // Upload opens on the active channel (3883fa94: the upload page's picker reads ?channel=)
+    await expect(upload).toHaveAttribute('href', `/en/upload?channel=${encodeURIComponent(single.channels[0].id)}`);
     if (!isMobile) await expect(upload).toBeVisible();
   });
 });

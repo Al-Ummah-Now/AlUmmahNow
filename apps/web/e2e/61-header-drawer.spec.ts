@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { ANONYMOUS_STATE, AUTH_STATE } from './test-utils/auth-state';
+import { ANONYMOUS_STATE, AUTH_STATE, readSession } from './test-utils/auth-state';
 import { clickAndWaitForURL } from './test-utils/qa-content';
 import { closeSideDrawer, expectSideDrawerClosed, isDrawerLayout, openSideDrawer } from './test-utils/navigation';
 import type { Page } from '@playwright/test';
@@ -88,7 +88,10 @@ test.describe('Header - channel owner', () => {
   test('NAV-004 shows the upload shortcut after the logo (text hidden on phones)', async ({ page, isMobile }) => {
     await page.goto('/en');
     const upload = page.getByRole('banner').getByRole('link', { name: /Upload Video/ });
-    await expect(upload).toHaveAttribute('href', '/en/upload');
+    // Upload opens on the active channel (3883fa94: the upload page's picker reads ?channel=)
+    const { activeChannelId } = readSession('single');
+    expect(activeChannelId, 'single user has an active channel').toBeTruthy();
+    await expect(upload).toHaveAttribute('href', `/en/upload?channel=${encodeURIComponent(activeChannelId!)}`);
     await expect(upload).toHaveAttribute('data-state', 'ready');
     await expect(page.getByTestId('header-upload')).toHaveCount(1);
     // Signed in it keeps its place: after the logo, before search, mirrored in Arabic
