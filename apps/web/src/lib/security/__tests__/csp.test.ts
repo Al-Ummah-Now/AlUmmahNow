@@ -56,6 +56,15 @@ describe('buildContentSecurityPolicy (production)', () => {
     expect(d['media-src']).toEqual(expect.arrayContaining(['https://live.stage.alummahnow.net']));
   });
 
+  it('allows a plain ws:// WebSocket only on this machine (the local E2E stack)', () => {
+    const local = directives(buildContentSecurityPolicy({ isDevelopment: false, nonce, env: { ...env, websocketUrl: 'ws://localhost:3087/ws' } }));
+    expect(local['connect-src']).toEqual(expect.arrayContaining(['ws://localhost:3087', 'http://localhost:3087']));
+    expect(local['connect-src']).not.toContain('wss://localhost:3087');
+    const remote = directives(buildContentSecurityPolicy({ isDevelopment: false, nonce, env: { ...env, websocketUrl: 'ws://realtime.example.com/ws' } }));
+    expect(remote['connect-src']).toContain('wss://realtime.example.com');
+    expect(remote['connect-src'].join(' ')).not.toMatch(/ws:\/\/realtime|http:\/\/realtime/);
+  });
+
   it('reports violations and upgrades insecure requests', () => {
     expect(d['report-uri']).toEqual([CSP_REPORT_PATH]);
     expect(d['upgrade-insecure-requests']).toEqual([]);
