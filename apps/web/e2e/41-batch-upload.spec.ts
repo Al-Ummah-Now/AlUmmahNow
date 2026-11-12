@@ -4,7 +4,7 @@ import { AUTH_STATE } from './test-utils/auth-state';
 import { listOwnVideos, userApi } from './test-utils/e2e-videos';
 import { createTestFile, gotoUpload, removeTestFiles, uploadPlaylistsDeployed } from './test-utils/upload';
 import { ARABIC, deleteVideosTitled, expectDarkSurface, tempName } from './test-utils/upload-studio';
-import { apiAs, channelsOf, createPlaylist, deletePlaylistsTitled } from './test-utils/channel-content';
+import { apiAs, channelsOf, createPlaylist, deletePlaylistQuietly, deletePlaylistsTitled } from './test-utils/channel-content';
 
 /**
  * Batch upload mode on /[locale]/upload (BatchUploadQueue / FileQueueItem /
@@ -199,16 +199,34 @@ test.describe('Batch upload - playlists', () => {
     test.skip(!(await uploadPlaylistsDeployed()), 'Upload playlists are not deployed on the target yet (they land with the PR that adds them)');
   });
   const channelId = () => channelsOf('single').main.id;
+  // Playlists this test created (through the API or inline on the page), deleted by id
+  // even when the title sweep's listing is slow, fails or does not reach them
+  const playlistIds = new Set<string>();
   test.afterEach(async () => {
-    await deletePlaylistsTitled('single', channelId(), prefix);
+    for (const id of playlistIds) await deletePlaylistQuietly('single', channelId(), id);
+    playlistIds.clear();
+    await deletePlaylistsTitled('single', channelId(), prefix).catch((error) => {
+      console.warn(`[cleanup] playlists titled "${prefix}…" may be left on QA`, error);
+    });
   });
 
   const playlistVideos = async (id: string) => (await apiAs<{ videos?: string[] }>('single', 'GET', `/api/playlists/${id}`)).body.videos ?? [];
 
   test('BATCH-PL-001 adds every video to the batch playlists in upload order, a row to its own, and creates one inline', async ({ page }) => {
     test.setTimeout(300000);
+    page.on('response', (response) => {
+      if (response.request().method() !== 'POST' || !/\/api\/playlists(\?|$)/.test(new URL(response.url()).pathname)) return;
+      response
+        .json()
+        .then((body: { result?: { playlist?: { id?: string } } }) => {
+          if (body?.result?.playlist?.id) playlistIds.add(body.result.playlist.id);
+        })
+        .catch(() => undefined);
+    });
     const forAll = await createPlaylist('single', channelId(), { title: `${prefix} all` });
+    playlistIds.add(forAll.id);
     const own = await createPlaylist('single', channelId(), { title: `${prefix} own` });
+    playlistIds.add(own.id);
     await openBatch(page);
 
     // Playlists for all videos: one picked, one created inline (selected at once)
@@ -234,7 +252,14 @@ test.describe('Batch upload - playlists', () => {
     await expect(row).toHaveAttribute('data-mode', 'batch');
     await row.getByTestId('batch-row-playlists-mode').click();
     await expect(row).toHaveAttribute('data-mode', 'own');
-    for (const chip of await row.getByTestId('batch-row-playlist-picker-chip').all()) await chip.getByRole('button').click();
+    // Remove the copied batch playlists one at a time: each removal re-renders
+    // the list, so always take the first chip and wait for the count to drop
+    const chips = row.getByTestId('batch-row-playlist-picker-chip');
+    await expect(chips).toHaveCount(2);
+    for (let left = 2; left > 0; left--) {
+      await chips.first().getByRole('button').click();
+      await expect(chips).toHaveCount(left - 1);
+    }
     await row.getByTestId('batch-row-playlist-picker-toggle').click();
     await row.getByTestId('batch-row-playlist-picker-search').fill(`${prefix} own`);
     await row.getByLabel(`${prefix} own`).check();
@@ -247,6 +272,7 @@ test.describe('Batch upload - playlists', () => {
     const created = (await apiAs<{ data?: Array<{ id: string; title: string }> }>('single', 'GET', `/api/playlists?channelId=${channelId()}&limit=100`))
       .body.data?.find((p) => p.title === `${prefix} created`);
     expect(created).toBeTruthy();
+    playlistIds.add(created!.id);
     await expect.poll(() => playlistVideos(forAll.id), { timeout: 90000 }).toEqual([ids[0], ids[2]]);
     await expect.poll(() => playlistVideos(created!.id), { timeout: 90000 }).toEqual([ids[0], ids[2]]);
     await expect.poll(() => playlistVideos(own.id), { timeout: 90000 }).toEqual([ids[1]]);
