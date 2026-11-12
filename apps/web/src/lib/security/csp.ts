@@ -63,6 +63,9 @@ export function generateNonce(): string {
   return btoa(binary);
 }
 
+/** R2 media hosts (docs/media-delivery/RUNBOOK.md); fixed per env, so listed rather than read from config. */
+const MEDIA_HOSTS = ['https://media.alummahnow.net', 'https://media.stage.alummahnow.net', 'https://media.qa.alummahnow.net'];
+
 export function buildContentSecurityPolicy({ isDevelopment, nonce, env = {}, frameAncestors = "'none'" }: CspOptions): string {
   const apiOrigin = origin(env.apiUrl);
   const authOrigin = origin(env.authUrl);
@@ -71,6 +74,8 @@ export function buildContentSecurityPolicy({ isDevelopment, nonce, env = {}, fra
   const connectSrc = [
     "'self'",
     'https://*.b-cdn.net',
+    // R2 + Cloudflare CDN renditions beside Bunny (epic #687): HLS playlists and segments
+    ...MEDIA_HOSTS,
     bunny,
     apiOrigin,
     authOrigin,
@@ -92,7 +97,7 @@ export function buildContentSecurityPolicy({ isDevelopment, nonce, env = {}, fra
     // Inline event-handler attributes are never needed: React attaches handlers via addEventListener.
     "script-src-attr 'none'",
     "style-src 'self' 'unsafe-inline' https://vjs.zencdn.net https://cdnjs.cloudflare.com",
-    "media-src 'self' https://cdn.bunny.net https://bunny-cdn.b-cdn.net https://*.b-cdn.net blob:",
+    `media-src 'self' https://cdn.bunny.net https://bunny-cdn.b-cdn.net https://*.b-cdn.net ${MEDIA_HOSTS.join(' ')} blob:`,
     `connect-src ${Array.from(new Set(connectSrc)).join(' ')}`,
     "img-src 'self' data: https: blob:",
     "font-src 'self' data: https://cdnjs.cloudflare.com",
