@@ -125,15 +125,17 @@ test.describe('Search v2 - English (LTR)', () => {
 
     await page.goto('/en/search');
     await (await searchInput(page)).click();
-    const item = page.getByTestId('search-history-item').filter({ hasText: 'tafsir' });
-    await expect(item).toBeVisible();
-    await expect(page.getByText('Search history is private and stored only on this device.')).toBeVisible();
+    // The header box and the page's own box (phones) each render the history;
+    // only the one in use is shown
+    const items = page.getByTestId('search-history-item').filter({ visible: true });
+    await expect(items.filter({ hasText: 'tafsir' })).toBeVisible();
+    await expect(page.getByText('Search history is private and stored only on this device.').filter({ visible: true })).toBeVisible();
 
-    await page.getByTestId('search-history-clear').click();
-    await expect(page.getByTestId('search-history-item')).toHaveCount(0);
+    await page.getByTestId('search-history-clear').filter({ visible: true }).click();
+    await expect(items).toHaveCount(0);
     await page.reload();
     await (await searchInput(page)).click();
-    await expect(page.getByTestId('search-history-item')).toHaveCount(0);
+    await expect(items).toHaveCount(0);
   });
 
   test('suggestions come from the index', async ({ page }) => {
@@ -273,7 +275,8 @@ test.describe('Header search on phones', () => {
     const sheet = page.getByTestId('header-search-sheet');
     await expect(sheet).toBeVisible();
     await sheet.locator('[data-testid="header-search-input"]').click();
-    await expect(page.getByTestId('search-dropdown')).toBeVisible();
+    // Explore has its own search box (and dropdown) too: check the sheet's
+    await expect(sheet.getByTestId('search-dropdown')).toBeVisible();
     await sheet.getByTestId('header-search-back').click();
     await expect(sheet).toBeHidden();
   });
