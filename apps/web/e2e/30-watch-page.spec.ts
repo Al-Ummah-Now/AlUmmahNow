@@ -331,23 +331,29 @@ test.describe('watch page - save to playlist', () => {
 
       const name = tempName('Watch Playlist');
       await dialog.getByRole('textbox').fill(name);
-      const createResponse = page.waitForResponse((r) => r.request().method() === 'POST' && r.status() < 500);
+      // The create's own answer names the new playlist (POST /api/playlists)
+      const createResponse = page.waitForResponse((r) => r.request().method() === 'POST' && /\/api\/playlists\/?$/.test(new URL(r.url()).pathname) && r.status() < 500);
       await dialog.getByRole('button', { name: create }).click();
-      await createResponse.catch(() => undefined);
+      const createdBody = (await (await createResponse).json().catch(() => null)) as { result?: { playlist?: { id?: string } } } | null;
+      const playlistId = createdBody?.result?.playlist?.id;
+      expect(playlistId, 'the create answered with the new playlist').toBeTruthy();
+      created.push(playlistId!);
 
       await expect(dialog.getByRole('status')).toHaveText(`${added} ${name}`);
       const row = dialog.locator('label').filter({ hasText: name });
       await expect(row.getByRole('checkbox')).toBeChecked();
 
-      // Record the playlist for cleanup and check the video really is in it
+      // Check the video really is in it: read that one playlist. Listing the channel's playlists
+      // (GET /api/playlists?channelId=) scans the whole playlists bucket, 12 s+ on QA (#909),
+      // and timed out at 15 s on every run since 2026-11-12
       const account = readAccount('single');
       const channelId = account.channels.find((c) => c.isMain)?.id ?? account.channels[0]?.id;
-      const res = await apiCall(request, 'GET', `/api/playlists?channelId=${channelId}&limit=50`, { token: account.accessToken, channelId });
-      const body = (await res.json()) as { data?: Array<{ id: string; name?: string; title?: string; videos?: string[] }>; result?: { data?: Array<{ id: string; name?: string; title?: string; videos?: string[] }> } };
-      const playlist = (body.data ?? body.result?.data ?? []).find((p) => (p.name || p.title) === name);
-      expect(playlist, 'created playlist is stored').toBeTruthy();
-      created.push(playlist!.id);
-      expect(playlist!.videos).toContain(video.id);
+      const res = await apiCall(request, 'GET', `/api/playlists/${playlistId}`, { token: account.accessToken, channelId });
+      expect(res.status(), 'created playlist is stored').toBe(200);
+      const body = (await res.json()) as { name?: string; title?: string; videos?: string[]; result?: { name?: string; title?: string; videos?: string[] } };
+      const playlist = body.result ?? body;
+      expect(playlist.name || playlist.title).toBe(name);
+      expect(playlist.videos).toContain(video.id);
 
       await page.keyboard.press('Escape');
       await expect(dialog).toBeHidden();
