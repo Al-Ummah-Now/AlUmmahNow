@@ -48,7 +48,7 @@ export default function VideoEditPage() {
       }
 
       try {
-        const videoData = await getVideoById(videoId);
+        const videoData = await getVideoById(videoId, undefined, 'edit');
         if (cancelled) return;
 
         if (!videoData) {

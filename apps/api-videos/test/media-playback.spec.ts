@@ -97,6 +97,16 @@ describe('the API picks one source', () => {
 		assert.deepEqual(playlistUrls(body), [BUNNY_PLAY]);
 	});
 
+	it('the editor (?for=edit) keeps Bunny\'s playUrl: its encoding frames feed the thumbnail picker', async () => {
+		const { env, get } = setup();
+		await writeDeliverySettings(env, { mode: 'r2' }, 'admin-1');
+		const { body } = await get(`/api/videos/${ID}?for=edit`);
+		assert.equal(body.playUrl, BUNNY_PLAY);
+		assert.equal(body.thumbnailUrl, BUNNY_THUMB);
+		assert.deepEqual(body.delivery, { source: 'bunny' });
+		assert.deepEqual(playlistUrls(body), [BUNNY_PLAY]);
+	});
+
 	it('R2 not ready: Bunny, whatever the switch says', async () => {
 		const { env, get } = setup({ r2: { ...READY, status: 'transcoding' } });
 		await writeDeliverySettings(env, { mode: 'r2' }, 'admin-1');

@@ -171,7 +171,7 @@ describe('SectionForm payloads', () => {
     fireEvent.click(screen.getByRole('button', { name: cs.form.addPasted }));
     await screen.findByText('Guest lecture');
     submit();
-    expect(mockVideo).toHaveBeenCalledWith('other1');
+    expect(mockVideo).toHaveBeenCalledWith('other1', undefined, 'edit');
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ videoIds: ['other1'] }));
   });
 
