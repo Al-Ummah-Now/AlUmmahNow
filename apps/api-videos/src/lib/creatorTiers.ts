@@ -24,6 +24,7 @@ import {
 	type CreatorTierAssignment,
 	type CreatorTierSource,
 	isSuperAdmin as isSuperAdminRole,
+	ownershipTombstone,
 } from '@al-ummah/shared-types';
 
 import { logger } from './logger';
@@ -430,6 +431,15 @@ export async function purgeTiers(db: D1Database, cutoff: string, limit = 100): P
 const CHANNEL_RESERVATION = 'channel_create';
 /** A failed or never-indexed create stops counting after this */
 const RESERVATION_TTL_SECONDS = 24 * 60 * 60;
+/**
+ * A reservation (alias `l`) still stands for a channel in flight: its channel is
+ * neither in the index nor deleted. Deleting a channel removes its index row and
+ * leaves a tombstone (syncOwnership); without the tombstone check the settled
+ * reservation counted again for the rest of its 24 h, so a deleted channel kept
+ * its slot (QA E2E, 2026-11-12: "You can own up to 3 channels" with one left).
+ */
+const RESERVATION_PENDING = `NOT EXISTS (SELECT 1 FROM content_ownership c WHERE c.kind = 'channel' AND c.id = l.lease_id)
+			      AND NOT EXISTS (SELECT 1 FROM search_tombstones t WHERE t.entity = '${ownershipTombstone('channel')}' AND t.id = l.lease_id)`;
 
 /** Channels the user owns plus creates in flight or not indexed yet. */
 /**
@@ -445,7 +455,7 @@ export async function countChannelSlots(db: D1Database, userId: string, nowMs = 
 			`SELECT
 			   (SELECT COUNT(*) FROM content_ownership WHERE kind = 'channel' AND owner_id = ?1 AND is_deleted = 0)
 			 + (SELECT COUNT(*) FROM upload_rate_leases l WHERE l.user_id = ?1 AND l.operation = ?2 AND l.expires_at > ?3
-			      AND NOT EXISTS (SELECT 1 FROM content_ownership c WHERE c.kind = 'channel' AND c.id = l.lease_id)) AS n`,
+			      AND ${RESERVATION_PENDING}) AS n`,
 		)
 		.bind(userId, CHANNEL_RESERVATION, Math.floor(nowMs / 1000))
 		.first<{ n: number }>();
@@ -462,7 +472,7 @@ export async function reserveChannelSlot(db: D1Database, userId: string, max: nu
 			 SELECT ?1, ?2, ?3, ?4
 			 WHERE (SELECT COUNT(*) FROM content_ownership WHERE kind = 'channel' AND owner_id = ?1 AND is_deleted = 0)
 			     + (SELECT COUNT(*) FROM upload_rate_leases l WHERE l.user_id = ?1 AND l.operation = ?2 AND l.expires_at > ?5
-			          AND NOT EXISTS (SELECT 1 FROM content_ownership c WHERE c.kind = 'channel' AND c.id = l.lease_id)) < ?6`,
+			          AND ${RESERVATION_PENDING}) < ?6`,
 		)
 		.bind(userId, CHANNEL_RESERVATION, id, now + RESERVATION_TTL_SECONDS, now, max)
 		.run();
