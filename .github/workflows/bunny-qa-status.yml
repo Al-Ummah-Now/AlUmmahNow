@@ -136,9 +136,14 @@ jobs:
           total=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["total"])' "$RUNNER_TEMP/status.json")
           sweep="$SWEEP_INPUT"
           if [ "$total" -gt "$GUARD_MAX" ]; then
-            echo "::warning title=Bunny test library over ${GUARD_MAX}::library $QA_LIBRARY_ID holds $total videos: test uploads are leaking (#929); sweeping"
-            echo "- **guard: $total videos > $GUARD_MAX: sweeping (apply)**" >> "$GITHUB_STEP_SUMMARY"
-            sweep=apply
+            echo "::warning title=Bunny test library over ${GUARD_MAX}::library $QA_LIBRARY_ID holds $total videos: test uploads are leaking (#929)"
+            # The hourly run sweeps at once; a manual run keeps the mode it was given (dry-run stays dry)
+            if [ "$GITHUB_EVENT_NAME" = schedule ]; then
+              echo "- **guard: $total videos > $GUARD_MAX: sweeping (apply)**" >> "$GITHUB_STEP_SUMMARY"
+              sweep=apply
+            else
+              echo "- **guard: $total videos > $GUARD_MAX**" >> "$GITHUB_STEP_SUMMARY"
+            fi
           fi
           echo "sweep=$sweep" >> "$GITHUB_OUTPUT"
 
