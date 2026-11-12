@@ -6,7 +6,7 @@
  */
 import { test, expect } from '@playwright/test';
 import { target } from './targets';
-import { HISTORY_MIN_SECONDS, NO_PLAYABLE_VIDEO, pause, playFor, watchUrl } from './videos';
+import { NO_PLAYABLE_VIDEO, pause, playFor, watchUrl } from './videos';
 import { apiFetch, createProfile, signUpOnWeb } from './web-session';
 import { fetchRetry } from './net';
 import { useOwnVideos } from './own-videos';
