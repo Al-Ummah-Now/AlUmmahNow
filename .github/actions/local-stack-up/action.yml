@@ -68,6 +68,11 @@ runs:
       shell: bash
       run: node --experimental-strip-types --no-warnings scripts/local-stack/smoke.ts
 
+    # Environment bootstrap, as every deploy does: the UI translations in global_settings R2
+    - name: Seed translations
+      shell: bash
+      run: pnpm exec tsx scripts/release/seed-translations.ts --env local
+
     - uses: ./.github/actions/playwright-install
       with:
         browsers: chromium
