@@ -679,13 +679,13 @@ H.264 HLS streams.
   the job).
 
 The suite needs only `@playwright/test` (no monorepo install), so keep its
-imports inside `e2e/release/`, `e2e/test-utils/code-sink.ts` and
+imports inside `e2e/release/`, `e2e/test-utils/code-sink.ts`, `e2e/test-utils/run-users.ts`, `e2e/test-utils/placement.ts` and
 `e2e/test-fixtures/`. Run it locally the way CI does:
 
 ```bash
 SUITE=$(mktemp -d) && mkdir -p $SUITE/e2e/test-utils
 cp -R apps/web/e2e/release apps/web/e2e/test-fixtures $SUITE/e2e/
-cp apps/web/e2e/test-utils/code-sink.ts $SUITE/e2e/test-utils/
+cp apps/web/e2e/test-utils/code-sink.ts apps/web/e2e/test-utils/run-users.ts apps/web/e2e/test-utils/placement.ts $SUITE/e2e/test-utils/
 cp apps/web/playwright.release.config.ts $SUITE/
 cd $SUITE && npm init -y >/dev/null && npm i @playwright/test@1.56.1 && npx playwright install chromium chrome
 E2E_ENV=qa E2E_CODE_SINK_SECRET=... TEST_PROMOTE_SECRET=... npx playwright test -c playwright.release.config.ts

@@ -1,0 +1,99 @@
+name: Local stack up
+description: >-
+  Boots the local E2E stack (docs/testing/LOCAL-STACK.md) from the build job's artifact and seeds
+  it: checks out the Auth repo at the given (released) commit, installs both repos, restores the
+  web/admin-web OpenNext builds and the Auth admin build, boots every worker in one Miniflare,
+  smoke-checks it and runs the deterministic seed. Leaves the stack running (STACK_PID).
+
+inputs:
+  auth-sha:
+    description: The Auth repo commit (scripts/local-stack/resolve-refs.ts in the build job)
+    required: true
+  token:
+    description: GITHUB_TOKEN with packages:read (GitHub Packages installs)
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Check out the Auth repo at its last release
+      uses: actions/checkout@v4
+      with:
+        repository: Al-Ummah-Now/AlUmmahNowAuth
+        ref: ${{ inputs.auth-sha }}
+        path: .local-stack/repos/auth
+        persist-credentials: false
+
+    - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      with:
+        version: 9.15.4
+
+    # No dependency cache: a second repo is checked out (CodeQL actions/cache-poisoning)
+    - uses: actions/setup-node@v6
+      with:
+        node-version: '22'
+
+    - name: Install
+      shell: bash
+      run: |
+        pnpm install --frozen-lockfile
+        cd .local-stack/repos/auth
+        echo "@al-ummah-now:registry=https://npm.pkg.github.com" >> .npmrc
+        echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}" >> .npmrc
+        pnpm install --frozen-lockfile
+      env:
+        NODE_AUTH_TOKEN: ${{ inputs.token }}
+
+    - name: Restore builds
+      uses: actions/download-artifact@v4
+      with:
+        name: local-stack-build
+        path: .
+
+    - name: Boot
+      shell: bash
+      run: |
+        echo "LOCAL_STACK_AUTH_DIR=$GITHUB_WORKSPACE/.local-stack/repos/auth" >> "$GITHUB_ENV"
+        export LOCAL_STACK_AUTH_DIR="$GITHUB_WORKSPACE/.local-stack/repos/auth"
+        nohup node --experimental-strip-types --no-warnings scripts/local-stack/boot.ts > "$RUNNER_TEMP/stack.log" 2>&1 &
+        echo "STACK_PID=$!" >> "$GITHUB_ENV"
+        for _ in $(seq 1 180); do
+          if [ -f .local-stack/stack.json ]; then exit 0; fi
+          if ! kill -0 $! 2>/dev/null; then echo "::error::the stack exited during boot"; cat "$RUNNER_TEMP/stack.log"; exit 1; fi
+          sleep 2
+        done
+        echo "::error::the stack was not ready after 6 minutes"; tail -100 "$RUNNER_TEMP/stack.log"; exit 1
+
+    - name: Smoke
+      shell: bash
+      run: node --experimental-strip-types --no-warnings scripts/local-stack/smoke.ts
+
+    - uses: ./.github/actions/playwright-install
+      with:
+        browsers: chromium
+        working-directory: apps/web
+
+    # The seed generates its clips with ffmpeg (titles drawn with DejaVu)
+    - uses: ./.github/actions/apt-install
+      with:
+        packages: ffmpeg fonts-dejavu-core
+
+    - name: Seed
+      shell: bash
+      working-directory: apps/web
+      run: npx tsx e2e/seed/seed-qa.ts
+      env:
+        CI: 'true'
+        SEED_STRICT: 'true'
+        SEED_MEDIA_DIR: ${{ runner.temp }}/seed-media
+        SEED_PROCESSING_TIMEOUT_SECONDS: '120'
+        SEED_EMAIL_DOMAIN: e2e.alummahnow.net
+        QA_SEED_PASSWORD: local-stack-seed-password-1
+        E2E_CODE_SINK_SECRET: local-stack-sink-secret
+        OPENAUTH_URL: http://localhost:3301
+        WEB_APP_URL: http://localhost:3001
+        API_URL: http://localhost:3086
+        OPENAUTH_CLIENT_ID: f0de3c30-0304-4ac4-86d6-1e185dec0439
+        SEED_D1_URL: http://127.0.0.1:3190/__stack/d1
+        D1_DATABASE_NAME: al-ummah-now-d1
+        SEARCH_D1_DATABASE_NAME: al-ummah-now-search
