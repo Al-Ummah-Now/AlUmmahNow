@@ -36,7 +36,11 @@ export async function outboundHandler(request: Request): Promise<Response> {
     return fetch(target, init);
   }
   const fake = fakeFor(target.hostname);
-  if (fake) return fake(request, target);
+  if (fake) {
+    const response = await fake(request, target);
+    process.stderr.write(`[local-stack] fake ${request.method} ${target.origin}${target.pathname} -> ${response.status}\n`);
+    return response;
+  }
   const line = `${request.method} ${target.origin}${target.pathname}`;
   refused.push(line);
   process.stderr.write(`[local-stack] refused outbound ${line} (no fake; the local stack never calls deployed or paid services)\n`);

@@ -45,6 +45,11 @@ function fakeHandler(host: string) {
 
 export const refusedByProxy: string[] = [];
 
+/** One line per proxied request (method, URL, status, ms) on stderr, the stack log: what the browser actually got. */
+function trace(method: string | undefined, target: string, status: number | string, started: number): void {
+  process.stderr.write(`[local-stack] proxy ${method ?? '?'} ${target.replace(/\?.*$/, '')} -> ${status} ${Date.now() - started}ms\n`);
+}
+
 /** A self-signed certificate for the faked hosts (browsers run with ignoreHTTPSErrors). */
 function certificate(): { key: Buffer; cert: Buffer } {
   const dir = join(STATE_DIR, 'tls');
@@ -105,8 +110,11 @@ export function startBrowserProxy(): Promise<() => Promise<void>> {
       res.writeHead(502).end();
       return;
     }
+    const started = Date.now();
     const request = await toFetchRequest(req, `https://${host}`);
-    await send(res, await fake(request, new URL(request.url)));
+    const response = await fake(request, new URL(request.url));
+    trace(req.method, `https://${host}${req.url}`, response.status, started);
+    await send(res, response);
   });
 
   const proxy = createServer(async (req, res) => {
@@ -118,6 +126,7 @@ export function startBrowserProxy(): Promise<() => Promise<void>> {
       res.writeHead(400).end();
       return;
     }
+    const started = Date.now();
     if (LOCAL.has(target.hostname)) {
       const port = Number(target.port || 80);
       if (!STACK_PORTS.has(port)) {
@@ -131,11 +140,16 @@ export function startBrowserProxy(): Promise<() => Promise<void>> {
       const upstream = httpRequest(
         { host: '127.0.0.1', port, method: req.method, path: `${target.pathname}${target.search}`, headers: req.headers },
         (answer) => {
+          trace(req.method, target.href, answer.statusCode ?? 502, started);
           res.writeHead(answer.statusCode ?? 502, answer.headers);
           answer.pipe(res);
         },
       );
-      upstream.on('error', () => (res.headersSent ? res.destroy() : res.writeHead(502).end()));
+      upstream.on('error', (error) => {
+        trace(req.method, target.href, `error ${error.message}`, started);
+        if (res.headersSent) res.destroy();
+        else res.writeHead(502).end();
+      });
       req.pipe(upstream);
       return;
     }
@@ -152,6 +166,7 @@ export function startBrowserProxy(): Promise<() => Promise<void>> {
   // A browser closing a connection mid-transfer (EPIPE, ECONNRESET) must never take the stack down
   proxy.on('connect', (req, socket, head) => {
     socket.on('error', () => socket.destroy());
+    process.stderr.write(`[local-stack] proxy CONNECT ${req.url}\n`);
     const [host, port = '443'] = (req.url ?? '').split(':');
     if (LOCAL.has(host)) {
       if (!STACK_PORTS.has(Number(port))) {
