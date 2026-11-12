@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Al Ummah Now API",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "description": "Public API v1 for Al Ummah Now apps. Additive changes ship in v1; breaking changes ship as a new version. Deprecated operations answer with Deprecation and Sunset headers. See API_VERSIONING.md."
   },
   "servers": [
@@ -6247,7 +6247,8 @@
                                       "type": "number"
                                     },
                                     "dislikesCount": {
-                                      "type": "number"
+                                      "type": "number",
+                                      "description": "Always 0: comment dislikes are hidden and not accepted since 2026-11-12 (kept for older clients)"
                                     },
                                     "repliesCount": {
                                       "type": "number"
@@ -6745,7 +6746,8 @@
                                   "type": "number"
                                 },
                                 "dislikesCount": {
-                                  "type": "number"
+                                  "type": "number",
+                                  "description": "Always 0: comment dislikes are hidden and not accepted since 2026-11-12 (kept for older clients)"
                                 },
                                 "repliesCount": {
                                   "type": "number"
@@ -8363,7 +8365,8 @@
                                   "type": "number"
                                 },
                                 "dislikesCount": {
-                                  "type": "number"
+                                  "type": "number",
+                                  "description": "Always 0: comment dislikes are hidden and not accepted since 2026-11-12 (kept for older clients)"
                                 },
                                 "repliesCount": {
                                   "type": "number"
@@ -9723,7 +9726,8 @@
                                   "type": "number"
                                 },
                                 "dislikesCount": {
-                                  "type": "number"
+                                  "type": "number",
+                                  "description": "Always 0: comment dislikes are hidden and not accepted since 2026-11-12 (kept for older clients)"
                                 },
                                 "repliesCount": {
                                   "type": "number"
@@ -24490,7 +24494,8 @@
                                   "type": "number"
                                 },
                                 "dislikesCount": {
-                                  "type": "number"
+                                  "type": "number",
+                                  "description": "Always 0: comment dislikes are hidden and not accepted since 2026-11-12 (kept for older clients)"
                                 },
                                 "repliesCount": {
                                   "type": "number"
@@ -24996,7 +25001,8 @@
                                     "type": "number"
                                   },
                                   "dislikesCount": {
-                                    "type": "number"
+                                    "type": "number",
+                                    "description": "Always 0: comment dislikes are hidden and not accepted since 2026-11-12 (kept for older clients)"
                                   },
                                   "repliesCount": {
                                     "type": "number"
@@ -27788,7 +27794,8 @@
                                   "type": "number"
                                 },
                                 "dislikesCount": {
-                                  "type": "number"
+                                  "type": "number",
+                                  "description": "Always 0: comment dislikes are hidden and not accepted since 2026-11-12 (kept for older clients)"
                                 },
                                 "repliesCount": {
                                   "type": "number"
@@ -31175,7 +31182,8 @@
                             "type": "number"
                           },
                           "dislikesCount": {
-                            "type": "number"
+                            "type": "number",
+                            "description": "Always 0: comment dislikes are hidden and not accepted since 2026-11-12 (kept for older clients)"
                           },
                           "repliesCount": {
                             "type": "number"
@@ -31720,7 +31728,8 @@
                                     "type": "number"
                                   },
                                   "dislikesCount": {
-                                    "type": "number"
+                                    "type": "number",
+                                    "description": "Always 0: comment dislikes are hidden and not accepted since 2026-11-12 (kept for older clients)"
                                   },
                                   "repliesCount": {
                                     "type": "number"
@@ -32686,7 +32695,7 @@
           "Comments"
         ],
         "summary": "List comments for a video",
-        "description": "Returns a page of top-level comments (pinned first, then by `sort`: newest first, or top = most net likes) with author display name and avatar. Replies are listed by GET /api/videos/:id/comments/:cid/replies. When the request is authenticated with a channelId header, isLiked/isDisliked reflect that channel's reactions. Held-for-review comments are included for their author and the video owner only. When comments are off the list is empty and commentSettings is `off`.",
+        "description": "Returns a page of top-level comments (pinned first, then by `sort`: newest first, or top = most likes) with author display name and avatar. Replies are listed by GET /api/videos/:id/comments/:cid/replies. When the request is authenticated with a channelId header, isLiked reflects that channel's like (isDisliked is always false: comment dislikes are hidden since 2026-11-12). Held-for-review comments are included for their author and the video owner only. When comments are off the list is empty and commentSettings is `off`.",
         "operationId": "get_CommentList",
         "parameters": [
           {
@@ -32778,7 +32787,8 @@
                                 "type": "number"
                               },
                               "dislikesCount": {
-                                "type": "number"
+                                "type": "number",
+                                "description": "Always 0: comment dislikes are hidden since 2026-11-12"
                               },
                               "repliesCount": {
                                 "type": "number"
@@ -32796,7 +32806,8 @@
                                 "type": "boolean"
                               },
                               "isDisliked": {
-                                "type": "boolean"
+                                "type": "boolean",
+                                "description": "Always false: comment dislikes are hidden since 2026-11-12"
                               },
                               "isHeld": {
                                 "type": "boolean",
@@ -33014,7 +33025,8 @@
                               "type": "number"
                             },
                             "dislikesCount": {
-                              "type": "number"
+                              "type": "number",
+                              "description": "Always 0: comment dislikes are hidden since 2026-11-12"
                             },
                             "repliesCount": {
                               "type": "number"
@@ -33032,7 +33044,8 @@
                               "type": "boolean"
                             },
                             "isDisliked": {
-                              "type": "boolean"
+                              "type": "boolean",
+                              "description": "Always false: comment dislikes are hidden since 2026-11-12"
                             },
                             "isHeld": {
                               "type": "boolean",
@@ -33543,7 +33556,9 @@
         "tags": [
           "Dislikes"
         ],
-        "summary": "Dislike a comment on a video",
+        "summary": "Dislike a comment on a video (disabled: always 410 dislikes_disabled)",
+        "description": "Comment dislikes were turned off on 2026-11-12. This always answers 410 Gone with code `dislikes_disabled` and stores nothing. Use DELETE /api/videos/{id}/comments/{cid}/dislikes to clear an old dislike.",
+        "deprecated": true,
         "operationId": "post_CommentDislikeCreate",
         "parameters": [
           {
@@ -33581,54 +33596,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Reaction applied; returns updated counts",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "result": {
-                      "type": "object",
-                      "properties": {
-                        "commentId": {
-                          "type": "string"
-                        },
-                        "likesCount": {
-                          "type": "number"
-                        },
-                        "dislikesCount": {
-                          "type": "number"
-                        },
-                        "isLiked": {
-                          "type": "boolean"
-                        },
-                        "isDisliked": {
-                          "type": "boolean"
-                        }
-                      },
-                      "required": [
-                        "commentId",
-                        "likesCount",
-                        "dislikesCount",
-                        "isLiked",
-                        "isDisliked"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "result"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Video or comment not found",
+          "410": {
+            "description": "Dislikes are turned off (code dislikes_disabled). `error` is in the language asked for with ?lang=ar, English otherwise.",
             "content": {
               "application/json": {
                 "schema": {
@@ -33643,10 +33612,34 @@
                     },
                     "message": {
                       "type": "string"
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "dislikes_disabled"
+                      ]
+                    },
+                    "messages": {
+                      "type": "object",
+                      "properties": {
+                        "en": {
+                          "type": "string"
+                        },
+                        "ar": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "en",
+                        "ar"
+                      ],
+                      "description": "The message in both site languages"
                     }
                   },
                   "required": [
-                    "error"
+                    "error",
+                    "code",
+                    "messages"
                   ]
                 }
               }
@@ -33659,6 +33652,7 @@
           "Dislikes"
         ],
         "summary": "Remove dislike from a comment on a video",
+        "description": "Clears a dislike stored before comment dislikes were turned off (2026-11-12). Idempotent.",
         "operationId": "delete_CommentDislikeDelete",
         "parameters": [
           {
@@ -33716,13 +33710,15 @@
                           "type": "number"
                         },
                         "dislikesCount": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "Always 0: comment dislikes are hidden since 2026-11-12"
                         },
                         "isLiked": {
                           "type": "boolean"
                         },
                         "isDisliked": {
-                          "type": "boolean"
+                          "type": "boolean",
+                          "description": "Always false: comment dislikes are hidden since 2026-11-12"
                         }
                       },
                       "required": [
@@ -33776,6 +33772,7 @@
           "Likes"
         ],
         "summary": "Like a comment on a video",
+        "description": "Also clears the reactor's dislike on the comment from before comment dislikes were turned off (2026-11-12).",
         "operationId": "post_CommentLikeCreate",
         "parameters": [
           {
@@ -33833,13 +33830,15 @@
                           "type": "number"
                         },
                         "dislikesCount": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "Always 0: comment dislikes are hidden since 2026-11-12"
                         },
                         "isLiked": {
                           "type": "boolean"
                         },
                         "isDisliked": {
-                          "type": "boolean"
+                          "type": "boolean",
+                          "description": "Always false: comment dislikes are hidden since 2026-11-12"
                         }
                       },
                       "required": [
@@ -33948,13 +33947,15 @@
                           "type": "number"
                         },
                         "dislikesCount": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "Always 0: comment dislikes are hidden since 2026-11-12"
                         },
                         "isLiked": {
                           "type": "boolean"
                         },
                         "isDisliked": {
-                          "type": "boolean"
+                          "type": "boolean",
+                          "description": "Always false: comment dislikes are hidden since 2026-11-12"
                         }
                       },
                       "required": [
@@ -34095,7 +34096,8 @@
                                 "type": "number"
                               },
                               "dislikesCount": {
-                                "type": "number"
+                                "type": "number",
+                                "description": "Always 0: comment dislikes are hidden since 2026-11-12"
                               },
                               "repliesCount": {
                                 "type": "number"
@@ -34113,7 +34115,8 @@
                                 "type": "boolean"
                               },
                               "isDisliked": {
-                                "type": "boolean"
+                                "type": "boolean",
+                                "description": "Always false: comment dislikes are hidden since 2026-11-12"
                               },
                               "isHeld": {
                                 "type": "boolean",

@@ -12,6 +12,7 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { target } from './targets';
+import { dislikesTurnedOff, VIDEO_DISLIKES } from './dislikes';
 import { findPlayableVideo, NO_PLAYABLE_VIDEO, watchUrl } from './videos';
 import { createProfile, signUpOnWeb, type Locale } from './web-session';
 
@@ -120,21 +121,6 @@ function rowProblems(r: Row, where: string): string[] {
   return out;
 }
 
-/**
- * Whether the target's API has dislikes turned off (2026-11-11): its public
- * contract marks POST /videos/{id}/dislikes deprecated. Web and API deploy
- * together, so a build without it still shows the dislike button. Only a PR
- * run (against QA, which follows main) may meet such a build; stage and the
- * nightly runs always check.
- */
-async function dislikesTurnedOff(): Promise<boolean> {
-  if (process.env.GITHUB_EVENT_NAME !== 'pull_request') return true;
-  const res = await fetch(`${target().api}/api/openapi.json`).catch(() => null);
-  if (!res?.ok) return true;
-  const doc = await res.json().catch(() => null) as { paths?: Record<string, { post?: { deprecated?: boolean } }> } | null;
-  return doc?.paths?.['/api/v1/videos/{id}/dislikes']?.post?.deprecated === true;
-}
-
 /** Report, directly in the row or through its "more" menu; opens the report dialog and closes it. */
 async function openReport(page: Page, where: string): Promise<void> {
   const row = page.locator('.watch-actions');
@@ -174,7 +160,7 @@ for (const locale of ['en', 'ar'] as Locale[]) {
     // Signed-in actions have rendered
     await expect(page.getByTestId('watch-later-button')).toBeAttached({ timeout: 20000 });
 
-    const dislikesOff = await dislikesTurnedOff();
+    const dislikesOff = await dislikesTurnedOff(VIDEO_DISLIKES);
     if (!dislikesOff) {
       test.info().annotations.push({ type: 'not-deployed', description: 'QA still has dislikes (its API predates 2026-11-11); the no-dislike check is skipped' });
     }

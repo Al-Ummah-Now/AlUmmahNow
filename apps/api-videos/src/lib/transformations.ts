@@ -6,7 +6,7 @@ import { Video as BusinessVideo, Channel as BusinessChannel, Profile as Business
 import { VideoView, ChannelView, ProfileView, PlaylistView, CommentView } from "./model/view";
 import { can, channelRoleOf, isShort, type ChannelRoleSource } from "@al-ummah/shared-types";
 import { isVideoReady } from './visibility';
-import { getCommentSettings, isCommentVisible, StoredComment } from './comments';
+import { getCommentSettings, isCommentVisible, StoredComment, withoutDislikes } from './comments';
 import { PUBLIC_DISLIKES_COUNT } from './reactions';
 
 /**
@@ -17,7 +17,8 @@ import { PUBLIC_DISLIKES_COUNT } from './reactions';
  * placeholder). Used by the detail view and every list view.
  * Dislikes are hidden (owner decision 2026-11-11): a stored `dislikes` list
  * goes out empty (the field stays for older clients), and `dislikesCount`
- * is PUBLIC_DISLIKES_COUNT (0).
+ * is PUBLIC_DISLIKES_COUNT (0). Embedded comments lose their dislikes the
+ * same way (comment dislikes hidden 2026-11-12).
  */
 export function publicVideoFields<T extends Record<string, any>>(video: T): Omit<T, 'processingCheck' | 'processingIssue' | 'thumbnailPending'> & { processingIssueKind?: 'encode_failed' | 'needs_reupload' | 'stalled' } {
     const { processingCheck: _check, processingIssue, thumbnailPending, ...rest } = video as Record<string, any>;
@@ -25,6 +26,7 @@ export function publicVideoFields<T extends Record<string, any>>(video: T): Omit
     return {
         ...rest,
         ...(Array.isArray(rest.dislikes) ? { dislikes: [] } : {}),
+        ...(Array.isArray(rest.comments) ? { comments: (rest.comments as StoredComment[]).map(withoutDislikes) } : {}),
         ...(processingIssue ? { processingIssueKind: processingIssue.kind } : {}),
         ...(hideThumbnail ? { thumbnailUrl: undefined, thumbnailSizes: undefined } : {}),
     } as never;
@@ -61,7 +63,10 @@ export function transformVideoToView(
     channel?: z.infer<typeof BusinessChannel> | null
 ): z.infer<typeof VideoView> {
     // Held-for-review, hidden and deleted comments are never exposed with the video
-    const publicComments = (video.comments || []).filter((comment) => isCommentVisible(comment as unknown as StoredComment));
+    // and comment dislikes are hidden (2026-11-12): they go out empty
+    const publicComments = (video.comments || [])
+        .filter((comment) => isCommentVisible(comment as unknown as StoredComment))
+        .map((comment) => withoutDislikes(comment as unknown as StoredComment) as unknown as typeof comment);
     return {
         ...publicVideoFields(video),
         comments: publicComments,
@@ -152,8 +157,9 @@ export function transformPlaylistToView(
 export function transformCommentToView(comment: z.infer<typeof BusinessComment>): z.infer<typeof CommentView> {
     return {
         ...comment,
+        ...(Array.isArray(comment.dislikes) ? { dislikes: [] } : {}),
         likesCount: comment.likes?.length || 0,
-        dislikesCount: comment.dislikes?.length || 0,
+        dislikesCount: PUBLIC_DISLIKES_COUNT,
         repliesCount: comment.replies?.length || 0,
         // Transform nested replies if present
         replies: comment.replies ? comment.replies.map(transformCommentToView) : undefined,

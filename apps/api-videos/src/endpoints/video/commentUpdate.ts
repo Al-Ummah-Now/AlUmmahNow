@@ -4,7 +4,7 @@ import { Video, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from '../../base';
-import { MAX_COMMENT_LENGTH, StoredComment, findStoredComment, normalizeCommentText } from "../../lib/comments";
+import { MAX_COMMENT_LENGTH, StoredComment, findStoredComment, normalizeCommentText, withoutDislikes } from "../../lib/comments";
 import { broadcastInBackground } from "../../lib/websocket-notify";
 import { scanInBackground } from '../../lib/moderation-scan';
 
@@ -176,7 +176,8 @@ export class CommentUpdate extends AuthenticatedRoute {
 
 		return {
 			success: true,
-			result: { comment: updatedComment },
+			// Comment dislikes are hidden (2026-11-12)
+			result: { comment: withoutDislikes(updatedComment) },
 		};
 	}
 }

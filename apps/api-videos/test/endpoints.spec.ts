@@ -132,7 +132,7 @@ describe('comment ownership', () => {
 	});
 });
 
-describe('comment like/dislike', () => {
+describe('comment like / unlike', () => {
 	it('updates the COMMENT (not the video) and keeps reactions exclusive', async () => {
 		const videos = new MemoryBucket({ v1: videoFixture({ comments: [commentFixture('c1')] }) });
 		const app = buildApp(commentRoutes, { userId: 'me' });
@@ -145,12 +145,13 @@ describe('comment like/dislike', () => {
 		assert.equal(videos.read('v1').likes.length, 0, 'video likes must be untouched');
 
 		const dislike = await app.request('/api/videos/v1/comments/c1/dislikes', { method: 'POST', headers: { channelId: 'my-ch' } }, e);
-		const dislikeBody = await dislike.json() as any;
-		assert.equal(dislikeBody.result.likesCount, 0);
-		assert.equal(dislikeBody.result.dislikesCount, 1);
+		assert.equal(dislike.status, 410, 'comment dislikes are turned off (2026-11-12)');
+		assert.equal(videos.read('v1').comments[0].likes.length, 1, 'a refused dislike leaves the like alone');
 
 		const unlike = await app.request('/api/videos/v1/comments/c1/likes', { method: 'DELETE', headers: { channelId: 'my-ch' } }, e);
-		assert.equal(unlike.status, 200, 'removing a non-existent like must not crash');
+		assert.equal(unlike.status, 200);
+		const again = await app.request('/api/videos/v1/comments/c1/likes', { method: 'DELETE', headers: { channelId: 'my-ch' } }, e);
+		assert.equal(again.status, 200, 'removing a non-existent like must not crash');
 		assert.equal(e.queue.messages.length, 2);
 	});
 

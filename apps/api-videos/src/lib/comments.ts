@@ -5,6 +5,8 @@
  * video object stored in R2, so listing/pagination happens in memory.
  */
 
+import { PUBLIC_DISLIKES_COUNT } from './reactions';
+
 export interface StoredReaction {
 	id: string;
 	userId: string;
@@ -104,12 +106,13 @@ export function isCommentVisible(comment: StoredComment | null | undefined, view
 	return true;
 }
 
+/** Ranking for `top`: likes only, since comment dislikes are hidden and not counted (2026-11-12). */
 function score(comment: StoredComment): number {
-	return (comment.likes?.length || 0) - (comment.dislikes?.length || 0);
+	return comment.likes?.length || 0;
 }
 
 /**
- * Order comments: pinned first, then by sort (`top` = net likes, ties newest
+ * Order comments: pinned first, then by sort (`top` = most likes, ties newest
  * first; `newest` = newest first).
  */
 export function sortComments<T extends StoredComment>(comments: T[], sort: CommentSort = 'newest'): T[] {
@@ -224,6 +227,19 @@ export function resolveCommentAuthor(
 	};
 }
 
+/**
+ * A stored comment as it may leave the API in a public payload: its dislikes
+ * (and its replies' dislikes) go out empty. Comment dislikes are hidden
+ * (owner decision 2026-11-12); the stored data is not changed.
+ */
+export function withoutDislikes<T extends StoredComment>(comment: T): T {
+	return {
+		...comment,
+		...(Array.isArray(comment.dislikes) ? { dislikes: [] } : {}),
+		...(Array.isArray(comment.replies) ? { replies: (comment.replies as StoredComment[]).map(withoutDislikes) } : {}),
+	};
+}
+
 /** Build the API representation of a comment for a given viewer channel. */
 export function toCommentListItem(
 	comment: StoredComment,
@@ -232,7 +248,6 @@ export function toCommentListItem(
 	viewer?: CommentViewer,
 ): CommentListItem {
 	const likes = comment.likes || [];
-	const dislikes = comment.dislikes || [];
 	return {
 		id: comment.id,
 		userId: comment.userId,
@@ -242,13 +257,14 @@ export function toCommentListItem(
 		dateCreated: comment.dateCreated,
 		dateModified: comment.dateModified || comment.dateCreated,
 		likesCount: likes.length,
-		dislikesCount: dislikes.length,
+		// Comment dislikes are hidden (owner decision 2026-11-12): never shown or counted
+		dislikesCount: PUBLIC_DISLIKES_COUNT,
 		repliesCount: ((comment.replies || []) as StoredComment[]).filter((r) => isCommentVisible(r, viewer)).length,
 		isEdited: comment.isEdited === true,
 		isDeleted: comment.isDeleted === true,
 		isPinned: comment.isPinned === true,
 		isLiked: !!viewerChannelId && likes.some((l) => l.channelId === viewerChannelId),
-		isDisliked: !!viewerChannelId && dislikes.some((d) => d.channelId === viewerChannelId),
+		isDisliked: false,
 		isHeld: comment.status === 'held',
 		parentCommentId: comment.parentCommentId || null,
 		author,
@@ -259,6 +275,8 @@ export function toCommentListItem(
  * Toggle a reaction on a comment. Adding a like removes an existing dislike
  * from the same channel (and vice versa) so a channel holds at most one
  * reaction per comment. Returns whether the stored comment changed.
+ * Comment dislikes are no longer added through the API (2026-11-12); liking
+ * is how a member takes an old one back.
  */
 export function applyCommentReaction(
 	comment: StoredComment,

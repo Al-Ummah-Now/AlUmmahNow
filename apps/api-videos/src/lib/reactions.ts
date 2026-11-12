@@ -1,6 +1,8 @@
 import { Str } from "chanfana";
 import { z } from "zod";
-import type { Video } from "./types";
+import type { Context } from "hono";
+import { DISLIKES_DISABLED_CODE, DISLIKES_DISABLED_MESSAGE } from "@al-ummah/shared-types";
+import { ResponseError, type Video } from "./types";
 import R2Repository from "./r2Repo";
 
 /**
@@ -21,11 +23,37 @@ export const ReactorHeaders = z.object({
 });
 
 /**
- * Public video payloads keep `dislikesCount` so older clients still decode
- * them, but it is always 0: dislikes are hidden (owner decision 2026-11-11)
- * and the ones stored before that are neither shown nor counted publicly.
+ * Public video and comment payloads keep `dislikesCount` so older clients
+ * still decode them, but it is always 0: dislikes are hidden (owner decisions
+ * 2026-11-11 videos, 2026-11-12 comments) and the ones stored before that are
+ * neither shown nor counted publicly.
  */
 export const PUBLIC_DISLIKES_COUNT = 0;
+
+/**
+ * Video and comment dislikes are turned off (owner decision 2026-11-11 for
+ * videos, 2026-11-12 for comments). Their POST routes stay registered and
+ * answer 410 Gone with this body, so older clients get a clear answer.
+ */
+export const DislikesDisabledError = ResponseError.extend({
+	code: z.literal(DISLIKES_DISABLED_CODE),
+	messages: z.object({ en: Str(), ar: Str() }).describe("The message in both site languages"),
+});
+
+export const dislikesDisabledResponseSchema = {
+	description: "Dislikes are turned off (code dislikes_disabled). `error` is in the language asked for with ?lang=ar, English otherwise.",
+	content: { "application/json": { schema: DislikesDisabledError } },
+};
+
+export function dislikesDisabledResponse(c: Context): Response {
+	const lang = c.req.query('lang') === 'ar' ? 'ar' : 'en';
+	return c.json({
+		success: false,
+		code: DISLIKES_DISABLED_CODE,
+		error: DISLIKES_DISABLED_MESSAGE[lang],
+		messages: DISLIKES_DISABLED_MESSAGE,
+	}, 410);
+}
 
 export function reactorId(channelId: string | null | undefined, userId: string): string {
 	return channelId || userId;

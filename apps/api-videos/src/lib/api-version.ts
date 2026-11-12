@@ -11,7 +11,7 @@
 export const CURRENT_API_VERSION = '1';
 export const SUPPORTED_API_VERSIONS: readonly string[] = ['1'];
 /** Version of the v1 contract document (openapi/v1.json). Bump the minor for additive changes. */
-export const CONTRACT_VERSION = '1.1.0';
+export const CONTRACT_VERSION = '1.2.0';
 
 export const API_VERSION_HEADER = 'X-API-Version';
 
@@ -62,6 +62,8 @@ export const DEPRECATIONS: Record<string, Deprecation> = {
 	// Owner decision 2026-11-11: dislikes are turned off; this always answers
 	// 410 dislikes_disabled. Clearing an old dislike (DELETE) still works.
 	'POST /api/v1/videos/{id}/dislikes': { since: '2026-11-11', sunset: '2027-05-11' },
+	// Owner decision 2026-11-12: comment dislikes too (410 dislikes_disabled; DELETE still clears)
+	'POST /api/v1/videos/{id}/comments/{cid}/dislikes': { since: '2026-11-12', sunset: '2027-05-12' },
 };
 
 /** RFC 9745 wants a structured-field date (`@<unix seconds>`); Sunset is an HTTP date. */

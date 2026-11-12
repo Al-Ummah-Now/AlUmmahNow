@@ -177,13 +177,13 @@ export interface Comments {
     dateCreated: string;     // Made required to match API spec
     dateModified: string;    // Made required to match API spec
     likesCount: number;      // Changed from likes array to count
-    dislikesCount: number;   // Changed from dislikes array to count
+    dislikesCount: number;   // Always 0: comment dislikes are hidden (2026-11-12)
     repliesCount: number;    // Changed from replies array to count
     isEdited: boolean;       // Made required to match API spec
     isDeleted: boolean;      // Made required to match API spec
     isPinned: boolean;       // Made required to match API spec
     isLiked?: boolean;       // Viewer channel liked this comment (GET /api/videos/:id/comments)
-    isDisliked?: boolean;    // Viewer channel disliked this comment
+    isDisliked?: boolean;    // Always false: comment dislikes are hidden (2026-11-12)
     author?: CommentAuthor;  // Resolved author (channel name/avatar, falling back to profile)
     isHeld?: boolean;        // Awaiting the video owner's review (visible to author + owner only)
     parentCommentId?: string | null; // Set on replies (one level deep)

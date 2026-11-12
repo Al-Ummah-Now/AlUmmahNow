@@ -1379,7 +1379,6 @@ export interface AppTranslations {
     live: string;
     offline: string;
     like: string;
-    dislike: string;
     deleteComment: string;
     confirmDelete: string;
     edited: string;

@@ -642,7 +642,10 @@ export class MessageProcessor {
         this.logger.debug(`Comment ${commentId} liked by user ${userId} on video ${videoId}`);
         break;
       case MessageType.CommentDislike:
-        this.logger.debug(`Comment ${commentId} disliked by user ${userId} on video ${videoId}`);
+        // Comment dislikes are turned off (owner decision 2026-11-12): the API no
+        // longer sends this; one still in the queue is acknowledged and not
+        // counted. Stored dislikes stay as they are.
+        this.logger.debug(`Comment ${commentId} dislike ignored: dislikes are turned off`, { videoId, userId });
         break;
       case MessageType.CommentUnlike:
         this.logger.debug(`Comment ${commentId} unliked by user ${userId} on video ${videoId}`);

@@ -8,7 +8,7 @@
  */
 
 import React, { useId, useState } from "react";
-import { ThumbsUp, ThumbsDown, Trash2, Pencil, MessageSquare, Check } from "lucide-react";
+import { ThumbsUp, Trash2, Pencil, MessageSquare, Check } from "lucide-react";
 import { useLanguage } from "@/hooks/useLanguage";
 import { dispatchPlayerSeek, parseCommentTimestamps } from "@/lib/video/comment-timestamps";
 
@@ -21,13 +21,10 @@ export interface CommentProps {
   /** Held for the video owner's review (shown to the author and the owner) */
   isHeld?: boolean;
   likesCount?: number;
-  dislikesCount?: number;
   isLiked?: boolean;
-  isDisliked?: boolean;
   /** Reactions are disabled for anonymous viewers / accounts without a channel */
   canReact?: boolean;
   onLike?: () => void;
-  onDislike?: () => void;
   onDelete?: () => void;
   /** Save an edit; resolves true when stored */
   onEdit?: (text: string) => Promise<boolean>;
@@ -89,12 +86,9 @@ export function CommentBody({
   isEdited,
   isHeld,
   likesCount,
-  dislikesCount,
   isLiked,
-  isDisliked,
   canReact = false,
   onLike,
-  onDislike,
   onDelete,
   onEdit,
   onReply,
@@ -180,34 +174,21 @@ export function CommentBody({
 
         {(showReactions || onDelete || onEdit || onReply || onApprove || actions) && !editing && (
           <div className="flex flex-wrap items-center gap-3 mt-1 text-sm text-gray-600 dark:text-gray-400">
+            {/* Like only: comment dislikes are turned off (owner decision 2026-11-12) */}
             {showReactions && (
-              <>
-                <button
-                  type="button"
-                  onClick={onLike}
-                  disabled={!canReact}
-                  aria-pressed={!!isLiked}
-                  // The visible count must be part of the accessible name (WCAG 2.5.3)
-                  aria-label={`${t.comments.like} ${likesCount ?? 0}`}
-                  title={t.comments.like}
-                  className={`flex items-center gap-1 disabled:opacity-50 ${isLiked ? 'text-brand-ink' : 'hover:text-gray-900 dark:hover:text-white'}`}
-                >
-                  <ThumbsUp className="w-4 h-4" aria-hidden="true" />
-                  <span>{likesCount ?? 0}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={onDislike}
-                  disabled={!canReact}
-                  aria-pressed={!!isDisliked}
-                  aria-label={`${t.comments.dislike} ${dislikesCount ?? 0}`}
-                  title={t.comments.dislike}
-                  className={`flex items-center gap-1 disabled:opacity-50 ${isDisliked ? 'text-brand-ink' : 'hover:text-gray-900 dark:hover:text-white'}`}
-                >
-                  <ThumbsDown className="w-4 h-4" aria-hidden="true" />
-                  <span>{dislikesCount ?? 0}</span>
-                </button>
-              </>
+              <button
+                type="button"
+                onClick={onLike}
+                disabled={!canReact}
+                aria-pressed={!!isLiked}
+                // The visible count must be part of the accessible name (WCAG 2.5.3)
+                aria-label={`${t.comments.like} ${likesCount ?? 0}`}
+                title={t.comments.like}
+                className={`flex items-center gap-1 disabled:opacity-50 ${isLiked ? 'text-brand-ink' : 'hover:text-gray-900 dark:hover:text-white'}`}
+              >
+                <ThumbsUp className="w-4 h-4" aria-hidden="true" />
+                <span>{likesCount ?? 0}</span>
+              </button>
             )}
             {onReply && (
               <button type="button" onClick={onReply} className="flex items-center gap-1 hover:text-gray-900 dark:hover:text-white" data-testid="comment-reply-button">

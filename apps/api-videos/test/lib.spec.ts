@@ -73,14 +73,14 @@ describe('resolveCommentAuthor', () => {
 });
 
 describe('toCommentListItem', () => {
-	it('computes counts and viewer reaction flags', () => {
+	it('computes the like count and flag; stored dislikes are never shown or counted (2026-11-12)', () => {
 		const comment = commentFixture('x', {
 			likes: [{ id: '1', userId: 'u2', channelId: 'viewer' }],
-			dislikes: [{ id: '2', userId: 'u3', channelId: 'other' }],
+			dislikes: [{ id: '2', userId: 'u3', channelId: 'other' }, { id: '3', userId: 'u2', channelId: 'viewer' }],
 		});
 		const item = toCommentListItem(comment, { userId: 'u1', channelId: 'ch1', displayName: 'N' }, 'viewer');
 		assert.equal(item.likesCount, 1);
-		assert.equal(item.dislikesCount, 1);
+		assert.equal(item.dislikesCount, 0);
 		assert.equal(item.isLiked, true);
 		assert.equal(item.isDisliked, false);
 		assert.equal(item.author.displayName, 'N');

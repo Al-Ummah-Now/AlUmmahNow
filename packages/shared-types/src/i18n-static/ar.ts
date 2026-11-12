@@ -1325,7 +1325,6 @@ export const AR_TRANSLATIONS: AppTranslations = {
     live: 'مباشر',
     offline: 'غير متصل',
     like: 'إعجاب',
-    dislike: 'عدم إعجاب',
     deleteComment: 'حذف التعليق',
     confirmDelete: 'هل تريد حذف هذا التعليق؟',
     edited: '(معدّل)',

@@ -132,14 +132,14 @@ describe('members without a channel react as themselves (#292)', () => {
 		assert.deepEqual(e.videos.read('v1').dislikes, []);
 	});
 
-	it('likes and dislikes a comment as themselves', async () => {
+	it('likes a comment as themselves, and its dislike route answers 410', async () => {
 		const e = env(videoFixture({ comments: [commentFixture('c1')] }));
 		const app = appWith(routes);
 		const like = await app.request('/api/videos/v1/comments/c1/likes', { method: 'POST', headers: { channelId: USER } }, e);
 		assert.equal(like.status, 200, await like.clone().text());
 		assert.equal((await like.json() as any).result.isLiked, true);
 		const dislike = await app.request('/api/videos/v1/comments/c1/dislikes', { method: 'POST' }, e);
-		assert.equal(dislike.status, 200, await dislike.clone().text());
+		assert.equal(dislike.status, 410, await dislike.clone().text());
 	});
 
 	it('cannot react as another user', async () => {

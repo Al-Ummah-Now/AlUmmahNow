@@ -1,7 +1,8 @@
 /**
  * Release regressions for the core web experience (Epic 29): auth pages follow
  * the site language (#293), unknown channels keep their config (#297), live
- * comments reach signed-out viewers (#301), and the library, notifications,
+ * comments reach signed-out viewers (#301) with no dislike control (comment
+ * dislikes turned off 2026-11-12), and the library, notifications,
  * explore and search pages work at phone width in Arabic.
  */
 import { test, expect, type BrowserContext, type Page } from '@playwright/test';
@@ -9,6 +10,7 @@ import { target } from './targets';
 import { findPlayableVideo, NO_PLAYABLE_VIDEO, watchUrl } from './videos';
 import { apiFetch, createProfile, signUpOnWeb, startSignIn, type Locale } from './web-session';
 import { grantCreatorTier } from './creator-tier';
+import { COMMENT_DISLIKES, dislikesTurnedOff } from './dislikes';
 
 // This file signs users in through the auth server: its traces would hold the
 // typed password and email code (fillSecret args, form POST bodies). Trace off.
@@ -105,12 +107,25 @@ test.describe('Release: live comments', () => {
     });
     expect(posted.status, `POST comment: ${await posted.clone().text()}`).toBeLessThan(300);
 
-    await expect(viewer.getByTestId('comment').filter({ hasText: text }).first()).toBeVisible({ timeout: 20000 });
-    await viewerContext.close();
+    const shown = viewer.getByTestId('comment').filter({ hasText: text }).first();
+    await expect(shown).toBeVisible({ timeout: 20000 });
 
     const list = await apiFetch(author, `/api/videos/${video!.id}/comments?limit=20`);
-    const body = (await list.json()) as { result?: { comments?: Array<{ id: string; text: string }> } };
+    const body = (await list.json()) as { result?: { comments?: Array<{ id: string; text: string; dislikesCount?: number }> } };
     const mine = body.result?.comments?.find((c) => c.text === text);
+
+    // Comment dislikes are turned off: no control, the route answers 410, nothing counted
+    if (await dislikesTurnedOff(COMMENT_DISLIKES)) {
+      await expect(shown.locator('.lucide-thumbs-down')).toHaveCount(0);
+      expect(mine, 'the new comment is listed').toBeTruthy();
+      const dislike = await apiFetch(author, `/api/videos/${video!.id}/comments/${mine!.id}/dislikes`, { method: 'POST', headers: { channelId } });
+      expect(dislike.status, `POST comment dislike: ${await dislike.clone().text()}`).toBe(410);
+      expect(((await dislike.json()) as { code?: string }).code).toBe('dislikes_disabled');
+      expect(mine!.dislikesCount ?? 0).toBe(0);
+    } else {
+      test.info().annotations.push({ type: 'not-deployed', description: "QA still has comment dislikes (its API predates 2026-11-12); the no-dislike check is skipped" });
+    }
+    await viewerContext.close();
     if (mine) await apiFetch(author, `/api/videos/${video!.id}/comments/${mine.id}`, { method: 'DELETE', headers: { channelId } });
   });
 });

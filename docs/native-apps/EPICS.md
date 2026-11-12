@@ -265,7 +265,8 @@ in parallel to the same stories, at parity with the core web experience plus mob
   finite home (see 21.6).
 - **12.3 Watch page:** player, title and description (localised), channel row with subscribe,
   like (no dislike: turned off 2026-11-11, `POST /videos/{id}/dislikes` answers 410
-  `dislikes_disabled`; see apps/api-videos/TECHNICAL_DOCUMENTATION.md), save to playlist, share, download, report; chapters; comments sheet; related videos;
+  `dislikes_disabled`; see apps/api-videos/TECHNICAL_DOCUMENTATION.md), save to playlist, share, download, report; chapters; comments sheet
+  (like only: comment dislikes turned off 2026-11-12, `POST /videos/{id}/comments/{cid}/dislikes` answers 410); related videos;
   "Up next" with autoplay **off by default**.
 - **12.4 Lamahat (short reflections):** vertical player, a daily finite stack ("You're all caught up"),
   "Watch full lecture" deep-link at the exact timestamp.

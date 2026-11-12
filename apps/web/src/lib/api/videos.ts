@@ -325,8 +325,10 @@ export interface CommentReactionResponse {
   result?: {
     commentId: string;
     likesCount: number;
+    /** Always 0: comment dislikes are hidden (2026-11-12) */
     dislikesCount: number;
     isLiked: boolean;
+    /** Always false: comment dislikes are hidden (2026-11-12) */
     isDisliked: boolean;
   };
   error?: string;
@@ -368,33 +370,6 @@ export async function listVideoComments(
     },
     false
   );
-}
-
-/**
- * Remove dislike from a comment
- * DELETE /api/videos/{id}/comments/{cid}/dislikes
- */
-export async function removeVideoCommentDislike(
-  videoId: string,
-  commentId: string,
-  headers?: Pick<ApiHeaders, 'channelId'>
-): Promise<CommentReactionResponse | null> {
-  try {
-    logger.debug('[removeVideoCommentDislike] Removing comment dislike', { videoId, commentId });
-
-    return apiRequestServer<CommentReactionResponse>(
-      {
-        method: 'DELETE',
-        url: buildApiUrl(`/api/videos/${videoId}/comments/${commentId}/dislikes`),
-        functionName: 'removeVideoCommentDislike',
-      },
-      () => commentAuthContext(headers?.channelId),
-      true
-    );
-  } catch (error) {
-    logger.error('removeVideoCommentDislike error:', error);
-    return null;
-  }
 }
 
 /**
@@ -589,33 +564,6 @@ export async function unlikeVideoComment(
     );
   } catch (error) {
     logger.error('unlikeVideoComment error:', error);
-    return null;
-  }
-}
-
-/**
- * Dislike a comment
- * POST /api/videos/{id}/comments/{cid}/dislikes
- */
-export async function dislikeVideoComment(
-  videoId: string,
-  commentId: string,
-  headers?: Pick<ApiHeaders, 'channelId'>
-): Promise<CommentReactionResponse | null> {
-  try {
-    logger.debug('[dislikeVideoComment] Disliking comment', { videoId, commentId });
-
-    return apiRequestServer<CommentReactionResponse>(
-      {
-        method: 'POST',
-        url: buildApiUrl(`/api/videos/${videoId}/comments/${commentId}/dislikes`),
-        functionName: 'dislikeVideoComment',
-      },
-      () => commentAuthContext(headers?.channelId),
-      true
-    );
-  } catch (error) {
-    logger.error('dislikeVideoComment error:', error);
     return null;
   }
 }
