@@ -412,6 +412,11 @@ export const ADMIN_JOB_KINDS = [
   /** Erase a user's videos data (privacy path), in resumable steps. */
   'user.delete-data',
   /**
+   * Erase an E2E run account (QA/stage) through the indexes, no bucket scans (#887). On its own
+   * queue (RUN_ERASE_QUEUE) so the sweep never holds up admin jobs.
+   */
+  'user.erase-run',
+  /**
    * Fill empty fields of usr_ profiles from the user's pre-SSO profile (the
    * fields an admin approved in the dry run; pre-change copy backed up first).
    */
@@ -470,6 +475,7 @@ export const ADMIN_JOB_PERMISSIONS: Readonly<Record<AdminJobKind, readonly Admin
   'video.purge': ['content:delete'],
   'user.sync-holds': ['users:manage'],
   'user.delete-data': ['users:manage', 'content:delete'],
+  'user.erase-run': ['users:manage', 'content:delete'],
   'profiles.restore-legacy': ['users:manage'],
   'videos.repair-thumbnails': ['videos:manage'],
   'search.rebuild-ownership': ['videos:manage'],

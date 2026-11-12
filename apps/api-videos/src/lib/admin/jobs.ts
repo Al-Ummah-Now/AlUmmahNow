@@ -23,6 +23,16 @@ export interface JobQueue {
 export interface JobEnv {
 	SEARCH_DB?: SearchDb;
 	ADMIN_JOBS_QUEUE?: JobQueue;
+	/** Run-account erasures (#887): their own queue, consumed with a concurrency cap */
+	RUN_ERASE_QUEUE?: JobQueue;
+}
+
+/** Job kinds that run on RUN_ERASE_QUEUE when it is bound. */
+const RUN_ERASE_KINDS = new Set<string>(['user.erase-run']);
+
+/** The queue a job's deliveries go to. */
+export function jobQueueFor(env: JobEnv, kind: string): JobQueue | undefined {
+	return RUN_ERASE_KINDS.has(kind) && env.RUN_ERASE_QUEUE ? env.RUN_ERASE_QUEUE : env.ADMIN_JOBS_QUEUE;
 }
 
 /** What a job handler returns: done, or another step to queue (resumable work). */
@@ -123,8 +133,9 @@ const message = (jobId: string) => ({ id: crypto.randomUUID(), type: MessageType
 /** Queues the job's next run; when the queue refuses, the job is marked failed so the admin sees it and can retry. */
 async function enqueue(env: JobEnv, job: AdminJob, delaySeconds?: number): Promise<AdminJob> {
 	try {
-		if (!env.ADMIN_JOBS_QUEUE) throw new Error('ADMIN_JOBS_QUEUE is not bound');
-		await env.ADMIN_JOBS_QUEUE.send(message(job.id), delaySeconds ? { delaySeconds } : undefined);
+		const queue = jobQueueFor(env, job.kind);
+		if (!queue) throw new Error('ADMIN_JOBS_QUEUE is not bound');
+		await queue.send(message(job.id), delaySeconds ? { delaySeconds } : undefined);
 		return job;
 	} catch (error) {
 		const reason = `Could not queue the job: ${error instanceof Error ? error.message : String(error)}`;
@@ -219,7 +230,7 @@ export async function handleAdminJobBatch(batch: { messages: readonly JobMessage
 			} else {
 				// Resumable work: store the next step and queue it as a fresh delivery
 				await setStatus(env, job.id, { status: 'queued', params: JSON.stringify(outcome.params), result: outcome.result ? JSON.stringify(outcome.result) : null });
-				await env.ADMIN_JOBS_QUEUE!.send(message(job.id));
+				await jobQueueFor(env, job.kind)!.send(message(job.id));
 			}
 			msg.ack();
 		} catch (error) {

@@ -36,6 +36,7 @@ import { findStoredComment, removeStoredComment, type StoredComment } from '../c
 import { subscriberCounts, subscribedChannelIds } from '../subscription-store';
 import { eraseUserData } from '../privacy/user-data';
 import { OperationBudget } from '../privacy/scan';
+import { RUN_USER_SWEEP_ACTOR, eraseRunUserData } from '../privacy/run-user-erase';
 import { BunnyStreamClient } from '../bunny/stream';
 import { requireSecret } from '../env-helpers';
 import { purgeVideoMedia, type MediaEnv } from '../media/r2-delivery';
@@ -1306,6 +1307,34 @@ async function runUserDelete(env: AdminServiceEnv, job: AdminJob): Promise<JobOu
 	return { done: true, result };
 }
 
+/** One step of a run account's cheap erasure (lib/privacy/run-user-erase.ts, #887). */
+async function runRunUserErase(env: AdminServiceEnv, job: AdminJob): Promise<JobOutcome> {
+	if (!(await pendingDeletion(env.SEARCH_DB!, 'user', job.targetId))) return { done: true, result: { skipped: 'user_not_deleted' } };
+	const b = await bunny(env);
+	const previous = (job.result?.deletedVideos as number | undefined) ?? 0;
+	const step = await eraseRunUserData(
+		env as never,
+		job.targetId,
+		new OperationBudget(900),
+		{
+			onVideoDeleted: async (videoId: string) => {
+				if (!b) return;
+				try {
+					await b.client.deleteVideo(b.libraryId, videoId);
+				} catch (error) {
+					logger.warn('[Admin] Bunny Stream delete failed', { videoId, error: error instanceof Error ? error.message : String(error) });
+				}
+			},
+		},
+		Number(job.params.step) || 0,
+	);
+	for (const videoId of step.deletedVideoIds) await send(env, MessageType.VideoDelete, { videoId, userId: job.targetId, reason: 'admin-erasure' });
+	const result = { deletedVideos: previous + step.deletedVideoIds.length };
+	if (!step.complete) return { done: false, params: { step: step.step }, result };
+	await send(env, MessageType.UserDataErased, { userId: job.targetId });
+	return { done: true, result };
+}
+
 async function eraseUserStep(env: AdminServiceEnv & Record<string, unknown>, userId: string, resumeToken?: string) {
 	const b = await bunny(env);
 	const budget = new OperationBudget(900);
@@ -1402,7 +1431,9 @@ export async function purgeDeletion(env: AdminServiceEnv, d: AdminDeletion): Pro
 			return { state: 'started', jobId: job.id };
 		}
 		case 'user': {
-			const job = await createJob(env, { kind: 'user.delete-data', targetKind: 'user', targetId: d.id, actorId });
+			// E2E run accounts (the sweep's deletions) take the cheap, index-based erasure (#887)
+			const kind = d.purgeRequestedBy === RUN_USER_SWEEP_ACTOR ? 'user.erase-run' : 'user.delete-data';
+			const job = await createJob(env, { kind, targetKind: 'user', targetId: d.id, actorId });
 			return { state: 'started', jobId: job.id };
 		}
 		case 'comment': {
@@ -1458,6 +1489,7 @@ export const ADMIN_JOB_HANDLERS: Record<AdminJobKind, JobHandler> = {
 	'video.purge': (env, job) => runVideoPurge(env as AdminServiceEnv, job),
 	'user.sync-holds': (env, job) => syncUserHolds(env as AdminServiceEnv, job),
 	'user.delete-data': (env, job) => runUserDelete(env as AdminServiceEnv, job),
+	'user.erase-run': (env, job) => runRunUserErase(env as AdminServiceEnv, job),
 	'profiles.restore-legacy': (env, job) => runLegacyRestore(env as AdminServiceEnv, job),
 	// Thumbnail aspect repair (lib/thumbnail/repair.ts), started from the admin Processing page
 	'videos.repair-thumbnails': (env, job) => runThumbnailRepairStep(env as ThumbnailRepairEnv, job) as unknown as Promise<JobOutcome>,

@@ -101,8 +101,8 @@ describe('E2E run-account sweep (videos side)', () => {
 			results.map((r: any) => [r.target_id, r.deleted_by, r.queued, r.started]),
 			gone.map((id) => [id, RUN_USER_SWEEP_ACTOR, 1, 1]),
 		);
-		// The purge job (user.delete-data: profile, channels, videos and their Bunny media) is queued for each
-		const jobs = (await e.SEARCH_DB.prepare("SELECT kind, target_id FROM admin_jobs WHERE kind = 'user.delete-data' ORDER BY target_id").all()).results;
+		// The purge job is queued for each: the cheap, index-based run-account erasure (#887), not user.delete-data's bucket scans
+		const jobs = (await e.SEARCH_DB.prepare("SELECT kind, target_id FROM admin_jobs WHERE kind = 'user.erase-run' ORDER BY target_id").all()).results;
 		assert.deepEqual(jobs.map((j: any) => j.target_id), gone);
 
 		// Next run: the started purges are not picked again

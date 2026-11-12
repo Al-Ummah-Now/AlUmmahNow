@@ -607,6 +607,7 @@ async function handleFetch(request: Request, env: AppBindings, ctx: ExecutionCon
 /**
  * Queue consumers, by queue name (prod name, or with its -stage / -qa suffix):
  * - al-ummah-now-admin-jobs*: heavy admin actions (lib/admin/jobs.ts).
+ * - al-ummah-now-run-erase*: E2E run-account erasures, admin jobs on their own queue (#887).
  * - otherwise PROCESSING_CHECK_QUEUE, which carries the per-video
  *   processing-check loop, the upload reaper's checks (kind "upload-reaper")
  *   new uploads' playlist adds (kind "playlist-add"), Bunny deletes after an
@@ -617,7 +618,8 @@ async function handleFetch(request: Request, env: AppBindings, ctx: ExecutionCon
  */
 async function queue(batch: MessageBatch<unknown>, env: AppBindings, ctx: ExecutionContext): Promise<void> {
 	try {
-		if (batch.queue.startsWith('al-ummah-now-admin-jobs')) {
+		// Run-account erasures (#887) are admin jobs on their own capped queue
+		if (batch.queue.startsWith('al-ummah-now-admin-jobs') || batch.queue.startsWith('al-ummah-now-run-erase')) {
 			await handleAdminJobBatch(batch as unknown as { messages: readonly JobMessage[] }, withSearchSync(env, ctx) as never, ADMIN_JOB_HANDLERS);
 			return;
 		}
