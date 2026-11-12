@@ -57,6 +57,9 @@ describe('fake Bunny', () => {
   it('stores images and serves them from the image host', async () => {
     await call('https://storage.bunnycdn.com/zone/avatars/a.jpg', { method: 'PUT', body: fixture('e2e-thumbnail.jpg') });
     assert.equal((await call('https://images.alummahnow.net/avatars/a.jpg')).status, 200);
+    // The API stores "<zone>//<file>" and links "/<file>"
+    await call('https://storage.bunnycdn.com/zone//b_avatar.jpeg', { method: 'PUT', body: fixture('e2e-thumbnail.jpg') });
+    assert.equal((await call('https://images.alummahnow.net/b_avatar.jpeg')).status, 200);
   });
 
   it('the browser proxy serves faked HTTPS hosts and refuses everything else', async () => {

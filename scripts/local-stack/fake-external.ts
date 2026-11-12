@@ -229,7 +229,8 @@ function cdn(method: string, pathname: string): Response {
 /** Bunny Storage (PUT/DELETE by the API) and the image host (GET by everyone). */
 async function images(request: Request, url: URL): Promise<Response> {
   // Storage: /<zone>/<path>; the image host serves the same file at /<path>
-  const path = url.hostname === IMAGE_HOST ? url.pathname : url.pathname.replace(/^\/[^/]+/, '');
+  // Repeated slashes collapsed: the API stores "<zone>//<file>" and links "/<file>"
+  const path = (url.hostname === IMAGE_HOST ? url.pathname : url.pathname.replace(/^\/[^/]+/, '')).replace(/\/{2,}/g, '/');
   if (request.method === 'PUT') {
     storage.set(path, { body: Buffer.from(await request.arrayBuffer()), type: request.headers.get('content-type') ?? 'application/octet-stream' });
     return json({ HttpCode: 201, Message: 'File uploaded.' }, 201);
