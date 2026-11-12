@@ -11,12 +11,12 @@ import {
   deletePlaylistsTitled,
   expectRtl,
   fillStable,
-  findQaLecturesChannel,
   listChannelPlaylists,
   listPublicChannelVideos,
   playlistToolsDeployed,
   tempName,
 } from './test-utils/channel-content';
+import { ownPublicVideos } from './test-utils/own-public-video';
 
 /**
  * Playlists: the channel playlist manager (/settings/channel/[id]/playlists:
@@ -25,9 +25,17 @@ import {
  * (/playlist/[id]: info, Play all, owner reorder/remove).
  *
  * Writes go to the single user's own channel; every playlist a test creates
- * is titled "E2E Temp …" and deleted afterwards. qa-creator's seeded playlist
- * is only viewed.
+ * is titled "E2E Temp …" and deleted afterwards. The viewed playlist is this
+ * file's own: another creator's channel with two public videos and a playlist of
+ * them, made in beforeAll and deleted afterwards.
  */
+
+// One worker runs this file's tests in order, so its own data (beforeAll) is made once
+test.describe.configure({ mode: 'default' });
+
+const own = ownPublicVideos(test, 'playlists', [{}, {}], { playlist: true });
+/** The file's own playlist channel */
+const ownChannel = () => ({ id: own.channelId(), name: own.channelName() });
 
 const owner = 'single' as const;
 const channelId = () => channelsOf(owner).main.id;
@@ -156,7 +164,7 @@ test.describe('Playlist page - visitor', () => {
   test.use({ storageState: ANONYMOUS_STATE });
 
   test('PLAY-010 shows the playlist, its ordered videos and Play all (en)', async ({ page }) => {
-    const lectures = await findQaLecturesChannel();
+    const lectures = ownChannel();
     const [playlist] = await listChannelPlaylists(lectures.id);
     const full = await apiGet<{ videoItems?: Array<{ id: string; title: string }> }>(`/api/playlists/${playlist.id}?includeVideos=true`);
     const items = full.videoItems ?? [];
@@ -182,7 +190,7 @@ test.describe('Playlist page - visitor', () => {
   });
 
   test('PLAY-013 channel Playlists tab cards show a cover image', async ({ page }) => {
-    const lectures = await findQaLecturesChannel();
+    const lectures = ownChannel();
     await page.goto(`/en/channels/${lectures.id}?tab=playlists`);
     await page.getByTestId('tab-playlists').click().catch(() => undefined);
     const card = page.getByTestId('playlist-card').first();
@@ -191,7 +199,7 @@ test.describe('Playlist page - visitor', () => {
   });
 
   test('PLAY-011 Arabic playlist page is RTL with Arabic labels', async ({ page }) => {
-    const lectures = await findQaLecturesChannel();
+    const lectures = ownChannel();
     const [playlist] = await listChannelPlaylists(lectures.id);
     // The page counts the videos a visitor can watch (videoItems, as PLAY-010), not every
     // id the record holds: deleted or private ones stay in `videos` but are not shown
@@ -217,7 +225,7 @@ test.describe('Playlist page - owner', () => {
   test.use({ storageState: AUTH_STATE.single });
 
   test('PLAY-020 owner reorders and removes videos', async ({ page }) => {
-    const lectures = await findQaLecturesChannel();
+    const lectures = ownChannel();
     const videos = (await listPublicChannelVideos(lectures.id)).slice(0, 2);
     expect(videos.length).toBe(2);
     const { id } = await createPlaylist(owner, channelId(), { title: tempName('Order'), videoIds: videos.map((v) => v.id) });

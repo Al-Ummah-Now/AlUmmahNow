@@ -14,7 +14,6 @@ import {
   deleteSectionsTitled,
   expectRtl,
   fillStable,
-  findQaLecturesChannel,
   listPublicChannelVideos,
   listSections,
   tempName,
@@ -22,6 +21,7 @@ import {
   withLock,
 } from './test-utils/channel-content';
 import { setupPublicDisposable } from './test-utils/e2e-videos';
+import { ownPublicVideos } from './test-utils/own-public-video';
 
 /**
  * Channel sections (docs/specs/CHANNEL-SECTIONS.md): the owner's section
@@ -38,6 +38,13 @@ import { setupPublicDisposable } from './test-utils/e2e-videos';
 
 const owner = 'single' as const;
 const channelId = () => channelsOf(owner).main.id;
+
+// One worker runs this file's tests in order, so its own data (beforeAll) is made once
+test.describe.configure({ mode: 'default' });
+
+/** Another creator's channel with a public video, for featured channels and other channels' videos (made in beforeAll, deleted afterwards) */
+const otherCreator = ownPublicVideos(test, 'sections-other');
+const ownOtherChannel = () => ({ id: otherCreator.channelId(), name: otherCreator.channelName() });
 const MAX_SECTIONS = 12;
 const LOCK_WAIT = 600_000;
 
@@ -317,7 +324,7 @@ test.describe('Section manager', () => {
         'sections',
         async () => {
           try {
-            const lectures = await findQaLecturesChannel();
+            const lectures = ownOtherChannel();
             await deleteSectionsOfType(owner, channelId(), ['featured_channels', 'community_posts']);
             await createTextPost(owner, channelId(), postMarker);
             await createSection(owner, channelId(), { type: 'featured_channels', title: first, channelIds: [lectures.id] });
@@ -440,7 +447,7 @@ test.describe('Section manager', () => {
 interface Fixtures {
   /** A public video of the owner's channel */
   ownVideoId: string;
-  /** A public video of another channel (QA Lectures) */
+  /** A public video of another channel (this file's own second creator) */
   otherVideoId: string;
   lecturesChannelId: string;
   lecturesChannelName: string;
@@ -631,7 +638,7 @@ test.describe('Each section type: add, render, remove', () => {
     test.skip(testInfo.project.name !== 'chromium', 'Every section type runs on the chromium project only');
     test.setTimeout(540_000);
     const video = await disposable.create();
-    const lectures = await findQaLecturesChannel();
+    const lectures = ownOtherChannel();
     const [other] = await listPublicChannelVideos(lectures.id);
     const playlistTitle = tempName('Sections playlist');
     const playlist = await createPlaylist(owner, channelId(), { title: playlistTitle, isPublic: true, videoIds: [video.id] });

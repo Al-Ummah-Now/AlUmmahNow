@@ -8,7 +8,6 @@ import {
   clickUntil,
   ensureUnsubscribed,
   expectRtl,
-  findQaLecturesChannel,
   getTabConfig,
   listChannelPlaylists,
   listPublicChannelVideos,
@@ -18,22 +17,32 @@ import {
   withLock,
   type PublicChannel,
 } from './test-utils/channel-content';
+import { ownPublicVideos } from './test-utils/own-public-video';
 
 /**
  * Channel page (/[locale]/channels/[id]): header, subscribe button and the
  * home/videos/shorts/live/playlists/community/channels tabs (About is covered
  * elsewhere).
  *
- * Read-only fixtures: qa-creator's seeded "Al Ummah Now QA — Lectures"
- * channel (public videos, one playlist, two community posts, no shorts/live).
+ * Its own fixture channel, made in beforeAll and deleted afterwards: English and Arabic
+ * name and description, public videos, one playlist, two community posts, no shorts/live.
  * Subscribe tests subscribe the single user to the multi user's second
  * channel and always unsubscribe again.
  */
 
+const DESCRIPTION = 'E2E channel with short sample lectures';
+const DESCRIPTION_AR = 'قناة اختبار تحتوي على محاضرات قصيرة نموذجية';
+const NAME_AR = 'قناة المحاضرات التجريبية';
+
+// One worker runs this file's tests in order, so its own data (beforeAll) is made once
+test.describe.configure({ mode: 'default' });
+
+const own = ownPublicVideos(test, 'channel-page', [{}, {}], { nameAr: NAME_AR, description: DESCRIPTION, descriptionAr: DESCRIPTION_AR, playlist: true, posts: 2 });
+
 let lectures: PublicChannel;
 
 test.beforeAll(async () => {
-  lectures = await findQaLecturesChannel();
+  lectures = { id: own.channelId(), name: own.channelName(), nameLocalized: { en: own.channelName(), ar: NAME_AR }, userId: own.owner().userId };
 });
 
 async function openChannel(page: Page, locale: 'en' | 'ar', channelId: string, tab?: string) {
@@ -54,7 +63,7 @@ test.describe('Channel header', () => {
     await openChannel(page, 'en', lectures.id);
     const header = page.getByTestId('channel-header');
     await expect(header.getByRole('heading', { level: 1 })).toHaveText(lectures.name);
-    await expect(header).toContainText('QA seed channel with short sample lectures');
+    await expect(header).toContainText(DESCRIPTION);
     await expect(header.getByTestId('channel-subscriber-count')).toHaveText(/^\d+(\.\d[KM])? subscribers$/);
     await expect(header.getByTestId('channel-subscribe-button')).toHaveText('Subscribe');
     await expect(header.getByTestId('channel-settings-link')).toHaveCount(0);
@@ -68,7 +77,7 @@ test.describe('Channel header', () => {
     await expect(header).toHaveAttribute('dir', 'rtl');
     const title = header.getByRole('heading', { level: 1 });
     await expect(title).toHaveText(lectures.nameLocalized?.ar ?? lectures.name);
-    await expect(header).toContainText('قناة اختبار تحتوي على محاضرات قصيرة نموذجية');
+    await expect(header).toContainText(DESCRIPTION_AR);
     await expect(header.getByTestId('channel-subscriber-count')).toContainText('المشتركون');
     // Static copy is 'اشترك'; the translations API currently serves 'اشتراك'
     await expect(header.getByTestId('channel-subscribe-button')).toHaveText(/^اشترا?ك$/);
@@ -257,7 +266,7 @@ test.describe('Channel tabs', () => {
   test('CHTAB-014 Community tab renders the channel posts', async ({ page }) => {
     const posts = await listPosts('single', lectures.id);
     const text = posts.find((p) => p.type === 'text');
-    expect(text, 'seed text post').toBeTruthy();
+    expect(text, 'the file\'s own text post').toBeTruthy();
 
     await openChannel(page, 'en', lectures.id, 'community');
     await expectTabSelected(page, 'community');
