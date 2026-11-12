@@ -73,14 +73,17 @@ test.describe('Post manager', () => {
       await expect(card).toContainText('Text');
       await expect(card).toContainText('Published');
 
-      await fillStable(page.getByRole('textbox', { name: /^Search/ }), marker);
+      // The post search is a live autocomplete (01e81c4f): a combobox, not a plain textbox
+      const search = page.getByRole('combobox', { name: /^Search posts/ });
+      await fillStable(search, marker);
       await expect(page.getByTestId('managed-post')).toHaveCount(1);
-      await fillStable(page.getByRole('textbox', { name: /^Search/ }), `${marker} no-such-text`);
+      await fillStable(search, `${marker} no-such-text`);
       await expect(page.getByTestId('managed-post')).toHaveCount(0);
       await expect(page.getByText(/^No results/)).toBeVisible();
 
       // View opens the channel Community tab
-      await page.getByRole('textbox', { name: /^Search/ }).fill('');
+      await search.fill('');
+      await search.press('Escape');
       await card.getByTestId('post-actions').click();
       await expect(page.getByRole('menuitem', { name: 'Edit' })).toHaveCount(0);
       await page.getByRole('menuitem', { name: 'View' }).click();
@@ -188,7 +191,10 @@ test.describe('Post manager', () => {
     await expectRtl(page);
     await expect(page.getByRole('heading', { level: 1, name: 'منشور جديد' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'اختر نوع المنشور' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'رجوع' })).toBeVisible();
+    // The way back is a link to the post list, named for it (00bb5d05), not a "رجوع" button
+    const back = page.getByTestId('new-post-back');
+    await expect(back).toHaveAccessibleName('العودة إلى منشورات المجتمع');
+    await expect(back).toHaveAttribute('href', `/ar/settings/channel/${channelId()}/community`);
     await selectType(page, 'text');
     await expect(page.getByPlaceholder('شارك أفكارك مع مجتمعك...')).toHaveAttribute('dir', 'rtl');
     await page.getByRole('button', { name: 'نشر' }).click();
