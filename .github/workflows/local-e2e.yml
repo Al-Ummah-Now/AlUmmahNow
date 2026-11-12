@@ -23,6 +23,11 @@ on:
   schedule:
     - cron: '45 3 * * *'
   workflow_dispatch:
+    inputs:
+      update_visual:
+        description: 'Regenerate the web visual snapshot baselines (apps/web/e2e/visual) and upload them as an artifact to commit'
+        type: boolean
+        default: false
   workflow_call:
 
 permissions:
@@ -346,7 +351,10 @@ jobs:
           # Global setup's accounts: e2e+<run>-<attempt>-web-local-<shard>-<role>
           export E2E_PROJECT="local-${SHARD%%/*}"
           code=0
-          pnpm exec playwright test --project=chromium --project=shared-state --project=a11y --shard="$SHARD" || code=$?
+          # Visual baselines are made here (Linux, the stack's own data): workflow_dispatch update_visual=true
+          update=()
+          if [ "${UPDATE_VISUAL:-}" = "true" ]; then update=(--update-snapshots); fi
+          pnpm exec playwright test --project=chromium --project=shared-state --project=a11y --project=visual --shard="$SHARD" "${update[@]}" || code=$?
           # A shard that ran nothing is a broken split, never a pass (Playwright exits 0 on an empty shard)
           ran=$(node -e 'const s=require("./test-results/test-results.json").stats||{};console.log((s.expected||0)+(s.unexpected||0)+(s.flaky||0))' 2>/dev/null || echo 0)
           echo "Shard $SHARD ran $ran test(s)"
@@ -355,6 +363,7 @@ jobs:
         env:
           CI: 'true'
           SHARD: ${{ matrix.shard }}
+          UPDATE_VISUAL: ${{ github.event_name == 'workflow_dispatch' && inputs.update_visual }}
           E2E_WORKERS: '2'
           # The shard's own stack: see every failure, not the first five (QA runs keep the cap)
           E2E_MAX_FAILURES: '1000'
@@ -388,6 +397,15 @@ jobs:
         run: |
           if [ -n "${STACK_PID:-}" ] && kill -0 "$STACK_PID" 2>/dev/null; then kill "$STACK_PID"; fi
           grep -h "refused" "$RUNNER_TEMP/stack.log" | sort | uniq -c | sort -rn | head -30 || true
+
+      - name: Upload visual baselines
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.update_visual
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-baselines-${{ strategy.job-index }}
+          path: apps/web/e2e/visual/__screenshots__
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Upload report
         if: failure()

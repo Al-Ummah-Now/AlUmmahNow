@@ -1,11 +1,10 @@
 import { expect, type Page } from '@playwright/test';
-import { channelsOf, findQaLecturesChannel, listChannelPlaylists } from './channel-content';
-import { ensureSeedVideos, SEED_TITLES } from './e2e-videos';
+import { channelsOf } from './channel-content';
 import type { AuthUser } from './auth-state';
 
 /**
  * Every routable page of apps/web/src/app/[locale] (plus /en|ar/live and the
- * 404 page), resolved to real QA data. Used by the axe-on-every-page spec and
+ * 404 page), resolved from a spec's own data (catalogFromOwnData). Used by the axe-on-every-page spec and
  * the visual snapshot spec so both stay in sync with the route inventory in
  * docs/testing/UI-TEST-PLAN.md.
  *
@@ -31,32 +30,6 @@ export interface CatalogData {
   singleSeedVideoId: string;
 }
 
-const API_URL = (process.env.API_URL || 'https://videos.api.qa.alummahnow.net').replace(/\/$/, '');
-
-let cached: CatalogData | null = null;
-
-/** Resolves the QA ids the catalog paths need (cached per worker) */
-export async function loadCatalogData(): Promise<CatalogData> {
-  if (cached) return cached;
-  const res = await fetch(`${API_URL}/api/videos?limit=100`);
-  expect(res.ok, 'GET /api/videos').toBe(true);
-  const body = (await res.json()) as { data?: Array<{ id: string; title: string }> };
-  const lecture = (body.data ?? [])
-    .filter((v) => v.title.startsWith('QA Lecture'))
-    .sort((a, b) => a.title.localeCompare(b.title))[0];
-  if (!lecture) throw new Error('No "QA Lecture" seed video on QA (run the Seed QA workflow)');
-  const channel = await findQaLecturesChannel();
-  const playlists = await listChannelPlaylists(channel.id);
-  const seed = await ensureSeedVideos('single');
-  cached = {
-    lectureVideoId: lecture.id,
-    lecturesChannelId: channel.id,
-    playlistId: playlists[0]?.id ?? null,
-    singleChannelId: channelsOf('single').main.id,
-    singleSeedVideoId: seed[SEED_TITLES.singleVideo].id,
-  };
-  return cached;
-}
 
 /**
  * The catalog ids from a spec file's own data (local stack): its own creator's public video,

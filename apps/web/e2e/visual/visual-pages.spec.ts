@@ -4,20 +4,21 @@ import { ANONYMOUS_STATE, AUTH_STATE } from '../test-utils/auth-state';
 import {
   VISUAL_PAGE_IDS,
   catalog,
-  loadCatalogData,
+  catalogFromOwnData,
   openCatalogPageInReferenceTheme,
   type CatalogData,
   type CatalogRole,
 } from '../test-utils/page-catalog';
+import { ownPublicVideos } from '../test-utils/own-public-video';
 
 /**
  * VIS-*: visual snapshots of the key pages x en/ar x light/dark, in the
  * dedicated `visual` project (Desktop Chrome, fixed 1280x800 viewport).
  *
  * Baselines are generated on Linux in CI (fonts/antialiasing differ per OS):
- * run the "Update visual snapshots" job of .github/workflows/e2e-tests.yml
- * (workflow_dispatch, update_snapshots=true), which commits
- * e2e/visual/__screenshots__/. The pages are pinned to the reference theme
+ * run Local E2E (.github/workflows/local-e2e.yml) by hand with update_visual=true; its
+ * web shard that holds this file uploads e2e/visual/__screenshots__/ as an artifact to commit.
+ * The pages show this file's own content on the local stack (E2E_ENV=local). The pages are pinned to the reference theme
  * (Lantern, REFERENCE_THEME in page-catalog.ts) so QA's active site theme never
  * changes the snapshots; the other themes are covered by the Theme visibility
  * contrast check (e2e/themes). Everything that changes between runs on QA
@@ -27,9 +28,29 @@ import {
 
 let data: CatalogData;
 
+// One worker runs this file's tests in order, so its own data (beforeAll) is made once
+test.describe.configure({ mode: 'default' });
+
+/**
+ * This file's own content (made in beforeAll, deleted afterwards), with fixed names: the channel
+ * header and the watch page title are not masked, so they must read the same in every run.
+ */
+const own = ownPublicVideos(test, 'visual', [{ title: 'E2E Visual lecture', titleAr: 'محاضرة الاختبار المرئي' }], {
+  exactNames: true,
+  name: 'E2E Visual channel',
+  nameAr: 'قناة الاختبار المرئي',
+  description: 'E2E channel for the visual snapshots',
+  descriptionAr: 'قناة لاختبار اللقطات المرئية',
+  playlist: true,
+});
+
 test.beforeAll(async () => {
-  test.setTimeout(180000);
-  data = await loadCatalogData();
+  data = catalogFromOwnData({
+    videoId: own.videos()[0].id,
+    channelId: own.channelId(),
+    playlistId: own.playlistId(),
+    singleVideoId: own.videos()[0].id,
+  });
 });
 
 const PLACEHOLDER: CatalogData = {

@@ -23,6 +23,14 @@ export interface OwnVideoSpec {
 
 /** What else the file's own channel gets, besides its videos. */
 export interface OwnChannelSpec {
+  /**
+   * Names exactly as given (channel `name`, video titles), without the run tag: for visual snapshots,
+   * whose headers are not masked. Cleanup still deletes them (DataScope), and the leftover check
+   * finds anything left through the run user's id.
+   */
+  exactNames?: boolean;
+  /** The channel's name (default: `E2E <label> <run tag>`) */
+  name?: string;
   /** Arabic name and English/Arabic descriptions (PUT /api/channels/:id) */
   nameAr?: string;
   description?: string;
@@ -72,13 +80,13 @@ export function ownPublicVideos(test: AnyTest, label: string, specs: OwnVideoSpe
     const context = await browser.newContext({ storageState: { cookies: [], origins: [] } });
     try {
       const page = await context.newPage();
-      channelName = `E2E ${label} ${ns()} ${randomBytes(2).toString('hex')}`;
+      channelName = channel.name ?? (channel.exactNames ? `E2E ${label}` : `E2E ${label} ${ns()} ${randomBytes(2).toString('hex')}`);
       owner = await data.createUser(page, label);
       await data.grantCreator(owner);
       channelId = await data.createChannel(owner, { name: channelName });
       for (const spec of specs) {
         // Readiness is awaited below, for all of them: uploads go first so the stack encodes them together
-        const video: OwnVideo = await data.createVideo(owner, channelId, { clip: 'landscape40', isPublic: true, title: spec.title && `${spec.title} ${ns()}`, waitReady: false });
+        const video: OwnVideo = await data.createVideo(owner, channelId, { clip: 'landscape40', isPublic: true, title: spec.title && (channel.exactNames ? spec.title : `${spec.title} ${ns()}`), waitReady: false });
         const update: Record<string, unknown> = {};
         if (spec.category) update.category = spec.category;
         if (spec.titleAr) update.titleLocalized = video.titleLocalized = { en: video.title, ar: spec.titleAr };

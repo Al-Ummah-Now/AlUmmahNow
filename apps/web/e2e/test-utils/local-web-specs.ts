@@ -75,4 +75,7 @@ export const LOCAL_WEB_SPECS: readonly string[] = [
   '31-video-player.spec.ts',
   '70-embeds.spec.ts',
   '73-watch-loading.spec.ts',
+  // Visual snapshots of the key pages (visual project), on the file's own content; baselines from
+  // Local E2E run by hand with update_visual=true
+  'visual/visual-pages.spec.ts',
 ];
