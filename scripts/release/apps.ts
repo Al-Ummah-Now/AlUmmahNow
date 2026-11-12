@@ -108,15 +108,21 @@ export const APPS: AppRule[] = [
 				Audience: 'https://videos.api.alummahnow.net',
 				WEBSOCKET_URL: 'https://realtime.alummahnow.net',
 				CORS_ORIGINS: 'https://videos.alummahnow.net,https://alummahnow.net,https://www.alummahnow.net,https://admin.alummahnow.net,https://cms.alummahnow.net',
-				// CDN host of the Bunny library the stream secrets point at (400189); uploads
-				// get their playUrl/thumbnailUrl on it, and it is the host that is signed.
-				// A different host here 404s every new upload (2026-11-10 incident).
-				bunny_hostname: 'vz-215a1ffd-a5a.b-cdn.net',
-				BUNNY_SIGN_HOSTNAME: 'vz-215a1ffd-a5a.b-cdn.net',
+				// CDN host of the primary Bunny library the stream secrets point at
+				// (498994); uploads get their playUrl on it. A host of another library
+				// here 404s every new upload (2026-11-10 incident).
+				bunny_hostname: 'vz-25839d05-80d.b-cdn.net',
+				// Legacy library 400189: older videos keep playing from it (lib/bunny/libraries.ts)
+				BUNNY_LEGACY_LIBRARY_ID: '400189',
+				BUNNY_LEGACY_HOSTNAME: 'vz-215a1ffd-a5a.b-cdn.net',
+				BUNNY_SIGN_URLS: 'true',
 			},
 			requiredBindings: [
 				INTERNAL_API_KEY,
 				{ kind: 'secrets_store_secrets', name: 'BUNNY_TOKEN_KEY' },
+				// Legacy library 400189's API and token keys (older videos)
+				{ kind: 'secrets_store_secrets', name: 'BUNNY_LEGACY_STREAM_KEY' },
+				{ kind: 'secrets_store_secrets', name: 'BUNNY_LEGACY_TOKEN_KEY' },
 				// Search index; also the upload rate limits (SCALABILITY-AUDIT AV-14)
 				{ kind: 'd1_databases', name: 'SEARCH_DB' },
 				{ kind: 'kv_namespaces', name: 'TUS_SESSIONS' },

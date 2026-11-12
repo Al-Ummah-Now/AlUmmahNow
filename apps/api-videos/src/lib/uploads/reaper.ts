@@ -37,7 +37,7 @@
 
 import { logger } from '../logger';
 import R2Repository from '../r2Repo';
-import { requireSecret } from '../env-helpers';
+import { bunnyApi, bunnyLibraries, bunnyLibraryForVideo, primaryBunnyLibrary, type BunnyLibrariesEnv, type LibraryHints } from '../bunny/libraries';
 import { generateTUSSignature } from '../bunny/tus';
 import { fetchBunnyVideo, ProcessingEnv } from '../processing/loop';
 import { releaseClaimFor } from './initiateOnce';
@@ -134,6 +134,10 @@ export interface RecordView {
 	originalFormat?: string;
 	processingIssue?: { kind: string; reason?: string; at: string } | null;
 	tusUpload?: { sessionId: string; bunnyUploadUrl: string; fileSize: number; createdAt: string };
+	/** Bunny library hints (lib/bunny/libraries.ts) */
+	bunnyLibraryId?: number;
+	playUrl?: string;
+	thumbnailUrl?: string;
 }
 
 export type ItemStatus = 'checking' | 'would_delete' | 'deleted' | 'kept' | 'skipped' | 'failed';
@@ -297,14 +301,14 @@ export async function writeReaperConfig(env: Pick<ReaperEnv, 'global_settings'>,
 	return config;
 }
 
-async function bunnySecrets(env: ReaperEnv): Promise<{ key: string; libraryId: string }> {
-	return {
-		key: await requireSecret(env['bunny-stream-key'], 'bunny-stream-key'),
-		libraryId: await requireSecret(env.bunny_stream_library_id, 'bunny_stream_library_id'),
-	};
+/** API key and id of the library a record's video lives in (lib/bunny/libraries.ts); the primary library without a record */
+async function bunnySecrets(env: ReaperEnv, record?: LibraryHints | null): Promise<{ key: string; libraryId: string }> {
+	const library = record ? await bunnyLibraryForVideo(env as BunnyLibrariesEnv, record) : await primaryBunnyLibrary(env as BunnyLibrariesEnv);
+	const { libraryId, apiKey } = bunnyApi(library);
+	return { key: apiKey, libraryId: String(libraryId) };
 }
 
-/** One page of the library, newest first. */
+/** One page of the primary library (where uploads go), newest first. */
 export async function listBunnyVideos(env: ReaperEnv, page: number, itemsPerPage = 100): Promise<{ items: BunnyView[]; totalItems: number }> {
 	const { key, libraryId } = await bunnySecrets(env);
 	const url = `${BUNNY_API}/library/${encodeURIComponent(libraryId)}/videos?page=${page}&itemsPerPage=${itemsPerPage}&orderBy=date`;
@@ -314,9 +318,7 @@ export async function listBunnyVideos(env: ReaperEnv, page: number, itemsPerPage
 	return { items: body.items ?? [], totalItems: body.totalItems ?? 0 };
 }
 
-/** Delete at Bunny; true when deleted now, false when it was already gone. */
-export async function deleteBunnyVideo(env: ReaperEnv, videoId: string): Promise<boolean> {
-	const { key, libraryId } = await bunnySecrets(env);
+async function deleteIn(key: string, libraryId: string, videoId: string): Promise<boolean> {
 	const response = await fetch(`${BUNNY_API}/library/${encodeURIComponent(libraryId)}/videos/${encodeURIComponent(videoId)}`, {
 		method: 'DELETE',
 		headers: { AccessKey: key, accept: 'application/json' },
@@ -326,11 +328,29 @@ export async function deleteBunnyVideo(env: ReaperEnv, videoId: string): Promise
 	return true;
 }
 
+/**
+ * Delete at Bunny; true when deleted now, false when it was already gone.
+ * With the record: in its library. Without one (the record is already
+ * deleted): in every library, primary first, until one had it.
+ */
+export async function deleteBunnyVideo(env: ReaperEnv, videoId: string, record?: LibraryHints | null): Promise<boolean> {
+	if (record) {
+		const { key, libraryId } = await bunnySecrets(env, record);
+		return deleteIn(key, libraryId, videoId);
+	}
+	for (const library of await bunnyLibraries(env as BunnyLibrariesEnv)) {
+		if (!library.primary && !library.apiKey) continue;
+		const { libraryId, apiKey } = bunnyApi(library);
+		if (await deleteIn(apiKey, String(libraryId), videoId)) return true;
+	}
+	return false;
+}
+
 /** Bunny's TUS offset of the record's upload; null when Bunny no longer has it. Throws on transient trouble. */
 export async function fetchTusOffset(env: ReaperEnv, record: RecordView): Promise<number | null> {
 	const url = record.tusUpload?.bunnyUploadUrl;
 	if (!url) return null;
-	const { key, libraryId } = await bunnySecrets(env);
+	const { key, libraryId } = await bunnySecrets(env, record as LibraryHints);
 	const expire = Math.floor(Date.now() / 1000) + 3600;
 	const signature = await generateTUSSignature(parseInt(libraryId, 10), key, expire, record.id);
 	const response = await fetch(url, {
@@ -485,7 +505,7 @@ async function performDelete(
 	// Audit row (with the backup) before anything is deleted
 	await env.global_settings.put(key, JSON.stringify(row), JSON_META);
 
-	const bunnyDeleted = decision.deleteBunny ? await deleteBunnyVideo(env, message.videoId) : false;
+	const bunnyDeleted = decision.deleteBunny ? await deleteBunnyVideo(env, message.videoId, (rawRecord as LibraryHints | null) ?? undefined) : false;
 	let recordAbandoned = false;
 	let fingerprint: string | undefined;
 	if (message.target === 'abandoned') {
@@ -524,7 +544,7 @@ export async function runReaperCheck(env: ReaperEnv, message: ReaperMessage, now
 
 	const config = await readReaperConfig(env);
 	const record = await readRecord(env, message.videoId);
-	const rawBunny = await fetchBunnyVideo(env, message.videoId);
+	const rawBunny = await fetchBunnyVideo(env, message.videoId, (record as LibraryHints | null) ?? null);
 	const bunny = bunnyView(rawBunny as BunnyView | null);
 	let offsetNow: number | null = null;
 	if (message.target === 'abandoned' && record && !record.abandoned && record.uploadStatus !== 'ready' && record.uploadStatus !== 'processing') {

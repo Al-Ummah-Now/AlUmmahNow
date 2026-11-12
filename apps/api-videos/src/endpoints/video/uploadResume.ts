@@ -1,3 +1,4 @@
+import { bunnyLibraryForVideo, type LibraryHints } from '../../lib/bunny/libraries';
 import { canOnVideo } from "../../lib/channelAccess";
 import { OpenAPIRoute, Str } from "chanfana";
 import { AuthenticatedRoute, AppContext } from '../../base';
@@ -8,7 +9,6 @@ import R2Repository, { rethrowBusy } from "../../lib/r2Repo";
 import { generateTUSConfig, createTusProxySession, TUS_PROXY_SESSION_TTL_SECONDS } from "../../lib/bunny/tus";
 import { buildTusUploadId, type VideoTusUpload } from "./tus/tusProxy";
 import { reopenForReupload, type UploadVideo } from "../../lib/uploads/lifecycle";
-import { requireSecret } from "../../lib/env-helpers";
 import { logger } from '../../lib/logger';
 
 /**
@@ -140,9 +140,10 @@ export class UploadResumeEndpoint extends AuthenticatedRoute {
 			}
 
 			// Get Bunny.net configuration
-			const bunnyKey = await requireSecret(c.env["bunny-stream-key"], 'bunny-stream-key');
-			const libraryIdRaw = await requireSecret(c.env.bunny_stream_library_id, 'bunny_stream_library_id');
-			const libraryId = parseInt(libraryIdRaw, 10);
+			// The library the video was created in (lib/bunny/libraries.ts)
+			const library = await bunnyLibraryForVideo(c.env as never, video as LibraryHints);
+			const bunnyKey = library.apiKey;
+			const libraryId = library.libraryId;
 
 			if (isNaN(libraryId)) {
 				return c.json({

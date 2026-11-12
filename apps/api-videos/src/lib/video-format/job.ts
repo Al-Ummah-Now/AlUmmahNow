@@ -45,9 +45,9 @@ import {
 } from '@al-ummah/shared-types';
 import { logger } from '../logger';
 import R2Repository from '../r2Repo';
-import { getSecret } from '../env-helpers';
 import { bunnyDirectoryToken, signedBunnyUrl, tokenExpiry } from '../bunny-signing';
 import { fetchBunnyVideo, startProcessingLoop, type ProcessingEnv } from '../processing/loop';
+import { bunnyLibraryForHost, type BunnyLibrariesEnv, type LibraryHints } from '../bunny/libraries';
 import { backfillOwnershipPage, ownershipIdForKey } from '../search/ownership';
 import { backfillSearchPage } from '../search/backfill';
 
@@ -55,7 +55,6 @@ export interface VideoFormatEnv extends ProcessingEnv {
 	global_settings?: R2Bucket;
 	/** Seconds between pages (default VIDEO_FORMAT_PAGE_DELAY_SECONDS) */
 	VIDEO_FORMAT_PAGE_DELAY_SECONDS?: string;
-	BUNNY_SIGN_HOSTNAME?: string;
 	BUNNY_SIGN_URLS?: string;
 	BUNNY_TOKEN_KEY?: unknown;
 }
@@ -151,13 +150,11 @@ async function sizeFromPlaylist(env: VideoFormatEnv, video: FormatVideo, opts: {
 	if (!where) return null;
 	const { host, id } = where;
 	let url = `https://${host}/${id}/playlist.m3u8`;
-	const signHost = env.BUNNY_SIGN_HOSTNAME || env.bunny_hostname;
-	if (env.BUNNY_SIGN_URLS === 'true' && host === signHost) {
-		const key = await getSecret(env.BUNNY_TOKEN_KEY, 'BUNNY_TOKEN_KEY');
-		if (key) {
-			const expires = tokenExpiry();
-			url = signedBunnyUrl(host, id, 'playlist.m3u8', await bunnyDirectoryToken(key, id, expires), expires);
-		}
+	// Signed with the token key of the library serving that host (lib/bunny/libraries.ts)
+	const library = await bunnyLibraryForHost(env as BunnyLibrariesEnv, host);
+	if (library?.tokenKey) {
+		const expires = tokenExpiry();
+		url = signedBunnyUrl(host, id, 'playlist.m3u8', await bunnyDirectoryToken(library.tokenKey, id, expires), expires);
 	}
 	const master = await fetchText(url, `playlist ${id}`);
 	if (!master) return null;
@@ -173,15 +170,16 @@ async function sizeFromPlaylist(env: VideoFormatEnv, video: FormatVideo, opts: {
 
 /**
  * Bunny's encoded size and length of a ready video, whichever library holds
- * it: the Stream API when the video plays from the configured library (prod:
- * legacy 400189 on vz-215a1ffd), and Bunny's CDN playlists for any other
+ * it: the Stream API when the video plays from a configured library (prod:
+ * 498994, and legacy 400189 on vz-215a1ffd), and Bunny's CDN playlists for any other
  * library (and when the API has no size). Null when Bunny cannot describe it.
  * Throws on transient errors (the page is retried).
  */
 export async function readEncodedSize(env: VideoFormatEnv, video: FormatVideo): Promise<EncodedSize | null> {
 	const where = playlistLocation(env, video);
-	const configuredLibrary = !where || where.host === env.bunny_hostname;
-	const bunny = configuredLibrary ? await fetchBunnyVideo(env, video.id) : null;
+	// Any configured library (primary or legacy) answers through its Stream API
+	const configuredLibrary = !where || !!(await bunnyLibraryForHost(env as BunnyLibrariesEnv, where.host));
+	const bunny = configuredLibrary ? await fetchBunnyVideo(env, video.id, video as LibraryHints) : null;
 	const apiSize = bunny && positive(bunny.width) && positive(bunny.height) ? { width: bunny.width, height: bunny.height } : null;
 	const apiDuration = positive(bunny?.length);
 	if (apiSize && (apiDuration || positive(video.duration))) return { ...apiSize, duration: apiDuration, source: 'bunny-api' };

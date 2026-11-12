@@ -1,3 +1,4 @@
+import { bunnyClientForVideo, type LibraryHints } from '../../lib/bunny/libraries';
 /**
  * GDPR data subject rights endpoints (Story 1.3, AC 2, 3).
  *
@@ -110,14 +111,10 @@ export class PrivacyErase extends AuthenticatedRoute {
 		}
 
 		const env = c.env;
-		let bunny: { client: BunnyStreamClient; libraryId: number } | null = null;
-		const onVideoDeleted = async (videoId: string) => {
+		const onVideoDeleted = async (videoId: string, video?: LibraryHints) => {
 			try {
-				if (!bunny) {
-					const key = await requireSecret(env['bunny-stream-key'], 'bunny-stream-key');
-					const libraryId = parseInt(await requireSecret(env.bunny_stream_library_id, 'bunny_stream_library_id'), 10);
-					bunny = { client: new BunnyStreamClient(key), libraryId };
-				}
+				// The video's own library (lib/bunny/libraries.ts)
+				const bunny = await bunnyClientForVideo(env as never, video);
 				await bunny.client.deleteVideo(bunny.libraryId, videoId);
 			} catch (error) {
 				// Media removal is best-effort: the R2 record is already gone, so the

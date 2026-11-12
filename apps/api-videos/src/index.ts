@@ -3,6 +3,7 @@ import { SUBSCRIPTION_IMPORT_CRON, importPendingSubscriptions } from './lib/subs
 import { handleProcessingCheckBatch, sweepProcessingVideos } from './lib/processing/loop';
 import { handleReaperBatch, isReaperMessage, sweepStaleUploads } from './lib/uploads/reaper';
 import { handleBunnyDeleteBatch, isBunnyDeleteMessage } from './lib/uploads/bunnyDelete';
+import { handleCollectionBackfillMessage, isCollectionBackfillMessage } from './lib/bunny/collectionBackfill';
 import { handlePurgeBatch, isPurgeMessage, startScheduledPurge } from './lib/uploads/testLibraryPurge';
 import { handleMediaMoveBatch, isMediaMoveMessage, sweepMediaJobs } from './lib/media/r2-delivery';
 import { collectDeliveryCosts } from './lib/media/costs';
@@ -619,8 +620,9 @@ async function handleFetch(request: Request, env: AppBindings, ctx: ExecutionCon
  * - otherwise PROCESSING_CHECK_QUEUE, which carries the per-video
  *   processing-check loop, the upload reaper's checks (kind "upload-reaper")
  *   new uploads' playlist adds (kind "playlist-add"), Bunny deletes after an
- *   owner delete (kind "bunny-delete") and the QA/stage test-library purge
- *   (kind "test-library-purge").
+ *   owner delete (kind "bunny-delete"), the QA/stage test-library purge
+ *   (kind "test-library-purge") and the channel collection backfill (kind
+ *   "bunny-collection-backfill").
  * R2 writes go through the search-sync wrapper so changes reach the search
  * index and ownership rows like any API write.
  */
@@ -635,7 +637,10 @@ async function queue(batch: MessageBatch<unknown>, env: AppBindings, ctx: Execut
 		// The same queue carries the Short/video format backfill (lib/video-format/job.ts) and the upload reaper
 		const isFormat = (m: { body: unknown }) => (m.body as { kind?: unknown } | null)?.kind === VIDEO_FORMAT_JOB_KIND;
 		for (const msg of batch.messages.filter(isFormat)) await handleVideoFormatMessage(synced, msg);
-		const rest = batch.messages.filter((m) => !isFormat(m));
+		// Channel collection backfill (lib/bunny/collectionBackfill.ts)
+		const isCollectionBackfill = (m: { body: unknown }) => isCollectionBackfillMessage(m.body);
+		for (const msg of batch.messages.filter(isCollectionBackfill)) await handleCollectionBackfillMessage(synced, msg);
+		const rest = batch.messages.filter((m) => !isFormat(m) && !isCollectionBackfill(m));
 		// New uploads → playlists (lib/playlistUploadAdds.ts)
 		const playlistAdds = rest.filter((m) => isPlaylistAddMessage(m.body));
 		const reaper = rest.filter((m) => isReaperMessage(m.body));

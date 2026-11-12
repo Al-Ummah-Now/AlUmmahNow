@@ -1,3 +1,4 @@
+import { bunnyClientForVideo, type LibraryHints } from '../../lib/bunny/libraries';
 import { Bool, Str } from "chanfana";
 import { z } from "zod";
 import { can, VideoCategory, type ChannelRole } from "@al-ummah/shared-types";
@@ -9,8 +10,6 @@ import { logger } from '../../lib/logger';
 import { inBackground } from "../../lib/websocket-notify";
 import { announceNewVideo } from "../../lib/notification-events";
 import { scanInBackground, videoScanText } from '../../lib/moderation-scan';
-import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
-import { requireSecret } from "../../lib/env-helpers";
 import { canManagePlaylist, roleOnChannel } from "../../lib/channelAccess";
 import { addVideosNow, removeVideos } from "../../lib/playlistBulk";
 import {
@@ -329,9 +328,9 @@ export class VideoBulkUpdate extends AuthenticatedRoute {
 		}
 		if (video.title && video.title !== previous.title) {
 			inBackground(c, 'bulk-bunny-title', async () => {
-				const key = await requireSecret(c.env["bunny-stream-key"], 'bunny-stream-key');
-				const libraryId = parseInt(await requireSecret(c.env.bunny_stream_library_id, 'bunny_stream_library_id'));
-				await new stream(key).forEnv(c.env).updateVideo(libraryId, videoId, { title: video.title });
+				// In the video's own library (lib/bunny/libraries.ts)
+				const { client, libraryId } = await bunnyClientForVideo(c.env as never, video as LibraryHints);
+				await client.updateVideo(libraryId, videoId, { title: video.title });
 			});
 		}
 	}

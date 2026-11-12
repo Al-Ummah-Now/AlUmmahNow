@@ -10,7 +10,7 @@
  */
 
 import { logger } from '../logger';
-import { requireSecret } from '../env-helpers';
+import { bunnyApi, bunnyLibraryForVideo, type BunnyLibrariesEnv, type LibraryHints } from './libraries';
 
 /**
  * Generate a TUS authorization signature for Bunny.net video uploads
@@ -271,17 +271,36 @@ export async function createTusProxySession(
 }
 interface SecretLike { text?(): Promise<string>; get?(): Promise<string> }
 
+/** Library of recent uploads (a video never changes library): one record read per video and isolate, not per TUS chunk */
+const uploadLibraries = new Map<string, number>();
+function rememberUploadLibrary(videoId: string, libraryId: number): void {
+  if (uploadLibraries.size >= 500) uploadLibraries.delete(uploadLibraries.keys().next().value as string);
+  uploadLibraries.set(videoId, libraryId);
+}
+
 /**
  * Headers for a server-side request to a Bunny TUS upload URL (HEAD, PATCH,
  * POST, DELETE): a fresh 1-hour signature each time, so nothing signed
  * earlier can expire under a long upload.
  */
 export async function bunnyTusRequestHeaders(
-  env: { 'bunny-stream-key': SecretLike | string; bunny_stream_library_id: SecretLike | string },
+  env: { 'bunny-stream-key': SecretLike | string; bunny_stream_library_id: SecretLike | string; videos?: R2Bucket },
   videoId: string,
+  record?: LibraryHints | null,
 ): Promise<Record<string, string>> {
-  const bunnyKey = await requireSecret(env['bunny-stream-key'] as never, 'bunny-stream-key');
-  const libraryId = parseInt(await requireSecret(env.bunny_stream_library_id as never, 'bunny_stream_library_id'), 10);
+  // Signed for the library the video was created in (an upload started
+  // before a library switch finishes there; lib/bunny/libraries.ts)
+  let hints = record;
+  if (hints === undefined) {
+    const known = uploadLibraries.get(videoId);
+    if (known !== undefined) hints = { bunnyLibraryId: known };
+    else if (env.videos) {
+      const stored = await env.videos.get(videoId).catch(() => null);
+      hints = stored ? ((await stored.json().catch(() => null)) as LibraryHints | null) : null;
+    }
+  }
+  const { libraryId, apiKey: bunnyKey } = bunnyApi(await bunnyLibraryForVideo(env as BunnyLibrariesEnv, hints));
+  if (hints) rememberUploadLibrary(videoId, libraryId);
   const expirationTime = Math.floor(Date.now() / 1000) + 3600;
   const signature = await generateTUSSignature(libraryId, bunnyKey, expirationTime, videoId);
   return {

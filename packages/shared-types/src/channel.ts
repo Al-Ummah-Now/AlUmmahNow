@@ -45,7 +45,10 @@ export interface Channel extends Timestamps, SoftDelete, Moderation {
   socialLinks?: SocialLinks;
 
   // Bunny.net Integration
-  bunnyCollectionId?: string; // Bunny.net Stream Collection ID for channel videos
+  /** Legacy single Bunny collection id (library not recorded); adopted into bunnyCollections */
+  bunnyCollectionId?: string;
+  /** Bunny Stream collection of the channel's videos, per library id (api-videos lib/channelCollection.ts) */
+  bunnyCollections?: Record<string, string>;
 
   // Timestamps
   dateCreated: string;

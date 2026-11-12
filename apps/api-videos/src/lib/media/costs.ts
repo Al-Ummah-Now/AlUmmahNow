@@ -16,7 +16,8 @@
  * Every part is best effort: a missing input leaves its metric out, never fails the run.
  */
 import { originalsStoredBytes } from './originals';
-import { getSecret, requireSecret } from '../env-helpers';
+import { getSecret } from '../env-helpers';
+import { bunnyApi, bunnyLibraries, type BunnyLibrariesEnv } from '../bunny/libraries';
 import { logger } from '../logger';
 
 /** List prices (2026-11), USD. Kept here so the page and the collector agree. */
@@ -99,15 +100,18 @@ export function metricsFromRecords(input: {
 
 async function bunnyStoredBytes(env: CostEnv): Promise<number | undefined> {
 	try {
-		const key = await requireSecret(env['bunny-stream-key'] as never, 'bunny-stream-key');
-		const lib = await requireSecret(env.bunny_stream_library_id as never, 'bunny_stream_library_id');
+		// Every library this env stores videos in (primary and legacy; lib/bunny/libraries.ts)
 		let total = 0;
-		for (let page = 1; page <= 100; page++) {
-			const res = await fetch(`https://video.bunnycdn.com/library/${encodeURIComponent(lib)}/videos?page=${page}&itemsPerPage=1000`, { headers: { AccessKey: key, accept: 'application/json' } });
-			if (!res.ok) throw new Error(`HTTP ${res.status}`);
-			const body = (await res.json()) as { items?: { storageSize?: number }[]; totalItems?: number };
-			for (const v of body.items ?? []) total += v.storageSize ?? 0;
-			if (!body.items || body.items.length < 1000) break;
+		for (const library of await bunnyLibraries(env as BunnyLibrariesEnv)) {
+			if (!library.primary && !library.apiKey) continue;
+			const { libraryId, apiKey } = bunnyApi(library);
+			for (let page = 1; page <= 100; page++) {
+				const res = await fetch(`https://video.bunnycdn.com/library/${libraryId}/videos?page=${page}&itemsPerPage=1000`, { headers: { AccessKey: apiKey, accept: 'application/json' } });
+				if (!res.ok) throw new Error(`HTTP ${res.status}`);
+				const body = (await res.json()) as { items?: { storageSize?: number }[]; totalItems?: number };
+				for (const v of body.items ?? []) total += v.storageSize ?? 0;
+				if (!body.items || body.items.length < 1000) break;
+			}
 		}
 		return total;
 	} catch (error) {

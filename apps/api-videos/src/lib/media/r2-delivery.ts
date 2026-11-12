@@ -37,6 +37,7 @@ import {
 import { getSecret } from '../env-helpers';
 import { fetchBunnyVideo } from '../processing/loop';
 import { deleteOriginal } from './originals';
+import { bunnyLibraryForVideo, type BunnyLibrariesEnv, type LibraryHints } from '../bunny/libraries';
 import { logger } from '../logger';
 import R2Repository from '../r2Repo';
 import { bunnyDirectoryToken, signedBunnyUrl, tokenExpiry } from '../bunny-signing';
@@ -65,8 +66,14 @@ export interface MediaEnv {
 	MEDIA_CDN_API_TOKEN?: SecretLike;
 	bunny_hostname?: string;
 	BUNNY_SIGN_URLS?: string;
-	BUNNY_SIGN_HOSTNAME?: string;
 	BUNNY_TOKEN_KEY?: SecretLike;
+	/** Legacy Bunny library (lib/bunny/libraries.ts) */
+	BUNNY_LEGACY_LIBRARY_ID?: string;
+	BUNNY_LEGACY_HOSTNAME?: string;
+	BUNNY_LEGACY_STREAM_KEY?: SecretLike;
+	BUNNY_LEGACY_TOKEN_KEY?: SecretLike;
+	'bunny-stream-key'?: SecretLike;
+	bunny_stream_library_id?: SecretLike;
 }
 
 /** Fields of a video record this module reads or writes. */
@@ -443,31 +450,30 @@ export function sourceFiles(bunny: { hasOriginal?: boolean | null; availableReso
  * Signed source URLs, best first (sourceFiles). Directory token in the path when the
  * library uses token auth (Bunny refuses the query-form token for these files).
  */
-export async function sourceCandidates(env: MediaEnv, videoId: string): Promise<string[]> {
-	const host = env.bunny_hostname;
+export async function sourceCandidates(env: MediaEnv, videoId: string, record?: LibraryHints | null): Promise<string[]> {
+	// The video's own library (host and token key; lib/bunny/libraries.ts)
+	const library = await bunnyLibraryForVideo(env as BunnyLibrariesEnv, record);
+	const host = library.host;
 	if (!host) return [];
 	let bunny: { hasOriginal?: boolean | null; availableResolutions?: string | null } | null = null;
 	try {
-		bunny = (await fetchBunnyVideo(env as never, videoId)) as never;
+		// In the video's own library
+		bunny = (await fetchBunnyVideo(env as never, videoId, record ?? undefined)) as never;
 	} catch (error) {
 		logger.warn('[Media] Bunny video lookup failed; trying every source', { videoId, error: error instanceof Error ? error.message : String(error) });
 	}
 	const files = sourceFiles(bunny);
-	const signHost = env.BUNNY_SIGN_HOSTNAME || host;
-	if (env.BUNNY_SIGN_URLS === 'true' && signHost === host) {
-		const key = await getSecret(env.BUNNY_TOKEN_KEY, 'BUNNY_TOKEN_KEY');
-		if (key) {
-			const expires = tokenExpiry();
-			const token = await bunnyDirectoryToken(key, videoId, expires);
-			return files.map((f) => signedBunnyUrl(host, videoId, f, token, expires));
-		}
+	if (library.tokenKey) {
+		const expires = tokenExpiry();
+		const token = await bunnyDirectoryToken(library.tokenKey, videoId, expires);
+		return files.map((f) => signedBunnyUrl(host, videoId, f, token, expires));
 	}
 	return files.map((f) => `https://${host}/${videoId}/${f}`);
 }
 
 /** The first candidate (the original): kept for callers that want one URL. */
-export async function sourceUrl(env: MediaEnv, videoId: string): Promise<string | null> {
-	return (await sourceCandidates(env, videoId))[0] ?? null;
+export async function sourceUrl(env: MediaEnv, videoId: string, record?: LibraryHints | null): Promise<string | null> {
+	return (await sourceCandidates(env, videoId, record))[0] ?? null;
 }
 
 /** Playable R2 URLs of a ready video (private ones signed), or null. */

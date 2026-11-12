@@ -39,7 +39,8 @@ import { eraseUserData } from '../privacy/user-data';
 import { OperationBudget } from '../privacy/scan';
 import { RUN_USER_SWEEP_ACTOR, eraseRunUserData } from '../privacy/run-user-erase';
 import { BunnyStreamClient } from '../bunny/stream';
-import { requireSecret } from '../env-helpers';
+import { bunnyClient as bunnyClientOf, bunnyClientForVideo, bunnyLibraries, type LibraryHints } from '../bunny/libraries';
+import { deleteChannelCollections, renameCollectionsForChannel } from '../channelCollection';
 import { purgeVideoMedia, type MediaEnv } from '../media/r2-delivery';
 import { readAssignment } from '../creatorTiers';
 import { bansFor, deleteBan, readBan, writeBan } from './bans';
@@ -70,6 +71,9 @@ export interface AdminServiceEnv extends AdminEnv {
 	channel_sections?: R2Bucket;
 	'bunny-stream-key'?: { text(): Promise<string> } | string;
 	bunny_stream_library_id?: { text(): Promise<string> } | string;
+	/** Legacy Bunny library of older videos (lib/bunny/libraries.ts) */
+	BUNNY_LEGACY_LIBRARY_ID?: string;
+	BUNNY_LEGACY_STREAM_KEY?: unknown;
 	/** The admin-jobs queue (heavy actions run from it; lib/admin/jobs.ts). */
 	ADMIN_JOBS_QUEUE?: JobQueue;
 	/** Auth service D1, read only (verified emails for the legacy profile restore). */
@@ -95,11 +99,10 @@ async function send(env: AdminServiceEnv, type: MessageType, payload: Record<str
 	}
 }
 
-async function bunny(env: AdminServiceEnv): Promise<{ client: BunnyStreamClient; libraryId: number } | null> {
+/** Stream API client for the library `video` lives in (lib/bunny/libraries.ts); null when unavailable */
+async function bunny(env: AdminServiceEnv, video?: LibraryHints | null): Promise<{ client: BunnyStreamClient; libraryId: number } | null> {
 	try {
-		const key = await requireSecret(env['bunny-stream-key'] as never, 'bunny-stream-key');
-		const libraryId = parseInt(await requireSecret(env.bunny_stream_library_id as never, 'bunny_stream_library_id'), 10);
-		return { client: new BunnyStreamClient(key), libraryId };
+		return await bunnyClientForVideo(env as never, video);
 	} catch (error) {
 		logger.warn('[Admin] Bunny Stream unavailable', { error: error instanceof Error ? error.message : String(error) });
 		return null;
@@ -289,6 +292,8 @@ export async function updateChannel(env: AdminServiceEnv, id: string, edit: Chan
 	if (claimed && previousHandle && env.channel_tabs && handleKey(previousHandle) !== handleKey(claimed)) {
 		await releaseReplacedHandle(env.channel_tabs, env.channels, previousHandle, id);
 	}
+	// The channel's Bunny collections follow its name (lib/channelCollection.ts)
+	if (edit.name !== undefined && saved.name !== existing.name) await renameCollectionsForChannel(env as never, id, saved);
 	await send(env, MessageType.ChannelUpdate, { channelId: id, userId: saved.userId });
 	return saved;
 }
@@ -460,6 +465,11 @@ async function purgeVideo(
 	bunnyClient?: { client: BunnyStreamClient; libraryId: number } | null,
 	opts: { strict?: boolean } = { strict: true },
 ): Promise<void> {
+	// The Bunny library comes from the record (read it before it is gone)
+	let hints: LibraryHints | null = video;
+	if (bunnyClient === undefined && !video?.bunnyLibraryId && !video?.playUrl) {
+		hints = (await repo(env.videos).getObject(videoId).catch(() => null)) ?? video;
+	}
 	await env.videos.delete(videoId);
 	// R2 renditions (epic #687), both buckets; strict jobs retry when it fails
 	try {
@@ -468,7 +478,7 @@ async function purgeVideo(
 		logger.warn('[Admin] R2 media delete failed', { videoId, error: error instanceof Error ? error.message : String(error) });
 		if (opts.strict) throw error;
 	}
-	const b = bunnyClient === undefined ? await bunny(env) : bunnyClient;
+	const b = bunnyClient === undefined ? await bunny(env, hints) : bunnyClient;
 	if (!b && opts.strict) throw new Error('Bunny Stream is unavailable');
 	if (b) {
 		try {
@@ -619,11 +629,11 @@ async function purgeChannel(env: AdminServiceEnv, job: AdminJob): Promise<JobOut
 			await env.channel_tabs.delete(`channel-tabs/${id}`);
 		}
 		const videoIds = await idsOf(env, 'video', { channelId: id });
-		const b = await bunny(env);
 		let failed = 0;
 		await eachLimited(videoIds, 6, async (videoId) => {
 			try {
-				await purgeVideo(env, videoId, { userId, channelId: id }, b);
+				// Each video is deleted from its own Bunny library
+				await purgeVideo(env, videoId, { userId, channelId: id });
 			} catch (error) {
 				failed++;
 				logger.warn('[Admin] Video purge failed', { videoId, error: error instanceof Error ? error.message : String(error) });
@@ -639,6 +649,9 @@ async function purgeChannel(env: AdminServiceEnv, job: AdminJob): Promise<JobOut
 	if (step.failed > 0) return finish({ playlists: p.playlists, cursor: p.cursor ?? null }, step.failed);
 	const result = { videos: p.videos, posts: p.posts, sections: p.sections, playlists: Number(p.playlists ?? 0) + step.removed, scanned: Number(p.scanned ?? 0) + step.scanned };
 	if (step.cursor) return { done: false, params: { ...p, ...result, cursor: step.cursor }, result };
+	// The channel's Bunny collections (a soft-deleted channel kept them; lib/channelCollection.ts)
+	const purgedChannel = await repo(env.channels).getObject(id);
+	if (purgedChannel) await removeChannelCollections(env, id, purgedChannel);
 	// Last: the record itself (the deletion row and the admin audit log keep the history)
 	await env.channels.delete(id);
 	await send(env, MessageType.ChannelDelete, { channelId: id, userId, reason: 'admin' });
@@ -654,7 +667,7 @@ export async function videoDetail(env: AdminServiceEnv, id: string): Promise<Adm
 	if (!video || id.includes(':')) throw new AdminError(404, 'video_not_found');
 	const channel = video.channelId ? await repo(env.channels).getObject(video.channelId) : null;
 	let processing: AdminVideoDetail['processing'] = null;
-	const b = await bunny(env);
+	const b = await bunny(env, video);
 	if (b) {
 		try {
 			const model = (await b.client.getVideo(b.libraryId, id)) as Row;
@@ -791,7 +804,7 @@ export async function setVideoPublished(env: AdminServiceEnv, id: string, publis
 export async function reprocessVideo(env: AdminServiceEnv, id: string): Promise<Row> {
 	const video = await repo(env.videos).getObject(id);
 	if (!video) throw new AdminError(404, 'video_not_found');
-	const b = await bunny(env);
+	const b = await bunny(env, video);
 	if (!b) throw new AdminError(409, 'processor_unavailable');
 	try {
 		await b.client.reencodeVideo(b.libraryId, id);
@@ -1331,14 +1344,15 @@ async function runUserDelete(env: AdminServiceEnv, job: AdminJob): Promise<JobOu
 /** One step of a run account's cheap erasure (lib/privacy/run-user-erase.ts, #887). */
 async function runRunUserErase(env: AdminServiceEnv, job: AdminJob): Promise<JobOutcome> {
 	if (!(await pendingDeletion(env.SEARCH_DB!, 'user', job.targetId))) return { done: true, result: { skipped: 'user_not_deleted' } };
-	const b = await bunny(env);
 	const previous = (job.result?.deletedVideos as number | undefined) ?? 0;
 	const step = await eraseRunUserData(
 		env as never,
 		job.targetId,
 		new OperationBudget(900),
 		{
-			onVideoDeleted: async (videoId: string) => {
+			onVideoDeleted: async (videoId: string, video?: LibraryHints) => {
+				// The video's own library (lib/bunny/libraries.ts)
+				const b = await bunny(env, video);
 				if (!b) return;
 				try {
 					await b.client.deleteVideo(b.libraryId, videoId);
@@ -1357,14 +1371,15 @@ async function runRunUserErase(env: AdminServiceEnv, job: AdminJob): Promise<Job
 }
 
 async function eraseUserStep(env: AdminServiceEnv & Record<string, unknown>, userId: string, resumeToken?: string) {
-	const b = await bunny(env);
 	const budget = new OperationBudget(900);
 	const summary = await eraseUserData(
 		env as never,
 		userId,
 		budget,
 		{
-			onVideoDeleted: async (videoId: string) => {
+			onVideoDeleted: async (videoId: string, video?: LibraryHints) => {
+				// The video's own library (lib/bunny/libraries.ts)
+				const b = await bunny(env, video);
 				if (!b) return;
 				try {
 					await b.client.deleteVideo(b.libraryId, videoId);
@@ -1519,3 +1534,18 @@ export const ADMIN_JOB_HANDLERS: Record<AdminJobKind, JobHandler> = {
 	// Bulk adds to a channel playlist above the inline cap, or after an inline write failed (lib/playlistBulk.ts)
 	'playlist.add-videos': (env, job) => runPlaylistAddStep(env as PlaylistEnv, job),
 };
+
+/** Remove a purged channel's Bunny collections in every library (best effort) */
+async function removeChannelCollections(env: AdminServiceEnv, channelId: string, channel: Row): Promise<void> {
+	try {
+		const libraries = await bunnyLibraries(env as never);
+		const clientFor = async (libraryId: number) => {
+			const library = libraries.find((l) => l.libraryId === libraryId);
+			return library?.apiKey ? bunnyClientOf(env, library).client : undefined;
+		};
+		const deleted = await deleteChannelCollections(clientFor, libraries.map((l) => l.libraryId), channelId, channel);
+		if (deleted > 0) logger.debug('[Admin] Channel collections removed', { channelId, deleted });
+	} catch (error) {
+		logger.warn('[Admin] Channel collection cleanup failed', { channelId, error: error instanceof Error ? error.message : String(error) });
+	}
+}

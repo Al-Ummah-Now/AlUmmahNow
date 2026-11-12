@@ -12,6 +12,8 @@ import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { canClaimOfficialHandles, claimHandle, handleKey, normalizeHandleInput, releaseReplacedHandle, validateHandleFormat } from "../../lib/channelHandles";
 import { logger } from "../../lib/logger";
+import { inBackground } from "../../lib/websocket-notify";
+import { renameCollectionsForChannel } from "../../lib/channelCollection";
 
 export class ChannelUpdate extends AuthenticatedRoute {
     schema = {
@@ -185,6 +187,10 @@ export class ChannelUpdate extends AuthenticatedRoute {
             return c.json({ success: false, error: "You do not have permission to update this channel" }, 403);
         }
         const updatedChannel = saved.video;
+        // The channel's Bunny collections follow its name (lib/channelCollection.ts)
+        if (updatedChannel.name !== existingChannel.name) {
+            inBackground(c, 'channel-collection-rename', () => renameCollectionsForChannel(c.env as never, id, updatedChannel));
+        }
         
         // Send queue message for channel update
         const queue = new Queue(c.env.queue);

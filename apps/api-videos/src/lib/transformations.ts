@@ -88,11 +88,14 @@ export function transformChannelToView(channel: z.infer<typeof BusinessChannel>)
     // Admin bookkeeping stays out of every view (who suspended it, the holds),
     // and so does the channel team: it is read through GET /:id/members, which
     // checks members.view
-    const { suspension, suspensionHolds: _holds, hiddenBeforeSuspension: _before, members: _members, ...rest } = channel as typeof channel & {
+    // Bunny collection ids are internal too (lib/channelCollection.ts)
+    const { suspension, suspensionHolds: _holds, hiddenBeforeSuspension: _before, members: _members, bunnyCollectionId: _collection, bunnyCollections: _collections, ...rest } = channel as typeof channel & {
         suspension?: { at?: string; reason?: string; by?: string };
         suspensionHolds?: unknown;
         hiddenBeforeSuspension?: unknown;
         members?: unknown;
+        bunnyCollectionId?: unknown;
+        bunnyCollections?: unknown;
     };
     return {
         ...(rest as typeof channel),

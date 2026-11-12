@@ -28,6 +28,8 @@ export interface SyncableVideo {
 	id: string;
 	dateCreated?: string;
 	uploadStatus?: 'initiated' | 'uploading' | 'processing' | 'ready' | 'failed';
+	/** Bunny Stream library the video lives in (lib/bunny/libraries.ts); older records: by playUrl host */
+	bunnyLibraryId?: number;
 	playUrl?: string;
 	thumbnailUrl?: string;
 	thumbnailType?: 'auto' | 'custom';

@@ -8,7 +8,7 @@ import { checkDraftAllowed } from "../../lib/studioLimits";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import { Channel, VideoCategory } from "@al-ummah/shared-types";
 import R2Repository from "../../lib/r2Repo";
-import { ensureChannelCollection } from '../../lib/channelCollection';
+import { uploadCollection } from '../../lib/channelCollection';
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
 import { requireSecret, requireEnvVar } from "../../lib/env-helpers";
@@ -202,7 +202,7 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 			// Creates the Bunny video and its record (the claim, when there is
 			// one, guarantees this runs once per file).
 			const create = async (): Promise<string> => {
-				const collectionId = await this.channelCollection(c, bunnyStream, libraryId, channelId, userId);
+				const collectionId = await uploadCollection(c.env, bunnyStream, libraryId, channelId, userId);
 				const bunnyVideo = await bunnyStream.createVideo(libraryId, {
 					title,
 					collectionId, // Add to collection if available
@@ -235,6 +235,7 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 						mimeType,
 						customThumbnail: thumb.custom ? { url: thumb.thumbnailUrl, type: thumb.thumbnailType, sizes: thumb.thumbnailSizes } : undefined,
 						bunnyHostname: c.env.bunny_hostname,
+						bunnyLibraryId: libraryId,
 						now: new Date(now),
 					}),
 					...(claimKey ? { uploadFingerprint: claimKey, lastInitiateAt: now } : {}),
@@ -361,30 +362,6 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 				error: "Failed to initiate upload",
 				details: errorMessage,
 			}, 500);
-		}
-	}
-
-	/** The channel's Bunny collection (created on first upload); undefined for a user-level upload or on failure. */
-	private async channelCollection(c: AppContext, bunnyStream: stream, libraryId: number, channelId: string, userId: string): Promise<string | undefined> {
-		if (channelId === userId) return undefined;
-		const channelRepo = new R2Repository<Channel>(c.env.channels);
-		const channel = await channelRepo.getObject(channelId);
-		if (!channel) {
-			logger.debug('[UploadInitiate] Channel not found, skipping collection', { channelId, userId });
-			return undefined;
-		}
-		if (channel.bunnyCollectionId) return channel.bunnyCollectionId;
-		try {
-			const collectionId = await ensureChannelCollection(channelRepo, bunnyStream, libraryId, channelId, channel.name || `Channel ${channelId}`);
-			logger.debug('[UploadInitiate] Collection created and saved to channel', { channelId, collectionId });
-			return collectionId;
-		} catch (error) {
-			logger.error('[UploadInitiate] Failed to create collection', {
-				channelId,
-				error: error instanceof Error ? error.message : String(error),
-			});
-			// Continue without collection - video will be created without collectionId
-			return undefined;
 		}
 	}
 

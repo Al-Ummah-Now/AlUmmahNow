@@ -230,7 +230,7 @@ describe('channel JSON writers (AV-5)', () => {
 		};
 		const results = await Promise.all(Array.from({ length: 20 }, () =>
 			ensureChannelCollection(new R2Repository<any>(channels as any), bunny, 1, 'ch', 'Channel')));
-		const kept = channels.read('ch').bunnyCollectionId;
+		const kept = channels.read('ch').bunnyCollections?.['1'];
 		assert.ok(kept);
 		assert.ok(results.every((id) => id === kept), 'every upload uses the stored collection');
 		assert.equal(deleted.length, 19, 'the other collections were removed');
