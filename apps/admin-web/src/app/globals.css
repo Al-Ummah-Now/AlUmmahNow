@@ -28,7 +28,9 @@
   --accent-hover: var(--fanous-color-primary-hover);
   --on-accent: var(--fanous-color-on-primary);
   --focus: var(--fanous-color-focus-ring);
-  --danger-bg: color-mix(in srgb, var(--fanous-color-error-fill) 12%, var(--fanous-color-surface));
+  /* A light tint: error text on it stays ≥ 4.5:1 in every theme (12% was 4.21:1 on Fawanees light's amber surface, #1037);
+     --danger-border carries the colour */
+  --danger-bg: color-mix(in srgb, var(--fanous-color-error-fill) 6%, var(--fanous-color-surface));
   --danger-border: var(--fanous-color-error-fill);
   --danger-fg: var(--fanous-color-error-text);
   --success-fg: var(--fanous-color-success-text);

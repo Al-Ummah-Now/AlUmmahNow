@@ -87,8 +87,7 @@ test.describe('channel transfer', () => {
     for (const id of created.splice(0)) await purgeChannel(id, superToken());
   });
 
-  // quarantined: #1037 @meywd (its axe scan fails on the Suspend/Delete buttons' danger contrast, 4.21:1)
-  test.fixme('TRANSFER-01 the picker finds users by email, name and @handle, never the current owner', async ({ page }) => {
+  test('TRANSFER-01 the picker finds users by email, name and @handle, never the current owner', async ({ page }) => {
     const channel = await createChannel('search');
     await page.goto(`/channels/${channel.id}`);
     await expect(picker(page)).toHaveAttribute('role', 'combobox');

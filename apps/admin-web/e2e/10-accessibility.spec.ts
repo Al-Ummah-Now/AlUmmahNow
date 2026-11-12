@@ -50,8 +50,6 @@ test.describe('axe - public pages', () => {
 
   for (const variant of VARIANTS) {
     test(`A11Y-03 login error [${variant.locale}/${variant.theme}]`, async ({ page }) => {
-      // quarantined: #1037 @meywd (danger text on danger background is 4.21:1 in the light theme)
-      test.fixme(variant.locale === 'en' && variant.theme === 'light', 'quarantined: #1037 @meywd danger text contrast 4.21:1');
       await setPreferences(page, variant);
       await page.goto('/login?error=auth_failed');
       await expectNoAxeViolations(page, `login error ${variant.locale}/${variant.theme}`);
