@@ -42,6 +42,10 @@ export const ADMIN_LIVE_PREFIX = 'admin:';
 export const ADMIN_LIVE_INTERVAL_MS = 1000;
 /** Most events one update carries; beyond that subscribers get `resync`. */
 export const ADMIN_LIVE_MAX_EVENTS = 50;
+/** Largest event (JSON characters) carried as is; bigger ones are cut to `{ kind, key, truncated }`. */
+export const ADMIN_LIVE_MAX_EVENT_CHARS = 2048;
+/** How long a producer waits for the realtime worker. */
+export const ADMIN_LIVE_PUBLISH_TIMEOUT_MS = 3000;
 /** Message type of a coalesced update. */
 export const ADMIN_LIVE_UPDATE = 'admin.update';
 
@@ -98,6 +102,12 @@ export function adminLiveEventKey(event: AdminLiveEvent): string {
   return event.key ?? event.kind;
 }
 
+/** An event small enough to hold: one over ADMIN_LIVE_MAX_EVENT_CHARS keeps only kind and key (the page refetches). */
+export function boundedAdminLiveEvent(event: AdminLiveEvent): AdminLiveEvent {
+  if (JSON.stringify(event).length <= ADMIN_LIVE_MAX_EVENT_CHARS) return event;
+  return { kind: String(event.kind).slice(0, 100), key: adminLiveEventKey(event).slice(0, 200), truncated: true };
+}
+
 /**
  * Merges pending events with new ones, latest per key wins, keeping first-seen
  * order. Returns at most `max` events and whether any were dropped.
@@ -108,7 +118,7 @@ export function coalesceAdminLiveEvents(
   max = ADMIN_LIVE_MAX_EVENTS,
 ): { events: AdminLiveEvent[]; overflow: boolean } {
   const byKey = new Map<string, AdminLiveEvent>();
-  for (const e of [...pending, ...incoming]) byKey.set(adminLiveEventKey(e), e);
+  for (const e of [...pending, ...incoming.map(boundedAdminLiveEvent)]) byKey.set(adminLiveEventKey(e), e);
   const events = [...byKey.values()];
   return events.length > max ? { events: events.slice(-max), overflow: true } : { events, overflow: false };
 }
@@ -153,7 +163,8 @@ export async function publishAdminLive(
     const res = await fetcher(`${base}/broadcast`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-API-Key': key },
-      body: JSON.stringify({ items: [adminLiveItem(topic, list)] }),
+      body: JSON.stringify({ items: [adminLiveItem(topic, list.map(boundedAdminLiveEvent))] }),
+      signal: AbortSignal.timeout(ADMIN_LIVE_PUBLISH_TIMEOUT_MS),
     });
     return res.ok;
   } catch {
