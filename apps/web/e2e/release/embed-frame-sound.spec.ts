@@ -96,14 +96,19 @@ const look = (frame: Frame) =>
       // the player's left edge, and whether the "Watch on" link sits on the player (not the page)
       x: box ? Math.round(box.left) : -1,
       linkOnPlayer: !!box && !!link && link.left >= box.left - 1 && link.right <= box.right + 1 && link.top >= box.top - 1,
-      // the control bar: every visible control on one row, inside the player (compact when narrow)
+      // the control bar: every visible control inside the player, and the buttons on one row (compact
+      // when narrow). The progress bar has a row of its own by design, so it is left out of the row
+      // check; the buttons' vertical centres agree within 6 px (their tops differ by a few sub-pixels
+      // with the buttons' heights, which flipped a top-bucketed check between runs).
       controlsOneRow: (() => {
         const bar = document.querySelector('.vjs-control-bar');
         if (!bar || !box) return false;
-        const shown = [...bar.children].map((c) => c.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0);
-        const buttons = shown.filter((r) => r.height <= 60);
-        const tops = new Set(buttons.map((r) => Math.round(r.top / 4)));
-        return shown.every((r) => r.left >= box.left - 1 && r.right <= box.right + 1) && tops.size <= 2;
+        const shown = [...bar.children]
+          .map((c) => ({ progress: c.classList.contains('vjs-progress-control'), r: c.getBoundingClientRect() }))
+          .filter(({ r }) => r.width > 0 && r.height > 0);
+        const centres = shown.filter(({ progress, r }) => !progress && r.height <= 60).map(({ r }) => r.top + r.height / 2);
+        const oneRow = centres.length === 0 || Math.max(...centres) - Math.min(...centres) <= 6;
+        return shown.every(({ r }) => r.left >= box.left - 1 && r.right <= box.right + 1) && oneRow;
       })(),
     };
   });
@@ -130,13 +135,19 @@ test.describe('Release: the embed fills its frame on the night colour', () => {
         const frame = await embedFrame(page);
         await expect(frame.locator('.custom-video-player')).toBeVisible({ timeout: 45000 });
         if (ON_PR && !(await look(frame)).backdrop) skipOnPr('the embed frame fill (components/embed/embed-frame.css)');
+        // The poll returns the failing parts by name, so a red run says which one
         await expect
           .poll(async () => {
             const l = await look(frame);
-            const centred = Math.abs(l.x - (width - l.w) / 2) <= 2;
-            return l.backdrop && Math.abs(l.w - player.w) <= 2 && Math.abs(l.h - player.h) <= 2 && centred && l.linkOnPlayer && l.controlsOneRow;
+            const failing: string[] = [];
+            if (!l.backdrop) failing.push('backdrop not the night colour');
+            if (Math.abs(l.w - player.w) > 2 || Math.abs(l.h - player.h) > 2) failing.push(`player ${l.w}x${l.h}`);
+            if (Math.abs(l.x - (width - l.w) / 2) > 2) failing.push(`not centred (left ${l.x})`);
+            if (!l.linkOnPlayer) failing.push('"Watch on" not on the player');
+            if (!l.controlsOneRow) failing.push('controls not on one row inside the player');
+            return failing;
           }, { message: `player ${player.w}x${player.h}, centred, on the night colour, "Watch on" and the controls on the player`, timeout: 15000 })
-          .toBe(true);
+          .toEqual([]);
       });
     }
   }
@@ -177,16 +188,29 @@ test.describe('Release: a click-started play has sound', () => {
     await expect(frame.getByTestId('embed-unmute')).toHaveCount(0);
   });
 
-  test('no user activation: muted, "Tap to unmute" (Arabic), which brings the sound back', async ({ page, browserName }) => {
-    await host(page, `${target().web}/embed/v/${videos.vertical.id}?lang=ar&autoplay=1&gesture=1`, { width: 216, height: 384 }, 'load');
-    const frame = await embedFrame(page);
-    await skipIfPredates(frame);
-    if (browserName === 'chromium') {
-      // Chrome's default policy refuses sound without activation: muted, still playing
-      await expect.poll(async () => (await media(frame))?.muted, { timeout: 45000 }).toBe(true);
-      await expect.poll(async () => (await media(frame))?.time ?? 0, { message: 'the muted fallback did not play', timeout: 45000 }).toBeGreaterThan(1);
-      await expect(frame.getByTestId('embed-unmute')).toHaveText('اضغط لتشغيل الصوت');
+  // landscape40 (40 s) in the Short's 216x384 frame: the 4 s vertical clip ended before a slow
+  // runner's first look ("watch again", nothing to unmute).
+  test('no user activation: muted, "Tap to unmute" (Arabic), which brings the sound back', async ({ page, browserName, browserType, channel, headless, launchOptions }) => {
+    // Chrome's default policy may allow sound without activation (the CI runner did, so the embed
+    // rightly played unmuted). A browser of this test's own that requires a gesture makes the muted
+    // fallback the path under test. Only here: the flag also refuses sound after a click.
+    const own = browserName === 'chromium'
+      ? await browserType.launch({ ...launchOptions, channel, headless, args: [...(launchOptions.args ?? []), '--autoplay-policy=user-gesture-required'] })
+      : null;
+    try {
+      const p = own ? await own.newPage() : page;
+      await host(p, `${target().web}/embed/v/${videos.landscape40.id}?lang=ar&autoplay=1&gesture=1`, { width: 216, height: 384 }, 'load');
+      const frame = await embedFrame(p);
+      await skipIfPredates(frame);
+      if (own) {
+        // no activation and sound refused: muted, still playing, with the Arabic control
+        await expect.poll(async () => (await media(frame))?.muted, { message: 'not muted without activation', timeout: 45000 }).toBe(true);
+        await expect.poll(async () => (await media(frame))?.time ?? 0, { message: 'the muted fallback did not play', timeout: 45000 }).toBeGreaterThan(1);
+        await expect(frame.getByTestId('embed-unmute')).toHaveText('اضغط لتشغيل الصوت');
+      }
+      await mutedOnlyWithControl(frame);
+    } finally {
+      await own?.close();
     }
-    await mutedOnlyWithControl(frame);
   });
 });
