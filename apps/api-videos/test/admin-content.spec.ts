@@ -12,6 +12,7 @@ import { fromHono } from 'chanfana';
 import { applySuspensionHold, deletionDaysLeft, deletionStatusOf, isPurgeDue, liftSuspensionHold, MessageType, purgeAfterOf, VIDEOS_BANNED_CODE } from '@al-ummah/shared-types';
 import { canViewPlaylist } from '../src/lib/playlists';
 import { ownershipCompleteKey } from '@al-ummah/shared-types';
+import { CHANNEL_HANDLE_PREFIX_SQL, PROFILE_EXACT_SQL } from '../src/lib/admin/userSearch';
 import adminRouter from '../src/routers/admin.router';
 import { withSearchSync } from '../src/lib/search/sync';
 import { runOwnershipPass } from '../src/lib/search/ownership';
@@ -439,6 +440,22 @@ describe('channel actions', () => {
 		const trimmed = await call('POST', '/channels/ch1/transfer', { newOwnerId: ` ${OTHER} ` });
 		assert.equal(trimmed.status, 200);
 		assert.equal(JSON.parse(raw.channels.store.get('ch1')!).userId, OTHER);
+	});
+
+	it('user search stays cheap: exact matches and channel handles use indexes, never a full scan (TRANSFER-01)', async () => {
+		const { db, call } = await setup();
+		const plan = (sql: string) => (db.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as Array<{ detail: string }>).map((r) => r.detail).join(' | ');
+		const bound = (sql: string, values: string[]) => values.reduce((q, v, i) => q.replaceAll(`?${i + 1}`, v), sql);
+		const exact = plan(bound(PROFILE_EXACT_SQL, ["'usr_x'", "'x@example.com'", '5']));
+		assert.match(exact, /idx_content_ownership_email_lower/, exact);
+		assert.match(exact, /idx_content_ownership_handle_lower/, exact);
+		assert.doesNotMatch(exact, /SCAN (content_ownership|p)\b/, exact);
+		const handles = plan(bound(CHANNEL_HANDLE_PREFIX_SQL, ["'ab'", '5']));
+		assert.match(handles, /idx_content_ownership_handle_lower/, handles);
+		// Behaviour the picker relies on: an exact email answers alone; a soft-deleted user is never offered
+		assert.deepEqual((await call('GET', `/users/search?q=${encodeURIComponent(`${OTHER}@example.com`)}`)).body.result.items.map((u: { id: string }) => u.id), [OTHER]);
+		await call('POST', `/users/${OTHER}/delete-data`, {});
+		assert.deepEqual((await call('GET', `/users/search?q=${encodeURIComponent(`${OTHER}@example.com`)}`)).body.result.items, []);
 	});
 
 	it('user search finds users by email, name, @handle, channel @handle and id, without the excluded owner', async () => {

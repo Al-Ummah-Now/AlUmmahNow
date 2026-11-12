@@ -15,6 +15,7 @@
 --   apps/api-videos/migrations/search/0015_admin_deletions.sql
 --   apps/api-videos/migrations/search/0016_creator_tier_soft_delete.sql
 --   apps/api-videos/migrations/search/0017_deletions_by_channel.sql
+--   apps/api-videos/migrations/search/0018_user_search_indexes.sql
 --   apps/api-videos/migrations/search/0020_media_delivery.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
@@ -81,6 +82,8 @@ CREATE INDEX idx_content_ownership_channel ON content_ownership (kind, channel_i
 CREATE INDEX idx_content_ownership_channel_short ON content_ownership (kind, channel_id, is_short, created_at);
 CREATE INDEX idx_content_ownership_channel_status ON content_ownership (kind, channel_id, studio_status, created_at);
 CREATE INDEX idx_content_ownership_created ON content_ownership (kind, created_at);
+CREATE INDEX idx_content_ownership_email_lower ON content_ownership (kind, lower(email));
+CREATE INDEX idx_content_ownership_handle_lower ON content_ownership (kind, lower(handle));
 CREATE INDEX idx_content_ownership_indexed ON content_ownership (kind, indexed_at);
 CREATE INDEX idx_content_ownership_needs_format ON content_ownership (kind, needs_format, created_at);
 CREATE INDEX idx_content_ownership_owner ON content_ownership (kind, owner_id);
