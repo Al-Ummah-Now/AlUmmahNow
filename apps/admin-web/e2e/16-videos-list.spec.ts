@@ -13,7 +13,8 @@
  * test changes its own video's state). PR runs skip while QA's admin-web
  * predates the client lists.
  */
-import { test, expect, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { test, expect } from './support/fixtures';
 import { adminApi, readTokens } from './support/api';
 import { RUN_ID, VIDEOS_API_URL } from './support/env';
 import { skipUntilClientListsDeployed } from './support/deployed';
