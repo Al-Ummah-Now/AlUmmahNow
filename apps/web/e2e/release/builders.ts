@@ -1,6 +1,6 @@
 /**
  * Fixture builders: every spec creates the data it needs and removes it afterwards (owner rule
- * 2026-11-12, docs/testing/E2E-PLACEMENT.md "Data"). No spec reads the global seed, a demo video,
+ * 2026-11-12, scripts/e2e/placement-doc.ts "Data"). No spec reads the global seed, a demo video,
  * "the newest public video" or a hard-coded id (scripts/qa/__tests__/own-data.test.ts).
  *
  *   const data = useOwnData(test);                         // afterAll: data.cleanup()

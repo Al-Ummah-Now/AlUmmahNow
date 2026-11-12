@@ -1,13 +1,14 @@
 /**
  * Guard: every E2E spec file has a placement (local stack or deployed QA/stage) with a reason,
- * and docs/testing/E2E-PLACEMENT.md matches apps/web/e2e/test-utils/placement.ts.
+ * in apps/web/e2e/test-utils/placement.ts (the table is generated from it, never committed:
+ * scripts/e2e/placement-doc.ts).
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { SPEC_PLACEMENT } from '../../../apps/web/e2e/test-utils/placement.ts';
-import { DOC_PATH, renderPlacementDoc } from '../../e2e/placement-doc.ts';
+import { renderPlacementDoc } from '../../e2e/placement-doc.ts';
 
 const ROOT = join(import.meta.dirname, '..', '..', '..');
 const SPEC = /\.spec\.ts$|\/release-prod\/[^/]+\.check\.ts$/;
@@ -25,6 +26,10 @@ const DEPLOYED_CATEGORY = /^(sso|bunny|media|pipeline|cross-app|shared-env): \S/
 
 describe('E2E placement', () => {
   const files = [...specFiles('apps/web/e2e'), ...specFiles('apps/admin-web/e2e')].sort();
+
+  it('renders the placement table', () => {
+    assert.match(renderPlacementDoc(), /^# Where each E2E spec runs/);
+  });
 
   it('lists every spec file', () => {
     const missing = files.filter((f) => !(f in SPEC_PLACEMENT));
@@ -50,8 +55,4 @@ describe('E2E placement', () => {
     }
   });
 
-  it('docs/testing/E2E-PLACEMENT.md is up to date', () => {
-    assert.equal(readFileSync(DOC_PATH, 'utf8'), renderPlacementDoc(),
-      'run: node --experimental-strip-types --no-warnings scripts/e2e/placement-doc.ts --write');
-  });
 });

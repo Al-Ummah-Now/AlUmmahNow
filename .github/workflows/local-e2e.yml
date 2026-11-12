@@ -1,10 +1,10 @@
 name: Local E2E
 
-# E2E specs placed `local` (apps/web/e2e/test-utils/placement.ts, docs/testing/E2E-PLACEMENT.md)
+# E2E specs placed `local` (apps/web/e2e/test-utils/placement.ts; table: scripts/e2e/placement-doc.ts)
 # run here, on a local stack each job boots for itself (docs/testing/LOCAL-STACK.md): this PR's
 # code, the Auth repo's last released bundle, fakes for Bunny/images/Resend, mocked AI, seeded data.
 # No QA, no shared data, no locks: every job is isolated, so the matrix runs fully in parallel.
-# The deployed specs keep running against QA/stage (release-e2e.yml); see E2E-PLACEMENT.md.
+# The deployed specs keep running against QA/stage (release-e2e.yml); see the placement table in the build job's summary.
 
 # The Auth repo comes as its released local-stack bundle (scripts/local-stack/fetch-auth.ts),
 # never as a checkout, so these jobs may also run in default-branch contexts (push, schedule, tags)
@@ -48,6 +48,9 @@ jobs:
         run: pnpm install --frozen-lockfile
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Placement table
+        run: node --experimental-strip-types --no-warnings scripts/e2e/placement-doc.ts >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build
         run: |

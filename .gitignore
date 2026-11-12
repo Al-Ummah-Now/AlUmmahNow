@@ -79,3 +79,5 @@ release-result.json
 .migration-backups/
 wrangler.local-stack.json
 /.local-stack/
+# Generated on demand (scripts/e2e/placement-doc.ts), never committed
+docs/testing/E2E-PLACEMENT.md
