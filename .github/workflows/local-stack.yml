@@ -5,6 +5,9 @@ name: Local stack
 # one Miniflare with local D1/R2/KV/queues/Secrets Store. No deployed environment is touched: no
 # Cloudflare token, no QA secrets. The E2E jobs that run specs on this stack reuse the same steps.
 
+# Pull requests only: the job checks out a second repo (the Auth repo), and in a default-branch
+# context (push, workflow_dispatch) every later step could poison caches that the default branch
+# trusts (CodeQL actions/cache-poisoning).
 on:
   pull_request:
     branches: [main]
@@ -14,14 +17,6 @@ on:
       - 'apps/*/wrangler*.json*'
       - 'apps/*/migrations*/**'
       - 'apps/api-videos/migrations/**'
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/local-stack/**'
-      - '.github/workflows/local-stack.yml'
-      - 'apps/*/wrangler*.json*'
-      - 'apps/*/migrations*/**'
-  workflow_dispatch:
 
 permissions:
   contents: read
