@@ -16,8 +16,12 @@
  *   for videos). On the local stack (E2E_ENV=local) the fake Bunny encodes right after the upload;
  *   on QA/stage the real encode is awaited and a slow one skips with #929 (encode.ts).
  * - Names carry ns(): run id, spec file and worker, so parallel shards and runs never share rows.
- * - A DataScope records what it created; cleanup() deletes it in reverse order (404 is fine).
- *   The run's accounts are also deleted by the workflow teardown (run-users.ts) on QA/stage.
+ * - A DataScope records what it created; cleanup() (afterAll: also after a failed or timed-out test)
+ *   deletes it in reverse order, videos permanently (DELETE /api/videos/:id/permanent: record, media,
+ *   the Bunny video and their index rows), 404 is fine. Everything belongs to run accounts
+ *   (sinkEmail → run-users.ts in CI), so if a worker crashes before afterAll the run's teardown
+ *   (cleanup-test-content.ts --run-users, then teardown-run-users.ts) still erases the content and
+ *   deletes the accounts on QA/stage; the local stack is discarded with the job.
  *
  * Imports stay inside e2e/release, e2e/test-utils/{code-sink,run-users,placement}.ts and
  * e2e/test-fixtures (the release suite runs from a copy, CLAUDE.md "Release regressions").
@@ -155,7 +159,15 @@ export class DataScope {
     const id = initiate.result?.videoId as string;
     const tusSessionId = initiate.result?.tusSessionId as string;
     expect(id && tusSessionId, 'upload initiate returned no videoId/tusSessionId').toBeTruthy();
-    this.undo.push({ what: `video ${id}`, run: () => apiFetch(user, `/api/videos/${id}`, { method: 'DELETE', headers: { channelId } }) });
+    // Cleanup deletes for good (record, media, the Bunny video, search/ownership rows), even mid-encode
+    // or after an interrupted upload: trash first (the owner's delete), then the permanent delete
+    this.undo.push({
+      what: `video ${id}`,
+      run: async () => {
+        await apiFetch(user, `/api/videos/${id}`, { method: 'DELETE', headers: { channelId } });
+        return apiFetch(user, `/api/videos/${id}/permanent`, { method: 'DELETE', headers: { channelId } });
+      },
+    });
 
     const b64 = (v: string) => Buffer.from(v, 'utf8').toString('base64');
     const create = await apiFetch(user, '/api/videos/tus', {
