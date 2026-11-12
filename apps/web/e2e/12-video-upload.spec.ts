@@ -12,7 +12,7 @@ import {
   trackUploads,
   uploadUi,
 } from './test-utils/upload';
-import { BUNNY_BACKLOG, BUNNY_WAIT_MS, getVideo, skipSlowEncode, userApi } from './test-utils/e2e-videos';
+import { API_URL, BUNNY_BACKLOG, BUNNY_WAIT_MS, getVideo, skipSlowEncode, userApi } from './test-utils/e2e-videos';
 
 /**
  * Video Upload Flow E2E Tests
@@ -65,10 +65,9 @@ test.describe('Video Upload Flow', () => {
     await expect(ui.dropzone).toBeVisible();
   });
 
-  // quarantined: #1026 @meywd (red on the local stack; the follow-up PR removes this fixme)
-  test.fixme('says the video is processing after the upload, then Ready, and notifies the uploader', async ({ page }) => {
+  test('says the video is processing after the upload, then Ready, and notifies the uploader', async ({ page, request }) => {
     // Waits for Bunny to encode a real (tiny) video, capped (BUNNY_WAIT_MS, #929)
-    test.setTimeout(BUNNY_WAIT_MS + 2 * 60_000);
+    test.setTimeout(BUNNY_WAIT_MS + 3 * 60_000);
     const title = `Processing notice E2E ${Date.now().toString(36)}`;
     await gotoUpload(page, 'en');
     await helpers.uploadTestVideo(page, {
@@ -99,11 +98,34 @@ test.describe('Video Upload Flow', () => {
     await expect(ui.processingStatus).toHaveText(`"${title}" is ready to watch`);
     await expect(ui.viewVideo).toHaveAttribute('href', `/en/video/${videoId}`);
 
-    // The server stored the uploader's notification (works with the tab closed)
-    await page.goto('/en/notifications');
-    const item = page.getByTestId('notification-item').filter({ hasText: `Your video "${title}" is ready to watch` });
-    await expect(item).toHaveCount(1, { timeout: 60_000 });
-    await expect(item.getByRole('link')).toHaveAttribute('href', `/en/video/${videoId}`);
+    // The server stored the uploader's notification (works with the tab closed).
+    // The processor stores it from a queue batch (up to 30 s), and the inbox
+    // loads its list once: wait for the stored row, then open the inbox.
+    const single = userApi('single');
+    const auth = { Authorization: `Bearer ${single.token}` };
+    let notificationId: string | undefined;
+    try {
+      await expect
+        .poll(
+          async () => {
+            const res = await request.get(`${API_URL}/api/notifications?limit=50`, { headers: auth });
+            if (!res.ok()) return undefined;
+            const body = (await res.json()) as { result: { items: Array<{ id: string; notificationKey: string; entityId?: string }> } };
+            notificationId = body.result.items.find((n) => n.notificationKey === 'uploadReady' && n.entityId === videoId)?.id;
+            return notificationId;
+          },
+          { message: `uploadReady notification for ${videoId}`, timeout: 90_000, intervals: [3_000] },
+        )
+        .toBeTruthy();
+
+      await page.goto('/en/notifications');
+      const item = page.getByTestId('notification-item').filter({ hasText: `Your video "${title}" is ready to watch` });
+      await expect(item).toHaveCount(1);
+      await expect(item.getByRole('link')).toHaveAttribute('href', `/en/video/${videoId}`);
+    } finally {
+      // The notification is this test's own data too
+      if (notificationId) await request.delete(`${API_URL}/api/notifications/${notificationId}`, { headers: auth });
+    }
   });
 
   test('should show upload progress tracking', async ({ page }) => {

@@ -15,14 +15,45 @@ export async function openAccountMenu(page: Page): Promise<Locator> {
   const menu = page.getByRole('menu');
   await expect(trigger).toBeVisible();
   if (await menu.isVisible()) return menu;
-  // Retried: a click that lands before hydration has no handler yet
+  // Retried as a whole: a click that lands before hydration has no handler
+  // yet, and a page refresh landing just after the click (an account or
+  // channel switch settling) remounts the header with the menu closed
   await expect(async () => {
     if (!(await menu.isVisible())) await trigger.click();
     await expect(menu).toBeVisible({ timeout: 3000 });
+    await expect(trigger).toHaveAttribute('aria-expanded', 'true', { timeout: 1000 });
   }).toPass();
-  await expect(menu).toBeVisible();
-  await expect(trigger).toHaveAttribute('aria-expanded', 'true');
   return menu;
+}
+
+/**
+ * Resolves once the page has made no request for `quietMs`. Unlike
+ * waitForLoadState('networkidle'), which returns at once on a page that loaded
+ * earlier, this sees the Server Actions and refresh a switch starts after the load.
+ */
+export async function waitForQuietNetwork(page: Page, quietMs = 750, timeout = 15000): Promise<void> {
+  let inFlight = 0;
+  let last = Date.now();
+  const started = () => {
+    inFlight++;
+    last = Date.now();
+  };
+  const ended = () => {
+    inFlight = Math.max(0, inFlight - 1);
+    last = Date.now();
+  };
+  page.on('request', started);
+  page.on('requestfinished', ended);
+  page.on('requestfailed', ended);
+  try {
+    await expect
+      .poll(() => inFlight === 0 && Date.now() - last >= quietMs, { timeout, intervals: [100] })
+      .toBe(true);
+  } finally {
+    page.off('request', started);
+    page.off('requestfinished', ended);
+    page.off('requestfailed', ended);
+  }
 }
 
 /**
@@ -125,7 +156,10 @@ export async function waitForSessionSwitch(
   timeout = 20000,
 ): Promise<void> {
   await expect.poll(async () => matches(await activeSession(page), expected), { timeout }).toBe(true);
-  await page.waitForLoadState('networkidle').catch(() => undefined);
+  // The cookie flips mid-switch: the session reload, router refresh and the
+  // header remount that follows it are still to come. A menu opened before
+  // they land is closed again by the remount (#1027).
+  await waitForQuietNetwork(page).catch(() => undefined);
   await expect(menuTrigger(page)).toBeVisible();
 }
 
