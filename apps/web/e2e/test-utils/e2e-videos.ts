@@ -318,13 +318,21 @@ export function setupPublicDisposable(user: AuthUser, label: string, opts: { rea
 }
 
 /**
+ * The longest any legacy spec waits for Bunny's encode. A 4 s clip normally
+ * encodes in about a minute; when QA's shared Bunny library is backed up it
+ * takes 15-50+ min (#929), and longer waits only ate the suite's globalTimeout.
+ */
+export const BUNNY_WAIT_MS = 120_000;
+export const BUNNY_BACKLOG = 'QA\'s shared Bunny library is backed up (#929)';
+
+/**
  * Waits until Bunny has encoded the video (uploadStatus "ready"). Listings
  * leave out videos that are still processing (public ones since the
  * 2026-11-10 incident; Studio files them under Processing, not Published), so
  * a spec that looks for a just-uploaded video there waits for this first.
  * Throws when it is not ready in time: the spec would fail anyway, less clearly.
  */
-export async function waitForReady(user: AuthUser, video: E2EVideo, timeoutMs = 240_000): Promise<E2EVideo> {
+export async function waitForReady(user: AuthUser, video: E2EVideo, timeoutMs = BUNNY_WAIT_MS): Promise<E2EVideo> {
   const u = userApi(user);
   const deadline = Date.now() + timeoutMs;
   let last: E2EVideo | null = null;
@@ -334,7 +342,7 @@ export async function waitForReady(user: AuthUser, video: E2EVideo, timeoutMs = 
     if (last?.uploadStatus === 'failed' || Date.now() > deadline) break;
     await new Promise((resolve) => setTimeout(resolve, 5000));
   }
-  throw new Error(`"${video.title}" (${video.id}) is ${last?.uploadStatus ?? 'missing'}, not ready (waited up to ${Math.round(timeoutMs / 1000)} s for Bunny's encoding)`);
+  throw new Error(`"${video.title}" (${video.id}) is ${last?.uploadStatus ?? 'missing'}, not ready after ${Math.round(timeoutMs / 1000)} s of Bunny encoding: ${BUNNY_BACKLOG}?`);
 }
 
 /** Unique title for a video a single test owns */
@@ -418,7 +426,7 @@ export function cdnBase(video: E2EVideo): string | null {
  * Polls the Bunny CDN until the video's generated thumbnails exist (encoding
  * finished), or the timeout passes. Returns whether they became available.
  */
-export async function waitForThumbnails(user: AuthUser, videoId: string, timeoutMs = 120000): Promise<boolean> {
+export async function waitForThumbnails(user: AuthUser, videoId: string, timeoutMs = BUNNY_WAIT_MS): Promise<boolean> {
   const u = userApi(user);
   const webUrl = process.env.WEB_APP_URL || 'https://videos.qa.alummahnow.net';
   const deadline = Date.now() + timeoutMs;
