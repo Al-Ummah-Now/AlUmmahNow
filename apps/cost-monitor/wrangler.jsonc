@@ -1,0 +1,57 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	// Platform analytics collector for the videos admin (docs/admin/LIVE_OPS.md Part A).
+	// Production at the top level (collects production, stage and QA), stage under env.stage
+	// (collects stage only). QA: wrangler.qa.jsonc. No route, no workers.dev: crons only.
+	// Released by release.yml with `wrangler deploy` after the other apps' promote.
+	"name": "al-ummah-cost-monitor",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-10-01",
+	"compatibility_flags": ["nodejs_compat"],
+	"workers_dev": false,
+	"version_metadata": { "binding": "CF_VERSION_METADATA" },
+	// Logging policy (docs/operations/logging.md): every invocation sampled so no error line is
+	// dropped; LOG_LEVEL warn and no invocation logs keep it to failures only (24 runs a day)
+	"observability": { "enabled": true, "head_sampling_rate": 1, "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": false } },
+	"triggers": { "crons": ["10 * * * *", "30 3 * * *"] },
+	"d1_databases": [
+		{ "binding": "COSTS_DB", "database_name": "al-ummah-now-costs", "database_id": "af54e39e-6faa-4923-bba3-8dd7b3e58cf7", "migrations_dir": "migrations" }
+	],
+	"secrets_store_secrets": [
+		// Account Analytics Read; the CI token's copy until al-ummah-cost-monitor-read exists (cost spec §2.5)
+		{ "binding": "CF_ANALYTICS_TOKEN", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "media-cdn-api-token" },
+		{ "binding": "INTERNAL_API_KEY", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "internal-api-key" }
+	],
+	"vars": {
+		"ENVIRONMENT": "production",
+		"LOG_LEVEL": "warn",
+		"CLOUDFLARE_ACCOUNT_ID": "0e4b6e7f9faf280c3c9bf95995edc64f",
+		"COLLECT_ENVS": "production,stage,qa",
+		// Threshold alerts become needs-action items on the admin Errors page
+		"ERRORS_INGEST_URL": "https://admin.api.alummahnow.net/internal/errors"
+	},
+
+	"env": {
+		"stage": {
+			"name": "al-ummah-cost-monitor-stage",
+			"workers_dev": false,
+			"version_metadata": { "binding": "CF_VERSION_METADATA" },
+			"observability": { "enabled": true, "head_sampling_rate": 0.1, "logs": { "enabled": true, "head_sampling_rate": 0.1, "invocation_logs": false } },
+			"triggers": { "crons": ["10 * * * *", "30 3 * * *"] },
+			"d1_databases": [
+				{ "binding": "COSTS_DB", "database_name": "al-ummah-now-costs-stage", "database_id": "d4c4d007-c691-4f92-a728-b2ecd706a3ae", "migrations_dir": "migrations" }
+			],
+			"secrets_store_secrets": [
+				{ "binding": "CF_ANALYTICS_TOKEN", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "media-cdn-api-token" },
+				{ "binding": "INTERNAL_API_KEY", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "internal-api-key-stage" }
+			],
+			"vars": {
+				"ENVIRONMENT": "stage",
+				"LOG_LEVEL": "info",
+				"CLOUDFLARE_ACCOUNT_ID": "0e4b6e7f9faf280c3c9bf95995edc64f",
+				"COLLECT_ENVS": "stage",
+				"ERRORS_INGEST_URL": "https://admin.api.stage.alummahnow.net/internal/errors"
+			}
+		}
+	}
+}

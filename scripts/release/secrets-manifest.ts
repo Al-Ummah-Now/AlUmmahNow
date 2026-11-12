@@ -98,6 +98,13 @@ export const SECRETS_MANIFEST: WorkerSecrets[] = [
 			{ name: 'MEDIA_SIGN_KEY', purpose: 'Secrets Store media-sign-key[-qa|-stage]; checks /priv/ path tokens' },
 		],
 	}),
+	// Platform analytics collector (docs/admin/LIVE_OPS.md): Cloudflare GraphQL reads, Errors page items
+	...envs('cost-monitor', 'al-ummah-cost-monitor-qa', {
+		required: [
+			{ ...INTERNAL_API_KEY, purpose: 'Secrets Store internal-api-key[-qa|-stage]; X-API-Key of threshold alerts to admin-api /internal/errors' },
+			{ name: 'CF_ANALYTICS_TOKEN', purpose: 'Secrets Store media-cdn-api-token (all envs); Account Analytics Read for the hourly GraphQL query' },
+		],
+	}),
 ];
 
 export interface BuildSecret {

@@ -250,6 +250,27 @@ export const APPS: AppRule[] = [
 		}),
 	},
 	{
+		// Platform analytics collector for the videos admin (docs/admin/LIVE_OPS.md Part A).
+		// Crons only (no route); released with `wrangler deploy` after the promote.
+		app: 'cost-monitor',
+		configPath: 'apps/cost-monitor/wrangler.jsonc',
+		qaConfigPath: 'apps/cost-monitor/wrangler.qa.jsonc',
+		dir: 'apps/cost-monitor',
+		deployFlags: 'any',
+		production: {
+			env: null,
+			name: 'al-ummah-cost-monitor',
+			vars: { ENVIRONMENT: 'production', COLLECT_ENVS: 'production,stage,qa', ERRORS_INGEST_URL: 'https://admin.api.alummahnow.net/internal/errors' },
+			requiredBindings: [INTERNAL_API_KEY, { kind: 'd1_databases', name: 'COSTS_DB' }, { kind: 'secrets_store_secrets', name: 'CF_ANALYTICS_TOKEN' }],
+			...PROD_GUARDS,
+		},
+		stage: stageRule({
+			name: 'al-ummah-cost-monitor-stage',
+			vars: { ENVIRONMENT: 'stage', COLLECT_ENVS: 'stage' },
+			requiredBindings: [INTERNAL_API_KEY, { kind: 'd1_databases', name: 'COSTS_DB' }, { kind: 'secrets_store_secrets', name: 'CF_ANALYTICS_TOKEN' }],
+		}),
+	},
+	{
 		app: 'admin-api',
 		configPath: 'apps/admin-api/wrangler.jsonc',
 		qaConfigPath: 'apps/admin-api/wrangler.qa.jsonc',

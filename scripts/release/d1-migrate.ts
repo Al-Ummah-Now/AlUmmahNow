@@ -15,6 +15,8 @@ export const DATABASES = [
 	{ app: 'api-videos', database: 'al-ummah-now-search' },
 	{ app: 'processor', database: 'al-ummah-now-notifications' },
 	{ app: 'admin-api', database: 'al-ummah-now-reports' },
+	// Platform analytics rollups (docs/admin/LIVE_OPS.md); admin-api reads them
+	{ app: 'cost-monitor', database: 'al-ummah-now-costs' },
 ] as const;
 
 export function migrateCommands(env: ReleaseEnv): { app: string; argv: string[] }[] {

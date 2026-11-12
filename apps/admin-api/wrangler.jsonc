@@ -29,6 +29,12 @@
 			"binding": "SEARCH_DB",
 			"database_name": "al-ummah-now-search",
 			"database_id": "41064871-cf1f-46e9-b102-7b913240ad89"
+		},
+		{
+			// Platform analytics rollups (read; writes only ops_thresholds). Migrations in apps/cost-monitor.
+			"binding": "COSTS_DB",
+			"database_name": "al-ummah-now-costs",
+			"database_id": "af54e39e-6faa-4923-bba3-8dd7b3e58cf7"
 		}
 	],
 
@@ -204,6 +210,12 @@
 					"binding": "SEARCH_DB",
 					"database_name": "al-ummah-now-search-stage",
 					"database_id": "956a3550-bd20-4cfc-9bf2-b1c2265b33dd"
+				},
+				{
+					// Platform analytics rollups (migrations in apps/cost-monitor)
+					"binding": "COSTS_DB",
+					"database_name": "al-ummah-now-costs-stage",
+					"database_id": "d4c4d007-c691-4f92-a728-b2ecd706a3ae"
 				}
 			],
 			// Token revocation list written by the auth worker (#437)

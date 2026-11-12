@@ -253,6 +253,17 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm release:queue-consumers --config apps/admin-api/wrangler.jsonc --env stage
 
+      # Platform analytics collector (apps/cost-monitor, docs/admin/LIVE_OPS.md): crons only, no
+      # route, so no smoke; its D1 was migrated with the others (d1-migrate.ts).
+      - name: Deploy cost monitor (stage)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          RELEASE_LABEL: ${{ needs.resolve.outputs.label }}
+        run: |
+          cd apps/cost-monitor
+          pnpm wrangler deploy -c wrangler.jsonc --env stage --message "release $RELEASE_LABEL"
+
       # R2 video delivery (apps/media, epic #687). Containers take no versions upload, so the
       # media worker (and its transcoder image, built here with Docker and pushed to Cloudflare's
       # registry) is deployed with `wrangler deploy` once the promote above passed its smoke,
@@ -503,6 +514,17 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm release:queue-consumers --config apps/admin-api/wrangler.jsonc
+
+      # Platform analytics collector (apps/cost-monitor, docs/admin/LIVE_OPS.md): crons only, no
+      # route, so no smoke; its D1 was migrated with the others (d1-migrate.ts).
+      - name: Deploy cost monitor (production)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          RELEASE_LABEL: ${{ needs.resolve.outputs.label }}
+        run: |
+          cd apps/cost-monitor
+          pnpm wrangler deploy -c wrangler.jsonc --message "release $RELEASE_LABEL"
 
       # R2 video delivery (apps/media, epic #687). Containers take no versions upload, so the
       # media worker (and its transcoder image, built here with Docker and pushed to Cloudflare's

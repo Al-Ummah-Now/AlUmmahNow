@@ -52,6 +52,10 @@ export const PERMISSIONS = {
   'videos:format': ADMIN_ROLE_IDS,
   /** Delivery comparison (epic #687): the Bunny/R2 switch, transcode jobs and retry, QoE and cost. */
   'media:manage': ADMIN_ROLE_IDS,
+  /** Operations page (docs/admin/LIVE_OPS.md): platform usage, latency, backlog and estimated cost. */
+  'ops:read': ADMIN_ROLE_IDS,
+  /** Change the Operations alert thresholds. */
+  'ops:manage': ['super_admin'],
 } as const satisfies Record<string, readonly string[]>;
 
 export type Permission = keyof typeof PERMISSIONS;
