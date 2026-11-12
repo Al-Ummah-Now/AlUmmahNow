@@ -15,36 +15,18 @@ import { ns, useOwnData as ownData } from './release/builders';
  */
 
 const PAGE_SIZE = 24;
-const LOCAL_STACK_SQL = `${process.env.LOCAL_STACK_CONTROL_URL || 'http://127.0.0.1:3190'}/__stack/d1/al-ummah-now-search`;
 // One worker runs this file's tests in order, so its own data (beforeAll) is made once
 test.describe.configure({ mode: 'default' });
 
 const data = ownData(test as never);
-/** The creator whose Unlimited tier row this file writes; deleted again in afterAll (idempotent) */
-let tierUserId = '';
-
-async function stackSql(sql: string): Promise<void> {
-  const res = await fetch(LOCAL_STACK_SQL, { method: 'POST', body: sql });
-  expect(res.ok, `local stack SQL: ${await res.text()}`).toBe(true);
-}
-
-test.afterAll(async () => {
-  if (tierUserId) await stackSql(`DELETE FROM creator_tier_assignments WHERE user_id = '${tierUserId}'`);
-  tierUserId = '';
-});
 
 test.beforeAll(async ({ browser }) => {
   test.setTimeout(240_000);
   const context = await browser.newContext({ storageState: { cookies: [], origins: [] } });
   try {
     const owner = await data.createUser(await context.newPage(), 'directory');
-    if (process.env.E2E_ENV === 'local') {
-      // The Unlimited tier (the Creator tier owns at most 3 channels), straight into the stack's database
-      tierUserId = owner.userId.replace(/[^A-Za-z0-9_:-]/g, '');
-      await stackSql(`INSERT OR REPLACE INTO creator_tier_assignments (user_id, tier_id, source, assigned_by, assigned_at) VALUES ('${tierUserId}', 'unlimited', 'admin', 'e2e-directory ${ns()}', '${new Date().toISOString()}')`);
-    } else {
-      await data.grantCreator(owner);
-    }
+    // The Unlimited tier (the Creator tier owns at most 3 channels); the builders undo it
+    await data.grantCreator(owner, 'unlimited');
     for (let i = 0; i <= PAGE_SIZE; i++) await data.createChannel(owner, { name: `E2E directory ${ns()} ${i}`, isMain: i === 0 });
   } finally {
     await context.close();
