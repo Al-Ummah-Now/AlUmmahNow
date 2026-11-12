@@ -34,8 +34,18 @@ export const RUN_USER_EMAIL = /^e2e\+\d{1,20}-\d{1,3}-[a-z0-9][a-z0-9-]{0,62}@e2
 export { RUN_USER_SWEEP_ACTOR } from '../privacy/run-user-erase';
 import { RUN_USER_SWEEP_ACTOR } from '../privacy/run-user-erase';
 export const RUN_USER_SWEEP_KEY = 'ops/run-user-sweep.json';
-/** Profiles looked at per run (every 10 minutes). */
+/** Profiles read per page. */
 export const RUN_USER_SWEEP_LIMIT = 200;
+/**
+ * Pages read per run (every 10 minutes). A page of run accounts whose auth
+ * account is still live used to end the run: on 2026-11-12 the oldest 200 were
+ * all live on QA and stage, so no deleted account was ever erased and their
+ * videos (and Bunny encodes) piled up in the test library (#929). The run now
+ * reads on, past live accounts, until it has ERASE_MAX deleted ones.
+ */
+export const RUN_USER_SWEEP_MAX_PAGES = 25;
+/** Accounts erased per run at most (each queues a purge job). */
+export const RUN_USER_SWEEP_ERASE_MAX = 100;
 const AUTH_BATCH = 50;
 const CONCURRENCY = 5;
 
@@ -105,22 +115,34 @@ export async function sweepRunUsers(env: RunUserSweepEnv, opts: { now?: Date; li
 	const stats: RunUserSweepStats = { at: now.toISOString(), candidates: 0, live: 0, erased: 0, failed: 0, durationMs: 0 };
 	try {
 		const search = env.SEARCH_DB as Db;
-		// Profiles of run accounts not already handed to the deletion cleanup
-		const { results } = await search
-			.prepare(
-				`SELECT id, email FROM content_ownership
-				 WHERE kind = 'profile' AND email LIKE 'e2e+%@e2e.alummahnow.net'
-				   AND id NOT IN (SELECT target_id FROM admin_deletions WHERE kind = 'user' AND (purge_started_at IS NOT NULL OR purged_at IS NOT NULL))
-				 ORDER BY created_at LIMIT ?`,
-			)
-			.bind(opts.limit ?? RUN_USER_SWEEP_LIMIT)
-			.all<{ id: string; email: string | null }>();
-		const candidates = (results ?? []).filter((r) => typeof r.id === 'string' && r.id && isRunUserEmail(r.email));
-		stats.candidates = candidates.length;
-		if (candidates.length) {
-			const live = await liveAuthIds(env.AUTH_DB as Db, candidates.map((c) => c.id));
-			stats.live = live.size;
-			const gone = candidates.filter((c) => !live.has(c.id));
+		// Profiles of run accounts not already handed to the deletion cleanup, page by
+		// page (keyset on created_at, id) past those whose auth account is still live
+		const gone: { id: string; email: string | null }[] = [];
+		let after: { createdAt: unknown; id: string } | null = null;
+		for (let page = 0; page < RUN_USER_SWEEP_MAX_PAGES && gone.length < RUN_USER_SWEEP_ERASE_MAX; page++) {
+			const { results } = await search
+				.prepare(
+					`SELECT id, email, created_at FROM content_ownership
+					 WHERE kind = 'profile' AND email LIKE 'e2e+%@e2e.alummahnow.net'
+					   AND id NOT IN (SELECT target_id FROM admin_deletions WHERE kind = 'user' AND (purge_started_at IS NOT NULL OR purged_at IS NOT NULL))
+					   ${after ? 'AND (created_at > ? OR (created_at = ? AND id > ?))' : ''}
+					 ORDER BY created_at, id LIMIT ?`,
+				)
+				.bind(...(after ? [after.createdAt, after.createdAt, after.id] : []), opts.limit ?? RUN_USER_SWEEP_LIMIT)
+				.all<{ id: string; email: string | null; created_at: unknown }>();
+			const rows = results ?? [];
+			const candidates = rows.filter((r) => typeof r.id === 'string' && r.id && isRunUserEmail(r.email));
+			stats.candidates += candidates.length;
+			if (candidates.length) {
+				const live = await liveAuthIds(env.AUTH_DB as Db, candidates.map((c) => c.id));
+				stats.live += live.size;
+				for (const c of candidates) if (!live.has(c.id) && gone.length < RUN_USER_SWEEP_ERASE_MAX) gone.push(c);
+			}
+			if (rows.length < (opts.limit ?? RUN_USER_SWEEP_LIMIT)) break;
+			const last = rows[rows.length - 1];
+			after = { createdAt: last.created_at, id: last.id };
+		}
+		{
 			let cursor = 0;
 			await Promise.all(
 				Array.from({ length: Math.min(CONCURRENCY, gone.length) }, async () => {

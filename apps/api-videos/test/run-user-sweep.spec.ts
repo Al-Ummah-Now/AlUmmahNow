@@ -112,6 +112,21 @@ describe('E2E run-account sweep (videos side)', () => {
 		assert.ok(await e.global_settings.get('ops/run-user-sweep.json'));
 	});
 
+	it('reads past live run accounts: deleted ones behind a full page of live ones are erased (#929)', async () => {
+		const e = env();
+		// 2026-11-12: the oldest 200 run accounts were all live, so the sweep erased nothing for good
+		const live = ['usr_live1', 'usr_live2', 'usr_live3', 'usr_live4', 'usr_live5'];
+		for (const [i, id] of live.entries()) await seedProfile(e.SEARCH_DB, id, `e2e+43000000000-1-rel-live${i}@e2e.alummahnow.net`, 1);
+		await seedProfile(e.SEARCH_DB, 'usr_old_gone', 'e2e+43000000001-1-rel-a@e2e.alummahnow.net', 2);
+		await seedProfile(e.SEARCH_DB, 'usr_new_gone', 'e2e+43000000002-1-rel-b@e2e.alummahnow.net', 3);
+		e.AUTH_DB = authDb(new Set(live));
+
+		const stats = await sweepRunUsers(e, { limit: 2 });
+		assert.deepEqual({ candidates: stats?.candidates, live: stats?.live, erased: stats?.erased }, { candidates: 7, live: 5, erased: 2 });
+		const { results } = await e.SEARCH_DB.prepare("SELECT target_id FROM admin_deletions WHERE kind = 'user' ORDER BY target_id").all();
+		assert.deepEqual(results.map((r: any) => r.target_id), ['usr_new_gone', 'usr_old_gone']);
+	});
+
 	it('does nothing on production', async () => {
 		const e = env({ ENVIRONMENT: 'production' });
 		await seedProfile(e.SEARCH_DB, 'usr_gone', 'e2e+1-1-rel-a@e2e.alummahnow.net', 1);
