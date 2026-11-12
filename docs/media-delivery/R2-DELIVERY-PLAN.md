@@ -165,6 +165,12 @@ sources side by side over time with the shared chart component, a per-video job 
 the cost projection below, recomputed from measured unit costs. It follows the live-streaming page's
 layout (#871).
 
+The page (`apps/admin-web/src/app/(protected)/delivery/`, admin-api `/api/media/*`) replaces an
+assumption with a measured unit cost as soon as the period has one: container seconds, duration and
+bytes from `media_jobs`; R2 `class_a_ops` / `class_b_ops` and Bunny `egress_gb` from
+`delivery_cost_daily`, divided by the period's video-minutes or viewer-hours. The collector writes
+those metric names.
+
 ### Cost model (until the measured numbers replace it)
 
 Unit assumptions (list prices, 2026-11):

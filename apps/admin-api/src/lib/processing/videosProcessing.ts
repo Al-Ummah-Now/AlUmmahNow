@@ -1,8 +1,9 @@
 /**
- * Calls api-videos' /internal/processing/* (processing health and repair; see
- * apps/api-videos/src/endpoints/video/processingInternal.ts) over the VIDEOS
- * service binding with the shared INTERNAL_API_KEY. Local dev without the
- * binding can point VIDEOS_API_URL at a running api-videos.
+ * Calls api-videos' /internal/* over the VIDEOS service binding with the
+ * shared INTERNAL_API_KEY: /internal/processing/* (processing health and
+ * repair; apps/api-videos/src/endpoints/video/processingInternal.ts) and
+ * /internal/media/* (R2 delivery; endpoints/media/mediaInternal.ts). Local dev
+ * without the binding can point VIDEOS_API_URL at a running api-videos.
  */
 
 export interface ProcessingClientEnv {
@@ -17,17 +18,25 @@ export class ProcessingApiError extends Error {
   }
 }
 
-export async function callProcessing<T>(
-  env: ProcessingClientEnv,
-  path: string,
-  init: { method?: string; json?: unknown; query?: Record<string, string | undefined> } = {},
-): Promise<T> {
+export interface VideosInternalInit {
+  method?: string;
+  json?: unknown;
+  query?: Record<string, string | undefined>;
+}
+
+/** `path` under /internal/processing (e.g. '/videos'). */
+export function callProcessing<T>(env: ProcessingClientEnv, path: string, init: VideosInternalInit = {}): Promise<T> {
+  return callVideosInternal<T>(env, `/internal/processing${path}`, init);
+}
+
+/** Any api-videos internal route (`path` starts with /internal/); returns `result`, throws ProcessingApiError. */
+export async function callVideosInternal<T>(env: ProcessingClientEnv, path: string, init: VideosInternalInit = {}): Promise<T> {
   const binding = env.INTERNAL_API_KEY;
   const key = typeof binding === 'string' ? binding : await binding?.get();
   if (!key) throw new ProcessingApiError(500, 'INTERNAL_API_KEY is not configured');
   const params = new URLSearchParams();
   for (const [name, value] of Object.entries(init.query ?? {})) if (value) params.set(name, value);
-  const suffix = `/internal/processing${path}${params.size ? `?${params}` : ''}`;
+  const suffix = `${path}${params.size ? `?${params}` : ''}`;
   const headers: Record<string, string> = { 'X-API-Key': key };
   let body: string | undefined;
   if (init.json !== undefined) {

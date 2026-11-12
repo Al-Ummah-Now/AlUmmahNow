@@ -459,3 +459,78 @@ export interface FlaggedVideoList {
   limit: number;
   offset: number;
 }
+
+// Delivery comparison (admin-api /api/media; media:manage; epic #687)
+
+export type { DeliverySettings, DeliveryMode, DeliveryAssign } from '@al-ummah/shared-types';
+
+/** Job counts and time to playable over the period (api-videos media_jobs); null when the table is not bound. */
+export interface MediaJobsSummary {
+  jobs: number;
+  ready: number | null;
+  failed: number | null;
+  running: number | null;
+  r2_seconds_to_playable: number | null;
+  bunny_seconds_to_playable: number | null;
+  video_seconds: number | null;
+  container_seconds: number | null;
+  bytes: number | null;
+}
+
+/** Player measurements per day and source (playback_qoe_daily, summed over device and country). */
+export interface MediaQoeRow {
+  day: string;
+  provider: string;
+  sessions: number;
+  started: number;
+  startup_ms_sum: number;
+  rebuffers: number;
+  rebuffer_ms: number;
+  watch_ms: number;
+  kbps_watch_s: number;
+  peak_kbps_sum: number;
+  switches: number;
+  errors: number;
+  fallbacks: number;
+}
+
+/** One cost input per day, source and metric (delivery_cost_daily, cron collector). */
+export interface MediaCostRow {
+  day: string;
+  provider: string;
+  metric: string;
+  value: number;
+}
+
+export interface MediaSummary {
+  days: number;
+  jobs: MediaJobsSummary | null;
+  qoe: MediaQoeRow[];
+  costs: MediaCostRow[];
+  settings?: import('@al-ummah/shared-types').DeliverySettings;
+}
+
+export type MediaJobStatus = 'queued' | 'transcoding' | 'ready' | 'failed';
+
+/** A video's latest R2 transcode (media_jobs). */
+export interface MediaJob {
+  video_id: string;
+  job_id: string;
+  status: MediaJobStatus | string;
+  access: string;
+  reason: string | null;
+  attempts: number;
+  queued_at: string;
+  started_at: string | null;
+  ready_at: string | null;
+  failed_at: string | null;
+  error: string | null;
+  duration_seconds: number | null;
+  bytes: number | null;
+  objects: number | null;
+  rungs: string | null;
+  container_seconds: number | null;
+  instance_type: string | null;
+  bunny_ready_at: string | null;
+  updated_at: string;
+}

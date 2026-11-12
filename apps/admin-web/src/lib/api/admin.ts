@@ -35,6 +35,9 @@ import type {
   CategorizeConfigView,
   FlaggedVideoList,
   VideoFormatRunView,
+  DeliverySettings,
+  MediaJob,
+  MediaSummary,
 } from './types';
 import type { ErrorCounts, ErrorFacets, ErrorGroup, ErrorGroupDetail, ErrorGroupList, NeedsActionItem } from './error-groups-types';
 
@@ -294,6 +297,34 @@ export async function retryProcessing(ids: string[]): Promise<ActionResult<unkno
 
 export async function markProcessingFailed(ids: string[], reason?: string): Promise<ActionResult<unknown>> {
   return mutate('/api/processing/mark-failed', 'POST', { ids, ...(reason ? { reason } : {}) });
+}
+
+// Delivery comparison: Bunny vs R2 (admin-api /api/media; media:manage; epic #687)
+
+export async function getMediaSummary(days: number): Promise<MediaSummary> {
+  return fetchAdmin<MediaSummary>(`/api/media/summary?days=${encodeURIComponent(String(days))}`);
+}
+
+export async function listMediaJobs(params: { status?: string; limit?: number } = {}): Promise<MediaJob[]> {
+  const query = new URLSearchParams();
+  if (params.status) query.set('status', params.status);
+  if (params.limit) query.set('limit', String(params.limit));
+  const suffix = query.size ? `?${query}` : '';
+  return (await fetchAdmin<{ items: MediaJob[] }>(`/api/media/jobs${suffix}`)).items;
+}
+
+/** Transcode again (audited per video in admin-api). */
+export async function retryMediaJobs(ids: string[]): Promise<ActionResult<unknown>> {
+  return mutate('/api/media/retry', 'POST', { ids });
+}
+
+export async function getDeliverySettings(): Promise<DeliverySettings> {
+  return fetchAdmin<DeliverySettings>('/api/media/settings');
+}
+
+/** The delivery switch (audited in admin-api under media:delivery). */
+export async function saveDeliverySettings(input: Pick<DeliverySettings, 'mode' | 'r2Percent' | 'assign' | 'transcode'>): Promise<ActionResult<DeliverySettings>> {
+  return mutate('/api/media/settings', 'PUT', input);
 }
 
 // Admin jobs (heavy actions queued in api-videos; admin-api /api/content/jobs)
