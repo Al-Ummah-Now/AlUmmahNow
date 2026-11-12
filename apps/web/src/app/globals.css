@@ -439,37 +439,34 @@
 /* Upload: one action in the top bar after the logo, before the search box, outlined, in the upload part tokens.
    A 44px icon button on phones; the label stays its accessible name. */
 .upload-action {
+  /* A header pill like the account button (docs/design/NAV.md): 40px tall, the nav border and colours */
   display: inline-flex;
-  flex: none;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
   height: 40px;
-  padding-inline: 14px;
-  border: 1px solid var(--fanous-c-upload-border, currentColor);
+  min-width: 40px;
+  padding-inline: 10px 14px;
+  border: 1px solid var(--fanous-c-nav-search-border);
   border-radius: 9999px;
-  background: var(--fanous-c-upload-bg, transparent);
-  color: var(--fanous-c-upload-text, inherit);
+  background: transparent;
+  color: var(--fanous-c-nav-text);
   font-size: 14px;
   font-weight: 600;
   line-height: 1;
   white-space: nowrap;
   text-decoration: none;
-  transition: background-color 160ms, border-color 160ms;
+  transition: background-color 160ms;
 }
-.upload-action svg { width: 20px; height: 20px; flex: none; color: var(--fanous-c-upload-icon, currentColor); }
-@media (hover: hover) { .upload-action:not([aria-disabled='true']):hover { background: var(--fanous-c-upload-hover, transparent); } }
-.upload-action:not([aria-disabled='true']):active { background: var(--fanous-c-upload-pressed, transparent); }
-.upload-action:focus-visible { outline: 2px solid var(--fanous-c-upload-focus, currentColor); outline-offset: 2px; }
-.upload-action[aria-disabled='true'] {
-  background: var(--fanous-c-upload-disabled-bg, transparent);
-  color: var(--fanous-c-upload-disabled-text, inherit);
-  border-color: var(--fanous-c-upload-disabled-text, currentColor);
-  cursor: not-allowed;
-}
-.upload-action[aria-disabled='true'] svg { color: inherit; }
+.upload-action svg { width: 18px; height: 18px; flex: none; color: var(--fanous-c-nav-icon); }
+@media (hover: hover) { .upload-action:not([aria-disabled='true']):hover { background: var(--fanous-c-nav-hover); } }
+.upload-action:not([aria-disabled='true']):active { background: var(--fanous-c-nav-hover); }
+.upload-action:focus-visible { outline: 2px solid var(--fanous-c-nav-active-text); outline-offset: 2px; }
+.upload-action[aria-disabled='true'] { opacity: 0.6; cursor: not-allowed; }
+/* Phones: icon only, the same 44px target as the bell beside it, no outline */
 @media (max-width: 639px) {
-  .upload-action { width: 44px; height: 44px; padding: 0; }
+  .upload-action { width: 44px; height: 44px; min-width: 44px; padding: 0; border-color: transparent; }
+  .upload-action svg { width: 22px; height: 22px; }
   .upload-action-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
 @media (prefers-reduced-motion: reduce) { .upload-action { transition: none; } }

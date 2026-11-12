@@ -30,8 +30,10 @@ async function expectNoSidewaysScroll(page: Page): Promise<void> {
 }
 
 /**
- * Upload sits directly after the logo and before the search (the search button on
- * phones), on the reading side: right of the logo in English, left of it in Arabic.
+ * Upload is the first item of the header's action cluster (after the search, before the bell and the
+ * account; docs/design/NAV.md, owner review rev 5), on the reading side: right of the search in
+ * English, left of it in Arabic. A deployed build from before has it directly after the logo and
+ * before the search; that passes too until this ships.
  */
 async function expectUploadAfterLogo(page: Page, locale: Locale): Promise<void> {
   const header = page.locator('header.ah');
@@ -40,11 +42,17 @@ async function expectUploadAfterLogo(page: Page, locale: Locale): Promise<void> 
   const input = header.getByTestId('header-search-input');
   const search = (await ((await input.isVisible()) ? header.locator('.ah-search-wrap .ah-search') : header.getByTestId('header-search-open')).boundingBox())!;
   const rtl = locale === 'ar';
-  const gap = rtl ? logo.x - (upload.x + upload.width) : upload.x - (logo.x + logo.width);
-  expect(gap, `Upload does not follow the logo (gap ${gap}px)`).toBeGreaterThanOrEqual(0);
-  expect(gap, `Upload is not beside the logo (gap ${gap}px)`).toBeLessThanOrEqual(24);
-  const toSearch = rtl ? upload.x - (search.x + search.width) : search.x - (upload.x + upload.width);
-  expect(toSearch, `Search does not follow Upload (gap ${toSearch}px)`).toBeGreaterThanOrEqual(0);
+  if ((await header.locator('.ah-end [data-testid="header-upload"]').count()) > 0) {
+    const fromSearch = rtl ? search.x - (upload.x + upload.width) : upload.x - (search.x + search.width);
+    expect(fromSearch, `Upload does not follow the search (gap ${fromSearch}px)`).toBeGreaterThanOrEqual(0);
+    expect(upload.height, 'Upload is no taller than a header control').toBeLessThanOrEqual(44.5);
+  } else {
+    const gap = rtl ? logo.x - (upload.x + upload.width) : upload.x - (logo.x + logo.width);
+    expect(gap, `Upload does not follow the logo (gap ${gap}px)`).toBeGreaterThanOrEqual(0);
+    expect(gap, `Upload is not beside the logo (gap ${gap}px)`).toBeLessThanOrEqual(24);
+    const toSearch = rtl ? upload.x - (search.x + search.width) : search.x - (upload.x + upload.width);
+    expect(toSearch, `Search does not follow Upload (gap ${toSearch}px)`).toBeGreaterThanOrEqual(0);
+  }
   expect(Math.abs(upload.y + upload.height / 2 - (logo.y + logo.height / 2)), 'Upload and the logo are not on one line').toBeLessThanOrEqual(2);
 }
 

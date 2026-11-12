@@ -88,11 +88,11 @@ export function AppShell() {
             <BrandLogo className="ah-logo" />
             <span>{t.common.appName}</span>
           </Link>
-          {/* Upload follows the logo, before the search box (mirrored in RTL) */}
-          <UploadAction />
         </div>
         <HeaderSearch />
         <div className="ah-end">
+          {/* The action cluster (docs/design/NAV.md): Upload, notifications, account; mirrored in RTL */}
+          <UploadAction />
           <NotificationBell dir={rtl ? 'rtl' : 'ltr'} />
           {rtl ? <UnifiedNavigationRTL /> : <UnifiedNavigation />}
         </div>

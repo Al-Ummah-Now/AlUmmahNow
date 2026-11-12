@@ -93,6 +93,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
   },
 
   navigation: {
+    moreAccounts: 'حسابات أخرى',
     channelSection: 'القناة',
     appsSection: 'تطبيقات الأمة الآن',
     appWww: 'الموقع',

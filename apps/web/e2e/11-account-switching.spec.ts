@@ -29,19 +29,20 @@ test.describe('Account Switching', () => {
     await page.goto('/en');
     const menu = await openAccountMenu(page);
 
-    // The accounts open from a submenu row on the main list
-    const switchAccount = menu.getByTestId('nav-switch-account');
-    await expect(switchAccount).toHaveText('Switch Account');
-    await expect(switchAccount).toHaveAttribute('aria-haspopup', 'menu');
+    // The current account is the top of the menu; the other one is listed under "More accounts"
+    // (docs/design/NAV.md: the Google pattern), with its own sign-out icon button
+    await expect(menu.getByTestId('nav-switch-account')).toHaveCount(0);
+    await expect(menu.getByTestId('nav-more-accounts')).toContainText('More accounts');
+    await expect(account(menu, multi.email).getByTestId('nav-account-sign-out')).toHaveAccessibleName(/^Sign out of /);
     await showMenuView(menu, 'account');
     await expect(menu.getByTestId('nav-account')).toHaveCount(2);
     await showMenuView(menu, 'account');
     await expect(account(menu, single.email)).toHaveAttribute('data-active', 'true');
     await showMenuView(menu, 'account');
     await expect(account(menu, multi.email)).toHaveAttribute('data-active', 'false');
-    // Not an exact count: 09-channel-switching briefly adds channels to this user
+    // The other account shows its email (its name when it has one)
     await showMenuView(menu, 'account');
-    await expect(account(menu, multi.email)).toContainText(/\d+ channels/);
+    await expect(account(menu, multi.email)).toContainText(multi.email);
     // Two accounts: "sign out of all" is offered
     await showMenuView(menu, 'main');
     await expect(menu.getByRole('menuitem', { name: /Sign out of all accounts/ })).toBeVisible();
@@ -135,7 +136,7 @@ test.describe('Account Switching', () => {
 
     let menu = await openAccountMenu(page);
     await expect(menu).toHaveCSS('direction', 'rtl');
-    await expect(menu.getByTestId('nav-switch-account')).toHaveText('تبديل الحساب');
+    await expect(menu.getByTestId('nav-more-accounts')).toContainText('حسابات أخرى');
     await switchAccountTo(page, multi);
 
     menu = await openAccountMenu(page);

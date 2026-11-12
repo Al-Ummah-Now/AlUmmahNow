@@ -95,6 +95,7 @@ export function AccountMenu({ issuer, currentEmail, roles }: AccountMenuProps) {
         ? [{ userId: '', email: currentEmail, isActive: true }]
         : [];
   const active = rows.find((a) => a.isActive) ?? rows[0];
+  const others = rows.filter((a) => a !== active);
   // The name auth has for the account (platform display-name rule); the email only without one
   const nameOf = (a: AuthAccount | undefined) => a?.name || a?.email || currentEmail || '';
   const name = nameOf(active);
@@ -130,7 +131,8 @@ export function AccountMenu({ issuer, currentEmail, roles }: AccountMenuProps) {
       </button>
       {open && (
         <div id={menuId} role="menu" data-testid="account-menu" aria-busy={busy} className="aun-menu">
-          <div className="aun-menu-who">
+          {/* The current account, only here (the Google pattern); the others follow under "More accounts" */}
+          <div className="aun-menu-who" data-testid="account-menu-account" data-active="true" data-email={active?.email ?? ''}>
             <span className="aun-avatar aun-avatar--lg" aria-hidden="true">{initial}</span>
             <span className="aun-menu-who-text">
               <span className="aun-menu-who-name" dir="auto">{name}</span>
@@ -138,55 +140,57 @@ export function AccountMenu({ issuer, currentEmail, roles }: AccountMenuProps) {
             </span>
           </div>
           {sep}
-          <span className="aun-menu-label" id={`${menuId}-accounts`}>{t('accounts.title')}</span>
-          <ul aria-labelledby={`${menuId}-accounts`}>
-            {rows.map((account) => {
-              const label = nameOf(account);
-              return (
-                <li
-                  key={account.userId || account.email}
-                  data-testid="account-menu-account"
-                  data-active={account.isActive ? 'true' : 'false'}
-                  data-email={account.email}
-                  className="aun-acct-row"
-                >
-                  <button
-                    type="button"
-                    role="menuitem"
-                    data-testid="account-switch"
-                    disabled={busy || account.isActive || !account.userId}
-                    aria-current={account.isActive ? 'true' : undefined}
-                    aria-label={account.isActive ? undefined : t('accounts.switchTo', { name: label })}
-                    onClick={() => onSwitch(account.userId)}
-                    className="aun-menu-item"
-                  >
-                    <span className="aun-avatar" aria-hidden="true">{(label[0] ?? '?').toUpperCase()}</span>
-                    <span className="aun-acct-text">
-                      <span className="aun-acct-label" dir="auto">{label}</span>
-                      {account.name && <span className="aun-acct-email" dir="auto">{account.email}</span>}
-                      {account.isActive && <span className="aun-acct-current">{t('accounts.current')}</span>}
-                    </span>
-                    {account.isActive && <Icon name="check" className="aun-menu-check" />}
-                  </button>
-                  {account.userId && count > 1 && (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      data-testid="account-sign-out"
-                      disabled={busy}
-                      onClick={() => onSignOut(account.userId)}
-                      className="aun-acct-signout"
-                      aria-label={t('accounts.signOutOf', { email: label })}
+          {others.length > 0 && (
+            <>
+              <span className="aun-menu-label" id={`${menuId}-accounts`}>{t('accounts.more')}</span>
+              <ul aria-labelledby={`${menuId}-accounts`}>
+                {others.map((account) => {
+                  const label = nameOf(account);
+                  return (
+                    <li
+                      key={account.userId || account.email}
+                      data-testid="account-menu-account"
+                      data-active="false"
+                      data-email={account.email}
+                      className="aun-acct-row"
                     >
-                      {t('accounts.signOut')}
-                    </button>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        data-testid="account-switch"
+                        disabled={busy || !account.userId}
+                        aria-label={t('accounts.switchTo', { name: label })}
+                        onClick={() => onSwitch(account.userId)}
+                        className="aun-menu-item"
+                      >
+                        <span className="aun-avatar" aria-hidden="true">{(label[0] ?? '?').toUpperCase()}</span>
+                        <span className="aun-acct-text">
+                          <span className="aun-acct-label" dir="auto">{label}</span>
+                          {account.name && <span className="aun-acct-email" dir="auto">{account.email}</span>}
+                        </span>
+                      </button>
+                      {account.userId && (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          data-testid="account-sign-out"
+                          disabled={busy}
+                          onClick={() => onSignOut(account.userId)}
+                          className="aun-acct-signout"
+                          aria-label={t('accounts.signOutOf', { email: label })}
+                          title={t('accounts.signOutOf', { email: label })}
+                        >
+                          <Icon name="logout" className="aun-flip" />
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
           <button type="button" role="menuitem" data-testid="account-add" disabled={busy} onClick={onAdd} className="aun-menu-item">
-            <Icon name="plus" className="aun-menu-icon" />
+            <Icon name="login" className="aun-menu-icon aun-flip" />
             <span className="aun-menu-text">{t('accounts.add')}</span>
           </button>
           {otherApps.length > 0 && (
@@ -196,6 +200,7 @@ export function AccountMenu({ issuer, currentEmail, roles }: AccountMenuProps) {
                 <span className="aun-menu-label" id={`${menuId}-apps`}>{t('accounts.apps')}</span>
                 {otherApps.map((app) => (
                   <a key={app.id} href={app.href} role="menuitem" className="aun-menu-item" data-app={app.id}>
+                    <span className="aun-app-icon" data-app={app.id} aria-hidden="true" />
                     <span className="aun-menu-text">{appLabel[app.id]}</span>
                   </a>
                 ))}

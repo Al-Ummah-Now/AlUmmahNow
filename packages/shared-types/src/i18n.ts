@@ -277,6 +277,8 @@ export interface AppTranslations {
     appsSection: string;
     /** The account menu's context slot label in the videos app (its channel layer) */
     channelSection: string;
+    /** The account menu's list of the other signed-in accounts */
+    moreAccounts: string;
     appWww: string;
     appVideos: string;
     appProfile: string;

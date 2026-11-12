@@ -101,6 +101,7 @@ const en = {
     arabic: 'العربية',
   },
   accounts: {
+    more: 'More accounts',
     current: 'Current account',
     switchTo: 'Switch to {name}',
     apps: 'Al Ummah Now apps',
