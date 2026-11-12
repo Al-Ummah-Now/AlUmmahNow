@@ -190,12 +190,12 @@ test.describe('Release: a click-started play has sound', () => {
 
   // landscape40 (40 s) in the Short's 216x384 frame: the 4 s vertical clip ended before a slow
   // runner's first look ("watch again", nothing to unmute).
-  test('no user activation: muted, "Tap to unmute" (Arabic), which brings the sound back', async ({ page, browserName, browserType, channel, headless, launchOptions }) => {
+  test('no user activation: muted, "Tap to unmute" (Arabic), which brings the sound back', async ({ page, browserName, playwright, channel, headless, launchOptions }) => {
     // Chrome's default policy may allow sound without activation (the CI runner did, so the embed
     // rightly played unmuted). A browser of this test's own that requires a gesture makes the muted
     // fallback the path under test. Only here: the flag also refuses sound after a click.
     const own = browserName === 'chromium'
-      ? await browserType.launch({ ...launchOptions, channel, headless, args: [...(launchOptions.args ?? []), '--autoplay-policy=user-gesture-required'] })
+      ? await playwright.chromium.launch({ ...launchOptions, channel, headless, args: [...(launchOptions.args ?? []), '--autoplay-policy=user-gesture-required'] })
       : null;
     try {
       const p = own ? await own.newPage() : page;
