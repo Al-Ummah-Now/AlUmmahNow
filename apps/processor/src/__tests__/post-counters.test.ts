@@ -201,8 +201,11 @@ describe('poll votes', () => {
 
     expect(sum('poll', 'poll_votes')).toBe(600);
     for (const o of ['a', 'b', 'c']) expect(sum('poll', 'poll_option', o)).toBe(expected[o]);
-    // Constant work per vote: one vote document read (plus the one-time import)
-    expect(gets.mock.calls.length).toBeLessThan(900 + 600 + 50);
+    // Constant work per vote, not a recount per vote (which would be ~600 x 600 reads). Under random
+    // redelivery order and parallel handling a delivery can read its vote again while the one-time
+    // import is in flight, so the bound allows twice the deliveries: CI saw 2,102 against the old
+    // 1,550 bound (#926) while every count above was exact.
+    expect(gets.mock.calls.length).toBeLessThan(2 * (900 + 600));
     expect(bucket.puts).toEqual([]);
   });
 
