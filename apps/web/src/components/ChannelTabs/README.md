@@ -79,8 +79,8 @@ import { ChannelTabContent } from '@/components/ChannelTabs/ChannelTabContent';
 | Tab ID | Label (EN) | Label (AR) | Description |
 |--------|------------|------------|-------------|
 | `home` | Home | الرئيسية | Channel sections (featured content) |
-| `videos` | Videos | الفيديوهات | All videos grid |
-| `shorts` | Shorts | الفيديوهات القصيرة | Short-form videos |
+| `videos` | Videos | المرئيات | All videos grid |
+| `shorts` | Shorts | المقاطع القصيرة | Short-form videos |
 | `live` | Live | البث المباشر | Live streams |
 | `playlists` | Playlists | قوائم التشغيل | Playlist grid |
 | `community` | Community | المجتمع | Community posts |
@@ -257,8 +257,8 @@ channel: {
 ```ts
 channel: {
   home: 'الرئيسية',
-  videos: 'الفيديوهات',
-  shorts: 'الفيديوهات القصيرة',
+  videos: 'المرئيات',
+  shorts: 'المقاطع القصيرة',
   live: 'البث المباشر',
   playlists: 'قوائم التشغيل',
   community: 'المجتمع',

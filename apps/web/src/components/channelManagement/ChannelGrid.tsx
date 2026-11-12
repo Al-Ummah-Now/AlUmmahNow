@@ -55,7 +55,7 @@ export const ChannelGrid: React.FC<ChannelGridProps> = ({
         </h3>
         <p className="text-gray-600 dark:text-gray-400 text-center mb-6 max-w-md">
           {lang === 'ar'
-            ? 'أنشئ قناتك الأولى لبدء مشاركة الفيديوهات وبناء جمهورك.'
+            ? 'أنشئ قناتك الأولى لبدء مشاركة المرئيات وبناء جمهورك.'
             : 'Create your first channel to start sharing videos and building your audience.'}
         </p>
         {onCreate && (

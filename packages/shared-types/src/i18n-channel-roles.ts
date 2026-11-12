@@ -94,7 +94,7 @@ export const CHANNEL_ROLES_AR: ChannelRolesTranslations = {
   roles: { owner: 'المالك', admin: 'مشرف القناة', editor: 'محرر', moderator: 'مراقب القناة' },
   roleHelp: {
     admin: 'يمكنه فعل كل شيء ما عدا تغيير المعرّف أو حذف القناة أو إضافة مشرفين آخرين.',
-    editor: 'يرفع الفيديوهات ويعدّلها ويجدولها.',
+    editor: 'يرفع المرئيات ويعدّلها ويجدولها.',
     moderator: 'يراقب التعليقات.',
   },
   yourChannels: 'قنواتك',
@@ -120,7 +120,7 @@ export const CHANNEL_ROLES_AR: ChannelRolesTranslations = {
   leaveConfirm: 'هل تريد مغادرة هذه القناة؟ ستفقد الوصول إليها.',
   you: 'أنت',
   limit: 'حتى {count} شخصًا',
-  cannotUpload: 'دورك في هذه القناة لا يسمح برفع الفيديوهات',
+  cannotUpload: 'دورك في هذه القناة لا يسمح برفع المرئيات',
   cannotUploadHint: 'اطلب دور المحرر من مالك القناة أو أحد مشرفيها، أو انتقل إلى قناة أخرى.',
   noAccess: 'ليست لديك صلاحية لإدارة هذا.',
   errors: {

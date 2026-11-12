@@ -86,7 +86,7 @@ describe('Watch later page', () => {
     mockLang = 'ar';
     service.liked.mockResolvedValue({ items: [], nextCursor: null, total: 0 });
     render(<LibraryListPage kind="liked" dir="rtl" />);
-    await waitFor(() => expect(screen.getByTestId('library-list-empty')).toHaveTextContent('ستظهر هنا الفيديوهات التي تعجبك'));
+    await waitFor(() => expect(screen.getByTestId('library-list-empty')).toHaveTextContent('ستظهر هنا المرئيات التي تعجبك'));
     expect(screen.getByTestId('library-liked-page')).toHaveAttribute('dir', 'rtl');
   });
 

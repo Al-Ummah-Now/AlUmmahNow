@@ -49,7 +49,7 @@ const createMockTabConfig = (overrides?: Partial<ChannelTabConfig>): ChannelTabC
   dateModified: '2024-01-01T00:00:00Z',
   tabs: [
     { id: 'home', name: 'Home', nameLocalized: { en: 'Home', ar: 'الرئيسية' }, type: 'system', visible: true, position: 0 },
-    { id: 'videos', name: 'Videos', nameLocalized: { en: 'Videos', ar: 'الفيديوهات' }, type: 'system', visible: true, position: 1 },
+    { id: 'videos', name: 'Videos', nameLocalized: { en: 'Videos', ar: 'المرئيات' }, type: 'system', visible: true, position: 1 },
   ],
   ...overrides,
 });

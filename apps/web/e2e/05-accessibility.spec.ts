@@ -164,7 +164,7 @@ test.describe('Accessibility - RTL Support', () => {
   test('Arabic pages have the correct direction', async ({ page }) => {
     await page.goto('/ar/');
 
-    await expect(page.getByRole('heading', { level: 1 })).toContainText('الفيديوهات');
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('المرئيات');
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     await expect(page.getByRole('main')).toHaveCSS('direction', 'rtl');
   });

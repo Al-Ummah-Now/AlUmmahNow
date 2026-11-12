@@ -401,9 +401,9 @@ test.describe('Section manager', () => {
     const dialog = await openAddDialog(page, 'ar');
     await expect(dialog).toHaveAttribute('dir', 'rtl');
     await expect(dialog.getByRole('heading', { name: 'إضافة قسم للقناة' })).toBeVisible();
-    await expect(dialog.locator('[data-section-card="recent_uploads"]')).toContainText('أحدث الفيديوهات');
+    await expect(dialog.locator('[data-section-card="recent_uploads"]')).toContainText('أحدث المرئيات');
     await dialog.locator('[data-section-card="featured_videos"]').click();
-    await expect(dialog.getByRole('heading', { name: 'فيديوهات مميزة' })).toBeVisible();
+    await expect(dialog.getByRole('heading', { name: 'مرئيات مميزة' })).toBeVisible();
     await dialog.getByTestId('section-form-submit').click();
     await expect(dialog.getByRole('alert').filter({ hasText: 'اختر عنصرًا واحدًا على الأقل.' })).toBeVisible();
     await dialog.getByRole('button', { name: 'رجوع' }).click();
@@ -745,8 +745,8 @@ test.describe('Video sections page (/sections)', () => {
   test('SECT-021 renders in Arabic, right-to-left', async ({ page }) => {
     await page.goto('/ar/sections');
     await expectRtl(page);
-    await expect(page).toHaveTitle('استكشف الفيديوهات | الأمة الآن');
-    await expect(page.getByRole('heading', { level: 1, name: 'استكشف الفيديوهات' })).toBeVisible();
+    await expect(page).toHaveTitle('استكشف المرئيات | الأمة الآن');
+    await expect(page.getByRole('heading', { level: 1, name: 'استكشف المرئيات' })).toBeVisible();
     await expect(page.locator('main').first()).toHaveAttribute('dir', 'rtl');
   });
 });

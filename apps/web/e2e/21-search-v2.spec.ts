@@ -159,7 +159,7 @@ test.describe('Search v2 - Arabic (RTL)', () => {
     await expectResults(page);
     await expect(page.locator('[dir="rtl"]').first()).toBeVisible();
     await expect(page.getByTestId('search-type-all')).toHaveText('الكل');
-    await expect(page.getByTestId('search-type-video')).toHaveText('الفيديوهات');
+    await expect(page.getByTestId('search-type-video')).toHaveText('المرئيات');
     await page.getByTestId('search-filters-toggle').click();
     await expect(page.getByTestId('search-filter-panel')).toContainText('تاريخ الرفع');
   });

@@ -63,7 +63,7 @@ never one error per failed action and never a system alert:
 | | Text |
 | --- | --- |
 | en | Your videos account is scheduled for deletion. Contact support. |
-| ar | حسابك في الفيديوهات مجدول للحذف. تواصل مع الدعم. |
+| ar | حسابك في المرئيات مجدول للحذف. تواصل مع الدعم. |
 
 The web app shows `VideosPendingDeletionNotice`
 (`apps/web/src/components/VideosNotices`). ProfileGuard shows it above every

@@ -63,7 +63,7 @@ test.describe('Homepage - Arabic (RTL)', () => {
     await page.goto('/ar/');
 
     await expect(page).toHaveTitle(/Al Ummah Now/i);
-    await expect(page.getByRole('heading', { level: 1 })).toContainText('الفيديوهات');
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('المرئيات');
     await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
   });
 
@@ -83,13 +83,13 @@ test.describe('Language Switching', () => {
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Videos');
 
     await page.goto('/ar/');
-    await expect(page.getByRole('heading', { level: 1 })).toContainText('الفيديوهات');
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('المرئيات');
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   });
 
   test('should switch from Arabic to English', async ({ page }) => {
     await page.goto('/ar/');
-    await expect(page.getByRole('heading', { level: 1 })).toContainText('الفيديوهات');
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('المرئيات');
 
     await page.goto('/en/');
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Videos');

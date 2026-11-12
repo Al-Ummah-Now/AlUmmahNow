@@ -8,7 +8,7 @@
 export interface ChannelTab {
   id: string; // Tab identifier (e.g., "home", "videos", "shorts", etc.)
   name: string; // Default display name
-  nameLocalized?: Record<string, string>; // Multi-language names {"en": "Videos", "ar": "فيديوهات"}
+  nameLocalized?: Record<string, string>; // Multi-language names {"en": "Videos", "ar": "مرئيات"}
   icon?: string; // Optional icon identifier
   type: 'system' | 'custom'; // System tabs vs future custom tabs
   visible: boolean; // Show/hide toggle
@@ -47,7 +47,7 @@ export const DEFAULT_CHANNEL_TABS: ChannelTab[] = [
   {
     id: 'videos',
     name: 'Videos',
-    nameLocalized: { en: 'Videos', ar: 'الفيديوهات' },
+    nameLocalized: { en: 'Videos', ar: 'المرئيات' },
     type: 'system',
     visible: true,
     position: 1

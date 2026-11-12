@@ -331,18 +331,18 @@ shared by the web static fallback and the api-videos translation seed. The manag
 
 | Key | en | ar |
 |---|---|---|
-| group.videos | Videos | الفيديوهات |
+| group.videos | Videos | المرئيات |
 | group.playlists | Playlists | قوائم التشغيل |
 | group.channels | Channels | القنوات |
 | group.community | Community | المجتمع |
 | typeLabels.channel_spotlight | Channel spotlight | واجهة القناة |
-| typeLabels.featured_videos | Featured videos | فيديوهات مميزة |
-| typeLabels.recent_uploads | Latest videos | أحدث الفيديوهات |
+| typeLabels.featured_videos | Featured videos | مرئيات مميزة |
+| typeLabels.recent_uploads | Latest videos | أحدث المرئيات |
 | typeLabels.popular_uploads | Popular videos | الأكثر مشاهدة |
 | typeLabels.shorts | Shorts | مقاطع قصيرة |
 | typeLabels.live_streams | Live and upcoming | مباشر وقادم |
 | typeLabels.live_streams_past | Past live streams | البث السابق |
-| typeLabels.liked_videos | Liked videos | الفيديوهات التي أعجبتني |
+| typeLabels.liked_videos | Liked videos | المرئيات التي أعجبتني |
 | typeLabels.single_playlist | Single playlist | قائمة تشغيل واحدة |
 | typeLabels.multiple_playlists | Featured playlists | قوائم تشغيل مميزة |
 | typeLabels.created_playlists | Created playlists | قوائم التشغيل المنشأة |
@@ -352,7 +352,7 @@ shared by the web static fallback and the api-videos translation seed. The manag
 | spotlight.trailer | Trailer for new visitors | مقدمة للزوار الجدد |
 | spotlight.returning | Featured video for subscribers | فيديو مميز للمشتركين |
 | consent.subscriptions | Anyone who visits your channel will see the channels you subscribe to. | سيرى كل من يزور قناتك القنوات التي تشترك فيها. |
-| consent.likes | Anyone who visits your channel will see the videos you have liked. | سيرى كل من يزور قناتك الفيديوهات التي أعجبتك. |
+| consent.likes | Anyone who visits your channel will see the videos you have liked. | سيرى كل من يزور قناتك المرئيات التي أعجبتك. |
 | privateData | Private data | بيانات خاصة |
 | alreadyAdded | Already on your channel | موجود في قناتك |
 | hidden | Hidden | مخفي |

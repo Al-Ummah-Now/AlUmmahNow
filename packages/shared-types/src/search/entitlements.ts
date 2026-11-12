@@ -25,7 +25,7 @@ export const SEARCH_ENTITLEMENTS: ReadonlyArray<EntitlementDeclaration> = [
     type: 'boolean',
     audience: 'viewer',
     freeDefault: true,
-    description: { en: 'Search videos, channels, playlists and posts', ar: 'البحث في الفيديوهات والقنوات وقوائم التشغيل والمنشورات' },
+    description: { en: 'Search videos, channels, playlists and posts', ar: 'البحث في المرئيات والقنوات وقوائم التشغيل والمنشورات' },
     atLimit: 'Not limited; always on.',
     epic: '29.8',
   },

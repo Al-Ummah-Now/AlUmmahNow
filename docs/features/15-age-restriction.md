@@ -675,7 +675,7 @@ export class VideoEmbed extends OpenAPIRoute {
     "reason_sensitive_fiqh": "مواضيع فقهية حساسة",
     "reason_other": "محتوى آخر للبالغين",
     "warning": "تحذير",
-    "age_restriction_warning": "الفيديوهات المقيدة بالعمر لها توزيع محدود وتتطلب تسجيل دخول المشاهدين"
+    "age_restriction_warning": "المرئيات المقيدة بالعمر لها توزيع محدود وتتطلب تسجيل دخول المشاهدين"
   }
 }
 ```

@@ -2072,7 +2072,7 @@ export const ar = {
 
     // Dimensions
     storage_size: 'التخزين',
-    video_count: 'الفيديوهات',
+    video_count: 'المرئيات',
     upload_count: 'التحميلات',
     processing: 'وقت المعالجة',
 
@@ -2083,7 +2083,7 @@ export const ar = {
     // Actions
     upgrade_now: 'الترقية الآن',
     view_details: 'عرض تفاصيل الحصة',
-    manage_videos: 'إدارة الفيديوهات',
+    manage_videos: 'إدارة المرئيات',
     upgrade_plan: 'ترقية الخطة',
 
     // Warnings

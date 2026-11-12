@@ -125,7 +125,7 @@ describe('AddSectionDialog', () => {
     const dialog = openDialog();
     expect(dialog).toHaveAttribute('dir', 'rtl');
     expect(within(dialog).getByRole('heading', { name: 'إضافة قسم للقناة' })).toBeInTheDocument();
-    expect(within(dialog).getByRole('button', { name: /^أحدث الفيديوهات/ })).toHaveAccessibleName('أحدث الفيديوهات أحدث فيديوهاتك');
+    expect(within(dialog).getByRole('button', { name: /^أحدث المرئيات/ })).toHaveAccessibleName('أحدث المرئيات أحدث مرئياتك');
     expect(within(dialog).getByRole('heading', { name: 'المجتمع' })).toBeInTheDocument();
     const all = options(dialog);
     await waitFor(() => expect(document.activeElement).toBe(all[0]));

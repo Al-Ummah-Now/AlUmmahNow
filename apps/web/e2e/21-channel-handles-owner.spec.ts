@@ -145,7 +145,7 @@ test.describe('Channel owner - handle, About and delete', () => {
     const actions = page.getByTestId('channel-owner-actions');
     await expect(actions).toHaveAttribute('dir', 'rtl');
     await expect(actions.getByRole('link', { name: 'تخصيص القناة' })).toBeVisible();
-    await expect(actions.getByRole('link', { name: 'إدارة الفيديوهات' })).toBeVisible();
+    await expect(actions.getByRole('link', { name: 'إدارة المرئيات' })).toBeVisible();
   });
 
   test('claims a new handle with an availability check and fills the About tab', async ({ page }) => {
