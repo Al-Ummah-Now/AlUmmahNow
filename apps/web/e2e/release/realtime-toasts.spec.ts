@@ -159,32 +159,43 @@ async function checkBurst(page: Page, locale: Locale, label: string): Promise<vo
 async function checkMenuOnTop(page: Page, rt: ReturnType<typeof fakeRealtime>, tag: string, label: string): Promise<void> {
   // Hovering the toasts pauses them; move away so the menu opens normally
   await page.mouse.move(5, 5);
-  // Toasts live 8 s (TOAST_TTL_MS) and the burst checks before this can take that long on a busy
-  // runner: one more ready event renews the bulk toast, so it is up for the whole menu check
-  rt.push('uploadReady', { videoTitle: `Good Deeds ${tag}-renew` }, `/video/e2e-${tag}-renew`);
-  await expect(page.locator(TOAST).first()).toBeVisible();
   await page.locator('[data-testid="nav-menu-trigger"]:visible').first().click();
   const menu = page.locator('[data-testid="nav-menu"]:visible').first();
   await expect(menu).toBeVisible();
-  await expect(page.locator(TOAST).first(), 'toasts are still up while the menu is open').toBeVisible();
+  // A toast lives 8 s after its latest event (TOAST_TTL_MS). Opening the menu can take longer than
+  // that on a busy runner (stage, v2026.11.12.7: the toasts were gone before the check began), so
+  // the event that keeps them up arrives with the menu already open, and the toasts and the menu
+  // items are read in one go: the check never runs against an empty toast region.
+  let covered: string[] = [];
+  await expect(async () => {
+    await expect(menu).toBeVisible({ timeout: 2000 });
+    const n = rt.next();
+    rt.push('uploadReady', { videoTitle: `Good Deeds ${tag}-renew-${n}` }, `/video/e2e-${tag}-renew-${n}`);
+    await expect(page.locator(TOAST).first()).toBeVisible({ timeout: 2000 });
+    const seen = await menu.locator('[role^="menuitem"]').evaluateAll(
+      (els, toast) => ({
+        toasts: document.querySelectorAll(toast).length,
+        covered: els
+          .filter((el) => el.getClientRects().length)
+          .map((el) => {
+            const r = el.getBoundingClientRect();
+            const x = r.left + r.width / 2;
+            const y = Math.min(r.top + r.height / 2, window.innerHeight - 1);
+            if (y < 0 || r.top >= window.innerHeight) return null;
+            const hit = document.elementFromPoint(x, y);
+            return hit && !el.contains(hit) && hit.closest('[data-testid="realtime-toasts"]') ? el.textContent?.trim() || '?' : null;
+          })
+          .filter((text): text is string => !!text),
+      }),
+      TOAST,
+    );
+    expect(seen.toasts, 'toasts are still up while the menu is open').toBeGreaterThan(0);
+    covered = seen.covered;
+  }).toPass({ timeout: 30000 });
+  expect(covered, 'menu items covered by a toast').toEqual([]);
   const shot = test.info().outputPath(`toasts-menu-${label}.png`);
   await page.screenshot({ path: shot });
   await test.info().attach(`toasts-menu-${label}`, { path: shot, contentType: 'image/png' });
-
-  const covered = await menu.locator('[role^="menuitem"]').evaluateAll((els) =>
-    els
-      .filter((el) => el.getClientRects().length)
-      .map((el) => {
-        const r = el.getBoundingClientRect();
-        const x = r.left + r.width / 2;
-        const y = Math.min(r.top + r.height / 2, window.innerHeight - 1);
-        if (y < 0 || r.top >= window.innerHeight) return null;
-        const hit = document.elementFromPoint(x, y);
-        return hit && !el.contains(hit) && hit.closest('[data-testid="realtime-toasts"]') ? el.textContent?.trim() || '?' : null;
-      })
-      .filter(Boolean),
-  );
-  expect(covered, 'menu items covered by a toast').toEqual([]);
   await page.keyboard.press('Escape');
   if (await menu.isVisible()) await page.locator('[data-testid="nav-menu-trigger"]:visible').first().click();
 }
