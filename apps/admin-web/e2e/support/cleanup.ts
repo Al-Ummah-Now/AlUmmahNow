@@ -17,7 +17,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { AUTH_DIR, E2E_ENTITY_PREFIX, LOCAL_STACK, OPENAUTH_URL, RUN_ID, VIDEOS_API_URL, runPassword, type Account } from './env';
 import { getAccessToken } from './oauth';
-import { stackSql } from './local-stack';
+import { runCron, stackSql, topOfHour } from './local-stack';
 import { adminApi } from './api';
 
 const LEDGER = path.join(AUTH_DIR, 'run-ledger.jsonl');
@@ -28,6 +28,12 @@ interface LedgerUser { email: string; userId: string }
 export function recordRunAccount(email: string, userId: string): void {
   fs.mkdirSync(AUTH_DIR, { recursive: true });
   fs.appendFileSync(LEDGER, `${JSON.stringify({ email, userId })}\n`);
+}
+
+/** Appends the job's run-user ids, one per line, for the leftover check (its users are gone by then). */
+export function writeRunUserIds(file: string): void {
+  const ids = ledgerUsers().map((u) => u.userId);
+  if (ids.length) fs.appendFileSync(file, `${ids.join('\n')}\n`);
 }
 
 export function ledgerUsers(): LedgerUser[] {
@@ -130,6 +136,7 @@ async function eraseLocalRows(users: LedgerUser[]): Promise<void> {
 export async function teardownRun(log: (line: string) => void = () => undefined): Promise<void> {
   if (!RUN_ID) return;
   const users = ledgerUsers();
+  if (process.env.E2E_RUN_USER_IDS_FILE) writeRunUserIds(process.env.E2E_RUN_USER_IDS_FILE);
   const problems: string[] = [];
   try {
     await eraseLocalRows(users);
@@ -152,6 +159,10 @@ export async function teardownRun(log: (line: string) => void = () => undefined)
       } catch (error) {
         problems.push(`${user.email}: ${(error as Error).message}`);
       }
+    }
+    // The purges the specs requested (channels, creator tiers, invites) run on the crons: run them now
+    for (const [app, cron, time] of [['api-videos', '47 * * * *', new Date()], ['admin-api', '*/5 * * * *', topOfHour()]] as const) {
+      await runCron(app, cron, time).catch((error) => problems.push((error as Error).message));
     }
     // Roles and tiers once more: deleting the account may have re-read them
     await eraseLocalRows(users).catch((error) => problems.push(`local rows: ${(error as Error).message}`));
