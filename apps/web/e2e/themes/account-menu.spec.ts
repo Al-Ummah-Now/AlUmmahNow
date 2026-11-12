@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { AxeBuilder } from '@axe-core/playwright';
-import { applyTheme, LANGS, measureText, MODES, mockApi, signIn, THEMES } from './harness';
+import { applyTheme, LANGS, measureText, menuLineContrast, MODES, mockApi, signIn, THEMES } from './harness';
 
 /**
  * THEME-NAV (docs/design/NAV.md): the header account button and menu follow the shared nav
@@ -57,6 +57,14 @@ for (const lang of LANGS) {
 
         const axe = await new AxeBuilder({ page }).include('[data-testid=nav-menu]').withRules(['color-contrast']).analyze();
         expect(axe.violations.flatMap((v) => v.nodes.map((n) => n.failureSummary))).toEqual([]);
+
+        // The lines between sections must show (owner review rev 4: "in dark you can't see the lines
+        // between rows"): separators ≥ 1.8:1 on the dark menu (≥ 1.25:1 on the light page background),
+        // and the outer border ≥ 3:1 in both modes
+        const lines = await menuLineContrast(page, '[data-testid=nav-menu]');
+        expect(lines.count, 'separators rendered').toBeGreaterThan(2);
+        expect(lines.separators, `separator contrast ${theme} ${mode}`).toBeGreaterThanOrEqual(mode === 'dark' ? 1.8 : 1.25);
+        expect(lines.edge, `menu border contrast ${theme} ${mode}`).toBeGreaterThanOrEqual(3);
       });
     }
   }
