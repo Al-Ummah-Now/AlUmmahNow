@@ -48,6 +48,8 @@ export class D1Client {
   }
 
   private execute<T>(sql: string): T[] {
+    // The local E2E stack (scripts/local-stack) answers SQL on its control port instead of a remote D1
+    if (process.env.SEED_D1_URL) return this.executeLocal<T>(process.env.SEED_D1_URL, sql);
     const bin = process.env.WRANGLER_BIN || 'npx';
     const prefix = process.env.WRANGLER_BIN ? [] : ['--yes', 'wrangler'];
     const args = [...prefix, 'd1', 'execute', this.cfg.databaseName, '--remote', '--json', '--config', this.configPath, '--command', sql];
@@ -69,6 +71,19 @@ export class D1Client {
     const parsed = JSON.parse(stdout.slice(start)) as Array<{ results?: T[]; success?: boolean }>;
     if (!parsed.every((r) => r.success !== false)) throw new Error('D1 statement reported success=false');
     return parsed.flatMap((r) => r.results || []);
+  }
+
+  /** SQL against a local stack database (POST <url>/<database name>); only loopback URLs. */
+  private executeLocal<T>(base: string, sql: string): T[] {
+    const url = new URL(`${base.replace(/\/$/, '')}/${encodeURIComponent(this.cfg.databaseName)}`);
+    if (url.hostname !== '127.0.0.1' && url.hostname !== 'localhost') throw new Error('SEED_D1_URL must be a local stack URL');
+    log.debug('D1 execute (local stack)', { sql });
+    const stdout = execFileSync('curl', ['-sS', '--fail-with-body', '-X', 'POST', '-H', 'content-type: text/plain', '--data-binary', '@-', url.toString()], {
+      encoding: 'utf8',
+      input: sql,
+      maxBuffer: 16 * 1024 * 1024,
+    });
+    return (JSON.parse(stdout) as { results: T[] }).results;
   }
 
   /**

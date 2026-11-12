@@ -34,8 +34,10 @@ export const PORTS = {
   auth: 3301,
   profile: 3302,
   'auth-admin': 3303,
-  /** Fake third-party CDN for the browser (Bunny HLS/thumbnails, image host): fake-external.ts */
+  /** Fake third-party CDN + control API (Bunny HLS/thumbnails, image host, SQL): fake-external.ts */
   'fake-cdn': 3190,
+  /** The browser's proxy (Playwright `proxy`): faked HTTPS hosts answered locally, others refused: browser-proxy.ts */
+  'browser-proxy': 3191,
 } as const;
 export type StackApp = keyof typeof PORTS;
 
@@ -110,9 +112,12 @@ export const WORKERS: StackWorker[] = [
       Audience: url('api-videos'),
       WEBSOCKET_URL: url('websocket'),
       CORS_ORIGINS: BROWSER_ORIGINS,
-      MEDIA_PUBLIC_HOST: `${HOST}:${PORTS['fake-cdn']}`,
-      bunny_hostname: `${HOST}:${PORTS['fake-cdn']}`,
-      BUNNY_SIGN_HOSTNAME: `${HOST}:${PORTS['fake-cdn']}`,
+      // R2 delivery's media Worker is not in the stack (delivery stays on the default, Bunny)
+      MEDIA_PUBLIC_HOST: 'media.local-stack.test',
+      // The fake Bunny CDN (fake-external.ts FAKE_CDN_HOST): workers reach it through the outbound
+      // fakes, the browser through Playwright routes to PORTS['fake-cdn']
+      bunny_hostname: 'vz-local-stack.b-cdn.net',
+      BUNNY_SIGN_HOSTNAME: 'vz-local-stack.b-cdn.net',
       BUNNY_TEST_LIBRARY: 'true',
     },
   },

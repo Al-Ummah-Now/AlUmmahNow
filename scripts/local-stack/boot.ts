@@ -23,6 +23,8 @@ import { parseJsonc } from '../release/jsonc.ts';
 import { localConfig, localRedirectUris, type Json } from './configs.ts';
 import { appDir, AUTH_DIR, HOST, localSecret, PORTS, PROD_HOST_TO_LOCAL, ROOT, STATE_DIR, url, WORKERS, type StackWorker } from './stack.ts';
 import { outboundHandler } from './outbound.ts';
+import { registerFakes, setStackSql, startFakeCdn } from './fake-external.ts';
+import { startBrowserProxy } from './browser-proxy.ts';
 
 const LOCAL_CONFIG = 'wrangler.local-stack.json';
 const args = process.argv.slice(2);
@@ -305,6 +307,9 @@ async function main(): Promise<void> {
   });
   const options = prepared.map(workerOptions);
 
+  registerFakes();
+  const stopCdn = await timed('fake cdn', () => startFakeCdn());
+  const stopProxy = await timed('browser proxy', () => startBrowserProxy());
   const mf = await timed('miniflare', async () => {
     const instance = new Miniflare({ workers: options, defaultPersistRoot: persist, log: undefined });
     await instance.ready;
@@ -313,12 +318,22 @@ async function main(): Promise<void> {
   const stop = async () => {
     log('stopping');
     await mf.dispose();
+    await stopCdn();
+    await stopProxy();
     process.exit(0);
   };
   process.on('SIGINT', stop);
   process.on('SIGTERM', stop);
 
   await timed('migrations', () => migrate(mf, prepared));
+  const databases = new Map<string, { binding: string; worker: string }>();
+  for (const p of prepared) for (const db of (p.local.config.d1_databases as Json[] | undefined) ?? []) if (!databases.has(String(db.database_name))) databases.set(String(db.database_name), { binding: String(db.binding), worker: p.name });
+  setStackSql(async (name, sql) => {
+    const target = databases.get(name);
+    if (!target) throw new Error(`no database ${name} (${[...databases.keys()].join(', ')})`);
+    const db = await mf.getD1Database(target.binding, target.worker);
+    return (await db.prepare(sql).all<unknown>()).results;
+  });
   await timed('secrets', () => fillSecrets(mf, prepared));
   await timed('clients', () => localClients(mf, prepared));
   const statuses = await timed('health', () => health(prepared));
