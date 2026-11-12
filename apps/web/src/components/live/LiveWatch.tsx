@@ -7,7 +7,7 @@
  * until the stream is live, then every minute to notice the end.
  */
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import type { Player } from 'video.js';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';

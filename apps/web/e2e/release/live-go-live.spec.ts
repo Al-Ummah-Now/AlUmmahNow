@@ -27,6 +27,8 @@ test.describe('Release: Studio Go live', () => {
   });
 
   test('creates a stream, shows its encoder settings, goes live, ends and deletes it', async ({ page }) => {
+    // Answer the consent banner up front so it cannot cover the row actions
+    await page.context().addCookies([{ name: 'aun_consent', value: `v1.a0.e0.p0.${Date.now()}`, url: target().web, sameSite: 'Lax' }]);
     const { user, channelId } = await studioOwner(page, 'rel-live-golive');
     owner = user;
     const listUrl = `${target().web}/en/studio/${channelId}/content/live`;

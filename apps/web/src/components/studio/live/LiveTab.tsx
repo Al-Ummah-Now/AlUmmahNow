@@ -6,7 +6,7 @@
  * self-hosted, D3) on the server; nothing here depends on which one.
  */
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
