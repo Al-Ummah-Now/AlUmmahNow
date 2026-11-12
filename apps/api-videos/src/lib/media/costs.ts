@@ -84,6 +84,8 @@ export function metricsFromRecords(input: {
 
 	add('bunny', 'viewer_hours', bunny.hours);
 	add('bunny', 'delivered_gb', bunny.gb);
+	// Name the admin page reads for Bunny's billed traffic (estimated from watch time × bitrate)
+	add('bunny', 'egress_gb', bunny.gb);
 	if (input.bunnyStoredBytes !== undefined) add('bunny', 'stored_gb', input.bunnyStoredBytes / GB);
 	const bunnyCost =
 		((input.bunnyStoredBytes ?? 0) / GB) * ((PRICES.bunnyStorageGbMonthPerRegion * PRICES.bunnyRegions) / 30) + bunny.gb * PRICES.bunnyEgressGb;
