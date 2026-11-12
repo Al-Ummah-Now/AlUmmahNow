@@ -85,10 +85,23 @@ const look = (frame: Frame) =>
     const [r, g, b] = (night.match(/\d+/g) ?? ['255', '255', '255']).map(Number);
     const dark = 0.2126 * r! + 0.7152 * g! + 0.0722 * b! < 80;
     const box = document.querySelector('.custom-video-player')?.getBoundingClientRect();
+    const link = document.querySelector('[data-testid="embed-watch-link"]')?.getBoundingClientRect();
     return {
       backdrop: dark && [bg(document.documentElement), bg(document.body), bg(document.querySelector('main'))].every((c) => c === night),
       w: box ? Math.round(box.width) : 0,
       h: box ? Math.round(box.height) : 0,
+      // the player's left edge, and whether the "Watch on" link sits on the player (not the page)
+      x: box ? Math.round(box.left) : -1,
+      linkOnPlayer: !!box && !!link && link.left >= box.left - 1 && link.right <= box.right + 1 && link.top >= box.top - 1,
+      // the control bar: every visible control on one row, inside the player (compact when narrow)
+      controlsOneRow: (() => {
+        const bar = document.querySelector('.vjs-control-bar');
+        if (!bar || !box) return false;
+        const shown = [...bar.children].map((c) => c.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0);
+        const buttons = shown.filter((r) => r.height <= 60);
+        const tops = new Set(buttons.map((r) => Math.round(r.top / 4)));
+        return shown.every((r) => r.left >= box.left - 1 && r.right <= box.right + 1) && tops.size <= 2;
+      })(),
     };
   });
 
@@ -98,11 +111,14 @@ function skipOnPr(why: string): void {
 }
 
 test.describe('Release: the embed fills its frame on the night colour', () => {
-  for (const { clip, width, height } of [
-    { clip: 'landscape40', width: 345, height: 194 },
-    { clip: 'landscape40', width: 800, height: 450 },
-    { clip: 'vertical', width: 216, height: 384 },
-    { clip: 'square', width: 345, height: 345 },
+  // `player`: the expected player box (the video's ratio fitted in the frame, centred). The clips:
+  // landscape 16:9, vertical 240x426, square 1:1. 780x440 is X's player card for a Short.
+  for (const { clip, width, height, player } of [
+    { clip: 'landscape40', width: 345, height: 194, player: { w: 345, h: 194 } },
+    { clip: 'landscape40', width: 800, height: 450, player: { w: 800, h: 450 } },
+    { clip: 'vertical', width: 216, height: 384, player: { w: 216, h: 383 } },
+    { clip: 'vertical', width: 780, height: 440, player: { w: 248, h: 440 } },
+    { clip: 'square', width: 345, height: 345, player: { w: 345, h: 345 } },
   ] as const) {
     for (const scheme of ['dark', 'light'] as const) {
       test(`${clip} in a ${width}x${height} frame (${scheme})`, async ({ page }) => {
@@ -111,7 +127,13 @@ test.describe('Release: the embed fills its frame on the night colour', () => {
         const frame = await embedFrame(page);
         await expect(frame.locator('.custom-video-player')).toBeVisible({ timeout: 45000 });
         if (ON_PR && !(await look(frame)).backdrop) skipOnPr('the embed frame fill (components/embed/embed-frame.css)');
-        await expect.poll(() => look(frame), { timeout: 15000 }).toEqual({ backdrop: true, w: width, h: height });
+        await expect
+          .poll(async () => {
+            const l = await look(frame);
+            const centred = Math.abs(l.x - (width - l.w) / 2) <= 2;
+            return l.backdrop && Math.abs(l.w - player.w) <= 2 && Math.abs(l.h - player.h) <= 2 && centred && l.linkOnPlayer && l.controlsOneRow;
+          }, { message: `player ${player.w}x${player.h}, centred, on the night colour, "Watch on" and the controls on the player`, timeout: 15000 })
+          .toBe(true);
       });
     }
   }

@@ -5,12 +5,23 @@
  */
 
 import type { Metadata } from 'next';
-import type { EmbedVideo } from './content';
+import { videoAspect, type EmbedVideo } from './content';
 import { embedUrl, oembedEndpointUrl, watchPageUrl } from './snippets';
 
 const PLAYER_WIDTH = 1280;
 const PLAYER_HEIGHT = 720;
 const DESCRIPTION_MAX = 200;
+
+/**
+ * The player size the cards declare: the video's own ratio (a Short is 405x720, 9:16), so X and
+ * others that size their player card from it give a Short a tall box, not a 16:9 one with bars.
+ * Landscape keeps 1280 wide; square and taller are 720 tall. Unknown size: 1280x720.
+ */
+export function declaredPlayerSize(video: Pick<EmbedVideo, 'width' | 'height' | 'isShort'>): { width: number; height: number } {
+  const a = videoAspect(video);
+  if (!a) return { width: PLAYER_WIDTH, height: PLAYER_HEIGHT };
+  return a > 1 ? { width: PLAYER_WIDTH, height: Math.round(PLAYER_WIDTH / a) } : { width: Math.round(PLAYER_HEIGHT * a), height: PLAYER_HEIGHT };
+}
 
 function truncate(text: string, max: number): string {
   const clean = text.replace(/\s+/g, ' ').trim();
@@ -25,7 +36,8 @@ export function buildWatchMetadata(video: EmbedVideo | null, locale: string, ori
   const description = rawDescription ? truncate(rawDescription, DESCRIPTION_MAX) : undefined;
   const pageUrl = watchPageUrl(origin, lang, video.id);
   const player = embedUrl(origin, 'video', video.id, { lang });
-  const images = video.poster ? [{ url: video.poster, width: PLAYER_WIDTH, height: PLAYER_HEIGHT, alt: title }] : undefined;
+  const size = declaredPlayerSize(video);
+  const images = video.poster ? [{ url: video.poster, width: size.width, height: size.height, alt: title }] : undefined;
 
   return {
     title,
@@ -43,14 +55,14 @@ export function buildWatchMetadata(video: EmbedVideo | null, locale: string, ori
       url: pageUrl,
       locale: lang === 'ar' ? 'ar_AR' : 'en_US',
       images,
-      videos: [{ url: player, secureUrl: player, type: 'text/html', width: PLAYER_WIDTH, height: PLAYER_HEIGHT }],
+      videos: [{ url: player, secureUrl: player, type: 'text/html', width: size.width, height: size.height }],
     },
     twitter: {
       card: 'player',
       title,
       description,
       images: video.poster ? [video.poster] : undefined,
-      players: [{ playerUrl: player, streamUrl: player, width: PLAYER_WIDTH, height: PLAYER_HEIGHT }],
+      players: [{ playerUrl: player, streamUrl: player, width: size.width, height: size.height }],
     },
   };
 }

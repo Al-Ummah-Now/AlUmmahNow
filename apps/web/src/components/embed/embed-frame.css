@@ -4,7 +4,8 @@
  *  - the theme's night colour as the backdrop in every theme and mode (--fanous-c-nav-bg, dark in
  *    all of them; www's player frame uses the same colour), where the theme's page background
  *    and its `main { background: transparent !important }` made it parchment, and
- *  - the player fills the whole frame and contains the video once: no 16:9 box inside a square
+ *  - the player box takes the video's ratio, as large as the frame allows and centred (a Short in
+ *    X's wide card fills its height), and the player fills that box: no 16:9 box inside a square
  *    or vertical frame (double bars), and no watch-page header allowance
  *    (max-height: 100dvh - 148px), which squashed it to a strip in a small iframe.
  */
@@ -13,14 +14,15 @@ html body:has(main[data-testid="embed-player"]),
 main[data-testid="embed-player"] {
   background: var(--fanous-c-nav-bg) !important;
 }
+/* the player box: the video's ratio fitted in the frame (EmbedPlayer --box-w/--box-h), else the whole frame */
 main[data-testid="embed-player"] > div {
-  width: 100vw !important;
-  height: 100vh;
+  width: var(--box-w, 100vw) !important;
+  height: var(--box-h, 100vh) !important;
 }
 main[data-testid="embed-player"] .custom-video-player,
 main[data-testid="embed-player"] .custom-video-player.aspect-video:not([data-portrait]) {
   width: 100% !important;
-  height: 100vh !important;
+  height: var(--box-h, 100vh) !important;
   max-height: none !important;
   aspect-ratio: auto !important;
   margin: 0;
