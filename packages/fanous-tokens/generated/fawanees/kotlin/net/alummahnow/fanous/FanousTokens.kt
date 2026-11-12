@@ -93,11 +93,11 @@ val FanousDarkColors = FanousColors(
 )
 
 val FanousLightColors = FanousColors(
-    background = Color(0xFFF6D67F),
-    surface = Color(0xFFFFF1C4),
-    surfaceRaised = Color(0xFFFFF9E6),
+    background = Color(0xFFFFF1C4),
+    surface = Color(0xFFF6D67F),
+    surfaceRaised = Color(0xFFF9DF97),
     heroStart = Color(0xFFEFC65F),
-    heroEnd = Color(0xFFF6D67F),
+    heroEnd = Color(0xFFFFF1C4),
     textPrimary = Color(0xFF0B2534),
     textSecondary = Color(0xFF143A4C),
     textMuted = Color(0xFF24505F),

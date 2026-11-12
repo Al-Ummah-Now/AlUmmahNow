@@ -106,11 +106,11 @@ public enum Fanous {
     )
 
     public static let light = FanousColors(
-        background: Color(.sRGB, red: 0.9647, green: 0.8392, blue: 0.498, opacity: 1),
-        surface: Color(.sRGB, red: 1, green: 0.9451, blue: 0.7686, opacity: 1),
-        surfaceRaised: Color(.sRGB, red: 1, green: 0.9765, blue: 0.902, opacity: 1),
+        background: Color(.sRGB, red: 1, green: 0.9451, blue: 0.7686, opacity: 1),
+        surface: Color(.sRGB, red: 0.9647, green: 0.8392, blue: 0.498, opacity: 1),
+        surfaceRaised: Color(.sRGB, red: 0.9765, green: 0.8745, blue: 0.5922, opacity: 1),
         heroStart: Color(.sRGB, red: 0.9373, green: 0.7765, blue: 0.3725, opacity: 1),
-        heroEnd: Color(.sRGB, red: 0.9647, green: 0.8392, blue: 0.498, opacity: 1),
+        heroEnd: Color(.sRGB, red: 1, green: 0.9451, blue: 0.7686, opacity: 1),
         textPrimary: Color(.sRGB, red: 0.0431, green: 0.1451, blue: 0.2039, opacity: 1),
         textSecondary: Color(.sRGB, red: 0.0784, green: 0.2275, blue: 0.298, opacity: 1),
         textMuted: Color(.sRGB, red: 0.1412, green: 0.3137, blue: 0.3725, opacity: 1),
