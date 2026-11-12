@@ -51,7 +51,7 @@ test.describe('navigation', () => {
       // hides on phones and stays the button's accessible name
       await expect(trigger).toBeVisible();
       await expect(page.getByTestId('user-email')).toHaveCount(0);
-      await expect(trigger).toHaveAccessibleName(/.+: .+/);
+      await expect(trigger).toHaveAccessibleName(/^(Accounts|الحسابات): .+/);
       await trigger.click();
       const menu = page.getByTestId('account-menu');
       // The one sign-out entry is in the menu (visible only: this test ends no session)

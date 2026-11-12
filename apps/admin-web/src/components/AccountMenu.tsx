@@ -119,11 +119,12 @@ export function AccountMenu({ issuer, currentEmail, roles }: AccountMenuProps) {
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={menuId}
-        aria-label={`${t('accounts.menu')}: ${name}`}
         onClick={() => setOpen((v) => !v)}
         className="aun-acct-btn"
       >
+        {/* No aria-label: the visible name is the button's name (axe label-content-name-mismatch) */}
         <span className="aun-avatar" aria-hidden="true">{initial}</span>
+        <span className="sr-only">{t('accounts.menu')}: </span>
         <span className="aun-acct-name" dir="auto">{name}</span>
         <Icon name="chevron" className="aun-caret rotate-90" />
       </button>
