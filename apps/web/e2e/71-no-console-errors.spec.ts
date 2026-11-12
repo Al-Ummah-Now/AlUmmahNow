@@ -23,6 +23,10 @@ async function expectCleanConsole(page: Page, path: string) {
   page.on('console', (message) => {
     if (message.type() === 'error' && !NETWORK_NOISE.test(message.text())) errors.push(`console.error: ${message.text()}`);
   });
+  // "Failed to load resource" names no URL: list each failed response next to it, so a red run says which
+  page.on('response', (response) => {
+    if (response.status() >= 400) errors.push(`response ${response.status()}: ${response.request().method()} ${response.url()}`);
+  });
   await page.goto(path, { waitUntil: 'load' });
   // An observation window: errors thrown after load (hydration, effects) count too
   await page.waitForTimeout(1500);
