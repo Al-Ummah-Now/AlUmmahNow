@@ -107,6 +107,26 @@ describe('secrets manifest', () => {
 	});
 });
 
+describe('a worker not deployed yet', () => {
+	const fresh = (declared: boolean, store: { name: string; status?: string }[]): Deps => ({
+		...deps(null, { store }),
+		declared: async () => (declared ? { store_id: 's', secret_name: 'internal-api-key' } : null),
+	});
+	const entry = { ...videos, clientIdVars: [] };
+
+	it('passes when this commit binds every required secret to an active one (its first deploy creates it)', async () => {
+		const fs = await checkWorker(entry, fresh(true, [{ name: 'internal-api-key', status: 'active' }]));
+		assert.deepEqual(failures(fs), []);
+		assert.match(fs.find((f) => f.check === 'worker exists')!.detail ?? '', /first deploy/);
+	});
+
+	it('fails when the config does not bind its secrets, or the secret is not active', async () => {
+		assert.deepEqual(failures(await checkWorker(entry, fresh(false, []))), ['worker exists']);
+		assert.deepEqual(failures(await checkWorker(entry, fresh(true, []))), ['secret INTERNAL_API_KEY']);
+		assert.deepEqual(failures(await checkWorker(entry, deps(null))), ['worker exists']);
+	});
+});
+
 describe('declaredInConfig', () => {
 	it('reads the Secrets Store binding from the production and stage configs', () => {
 		const root = new URL('../../..', import.meta.url).pathname;
