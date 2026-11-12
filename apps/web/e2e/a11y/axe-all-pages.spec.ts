@@ -1,7 +1,7 @@
 import { test, expect } from '../fixtures';
 import { AxeBuilder } from '@axe-core/playwright';
 import { ANONYMOUS_STATE, AUTH_STATE } from '../test-utils/auth-state';
-import { catalog, loadCatalogData, openCatalogPage, type CatalogData, type CatalogRole } from '../test-utils/page-catalog';
+import { catalog, loadCatalogData, openCatalogPageInReferenceTheme, type CatalogData, type CatalogRole } from '../test-utils/page-catalog';
 
 /**
  * A11Y-ALL: axe-core WCAG 2.1 AA scan of every page in the route inventory
@@ -45,10 +45,11 @@ for (const role of ROLES) {
       for (const colorScheme of ['light', 'dark'] as const) {
         for (const locale of ['en', 'ar'] as const) {
           test(`A11Y-ALL ${entry.id} (${locale}, ${colorScheme}) has no WCAG 2.1 AA violations`, async ({ page }) => {
-            await page.emulateMedia({ colorScheme });
             const resolved = catalog(data).find((p) => p.id === entry.id && p.role === role);
             expect(resolved, `catalog entry ${entry.id}`).toBeTruthy();
-            await openCatalogPage(page, locale, resolved!);
+            // Contrast results follow the site theme: scan in the reference theme (Lantern), not
+            // whatever QA's active theme is; e2e/themes checks contrast in every theme
+            await openCatalogPageInReferenceTheme(page, locale, resolved!, colorScheme);
             await expect(page.locator('html')).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
 
             const results = await new AxeBuilder({ page })
