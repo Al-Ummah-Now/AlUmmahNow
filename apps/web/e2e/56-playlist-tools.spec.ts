@@ -13,7 +13,7 @@ import {
   playlistToolsDeployed,
   tempName,
 } from './test-utils/channel-content';
-import { ensureSeedVideos, SEED_TITLES, type E2EVideo } from './test-utils/e2e-videos';
+import { ensureSeedVideos, getVideo, SEED_TITLES, userApi, type E2EVideo } from './test-utils/e2e-videos';
 
 /**
  * Adding videos to playlists (owner, 2026-11-10: "how do you add videos to a
@@ -23,8 +23,8 @@ import { ensureSeedVideos, SEED_TITLES, type E2EVideo } from './test-utils/e2e-v
  *   channel, created in one go
  * - Manage Playlists › a playlist: add with the picker, reorder (keyboard
  *   drag and Move buttons), automatic order, remove
- * - Video Management: the selection's "Add to playlist", and a video's menu
- *   with an inline new playlist
+ * - Studio Content › Videos (Video Management moved there, 3883fa94): the
+ *   selection's "Add to playlist", to an existing playlist or a new one
  *
  * Writes go to the single user's own channel and its private seed videos;
  * every playlist is titled "E2E Temp …" and deleted afterwards.
@@ -53,6 +53,23 @@ async function pick(scope: Locator, video: E2EVideo) {
   await expect(row).toBeVisible({ timeout: 15000 });
   await row.getByRole('checkbox').check();
   await expect(row).toHaveAttribute('data-selected', 'true');
+}
+
+/**
+ * Opens Studio's video list on the tab the videos are in now (Processing until
+ * Bunny has encoded them, then Published: the seeds are uploaded by each run,
+ * #929) and waits for their select boxes
+ */
+async function openStudioWith(page: Page, videos: E2EVideo[]) {
+  const select = (video: E2EVideo) => page.locator(`[data-testid="studio-video-select"][data-video-id="${video.id}"]`);
+  await expect(async () => {
+    const fresh = await getVideo(userApi(owner), videos[0].id);
+    const status = fresh?.uploadStatus && fresh.uploadStatus !== 'ready' ? 'processing' : 'published';
+    await page.goto(`/en/studio/${channelId()}/content/videos?status=${status}`);
+    await expect(page.getByTestId('studio-videos-loading')).toHaveCount(0, { timeout: 20000 });
+    for (const video of videos) await expect(select(video)).toBeVisible({ timeout: 5000 });
+  }).toPass({ timeout: 60000 });
+  return select;
 }
 
 const itemOrder = (page: Page) => page.getByTestId('playlist-item').evaluateAll((rows) => rows.map((r) => r.getAttribute('data-video-id')));
@@ -155,43 +172,24 @@ test.describe('Playlist tools', () => {
     }
   });
 
-  test('PLT-003 Video Management: add the selection to a playlist, and create one from a video menu', async ({ page }) => {
-    const existingTitle = tempName('Tools Existing');
+  test('PLT-003 Studio videos: create a playlist inline from the selection', async ({ page }) => {
     const newTitle = tempName('Tools Inline');
-    const { id } = await createPlaylist(owner, channelId(), { title: existingTitle });
     try {
-      await page.goto(`/en/settings/channel/${channelId()}/videos`);
-      const card = (video: E2EVideo) => page.locator(`[data-testid="managed-video"][data-video-id="${video.id}"]`);
-      await expect(card(seeds[0])).toBeVisible({ timeout: 20000 });
-
-      // Selection → bulk "Add to playlist" → the existing playlist
-      await card(seeds[0]).getByTestId('managed-video-select').check();
-      await card(seeds[1]).getByTestId('managed-video-select').check();
-      await expect(page.getByTestId('video-bulk-bar')).toContainText('2 video(s) selected');
-      await page.getByTestId('bulk-add-to-playlist').click();
+      const select = await openStudioWith(page, [seeds[0]]);
+      await select(seeds[0]).check();
+      await page.getByTestId('studio-bulk-playlist').click();
       const dialog = page.getByTestId('add-to-playlist-dialog');
-      await expect(dialog.getByRole('heading', { name: 'Add 2 videos to playlists' })).toBeVisible();
-      await dialog.locator(`[data-testid="add-to-playlist-option"][data-playlist-id="${id}"]`).check();
-      await dialog.getByTestId('add-to-playlist-submit').click();
-      await expect(dialog.getByTestId('bulk-add-notice')).toContainText(`Added 2 videos to ${existingTitle}.`);
-      await expect.poll(async () => [...(await stored(id)).videos].sort()).toEqual([seeds[0].id, seeds[1].id].sort());
-      await dialog.getByTestId('add-to-playlist-done').click();
-      await expect(dialog).toHaveCount(0);
-
-      // A video's menu → Add to playlist → new playlist inline (picker starts with that video)
-      await card(seeds[2]).getByTestId('managed-video-menu').click();
-      await page.getByTestId('managed-video-add-to-playlist').click();
       await expect(dialog.getByRole('heading', { name: 'Add 1 video to playlists' })).toBeVisible();
+      // New playlist inline: its picker starts with the selected video
       await dialog.getByTestId('add-to-playlist-new').click();
       await expect(dialog.getByTestId('picker-tray-item')).toHaveCount(1);
       await fillStable(dialog.getByLabel('Name'), newTitle);
       await dialog.getByRole('radio', { name: /^Private/ }).check();
       await dialog.getByTestId('create-playlist-submit').click();
       await expect(dialog.getByTestId('bulk-add-notice')).toContainText(`Added 1 video to ${newTitle}.`);
-      await expect.poll(async () => (await playlistTitled(newTitle))?.videos).toEqual([seeds[2].id]);
+      await expect.poll(async () => (await playlistTitled(newTitle))?.videos).toEqual([seeds[0].id]);
       expect((await playlistTitled(newTitle))?.isPublic).toBe(false);
     } finally {
-      await deletePlaylistQuietly(owner, channelId(), id);
       await deletePlaylistsTitled(owner, channelId(), newTitle);
     }
   });
@@ -200,14 +198,13 @@ test.describe('Playlist tools', () => {
     const title = tempName('Tools Studio');
     const { id } = await createPlaylist(owner, channelId(), { title, videoIds: [seeds[0].id] });
     try {
-      await page.goto(`/en/studio/${channelId()}/content/videos`);
-      await expect(page.getByTestId('studio-videos-loading')).toHaveCount(0, { timeout: 20000 });
-      const select = (video: E2EVideo) => page.locator(`[data-testid="studio-video-select"][data-video-id="${video.id}"]`);
+      const select = await openStudioWith(page, [seeds[0], seeds[1]]);
       // One already in the playlist is skipped, not added twice
       await select(seeds[0]).check();
       await select(seeds[1]).check();
       await page.getByTestId('studio-bulk-playlist').click();
       const dialog = page.getByTestId('add-to-playlist-dialog');
+      await expect(dialog.getByRole('heading', { name: 'Add 2 videos to playlists' })).toBeVisible();
       await dialog.locator(`[data-testid="add-to-playlist-option"][data-playlist-id="${id}"]`).check();
       await dialog.getByTestId('add-to-playlist-submit').click();
       await expect(dialog.getByTestId('bulk-add-notice')).toContainText(`Added 1 video to ${title}.`);
