@@ -104,7 +104,7 @@ test.describe('Release: embeds', () => {
     { key: 'vertical', width: 216, height: 384 },
   ] as const) {
     for (const scheme of ['dark', 'light'] as const) {
-      test(`the player fills a ${width}x${height} frame on black (${key}, ${scheme})`, async ({ page }, testInfo) => {
+      test(`the player fills a ${width}x${height} frame on the night colour (${key}, ${scheme})`, async ({ page }, testInfo) => {
         const video = await fixtureVideo(key);
         await page.emulateMedia({ colorScheme: scheme });
         await hostIframe(page, `${target().web}/embed/v/${video.id}?lang=ar&autoplay=1`, { width, height });
@@ -116,13 +116,23 @@ test.describe('Release: embeds', () => {
           embed.evaluate(() => {
             const bg = (el: Element | null) => (el ? getComputedStyle(el).backgroundColor : '');
             const p = document.querySelector('.custom-video-player')!.getBoundingClientRect();
-            return { html: bg(document.documentElement), body: bg(document.body), main: bg(document.querySelector('main')), w: Math.round(p.width), h: Math.round(p.height) };
+            // the theme's night colour (--fanous-c-nav-bg), dark in every theme and mode
+            const night = getComputedStyle(document.documentElement).getPropertyValue('--fanous-c-nav-bg').trim();
+            const probe = document.createElement('i');
+            probe.style.color = night;
+            document.body.append(probe);
+            const nightRgb = getComputedStyle(probe).color;
+            probe.remove();
+            const [r, g, b] = (nightRgb.match(/\d+/g) ?? ['255', '255', '255']).map(Number);
+            const dark = 0.2126 * r! + 0.7152 * g! + 0.0722 * b! < 80;
+            const all = [bg(document.documentElement), bg(document.body), bg(document.querySelector('main'))];
+            return { backdrop: all.every((c) => c === nightRgb) && dark, w: Math.round(p.width), h: Math.round(p.height) };
           });
-        if (process.env.GITHUB_EVENT_NAME === 'pull_request' && (await look()).main !== 'rgb(0, 0, 0)') {
+        if (process.env.GITHUB_EVENT_NAME === 'pull_request' && !(await look()).backdrop) {
           testInfo.annotations.push({ type: 'skip', description: 'this build predates the embed frame fill (components/embed/embed-frame.css)' });
           test.skip(true, 'this build predates the embed frame fill');
         }
-        await expect.poll(look, { timeout: 15000 }).toEqual({ html: 'rgb(0, 0, 0)', body: 'rgb(0, 0, 0)', main: 'rgb(0, 0, 0)', w: width, h: height });
+        await expect.poll(look, { timeout: 15000 }).toEqual({ backdrop: true, w: width, h: height });
       });
     }
   }
