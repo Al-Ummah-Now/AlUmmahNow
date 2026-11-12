@@ -179,22 +179,37 @@ export async function checkPurge(zone: ReturnType<typeof zoneClient>, env: Media
 	return [];
 }
 
-/** One tiny Account Analytics (GraphQL) read: the daily cost collector's R2 and cache numbers. */
-export async function checkAnalytics(token: string, accountId: string): Promise<Change[]> {
-	const day = new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
+async function graphql(token: string, query: string, variables: Record<string, string>): Promise<void> {
 	const res = await fetch('https://api.cloudflare.com/client/v4/graphql', {
 		method: 'POST',
 		headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-		body: JSON.stringify({
-			query: `query($a: String!, $z: String!, $d: Date!) { viewer {
-				accounts(filter: { accountTag: $a }) { r2OperationsAdaptiveGroups(limit: 1, filter: { date_geq: $d }) { sum { requests } } }
-				zones(filter: { zoneTag: $z }) { httpRequestsAdaptiveGroups(limit: 1, filter: { date_geq: $d }) { count } } } }`,
-			variables: { a: accountId, z: ZONE_ID, d: day },
-		}),
+		body: JSON.stringify({ query, variables }),
 	});
 	const json = (await res.json().catch(() => ({}))) as { errors?: { message: string }[] | null };
-	if (!res.ok || json.errors?.length) throw new CfApiError(res.status === 200 ? 403 : res.status, `graphql -> ${res.status} ${json.errors?.map((e) => e.message).join('; ') ?? ''}`);
-	console.log('analytics ok      R2 operations and zone HTTP analytics readable');
+	if (!res.ok || json.errors?.length) throw new CfApiError(res.status === 200 ? 403 : res.status, `graphql -> ${json.errors?.map((e) => e.message).join('; ') || res.status}`);
+}
+
+/**
+ * The daily cost collector's two analytics reads, checked separately:
+ *   account: R2 storage and operations (Account Analytics Read)
+ *   zone:    media host requests, bytes, cache status (Zone Analytics Read)
+ */
+export async function checkAnalytics(token: string, accountId: string): Promise<Change[]> {
+	const d = new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
+	const failures: string[] = [];
+	try {
+		await graphql(token, 'query($a: String!, $d: Date!) { viewer { accounts(filter: { accountTag: $a }) { r2OperationsAdaptiveGroups(limit: 1, filter: { date_geq: $d }) { sum { requests } } } } }', { a: accountId, d });
+		console.log('analytics ok      account: R2 storage and operations readable');
+	} catch (error) {
+		failures.push(`account R2 analytics: ${error instanceof Error ? error.message : String(error)}`);
+	}
+	try {
+		await graphql(token, 'query($z: String!, $d: Date!) { viewer { zones(filter: { zoneTag: $z }) { httpRequestsAdaptiveGroups(limit: 1, filter: { date_geq: $d }) { count } } } }', { z: ZONE_ID, d });
+		console.log('analytics ok      zone: media host requests and cache status readable');
+	} catch (error) {
+		failures.push(`zone HTTP analytics (needs Zone → Analytics: Read): ${error instanceof Error ? error.message : String(error)}`);
+	}
+	if (failures.length) throw new CfApiError(403, failures.join(' | '));
 	return [];
 }
 
