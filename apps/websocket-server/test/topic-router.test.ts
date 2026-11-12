@@ -9,6 +9,7 @@ import { __setJwksForTests } from '../src/auth.ts';
 import { WebSocketDurableObject } from '../src/websocket.ts';
 import { SHARD_HEADER, socketShardName, topicName } from '../src/shards.ts';
 import app from '../src/index.ts';
+import { adminLiveItem } from '@al-ummah/shared-types';
 import { ISSUER, WEB_CLIENT, makeSigner, type Signer } from './helpers.ts';
 import { FakeNamespace, FakeSocket, installWorkerGlobals, restoreWorkerGlobals } from './fakes.ts';
 
@@ -230,4 +231,37 @@ test('a directory keeps a shard that joined again while a broadcast found it emp
 		method: 'POST', body: JSON.stringify({ channel: 'video:x', items: [{ channel: 'video:x', message: { type: 'message' } }] }),
 	}));
 	assert.deepEqual([...ctx.storage.data.keys()], []);
+});
+
+test('an admin update goes through its coalescer to admin sockets only; a burst waits for the next second', async () => {
+	const t = setup();
+	const [admin, user] = await t.connect(2);
+	await t.dispatch(admin, { type: 'authenticate', token: await signer.sign({ properties: { id: 'a1', email: 'a1@example.com', roles: ['Admin'] } }) });
+	await t.dispatch(user, { type: 'authenticate', token: await tokenFor('u1') });
+	await t.dispatch(admin, { type: 'subscribe', channel: 'admin:jobs' });
+	await t.dispatch(user, { type: 'subscribe', channel: 'admin:jobs' });
+	assert.equal(user.last().code, 'FORBIDDEN');
+
+	const update = (status: string) => ({ items: [adminLiveItem('jobs', [{ kind: 'job', key: 'job:1', status }])] });
+	const first = await t.post(update('queued'));
+	assert.deepEqual([first.status, first.body.coalesced], [200, 1]);
+	const updates = () => admin.sent.filter((m) => m.type === 'admin.update');
+	assert.equal(updates().length, 1);
+	assert.deepEqual((updates()[0].data as any).events, [{ kind: 'job', key: 'job:1', status: 'queued' }]);
+
+	await t.post(update('running'));
+	assert.equal(updates().length, 1); // held until the coalescer's alarm
+	assert.ok(t.ns.objects.has('coalesce:admin:jobs'));
+	assert.equal(user.sent.filter((m) => m.type === 'admin.update').length, 0);
+
+	// A batch mixing user and admin items: both kinds go out
+	const mixed = await t.post({ items: [note('u1'), adminLiveItem('errors', [{ kind: 'counts', open: 2 }])] });
+	assert.equal(mixed.status, 200);
+	assert.deepEqual(notesFor(user), ['u1']);
+});
+
+test('a malformed admin update is refused', async () => {
+	const t = setup();
+	const r = await t.post({ channel: 'admin:jobs', message: { type: 'notification', data: {} } });
+	assert.equal(r.status, 400);
 });

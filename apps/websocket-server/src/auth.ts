@@ -13,6 +13,7 @@
 
 import { createRemoteJWKSet, jwtVerify, type JWTPayload, type JWTVerifyGetKey } from 'jose';
 import { logger } from './lib/logger';
+import { isAdminLiveChannel } from '@al-ummah/shared-types';
 import { isLegacyLongLivedToken, isTokenRevoked } from './token-revocation';
 
 /** Identity established for a connection. */
@@ -24,6 +25,8 @@ export interface AuthPayload {
   exp: number;
   aud?: string;
   iss?: string;
+  /** Site roles named in the token (`properties.roles`), as the auth server wrote them. */
+  roles?: string[];
 }
 
 /** The subset of Env that authentication reads. */
@@ -50,7 +53,7 @@ export interface AuthDeps {
 interface OpenAuthAccessClaims extends JWTPayload {
   mode?: string;
   type?: string;
-  properties?: { id?: unknown; email?: unknown };
+  properties?: { id?: unknown; email?: unknown; roles?: unknown };
 }
 
 /** Unsigned tokens are accepted only when ENVIRONMENT is exactly "development". */
@@ -161,12 +164,17 @@ async function verifySignedToken(
       exp: payload.exp as number,
       aud: Array.isArray(payload.aud) ? payload.aud[0] : payload.aud,
       iss: payload.iss,
+      roles: rolesOf(payload.properties?.roles),
     };
   } catch (error) {
     const e = error as { code?: string; message?: string };
     logger.warn('WebSocket token rejected', { code: e?.code, message: e?.message });
     return null;
   }
+}
+
+function rolesOf(roles: unknown): string[] | undefined {
+  return Array.isArray(roles) ? roles.filter((r): r is string => typeof r === 'string') : undefined;
 }
 
 function decodeBase64Url(segment: string): string {
@@ -193,6 +201,7 @@ function decodeUnverifiedToken(token: string, nowSeconds?: number): AuthPayload 
       iat: payload.iat,
       exp: payload.exp ?? now + 3600,
       iss: payload.iss,
+      roles: rolesOf(payload.properties?.roles),
     };
   } catch {
     return null;
@@ -204,6 +213,8 @@ function decodeUnverifiedToken(token: string, nowSeconds?: number): AuthPayload 
  * so only that user may join it; other channel types are public feeds.
  */
 export function canSubscribe(userId: string, channel: string): boolean {
+  // Admin channels are checked against the socket's admin level (canSubscribeAdminLive)
+  if (isAdminLiveChannel(channel)) return false;
   if (channel.startsWith('user:')) {
     return channel === `user:${userId}`;
   }
@@ -218,7 +229,7 @@ export function canSubscribeAnonymously(channel: string): boolean {
   return channel.startsWith('video:');
 }
 
-/** Clients may not publish into private `user:<id>` channels (server-fed via /broadcast). */
+/** Clients may not publish into `user:<id>` or `admin:<topic>` channels (server-fed via /broadcast). */
 export function canPublish(channel: string): boolean {
-  return !channel.startsWith('user:');
+  return !channel.startsWith('user:') && !isAdminLiveChannel(channel);
 }

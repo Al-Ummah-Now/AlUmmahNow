@@ -88,6 +88,8 @@ export * from './playlist-bulk';
 export * from './creator-tiers';
 export * from './thumbnail-crop';
 export * from './roles';
+// Live updates in the videos admin (docs/admin/LIVE_OPS.md)
+export * from './admin-live';
 // Soft delete of admin-managed configuration (contact messages, themes, creator tiers)
 export * from './admin-trash';
 export * from './video-reactions';

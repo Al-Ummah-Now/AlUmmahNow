@@ -20,6 +20,8 @@ import { ClientMessageSchema, ServerMessage } from './messages';
 import { logger } from './lib/logger';
 import { ViewCounter, type CounterStorage, type VideoBucket } from './view-counter';
 import { PostViewCounter, type CounterDb, type PostCounterStorage } from './post-view-counter';
+import { AdminCoalescer, eventsOf } from './admin-coalescer';
+import { adminLevelOf, canSubscribeAdminLive, isAdminLiveChannel, type AdminLiveLevel } from '@al-ummah/shared-types';
 import { SHARD_HEADER, isSocketShardName, routeBroadcast, shardRequest, topicName, type BroadcastItem, type FanOutResult } from './shards';
 
 /** Tag on every accepted socket, so its state can be found again after hibernation. */
@@ -40,6 +42,8 @@ export interface SocketState {
   sessionId: string;
   userId?: string;
   authenticated: boolean;
+  /** Admin level from the token's roles; decides which `admin:<topic>` channels the socket may join. */
+  adminLevel?: AdminLiveLevel;
   /** Unix seconds when the token the socket authenticated with expires (#437). */
   authExpiresAt?: number;
   connectedAt: number;
@@ -135,6 +139,11 @@ export class WebSocketDurableObject extends DurableObject {
 
     if (url.pathname === '/broadcast' && request.method === 'POST') {
       return await this.handleBroadcastRequest(request);
+    }
+
+    // Admin topic coalescer role (objects named coalesce:admin:<topic>, see admin-coalescer.ts)
+    if (url.pathname === '/coalesce' && request.method === 'POST') {
+      return await this.handleCoalesce(request);
     }
 
     if (url.pathname === '/stats' && request.method === 'GET') {
@@ -306,6 +315,7 @@ export class WebSocketDurableObject extends DurableObject {
     }
     state.channels = state.channels.filter(canSubscribeAnonymously);
     state.authenticated = false;
+    state.adminLevel = undefined;
     this.save(ws, state);
     if (notify) {
       this.sendMessage(ws, { type: 'error', error: 'Token expired; authenticate again', code: 'AUTH_EXPIRED' });
@@ -340,6 +350,12 @@ export class WebSocketDurableObject extends DurableObject {
       state.authenticated = true;
       state.userId = authPayload.sub;
       state.authExpiresAt = authPayload.exp;
+      // Roles are re-read on every authenticate (token refresh): a lost role drops its admin channels
+      state.adminLevel = adminLevelOf(authPayload.roles) ?? undefined;
+      for (const channel of state.channels.filter((c) => isAdminLiveChannel(c) && !canSubscribeAdminLive(state.adminLevel, c))) {
+        this.unindex(ws, channel);
+        state.channels = state.channels.filter((c) => c !== channel);
+      }
       // Auto-subscribe to the user's notification channel
       const userChannel = `user:${authPayload.sub}`;
       const join = this.needsJoin(userChannel);
@@ -376,8 +392,14 @@ export class WebSocketDurableObject extends DurableObject {
       return;
     }
 
-    // user:<id> channels carry private notifications; only that user may join.
-    if (state.authenticated && (!state.userId || !canSubscribe(state.userId, channel))) {
+    // admin:<topic> channels need the topic's admin level from the token's roles.
+    if (isAdminLiveChannel(channel)) {
+      if (!canSubscribeAdminLive(state.adminLevel, channel)) {
+        this.sendMessage(ws, { type: 'error', error: 'Not allowed to subscribe to this channel', code: 'FORBIDDEN' });
+        return;
+      }
+    } else if (state.authenticated && (!state.userId || !canSubscribe(state.userId, channel))) {
+      // user:<id> channels carry private notifications; only that user may join.
       this.sendMessage(ws, { type: 'error', error: 'Not allowed to subscribe to this channel', code: 'FORBIDDEN' });
       return;
     }
@@ -507,12 +529,48 @@ export class WebSocketDurableObject extends DurableObject {
 
   /** Only view-counter objects (video or post) ever set an alarm. */
   async alarm(): Promise<void> {
+    if (await this.getCoalescer().alarm()) return;
     const posts = this.getPostViewCounter();
     if (await posts.active()) {
       await posts.alarm();
       return;
     }
     await this.getViewCounter().alarm();
+  }
+
+  private coalescer?: AdminCoalescer;
+
+  private getCoalescer(): AdminCoalescer {
+    if (!this.coalescer) {
+      this.coalescer = new AdminCoalescer(this.ctx.storage as unknown as ConstructorParameters<typeof AdminCoalescer>[0], async (item) => {
+        const env = this.env as SocketEnv;
+        const result = await routeBroadcast(env.WEBSOCKET_DO, env, [item]);
+        if (result.failed > 0) logger.warn('Admin update not delivered to every shard', { channel: item.channel, failed: result.failed });
+      });
+    }
+    return this.coalescer;
+  }
+
+  /** Coalescer side of an admin broadcast: `{ channel, events }` from the Worker. */
+  private async handleCoalesce(request: Request): Promise<Response> {
+    let body: { channel?: unknown; message?: unknown };
+    try {
+      body = (await request.json()) as { channel?: unknown; message?: unknown };
+    } catch {
+      return Response.json({ error: 'Invalid JSON' }, { status: 400 });
+    }
+    const channel = typeof body.channel === 'string' ? body.channel : '';
+    const events = channel ? eventsOf({ channel, message: body.message }) : null;
+    if (!isAdminLiveChannel(channel) || !events || events.length === 0) {
+      return Response.json({ error: 'Not an admin update' }, { status: 400 });
+    }
+    try {
+      const outcome = await this.getCoalescer().add(channel, events);
+      return Response.json({ success: true, outcome });
+    } catch (error) {
+      logger.error('Admin update failed', { channel, error: error instanceof Error ? error.message : String(error) });
+      return Response.json({ error: 'Admin update failed' }, { status: 500 });
+    }
   }
 
   private getPostViewCounter(): PostViewCounter {

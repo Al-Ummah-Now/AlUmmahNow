@@ -8,6 +8,8 @@ import { cors } from 'hono/cors';
 import { WebSocketDurableObject, MAX_BROADCAST_ITEMS } from './websocket';
 import { SHARD_HEADER, readAllShards, routeBroadcast, shardsInRandomOrder, topicRoutingReady, type BroadcastItem } from './shards';
 import { logger } from './lib/logger';
+import { coalescerName } from './admin-coalescer';
+import { isAdminLiveChannel } from '@al-ummah/shared-types';
 import { reportServerError, requestIdOf, type ErrorReporterEnv, type ExecutionContextLike } from '@al-ummah/shared-types';
 
 // Export the Durable Object
@@ -152,8 +154,20 @@ app.post('/broadcast', async (c) => {
       }, 400);
     }
 
+    // admin:<topic> updates go through the topic's coalescer (at most one update per second, admin-coalescer.ts)
+    const adminItems = items.filter((i) => isAdminLiveChannel(i.channel));
+    if (adminItems.length > 0) {
+      const outcome = await coalesceAdminItems(c.env.WEBSOCKET_DO, adminItems);
+      if (outcome.failed > 0) {
+        logger.error(`Admin update failed for ${outcome.failed} of ${adminItems.length} items`);
+        return c.json({ error: 'Failed to broadcast message', failed: outcome.failed }, outcome.rejected ? 400 : 500);
+      }
+      if (adminItems.length === items.length) return c.json({ success: true, delivered: 0, coalesced: adminItems.length });
+    }
+    const userItems = adminItems.length > 0 ? items.filter((i) => !isAdminLiveChannel(i.channel)) : items;
+
     // Each channel's directory forwards to the shards holding it (or every shard takes it, see shards.ts)
-    const result = await routeBroadcast(c.env.WEBSOCKET_DO, c.env, items);
+    const result = await routeBroadcast(c.env.WEBSOCKET_DO, c.env, userItems);
     if (result.failed === 0) {
       return c.json({ success: true, delivered: result.delivered });
     }
@@ -166,6 +180,32 @@ app.post('/broadcast', async (c) => {
     }, 500);
   }
 });
+
+/** Hands admin updates to their topics' coalescers; counts the items that did not land. */
+async function coalesceAdminItems(
+  ns: Env['WEBSOCKET_DO'],
+  items: BroadcastItem[],
+): Promise<{ failed: number; rejected: boolean }> {
+  let failed = 0;
+  let rejected = false;
+  await Promise.all(items.map(async (item) => {
+    try {
+      const res = await ns.get(ns.idFromName(coalescerName(item.channel))).fetch(new Request('http://internal/coalesce', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(item),
+      }));
+      if (!res.ok) {
+        failed++;
+        if (res.status === 400) rejected = true;
+      }
+    } catch (error) {
+      failed++;
+      logger.error('Admin coalescer unreachable', { channel: item.channel, error: error instanceof Error ? error.message : String(error) });
+    }
+  }));
+  return { failed, rejected };
+}
 
 /**
  * Stats endpoint
