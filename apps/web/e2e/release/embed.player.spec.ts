@@ -20,8 +20,12 @@ const own = useOwnVideos(test);
 // It signs a user up through the auth server: traces and video would hold the password and code
 test.use({ trace: 'off', video: 'off' });
 
-// Same scheme as the site under test: an https host page cannot frame the local stack's plain http (mixed content)
-const HOST_PAGE = `${releaseEnv() === 'local' ? 'http' : 'https'}://embed-host.release.test/page`;
+// A fake origin served by page.route, cross-origin to the site under test. On the local stack it is
+// 127.0.0.1 (the site is localhost): Chrome's Local Network Access lets a page frame loopback only
+// from a secure context holding the local-network-access permission. A plain-http public host is not
+// a secure context (the permission can't be granted) and an https one is; loopback is both secure and
+// local, so the plain-http stack frames without mixed content.
+const HOST_PAGE = releaseEnv() === 'local' ? 'http://127.0.0.1:3001/__embed-host/page' : 'https://embed-host.release.test/page';
 
 async function embedDeployed(): Promise<boolean> {
   // A build without /embed redirects it to /{locale}/embed/... and then 404s
@@ -35,9 +39,7 @@ async function skipIfNotDeployedOnPr(): Promise<void> {
 }
 
 async function hostIframe(page: Page, src: string): Promise<void> {
-  // Chrome's Local Network Access: a public page (the routed host page) framing loopback (the local
-  // stack) needs the local-network-access permission, which headless Chrome denies without asking, so
-  // the frame would get Chrome's error page. A real embedder framing a public deployment never asks.
+  // Headless Chrome denies the Local Network Access prompt without asking (Chrome's error page in the frame)
   if (releaseEnv() === 'local') await page.context().grantPermissions(['local-network-access'], { origin: new URL(HOST_PAGE).origin });
   await page.route(HOST_PAGE, (route) =>
     route.fulfill({
