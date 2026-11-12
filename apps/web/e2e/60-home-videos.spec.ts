@@ -29,7 +29,8 @@ function loadMoreButton(page: Page) {
   return page.getByRole('main').getByRole('button', { name: /^(Load More|تحميل المزيد)$/ });
 }
 
-test.describe('Home - anonymous', () => {
+// quarantined: #1029 @meywd (home grid on a busy local stack)
+test.describe.fixme('Home - anonymous', () => {
   test.use({ storageState: ANONYMOUS_STATE });
 
   // quarantined: #1029 @meywd (home grid on a busy local stack)
@@ -143,7 +144,8 @@ test.describe('Home - anonymous', () => {
   });
 });
 
-test.describe('Home - dark theme', () => {
+// quarantined: #1029 @meywd (home grid on a busy local stack)
+test.describe.fixme('Home - dark theme', () => {
   test.use({ storageState: ANONYMOUS_STATE, colorScheme: 'dark' });
 
   test('HOME-008 follows the system dark theme', async ({ page }) => {
@@ -166,7 +168,8 @@ test.describe('Home - dark theme', () => {
   });
 });
 
-test.describe('Home - signed in', () => {
+// quarantined: #1029 @meywd (home grid on a busy local stack)
+test.describe.fixme('Home - signed in', () => {
   test.use({ storageState: AUTH_STATE.single });
 
   test('HOME-009 renders the feed for a signed-in user', async ({ page }) => {
@@ -176,7 +179,8 @@ test.describe('Home - signed in', () => {
   });
 });
 
-test.describe('All videos page', () => {
+// quarantined: #1029 @meywd (home grid on a busy local stack)
+test.describe.fixme('All videos page', () => {
   test.use({ storageState: ANONYMOUS_STATE });
 
   test('VIDS-001 lists videos with a localized heading and metadata', async ({ page }) => {

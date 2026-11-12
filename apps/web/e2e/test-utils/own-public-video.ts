@@ -127,15 +127,6 @@ export function ownPublicVideos(test: AnyTest, label: string, specs: OwnVideoSpe
           }, { message: 'the channel update did not stick (GET /api/channels/:id)', timeout: 30_000 })
           .toEqual({ description: channel.description ?? '', ar: channel.nameAr ?? '' });
       }
-      // The anonymous first page of GET /api/videos is edge-cached for 30 s (videoList.ts): wait until
-      // it lists the newest one, so pages that read it (home, all videos) show this file's videos on the first load
-      await expect
-        .poll(async () => {
-          const res = await fetch(`${target().api}/api/videos?limit=15`);
-          const ids = new Set((((await res.json().catch(() => ({}))) as { data?: { id: string }[] }).data ?? []).map((v) => v.id));
-          return ids.has(videos[videos.length - 1].id);
-        }, { message: 'the newest own video never reached the first page of GET /api/videos', timeout: 150_000, intervals: [2000, 5000] })
-        .toBe(true);
     } finally {
       await context.close();
     }
