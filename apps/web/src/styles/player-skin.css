@@ -265,7 +265,8 @@
   margin: 0;
   padding: 0;
   cursor: pointer;
-  touch-action: none;
+  /* An up or down drag scrolls the page; a tap or sideways drag seeks (lib/video/touch-seek-gate.ts) */
+  touch-action: pan-y;
   overflow: visible;
   contain: none;
 }

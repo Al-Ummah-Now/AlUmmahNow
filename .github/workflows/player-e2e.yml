@@ -48,6 +48,11 @@ jobs:
             browsers: firefox
           - project: webkit
             browsers: webkit
+          # Touch phones and foldables (e2e/player/mobile-*.spec.ts)
+          - project: mobile-chrome
+            browsers: chrome
+          - project: mobile-webkit
+            browsers: webkit
           # The runner image's own Firefox release over WebDriver BiDi, as viewers run it
           - project: firefox-stable
             browsers: ''

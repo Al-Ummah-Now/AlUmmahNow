@@ -14,6 +14,9 @@ import { defineConfig, devices } from '@playwright/test';
  *   pnpm --filter web exec playwright test -c playwright.player.config.ts
  *   PLAYER_BASE_URL=http://localhost:3101 ... to reuse a running dev server
  */
+/** Phone and foldable specs run only in the mobile projects, and only there */
+const MOBILE_SPECS = /\/mobile-[^/]*\.spec\.ts$/;
+
 const port = Number(process.env.PLAYER_PORT || 3101);
 const baseURL = process.env.PLAYER_BASE_URL || `http://localhost:${port}`;
 
@@ -37,14 +40,18 @@ export default defineConfig({
     colorScheme: 'dark',
   },
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'], channel: 'chrome', deviceScaleFactor: 2, viewport: { width: 1280, height: 800 } } },
-    { name: 'firefox', use: { ...devices['Desktop Firefox'], deviceScaleFactor: 2, viewport: { width: 1280, height: 800 } } },
-    { name: 'webkit', use: { ...devices['Desktop Safari'], deviceScaleFactor: 2, viewport: { width: 1280, height: 800 } } },
+    { name: 'chromium', testIgnore: MOBILE_SPECS, use: { ...devices['Desktop Chrome'], channel: 'chrome', deviceScaleFactor: 2, viewport: { width: 1280, height: 800 } } },
+    { name: 'firefox', testIgnore: MOBILE_SPECS, use: { ...devices['Desktop Firefox'], deviceScaleFactor: 2, viewport: { width: 1280, height: 800 } } },
+    { name: 'webkit', testIgnore: MOBILE_SPECS, use: { ...devices['Desktop Safari'], deviceScaleFactor: 2, viewport: { width: 1280, height: 800 } } },
+    // Touch phones and foldables (e2e/player/mobile-*.spec.ts): Android Chrome and iPhone Safari
+    { name: 'mobile-chrome', testMatch: MOBILE_SPECS, use: { ...devices['Pixel 7'], channel: 'chrome' } },
+    { name: 'mobile-webkit', testMatch: MOBILE_SPECS, use: { ...devices['iPhone 15'] } },
     // The installed Firefox (stock release, not Playwright's build) over WebDriver BiDi:
     // PLAYER_FIREFOX_PATH=/Applications/Firefox.app/Contents/MacOS/firefox
     ...(process.env.PLAYER_FIREFOX_PATH
       ? [{
           name: 'firefox-stable',
+          testIgnore: MOBILE_SPECS,
           use: {
             ...devices['Desktop Firefox'],
             browserName: '_bidiFirefox' as 'firefox',

@@ -76,7 +76,8 @@ import { SettingsMenu } from './SettingsMenu';
 import { ProgressTooltip } from './ProgressTooltip';
 import { EndScreen, MiniPlayerButtons } from './PlayerOverlays';
 import { getPlayerUi, subscribePlayerUi } from '@/lib/video/player-ui';
-import { keepFrameInView } from '@/lib/video/theatre-scroll';
+import { keepFrameInView, stickyTopInset } from '@/lib/video/theatre-scroll';
+import { MINI_ENTER_BELOW, MINI_LEAVE_ABOVE, nextMini } from '@/lib/video/mini-player';
 import { applyBuiltInIcons } from '@/lib/video/components';
 import { ViewerCount } from './ViewerCount';
 import { KeyboardHelpModal } from './KeyboardHelpModal';
@@ -961,22 +962,54 @@ export default function CustomVideoPlayer({
 
   /**
    * Mini player: on pages that offer it, while playing and the frame is almost scrolled away,
-   * the video floats in the end corner. Closing pauses it until the frame is seen again.
+   * the video floats in the end corner. Closing pauses it until the frame is seen again. The rule,
+   * with its hysteresis and no switch under a finger, is lib/video/mini-player.ts.
    */
+  const isPlayingRef = useRef(isPlaying);
+  const miniRef = useRef(mini);
+  const evaluateMiniRef = useRef<() => void>(() => undefined);
+  isPlayingRef.current = isPlaying;
+  miniRef.current = mini;
   useEffect(() => {
     const frame = frameRef.current;
     if (!frame || !playerUi.miniPlayerAvailable || typeof IntersectionObserver === 'undefined') {
       setMini(false);
       return undefined;
     }
+    let ratio = 1;
+    let touching = false;
+    const evaluate = () => {
+      if (ratio > MINI_LEAVE_ABOVE) miniDismissedRef.current = false;
+      const next = nextMini({ mini: miniRef.current, ratio, playing: isPlayingRef.current, dismissed: miniDismissedRef.current, viewportWidth: window.innerWidth, touching });
+      miniRef.current = next;
+      setMini(next);
+    };
+    evaluateMiniRef.current = evaluate;
+    // The part under the sticky top bar is not seen
     const io = new IntersectionObserver(([entry]) => {
-      const away = !entry.isIntersecting || entry.intersectionRatio < 0.15;
-      if (!away) miniDismissedRef.current = false;
-      setMini(away && isPlaying && !miniDismissedRef.current && window.innerWidth >= 640);
-    }, { threshold: [0, 0.15, 0.5] });
+      ratio = entry.isIntersecting ? entry.intersectionRatio : 0;
+      evaluate();
+    }, { threshold: [0, MINI_ENTER_BELOW, MINI_LEAVE_ABOVE, 1], rootMargin: `-${Math.round(stickyTopInset(document))}px 0px 0px 0px` });
     io.observe(frame);
-    return () => io.disconnect();
-  }, [playerUi.miniPlayerAvailable, isPlaying]);
+    const down = () => { touching = true; };
+    const up = (event: TouchEvent) => {
+      if (event.touches.length > 0) return;
+      touching = false;
+      evaluate();
+    };
+    frame.addEventListener('touchstart', down, { passive: true });
+    frame.addEventListener('touchend', up, { passive: true });
+    frame.addEventListener('touchcancel', up, { passive: true });
+    return () => {
+      io.disconnect();
+      evaluateMiniRef.current = () => undefined;
+      frame.removeEventListener('touchstart', down);
+      frame.removeEventListener('touchend', up);
+      frame.removeEventListener('touchcancel', up);
+    };
+  }, [playerUi.miniPlayerAvailable]);
+  // Playing starts the mini player when the frame is already away; pausing never docks it
+  useEffect(() => evaluateMiniRef.current(), [isPlaying]);
 
   /**
    * Theatre on or off keeps the frame's top in view (lib/video/theatre-scroll.ts). It runs in the
@@ -992,10 +1025,14 @@ export default function CustomVideoPlayer({
 
   const closeMini = useCallback(() => {
     miniDismissedRef.current = true;
+    miniRef.current = false;
     setMini(false);
     playerRef.current?.pause();
   }, []);
   const returnFromMini = useCallback(() => {
+    // The smooth scroll back passes through "away": it must not float the player again on the way
+    miniDismissedRef.current = true;
+    miniRef.current = false;
     setMini(false);
     frameRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, []);
