@@ -9,6 +9,23 @@ import { applyTheme, LANGS, measureText, MODES, mockApi, signIn, THEMES } from '
  * rendered pixels, and axe colour-contrast clean. The menu is its own surface, never the dark
  * header's light text on a light popover.
  */
+// The first tests on a cold dev server measured while it was still compiling (every text repainting,
+// so none measurable): open the page and the menu once before the matrix, and allow one retry
+test.describe.configure({ retries: 1 });
+test.beforeAll(async ({ browser, baseURL }) => {
+  test.setTimeout(180_000);
+  const context = await browser.newContext();
+  await signIn(context, baseURL!);
+  const page = await context.newPage();
+  await mockApi(page);
+  for (const lang of LANGS) {
+    await page.goto(`${baseURL}/${lang}`, { timeout: 150_000 });
+    await page.locator('[data-testid="nav-menu-trigger"]:visible').first().click();
+    await expect(page.getByTestId('nav-menu')).toBeVisible({ timeout: 60_000 });
+  }
+  await context.close();
+});
+
 for (const lang of LANGS) {
   for (const theme of THEMES) {
     for (const mode of MODES) {
