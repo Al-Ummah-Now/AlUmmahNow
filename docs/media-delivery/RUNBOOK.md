@@ -73,6 +73,12 @@ curl -s -o /dev/null -w '%{http_code}\n' https://media.qa.alummahnow.net/priv/19
 npx wrangler tail al-ummah-now-media-qa
 ```
 
+**Release gate** (`apps/web/e2e/release/media-delivery.spec.ts`, #960, QA and stage): uploads one
+short private clip as its own run account, waits for `r2.status = ready` on the owner's
+`GET /api/videos/:id/upload-status`, then fetches the signed master playlist, a rendition playlist
+and its segments from the media host. E2E run accounts are never transcoded, except the gate's
+(`e2e+…-media-gate@e2e.alummahnow.net`): one clip per release run.
+
 `cf-cache-status: DYNAMIC` on `/pub/…` means the Cache Rule is missing. Segments would then come
 from R2 on every request, at Class B cost and with no edge cache.
 

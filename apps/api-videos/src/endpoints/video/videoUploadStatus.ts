@@ -9,6 +9,7 @@ import { requireSecret } from "../../lib/env-helpers";
 import { logger } from '../../lib/logger';
 import { syncVideoFromBunny } from "../../lib/processing/loop";
 import { bunnyPhase, uploadStatusView } from "../../lib/processing/sync";
+import { ownerR2View } from "../../lib/media/r2-delivery";
 
 // Upload status type
 const UploadStatus = z.object({
@@ -33,7 +34,25 @@ const UploadStatus = z.object({
 		processingStarted: z.string().optional(),
 		processingCompleted: z.string().optional(),
 	}).optional(),
+	r2: z.object({
+		status: z.enum(["queued", "transcoding", "ready", "failed"]),
+		access: z.enum(["pub", "priv"]),
+		rev: z.string(),
+		attempts: z.number(),
+		queuedAt: z.string(),
+		startedAt: z.string().optional(),
+		readyAt: z.string().optional(),
+		failedAt: z.string().optional(),
+		error: z.string().optional(),
+		renditions: z.array(z.string()).describe("Rungs the transcode wrote (720p, 480p, ...)"),
+		playUrl: z.string().optional().describe("R2 master playlist (signed when private); ready only"),
+	}).optional().describe("R2 delivery beside Bunny (epic #687): the transcode's state; absent where there is no dual write"),
 });
+
+async function ownerR2Field(env: unknown, video: unknown): Promise<{ r2?: z.infer<typeof UploadStatus>["r2"] }> {
+	const r2 = await ownerR2View(env as never, video as never);
+	return r2 ? { r2 } : {};
+}
 
 export class VideoUploadStatus extends OptionalAuthRoute {
 	schema = {
@@ -214,6 +233,7 @@ export class VideoUploadStatus extends OptionalAuthRoute {
 				processingStarted: undefined, // Could be tracked separately
 				processingCompleted: status === "ready" ? video.dateModified : undefined,
 			},
+			...(await ownerR2Field(c.env, video)),
 		};
 
 		return {
