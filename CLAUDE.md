@@ -735,11 +735,13 @@ channels, uploads or other content on production from a probe script.
 #### Legacy E2E suite
 
 `.github/workflows/e2e-tests.yml` (`apps/web/playwright.config.ts`, every other
-spec under `apps/web/e2e/`) is not a release gate. Its specs read seeded data
-and are known to be flaky; fix them when touching their area, but gate on the
-release suite. Each job registers its own run accounts in global setup
-(`auth.setup.ts`, code-sink addresses, `E2E_CODE_SINK_SECRET` from
-`E2E_CODE_SINK_SECRET_QA`).
+spec under `apps/web/e2e/`) against QA runs **by hand only** (workflow_dispatch):
+no schedule, no PR runs, no run after a Release. Those specs run on the local
+stack in Local E2E (every PR, every push to main, nightly, and inside every
+release); QA and stage run only the deployed specs (release-e2e.yml). Use it for
+a one-off check against QA or to update the visual baselines (`update_snapshots`).
+Each job registers its own run accounts in global setup (`auth.setup.ts`,
+code-sink addresses, `E2E_CODE_SINK_SECRET` from `E2E_CODE_SINK_SECRET_QA`).
 
 #### Per-run E2E accounts
 
