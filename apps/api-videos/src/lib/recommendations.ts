@@ -15,6 +15,7 @@ import {
 } from '@al-ummah/shared-types';
 import { DiscoveryVideo, isDiscoverable, loadDiscoverableVideos } from './discovery';
 import { logger } from './logger';
+import { findSeriesNext } from './series';
 
 /** Rows read per source: the upper bound on what one request ranks. */
 export const CANDIDATE_LIMITS = { category: 100, channel: 40, text: 50, recent: 50, recentWithoutSeeds: 200 };
@@ -230,4 +231,47 @@ export async function recommendationsCachePath(options: {
   if (!options.userId) return `recommendations/v1/anon/${video}/${options.limit}`;
   const viewer = await sha256Hex(options.userId);
   return `recommendations/v1/user/${viewer}/${video}/${options.limit}/${options.historyPaused ? 'paused' : 'active'}/${options.excludeWatched ? 'unwatched' : 'all'}`;
+}
+
+/** Most videos of one channel read to find a series continuation (one indexed query). */
+export const SERIES_CHANNEL_LIMIT = 2000;
+
+interface SeriesRow {
+  id: string;
+  channel_id: string | null;
+  payload: string;
+}
+
+function seriesTitles(payload: string): string[] {
+  try {
+    const p = JSON.parse(payload) as { title?: string; titleLocalized?: Record<string, string> };
+    return [p.title ?? '', ...Object.values(p.titleLocalized ?? {})].filter((t) => typeof t === 'string' && t.length > 0);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The listed video that continues `videoId`'s numbered series in its channel (lib/series.ts), from
+ * the search index: the video's own row and its channel's listed rows (idx_search_videos_channel,
+ * bounded). Never a bucket scan; null without the index, a channel or a continuation.
+ */
+export async function seriesNextFromIndex(db: SearchDb, bucket: R2Bucket, videoId: string): Promise<string | null> {
+  const current = await db.prepare(`SELECT id, channel_id, payload FROM ${VIDEOS} WHERE id = ?`).bind(videoId).first<SeriesRow>();
+  let titles = current ? seriesTitles(current.payload) : [];
+  let channelId = current?.channel_id ?? null;
+  if (!current) {
+    // A video outside the index (private, unlisted) still continues its channel's public series
+    const own = await readSeedObject(bucket, videoId) as (DiscoveryVideo & { titleLocalized?: Record<string, string> }) | null;
+    if (!own) return null;
+    titles = [own.title ?? '', ...Object.values(own.titleLocalized ?? {})].filter(Boolean);
+    channelId = own.channelId ?? null;
+  }
+  if (!channelId || titles.length === 0 || !titles.some((t) => /\d|[٠-٩۰-۹]/.test(t))) return null;
+  const result = await db
+    .prepare(`SELECT d.id, d.payload FROM ${VIDEOS} d ${JOIN_CHANNEL} WHERE d.channel_id = ? AND ${LISTED} ORDER BY d.created_at ASC LIMIT ?`)
+    .bind(channelId, SERIES_CHANNEL_LIMIT)
+    .all<CandidateRow>();
+  const siblings = ((result as { results?: CandidateRow[] }).results ?? []).map((r) => ({ id: r.id, titles: seriesTitles(r.payload) }));
+  return findSeriesNext({ id: videoId, titles }, siblings);
 }

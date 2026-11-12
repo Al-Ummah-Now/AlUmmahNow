@@ -90,6 +90,10 @@ export interface VideoInfo {
     likesCount: number;
     dislikesCount: number;
     commentsCount: number;
+    /** Short by the shared rule (API flag), for "Up next" format matching */
+    isShort?: boolean;
+    /** The API's pick: the next video of the playing video's numbered series (plays next) */
+    seriesNext?: boolean;
 }
 
 export interface Profile {
