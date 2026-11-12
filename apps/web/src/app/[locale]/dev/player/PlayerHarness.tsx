@@ -9,6 +9,7 @@
  */
 import { useEffect, useSyncExternalStore } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { VIDEO_PLAYER_ID } from '@/components/SkipLinks/SkipLinksBase';
 import { VideoPlayerWithChapters } from '@/components/VideoPagePlayer/VideoPlayerWithChapters';
 import { enableWatchPageFeatures, getPlayerUi, subscribePlayerUi, updatePlayerUi } from '@/lib/video/player-ui';
 
@@ -35,9 +36,11 @@ export function PlayerHarness({ lang }: { lang: 'en' | 'ar' }) {
   }, [watch, src, lang, router]);
 
   return (
-    <main className="px-4 py-6" data-testid="player-harness">
-      <div className={`mx-auto flex flex-col gap-6 ${theatre ? '' : 'lg:flex-row'} max-w-[1600px]`} data-theatre={theatre ? '' : undefined} data-testid="watch-layout">
-        <div className={`w-full ${theatre ? '' : 'lg:w-3/4'}`} style={width ? { width, maxWidth: '100%' } : undefined}>
+    <main className="py-6" data-testid="player-harness">
+      {/* The watch page's structure (WatchPageContent): the layout's gutter, the primary column, the player section */}
+      <div className={`mx-auto flex flex-col gap-6 px-4 ${theatre ? '' : 'lg:flex-row'} max-w-[1600px]`} data-theatre={theatre ? '' : undefined} data-testid="watch-layout">
+        <div className={`w-full ${theatre ? '' : 'lg:w-3/4'}`} style={width ? { width, maxWidth: '100%' } : undefined} data-testid="watch-primary">
+          <section id={VIDEO_PLAYER_ID} className="w-full" tabIndex={-1}>
           <VideoPlayerWithChapters
             key={src}
             videoId={`harness-${src}`}
@@ -55,6 +58,7 @@ export function PlayerHarness({ lang }: { lang: 'en' | 'ar' }) {
             enableChapters={src !== 'live' && src !== 'short'}
             enableSubtitles={src !== 'live'}
           />
+          </section>
           <h1 className="mt-4 text-lg font-semibold">Harness: {src}</h1>
           <button id="harness-report" type="button" className="mt-2 text-sm underline">Report</button>
         </div>
