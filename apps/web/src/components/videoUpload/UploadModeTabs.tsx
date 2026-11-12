@@ -82,10 +82,13 @@ export function UploadModeTabs({ mode, onChange, labels }: UploadModeTabsProps) 
               {/* Named by its content, label first then hint ("Single video, One file …"), so the name
                   holds all the visible text in order (WCAG 2.5.3). axe compares against everything
                   painted, aria-hidden or not: a name of just the label, with the hint aria-hidden,
-                  fails label-content-name-mismatch. The sr-only separator keeps them apart when read. */}
+                  fails label-content-name-mismatch. The sr-only separator keeps them apart when read; it
+                  sits inside the hint, so where the hint is hidden (phones) the name is just the label. */}
               <span className="upload-mode-tab__label">{m === 'single' ? labels.single : labels.batch}</span>
-              <span className="sr-only">{labels.separator ?? ', '}</span>
-              <span className="upload-mode-tab__hint">{m === 'single' ? labels.singleHint : labels.batchHint}</span>
+              <span className="upload-mode-tab__hint">
+                <span className="sr-only">{labels.separator ?? ', '}</span>
+                {m === 'single' ? labels.singleHint : labels.batchHint}
+              </span>
             </span>
           </button>
         );
