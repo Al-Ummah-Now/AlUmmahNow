@@ -99,7 +99,7 @@ test.describe('watch history - signed in', () => {
     for (const v of videos) await record(request, v, 0.2);
     await page.goto('/en/history');
     await expect(page.getByRole('listitem')).toHaveCount(videos.length);
-    await expect(page.getByText(`${videos.length} videos`)).toBeVisible();
+    await expect(page.getByText(videos.length === 1 ? '1 video' : `${videos.length} videos`, { exact: true })).toBeVisible();
 
     // Dismissing the confirmation keeps everything
     await page.getByRole('button', { name: 'Clear all history' }).click();
