@@ -16,9 +16,13 @@
  *   for videos). On the local stack (E2E_ENV=local) the fake Bunny encodes right after the upload;
  *   on QA/stage the real encode is awaited and a slow one skips with #929 (encode.ts).
  * - Names carry ns(): run id, spec file and worker, so parallel shards and runs never share rows.
- * - A DataScope records what it created; cleanup() (afterAll: also after a failed or timed-out test)
- *   deletes it in reverse order, videos permanently (DELETE /api/videos/:id/permanent: record, media,
- *   the Bunny video and their index rows), 404 is fine. Everything belongs to run accounts
+ * - A DataScope records what it created; cleanup() deletes it in reverse order and is idempotent
+ *   (404 = already gone): videos permanently (DELETE /api/videos/:id/permanent: record, media, the
+ *   Bunny video and their index rows), then playlists/posts/comments, channels, and last each user:
+ *   the privacy erase (everything the user owns) and the auth account with its sessions.
+ * - Teardown always runs: useOwnData(test) is a per-file afterAll; the `test` export's `ownData` /
+ *   `workerData` fixtures clean up after use(), also on failure, timeout or retry. Users' ids go to
+ *   E2E_RUN_USER_IDS_FILE for the end-of-job leftover check. Everything belongs to run accounts
  *   (sinkEmail → run-users.ts in CI), so if a worker crashes before afterAll the run's teardown
  *   (cleanup-test-content.ts --run-users, then teardown-run-users.ts) still erases the content and
  *   deletes the accounts on QA/stage; the local stack is discarded with the job.
@@ -26,14 +30,14 @@
  * Imports stay inside e2e/release, e2e/test-utils/{code-sink,run-users,placement}.ts and
  * e2e/test-fixtures (the release suite runs from a copy, CLAUDE.md "Release regressions").
  */
-import { readFileSync } from 'fs';
+import { appendFileSync, readFileSync } from 'fs';
 import * as path from 'path';
 import { expect, test as base, type Page } from '@playwright/test';
 import { releaseEnv, target } from './targets';
 import { apiFetch, createProfile, signUpOnWeb, type Locale, type WebUser } from './web-session';
-import { grantCreatorTier } from './creator-tier';
+import { grantCreatorTier, setCreatorTier } from './creator-tier';
 import { encoding, untilEncoded } from './encode';
-import { runId } from '../test-utils/run-users';
+import { isRunUserEmail, runId } from '../test-utils/run-users';
 
 const FIXTURES = path.join(__dirname, '..', 'test-fixtures');
 
@@ -101,13 +105,104 @@ const json = (body: unknown, channelId?: string): RequestInit => ({
   body: JSON.stringify(body),
 });
 
+/** The videos web app's OAuth client per environment (apps/web wrangler configs; the local stack seeds prod's ids). */
+const WEB_CLIENT_ID: Record<string, string> = {
+  qa: 'e0de3c30-0304-4ac4-86d6-1e185dec0439',
+  stage: 'f0de3c30-0304-4ac4-86d6-1e185dec0439',
+  local: 'f0de3c30-0304-4ac4-86d6-1e185dec0439',
+  production: 'f0de3c30-0304-4ac4-86d6-1e185dec0439',
+};
+
+/** The refresh token in the web app's session cookie (plain JSON, possibly nested per account). */
+function findRefreshToken(value: unknown): string | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const record = value as Record<string, unknown>;
+  if (typeof record.refreshToken === 'string') return record.refreshToken;
+  for (const nested of Object.values(record)) {
+    const found = findRefreshToken(nested);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+/**
+ * A fresh access token for cleanup: access tokens live 15 minutes on QA, longer than many specs
+ * run, and an expired token would fail every delete (and leak the data). Refresh tokens rotate.
+ */
+async function refreshUser(user: WebUser, refreshToken: string | undefined): Promise<string | undefined> {
+  if (!refreshToken) return undefined;
+  try {
+    const res = await fetch(`${target().auth}/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken, client_id: WEB_CLIENT_ID[releaseEnv()] }),
+    });
+    if (!res.ok) return refreshToken;
+    const body = (await res.json()) as { access_token?: string; refresh_token?: string };
+    if (body.access_token) user.accessToken = body.access_token;
+    return body.refresh_token ?? refreshToken;
+  } catch {
+    return refreshToken;
+  }
+}
+
+/**
+ * Erases a user completely: DELETE /api/privacy/data (profile, channels, videos with their Bunny
+ * media, playlists, posts, history, subscriptions, likes; resumable) as the user, then the account
+ * and its sessions on the auth server (QA/stage/local test route, run accounts only). 404 = gone.
+ */
+async function eraseUser(user: WebUser): Promise<Response | undefined> {
+  let resumeToken: string | undefined;
+  for (let round = 0; round < 20; round++) {
+    const res = await apiFetch(user, '/api/privacy/data', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirm: 'DELETE', ...(resumeToken ? { resumeToken } : {}) }),
+    });
+    if (res.status >= 300) {
+      if (res.status !== 404 && res.status !== 401) console.warn(`[builders] privacy erase of ${user.email} answered ${res.status}`);
+      break;
+    }
+    const body = (await res.json().catch(() => ({}))) as { complete?: boolean; resumeToken?: string; result?: { complete?: boolean; resumeToken?: string } };
+    const result = body.result ?? body;
+    if (result.complete !== false) break;
+    resumeToken = result.resumeToken;
+  }
+  return deleteAccount(user.email);
+}
+
+/** The run account on the auth server (soft delete + immediate purge, sessions revoked). Run accounts only. */
+async function deleteAccount(email: string): Promise<Response | undefined> {
+  const sink = process.env.E2E_CODE_SINK_SECRET;
+  const promote = process.env.TEST_PROMOTE_SECRET;
+  if (!isRunUserEmail(email) || !sink || !promote || releaseEnv() === 'production') return undefined;
+  return fetch(`${target().auth}/test/run-users/delete/${encodeURIComponent(email)}`, {
+    method: 'POST',
+    headers: { 'X-E2E-Secret': sink, 'X-Test-Secret': promote, 'User-Agent': 'al-ummah-e2e-builders' },
+  });
+}
+
 /** Everything one spec (or worker) created, deleted again by cleanup(). */
 export class DataScope {
   private undo: { what: string; run: () => Promise<unknown> }[] = [];
+  /** Users this scope created or acts for, with their refresh tokens (cleanup refreshes first). */
+  private sessions = new Map<WebUser, string | undefined>();
 
   /** A new user signed up through the real issuer (code sink), with a videos profile. */
   async createUser(page: Page, prefix: string, locale: Locale = 'en'): Promise<WebUser> {
     const user = await signUpOnWeb(page, prefix, locale);
+    const cookie = (await page.context().cookies(target().web)).find((c) => c.name === 'al_ummah_session');
+    let refreshToken: string | undefined;
+    try {
+      refreshToken = findRefreshToken(JSON.parse(decodeURIComponent(cookie?.value ?? '{}')));
+    } catch {
+      /* not JSON: cleanup keeps the original token */
+    }
+    this.sessions.set(user, refreshToken);
+    // The id, for the end-of-job leftover check (rows keyed only by user id; the account is gone by then)
+    if (process.env.E2E_RUN_USER_IDS_FILE) appendFileSync(process.env.E2E_RUN_USER_IDS_FILE, `${user.userId}\n`);
+    // Runs last (cleanup is newest first): the user's data, then the account and its sessions
+    this.undo.push({ what: `user ${user.email}`, run: () => eraseUser(user) });
     await createProfile(user);
     return user;
   }
@@ -116,13 +211,25 @@ export class DataScope {
    * The Creator tier (uploads and channels are by invitation). Local stack: written directly to
    * the stack's database (a fast path; the tier UI has its own specs). QA/stage: the admin-web control.
    */
-  async grantCreator(user: WebUser): Promise<void> {
+  async grantCreator(user: WebUser, tierId = 'creator'): Promise<void> {
+    const id = user.userId.replace(/[^A-Za-z0-9_:-]/g, '');
+    const tier = tierId.replace(/[^A-Za-z0-9_:-]/g, '');
+    // The assignment is removed again (before the user is erased: cleanup runs newest first)
+    this.undo.push({
+      what: `tier ${tier} of ${id}`,
+      run: () =>
+        onLocalStack()
+          ? fetch(`${LOCAL_CONTROL}/__stack/d1/al-ummah-now-search`, { method: 'POST', body: `DELETE FROM creator_tier_assignments WHERE user_id = '${id}'` })
+          : setCreatorTier(user, null),
+    });
     if (onLocalStack()) {
-      const sql = `INSERT OR IGNORE INTO creator_tier_assignments (user_id, tier_id, source, assigned_by, assigned_at) VALUES ('${user.userId.replace(/[^A-Za-z0-9_:-]/g, '')}', 'creator', 'admin', 'e2e-builder', '${new Date().toISOString()}')`;
+      const sql = `INSERT OR REPLACE INTO creator_tier_assignments (user_id, tier_id, source, assigned_by, assigned_at) VALUES ('${id}', '${tier}', 'admin', 'e2e-builder-${ns()}', '${new Date().toISOString()}')`;
       const res = await fetch(`${LOCAL_CONTROL}/__stack/d1/al-ummah-now-search`, { method: 'POST', body: sql });
       expect(res.ok, `local stack tier write: ${await res.text()}`).toBe(true);
-    } else {
+    } else if (tier === 'creator') {
       await grantCreatorTier(user);
+    } else {
+      await setCreatorTier(user, tier);
     }
     await expect
       .poll(async () => ((await (await apiFetch(user, '/api/me/creator')).json().catch(() => ({}))) as { result?: { canUpload?: boolean } }).result?.canUpload, {
@@ -249,6 +356,7 @@ export class DataScope {
 
   /** Deletes everything this scope created, newest first. Failures are reported, never thrown. */
   async cleanup(): Promise<void> {
+    for (const [user, refreshToken] of this.sessions) this.sessions.set(user, await refreshUser(user, refreshToken));
     for (const step of this.undo.reverse()) {
       try {
         const res = (await step.run()) as Response | undefined;
@@ -258,12 +366,42 @@ export class DataScope {
       }
     }
     this.undo = [];
+    this.sessions.clear();
   }
 }
 
-/** A DataScope for this spec file, cleaned up after its tests (test.afterAll). */
+/** A DataScope for this spec file, cleaned up after its tests (test.afterAll: also after a failure). */
 export function useOwnData(test: typeof base): DataScope {
   const scope = new DataScope();
   test.afterAll(async () => scope.cleanup());
   return scope;
 }
+
+/**
+ * The same as Playwright fixtures, torn down after use() whatever happened (pass, fail, timeout,
+ * retry): `ownData` per test, `workerData` per worker.
+ *
+ *   import { test } from './builders';
+ *   test('…', async ({ page, ownData }) => { const user = await ownData.createUser(page, 'x'); … });
+ */
+export const test = base.extend<{ ownData: DataScope }, { workerData: DataScope }>({
+  ownData: async ({}, use) => {
+    const scope = new DataScope();
+    try {
+      await use(scope);
+    } finally {
+      await scope.cleanup();
+    }
+  },
+  workerData: [
+    async ({}, use) => {
+      const scope = new DataScope();
+      try {
+        await use(scope);
+      } finally {
+        await scope.cleanup();
+      }
+    },
+    { scope: 'worker' },
+  ],
+});
