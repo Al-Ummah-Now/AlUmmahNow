@@ -6,7 +6,7 @@
 # (bunny-stream-key-qa), so the job deploys a throwaway worker bound to the QA
 # secrets (scripts/qa/bunny-qa-status/worker.js), calls it once with a random
 # bearer token and deletes it. The key never reaches the runner or the log.
-# QA only: the bindings name the QA secrets and the QA videos bucket, and the
+# Test library only (553336, QA + stage by name prefix): the bindings name the QA secrets and the QA and stage videos buckets, and the
 # worker refuses to delete in any library other than QA_LIBRARY_ID.
 #
 # sweep: pages through the library (newest first, 100 a call) and deletes every
@@ -18,10 +18,14 @@
 name: Bunny QA Status
 
 on:
+  # Guard (2026-11-13: the test library was back at ~9,000 videos): every hour,
+  # read the library; above GUARD_MAX videos warn and sweep (apply) at once.
+  schedule:
+    - cron: '23 * * * *'
   workflow_dispatch:
     inputs:
       sweep:
-        description: 'Delete QA videos no live QA record refers to (theme-demo keep list, other env, < 1 h and live streams kept). apply needs QA_LIBRARY_ID.'
+        description: 'Delete QA and stage test-library videos no live record of their env refers to (theme-demo keep list, other env, < 1 h and live streams kept). apply needs QA_LIBRARY_ID.'
         type: choice
         options: [none, dry-run, apply]
         default: none
@@ -40,13 +44,15 @@ concurrency:
 env:
   PROBE: bunny-qa-status-probe
   # The QA (and stage, by name prefix) Bunny Stream library. Never any other.
-  QA_LIBRARY_ID: ''
+  QA_LIBRARY_ID: '553336'
+  # Above this many videos the hourly run warns and sweeps (apply)
+  GUARD_MAX: '500'
 
 jobs:
   status:
     name: QA Bunny library status
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
 
@@ -72,7 +78,10 @@ jobs:
             "compatibility_date": "2025-09-01",
             "workers_dev": true,
             "vars": { "QA_LIBRARY_ID": "$QA_LIBRARY_ID" },
-            "r2_buckets": [{ "binding": "videos", "bucket_name": "videos-qa" }],
+            "r2_buckets": [
+              { "binding": "videos", "bucket_name": "videos-qa" },
+              { "binding": "videos_stage", "bucket_name": "videos-stage" }
+            ],
             "secrets_store_secrets": [
               { "binding": "BUNNY_KEY", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "bunny-stream-key-qa" },
               { "binding": "BUNNY_LIBRARY_ID", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "bunny-stream-library-id-qa" }
@@ -96,10 +105,24 @@ jobs:
           test "$code" = 200
           { echo '### QA Bunny library'; echo '```json'; cat "$RUNNER_TEMP/status.json" | python3 -m json.tool; echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
 
-      - name: Sweep the library (${{ inputs.sweep }})
-        if: inputs.sweep != 'none'
+      - name: Guard (more than ${{ env.GUARD_MAX }} videos)
+        id: guard
         env:
-          SWEEP: ${{ inputs.sweep }}
+          SWEEP_INPUT: ${{ inputs.sweep || 'none' }}
+        run: |
+          total=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["total"])' "$RUNNER_TEMP/status.json")
+          sweep="$SWEEP_INPUT"
+          if [ "$total" -gt "$GUARD_MAX" ]; then
+            echo "::warning title=Bunny test library over ${GUARD_MAX}::library $QA_LIBRARY_ID holds $total videos: test uploads are leaking (#929); sweeping"
+            echo "- **guard: $total videos > $GUARD_MAX: sweeping (apply)**" >> "$GITHUB_STEP_SUMMARY"
+            sweep=apply
+          fi
+          echo "sweep=$sweep" >> "$GITHUB_OUTPUT"
+
+      - name: Sweep the library (${{ steps.guard.outputs.sweep }})
+        if: steps.guard.outputs.sweep != 'none'
+        env:
+          SWEEP: ${{ steps.guard.outputs.sweep }}
         run: |
           set -euo pipefail
           apply=0; [ "$SWEEP" = apply ] && apply=1
@@ -120,13 +143,14 @@ jobs:
           python3 - "$RUNNER_TEMP/sweep.jsonl" "$SWEEP" <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
           import json, sys, collections
           rows = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
-          kept, would, deleted, failed = collections.Counter(), collections.Counter(), collections.Counter(), []
+          kept, would, deleted, envs, failed = collections.Counter(), collections.Counter(), collections.Counter(), collections.Counter(), []
           for r in rows:
-              kept.update(r['kept']); deleted.update(r['deletedByStatus']); failed += r['failed']
+              kept.update(r['kept']); deleted.update(r['deletedByStatus']); failed += r['failed']; envs.update(r.get('candidatesByEnv', {}))
               if sys.argv[2] != 'apply': would.update(r['wouldByStatus'])
           print(f'### Sweep ({sys.argv[2]})')
           print(f'- calls: {len(rows)}')
           print(f'- kept: {dict(kept)}')
+          print(f'- unreferenced by env: {dict(envs)}')
           print(f'- would delete by status: {dict(would)} (total {sum(would.values())})' if sys.argv[2] != 'apply' else f'- deleted by status: {dict(deleted)} (total {sum(deleted.values())})')
           print(f'- failed: {len(failed)} {failed[:5]}')
           samples = [s for r in rows for s in r.get('sample', [])][:10]
@@ -134,9 +158,9 @@ jobs:
           PY
 
       - name: Read the library after the sweep
-        if: inputs.sweep == 'apply'
+        if: steps.guard.outputs.sweep == 'apply'
         run: |
-          curl -sS --max-time 120 -H "Authorization: Bearer $PROBE_TOKEN" "$PROBE_URL/status" | python3 -c 'import json,sys;d=json.load(sys.stdin);print("### After the sweep");[print(f"- {k}: {d.get(k)}") for k in ("total","storageGB","byStatus","pendingCount","qaPendingByRecord")]' | tee -a "$GITHUB_STEP_SUMMARY"
+          curl -sS --max-time 120 -H "Authorization: Bearer $PROBE_TOKEN" "$PROBE_URL/status" | python3 -c 'import json,sys;d=json.load(sys.stdin);print("### After the sweep");[print(f"- {k}: {d.get(k)}") for k in ("total","storageGB","byStatus","byEnvStatus","pendingCount","qaPendingByRecord")]' | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Bunny status page
         if: always()
@@ -166,7 +190,7 @@ jobs:
 
   timed-upload:
     name: Timed QA upload
-    if: inputs.timed_upload
+    if: github.event_name == 'workflow_dispatch' && inputs.timed_upload
     needs: status
     runs-on: ubuntu-24.04
     timeout-minutes: 40
