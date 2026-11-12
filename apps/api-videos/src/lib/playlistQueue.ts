@@ -16,6 +16,7 @@ import { isShort } from '@al-ummah/shared-types';
 import { canViewVideo, type VideoType } from './playlists';
 import { loadPlaylistVideos } from './playlistOrder';
 import { publicVideoFields } from './transformations';
+import { withPlayback } from './media/playback';
 
 /** Lists up to this length are loaded whole and filtered for the viewer. */
 export const FULL_SCAN_MAX = 300;
@@ -51,6 +52,8 @@ export interface QueueItem {
 	/** HLS playlist (signed by the bunny-signing middleware like every response), for players that play the list in place (embeds, native apps) */
 	playUrl?: string;
 	uploadStatus?: string;
+	/** Which source the API chose for playUrl (lib/media/playback.ts; a label only) */
+	delivery?: { source: string };
 }
 
 export interface QueueWindow {
@@ -141,7 +144,7 @@ export async function visibleEntries(
 
 /** The page's items, in order, without the ones this viewer may not see. */
 export async function queueItems(
-	env: { videos: R2Bucket; channels: R2Bucket },
+	env: { videos: R2Bucket; channels: R2Bucket; MEDIA_PUBLIC_HOST?: string },
 	window: QueueWindow,
 	userId: string | undefined,
 	known: Map<string, VideoType>,
@@ -153,9 +156,11 @@ export async function queueItems(
 		.map((entry, i) => ({ entry, position: window.offset + i, video: known.get(entry.id) }))
 		.filter((x): x is { entry: QueueEntry; position: number; video: VideoType } => !!x.video && canViewVideo(x.video, userId));
 	const names = await channelNames([...new Set(visible.map((x) => x.video.channelId).filter(Boolean) as string[])]);
-	return visible.map(({ entry, position, video }) => {
-		// The public fields hide a thumbnail that is not ready yet
-		const extra = publicVideoFields(video) as VideoType & { titleLocalized?: Record<string, string>; thumbnailUrl?: string; duration?: number | null; playUrl?: string; uploadStatus?: string };
+	return Promise.all(visible.map(async ({ entry, position, video }) => {
+		// The public fields hide a thumbnail that is not ready yet; the API picks the playback
+		// source (Bunny or R2) like every other read, so the queue's playUrl is that source's
+		const view = publicVideoFields(video) as VideoType & { titleLocalized?: Record<string, string>; thumbnailUrl?: string; duration?: number | null; playUrl?: string; uploadStatus?: string; delivery?: { source: string } };
+		const extra = (await withPlayback(env as never, video as never, view as never, 'queue')) as typeof view;
 		return {
 			id: entry.id,
 			index: entry.index,
@@ -169,6 +174,7 @@ export async function queueItems(
 			isShort: isShort(video as never),
 			...(extra.playUrl ? { playUrl: extra.playUrl } : {}),
 			...(extra.uploadStatus ? { uploadStatus: extra.uploadStatus } : {}),
+			...(extra.delivery ? { delivery: extra.delivery } : {}),
 		};
-	});
+	}));
 }
