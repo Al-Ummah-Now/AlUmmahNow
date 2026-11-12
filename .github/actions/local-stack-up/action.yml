@@ -1,48 +1,41 @@
 name: Local stack up
 description: >-
   Boots the local E2E stack (docs/testing/LOCAL-STACK.md) from the build job's artifact and seeds
-  it: checks out the Auth repo at the given (released) commit, installs both repos, restores the
-  web/admin-web OpenNext builds and the Auth admin build, boots every worker in one Miniflare,
-  smoke-checks it and runs the deterministic seed. Leaves the stack running (STACK_PID).
+  it: downloads the Auth repo's released local-stack bundle (sha256-checked; no checkout or install
+  of that repo, so it is safe in push, schedule and tag runs), installs this repo, restores the
+  web/admin-web OpenNext builds, boots every worker in one Miniflare, smoke-checks it, seeds the
+  translations and the deterministic fixtures. Leaves the stack running (STACK_PID).
 
 inputs:
-  auth-sha:
-    description: The Auth repo commit (scripts/local-stack/resolve-refs.ts in the build job)
-    required: true
   token:
-    description: GITHUB_TOKEN with packages:read (GitHub Packages installs)
+    description: GITHUB_TOKEN (GitHub Packages installs, the Auth bundle download)
     required: true
 
 runs:
   using: composite
   steps:
-    - name: Check out the Auth repo at its last release
-      uses: actions/checkout@v4
-      with:
-        repository: Al-Ummah-Now/AlUmmahNowAuth
-        ref: ${{ inputs.auth-sha }}
-        path: .local-stack/repos/auth
-        persist-credentials: false
-
     - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
       with:
         version: 9.15.4
 
-    # No dependency cache: a second repo is checked out (CodeQL actions/cache-poisoning)
     - uses: actions/setup-node@v6
       with:
         node-version: '22'
+        cache: pnpm
 
     - name: Install
       shell: bash
-      run: |
-        pnpm install --frozen-lockfile
-        cd .local-stack/repos/auth
-        echo "@al-ummah-now:registry=https://npm.pkg.github.com" >> .npmrc
-        echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}" >> .npmrc
-        pnpm install --frozen-lockfile
+      run: pnpm install --frozen-lockfile
       env:
         NODE_AUTH_TOKEN: ${{ inputs.token }}
+
+    - name: The Auth repo's last released bundle
+      shell: bash
+      run: |
+        echo "LOCAL_STACK_AUTH_DIR=$GITHUB_WORKSPACE/.local-stack/repos/auth" >> "$GITHUB_ENV"
+        LOCAL_STACK_AUTH_DIR="$GITHUB_WORKSPACE/.local-stack/repos/auth" node --experimental-strip-types --no-warnings scripts/local-stack/fetch-auth.ts
+      env:
+        GH_TOKEN: ${{ inputs.token }}
 
     - name: Restore builds
       uses: actions/download-artifact@v4
@@ -53,7 +46,6 @@ runs:
     - name: Boot
       shell: bash
       run: |
-        echo "LOCAL_STACK_AUTH_DIR=$GITHUB_WORKSPACE/.local-stack/repos/auth" >> "$GITHUB_ENV"
         export LOCAL_STACK_AUTH_DIR="$GITHUB_WORKSPACE/.local-stack/repos/auth"
         nohup node --experimental-strip-types --no-warnings scripts/local-stack/boot.ts > "$RUNNER_TEMP/stack.log" 2>&1 &
         echo "STACK_PID=$!" >> "$GITHUB_ENV"

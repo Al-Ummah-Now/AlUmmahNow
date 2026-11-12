@@ -2,14 +2,13 @@ name: Local E2E
 
 # E2E specs placed `local` (apps/web/e2e/test-utils/placement.ts, docs/testing/E2E-PLACEMENT.md)
 # run here, on a local stack each job boots for itself (docs/testing/LOCAL-STACK.md): this PR's
-# code, the Auth repo at its last release, fakes for Bunny/images/Resend, mocked AI, seeded data.
+# code, the Auth repo's last released bundle, fakes for Bunny/images/Resend, mocked AI, seeded data.
 # No QA, no shared data, no locks: every job is isolated, so the matrix runs fully in parallel.
 # The deployed specs keep running against QA/stage (release-e2e.yml); see E2E-PLACEMENT.md.
 
-# Until each batch is green it runs only for changes to the harness or the suites; step 4 of the
-# move (docs/testing/E2E-PLACEMENT.md) makes it run on every pull request. Pull requests only: the
-# jobs check out a second repo (Auth), and in a default-branch context every later step could
-# poison caches the default branch trusts (CodeQL actions/cache-poisoning).
+# The Auth repo comes as its released local-stack bundle (scripts/local-stack/fetch-auth.ts),
+# never as a checkout, so these jobs may also run in default-branch contexts (push, schedule, tags)
+# without CodeQL's cache-poisoning finding; those triggers come once batch 1 is green.
 on:
   pull_request:
     branches: [main]
@@ -33,42 +32,20 @@ jobs:
     name: Build local stack
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    outputs:
-      auth_sha: ${{ steps.refs.outputs.auth_sha }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Released refs of the sibling repos
-        id: refs
-        run: node --experimental-strip-types --no-warnings scripts/local-stack/resolve-refs.ts auth | tee -a "$GITHUB_OUTPUT"
-        env:
-          GH_TOKEN: ${{ github.token }}
-
-      - name: Check out the Auth repo at its last release
-        uses: actions/checkout@v4
-        with:
-          repository: Al-Ummah-Now/AlUmmahNowAuth
-          ref: ${{ steps.refs.outputs.auth_sha }}
-          path: .local-stack/repos/auth
-          persist-credentials: false
 
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           version: 9.15.4
 
-      # No dependency cache: a second repo is checked out (CodeQL actions/cache-poisoning)
       - uses: actions/setup-node@v6
         with:
           node-version: '22'
+          cache: pnpm
 
       - name: Install
-        run: |
-          pnpm install --frozen-lockfile
-          cd .local-stack/repos/auth
-          echo "@al-ummah-now:registry=https://npm.pkg.github.com" >> .npmrc
-          echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}" >> .npmrc
-          pnpm install --frozen-lockfile
-          (cd apps/admin && pnpm build)
+        run: pnpm install --frozen-lockfile
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -90,7 +67,6 @@ jobs:
             packages/*/dist
             apps/web/.open-next
             apps/admin-web/.open-next
-            .local-stack/repos/auth/apps/admin/build
           include-hidden-files: true
           retention-days: 2
           if-no-files-found: error
@@ -116,7 +92,6 @@ jobs:
 
       - uses: ./.github/actions/local-stack-up
         with:
-          auth-sha: ${{ needs.build.outputs.auth_sha }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: ./.github/actions/playwright-install
