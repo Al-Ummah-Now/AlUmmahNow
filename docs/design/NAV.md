@@ -216,6 +216,11 @@ keep `--fanous-c-drawer-*` (the app's material). The active item is on `--fanous
 `--fanous-c-drawer-active-text` with a 3px indicator on its inline-start edge. On phones the drawer
 opens from the inline-start side, as a `<dialog>` or with a backdrop, and closes on Escape.
 
+Section headings in the drawer and rail are short nouns. The personal section (Library, History,
+Watch later, Liked videos) is **"Yours" / «لك»**, never "You" / «أنت» (owner review, revision 4).
+The same wording applies wherever that heading appears (the videos drawer and rail, Studio, the
+native apps).
+
 ## Checks
 
 - Theme visibility: every theme × light/dark × en/ar, with the account menu open. Videos:
