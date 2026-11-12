@@ -5,7 +5,13 @@
  */
 import { test, expect } from '@playwright/test';
 import { target } from './targets';
-import { findPlayableVideo, NO_PLAYABLE_VIDEO, watchUrl } from './videos';
+import { NO_PLAYABLE_VIDEO, watchUrl } from './videos';
+import { useOwnVideos } from './own-videos';
+
+// This spec's own videos (created in beforeAll, deleted in afterAll): never the seed's or the newest public one
+const own = useOwnVideos(test);
+// It signs a user up through the auth server: traces and video would hold the password and code
+test.use({ trace: 'off', video: 'off' });
 
 const RECOMMENDATIONS_BUDGET_MS = 1000;
 
@@ -19,7 +25,7 @@ async function recommendedIds(videoId: string): Promise<string[]> {
 test.describe('Release: related videos on the watch page', () => {
   for (const locale of ['en', 'ar'] as const) {
     test(`related shelf leads with recommendations for the video (${locale})`, async ({ page }) => {
-      const video = await findPlayableVideo();
+      const video = await own('landscape');
       test.skip(!video, NO_PLAYABLE_VIDEO);
       const recommended = await recommendedIds(video!.id);
       test.skip(recommended.length === 0, 'the API has no recommendations for this video');
@@ -38,7 +44,7 @@ test.describe('Release: related videos on the watch page', () => {
 
   for (const locale of ['en', 'ar'] as const) {
     test(`related shelf is never empty on a public video (${locale})`, async ({ page }) => {
-      const video = await findPlayableVideo();
+      const video = await own('landscape');
       test.skip(!video, NO_PLAYABLE_VIDEO);
       // The seed has other public videos on the same channel, so a shelf exists to show
 
@@ -52,7 +58,7 @@ test.describe('Release: related videos on the watch page', () => {
   // Stage only: PR runs target QA, which still serves the previous main.
   test('recommendations answer within the latency budget', { tag: '@load' }, async () => {
     test.skip(process.env.E2E_ENV !== 'stage', 'the budget is enforced on the release candidate (stage)');
-    const video = await findPlayableVideo();
+    const video = await own('landscape');
     test.skip(!video, NO_PLAYABLE_VIDEO);
     const url = `${target().api}/api/recommendations?videoId=${encodeURIComponent(video!.id)}&limit=15`;
 

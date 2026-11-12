@@ -4,12 +4,18 @@
  * on branded Chrome against a public video found through the API.
  */
 import { test, expect, devices, type Page } from '@playwright/test';
-import { findPlayableVideo, NO_PLAYABLE_VIDEO, playFor, watchUrl } from './videos';
+import { NO_PLAYABLE_VIDEO, playFor, watchUrl } from './videos';
+import { useOwnVideos } from './own-videos';
+
+// This spec's own videos (created in beforeAll, deleted in afterAll): never the seed's or the newest public one
+const own = useOwnVideos(test);
+// It signs a user up through the auth server: traces and video would hold the password and code
+test.use({ trace: 'off', video: 'off' });
 
 const CONTROLS = '.video-js .vjs-control-bar';
 
 async function openPlayer(page: Page, locale: 'en' | 'ar'): Promise<void> {
-  const video = await findPlayableVideo();
+  const video = await own('landscape');
   test.skip(!video, NO_PLAYABLE_VIDEO);
   await page.goto(watchUrl(video!.id, locale));
   await page.locator(CONTROLS).waitFor({ state: 'attached', timeout: 45000 });
@@ -43,7 +49,7 @@ test.describe('Release: player keyboard and screen-reader semantics', () => {
 
 test.describe('Release: player analytics', () => {
   test('engagement events reach the analytics route with consent', async ({ page, context }) => {
-    const video = await findPlayableVideo();
+    const video = await own('landscape');
     test.skip(!video, NO_PLAYABLE_VIDEO);
     await context.addCookies([
       { name: 'aun_consent', value: `v1.a1.e0.p0.${Date.now()}`, url: new URL(watchUrl(video!.id, 'en')).origin },

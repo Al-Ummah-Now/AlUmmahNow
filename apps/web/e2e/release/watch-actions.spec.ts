@@ -13,8 +13,12 @@
 import { test, expect, type Page } from '@playwright/test';
 import { target } from './targets';
 import { dislikesTurnedOff, VIDEO_DISLIKES } from './dislikes';
-import { findPlayableVideo, NO_PLAYABLE_VIDEO, watchUrl } from './videos';
+import { NO_PLAYABLE_VIDEO, watchUrl } from './videos';
 import { createProfile, signUpOnWeb, type Locale } from './web-session';
+import { useOwnVideos } from './own-videos';
+
+// This spec's own videos (created in beforeAll, deleted in afterAll): never the seed's or the newest public one
+const own = useOwnVideos(test);
 
 // Signs users in through the auth server: traces would hold the password and code
 test.use({ trace: 'off' });
@@ -145,7 +149,7 @@ async function openReport(page: Page, where: string): Promise<void> {
 for (const locale of ['en', 'ar'] as Locale[]) {
   test(`watch actions share one pill style and stay on one line (${locale})`, async ({ page, context }) => {
     test.setTimeout(300000);
-    const video = await findPlayableVideo();
+    const video = await own('landscape');
     test.skip(!video, NO_PLAYABLE_VIDEO);
 
     await context.addCookies([{ name: 'aun_consent', value: `v1.a0.e0.p0.${Date.now()}`, url: target().web, sameSite: 'Lax' }]);

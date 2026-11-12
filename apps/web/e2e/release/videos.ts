@@ -1,11 +1,10 @@
 /**
- * Playback helpers. The video every playback spec uses is a seeded fixture
- * (fixtures.ts), found by its seed title, so the suite never depends on
- * hard-coded ids nor on what other specs uploaded.
+ * Playback helpers. Every playback spec uses videos it created itself
+ * (own-videos.ts, builders.ts), never the global seed, hard-coded ids or what
+ * other specs uploaded.
  */
 import { expect, type Page } from '@playwright/test';
 import { target } from './targets';
-import { fixtureVideo } from './fixtures';
 import { fetchRetry } from './net';
 
 export interface PublicVideo {
@@ -60,26 +59,9 @@ export async function stableVideos<T extends PublicVideo>(candidates: T[]): Prom
   return out;
 }
 
-export const NO_PLAYABLE_VIDEO = 'no public, encoded video in this environment (seed one; see CLAUDE.md "Release regressions")';
+export const NO_PLAYABLE_VIDEO = 'no public, encoded video (the spec creates its own: own-videos.ts)';
 
-/**
- * A public, encoded, non-live video of at least `minSeconds`: the seeded lecture
- * (fixtures.ts), never whatever a shared list returns first. Null only when it is
- * shorter than asked (no caller asks for more than the seed's 75 s).
- */
-export async function findPlayableVideo(minSeconds = 8, opts: { excludeShorts?: boolean } = {}): Promise<PublicVideo | null> {
-  const video = await fixtureVideo('landscape');
-  expect(video.duration ?? 0, `the seeded lecture is shorter than ${minSeconds}s`).toBeGreaterThanOrEqual(minSeconds);
-  if (opts.excludeShorts) expect(video.isShort, 'the seeded lecture is listed as a Short').not.toBe(true);
-  return video;
-}
-
-/** A playable landscape video (theatre mode needs one): the seeded 640x360 lecture. */
-export async function findLandscapeVideo(minSeconds = 8): Promise<PublicVideo | null> {
-  return findPlayableVideo(minSeconds);
-}
-
-export const NO_LANDSCAPE_VIDEO = 'no public, encoded landscape video in this environment (stage seeds "QA Lecture" videos at 640x360)';
+export const NO_LANDSCAPE_VIDEO = 'no public, encoded landscape video (the spec creates its own: own-videos.ts)';
 
 export function watchUrl(id: string, locale: 'en' | 'ar' = 'en'): string {
   return `${target().web}/${locale}/video/${id}`;

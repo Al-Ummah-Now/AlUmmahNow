@@ -6,8 +6,13 @@
 import { test, expect } from '@playwright/test';
 import { target } from './targets';
 import { watchUrl } from './videos';
-import { fixtureVideo } from './fixtures';
 import { fetchRetry } from './net';
+import { useOwnVideos } from './own-videos';
+
+// This spec's own videos (created in beforeAll, deleted in afterAll): never the seed's or the newest public one
+const own = useOwnVideos(test);
+// It signs a user up through the auth server: traces and video would hold the password and code
+test.use({ trace: 'off', video: 'off' });
 
 type ChapterList = Array<{ startTime: number; title: string }>;
 interface Chaptered { id: string; chapters?: ChapterList | { chapters?: ChapterList }; uploadStatus?: string; isPublic?: boolean; playUrl?: string }
@@ -17,7 +22,7 @@ const chaptersOf = (v: Chaptered): ChapterList => (Array.isArray(v.chapters) ? v
 
 /** The seeded lecture carries the seed's four chapters (seed-config.ts withSubtitlesAndChapters). */
 async function findChapteredVideo(): Promise<Chaptered | null> {
-  const { id } = await fixtureVideo('landscape');
+  const { id } = await own('landscape');
   // The list omits chapters: read the video itself
   const res = await fetchRetry(`${target().api}/api/videos/${encodeURIComponent(id)}`, { cache: 'no-store' });
   expect(res.ok, `GET /api/videos/${id} answered ${res.status}`).toBe(true);

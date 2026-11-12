@@ -17,7 +17,10 @@ import { promoteToAdmin } from './sink';
 import { sinkEmail, target } from './targets';
 import { completeRegistration, submitPasswordSignIn } from './web-session';
 import { watchUrl } from './videos';
-import { seeded } from './fixtures';
+import { useOwnVideos } from './own-videos';
+
+// This spec's own videos (created in beforeAll, deleted in afterAll): never the seed's or the newest public one
+const own = useOwnVideos(test);
 
 // Signs up/in: no trace or video, they would record the password (see secret-fill.ts)
 test.use({ trace: 'off', video: 'off' });
@@ -40,7 +43,7 @@ test.describe('Release: one h1 per page', () => {
     test.setTimeout(300000);
     const web = target().web;
     // Seeded fixtures: never the newest item of a shared list (another spec's upload, still encoding)
-    const { videos, lecturesChannelId: channelId } = await seeded();
+    const { videos, channelId } = await own.all();
     const videoId = videos.landscape.id;
     for (const locale of LOCALES) {
       const pages: Array<[string, string]> = [

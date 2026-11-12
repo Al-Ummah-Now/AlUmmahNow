@@ -7,9 +7,13 @@
  * stay compact, RTL mirrors the columns, and header items never overlap.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { findPlayableVideo, NO_PLAYABLE_VIDEO, watchUrl } from './videos';
+import { NO_PLAYABLE_VIDEO, watchUrl } from './videos';
 import { createProfile, signUpOnWeb, type Locale } from './web-session';
 import { grantCreatorTier } from './creator-tier';
+import { useOwnVideos } from './own-videos';
+
+// This spec's own videos (created in beforeAll, deleted in afterAll): never the seed's or the newest public one
+const own = useOwnVideos(test);
 
 // Signs in through the auth server: a retained trace would hold the password and code
 test.use({ trace: 'off' });
@@ -155,7 +159,7 @@ async function checkAllWidths(page: Page, videoId: string, locale: Locale): Prom
 
 /** The seeded lecture: its channel has other seeded lectures, so the related column is never empty. */
 async function videoWithRelated(): Promise<string | null> {
-  return (await findPlayableVideo())?.id ?? null;
+  return (await own('landscape'))?.id ?? null;
 }
 
 test.describe('Release: watch page and header layout, tablet to desktop', () => {

@@ -11,8 +11,14 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { target, releaseEnv } from './targets';
-import { findPlayableVideo, NO_PLAYABLE_VIDEO, watchUrl } from './videos';
+import { NO_PLAYABLE_VIDEO, watchUrl } from './videos';
 import { fetchRetry } from './net';
+import { useOwnVideos } from './own-videos';
+
+// This spec's own videos (created in beforeAll, deleted in afterAll): never the seed's or the newest public one
+const own = useOwnVideos(test);
+// It signs a user up through the auth server: traces and video would hold the password and code
+test.use({ trace: 'off', video: 'off' });
 
 // Same scheme as the site under test: an https host page cannot frame the local stack's plain http (mixed content)
 const HOST_PAGE = `${releaseEnv() === 'local' ? 'http' : 'https'}://embed-host.release.test/page`;
@@ -45,7 +51,7 @@ test.describe('Release: embeds', () => {
 
   for (const lang of ['en', 'ar'] as const) {
     test(`a public video plays in a cross-origin iframe (${lang})`, async ({ page }) => {
-      const video = await findPlayableVideo();
+      const video = await own('landscape');
       test.skip(!video, NO_PLAYABLE_VIDEO);
 
       await hostIframe(page, `${target().web}/embed/v/${video!.id}?lang=${lang}`);
@@ -80,7 +86,7 @@ test.describe('Release: embeds', () => {
   });
 
   test('oEmbed describes a watch URL', async () => {
-    const video = await findPlayableVideo();
+    const video = await own('landscape');
     test.skip(!video, NO_PLAYABLE_VIDEO);
 
     const res = await fetchRetry(`${target().web}/oembed?format=json&url=${encodeURIComponent(watchUrl(video!.id))}`);

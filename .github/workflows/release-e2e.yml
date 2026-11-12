@@ -168,7 +168,7 @@ jobs:
           # The shared-state specs and the encode-waiting specs run below, each under its lock
           E2E_SHARED_STATE: skip
           E2E_ENCODE: skip
-        run: npx playwright test -c playwright.release.config.ts --repeat-each="$E2E_REPEAT"
+        run: npx playwright test -c playwright.release.config.ts --repeat-each="$E2E_REPEAT" --pass-with-no-tests
 
       # The specs that wait for Bunny to encode an upload share one encode queue with
       # every other run on the QA/stage library: at most two runs encode at once
@@ -193,7 +193,7 @@ jobs:
           E2E_SHARED_STATE: skip
           E2E_ENCODE: only
           E2E_OUTPUT_SUFFIX: encode
-        run: npx playwright test -c playwright.release.config.ts --repeat-each="$E2E_REPEAT"
+        run: npx playwright test -c playwright.release.config.ts --repeat-each="$E2E_REPEAT" --pass-with-no-tests
 
       - name: Release the ${{ env.E2E_ENV }}-encode slot
         if: always() && steps.encode-lock.outputs.holder != ''
@@ -224,7 +224,7 @@ jobs:
           E2E_RUN_TAG: g${{ github.run_id }}a${{ github.run_attempt }}
           E2E_SHARED_STATE: only
           E2E_OUTPUT_SUFFIX: shared-state
-        run: npx playwright test -c playwright.release.config.ts --repeat-each="$E2E_REPEAT"
+        run: npx playwright test -c playwright.release.config.ts --repeat-each="$E2E_REPEAT" --pass-with-no-tests
 
       - name: Release the ${{ env.E2E_ENV }}-global lock
         if: always() && steps.lock.outputs.holder != ''

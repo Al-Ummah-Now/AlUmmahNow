@@ -10,8 +10,12 @@
  */
 import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { findPlayableVideo, HISTORY_MIN_SECONDS, NO_PLAYABLE_VIDEO, pause, playFor, RESUME_MIN_VIDEO_SECONDS, watchUrl } from './videos';
+import { HISTORY_MIN_SECONDS, NO_PLAYABLE_VIDEO, pause, playFor, RESUME_MIN_VIDEO_SECONDS, watchUrl } from './videos';
 import { apiFetch, createProfile, signUpOnWeb, type WebUser } from './web-session';
+import { useOwnVideos } from './own-videos';
+
+// This spec's own videos (created in beforeAll, deleted in afterAll): never the seed's or the newest public one
+const own = useOwnVideos(test);
 
 // This file signs users in through the auth server: its traces would hold the
 // typed password and email code (fillSecret args, form POST bodies). Trace off.
@@ -64,7 +68,7 @@ interface HistoryEntry {
 
 test.describe('Release: periodic watch progress', () => {
   test('a signed-in watch is saved to history while it plays, without pausing', async ({ page }) => {
-    const video = await findPlayableVideo(HISTORY_MIN_SECONDS);
+    const video = await own('landscape');
     test.skip(!video, NO_PLAYABLE_VIDEO);
 
     const user = await signUpOnWeb(page, 'rel-history-tick');
@@ -97,7 +101,7 @@ test.describe('Release: periodic watch progress', () => {
   });
 
   test('a watched video reopens at the saved time with Start from beginning (#242)', async ({ page }) => {
-    const video = await findPlayableVideo(RESUME_MIN_VIDEO_SECONDS, { excludeShorts: true });
+    const video = await own('landscape');
     test.skip(!video, NO_PLAYABLE_VIDEO);
     await skipIfResumeUiNotDeployedOnPr(page, video!.id);
 
@@ -133,7 +137,7 @@ test.describe('Release: periodic watch progress', () => {
   });
 
   test('a video that was opened but never played has no Start from beginning (#242)', async ({ page }) => {
-    const video = await findPlayableVideo(RESUME_MIN_VIDEO_SECONDS, { excludeShorts: true });
+    const video = await own('landscape');
     test.skip(!video, NO_PLAYABLE_VIDEO);
     await skipIfResumeUiNotDeployedOnPr(page, video!.id);
 
