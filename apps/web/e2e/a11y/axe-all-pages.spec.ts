@@ -1,7 +1,10 @@
 import { test, expect } from '../fixtures';
 import { AxeBuilder } from '@axe-core/playwright';
 import { ANONYMOUS_STATE, AUTH_STATE } from '../test-utils/auth-state';
-import { catalog, loadCatalogData, openCatalogPageInReferenceTheme, type CatalogData, type CatalogRole } from '../test-utils/page-catalog';
+import { catalog, catalogFromOwnData, openCatalogPageInReferenceTheme, type CatalogData, type CatalogRole } from '../test-utils/page-catalog';
+import { ownPublicVideos } from '../test-utils/own-public-video';
+import { ownStudioVideos } from '../test-utils/own-studio-videos';
+import { SEED_TITLES } from '../test-utils/e2e-videos';
 
 /**
  * A11Y-ALL: axe-core WCAG 2.1 AA scan of every page in the route inventory
@@ -19,9 +22,30 @@ const ROLES: CatalogRole[] = ['anon', 'single', 'none'];
 
 let data: CatalogData;
 
+// One worker runs this file's tests in order, so its own data (beforeAll) is made once
+test.describe.configure({ mode: 'default' });
+
+/**
+ * This file's own content (made in beforeAll, deleted afterwards): a creator's channel with a
+ * public video (English and Arabic titles), a playlist and a community post, and the single
+ * user's own Studio videos for the editor page.
+ */
+const own = ownPublicVideos(test, 'a11y-catalog', [{ titleAr: 'محاضرة فحص الوصول' }], {
+  nameAr: 'قناة فحص الوصول',
+  description: 'E2E accessibility sweep channel',
+  descriptionAr: 'قناة فحص إمكانية الوصول',
+  playlist: true,
+  posts: 1,
+});
+const studio = ownStudioVideos(test, 'single');
+
 test.beforeAll(async () => {
-  test.setTimeout(180000);
-  data = await loadCatalogData();
+  data = catalogFromOwnData({
+    videoId: own.videos()[0].id,
+    channelId: own.channelId(),
+    playlistId: own.playlistId(),
+    singleVideoId: studio.videos()[SEED_TITLES.singleVideo].id,
+  });
 });
 
 function storageFor(role: CatalogRole) {
