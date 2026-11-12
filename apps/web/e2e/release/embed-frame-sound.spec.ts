@@ -190,27 +190,31 @@ test.describe('Release: a click-started play has sound', () => {
 
   // landscape40 (40 s) in the Short's 216x384 frame: the 4 s vertical clip ended before a slow
   // runner's first look ("watch again", nothing to unmute).
-  test('no user activation: muted, "Tap to unmute" (Arabic), which brings the sound back', async ({ page, browserName, playwright, channel, headless, launchOptions }) => {
-    // Chrome's default policy may allow sound without activation (the CI runner did, so the embed
-    // rightly played unmuted). A browser of this test's own that requires a gesture makes the muted
-    // fallback the path under test. Only here: the flag also refuses sound after a click.
-    const own = browserName === 'chromium'
-      ? await playwright.chromium.launch({ ...launchOptions, channel, headless, args: [...(launchOptions.args ?? []), '--autoplay-policy=user-gesture-required'] })
-      : null;
-    try {
-      const p = own ? await own.newPage() : page;
-      await host(p, `${target().web}/embed/v/${videos.landscape40.id}?lang=ar&autoplay=1&gesture=1`, { width: 216, height: 384 }, 'load');
-      const frame = await embedFrame(p);
-      await skipIfPredates(frame);
-      if (own) {
-        // no activation and sound refused: muted, still playing, with the Arabic control
-        await expect.poll(async () => (await media(frame))?.muted, { message: 'not muted without activation', timeout: 45000 }).toBe(true);
-        await expect.poll(async () => (await media(frame))?.time ?? 0, { message: 'the muted fallback did not play', timeout: 45000 }).toBeGreaterThan(1);
-        await expect(frame.getByTestId('embed-unmute')).toHaveText('اضغط لتشغيل الصوت');
-      }
-      await mutedOnlyWithControl(frame);
-    } finally {
-      await own?.close();
+  test('no user activation: muted, "Tap to unmute" (Arabic), which brings the sound back', async ({ page, browserName }) => {
+    if (browserName === 'chromium') {
+      // Chrome on the CI runner allows sound without activation, even with
+      // --autoplay-policy=user-gesture-required, so the embed rightly plays unmuted there. Refuse an
+      // unmuted play() without activation in every frame, as Chrome's default policy does elsewhere,
+      // so the muted fallback is the path under test. A click in the frame (the pill) is activation.
+      await page.addInitScript(() => {
+        const play = HTMLMediaElement.prototype.play;
+        HTMLMediaElement.prototype.play = function (this: HTMLMediaElement) {
+          if (!this.muted && this.volume > 0 && !navigator.userActivation?.isActive) {
+            return Promise.reject(new DOMException('sound needs a user gesture', 'NotAllowedError'));
+          }
+          return play.call(this);
+        };
+      });
     }
+    await host(page, `${target().web}/embed/v/${videos.landscape40.id}?lang=ar&autoplay=1&gesture=1`, { width: 216, height: 384 }, 'load');
+    const frame = await embedFrame(page);
+    await skipIfPredates(frame);
+    if (browserName === 'chromium') {
+      // sound refused: muted, still playing, with the Arabic control
+      await expect.poll(async () => (await media(frame))?.muted, { message: 'not muted without activation', timeout: 45000 }).toBe(true);
+      await expect.poll(async () => (await media(frame))?.time ?? 0, { message: 'the muted fallback did not play', timeout: 45000 }).toBeGreaterThan(1);
+      await expect(frame.getByTestId('embed-unmute')).toHaveText('اضغط لتشغيل الصوت');
+    }
+    await mutedOnlyWithControl(frame);
   });
 });
