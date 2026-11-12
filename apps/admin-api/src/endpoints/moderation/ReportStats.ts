@@ -51,12 +51,9 @@ export class ReportStats extends AdminRoute {
     try {
       const db = c.env.REPORTS_DB;
 
-      // Get total count
-      const totalResult = await db.prepare(
-        'SELECT COUNT(*) as count FROM reports'
-      ).first<{ count: number }>();
-
-      // Get counts by status
+      // Counts by status; the total is their sum. A separate COUNT(*) ran a moment earlier, so a
+      // report filed in between made pending + resolved + dismissed exceed the total (DASH-01 on QA,
+      // 32,424 vs 32,423 with other runs filing reports)
       const statusResult = await db.prepare(`
         SELECT status, COUNT(*) as count
         FROM reports
@@ -69,7 +66,9 @@ export class ReportStats extends AdminRoute {
         resolved: 0,
         dismissed: 0,
       };
+      let total = 0;
       statusResult.results?.forEach(row => {
+        total += Number(row.count) || 0;
         if (row.status in byStatus) {
           byStatus[row.status as keyof typeof byStatus] = row.count;
         }
@@ -122,13 +121,13 @@ export class ReportStats extends AdminRoute {
 
       logger.debug('Report stats retrieved', {
         moderatorId: this.getUserId(c),
-        total: totalResult?.count || 0
+        total: total
       });
 
       return {
         success: true,
         result: {
-          total: totalResult?.count || 0,
+          total: total,
           byStatus,
           byEntityType,
           byAction,
