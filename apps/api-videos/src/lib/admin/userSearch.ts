@@ -15,9 +15,33 @@ import {
 	type AdminUserSearchItem,
 	type AdminUserSearchQuery,
 } from '@al-ummah/shared-types';
-import { likeTerm, listUsers, userRows, type AdminEnv } from './directory';
+import { likeTerm, userRows, type AdminEnv } from './directory';
 
 type Row = Record<string, unknown>;
+
+/** Profiles not soft-deleted by an admin (those are in Recently deleted), as in the users list. */
+const LIVE_PROFILE = `p.kind = 'profile' AND p.is_deleted = 0
+	AND NOT EXISTS (SELECT 1 FROM admin_deletions d WHERE d.kind = 'user' AND d.target_id = p.id AND d.purged_at IS NULL)`;
+
+/**
+ * ?1 id, ?2 the term lower-cased, ?3 limit. One index lookup per field, joined by UNION: SQLite
+ * does not split `kind = ? AND (a OR b OR c)` across indexes, and scanned every profile instead.
+ */
+export const PROFILE_EXACT_SQL = `SELECT p.id AS id FROM (
+		SELECT id FROM ${OWNERSHIP_TABLE} WHERE kind = 'profile' AND id = ?1
+		UNION SELECT id FROM ${OWNERSHIP_TABLE} WHERE kind = 'profile' AND lower(email) = ?2
+		UNION SELECT id FROM ${OWNERSHIP_TABLE} WHERE kind = 'profile' AND lower(handle) = ?2
+	) m JOIN ${OWNERSHIP_TABLE} p ON p.kind = 'profile' AND p.id = m.id
+	WHERE ${LIVE_PROFILE} LIMIT ?3`;
+
+/** ?1 the LIKE term, ?2 limit. Stops at the limit: no COUNT, no ORDER BY (the caller ranks). */
+export const PROFILE_CONTAINS_SQL = `SELECT p.id AS id FROM ${OWNERSHIP_TABLE} p WHERE ${LIVE_PROFILE}
+	AND (lower(p.admin_title) LIKE ?1 ESCAPE '\\' OR lower(p.handle) LIKE ?1 ESCAPE '\\' OR lower(p.email) LIKE ?1 ESCAPE '\\') LIMIT ?2`;
+
+/** ?1 the term lower-cased, ?2 limit. A range on the lower(handle) index, not a LIKE scan. */
+export const CHANNEL_HANDLE_PREFIX_SQL = `SELECT DISTINCT owner_id FROM ${OWNERSHIP_TABLE}
+	WHERE kind = 'channel' AND is_deleted = 0 AND owner_id IS NOT NULL AND lower(handle) >= ?1 AND lower(handle) < ?1 || char(1114111) LIMIT ?2`;
+
 
 /** The search term: trimmed, without a leading "@" (handles are stored without it). */
 export function searchTerm(q: string | undefined): string {
@@ -41,15 +65,18 @@ export async function searchUsers(env: AdminEnv, query: AdminUserSearchQuery): P
 	const db = env.SEARCH_DB;
 	if (!db) throw new Error('SEARCH_DB is not bound');
 
-	// Users by email, name, user handle or id, and owners of channels whose @handle starts with the term
-	const [page, handleOwners] = await Promise.all([
-		listUsers(env, { q: term, pageSize: limit + exclude.size + 10 }),
+	// Users by email, name, user handle or id, and owners of channels whose @handle starts with the term.
+	// A keystroke must stay cheap: D1 runs one query at a time per database, and the old full-list
+	// search (a COUNT and an ordered page over every profile, plus a scan of every channel handle,
+	// ~200 ms of D1 time) queued into 500s under parallel load (TRANSFER-01, 2026-11-12).
+	const lower = term.toLowerCase();
+	const [matched, handleOwners] = await Promise.all([
+		profileMatches(db, term, limit + exclude.size + 10),
 		db
 			.prepare(
-				`SELECT DISTINCT owner_id FROM ${OWNERSHIP_TABLE}
-				 WHERE kind = 'channel' AND is_deleted = 0 AND owner_id IS NOT NULL AND lower(handle) LIKE ? ESCAPE '\\' LIMIT ?`,
+				CHANNEL_HANDLE_PREFIX_SQL,
 			)
-			.bind(`${likeTerm(term).slice(1)}`, limit)
+			.bind(lower, limit)
 			.all<{ owner_id: string }>(),
 	]);
 	const exactHandleOwners = new Set<string>();
@@ -57,10 +84,11 @@ export async function searchUsers(env: AdminEnv, query: AdminUserSearchQuery): P
 	if (ownerIds.length) {
 		const { results } = await db
 			.prepare(`SELECT DISTINCT owner_id FROM ${OWNERSHIP_TABLE} WHERE kind = 'channel' AND is_deleted = 0 AND lower(handle) = ?`)
-			.bind(term.toLowerCase())
+			.bind(lower)
 			.all<{ owner_id: string }>();
 		for (const r of results ?? []) exactHandleOwners.add(r.owner_id);
 	}
+	const page = { items: [...(await userRows(env, matched)).values()] };
 
 	const byId = new Map<string, AdminUserRow>();
 	for (const user of page.items) if (!user.profileDeleted) byId.set(user.id, user);
@@ -98,4 +126,19 @@ export async function searchUsers(env: AdminEnv, query: AdminUserSearchQuery): P
 	return {
 		items: users.map((u) => ({ ...u, channelCount: countOf.get(u.id) ?? 0, channelRole: roleOf.get(u.id) ?? null })),
 	};
+}
+
+/**
+ * Profiles for a picker search, cheapest first: an exact id, email or user handle through the
+ * (kind, id) key and the lower(email) / lower(handle) indexes (search migration 0018); only when
+ * nothing matches exactly, one contains scan that stops at `max` rows (no COUNT, no ORDER BY: the
+ * caller ranks). Users an admin soft-deleted are left out, as in the users list.
+ */
+export async function profileMatches(db: NonNullable<AdminEnv['SEARCH_DB']>, term: string, max: number): Promise<string[]> {
+	const lower = term.toLowerCase();
+	const exact = await db.prepare(PROFILE_EXACT_SQL).bind(term, lower, max).all<{ id: string }>();
+	const exactIds = (exact.results ?? []).map((r) => r.id);
+	if (exactIds.length) return exactIds;
+	const { results } = await db.prepare(PROFILE_CONTAINS_SQL).bind(likeTerm(term), max).all<{ id: string }>();
+	return (results ?? []).map((r) => r.id);
 }
