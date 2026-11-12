@@ -273,6 +273,16 @@ export interface AppTranslations {
     myArticles: string;
     scholarPage: string;
     navigationMenu: string;
+    /** Account menu "Al Ummah Now apps" section (docs/design/NAV.md) */
+    appsSection: string;
+    appWww: string;
+    appVideos: string;
+    appProfile: string;
+    appCms: string;
+    appAdmin: string;
+    appAuthAdmin: string;
+    currentAccount: string;
+    switchToAccount: string;
     navigation: string;
     accounts: string;
     profile: string;

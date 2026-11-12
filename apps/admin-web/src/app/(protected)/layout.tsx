@@ -51,6 +51,7 @@ export default async function ProtectedLayout({
       <ErrorReportingIdentity userId={session.user.id} />
       <AdminShell
         userEmail={session.user.email}
+        userRoles={session.user.role ? [session.user.role] : []}
         authIssuer={process.env.Issuer}
         initialRail={navCookie === 'rail'}
         access={{

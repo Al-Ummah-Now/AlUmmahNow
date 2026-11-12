@@ -22,6 +22,8 @@ import {
 
 interface AdminShellProps {
   userEmail?: string;
+  /** The signed-in account's roles (the account menu's app links). */
+  userRoles?: readonly string[];
   /** Auth server origin, for the account menu */
   authIssuer?: string;
   access: NavAccess;
@@ -38,7 +40,7 @@ const focusRing = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-fo
  * beside a top bar with breadcrumbs, search (⌘K) and the account. Tablets: the rail. Phones: the
  * top bar, a bottom bar, and the sidebar as a drawer.
  */
-export function AdminShell({ userEmail, authIssuer, access, badges, initialRail, children }: AdminShellProps) {
+export function AdminShell({ userEmail, userRoles, authIssuer, access, badges, initialRail, children }: AdminShellProps) {
   const { t } = useLanguage();
   const pathname = usePathname();
   const [rail, setRail] = useState(initialRail);
@@ -262,23 +264,10 @@ export function AdminShell({ userEmail, authIssuer, access, badges, initialRail,
             <kbd aria-hidden="true" className="rounded border border-nav-search-border px-1.5 text-[11px] max-md:hidden" dir="ltr">⌘K</kbd>
           </button>
 
-          {userEmail && (
-            <div className="flex items-center gap-1 md:gap-3 md:ps-2">
-              <span className="hidden max-w-[14rem] truncate text-sm text-nav-search-placeholder lg:inline" data-testid="user-email">
-                {userEmail}
-              </span>
-              {authIssuer && <AccountMenu issuer={authIssuer} currentEmail={userEmail} />}
-              <form action="/api/logout" method="POST">
-                <button
-                  type="submit"
-                  data-testid="logout-button"
-                  title={t('common.logout')}
-                  className={`flex h-10 items-center gap-2 rounded-lg px-2 text-sm text-nav-text hover:bg-nav-hover ${focusRing}`}
-                >
-                  <Icon name="logout" className="size-[18px] rtl:-scale-x-100" />
-                  <span className="max-md:sr-only">{t('common.logout')}</span>
-                </button>
-              </form>
+          {/* The account button and menu (docs/design/NAV.md): avatar + name; sign-out lives in the menu */}
+          {userEmail && authIssuer && (
+            <div className="flex items-center md:ps-2">
+              <AccountMenu issuer={authIssuer} currentEmail={userEmail} roles={userRoles} />
             </div>
           )}
         </header>

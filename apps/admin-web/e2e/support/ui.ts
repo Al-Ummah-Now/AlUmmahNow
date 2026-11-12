@@ -45,6 +45,30 @@ export async function openMainNav(page: Page) {
 }
 
 /**
+ * Sign out from the top bar. Since the shared nav (docs/design/NAV.md) the one sign-out entry is
+ * in the account menu; the deployed QA build a PR runs against may still have the separate
+ * "Log out" button (logout-button), so both are handled.
+ */
+export async function clickSignOut(page: Page) {
+  const legacy = page.getByTestId('logout-button');
+  if (await legacy.isVisible().catch(() => false)) {
+    await legacy.click();
+    return;
+  }
+  const trigger = page.getByTestId('account-menu-trigger');
+  await expect(trigger).toBeVisible();
+  if ((await trigger.getAttribute('aria-expanded')) !== 'true') await trigger.click();
+  await page.getByTestId('account-menu').getByTestId('account-sign-out-all').click();
+}
+
+/** The account control at the top bar's inline end: the menu button (or the old "Log out"). */
+export async function accountControl(page: Page) {
+  const legacy = page.getByTestId('logout-button');
+  if (await legacy.isVisible().catch(() => false)) return legacy;
+  return page.getByTestId('account-menu-trigger');
+}
+
+/**
  * The light/dark preference on <html>: data-color-mode (with the .dark class) since the shell
  * follows the site theme; the deployed QA build may still use data-theme for it.
  */
