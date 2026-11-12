@@ -2,13 +2,15 @@
  * Release regression: the embed player (docs/embeds/README.md) plays inside a
  * cross-origin iframe, refuses unknown videos with the unavailable frame, and
  * oEmbed answers for a watch URL. Runs in the "player" project (branded Chrome,
- * H.264). The host page lives on a fake origin served by page.route, so the
- * frame really is cross-origin and frame-ancestors is exercised.
+ * H.264). The host page lives on another origin (see HOST_PAGE), so the frame
+ * really is cross-origin and frame-ancestors is exercised.
  *
  * On a pull request the target is the already-deployed QA build, so the PR
  * that introduces a route cannot pass a spec for it: when /embed is not on the
  * target yet, PR runs skip with that reason. Stage release runs never skip.
  */
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { test, expect, type Page } from '@playwright/test';
 import { target, releaseEnv } from './targets';
 import { NO_PLAYABLE_VIDEO, watchUrl } from './videos';
@@ -20,12 +22,31 @@ const own = useOwnVideos(test);
 // It signs a user up through the auth server: traces and video would hold the password and code
 test.use({ trace: 'off', video: 'off' });
 
-// A fake origin served by page.route, cross-origin to the site under test. On the local stack it is
-// 127.0.0.1 (the site is localhost): Chrome's Local Network Access lets a page frame loopback only
-// from a secure context holding the local-network-access permission. A plain-http public host is not
-// a secure context (the permission can't be granted) and an https one is; loopback is both secure and
-// local, so the plain-http stack frames without mixed content.
-const HOST_PAGE = releaseEnv() === 'local' ? 'http://127.0.0.1:3001/__embed-host/page' : 'https://embed-host.release.test/page';
+// The host page: a fake origin served by page.route, so the frame really is cross-origin. On the
+// local stack the site is loopback (http://localhost) and Chrome's Local Network Access blocks a public
+// page from framing it; a page.route answer counts as public whatever its URL. There the host page
+// comes from a real loopback server of this spec (127.0.0.1, still cross-origin to localhost).
+const HOST_PAGE = 'https://embed-host.release.test/page';
+let loopbackHost: Server | undefined;
+
+function hostHtml(src: string): string {
+  return `<!doctype html><html><body style="margin:0">
+        <iframe id="aun" src="${src}" width="640" height="360" allow="autoplay; fullscreen" style="border:0"></iframe>
+      </body></html>`;
+}
+
+/** The local stack's host page server on an ephemeral 127.0.0.1 port: /page?src=<embed URL>. */
+async function loopbackHostOrigin(): Promise<string> {
+  if (!loopbackHost) {
+    const server = createServer((req, res) => {
+      const src = new URL(req.url ?? '/', 'http://127.0.0.1').searchParams.get('src') ?? '';
+      res.writeHead(200, { 'content-type': 'text/html' }).end(hostHtml(src.replace(/"/g, '&quot;')));
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    loopbackHost = server;
+  }
+  return `http://127.0.0.1:${(loopbackHost.address() as AddressInfo).port}`;
+}
 
 async function embedDeployed(): Promise<boolean> {
   // A build without /embed redirects it to /{locale}/embed/... and then 404s
@@ -39,21 +60,21 @@ async function skipIfNotDeployedOnPr(): Promise<void> {
 }
 
 async function hostIframe(page: Page, src: string): Promise<void> {
-  // Headless Chrome denies the Local Network Access prompt without asking (Chrome's error page in the frame)
-  if (releaseEnv() === 'local') await page.context().grantPermissions(['local-network-access'], { origin: new URL(HOST_PAGE).origin });
-  await page.route(HOST_PAGE, (route) =>
-    route.fulfill({
-      contentType: 'text/html',
-      body: `<!doctype html><html><body style="margin:0">
-        <iframe id="aun" src="${src}" width="640" height="360" allow="autoplay; fullscreen" style="border:0"></iframe>
-      </body></html>`,
-    }),
-  );
+  if (releaseEnv() === 'local') {
+    await page.goto(`${await loopbackHostOrigin()}/page?src=${encodeURIComponent(src)}`);
+    return;
+  }
+  await page.route(HOST_PAGE, (route) => route.fulfill({ contentType: 'text/html', body: hostHtml(src) }));
   await page.goto(HOST_PAGE);
 }
 
 test.describe('Release: embeds', () => {
   test.beforeEach(skipIfNotDeployedOnPr);
+  test.afterAll(async () => {
+    const server = loopbackHost;
+    loopbackHost = undefined;
+    if (server) await new Promise((resolve) => server.close(resolve));
+  });
 
   for (const lang of ['en', 'ar'] as const) {
     test(`a public video plays in a cross-origin iframe (${lang})`, async ({ page }) => {
