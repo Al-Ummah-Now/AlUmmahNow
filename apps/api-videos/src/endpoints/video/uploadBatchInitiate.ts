@@ -198,7 +198,7 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 
 				const create = async (): Promise<string> => {
 					// The channel's collection, like a single upload (one lookup per batch)
-					const collectionId = await (collection ??= uploadCollection(c.env, bunnyStream, libraryId, channelId, userId));
+					const collectionId = await (collection ??= uploadCollection(c.env, bunnyStream, libraryId, channelId, ownerId));
 					const bunnyVideo = await bunnyStream.createVideo(libraryId, {
 						title: videoData.title,
 						collectionId,

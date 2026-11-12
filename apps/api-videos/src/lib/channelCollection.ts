@@ -1,6 +1,7 @@
 /**
  * One Bunny Stream collection per channel, per library (SCALABILITY-AUDIT
- * AV-5; 2026-11-12 owner request: each channel's videos grouped in Bunny).
+ * AV-5; 2026-11-12 owner request: each channel's videos grouped in Bunny),
+ * and one per user for user-level uploads (stored on the profile the same way).
  *
  * A collection id belongs to one library, so the channel stores one id per
  * library: `bunnyCollections: { [libraryId]: collectionId }`. The older single
@@ -8,9 +9,9 @@
  * that actually holds it (checked with the Bunny API) and is kept on the record
  * for older readers.
  *
- * - Created lazily on the channel's first upload to that library.
- * - Renamed with the channel (renameChannelCollections).
- * - A soft-deleted channel keeps them; purge removes them (deleteChannelCollections).
+ * - Created lazily on the first upload to that library (uploadCollection).
+ * - Renamed with the channel or profile (renameCollectionsFor).
+ * - Soft delete keeps them; purge removes them (removeCollectionsFor).
  *
  * Parallel first uploads to a channel without a collection each create one;
  * only the first to store its id in the channel JSON (conditional write)
@@ -185,34 +186,76 @@ export async function deleteChannelCollections(
 	return deleted;
 }
 
+/** Profile fields a user collection is named after */
+export interface CollectionProfile extends CollectionChannel {
+	displayName?: string;
+	userName?: string;
+}
+
+/** Name of a user's collection: display name, else @handle, else the user id */
+export function userCollectionName(profile: CollectionProfile | null | undefined, userId: string): string {
+	const display = profile?.displayName?.trim();
+	if (display) return display;
+	const handle = profile?.userName?.trim();
+	if (handle) return `@${handle.replace(/^@/, '')}`;
+	return `User ${userId}`;
+}
+
 /**
- * The channel's collection in `libraryId` for a new upload: undefined for a
- * user-level upload (no channel), a missing channel or on failure (the video
- * is then created outside any collection; the backfill places it later).
+ * The owner's own collection in `libraryId` (user-level uploads, and videos
+ * of a channel that no longer exists). Stored on the profile like a channel's;
+ * undefined when the user has no profile.
+ */
+export async function ensureUserCollection(
+	profiles: R2Bucket,
+	bunny: CollectionClient,
+	libraryId: number,
+	userId: string,
+): Promise<string | undefined> {
+	const repo = new R2Repository<CollectionProfile>(profiles);
+	const profile = await repo.getObject(userId);
+	if (!profile) return undefined;
+	const existing = storedCollectionId(profile, libraryId);
+	if (existing) return existing;
+	return ensureChannelCollection(repo, bunny, libraryId, userId, userCollectionName(profile, userId));
+}
+
+/**
+ * The collection a new upload goes into, in `libraryId`:
+ * - a real channel (not deleted): the channel's collection;
+ * - a user-level upload (channelId is the owner) or a channel that is gone:
+ *   the owner's user collection.
+ * undefined on failure (the video is then created outside any collection; the
+ * backfill places it later).
  */
 export async function uploadCollection(
-	env: { channels: R2Bucket },
+	env: { channels: R2Bucket; profiles?: R2Bucket },
 	bunny: CollectionClient,
 	libraryId: number,
 	channelId: string,
-	userId: string,
+	ownerId: string,
 ): Promise<string | undefined> {
-	if (channelId === userId) return undefined;
-	const channels = new R2Repository<CollectionChannel>(env.channels);
 	try {
-		const channel = await channels.getObject(channelId);
-		if (!channel) {
-			logger.debug('[ChannelCollection] Channel not found, upload goes without a collection', { channelId, userId });
-			return undefined;
+		if (channelId && channelId !== ownerId) {
+			const channels = new R2Repository<CollectionChannel & { isDeleted?: boolean }>(env.channels);
+			const channel = await channels.getObject(channelId);
+			if (channel && !channel.isDeleted) {
+				const existing = storedCollectionId(channel, libraryId);
+				if (existing) return existing;
+				const collectionId = await ensureChannelCollection(channels, bunny, libraryId, channelId, channel.name || `Channel ${channelId}`);
+				logger.debug('[ChannelCollection] Channel collection ready for upload', { channelId, libraryId, collectionId });
+				return collectionId;
+			}
+			logger.debug('[ChannelCollection] Channel not found; using the owner collection', { channelId, ownerId });
 		}
-		const existing = storedCollectionId(channel, libraryId);
-		if (existing) return existing;
-		const collectionId = await ensureChannelCollection(channels, bunny, libraryId, channelId, channel.name || `Channel ${channelId}`);
-		logger.debug('[ChannelCollection] Collection ready for upload', { channelId, libraryId, collectionId });
+		if (!env.profiles) return undefined;
+		const collectionId = await ensureUserCollection(env.profiles, bunny, libraryId, ownerId);
+		logger.debug('[ChannelCollection] User collection ready for upload', { ownerId, libraryId, collectionId });
 		return collectionId;
 	} catch (error) {
 		logger.error('[ChannelCollection] Failed to get or create the collection', {
 			channelId,
+			ownerId,
 			libraryId,
 			error: error instanceof Error ? error.message : String(error),
 		});
@@ -220,21 +263,56 @@ export async function uploadCollection(
 	}
 }
 
-/**
- * After a channel rename: rename its collection in every library this env
- * knows (each with that library's API key). Best effort, never throws.
- */
-export async function renameCollectionsForChannel(env: BunnyLibrariesEnv, channelId: string, channel: CollectionChannel | null | undefined): Promise<number> {
-	if (!channel?.name || channelCollections(channel).length === 0) return 0;
-	try {
-		const libraries = await bunnyLibraries(env);
-		const clientFor: ClientFor = async (libraryId) => {
+/** Client per configured library (each with its own API key) */
+async function clientsFor(env: BunnyLibrariesEnv): Promise<{ clientFor: ClientFor; libraryIds: number[] }> {
+	const libraries = await bunnyLibraries(env);
+	return {
+		libraryIds: libraries.map((l) => l.libraryId),
+		clientFor: async (libraryId) => {
 			const library = libraries.find((l) => l.libraryId === libraryId);
 			return library?.apiKey ? bunnyClient(env, library).client : undefined;
-		};
-		return await renameChannelCollections(clientFor, channelId, channel, channel.name);
+		},
+	};
+}
+
+/**
+ * After a rename of a channel or a user: rename their collection in every
+ * library this env knows. Best effort, never throws.
+ */
+export async function renameCollectionsFor(env: BunnyLibrariesEnv, ownerId: string, record: CollectionChannel | null | undefined, name: string | undefined): Promise<number> {
+	if (!name || channelCollections(record).length === 0) return 0;
+	try {
+		const { clientFor } = await clientsFor(env);
+		return await renameChannelCollections(clientFor, ownerId, record!, name);
 	} catch (error) {
-		logger.warn('[ChannelCollection] Rename skipped', { channelId, error: error instanceof Error ? error.message : String(error) });
+		logger.warn('[ChannelCollection] Rename skipped', { ownerId, error: error instanceof Error ? error.message : String(error) });
+		return 0;
+	}
+}
+
+/** After a channel rename */
+export function renameCollectionsForChannel(env: BunnyLibrariesEnv, channelId: string, channel: CollectionChannel | null | undefined): Promise<number> {
+	return renameCollectionsFor(env, channelId, channel, channel?.name);
+}
+
+/** After a profile's display name or handle changed */
+export function renameCollectionsForUser(env: BunnyLibrariesEnv, userId: string, profile: CollectionProfile | null | undefined): Promise<number> {
+	return renameCollectionsFor(env, userId, profile, userCollectionName(profile, userId));
+}
+
+/**
+ * Purge of a channel or a user: remove their collections in every library
+ * (soft delete keeps them). Best effort, never throws.
+ */
+export async function removeCollectionsFor(env: BunnyLibrariesEnv, ownerId: string, record: CollectionChannel | null | undefined): Promise<number> {
+	if (channelCollections(record).length === 0) return 0;
+	try {
+		const { clientFor, libraryIds } = await clientsFor(env);
+		const deleted = await deleteChannelCollections(clientFor, libraryIds, ownerId, record!);
+		if (deleted > 0) logger.debug('[ChannelCollection] Collections removed', { ownerId, deleted });
+		return deleted;
+	} catch (error) {
+		logger.warn('[ChannelCollection] Collection cleanup failed', { ownerId, error: error instanceof Error ? error.message : String(error) });
 		return 0;
 	}
 }

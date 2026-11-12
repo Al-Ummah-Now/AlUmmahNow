@@ -178,7 +178,11 @@ export async function eraseRunUserData(
 			}
 			budget.spend();
 			const profiles = asBucket(env.profiles);
-			if (await profiles.get(userId)) bump('profile', await deleteKeys(profiles, [userId], budget));
+			const stored = await profiles.get(userId);
+			if (stored) {
+				if (hooks.onProfileDeleted) await hooks.onProfileDeleted(userId, await stored.json().catch(() => null));
+				bump('profile', await deleteKeys(profiles, [userId], budget));
+			}
 		},
 	];
 

@@ -10,7 +10,10 @@ import {
 	deleteChannelCollections,
 	ensureChannelCollection,
 	renameChannelCollections,
+	removeCollectionsFor,
+	renameCollectionsForUser,
 	uploadCollection,
+	userCollectionName,
 	type CollectionClient,
 } from '../src/lib/channelCollection';
 import { handleCollectionBackfillMessage, readCollectionBackfillRun, runCollectionBackfillPage } from '../src/lib/bunny/collectionBackfill';
@@ -79,11 +82,26 @@ describe('channel collections per library', () => {
 		assert.deepEqual(channelCollections(saved).map((c) => c.libraryId).sort(), [400189, 498994]);
 	});
 
-	it('a user-level upload (no channel) gets no collection', async () => {
+	it('a user-level upload, or one to a channel that is gone, goes into the owner collection (per library)', async () => {
 		const bunny = fakeBunny();
-		assert.equal(await uploadCollection({ channels: new MemoryBucket() as any }, bunny.client, 1, 'user-1', 'user-1'), undefined);
-		assert.equal(await uploadCollection({ channels: new MemoryBucket() as any }, bunny.client, 1, 'missing', 'user-1'), undefined);
-		assert.equal(bunny.log.length, 0);
+		const profiles = new MemoryBucket({ u1: { id: 'u1', displayName: '', userName: 'abu_bakr' } });
+		const channels = new MemoryBucket({ dead: channel({ id: 'dead', isDeleted: true }) });
+		const env = { channels: channels as any, profiles: profiles as any };
+		const own = await uploadCollection(env, bunny.client, 498994, 'u1', 'u1');
+		assert.ok(own);
+		assert.equal(bunny.collections.get(498994)!.get(own!), '@abu_bakr', 'named after the handle without a display name');
+		assert.equal(await uploadCollection(env, bunny.client, 498994, 'dead', 'u1'), own, "a deleted channel's upload: the owner's collection");
+		assert.equal(await uploadCollection(env, bunny.client, 498994, 'missing', 'u1'), own);
+		assert.deepEqual(JSON.parse(profiles.store.get('u1')!).bunnyCollections, { '498994': own });
+		// No profile: no collection, never a throw
+		assert.equal(await uploadCollection(env, bunny.client, 498994, 'u2', 'u2'), undefined);
+		assert.equal(bunny.log.filter((l) => l.startsWith('create')).length, 1);
+	});
+
+	it('user collection names: display name, else @handle, else the id', () => {
+		assert.equal(userCollectionName({ displayName: ' Umm Salama ', userName: 'x' }, 'u'), 'Umm Salama');
+		assert.equal(userCollectionName({ userName: '@x' }, 'u'), '@x');
+		assert.equal(userCollectionName(null, 'u9'), 'User u9');
 	});
 
 	it('renames every library\'s collection with the channel; a failure is not fatal', async () => {
@@ -115,17 +133,25 @@ const vid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0'
 
 const realFetch = globalThis.fetch;
 /** Bunny state: videos per library with their collection; collections per library */
-let lib: Record<string, Record<string, { collectionId: string }>>;
-let cols: Record<string, Set<string>>;
+let lib: Record<string, Record<string, { collectionId: string; title?: string; storageSize?: number }>>;
+let cols: Record<string, Map<string, string>>;
 let writes: string[];
 
 beforeEach(() => {
 	writes = [];
 	lib = {
-		'498994': { [vid(1)]: { collectionId: '' } },
-		'400189': { [vid(2)]: { collectionId: '' }, [vid(3)]: { collectionId: 'legacy-col' }, [vid(5)]: { collectionId: '' } },
+		'498994': { [vid(1)]: { collectionId: '' }, [vid(9)]: { collectionId: '', title: 'nobody references me', storageSize: 1000 } },
+		'400189': {
+			[vid(2)]: { collectionId: '' },
+			[vid(3)]: { collectionId: 'legacy-col' },
+			[vid(4)]: { collectionId: '' },
+			[vid(7)]: { collectionId: '' },
+			[vid(8)]: { collectionId: '' },
+			[vid(10)]: { collectionId: '' },
+			[vid(5)]: { collectionId: '', title: 'orphan', storageSize: 5 },
+		},
 	};
-	cols = { '498994': new Set(), '400189': new Set(['legacy-col']) };
+	cols = { '498994': new Map(), '400189': new Map([['legacy-col', 'Lessons']]) };
 	let n = 0;
 	globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
 		const url = new URL(String(input));
@@ -136,14 +162,22 @@ beforeEach(() => {
 		if (kind === 'collections') {
 			if (method === 'POST' && !id) {
 				const guid = `new-col-${l}-${++n}`;
-				cols[l].add(guid);
+				cols[l].set(guid, JSON.parse(String(init!.body)).name);
 				writes.push(`create-collection ${l}`);
 				return Response.json({ guid });
 			}
 			if (method === 'GET' && !id) return Response.json({ totalItems: cols[l].size, items: [] });
-			return cols[l].has(id!) ? Response.json({ guid: id }) : new Response('{}', { status: 404 });
+			if (!cols[l].has(id!)) return new Response('{}', { status: 404 });
+			if (method === 'POST') cols[l].set(id!, JSON.parse(String(init!.body)).name);
+			if (method === 'DELETE') cols[l].delete(id!);
+			return Response.json({ guid: id });
 		}
-		if (!id) return Response.json({ totalItems: Object.keys(lib[l]).length, items: Object.keys(lib[l]).map((guid) => ({ guid, status: 4 })) });
+		if (!id) {
+			const page = Number(url.searchParams.get('page') || 1);
+			const per = Number(url.searchParams.get('itemsPerPage') || 100);
+			const all = Object.entries(lib[l]).map(([guid, v]) => ({ guid, status: 4, ...v }));
+			return Response.json({ totalItems: all.length, items: all.slice((page - 1) * per, page * per) });
+		}
 		const v = lib[l][id];
 		if (!v) return new Response('{}', { status: 404 });
 		if (method === 'POST') {
@@ -159,22 +193,33 @@ afterEach(() => {
 });
 
 function backfillEnv() {
+	const rec = (n: number, host: string, extra: Record<string, unknown>) => ({ id: vid(n), userId: 'owner', playUrl: `https://${host}/${vid(n)}/playlist.m3u8`, ...extra });
 	const videos = new MemoryBucket({
-		// New upload in the primary library
-		[vid(1)]: { id: vid(1), userId: 'owner', channelId: 'ch', bunnyLibraryId: 498994, playUrl: `https://${NEW_HOST}/${vid(1)}/playlist.m3u8` },
-		// Legacy videos (playUrl host only)
-		[vid(2)]: { id: vid(2), userId: 'owner', channelId: 'ch', playUrl: `https://${OLD_HOST}/${vid(2)}/playlist.m3u8` },
-		[vid(3)]: { id: vid(3), userId: 'owner', channelId: 'ch', playUrl: `https://${OLD_HOST}/${vid(3)}/playlist.m3u8` },
-		// User-level upload, and a record whose Bunny video is gone
-		[vid(4)]: { id: vid(4), userId: 'owner', channelId: 'owner', playUrl: `https://${OLD_HOST}/${vid(4)}/playlist.m3u8` },
-		[vid(6)]: { id: vid(6), userId: 'owner', channelId: 'ch', playUrl: `https://${OLD_HOST}/${vid(6)}/playlist.m3u8` },
-		// Not a video record
-		'livestream:abc': { id: 'abc' },
+		// Channel video, new upload in the primary library
+		[vid(1)]: rec(1, NEW_HOST, { channelId: 'ch', bunnyLibraryId: 498994 }),
+		// Channel videos in the legacy library (one already in the adopted legacy collection)
+		[vid(2)]: rec(2, OLD_HOST, { channelId: 'ch' }),
+		[vid(3)]: rec(3, OLD_HOST, { channelId: 'ch' }),
+		// User-level upload (channelId is the owner) and one with no channel at all
+		[vid(4)]: rec(4, OLD_HOST, { channelId: 'owner' }),
+		[vid(10)]: rec(10, OLD_HOST, {}),
+		// Its channel was deleted (soft) / never existed: the owner's collection
+		[vid(7)]: rec(7, OLD_HOST, { channelId: 'gone-soft' }),
+		[vid(8)]: rec(8, OLD_HOST, { channelId: 'gone-hard' }),
+		// Owner without a profile: listed only
+		[vid(11)]: rec(11, OLD_HOST, { channelId: 'gone-hard', userId: 'ghost' }),
+		// Record whose Bunny video is gone
+		[vid(6)]: rec(6, OLD_HOST, { channelId: 'ch' }),
+		// A live stream that references a Bunny video, and not a video record
+		'livestream:abc': { id: 'abc', streamUrl: `https://iframe.mediadelivery.net/embed/498994/${vid(12)}` },
 	});
-	const channels = new MemoryBucket({ ch: channel({ bunnyCollectionId: 'legacy-col' }) });
+	lib['498994'][vid(12)] = { collectionId: '' };
+	const channels = new MemoryBucket({ ch: channel({ bunnyCollectionId: 'legacy-col' }), 'gone-soft': channel({ id: 'gone-soft', isDeleted: true }) });
+	const profiles = new MemoryBucket({ owner: { id: 'owner', displayName: 'Shaykh A', userName: 'shaykha' } });
 	return {
 		videos,
 		channels,
+		profiles,
 		global_settings: new MemoryBucket(),
 		PROCESSING_CHECK_QUEUE: new MemoryQueue(),
 		'bunny-stream-key': 'new-key',
@@ -186,56 +231,73 @@ function backfillEnv() {
 	} as any;
 }
 
+const P = (videos: number, alreadyPlaced: number, moved: number, missingInBunny = 0) => ({ videos, alreadyPlaced, moved, missingInBunny, errors: 0 });
+
 describe('collection backfill', () => {
-	it('dry run counts per library and writes nothing', async () => {
+	it('dry run counts each placement per library and writes nothing', async () => {
 		const env = backfillEnv();
-		const before = env.channels.store.get('ch');
+		const before = [env.channels.store.get('ch'), env.profiles.store.get('owner')];
 		const { counts, nextCursor } = await runCollectionBackfillPage(env, { cursor: null, dryRun: true, limit: 50 });
 		assert.equal(nextCursor, null);
-		assert.equal(counts.scanned, 5);
-		assert.equal(counts.noChannel, 1);
-		assert.deepEqual(counts.byLibrary['498994'], { videos: 1, alreadyPlaced: 0, moved: 1, missingInBunny: 0, errors: 0 });
-		assert.deepEqual(counts.byLibrary['400189'], { videos: 3, alreadyPlaced: 1, moved: 1, missingInBunny: 1, errors: 0 });
-		assert.deepEqual(counts.collectionsCreated, ['ch:498994']);
-		assert.deepEqual(counts.collectionsAdopted, ['ch:400189']);
+		assert.equal(counts.scanned, 9);
+		assert.deepEqual(counts.byLibrary['498994'], { channel: P(1, 0, 1), user: P(0, 0, 0), deletedChannel: P(0, 0, 0), ownerMissing: 0 });
+		assert.deepEqual(counts.byLibrary['400189'], { channel: P(3, 1, 1, 1), user: P(2, 0, 2), deletedChannel: P(2, 0, 2), ownerMissing: 1 });
+		assert.deepEqual(counts.ownerMissing.map((o) => o.videoId), [vid(11)]);
+		assert.deepEqual(counts.collectionsCreated.sort(), ['channel:ch:498994', 'user:owner:400189']);
+		assert.deepEqual(counts.collectionsAdopted, ['channel:ch:400189']);
 		assert.deepEqual(writes, []);
-		assert.equal(env.channels.store.get('ch'), before);
+		assert.deepEqual([env.channels.store.get('ch'), env.profiles.store.get('owner')], before);
 	});
 
-	it('apply files every video in its channel\'s collection in its own library, and is idempotent', async () => {
+	it('apply files channel videos in the channel collection and the rest in the owner collection; idempotent', async () => {
 		const env = backfillEnv();
 		await runCollectionBackfillPage(env, { cursor: null, dryRun: false, limit: 50 });
-		const saved = JSON.parse(env.channels.store.get('ch')!);
-		assert.equal(saved.bunnyCollections['400189'], 'legacy-col');
-		const fresh = saved.bunnyCollections['498994'];
-		assert.ok(fresh?.startsWith('new-col-498994'));
-		assert.equal(lib['498994'][vid(1)].collectionId, fresh);
+		const ch = JSON.parse(env.channels.store.get('ch')!);
+		const owner = JSON.parse(env.profiles.store.get('owner')!);
+		assert.equal(ch.bunnyCollections['400189'], 'legacy-col');
+		const userCol = owner.bunnyCollections['400189'];
+		assert.ok(userCol);
+		assert.equal(cols['400189'].get(userCol), 'Shaykh A', 'named after the display name');
+		assert.equal(lib['498994'][vid(1)].collectionId, ch.bunnyCollections['498994']);
 		assert.equal(lib['400189'][vid(2)].collectionId, 'legacy-col');
-		assert.equal(lib['400189'][vid(3)].collectionId, 'legacy-col');
-		assert.equal(lib['400189'][vid(5)].collectionId, '', 'a Bunny video without a record is not ours to file');
+		for (const n of [4, 10, 7, 8]) assert.equal(lib['400189'][vid(n)].collectionId, userCol, `video ${n} in the owner collection`);
+		assert.equal(lib['400189'][vid(5)].collectionId, '', 'a Bunny video without a record is never touched');
 
 		writes = [];
 		const second = await runCollectionBackfillPage(env, { cursor: null, dryRun: false, limit: 50 });
 		assert.deepEqual(writes, []);
-		assert.equal(second.counts.byLibrary['400189'].alreadyPlaced, 2);
+		assert.equal(second.counts.byLibrary['400189'].user.alreadyPlaced, 2);
+		assert.equal(second.counts.byLibrary['400189'].deletedChannel.alreadyPlaced, 2);
 	});
 
-	it('runs page by page from the queue and records the run with library checks', async () => {
+	it('runs from the queue: video pages, then lists unreferenced Bunny videos per library', async () => {
 		const env = backfillEnv();
 		const ack = { acked: 0, retried: 0 };
 		const message = (body: unknown) => ({ body, attempts: 1, ack: () => void ack.acked++, retry: () => void ack.retried++ });
-		await handleCollectionBackfillMessage(env, message({ kind: 'bunny-collection-backfill', runId: 'r1', page: 0, cursor: null, dryRun: true, limit: 2 }));
-		while (env.PROCESSING_CHECK_QUEUE.messages.length) {
-			const next = env.PROCESSING_CHECK_QUEUE.messages.shift();
-			await handleCollectionBackfillMessage(env, message(next));
-		}
+		await handleCollectionBackfillMessage(env, message({ kind: 'bunny-collection-backfill', runId: 'r1', page: 0, cursor: null, dryRun: true, limit: 3 }));
+		while (env.PROCESSING_CHECK_QUEUE.messages.length) await handleCollectionBackfillMessage(env, message(env.PROCESSING_CHECK_QUEUE.messages.shift()));
 		assert.equal(ack.retried, 0);
 		const run = await readCollectionBackfillRun(env, 'r1');
 		assert.equal(run?.status, 'done');
-		assert.equal(run?.totals?.scanned, 5);
-		assert.equal(run?.totals?.byLibrary['400189'].moved, 1);
+		assert.equal(run?.totals?.scanned, 9);
+		assert.equal(run?.totals?.byLibrary['400189'].deletedChannel.moved, 2);
 		assert.deepEqual(Object.keys(run?.libraries ?? {}).sort(), ['400189', '498994']);
-		assert.equal(run?.libraries?.['400189'].host, OLD_HOST);
-		assert.equal(run?.libraries?.['400189'].videosInLibrary, 3);
+		assert.deepEqual(run?.unreferenced?.['498994'].items.map((v) => v.guid), [vid(9)], 'the live stream video is referenced');
+		assert.deepEqual(run?.unreferenced?.['400189'].items.map((v) => v.guid), [vid(5)]);
+		assert.equal(run?.unreferenced?.['400189'].storageBytes, 5);
+		assert.equal(lib['400189'][vid(5)] !== undefined, true, 'listed, not deleted');
+	});
+
+	it('a user collection is renamed with the profile and removed on purge, in each library', async () => {
+		const env = backfillEnv();
+		cols['400189'].set('user-col', 'Old name');
+		cols['498994'].set('user-col-2', 'Old name');
+		const profile = { id: 'owner', displayName: 'New name', bunnyCollections: { '400189': 'user-col', '498994': 'user-col-2' } };
+		assert.equal(await renameCollectionsForUser(env, 'owner', profile), 2);
+		assert.equal(cols['400189'].get('user-col'), 'New name');
+		assert.equal(cols['498994'].get('user-col-2'), 'New name');
+		assert.equal(await removeCollectionsFor(env, 'owner', profile), 2);
+		assert.equal(cols['400189'].has('user-col'), false);
+		assert.equal(cols['498994'].has('user-col-2'), false);
 	});
 });

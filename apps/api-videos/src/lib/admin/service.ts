@@ -39,8 +39,8 @@ import { eraseUserData } from '../privacy/user-data';
 import { OperationBudget } from '../privacy/scan';
 import { RUN_USER_SWEEP_ACTOR, eraseRunUserData } from '../privacy/run-user-erase';
 import { BunnyStreamClient } from '../bunny/stream';
-import { bunnyClient as bunnyClientOf, bunnyClientForVideo, bunnyLibraries, type LibraryHints } from '../bunny/libraries';
-import { deleteChannelCollections, renameCollectionsForChannel } from '../channelCollection';
+import { bunnyClientForVideo, type LibraryHints } from '../bunny/libraries';
+import { removeCollectionsFor, renameCollectionsForChannel, renameCollectionsForUser, userCollectionName } from '../channelCollection';
 import { purgeVideoMedia, type MediaEnv } from '../media/r2-delivery';
 import { readAssignment } from '../creatorTiers';
 import { bansFor, deleteBan, readBan, writeBan } from './bans';
@@ -651,7 +651,7 @@ async function purgeChannel(env: AdminServiceEnv, job: AdminJob): Promise<JobOut
 	if (step.cursor) return { done: false, params: { ...p, ...result, cursor: step.cursor }, result };
 	// The channel's Bunny collections (a soft-deleted channel kept them; lib/channelCollection.ts)
 	const purgedChannel = await repo(env.channels).getObject(id);
-	if (purgedChannel) await removeChannelCollections(env, id, purgedChannel);
+	if (purgedChannel) await removeCollectionsFor(env as never, id, purgedChannel);
 	// Last: the record itself (the deletion row and the admin audit log keep the history)
 	await env.channels.delete(id);
 	await send(env, MessageType.ChannelDelete, { channelId: id, userId, reason: 'admin' });
@@ -1236,7 +1236,9 @@ export interface UserEdit {
 }
 
 export async function updateUser(env: AdminServiceEnv, userId: string, edit: UserEdit): Promise<Row> {
+	let previousName = '';
 	const saved = await repo(env.profiles).updateObject(userId, (fresh) => {
+		previousName = userCollectionName(fresh as never, userId);
 		if (edit.displayName !== undefined) {
 			fresh.displayName = edit.displayName;
 			delete fresh.displayNameLocalized;
@@ -1249,6 +1251,8 @@ export async function updateUser(env: AdminServiceEnv, userId: string, edit: Use
 		fresh.dateModified = now();
 	});
 	if (!saved) throw new AdminError(404, 'user_not_found');
+	// The user's Bunny collections follow the name (lib/channelCollection.ts)
+	if (userCollectionName(saved as never, userId) !== previousName) await renameCollectionsForUser(env as never, userId, saved as never);
 	await send(env, MessageType.ProfileUpdate, { userId });
 	return saved;
 }
@@ -1360,6 +1364,10 @@ async function runRunUserErase(env: AdminServiceEnv, job: AdminJob): Promise<Job
 					logger.warn('[Admin] Bunny Stream delete failed', { videoId, error: error instanceof Error ? error.message : String(error) });
 				}
 			},
+			// The user's Bunny collections go with the profile (lib/channelCollection.ts)
+			onProfileDeleted: async (id: string, profile: unknown) => {
+				await removeCollectionsFor(env as never, id, profile as never);
+			},
 		},
 		Number(job.params.step) || 0,
 	);
@@ -1386,6 +1394,10 @@ async function eraseUserStep(env: AdminServiceEnv & Record<string, unknown>, use
 				} catch (error) {
 					logger.warn('[Admin] Bunny Stream delete failed', { videoId, error: error instanceof Error ? error.message : String(error) });
 				}
+			},
+			// The user's Bunny collections go with the profile (lib/channelCollection.ts)
+			onProfileDeleted: async (id: string, profile: unknown) => {
+				await removeCollectionsFor(env as never, id, profile as never);
 			},
 		},
 		{ resumeToken },
@@ -1535,17 +1547,3 @@ export const ADMIN_JOB_HANDLERS: Record<AdminJobKind, JobHandler> = {
 	'playlist.add-videos': (env, job) => runPlaylistAddStep(env as PlaylistEnv, job),
 };
 
-/** Remove a purged channel's Bunny collections in every library (best effort) */
-async function removeChannelCollections(env: AdminServiceEnv, channelId: string, channel: Row): Promise<void> {
-	try {
-		const libraries = await bunnyLibraries(env as never);
-		const clientFor = async (libraryId: number) => {
-			const library = libraries.find((l) => l.libraryId === libraryId);
-			return library?.apiKey ? bunnyClientOf(env, library).client : undefined;
-		};
-		const deleted = await deleteChannelCollections(clientFor, libraries.map((l) => l.libraryId), channelId, channel);
-		if (deleted > 0) logger.debug('[Admin] Channel collections removed', { channelId, deleted });
-	} catch (error) {
-		logger.warn('[Admin] Channel collection cleanup failed', { channelId, error: error instanceof Error ? error.message : String(error) });
-	}
-}
