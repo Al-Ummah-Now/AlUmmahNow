@@ -104,6 +104,11 @@ export default defineConfig({
     ['html', { outputFolder: `playwright-report${OUTPUT_SUFFIX}` }],
     ['junit', { outputFile: `test-results${OUTPUT_SUFFIX}/junit.xml` }],
     ['json', { outputFile: `test-results${OUTPUT_SUFFIX}/test-results.json` }],
+    // E2E_BLOB=1 (CI shards): a blob report per invocation, named after the shard's
+    // project and suffix so the merge job (e2e-tests.yml merge-report) can join them all
+    ...(process.env.E2E_BLOB === '1'
+      ? [['blob', { outputDir: `blob-report${OUTPUT_SUFFIX}`, fileName: `report-${(process.env.E2E_PROJECT || 'local').replace(/[^a-z0-9-]/gi, '-')}${OUTPUT_SUFFIX}.zip` }] as const]
+      : []),
   ],
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {

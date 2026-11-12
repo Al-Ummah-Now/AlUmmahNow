@@ -1,7 +1,9 @@
 name: E2E Tests
 
 # Legacy multi-browser suite against QA. Every run is real traffic on the QA
-# workers (and Workers Logs lines), and a full matrix run takes ~1h40m, so:
+# workers (and Workers Logs lines). Each browser project runs as 4 shards
+# (~25 min each, at most 8 shard jobs against QA at once) and merge-report joins
+# their results into one summary, so:
 #   - pull requests run the chromium project only (the release suite in
 #     release-e2e.yml also runs on every PR into main);
 #   - the full matrix (firefox, webkit, mobile, a11y, visual, Lighthouse) runs
@@ -57,7 +59,7 @@ jobs:
   # run, in the chromium job, under the cross-run qa-global lock
   # (scripts/ci/qa-lock.ts), which waits its turn instead of replacing anyone.
   e2e:
-    name: E2E - ${{ matrix.project }}
+    name: E2E - ${{ matrix.browser.project }} (${{ matrix.shard }}/4)
     # A PR labelled skip-qa-e2e (spec-only fixes while main's E2E is being made green) sends no
     # traffic to QA: those specs are proven by the verification run on main
     # A snapshot update (workflow_dispatch update_snapshots) runs only the update job below
@@ -73,16 +75,25 @@ jobs:
       pull-requests: read
       checks: write
 
-    # Pull requests: chromium only. Everything else: the full matrix.
+    # Pull requests: chromium only. Everything else: the full matrix. Each browser
+    # project is split into 4 shards (playwright --shard) that run as their own
+    # jobs, ~20-25 min each instead of ~1h50m in one job. max-parallel caps how
+    # many shards hit QA at once (D1 overload); a shard's accounts and data are
+    # its own (E2E_PROJECT carries the shard, so web-<browser>-s<n>-<role>).
+    # merge-report below joins the shards' blob reports into one summary.
     strategy:
       fail-fast: false
+      max-parallel: 8
       matrix:
-        include: ${{ fromJSON(github.event_name == 'pull_request' && '[{"project":"chromium","slug":"chromium"}]' || '[{"project":"chromium","slug":"chromium"},{"project":"firefox","slug":"firefox"},{"project":"webkit","slug":"webkit"},{"project":"Mobile Chrome","slug":"mobile-chrome"},{"project":"Mobile Safari","slug":"mobile-safari"}]') }}
+        browser: ${{ fromJSON(github.event_name == 'pull_request' && '[{"project":"chromium","slug":"chromium"}]' || '[{"project":"chromium","slug":"chromium"},{"project":"firefox","slug":"firefox"},{"project":"webkit","slug":"webkit"},{"project":"Mobile Chrome","slug":"mobile-chrome"},{"project":"Mobile Safari","slug":"mobile-safari"}]') }}
+        shard: [1, 2, 3, 4]
 
     env:
       # Run mode: this job's own accounts (auth.setup.ts, run-users.ts)
       E2E_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
-      E2E_PROJECT: ${{ matrix.slug }}
+      E2E_PROJECT: ${{ matrix.browser.slug }}-s${{ matrix.shard }}
+      # Each invocation also writes a blob report; merge-report joins them
+      E2E_BLOB: '1'
 
     steps:
       - name: Checkout code
@@ -136,7 +147,7 @@ jobs:
         uses: ./.github/actions/playwright-install
         with:
           working-directory: apps/web
-          browsers: ${{ matrix.project == 'firefox' && 'chromium firefox' || ((matrix.project == 'webkit' || matrix.project == 'Mobile Safari') && 'chromium webkit' || 'chromium') }}
+          browsers: ${{ matrix.browser.project == 'firefox' && 'chromium firefox' || ((matrix.browser.project == 'webkit' || matrix.browser.project == 'Mobile Safari') && 'chromium webkit' || 'chromium') }}
 
       - name: Record E2E start
         id: e2e-start
@@ -166,7 +177,7 @@ jobs:
         id: uploads-before
         if: steps.superseded.outputs.skip != 'true'
         continue-on-error: true
-        run: node --experimental-strip-types --no-warnings scripts/release/upload-budget.ts --env qa --emails "e2e+${{ github.run_id }}-${{ github.run_attempt }}-web-${{ matrix.slug }}-%@e2e.alummahnow.net" --snapshot "$RUNNER_TEMP/uploads-before.json"
+        run: node --experimental-strip-types --no-warnings scripts/release/upload-budget.ts --env qa --emails "e2e+${{ github.run_id }}-${{ github.run_attempt }}-web-${{ matrix.browser.slug }}-s${{ matrix.shard }}-%@e2e.alummahnow.net" --snapshot "$RUNNER_TEMP/uploads-before.json"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -174,15 +185,16 @@ jobs:
       - name: Run E2E specs
         if: steps.superseded.outputs.skip != 'true'
         working-directory: apps/web
-        run: pnpm exec playwright test --project="${{ matrix.project }}"
+        run: pnpm exec playwright test --project="${{ matrix.browser.project }}" --shard=${{ matrix.shard }}/4
         env:
           CI: true
           # Pull requests: the upload transport/UI specs are covered by the release
           # suite on every PR; they run nightly and after every Release, in chromium
           # only (playwright.config.ts UPLOAD_SPECS)
           E2E_SKIP_UPLOAD_SPECS: ${{ github.event_name == 'pull_request' && '1' || '' }}
-          E2E_GLOBAL_TIMEOUT_MINUTES: '100'
-          E2E_MAX_FAILURES: '40'
+          # One shard is a quarter of the project: ~25 min; a broken area stops its shard only
+          E2E_GLOBAL_TIMEOUT_MINUTES: '45'
+          E2E_MAX_FAILURES: '15'
           E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET_QA }}
           E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
           # auth.setup has a promoted QA admin give the channel-owning users the Creator tier
@@ -193,7 +205,7 @@ jobs:
       # never replaced or cancelled by another run). Same users, no new setup.
       - name: Acquire the qa-global lock
         id: lock
-        if: steps.superseded.outputs.skip != 'true' && matrix.project == 'chromium' && !cancelled()
+        if: steps.superseded.outputs.skip != 'true' && matrix.browser.project == 'chromium' && matrix.shard == 1 && !cancelled()
         timeout-minutes: 90
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -224,7 +236,7 @@ jobs:
       # summary, never gating (owner rule 2026-11-12). Chromium only, not on PRs: nightly, after a
       # Release and by hand.
       - name: Load and timing specs (non-blocking)
-        if: matrix.project == 'chromium' && github.event_name != 'pull_request' && steps.superseded.outputs.skip != 'true' && !cancelled()
+        if: matrix.browser.project == 'chromium' && matrix.shard == 1 && github.event_name != 'pull_request' && steps.superseded.outputs.skip != 'true' && !cancelled()
         continue-on-error: true
         working-directory: apps/web
         timeout-minutes: 20
@@ -285,8 +297,8 @@ jobs:
         continue-on-error: true
         run: >-
           node --experimental-strip-types --no-warnings scripts/release/upload-budget.ts --env qa
-          --emails "e2e+${{ github.run_id }}-${{ github.run_attempt }}-web-${{ matrix.slug }}-%@e2e.alummahnow.net" --baseline "$RUNNER_TEMP/uploads-before.json"
-          --label "${{ matrix.project }}" --max ${{ github.event_name != 'pull_request' && matrix.project == 'chromium' && '90' || '45' }}
+          --emails "e2e+${{ github.run_id }}-${{ github.run_attempt }}-web-${{ matrix.browser.slug }}-s${{ matrix.shard }}-%@e2e.alummahnow.net" --baseline "$RUNNER_TEMP/uploads-before.json"
+          --label "${{ matrix.browser.project }}" --max ${{ github.event_name != 'pull_request' && matrix.browser.project == 'chromium' && '90' || '45' }}
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -305,7 +317,7 @@ jobs:
         if: always()
         id: art
         shell: bash
-        run: echo "name=$(echo '${{ matrix.project }}' | tr ' ' '-')" >> $GITHUB_OUTPUT
+        run: echo "name=$(echo '${{ matrix.browser.project }}' | tr ' ' '-')-${{ matrix.shard }}" >> $GITHUB_OUTPUT
 
       # Artifacts of this public repo are downloadable by anyone signed in to
       # GitHub: drop any output that holds a secret or a storage state, then fail.
@@ -320,7 +332,7 @@ jobs:
         run: >-
           python3 scripts/ci/scan-artifacts-for-secrets.py
           --env E2E_CODE_SINK_SECRET --env E2E_USER_PASSWORD --env TEST_PROMOTE_SECRET --env CLOUDFLARE_API_TOKEN
-          --remove apps/web/playwright-report apps/web/test-results apps/web/playwright-report-shared-state apps/web/test-results-shared-state
+          --remove apps/web/playwright-report apps/web/test-results apps/web/playwright-report-shared-state apps/web/test-results-shared-state apps/web/blob-report apps/web/blob-report-shared-state
 
       - name: Upload HTML report
         if: always()
@@ -342,14 +354,76 @@ jobs:
             apps/web/test-results-shared-state/
           retention-days: 14
 
-      - name: Publish JUnit results
+      # merge-report joins every shard's blob into one HTML report, one JUnit check and one summary
+      - name: Upload blob report
         if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blob-report-${{ steps.art.outputs.name }}
+          path: |
+            apps/web/blob-report/
+            apps/web/blob-report-shared-state/
+          retention-days: 7
+
+  # One place for the whole run: the shards' blob reports merged into one HTML
+  # report (artifact playwright-report-merged), one JUnit check (E2E Results) and
+  # a job summary listing every failed and flaky test per spec.
+  merge-report:
+    name: E2E - merged report
+    needs: e2e
+    if: ${{ always() && needs.e2e.result != 'skipped' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+      checks: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /apps/web/package.json
+            /scripts/ci/
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Download the shards' blob reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: blob-report-*
+          path: all-blob-reports
+          merge-multiple: true
+      - name: Merge reports
+        id: merge
+        run: |
+          shopt -s nullglob
+          blobs=(all-blob-reports/*.zip all-blob-reports/*/*.zip)
+          if [ ${#blobs[@]} -eq 0 ]; then echo "::warning::No shard produced a blob report"; exit 0; fi
+          mkdir -p merge-in && cp "${blobs[@]}" merge-in/
+          # The same @playwright/test version the shards ran (apps/web/package.json)
+          version=$(node -p "require('./apps/web/package.json').devDependencies['@playwright/test'].replace(/^[^0-9]*/, '')")
+          mkdir -p merge-tool && (cd merge-tool && npm init -y >/dev/null && npm i --no-audit --no-fund "@playwright/test@$version" >/dev/null)
+          PLAYWRIGHT_JUNIT_OUTPUT_NAME=junit.xml PLAYWRIGHT_JSON_OUTPUT_NAME=results.json PLAYWRIGHT_HTML_OUTPUT_DIR=playwright-report-merged PLAYWRIGHT_HTML_OPEN=never \
+            merge-tool/node_modules/.bin/playwright merge-reports --reporter=html,junit,json merge-in
+          node --experimental-strip-types --no-warnings scripts/ci/e2e-shard-summary.ts results.json >> "$GITHUB_STEP_SUMMARY"
+          echo "merged=true" >> "$GITHUB_OUTPUT"
+      - name: Upload merged HTML report
+        if: steps.merge.outputs.merged == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-merged
+          path: playwright-report-merged/
+          retention-days: 30
+      - name: Publish JUnit results
+        if: steps.merge.outputs.merged == 'true'
         uses: EnricoMi/publish-unit-test-result-action@da5b7be67623cd59bbbd1a0ce4f022050a55605f # v2
         with:
-          files: |
-            apps/web/test-results/junit.xml
-            apps/web/test-results-shared-state/junit.xml
-          check_name: E2E Results (${{ matrix.project }})
+          files: junit.xml
+          check_name: E2E Results
           comment_mode: off
 
   # axe-core WCAG 2.1 AA on every page, en/ar x light/dark (project "a11y")

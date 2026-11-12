@@ -720,6 +720,14 @@ release suite. Each job registers its own run accounts in global setup
 (`auth.setup.ts`, code-sink addresses, `E2E_CODE_SINK_SECRET` from
 `E2E_CODE_SINK_SECRET_QA`).
 
+Each browser project runs as 4 shards (`--shard=i/4`, one job each, ~25 min,
+`max-parallel: 8` against QA, `E2E_MAX_FAILURES` per shard). A shard is its own
+`E2E_PROJECT` (`<browser>-s<i>`), so it registers its own accounts and data. Every
+shard uploads a blob report (`E2E_BLOB=1`); the `merge-report` job joins them into one
+HTML report (`playwright-report-merged`), one `E2E Results` check and a job summary
+of failed and flaky tests per spec (`scripts/ci/e2e-shard-summary.ts`). Change the
+shard count in the matrix and in `--shard` together.
+
 #### Per-run E2E accounts
 
 E2E Tests, Admin E2E and Release regressions never share test accounts between
