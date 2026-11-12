@@ -7,12 +7,16 @@ Every spec file is **local** or **deployed**.
 
 - **local**: UI behaviour and our own API logic. It runs against a local stack that each CI job boots for itself:
   web, admin-web, api-videos, admin-api, processor and websocket-server under wrangler/miniflare with local D1, R2,
-  KV and queues, deterministic seed fixtures, a fake Bunny (upload accepted, "encoded" on demand, fixture HLS), a
-  mock OpenAuth issuer and mocked AI providers. No shared QA data, so jobs run fully in parallel and shard.
+  KV and queues, deterministic seed fixtures, a fake Bunny (upload accepted, "encoded" on demand, fixture HLS) and
+  mocked AI providers. Sign-in is real: the Auth repo (issuer, profile app, auth admin) runs locally with local D1/KV,
+  clients seeded with localhost redirect URIs and the E2E code sink. The CMS and www run locally too where a spec
+  crosses into them. Auth, CMS and www are checked out at the ref each last released. Specs that are not about
+  auth may mint a session as a fast path. No shared QA data, so jobs run fully in parallel and shard.
 - **deployed**: needs real infrastructure, so it runs against QA and stage and is the release gate. The reason
-  starts with the category: `sso` (sign-in across apps on the real issuer), `bunny` (real upload and encode),
-  `media` (real CDN/R2 playback), `pipeline` (queues and processor end to end under load), `cross-app` (CMS, www,
-  auth admin, which are not in this repo) or `shared-env` (deployed-environment checks).
+  starts with the category: `sso` (sessions on the real `.alummahnow.net` cookie domain: `Domain=`, `Secure`,
+  HTTPS; on localhost every app shares one host's cookies, so this cannot be reproduced), `bunny` (real upload and encode),
+  `media` (real CDN/R2 playback), `pipeline` (queues and processor end to end under load) or `shared-env`
+  (deployed-environment checks).
 
 Deploy skew and migrations are checked outside the E2E suites, by the release itself: `scripts/release/skew-check.ts`
 after every promote, `pnpm check:migrations` and `pnpm check:schema` on every PR. `deploy-skew.spec.ts` simulates a
@@ -26,13 +30,13 @@ Until a batch is moved, every spec still runs where it runs today; the local job
 
 | Suite | Config | Local | Deployed |
 |---|---|---:|---:|
-| web | `apps/web/playwright.config.ts` (e2e-tests.yml) | 59 | 2 |
-| release | `apps/web/playwright.release.config.ts` (release-e2e.yml, release.yml) | 52 | 12 |
-| admin | `apps/admin-web/playwright.config.ts` (admin-e2e.yml) | 16 | 3 |
+| web | `apps/web/playwright.config.ts` (e2e-tests.yml) | 60 | 1 |
+| release | `apps/web/playwright.release.config.ts` (release-e2e.yml, release.yml) | 57 | 7 |
+| admin | `apps/admin-web/playwright.config.ts` (admin-e2e.yml) | 19 | 0 |
 | themes | `apps/web/playwright.themes.config.ts` (theme-visibility.yml) | 4 | 0 |
 | player | `apps/web/playwright.player.config.ts` (player-e2e.yml) | 10 | 0 |
 | release-prod | `apps/web/playwright.release-prod.config.ts` (prod-signed-in.yml) | 0 | 1 |
-| **all** | | **141** | **18** |
+| **all** | | **150** | **9** |
 
 ## Deployed (QA and stage)
 
@@ -41,32 +45,18 @@ Until a batch is moved, every spec still runs where it runs today; the local job
 | Spec | Reason | @load |
 |---|---|:---:|
 | `07-performance.spec.ts` | shared-env: perf budgets meant for deployed edge over internet | yes |
-| `72-real-sign-in.spec.ts` | sso: real issuer form, callback, sign-out and sign-in again |  |
 
 ### release
 
 | Spec | Reason | @load |
 |---|---|:---:|
-| `release/admin-signin.spec.ts` | sso: admin-web OAuth client through real issuer, redirect-chain loop check |  |
 | `release/load-hot-paths.spec.ts` | pipeline: DO view flush + queue/processor into D1 under real load | yes |
 | `release/player.spec.ts` | media: an anonymous watch page plays the real Bunny/CDN HLS stream |  |
 | `release/processing.player.spec.ts` | bunny: real upload, processing-check loop to real encode, thumbnail, CDN playback |  |
-| `release/profile-signin.spec.ts` | sso: profile app (AlUmmahNowAuth) OAuth client sign-up/sign-in |  |
-| `release/sign-in-restart.spec.ts` | sso: issuer's own "Start sign-in again" page en/ar |  |
-| `release/signed-in-everywhere.spec.ts` | sso: shared sign-in across videos, admin, www, cms, profile, auth admin |  |
-| `release/signup-signin.spec.ts` | sso: real issuer sign-up, email code, sign-in round trip |  |
-| `release/single-sign-out.spec.ts` | sso: single sign-out through issuer /logout front-channel to every app |  |
-| `release/sso-journey.spec.ts` | sso: deep link sign-in, roles in admin/cms/www/profile, token revocation |  |
+| `release/signed-in-everywhere.spec.ts` | sso: one sign-in shared by six apps through Domain=.alummahnow.net Secure cookies over HTTPS (localhost sends neither) |  |
+| `release/single-sign-out.spec.ts` | sso: /logout must clear Domain=.alummahnow.net cookies on every subdomain; localhost cookies have no Domain |  |
 | `release/upload-reuse.spec.ts` | bunny: retry resumes real partial Bunny TUS upload, no second Bunny video |  |
 | `release/uploads.spec.ts` | bunny: real TUS via proxy to Bunny; images stored on Bunny image CDN |  |
-
-### admin
-
-| Spec | Reason | @load |
-|---|---|:---:|
-| `01-auth.spec.ts` | sso: issuer redirects, password form, single sign-out through auth.qa /logout |  |
-| `12-auth-requests.spec.ts` | cross-app: auth admin dashboard (admin.auth.qa) decides requests; issuer sign-up sink |  |
-| `15-invites.spec.ts` | sso: invite link and sign-up on real issuer, lands signed in on web |  |
 
 ### release-prod
 
@@ -133,6 +123,7 @@ Until a batch is moved, every spec still runs where it runs today; the local job
 | `66-feed-subscriptions.spec.ts` | subscriptions feed for multi user |  |
 | `70-embeds.spec.ts` | embed framing headers, postMessage, oEmbed; local host page via EMBED_HOST_PAGE |  |
 | `71-no-console-errors.spec.ts` | console clean on public pages; hard-coded embed video id |  |
+| `72-real-sign-in.spec.ts` | real issuer form (Auth repo, local): callback, sign-out, sign-in again |  |
 | `73-watch-loading.spec.ts` | watch skeleton/no layout shift with delayed server action |  |
 | `74-no-empty-media.spec.ts` | thumbnails never empty boxes on public pages |  |
 | `75-save-to-playlist-menu.spec.ts` | save menu stays in viewport; hard-coded video id |  |
@@ -145,6 +136,7 @@ Until a batch is moved, every spec still runs where it runs today; the local job
 | Spec | Reason | @load |
 |---|---|:---:|
 | `release/admin-content.spec.ts` | admin-web/admin-api content moderation; queued cascades run on local queues |  |
+| `release/admin-signin.spec.ts` | admin-web OAuth client on the real issuer (local): refusal, promote, redirect loop check |  |
 | `release/anonymous-console.spec.ts` | signed-out console cleanliness; mock issuer must answer /session/accounts 200 |  |
 | `release/brand-logo.spec.ts` | header logo first-paint layout |  |
 | `release/bulk-rename-edit.spec.ts` | bulk upload UI + Studio bulk PATCH; encode only gates listing |  |
@@ -171,12 +163,16 @@ Until a batch is moved, every spec still runs where it runs today; the local job
 | `release/player-track.player.spec.ts` | progress bar pixel sampling |  |
 | `release/popover-tabbar.spec.ts` | card menu vs phone tab bar layout |  |
 | `release/profile-images.spec.ts` | avatar/cover display in UI; image host must be faked |  |
+| `release/profile-signin.spec.ts` | real issuer and profile app (Auth repo, local): sign-up and sign-in |  |
 | `release/public-fields.spec.ts` | anonymous API responses field allow-list |  |
 | `release/realtime-toasts.spec.ts` | toast grouping; socket already replaced by routeWebSocket |  |
 | `release/related.spec.ts` | related shelf from recommendations API; latency check is @load | yes |
 | `release/settings-controls.spec.ts` | settings switches/breadcrumbs CSS per theme |  |
+| `release/sign-in-restart.spec.ts` | real issuer (Auth repo, local): its "Start sign-in again" page, en/ar |  |
+| `release/signup-signin.spec.ts` | real issuer (Auth repo, local): web sign-up, sink code, sign-in round trip, en/ar |  |
 | `release/single-h1.spec.ts` | one h1 per web/admin page |  |
 | `release/site-theme.spec.ts` | admin-web theme switch + builder, web renders it |  |
+| `release/sso-journey.spec.ts` | SSO journey on the real issuer with CMS and www booted locally (last released refs) |  |
 | `release/studio-analytics.spec.ts` | Studio analytics empty state and range |  |
 | `release/studio-dashboard.spec.ts` | Studio dashboard welcome |  |
 | `release/studio-draft-path.spec.ts` | Studio draft/schedule/publish lifecycle; encode only gates Drafts listing |  |
@@ -201,6 +197,7 @@ Until a batch is moved, every spec still runs where it runs today; the local job
 
 | Spec | Reason | @load |
 |---|---|:---:|
+| `01-auth.spec.ts` | admin-web sign-in and sign-out on the real issuer (Auth repo, local) |  |
 | `02-dashboard.spec.ts` | Dashboard stats vs admin-api, new report counted |  |
 | `03-navigation.spec.ts` | Nav, active link, 404, back/forward; one report fixture |  |
 | `04-moderation-queue.spec.ts` | Queue filters, pagination, empty state against admin-api |  |
@@ -212,10 +209,12 @@ Until a batch is moved, every spec still runs where it runs today; the local job
 | `09-theme.spec.ts` | Admin theme select and OS colour scheme |  |
 | `10-accessibility.spec.ts` | Axe scans, keyboard flows on admin pages |  |
 | `11-site-theme.spec.ts` | Admin site theme reaches web first HTML; web is local |  |
+| `12-auth-requests.spec.ts` | auth admin app (Auth repo, local) decides the requests; issuer code sink |  |
 | `12-legacy-profiles.spec.ts` | Restore job via admin-api queue; R2 seed helper swappable to local R2 |  |
 | `13-creators.spec.ts` | Creator tier assign/remove, tiers validation, audit |  |
 | `14-channel-transfer.spec.ts` | Owner picker, confirm dialog, transfer job, permissions |  |
 | `14-recently-deleted.spec.ts` | Recently deleted list and type-to-confirm dialog |  |
+| `15-invites.spec.ts` | invite link and sign-up on the real issuer (local), lands signed in on web |  |
 | `15-recently-deleted-config.spec.ts` | Creator tier trash: delete, restore, purge queue dialogs |  |
 
 ### themes
