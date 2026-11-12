@@ -127,7 +127,8 @@ test.describe('restore legacy profile fields', () => {
     await page.getByTestId('legacy-restore-run').click();
     await expect(page.getByText(/Each profile is backed up first/)).toBeVisible();
     await page.getByTestId('legacy-restore-confirm').click();
-    await expect(page.getByTestId('legacy-restore-started')).toBeVisible();
+    // The started notice, or (when the queue ran it at once, as on the local stack) the run itself
+    await expect(page.getByTestId('legacy-restore-started').or(page.locator('[data-testid="legacy-jobs"] tr[data-job-id]')).first()).toBeVisible();
 
     // The job runs from the admin-jobs queue; the page refreshes while it does
     let job: Job | undefined;
