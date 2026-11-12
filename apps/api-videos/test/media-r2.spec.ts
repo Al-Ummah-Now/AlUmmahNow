@@ -150,6 +150,12 @@ describe('R2 dual write', () => {
 	it('reads the source from Bunny\'s kept original', async () => {
 		const { env } = setup();
 		assert.equal(await sourceUrl(env, ID), `https://vz-cb79844a-c5d.b-cdn.net/${ID}/original`);
+		// Token-auth libraries: directory token in the path (Bunny refuses the query-form token there), MP4 fallbacks after the original
+		const { sourceCandidates } = await import('../src/lib/media/r2-delivery');
+		const signed = await sourceCandidates({ ...env, BUNNY_SIGN_URLS: 'true', BUNNY_TOKEN_KEY: 'k' } as never, ID);
+		assert.equal(signed.length, 5);
+		assert.match(signed[0], new RegExp(`^https://vz-cb79844a-c5d\\.b-cdn\\.net/bcdn_token=[^&]+&expires=\\d+&token_path=%2F${ID}%2F/${ID}/original$`));
+		assert.ok(signed[1].endsWith(`/${ID}/play_720p.mp4`));
 	});
 });
 

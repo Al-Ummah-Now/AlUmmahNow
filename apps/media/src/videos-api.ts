@@ -16,21 +16,21 @@ async function call(env: Env, path: string, init: RequestInit = {}): Promise<Res
 	return env.VIDEOS.fetch(new Request(`${ORIGIN}${path}`, { ...init, headers }));
 }
 
-const sources = new Map<string, { at: number; url: string }>();
+const sources = new Map<string, { at: number; urls: string[] }>();
 const SOURCE_TTL_MS = 30 * 60 * 1000;
 
-/** Signed URL of the video's original, cached 30 min per isolate (the signature lives 6 h). */
-export async function sourceUrl(env: Env, videoId: string): Promise<string | null> {
+/** Signed source candidates (original first, then MP4 fallbacks), cached 30 min per isolate (signatures live 6 h). */
+export async function sourceCandidates(env: Env, videoId: string): Promise<string[]> {
 	const hit = sources.get(videoId);
-	if (hit && Date.now() - hit.at < SOURCE_TTL_MS) return hit.url;
+	if (hit && Date.now() - hit.at < SOURCE_TTL_MS) return hit.urls;
 	const res = await call(env, `/internal/media/source/${encodeURIComponent(videoId)}`);
-	if (res.status === 404) return null;
+	if (res.status === 404) return [];
 	if (!res.ok) throw new Error(`api-videos source ${videoId}: HTTP ${res.status}`);
-	const { url } = (await res.json()) as { url?: string };
-	if (!url) return null;
-	sources.set(videoId, { at: Date.now(), url });
+	const body = (await res.json()) as { url?: string; candidates?: string[] };
+	const urls = body.candidates?.length ? body.candidates : body.url ? [body.url] : [];
+	sources.set(videoId, { at: Date.now(), urls });
 	if (sources.size > 200) sources.delete(sources.keys().next().value!);
-	return url;
+	return urls;
 }
 
 /** Report a job event; throws when api-videos did not take it (the caller keeps it for later). */

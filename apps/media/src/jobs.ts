@@ -65,8 +65,13 @@ export function containerSeconds(job: JobState, now: number): number {
 }
 
 /** After an attempt failed: retry (with delay) or give up. Fatal errors (no source, no video stream) never retry. */
-export function onFailure(job: JobState, _error: string, fatal: boolean): { retry: false } | { retry: true; delaySeconds: number } {
-	if (fatal || job.attempt >= MAX_ATTEMPTS) return { retry: false };
+/** No source yet (Bunny still making its MP4 fallback): wait for it this long, in 5-minute steps. */
+export const SOURCE_WAIT_ATTEMPTS = 12;
+
+export function onFailure(job: JobState, error: string, fatal: boolean): { retry: false } | { retry: true; delaySeconds: number } {
+	if (fatal) return { retry: false };
+	if (error === 'source_unavailable') return job.attempt >= SOURCE_WAIT_ATTEMPTS ? { retry: false } : { retry: true, delaySeconds: 300 };
+	if (job.attempt >= MAX_ATTEMPTS) return { retry: false };
 	return { retry: true, delaySeconds: 60 * job.attempt * job.attempt };
 }
 

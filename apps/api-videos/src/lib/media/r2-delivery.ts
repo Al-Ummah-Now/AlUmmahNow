@@ -30,7 +30,7 @@ import {
 import { getSecret } from '../env-helpers';
 import { logger } from '../logger';
 import R2Repository from '../r2Repo';
-import { bunnyFileToken, tokenExpiry } from '../bunny-signing';
+import { bunnyDirectoryToken, signedBunnyUrl, tokenExpiry } from '../bunny-signing';
 
 type SecretLike = { get(): Promise<string> } | { text(): Promise<string> } | string;
 
@@ -349,21 +349,32 @@ export async function applyJobEvent(
 // Source and play URLs
 // ---------------------------------------------------------------------------
 
-/** The uploaded original as Bunny keeps it ("Keep original files"), signed when the library uses token auth. */
-export async function sourceUrl(env: MediaEnv, videoId: string): Promise<string | null> {
+/**
+ * Where the transcode reads the upload, best first: Bunny's kept original, then
+ * its MP4 fallbacks (highest first; Bunny makes them up to 720p as it encodes).
+ * Signed with the directory token (path form) when the library uses token auth:
+ * Bunny refuses the query-form file token there. The CDN may refuse the original
+ * (library setting); the media worker then uses the first MP4 that answers.
+ */
+export async function sourceCandidates(env: MediaEnv, videoId: string): Promise<string[]> {
 	const host = env.bunny_hostname;
-	if (!host) return null;
-	const path = `/${videoId}/original`;
-	let url = `https://${host}${path}`;
+	if (!host) return [];
+	const files = ['original', 'play_720p.mp4', 'play_480p.mp4', 'play_360p.mp4', 'play_240p.mp4'];
 	const signHost = env.BUNNY_SIGN_HOSTNAME || host;
 	if (env.BUNNY_SIGN_URLS === 'true' && signHost === host) {
 		const key = await getSecret(env.BUNNY_TOKEN_KEY, 'BUNNY_TOKEN_KEY');
 		if (key) {
 			const expires = tokenExpiry();
-			url += `?token=${await bunnyFileToken(key, path, expires)}&expires=${expires}`;
+			const token = await bunnyDirectoryToken(key, videoId, expires);
+			return files.map((f) => signedBunnyUrl(host, videoId, f, token, expires));
 		}
 	}
-	return url;
+	return files.map((f) => `https://${host}/${videoId}/${f}`);
+}
+
+/** The first candidate (the original): kept for callers that want one URL. */
+export async function sourceUrl(env: MediaEnv, videoId: string): Promise<string | null> {
+	return (await sourceCandidates(env, videoId))[0] ?? null;
 }
 
 /** Playable R2 URLs of a ready video (private ones signed), or null. */

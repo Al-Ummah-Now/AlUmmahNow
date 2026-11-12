@@ -9,7 +9,10 @@ import { Container, type OutboundHandlerContext } from '@cloudflare/containers';
 import { mediaCacheControl, mediaContentType, type TranscodeJobEvent, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
 import { bucketFor, errorText, log, type Env } from './env';
 import { containerSeconds, keyAllowed, newJob, onFailure, onMessage, watchdogVerdict, WATCHDOG_SECONDS, type JobState } from './jobs';
-import { reportEvent, sourceUrl } from './videos-api';
+import { reportEvent, sourceCandidates } from './videos-api';
+
+/** Source URL that answered, per video (isolate memory; a miss just re-probes). */
+const chosenSource = new Map<string, string>();
 
 type ContainerEvent =
 	| { type: 'started'; jobId: string }
@@ -40,18 +43,38 @@ export class Transcoder extends Container<Env> {
 	override sleepAfter = '5m';
 	override enableInternet = false;
 
-	static override outboundHandlers = {
-		/** GET http://source.internal/src (Range passed through) → the original upload */
+	// Registered after the class (see the end of this file): a static class field would shadow
+	// Container's static setter (ES2022 define semantics) and the handlers would never register.
+	static readonly handlers = {
+		/**
+		 * GET http://source.internal/src (Range passed through) → the first source that
+		 * answers: Bunny's original, else its highest MP4 fallback (remembered per job).
+		 */
 		async source(req: Request, env: Env, ctx: OutboundHandlerContext<{ videoId: string }>): Promise<Response> {
 			if (req.method !== 'GET' && req.method !== 'HEAD') return new Response('method', { status: 405 });
-			const url = await sourceUrl(env, ctx.params.videoId);
-			if (!url) return new Response('source_missing', { status: 404 });
+			const urls = await sourceCandidates(env, ctx.params.videoId);
+			if (!urls.length) return new Response('source_missing', { status: 404 });
 			const headers = new Headers();
 			const range = req.headers.get('range');
 			if (range) headers.set('range', range);
-			const res = await fetch(url, { method: req.method, headers });
-			if (res.status === 404 || res.status === 403) return new Response('source_missing', { status: 404 });
-			return res;
+			const known = chosenSource.get(ctx.params.videoId);
+			const order = known ? [known, ...urls.filter((u) => u !== known)] : urls;
+			const refused: string[] = [];
+			for (const url of order) {
+				const res = await fetch(url, { method: req.method, headers });
+				if (res.status === 404 || res.status === 403) {
+					refused.push(`${new URL(url).pathname.split('/').pop()}:${res.status}`);
+					continue;
+				}
+				if (!known || known !== url) {
+					chosenSource.set(ctx.params.videoId, url);
+					log.warn('[Transcoder] Source chosen', { videoId: ctx.params.videoId, file: new URL(url).pathname.split('/').pop(), refused });
+				}
+				return res;
+			}
+			// Nothing yet: the original is refused by the CDN and Bunny has not made an MP4 yet. Retryable.
+			log.warn('[Transcoder] No source answered', { videoId: ctx.params.videoId, refused });
+			return new Response('source_unavailable', { status: 404 });
 		},
 		/** PUT http://media.internal/<key> → R2, only under this job's prefix */
 		async media(req: Request, env: Env, ctx: OutboundHandlerContext<{ prefix: string }>): Promise<Response> {
@@ -92,7 +115,14 @@ export class Transcoder extends Container<Env> {
 		}
 		const job = newJob(msg, Date.now());
 		await this.save(job);
-		await this.launch(job);
+		try {
+			await this.launch(job);
+		} catch (error) {
+			// Not started: forget it, so the queue's redelivery starts it again (not a "duplicate")
+			await this.ctx.storage.delete('job');
+			await this.destroy().catch(() => undefined);
+			throw error;
+		}
 		return action === 'supersede' ? 'superseded' : 'started';
 	}
 
@@ -267,3 +297,6 @@ export class Transcoder extends Container<Env> {
 		if (left.length && job?.status !== 'running') await this.schedule(5 * WATCHDOG_SECONDS, 'watchdog');
 	}
 }
+
+// Through Container's static setter, which registers them by name for setOutboundByHosts
+Transcoder.outboundHandlers = Transcoder.handlers as never;

@@ -59,7 +59,10 @@ async function download(dest) {
 			const end = offset + CHUNK - 1;
 			const buf = await retrying('source range', async () => {
 				const res = await fetch('http://source.internal/src', { headers: { range: `bytes=${offset}-${end}` } });
-				if (res.status === 404) throw Object.assign(new Error('source_missing'), { fatal: true });
+				if (res.status === 404) {
+					const why = (await res.text().catch(() => '')).trim();
+					throw Object.assign(new Error(why || 'source_missing'), { fatal: why !== 'source_unavailable' });
+				}
 				if (res.status !== 206 && res.status !== 200) throw new Error(`source HTTP ${res.status}`);
 				const range = res.headers.get('content-range');
 				if (res.status === 206 && range) total = Number(range.split('/')[1]) || total;
