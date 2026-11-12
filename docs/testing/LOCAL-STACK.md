@@ -34,9 +34,15 @@ listens on its own port:
   Auth app's migrations and rewrites every OAuth client's redirect URIs to the localhost apps. The
   E2E code sink is on (`X-E2E-Secret: local-stack-sink-secret`), as are the test routes
   (`TEST_PROMOTE_SECRET=local-stack-promote-secret`) and run-user marking.
-- **Released versions of the sibling repos.** `scripts/local-stack/resolve-refs.ts` finds the commit
-  each sibling repo last released: Auth from its last successful Release run on `main`, and the CMS
-  and www from their newest successfully released `v*` tag. CI checks that commit out.
+- **Released versions of the sibling repos, as built artifacts.** `scripts/local-stack/resolve-refs.ts`
+  finds the commit each sibling repo last released: Auth from its last successful Release run on
+  `main`, and the CMS and www from their newest successfully released `v*` tag. For every released
+  commit, the Auth repo publishes `local-stack.tar.gz` and its sha256 on the prerelease
+  `local-stack-<sha12>` (its `local-stack-bundle.yml` workflow). The tarball holds the prebuilt auth,
+  profile and admin workers, their wrangler configs and every migration.
+  `scripts/local-stack/fetch-auth.ts` downloads the newest one, verifies the sha256 and unpacks it.
+  Nothing of that repo is checked out or installed. That is what lets the local suites run on pushes
+  to `main` and in releases without CodeQL's cache-poisoning finding.
 - **Nothing leaves the machine.** Every outbound fetch from a worker goes through
   `scripts/local-stack/outbound.ts`:
   - local hosts are passed through;
@@ -81,9 +87,7 @@ Locally (one boot at a time; it needs a full `pnpm install`, built shared packag
 and admin-web their OpenNext builds, which are otherwise skipped):
 
 ```bash
-git clone https://github.com/Al-Ummah-Now/AlUmmahNowAuth .local-stack/repos/auth
-git -C .local-stack/repos/auth checkout "$(node --experimental-strip-types --no-warnings scripts/local-stack/resolve-refs.ts auth | sed -n 's/^auth_sha=//p')"
-(cd .local-stack/repos/auth && pnpm install)   # needs a GitHub Packages token for @al-ummah-now/openauth
+node --experimental-strip-types --no-warnings scripts/local-stack/fetch-auth.ts   # Auth's last released bundle into .local-stack/repos/auth
 node --experimental-strip-types --no-warnings scripts/local-stack/boot.ts              # runs until Ctrl-C
 node --experimental-strip-types --no-warnings scripts/local-stack/boot.ts --check      # boot, health-check, stop
 node --experimental-strip-types --no-warnings scripts/local-stack/boot.ts --only api-videos,auth

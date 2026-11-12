@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { parseJsonc } from '../../release/jsonc.ts';
 import { localConfig, localRedirectUri, localRedirectUris, type Json } from '../configs.ts';
 import { releasedRun } from '../resolve-refs.ts';
+import { bundleTag } from '../fetch-auth.ts';
 import { PROD_HOST_TO_LOCAL, ROOT, WORKERS, LOCAL_SECRETS } from '../stack.ts';
 
 const videosWorkers = WORKERS.filter((w) => w.repo === 'videos');
@@ -90,5 +91,12 @@ describe('released refs', () => {
   it('cms/www: the newest successful tag run', () => {
     assert.equal(releasedRun([run('main'), run('v2026.11.12', 'failure'), run('v2026.11.11.6')], 'tag')?.head_branch, 'v2026.11.11.6');
     assert.equal(releasedRun([run('main')], 'tag'), undefined);
+  });
+});
+
+describe('Auth bundle', () => {
+  it('is published per released commit as local-stack-<sha12>', () => {
+    assert.equal(bundleTag('e382a4370348f2497975662177f14efce12d406d'), 'local-stack-e382a4370348');
+    assert.throws(() => bundleTag('e382a43'));
   });
 });
