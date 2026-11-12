@@ -46,12 +46,16 @@ export function renderPlacementDoc(): string {
     '',
     '- **local**: UI behaviour and our own API logic. It runs against a local stack that each CI job boots for itself:',
     '  web, admin-web, api-videos, admin-api, processor and websocket-server under wrangler/miniflare with local D1, R2,',
-    '  KV and queues, deterministic seed fixtures, a fake Bunny (upload accepted, "encoded" on demand, fixture HLS), a',
-    '  mock OpenAuth issuer and mocked AI providers. No shared QA data, so jobs run fully in parallel and shard.',
+    '  KV and queues, deterministic seed fixtures, a fake Bunny (upload accepted, "encoded" on demand, fixture HLS) and',
+    '  mocked AI providers. Sign-in is real: the Auth repo (issuer, profile app, auth admin) runs locally with local D1/KV,',
+    '  clients seeded with localhost redirect URIs and the E2E code sink. The CMS and www run locally too where a spec',
+    '  crosses into them. Auth, CMS and www are checked out at the ref each last released. Specs that are not about',
+    '  auth may mint a session as a fast path. No shared QA data, so jobs run fully in parallel and shard.',
     '- **deployed**: needs real infrastructure, so it runs against QA and stage and is the release gate. The reason',
-    '  starts with the category: `sso` (sign-in across apps on the real issuer), `bunny` (real upload and encode),',
-    '  `media` (real CDN/R2 playback), `pipeline` (queues and processor end to end under load), `cross-app` (CMS, www,',
-    '  auth admin, which are not in this repo) or `shared-env` (deployed-environment checks).',
+    '  starts with the category: `sso` (sessions on the real `.alummahnow.net` cookie domain: `Domain=`, `Secure`,',
+    '  HTTPS; on localhost every app shares one host\'s cookies, so this cannot be reproduced), `bunny` (real upload and encode),',
+    '  `media` (real CDN/R2 playback), `pipeline` (queues and processor end to end under load) or `shared-env`',
+    '  (deployed-environment checks).',
     '',
     'Deploy skew and migrations are checked outside the E2E suites, by the release itself: `scripts/release/skew-check.ts`',
     'after every promote, `pnpm check:migrations` and `pnpm check:schema` on every PR. `deploy-skew.spec.ts` simulates a',
@@ -77,7 +81,7 @@ export function renderPlacementDoc(): string {
       lines.push(`### ${suite}`, '', '| Spec | Reason | @load |', '|---|---|:---:|');
       for (const p of rows) {
         const { reason, load } = SPEC_PLACEMENT[p];
-        lines.push(`| \`${p.replace(/^apps\/(web|admin-web)\/e2e\//, '')}\` | ${reason.replace(/\|/g, '\\|')} | ${load ? 'yes' : ''} |`);
+        lines.push(`| \`${p.replace(/^apps\/(web|admin-web)\/e2e\//, '')}\` | ${reason.replace(/\\/g, '\\\\').replace(/\|/g, '\\|')} | ${load ? 'yes' : ''} |`);
       }
       lines.push('');
     }

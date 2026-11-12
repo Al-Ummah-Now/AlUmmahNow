@@ -21,7 +21,7 @@ function specFiles(dir: string): string[] {
   });
 }
 
-const DEPLOYED_CATEGORY = /^(sso|bunny|media|pipeline|cross-app|shared-env): \S/;
+const DEPLOYED_CATEGORY = /^(sso|bunny|media|pipeline|shared-env): \S/;
 
 describe('E2E placement', () => {
   const files = [...specFiles('apps/web/e2e'), ...specFiles('apps/admin-web/e2e')].sort();

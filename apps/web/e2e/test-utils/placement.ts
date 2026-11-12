@@ -3,10 +3,12 @@
  *
  * - local: UI behaviour and our own API logic. Runs against a local stack that CI boots per job
  *   (web, admin-web, api-videos, admin-api, processor, websocket-server under wrangler/miniflare,
- *   local D1/R2/KV/queues, seeded fixtures, fake Bunny, mock OpenAuth issuer, mocked AI).
+ *   local D1/R2/KV/queues, seeded fixtures, fake Bunny, mocked AI), plus the real Auth repo (issuer,
+ *   profile, auth admin; E2E code sink) and, where a spec crosses into them, the CMS and www, each at
+ *   the ref it was last released at. Specs that are not about auth may mint sessions as a fast path.
  * - deployed: needs real infrastructure, so it runs against QA and stage (the release gate):
- *   SSO across apps on the real issuer, real Bunny upload/encode, R2/Containers/media Worker and
- *   real CDN playback, queues end to end under load, cross-app flows (CMS, www, auth admin),
+ *   SSO on the real .alummahnow.net cookie domain (Domain=, Secure, HTTPS), real Bunny
+ *   upload/encode, R2/Containers/media Worker and real CDN playback, queues end to end under load,
  *   production-only checks. The reason starts with that category.
  *
  * `load: true`: the file has @load tests, which never gate (E2E_LOAD=only, non-blocking).
@@ -17,14 +19,14 @@ export type Placement = 'local' | 'deployed';
 
 export interface SpecPlacement {
   placement: Placement;
-  /** Why; for deployed specs, starts with the category (sso, bunny, media, pipeline, cross-app, shared-env). */
+  /** Why; for deployed specs, starts with the category (sso, bunny, media, pipeline, shared-env). */
   reason: string;
   load?: true;
 }
 
 /** Keyed by the repo-relative path of the spec file. */
 export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
-  'apps/admin-web/e2e/01-auth.spec.ts': { placement: 'deployed', reason: 'sso: issuer redirects, password form, single sign-out through auth.qa /logout' },
+  'apps/admin-web/e2e/01-auth.spec.ts': { placement: 'local', reason: 'admin-web sign-in and sign-out on the real issuer (Auth repo, local)' },
   'apps/admin-web/e2e/02-dashboard.spec.ts': { placement: 'local', reason: 'Dashboard stats vs admin-api, new report counted' },
   'apps/admin-web/e2e/03-navigation.spec.ts': { placement: 'local', reason: 'Nav, active link, 404, back/forward; one report fixture' },
   'apps/admin-web/e2e/04-moderation-queue.spec.ts': { placement: 'local', reason: 'Queue filters, pagination, empty state against admin-api' },
@@ -36,12 +38,12 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/admin-web/e2e/09-theme.spec.ts': { placement: 'local', reason: 'Admin theme select and OS colour scheme' },
   'apps/admin-web/e2e/10-accessibility.spec.ts': { placement: 'local', reason: 'Axe scans, keyboard flows on admin pages' },
   'apps/admin-web/e2e/11-site-theme.spec.ts': { placement: 'local', reason: 'Admin site theme reaches web first HTML; web is local' },
-  'apps/admin-web/e2e/12-auth-requests.spec.ts': { placement: 'deployed', reason: 'cross-app: auth admin dashboard (admin.auth.qa) decides requests; issuer sign-up sink' },
+  'apps/admin-web/e2e/12-auth-requests.spec.ts': { placement: 'local', reason: 'auth admin app (Auth repo, local) decides the requests; issuer code sink' },
   'apps/admin-web/e2e/12-legacy-profiles.spec.ts': { placement: 'local', reason: 'Restore job via admin-api queue; R2 seed helper swappable to local R2' },
   'apps/admin-web/e2e/13-creators.spec.ts': { placement: 'local', reason: 'Creator tier assign/remove, tiers validation, audit' },
   'apps/admin-web/e2e/14-channel-transfer.spec.ts': { placement: 'local', reason: 'Owner picker, confirm dialog, transfer job, permissions' },
   'apps/admin-web/e2e/14-recently-deleted.spec.ts': { placement: 'local', reason: 'Recently deleted list and type-to-confirm dialog' },
-  'apps/admin-web/e2e/15-invites.spec.ts': { placement: 'deployed', reason: 'sso: invite link and sign-up on real issuer, lands signed in on web' },
+  'apps/admin-web/e2e/15-invites.spec.ts': { placement: 'local', reason: 'invite link and sign-up on the real issuer (local), lands signed in on web' },
   'apps/admin-web/e2e/15-recently-deleted-config.spec.ts': { placement: 'local', reason: 'Creator tier trash: delete, restore, purge queue dialogs' },
   'apps/web/e2e/01-homepage.spec.ts': { placement: 'local', reason: 'anonymous home page layout and content' },
   'apps/web/e2e/02-video-player.spec.ts': { placement: 'local', reason: 'player loads a seed video; any playable HLS will do' },
@@ -97,7 +99,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/66-feed-subscriptions.spec.ts': { placement: 'local', reason: 'subscriptions feed for multi user' },
   'apps/web/e2e/70-embeds.spec.ts': { placement: 'local', reason: 'embed framing headers, postMessage, oEmbed; local host page via EMBED_HOST_PAGE' },
   'apps/web/e2e/71-no-console-errors.spec.ts': { placement: 'local', reason: 'console clean on public pages; hard-coded embed video id' },
-  'apps/web/e2e/72-real-sign-in.spec.ts': { placement: 'deployed', reason: 'sso: real issuer form, callback, sign-out and sign-in again' },
+  'apps/web/e2e/72-real-sign-in.spec.ts': { placement: 'local', reason: 'real issuer form (Auth repo, local): callback, sign-out, sign-in again' },
   'apps/web/e2e/73-watch-loading.spec.ts': { placement: 'local', reason: 'watch skeleton/no layout shift with delayed server action' },
   'apps/web/e2e/74-no-empty-media.spec.ts': { placement: 'local', reason: 'thumbnails never empty boxes on public pages' },
   'apps/web/e2e/75-save-to-playlist-menu.spec.ts': { placement: 'local', reason: 'save menu stays in viewport; hard-coded video id' },
@@ -115,7 +117,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/player/themes.spec.ts': { placement: 'local', reason: 'already local player harness' },
   'apps/web/e2e/release-prod/signed-in.check.ts': { placement: 'deployed', reason: 'shared-env: prod post-promote sign-up via Resend, profile, admin refusal' },
   'apps/web/e2e/release/admin-content.spec.ts': { placement: 'local', reason: 'admin-web/admin-api content moderation; queued cascades run on local queues' },
-  'apps/web/e2e/release/admin-signin.spec.ts': { placement: 'deployed', reason: 'sso: admin-web OAuth client through real issuer, redirect-chain loop check' },
+  'apps/web/e2e/release/admin-signin.spec.ts': { placement: 'local', reason: 'admin-web OAuth client on the real issuer (local): refusal, promote, redirect loop check' },
   'apps/web/e2e/release/anonymous-console.spec.ts': { placement: 'local', reason: 'signed-out console cleanliness; mock issuer must answer /session/accounts 200' },
   'apps/web/e2e/release/brand-logo.spec.ts': { placement: 'local', reason: 'header logo first-paint layout' },
   'apps/web/e2e/release/bulk-rename-edit.spec.ts': { placement: 'local', reason: 'bulk upload UI + Studio bulk PATCH; encode only gates listing' },
@@ -145,18 +147,18 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/release/popover-tabbar.spec.ts': { placement: 'local', reason: 'card menu vs phone tab bar layout' },
   'apps/web/e2e/release/processing.player.spec.ts': { placement: 'deployed', reason: 'bunny: real upload, processing-check loop to real encode, thumbnail, CDN playback' },
   'apps/web/e2e/release/profile-images.spec.ts': { placement: 'local', reason: 'avatar/cover display in UI; image host must be faked' },
-  'apps/web/e2e/release/profile-signin.spec.ts': { placement: 'deployed', reason: 'sso: profile app (AlUmmahNowAuth) OAuth client sign-up/sign-in' },
+  'apps/web/e2e/release/profile-signin.spec.ts': { placement: 'local', reason: 'real issuer and profile app (Auth repo, local): sign-up and sign-in' },
   'apps/web/e2e/release/public-fields.spec.ts': { placement: 'local', reason: 'anonymous API responses field allow-list' },
   'apps/web/e2e/release/realtime-toasts.spec.ts': { placement: 'local', reason: 'toast grouping; socket already replaced by routeWebSocket' },
   'apps/web/e2e/release/related.spec.ts': { placement: 'local', reason: 'related shelf from recommendations API; latency check is @load', load: true },
   'apps/web/e2e/release/settings-controls.spec.ts': { placement: 'local', reason: 'settings switches/breadcrumbs CSS per theme' },
-  'apps/web/e2e/release/sign-in-restart.spec.ts': { placement: 'deployed', reason: 'sso: issuer\'s own "Start sign-in again" page en/ar' },
-  'apps/web/e2e/release/signed-in-everywhere.spec.ts': { placement: 'deployed', reason: 'sso: shared sign-in across videos, admin, www, cms, profile, auth admin' },
-  'apps/web/e2e/release/signup-signin.spec.ts': { placement: 'deployed', reason: 'sso: real issuer sign-up, email code, sign-in round trip' },
+  'apps/web/e2e/release/sign-in-restart.spec.ts': { placement: 'local', reason: 'real issuer (Auth repo, local): its "Start sign-in again" page, en/ar' },
+  'apps/web/e2e/release/signed-in-everywhere.spec.ts': { placement: 'deployed', reason: 'sso: one sign-in shared by six apps through Domain=.alummahnow.net Secure cookies over HTTPS (localhost sends neither)' },
+  'apps/web/e2e/release/signup-signin.spec.ts': { placement: 'local', reason: 'real issuer (Auth repo, local): web sign-up, sink code, sign-in round trip, en/ar' },
   'apps/web/e2e/release/single-h1.spec.ts': { placement: 'local', reason: 'one h1 per web/admin page' },
-  'apps/web/e2e/release/single-sign-out.spec.ts': { placement: 'deployed', reason: 'sso: single sign-out through issuer /logout front-channel to every app' },
+  'apps/web/e2e/release/single-sign-out.spec.ts': { placement: 'deployed', reason: 'sso: /logout must clear Domain=.alummahnow.net cookies on every subdomain; localhost cookies have no Domain' },
   'apps/web/e2e/release/site-theme.spec.ts': { placement: 'local', reason: 'admin-web theme switch + builder, web renders it' },
-  'apps/web/e2e/release/sso-journey.spec.ts': { placement: 'deployed', reason: 'sso: deep link sign-in, roles in admin/cms/www/profile, token revocation' },
+  'apps/web/e2e/release/sso-journey.spec.ts': { placement: 'local', reason: 'SSO journey on the real issuer with CMS and www booted locally (last released refs)' },
   'apps/web/e2e/release/studio-analytics.spec.ts': { placement: 'local', reason: 'Studio analytics empty state and range' },
   'apps/web/e2e/release/studio-dashboard.spec.ts': { placement: 'local', reason: 'Studio dashboard welcome' },
   'apps/web/e2e/release/studio-draft-path.spec.ts': { placement: 'local', reason: 'Studio draft/schedule/publish lifecycle; encode only gates Drafts listing' },
