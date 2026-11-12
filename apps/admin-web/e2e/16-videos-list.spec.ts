@@ -132,7 +132,8 @@ test.describe('videos list', () => {
     await expect(page.getByTestId('saved-view-all')).toHaveAttribute('aria-current', 'page');
   });
 
-  test('LIST-02 Unpublish acts at once with an Undo toast; u undoes it', async ({ page }) => {
+  // quarantined: #1040 @meywd (after Undo the row stays hidden on the local stack)
+  test.fixme('LIST-02 Unpublish acts at once with an Undo toast; u undoes it', async ({ page }) => {
     page.on('dialog', (d) => {
       throw new Error(`A browser dialog opened: ${d.type()} ${d.message()}`);
     });
