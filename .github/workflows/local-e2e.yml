@@ -187,7 +187,6 @@ jobs:
         include:
           - { name: chromium 1/2, project: chromium, shard: 1/2, browsers: chromium }
           - { name: chromium 2/2, project: chromium, shard: 2/2, browsers: chromium }
-          # Quarantined on the stack (#1020): every test is fixme for WebKit + E2E_ENV=local
           - { name: webkit, project: webkit, shard: 1/1, browsers: chromium webkit }
           - { name: mobile, project: mobile, shard: 1/1, browsers: chromium }
           - { name: shared-state, project: shared-state, shard: 1/1, browsers: chromium }
@@ -203,6 +202,15 @@ jobs:
         with:
           browsers: ${{ matrix.browsers }}
           working-directory: apps/admin-web
+
+      # Diagnostic for #1020: what a WebKit page load on admin-web and on the issuer's sign-in waits on
+      - name: Pending requests (WebKit)
+        if: matrix.project == 'webkit'
+        continue-on-error: true
+        timeout-minutes: 4
+        run: |
+          node scripts/local-stack/pending-requests.mjs webkit http://localhost:3091/login
+          node scripts/local-stack/pending-requests.mjs webkit http://localhost:3091/access-denied
 
       - name: Run
         working-directory: apps/admin-web
