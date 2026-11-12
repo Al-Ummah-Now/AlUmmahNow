@@ -81,8 +81,32 @@ test.describe('Settings - dark theme', () => {
     await page.goto('/en/settings');
     const card = page.getByTestId('settings-section').first();
     await expect(card).toBeVisible();
-    // gray-800 card on the dark page
-    await expect(card).toHaveCSS('background-color', /rgb\(31, 41, 55\)|oklch\(0\.278/);
+    await expect(page.locator('html')).toHaveClass(/\bdark\b/);
+    // The site theme paints the card with its material (--m-card, a gradient over the theme's
+    // surface tokens) or, without one, with dark:bg-gray-800, which the bridge maps to
+    // --fanous-color-surface. Either way it is drawn from the active theme's dark surface
+    // colours, whichever theme the site runs.
+    const paint = await card.evaluate((el) => {
+      const resolve = (token: string) => {
+        const probe = document.createElement('span');
+        probe.style.backgroundColor = `var(${token})`;
+        document.body.appendChild(probe);
+        const value = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        return value;
+      };
+      const style = getComputedStyle(el);
+      return {
+        color: style.backgroundColor,
+        image: style.backgroundImage,
+        surfaces: [resolve('--fanous-color-surface'), resolve('--fanous-color-surface-raised')],
+      };
+    });
+    const painted = `${paint.color} ${paint.image}`;
+    expect(
+      paint.surfaces.some((surface) => painted.includes(surface)),
+      `card paint "${painted}" uses a dark surface token (${paint.surfaces.join(', ')})`,
+    ).toBe(true);
   });
 });
 
@@ -109,7 +133,8 @@ test.describe('Privacy settings - anonymous', () => {
     await analytics.check();
     await performance.check();
     await page.getByRole('button', { name: 'Save choices' }).click();
-    await expect(page.getByRole('status')).toHaveText('Your choices have been saved.');
+    // Scoped: the header search has its own (empty) live status region
+    await expect(page.getByRole('region', { name: 'Tracking consent' }).getByRole('status')).toHaveText('Your choices have been saved.');
     expect(await consentValue(context)).toMatch(/^v1\.a1\.e0\.p1\.\d+$/);
 
     await page.reload();
@@ -128,7 +153,7 @@ test.describe('Privacy settings - anonymous', () => {
     await page.evaluate(() => localStorage.setItem('pendingVideoAnalytics', '[1]'));
     await page.getByRole('button', { name: 'Clear data on this device' }).click();
     await page.getByTestId('clear-device-dialog-confirm').click();
-    await expect(page.getByRole('status')).toHaveText('Data on this device has been cleared.');
+    await expect(page.getByRole('region', { name: 'Data on this device' }).getByRole('status')).toHaveText('Data on this device has been cleared.');
     expect(await page.evaluate(() => localStorage.getItem('pendingVideoAnalytics'))).toBeNull();
   });
 
@@ -168,16 +193,30 @@ test.describe('Privacy settings - signed in', () => {
   });
 
   test('PRIV-012 exports the account data as a JSON download', async ({ page }) => {
-    // The export scans the shared R2 buckets in resumable passes; on QA even
-    // an account with no data needs ~3 passes of 30-55 s each (~2 min).
-    // Export speed is tracked separately from this UI flow (issue #184).
-    test.setTimeout(330_000);
+    // The export scans every shared R2 object in resumable passes, so a full export grows
+    // with all of QA's data (issue #184: ~2 min in Nov 2026, now past 5 min). This test
+    // checks the flow, not export speed: the first pass goes to the real API (auth,
+    // status, attachment header, JSON body), then is marked complete so the page builds
+    // and downloads the file. Following resume tokens is covered by privacy.service.test.ts.
+    test.setTimeout(150_000);
+    let firstPass: { status: number; disposition: string } | undefined;
+    await page.route(/\/api\/privacy\/export(\?|$)/, async (route) => {
+      if (route.request().method() !== 'GET') return route.continue();
+      const response = await route.fetch({ timeout: 90_000 });
+      firstPass = { status: response.status(), disposition: response.headers()['content-disposition'] ?? '' };
+      if (!response.ok()) return route.fulfill({ response });
+      const body = (await response.json()) as Record<string, unknown>;
+      delete body.resumeToken;
+      await route.fulfill({ response, json: { ...body, complete: true } });
+    });
     await page.goto('/en/settings/privacy');
     const [download] = await Promise.all([
-      page.waitForEvent('download', { timeout: 300_000 }),
+      page.waitForEvent('download', { timeout: 100_000 }),
       page.getByRole('button', { name: 'Download my data' }).click(),
     ]);
+    expect(firstPass?.status, 'first export pass status').toBe(200);
+    expect(firstPass?.disposition).toMatch(/attachment; filename="al-ummah-now-data-\d{4}-\d{2}-\d{2}\.json"/);
     expect(download.suggestedFilename()).toMatch(/^al-ummah-now-data-\d{4}-\d{2}-\d{2}\.json$/);
-    await expect(page.getByRole('status')).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Download your data' }).getByRole('status')).toBeVisible();
   });
 });
