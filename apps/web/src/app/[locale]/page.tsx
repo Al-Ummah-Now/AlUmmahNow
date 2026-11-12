@@ -119,15 +119,20 @@ const VideosPage: React.FC = () => {
               ))}
             </div>
           )}
-          <div className="flex justify-center items-center mt-6">
-            <button
-              onClick={handleNextPage}
-              disabled={!nextCursor || loading}
-              className="px-4 py-2 bg-gray-700 text-white rounded disabled:opacity-50"
-            >
-              {loading ? t.common.loading : t.common.loadMore}
-            </button>
-          </div>
+          {/* Only when there is a next page (or one is loading). Rendered always, it sat under the
+              6-card placeholder and jumped up into view when a short first page replaced it:
+              CLS 0.38 on a phone (release spec home-hero, QA 2026-11-12). */}
+          {(nextCursor || (loading && videos.length > 0)) && (
+            <div className="flex justify-center items-center mt-6" data-testid="home-load-more">
+              <button
+                onClick={handleNextPage}
+                disabled={!nextCursor || loading}
+                className="px-4 py-2 bg-gray-700 text-white rounded disabled:opacity-50"
+              >
+                {loading ? t.common.loading : t.common.loadMore}
+              </button>
+            </div>
+          )}
         </main>
   );
 };
