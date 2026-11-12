@@ -406,6 +406,20 @@ export function pickDeliverySource(settings: DeliverySettings, r2Ready: boolean,
 	return deliveryBucket(drawKey) < settings.r2Percent ? 'r2' : 'bunny';
 }
 
+/** Where one play comes from. The API chooses; players only play the URL they were given. */
+export type PlaybackSource = 'bunny' | 'r2';
+
+/**
+ * Why a player gave up on R2 and asked the API for Bunny
+ * (GET /api/videos/:id/playback?exclude=r2&reason=<code>, and the QoE beacon's fallbackReason).
+ */
+export const PLAYBACK_FALLBACK_REASONS = ['manifest_4xx', 'manifest_5xx', 'network', 'cors', 'decode', 'unsupported', 'stall_timeout', 'other'] as const;
+export type PlaybackFallbackReason = (typeof PLAYBACK_FALLBACK_REASONS)[number];
+
+export function isPlaybackFallbackReason(value: unknown): value is PlaybackFallbackReason {
+	return typeof value === 'string' && (PLAYBACK_FALLBACK_REASONS as readonly string[]).includes(value);
+}
+
 // ---------------------------------------------------------------------------
 // Originals: the upload as received, kept in al-ummah-now-media-originals[-env]
 // (docs/media-delivery/ORIGINALS.md). One object per TUS PATCH, keyed by offset.

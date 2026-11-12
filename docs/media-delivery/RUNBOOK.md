@@ -62,6 +62,27 @@ Or run the **Media CDN settings** workflow (Actions → manual dispatch: env, ap
     - Browser TTL: respect origin.
   - Caching → Tiered Cache → Smart Tiered Caching Topology: on.
 
+## Which source a play got
+
+The API decides and returns one URL (owner decision 2026-11-12; `apps/api-videos/src/lib/media/playback.ts`):
+
+- `GET /api/videos/:id` and playlist `videoItems`: `playUrl` and `thumbnailUrl` are the chosen source's
+  (R2 signed by the API, Bunny by the URL-signing middleware); `delivery` is `{ source }`, a label only.
+  A creator's custom thumbnail stays as it is.
+- Split mode: assign `video` uses the video's bucket (stable), assign `view` draws on the server per request.
+- Players (watch pages in both directions, embeds, native apps) play `playUrl` and nothing else. On a
+  fatal error or a 15 s stall on R2 they call `GET /api/videos/:id/playback?exclude=r2&reason=<code>`
+  once and play the Bunny URL it returns. Reasons: `manifest_4xx`, `manifest_5xx`, `network`, `cors`,
+  `decode`, `unsupported`, `stall_timeout`, `other`.
+
+**Decision log** (Workers Logs, api-videos): `[Media] Playback decision` with
+`{ videoId, mode, r2Percent, bucket, r2Status, chosen, reason, context }`. It is `info`, so it shows on
+stage and QA; production runs at `warn` (docs/operations/logging.md), so raise `LOG_LEVEL` there to see
+every decision. Fallbacks are `[Media] Playback fell back to Bunny` at `warn` (always kept), and are
+counted per day in `playback_fallback_daily`: `server_fallbacks` from the endpoint, `qoe_sessions` from
+the players' QoE beacons (`requested`, `actual`, `fallbackReason`). The Delivery summary returns them as
+`fallbacks`.
+
 ## Checks
 
 ```sh

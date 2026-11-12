@@ -1,4 +1,5 @@
 import { VideoQoe } from "../endpoints/video/videoQoe";
+import { VideoPlayback } from "../endpoints/video/videoPlayback";
 import { Hono } from 'hono';
 import { fromHono } from 'chanfana';
 
@@ -251,6 +252,8 @@ videoRouter.post('/:id/view', VideoView);
 videoRouter.post('/:id/watch-time', VideoWatchTime);
 // Playback quality per delivery source (Bunny / R2, epic #687)
 videoRouter.post('/:id/qoe', VideoQoe);
+// The player's fallback when the source the API chose fails: Bunny's URL, reason logged
+videoRouter.get('/:id/playback', VideoPlayback);
 videoRouter.post('/:id/retention', VideoRetention);
 
 // Export as default and named export

@@ -26,6 +26,8 @@ export interface EmbedVideo {
   channelHandle?: string | null;
   /** The API's flag: the video has chapters */
   hasChapters?: boolean;
+  /** Which source the API chose for playUrl (a label; the player only plays playUrl) */
+  delivery?: { source: 'bunny' | 'r2' };
 }
 
 export interface EmbedPlaylist {
@@ -55,6 +57,7 @@ interface ApiVideo {
   isHidden?: boolean;
   uploadStatus?: string;
   hasChapters?: boolean;
+  delivery?: { source?: string };
 }
 
 function apiBase(): string {
@@ -94,6 +97,7 @@ export function toEmbedVideo(video: ApiVideo | null | undefined): EmbedVideo | n
     channelName: video.channelName,
     channelHandle: video.channelHandle ?? null,
     hasChapters: video.hasChapters === true || undefined,
+    ...(video.delivery?.source === 'r2' || video.delivery?.source === 'bunny' ? { delivery: { source: video.delivery.source } } : {}),
   };
 }
 
