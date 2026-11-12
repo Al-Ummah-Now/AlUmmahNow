@@ -77,3 +77,5 @@ release-result.json
 
 # Local backups written by data migrations (scripts/migrations)
 .migration-backups/
+wrangler.local-stack.json
+/.local-stack/

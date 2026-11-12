@@ -1,0 +1,146 @@
+name: Local stack
+
+# Boots the local E2E stack (docs/testing/LOCAL-STACK.md) and checks it: every worker of this repo
+# (web and admin-web as their OpenNext builds) plus the Auth repo at its last released commit, in
+# one Miniflare with local D1/R2/KV/queues/Secrets Store. No deployed environment is touched: no
+# Cloudflare token, no QA secrets. The E2E jobs that run specs on this stack reuse the same steps.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/local-stack/**'
+      - '.github/workflows/local-stack.yml'
+      - 'apps/*/wrangler*.json*'
+      - 'apps/*/migrations*/**'
+      - 'apps/api-videos/migrations/**'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/local-stack/**'
+      - '.github/workflows/local-stack.yml'
+      - 'apps/*/wrangler*.json*'
+      - 'apps/*/migrations*/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # pnpm installs @al-ummah-now/openauth from GitHub Packages (this repo and the Auth repo)
+  packages: read
+
+concurrency:
+  group: local-stack-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  boot:
+    name: Boot local stack
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      LOCAL_STACK_AUTH_DIR: ${{ github.workspace }}/.local-stack/repos/auth
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Released refs of the sibling repos
+        id: refs
+        run: node --experimental-strip-types --no-warnings scripts/local-stack/resolve-refs.ts auth | tee -a "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Check out the Auth repo at its last release
+        uses: actions/checkout@v4
+        with:
+          repository: Al-Ummah-Now/AlUmmahNowAuth
+          ref: ${{ steps.refs.outputs.auth_sha }}
+          path: .local-stack/repos/auth
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            .local-stack/repos/auth/pnpm-lock.yaml
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install the Auth repo
+        working-directory: .local-stack/repos/auth
+        run: |
+          echo "@al-ummah-now:registry=https://npm.pkg.github.com" >> .npmrc
+          echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}" >> .npmrc
+          pnpm install --frozen-lockfile
+          (cd apps/admin && pnpm build)
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build shared packages
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
+          pnpm --filter @al-ummah/theme-packages build
+
+      - name: Build web and admin-web (OpenNext)
+        run: |
+          start=$(date +%s)
+          pnpm --filter @al-ummah/web build
+          (cd apps/web && pnpm opennextjs-cloudflare build)
+          web=$(( $(date +%s) - start )); start=$(date +%s)
+          pnpm --filter @al-ummah/admin-web build
+          (cd apps/admin-web && pnpm opennextjs-cloudflare build)
+          echo "BUILD_SECONDS=web ${web} s, admin-web $(( $(date +%s) - start )) s" >> "$GITHUB_ENV"
+
+      - name: Boot
+        run: |
+          node --experimental-strip-types --no-warnings scripts/local-stack/boot.ts > "$RUNNER_TEMP/stack.log" 2>&1 &
+          echo "STACK_PID=$!" >> "$GITHUB_ENV"
+          for _ in $(seq 1 180); do
+            if [ -f .local-stack/stack.json ]; then echo "ready"; exit 0; fi
+            if ! kill -0 $! 2>/dev/null; then echo "::error::the stack exited during boot"; cat "$RUNNER_TEMP/stack.log"; exit 1; fi
+            sleep 2
+          done
+          echo "::error::the stack was not ready after 6 minutes"; tail -100 "$RUNNER_TEMP/stack.log"; exit 1
+
+      - name: Smoke
+        run: node --experimental-strip-types --no-warnings scripts/local-stack/smoke.ts
+
+      - name: Boot timings
+        if: always()
+        run: |
+          {
+            echo "### Local stack"
+            echo
+            echo "Auth at \`${{ steps.refs.outputs.auth_sha }}\` (last release). Builds: ${BUILD_SECONDS:-n/a}."
+            echo
+            if [ -f .local-stack/stack.json ]; then
+              node -e 'const s=require("./.local-stack/stack.json");console.log("| step | seconds |\n|---|---:|");for(const[k,v]of Object.entries(s.timings))console.log(`| ${k} | ${(v/1000).toFixed(1)} |`);console.log("\n| app | url | health |\n|---|---|---:|");for(const[k,a]of Object.entries(s.apps))console.log(`| ${k} | ${a.url} | ${a.health} |`)'
+            else
+              echo "No stack.json: the boot failed (see the boot log artifact)."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Stop
+        if: always()
+        run: |
+          if [ -n "${STACK_PID:-}" ] && kill -0 "$STACK_PID" 2>/dev/null; then kill "$STACK_PID"; fi
+          grep -h "refused outbound" "$RUNNER_TEMP/stack.log" | sort | uniq -c | sort -rn | head -30 || true
+
+      - name: Upload boot log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-stack-boot
+          path: |
+            ${{ runner.temp }}/stack.log
+            .local-stack/stack.json
+          if-no-files-found: ignore
+          retention-days: 7
