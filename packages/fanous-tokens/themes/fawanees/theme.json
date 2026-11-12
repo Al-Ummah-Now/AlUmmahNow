@@ -8,11 +8,11 @@
   },
   "color": {
     "light": {
-      "background": "#f6d67f",
-      "surface": "#fff1c4",
-      "surfaceRaised": "#fff9e6",
+      "background": "#fff1c4",
+      "surface": "#f6d67f",
+      "surfaceRaised": "#f9df97",
       "heroStart": "#efc65f",
-      "heroEnd": "#f6d67f",
+      "heroEnd": "#fff1c4",
       "textPrimary": "#0b2534",
       "textSecondary": "#143a4c",
       "textMuted": "#24505f",
@@ -96,7 +96,12 @@
       "upload.hover": "#184456",
       "upload.pressed": "#184456",
       "upload.disabledBg": "#0e2b3d",
-      "upload.disabledText": "#d6dfe2"
+      "upload.disabledText": "#d6dfe2",
+      "menu.bg": "#f6d67f",
+      "dialog.bg": "#f6d67f",
+      "nav.menuBg": "#f6d67f",
+      "drawer.activeBg": "#efc65f",
+      "form.inputBg": "#f6d67f"
     }
   }
 }

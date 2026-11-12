@@ -61,11 +61,11 @@ namespace AlUmmahNow.Fanous
 
     public static class LightColors
     {
-        public static Color Background => new Color(0.9647f, 0.8392f, 0.498f, 1f);
-        public static Color Surface => new Color(1f, 0.9451f, 0.7686f, 1f);
-        public static Color SurfaceRaised => new Color(1f, 0.9765f, 0.902f, 1f);
+        public static Color Background => new Color(1f, 0.9451f, 0.7686f, 1f);
+        public static Color Surface => new Color(0.9647f, 0.8392f, 0.498f, 1f);
+        public static Color SurfaceRaised => new Color(0.9765f, 0.8745f, 0.5922f, 1f);
         public static Color HeroStart => new Color(0.9373f, 0.7765f, 0.3725f, 1f);
-        public static Color HeroEnd => new Color(0.9647f, 0.8392f, 0.498f, 1f);
+        public static Color HeroEnd => new Color(1f, 0.9451f, 0.7686f, 1f);
         public static Color TextPrimary => new Color(0.0431f, 0.1451f, 0.2039f, 1f);
         public static Color TextSecondary => new Color(0.0784f, 0.2275f, 0.298f, 1f);
         public static Color TextMuted => new Color(0.1412f, 0.3137f, 0.3725f, 1f);

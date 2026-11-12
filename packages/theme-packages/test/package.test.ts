@@ -86,9 +86,9 @@ test('assets: unsafe SVGs, fake extensions and unused files', () => {
 test('contrast: a text colour that fails WCAG AA names the pair and the ratio', () => {
   const { theme } = fawanees();
   const t = clone(theme);
-  t.tokens.color.light.textPrimary = '#f6d67f';
+  t.tokens.color.light.textPrimary = '#fff1c4';
   const errs = messages(validatePackage(t));
-  assert.ok(errs.some((e) => e.startsWith('tokens.color.light.textPrimary: #f6d67f on background #f6d67f is 1.00:1, needs 4.5:1')), errs.join('\n'));
+  assert.ok(errs.some((e) => e.startsWith('tokens.color.light.textPrimary: #fff1c4 on background #fff1c4 is 1.00:1, needs 4.5:1')), errs.join('\n'));
   const u = clone(theme);
   u.components.header.colors!.light.text = u.components.header.colors!.light.bg;
   assert.ok(messages(validatePackage(u)).some((e) => e.startsWith('components.header.colors.light.text: nav.text')));
@@ -165,7 +165,7 @@ test('duplicate and versions', () => {
   const { theme } = fawanees();
   const copy: ThemePackage = duplicatePackage(theme, 'fawanees-eid', { en: 'Eid', ar: 'عيد' }, 'admin@test');
   assert.equal(copy.kind, 'custom');
-  assert.equal(copy.basedOn, 'fawanees@1.0.0');
+  assert.equal(copy.basedOn, 'fawanees@1.1.0');
   assert.equal(copy.version, '1.0.0');
   assert.deepEqual(copy.components, theme.components);
   assert.throws(() => duplicatePackage(theme, 'Bad Id', copy.name, 'x'));
