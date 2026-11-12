@@ -7,8 +7,10 @@
  * fallbacks equal the token values so an app that vendors only the colour tokens still renders the
  * same sizes. Logical properties only, so it mirrors in RTL with no extra rules.
  *
- * The header is dark in every theme and mode: header controls use the nav tokens. A menu is a
- * surface of its own and resets text colours, so it never inherits the header's light text.
+ * The header is dark in every theme and mode: header controls use the nav tokens. A menu is not
+ * part of the header: it is a page surface (the page's surface, background, text and divider
+ * tokens), light in light mode and dark in dark, and resets text colours, so it never inherits the
+ * header's light text.
  */
 
 /* ---------- header controls (on the dark header) ---------- */
@@ -120,8 +122,13 @@
 
 /* ---------- menu surface ---------- */
 .aun-menu {
-  --aun-menu-text: var(--fanous-c-menu-text);
-  --aun-menu-muted: var(--fanous-c-menu-muted);
+  /* The page's own colours, never the dark header's (owner review, 2026-11-12): light surfaces in
+     light mode, dark in dark. Hover and the current row take the page background. */
+  --aun-menu-bg: var(--fanous-color-surface);
+  --aun-menu-text: var(--fanous-color-text-primary);
+  --aun-menu-muted: var(--fanous-color-text-secondary);
+  --aun-menu-hover: var(--fanous-color-background);
+  --aun-menu-line: var(--fanous-color-divider);
   position: absolute;
   inset-inline-end: 0;
   inset-block-start: calc(100% + var(--fanous-spacing-sm, 8px));
@@ -134,9 +141,9 @@
   margin: 0;
   padding: var(--fanous-spacing-xs, 4px);
   list-style: none;
-  background: var(--fanous-c-menu-bg);
+  background: var(--aun-menu-bg);
   color: var(--aun-menu-text);
-  border: 1px solid var(--fanous-c-menu-border);
+  border: 1px solid var(--aun-menu-line);
   border-radius: var(--fanous-radius-md, 8px);
   box-shadow: var(--fanous-elevation-medium);
   font-size: 0.9375rem;
@@ -213,7 +220,7 @@
   margin: var(--fanous-spacing-xs, 4px) calc(-1 * var(--fanous-spacing-xs, 4px));
   padding: 0;
   border: 0;
-  border-block-start: 1px solid var(--fanous-c-divider-line);
+  border-block-start: 1px solid var(--aun-menu-line);
 }
 
 /* item: a link or a button */
@@ -237,7 +244,7 @@
 }
 .aun-menu-item:hover,
 .aun-menu-item:focus-visible {
-  background: var(--fanous-c-menu-hover);
+  background: var(--aun-menu-hover);
   color: var(--aun-menu-text);
   text-decoration: none;
 }
@@ -247,7 +254,7 @@
   outline-offset: -2px;
 }
 .aun-menu-item:active {
-  background: var(--fanous-c-menu-hover);
+  background: var(--aun-menu-hover);
 }
 .aun-menu-item[disabled],
 .aun-menu-item[aria-disabled='true'] {
@@ -278,7 +285,7 @@
 .aun-menu-item[aria-current]:not([aria-current='false']):not(.aun-menu-who),
 .aun-menu-item[aria-checked='true'],
 .aun-menu-item[aria-pressed='true'] {
-  background: var(--fanous-c-menu-hover);
+  background: var(--aun-menu-hover);
   font-weight: 600;
 }
 .aun-menu-check {
@@ -333,7 +340,7 @@
   cursor: pointer;
 }
 .aun-acct-signout:hover {
-  background: var(--fanous-c-menu-hover);
+  background: var(--aun-menu-hover);
   color: var(--aun-menu-text);
 }
 
@@ -352,7 +359,7 @@
   flex: none;
   margin-inline-start: auto;
   padding: var(--fanous-spacing-xxs, 2px) var(--fanous-spacing-sm, 8px);
-  border: 1px solid var(--fanous-c-menu-border);
+  border: 1px solid var(--aun-menu-line);
   border-radius: var(--fanous-radius-full, 999px);
   color: var(--aun-menu-muted);
   font-size: 0.6875rem;
@@ -381,7 +388,7 @@
   width: 100%;
   min-height: 2.5rem;
   padding: 0 var(--fanous-spacing-md, 12px);
-  border: 1px solid var(--fanous-c-menu-border);
+  border: 1px solid var(--aun-menu-line);
   border-radius: var(--fanous-radius-sm, 4px);
   background: transparent;
   color: var(--aun-menu-text);
