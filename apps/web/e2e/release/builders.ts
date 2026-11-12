@@ -32,9 +32,9 @@
  */
 import { appendFileSync, readFileSync } from 'fs';
 import * as path from 'path';
-import { expect, test as base, type Page } from '@playwright/test';
+import { expect, test as base, type Browser, type BrowserContext, type Page } from '@playwright/test';
 import { releaseEnv, target } from './targets';
-import { apiFetch, createProfile, signUpOnWeb, type Locale, type WebUser } from './web-session';
+import { apiFetch, createProfile, signInAgain, signUpOnWeb, type Locale, type WebUser } from './web-session';
 import { grantCreatorTier, setCreatorTier } from './creator-tier';
 import { encoding, untilEncoded } from './encode';
 import { isRunUserEmail, runId } from '../test-utils/run-users';
@@ -84,6 +84,17 @@ export function ns(): string {
     /* outside a test (global setup): no spec */
   }
   return `${runId() || process.env.E2E_RUN_TAG || 'local'}-${spec}-w${worker}`;
+}
+
+/** A browser storage state (cookies + origins) a test context can start from. */
+export type StorageState = Awaited<ReturnType<BrowserContext['storageState']>>;
+
+/** A creator with channels and a web session that knows them (createCreator). */
+export interface Creator {
+  user: WebUser;
+  channelIds: string[];
+  /** Signed in as the creator: `test.use({ storageState: async ({}, use) => use(creator.state) })` */
+  state: StorageState;
 }
 
 export interface CreatedVideo {
@@ -368,6 +379,38 @@ export class DataScope {
     expect(id, 'comment create returned no id').toBeTruthy();
     this.undo.push({ what: `comment ${id}`, run: () => apiFetch(user, `/api/videos/${videoId}/comments/${id}`, { method: 'DELETE' }) });
     return id as string;
+  }
+
+  /**
+   * A creator for UI specs: signs up, gets the Creator tier and `channels` channels (the first is
+   * main), then signs in again so the web session lists those channels (channels made through the
+   * API are not in the session the sign-up made; the app would rewrite it on the first page, in the
+   * middle of the test). Runs in its own context, closed afterwards.
+   */
+  async createCreator(browser: Browser, prefix: string, opts: { channels?: number; locale?: Locale } = {}): Promise<Creator> {
+    const context = await browser.newContext();
+    try {
+      const page = await context.newPage();
+      const first = await this.createUser(page, prefix, opts.locale);
+      await this.grantCreator(first);
+      const channelIds: string[] = [];
+      for (let i = 0; i < (opts.channels ?? 1); i++) {
+        channelIds.push(await this.createChannel(first, { name: `E2E ${prefix} ${i + 1} ${ns()} ${Date.now().toString(36)}`, isMain: i === 0 }));
+      }
+      const user = await signInAgain(page, first.email, opts.locale);
+      return { user, channelIds, state: await context.storageState() };
+    } finally {
+      await context.close();
+    }
+  }
+
+  /**
+   * Registers a cleanup step for something the spec made another way (through the UI, say), run
+   * by cleanup() in the same newest-first order. Register it as soon as the id is known, or
+   * register a sweep (e.g. "every playlist of this spec's channel") before the UI step runs.
+   */
+  onCleanup(what: string, run: () => Promise<Response | unknown>): void {
+    this.undo.push({ what, run });
   }
 
   /** Deletes everything this scope created, newest first. Failures are reported, never thrown. */
