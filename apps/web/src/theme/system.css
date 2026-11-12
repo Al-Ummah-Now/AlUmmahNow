@@ -404,6 +404,12 @@ div:has(>a[class*="w-40"][class*="h-24"])>button{background:transparent!importan
 .video-card [data-testid=video-card-menu],.video-card [data-testid=video-card-menu] button,button[data-testid=video-card-menu]{background:transparent!important;background-image:none!important;color:var(--fanous-color-text-secondary)!important;box-shadow:none!important;border:0!important}
 @media(hover:hover){button[data-testid=video-card-menu]:hover{background:var(--m-hover)!important}}
 .tabbar{background:var(--fanous-color-surface)!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+/* The phone tab bar sits on the page surface, so it takes the drawer's colours (checked against drawer.bg in every
+   theme), never the night header's nav colours: those are light text for a dark bar and vanished in light themes */
+.tabbar{background:var(--fanous-c-drawer-bg)!important}.tabbar .tb{color:var(--fanous-c-drawer-text)!important}.tabbar .tb svg{color:var(--fanous-c-drawer-icon)}
+.tabbar .tb[aria-current=page],.tabbar .tb[aria-current=page] svg{color:var(--fanous-c-drawer-active-text)!important}
+/* The header search has its own clear button (header-search-clear): the browser's one doubled it, and in RTL sat over the typed text */
+.ah-search input::-webkit-search-cancel-button,.ah-search-sheet input::-webkit-search-cancel-button{display:none;-webkit-appearance:none;appearance:none}
 
 html:not(.dark) main:has(.demo-gfx) input:not([type=checkbox]):not([type=radio]):not([type=range]){background:#fff!important}
 /* Playlist rows: quiet list, not stacked cards */
