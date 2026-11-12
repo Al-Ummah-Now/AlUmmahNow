@@ -11,6 +11,7 @@ import { formatDate, formatNumber, type MessageKey } from '@/i18n/translate';
 import { linkClass } from '@/components/ui';
 import { ConfirmButton } from '@/components/content/actions';
 import { Chip, MonoId, smallButtonClass, statusTone, tableWrapClass, tdClass, thClass, wideOnly } from '@/components/content/parts';
+import { R2Badge } from '@/components/content/r2';
 import { VideoBulkActionsSlot } from './extensions';
 
 function duration(seconds: number | null): string | null {
@@ -138,6 +139,7 @@ export function VideoTable({ rows, permissions }: { rows: AdminVideoRow[]; permi
               <th className={thClass} scope="col">{t('videos.colVideo')}</th>
               <th className={`${thClass} ${wideOnly}`} scope="col">{t('videos.colChannel')}</th>
               <th className={thClass} scope="col">{t('videos.colStatus')}</th>
+              <th className={thClass} scope="col">{t('mediaDelivery.colR2')}</th>
               <th className={`${thClass} ${wideOnly} text-end`} scope="col">{t('videos.colViews')}</th>
               <th className={`${thClass} ${wideOnly}`} scope="col">{t('videos.colCreated')}</th>
             </tr>
@@ -190,6 +192,10 @@ export function VideoTable({ rows, permissions }: { rows: AdminVideoRow[]; permi
                       {v.isHidden && <Chip tone="bad" testId="chip-hidden">{t('videos.hiddenYes')}</Chip>}
                       {!!v.openReports && <Chip tone="warn" testId="chip-reports">{t('content.openReports', { count: v.openReports })}</Chip>}
                     </div>
+                  </td>
+                  <td className={tdClass} data-testid="video-r2-cell">
+                    {/* Absent from an older api-videos: nothing rather than a wrong "Not transcoded" */}
+                    {v.r2 !== undefined && <R2Badge r2={v.r2} t={t} prefix={false} testId="chip-r2" />}
                   </td>
                   <td className={`${tdClass} ${wideOnly} text-end tabular-nums`}>{formatNumber(v.views, locale)}</td>
                   <td className={`${tdClass} ${wideOnly} text-sm text-fg-muted whitespace-nowrap`}>

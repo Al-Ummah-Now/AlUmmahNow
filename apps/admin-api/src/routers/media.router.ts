@@ -6,7 +6,9 @@
  * needs the `media:manage` permission (admins and super admins). The data and
  * the work live in api-videos' /internal/media/* (VIDEOS service binding).
  *
- *   GET  /summary?days=     time to playable, QoE per source per day, cost inputs, the switch
+ *   GET  /summary?days=     time to playable, QoE per source per day, cost inputs, the switch, and
+ *                           live (transcoding now, waiting, max concurrent, oldest wait)
+ *   GET  /summary?only=live just the live figures (the Delivery page polls them every 30 s)
  *   GET  /jobs?status=&limit=  recent R2 transcode jobs
  *   POST /retry { ids }     transcode again (audited per video, key media:video:<id>)
  *   GET  /settings          the delivery switch
@@ -84,7 +86,8 @@ async function audited<T>(c: C, rows: { key: string; oldValue: unknown; newValue
 
 app.get('/summary', async (c) => {
   const days = Math.min(Math.max(parseInt(c.req.query('days') || '30', 10) || 30, 1), 120);
-  const result = await callVideosInternal(c.env, '/internal/media/summary', { query: { days: String(days) } });
+  const only = c.req.query('only') === 'live' ? 'live' : undefined;
+  const result = await callVideosInternal(c.env, '/internal/media/summary', { query: { days: String(days), only } });
   return c.json({ success: true, result });
 });
 

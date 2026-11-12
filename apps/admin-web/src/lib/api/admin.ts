@@ -37,6 +37,7 @@ import type {
   VideoFormatRunView,
   DeliverySettings,
   MediaJob,
+  MediaLive,
   MediaSummary,
 } from './types';
 import type { ErrorCounts, ErrorFacets, ErrorGroup, ErrorGroupDetail, ErrorGroupList, NeedsActionItem } from './error-groups-types';
@@ -303,6 +304,20 @@ export async function markProcessingFailed(ids: string[], reason?: string): Prom
 
 export async function getMediaSummary(days: number): Promise<MediaSummary> {
   return fetchAdmin<MediaSummary>(`/api/media/summary?days=${encodeURIComponent(String(days))}`);
+}
+
+/**
+ * The live transcoder figures alone (the Delivery page polls them every 30 s).
+ * A result, not a throw: production builds redact server-action errors.
+ */
+export async function getMediaLive(): Promise<ActionResult<MediaLive | null>> {
+  try {
+    const data = await fetchAdmin<{ live?: MediaLive }>('/api/media/summary?only=live');
+    return { ok: true, data: data.live ?? null };
+  } catch (error) {
+    if (error instanceof AdminApiError) return { ok: false, status: error.status, error: error.message };
+    return { ok: false, status: 500, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
 }
 
 export async function listMediaJobs(params: { status?: string; limit?: number } = {}): Promise<MediaJob[]> {

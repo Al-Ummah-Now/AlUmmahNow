@@ -73,6 +73,17 @@ describe('/api/media', () => {
     assert.equal(calls[2].path, '/internal/media/summary?days=30');
   });
 
+  it('summary passes the live figures through, and asks for them alone with only=live', async () => {
+    const live = { transcoding: 1, queued: 3, maxTranscodes: 2, oldestQueuedAt: '2026-11-11T11:45:00.000Z', oldestQueuedSeconds: 900, at: '2026-11-11T12:00:00.000Z' };
+    const { req, calls } = setup(['Admin'], (path) => (path.endsWith('/summary') ? ok({ days: 30, jobs: null, qoe: [], costs: [], live }) : ok({})));
+    const body = (await (await req('/api/media/summary')).json()) as { result: { live: unknown } };
+    assert.deepEqual(body.result.live, live);
+    await req('/api/media/summary?only=live');
+    assert.equal(calls[1].path, '/internal/media/summary?days=30&only=live');
+    await req('/api/media/summary?only=everything');
+    assert.equal(calls[2].path, '/internal/media/summary?days=30');
+  });
+
   it('jobs forwards the status filter and refuses unknown ones', async () => {
     const { req, calls } = setup(['admin']);
     assert.equal((await req('/api/media/jobs?status=failed&limit=20')).status, 200);

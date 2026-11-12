@@ -12,6 +12,7 @@
 
 import type { CreatorTierAssignment } from './creator-tiers';
 import { normalizeRole } from './roles';
+import type { VideoR2State } from './media-delivery';
 
 // ---------------------------------------------------------------------------
 // Permissions
@@ -212,6 +213,15 @@ export interface AdminVideoQuery {
   pageSize?: number;
 }
 
+/** A video's R2 rendition state as the admin list shows it (from the video record's `r2`; null = never queued). */
+export type AdminVideoR2Badge = Pick<VideoR2State, 'status' | 'progress' | 'error'>;
+
+/** The R2 side of a video for the admin video page (the record's `r2`, without the transcode result). */
+export type AdminVideoR2 = Pick<
+  VideoR2State,
+  'status' | 'jobId' | 'rev' | 'access' | 'attempts' | 'queuedAt' | 'startedAt' | 'readyAt' | 'failedAt' | 'error' | 'progress' | 'failure'
+>;
+
 export interface AdminVideoRow {
   id: string;
   title: string;
@@ -227,6 +237,8 @@ export interface AdminVideoRow {
   thumbnailUrl: string | null;
   createdAt: string | null;
   openReports?: number;
+  /** R2 transcode state (epic #687); null when the video was never queued for R2. Absent from older api-videos. */
+  r2?: AdminVideoR2Badge | null;
 }
 
 export interface AdminVideoDetail extends AdminVideoRow {
@@ -247,6 +259,8 @@ export interface AdminVideoDetail extends AdminVideoRow {
   updatedAt: string | null;
   /** Live status from Bunny Stream when it could be read. */
   processing: { status: string; encodeProgress: number | null; resolutions: string[] } | null;
+  /** R2 transcode state (epic #687); null when the video was never queued for R2. */
+  r2?: AdminVideoR2 | null;
 }
 
 export interface AdminCommentRow {
