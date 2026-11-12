@@ -7,9 +7,15 @@
  * object keeps nothing longer than 48 hours.
  */
 import { test, expect } from '@playwright/test';
-import { VIDEOS_API_URL, storageStatePath } from './support/env';
+import { ADMIN_WEB_URL, VIDEOS_API_URL, storageStatePath } from './support/env';
 
 const VIDEO_ID = 'e2e-live-qoe-video';
+/**
+ * A local-stack spec (placement.ts): it sends made-up playback beacons and reads the live view
+ * the local realtime worker builds from them. Against a deployed target (QA) the beacons would land
+ * in shared live figures and the page's numbers move with real plays, so it runs only locally.
+ */
+const LOCAL_STACK = /^https?:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/.test(ADMIN_WEB_URL);
 
 async function report(body: Record<string, unknown>) {
   const res = await fetch(`${VIDEOS_API_URL}/api/videos/${VIDEO_ID}/qoe`, {
@@ -23,6 +29,7 @@ async function report(body: Record<string, unknown>) {
 test.use({ storageState: storageStatePath('superadmin') });
 
 test('a play heartbeat shows on the Delivery page live, and its final report ends it', async ({ page }) => {
+  test.skip(!LOCAL_STACK, 'local stack only: sends test beacons to its own api-videos and realtime worker; not against a deployed target');
   const sessionId = `e2e-live-${Date.now().toString(36)}`;
   await page.goto('/delivery');
   const panel = page.getByTestId('delivery-qoe-live');
