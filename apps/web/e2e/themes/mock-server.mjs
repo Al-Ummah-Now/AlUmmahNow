@@ -42,6 +42,55 @@ const COMMENTS = [
 }));
 const NOTIFS = Array.from({ length: 8 }, (_, i) => ({ id: `n${i}`, category: 'uploads', notificationType: 'upload_ready', notificationKey: 'uploadReady', params: { videoTitle: `WH${i + 10}_1` }, actionUrl: null, entityId: null, isRead: i > 1, createdAt: iso(i * 24 + 1) }));
 
+// Channel-layer fixtures (e2e/themes/channel-layer.spec.ts): answers per access token, so two
+// accounts in one browser each have their own channels and creator tier. Other tokens are unchanged.
+const ch = (id, userId, name, ar, role, isMain = false, i = 1) => ({ id, userId, name, nameLocalized: { ar }, avatarUrl: `${base}/thumb/${i}.svg`, handle: id, isMain, role });
+const tier = (over) => ({ tier: { id: 't1', name: 'Scholar', unlimited: false }, via: 'tier', canUpload: true, canCreateChannel: true, channelsOwned: 0, maxChannels: 3, limits: null, usage: { hour: 0, day: 0 }, ...over });
+export const CHANNEL_FIXTURES = {
+  // Aisha: owns two channels (her tier allows two: at the limit) and manages one of Omar's
+  'nav-aisha': {
+    channels: [ch('a1', 'nav-a', 'Tafsir Lessons', 'دروس التفسير', 'owner', true, 2), ch('a2', 'nav-a', 'Hadith Circle', 'حلقة الحديث', 'owner', false, 3), ch('b1', 'nav-b', 'Seerah Weekly', 'السيرة أسبوعيًا', 'admin', false, 4)],
+    creator: tier({ canCreateChannel: false, channelsOwned: 2, maxChannels: 2 }),
+  },
+  // Omar: owns three channels, may create more
+  'nav-omar': {
+    channels: [ch('b1', 'nav-b', 'Seerah Weekly', 'السيرة أسبوعيًا', 'owner', true, 4), ch('b2', 'nav-b', 'Arabic Basics', 'أساسيات العربية', 'owner', false, 5), ch('b3', 'nav-b', 'Fiqh Q&A', 'أسئلة الفقه', 'owner', false, 6)],
+    creator: tier({ channelsOwned: 3, maxChannels: 5 }),
+  },
+  // Hana: her tier said she could create one more, but another tab used it up: the create is refused
+  // (channel_limit) and the tier, read again, is at its limit
+  'nav-race': {
+    channels: [ch('h1', 'nav-h', 'Quran Recitation', 'تلاوة القرآن', 'owner', true, 7)],
+    creator: tier({ channelsOwned: 1, maxChannels: 2 }),
+    refuseCreate: tier({ canCreateChannel: false, channelsOwned: 2, maxChannels: 2 }),
+  },
+  // A viewer: no channel, no creator tier (uploads and channels are by invitation)
+  'nav-viewer': {
+    channels: [],
+    creator: { tier: null, via: 'none', canUpload: false, canCreateChannel: false, channelsOwned: 0, maxChannels: null, limits: null, usage: { hour: 0, day: 0 } },
+  },
+};
+
+const FIXTURE_START = JSON.stringify(CHANNEL_FIXTURES);
+/** Back to the start (each test that changes a fixture resets it first). */
+function resetFixtures() {
+  const start = JSON.parse(FIXTURE_START);
+  for (const key of Object.keys(CHANNEL_FIXTURES)) CHANNEL_FIXTURES[key] = start[key];
+}
+
+function fixtureAnswer(path, token, method) {
+  const f = CHANNEL_FIXTURES[token];
+  if (!f) return undefined;
+  if (path === '/api/channels/access') return { status: 200, body: { success: true, data: f.channels } };
+  if (path === '/api/me/creator') return { status: 200, body: { success: true, result: f.creator } };
+  // Creating a channel past the tier's limit is refused the way api-videos refuses it
+  if (path === '/api/channels' && method === 'POST' && (f.refuseCreate || !f.creator.canCreateChannel)) {
+    if (f.refuseCreate) f.creator = f.refuseCreate;
+    return { status: 403, body: { success: false, error: 'channel_limit', code: 'channel_limit', maxChannels: f.creator.maxChannels } };
+  }
+  return undefined;
+}
+
 function answer(path) {
   if (path.startsWith('/thumb/')) return null;
   if (path === '/api/profile' || path === '/api/profiles/me') return PROFILE;
@@ -69,6 +118,13 @@ createServer((req, res) => {
   const cors = { 'access-control-allow-origin': siteOrigin, 'access-control-allow-credentials': 'true', 'access-control-allow-headers': 'authorization, content-type, x-channel-id', 'access-control-allow-methods': 'GET, POST, PUT, DELETE, OPTIONS', vary: 'Origin' };
   if (req.method === 'OPTIONS') { res.writeHead(204, cors); return res.end(); }
   if (path.startsWith('/thumb/')) { res.writeHead(200, { ...cors, 'content-type': 'image/svg+xml' }); return res.end(thumb(parseInt(path.slice(7), 10) || 1)); }
+  if (path === '/__fixtures/reset') { resetFixtures(); res.writeHead(204, cors); return res.end(); }
+  const token = (req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
+  const fixture = fixtureAnswer(path, token, req.method);
+  if (fixture) {
+    res.writeHead(fixture.status, { ...cors, 'content-type': 'application/json' });
+    return res.end(JSON.stringify(fixture.body));
+  }
   res.writeHead(200, { ...cors, 'content-type': 'application/json' });
   res.end(JSON.stringify(answer(path)));
 }).listen(port, '127.0.0.1', () => console.log(`mock api on ${base}`));
