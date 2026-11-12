@@ -13,6 +13,7 @@ import {
   userApi,
   waitForThumbnails,
   type E2EVideo,
+  waitForReady,
 } from './test-utils/e2e-videos';
 import { ownStudioVideos } from './test-utils/own-studio-videos';
 
@@ -95,7 +96,12 @@ test.describe('Thumbnail - saving', () => {
 
   test('should save a selected auto-generated frame', async ({ page }) => {
     test.setTimeout(BUNNY_WAIT_MS + 120000);
-    expect(await waitForThumbnails('single', video!.id), `no Bunny frames after ${BUNNY_WAIT_MS / 1000} s: ${BUNNY_BACKLOG}?`).toBe(true);
+    if (process.env.E2E_ENV === 'local') {
+      // The stack's fake Bunny has the frames once the video is ready; its CDN host only resolves in the browser
+      video = await waitForReady('single', video!);
+    } else {
+      expect(await waitForThumbnails('single', video!.id), `no Bunny frames after ${BUNNY_WAIT_MS / 1000} s: ${BUNNY_BACKLOG}?`).toBe(true);
+    }
     await openEditor(page, video!);
 
     const option = page.getByTestId('thumbnail-auto-option').first();
