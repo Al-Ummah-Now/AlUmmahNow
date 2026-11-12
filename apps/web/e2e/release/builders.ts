@@ -243,7 +243,7 @@ async function deleteAccount(email: string, signal?: AbortSignal): Promise<Respo
  * end-of-job leftover checks look for its Bunny video, collection and R2 objects even after the
  * D1 rows are gone (scripts/e2e/run-leftovers.ts).
  */
-function recordResource(kind: 'video' | 'channel', id: string): void {
+export function recordResource(kind: 'video' | 'channel', id: string): void {
   if (process.env.E2E_RUN_RESOURCES_FILE) appendFileSync(process.env.E2E_RUN_RESOURCES_FILE, `${kind} ${id}\n`);
 }
 

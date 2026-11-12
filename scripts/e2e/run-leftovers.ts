@@ -153,7 +153,12 @@ async function main(): Promise<void> {
   const token = process.env.LEFTOVERS_PROBE_TOKEN;
   if (probe && token && env === 'qa') {
     const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-    const bunny = await fetch(`${probe}/bunny?marker=${encodeURIComponent(marker)}`, { headers });
+    // A workers.dev URL deployed seconds ago can answer 404 until it propagates: retry for a minute
+    let bunny = await fetch(`${probe}/bunny?marker=${encodeURIComponent(marker)}`, { headers });
+    for (let attempt = 0; bunny.status === 404 && attempt < 12; attempt++) {
+      await new Promise((r) => setTimeout(r, 5000));
+      bunny = await fetch(`${probe}/bunny?marker=${encodeURIComponent(marker)}`, { headers });
+    }
     if (!bunny.ok) throw new Error(`probe /bunny answered ${bunny.status}`);
     const found = (await bunny.json()) as { videos: Leftovers['bunnyVideos']; collections: Leftovers['bunnyCollections'] };
     leftovers.bunnyVideos = found.videos;

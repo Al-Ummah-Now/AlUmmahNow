@@ -18,6 +18,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { randomBytes } from 'crypto';
 import { test, expect, type Page } from '@playwright/test';
+import { trackRunUploads } from './run-videos';
 import { target } from './targets';
 import { apiFetch, createProfile, signInAgain, signUpOnWeb, type WebUser } from './web-session';
 import { grantCreatorTier } from './creator-tier';
@@ -25,6 +26,9 @@ import { submitNewChannelInMenu } from './account-menu';
 
 // Signs users in through the auth server: traces would hold the password.
 test.use({ trace: 'off' });
+// Real Bunny uploads: no retry (a failed upload is reported, never uploaded again) and every
+// upload recorded for the run's upload cap (run-videos.ts, release-e2e.yml)
+test.describe.configure({ retries: 0 });
 
 const MB = 1024 * 1024;
 const CHUNK = 5 * MB;
@@ -68,6 +72,7 @@ interface Log {
 
 /** Watches the page's initiate answers and its TUS traffic (no interception). */
 function watch(page: Page, log: Log): void {
+  trackRunUploads(page);
   page.on('response', async (res) => {
     const url = res.url();
     const method = res.request().method();

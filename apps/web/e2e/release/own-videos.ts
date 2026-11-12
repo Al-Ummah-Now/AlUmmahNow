@@ -15,6 +15,7 @@
  */
 import { expect, type test as base } from '@playwright/test';
 import { useOwnData } from './builders';
+import { runVideo, runVideos, sharedRunVideosOn, type RunVideos } from './run-videos';
 import { target } from './targets';
 import type { PublicVideo } from './videos';
 
@@ -36,7 +37,13 @@ async function publicVideo(id: string): Promise<PublicVideo> {
 export function useOwnVideos(test: typeof base): ((key: OwnVideoKey) => Promise<PublicVideo>) & { all: () => Promise<OwnVideos> } {
   const data = useOwnData(test);
   let built: OwnVideos | null = null;
+  // A run with shared videos (QA/stage encode part, run-videos.ts) uploads nothing here: `own()`
+  // hands out the run's clips instead (landscape and landscape2: its 40 s landscape, vertical: its
+  // Short). Only specs that just need a ready, playable video run there (player.spec.ts).
+  // (test files load before the global setup runs: only the flag here, the file is read in the tests)
+  const shared = sharedRunVideosOn();
   test.beforeAll(async ({ browser }) => {
+    if (shared) return;
     // Sign-up, channel and three uploads: allow for a slow environment
     test.setTimeout(10 * 60 * 1000);
     const context = await browser.newContext();
@@ -62,9 +69,19 @@ export function useOwnVideos(test: typeof base): ((key: OwnVideoKey) => Promise<
       await context.close();
     }
   });
+  const sharedVideo = async (key: OwnVideoKey): Promise<PublicVideo> => {
+    const clip = key === 'vertical' ? 'vertical' : 'landscape40';
+    return publicVideo((await runVideo(clip)).id);
+  };
   const all = async (): Promise<OwnVideos> => {
+    if (shared) {
+      return {
+        channelId: (runVideos() as RunVideos).channelId,
+        videos: { landscape: await sharedVideo('landscape'), landscape2: await sharedVideo('landscape2'), vertical: await sharedVideo('vertical') },
+      };
+    }
     expect(built, 'useOwnVideos: the beforeAll that creates the videos did not run').toBeTruthy();
     return built as OwnVideos;
   };
-  return Object.assign(async (key: OwnVideoKey) => (await all()).videos[key], { all });
+  return Object.assign(async (key: OwnVideoKey) => (shared ? sharedVideo(key) : (await all()).videos[key]), { all });
 }

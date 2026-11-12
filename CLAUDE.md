@@ -689,6 +689,13 @@ H.264 HLS streams.
   main specs; a release waits for the slower part. A new encode-waiting spec goes in
   `ENCODE_SPECS` in `playwright.release.config.ts` (#838). The shared-state step takes the
   `<env>-global` lock only when the target has shared-state specs to run.
+- **Bunny upload cap.** Real uploads on QA/stage are capped at 10 per run part (the workflow's
+  "Bunny upload cap" step counts `video` lines in `E2E_RUN_RESOURCES_FILE`; ~8 per release). Specs
+  that upload through the upload page (`uploads`, `upload-reuse`, `processing.player`,
+  `media-delivery`) run in one Chromium project only, with `retries: 0`, and record each upload
+  (`trackRunUploads`). A spec that only needs a ready video uses the run's shared clips
+  (`runVideo()` in `e2e/release/run-videos.ts`, uploaded once in the global setup when
+  `E2E_SHARED_RUN_VIDEOS=1` and deleted at the end), never its own upload.
 - **Functional gates, load does not.** Specs that assert speed, latency budgets or behaviour under
   parallel load carry the tag `@load` (studio-list-speed, load-hot-paths, the recommendations
   budget, 07-performance). Every run leaves them out (`grepInvert`); `E2E_LOAD=only` runs just them

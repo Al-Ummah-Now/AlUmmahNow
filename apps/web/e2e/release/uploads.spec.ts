@@ -9,6 +9,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { test, expect, type Page } from '@playwright/test';
+import { trackRunUploads } from './run-videos';
 import { target } from './targets';
 import { apiFetch, createProfile, signUpOnWeb, type WebUser } from './web-session';
 import { grantCreatorTier } from './creator-tier';
@@ -18,6 +19,10 @@ import { fetchRetry } from './net';
 // This file signs users in through the auth server: its traces would hold the
 // typed password and email code (fillSecret args, form POST bodies). Trace off.
 test.use({ trace: 'off' });
+// Real Bunny uploads: no retry (a failed upload is reported, never uploaded again) and every
+// upload recorded for the run's upload cap (run-videos.ts, release-e2e.yml)
+test.describe.configure({ retries: 0 });
+test.beforeEach(({ page }) => trackRunUploads(page));
 
 const FIXTURES = path.join(__dirname, '..', 'test-fixtures');
 const IMAGE = path.join(FIXTURES, 'e2e-thumbnail.jpg');

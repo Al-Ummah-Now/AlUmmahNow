@@ -38,7 +38,7 @@ const SHARED_MODE = process.env.E2E_SHARED_STATE;
  * under a cross-run lock with a few slots (scripts/ci/qa-lock.ts --slots, #838): E2E_ENCODE=skip
  * in the main part, =only in the encode part. Unset (local runs): everything together.
  */
-const ENCODE_SPECS = '(bulk-rename-edit|upload-modes|studio-draft-path|embed-frame-sound|uploads|upload-reuse|media-delivery)\\.spec\\.ts|processing\\.player\\.spec\\.ts';
+const ENCODE_SPECS = '(bulk-rename-edit|upload-modes|studio-draft-path|embed-frame-sound|uploads|upload-reuse|media-delivery)\\.spec\\.ts|processing\\.player\\.spec\\.ts|player\\.spec\\.ts';
 const ENCODE = new RegExp(`/(${ENCODE_SPECS})$`);
 const NOT_ENCODE = new RegExp(`^(?!.*/(${ENCODE_SPECS})$)`);
 const ENCODE_MODE = process.env.E2E_ENCODE;
@@ -89,6 +89,9 @@ const LOAD_ONLY = process.env.E2E_LOAD === 'only';
 export default defineConfig({
   testDir: './e2e/release',
   ...(LOAD_ONLY ? { grep: LOAD_TAG } : { grepInvert: LOAD_TAG }),
+  // E2E_SHARED_RUN_VIDEOS=1 (CI's encode part on QA/stage): the run's shared clips, uploaded once
+  // before any test and deleted after the last (e2e/release/run-videos.ts); otherwise a no-op
+  globalSetup: './e2e/release/run-videos.ts',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   // One retry, never more. A test that needs it is reported as flaky (job summary, annotation) and
