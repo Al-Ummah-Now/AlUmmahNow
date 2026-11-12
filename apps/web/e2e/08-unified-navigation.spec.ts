@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { AUTH_STATE, ANONYMOUS_STATE, readAccount } from './test-utils/auth-state';
+import { AUTH_STATE, ANONYMOUS_STATE, readAccount, readSession } from './test-utils/auth-state';
 import { webAuthConfig } from './test-utils/session-login';
 import { closeSideDrawer, menuTrigger, openAccountMenu, openSideDrawer, showMenuView } from './test-utils/navigation';
 
@@ -324,7 +324,10 @@ test.describe('Side drawer - channel owner', () => {
     const drawer = await openSideDrawer(page);
     await expect(drawer.getByRole('link', { name: /Upload/ })).toHaveCount(0);
     const upload = page.getByRole('banner').getByTestId('header-upload');
-    await expect(upload).toHaveAttribute('href', '/en/upload');
+    // Upload opens on the active channel (the upload page's picker reads ?channel=)
+    const { activeChannelId } = readSession('single');
+    expect(activeChannelId, 'single user has an active channel').toBeTruthy();
+    await expect(upload).toHaveAttribute('href', `/en/upload?channel=${encodeURIComponent(activeChannelId!)}`);
     await expect(upload).toHaveAttribute('data-state', 'ready');
   });
 });
