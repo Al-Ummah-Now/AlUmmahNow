@@ -21588,6 +21588,127 @@
         }
       }
     },
+    "/api/v1/profile/playback": {
+      "get": {
+        "tags": [
+          "Profiles"
+        ],
+        "summary": "Get the current user's playback settings",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).",
+        "operationId": "get_PlaybackSettingsGet",
+        "responses": {
+          "200": {
+            "description": "Playback settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "autoplayNext": {
+                      "type": "boolean",
+                      "description": "When a video ends, the next one plays after the 3 s countdown (default true)"
+                    }
+                  },
+                  "required": [
+                    "autoplayNext"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Profiles"
+        ],
+        "summary": "Update the current user's playback settings",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).",
+        "operationId": "put_PlaybackSettingsUpdate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "autoplayNext": {
+                    "type": "boolean",
+                    "description": "When a video ends, the next one plays after the 3 s countdown (default true)"
+                  }
+                },
+                "required": [
+                  "autoplayNext"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "autoplayNext": {
+                      "type": "boolean",
+                      "description": "When a video ends, the next one plays after the 3 s countdown (default true)"
+                    }
+                  },
+                  "required": [
+                    "autoplayNext"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request data"
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/profile/subscriptions": {
       "get": {
         "tags": [
@@ -38301,6 +38422,10 @@
                       "unknown"
                     ],
                     "description": "Where the view came from (docs/specs/CREATOR-STUDIO.md §8.4)"
+                  },
+                  "autoplay": {
+                    "type": "boolean",
+                    "description": "The player started this video on its own (an up-next or playlist advance), not the viewer: counted separately so creator analytics stay honest"
                   },
                   "referrerHost": {
                     "type": "string",

@@ -8,7 +8,7 @@ import videojs, { type Player } from 'video.js';
 import { setControlIcons, type IconName } from './icons';
 import { isLivePlayback, isTrackingLive } from './live-state';
 import { captionTracks } from './settings-model';
-import { getPlayerUi, setTheatre, subscribePlayerUi } from './player-ui';
+import { getPlayerUi, setAutoplayNext, setTheatre, subscribePlayerUi } from './player-ui';
 import { formatTime as formatPlayerTime } from './progress-preview';
 import { FULLSCREEN_EVENTS, layerHostFor, PLAYER_LAYER_ATTR } from './player-layer';
 
@@ -22,6 +22,9 @@ export interface ChromeCopy {
   live: string;
   goToLive: string;
   behind: string;
+  autoplay: string;
+  autoplayOn: string;
+  autoplayOff: string;
 }
 
 export const SETTINGS_TOGGLE_EVENT = 'fanous:settings-toggle';
@@ -163,6 +166,43 @@ export function registerFanousComponents(): void {
     }
   }
 
+  /**
+   * YouTube-style autoplay switch (docs/specs/PLAYLIST-PLAYBACK.md, "auto play like youtube"): on
+   * the watch page only. A real switch for assistive tech (role="switch", aria-checked) named
+   * "Autoplay"; the tooltip says "Autoplay is on/off". Saved on this device and, signed in, on the
+   * account (hooks/useAutoplaySetting.ts).
+   */
+  class FanousAutoplayToggle extends Button {
+    constructor(player: Player, options?: Record<string, unknown>) {
+      super(player, options);
+      const el = this.el();
+      el.setAttribute('role', 'switch');
+      el.setAttribute('data-testid', 'player-autoplay-toggle');
+      const track = document.createElement('span');
+      track.className = 'vjs-fanous-switch';
+      track.setAttribute('aria-hidden', 'true');
+      const knob = document.createElement('span');
+      knob.className = 'vjs-fanous-switch-knob';
+      track.appendChild(knob);
+      el.querySelector('.vjs-icon-placeholder')?.replaceWith(track);
+      this.controlText(copy(this).autoplay);
+      followUi(this, () => {
+        const ui = getPlayerUi();
+        if (ui.theatreAvailable) this.show();
+        else this.hide();
+        el.setAttribute('aria-checked', String(ui.autoplayNext));
+        el.setAttribute('title', ui.autoplayNext ? copy(this).autoplayOn : copy(this).autoplayOff);
+        this.toggleClass('vjs-fanous-on', ui.autoplayNext);
+      });
+    }
+    buildCSSClass() {
+      return `vjs-fanous-autoplay ${super.buildCSSClass()}`;
+    }
+    handleClick() {
+      setAutoplayNext(!getPlayerUi().autoplayNext);
+    }
+  }
+
   /** "Live" at the edge; "Live · 0:42 behind" otherwise. Clicking seeks to the edge. */
   class FanousLiveBadge extends Button {
     constructor(player: Player, options?: Record<string, unknown>) {
@@ -214,6 +254,7 @@ export function registerFanousComponents(): void {
   vjs.registerComponent('FanousCaptionsToggle', FanousCaptionsToggle);
   vjs.registerComponent('FanousSettingsButton', FanousSettingsButton);
   vjs.registerComponent('FanousTheatreToggle', FanousTheatreToggle);
+  vjs.registerComponent('FanousAutoplayToggle', FanousAutoplayToggle);
   vjs.registerComponent('FanousLiveBadge', FanousLiveBadge);
 }
 

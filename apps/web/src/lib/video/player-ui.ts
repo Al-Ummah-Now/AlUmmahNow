@@ -5,13 +5,24 @@
  * controls only show them. This store connects the two without threading props through every
  * player wrapper. Surfaces that never opt in (embeds, previews) keep all three off.
  */
+import { readAutoplayNext, writeAutoplayNext } from '@/lib/playlists/playback';
+
 export interface UpNext {
   title: string;
   channel: string;
   thumbnail?: string;
   /** Where the next video sits in its playlist, e.g. "4 / 12" */
   badge?: string;
-  /** Navigates to the next video */
+  /** Navigates to the next video; `auto` when the countdown ran out (counted as an autoplayed view) */
+  go: (opts?: { auto?: boolean }) => void;
+}
+
+/** A suggestion on the end screen beside up next (autoplay off or cancelled) */
+export interface EndSuggestion {
+  id: string;
+  title: string;
+  channel: string;
+  thumbnail?: string;
   go: () => void;
 }
 
@@ -24,6 +35,10 @@ export interface PlayerUiState {
   upNext: UpNext | null;
   /** At the end of a playlist (loop off): starts it again from its first video */
   replayList: (() => void) | null;
+  /** More videos for the end screen when the countdown is off or cancelled */
+  suggestions: EndSuggestion[];
+  /** "Autoplay next": the viewer's choice (account-synced when signed in, else this device) */
+  autoplayNext: boolean;
   /** Opens the page's report flow from the player's error panel */
   reportProblem: (() => void) | null;
   /** Chapter starts and titles (in the page language), for the progress bar's hover tooltip */
@@ -39,7 +54,7 @@ export const THEATRE_STORAGE_KEY = 'aun.player.theatre';
 
 type Listener = () => void;
 const listeners = new Set<Listener>();
-let state: PlayerUiState = { theatreAvailable: false, theatre: false, miniPlayerAvailable: false, upNext: null, replayList: null, reportProblem: null, chapters: [] };
+let state: PlayerUiState = { theatreAvailable: false, theatre: false, miniPlayerAvailable: false, upNext: null, replayList: null, suggestions: [], autoplayNext: true, reportProblem: null, chapters: [] };
 
 /** The viewer's remembered theatre choice. Storage can be missing or throw (private mode). */
 export function readTheatrePreference(storage: Pick<Storage, 'getItem'> | undefined = safeStorage()): boolean {
@@ -90,12 +105,29 @@ export function setTheatre(on: boolean): void {
 
 /** The watch page turns its features on while mounted. Returns the cleanup. */
 export function enableWatchPageFeatures(): () => void {
-  updatePlayerUi({ theatreAvailable: true, miniPlayerAvailable: true, theatre: readTheatrePreference() });
-  return () => updatePlayerUi({ theatreAvailable: false, miniPlayerAvailable: false, theatre: false, upNext: null, replayList: null, reportProblem: null });
+  updatePlayerUi({ theatreAvailable: true, miniPlayerAvailable: true, theatre: readTheatrePreference(), autoplayNext: readAutoplayNext() });
+  return () => updatePlayerUi({ theatreAvailable: false, miniPlayerAvailable: false, theatre: false, upNext: null, replayList: null, suggestions: [], reportProblem: null });
 }
 
 /** Test helper: back to the initial state. */
 export function resetPlayerUi(): void {
-  state = { theatreAvailable: false, theatre: false, miniPlayerAvailable: false, upNext: null, replayList: null, reportProblem: null, chapters: [] };
+  state = { theatreAvailable: false, theatre: false, miniPlayerAvailable: false, upNext: null, replayList: null, suggestions: [], autoplayNext: true, reportProblem: null, chapters: [] };
   listeners.forEach((l) => l());
+}
+
+/**
+ * The viewer turns "Autoplay next" on or off (control bar switch, settings menu). Saved on this
+ * device at once; listeners (the account sync) save it on the account for signed-in viewers.
+ */
+const autoplayListeners = new Set<(on: boolean) => void>();
+
+export function setAutoplayNext(on: boolean): void {
+  writeAutoplayNext(on);
+  updatePlayerUi({ autoplayNext: on });
+  autoplayListeners.forEach((l) => l(on));
+}
+
+export function onAutoplayNextChange(listener: (on: boolean) => void): () => void {
+  autoplayListeners.add(listener);
+  return () => autoplayListeners.delete(listener);
 }

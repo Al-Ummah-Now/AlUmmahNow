@@ -45,6 +45,52 @@ function renderEnd(opts: { upNext?: boolean } = {}) {
 }
 
 describe('EndScreen', () => {
+  it('the countdown running out is an automatic advance; Play now is the viewer\'s choice', () => {
+    const { go } = renderEnd();
+    elapse(AUTO_ADVANCE_SECONDS * 1000);
+    expect(go).toHaveBeenCalledWith({ auto: true });
+    const second = renderEnd();
+    fireEvent.click(screen.getAllByTestId('player-play-next')[1]);
+    expect(second.go).toHaveBeenCalledWith();
+  });
+
+  it('autoplay off: no countdown, and more videos beside Watch again', () => {
+    const go = jest.fn();
+    const pick = jest.fn();
+    render(
+      <div className="video-js">
+        <EndScreen
+          upNext={{ title: 'Next talk', channel: 'Channel', go }}
+          onReplay={jest.fn()}
+          suggestions={[{ id: 's1', title: 'Another talk', channel: 'C', go: pick }, { id: 's2', title: 'Third talk', channel: 'C', go: jest.fn() }, { id: 's3', title: 'Hidden', channel: 'C', go: jest.fn() }]}
+          t={en}
+          dir="ltr"
+          autoAdvanceSeconds={0}
+        />
+      </div>,
+    );
+    elapse(10_000);
+    expect(go).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('player-next-ring')).toBeNull();
+    const items = screen.getAllByTestId('player-end-suggestion');
+    expect(items).toHaveLength(2);
+    expect(items[0]).toHaveAccessibleName('Play Another talk');
+    fireEvent.click(items[0]);
+    expect(pick).toHaveBeenCalled();
+    expect(screen.getByTestId('player-watch-again')).toBeInTheDocument();
+  });
+
+  it('suggestions wait while the countdown runs', () => {
+    render(
+      <div className="video-js">
+        <EndScreen upNext={{ title: 'Next', channel: 'C', go: jest.fn() }} onReplay={jest.fn()} suggestions={[{ id: 's1', title: 'S', channel: 'C', go: jest.fn() }]} t={en} dir="ltr" />
+      </div>,
+    );
+    expect(screen.queryByTestId('player-end-suggestions')).toBeNull();
+    fireEvent.click(screen.getByTestId('player-cancel-next'));
+    expect(screen.getByTestId('player-end-suggestions')).toBeInTheDocument();
+  });
+
   it('counts real seconds and plays the next video at zero', () => {
     const { go, seconds } = renderEnd();
     expect(AUTO_ADVANCE_SECONDS).toBe(3);

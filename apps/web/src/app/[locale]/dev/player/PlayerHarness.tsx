@@ -7,6 +7,8 @@
  *   &start=12                     a start position, for the start-over pill
  *   &list=fixtures&index=0        playlist playback: the real pane, up next and autoplay over a
  *                                 queue the spec serves (GET /api/playlists/fixtures/queue)
+ *   &account=1                    "Autoplay next" synced with an account (the spec serves
+ *                                 /api/auth/token and /api/profile/playback)
  * Fixtures live under e2e/player/fixtures and are never deployed.
  */
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
@@ -18,6 +20,7 @@ import { PlaylistPane } from '@/components/video/PlaylistPane';
 import { usePlaylistPlayback } from '@/hooks/usePlaylistPlayback';
 import { clearAutoplayIntent, hasAutoplayIntent, requestAutoplay } from '@/lib/video/autoplay-intent';
 import { navigateOrLoad } from '@/lib/navigation/navigate-or-load';
+import { useAutoplaySetting } from '@/hooks/useAutoplaySetting';
 
 const SOURCES = ['bright', 'dark', 'short', 'live'] as const;
 type Source = (typeof SOURCES)[number];
@@ -35,6 +38,7 @@ export function PlayerHarness({ lang }: { lang: 'en' | 'ar' }) {
     [lang],
   );
   const playback = usePlaylistPlayback(src, lang, { buildHref });
+  useAutoplaySetting(params.get('account') === '1' ? 'harness-user' : null);
   const autoplayIntent = useMemo(() => !!playback.list || hasAutoplayIntent(src), [src, playback.list]);
   useEffect(() => clearAutoplayIntent(src), [src]);
 
@@ -51,12 +55,22 @@ export function PlayerHarness({ lang }: { lang: 'en' | 'ar' }) {
         title: `Next: the ${next} fixture`,
         channel: 'Player harness',
         // As on the watch page: the advance asks the next video to play
-        go: () => {
-          requestAutoplay(next);
+        go: (opts) => {
+          requestAutoplay(next, { auto: opts?.auto === true });
           navigateOrLoad((href) => router.push(href), `/${lang}/dev/player?src=${next}`);
         },
       },
       replayList: null,
+      // As on the watch page: more videos once the countdown is off or cancelled
+      suggestions: (['short', 'bright', 'dark'] as const).filter((f) => f !== src && f !== next).map((f) => ({
+        id: f,
+        title: `Suggestion: the ${f} fixture`,
+        channel: 'Player harness',
+        go: () => {
+          requestAutoplay(f);
+          navigateOrLoad((href) => router.push(href), `/${lang}/dev/player?src=${f}`);
+        },
+      })),
       reportProblem: () => document.getElementById('harness-report')?.focus(),
     });
   }, [watch, src, lang, router, playback.active, playback.upNext, playback.replayList]);

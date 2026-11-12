@@ -30,6 +30,7 @@ export class VideoView extends OptionalAuthRoute {
 							deviceType: z.enum(["desktop", "mobile", "tablet", "tv"]).optional().describe("Type of device used"),
 							source: z.enum(["watch", "embed"]).optional().describe("Playback surface: the watch page (default) or the embed player on another site"),
 							trafficSource: z.enum(TRAFFIC_SOURCES).optional().describe("Where the view came from (docs/specs/CREATOR-STUDIO.md §8.4)"),
+							autoplay: z.boolean().optional().describe("The player started this video on its own (an up-next or playlist advance), not the viewer: counted separately so creator analytics stay honest"),
 							referrerHost: z.string().max(253).optional().describe("External only: the host of the referring site"),
 							embedOrigin: z.string().max(300).optional().describe("Embed only: origin of the page that embeds the player (never a path)"),
 							location: z.object({
@@ -166,6 +167,8 @@ export class VideoView extends OptionalAuthRoute {
 			source: viewData.source === "embed" ? "embed" : "watch",
 			embedOrigin: viewData.source === "embed" ? normalizeEmbedOrigin(viewData.embedOrigin) : null,
 			trafficSource: viewData.trafficSource ?? "unknown",
+			// docs/specs/PLAYLIST-PLAYBACK.md: autoplayed views are rolled up apart from chosen ones
+			autoplay: viewData.autoplay === true,
 			...(viewData.trafficSource === "external" && normalizeReferrerHost(viewData.referrerHost)
 				? { referrerHost: normalizeReferrerHost(viewData.referrerHost) as string }
 				: {}),
