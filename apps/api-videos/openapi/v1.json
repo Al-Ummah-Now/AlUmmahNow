@@ -35048,6 +35048,70 @@
                     "type": "boolean",
                     "default": false,
                     "description": "R2 failed and the player switched to Bunny"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "final",
+                      "heartbeat"
+                    ],
+                    "default": "final",
+                    "description": "final: the session's totals (daily rollup); heartbeat: live deltas only"
+                  },
+                  "serving": {
+                    "type": "string",
+                    "enum": [
+                      "bunny",
+                      "r2"
+                    ],
+                    "description": "Source delivering the session now (bunny after a fallback)"
+                  },
+                  "playing": {
+                    "type": "boolean",
+                    "description": "Playing at the time of the report"
+                  },
+                  "live": {
+                    "type": "object",
+                    "properties": {
+                      "attempt": {
+                        "type": "boolean"
+                      },
+                      "started": {
+                        "type": "boolean"
+                      },
+                      "startupMs": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 120000
+                      },
+                      "watchMs": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 600000
+                      },
+                      "rebufferMs": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 600000
+                      },
+                      "rebuffers": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1000
+                      },
+                      "avgKbps": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 200000
+                      },
+                      "errored": {
+                        "type": "boolean"
+                      },
+                      "fallback": {
+                        "type": "boolean"
+                      }
+                    },
+                    "description": "Deltas since the session's previous report, for the live view"
                   }
                 },
                 "required": [
