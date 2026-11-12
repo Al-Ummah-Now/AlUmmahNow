@@ -2,6 +2,7 @@ import { devices, type Page } from '@playwright/test';
 import { test, expect, consentCookie } from './fixtures';
 import { AxeBuilder } from '@axe-core/playwright';
 import { startThenPause, waitForPlayer } from './test-utils/watch-page';
+import { useOwnVideos } from './release/own-videos';
 
 /**
  * Epic 1 accessibility (stories 1.1 colour contrast, 1.4 keyboard navigation,
@@ -19,7 +20,6 @@ import { startThenPause, waitForPlayer } from './test-utils/watch-page';
  * a reason) and only the page-level axe scan runs.
  */
 
-const API_URL = process.env.E2E_API_URL || 'https://videos.api.qa.alummahnow.net';
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
 const MIN_TARGET = 44;
 
@@ -27,23 +27,13 @@ if (process.env.A11Y_CHROME_CHANNEL) {
   test.use({ channel: process.env.A11Y_CHROME_CHANNEL });
 }
 
-let videoId: string | undefined;
+// This file's own landscape video (release/own-videos.ts: made in beforeAll, deleted afterwards);
+// landscape like the other watch specs: a portrait video gives a narrow player that hides the
+// volume slider by design
+const own = useOwnVideos(test as never);
 
 async function resolveVideoId(): Promise<string> {
-  if (process.env.E2E_VIDEO_ID) return process.env.E2E_VIDEO_ID;
-  if (videoId) return videoId;
-  // The first "QA Lecture" seed (landscape, like the other watch specs): a portrait video
-  // gives a narrow player that hides the volume slider by design. limit=1 can return an
-  // empty first page (visibility filtering happens after the page is cut), so ask for more.
-  const response = await fetch(`${API_URL}/api/videos?limit=100`);
-  expect(response.ok, `GET ${API_URL}/api/videos`).toBeTruthy();
-  const body = (await response.json()) as { data?: Array<{ id: string; title: string; uploadStatus?: string }> };
-  const ready = (body.data ?? []).filter((v) => !v.uploadStatus || v.uploadStatus === 'ready');
-  const lectures = ready.filter((v) => v.title.startsWith('QA Lecture')).sort((x, y) => x.title.localeCompare(y.title));
-  const video = lectures[0] ?? ready[0] ?? body.data?.[0];
-  expect(video, 'at least one video in the API').toBeTruthy();
-  videoId = video!.id;
-  return videoId;
+  return (await own('landscape')).id;
 }
 
 /**
