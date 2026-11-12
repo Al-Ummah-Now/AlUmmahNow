@@ -24,6 +24,8 @@ export interface EmbedVideo {
   channelId?: string | null;
   channelName?: string;
   channelHandle?: string | null;
+  /** The API's flag: the video has chapters */
+  hasChapters?: boolean;
 }
 
 export interface EmbedPlaylist {
@@ -52,6 +54,7 @@ interface ApiVideo {
   isDeleted?: boolean;
   isHidden?: boolean;
   uploadStatus?: string;
+  hasChapters?: boolean;
 }
 
 function apiBase(): string {
@@ -90,6 +93,7 @@ export function toEmbedVideo(video: ApiVideo | null | undefined): EmbedVideo | n
     channelId: video.channelId ?? null,
     channelName: video.channelName,
     channelHandle: video.channelHandle ?? null,
+    hasChapters: video.hasChapters === true || undefined,
   };
 }
 

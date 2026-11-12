@@ -133,6 +133,7 @@ const VideoPlayer: React.FC<WatchPlayerProps> = ({ options, startTime, onPlayerR
           {/* Video.js player with chapters and subtitles */}
           <VideoPlayerWithChapters
             videoId={options.id}
+            expectChapters={options.hasChapters === true}
             userId={user?.id}
             sources={videoSources}
             poster={posterUrl}

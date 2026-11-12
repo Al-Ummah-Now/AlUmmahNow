@@ -15,7 +15,7 @@ import CustomVideoPlayer, { CustomVideoPlayerProps } from '../VideoPlayer/Custom
 import { ChapterMarkers } from './ChapterMarkers';
 import { ChapterList } from './ChapterList';
 import { CurrentChapter } from './CurrentChapter';
-import { ChapterNav } from './ChapterNav';
+import { ChapterNav, ChapterNavPlaceholder } from './ChapterNav';
 import { useVideoChapters } from '@/hooks/useVideoChapters';
 import { useVideoSubtitles } from '@/hooks/useVideoSubtitles';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -30,6 +30,8 @@ interface VideoPlayerWithChaptersProps extends CustomVideoPlayerProps {
   enableChapters?: boolean;
   enableSubtitles?: boolean;
   showChapterOverlay?: boolean;
+  /** The video is known to have chapters: hold the chapter bar's place until they load */
+  expectChapters?: boolean;
 }
 
 export function VideoPlayerWithChapters({
@@ -37,6 +39,7 @@ export function VideoPlayerWithChapters({
   enableChapters = true,
   enableSubtitles = true,
   showChapterOverlay = true,
+  expectChapters = false,
   onPlayerReady,
   ...playerProps
 }: VideoPlayerWithChaptersProps) {
@@ -54,6 +57,7 @@ export function VideoPlayerWithChapters({
     nextChapter,
     previousChapter,
     hasChapters,
+    settled,
   } = useVideoChapters({
     videoId,
     player,
@@ -130,6 +134,8 @@ export function VideoPlayerWithChapters({
   }, []);
 
   const showChapters = enableChapters && hasChapters && !!player;
+  // Until the bar shows, or the request says there are none after all
+  const holdChapterBar = enableChapters && expectChapters && !showChapters && !(settled && !hasChapters);
 
   return (
     <div className="relative">
@@ -139,6 +145,8 @@ export function VideoPlayerWithChapters({
         textTracks={textTracks}
         onPlayerReady={handlePlayerReady}
       />
+
+      {holdChapterBar && <ChapterNavPlaceholder />}
 
       {showChapters && (
         <>

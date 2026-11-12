@@ -204,6 +204,16 @@ export class TrendingGet extends OptionalAuthRoute {
     const limit = clampLimit(query.limit, 20, 50);
 
     try {
+      // Ranking reads every stored video (seconds on a large catalogue), and the
+      // web app calls this from the server, past the browser cache: keep the
+      // answer at the edge for as long as browsers may.
+      const cacheUrl = edgeCacheUrl(c.req.url, `trending/${encodeURIComponent(period)}/${encodeURIComponent(query.category || "")}/${encodeURIComponent(query.language || "")}/${limit}`);
+      const cached = await readEdgeCache<TrendingBody>(cacheUrl);
+      if (cached) {
+        c.header("Cache-Control", `public, max-age=${TRENDING_TTL}`);
+        c.header("X-Trending-Cache", "HIT");
+        return c.json(cached);
+      }
       const videos = await loadDiscoverableVideos(c.env.videos);
       const ranked = rankTrending(videos, { now: Date.now(), period, category: query.category, language: query.language, limit });
       const channels = await loadChannelMap(c.env.channels, ranked.map(r => r.video.channelId || ""));
@@ -212,13 +222,28 @@ export class TrendingGet extends OptionalAuthRoute {
         trendingMetadata: { rank, score: trending.score, viewsVelocity: trending.viewsVelocity },
       }));
       logger.debug("[Trending] Served trending videos", { period, category: query.category, language: query.language, count: data.length });
-      c.header("Cache-Control", "public, max-age=120");
-      return c.json({ success: true, period, category: query.category, language: query.language, data, videos: data });
+      const body: TrendingBody = { success: true, period, category: query.category, language: query.language, data, videos: data };
+      writeEdgeCache(cacheUrl, body, TRENDING_TTL, waitUntilOf(c as never));
+      c.header("Cache-Control", `public, max-age=${TRENDING_TTL}`);
+      c.header("X-Trending-Cache", "MISS");
+      return c.json(body);
     } catch (error) {
       logger.error("[Trending] Failed to rank trending videos", { error, period });
       return c.json({ success: false, error: "Failed to load trending videos" }, 500);
     }
   }
+}
+
+/** Seconds a trending list is reused, at the edge and in browsers. */
+const TRENDING_TTL = 120;
+
+interface TrendingBody {
+  success: true;
+  period: string;
+  category?: string;
+  language?: string;
+  data: unknown[];
+  videos: unknown[];
 }
 
 /** Seconds a recommendations result is reused (a viewer's own entry is shorter-lived). */

@@ -3,6 +3,8 @@ import { ANONYMOUS_STATE } from './test-utils/auth-state';
 
 /** Cards, tiles, covers and avatars show a loaded image or a designed placeholder, never an empty box. */
 const PAGES = ['/en', '/ar', '/en/explore', '/en/search?q=mosque'];
+/** The media boxes of loading skeletons (Explore rails, search results) */
+const LOADING = 'main .animate-pulse [class*="aspect-video"]';
 
 const findProblems = ()=>{const bad: string[][]=[];const vis=(e: Element)=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>12&&r.height>12&&s.visibility!=='hidden'&&s.display!=='none'};
 document.querySelectorAll<HTMLImageElement>('main img, header img').forEach(i=>{if(vis(i)&&(!i.complete||i.naturalWidth===0))bad.push(['broken image',(i.currentSrc||i.src||'').slice(-70)])});
@@ -14,7 +16,8 @@ test.describe('Media is never an empty box', () => {
   for (const path of PAGES) {
     test(`MEDIA-001 ${path}`, async ({ page }) => {
       await page.goto(path, { waitUntil: 'load' });
-      await page.waitForTimeout(2000);
+      // A section still loading shows a pulsing placeholder (a designed one); judge the page once its sections answered
+      await expect(page.locator(LOADING), `${path} sections still loading`).toHaveCount(0, { timeout: 30000 });
       const height = await page.evaluate(() => document.documentElement.scrollHeight);
       for (let y = 0; y < height; y += 700) {
         await page.evaluate((top) => window.scrollTo(0, top), y);

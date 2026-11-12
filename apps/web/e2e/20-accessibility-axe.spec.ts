@@ -314,21 +314,25 @@ test.describe('mobile touch targets (story 1.5)', () => {
 
       // The progress bar's 44px touch area reaches into the bar's padding
       // (VIDEO-PLAYER.md): a tap anywhere on a button's own 44x44 area must
-      // still reach that button, never seek
-      const missed = await page.evaluate((inset) => {
+      // still reach that button, never seek. Side by side, narrow players draw
+      // 36px buttons whose centred 44px targets each reach (44 - 36) / 2 = 4px
+      // into the neighbour, by design (player-skin.css): the side probes start
+      // past that shared strip, whose edge WebKit's hit test gives the neighbour.
+      const missed = await page.evaluate(({ inset, target }) => {
         const out: string[] = [];
         for (const el of Array.from(document.querySelectorAll<HTMLElement>('.video-js .vjs-control-bar button'))) {
           const r = el.getBoundingClientRect();
           if (getComputedStyle(el).display === 'none' || r.width === 0) continue;
           const cx = r.left + r.width / 2;
           const cy = r.top + r.height / 2;
-          for (const [x, y] of [[cx, cy], [cx, r.top + inset], [cx, r.bottom - inset], [r.left + inset, cy], [r.right - inset, cy]]) {
+          const side = Math.max(inset, (target - r.width) / 2 + 1);
+          for (const [x, y] of [[cx, cy], [cx, r.top + inset], [cx, r.bottom - inset], [r.left + side, cy], [r.right - side, cy]]) {
             const hit = document.elementFromPoint(x, y);
             if (!hit || !el.contains(hit)) out.push(`${el.className.toString().slice(0, 40)} at ${Math.round(x)},${Math.round(y)} -> ${hit?.className.toString().slice(0, 40)}`);
           }
         }
         return out;
-      }, 4);
+      }, { inset: 4, target: MIN_TARGET });
       expect(missed).toEqual([]);
 
       // Control bar fits the viewport - no control pushed off-screen

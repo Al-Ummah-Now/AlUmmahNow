@@ -23,6 +23,8 @@ interface UseVideoChaptersReturn {
   currentChapterIndex: number;
   duration: number;
   loading: boolean;
+  /** The chapters request for this video has answered (with chapters or none) */
+  settled: boolean;
   error: string | null;
   seekToChapter: (chapter: VideoChapter) => void;
   nextChapter: () => void;
@@ -39,6 +41,7 @@ export function useVideoChapters({
   const [currentChapter, setCurrentChapter] = useState<VideoChapter | null>(null);
   const [duration, setDuration] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [settled, setSettled] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Fetch chapters from the API (GET /api/videos/:id/chapters, public)
@@ -49,6 +52,7 @@ export function useVideoChapters({
     }
 
     const controller = new AbortController();
+    setSettled(false);
 
     const fetchChapters = async () => {
       setLoading(true);
@@ -72,7 +76,10 @@ export function useVideoChapters({
         setError(err instanceof Error ? err.message : 'unknown');
         setChapterData(null);
       } finally {
-        if (!controller.signal.aborted) setLoading(false);
+        if (!controller.signal.aborted) {
+          setLoading(false);
+          setSettled(true);
+        }
       }
     };
 
@@ -164,6 +171,7 @@ export function useVideoChapters({
     currentChapterIndex,
     duration,
     loading,
+    settled,
     error,
     seekToChapter,
     nextChapter,

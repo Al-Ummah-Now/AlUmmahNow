@@ -1006,6 +1006,7 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions | undef
             uploadStatus: (video as { uploadStatus?: PlayerOptions['uploadStatus'] }).uploadStatus,
             processingIssueKind: (video as { processingIssueKind?: PlayerOptions['processingIssueKind'] }).processingIssueKind,
             delivery: (video as { delivery?: PlayerOptions['delivery'] }).delivery,
+            hasChapters: (video as { hasChapters?: boolean }).hasChapters === true,
         };
 
         logger.debug('[fetchVideoById] Mapped to PlayerOptions:', playerOptions);

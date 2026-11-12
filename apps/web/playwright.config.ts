@@ -25,7 +25,9 @@ const isRemoteTarget = baseURL.startsWith('https://');
  */
 // e2e/release/ is the release suite (playwright.release.config.ts), never run here
 // e2e/themes runs on its own config (playwright.themes.config.ts) against a local server
-const DEDICATED_DIRS = [/e2e\/a11y\//, /e2e\/visual\//, /e2e\/release\//, /e2e\/themes\//];
+// e2e/player is the player harness suite (playwright.player.config.ts, player-e2e.yml): it opens
+// /dev/player, which deployed builds answer with 404, so it never runs against a deployed site
+const DEDICATED_DIRS = [/e2e\/a11y\//, /e2e\/visual\//, /e2e\/release\//, /e2e\/themes\//, /e2e\/player\//];
 
 /*
  * Upload transport and upload UI specs: every test sends real bytes to the Bunny
