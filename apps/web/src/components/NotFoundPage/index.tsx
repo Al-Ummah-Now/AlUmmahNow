@@ -91,7 +91,7 @@ export default function NotFoundPage() {
         {t.errors.notFoundNeedHelp}{' '}
         <Link
           href={`/${locale}`}
-          className="text-blue-700 dark:text-blue-400 underline hover:no-underline"
+          className="font-medium text-[var(--fanous-color-text-primary)] underline hover:no-underline"
         >
           {t.errors.notFoundContactUs}
         </Link>
