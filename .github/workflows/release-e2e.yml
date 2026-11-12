@@ -117,7 +117,10 @@ jobs:
         run: node --experimental-strip-types --no-warnings "$GITHUB_WORKSPACE/.ci-trusted/scripts/ci/check-quarantine.ts" apps/web/e2e/release
 
       - name: Run accounts file
-        run: echo "E2E_RUN_USERS_FILE=$RUNNER_TEMP/run-users.txt" >> "$GITHUB_ENV"
+        run: |
+          echo "E2E_RUN_USERS_FILE=$RUNNER_TEMP/run-users.txt" >> "$GITHUB_ENV"
+          # Videos and channels the builders make, for the leftover check's Bunny and R2 lookups
+          echo "E2E_RUN_RESOURCES_FILE=$RUNNER_TEMP/run-resources.txt" >> "$GITHUB_ENV"
 
       - uses: actions/setup-node@v6
         with:
@@ -291,6 +294,49 @@ jobs:
       # Nothing this run created may be left (owner rule): its accounts, the videos, channels,
       # playlists and posts they owned (ownership index; a video left = its Bunny video left), their
       # creator tiers. Deleted content whose purge is queued is reported, not failed. Read-only.
+      # QA only: a read-only probe for the QA Bunny library and R2, bound to the Secrets Store key
+      # (never on the runner), one per run, deleted below (as bunny-qa-status.yml does, #951)
+      - name: Deploy the leftover probe
+        if: always() && env.E2E_ENV == 'qa'
+        continue-on-error: true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          P="$GITHUB_WORKSPACE/.ci-trusted/scripts/e2e/leftovers-probe"
+          if [ ! -f "$P/worker.js" ]; then echo "the probe is not on the base branch yet"; exit 0; fi
+          name="e2e-leftovers-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "LEFTOVERS_PROBE_NAME=$name" >> "$GITHUB_ENV"
+          token=$(openssl rand -hex 32)
+          echo "::add-mask::$token"
+          echo "LEFTOVERS_PROBE_TOKEN=$token" >> "$GITHUB_ENV"
+          dir=$(mktemp -d); cp "$P/worker.js" "$dir/"
+          printf '{"PROBE_TOKEN":"%s"}' "$token" > "$RUNNER_TEMP/probe-secrets.json"
+          cat > "$dir/wrangler.json" <<JSON
+          {
+            "name": "$name",
+            "main": "worker.js",
+            "compatibility_date": "2025-09-01",
+            "workers_dev": true,
+            "r2_buckets": [
+              { "binding": "videos", "bucket_name": "videos-qa" },
+              { "binding": "MEDIA", "bucket_name": "al-ummah-now-media-qa" },
+              { "binding": "MEDIA_PRIVATE", "bucket_name": "al-ummah-now-media-private-qa" },
+              { "binding": "MEDIA_ORIGINALS", "bucket_name": "al-ummah-now-media-originals-qa" }
+            ],
+            "secrets_store_secrets": [
+              { "binding": "BUNNY_KEY", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "bunny-stream-key-qa" },
+              { "binding": "BUNNY_LIBRARY_ID", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "bunny-stream-library-id-qa" }
+            ]
+          }
+          JSON
+          (cd "$dir" && npx -y wrangler@4.161.0 deploy --secrets-file "$RUNNER_TEMP/probe-secrets.json" > "$RUNNER_TEMP/probe-deploy.txt" 2>&1) || { tail -20 "$RUNNER_TEMP/probe-deploy.txt"; exit 1; }
+          rm -f "$RUNNER_TEMP/probe-secrets.json"
+          url=$(grep -oE 'https://[a-z0-9.-]+\.workers\.dev' "$RUNNER_TEMP/probe-deploy.txt" | head -1)
+          test -n "$url"
+          echo "LEFTOVERS_PROBE_URL=$url" >> "$GITHUB_ENV"
+
       - name: Leftovers
         if: always()
         run: |
@@ -300,6 +346,14 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Delete the leftover probe
+        if: always() && env.LEFTOVERS_PROBE_NAME != ''
+        continue-on-error: true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx -y wrangler@4.161.0 delete --name "$LEFTOVERS_PROBE_NAME" --force
 
       # Uploads this run sent (its own users, by E2E_RUN_TAG): every upload with
       # bytes is a Bunny encode in the library QA and stage share. Informational

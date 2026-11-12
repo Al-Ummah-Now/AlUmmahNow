@@ -182,6 +182,15 @@ async function deleteAccount(email: string): Promise<Response | undefined> {
   });
 }
 
+/**
+ * Records a created resource ("<kind> <id>", one per line) in E2E_RUN_RESOURCES_FILE: the
+ * end-of-job leftover checks look for its Bunny video, collection and R2 objects even after the
+ * D1 rows are gone (scripts/e2e/run-leftovers.ts).
+ */
+function recordResource(kind: 'video' | 'channel', id: string): void {
+  if (process.env.E2E_RUN_RESOURCES_FILE) appendFileSync(process.env.E2E_RUN_RESOURCES_FILE, `${kind} ${id}\n`);
+}
+
 /** Everything one spec (or worker) created, deleted again by cleanup(). */
 export class DataScope {
   private undo: { what: string; run: () => Promise<unknown> }[] = [];
@@ -246,6 +255,7 @@ export class DataScope {
     )) as { result?: { channel?: { id?: string } } };
     const id = body.result?.channel?.id;
     expect(id, 'channel create returned no id').toBeTruthy();
+    recordResource('channel', id as string);
     this.undo.push({ what: `channel ${id}`, run: () => apiFetch(user, `/api/channels/${id}`, { method: 'DELETE' }) });
     return id as string;
   }
@@ -266,6 +276,7 @@ export class DataScope {
     const id = initiate.result?.videoId as string;
     const tusSessionId = initiate.result?.tusSessionId as string;
     expect(id && tusSessionId, 'upload initiate returned no videoId/tusSessionId').toBeTruthy();
+    recordResource('video', id);
     // Cleanup deletes for good (record, media, the Bunny video, search/ownership rows), even mid-encode
     // or after an interrupted upload: trash first (the owner's delete), then the permanent delete
     this.undo.push({
