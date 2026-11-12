@@ -13824,7 +13824,14 @@
                         "updatedAt": {
                           "type": "string"
                         },
-                        "translations": {}
+                        "translations": {},
+                        "overrides": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Keys an admin edited (dotted paths); only these differ from the repo text"
+                        }
                       },
                       "required": [
                         "locale",

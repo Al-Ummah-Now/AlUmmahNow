@@ -69,6 +69,12 @@ export interface TranslationData {
   updatedAt: string;
   /** Translation content */
   translations: AppTranslations;
+  /**
+   * Keys (dotted leaf paths) an admin edited: only these win over the repo's
+   * static translations. Absent on files written before #982 (every key that
+   * differs from the repo then counts as edited). See i18n-overrides.ts.
+   */
+  overrides?: string[];
 }
 
 /**

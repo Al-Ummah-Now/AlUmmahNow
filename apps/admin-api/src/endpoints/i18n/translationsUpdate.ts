@@ -17,6 +17,10 @@ import {
   I18nMetadata,
   AppTranslations,
   SupportedLanguage,
+  AR_TRANSLATIONS,
+  EN_TRANSLATIONS,
+  effectiveOverrides,
+  nextTranslationOverrides,
 } from '@al-ummah/shared-types';
 
 const SUPPORTED_LOCALES: SupportedLanguage[] = ['en', 'ar'];
@@ -75,11 +79,16 @@ export async function saveTranslations(
       finalTranslations = merge && existingData
         ? deepMerge(existingData.translations, newTranslations)
         : (newTranslations as AppTranslations);
+      // #982: record which keys an admin set, so only those win over the
+      // repo's static text; a key saved back to the repo value leaves the list.
+      const defaults = locale === 'ar' ? AR_TRANSLATIONS : EN_TRANSLATIONS;
+      const previous = existingData ? effectiveOverrides(defaults, existingData) : [];
       const translationData: TranslationData = {
         version: newVersion,
         locale,
         updatedAt: now,
         translations: finalTranslations,
+        overrides: nextTranslationOverrides(previous, newTranslations, defaults),
       };
       translationJson = JSON.stringify(translationData, null, 2);
       return translationData;

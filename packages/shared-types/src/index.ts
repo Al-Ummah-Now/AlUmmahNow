@@ -66,6 +66,7 @@ export * from './i18n-channel-roles';
 export * from './i18n-channel-sections';
 
 // Static en/ar UI translations (web fallback + api-videos translation seed)
+export * from './i18n-overrides';
 export { EN_TRANSLATIONS } from './i18n-static/en';
 export { AR_TRANSLATIONS } from './i18n-static/ar';
 

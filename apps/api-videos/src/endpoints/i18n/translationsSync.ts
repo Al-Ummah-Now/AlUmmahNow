@@ -6,7 +6,9 @@
  * This endpoint is used for development and initial setup.
  *
  * The seed is the web app's static translations, imported from
- * @al-ummah/shared-types, so the stored copy cannot drift from them.
+ * @al-ummah/shared-types, so the stored copy cannot drift from them. Keys an
+ * admin edited (a stored file's `overrides`, #982) keep their stored value; a
+ * file without that list (written before #982) is reset to the static text.
  */
 
 import { Str, Bool } from 'chanfana';
@@ -19,6 +21,8 @@ import {
   TranslationData,
   I18nMetadata,
   I18nConfig,
+  applyTranslationOverrides,
+  storedOverrides,
 } from '@al-ummah/shared-types';
 
 const INITIAL_VERSION = '1.0.0';
@@ -47,16 +51,21 @@ export function nextSeedVersion(storedVersions: unknown[]): string {
   return `${major}.${minor}.${patch + 1}`;
 }
 
-async function readStoredVersion(bucket: R2Bucket, key: string): Promise<unknown> {
+async function readStored(bucket: R2Bucket, key: string): Promise<Record<string, unknown> | null> {
   const object = await bucket.get(key);
   if (!object) return null;
   try {
-    const data = (await object.json()) as { version?: unknown };
-    return data.version;
+    return (await object.json()) as Record<string, unknown>;
   } catch (error) {
-    logger.warn(`Ignoring unreadable ${key} while computing the seed version`, error);
+    logger.warn(`Ignoring unreadable ${key} while syncing translations`, error);
     return null;
   }
+}
+
+/** The static translations with the stored file's admin-edited keys kept. */
+function seedLocale(defaults: TranslationData['translations'], stored: Record<string, unknown> | null) {
+  const overrides = storedOverrides(stored) ?? [];
+  return { translations: applyTranslationOverrides(defaults, stored?.translations, overrides), overrides };
 }
 
 
@@ -119,13 +128,12 @@ export class SyncTranslationsEndpoint extends PublicRoute {
       }
 
       const now = new Date().toISOString();
-      const version = nextSeedVersion(
-        await Promise.all(
-          ['translations/en.json', 'translations/ar.json', 'translations/metadata.json'].map((key) =>
-            readStoredVersion(bucket, key)
-          )
+      const [storedEn, storedAr, storedMetadata] = await Promise.all(
+        ['translations/en.json', 'translations/ar.json', 'translations/metadata.json'].map((key) =>
+          readStored(bucket, key)
         )
       );
+      const version = nextSeedVersion([storedEn, storedAr, storedMetadata].map((d) => d?.version ?? null));
       const synced: string[] = [];
 
       // Prepare translation data
@@ -133,7 +141,7 @@ export class SyncTranslationsEndpoint extends PublicRoute {
         version,
         locale: 'en',
         updatedAt: now,
-        translations: EN_TRANSLATIONS,
+        ...seedLocale(EN_TRANSLATIONS, storedEn),
       };
 
       // Upload English translations
@@ -149,7 +157,7 @@ export class SyncTranslationsEndpoint extends PublicRoute {
         version,
         locale: 'ar',
         updatedAt: now,
-        translations: AR_TRANSLATIONS,
+        ...seedLocale(AR_TRANSLATIONS, storedAr),
       };
 
       // Upload Arabic translations
