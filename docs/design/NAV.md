@@ -6,7 +6,10 @@ admin (AlUmmahNowAuth).
 
 Fixed by earlier decisions and not reopened here:
 - every app follows the admin-chosen site theme (Fanous: fawanees, lantern, zujaj, nahas; light and dark);
-- the header is dark in every theme and mode;
+- the header bar is dark in every theme and mode;
+- everything that opens from it (the account menu with its channel layer, every header menu) and
+  the drawer follow the **page's** colours, not the header's: light surfaces in light mode, dark in
+  dark (owner review of the mockups, 2026-11-12: "the account menu should follow the bg colors");
 - destructive actions confirm in an in-app dialog, never a browser prompt.
 
 ## Shared code
@@ -15,7 +18,7 @@ The stacks differ (Astro, Next.js/React, Hono JSX, a string-template Worker, Rea
 every app shares is a **framework-free CSS + markup contract**, not a component:
 
 - `packages/fanous-tokens/nav/aun-nav.css`: the canonical stylesheet. It uses Fanous tokens only
-  (`--fanous-c-nav-*`, `--fanous-c-menu-*`, `--fanous-c-divider-line`, `--fanous-color-*`,
+  (`--fanous-c-nav-*` for the header controls only; the page's `--fanous-color-*` for menus;
   `--fanous-radius-*`, `--fanous-spacing-*`, `--fanous-elevation-*`). Size fallbacks equal the
   token values, so an app that vendors only the colour tokens renders the same.
 - Each repo vendors it at a pinned commit with its Fanous sync script (www and CMS `sync:fanous`,
@@ -153,24 +156,33 @@ fixtures (`e2e/themes/mock-server.mjs` `CHANNEL_FIXTURES`).
 
 ## Menu surface (every menu from the header: account, theme, launcher, create)
 
+A menu is a **page surface**, not part of the header: it takes the page's own colour tokens in the
+current mode, never `--fanous-c-nav-*`. In light mode it is light (in Fawanees light the gold
+surface, per the owner's 2026-11-11 decision), in dark mode the page's dark surface. The header's
+light text never reaches it.
+
 | Property | Value |
 |---|---|
-| Background / text / muted | `--fanous-c-menu-bg` / `--fanous-c-menu-text` / `--fanous-c-menu-muted` |
-| Border | 1px `--fanous-c-menu-border` |
+| Background | `--fanous-color-surface` (the page's surface: cards, panels) |
+| Text / muted | `--fanous-color-text-primary` / `--fanous-color-text-secondary` |
+| Hover / pressed / current row | `--fanous-color-background` (the page background) |
+| Border, separators | 1px `--fanous-color-divider` (separators edge to edge) |
 | Radius | `--fanous-radius-md` (8px). Items use `--fanous-radius-sm` (4px) |
 | Shadow | `--fanous-elevation-medium` |
 | Padding | `--fanous-spacing-xs` (4px) |
 | Width | 16rem min, 20rem max |
 | Item | 2.75rem min height (touch target), `--fanous-spacing-md` inline padding, 0.9375rem text, 1.125rem icon in muted |
 | Section label | 0.75rem, weight 600, muted, never upper-cased (Arabic) |
-| Separator | 1px `--fanous-c-divider-line`, edge to edge |
-| Hover / pressed | `--fanous-c-menu-hover` |
-| Role chip (`.aun-badge`) | 11px, weight 600, pill, 1px menu border, muted text |
+| Role chip (`.aun-badge`) | 11px, weight 600, pill, 1px divider border, muted text |
 | Note (`.aun-menu-note`) | 13px, muted, item padding; why an action is missing |
 | Focus | 2px `--fanous-color-focus-ring` outline, inset 2px |
-| Current / checked | `--fanous-c-menu-hover` fill, weight 600, `.aun-menu-check` at the end |
+| Current / checked | the page background fill, weight 600, `.aun-menu-check` (`--fanous-color-link`) at the end |
 | Danger | `--fanous-color-error-text` |
 | Phone (≤ 30rem) | a sheet under the header: full width less 8px each side, scrolls inside |
+
+Contrast (computed from the tokens, every theme and mode): text, muted, danger and the check on the
+surface and on the page background are 5.18:1 or more (the lowest: Fawanees light, muted text).
+Separators are decorative.
 
 Keyboard: ↓ on the button opens and focuses the first item; ↑/↓ move, Home/End jump; Escape
 closes and returns focus to the button. A click outside or tabbing out closes it.
@@ -179,9 +191,11 @@ RTL: logical properties only. Directional icons (back, chevron, sign-out arrow) 
 
 ## Drawer and side rail
 
-These keep each app's layout (the videos left navigation, the admin groups, the CMS rail). They
-use `--fanous-c-drawer-*`, with the active item on `--fanous-c-drawer-active-bg` /
-`--fanous-c-drawer-active-text` and a 3px indicator on its inline-start edge. On phones the drawer
+These keep each app's layout (the videos left navigation, the admin groups, the CMS rail). Like
+the menus they follow the **page's** colours, never the header's: `--fanous-c-drawer-*`, which every
+theme sets to the page surface and text (`--fanous-c-drawer-bg` = `--fanous-color-surface`), so the
+drawer is light in light mode and dark in dark. The active item is on `--fanous-c-drawer-active-bg` /
+`--fanous-c-drawer-active-text` with a 3px indicator on its inline-start edge. On phones the drawer
 opens from the inline-start side, as a `<dialog>` or with a backdrop, and closes on Escape.
 
 ## Checks
