@@ -150,9 +150,10 @@ async function eraseLocalCopies(users: LedgerUser[]): Promise<void> {
       }));
     }
   }
-  for (const table of ['site_settings_log', 'admin_audit_log']) await eraseRowsMentioning('al-ummah-now-reports', table, markers).catch(() => 0);
+  // Errors surface (the teardown fails): a sweep that silently did nothing hid leftovers before
+  for (const table of ['site_settings_log', 'admin_audit_log']) await eraseRowsMentioning('al-ummah-now-reports', table, markers);
   for (const table of ['admin_jobs', 'admin_deletions', 'search_tombstones', 'search_channels', 'search_meta', 'content_ownership', 'channel_access', 'upload_rate_windows']) {
-    await eraseRowsMentioning('al-ummah-now-search', table, markers).catch(() => 0);
+    await eraseRowsMentioning('al-ummah-now-search', table, markers);
   }
 }
 

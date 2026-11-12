@@ -87,7 +87,8 @@ export async function stackR2Keys(bucket: string, prefix = ''): Promise<string[]
 export async function eraseRowsMentioning(database: string, table: string, markers: string[]): Promise<number> {
   const safe = markers.filter((m) => /^[A-Za-z0-9_:.+@-]{6,128}$/.test(m));
   if (!safe.length || !/^[a-z_][a-z0-9_]*$/i.test(table)) return 0;
-  const columns = (await stackSql<{ name: string; type: string }>(database, `PRAGMA table_info(${table})`)).filter((c) => /TEXT|^$/i.test(c.type)).map((c) => c.name);
+  // The table-valued pragma: D1 refuses PRAGMA statements through a prepared query
+  const columns = (await stackSql<{ name: string; type: string }>(database, `SELECT name, type FROM pragma_table_info('${table}')`)).filter((c) => /TEXT|^$/i.test(c.type)).map((c) => c.name);
   if (!columns.length) return 0;
   const where = columns.flatMap((c) => safe.map((m) => `instr(CAST("${c}" AS TEXT), '${m}') > 0`)).join(' OR ');
   const [{ n }] = await stackSql<{ n: number }>(database, `SELECT count(*) AS n FROM ${table} WHERE ${where}`);
