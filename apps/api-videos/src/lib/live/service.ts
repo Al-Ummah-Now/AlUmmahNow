@@ -61,7 +61,7 @@ export interface NewSession {
  */
 export async function provisionSession(
 	env: LiveEnv,
-	stream: { id: string; title: string; channelId?: string | null; providerMove?: LiveProviderId | null; isTest?: boolean },
+	stream: { id: string; title: string; userId?: string | null; channelId?: string | null; providerMove?: LiveProviderId | null; isTest?: boolean },
 	now = Date.now(),
 ): Promise<NewSession> {
 	const d1 = db(env);
@@ -86,6 +86,8 @@ export async function provisionSession(
 			title: stream.title,
 			lowLatency,
 			recordVod: provider === 'selfhosted' ? settings.selfhosted.recordVod : true,
+			channelId: stream.channelId ?? null,
+			ownerId: stream.userId ?? null,
 		});
 		return { sessionId, provisioned };
 	};
@@ -137,7 +139,7 @@ export async function sessionIngest(env: LiveEnv, session: LiveSessionRow): Prom
  * failure with fallback on re-provisions the stream on self-hosted (the
  * encoder settings change; Studio shows the new ones).
  */
-export async function startSession(env: LiveEnv, session: LiveSessionRow, stream: { id: string; title: string; channelId?: string | null }, now = Date.now()): Promise<LiveSessionRow> {
+export async function startSession(env: LiveEnv, session: LiveSessionRow, stream: { id: string; title: string; userId?: string | null; channelId?: string | null }, now = Date.now()): Promise<LiveSessionRow> {
 	const d1 = db(env);
 	try {
 		await LIVE_ADAPTERS[session.provider].start(env, session);
