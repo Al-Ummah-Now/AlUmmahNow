@@ -203,3 +203,35 @@ async function measureOnce(page: Page, root: string): Promise<Contrast[]> {
     });
   }, { a: shown.toString('base64'), b: hidden.toString('base64'), c: again.toString('base64'), boxes });
 }
+
+/**
+ * The menu's lines against its own background (docs/design/NAV.md): the lowest contrast among its
+ * separators (`.aun-menu-sep`) and the contrast of its outer border. Colours are read back through a
+ * canvas, so color-mix() / light-dark() results compare like plain colours.
+ */
+export async function menuLineContrast(page: Page, root: string): Promise<{ separators: number; edge: number; count: number }> {
+  return page.evaluate((sel) => {
+    const menu = document.querySelector(sel) as HTMLElement | null;
+    if (!menu) return { separators: 0, edge: 0, count: 0 };
+    const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true })!;
+    const rgb = (css: string) => {
+      ctx.clearRect(0, 0, 1, 1);
+      ctx.fillStyle = '#000';
+      ctx.fillStyle = css;
+      ctx.fillRect(0, 0, 1, 1);
+      return Array.from(ctx.getImageData(0, 0, 1, 1).data.slice(0, 3));
+    };
+    const lum = (c: number[]) => {
+      const [r, g, b] = c.map((v) => v / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const ratio = (a: string, b: string) => {
+      const [x, y] = [lum(rgb(a)), lum(rgb(b))].sort((p, q) => q - p);
+      return Math.round(((x + 0.05) / (y + 0.05)) * 100) / 100;
+    };
+    const bg = getComputedStyle(menu).backgroundColor;
+    const seps = Array.from(menu.querySelectorAll<HTMLElement>('.aun-menu-sep')).filter((s) => s.getClientRects().length);
+    const separators = seps.length ? Math.min(...seps.map((s) => ratio(getComputedStyle(s).borderBlockStartColor, bg))) : 0;
+    return { separators, edge: ratio(getComputedStyle(menu).borderBlockStartColor, bg), count: seps.length };
+  }, root);
+}

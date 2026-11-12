@@ -131,7 +131,10 @@
   --aun-menu-text: light-dark(var(--fanous-color-text-primary), var(--fanous-c-menu-text));
   --aun-menu-muted: light-dark(var(--fanous-color-text-secondary), var(--fanous-c-menu-muted));
   --aun-menu-hover: light-dark(color-mix(in srgb, var(--fanous-c-menu-hover) 50%, var(--fanous-color-background)), var(--fanous-c-menu-hover));
-  --aun-menu-line: light-dark(var(--fanous-color-divider), var(--fanous-c-divider-line));
+  /* Separators: the page divider in light mode; in dark mode the menu text mixed 30% into the menu
+     (about 2:1 on the menu in every theme; the theme's divider token is 1.0–1.4:1 there, owner
+     review rev 4: "in dark you can't see the lines between rows") */
+  --aun-menu-line: light-dark(var(--fanous-color-divider), color-mix(in srgb, var(--fanous-c-menu-text) 30%, var(--fanous-c-menu-bg)));
   --aun-menu-edge: light-dark(var(--fanous-color-outline), var(--fanous-c-menu-border));
   position: absolute;
   inset-inline-end: 0;
