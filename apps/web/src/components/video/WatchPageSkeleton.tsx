@@ -1,9 +1,13 @@
+import { ChapterNavPlaceholder } from '@/components/VideoPagePlayer/ChapterNav';
+
 /** What the server already knows about the video when the page starts. */
 export interface WatchHint {
   title?: string;
   channelName?: string;
   channelAvatar?: string;
   poster?: string;
+  /** The video has chapters: the skeleton holds the chapter bar's place under the player */
+  chapters?: boolean;
 }
 
 const BLOCK = 'wsk-b animate-pulse rounded bg-muted';
@@ -13,8 +17,12 @@ const BLOCK = 'wsk-b animate-pulse rounded bg-muted';
 export function WatchDetailsSkeleton({ hint }: { hint?: WatchHint }) {
   return (
     <div role="status" aria-busy="true" className="flex flex-col w-full mt-0 items-center">
-      {/* contain, not cover: a vertical or square poster is letterboxed like the player shows it, not cropped */}
-      <div className="wsk-player w-full aspect-video rounded-lg bg-muted bg-contain bg-center bg-no-repeat" style={hint?.poster ? { backgroundImage: `url("${hint.poster}")` } : undefined} />
+      {/* The player and, for a video with chapters, the chapter bar under it, as the loaded page's player block */}
+      <div className="wsk-player-frame w-full">
+        {/* contain, not cover: a vertical or square poster is letterboxed like the player shows it, not cropped */}
+        <div className="wsk-player w-full aspect-video rounded-lg bg-muted bg-contain bg-center bg-no-repeat" style={hint?.poster ? { backgroundImage: `url("${hint.poster}")` } : undefined} />
+        {hint?.chapters && <ChapterNavPlaceholder />}
+      </div>
       <div className="wsk-details watch-details">
         {hint?.title
           ? <p className="wsk-title watch-title">{hint.title}</p>

@@ -11,6 +11,25 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getChapterTitle } from '@/lib/video/chapters';
 
+/**
+ * The chapter bar's box, shared by ChapterNav and the space held for it: the
+ * same margin, padding and card, around a 44px row (the bar's buttons).
+ */
+export const CHAPTER_NAV_BOX = 'mt-2 rounded-lg bg-gray-50 px-2 py-1 dark:bg-gray-900';
+
+/**
+ * Holds the chapter bar's place while a video known to have chapters loads
+ * (the watch skeleton, then the player until its chapters arrive), so the
+ * title and everything under it do not jump down when the bar appears.
+ */
+export function ChapterNavPlaceholder() {
+  return (
+    <div aria-hidden="true" data-testid="chapter-nav-placeholder" className={CHAPTER_NAV_BOX}>
+      <div className="h-11" />
+    </div>
+  );
+}
+
 interface ChapterNavProps {
   chapters: VideoChapter[];
   currentChapterIndex: number;
@@ -38,7 +57,7 @@ export function ChapterNav({ chapters, currentChapterIndex, currentChapter, onPr
       aria-label={t.video.chapters}
       dir={isRTL ? 'rtl' : 'ltr'}
       data-testid="chapter-nav"
-      className="mt-2 flex items-center justify-between gap-2 rounded-lg bg-gray-50 px-2 py-1 dark:bg-gray-900"
+      className={`${CHAPTER_NAV_BOX} flex items-center justify-between gap-2`}
     >
       <button
         type="button"

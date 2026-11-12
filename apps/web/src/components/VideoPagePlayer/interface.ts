@@ -38,6 +38,8 @@ export interface PlayerOptions {
   /** Anything but "ready" (or unset, for older videos) shows the processing state instead of the player */
   uploadStatus?: 'initiated' | 'uploading' | 'processing' | 'ready' | 'failed';
   processingIssueKind?: 'encode_failed' | 'needs_reupload' | 'stalled';
+  /** The video has chapters (the API's flag): the page holds the chapter bar's place while they load */
+  hasChapters?: boolean;
 }
 
 /** True while the video cannot play yet (still uploading or processing at Bunny). */

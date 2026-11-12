@@ -124,7 +124,7 @@ async function skeletonStats(page: Page): Promise<{ created: number; maxAtOnce: 
   });
 }
 
-/** Top and height of the player, title, channel row, actions (which hold the metrics) and comments. */
+/** Top and height of the player (with its chapter bar), title, channel row, actions (which hold the metrics) and comments. */
 async function blocks(page: Page): Promise<Record<string, number[]>> {
   return page.evaluate(() => {
     const pick = (...selectors: string[]) => {
@@ -139,7 +139,8 @@ async function blocks(page: Page): Promise<Record<string, number[]>> {
       return [];
     };
     return {
-      player: pick('.wsk-player', '#video-player > div:first-child'),
+      // The player with the chapter bar under it (a video with chapters, as the seed lectures have)
+      player: pick('.wsk-player-frame', '#video-player > div:first-child'),
       title: pick('.wsk-title', '.wsk-title-b', 'h1'),
       channel: pick('.wsk-channel', '#video-player h1 + div'),
       actions: pick('.wsk-actions', '[data-testid="share-button"]'),

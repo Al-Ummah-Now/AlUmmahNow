@@ -55,6 +55,7 @@ const VideoPlayerRTL: React.FC<WatchPlayerProps> = ({ options, startTime, onPlay
           {/* New Custom Video.js Player with Arabic/RTL support */}
           <VideoPlayerWithChapters
             videoId={options.id}
+            expectChapters={options.hasChapters === true}
             userId={user?.id}
             sources={videoSources}
             poster={posterUrl}

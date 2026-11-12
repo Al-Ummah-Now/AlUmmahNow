@@ -199,22 +199,31 @@ test.describe('player controls', () => {
     await expect(menu).toBeVisible();
     await expect(page.locator('.video-js .vjs-control-bar')).toHaveCSS('opacity', '1');
 
+    // A phone-width player opens the menu over the whole frame, controls included
+    // (SettingsMenu.tsx, data-over-bar): there neither the gear nor the video is
+    // under the pointer while it is open, and Escape is the way out tested here
+    const overBar = (await menu.getAttribute('data-over-bar')) !== null;
+
     // A second click on the gear closes it; Escape closes it and returns focus to the gear
-    await gear.click();
-    await expect(menu).toHaveCount(0);
-    await gear.click();
-    await expect(menu).toBeVisible();
+    if (!overBar) {
+      await gear.click();
+      await expect(menu).toHaveCount(0);
+      await gear.click();
+      await expect(menu).toBeVisible();
+    }
     await page.keyboard.press('Escape');
     await expect(menu).toHaveCount(0);
     await expect(gear).toBeFocused();
 
     // A click on the video only dismisses the menu (playback state is unchanged)
-    await gear.click();
-    await expect(menu).toBeVisible();
-    const pausedBefore = (await mediaState(page)).paused;
-    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 3);
-    await expect(menu).toHaveCount(0);
-    expect((await mediaState(page)).paused).toBe(pausedBefore);
+    if (!overBar) {
+      await gear.click();
+      await expect(menu).toBeVisible();
+      const pausedBefore = (await mediaState(page)).paused;
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 3);
+      await expect(menu).toHaveCount(0);
+      expect((await mediaState(page)).paused).toBe(pausedBefore);
+    }
 
     await keepControlsVisible(page);
     await gear.click();
