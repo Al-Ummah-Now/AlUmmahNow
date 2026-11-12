@@ -15,6 +15,7 @@ import { getTranslations as getApiTranslations } from "@/lib/api/i18n";
 import { getTranslations as getStaticTranslations } from "@/lib/i18n/utils";
 import { logger } from "@/lib/logger-client";
 import type { SupportedLanguage } from "@/lib/i18n/types";
+import { applyTranslationOverrides } from "@al-ummah/shared-types";
 import type { AppTranslations as ApiAppTranslations } from "@al-ummah/shared-types";
 // The merged result always starts from the static web translations, so it has
 // the full web shape (a superset of the shared/API type)
@@ -112,8 +113,12 @@ export function useTranslationsQuery(locale: SupportedLanguage) {
       const apiData = await getApiTranslations(locale);
 
       if (apiData && apiData.translations) {
-        // Merge API translations over static (key-by-key fallback)
-        const merged = deepMergeTranslations(staticTranslations, apiData.translations);
+        // #982: with an override list only the keys an admin edited replace
+        // this build's static text, so repo copy changes always show. A store
+        // without the list (pre-#982) is merged whole, as before.
+        const merged = Array.isArray(apiData.overrides)
+          ? applyTranslationOverrides(staticTranslations, apiData.translations, apiData.overrides)
+          : deepMergeTranslations(staticTranslations, apiData.translations);
         logger.debug('Loaded translations from R2', { locale, appName: merged.common.appName });
         return merged;
       }

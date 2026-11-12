@@ -20,7 +20,7 @@ describe('planTranslationSeed', () => {
 		const writes = planTranslationSeed({ en: null, ar: null, metadata: null }, DEFAULTS, NOW);
 		assert.deepEqual(writes.map((w) => w.key), [KEYS.en, KEYS.ar, KEYS.metadata]);
 		const en = JSON.parse(writes[0].body);
-		assert.deepEqual(en, { version: '1.0.0', locale: 'en', updatedAt: NOW, translations: DEFAULTS.en });
+		assert.deepEqual(en, { version: '1.0.0', locale: 'en', updatedAt: NOW, translations: DEFAULTS.en, overrides: [] });
 		const metadata = JSON.parse(writes[2].body);
 		assert.equal(metadata.version, '1.0.0');
 		assert.deepEqual(metadata.locales, ['en', 'ar']);

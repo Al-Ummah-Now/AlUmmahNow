@@ -9,7 +9,9 @@
  * logged console errors until someone copied production's files over by hand.
  *
  * Only missing files are written, so edits made in that environment survive
- * every release. The seed is the repo's source of truth, the static
+ * every release. Repo copy changes still reach an existing store: api-videos
+ * and the web serve the repo text for every key not in the file's `overrides`
+ * (the keys an admin edited, #982), so a new file starts with an empty list. The seed is the repo's source of truth, the static
  * translations in @al-ummah/shared-types (the same objects POST /api/i18n/sync
  * and the web app's fallback use).
  *
@@ -86,7 +88,7 @@ export function planTranslationSeed(stored: StoredFiles, defaults: Record<Locale
 			finalJson[locale] = existing;
 			continue;
 		}
-		const body = JSON.stringify({ version, locale, updatedAt: now, translations: defaults[locale] }, null, 2);
+		const body = JSON.stringify({ version, locale, updatedAt: now, translations: defaults[locale], overrides: [] }, null, 2);
 		finalJson[locale] = body;
 		writes.push({ key: KEYS[locale], body });
 	}
@@ -119,7 +121,7 @@ export function translationBucket(env: SeedEnv, root: string): string {
 	return bucket;
 }
 
-interface R2 {
+export interface R2 {
 	/** Keys under the prefix: one list call (object GETs are rate limited hard). */
 	list(prefix: string): Promise<Set<string>>;
 	get(key: string): Promise<string | null>;
@@ -137,7 +139,7 @@ async function fetchRetry(url: string, init: RequestInit, attempts = 6): Promise
 	}
 }
 
-function r2Client(bucket: string, token: string, accountId: string): R2 {
+export function r2Client(bucket: string, token: string, accountId: string): R2 {
 	const url = (key: string) => `https://api.cloudflare.com/client/v4/accounts/${accountId}/r2/buckets/${bucket}/objects/${key.split('/').map(encodeURIComponent).join('/')}`;
 	const headers = { Authorization: `Bearer ${token}` };
 	return {
