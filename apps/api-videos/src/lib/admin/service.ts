@@ -58,6 +58,7 @@ import {
 	readMany,
 	toUserRow,
 	type AdminEnv,
+	adminR2Detail,
 } from './directory';
 
 type Row = Record<string, any>;
@@ -698,6 +699,7 @@ export async function videoDetail(env: AdminServiceEnv, id: string): Promise<Adm
 		suspensionHolds: Array.isArray(video.suspensionHolds) ? video.suspensionHolds : [],
 		moderationAction: video.moderationAction ?? null,
 		processing,
+		r2: adminR2Detail(video),
 	};
 }
 

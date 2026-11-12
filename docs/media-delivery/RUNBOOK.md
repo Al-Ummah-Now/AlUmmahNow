@@ -84,7 +84,12 @@ from R2 on every request, at Class B cost and with no edge cache.
 - **`source_missing`:** Bunny didn't keep the original. "Keep original files" must be on in the
   library's Encoding settings.
 - **Queue backs off ("Could not start job"):** all `max_instances` containers are busy. That's
-  expected under bursts. Raising `max_instances` raises the peak spend.
+  expected under bursts. Raising `max_instances` raises the peak spend. The Delivery page's
+  "Transcoder now" card shows transcoding now out of the maximum, the jobs waiting and the oldest
+  wait (from `media_jobs`, refreshed every 30 s). The maximum is api-videos' `MEDIA_MAX_TRANSCODES`
+  var: change it with `max_instances` in `apps/media/wrangler*.jsonc` (production 4, stage and QA 2).
+- **One video:** its admin page has an R2 card with the status, the failure details when a
+  transcode failed, and "Transcode again" (`media:manage`).
 - **Dead letters** (`al-ummah-now-transcode-dlq-*`): the queue gave up starting a job. The
   api-videos sweep re-queues videos stuck in `queued`.
 - **Container image:** `apps/media/container/Dockerfile` (node:22-alpine + ffmpeg). Wrangler builds

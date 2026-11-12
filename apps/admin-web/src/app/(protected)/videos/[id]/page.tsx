@@ -9,8 +9,11 @@ import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
 import { AuditCard, BackLink, Chip, MonoId, Notice, ReportsCard, SectionCard, StatGrid, statusTone } from '@/components/content/parts';
 import { JobsPanel } from '@/components/content/jobs';
 import { logger } from '@/lib/logger';
+import { getAdminSession } from '@/lib/auth';
+import { canManageMedia } from '@/lib/roles';
 import { VideoActions } from './VideoActions';
 import { VideoPlayer } from './VideoPlayer';
+import { VideoR2Panel } from './VideoR2Panel';
 
 export const dynamic = 'force-dynamic';
 
@@ -64,6 +67,8 @@ export default async function VideoPage({ params }: { params: Promise<{ id: stri
 
   let video: VideoDetailView | null = null;
   let permissions: AdminContentPermission[] = [];
+  // Transcode again needs media:manage (admins and super admins), like the Delivery page
+  const session = await getAdminSession().catch(() => null);
   try {
     [video, permissions] = await Promise.all([getVideo(id), getContentPermissions()]);
   } catch (e) {
@@ -146,6 +151,15 @@ export default async function VideoPage({ params }: { params: Promise<{ id: stri
                 </dd>
               </div>
             </dl>
+          </SectionCard>
+
+          {/* R2 delivery beside Bunny (the R2 delivery epic): absent from an older api-videos, so undefined shows as unavailable */}
+          <SectionCard title={t('mediaDelivery.r2Title')} id="video-r2" testId="video-r2-section">
+            {v.r2 === undefined ? (
+              <p className="text-sm text-fg-muted">{t('mediaDelivery.r2Unavailable')}</p>
+            ) : (
+              <VideoR2Panel videoId={v.id} r2={v.r2} canManage={canManageMedia(session?.user.role)} />
+            )}
           </SectionCard>
 
           <SectionCard title={t('videos.detailsTitle')} id="video-details">

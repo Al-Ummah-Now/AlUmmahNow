@@ -238,6 +238,8 @@
     "MEDIA_BUCKET_NAMES": "al-ummah-now-media-qa,al-ummah-now-media-private-qa,al-ummah-now-media-originals-qa",
     "ORIGINALS_RETENTION_DAYS": "30",
     "ORIGINALS_MAX_DAYS": "90",
+    // Max concurrent transcodes: max_instances of the QA transcoder container (apps/media/wrangler.qa.jsonc)
+    "MEDIA_MAX_TRANSCODES": "2",
     // Logging policy (docs/operations/logging.md): production warn, stage info, QA/dev debug
     "LOG_LEVEL": "debug",
     // Upload limits enforced (any value but "off"): the numbers come from each user's creator tier, edited in the videos admin (middleware/upload-limits.ts)

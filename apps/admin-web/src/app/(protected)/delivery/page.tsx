@@ -9,6 +9,7 @@ import { ErrorAlert, cardClass, fieldClass, secondaryButtonClass } from '@/compo
 import { logger } from '@/lib/logger';
 import { DeliverySwitch } from './DeliverySwitch';
 import { JobsTable } from './JobsTable';
+import { LiveTranscodes } from './LiveTranscodes';
 import { CostSection, PlaybackSection, SpeedSection } from './sections';
 import { JOB_FILTERS, JOB_STATUS_LABEL, PERIODS, parseJobFilter, parsePeriod } from './metrics';
 
@@ -82,6 +83,7 @@ export default async function DeliveryComparisonPage({ searchParams }: PageProps
 
       {summary ? (
         <>
+          <LiveTranscodes initial={summary.live ?? null} />
           <SpeedSection summary={summary} t={t} locale={locale} />
           <PlaybackSection summary={summary} t={t} locale={locale} />
           <CostSection summary={summary} t={t} locale={locale} />

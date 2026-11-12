@@ -21,6 +21,8 @@ import {
 	type AdminUserQuery,
 	type AdminUserRow,
 	type AdminVideoQuery,
+	type AdminVideoR2,
+	type AdminVideoR2Badge,
 	type AdminVideoRow,
 	type OwnershipKind,
 	type SearchDb,
@@ -42,6 +44,36 @@ export interface AdminEnv extends OwnershipEnv {
 }
 
 type Row = Record<string, any>;
+
+const R2_STATUSES = ['queued', 'transcoding', 'ready', 'failed'];
+
+/** A record's `r2` when it looks like one (epic #687), else null. */
+function r2Of(video: Row | null | undefined): Row | null {
+	const r2 = video?.r2;
+	return r2 && typeof r2 === 'object' && R2_STATUSES.includes(r2.status) ? r2 : null;
+}
+
+/** The list badge: status, progress while transcoding, the error when failed. */
+export function adminR2Badge(video: Row | null | undefined): AdminVideoR2Badge | null {
+	const r2 = r2Of(video);
+	if (!r2) return null;
+	return {
+		status: r2.status,
+		...(typeof r2.progress === 'number' ? { progress: r2.progress } : {}),
+		...(typeof r2.error === 'string' && r2.error ? { error: r2.error } : {}),
+	};
+}
+
+/** The video page's R2 panel: the record's `r2` without the transcode result (rungs, timings) or the move/previous bookkeeping. */
+export function adminR2Detail(video: Row | null | undefined): AdminVideoR2 | null {
+	const r2 = r2Of(video);
+	if (!r2) return null;
+	const out: Row = { status: r2.status, jobId: String(r2.jobId ?? ''), rev: String(r2.rev ?? ''), access: r2.access === 'pub' ? 'pub' : 'priv', attempts: Number(r2.attempts) || 0, queuedAt: String(r2.queuedAt ?? '') };
+	for (const key of ['startedAt', 'readyAt', 'failedAt', 'error'] as const) if (typeof r2[key] === 'string' && r2[key]) out[key] = r2[key];
+	if (typeof r2.progress === 'number') out.progress = r2.progress;
+	if (r2.failure && typeof r2.failure === 'object') out.failure = r2.failure;
+	return out as AdminVideoR2;
+}
 
 export const DEFAULT_PAGE_SIZE = 20;
 export const MAX_PAGE_SIZE = 100;
@@ -312,6 +344,7 @@ export async function hydrateVideos(env: AdminEnv, rows: Row[]): Promise<AdminVi
 			duration: r.duration ?? null,
 			thumbnailUrl: (v.thumbnailUrl as string) || null,
 			createdAt: iso(r.created_at) ?? ((v.dateCreated as string) || null),
+			r2: adminR2Badge(v),
 		};
 	});
 }

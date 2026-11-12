@@ -19,7 +19,9 @@ import {
 	writeDeliverySettings,
 	type MediaMoveMessage,
 } from '../src/lib/media/r2-delivery';
-import { createMediaInternalRouter } from '../src/endpoints/media/mediaInternal';
+import { createMediaInternalRouter, maxTranscodesOf, readMediaLive } from '../src/endpoints/media/mediaInternal';
+import { adminR2Badge, adminR2Detail } from '../src/lib/admin/directory';
+import { SqliteD1 } from './search-sqlite-d1';
 import { MemoryBucket, MemoryQueue, videoFixture } from './helpers';
 
 const ID = '912859ed-e618-4d04-8438-874a74a251dd';
@@ -239,6 +241,85 @@ describe('/internal/media', () => {
 		const ok = await app.request('/settings', { method: 'PUT', body: JSON.stringify({ mode: 'split', r2Percent: 25, actorId: 'admin-1' }) }, env as never);
 		const saved = ((await ok.json()) as { result: { mode: string; r2Percent: number; updatedBy: string } }).result;
 		assert.deepEqual([saved.mode, saved.r2Percent, saved.updatedBy], ['split', 25, 'admin-1']);
+	});
+});
+
+describe('/internal/media/summary live figures', () => {
+	function jobsDb(rows: { id: string; status: string; queuedAt: string }[]) {
+		const db = new SqliteD1();
+		for (const r of rows) {
+			db.db
+				.prepare('INSERT INTO media_jobs (video_id, job_id, status, access, attempts, queued_at, updated_at) VALUES (?, ?, ?, ?, 0, ?, ?)')
+				.run(r.id, `job-${r.id}`, r.status, 'pub', r.queuedAt, r.queuedAt);
+		}
+		return db;
+	}
+	const rows = [
+		{ id: 'v1', status: 'transcoding', queuedAt: '2026-11-11T11:00:00.000Z' },
+		{ id: 'v2', status: 'queued', queuedAt: '2026-11-11T11:50:00.000Z' },
+		{ id: 'v3', status: 'queued', queuedAt: '2026-11-11T11:45:00.000Z' },
+		{ id: 'v4', status: 'ready', queuedAt: '2026-11-11T09:00:00.000Z' },
+		{ id: 'v5', status: 'failed', queuedAt: '2026-11-11T08:00:00.000Z' },
+		{ id: 'v6', status: 'queued', queuedAt: '2026-11-11T11:58:00.000Z' },
+	];
+
+	it('counts transcoding and queued jobs, the max, and the oldest wait', async () => {
+		const now = Date.parse('2026-11-11T12:00:00.000Z');
+		const live = await readMediaLive({ SEARCH_DB: jobsDb(rows), MEDIA_MAX_TRANSCODES: '2' } as never, now);
+		assert.deepEqual(live, {
+			transcoding: 1,
+			queued: 3,
+			maxTranscodes: 2,
+			oldestQueuedAt: '2026-11-11T11:45:00.000Z',
+			oldestQueuedSeconds: 900,
+			at: '2026-11-11T12:00:00.000Z',
+		});
+	});
+
+	it('is zero with nothing running, and without the database', async () => {
+		const empty = await readMediaLive({ SEARCH_DB: jobsDb([rows[3]!]), MEDIA_MAX_TRANSCODES: '4' } as never);
+		assert.deepEqual([empty.transcoding, empty.queued, empty.maxTranscodes, empty.oldestQueuedAt, empty.oldestQueuedSeconds], [0, 0, 4, null, null]);
+		const unbound = await readMediaLive({} as never);
+		assert.deepEqual([unbound.transcoding, unbound.queued, unbound.maxTranscodes], [0, 0, null]);
+	});
+
+	it('reads the max from MEDIA_MAX_TRANSCODES, null when unset or not a positive whole number', () => {
+		assert.equal(maxTranscodesOf('4'), 4);
+		for (const bad of [undefined, '', '0', '-1', '2.5', 'two']) assert.equal(maxTranscodesOf(bad), null, String(bad));
+	});
+
+	it('returns live with the summary, and alone with ?only=live', async () => {
+		const { env } = setup();
+		const full = { ...env, SEARCH_DB: jobsDb(rows), MEDIA_MAX_TRANSCODES: '2' };
+		const app = createMediaInternalRouter();
+		const res = (await (await app.request('/summary?days=7', {}, full as never)).json()) as { result: Record<string, any> };
+		assert.equal(res.result.days, 7);
+		assert.equal(res.result.jobs.jobs, 6);
+		assert.deepEqual([res.result.live.transcoding, res.result.live.queued, res.result.live.maxTranscodes], [1, 3, 2]);
+		const only = (await (await app.request('/summary?only=live', {}, full as never)).json()) as { result: Record<string, any> };
+		assert.deepEqual(Object.keys(only.result), ['live']);
+		assert.equal(only.result.live.queued, 3);
+		const none = (await (await app.request('/summary', {}, { ...env, MEDIA_MAX_TRANSCODES: '4' } as never)).json()) as { result: Record<string, any> };
+		assert.deepEqual([none.result.jobs, none.result.live.transcoding, none.result.live.maxTranscodes], [null, 0, 4]);
+	});
+});
+
+describe('R2 state on the admin video views', () => {
+	const failure = { stage: 'encode' as const, error: 'ffmpeg exited 1', attempt: 2, elapsedMs: 5000, at: '2026-11-11T10:00:00Z', stderrTail: ['x'] };
+
+	it('the list badge carries status, progress and error only', () => {
+		assert.equal(adminR2Badge({}), null);
+		assert.equal(adminR2Badge({ r2: { status: 'bogus' } }), null);
+		assert.deepEqual(adminR2Badge({ r2: { status: 'transcoding', progress: 0.4, jobId: 'j', result: RESULT } }), { status: 'transcoding', progress: 0.4 });
+		assert.deepEqual(adminR2Badge({ r2: { status: 'failed', error: 'source_unavailable' } }), { status: 'failed', error: 'source_unavailable' });
+	});
+
+	it('the detail keeps the failure and drops the transcode result', () => {
+		const detail = adminR2Detail({
+			r2: { status: 'failed', jobId: 'j', rev: 'r', access: 'priv', attempts: 2, queuedAt: 'q', failedAt: 'f', error: 'ffmpeg exited 1', failure, result: RESULT, previous: { rev: 'p', access: 'pub' } },
+		});
+		assert.deepEqual(detail, { status: 'failed', jobId: 'j', rev: 'r', access: 'priv', attempts: 2, queuedAt: 'q', failedAt: 'f', error: 'ffmpeg exited 1', failure });
+		assert.equal(adminR2Detail({ r2: null }), null);
 	});
 });
 

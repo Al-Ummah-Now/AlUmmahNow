@@ -331,6 +331,22 @@ describe('content endpoints: reports', () => {
     assert.equal(params.get('reported'), null);
   });
 
+  it('passes the R2 state through on the list rows and the video page (epic #687)', async () => {
+    const { db } = fakeDb();
+    const failure = { stage: 'encode', error: 'ffmpeg exited 1', attempt: 2, elapsedMs: 5000, at: '2026-11-11T10:00:00Z' };
+    const r2 = { status: 'failed', jobId: 'j', rev: 'r', access: 'pub', attempts: 2, queuedAt: 'q', error: 'ffmpeg exited 1', failure };
+    const { fetcher } = fakeVideos({
+      'GET /videos': () => ({ body: { success: true, result: { items: [{ id: 'v_1', r2: { status: 'transcoding', progress: 0.5 } }, { id: 'v_2', r2: null }], total: 2, page: 1, pageSize: 20, indexComplete: true } } }),
+      'GET /videos/v_1': () => ({ body: { success: true, result: { id: 'v_1', title: 'Talk', r2 } } }),
+      'GET /jobs': () => ({ body: { success: true, result: { items: [] } } }),
+    });
+    const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
+    const list = (await (await call('/api/content/videos', { roles: 'moderator' })).json()) as { result: { items: { id: string; r2: unknown }[] } };
+    assert.deepEqual(list.result.items.map((i) => i.r2), [{ status: 'transcoding', progress: 0.5 }, null]);
+    const detail = (await (await call('/api/content/videos/v_1', { roles: 'moderator' })).json()) as { result: { r2: unknown } };
+    assert.deepEqual(detail.result.r2, r2);
+  });
+
   it('with nothing reported, the "reported" list is empty without asking api-videos', async () => {
     const { fetcher, calls } = fakeVideos();
     const call = appFor({ REPORTS_DB: fakeDb().db, VIDEOS: fetcher });

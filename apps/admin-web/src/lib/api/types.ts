@@ -502,11 +502,25 @@ export interface MediaCostRow {
   value: number;
 }
 
+/** What the transcoder is doing now (api-videos media_jobs; MEDIA_MAX_TRANSCODES). */
+export interface MediaLive {
+  transcoding: number;
+  queued: number;
+  /** Max concurrent transcodes (the container's max_instances); null when not configured */
+  maxTranscodes: number | null;
+  oldestQueuedAt: string | null;
+  /** Age of the oldest waiting job by the server clock */
+  oldestQueuedSeconds: number | null;
+  at: string;
+}
+
 export interface MediaSummary {
   days: number;
   jobs: MediaJobsSummary | null;
   qoe: MediaQoeRow[];
   costs: MediaCostRow[];
+  /** Absent from an older api-videos */
+  live?: MediaLive;
   settings?: import('@al-ummah/shared-types').DeliverySettings;
 }
 

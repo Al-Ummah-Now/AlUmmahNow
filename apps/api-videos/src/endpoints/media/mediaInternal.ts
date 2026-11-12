@@ -7,7 +7,9 @@
  *   POST /internal/media/events            TranscodeJobEvent → the video record
  *   POST /internal/media/retry             { ids: string[] } → transcode again
  *   GET  /internal/media/jobs?status=&limit=  recent jobs (media_jobs)
- *   GET  /internal/media/summary?days=     time to playable and cost inputs per source
+ *   GET  /internal/media/summary?days=     time to playable and cost inputs per source, plus `live`
+ *                                          (transcoding now, waiting, max concurrent, oldest wait);
+ *                                          ?only=live returns just `live` (the Delivery page polls it)
  *   GET  /internal/media/settings          delivery switch
  *   PUT  /internal/media/settings          { mode, r2Percent, assign, transcode, actorId }
  */
@@ -17,13 +19,61 @@ import { applyJobEvent, enqueueTranscode, readDeliverySettings, sourceCandidates
 
 const MAX_IDS = 50;
 
+type Env = MediaEnv & {
+	/** Max concurrent transcodes: max_instances of apps/media's transcoder container ("4" production, "2" stage and QA) */
+	MEDIA_MAX_TRANSCODES?: string;
+};
+
+/** What the transcoder is doing now (media_jobs is our own record of the backlog). */
+export interface MediaLive {
+	/** Jobs a container is working on */
+	transcoding: number;
+	/** Jobs waiting for a container */
+	queued: number;
+	/** MEDIA_MAX_TRANSCODES; null when unset */
+	maxTranscodes: number | null;
+	/** queued_at of the oldest waiting job, and its age in seconds (server clock) */
+	oldestQueuedAt: string | null;
+	oldestQueuedSeconds: number | null;
+	at: string;
+}
+
+export function maxTranscodesOf(value: string | undefined): number | null {
+	const n = Number(value);
+	return value && Number.isInteger(n) && n > 0 ? n : null;
+}
+
+export async function readMediaLive(env: Env, now: number = Date.now()): Promise<MediaLive> {
+	const at = new Date(now).toISOString();
+	const maxTranscodes = maxTranscodesOf(env.MEDIA_MAX_TRANSCODES);
+	const db = env.SEARCH_DB;
+	if (!db) return { transcoding: 0, queued: 0, maxTranscodes, oldestQueuedAt: null, oldestQueuedSeconds: null, at };
+	const row = await db
+		.prepare(
+			`SELECT SUM(status = 'transcoding') AS transcoding, SUM(status = 'queued') AS queued,
+			   MIN(CASE WHEN status = 'queued' THEN queued_at END) AS oldest_queued_at
+			 FROM media_jobs WHERE status IN ('queued', 'transcoding')`,
+		)
+		.first<{ transcoding: number | null; queued: number | null; oldest_queued_at: string | null }>();
+	const oldest = row?.oldest_queued_at ?? null;
+	const oldestMs = oldest ? Date.parse(oldest) : NaN;
+	return {
+		transcoding: Number(row?.transcoding) || 0,
+		queued: Number(row?.queued) || 0,
+		maxTranscodes,
+		oldestQueuedAt: oldest,
+		oldestQueuedSeconds: Number.isFinite(oldestMs) ? Math.max(0, Math.round((now - oldestMs) / 1000)) : null,
+		at,
+	};
+}
+
 function isEvent(body: unknown): body is TranscodeJobEvent {
 	const b = body as Partial<TranscodeJobEvent> | null;
 	return !!b && typeof b.videoId === 'string' && isMediaVideoId(b.videoId) && typeof b.jobId === 'string' && ['started', 'progress', 'ready', 'failed'].includes(b.type as string);
 }
 
 export function createMediaInternalRouter() {
-	const app = new Hono<{ Bindings: MediaEnv }>();
+	const app = new Hono<{ Bindings: Env }>();
 
 	app.get('/source/:videoId', async (c) => {
 		const id = c.req.param('videoId');
@@ -68,8 +118,9 @@ export function createMediaInternalRouter() {
 		const db = c.env.SEARCH_DB;
 		const days = Math.min(Math.max(parseInt(c.req.query('days') || '30', 10) || 30, 1), 120);
 		const since = new Date(Date.now() - days * 86400_000).toISOString();
-		if (!db) return c.json({ success: true, result: { days, jobs: null, qoe: [], costs: [] } });
-		const [jobs, qoe, costs] = await Promise.all([
+		if (c.req.query('only') === 'live') return c.json({ success: true, result: { live: await readMediaLive(c.env) } });
+		if (!db) return c.json({ success: true, result: { days, jobs: null, qoe: [], costs: [], live: await readMediaLive(c.env) } });
+		const [jobs, qoe, costs, live] = await Promise.all([
 			db
 				.prepare(
 					`SELECT COUNT(*) AS jobs,
@@ -93,8 +144,9 @@ export function createMediaInternalRouter() {
 				.bind(since.slice(0, 10))
 				.all(),
 			db.prepare('SELECT day, provider, metric, value FROM delivery_cost_daily WHERE day >= ? ORDER BY day').bind(since.slice(0, 10)).all(),
+			readMediaLive(c.env),
 		]);
-		return c.json({ success: true, result: { days, jobs, qoe: qoe.results ?? [], costs: costs.results ?? [], settings: await readDeliverySettings(c.env) } });
+		return c.json({ success: true, result: { days, jobs, qoe: qoe.results ?? [], costs: costs.results ?? [], live, settings: await readDeliverySettings(c.env) } });
 	});
 
 	app.get('/settings', async (c) => c.json({ success: true, result: await readDeliverySettings(c.env, true) }));

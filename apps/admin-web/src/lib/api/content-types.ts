@@ -21,6 +21,7 @@ import type {
 } from '@al-ummah/shared-types';
 
 export type { AdminDeletion, AdminDeletionKind, AdminDeletionPage, AdminDeletionStatus } from '@al-ummah/shared-types';
+export type { AdminVideoR2, AdminVideoR2Badge, TranscodeFailure, TranscodeStage } from '@al-ummah/shared-types';
 
 export type {
   AdminUserSearchItem,
