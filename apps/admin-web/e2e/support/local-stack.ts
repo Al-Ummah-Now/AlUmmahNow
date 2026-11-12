@@ -46,6 +46,24 @@ export async function grantRole(email: string, roleId: 'role_admin' | 'role_mode
   if (!roles.some((r) => r.role_id === roleId)) throw new Error(`${roleId} was not granted to ${email}`);
 }
 
+/**
+ * Runs a worker's scheduled handler now (POST /__stack/scheduled), for the purges the admin only
+ * queues for the cron: api-videos' hourly deletion cleanup ('47 * * * *') and admin-api's trash
+ * cleanup, which runs on the 5-minute tick in the first minutes of an hour.
+ */
+export async function runCron(app: 'api-videos' | 'admin-api', cron: string, time = new Date()): Promise<void> {
+  const res = await fetch(`${control()}/__stack/scheduled/${app}?cron=${encodeURIComponent(cron)}&time=${encodeURIComponent(time.toISOString())}`, { method: 'POST' });
+  const body = (await res.json().catch(() => ({}))) as { outcome?: string; error?: string };
+  if (!res.ok || body.outcome !== 'ok') throw new Error(`${app} cron ${cron} -> ${res.status} ${body.outcome ?? body.error ?? ''}`);
+}
+
+/** The top of the current UTC hour (admin-api's hourly tick). */
+export function topOfHour(now = new Date()): Date {
+  const t = new Date(now);
+  t.setUTCMinutes(0, 0, 0);
+  return t;
+}
+
 /** An object in a stack R2 bucket (bucket_name of the app's top-level wrangler config). */
 export function stackR2(method: 'GET' | 'PUT' | 'DELETE', bucket: string, key: string, body?: unknown): Promise<Response> {
   return fetch(`${control()}/__stack/r2/${encodeURIComponent(bucket)}/${encodeURIComponent(key)}`, {
