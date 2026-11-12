@@ -10,7 +10,7 @@
  */
 import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { HISTORY_MIN_SECONDS, NO_PLAYABLE_VIDEO, pause, playFor, RESUME_MIN_VIDEO_SECONDS, watchUrl } from './videos';
+import { NO_PLAYABLE_VIDEO, pause, playFor, watchUrl } from './videos';
 import { apiFetch, createProfile, signUpOnWeb, type WebUser } from './web-session';
 import { useOwnVideos } from './own-videos';
 
