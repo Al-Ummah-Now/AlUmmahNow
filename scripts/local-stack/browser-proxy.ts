@@ -13,7 +13,7 @@
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
-import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { createServer, request as httpRequest, type IncomingMessage, type ServerResponse } from 'node:http';
 import { connect, type Socket } from 'node:net';
 import type { Duplex } from 'node:stream';
 import { TLSSocket } from 'node:tls';
@@ -125,14 +125,18 @@ export function startBrowserProxy(): Promise<() => Promise<void>> {
         res.writeHead(502).end();
         return;
       }
-      const request = await toFetchRequest(req, target.origin);
-      // Always the stack on loopback, on one of its own ports; only the path comes from the request
-      const local = `http://127.0.0.1:${port}${target.pathname}${target.search}`;
-      try {
-        await send(res, await fetch(local, { method: request.method, headers: request.headers, body: request.body, redirect: 'manual', duplex: 'half' } as RequestInit));
-      } catch {
-        res.writeHead(502).end();
-      }
+      // Streamed to the stack on loopback, on one of its own ports: headers as sent (Host kept, so
+      // Next's Server Action origin check holds), the body and the response streamed both ways
+      // (streamed HTML, server-sent events). Only the path comes from the request.
+      const upstream = httpRequest(
+        { host: '127.0.0.1', port, method: req.method, path: `${target.pathname}${target.search}`, headers: req.headers },
+        (answer) => {
+          res.writeHead(answer.statusCode ?? 502, answer.headers);
+          answer.pipe(res);
+        },
+      );
+      upstream.on('error', () => (res.headersSent ? res.destroy() : res.writeHead(502).end()));
+      req.pipe(upstream);
       return;
     }
     const fake = fakeHandler(target.hostname);
@@ -172,6 +176,37 @@ export function startBrowserProxy(): Promise<() => Promise<void>> {
     secure.on('error', () => secure.destroy());
     if (head.length) socket.unshift(head);
     fakeServer.emit('connection', secure);
+  });
+  // WebSocket upgrades through the proxy (browsers that proxy localhost): piped to the stack port
+  proxy.on('upgrade', (req, socket, head) => {
+    socket.on('error', () => socket.destroy());
+    let target: URL;
+    try {
+      target = new URL(req.url ?? '');
+    } catch {
+      socket.destroy();
+      return;
+    }
+    const port = Number(target.port || 80);
+    if (!LOCAL.has(target.hostname) || !STACK_PORTS.has(port)) {
+      refuse(target.href);
+      socket.destroy();
+      return;
+    }
+    const upstream = connect(port, '127.0.0.1', () => {
+      const lines = [`${req.method} ${target.pathname}${target.search} HTTP/1.1`];
+      for (let i = 0; i < req.rawHeaders.length; i += 2) lines.push(`${req.rawHeaders[i]}: ${req.rawHeaders[i + 1]}`);
+      upstream.write(`${lines.join('\r\n')}\r\n\r\n`);
+      if (head.length) upstream.write(head);
+      upstream.pipe(socket);
+      socket.pipe(upstream);
+    });
+    const close = () => {
+      upstream.destroy();
+      socket.destroy();
+    };
+    upstream.on('error', close);
+    socket.on('error', close);
   });
   proxy.on('clientError', (_e, socket) => socket.destroy());
 
