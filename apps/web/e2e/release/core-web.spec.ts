@@ -7,10 +7,14 @@
  */
 import { test, expect, type BrowserContext, type Page } from '@playwright/test';
 import { target } from './targets';
-import { findPlayableVideo, NO_PLAYABLE_VIDEO, watchUrl } from './videos';
+import { NO_PLAYABLE_VIDEO, watchUrl } from './videos';
 import { apiFetch, createProfile, signUpOnWeb, startSignIn, type Locale } from './web-session';
 import { grantCreatorTier } from './creator-tier';
 import { COMMENT_DISLIKES, dislikesTurnedOff } from './dislikes';
+import { useOwnVideos } from './own-videos';
+
+// This spec's own videos (created in beforeAll, deleted in afterAll): never the seed's or the newest public one
+const own = useOwnVideos(test);
 
 // This file signs users in through the auth server: its traces would hold the
 // typed password and email code (fillSecret args, form POST bodies). Trace off.
@@ -68,7 +72,7 @@ test.describe('Release: unknown channel page', () => {
 
 test.describe('Release: live comments', () => {
   test('a new comment reaches a signed-out viewer without a reload', async ({ page, browser, context }) => {
-    const video = await findPlayableVideo();
+    const video = await own('landscape');
     test.skip(!video, NO_PLAYABLE_VIDEO);
 
     await answerConsent(context);
@@ -134,7 +138,7 @@ test.describe('Release: Arabic at phone width', () => {
   test.use({ viewport: PHONE });
 
   test('watch later reaches the library, and notifications opens', async ({ page, context }) => {
-    const video = await findPlayableVideo();
+    const video = await own('landscape');
     test.skip(!video, NO_PLAYABLE_VIDEO);
 
     await answerConsent(context);

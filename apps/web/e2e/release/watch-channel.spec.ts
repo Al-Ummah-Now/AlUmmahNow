@@ -12,9 +12,12 @@ import { target } from './targets';
 import { watchUrl } from './videos';
 import { apiFetch, createProfile, signUpOnWeb, type Locale } from './web-session';
 import { grantCreatorTier } from './creator-tier';
-import { fixtureVideo } from './fixtures';
 import { submitNewChannelInMenu } from './account-menu';
 import { fetchRetry } from './net';
+import { useOwnVideos } from './own-videos';
+
+// This spec's own videos (created in beforeAll, deleted in afterAll): never the seed's or the newest public one
+const own = useOwnVideos(test);
 
 // The signed-in test registers through the auth server: its trace would hold
 // the typed password and email code. Trace off for the file.
@@ -37,7 +40,7 @@ async function answerConsent(context: BrowserContext): Promise<void> {
 /** A public video that belongs to a channel (legacy imports have channelId null and no Subscribe). */
 async function findChannelVideo(): Promise<ChannelVideo | null> {
   // The seeded lecture: on the seed's channel, never deleted by a parallel spec
-  const video = await fixtureVideo('landscape');
+  const video = await own('landscape');
   return { id: video.id, channelId: video.channelId as string };
 }
 

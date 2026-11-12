@@ -17,7 +17,12 @@
 import { test, expect, type BrowserContext, type ConsoleMessage, type Page, type Response } from '@playwright/test';
 import { target } from './targets';
 import { watchUrl } from './videos';
-import { seeded } from './fixtures';
+import { useOwnVideos } from './own-videos';
+
+// This spec's own videos (created in beforeAll, deleted in afterAll): never the seed's or the newest public one
+const own = useOwnVideos(test);
+// It signs a user up through the auth server: traces and video would hold the password and code
+test.use({ trace: 'off', video: 'off' });
 
 /** How long a page may stay quiet after the probe before it counts as settled. */
 const SETTLE_MS = 3000;
@@ -66,7 +71,7 @@ test.describe('Release: signed-out visitors get a clean console', () => {
     test.setTimeout(240000);
     const web = target().web;
     // Seeded fixtures: never the newest item of a shared list (another spec's upload, still encoding)
-    const { videos, lecturesChannelId: channelId } = await seeded();
+    const { videos, channelId } = await own.all();
     const videoId = videos.landscape.id;
     const pages: Array<[string, string]> = [
       ['home', `${web}/en`],

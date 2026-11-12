@@ -9,8 +9,13 @@
  */
 import { test, expect } from '@playwright/test';
 import { target } from './targets';
-import { fixtureVideo } from './fixtures';
 import { fetchRetry } from './net';
+import { useOwnVideos } from './own-videos';
+
+// This spec's own videos (created in beforeAll, deleted in afterAll): never the seed's or the newest public one
+const own = useOwnVideos(test);
+// It signs a user up through the auth server: traces and video would hold the password and code
+test.use({ trace: 'off', video: 'off' });
 
 interface ListedVideo {
   id: string;
@@ -55,7 +60,7 @@ async function shortsTabIds(channelId: string): Promise<string[]> {
 
 test.describe('Release: channel shorts', () => {
   test('a public short is listed on its channel\'s Shorts tab (API)', async () => {
-    const short = await currentVideo((await fixtureVideo('vertical')).id);
+    const short = await currentVideo((await own('vertical')).id);
     expect(short, 'the seeded Short is gone: re-run the seed').not.toBeNull();
     expect(short!.isShort, 'the seeded vertical clip is a Short by the shared rule').toBe(true);
     expect(short!.channelId, 'the seeded Short has a channel').toBeTruthy();

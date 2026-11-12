@@ -6,7 +6,13 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { target } from './targets';
-import { findPlayableVideo, NO_PLAYABLE_VIDEO, watchUrl } from './videos';
+import { NO_PLAYABLE_VIDEO, watchUrl } from './videos';
+import { useOwnVideos } from './own-videos';
+
+// This spec's own videos (created in beforeAll, deleted in afterAll): never the seed's or the newest public one
+const own = useOwnVideos(test);
+// It signs a user up through the auth server: traces and video would hold the password and code
+test.use({ trace: 'off', video: 'off' });
 
 const PHONE = { width: 390, height: 844 };
 /** The 3x file is about 2.6 KB; anything near the old 1.1 MB PNG fails. */
@@ -61,7 +67,7 @@ test.describe('Release: header logo on first paint', () => {
     });
 
     test(`watch page shows the logo at once (${locale})`, async ({ page }) => {
-      const video = await findPlayableVideo();
+      const video = await own('landscape');
       test.skip(!video, NO_PLAYABLE_VIDEO);
       await expectLogo(page, watchUrl(video!.id, locale), 32);
     });

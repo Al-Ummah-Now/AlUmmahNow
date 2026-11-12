@@ -11,7 +11,13 @@
  * Firefox and WebKit locally (playwright.release.config.ts).
  */
 import { test, expect, type Page } from '@playwright/test';
-import { findPlayableVideo, NO_PLAYABLE_VIDEO, watchUrl } from './videos';
+import { NO_PLAYABLE_VIDEO, watchUrl } from './videos';
+import { useOwnVideos } from './own-videos';
+
+// This spec's own videos (created in beforeAll, deleted in afterAll): never the seed's or the newest public one
+const own = useOwnVideos(test);
+// It signs a user up through the auth server: traces and video would hold the password and code
+test.use({ trace: 'off', video: 'off' });
 
 const PLAYER = '.video-js.vjs-fanous';
 const BAR = `${PLAYER} .vjs-control-bar`;
@@ -81,7 +87,7 @@ for (const input of ['mouse', 'touch'] as const) {
     for (const locale of ['en', 'ar'] as const) {
       test(`one row inside the player from 320 to 1920 px (${locale}, ${input})`, async ({ page }) => {
         test.setTimeout(240000);
-        const video = await findPlayableVideo(20);
+        const video = await own('landscape');
         test.skip(!video, NO_PLAYABLE_VIDEO);
 
         await page.setViewportSize({ width: 1280, height: HEIGHT });

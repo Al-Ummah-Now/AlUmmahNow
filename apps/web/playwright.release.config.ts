@@ -76,6 +76,11 @@ const releaseSpecs = (placement: 'local' | 'deployed') =>
     .filter((p) => p.startsWith('apps/web/e2e/release/') && SPEC_PLACEMENT[p].placement === placement)
     .map((p) => escape(p.slice('apps/web/e2e/release/'.length)));
 const DEPLOYED_ONLY = new RegExp(`/(${releaseSpecs('deployed').join('|')})$`);
+/**
+ * QA/stage runs only the specs that need real infrastructure (placed `deployed`); every `local`
+ * spec runs on the local stack instead (local-e2e.yml, green before it left the QA runs).
+ */
+const LOCAL_ONLY = new RegExp(`/(${releaseSpecs('local').join('|')})$`);
 const LOCAL_USE = LOCAL ? { proxy: { server: 'http://127.0.0.1:3191', bypass: 'localhost,127.0.0.1' }, ignoreHTTPSErrors: true } : {};
 
 const LOAD_TAG = /@load/;
@@ -105,7 +110,7 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     ...LOCAL_USE,
   },
-  projects: SHARED_MODE === 'only' ? [{ name: 'shared-state', testMatch: SHARED_STATE, use: { ...devices['Desktop Chrome'] } }] : ([
+  projects: SHARED_MODE === 'only' ? [{ name: 'shared-state', testMatch: SHARED_STATE, testIgnore: LOCAL ? DEPLOYED_ONLY : LOCAL_ONLY, use: { ...devices['Desktop Chrome'] } }] : ([
     {
       name: 'auth-flows',
       testIgnore: SHARED_MODE === 'skip' ? [PLAYER, ALL_BROWSERS, SHARED_STATE] : [PLAYER, ALL_BROWSERS],
@@ -143,6 +148,6 @@ export default defineConfig({
     ),
   ] as Array<{ name: string; testIgnore?: RegExp | RegExp[] } & Record<string, unknown>>).map((project) => ({
     ...project,
-    testIgnore: encodeIgnore([...(project.testIgnore === undefined ? [] : ([] as RegExp[]).concat(project.testIgnore)), ...(LOCAL ? [DEPLOYED_ONLY] : [])]),
+    testIgnore: encodeIgnore([...(project.testIgnore === undefined ? [] : ([] as RegExp[]).concat(project.testIgnore)), LOCAL ? DEPLOYED_ONLY : LOCAL_ONLY]),
   })),
 });

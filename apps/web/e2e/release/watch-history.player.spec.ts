@@ -6,9 +6,13 @@
  */
 import { test, expect } from '@playwright/test';
 import { target } from './targets';
-import { findPlayableVideo, HISTORY_MIN_SECONDS, NO_PLAYABLE_VIDEO, pause, playFor, watchUrl } from './videos';
+import { HISTORY_MIN_SECONDS, NO_PLAYABLE_VIDEO, pause, playFor, watchUrl } from './videos';
 import { apiFetch, createProfile, signUpOnWeb } from './web-session';
 import { fetchRetry } from './net';
+import { useOwnVideos } from './own-videos';
+
+// This spec's own videos (created in beforeAll, deleted in afterAll): never the seed's or the newest public one
+const own = useOwnVideos(test);
 
 // This file signs users in through the auth server: its traces would hold the
 // typed password and email code (fillSecret args, form POST bodies). Trace off.
@@ -31,7 +35,7 @@ async function channelName(channelId: string | undefined): Promise<string | null
 
 test.describe('Release: watch history', () => {
   test('a signed-in watch is listed in the user\'s history', async ({ page }) => {
-    const video = await findPlayableVideo(HISTORY_MIN_SECONDS);
+    const video = await own('landscape');
     test.skip(!video, NO_PLAYABLE_VIDEO);
 
     const user = await signUpOnWeb(page, 'rel-history');

@@ -6,7 +6,13 @@
  * on branded Chrome against a public video found through the API.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { findPlayableVideo, NO_PLAYABLE_VIDEO, watchUrl } from './videos';
+import { NO_PLAYABLE_VIDEO, watchUrl } from './videos';
+import { useOwnVideos } from './own-videos';
+
+// This spec's own videos (created in beforeAll, deleted in afterAll): never the seed's or the newest public one
+const own = useOwnVideos(test);
+// It signs a user up through the auth server: traces and video would hold the password and code
+test.use({ trace: 'off', video: 'off' });
 
 const PLAYER = '.video-js.vjs-fanous';
 const BAR = `${PLAYER} .vjs-control-bar`;
@@ -32,7 +38,7 @@ const LABELS = {
 test.describe('Release: player controls', () => {
   for (const locale of ['en', 'ar'] as const) {
     test(`big play starts the video and the bar's controls drive it (${locale})`, async ({ page }) => {
-      const video = await findPlayableVideo(20);
+      const video = await own('landscape');
       test.skip(!video, NO_PLAYABLE_VIDEO);
       const labels = LABELS[locale];
 
