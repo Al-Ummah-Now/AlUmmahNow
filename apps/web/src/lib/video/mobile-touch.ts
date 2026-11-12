@@ -8,6 +8,13 @@
  * - Long press for playback speed menu
  * - Visual feedback animations
  *
+ * Gestures belong to the video surface only. A touch that starts on a control (the bar, the big
+ * play button, a menu, an overlay button) is that control's alone: before, two quick taps on the
+ * bar's play button also counted as a double tap and seeked 10s back, a slow tap on it changed the
+ * speed and still paused, and a finger on the half-scrolled player could not scroll the page
+ * because every vertical move was taken for the volume swipe. The volume swipe now runs only in
+ * fullscreen, where there is no page to scroll; inline, a vertical drag scrolls the page.
+ *
  * Features:
  * - Touch zones: left (rewind), center (play/pause), right (forward)
  * - Smooth volume control via vertical swipe
@@ -74,13 +81,21 @@ const DEFAULT_OPTIONS: Required<MobileTouchOptions> = {
   swipeSensitivity: 200,
 };
 
+/** How far (px) a finger may shake and still be tapping */
+const MOVE_SLOP = 10;
+
 /**
  * Mobile Touch Handler State
  */
 interface TouchState {
+  /** The current touch started on the video surface (not on a control) */
+  tracking: boolean;
   lastTapTime: number;
   lastTapX: number;
+  touchStartX: number;
   touchStartY: number;
+  /** The finger moved past MOVE_SLOP: a drag, not a tap or a long press */
+  moved: boolean;
   touchStartVolume: number;
   longPressTimer: ReturnType<typeof setTimeout> | null;
   isLongPress: boolean;
@@ -106,9 +121,12 @@ export function setupMobileTouchControls(
 
   // Touch state management
   const state: TouchState = {
+    tracking: false,
     lastTapTime: 0,
     lastTapX: 0,
+    touchStartX: 0,
     touchStartY: 0,
+    moved: false,
     touchStartVolume: 0,
     longPressTimer: null,
     isLongPress: false,
@@ -229,15 +247,24 @@ export function setupMobileTouchControls(
    * Touch start handler
    */
   function onTouchStart(event: TouchEvent): void {
+    clearLongPress();
+    state.isLongPress = false;
+    // A second finger, or a touch on a control, is not a surface gesture
+    state.tracking = event.touches.length === 1 && isVideoSurface(event.target);
+    if (!state.tracking) {
+      state.lastTapTime = 0;
+      return;
+    }
     const touch = event.touches[0];
 
     // Store initial touch position for swipe detection
+    state.moved = false;
+    state.touchStartX = touch.clientX;
     state.touchStartY = touch.clientY;
     state.touchStartVolume = player.volume();
 
     // Start long press timer if enabled
     if (config.enableLongPress) {
-      state.isLongPress = false;
       state.longPressTimer = setTimeout(() => {
         handleLongPress();
       }, config.longPressDuration);
@@ -248,14 +275,17 @@ export function setupMobileTouchControls(
    * Touch move handler
    */
   function onTouchMove(event: TouchEvent): void {
-    // Cancel long press if finger moves
-    if (state.longPressTimer) {
-      clearTimeout(state.longPressTimer);
-      state.longPressTimer = null;
-    }
+    if (!state.tracking) return;
+    const moving = event.touches[0];
+    // A finger always shakes a little: only a real move is a drag
+    if (!state.moved && Math.hypot(moving.clientX - state.touchStartX, moving.clientY - state.touchStartY) < MOVE_SLOP) return;
+    state.moved = true;
+    // A drag is neither a long press nor a tap
+    clearLongPress();
+    state.lastTapTime = 0;
 
-    // Handle volume swipe if enabled
-    if (config.enableSwipeVolume) {
+    // Volume swipe only in fullscreen: inline, a vertical drag scrolls the page
+    if (config.enableSwipeVolume && player.isFullscreen()) {
       const touch = event.touches[0];
       const deltaY = state.touchStartY - touch.clientY;
 
@@ -271,20 +301,19 @@ export function setupMobileTouchControls(
    * Touch end handler
    */
   function onTouchEnd(event: TouchEvent): void {
-    // Clear long press timer
-    if (state.longPressTimer) {
-      clearTimeout(state.longPressTimer);
-      state.longPressTimer = null;
-    }
+    clearLongPress();
+    if (!state.tracking) return;
+    state.tracking = false;
 
-    // Skip if this was a long press
+    // A long press already acted: its release must not also tap (play/pause, show controls)
     if (state.isLongPress) {
       state.isLongPress = false;
+      if (event.cancelable) event.preventDefault();
       return;
     }
 
-    // Handle double-tap if enabled
-    if (config.enableDoubleTap) {
+    // Handle double-tap if enabled (a drag is no tap)
+    if (config.enableDoubleTap && !state.moved) {
       const touch = event.changedTouches[0];
       const now = Date.now();
       const timeSinceLast = now - state.lastTapTime;
@@ -292,7 +321,7 @@ export function setupMobileTouchControls(
 
       // Check if this is a double-tap (same location within threshold)
       const isSameLocation = Math.abs(x - state.lastTapX) < 50;
-      const isWithinThreshold = timeSinceLast > 0 && timeSinceLast < config.doubleTapThreshold;
+      const isWithinThreshold = state.lastTapTime > 0 && timeSinceLast > 0 && timeSinceLast < config.doubleTapThreshold;
 
       if (isSameLocation && isWithinThreshold) {
         event.preventDefault();
@@ -307,17 +336,33 @@ export function setupMobileTouchControls(
     }
   }
 
+  /** The browser took the touch (a scroll, a system gesture): nothing to finish */
+  function onTouchCancel(): void {
+    clearLongPress();
+    state.tracking = false;
+    state.isLongPress = false;
+    state.lastTapTime = 0;
+  }
+
+  function clearLongPress(): void {
+    if (state.longPressTimer) {
+      clearTimeout(state.longPressTimer);
+      state.longPressTimer = null;
+    }
+  }
+
   /**
    * Prevent context menu on long press
    */
   function onContextMenu(event: Event): void {
-    event.preventDefault();
+    if (isVideoSurface(event.target)) event.preventDefault();
   }
 
   // Add event listeners
   playerElement.addEventListener('touchstart', onTouchStart, { passive: true });
   playerElement.addEventListener('touchmove', onTouchMove, { passive: false });
   playerElement.addEventListener('touchend', onTouchEnd, { passive: false });
+  playerElement.addEventListener('touchcancel', onTouchCancel, { passive: true });
   playerElement.addEventListener('contextmenu', onContextMenu);
 
   // Return cleanup function
@@ -326,6 +371,7 @@ export function setupMobileTouchControls(
     playerElement.removeEventListener('touchstart', onTouchStart);
     playerElement.removeEventListener('touchmove', onTouchMove);
     playerElement.removeEventListener('touchend', onTouchEnd);
+    playerElement.removeEventListener('touchcancel', onTouchCancel);
     playerElement.removeEventListener('contextmenu', onContextMenu);
 
     // Clear long press timer
@@ -343,6 +389,34 @@ export function setupMobileTouchControls(
       }
     });
   };
+}
+
+/**
+ * Controls and overlays inside the player: a touch on any of them is the control's, never a gesture
+ */
+const CONTROL_SELECTOR = [
+  '.vjs-control-bar',
+  '.vjs-control',
+  '.vjs-big-play-button',
+  '.vjs-menu',
+  '.vjs-modal-dialog',
+  'button',
+  'a',
+  'input',
+  'select',
+  'textarea',
+  '[role="button"]',
+  '[role="slider"]',
+  '[role="menu"]',
+  '[role="menuitem"]',
+  '[role="menuitemradio"]',
+  '[role="dialog"]',
+].join(',');
+
+/** True when a touch on this target is a gesture on the video itself */
+export function isVideoSurface(target: EventTarget | null): boolean {
+  if (!target || typeof (target as Element).closest !== 'function') return false;
+  return (target as Element).closest(CONTROL_SELECTOR) === null;
 }
 
 /**
