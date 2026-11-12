@@ -1,0 +1,86 @@
+# Media delivery runbook (R2 + Cloudflare CDN beside Bunny)
+
+Plan and design: [R2-DELIVERY-PLAN.md](./R2-DELIVERY-PLAN.md). Epic #687.
+
+## What exists per environment
+
+| | QA | Stage | Production |
+|---|---|---|---|
+| Public bucket (R2 custom domain) | `al-ummah-now-media-qa` → `media.qa.alummahnow.net` | `al-ummah-now-media-stage` → `media.stage.alummahnow.net` | `al-ummah-now-media` → `media.alummahnow.net` |
+| Private bucket (no public access) | `al-ummah-now-media-private-qa` | `al-ummah-now-media-private-stage` | `al-ummah-now-media-private` |
+| Worker (queue consumer, container, `/priv/*` route) | `al-ummah-now-media-qa` | `al-ummah-now-media-stage` | `al-ummah-now-media` |
+| Transcode queue / DLQ | `al-ummah-now-transcode-qa` / `-dlq-qa` | `…-stage` | `al-ummah-now-transcode` / `-dlq` |
+| Path-token key (Secrets Store) | `media-sign-key-qa` | `media-sign-key-stage` | `media-sign-key` |
+
+The buckets and queues are created by `scripts/release/ensure-resources.ts` on every deploy. The
+signing keys were created once, with `wrangler secrets-store secret create`.
+
+## Applying the CDN settings
+
+```sh
+# Plan (read-only): prints what differs and, without zone access, the exact rule to paste
+node --experimental-strip-types scripts/media-cdn/apply.ts --env qa
+# Apply
+MEDIA_CDN_API_TOKEN=… node --experimental-strip-types scripts/media-cdn/apply.ts --env qa --apply
+```
+
+Or run the **Media CDN settings** workflow (Actions → manual dispatch: env, apply).
+
+- **What it manages:** the custom domain and CORS on the public bucket (account token; the wrangler
+  login works), one Cache Rule per env found by its ref `al-ummah-media-cache-<env>`, and Smart Tiered
+  Cache. Both of the last two need `MEDIA_CDN_API_TOKEN`. It never edits other rules in the phase.
+- **Production attaches `media.alummahnow.net`, which creates a DNS record.** Only with the owner's
+  go-ahead.
+- **By hand in the dashboard** (if no zone token):
+  - Caching → Cache Rules → Create rule:
+    - Hostname equals `media.<env>.alummahnow.net` → Eligible for cache.
+    - Edge TTL: use cache-control header if present.
+    - Status code TTL: 400–599 → 10 s.
+    - Browser TTL: respect origin.
+  - Caching → Tiered Cache → Smart Tiered Caching Topology: on.
+
+## Checks
+
+```sh
+# Public object: second request is a HIT (needs the Cache Rule)
+curl -sI https://media.qa.alummahnow.net/pub/<videoId>/<rev>/master.m3u8 | grep -i cf-cache-status
+# Private path without a valid token: 403 from the Worker (never served by R2)
+curl -s -o /dev/null -w '%{http_code}\n' https://media.qa.alummahnow.net/priv/1999999999.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/x/y/master.m3u8
+# A job as its container sees it (service binding from api-videos, or wrangler tail)
+npx wrangler tail al-ummah-now-media-qa
+```
+
+`cf-cache-status: DYNAMIC` on `/pub/…` means the Cache Rule is missing. Segments would then come
+from R2 on every request, at Class B cost and with no edge cache.
+
+## Failures
+
+- **A job fails 3 times, or fatally** (`source_missing`, `no_video_stream`): the record gets
+  `r2.status = failed`, and the Errors page shows a needs-action item with Retry. Viewers keep
+  playing Bunny, which is untouched.
+- **`source_missing`:** Bunny didn't keep the original. "Keep original files" must be on in the
+  library's Encoding settings.
+- **Queue backs off ("Could not start job"):** all `max_instances` containers are busy. That's
+  expected under bursts. Raising `max_instances` raises the peak spend.
+- **Dead letters** (`al-ummah-now-transcode-dlq-*`): the queue gave up starting a job. The
+  api-videos sweep re-queues videos stuck in `queued`.
+- **Container image:** `apps/media/container/Dockerfile` (node:22-alpine + ffmpeg). Wrangler builds
+  and pushes it on deploy. Old images count toward the 50 GB image storage. Prune with
+  `wrangler containers images list` / `delete`.
+
+## Rollback
+
+- **Viewers:** set the delivery switch (admin, per env) to `bunny`. That is immediate, and nothing
+  else changes.
+- **Pipeline:** set "Transcode new uploads" off in the same setting. Running jobs finish, and no new
+  ones start.
+- **Worker:** `wrangler rollback` on `al-ummah-now-media-<env>`. The R2 objects stay.
+
+## Costs to watch
+
+- **Container seconds:** recorded per job (`r2.containerSeconds`).
+- **R2:** storage and operations, for both media buckets.
+- **Media host:** requests and cache status.
+
+All three appear on the admin Delivery comparison page. Against the $500/month cap, see the cost
+model in the plan.
