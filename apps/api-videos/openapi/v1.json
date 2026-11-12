@@ -34748,6 +34748,119 @@
         }
       }
     },
+    "/api/v1/videos/{id}/playback": {
+      "get": {
+        "tags": [
+          "Videos"
+        ],
+        "summary": "Playback URL without a failed source",
+        "description": "🔓 **Authentication Optional**: The one URL to play when the source the API chose failed in the player. `exclude=r2` returns Bunny's URL; `reason` (the player's error class) is logged and counted.",
+        "operationId": "get_VideoPlayback",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Video id"
+            },
+            "required": true,
+            "description": "Video id",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "r2"
+              ],
+              "description": "The source that failed"
+            },
+            "required": true,
+            "description": "The source that failed",
+            "name": "exclude",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 32,
+              "description": "Why: manifest_4xx, manifest_5xx, network, cors, decode, unsupported, stall_timeout, other (anything else counts as other)"
+            },
+            "required": false,
+            "description": "Why: manifest_4xx, manifest_5xx, network, cors, decode, unsupported, stall_timeout, other (anything else counts as other)",
+            "name": "reason",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The URL to play",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "playUrl": {
+                      "type": "string"
+                    },
+                    "thumbnailUrl": {
+                      "type": "string"
+                    },
+                    "delivery": {
+                      "type": "object",
+                      "properties": {
+                        "source": {
+                          "type": "string",
+                          "enum": [
+                            "bunny",
+                            "r2"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "source"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "delivery"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Video not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/videos/{id}/publish-now": {
       "post": {
         "tags": [
@@ -35112,6 +35225,36 @@
                       }
                     },
                     "description": "Deltas since the session's previous report, for the live view"
+                  },
+                  "requested": {
+                    "type": "string",
+                    "enum": [
+                      "bunny",
+                      "r2"
+                    ],
+                    "description": "Source the API chose for this play"
+                  },
+                  "actual": {
+                    "type": "string",
+                    "enum": [
+                      "bunny",
+                      "r2"
+                    ],
+                    "description": "Source the session ended on (bunny after a fallback)"
+                  },
+                  "fallbackReason": {
+                    "type": "string",
+                    "enum": [
+                      "manifest_4xx",
+                      "manifest_5xx",
+                      "network",
+                      "cors",
+                      "decode",
+                      "unsupported",
+                      "stall_timeout",
+                      "other"
+                    ],
+                    "description": "Why the player left the requested source"
                   }
                 },
                 "required": [
