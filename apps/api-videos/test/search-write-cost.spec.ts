@@ -107,7 +107,8 @@ describe('ownership heal lease (AV-17)', () => {
 		for (let i = 0; i < 50; i++) scheduleOwnershipHeal(env as never, (p) => tasks.push(p), 'video');
 		await Promise.all(tasks);
 		assert.equal(sql.length, 50);
-		assert.ok(sql.every((s) => s.startsWith('SELECT updated_at FROM search_meta')), sql.find((s) => !s.startsWith('SELECT')));
+		// One read covers the lease and a rebuild job's claim
+		assert.ok(sql.every((s) => /^SELECT [\w, ]+ FROM search_meta/.test(s)), sql.find((s) => !s.startsWith('SELECT')));
 		assert.equal(env.videos.calls, 0, 'no heal pass ran');
 	});
 

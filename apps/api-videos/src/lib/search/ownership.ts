@@ -540,6 +540,21 @@ interface PassState {
 }
 
 const passKey = (kind: OwnershipKind) => `ownership:sweep:${kind}`;
+
+/**
+ * Set by the admin rebuild job (ownershipRebuild.ts) at every step, value = the job id. While it is
+ * fresh, reader heals and the daily reconcile leave the kind to the job: competing for the lease
+ * they made each job step retry, and every retry restarted the pass (QA reset 2026-11-11).
+ */
+export const ownershipRebuildKey = (kind: OwnershipKind) => `ownership:rebuild:${kind}`;
+/** A rebuild mark older than this belongs to a job that died; heals take over again. */
+export const OWNERSHIP_REBUILD_ACTIVE_MS = 10 * 60 * 1000;
+
+/** The job id of the rebuild running for the kind, or null. */
+export async function activeOwnershipRebuild(db: SearchDb, kind: OwnershipKind, now = Date.now()): Promise<string | null> {
+  const row = await db.prepare('SELECT value, updated_at FROM search_meta WHERE key = ?').bind(ownershipRebuildKey(kind)).first<{ value: string; updated_at: number }>();
+  return row && Number(row.updated_at) >= now - OWNERSHIP_REBUILD_ACTIVE_MS ? row.value : null;
+}
 const leaseKey = (kind: OwnershipKind) => `ownership:heal:${kind}`;
 
 async function readPass(db: SearchDb, kind: OwnershipKind): Promise<PassState | null> {
@@ -728,8 +743,13 @@ export async function reconcileOwnershipIndex(
  * falls back to a scan asks for it, so a held lease is seen with a read first
  * and only a free (or expired) one costs a write (SCALABILITY-AUDIT AV-17).
  */
-async function acquireHealLease(db: SearchDb, kind: OwnershipKind, now: number): Promise<number | null> {
-  const held = await db.prepare('SELECT updated_at FROM search_meta WHERE key = ?').bind(leaseKey(kind)).first<{ updated_at: number }>();
+async function acquireHealLease(db: SearchDb, kind: OwnershipKind, now: number, options: { rebuild?: boolean } = {}): Promise<number | null> {
+  // One read for both: the lease, and (except for the rebuild job itself) a running rebuild's claim
+  const { results } = await db.prepare('SELECT key, updated_at FROM search_meta WHERE key IN (?, ?)')
+    .bind(leaseKey(kind), ownershipRebuildKey(kind)).all<{ key: string; updated_at: number }>();
+  const held = (results ?? []).find(r => r.key === leaseKey(kind));
+  const claim = (results ?? []).find(r => r.key === ownershipRebuildKey(kind));
+  if (!options.rebuild && claim && Number(claim.updated_at) >= now - OWNERSHIP_REBUILD_ACTIVE_MS) return null;
   if (held && Number(held.updated_at) >= now - OWNERSHIP_HEAL_LEASE_MS) return null;
   const outcome = await db.prepare(
     `INSERT INTO search_meta (key, value, updated_at) VALUES (?, 'lease', ?)
@@ -753,10 +773,10 @@ async function releaseHealLease(db: SearchDb, kind: OwnershipKind, acquiredAt: n
  * self-heal, so two passes never walk the same cursor). Null when another
  * pass holds it.
  */
-export async function withOwnershipLease<T>(env: OwnershipEnv, kind: OwnershipKind, task: () => Promise<T>, now = Date.now()): Promise<T | null> {
+export async function withOwnershipLease<T>(env: OwnershipEnv, kind: OwnershipKind, task: () => Promise<T>, now = Date.now(), options: { rebuild?: boolean } = {}): Promise<T | null> {
   const db = dbOf(env);
   if (!db) throw new Error('SEARCH_DB is not bound');
-  const lease = await acquireHealLease(db, kind, now);
+  const lease = await acquireHealLease(db, kind, now, options);
   if (lease === null) return null;
   try {
     return await task();

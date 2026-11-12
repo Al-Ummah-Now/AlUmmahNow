@@ -24,7 +24,7 @@ import {
 	ownershipTombstone,
 	type AdminJob,
 } from '@al-ummah/shared-types';
-import { isOwnershipComplete, readOwnershipDrift, reconcileOwnershipIndex, runOwnershipPass } from '../src/lib/search/ownership';
+import { isOwnershipComplete, readOwnershipDrift, reconcileOwnershipIndex, runOwnershipPass, scheduleOwnershipHeal } from '../src/lib/search/ownership';
 import { OWNERSHIP_REBUILD_JOB, OWNERSHIP_REBUILD_TARGET, runOwnershipRebuildStep, startOwnershipRebuild } from '../src/lib/search/ownershipRebuild';
 import { handleAdminJobBatch, getJob, retryJob } from '../src/lib/admin/jobs';
 import { ADMIN_JOB_HANDLERS } from '../src/lib/admin/service';
@@ -325,6 +325,28 @@ describe('admin rebuild of the ownership index (Errors page flag + Retry)', () =
 		assert.deepEqual(await readOwnershipDrift(db as never), []);
 		const after = (await (await app.request('/errors', {}, env as never)).json()) as any;
 		assert.deepEqual(after.result.indexDrift, []);
+	});
+
+	it('a running rebuild keeps reader heals off the kind, and a retried first step continues its pass', async () => {
+		const db = new SqliteD1();
+		const videos = new MemoryBucket();
+		for (let i = 0; i < 2500; i++) put(videos, appVideo(`v${String(i).padStart(4, '0')}`, MAIN), Date.now() - 1000);
+		const env = { SEARCH_DB: db, videos, ADMIN_JOBS_QUEUE: new JobsQueue() };
+		const { job } = await startOwnershipRebuild(env as never, 'video', 'admin-1');
+		const first = await runOwnershipRebuildStep(env as never, job);
+		assert.equal(first.done, false);
+		const pass = () => JSON.parse((db.db.prepare("SELECT value FROM search_meta WHERE key = 'ownership:sweep:video'").get() as { value: string }).value);
+		assert.equal(pass().stored, 2000);
+		// A reader falls back and asks for a heal: it leaves the pass alone
+		const lists = videos.calls;
+		await scheduleOwnershipHeal(env as never, null, 'video');
+		assert.equal(videos.calls, lists, 'no heal ran');
+		// The queue redelivers the first message (fresh: true) after a failed attempt: the pass continues
+		const again = await runOwnershipRebuildStep(env as never, job);
+		assert.equal(again.done, true);
+		assert.equal(count(db, 'video'), 2500);
+		assert.equal(await isOwnershipComplete(db as never, 'video'), true);
+		assert.equal(db.db.prepare("SELECT 1 FROM search_meta WHERE key = 'ownership:rebuild:video'").get(), undefined, 'the claim ends with the pass');
 	});
 
 	it('a rebuild walks a fresh pass in resumable steps and waits for a pass holding the lease', async () => {
