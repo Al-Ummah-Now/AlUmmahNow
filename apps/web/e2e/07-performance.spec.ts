@@ -21,7 +21,7 @@ async function navigationTiming(page: Page) {
   });
 }
 
-test.describe('Performance - Page Load', () => {
+test.describe('Performance - Page Load', { tag: '@load' }, () => {
   test('homepage DOM is ready within budget', async ({ page }) => {
     await page.goto('/en/');
     const { domContentLoaded } = await navigationTiming(page);
@@ -41,7 +41,7 @@ test.describe('Performance - Page Load', () => {
   });
 });
 
-test.describe('Performance - Resource Loading', () => {
+test.describe('Performance - Resource Loading', { tag: '@load' }, () => {
   test('should not load an excessive number of resources', async ({ page }) => {
     const requests: string[] = [];
     page.on('request', (request) => requests.push(request.url()));
@@ -77,7 +77,7 @@ test.describe('Performance - Resource Loading', () => {
   });
 });
 
-test.describe('Performance - Core Web Vitals', () => {
+test.describe('Performance - Core Web Vitals', { tag: '@load' }, () => {
   test('should have good Largest Contentful Paint (LCP)', async ({ page }) => {
     await page.goto('/en/');
     await expect(page.getByTestId('video-card').first()).toBeVisible();
@@ -145,7 +145,7 @@ test.describe('Performance - Core Web Vitals', () => {
   });
 });
 
-test.describe('Performance - Caching', () => {
+test.describe('Performance - Caching', { tag: '@load' }, () => {
   test('static assets are served with long-lived cache headers', async ({ page }) => {
     const chunkResponses: Array<string | null> = [];
     page.on('response', (r) => {
@@ -168,7 +168,7 @@ test.describe('Performance - Caching', () => {
   });
 });
 
-test.describe('Performance - JavaScript Execution', () => {
+test.describe('Performance - JavaScript Execution', { tag: '@load' }, () => {
   test('should not have many long tasks blocking the main thread', async ({ page, browserName }) => {
     test.skip(browserName !== 'chromium', 'Long Tasks API is Chromium-only');
 
@@ -196,7 +196,7 @@ test.describe('Performance - JavaScript Execution', () => {
   });
 });
 
-test.describe('Performance - Mobile Performance', () => {
+test.describe('Performance - Mobile Performance', { tag: '@load' }, () => {
   test('should load in reasonable time on a mobile viewport', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     await page.goto('/en/');
@@ -214,7 +214,7 @@ test.describe('Performance - Mobile Performance', () => {
   });
 });
 
-test.describe('Performance - Memory Usage', () => {
+test.describe('Performance - Memory Usage', { tag: '@load' }, () => {
   test('stays responsive after repeated navigation', async ({ page }) => {
     await page.goto('/en/');
     for (let i = 0; i < 5; i++) {

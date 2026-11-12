@@ -57,8 +57,17 @@ const EXTRA_DEVICES = {
   webkit: devices['Desktop Safari'],
 } as const;
 
+/**
+ * Load / performance / timing specs (tag @load: speed budgets, parallel-load probes, durations).
+ * Owner rule 2026-11-12: functionality gates, load does not. Every run leaves them out; a run
+ * with E2E_LOAD=only runs just them (non-blocking jobs: continue-on-error, nightly and releases).
+ */
+const LOAD_TAG = /@load/;
+const LOAD_ONLY = process.env.E2E_LOAD === 'only';
+
 export default defineConfig({
   testDir: './e2e/release',
+  ...(LOAD_ONLY ? { grep: LOAD_TAG } : { grepInvert: LOAD_TAG }),
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   // One retry, never more. A test that needs it is reported as flaky (job summary, annotation) and

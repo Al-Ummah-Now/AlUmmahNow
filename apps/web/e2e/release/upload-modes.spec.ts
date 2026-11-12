@@ -11,6 +11,7 @@
  * Both videos are deleted afterwards.
  */
 import * as path from 'path';
+import { encoding, untilEncoded } from './encode';
 import { test, expect, type Page } from '@playwright/test';
 import { target } from './targets';
 import { apiFetch, createProfile, signUpOnWeb, type WebUser } from './web-session';
@@ -102,13 +103,15 @@ test.describe('Release: single and bulk uploads behave the same', () => {
       }
 
       // Both become ready (check loop) and then both are listed to a visitor
-      await expect
-        .poll(async () => (await channelList(channelId, user)).filter((v) => v.uploadStatus === 'ready').length, {
-          message: 'both uploads should become ready',
-          timeout: 9 * 60_000,
-          intervals: [5000],
-        })
-        .toBe(2);
+      await untilEncoded('both uploads',
+        () => expect
+          .poll(async () => (await channelList(channelId, user)).filter((v) => v.uploadStatus === 'ready').length, {
+            message: 'both uploads should become ready',
+            timeout: 9 * 60_000,
+            intervals: [5000],
+          })
+          .toBe(2),
+        async () => (await channelList(channelId, user)).some((v) => encoding(v.uploadStatus)));
       await expect
         .poll(async () => (await channelList(channelId)).map((v) => v.id).sort().join(','), { timeout: 60000 })
         .toBe([...ids].sort().join(','));

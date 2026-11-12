@@ -62,7 +62,7 @@ async function createChannel(user: WebUser): Promise<string> {
   return id as string;
 }
 
-test.describe('Release: hot paths under parallel load', () => {
+test.describe('Release: hot paths under parallel load', { tag: '@load' }, () => {
   test('parallel views and watch time arrive exactly in the video and in the analytics counters', async ({ page }) => {
     test.setTimeout(6 * 60_000);
     const user = await signUpOnWeb(page, 'rel-load');

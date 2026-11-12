@@ -219,6 +219,37 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: node --experimental-strip-types --no-warnings scripts/ci/qa-lock.ts release qa-global --holder "${{ steps.lock.outputs.holder }}"
 
+      # Load / performance / timing specs (tag @load, e.g. 07-performance): reported in the job
+      # summary, never gating (owner rule 2026-11-12). Chromium only, not on PRs: nightly, after a
+      # Release and by hand.
+      - name: Load and timing specs (non-blocking)
+        if: matrix.project == 'chromium' && github.event_name != 'pull_request' && steps.superseded.outputs.skip != 'true' && !cancelled()
+        continue-on-error: true
+        working-directory: apps/web
+        timeout-minutes: 20
+        env:
+          CI: true
+          SKIP_AUTH_SETUP: 'true'
+          E2E_LOAD: only
+          E2E_OUTPUT_SUFFIX: load
+          E2E_GLOBAL_TIMEOUT_MINUTES: '15'
+          E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET_QA }}
+          E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
+          TEST_PROMOTE_SECRET: ${{ secrets.TEST_PROMOTE_SECRET_QA }}
+        run: |
+          set +e
+          pnpm exec playwright test --project=chromium --reporter=line > "$RUNNER_TEMP/load.txt" 2>&1
+          code=$?
+          tail -60 "$RUNNER_TEMP/load.txt"
+          {
+            echo "### Load and timing specs (non-blocking)"
+            if [ "$code" = 0 ]; then echo "All @load specs passed."; else echo "Some @load specs failed (exit $code). They are reported here and do not gate this run."; fi
+            echo '```'
+            grep -E "^ +[0-9]+ (passed|failed|flaky|skipped)|^ +[0-9]+\) \[" "$RUNNER_TEMP/load.txt" | head -40
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$code"
+
       # Teardown, pass, fail or cancelled: everything the run accounts own goes
       # (videos with their Bunny media, then the GDPR erase of profile, channels,
       # playlists, history...), then the accounts themselves (auth soft delete +

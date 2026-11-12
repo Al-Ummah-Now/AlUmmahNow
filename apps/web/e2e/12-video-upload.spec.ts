@@ -12,7 +12,7 @@ import {
   trackUploads,
   uploadUi,
 } from './test-utils/upload';
-import { BUNNY_BACKLOG, BUNNY_WAIT_MS } from './test-utils/e2e-videos';
+import { BUNNY_BACKLOG, BUNNY_WAIT_MS, getVideo, skipSlowEncode, userApi } from './test-utils/e2e-videos';
 
 /**
  * Video Upload Flow E2E Tests
@@ -88,7 +88,13 @@ test.describe('Video Upload Flow', () => {
     expect(videoId).not.toBe('');
 
     // Processing finishes on the server (check loop); the card follows it
-    await expect(ui.success, `not ready after ${BUNNY_WAIT_MS / 1000} s: ${BUNNY_BACKLOG}?`).toHaveAttribute('data-phase', 'ready', { timeout: BUNNY_WAIT_MS });
+    // A slow Bunny encode skips (#929); a card that never follows a finished encode still fails
+    const phase = await expect(ui.success).toHaveAttribute('data-phase', 'ready', { timeout: BUNNY_WAIT_MS }).then(() => 'ready', () => 'timeout');
+    if (phase === 'timeout') {
+      const uploadStatus = (await getVideo(userApi('single'), videoId).catch(() => null))?.uploadStatus;
+      if (uploadStatus !== 'ready' && uploadStatus !== 'failed') skipSlowEncode(`upload "${title}" still ${uploadStatus ?? 'processing'} after ${BUNNY_WAIT_MS / 1000} s`);
+      await expect(ui.success, `not ready after ${BUNNY_WAIT_MS / 1000} s: ${BUNNY_BACKLOG}?`).toHaveAttribute('data-phase', 'ready', { timeout: 1 });
+    }
     await expect(ui.processingStatus).toHaveText(`"${title}" is ready to watch`);
     await expect(ui.viewVideo).toHaveAttribute('href', `/en/video/${videoId}`);
 

@@ -53,7 +53,7 @@ async function timeBackToList(page: Page): Promise<number> {
   });
 }
 
-test.describe('Release: Studio list speed', () => {
+test.describe('Release: Studio list speed', { tag: '@load' }, () => {
   test.beforeEach(skipUntilStudioDeployed);
 
   test(`back to the Videos list shows it from cache in under ${BACK_BUDGET_MS} ms`, async ({ page }) => {

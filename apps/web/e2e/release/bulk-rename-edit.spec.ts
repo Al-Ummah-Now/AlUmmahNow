@@ -14,6 +14,7 @@
  * (the spec runs on QA before the change is deployed there).
  */
 import * as path from 'path';
+import { encoding, untilEncoded } from './encode';
 import { test, expect, type Page } from '@playwright/test';
 import { target } from './targets';
 import { apiFetch, createProfile, signUpOnWeb, type WebUser } from './web-session';
@@ -139,13 +140,15 @@ test.describe('Release: bulk rename and bulk edit', () => {
       expect(playlistId, 'playlist created').not.toBe('');
 
       // Studio lists a video under "processing" until it is ready: wait for all 3 (encoding is short)
-      await expect
-        .poll(async () => (await ownVideos(user, channelId)).filter((v) => !v.uploadStatus || v.uploadStatus === 'ready').length, {
-          message: 'the 3 uploads should become ready (a Bunny encoder stall fails here)',
-          timeout: 8 * 60_000,
-          intervals: [5000],
-        })
-        .toBe(3);
+      await untilEncoded('the 3 bulk uploads',
+        () => expect
+          .poll(async () => (await ownVideos(user, channelId)).filter((v) => !v.uploadStatus || v.uploadStatus === 'ready').length, {
+            message: 'the 3 uploads should become ready',
+            timeout: 8 * 60_000,
+            intervals: [5000],
+          })
+          .toBe(3),
+        async () => (await ownVideos(user, channelId)).some((v) => encoding(v.uploadStatus)));
       await page.goto(`${target().web}/en/studio/${channelId}/content/videos?status=published&q=${encodeURIComponent(`Bulk ${stamp}`)}`);
       const bar = page.getByTestId('studio-bulk-bar');
       const rows = page.getByTestId('studio-video-select');
