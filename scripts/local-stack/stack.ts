@@ -129,6 +129,8 @@ export const WORKERS: StackWorker[] = [
       CORS_ORIGINS: BROWSER_ORIGINS,
       // R2 delivery's media Worker is not in the stack (delivery stays on the default, Bunny)
       MEDIA_PUBLIC_HOST: 'media.local-stack.test',
+      // The self-hosted live edge (lib/live/edge.ts) answers on this host; nothing in the stack streams to it
+      LIVE_PUBLIC_HOST: 'live.local-stack.test',
       // The fake Bunny CDN (fake-external.ts FAKE_CDN_HOST): workers reach it through the outbound
       // fakes, the browser through Playwright routes to PORTS['fake-cdn']
       bunny_hostname: 'vz-local-stack.b-cdn.net',
