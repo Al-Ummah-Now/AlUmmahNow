@@ -609,6 +609,7 @@ const en = {
       videoPurge: 'Video delete',
       userSyncHolds: 'User ban cascade',
       userDeleteData: 'User data delete',
+      userEraseRun: 'Test account erase',
       profilesRestoreLegacy: 'Restore legacy profile fields',
       videosRepairThumbnails: 'Fix thumbnail shapes',
       searchRebuildOwnership: 'Rebuild the admin lists index',
