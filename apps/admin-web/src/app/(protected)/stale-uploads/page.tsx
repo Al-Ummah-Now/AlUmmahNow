@@ -10,6 +10,7 @@ import { logger } from '@/lib/logger';
 import { FILTER_LABEL, STALE_FILTERS, parseStaleFilter, statusQuery, TYPE_LABEL } from './labels';
 import { ReaperPanel } from './ReaperPanel';
 import { StaleUploadsTable } from './StaleUploadsTable';
+import { LiveRefresh } from '@/components/LiveRefresh';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,6 +45,7 @@ export default async function StaleUploadsPage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-8">
+      <LiveRefresh topics={['uploads']} />
       <div>
         <h1 className="text-3xl font-bold text-fg">{t('staleUploads.title')}</h1>
         <p className="text-fg-muted mt-1 max-w-3xl">{t('staleUploads.subtitle')}</p>

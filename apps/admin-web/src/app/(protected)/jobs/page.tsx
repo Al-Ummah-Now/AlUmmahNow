@@ -8,6 +8,7 @@ import { EmptyState, PageHeader } from '@/components/content/parts';
 import { JobsTable } from '@/components/content/jobs';
 import { pickParams, type SearchParams } from '@/components/content/query';
 import { logger } from '@/lib/logger';
+import { LiveRefresh } from '@/components/LiveRefresh';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,6 +44,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
 
   return (
     <div>
+      <LiveRefresh topics={['jobs']} />
       <PageHeader title={t('jobs.title')} subtitle={t('jobs.subtitle')} t={t} />
       <nav aria-label={t('jobs.statusFilter')} className="mb-6 flex flex-wrap gap-2" data-testid="jobs-filters">
         {FILTERS.map((f) => {

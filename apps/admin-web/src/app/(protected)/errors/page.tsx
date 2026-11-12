@@ -12,6 +12,7 @@ import { ErrorFilterBar } from './ErrorFilterBar';
 import { FailuresSections, hasFailures, loadFailures } from './FailuresSections';
 import { ERRORS_PAGE_SIZE, errorGroupsQuery, errorsHref, hasErrorFilters, parseErrorFilters, searchedRef } from './filters';
 import { ErrorStatusChip, Sparkline, TestChip, errorTitle } from './ui';
+import { LiveRefresh } from '@/components/LiveRefresh';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,6 +43,7 @@ export default async function ErrorsPage({ searchParams }: PageProps) {
     const failures = await loadFailures(role);
     return (
       <div className="space-y-8">
+        <LiveRefresh topics={['uploads']} />
         <div>
           <h1 className="text-3xl font-bold text-fg">{t('errorsPage.title')}</h1>
           <p className="text-fg-muted mt-1">{t('errorsPage.subtitle')}</p>
@@ -81,6 +83,7 @@ export default async function ErrorsPage({ searchParams }: PageProps) {
 
   return (
     <div>
+      <LiveRefresh topics={['errors', 'uploads']} />
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-fg">{t('errorsPage.title')}</h1>
         <p className="text-fg-muted mt-1">

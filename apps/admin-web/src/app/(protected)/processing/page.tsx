@@ -10,6 +10,7 @@ import { logger } from '@/lib/logger';
 import { FILTER_LABEL, PROCESSING_FILTERS, parseFilter } from './labels';
 import { ProcessingTable } from './ProcessingTable';
 import { ThumbnailRepairPanel } from './ThumbnailRepairPanel';
+import { LiveRefresh } from '@/components/LiveRefresh';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,6 +41,7 @@ export default async function ProcessingHealthPage({ searchParams }: PageProps) 
 
   return (
     <div>
+      <LiveRefresh topics={['uploads']} />
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-fg">{t('processing.title')}</h1>
