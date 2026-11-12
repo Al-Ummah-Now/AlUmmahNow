@@ -45,7 +45,7 @@ test.describe('Accessibility - Semantic HTML', () => {
 
   test('images have alt text', async ({ page }) => {
     await page.goto('/en/');
-    await expect(own.card(page)).toBeVisible();
+    await own.showCard(page);
 
     await page.waitForLoadState('networkidle').catch(() => undefined);
     // One pass over the images present now: the feed re-renders cards while it
@@ -84,7 +84,7 @@ test.describe('Accessibility - Keyboard Navigation', () => {
 
   test('video cards are keyboard-focusable links', async ({ page }) => {
     await page.goto('/en/');
-    const card = own.card(page);
+    const card = await own.showCard(page);
     await expect(card).toBeVisible();
 
     // Retried: the grid can re-render (client data load, other runs adding

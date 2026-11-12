@@ -34,7 +34,7 @@ test.describe('Home - anonymous', () => {
 
   test('HOME-001 cards render title, thumbnail and a locale-aware watch link', async ({ page }) => {
     await page.goto('/en');
-    const card = own.card(page);
+    const card = await own.showCard(page);
     await expect(card).toBeVisible();
     await expect(page.getByTestId('video-grid-loading')).toHaveCount(0);
 
@@ -54,7 +54,7 @@ test.describe('Home - anonymous', () => {
     const mine = own.videos()[0];
 
     await page.goto('/en');
-    await expect(own.card(page)).toBeVisible();
+    await own.showCard(page);
     // Loaded pages include it (load more until found, bounded)
     const mineCard = page.locator(`[data-testid="video-card"][data-video-id="${mine.id}"]`);
     for (let i = 0; i < 5 && (await mineCard.count()) === 0; i++) {
@@ -93,7 +93,7 @@ test.describe('Home - anonymous', () => {
 
   test('HOME-004 clicking a card opens the watch page', async ({ page }) => {
     await page.goto('/en');
-    const card = own.card(page);
+    const card = await own.showCard(page);
     await expect(card).toBeVisible();
     await clickAndWaitForURL(page, card, /\/en\/video\?vid=[\w-]+$/);
   });
@@ -102,7 +102,7 @@ test.describe('Home - anonymous', () => {
     await page.goto('/ar');
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('المرئيات');
-    const card = own.card(page);
+    const card = await own.showCard(page);
     await expect(card).toHaveAttribute('href', /^\/ar\/video\?vid=/);
     await expect(loadMoreButton(page)).toBeVisible();
     await expect(page.getByRole('main')).toHaveCSS('direction', 'rtl');
@@ -110,10 +110,10 @@ test.describe('Home - anonymous', () => {
 
   test('HOME-006 grid fits the viewport (no horizontal scroll)', async ({ page }) => {
     await page.goto('/en');
-    await expect(own.card(page)).toBeVisible();
+    await own.showCard(page);
     await expectNoHorizontalScroll(page);
     await page.goto('/ar');
-    await expect(own.card(page)).toBeVisible();
+    await own.showCard(page);
     await expectNoHorizontalScroll(page);
   });
 
@@ -123,12 +123,12 @@ test.describe('Home - anonymous', () => {
     // QA's first page holds depends on its catalogue (it can be a single one)
     // The home grid comes after the (signed-in only) continue-watching shelf
     const grid = page.getByTestId('video-grid').last();
-    await expect(own.card(page)).toBeVisible();
+    await own.showCard(page);
     const { columns, gridWidth } = await grid.evaluate((el) => ({
       columns: getComputedStyle(el).gridTemplateColumns.split(' ').filter(Boolean).length,
       gridWidth: el.getBoundingClientRect().width,
     }));
-    const card = (await own.card(page).boundingBox())!;
+    const card = (await (await own.showCard(page)).boundingBox())!;
     if (isMobile) {
       // One column: the card spans the grid
       expect(columns).toBe(1);
@@ -146,7 +146,7 @@ test.describe('Home - dark theme', () => {
   test('HOME-008 follows the system dark theme', async ({ page }) => {
     await page.goto('/en');
     await expect(page.locator('html')).toHaveClass(/\bdark\b/);
-    await expect(own.card(page)).toBeVisible();
+    await own.showCard(page);
     const heading = page.getByRole('heading', { level: 1 });
     // Light text on the dark page: the dark theme's primary text colour
     const themeText = await page.evaluate(() => {
@@ -169,7 +169,7 @@ test.describe('Home - signed in', () => {
   test('HOME-009 renders the feed for a signed-in user', async ({ page }) => {
     await page.goto('/en');
     await expect(page.getByRole('heading', { level: 1, name: 'Videos' })).toBeVisible();
-    await expect(own.card(page)).toBeVisible();
+    await own.showCard(page);
   });
 });
 
@@ -181,7 +181,7 @@ test.describe('All videos page', () => {
     await expect(page).toHaveTitle(/All videos \| Al Ummah Now/i);
     await expect(page.getByRole('heading', { level: 1, name: /^All videos$/i })).toBeVisible();
     await expect(page.getByText('Browse the latest videos from every channel')).toBeVisible();
-    const card = own.card(page);
+    const card = await own.showCard(page);
     await expect(card).toBeVisible();
     await expect(card).toHaveAttribute('href', /^\/en\/video\?vid=/);
   });
@@ -191,7 +191,7 @@ test.describe('All videos page', () => {
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     await expect(page.getByRole('heading', { level: 1, name: 'جميع المرئيات' })).toBeVisible();
     await expect(page.getByRole('main')).toHaveAttribute('dir', 'rtl');
-    await expect(own.card(page)).toHaveAttribute('href', /^\/ar\/video\?vid=/);
+    await expect(await own.showCard(page)).toHaveAttribute('href', /^\/ar\/video\?vid=/);
   });
 
   test('VIDS-003 load more appends unique videos', async ({ page }) => {

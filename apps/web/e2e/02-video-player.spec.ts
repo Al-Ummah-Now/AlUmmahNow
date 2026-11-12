@@ -31,7 +31,7 @@ test.describe('Video Player', () => {
 
   test('opens a video page from a home page card', async ({ page }) => {
     await page.goto('/en');
-    const card = own.card(page);
+    const card = await own.showCard(page);
     await expect(card).toBeVisible();
     const id = await card.getAttribute('data-video-id');
 
