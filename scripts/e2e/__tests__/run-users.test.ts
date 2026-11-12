@@ -69,6 +69,10 @@ describe('teardown-run-users', () => {
 		assertAuthUrl('https://auth.stage.alummahnow.net/');
 		assert.throws(() => assertAuthUrl('https://auth.alummahnow.net'));
 		assert.throws(() => assertAuthUrl('http://auth.qa.alummahnow.net'));
+		// The local E2E stack's issuer, and nothing else on plain http
+		assertAuthUrl('http://localhost:3301');
+		assert.throws(() => assertAuthUrl('http://localhost:3302'));
+		assert.throws(() => assertAuthUrl('http://evil.example.com:3301'));
 		assert.throws(() => parseArgs(['--auth-url', 'https://auth.qa.alummahnow.net']));
 	});
 

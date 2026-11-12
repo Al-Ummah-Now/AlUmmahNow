@@ -47,10 +47,14 @@ export function parseArgs(argv: string[]): Args {
 	return args;
 }
 
+/** The local E2E stack's issuer (scripts/local-stack: a throwaway Auth with local data only). */
+export const LOCAL_STACK_AUTH = new Set(['http://localhost:3301', 'http://127.0.0.1:3301']);
+
 export function assertAuthUrl(url: string): void {
 	let host = '';
 	try {
 		const u = new URL(url);
+		if (LOCAL_STACK_AUTH.has(u.origin)) return;
 		if (u.protocol !== 'https:') throw new Error('not https');
 		host = u.host;
 	} catch {
