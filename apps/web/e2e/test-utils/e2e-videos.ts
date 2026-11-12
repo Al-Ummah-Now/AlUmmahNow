@@ -296,12 +296,14 @@ export async function ensureSeedVideos(user: AuthUser): Promise<Record<string, E
  * A public video for one spec file: created in beforeAll, removed in afterAll
  * (seed videos are private). Returns getters so describes can share it.
  */
-export function setupPublicDisposable(user: AuthUser, label: string) {
+export function setupPublicDisposable(user: AuthUser, label: string, opts: { ready?: boolean } = {}) {
   let video: E2EVideo | null = null;
   return {
     create: async () => {
       // Public pages (watch, comments, channel sections) need a real, encoding video
       video = await createDisposableVideo(user, label, { isPublic: true, encode: true });
+      // Listings (channel sections, Studio's Published list, search) show a video only once it is ready
+      if (opts.ready) video = await waitForReady(user, video);
       return video;
     },
     remove: async () => {
@@ -313,6 +315,26 @@ export function setupPublicDisposable(user: AuthUser, label: string) {
       return video;
     },
   };
+}
+
+/**
+ * Waits until Bunny has encoded the video (uploadStatus "ready"). Listings
+ * leave out videos that are still processing (public ones since the
+ * 2026-11-10 incident; Studio files them under Processing, not Published), so
+ * a spec that looks for a just-uploaded video there waits for this first.
+ * Throws when it is not ready in time: the spec would fail anyway, less clearly.
+ */
+export async function waitForReady(user: AuthUser, video: E2EVideo, timeoutMs = 240_000): Promise<E2EVideo> {
+  const u = userApi(user);
+  const deadline = Date.now() + timeoutMs;
+  let last: E2EVideo | null = null;
+  for (;;) {
+    last = await getVideo(u, video.id);
+    if (last && (!last.uploadStatus || last.uploadStatus === 'ready')) return { ...video, ...last };
+    if (last?.uploadStatus === 'failed' || Date.now() > deadline) break;
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+  }
+  throw new Error(`"${video.title}" (${video.id}) is ${last?.uploadStatus ?? 'missing'}, not ready (waited up to ${Math.round(timeoutMs / 1000)} s for Bunny's encoding)`);
 }
 
 /** Unique title for a video a single test owns */
