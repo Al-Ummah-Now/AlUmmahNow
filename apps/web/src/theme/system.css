@@ -536,3 +536,7 @@ html[lang=ar] .opt-heading,[dir=rtl] .opt-heading{font-size:13px;letter-spacing:
 .ocard-help{display:block;margin-block-start:2px;font-size:12px;line-height:1.45;color:var(--fanous-color-text-secondary)}
 @media(prefers-reduced-motion:reduce){.ocard{transition:none}}
 @media(forced-colors:active){.ocard{border:1px solid ButtonText}.ocard[data-checked]{outline:2px solid Highlight}.ocard[data-checked] .ocard-mark{background:Highlight;color:HighlightText}}
+/* Drawer and rail in light mode (docs/design/NAV.md): the page background like the account menu, a divider edge, and a soft shadow when it opens over the page; dark mode keeps the material */
+html:not(.dark) .nv-panel{border-inline-end:1px solid var(--fanous-color-divider)}
+html:not(.dark) [data-testid=side-nav],html:not(.dark) [data-testid=side-nav] ul{background:var(--fanous-color-background)!important}
+html:not(.dark) .nv-panel[data-open=true]{box-shadow:var(--fanous-elevation-medium)}

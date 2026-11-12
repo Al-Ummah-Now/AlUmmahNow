@@ -14,8 +14,8 @@ const thumb = (i) => `<svg xmlns="http://www.w3.org/2000/svg" width="640" height
 
 const video = (i) => ({
   id: `v${i}`, title: i % 2 ? `درس في التفسير ${i}` : `Lecture on patience, part ${i}`, description: 'Sweep video',
-  thumbnailUrl: `${base}/thumb/${i}.svg`, videoUrl: '', userId: 'u2', channel: 'c1', channelId: 'c1',
-  channelAvatarUrl: `${base}/thumb/${i + 7}.svg`, channelName: i % 2 ? 'قناة الدروس' : 'Lectures Channel', channelIsVerified: i % 3 === 0,
+  thumbnailUrl: `https://img.example.test/thumb/${i}.svg`, videoUrl: '', userId: 'u2', channel: 'c1', channelId: 'c1',
+  channelAvatarUrl: `https://img.example.test/avatar/${i + 7}.svg`, channelName: i % 2 ? 'قناة الدروس' : 'Lectures Channel', channelIsVerified: i % 3 === 0,
   dateCreated: iso(i * 20), dateModified: iso(i * 20), createdAt: iso(i * 20), duration: 125 + i * 600, views: 1000 * i + 7,
   likesCount: 3, dislikesCount: 0, commentsCount: 2, isPublic: true, isLive: i === 3, width: 1920, height: 1080, status: 'ready',
 });
