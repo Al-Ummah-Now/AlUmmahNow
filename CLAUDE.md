@@ -601,6 +601,25 @@ Required checks on every PR (`deploy.yml` jobs `test` and `release-checks`). Scr
 | `pnpm check:tokens` | a Fanous theme colour pair is under WCAG 2.1 AA, or `packages/fanous-tokens/generated/` is out of date | Fix the colour in `packages/fanous-tokens/tokens/fanous.tokens.json`, run `pnpm tokens:generate` and commit the result. Never edit `generated/` by hand. |
 | `pnpm test:scripts` | the release scripts' own tests fail | Fix the script or its test in `scripts/release/__tests__/`. |
 
+### Where E2E tests run
+
+Most E2E specs run on a **local stack** that each CI job boots for itself (every worker in one
+Miniflare, the real Auth issuer from its released bundle, fake Bunny and Resend, mocked AI). They
+never touch QA, so they run in parallel and shard. Only the specs that need a real deployment stay
+**deployed** (QA on PRs, stage in releases): real Bunny encodes, R2/media delivery, real domains and
+cookies. `apps/web/e2e/test-utils/placement.ts` lists every spec with its placement, and a test fails
+on a spec missing from it.
+
+| Check | Runs | Target |
+|---|---|---|
+| **Local E2E** (`local-e2e.yml`) | every PR, every push to `main`, nightly, every release | local stack (`E2E_ENV=local`) |
+| **Release regressions (qa)** (`release-e2e.yml`) | every PR | QA, deployed specs only |
+| Release → `stage-e2e` | every release | stage, deployed specs only |
+
+A release promotes production only when both Local E2E and the stage run pass. How the stack
+works, how to run it and its specs, the own-data and cleanup rules and the quarantine format are in
+`docs/testing/LOCAL-STACK.md`.
+
 ### Release regressions
 
 The release E2E suite is the gate: `apps/web/e2e/release/` with
@@ -646,12 +665,11 @@ Chrome (`channel: 'chrome'`): Playwright's bundled Chromium cannot decode the
 H.264 HLS streams.
 
 **Reliability rules** (a red run must mean a real bug):
-- **Data.** A spec creates what it changes (its own run account, channel, uploads) and reads
-  only seeded fixtures otherwise: `e2e/release/fixtures.ts` finds the seed's ready, public
-  landscape lecture (with chapters), a second lecture and the vertical Short by their seed
-  titles (`e2e/seed/seed-config.ts`). Never "the newest public video" or `limit=1` of a
-  shared list: that is another spec's upload, still encoding or about to be deleted. A
-  missing fixture fails with "run the seed", never a skip.
+- **Data.** A spec creates everything it reads or changes (its own run account, channel,
+  videos) with the builders in `e2e/release/builders.ts` and `own-videos.ts`, and deletes it
+  afterwards. It never reads seed or demo data, "the newest public video" or `limit=1` of a
+  shared list: that is another spec's upload, still encoding or about to be deleted.
+  `scripts/qa/__tests__/own-data.test.ts` enforces this.
 - **Waits.** No sleeps for readiness: wait for the thing itself. Sign-in helpers in
   `web-session.ts` end only when the app is done redirecting (`settleSignIn`: no
   `session_updated`, `/profile/create` included); the header menu is opened with

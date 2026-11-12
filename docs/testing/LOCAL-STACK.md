@@ -106,3 +106,37 @@ node --experimental-strip-types --no-warnings scripts/local-stack/smoke.ts      
 `LOCAL_STACK_AUTH_DIR` points at another Auth checkout, and `LOCAL_STACK_DIR` moves the state dir
 (`.local-stack/`). Every boot starts from empty databases. To stop a stack, use Ctrl-C or kill its
 PID. Never kill processes by name.
+
+## Run the specs
+
+CI: `.github/workflows/local-e2e.yml` (check **Local E2E**). One build job makes the OpenNext
+builds and prints the placement table. Every suite job boots its own stack through
+`.github/actions/local-stack-up` (fetch the Auth bundle, boot, smoke, seed translations, seed), then
+runs its specs with `E2E_ENV=local`. It runs on every pull request, every push to `main`, nightly, and
+in every release (`release.yml` job `local-e2e`). Production waits for it.
+
+Locally, against a running stack (one stack and one Playwright run at a time):
+
+```bash
+cd apps/web
+E2E_ENV=local pnpm exec playwright test -c playwright.release.config.ts --project=chrome
+```
+
+With `E2E_ENV=local` the release config runs only the specs placed `local` and sends the browser
+through the proxy. Against QA or stage it runs only the `deployed` ones.
+
+- **Placement.** Every spec is listed in `apps/web/e2e/test-utils/placement.ts` as `local` or
+  `deployed`, with a reason for each deployed one. `scripts/qa/__tests__/e2e-placement.test.ts` fails
+  on a spec that is missing there or listed twice. The table is generated
+  (`node --experimental-strip-types --no-warnings scripts/e2e/placement-doc.ts`), never committed.
+- **Own data.** A spec creates everything it reads or changes through the builders in
+  `apps/web/e2e/release/builders.ts`: users, creator tiers, channels, videos, playlists, posts and
+  comments. Release videos come from `useOwnVideos(test)` (`own-videos.ts`). Names carry the run
+  namespace (`ns()`). `scripts/qa/__tests__/own-data.test.ts` fails on seed titles, demo data or
+  hard-coded ids outside its allow list.
+- **Cleanup.** Builders register teardown as they create. Teardown always runs, even on failure, and
+  is idempotent (a 404 counts as gone). It deletes only what carries the run id. The leftover check
+  above fails the job on anything left.
+- **Quarantine.** A spec still red on the stack gets
+  `test.fixme(releaseEnv() === 'local', 'quarantined: #<issue> @<owner> ...')`, with one issue per
+  cause (`scripts/ci/check-quarantine.ts`). Fix it in a small follow-up and lift the fixme.
