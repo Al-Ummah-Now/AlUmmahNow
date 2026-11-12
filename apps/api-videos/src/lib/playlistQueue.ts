@@ -49,6 +49,9 @@ export interface QueueItem {
 	channelId?: string;
 	channelName?: string;
 	isShort: boolean;
+	/** Encoded size, so a player sizes its box to the video (the embed does) */
+	width?: number;
+	height?: number;
 	/** HLS playlist (signed by the bunny-signing middleware like every response), for players that play the list in place (embeds, native apps) */
 	playUrl?: string;
 	uploadStatus?: string;
@@ -172,6 +175,8 @@ export async function queueItems(
 			channelId: video.channelId,
 			channelName: names.get(video.channelId) ?? '',
 			isShort: isShort(video as never),
+			...(typeof (video as { width?: unknown }).width === 'number' ? { width: (video as { width: number }).width } : {}),
+			...(typeof (video as { height?: unknown }).height === 'number' ? { height: (video as { height: number }).height } : {}),
 			...(extra.playUrl ? { playUrl: extra.playUrl } : {}),
 			...(extra.uploadStatus ? { uploadStatus: extra.uploadStatus } : {}),
 			...(extra.delivery ? { delivery: extra.delivery } : {}),
