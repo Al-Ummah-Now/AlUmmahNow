@@ -275,7 +275,16 @@ test.describe('mobile touch targets (story 1.5)', () => {
           })
           .map((el) => {
             const r = el.getBoundingClientRect();
-            return { cls: el.className.toString().slice(0, 60), left: r.left, top: r.top, right: r.right, bottom: r.bottom, w: r.width, h: r.height };
+            // The touch target is the larger of the drawn box and the centred ::after hit area:
+            // narrow players draw 36px buttons, each with a 44x44 ::after on touch (player-skin.css)
+            const after = getComputedStyle(el, '::after');
+            const hitW = after.content && after.content !== 'none' ? parseFloat(after.width) || 0 : 0;
+            const hitH = after.content && after.content !== 'none' ? parseFloat(after.height) || 0 : 0;
+            return {
+              cls: el.className.toString().slice(0, 60),
+              left: r.left, top: r.top, right: r.right, bottom: r.bottom,
+              w: Math.max(r.width, hitW), h: Math.max(r.height, hitH),
+            };
           });
       });
 

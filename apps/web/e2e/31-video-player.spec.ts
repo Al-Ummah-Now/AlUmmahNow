@@ -219,10 +219,11 @@ test.describe('player controls', () => {
     await keepControlsVisible(page);
     await gear.click();
     const qualityRow = menu.locator('[data-row="quality"]');
-    if (browserName === 'webkit') {
-      // Native HLS exposes no renditions: no empty Quality submenu is offered
-      await expect(menu.locator('[data-row="speed"]')).toBeVisible();
-      await expect(qualityRow).toHaveCount(0);
+    await expect(menu.locator('[data-row="speed"]')).toBeVisible();
+    if (browserName === 'webkit' && (await qualityRow.count()) === 0) {
+      // WebKit may play the stream with its native HLS, which exposes no renditions: then no
+      // empty Quality submenu is offered. When Video.js plays it through MSE (VHS), the
+      // renditions are listed and checked below like on the other engines.
       return;
     }
     await qualityRow.click();
