@@ -69,7 +69,7 @@ test.beforeEach(async ({ request }) => {
   await request.get(`${MOCK_API}/__fixtures/reset`);
 });
 
-test('two accounts with several channels: the channel layer sits in the shared slot and scopes Upload and Studio', async ({ page, context, baseURL }) => {
+test('two accounts with several channels: the channel layer sits in the shared slot and scopes Studio and the header Upload', async ({ page, context, baseURL }) => {
   await signInAs(context, baseURL!, 'aisha', 'a2', ['omar']);
   await mockApi(page);
   await page.goto('/en');
@@ -79,7 +79,7 @@ test('two accounts with several channels: the channel layer sits in the shared s
     const ids = await order(page);
     const at = (id: string) => ids.indexOf(id);
     return [at('nav-profile-link'), at('nav-channel-layer'), at('nav-add-account'), at('nav-apps'), at('nav-sign-out')].join(',');
-  }).toMatch(/^\d+,\d+,\d+,\d+,\d+,\d+$/);
+  }).toMatch(/^\d+,\d+,\d+,\d+,\d+$/);
   const ids = await order(page);
   const sequence = ['nav-profile-link', 'nav-channel-layer', 'nav-active-channel', 'nav-switch-channel', 'nav-menu-studio', 'nav-more-accounts', 'nav-add-account', 'nav-apps', 'nav-sign-out', 'nav-sign-out-all'];
   expect(sequence.map((id) => ids.indexOf(id))).toEqual([...sequence.map((id) => ids.indexOf(id))].sort((a, b) => a - b));
