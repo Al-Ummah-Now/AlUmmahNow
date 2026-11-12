@@ -25,6 +25,7 @@ import { appDir, AUTH_DIR, HOST, localSecret, PORTS, PROD_HOST_TO_LOCAL, ROOT, S
 import { outboundHandler } from './outbound.ts';
 import { registerFakes, setStackSql, startFakeCdn } from './fake-external.ts';
 import { startBrowserProxy } from './browser-proxy.ts';
+import { assetsHandler } from './assets.ts';
 
 const LOCAL_CONFIG = 'wrangler.local-stack.json';
 const args = process.argv.slice(2);
@@ -182,8 +183,14 @@ function writeEntry(p: Prepared, modules: { type: string; path: string }[]): { t
 
 function workerOptions(p: Prepared): Json {
   const { workerOptions: options } = wrangler.unstable_getMiniflareWorkerOptions(p.configPath);
+  // Static assets from Node, per worker: Miniflare's assets services share one storage service
+  // between workers, so a second app's assets answer 500 (assets.ts)
+  const { assets, ...rest } = options as Json & { assets?: { directory: string; binding?: string } };
+  const serviceBindings = { ...((rest.serviceBindings as Json | undefined) ?? {}) };
+  if (assets?.binding) serviceBindings[assets.binding] = assetsHandler(assets.directory);
   return {
-    ...options,
+    ...rest,
+    serviceBindings,
     name: p.name,
     modulesRoot: p.outDir,
     modules: writeEntry(p, bundleModules(p.outDir)),
