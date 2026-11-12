@@ -1,5 +1,5 @@
 // Contrast for one colour slot, so each field can show its WCAG AA result as it is edited.
-import { AA_NON_TEXT, AA_TEXT, BASE, contrastRatio, resolvedColors, type Mode, type ThemePackage } from '@al-ummah/theme-packages';
+import { AA_NON_TEXT, AA_TEXT, BASE, contrastRatio, get, resolvedColors, type Issue, type Mode, type ThemePackage } from '@al-ummah/theme-packages';
 
 export interface ContrastCheck { against: string; ratio: number; min: number }
 
@@ -29,4 +29,36 @@ export function partContrast(theme: ThemePackage, mode: Mode, part: string): Con
     .filter(([fg, bg]) => fg === part || bg === part)
     .map(([fg, bg, min]) => ({ against: fg === part ? bg : fg, ratio: contrastRatio(parts[fg], parts[bg]), min }))
     .sort((a, b) => a.ratio / a.min - b.ratio / b.min);
+}
+
+/**
+ * Each issue at a colour slot, also filed under every role and brand colour that slot reaches
+ * through {color.*} and {brand.*}, so a failing pair shows next to the colour that causes it
+ * (a role or brand swatch edit can break a component pair several references away).
+ */
+export function traceIssues(theme: ThemePackage, issues: Issue[]): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  const add = (path: string, message: string) => {
+    const list = out.get(path) ?? [];
+    if (!list.includes(message)) list.push(message);
+    out.set(path, list);
+  };
+  for (const issue of issues) {
+    add(issue.path, issue.message);
+    const m = /^(tokens\.color|components\.[a-zA-Z]+\.colors)\.(light|dark)\.([a-zA-Z0-9]+)$/.exec(issue.path);
+    if (!m) continue;
+    const mode = m[2] as Mode;
+    let value = get(theme, issue.path);
+    const seen = new Set<string>();
+    while (typeof value === 'string') {
+      const ref = /^\{(color|brand)\.([a-zA-Z0-9]+)\}$/.exec(value);
+      if (!ref) break;
+      const path = ref[1] === 'brand' ? `tokens.brand.${ref[2]}` : `tokens.color.${mode}.${ref[2]}`;
+      if (seen.has(path)) break;
+      seen.add(path);
+      add(path, issue.message);
+      value = ref[1] === 'brand' ? undefined : theme.tokens.color[mode]?.[ref[2]];
+    }
+  }
+  return out;
 }

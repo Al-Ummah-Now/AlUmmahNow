@@ -28,6 +28,11 @@ h1,h2,h3{letter-spacing:-.01em}html[lang=ar] h1,html[lang=ar] h2,html[lang=ar] h
 .ah-search button{width:56px;display:grid;place-items:center;border:0;background:transparent;color:var(--fanous-c-nav-icon);cursor:pointer;border-inline-start:1px solid var(--fanous-c-nav-search-border)}@media(hover:hover){.ah-search button:hover{background:var(--fanous-c-nav-hover)}}.ah-search svg{width:20px;height:20px}
 .ah-search-phone{display:none}
 .ah button{color:var(--fanous-c-nav-icon)}.ah-end button{min-height:44px;border-radius:var(--r-pill)}.ah-end>:is(div,button){display:flex;align-items:center}@media(hover:hover){.ah-end button:hover{background:var(--fanous-c-nav-hover)}}.ah-end *{color:var(--fanous-c-nav-text)}
+/* Popovers opened from the header (notifications, menus, listboxes) sit on the dialog/menu surface, not the night bar:
+   the nav colours above must not reach inside them. revert-layer hands colour back to the component's own classes
+   (or inheritance from the popover's token colour). */
+.ah :is([data-popover],[role=dialog],[role=menu],[role=listbox]) :is(*,button){color:revert-layer}
+@media(hover:hover){.ah :is([data-popover],[role=dialog],[role=menu],[role=listbox]) button:hover{background:revert-layer}}
 /* Navigation */
 .nv-panel{position:fixed;z-index:45;inset-block:0;inset-inline-start:0;width:var(--rail);padding-block-start:64px;display:flex;flex-direction:column;background:var(--m-rail);box-shadow:var(--m-rail-edge);-webkit-backdrop-filter:var(--m-blur);backdrop-filter:var(--m-blur);transition:width 220ms cubic-bezier(.2,0,0,1)}
 .demo-banner~* .nv-panel{padding-block-start:92px}.nv-scroll{flex:1;overflow-y:auto;overflow-x:hidden;padding:var(--fanous-spacing-sm)}
@@ -60,7 +65,7 @@ html[data-rail-still] .nv-panel,html[data-rail-still] #page-content{transition:n
 .sb{display:flex;align-items:center;gap:var(--fanous-spacing-xs,4px);min-width:0;color:var(--fanous-color-text-secondary)}.sb-page{max-width:72rem;margin-inline:auto;padding:var(--fanous-spacing-sm,8px) var(--fanous-spacing-md,16px) 0}.sb-text{color:var(--fanous-color-text-secondary)}.sb-back{display:inline-flex;flex:none;align-items:center;justify-content:center;width:44px;height:44px;border-radius:var(--r-pill,999px);color:var(--fanous-color-text-primary);transition:background-color 140ms}.sb-arrow{width:20px;height:20px}[dir=rtl] .sb-arrow{transform:scaleX(-1)}.sb-list{display:flex;flex-wrap:wrap;align-items:center;gap:2px var(--fanous-spacing-xs,4px);min-width:0;margin:0;padding:0;list-style:none;font-size:14px;line-height:1.4}.sb-item{display:inline-flex;align-items:center;gap:var(--fanous-spacing-xs,4px);min-width:0}.sb-link{display:inline-flex;align-items:center;min-height:44px;color:var(--fanous-color-link,var(--fanous-color-accent));text-decoration:none;border-radius:4px}.sb-current{color:var(--fanous-color-text-primary);font-weight:600;overflow-wrap:anywhere}.sb-sep{width:16px;height:16px;flex:none;color:var(--fanous-color-text-muted)}[dir=rtl] .sb-sep{transform:scaleX(-1)}@media(hover:hover){.sb-back:hover{background:var(--m-hover)}.sb-link:hover{text-decoration:underline}}
 .ck{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:var(--r-sm);box-shadow:var(--m-control-edge);background:var(--m-control);border:1px solid var(--fanous-c-form-input-border)}.ck[data-on]{background:var(--m-primary);border-color:var(--fanous-c-button-primary-border)}.ck svg{width:14px;height:14px;color:var(--fanous-c-button-primary-text)}.rd{display:inline-block;width:22px;height:22px;border-radius:50%;background:var(--m-control);border:1px solid var(--fanous-c-form-input-border);box-shadow:var(--m-control-edge)}.rd[data-on]{border:7px solid var(--fanous-c-form-check-on)}
 /* Surfaces */
-.c,[data-slot=card],:is([class^="bg-white"],[class*=" bg-white"])[class*="rounded"]:not(.video-card):not(button):not(a):not(.sw),:is([class^="bg-gray-50"],[class*=" bg-gray-50"])[class*="rounded"]:not(button):not(a){border:1px solid transparent!important;background:var(--m-card) padding-box,var(--m-border) border-box!important;box-shadow:var(--m-card-edge);border-radius:var(--r-lg)!important;-webkit-backdrop-filter:var(--m-blur);backdrop-filter:var(--m-blur)}
+.c,[data-slot=card],:is([class^="bg-white"],[class*=" bg-white"])[class*="rounded"]:not(.video-card):not(button):not(a):not(.sw):not(:is([role=menu],[role=dialog],[role=listbox],[data-popover])),:is([class^="bg-gray-50"],[class*=" bg-gray-50"])[class*="rounded"]:not(button):not(a){border:1px solid transparent!important;background:var(--m-card) padding-box,var(--m-border) border-box!important;box-shadow:var(--m-card-edge);border-radius:var(--r-lg)!important;-webkit-backdrop-filter:var(--m-blur);backdrop-filter:var(--m-blur)}
 .c{padding:var(--fanous-spacing-xl)}
 .hero{background:var(--m-hero);border-radius:var(--r-xl);box-shadow:var(--m-card-edge)}
 .menu,[role=menu]:not(.vjs-fanous-layer):not(.vjs-menu-content),[data-slot=dropdown-menu-content],[data-slot=select-content],[data-radix-popper-content-wrapper]>[role=dialog]{background:var(--m-raised)!important;box-shadow:var(--m-raised-edge)!important;border:0!important;border-radius:var(--r-lg)!important;color:var(--fanous-c-menu-text)!important;-webkit-backdrop-filter:var(--m-blur);backdrop-filter:var(--m-blur)}.menu{padding:6px;width:240px}.mi,[data-slot=dropdown-menu-item]{display:flex;align-items:center;gap:var(--fanous-spacing-sm);min-height:40px;padding-inline:var(--fanous-spacing-md);border-radius:var(--r-md);font-size:14px}.mi.is-hover,[data-slot=dropdown-menu-item][data-highlighted]{background:var(--m-hover)!important}@media(hover:hover){.mi:hover,[data-slot=dropdown-menu-item]:hover{background:var(--m-hover)!important}}.mi svg{width:16px;height:16px;color:var(--fanous-c-menu-muted)}.mi small{margin-inline-start:auto;color:var(--fanous-c-menu-muted)}
@@ -265,6 +270,8 @@ main [data-slot=button]{max-width:100%;white-space:normal;height:auto;min-height
 [data-theatre] [data-testid=related-videos-list]{grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
 [data-theatre] .rv{grid-template-columns:1fr;padding:0 0 8px}
 [data-theatre] .related-videos .rv-title{font-size:15px;line-height:21px}
+/* Below lg the normal layout already stacks, so theatre is the edge-to-edge player: square, no page gutter (owner, foldables: theatre off looked the same as on) */
+@media(max-width:1023px){[data-testid=watch-layout][data-theatre]{padding-inline:0}[data-testid=watch-layout][data-theatre]>*{padding-inline:16px}[data-testid=watch-layout][data-theatre] #video-player{margin-inline:-16px;width:calc(100% + 32px);max-width:none}}
 
 /* Consent: opaque compact card in the corner, never over the title or actions */
 [data-testid=consent-banner]{left:auto!important;right:0!important;width:min(420px,100vw);padding:16px!important}
@@ -348,6 +355,7 @@ html[data-rail=open] .nv{font-size:14px;line-height:20px}html[data-rail=open] .n
 a.group svg.lucide-chevron-right{align-self:center}
 
 /* Header account menu: anchored below the header, quiet opaque rows */
+/* Menus, dialogs and listboxes are popovers, never cards: the card material (glass in Zujaj) left the phone account menu see-through (#898) */
 .ah-end [class*="absolute"][class*="w-80"]{top:calc(100% + 8px);margin-top:0;background:var(--fanous-c-dialog-bg)!important;-webkit-backdrop-filter:none;backdrop-filter:none}
 .ah-end [class*="absolute"][class*="w-80"] :is(button,a){background:transparent!important;color:var(--fanous-color-text-primary)!important;border:0!important;box-shadow:none!important;border-radius:var(--r-md)!important;min-height:40px}
 .ah-end [class*="absolute"][class*="w-80"] :is(button,a) :not([class^="bg-blue-5"]):not([class*=" bg-blue-5"]):not(svg){color:inherit}
@@ -409,6 +417,12 @@ div:has(>a[class*="w-40"][class*="h-24"])>button{background:transparent!importan
 .video-card [data-testid=video-card-menu],.video-card [data-testid=video-card-menu] button,button[data-testid=video-card-menu]{background:transparent!important;background-image:none!important;color:var(--fanous-color-text-secondary)!important;box-shadow:none!important;border:0!important}
 @media(hover:hover){button[data-testid=video-card-menu]:hover{background:var(--m-hover)!important}}
 .tabbar{background:var(--fanous-color-surface)!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+/* The phone tab bar sits on the page surface, so it takes the drawer's colours (checked against drawer.bg in every
+   theme), never the night header's nav colours: those are light text for a dark bar and vanished in light themes */
+.tabbar{background:var(--fanous-c-drawer-bg)!important}.tabbar .tb{color:var(--fanous-c-drawer-text)!important}.tabbar .tb svg{color:var(--fanous-c-drawer-icon)}
+.tabbar .tb[aria-current=page],.tabbar .tb[aria-current=page] svg{color:var(--fanous-c-drawer-active-text)!important}
+/* The header search has its own clear button (header-search-clear): the browser's one doubled it, and in RTL sat over the typed text */
+.ah-search input::-webkit-search-cancel-button,.ah-search-sheet input::-webkit-search-cancel-button{display:none;-webkit-appearance:none;appearance:none}
 
 html:not(.dark) main:has(.demo-gfx) input:not([type=checkbox]):not([type=radio]):not([type=range]){background:#fff!important}
 /* Playlist rows: quiet list, not stacked cards */

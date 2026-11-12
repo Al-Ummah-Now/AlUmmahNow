@@ -34,8 +34,8 @@ function ContrastBadge({ checks }: { checks: ContrastCheck[] }) {
 }
 
 /** A colour slot: a hex value or a reference to a role or brand colour. */
-export function ColorField({ label, value, onChange, theme, mode, checks = [], errors = [], allowRoleRefs = true, readOnly, testId }: {
-  label: string; value: string; onChange: (v: string) => void; theme: ThemePackage; mode: Mode; checks?: ContrastCheck[]; errors?: string[]; allowRoleRefs?: boolean; readOnly?: boolean; testId?: string;
+export function ColorField({ label, value, onChange, theme, mode, checks = [], errors = [], allowRoleRefs = true, readOnly, testId, note }: {
+  label: string; value: string; onChange: (v: string) => void; theme: ThemePackage; mode: Mode; checks?: ContrastCheck[]; errors?: string[]; allowRoleRefs?: boolean; readOnly?: boolean; testId?: string; note?: string;
 }) {
   const { t } = useLanguage();
   const id = useId();
@@ -51,11 +51,12 @@ export function ColorField({ label, value, onChange, theme, mode, checks = [], e
           : <span aria-hidden="true" className="h-8 w-10 rounded border border-dashed border-danger-border" />}
         <label htmlFor={id} className="text-sm text-fg min-w-[9rem] font-mono" dir="ltr">{label}</label>
         <input id={id} dir="ltr" value={value} readOnly={readOnly} onChange={(e) => onChange(e.target.value.trim())} className={`${fieldClass} !py-1 text-sm font-mono w-44`} data-testid={testId ? `${testId}-text` : undefined} />
-        <select aria-label={t('themeBuilder.linkTo')} disabled={readOnly} value={isRef ? value : ''} onChange={(e) => e.target.value && onChange(e.target.value)} className={`${fieldClass} !py-1 text-xs w-40`} dir="ltr">
-          <option value="">{t('themeBuilder.linkTo')}</option>
+        <select aria-label={allowRoleRefs ? t('themeBuilder.linkTo') : t('themeBuilder.linkToBrand')} disabled={readOnly} value={isRef ? value : ''} onChange={(e) => e.target.value && onChange(e.target.value)} className={`${fieldClass} !py-1 text-xs w-40`} dir="ltr">
+          <option value="">{allowRoleRefs ? t('themeBuilder.linkTo') : t('themeBuilder.linkToBrand')}</option>
           {(allowRoleRefs ? [...ROLE_REFS, ...BRAND_REFS] : BRAND_REFS).map((r) => <option key={r} value={r}>{r}</option>)}
         </select>
         <ContrastBadge checks={checks} />
+        {note && <span className="text-[11px] text-fg-muted" data-testid={testId ? `${testId}-note` : undefined}>{note}</span>}
       </div>
       <IssueText messages={errors} />
     </div>

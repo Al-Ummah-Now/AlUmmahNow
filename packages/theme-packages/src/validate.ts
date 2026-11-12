@@ -116,6 +116,10 @@ export function contrastIssues(pkg: ThemePackage, builtIn = false): Issue[] {
         if (ratio < min) issues.push({ path: `tokens.color.${mode}.${r.name}`, message: `${roles[r.name]} on ${bg} ${roles[bg]} is ${ratio.toFixed(2)}:1, needs ${min}:1 (WCAG AA)` });
       }
     }
+    // The header is dark in every theme and both modes (owner decision, 2026-11-11), as on the site
+    const header = colors[mode].parts['nav.bg'];
+    const headerRatio = contrastRatio('#ffffff', header);
+    if (headerRatio < AA_TEXT) issues.push({ path: `components.header.colors.${mode}.bg`, message: `the header is dark in every theme: ${header} is ${headerRatio.toFixed(2)}:1 against white, needs ${AA_TEXT}:1` });
     for (const [fg, bg, min] of BASE.componentPairs) {
       const ratio = contrastRatio(colors[mode].parts[fg], colors[mode].parts[bg]);
       if (ratio < min) issues.push({ path: `components.${sectionOf(fg)}.colors.${mode}.${fg.slice(fg.lastIndexOf('.') + 1)}`, message: `${fg} ${colors[mode].parts[fg]} on ${bg} ${colors[mode].parts[bg]} is ${ratio.toFixed(2)}:1, needs ${min}:1 (WCAG AA)` });

@@ -5,7 +5,7 @@ import { useCallback, useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  BASE, BRAND_NAMES, COMPONENT_PARTS, ELEVATION_NAMES, MATERIAL_VARS, PLAYER_TOKENS, RADIUS_NAMES, validatePackage,
+  BASE, BRAND_NAMES, COMPONENT_PARTS, ELEVATION_NAMES, MATERIAL_VARS, PLAYER_TOKENS, RADIUS_NAMES, brandUsage, linkBrandColors, unlinkedBrandColors, validatePackage,
   type Issue, type Mode, type ThemePackage,
 } from '@al-ummah/theme-packages';
 import { useLanguage } from '@/i18n/I18nProvider';
@@ -14,7 +14,7 @@ import type { MessageKey } from '@/i18n/translate';
 import { setSiteTheme } from '@/lib/api/admin';
 import { ErrorAlert, cardClass, fieldClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { ThemeApiError, deleteAsset, draftAssetUrl, exportUrl, publish, saveDraft, uploadAsset } from './api';
-import { partContrast, roleContrast } from './contrast';
+import { partContrast, roleContrast, traceIssues } from './contrast';
 import { ColorField, CssValueField, IssueText, LengthInput } from './fields';
 import { Preview } from './Preview';
 
@@ -99,7 +99,11 @@ export function ThemeEditor({ initial, assets: initialAssets, latestVersion: ini
     const seen = new Set<string>();
     return [...live.errors, ...fileIssues, ...serverIssues.filter((i) => i.path.startsWith('assets/'))].filter((i) => (seen.has(`${i.path}${i.message}`) ? false : (seen.add(`${i.path}${i.message}`), true)));
   }, [live, fileIssues, serverIssues]);
-  const errorsAt = (path: string) => issues.filter((i) => i.path === path).map((i) => i.message);
+  // A failing pair is also shown at the role or brand colour it comes from
+  const traced = useMemo(() => traceIssues(theme, issues), [theme, issues]);
+  const errorsAt = (path: string) => traced.get(path) ?? [];
+  const unlinked = useMemo(() => unlinkedBrandColors(theme), [theme]);
+  const usage = useMemo(() => brandUsage(theme), [theme]);
 
   const assetUrl = useMemo(() => {
     const base = draftAssetUrl(theme.id);
@@ -195,6 +199,7 @@ export function ThemeEditor({ initial, assets: initialAssets, latestVersion: ini
       </div>
       {!canEdit && <p className="text-fg-muted mb-3">{t('themeBuilder.adminOnly')}</p>}
       {failure && <ErrorAlert testId="theme-editor-failed">{failure}</ErrorAlert>}
+      {canEdit && issues.length > 0 && <p className="mb-3 text-sm text-danger-fg" data-testid="theme-publish-blocked">{t('themeBuilder.publishBlocked')}</p>}
       {notice && <p role="status" className="mb-3 text-sm font-medium text-fg" data-testid="theme-editor-notice">{notice}</p>}
       <details className={`${cardClass} !p-3 mb-4`} open={issues.length > 0 && issues.length < 12} data-testid="theme-issues" data-count={issues.length}>
         <summary className={`text-sm font-medium ${issues.length ? 'text-danger-fg' : 'text-fg'}`}>{issues.length ? t('themeBuilder.errors', { count: issues.length }) : t('themeBuilder.noErrors')}{live.warnings.length ? ` · ${t('themeBuilder.warnings', { count: live.warnings.length })}` : ''}</summary>
@@ -244,9 +249,15 @@ export function ThemeEditor({ initial, assets: initialAssets, latestVersion: ini
                   onChange={(v) => update(['tokens', 'color', mode, r.name], v)} checks={roleContrast(theme, mode, r.name)} errors={errorsAt(`tokens.color.${mode}.${r.name}`)} />
               ))}
               <h2 className="text-sm font-semibold text-fg mt-4">{t('themeBuilder.brandColours')}</h2>
+              {canEdit && unlinked > 0 && (
+                <div className="my-2 p-2 rounded border border-border bg-surface-2" data-testid="brand-link">
+                  <button type="button" className={secondaryButtonClass} onClick={() => setTheme(linkBrandColors(theme))} data-testid="brand-link-button">{t('themeBuilder.linkBrand', { count: unlinked })}</button>
+                  <p className="text-xs text-fg-muted mt-1">{t('themeBuilder.linkBrandHelp')}</p>
+                </div>
+              )}
               {BRAND_NAMES.map((n) => (
                 <ColorField key={n} testId={`brand-${n}`} label={n} value={theme.tokens.brand[n] ?? ''} theme={theme} mode={mode} allowRoleRefs={false} readOnly={readOnly}
-                  onChange={(v) => update(['tokens', 'brand', n], v)} errors={errorsAt(`tokens.brand.${n}`)} />
+                  onChange={(v) => update(['tokens', 'brand', n], v)} errors={errorsAt(`tokens.brand.${n}`)} note={t('themeBuilder.brandDrives', { count: usage[n] ?? 0 })} />
               ))}
             </div>
           )}
