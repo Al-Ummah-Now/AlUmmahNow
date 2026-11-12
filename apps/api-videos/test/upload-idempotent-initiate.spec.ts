@@ -14,7 +14,7 @@ const FP = { name: 'lecture.mp4', size: 4096, lastModified: 1762700000000, hash:
 
 /** Bunny Stream stub: create / get / delete videos, with an optional delay on create. */
 function bunnyStub() {
-	const s = { created: [] as string[], status: new Map<string, number>(), createDelayMs: 0, deleted: [] as string[], bodies: [] as any[] };
+	const s = { created: [] as string[], status: new Map<string, number>(), createDelayMs: 0, deleted: [] as string[], bodies: [] as any[], updates: [] as { id: string; body: any }[] };
 	globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
 		const url = String(input);
 		const method = init?.method ?? 'GET';
@@ -31,6 +31,10 @@ function bunnyStub() {
 		if (one && method === 'GET') {
 			const st = s.status.get(one[1]);
 			return st === undefined ? new Response(null, { status: 404 }) : new Response(JSON.stringify({ guid: one[1], status: st }), { status: 200 });
+		}
+		if (one && method === 'POST') {
+			s.updates.push({ id: one[1], body: JSON.parse(String(init?.body)) });
+			return new Response(JSON.stringify({ guid: one[1] }), { status: 200 });
 		}
 		if (one && method === 'DELETE') {
 			s.deleted.push(one[1]);
@@ -332,5 +336,35 @@ describe('uploads go into the channel collection (2026-11-12: bulk uploads lande
 		assert.ok(stub.bodies.every((b) => b.collectionId === 'col-1'), JSON.stringify(stub.bodies));
 		const record = JSON.parse(h.env.videos.store.get(single.body.result?.videoId ?? single.body.videoId)!);
 		assert.equal(record.bunnyLibraryId, 123);
+	});
+
+	it('a reused upload (same file again) is filed into the channel collection', async () => {
+		const stub = bunnyStub();
+		const h = harness();
+		// The first initiate ran before the channel had a collection (or on the old bulk path)
+		const first = await h.initiate({ fingerprint: FP });
+		const videoId = first.body.result?.videoId ?? first.body.videoId;
+		await h.env.channels.put('ch1', JSON.stringify({ id: 'ch1', userId: 'alice', name: 'Lessons', bunnyCollections: { '123': 'col-1' } }));
+		const again = await h.initiate({ fingerprint: FP });
+		assert.equal(again.body.result?.reused ?? again.body.reused, true);
+		assert.deepEqual(stub.updates, [{ id: videoId, body: { collectionId: 'col-1' } }]);
+		// Bulk reuse too
+		stub.updates.length = 0;
+		const bulk = await h.batch([{ fingerprint: FP }]);
+		assert.equal(bulk.status, 200);
+		assert.deepEqual(stub.updates, [{ id: videoId, body: { collectionId: 'col-1' } }]);
+	});
+
+	it('an unfinished upload left in another (legacy) library is not reused', async () => {
+		bunnyStub();
+		const h = harness();
+		const first = await h.initiate({ fingerprint: FP });
+		const videoId = first.body.result?.videoId ?? first.body.videoId;
+		const record = JSON.parse(h.env.videos.store.get(videoId)!);
+		await h.env.videos.put(videoId, JSON.stringify({ ...record, bunnyLibraryId: 400189 }));
+		Object.assign(h.env, { BUNNY_LEGACY_LIBRARY_ID: '400189', BUNNY_LEGACY_HOSTNAME: 'vz-old.b-cdn.net', BUNNY_LEGACY_STREAM_KEY: 'old' });
+		const again = await h.initiate({ fingerprint: FP });
+		const second = again.body.result?.videoId ?? again.body.videoId;
+		assert.notEqual(second, videoId);
 	});
 });

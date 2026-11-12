@@ -279,6 +279,33 @@ async function resolveUploadCollection(
 	return collectionId;
 }
 
+/**
+ * A reused upload (same file initiated again, lib/uploads/initiateOnce.ts)
+ * keeps the Bunny video an earlier initiate made, possibly before collections
+ * were set on that path: file it into its collection now. Never throws.
+ */
+export async function fileReusedVideo(
+	env: { channels: R2Bucket; profiles?: R2Bucket },
+	bunny: CollectionClient & { updateVideo(libraryId: number, videoId: string, data: { collectionId?: string }): Promise<unknown> },
+	libraryId: number,
+	videoId: string,
+	channelId: string,
+	ownerId: string,
+	target?: Promise<string | undefined>,
+): Promise<void> {
+	const collectionId = await (target ?? uploadCollection(env, bunny, libraryId, channelId, ownerId));
+	if (!collectionId) return;
+	try {
+		await bunny.updateVideo(libraryId, videoId, { collectionId });
+	} catch (error) {
+		logger.warn('[ChannelCollection] Could not file the reused video; the processing check will', {
+			videoId,
+			libraryId,
+			error: error instanceof Error ? error.message : String(error),
+		});
+	}
+}
+
 export type PlacementOutcome = 'placed' | 'already' | 'no_collection' | 'failed';
 
 /**

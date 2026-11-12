@@ -8,7 +8,7 @@ import { checkDraftAllowed } from "../../lib/studioLimits";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import { Channel, VideoCategory } from "@al-ummah/shared-types";
 import R2Repository from "../../lib/r2Repo";
-import { uploadCollection } from '../../lib/channelCollection';
+import { fileReusedVideo, uploadCollection } from '../../lib/channelCollection';
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
 import { requireSecret, requireEnvVar } from "../../lib/env-helpers";
@@ -292,6 +292,8 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 			let thumbnailUrl: string | undefined;
 			let thumbnailSizes: Record<string, string> | undefined;
 			if (reused) {
+				// The earlier initiate may have left it outside its collection
+				await fileReusedVideo(c.env, bunnyStream, libraryId, videoId, channelId, ownerId);
 				// Same video again: latest metadata (and thumbnail, when one was sent)
 				const thumb = thumbnail?.data ? await this.processThumbnail(c, videoId, thumbnail) : null;
 				const nowIso = new Date().toISOString();

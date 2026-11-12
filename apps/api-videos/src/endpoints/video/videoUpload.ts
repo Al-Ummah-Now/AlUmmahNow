@@ -1,5 +1,6 @@
 import { completeOriginal, putWholeOriginal } from '../../lib/media/originals';
 import { enqueueTranscode } from '../../lib/media/r2-delivery';
+import { uploadCollection } from "../../lib/channelCollection";
 import { uploadIdentity } from "../../lib/channelAccess";
 import { OpenAPIRoute, Str } from "chanfana";
 import { AuthenticatedRoute, AppContext } from '../../base';
@@ -215,9 +216,12 @@ export class VideoUpload extends AuthenticatedRoute {
                     const bunnyStream = new stream(bunnyKey).forEnv(c.env);
 
                     // Create video in Bunny Stream
+                    // The channel's (or owner's) Bunny collection (lib/channelCollection.ts)
+                    const collectionId = await uploadCollection(c.env, bunnyStream, libraryId, channelId, ownerId);
                     const bunnyVideo = await bunnyStream.createVideo(libraryId, {
                         title,
                         thumbnailTime: 0,
+                        ...(collectionId ? { collectionId } : {}),
                     });
 
                     // Upload file to Bunny Stream
