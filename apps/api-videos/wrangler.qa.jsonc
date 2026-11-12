@@ -207,6 +207,8 @@
     "ERRORS_INGEST_URL": "https://admin.api.qa.alummahnow.net/internal/errors",
     // R2 delivery host (public renditions direct from R2, private ones via apps/media)
     "MEDIA_PUBLIC_HOST": "media.qa.alummahnow.net",
+    // Cloudflare analytics filters for the daily cost inputs (lib/media/costs.ts)
+    "MEDIA_BUCKET_NAMES": "al-ummah-now-media-qa,al-ummah-now-media-private-qa",
     // Logging policy (docs/operations/logging.md): production warn, stage info, QA/dev debug
     "LOG_LEVEL": "debug",
     // Upload limits enforced (any value but "off"): the numbers come from each user's creator tier, edited in the videos admin (middleware/upload-limits.ts)

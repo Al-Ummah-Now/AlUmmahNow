@@ -261,3 +261,28 @@ describe('delivery switch on the watch response', () => {
 		assert.equal(a.source, b.source, 'stable per video');
 	});
 });
+
+describe('daily cost inputs', () => {
+	it('turns records into per-source metrics with estimated cost', async () => {
+		const { metricsFromRecords, PRICES } = await import('../src/lib/media/costs');
+		const GB = 1024 ** 3;
+		const m = metricsFromRecords({
+			jobs: { containerSeconds: 600, bytes: 2 * GB, objects: 4000, videoSeconds: 1200, storedBytes: 30 * GB },
+			qoe: [
+				{ provider: 'r2', watchMs: 3_600_000, kbpsWatchS: 2000 * 3600 },
+				{ provider: 'bunny', watchMs: 7_200_000, kbpsWatchS: 2000 * 7200 },
+			],
+			bunnyStoredBytes: 60 * GB,
+		});
+		const get = (p: string, k: string) => m.find((x) => x.provider === p && x.metric === k)?.value;
+		assert.equal(get('r2', 'video_minutes'), 20);
+		assert.equal(get('r2', 'viewer_hours'), 1);
+		assert.equal(get('bunny', 'viewer_hours'), 2);
+		assert.equal(get('r2', 'stored_gb'), 30);
+		// 2000 kbps for 2 h = 1.8e9 bytes
+		assert.ok(Math.abs(get('bunny', 'delivered_gb')! - 1.8e9 / GB) < 1e-3);
+		const r2Cost = 600 * PRICES.containerInstanceSecond + 30 * (0.015 / 30) + (4000 / 1e6) * 4.5;
+		assert.ok(Math.abs(get('r2', 'cost_usd')! - r2Cost) < 1e-5);
+		assert.equal(get('r2', 'class_b_ops'), undefined, 'no analytics token: left out');
+	});
+});
