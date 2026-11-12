@@ -41,6 +41,23 @@ export function getVideoCdnDirectory(playUrl?: string): string | null {
   }
 }
 
+/**
+ * The URL to save for a frame: without the Bunny token the directory carried
+ * (path form /bcdn_token=…/ or ?token=&expires=). Tokens expire; the API signs
+ * thumbnails again in every response, so a stored token only breaks the image.
+ */
+export function unsignedFrameUrl(url: string): string {
+  const path = /^(https:\/\/[^/?#]+)\/bcdn_token=[^/?#]*\/(.*)$/.exec(url);
+  const out = path ? `${path[1]}/${path[2]}` : url;
+  try {
+    const parsed = new URL(out);
+    for (const key of ['token', 'expires', 'token_path']) parsed.searchParams.delete(key);
+    return parsed.toString();
+  } catch {
+    return out;
+  }
+}
+
 export default function ThumbnailSelector({
   videoId,
   currentThumbnailUrl,
@@ -71,7 +88,7 @@ export default function ThumbnailSelector({
 
   const handleThumbnailSelect = (thumbnailUrl: string) => {
     setSelectedThumbnail(thumbnailUrl);
-    onThumbnailChange(thumbnailUrl);
+    onThumbnailChange(unsignedFrameUrl(thumbnailUrl));
   };
 
   const handleFrameError = (url: string) => {
