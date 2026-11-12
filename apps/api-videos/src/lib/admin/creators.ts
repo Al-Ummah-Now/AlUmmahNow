@@ -28,7 +28,7 @@ import {
 import { CreatorTierError, readAssignments, readTier, readTiers } from '../creatorTiers';
 import { windowStart } from '../../middleware/rate-limit';
 import { UPLOAD_SESSION_OPERATION } from '../../middleware/upload-limits';
-import { likeTerm, pageOf, readMany, toUserRow } from './directory';
+import { cachedCount, likeTerm, pageOf, readMany, toUserRow } from './directory';
 
 export interface CreatorsEnv {
 	SEARCH_DB?: D1Database;
@@ -103,8 +103,13 @@ export async function listCreators(env: CreatorsEnv, query: CreatorsQuery, nowMs
 		where.push(`tier_id = ?${binds.length}`);
 	}
 	const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
-	const [total, rows, notices] = await Promise.all([
-		db.prepare(`SELECT COUNT(*) AS n FROM (${CREATORS_SQL}) ${whereSql}`).bind(...binds).first<{ n: number }>(),
+	// The total and the needs-tier count each scan every profile (~33k on QA): reused for a minute per
+	// filter (cachedCount, as the users list), so a page load costs one scan, not three. Under suite
+	// load the three scans overloaded the search database and the Creators page failed to load (CRE-02).
+	const filterKey = `creators:${query.filter ?? ''}:${query.tierId ?? ''}:${(q ?? '').toLowerCase().slice(0, 80)}`;
+	const [total, rows, notices, needsTier] = await Promise.all([
+		cachedCount(db as never, filterKey, () =>
+			db.prepare(`SELECT COUNT(*) AS n FROM (${CREATORS_SQL}) ${whereSql}`).bind(...binds).first<{ n: number }>().then((r) => Number(r?.n) || 0), nowMs),
 		db
 			.prepare(
 				`SELECT * FROM (${CREATORS_SQL}) ${whereSql}
@@ -117,11 +122,12 @@ export async function listCreators(env: CreatorsEnv, query: CreatorsQuery, nowMs
 			.prepare(
 				`SELECT
 				   (SELECT COUNT(DISTINCT user_id) FROM upload_limit_hits WHERE hit_at >= ?2) AS hits24h,
-				   (SELECT COUNT(DISTINCT user_id) FROM upload_limit_hits WHERE hit_at >= ?1) AS hits7d,
-				   (SELECT COUNT(*) FROM (${CREATORS_SQL}) WHERE ${NEEDS_TIER}) AS needs_tier`,
+				   (SELECT COUNT(DISTINCT user_id) FROM upload_limit_hits WHERE hit_at >= ?1) AS hits7d`,
 			)
 			.bind(weekAgo, now - 86400)
-			.first<{ hits24h: number; hits7d: number; needs_tier: number }>(),
+			.first<{ hits24h: number; hits7d: number }>(),
+		cachedCount(db as never, 'creators:needs-tier', () =>
+			db.prepare(`SELECT COUNT(*) AS n FROM (${CREATORS_SQL}) WHERE ${NEEDS_TIER}`).bind(weekAgo).first<{ n: number }>().then((r) => Number(r?.n) || 0), nowMs),
 	]);
 	const list = rows.results ?? [];
 	const ids = list.map((r) => String(r.user_id));
@@ -159,12 +165,12 @@ export async function listCreators(env: CreatorsEnv, query: CreatorsQuery, nowMs
 	});
 	return {
 		items,
-		total: Number(total?.n) || 0,
+		total,
 		page,
 		pageSize,
 		limitHits24h: Number(notices?.hits24h) || 0,
 		limitHits7d: Number(notices?.hits7d) || 0,
-		needsTier: Number(notices?.needs_tier) || 0,
+		needsTier,
 	};
 }
 
