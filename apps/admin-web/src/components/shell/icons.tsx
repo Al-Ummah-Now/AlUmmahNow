@@ -19,6 +19,7 @@ const PATHS = {
   crown: 'M3 8l4 4 5-7 5 7 4-4-2 11H5z',
   key: 'M15 8a4 4 0 1 1-3.5 6L4 21H3v-3l7-7A4 4 0 0 1 15 8zM16 7h.01',
   archive: 'M3 4h18v4H3zM5 8v12h14V8M10 12h4',
+  activity: 'M3 12h4l3-8 4 16 3-8h4',
   cpu: 'M7 7h10v10H7zM9 3v4M15 3v4M9 17v4M15 17v4M3 9h4M3 15h4M17 9h4M17 15h4',
   clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M12 7v5l3 2',
   layers: 'M12 3l9 5-9 5-9-5zM3 13l9 5 9-5',

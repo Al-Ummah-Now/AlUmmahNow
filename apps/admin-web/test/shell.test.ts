@@ -8,20 +8,20 @@ import en from '../src/i18n/messages/en';
 import ar from '../src/i18n/messages/ar';
 import { createTranslator } from '../src/i18n/translate';
 
-const moderator: NavAccess = { contact: false, processing: false, errors: false, manageUsers: false, staleUploads: false, media: false };
-const admin: NavAccess = { contact: true, processing: true, errors: true, manageUsers: true, staleUploads: true, media: true };
+const moderator: NavAccess = { contact: false, processing: false, errors: false, manageUsers: false, staleUploads: false, media: false, ops: false };
+const admin: NavAccess = { contact: true, processing: true, errors: true, manageUsers: true, staleUploads: true, media: true, ops: true };
 const hrefs = (access: NavAccess) => visibleItems(access).map((i) => i.href);
 
 describe('nav model', () => {
   it('keeps every section of the old top nav', () => {
-    for (const href of ['/dashboard', '/moderation', '/moderation/ai', '/channels', '/videos', '/comments', '/playlists', '/community', '/deleted', '/users', '/category-suggestions', '/translations', '/indices', '/site-theme', '/contact', '/processing', '/stale-uploads', '/errors', '/jobs', '/creators', '/auth-requests', '/legacy-profiles', '/video-formats', '/delivery']) {
+    for (const href of ['/dashboard', '/moderation', '/moderation/ai', '/channels', '/videos', '/comments', '/playlists', '/community', '/deleted', '/users', '/category-suggestions', '/translations', '/indices', '/site-theme', '/contact', '/processing', '/stale-uploads', '/errors', '/jobs', '/creators', '/auth-requests', '/legacy-profiles', '/video-formats', '/delivery', '/operations']) {
       assert.ok(NAV_ITEMS.some((i) => i.href === href), href);
     }
   });
 
   it('hides from moderators exactly what the old nav hid', () => {
     const hidden = hrefs(admin).filter((h) => !hrefs(moderator).includes(h)).sort();
-    assert.deepEqual(hidden, ['/contact', '/delivery', '/errors', '/legacy-profiles', '/processing', '/stale-uploads', '/video-formats']);
+    assert.deepEqual(hidden, ['/contact', '/delivery', '/errors', '/legacy-profiles', '/operations', '/processing', '/stale-uploads', '/video-formats']);
   });
 
   it('shows Errors to whoever has errors:read or videos:processing', () => {
@@ -33,6 +33,7 @@ describe('nav model', () => {
     const ids = groupedItems(moderator).map((g) => g.id);
     assert.deepEqual(ids, ['overview', 'moderation', 'content', 'people', 'operations', 'site']);
     assert.deepEqual(groupedItems(moderator).find((g) => g.id === 'operations')!.items.map((i) => i.href), ['/jobs', '/indices']);
+    assert.equal(groupedItems(admin).find((g) => g.id === 'operations')!.items[0].href, '/operations');
   });
 
   it('marks the most specific section as active', () => {
