@@ -111,11 +111,10 @@ export function isMediaRev(rev: string): boolean {
 	return SAFE_REV.test(rev);
 }
 
-/** A new random rev (16 lowercase base-36 chars, ~80 bits) for one transcode. */
+/** A new random rev (16 hex chars, 64 bits) for one transcode. */
 export function newMediaRev(): string {
-	const bytes = crypto.getRandomValues(new Uint8Array(16));
 	let out = '';
-	for (const b of bytes) out += (b % 36).toString(36);
+	for (const b of crypto.getRandomValues(new Uint8Array(8))) out += b.toString(16).padStart(2, '0');
 	return out;
 }
 

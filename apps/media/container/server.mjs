@@ -219,22 +219,28 @@ async function runJob(job) {
 	return result;
 }
 
+/** What /status and /jobs may answer: no error text. */
+function publicState(c) {
+	return { jobId: c.jobId, status: c.status, progress: c.progress, startedAt: c.startedAt, ...(c.result ? { result: c.result } : {}) };
+}
+
 const server = createServer(async (req, res) => {
 	const send = (status, body) => {
 		res.writeHead(status, { 'content-type': 'application/json' });
 		res.end(JSON.stringify(body));
 	};
 	if (req.url === '/health') return send(200, { ok: true });
-	if (req.url === '/status') return send(200, current ?? { status: 'idle' });
+	// Status without the error text: the failure reason goes to the Worker in the 'failed' event only
+	if (req.url === '/status') return send(200, current ? publicState(current) : { status: 'idle' });
 	if (req.url === '/jobs' && req.method === 'POST') {
 		let raw = '';
 		for await (const c of req) raw += c;
 		const job = JSON.parse(raw || '{}');
 		if (!job.jobId || !/^(pub|priv)\/[A-Za-z0-9-]+\/[a-z0-9]+$/.test(job.prefix || '')) return send(400, { error: 'bad job' });
-		if (current && current.jobId === job.jobId) return send(200, current);
-		if (current && ['downloading', 'transcoding', 'uploading'].includes(current.status)) return send(409, { error: 'busy', current });
+		if (current && current.jobId === job.jobId) return send(200, publicState(current));
+		if (current && ['downloading', 'transcoding', 'uploading'].includes(current.status)) return send(409, { error: 'busy', current: publicState(current) });
 		current = { jobId: job.jobId, status: 'starting', progress: 0, startedAt: Date.now() };
-		send(202, current);
+		send(202, publicState(current));
 		runJob(job).then(
 			async (result) => {
 				current.status = 'ready';
