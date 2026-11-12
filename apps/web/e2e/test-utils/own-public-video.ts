@@ -152,14 +152,18 @@ export function ownPublicVideos(test: AnyTest, label: string, specs: OwnVideoSpe
       const card = cardOf(page);
       const cards = page.getByTestId('video-card');
       const more = page.getByRole('main').getByRole('button', { name: /^(Load More|تحميل المزيد|View All)$/ });
-      await expect(cards.first()).toBeVisible();
-      for (let i = 0; i < 10 && !(await card.isVisible()); i++) {
-        if (!(await more.isVisible()) || !(await more.isEnabled())) break;
-        const before = await cards.count();
-        await more.click();
-        await expect.poll(() => cards.count(), { message: '"Load More" appended nothing', timeout: 30_000 }).toBeGreaterThan(before);
-      }
-      await expect(card, 'this file\'s own video card in the listing').toBeVisible();
+      // Retried as a whole: the grid can still be loading (no button yet) when a pass looks
+      await expect(async () => {
+        if (await card.isVisible()) return;
+        await expect(cards.first()).toBeVisible({ timeout: 10_000 });
+        await expect(page.getByTestId('video-grid-loading')).toHaveCount(0, { timeout: 10_000 });
+        if ((await more.isVisible()) && (await more.isEnabled())) {
+          const before = await cards.count();
+          await more.click();
+          await expect.poll(() => cards.count(), { timeout: 15_000 }).toBeGreaterThan(before);
+        }
+        await expect(card).toBeVisible({ timeout: 2_000 });
+      }, 'this file\'s own video card in the listing').toPass({ timeout: 90_000, intervals: [500, 1000, 2000] });
       return card;
     },
     data,
