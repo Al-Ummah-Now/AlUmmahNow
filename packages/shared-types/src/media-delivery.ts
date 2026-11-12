@@ -36,7 +36,7 @@ export interface TranscodeResult {
 	objects: number;
 	bytes: number;
 	durationSeconds: number;
-	source: { width: number; height: number; durationSeconds: number; bytes: number; codec?: string; hasAudio: boolean };
+	source: { width: number; height: number; durationSeconds: number; bytes: number; codec?: string; hasAudio: boolean; /** Bunny file it was read from: original, play_1080p.mp4 … */ file?: string };
 	timings: { downloadMs: number; transcodeMs: number; uploadMs: number; totalMs: number };
 	thumbnail: string;
 	preview?: string;

@@ -66,11 +66,15 @@ export class Transcoder extends Container<Env> {
 					refused.push(`${new URL(url).pathname.split('/').pop()}:${res.status}`);
 					continue;
 				}
+				const file = new URL(url).pathname.split('/').pop() ?? '';
 				if (!known || known !== url) {
 					chosenSource.set(ctx.params.videoId, url);
-					log.warn('[Transcoder] Source chosen', { videoId: ctx.params.videoId, file: new URL(url).pathname.split('/').pop(), refused });
+					log.warn('[Transcoder] Source chosen', { videoId: ctx.params.videoId, file, refused });
 				}
-				return res;
+				// The container records which Bunny file it transcoded (result.source.file)
+				const out = new Response(res.body, res);
+				out.headers.set('x-media-source', file);
+				return out;
 			}
 			// Nothing yet: the original is refused by the CDN and Bunny has not made an MP4 yet. Retryable.
 			log.warn('[Transcoder] No source answered', { videoId: ctx.params.videoId, refused });

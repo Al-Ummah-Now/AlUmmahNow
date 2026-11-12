@@ -154,9 +154,18 @@ describe('R2 dual write', () => {
 		// Token-auth libraries: directory token in the path (Bunny refuses the query-form token there), MP4 fallbacks after the original
 		const { sourceCandidates } = await import('../src/lib/media/r2-delivery');
 		const signed = await sourceCandidates({ ...env, BUNNY_SIGN_URLS: 'true', BUNNY_TOKEN_KEY: 'k' } as never, ID);
-		assert.equal(signed.length, 5);
+		// No Bunny answer here (no API key in the test env): the original, then every MP4 fallback, highest first
+		assert.equal(signed.length, 8);
 		assert.match(signed[0], new RegExp(`^https://vz-cb79844a-c5d\\.b-cdn\\.net/bcdn_token=[^&]+&expires=\\d+&token_path=%2F${ID}%2F/${ID}/original$`));
-		assert.ok(signed[1].endsWith(`/${ID}/play_720p.mp4`));
+		assert.ok(signed[3].endsWith(`/${ID}/play_1080p.mp4`));
+	});
+
+	it('ranks sources from what Bunny reports: original only when kept, MP4s at its resolutions, 1080p first', async () => {
+		const { sourceFiles } = await import('../src/lib/media/r2-delivery');
+		assert.deepEqual(sourceFiles({ hasOriginal: true, availableResolutions: '360p,480p,720p,240p,1080p' }), ['original', 'play_1080p.mp4', 'play_720p.mp4', 'play_480p.mp4', 'play_360p.mp4', 'play_240p.mp4']);
+		// Uploaded before Keep originals: straight to the best MP4
+		assert.deepEqual(sourceFiles({ hasOriginal: false, availableResolutions: '240p,360p' }), ['play_360p.mp4', 'play_240p.mp4']);
+		assert.equal(sourceFiles(null)[0], 'original');
 	});
 });
 

@@ -18,6 +18,8 @@ const PORT = 8080;
 const WORK = '/tmp/work';
 const CHUNK = 64 * 1024 * 1024;
 const UPLOAD_CONCURRENCY = 6;
+/** Bunny file the current job's source came from (x-media-source from the Worker) */
+let sourceFile;
 
 /** @type {{ jobId: string, status: string, progress: number, error?: string, startedAt: number } | null} */
 let current = null;
@@ -64,6 +66,7 @@ async function download(dest) {
 					throw Object.assign(new Error(why || 'source_missing'), { fatal: why !== 'source_unavailable' });
 				}
 				if (res.status !== 206 && res.status !== 200) throw new Error(`source HTTP ${res.status}`);
+				sourceFile = res.headers.get('x-media-source') || sourceFile;
 				const range = res.headers.get('content-range');
 				if (res.status === 206 && range) total = Number(range.split('/')[1]) || total;
 				const ab = Buffer.from(await res.arrayBuffer());
@@ -155,6 +158,7 @@ async function runJob(job) {
 	await mkdir(out, { recursive: true });
 
 	current.status = 'downloading';
+	sourceFile = undefined;
 	const sourceBytes = await download(src);
 	const tDownload = Date.now();
 	const info = await probe(src);
@@ -209,7 +213,7 @@ async function runJob(job) {
 		objects: files.length,
 		bytes: 0,
 		durationSeconds: info.durationSeconds,
-		source: { width: info.width, height: info.height, durationSeconds: info.durationSeconds, bytes: sourceBytes, codec: info.codec, hasAudio: info.hasAudio },
+		source: { width: info.width, height: info.height, durationSeconds: info.durationSeconds, bytes: sourceBytes, codec: info.codec, hasAudio: info.hasAudio, ...(sourceFile ? { file: sourceFile } : {}) },
 		timings: { downloadMs: tDownload - t0, transcodeMs: tTranscode - tDownload, uploadMs: tUpload - tTranscode, totalMs: tUpload - t0 },
 		thumbnail: 'thumb.jpg',
 		...(preview ? { preview } : {}),

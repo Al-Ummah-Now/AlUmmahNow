@@ -29,6 +29,7 @@ import {
 	type VideoR2State,
 } from '@al-ummah/shared-types';
 import { getSecret } from '../env-helpers';
+import { fetchBunnyVideo } from '../processing/loop';
 import { logger } from '../logger';
 import R2Repository from '../r2Repo';
 import { bunnyDirectoryToken, signedBunnyUrl, tokenExpiry } from '../bunny-signing';
@@ -350,17 +351,39 @@ export async function applyJobEvent(
 // Source and play URLs
 // ---------------------------------------------------------------------------
 
+const MP4_FALLBACKS = ['2160p', '1440p', '1080p', '720p', '480p', '360p', '240p'];
+
 /**
- * Where the transcode reads the upload, best first: Bunny's kept original, then
- * its MP4 fallbacks (highest first; Bunny makes them up to 720p as it encodes).
- * Signed with the directory token (path form) when the library uses token auth:
- * Bunny refuses the query-form file token there. The CDN may refuse the original
- * (library setting); the media worker then uses the first MP4 that answers.
+ * Source files to try, best first (pure; tested). Bunny's kept original when Bunny
+ * says it has one (`hasOriginal`), then its MP4 fallbacks at the resolutions Bunny
+ * encoded, highest first; unknown resolutions: every standard one.
+ *
+ * Bunny's CDN answers 403 for /<id>/original even when the original exists and the
+ * request is correctly signed (checked 2026-11-12 on QA pull zone 4943033 and
+ * production library 400189: the same token serves playlist.m3u8 and
+ * play_1080p.mp4). The original stays first so it is used as soon as Bunny serves
+ * it; until then the highest MP4 (up to 1080p) is the source.
+ */
+export function sourceFiles(bunny: { hasOriginal?: boolean | null; availableResolutions?: string | null } | null): string[] {
+	const listed = (bunny?.availableResolutions ?? '').split(',').map((r) => r.trim()).filter(Boolean);
+	const mp4 = (listed.length ? MP4_FALLBACKS.filter((r) => listed.includes(r)) : MP4_FALLBACKS).map((r) => `play_${r}.mp4`);
+	return bunny?.hasOriginal === false ? mp4 : ['original', ...mp4];
+}
+
+/**
+ * Signed source URLs, best first (sourceFiles). Directory token in the path when the
+ * library uses token auth (Bunny refuses the query-form token for these files).
  */
 export async function sourceCandidates(env: MediaEnv, videoId: string): Promise<string[]> {
 	const host = env.bunny_hostname;
 	if (!host) return [];
-	const files = ['original', 'play_720p.mp4', 'play_480p.mp4', 'play_360p.mp4', 'play_240p.mp4'];
+	let bunny: { hasOriginal?: boolean | null; availableResolutions?: string | null } | null = null;
+	try {
+		bunny = (await fetchBunnyVideo(env as never, videoId)) as never;
+	} catch (error) {
+		logger.warn('[Media] Bunny video lookup failed; trying every source', { videoId, error: error instanceof Error ? error.message : String(error) });
+	}
+	const files = sourceFiles(bunny);
 	const signHost = env.BUNNY_SIGN_HOSTNAME || host;
 	if (env.BUNNY_SIGN_URLS === 'true' && signHost === host) {
 		const key = await getSecret(env.BUNNY_TOKEN_KEY, 'BUNNY_TOKEN_KEY');
