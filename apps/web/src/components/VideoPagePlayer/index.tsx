@@ -14,6 +14,12 @@ import { QoeTracker, sendQoeBeacon } from "@/lib/video/qoe";
 
 const HLS = 'application/x-mpegURL';
 
+/** One id per play session (statistics only, but never Math.random) */
+function qoeSessionId(): string {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  return Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 /** VHS's selected rendition bandwidth (bits/s), when the tech exposes it */
 function vhsBandwidth(player: Player): number | undefined {
   try {
@@ -57,7 +63,7 @@ const VideoPlayer: React.FC<WatchPlayerProps> = ({ options, startTime, onPlayerR
   // One QoE session per video load on this player, plus the one-time R2 → Bunny fallback
   useEffect(() => {
     if (!player) return;
-    const sessionId = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const sessionId = qoeSessionId();
     const videoId = options.id;
     const tracker = new QoeTracker(
       { on: (e, fn) => player.on(e, fn), off: (e, fn) => player.off(e, fn), paused: () => player.paused(), bandwidth: () => vhsBandwidth(player) },
