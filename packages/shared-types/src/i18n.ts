@@ -275,6 +275,8 @@ export interface AppTranslations {
     navigationMenu: string;
     /** Account menu "Al Ummah Now apps" section (docs/design/NAV.md) */
     appsSection: string;
+    /** The account menu's context slot label in the videos app (its channel layer) */
+    channelSection: string;
     appWww: string;
     appVideos: string;
     appProfile: string;

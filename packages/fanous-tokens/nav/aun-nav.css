@@ -337,6 +337,68 @@
   color: var(--aun-menu-text);
 }
 
+/* ---------- the context slot (NAV.md "Slots"): one app's own layer, e.g. the videos channel layer ---------- */
+.aun-menu-context {
+  display: flex;
+  flex-direction: column;
+}
+/* the current context (the active channel): avatar + name, like an account row */
+.aun-menu-context-current .aun-avatar {
+  width: 2rem;
+  height: 2rem;
+}
+/* a small role chip ("Channel admin") */
+.aun-badge {
+  flex: none;
+  margin-inline-start: auto;
+  padding: var(--fanous-spacing-xxs, 2px) var(--fanous-spacing-sm, 8px);
+  border: 1px solid var(--fanous-c-menu-border);
+  border-radius: var(--fanous-radius-full, 999px);
+  color: var(--aun-menu-muted);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+/* a line that explains why an action is missing (a limit reached) */
+.aun-menu-note {
+  margin: 0;
+  padding: var(--fanous-spacing-sm, 8px) var(--fanous-spacing-md, 12px);
+  color: var(--aun-menu-muted);
+  font-size: 0.8125rem;
+}
+/* an inline form (create a channel) */
+.aun-menu-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fanous-spacing-sm, 8px);
+  padding: var(--fanous-spacing-sm, 8px) var(--fanous-spacing-md, 12px);
+}
+.aun-menu-form .aun-menu-label {
+  padding: 0;
+}
+.aun-menu-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 2.5rem;
+  padding: 0 var(--fanous-spacing-md, 12px);
+  border: 1px solid var(--fanous-c-menu-border);
+  border-radius: var(--fanous-radius-sm, 4px);
+  background: transparent;
+  color: var(--aun-menu-text);
+  font: inherit;
+}
+.aun-menu-input:focus-visible {
+  outline: 2px solid var(--fanous-color-focus-ring);
+  outline-offset: -1px;
+}
+.aun-menu-form-actions {
+  display: flex;
+  gap: var(--fanous-spacing-sm, 8px);
+}
+.aun-menu-form-actions > * {
+  flex: 1 1 0;
+}
+
 /* directional icons (back, chevron, sign out) point the reading direction */
 [dir='rtl'] .aun-flip {
   transform: scaleX(-1);

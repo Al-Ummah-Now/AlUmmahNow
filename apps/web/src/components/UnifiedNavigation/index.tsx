@@ -13,7 +13,8 @@ import { useState, useEffect } from 'react';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { MenuBackdrop } from './MenuBackdrop';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { mayCreateChannel, refreshCreatorAccess, useCreatorAccess } from '@/hooks/useCreatorAccess';
+import { mayCreateChannel, mayUpload, refreshCreatorAccess, useCreatorAccess } from '@/hooks/useCreatorAccess';
+import { studioUploadHref } from '@/lib/studio/links';
 import { useLanguage } from '@/hooks/useLanguage';
 import Link from '@/components/common/AppLink';
 import { login } from '@/lib/actions';
@@ -34,6 +35,7 @@ import {
   Users,
   PenLine,
   FileText,
+  Upload,
 } from 'lucide-react';
 import { ACCOUNT_MENU_PATHS } from '@/lib/navigation/destinations';
 import { useOptionalAuth } from '@/components/AuthProvider/authContext';
@@ -156,10 +158,21 @@ export function UnifiedNavigation() {
     setIsOpenState(open);
     setView('main');
   };
-  const canCreateChannel = mayCreateChannel(useCreatorAccess());
+  const creatorAccess = useCreatorAccess();
+  const canCreateChannel = mayCreateChannel(creatorAccess);
+  const canUpload = mayUpload(creatorAccess);
+  // The tier's channel limit is reached: say so where "Create channel" would be (channel_limit)
+  const channelLimit = creatorAccess.status === 'ready' && !creatorAccess.access.canCreateChannel && !creatorAccess.access.pendingDeletion
+    && creatorAccess.access.maxChannels !== null && creatorAccess.access.channelsOwned >= creatorAccess.access.maxChannels
+    ? creatorAccess.access.maxChannels
+    : null;
   const [isCreatingChannel, setIsCreatingChannel] = useState(false);
   const [newChannelName, setNewChannelName] = useState('');
   const [showLogoutAllConfirm, setShowLogoutAllConfirm] = useState(false);
+  // A create refused for the channel limit re-reads the tier: the form closes and the limit shows
+  useEffect(() => {
+    if (!canCreateChannel) setIsCreatingChannel(false);
+  }, [canCreateChannel]);
 
   // Handle Escape key to close menu
   useEffect(() => {
@@ -236,10 +249,6 @@ export function UnifiedNavigation() {
       { label: t.navigation.writeArticle, icon: PenLine, href: cms.write },
       { label: t.navigation.myArticles, icon: FileText, href: cms.articles },
     ] : []),
-    // Studio is the creator home: videos, scheduling and analytics all live there
-    ...(channels.length > 0 ? [
-      { label: t.studio.title, icon: Video, href: `/${lang}${ACCOUNT_MENU_PATHS.studio}` },
-    ] : []),
     { label: t.header.settings, icon: Settings, href: `/${lang}${ACCOUNT_MENU_PATHS.settings}` },
   ];
   // The other Al Ummah Now apps this account may open (docs/design/NAV.md), same order everywhere
@@ -267,7 +276,7 @@ export function UnifiedNavigation() {
     <span
       data-testid="nav-channel-role"
       title={t.channelRoles.yourRole.replace('{role}', t.channelRoles.roles[role])}
-      className="aun-acct-current flex-none"
+      className="aun-badge"
     >
       <span className="sr-only">{t.channelRoles.yourRole.replace('{role}', '')}</span>
       {t.channelRoles.roles[role]}
@@ -316,7 +325,7 @@ export function UnifiedNavigation() {
           />
           <div className="aun-menu" role="menu" data-testid="nav-menu" aria-orientation="vertical">
             {view === 'main' && <>
-            {/* Who: the account (to the profile) and, as context, the active channel */}
+            {/* 1. Who: the account (to the profile) */}
             <div data-testid="nav-active-context">
               <Link
                 data-testid="nav-profile-link"
@@ -330,29 +339,61 @@ export function UnifiedNavigation() {
                   {displayName !== user.email && <span className="aun-menu-who-sub" dir="auto">{user.email}</span>}
                 </span>
               </Link>
+            </div>
+            {sep}
+            {/* 2. The context slot (docs/design/NAV.md): the videos app's channel layer. The active
+                channel scopes Upload and Studio; switching channels never switches the account. */}
+            <div className="aun-menu-context" role="group" aria-labelledby="nav-channel-layer-label" data-testid="nav-channel-layer">
+              <span className="aun-menu-label" id="nav-channel-layer-label">{t.navigation.channelSection}</span>
               {channel ? (
                 <Link
                   data-testid="nav-active-channel"
                   href={`/${lang}/channels/${channel.id}`}
                   onClick={() => setIsOpen(false)}
-                  className="aun-menu-item"
+                  className="aun-menu-item aun-menu-context-current"
+                  role="menuitem"
                 >
                   <span className="relative flex-none">
-                    {avatar(channel.avatarUrl, getChannelName(channel.name, channel.nameLocalized)[0].toUpperCase(), 'aun-avatar--sm')}
+                    {avatar(channel.avatarUrl, getChannelName(channel.name, channel.nameLocalized)[0].toUpperCase())}
                     {channel.isMain && <Crown className="absolute -bottom-0.5 -end-0.5 h-2.5 w-2.5 rounded-full text-brand-ink" aria-hidden="true" />}
                   </span>
                   <span className="aun-menu-text" dir="auto">{getChannelName(channel.name, channel.nameLocalized)}</span>
                   {activeRole && activeRole !== 'owner' && roleBadge(activeRole)}
                 </Link>
               ) : (
-                <div data-testid="nav-no-active-channel" className="aun-menu-item aun-menu-who-sub" aria-disabled="true">
+                <div data-testid="nav-no-active-channel" className="aun-menu-item aun-menu-context-current aun-menu-who-sub" aria-disabled="true">
                   <Tv className="aun-menu-icon" aria-hidden="true" />
                   <span className="aun-menu-text">{t.navigation.noActiveChannel}</span>
                 </div>
               )}
+              <button type="button" onClick={() => setView('channels')} data-testid="nav-switch-channel" className="aun-menu-item" role="menuitem" aria-haspopup="menu">
+                <Tv className="aun-menu-icon" aria-hidden="true" />
+                <span className="aun-menu-text">{t.navigation.switchChannel}</span>
+                <ChevronRight className="aun-menu-icon aun-flip" aria-hidden="true" />
+              </button>
+              {/* Upload and Studio act on the active channel */}
+              {channel && canUpload && (
+                <Link href={studioUploadHref(lang, channel.id)} onClick={() => setIsOpen(false)} data-testid="nav-menu-upload" className="aun-menu-item" role="menuitem">
+                  <Upload className="aun-menu-icon" aria-hidden="true" />
+                  <span className="aun-menu-text">{t.upload.uploadVideo}</span>
+                </Link>
+              )}
+              {channels.length > 0 && (
+                <Link href={`/${lang}${ACCOUNT_MENU_PATHS.studio}`} onClick={() => setIsOpen(false)} data-testid="nav-menu-studio" className="aun-menu-item" role="menuitem">
+                  <Video className="aun-menu-icon" aria-hidden="true" />
+                  <span className="aun-menu-text">{t.studio.title}</span>
+                </Link>
+              )}
+              {/* No channel yet: creating one is right here (with channels it sits in the switcher) */}
+              {channels.length === 0 && canCreateChannel && (
+                <button type="button" onClick={() => { setView('channels'); setIsCreatingChannel(true); }} data-testid="nav-create-channel" className="aun-menu-item" role="menuitem">
+                  <Plus className="aun-menu-icon" aria-hidden="true" />
+                  <span className="aun-menu-text">{t.navigation.createChannel}</span>
+                </button>
+              )}
             </div>
             {sep}
-            {/* Accounts, then this app's own entries (switchers open in place) */}
+            {/* 3. Accounts in this browser (the list opens in place) */}
             <button type="button" onClick={() => setView('accounts')} data-testid="nav-switch-account" className="aun-menu-item" role="menuitem" aria-haspopup="menu">
               <Users className="aun-menu-icon" aria-hidden="true" />
               <span className="aun-menu-text">{t.header.switchAccount}</span>
@@ -372,11 +413,7 @@ export function UnifiedNavigation() {
               <span className="aun-menu-text">{t.navigation.addAnotherAccount}</span>
             </button>
             {sep}
-            <button type="button" onClick={() => setView('channels')} data-testid="nav-switch-channel" className="aun-menu-item" role="menuitem" aria-haspopup="menu">
-              <Tv className="aun-menu-icon" aria-hidden="true" />
-              <span className="aun-menu-text">{t.navigation.switchChannel}</span>
-              <ChevronRight className="aun-menu-icon aun-flip" aria-hidden="true" />
-            </button>
+            {/* 4. This app's own entries */}
             {navItems.map((item) => {
               const Icon = item.icon;
               return (
@@ -452,7 +489,11 @@ export function UnifiedNavigation() {
                   {!channel && <Check className="aun-menu-check" aria-hidden="true" />}
                 </button>
                 {/* Create Channel - Only for Active Account, and only with a creator tier that allows another channel */}
-                {!canCreateChannel ? null : !isCreatingChannel ? (
+                {channelLimit !== null ? (
+                  <p data-testid="nav-channel-limit" className="aun-menu-note" role="note">
+                    {t.creator.channelLimit.replace('{max}', String(channelLimit))}
+                  </p>
+                ) : !canCreateChannel ? null : !isCreatingChannel ? (
                   <button
                     type="button"
                     onClick={() => setIsCreatingChannel(true)}
@@ -464,8 +505,8 @@ export function UnifiedNavigation() {
                     <span className="aun-menu-text">{t.navigation.createChannel}</span>
                   </button>
                 ) : (
-                  <div className="p-2">
-                    <label className="aun-menu-label px-0" htmlFor="nav-new-channel-name">
+                  <div className="aun-menu-form">
+                    <label className="aun-menu-label" htmlFor="nav-new-channel-name">
                       {t.navigation.channelName}
                     </label>
                     <input
@@ -475,7 +516,7 @@ export function UnifiedNavigation() {
                       disabled={creatingChannel}
                       onChange={(e) => setNewChannelName(e.target.value)}
                       placeholder={t.navigation.enterChannelName}
-                      className="w-full rounded-md border border-[var(--fanous-color-outline)] bg-[var(--fanous-color-surface)] px-2 py-1.5 text-sm text-[var(--fanous-color-text-primary)]"
+                      className="aun-menu-input"
                       autoFocus
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
@@ -483,7 +524,7 @@ export function UnifiedNavigation() {
                         }
                       }}
                     />
-                    <div className="mt-2 flex gap-1.5">
+                    <div className="aun-menu-form-actions">
                       <button
                         type="button"
                         onClick={handleCreateChannel}
@@ -547,7 +588,7 @@ export function UnifiedNavigation() {
               </div>
             )}
             {/* Error Message */}
-            {error && (
+            {error && !(channelLimit !== null && error === t.errors.failedToCreate) && (
               <>
                 {sep}
                 <p className="aun-menu-who-sub px-3 py-2 text-[var(--fanous-color-error-text)]" role="alert">{error}</p>

@@ -65,21 +65,37 @@ There is one sign-out entry, inside the account menu. The header has no separate
 ## Account menu
 
 `<ul class="aun-menu" role="menu">` (or a plain disclosure list), opening under the button at its
-inline end. Sections, top to bottom, with `.aun-menu-sep` separators between them:
+inline end. Every app builds the same **base**. One app may add its own layer in one defined place,
+the **context slot**. Sections, top to bottom, with `.aun-menu-sep` separators between them:
 
-1. **Who** (`.aun-menu-who`): a large avatar, the name, and the email muted under it. Apps may add
-   one context line: the CMS role, or the videos active channel.
-2. **Your accounts** (`.aun-menu-label`), shown when the browser has 2 or more accounts. An app
-   whose menu also switches channels (videos) may open this list in place behind a "Switch
+| # | Section | Base or slot | Every app | Videos (web + Studio) |
+|---|---|---|---|---|
+| 1 | Who | base | yes | yes |
+| 2 | **Context slot** | slot | empty | the **channel layer** (below) |
+| 3 | Your accounts + Add another account | base | yes | yes ("Switch account ›" opens the list in place) |
+| 4 | This app | base | the app's own entries (≤ 4) | Write article / My articles (scholars), Settings |
+| 5 | Al Ummah Now apps | base | yes | yes |
+| 6 | Sign out | base | yes | yes |
+
+An app with nothing to put in the slot leaves it out, separator included. Its menu then has the
+base shape exactly (www, CMS, profile, videos admin, auth admin).
+
+1. **Who** (`.aun-menu-who`): a large avatar, the name, and the email muted under it. An app may
+   add one muted line here (the CMS role). Who never shows the channel; that is the slot's job.
+2. **Context slot** (`<div class="aun-menu-context" role="group" aria-labelledby>` with a
+   `.aun-menu-label`): one app-specific layer, see [Context slot](#context-slot-the-videos-channel-layer).
+3. **Your accounts** (`.aun-menu-label`), shown when the browser has 2 or more accounts. An app
+   whose menu also has a context layer (videos) may open this list in place behind a "Switch
    account ›" row; the rows look the same. Each row is `.aun-acct-row`:
    - the entry: avatar, name and email;
    - the current account is `aria-current="true"`, with a `.aun-menu-check` mark and the muted
      line "Current account";
    - any other account is a button, "Switch to {name}";
    - each row ends with a small `.aun-acct-signout` "Sign out" button, which confirms first.
-3. **Add another account**.
-4. **This app** (no label): the app's own entries, at most four. Videos: switch channel, Studio,
-   Settings, Write article (scholars). Profile: Manage sessions.
+
+   **Add another account** follows the accounts.
+4. **This app** (no label): the app's own entries, at most four. Videos: Write article, My
+   articles (scholars), Settings. Profile: Manage sessions.
 5. **Al Ummah Now apps** (label): links to the other apps the account may open, gated by role
    like each app's own guard. The current app is left out. The order and labels are fixed:
 
@@ -94,10 +110,46 @@ inline end. Sections, top to bottom, with `.aun-menu-sep` separators between the
 
    The role gates mirror the profile app's catalog (AlUmmahNowAuth `apps/profile/src/apps.ts`),
    which mirrors each app's own access guard. Videos and admin-web share
-   `apps/web/src/lib/navigation/app-links.ts`.
+   `packages/shared-types/src/app-links.ts`.
 
 6. **Sign out**: "Sign out" signs this account out. With two or more accounts, "Sign out of all
    accounts" (`.aun-menu-item--danger`) follows it and asks first in the in-app dialog.
+
+## Context slot: the videos channel layer
+
+Only the videos app (web and Studio) fills the slot. A channel belongs to an account: an account
+can own several channels and hold roles on other people's. The **active channel** scopes Upload
+and Studio. Switching channels never switches the account, and switching accounts brings that
+account's own channels and active channel.
+
+`<div class="aun-menu-context" role="group" aria-labelledby="…">`, label **Channel** / **القناة**, then
+in this order:
+
+| Row | What | When |
+|---|---|---|
+| Current channel (`.aun-menu-context-current`) | avatar + name, crown on the main channel, a `.aun-badge` role chip when the account is not the owner ("Channel admin"); links to the channel | a channel is active |
+| "No active channel" (muted, not a link) | | no channel is active |
+| **Switch channel ›** | opens the switcher in place (below) | always (an account without channels can still choose "Use without a channel") |
+| **Upload** | the upload page for the active channel (`/upload?channel=<id>`) | a channel is active and the account may upload (creator tier) |
+| **Studio** | the creator home, on the active channel | the account has at least one channel |
+| **Create channel** | opens the switcher with the create form | the account has no channel yet and may create one |
+
+**Switcher view** (in place, a back row "‹ Switch channel" at the top):
+1. "Your channels" (`.aun-menu-label`): the account's own channels; the active one checked (`aria-checked`, `.aun-menu-check`).
+2. "Channels you manage": channels where the account holds a role, each with its `.aun-badge`.
+3. "Use without a channel".
+4. **Create channel** (`.aun-menu-form` with `.aun-menu-input`), only while the tier allows another channel.
+   At the tier's limit (`channel_limit`: `channelsOwned >= maxChannels`), the row is replaced by
+   a `.aun-menu-note` "You can own up to {max} channels". A create the server refuses for the
+   limit (another tab used it up) reads the tier again, closes the form and shows the same note,
+   never a generic error. Without a creator tier (by invitation) there is neither Create nor the note.
+
+The header's own Upload button (beside the logo) stays: same target, disabled with "Create a
+channel to upload" when no channel is active.
+
+Coverage: `apps/web/e2e/themes/channel-layer.spec.ts` (two accounts with several channels each, the
+limit, a refused create, a viewer, the switcher's contrast in every theme), local, mocked API
+fixtures (`e2e/themes/mock-server.mjs` `CHANNEL_FIXTURES`).
 
 ## Menu surface (every menu from the header: account, theme, launcher, create)
 
@@ -113,6 +165,8 @@ inline end. Sections, top to bottom, with `.aun-menu-sep` separators between the
 | Section label | 0.75rem, weight 600, muted, never upper-cased (Arabic) |
 | Separator | 1px `--fanous-c-divider-line`, edge to edge |
 | Hover / pressed | `--fanous-c-menu-hover` |
+| Role chip (`.aun-badge`) | 11px, weight 600, pill, 1px menu border, muted text |
+| Note (`.aun-menu-note`) | 13px, muted, item padding; why an action is missing |
 | Focus | 2px `--fanous-color-focus-ring` outline, inset 2px |
 | Current / checked | `--fanous-c-menu-hover` fill, weight 600, `.aun-menu-check` at the end |
 | Danger | `--fanous-color-error-text` |
