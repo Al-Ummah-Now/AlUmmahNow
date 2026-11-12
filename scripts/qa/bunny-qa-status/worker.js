@@ -229,6 +229,44 @@ export default {
 		if (env.QA_LIBRARY_ID && libraryId !== env.QA_LIBRARY_ID) return Response.json({ error: `refusing library ${libraryId}: not QA (${env.QA_LIBRARY_ID})` }, { status: 403 });
 		const url = new URL(request.url);
 		try {
+			if (url.pathname === '/owners' && request.method === 'POST') {
+				// Who owns each video: record → profile → run account (e2e+<run>-<attempt>-<name>).
+				// Only run/seed/demo account tags are returned, never another address.
+				const { guids = [], titles = {} } = await request.json();
+				const buckets = { qa: [env.videos, env.profiles], stage: [env.videos_stage, env.profiles_stage] };
+				const profileCache = new Map();
+				const out = {};
+				for (let i = 0; i < guids.length; i += 25) {
+					await Promise.all(guids.slice(i, i + 25).map(async (guid) => {
+						const e = envOf(titles[guid] || '');
+						const [vb, pb] = buckets[e] || [];
+						if (!vb) return (out[guid] = { kind: 'other-env' });
+						const object = await vb.get(guid);
+						if (!object) return (out[guid] = { kind: 'no-record' });
+						let r = {};
+						try { r = await object.json(); } catch { return (out[guid] = { kind: 'unreadable' }); }
+						const deleted = r.isDeleted === true;
+						const uid = typeof r.userId === 'string' ? r.userId : '';
+						if (!uid) return (out[guid] = { kind: 'no-owner', deleted });
+						const ck = `${e}:${uid}`;
+						if (!profileCache.has(ck)) {
+							profileCache.set(ck, (async () => {
+								const p = await pb.get(uid);
+								if (!p) return '';
+								try { return String((await p.json()).email || '').toLowerCase(); } catch { return ''; }
+							})());
+						}
+						const email = await profileCache.get(ck);
+						const run = /^e2e\+(\d{1,20})-(\d{1,3})-([a-z0-9-]{1,63})@e2e\.alummahnow\.net$/.exec(email);
+						if (run) return (out[guid] = { kind: 'run', runId: run[1], attempt: run[2], account: run[3].replace(/-mw[a-z0-9]{8,}/, ''), deleted });
+						if (/^(qa|stage)-[a-z0-9-]+@delivered\.resend\.dev$/.test(email)) return (out[guid] = { kind: 'seed', account: email.split('@')[0], deleted });
+						if (/^demo-[a-z0-9-]+@delivered\.resend\.dev$/.test(email)) return (out[guid] = { kind: 'demo', account: email.split('@')[0], deleted });
+						if (/@e2e\.alummahnow\.net$/.test(email)) return (out[guid] = { kind: 'e2e-other', account: email.split('@')[0].replace(/\d{6,}/g, '#').slice(0, 40), deleted });
+						out[guid] = { kind: email ? 'other-user' : 'no-profile', deleted };
+					}));
+				}
+				return Response.json(out);
+			}
 			if (url.pathname === '/list') {
 				// Compact listing for the per-run census (no keys, no URLs)
 				const rows = [];
