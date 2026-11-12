@@ -23,7 +23,8 @@ export default defineConfig({
   expect: { timeout: 15_000 },
   reporter: process.env.CI ? [['github'], ['list']] : [['list']],
   outputDir: 'test-results-themes',
-  use: { baseURL, trace: 'off', screenshot: 'off', deviceScaleFactor: 1 },
+  // Colours are measured at rest: reduced motion here, and the harness also turns animations off while it measures
+  use: { baseURL, trace: 'off', screenshot: 'off', deviceScaleFactor: 1, reducedMotion: 'reduce' },
   projects: [
     { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } } },
     { name: 'phone', use: { ...devices['Pixel 7'] } },

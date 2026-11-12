@@ -28,7 +28,10 @@ for (const lang of LANGS) {
         expect(low, `low contrast:\n${low.map((t) => `${t.ratio}:1 ${t.fg} on ${t.bg} "${t.text}" (${t.selector})`).join('\n')}`).toEqual([]);
 
         // The unread badge on the bell (in the night header) is readable too
-        const badge = (await measureText(page, '[data-testid=notification-bell]')).filter((t) => t.ratio < 4.5);
+        // Measured at rest (the harness drops a text that changed while it was measured): it must be there
+        const bell = await measureText(page, '[data-testid=notification-bell]');
+        expect(bell.some((t) => t.selector.startsWith('notification-badge')), 'the badge was measured').toBe(true);
+        const badge = bell.filter((t) => t.ratio < 4.5);
         expect(badge, `badge: ${JSON.stringify(badge)}`).toEqual([]);
 
         // Read and unread rows differ by more than colour: the unread dot carries a name
