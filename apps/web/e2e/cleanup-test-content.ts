@@ -1,5 +1,6 @@
 /**
- * Deletes videos owned by the E2E test users (test-single/multi/none/scratch-*).
+ * Deletes videos owned by the E2E test users (test-single/multi/none/scratch-*)
+ * for good: to the trash, then purged (record, media and Bunny video).
  *
  * Only the stored E2E sessions (e2e/.auth/user-*.json) are used, and only
  * videos whose channelId is one of that user's own channels are deleted, so
@@ -38,9 +39,32 @@ export interface CleanupOptions {
   log?: (message: string) => void;
 }
 
+interface TrashItem { id: string; title: string; status: 'deleted' | 'queued' | 'purging' | 'purged' }
+
+/** A channel's trash (GET /api/channels/:id/content/deleted), every page. */
+async function listTrash(u: ReturnType<typeof userApi>, channelId: string, log: (message: string) => void): Promise<TrashItem[]> {
+  const items: TrashItem[] = [];
+  let cursor = '';
+  for (let page = 0; page < 50; page++) {
+    const res = await u.api.get<{ result?: { items?: TrashItem[]; cursor?: string | null } }>(
+      `/api/channels/${channelId}/content/deleted?limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
+      { token: u.token, channelId, allowStatus: [403, 404, 500, 503] },
+    );
+    if (res.status !== 200) {
+      log(`[cleanup] listing ${channelId}'s trash returned ${res.status}`);
+      break;
+    }
+    items.push(...(res.data.result?.items ?? []));
+    cursor = res.data.result?.cursor ?? '';
+    if (!cursor) break;
+  }
+  return items;
+}
+
 export async function cleanupTestVideos(opts: CleanupOptions): Promise<number> {
   const log = opts.log ?? (() => undefined);
   let deleted = 0;
+  let purged = 0;
 
   for (const user of opts.users ?? USERS) {
     if (!fs.existsSync(AUTH_STATE[user])) {
@@ -51,7 +75,6 @@ export async function cleanupTestVideos(opts: CleanupOptions): Promise<number> {
     await ensureFreshSession(AUTH_STATE[user]);
     const u = userApi(user);
     if (u.channelIds.length === 0) continue;
-
     const own = new Set(u.channelIds);
     const videos = (await listOwnVideos(u)).filter((v) => own.has(v.channelId));
     const cutoff = Date.now() - (opts.minAgeMs ?? 0);
@@ -60,9 +83,10 @@ export async function cleanupTestVideos(opts: CleanupOptions): Promise<number> {
       (v) => !(opts.keepSeed && SEED_TITLE_SET.has(v.title)) && createdAt(v as { dateCreated?: string }) <= cutoff,
     );
     log(`[cleanup] ${user}: ${videos.length} owned, ${targets.length} to delete`);
-    if (opts.dryRun || targets.length === 0) continue;
+    if (opts.dryRun) continue;
 
-    // bulk-delete is scoped to one channel per request
+    // bulk-delete is scoped to one channel per request. It only moves a video to
+    // the trash (restorable for 30 days, its Bunny video kept), so purge follows.
     const byChannel = new Map<string, string[]>();
     for (const v of targets) byChannel.set(v.channelId, [...(byChannel.get(v.channelId) || []), v.id]);
     for (const [channelId, ids] of byChannel) {
@@ -77,7 +101,31 @@ export async function cleanupTestVideos(opts: CleanupOptions): Promise<number> {
         else log(`[cleanup] bulk-delete returned ${res.status} for ${user}/${channelId}`);
       }
     }
+
+    // Delete permanently: everything in these channels' trash, which includes the
+    // videos specs deleted themselves through the UI and never show up in the owner
+    // search above. The purge (POST /api/videos/bulk-purge, queued for the next
+    // cleanup run) removes the record, its media and the Bunny video; without it the
+    // trash kept every run video in Bunny for 30 days (QA, 2026-11-11: ~4,000).
+    // With keepSeed, only what this pass deleted; the trash can't hold a seed video
+    // (seeds are never deleted) but the filter keeps that promise explicit.
+    const deletedNow = new Set(targets.map((v) => v.id));
+    for (const channelId of own) {
+      const trashed = await listTrash(u, channelId, log);
+      const ids = trashed.filter((t) => t.status === 'deleted' && (!opts.keepSeed || deletedNow.has(t.id) || !SEED_TITLE_SET.has(t.title))).map((t) => t.id);
+      for (let i = 0; i < ids.length; i += 50) {
+        const batch = ids.slice(i, i + 50);
+        const res = await u.api.post<{ summary?: { succeeded?: number } }>('/api/videos/bulk-purge', { videoIds: batch }, {
+          token: u.token,
+          channelId,
+          allowStatus: [400, 403, 404],
+        });
+        if (res.status < 300) purged += res.data.summary?.succeeded ?? 0;
+        else log(`[cleanup] bulk-purge returned ${res.status} for ${user}/${channelId}`);
+      }
+    }
   }
+  log(`[cleanup] ${deleted} moved to the trash, ${purged} queued for permanent deletion (record, media and Bunny video)`);
   return deleted;
 }
 
@@ -93,7 +141,7 @@ function withTimeout<T>(work: Promise<T>, ms: number, what: string): Promise<T> 
 
 /**
  * CI run mode (E2E_RUN_ID): the users are this job's own, so everything they
- * own goes. Their videos first (the owner delete also removes the Bunny video),
+ * own goes. Their videos first (trashed, then purged with their Bunny video),
  * then DELETE /api/privacy/data (the GDPR erase: profile, channels, playlists,
  * posts, history, subscriptions, likes; comments anonymised), repeated while
  * it reports `complete: false`. The workflow's teardown then deletes the
