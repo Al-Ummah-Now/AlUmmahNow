@@ -97,9 +97,14 @@ export function liveDeps(cf: CfClient): Deps {
 export async function checkWorker(entry: WorkerSecrets, deps: Deps): Promise<Finding[]> {
 	const base = { app: entry.app, env: entry.env, worker: entry.worker };
 	const out: Finding[] = [];
-	const bindings = await deps.bindings(entry.worker);
-	if (!bindings) return [{ ...base, ok: false, check: 'worker exists', detail: 'not deployed' }];
-	out.push({ ...base, ok: true, check: 'worker exists' });
+	const deployed = await deps.bindings(entry.worker);
+	// A new worker (never deployed) passes when this commit's config binds every required secret:
+	// its first deploy creates it, and the secrets are checked below against what the config binds
+	const firstDeploy = !deployed && (entry.required ?? []).length > 0 && !!deps.declared
+		&& (await Promise.all((entry.required ?? []).map((r) => deps.declared!(entry, r.name)))).every(Boolean);
+	if (!deployed && !firstDeploy) return [{ ...base, ok: false, check: 'worker exists', detail: 'not deployed' }];
+	out.push({ ...base, ok: true, check: 'worker exists', ...(firstDeploy ? { detail: 'not deployed yet; its first deploy creates it' } : {}) });
+	const bindings = deployed ?? [];
 
 	for (const req of entry.required ?? []) {
 		const b = bindings.find((x) => x.name === req.name);
