@@ -215,7 +215,11 @@ test.describe('Batch upload - playlists', () => {
     const defaults = page.getByTestId('batch-playlists-default');
     await defaults.getByTestId('batch-playlists-default-toggle').click();
     await defaults.getByTestId('batch-playlists-default-search').fill(`${prefix} all`);
-    await defaults.getByLabel(`${prefix} all`).check();
+    // The picker lists the channel's playlists with GET /api/playlists?channelId=, which
+    // scans the whole bucket: 13 s on a quiet QA, over 30 s under the E2E jobs (#909)
+    const allOption = defaults.getByLabel(`${prefix} all`);
+    await expect(allOption).toBeVisible({ timeout: 90_000 });
+    await allOption.check();
     await defaults.getByTestId('batch-playlists-default-new').click();
     await defaults.getByTestId('batch-playlists-default-name').fill(`${prefix} created`);
     await defaults.getByTestId('batch-playlists-default-create').click();
