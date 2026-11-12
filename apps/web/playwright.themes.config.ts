@@ -33,7 +33,7 @@ export default defineConfig({
       command: 'node e2e/themes/mock-server.mjs',
       url: `${MOCK_API}/api/profile`,
       reuseExistingServer: !process.env.CI,
-      env: { MOCK_API_PORT: String(mockPort) },
+      env: { MOCK_API_PORT: String(mockPort), THEMES_ORIGIN: new URL(baseURL).origin },
       stdout: 'ignore',
       stderr: 'pipe',
     },
