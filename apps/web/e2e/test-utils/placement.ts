@@ -139,6 +139,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/release/creator-tiers.spec.ts': { placement: 'local', reason: 'tier gating server+UI, admin-web tier control' },
   'apps/web/e2e/release/deploy-skew.spec.ts': { placement: 'local', reason: 'skew simulated by route interception against build under test' },
   'apps/web/e2e/release/display-name.spec.ts': { placement: 'local', reason: 'names-only profile shown by first + last in header, comment author, admin user list; fake encode suffices' },
+  'apps/web/e2e/release/embed-frame-sound.spec.ts': { placement: 'deployed', reason: 'media: own landscape/Short/square uploads encoded and played in a cross-origin embed (fill, night backdrop, sound after a click), Chrome + WebKit' },
   'apps/web/e2e/release/embed.player.spec.ts': { placement: 'local', reason: 'embed iframe/headers/oEmbed on fake origin via page.route' },
   'apps/web/e2e/release/errors.spec.ts': { placement: 'local', reason: 'dev error-test page + admin Errors page' },
   'apps/web/e2e/release/header-name.spec.ts': { placement: 'local', reason: 'header account menu names a names-only profile by first + last, en/ar' },

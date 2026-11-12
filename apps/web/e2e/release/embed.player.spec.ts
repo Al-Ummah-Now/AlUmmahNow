@@ -12,7 +12,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { target, releaseEnv } from './targets';
 import { findPlayableVideo, NO_PLAYABLE_VIDEO, watchUrl } from './videos';
-import { fixtureVideo } from './fixtures';
 import { fetchRetry } from './net';
 
 // Same scheme as the site under test: an https host page cannot frame the local stack's plain http (mixed content)
@@ -29,12 +28,12 @@ async function skipIfNotDeployedOnPr(): Promise<void> {
   test.skip(!(await embedDeployed()), '/embed is not deployed on the target yet (it lands with the PR that adds it)');
 }
 
-async function hostIframe(page: Page, src: string, size = { width: 640, height: 360 }): Promise<void> {
+async function hostIframe(page: Page, src: string): Promise<void> {
   await page.route(HOST_PAGE, (route) =>
     route.fulfill({
       contentType: 'text/html',
       body: `<!doctype html><html><body style="margin:0">
-        <iframe id="aun" src="${src}" width="${size.width}" height="${size.height}" allow="autoplay; fullscreen" style="border:0"></iframe>
+        <iframe id="aun" src="${src}" width="640" height="360" allow="autoplay; fullscreen" style="border:0"></iframe>
       </body></html>`,
     }),
   );
@@ -91,49 +90,4 @@ test.describe('Release: embeds', () => {
     expect(body).toMatchObject({ version: '1.0', type: 'video', provider_name: 'Al Ummah Now', aun_video_id: video!.id });
     expect(String(body.html)).toContain(`/embed/v/${video!.id}`);
   });
-
-  /*
-   * 2026-11-12, www home in Arabic, dark: an embed showed parchment bands above and below a
-   * 345x46 strip with pillarboxes (the theme's page background and `main { transparent }` beat
-   * the frame's black; the watch page's max-height 100dvh - 148px squashed the player). The
-   * host sizes the frame to the video (www: its aspect ratio); the player must fill it on black.
-   */
-  for (const { key, width, height } of [
-    { key: 'landscape', width: 345, height: 194 },
-    { key: 'landscape', width: 800, height: 450 },
-    { key: 'vertical', width: 216, height: 384 },
-  ] as const) {
-    for (const scheme of ['dark', 'light'] as const) {
-      test(`the player fills a ${width}x${height} frame on the night colour (${key}, ${scheme})`, async ({ page }, testInfo) => {
-        const video = await fixtureVideo(key);
-        await page.emulateMedia({ colorScheme: scheme });
-        await hostIframe(page, `${target().web}/embed/v/${video.id}?lang=ar&autoplay=1`, { width, height });
-        const frame = page.frameLocator('#aun');
-        const player = frame.locator('.custom-video-player');
-        await expect(player).toBeVisible({ timeout: 45000 });
-        const embed = page.frame({ url: /\/embed\/v\// })!;
-        const look = () =>
-          embed.evaluate(() => {
-            const bg = (el: Element | null) => (el ? getComputedStyle(el).backgroundColor : '');
-            const p = document.querySelector('.custom-video-player')!.getBoundingClientRect();
-            // the theme's night colour (--fanous-c-nav-bg), dark in every theme and mode
-            const night = getComputedStyle(document.documentElement).getPropertyValue('--fanous-c-nav-bg').trim();
-            const probe = document.createElement('i');
-            probe.style.color = night;
-            document.body.append(probe);
-            const nightRgb = getComputedStyle(probe).color;
-            probe.remove();
-            const [r, g, b] = (nightRgb.match(/\d+/g) ?? ['255', '255', '255']).map(Number);
-            const dark = 0.2126 * r! + 0.7152 * g! + 0.0722 * b! < 80;
-            const all = [bg(document.documentElement), bg(document.body), bg(document.querySelector('main'))];
-            return { backdrop: all.every((c) => c === nightRgb) && dark, w: Math.round(p.width), h: Math.round(p.height) };
-          });
-        if (process.env.GITHUB_EVENT_NAME === 'pull_request' && !(await look()).backdrop) {
-          testInfo.annotations.push({ type: 'skip', description: 'this build predates the embed frame fill (components/embed/embed-frame.css)' });
-          test.skip(true, 'this build predates the embed frame fill');
-        }
-        await expect.poll(look, { timeout: 15000 }).toEqual({ backdrop: true, w: width, h: height });
-      });
-    }
-  }
 });

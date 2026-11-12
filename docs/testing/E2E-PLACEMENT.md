@@ -43,12 +43,12 @@ Until a batch is moved, every spec still runs where it runs today; the local job
 | Suite | Config | Local | Deployed |
 |---|---|---:|---:|
 | web | `apps/web/playwright.config.ts` (e2e-tests.yml) | 61 | 1 |
-| release | `apps/web/playwright.release.config.ts` (release-e2e.yml, release.yml) | 59 | 7 |
+| release | `apps/web/playwright.release.config.ts` (release-e2e.yml, release.yml) | 59 | 8 |
 | admin | `apps/admin-web/playwright.config.ts` (admin-e2e.yml) | 24 | 0 |
 | themes | `apps/web/playwright.themes.config.ts` (theme-visibility.yml) | 5 | 0 |
 | player | `apps/web/playwright.player.config.ts` (player-e2e.yml) | 10 | 0 |
 | release-prod | `apps/web/playwright.release-prod.config.ts` (prod-signed-in.yml) | 0 | 1 |
-| **all** | | **159** | **9** |
+| **all** | | **159** | **10** |
 
 ## Deployed (QA and stage)
 
@@ -62,6 +62,7 @@ Until a batch is moved, every spec still runs where it runs today; the local job
 
 | Spec | Reason | @load |
 |---|---|:---:|
+| `release/embed-frame-sound.spec.ts` | media: own landscape/Short/square uploads encoded and played in a cross-origin embed (fill, night backdrop, sound after a click), Chrome + WebKit |  |
 | `release/load-hot-paths.spec.ts` | pipeline: DO view flush + queue/processor into D1 under real load | yes |
 | `release/player.spec.ts` | media: an anonymous watch page plays the real Bunny/CDN HLS stream |  |
 | `release/processing.player.spec.ts` | bunny: real upload, processing-check loop to real encode, thumbnail, CDN playback |  |

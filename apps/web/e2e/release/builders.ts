@@ -52,6 +52,8 @@ export const CLIPS = {
   landscape40: { file: 'e2e-sample-40s.mp4', duration: 40 },
   /** 90x160 portrait: a Short */
   vertical: { file: 'e2e-sample-vertical.mp4', duration: 4 },
+  /** 240x240: a square video */
+  square: { file: 'e2e-sample-square.mp4', duration: 4 },
 } as const;
 export type Clip = keyof typeof CLIPS;
 
