@@ -12,7 +12,11 @@ import {
 } from './test-utils/e2e-videos';
 
 /**
- * Video edit page (/[locale]/video/[id]/edit) E2E tests.
+ * The video editor, which lives in Studio: /[locale]/studio/video/{id}/edit
+ * (the watch page's owner link; the old /[locale]/video/{id}/edit 301s here)
+ * redirects to /[locale]/studio/{channelId}/content/videos/{id}/edit. Save and
+ * Cancel return to the channel's Studio video list. English and Arabic titles
+ * and descriptions sit side by side (no language tabs).
  *
  * Saving goes through a server action to the real QA API, so tests that save
  * edit a disposable video they upload themselves; read-only tests open the
@@ -28,8 +32,15 @@ test.beforeAll(async () => {
   seed = await ensureSeedVideos('single');
 });
 
+/** The Studio editor's own URL, once /studio/video/{id}/edit has resolved the video's channel */
+const editorUrl = (video: E2EVideo, locale: 'en' | 'ar' = 'en') =>
+  new RegExp(`/${locale}/studio/[^/]+/content/videos/${video.id}/edit$`);
+/** The Studio video list that Save and Cancel return to (filters may ride along in the query) */
+const STUDIO_LIST = /\/en\/studio\/[^/]+\/content\/videos(\?.*)?$/;
+
 async function openEditor(page: Page, video: E2EVideo, locale: 'en' | 'ar' = 'en') {
-  await page.goto(`/${locale}/video/${video.id}/edit`);
+  await page.goto(`/${locale}/studio/video/${video.id}/edit`);
+  await expect(page).toHaveURL(editorUrl(video, locale));
   await expect(page.getByTestId('video-edit-form')).toBeVisible();
   // Let the session/profile checks that run after hydration finish before
   // editing, so a late re-render cannot race the test's input
@@ -38,9 +49,9 @@ async function openEditor(page: Page, video: E2EVideo, locale: 'en' | 'ar' = 'en
 }
 
 /**
- * Saves and waits for the outcome: the success message, which is shown for
- * ~1.5s before the page moves on to the video page. Either one proves the
- * save went through; tests verify the stored values through the API.
+ * Saves and waits for the outcome: the success message, or the Studio video
+ * list the editor returns to right after. Either one proves the save went
+ * through; tests verify the stored values through the API.
  */
 async function save(page: Page) {
   const saveButton = page.getByTestId('video-edit-save');
@@ -49,7 +60,7 @@ async function save(page: Page) {
   const succeeded = await expect(page.getByTestId('video-edit-success'))
     .toBeVisible({ timeout: 15000 })
     .then(() => true, () => false);
-  if (!succeeded) await expect(page).toHaveURL(/\/video\?vid=/);
+  if (!succeeded) await expect(page).toHaveURL(STUDIO_LIST);
 }
 
 test.describe('Video Edit - read only', () => {
@@ -63,30 +74,27 @@ test.describe('Video Edit - read only', () => {
     await expect(page.getByTestId('video-edit-unsaved')).toHaveCount(0);
   });
 
-  test('should switch between language tabs', async ({ page }) => {
+  test('should show the English and Arabic fields side by side', async ({ page }) => {
     await openEditor(page, seed[SEED_TITLES.singleVideo]);
 
-    await page.getByTestId('video-edit-tab-ar').click();
-    await expect(page.getByTestId('video-edit-tab-ar')).toHaveAttribute('aria-selected', 'true');
-    await expect(page.getByTestId('video-edit-title-ar')).toBeVisible();
-    await expect(page.getByTestId('video-edit-title-ar')).toHaveAttribute('dir', 'rtl');
-    await expect(page.getByTestId('video-edit-title-en')).toHaveCount(0);
-
-    await page.getByTestId('video-edit-tab-en').click();
-    await expect(page.getByTestId('video-edit-title-en')).toBeVisible();
+    for (const field of ['title', 'description']) {
+      await expect(page.getByTestId(`video-edit-${field}-en`)).toBeVisible();
+      await expect(page.getByTestId(`video-edit-${field}-en`)).toHaveAttribute('dir', 'ltr');
+      await expect(page.getByTestId(`video-edit-${field}-ar`)).toBeVisible();
+      await expect(page.getByTestId(`video-edit-${field}-ar`)).toHaveAttribute('dir', 'rtl');
+      await expect(page.getByTestId(`video-edit-${field}-ar`)).toHaveAttribute('lang', 'ar');
+    }
   });
 
-  test('should preserve unsaved changes when switching tabs', async ({ page }) => {
+  test('should keep unsaved edits in both languages', async ({ page }) => {
     await openEditor(page, seed[SEED_TITLES.singleVideo]);
 
     await page.getByTestId('video-edit-title-en').fill('Edited but not saved');
-    await page.getByTestId('video-edit-tab-ar').click();
     await page.getByTestId('video-edit-title-ar').fill('تعديل غير محفوظ');
-    await page.getByTestId('video-edit-tab-en').click();
 
     await expect(page.getByTestId('video-edit-title-en')).toHaveValue('Edited but not saved');
-    await page.getByTestId('video-edit-tab-ar').click();
     await expect(page.getByTestId('video-edit-title-ar')).toHaveValue('تعديل غير محفوظ');
+    await expect(page.getByTestId('video-edit-unsaved')).toBeVisible();
   });
 
   test('typing in the form keeps every key: the preview player does not take Space, F or M', async ({ page }) => {
@@ -127,7 +135,6 @@ test.describe('Video Edit - read only', () => {
     await openEditor(page, seed[SEED_TITLES.singleVideo]);
 
     await page.getByTestId('video-edit-title-en').fill('');
-    await page.getByTestId('video-edit-tab-ar').click();
     await page.getByTestId('video-edit-title-ar').fill('');
     await page.getByTestId('video-edit-save').click();
 
@@ -142,7 +149,7 @@ test.describe('Video Edit - read only', () => {
 
     await page.getByTestId('video-edit-cancel').click();
     await page.getByTestId('video-edit-discard-cancel').click();
-    await expect(page).toHaveURL(new RegExp(`/video/${video.id}/edit`));
+    await expect(page).toHaveURL(editorUrl(video));
     await expect(page.getByTestId('video-edit-title-en')).toHaveValue('Unsaved title');
   });
 
@@ -153,7 +160,7 @@ test.describe('Video Edit - read only', () => {
 
     await page.getByTestId('video-edit-cancel').click();
     await page.getByTestId('video-edit-discard-confirm').click();
-    await expect(page).toHaveURL(new RegExp(`/en/video\\?vid=${video.id}`));
+    await expect(page).toHaveURL(STUDIO_LIST);
 
     const stored = await getVideo(userApi('single'), video.id);
     expect(stored?.title).toBe(SEED_TITLES.singleVideo);
@@ -164,17 +171,18 @@ test.describe('Video Edit - read only', () => {
     await openEditor(page, video);
 
     await page.getByTestId('video-edit-cancel').click();
-    await expect(page).toHaveURL(new RegExp(`/en/video\\?vid=${video.id}`));
+    await expect(page).toHaveURL(STUDIO_LIST);
     await expect(page.getByTestId('video-edit-discard')).toHaveCount(0);
   });
 
   test('should show an error when the save request fails', async ({ page }) => {
     const video = seed[SEED_TITLES.singleVideo];
     await openEditor(page, video);
-    await page.getByTestId('video-edit-description-en').fill('This save is aborted by the test');
+    // Unique, so the form is dirty even if an earlier attempt's save got through
+    await page.getByTestId('video-edit-description-en').fill(`This save is aborted by the test ${Date.now()}`);
 
-    // Server actions are POSTed by the browser to the page URL; fail them
-    await page.route(`**/video/${video.id}/edit`, (route) =>
+    // Server actions are POSTed by the browser to the page URL (the Studio editor); fail them
+    await page.route(`**/content/videos/${video.id}/edit`, (route) =>
       route.request().method() === 'POST' ? route.abort('failed') : route.continue(),
     );
     await page.getByTestId('video-edit-save').click();
@@ -199,7 +207,6 @@ test.describe('Video Edit - read only', () => {
     await openEditor(page, seed[SEED_TITLES.singleVideo], 'ar');
 
     await expect(page.locator('div[dir="rtl"]').first()).toBeVisible();
-    await page.getByTestId('video-edit-tab-ar').click();
     await expect(page.getByTestId('video-edit-title-ar')).toHaveValue('فيديو اختبار');
   });
 });
@@ -208,9 +215,10 @@ test.describe('Video Edit - ownership', () => {
   test.use({ storageState: AUTH_STATE.multi });
 
   test('should refuse to edit another user\'s video', async ({ page }) => {
-    await page.goto(`/en/video/${seed[SEED_TITLES.singleVideo].id}/edit`);
+    // Studio answers "not found" for a channel the user has no role on (it does not reveal it exists)
+    await page.goto(`/en/studio/video/${seed[SEED_TITLES.singleVideo].id}/edit`);
 
-    await expect(page.getByTestId('video-edit-page-error')).toBeVisible();
+    await expect(page.getByTestId('not-found-page')).toBeVisible();
     await expect(page.getByTestId('video-edit-form')).toHaveCount(0);
   });
 });
@@ -231,7 +239,6 @@ test.describe('Video Edit - saving', () => {
 
     await page.getByTestId('video-edit-title-en').fill('E2E edited title');
     await page.getByTestId('video-edit-description-en').fill('E2E edited description');
-    await page.getByTestId('video-edit-tab-ar').click();
     await page.getByTestId('video-edit-title-ar').fill('عنوان معدل');
     await page.getByTestId('video-edit-description-ar').fill('وصف معدل');
     await save(page);
@@ -279,11 +286,11 @@ test.describe('Video Edit - saving', () => {
     expect(tags).not.toContain('sabr');
   });
 
-  test('should return to the video page after saving', async ({ page }) => {
+  test('should return to the Studio video list after saving', async ({ page }) => {
     await openEditor(page, video!);
 
     await page.getByTestId('video-edit-title-en').fill('E2E saved and redirected');
     await save(page);
-    await expect(page).toHaveURL(new RegExp(`/en/video\\?vid=${video!.id}`));
+    await expect(page).toHaveURL(STUDIO_LIST);
   });
 });
