@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- test doubles read arbitrary frames */
 /**
  * The admin's live socket (docs/admin/LIVE_OPS.md §B.5): authenticate, subscribe
  * one topic at a time, deliver updates, back off and reconnect, re-authenticate
