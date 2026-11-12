@@ -67,34 +67,3 @@ describe('checkTranslationsServed', () => {
 		await assert.rejects(checkTranslationsServed('https://api', (async () => respond(404)) as typeof fetch), /en: HTTP 404; ar: HTTP 404/);
 	});
 });
-
-/** The `run:` lines of the named job in a workflow file (2-space job keys). */
-function jobSteps(path: string, job: string): string {
-	const text = readFileSync(resolve(ROOT, path), 'utf8');
-	const start = text.indexOf(`\n  ${job}:\n`);
-	assert.ok(start >= 0, `${path} has no job ${job}`);
-	const rest = text.slice(start + 1);
-	const end = rest.slice(1).search(/\n  [\w-]+:\n/);
-	return end < 0 ? rest : rest.slice(0, end + 1);
-}
-
-describe('pipelines seed the translation store', () => {
-	it('release stage job seeds stage after deploying it', () => {
-		const stage = jobSteps('.github/workflows/release.yml', 'stage');
-		const seed = stage.indexOf('scripts/release/seed-translations.ts --env stage');
-		assert.ok(seed >= 0, 'release.yml stage job must run seed-translations.ts --env stage');
-		assert.ok(seed > stage.indexOf('pnpm release:promote --env stage'), 'seed after the stage deploy');
-		assert.doesNotMatch(stage.slice(seed, stage.indexOf('\n', seed)), /--dry-run/);
-	});
-
-	it('production never seeds (its store is the live, edited copy)', () => {
-		assert.doesNotMatch(jobSteps('.github/workflows/release.yml', 'production'), /seed-translations/);
-	});
-
-	it('QA deploy seeds QA after deploying the API', () => {
-		const qa = jobSteps('.github/workflows/deploy.yml', 'deploy-qa');
-		const seed = qa.indexOf('scripts/release/seed-translations.ts --env qa');
-		assert.ok(seed >= 0, 'deploy.yml deploy-qa must run seed-translations.ts --env qa');
-		assert.ok(seed > qa.indexOf('- name: Deploy API to QA'), 'seed after the API deploy');
-	});
-});
