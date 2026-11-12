@@ -1,5 +1,5 @@
 /**
- * The name copies on report rows (migration 0017): item title, parent, channel,
+ * The name copies on report rows (migration 0020): item title, parent, channel,
  * owner, reporter and moderator names. The reports queue searches and shows
  * them without a call per row.
  *
