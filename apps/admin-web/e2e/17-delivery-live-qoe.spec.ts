@@ -6,7 +6,7 @@
  * report takes it off "now". The beats are this run's own sessions; the live
  * object keeps nothing longer than 48 hours.
  */
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/fixtures';
 import { ADMIN_WEB_URL, VIDEOS_API_URL, storageStatePath } from './support/env';
 
 const VIDEO_ID = 'e2e-live-qoe-video';
