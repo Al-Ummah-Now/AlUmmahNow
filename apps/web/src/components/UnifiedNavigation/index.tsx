@@ -13,8 +13,7 @@ import { useState, useEffect } from 'react';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { MenuBackdrop } from './MenuBackdrop';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { mayCreateChannel, mayUpload, refreshCreatorAccess, useCreatorAccess } from '@/hooks/useCreatorAccess';
-import { studioUploadHref } from '@/lib/studio/links';
+import { mayCreateChannel, refreshCreatorAccess, useCreatorAccess } from '@/hooks/useCreatorAccess';
 import { useLanguage } from '@/hooks/useLanguage';
 import Link from '@/components/common/AppLink';
 import { login } from '@/lib/actions';
@@ -25,6 +24,7 @@ import {
   Check,
   Plus,
   LogOut,
+  LogIn,
   User,
   Tv,
   Crown,
@@ -32,10 +32,8 @@ import {
   Settings,
   ChevronRight,
   ArrowLeft,
-  Users,
   PenLine,
   FileText,
-  Upload,
 } from 'lucide-react';
 import { ACCOUNT_MENU_PATHS } from '@/lib/navigation/destinations';
 import { useOptionalAuth } from '@/components/AuthProvider/authContext';
@@ -46,7 +44,7 @@ import { buildChannelMenu } from '@/lib/channels/menu';
 import type { ChannelRole } from '@al-ummah/shared-types';
 import { userDisplayName } from '@/lib/display-name';
 
-type MenuView = 'main' | 'channels' | 'accounts';
+type MenuView = 'main' | 'channels';
 
 export function UnifiedNavigation() {
   // Get language context and translations
@@ -160,7 +158,6 @@ export function UnifiedNavigation() {
   };
   const creatorAccess = useCreatorAccess();
   const canCreateChannel = mayCreateChannel(creatorAccess);
-  const canUpload = mayUpload(creatorAccess);
   // The tier's channel limit is reached: say so where "Create channel" would be (channel_limit)
   const channelLimit = creatorAccess.status === 'ready' && !creatorAccess.access.canCreateChannel && !creatorAccess.access.pendingDeletion
     && creatorAccess.access.maxChannels !== null && creatorAccess.access.channelsOwned >= creatorAccess.access.maxChannels
@@ -283,6 +280,7 @@ export function UnifiedNavigation() {
     </span>
   );
   const displayName = getDisplayName();
+  const otherAccounts = accounts.filter((a) => !a.isActive);
   const initial = (displayName[0] || user.email[0] || '?').toUpperCase();
   const avatar = (src: string | undefined | null, letter: string, size = '') =>
     src ? (
@@ -327,7 +325,10 @@ export function UnifiedNavigation() {
             {view === 'main' && <>
             {/* 1. Who: the account (to the profile) */}
             <div data-testid="nav-active-context">
+              {/* The current account is only here (the Google pattern): the other accounts follow under "More accounts" */}
+              <div data-testid="nav-account" data-active="true" data-local="true" data-email={user.email}>
               <Link
+                role="menuitem"
                 data-testid="nav-profile-link"
                 href={`/${lang}/profile`}
                 onClick={() => setIsOpen(false)}
@@ -339,10 +340,11 @@ export function UnifiedNavigation() {
                   {displayName !== user.email && <span className="aun-menu-who-sub" dir="auto">{user.email}</span>}
                 </span>
               </Link>
+              </div>
             </div>
             {sep}
             {/* 2. The context slot (docs/design/NAV.md): the videos app's channel layer. The active
-                channel scopes Upload and Studio; switching channels never switches the account. */}
+                channel scopes Studio and the header Upload; switching channels never switches the account. */}
             <div className="aun-menu-context" role="group" aria-labelledby="nav-channel-layer-label" data-testid="nav-channel-layer">
               <span className="aun-menu-label" id="nav-channel-layer-label">{t.navigation.channelSection}</span>
               {channel ? (
@@ -371,13 +373,7 @@ export function UnifiedNavigation() {
                 <span className="aun-menu-text">{t.navigation.switchChannel}</span>
                 <ChevronRight className="aun-menu-icon aun-flip" aria-hidden="true" />
               </button>
-              {/* Upload and Studio act on the active channel */}
-              {channel && canUpload && (
-                <Link href={studioUploadHref(lang, channel.id)} onClick={() => setIsOpen(false)} data-testid="nav-menu-upload" className="aun-menu-item" role="menuitem">
-                  <Upload className="aun-menu-icon" aria-hidden="true" />
-                  <span className="aun-menu-text">{t.upload.uploadVideo}</span>
-                </Link>
-              )}
+              {/* Studio acts on the active channel; uploading lives in the header and in Studio (owner review rev 5) */}
               {channels.length > 0 && (
                 <Link href={`/${lang}${ACCOUNT_MENU_PATHS.studio}`} onClick={() => setIsOpen(false)} data-testid="nav-menu-studio" className="aun-menu-item" role="menuitem">
                   <Video className="aun-menu-icon" aria-hidden="true" />
@@ -393,12 +389,43 @@ export function UnifiedNavigation() {
               )}
             </div>
             {sep}
-            {/* 3. Accounts in this browser (the list opens in place) */}
-            <button type="button" onClick={() => setView('accounts')} data-testid="nav-switch-account" className="aun-menu-item" role="menuitem" aria-haspopup="menu">
-              <Users className="aun-menu-icon" aria-hidden="true" />
-              <span className="aun-menu-text">{t.header.switchAccount}</span>
-              <ChevronRight className="aun-menu-icon aun-flip" aria-hidden="true" />
-            </button>
+            {/* 3. More accounts: the other accounts in this browser, then Add another account */}
+            {otherAccounts.length > 0 && (
+              <div role="group" aria-labelledby="nav-more-accounts-label" data-testid="nav-more-accounts">
+                <span className="aun-menu-label" id="nav-more-accounts-label">{t.navigation.moreAccounts}</span>
+                {otherAccounts.map((account) => {
+                  const accountAvatar = getAccountAvatar(account.userId) ?? account.avatarUrl;
+                  const name = account.displayName?.trim() || account.email;
+                  return (
+                    <div key={account.userId} className="aun-acct-row" data-testid="nav-account" data-active="false" data-local={account.hasLocalSession === false ? 'false' : 'true'} data-email={account.email}>
+                      <button
+                        type="button"
+                        onClick={() => { switchAccount(account.userId); setIsOpen(false); }}
+                        aria-label={t.navigation.switchToAccount.replace('{name}', name)}
+                        className="aun-menu-item"
+                        role="menuitem"
+                      >
+                        {avatar(accountAvatar, name[0]?.toUpperCase() ?? '?')}
+                        <span className="aun-acct-text">
+                          <span className="aun-acct-label" dir="auto">{name}</span>
+                          {name !== account.email && <span className="aun-acct-email" dir="auto">{account.email}</span>}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); removeAccount(account.userId); }}
+                        className="aun-acct-signout"
+                        data-testid="nav-account-sign-out"
+                        aria-label={`${t.navigation.signOutOf} ${name}`}
+                        title={`${t.navigation.signOutOf} ${name}`}
+                      >
+                        <LogOut className="aun-flip" aria-hidden="true" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             <button
               type="button"
               onClick={() => {
@@ -409,7 +436,7 @@ export function UnifiedNavigation() {
               className="aun-menu-item"
               role="menuitem"
             >
-              <Plus className="aun-menu-icon" aria-hidden="true" />
+              <LogIn className="aun-menu-icon aun-flip" aria-hidden="true" />
               <span className="aun-menu-text">{t.navigation.addAnotherAccount}</span>
             </button>
             {sep}
@@ -429,6 +456,7 @@ export function UnifiedNavigation() {
                 <span className="aun-menu-label" id="nav-apps-label">{t.navigation.appsSection}</span>
                 {otherApps.map((app) => (
                   <a key={app.id} href={app.href} className="aun-menu-item" role="menuitem" data-app={app.id}>
+                    <span className="aun-app-icon" data-app={app.id} aria-hidden="true" />
                     <span className="aun-menu-text">{appLabel[app.id]}</span>
                   </a>
                 ))}
@@ -547,44 +575,6 @@ export function UnifiedNavigation() {
                     </div>
                   </div>
                 )}
-              </div>
-            )}
-            {view === 'accounts' && (
-              <div role="group" aria-label={t.header.switchAccount}>
-                {backRow(t.header.switchAccount)}
-                {accounts.map((account) => {
-                  const accountAvatar = getAccountAvatar(account.userId) ?? account.avatarUrl;
-                  const name = account.displayName?.trim() || account.email;
-                  const count = account.channelsCount || 0;
-                  return (
-                    <div key={account.userId} className="aun-acct-row" data-testid="nav-account" data-active={account.isActive ? 'true' : 'false'} data-local={account.hasLocalSession === false ? 'false' : 'true'} data-email={account.email}>
-                      <button
-                        type="button"
-                        onClick={() => { if (!account.isActive) { switchAccount(account.userId); setIsOpen(false); } }}
-                        disabled={account.isActive}
-                        aria-current={account.isActive ? 'true' : undefined}
-                        aria-label={account.isActive ? undefined : t.navigation.switchToAccount.replace('{name}', name)}
-                        className="aun-menu-item"
-                        role="menuitem"
-                      >
-                        {avatar(accountAvatar, name[0]?.toUpperCase() ?? '?')}
-                        <span className="aun-acct-text">
-                          <span className="aun-acct-label" dir="auto">{name}</span>
-                          {/* Signed in to the browser but not here yet: its email (switching signs it in) */}
-                          <span className="aun-acct-email" dir="auto">
-                            {account.isActive ? t.navigation.currentAccount : account.hasLocalSession === false ? account.email : <>{count} {count === 1 ? t.navigation.channel : t.navigation.channels}</>}
-                          </span>
-                        </span>
-                        {account.isActive && <Check className="aun-menu-check" aria-hidden="true" />}
-                      </button>
-                      {!account.isActive && accounts.length > 1 && (
-                        <button type="button" onClick={(e) => { e.stopPropagation(); removeAccount(account.userId); }} className="aun-acct-signout" aria-label={t.navigation.removeAccount}>
-                          {t.navigation.signOut}
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
               </div>
             )}
             {/* Error Message */}

@@ -126,9 +126,10 @@ test.describe('Unified Navigation - English (LTR)', () => {
     const { channels } = readAccount('single');
     const menu = await openAccountMenu(page);
 
-    // The account list is a submenu behind "Switch Account"
-    await expect(menu.getByTestId('nav-switch-account')).toHaveText('Switch Account');
-    await expect(menu.getByTestId('nav-switch-account')).toHaveAttribute('aria-haspopup', 'menu');
+    // The current account is the top of the menu (docs/design/NAV.md); with one account there is no
+    // "More accounts" list and no submenu
+    await expect(menu.getByTestId('nav-switch-account')).toHaveCount(0);
+    await expect(menu.getByTestId('nav-more-accounts')).toHaveCount(0);
     await showMenuView(menu, 'account');
     await expect(menu.getByTestId('nav-account')).toHaveCount(1);
     await showMenuView(menu, 'account');
@@ -228,7 +229,7 @@ test.describe('Unified Navigation - Arabic (RTL)', () => {
     const menu = await openAccountMenu(page);
 
     await expect(menu.getByTestId('nav-switch-channel')).toHaveText('تبديل القناة');
-    await expect(menu.getByTestId('nav-switch-account')).toHaveText('تبديل الحساب');
+    await expect(menu.getByTestId('nav-add-account')).toHaveText('إضافة حساب آخر');
     await expect(menu.getByRole('menuitem', { name: 'الاستوديو' })).toHaveAttribute('href', '/ar/studio');
     await showMenuView(menu, 'main');
     await expect(menu.locator('a[role="menuitem"][href="/ar/settings"]')).toBeVisible();

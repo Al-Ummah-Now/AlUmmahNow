@@ -6,7 +6,9 @@
   "type": "module",
   "scripts": {
     "build": "node --experimental-strip-types --no-warnings src/cli.ts",
-    "test": "node --experimental-strip-types --no-warnings --test test/*.test.ts"
+    "test": "node --experimental-strip-types --no-warnings --test test/*.test.ts",
+    "nav-icons": "node --experimental-strip-types --no-warnings src/nav-icons.ts",
+    "check:nav-icons": "node --experimental-strip-types --no-warnings src/nav-icons.ts --check"
   },
   "devDependencies": {
     "sharp": "0.34.5"

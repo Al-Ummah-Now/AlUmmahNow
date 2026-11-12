@@ -78,19 +78,21 @@ test('two accounts with several channels: the channel layer sits in the shared s
   await expect.poll(async () => {
     const ids = await order(page);
     const at = (id: string) => ids.indexOf(id);
-    return [at('nav-profile-link'), at('nav-channel-layer'), at('nav-switch-account'), at('nav-add-account'), at('nav-apps'), at('nav-sign-out')].join(',');
+    return [at('nav-profile-link'), at('nav-channel-layer'), at('nav-add-account'), at('nav-apps'), at('nav-sign-out')].join(',');
   }).toMatch(/^\d+,\d+,\d+,\d+,\d+,\d+$/);
   const ids = await order(page);
-  const sequence = ['nav-profile-link', 'nav-channel-layer', 'nav-active-channel', 'nav-switch-channel', 'nav-menu-upload', 'nav-menu-studio', 'nav-switch-account', 'nav-add-account', 'nav-apps', 'nav-sign-out', 'nav-sign-out-all'];
+  const sequence = ['nav-profile-link', 'nav-channel-layer', 'nav-active-channel', 'nav-switch-channel', 'nav-menu-studio', 'nav-more-accounts', 'nav-add-account', 'nav-apps', 'nav-sign-out', 'nav-sign-out-all'];
   expect(sequence.map((id) => ids.indexOf(id))).toEqual([...sequence.map((id) => ids.indexOf(id))].sort((a, b) => a - b));
 
   const layer = menu.getByTestId('nav-channel-layer');
   await expect(layer).toHaveAttribute('role', 'group');
   await expect(layer).toHaveAccessibleName('Channel');
-  // The active channel (avatar + name) links to it; Upload goes to the upload page for that channel
+  // The active channel (avatar + name) links to it. No Upload in the menu (owner review rev 5, the
+  // YouTube pattern): the header's Upload, first in the action cluster, goes to that channel's upload
   await expect(layer.getByTestId('nav-active-channel')).toContainText('Hadith Circle');
   await expect(layer.getByTestId('nav-active-channel')).toHaveAttribute('href', '/en/channels/a2');
-  await expect(layer.getByTestId('nav-menu-upload')).toHaveAttribute('href', '/en/upload?channel=a2');
+  await expect(menu.getByTestId('nav-menu-upload')).toHaveCount(0);
+  await expect(page.locator('.ah-end [data-testid="header-upload"]').first()).toHaveAttribute('href', '/en/upload?channel=a2');
   await expect(layer.getByTestId('nav-menu-studio')).toHaveAttribute('href', '/en/studio');
 
   // Switching channels lists this account's channels only (owned, then managed with the role), never the other account's own
@@ -106,13 +108,18 @@ test('two accounts with several channels: the channel layer sits in the shared s
   await expect(menu.getByTestId('nav-create-channel')).toHaveCount(0);
   await expect(menu.getByTestId('nav-channel-limit')).toHaveText('You can own up to 2 channels');
 
-  // Switching accounts is its own list: both accounts, Aisha current
+  // Accounts (the Google pattern): Aisha, current, is the top of the menu; Omar is under "More accounts"
+  // with a sign-out icon button; switching channels never touched that list
   await menu.getByTestId('nav-menu-back').click();
-  await menu.getByTestId('nav-switch-account').click();
   const rows = menu.getByTestId('nav-account');
   await expect(rows).toHaveCount(2);
-  await expect(rows.filter({ hasText: 'Aisha Rahman' })).toHaveAttribute('data-active', 'true');
-  await expect(rows.filter({ hasText: 'Omar Khalid' })).toHaveAttribute('data-active', 'false');
+  await expect(menu.getByTestId('nav-active-context').getByTestId('nav-account')).toHaveAttribute('data-active', 'true');
+  const more = menu.getByTestId('nav-more-accounts').getByTestId('nav-account');
+  await expect(more).toHaveCount(1);
+  await expect(more).toContainText('Omar Khalid');
+  await expect(more.getByTestId('nav-account-sign-out')).toHaveAccessibleName('Sign out of Omar Khalid');
+  // Each other app shows its own icon
+  await expect(menu.locator('[data-testid="nav-apps"] .aun-app-icon').first()).toHaveCSS('background-image', /data:image\/webp/);
 });
 
 test('an account that may create channels gets Create in the switcher', async ({ page, context, baseURL }) => {
@@ -121,7 +128,8 @@ test('an account that may create channels gets Create in the switcher', async ({
   await page.goto('/ar');
   const menu = await openMenu(page);
   await expect(menu.getByTestId('nav-channel-layer')).toHaveAccessibleName('القناة');
-  await expect(menu.getByTestId('nav-menu-upload')).toHaveAttribute('href', '/ar/upload?channel=b2');
+  await expect(menu.getByTestId('nav-menu-upload')).toHaveCount(0);
+  await expect(page.locator('.ah-end [data-testid="header-upload"]').first()).toHaveAttribute('href', '/ar/upload?channel=b2');
   await menu.getByTestId('nav-switch-channel').click();
   await expect(menu.getByTestId('nav-channel-group-owned').getByTestId('nav-channel-option')).toHaveCount(3);
   await expect(menu.getByTestId('nav-channel-group-managed')).toHaveCount(0);
@@ -144,7 +152,7 @@ test('a create refused for the channel limit closes the form and shows the limit
   await expect(menu.getByText('Failed to create', { exact: false })).toHaveCount(0);
 });
 
-test('a viewer (no channel, no creator tier) keeps the layer without Upload, Studio or Create', async ({ page, context, baseURL }) => {
+test('a viewer (no channel, no creator tier) keeps the layer without Studio or Create', async ({ page, context, baseURL }) => {
   await signInAs(context, baseURL!, 'viewer', null);
   await mockApi(page);
   await page.goto('/en');

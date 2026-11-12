@@ -13,9 +13,10 @@ import type { Page } from '@playwright/test';
 const HOME_LINK = { en: /Al Ummah Now/, ar: /الأمة الآن/ } as const;
 
 /**
- * The top bar reads: menu button, logo, Upload, search, then bell and account.
- * Upload sits after the logo link and before the search box (the search button
- * on phones): to the right of the logo in LTR, to its left in RTL.
+ * The top bar reads: menu button, logo, search, then the action cluster: Upload, bell, account
+ * (docs/design/NAV.md; owner review rev 5). Upload is the first item of the cluster, after the
+ * search: to its right in LTR, to its left in RTL. A deployed build from before still has Upload
+ * right after the logo, so that layout passes too until this ships.
  */
 async function expectUploadAfterLogo(page: Page, lang: 'en' | 'ar', rtl: boolean): Promise<void> {
   const banner = page.getByRole('banner');
@@ -24,7 +25,18 @@ async function expectUploadAfterLogo(page: Page, lang: 'en' | 'ar', rtl: boolean
   const searchInput = banner.getByTestId('header-search-input');
   const search = await ((await searchInput.isVisible()) ? searchInput : banner.getByTestId('header-search-open')).boundingBox();
   if (!logo || !upload || !search) throw new Error('header controls not laid out');
-  if (rtl) {
+  const inCluster = (await banner.locator('.ah-end [data-testid="header-upload"]').count()) > 0;
+  if (inCluster) {
+    const bell = await banner.getByTestId('notification-bell').boundingBox();
+    if (rtl) {
+      expect(upload.x + upload.width, 'Upload follows the search (RTL)').toBeLessThanOrEqual(search.x + 1);
+      if (bell) expect(bell.x + bell.width, 'the bell follows Upload (RTL)').toBeLessThanOrEqual(upload.x + 1);
+    } else {
+      expect(upload.x, 'Upload follows the search').toBeGreaterThanOrEqual(search.x + search.width - 1);
+      if (bell) expect(bell.x, 'the bell follows Upload').toBeGreaterThanOrEqual(upload.x + upload.width - 1);
+    }
+    expect(upload.height, 'Upload is no taller than a header control').toBeLessThanOrEqual(44.5);
+  } else if (rtl) {
     expect(upload.x + upload.width, 'Upload follows the logo (RTL)').toBeLessThanOrEqual(logo.x + 1);
     expect(search.x + search.width, 'search follows Upload (RTL)').toBeLessThanOrEqual(upload.x + 1);
   } else {
@@ -111,12 +123,14 @@ test.describe('Header - channel owner', () => {
       // A 44px icon button; the label is visually hidden but stays its accessible name
       await expect(upload).toHaveAccessibleName('Upload Video');
       const box = await upload.boundingBox();
-      const label = await upload.getByText('Upload Video').boundingBox();
+      // The visible label is the short "Upload" since the shared nav ("Upload Video" before; the name stays)
+      const label = await upload.getByText(/^Upload( Video)?$/).boundingBox();
       expect(Math.round(box!.width)).toBe(44);
       expect(label!.width).toBeLessThanOrEqual(1);
       expect(label!.height).toBeLessThanOrEqual(1);
     } else {
-      await expect(upload).toContainText('Upload Video');
+      await expect(upload).toContainText(/Upload( Video)?/);
+      await expect(upload).toHaveAccessibleName('Upload Video');
     }
   });
 });

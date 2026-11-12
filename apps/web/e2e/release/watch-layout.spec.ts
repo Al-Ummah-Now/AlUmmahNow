@@ -100,7 +100,8 @@ async function expectHeader(page: Page, locale: Locale, width: number): Promise<
       ['logo', header?.querySelector('.ah-brand') ?? null],
       ['upload', document.querySelector('[data-testid="header-upload"]')],
       ['search', header?.querySelector('.ah-search-wrap .ah-search, [data-testid="header-search-open"]') ?? null],
-      ...[...(end?.children ?? [])].map((c, i) => [`end-${i}`, c] as [string, Element]),
+      // The end cluster's other children (Upload sits in it since the shared nav; it is listed by name above)
+      ...[...(end?.children ?? [])].filter((c) => !c.querySelector('[data-testid="header-upload"]') && c.getAttribute('data-testid') !== 'header-upload').map((c, i) => [`end-${i}`, c] as [string, Element]),
     ];
     return named.map(([name, el]) => ({ name, box: box(el) })).filter((i) => i.box);
   });

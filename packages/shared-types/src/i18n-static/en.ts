@@ -93,6 +93,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
   },
 
   navigation: {
+    moreAccounts: 'More accounts',
     channelSection: 'Channel',
     appsSection: 'Al Ummah Now apps',
     appWww: 'Website',

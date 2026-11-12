@@ -82,11 +82,11 @@ test.describe('THEME-NAV structure', () => {
     await trigger.click();
     const menu = page.getByTestId('nav-menu');
     const order = await menu.evaluate((m) => {
-      const ids = ['nav-profile-link', 'nav-channel-layer', 'nav-switch-channel', 'nav-switch-account', 'nav-add-account', 'nav-apps', 'nav-sign-out'];
+      const ids = ['nav-profile-link', 'nav-channel-layer', 'nav-switch-channel', 'nav-add-account', 'nav-apps', 'nav-sign-out'];
       const all = Array.from(m.querySelectorAll('[data-testid]')).map((el) => el.getAttribute('data-testid'));
       return ids.map((id) => all.indexOf(id));
     });
-    // who → the app's context slot (the channel layer) → accounts → add account → other apps → sign out
+    // who → the app's context slot (the channel layer) → more accounts → add account → other apps → sign out
     expect(order.every((i) => i >= 0), `sections present: ${order}`).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     // The other apps, never this one; "Website" first

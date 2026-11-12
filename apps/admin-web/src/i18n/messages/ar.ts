@@ -100,6 +100,7 @@ const ar: Messages = {
     arabic: 'العربية',
   },
   accounts: {
+    more: 'حسابات أخرى',
     current: 'الحساب الحالي',
     switchTo: 'التبديل إلى {name}',
     apps: 'تطبيقات الأمة الآن',
