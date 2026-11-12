@@ -60,13 +60,11 @@ jobs:
         with:
           version: 9.15.4
 
+      # No dependency cache: this job checks out a second repo, and a cache written here would be
+      # trusted by default-branch runs (CodeQL actions/cache-poisoning)
       - uses: actions/setup-node@v6
         with:
           node-version: '22'
-          cache: pnpm
-          cache-dependency-path: |
-            pnpm-lock.yaml
-            .local-stack/repos/auth/pnpm-lock.yaml
 
       - name: Install
         run: pnpm install --frozen-lockfile
@@ -113,13 +111,43 @@ jobs:
       - name: Smoke
         run: node --experimental-strip-types --no-warnings scripts/local-stack/smoke.ts
 
+      - uses: ./.github/actions/playwright-install
+        with:
+          browsers: chromium
+          working-directory: apps/web
+
+      # The deterministic fixtures: the QA seed (e2e/seed/seed-qa.ts) run against the stack. Accounts
+      # sign up through the real local issuer (codes from its E2E sink), videos are real TUS uploads
+      # that the fake Bunny encodes, roles and tiers go through the stack's local SQL endpoint.
+      - name: Seed
+        working-directory: apps/web
+        run: |
+          start=$(date +%s)
+          npx tsx e2e/seed/seed-qa.ts
+          echo "SEED_SECONDS=$(( $(date +%s) - start ))" >> "$GITHUB_ENV"
+        env:
+          CI: true
+          SEED_STRICT: 'true'
+          SEED_MEDIA_DIR: ${{ runner.temp }}/seed-media
+          SEED_PROCESSING_TIMEOUT_SECONDS: '120'
+          SEED_EMAIL_DOMAIN: e2e.alummahnow.net
+          QA_SEED_PASSWORD: local-stack-seed-password-1
+          E2E_CODE_SINK_SECRET: local-stack-sink-secret
+          OPENAUTH_URL: http://localhost:3301
+          WEB_APP_URL: http://localhost:3001
+          API_URL: http://localhost:3086
+          OPENAUTH_CLIENT_ID: f0de3c30-0304-4ac4-86d6-1e185dec0439
+          SEED_D1_URL: http://127.0.0.1:3190/__stack/d1
+          D1_DATABASE_NAME: al-ummah-now-d1
+          SEARCH_D1_DATABASE_NAME: al-ummah-now-search
+
       - name: Boot timings
         if: always()
         run: |
           {
             echo "### Local stack"
             echo
-            echo "Auth at \`${{ steps.refs.outputs.auth_sha }}\` (last release). Builds: ${BUILD_SECONDS:-n/a}."
+            echo "Auth at \`${{ steps.refs.outputs.auth_sha }}\` (last release). Builds: ${BUILD_SECONDS:-n/a}. Seed: ${SEED_SECONDS:-n/a} s."
             echo
             if [ -f .local-stack/stack.json ]; then
               node -e 'const s=require("./.local-stack/stack.json");console.log("| step | seconds |\n|---|---:|");for(const[k,v]of Object.entries(s.timings))console.log(`| ${k} | ${(v/1000).toFixed(1)} |`);console.log("\n| app | url | health |\n|---|---|---:|");for(const[k,a]of Object.entries(s.apps))console.log(`| ${k} | ${a.url} | ${a.health} |`)'

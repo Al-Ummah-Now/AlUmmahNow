@@ -21,6 +21,8 @@ listens on its own port:
 | Auth issuer | 3301 | AlUmmahNowAuth `apps/auth`, at its last released commit |
 | Auth profile app | 3302 | AlUmmahNowAuth `apps/profile` |
 | Auth admin dashboard | 3303 | AlUmmahNowAuth `apps/admin` (React Router build) |
+| Fake CDN + control API | 3190 | `scripts/local-stack/fake-external.ts` |
+| Browser proxy | 3191 | `scripts/local-stack/browser-proxy.ts` |
 
 - **Configs.** `scripts/local-stack/configs.ts` generates a local-only wrangler config per app
   (`wrangler.local-stack.json`, gitignored) from the app's top-level wrangler file. It keeps the
@@ -42,6 +44,30 @@ listens on its own port:
   - everything else is refused with 502 and logged. That covers QA, production and paid AI.
 
   The processor's AI steps are off.
+- **Fakes** (`scripts/local-stack/fake-external.ts`), registered with the outbound router:
+  - **Bunny Stream** (`video.bunnycdn.com`): videos and TUS uploads, with offsets kept for resumes.
+    A completed upload is "processing", then becomes encoded after `FAKE_BUNNY_ENCODE_MS` (default
+    2000), with the duration and size read from the MP4. `FAKE_BUNNY_ENCODE=manual` holds encodes
+    until a test asks for one.
+  - **Bunny CDN** (`vz-local-stack.b-cdn.net`): the player's HLS fixtures (the short one for vertical
+    videos), thumbnails and MP4s. Encoded videos only; before the encode it answers 404, like Bunny.
+  - **Bunny Storage and the image host** (`images.alummahnow.net`).
+  - **Resend**: emails are kept, never sent.
+- **Control API.** `http://127.0.0.1:3190` (loopback only) has:
+  - `GET /__fake/bunny/videos[/<guid>]`;
+  - `POST /__fake/bunny/videos/<guid>/encode|fail|hold`;
+  - `GET /__fake/resend/emails`;
+  - `POST /__stack/d1/<database name>`, which runs the request body as SQL. The seed uses it for roles
+    and creator tiers, and specs that are not about auth can use it as a fast path.
+- **The browser's proxy** (`scripts/local-stack/browser-proxy.ts`, `http://127.0.0.1:3191`): Playwright
+  runs on the local stack with `proxy` set to it and with `ignoreHTTPSErrors`. HTTPS to a faked host is
+  terminated there with a throwaway self-signed certificate and answered by the same fakes. Localhost
+  is passed through, and everything else is refused. Pages keep their real CDN URLs, no spec changes,
+  in every browser, and a local run can never load QA or production.
+- **Fixtures.** The QA seed (`apps/web/e2e/seed/seed-qa.ts`) runs against the stack. Its accounts sign
+  up through the real local issuer, with codes from the sink. Its videos are real TUS uploads that the
+  fake Bunny encodes. Roles and tiers go through `SEED_D1_URL`. The data is the same on every run (see
+  the Seed step in `local-stack.yml` for the environment).
 - **Values.** Every secret is a local test value (`LOCAL_SECRETS` in `stack.ts`).
 
 ## Run it

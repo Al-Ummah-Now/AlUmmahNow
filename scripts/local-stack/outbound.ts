@@ -16,7 +16,7 @@ export const FAKES = new Map<string, FakeHandler>();
 
 export const refused: string[] = [];
 
-function fakeFor(hostname: string): FakeHandler | undefined {
+export function fakeFor(hostname: string): FakeHandler | undefined {
   const exact = FAKES.get(hostname);
   if (exact) return exact;
   for (const [key, handler] of FAKES) if (key.startsWith('.') && (hostname === key.slice(1) || hostname.endsWith(key))) return handler;
