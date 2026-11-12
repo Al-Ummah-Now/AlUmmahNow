@@ -31,7 +31,7 @@ export interface Report {
   created_at: string;
   updated_at?: string | null;
   resolved_at?: string | null;
-  /** Copies for the reports queue search (migration 0017), filled after the report is filed. */
+  /** Copies for the reports queue search (migration 0020), filled after the report is filed. */
   entity_title?: string | null;
   entity_parent_id?: string | null;
   channel_id?: string | null;
