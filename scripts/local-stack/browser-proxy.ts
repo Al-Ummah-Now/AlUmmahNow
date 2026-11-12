@@ -6,7 +6,9 @@
  * https://images.alummahnow.net/…). In every browser, without touching a spec:
  * - CONNECT to a faked host: TLS is terminated here with a throwaway self-signed certificate and
  *   the request is answered by the same fake the workers use (fake-external.ts);
- * - plain HTTP (and CONNECT) to localhost: passed through to the stack;
+ * - plain HTTP (and CONNECT) to localhost: passed through to the stack (browsers bypass the proxy
+ *   for localhost anyway: `bypass: 'localhost,127.0.0.1'`);
+ * - public static CDNs (PUBLIC_STATIC_HOSTS): tunnelled unchanged;
  * - anything else: refused (502), so a local run can never load QA, production or a third party.
  */
 import { execFileSync } from 'node:child_process';
@@ -19,6 +21,18 @@ import { fakeFor } from './outbound.ts';
 import { PORTS, STATE_DIR } from './stack.ts';
 
 const LOCAL = new Set(['localhost', '127.0.0.1']);
+/**
+ * Public, read-only static CDNs the pages load scripts, styles and fonts from (not QA, not
+ * production, nothing paid): tunnelled to the real host unchanged.
+ */
+export const PUBLIC_STATIC_HOSTS = new Set([
+  'cdnjs.cloudflare.com',
+  'unpkg.com',
+  'cdn.jsdelivr.net',
+  'fonts.googleapis.com',
+  'fonts.gstatic.com',
+  'assets.mediadelivery.net',
+]);
 /** Only the stack's own ports are reachable through the proxy. */
 const STACK_PORTS = new Set<number>(Object.values(PORTS));
 
@@ -122,6 +136,16 @@ export function startBrowserProxy(): Promise<() => Promise<void>> {
         return;
       }
       const upstream = connect(Number(port), '127.0.0.1', () => {
+        socket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+        if (head.length) upstream.write(head);
+        upstream.pipe(socket);
+        socket.pipe(upstream);
+      });
+      upstream.on('error', () => socket.destroy());
+      return;
+    }
+    if (PUBLIC_STATIC_HOSTS.has(host) && port === '443') {
+      const upstream = connect(443, host, () => {
         socket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
         if (head.length) upstream.write(head);
         upstream.pipe(socket);
