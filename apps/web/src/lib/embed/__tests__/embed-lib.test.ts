@@ -21,8 +21,8 @@ import {
 import { buildEvent, embedderOrigin, parseCommand, resolvePartnerOrigin } from '../messaging';
 import { buildOEmbed, fitSize, parseContentUrl } from '../oembed';
 import { viewContextFromBatch } from '../view-context';
-import { buildWatchMetadata } from '../watch-metadata';
-import { posterFor, toEmbedVideo } from '../content';
+import { buildWatchMetadata, declaredPlayerSize } from '../watch-metadata';
+import { posterFor, toEmbedVideo, videoAspect } from '../content';
 import { isEmbedPath, isOEmbedPath } from '../routes';
 import { embedStrings, fill } from '../strings';
 
@@ -222,6 +222,13 @@ describe('oEmbed', () => {
     expect(fitSize('1000', '300')).toEqual({ width: 533, height: 300 });
     expect(fitSize('50', null)).toEqual({ width: 200, height: 113 });
     expect(fitSize('abc', '-4')).toEqual({ width: 640, height: 360 });
+    // a Short (9:16): tall, never a 16:9 box
+    expect(fitSize(null, null, 9 / 16)).toEqual({ width: 360, height: 640 });
+    expect(fitSize('5000', '5000', 9 / 16)).toEqual({ width: 720, height: 1280 });
+    expect(fitSize('550', '550', 9 / 16)).toEqual({ width: 309, height: 550 });
+    // square
+    expect(fitSize(null, null, 1)).toEqual({ width: 640, height: 640 });
+    expect(fitSize('500', '400', 1)).toEqual({ width: 400, height: 400 });
   });
 
   it('builds a valid oEmbed 1.0 video response', () => {
@@ -316,6 +323,27 @@ describe('buildWatchMetadata', () => {
 
   it('adds nothing for unavailable videos', () => {
     expect(buildWatchMetadata(null, 'en', HOST)).toEqual({});
+  });
+
+  it("declares the video's own ratio: a Short is 9:16, so X gives it a tall card (2026-11-12)", () => {
+    const short = toEmbedVideo({ id: 's1', title: 'Short', playUrl: 'https://vz/t/s1/playlist.m3u8', isPublic: true, width: 720, height: 1280, isShort: true });
+    const meta = buildWatchMetadata(short, 'en', HOST);
+    expect(meta.twitter).toMatchObject({ card: 'player', players: [{ playerUrl: expect.stringContaining('/embed/v/s1'), width: 405, height: 720 }] });
+    expect(meta.openGraph).toMatchObject({ videos: [{ type: 'text/html', width: 405, height: 720 }] });
+    // a Short flag with no size is still 9:16; a square is square; unknown stays 1280x720
+    expect(declaredPlayerSize({ isShort: true })).toEqual({ width: 405, height: 720 });
+    expect(declaredPlayerSize({ width: 1080, height: 1080 })).toEqual({ width: 720, height: 720 });
+    expect(declaredPlayerSize({ width: 427, height: 240 })).toEqual({ width: 1280, height: 719 });
+    expect(declaredPlayerSize({})).toEqual({ width: 1280, height: 720 });
+  });
+});
+
+describe('player box ratio', () => {
+  it('videoAspect: the encoded size, else 9:16 for a Short, else unknown', () => {
+    expect(videoAspect({ width: 1280, height: 720 })).toBeCloseTo(16 / 9);
+    expect(videoAspect({ isShort: true })).toBeCloseTo(9 / 16);
+    expect(videoAspect({})).toBeNull();
+    expect(toEmbedVideo({ id: 'v', playUrl: 'https://vz/t/v/playlist.m3u8', isPublic: true, width: 0, height: 720 })).not.toHaveProperty('width');
   });
 });
 

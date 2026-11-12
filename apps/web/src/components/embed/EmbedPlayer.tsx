@@ -28,6 +28,7 @@ import type { EmbedParams } from '@/lib/embed/params';
 import { embedStrings, fill } from '@/lib/embed/strings';
 import { formatTimestamp } from '@/lib/embed/snippets';
 import type { EmbedVideo } from '@/lib/embed/content';
+import { videoAspect } from '@/lib/embed/aspect';
 import type { ExtendedPlayer } from '@/lib/video/videojs';
 import type { AnalyticsContext } from '@al-ummah/shared-types';
 import { useEmbedMessaging } from './useEmbedMessaging';
@@ -44,10 +45,18 @@ function titleOf(video: EmbedVideo, lang: string): string {
   return removeUnwantedChars(video.titleLocalized?.[lang] || video.title || '');
 }
 
-/** Largest 16:9 box that fits the frame */
-const PLAYER_BOX_STYLE = { width: 'min(100vw, calc(100vh * 16 / 9))' } as const;
-/** Inline: the @tailwindcss/aspect-ratio plugin replaces the core aspect-video utility */
-const FACADE_STYLE = { aspectRatio: '16 / 9' } as const;
+/**
+ * The player box: the largest box at the video's own ratio that fits the frame, centred (a Short
+ * in X's wide card fills the height; the "Watch on" link and the controls belong to that box, so
+ * they sit on the video, not on the page). Unknown size: the whole frame. embed-frame.css reads
+ * --box-w / --box-h.
+ */
+function playerBoxStyle(aspect: number | null): React.CSSProperties {
+  if (!aspect) return {};
+  const a = aspect.toFixed(4);
+  return { ['--box-w' as string]: `min(100vw, calc(100vh * ${a}))`, ['--box-h' as string]: `min(100vh, calc(100vw / ${a}))` } as React.CSSProperties;
+}
+const FACADE_STYLE = { width: '100%', height: '100%' } as const;
 
 export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerProps) {
   const { lang } = params;
@@ -215,7 +224,7 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
         data-video-id={video.id}
         className="relative w-screen h-screen bg-black text-white overflow-hidden flex items-center justify-center"
       >
-        <div className="relative" style={PLAYER_BOX_STYLE}>
+        <div className="relative" style={playerBoxStyle(videoAspect(video))} data-fit={videoAspect(video) ? 'video' : 'frame'}>
           {activated ? (
             <VideoPlayerWithChapters
               key={video.id}

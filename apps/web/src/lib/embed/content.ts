@@ -28,6 +28,10 @@ export interface EmbedVideo {
   hasChapters?: boolean;
   /** Which source the API chose for playUrl (a label; the player only plays playUrl) */
   delivery?: { source: 'bunny' | 'r2' };
+  /** Encoded size (the player box and the declared card / oEmbed sizes follow its ratio) */
+  width?: number;
+  height?: number;
+  isShort?: boolean;
 }
 
 export interface EmbedPlaylist {
@@ -58,6 +62,9 @@ interface ApiVideo {
   uploadStatus?: string;
   hasChapters?: boolean;
   delivery?: { source?: string };
+  width?: number;
+  height?: number;
+  isShort?: boolean;
 }
 
 function apiBase(): string {
@@ -79,6 +86,10 @@ export function posterFor(playUrl: string | undefined, thumbnailUrl: string | un
  * not public, removed, or nothing to play yet. The API already hides
  * non-public videos from anonymous callers; this is defence in depth.
  */
+const positiveSize = (v: unknown) => typeof v === 'number' && Number.isFinite(v) && v > 0;
+
+export { videoAspect } from './aspect';
+
 export function toEmbedVideo(video: ApiVideo | null | undefined): EmbedVideo | null {
   if (!video || !video.id || !video.playUrl) return null;
   if (video.isPublic === false || video.isDeleted === true || video.isHidden === true) return null;
@@ -97,6 +108,8 @@ export function toEmbedVideo(video: ApiVideo | null | undefined): EmbedVideo | n
     channelName: video.channelName,
     channelHandle: video.channelHandle ?? null,
     hasChapters: video.hasChapters === true || undefined,
+    ...(positiveSize(video.width) && positiveSize(video.height) ? { width: Number(video.width), height: Number(video.height) } : {}),
+    ...(video.isShort === true ? { isShort: true } : {}),
     ...(video.delivery?.source === 'r2' || video.delivery?.source === 'bunny' ? { delivery: { source: video.delivery.source } } : {}),
   };
 }

@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger-server';
-import { loadPublicPlaylist, loadPublicVideo, localizedTitle } from '@/lib/embed/content';
+import { loadPublicPlaylist, loadPublicVideo, localizedTitle, videoAspect } from '@/lib/embed/content';
 import { buildOEmbed, fitSize, parseContentUrl, type OEmbedContent } from '@/lib/embed/oembed';
 import { channelPath } from '@/lib/channel-url';
 import { requestOrigin } from '@/lib/embed/request-origin';
@@ -39,12 +39,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const ref = parseContentUrl(url, new URL(origin).host);
   if (!ref) return json({ error: 'URL not recognised' }, 404);
 
-  const size = fitSize(searchParams.get('maxwidth'), searchParams.get('maxheight'));
+  let size = fitSize(searchParams.get('maxwidth'), searchParams.get('maxheight'));
   let content: OEmbedContent | null = null;
 
   if (ref.kind === 'video') {
     const video = await loadPublicVideo(ref.id);
     if (video) {
+      // the video's own ratio (a Short is 9:16), not always 16:9
+      size = fitSize(searchParams.get('maxwidth'), searchParams.get('maxheight'), videoAspect(video));
       content = {
         title: localizedTitle(video, 'en'),
         authorName: video.channelName || undefined,

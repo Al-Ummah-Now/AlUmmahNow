@@ -55,10 +55,29 @@ function positiveInt(value: string | null): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-/** Largest 16:9 size within maxwidth/maxheight, capped at 1280×720, at least 200×113. */
-export function fitSize(maxwidthRaw: string | null, maxheightRaw: string | null): EmbedSize {
+/**
+ * Largest size at the video's ratio (default 16:9) within maxwidth/maxheight. Landscape: capped
+ * at 1280 wide, at least 200 wide (unchanged for 16:9: 1280x720 .. 200x113, default 640x360).
+ * Taller than wide (a Short, 9:16): capped at 1280 tall, at least 200 tall, default 360x640.
+ */
+export function fitSize(maxwidthRaw: string | null, maxheightRaw: string | null, aspect: number | null = null): EmbedSize {
   const maxwidth = positiveInt(maxwidthRaw);
   const maxheight = positiveInt(maxheightRaw);
+  const a = aspect && Number.isFinite(aspect) && aspect > 0 ? aspect : 16 / 9;
+  if (a < 1) {
+    if (maxwidth === null && maxheight === null) return { width: Math.round(640 * a), height: 640 };
+    let height = Math.min(1280, maxheight ?? 1280);
+    if (maxwidth !== null) height = Math.min(height, Math.floor(maxwidth / a));
+    height = Math.max(MIN_SIZE.width, height);
+    return { width: Math.round(height * a), height };
+  }
+  if (a !== 16 / 9) {
+    if (maxwidth === null && maxheight === null) return { width: DEFAULT_SIZE.width, height: Math.round(DEFAULT_SIZE.width / a) };
+    let width = Math.min(MAX_SIZE.width, maxwidth ?? MAX_SIZE.width);
+    if (maxheight !== null) width = Math.min(width, Math.floor(maxheight * a));
+    width = Math.max(MIN_SIZE.width, width);
+    return { width, height: Math.round(width / a) };
+  }
   if (maxwidth === null && maxheight === null) return { ...DEFAULT_SIZE };
   let width = Math.min(MAX_SIZE.width, maxwidth ?? MAX_SIZE.width);
   if (maxheight !== null) width = Math.min(width, Math.floor((maxheight * 16) / 9));
@@ -109,8 +128,10 @@ export function buildOEmbed(origin: string, ref: ContentRef, size: EmbedSize, co
   if (content.authorUrl) response.author_url = content.authorUrl;
   if (content.thumbnailUrl) {
     response.thumbnail_url = content.thumbnailUrl;
-    response.thumbnail_width = MAX_SIZE.width;
-    response.thumbnail_height = MAX_SIZE.height;
+    // the poster has the video's ratio: scale the response's size up to the 1280 / 720 caps
+    const landscape = size.width >= size.height;
+    response.thumbnail_width = landscape ? MAX_SIZE.width : Math.round((MAX_SIZE.height * size.width) / size.height);
+    response.thumbnail_height = landscape ? Math.round((MAX_SIZE.width * size.height) / size.width) : MAX_SIZE.height;
   }
   if (ref.kind === 'video') {
     response.aun_video_id = ref.id;
