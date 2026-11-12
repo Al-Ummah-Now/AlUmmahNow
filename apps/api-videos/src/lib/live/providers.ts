@@ -14,6 +14,8 @@
  */
 import type { LiveIngest, LiveProviderId } from '@al-ummah/shared-types';
 import { getSecret } from '../env-helpers';
+import { BunnyStreamClient } from '../bunny/stream';
+import { uploadCollection } from '../channelCollection';
 import { logger } from '../logger';
 
 export interface LiveEnv {
@@ -31,6 +33,8 @@ export interface LiveEnv {
 	'bunny-stream-key'?: unknown;
 	bunny_stream_library_id?: unknown;
 	ENVIRONMENT?: string;
+	channels?: R2Bucket;
+	profiles?: R2Bucket;
 }
 
 export interface ProvisionInput {
@@ -39,6 +43,9 @@ export interface ProvisionInput {
 	title: string;
 	lowLatency: boolean;
 	recordVod: boolean;
+	/** The stream's channel and owner: Bunny files the recording in their collection. */
+	channelId?: string | null;
+	ownerId?: string | null;
 }
 
 export interface Provisioned {
@@ -253,10 +260,27 @@ export const bunnyAdapter: LiveProviderAdapter = {
 		return ok;
 	},
 	async provision(env, input) {
+		// The recording becomes a library video: it goes in the channel's collection
+		// (or the owner's), like every other Bunny create (lib/channelCollection.ts).
+		let collectionId: string | undefined;
+		if (input.ownerId && env.channels) {
+			const { key, lib } = await bunnyCreds(env);
+			collectionId = await uploadCollection(
+				env as { channels: R2Bucket; profiles?: R2Bucket },
+				new BunnyStreamClient(key).forEnv(env),
+				Number(lib),
+				input.channelId ?? '',
+				input.ownerId,
+			).catch((error) => {
+				logger.warn('[Live] No Bunny collection for the live stream', { streamId: input.streamId, error: error instanceof Error ? error.message : String(error) });
+				return undefined;
+			});
+		}
 		const created = await bunnyCall<BunnyLiveStream>(env, 'POST', '/live', {
 			title: input.title.slice(0, 200),
 			recordVod: input.recordVod,
 			dvrEnabled: false,
+			...(collectionId ? { collectionId } : {}),
 		});
 		if (!created?.guid) throw new LiveProviderError('bunny', 'bad_response', 'Bunny live create returned no guid');
 		return { providerRef: created.guid, playbackUrl: created.playbackUrlHls || bunnyHls(env, created.guid) };

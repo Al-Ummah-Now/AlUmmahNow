@@ -47,7 +47,7 @@ export async function readStream(env: StreamsEnv, id: string): Promise<LiveStrea
 
 /** Provisions the stream's first (or next) session and stores it on the record. */
 export async function attachSession(env: StreamsEnv, stream: LiveStreamRecord, now = Date.now()): Promise<{ stream: LiveStreamRecord; session: LiveSessionRow }> {
-	const { session } = await provisionSession(env, { id: stream.id, title: stream.title, channelId: stream.channelId, providerMove: stream.providerMove ?? null, isTest: stream.isTest }, now);
+	const { session } = await provisionSession(env, { id: stream.id, title: stream.title, userId: stream.userId, channelId: stream.channelId, providerMove: stream.providerMove ?? null, isTest: stream.isTest }, now);
 	const updated = await repo(env).updateObject(streamKey(stream.id), (fresh) => {
 		fresh.provider = session.provider;
 		fresh.sessionId = session.id;

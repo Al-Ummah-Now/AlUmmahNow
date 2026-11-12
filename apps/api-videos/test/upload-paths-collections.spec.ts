@@ -14,14 +14,19 @@ import { VideoCreate } from '../src/endpoints/video/videoCreate';
 import { VideoUpload } from '../src/endpoints/video/videoUpload';
 import { LiveStreamCreate } from '../src/endpoints/live/liveStreamCreate';
 import { MemoryBucket, MemoryQueue, buildApp } from './helpers';
+import { SqliteD1 } from './search-sqlite-d1';
+import { forgetBunnyAvailability } from '../src/lib/live/providers';
 
 const realFetch = globalThis.fetch;
 let creates: any[];
 let collectionsMade: any[];
+let liveCreates: any[];
 
 beforeEach(() => {
 	creates = [];
 	collectionsMade = [];
+	liveCreates = [];
+	forgetBunnyAvailability();
 	globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
 		const url = new URL(String(input));
 		const method = init?.method ?? 'GET';
@@ -30,6 +35,13 @@ beforeEach(() => {
 				const body = JSON.parse(String(init!.body));
 				creates.push(body);
 				return Response.json({ guid: crypto.randomUUID(), title: body.title, status: 0 });
+			}
+			// Bunny Stream Live (lib/live/providers.ts): the availability probe and the create
+			if (/^\/library\/\d+\/live\/?$/.test(url.pathname)) {
+				if (method === 'GET') return Response.json({ items: [] });
+				const body = JSON.parse(String(init!.body));
+				liveCreates.push(body);
+				return Response.json({ guid: crypto.randomUUID(), title: body.title, streamKey: 'k', playbackUrlHls: 'https://example.invalid/live.m3u8' });
 			}
 			if (/^\/library\/\d+\/collections\/?$/.test(url.pathname) && method === 'POST') {
 				const body = JSON.parse(String(init!.body));
@@ -59,6 +71,8 @@ function harness(channels: Record<string, unknown> = {}, profiles: Record<string
 		'bunny-stream-key': 'key',
 		bunny_stream_library_id: '498994',
 		bunny_hostname: 'vz-25839d05-80d.b-cdn.net',
+		// Live streams are assigned a provider (lib/live/*); self-hosted is not configured here, so Bunny takes them
+		SEARCH_DB: new SqliteD1() as unknown as D1Database,
 	};
 	const app = buildApp((router) => {
 		router.post('/api/videos/upload/initiate', UploadInitiateEndpoint);
@@ -112,7 +126,9 @@ describe('every Bunny create gets the right collection', () => {
 		const h = harness(CHANNEL);
 		const res = await h.post('/api/live', { title: 'Live' }, 'ch1');
 		assert.ok(res.status < 300, `status ${res.status}: ${await res.clone().text()}`);
-		assert.deepEqual(creates.map((c) => c.collectionId), ['col-ch1']);
+		// Bunny Stream Live creates the stream (its recording becomes the library video) in the channel's collection
+		assert.deepEqual(liveCreates.map((c) => c.collectionId), ['col-ch1']);
+		assert.deepEqual(creates, [], 'no separate VOD placeholder');
 	});
 
 	it('a channel-less upload gets the owner collection, created once and named after the profile', async () => {
