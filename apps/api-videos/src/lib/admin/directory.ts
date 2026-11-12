@@ -316,6 +316,30 @@ export async function hydrateVideos(env: AdminEnv, rows: Row[]): Promise<AdminVi
 	});
 }
 
+/** How long a list total is reused (#891). */
+export const ADMIN_COUNT_TTL_MS = 60_000;
+
+/**
+ * A list's total, reused for ADMIN_COUNT_TTL_MS per filter (search_meta, key admin-count:<key>).
+ * Counting every profile on each users-list call read ~28.7k rows a time on QA, the search
+ * database's largest reader (#891); a total a minute old is fine for the header and the pager.
+ */
+export async function cachedCount(db: SearchDb, key: string, count: () => Promise<number>, now = Date.now()): Promise<number> {
+	const metaKey = `admin-count:${key}`;
+	const hit = await db.prepare('SELECT value, updated_at FROM search_meta WHERE key = ?').bind(metaKey).first<{ value: string; updated_at: number }>();
+	if (hit && Number(hit.updated_at) > now - ADMIN_COUNT_TTL_MS) return Number(hit.value) || 0;
+	const n = await count();
+	await db.batch([
+		db.prepare(
+			`INSERT INTO search_meta (key, value, updated_at) VALUES (?, ?, ?)
+			 ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+		).bind(metaKey, String(n), now),
+		// Totals of searches nobody repeats do not pile up
+		db.prepare(`DELETE FROM search_meta WHERE key > 'admin-count:' AND key < 'admin-count;' AND updated_at < ?`).bind(now - 3_600_000),
+	]).catch(() => undefined);
+	return n;
+}
+
 // ---------------------------------------------------------------------------
 // Users (videos profiles + bans)
 // ---------------------------------------------------------------------------
@@ -349,7 +373,8 @@ export async function listUsers(env: AdminEnv, query: AdminUserQuery, waitUntil?
 	}
 	if (query.banned) where.push(`banned = ${query.banned === 'yes' ? 1 : 0}`);
 	const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
-	const total = await db.prepare(`SELECT COUNT(*) AS n FROM (${base}) ${whereSql}`).bind(...binds).first<{ n: number }>();
+	const total = await cachedCount(db, `users:${query.banned ?? ''}:${(query.q ?? '').trim().toLowerCase().slice(0, 80)}`, () =>
+		db.prepare(`SELECT COUNT(*) AS n FROM (${base}) ${whereSql}`).bind(...binds).first<{ n: number }>().then((r) => Number(r?.n) || 0));
 	const { results } = await db
 		.prepare(`SELECT * FROM (${base}) ${whereSql} ORDER BY ${USER_SORT[query.sort ?? 'newest'] ?? USER_SORT.newest} LIMIT ${pageSize} OFFSET ${offset}`)
 		.bind(...binds)
@@ -358,7 +383,7 @@ export async function listUsers(env: AdminEnv, query: AdminUserQuery, waitUntil?
 	const profiles = await readMany(env.profiles, rows.filter((r) => !r.profile_deleted).map((r) => r.id));
 	return {
 		items: rows.map((r) => toUserRow(r.id, profiles.get(r.id) ?? null, r.banned === 1, r)),
-		total: Number(total?.n) || 0,
+		total,
 		page,
 		pageSize,
 		indexComplete,
