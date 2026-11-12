@@ -8,7 +8,7 @@
  */
 import { expect } from '@playwright/test';
 import { workerAdminPage } from './admin-session';
-import { target } from './targets';
+import { releaseEnv, target } from './targets';
 import { apiFetch, type WebUser } from './web-session';
 
 /** Sets (or with null removes) the user's creator tier in admin-web and waits until saved and in effect. */
@@ -51,5 +51,21 @@ export async function setCreatorTier(user: WebUser, tierId: string | null): Prom
     .toBe(tierId);
 }
 
-/** The Creator tier for a fresh release user, before it creates a channel or uploads. */
-export const grantCreatorTier = (user: WebUser) => setCreatorTier(user, 'creator');
+/**
+ * The Creator tier for a fresh release user, before it creates a channel or uploads. On the local
+ * stack (E2E_ENV=local) it is written straight to the stack's database (a fast path; the tier UI
+ * itself is covered by creator-tiers.spec.ts through setCreatorTier).
+ */
+export async function grantCreatorTier(user: WebUser): Promise<void> {
+  if (releaseEnv() !== 'local') return setCreatorTier(user, 'creator');
+  const id = user.userId.replace(/[^A-Za-z0-9_:-]/g, '');
+  const sql = `INSERT OR IGNORE INTO creator_tier_assignments (user_id, tier_id, source, assigned_by, assigned_at) VALUES ('${id}', 'creator', 'admin', 'e2e', '${new Date().toISOString()}')`;
+  const res = await fetch(`${process.env.LOCAL_STACK_CONTROL_URL || 'http://127.0.0.1:3190'}/__stack/d1/al-ummah-now-search`, { method: 'POST', body: sql });
+  expect(res.ok, `local stack tier write: ${await res.text()}`).toBe(true);
+  await expect
+    .poll(async () => ((await (await apiFetch(user, '/api/me/creator')).json().catch(() => ({}))) as { result?: { tier?: { id?: string } | null } }).result?.tier?.id ?? null, {
+      message: 'GET /api/me/creator does not show the creator tier',
+      timeout: 20000,
+    })
+    .toBe('creator');
+}
