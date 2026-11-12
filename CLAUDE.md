@@ -681,11 +681,14 @@ H.264 HLS streams.
   `expectHydrated(locator)` waits until React has attached a control's handlers, and
   `fillSecret` waits for the field first. Fixed waits remain only as observation windows
   ("nothing else happens for N s").
-- **Encodes.** Specs that wait for Bunny to encode an upload (`bulk-rename-edit`,
-  `upload-modes`, `studio-draft-path`, `processing.player`, `media-delivery`, which also waits for the R2 transcode) share the QA/stage library's
-  encode queue with every other run. CI runs them in their own step (`E2E_ENCODE=only`)
-  under a 2-slot cross-run lock (`qa-lock.ts --slots 2`, `<env>-encode`); a new
-  encode-waiting spec goes in `ENCODE_SPECS` in `playwright.release.config.ts` (#838).
+- **Encodes.** Specs that upload to Bunny and wait for it (on QA/stage: `uploads`,
+  `upload-reuse`, `processing.player`, `embed-frame-sound`, `media-delivery`) share the QA/stage
+  library's encode queue with every other run. CI runs them in the run's `encode` part, a job
+  parallel to the main specs with its own run accounts (`E2E_ENCODE=only`), under a 2-slot
+  cross-run lock (`qa-lock.ts --slots 2`, `<env>-encode`), so an encode wait never adds onto the
+  main specs; a release waits for the slower part. A new encode-waiting spec goes in
+  `ENCODE_SPECS` in `playwright.release.config.ts` (#838). The shared-state step takes the
+  `<env>-global` lock only when the target has shared-state specs to run.
 - **Functional gates, load does not.** Specs that assert speed, latency budgets or behaviour under
   parallel load carry the tag `@load` (studio-list-speed, load-hot-paths, the recommendations
   budget, 07-performance). Every run leaves them out (`grepInvert`); `E2E_LOAD=only` runs just them
