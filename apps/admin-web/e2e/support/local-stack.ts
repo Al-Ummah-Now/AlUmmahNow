@@ -89,11 +89,15 @@ export async function eraseRowsMentioning(database: string, table: string, marke
   if (!safe.length || !/^[a-z_][a-z0-9_]*$/i.test(table)) return 0;
   // The table-valued pragma: D1 refuses PRAGMA statements through a prepared query
   const columns = (await stackSql<{ name: string; type: string }>(database, `SELECT name, type FROM pragma_table_info('${table}')`)).filter((c) => /TEXT|^$/i.test(c.type)).map((c) => c.name);
-  if (!columns.length) return 0;
-  const where = columns.flatMap((c) => safe.map((m) => `instr(CAST("${c}" AS TEXT), '${m}') > 0`)).join(' OR ');
-  const [{ n }] = await stackSql<{ n: number }>(database, `SELECT count(*) AS n FROM ${table} WHERE ${where}`);
-  if (n) await stackSql(database, `DELETE FROM ${table} WHERE ${where}`);
-  return n;
+  // One query per column: D1 caps an expression tree at depth 100, which every-column-by-every-marker exceeds
+  let erased = 0;
+  for (const c of columns) {
+    const where = safe.map((m) => `instr(CAST("${c}" AS TEXT), '${m}') > 0`).join(' OR ');
+    const [{ n }] = await stackSql<{ n: number }>(database, `SELECT count(*) AS n FROM ${table} WHERE ${where}`);
+    if (n) await stackSql(database, `DELETE FROM ${table} WHERE ${where}`);
+    erased += n;
+  }
+  return erased;
 }
 
 /** An object in a stack R2 bucket (bucket_name of the app's top-level wrangler config). */
