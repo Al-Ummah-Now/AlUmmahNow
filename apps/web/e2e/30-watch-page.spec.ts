@@ -47,7 +47,7 @@ test.describe('watch page - anonymous', () => {
       await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
       await expect(page.getByRole('heading', { level: 1, name: video.titleLocalized?.en || video.title })).toBeVisible();
       await expect(page.locator('#video-player .video-js, #video-player [data-testid="video-error"]').first()).toBeAttached();
-      await expect(page.getByTestId('video-metrics-views')).toHaveText(/\d+(\.\d)?[KM]? views?/);
+      await expect(page.getByTestId('video-metrics-views')).toHaveText(/^(No views|\d+(\.\d)?[KM]? views?)$/);
       const channelLink = page.locator('main a[href*="/en/channels/"]').filter({ hasText: /\S/ }).first();
       await expect(channelLink).toBeVisible();
       // Skip-link targets exist on both routes

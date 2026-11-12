@@ -1,7 +1,7 @@
 import type { TestType } from '@playwright/test';
 import type { AuthUser } from './auth-state';
 import { ns } from '../release/builders';
-import { SEED_TITLES, deleteVideoQuietly, uploadVideo, userApi, type E2EVideo, type UserApi } from './e2e-videos';
+import { SEED_TITLES, deleteVideoQuietly, uploadVideo, userApi, waitForReady, type E2EVideo, type UserApi } from './e2e-videos';
 
 /**
  * The run user's Studio videos, made by the spec file that uses them (owner rule 2026-11-12:
@@ -58,7 +58,8 @@ export function ownStudioVideos(test: AnyTest, user: AuthUser): { videos: () => 
     for (const spec of SPECS[user] ?? []) {
       const title = `${spec.base} ${suffix}`;
       // Bytes too: the stack's fake Bunny encodes them (thumbnails, durations), like the old seed
-      let video = await uploadVideo(u, { title, titleAr: `${spec.titleAr} ${suffix}`, isPublic: false, channelIndex: spec.channelIndex });
+      // The run tag goes in the English title only: specs compare the Arabic one as it was seeded
+      let video = await uploadVideo(u, { title, titleAr: spec.titleAr, isPublic: false, channelIndex: spec.channelIndex });
       if (spec.scheduleInDays) {
         await schedule(u, video, spec.scheduleInDays);
         const res = await u.api.get<E2EVideo>(`/api/videos/${video.id}`, { token: u.token });
@@ -66,6 +67,8 @@ export function ownStudioVideos(test: AnyTest, user: AuthUser): { videos: () => 
       }
       made[spec.base] = video;
     }
+    // Encoded before the specs open them (Studio frames, durations); the stack's fake Bunny takes seconds
+    for (const [base, video] of Object.entries(made)) made[base] = { ...video, ...(await waitForReady(user, video)) };
   });
 
   test.afterAll(async () => {
