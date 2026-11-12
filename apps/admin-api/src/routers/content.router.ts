@@ -802,6 +802,14 @@ app.put('/live/settings', async (c) => {
     videos(c, '/live/settings', { method: 'PUT', json: patch })));
 });
 
+/** Reset to the shipped defaults (audited with the settings it replaced). */
+app.delete('/live/settings', async (c) => {
+  need(c, 'live:manage');
+  const current = await videos<LiveSettingsView>(c, '/live/settings');
+  return ok(c, await audited(c, { kind: 'live-settings', id: 'routing', action: 'reset', previous: current.settings as unknown as Record<string, unknown> }, () =>
+    videos(c, '/live/settings', { method: 'DELETE' })));
+});
+
 app.put('/live/overrides/:channelId', async (c) => {
   need(c, 'live:manage');
   const channelId = c.req.param('channelId');

@@ -22,6 +22,8 @@ import { RUN_ID, VIDEOS_API_URL, ADMIN_WEB_URL, accounts } from './support/env';
 import { createVideosProfile } from './support/profiles';
 
 interface LiveSettings {
+  /** null while the environment runs on the shipped defaults (no settings saved yet) */
+  updatedAt: string | null;
   mode: string;
   bunnyPercent: number;
   providers: Record<'bunny' | 'selfhosted', { enabled: boolean; draining: boolean; note: string | null }>;
@@ -89,7 +91,10 @@ test.describe('live streaming', () => {
   });
 
   test.afterAll(async () => {
-    if (original) {
+    if (original && original.settings.updatedAt === null) {
+      // Nothing was saved before this spec: back to the defaults, leaving no settings row behind
+      await adminApi('/api/content/live/settings', { method: 'DELETE', body: '{}' }).catch(() => undefined);
+    } else if (original) {
       const { settings } = original;
       await adminApi('/api/content/live/settings', {
         method: 'PUT',

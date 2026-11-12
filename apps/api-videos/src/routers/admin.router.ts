@@ -32,7 +32,7 @@ import { logger } from '../lib/logger';
 import R2Repository from '../lib/r2Repo';
 import type { LiveEnv } from '../lib/live/providers';
 import { providerUsage } from '../lib/live/service';
-import { listChannelOverrides, readLiveRouting, readSession, removeChannelOverride, setChannelOverride, writeLiveRouting } from '../lib/live/store';
+import { listChannelOverrides, readLiveRouting, readSession, removeChannelOverride, resetLiveRouting, setChannelOverride, writeLiveRouting } from '../lib/live/store';
 import { compareProviders } from '../lib/live/qoe';
 import { readStream, streamEnd, type LiveStreamRecord } from '../lib/live/streams';
 import { bulkAssignTier, limitHitsSince, listCreators, tierCounts } from '../lib/admin/creators';
@@ -407,6 +407,8 @@ app.put('/live/settings', async (c) => {
 	const out = await writeLiveRouting(searchDb(c), await body(c), actor(c));
 	return ok(c, out);
 });
+/** Reset to the shipped defaults (the settings row is removed). */
+app.delete('/live/settings', async (c) => ok(c, await resetLiveRouting(searchDb(c))));
 app.put('/live/overrides/:channelId', async (c) => {
 	const input = parse(LiveOverride, await body(c));
 	const channelId = c.req.param('channelId');
