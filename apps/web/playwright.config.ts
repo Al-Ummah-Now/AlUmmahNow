@@ -54,8 +54,17 @@ const SHARED_STATE_SPECS = /\/(30-watch-page|32-comments|75-site-theme)\.spec\.t
 const browserIgnore = (runsUploads: boolean) =>
   runsUploads && !SKIP_UPLOAD_SPECS ? [...DEDICATED_DIRS, SHARED_STATE_SPECS] : [...DEDICATED_DIRS, SHARED_STATE_SPECS, UPLOAD_SPECS];
 
+/**
+ * Load / performance / timing specs (tag @load: speed budgets, parallel-load probes, durations).
+ * Owner rule 2026-11-12: functionality gates, load does not. Every run leaves them out; a run
+ * with E2E_LOAD=only runs just them (non-blocking jobs: continue-on-error, nightly and releases).
+ */
+const LOAD_TAG = /@load/;
+const LOAD_ONLY = process.env.E2E_LOAD === 'only';
+
 export default defineConfig({
   testDir: './e2e',
+  ...(LOAD_ONLY ? { grep: LOAD_TAG } : { grepInvert: LOAD_TAG }),
   /* Visual baselines are OS-independent paths; they are generated on Linux in CI */
   snapshotPathTemplate: '{testDir}/visual/__screenshots__/{projectName}/{arg}{ext}',
   testIgnore: DEDICATED_DIRS,

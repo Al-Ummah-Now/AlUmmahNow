@@ -15,6 +15,7 @@
  * The video and channel are the run's own; the video is deleted at the end.
  */
 import * as path from 'path';
+import { encoding, untilEncoded } from './encode';
 import { test, expect, type Page } from '@playwright/test';
 import { target } from './targets';
 import { apiFetch, createProfile, signUpOnWeb, type WebUser } from './web-session';
@@ -102,13 +103,16 @@ test.describe('Release: upload processing', () => {
         test.info().annotations.push({ type: 'note', description: 'Encoded before the first check; the processing state was not observable' });
       }
 
-      await expect
-        .poll(async () => (await videoState(user, videoId)).uploadStatus, {
-          message: 'the video did not become ready by itself (processing-check loop)',
-          timeout: READY_TIMEOUT_MS,
-          intervals: [5_000],
-        })
-        .toBe('ready');
+      // Ready by itself (processing-check loop). Still encoding at the deadline = slow Bunny (#929)
+      await untilEncoded('the processing clip',
+        () => expect
+          .poll(async () => (await videoState(user, videoId)).uploadStatus, {
+            message: 'the video did not become ready by itself (processing-check loop)',
+            timeout: READY_TIMEOUT_MS,
+            intervals: [5_000],
+          })
+          .toBe('ready'),
+        async () => encoding((await videoState(user, videoId)).uploadStatus));
       // Reported for the incident follow-up: upload complete → ready (first playable resolution)
       const readyAfter = Math.round((Date.now() - uploadedAt) / 1000);
       test.info().annotations.push({ type: 'ready-after-upload', description: `${readyAfter}s` });

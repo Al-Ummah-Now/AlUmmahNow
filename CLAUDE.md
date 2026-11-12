@@ -664,6 +664,13 @@ H.264 HLS streams.
   encode queue with every other run. CI runs them in their own step (`E2E_ENCODE=only`)
   under a 2-slot cross-run lock (`qa-lock.ts --slots 2`, `<env>-encode`); a new
   encode-waiting spec goes in `ENCODE_SPECS` in `playwright.release.config.ts` (#838).
+- **Functional gates, load does not.** Specs that assert speed, latency budgets or behaviour under
+  parallel load carry the tag `@load` (studio-list-speed, load-hot-paths, the recommendations
+  budget, 07-performance). Every run leaves them out (`grepInvert`); `E2E_LOAD=only` runs just them
+  in a non-blocking step (`continue-on-error`, job summary) nightly, by hand and in releases, never
+  on PRs. A spec whose only failure mode is a slow third-party encode skips with #929 instead of
+  failing (`untilEncoded` in `e2e/release/encode.ts`, `skipSlowEncode` in the legacy helpers);
+  wrong behaviour once the encode finished still fails.
 - **Retries stay at one.** A test that needed its retry is listed as flaky in the job
   summary and as a warning (`e2e/release/outcome-reporter.ts`). `release-e2e-nightly.yml`
   runs the suite 3x with no retries and keeps one issue (label `e2e-flaky-nightly`) listing

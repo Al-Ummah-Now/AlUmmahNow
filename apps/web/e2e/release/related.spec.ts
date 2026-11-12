@@ -50,7 +50,7 @@ test.describe('Release: related videos on the watch page', () => {
   }
 
   // Stage only: PR runs target QA, which still serves the previous main.
-  test('recommendations answer within the latency budget', async () => {
+  test('recommendations answer within the latency budget', { tag: '@load' }, async () => {
     test.skip(process.env.E2E_ENV !== 'stage', 'the budget is enforced on the release candidate (stage)');
     const video = await findPlayableVideo();
     test.skip(!video, NO_PLAYABLE_VIDEO);

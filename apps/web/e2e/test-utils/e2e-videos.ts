@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import { test } from '@playwright/test';
 import * as path from 'path';
 import { ApiClient } from '../seed/seed-api';
 import { AUTH_STATE, type AuthUser } from './auth-state';
@@ -326,6 +327,17 @@ export const BUNNY_WAIT_MS = 120_000;
 export const BUNNY_BACKLOG = 'QA\'s shared Bunny library is backed up (#929)';
 
 /**
+ * Owner rule (2026-11-12): a slow third-party encode is not a functional failure of our code.
+ * When Bunny is still encoding at the end of a wait, the test is skipped with this reason;
+ * wrong behaviour once an encode finished (or an encode that failed) still fails.
+ */
+export function skipSlowEncode(what: string): never {
+  test.info().annotations.push({ type: 'encode-timeout', description: `${what} (#929)` });
+  test.skip(true, `${what}: Bunny did not finish encoding in time, a slow third-party encode, not a product failure (https://github.com/Al-Ummah-Now/AlUmmahNow/issues/929)`);
+  throw new Error('unreachable');
+}
+
+/**
  * Waits until Bunny has encoded the video (uploadStatus "ready"). Listings
  * leave out videos that are still processing (public ones since the
  * 2026-11-10 incident; Studio files them under Processing, not Published), so
@@ -342,6 +354,7 @@ export async function waitForReady(user: AuthUser, video: E2EVideo, timeoutMs = 
     if (last?.uploadStatus === 'failed' || Date.now() > deadline) break;
     await new Promise((resolve) => setTimeout(resolve, 5000));
   }
+  if (last && last.uploadStatus !== 'failed') skipSlowEncode(`"${video.title}" (${video.id}) still ${last.uploadStatus} after ${Math.round(timeoutMs / 1000)} s`);
   throw new Error(`"${video.title}" (${video.id}) is ${last?.uploadStatus ?? 'missing'}, not ready after ${Math.round(timeoutMs / 1000)} s of Bunny encoding: ${BUNNY_BACKLOG}?`);
 }
 
@@ -438,6 +451,11 @@ export async function waitForThumbnails(user: AuthUser, videoId: string, timeout
       if (res.ok) return true;
     }
     await new Promise((resolve) => setTimeout(resolve, 5000));
+  }
+  // Still encoding when time ran out: a slow third-party encode, not ours (#929)
+  const video = await getVideo(u, videoId);
+  if (video && video.uploadStatus && video.uploadStatus !== 'ready' && video.uploadStatus !== 'failed') {
+    skipSlowEncode(`thumbnails of ${videoId} (video ${video.uploadStatus}) after ${Math.round(timeoutMs / 1000)} s`);
   }
   return false;
 }

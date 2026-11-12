@@ -233,6 +233,37 @@ jobs:
       # server (soft delete + immediate purge, QA/stage-only route). Content they
       # left ("Release E2E …", their channels) goes with the QA cleanup.
       # Trusted copy: it runs with the secrets.
+      # Load / performance / timing specs (tag @load: speed budgets, parallel-load probes): reported
+      # in the job summary, never gating a PR, main or a release (owner rule 2026-11-12). Not on PRs
+      # (no extra QA load); nightly, by hand and in releases (workflow_call).
+      - name: Load and timing specs (non-blocking)
+        if: github.event_name != 'pull_request' && !cancelled()
+        continue-on-error: true
+        working-directory: ${{ env.SUITE }}
+        timeout-minutes: 30
+        env:
+          CI: 'true'
+          E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET || (inputs.env == 'stage' && secrets.E2E_CODE_SINK_SECRET_STAGE) || secrets.E2E_CODE_SINK_SECRET_QA }}
+          TEST_PROMOTE_SECRET: ${{ secrets.TEST_PROMOTE_SECRET || (inputs.env == 'stage' && secrets.TEST_PROMOTE_SECRET_STAGE) || secrets.TEST_PROMOTE_SECRET_QA }}
+          E2E_RUN_TAG: g${{ github.run_id }}a${{ github.run_attempt }}
+          E2E_LOAD: only
+          E2E_SHARED_STATE: skip
+          E2E_ENCODE: skip
+          E2E_OUTPUT_SUFFIX: load
+        run: |
+          set +e
+          npx playwright test -c playwright.release.config.ts --reporter=line > "$RUNNER_TEMP/load.txt" 2>&1
+          code=$?
+          tail -60 "$RUNNER_TEMP/load.txt"
+          {
+            echo "### Load and timing specs (non-blocking)"
+            if [ "$code" = 0 ]; then echo "All @load specs passed."; else echo "Some @load specs failed (exit $code). They are reported here and do not gate this run."; fi
+            echo '```'
+            grep -E "^ +[0-9]+ (passed|failed|flaky|skipped)|^ +[0-9]+\) \[" "$RUNNER_TEMP/load.txt" | head -40
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$code"
+
       - name: Delete the run accounts
         if: always()
         continue-on-error: true

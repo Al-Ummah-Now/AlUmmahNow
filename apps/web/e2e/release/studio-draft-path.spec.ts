@@ -1,5 +1,6 @@
 /** A real upload through the draft life cycle (docs/specs/CREATOR-STUDIO.md §4.4.1). */
 import path from 'node:path';
+import { encoding, untilEncoded } from './encode';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { skipUntilStudioDeployed, studioOwner } from './studio';
 import { apiFetch } from './web-session';
@@ -61,12 +62,13 @@ test.describe('Release: Studio draft path', () => {
           return videoId;
         }, { message: 'the uploaded draft is not in the owner\'s videos', timeout: 60000 })
         .not.toBe('');
-      await expect
-        .poll(async () => {
-          const res = await apiFetch(user, `/api/videos/${videoId}/upload-status`, { headers: { channelId } });
-          return ((await res.json().catch(() => ({}))) as { result?: { status?: string } }).result?.status ?? '';
-        }, { message: 'the draft never finished encoding', timeout: 9 * 60_000, intervals: [5000] })
-        .toBe('ready');
+      const draftStatus = async () => {
+        const res = await apiFetch(user, `/api/videos/${videoId}/upload-status`, { headers: { channelId } });
+        return ((await res.json().catch(() => ({}))) as { result?: { status?: string } }).result?.status ?? '';
+      };
+      await untilEncoded('the draft',
+        () => expect.poll(draftStatus, { message: 'the draft never finished encoding', timeout: 9 * 60_000, intervals: [5000] }).toBe('ready'),
+        async () => encoding(await draftStatus()));
 
       await openStatus('drafts');
       const listed = await apiFetch(user, `/api/channels/${channelId}/content?status=drafts`);
