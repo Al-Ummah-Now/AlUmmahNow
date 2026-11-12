@@ -13,6 +13,7 @@ import { adminConfirm, confirmInApp } from './in-app-confirm';
 import { target } from './targets';
 import { signInAsAdmin } from './admin-session';
 import { fetchRetry } from './net';
+import { expectHydrated } from './web-session';
 
 // Signs in through the auth server: the trace would hold the password and code
 test.use({ trace: 'off' });
@@ -122,6 +123,7 @@ test.describe('Release: theme builder', () => {
     // rel-theme-* themes, never the active one; the shared-state lock keeps other runs out.
     const leftovers = await page.locator('[data-testid^="theme-row-rel-theme-"][data-active="false"]').evaluateAll((rows) => rows.map((r) => r.getAttribute('data-testid')!.replace('theme-row-', '')));
     for (const stale of leftovers.slice(0, 10)) {
+      await expectHydrated(page.getByTestId(`theme-delete-${stale}`));
       await page.getByTestId(`theme-delete-${stale}`).click();
       await confirmInApp(page, adminConfirm('theme-delete-confirm'), stale);
       await expect(page.getByTestId(`theme-row-${stale}`)).toHaveCount(0, { timeout: 30000 });
@@ -202,6 +204,7 @@ test.describe('Release: theme builder', () => {
         await page.goto(`${target().adminWeb}/site-theme`);
         // Builds before the in-app dialog used window.confirm
         page.once('dialog', (dialog) => void dialog.accept());
+        await expectHydrated(page.getByTestId(`theme-delete-${id}`));
         await page.getByTestId(`theme-delete-${id}`).click();
         await confirmInApp(page, adminConfirm('theme-delete-confirm'), id);
         await expect(page.getByTestId(`theme-row-${id}`)).toHaveCount(0, { timeout: 30000 });
