@@ -240,3 +240,10 @@ test('publishAdminLive posts one item to the realtime /broadcast and never throw
   assert.equal(await publishAdminLive({}, 'jobs', { kind: 'job' }, ok), false);
   assert.equal(calls.length, 1);
 });
+
+test('an oversized event is cut to kind and key so a window always fits in storage', () => {
+  const big = { kind: 'job', key: 'job:9', failure: { stderr: 'x'.repeat(5000) } };
+  const { events } = coalesceAdminLiveEvents([], [big, { kind: 'live', n: 1 }]);
+  assert.deepEqual(events[0], { kind: 'job', key: 'job:9', truncated: true });
+  assert.deepEqual(events[1], { kind: 'live', n: 1 });
+});
