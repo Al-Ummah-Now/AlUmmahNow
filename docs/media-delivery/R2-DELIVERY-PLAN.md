@@ -96,9 +96,9 @@ use the same rungs by short side (360×640 … 1080×1920). CRF 23 with `maxrate
 | Item | How | Who |
 |---|---|---|
 | Buckets `al-ummah-now-media[-qa\|-stage]` (public) and `al-ummah-now-media-private[-qa\|-stage]` | `scripts/release/ensure-resources.ts` (runs on every deploy) | CI |
-| Custom domain `media.qa.alummahnow.net`, `media.stage…`, `media.alummahnow.net` | `scripts/media-cdn/apply.ts domains` (R2 custom-domain API) | Agent for QA/stage; **production only after the owner says go** (it creates a DNS record) |
-| Cache Rule on the media hosts: cache everything; segments and init 1 year, playlists 10 s (VOD playlists don't change, `rev` makes them immutable), `manifest.json` bypass | `scripts/media-cdn/apply.ts cache` (Rulesets API, phase `http_request_cache_settings`, one rule per env, matched by its ref) | Needs a token with Zone → Cache Rules Edit (see Owner actions) |
-| Smart Tiered Cache on | `scripts/media-cdn/apply.ts tiered` | Same token (Zone Settings Edit) |
+| Custom domain `media.qa.alummahnow.net`, `media.stage…`, `media.alummahnow.net` | `scripts/media-cdn/apply.ts` (R2 custom-domain API) | Done for all three (QA, stage, production) |
+| Cache Rule on the media hosts: cache everything; segments and init 1 year, playlists 10 s (VOD playlists don't change, `rev` makes them immutable), `manifest.json` bypass | `scripts/media-cdn/apply.ts cache` (Rulesets API, phase `http_request_cache_settings`, one rule per env, matched by its ref) | CI token (Zone Cache Settings Edit); QA applied, stage and production by the release |
+| Smart Tiered Cache on | `scripts/media-cdn/apply.ts tiered` | CI token; on (zone-wide) |
 | CORS on the public bucket (players on www, videos, admin, embeds, native apps) | `scripts/media-cdn/apply.ts` | Agent |
 | Worker route `media.<env>/priv/*` → al-ummah-now-media | wrangler config | CI |
 | Secrets Store `media-sign-key[-qa\|-stage]` (HMAC for `/priv/` tokens), shared by api-videos and the media Worker | `wrangler secrets-store secret create` + `scripts/release/secrets-manifest.ts` | Agent |
@@ -223,21 +223,14 @@ generated clip. No paid AI anywhere in this work.
 
 ## Owner actions
 
-1. **A Cloudflare API token for the zone settings.** Our wrangler login can't read or edit the zone's
-   Cache Rules, Tiered Cache, DNS or cache purge. Create a token (dashboard → My Profile → API Tokens)
-   with these permissions, zone `alummahnow.net` only:
-   - Zone → Cache Rules: Edit
-   - Zone → Zone Settings: Edit
-   - Zone → Cache Purge: Purge
-   - Account → Account Analytics: Read
-
-   Store it as the GitHub secret `MEDIA_CDN_API_TOKEN` and in Secrets Store as `media-cdn-api-token`.
-   - Without it, the same settings are three dashboard clicks: Caching → Tiered Cache → Smart; and
-     Rules → Cache Rules → the rule exactly as `scripts/media-cdn/apply.ts --print` prints it.
-   - Purge-on-visibility-change and the hit-ratio and egress numbers need the token.
-2. **Bunny "Keep original files"** must be on for the QA, stage and production upload libraries. It is
-   the transcode source. The job reports `source_missing` if it is off.
-3. **Production DNS:** say go before `media.alummahnow.net` is attached.
+1. **Cloudflare token: done (2026-11-12).** The repository's `CLOUDFLARE_API_TOKEN` has Zone Cache
+   Settings Edit, Cache Purge and DNS Edit, plus Account Analytics Read. `scripts/media-cdn/apply.ts`
+   uses it for domains, the Cache Rule, Tiered Cache, and the purge and analytics checks.
+   - It is stored in Secrets Store as `media-cdn-api-token` for api-videos' runtime purge and cost
+     analytics (`apply.ts --store-secret`).
+2. **Bunny originals.** "Keep original files" and "Expose originals" must be on for each upload
+   library. The stored Stream keys can't change library settings: the account API answers 401. Until
+   then, the transcode reads Bunny's MP4 fallback.
 
 ## Later (planned, not run)
 
