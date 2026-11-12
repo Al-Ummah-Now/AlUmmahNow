@@ -294,17 +294,18 @@
   color: var(--fanous-c-tabs-text, var(--fanous-color-text-secondary));
   transition: background-color 120ms, box-shadow 120ms, color 120ms;
 }
+/* A light tint only: the active text is checked against tabs.bg, and a stronger tint dropped it under AA (Zujaj light) */
 .tab-item[aria-selected='true'],
 .tab-item[data-state='active'],
 .tab-item[data-active='true'] {
   box-shadow: inset 0 -2px 0 var(--fanous-c-tabs-indicator, var(--fanous-color-primary));
-  background-color: color-mix(in srgb, var(--fanous-c-tabs-indicator, var(--fanous-color-primary)) 12%, transparent);
+  background-color: color-mix(in srgb, var(--fanous-c-tabs-indicator, var(--fanous-color-primary)) 6%, transparent);
   color: var(--fanous-c-tabs-active-text, var(--fanous-color-text-primary));
 }
 @media (hover: hover) {
   .tab-item:hover:not(:disabled) {
     box-shadow: inset 0 -2px 0 var(--fanous-c-tabs-indicator, var(--fanous-color-primary));
-    background-color: color-mix(in srgb, var(--fanous-c-tabs-indicator, var(--fanous-color-primary)) 12%, transparent);
+    background-color: color-mix(in srgb, var(--fanous-c-tabs-indicator, var(--fanous-color-primary)) 6%, transparent);
     color: var(--fanous-c-tabs-active-text, var(--fanous-color-text-primary));
   }
 }
