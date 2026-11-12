@@ -92,7 +92,24 @@ async function status(key, libraryId, videosBucket) {
 	if (acct.ok) acctBody = pick(await acct.json());
 	settings['api.bunny.net/videolibrary/<id>'] = { http: acct.status, body: acctBody };
 
+	// Leak census: who created what, grouped by title shape (digits → #, hex ids → *) and UTC hour
+	const shape = (t) => (t || '').replace(/[0-9a-f]{8}-[0-9a-f-]{27,}/gi, '*').replace(/\d+/g, '#').slice(0, 48);
+	const byShape = {};
+	const byHour = {};
+	const runIds = {};
+	for (const v of videos) {
+		const k = shape(v.title);
+		byShape[k] = (byShape[k] || 0) + 1;
+		const h = (v.dateUploaded || '').slice(0, 13);
+		byHour[h] = (byHour[h] || 0) + 1;
+		const run = /(\d{10,11})-(\d{1,2})/.exec(v.title || '');
+		if (run) runIds[run[0]] = (runIds[run[0]] || 0) + 1;
+	}
+	const top = (o, n) => Object.entries(o).sort((a, b) => b[1] - a[1]).slice(0, n);
+	const census = { byTitleShape: top(byShape, 40), byHourUTC: Object.entries(byHour).sort().slice(-36), byRunId: top(runIds, 40) };
+
 	return {
+		census,
 		libraryId,
 		at: new Date().toISOString(),
 		total: videos.length,
@@ -118,13 +135,16 @@ function uploadedAt(v) {
 }
 
 /** Why a video must stay, or null when nothing refers to it. Unreadable or unknown always keeps. */
-async function keepReason(v, videosBucket, lives, now) {
+async function keepReason(v, buckets, lives, now) {
 	if (!v || !v.guid) return 'no-id';
-	if (envOf(v.title) !== 'qa') return 'other-env';
+	const e = envOf(v.title);
+	const videosBucket = buckets[e];
+	// Only QA (no prefix) and stage ("[stage] "), each checked against its own records
+	if (!videosBucket) return 'other-env';
 	if (KEEP.has(v.guid)) return 'keep-list';
 	const at = uploadedAt(v);
 	if (!Number.isFinite(at) || now - at < MIN_AGE_MS) return 'young';
-	if (lives.some((t) => t.includes(v.guid))) return 'live-stream';
+	if ((lives[e] || []).some((t) => t.includes(v.guid))) return 'live-stream';
 	const object = await videosBucket.get(v.guid);
 	if (!object) return null;
 	let r;
@@ -151,27 +171,29 @@ async function liveStreams(videosBucket) {
 }
 
 /** One library page (DELETE_BATCH videos, newest first): what would go, and with apply, delete up to DELETE_BATCH of it. */
-async function sweep(key, libraryId, videosBucket, page, apply) {
+async function sweep(key, libraryId, buckets, page, apply) {
 	const r = await bunny(key, `/library/${libraryId}/videos?page=${page}&itemsPerPage=${DELETE_BATCH}&orderBy=date`);
 	if (r.status !== 200) throw new Error(`list page ${page}: HTTP ${r.status}`);
 	const items = r.body.items || [];
-	const lives = await liveStreams(videosBucket);
+	const lives = {};
+	for (const [e, b] of Object.entries(buckets)) lives[e] = await liveStreams(b);
 	const now = Date.now();
 	const kept = {};
 	const candidates = [];
+	const byEnv = {};
 	for (let i = 0; i < items.length; i += 25) {
 		await Promise.all(items.slice(i, i + 25).map(async (v) => {
-			const reason = await keepReason(v, videosBucket, lives, now);
+			const reason = await keepReason(v, buckets, lives, now);
 			if (reason) kept[reason] = (kept[reason] || 0) + 1;
-			else candidates.push(v);
+			else { candidates.push(v); byEnv[envOf(v.title)] = (byEnv[envOf(v.title)] || 0) + 1; }
 		}));
 	}
 	const deleted = [];
 	const failed = [];
 	const deletedByStatus = {};
 	if (apply) {
-		for (let i = 0; i < candidates.length; i += 10) {
-			await Promise.all(candidates.slice(i, i + 10).map(async (v) => {
+		for (let i = 0; i < candidates.length; i += 20) {
+			await Promise.all(candidates.slice(i, i + 20).map(async (v) => {
 				const res = await fetch(`${API}/library/${libraryId}/videos/${encodeURIComponent(v.guid)}`, { method: 'DELETE', headers: { AccessKey: key } });
 				if (res.ok || res.status === 404) {
 					deleted.push(v.guid);
@@ -183,7 +205,7 @@ async function sweep(key, libraryId, videosBucket, page, apply) {
 	}
 	const wouldByStatus = {};
 	for (const v of candidates) { const s = STATUS[v.status] ?? String(v.status); wouldByStatus[s] = (wouldByStatus[s] || 0) + 1; }
-	return { page, listed: items.length, totalItems: r.body.totalItems, kept, candidates: candidates.length, wouldByStatus, deleted: deleted.length, deletedByStatus, failed, sample: candidates.slice(0, 5).map((v) => ({ guid: v.guid, title: (v.title || '').slice(0, 60), status: STATUS[v.status] ?? v.status })) };
+	return { page, candidatesByEnv: byEnv, listed: items.length, totalItems: r.body.totalItems, kept, candidates: candidates.length, wouldByStatus, deleted: deleted.length, deletedByStatus, failed, sample: candidates.slice(0, 5).map((v) => ({ guid: v.guid, title: (v.title || '').slice(0, 60), status: STATUS[v.status] ?? v.status })) };
 }
 
 function pick(body) {
@@ -213,7 +235,7 @@ export default {
 				// Deleting needs the pinned QA library id: never another library
 				if (apply && (!env.QA_LIBRARY_ID || libraryId !== env.QA_LIBRARY_ID)) return Response.json({ error: 'apply needs QA_LIBRARY_ID pinned to this library' }, { status: 403 });
 				const page = Math.max(1, Number(url.searchParams.get('page') || 1));
-				return Response.json(await sweep(key, libraryId, env.videos, page, apply));
+				return Response.json(await sweep(key, libraryId, { qa: env.videos, stage: env.videos_stage }, page, apply));
 			}
 			return new Response('not found', { status: 404 });
 		} catch (e) {
