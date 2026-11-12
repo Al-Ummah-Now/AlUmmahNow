@@ -76,6 +76,9 @@ test.describe('Video comments - viewer', () => {
     await comment.getByTestId('comment-edit-input').fill(`${text} (updated)`);
     await comment.getByTestId('comment-edit-save').click();
     await expect(comment.getByTestId('comment-edited')).toBeVisible();
+    // The marker is optimistic: the editor closes only once the API has saved the edit. Reloading
+    // before that aborts the request (WebKit lost the edit this way on main's run 43210282718).
+    await expect(comment.getByTestId('comment-edit-input')).toHaveCount(0);
 
     await page.reload();
     const reloaded = page.getByTestId('comment').filter({ hasText: '(updated)' }).first();
