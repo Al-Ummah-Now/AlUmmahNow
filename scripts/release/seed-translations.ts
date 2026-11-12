@@ -15,16 +15,20 @@
  * translations in @al-ummah/shared-types (the same objects POST /api/i18n/sync
  * and the web app's fallback use).
  *
- * Usage: tsx scripts/release/seed-translations.ts --env qa|stage [--dry-run]
+ * Usage: tsx scripts/release/seed-translations.ts --env qa|stage|local [--dry-run]
+ * `--env local`: the local E2E stack (docs/testing/LOCAL-STACK.md), whose buckets start empty on
+ * every boot; written through the stack's control API (PUT /__stack/r2/<bucket>/<key>), no
+ * Cloudflare credentials.
  * (tsx, not plain node: shared-types' sources use extensionless imports).
  * Never production: production's store holds the edited, live copy.
  */
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { cfToken, DEFAULT_ACCOUNT_ID } from './cf-api.ts';
 import { parseJsonc } from './jsonc.ts';
 
-export type SeedEnv = 'qa' | 'stage';
+export type SeedEnv = 'qa' | 'stage' | 'local';
 export const LOCALES = ['en', 'ar'] as const;
 export type Locale = (typeof LOCALES)[number];
 
@@ -37,6 +41,7 @@ export const KEYS = {
 export const API_URLS: Record<SeedEnv, string> = {
 	qa: 'https://videos.api.qa.alummahnow.net',
 	stage: 'https://videos.api.stage.alummahnow.net',
+	local: 'http://localhost:3086',
 };
 
 /** Same checksum admin-api writes into metadata.json (translationsUpdate.ts). */
@@ -112,6 +117,12 @@ export function planTranslationSeed(stored: StoredFiles, defaults: Record<Locale
 export function translationBucket(env: SeedEnv, root: string): string {
 	const dir = join(root, 'apps/api-videos');
 	const prod = parseJsonc(readFileSync(join(dir, 'wrangler.jsonc'), 'utf8')) as any;
+	// The local stack keeps the top-level config's bucket names (scripts/local-stack/configs.ts)
+	if (env === 'local') {
+		const local = prod.r2_buckets?.find((b: any) => b.binding === 'global_settings')?.bucket_name;
+		if (!local) throw new Error('api-videos config has no global_settings bucket');
+		return local;
+	}
 	const cfg = env === 'qa' ? (parseJsonc(readFileSync(join(dir, 'wrangler.qa.jsonc'), 'utf8')) as any) : prod.env?.stage;
 	const bucket = cfg?.r2_buckets?.find((b: any) => b.binding === 'global_settings')?.bucket_name;
 	if (!bucket) throw new Error(`api-videos config for ${env} has no global_settings bucket`);
@@ -163,6 +174,32 @@ export function r2Client(bucket: string, token: string, accountId: string): R2 {
 	};
 }
 
+/** The local stack's R2 through its loopback control API (GET/PUT /__stack/r2/<bucket>/<key>). */
+export function localR2Client(bucket: string, control = process.env.LOCAL_STACK_CONTROL_URL || 'http://127.0.0.1:3190', fetchFn: typeof fetch = fetch): R2 {
+	const host = new URL(control).hostname;
+	if (host !== '127.0.0.1' && host !== 'localhost') throw new Error('LOCAL_STACK_CONTROL_URL must be a loopback URL');
+	const url = (key: string) => `${control.replace(/\/$/, '')}/__stack/r2/${encodeURIComponent(bucket)}/${encodeURIComponent(key)}`;
+	const get = async (key: string) => {
+		const res = await fetchFn(url(key));
+		if (res.status === 404) return null;
+		if (!res.ok) throw new Error(`GET ${bucket}/${key} (local stack) -> HTTP ${res.status}`);
+		return res.text();
+	};
+	return {
+		// No listing on the control API: the three keys are read one by one (local, no rate limit)
+		async list(prefix) {
+			const keys = Object.values(KEYS).filter((k) => k.startsWith(prefix));
+			const present = await Promise.all(keys.map(async (k) => ((await get(k)) === null ? null : k)));
+			return new Set(present.filter((k): k is string => k !== null));
+		},
+		get,
+		async put(key, body) {
+			const res = await fetchFn(url(key), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body });
+			if (!res.ok) throw new Error(`PUT ${bucket}/${key} (local stack) -> HTTP ${res.status}`);
+		},
+	};
+}
+
 /** Throws unless GET /api/i18n/translations/<locale> answers 200 with translations, for each locale. */
 export async function checkTranslationsServed(api: string, fetchFn: typeof fetch = fetch): Promise<void> {
 	const failures: string[] = [];
@@ -176,13 +213,18 @@ export async function checkTranslationsServed(api: string, fetchFn: typeof fetch
 
 async function main(): Promise<void> {
 	const env = process.argv[process.argv.indexOf('--env') + 1] as SeedEnv;
-	if (env !== 'qa' && env !== 'stage') throw new Error('usage: seed-translations.ts --env qa|stage [--dry-run]');
+	if (env !== 'qa' && env !== 'stage' && env !== 'local') throw new Error('usage: seed-translations.ts --env qa|stage|local [--dry-run]');
 	const dryRun = process.argv.includes('--dry-run');
 	const root = join(import.meta.dirname, '..', '..');
 	const bucket = translationBucket(env, root);
-	const token = cfToken();
-	if (!token) throw new Error('No Cloudflare credentials: set CLOUDFLARE_API_TOKEN or run `wrangler login`');
-	const r2 = r2Client(bucket, token, process.env.CLOUDFLARE_ACCOUNT_ID || DEFAULT_ACCOUNT_ID);
+	let r2: R2;
+	if (env === 'local') {
+		r2 = localR2Client(bucket);
+	} else {
+		const token = cfToken();
+		if (!token) throw new Error('No Cloudflare credentials: set CLOUDFLARE_API_TOKEN or run `wrangler login`');
+		r2 = r2Client(bucket, token, process.env.CLOUDFLARE_ACCOUNT_ID || DEFAULT_ACCOUNT_ID);
+	}
 
 	const [{ EN_TRANSLATIONS }, { AR_TRANSLATIONS }] = await Promise.all([
 		import('../../packages/shared-types/src/i18n-static/en.ts'),
@@ -208,7 +250,8 @@ async function main(): Promise<void> {
 	}
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Compared as paths: the URL form escapes spaces, so a checkout under a path with a space never ran
+if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
 	main().catch((error) => {
 		console.error(error instanceof Error ? error.message : error);
 		process.exit(1);

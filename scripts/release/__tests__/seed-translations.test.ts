@@ -8,7 +8,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { checkTranslationsServed, computeChecksum, KEYS, planTranslationSeed, translationBucket } from '../seed-translations.ts';
+import { checkTranslationsServed, computeChecksum, KEYS, localR2Client, planTranslationSeed, translationBucket } from '../seed-translations.ts';
 
 const ROOT = resolve(import.meta.dirname, '../../..');
 const NOW = '2026-11-09T00:00:00.000Z';
@@ -53,6 +53,36 @@ describe('translationBucket', () => {
 	it('resolves QA and stage to their own buckets, never production', () => {
 		assert.equal(translationBucket('qa', ROOT), 'global-settings-qa');
 		assert.equal(translationBucket('stage', ROOT), 'global-settings-stage');
+	});
+
+	it('resolves the local stack to the top-level bucket name (its own empty copy)', () => {
+		assert.equal(translationBucket('local', ROOT), 'global-settings');
+	});
+});
+
+describe('localR2Client', () => {
+	it('reads and writes through the stack control API only, and lists the known keys', async () => {
+		const store = new Map<string, string>([[KEYS.en, '{"version":"1.0.0"}']]);
+		const calls: string[] = [];
+		const fake = (async (input: string, init?: RequestInit) => {
+			calls.push(`${init?.method ?? 'GET'} ${input}`);
+			const key = decodeURIComponent(input.split('/__stack/r2/global-settings/')[1]);
+			if (init?.method === 'PUT') {
+				store.set(key, String(init.body));
+				return new Response('{}');
+			}
+			return store.has(key) ? new Response(store.get(key)) : new Response(null, { status: 404 });
+		}) as typeof fetch;
+		const r2 = localR2Client('global-settings', 'http://127.0.0.1:3190', fake);
+		assert.deepEqual([...(await r2.list('translations/'))], [KEYS.en]);
+		await r2.put(KEYS.ar, '{"locale":"ar"}');
+		assert.equal(await r2.get(KEYS.ar), '{"locale":"ar"}');
+		assert.equal(await r2.get(KEYS.metadata), null);
+		assert.ok(calls.every((c) => c.includes('http://127.0.0.1:3190/__stack/r2/global-settings/')));
+	});
+
+	it('refuses a control URL that is not loopback', () => {
+		assert.throws(() => localR2Client('global-settings', 'https://videos.api.qa.alummahnow.net'), /loopback/);
 	});
 });
 
