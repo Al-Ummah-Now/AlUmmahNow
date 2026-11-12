@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { workerFirstPattern, assetsFirstEntry } from '../boot.ts';
+import { workerFirstPattern, assetsFirstEntry } from '../entry.ts';
 
 describe('assets-first entry', () => {
   it('turns run_worker_first globs into anchored patterns', () => {
