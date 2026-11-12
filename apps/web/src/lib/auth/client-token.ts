@@ -28,24 +28,28 @@ function isFresh(entry: { info: TokenInfo; at: number }, now: number): boolean {
 }
 let cached: { info: TokenInfo; at: number } | null = null;
 let inflight: Promise<TokenInfo> | null = null;
+/** Bumped by clearClientAuthToken: a read started before the clear never fills the cache. */
+let epoch = 0;
 
 export async function fetchClientAuthInfo(force = false): Promise<TokenInfo> {
   if (typeof window === 'undefined') return { accessToken: null, channelId: null };
   if (!force && cached && isFresh(cached, Date.now())) return cached.info;
   if (inflight) return inflight;
-  inflight = (async () => {
+  const mine = epoch;
+  const request: Promise<TokenInfo> = (async () => {
     try {
       const res = await fetch('/api/auth/token', { credentials: 'same-origin', cache: 'no-store' });
       const info: TokenInfo = res.ok ? await res.json() : { accessToken: null, channelId: null };
-      cached = { info, at: Date.now() };
+      if (mine === epoch) cached = { info, at: Date.now() };
       return info;
     } catch {
       return { accessToken: null, channelId: null };
     } finally {
-      inflight = null;
+      if (inflight === request) inflight = null;
     }
   })();
-  return inflight;
+  inflight = request;
+  return request;
 }
 
 export async function fetchClientAuthToken(force = false): Promise<string | null> {
@@ -58,8 +62,14 @@ export function getClientAuthToken(): string | null {
   return cached?.info.accessToken ?? null;
 }
 
+/**
+ * Forget the cached token, and any read still running. Call it when the active
+ * account changes: the cached token is the previous account's for up to a minute.
+ */
 export function clearClientAuthToken(): void {
   cached = null;
+  inflight = null;
+  epoch += 1;
 }
 
 /** Authorization (+channelId) headers for direct API calls from the browser. */

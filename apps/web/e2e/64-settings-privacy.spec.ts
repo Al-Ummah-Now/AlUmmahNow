@@ -202,7 +202,10 @@ test.describe('Privacy settings - signed in', () => {
     let firstPass: { status: number; disposition: string } | undefined;
     await page.route(/\/api\/privacy\/export(\?|$)/, async (route) => {
       if (route.request().method() !== 'GET') return route.continue();
-      const response = await route.fetch({ timeout: 90_000 });
+      // Firefox offers zstd and Playwright's fetch does not decode it (response.json()
+      // then reads the compressed bytes): ask for an encoding it decodes
+      const headers = { ...route.request().headers(), 'accept-encoding': 'gzip, deflate, br' };
+      const response = await route.fetch({ timeout: 90_000, headers });
       firstPass = { status: response.status(), disposition: response.headers()['content-disposition'] ?? '' };
       if (!response.ok()) return route.fulfill({ response });
       const body = (await response.json()) as Record<string, unknown>;
