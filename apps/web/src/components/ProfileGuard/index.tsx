@@ -138,14 +138,8 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children }) => {
         setHasChecked(true);
 
         if (isProfileCreatePage) {
-          // On profile create page - redirect away if profile EXISTS
-          if (exists === true) {
-            const homePath = `/${locale}/`;
-            logger.debug('[ProfileGuard] 🚨 Profile exists on create page - REDIRECTING to:', homePath);
-            router.push(homePath);
-          } else {
-            logger.debug('[ProfileGuard] ✅ No profile exists - allowing create page access');
-          }
+          // On profile create page with a profile: the effect below sends the user home
+          logger.debug('[ProfileGuard] Profile on create page?', exists);
         } else {
           // On regular pages - redirect to create if profile DOESN'T exist
           if (exists === false) {
@@ -169,6 +163,20 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children }) => {
 
     checkProfile();
   }, [user, locale, shouldSkipCheck, isProfileCreatePage, hasChecked, lastCheckedUserId, profileExists, router]);
+
+  // On the create page with a profile: home. Whenever that is the state, not only
+  // right after the check: the URL can come back to /profile/create after the
+  // check sent the user home (a server action from the page being left, e.g.
+  // around an account switch, lets Next write the old URL back), and the page
+  // then sat on "Redirecting..." for good.
+  // The answer must be this user's: right after an account switch the state still holds the last one's
+  const sendHome = !shouldSkipCheck && hasChecked && user?.id === lastCheckedUserId && !ban && isProfileCreatePage && profileExists === true;
+  useEffect(() => {
+    if (!sendHome) return;
+    const homePath = `/${locale}/`;
+    logger.debug('[ProfileGuard] Profile exists on create page - redirecting to:', homePath);
+    router.push(homePath);
+  }, [sendHome, pathname, locale, router]);
 
   const content = (() => {
     if (shouldSkipCheck) {
