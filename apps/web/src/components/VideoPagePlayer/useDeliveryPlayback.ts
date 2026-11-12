@@ -15,10 +15,10 @@ import { QoeTracker, sendQoeBeacon } from "@/lib/video/qoe";
 
 export const HLS = 'application/x-mpegURL';
 
-/** One id per play session (statistics only, but never Math.random) */
 /** How often a playing session reports to the live view (admin Delivery page "now"; the server forgets a session after 75 s). */
 const QOE_HEARTBEAT_MS = 30_000;
 
+/** One id per play session (statistics only, but never Math.random) */
 function qoeSessionId(): string {
   if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
   return Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
