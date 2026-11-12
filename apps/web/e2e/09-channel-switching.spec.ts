@@ -34,8 +34,12 @@ async function switchTo(page: Page, channelId: string | null) {
   // Switching reloads the session, which remounts the menu closed: wait for
   // that, then check the selection in the reopened channel list
   await waitForSessionSwitch(page, { channelId });
-  await showMenuView(menu, 'channel');
-  await expect(target).toHaveAttribute('aria-checked', 'true');
+  // The page refresh can remount the menu closed again after it was reopened
+  // (run 43210282718: switched, but the menu was closed when checked): reopen and re-check
+  await expect(async () => {
+    await showMenuView(menu, 'channel');
+    await expect(target).toHaveAttribute('aria-checked', 'true', { timeout: 3000 });
+  }).toPass({ timeout: 30000 });
   return menu;
 }
 
