@@ -69,6 +69,22 @@ describe('home featured hero', () => {
     expect(hero.querySelector('.b')).toHaveClass('b-primary');
   });
 
+  it('shows Load more only when there is a next page, so a short first page moves nothing into view', async () => {
+    let resolve!: (v: unknown) => void;
+    mockFetchVideos.mockReturnValueOnce(new Promise((r) => { resolve = r; }) as never);
+    const { unmount } = render(<VideosPage />);
+    // Not under the placeholder grid either: it would jump up when a short page replaced it
+    expect(screen.queryByTestId('home-load-more')).not.toBeInTheDocument();
+    resolve({ data: [video('v1', 'Tafsir'), video('v2', 'Hadith')], cursor: '' });
+    await waitFor(() => expect(screen.queryByTestId('video-grid-loading')).not.toBeInTheDocument());
+    expect(screen.queryByTestId('home-load-more')).not.toBeInTheDocument();
+    unmount();
+
+    mockFetchVideos.mockResolvedValueOnce({ data: [video('v1', 'Tafsir'), video('v2', 'Hadith')], cursor: 'next-page' } as never);
+    render(<VideosPage />);
+    expect((await screen.findByTestId('home-load-more')).querySelector('button')).not.toBeNull();
+  });
+
   it('drops the frame when there is nothing to feature', async () => {
     mockFetchVideos.mockResolvedValueOnce({ data: [], cursor: '' } as never);
     const { container } = render(<VideosPage />);
