@@ -23,7 +23,7 @@ import { parseJsonc } from '../release/jsonc.ts';
 import { localConfig, localRedirectUris, type Json } from './configs.ts';
 import { appDir, AUTH_DIR, HOST, localSecret, PORTS, PROD_HOST_TO_LOCAL, ROOT, STATE_DIR, url, WORKERS, type StackWorker } from './stack.ts';
 import { outboundHandler } from './outbound.ts';
-import { registerFakes, setStackSql, startFakeCdn } from './fake-external.ts';
+import { registerFakes, setStackR2, setStackSql, startFakeCdn } from './fake-external.ts';
 import { startBrowserProxy } from './browser-proxy.ts';
 import { assetsHandler } from './assets.ts';
 
@@ -61,7 +61,13 @@ interface MiniflareInstance {
   ready: Promise<URL>;
   dispose(): Promise<void>;
   getD1Database(binding: string, worker?: string): Promise<D1>;
+  getR2Bucket(binding: string, worker?: string): Promise<R2>;
   getSecretsStoreSecretAPI(binding: string, worker?: string): Promise<() => { create(value: string): Promise<string> }>;
+}
+interface R2 {
+  get(key: string): Promise<{ text(): Promise<string> } | null>;
+  put(key: string, value: string): Promise<unknown>;
+  delete(key: string): Promise<void>;
 }
 interface D1 {
   prepare(sql: string): { bind(...v: unknown[]): { run(): Promise<unknown> }; run(): Promise<unknown>; all<T>(): Promise<{ results: T[] }> };
@@ -340,6 +346,17 @@ async function main(): Promise<void> {
     if (!target) throw new Error(`no database ${name} (${[...databases.keys()].join(', ')})`);
     const db = await mf.getD1Database(target.binding, target.worker);
     return (await db.prepare(sql).all<unknown>()).results;
+  });
+  const buckets = new Map<string, { binding: string; worker: string }>();
+  for (const p of prepared) for (const b of (p.local.config.r2_buckets as Json[] | undefined) ?? []) if (!buckets.has(String(b.bucket_name))) buckets.set(String(b.bucket_name), { binding: String(b.binding), worker: p.name });
+  setStackR2(async (name, key, method, body) => {
+    const target = buckets.get(name);
+    if (!target) throw new Error(`no bucket ${name} (${[...buckets.keys()].join(', ')})`);
+    const bucket = await mf.getR2Bucket(target.binding, target.worker);
+    if (method === 'PUT') return (await bucket.put(key, body ?? '')), { status: 200 };
+    if (method === 'DELETE') return (await bucket.delete(key)), { status: 200 };
+    const object = await bucket.get(key);
+    return object ? { status: 200, body: await object.text() } : { status: 404 };
   });
   await timed('secrets', () => fillSecrets(mf, prepared));
   await timed('clients', () => localClients(mf, prepared));
