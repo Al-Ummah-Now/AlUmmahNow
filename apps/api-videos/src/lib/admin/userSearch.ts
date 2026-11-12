@@ -23,23 +23,27 @@ type Row = Record<string, unknown>;
 const LIVE_PROFILE = `p.kind = 'profile' AND p.is_deleted = 0
 	AND NOT EXISTS (SELECT 1 FROM admin_deletions d WHERE d.kind = 'user' AND d.target_id = p.id AND d.purged_at IS NULL)`;
 
-/**
- * ?1 id, ?2 the term lower-cased, ?3 limit. One index lookup per field, joined by UNION: SQLite
- * does not split `kind = ? AND (a OR b OR c)` across indexes, and scanned every profile instead.
+/*
+ * Exact matches: one small query per field. INDEXED BY pins the expression indexes (search
+ * migration 0021): SQLite's planner differs between versions (CI's Node, D1, local) and without it
+ * one of them searched only on `kind`, i.e. read every profile; with it SQLite errors instead of
+ * silently scanning.
  */
-export const PROFILE_EXACT_SQL = `SELECT p.id AS id FROM (
-		SELECT id FROM ${OWNERSHIP_TABLE} WHERE kind = 'profile' AND id = ?1
-		UNION SELECT id FROM ${OWNERSHIP_TABLE} WHERE kind = 'profile' AND lower(email) = ?2
-		UNION SELECT id FROM ${OWNERSHIP_TABLE} WHERE kind = 'profile' AND lower(handle) = ?2
-	) m JOIN ${OWNERSHIP_TABLE} p ON p.kind = 'profile' AND p.id = m.id
-	WHERE ${LIVE_PROFILE} LIMIT ?3`;
+/** ?1 id, ?2 limit */
+export const PROFILE_BY_ID_SQL = `SELECT id FROM ${OWNERSHIP_TABLE} WHERE kind = 'profile' AND id = ?1 LIMIT ?2`;
+/** ?1 the term lower-cased, ?2 limit */
+export const PROFILE_BY_EMAIL_SQL = `SELECT id FROM ${OWNERSHIP_TABLE} INDEXED BY idx_content_ownership_email_lower WHERE kind = 'profile' AND lower(email) = ?1 LIMIT ?2`;
+/** ?1 the term lower-cased, ?2 limit */
+export const PROFILE_BY_HANDLE_SQL = `SELECT id FROM ${OWNERSHIP_TABLE} INDEXED BY idx_content_ownership_handle_lower WHERE kind = 'profile' AND lower(handle) = ?1 LIMIT ?2`;
+/** ?1 JSON array of ids: the ones that are live profiles (primary-key lookups) */
+export const LIVE_PROFILE_IDS_SQL = `SELECT p.id AS id FROM ${OWNERSHIP_TABLE} p WHERE p.kind = 'profile' AND p.id IN (SELECT value FROM json_each(?1)) AND ${LIVE_PROFILE}`;
 
 /** ?1 the LIKE term, ?2 limit. Stops at the limit: no COUNT, no ORDER BY (the caller ranks). */
 export const PROFILE_CONTAINS_SQL = `SELECT p.id AS id FROM ${OWNERSHIP_TABLE} p WHERE ${LIVE_PROFILE}
 	AND (lower(p.admin_title) LIKE ?1 ESCAPE '\\' OR lower(p.handle) LIKE ?1 ESCAPE '\\' OR lower(p.email) LIKE ?1 ESCAPE '\\') LIMIT ?2`;
 
 /** ?1 the term lower-cased, ?2 limit. A range on the lower(handle) index, not a LIKE scan. */
-export const CHANNEL_HANDLE_PREFIX_SQL = `SELECT DISTINCT owner_id FROM ${OWNERSHIP_TABLE}
+export const CHANNEL_HANDLE_PREFIX_SQL = `SELECT DISTINCT owner_id FROM ${OWNERSHIP_TABLE} INDEXED BY idx_content_ownership_handle_lower
 	WHERE kind = 'channel' AND is_deleted = 0 AND owner_id IS NOT NULL AND lower(handle) >= ?1 AND lower(handle) < ?1 || char(1114111) LIMIT ?2`;
 
 
@@ -136,9 +140,18 @@ export async function searchUsers(env: AdminEnv, query: AdminUserSearchQuery): P
  */
 export async function profileMatches(db: NonNullable<AdminEnv['SEARCH_DB']>, term: string, max: number): Promise<string[]> {
 	const lower = term.toLowerCase();
-	const exact = await db.prepare(PROFILE_EXACT_SQL).bind(term, lower, max).all<{ id: string }>();
-	const exactIds = (exact.results ?? []).map((r) => r.id);
-	if (exactIds.length) return exactIds;
+	const found = await Promise.all([
+		db.prepare(PROFILE_BY_ID_SQL).bind(term, max).all<{ id: string }>(),
+		db.prepare(PROFILE_BY_EMAIL_SQL).bind(lower, max).all<{ id: string }>(),
+		db.prepare(PROFILE_BY_HANDLE_SQL).bind(lower, max).all<{ id: string }>(),
+	]);
+	const exact = [...new Set(found.flatMap((r) => (r.results ?? []).map((x) => x.id)))];
+	if (exact.length) {
+		const live = await db.prepare(LIVE_PROFILE_IDS_SQL).bind(JSON.stringify(exact)).all<{ id: string }>();
+		const ids = new Set((live.results ?? []).map((r) => r.id));
+		// Exact hits that were soft-deleted: nothing to offer, and no scan either
+		return exact.filter((id) => ids.has(id)).slice(0, max);
+	}
 	const { results } = await db.prepare(PROFILE_CONTAINS_SQL).bind(likeTerm(term), max).all<{ id: string }>();
 	return (results ?? []).map((r) => r.id);
 }

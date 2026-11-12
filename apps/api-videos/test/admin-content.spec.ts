@@ -12,7 +12,7 @@ import { fromHono } from 'chanfana';
 import { applySuspensionHold, deletionDaysLeft, deletionStatusOf, isPurgeDue, liftSuspensionHold, MessageType, purgeAfterOf, VIDEOS_BANNED_CODE } from '@al-ummah/shared-types';
 import { canViewPlaylist } from '../src/lib/playlists';
 import { ownershipCompleteKey } from '@al-ummah/shared-types';
-import { CHANNEL_HANDLE_PREFIX_SQL, PROFILE_EXACT_SQL } from '../src/lib/admin/userSearch';
+import { CHANNEL_HANDLE_PREFIX_SQL, LIVE_PROFILE_IDS_SQL, PROFILE_BY_EMAIL_SQL, PROFILE_BY_HANDLE_SQL, PROFILE_BY_ID_SQL } from '../src/lib/admin/userSearch';
 import adminRouter from '../src/routers/admin.router';
 import { withSearchSync } from '../src/lib/search/sync';
 import { runOwnershipPass } from '../src/lib/search/ownership';
@@ -446,12 +446,18 @@ describe('channel actions', () => {
 		const { db, call } = await setup();
 		const plan = (sql: string) => (db.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as Array<{ detail: string }>).map((r) => r.detail).join(' | ');
 		const bound = (sql: string, values: string[]) => values.reduce((q, v, i) => q.replaceAll(`?${i + 1}`, v), sql);
-		const exact = plan(bound(PROFILE_EXACT_SQL, ["'usr_x'", "'x@example.com'", '5']));
-		assert.match(exact, /idx_content_ownership_email_lower/, exact);
-		assert.match(exact, /idx_content_ownership_handle_lower/, exact);
-		assert.doesNotMatch(exact, /SCAN (content_ownership|p)\b/, exact);
-		const handles = plan(bound(CHANNEL_HANDLE_PREFIX_SQL, ["'ab'", '5']));
-		assert.match(handles, /idx_content_ownership_handle_lower/, handles);
+		const plans = [
+			plan(bound(PROFILE_BY_ID_SQL, ["'usr_x'", '5'])),
+			plan(bound(PROFILE_BY_EMAIL_SQL, ["'x@example.com'", '5'])),
+			plan(bound(PROFILE_BY_HANDLE_SQL, ["'x'", '5'])),
+			plan(bound(LIVE_PROFILE_IDS_SQL, [`'["usr_x"]'`])),
+			plan(bound(CHANNEL_HANDLE_PREFIX_SQL, ["'ab'", '5'])),
+		];
+		for (const p of plans) assert.doesNotMatch(p, /\bSCAN (content_ownership|p)\b/, p);
+		assert.match(plans[0], /\(kind=\? AND id=\?\)/, plans[0]);
+		assert.match(plans[1], /idx_content_ownership_email_lower \(kind=\? AND <expr>=\?\)/, plans[1]);
+		assert.match(plans[2], /idx_content_ownership_handle_lower \(kind=\? AND <expr>=\?\)/, plans[2]);
+		assert.match(plans[4], /idx_content_ownership_handle_lower \(kind=\? AND <expr>>\? AND <expr><\?\)/, plans[4]);
 		// Behaviour the picker relies on: an exact email answers alone; a soft-deleted user is never offered
 		assert.deepEqual((await call('GET', `/users/search?q=${encodeURIComponent(`${OTHER}@example.com`)}`)).body.result.items.map((u: { id: string }) => u.id), [OTHER]);
 		await call('POST', `/users/${OTHER}/delete-data`, {});
