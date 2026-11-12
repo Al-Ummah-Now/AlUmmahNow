@@ -27,7 +27,8 @@ import {
 import type { AdminBindings } from '../base/types';
 import { callVideos, VideosError, type VideosClientEnv } from './content/videosClient';
 import { getWarning, recordWarningEmail } from './content/warnings';
-import { escapeHtml, sendContactEmail, type RenderedEmail } from './contact-email';
+import { envTag, sendContactEmail, type RenderedEmail } from './contact-email';
+import { renderEmail, type EmailDoc } from './email/layout';
 import { MAX_ATTEMPTS, type QueueMessageLike } from './contact-mail-queue';
 import { videosWebOrigin } from './invites';
 import { logger } from './logger';
@@ -71,6 +72,11 @@ const COPY = {
     guidelines: 'Please read the community guidelines to keep your account in good standing:',
     repeat: 'Repeated warnings can lead to your account being suspended.',
     settings: 'You can turn these emails off in your notification settings:',
+    settingsLink: 'Notification settings',
+    preheader: 'Please read the community guidelines to keep your account in good standing.',
+    heading: 'Your account received a warning',
+    cta: 'Read the community guidelines',
+    footer: 'You received this email because a moderator warned your Al Ummah Now account.',
     sign: 'Al Ummah Now',
   },
   ar: {
@@ -82,6 +88,11 @@ const COPY = {
     guidelines: 'يُرجى قراءة إرشادات المجتمع للحفاظ على حسابك في وضع جيد:',
     repeat: 'قد يؤدي تكرار التحذيرات إلى إيقاف حسابك.',
     settings: 'يمكنك إيقاف هذه الرسائل من إعدادات الإشعارات:',
+    settingsLink: 'إعدادات الإشعارات',
+    preheader: 'يُرجى قراءة إرشادات المجتمع للحفاظ على حسابك في وضع جيد.',
+    heading: 'تلقّى حسابك تحذيرًا',
+    cta: 'اقرأ إرشادات المجتمع',
+    footer: 'وصلتك هذه الرسالة لأن أحد المشرفين أصدر تحذيرًا لحسابك في الأمة الآن.',
     sign: 'الأمة الآن',
   },
 } as const;
@@ -90,9 +101,6 @@ const REASONS: Record<NotificationEmailLocale, Record<ReportReason, string>> = {
   en: NOTIFICATION_CENTER_EN.accountWarning.reasons,
   ar: NOTIFICATION_CENTER_AR.accountWarning.reasons,
 };
-
-/** Environment tag in subjects outside production, as contact mail does. */
-const envTag = (environment: string | undefined) => (environment && environment !== 'production' ? `[${environment}] ` : '');
 
 export interface WarningEmailInput {
   to: string;
@@ -105,42 +113,36 @@ export interface WarningEmailInput {
   environment?: string;
 }
 
-/** The warning email in the user's language: reason in plain words, count, guidelines and settings links. */
+/**
+ * The warning email in exactly one language (chosen when the moderator warned), on the shared
+ * branded layout (lib/email/layout.ts): reason and count, the community guidelines as the action,
+ * the notification settings link, and why the reader got it.
+ */
 export function renderWarningEmail(input: WarningEmailInput): RenderedEmail {
   const s = COPY[input.locale];
   const reason = REASONS[input.locale][input.reasonCode] ?? REASONS[input.locale].other;
   const count = input.count.toLocaleString(input.locale === 'ar' ? 'ar' : 'en');
   const guidelinesUrl = input.origin ? `${input.origin}/${input.locale}/community-guidelines` : null;
   const settingsUrl = input.origin ? `${input.origin}/${input.locale}/settings#notifications` : null;
-  const text = [
-    s.greeting(input.name),
-    '',
-    s.intro,
-    '',
-    `${s.reason}: ${reason}`,
-    `${s.count}: ${count}`,
-    '',
-    guidelinesUrl ? `${s.guidelines}\n${guidelinesUrl}` : '',
-    s.repeat,
-    '',
-    settingsUrl ? `${s.settings}\n${settingsUrl}` : '',
-    '',
-    `— ${s.sign}`,
-  ]
-    .filter((line, i, all) => line !== '' || all[i - 1] !== '')
-    .join('\n');
-  const dir = input.locale === 'ar' ? 'rtl' : 'ltr';
-  const link = (url: string) => `<a href="${escapeHtml(url)}">${escapeHtml(url)}</a>`;
-  const html = `<!doctype html><html lang="${input.locale}" dir="${dir}"><body style="margin:0;padding:24px;font-family:system-ui,-apple-system,'Segoe UI',Tahoma,sans-serif;font-size:15px;line-height:1.6">
-<p>${escapeHtml(s.greeting(input.name))}</p>
-<p>${escapeHtml(s.intro)}</p>
-<p><strong>${escapeHtml(s.reason)}:</strong> ${escapeHtml(reason)}<br><strong>${escapeHtml(s.count)}:</strong> ${escapeHtml(count)}</p>
-${guidelinesUrl ? `<p>${escapeHtml(s.guidelines)}<br>${link(guidelinesUrl)}</p>` : ''}
-<p>${escapeHtml(s.repeat)}</p>
-${settingsUrl ? `<p style="opacity:.75">${escapeHtml(s.settings)}<br>${link(settingsUrl)}</p>` : ''}
-<p>— ${escapeHtml(s.sign)}</p>
-</body></html>`;
-  return { to: input.to, subject: `${envTag(input.environment)}${s.subject}`, text, html };
+  const doc: EmailDoc = {
+    locale: input.locale,
+    subject: `${envTag(input.environment)}${s.subject}`,
+    preheader: s.preheader,
+    greeting: s.greeting(input.name),
+    heading: s.heading,
+    blocks: [
+      { kind: 'p', text: s.intro },
+      { kind: 'facts', rows: [[s.reason, reason], [s.count, count]] },
+      { kind: 'notice', text: s.repeat, tone: 'warning' },
+    ],
+    ...(guidelinesUrl ? { cta: { label: s.cta, url: guidelinesUrl } } : {}),
+    after: settingsUrl ? [{ kind: 'small', text: s.settings }, { kind: 'link', label: s.settingsLink, url: settingsUrl }] : [],
+    signoff: s.sign,
+    reason: s.footer,
+    ...(input.origin ? { siteUrl: input.origin } : {}),
+  };
+  const { subject, html, text } = renderEmail(doc);
+  return { to: input.to, subject, html, text };
 }
 
 /** Needs-action item key of one warning email (lib/errors-actions.ts "warning-email" retries it). */

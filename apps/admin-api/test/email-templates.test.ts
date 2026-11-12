@@ -8,6 +8,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { renderAcknowledgement, renderInboxNotification, renderReply, replyLocaleOf, type RenderedEmail } from '../src/lib/contact-email';
 import { renderErrorAlert } from '../src/lib/errors-alerts';
+import { renderWarningEmail } from '../src/lib/warning-mail';
 import { EMAIL_LOGO_URL, escapeHtml, renderEmail } from '../src/lib/email/layout';
 
 const ARABIC = /[؀-ۿ]/;
@@ -141,3 +142,18 @@ describe('the layout', () => {
     assert.ok(!mail.text.includes('Peek'));
   });
 });
+
+describe('user warning email (shared layout, one language)', () => {
+  for (const locale of ['en', 'ar'] as const) {
+    it(`${locale}: branded layout, one language, guidelines as the action, plain text matches`, () => {
+      const mail = renderWarningEmail({ to: 'a@b.c', name: 'Amina <b>', locale, reasonCode: 'spam', count: 3, origin: 'https://videos.alummahnow.net', environment: 'production' });
+      wellFormed(mail, locale);
+      parity(mail);
+      assert.ok(mail.html.includes(`https://videos.alummahnow.net/${locale}/community-guidelines`));
+      assert.ok(mail.html.includes(`https://videos.alummahnow.net/${locale}/settings#notifications`));
+      assert.ok(!mail.html.includes('Amina <b>'), 'names are escaped');
+      if (locale === 'en') assert.doesNotMatch(visibleText(mail.html), ARABIC, 'English email has no Arabic');
+    });
+  }
+});
+
