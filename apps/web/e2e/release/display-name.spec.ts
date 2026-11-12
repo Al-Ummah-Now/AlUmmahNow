@@ -6,15 +6,16 @@
  * admin-web's user list. (The owner's own profile is like this: www showed
  * their email.)
  *
- * Every user, channel, video and comment is created here and removed by the
- * data scope afterwards, pass or fail.
+ * The comment is on a community post: a user without a channel comments there
+ * as themselves (video comments are always posted as a channel, whose name is
+ * then the author). Every user, channel, post and comment is created here and
+ * removed by the data scope afterwards, pass or fail.
  */
 import { expect } from '@playwright/test';
 import { test, ns } from './builders';
 import { signInAsAdmin } from './admin-session';
-import { releaseEnv, target } from './targets';
+import { target } from './targets';
 import { apiFetch, gotoSettled, openMenuUntil, type WebUser } from './web-session';
-import { watchUrl } from './videos';
 
 // Signs users in through the auth server: traces would hold the password and code
 test.use({ trace: 'off' });
@@ -31,16 +32,17 @@ async function namesOnly(user: WebUser, first: string, last: string): Promise<vo
 
 test.describe('display name falls back to first + last', () => {
   test('header, comment author and admin user list show the first and last name, not the email', async ({ browser, page, ownData }) => {
-    test.fixme(releaseEnv() === 'local', 'quarantined: #1021 @meywd: commenting answers "Channel not found" on the local stack');
     test.setTimeout(240000);
     const stamp = Date.now().toString(36);
     const first = `Firstname${stamp}`;
     const last = 'Lastname';
     const full = `${first} ${last}`;
 
-    // A creator with a video to comment on
+    // A creator with a community post to comment on (no upload, so no encode wait)
     const creator = await ownData.createCreator(browser, 'dn-creator');
-    const video = await ownData.createVideo(creator.user, creator.channelIds[0], { title: `Display name ${ns()} ${stamp}` });
+    const channelId = creator.channelIds[0];
+    const postText = `Display name post ${ns()} ${stamp}`;
+    const postId = await ownData.createPost(creator.user, channelId, { text: postText });
 
     // The names-only user (no channel): signed in on this page
     const user = await ownData.createUser(page, 'dn-names');
@@ -60,22 +62,33 @@ test.describe('display name falls back to first + last', () => {
     await openMenuUntil(page, profileLink);
     await expect(profileLink).toContainText(full);
 
-    // Comment author: commenting without a channel, the comment carries the profile's name
+    // Comment author: the user (no channel, so no channelId header) comments on the post as themselves
     const text = `Display name comment ${stamp}`;
-    const res = await apiFetch(user, `/api/videos/${video.id}/comments`, {
+    const commentsPath = `/api/community/channels/${channelId}/posts/${postId}/comments`;
+    const res = await apiFetch(user, commentsPath, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', channelId: user.userId },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: text }),
     });
     const body = await res.text();
-    expect(res.status, `POST comment: ${body}`).toBeLessThan(300);
-    const commentId = (JSON.parse(body) as { result?: { comment?: { id?: string } }; comment?: { id?: string } }).result?.comment?.id;
-    if (commentId) ownData.onCleanup(`comment ${commentId}`, () => apiFetch(user, `/api/videos/${video.id}/comments/${commentId}`, { method: 'DELETE' }));
+    expect(res.status, `POST community comment: ${body}`).toBeLessThan(300);
+    const parsed = JSON.parse(body) as { result?: { comment?: { id?: string; userDisplayName?: string } }; comment?: { id?: string; userDisplayName?: string } };
+    const created = parsed.result?.comment ?? parsed.comment;
+    // Removed before the post (cleanup runs newest first); the post's delete would take it too
+    if (created?.id) ownData.onCleanup(`community comment ${created.id}`, () => apiFetch(user, `${commentsPath}/${created.id}`, { method: 'DELETE' }));
+    expect(created?.userDisplayName).toBe(full);
 
-    await gotoSettled(page, watchUrl(video.id, 'en'));
-    const comment = page.locator('#comments').getByTestId('comment').filter({ hasText: text });
-    await expect(comment).toBeVisible({ timeout: 30000 });
-    await expect(comment.getByRole('heading', { level: 4 })).toHaveText(full);
+    // The channel's Community tab shows the comment under that name
+    await gotoSettled(page, `${target().web}/en/channels/${channelId}?tab=community`);
+    const card = page.getByRole('article').filter({ hasText: postText });
+    await expect(card).toBeVisible({ timeout: 30000 });
+    const comment = card.getByText(text);
+    await expect(async () => {
+      if (!(await comment.isVisible())) await card.getByRole('button', { name: 'Comments' }).click();
+      await expect(comment).toBeVisible({ timeout: 3000 });
+    }).toPass({ timeout: 30000 });
+    await expect(card.getByText(full, { exact: true })).toBeVisible();
+    await expect(card.getByText(user.email)).toHaveCount(0);
 
     // Admin user list: an admin in a browser of its own finds the user by email
     const adminContext = await browser.newContext();
