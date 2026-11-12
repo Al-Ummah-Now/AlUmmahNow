@@ -487,14 +487,17 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
             timeRemaining = speed > 0 ? bytesRemaining / speed : 0;
           }
 
-          setUploadProgress({
+          // tus-js-client reports progress before every PATCH, retries included:
+          // keep "Reconnecting" until onReconnecting(false) (a chunk was accepted)
+          setUploadProgress(prev => ({
             percentage: adjustedPercent,
             state: 'uploading',
             speed,
             bytesUploaded,
             bytesTotal,
             timeRemaining,
-          });
+            reconnecting: prev?.state === 'uploading' ? prev.reconnecting : undefined,
+          }));
           onProgress(adjustedPercent);
         },
         // tus-js-client does not await onSuccess, so every failure in here

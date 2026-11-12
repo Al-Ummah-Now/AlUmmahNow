@@ -1,3 +1,4 @@
+import type { Page } from '@playwright/test';
 import { test, expect, helpers } from './fixtures';
 import { AUTH_STATE } from './test-utils/auth-state';
 import {
@@ -29,13 +30,32 @@ const BUNNY_UPLOAD_HOSTS = /(^|\.)(bunnycdn\.com|bunny\.net)$/;
 const SECRET_MARKERS = ['AuthorizationSignature', 'AuthorizationExpire', 'AccessKey', 'bunny-stream-key', 'image_storage_key'];
 const apiHost = new URL(API_URL).hostname;
 
+/**
+ * Adds the video each upload initiate created (or reused) to `ids`, so the
+ * afterEach deletes it even when no TUS POST carried its id: an initiate that
+ * reuses an unfinished upload of the same file resumes it without a POST.
+ */
+function trackInitiatedVideos(page: Page, ids: Set<string>) {
+  page.on('response', (response) => {
+    if (response.request().method() !== 'POST' || !/\/api\/videos\/upload\/initiate(\?|$)/.test(response.url())) return;
+    response
+      .json()
+      .then((body: { result?: { videoId?: string } }) => {
+        if (body?.result?.videoId) ids.add(body.result.videoId);
+      })
+      .catch(() => undefined);
+  });
+}
+
 test.describe('TUS Proxy - Security Verification', () => {
   test.use({ storageState: AUTH_STATE.single });
 
   let tracker: ReturnType<typeof trackUploads>;
+  const initiated = new Set<string>();
 
   test.beforeEach(async ({ page }) => {
     tracker = trackUploads(page);
+    trackInitiatedVideos(page, initiated);
     // The upload control responses (initiate/complete/status, called from the
     // browser straight to api-videos) and any server action response are where
     // upload credentials could leak to the browser. Streamed action bodies are
@@ -59,7 +79,8 @@ test.describe('TUS Proxy - Security Verification', () => {
   });
 
   test.afterEach(async ({ page }) => {
-    await deleteVideos(page, tracker.videoIds);
+    await deleteVideos(page, new Set([...tracker.videoIds, ...initiated]));
+    initiated.clear();
   });
 
   test('uploads only through the TUS proxy with a Bearer token and no Bunny credentials', async ({ page }) => {
@@ -140,14 +161,17 @@ test.describe('TUS Proxy - Error Handling', () => {
   test.use({ storageState: AUTH_STATE.single });
 
   let tracker: ReturnType<typeof trackUploads>;
+  const initiated = new Set<string>();
 
   test.beforeEach(async ({ page }) => {
     tracker = trackUploads(page);
+    trackInitiatedVideos(page, initiated);
     await gotoUpload(page, 'en');
   });
 
   test.afterEach(async ({ page }) => {
-    await deleteVideos(page, tracker.videoIds);
+    await deleteVideos(page, new Set([...tracker.videoIds, ...initiated]));
+    initiated.clear();
   });
 
   test('keeps retrying while the proxy fails, says it is reconnecting, and finishes once it recovers', async ({ page }) => {
