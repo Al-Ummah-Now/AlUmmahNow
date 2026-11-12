@@ -7,17 +7,23 @@ name: Local E2E
 # The deployed specs keep running against QA/stage (release-e2e.yml); see the placement table in the build job's summary.
 
 # The Auth repo comes as its released local-stack bundle (scripts/local-stack/fetch-auth.ts),
-# never as a checkout, so these jobs may also run in default-branch contexts (push, schedule, tags)
-# without CodeQL's cache-poisoning finding; those triggers come once batch 1 is green.
+# never as a checkout, so these jobs run in default-branch contexts (push, schedule, release) too
+# without CodeQL's cache-poisoning finding.
+# Every pull request (local E2E is the PR suite: fast, isolated, no QA), every push to main and
+# nightly, so main always has its own result; release.yml calls it for every release tag, and
+# production waits for it next to the deployed suite on stage (release-e2e.yml).
 on:
   pull_request:
     branches: [main]
-    paths:
-      - 'scripts/local-stack/**'
-      - '.github/actions/local-stack-up/**'
-      - '.github/workflows/local-e2e.yml'
-      - 'apps/web/e2e/**'
-      - 'apps/web/playwright.release.config.ts'
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  push:
+    branches: [main]
+  schedule:
+    - cron: '45 3 * * *'
+  workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
