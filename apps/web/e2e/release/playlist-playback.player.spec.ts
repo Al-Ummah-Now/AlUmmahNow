@@ -3,16 +3,16 @@
  * reports "when you hit play all on playlist, or when you hit play next or it goes there auto,
  * shouldnt it auto play the video?" and "shouldnt it play them as ORDERED IN PLAYLIST").
  *
- * A run account makes a playlist of the seed's three videos and reorders it, so the saved order
- * is neither the add order nor a date or title order. Then: the playlist page's Play all opens the
+ * A run creator uploads three videos of its own and makes a playlist of them, then reorders it, so
+ * the saved order is neither the upload order nor a date or title order (builders.ts: the spec makes
+ * its own data and removes it afterwards). Then: the playlist page's Play all opens the
  * first item with the list in the URL and it plays on its own; the pane lists the saved order with
  * the first item highlighted; when the video ends the next item in that order plays and the
  * highlight moves; after the last item the list stops (loop off); with loop on the first item
- * follows. The Arabic pane is right to left in the same order. The playlist is deleted afterwards.
+ * follows. The Arabic pane is right to left in the same order. Everything is deleted afterwards.
  */
-import { expect, test, type Page } from '@playwright/test';
-import { seeded } from './fixtures';
-import { studioOwner } from './studio';
+import { expect, type Page } from '@playwright/test';
+import { test } from './builders';
 import { target } from './targets';
 import { apiFetch } from './web-session';
 
@@ -43,29 +43,21 @@ const paneOrder = (page: Page) =>
 const current = (page: Page) => page.locator('[data-testid="playlist-pane-item"][aria-current="true"]');
 
 test.describe('Release: playlist playback', () => {
-  test('Play all plays the saved order on its own; the end advances, stops at the last item, and loops', async ({ page }) => {
-    test.setTimeout(300_000);
-    const { videos } = await seeded();
-    const { user, channelId } = await studioOwner(page, 'playlist-play');
+  test('Play all plays the saved order on its own; the end advances, stops at the last item, and loops', async ({ page, browser, ownData }) => {
+    test.setTimeout(900_000);
+    const creator = await ownData.createCreator(browser, 'playlist-play');
+    const user = creator.user;
+    const channelId = creator.channelIds[0];
     const json = { 'Content-Type': 'application/json', channelId };
-    let playlistId = '';
-    try {
-      const created = await apiFetch(user, '/api/playlists', {
-        method: 'POST',
-        headers: json,
-        body: JSON.stringify({ title: `Release playlist ${Date.now().toString(36)}`, isPublic: true, channelId }),
-      });
-      const createdText = await created.text();
-      expect(created.status, `POST /api/playlists: ${createdText}`).toBeLessThan(300);
-      playlistId = (JSON.parse(createdText) as { result?: { playlist?: { id?: string } } }).result?.playlist?.id ?? '';
-      expect(playlistId, 'playlist created').not.toBe('');
-
-      // Added in one order, then reordered: the saved order is what must play
-      for (const v of [videos.landscape, videos.landscape2, videos.vertical]) {
-        const added = await apiFetch(user, `/api/playlists/${playlistId}/videos`, { method: 'POST', headers: json, body: JSON.stringify({ videoId: v.id }) });
-        expect(added.status, `add ${v.title}: ${await added.text()}`).toBeLessThan(300);
-      }
-      const order = [videos.landscape2.id, videos.landscape.id, videos.vertical.id];
+    const [first, second, third] = [
+      await ownData.createVideo(user, channelId, { clip: 'landscape40', title: `Playlist A ${Date.now().toString(36)}` }),
+      await ownData.createVideo(user, channelId, { clip: 'landscape40', title: `Playlist B ${Date.now().toString(36)}` }),
+      await ownData.createVideo(user, channelId, { clip: 'landscape40', title: `Playlist C ${Date.now().toString(36)}` }),
+    ];
+    {
+      // Made in one order, then reordered: the saved order is what must play
+      const playlistId = await ownData.createPlaylist(user, channelId, { videoIds: [first.id, second.id, third.id], isPublic: true });
+      const order = [second.id, first.id, third.id];
       const reordered = await apiFetch(user, `/api/playlists/${playlistId}/videos/order`, { method: 'PUT', headers: json, body: JSON.stringify({ videoIds: order }) });
       expect(reordered.status, `reorder: ${await reordered.text()}`).toBeLessThan(300);
 
@@ -120,8 +112,6 @@ test.describe('Release: playlist playback', () => {
       await expect(pane).toHaveAttribute('dir', 'rtl', { timeout: 30_000 });
       await expect.poll(() => paneOrder(page)).toEqual(order);
       await expect(current(page)).toHaveAttribute('data-video-id', order[1]);
-    } finally {
-      if (playlistId) await apiFetch(user, `/api/playlists/${playlistId}`, { method: 'DELETE', headers: { channelId } });
     }
   });
 });

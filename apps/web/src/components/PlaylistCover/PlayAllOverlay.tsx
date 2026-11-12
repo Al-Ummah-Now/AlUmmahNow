@@ -14,7 +14,7 @@ export function PlayAllOverlay({ href, label }: { href: string; label: string })
       data-testid="playlist-card-play-all"
       className="absolute top-2 start-2 z-10 inline-flex items-center gap-1.5 rounded-full bg-[var(--fanous-color-primary)] px-3 py-1.5 text-xs font-semibold text-[var(--fanous-color-on-primary)] shadow hover:bg-[var(--fanous-color-primary-hover)] hover:text-[var(--fanous-color-on-primary-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fanous-color-focus-ring)]"
     >
-      <Play className="h-3.5 w-3.5 fill-current rtl:-scale-x-100" aria-hidden="true" />
+      <Play className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
       {label}
     </Link>
   );

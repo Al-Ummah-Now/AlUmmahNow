@@ -140,10 +140,10 @@ export function PlaylistPane(props: PlaylistPaneProps) {
         </div>
         <div className="flex items-center gap-1" role="group" aria-label={tp.queueLabel}>
           <button type="button" className={iconButton} onClick={props.onPrevious} disabled={!props.canPrevious} aria-label={tp.previousVideo} title={tp.previousVideo} data-testid="playlist-pane-previous">
-            <SkipBack className="h-4 w-4 rtl:-scale-x-100" aria-hidden="true" />
+            <SkipBack className="h-4 w-4" aria-hidden="true" />
           </button>
           <button type="button" className={iconButton} onClick={props.onNext} disabled={!props.canNext} aria-label={tp.nextVideo} title={tp.nextVideo} data-testid="playlist-pane-next">
-            <SkipForward className="h-4 w-4 rtl:-scale-x-100" aria-hidden="true" />
+            <SkipForward className="h-4 w-4" aria-hidden="true" />
           </button>
           <button type="button" className={iconButton} onClick={props.onToggleLoop} aria-pressed={loop} aria-label={tp.loop} title={tp.loop} data-testid="playlist-pane-loop">
             <Repeat className="h-4 w-4" aria-hidden="true" />
@@ -210,7 +210,7 @@ export function PlaylistPane(props: PlaylistPaneProps) {
                       }`}
                     >
                       <span className="w-6 shrink-0 text-center text-xs tabular-nums text-[var(--fanous-color-text-muted)]" aria-hidden="true">
-                        {current ? <Play className="mx-auto h-3.5 w-3.5 fill-current text-[var(--fanous-color-accent)] rtl:-scale-x-100" /> : (item.position + 1).toLocaleString(lang)}
+                        {current ? <Play className="mx-auto h-3.5 w-3.5 fill-current text-[var(--fanous-color-accent)]" /> : (item.position + 1).toLocaleString(lang)}
                       </span>
                       <span className="relative block aspect-video w-24 shrink-0 overflow-hidden rounded-md bg-[var(--fanous-color-surface-raised)]">
                         {item.thumbnailUrl && (
