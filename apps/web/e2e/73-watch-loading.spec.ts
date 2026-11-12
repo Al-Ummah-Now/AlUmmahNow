@@ -1,14 +1,37 @@
-import type { Page } from '@playwright/test';
+import type { APIRequestContext, Page } from '@playwright/test';
 import { test, expect } from './fixtures';
 import { ANONYMOUS_STATE } from './test-utils/auth-state';
+import { qaLectures } from './test-utils/watch-page';
 
 /**
  * The watch page loads the video through a server action after hydration.
  * Until it answers the page shows a skeleton of itself, never comments first,
  * and nothing jumps when the real content arrives.
  */
-const VIDEO = process.env.E2E_PLAYBACK_VIDEO_ID || '443418c1-dc70-43d9-944d-5388ab7dc4c3';
 const DELAY_MS = 2000;
+
+/**
+ * A public, processed "QA Lecture …" seed video (the Seed QA workflow keeps them), or
+ * E2E_PLAYBACK_VIDEO_ID when set. Not a hard-coded id: the theme-demo video these tests
+ * used to open (443418c1-…) is gone from QA, and every test then waited for comments on
+ * a "Video not found" page.
+ */
+async function watchVideo(request: APIRequestContext): Promise<string> {
+  if (process.env.E2E_PLAYBACK_VIDEO_ID) return process.env.E2E_PLAYBACK_VIDEO_ID;
+  return (await qaLectures(request))[0].id;
+}
+
+/**
+ * Waits for the loaded watch page's comments, and fails at once with a clear message when
+ * the page says the video does not exist instead of waiting out the timeout.
+ */
+async function expectComments(page: Page, video: string): Promise<void> {
+  const comments = page.getByTestId('comments-section');
+  const notFound = page.getByRole('heading', { level: 1, name: /^(Video not found|الفيديو غير موجود)$/ });
+  await expect(comments.or(notFound).first()).toBeVisible({ timeout: 30000 });
+  expect(await notFound.count(), `the watch page says video ${video} was not found`).toBe(0);
+  await expect(comments).toBeVisible();
+}
 
 async function delayVideoAction(page: Page): Promise<void> {
   await page.route(/\/video(\/|\?|$)/, async (route) => {
@@ -134,26 +157,28 @@ for (const lang of ['en', 'ar'] as const) {
   test.describe(`Watch page loading (${lang})`, () => {
     test.use({ storageState: ANONYMOUS_STATE });
 
-    test(`WATCH-LOAD-001 shows the skeleton, not comments, until the video is known (${lang})`, async ({ page }) => {
+    test(`WATCH-LOAD-001 shows the skeleton, not comments, until the video is known (${lang})`, async ({ page, request }) => {
+      const VIDEO = await watchVideo(request);
       await delayVideoAction(page);
       await page.goto(`/${lang}/video/${VIDEO}`, { waitUntil: 'domcontentloaded' });
       await expect(page.getByTestId('watch-skeleton')).toBeVisible();
       await expect(page.getByTestId('comments-skeleton')).toBeVisible();
       await expect(page.getByTestId('comments-section')).toHaveCount(0);
 
-      await expect(page.getByTestId('comments-section')).toBeVisible({ timeout: 30000 });
+      await expectComments(page, VIDEO);
       await expect(page.getByTestId('watch-skeleton')).toHaveCount(0);
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     });
 
     for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
-      test(`WATCH-LOAD-003 one comments skeleton, then the comments (${lang}, ${viewport.width})`, async ({ page }) => {
+      test(`WATCH-LOAD-003 one comments skeleton, then the comments (${lang}, ${viewport.width})`, async ({ page, request }) => {
+        const VIDEO = await watchVideo(request);
         await page.setViewportSize(viewport);
         await trackCommentsSkeletons(page);
         await delayVideoAction(page);
         await page.goto(`/${lang}/video/${VIDEO}`, { waitUntil: 'domcontentloaded' });
         await expect(page.getByTestId('comments-skeleton')).toBeVisible();
-        await expect(page.getByTestId('comments-section')).toBeVisible({ timeout: 30000 });
+        await expectComments(page, VIDEO);
         await expect(page.getByTestId('comments-skeleton')).toHaveCount(0);
         await expect(page.getByTestId('comments-section')).toHaveCount(1);
         expect(await skeletonStats(page)).toEqual({ created: 1, maxAtOnce: 1 });
@@ -164,11 +189,12 @@ for (const lang of ['en', 'ar'] as const) {
       test.describe(name, () => {
         test.use({ viewport });
 
-        test(`WATCH-LOAD-002 the page does not jump while loading (${lang}, ${name})`, async ({ page }) => {
+        test(`WATCH-LOAD-002 the page does not jump while loading (${lang}, ${name})`, async ({ page, request }) => {
+          const VIDEO = await watchVideo(request);
           await trackShift(page);
           await delayVideoAction(page);
           await page.goto(`/${lang}/video/${VIDEO}`, { waitUntil: 'domcontentloaded' });
-          await expect(page.getByTestId('comments-section')).toBeVisible({ timeout: 30000 });
+          await expectComments(page, VIDEO);
           await page.waitForTimeout(1500);
           const { cls, shifts } = await page.evaluate(() => {
             const w = window as unknown as { __cls: number; __shifts: string[] };
@@ -177,7 +203,8 @@ for (const lang of ['en', 'ar'] as const) {
           expect(cls, `shifts: ${shifts.join('; ')}`).toBeLessThan(0.1);
         });
 
-        test(`WATCH-LOAD-004 the skeleton holds the player, title, channel row, actions and comments in place (${lang}, ${name})`, async ({ page }) => {
+        test(`WATCH-LOAD-004 the skeleton holds the player, title, channel row, actions and comments in place (${lang}, ${name})`, async ({ page, request }) => {
+          const VIDEO = await watchVideo(request);
           let release!: () => void;
           const answered = new Promise<void>((resolve) => (release = resolve));
           await page.route(/\/video(\/|\?|$)/, async (route) => {
@@ -190,7 +217,7 @@ for (const lang of ['en', 'ar'] as const) {
           await page.evaluate(() => document.fonts.ready);
           const before = await blocks(page);
           release();
-          await expect(page.getByTestId('comments-section')).toBeVisible({ timeout: 30000 });
+          await expectComments(page, VIDEO);
           await expect(page.getByTestId('watch-skeleton')).toHaveCount(0);
           await page.evaluate(() => document.fonts.ready);
           const after = await blocks(page);
