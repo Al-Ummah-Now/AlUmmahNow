@@ -12,10 +12,13 @@
  */
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import { promoteToAdmin } from './sink';
-import { sinkEmail, target } from './targets';
+import { sinkEmail, target, releaseEnv } from './targets';
 import { apiFetch, completeRegistration, createProfile, signUpOnWeb, type WebUser, submitPasswordSignIn } from './web-session';
 import { grantCreatorTier } from './creator-tier';
 import { fetchRetry } from './net';
+
+// quarantined: #1020 @meywd: on the local stack WebKit never fires the load event (every navigation times out)
+test.fixme(({ browserName }) => browserName === 'webkit' && releaseEnv() === 'local', 'quarantined: #1020 @meywd: WebKit load event on the local stack');
 
 // Signs users in through the auth server: traces would hold the password and code
 test.use({ trace: 'off' });

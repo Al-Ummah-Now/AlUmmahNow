@@ -18,8 +18,11 @@
  */
 import { readFileSync } from 'fs';
 import { test, expect, type Page, type WebSocketRoute } from '@playwright/test';
-import { target } from './targets';
+import { target, releaseEnv } from './targets';
 import { signUpOnWeb, createProfile, gotoSettled, type Locale } from './web-session';
+
+// quarantined: #1020 @meywd: on the local stack WebKit never fires the load event (every navigation times out)
+test.fixme(({ browserName }) => browserName === 'webkit' && releaseEnv() === 'local', 'quarantined: #1020 @meywd: WebKit load event on the local stack');
 
 // Signs in through the auth server: a retained trace would hold the password and code
 test.use({ trace: 'off' });
