@@ -44,11 +44,11 @@ Until a batch is moved, every spec still runs where it runs today; the local job
 |---|---|---:|---:|
 | web | `apps/web/playwright.config.ts` (e2e-tests.yml) | 61 | 1 |
 | release | `apps/web/playwright.release.config.ts` (release-e2e.yml, release.yml) | 57 | 7 |
-| admin | `apps/admin-web/playwright.config.ts` (admin-e2e.yml) | 23 | 0 |
+| admin | `apps/admin-web/playwright.config.ts` (admin-e2e.yml) | 24 | 0 |
 | themes | `apps/web/playwright.themes.config.ts` (theme-visibility.yml) | 5 | 0 |
 | player | `apps/web/playwright.player.config.ts` (player-e2e.yml) | 10 | 0 |
 | release-prod | `apps/web/playwright.release-prod.config.ts` (prod-signed-in.yml) | 0 | 1 |
-| **all** | | **156** | **9** |
+| **all** | | **157** | **9** |
 
 ## Deployed (QA and stage)
 
@@ -232,6 +232,7 @@ Until a batch is moved, every spec still runs where it runs today; the local job
 | `16-live-updates.spec.ts` | Admin pages over the local realtime worker: subscribe, live re-render, moderator topics, token route |  |
 | `16-operations.spec.ts` | Operations page vs admin-api /api/ops; empty COSTS_DB shows the no-data notice |  |
 | `16-pending-user-deletion.spec.ts` | Pending "Delete videos data" blocks the user's writes (403 code), reads still work, admin restore lifts it at once (#701) |  |
+| `16-videos-list.spec.ts` | Videos list on the client list foundation: filters survive reload and Back, Unpublish then Undo restores it (own throwaway channel and video) |  |
 | `17-delivery-live-qoe.spec.ts` | Delivery live playback: beacon heartbeats through api-videos and the local realtime worker to the open page |  |
 
 ### themes
