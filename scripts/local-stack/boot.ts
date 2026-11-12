@@ -23,7 +23,7 @@ import { parseJsonc } from '../release/jsonc.ts';
 import { localConfig, localRedirectUris, type Json } from './configs.ts';
 import { appDir, AUTH_DIR, HOST, LOCAL_CLIENT_SECRETS, localSecret, PORTS, PROD_HOST_TO_LOCAL, ROOT, STATE_DIR, url, WORKERS, type StackWorker } from './stack.ts';
 import { outboundHandler } from './outbound.ts';
-import { registerFakes, setStackR2, setStackSql, startFakeCdn } from './fake-external.ts';
+import { fakeStateContaining, registerFakes, setStackHooks, setStackR2, setStackSql, startFakeCdn } from './fake-external.ts';
 import { startBrowserProxy } from './browser-proxy.ts';
 import { assetsHandler } from './assets.ts';
 import { assetsFirstEntry } from './entry.ts';
@@ -60,6 +60,15 @@ const { Miniflare } = createRequire(WRANGLER_PKG)('miniflare') as { Miniflare: n
 
 interface MiniflareInstance {
   ready: Promise<URL>;
+  getR2Bucket(binding: string, worker?: string): Promise<{
+    list(o?: { cursor?: string; limit?: number }): Promise<{ objects: { key: string; size: number }[]; truncated: boolean; cursor?: string }>;
+    get(key: string): Promise<{ text(): Promise<string> } | null>;
+  }>;
+  getKVNamespace(binding: string, worker?: string): Promise<{
+    list(o?: { cursor?: string }): Promise<{ keys: { name: string }[]; list_complete: boolean; cursor?: string }>;
+    get(key: string): Promise<string | null>;
+  }>;
+  getWorker(name?: string): Promise<{ scheduled(o: { cron: string; scheduledTime?: Date }): Promise<{ outcome: string; noRetry: boolean }> }>;
   dispose(): Promise<void>;
   getD1Database(binding: string, worker?: string): Promise<D1>;
   getR2Bucket(binding: string, worker?: string): Promise<R2>;
@@ -318,6 +327,86 @@ export async function hashClientSecret(secret: string, salt = crypto.getRandomVa
   return `$pbkdf2-sha256$${iterations}$${b64url(salt)}$${b64url(bits)}`;
 }
 
+interface Hit { store: string; location: string; sample: string }
+
+/**
+ * Everything in the stack that still holds `marker` (the run id) or the id of a run user (an
+ * auth user whose email starts with e2e+<marker>): every D1 table, every R2 object (bodies up to
+ * 256 KB), every KV key and value, the fake Bunny and image store. The seed never matches.
+ */
+async function scanLeftovers(mf: MiniflareInstance, prepared: Prepared[], marker: string): Promise<{ marker: string; runUserIds: string[]; hits: Hit[]; truncated: boolean }> {
+  const hits: Hit[] = [];
+  const MAX = 300;
+  const add = (hit: Hit) => {
+    if (hits.length < MAX) hits.push({ ...hit, sample: hit.sample.slice(0, 200) });
+  };
+  const auth = prepared.find((p) => p.worker.app === 'auth');
+  const runUserIds: string[] = [];
+  if (auth) {
+    const db = await mf.getD1Database('AUTH_DB', auth.name);
+    const { results } = await db.prepare("SELECT id FROM users WHERE email LIKE 'e2e+' || ? || '%'").bind(marker).all<{ id: string }>();
+    runUserIds.push(...results.map((r) => r.id));
+  }
+  const needles = [marker, ...runUserIds];
+  const holds = (text: string) => needles.some((n) => text.includes(n));
+
+  const seen = new Set<string>();
+  for (const p of prepared) {
+    for (const d of (p.local.config.d1_databases as Json[] | undefined) ?? []) {
+      const id = `d1:${String(d.database_id ?? d.database_name)}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const db = await mf.getD1Database(String(d.binding), p.name);
+      const tables = (await db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name NOT LIKE 'd1_%' AND name NOT LIKE '%_fts%'").all<{ name: string }>()).results;
+      for (const { name } of tables) {
+        const rows = (await db.prepare(`SELECT * FROM "${name.replace(/"/g, '')}"`).all<Record<string, unknown>>()).results;
+        for (const row of rows) {
+          const text = JSON.stringify(row);
+          if (holds(text)) add({ store: `d1:${String(d.database_name)}`, location: name, sample: text });
+        }
+      }
+    }
+    for (const b of (p.local.config.r2_buckets as Json[] | undefined) ?? []) {
+      const id = `r2:${String(b.bucket_name)}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const bucket = await mf.getR2Bucket(String(b.binding), p.name);
+      let cursor: string | undefined;
+      do {
+        const page = await bucket.list({ cursor, limit: 1000 });
+        for (const object of page.objects) {
+          if (holds(object.key)) add({ store: id, location: object.key, sample: object.key });
+          else if (object.size <= 256 * 1024) {
+            const text = (await (await bucket.get(object.key))?.text()) ?? '';
+            if (holds(text)) add({ store: id, location: object.key, sample: text });
+          }
+        }
+        cursor = page.truncated ? page.cursor : undefined;
+      } while (cursor);
+    }
+    for (const k of (p.local.config.kv_namespaces as Json[] | undefined) ?? []) {
+      const id = `kv:${String(k.id ?? k.binding)}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const kv = await mf.getKVNamespace(String(k.binding), p.name);
+      let cursor: string | undefined;
+      do {
+        const page = await kv.list({ cursor });
+        for (const { name } of page.keys) {
+          if (holds(name)) add({ store: `kv:${String(k.binding)}`, location: name, sample: name });
+          else {
+            const value = (await kv.get(name)) ?? '';
+            if (holds(value)) add({ store: `kv:${String(k.binding)}`, location: name, sample: value });
+          }
+        }
+        cursor = page.list_complete ? undefined : page.cursor;
+      } while (cursor);
+    }
+  }
+  for (const hit of fakeStateContaining(needles)) add(hit);
+  return { marker, runUserIds, hits, truncated: hits.length >= MAX };
+}
+
 async function health(prepared: Prepared[]): Promise<Record<string, number>> {
   const statuses: Record<string, number> = {};
   const deadline = Date.now() + 120_000;
@@ -396,6 +485,14 @@ async function main(): Promise<void> {
     }
     const object = await bucket.get(key);
     return object ? { status: 200, body: await object.text() } : { status: 404 };
+  });
+  setStackHooks({
+    leftovers: (marker) => scanLeftovers(mf, prepared, marker),
+    scheduled: async (app, cron) => {
+      const p = prepared.find((x) => x.worker.app === app || x.name === app);
+      if (!p) throw new Error(`no worker ${app} (${prepared.map((x) => x.worker.app).join(', ')})`);
+      return (await mf.getWorker(p.name)).scheduled({ cron, scheduledTime: new Date() });
+    },
   });
   await timed('secrets', () => fillSecrets(mf, prepared));
   await timed('clients', () => localClients(mf, prepared));

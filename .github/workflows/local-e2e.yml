@@ -79,6 +79,10 @@ jobs:
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    env:
+      # Run mode: every account is e2e+<run>-…, every builder name starts with the run id, so the
+      # leftover check can find whatever the run did not remove (each job has its own stack)
+      E2E_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
     strategy:
       fail-fast: false
       matrix:
@@ -112,6 +116,8 @@ jobs:
       - name: Run
         working-directory: apps/web
         run: |
+          echo "E2E_RUN_USERS_FILE=$RUNNER_TEMP/run-users.txt" >> "$GITHUB_ENV"
+          export E2E_RUN_USERS_FILE="$RUNNER_TEMP/run-users.txt"
           # The PR's own code runs here: none of the "not deployed on QA yet" pull-request skips apply
           export GITHUB_EVENT_NAME=local-stack
           pnpm exec playwright test -c playwright.release.config.ts --project="${{ matrix.project }}" --shard="${{ matrix.shard }}"
@@ -122,6 +128,22 @@ jobs:
           NODE_OPTIONS: --dns-result-order=ipv4first
           E2E_CODE_SINK_SECRET: local-stack-sink-secret
           TEST_PROMOTE_SECRET: local-stack-promote-secret
+
+      # The run's accounts, as on QA (auth soft delete + immediate purge through the test route)
+      - name: Delete the run accounts
+        if: always()
+        run: |
+          if [ ! -s "${E2E_RUN_USERS_FILE:-}" ]; then echo "No run accounts were generated"; exit 0; fi
+          node --experimental-strip-types --no-warnings scripts/e2e/teardown-run-users.ts --auth-url http://localhost:3301 --file "$E2E_RUN_USERS_FILE"
+        env:
+          E2E_CODE_SINK_SECRET: local-stack-sink-secret
+          TEST_PROMOTE_SECRET: local-stack-promote-secret
+
+      # Nothing the run created may be left (owner rule). Report-only until every spec of the batch
+      # cleans up fully; then this gates.
+      - name: Leftovers
+        if: always()
+        run: node --experimental-strip-types --no-warnings scripts/local-stack/leftovers.ts --marker "$E2E_RUN_ID" --report-only
 
       - name: Stack log
         if: always()

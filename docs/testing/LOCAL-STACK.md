@@ -64,10 +64,17 @@ listens on its own port:
   - `POST /__fake/bunny/videos/<guid>/encode|fail|hold`;
   - `GET /__fake/resend/emails`;
   - `POST /__stack/d1/<database name>`, which runs the request body as SQL. The seed uses it for roles
-    and creator tiers, and specs that are not about auth can use it as a fast path.
+    and creator tiers, and specs that are not about auth can use it as a fast path;
   - `GET|PUT|DELETE /__stack/r2/<bucket name>/<key>`: one object of a stack R2 bucket (fixtures a spec
     seeds in R2, such as the admin suite's legacy profile record); without a key,
     `GET /__stack/r2/<bucket name>?prefix=<p>[&cursor=<c>]` lists keys (`{ keys, cursor }`, 1000 a page).
+  - `GET /__stack/leftovers?marker=<run id>`, which lists every D1 row, R2 object, KV entry and fake
+    Bunny video or image that still holds the run id or a run user's id;
+  - `POST /__stack/scheduled/<app>?cron=<expr>`, which runs that worker's scheduled handler now. Teardowns
+    use it for purges that the APIs only queue for the hourly cron.
+- **Leftover check.** `scripts/local-stack/leftovers.ts --marker "$E2E_RUN_ID"` runs at the end of every
+  local job, after the run accounts are deleted, and fails when anything the run created is still there.
+  It runs with `--report-only` while a batch's specs don't yet clean up fully.
 - **The browser's proxy** (`scripts/local-stack/browser-proxy.ts`, `http://127.0.0.1:3191`): Playwright
   runs on the local stack with `proxy` set to it and with `ignoreHTTPSErrors`. HTTPS to a faked host is
   terminated there with a throwaway self-signed certificate and answered by the same fakes. Localhost

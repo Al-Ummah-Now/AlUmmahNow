@@ -285,6 +285,26 @@ export function setStackR2(fn: StackR2): void {
   stackR2 = fn;
 }
 
+/** Leftover scan and scheduled-handler trigger (boot.ts sets them once Miniflare is up). */
+export interface StackHooks {
+  leftovers?: (marker: string) => Promise<unknown>;
+  scheduled?: (app: string, cron: string) => Promise<unknown>;
+}
+const hooks: StackHooks = {};
+export function setStackHooks(next: StackHooks): void {
+  Object.assign(hooks, next);
+}
+
+/** Fake-side state that may hold a run's data (scanned by the leftover check). */
+export function fakeStateContaining(needles: string[]): { store: string; location: string; sample: string }[] {
+  const hits: { store: string; location: string; sample: string }[] = [];
+  for (const video of bunny.videos.values()) {
+    if (needles.some((n) => video.title.includes(n))) hits.push({ store: 'fake-bunny', location: video.guid, sample: video.title.slice(0, 160) });
+  }
+  for (const key of storage.keys()) if (needles.some((n) => key.includes(n))) hits.push({ store: 'fake-images', location: key, sample: key });
+  return hits;
+}
+
 async function readBody(req: IncomingMessage): Promise<string> {
   const chunks: Buffer[] = [];
   for await (const chunk of req) chunks.push(chunk as Buffer);
@@ -298,6 +318,10 @@ async function readBody(req: IncomingMessage): Promise<string> {
  * - POST /__stack/d1/<database name> with SQL as the body: { results } (seed, fast-path fixtures)
  * - GET | PUT | DELETE /__stack/r2/<bucket name>/<key>: one object (fixtures a spec seeds in R2)
  * - GET /__stack/r2/<bucket name>?prefix=<p>[&cursor=<c>]: { keys, cursor } (teardowns find what a run wrote)
+ * - GET /__stack/leftovers?marker=<run id>: every row, object, key or fake video that still holds the
+ *   marker or the id of a run user (leftovers.ts)
+ * - POST /__stack/scheduled/<app>?cron=<expr>: runs that worker's scheduled handler now (purges that
+ *   the APIs only queue for the hourly cron)
  */
 async function control(req: IncomingMessage, url: URL): Promise<Response> {
   if (url.pathname.startsWith('/__stack/d1/')) {
@@ -324,6 +348,19 @@ async function control(req: IncomingMessage, url: URL): Promise<Response> {
     try {
       const out = await stackR2(decodeURIComponent(bucket), key, req.method!, req.method === 'PUT' ? await readBody(req) : undefined);
       return out.body === undefined ? json({}, out.status) : new Response(out.body, { status: out.status, headers: { 'content-type': 'application/json' } });
+    } catch (error) {
+      return json({ error: (error as Error).message }, 400);
+    }
+  }
+  if (url.pathname === '/__stack/leftovers') {
+    const marker = url.searchParams.get('marker') ?? '';
+    if (marker.length < 6 || !hooks.leftovers) return json({ error: 'marker (>= 6 characters) required, once the stack is up' }, 400);
+    return json(await hooks.leftovers(marker));
+  }
+  if (url.pathname.startsWith('/__stack/scheduled/')) {
+    if (req.method !== 'POST' || !hooks.scheduled) return json({ error: 'POST once the stack is up' }, 405);
+    try {
+      return json(await hooks.scheduled(decodeURIComponent(url.pathname.slice('/__stack/scheduled/'.length)), url.searchParams.get('cron') ?? '* * * * *'));
     } catch (error) {
       return json({ error: (error as Error).message }, 400);
     }
