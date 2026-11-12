@@ -44,18 +44,22 @@ const NOTIFS = Array.from({ length: 8 }, (_, i) => ({ id: `n${i}`, category: 'up
 
 // Channel-layer fixtures (e2e/themes/channel-layer.spec.ts): answers per access token, so two
 // accounts in one browser each have their own channels and creator tier. Other tokens are unchanged.
-const ch = (id, userId, name, ar, role, isMain = false, i = 1) => ({ id, userId, name, nameLocalized: { ar }, avatarUrl: `${base}/thumb/${i}.svg`, handle: id, isMain, role });
+// Avatars on an https host the page's CSP allows; the mockup browser answers it (specs leave it unanswered)
+const avatar = (i) => `https://img.example.test/avatar/${i}.svg`;
+const ch = (id, userId, name, ar, role, isMain = false, i = 1) => ({ id, userId, name, nameLocalized: { ar }, avatarUrl: avatar(i), handle: id, isMain, role });
 const tier = (over) => ({ tier: { id: 't1', name: 'Scholar', unlimited: false }, via: 'tier', canUpload: true, canCreateChannel: true, channelsOwned: 0, maxChannels: 3, limits: null, usage: { hour: 0, day: 0 }, ...over });
 export const CHANNEL_FIXTURES = {
   // Aisha: owns two channels (her tier allows two: at the limit) and manages one of Omar's
   'nav-aisha': {
     channels: [ch('a1', 'nav-a', 'Tafsir Lessons', 'دروس التفسير', 'owner', true, 2), ch('a2', 'nav-a', 'Hadith Circle', 'حلقة الحديث', 'owner', false, 3), ch('b1', 'nav-b', 'Seerah Weekly', 'السيرة أسبوعيًا', 'admin', false, 4)],
     creator: tier({ canCreateChannel: false, channelsOwned: 2, maxChannels: 2 }),
+    profile: { id: 'nav-a', userId: 'nav-a', email: 'aisha@example.com', firstName: 'Aisha', lastName: 'Rahman', displayName: 'Aisha Rahman', displayNameLocalized: { ar: 'عائشة رحمن' } },
   },
   // Omar: owns three channels, may create more
   'nav-omar': {
     channels: [ch('b1', 'nav-b', 'Seerah Weekly', 'السيرة أسبوعيًا', 'owner', true, 4), ch('b2', 'nav-b', 'Arabic Basics', 'أساسيات العربية', 'owner', false, 5), ch('b3', 'nav-b', 'Fiqh Q&A', 'أسئلة الفقه', 'owner', false, 6)],
     creator: tier({ channelsOwned: 3, maxChannels: 5 }),
+    profile: { id: 'nav-b', userId: 'nav-b', email: 'omar@example.com', firstName: 'Omar', lastName: 'Khalid', displayName: 'Omar Khalid', displayNameLocalized: { ar: 'عمر خالد' } },
   },
   // Hana: her tier said she could create one more, but another tab used it up: the create is refused
   // (channel_limit) and the tier, read again, is at its limit
@@ -82,6 +86,7 @@ function fixtureAnswer(path, token, method) {
   const f = CHANNEL_FIXTURES[token];
   if (!f) return undefined;
   if (path === '/api/channels/access') return { status: 200, body: { success: true, data: f.channels } };
+  if ((path === '/api/profile' || path === '/api/profiles/me') && f.profile) return { status: 200, body: { ...PROFILE, ...f.profile } };
   if (path === '/api/me/creator') return { status: 200, body: { success: true, result: f.creator } };
   // Creating a channel past the tier's limit is refused the way api-videos refuses it
   if (path === '/api/channels' && method === 'POST' && (f.refuseCreate || !f.creator.canCreateChannel)) {
