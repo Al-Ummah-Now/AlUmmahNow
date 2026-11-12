@@ -4,7 +4,7 @@
   "name": "al-ummah-now-media-qa",
   "main": "src/index.ts",
   "compatibility_date": "2025-10-01",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": ["nodejs_compat", "enable_ctx_exports"],
   "workers_dev": false,
   "observability": { "enabled": true, "head_sampling_rate": 1, "logs": { "enabled": true, "head_sampling_rate": 1 } },
   // Only private renditions run this Worker; /pub/* is the R2 custom domain + Cache Rule

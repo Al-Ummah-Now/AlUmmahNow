@@ -31,6 +31,9 @@ describe('job decisions', () => {
 		assert.deepEqual(onFailure({ ...job, attempt: 2 }, 'x', false), { retry: true, delaySeconds: 240 });
 		assert.deepEqual(onFailure({ ...job, attempt: MAX_ATTEMPTS }, 'x', false), { retry: false });
 		assert.deepEqual(onFailure(job, 'source_missing', true), { retry: false });
+		// No source yet (Bunny still encoding its MP4 fallback): wait in 5-minute steps, up to an hour
+		assert.deepEqual(onFailure({ ...job, attempt: 5 }, 'source_unavailable', false), { retry: true, delaySeconds: 300 });
+		assert.deepEqual(onFailure({ ...job, attempt: 12 }, 'source_unavailable', false), { retry: false });
 	});
 	it('counts container seconds across attempts', () => {
 		const job = { ...newJob(msg(), 1000), priorSeconds: 30 };

@@ -3,7 +3,7 @@
  * apps/media calls the first two over its service binding; admin-api proxies the rest
  * behind RBAC and audit (epic #687).
  *
- *   GET  /internal/media/source/:videoId   { url }  the upload's original (Bunny, signed)
+ *   GET  /internal/media/source/:videoId   { url, candidates }  Bunny original, then MP4 fallbacks (signed)
  *   POST /internal/media/events            TranscodeJobEvent → the video record
  *   POST /internal/media/retry             { ids: string[] } → transcode again
  *   GET  /internal/media/jobs?status=&limit=  recent jobs (media_jobs)
@@ -13,7 +13,7 @@
  */
 import { Hono } from 'hono';
 import { isMediaVideoId, type DeliverySettings, type TranscodeJobEvent } from '@al-ummah/shared-types';
-import { applyJobEvent, enqueueTranscode, readDeliverySettings, sourceUrl, writeDeliverySettings, type MediaEnv } from '../../lib/media/r2-delivery';
+import { applyJobEvent, enqueueTranscode, readDeliverySettings, sourceCandidates, writeDeliverySettings, type MediaEnv } from '../../lib/media/r2-delivery';
 
 const MAX_IDS = 50;
 
@@ -30,9 +30,9 @@ export function createMediaInternalRouter() {
 		if (!isMediaVideoId(id)) return c.json({ success: false, error: 'bad id' }, 400);
 		const video = await c.env.videos.get(id);
 		if (!video) return c.json({ success: false, error: 'video not found' }, 404);
-		const url = await sourceUrl(c.env, id);
-		if (!url) return c.json({ success: false, error: 'no Bunny host configured' }, 404);
-		return c.json({ success: true, url });
+		const candidates = await sourceCandidates(c.env, id);
+		if (!candidates.length) return c.json({ success: false, error: 'no Bunny host configured' }, 404);
+		return c.json({ success: true, url: candidates[0], candidates });
 	});
 
 	app.post('/events', async (c) => {
