@@ -68,12 +68,18 @@ export default function SaveToPlaylist({ videoId, channelId: channelIdProp, clas
     return () => window.removeEventListener('resize', place);
   }, [open]);
 
+  // Playlists created in this dialog: a list load that started before them (it can take seconds,
+  // #909) must not drop them when it lands
+  const createdHere = useRef(new Map<string, PlaylistWithVideos>());
+
   const loadPlaylists = useCallback(async () => {
     if (!channelId) return;
     setLoading(true);
     try {
       const result = await listPlaylists({ channelId, limit: MAX_PLAYLISTS });
-      setPlaylists(result?.data || []);
+      const loaded = result?.data || [];
+      const loadedIds = new Set(loaded.map((p) => p.id));
+      setPlaylists([...[...createdHere.current.values()].filter((p) => !loadedIds.has(p.id)), ...loaded]);
     } catch (error) {
       logger.error('[SaveToPlaylist] Failed to load playlists', { channelId, error });
       setMessage({ type: 'error', text: t.playlist.loadFailed });
@@ -168,7 +174,8 @@ export default function SaveToPlaylist({ videoId, channelId: channelIdProp, clas
       title: playlist.title || title,
       videos: added?.success ? [videoId] : [],
     };
-    setPlaylists((prev) => [entry, ...prev]);
+    createdHere.current.set(entry.id, entry);
+    setPlaylists((prev) => [entry, ...prev.filter((p) => p.id !== entry.id)]);
     setMessage(added?.success
       ? { type: 'success', text: t.playlist.addedTo.replace('{title}', title) }
       : { type: 'error', text: t.playlist.saveFailed });
@@ -213,7 +220,7 @@ export default function SaveToPlaylist({ videoId, channelId: channelIdProp, clas
           ) : (
             <>
               <div className="max-h-64 overflow-y-auto py-2">
-                {loading ? (
+                {loading && playlists.length === 0 ? (
                   <p className="px-4 py-2 text-sm text-gray-500">{t.common.loading}</p>
                 ) : playlists.length === 0 ? (
                   <p className="px-4 py-2 text-sm text-gray-500">{t.playlist.noPlaylists}</p>
@@ -223,6 +230,7 @@ export default function SaveToPlaylist({ videoId, channelId: channelIdProp, clas
                     return (
                       <label
                         key={playlist.id}
+                        data-playlist-id={playlist.id}
                         className="flex items-center gap-3 px-4 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
                       >
                         <input

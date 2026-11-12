@@ -331,17 +331,16 @@ test.describe('watch page - save to playlist', () => {
 
       const name = tempName('Watch Playlist');
       await dialog.getByRole('textbox').fill(name);
-      // The create's own answer names the new playlist (POST /api/playlists)
-      const createResponse = page.waitForResponse((r) => r.request().method() === 'POST' && /\/api\/playlists\/?$/.test(new URL(r.url()).pathname) && r.status() < 500);
+      // createPlaylist is a server action (a POST to the page, not /api/playlists): wait for the
+      // dialog's own confirmation, then read the new row's id
       await dialog.getByRole('button', { name: create }).click();
-      const createdBody = (await (await createResponse).json().catch(() => null)) as { result?: { playlist?: { id?: string } } } | null;
-      const playlistId = createdBody?.result?.playlist?.id;
-      expect(playlistId, 'the create answered with the new playlist').toBeTruthy();
-      created.push(playlistId!);
 
-      await expect(dialog.getByRole('status')).toHaveText(`${added} ${name}`);
+      await expect(dialog.getByRole('status')).toHaveText(`${added} ${name}`, { timeout: 30000 });
       const row = dialog.locator('label').filter({ hasText: name });
       await expect(row.getByRole('checkbox')).toBeChecked();
+      const playlistId = await row.getAttribute('data-playlist-id');
+      expect(playlistId, 'the new playlist row carries its id').toBeTruthy();
+      created.push(playlistId!);
 
       // Check the video really is in it: read that one playlist. Listing the channel's playlists
       // (GET /api/playlists?channelId=) scans the whole playlists bucket, 12 s+ on QA (#909),
