@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/AppLink';
 import { getDeliverySettings, getMediaQoeLive, getMediaSummary, listMediaJobs } from '@/lib/api/admin';
 import type { DeliverySettings, MediaJob, MediaSummary } from '@/lib/api/types';
 import { getAdminSession } from '@/lib/auth';
