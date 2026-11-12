@@ -111,7 +111,10 @@ test.describe('Thumbnail - saving', () => {
     await page.getByTestId('video-edit-save').click();
     await expect(page.getByTestId('video-edit-error')).toHaveCount(0);
 
-    await expect.poll(async () => (await getVideo(userApi('single'), video!.id))?.thumbnailUrl, { timeout: 60000 }).toBe(src);
+    // The same frame file; the CDN token around it is signed afresh on every read (path or query form)
+    const frameFile = (url: string | null | undefined) => url?.match(/\/([0-9a-f-]{36}\/thumbnail_\d+\.jpg)/)?.[1] ?? url;
+    expect(frameFile(src), `a frame file in ${src}`).toMatch(/thumbnail_\d+\.jpg$/);
+    await expect.poll(async () => frameFile((await getVideo(userApi('single'), video!.id))?.thumbnailUrl), { timeout: 60000 }).toBe(frameFile(src));
   });
 
   test('should upload, preview and save a custom thumbnail', async ({ page }) => {
