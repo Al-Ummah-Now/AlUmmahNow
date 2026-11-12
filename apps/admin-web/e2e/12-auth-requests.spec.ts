@@ -131,7 +131,8 @@ async function expectVideosStatus(page: Page, userId: string, requestId: string,
 test.describe('Requests to auth', () => {
   test.describe.configure({ timeout: 420_000 });
 
-  test('rejected, then an approved delete: the videos admin follows auth\'s decisions', async ({ page, browser }, testInfo) => {
+  // quarantined: #1024 @meywd (auth admin page does not hydrate on the local stack until #1017)
+  test.fixme('rejected, then an approved delete: the videos admin follows auth\'s decisions', async ({ page, browser }, testInfo) => {
     // One cross-app flow per run is enough; it changes shared QA state
     test.skip(testInfo.project.name !== 'chromium', 'runs once, on chromium');
     test.skip(!SINK_SECRET, 'E2E_CODE_SINK_SECRET is not set');

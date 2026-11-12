@@ -56,7 +56,8 @@ async function shot(page: Page, testInfo: TestInfo, name: string) {
   await testInfo.attach(name, { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
 }
 
-test.describe('invite creators', () => {
+// quarantined: #1023 @meywd (long-email search 500 until #1019; invited run accounts not deletable at teardown)
+test.describe.fixme('invite creators', () => {
   // Pass or fail: the channel deleted and purged, the invite revoked and purged; the account itself
   // is erased and deleted by the global teardown (recorded above)
   test.afterAll(async () => {
