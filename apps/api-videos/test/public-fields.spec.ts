@@ -145,8 +145,46 @@ describe('GET /api/channels/:id/owner', () => {
 describe('public profile output', () => {
 	it('toPublicProfile returns exactly the allow-listed fields', () => {
 		assert.deepEqual(Object.keys(JSON.parse(JSON.stringify(toPublicProfile(profile as never)))).sort(), [
-			'channelsCount', 'dateCreated', 'dateModified', 'displayName', 'id', 'userName',
+			'channelsCount', 'dateCreated', 'dateModified', 'displayName', 'id', 'resolvedDisplayName', 'userName',
 		]);
+	});
+
+	// Owner rule 2026-11-12: "display name should be the first and last as a fallback"
+	it('a profile with only first and last names shows them as its display name, without the raw fields or the email', async () => {
+		const namesOnly = { ...profile, id: 'names', userName: undefined, displayName: '', displayNameLocalized: { en: '', ar: ' ' }, firstName: 'Mahmoud', lastName: 'Darwish', firstNameLocalized: { ar: 'محمود' }, lastNameLocalized: { ar: 'درويش' } };
+		const app = buildApp((r) => {
+			r.get('/api/profiles', ProfilesList);
+			r.get('/api/profiles/:id', ProfileFetch);
+		}, null);
+		const e = { ...env(), profiles: new MemoryBucket({ names: namesOnly }) };
+		const res = await app.request('/api/profiles/names', {}, e);
+		assert.equal(res.status, 200);
+		const body = await res.json() as { result: { profile: Record<string, unknown> } };
+		assert.equal(body.result.profile.displayName, 'Mahmoud Darwish');
+		assert.equal(body.result.profile.resolvedDisplayName, 'Mahmoud Darwish');
+		for (const key of ['firstName', 'lastName', 'firstNameLocalized', 'lastNameLocalized', 'email']) assert.ok(!(key in body.result.profile), key);
+		assertNoAccountDetails(body);
+
+		const ar = await (await app.request('/api/profiles/names?lang=ar', {}, e)).json() as { result: { profile: Record<string, unknown> } };
+		assert.equal(ar.result.profile.displayName, 'محمود درويش');
+
+		const list = await (await app.request('/api/profiles?limit=10', {}, e)).json() as { result: { profiles?: Array<Record<string, unknown>> } } & Record<string, unknown>;
+		assert.ok(JSON.stringify(list).includes('"displayName":"Mahmoud Darwish"'));
+	});
+
+	it('a profile with no name at all has an empty resolved name, never the email', () => {
+		const view = toPublicProfile({ ...profile, userName: undefined, displayName: ' ', firstName: '', lastName: '' } as never);
+		assert.equal(view.resolvedDisplayName, '');
+		assert.equal(view.displayName, undefined);
+	});
+
+	it('GET /api/profile keeps the typed display name for the edit form and adds the resolved one', async () => {
+		const owner = buildApp((r) => r.get('/api/profile', ProfileCurrentFetch), { userId: 'owner' });
+		const e = { ...env(), profiles: new MemoryBucket({ owner: { ...profile, displayName: '', userName: undefined, firstName: 'Mahmoud', lastName: 'Darwish' } }) };
+		const body = await (await owner.request('/api/profile', {}, e)).json() as { result: { profile: Record<string, unknown> } };
+		assert.equal(body.result.profile.displayName, '');
+		assert.equal(body.result.profile.resolvedDisplayName, 'Mahmoud Darwish');
+		assert.equal(body.result.profile.email, OWNER_EMAIL);
 	});
 
 	it('GET /api/profiles and /api/profiles/:id have no account details, even for the profile owner', async () => {

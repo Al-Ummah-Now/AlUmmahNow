@@ -10,6 +10,7 @@ import { AuditCard, BackLink, Chip, MonoId, Notice, ReportsCard, StatGrid, small
 import { JobsPanel } from '@/components/content/jobs';
 import { logger } from '@/lib/logger';
 import { ChannelActions } from './ChannelActions';
+import { adminUserName } from '@/lib/user-name';
 
 export const dynamic = 'force-dynamic';
 
@@ -105,7 +106,7 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
                 <dd>
                   {ch.ownerId ? (
                     <Link href={`/users/${encodeURIComponent(ch.ownerId)}`} className={`${linkClass} break-all`} data-testid="channel-owner-link">
-                      {ch.owner?.displayName || ch.ownerEmail || ch.ownerId}
+                      {adminUserName({ ...ch.owner, email: ch.owner?.email || ch.ownerEmail, id: ch.ownerId })}
                     </Link>
                   ) : (
                     t('content.none')

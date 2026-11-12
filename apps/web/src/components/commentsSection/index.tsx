@@ -18,6 +18,7 @@ import { useMultiAccount } from "@/hooks/useMultiAccount";
 import { User } from "@/interfaces";
 import { formatRelativeTime } from '@/lib/format/videoMeta';
 import { loginRoutePath } from '@/lib/auth/silent-sign-in';
+import { userDisplayName } from '@/lib/display-name';
 
 export interface CommentsSectionProps {
   videoId: string;
@@ -130,8 +131,8 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
   // Map the API comment (with its own author) to the presentational props
   const toCommentProps = (comment: Comments, isReply: boolean): CommentProps => {
     const isOwnComment = !!user && comment.userId === user.id;
-    const authorName = comment.author?.displayName
-      || (isOwnComment ? (activeChannel?.name || profile?.displayName || '') : '')
+    const authorName = comment.author?.displayName?.trim()
+      || (isOwnComment ? (activeChannel?.name?.trim() || userDisplayName(profile, lang)) : '')
       || t.comments.unknownAuthor;
     const authorAvatar = comment.author?.avatarUrl
       || (isOwnComment ? (activeChannel?.avatarUrl || profile?.avatarUrl) : undefined)

@@ -4,7 +4,7 @@
 import { z } from "zod";
 import { Video as BusinessVideo, Channel as BusinessChannel, Profile as BusinessProfile, Playlist as BusinessPlaylist, Comment as BusinessComment } from "./types";
 import { VideoView, ChannelView, ProfileView, PlaylistView, CommentView } from "./model/view";
-import { can, channelRoleOf, isShort, type ChannelRoleSource } from "@al-ummah/shared-types";
+import { can, channelRoleOf, isShort, resolveDisplayName, type ChannelRoleSource } from "@al-ummah/shared-types";
 import { isVideoReady } from './visibility';
 import { getCommentSettings, isCommentVisible, StoredComment, withoutDislikes } from './comments';
 import { PUBLIC_DISLIKES_COUNT } from './reactions';
@@ -109,8 +109,7 @@ export function transformChannelToView(channel: z.infer<typeof BusinessChannel>)
 }
 
 // Transform a business profile to a view model
-export function transformProfileToView(profile: z.infer<typeof BusinessProfile>): z.infer<typeof ProfileView> {
-   
+export function transformProfileToView(profile: z.infer<typeof BusinessProfile>, locale?: string): z.infer<typeof ProfileView> {
     return {
         id: profile.id,
         email: profile.email,
@@ -121,6 +120,8 @@ export function transformProfileToView(profile: z.infer<typeof BusinessProfile>)
         lastNameLocalized: profile.lastNameLocalized,
         displayName: profile.displayName,
         displayNameLocalized: profile.displayNameLocalized,
+        // What others see (the edit form keeps the raw displayName above)
+        resolvedDisplayName: resolveDisplayName(profile, locale),
         bio: profile.bio,
         bioLocalized: profile.bioLocalized,
         avatarUrl: profile.avatarUrl,
@@ -181,7 +182,7 @@ export function transformChannelsToView(channels: z.infer<typeof BusinessChannel
 }
 
 export function transformProfilesToView(profiles: z.infer<typeof BusinessProfile>[]): z.infer<typeof ProfileView>[] {
-    return (profiles || []).map(transformProfileToView);
+    return (profiles || []).map((profile) => transformProfileToView(profile));
 }
 
 export function transformPlaylistsToView(

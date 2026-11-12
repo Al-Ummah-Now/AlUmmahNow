@@ -14,6 +14,7 @@ import { safeChannelLinks } from './channelAbout';
 import { subscriberCounts } from './subscription-store';
 import { channelVideoCountsFromIndex, OwnershipEnv } from './search/ownership';
 import { logger } from './logger';
+import { resolveDisplayName } from '@al-ummah/shared-types';
 
 type StoredChannel = z.infer<typeof BusinessChannel> & { isVerified?: boolean; isSuspended?: boolean; suspension?: { at?: string; reason?: string } };
 type StoredProfile = z.infer<typeof BusinessProfile>;
@@ -51,11 +52,18 @@ export function toPublicChannel(channel: StoredChannel, subscribers?: number): z
 	};
 }
 
-export function toPublicProfile(profile: StoredProfile): z.infer<typeof PublicProfileView> {
+/**
+ * `locale`: the request's language (?lang), for the resolved name. The raw
+ * first and last names stay private; the resolved name may be built from them
+ * (owner decision 2026-11-12: "display name should be the first and last as a fallback").
+ */
+export function toPublicProfile(profile: StoredProfile, locale?: string): z.infer<typeof PublicProfileView> {
+	const name = resolveDisplayName(profile, locale);
 	return {
 		id: profile.id,
 		userName: profile.userName,
-		displayName: profile.displayName,
+		displayName: name || undefined,
+		resolvedDisplayName: name,
 		displayNameLocalized: profile.displayNameLocalized,
 		bio: profile.bio,
 		bioLocalized: profile.bioLocalized,

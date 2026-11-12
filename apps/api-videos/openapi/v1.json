@@ -20189,6 +20189,19 @@
           }
         ],
         "operationId": "get_ProfileCurrentFetch",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 16,
+              "description": "Language to resolve user names in (en or ar); other values are ignored"
+            },
+            "required": false,
+            "description": "Language to resolve user names in (en or ar); other values are ignored",
+            "name": "lang",
+            "in": "query"
+          }
+        ],
         "responses": {
           "200": {
             "description": "The current user's profile",
@@ -20237,7 +20250,8 @@
                               "description": "Multi-language last names"
                             },
                             "displayName": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "The display name the user typed (may be empty); use resolvedDisplayName to show the user"
                             },
                             "displayNameLocalized": {
                               "type": "object",
@@ -20245,6 +20259,10 @@
                                 "type": "string"
                               },
                               "description": "Multi-language display names"
+                            },
+                            "resolvedDisplayName": {
+                              "type": "string",
+                              "description": "The name to show for the user (resolveDisplayName in @al-ummah/shared-types: display name in the request language (?lang), plain display name, first + last). Empty when the profile has no name; never the email"
                             },
                             "bio": {
                               "type": "string"
@@ -20306,6 +20324,7 @@
                           "required": [
                             "id",
                             "email",
+                            "resolvedDisplayName",
                             "dateCreated",
                             "dateModified",
                             "channelsCount"
@@ -20506,7 +20525,8 @@
                               "description": "Multi-language last names"
                             },
                             "displayName": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "The display name the user typed (may be empty); use resolvedDisplayName to show the user"
                             },
                             "displayNameLocalized": {
                               "type": "object",
@@ -20514,6 +20534,10 @@
                                 "type": "string"
                               },
                               "description": "Multi-language display names"
+                            },
+                            "resolvedDisplayName": {
+                              "type": "string",
+                              "description": "The name to show for the user (resolveDisplayName in @al-ummah/shared-types: display name in the request language (?lang), plain display name, first + last). Empty when the profile has no name; never the email"
                             },
                             "bio": {
                               "type": "string"
@@ -20575,6 +20599,7 @@
                           "required": [
                             "id",
                             "email",
+                            "resolvedDisplayName",
                             "dateCreated",
                             "dateModified",
                             "channelsCount"
@@ -21084,6 +21109,17 @@
             "description": "The last cursor returned from the previous request",
             "name": "cursor",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 16,
+              "description": "Language to resolve user names in (en or ar); other values are ignored"
+            },
+            "required": false,
+            "description": "Language to resolve user names in (en or ar); other values are ignored",
+            "name": "lang",
+            "in": "query"
           }
         ],
         "responses": {
@@ -21112,13 +21148,18 @@
                                 "type": "string"
                               },
                               "displayName": {
-                                "type": "string"
+                                "type": "string",
+                                "description": "The name to show for the user: the resolved display name (display name, else first + last); never the email"
                               },
                               "displayNameLocalized": {
                                 "type": "object",
                                 "additionalProperties": {
                                   "type": "string"
                                 }
+                              },
+                              "resolvedDisplayName": {
+                                "type": "string",
+                                "description": "Same as displayName; the field name every profile response shares"
                               },
                               "bio": {
                                 "type": "string"
@@ -21149,6 +21190,7 @@
                             },
                             "required": [
                               "id",
+                              "resolvedDisplayName",
                               "dateCreated",
                               "dateModified",
                               "channelsCount"
@@ -21374,7 +21416,8 @@
                               "description": "Multi-language last names"
                             },
                             "displayName": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "The display name the user typed (may be empty); use resolvedDisplayName to show the user"
                             },
                             "displayNameLocalized": {
                               "type": "object",
@@ -21382,6 +21425,10 @@
                                 "type": "string"
                               },
                               "description": "Multi-language display names"
+                            },
+                            "resolvedDisplayName": {
+                              "type": "string",
+                              "description": "The name to show for the user (resolveDisplayName in @al-ummah/shared-types: display name in the request language (?lang), plain display name, first + last). Empty when the profile has no name; never the email"
                             },
                             "bio": {
                               "type": "string"
@@ -21443,6 +21490,7 @@
                           "required": [
                             "id",
                             "email",
+                            "resolvedDisplayName",
                             "dateCreated",
                             "dateModified",
                             "channelsCount"
@@ -21942,6 +21990,17 @@
             "description": "Profile id",
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 16,
+              "description": "Language to resolve user names in (en or ar); other values are ignored"
+            },
+            "required": false,
+            "description": "Language to resolve user names in (en or ar); other values are ignored",
+            "name": "lang",
+            "in": "query"
           }
         ],
         "responses": {
@@ -21968,13 +22027,18 @@
                               "type": "string"
                             },
                             "displayName": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "The name to show for the user: the resolved display name (display name, else first + last); never the email"
                             },
                             "displayNameLocalized": {
                               "type": "object",
                               "additionalProperties": {
                                 "type": "string"
                               }
+                            },
+                            "resolvedDisplayName": {
+                              "type": "string",
+                              "description": "Same as displayName; the field name every profile response shares"
                             },
                             "bio": {
                               "type": "string"
@@ -22005,6 +22069,7 @@
                           },
                           "required": [
                             "id",
+                            "resolvedDisplayName",
                             "dateCreated",
                             "dateModified",
                             "channelsCount"

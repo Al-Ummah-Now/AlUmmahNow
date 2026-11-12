@@ -10,6 +10,7 @@ import { FilterForm } from '@/components/content/FilterForm';
 import { Chip, EmptyState, MonoId, Notice, PageHeader, Pager, tableWrapClass, tdClass, thClass, wideOnly } from '@/components/content/parts';
 import { PAGE_SIZE, hrefWith, pickParams, type SearchParams } from '@/components/content/query';
 import { logger } from '@/lib/logger';
+import { adminUserName } from '@/lib/user-name';
 
 export const dynamic = 'force-dynamic';
 
@@ -74,7 +75,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
                         )}
                         <div className="min-w-0">
                           <Link href={`/users/${encodeURIComponent(u.id)}`} className={`${linkClass} font-medium break-words`} dir="auto" data-testid="user-link">
-                            {u.displayName || u.userName || u.id}
+                            {adminUserName(u)}
                           </Link>
                           {u.userName && <span className="block text-sm text-fg-muted" dir="ltr">@{u.userName}</span>}
                           <span className="block"><MonoId value={u.id} max={24} /></span>

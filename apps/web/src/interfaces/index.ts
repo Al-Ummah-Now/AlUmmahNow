@@ -101,6 +101,8 @@ export interface Profile {
     firstNameLocalized?: Record<string, string>; // Multi-language first names
     lastName?: string;
     lastNameLocalized?: Record<string, string>; // Multi-language last names
+    /** The name others see (api-videos resolveDisplayName); show it with userDisplayName() */
+    resolvedDisplayName?: string;
     avatarUrl?: string;
     coverUrl?: string;
     bio?: string;

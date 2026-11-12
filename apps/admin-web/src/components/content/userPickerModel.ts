@@ -4,6 +4,7 @@
  */
 import { ADMIN_USER_SEARCH_MIN_LENGTH, type AdminUserSearchItem } from '@al-ummah/shared-types';
 import type { MessageKey, Translator } from '@/i18n/translate';
+import { adminUserName } from '@/lib/user-name';
 
 export const SEARCH_DEBOUNCE_MS = 250;
 export const MIN_QUERY_LENGTH = ADMIN_USER_SEARCH_MIN_LENGTH;
@@ -131,8 +132,7 @@ export function userMeta(user: AdminUserSearchItem, t: Translator): string {
 }
 
 /** What the user is called in the confirm dialog and status lines. */
-export const userName = (user: Pick<AdminUserSearchItem, 'displayName' | 'userName' | 'email' | 'id'>) =>
-  user.displayName || (user.userName ? `@${user.userName}` : '') || user.email || user.id;
+export const userName = (user: Pick<AdminUserSearchItem, 'displayName' | 'userName' | 'email' | 'id'>) => adminUserName(user);
 
 /** Values the admin may type to confirm a transfer: the channel's @handle (with or without "@") or the new owner's email. */
 export function transferConfirmValues(handle: string | null, email: string | null): string[] {

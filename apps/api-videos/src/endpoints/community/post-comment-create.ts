@@ -17,6 +17,7 @@ import type {
 import { findPostComment, getChannelObject, topLevelCommentKey, recordReplyParent } from './post-comment-helpers';
 import { notifyUserInBackground } from '../../lib/websocket-notify';
 import { scanInBackground } from '../../lib/moderation-scan';
+import { resolveDisplayName, type NameFields } from '@al-ummah/shared-types';
 
 // Sanitization configuration for comments
 // Allows basic formatting while preventing XSS attacks
@@ -206,6 +207,13 @@ export class CreatePostComment extends AuthenticatedRoute {
       }
     }
 
+    // Posted as a channel: the channel's name. Without one: the user's resolved name (display name, else first + last)
+    let profileName = '';
+    if (!actorChannel?.name?.trim()) {
+      const profileObj = await c.env.profiles?.get(userId).catch(() => null);
+      profileName = profileObj ? resolveDisplayName((await profileObj.json().catch(() => null)) as NameFields | null) : '';
+    }
+
     const comment: PostComment = {
       id: crypto.randomUUID(),
       postId,
@@ -213,7 +221,7 @@ export class CreatePostComment extends AuthenticatedRoute {
       userId: userId,
       parentCommentId: requestBody.parentCommentId,
       content: sanitizeHtml(requestBody.content, sanitizeOptions),
-      userDisplayName: actorChannel?.name || 'Anonymous',
+      userDisplayName: actorChannel?.name?.trim() || profileName || 'Anonymous',
       userAvatarUrl: actorChannel?.avatarUrl,
       channelVerified: Boolean(actorChannel?.isVerified),
       likes: 0,

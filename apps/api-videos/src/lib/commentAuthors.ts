@@ -37,7 +37,7 @@ export async function resolveCommentAuthors(
 	}));
 
 	const userIds = [...new Set(comments
-		.filter((cm) => !channels.get(cm.channelId)?.name)
+		.filter((cm) => !channels.get(cm.channelId)?.name?.trim())
 		.map((cm) => cm.userId)
 		.filter(Boolean))];
 	const profiles = new Map<string, ProfileType | null>();

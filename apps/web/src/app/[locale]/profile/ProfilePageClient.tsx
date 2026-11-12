@@ -12,6 +12,7 @@ import type { Profile } from '@/interfaces';
 import { Pencil } from 'lucide-react';
 import { AvatarImage, CoverImage } from '@/components/media/ProfileImages';
 import type { Channel } from '@al-ummah/shared-types';
+import { userDisplayName } from '@/lib/display-name';
 
 interface ProfilePageClientProps {
   /** Loaded on the server with the page request (no client round trips) */
@@ -32,27 +33,8 @@ const ProfilePageClient = ({ initialProfile, initialChannels }: ProfilePageClien
     ? `/${locale}/settings/channel/${currentChannel.id}/playlists`
     : `/${locale}/settings`;
 
-  // Get localized name or fall back to default
-  const getLocalizedName = (
-    defaultValue: string | undefined,
-    localizedValues: Record<string, string> | undefined
-  ): string => {
-    if (localizedValues && localizedValues[locale]) {
-      return localizedValues[locale];
-    }
-    return defaultValue || '';
-  };
-
-  const displayFirstName = getLocalizedName(profile?.firstName, profile?.firstNameLocalized);
-  const displayLastName = getLocalizedName(profile?.lastName, profile?.lastNameLocalized);
-  // Profiles may have only a display name (first/last are optional), so fall
-  // back to it, then the email, instead of rendering an empty heading
-  const displayHeading =
-    `${displayFirstName} ${displayLastName}`.trim() ||
-    getLocalizedName(profile?.displayName, profile?.displayNameLocalized) ||
-    profile?.email ||
-    auth?.user?.email ||
-    '';
+  // Display name, else first + last; the email only as the last resort
+  const displayHeading = userDisplayName(profile, locale, profile?.email || auth?.user?.email);
 
   // A server-loaded profile means the visitor is signed in; the client auth
   // state may simply not have loaded yet
