@@ -91,3 +91,5 @@ export * from './roles';
 // Soft delete of admin-managed configuration (contact messages, themes, creator tiers)
 export * from './admin-trash';
 export * from './video-reactions';
+// Video delivery on R2 + Cloudflare CDN beside Bunny (epic #687): keys, private tokens, delivery switch
+export * from './media-delivery';

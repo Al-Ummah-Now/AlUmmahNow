@@ -22,9 +22,12 @@ export function resourcesFor(env: ResourceEnv): Resources {
 	const s = env === 'production' ? '' : `-${env}`;
 	return {
 		// Errors page: async ingest and its dead letters (apps/admin-api ErrorsIngest.ts)
-		queues: [`al-ummah-now-errors${s}`, `al-ummah-now-errors-dlq${s}`],
+		// R2 video delivery (apps/media): transcode jobs and their dead letters (DLQ name ends in the env, see queue-consumers)
+		queues: [`al-ummah-now-errors${s}`, `al-ummah-now-errors-dlq${s}`, `al-ummah-now-transcode${s}`, `al-ummah-now-transcode-dlq${s}`],
 		// Private source maps of the web apps (apps/admin-api lib/sourcemaps.ts; upload-sourcemaps.ts)
-		buckets: [`al-ummah-now-sourcemaps${s}`],
+		// Renditions served from media.<env>.alummahnow.net (docs/media-delivery/R2-DELIVERY-PLAN.md)
+		// (public, behind the R2 custom domain) and private/unlisted ones (no public access; the media Worker serves them)
+		buckets: [`al-ummah-now-sourcemaps${s}`, `al-ummah-now-media${s}`, `al-ummah-now-media-private${s}`],
 	};
 }
 

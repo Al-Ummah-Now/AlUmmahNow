@@ -1,0 +1,38 @@
+# The media host's Cloudflare settings (R2 custom domain, CORS, Cache Rule, Smart Tiered Cache)
+# as code: scripts/media-cdn/apply.ts, docs/media-delivery/RUNBOOK.md. Plans by default; apply=true
+# makes the changes. Production creates a DNS record: only with the owner's go-ahead.
+name: Media CDN settings
+
+on:
+  workflow_dispatch:
+    inputs:
+      env:
+        description: Environment
+        type: choice
+        options: [qa, stage, production]
+        default: qa
+      apply:
+        description: Apply the changes (otherwise plan only)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  media-cdn:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: ${{ inputs.env == 'production' && 'production' || 'qa' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: ${{ inputs.apply && 'Apply' || 'Plan' }} media CDN settings (${{ inputs.env }})
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # Zone: Cache Rules Edit + Zone Settings Edit (the account token has no zone scope)
+          MEDIA_CDN_API_TOKEN: ${{ secrets.MEDIA_CDN_API_TOKEN }}
+        run: node --experimental-strip-types --no-warnings scripts/media-cdn/apply.ts --env "${{ inputs.env }}" ${{ inputs.apply && '--apply' || '' }}

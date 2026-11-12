@@ -1,0 +1,48 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // R2 video delivery beside Bunny (epic #687, docs/media-delivery/R2-DELIVERY-PLAN.md)
+  "name": "al-ummah-now-media-qa",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "observability": { "enabled": true, "head_sampling_rate": 1, "logs": { "enabled": true, "head_sampling_rate": 1 } },
+  // Only private renditions run this Worker; /pub/* is the R2 custom domain + Cache Rule
+  "routes": [{ "pattern": "media.qa.alummahnow.net/priv/*", "zone_name": "alummahnow.net" }],
+  "containers": [
+    {
+      "class_name": "Transcoder",
+      "image": "./container/Dockerfile",
+      "image_build_context": "./container",
+      "instance_type": "standard-4",
+      // Bounds spend: at most this many transcodes at once (the queue backs off when full)
+      "max_instances": 2
+    }
+  ],
+  "durable_objects": { "bindings": [{ "name": "TRANSCODER", "class_name": "Transcoder" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Transcoder"] }],
+  // MEDIA: public renditions (pub/…), served by the R2 custom domain. MEDIA_PRIVATE: private and
+  // unlisted ones (priv/…), with no public access at all: only /priv/ (token checked) reads it.
+  "r2_buckets": [
+    { "binding": "MEDIA", "bucket_name": "al-ummah-now-media-qa" },
+    { "binding": "MEDIA_PRIVATE", "bucket_name": "al-ummah-now-media-private-qa" }
+  ],
+  "services": [{ "binding": "VIDEOS", "service": "videos-qa" }],
+  "queues": {
+    "consumers": [
+      {
+        "queue": "al-ummah-now-transcode-qa",
+        "max_batch_size": 1,
+        "max_batch_timeout": 5,
+        "max_concurrency": 2,
+        "max_retries": 8,
+        "dead_letter_queue": "al-ummah-now-transcode-dlq-qa"
+      }
+    ]
+  },
+  "secrets_store_secrets": [
+    { "binding": "MEDIA_SIGN_KEY", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "media-sign-key-qa" },
+    { "binding": "INTERNAL_API_KEY", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "internal-api-key-qa" }
+  ],
+  "vars": { "TRANSCODER_INSTANCE": "standard-4", "LOG_LEVEL": "debug" }
+}
