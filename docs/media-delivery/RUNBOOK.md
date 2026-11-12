@@ -15,6 +15,27 @@ Plan and design: [R2-DELIVERY-PLAN.md](./R2-DELIVERY-PLAN.md). Epic #687.
 The buckets and queues are created by `scripts/release/ensure-resources.ts` on every deploy. The
 signing keys were created once, with `wrangler secrets-store secret create`.
 
+## Releases
+
+- **QA:** `deploy.yml` deploys `apps/media` from `wrangler.qa.jsonc` on every push to main (job `deploy-qa-media`).
+- **Stage and production:** `release.yml` deploys `apps/media` from `wrangler.jsonc` (`--env stage` for stage) after the other apps' promote and its smoke. Containers take no versions upload, so this is a plain `wrangler deploy`. It builds the transcoder image with Docker and pushes it to Cloudflare's registry.
+- **Media smoke:** `scripts/release/media-smoke.ts` checks three things:
+  - `/priv/` with a bad token gets 403 from the Worker;
+  - a missing `/pub/` key gets 404 from R2;
+  - the transcoder application exists.
+- **On a failed smoke:** the release runs `wrangler rollback` on the media Worker.
+- **Cache Rule and Smart Tiered Cache:** applied by the release when the `MEDIA_CDN_API_TOKEN` secret is set; otherwise it skips with a notice.
+- **Manual rollback:** `cd apps/media && pnpm wrangler rollback -c wrangler.jsonc [--env stage]`.
+- **Viewers:** the production delivery switch defaults to Bunny. Uploads are dual-written to R2 from the first release. Viewers move only when an admin changes the switch on the Delivery page.
+
+## Bunny originals
+
+The transcode reads `/{id}/original` first. Bunny serves it only when the Stream library has:
+- **Keep original files** (`KeepOriginalFiles`);
+- **Expose originals on the CDN** (`ExposeOriginals`).
+
+Both are set with the Bunny *account* API (`POST https://api.bunny.net/videolibrary/{id}`) or in the dashboard. The stored Stream library keys get 401 there (checked 2026-11-12). Until they're set, the transcode uses Bunny's MP4 fallback, which tops out at 720p and is a second-generation encode.
+
 ## Applying the CDN settings
 
 ```sh

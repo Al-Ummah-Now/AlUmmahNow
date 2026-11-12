@@ -252,6 +252,51 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm release:queue-consumers --config apps/admin-api/wrangler.jsonc --env stage
+
+      # R2 video delivery (apps/media, epic #687). Containers take no versions upload, so the
+      # media worker (and its transcoder image, built here with Docker and pushed to Cloudflare's
+      # registry) is deployed with `wrangler deploy` once the promote above passed its smoke,
+      # then smoke-tested itself; a failed smoke rolls the media worker back.
+      - name: Deploy media (stage)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          RELEASE_LABEL: ${{ needs.resolve.outputs.label }}
+        run: |
+          cd apps/media
+          pnpm wrangler deploy -c wrangler.jsonc --env stage --message "release $RELEASE_LABEL"
+
+      - name: Media smoke (stage)
+        id: media_smoke
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node --experimental-strip-types --no-warnings scripts/release/media-smoke.ts --env stage
+
+      - name: Roll back media (smoke failed)
+        if: failure() && steps.media_smoke.outcome == 'failure'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          cd apps/media
+          pnpm wrangler rollback -c wrangler.jsonc --env stage --message "release ${GITHUB_SHA::7}: media smoke failed" -y
+          echo "### Rolled back: media smoke failed (stage)" >> "$GITHUB_STEP_SUMMARY"
+
+      # Cache Rule + Smart Tiered Cache on the media host (scripts/media-cdn/apply.ts). Needs a
+      # zone-scoped token (MEDIA_CDN_API_TOKEN: Zone Cache Rules Edit, Zone Settings Edit); the
+      # account token cannot. Without it the host still serves, uncached, and this says so.
+      - name: Media CDN settings (stage)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          MEDIA_CDN_API_TOKEN: ${{ secrets.MEDIA_CDN_API_TOKEN }}
+        run: |
+          if [ -z "$MEDIA_CDN_API_TOKEN" ]; then
+            echo "::notice title=Media CDN settings skipped::MEDIA_CDN_API_TOKEN is not set: media.* is served uncached until the Cache Rule exists (docs/media-delivery/RUNBOOK.md)"
+            exit 0
+          fi
+          node --experimental-strip-types --no-warnings scripts/media-cdn/apply.ts --env stage --apply --only cache,tiered
       # Fills columns added by a migration, once the new worker writes them. Fails the deploy if any row is left.
       - name: Backfill and verify Studio columns (stage)
         env:
@@ -461,6 +506,51 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm release:queue-consumers --config apps/admin-api/wrangler.jsonc
+
+      # R2 video delivery (apps/media, epic #687). Containers take no versions upload, so the
+      # media worker (and its transcoder image, built here with Docker and pushed to Cloudflare's
+      # registry) is deployed with `wrangler deploy` once the promote above passed its smoke,
+      # then smoke-tested itself; a failed smoke rolls the media worker back.
+      - name: Deploy media (production)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          RELEASE_LABEL: ${{ needs.resolve.outputs.label }}
+        run: |
+          cd apps/media
+          pnpm wrangler deploy -c wrangler.jsonc --message "release $RELEASE_LABEL"
+
+      - name: Media smoke (production)
+        id: media_smoke
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node --experimental-strip-types --no-warnings scripts/release/media-smoke.ts --env production
+
+      - name: Roll back media (smoke failed)
+        if: failure() && steps.media_smoke.outcome == 'failure'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          cd apps/media
+          pnpm wrangler rollback -c wrangler.jsonc --message "release ${GITHUB_SHA::7}: media smoke failed" -y
+          echo "### Rolled back: media smoke failed (production)" >> "$GITHUB_STEP_SUMMARY"
+
+      # Cache Rule + Smart Tiered Cache on the media host (scripts/media-cdn/apply.ts). Needs a
+      # zone-scoped token (MEDIA_CDN_API_TOKEN: Zone Cache Rules Edit, Zone Settings Edit); the
+      # account token cannot. Without it the host still serves, uncached, and this says so.
+      - name: Media CDN settings (production)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          MEDIA_CDN_API_TOKEN: ${{ secrets.MEDIA_CDN_API_TOKEN }}
+        run: |
+          if [ -z "$MEDIA_CDN_API_TOKEN" ]; then
+            echo "::notice title=Media CDN settings skipped::MEDIA_CDN_API_TOKEN is not set: media.* is served uncached until the Cache Rule exists (docs/media-delivery/RUNBOOK.md)"
+            exit 0
+          fi
+          node --experimental-strip-types --no-warnings scripts/media-cdn/apply.ts --env production --apply --only cache,tiered
       # Fills columns added by a migration, once the new worker writes them. Fails the deploy if any row is left.
       - name: Backfill and verify Studio columns (production)
         env:

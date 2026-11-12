@@ -124,6 +124,11 @@ export const APPS: AppRule[] = [
 				{ kind: 'queue_producer', name: 'MODERATION_QUEUE' },
 				// Per-video processing-check loop (src/lib/processing/loop.ts; 2026-11-10 incident)
 				{ kind: 'queue_producer', name: 'PROCESSING_CHECK_QUEUE' },
+				// R2 delivery beside Bunny (epic #687): dual write, visibility moves, purge, private URL signing
+				{ kind: 'r2_buckets', name: 'MEDIA' },
+				{ kind: 'r2_buckets', name: 'MEDIA_PRIVATE' },
+				{ kind: 'queue_producer', name: 'TRANSCODE_QUEUE' },
+				{ kind: 'secrets_store_secrets', name: 'MEDIA_SIGN_KEY' },
 				{ kind: 'queue_consumer', name: 'al-ummah-now-processing-check' },
 				// Heavy admin actions run as queued jobs (lib/admin/jobs.ts)
 				{ kind: 'queue_producer', name: 'ADMIN_JOBS_QUEUE' },
@@ -214,6 +219,35 @@ export const APPS: AppRule[] = [
 			...PROD_GUARDS,
 		},
 		stage: stageRule({ name: 'al-ummah-scheduler-stage', vars: { WEBSOCKET_URL: STAGE_REALTIME }, requiredBindings: [INTERNAL_API_KEY, { kind: 'queue_producer', name: 'QUEUE' }] }),
+	},
+	{
+		// R2 video delivery (epic #687): transcoder container, queue consumer, /priv/ edge.
+		// Released with `wrangler deploy` after the promote (Containers take no versions upload).
+		app: 'media',
+		configPath: 'apps/media/wrangler.jsonc',
+		qaConfigPath: 'apps/media/wrangler.qa.jsonc',
+		dir: 'apps/media',
+		deployFlags: 'any',
+		production: {
+			env: null,
+			name: 'al-ummah-now-media',
+			requireRoutes: true,
+			requiredBindings: [
+				INTERNAL_API_KEY,
+				{ kind: 'secrets_store_secrets', name: 'MEDIA_SIGN_KEY' },
+				{ kind: 'r2_buckets', name: 'MEDIA' },
+				{ kind: 'r2_buckets', name: 'MEDIA_PRIVATE' },
+				{ kind: 'durable_objects', name: 'TRANSCODER' },
+				{ kind: 'services', name: 'VIDEOS' },
+				{ kind: 'queue_consumer', name: 'al-ummah-now-transcode' },
+			],
+			...PROD_GUARDS,
+		},
+		stage: stageRule({
+			name: 'al-ummah-now-media-stage',
+			requireRoutes: true,
+			requiredBindings: [INTERNAL_API_KEY, { kind: 'r2_buckets', name: 'MEDIA' }, { kind: 'r2_buckets', name: 'MEDIA_PRIVATE' }, { kind: 'queue_consumer', name: 'al-ummah-now-transcode-stage' }],
+		}),
 	},
 	{
 		app: 'admin-api',

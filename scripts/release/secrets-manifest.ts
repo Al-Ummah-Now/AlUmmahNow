@@ -57,6 +57,7 @@ const API_VIDEOS_SECRETS: RequiredSecret[] = [
 	{ name: 'BUNNY_TOKEN_KEY', purpose: 'Secrets Store; signs Bunny CDN playback and thumbnail URLs' },
 	{ name: 'image_storage_key', purpose: 'Secrets Store; Bunny Storage key for thumbnails and avatars' },
 	INTERNAL_API_KEY,
+	{ name: 'MEDIA_SIGN_KEY', purpose: 'Secrets Store media-sign-key[-qa|-stage]; path tokens of private R2 renditions (shared with apps/media)' },
 ];
 
 const CLIENT_REQUIRED = [{ name: 'ClientId', required: true }];
@@ -90,6 +91,13 @@ export const SECRETS_MANIFEST: WorkerSecrets[] = [
 	...envs('websocket-server', 'al-ummah-now-comms-qa', { required: [INTERNAL_API_KEY], clientIdVars: CLIENT_OPTIONAL }),
 	...envs('processor', 'al-ummah-now-processor-qa', { required: [INTERNAL_API_KEY] }),
 	...envs('scheduler', 'al-ummah-scheduler-qa', { required: [INTERNAL_API_KEY] }),
+	// R2 delivery (epic #687): api-videos callbacks and private-rendition path tokens
+	...envs('media', 'al-ummah-now-media-qa', {
+		required: [
+			{ ...INTERNAL_API_KEY, purpose: 'Secrets Store internal-api-key[-qa|-stage]; X-API-Key of the calls to api-videos /internal/media' },
+			{ name: 'MEDIA_SIGN_KEY', purpose: 'Secrets Store media-sign-key[-qa|-stage]; checks /priv/ path tokens' },
+		],
+	}),
 ];
 
 export interface BuildSecret {
