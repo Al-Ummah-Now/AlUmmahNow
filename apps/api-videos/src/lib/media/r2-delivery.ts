@@ -15,6 +15,7 @@ import {
 	mediaPlayUrl,
 	newMediaRev,
 	normaliseDeliverySettings,
+	pickDeliverySource,
 	reportNeedsAction,
 	resolveNeedsAction,
 	MEDIA_MASTER,
@@ -583,4 +584,31 @@ export async function sweepMediaJobs(env: MediaEnv, now = Date.now()): Promise<{
 		.bind(new Date(now - STUCK_QUEUED_MS).toISOString(), new Date(now - STUCK_TRANSCODING_MS).toISOString())
 		.all<{ video_id: string }>();
 	return sweepMedia(env, (results ?? []).map((r) => r.video_id), now);
+}
+
+/**
+ * What the watch page gets beside the Bunny playUrl (which stays as it was, so
+ * every existing client keeps playing Bunny):
+ *   source 'bunny' | 'r2'  decided here (assign = video: stable per video)
+ *   source 'draw'          the player draws per play with r2Percent (assign = view;
+ *                          decided client-side so cached responses stay shared)
+ * r2 URLs are present only when the R2 rendition is ready.
+ */
+export interface DeliveryView {
+	source: 'bunny' | 'r2' | 'draw';
+	r2Percent: number;
+	r2?: { playUrl: string; thumbnailUrl: string };
+}
+
+export async function deliveryFor(env: MediaEnv, video: Pick<MediaVideo, 'id' | 'r2'>): Promise<DeliveryView> {
+	const settings = await readDeliverySettings(env);
+	let r2: DeliveryView['r2'] | undefined;
+	try {
+		r2 = settings.mode === 'bunny' ? undefined : ((await r2Urls(env, video)) ?? undefined);
+	} catch (error) {
+		logger.warn('[Media] Could not build R2 URLs; serving Bunny', { videoId: video.id, error: error instanceof Error ? error.message : String(error) });
+	}
+	if (!r2) return { source: 'bunny', r2Percent: settings.r2Percent };
+	if (settings.mode === 'split' && settings.assign === 'view') return { source: 'draw', r2Percent: settings.r2Percent, r2 };
+	return { source: pickDeliverySource(settings, true, video.id), r2Percent: settings.r2Percent, r2 };
 }

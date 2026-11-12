@@ -1,3 +1,4 @@
+import { VideoQoe } from "../endpoints/video/videoQoe";
 import { Hono } from 'hono';
 import { fromHono } from 'chanfana';
 
@@ -248,6 +249,8 @@ videoRouter.delete('/:id/comments/:cid/dislikes', CommentDislikeDelete);
 // Track video view (public - for analytics)
 videoRouter.post('/:id/view', VideoView);
 videoRouter.post('/:id/watch-time', VideoWatchTime);
+// Playback quality per delivery source (Bunny / R2, epic #687)
+videoRouter.post('/:id/qoe', VideoQoe);
 videoRouter.post('/:id/retention', VideoRetention);
 
 // Export as default and named export

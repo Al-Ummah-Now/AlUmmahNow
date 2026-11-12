@@ -34930,6 +34930,201 @@
         }
       }
     },
+    "/api/v1/videos/{id}/qoe": {
+      "post": {
+        "tags": [
+          "Videos"
+        ],
+        "summary": "Report playback quality",
+        "description": "🔓 **Authentication Optional**: One play session's quality measurements, tagged by delivery source.",
+        "operationId": "post_VideoQoe",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Video id"
+            },
+            "required": true,
+            "description": "Video id",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sessionId": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 128,
+                    "description": "Playback session id (one per player load)"
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "bunny",
+                      "r2"
+                    ],
+                    "description": "Source the session started on (an R2 session that fell back to Bunny stays r2, with fallback=true)"
+                  },
+                  "country": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{2}$",
+                    "description": "Viewer country (set by the web app's beacon route); else the request's"
+                  },
+                  "device": {
+                    "type": "string",
+                    "enum": [
+                      "desktop",
+                      "mobile",
+                      "tablet",
+                      "tv",
+                      "other"
+                    ],
+                    "description": "Device class"
+                  },
+                  "started": {
+                    "type": "boolean",
+                    "description": "Playback started"
+                  },
+                  "startupMs": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 120000,
+                    "description": "Play request to first frame"
+                  },
+                  "rebuffers": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 10000,
+                    "default": 0
+                  },
+                  "rebufferMs": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 86400000,
+                    "default": 0
+                  },
+                  "watchMs": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 86400000,
+                    "default": 0
+                  },
+                  "avgKbps": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 200000,
+                    "description": "Average selected bitrate, weighted by time"
+                  },
+                  "peakKbps": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 200000
+                  },
+                  "switches": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 10000,
+                    "default": 0
+                  },
+                  "errors": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000,
+                    "default": 0
+                  },
+                  "fallback": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "R2 failed and the player switched to Bunny"
+                  }
+                },
+                "required": [
+                  "sessionId",
+                  "source",
+                  "device",
+                  "started"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Report accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "success"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many reports for this session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/videos/{id}/restore": {
       "post": {
         "tags": [
