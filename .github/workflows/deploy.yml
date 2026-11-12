@@ -1105,6 +1105,17 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
+      # Platform analytics collector (docs/admin/LIVE_OPS.md): its D1 is migrated before
+      # admin-api, which reads it (COSTS_DB)
+      - name: Deploy Cost Monitor to QA
+        run: |
+          cd apps/cost-monitor
+          pnpm wrangler d1 migrations apply al-ummah-now-costs-qa --remote --config wrangler.qa.jsonc
+          pnpm wrangler deploy --config wrangler.qa.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
       - name: Deploy Admin API to QA
         run: |
           cd apps/admin-api
@@ -1154,8 +1165,9 @@ jobs:
           echo "  • al-ummah-admin-api-qa → admin.api.qa.alummahnow.net"
           echo "  • al-ummah-scheduler-qa (cron)"
           echo "  • al-ummah-admin-web-qa → admin.qa.alummahnow.net"
+          echo "  • al-ummah-cost-monitor-qa (cron)"
           echo ""
-          echo "All 7 QA workers are live!"
+          echo "All 8 QA workers are live!"
 
   # R2 video delivery beside Bunny (epic #687): the media Worker and its FFmpeg
   # container (wrangler builds the image with Docker and pushes it to Cloudflare's

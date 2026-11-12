@@ -14,6 +14,7 @@ import invitesRouter from './routers/invites.router';
 import { scheduleInviteSyncs } from './lib/invites';
 import processingRouter from './routers/processing.router';
 import mediaRouter from './routers/media.router';
+import opsRouter from './routers/ops.router';
 import staleUploadsRouter from './routers/staleUploads.router';
 import trashRouter from './routers/trash.router';
 import { isHourlyTick, runTrashCleanup } from './lib/trash';
@@ -176,6 +177,9 @@ app.route('/api/processing', processingRouter);
 
 // Delivery comparison (Bunny vs R2, epic #687): the switch, transcode jobs, QoE and cost; permission-checked, audited proxy to api-videos
 app.route('/api/media', mediaRouter);
+
+// Platform analytics (Operations page, docs/admin/LIVE_OPS.md): reads apps/cost-monitor's rollups; ops:read / ops:manage
+app.route('/api/ops', opsRouter);
 
 // Stale uploads (abandoned placeholders, Bunny orphans): permission-checked, audited proxy to api-videos
 app.route('/api/uploads/stale', staleUploadsRouter as never);

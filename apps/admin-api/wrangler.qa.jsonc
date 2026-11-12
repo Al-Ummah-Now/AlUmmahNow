@@ -16,6 +16,12 @@
       "binding": "SEARCH_DB",
       "database_name": "al-ummah-now-search-qa",
       "database_id": "0282bac3-5b70-4343-a991-937c732d981a"
+    },
+    {
+      // Platform analytics rollups (migrations in apps/cost-monitor)
+      "binding": "COSTS_DB",
+      "database_name": "al-ummah-now-costs-qa",
+      "database_id": "a83d0ca5-6186-43df-8bc0-90b36561f42d"
     }
   ],
 

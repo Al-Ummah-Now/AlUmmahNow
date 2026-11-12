@@ -8,7 +8,7 @@
  */
 
 /** Apps that report errors (admin "App" filter). */
-export const ERROR_APPS = ['web', 'admin-web', 'api-videos', 'admin-api', 'processor', 'scheduler', 'websocket'] as const;
+export const ERROR_APPS = ['web', 'admin-web', 'api-videos', 'admin-api', 'processor', 'scheduler', 'websocket', 'cost-monitor'] as const;
 export type ErrorApp = (typeof ERROR_APPS)[number];
 
 /**
@@ -72,7 +72,7 @@ export interface ErrorEventInput {
 }
 
 /** Where a needs-action item comes from (Errors page "Source" column). */
-export const NEEDS_ACTION_SOURCES = ['queue', 'dlq', 'processing', 'email', 'ai', 'admin-job', 'scheduler', 'upload', 'other'] as const;
+export const NEEDS_ACTION_SOURCES = ['queue', 'dlq', 'processing', 'email', 'ai', 'admin-job', 'scheduler', 'upload', 'ops', 'other'] as const;
 export type NeedsActionSource = (typeof NEEDS_ACTION_SOURCES)[number];
 
 /**

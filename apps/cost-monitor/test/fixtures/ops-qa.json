@@ -1,0 +1,380 @@
+{
+ "_note": "Live response of the ops query on QA resources only (2026-11-12), trimmed; shapes match OPS_QUERY.",
+ "data": {
+  "viewer": {
+   "accounts": [
+    {
+     "workers": [
+      {
+       "dimensions": {
+        "datetimeHour": "2026-11-12T14:00:00Z",
+        "scriptName": "videos-qa",
+        "status": "success"
+       },
+       "quantiles": {
+        "cpuTimeP50": 3841,
+        "cpuTimeP99": 129251
+       },
+       "sum": {
+        "cpuTimeUs": 122367997,
+        "errors": 0,
+        "requests": 11412,
+        "subrequests": 15042
+       }
+      },
+      {
+       "dimensions": {
+        "datetimeHour": "2026-11-12T15:00:00Z",
+        "scriptName": "videos-qa",
+        "status": "clientDisconnected"
+       },
+       "quantiles": {
+        "cpuTimeP50": 3460,
+        "cpuTimeP99": 594691
+       },
+       "sum": {
+        "cpuTimeUs": 41083940,
+        "errors": 0,
+        "requests": 712,
+        "subrequests": 327
+       }
+      },
+      {
+       "dimensions": {
+        "datetimeHour": "2026-11-12T13:00:00Z",
+        "scriptName": "videos-qa",
+        "status": "success"
+       },
+       "quantiles": {
+        "cpuTimeP50": 4796,
+        "cpuTimeP99": 469429
+       },
+       "sum": {
+        "cpuTimeUs": 291714950,
+        "errors": 0,
+        "requests": 15839,
+        "subrequests": 27218
+       }
+      },
+      {
+       "dimensions": {
+        "datetimeHour": "2026-11-12T15:00:00Z",
+        "scriptName": "al-ummah-admin-api-qa",
+        "status": "success"
+       },
+       "quantiles": {
+        "cpuTimeP50": 1783,
+        "cpuTimeP99": 28979
+       },
+       "sum": {
+        "cpuTimeUs": 51072252,
+        "errors": 0,
+        "requests": 13563,
+        "subrequests": 5839
+       }
+      },
+      {
+       "dimensions": {
+        "datetimeHour": "2026-11-12T13:00:00Z",
+        "scriptName": "al-ummah-admin-api-qa",
+        "status": "clientDisconnected"
+       },
+       "quantiles": {
+        "cpuTimeP50": 22803,
+        "cpuTimeP99": 30296
+       },
+       "sum": {
+        "cpuTimeUs": 76673,
+        "errors": 0,
+        "requests": 4,
+        "subrequests": 0
+       }
+      },
+      {
+       "dimensions": {
+        "datetimeHour": "2026-11-12T13:00:00Z",
+        "scriptName": "videos-qa",
+        "status": "clientDisconnected"
+       },
+       "quantiles": {
+        "cpuTimeP50": 11414,
+        "cpuTimeP99": 605242
+       },
+       "sum": {
+        "cpuTimeUs": 17196871,
+        "errors": 0,
+        "requests": 161,
+        "subrequests": 64
+       }
+      }
+     ],
+     "d1": [
+      {
+       "dimensions": {
+        "databaseId": "eed66c4a-af26-4e07-9f9a-36f1e4ada555",
+        "datetimeHour": "2026-11-12T15:00:00Z"
+       },
+       "quantiles": {
+        "queryBatchTimeMsP50": 0.21,
+        "queryBatchTimeMsP99": 5.26
+       },
+       "sum": {
+        "readQueries": 22235,
+        "rowsRead": 53112745,
+        "rowsWritten": 24709,
+        "writeQueries": 10604
+       }
+      },
+      {
+       "dimensions": {
+        "databaseId": "eed66c4a-af26-4e07-9f9a-36f1e4ada555",
+        "datetimeHour": "2026-11-12T13:00:00Z"
+       },
+       "quantiles": {
+        "queryBatchTimeMsP50": 0.2,
+        "queryBatchTimeMsP99": 2.1
+       },
+       "sum": {
+        "readQueries": 7526,
+        "rowsRead": 6640320,
+        "rowsWritten": 12218,
+        "writeQueries": 5468
+       }
+      }
+     ],
+     "d1Storage": [
+      {
+       "dimensions": {
+        "databaseId": "eed66c4a-af26-4e07-9f9a-36f1e4ada555",
+        "datetimeHour": "2026-11-12T15:00:00Z"
+       },
+       "max": {
+        "databaseSizeBytes": 89911300
+       }
+      },
+      {
+       "dimensions": {
+        "databaseId": "eed66c4a-af26-4e07-9f9a-36f1e4ada555",
+        "datetimeHour": "2026-11-12T13:00:00Z"
+       },
+       "max": {
+        "databaseSizeBytes": 88903680
+       }
+      }
+     ],
+     "r2": [
+      {
+       "dimensions": {
+        "actionType": "ListObjects",
+        "bucketName": "al-ummah-now-media-qa",
+        "datetimeHour": "2026-11-12T13:00:00Z"
+       },
+       "sum": {
+        "requests": 19,
+        "responseObjectSize": 0
+       }
+      },
+      {
+       "dimensions": {
+        "actionType": "HeadBucket",
+        "bucketName": "al-ummah-now-media-qa",
+        "datetimeHour": "2026-11-12T15:00:00Z"
+       },
+       "sum": {
+        "requests": 11,
+        "responseObjectSize": 0
+       }
+      },
+      {
+       "dimensions": {
+        "actionType": "ListObjects",
+        "bucketName": "al-ummah-now-media-qa",
+        "datetimeHour": "2026-11-12T14:00:00Z"
+       },
+       "sum": {
+        "requests": 2,
+        "responseObjectSize": 0
+       }
+      },
+      {
+       "dimensions": {
+        "actionType": "HeadBucket",
+        "bucketName": "videos-qa",
+        "datetimeHour": "2026-11-12T15:00:00Z"
+       },
+       "sum": {
+        "requests": 43,
+        "responseObjectSize": 0
+       }
+      },
+      {
+       "dimensions": {
+        "actionType": "HeadBucket",
+        "bucketName": "al-ummah-now-media-qa",
+        "datetimeHour": "2026-11-12T13:00:00Z"
+       },
+       "sum": {
+        "requests": 41,
+        "responseObjectSize": 0
+       }
+      },
+      {
+       "dimensions": {
+        "actionType": "HeadBucket",
+        "bucketName": "videos-qa",
+        "datetimeHour": "2026-11-12T14:00:00Z"
+       },
+       "sum": {
+        "requests": 175,
+        "responseObjectSize": 0
+       }
+      },
+      {
+       "dimensions": {
+        "actionType": "PutObject",
+        "bucketName": "videos-qa",
+        "datetimeHour": "2026-11-12T13:00:00Z"
+       },
+       "sum": {
+        "requests": 4488,
+        "responseObjectSize": 6331979
+       }
+      },
+      {
+       "dimensions": {
+        "actionType": "ListObjects",
+        "bucketName": "videos-qa",
+        "datetimeHour": "2026-11-12T14:00:00Z"
+       },
+       "sum": {
+        "requests": 1414,
+        "responseObjectSize": 0
+       }
+      }
+     ],
+     "r2Storage": [
+      {
+       "dimensions": {
+        "bucketName": "videos-qa",
+        "datetimeHour": "2026-11-12T14:00:00Z"
+       },
+       "max": {
+        "objectCount": 9616,
+        "payloadSize": 14713740
+       }
+      },
+      {
+       "dimensions": {
+        "bucketName": "al-ummah-now-media-qa",
+        "datetimeHour": "2026-11-12T13:00:00Z"
+       },
+       "max": {
+        "objectCount": 36,
+        "payloadSize": 10223876
+       }
+      },
+      {
+       "dimensions": {
+        "bucketName": "al-ummah-now-media-qa",
+        "datetimeHour": "2026-11-12T15:00:00Z"
+       },
+       "max": {
+        "objectCount": 36,
+        "payloadSize": 10223876
+       }
+      }
+     ],
+     "queueBacklog": [
+      {
+       "dimensions": {
+        "queueId": "0c2bd068d6a7447aadcce2f4622ed706",
+        "datetimeFifteenMinutes": "2026-11-12T13:00:00Z"
+       },
+       "avg": {
+        "messages": 12
+       }
+      },
+      {
+       "dimensions": {
+        "queueId": "0c2bd068d6a7447aadcce2f4622ed706",
+        "datetimeFifteenMinutes": "2026-11-12T15:00:00Z"
+       },
+       "avg": {
+        "messages": 10
+       }
+      },
+      {
+       "dimensions": {
+        "queueId": "8bbac68dcf8d47dcb8107e4080c67326",
+        "datetimeFifteenMinutes": "2026-11-12T14:00:00Z"
+       },
+       "avg": {
+        "messages": 0
+       }
+      },
+      {
+       "dimensions": {
+        "queueId": "0c2bd068d6a7447aadcce2f4622ed706",
+        "datetimeFifteenMinutes": "2026-11-12T14:00:00Z"
+       },
+       "avg": {
+        "messages": 8
+       }
+      }
+     ],
+     "queueOps": [
+      {
+       "count": 3999,
+       "dimensions": {
+        "actionType": "WriteMessage",
+        "datetimeHour": "2026-11-12T15:00:00Z",
+        "queueId": "0c2bd068d6a7447aadcce2f4622ed706"
+       }
+      },
+      {
+       "count": 1150,
+       "dimensions": {
+        "actionType": "WriteMessage",
+        "datetimeHour": "2026-11-12T14:00:00Z",
+        "queueId": "0c2bd068d6a7447aadcce2f4622ed706"
+       }
+      },
+      {
+       "count": 1167,
+       "dimensions": {
+        "actionType": "ReadMessage",
+        "datetimeHour": "2026-11-12T14:00:00Z",
+        "queueId": "0c2bd068d6a7447aadcce2f4622ed706"
+       }
+      },
+      {
+       "count": 2677,
+       "dimensions": {
+        "actionType": "DeleteMessage",
+        "datetimeHour": "2026-11-12T13:00:00Z",
+        "queueId": "0c2bd068d6a7447aadcce2f4622ed706"
+       }
+      },
+      {
+       "count": 3,
+       "dimensions": {
+        "actionType": "WriteMessage",
+        "datetimeHour": "2026-11-12T15:00:00Z",
+        "queueId": "8bbac68dcf8d47dcb8107e4080c67326"
+       }
+      },
+      {
+       "count": 3,
+       "dimensions": {
+        "actionType": "WriteMessage",
+        "datetimeHour": "2026-11-12T14:00:00Z",
+        "queueId": "8bbac68dcf8d47dcb8107e4080c67326"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "errors": null
+}
