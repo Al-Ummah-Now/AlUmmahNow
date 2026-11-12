@@ -295,3 +295,109 @@ jobs:
             ${{ runner.temp }}/stack.log
           retention-days: 7
           if-no-files-found: ignore
+
+  # The web suite (apps/web/playwright.config.ts), 5 shards: the specs moved to the local stack so
+  # far (e2e/test-utils/local-web-specs.ts; e2e-tests.yml no longer runs them against QA). Global
+  # setup registers this shard's own accounts on the local issuer; the specs make their own
+  # channels and videos (release/builders.ts) and delete them. Each shard boots and seeds its own
+  # stack, erases and deletes its run accounts, then checks that nothing of the run is left.
+  web:
+    name: Local web suite - ${{ matrix.shard }}
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      # Run mode: every account is e2e+<run>-…, every name the specs make carries the run id, so
+      # the leftover check can find whatever the run did not remove (each job has its own stack)
+      E2E_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+      E2E_ENV: local
+      E2E_CODE_SINK_SECRET: local-stack-sink-secret
+      TEST_PROMOTE_SECRET: local-stack-promote-secret
+      OPENAUTH_URL: http://localhost:3301
+      WEB_APP_URL: http://localhost:3001
+      API_URL: http://localhost:3086
+      OPENAUTH_CLIENT_ID: f0de3c30-0304-4ac4-86d6-1e185dec0439
+      # The stack listens on 127.0.0.1: never let Node try ::1 for "localhost" first
+      NODE_OPTIONS: --dns-result-order=ipv4first
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1/5, 2/5, 3/5, 4/5, 5/5]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/local-stack-up
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run
+        working-directory: apps/web
+        run: |
+          echo "E2E_RUN_USERS_FILE=$RUNNER_TEMP/run-users.txt" >> "$GITHUB_ENV"
+          echo "E2E_RUN_USER_IDS_FILE=$RUNNER_TEMP/run-user-ids.txt" >> "$GITHUB_ENV"
+          export E2E_RUN_USERS_FILE="$RUNNER_TEMP/run-users.txt" E2E_RUN_USER_IDS_FILE="$RUNNER_TEMP/run-user-ids.txt"
+          # The run accounts' password: random per job (the stack dies with it), shared with the teardown
+          E2E_USER_PASSWORD="Aa1!$(openssl rand -hex 16)"
+          echo "::add-mask::$E2E_USER_PASSWORD"
+          echo "E2E_USER_PASSWORD=$E2E_USER_PASSWORD" >> "$GITHUB_ENV"
+          export E2E_USER_PASSWORD
+          # The PR's own code runs here: none of the "not deployed on QA yet" pull-request skips apply
+          export GITHUB_EVENT_NAME=local-stack
+          # Global setup's accounts: e2e+<run>-<attempt>-web-local-<shard>-<role>
+          export E2E_PROJECT="local-${SHARD%%/*}"
+          code=0
+          pnpm exec playwright test --project=chromium --project=shared-state --project=a11y --shard="$SHARD" || code=$?
+          # A shard that ran nothing is a broken split, never a pass (Playwright exits 0 on an empty shard)
+          ran=$(node -e 'const s=require("./test-results/test-results.json").stats||{};console.log((s.expected||0)+(s.unexpected||0)+(s.flaky||0))' 2>/dev/null || echo 0)
+          echo "Shard $SHARD ran $ran test(s)"
+          if [ "$ran" -eq 0 ]; then echo "::error::shard $SHARD ran no tests"; exit 1; fi
+          exit "$code"
+        env:
+          CI: 'true'
+          SHARD: ${{ matrix.shard }}
+          E2E_WORKERS: '2'
+          # The shard's own stack: see every failure, not the first five (QA runs keep the cap)
+          E2E_MAX_FAILURES: '1000'
+
+      # Teardown, pass or fail (owner rule: test sets clean up every resource they use): the run
+      # accounts' content goes (videos with their media, then the GDPR erase of profile, channels,
+      # playlists, history), then the accounts themselves on the local issuer
+      - name: Erase the run accounts' content
+        if: always()
+        timeout-minutes: 10
+        working-directory: apps/web
+        run: |
+          if [ ! -s "${E2E_RUN_USERS_FILE:-}" ]; then echo "No run accounts were generated"; exit 0; fi
+          pnpm exec tsx e2e/cleanup-test-content.ts --run-users
+
+      - name: Delete the run accounts
+        if: always()
+        timeout-minutes: 5
+        run: |
+          if [ ! -s "${E2E_RUN_USERS_FILE:-}" ]; then echo "No run accounts were generated"; exit 0; fi
+          node --experimental-strip-types --no-warnings scripts/e2e/teardown-run-users.ts --auth-url http://localhost:3301 --file "$E2E_RUN_USERS_FILE"
+
+      # Nothing the run created may be left (owner rule). Report-only until every moved spec cleans
+      # up fully; then this gates.
+      - name: Leftovers
+        if: always()
+        run: node --experimental-strip-types --no-warnings scripts/local-stack/leftovers.ts --marker "$E2E_RUN_ID" --report-only
+
+      - name: Stack log
+        if: always()
+        run: |
+          if [ -n "${STACK_PID:-}" ] && kill -0 "$STACK_PID" 2>/dev/null; then kill "$STACK_PID"; fi
+          grep -h "refused" "$RUNNER_TEMP/stack.log" | sort | uniq -c | sort -rn | head -30 || true
+
+      - name: Upload report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-web-${{ strategy.job-index }}
+          path: |
+            apps/web/playwright-report
+            apps/web/test-results
+            apps/web/e2e/.auth/error-*.png
+            ${{ runner.temp }}/stack.log
+          retention-days: 7
+          if-no-files-found: ignore
