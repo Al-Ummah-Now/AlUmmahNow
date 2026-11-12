@@ -112,53 +112,66 @@ async function bunnyStoredBytes(env: CostEnv): Promise<number | undefined> {
 	}
 }
 
-/** Cloudflare GraphQL for the day (only with MEDIA_ANALYTICS_TOKEN). */
+async function graphql(token: string, query: string, variables: Record<string, unknown>): Promise<any> {
+	const res = await fetch('https://api.cloudflare.com/client/v4/graphql', {
+		method: 'POST',
+		headers: { Authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+		body: JSON.stringify({ query, variables }),
+	});
+	const json = (await res.json()) as { data?: any; errors?: { message: string }[] | null };
+	if (json.errors?.length) throw new Error(json.errors.map((e) => e.message).join('; '));
+	return json.data;
+}
+
+const CLASS_B = new Set(['GetObject', 'HeadObject', 'HeadBucket', 'UsageSummary', 'GetBucketEncryption', 'GetBucketLocation', 'GetBucketCors', 'GetBucketLifecycleConfiguration']);
+
+/**
+ * Cloudflare GraphQL for the day (only with MEDIA_ANALYTICS_TOKEN). Two reads, each optional:
+ * R2 storage and operations (Account Analytics Read) and the media host's requests, bytes and
+ * cache status (Zone Analytics Read). A refused one leaves its metrics out, never the other's.
+ */
 async function cloudflareDay(env: CostEnv, day: string): Promise<{ r2StoredBytes?: number; r2ClassB?: number; extra: Metric[] }> {
 	const token = await getSecret(env.MEDIA_ANALYTICS_TOKEN, 'MEDIA_ANALYTICS_TOKEN');
 	if (!token) return { extra: [] };
 	const buckets = (env.MEDIA_BUCKET_NAMES ?? '').split(',').filter(Boolean);
 	const next = new Date(Date.parse(`${day}T00:00:00Z`) + 86400_000).toISOString().slice(0, 10);
-	const query = `query($a: String!, $z: String!, $b: [String!], $d: Date!, $n: Date!, $h: String!) {
-  viewer {
-    accounts(filter: { accountTag: $a }) {
-      r2StorageAdaptiveGroups(limit: 100, filter: { date_geq: $d, date_lt: $n, bucketName_in: $b }) { max { payloadSize metadataSize } dimensions { bucketName } }
-      r2OperationsAdaptiveGroups(limit: 100, filter: { date_geq: $d, date_lt: $n, bucketName_in: $b }) { sum { requests } dimensions { actionType } }
-    }
-    zones(filter: { zoneTag: $z }) {
-      httpRequestsAdaptiveGroups(limit: 20, filter: { date_geq: $d, date_lt: $n, clientRequestHTTPHost: $h }) { count sum { edgeResponseBytes } dimensions { cacheStatus } }
-    }
-  }
-}`;
+	const out: { r2StoredBytes?: number; r2ClassB?: number; extra: Metric[] } = { extra: [] };
 	try {
-		const res = await fetch('https://api.cloudflare.com/client/v4/graphql', {
-			method: 'POST',
-			headers: { Authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-			body: JSON.stringify({ query, variables: { a: env.CLOUDFLARE_ACCOUNT_ID || ACCOUNT_ID, z: ZONE_ID, b: buckets, d: day, n: next, h: env.MEDIA_PUBLIC_HOST ?? '' } }),
-		});
-		const json = (await res.json()) as { data?: any; errors?: { message: string }[] };
-		if (json.errors?.length) throw new Error(json.errors.map((e) => e.message).join('; '));
-		const acct = json.data?.viewer?.accounts?.[0] ?? {};
-		const zone = json.data?.viewer?.zones?.[0] ?? {};
+		const data = await graphql(
+			token,
+			`query($a: String!, $b: [String!], $d: Date!, $n: Date!) { viewer { accounts(filter: { accountTag: $a }) {
+				r2StorageAdaptiveGroups(limit: 100, filter: { date_geq: $d, date_lt: $n, bucketName_in: $b }) { max { payloadSize metadataSize } dimensions { bucketName } }
+				r2OperationsAdaptiveGroups(limit: 100, filter: { date_geq: $d, date_lt: $n, bucketName_in: $b }) { sum { requests } dimensions { actionType } } } } }`,
+			{ a: env.CLOUDFLARE_ACCOUNT_ID || ACCOUNT_ID, b: buckets, d: day, n: next },
+		);
+		const acct = data?.viewer?.accounts?.[0] ?? {};
 		const stored = (acct.r2StorageAdaptiveGroups ?? []).reduce((n: number, g: any) => n + (g.max?.payloadSize ?? 0) + (g.max?.metadataSize ?? 0), 0);
-		const CLASS_B = new Set(['GetObject', 'HeadObject', 'HeadBucket', 'UsageSummary', 'GetBucketEncryption', 'GetBucketLocation', 'GetBucketCors', 'GetBucketLifecycleConfiguration']);
-		const classB = (acct.r2OperationsAdaptiveGroups ?? []).filter((g: any) => CLASS_B.has(g.dimensions?.actionType)).reduce((n: number, g: any) => n + (g.sum?.requests ?? 0), 0);
-		const http = zone.httpRequestsAdaptiveGroups ?? [];
+		out.r2StoredBytes = stored || undefined;
+		out.r2ClassB = (acct.r2OperationsAdaptiveGroups ?? []).filter((g: any) => CLASS_B.has(g.dimensions?.actionType)).reduce((n: number, g: any) => n + (g.sum?.requests ?? 0), 0);
+	} catch (error) {
+		logger.warn('[MediaCosts] R2 analytics unavailable', { error: error instanceof Error ? error.message : String(error) });
+	}
+	try {
+		const data = await graphql(
+			token,
+			`query($z: String!, $d: Date!, $n: Date!, $h: String!) { viewer { zones(filter: { zoneTag: $z }) {
+				httpRequestsAdaptiveGroups(limit: 20, filter: { date_geq: $d, date_lt: $n, clientRequestHTTPHost: $h }) { count sum { edgeResponseBytes } dimensions { cacheStatus } } } } }`,
+			{ z: ZONE_ID, d: day, n: next, h: env.MEDIA_PUBLIC_HOST ?? '' },
+		);
+		const http = data?.viewer?.zones?.[0]?.httpRequestsAdaptiveGroups ?? [];
 		const requests = http.reduce((n: number, g: any) => n + (g.count ?? 0), 0);
 		const hits = http.filter((g: any) => ['hit', 'stale', 'revalidated', 'updating'].includes(g.dimensions?.cacheStatus)).reduce((n: number, g: any) => n + (g.count ?? 0), 0);
 		const bytes = http.reduce((n: number, g: any) => n + (g.sum?.edgeResponseBytes ?? 0), 0);
-		return {
-			r2StoredBytes: stored || undefined,
-			r2ClassB: classB,
-			extra: [
-				{ provider: 'r2', metric: 'cdn_requests', value: requests },
-				{ provider: 'r2', metric: 'cdn_hit_ratio', value: requests ? hits / requests : 0 },
-				{ provider: 'r2', metric: 'cdn_edge_gb', value: bytes / GB },
-			],
-		};
+		out.extra.push(
+			{ provider: 'r2', metric: 'cdn_requests', value: requests },
+			{ provider: 'r2', metric: 'cdn_hit_ratio', value: requests ? hits / requests : 0 },
+			{ provider: 'r2', metric: 'cdn_edge_gb', value: bytes / GB },
+		);
 	} catch (error) {
-		logger.warn('[MediaCosts] Cloudflare analytics unavailable', { error: error instanceof Error ? error.message : String(error) });
-		return { extra: [] };
+		// Needs Zone → Analytics: Read on the token
+		logger.warn('[MediaCosts] Media host analytics unavailable', { error: error instanceof Error ? error.message : String(error) });
 	}
+	return out;
 }
 
 /** Collect yesterday (UTC) and upsert its rows. Never throws. */

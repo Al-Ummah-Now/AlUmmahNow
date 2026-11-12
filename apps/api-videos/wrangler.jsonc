@@ -259,6 +259,17 @@
 		"binding": "MEDIA_SIGN_KEY",
 		"store_id": "f8eddc9944d041919ed8dc7d08d32308",
 		"secret_name": "media-sign-key"
+	  },
+	  {
+	  	// Cloudflare token (Secrets Store media-cdn-api-token): CDN purge when a video turns private; R2 and media-host analytics for the daily costs
+	  	"binding": "MEDIA_CDN_API_TOKEN",
+	  	"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+	  	"secret_name": "media-cdn-api-token"
+	  },
+	  {
+	  	"binding": "MEDIA_ANALYTICS_TOKEN",
+	  	"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+	  	"secret_name": "media-cdn-api-token"
 	  }
 	],
 	/**
@@ -507,6 +518,17 @@
 					"binding": "MEDIA_SIGN_KEY",
 					"store_id": "f8eddc9944d041919ed8dc7d08d32308",
 					"secret_name": "media-sign-key-stage"
+				},
+				{
+					// Cloudflare token (Secrets Store media-cdn-api-token): CDN purge when a video turns private; R2 and media-host analytics for the daily costs
+					"binding": "MEDIA_CDN_API_TOKEN",
+					"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+					"secret_name": "media-cdn-api-token"
+				},
+				{
+					"binding": "MEDIA_ANALYTICS_TOKEN",
+					"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+					"secret_name": "media-cdn-api-token"
 				}
 			],
 			"vars": {
