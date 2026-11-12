@@ -52,8 +52,8 @@ const JSON_META = { httpMetadata: { contentType: 'application/json' } };
 export interface CollectionBackfillMessage {
 	kind: typeof COLLECTION_BACKFILL_KIND;
 	runId: string;
-	/** Video pages (default), then the unreferenced-video scan per library */
-	phase?: 'videos' | 'unreferenced';
+	/** Video pages (default), then per library: the unreferenced-video scan, then the stray-collection scan */
+	phase?: 'videos' | 'unreferenced' | 'collections';
 	page: number;
 	cursor: string | null;
 	dryRun: boolean;
@@ -101,6 +101,24 @@ export interface UnreferencedVideo {
 	collectionId?: string;
 }
 
+/** A collection named after a channel id (old POST /api/videos) */
+export interface StrayCollection {
+	guid: string;
+	name: string;
+	videoCount: number;
+	/** The channel the name refers to still exists */
+	channelExists: boolean;
+	/** Apply: removed because the video pages emptied it */
+	deleted?: boolean;
+}
+
+export interface StrayScan {
+	scanned: number;
+	items: StrayCollection[];
+	pages: number[];
+	done: boolean;
+}
+
 export interface UnreferencedScan {
 	scanned: number;
 	count: number;
@@ -132,6 +150,8 @@ export interface CollectionBackfillRun {
 	totals?: CollectionBackfillCounts;
 	/** Bunny videos no record references, per library (list only) */
 	unreferenced?: Record<string, UnreferencedScan>;
+	/** Collections named after a channel id, per library; their videos were moved by the video pages, empty ones removed on apply */
+	strayCollections?: Record<string, StrayScan>;
 	lastError?: string;
 	errors?: Array<{ id: string; error: string }>;
 }
@@ -446,6 +466,45 @@ export async function scanUnreferencedPage(
 	return { scanned: items.length, unreferenced, more: items.length === UNREFERENCED_PAGE_SIZE && page * UNREFERENCED_PAGE_SIZE < (body.totalItems ?? Infinity) };
 }
 
+const UUID_NAME = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** A leading env tag such as "[stage] " (BunnyStreamClient.prefixed) */
+const ENV_TAG = /^(?:\s*\[[^\]]{1,32}\]\s+)+/;
+
+/**
+ * One page of a library's collections: those named after a channel id (the old
+ * POST /api/videos named its collection after the channel id and never stored
+ * it). Apply removes those the video pages emptied; any still holding videos
+ * (videos no record references) are kept and listed.
+ */
+export async function scanStrayCollectionsPage(
+	env: CollectionBackfillEnv,
+	library: BunnyLibrary,
+	page: number,
+	dryRun: boolean,
+): Promise<{ scanned: number; stray: StrayCollection[]; more: boolean }> {
+	const { libraryId, apiKey } = bunnyApi(library);
+	const res = await fetch(`https://video.bunnycdn.com/library/${libraryId}/collections?page=${page}&itemsPerPage=${UNREFERENCED_PAGE_SIZE}`, {
+		headers: { AccessKey: apiKey, accept: 'application/json' },
+	});
+	if (!res.ok) throw new Error(`list collections ${libraryId} page ${page}: HTTP ${res.status}`);
+	const body = (await res.json()) as { items?: Array<{ guid: string; name?: string; videoCount?: number }>; totalItems?: number };
+	const items = body.items ?? [];
+	const stray: StrayCollection[] = [];
+	for (const c of items) {
+		const bare = (c.name ?? '').replace(ENV_TAG, '').trim();
+		if (!UUID_NAME.test(bare)) continue;
+		const entry: StrayCollection = { guid: c.guid, name: c.name ?? '', videoCount: c.videoCount ?? 0, channelExists: !!(await env.channels.head(bare)) };
+		if (!dryRun && entry.videoCount === 0) {
+			await bunnyClient(env, library).client.deleteCollection(libraryId, c.guid);
+			entry.deleted = true;
+		}
+		stray.push(entry);
+	}
+	// Deleting shifts later pages forward: the caller re-reads the same page until nothing more goes
+	const removed = stray.filter((x) => x.deleted).length;
+	return { scanned: items.length, stray, more: removed > 0 ? items.length > 0 : items.length === UNREFERENCED_PAGE_SIZE && page * UNREFERENCED_PAGE_SIZE < (body.totalItems ?? Infinity) };
+}
+
 export function runKey(runId: string): string {
 	return `${COLLECTION_BACKFILL_PREFIX}runs/${runId}.json`;
 }
@@ -524,6 +583,37 @@ export async function handleCollectionBackfillMessage(env: CollectionBackfillEnv
 				await env.PROCESSING_CHECK_QUEUE!.send({ ...body, bunnyPage: bunnyPage + 1 } satisfies CollectionBackfillMessage, { delaySeconds: PAGE_DELAY_SECONDS });
 			} else {
 				scan.done = true;
+				await env.PROCESSING_CHECK_QUEUE!.send(
+					{ ...body, phase: 'collections', bunnyPage: 1 } satisfies CollectionBackfillMessage,
+					{ delaySeconds: PAGE_DELAY_SECONDS },
+				);
+			}
+			run.updatedAt = at;
+			await writeRun(env, run);
+			logger.info('[CollectionBackfill] Unreferenced scan page done', { runId: body.runId, libraryId: body.libraryId, bunnyPage, unreferenced: result.unreferenced.length });
+			msg.ack();
+			return;
+		}
+
+		if (body.phase === 'collections') {
+			const index = scanLibraries.findIndex((l) => l.libraryId === body.libraryId);
+			const library = scanLibraries[index];
+			const bunnyPage = body.bunnyPage ?? 1;
+			const scan = ((run.strayCollections ??= {})[String(body.libraryId)] ??= { scanned: 0, items: [], pages: [], done: false });
+			if (!library || scan.done) {
+				msg.ack();
+				return;
+			}
+			const result = await scanStrayCollectionsPage(env, library, bunnyPage, body.dryRun);
+			scan.pages.push(bunnyPage);
+			scan.scanned += result.scanned;
+			scan.items = [...scan.items, ...result.stray.filter((x) => !scan.items.some((y) => y.guid === x.guid))].slice(0, 2000);
+			// After deletions the same page holds the next collections
+			const deletedHere = result.stray.some((x) => x.deleted);
+			if (result.more) {
+				await env.PROCESSING_CHECK_QUEUE!.send({ ...body, bunnyPage: deletedHere ? bunnyPage : bunnyPage + 1 } satisfies CollectionBackfillMessage, { delaySeconds: PAGE_DELAY_SECONDS });
+			} else {
+				scan.done = true;
 				if (!(await startScan(index + 1))) {
 					run.status = 'done';
 					run.finishedAt = at;
@@ -531,7 +621,7 @@ export async function handleCollectionBackfillMessage(env: CollectionBackfillEnv
 			}
 			run.updatedAt = at;
 			await writeRun(env, run);
-			logger.info('[CollectionBackfill] Unreferenced scan page done', { runId: body.runId, libraryId: body.libraryId, bunnyPage, unreferenced: result.unreferenced.length });
+			logger.info('[CollectionBackfill] Stray collection page done', { runId: body.runId, libraryId: body.libraryId, bunnyPage, stray: result.stray.length });
 			msg.ack();
 			return;
 		}

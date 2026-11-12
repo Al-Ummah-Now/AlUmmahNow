@@ -168,7 +168,12 @@ beforeEach(() => {
 				writes.push(`create-collection ${l}`);
 				return Response.json({ guid });
 			}
-			if (method === 'GET' && !id) return Response.json({ totalItems: cols[l].size, items: [] });
+			if (method === 'GET' && !id) {
+				const page = Number(url.searchParams.get('page') || 1);
+				const per = Number(url.searchParams.get('itemsPerPage') || 100);
+				const all = [...cols[l].entries()].map(([guid, name]) => ({ guid, name, videoCount: Object.values(lib[l]).filter((v) => v.collectionId === guid).length }));
+				return Response.json({ totalItems: all.length, items: all.slice((page - 1) * per, page * per) });
+			}
 			if (!cols[l].has(id!)) return new Response('{}', { status: 404 });
 			if (method === 'POST') cols[l].set(id!, JSON.parse(String(init!.body)).name);
 			if (method === 'DELETE') cols[l].delete(id!);
@@ -334,5 +339,41 @@ describe('collection backfill', () => {
 		const channels = new MemoryBucket({ ch: channel() });
 		assert.equal(await uploadCollection({ channels: channels as any }, failing, 400189, 'ch', 'owner'), undefined);
 		assert.equal(calls, 2);
+	});
+
+	it('folds collections the old POST /api/videos named after a channel id: videos moved, empty ones removed on apply', async () => {
+		const CH = '11111111-2222-4333-8444-555555555555';
+		const env = backfillEnv();
+		await env.channels.put(CH, JSON.stringify(channel({ id: CH, name: 'Tafsir' })));
+		// Its record's video sits in the odd collection; another one holds an unreferenced video
+		cols['400189'].set('odd-1', CH);
+		cols['400189'].set('odd-2', '[stage] 99999999-2222-4333-8444-555555555555');
+		lib['400189'][vid(20)] = { collectionId: 'odd-1' };
+		lib['400189'][vid(21)] = { collectionId: 'odd-2' };
+		await env.videos.put(vid(20), JSON.stringify({ id: vid(20), userId: 'owner', channelId: CH, playUrl: `https://${OLD_HOST}/${vid(20)}/playlist.m3u8` }));
+		const ack = { retried: 0 };
+		const message = (body: unknown) => ({ body, attempts: 1, ack: () => {}, retry: () => void ack.retried++ });
+		const runAll = async (runId: string, dryRun: boolean) => {
+			await handleCollectionBackfillMessage(env, message({ kind: 'bunny-collection-backfill', runId, page: 0, cursor: null, dryRun, limit: 50 }));
+			while (env.PROCESSING_CHECK_QUEUE.messages.length) await handleCollectionBackfillMessage(env, message(env.PROCESSING_CHECK_QUEUE.messages.shift()));
+			return (await readCollectionBackfillRun(env, runId))!;
+		};
+		const dry = await runAll('dry', true);
+		assert.deepEqual(dry.strayCollections?.['400189'].items.map((c) => [c.guid, c.videoCount, c.channelExists, !!c.deleted]), [
+			['odd-1', 1, true, false],
+			['odd-2', 1, false, false],
+		]);
+		assert.ok(cols['400189'].has('odd-1'), 'dry run deletes nothing');
+
+		const applied = await runAll('apply', false);
+		assert.equal(ack.retried, 0);
+		const tafsir = JSON.parse(env.channels.store.get(CH)!).bunnyCollections['400189'];
+		assert.equal(lib['400189'][vid(20)].collectionId, tafsir, 'moved into the proper channel collection');
+		assert.equal(cols['400189'].has('odd-1'), false, 'emptied odd collection removed');
+		assert.equal(cols['400189'].has('odd-2'), true, 'still holds a video nobody references: kept and listed');
+		assert.deepEqual(applied.strayCollections?.['400189'].items.map((c) => [c.guid, !!c.deleted]), [
+			['odd-1', true],
+			['odd-2', false],
+		]);
 	});
 });
