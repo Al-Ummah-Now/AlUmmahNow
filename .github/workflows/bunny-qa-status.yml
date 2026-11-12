@@ -1,0 +1,106 @@
+# QA Bunny Stream library status (issue #929): video counts by status, the
+# oldest pending encodes (and whether a live QA record still refers to them),
+# storage and the library's encoding settings, as the job summary.
+#
+# The Stream API key exists only in the Cloudflare Secrets Store
+# (bunny-stream-key-qa), so the job deploys a throwaway worker bound to the QA
+# secrets (scripts/qa/bunny-qa-status/worker.js), calls it once with a random
+# bearer token and deletes it. The key never reaches the runner or the log.
+# QA only: the bindings name the QA secrets and the QA videos bucket, and the
+# worker refuses any library id other than QA_LIBRARY_ID.
+name: Bunny QA Status
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bunny-qa-status
+  cancel-in-progress: false
+
+env:
+  PROBE: bunny-qa-status-probe
+  # The QA (and stage, by name prefix) Bunny Stream library. Never any other.
+  QA_LIBRARY_ID: ''
+
+jobs:
+  status:
+    name: QA Bunny library status
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Deploy the probe
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          cd scripts/qa/bunny-qa-status
+          token=$(openssl rand -hex 32)
+          echo "::add-mask::$token"
+          echo "PROBE_TOKEN=$token" >> "$GITHUB_ENV"
+          printf '{"PROBE_TOKEN":"%s"}' "$token" > "$RUNNER_TEMP/probe-secrets.json"
+          cat > wrangler.json <<JSON
+          {
+            "name": "$PROBE",
+            "main": "worker.js",
+            "compatibility_date": "2025-09-01",
+            "workers_dev": true,
+            "vars": { "QA_LIBRARY_ID": "$QA_LIBRARY_ID" },
+            "r2_buckets": [{ "binding": "videos", "bucket_name": "videos-qa" }],
+            "secrets_store_secrets": [
+              { "binding": "BUNNY_KEY", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "bunny-stream-key-qa" },
+              { "binding": "BUNNY_LIBRARY_ID", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "bunny-stream-library-id-qa" }
+            ]
+          }
+          JSON
+          npx -y wrangler@4.161.0 deploy --secrets-file "$RUNNER_TEMP/probe-secrets.json" 2>&1 | tee "$RUNNER_TEMP/deploy.txt"
+          rm -f "$RUNNER_TEMP/probe-secrets.json"
+          url=$(grep -oE 'https://[a-z0-9.-]+\.workers\.dev' "$RUNNER_TEMP/deploy.txt" | head -1)
+          test -n "$url"
+          echo "PROBE_URL=$url" >> "$GITHUB_ENV"
+
+      - name: Read the library
+        run: |
+          set -euo pipefail
+          for i in 1 2 3 4 5 6; do
+            code=$(curl -sS -o "$RUNNER_TEMP/status.json" -w '%{http_code}' --max-time 120 -H "Authorization: Bearer $PROBE_TOKEN" "$PROBE_URL/status" || true)
+            [ "$code" = 200 ] && break
+            echo "attempt $i: HTTP $code $(head -c 300 "$RUNNER_TEMP/status.json" 2>/dev/null)"; sleep 10
+          done
+          test "$code" = 200
+          { echo '### QA Bunny library'; echo '```json'; cat "$RUNNER_TEMP/status.json" | python3 -m json.tool; echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Bunny status page
+        if: always()
+        run: |
+          curl -sS --max-time 20 https://status.bunny.net/api/v2/summary.json -o "$RUNNER_TEMP/bunny-status.json" || exit 0
+          python3 - "$RUNNER_TEMP/bunny-status.json" <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json, sys
+          try:
+              d = json.load(open(sys.argv[1]))
+          except Exception as e:
+              print(f'status page not JSON: {e}'); sys.exit(0)
+          print('### status.bunny.net')
+          print('- overall:', d.get('status', {}).get('description'))
+          for c in d.get('components', []):
+              if 'stream' in c.get('name', '').lower() or 'encod' in c.get('name', '').lower() or c.get('status') != 'operational':
+                  print(f"- {c.get('name')}: {c.get('status')}")
+          for i in d.get('incidents', []):
+              print(f"- incident: {i.get('name')} ({i.get('status')}, {i.get('created_at')})")
+          PY
+
+      - name: Delete the probe
+        if: always()
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx -y wrangler@4.161.0 delete --name "$PROBE" --force || true
