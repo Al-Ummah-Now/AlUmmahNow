@@ -130,7 +130,7 @@ export async function searchUsers(env: AdminEnv, query: AdminUserSearchQuery): P
 
 /**
  * Profiles for a picker search, cheapest first: an exact id, email or user handle through the
- * (kind, id) key and the lower(email) / lower(handle) indexes (search migration 0018); only when
+ * (kind, id) key and the lower(email) / lower(handle) indexes (search migration 0021); only when
  * nothing matches exactly, one contains scan that stops at `max` rows (no COUNT, no ORDER BY: the
  * caller ranks). Users an admin soft-deleted are left out, as in the users list.
  */
