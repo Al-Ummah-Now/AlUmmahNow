@@ -114,15 +114,23 @@ test.describe('Home - anonymous', () => {
 
   test('HOME-007 single-column grid on phones, multi-column on desktop', async ({ page, isMobile }) => {
     await page.goto('/en');
-    const cards = page.getByTestId('video-card');
-    await expect(cards.nth(1)).toBeVisible();
-    const [a, b] = await Promise.all([cards.nth(0).boundingBox(), cards.nth(1).boundingBox()]);
+    // The grid's own column tracks, not the position of a second card: how many cards
+    // QA's first page holds depends on its catalogue (it can be a single one)
+    // The home grid comes after the (signed-in only) continue-watching shelf
+    const grid = page.getByTestId('video-grid').last();
+    await expect(grid.getByTestId('video-card').first()).toBeVisible();
+    const { columns, gridWidth } = await grid.evaluate((el) => ({
+      columns: getComputedStyle(el).gridTemplateColumns.split(' ').filter(Boolean).length,
+      gridWidth: el.getBoundingClientRect().width,
+    }));
+    const card = (await grid.getByTestId('video-card').first().boundingBox())!;
     if (isMobile) {
-      // Stacked: second card below the first
-      expect(b!.y).toBeGreaterThan(a!.y + a!.height - 1);
+      // One column: the card spans the grid
+      expect(columns).toBe(1);
+      expect(Math.abs(card.width - gridWidth)).toBeLessThan(2);
     } else {
-      // Side by side on the same row
-      expect(Math.abs(b!.y - a!.y)).toBeLessThan(2);
+      expect(columns).toBeGreaterThan(1);
+      expect(card.width).toBeLessThan(gridWidth / 2);
     }
   });
 });
