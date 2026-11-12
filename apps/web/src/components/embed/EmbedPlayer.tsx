@@ -296,7 +296,7 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
               <button
                 type="button"
                 onClick={unmute}
-                className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-black/80 px-4 py-2 text-sm font-semibold hover:bg-black/90 focus-visible:ring-2 focus-visible:ring-white"
+                className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-[var(--fanous-c-nav-bg)] text-[var(--fanous-c-nav-text)] px-4 py-2 text-sm font-semibold shadow-lg hover:opacity-90 focus-visible:ring-2 focus-visible:ring-[var(--fanous-color-focus-ring)]"
                 data-testid="embed-unmute"
               >
                 <VolumeX className="w-5 h-5" aria-hidden="true" />
