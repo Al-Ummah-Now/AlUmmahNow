@@ -71,7 +71,18 @@ export async function applyTheme(page: Page, theme: string, mode: Mode) {
   await page.waitForTimeout(50);
 }
 
-export interface Contrast { text: string; ratio: number; fg: string; bg: string; selector: string }
+export interface Contrast {
+  text: string;
+  ratio: number;
+  fg: string;
+  bg: string;
+  selector: string;
+  /** The text's pixels changed between two screenshots of the same state (a badge arriving, a late repaint): not a measurement */
+  unstable?: boolean;
+}
+
+/** Turns motion off while measuring: an animated or transitioning colour is not a contrast result. */
+const STILL_CSS = '*,*::before,*::after{animation:none!important;transition:none!important}';
 
 /**
  * Rendered contrast of every text element inside `root`, measured from pixels: one screenshot as is,
@@ -80,13 +91,17 @@ export interface Contrast { text: string; ratio: number; fg: string; bg: string;
  * text over gradients, glass, images, masks and opacity fades.
  */
 export async function measureText(page: Page, root: string): Promise<Contrast[]> {
-  // A text with no glyph pixels is either invisible (stays so) or was caught mid-repaint: look again
+  // A text with no glyph pixels is either invisible (stays so) or was caught mid-repaint, and a text
+  // whose pixels changed while it was measured (a notification badge arriving between the two
+  // screenshots) was not measured at all: look again
   let out = await measureOnce(page, root);
-  for (let i = 0; i < 2 && out.some((t) => t.fg === '?'); i++) {
-    await page.waitForTimeout(300);
+  for (let i = 0; i < 4 && out.some((t) => t.fg === '?' || t.unstable); i++) {
+    await page.waitForTimeout(400);
     out = await measureOnce(page, root);
   }
-  return out;
+  // Still changing after that (live text): the pixels cannot say; axe's colour-contrast check in
+  // the same specs reads its computed colours instead
+  return out.filter((t) => !t.unstable);
 }
 
 async function measureOnce(page: Page, root: string): Promise<Contrast[]> {
@@ -134,6 +149,12 @@ async function measureOnce(page: Page, root: string): Promise<Contrast[]> {
     return out;
   }, root);
   if (!boxes.length) return [];
+  await page.evaluate((css) => {
+    const s = document.createElement('style');
+    s.dataset.sweepStill = '';
+    s.textContent = css;
+    document.head.append(s);
+  }, STILL_CSS);
   const shown = await page.screenshot({ animations: 'disabled', caret: 'hide', scale: 'css' });
   await page.evaluate(() => {
     const s = document.createElement('style');
@@ -143,7 +164,10 @@ async function measureOnce(page: Page, root: string): Promise<Contrast[]> {
   });
   const hidden = await page.screenshot({ animations: 'disabled', caret: 'hide', scale: 'css' });
   await page.evaluate(() => document.querySelectorAll('style[data-sweep]').forEach((s) => s.remove()));
-  return page.evaluate(async ({ a, b, boxes }) => {
+  // The same state again: a text whose pixels moved between `shown` and `again` changed while it was measured
+  const again = await page.screenshot({ animations: 'disabled', caret: 'hide', scale: 'css' });
+  await page.evaluate(() => document.querySelectorAll('style[data-sweep-still]').forEach((s) => s.remove()));
+  return page.evaluate(async ({ a, b, c, boxes }) => {
     const load = async (b64: string) => {
       const img = new Image();
       img.src = `data:image/png;base64,${b64}`;
@@ -154,25 +178,28 @@ async function measureOnce(page: Page, root: string): Promise<Contrast[]> {
       ctx.drawImage(img, 0, 0);
       return ctx.getImageData(0, 0, c.width, c.height);
     };
-    const [A, B] = await Promise.all([load(a), load(b)]);
+    const [A, B, C] = await Promise.all([load(a), load(b), load(c)]);
     const lin = (v: number) => { const s = v / 255; return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4; };
     const lum = (d: Uint8ClampedArray, i: number) => 0.2126 * lin(d[i]) + 0.7152 * lin(d[i + 1]) + 0.0722 * lin(d[i + 2]);
     const hex = (d: Uint8ClampedArray, i: number) => `#${[d[i], d[i + 1], d[i + 2]].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
     return boxes.map((bx) => {
       const ratios: { r: number; i: number }[] = [];
+      let moved = 0;
       for (let y = Math.max(0, Math.floor(bx.y)); y < Math.min(A.height, Math.ceil(bx.y + bx.h)); y++) {
         for (let x = Math.max(0, Math.floor(bx.x)); x < Math.min(A.width, Math.ceil(bx.x + bx.w)); x++) {
           const i = (y * A.width + x) * 4;
+          if (Math.abs(A.data[i] - C.data[i]) + Math.abs(A.data[i + 1] - C.data[i + 1]) + Math.abs(A.data[i + 2] - C.data[i + 2]) >= 6) moved++;
           if (Math.abs(A.data[i] - B.data[i]) + Math.abs(A.data[i + 1] - B.data[i + 1]) + Math.abs(A.data[i + 2] - B.data[i + 2]) < 6) continue;
           const la = lum(A.data, i), lb = lum(B.data, i);
           ratios.push({ r: (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05), i });
         }
       }
+      if (moved > 0) return { text: bx.text, ratio: 0, fg: '~', bg: '~', selector: bx.selector, unstable: true };
       if (!ratios.length) return { text: bx.text, ratio: 1, fg: '?', bg: '?', selector: bx.selector };
       ratios.sort((p, q) => q.r - p.r);
       // The glyph core: ignore the few strongest pixels (subpixel fringes), take the 5th percentile from the top
       const core = ratios[Math.min(ratios.length - 1, Math.floor(ratios.length * 0.05))];
       return { text: bx.text, ratio: Math.round(core.r * 100) / 100, fg: hex(A.data, core.i), bg: hex(B.data, core.i), selector: bx.selector };
     });
-  }, { a: shown.toString('base64'), b: hidden.toString('base64'), boxes });
+  }, { a: shown.toString('base64'), b: hidden.toString('base64'), c: again.toString('base64'), boxes });
 }
