@@ -54,9 +54,26 @@ async function settle(page: Page, quietMs = 2500, timeoutMs = 45000): Promise<vo
   }
 }
 
+/**
+ * Opens an app's page. A silent sign-in may abort the navigation on its way through the auth
+ * server (the error is expected and ignored), but the page must end on that app's origin: before,
+ * a navigation that never happened left the test on the previous app, and the next check (e.g.
+ * www's /auth/me, fetched relative to the current page) asked the wrong site (v2026.11.12.7).
+ * The auth server's sign-in form is allowed: the caller checks for it and says which app asked.
+ */
 async function open(page: Page, url: string): Promise<void> {
-  await page.goto(url, { waitUntil: 'load' }).catch(() => {});
+  let failure = '';
+  await page.goto(url, { waitUntil: 'load' }).catch((error: Error) => {
+    failure = error.message.split('\n')[0] ?? '';
+  });
   await settle(page);
+  const allowed = [new URL(url).origin, target().auth];
+  await expect
+    .poll(() => allowed.includes(new URL(page.url()).origin), {
+      message: `opening ${url} ended on ${page.url()}${failure ? ` (navigation: ${failure})` : ''}`,
+      timeout: 30000,
+    })
+    .toBe(true);
 }
 
 /** The auth server's sign-in form is on screen. */
