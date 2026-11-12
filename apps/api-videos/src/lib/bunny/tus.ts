@@ -228,6 +228,14 @@ export function getTusSessionKey(tusSessionId: string): string {
 }
 
 /**
+ * Per-user index of TUS proxy sessions, `tus:user:<userId>:<sessionId>`, written beside each session
+ * with the same lifetime, so an account erasure can find and delete its sessions (#1059).
+ */
+export function tusUserIndexPrefix(userId: string): string {
+  return `tus:user:${userId}:`;
+}
+
+/**
  * How long an initiate/resume session stays usable. Written once, read once
  * (by the proxy's POST), so a long life is free. One hour lost the sessions of
  * files queued behind others in a bulk batch before they ever started. The
@@ -260,6 +268,7 @@ export async function createTusProxySession(
   await kv.put(getTusSessionKey(tusSessionId), JSON.stringify(session), {
     expirationTtl: ttlSeconds,
   });
+  await kv.put(`${tusUserIndexPrefix(params.userId)}${tusSessionId}`, '1', { expirationTtl: ttlSeconds });
 
   logger.debug('[TUS] Proxy session created', {
     tusSessionId,

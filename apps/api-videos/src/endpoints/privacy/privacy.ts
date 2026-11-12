@@ -1,3 +1,4 @@
+import { eraseUploadTraces } from '../../lib/privacy/upload-traces';
 import { removeCollectionsFor } from '../../lib/channelCollection';
 import { bunnyClientForVideo, type LibraryHints } from '../../lib/bunny/libraries';
 /**
@@ -131,6 +132,8 @@ export class PrivacyErase extends AuthenticatedRoute {
 		const resumeToken = typeof body.resumeToken === 'string' ? body.resumeToken : undefined;
 		const onProfileDeleted = (id: string, profile: unknown) => removeCollectionsFor(env as never, id, profile as never).then(() => undefined);
 		const summary = await eraseUserData(buckets(c), userId, budget, { onVideoDeleted, onProfileDeleted }, { resumeToken });
+		// Upload markers and TUS sessions that name the user (#1059)
+		await eraseUploadTraces(env as never, userId, summary.deletedVideoIds);
 
 		try {
 			const queue = new Queue(c.env.queue);

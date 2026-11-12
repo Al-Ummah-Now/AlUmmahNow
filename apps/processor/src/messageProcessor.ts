@@ -20,6 +20,7 @@ import {
 } from './lib/notifications-store';
 import { eraseUserModerationData } from './moderation/store';
 import { eraseUserContactData } from './contact/erase';
+import { eraseUserTraces } from './erasure/user-traces';
 import type { NotificationCreatePayload, NotificationFanoutPayload, PushDispatchPayload } from '@al-ummah/shared-types';
 import { publishAdminLive } from '@al-ummah/shared-types';
 import { dispatchPush, enqueuePush } from './push/dispatch';
@@ -857,6 +858,9 @@ export class MessageProcessor {
       .run();
     // AI moderation signals (Epic 28): tombstone the author, drop reviewer translations
     await eraseUserModerationData(env.REPORTS_DB, userId, DELETED_USER_ID);
+    // Invites, error rows (anonymised, kept for trends) and category suggestions (#1059)
+    const traces = await eraseUserTraces(env.REPORTS_DB, env.SEARCH_DB, userId, DELETED_USER_ID);
+    this.logger.debug('Erased user traces after user data erasure', { userId, ...traces });
     if (env.NOTIFICATIONS_DB) {
       await eraseUserNotifications(env.NOTIFICATIONS_DB, userId);
       // Their community post likes and poll votes come off the counters (PR-2/3/4)
