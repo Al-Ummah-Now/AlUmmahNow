@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures';
 import type { Page } from '@playwright/test';
 import { ANONYMOUS_STATE } from './test-utils/auth-state';
-import { usePublicVideos } from './test-utils/own-public-video';
+import { ownPublicVideos } from './test-utils/own-public-video';
 
 /**
  * Homepage E2E Tests (anonymous visitor, real QA content)
@@ -13,7 +13,7 @@ test.use({ storageState: ANONYMOUS_STATE });
 test.describe.configure({ mode: 'default' });
 
 /** This file's own public video, so the home grid has a card of ours (no seed, no other run's uploads) */
-const own = usePublicVideos(test, 'home');
+const own = ownPublicVideos(test, 'home');
 
 async function expectNoHorizontalScroll(page: Page) {
   const { scrollWidth, innerWidth } = await page.evaluate(() => ({

@@ -26,4 +26,13 @@ export const LOCAL_WEB_SPECS: readonly string[] = [
   '65-consent-banner.spec.ts',
   '72-real-sign-in.spec.ts',
   '75-site-theme.spec.ts',
+  // Sub-batch 2: watch page, player, library, comments, history, home grid
+  '02-video-player.spec.ts',
+  '14-video-upload-playback.spec.ts',
+  '21-library.spec.ts',
+  '30-watch-page.spec.ts',
+  '32-comments.spec.ts',
+  '33-watch-history.spec.ts',
+  '60-home-videos.spec.ts',
+  '71-no-console-errors.spec.ts',
 ];

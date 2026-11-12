@@ -2,7 +2,7 @@ import { test, expect } from './fixtures';
 import { ANONYMOUS_STATE } from './test-utils/auth-state';
 import { clickAndWaitForURL } from './test-utils/qa-content';
 import { openSideDrawer } from './test-utils/navigation';
-import { usePublicVideos } from './test-utils/own-public-video';
+import { ownPublicVideos } from './test-utils/own-public-video';
 
 /**
  * Explore page (Epic 29, Story 29.7) against this file's own content (a creator, its channel and a
@@ -17,7 +17,7 @@ const TAFSIR_TITLE = `E2E Tafsir explore ${Date.now().toString(36)}`;
 // One worker runs this file's tests in order, so its own data (beforeAll) is made once
 test.describe.configure({ mode: 'default' });
 
-const own = usePublicVideos(test, 'explore', [{ title: TAFSIR_TITLE, category: 'quran_tafsir' }]);
+const own = ownPublicVideos(test, 'explore', [{ title: TAFSIR_TITLE, category: 'quran_tafsir' }]);
 
 test.describe('Explore - English (LTR)', () => {
   test('shows every section', async ({ page }) => {

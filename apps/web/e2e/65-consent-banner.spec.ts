@@ -3,7 +3,7 @@
 import { test as base, expect, type BrowserContext, type Page } from '@playwright/test';
 import { ANONYMOUS_STATE, AUTH_STATE } from './test-utils/auth-state';
 import { ensureFreshSessions } from './test-utils/fresh-session';
-import { usePublicVideos } from './test-utils/own-public-video';
+import { ownPublicVideos } from './test-utils/own-public-video';
 
 
 // The stored session must still be signed in (see test-utils/fresh-session.ts)
@@ -21,7 +21,7 @@ const test = base.extend<{ freshSessions: void }>({
 test.describe.configure({ mode: 'default' });
 
 /** This file's own public video, so the home grid has a card of ours (no seed, no other run's uploads) */
-const own = usePublicVideos(test, 'consent');
+const own = ownPublicVideos(test, 'consent');
 
 /**
  * Cookie / tracking consent banner (GDPR): shown on a first visit without the

@@ -2,7 +2,7 @@ import { test, expect } from './fixtures';
 import { ANONYMOUS_STATE } from './test-utils/auth-state';
 import { clickAndWaitForURL } from './test-utils/qa-content';
 import { openSideDrawer } from './test-utils/navigation';
-import { usePublicVideos } from './test-utils/own-public-video';
+import { ownPublicVideos } from './test-utils/own-public-video';
 
 /**
  * Navigation and Routing E2E Tests (anonymous visitor)
@@ -14,7 +14,7 @@ test.use({ storageState: ANONYMOUS_STATE });
 test.describe.configure({ mode: 'default' });
 
 /** This file's own public video, so the home grid has a card of ours (no seed, no other run's uploads) */
-const own = usePublicVideos(test, 'nav');
+const own = ownPublicVideos(test, 'nav');
 
 test.describe('Navigation - English Routes', () => {
   test('navigates from the homepage to a video page by clicking a card', async ({ page }) => {

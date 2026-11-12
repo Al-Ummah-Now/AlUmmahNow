@@ -2,7 +2,7 @@ import { test, expect } from './fixtures';
 import type { Page } from '@playwright/test';
 import { ANONYMOUS_STATE, AUTH_STATE } from './test-utils/auth-state';
 import { apiGet, channelsOf, expectRtl, clickUntil, fillStable, type PublicChannel } from './test-utils/channel-content';
-import { useOwnData } from './release/builders';
+import { useOwnData as ownData } from './release/builders';
 
 /**
  * Channel directory (/[locale]/channels) and the "Create channel" dialog of
@@ -19,7 +19,7 @@ const LOCAL_STACK_SQL = `${process.env.LOCAL_STACK_CONTROL_URL || 'http://127.0.
 // One worker runs this file's tests in order, so its own data (beforeAll) is made once
 test.describe.configure({ mode: 'default' });
 
-const data = useOwnData(test as never);
+const data = ownData(test as never);
 
 test.beforeAll(async ({ browser }) => {
   test.setTimeout(240_000);

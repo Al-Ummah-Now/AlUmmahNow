@@ -1,21 +1,28 @@
 import { test, expect } from './fixtures';
 import type { APIRequestContext, Locator, Page } from '@playwright/test';
 import { ANONYMOUS_STATE, AUTH_STATE, readAccount } from './test-utils/auth-state';
-import { apiCall, qaLecture, qaVideoForProject, tempName, watchUrl, type QaVideo } from './test-utils/watch-page';
+import { apiCall, tempName, watchUrl, type QaVideo } from './test-utils/watch-page';
+import { ownPublicVideos } from './test-utils/own-public-video';
 import { watchSignInRedirect } from './test-utils/sign-in-redirect';
 
 /**
  * Comments section on the watch page, tested as it is today: anonymous and
  * channel-less prompts, posting, cancelling and deleting a comment (LTR + RTL).
  *
- * Comments are posted on a public QA seed lecture and always deleted again;
- * assertions only look at the comment this test wrote.
+ * Comments are posted on this file's own public video (made in beforeAll, deleted afterwards)
+ * and always deleted again; assertions only look at the comment this test wrote.
  */
+
+// One worker runs this file's tests in order, so its own data (beforeAll) is made once
+test.describe.configure({ mode: 'default' });
+
+const own = ownPublicVideos(test, 'comments', [{ titleAr: 'فيديو التعليقات' }]);
+const ownLecture = (n: number): QaVideo => own.videos()[n - 1];
 
 interface ApiComment { id: string; text: string; channelId?: string }
 
 async function listComments(request: APIRequestContext, videoId: string): Promise<ApiComment[]> {
-  const res = await request.get(`${(process.env.API_URL || 'https://videos.api.qa.alummahnow.net')}/api/videos/${videoId}/comments?limit=100`);
+  const res = await request.get(`${(process.env.API_URL || 'http://localhost:3086')}/api/videos/${videoId}/comments?limit=100`);
   if (!res.ok()) return [];
   const body = (await res.json()) as { result?: { comments?: ApiComment[] } };
   return body.result?.comments ?? [];
@@ -55,8 +62,8 @@ test.describe('comments - anonymous', () => {
     ['en', /sign in/i],
     ['ar', /سجل الدخول|تسجيل الدخول/],
   ] as const) {
-    test(`CMT-001 anonymous viewers see a sign-in prompt instead of the composer (${locale})`, async ({ page, request }) => {
-      const video = await qaLecture(request, 1);
+    test(`CMT-001 anonymous viewers see a sign-in prompt instead of the composer (${locale})`, async ({ page }) => {
+      const video = ownLecture(1);
       const section = await openComments(page, video, locale);
 
       await expect(section.getByRole('textbox')).toHaveCount(0);
@@ -78,8 +85,8 @@ test.describe('comments - signed in without a channel', () => {
     ['en', 'Create Channel'],
     ['ar', 'إنشاء قناة'],
   ] as const) {
-    test(`CMT-002 accounts without a channel are asked to create one (${locale})`, async ({ page, request }) => {
-      const video = await qaLecture(request, 1);
+    test(`CMT-002 accounts without a channel are asked to create one (${locale})`, async ({ page }) => {
+      const video = ownLecture(1);
       const section = await openComments(page, video, locale);
 
       await expect(section.getByRole('textbox')).toHaveCount(0);
@@ -98,10 +105,10 @@ test.describe('comments - post and delete (single-channel user)', () => {
   let video: QaVideo;
   let text = '';
 
-  test.beforeAll(async ({ request }, testInfo) => {
+  test.beforeAll(async () => {
     // One video per project: parallel projects writing comments to the same
     // video object can overwrite each other's change on the API side
-    video = await qaVideoForProject(request, testInfo.project.name, { fromEnd: true });
+    video = ownLecture(1);
   });
   test.afterEach(async ({ request }) => {
     if (text) await deleteCommentsWithText(request, video.id, text);
