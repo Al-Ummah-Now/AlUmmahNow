@@ -48,7 +48,8 @@ export const refusedByProxy: string[] = [];
 
 /** One line per proxied request (method, URL, status, ms) on stderr, the stack log: what the browser actually got. */
 function trace(method: string | undefined, target: string, status: number | string, started: number): void {
-  process.stderr.write(`[local-stack] proxy ${method ?? '?'} ${target.replace(/\?.*$/, '')} -> ${status} ${Date.now() - started}ms\n`);
+  const query = target.indexOf('?');
+  process.stderr.write(`[local-stack] proxy ${method ?? '?'} ${query >= 0 ? target.slice(0, query) : target} -> ${status} ${Date.now() - started}ms\n`);
 }
 
 /** A self-signed certificate for the faked hosts (browsers run with ignoreHTTPSErrors). */
