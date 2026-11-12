@@ -246,6 +246,38 @@ jobs:
           --allow d1:al-ummah-now-d1:user_revocations --allow kv:TOKEN_REVOCATIONS
           --allow d1:al-ummah-now-d1:user_invites --allow kv:AUTH_STORAGE:test:invite:
 
+      # Teardown, pass or fail (owner rule: test sets clean up every resource they use): the run
+      # accounts' content goes (videos with their media, then the GDPR erase of profile, channels,
+      # playlists, history), then the accounts themselves on the local issuer
+      - name: Erase the run accounts' content
+        if: always()
+        timeout-minutes: 10
+        working-directory: apps/web
+        run: |
+          if [ ! -s "$E2E_RUN_USERS_FILE" ]; then echo "No run accounts were generated"; exit 0; fi
+          pnpm exec tsx e2e/cleanup-test-content.ts --run-users
+        env:
+          E2E_ENV: local
+          E2E_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          E2E_RUN_USERS_FILE: ${{ runner.temp }}/run-users.txt
+          E2E_CODE_SINK_SECRET: local-stack-sink-secret
+          OPENAUTH_URL: http://localhost:3301
+          WEB_APP_URL: http://localhost:3001
+          API_URL: http://localhost:3086
+          OPENAUTH_CLIENT_ID: f0de3c30-0304-4ac4-86d6-1e185dec0439
+
+      - name: Delete the run accounts
+        if: always()
+        timeout-minutes: 5
+        run: >-
+          if [ ! -s "$E2E_RUN_USERS_FILE" ]; then echo "No run accounts were generated"; exit 0; fi;
+          node --experimental-strip-types --no-warnings scripts/e2e/teardown-run-users.ts
+          --auth-url http://localhost:3301 --file "$E2E_RUN_USERS_FILE"
+        env:
+          E2E_RUN_USERS_FILE: ${{ runner.temp }}/run-users.txt
+          E2E_CODE_SINK_SECRET: local-stack-sink-secret
+          TEST_PROMOTE_SECRET: local-stack-promote-secret
+
       - name: Stack log
         if: always()
         run: |

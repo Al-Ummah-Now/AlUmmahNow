@@ -206,8 +206,10 @@ export default async function globalTeardown(): Promise<void> {
   // when the job is cancelled, which globalTeardown does not)
   if (runId()) return;
   try {
-    // 30 minutes covers any test still running in a concurrent run
-    await cleanupTestVideos({ keepSeed: true, minAgeMs: 30 * 60 * 1000, log: (m) => console.log(m) });
+    // 30 minutes covers any test still running in a concurrent run on QA; the local stack belongs to
+    // this job alone, so everything the run users made goes (owner rule: clean up every resource)
+    const minAgeMs = process.env.E2E_ENV === 'local' ? 0 : 30 * 60 * 1000;
+    await cleanupTestVideos({ keepSeed: true, minAgeMs, log: (m) => console.log(m) });
   } catch (error) {
     // Cleanup must not fail the run
     console.warn('[cleanup] teardown failed', error);
