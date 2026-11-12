@@ -25,6 +25,8 @@ export interface NavAccess {
   staleUploads: boolean;
   /** media:manage (Delivery: Bunny vs R2 comparison) */
   media: boolean;
+  /** ops:read (Operations: platform analytics per environment) */
+  ops: boolean;
 }
 
 /** Live counts shown on nav items; null hides the badge. */
@@ -78,6 +80,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/auth-requests', label: 'nav.authRequests', icon: 'key', group: 'people' },
   { href: '/legacy-profiles', label: 'nav.legacyProfiles', icon: 'archive', group: 'people', requires: (a) => a.manageUsers },
 
+  { href: '/operations', label: 'nav.operations', icon: 'activity', group: 'operations', requires: (a) => a.ops },
   { href: '/processing', label: 'nav.processing', icon: 'cpu', group: 'operations', requires: (a) => a.processing },
   { href: '/stale-uploads', label: 'nav.staleUploads', icon: 'clock', group: 'operations', requires: (a) => a.staleUploads },
   { href: '/jobs', label: 'nav.jobs', icon: 'layers', group: 'operations' },
