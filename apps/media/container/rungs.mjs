@@ -18,6 +18,7 @@ export function ascending(rungs) {
 export class RungTracker {
 	/** @param {{ name: string }[]} rungs */
 	constructor(rungs) {
+		/** @type {{ name: string, state: string, progress?: number }[]} */
 		this.states = rungs.map((r) => ({ name: r.name, state: 'pending' }));
 		this.lastEmitAt = 0;
 		this.dirty = false;
@@ -67,10 +68,12 @@ export class RungTracker {
  * A player can never fetch a playlist whose segments are not in R2 yet.
  * @param {string[]} files paths relative to the output folder ("720p/seg_00001.m4s", "thumb.jpg", "master.m3u8")
  * @param {{ name: string, width: number, height: number }[]} rungs
+ * @returns {{ rung: string | null, files: string[], playlists?: string[] }[]}
  */
 export function uploadPlan(files, rungs) {
 	const isPlaylist = (f) => f.endsWith('.m3u8');
 	const inRung = (f) => rungs.some((r) => f.startsWith(`${r.name}/`));
+	/** @type {{ rung: string | null, files: string[], playlists?: string[] }[]} */
 	const plan = [{ rung: null, files: files.filter((f) => !inRung(f) && !isPlaylist(f)) }];
 	for (const r of ascending(rungs)) {
 		const mine = files.filter((f) => f.startsWith(`${r.name}/`));

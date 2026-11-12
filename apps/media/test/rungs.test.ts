@@ -61,7 +61,7 @@ describe('upload order', () => {
 		assert.deepEqual(plan[0].files.sort(), ['preview.webp', 'thumb.jpg', 'thumb_640.jpg']);
 		assert.deepEqual(plan[1].playlists, ['360p/index.m3u8']);
 		assert.ok(plan[1].files.every((f: string) => !f.endsWith('.m3u8')));
-		assert.deepEqual(plan.at(-1).files, ['master.m3u8']);
+		assert.deepEqual(plan.at(-1)?.files, ['master.m3u8']);
 	});
 
 	it('orders Shorts by the short side too', () => {
