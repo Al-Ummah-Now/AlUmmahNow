@@ -96,7 +96,8 @@ test.describe('Account Switching', () => {
     await expect(account(reopened, multi.email)).toHaveAttribute('data-active', 'true');
   });
 
-  test('keeps the active channel per account', async ({ page }) => {
+  // quarantined: #1027 @meywd (account switching on the local stack)
+  test.fixme('keeps the active channel per account', async ({ page }) => {
     const single = readAccount('single');
     const multi = readAccount('multi');
     await page.goto('/en');

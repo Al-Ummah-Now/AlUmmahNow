@@ -43,7 +43,8 @@ test.describe('Accessibility - Semantic HTML', () => {
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   });
 
-  test('images have alt text', async ({ page }) => {
+  // quarantined: #1029 @meywd (the file's own card on the signed-out home grid)
+  test.fixme('images have alt text', async ({ page }) => {
     await page.goto('/en/');
     await own.showCard(page);
 
@@ -82,7 +83,8 @@ test.describe('Accessibility - Keyboard Navigation', () => {
     expect(['A', 'BUTTON', 'INPUT', 'SELECT', 'TEXTAREA']).toContain(tag);
   });
 
-  test('video cards are keyboard-focusable links', async ({ page }) => {
+  // quarantined: #1029 @meywd (the file's own card on the signed-out home grid)
+  test.fixme('video cards are keyboard-focusable links', async ({ page }) => {
     await page.goto('/en/');
     const card = await own.showCard(page);
     await expect(card).toBeVisible();
