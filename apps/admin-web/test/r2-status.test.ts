@@ -13,6 +13,8 @@ import type { MediaLive } from '../src/lib/api/types';
 
 // tsx compiles the component's JSX to React.createElement (Next uses the automatic runtime)
 (globalThis as { React?: unknown }).React = React;
+// CI resolves two copies of @types/react: render through a plain FC cast (as the other admin-web tests do)
+const h = (component: unknown, props: object) => React.createElement(component as React.FC<object>, props) as never;
 type R2 = typeof import('../src/components/content/r2');
 type Live = typeof import('../src/app/(protected)/delivery/live');
 let r2m: R2;
@@ -44,7 +46,7 @@ const base: AdminVideoR2 = { status: 'ready', jobId: 'j', rev: 'r', access: 'pub
 
 describe('R2 badge', () => {
   it('names every state in words, with progress while transcoding', () => {
-    const badge = (r2: Parameters<R2['R2Badge']>[0]['r2'], t = en, prefix = true) => text(renderToStaticMarkup(React.createElement(r2m.R2Badge, { r2, t, prefix })));
+    const badge = (r2: Parameters<R2['R2Badge']>[0]['r2'], t = en, prefix = true) => text(renderToStaticMarkup(h(r2m.R2Badge, { r2, t, prefix })));
     assert.equal(badge({ status: 'queued' }), 'R2: Queued');
     assert.equal(badge({ status: 'transcoding', progress: 0.42 }), 'R2: Transcoding 42%');
     assert.equal(badge({ status: 'transcoding' }), 'R2: Transcoding');
@@ -53,12 +55,12 @@ describe('R2 badge', () => {
     assert.equal(badge(null), 'R2: Not transcoded');
     assert.equal(badge({ status: 'ready' }, en, false), 'Ready', 'no prefix under the list column');
     assert.match(badge({ status: 'failed' }, ar), ARABIC);
-    assert.match(renderToStaticMarkup(React.createElement(r2m.R2Badge, { r2: { status: 'failed' }, t: en })), /data-r2-status="failed"/);
+    assert.match(renderToStaticMarkup(h(r2m.R2Badge, { r2: { status: 'failed' }, t: en })), /data-r2-status="failed"/);
   });
 });
 
 describe('R2 status on the video page', () => {
-  const render = (r2: AdminVideoR2 | null, t = en, locale = 'en') => renderToStaticMarkup(React.createElement(r2m.R2Status, { r2, t, locale }));
+  const render = (r2: AdminVideoR2 | null, t = en, locale = 'en') => renderToStaticMarkup(h(r2m.R2Status, { r2, t, locale }));
 
   it('a video never transcoded says Bunny plays it', () => {
     const html = render(null);
@@ -108,7 +110,7 @@ describe('R2 status on the video page', () => {
 describe('live transcoder figures', () => {
   const live: MediaLive = { transcoding: 1, queued: 3, maxTranscodes: 2, oldestQueuedAt: '2026-11-11T11:45:00Z', oldestQueuedSeconds: 900, at: '2026-11-11T12:00:00Z' };
   const render = (l: MediaLive | null, extra: { stale?: boolean; t?: typeof en; locale?: string } = {}) =>
-    renderToStaticMarkup(React.createElement(livem.LiveFigures, { live: l, t: extra.t ?? en, locale: extra.locale ?? 'en', stale: extra.stale }));
+    renderToStaticMarkup(h(livem.LiveFigures, { live: l, t: extra.t ?? en, locale: extra.locale ?? 'en', stale: extra.stale }));
   const figure = (html: string, id: string) => text(new RegExp(`data-testid="${id}">([^<]*)<`).exec(html)?.[1] ?? '');
 
   it('shows N of M, the queue and the oldest wait', () => {
