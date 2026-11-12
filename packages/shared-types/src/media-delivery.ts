@@ -60,6 +60,10 @@ export interface VideoR2State {
 	result?: TranscodeResult;
 	/** A visibility change is moving the objects to the other prefix */
 	moving?: { to: MediaAccess; jobId: string; at: string };
+	/** 0..1 while transcoding */
+	progress?: number;
+	/** A re-transcode: the rendition set that keeps playing until this one is ready (then deleted) */
+	previous?: { rev: string; access: MediaAccess };
 }
 
 /** Message on the transcode queue (api-videos → apps/media). */
@@ -219,11 +223,16 @@ export function mediaContentType(name: string): string {
 	}
 }
 
-/** Edge cache lifetime by file: segments and images never change under one rev. */
+/**
+ * Cache lifetime by file. Nothing changes under one rev, but a video that turns
+ * private is moved out of the public bucket: without a CDN purge token its
+ * public copies would stay at the edge for their whole TTL, so the TTL is a day
+ * (a day of R2 reads per colo per segment is still negligible).
+ */
 export function mediaCacheControl(name: string): string {
 	if (name.endsWith('.m3u8')) return 'public, max-age=300';
 	if (name.endsWith(MEDIA_MANIFEST)) return 'no-store';
-	return 'public, max-age=31536000, immutable';
+	return 'public, max-age=86400';
 }
 
 // ---------------------------------------------------------------------------
