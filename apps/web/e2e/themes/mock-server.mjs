@@ -4,6 +4,8 @@ import { createServer } from 'node:http';
 
 const port = Number(process.env.MOCK_API_PORT || 3158);
 const base = `http://127.0.0.1:${port}`;
+// Only the sweep's own dev server may call it (never a reflected origin)
+const siteOrigin = process.env.THEMES_ORIGIN || 'http://localhost:3157';
 const USER = 'theme-sweep-user';
 const now = Date.now();
 const iso = (h) => new Date(now - h * 3600_000).toISOString();
@@ -34,7 +36,7 @@ function answer(path) {
 
 createServer((req, res) => {
   const path = new URL(req.url, base).pathname;
-  const cors = { 'access-control-allow-origin': req.headers.origin || '*', 'access-control-allow-credentials': 'true', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+  const cors = { 'access-control-allow-origin': siteOrigin, 'access-control-allow-credentials': 'true', 'access-control-allow-headers': 'authorization, content-type, x-channel-id', 'access-control-allow-methods': 'GET, POST, PUT, DELETE, OPTIONS', vary: 'Origin' };
   if (req.method === 'OPTIONS') { res.writeHead(204, cors); return res.end(); }
   if (path.startsWith('/thumb/')) { res.writeHead(200, { ...cors, 'content-type': 'image/svg+xml' }); return res.end(thumb(parseInt(path.slice(7), 10) || 1)); }
   res.writeHead(200, { ...cors, 'content-type': 'application/json' });

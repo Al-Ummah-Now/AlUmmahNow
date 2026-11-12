@@ -78,6 +78,16 @@ export interface Contrast { text: string; ratio: number; fg: string; bg: string;
  * text over gradients, glass, images, masks and opacity fades.
  */
 export async function measureText(page: Page, root: string): Promise<Contrast[]> {
+  // A text with no glyph pixels is either invisible (stays so) or was caught mid-repaint: look again
+  let out = await measureOnce(page, root);
+  for (let i = 0; i < 2 && out.some((t) => t.fg === '?'); i++) {
+    await page.waitForTimeout(300);
+    out = await measureOnce(page, root);
+  }
+  return out;
+}
+
+async function measureOnce(page: Page, root: string): Promise<Contrast[]> {
   const boxes = await page.evaluate((rootSel) => {
     const out: { text: string; x: number; y: number; w: number; h: number; selector: string }[] = [];
     const rootEl = document.querySelector(rootSel);
