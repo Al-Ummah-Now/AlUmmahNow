@@ -14,7 +14,8 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { connect } from 'node:net';
+import { connect, type Socket } from 'node:net';
+import type { Duplex } from 'node:stream';
 import { TLSSocket } from 'node:tls';
 import { join } from 'node:path';
 import { fakeFor } from './outbound.ts';
@@ -75,11 +76,28 @@ function refuse(target: string): void {
   process.stderr.write(`[local-stack] browser request to ${target} refused (not local, no fake)\n`);
 }
 
+/** Pipes a CONNECT tunnel both ways; an error on either side closes both. */
+function tunnel(client: Duplex, upstream: Socket, head: Buffer): void {
+  upstream.on('connect', () => {
+    client.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+    if (head.length) upstream.write(head);
+    upstream.pipe(client);
+    client.pipe(upstream);
+  });
+  const close = () => {
+    upstream.destroy();
+    client.destroy();
+  };
+  upstream.on('error', close);
+  client.on('error', close);
+}
+
 export function startBrowserProxy(): Promise<() => Promise<void>> {
   const tls = certificate();
 
   // Requests on a terminated TLS connection: the Host header names the faked host
   const fakeServer = createServer(async (req, res) => {
+    res.on('error', () => undefined);
     const host = (req.headers.host ?? '').split(':')[0];
     const fake = fakeHandler(host);
     if (!fake) {
@@ -127,7 +145,9 @@ export function startBrowserProxy(): Promise<() => Promise<void>> {
     res.writeHead(502).end();
   });
 
+  // A browser closing a connection mid-transfer (EPIPE, ECONNRESET) must never take the stack down
   proxy.on('connect', (req, socket, head) => {
+    socket.on('error', () => socket.destroy());
     const [host, port = '443'] = (req.url ?? '').split(':');
     if (LOCAL.has(host)) {
       if (!STACK_PORTS.has(Number(port))) {
@@ -135,23 +155,11 @@ export function startBrowserProxy(): Promise<() => Promise<void>> {
         socket.end('HTTP/1.1 502 Bad Gateway\r\n\r\n');
         return;
       }
-      const upstream = connect(Number(port), '127.0.0.1', () => {
-        socket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
-        if (head.length) upstream.write(head);
-        upstream.pipe(socket);
-        socket.pipe(upstream);
-      });
-      upstream.on('error', () => socket.destroy());
+      tunnel(socket, connect(Number(port), '127.0.0.1'), head);
       return;
     }
     if (PUBLIC_STATIC_HOSTS.has(host) && port === '443') {
-      const upstream = connect(443, host, () => {
-        socket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
-        if (head.length) upstream.write(head);
-        upstream.pipe(socket);
-        socket.pipe(upstream);
-      });
-      upstream.on('error', () => socket.destroy());
+      tunnel(socket, connect(443, host), head);
       return;
     }
     if (!fakeHandler(host)) {
@@ -161,6 +169,7 @@ export function startBrowserProxy(): Promise<() => Promise<void>> {
     }
     socket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
     const secure = new TLSSocket(socket, { isServer: true, key: tls.key, cert: tls.cert, ALPNProtocols: ['http/1.1'] });
+    secure.on('error', () => secure.destroy());
     if (head.length) socket.unshift(head);
     fakeServer.emit('connection', secure);
   });

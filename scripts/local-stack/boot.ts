@@ -409,6 +409,8 @@ async function main(): Promise<void> {
 }
 
 if (import.meta.main) {
+  // One broken connection (a browser closing a socket mid-transfer) must never stop the stack under a running suite
+  process.on('uncaughtException', (error) => log(`uncaught (stack keeps running): ${(error as Error).stack ?? error}`));
   main().catch((error) => {
     log(`FAILED: ${(error as Error).stack ?? error}`);
     process.exit(1);
