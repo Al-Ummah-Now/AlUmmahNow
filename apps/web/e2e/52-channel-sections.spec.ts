@@ -588,7 +588,8 @@ test.describe('Each section type: add, render, remove', () => {
   // In order, one at a time (they share the channel), but a failure doesn't skip the rest
   test.describe.configure({ mode: 'default' });
 
-  const disposable = setupPublicDisposable(owner, 'Sections');
+  // Ready first: sections list only videos that finished processing (spotlight, recent, popular, playlists)
+  const disposable = setupPublicDisposable(owner, 'Sections', { ready: true });
   let fx: Fixtures | null = null;
   const getFx = () => {
     if (!fx) throw new Error('Section fixtures were not created');
@@ -598,7 +599,7 @@ test.describe('Each section type: add, render, remove', () => {
   test.beforeAll(async ({}, testInfo) => {
     // 28 round trips through the dialog and two Home tabs: the rendering is the same in every browser
     test.skip(testInfo.project.name !== 'chromium', 'Every section type runs on the chromium project only');
-    test.setTimeout(300_000);
+    test.setTimeout(540_000);
     const video = await disposable.create();
     const lectures = await findQaLecturesChannel();
     const [other] = await listPublicChannelVideos(lectures.id);

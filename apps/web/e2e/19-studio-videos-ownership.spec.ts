@@ -7,20 +7,29 @@
 import { test, expect } from './fixtures';
 import type { Page } from '@playwright/test';
 import { AUTH_STATE } from './test-utils/auth-state';
-import { API_URL, SEED_TITLES, ensureSeedVideos, setupPublicDisposable, type E2EVideo } from './test-utils/e2e-videos';
+import { API_URL, SEED_TITLES, ensureSeedVideos, setupPublicDisposable, waitForReady, type E2EVideo } from './test-utils/e2e-videos';
 import { channelsOf } from './test-utils/channel-content';
 
 let singleSeed: Record<string, E2EVideo> = {};
 let multiSeed: Record<string, E2EVideo> = {};
-const publicVideo = setupPublicDisposable('single', 'studio-ownership-public');
+// Ready before the tests: the list opens on Published, which leaves out videos still processing
+const publicVideo = setupPublicDisposable('single', 'studio-ownership-public', { ready: true });
 
 test.beforeAll(async () => {
-  test.setTimeout(240000);
+  test.setTimeout(540000);
   // Until Studio is deployed where this runs (PR checks run against QA, which follows main)
   const studio = await fetch(`${process.env.WEB_APP_URL ?? 'https://videos.qa.alummahnow.net'}/en/studio`, { redirect: 'manual' });
   test.skip(studio.status === 404, 'Studio is not deployed to this environment yet');
   singleSeed = await ensureSeedVideos('single');
   multiSeed = await ensureSeedVideos('multi');
+  // Seeds uploaded by this run (a freshly seeded QA) may still be encoding
+  for (const [user, seed, title] of [
+    ['single', singleSeed, SEED_TITLES.singlePrivate],
+    ['multi', multiSeed, SEED_TITLES.multiOne],
+    ['multi', multiSeed, SEED_TITLES.multiTwo],
+  ] as const) {
+    seed[title] = await waitForReady(user, seed[title]);
+  }
   await publicVideo.create();
 });
 
