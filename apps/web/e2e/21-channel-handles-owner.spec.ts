@@ -129,7 +129,8 @@ test.describe('Channel owner - handle, About and delete', () => {
     const actions = page.getByTestId('channel-owner-actions');
     await expect(actions).toBeVisible();
     await expect(actions.getByRole('link', { name: 'Customize channel' })).toHaveAttribute('href', `/en/settings/channel/${channel!.id}/edit`);
-    await expect(actions.getByRole('link', { name: 'Manage videos' })).toHaveAttribute('href', `/en/settings/channel/${channel!.id}/videos`);
+    // Studio is the creator home: Manage videos opens its Content list (lib/studio/redirects.ts)
+    await expect(actions.getByRole('link', { name: 'Manage videos' })).toHaveAttribute('href', `/en/studio/${channel!.id}/content/videos`);
     await expect(page.getByRole('button', { name: /^Subscribe$/ })).toHaveCount(0);
 
     await actions.getByRole('button', { name: 'More actions' }).click();
