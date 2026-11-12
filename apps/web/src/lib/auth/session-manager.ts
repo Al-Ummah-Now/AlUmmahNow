@@ -45,6 +45,7 @@ const MAX_SESSION_CHUNKS = 12;
 // First-paint channel cache (pure, shared with the client's live list)
 export { MAX_CACHED_CHANNELS, cacheChannels, isCacheableChannel, toSessionChannel, type SessionChannel } from '../channels/session-cache';
 import { cacheChannels, isCacheableChannel, toSessionChannel, type SessionChannel } from '../channels/session-cache';
+import { userDisplayName } from '@/lib/display-name';
 
 // Types
 export interface AuthTokens {
@@ -789,7 +790,8 @@ export class SessionManager {
         const profileResponse = profile as Record<string, unknown>;
         const profileData = ('profile' in profileResponse ? profileResponse.profile : profileResponse) as Record<string, unknown>;
 
-        account.displayName = (profileData.displayName as string) || (profileData.email as string) || account.email;
+        // Display name, else first + last; the email only as the last resort
+        account.displayName = userDisplayName(profileData as Parameters<typeof userDisplayName>[0], undefined, (profileData.email as string) || account.email);
         account.avatarUrl = profileData.avatarUrl as string | undefined;
         await this.setSessionData(sessionData);
         logger.debug('[SessionManager] Updated profile for user', {

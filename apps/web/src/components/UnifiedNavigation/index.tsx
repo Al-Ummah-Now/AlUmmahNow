@@ -40,6 +40,7 @@ import { getCmsUrl } from '@/lib/runtime-config';
 import { cmsLinks, isScholar } from '@/lib/scholars/sites';
 import { buildChannelMenu } from '@/lib/channels/menu';
 import type { ChannelRole } from '@al-ummah/shared-types';
+import { userDisplayName } from '@/lib/display-name';
 
 type MenuView = 'main' | 'channels' | 'accounts';
 const ROW = 'flex items-center gap-3 w-full min-h-10 px-3 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-start';
@@ -128,15 +129,8 @@ export function UnifiedNavigation() {
   }, [user?.id, user?.email, user?.channel, user?.channels]);
 
   // Get localized display name
-  const getDisplayName = () => {
-    if (profile?.displayNameLocalized?.[lang]) {
-      return profile.displayNameLocalized[lang];
-    }
-    if (profile?.displayName) {
-      return profile.displayName;
-    }
-    return user?.displayName || user?.email || '';
-  };
+  // The user's name (display name, else first + last); the email only as the last resort. The active channel is shown separately
+  const getDisplayName = () => userDisplayName(profile, lang) || userDisplayName({ displayName: user?.displayName }, lang, user?.email);
 
   // Get user avatar (always from profile, never from channel)
   const getUserAvatar = () => {
@@ -383,7 +377,7 @@ export function UnifiedNavigation() {
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
+                  <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate" data-testid="nav-user-name">
                     {getDisplayName()}
                   </div>
                   {displayName !== user.email && (
@@ -613,7 +607,7 @@ export function UnifiedNavigation() {
                 {backRow(t.header.switchAccount)}
                 {accounts.map((account) => {
                   const avatar = getAccountAvatar(account.userId) ?? account.avatarUrl;
-                  const name = account.displayName || account.email;
+                  const name = account.displayName?.trim() || account.email;
                   const count = account.channelsCount || 0;
                   return (
                     <div key={account.userId} className="group relative" data-testid="nav-account" data-active={account.isActive ? 'true' : 'false'} data-local={account.hasLocalSession === false ? 'false' : 'true'} data-email={account.email}>
