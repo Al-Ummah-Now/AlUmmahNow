@@ -17,7 +17,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { AUTH_DIR, E2E_ENTITY_PREFIX, LOCAL_STACK, OPENAUTH_URL, RUN_ID, VIDEOS_API_URL, runPassword, type Account } from './env';
 import { getAccessToken } from './oauth';
-import { runCron, stackSql, topOfHour } from './local-stack';
+import { eraseRowsMentioning, runCron, stackR2, stackR2Keys, stackSql, topOfHour } from './local-stack';
 import { adminApi } from './api';
 
 const LEDGER = path.join(AUTH_DIR, 'run-ledger.jsonl');
@@ -130,6 +130,32 @@ async function eraseLocalRows(users: LedgerUser[]): Promise<void> {
 }
 
 /**
+ * Local stack only, after the purges: what the product keeps as history or copies, found by the
+ * run id and the run users' ids. R2: api-videos' report copies (report:<entity id>:…), the run
+ * users' profile records, and the processor's message archive and legacy-restore backups that
+ * mention the run. D1: job, deletion, tombstone and search rows of the run's channels and users.
+ */
+async function eraseLocalCopies(users: LedgerUser[]): Promise<void> {
+  if (!LOCAL_STACK || !RUN_ID) return;
+  const markers = [RUN_ID, ...users.map((u) => u.userId)];
+  for (const key of await stackR2Keys('reports', `report:${E2E_ENTITY_PREFIX}`)) await stackR2('DELETE', 'reports', key);
+  for (const user of users) await stackR2('DELETE', 'profiles', user.userId);
+  for (const bucket of ['al-ummah-now-messages', 'admin-backups']) {
+    const keys = await stackR2Keys(bucket);
+    for (let i = 0; i < keys.length; i += 20) {
+      await Promise.all(keys.slice(i, i + 20).map(async (key) => {
+        const res = await stackR2('GET', bucket, key);
+        const text = res.ok ? await res.text() : '';
+        if (markers.some((m) => key.includes(m) || text.includes(m))) await stackR2('DELETE', bucket, key);
+      }));
+    }
+  }
+  for (const table of ['admin_jobs', 'admin_deletions', 'search_tombstones', 'search_channels', 'search_meta', 'content_ownership', 'channel_access', 'upload_rate_windows']) {
+    await eraseRowsMentioning('al-ummah-now-search', table, markers).catch(() => 0);
+  }
+}
+
+/**
  * The job's whole teardown (global-teardown.ts). Accounts go last: the admin's token is what the
  * report and row clean-ups use.
  */
@@ -166,6 +192,7 @@ export async function teardownRun(log: (line: string) => void = () => undefined)
     }
     // Roles and tiers once more: deleting the account may have re-read them
     await eraseLocalRows(users).catch((error) => problems.push(`local rows: ${(error as Error).message}`));
+    await eraseLocalCopies(users).catch((error) => problems.push(`local copies: ${(error as Error).message}`));
   }
   if (problems.length) throw new Error(`teardown left things behind:\n${problems.join('\n')}`);
 }
