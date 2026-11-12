@@ -79,6 +79,6 @@ describe('fake Bunny', () => {
   it('refuses hosts without a fake', async () => {
     const res = await call('https://videos.api.qa.alummahnow.net/api/videos');
     assert.equal(res.status, 502);
-    assert.ok(refused.some((r) => r.includes('videos.api.qa.alummahnow.net')));
+    assert.ok(refused.includes('GET https://videos.api.qa.alummahnow.net/api/videos'));
   });
 });

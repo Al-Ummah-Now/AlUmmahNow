@@ -19,6 +19,14 @@ import { fakeFor } from './outbound.ts';
 import { PORTS, STATE_DIR } from './stack.ts';
 
 const LOCAL = new Set(['localhost', '127.0.0.1']);
+/** Only the stack's own ports are reachable through the proxy. */
+const STACK_PORTS = new Set<number>(Object.values(PORTS));
+
+/** The fake for a host, only when it is a registered handler. */
+function fakeHandler(host: string) {
+  const handler = fakeFor(host);
+  return typeof handler === 'function' ? handler : undefined;
+}
 
 export const refusedByProxy: string[] = [];
 
@@ -59,7 +67,7 @@ export function startBrowserProxy(): Promise<() => Promise<void>> {
   // Requests on a terminated TLS connection: the Host header names the faked host
   const fakeServer = createServer(async (req, res) => {
     const host = (req.headers.host ?? '').split(':')[0];
-    const fake = fakeFor(host);
+    const fake = fakeHandler(host);
     if (!fake) {
       refuse(`https://${host}${req.url}`);
       res.writeHead(502).end();
@@ -79,9 +87,15 @@ export function startBrowserProxy(): Promise<() => Promise<void>> {
       return;
     }
     if (LOCAL.has(target.hostname)) {
+      const port = Number(target.port || 80);
+      if (!STACK_PORTS.has(port)) {
+        refuse(target.href);
+        res.writeHead(502).end();
+        return;
+      }
       const request = await toFetchRequest(req, target.origin);
-      const local = new URL(target);
-      local.hostname = '127.0.0.1';
+      // Always the stack on loopback, on one of its own ports; only the path comes from the request
+      const local = `http://127.0.0.1:${port}${target.pathname}${target.search}`;
       try {
         await send(res, await fetch(local, { method: request.method, headers: request.headers, body: request.body, redirect: 'manual', duplex: 'half' } as RequestInit));
       } catch {
@@ -89,7 +103,7 @@ export function startBrowserProxy(): Promise<() => Promise<void>> {
       }
       return;
     }
-    const fake = fakeFor(target.hostname);
+    const fake = fakeHandler(target.hostname);
     if (fake) {
       const request = await toFetchRequest(req, target.origin);
       await send(res, await fake(request, target));
@@ -102,6 +116,11 @@ export function startBrowserProxy(): Promise<() => Promise<void>> {
   proxy.on('connect', (req, socket, head) => {
     const [host, port = '443'] = (req.url ?? '').split(':');
     if (LOCAL.has(host)) {
+      if (!STACK_PORTS.has(Number(port))) {
+        refuse(`https://${host}:${port}`);
+        socket.end('HTTP/1.1 502 Bad Gateway\r\n\r\n');
+        return;
+      }
       const upstream = connect(Number(port), '127.0.0.1', () => {
         socket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
         if (head.length) upstream.write(head);
@@ -111,7 +130,7 @@ export function startBrowserProxy(): Promise<() => Promise<void>> {
       upstream.on('error', () => socket.destroy());
       return;
     }
-    if (!fakeFor(host)) {
+    if (!fakeHandler(host)) {
       refuse(`https://${host}`);
       socket.end('HTTP/1.1 502 Bad Gateway\r\n\r\n');
       return;
