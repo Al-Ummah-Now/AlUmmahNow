@@ -88,7 +88,6 @@
   "apps/web/src/components/VideoPagePlayer/ChapterNav.tsx": 9,
   "apps/web/src/components/VideoPagePlayer/VideoDetails.tsx": 1,
   "apps/web/src/components/VideoPlayer/CustomVideoPlayer.tsx": 2,
-  "apps/web/src/components/VideoPlayer/EngagementButtons.tsx": 46,
   "apps/web/src/components/VideoPlayer/ErrorDisplay.tsx": 17,
   "apps/web/src/components/VideoPlayer/Skeleton.tsx": 15,
   "apps/web/src/components/VideoPlayer/VideoPlayerErrorBoundary.tsx": 1,
