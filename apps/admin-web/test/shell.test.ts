@@ -32,7 +32,7 @@ describe('nav model', () => {
   it('drops groups with nothing visible and keeps their order', () => {
     const ids = groupedItems(moderator).map((g) => g.id);
     assert.deepEqual(ids, ['overview', 'moderation', 'content', 'people', 'operations', 'site']);
-    assert.deepEqual(groupedItems(moderator).find((g) => g.id === 'operations')!.items.map((i) => i.href), ['/jobs', '/indices']);
+    assert.deepEqual(groupedItems(moderator).find((g) => g.id === 'operations')!.items.map((i) => i.href), ['/jobs', '/indices', '/live-streaming']);
     assert.equal(groupedItems(admin).find((g) => g.id === 'operations')!.items[0].href, '/operations');
   });
 
