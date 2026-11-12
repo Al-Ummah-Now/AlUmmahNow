@@ -196,11 +196,45 @@ function writeEntry(p: Prepared, modules: { type: string; path: string }[]): { t
   const classes = [...new Set(dos)];
   const entryPath = join(p.outDir, '__local_stack_entry.mjs');
   const target = `./${relative(p.outDir, modules[0].path)}`;
-  writeFileSync(
-    entryPath,
-    [`export { default } from ${JSON.stringify(target)};`, ...(classes.length ? [`export { ${classes.join(', ')} } from ${JSON.stringify(target)};`] : [])].join('\n') + '\n',
-  );
+  const reexports = classes.length ? [`export { ${classes.join(', ')} } from ${JSON.stringify(target)};`] : [];
+  const assets = p.local.config.assets as { binding?: string; run_worker_first?: boolean | string[] } | undefined;
+  const lines = assets?.binding && assets.run_worker_first !== true
+    ? [assetsFirstEntry(target, assets.binding, Array.isArray(assets.run_worker_first) ? assets.run_worker_first : []), ...reexports]
+    : [`export { default } from ${JSON.stringify(target)};`, ...reexports];
+  writeFileSync(entryPath, `${lines.join('\n')}\n`);
   return [{ type: 'ESModule', path: entryPath }, ...modules];
+}
+
+/** A wrangler run_worker_first pattern ("/_next/static/*") as a RegExp source. */
+export function workerFirstPattern(pattern: string): string {
+  return `^${pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}$`;
+}
+
+/**
+ * Cloudflare serves a worker's static assets before the worker, except for its run_worker_first
+ * paths. The stack's sockets go straight to the worker, so the entry does the same: a GET/HEAD
+ * the assets binding has a file for is answered from it; everything else (and every
+ * run_worker_first path, such as OpenNext's skew-protected /_next/static/*) goes to the worker.
+ * Without this, public files (web's /brand/logo-*.webp, favicons, icons) reach the app's router
+ * and answer 404.
+ */
+export function assetsFirstEntry(target: string, binding: string, workerFirst: string[]): string {
+  const patterns = workerFirst.filter((p) => !p.startsWith('!')).map(workerFirstPattern);
+  return [
+    `import worker from ${JSON.stringify(target)};`,
+    `const WORKER_FIRST = ${JSON.stringify(patterns)}.map((p) => new RegExp(p));`,
+    'export default {',
+    '  ...worker,',
+    '  async fetch(request, env, ctx) {',
+    '    const { pathname } = new URL(request.url);',
+    "    if ((request.method === 'GET' || request.method === 'HEAD') && pathname !== '/' && !WORKER_FIRST.some((re) => re.test(pathname))) {",
+    `      const asset = await env[${JSON.stringify(binding)}].fetch(request);`,
+    '      if (asset.status !== 404) return asset;',
+    '    }',
+    '    return worker.fetch(request, env, ctx);',
+    '  },',
+    '};',
+  ].join('\n');
 }
 
 function workerOptions(p: Prepared): Json {
@@ -405,7 +439,9 @@ async function main(): Promise<void> {
   if (flag('--check')) await stop();
 }
 
-main().catch((error) => {
-  log(`FAILED: ${(error as Error).stack ?? error}`);
-  process.exit(1);
-});
+if (import.meta.main) {
+  main().catch((error) => {
+    log(`FAILED: ${(error as Error).stack ?? error}`);
+    process.exit(1);
+  });
+}
