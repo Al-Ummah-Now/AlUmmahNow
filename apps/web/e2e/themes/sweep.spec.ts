@@ -26,9 +26,11 @@ const STEPS: Step[] = [
   { name: 'notifications-menu', path: '', open: async (p) => { await p.getByTestId('notification-bell').click(); }, root: '[data-testid=notification-dropdown]' },
   { name: 'side-nav', path: '', open: async (p) => { await p.getByTestId('nav-drawer-toggle').click(); }, root: '[data-testid=side-nav]' },
   { name: 'search-suggest', path: '', open: async (p) => {
+    // Phone: open the search sheet once (it stays open across theme changes)
     const open = p.getByTestId('header-search-open');
-    if (await open.isVisible()) await open.click();
-    await p.locator('.ah input[type=search], [data-testid=header-search-sheet] input').first().fill('qur');
+    if (!(await p.getByTestId('header-search-sheet').isVisible()) && (await open.isVisible())) await open.click({ timeout: 5000 });
+    // Phone: the sheet's own field; desktop: the header's (only one of them is shown)
+    await p.locator('.ah input[type=search]:visible, [data-testid=header-search-sheet] input:visible').first().fill('qur', { timeout: 5000 });
     await p.waitForTimeout(600);
   }, root: 'body' },
 ];

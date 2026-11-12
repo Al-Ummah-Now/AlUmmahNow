@@ -28,6 +28,12 @@ function answer(path) {
   if (path === '/api/profile' || path === '/api/profiles/me') return PROFILE;
   if (path === '/api/notifications/unread-count') return { success: true, result: { unreadCount: 2 } };
   if (path === '/api/notifications') return { success: true, result: { items: NOTIFS, nextCursor: null, unreadCount: 2 } };
+  if (path === '/api/search/suggestions') return { data: [
+    { text: 'quran recitation', type: 'query' },
+    { text: 'Lectures Channel', type: 'channel', id: 'c1', subtitle: '@lectures', verified: true, thumbnailUrl: `${base}/thumb/3.svg` },
+    ...VIDEOS.slice(0, 4).map((v) => ({ text: v.title, type: 'video', id: v.id, subtitle: v.channelName, thumbnailUrl: v.thumbnailUrl })),
+    { text: 'Tafsir', type: 'category', count: 12 },
+  ] };
   if (/^\/api\/videos\/[^/]+$/.test(path)) return { ...VIDEOS[0], id: path.split('/').pop() };
   if (/videos|search|history|feed|library|watch-later|liked|trending|explore|recommend/.test(path)) return { cursor: '', limit: 12, data: VIDEOS, items: VIDEOS, videos: VIDEOS, success: true, result: { items: VIDEOS, videos: VIDEOS, nextCursor: null } };
   if (/channels/.test(path)) return { success: true, data: [], result: [], items: [], channels: [] };

@@ -61,7 +61,7 @@ export function NotificationRow({ item, onOpen, onMarkRead, onDelete, compact = 
       <div className="min-w-0 flex-1 text-start">
         <p className={`text-sm ${TEXT} ${item.isRead ? 'font-normal' : 'font-bold'}`}>{title}</p>
         {message && <p className={`text-sm ${SECONDARY} ${compact ? 'line-clamp-2' : ''}`}>{message}</p>}
-        <p className={`text-xs ${MUTED} mt-1`}>
+        <p className={`text-xs ${SECONDARY} mt-1`}>
           <time dateTime={item.createdAt}>{relativeTime(item.createdAt, t, lang)}</time>
         </p>
       </div>
