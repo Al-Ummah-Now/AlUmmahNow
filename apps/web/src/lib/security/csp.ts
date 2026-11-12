@@ -59,9 +59,15 @@ function origin(url: string | undefined): string {
 
 function websocketOrigins(url: string | undefined): string[] {
   if (!url) return [];
-  const match = url.match(/^(?:wss?|https?):\/\/([^/]+)/);
+  const match = url.match(/^(wss?|https?):\/\/([^/]+)/);
   if (!match) return [];
-  return [`https://${match[1]}`, `wss://${match[1]}`];
+  const [, scheme, host] = match;
+  // A plain ws:// (or http://) server on this machine (the local E2E stack) is allowed as configured;
+  // every other host only over TLS
+  if ((scheme === 'ws' || scheme === 'http') && /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host)) {
+    return [`http://${host}`, `ws://${host}`];
+  }
+  return [`https://${host}`, `wss://${host}`];
 }
 
 /** Generate a base64 nonce with 128 bits of entropy. */
