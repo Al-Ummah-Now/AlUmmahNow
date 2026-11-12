@@ -1,3 +1,5 @@
+import { removeCollectionsFor } from "../../lib/channelCollection";
+import { inBackground } from "../../lib/websocket-notify";
 import { Bool } from "chanfana";
 import R2Repository from "../../lib/r2Repo";
 import { Profile as BusinessProfile, ResponseError } from "../../lib/types";
@@ -47,7 +49,10 @@ export class ProfileDelete extends AuthenticatedRoute {
 		const bucket = c.env.profiles;
 		type ProfileType = z.infer<typeof BusinessProfile>;
 		const repository = new R2Repository<ProfileType>(bucket);
+		const profile = await repository.getObject(userId);
 		await repository.deleteObject(userId);
+		// The profile is gone for good: so is the user's Bunny collection (lib/channelCollection.ts)
+		if (profile) inBackground(c, 'user-collection-remove', () => removeCollectionsFor(c.env as never, userId, profile as never));
 
 		// Send queue message for profile deletion
 		const queue = new Queue(c.env.queue);

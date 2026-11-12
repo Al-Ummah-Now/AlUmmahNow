@@ -2,10 +2,21 @@
  * Channel collection backfill (2026-11-12 owner request: in Bunny, each
  * channel's videos are grouped in the channel's collection).
  *
- * Puts every existing video into its channel's collection in the video's own
- * library (lib/bunny/libraries.ts; production: 498994 and legacy 400189, QA
- * and stage: the shared test library). Collections are created or adopted
- * per library exactly as an upload does (lib/channelCollection.ts).
+ * Puts every existing video into a collection in the video's own library
+ * (lib/bunny/libraries.ts; production: 498994 and legacy 400189, QA and stage:
+ * the shared test library), created or adopted per library exactly as an
+ * upload does (lib/channelCollection.ts):
+ *
+ * - channel: the video's channel is a real channel → the channel's collection;
+ * - user: a user-level upload (channelId is the owner, or no channel) → the
+ *   owner's user collection;
+ * - deletedChannel: its channel was deleted (or never existed) → the owner's
+ *   user collection;
+ * - ownerMissing: a user collection is needed but the owner has no profile →
+ *   listed, never moved.
+ *
+ * After the last page, every library's Bunny videos that no record (and no
+ * live stream) references are listed: list only, nothing is ever deleted.
  *
  * Runs as a chain of messages on PROCESSING_CHECK_QUEUE (kind
  * `bunny-collection-backfill`), one page of the videos bucket per message:
@@ -19,14 +30,14 @@
  * Page 0 also checks each library's CDN host (signed thumbnail of one of its
  * videos), so the host and token key of every library are proven.
  *
- * Skipped (counted): user-level uploads (no channel), records of a library
- * this env does not know, videos Bunny no longer has, deleted channels.
+ * Counted, not moved: records of a library this env does not know, videos
+ * Bunny no longer has, owners without a profile.
  * State: global_settings `ops/bunny-collections/runs/<runId>.json` (+ latest.json).
  */
 import { logger } from '../logger';
 import R2Repository from '../r2Repo';
 import { bunnyFileToken, tokenExpiry } from '../bunny-signing';
-import { adoptLegacyCollection, ensureChannelCollection, storedCollectionId, type CollectionChannel } from '../channelCollection';
+import { adoptLegacyCollection, ensureChannelCollection, storedCollectionId, userCollectionName, type CollectionChannel, type CollectionProfile } from '../channelCollection';
 import { bunnyApi, bunnyClient, bunnyLibraries, pickLibrary, type BunnyLibrariesEnv, type BunnyLibrary, type LibraryHints } from './libraries';
 import type { BunnyStreamClient } from './stream';
 
@@ -41,13 +52,20 @@ const JSON_META = { httpMetadata: { contentType: 'application/json' } };
 export interface CollectionBackfillMessage {
 	kind: typeof COLLECTION_BACKFILL_KIND;
 	runId: string;
+	/** Video pages (default), then the unreferenced-video scan per library */
+	phase?: 'videos' | 'unreferenced';
 	page: number;
 	cursor: string | null;
 	dryRun: boolean;
 	limit?: number;
+	/** phase 'unreferenced': the library scanned and its Bunny page (from 1) */
+	libraryId?: number;
+	bunnyPage?: number;
 }
 
-export interface LibraryCounts {
+export type Placement = 'channel' | 'user' | 'deletedChannel';
+
+export interface PlacementCounts {
 	videos: number;
 	alreadyPlaced: number;
 	/** Dry run: would be moved; apply: moved */
@@ -56,15 +74,41 @@ export interface LibraryCounts {
 	errors: number;
 }
 
+export interface LibraryCounts {
+	channel: PlacementCounts;
+	user: PlacementCounts;
+	deletedChannel: PlacementCounts;
+	/** Needs the owner's collection, but the owner has no profile (listed in ownerMissing) */
+	ownerMissing: number;
+}
+
 export interface CollectionBackfillCounts {
 	scanned: number;
-	noChannel: number;
-	channelMissing: number;
 	unknownLibrary: number;
 	byLibrary: Record<string, LibraryCounts>;
-	/** channelId:libraryId pairs that need a collection: created (or would be), adopted from the legacy id (or would be) */
+	/** "channel:<id>:<lib>" / "user:<id>:<lib>": created (or would be), adopted from the legacy id (or would be) */
 	collectionsCreated: string[];
 	collectionsAdopted: string[];
+	ownerMissing: Array<{ videoId: string; libraryId: number; userId?: string; channelId?: string }>;
+}
+
+export interface UnreferencedVideo {
+	guid: string;
+	title?: string;
+	status?: number;
+	storageSize?: number;
+	dateUploaded?: string;
+	collectionId?: string;
+}
+
+export interface UnreferencedScan {
+	scanned: number;
+	count: number;
+	storageBytes: number;
+	/** First 1000 */
+	items: UnreferencedVideo[];
+	pages: number[];
+	done: boolean;
 }
 
 export interface LibraryCheck {
@@ -86,6 +130,8 @@ export interface CollectionBackfillRun {
 	libraries?: Record<string, LibraryCheck>;
 	pages: Record<string, CollectionBackfillCounts>;
 	totals?: CollectionBackfillCounts;
+	/** Bunny videos no record references, per library (list only) */
+	unreferenced?: Record<string, UnreferencedScan>;
 	lastError?: string;
 	errors?: Array<{ id: string; error: string }>;
 }
@@ -97,6 +143,10 @@ interface BackfillVideo extends LibraryHints {
 	isDeleted?: boolean;
 }
 
+interface BackfillProfile extends CollectionProfile {
+	id?: string;
+}
+
 interface BackfillChannel extends CollectionChannel {
 	id?: string;
 	isDeleted?: boolean;
@@ -105,6 +155,7 @@ interface BackfillChannel extends CollectionChannel {
 export interface CollectionBackfillEnv extends BunnyLibrariesEnv {
 	videos: R2Bucket;
 	channels: R2Bucket;
+	profiles: R2Bucket;
 	global_settings?: R2Bucket;
 	PROCESSING_CHECK_QUEUE?: Queue;
 	BUNNY_NAME_PREFIX?: string;
@@ -116,12 +167,39 @@ export function isCollectionBackfillMessage(body: unknown): body is CollectionBa
 }
 
 function emptyCounts(): CollectionBackfillCounts {
-	return { scanned: 0, noChannel: 0, channelMissing: 0, unknownLibrary: 0, byLibrary: {}, collectionsCreated: [], collectionsAdopted: [] };
+	return { scanned: 0, unknownLibrary: 0, byLibrary: {}, collectionsCreated: [], collectionsAdopted: [], ownerMissing: [] };
 }
+
+const emptyPlacement = (): PlacementCounts => ({ videos: 0, alreadyPlaced: 0, moved: 0, missingInBunny: 0, errors: 0 });
 
 function libCounts(counts: CollectionBackfillCounts, libraryId: number): LibraryCounts {
 	const key = String(libraryId);
-	return (counts.byLibrary[key] ??= { videos: 0, alreadyPlaced: 0, moved: 0, missingInBunny: 0, errors: 0 });
+	return (counts.byLibrary[key] ??= { channel: emptyPlacement(), user: emptyPlacement(), deletedChannel: emptyPlacement(), ownerMissing: 0 });
+}
+
+/** Totals over every page (collections counted once per owner and library) */
+export function sumCounts(pages: Record<string, CollectionBackfillCounts>): CollectionBackfillCounts {
+	const total = emptyCounts();
+	const created = new Set<string>();
+	const adopted = new Set<string>();
+	for (const page of Object.values(pages)) {
+		total.scanned += page.scanned;
+		total.unknownLibrary += page.unknownLibrary;
+		for (const [lib, c] of Object.entries(page.byLibrary)) {
+			const t = libCounts(total, Number(lib));
+			for (const placement of ['channel', 'user', 'deletedChannel'] as const) {
+				for (const k of Object.keys(t[placement]) as (keyof PlacementCounts)[]) t[placement][k] += c[placement][k];
+			}
+			t.ownerMissing += c.ownerMissing;
+		}
+		page.collectionsCreated.forEach((k) => created.add(k));
+		page.collectionsAdopted.forEach((k) => adopted.add(k));
+		total.ownerMissing.push(...page.ownerMissing);
+	}
+	total.collectionsCreated = [...created];
+	total.collectionsAdopted = [...adopted];
+	total.ownerMissing = total.ownerMissing.slice(0, 1000);
+	return total;
 }
 
 /** Runs `task` over `items`, `limit` at a time; results in input order */
@@ -143,31 +221,6 @@ function errorText(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
 
-/** Totals over every page (collections counted once per channel and library) */
-export function sumCounts(pages: Record<string, CollectionBackfillCounts>): CollectionBackfillCounts {
-	const total = emptyCounts();
-	const created = new Set<string>();
-	const adopted = new Set<string>();
-	for (const page of Object.values(pages)) {
-		total.scanned += page.scanned;
-		total.noChannel += page.noChannel;
-		total.channelMissing += page.channelMissing;
-		total.unknownLibrary += page.unknownLibrary;
-		for (const [lib, c] of Object.entries(page.byLibrary)) {
-			const t = libCounts(total, Number(lib));
-			t.videos += c.videos;
-			t.alreadyPlaced += c.alreadyPlaced;
-			t.moved += c.moved;
-			t.missingInBunny += c.missingInBunny;
-			t.errors += c.errors;
-		}
-		page.collectionsCreated.forEach((k) => created.add(k));
-		page.collectionsAdopted.forEach((k) => adopted.add(k));
-	}
-	total.collectionsCreated = [...created];
-	total.collectionsAdopted = [...adopted];
-	return total;
-}
 
 /** Bunny's current collection of a video; null when Bunny has no such video */
 async function bunnyCollectionOf(client: BunnyStreamClient, libraryId: number, videoId: string): Promise<{ collectionId: string } | null> {
@@ -233,7 +286,9 @@ export async function runCollectionBackfillPage(
 		return client;
 	};
 	const channelCache = new Map<string, BackfillChannel | null>();
-	/** channelId:libraryId → collection id (undefined in a dry run when it would be created) */
+	const profileCache = new Map<string, BackfillProfile | null>();
+	const profiles = new R2Repository<BackfillProfile>(env.profiles);
+	/** "<kind>:<ownerId>:<libraryId>" → collection id (undefined in a dry run when it would be created) */
 	const targets = new Map<string, string | undefined>();
 
 	// Video records only (no livestream:, comment or other keyed objects), read in parallel
@@ -247,62 +302,87 @@ export async function runCollectionBackfillPage(
 		}
 	});
 
-	// 1. Sequential: each video's library and its channel's collection there
-	//    (one create/adopt per channel and library, never raced)
-	const work: { video: BackfillVideo; library: BunnyLibrary; counts: LibraryCounts; target: string | undefined }[] = [];
+	const channelOf = async (id: string) => {
+		if (!channelCache.has(id)) channelCache.set(id, await channels.getObject(id));
+		return channelCache.get(id) ?? null;
+	};
+	const profileOf = async (id: string) => {
+		if (!profileCache.has(id)) profileCache.set(id, await profiles.getObject(id));
+		return profileCache.get(id) ?? null;
+	};
+
+	/** The owner's (channel or user) collection in a library, created/adopted once per page */
+	const resolveTarget = async (kind: 'channel' | 'user', ownerId: string, owner: CollectionChannel, library: BunnyLibrary): Promise<string | undefined> => {
+		const { libraryId } = bunnyApi(library);
+		const pair = `${kind}:${ownerId}:${libraryId}`;
+		if (targets.has(pair)) return targets.get(pair);
+		const client = clientOf(library);
+		const repo = (kind === 'channel' ? channels : profiles) as R2Repository<CollectionChannel>;
+		const name = kind === 'channel' ? owner.name || `Channel ${ownerId}` : userCollectionName(owner as CollectionProfile, ownerId);
+		let target = storedCollectionId(owner, libraryId);
+		if (!target) {
+			const legacy = kind === 'channel' ? owner.bunnyCollectionId : undefined;
+			if (message.dryRun) {
+				// Read-only: would the legacy id be adopted, or a collection created?
+				const held = legacy ? await client.getCollection(libraryId, legacy).then((col) => !!col?.guid).catch(() => false) : false;
+				if (held) {
+					target = legacy!;
+					counts.collectionsAdopted.push(pair);
+				} else counts.collectionsCreated.push(pair);
+			} else {
+				const adopted = legacy ? await adoptLegacyCollection(repo, client, libraryId, ownerId, owner) : undefined;
+				if (adopted) {
+					target = adopted;
+					counts.collectionsAdopted.push(pair);
+				} else {
+					target = await ensureChannelCollection(repo, client, libraryId, ownerId, name);
+					if (target) counts.collectionsCreated.push(pair);
+				}
+				// Later videos of the owner see the stored id
+				if (kind === 'channel') channelCache.set(ownerId, await channels.getObject(ownerId));
+				else profileCache.set(ownerId, await profiles.getObject(ownerId));
+			}
+		}
+		targets.set(pair, target);
+		return target;
+	};
+
+	// 1. Sequential: each video's library, placement and target collection
+	const work: { video: BackfillVideo; library: BunnyLibrary; counts: PlacementCounts; target: string | undefined }[] = [];
 	for (const video of records) {
 		if (!video?.id) continue;
 		counts.scanned++;
-		if (!video.channelId || video.channelId === video.userId) {
-			counts.noChannel++;
-			continue;
-		}
 		const library = pickLibrary(libraries, video);
 		if (!library || (!library.apiKey && !library.primary)) {
 			counts.unknownLibrary++;
 			continue;
 		}
-		const c = libCounts(counts, library.libraryId);
-		c.videos++;
+		const lc = libCounts(counts, library.libraryId);
+		let placement: Placement = 'user';
 		try {
-			if (!channelCache.has(video.channelId)) channelCache.set(video.channelId, await channels.getObject(video.channelId));
-			const channel = channelCache.get(video.channelId) ?? null;
-			if (!channel || channel.isDeleted) {
-				counts.channelMissing++;
-				continue;
+			let channel: BackfillChannel | null = null;
+			if (video.channelId && video.channelId !== video.userId) {
+				channel = await channelOf(video.channelId);
+				placement = channel && !channel.isDeleted ? 'channel' : 'deletedChannel';
 			}
-			const client = clientOf(library);
-			const { libraryId } = bunnyApi(library);
-			const pair = `${video.channelId}:${libraryId}`;
-			if (!targets.has(pair)) {
-				let target = storedCollectionId(channel, libraryId);
-				if (!target) {
-					if (message.dryRun) {
-						// Read-only: would the legacy id be adopted, or a collection created?
-						const legacy = channel.bunnyCollectionId;
-						const held = legacy ? await client.getCollection(libraryId, legacy).then((col) => !!col?.guid).catch(() => false) : false;
-						if (held) {
-							target = legacy!;
-							counts.collectionsAdopted.push(pair);
-						} else counts.collectionsCreated.push(pair);
-					} else {
-						const adopted = await adoptLegacyCollection(channels, client, libraryId, video.channelId, channel);
-						if (adopted) {
-							target = adopted;
-							counts.collectionsAdopted.push(pair);
-						} else {
-							target = await ensureChannelCollection(channels, client, libraryId, video.channelId, channel.name || `Channel ${video.channelId}`);
-							if (target) counts.collectionsCreated.push(pair);
-						}
-						// Later videos of the channel see the stored id
-						channelCache.set(video.channelId, await channels.getObject(video.channelId));
-					}
+			const c = lc[placement];
+			c.videos++;
+			let target: string | undefined;
+			if (placement === 'channel') {
+				target = await resolveTarget('channel', video.channelId!, channel!, library);
+			} else {
+				const owner = video.userId ? await profileOf(video.userId) : null;
+				if (!owner) {
+					c.videos--;
+					lc.ownerMissing++;
+					counts.ownerMissing.push({ videoId: video.id, libraryId: library.libraryId, userId: video.userId, channelId: video.channelId });
+					continue;
 				}
-				targets.set(pair, target);
+				target = await resolveTarget('user', video.userId!, owner, library);
 			}
-			work.push({ video, library, counts: c, target: targets.get(pair) });
+			work.push({ video, library, counts: c, target });
 		} catch (error) {
-			c.errors++;
+			lc[placement].errors++;
 			errors.push({ id: video.id, error: errorText(error) });
 		}
 	}
@@ -331,6 +411,39 @@ export async function runCollectionBackfillPage(
 		}
 	});
 	return { counts, nextCursor: listing.truncated ? listing.cursor ?? null : null, errors };
+}
+
+const UNREFERENCED_PAGE_SIZE = 100;
+
+/**
+ * One page of a library's Bunny videos: those that no video record (and no
+ * live stream record) references. List only: nothing is deleted.
+ */
+export async function scanUnreferencedPage(
+	env: CollectionBackfillEnv,
+	library: BunnyLibrary,
+	page: number,
+): Promise<{ scanned: number; unreferenced: UnreferencedVideo[]; more: boolean }> {
+	const { libraryId, apiKey } = bunnyApi(library);
+	const res = await fetch(`https://video.bunnycdn.com/library/${libraryId}/videos?page=${page}&itemsPerPage=${UNREFERENCED_PAGE_SIZE}&orderBy=date`, {
+		headers: { AccessKey: apiKey, accept: 'application/json' },
+	});
+	if (!res.ok) throw new Error(`list videos ${libraryId} page ${page}: HTTP ${res.status}`);
+	const body = (await res.json()) as { items?: Array<UnreferencedVideo & { guid: string }>; totalItems?: number };
+	const items = body.items ?? [];
+	// Live streams keep their Bunny video id inside the record (streamUrl)
+	let liveText = '';
+	let cursor: string | undefined;
+	do {
+		const listed = await env.videos.list({ prefix: 'livestream:', cursor, limit: 500 });
+		for (const o of listed.objects) liveText += (await (await env.videos.get(o.key))?.text()) ?? '';
+		cursor = listed.truncated ? listed.cursor : undefined;
+	} while (cursor);
+	const present = await eachLimited(items, CONCURRENCY, async (v) => !!(await env.videos.head(v.guid)) || liveText.includes(v.guid));
+	const unreferenced = items
+		.filter((_, i) => !present[i])
+		.map((v) => ({ guid: v.guid, title: v.title, status: v.status, storageSize: v.storageSize, dateUploaded: v.dateUploaded, collectionId: v.collectionId || undefined }));
+	return { scanned: items.length, unreferenced, more: items.length === UNREFERENCED_PAGE_SIZE && page * UNREFERENCED_PAGE_SIZE < (body.totalItems ?? Infinity) };
 }
 
 export function runKey(runId: string): string {
@@ -377,17 +490,60 @@ export async function handleCollectionBackfillMessage(env: CollectionBackfillEnv
 			updatedAt: at,
 			pages: {},
 		};
-		if (run.status === 'done' || run.pages[String(body.page)]) {
+		if (run.status === 'done') {
+			msg.ack();
+			return;
+		}
+		const scanLibraries = (await bunnyLibraries(env)).filter((l) => l.primary || l.apiKey);
+		const startScan = async (index: number) => {
+			const next = scanLibraries[index];
+			if (!next) return false;
+			await env.PROCESSING_CHECK_QUEUE!.send(
+				{ kind: COLLECTION_BACKFILL_KIND, runId: body.runId, phase: 'unreferenced', page: 0, cursor: null, dryRun: body.dryRun, libraryId: next.libraryId, bunnyPage: 1 } satisfies CollectionBackfillMessage,
+				{ delaySeconds: PAGE_DELAY_SECONDS },
+			);
+			return true;
+		};
+
+		if (body.phase === 'unreferenced') {
+			const index = scanLibraries.findIndex((l) => l.libraryId === body.libraryId);
+			const library = scanLibraries[index];
+			const bunnyPage = body.bunnyPage ?? 1;
+			const scan = ((run.unreferenced ??= {})[String(body.libraryId)] ??= { scanned: 0, count: 0, storageBytes: 0, items: [], pages: [], done: false });
+			if (!library || scan.pages.includes(bunnyPage)) {
+				msg.ack();
+				return;
+			}
+			const result = await scanUnreferencedPage(env, library, bunnyPage);
+			scan.pages.push(bunnyPage);
+			scan.scanned += result.scanned;
+			scan.count += result.unreferenced.length;
+			scan.storageBytes += result.unreferenced.reduce((n, v) => n + (v.storageSize ?? 0), 0);
+			scan.items = [...scan.items, ...result.unreferenced].slice(0, 1000);
+			if (result.more) {
+				await env.PROCESSING_CHECK_QUEUE!.send({ ...body, bunnyPage: bunnyPage + 1 } satisfies CollectionBackfillMessage, { delaySeconds: PAGE_DELAY_SECONDS });
+			} else {
+				scan.done = true;
+				if (!(await startScan(index + 1))) {
+					run.status = 'done';
+					run.finishedAt = at;
+				}
+			}
+			run.updatedAt = at;
+			await writeRun(env, run);
+			logger.info('[CollectionBackfill] Unreferenced scan page done', { runId: body.runId, libraryId: body.libraryId, bunnyPage, unreferenced: result.unreferenced.length });
+			msg.ack();
+			return;
+		}
+
+		if (run.pages[String(body.page)]) {
 			logger.info('[CollectionBackfill] Duplicate page delivery acknowledged', { runId: body.runId, page: body.page });
 			msg.ack();
 			return;
 		}
 		if (body.page === 0 && !run.libraries) {
 			run.libraries = {};
-			for (const library of await bunnyLibraries(env)) {
-				if (!library.primary && !library.apiKey) continue;
-				run.libraries[String(library.libraryId)] = await checkLibrary(library);
-			}
+			for (const library of scanLibraries) run.libraries[String(library.libraryId)] = await checkLibrary(library);
 		}
 		const result = await runCollectionBackfillPage(env, body);
 		if (result.errors.length && msg.attempts < RECORD_ERRORS_ON_ATTEMPT) {
@@ -397,16 +553,15 @@ export async function handleCollectionBackfillMessage(env: CollectionBackfillEnv
 			await env.PROCESSING_CHECK_QUEUE!.send({ ...body, page: body.page + 1, cursor: result.nextCursor } satisfies CollectionBackfillMessage, {
 				delaySeconds: PAGE_DELAY_SECONDS,
 			});
+		} else if (!(await startScan(0))) {
+			run.status = 'done';
+			run.finishedAt = at;
 		}
 		run.pages[String(body.page)] = result.counts;
 		if (result.errors.length) run.errors = [...(run.errors ?? []), ...result.errors].slice(-200);
 		run.totals = sumCounts(run.pages);
 		run.updatedAt = at;
 		delete run.lastError;
-		if (!result.nextCursor) {
-			run.status = 'done';
-			run.finishedAt = at;
-		}
 		await writeRun(env, run);
 		logger.info('[CollectionBackfill] Page done', { runId: body.runId, page: body.page, dryRun: body.dryRun, scanned: result.counts.scanned, done: run.status === 'done' });
 		msg.ack();

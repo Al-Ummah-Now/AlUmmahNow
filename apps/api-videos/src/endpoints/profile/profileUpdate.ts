@@ -1,3 +1,5 @@
+import { renameCollectionsForUser, userCollectionName } from "../../lib/channelCollection";
+import { inBackground } from "../../lib/websocket-notify";
 import { Bool } from "chanfana";
 import { z } from "zod";
 import { Profile as BusinessProfile, ResponseError } from "../../lib/types";
@@ -90,6 +92,11 @@ export class ProfileUpdate extends AuthenticatedRoute {
         });
         if (!updatedProfile) {
             return c.json({ success: false, error: "Profile not found" }, 404);
+        }
+
+        // The user's Bunny collections follow the display name / handle (lib/channelCollection.ts)
+        if (userCollectionName(updatedProfile as never, userId) !== userCollectionName(existingProfile as never, userId)) {
+            inBackground(c, 'user-collection-rename', () => renameCollectionsForUser(c.env as never, userId, updatedProfile as never));
         }
 
         // Send queue message for profile update

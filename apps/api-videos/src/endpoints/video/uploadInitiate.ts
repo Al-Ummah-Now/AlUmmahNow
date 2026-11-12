@@ -202,7 +202,7 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 			// Creates the Bunny video and its record (the claim, when there is
 			// one, guarantees this runs once per file).
 			const create = async (): Promise<string> => {
-				const collectionId = await uploadCollection(c.env, bunnyStream, libraryId, channelId, userId);
+				const collectionId = await uploadCollection(c.env, bunnyStream, libraryId, channelId, ownerId);
 				const bunnyVideo = await bunnyStream.createVideo(libraryId, {
 					title,
 					collectionId, // Add to collection if available

@@ -426,6 +426,8 @@ export interface ErasureSummary {
 export interface ErasureHooks {
 	/** Remove the streaming media of a deleted video (Bunny Stream). Must not throw. */
 	onVideoDeleted?: (videoId: string, video?: { bunnyLibraryId?: number | string | null; playUrl?: string | null; thumbnailUrl?: string | null }) => Promise<void>;
+	/** Remove what the profile owned outside R2 (its Bunny collections) just before it is deleted. Must not throw. */
+	onProfileDeleted?: (userId: string, profile: unknown) => Promise<void>;
 }
 
 function bump(map: Record<string, number>, key: string, by = 1): void {
@@ -708,7 +710,9 @@ export async function eraseUserData(
 			}
 			const profiles = asBucket(env.profiles);
 			ctx.budget.spend();
-			if (await profiles.get(userId)) {
+			const stored = await profiles.get(userId);
+			if (stored) {
+				if (hooks.onProfileDeleted) await hooks.onProfileDeleted(userId, await stored.json().catch(() => null));
 				await deleteKeys(profiles, [userId], ctx.budget);
 				bump(summary.deleted, 'profile');
 			}

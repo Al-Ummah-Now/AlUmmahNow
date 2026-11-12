@@ -1,3 +1,4 @@
+import { removeCollectionsFor } from '../../lib/channelCollection';
 import { bunnyClientForVideo, type LibraryHints } from '../../lib/bunny/libraries';
 /**
  * GDPR data subject rights endpoints (Story 1.3, AC 2, 3).
@@ -128,7 +129,8 @@ export class PrivacyErase extends AuthenticatedRoute {
 
 		const budget = budgetFor(c);
 		const resumeToken = typeof body.resumeToken === 'string' ? body.resumeToken : undefined;
-		const summary = await eraseUserData(buckets(c), userId, budget, { onVideoDeleted }, { resumeToken });
+		const onProfileDeleted = (id: string, profile: unknown) => removeCollectionsFor(env as never, id, profile as never).then(() => undefined);
+		const summary = await eraseUserData(buckets(c), userId, budget, { onVideoDeleted, onProfileDeleted }, { resumeToken });
 
 		try {
 			const queue = new Queue(c.env.queue);
