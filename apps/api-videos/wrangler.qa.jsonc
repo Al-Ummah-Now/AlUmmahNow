@@ -84,7 +84,11 @@
       // Private pre-change copies written by admin jobs (legacy profile restore)
       "binding": "ADMIN_BACKUPS",
       "bucket_name": "admin-backups-qa"
-    }
+    },
+    // R2 delivery beside Bunny (epic #687): renditions written by apps/media; api-videos
+    // moves them on visibility changes and deletes them at purge
+    { "binding": "MEDIA", "bucket_name": "al-ummah-now-media-qa" },
+    { "binding": "MEDIA_PRIVATE", "bucket_name": "al-ummah-now-media-private-qa" }
   ],
   "d1_databases": [
     {
@@ -156,6 +160,11 @@
       {
         "queue": "al-ummah-now-admin-jobs-qa",
         "binding": "ADMIN_JOBS_QUEUE"
+      },
+      {
+        // R2 transcodes (apps/media consumes)
+        "queue": "al-ummah-now-transcode-qa",
+        "binding": "TRANSCODE_QUEUE"
       }
     ]
   },
@@ -185,11 +194,19 @@
       "binding": "BUNNY_TOKEN_KEY",
       "store_id": "f8eddc9944d041919ed8dc7d08d32308",
       "secret_name": "bunny-stream-token-key-qa"
+    },
+    {
+      // Path tokens of private R2 renditions (shared with apps/media)
+      "binding": "MEDIA_SIGN_KEY",
+      "store_id": "f8eddc9944d041919ed8dc7d08d32308",
+      "secret_name": "media-sign-key-qa"
     }
   ],
   "vars": {
     // Error reports to the admin Errors page (docs/features/error-reporting.md)
     "ERRORS_INGEST_URL": "https://admin.api.qa.alummahnow.net/internal/errors",
+    // R2 delivery host (public renditions direct from R2, private ones via apps/media)
+    "MEDIA_PUBLIC_HOST": "media.qa.alummahnow.net",
     // Logging policy (docs/operations/logging.md): production warn, stage info, QA/dev debug
     "LOG_LEVEL": "debug",
     // Upload limits enforced (any value but "off"): the numbers come from each user's creator tier, edited in the videos admin (middleware/upload-limits.ts)

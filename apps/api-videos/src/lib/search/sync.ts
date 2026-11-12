@@ -18,6 +18,7 @@
  * until the next pass) instead of failing the request.
  */
 
+import { onVideoWritten } from '../media/r2-delivery';
 import {
   COMMUNITY_POST_KEY,
   SearchDb,
@@ -143,7 +144,15 @@ async function syncOwnershipInline(db: SearchDb, queue: QueueBinding | undefined
   }
 }
 
-function wrapBucket(bucket: R2Bucket, type: SearchEntityType, queue: SearchSyncQueue, db: SearchDb, producer: QueueBinding | undefined, waitUntil: (p: Promise<unknown>) => void): R2Bucket {
+function wrapBucket(
+  bucket: R2Bucket,
+  type: SearchEntityType,
+  queue: SearchSyncQueue,
+  db: SearchDb,
+  producer: QueueBinding | undefined,
+  waitUntil: (p: Promise<unknown>) => void,
+  onVideo?: (decoded: unknown) => Promise<void>,
+): R2Bucket {
   const tracksOwnership = ownershipKindFor(type) !== null;
   // Admin comment list (lib/admin/commentIndex.ts): video comments mirrored in D1, after the response
   const tracksComments = type === 'video';
@@ -174,6 +183,8 @@ function wrapBucket(bucket: R2Bucket, type: SearchEntityType, queue: SearchSyncQ
             }
             if (tracksOwnership && decoded !== undefined) await syncOwnershipInline(db, producer, type, id, decoded, version);
             if (tracksComments && decoded !== undefined) waitUntil(syncCommentIndex(db, id, decoded));
+            // R2 renditions follow the video's visibility (lib/media/r2-delivery.ts)
+            if (type === 'video' && decoded && onVideo) waitUntil(onVideo(decoded));
             queue.enqueue(type, id, decoded !== undefined
               ? async () => decoded
               : async () => {
@@ -262,7 +273,11 @@ export function withSearchSync<E extends object>(env: E, ctx: Pick<ExecutionCont
   const wrapped: Record<string, unknown> = { ...(env as Record<string, unknown>) };
   for (const [binding, type] of Object.entries(SEARCH_BUCKETS)) {
     const bucket = wrapped[binding] as R2Bucket | undefined;
-    if (bucket && typeof bucket.put === 'function') wrapped[binding] = wrapBucket(bucket, type, queue, db, (env as { queue?: QueueBinding }).queue, promise => ctx.waitUntil(promise));
+    if (bucket && typeof bucket.put === 'function') {
+      // The hook gets the unwrapped env: its own writes need no search sync of their own
+      const onVideo = type === 'video' && (env as { MEDIA?: unknown }).MEDIA ? (decoded: unknown) => onVideoWritten(env as never, decoded) : undefined;
+      wrapped[binding] = wrapBucket(bucket, type, queue, db, (env as { queue?: QueueBinding }).queue, promise => ctx.waitUntil(promise), onVideo);
+    }
   }
   const profiles = wrapped.profiles as R2Bucket | undefined;
   if (profiles && typeof profiles.put === 'function') wrapped.profiles = wrapProfiles(profiles, db);

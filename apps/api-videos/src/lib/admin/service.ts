@@ -38,6 +38,7 @@ import { eraseUserData } from '../privacy/user-data';
 import { OperationBudget } from '../privacy/scan';
 import { BunnyStreamClient } from '../bunny/stream';
 import { requireSecret } from '../env-helpers';
+import { purgeVideoMedia, type MediaEnv } from '../media/r2-delivery';
 import { readAssignment } from '../creatorTiers';
 import { bansFor, deleteBan, readBan, writeBan } from './bans';
 import { createJob, type JobHandler, type JobOutcome, type JobQueue } from './jobs';
@@ -444,6 +445,13 @@ async function purgeVideo(
 	opts: { strict?: boolean } = { strict: true },
 ): Promise<void> {
 	await env.videos.delete(videoId);
+	// R2 renditions (epic #687), both buckets; strict jobs retry when it fails
+	try {
+		await purgeVideoMedia(env as unknown as MediaEnv, videoId);
+	} catch (error) {
+		logger.warn('[Admin] R2 media delete failed', { videoId, error: error instanceof Error ? error.message : String(error) });
+		if (opts.strict) throw error;
+	}
 	const b = bunnyClient === undefined ? await bunny(env) : bunnyClient;
 	if (!b && opts.strict) throw new Error('Bunny Stream is unavailable');
 	if (b) {
