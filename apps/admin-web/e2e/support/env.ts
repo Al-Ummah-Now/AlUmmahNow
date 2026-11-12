@@ -59,6 +59,12 @@ export const RUN_ID = runId();
  */
 export const LOCAL_RUN_ROLES = LOCAL_STACK && !!RUN_ID;
 
+/**
+ * Goes into the name of everything the suite creates (channels, tiers, invites, profiles), so the
+ * end-of-job leftover check (scripts/local-stack/leftovers.ts) finds anything a teardown missed.
+ */
+export const RUN_TAG = RUN_ID ?? 'local';
+
 export const SHARED_STATE_PROJECT = 'shared-state';
 
 /**

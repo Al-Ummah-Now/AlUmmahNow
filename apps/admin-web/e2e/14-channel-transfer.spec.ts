@@ -15,8 +15,9 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { adminApi, readTokens } from './support/api';
-import { LOCAL_RUN_ROLES, RUN_ID, VIDEOS_API_URL, accounts, storageStatePath } from './support/env';
+import { LOCAL_RUN_ROLES, RUN_ID, RUN_TAG, VIDEOS_API_URL, accounts, storageStatePath } from './support/env';
 import { createRunUser, createVideosProfile } from './support/profiles';
+import { purgeChannel } from './support/cleanup';
 import { expectDirection, expectNoAxeViolations, setPreferences } from './support/ui';
 
 interface SearchItem { id: string; displayName: string; userName: string | null; email: string | null }
@@ -30,7 +31,7 @@ async function createChannel(label: string): Promise<{ id: string; handle: strin
   const res = await fetch(`${VIDEOS_API_URL}/api/channels`, {
     method: 'POST',
     headers: { authorization: `Bearer ${superToken()}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ name: `E2E transfer ${label} ${Date.now().toString(36)}`, description: '[e2e-admin] channel transfer', isMain: false }),
+    body: JSON.stringify({ name: `E2E transfer ${label} ${RUN_TAG} ${Date.now().toString(36)}`, description: `[e2e-admin] channel transfer ${RUN_TAG}`, isMain: false }),
   });
   const body = (await res.json()) as { result?: { channel?: { id: string; handle?: string } } };
   const channel = body.result?.channel;
@@ -62,13 +63,13 @@ test.describe('channel transfer', () => {
     test.skip(testInfo.project.name !== 'chromium', 'One project only: the tests change channel ownership');
     test.setTimeout(180_000);
     // The local stack's super admin is this job's own account: it needs a videos profile to own channels
-    if (LOCAL_RUN_ROLES) await createVideosProfile(superToken(), accounts.superadmin.email, 'Admin E2E super admin');
+    if (LOCAL_RUN_ROLES) await createVideosProfile(superToken(), accounts.superadmin.email, `Admin E2E super admin ${RUN_TAG}`);
     // PR runs hit QA, which follows main: skip until admin-api has the user search there
     const probe = await adminApi<{ items: SearchItem[] }>(`/api/content/users/search?q=${encodeURIComponent(accounts.superadmin.email)}`, { token: superToken() });
     test.skip(probe.status === 404, 'admin-api on QA does not have the transfer user search yet');
     expect(probe.status, 'the super admin may search users').toBe(200);
     // The new owner: this job's own creator (run mode), else the seeded QA creator
-    const email = RUN_ID ? (await createRunUser(browser, 'creator', `E2E Creator ${Date.now().toString(36)}`)).email : 'qa-creator@delivered.resend.dev';
+    const email = RUN_ID ? (await createRunUser(browser, 'creator', `E2E Creator ${RUN_TAG} ${Date.now().toString(36)}`)).email : 'qa-creator@delivered.resend.dev';
     let found: SearchItem | undefined;
     // A new profile reaches the search index asynchronously (processor)
     await expect
@@ -82,9 +83,7 @@ test.describe('channel transfer', () => {
   });
 
   test.afterAll(async () => {
-    for (const id of created.splice(0)) {
-      await adminApi(`/api/content/channels/${encodeURIComponent(id)}`, { method: 'DELETE', token: superToken() }).catch(() => undefined);
-    }
+    for (const id of created.splice(0)) await purgeChannel(id, superToken());
   });
 
   test('TRANSFER-01 the picker finds users by email, name and @handle, never the current owner', async ({ page }) => {
@@ -211,9 +210,7 @@ test.describe('channel transfer permissions', () => {
   test.use({ storageState: storageStatePath('admin') });
 
   test.afterAll(async () => {
-    for (const id of created.splice(0)) {
-      await adminApi(`/api/content/channels/${encodeURIComponent(id)}`, { method: 'DELETE', token: superToken() }).catch(() => undefined);
-    }
+    for (const id of created.splice(0)) await purgeChannel(id, superToken());
   });
 
   test('TRANSFER-05 an admin who is not a super admin sees no transfer section', async ({ page }, testInfo) => {

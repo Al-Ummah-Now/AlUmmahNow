@@ -6,6 +6,7 @@
 import { test, expect } from './support/fixtures';
 import { adminApi } from './support/api';
 import { fetchJson, openEditor, row } from './support/translations';
+import { RUN_TAG } from './support/env';
 
 test.describe('translations editor - save', () => {
   // Writes the shared QA translation file: serial, and only in the
@@ -35,7 +36,7 @@ test.describe('translations editor - save', () => {
   });
 
   test('TR-08 edit, save and revert a harmless key', async ({ page }) => {
-    const temporary = `${original} [e2e ${Date.now()}]`;
+    const temporary = `${original} [e2e ${RUN_TAG} ${Date.now()}]`;
     await openEditor(page);
     const target = row(page, KEY);
     await expect(target.getByTestId('translation-value')).toHaveText(original!);
