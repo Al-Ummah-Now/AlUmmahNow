@@ -425,7 +425,7 @@ export interface ErasureSummary {
 
 export interface ErasureHooks {
 	/** Remove the streaming media of a deleted video (Bunny Stream). Must not throw. */
-	onVideoDeleted?: (videoId: string) => Promise<void>;
+	onVideoDeleted?: (videoId: string, video?: { bunnyLibraryId?: number | string | null; playUrl?: string | null; thumbnailUrl?: string | null }) => Promise<void>;
 }
 
 function bump(map: Record<string, number>, key: string, by = 1): void {
@@ -574,7 +574,7 @@ export async function eraseUserData(
 							const subtitles = asBucket(env.subtitles);
 							bump(summary.deleted, 'subtitles', await deleteKeys(subtitles, await allKeys(subtitles, `${videoId}/`, ctx.budget), ctx.budget));
 						}
-						if (hooks.onVideoDeleted) await hooks.onVideoDeleted(videoId);
+						if (hooks.onVideoDeleted) await hooks.onVideoDeleted(videoId, video as never);
 						await deleteKeys(videos, [key], ctx.budget);
 						summary.deletedVideoIds.push(videoId);
 						bump(summary.deleted, 'videos');

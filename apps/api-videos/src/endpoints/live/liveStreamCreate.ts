@@ -1,3 +1,4 @@
+import { uploadCollection } from "../../lib/channelCollection";
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { Bool, Str } from "chanfana";
 import { z } from "zod";
@@ -113,13 +114,16 @@ export class LiveStreamCreate extends AuthenticatedRoute {
 				const libraryId = parseInt(libraryIdStr);
 				const bunnyStream = new stream(key).forEnv(c.env);
 				
-				// Create a video entry for the live stream
-				const videoId = await bunnyStream.createVideo(libraryId, {
+				// Create a video entry for the live stream, in the channel's Bunny
+				// collection (lib/channelCollection.ts). The channel id itself is
+				// not a collection id: Bunny rejects it or files it nowhere.
+				const collectionId = await uploadCollection(c.env, bunnyStream, libraryId, liveStream.channelId, userId);
+				const bunnyVideo = await bunnyStream.createVideo(libraryId, {
 					title: liveStream.title,
-					collectionId: liveStream.channelId,
+					...(collectionId ? { collectionId } : {}),
 				});
-				
-				liveStream.streamUrl = `https://iframe.mediadelivery.net/embed/${libraryId}/${videoId}`;
+
+				liveStream.streamUrl = `https://iframe.mediadelivery.net/embed/${libraryId}/${bunnyVideo.guid}`;
 			}
 		} catch (error) {
 			logger.error("Error creating Bunny stream:", error);

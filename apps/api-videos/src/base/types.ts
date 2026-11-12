@@ -80,6 +80,11 @@ export interface AppBindings {
   BUNNY_SIGN_URLS?: string;
   /** Bunny Stream CDN token authentication key (Secrets Store) */
   BUNNY_TOKEN_KEY?: { get(): Promise<string> } | string;
+  /** Legacy Bunny library that only serves its existing videos (lib/bunny/libraries.ts) */
+  BUNNY_LEGACY_LIBRARY_ID?: string;
+  BUNNY_LEGACY_HOSTNAME?: string;
+  BUNNY_LEGACY_STREAM_KEY?: { get(): Promise<string> } | string;
+  BUNNY_LEGACY_TOKEN_KEY?: { get(): Promise<string> } | string;
   WEBSOCKET_URL?: string;
   CORS_ORIGINS?: string;
 }

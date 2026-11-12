@@ -8,7 +8,8 @@
  * - No thumbnail URL until one exists: the processing check sets Bunny's auto
  *   thumbnail once the video plays and the image answers (lib/processing).
  *   A custom thumbnail uploaded with the video is kept.
- * - playUrl on the library's CDN host, so the processing check finds it.
+ * - playUrl on the library's CDN host and bunnyLibraryId, so every later
+ *   Bunny call (processing check, delete, signing) uses that library.
  */
 import type { z } from 'zod';
 import type { Video as BusinessVideo } from '../types';
@@ -44,6 +45,8 @@ export interface UploadRecordInput {
 	customThumbnail?: { url: string; type: 'auto' | 'custom'; sizes?: Record<string, string> };
 	/** CDN host of the Bunny library the video is uploaded to */
 	bunnyHostname: string;
+	/** Bunny library the video is uploaded to (lib/bunny/libraries.ts) */
+	bunnyLibraryId?: number;
 	now?: Date;
 }
 
@@ -57,6 +60,7 @@ export function createUploadRecord(input: UploadRecordInput): VideoRecord {
 		userId: input.userId,
 		...(input.uploadedBy ? { uploadedBy: input.uploadedBy } : {}),
 		channelId: input.channelId,
+		...(Number.isFinite(input.bunnyLibraryId) ? { bunnyLibraryId: input.bunnyLibraryId } : {}),
 		playUrl: `https://${input.bunnyHostname}/${input.videoId}/playlist.m3u8`,
 		thumbnailType: thumbnail?.type ?? 'auto',
 		...(thumbnail ? { thumbnailUrl: thumbnail.url } : {}),

@@ -19,7 +19,7 @@
 
 import { logger } from '../logger';
 import R2Repository from '../r2Repo';
-import { getSecret, requireSecret } from '../env-helpers';
+import { bunnyApi, bunnyLibraries, bunnyLibraryForVideo, type BunnyLibrariesEnv, type BunnyLibrary, type LibraryHints } from '../bunny/libraries';
 import { isOwnershipComplete } from '../search/ownership';
 import { bunnyFileToken, tokenExpiry } from '../bunny-signing';
 import { announceAndRecordProcessingResult, pendingProcessingResult, ProcessingResult } from '../notification-events';
@@ -62,8 +62,12 @@ export interface ProcessingEnv extends AdminLiveEnv {
 	bunny_hostname?: string;
 	/** CDN token auth (lib/bunny-signing.ts): the thumbnail check signs its URL */
 	BUNNY_SIGN_URLS?: string;
-	BUNNY_SIGN_HOSTNAME?: string;
 	BUNNY_TOKEN_KEY?: SecretBinding | string;
+	/** Legacy library (lib/bunny/libraries.ts) */
+	BUNNY_LEGACY_LIBRARY_ID?: string;
+	BUNNY_LEGACY_HOSTNAME?: string;
+	BUNNY_LEGACY_STREAM_KEY?: SecretBinding | string;
+	BUNNY_LEGACY_TOKEN_KEY?: SecretBinding | string;
 	SEARCH_DB?: D1Database;
 	NOTIFICATIONS_DB?: D1Database;
 }
@@ -96,12 +100,22 @@ export const MAX_SWEEP_RESTARTS = 3;
 
 const BUNNY_API = 'https://video.bunnycdn.com';
 
-/** Bunny's view of one video; null when Bunny has no such video (404). */
-export async function fetchBunnyVideo(env: ProcessingEnv, videoId: string): Promise<BunnyVideoState | null> {
-	const key = await requireSecret(env['bunny-stream-key'], 'bunny-stream-key');
-	const libraryId = await requireSecret(env.bunny_stream_library_id, 'bunny_stream_library_id');
-	const response = await fetch(`${BUNNY_API}/library/${encodeURIComponent(libraryId)}/videos/${encodeURIComponent(videoId)}`, {
-		headers: { AccessKey: key, accept: 'application/json' },
+/** The record's library hints: `hints` when the caller has the record, else the stored record (null when there is none). */
+async function recordHints(env: ProcessingEnv, videoId: string, hints?: LibraryHints | null): Promise<LibraryHints | null> {
+	if (hints !== undefined) return hints;
+	if (!env.videos) return null;
+	return (await new R2Repository<LoopVideo>(env.videos).getObject(videoId).catch(() => null)) ?? null;
+}
+
+/** The library a video lives in (lib/bunny/libraries.ts) */
+async function libraryOf(env: ProcessingEnv, videoId: string, hints?: LibraryHints | null): Promise<BunnyLibrary> {
+	return bunnyLibraryForVideo(env as BunnyLibrariesEnv, await recordHints(env, videoId, hints));
+}
+
+async function getBunnyVideo(library: BunnyLibrary, videoId: string): Promise<BunnyVideoState | null> {
+	const { libraryId, apiKey } = bunnyApi(library);
+	const response = await fetch(`${BUNNY_API}/library/${encodeURIComponent(String(libraryId))}/videos/${encodeURIComponent(videoId)}`, {
+		headers: { AccessKey: apiKey, accept: 'application/json' },
 	});
 	if (response.status === 404) return null;
 	if (!response.ok) throw new Error(`Bunny getVideo ${videoId} failed: HTTP ${response.status}`);
@@ -109,23 +123,41 @@ export async function fetchBunnyVideo(env: ProcessingEnv, videoId: string): Prom
 }
 
 /**
- * Does Bunny's auto thumbnail exist yet? HEAD on the library CDN, signed when
- * token authentication is on (query-form file token, like API responses).
+ * Bunny's view of one video, in its own library; null when Bunny has no such
+ * video (404). Without a record (an orphan) every library is asked, primary first.
+ */
+export async function fetchBunnyVideo(env: ProcessingEnv, videoId: string, hints?: LibraryHints | null): Promise<BunnyVideoState | null> {
+	const record = await recordHints(env, videoId, hints);
+	if (record) return getBunnyVideo(await bunnyLibraryForVideo(env as BunnyLibrariesEnv, record), videoId);
+	for (const library of await bunnyLibraries(env as BunnyLibrariesEnv)) {
+		if (!library.apiKey && !library.primary) continue;
+		const found = await getBunnyVideo(library, videoId);
+		if (found) return found;
+	}
+	return null;
+}
+
+/**
+ * Does Bunny's auto thumbnail exist yet? HEAD on the video's library CDN,
+ * signed with that library's token key when token authentication is on
+ * (query-form file token, like API responses).
  * true / false (404 or 403), or undefined when the CDN could not be asked.
  */
-export async function bunnyThumbnailExists(env: ProcessingEnv, videoId: string, fileName = 'thumbnail.jpg'): Promise<boolean | undefined> {
-	const host = env.bunny_hostname;
-	if (!host) return undefined;
-	const path = `/${videoId}/${fileName}`;
-	let url = `https://${host}${path}`;
+export async function bunnyThumbnailExists(
+	env: ProcessingEnv,
+	videoId: string,
+	fileName = 'thumbnail.jpg',
+	hints?: LibraryHints | null,
+): Promise<boolean | undefined> {
 	try {
-		const signHost = env.BUNNY_SIGN_HOSTNAME || host;
-		if (env.BUNNY_SIGN_URLS === 'true' && signHost === host) {
-			const key = await getSecret(env.BUNNY_TOKEN_KEY, 'BUNNY_TOKEN_KEY');
-			if (key) {
-				const expires = tokenExpiry();
-				url += `?token=${await bunnyFileToken(key, path, expires)}&expires=${expires}`;
-			}
+		const library = await libraryOf(env, videoId, hints);
+		const host = library.host;
+		if (!host) return undefined;
+		const path = `/${videoId}/${fileName}`;
+		let url = `https://${host}${path}`;
+		if (library.tokenKey) {
+			const expires = tokenExpiry();
+			url += `?token=${await bunnyFileToken(library.tokenKey, path, expires)}&expires=${expires}`;
 		}
 		const response = await fetch(url, { method: 'HEAD' });
 		if (response.ok) return true;
@@ -171,17 +203,19 @@ export async function syncVideoFromBunny(
 	const repo = new R2Repository<LoopVideo>(env.videos);
 	const video = await repo.getObject(videoId);
 	if (!video) return { videoId, found: false, dryRun: !!opts.dryRun, changed: false, error: 'Video not found' };
-	const host = env.bunny_hostname;
+	// The video's own library: a legacy-library video keeps its host
+	const library = await bunnyLibraryForVideo(env as BunnyLibrariesEnv, video);
+	const host = library.host;
 	if (!host) return { videoId, found: true, dryRun: !!opts.dryRun, changed: false, error: 'bunny_hostname is not configured' };
 
-	const bunny = opts.bunny !== undefined ? opts.bunny : await fetchBunnyVideo(env, videoId);
+	const bunny = opts.bunny !== undefined ? opts.bunny : await fetchBunnyVideo(env, videoId, video);
 	const now = opts.now ?? new Date();
 	// The thumbnail is checked once the video plays (Bunny makes it from
 	// thumbnailTime after the first resolution); custom thumbnails are ours
 	const phase = bunnyPhase(bunny);
 	const thumbnailExists =
 		(phase === 'ready' || phase === 'playable') && video.thumbnailType !== 'custom'
-			? await bunnyThumbnailExists(env, videoId, bunny?.thumbnailFileName || 'thumbnail.jpg')
+			? await bunnyThumbnailExists(env, videoId, bunny?.thumbnailFileName || 'thumbnail.jpg', video)
 			: undefined;
 	const syncOpts = { host, now, loopStartedAt: opts.loopStartedAt, thumbnailExists };
 	const plan = planSync(video, bunny, syncOpts);
@@ -336,7 +370,7 @@ export async function runProcessingCheck(env: ProcessingEnv, message: Processing
 	const unannounced = pendingProcessingResult(video);
 	if (unannounced) await announceAndRecordProcessingResult(env as never, video, unannounced);
 
-	const bunny = await fetchBunnyVideo(env, message.videoId);
+	const bunny = await fetchBunnyVideo(env, message.videoId, video);
 	const result = await syncVideoFromBunny(env, message.videoId, { now, loopStartedAt: message.startedAt, bunny });
 	const outcome = result.plan?.outcome ?? 'pending';
 	if (outcome === 'ready') await flagUnclassifiable(repo, message.videoId, now);

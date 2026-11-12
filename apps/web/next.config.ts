@@ -78,6 +78,13 @@ const nextConfig = {
             pathname: "**",
           },
           {
+            // Bunny Stream library 498994: production uploads (api-videos lib/bunny/libraries.ts)
+            protocol: "https",
+            hostname: "vz-25839d05-80d.b-cdn.net",
+            port: "",
+            pathname: "**",
+          },
+          {
             protocol: "https",
             hostname: "iframe.mediadelivery.net",
             port: "",

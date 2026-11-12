@@ -117,8 +117,11 @@ export async function eraseRunUserData(
 					bump('subtitles', await deleteKeys(subtitles, await prefixKeys(subtitles, `${videoId}/`, budget), budget));
 				}
 				budget.spend();
-				if (!(await bucket.get(videoId))) continue;
-				if (hooks.onVideoDeleted) await hooks.onVideoDeleted(videoId);
+				const stored = await bucket.get(videoId);
+				if (!stored) continue;
+				// The record names the Bunny library the media lives in
+				const record = await stored.json<Record<string, unknown>>().catch(() => undefined);
+				if (hooks.onVideoDeleted) await hooks.onVideoDeleted(videoId, record as never);
 				await deleteKeys(bucket, [videoId], budget);
 				result.deletedVideoIds.push(videoId);
 				bump('videos', 1);

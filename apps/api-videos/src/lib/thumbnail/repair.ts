@@ -37,7 +37,7 @@ import { logger } from '../logger';
 import R2Repository from '../r2Repo';
 import { fetchBunnyVideo, type ProcessingEnv } from '../processing/loop';
 import { signBunnyUrlsInText } from '../bunny-signing';
-import { getSecret } from '../env-helpers';
+import { bunnyHosts, bunnyLibraries, bunnyLibraryForVideo, type BunnyLibrariesEnv, type LibraryHints } from '../bunny/libraries';
 import Queue from '../queue';
 import { MessageType } from '@al-ummah/shared-types';
 import { absoluteImageUrl, aspectMismatch, checkThumbnailShape, imageSize, isBunnyFrameOf, isLetterboxedArt, isOnHost, isOwnImageHost, resolveVideoSize, type Size } from './shape';
@@ -74,7 +74,6 @@ export interface ThumbnailCheck {
 export interface ThumbnailRepairEnv extends ProcessingEnv {
 	BUNNY_TOKEN_KEY?: unknown;
 	BUNNY_SIGN_URLS?: string;
-	BUNNY_SIGN_HOSTNAME?: string;
 }
 
 interface RepairVideo {
@@ -133,12 +132,12 @@ export function planThumbnailRepair(input: {
 
 /** Sign a Bunny Stream image URL of `videoId` when the library needs tokens. */
 async function fetchableUrl(env: ThumbnailRepairEnv, videoId: string, url: string): Promise<string> {
-	const host = env.BUNNY_SIGN_HOSTNAME || env.bunny_hostname;
-	// Only Bunny's own host is signed (exact hostname, never a look-alike URL)
-	if (env.BUNNY_SIGN_URLS !== 'true' || !isOnHost(url, host) || url.includes('token=')) return url;
-	const key = await getSecret(env.BUNNY_TOKEN_KEY as never, 'BUNNY_TOKEN_KEY');
-	if (!key) return url;
-	const signed = await signBunnyUrlsInText(JSON.stringify({ id: videoId, thumbnailUrl: url }), host, key);
+	if (env.BUNNY_SIGN_URLS !== 'true' || url.includes('token=')) return url;
+	// Only a configured library's own host is signed, with that library's key
+	// (exact hostname, never a look-alike URL; lib/bunny/libraries.ts)
+	const library = (await bunnyLibraries(env as BunnyLibrariesEnv)).find((l) => l.host && isOnHost(url, l.host));
+	if (!library?.host || !library.tokenKey) return url;
+	const signed = await signBunnyUrlsInText(JSON.stringify({ id: videoId, thumbnailUrl: url }), library.host, library.tokenKey);
 	return (JSON.parse(signed) as { thumbnailUrl: string }).thumbnailUrl;
 }
 
@@ -195,7 +194,7 @@ export async function repairVideoThumbnail(
 	let bunny: Awaited<ReturnType<typeof fetchBunnyVideo>> = null;
 	const needsBunny = () => !videoSize || !isBunnyStreamUrl(video.thumbnailUrl);
 	if (needsBunny()) {
-		bunny = await fetchBunnyVideo(env, videoId);
+		bunny = await fetchBunnyVideo(env, videoId, video as LibraryHints);
 		if (!videoSize && bunny?.width && bunny?.height) videoSize = { width: bunny.width, height: bunny.height };
 	}
 	const thumbnail = video.thumbnailUrl ? await fetchImageSize(env, videoId, video.thumbnailUrl) : null;
@@ -215,7 +214,8 @@ export async function repairVideoThumbnail(
 			outcome = 'flagged';
 			break;
 		case 'use_bunny': {
-			const host = env.bunny_hostname;
+			// The video's own library host
+			const host = (await bunnyLibraryForVideo(env as BunnyLibrariesEnv, video as LibraryHints)).host;
 			const candidate = host ? `https://${host}/${videoId}/${bunny?.thumbnailFileName || 'thumbnail.jpg'}` : undefined;
 			const candidateSize = candidate ? await fetchImageSize(env, videoId, candidate) : null;
 			if (!candidate || !candidateSize || aspectMismatch(candidateSize, videoSize!)) {
@@ -466,17 +466,18 @@ export interface ThumbnailUrlVerdict {
  */
 export async function verifyThumbnailUrl(
 	env: ThumbnailRepairEnv,
-	video: { id: string; width?: number; height?: number },
+	video: { id: string; width?: number; height?: number } & LibraryHints,
 	url: string,
 ): Promise<ThumbnailUrlVerdict> {
 	if (!url.trim()) return { ok: true };
-	if (isBunnyFrameOf(url, video.id, env.bunny_hostname)) return { ok: true, type: 'auto' };
-	if (!isOwnImageHost(url, [env.bunny_hostname, env.BUNNY_SIGN_HOSTNAME])) {
+	const own = await bunnyLibraryForVideo(env as BunnyLibrariesEnv, video);
+	if (isBunnyFrameOf(url, video.id, own.host)) return { ok: true, type: 'auto' };
+	if (!isOwnImageHost(url, await bunnyHosts(env as BunnyLibrariesEnv))) {
 		return { ok: false, code: 'thumbnail_host', error: 'The thumbnail must be one of the video\'s frames or an uploaded image. Upload it instead.' };
 	}
 	const image = await fetchImageSize(env, video.id, url).catch(() => null);
 	if (!image) return { ok: false, code: 'thumbnail_unreadable', error: 'The thumbnail image could not be read. Upload it instead.' };
-	const videoSize = await resolveVideoSize(video, () => fetchBunnyVideo(env, video.id));
+	const videoSize = await resolveVideoSize(video, () => fetchBunnyVideo(env, video.id, video));
 	const shape = checkThumbnailShape(image, videoSize);
 	return shape.ok ? { ok: true, type: 'custom' } : shape;
 }

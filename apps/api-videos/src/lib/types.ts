@@ -81,6 +81,8 @@ export const Video = z.object({
     thumbnailPending: z.boolean().optional(),
     videoUrl: Str().optional(),
     playUrl: Str().optional(),
+    /** Bunny Stream library the video lives in (lib/bunny/libraries.ts). Private. */
+    bunnyLibraryId: z.number().optional(),
     userId: Str(),
     /** The channel member who uploaded it, when not the owner (spec CHANNEL-ROLES §8). Private. */
     uploadedBy: Str().optional(),

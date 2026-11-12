@@ -1,3 +1,4 @@
+import { uploadCollection } from "../../lib/channelCollection";
 import { uploadIdentity } from "../../lib/channelAccess";
 import { Str, Num } from "chanfana";
 import { createUploadRecord } from '../../lib/upload/uploadRecord';
@@ -180,6 +181,7 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 			// Duplicate files in one request share one video
 			const keys = await Promise.all(videos.map((v) => (v.fingerprint ? fingerprintKey(channelId, userId, v.fingerprint) : Promise.resolve(undefined))));
 			const byKey = new Map<string, Promise<{ videoId: string; reused: boolean }>>();
+			let collection: Promise<string | undefined> | undefined;
 
 			const results = await Promise.all(videos.map(async (videoData, index) => {
 				const claimKey = keys[index];
@@ -195,8 +197,11 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 				};
 
 				const create = async (): Promise<string> => {
+					// The channel's collection, like a single upload (one lookup per batch)
+					const collectionId = await (collection ??= uploadCollection(c.env, bunnyStream, libraryId, channelId, userId));
 					const bunnyVideo = await bunnyStream.createVideo(libraryId, {
 						title: videoData.title,
+						collectionId,
 						thumbnailTime: 0,
 					});
 					const videoId = bunnyVideo.guid;
@@ -226,6 +231,7 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 							fileSize: videoData.fileSize,
 							mimeType: videoData.mimeType,
 							bunnyHostname: c.env.bunny_hostname,
+							bunnyLibraryId: libraryId,
 							now: new Date(now),
 						}),
 						...(claimKey ? { uploadFingerprint: claimKey, lastInitiateAt: now } : {}),

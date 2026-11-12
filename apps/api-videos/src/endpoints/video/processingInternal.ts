@@ -161,7 +161,7 @@ export function createProcessingInternalRouter() {
 				let bunny: unknown = undefined;
 				if (withBunny) {
 					try {
-						const b = await fetchBunnyVideo(c.env, video.id);
+						const b = await fetchBunnyVideo(c.env, video.id, video as never);
 						bunny = b
 							? { status: b.status, encodeProgress: b.encodeProgress, availableResolutions: b.availableResolutions, length: b.length, storageSize: b.storageSize, width: b.width, height: b.height }
 							: null;

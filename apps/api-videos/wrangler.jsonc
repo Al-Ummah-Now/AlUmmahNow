@@ -236,14 +236,15 @@
 		"secret_name": "al-ummah-now-images-key"
 	  },
 	  {
+		// Primary Bunny Stream library 498994 ("al-ummah-now", vz-25839d05): every new upload
 		"binding": "bunny-stream-key",
 		"store_id": "f8eddc9944d041919ed8dc7d08d32308",
-		"secret_name": "bunny-stream-key"
+		"secret_name": "bunny-stream-key-498994"
 	  },
 	  {
 		"binding": "bunny_stream_library_id",
 		"store_id": "f8eddc9944d041919ed8dc7d08d32308",
-		"secret_name": "bunny_stream_library_id"
+		"secret_name": "bunny-stream-library-id-498994"
 	  },
 	  {
 		"binding": "INTERNAL_API_KEY",
@@ -251,8 +252,20 @@
 		"secret_name": "internal-api-key"
 	  },
 	  {
-		// Bunny CDN token authentication key of legacy library 400189 (vz-215a1ffd)
+		// Bunny CDN token authentication key of library 498994 (vz-25839d05)
 		"binding": "BUNNY_TOKEN_KEY",
+		"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+		"secret_name": "bunny-stream-token-key-498994"
+	  },
+	  {
+		// Legacy library 400189 (vz-215a1ffd): the videos already there keep
+		// playing, processing and deleting through its own API key and token key
+		"binding": "BUNNY_LEGACY_STREAM_KEY",
+		"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+		"secret_name": "bunny-stream-key"
+	  },
+	  {
+		"binding": "BUNNY_LEGACY_TOKEN_KEY",
 		"store_id": "f8eddc9944d041919ed8dc7d08d32308",
 		"secret_name": "bunny-stream-token-key"
 	  },
@@ -298,13 +311,17 @@
 		"ClientId": "b1770235-e4b6-42f3-9eb4-3c03ca111b02",
 		"Issuer": "https://auth.alummahnow.net",
 		"Audience": "https://videos.api.alummahnow.net",
-		// CDN host of the library the stream key/library-id secrets point at
-		// (400189). New uploads land there, so their playUrl/thumbnailUrl must
-		// use this host; vz-25839d05 belongs to a different library and 404s
-		// every new upload (2026-11-10 incident).
-		"bunny_hostname": "vz-215a1ffd-a5a.b-cdn.net",
-		// Existing videos live on legacy library 400189 with CDN token auth on:
-		// sign its URLs (playUrl, thumbnails) in API responses
+		// CDN host of the primary library (498994), the one the stream
+		// key/library-id secrets point at. New uploads land there, so their
+		// playUrl must use this host: a host of another library 404s every new
+		// upload (2026-11-10 incident). lib/bunny/libraries.ts
+		"bunny_hostname": "vz-25839d05-80d.b-cdn.net",
+		// Legacy library 400189: the videos uploaded before the switch stay there
+		// (their records name it by bunnyLibraryId or their playUrl host)
+		"BUNNY_LEGACY_LIBRARY_ID": "400189",
+		"BUNNY_LEGACY_HOSTNAME": "vz-215a1ffd-a5a.b-cdn.net",
+		// Both libraries have CDN token auth on: sign their URLs (playUrl,
+		// thumbnails) in API responses, each with its own token key
 		"BUNNY_SIGN_URLS": "true",
 		// Name prefix for Bunny videos/collections this env creates (stage: "[stage] "; none in production)
 		"BUNNY_NAME_PREFIX": "",
@@ -312,7 +329,6 @@
 		"BUNNY_TEST_LIBRARY": "false",
 		// Upload limits enforced (any value but "off"): the numbers come from each user's creator tier, edited in the videos admin (middleware/upload-limits.ts)
 		"UPLOAD_RATE_LIMIT": "standard",
-		"BUNNY_SIGN_HOSTNAME": "vz-215a1ffd-a5a.b-cdn.net",
 		"WEBSOCKET_URL": "https://realtime.alummahnow.net",
 		"CORS_ORIGINS": "https://videos.alummahnow.net,https://alummahnow.net,https://www.alummahnow.net,https://admin.alummahnow.net,https://cms.alummahnow.net"
 	},
@@ -563,7 +579,6 @@
 				"BUNNY_TEST_LIBRARY": "true",
 				// Upload limits enforced, as in production (numbers from the creator tiers)
 				"UPLOAD_RATE_LIMIT": "relaxed",
-				"BUNNY_SIGN_HOSTNAME": "vz-cb79844a-c5d.b-cdn.net",
 				"WEBSOCKET_URL": "https://realtime.stage.alummahnow.net",
 				"CORS_ORIGINS": "https://videos.stage.alummahnow.net,https://admin.stage.alummahnow.net,https://stage.alummahnow.net,https://www.stage.alummahnow.net,https://cms.stage.alummahnow.net"
 			}

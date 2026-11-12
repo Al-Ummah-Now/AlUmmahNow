@@ -20,6 +20,7 @@ import { isMediaVideoId, type DeliverySettings, type TranscodeJobEvent } from '@
 import R2Repository from '../../lib/r2Repo';
 import { pushMediaLive, type MediaVideo } from '../../lib/media/r2-delivery';
 import { readQoeLive } from '../../lib/media/qoe-live';
+import type { LibraryHints } from '../../lib/bunny/libraries';
 import { applyJobEvent, enqueueTranscode, readDeliverySettings, sourceCandidates, writeDeliverySettings, type MediaEnv } from '../../lib/media/r2-delivery';
 
 const MAX_IDS = 50;
@@ -85,7 +86,9 @@ export function createMediaInternalRouter() {
 		if (!isMediaVideoId(id)) return c.json({ success: false, error: 'bad id' }, 400);
 		const video = await c.env.videos.get(id);
 		if (!video) return c.json({ success: false, error: 'video not found' }, 404);
-		const candidates = await sourceCandidates(c.env, id);
+		// The source lives in the video's own Bunny library
+		const record = await video.json<LibraryHints>().catch(() => null);
+		const candidates = await sourceCandidates(c.env, id, record);
 		if (!candidates.length) return c.json({ success: false, error: 'no Bunny host configured' }, 404);
 		return c.json({ success: true, url: candidates[0], candidates });
 	});

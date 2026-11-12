@@ -1,11 +1,10 @@
+import { bunnyClientForVideo, type LibraryHints } from '../../lib/bunny/libraries';
 import { canOnVideo } from "../../lib/channelAccess";
 import { OpenAPIRoute, Str } from "chanfana";
 import { OptionalAuthRoute, AppContext } from '../../base';
 import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
-import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
-import { requireSecret } from "../../lib/env-helpers";
 import { logger } from '../../lib/logger';
 import { syncVideoFromBunny } from "../../lib/processing/loop";
 import { bunnyPhase, uploadStatusView } from "../../lib/processing/sync";
@@ -135,11 +134,9 @@ export class VideoUploadStatus extends OptionalAuthRoute {
 		// Get status from Bunny Stream if possible
 		let bunnyStreamStatus = null;
 		try {
-			const key = await requireSecret(c.env["bunny-stream-key"], 'bunny-stream-key');
-			if (key) {
-				const libraryIdStr = await requireSecret(c.env.bunny_stream_library_id, 'bunny_stream_library_id');
-				const libraryId = parseInt(libraryIdStr);
-				const bunnyStream = new stream(key);
+			{
+				// The video's own library (lib/bunny/libraries.ts)
+				const { client: bunnyStream, libraryId } = await bunnyClientForVideo(c.env as never, video as LibraryHints);
 
 				// Get video details from Bunny Stream
 				bunnyStreamStatus = await bunnyStream.getVideo(libraryId, id);
