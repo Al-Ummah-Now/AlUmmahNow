@@ -6,7 +6,6 @@ import assert from 'node:assert/strict';
 import type { TranscodeJobEvent, TranscodeJobMessage, TranscodeResult } from '@al-ummah/shared-types';
 import {
 	accessDrift,
-	deliveryFor,
 	applyJobEvent,
 	clearDeliverySettingsCache,
 	desiredAccess,
@@ -328,34 +327,7 @@ describe('R2 state on the admin video views', () => {
 	});
 });
 
-describe('delivery switch on the watch response', () => {
-	const ready = { id: ID, r2: { status: 'ready' as const, jobId: 'j', rev: 'abcdefgh12345678', access: 'pub' as const, attempts: 1, queuedAt: 'x' } };
-
-	it('is Bunny with no R2 URLs while the switch says bunny (the default)', async () => {
-		const { env } = setup();
-		assert.deepEqual(await deliveryFor(env, ready), { source: 'bunny', r2Percent: 10 });
-	});
-
-	it('serves R2 at mode r2, and Bunny for a video whose R2 rendition is not ready', async () => {
-		const { env } = setup();
-		await writeDeliverySettings(env, { mode: 'r2' }, 'admin-1');
-		const d = await deliveryFor(env, ready);
-		assert.equal(d.source, 'r2');
-		assert.equal(d.r2?.playUrl, `https://media.qa.alummahnow.net/pub/${ID}/abcdefgh12345678/master.m3u8`);
-		assert.deepEqual(await deliveryFor(env, { id: ID }), { source: 'bunny', r2Percent: 10 });
-	});
-
-	it('lets the player draw per view at split/view, and decides per video at split/video', async () => {
-		const { env } = setup();
-		await writeDeliverySettings(env, { mode: 'split', r2Percent: 40, assign: 'view' }, 'admin-1');
-		assert.equal((await deliveryFor(env, ready)).source, 'draw');
-		await writeDeliverySettings(env, { assign: 'video' }, 'admin-1');
-		const a = await deliveryFor(env, ready);
-		const b = await deliveryFor(env, ready);
-		assert.ok(a.source === 'r2' || a.source === 'bunny');
-		assert.equal(a.source, b.source, 'stable per video');
-	});
-});
+// The delivery switch on the watch response: test/media-playback.spec.ts
 
 describe('daily cost inputs', () => {
 	it('turns records into per-source metrics with estimated cost', async () => {

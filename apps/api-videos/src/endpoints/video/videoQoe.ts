@@ -5,6 +5,8 @@ import { ResponseError } from "../../lib/types";
 import { logger } from "../../lib/logger";
 import { recordQoe, QOE_DEVICES } from "../../lib/media/qoe";
 import { recordQoeLive } from "../../lib/media/qoe-live";
+import { countFallback } from "../../lib/media/playback";
+import { PLAYBACK_FALLBACK_REASONS } from "@al-ummah/shared-types";
 
 /**
  * POST /api/videos/:id/qoe
@@ -61,6 +63,9 @@ export class VideoQoe extends OptionalAuthRoute {
 								})
 								.optional()
 								.describe("Deltas since the session's previous report, for the live view"),
+							requested: z.enum(["bunny", "r2"]).optional().describe("Source the API chose for this play"),
+							actual: z.enum(["bunny", "r2"]).optional().describe("Source the session ended on (bunny after a fallback)"),
+							fallbackReason: z.enum(PLAYBACK_FALLBACK_REASONS).optional().describe("Why the player left the requested source"),
 						}),
 					},
 				},
@@ -107,7 +112,13 @@ export class VideoQoe extends OptionalAuthRoute {
 			return c.json({ success: true }, 202);
 		}
 		const country = body.country ?? ((c.req.raw as { cf?: { country?: string } }).cf?.country ?? "XX").slice(0, 2).toUpperCase();
-		const write = recordQoe(c.env as never, {
+		const day = new Date().toISOString().slice(0, 10);
+		const requested = body.requested ?? body.source;
+		const actual = body.actual ?? (body.fallback ? "bunny" : body.source);
+		const fallbackWrite = requested !== actual || body.fallback
+			? countFallback(c.env as never, { day, requested, actual, reason: body.fallbackReason ?? "other", column: "qoe_sessions" })
+			: Promise.resolve();
+		const write = Promise.all([fallbackWrite, recordQoe(c.env as never, {
 			...(body as Required<Pick<typeof body, 'source' | 'device' | 'started'>> & typeof body),
 			rebuffers: body.rebuffers ?? 0,
 			rebufferMs: body.rebufferMs ?? 0,
@@ -116,8 +127,8 @@ export class VideoQoe extends OptionalAuthRoute {
 			errors: body.errors ?? 0,
 			fallback: body.fallback ?? false,
 			country,
-			day: new Date().toISOString().slice(0, 10),
-		});
+			day,
+		})]);
 		const work = live ? Promise.all([write, live]) : write;
 		try {
 			c.executionCtx.waitUntil(work);

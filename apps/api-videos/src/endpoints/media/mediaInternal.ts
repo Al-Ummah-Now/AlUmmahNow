@@ -163,7 +163,16 @@ export function createMediaInternalRouter() {
 			db.prepare('SELECT day, provider, metric, value FROM delivery_cost_daily WHERE day >= ? ORDER BY day').bind(since.slice(0, 10)).all(),
 			readMediaLive(c.env),
 		]);
-		return c.json({ success: true, result: { days, jobs, qoe: qoe.results ?? [], costs: costs.results ?? [], live, settings: await readDeliverySettings(c.env) } });
+		// Why plays left R2 (lib/media/playback.ts): the fallback endpoint's count beside the QoE sessions'
+		const fallbacks = await db
+			.prepare(
+				`SELECT requested, actual, reason, SUM(server_fallbacks) AS server_fallbacks, SUM(qoe_sessions) AS qoe_sessions
+				 FROM playback_fallback_daily WHERE day >= ? GROUP BY requested, actual, reason ORDER BY server_fallbacks DESC`,
+			)
+			.bind(since.slice(0, 10))
+			.all()
+			.catch(() => ({ results: [] }));
+		return c.json({ success: true, result: { days, jobs, qoe: qoe.results ?? [], costs: costs.results ?? [], fallbacks: fallbacks.results ?? [], live, settings: await readDeliverySettings(c.env) } });
 	});
 
 	app.get('/settings', async (c) => c.json({ success: true, result: await readDeliverySettings(c.env, true) }));

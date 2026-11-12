@@ -1,4 +1,4 @@
-import { deliveryFor } from '../../lib/media/r2-delivery';
+import { withPlayback } from '../../lib/media/playback';
 import { canOnVideo } from "../../lib/channelAccess";
 import { Str } from "chanfana";
 import { z } from "zod";
@@ -151,11 +151,9 @@ export class VideoFetch extends OptionalAuthRoute {
 		}
 
 		// Transform to view model for response with channel data
-		const videoView = transformVideoToView(video, channel);
-		// R2 beside Bunny (epic #687): which source this play gets; playUrl stays Bunny's
-		if ((c.env as { MEDIA_PUBLIC_HOST?: string }).MEDIA_PUBLIC_HOST) {
-			(videoView as Record<string, unknown>).delivery = await deliveryFor(c.env as never, video as never);
-		}
+		// R2 beside Bunny (epic #687): the API picks the source; playUrl/thumbnailUrl are that source's
+		// and delivery.source labels it (lib/media/playback.ts). Players never choose.
+		const videoView = await withPlayback(c.env as never, video as never, transformVideoToView(video, channel), 'video');
 
 		// No queue message: a fetch is not a view (POST /videos/:id/view records views),
 		// and per-read messages only cost queue operations and processor invocations.

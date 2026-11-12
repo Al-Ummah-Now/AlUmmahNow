@@ -59,10 +59,10 @@ describe('QoeTracker', () => {
   it('keeps a fallback session on R2 with the fallback flag and counts errors', () => {
     const { player, tracker, sent, at } = setup('r2');
     at(0); player.emit('play'); player.emit('error');
-    tracker.markFallback();
+    tracker.markFallback('manifest_4xx');
     at(900); player.emit('playing');
     at(1900); tracker.flush();
-    expect(sent[0]).toMatchObject({ source: 'r2', fallback: true, errors: 1, started: true });
+    expect(sent[0]).toMatchObject({ source: 'r2', fallback: true, errors: 1, started: true, requested: 'r2', actual: 'bunny', fallbackReason: 'manifest_4xx' });
   });
 
   it('sends nothing for a player nobody pressed play on, and detaches its listeners', () => {

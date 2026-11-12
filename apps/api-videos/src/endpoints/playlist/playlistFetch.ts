@@ -1,4 +1,5 @@
 import { Str } from "chanfana";
+import { withPlayback } from '../../lib/media/playback';
 import { z } from "zod";
 import { Playlist, Channel as BusinessChannel, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
@@ -117,9 +118,10 @@ export class PlaylistFetch extends OptionalAuthRoute {
             const videoRepo = new R2Repository<VideoType>(c.env.videos);
             const ids = ordered.ids.slice(0, MAX_EXPANDED_VIDEOS);
             const videos = await Promise.all(ids.map((videoId) => ordered.videos.get(videoId) ?? videoRepo.getObject(videoId)));
-            response.videoItems = videos
+            // Each item carries the one URL its player plays (lib/media/playback.ts)
+            response.videoItems = await Promise.all(videos
                 .filter((video): video is VideoType => !!video && canViewVideo(video, userId))
-                .map((video) => transformVideoToView(video));
+                .map((video) => withPlayback(c.env as never, video as never, transformVideoToView(video), 'playlist')));
 
             logger.debug("[PlaylistFetch] Expanded playlist videos", {
                 playlistId: id,

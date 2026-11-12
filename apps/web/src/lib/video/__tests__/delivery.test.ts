@@ -1,23 +1,15 @@
-import { chooseDelivery, deviceClass } from '../delivery';
+import { deviceClass, fallbackReasonFor } from '../delivery';
 
-const BUNNY = 'https://vz-x.b-cdn.net/bcdn_token=t/v/playlist.m3u8';
-const R2 = { playUrl: 'https://media.qa.alummahnow.net/pub/v/r/master.m3u8', thumbnailUrl: 'https://media.qa.alummahnow.net/pub/v/r/thumb.jpg' };
-
-describe('chooseDelivery', () => {
-  it('plays Bunny when the API sends no delivery or no R2 rendition', () => {
-    expect(chooseDelivery(BUNNY, undefined)).toEqual({ provider: 'bunny', src: BUNNY });
-    expect(chooseDelivery(BUNNY, { source: 'r2', r2Percent: 100 })).toEqual({ provider: 'bunny', src: BUNNY });
-  });
-  it('plays R2 with Bunny as the fallback when the API chose R2', () => {
-    expect(chooseDelivery(BUNNY, { source: 'r2', r2Percent: 10, r2: R2 })).toEqual({ provider: 'r2', src: R2.playUrl, fallbackSrc: BUNNY, poster: R2.thumbnailUrl });
-  });
-  it('keeps Bunny when the API chose Bunny even if R2 is ready', () => {
-    expect(chooseDelivery(BUNNY, { source: 'bunny', r2Percent: 10, r2: R2 }).provider).toBe('bunny');
-  });
-  it('draws per play with the percent', () => {
-    expect(chooseDelivery(BUNNY, { source: 'draw', r2Percent: 30, r2: R2 }, () => 0.2).provider).toBe('r2');
-    expect(chooseDelivery(BUNNY, { source: 'draw', r2Percent: 30, r2: R2 }, () => 0.31).provider).toBe('bunny');
-    expect(chooseDelivery(BUNNY, { source: 'draw', r2Percent: 0, r2: R2 }, () => 0).provider).toBe('bunny');
+describe('fallbackReasonFor', () => {
+  it('names the failure from the playlist status first, then the MediaError code', () => {
+    expect(fallbackReasonFor({ code: 2, status: 403 })).toBe('manifest_4xx');
+    expect(fallbackReasonFor({ code: 4, status: 404 })).toBe('manifest_4xx');
+    expect(fallbackReasonFor({ code: 2, status: 503 })).toBe('manifest_5xx');
+    expect(fallbackReasonFor({ code: 2, status: 0 })).toBe('cors');
+    expect(fallbackReasonFor({ code: 2 })).toBe('network');
+    expect(fallbackReasonFor({ code: 3 })).toBe('decode');
+    expect(fallbackReasonFor({ code: 4 })).toBe('unsupported');
+    expect(fallbackReasonFor({})).toBe('other');
   });
 });
 

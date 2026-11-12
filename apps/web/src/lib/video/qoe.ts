@@ -11,6 +11,7 @@
  * with `live`, the deltas since the previous report; the final report carries
  * the last deltas. The daily rollup still counts only the final report.
  */
+import type { PlaybackFallbackReason } from '@al-ummah/shared-types';
 import type { DeviceClass } from './delivery';
 
 export interface QoeReport {
@@ -27,6 +28,12 @@ export interface QoeReport {
   switches: number;
   errors: number;
   fallback: boolean;
+  /** Source the API chose for this play */
+  requested: 'bunny' | 'r2';
+  /** Source the session ended on (bunny after a fallback) */
+  actual: 'bunny' | 'r2';
+  /** Why the player left the requested source */
+  fallbackReason?: PlaybackFallbackReason;
   kind?: 'final' | 'heartbeat';
   /** Source delivering the session now (bunny after a fallback) */
   serving?: 'bunny' | 'r2';
@@ -74,6 +81,7 @@ export class QoeTracker {
   private switches = 0;
   private errors = 0;
   private fallback = false;
+  private fallbackReason?: PlaybackFallbackReason;
   private seeking = false;
   private sent = false;
   private cursor = { watchMs: 0, kbpsMs: 0, rebufferMs: 0, rebuffers: 0 };
@@ -171,8 +179,9 @@ export class QoeTracker {
   }
 
   /** R2 failed and the player switched to Bunny: the session is now Bunny's, flagged as a fallback. */
-  markFallback(): void {
+  markFallback(reason: PlaybackFallbackReason = 'other'): void {
     this.fallback = true;
+    this.fallbackReason = reason;
     this.source = 'bunny';
     this.lastKbps = undefined;
     this.heartbeat();
@@ -239,6 +248,9 @@ export class QoeTracker {
       switches: this.switches,
       errors: this.errors,
       fallback: this.fallback,
+      requested: this.opts.source,
+      actual: this.source,
+      ...(this.fallbackReason ? { fallbackReason: this.fallbackReason } : {}),
     };
   }
 

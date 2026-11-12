@@ -1092,3 +1092,22 @@ export async function fetchVideosWithPagination(cursor: string | null = null): P
         return null;
     }
 }
+
+/**
+ * The player's fallback when the URL the API chose (R2) fails: the API decides again without R2,
+ * logs and counts `reason`, and returns Bunny's URL (GET /api/videos/:id/playback, epic #687).
+ * `anonymous`: embeds never act as the viewer (lib/embed/content.ts).
+ */
+export async function fetchFallbackPlayback(
+  id: string,
+  reason: string,
+  anonymous = false,
+): Promise<{ playUrl?: string; thumbnailUrl?: string; delivery?: { source: 'bunny' | 'r2' } } | null> {
+  if (!/^[A-Za-z0-9-]{8,64}$/.test(id) || !/^[a-z0-9_]{1,32}$/.test(reason)) return null;
+  return apiRequestServer<{ playUrl?: string; thumbnailUrl?: string; delivery?: { source: 'bunny' | 'r2' } }>({
+    method: 'GET',
+    url: buildApiUrl(`/api/videos/${encodeURIComponent(id)}/playback?exclude=r2&reason=${reason}`),
+    functionName: 'fetchFallbackPlayback',
+    timeoutMs: 8000,
+  }, async () => (anonymous ? null : { accessToken: (await getServerAuthContext())?.accessToken || '' }), false);
+}

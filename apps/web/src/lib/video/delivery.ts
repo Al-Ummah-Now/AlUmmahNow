@@ -1,38 +1,35 @@
 /**
- * Which source a play gets: Bunny or R2 + Cloudflare CDN (epic #687).
- *
- * The API keeps `playUrl` as Bunny's (every client that knows nothing else
- * keeps working) and adds `delivery`:
- *   source 'bunny' | 'r2'  decided by the API (stable per video)
- *   source 'draw'          drawn here, once per player load, with r2Percent
- * R2 URLs are only present when the R2 rendition is ready. A fatal R2 error
- * falls back to Bunny once (see useDeliveryPlayer in VideoPagePlayer).
+ * Delivery on the web (epic #687, owner decision 2026-11-12): the API decides the source and returns
+ * ONE playUrl; players never choose. `delivery.source` is only a label (QoE, the admin Source row).
+ * When the URL fails in the player, it asks the API once for a URL without R2
+ * (fetchFallbackPlayback → GET /api/videos/:id/playback?exclude=r2&reason=<code>).
  */
+import type { PlaybackFallbackReason, PlaybackSource } from '@al-ummah/shared-types';
+
 export interface DeliveryView {
-  source: 'bunny' | 'r2' | 'draw';
-  r2Percent: number;
-  r2?: { playUrl: string; thumbnailUrl: string };
+  source: PlaybackSource;
 }
 
-export interface DeliveryChoice {
-  provider: 'bunny' | 'r2';
-  src: string;
-  /** Bunny's URL, when the choice is R2 */
-  fallbackSrc?: string;
-  poster?: string;
+/** The parts of a Video.js MediaError and VHS state the classifier reads. */
+export interface PlayerErrorInfo {
+  /** MediaError code: 1 aborted, 2 network, 3 decode, 4 source not supported */
+  code?: number;
+  /** HTTP status of VHS's last failed playlist request, when known (0 = blocked, e.g. CORS) */
+  status?: number;
 }
 
-export function chooseDelivery(
-  playUrl: string | undefined,
-  delivery: DeliveryView | undefined,
-  random: () => number = Math.random,
-): DeliveryChoice {
-  const bunny: DeliveryChoice = { provider: 'bunny', src: playUrl || '' };
-  const r2 = delivery?.r2;
-  if (!delivery || !r2?.playUrl) return bunny;
-  const useR2 = delivery.source === 'r2' || (delivery.source === 'draw' && random() * 100 < delivery.r2Percent);
-  if (!useR2) return bunny;
-  return { provider: 'r2', src: r2.playUrl, ...(playUrl ? { fallbackSrc: playUrl } : {}), poster: r2.thumbnailUrl };
+/** The fallback reason for a player error (sent to the API and in the QoE beacon). */
+export function fallbackReasonFor(info: PlayerErrorInfo): PlaybackFallbackReason {
+  const { code, status } = info;
+  if (typeof status === 'number') {
+    if (status >= 500) return 'manifest_5xx';
+    if (status >= 400) return 'manifest_4xx';
+    if (status === 0 && code === 2) return 'cors';
+  }
+  if (code === 2) return 'network';
+  if (code === 3) return 'decode';
+  if (code === 4) return 'unsupported';
+  return 'other';
 }
 
 export type DeviceClass = 'desktop' | 'mobile' | 'tablet' | 'tv' | 'other';

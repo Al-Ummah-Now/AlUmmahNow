@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Player } from 'video.js';
 import { ExternalLink, ListVideo, Play, X } from 'lucide-react';
 import { VideoPlayerWithChapters } from '@/components/VideoPagePlayer/VideoPlayerWithChapters';
+import { useDeliveryPlayback } from '@/components/VideoPagePlayer/useDeliveryPlayback';
 import { LocaleOverrideContext } from '@/hooks/useLanguage';
 import { removeUnwantedChars } from '@/lib/utility';
 import { embedderOrigin, readAncestorOrigins, type EmbedCommandMessage, type EmbedState } from '@/lib/embed/messaging';
@@ -149,6 +150,9 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
     event.currentTarget.href = watchHref(seconds);
   };
 
+  // The one URL the API chose; on an R2 failure the API gives Bunny's (anonymously, like every embed call)
+  const delivery = useDeliveryPlayback(video, handlePlayerReady, { anonymous: true });
+
   const title = titleOf(video, lang);
   const isFirst = index === Math.min(params.index, videos.length - 1);
   const muted = params.autoplay && isFirst;
@@ -167,7 +171,7 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
             <VideoPlayerWithChapters
               key={video.id}
               videoId={video.id}
-              sources={[{ src: video.playUrl, type: 'application/x-mpegURL' }]}
+              sources={delivery.videoSources}
               poster={video.poster}
               controls
               autoplay
@@ -180,7 +184,7 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
               lang={lang}
               className="w-full"
               ariaLabel={fill(s.playVideo, { title })}
-              onPlayerReady={handlePlayerReady}
+              onPlayerReady={delivery.handlePlayerReady}
             />
           ) : (
             <button
