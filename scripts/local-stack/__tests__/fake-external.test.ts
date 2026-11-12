@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 process.env.FAKE_BUNNY_ENCODE = 'manual';
-const { bunny, probeMp4, registerFakes, FAKE_CDN_HOST } = await import('../fake-external.ts');
+const { bunny, probeMp4, registerFakes, FAKE_CDN_HOST, cdnPath } = await import('../fake-external.ts');
 const { outboundHandler, refused } = await import('../outbound.ts');
 const { ROOT } = await import('../stack.ts');
 
@@ -52,6 +52,20 @@ describe('fake Bunny', () => {
     const playlist = await (await call(`https://${FAKE_CDN_HOST}/${created.guid}/playlist.m3u8`)).text();
     assert.match(playlist, /^#EXTM3U/);
     assert.equal((await call(`https://${FAKE_CDN_HOST}/${created.guid}/../../stack.ts`)).status, 404, 'no path escape');
+  });
+
+  it('reads past Bunny path-form tokens, and answers errors with CORS', async () => {
+    assert.deepEqual(cdnPath('/bcdn_token=abc&expires=1&token_path=%2Fg%2F/g/playlist.m3u8'), ['g', 'playlist.m3u8']);
+    assert.deepEqual(cdnPath('/g/playlist.m3u8'), ['g', 'playlist.m3u8']);
+    const missing = await call(`https://${FAKE_CDN_HOST}/bcdn_token=x&expires=1/nope/playlist.m3u8`);
+    assert.equal(missing.status, 404);
+    assert.equal(missing.headers.get('access-control-allow-origin'), '*');
+  });
+
+  it('serves third-party static files locally (empty, typed)', async () => {
+    const css = await call('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.1/css/all.min.css');
+    assert.equal(css.status, 200);
+    assert.equal(css.headers.get('content-type'), 'text/css');
   });
 
   it('stores images and serves them from the image host', async () => {

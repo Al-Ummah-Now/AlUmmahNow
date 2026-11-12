@@ -210,19 +210,28 @@ const TYPES: Record<string, string> = {
 };
 
 /** The Bunny CDN: /<guid>/<file>. Only encoded videos have media (404 before, like Bunny). */
+const CORS = { 'access-control-allow-origin': '*' };
+
+/** Path segments of a CDN URL without Bunny's path-form token (`/bcdn_token=…&expires=…&token_path=…/<guid>/…`). */
+export function cdnPath(pathname: string): string[] {
+  const parts = pathname.split('/').filter(Boolean);
+  return parts[0]?.startsWith('bcdn_token=') ? parts.slice(1) : parts;
+}
+
 function cdn(method: string, pathname: string): Response {
-  const [guid, ...rest] = pathname.split('/').filter(Boolean);
+  const [guid, ...rest] = cdnPath(pathname);
   const file = rest.join('/');
   const video = bunny.videos.get(guid ?? '');
   const head = method === 'HEAD';
-  if (!video || video.status !== 4) return new Response(null, { status: 404 });
+  // CORS on errors too: the player reads the status, not a CORS failure
+  if (!video || video.status !== 4) return new Response(null, { status: 404, headers: CORS });
   const send = (body: Buffer | string, type: string) => new Response(head ? null : body, { status: 200, headers: { 'content-type': type, 'access-control-allow-origin': '*', 'cache-control': 'no-store' } });
   if (/^thumbnail(_\d+)?\.jpg$/.test(file) || file === 'preview.webp') return send(readFileSync(THUMBNAIL), 'image/jpeg');
   if (/^(play_\d+p\.mp4|original)$/.test(file)) return send(video.bytes, 'video/mp4');
   const fixture = video.height > video.width ? 'short' : 'bright';
   const name = file === 'playlist.m3u8' ? 'master.m3u8' : file;
   const path = normalize(join(PLAYER_FIXTURES, fixture, name));
-  if (!path.startsWith(join(PLAYER_FIXTURES, fixture)) || !existsSync(path)) return new Response(null, { status: 404 });
+  if (!path.startsWith(join(PLAYER_FIXTURES, fixture)) || !existsSync(path)) return new Response(null, { status: 404, headers: CORS });
   return send(readFileSync(path), TYPES[extname(path)] ?? 'application/octet-stream');
 }
 
@@ -259,6 +268,16 @@ export function registerFakes(): void {
   FAKES.set('.storage.bunnycdn.com', images);
   FAKES.set(IMAGE_HOST, images);
   FAKES.set('api.resend.com', resend);
+  // Third-party static files the pages load (Font Awesome, Bunny's player script): served empty
+  // locally, so no page waits on the internet and no run depends on it
+  FAKES.set('cdnjs.cloudflare.com', (_request, url) => staticFile(url.pathname));
+  FAKES.set('assets.mediadelivery.net', (_request, url) => staticFile(url.pathname));
+}
+
+/** An empty file of the right type for a third-party static asset. */
+export function staticFile(pathname: string): Response {
+  const type = pathname.endsWith('.css') ? 'text/css' : pathname.endsWith('.js') ? 'text/javascript' : /\.(woff2?|ttf)$/.test(pathname) ? 'font/woff2' : 'application/octet-stream';
+  return new Response('', { status: 200, headers: { 'content-type': type, ...CORS, 'cache-control': 'public, max-age=3600' } });
 }
 
 /** SQL against a stack database by its database_name (boot.ts sets it once Miniflare is up). */

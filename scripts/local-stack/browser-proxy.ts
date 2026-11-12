@@ -27,12 +27,10 @@ const LOCAL = new Set(['localhost', '127.0.0.1']);
  * production, nothing paid): tunnelled to the real host unchanged.
  */
 export const PUBLIC_STATIC_HOSTS = new Set([
-  'cdnjs.cloudflare.com',
   'unpkg.com',
   'cdn.jsdelivr.net',
   'fonts.googleapis.com',
   'fonts.gstatic.com',
-  'assets.mediadelivery.net',
 ]);
 /** Only the stack's own ports are reachable through the proxy. */
 const STACK_PORTS = new Set<number>(Object.values(PORTS));
