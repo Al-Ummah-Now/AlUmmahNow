@@ -14,7 +14,7 @@ export default async function StudioVideoPage({ params }: { params: Promise<{ lo
   const id = encodeURIComponent(videoId);
   const session = await getStudioChannels();
   if (!session) return <StudioSignIn locale={locale} returnTo={`/${locale}/studio/video/${id}/${action}`} />;
-  const video = await getVideoById(videoId);
+  const video = await getVideoById(videoId, undefined, 'edit');
   // Imported videos with no channel have no Studio to open in
   if (!video?.channelId) notFound();
   redirect(`/${locale}/studio/${video.channelId}/content/videos/${id}/${action}`);

@@ -17,6 +17,9 @@ export class VideoFetch extends OptionalAuthRoute {
 			params: z.object({
 				id: Str({ description: "Video id" }),
 			}),
+			query: z.object({
+				for: z.enum(["edit"]).optional().describe("edit: the editor's view. playUrl stays Bunny's, whose files (encoding frames, thumbnails) the editor offers; not for playback"),
+			}),
 			headers: z.object({
 				channelId: Str({ description: "Channel ID" }).optional().nullable(),
 			}),
@@ -153,7 +156,10 @@ export class VideoFetch extends OptionalAuthRoute {
 		// Transform to view model for response with channel data
 		// R2 beside Bunny (epic #687): the API picks the source; playUrl/thumbnailUrl are that source's
 		// and delivery.source labels it (lib/media/playback.ts). Players never choose.
-		const videoView = await withPlayback(c.env as never, video as never, transformVideoToView(video, channel), 'video');
+		const forEdit = request.query?.for === 'edit';
+		const videoView = forEdit
+			? Object.assign(transformVideoToView(video, channel), { delivery: { source: 'bunny' as const } })
+			: await withPlayback(c.env as never, video as never, transformVideoToView(video, channel), 'video');
 
 		// No queue message: a fetch is not a view (POST /videos/:id/view records views),
 		// and per-read messages only cost queue operations and processor invocations.

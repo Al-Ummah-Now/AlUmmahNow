@@ -31080,6 +31080,19 @@
           },
           {
             "schema": {
+              "type": "string",
+              "enum": [
+                "edit"
+              ],
+              "description": "edit: the editor's view. playUrl stays Bunny's, whose files (encoding frames, thumbnails) the editor offers; not for playback"
+            },
+            "required": false,
+            "description": "edit: the editor's view. playUrl stays Bunny's, whose files (encoding frames, thumbnails) the editor offers; not for playback",
+            "name": "for",
+            "in": "query"
+          },
+          {
+            "schema": {
               "type": [
                 "string",
                 "null"

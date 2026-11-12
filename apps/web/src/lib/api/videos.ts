@@ -60,11 +60,13 @@ export async function listVideos(
  */
 export async function getVideoById(
   id: string,
-  headers?: ApiHeaders
+  headers?: ApiHeaders,
+  /** edit: editors get Bunny's playUrl (its encoding frames feed the thumbnail picker), never for playback */
+  purpose?: 'edit'
 ): Promise<VideoObject | null> {
   return apiRequestServer<VideoObject>({
     method: 'GET',
-    url: buildApiUrl(`/api/videos/${id}`),
+    url: buildApiUrl(`/api/videos/${id}${purpose === 'edit' ? '?for=edit' : ''}`),
     functionName: 'getVideoById'
   }, async () => ({
     channelId: headers?.channelId || '',

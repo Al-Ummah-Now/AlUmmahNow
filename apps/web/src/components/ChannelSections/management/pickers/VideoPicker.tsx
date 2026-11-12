@@ -92,7 +92,7 @@ export function VideoPicker({ channelId, value, onChange, max, anyChannel = fals
     }
     setPasting(true);
     try {
-      const video = await getVideoById(id);
+      const video = await getVideoById(id, undefined, 'edit');
       if (!video || !isPublicVideo(video) || (!anyChannel && video.channelId !== channelId)) {
         setPasteError(true);
         return;
