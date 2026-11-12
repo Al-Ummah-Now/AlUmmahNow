@@ -31,7 +31,8 @@ import { logger } from '../logger';
 
 /** Same rule as the auth server's RUN_USER_EMAIL and apps/web/e2e/test-utils/run-users.ts. */
 export const RUN_USER_EMAIL = /^e2e\+\d{1,20}-\d{1,3}-[a-z0-9][a-z0-9-]{0,62}@e2e\.alummahnow\.net$/;
-export const RUN_USER_SWEEP_ACTOR = 'e2e-run-sweep';
+export { RUN_USER_SWEEP_ACTOR } from '../privacy/run-user-erase';
+import { RUN_USER_SWEEP_ACTOR } from '../privacy/run-user-erase';
 export const RUN_USER_SWEEP_KEY = 'ops/run-user-sweep.json';
 /** Profiles looked at per run (every 10 minutes). */
 export const RUN_USER_SWEEP_LIMIT = 200;
