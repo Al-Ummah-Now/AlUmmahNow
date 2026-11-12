@@ -35,4 +35,12 @@ export const LOCAL_WEB_SPECS: readonly string[] = [
   '33-watch-history.spec.ts',
   '60-home-videos.spec.ts',
   '71-no-console-errors.spec.ts',
+  // Sub-batch 3: search, notifications, video comments, channel page and sections, playlists, feed
+  '21-search-v2.spec.ts',
+  '22-notifications.spec.ts',
+  '22-video-comments.spec.ts',
+  '51-channel-page.spec.ts',
+  '52-channel-sections.spec.ts',
+  '54-playlists.spec.ts',
+  '66-feed-subscriptions.spec.ts',
 ];

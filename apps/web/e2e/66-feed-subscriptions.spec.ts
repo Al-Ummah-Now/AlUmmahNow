@@ -1,15 +1,22 @@
 import { test, expect } from './fixtures';
 import { ANONYMOUS_STATE, AUTH_STATE, readAccount } from './test-utils/auth-state';
+import { ownPublicVideos } from './test-utils/own-public-video';
 
 /**
  * Subscription feed (/subscriptions) and subscription management (/subscriptions/manage).
  *
  * The multi-channel user subscribes (through the API, as its main channel) to
- * the QA seed channel that owns the "QA Lecture" videos; every test removes
- * the subscription again. Other specs don't use this user's subscriptions.
+ * this file's own channel with its own public video (made in beforeAll, deleted
+ * afterwards); every test removes the subscription again. Other specs don't use
+ * this user's subscriptions.
  */
 
 const API_URL = process.env.API_URL || 'https://videos.api.qa.alummahnow.net';
+
+// One worker runs this file's tests in order, so its own data (beforeAll) is made once
+test.describe.configure({ mode: 'default' });
+
+const own = ownPublicVideos(test, 'feed');
 
 function subscriber() {
   const account = readAccount('multi');
@@ -19,14 +26,9 @@ function subscriber() {
   };
 }
 
-/** The seed channel behind the public "QA Lecture" videos */
-async function seedChannel(): Promise<{ id: string; videoTitle: string }> {
-  const res = await fetch(`${API_URL}/api/videos?limit=100`);
-  expect(res.ok).toBe(true);
-  const body = (await res.json()) as { data: Array<{ title: string; channelId?: string; channel?: { id?: string } }> };
-  const video = body.data.find((v) => v.title.startsWith('QA Lecture') && (v.channelId || v.channel?.id));
-  if (!video) throw new Error('No "QA Lecture" seed video found on QA (run the Seed QA workflow)');
-  return { id: (video.channelId || video.channel!.id)!, videoTitle: video.title };
+/** This file's own channel and its public video */
+function ownChannel(): { id: string; videoTitle: string } {
+  return { id: own.channelId(), videoTitle: own.videos()[0].title };
 }
 
 async function subscribe(channelId: string) {
@@ -115,7 +117,7 @@ test.describe('Feed and subscriptions - with a subscription', () => {
 
   let channel: { id: string; videoTitle: string };
   test.beforeAll(async () => {
-    channel = await seedChannel();
+    channel = ownChannel();
   });
   test.beforeEach(async () => {
     await subscribe(channel.id);

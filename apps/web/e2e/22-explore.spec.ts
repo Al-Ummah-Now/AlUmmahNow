@@ -49,7 +49,7 @@ test.describe('Explore - English (LTR)', () => {
     await page.goto('/en/explore');
     const section = page.getByTestId('explore-new-channels');
     await expect(section.getByTestId('channel-tile').first()).toBeVisible();
-    await expect(section.locator(`[data-testid="channel-tile"][href*="${own.channelId()}"]`)).toBeVisible();
+    await expect(section.getByTestId('channel-tile').filter({ hasText: own.channelName() })).toBeVisible();
   });
 
   test('content language switch updates the URL', async ({ page }) => {

@@ -1,15 +1,52 @@
 import { test, expect } from './fixtures';
 import type { Page } from '@playwright/test';
 import { ANONYMOUS_STATE } from './test-utils/auth-state';
+import { ownPublicVideos } from './test-utils/own-public-video';
+import { target } from './release/targets';
 
 /**
- * Search v2 (Epic 29, Story 29.8) against the seeded QA content
- * (e2e/seed/seed-config.ts): index-backed results, Arabic normalisation,
- * type chips, filters (inline panel on desktop, bottom sheet on mobile),
- * removable filter chips and private on-device history.
+ * Search v2 (Epic 29, Story 29.8) against this file's own content: index-backed results, Arabic
+ * normalisation, type chips, filters (inline panel on desktop, bottom sheet on mobile), removable
+ * filter chips and private on-device history.
+ *
+ * In beforeAll a new creator makes a channel, two public videos (Hadith, Tafsir; English and
+ * Arabic titles) and a playlist, all carrying this run's random words TOKEN (Latin) and AR_TOKEN
+ * (Arabic), so every query finds only this file's rows; afterAll deletes them.
  */
 
 test.use({ storageState: ANONYMOUS_STATE });
+
+const pick = (letters: string, n: number) => Array.from({ length: n }, () => letters[Math.floor(Math.random() * letters.length)]).join('');
+/** This run's Latin word: in every title, so a query for it finds only this file's content */
+const TOKEN = `zq${pick('bcdfghjklmnpqrstvwxz', 6)}`;
+/** This run's Arabic word (no alef or taa marbuta, so normalisation leaves it as it is) */
+const AR_TOKEN = pick('بتثجحخدذرزسشصضطظعغفقكمن', 6);
+const HADITH = `${TOKEN} Hadith Basics`;
+const TAFSIR = `${TOKEN} Introduction to Tafsir`;
+
+// One worker runs this file's tests in order, so its own data (beforeAll) is made once
+test.describe.configure({ mode: 'default' });
+
+const own = ownPublicVideos(
+  test,
+  `search ${TOKEN}`,
+  [
+    { title: HADITH, titleAr: `${AR_TOKEN} أساسيات الحديث`, category: 'hadith_studies' },
+    { title: TAFSIR, titleAr: `${AR_TOKEN} مقدمة في التفسير`, category: 'quran_tafsir' },
+  ],
+  { playlist: true },
+);
+
+/** The index is written after the API calls: wait until it has every row of this file */
+test.beforeAll(async () => {
+  const count = async (type: string, q: string) =>
+    (((await (await fetch(`${target().api}/api/search?q=${encodeURIComponent(q)}&type=${type}`)).json().catch(() => ({}))) as { results?: unknown[] }).results ?? []).length;
+  await expect.poll(() => count('video', TOKEN), { message: 'own videos in the search index', timeout: 60_000 }).toBe(2);
+  await expect.poll(() => count('video', AR_TOKEN), { message: 'own Arabic titles in the search index', timeout: 60_000 }).toBe(2);
+  await expect.poll(() => count('channel', TOKEN), { message: 'own channel in the search index', timeout: 60_000 }).toBeGreaterThan(0);
+  await expect.poll(() => count('playlist', TOKEN), { message: 'own playlist in the search index', timeout: 60_000 }).toBeGreaterThan(0);
+  expect(own.videos()).toHaveLength(2);
+});
 
 const results = (page: Page) => page.getByTestId('search-result');
 
@@ -41,24 +78,24 @@ async function expectResults(page: Page) {
 }
 
 test.describe('Search v2 - English (LTR)', () => {
-  test('finds a seeded video by a word prefix', async ({ page }) => {
-    await page.goto('/en/search?q=hadi');
+  test('finds a video by a word prefix', async ({ page }) => {
+    await page.goto(`/en/search?q=${TOKEN}+hadi`);
     await expectResults(page);
-    await expect(page.locator('[data-result-type="video"]').filter({ hasText: 'Hadith Basics' }).first()).toBeVisible();
+    await expect(page.locator('[data-result-type="video"]').filter({ hasText: HADITH })).toBeVisible();
     await expect(page.locator('[dir="ltr"]').first()).toBeVisible();
   });
 
   test('typing and submitting updates the URL', async ({ page }) => {
     await page.goto('/en/search');
     await expect(page.getByTestId('search-idle')).toBeVisible();
-    await typeQuery(page, 'seerah');
+    await typeQuery(page, `${TOKEN} tafsir`);
     await page.locator(':is([data-testid="search-submit"],[data-testid="header-search-submit"]):visible').click();
-    await expect(page).toHaveURL(/\/en\/search\?q=seerah/);
+    await expect(page).toHaveURL(new RegExp(`/en/search\\?q=${TOKEN}(\\+|%20)tafsir`));
     await expectResults(page);
   });
 
   test('type chips restrict results to one type', async ({ page }) => {
-    await page.goto('/en/search?q=QA');
+    await page.goto(`/en/search?q=${TOKEN}`);
     await expectResults(page);
     await page.getByTestId('search-type-channel').click();
     await expect(page).toHaveURL(/type=channel/);
@@ -69,18 +106,11 @@ test.describe('Search v2 - English (LTR)', () => {
 
     await page.getByTestId('search-type-playlist').click();
     await expect(page).toHaveURL(/type=playlist/);
-    // Playlists only exist in the index after the search backfill has run on this environment
-    const apiUrl = process.env.API_URL || 'https://videos.api.qa.alummahnow.net';
-    const indexed = await page.request
-      .get(`${apiUrl}/api/search?q=QA&type=playlist`)
-      .then(async r => ((await r.json())?.results?.length ?? 0) > 0)
-      .catch(() => false);
-    test.skip(!indexed, 'No playlists in the search index yet (run the search backfill)');
     await expect(page.locator('[data-result-type="playlist"]').first()).toBeVisible();
   });
 
   test('filters apply from the panel and can be removed as chips', async ({ page, isMobile }) => {
-    await page.goto('/en/search?q=QA&type=video');
+    await page.goto(`/en/search?q=${TOKEN}&type=video`);
     await expectResults(page);
 
     await page.getByTestId('search-filters-toggle').click();
@@ -89,13 +119,13 @@ test.describe('Search v2 - English (LTR)', () => {
     await panel.getByTestId('search-filter-category').selectOption('hadith_studies');
     await expect(page).toHaveURL(/category=hadith_studies/);
     await expect(page.getByTestId('active-filter-category')).toContainText('Hadith Studies');
-    await expect(results(page).filter({ hasText: 'Hadith Basics' }).first()).toBeVisible();
-    await expect(results(page).filter({ hasText: 'Introduction to Tafsir' })).toHaveCount(0);
+    await expect(results(page).filter({ hasText: HADITH })).toBeVisible();
+    await expect(results(page).filter({ hasText: TAFSIR })).toHaveCount(0);
 
     await panel.getByTestId('search-filter-duration-long').click();
     await expect(page).toHaveURL(/duration=long/);
     await expect(page.getByTestId('search-filters-count')).toHaveText('2');
-    // Seeded videos are about a minute long, so "long" leaves nothing
+    // This file's videos are 40 s long, so "long" leaves nothing
     await expect(page.getByTestId('search-empty')).toBeVisible();
 
     // On phones the panel is a bottom sheet that covers the active-filter chips
@@ -110,7 +140,7 @@ test.describe('Search v2 - English (LTR)', () => {
   });
 
   test('duration filter is hidden for non-video types', async ({ page }) => {
-    await page.goto('/en/search?q=QA&type=channel');
+    await page.goto(`/en/search?q=${TOKEN}&type=channel`);
     await page.getByTestId('search-filters-toggle').click();
     await expect(page.getByTestId('search-filter-panel')).toBeVisible();
     await expect(page.getByTestId('search-filter-duration-short')).toHaveCount(0);
@@ -118,9 +148,9 @@ test.describe('Search v2 - English (LTR)', () => {
 
   test('search history is kept on the device and can be cleared', async ({ page }) => {
     await page.goto('/en/search');
-    const input = await typeQuery(page, 'tafsir');
+    const input = await typeQuery(page, TOKEN);
     await input.press('Enter');
-    await expect(page).toHaveURL(/q=tafsir/);
+    await expect(page).toHaveURL(new RegExp(`q=${TOKEN}`));
     await expectResults(page);
 
     await page.goto('/en/search');
@@ -128,7 +158,7 @@ test.describe('Search v2 - English (LTR)', () => {
     // The header box and the page's own box (phones) each render the history;
     // only the one in use is shown
     const items = page.getByTestId('search-history-item').filter({ visible: true });
-    await expect(items.filter({ hasText: 'tafsir' })).toBeVisible();
+    await expect(items.filter({ hasText: TOKEN })).toBeVisible();
     await expect(page.getByText('Search history is private and stored only on this device.').filter({ visible: true })).toBeVisible();
 
     await page.getByTestId('search-history-clear').filter({ visible: true }).click();
@@ -140,22 +170,22 @@ test.describe('Search v2 - English (LTR)', () => {
 
   test('suggestions come from the index', async ({ page }) => {
     await page.goto('/en/search');
-    await typeQuery(page, 'Hadith');
-    await expect(page.getByTestId('search-suggestion').first()).toBeVisible();
+    await typeQuery(page, TOKEN);
+    await expect(page.getByTestId('search-suggestion').filter({ hasText: TOKEN }).first()).toBeVisible();
   });
 });
 
 test.describe('Search v2 - Arabic (RTL)', () => {
   test('matches Arabic spelling variants (diacritics, article)', async ({ page }) => {
-    for (const q of ['الحديث', 'حديث', 'الحَدِيث']) {
+    for (const q of [`${AR_TOKEN} الحديث`, `${AR_TOKEN} حديث`, `${AR_TOKEN} الحَدِيث`, `${AR_TOKEN[0]}َ${AR_TOKEN.slice(1)} الحديث`]) {
       await page.goto(`/ar/search?q=${encodeURIComponent(q)}&type=video`);
       await expectResults(page);
-      await expect(results(page).filter({ hasText: 'الحديث' }).first()).toBeVisible();
+      await expect(results(page).filter({ hasText: `${AR_TOKEN} أساسيات الحديث` })).toBeVisible();
     }
   });
 
   test('renders right-to-left with Arabic labels', async ({ page }) => {
-    await page.goto('/ar/search?q=QA');
+    await page.goto(`/ar/search?q=${TOKEN}`);
     await expectResults(page);
     await expect(page.locator('[dir="rtl"]').first()).toBeVisible();
     await expect(page.getByTestId('search-type-all')).toHaveText('الكل');
@@ -171,7 +201,7 @@ test.describe('Search v2 - mobile', () => {
   test.skip(({ browserName }) => browserName === 'firefox', 'isMobile is not supported in Firefox');
 
   test('filters open as a bottom sheet and close with "Show results"', async ({ page }) => {
-    await page.goto('/en/search?q=QA');
+    await page.goto(`/en/search?q=${TOKEN}`);
     await expectResults(page);
     await page.getByTestId('search-filters-toggle').click();
     const sheet = page.getByTestId('search-filter-panel');
@@ -187,7 +217,7 @@ test.describe('Search v2 - mobile', () => {
   });
 
   test('type chips scroll horizontally without overflowing the page', async ({ page }) => {
-    await page.goto('/ar/search?q=QA');
+    await page.goto(`/ar/search?q=${TOKEN}`);
     await expectResults(page);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow).toBeLessThanOrEqual(1);
@@ -199,15 +229,15 @@ test.describe('Header search', () => {
     test.skip(isMobile, 'Phones open it from the icon: SEARCH-HDR-003');
     await page.goto('/en/explore');
     const input = page.locator('[data-testid="header-search-input"][data-ready="true"]:visible');
-    await input.pressSequentially('mosque', { delay: 20 });
-    await expect(page.getByTestId('search-suggestion').first()).toBeVisible();
+    await input.pressSequentially(TOKEN, { delay: 20 });
+    await expect(page.getByTestId('search-suggestion').filter({ hasText: TOKEN }).first()).toBeVisible();
     // Enter without choosing a suggestion runs the full search
     await input.press('Enter');
-    await expect(page).toHaveURL(/\/en\/search\?.*q=mosque/);
+    await expect(page).toHaveURL(new RegExp(`/en/search\\?.*q=${TOKEN}`));
 
     await page.goto('/en/explore');
-    await input.pressSequentially('mosque', { delay: 20 });
-    await expect(page.getByTestId('search-suggestion').first()).toBeVisible();
+    await input.pressSequentially(TOKEN, { delay: 20 });
+    await expect(page.getByTestId('search-suggestion').filter({ hasText: TOKEN }).first()).toBeVisible();
     await input.press('ArrowDown');
     await expect(input).toHaveAttribute('aria-activedescendant', /opt-0$/);
     // Choosing a suggestion opens that item (a category runs a category search)
@@ -243,7 +273,7 @@ test.describe('Autocomplete', () => {
     const input = page.locator('[data-testid="header-search-input"][data-ready="true"]:visible');
     await expect(input).toHaveAttribute('role', 'combobox');
     await expect(input).toHaveAttribute('aria-expanded', 'false');
-    await input.pressSequentially('Hadith', { delay: 20 });
+    await input.pressSequentially(TOKEN, { delay: 20 });
     await expect(input).toHaveAttribute('aria-expanded', 'true');
     const listbox = page.locator(`#${await input.getAttribute('aria-controls')}`);
     await expect(listbox).toHaveAttribute('role', 'listbox');
@@ -252,15 +282,16 @@ test.describe('Autocomplete', () => {
     await expect(page.getByTestId('autocomplete-status').first()).toContainText(/suggestion/);
     await input.press('Escape');
     await expect(input).toHaveAttribute('aria-expanded', 'false');
-    await expect(input).toHaveValue('Hadith');
+    await expect(input).toHaveValue(TOKEN);
   });
 
   test('SEARCH-AC-002 Arabic suggestions ignore diacritics and alef/taa marbuta spelling', async ({ page, isMobile }) => {
     test.skip(isMobile, 'Desktop header box');
     await page.goto('/ar/explore');
     const input = page.locator('[data-testid="header-search-input"][data-ready="true"]:visible');
-    await input.pressSequentially('الحَدِيث', { delay: 20 });
-    await expect(page.getByTestId('search-suggestion').first()).toBeVisible();
+    // This run's Arabic word typed with a diacritic still suggests this file's titles
+    await input.pressSequentially(`${AR_TOKEN[0]}َ${AR_TOKEN.slice(1)}`, { delay: 20 });
+    await expect(page.getByTestId('search-suggestion').filter({ hasText: AR_TOKEN }).first()).toBeVisible();
     await expect(page.getByTestId('search-dropdown').locator('mark').first()).toBeVisible();
   });
 });

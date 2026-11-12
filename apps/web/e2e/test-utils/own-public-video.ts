@@ -20,12 +20,27 @@ export interface OwnVideoSpec {
   category?: string;
 }
 
+/** What else the file's own channel gets, besides its videos. */
+export interface OwnChannelSpec {
+  /** Arabic name and English/Arabic descriptions (PUT /api/channels/:id) */
+  nameAr?: string;
+  description?: string;
+  descriptionAr?: string;
+  /** A public playlist of all the videos */
+  playlist?: boolean;
+  /** Public text posts on the Community tab */
+  posts?: number;
+}
+
 export type OwnVideo = CreatedVideo & { titleLocalized?: { en?: string; ar?: string } };
 
 export interface OwnPublicVideos {
   videos: () => OwnVideo[];
   owner: () => WebUser;
   channelId: () => string;
+  channelName: () => string;
+  playlistId: () => string;
+  postIds: () => string[];
   /** The card of the spec's newest own video in a listing (never another run's or the seed's). */
   card: (page: Page) => Locator;
   data: DataScope;
@@ -35,10 +50,13 @@ export interface OwnPublicVideos {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyTest = TestType<any, any>;
 
-export function ownPublicVideos(test: AnyTest, label: string, specs: OwnVideoSpec[] = [{}]): OwnPublicVideos {
+export function ownPublicVideos(test: AnyTest, label: string, specs: OwnVideoSpec[] = [{}], channel: OwnChannelSpec = {}): OwnPublicVideos {
   const data = ownData(test as never);
   let owner: WebUser | null = null;
   let channelId = '';
+  const channelName = `E2E ${label} ${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+  let playlistId = '';
+  const postIds: string[] = [];
   const videos: OwnVideo[] = [];
 
   test.beforeAll(async ({ browser }) => {
@@ -48,7 +66,7 @@ export function ownPublicVideos(test: AnyTest, label: string, specs: OwnVideoSpe
       const page = await context.newPage();
       owner = await data.createUser(page, label);
       await data.grantCreator(owner);
-      channelId = await data.createChannel(owner);
+      channelId = await data.createChannel(owner, { name: channelName });
       for (const spec of specs) {
         const video: OwnVideo = await data.createVideo(owner, channelId, { clip: 'landscape40', isPublic: true, title: spec.title });
         const update: Record<string, unknown> = {};
@@ -64,6 +82,8 @@ export function ownPublicVideos(test: AnyTest, label: string, specs: OwnVideoSpe
         }
         videos.push(video);
       }
+      if (channel.playlist) playlistId = await data.createPlaylist(owner, channelId, { title: `E2E playlist ${channelName}`, videoIds: videos.map((v) => v.id) });
+      for (let i = 0; i < (channel.posts ?? 0); i++) postIds.push(await data.createPost(owner, channelId, { text: `E2E post ${i + 1} of ${channelName}` }));
       // The anonymous first page of GET /api/videos is edge-cached for 30 s (videoList.ts): wait until
       // it lists the newest one, so pages that read it (home, all videos) show this file's videos on the first load
       await expect
@@ -88,6 +108,9 @@ export function ownPublicVideos(test: AnyTest, label: string, specs: OwnVideoSpe
       return owner;
     },
     channelId: () => channelId,
+    channelName: () => channelName,
+    playlistId: () => playlistId,
+    postIds: () => postIds,
     card: (page: Page) => page.locator(`[data-testid="video-card"][data-video-id="${videos[videos.length - 1]?.id ?? 'not-created'}"]`),
     data,
   };
