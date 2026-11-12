@@ -10,6 +10,7 @@ import {
 	deleteChannelCollections,
 	ensureChannelCollection,
 	renameChannelCollections,
+	placeVideoInCollection,
 	removeCollectionsFor,
 	renameCollectionsForUser,
 	uploadCollection,
@@ -17,6 +18,7 @@ import {
 	type CollectionClient,
 } from '../src/lib/channelCollection';
 import { handleCollectionBackfillMessage, readCollectionBackfillRun, runCollectionBackfillPage } from '../src/lib/bunny/collectionBackfill';
+import { runProcessingCheck, startProcessingLoop } from '../src/lib/processing/loop';
 import { MemoryBucket, MemoryQueue } from './helpers';
 
 /** In-memory Bunny collections per library */
@@ -299,5 +301,38 @@ describe('collection backfill', () => {
 		assert.equal(await removeCollectionsFor(env, 'owner', profile), 2);
 		assert.equal(cols['400189'].has('user-col'), false);
 		assert.equal(cols['498994'].has('user-col-2'), false);
+	});
+
+	it('the processing check files a video Bunny still has at the root (failed or skipped collection step)', async () => {
+		const env = backfillEnv();
+		// A bulk upload of 2026-11-10: at the library root although its channel has a collection
+		assert.equal(lib['400189'][vid(2)].collectionId, '');
+		await startProcessingLoop(env, vid(2), { reason: 'test' });
+		const message = env.PROCESSING_CHECK_QUEUE.messages.find((m: any) => m.videoId === vid(2));
+		await runProcessingCheck(env, message);
+		assert.equal(lib['400189'][vid(2)].collectionId, 'legacy-col');
+		assert.ok(writes.includes(`move 400189 ${vid(2)} legacy-col`));
+		// Already in a collection: left alone
+		writes = [];
+		await runProcessingCheck(env, { ...message, attempt: message.attempt + 1 });
+		assert.deepEqual(writes.filter((w) => w.startsWith('move')), []);
+	});
+
+	it('placeVideoInCollection: a user-level video goes to the owner collection; failures never throw', async () => {
+		const env = backfillEnv();
+		assert.equal(await placeVideoInCollection(env, { id: vid(4), userId: 'owner', channelId: 'owner', playUrl: `https://${OLD_HOST}/${vid(4)}/playlist.m3u8` }, ''), 'placed');
+		const userCol = JSON.parse(env.profiles.store.get('owner')!).bunnyCollections['400189'];
+		assert.equal(lib['400189'][vid(4)].collectionId, userCol);
+		assert.equal(await placeVideoInCollection(env, { id: vid(4), userId: 'owner' }, 'x'), 'already');
+		globalThis.fetch = (async () => new Response('{}', { status: 500 })) as typeof fetch;
+		assert.equal(await placeVideoInCollection(env, { id: vid(2), userId: 'owner', channelId: 'ch2', playUrl: `https://${OLD_HOST}/${vid(2)}/playlist.m3u8` }, ''), 'failed');
+	});
+
+	it('an upload whose collection step fails is retried once, then goes on without one (warned)', async () => {
+		let calls = 0;
+		const failing = { ...fakeBunny().client, createCollection: async () => { calls++; throw new Error('HTTP error! status: 500'); } };
+		const channels = new MemoryBucket({ ch: channel() });
+		assert.equal(await uploadCollection({ channels: channels as any }, failing, 400189, 'ch', 'owner'), undefined);
+		assert.equal(calls, 2);
 	});
 });
