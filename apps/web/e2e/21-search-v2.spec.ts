@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 import { test, expect } from './fixtures';
 import type { Page } from '@playwright/test';
 import { ANONYMOUS_STATE } from './test-utils/auth-state';
@@ -16,7 +17,7 @@ import { target } from './release/targets';
 
 test.use({ storageState: ANONYMOUS_STATE });
 
-const pick = (letters: string, n: number) => Array.from({ length: n }, () => letters[Math.floor(Math.random() * letters.length)]).join('');
+const pick = (letters: string, n: number) => Array.from({ length: n }, () => letters[randomInt(letters.length)]).join('');
 /** This run's Latin word: in every title, so a query for it finds only this file's content */
 const TOKEN = `zq${pick('bcdfghjklmnpqrstvwxz', 6)}`;
 /** This run's Arabic word (no alef or taa marbuta, so normalisation leaves it as it is) */

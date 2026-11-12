@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { expect, type Locator, type Page, type TestType } from '@playwright/test';
 import { ns, useOwnData as ownData, type CreatedVideo, type DataScope } from '../release/builders';
 import { apiFetch, type WebUser } from '../release/web-session';
@@ -71,7 +72,7 @@ export function ownPublicVideos(test: AnyTest, label: string, specs: OwnVideoSpe
     const context = await browser.newContext({ storageState: { cookies: [], origins: [] } });
     try {
       const page = await context.newPage();
-      channelName = `E2E ${label} ${ns()} ${Math.random().toString(36).slice(2, 6)}`;
+      channelName = `E2E ${label} ${ns()} ${randomBytes(2).toString('hex')}`;
       owner = await data.createUser(page, label);
       await data.grantCreator(owner);
       channelId = await data.createChannel(owner, { name: channelName });

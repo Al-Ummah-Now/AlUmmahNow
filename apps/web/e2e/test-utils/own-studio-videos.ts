@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import type { TestType } from '@playwright/test';
 import type { AuthUser } from './auth-state';
 import { ns } from '../release/builders';
@@ -54,7 +55,7 @@ export function ownStudioVideos(test: AnyTest, user: AuthUser): { videos: () => 
     test.setTimeout(180_000);
     const u = userApi(user);
     // Tagged with ns() (run, spec file, worker), so the job's leftover check can find them
-    const suffix = `${ns()} ${Math.random().toString(36).slice(2, 6)}`;
+    const suffix = `${ns()} ${randomBytes(2).toString('hex')}`;
     for (const spec of SPECS[user] ?? []) {
       const title = `${spec.base} ${suffix}`;
       // Bytes too: the stack's fake Bunny encodes them (thumbnails, durations), like the old seed
