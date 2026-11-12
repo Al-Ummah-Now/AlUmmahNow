@@ -1,10 +1,11 @@
 'use client';
 
 import NextLink from 'next/link';
-import { useState, type ComponentProps, type FocusEvent, type MouseEvent, type TouchEvent } from 'react';
+import { useState, type FocusEvent, type MouseEvent, type TouchEvent } from 'react';
 
-// Exactly the props next/link accepts (ref included: React 19)
-type LinkProps = ComponentProps<typeof NextLink>;
+// Exactly the props next/link accepts, typed by next's own React types (taken from
+// its call signature: ComponentProps resolves to {} where two @types/react meet)
+type LinkProps = Parameters<typeof NextLink>[0];
 
 /**
  * next/link that prefetches on intent (hover, focus, touch) instead of whenever
