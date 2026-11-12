@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test, expect, type Page } from '@playwright/test';
-import { previewDocument } from '../../../admin-web/src/app/(protected)/site-theme/builder/preview-document';
 
 /**
  * THEME-BUILDER-PREVIEW: the admin theme builder's preview paints the theme's own colours (owner
@@ -14,11 +13,22 @@ const ROOT = join(__dirname, '../../../..');
 const SITE_CSS = ['font-faces.css', 'system.css', 'pages.css'].map((f) => readFileSync(join(ROOT, 'apps/web/src/theme', f), 'utf8')).join('\n');
 const lantern = JSON.parse(readFileSync(join(ROOT, 'packages/theme-packages/themes/lantern/theme.json'), 'utf8')) as ThemePackage;
 
-// The package is ESM (built by the workflow before this suite); a static import would be compiled to require
-type ThemePackages = typeof import('../../../../packages/theme-packages/dist/index.js');
-type ThemePackage = ReturnType<ThemePackages['duplicatePackage']>;
+// The theme package is loaded at run time: it is ESM (built by the workflow before this suite), which a
+// static import would require(), and outside this tsconfig
+interface ThemePackage { id: string; tokens: { brand: Record<string, string>; color: Record<'light' | 'dark', Record<string, string>> }; components: Record<string, { colors?: Record<'light' | 'dark', Record<string, string>> }> }
+interface ThemePackages {
+  compilePackage: (t: ThemePackage) => { css: string };
+  duplicatePackage: (t: ThemePackage, id: string, name: { en: string; ar: string }, author: string) => ThemePackage;
+}
+type PreviewDocument = (o: { themeId: string; css: string; page: 'home'; mode: 'light' | 'dark'; lang: 'en' }) => string;
+// The builder's own preview document, required by path: it is in admin-web's project, and a static
+// import would pull it into this tsconfig (TS6307). Playwright's require hook transpiles it.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { previewDocument } = require(join(ROOT, 'apps/admin-web/src/app/(protected)/site-theme/builder/preview-document.ts')) as { previewDocument: PreviewDocument };
 let tp: ThemePackages;
-test.beforeAll(async () => { tp = await import(join(ROOT, 'packages/theme-packages/dist/index.js')); });
+test.beforeAll(async () => {
+  tp = await import(join(ROOT, 'packages/theme-packages/dist/index.js'));
+});
 const compilePackage = (t: ThemePackage) => tp.compilePackage(t);
 const duplicatePackage = (...args: Parameters<ThemePackages['duplicatePackage']>) => tp.duplicatePackage(...args);
 
