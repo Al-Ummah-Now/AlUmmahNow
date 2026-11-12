@@ -20,14 +20,17 @@ import { SEED_TITLES } from './test-utils/e2e-videos';
 
 /**
  * Channel settings: overview (/settings/channel/[id]), the ownership guard on
- * every settings page, edit (/edit), videos (/videos) and tab management
- * (/tabs: visibility, default tab, keyboard reorder).
+ * every settings page, edit (/edit), videos (now Studio: /videos 301s to
+ * /studio/[id]/content/videos) and tab management (/tabs: visibility, default
+ * tab, keyboard reorder).
  *
  * Tab-configuration and edit tests change the multi user's second channel and
  * restore its original state afterwards (under a run-wide lock).
  */
 
-const SETTINGS_PAGES = ['', '/edit', '/videos', '/tabs', '/sections', '/playlists', '/community', '/community/new'];
+const SETTINGS_PAGES = ['', '/edit', '/tabs', '/sections', '/playlists', '/community', '/community/new'];
+/** Video management moved to Studio (lib/studio/redirects.ts): the old page 301s there */
+const studioVideos = (locale: string, id: string) => `/${locale}/studio/${id}/content/videos`;
 
 test.describe('Settings overview', () => {
   test.use({ storageState: AUTH_STATE.single });
@@ -39,7 +42,6 @@ test.describe('Settings overview', () => {
 
     const cards: Array<[RegExp, string]> = [
       [/General Settings/, '/edit'],
-      [/Video Management/, '/videos'],
       [/Manage Playlists/i, '/playlists'],
       [/Manage Channel Tabs/, '/tabs'],
       [/Manage Sections/, '/sections'],
@@ -48,6 +50,8 @@ test.describe('Settings overview', () => {
     for (const [name, suffix] of cards) {
       await expect(page.getByRole('link', { name })).toHaveAttribute('href', `/en/settings/channel/${main.id}${suffix}`);
     }
+    // Video Management opens Studio, the creator home
+    await expect(page.getByRole('link', { name: /Video Management/ })).toHaveAttribute('href', studioVideos('en', main.id));
     await expect(page.getByRole('link', { name: 'Back to Channel' })).toHaveAttribute('href', `/en/channels/${main.id}`);
 
     await clickUntil(page.getByRole('link', { name: /Manage Channel Tabs/ }), async () =>
@@ -82,6 +86,10 @@ test.describe('Ownership guard', () => {
         await expect(page, `settings${suffix || ' overview'}`).toHaveURL(new RegExp(`/en/channels/${main.id}$`));
         await expect(page.getByTestId('channel-tabs')).toBeVisible();
       }
+      // The old videos page is a permanent redirect to Studio, which signs visitors in first
+      const res = await page.request.get(`/en/settings/channel/${main.id}/videos`, { maxRedirects: 0 });
+      expect(res.status()).toBe(301);
+      expect(res.headers()['location']).toMatch(new RegExp(`${studioVideos('en', main.id)}$`));
     });
   });
 
@@ -98,6 +106,10 @@ test.describe('Ownership guard', () => {
         // No management UI leaked on the public page
         await expect(page.getByTestId('channel-settings-link')).toHaveCount(0);
         await expect(page.getByTestId('channel-subscribe-button')).toBeVisible();
+        // The old videos page goes to Studio, which is not found for someone else's channel
+        const res = await page.goto(`/${locale}/settings/channel/${main.id}/videos`);
+        await expect(page).toHaveURL(new RegExp(`${studioVideos(locale, main.id)}$`));
+        expect(res?.status()).toBe(404);
       });
     }
   });
@@ -173,28 +185,31 @@ test.describe('Edit channel', () => {
   });
 });
 
+// Video management is Studio's Content > Videos now (19-studio-videos-ownership
+// covers the list itself); the old settings URL keeps working for the owner
 test.describe('Channel videos', () => {
   test.use({ storageState: AUTH_STATE.single });
 
-  test('CHSET-030 lists the channel videos, including private ones, with search (en)', async ({ page }) => {
+  test('CHSET-030 the old videos page opens Studio with the channel videos, private ones included (en)', async ({ page }) => {
     const { main } = channelsOf('single');
     await page.goto(`/en/settings/channel/${main.id}/videos`);
-    await expect(page.getByRole('heading', { level: 1, name: 'Video Management' })).toBeVisible();
-    const seed = page.getByRole('heading', { level: 3, name: SEED_TITLES.singleVideo, exact: true });
-    await expect(seed).toBeVisible();
-
-    // The page's own search box (the header search is a combobox)
-    await fillStable(page.getByRole('textbox', { name: /^Search videos/ }), SEED_TITLES.singlePrivate);
-    await expect(page.getByRole('heading', { level: 3, name: SEED_TITLES.singlePrivate, exact: true })).toBeVisible();
-    await expect(seed).toHaveCount(0);
+    await expect(page).toHaveURL(new RegExp(`${studioVideos('en', main.id)}$`));
+    await expect(page.getByTestId('studio-videos')).toBeVisible();
+    await expect(page.getByTestId('studio-videos-loading')).toHaveCount(0, { timeout: 20000 });
+    const videos = page.getByTestId('studio-videos');
+    for (const title of [SEED_TITLES.singleVideo, SEED_TITLES.singlePrivate]) {
+      await expect(videos.getByRole('link', { name: title, exact: true })).toBeVisible();
+    }
+    await expect(page.getByRole('searchbox', { name: 'Search your videos' })).toBeVisible();
   });
 
-  test('CHSET-031 Arabic video management is translated and RTL', async ({ page }) => {
+  test('CHSET-031 the Arabic old videos page opens Studio, translated and RTL', async ({ page }) => {
     const { main } = channelsOf('single');
     await page.goto(`/ar/settings/channel/${main.id}/videos`);
+    await expect(page).toHaveURL(new RegExp(`${studioVideos('ar', main.id)}$`));
     await expectRtl(page);
-    await expect(page.getByRole('heading', { level: 1, name: 'إدارة الفيديوهات' })).toBeVisible();
-    await expect(page.getByPlaceholder(/فيديوهات\.\.\.$/)).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'الفيديوهات', exact: true })).toBeAttached();
+    await expect(page.getByRole('searchbox', { name: 'ابحث في فيديوهاتك' })).toBeVisible();
   });
 });
 
