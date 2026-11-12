@@ -5,7 +5,16 @@
  * never leaves the worker. QA only: the Secrets Store bindings name the QA
  * secrets, and when QA_LIBRARY_ID is set any other library id is refused.
  */
+import { THEME_DEMO } from '../theme-demo-keep.ts';
+
 const API = 'https://video.bunnycdn.com';
+/** Never deleted, whatever their record says: theme-demo, seed and owner-pinned content (scripts/qa/theme-demo-keep.ts, e2e-leftovers KEEP_VIDEO_IDS). */
+const KEEP = new Set([...THEME_DEMO.videoIds, '443418c1-dc70-43d9-944d-5388ab7dc4c3']);
+/** A Bunny video younger than this may be an upload whose record lands seconds later. */
+const MIN_AGE_MS = 60 * 60 * 1000;
+/** A soft-deleted record's video goes once the delete is this old (tests restore within minutes). */
+const SOFT_DELETED_MIN_AGE_MS = 30 * 60 * 1000;
+const DELETE_BATCH = 100;
 const STATUS = { 0: 'created', 1: 'uploaded', 2: 'processing', 3: 'transcoding', 4: 'finished', 5: 'error', 6: 'upload-failed', 7: 'jit-segmenting', 8: 'jit-playlists-created' };
 const SETTING_KEYS = ['Name', 'VideoCount', 'StorageUsage', 'TrafficUsage', 'EnabledResolutions', 'KeepOriginalFiles', 'AllowEarlyPlay', 'EnableMP4Fallback', 'EnableTranscribing', 'EnableTranscribingTitleGeneration', 'EnableContentTagging', 'JitEncodingEnabled', 'EnableMultiAudioTrackSupport', 'OutputCodecs', 'EncodingTier', 'PremiumEncoding', 'EnableDRM', 'Bitrate240p', 'Bitrate360p', 'Bitrate480p', 'Bitrate720p', 'Bitrate1080p', 'Bitrate1440p', 'Bitrate2160p', 'WatermarkPositionLeft', 'RememberPlayerPosition', 'Replication', 'ReplicationRegions', 'StorageZoneId', 'PullZoneId'];
 
@@ -103,6 +112,80 @@ async function status(key, libraryId, videosBucket) {
 	};
 }
 
+function uploadedAt(v) {
+	const d = v.dateUploaded || '';
+	return Date.parse(d.endsWith('Z') ? d : d + 'Z');
+}
+
+/** Why a video must stay, or null when nothing refers to it. Unreadable or unknown always keeps. */
+async function keepReason(v, videosBucket, lives, now) {
+	if (!v || !v.guid) return 'no-id';
+	if (envOf(v.title) !== 'qa') return 'other-env';
+	if (KEEP.has(v.guid)) return 'keep-list';
+	const at = uploadedAt(v);
+	if (!Number.isFinite(at) || now - at < MIN_AGE_MS) return 'young';
+	if (lives.some((t) => t.includes(v.guid))) return 'live-stream';
+	const object = await videosBucket.get(v.guid);
+	if (!object) return null;
+	let r;
+	try { r = await object.json(); } catch { return 'unreadable-record'; }
+	if (!r || typeof r !== 'object') return 'unreadable-record';
+	if (r.isDeleted !== true) return 'live-record';
+	const deletedAt = Date.parse(r.deletedAt || r.ownerDeletion?.at || '');
+	if (!Number.isFinite(deletedAt) || now - deletedAt < SOFT_DELETED_MIN_AGE_MS) return 'recently-deleted';
+	return null;
+}
+
+async function liveStreams(videosBucket) {
+	const texts = [];
+	let cursor;
+	do {
+		const page = await videosBucket.list({ prefix: 'livestream:', cursor, limit: 500 });
+		for (const o of page.objects) {
+			const t = await (await videosBucket.get(o.key))?.text();
+			if (t) texts.push(t);
+		}
+		cursor = page.truncated ? page.cursor : undefined;
+	} while (cursor);
+	return texts;
+}
+
+/** One library page (DELETE_BATCH videos, newest first): what would go, and with apply, delete up to DELETE_BATCH of it. */
+async function sweep(key, libraryId, videosBucket, page, apply) {
+	const r = await bunny(key, `/library/${libraryId}/videos?page=${page}&itemsPerPage=${DELETE_BATCH}&orderBy=date`);
+	if (r.status !== 200) throw new Error(`list page ${page}: HTTP ${r.status}`);
+	const items = r.body.items || [];
+	const lives = await liveStreams(videosBucket);
+	const now = Date.now();
+	const kept = {};
+	const candidates = [];
+	for (let i = 0; i < items.length; i += 25) {
+		await Promise.all(items.slice(i, i + 25).map(async (v) => {
+			const reason = await keepReason(v, videosBucket, lives, now);
+			if (reason) kept[reason] = (kept[reason] || 0) + 1;
+			else candidates.push(v);
+		}));
+	}
+	const deleted = [];
+	const failed = [];
+	const deletedByStatus = {};
+	if (apply) {
+		for (let i = 0; i < candidates.length; i += 10) {
+			await Promise.all(candidates.slice(i, i + 10).map(async (v) => {
+				const res = await fetch(`${API}/library/${libraryId}/videos/${encodeURIComponent(v.guid)}`, { method: 'DELETE', headers: { AccessKey: key } });
+				if (res.ok || res.status === 404) {
+					deleted.push(v.guid);
+					const s = STATUS[v.status] ?? String(v.status);
+					deletedByStatus[s] = (deletedByStatus[s] || 0) + 1;
+				} else failed.push({ guid: v.guid, http: res.status });
+			}));
+		}
+	}
+	const wouldByStatus = {};
+	for (const v of candidates) { const s = STATUS[v.status] ?? String(v.status); wouldByStatus[s] = (wouldByStatus[s] || 0) + 1; }
+	return { page, listed: items.length, totalItems: r.body.totalItems, kept, candidates: candidates.length, wouldByStatus, deleted: deleted.length, deletedByStatus, failed, sample: candidates.slice(0, 5).map((v) => ({ guid: v.guid, title: (v.title || '').slice(0, 60), status: STATUS[v.status] ?? v.status })) };
+}
+
 function pick(body) {
 	if (Array.isArray(body)) return { array: body.length };
 	const out = {};
@@ -125,6 +208,13 @@ export default {
 		const url = new URL(request.url);
 		try {
 			if (url.pathname === '/status') return Response.json(await status(key, libraryId, env.videos));
+			if (url.pathname === '/sweep') {
+				const apply = url.searchParams.get('apply') === '1';
+				// Deleting needs the pinned QA library id: never another library
+				if (apply && (!env.QA_LIBRARY_ID || libraryId !== env.QA_LIBRARY_ID)) return Response.json({ error: 'apply needs QA_LIBRARY_ID pinned to this library' }, { status: 403 });
+				const page = Math.max(1, Number(url.searchParams.get('page') || 1));
+				return Response.json(await sweep(key, libraryId, env.videos, page, apply));
+			}
 			return new Response('not found', { status: 404 });
 		} catch (e) {
 			return Response.json({ error: String(e?.message || e) }, { status: 500 });
