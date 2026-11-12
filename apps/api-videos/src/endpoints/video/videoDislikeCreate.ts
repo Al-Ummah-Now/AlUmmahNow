@@ -1,14 +1,7 @@
 import { Str } from "chanfana";
 import { z } from "zod";
-import { DISLIKES_DISABLED_CODE, DISLIKES_DISABLED_MESSAGE } from "@al-ummah/shared-types";
-import { ResponseError } from "../../lib/types";
 import { AuthenticatedRoute, AppContext } from '../../base';
-import { ReactorHeaders } from "../../lib/reactions";
-
-const DislikesDisabledError = ResponseError.extend({
-	code: z.literal(DISLIKES_DISABLED_CODE),
-	messages: z.object({ en: Str(), ar: Str() }).describe("The message in both site languages"),
-});
+import { ReactorHeaders, dislikesDisabledResponse, dislikesDisabledResponseSchema } from "../../lib/reactions";
 
 /**
  * Disabled by owner decision 2026-11-11: dislikes are hidden and not accepted.
@@ -31,24 +24,11 @@ export class DislikeCreate extends AuthenticatedRoute {
 			headers: ReactorHeaders,
 		},
 		responses: {
-			"410": {
-				description: "Dislikes are turned off (code dislikes_disabled). `error` is in the language asked for with ?lang=ar, English otherwise.",
-				content: {
-					"application/json": {
-						schema: DislikesDisabledError,
-					},
-				},
-			},
+			"410": dislikesDisabledResponseSchema,
 		},
 	};
 
 	async handle(c: AppContext) {
-		const lang = c.req.query('lang') === 'ar' ? 'ar' : 'en';
-		return c.json({
-			success: false,
-			code: DISLIKES_DISABLED_CODE,
-			error: DISLIKES_DISABLED_MESSAGE[lang],
-			messages: DISLIKES_DISABLED_MESSAGE,
-		}, 410);
+		return dislikesDisabledResponse(c);
 	}
 }

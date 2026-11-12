@@ -72,7 +72,7 @@ userId: <user-id>  // Will be overridden by JWT token if present
 - All channel management endpoints (POST, DELETE)
 - All subscription endpoints
 - All comment endpoints
-- All like/dislike endpoints (video dislike POST answers 410 `dislikes_disabled` since 2026-11-11)
+- All like/dislike endpoints (the video and comment dislike POSTs answer 410 `dislikes_disabled` since 2026-11-11 / 2026-11-12)
 
 ## JWT Token Format
 

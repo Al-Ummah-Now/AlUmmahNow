@@ -252,8 +252,10 @@ DELETE /api/videos/:id/dislikes # Clear a dislike stored before 2026-11-11
 POST   /api/videos/:id/comments # Create comment
 PUT    /api/comments/:id        # Update comment
 DELETE /api/comments/:id        # Delete comment
-POST   /api/comments/:id/likes  # Like comment
-DELETE /api/comments/:id/likes  # Remove comment like
+POST   /api/videos/:id/comments/:cid/likes    # Like comment (also clears the member's dislike from before 2026-11-12)
+DELETE /api/videos/:id/comments/:cid/likes    # Remove comment like
+POST   /api/videos/:id/comments/:cid/dislikes # Disabled: always 410 dislikes_disabled (deprecated, see below)
+DELETE /api/videos/:id/comments/:cid/dislikes # Clear a comment dislike stored before 2026-11-12
 
 # Profile Management
 PUT    /api/profiles/:id        # Update profile
@@ -273,24 +275,29 @@ DELETE /api/playlists/:id       # Delete playlist
 GET    /auth-test               # Test JWT authentication
 ```
 
-#### Video dislikes are turned off (owner decision 2026-11-11)
+#### Dislikes are turned off: videos (owner decision 2026-11-11) and comments (2026-11-12)
 
 Dislikes are hidden and not accepted. Re-enable only with an owner decision.
 
-- `POST /api/videos/{id}/dislikes` stays registered (old clients get a clear answer, not a 404) and
-  always answers **410 Gone**, storing nothing:
+- `POST /api/videos/{id}/dislikes` and `POST /api/videos/{id}/comments/{cid}/dislikes` stay
+  registered (old clients get a clear answer, not a 404) and always answer **410 Gone**, storing
+  nothing:
   `{ "success": false, "code": "dislikes_disabled", "error": "Dislikes are turned off", "messages": { "en": "Dislikes are turned off", "ar": "تم إيقاف عدم الإعجاب" } }`.
   `error` is Arabic with `?lang=ar`. The contract marks it `deprecated` and responses carry
   `Deprecation`/`Sunset` headers (`DEPRECATIONS` in `src/lib/api-version.ts`). The code and both
   messages are exported from `@al-ummah/shared-types` (`DISLIKES_DISABLED_CODE`, `DISLIKES_DISABLED_MESSAGE`).
-- `DELETE /api/videos/{id}/dislikes` still clears a dislike stored before that date, and
-  `POST /api/videos/{id}/likes` clears the member's old dislike in the same write.
+- `DELETE /api/videos/{id}/dislikes` and `DELETE /api/videos/{id}/comments/{cid}/dislikes` still
+  clear a dislike stored before those dates, and liking the video or the comment clears the
+  member's old dislike in the same write (queues `VideoUndislike` / `CommentUndislike`).
 - Public video payloads keep `dislikesCount` for older clients, **always 0**, and a stored
   `dislikes` list goes out empty (`[]`). Realtime `video_liked`/`video_unliked` events send
   `dislikesCount: 0`. Stored dislikes stay in R2 untouched (historical data); the owner's own
   analytics (`GET /api/analytics…`) and the privacy export still count them.
 - The processor acknowledges a `VideoDislike` message still in the queue without counting it.
-- Comment dislikes are unchanged (out of scope of this decision).
+- Comments: list items, reaction answers and comment views send `dislikesCount: 0` and
+  `isDisliked: false`; comments embedded in video payloads (and their replies) carry `dislikes: []`.
+  The `top` sort ranks by likes only (it used to be likes minus dislikes).
+- The processor acknowledges a `CommentDislike` message still in the queue without counting it.
 
 
 ## Authentication & Security

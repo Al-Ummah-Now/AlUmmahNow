@@ -1,6 +1,11 @@
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { commentReactionSchema, handleCommentReaction } from './commentReaction';
 
+/**
+ * Still enabled after comment dislikes were turned off (owner decision
+ * 2026-11-12, see commentDislikeCreate.ts): a member can clear a dislike
+ * stored before then.
+ */
 export class CommentDislikeDelete extends AuthenticatedRoute {
 	schema = commentReactionSchema('dislike', 'remove');
 

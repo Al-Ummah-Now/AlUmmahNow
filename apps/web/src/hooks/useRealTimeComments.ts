@@ -17,8 +17,6 @@ import {
   deleteVideoComment,
   likeVideoComment,
   unlikeVideoComment,
-  dislikeVideoComment,
-  removeVideoCommentDislike,
   CommentReactionResponse,
 } from '@/lib/api/videos';
 import {
@@ -33,7 +31,6 @@ import {
 const COMMENTS_PAGE_SIZE = 20;
 const REPLIES_PAGE_SIZE = 20;
 
-export type CommentReaction = 'like' | 'dislike';
 export type { CommentSort, CommentSettings };
 
 export interface ReplyThread {
@@ -67,7 +64,8 @@ export interface UseRealTimeCommentsReturn {
   updateComment: (commentId: string, text: string) => Promise<boolean>;
   deleteComment: (commentId: string) => Promise<boolean>;
   approveComment: (commentId: string) => Promise<boolean>;
-  toggleReaction: (commentId: string, reaction: CommentReaction) => Promise<boolean>;
+  /** Like or unlike (comment dislikes are turned off, 2026-11-12; liking clears an old one server-side) */
+  toggleLike: (commentId: string) => Promise<boolean>;
   toggleReplies: (parentId: string) => Promise<void>;
   loadMoreReplies: (parentId: string) => Promise<void>;
   loadMore: () => Promise<void>;
@@ -360,35 +358,29 @@ export function useRealTimeComments(options: UseRealTimeCommentsOptions): UseRea
     return undefined;
   }, []);
 
-  // Like/dislike toggle; the API keeps a channel's reaction exclusive
-  const toggleReaction = useCallback(async (commentId: string, reaction: CommentReaction): Promise<boolean> => {
+  // Like toggle. Comment dislikes are turned off (owner decision 2026-11-12)
+  const toggleLike = useCallback(async (commentId: string): Promise<boolean> => {
     const current = findComment(commentId);
     if (!current) return false;
-    const active = reaction === 'like' ? current.isLiked : current.isDisliked;
+    const liked = !!current.isLiked;
 
     let response: CommentReactionResponse | null = null;
     try {
-      if (reaction === 'like') {
-        response = active
-          ? await unlikeVideoComment(videoId, commentId, { channelId })
-          : await likeVideoComment(videoId, commentId, { channelId });
-      } else {
-        response = active
-          ? await removeVideoCommentDislike(videoId, commentId, { channelId })
-          : await dislikeVideoComment(videoId, commentId, { channelId });
-      }
+      response = liked
+        ? await unlikeVideoComment(videoId, commentId, { channelId })
+        : await likeVideoComment(videoId, commentId, { channelId });
     } catch (error) {
-      logger.error('[useRealTimeComments] Reaction failed', { videoId, commentId, reaction, error });
+      logger.error('[useRealTimeComments] Like failed', { videoId, commentId, liked, error });
       return false;
     }
 
     if (!response?.success || !response.result) {
-      logger.warn('[useRealTimeComments] Reaction rejected', { videoId, commentId, reaction, error: response?.error });
+      logger.warn('[useRealTimeComments] Like rejected', { videoId, commentId, liked, error: response?.error });
       return false;
     }
 
     const r = response.result;
-    patchEverywhere(commentId, (c) => ({ ...c, likesCount: r.likesCount, dislikesCount: r.dislikesCount, isLiked: r.isLiked, isDisliked: r.isDisliked }));
+    patchEverywhere(commentId, (c) => ({ ...c, likesCount: r.likesCount, isLiked: r.isLiked }));
     return true;
   }, [videoId, channelId, findComment, patchEverywhere]);
 
@@ -438,7 +430,7 @@ export function useRealTimeComments(options: UseRealTimeCommentsOptions): UseRea
     updateComment,
     deleteComment,
     approveComment,
-    toggleReaction,
+    toggleLike,
     toggleReplies,
     loadMoreReplies,
     loadMore,

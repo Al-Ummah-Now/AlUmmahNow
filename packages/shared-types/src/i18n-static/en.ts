@@ -1325,7 +1325,6 @@ export const EN_TRANSLATIONS: AppTranslations = {
     live: 'Live',
     offline: 'Offline',
     like: 'Like',
-    dislike: 'Dislike',
     deleteComment: 'Delete comment',
     confirmDelete: 'Delete this comment?',
     edited: '(edited)',

@@ -33,13 +33,13 @@ export const CommentListItemSchema = z.object({
 	dateCreated: z.string(),
 	dateModified: z.string(),
 	likesCount: z.number(),
-	dislikesCount: z.number(),
+	dislikesCount: z.number().describe("Always 0: comment dislikes are hidden since 2026-11-12"),
 	repliesCount: z.number(),
 	isEdited: z.boolean(),
 	isDeleted: z.boolean(),
 	isPinned: z.boolean(),
 	isLiked: z.boolean(),
-	isDisliked: z.boolean(),
+	isDisliked: z.boolean().describe("Always false: comment dislikes are hidden since 2026-11-12"),
 	isHeld: z.boolean().describe("Awaiting the video owner's review (visible to its author and the owner only)"),
 	parentCommentId: z.string().nullable(),
 	author: CommentAuthorSchema,
@@ -49,7 +49,7 @@ export class CommentList extends OptionalAuthRoute {
 	schema = {
 		tags: ["Comments"],
 		summary: "List comments for a video",
-		description: "Returns a page of top-level comments (pinned first, then by `sort`: newest first, or top = most net likes) with author display name and avatar. Replies are listed by GET /api/videos/:id/comments/:cid/replies. When the request is authenticated with a channelId header, isLiked/isDisliked reflect that channel's reactions. Held-for-review comments are included for their author and the video owner only. When comments are off the list is empty and commentSettings is `off`.",
+		description: "Returns a page of top-level comments (pinned first, then by `sort`: newest first, or top = most likes) with author display name and avatar. Replies are listed by GET /api/videos/:id/comments/:cid/replies. When the request is authenticated with a channelId header, isLiked reflects that channel's like (isDisliked is always false: comment dislikes are hidden since 2026-11-12). Held-for-review comments are included for their author and the video owner only. When comments are off the list is empty and commentSettings is `off`.",
 		request: {
 			params: z.object({
 				id: Str({ description: "Video id" }),

@@ -131,6 +131,29 @@ test.describe('Video comments - viewer', () => {
     await expect(page.getByTestId('comment').first()).not.toContainText(liked);
   });
 
+  // Comment dislikes are turned off (owner decision 2026-11-12)
+  for (const locale of ['en', 'ar'] as const) {
+    test(`a comment has a like button and no dislike control; the dislike API answers 410 (${locale})`, async ({ page }) => {
+      const text = unique('E2E no dislike');
+      const created = await apiComment('single', text);
+      await page.goto(`/${locale}/video/${video.get().id}`);
+      const comment = page.getByTestId('comment').filter({ hasText: text }).first();
+      await expect(comment).toBeVisible();
+      await expect(comment.locator('.lucide-thumbs-up')).toBeVisible();
+      await expect(comment.locator('.lucide-thumbs-down')).toHaveCount(0);
+      await expect(comment.getByRole('button', { name: /dislike|عدم إعجاب|عدم الإعجاب/i })).toHaveCount(0);
+
+      const u = userApi('multi');
+      const res = await u.api.post<{ code?: string }>(
+        `/api/videos/${video.get().id}/comments/${created.id}/dislikes`,
+        {},
+        { token: u.token, channelId: u.channelIds[0], allowStatus: [410] },
+      );
+      expect(res.status).toBe(410);
+      expect(res.data.code).toBe('dislikes_disabled');
+    });
+  }
+
   test('shows comments from other viewers live, without a reload', async ({ page }) => {
     await page.goto(`/en/video/${video.get().id}`);
     await expect(page.getByTestId('comments-list')).toBeVisible();

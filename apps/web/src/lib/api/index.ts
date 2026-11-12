@@ -13,7 +13,6 @@ export {
   unlikeVideo,
   likeVideoComment,
   unlikeVideoComment,
-  dislikeVideoComment,
   searchVideos,
   getTrendingVideos,
   getRecommendedVideos,

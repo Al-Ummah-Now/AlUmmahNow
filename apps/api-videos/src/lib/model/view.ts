@@ -54,7 +54,7 @@ export const CommentView = z.object({
     dateCreated: DateTime(),
     dateModified: DateTime().optional(),
     likesCount: z.number(),
-    dislikesCount: z.number(),
+    dislikesCount: z.number().describe("Always 0: comment dislikes are hidden and not accepted since 2026-11-12 (kept for older clients)"),
     repliesCount: z.number(),
     isEdited: z.boolean(),
     isPinned: z.boolean(),

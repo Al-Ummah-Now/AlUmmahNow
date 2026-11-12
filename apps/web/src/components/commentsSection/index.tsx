@@ -8,7 +8,7 @@ import CommentLTR, { CommentProps } from "@/components/comment";
 import CommentRTL from "@/components/comment/rtl";
 import ReportContentButton from "@/components/moderation/ReportContentButton";
 import { Comments } from "@/interfaces";
-import { useRealTimeComments, CommentReaction, CommentSort, AddCommentResult } from "@/hooks/useRealTimeComments";
+import { useRealTimeComments, CommentSort, AddCommentResult } from "@/hooks/useRealTimeComments";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useProfile } from "@/hooks/useProfile";
@@ -50,7 +50,7 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
 
   const Comment = isRTL ? CommentRTL : CommentLTR;
 
-  // Comments, likes and dislikes are made by the active channel
+  // Comments and likes are made by the active channel
   const activeChannel = account?.channel || null;
   const channelId = activeChannel?.id || '';
   const canInteract = !!user && !!channelId;
@@ -67,7 +67,7 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
     updateComment,
     deleteComment,
     approveComment,
-    toggleReaction,
+    toggleLike,
     toggleReplies,
     loadMoreReplies,
     loadMore,
@@ -94,10 +94,10 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
     return false;
   };
 
-  const handleReaction = async (commentId: string, reaction: CommentReaction) => {
+  const handleLike = async (commentId: string) => {
     if (!canInteract) return;
     setActionError(false);
-    const ok = await toggleReaction(commentId, reaction);
+    const ok = await toggleLike(commentId);
     if (!ok) setActionError(true);
   };
 
@@ -147,12 +147,9 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
       isReply,
       videoId,
       likesCount: comment.likesCount ?? 0,
-      dislikesCount: comment.dislikesCount ?? 0,
       isLiked: comment.isLiked,
-      isDisliked: comment.isDisliked,
       canReact: canInteract && !comment.isHeld,
-      onLike: () => handleReaction(comment.id, 'like'),
-      onDislike: () => handleReaction(comment.id, 'dislike'),
+      onLike: () => handleLike(comment.id),
       onDelete: isOwnComment || isVideoOwner ? () => handleDelete(comment.id) : undefined,
       onEdit: isOwnComment ? (text) => handleEdit(comment.id, text) : undefined,
       onReply: !isReply && canInteract && !commentsOff && !comment.isHeld
