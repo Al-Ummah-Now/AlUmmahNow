@@ -106,10 +106,15 @@ test('nobody can publish into an admin channel from a socket', async () => {
 test('admin channels are dropped when the token expires and after re-auth without the role', async () => {
   const durable = makeDO();
   const ws = await connect(durable);
-  const now = Math.floor(Date.now() / 1000);
-  await signIn(durable, ws, ['Admin'], now + 1);
-  await subscribe(durable, ws, 'admin:jobs');
-  durable.expireAuthIfNeeded(ws, { nowSeconds: now + 5 });
+  // The token lives 10 minutes, so the real clock never expires it during sign-in and subscribe
+  // (with a 1 s token, a slow runner crossed the second and the test flaked); expiry is then
+  // driven only through the injected clock, at and after the token's exp
+  const exp = Math.floor(Date.now() / 1000) + 600;
+  await signIn(durable, ws, ['Admin'], exp);
+  assert.equal((await subscribe(durable, ws, 'admin:jobs')).type, 'subscribed');
+  assert.equal(durable.expireAuthIfNeeded(ws, { nowSeconds: exp - 1 }), false, 'still valid a second before exp');
+  assert.equal(durable.subscriberCount('admin:jobs'), 1);
+  assert.equal(durable.expireAuthIfNeeded(ws, { nowSeconds: exp }), true, 'expired at exp');
   assert.equal(durable.subscriberCount('admin:jobs'), 0);
   assert.equal(durable.sockets.get(ws).adminLevel, undefined);
 
