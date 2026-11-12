@@ -67,7 +67,7 @@ export function ownPublicVideos(test: AnyTest, label: string, specs: OwnVideoSpe
 
   test.beforeAll(async ({ browser }) => {
     // Sign-up, channel, uploads and their encodes (16 for the home grid)
-    test.setTimeout(120_000 + specs.length * 20_000);
+    test.setTimeout(300_000 + specs.length * 20_000);
     const context = await browser.newContext({ storageState: { cookies: [], origins: [] } });
     try {
       const page = await context.newPage();
@@ -91,7 +91,16 @@ export function ownPublicVideos(test: AnyTest, label: string, specs: OwnVideoSpe
         }
         videos.push(video);
       }
-      for (const video of videos) await data.waitReady(video.id, video.title);
+      // Polled here rather than the builders' 60 s: a shard's stack encodes many files' uploads at once
+      for (const video of videos) {
+        await expect
+          .poll(async () => ((await (await fetch(`${target().api}/api/videos/${video.id}`, { cache: 'no-store' })).json().catch(() => ({}))) as { uploadStatus?: string }).uploadStatus, {
+            message: `"${video.title}" never became ready`,
+            timeout: 180_000,
+            intervals: [1000, 2000, 5000],
+          })
+          .toBe('ready');
+      }
       if (channel.playlist) playlistId = await data.createPlaylist(owner, channelId, { title: `E2E playlist ${channelName}`, videoIds: videos.map((v) => v.id) });
       for (let i = 0; i < (channel.posts ?? 0); i++) postIds.push(await data.createPost(owner, channelId, { text: `E2E post ${i + 1} of ${channelName}` }));
       if (channel.nameAr || channel.description || channel.descriptionAr) {
@@ -125,7 +134,7 @@ export function ownPublicVideos(test: AnyTest, label: string, specs: OwnVideoSpe
           const res = await fetch(`${target().api}/api/videos?limit=15`);
           const ids = new Set((((await res.json().catch(() => ({}))) as { data?: { id: string }[] }).data ?? []).map((v) => v.id));
           return ids.has(videos[videos.length - 1].id);
-        }, { message: 'the newest own video never reached the first page of GET /api/videos', timeout: 75_000, intervals: [2000, 5000] })
+        }, { message: 'the newest own video never reached the first page of GET /api/videos', timeout: 150_000, intervals: [2000, 5000] })
         .toBe(true);
     } finally {
       await context.close();
