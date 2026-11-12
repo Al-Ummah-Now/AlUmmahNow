@@ -8,7 +8,7 @@
  */
 
 import React, { useEffect, useRef, type KeyboardEvent, type MouseEvent } from 'react';
-import Link from 'next/link';
+import Link from '@/components/common/AppLink';
 import { ChevronDown, ChevronUp, ListVideo, Lock, Play, Repeat, Shuffle, SkipBack, SkipForward } from 'lucide-react';
 import { getLocalizedValue } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
