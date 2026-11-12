@@ -171,7 +171,7 @@ it keeps the theme's menu colours (Lantern `#134a62`). The stylesheet switches w
 | Text / muted | `--fanous-color-text-primary` / `--fanous-color-text-secondary` | `--fanous-c-menu-text` / `--fanous-c-menu-muted` |
 | Hover / pressed / current row | `--fanous-c-menu-hover` mixed 50% into the background (a light tint) | `--fanous-c-menu-hover` |
 | Border | 1px `--fanous-color-outline` | 1px `--fanous-c-menu-border` |
-| Separators, role-chip border | `--fanous-color-divider` | `--fanous-c-divider-line` |
+| Separators, role-chip border | `--fanous-color-divider` | `--fanous-c-menu-text` mixed 30% into `--fanous-c-menu-bg` (the theme's divider token is 1.0–1.4:1 on the dark menu, too faint) |
 | Shadow | `--fanous-elevation-medium` | `--fanous-elevation-medium` |
 
 | Property | Value (both modes) |
@@ -190,7 +190,16 @@ it keeps the theme's menu colours (Lantern `#134a62`). The stylesheet switches w
 
 Contrast (computed from the tokens, every theme): light mode, text, muted, danger and the check on
 the background and the hover tint are 5.10:1 or more; dark mode (the menu tokens) 4.69:1 or more.
-The border is 3.6:1 or more against the page in light mode. Separators are decorative.
+
+Lines must show (owner review rev 4, "in dark you can't see the lines between rows"):
+
+| Line | Light mode | Dark mode | Floor (checked) |
+|---|---|---|---|
+| Separators between sections | 1.31–1.77:1 on the background | 1.91–2.49:1 on the menu (Lantern 2.13, Zujaj 1.91, Nahas 2.49, Fawanees 2.23) | 1.25:1 light, 1.8:1 dark |
+| Outer border | 3.57–5.12:1 on the background | 3.24–4.40:1 on the menu | 3:1 |
+
+`apps/web/e2e/themes/account-menu.spec.ts` measures both in every theme × light/dark × en/ar
+(`menuLineContrast` in `e2e/themes/harness.ts`), so a faint divider fails the Theme visibility check.
 
 Keyboard: ↓ on the button opens and focuses the first item; ↑/↓ move, Home/End jump; Escape
 closes and returns focus to the button. A click outside or tabbing out closes it.
