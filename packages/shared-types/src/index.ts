@@ -106,3 +106,5 @@ export * from './media-delivery';
 export * from './admin-queue';
 // Live providers (D3): routing settings, assignment, QoE beacons, comparison
 export * from './live-providers';
+// The account menu's "Al Ummah Now apps" links, same order and role gates in every app (docs/design/NAV.md)
+export * from './app-links';

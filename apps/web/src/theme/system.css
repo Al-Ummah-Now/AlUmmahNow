@@ -14,12 +14,12 @@ h1,h2,h3{letter-spacing:-.01em}html[lang=ar] h1,html[lang=ar] h2,html[lang=ar] h
 .ah-search input{flex:1;min-width:0;padding-inline:var(--fanous-spacing-lg);border:0!important;outline:0!important;background:transparent!important;color:var(--fanous-c-nav-search-text)!important;box-shadow:none!important}.ah-search input::placeholder{color:var(--fanous-c-nav-search-placeholder)!important}
 .ah-search button{width:56px;display:grid;place-items:center;border:0;background:transparent;color:var(--fanous-c-nav-icon);cursor:pointer;border-inline-start:1px solid var(--fanous-c-nav-search-border)}@media(hover:hover){.ah-search button:hover{background:var(--fanous-c-nav-hover)}}.ah-search svg{width:20px;height:20px}
 .ah-search-phone{display:none}
-.ah button{color:var(--fanous-c-nav-icon)}.ah-end button{min-height:44px;border-radius:var(--r-pill)}.ah-end>:is(div,button){display:flex;align-items:center}@media(hover:hover){.ah-end button:hover{background:var(--fanous-c-nav-hover)}}.ah-end *{color:var(--fanous-c-nav-text)}
+.ah button:not([class*=aun-]){color:var(--fanous-c-nav-icon)}.ah-end button:not([class*=aun-]){min-height:44px;border-radius:var(--r-pill)}.ah-end>:is(div,button){display:flex;align-items:center}@media(hover:hover){.ah-end button:not([class*=aun-]):hover{background:var(--fanous-c-nav-hover)}}.ah-end *:not(.aun-menu,.aun-menu *,.aun-avatar){color:var(--fanous-c-nav-text)}
 /* Popovers opened from the header (notifications, menus, listboxes) sit on the dialog/menu surface, not the night bar:
    the nav colours above must not reach inside them. revert-layer hands colour back to the component's own classes
    (or inheritance from the popover's token colour). */
-.ah :is([data-popover],[role=dialog],[role=menu],[role=listbox]) :is(*,button){color:revert-layer}
-@media(hover:hover){.ah :is([data-popover],[role=dialog],[role=menu],[role=listbox]) button:hover{background:revert-layer}}
+.ah :is([data-popover],[role=dialog],[role=menu],[role=listbox]) :is(*,button):not(.aun-menu *){color:revert-layer}
+@media(hover:hover){.ah :is([data-popover],[role=dialog],[role=menu],[role=listbox]) button:not(.aun-menu *):hover{background:revert-layer}}
 /* Navigation */
 .nv-panel{position:fixed;z-index:45;inset-block:0;inset-inline-start:0;width:var(--rail);padding-block-start:64px;display:flex;flex-direction:column;background:var(--m-rail);box-shadow:var(--m-rail-edge);-webkit-backdrop-filter:var(--m-blur);backdrop-filter:var(--m-blur);transition:width 220ms cubic-bezier(.2,0,0,1)}
 .demo-banner~* .nv-panel{padding-block-start:92px}.nv-scroll{flex:1;overflow-y:auto;overflow-x:hidden;padding:var(--fanous-spacing-sm)}
@@ -57,7 +57,7 @@ html[data-rail-still] .nv-panel,html[data-rail-still] #page-content{transition:n
 .c,[data-slot=card],:is([class^="bg-white"],[class*=" bg-white"])[class*="rounded"]:not(.video-card):not(button):not(a):not(.sw):not(:is([role=menu],[role=dialog],[role=listbox],[data-popover])),:is([class^="bg-gray-50"],[class*=" bg-gray-50"])[class*="rounded"]:not(button):not(a){border:1px solid transparent!important;background:var(--m-card) padding-box,var(--m-border) border-box!important;box-shadow:var(--m-card-edge);border-radius:var(--r-lg)!important;-webkit-backdrop-filter:var(--m-blur);backdrop-filter:var(--m-blur)}
 .c{padding:var(--fanous-spacing-xl)}
 .hero{background:var(--m-hero);border-radius:var(--r-xl);box-shadow:var(--m-card-edge)}
-.menu,[role=menu]:not(.vjs-fanous-layer):not(.vjs-menu-content),[data-slot=dropdown-menu-content],[data-slot=select-content],[data-radix-popper-content-wrapper]>[role=dialog]{background:var(--m-raised)!important;box-shadow:var(--m-raised-edge)!important;border:0!important;border-radius:var(--r-lg)!important;color:var(--fanous-c-menu-text)!important;-webkit-backdrop-filter:var(--m-blur);backdrop-filter:var(--m-blur)}.menu{padding:6px;width:240px}.mi,[data-slot=dropdown-menu-item]{display:flex;align-items:center;gap:var(--fanous-spacing-sm);min-height:40px;padding-inline:var(--fanous-spacing-md);border-radius:var(--r-md);font-size:14px}.mi.is-hover,[data-slot=dropdown-menu-item][data-highlighted]{background:var(--m-hover)!important}@media(hover:hover){.mi:hover,[data-slot=dropdown-menu-item]:hover{background:var(--m-hover)!important}}.mi svg{width:16px;height:16px;color:var(--fanous-c-menu-muted)}.mi small{margin-inline-start:auto;color:var(--fanous-c-menu-muted)}
+.menu,[role=menu]:not(.vjs-fanous-layer):not(.vjs-menu-content):not(.aun-menu),[data-slot=dropdown-menu-content],[data-slot=select-content],[data-radix-popper-content-wrapper]>[role=dialog]{background:var(--m-raised)!important;box-shadow:var(--m-raised-edge)!important;border:0!important;border-radius:var(--r-lg)!important;color:var(--fanous-c-menu-text)!important;-webkit-backdrop-filter:var(--m-blur);backdrop-filter:var(--m-blur)}.menu{padding:6px;width:240px}.mi,[data-slot=dropdown-menu-item]{display:flex;align-items:center;gap:var(--fanous-spacing-sm);min-height:40px;padding-inline:var(--fanous-spacing-md);border-radius:var(--r-md);font-size:14px}.mi.is-hover,[data-slot=dropdown-menu-item][data-highlighted]{background:var(--m-hover)!important}@media(hover:hover){.mi:hover,[data-slot=dropdown-menu-item]:hover{background:var(--m-hover)!important}}.mi svg{width:16px;height:16px;color:var(--fanous-c-menu-muted)}.mi small{margin-inline-start:auto;color:var(--fanous-c-menu-muted)}
 .dl,[data-slot=dialog-content],[data-slot=alert-dialog-content]{background:var(--m-raised)!important;box-shadow:var(--m-dialog-shadow,var(--m-raised-edge))!important;border:1px solid var(--m-dialog-line,transparent)!important;border-radius:var(--r-xl)!important;color:var(--fanous-c-dialog-text)!important}.dl{padding:var(--fanous-spacing-xl);max-width:420px}.dl h3{font-size:19px;font-weight:700;margin:0}.dl p{color:var(--fanous-c-dialog-muted);margin:6px 0 0}.dl-a{display:flex;gap:8px;justify-content:flex-end;margin-block-start:20px}
 .toast{display:flex;align-items:center;gap:10px;padding:12px var(--fanous-spacing-lg);background:var(--m-raised);box-shadow:var(--m-raised-edge);border-radius:var(--r-lg);color:var(--fanous-c-toast-text);max-width:380px}.toast svg{width:20px;height:20px;flex:none}.toast.ok svg{color:var(--fanous-c-toast-success)}.toast.err svg{color:var(--fanous-c-toast-error)}
 /* Tabs and chips */
@@ -169,7 +169,7 @@ button[class*="rounded-full"][class*="border"][class*="h-9"][aria-pressed=true]{
 .ah-search{justify-self:center;width:100%;max-width:640px;min-width:0}
 .ah-search input{padding-inline:16px 8px;font-size:15px}.ah-search input::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none;width:18px;height:18px;margin-inline-start:6px;cursor:pointer;background:var(--fanous-c-nav-icon);-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M6 6l12 12M18 6L6 18'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M6 6l12 12M18 6L6 18'/%3E%3C/svg%3E") center/contain no-repeat}
 .ah-search button{flex:none;width:52px}
-@media(max-width:1439px){.ah-end [class*="max-w-[150px]"]{display:none}}
+
 
 @media(max-width:1023px){.ah{gap:var(--fanous-spacing-sm)}.ah-search{min-width:200px}}
 @media(max-width:767px){.ah-search{min-width:0}}
@@ -343,17 +343,7 @@ html[data-rail=open] .nv{font-size:14px;line-height:20px}html[data-rail=open] .n
 /* Settings row chevrons centred */
 a.group svg.lucide-chevron-right{align-self:center}
 
-/* Header account menu: anchored below the header, quiet opaque rows */
 /* Menus, dialogs and listboxes are popovers, never cards: the card material (glass in Zujaj) left the phone account menu see-through (#898) */
-.ah-end [class*="absolute"][class*="w-80"]{top:calc(100% + 8px);margin-top:0;background:var(--fanous-c-dialog-bg)!important;-webkit-backdrop-filter:none;backdrop-filter:none}
-.ah-end [class*="absolute"][class*="w-80"] :is(button,a){background:transparent!important;color:var(--fanous-color-text-primary)!important;border:0!important;box-shadow:none!important;border-radius:var(--r-md)!important;min-height:40px}
-.ah-end [class*="absolute"][class*="w-80"] :is(button,a) :not([class^="bg-blue-5"]):not([class*=" bg-blue-5"]):not(svg){color:inherit}
-.ah-end [class*="absolute"][class*="w-80"] [class*="text-gray-"]{color:var(--fanous-color-text-secondary)!important}
-@media(hover:hover){.ah-end [class*="absolute"][class*="w-80"] :is(button,a):hover{background:var(--m-hover)!important}}
-.ah-end [class*="max-w-[150px]"]{display:none}
-/* Account trigger: avatar and chevron read as one control (the hidden name block must not leave a gap between them) */
-.ah-end .nav-trigger-name{display:none}
-.ah-end [data-testid=nav-menu-trigger]{gap:2px;padding-inline:6px}
 .ah-end :is([class^="bg-red-"],[class*=" bg-red-"]){transform:scale(.82);transform-origin:center}
 
 /* Phone chrome */
@@ -398,9 +388,6 @@ div:has(>a[class*="w-40"][class*="h-24"])>button{background:transparent!importan
 
 /* Round two */
 
-.ah-end [class*="absolute"][class*="w-80"]{background:linear-gradient(var(--fanous-c-dialog-bg),var(--fanous-c-dialog-bg)) padding-box,var(--m-border) border-box!important;border:1px solid transparent!important}
-.ah-end [class*="absolute"][class*="w-80"] [class*="gradient"]{background:transparent!important}
-.ah-end [class*="absolute"][class*="w-80"] [class*="gradient"] :is(div,span){color:var(--fanous-color-text-primary)!important}
 
 .nv{padding-inline:2px}.nv span{overflow-wrap:normal;word-break:normal;font-size:10.5px;line-height:13px}html[data-rail=open] .nv span{font-size:14px;line-height:20px}
 .video-card [data-testid=video-card-menu],.video-card [data-testid=video-card-menu] button,button[data-testid=video-card-menu]{background:transparent!important;background-image:none!important;color:var(--fanous-color-text-secondary)!important;box-shadow:none!important;border:0!important}

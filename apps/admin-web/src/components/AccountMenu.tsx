@@ -12,12 +12,15 @@ import {
   switchAuthAccount,
   type AuthAccount,
 } from '@/lib/auth-accounts';
+import { appLinks, appUrlsFromIssuer, type AppLinkId } from '@al-ummah/shared-types';
 
 interface AccountMenuProps {
   /** Auth server origin (the Issuer). */
   issuer: string;
   /** The account this panel is signed in as, if any (shown until the list loads). */
   currentEmail?: string;
+  /** This account's roles: the "Al Ummah Now apps" links are gated like each app's guard. */
+  roles?: readonly string[];
 }
 
 /**
@@ -25,8 +28,8 @@ interface AccountMenuProps {
  * switch (silent sign-in as that account), add one (sign-in form), sign out
  * of one, or sign out of all (single sign-out).
  */
-export function AccountMenu({ issuer, currentEmail }: AccountMenuProps) {
-  const { t } = useLanguage();
+export function AccountMenu({ issuer, currentEmail, roles }: AccountMenuProps) {
+  const { t, locale } = useLanguage();
   const { confirm, dialog: confirmDialog } = useConfirm();
   const [open, setOpen] = useState(false);
   const [accounts, setAccounts] = useState<AuthAccount[] | null>(null);
@@ -84,7 +87,6 @@ export function AccountMenu({ issuer, currentEmail }: AccountMenuProps) {
   };
 
   const count = accounts?.length ?? 0;
-  const label = count > 1 ? `${t('accounts.menu')} (${count})` : t('accounts.menu');
   // Without the auth server's list, show at least the account signed in here
   const rows: AuthAccount[] =
     accounts && accounts.length > 0
@@ -92,9 +94,21 @@ export function AccountMenu({ issuer, currentEmail }: AccountMenuProps) {
       : currentEmail
         ? [{ userId: '', email: currentEmail, isActive: true }]
         : [];
-
-  const itemClass =
-    'text-sm px-2 py-1 rounded text-fg-muted hover:text-fg hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50';
+  const active = rows.find((a) => a.isActive) ?? rows[0];
+  // The name auth has for the account (platform display-name rule); the email only without one
+  const nameOf = (a: AuthAccount | undefined) => a?.name || a?.email || currentEmail || '';
+  const name = nameOf(active);
+  const initial = (name[0] ?? '?').toUpperCase();
+  const otherApps = appLinks({ current: 'admin', roles, lang: locale, urls: appUrlsFromIssuer(issuer) });
+  const appLabel: Record<AppLinkId, string> = {
+    www: t('accounts.appWww'),
+    videos: t('accounts.appVideos'),
+    profile: t('accounts.appProfile'),
+    cms: t('accounts.appCms'),
+    admin: t('accounts.appAdmin'),
+    'auth-admin': t('accounts.appAuthAdmin'),
+  };
+  const sep = <div className="aun-menu-sep" role="separator" />;
 
   return (
     <div ref={rootRef} className="relative">
@@ -105,87 +119,120 @@ export function AccountMenu({ issuer, currentEmail }: AccountMenuProps) {
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={menuId}
+        aria-label={`${t('accounts.menu')}: ${name}`}
         onClick={() => setOpen((v) => !v)}
-        title={label}
-        className="flex h-10 items-center gap-2 rounded-lg px-2 text-sm text-nav-text hover:bg-nav-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-focus max-w-[16rem]"
+        className="aun-acct-btn"
       >
-        <Icon name="user" className="size-[18px] text-nav-icon" />
-        <span className="truncate max-md:sr-only">{label}</span>
+        <span className="aun-avatar" aria-hidden="true">{initial}</span>
+        <span className="aun-acct-name" dir="auto">{name}</span>
+        <Icon name="chevron" className="aun-caret rotate-90" />
       </button>
       {open && (
-        <div
-          id={menuId}
-          role="menu"
-          data-testid="account-menu"
-          aria-busy={busy}
-          className="absolute end-0 mt-2 w-72 z-50 bg-surface border border-border rounded-lg shadow-lg p-2"
-        >
-          <p className="px-2 py-1 text-xs font-semibold text-fg-subtle uppercase">{t('accounts.title')}</p>
-          <ul className="mb-2">
-            {rows.map((account) => (
-              <li
-                key={account.userId || account.email}
-                data-testid="account-menu-account"
-                data-active={account.isActive ? 'true' : 'false'}
-                data-email={account.email}
-                className="flex items-center justify-between gap-2 px-2 py-1 rounded"
-              >
-                <button
-                  type="button"
-                  role="menuitem"
-                  data-testid="account-switch"
-                  disabled={busy || account.isActive || !account.userId}
-                  onClick={() => onSwitch(account.userId)}
-                  className="flex-1 min-w-0 text-start disabled:cursor-default"
+        <div id={menuId} role="menu" data-testid="account-menu" aria-busy={busy} className="aun-menu">
+          <div className="aun-menu-who">
+            <span className="aun-avatar aun-avatar--lg" aria-hidden="true">{initial}</span>
+            <span className="aun-menu-who-text">
+              <span className="aun-menu-who-name" dir="auto">{name}</span>
+              {active?.email && active.email !== name && <span className="aun-menu-who-sub" dir="auto">{active.email}</span>}
+            </span>
+          </div>
+          {sep}
+          <span className="aun-menu-label" id={`${menuId}-accounts`}>{t('accounts.title')}</span>
+          <ul aria-labelledby={`${menuId}-accounts`}>
+            {rows.map((account) => {
+              const label = nameOf(account);
+              return (
+                <li
+                  key={account.userId || account.email}
+                  data-testid="account-menu-account"
+                  data-active={account.isActive ? 'true' : 'false'}
+                  data-email={account.email}
+                  className="aun-acct-row"
                 >
-                  <span className="block text-sm text-fg truncate">{account.name || account.email}</span>
-                  {account.name && <span className="block text-xs text-fg-muted truncate">{account.email}</span>}
-                  {account.isActive && <span className="block text-xs text-success-fg">{t('accounts.active')}</span>}
-                </button>
-                {account.userId && (
                   <button
                     type="button"
                     role="menuitem"
-                    data-testid="account-sign-out"
-                    disabled={busy}
-                    onClick={() => onSignOut(account.userId)}
-                    className={itemClass}
-                    aria-label={t('accounts.signOutOf', { email: account.email })}
+                    data-testid="account-switch"
+                    disabled={busy || account.isActive || !account.userId}
+                    aria-current={account.isActive ? 'true' : undefined}
+                    aria-label={account.isActive ? undefined : t('accounts.switchTo', { name: label })}
+                    onClick={() => onSwitch(account.userId)}
+                    className="aun-menu-item"
                   >
-                    {t('accounts.signOut')}
+                    <span className="aun-avatar" aria-hidden="true">{(label[0] ?? '?').toUpperCase()}</span>
+                    <span className="aun-acct-text">
+                      <span className="aun-acct-label" dir="auto">{label}</span>
+                      {account.name && <span className="aun-acct-email" dir="auto">{account.email}</span>}
+                      {account.isActive && <span className="aun-acct-current">{t('accounts.current')}</span>}
+                    </span>
+                    {account.isActive && <Icon name="check" className="aun-menu-check" />}
                   </button>
-                )}
-              </li>
-            ))}
+                  {account.userId && count > 1 && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      data-testid="account-sign-out"
+                      disabled={busy}
+                      onClick={() => onSignOut(account.userId)}
+                      className="aun-acct-signout"
+                      aria-label={t('accounts.signOutOf', { email: label })}
+                    >
+                      {t('accounts.signOut')}
+                    </button>
+                  )}
+                </li>
+              );
+            })}
           </ul>
-          <div className="border-t border-border pt-2 flex flex-col items-stretch gap-1">
-            <button type="button" role="menuitem" data-testid="account-add" disabled={busy} onClick={onAdd} className={`${itemClass} text-start`}>
-              {t('accounts.add')}
-            </button>
-            <form
-              ref={signOutAllRef}
-              action="/api/logout"
-              method="POST"
-              onSubmit={async (e) => {
-                // With several accounts a click signs every one out: confirm first
-                // (requestSubmit from onSignOut has no submitter and goes straight through)
-                if (count < 2 || !(e.nativeEvent as SubmitEvent).submitter) return;
-                e.preventDefault();
-                const confirmed = await confirm({
-                  title: t('confirmDialog.signOutAllTitle'),
-                  body: t('confirmDialog.signOutAllBody'),
-                  confirmLabel: t('accounts.signOutAll'),
-                  danger: true,
-                  testId: 'account-sign-out-all-confirm',
-                });
-                if (confirmed) signOutAllRef.current?.submit();
-              }}
+          <button type="button" role="menuitem" data-testid="account-add" disabled={busy} onClick={onAdd} className="aun-menu-item">
+            <Icon name="plus" className="aun-menu-icon" />
+            <span className="aun-menu-text">{t('accounts.add')}</span>
+          </button>
+          {otherApps.length > 0 && (
+            <>
+              {sep}
+              <div role="group" aria-labelledby={`${menuId}-apps`} data-testid="account-menu-apps">
+                <span className="aun-menu-label" id={`${menuId}-apps`}>{t('accounts.apps')}</span>
+                {otherApps.map((app) => (
+                  <a key={app.id} href={app.href} role="menuitem" className="aun-menu-item" data-app={app.id}>
+                    <span className="aun-menu-text">{appLabel[app.id]}</span>
+                  </a>
+                ))}
+              </div>
+            </>
+          )}
+          {sep}
+          <form
+            ref={signOutAllRef}
+            action="/api/logout"
+            method="POST"
+            onSubmit={async (e) => {
+              // With several accounts a click signs every one out: confirm first
+              // (requestSubmit from onSignOut has no submitter and goes straight through)
+              if (count < 2 || !(e.nativeEvent as SubmitEvent).submitter) return;
+              e.preventDefault();
+              const confirmed = await confirm({
+                title: t('confirmDialog.signOutAllTitle'),
+                body: t('confirmDialog.signOutAllBody'),
+                confirmLabel: t('accounts.signOutAll'),
+                danger: true,
+                testId: 'account-sign-out-all-confirm',
+              });
+              if (confirmed) signOutAllRef.current?.submit();
+            }}
+          >
+            {/* The one sign-out entry (single sign-out through the auth server; it was a separate header button) */}
+            <button
+              type="submit"
+              role="menuitem"
+              data-testid="account-sign-out-all"
+              disabled={busy}
+              className={`aun-menu-item ${count > 1 ? 'aun-menu-item--danger' : ''}`}
             >
-              <button type="submit" role="menuitem" data-testid="account-sign-out-all" disabled={busy} className={`${itemClass} w-full text-start`}>
-                {t('accounts.signOutAll')}
-              </button>
-            </form>
-          </div>
+              <Icon name="logout" className="aun-menu-icon aun-flip" />
+              <span className="aun-menu-text">{count > 1 ? t('accounts.signOutAll') : t('accounts.signOut')}</span>
+            </button>
+          </form>
         </div>
       )}
     </div>

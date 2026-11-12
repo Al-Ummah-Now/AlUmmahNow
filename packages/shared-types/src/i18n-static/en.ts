@@ -93,6 +93,15 @@ export const EN_TRANSLATIONS: AppTranslations = {
   },
 
   navigation: {
+    appsSection: 'Al Ummah Now apps',
+    appWww: 'Website',
+    appVideos: 'Videos',
+    appProfile: 'Your profile',
+    appCms: 'Content management',
+    appAdmin: 'Videos admin',
+    appAuthAdmin: 'Accounts admin',
+    currentAccount: 'Current account',
+    switchToAccount: 'Switch to {name}',
     writeArticle: 'Write article',
     myArticles: 'My articles',
     scholarPage: 'Scholar page',

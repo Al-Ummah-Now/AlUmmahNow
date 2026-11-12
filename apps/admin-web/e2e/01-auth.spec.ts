@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from './support/fixtures';
 import { ADMIN_WEB_URL, OPENAUTH_URL, RUN_ACCOUNTS_ONLY, RUN_ID, accounts, storageStatePath } from './support/env';
-import { uiLogin } from './support/ui';
+import { clickSignOut, uiLogin } from './support/ui';
 import { skipUntilSignInDeployed } from './support/deployed';
 
 // AUTH-03/04/05/12/15 type a password (uiLogin): a trace would hold it in the
@@ -180,7 +180,7 @@ test.describe('log out (single sign-out)', () => {
     test.skip(!RUN_ID, RUN_ACCOUNTS_ONLY);
     await skipUntilSignInDeployed();
     await uiLogin(page, accounts.admin);
-    await logOutThroughAuthServer(page, () => page.getByTestId('logout-button').click());
+    await logOutThroughAuthServer(page, () => clickSignOut(page));
   });
 
   test('AUTH-13 logout endpoint answers 303 to the auth server sign-out (no form re-POST)', async ({ request }) => {

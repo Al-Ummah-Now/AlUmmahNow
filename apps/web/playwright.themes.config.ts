@@ -43,7 +43,7 @@ export default defineConfig({
         url: `${baseURL}/en`,
         reuseExistingServer: !process.env.CI,
         timeout: 300_000,
-        env: { API_URL: MOCK_API, NEXT_PUBLIC_API_URL: MOCK_API, WEBSOCKET_URL: `${MOCK_API.replace('http', 'ws')}/ws`, NEXT_PUBLIC_WEBSOCKET_URL: `${MOCK_API.replace('http', 'ws')}/ws` },
+        env: { API_URL: MOCK_API, NEXT_PUBLIC_API_URL: MOCK_API, WWW_URL: 'https://www.example.test', AUTH_PROFILE_URL: 'https://profile.auth.example.test', WEBSOCKET_URL: `${MOCK_API.replace('http', 'ws')}/ws`, NEXT_PUBLIC_WEBSOCKET_URL: `${MOCK_API.replace('http', 'ws')}/ws` },
         stdout: 'ignore' as const,
         stderr: 'pipe' as const,
       }]),

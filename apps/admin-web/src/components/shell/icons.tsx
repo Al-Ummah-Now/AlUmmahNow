@@ -35,6 +35,8 @@ const PATHS = {
   sidebar: 'M3 4h18v16H3zM9 4v16',
   logout: 'M15 4h4v16h-4M10 8l-4 4 4 4M6 12h11',
   enter: 'M20 5v7a3 3 0 0 1-3 3H5m0 0l4-4m-4 4l4 4',
+  plus: 'M12 5v14M5 12h14',
+  check: 'M5 12.5l4.5 4.5L19 7',
 } as const;
 
 export type IconName = keyof typeof PATHS;

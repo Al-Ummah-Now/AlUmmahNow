@@ -12,6 +12,7 @@ import { logger } from '@/lib/logger-client';
 import { useState, useEffect } from 'react';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { MenuBackdrop } from './MenuBackdrop';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { mayCreateChannel, refreshCreatorAccess, useCreatorAccess } from '@/hooks/useCreatorAccess';
 import { useLanguage } from '@/hooks/useLanguage';
 import Link from '@/components/common/AppLink';
@@ -36,16 +37,14 @@ import {
 } from 'lucide-react';
 import { ACCOUNT_MENU_PATHS } from '@/lib/navigation/destinations';
 import { useOptionalAuth } from '@/components/AuthProvider/authContext';
-import { getCmsUrl } from '@/lib/runtime-config';
+import { getAuthProfileUrl, getAuthUrl, getCmsUrl, getWwwUrl } from '@/lib/runtime-config';
+import { appLinks, type AppLinkId } from '@al-ummah/shared-types';
 import { cmsLinks, isScholar } from '@/lib/scholars/sites';
 import { buildChannelMenu } from '@/lib/channels/menu';
 import type { ChannelRole } from '@al-ummah/shared-types';
 import { userDisplayName } from '@/lib/display-name';
 
 type MenuView = 'main' | 'channels' | 'accounts';
-const ROW = 'flex items-center gap-3 w-full min-h-10 px-3 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-start';
-const ROW_TEXT = 'text-sm font-medium text-gray-900 dark:text-gray-100';
-const ROW_ICON = 'h-[18px] w-[18px] flex-shrink-0 text-gray-500 dark:text-gray-400';
 
 export function UnifiedNavigation() {
   // Get language context and translations
@@ -178,55 +177,36 @@ export function UnifiedNavigation() {
   }, [isOpen]);
 
   if (loading) {
-    return (
-      <div className="h-10 w-10 animate-pulse rounded-full bg-gray-200 dark:bg-gray-700" />
-    );
+    // Same footprint as the button: the header must not shift when it arrives
+    return <span className="aun-acct-btn" aria-hidden="true"><span className="aun-avatar" /></span>;
   }
 
   // Anonymous user - show menu icon with Sign In option
   if (!user) {
     return (
       <div className="relative">
-        {/* Trigger Button - Menu Icon */}
         <button
+          type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center gap-2 rounded-lg p-2 hover:bg-white/10 transition-colors"
+          className="aun-acct-btn"
           aria-label={t.navigation.navigationMenu}
           aria-expanded={isOpen}
           aria-haspopup="menu"
           data-testid="nav-menu-trigger"
         >
-          <div className="h-8 w-8 rounded-full bg-gray-300 dark:bg-gray-700 flex items-center justify-center">
-            <User className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-          </div>
-          <ChevronDown className="h-4 w-4 text-gray-500" />
+          <span className="aun-avatar" aria-hidden="true"><User className="h-4 w-4" /></span>
+          <ChevronDown className="aun-caret" aria-hidden="true" />
         </button>
-
-        {/* Dropdown Menu */}
         {isOpen && (
           <>
             <MenuBackdrop onClose={() => setIsOpen(false)} />
-
-            {/* Menu */}
-            <div
-              className="absolute end-0 mt-2 w-80 rounded-lg bg-white dark:bg-gray-900 shadow-lg border border-gray-200 dark:border-gray-700 z-50"
-              role="menu"
-              data-testid="nav-menu"
-              aria-orientation="vertical"
-            >
-              {/* Sign In */}
-              <div className="p-3">
-                <form action={login.bind(null, lang)}>
-                  <button
-                    type="submit"
-                    className="flex items-center justify-center gap-3 w-full px-4 py-3 rounded-lg bg-brand hover:bg-brand-hover text-on-brand font-semibold transition-all shadow-md hover:shadow-lg"
-                    role="menuitem"
-                  >
-                    <User className="h-5 w-5" />
-                    <span className="text-sm">{t.navigation.signIn}</span>
-                  </button>
-                </form>
-              </div>
+            <div className="aun-menu" role="menu" data-testid="nav-menu" aria-orientation="vertical">
+              <form action={login.bind(null, lang)}>
+                <button type="submit" className="aun-menu-item" role="menuitem">
+                  <User className="aun-menu-icon" aria-hidden="true" />
+                  <span className="aun-menu-text">{t.navigation.signIn}</span>
+                </button>
+              </form>
             </div>
           </>
         )}
@@ -236,11 +216,9 @@ export function UnifiedNavigation() {
 
   const handleCreateChannel = async () => {
     if (!newChannelName.trim() || creatingChannel) return;
-
     const created = await createChannel({
       name: newChannelName.trim(),
     });
-
     if (created) {
       setNewChannelName('');
       setIsCreatingChannel(false);
@@ -264,7 +242,21 @@ export function UnifiedNavigation() {
     ] : []),
     { label: t.header.settings, icon: Settings, href: `/${lang}${ACCOUNT_MENU_PATHS.settings}` },
   ];
-
+  // The other Al Ummah Now apps this account may open (docs/design/NAV.md), same order everywhere
+  const otherApps = appLinks({
+    current: 'videos',
+    roles: authUser?.roles,
+    lang,
+    urls: { www: getWwwUrl(), profile: getAuthProfileUrl(), cms: getCmsUrl(), auth: getAuthUrl() },
+  });
+  const appLabel: Record<AppLinkId, string> = {
+    www: t.navigation.appWww,
+    videos: t.navigation.appVideos,
+    profile: t.navigation.appProfile,
+    cms: t.navigation.appCms,
+    admin: t.navigation.appAdmin,
+    'auth-admin': t.navigation.appAuthAdmin,
+  };
   // Owned channels first, then channels where this account holds a channel
   // role (live list from /api/channels/access via useMultiAccount)
   const channelSections = user ? buildChannelMenu(channels, user.id) : [];
@@ -275,68 +267,44 @@ export function UnifiedNavigation() {
     <span
       data-testid="nav-channel-role"
       title={t.channelRoles.yourRole.replace('{role}', t.channelRoles.roles[role])}
-      className="c flex-shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium text-[var(--fanous-color-text-secondary)]"
+      className="aun-acct-current flex-none"
     >
       <span className="sr-only">{t.channelRoles.yourRole.replace('{role}', '')}</span>
       {t.channelRoles.roles[role]}
     </span>
   );
-
   const displayName = getDisplayName();
+  const initial = (displayName[0] || user.email[0] || '?').toUpperCase();
+  const avatar = (src: string | undefined | null, letter: string, size = '') =>
+    src ? (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={src} alt="" className={`aun-avatar ${size}`} />
+    ) : (
+      <span className={`aun-avatar ${size}`} aria-hidden="true">{letter}</span>
+    );
   const backRow = (title: string) => (
-    <button type="button" autoFocus onClick={() => { setView('main'); setIsCreatingChannel(false); }} data-testid="nav-menu-back" className={`${ROW} font-semibold`} role="menuitem">
-      <ArrowLeft className={`${ROW_ICON} rtl:rotate-180`} aria-hidden="true" />
-      <span className={ROW_TEXT}>{title}</span>
+    <button type="button" autoFocus onClick={() => { setView('main'); setIsCreatingChannel(false); }} data-testid="nav-menu-back" className="aun-menu-item" role="menuitem">
+      <ArrowLeft className="aun-menu-icon aun-flip" aria-hidden="true" />
+      <span className="aun-menu-text font-semibold">{title}</span>
     </button>
   );
-
+  const sep = <div className="aun-menu-sep" role="separator" />;
   return (
     <div className="relative">
-      {/* Trigger Button - Avatar with Dropdown */}
+      {/* Avatar + display name (the name hides on phones and stays the accessible name) */}
       <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 rounded-lg p-2 hover:bg-white/10 transition-colors"
+        className="aun-acct-btn"
         aria-expanded={isOpen}
         aria-haspopup="menu"
         data-testid="nav-menu-trigger"
       >
-        {/* Avatar: Show channel avatar if channel selected, otherwise user avatar */}
-        {channel?.avatarUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={channel.avatarUrl}
-            alt=""
-            className="h-8 w-8 rounded-full object-cover"
-          />
-        ) : getUserAvatar() ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={getUserAvatar()!}
-            alt=""
-            className="h-8 w-8 rounded-full object-cover"
-          />
-        ) : (
-          <div aria-hidden="true" className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-semibold">
-            {displayName[0]?.toUpperCase() || user.email[0].toUpperCase()}
-          </div>
-        )}
-
-        {/* User Info (hidden on mobile) */}
-        <div className="nav-trigger-name hidden md:block text-start">
-          <div className="text-sm font-medium text-white truncate max-w-[150px]">
-            {getDisplayName()}
-          </div>
-          <div className="text-xs text-gray-300 truncate max-w-[150px]">
-            {channel ? getChannelName(channel.name, channel.nameLocalized) : t.navigation.noChannel}
-          </div>
-        </div>
-
-        {/* Accessible name = visible name + channel + "Navigation menu" (label-in-name) */}
+        {avatar(channel?.avatarUrl || getUserAvatar(), initial)}
+        <span className="aun-acct-name nav-trigger-name" dir="auto">{displayName}</span>
         <span className="sr-only">{t.navigation.navigationMenu}</span>
-        <ChevronDown className="h-4 w-4 text-gray-300" aria-hidden="true" />
+        <ChevronDown className="aun-caret" aria-hidden="true" />
       </button>
-
-      {/* Dropdown Menu */}
       {isOpen && (
         <>
           <MenuBackdrop
@@ -346,287 +314,231 @@ export function UnifiedNavigation() {
               setNewChannelName('');
             }}
           />
-
-          {/* Menu */}
-          <div
-            className="absolute end-0 mt-2 w-80 max-h-[calc(100vh-5rem)] overflow-y-auto rounded-lg bg-white dark:bg-gray-900 shadow-lg border border-gray-200 dark:border-gray-700 z-50"
-            role="menu"
-            data-testid="nav-menu"
-            aria-orientation="vertical"
-          >
+          <div className="aun-menu" role="menu" data-testid="nav-menu" aria-orientation="vertical">
             {view === 'main' && <>
-            {/* Active Context Card */}
-            <div data-testid="nav-active-context" className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border-b border-gray-200 dark:border-gray-700">
+            {/* Who: the account (to the profile) and, as context, the active channel */}
+            <div data-testid="nav-active-context">
               <Link
                 data-testid="nav-profile-link"
                 href={`/${lang}/profile`}
                 onClick={() => setIsOpen(false)}
-                className="flex items-center gap-3 mb-3 rounded-lg p-2 -m-2 hover:bg-white/60 dark:hover:bg-gray-800/60 transition-colors cursor-pointer"
+                className="aun-menu-item aun-menu-who"
               >
-                {/* User Avatar (always user, never channel) */}
-                {getUserAvatar() ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={getUserAvatar()!}
-                    alt={getDisplayName()}
-                    className="h-12 w-12 rounded-full object-cover flex-shrink-0"
-                  />
-                ) : (
-                  <div className="h-12 w-12 rounded-full bg-blue-500 flex items-center justify-center text-white text-lg font-semibold flex-shrink-0">
-                    {displayName[0]?.toUpperCase() || user.email[0].toUpperCase()}
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate" data-testid="nav-user-name">
-                    {getDisplayName()}
-                  </div>
-                  {displayName !== user.email && (
-                    <div className="text-xs text-gray-600 dark:text-gray-400 truncate">
-                      {user.email}
-                    </div>
-                  )}
-                </div>
+                {avatar(getUserAvatar(), initial, 'aun-avatar--lg')}
+                <span className="aun-menu-who-text">
+                  <span className="aun-menu-who-name" dir="auto" data-testid="nav-user-name">{displayName}</span>
+                  {displayName !== user.email && <span className="aun-menu-who-sub" dir="auto">{user.email}</span>}
+                </span>
               </Link>
-
-              {/* Active Channel Display */}
               {channel ? (
                 <Link
                   data-testid="nav-active-channel"
                   href={`/${lang}/channels/${channel.id}`}
                   onClick={() => setIsOpen(false)}
-                  className="flex items-center gap-2 px-3 py-2 bg-white/60 dark:bg-gray-800/60 rounded-md hover:bg-white/80 dark:hover:bg-gray-800/80 transition-colors cursor-pointer"
+                  className="aun-menu-item"
                 >
-                  <div className="relative flex-shrink-0">
-                    {channel.avatarUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={channel.avatarUrl}
-                        alt={channel.name}
-                        className="h-6 w-6 rounded-full object-cover"
-                      />
-                    ) : (
-                      <div className="h-6 w-6 rounded-full bg-purple-500 flex items-center justify-center text-white text-xs font-semibold">
-                        {getChannelName(channel.name, channel.nameLocalized)[0].toUpperCase()}
-                      </div>
-                    )}
-                    {channel.isMain && (
-                      <Crown className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 text-brand-ink bg-white dark:bg-gray-900 rounded-full" />
-                    )}
-                  </div>
-                  <span className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate flex-1">
-                    {getChannelName(channel.name, channel.nameLocalized)}
+                  <span className="relative flex-none">
+                    {avatar(channel.avatarUrl, getChannelName(channel.name, channel.nameLocalized)[0].toUpperCase(), 'aun-avatar--sm')}
+                    {channel.isMain && <Crown className="absolute -bottom-0.5 -end-0.5 h-2.5 w-2.5 rounded-full text-brand-ink" aria-hidden="true" />}
                   </span>
+                  <span className="aun-menu-text" dir="auto">{getChannelName(channel.name, channel.nameLocalized)}</span>
                   {activeRole && activeRole !== 'owner' && roleBadge(activeRole)}
                 </Link>
               ) : (
-                <div data-testid="nav-no-active-channel" className="flex items-center gap-2 px-3 py-2 bg-white/60 dark:bg-gray-800/60 rounded-md">
-                  <Tv className="h-4 w-4 text-gray-500" />
-                  <span className="text-xs text-gray-600 dark:text-gray-400">
-                    {t.navigation.noActiveChannel}
-                  </span>
+                <div data-testid="nav-no-active-channel" className="aun-menu-item aun-menu-who-sub" aria-disabled="true">
+                  <Tv className="aun-menu-icon" aria-hidden="true" />
+                  <span className="aun-menu-text">{t.navigation.noActiveChannel}</span>
                 </div>
               )}
             </div>
-
-            {/* Switchers open in place */}
-            <div className="p-2 border-b border-gray-200 dark:border-gray-700">
-              <button type="button" onClick={() => setView('channels')} data-testid="nav-switch-channel" className={ROW} role="menuitem" aria-haspopup="menu">
-                <Tv className={ROW_ICON} aria-hidden="true" />
-                <span className={`${ROW_TEXT} flex-1`}>{t.navigation.switchChannel}</span>
-                <ChevronRight className={`${ROW_ICON} rtl:rotate-180`} aria-hidden="true" />
-              </button>
-              <button type="button" onClick={() => setView('accounts')} data-testid="nav-switch-account" className={ROW} role="menuitem" aria-haspopup="menu">
-                <Users className={ROW_ICON} aria-hidden="true" />
-                <span className={`${ROW_TEXT} flex-1`}>{t.header.switchAccount}</span>
-                <ChevronRight className={`${ROW_ICON} rtl:rotate-180`} aria-hidden="true" />
-              </button>
-            </div>
-
-            <div className="p-2 border-b border-gray-200 dark:border-gray-700">
-              {navItems.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => setIsOpen(false)}
-                    className={ROW}
-                    role="menuitem"
-                  >
-                    <Icon className={ROW_ICON} aria-hidden="true" />
-                    <span className={ROW_TEXT}>
-                      {item.label}
-                    </span>
-                  </Link>
-                );
-              })}
-            </div>
-
-            {/* Add Account & Sign Out */}
-            <div className="p-2">
-              {/* Add Account */}
-              <button
-                onClick={() => {
-                  addAccount();
-                  setIsOpen(false);
-                }}
-                data-testid="nav-add-account"
-                className={ROW}
-                role="menuitem"
-              >
-                <Plus className={ROW_ICON} aria-hidden="true" />
-                <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  {t.navigation.addAnotherAccount}
-                </span>
-              </button>
-
-              {/* Sign Out Current */}
-              <button
-                onClick={() => {
-                  logout();
-                  setIsOpen(false);
-                }}
-                data-testid="nav-sign-out"
-                className={ROW}
-                role="menuitem"
-              >
-                <LogOut className={ROW_ICON} aria-hidden="true" />
-                <span className={ROW_TEXT}>{t.navigation.signOut}</span>
-              </button>
-
-              {/* Sign Out All (if multiple accounts) */}
-              {accounts.length > 1 && (
-                <button
-                  onClick={() => {
-                    setShowLogoutAllConfirm(true);
-                  }}
-                  className={ROW}
-                  role="menuitem"
-                >
-                  <LogOut className="h-[18px] w-[18px] flex-shrink-0 text-red-600 dark:text-red-400" aria-hidden="true" />
-                  <span className="text-sm font-medium text-red-600 dark:text-red-400">
-                    {t.navigation.signOutOfAll}
-                  </span>
-                </button>
-              )}
-            </div>
-
+            {sep}
+            {/* Accounts, then this app's own entries (switchers open in place) */}
+            <button type="button" onClick={() => setView('accounts')} data-testid="nav-switch-account" className="aun-menu-item" role="menuitem" aria-haspopup="menu">
+              <Users className="aun-menu-icon" aria-hidden="true" />
+              <span className="aun-menu-text">{t.header.switchAccount}</span>
+              <ChevronRight className="aun-menu-icon aun-flip" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                addAccount();
+                setIsOpen(false);
+              }}
+              data-testid="nav-add-account"
+              className="aun-menu-item"
+              role="menuitem"
+            >
+              <Plus className="aun-menu-icon" aria-hidden="true" />
+              <span className="aun-menu-text">{t.navigation.addAnotherAccount}</span>
+            </button>
+            {sep}
+            <button type="button" onClick={() => setView('channels')} data-testid="nav-switch-channel" className="aun-menu-item" role="menuitem" aria-haspopup="menu">
+              <Tv className="aun-menu-icon" aria-hidden="true" />
+              <span className="aun-menu-text">{t.navigation.switchChannel}</span>
+              <ChevronRight className="aun-menu-icon aun-flip" aria-hidden="true" />
+            </button>
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <Link key={item.href} href={item.href} onClick={() => setIsOpen(false)} className="aun-menu-item" role="menuitem">
+                  <Icon className="aun-menu-icon" aria-hidden="true" />
+                  <span className="aun-menu-text">{item.label}</span>
+                </Link>
+              );
+            })}
+            {otherApps.length > 0 && <>
+              {sep}
+              <div role="group" aria-labelledby="nav-apps-label" data-testid="nav-apps">
+                <span className="aun-menu-label" id="nav-apps-label">{t.navigation.appsSection}</span>
+                {otherApps.map((app) => (
+                  <a key={app.id} href={app.href} className="aun-menu-item" role="menuitem" data-app={app.id}>
+                    <span className="aun-menu-text">{appLabel[app.id]}</span>
+                  </a>
+                ))}
+              </div>
             </>}
-
+            {sep}
+            {/* Sign out of this account; with several, also of every account (after a confirmation) */}
+            <button
+              type="button"
+              onClick={() => {
+                logout();
+                setIsOpen(false);
+              }}
+              data-testid="nav-sign-out"
+              className="aun-menu-item"
+              role="menuitem"
+            >
+              <LogOut className="aun-menu-icon aun-flip" aria-hidden="true" />
+              <span className="aun-menu-text">{t.navigation.signOut}</span>
+            </button>
+            {accounts.length > 1 && (
+              <button
+                type="button"
+                onClick={() => setShowLogoutAllConfirm(true)}
+                data-testid="nav-sign-out-all"
+                className="aun-menu-item aun-menu-item--danger"
+                role="menuitem"
+              >
+                <LogOut className="aun-menu-icon aun-flip" aria-hidden="true" />
+                <span className="aun-menu-text">{t.navigation.signOutOfAll}</span>
+              </button>
+            )}
+            </>}
             {view === 'channels' && (
-              <div className="p-2" role="group" aria-label={t.navigation.switchChannel}>
+              <div role="group" aria-label={t.navigation.switchChannel}>
                 {backRow(t.navigation.switchChannel)}
                 {channelSections.map((section) => (
                   <div key={section.key} role="group" aria-labelledby={`nav-channels-${section.key}`} data-testid={`nav-channel-group-${section.key}`}>
-                    <p id={`nav-channels-${section.key}`} className="px-3 pt-2 pb-1 text-xs font-semibold uppercase tracking-wide text-[var(--fanous-color-text-muted)]">
+                    <p id={`nav-channels-${section.key}`} className="aun-menu-label">
                       {section.key === 'owned' ? t.channelRoles.yourChannels : t.channelRoles.channelsYouManage}
                     </p>
                     {section.items.map((ch) => (
-                      <button key={ch.id} type="button" onClick={() => switchToChannel(ch.id)} data-testid="nav-channel-option" data-channel-id={ch.id} data-role={ch.role} aria-checked={channel?.id === ch.id} className={ROW} role="menuitemradio">
-                        <span className="relative flex-shrink-0">
-                          {ch.avatarUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={ch.avatarUrl} alt="" className="h-7 w-7 rounded-full object-cover" />
-                          ) : (
-                            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--fanous-c-button-primary-bg)] text-xs font-semibold text-[var(--fanous-c-button-primary-text)]">{getChannelName(ch.name, ch.nameLocalized)[0].toUpperCase()}</span>
-                          )}
-                          {ch.isMain && ch.role === 'owner' && <Crown className="absolute -bottom-0.5 -end-0.5 h-2.5 w-2.5 rounded-full bg-white text-brand-ink dark:bg-gray-900" />}
+                      <button key={ch.id} type="button" onClick={() => switchToChannel(ch.id)} data-testid="nav-channel-option" data-channel-id={ch.id} data-role={ch.role} aria-checked={channel?.id === ch.id} className="aun-menu-item" role="menuitemradio">
+                        <span className="relative flex-none">
+                          {avatar(ch.avatarUrl, getChannelName(ch.name, ch.nameLocalized)[0]?.toUpperCase() ?? '?')}
+                          {ch.isMain && ch.role === 'owner' && <Crown className="absolute -bottom-0.5 -end-0.5 h-2.5 w-2.5 rounded-full text-brand-ink" aria-hidden="true" />}
                         </span>
-                        <span className={`${ROW_TEXT} flex-1 min-w-0 truncate`}>{getChannelName(ch.name, ch.nameLocalized)}</span>
+                        <span className="aun-menu-text" dir="auto">{getChannelName(ch.name, ch.nameLocalized)}</span>
                         {ch.role !== 'owner' && roleBadge(ch.role)}
-                        {channel?.id === ch.id && <Check className={ROW_ICON} aria-hidden="true" />}
+                        {channel?.id === ch.id && <Check className="aun-menu-check" aria-hidden="true" />}
                       </button>
                     ))}
                   </div>
                 ))}
-                <button type="button" onClick={() => switchToChannel(null)} data-testid="nav-channel-option-none" aria-checked={!channel} className={ROW} role="menuitemradio">
-                  <Tv className={`${ROW_ICON} mx-[5px]`} aria-hidden="true" />
-                  <span className={`${ROW_TEXT} flex-1`}>{t.navigation.useWithoutChannel}</span>
-                  {!channel && <Check className={ROW_ICON} aria-hidden="true" />}
+                <button type="button" onClick={() => switchToChannel(null)} data-testid="nav-channel-option-none" aria-checked={!channel} className="aun-menu-item" role="menuitemradio">
+                  <Tv className="aun-menu-icon" aria-hidden="true" />
+                  <span className="aun-menu-text">{t.navigation.useWithoutChannel}</span>
+                  {!channel && <Check className="aun-menu-check" aria-hidden="true" />}
                 </button>
-                        {/* Create Channel - Only for Active Account, and only with a creator tier that allows another channel */}
-                        {!canCreateChannel ? null : !isCreatingChannel ? (
-                          <button
-                            onClick={() => setIsCreatingChannel(true)}
-                            data-testid="nav-create-channel"
-                            className="flex items-center gap-3 w-full px-2 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left mt-1"
-                            role="menuitem"
-                          >
-                            <div className="h-6 w-6 rounded-full border-2 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center flex-shrink-0">
-                              <Plus className="h-3 w-3 text-gray-500 dark:text-gray-400" />
-                            </div>
-                            <span className="text-xs font-medium text-gray-900 dark:text-gray-100">
-                              {t.navigation.createChannel}
-                            </span>
-                          </button>
-                        ) : (
-                          <div className="p-2 bg-gray-50 dark:bg-gray-800 rounded-lg mt-1">
-                            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                              {t.navigation.channelName}
-                            </label>
-                            <input
-                              type="text"
-                              value={newChannelName}
-                              disabled={creatingChannel}
-                              onChange={(e) => setNewChannelName(e.target.value)}
-                              placeholder={t.navigation.enterChannelName}
-                              className="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 dark:bg-gray-900 dark:text-gray-100"
-                              autoFocus
-                              onKeyPress={(e) => {
-                                if (e.key === 'Enter') {
-                                  handleCreateChannel();
-                                }
-                              }}
-                            />
-                            <div className="flex gap-1.5 mt-2">
-                              <button
-                                onClick={handleCreateChannel}
-                                disabled={!newChannelName.trim() || creatingChannel}
-                                aria-busy={creatingChannel}
-                                className="flex-1 px-2 py-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 rounded-md transition-colors"
-                              >
-                                {creatingChannel ? t.channel.creating : t.common.create}
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setIsCreatingChannel(false);
-                                  setNewChannelName('');
-                                }}
-                                className="flex-1 px-2 py-1 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-md transition-colors"
-                              >
-                                {t.common.cancel}
-                              </button>
-                            </div>
-                          </div>
-                        )}
+                {/* Create Channel - Only for Active Account, and only with a creator tier that allows another channel */}
+                {!canCreateChannel ? null : !isCreatingChannel ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsCreatingChannel(true)}
+                    data-testid="nav-create-channel"
+                    className="aun-menu-item"
+                    role="menuitem"
+                  >
+                    <Plus className="aun-menu-icon" aria-hidden="true" />
+                    <span className="aun-menu-text">{t.navigation.createChannel}</span>
+                  </button>
+                ) : (
+                  <div className="p-2">
+                    <label className="aun-menu-label px-0" htmlFor="nav-new-channel-name">
+                      {t.navigation.channelName}
+                    </label>
+                    <input
+                      id="nav-new-channel-name"
+                      type="text"
+                      value={newChannelName}
+                      disabled={creatingChannel}
+                      onChange={(e) => setNewChannelName(e.target.value)}
+                      placeholder={t.navigation.enterChannelName}
+                      className="w-full rounded-md border border-[var(--fanous-color-outline)] bg-[var(--fanous-color-surface)] px-2 py-1.5 text-sm text-[var(--fanous-color-text-primary)]"
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          handleCreateChannel();
+                        }
+                      }}
+                    />
+                    <div className="mt-2 flex gap-1.5">
+                      <button
+                        type="button"
+                        onClick={handleCreateChannel}
+                        disabled={!newChannelName.trim() || creatingChannel}
+                        aria-busy={creatingChannel}
+                        className="b b-primary flex-1"
+                      >
+                        {creatingChannel ? t.channel.creating : t.common.create}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsCreatingChannel(false);
+                          setNewChannelName('');
+                        }}
+                        className="b b-ghost flex-1"
+                      >
+                        {t.common.cancel}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
-
             {view === 'accounts' && (
-              <div className="p-2" role="group" aria-label={t.header.switchAccount}>
+              <div role="group" aria-label={t.header.switchAccount}>
                 {backRow(t.header.switchAccount)}
                 {accounts.map((account) => {
-                  const avatar = getAccountAvatar(account.userId) ?? account.avatarUrl;
+                  const accountAvatar = getAccountAvatar(account.userId) ?? account.avatarUrl;
                   const name = account.displayName?.trim() || account.email;
                   const count = account.channelsCount || 0;
                   return (
-                    <div key={account.userId} className="group relative" data-testid="nav-account" data-active={account.isActive ? 'true' : 'false'} data-local={account.hasLocalSession === false ? 'false' : 'true'} data-email={account.email}>
-                      <button type="button" onClick={() => { if (!account.isActive) { switchAccount(account.userId); setIsOpen(false); } }} disabled={account.isActive} className={ROW} role="menuitem">
-                        {avatar ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={avatar} alt="" className="h-8 w-8 flex-shrink-0 rounded-full object-cover" />
-                        ) : (
-                          <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-blue-500 text-sm font-semibold text-white">{name[0]?.toUpperCase()}</span>
-                        )}
-                        <span className="min-w-0 flex-1">
-                          <span className={`block truncate ${ROW_TEXT}`}>{name}</span>
-                          <span className="block truncate text-xs text-gray-500 dark:text-gray-400">{/* Signed in to the browser but not here yet: its email (switching signs it in) */}{account.hasLocalSession === false ? account.email : <>{count} {count === 1 ? t.navigation.channel : t.navigation.channels}</>}</span>
+                    <div key={account.userId} className="aun-acct-row" data-testid="nav-account" data-active={account.isActive ? 'true' : 'false'} data-local={account.hasLocalSession === false ? 'false' : 'true'} data-email={account.email}>
+                      <button
+                        type="button"
+                        onClick={() => { if (!account.isActive) { switchAccount(account.userId); setIsOpen(false); } }}
+                        disabled={account.isActive}
+                        aria-current={account.isActive ? 'true' : undefined}
+                        aria-label={account.isActive ? undefined : t.navigation.switchToAccount.replace('{name}', name)}
+                        className="aun-menu-item"
+                        role="menuitem"
+                      >
+                        {avatar(accountAvatar, name[0]?.toUpperCase() ?? '?')}
+                        <span className="aun-acct-text">
+                          <span className="aun-acct-label" dir="auto">{name}</span>
+                          {/* Signed in to the browser but not here yet: its email (switching signs it in) */}
+                          <span className="aun-acct-email" dir="auto">
+                            {account.isActive ? t.navigation.currentAccount : account.hasLocalSession === false ? account.email : <>{count} {count === 1 ? t.navigation.channel : t.navigation.channels}</>}
+                          </span>
                         </span>
-                        {account.isActive && <Check className={ROW_ICON} aria-hidden="true" />}
+                        {account.isActive && <Check className="aun-menu-check" aria-hidden="true" />}
                       </button>
                       {!account.isActive && accounts.length > 1 && (
-                        <button type="button" onClick={(e) => { e.stopPropagation(); removeAccount(account.userId); }} className="absolute end-2 top-1/2 -translate-y-1/2 p-1 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity" aria-label={t.navigation.removeAccount}>
-                          <LogOut className="h-4 w-4 text-red-600 dark:text-red-400" aria-hidden="true" />
+                        <button type="button" onClick={(e) => { e.stopPropagation(); removeAccount(account.userId); }} className="aun-acct-signout" aria-label={t.navigation.removeAccount}>
+                          {t.navigation.signOut}
                         </button>
                       )}
                     </div>
@@ -634,59 +546,32 @@ export function UnifiedNavigation() {
                 })}
               </div>
             )}
-
             {/* Error Message */}
             {error && (
               <>
-                <div className="border-t border-gray-200 dark:border-gray-700" />
-                <div className="p-3 bg-red-50 dark:bg-red-900/20">
-                  <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
-                </div>
+                {sep}
+                <p className="aun-menu-who-sub px-3 py-2 text-[var(--fanous-color-error-text)]" role="alert">{error}</p>
               </>
             )}
           </div>
         </>
       )}
-
-      {/* Logout All Confirmation Dialog */}
-      {showLogoutAllConfirm && (
-        <>
-          {/* Backdrop */}
-          <div
-            className="fixed inset-0 bg-black/50 z-50"
-            onClick={() => setShowLogoutAllConfirm(false)}
-            aria-hidden="true"
-          />
-
-          {/* Dialog */}
-          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md p-6 bg-white dark:bg-gray-900 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-              {t.navigation.signOutOfAll}?
-            </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-              {t.navigation.signOutOfAllDescription.replace('{count}', String(accounts.length))}
-            </p>
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setShowLogoutAllConfirm(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
-              >
-                {t.common.cancel}
-              </button>
-              <button
-                onClick={() => {
-                  setShowLogoutAllConfirm(false);
-                  setIsOpen(false);
-                  logoutAll(true); // Pass true to skip confirmation check
-                }}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
-              >
-                {t.navigation.signOutOfAll}
-              </button>
-            </div>
-          </div>
-        </>
-      )}
+      {/* Sign out of all accounts: the in-app confirmation */}
+      <ConfirmDialog
+        open={showLogoutAllConfirm}
+        title={`${t.navigation.signOutOfAll}?`}
+        description={t.navigation.signOutOfAllDescription.replace('{count}', String(accounts.length))}
+        confirmLabel={t.navigation.signOutOfAll}
+        cancelLabel={t.common.cancel}
+        danger
+        testId="nav-sign-out-all-confirm"
+        onResult={(confirmed) => {
+          setShowLogoutAllConfirm(false);
+          if (!confirmed) return;
+          setIsOpen(false);
+          logoutAll(true); // Pass true to skip confirmation check
+        }}
+      />
     </div>
   );
 }
