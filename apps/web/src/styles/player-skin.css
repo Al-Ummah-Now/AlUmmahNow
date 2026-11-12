@@ -252,6 +252,54 @@
   background: var(--fanous-player-accent);
 }
 
+/* Autoplay switch (YouTube-style): a track with a knob; the knob moves to the end when on.
+   Logical properties, so it mirrors in RTL. No underline: the switch itself shows the state. */
+.video-js.vjs-fanous .vjs-control-bar .vjs-fanous-autoplay {
+  width: auto;
+  padding: 0 6px;
+}
+
+.video-js.vjs-fanous .vjs-control-bar .vjs-fanous-autoplay.vjs-fanous-on::after {
+  content: none;
+}
+
+.video-js.vjs-fanous .vjs-fanous-switch {
+  position: relative;
+  display: inline-block;
+  width: 30px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--fanous-player-buffered);
+  transition: background-color 150ms ease;
+}
+
+.video-js.vjs-fanous .vjs-fanous-switch-knob {
+  position: absolute;
+  top: 50%;
+  inset-inline-start: -2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--fanous-player-icon);
+  transform: translateY(-50%);
+  transition: inset-inline-start 150ms ease, background-color 150ms ease;
+}
+
+.video-js.vjs-fanous .vjs-fanous-autoplay.vjs-fanous-on .vjs-fanous-switch {
+  background: var(--fanous-player-accent);
+}
+
+.video-js.vjs-fanous .vjs-fanous-autoplay.vjs-fanous-on .vjs-fanous-switch-knob {
+  inset-inline-start: 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .video-js.vjs-fanous .vjs-fanous-switch,
+  .video-js.vjs-fanous .vjs-fanous-switch-knob {
+    transition: none;
+  }
+}
+
 /* ---------- Progress bar: production geometry, themed colours ---------- */
 
 .video-js.vjs-fanous .vjs-progress-control {
@@ -1309,6 +1357,66 @@
   (portrait, fullscreen on a phone), the thumbnail stacks above the text. Every selector is scoped under
   `.video-js.vjs-fanous`: Video.js's `.video-js button` reset outranks single-class rules.
 */
+/* End screen suggestions (autoplay off or cancelled): two more videos under the card */
+.video-js.vjs-fanous .vjs-fanous-end-more {
+  width: min(640px, 100%);
+  margin-top: 12px;
+}
+
+.video-js.vjs-fanous .vjs-fanous-end-more-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.video-js.vjs-fanous .vjs-fanous-end-more-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 4px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fanous-player-icon);
+  font: inherit;
+  font-size: 13px;
+  text-align: start;
+  cursor: pointer;
+}
+
+.video-js.vjs-fanous .vjs-fanous-end-more-item:hover,
+.video-js.vjs-fanous .vjs-fanous-end-more-item:focus-visible {
+  background: var(--fanous-player-menu-hover);
+}
+
+.video-js.vjs-fanous .vjs-fanous-end-more-item:focus-visible {
+  outline: 2px solid var(--fanous-player-accent);
+  outline-offset: 2px;
+}
+
+.video-js.vjs-fanous .vjs-fanous-end-more-thumb {
+  flex: none;
+  width: 96px;
+  aspect-ratio: 16 / 9;
+  border-radius: 6px;
+  background: var(--fanous-player-buffered) center / cover no-repeat;
+}
+
+.video-js.vjs-fanous .vjs-fanous-end-more-title {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* Too small a frame for more than the card: the suggestions stay in the page's Up next list */
+@container fanous-end (max-width: 560px) or (max-height: 380px) {
+  .video-js.vjs-fanous .vjs-fanous-end-more {
+    display: none;
+  }
+}
+
 /* End of a playlist: Watch again and Replay playlist side by side */
 .video-js.vjs-fanous .vjs-fanous-end.vjs-fanous-end-replay {
   grid-auto-flow: column;

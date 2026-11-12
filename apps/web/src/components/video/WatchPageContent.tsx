@@ -37,7 +37,9 @@ import { PlaylistPane } from "@/components/video/PlaylistPane";
 import { usePlaylistPlayback } from "@/hooks/usePlaylistPlayback";
 import { shareableList } from "@/lib/playlists/playback";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
-import { clearAutoplayIntent, hasAutoplayIntent, requestAutoplay } from "@/lib/video/autoplay-intent";
+import { clearAutoplayIntent, hasAutoplayIntent, isAutoAdvance, requestAutoplay } from "@/lib/video/autoplay-intent";
+import { pickUpNext, recordWatched, watchedThisSession } from "@/lib/video/up-next";
+import { useAutoplaySetting } from "@/hooks/useAutoplaySetting";
 import { navigateOrLoad } from "@/lib/navigation/navigate-or-load";
 
 /** The list a share link carries: public playlists only, never the viewer's WL / LL (spec 2.4) */
@@ -84,7 +86,18 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
   const Comments = isRTL ? CommentsSectionRTL : CommentsSection;
   const Player = isRTL ? VideoPlayerRTL : VideoPlayer;
   const SaveToPlaylistControl = isRTL ? SaveToPlaylistRTL : SaveToPlaylist;
-  const related = relatedVideos.filter((video) => video.id !== videoId);
+  // "Up next" (the owner's "auto play like youtube"): the first related video of the same format
+  // (long to long, Short to Short) not yet watched in this session, shown first in the list
+  const current = state.status === 'ready' ? state.video : null;
+  const currentShort = current?.isShort;
+  const currentWidth = current?.width;
+  const currentHeight = current?.height;
+  const currentDuration = current?.duration;
+  const { next, ordered: related } = useMemo(
+    () => pickUpNext({ id: videoId, isShort: currentShort, width: currentWidth, height: currentHeight, duration: typeof currentDuration === 'number' ? currentDuration : undefined }, relatedVideos, watchedThisSession()),
+    [videoId, relatedVideos, currentShort, currentWidth, currentHeight, currentDuration],
+  );
+  useEffect(() => recordWatched(videoId), [videoId]);
 
   // Theatre, mini player and up next belong to the watch page (docs/specs/VIDEO-PLAYER.md section 5)
   const router = useRouter();
@@ -97,7 +110,6 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
   const actionsRef = useRef<HTMLDivElement | null>(null);
   const { theatre } = useSyncExternalStore(subscribePlayerUi, getPlayerUi, getPlayerUi);
   useEffect(() => enableWatchPageFeatures(), []);
-  const next = related[0];
   const nextId = next?.id;
   const nextTitle = next?.title;
   const nextChannel = next?.channelName || '';
@@ -109,12 +121,22 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
   const playlistReplay = playback.replayList;
   // Autoplay: a usable list in the URL, or an in-app advance asked for it (never a plain link, D3)
   const autoplayIntent = useMemo(() => !!playback.list || hasAutoplayIntent(videoId), [videoId, playback.list]);
+  // Started by the countdown, not the viewer: counted as an autoplayed view
+  const autoplayedView = useMemo(() => isAutoAdvance(videoId), [videoId]);
+  // "Autoplay next" follows the signed-in viewer's account across devices
+  useAutoplaySetting(user?.id);
+  const suggestions = related.slice(1, 3);
+  const suggestionKey = suggestions.map((v) => v.id).join(',');
   useEffect(() => clearAutoplayIntent(videoId), [videoId]);
   useEffect(() => {
     if (playback.active) {
-      updatePlayerUi({ upNext: playlistUpNext, replayList: playlistReplay });
+      updatePlayerUi({ upNext: playlistUpNext, replayList: playlistReplay, suggestions: [] });
       return;
     }
+    const goTo = (id: string, auto = false) => {
+      requestAutoplay(id, { auto });
+      navigateOrLoad((href) => routerRef.current.push(href), `/${lang}/video/${encodeURIComponent(id)}`);
+    };
     updatePlayerUi({
       replayList: null,
       upNext: nextId
@@ -122,14 +144,14 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
             title: nextTitle ?? '',
             channel: nextChannel,
             thumbnail: nextThumbnail,
-            go: () => {
-              requestAutoplay(nextId);
-              navigateOrLoad((href) => routerRef.current.push(href), `/${lang}/video/${encodeURIComponent(nextId)}`);
-            },
+            go: (opts) => goTo(nextId, opts?.auto === true),
           }
         : null,
+      suggestions: suggestions.map((v) => ({ id: v.id, title: getLocalizedValue(v.titleLocalized, v.title, lang), channel: v.channelName || '', thumbnail: v.thumbnail, go: () => goTo(v.id) })),
     });
-  }, [playback.active, playlistUpNext, playlistReplay, nextId, nextTitle, nextChannel, nextThumbnail, lang]);
+    // suggestionKey stands for the suggestions (a new array each render)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playback.active, playlistUpNext, playlistReplay, nextId, nextTitle, nextChannel, nextThumbnail, lang, suggestionKey]);
   useEffect(() => {
     updatePlayerUi({
       reportProblem: () => setReportOpen(true),
@@ -244,6 +266,7 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
                     startTime={startTime}
                     onPlayerReady={handlePlayerReady}
                     autoplayIntent={autoplayIntent}
+                    autoplayedView={autoplayedView}
                     offerResume={playback.active}
                   />
                 )}

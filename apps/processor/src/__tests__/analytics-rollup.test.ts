@@ -79,7 +79,19 @@ describe('events → increments', () => {
     expect(incs).toEqual([
       { entityType: 'video', entityId: '0269b21b', day: '2026-11-08', metric: 'views', value: 1 },
       { entityType: 'video', entityId: '0269b21b', day: '2026-11-08', metric: 'traffic', dim: 'unknown', value: 1, maxDims: 13 },
+      { entityType: 'video', entityId: '0269b21b', day: '2026-11-08', metric: 'playback', dim: 'chosen', value: 1, maxDims: 2 },
     ]);
+  });
+
+  it('autoplayed views are counted apart from chosen ones (docs/specs/PLAYLIST-PLAYBACK.md)', () => {
+    const incs = viewIncrements({ videoId: 'v1', videoChannelId: 'c1', autoplay: true, timestamp: '2026-11-11T10:00:00Z' }, Date.now())!;
+    expect(incs).toEqual(expect.arrayContaining([
+      { entityType: 'video', entityId: 'v1', day: '2026-11-11', metric: 'playback', dim: 'autoplay', value: 1, maxDims: 2 },
+      { entityType: 'channel', entityId: 'c1', day: '2026-11-11', metric: 'playback', dim: 'autoplay', value: 1, maxDims: 2 },
+    ]));
+    // Only a literal true counts as autoplay
+    const sneaky = viewIncrements({ videoId: 'v1', videoChannelId: 'c1', autoplay: 'yes', timestamp: '2026-11-11T10:00:00Z' }, Date.now())!;
+    expect(sneaky.filter((i) => i.metric === 'playback').map((i) => i.dim)).toEqual(['chosen', 'chosen']);
   });
 
   it('ignores view-like events that are not tracked views', () => {
@@ -115,8 +127,8 @@ describe('D1 counters', () => {
     const batch = new CounterBatch();
     for (let i = 0; i < 10; i++) recordViewRollup(batch, { videoId: 'v1', videoChannelId: 'c1', watchTime: 1.5, timestamp: '2026-11-06T10:00:00Z' }, 0);
     recordWatchTimeRollup(batch, { videoId: 'v1', videoChannelId: 'c1', seconds: 28.42, timestamp: '2026-11-06T10:00:00Z' }, 0);
-    // views, watch_time and traffic for the video and for the channel
-    expect(batch.size).toBe(6);
+    // views, watch_time, traffic and playback (chosen) for the video and for the channel
+    expect(batch.size).toBe(8);
     await batch.flush(db);
     expect(batch.size).toBe(0);
     const rows = await readCounters(db, 'video', ['v1'], '2026-11-01', '2026-11-30');

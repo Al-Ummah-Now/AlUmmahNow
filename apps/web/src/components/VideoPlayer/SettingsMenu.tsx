@@ -11,8 +11,7 @@ import { createElement, useCallback, useEffect, useLayoutEffect, useReducer, use
 import { createPortal } from 'react-dom';
 import type { Player } from 'video.js';
 import { AudioLines, Captions, Check, ChevronLeft, ChevronRight, Gauge, Keyboard, ListVideo, SlidersHorizontal, Type, type LucideIcon } from 'lucide-react';
-import { getPlayerUi } from '@/lib/video/player-ui';
-import { readAutoplayNext, writeAutoplayNext } from '@/lib/playlists/playback';
+import { getPlayerUi, setAutoplayNext } from '@/lib/video/player-ui';
 import { SETTINGS_TOGGLE_EVENT } from '@/lib/video/components';
 import { PLAYER_LAYER_ATTR } from '@/lib/video/player-layer';
 import { isLivePlayback } from '@/lib/video/live-state';
@@ -371,16 +370,16 @@ export function SettingsMenu({ player, lang, onShowShortcuts }: SettingsMenuProp
           <button
             type="button"
             role="menuitemcheckbox"
-            aria-checked={readAutoplayNext()}
+            aria-checked={getPlayerUi().autoplayNext}
             className="vjs-fanous-mi vjs-fanous-mi-row"
             data-row="autoplay-next"
             data-testid="player-autoplay-next"
             tabIndex={-1}
-            onClick={() => { writeAutoplayNext(!readAutoplayNext()); refresh(); }}
+            onClick={() => { setAutoplayNext(!getPlayerUi().autoplayNext); refresh(); }}
           >
             <span className="vjs-fanous-mi-icon" aria-hidden="true"><ListVideo /></span>
             <span className="vjs-fanous-mi-label">{t.chrome.autoplayNext}</span>
-            <span className="vjs-fanous-mi-end vjs-fanous-mi-check" aria-hidden="true">{readAutoplayNext() && <Check />}</span>
+            <span className="vjs-fanous-mi-end vjs-fanous-mi-check" aria-hidden="true">{getPlayerUi().autoplayNext && <Check />}</span>
           </button>
         )}
         {panel === 'quality' && sub(t.controls.quality, qualities, qualityId, (id) => selectQuality(levels, id))}

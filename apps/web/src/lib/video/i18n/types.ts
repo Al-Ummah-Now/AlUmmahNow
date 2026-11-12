@@ -185,6 +185,12 @@ export interface VideoPlayerTranslations {
     tapToUnmute: string;
     /** Settings menu toggle: the next video starts on its own after the countdown */
     autoplayNext: string;
+    /** The control bar's autoplay switch: its name, and its tooltip in each state */
+    autoplay: string;
+    autoplayOn: string;
+    autoplayOff: string;
+    /** End screen: more videos beside up next */
+    moreVideos: string;
     /** End of a playlist: start it again from the first video */
     replayPlaylist: string;
   };

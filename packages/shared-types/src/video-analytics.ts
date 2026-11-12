@@ -86,6 +86,11 @@ export interface AnalyticsContext {
   trafficSource?: ViewTrafficSource;
   /** External views only: the referring site's host */
   referrerHost?: string;
+  /**
+   * The player started this video on its own (an up-next or playlist advance), not the viewer.
+   * Counted apart so creator analytics stay honest (docs/specs/PLAYLIST-PLAYBACK.md).
+   */
+  autoplay?: boolean;
 }
 
 /**

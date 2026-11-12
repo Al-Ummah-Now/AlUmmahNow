@@ -88,6 +88,8 @@ export interface ViewEventPayload {
   /** Where the view came from (docs/specs/CREATOR-STUDIO.md §8.4) */
   trafficSource?: unknown;
   referrerHost?: unknown;
+  /** True when the player started the video on its own (up next, playlist advance) */
+  autoplay?: unknown;
 }
 
 /** Pure: the rollup dimensions a tracked view carries (invalid values dropped). */
@@ -155,6 +157,8 @@ export function viewIncrements(payload: ViewEventPayload, messageTimestamp: numb
     out.push({ ...base, metric: 'views', value: 1 });
     if (watchTime > 0) out.push({ ...base, metric: 'watch_time', value: watchTime });
     out.push({ ...base, metric: 'traffic', dim: traffic.trafficSource ?? 'unknown', value: 1, maxDims: MAX_TRAFFIC_SOURCES });
+    // Autoplayed views apart from views the viewer chose (both add up to `views`)
+    out.push({ ...base, metric: 'playback', dim: payload.autoplay === true ? 'autoplay' : 'chosen', value: 1, maxDims: 2 });
     if (traffic.referrerHost) {
       out.push({ ...base, metric: 'external_host', dim: traffic.referrerHost, value: 1, maxDims: MAX_EXTERNAL_HOSTS });
     }

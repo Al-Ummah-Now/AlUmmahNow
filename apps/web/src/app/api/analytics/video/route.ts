@@ -22,6 +22,8 @@ export async function POST(request: NextRequest) {
     // Embed frames tag their views (docs/embeds §6); anything invalid counts as a watch-page view
     const viewContext = viewContextFromBatch(body.context);
     const traffic = trafficFromBatch(body.context);
+    // An autoplayed view (up next, playlist advance) is counted apart (docs/specs/PLAYLIST-PLAYBACK.md)
+    const autoplay = (body.context as { autoplay?: unknown } | undefined)?.autoplay === true ? { autoplay: true } : {};
 
     // Log analytics event in development with detailed error information
     if (process.env.NODE_ENV === 'development') {
@@ -71,6 +73,7 @@ export async function POST(request: NextRequest) {
               deviceType: 'desktop',
               ...viewContext,
               ...traffic,
+              ...autoplay,
             }),
           });
 

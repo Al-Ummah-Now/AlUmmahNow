@@ -146,6 +146,10 @@ export const AR_TRANSLATIONS: VideoPlayerTranslations = {
     seekValue: '{current} من {total}',
     tapToUnmute: 'اضغط لتشغيل الصوت',
     autoplayNext: 'التشغيل التلقائي للتالي',
+    autoplay: 'التشغيل التلقائي',
+    autoplayOn: 'التشغيل التلقائي مفعّل',
+    autoplayOff: 'التشغيل التلقائي متوقف',
+    moreVideos: 'فيديوهات أخرى',
     replayPlaylist: 'إعادة تشغيل القائمة',
   },
 

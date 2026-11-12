@@ -19,11 +19,13 @@ interface WatchPlayerProps {
   onPlayerReady?: (player: Player) => void;
   /** Start playing once loaded (playlist playback or an in-app advance; muted fallback when the browser refuses) */
   autoplayIntent?: boolean;
+  /** Started by the countdown rather than the viewer: counted as an autoplayed view */
+  autoplayedView?: boolean;
   /** Inside a playlist: start at 0 and offer the saved position instead of jumping to it */
   offerResume?: boolean;
 }
 
-const VideoPlayer: React.FC<WatchPlayerProps> = ({ options, startTime, onPlayerReady, autoplayIntent, offerResume }) => {
+const VideoPlayer: React.FC<WatchPlayerProps> = ({ options, startTime, onPlayerReady, autoplayIntent, autoplayedView, offerResume }) => {
   const { user } = useAuth();
   const { lang, t } = useLanguage();
   const locale = lang;
@@ -60,6 +62,7 @@ const VideoPlayer: React.FC<WatchPlayerProps> = ({ options, startTime, onPlayerR
             startTime={startTime}
             onPlayerReady={handlePlayerReady}
             autoplayIntent={autoplayIntent}
+            autoplayedView={autoplayedView}
             offerResume={offerResume}
           />
         </div>

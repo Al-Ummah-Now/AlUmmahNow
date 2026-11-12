@@ -93,11 +93,12 @@ export function recordNavigation(pathname: string): void {
 }
 
 /** The analytics context of a player: an embed keeps its own, the watch page resolves its source. */
-export function playerAnalyticsContext(embedContext: AnalyticsContext | undefined, videoId: string): AnalyticsContext {
-  if (embedContext) return { ...embedContext, trafficSource: 'embed' };
-  if (typeof window === 'undefined') return { source: 'watch' };
+export function playerAnalyticsContext(embedContext: AnalyticsContext | undefined, videoId: string, autoplay = false): AnalyticsContext {
+  const auto = autoplay ? { autoplay: true } : {};
+  if (embedContext) return { ...embedContext, trafficSource: 'embed', ...auto };
+  if (typeof window === 'undefined') return { source: 'watch', ...auto };
   const { hostname, host, pathname } = window.location;
-  return { source: 'watch', ...tracker.resolve(pathname, videoId, { referrer: document.referrer, hostname, host }) };
+  return { source: 'watch', ...tracker.resolve(pathname, videoId, { referrer: document.referrer, hostname, host }), ...auto };
 }
 
 /** Validates the source a batch claims before it is forwarded to the API. */

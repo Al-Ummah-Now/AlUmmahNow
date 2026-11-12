@@ -13,7 +13,7 @@ jest.mock('@/components/AuthProvider/authContext', () => ({ useAuth: () => ({ us
 jest.mock('@/hooks/useLanguage', () => ({
   useLanguage: () => ({ t: { video: { relatedVideos: 'Related', relatedEmpty: 'Nothing here', relatedEmptyRetry: 'Retry shelf' }, navigation: {} }, lang: mockIsRTL ? 'ar' : 'en', isRTL: mockIsRTL }),
 }));
-jest.mock('@al-ummah/shared-types', () => ({ getLocalizedValue: (_: unknown, title: string) => title }));
+jest.mock('@al-ummah/shared-types', () => ({ ...jest.requireActual('@al-ummah/shared-types'), getLocalizedValue: (_: unknown, title: string) => title }));
 jest.mock('@/components/relatedVideo', () => ({ __esModule: true, default: ({ id }: { id: string }) => <div data-testid={`card-${id}`} /> }));
 jest.mock('@/components/relatedVideo/rtl', () => ({ __esModule: true, default: ({ id }: { id: string }) => <div data-testid={`card-${id}`} /> }));
 jest.mock('@/components/VideoPagePlayer/index', () => ({ __esModule: true, default: () => null }));

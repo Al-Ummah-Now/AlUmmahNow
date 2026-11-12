@@ -9,6 +9,7 @@ import { ProfileFetch } from '../endpoints/profile/profileFetch';
 import { ProfileCurrentFetch } from '../endpoints/profile/profileCurrentFetch';
 import { ProfilesList } from '../endpoints/profile/profileList';
 import { ProfileUpdate } from '../endpoints/profile/profileUpdate';
+import { PlaybackSettingsGet, PlaybackSettingsUpdate } from '../endpoints/profile/playbackSettings';
 import { WatchHistoryAdd } from '../endpoints/profile/watchHistoryAdd';
 import { WatchHistoryList } from '../endpoints/profile/watchHistoryList';
 import handleAvatarUpdate from '../endpoints/profile/profileAvatarUpdate';
@@ -54,6 +55,10 @@ profileRouter.put('/profile', ProfileUpdate);
 profileRouter.delete('/profile', ProfileDelete);
 
 // Auth required: Get current user's subscriptions
+// Auth required: playback settings (autoplay next), synced across the viewer's devices
+profileRouter.get('/profile/playback', PlaybackSettingsGet);
+profileRouter.put('/profile/playback', PlaybackSettingsUpdate);
+
 profileRouter.get('/profile/subscriptions', SubscriptionsList);
 profileRouter.get('/profile/subscriptions/feed', SubscriptionFeed);
 

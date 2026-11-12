@@ -16,7 +16,7 @@
  */
 import { useEffect, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react';
 import { ListRestart, Maximize2, Play, RotateCcw, SkipForward, X } from 'lucide-react';
-import type { UpNext } from '@/lib/video/player-ui';
+import type { EndSuggestion, UpNext } from '@/lib/video/player-ui';
 import type { VideoPlayerTranslations } from '@/lib/video/i18n/types';
 
 /** Seconds before the next video starts on its own */
@@ -30,13 +30,15 @@ interface EndScreenProps {
   onReplay: () => void;
   /** End of a playlist with loop off: start the playlist again (docs/specs/PLAYLIST-PLAYBACK.md D9) */
   onReplayList?: () => void;
+  /** More videos, shown once the countdown is off or cancelled (the owner's "auto play like youtube") */
+  suggestions?: EndSuggestion[];
   t: VideoPlayerTranslations;
   dir: 'ltr' | 'rtl';
   /** Seconds before advancing; 0 turns auto-advance off */
   autoAdvanceSeconds?: number;
 }
 
-export function EndScreen({ upNext, onReplay, onReplayList, t, dir, autoAdvanceSeconds = AUTO_ADVANCE_SECONDS }: EndScreenProps) {
+export function EndScreen({ upNext, onReplay, onReplayList, suggestions = [], t, dir, autoAdvanceSeconds = AUTO_ADVANCE_SECONDS }: EndScreenProps) {
   const [elapsed, setElapsed] = useState(0);
   const [stopped, setStopped] = useState(autoAdvanceSeconds <= 0);
   const [hovered, setHovered] = useState(false);
@@ -47,6 +49,35 @@ export function EndScreen({ upNext, onReplay, onReplayList, t, dir, autoAdvanceS
   const goRef = useRef(upNext?.go);
   goRef.current = upNext?.go;
   const counting = !!upNext && !stopped;
+  // Autoplay turned off while the screen shows: the countdown stops there
+  useEffect(() => {
+    if (autoAdvanceSeconds <= 0) setStopped(true);
+  }, [autoAdvanceSeconds]);
+  const more = suggestions.slice(0, 2);
+  const moreRow = !counting && more.length > 0 ? (
+    <div className="vjs-fanous-end-more" data-testid="player-end-suggestions">
+      <p className="vjs-fanous-next-kicker">{t.chrome.moreVideos}</p>
+      <div className="vjs-fanous-end-more-row">
+        {more.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            className="vjs-fanous-end-more-item"
+            onClick={s.go}
+            aria-label={t.chrome.playTitle.replace('{title}', s.title)}
+            data-testid="player-end-suggestion"
+          >
+            <span
+              className="vjs-fanous-end-more-thumb"
+              aria-hidden="true"
+              style={s.thumbnail ? { backgroundImage: `url(${JSON.stringify(s.thumbnail)})` } : undefined}
+            />
+            <span className="vjs-fanous-end-more-title">{s.title}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  ) : null;
   const ticking = counting && !hovered && !focused;
 
   // Focus Play now, unless the viewer is working somewhere else on the page
@@ -82,7 +113,8 @@ export function EndScreen({ upNext, onReplay, onReplayList, t, dir, autoAdvanceS
     // Summed 100ms steps land a hair under whole seconds
     if (counting && elapsed >= autoAdvanceSeconds - 1e-6) {
       setStopped(true);
-      goRef.current?.();
+      // The countdown ran out: the next video is an autoplayed view
+      goRef.current?.({ auto: true });
     }
   }, [counting, elapsed, autoAdvanceSeconds]);
 
@@ -111,6 +143,7 @@ export function EndScreen({ upNext, onReplay, onReplayList, t, dir, autoAdvanceS
             <span className="vjs-fanous-btn-label">{t.chrome.replayPlaylist}</span>
           </button>
         )}
+        {moreRow}
       </div>
     );
   }
@@ -139,7 +172,7 @@ export function EndScreen({ upNext, onReplay, onReplayList, t, dir, autoAdvanceS
           type="button"
           className="vjs-fanous-next-thumb"
           aria-label={t.chrome.playTitle.replace('{title}', upNext.title)}
-          onClick={upNext.go}
+          onClick={() => upNext.go()}
           data-testid="player-next-thumb"
           style={upNext.thumbnail ? { backgroundImage: `url(${JSON.stringify(upNext.thumbnail)})` } : undefined}
         >
@@ -153,7 +186,7 @@ export function EndScreen({ upNext, onReplay, onReplayList, t, dir, autoAdvanceS
             <p className="vjs-fanous-next-channel">{upNext.channel}</p>
           </div>
           <div className="vjs-fanous-next-actions">
-            <button ref={playRef} type="button" className="vjs-fanous-btn vjs-fanous-btn-primary" onClick={upNext.go} data-testid="player-play-next">
+            <button ref={playRef} type="button" className="vjs-fanous-btn vjs-fanous-btn-primary" onClick={() => upNext.go()} data-testid="player-play-next">
               {counting ? (
                 <span className="vjs-fanous-next-ring" data-testid="player-next-ring" aria-hidden="true">
                   <svg viewBox="0 0 22 22">
@@ -187,6 +220,7 @@ export function EndScreen({ upNext, onReplay, onReplayList, t, dir, autoAdvanceS
           </div>
         </div>
       </div>
+      {moreRow}
       {/* Announced once, not every second */}
       <p className="vjs-control-text" role="status" aria-live="polite">
         {counting ? t.chrome.autoAdvance.replace('{seconds}', String(autoAdvanceSeconds)) : ''}

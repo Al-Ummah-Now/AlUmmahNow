@@ -44,7 +44,7 @@ export interface PlaylistPlayback {
   toggleCollapsed: () => void;
   previous: () => void;
   next: () => void;
-  play: (item: QueueItem) => void;
+  play: (item: QueueItem, opts?: { auto?: boolean }) => void;
   hrefFor: (item: QueueItem) => string;
   /** What the player's Next button, `N` and the end screen play (null at the end of the list) */
   upNext: UpNext | null;
@@ -97,8 +97,8 @@ export function usePlaylistPlayback(videoId: string, lang: string, options: Play
     [buildHref, lang, list],
   );
 
-  const play = useCallback((item: QueueItem) => {
-    requestAutoplay(item.id);
+  const play = useCallback((item: QueueItem, opts: { auto?: boolean } = {}) => {
+    requestAutoplay(item.id, opts);
     // The page keeps its scroll: the mini player takes over when the player is out of view
     navigateOrLoad((href) => router.push(href, { scroll: false }), hrefFor(item));
   }, [router, hrefFor]);
@@ -138,7 +138,7 @@ export function usePlaylistPlayback(videoId: string, lang: string, options: Play
       channel: nextItem.channelName ?? '',
       thumbnail: nextItem.thumbnailUrl,
       badge: `${(nextItem.position + 1).toLocaleString(lang)} / ${total.toLocaleString(lang)}`,
-      go: () => play(nextItem),
+      go: (opts) => play(nextItem, opts),
     };
   }, [nextItem, lang, total, play]);
 

@@ -75,7 +75,6 @@ import { ErrorDisplay } from './ErrorDisplay';
 import { SettingsMenu } from './SettingsMenu';
 import { ProgressTooltip } from './ProgressTooltip';
 import { AUTO_ADVANCE_SECONDS, EndScreen, MiniPlayerButtons } from './PlayerOverlays';
-import { readAutoplayNext } from '@/lib/playlists/playback';
 import { getPlayerUi, subscribePlayerUi } from '@/lib/video/player-ui';
 import { keepFrameInView, stickyTopInset } from '@/lib/video/theatre-scroll';
 import { MINI_ENTER_BELOW, MINI_LEAVE_ABOVE, nextMini } from '@/lib/video/mini-player';
@@ -143,6 +142,8 @@ export interface CustomVideoPlayerProps {
    * (NotAllowedError) it plays muted with a "Tap to unmute" button.
    */
   autoplayIntent?: boolean;
+  /** Started by the countdown rather than the viewer: the view is flagged as autoplayed in analytics */
+  autoplayedView?: boolean;
   /** Inside a playlist: start at 0 and offer the saved position ("Resume at") instead of seeking */
   offerResume?: boolean;
 }
@@ -174,6 +175,7 @@ export default function CustomVideoPlayer({
   muted,
   analyticsContext,
   autoplayIntent = false,
+  autoplayedView = false,
   offerResume = false,
 }: CustomVideoPlayerProps) {
   const { t, dir } = useVideoPlayerI18n(lang);
@@ -586,7 +588,7 @@ export default function CustomVideoPlayer({
 
       // Initialize analytics (Phase 1.5)
       if (enableAnalytics) {
-        analyticsRef.current = new VideoAnalytics(videoId, userId, { context: playerAnalyticsContext(analyticsContext, videoId) });
+        analyticsRef.current = new VideoAnalytics(videoId, userId, { context: playerAnalyticsContext(analyticsContext, videoId, autoplayedView) });
       }
 
       // Initialize Video.js player with the DOM element
@@ -958,7 +960,7 @@ export default function CustomVideoPlayer({
       if (analyticsRef.current) {
         analyticsRef.current.destroy();
         if (enableAnalytics) {
-          analyticsRef.current = new VideoAnalytics(videoId, userId, { context: playerAnalyticsContext(analyticsContext, videoId) });
+          analyticsRef.current = new VideoAnalytics(videoId, userId, { context: playerAnalyticsContext(analyticsContext, videoId, autoplayedView) });
         }
       }
 
@@ -1256,9 +1258,10 @@ export default function CustomVideoPlayer({
             upNext={playerUi.upNext}
             onReplay={replay}
             onReplayList={playerUi.replayList ?? undefined}
+            suggestions={playerUi.suggestions}
             t={t}
             dir={dir === 'rtl' ? 'rtl' : 'ltr'}
-            autoAdvanceSeconds={readAutoplayNext() ? AUTO_ADVANCE_SECONDS : 0}
+            autoAdvanceSeconds={playerUi.autoplayNext ? AUTO_ADVANCE_SECONDS : 0}
           />
         )}
         {mini && <MiniPlayerButtons onClose={closeMini} onReturn={returnFromMini} t={t} />}

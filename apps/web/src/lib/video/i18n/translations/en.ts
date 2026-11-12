@@ -145,6 +145,10 @@ export const EN_TRANSLATIONS: VideoPlayerTranslations = {
     seekValue: '{current} of {total}',
     tapToUnmute: 'Tap to unmute',
     autoplayNext: 'Autoplay next',
+    autoplay: 'Autoplay',
+    autoplayOn: 'Autoplay is on',
+    autoplayOff: 'Autoplay is off',
+    moreVideos: 'More videos',
     replayPlaylist: 'Replay playlist',
   },
 

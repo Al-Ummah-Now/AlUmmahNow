@@ -48,6 +48,7 @@ export const VIDEO_JS_OPTIONS: Partial<PlayerOptions> = {
       'durationDisplay',
       'fanousLiveBadge',
       'customControlSpacer',
+      'fanousAutoplayToggle',
       'fanousCaptionsToggle',
       'fanousSettingsButton',
       'pictureInPictureToggle',
@@ -127,6 +128,7 @@ export function createVideoPlayer(
         fanousCaptionsToggle: { copy },
         fanousSettingsButton: { copy },
         fanousTheatreToggle: { copy },
+        fanousAutoplayToggle: { copy },
         ...((options.controlBar as Record<string, unknown> | undefined) ?? {})
       }
     });
@@ -181,6 +183,9 @@ export function chromeCopy(lang: 'en' | 'ar'): ChromeCopy {
     live: t.chrome.live,
     goToLive: t.chrome.goToLive,
     behind: t.chrome.behind,
+    autoplay: t.chrome.autoplay,
+    autoplayOn: t.chrome.autoplayOn,
+    autoplayOff: t.chrome.autoplayOff,
   };
 }
 
