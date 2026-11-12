@@ -59,11 +59,21 @@ export const test = base.extend<TestFixtures>({
   // about:blank swaps browsing-context groups and Playwright's focus emulation is
   // lost (document.hasFocus() === false, toBeFocused() reports "inactive").
   // Re-focus the page after every goto so keyboard tests see a focused window.
-  page: async ({ page }, use) => {
+  // Firefox loses the context's colour-scheme emulation the same way: every
+  // `colorScheme: 'dark'` spec saw prefers-color-scheme: light (html.light)
+  // there, never in Chromium or WebKit. Re-apply it on the page when the
+  // document does not match, so "system" theme specs test the real path.
+  page: async ({ page, browserName, colorScheme }, use) => {
     const goto = page.goto.bind(page);
     page.goto = async (...args: Parameters<typeof page.goto>) => {
       const response = await goto(...args);
       await page.bringToFront();
+      if (browserName === 'firefox' && (colorScheme === 'dark' || colorScheme === 'light')) {
+        const matches = await page
+          .evaluate((scheme) => window.matchMedia(`(prefers-color-scheme: ${scheme})`).matches, colorScheme)
+          .catch(() => true);
+        if (!matches) await page.emulateMedia({ colorScheme });
+      }
       return response;
     };
     await use(page);
