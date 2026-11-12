@@ -96,6 +96,8 @@ test.describe('playlist playback', () => {
 
   test("the pane's Next and a click on an item play that item", async ({ page }) => {
     await openHarness(page, { src: 'dark', list: 'fixtures', index: 0 });
+    // As a viewer would: the list has started playing before Next is pressed
+    await expectPlaying(page);
     await page.getByTestId('playlist-pane-next').click();
     await expect(page).toHaveURL(/src=short/);
     await expect(current(page)).toHaveAttribute('data-video-id', 'short');

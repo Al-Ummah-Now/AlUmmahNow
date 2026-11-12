@@ -25,6 +25,7 @@ import {
   type ListMode,
 } from '@/lib/playlists/playback';
 import { requestAutoplay } from '@/lib/video/autoplay-intent';
+import { navigateOrLoad } from '@/lib/navigation/navigate-or-load';
 import { removeUnwantedChars } from '@/lib/utility';
 import type { UpNext } from '@/lib/video/player-ui';
 
@@ -99,7 +100,7 @@ export function usePlaylistPlayback(videoId: string, lang: string, options: Play
   const play = useCallback((item: QueueItem) => {
     requestAutoplay(item.id);
     // The page keeps its scroll: the mini player takes over when the player is out of view
-    router.push(hrefFor(item), { scroll: false });
+    navigateOrLoad((href) => router.push(href, { scroll: false }), hrefFor(item));
   }, [router, hrefFor]);
 
   const { itemAt } = queue;

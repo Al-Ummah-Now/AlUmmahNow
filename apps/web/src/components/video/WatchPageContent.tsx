@@ -38,6 +38,7 @@ import { usePlaylistPlayback } from "@/hooks/usePlaylistPlayback";
 import { shareableList } from "@/lib/playlists/playback";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { clearAutoplayIntent, hasAutoplayIntent, requestAutoplay } from "@/lib/video/autoplay-intent";
+import { navigateOrLoad } from "@/lib/navigation/navigate-or-load";
 
 /** The list a share link carries: public playlists only, never the viewer's WL / LL (spec 2.4) */
 function shareListOf(list: string | null, index: number | null): { id: string; index: number | null } | null {
@@ -123,7 +124,7 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
             thumbnail: nextThumbnail,
             go: () => {
               requestAutoplay(nextId);
-              routerRef.current.push(`/${lang}/video/${encodeURIComponent(nextId)}`);
+              navigateOrLoad((href) => routerRef.current.push(href), `/${lang}/video/${encodeURIComponent(nextId)}`);
             },
           }
         : null,

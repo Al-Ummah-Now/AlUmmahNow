@@ -17,6 +17,7 @@ import { enableWatchPageFeatures, getPlayerUi, subscribePlayerUi, updatePlayerUi
 import { PlaylistPane } from '@/components/video/PlaylistPane';
 import { usePlaylistPlayback } from '@/hooks/usePlaylistPlayback';
 import { clearAutoplayIntent, hasAutoplayIntent, requestAutoplay } from '@/lib/video/autoplay-intent';
+import { navigateOrLoad } from '@/lib/navigation/navigate-or-load';
 
 const SOURCES = ['bright', 'dark', 'short', 'live'] as const;
 type Source = (typeof SOURCES)[number];
@@ -52,7 +53,7 @@ export function PlayerHarness({ lang }: { lang: 'en' | 'ar' }) {
         // As on the watch page: the advance asks the next video to play
         go: () => {
           requestAutoplay(next);
-          router.push(`/${lang}/dev/player?src=${next}`);
+          navigateOrLoad((href) => router.push(href), `/${lang}/dev/player?src=${next}`);
         },
       },
       replayList: null,
