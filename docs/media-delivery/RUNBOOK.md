@@ -39,20 +39,22 @@ Both are set with the Bunny *account* API (`POST https://api.bunny.net/videolibr
 ## Applying the CDN settings
 
 ```sh
-# Plan (read-only): prints what differs and, without zone access, the exact rule to paste
-node --experimental-strip-types scripts/media-cdn/apply.ts --env qa
-# Apply
-MEDIA_CDN_API_TOKEN=… node --experimental-strip-types scripts/media-cdn/apply.ts --env qa --apply
+# Plan (read-only): what differs, plus the purge and analytics access checks
+CLOUDFLARE_API_TOKEN=… node --experimental-strip-types scripts/media-cdn/apply.ts --env qa
+# Apply (and store the token for api-videos' runtime purge and analytics)
+CLOUDFLARE_API_TOKEN=… node --experimental-strip-types scripts/media-cdn/apply.ts --env qa --apply --store-secret
 ```
 
 Or run the **Media CDN settings** workflow (Actions → manual dispatch: env, apply).
 
-- **What it manages:** the custom domain and CORS on the public bucket (account token; the wrangler
-  login works), one Cache Rule per env found by its ref `al-ummah-media-cache-<env>`, and Smart Tiered
-  Cache. Both of the last two need `MEDIA_CDN_API_TOKEN`. It never edits other rules in the phase.
-- **Production attaches `media.alummahnow.net`, which creates a DNS record.** Only with the owner's
-  go-ahead.
-- **By hand in the dashboard** (if no zone token):
+- **What it manages:**
+  - the custom domain and CORS on the public bucket;
+  - one Cache Rule per env, found by its ref `al-ummah-media-cache-<env>` (it never edits other rules in the phase);
+  - Smart Tiered Cache.
+- **What it checks:** that the token can purge the media host's cache and read Account Analytics.
+- **Token:** the repository's `CLOUDFLARE_API_TOKEN`, which has Zone Cache Settings, Cache Purge and DNS Edit, plus Account Analytics Read. `MEDIA_CDN_API_TOKEN`, if ever set, overrides it for zone calls.
+- **Releases** apply stage and production. The manual workflow covers QA, or stage on demand.
+- **By hand in the dashboard** (should a token ever lack zone access):
   - Caching → Cache Rules → Create rule:
     - Hostname equals `media.<env>.alummahnow.net` → Eligible for cache.
     - Edge TTL: use cache-control header if present.

@@ -283,20 +283,17 @@ jobs:
           pnpm wrangler rollback -c wrangler.jsonc --env stage --message "release ${GITHUB_SHA::7}: media smoke failed" -y
           echo "### Rolled back: media smoke failed (stage)" >> "$GITHUB_STEP_SUMMARY"
 
-      # Cache Rule + Smart Tiered Cache on the media host (scripts/media-cdn/apply.ts). Needs a
-      # zone-scoped token (MEDIA_CDN_API_TOKEN: Zone Cache Rules Edit, Zone Settings Edit); the
-      # account token cannot. Without it the host still serves, uncached, and this says so.
+      # Media host settings (scripts/media-cdn/apply.ts, idempotent): R2 custom domain, CORS, the
+      # Cache Rule, Smart Tiered Cache, and checks that the token can purge and read analytics.
+      # The release token carries the zone permissions (Cache Settings, Cache Purge, DNS) and
+      # Account Analytics Read. A problem here is a warning: the media host still serves.
       - name: Media CDN settings (stage)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          MEDIA_CDN_API_TOKEN: ${{ secrets.MEDIA_CDN_API_TOKEN }}
         run: |
-          if [ -z "$MEDIA_CDN_API_TOKEN" ]; then
-            echo "::notice title=Media CDN settings skipped::MEDIA_CDN_API_TOKEN is not set: media.* is served uncached until the Cache Rule exists (docs/media-delivery/RUNBOOK.md)"
-            exit 0
-          fi
-          node --experimental-strip-types --no-warnings scripts/media-cdn/apply.ts --env stage --apply --only cache,tiered
+          node --experimental-strip-types --no-warnings scripts/media-cdn/apply.ts --env stage --apply \
+            || echo "::warning title=Media CDN settings::scripts/media-cdn/apply.ts --env stage did not finish; see the log above"
       # Fills columns added by a migration, once the new worker writes them. Fails the deploy if any row is left.
       - name: Backfill and verify Studio columns (stage)
         env:
@@ -537,20 +534,17 @@ jobs:
           pnpm wrangler rollback -c wrangler.jsonc --message "release ${GITHUB_SHA::7}: media smoke failed" -y
           echo "### Rolled back: media smoke failed (production)" >> "$GITHUB_STEP_SUMMARY"
 
-      # Cache Rule + Smart Tiered Cache on the media host (scripts/media-cdn/apply.ts). Needs a
-      # zone-scoped token (MEDIA_CDN_API_TOKEN: Zone Cache Rules Edit, Zone Settings Edit); the
-      # account token cannot. Without it the host still serves, uncached, and this says so.
+      # Media host settings (scripts/media-cdn/apply.ts, idempotent): R2 custom domain, CORS, the
+      # Cache Rule, Smart Tiered Cache, and checks that the token can purge and read analytics.
+      # The release token carries the zone permissions (Cache Settings, Cache Purge, DNS) and
+      # Account Analytics Read. A problem here is a warning: the media host still serves.
       - name: Media CDN settings (production)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          MEDIA_CDN_API_TOKEN: ${{ secrets.MEDIA_CDN_API_TOKEN }}
         run: |
-          if [ -z "$MEDIA_CDN_API_TOKEN" ]; then
-            echo "::notice title=Media CDN settings skipped::MEDIA_CDN_API_TOKEN is not set: media.* is served uncached until the Cache Rule exists (docs/media-delivery/RUNBOOK.md)"
-            exit 0
-          fi
-          node --experimental-strip-types --no-warnings scripts/media-cdn/apply.ts --env production --apply --only cache,tiered
+          node --experimental-strip-types --no-warnings scripts/media-cdn/apply.ts --env production --apply \
+            || echo "::warning title=Media CDN settings::scripts/media-cdn/apply.ts --env production did not finish; see the log above"
       # Fills columns added by a migration, once the new worker writes them. Fails the deploy if any row is left.
       - name: Backfill and verify Studio columns (production)
         env:

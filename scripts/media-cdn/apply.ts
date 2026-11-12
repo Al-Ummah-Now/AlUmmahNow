@@ -1,7 +1,8 @@
 /**
  * The media host's Cloudflare settings as code (epic #687, docs/media-delivery/RUNBOOK.md):
  *
- *   node --experimental-strip-types scripts/media-cdn/apply.ts --env qa|stage|production [--apply] [--only domain,cors,cache,tiered]
+ *   node --experimental-strip-types scripts/media-cdn/apply.ts --env qa|stage|production [--apply]
+ *        [--only domain,cors,cache,tiered,purge,analytics] [--store-secret]
  *
  * Without --apply it reads the current state and prints what it would change
  * (and the exact Cache Rule, for pasting in the dashboard). With --apply it
@@ -10,11 +11,15 @@
  *   - one Cache Rule per env in the zone's cache-settings phase, found by its ref
  *     (other rules in that phase are left exactly as they are)
  *   - Tiered Cache: Smart topology on (zone-wide; free, lowers R2 reads)
+ * and checks (never changes anything) that the token can purge the media host's
+ * cache and read Account Analytics, which api-videos needs at runtime. With
+ * --store-secret (and --apply) it also stores the token in Secrets Store as
+ * media-cdn-api-token, the binding api-videos purges and reads analytics with.
  *
- * Tokens: account calls use CLOUDFLARE_API_TOKEN (or the wrangler login). Zone
- * calls (Cache Rules, Tiered Cache) use MEDIA_CDN_API_TOKEN when set, because
- * the wrangler login has no zone Rulesets/Settings scope. Production changes
- * create a DNS record: run them only with the owner's go-ahead.
+ * Token: CLOUDFLARE_API_TOKEN for everything (account R2 calls and the zone's
+ * Cache Settings, Cache Purge, DNS; Account Analytics Read). MEDIA_CDN_API_TOKEN,
+ * when set, overrides it for the zone calls. Locally the wrangler login works for
+ * the account calls only.
  */
 import { resolve } from 'node:path';
 import { cfToken, CfApiError, createCfClient, type CfClient } from '../release/cf-api.ts';
@@ -167,6 +172,48 @@ export async function planTiered(zone: ReturnType<typeof zoneClient>): Promise<C
 	return changes;
 }
 
+/** Purge one URL that never exists on the media host: proves Cache Purge without touching real content. */
+export async function checkPurge(zone: ReturnType<typeof zoneClient>, env: MediaEnv): Promise<Change[]> {
+	await zone('POST', '/purge_cache', { files: [`https://${mediaHost(env)}/pub/_access-check/none`] });
+	console.log('purge   ok        Cache Purge allowed on the zone');
+	return [];
+}
+
+/** One tiny Account Analytics (GraphQL) read: the daily cost collector's R2 and cache numbers. */
+export async function checkAnalytics(token: string, accountId: string): Promise<Change[]> {
+	const day = new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
+	const res = await fetch('https://api.cloudflare.com/client/v4/graphql', {
+		method: 'POST',
+		headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+		body: JSON.stringify({
+			query: `query($a: String!, $z: String!, $d: Date!) { viewer {
+				accounts(filter: { accountTag: $a }) { r2OperationsAdaptiveGroups(limit: 1, filter: { date_geq: $d }) { sum { requests } } }
+				zones(filter: { zoneTag: $z }) { httpRequestsAdaptiveGroups(limit: 1, filter: { date_geq: $d }) { count } } } }`,
+			variables: { a: accountId, z: ZONE_ID, d: day },
+		}),
+	});
+	const json = (await res.json().catch(() => ({}))) as { errors?: { message: string }[] | null };
+	if (!res.ok || json.errors?.length) throw new CfApiError(res.status === 200 ? 403 : res.status, `graphql -> ${res.status} ${json.errors?.map((e) => e.message).join('; ') ?? ''}`);
+	console.log('analytics ok      R2 operations and zone HTTP analytics readable');
+	return [];
+}
+
+export const TOKEN_SECRET_NAME = 'media-cdn-api-token';
+export const SECRETS_STORE_ID = 'f8eddc9944d041919ed8dc7d08d32308';
+
+/** Create or update Secrets Store media-cdn-api-token with the token (never printed). */
+export async function storeTokenSecret(cf: CfClient, token: string): Promise<string> {
+	const base = `/secrets_store/stores/${SECRETS_STORE_ID}/secrets`;
+	const list = await cf.request<{ id: string; name: string }[]>('GET', `${base}?per_page=100&search=${TOKEN_SECRET_NAME}`);
+	const found = (list ?? []).find((x) => x.name === TOKEN_SECRET_NAME);
+	if (found) {
+		await cf.request('PATCH', `${base}/${found.id}`, { value: token, scopes: ['workers'] });
+		return `updated Secrets Store ${TOKEN_SECRET_NAME}`;
+	}
+	await cf.request('POST', base, [{ name: TOKEN_SECRET_NAME, value: token, scopes: ['workers'], comment: 'Media cache purge + analytics (epic #687)' }]);
+	return `created Secrets Store ${TOKEN_SECRET_NAME}`;
+}
+
 const isMain = process.argv[1] && resolve(process.argv[1]) === resolve(decodeURIComponent(new URL(import.meta.url).pathname));
 if (isMain) {
 	const arg = (name: string) => {
@@ -175,9 +222,10 @@ if (isMain) {
 	};
 	const env = arg('--env') as MediaEnv;
 	const apply = process.argv.includes('--apply');
-	const only = new Set((arg('--only') ?? 'domain,cors,cache,tiered').split(','));
+	const only = new Set((arg('--only') ?? 'domain,cors,cache,tiered,purge,analytics').split(','));
+	const storeSecret = process.argv.includes('--store-secret');
 	if (!['qa', 'stage', 'production'].includes(env)) {
-		process.stderr.write('usage: apply.ts --env qa|stage|production [--apply] [--only domain,cors,cache,tiered]\n');
+		process.stderr.write('usage: apply.ts --env qa|stage|production [--apply] [--only domain,cors,cache,tiered,purge,analytics] [--store-secret]\n');
 		process.exit(2);
 	}
 	const main = async () => {
@@ -190,6 +238,8 @@ if (isMain) {
 			['cors', () => planCors(cf, env)],
 			['cache', () => planCache(zone, env)],
 			['tiered', () => planTiered(zone)],
+			['purge', () => checkPurge(zone, env)],
+			['analytics', () => checkAnalytics(zoneToken!, cf.accountId)],
 		];
 		let blocked = 0;
 		for (const [name, plan] of steps) {
@@ -201,7 +251,7 @@ if (isMain) {
 				const denied = error instanceof CfApiError && (error.status === 401 || error.status === 403);
 				console.log(`${name.padEnd(7)} ${denied ? 'NO ACCESS' : 'ERROR    '} ${error instanceof Error ? error.message : String(error)}`);
 				if (denied && (name === 'cache' || name === 'tiered')) {
-					console.log('        → set MEDIA_CDN_API_TOKEN (Zone: Cache Rules Edit, Zone Settings Edit), or apply by hand in the dashboard:');
+					console.log('        → the token needs Zone: Cache Settings Edit (or apply by hand in the dashboard):');
 					if (name === 'cache') console.log(JSON.stringify(cacheRule(env), null, 2).replace(/^/gm, '          '));
 					else console.log('          Caching → Tiered Cache → Smart Tiered Caching Topology: on');
 				}
@@ -209,6 +259,14 @@ if (isMain) {
 		}
 		for (const c of changes) console.log(`${apply ? 'APPLY  ' : 'PLAN   '} ${c.what}`);
 		if (apply) for (const c of changes) await c.apply();
+		if (apply && storeSecret) {
+			try {
+				console.log(`secret  ${await storeTokenSecret(cf, zoneToken!)}`);
+			} catch (error) {
+				blocked++;
+				console.log(`secret  NO ACCESS ${error instanceof Error ? error.message : String(error)}`);
+			}
+		}
 		console.log(`${changes.length} change(s) ${apply ? 'applied' : 'planned'}${blocked ? `, ${blocked} step(s) could not be checked` : ''}.`);
 		if (blocked) process.exitCode = 3;
 	};

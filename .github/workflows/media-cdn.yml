@@ -1,6 +1,7 @@
 # The media host's Cloudflare settings (R2 custom domain, CORS, Cache Rule, Smart Tiered Cache)
-# as code: scripts/media-cdn/apply.ts, docs/media-delivery/RUNBOOK.md. Plans by default; apply=true
-# makes the changes. Production creates a DNS record: only with the owner's go-ahead.
+# as code, plus a check that the token can purge the media cache and read Account Analytics:
+# scripts/media-cdn/apply.ts, docs/media-delivery/RUNBOOK.md. Plans by default; apply=true makes
+# the changes. Releases apply stage and production themselves (release.yml).
 name: Media CDN settings
 
 on:
@@ -13,6 +14,10 @@ on:
         default: qa
       apply:
         description: Apply the changes (otherwise plan only)
+        type: boolean
+        default: false
+      store_secret:
+        description: Also store the token in Secrets Store as media-cdn-api-token (api-videos purge + analytics; needs apply)
         type: boolean
         default: false
 
@@ -33,6 +38,4 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # Zone: Cache Rules Edit + Zone Settings Edit (the account token has no zone scope)
-          MEDIA_CDN_API_TOKEN: ${{ secrets.MEDIA_CDN_API_TOKEN }}
-        run: node --experimental-strip-types --no-warnings scripts/media-cdn/apply.ts --env "${{ inputs.env }}" ${{ inputs.apply && '--apply' || '' }}
+        run: node --experimental-strip-types --no-warnings scripts/media-cdn/apply.ts --env "${{ inputs.env }}" ${{ inputs.apply && '--apply' || '' }} ${{ inputs.store_secret && '--store-secret' || '' }}
