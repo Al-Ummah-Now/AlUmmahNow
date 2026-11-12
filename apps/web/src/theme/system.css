@@ -15,6 +15,11 @@ h1,h2,h3{letter-spacing:-.01em}html[lang=ar] h1,html[lang=ar] h2,html[lang=ar] h
 .ah-search button{width:56px;display:grid;place-items:center;border:0;background:transparent;color:var(--fanous-c-nav-icon);cursor:pointer;border-inline-start:1px solid var(--fanous-c-nav-search-border)}@media(hover:hover){.ah-search button:hover{background:var(--fanous-c-nav-hover)}}.ah-search svg{width:20px;height:20px}
 .ah-search-phone{display:none}
 .ah button{color:var(--fanous-c-nav-icon)}.ah-end button{min-height:44px;border-radius:var(--r-pill)}.ah-end>:is(div,button){display:flex;align-items:center}@media(hover:hover){.ah-end button:hover{background:var(--fanous-c-nav-hover)}}.ah-end *{color:var(--fanous-c-nav-text)}
+/* Popovers opened from the header (notifications, menus, listboxes) sit on the dialog/menu surface, not the night bar:
+   the nav colours above must not reach inside them. revert-layer hands colour back to the component's own classes
+   (or inheritance from the popover's token colour). */
+.ah :is([data-popover],[role=dialog],[role=menu],[role=listbox]) :is(*,button){color:revert-layer}
+@media(hover:hover){.ah :is([data-popover],[role=dialog],[role=menu],[role=listbox]) button:hover{background:revert-layer}}
 /* Navigation */
 .nv-panel{position:fixed;z-index:45;inset-block:0;inset-inline-start:0;width:var(--rail);padding-block-start:64px;display:flex;flex-direction:column;background:var(--m-rail);box-shadow:var(--m-rail-edge);-webkit-backdrop-filter:var(--m-blur);backdrop-filter:var(--m-blur);transition:width 220ms cubic-bezier(.2,0,0,1)}
 .demo-banner~* .nv-panel{padding-block-start:92px}.nv-scroll{flex:1;overflow-y:auto;overflow-x:hidden;padding:var(--fanous-spacing-sm)}

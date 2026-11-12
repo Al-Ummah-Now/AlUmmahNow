@@ -7,24 +7,33 @@ import type { NotificationItem } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { localizeActionUrl, relativeTime, renderNotification } from '@/lib/notifications/render';
 
+/**
+ * Row colours come from the surface the row sits on: the page by default, the popover's own
+ * tokens inside the header dropdown (NotificationBell sets --nr-*). Never literal colours, so
+ * every site theme and custom package reads in light and dark.
+ */
+const TEXT = 'text-[var(--nr-text,var(--fanous-color-text-primary))]';
+const SECONDARY = 'text-[var(--nr-secondary,var(--fanous-color-text-secondary))]';
+const MUTED = 'text-[var(--nr-muted,var(--fanous-color-text-muted))]';
+
 function Icon({ item }: { item: NotificationItem }) {
-  const cls = 'h-5 w-5 flex-shrink-0';
+  // The shape tells the kind apart; one readable tone instead of hues tuned for one theme
+  const cls = `h-5 w-5 flex-shrink-0 ${SECONDARY}`;
   switch (item.notificationKey) {
     case 'liveStarted':
-      return <Radio className={`${cls} text-red-500`} aria-hidden="true" />;
+      return <Radio className={cls} aria-hidden="true" />;
     case 'newVideo':
-      return <Video className={`${cls} text-purple-500`} aria-hidden="true" />;
+    case 'uploadReady':
+      return <Video className={cls} aria-hidden="true" />;
     case 'commentReply':
     case 'newComment':
-      return <MessageCircle className={`${cls} text-blue-500`} aria-hidden="true" />;
+      return <MessageCircle className={cls} aria-hidden="true" />;
     case 'newSubscriber':
-      return <UserPlus className={`${cls} text-green-600`} aria-hidden="true" />;
+      return <UserPlus className={cls} aria-hidden="true" />;
     case 'uploadFailed':
-      return <AlertCircle className={`${cls} text-orange-500`} aria-hidden="true" />;
-    case 'uploadReady':
-      return <Video className={`${cls} text-emerald-600`} aria-hidden="true" />;
+      return <AlertCircle className={cls} aria-hidden="true" />;
     default:
-      return <Bell className={`${cls} text-gray-500`} aria-hidden="true" />;
+      return <Bell className={cls} aria-hidden="true" />;
   }
 }
 
@@ -50,14 +59,14 @@ export function NotificationRow({ item, onOpen, onMarkRead, onDelete, compact = 
     <div className="flex items-start gap-3 min-w-0 flex-1">
       <Icon item={item} />
       <div className="min-w-0 flex-1 text-start">
-        <p className={`text-sm ${item.isRead ? 'text-gray-700 dark:text-gray-300' : 'font-semibold text-gray-900 dark:text-white'}`}>{title}</p>
-        {message && <p className={`text-sm text-gray-600 dark:text-gray-400 ${compact ? 'line-clamp-2' : ''}`}>{message}</p>}
-        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+        <p className={`text-sm ${TEXT} ${item.isRead ? 'font-normal' : 'font-bold'}`}>{title}</p>
+        {message && <p className={`text-sm ${SECONDARY} ${compact ? 'line-clamp-2' : ''}`}>{message}</p>}
+        <p className={`text-xs ${MUTED} mt-1`}>
           <time dateTime={item.createdAt}>{relativeTime(item.createdAt, t, lang)}</time>
         </p>
       </div>
       {!item.isRead && (
-        <span className="mt-1.5 h-2.5 w-2.5 rounded-full bg-blue-600 flex-shrink-0" aria-label={texts.unreadDot} role="img" />
+        <span className="mt-1.5 h-2.5 w-2.5 rounded-full bg-[var(--fanous-color-primary)] ring-1 ring-[var(--nr-text,var(--fanous-color-text-primary))] flex-shrink-0" aria-label={texts.unreadDot} role="img" />
       )}
     </div>
   );
@@ -67,10 +76,10 @@ export function NotificationRow({ item, onOpen, onMarkRead, onDelete, compact = 
       data-testid="notification-item"
       data-notification-id={item.id}
       data-read={item.isRead ? 'true' : 'false'}
-      className={`flex items-start gap-2 px-3 py-3 ${item.isRead ? '' : 'bg-blue-50/60 dark:bg-blue-900/20'} hover:bg-gray-50 dark:hover:bg-gray-800`}
+      className={`flex items-start gap-2 border-s-4 px-3 py-3 ${item.isRead ? 'border-s-transparent' : 'border-s-[var(--fanous-color-primary)] bg-[color-mix(in_srgb,var(--fanous-color-primary)_8%,transparent)]'} hover:bg-[var(--m-hover)]`}
     >
       {href ? (
-        <Link href={href} onClick={() => onOpen?.(item)} className="flex min-w-0 flex-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+        <Link href={href} onClick={() => onOpen?.(item)} className="flex min-w-0 flex-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fanous-c-form-focus-ring)]">
           {body}
         </Link>
       ) : (
@@ -82,7 +91,7 @@ export function NotificationRow({ item, onOpen, onMarkRead, onDelete, compact = 
             <button
               type="button"
               onClick={() => onMarkRead(item)}
-              className="rounded p-1.5 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              className={`rounded p-1.5 ${MUTED} hover:bg-[var(--m-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fanous-c-form-focus-ring)]`}
               aria-label={texts.markRead}
               title={texts.markRead}
               data-testid="notification-mark-read"
@@ -94,7 +103,7 @@ export function NotificationRow({ item, onOpen, onMarkRead, onDelete, compact = 
             <button
               type="button"
               onClick={() => onDelete(item)}
-              className="rounded p-1.5 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              className={`rounded p-1.5 ${MUTED} hover:bg-[var(--m-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fanous-c-form-focus-ring)]`}
               aria-label={texts.delete}
               title={texts.delete}
               data-testid="notification-delete"

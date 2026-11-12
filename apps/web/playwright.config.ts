@@ -24,7 +24,8 @@ const isRemoteTarget = baseURL.startsWith('https://');
  * projects run every other spec.
  */
 // e2e/release/ is the release suite (playwright.release.config.ts), never run here
-const DEDICATED_DIRS = [/e2e\/a11y\//, /e2e\/visual\//, /e2e\/release\//];
+// e2e/themes runs on its own config (playwright.themes.config.ts) against a local server
+const DEDICATED_DIRS = [/e2e\/a11y\//, /e2e\/visual\//, /e2e\/release\//, /e2e\/themes\//];
 
 /*
  * Upload transport and upload UI specs: every test sends real bytes to the Bunny

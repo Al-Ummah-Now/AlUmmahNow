@@ -64,7 +64,7 @@ export function NotificationBell({ dir = 'ltr' }: NotificationBellProps) {
         ref={buttonRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="relative rounded-full p-2 text-[var(--fanous-color-accent)] hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fanous-color-accent)]"
+        className="relative rounded-full p-2 text-[var(--fanous-color-accent)] hover:bg-[var(--fanous-c-nav-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fanous-color-accent)]"
         aria-label={label}
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
@@ -75,7 +75,7 @@ export function NotificationBell({ dir = 'ltr' }: NotificationBellProps) {
         {unreadCount > 0 && (
           <span
             data-testid="notification-badge"
-            className="absolute top-0.5 end-0 min-w-[1.1rem] h-[1.1rem] rounded-full bg-red-600 px-1 text-[0.65rem] font-bold leading-[1.1rem] text-white text-center"
+            className="absolute top-0.5 end-0 min-w-[1.1rem] h-[1.1rem] rounded-full bg-[var(--fanous-c-badge-live-bg)] px-1 text-[0.65rem] font-bold leading-[1.1rem] text-[var(--fanous-c-badge-live-text)] text-center"
             aria-hidden="true"
           >
             {badge}
@@ -89,16 +89,19 @@ export function NotificationBell({ dir = 'ltr' }: NotificationBellProps) {
           role="dialog"
           aria-label={texts.latest}
           data-testid="notification-dropdown"
-          className="absolute end-0 z-50 mt-2 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-900"
+          // Popover surface and text from the theme's dialog tokens. data-popover keeps the header's
+          // nav colours (system.css .ah-end) out of it; an opaque surface, never the card glass.
+          data-popover=""
+          className="absolute end-0 z-50 mt-2 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-lg border border-[var(--fanous-c-dialog-border)] bg-[var(--fanous-c-dialog-bg)] text-[var(--fanous-c-dialog-text)] shadow-lg [--nr-muted:var(--fanous-c-dialog-muted)] [--nr-secondary:var(--fanous-c-dialog-text)] [--nr-text:var(--fanous-c-dialog-text)]"
         >
-          <div className="flex items-center justify-between gap-2 border-b border-gray-200 px-3 py-2 dark:border-gray-700">
-            <h2 className="text-sm font-semibold text-gray-900 dark:text-white">{texts.title}</h2>
+          <div className="flex items-center justify-between gap-2 border-b border-[var(--fanous-c-dialog-border)] px-3 py-2">
+            <h2 className="text-sm font-semibold text-[var(--fanous-c-dialog-text)]">{texts.title}</h2>
             <div className="flex items-center gap-1">
               {unreadCount > 0 && (
                 <button
                   type="button"
                   onClick={() => void markAllRead()}
-                  className="rounded px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-900/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  className="rounded px-2 py-1 text-xs font-medium text-[var(--fanous-c-dialog-text)] underline-offset-2 hover:bg-[var(--m-hover)] hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fanous-c-form-focus-ring)]"
                   data-testid="notification-mark-all-read"
                 >
                   {texts.markAllRead}
@@ -107,7 +110,7 @@ export function NotificationBell({ dir = 'ltr' }: NotificationBellProps) {
               <Link
                 href={`/${lang}/settings#notifications`}
                 onClick={() => close()}
-                className="rounded p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="rounded p-1.5 text-[var(--fanous-c-dialog-muted)] hover:bg-[var(--m-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fanous-c-form-focus-ring)]"
                 aria-label={texts.settings}
                 title={texts.settings}
               >
@@ -118,13 +121,13 @@ export function NotificationBell({ dir = 'ltr' }: NotificationBellProps) {
 
           <div className="max-h-[60vh] overflow-y-auto">
             {isLoading && latest.length === 0 ? (
-              <p className="px-3 py-6 text-center text-sm text-gray-500" role="status">{t.common.loading}</p>
+              <p className="px-3 py-6 text-center text-sm text-[var(--fanous-c-dialog-muted)]" role="status">{t.common.loading}</p>
             ) : error && latest.length === 0 ? (
-              <p className="px-3 py-6 text-center text-sm text-red-600" role="alert">{texts.loadError}</p>
+              <p className="px-3 py-6 text-center text-sm text-[var(--fanous-c-dialog-text)]" role="alert">{texts.loadError}</p>
             ) : latest.length === 0 ? (
-              <p className="px-3 py-6 text-center text-sm text-gray-500" data-testid="notification-empty">{texts.empty}</p>
+              <p className="px-3 py-6 text-center text-sm text-[var(--fanous-c-dialog-muted)]" data-testid="notification-empty">{texts.empty}</p>
             ) : (
-              <ul className="divide-y divide-gray-100 dark:divide-gray-800">
+              <ul className="divide-y divide-[var(--fanous-c-dialog-border)]">
                 {latest.map((item) => (
                   <NotificationRow
                     key={item.id}
@@ -143,7 +146,7 @@ export function NotificationBell({ dir = 'ltr' }: NotificationBellProps) {
           <Link
             href={`/${lang}/notifications`}
             onClick={() => close()}
-            className="block border-t border-gray-200 px-3 py-2 text-center text-sm font-medium text-blue-700 hover:bg-gray-50 dark:border-gray-700 dark:text-blue-300 dark:hover:bg-gray-800"
+            className="block border-t border-[var(--fanous-c-dialog-border)] px-3 py-2 text-center text-sm font-medium text-[var(--fanous-c-dialog-text)] underline-offset-2 hover:bg-[var(--m-hover)] hover:underline"
             data-testid="notification-see-all"
           >
             {texts.seeAll}
