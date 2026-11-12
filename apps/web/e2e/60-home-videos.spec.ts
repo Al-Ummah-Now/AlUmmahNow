@@ -96,7 +96,7 @@ test.describe('Home - anonymous', () => {
   test('HOME-005 Arabic home is RTL with RTL cards', async ({ page }) => {
     await page.goto('/ar');
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('الفيديوهات');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('المرئيات');
     const card = page.getByTestId('video-card').first();
     await expect(card).toHaveAttribute('href', /^\/ar\/video\?vid=/);
     await expect(loadMoreButton(page)).toBeVisible();
@@ -184,7 +184,7 @@ test.describe('All videos page', () => {
   test('VIDS-002 Arabic browse page is RTL', async ({ page }) => {
     await page.goto('/ar/videos');
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
-    await expect(page.getByRole('heading', { level: 1, name: 'جميع الفيديوهات' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'جميع المرئيات' })).toBeVisible();
     await expect(page.getByRole('main')).toHaveAttribute('dir', 'rtl');
     await expect(page.getByTestId('video-card').first()).toHaveAttribute('href', /^\/ar\/video\?vid=/);
   });

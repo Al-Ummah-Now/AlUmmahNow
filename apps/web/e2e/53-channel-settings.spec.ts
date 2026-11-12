@@ -257,8 +257,8 @@ test.describe('Channel videos', () => {
     await page.goto(`/ar/settings/channel/${main.id}/videos`);
     await expect(page).toHaveURL(new RegExp(`${studioVideos('ar', main.id)}$`));
     await expectRtl(page);
-    await expect(page.getByRole('heading', { level: 1, name: 'الفيديوهات', exact: true })).toBeAttached();
-    await expect(page.getByRole('searchbox', { name: 'ابحث في فيديوهاتك' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'المرئيات', exact: true })).toBeAttached();
+    await expect(page.getByRole('searchbox', { name: 'ابحث في مرئياتك' })).toBeVisible();
   });
 });
 

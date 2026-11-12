@@ -444,7 +444,7 @@ export function ChannelTabBar({ channelId }) {
     {
       "id": "videos",
       "name": "Videos",
-      "nameLocalized": { "en": "Videos", "ar": "الفيديوهات" },
+      "nameLocalized": { "en": "Videos", "ar": "المرئيات" },
       "type": "system",
       "visible": true,
       "position": 1

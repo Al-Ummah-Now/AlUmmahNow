@@ -1114,7 +1114,7 @@ const TIER_FEATURES: TierFeature[] = [
   {
     name: 'shorts',
     description: 'Upload short-form vertical videos (<60s)',
-    descriptionAr: 'رفع فيديوهات قصيرة عمودية',
+    descriptionAr: 'رفع مرئيات قصيرة عمودية',
     availableTiers: ['creator', 'professional', 'organization'],
     category: 'content',
   },
@@ -1142,7 +1142,7 @@ const TIER_FEATURES: TierFeature[] = [
   {
     name: 'scheduled_publishing',
     description: 'Schedule videos for future release',
-    descriptionAr: 'جدولة الفيديوهات للنشر المستقبلي',
+    descriptionAr: 'جدولة المرئيات للنشر المستقبلي',
     availableTiers: ['creator', 'professional', 'organization'],
     category: 'content',
   },

@@ -214,7 +214,7 @@ export default function UploadDefaultsPage() {
             </h3>
             <p className="text-gray-600 dark:text-gray-400 mb-6">
               {isRTL
-                ? 'أنشئ قالبك الأول لتسريع عملية رفع الفيديوهات'
+                ? 'أنشئ قالبك الأول لتسريع عملية رفع المرئيات'
                 : 'Create your first template to speed up video uploads'}
             </p>
             <button

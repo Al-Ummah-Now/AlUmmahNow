@@ -336,9 +336,9 @@ test.describe('Playlist tools', () => {
     await page.goto(`/ar/settings/channel/${channelId}/playlists/${id}`);
     await expectRtl(page);
     await expect(page.getByTestId('playlist-editor')).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'الفيديوهات في هذه القائمة' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'المرئيات في هذه القائمة' })).toBeVisible();
     await expect(page.getByRole('radio', { name: /يدوي/ })).toBeChecked();
-    await expect(page.getByTestId('playlist-add-videos')).toHaveText('إضافة فيديوهات');
+    await expect(page.getByTestId('playlist-add-videos')).toHaveText('إضافة مرئيات');
 
     // The Add to playlist dialog in Arabic: translated, right to left, both name fields
     const select = await openStudioWith(page, [videos[0]], 'ar');

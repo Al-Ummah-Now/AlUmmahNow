@@ -91,7 +91,7 @@ test.describe('Feed and subscriptions - no subscriptions', () => {
   test('FEED-003 Arabic empty feed is RTL', async ({ page }) => {
     await page.goto('/ar/subscriptions');
     await expect(page.getByRole('heading', { level: 1, name: /^(تغذية|خلاصة) الاشتراكات$/ })).toBeVisible();
-    await expect(page.getByTestId('feed-empty').getByRole('heading', { name: /^لا توجد فيديوهات في (التغذية|الخلاصة)$/ })).toBeVisible();
+    await expect(page.getByTestId('feed-empty').getByRole('heading', { name: /^لا توجد مرئيات في (التغذية|الخلاصة)$/ })).toBeVisible();
     await expect(page.getByRole('button', { name: 'تحديث' })).toBeVisible();
   });
 

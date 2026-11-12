@@ -53,12 +53,12 @@ test.describe('Navigation - Arabic Routes', () => {
   test('Arabic homepage', async ({ page }) => {
     await page.goto('/ar/');
     await expect(page).toHaveURL(/\/ar\/?$/);
-    await expect(page.getByRole('heading', { level: 1 })).toContainText('الفيديوهات');
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('المرئيات');
   });
 
   test('preserves RTL when navigating', async ({ page }) => {
     await page.goto('/ar/');
-    await expect(page.getByRole('heading', { level: 1 })).toContainText('الفيديوهات');
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('المرئيات');
 
     await page.goto('/ar/channels');
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');

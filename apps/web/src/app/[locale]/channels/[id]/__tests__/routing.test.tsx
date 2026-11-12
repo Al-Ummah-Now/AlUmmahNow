@@ -39,14 +39,14 @@ jest.mock('@/lib/i18n', () => ({
       content: locale === 'ar' ? 'المحتوى' : 'Content',
       channelSectionsPlaceholder: locale === 'ar' ? 'سيتم إضافة الأقسام قريباً' : 'Sections coming soon',
       home: locale === 'ar' ? 'الرئيسية' : 'Home',
-      videos: locale === 'ar' ? 'الفيديوهات' : 'Videos',
+      videos: locale === 'ar' ? 'المرئيات' : 'Videos',
       shorts: locale === 'ar' ? 'مقاطع قصيرة' : 'Shorts',
       live: locale === 'ar' ? 'بث مباشر' : 'Live',
       playlists: locale === 'ar' ? 'قوائم التشغيل' : 'Playlists',
       community: locale === 'ar' ? 'المجتمع' : 'Community',
     },
     video: {
-      videos: locale === 'ar' ? 'الفيديوهات' : 'Videos',
+      videos: locale === 'ar' ? 'المرئيات' : 'Videos',
     },
     community: {
       community: locale === 'ar' ? 'المجتمع' : 'Community',

@@ -124,7 +124,7 @@ ls -la apps/web/src/locales/
 
 ### Step 6: Verify Navigation Translations (Arabic)
 1. Check "الرئيسية" link text
-2. Verify "الفيديوهات" link text
+2. Verify "المرئيات" link text
 3. Check "القنوات" link text
 4. Verify "تسجيل الدخول/إنشاء حساب" buttons
 5. Check "بحث" placeholder text
@@ -278,7 +278,7 @@ test.describe('TC-BIL-002: Content Translation Accuracy', () => {
     },
     ar: {
       home: 'الرئيسية',
-      videos: 'الفيديوهات',
+      videos: 'المرئيات',
       channels: 'القنوات',
       login: 'تسجيل الدخول',
       search: 'بحث',

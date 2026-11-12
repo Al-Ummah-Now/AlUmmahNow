@@ -42,7 +42,7 @@ jest.mock('@/lib/i18n', () => ({
       about: locale === 'ar' ? 'حول' : 'About',
     },
     video: {
-      videos: locale === 'ar' ? 'الفيديوهات' : 'Videos',
+      videos: locale === 'ar' ? 'المرئيات' : 'Videos',
     },
     community: {
       community: locale === 'ar' ? 'المجتمع' : 'Community',
@@ -82,7 +82,7 @@ const createMockTabConfig = (overrides?: Partial<ChannelTabConfig>): ChannelTabC
   dateModified: '2024-01-01T00:00:00Z',
   tabs: [
     { id: 'home', name: 'Home', nameLocalized: { en: 'Home', ar: 'الرئيسية' }, type: 'system', visible: true, position: 0 },
-    { id: 'videos', name: 'Videos', nameLocalized: { en: 'Videos', ar: 'الفيديوهات' }, type: 'system', visible: true, position: 1 },
+    { id: 'videos', name: 'Videos', nameLocalized: { en: 'Videos', ar: 'المرئيات' }, type: 'system', visible: true, position: 1 },
     { id: 'shorts', name: 'Shorts', nameLocalized: { en: 'Shorts', ar: 'مقاطع قصيرة' }, type: 'system', visible: true, position: 2 },
     { id: 'live', name: 'Live', nameLocalized: { en: 'Live', ar: 'بث مباشر' }, type: 'system', visible: true, position: 3 },
     { id: 'playlists', name: 'Playlists', nameLocalized: { en: 'Playlists', ar: 'قوائم التشغيل' }, type: 'system', visible: true, position: 4 },
@@ -185,7 +185,7 @@ describe('ChannelTabs - Tab Configuration', () => {
     const customConfig = createMockTabConfig({
       tabs: [
         { id: 'home', name: 'Home', nameLocalized: { en: 'Home', ar: 'الرئيسية' }, type: 'system', visible: true, position: 0 },
-        { id: 'videos', name: 'Videos', nameLocalized: { en: 'Videos', ar: 'الفيديوهات' }, type: 'system', visible: true, position: 1 },
+        { id: 'videos', name: 'Videos', nameLocalized: { en: 'Videos', ar: 'المرئيات' }, type: 'system', visible: true, position: 1 },
         { id: 'about', name: 'About', nameLocalized: { en: 'About', ar: 'حول' }, type: 'system', visible: true, position: 2 },
       ],
     });
@@ -290,7 +290,7 @@ describe('ChannelTabs - Bilingual Support', () => {
 
     await waitFor(() => {
       expect(screen.getByText('الرئيسية')).toBeInTheDocument();
-      expect(screen.getByText('الفيديوهات')).toBeInTheDocument();
+      expect(screen.getByText('المرئيات')).toBeInTheDocument();
       expect(screen.getByText('مقاطع قصيرة')).toBeInTheDocument();
     });
   });
@@ -302,10 +302,10 @@ describe('ChannelTabs - Bilingual Support', () => {
     render(<ChannelTabs channel={mockChannel} locale="ar" />);
 
     await waitFor(() => {
-      expect(screen.getByText('الفيديوهات')).toBeInTheDocument();
+      expect(screen.getByText('المرئيات')).toBeInTheDocument();
     });
 
-    const videosTab = screen.getByText('الفيديوهات');
+    const videosTab = screen.getByText('المرئيات');
     fireEvent.click(videosTab);
 
     expect(mockPush).toHaveBeenCalledWith('/ar/channels/test-channel-id/videos');

@@ -92,7 +92,7 @@ response=$(curl -s -X POST "${BASE_URL}/api/channels/${CHANNEL_ID}/sections" \
     "title": "Featured Videos",
     "titleLocalized": {
       "en": "Featured Videos",
-      "ar": "الفيديوهات المميزة"
+      "ar": "المرئيات المميزة"
     },
     "style": "horizontal_row",
     "videoIds": ["video-1", "video-2", "video-3"],

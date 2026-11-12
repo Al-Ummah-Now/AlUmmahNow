@@ -228,7 +228,7 @@ test.describe('Channel tabs', () => {
   for (const locale of ['en', 'ar'] as const) {
     test(`CHTAB-012 Shorts and Live tabs show their empty states (${locale})`, async ({ page }) => {
       const L = locale === 'ar'
-        ? { shorts: 'لا توجد فيديوهات', live: 'البث المباشر الحالي' }
+        ? { shorts: 'لا توجد مرئيات', live: 'البث المباشر الحالي' }
         : { shorts: 'No videos available', live: 'Current live streams' };
       await openChannel(page, locale, lectures.id, 'shorts');
       await expectTabSelected(page, 'shorts');

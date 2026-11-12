@@ -65,7 +65,7 @@ ls apps/web/public/locales/ar/
   "translations": {
     "navigation": {
       "home": { "en": "Home", "ar": "الرئيسية" },
-      "videos": { "en": "Videos", "ar": "الفيديوهات" },
+      "videos": { "en": "Videos", "ar": "المرئيات" },
       "dashboard": { "en": "Dashboard", "ar": "لوحة التحكم" }
     }
   }
