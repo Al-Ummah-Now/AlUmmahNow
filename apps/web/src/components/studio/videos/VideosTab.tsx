@@ -432,7 +432,7 @@ export function VideosTab({ locale, channelId, role }: Props) {
         <>
           <table className="block w-full md:table">
             <thead className="sr-only md:not-sr-only md:table-header-group">
-              <tr className="border-b border-border text-start text-xs text-muted-foreground">
+              <tr className="border-b border-border text-start text-xs text-foreground">
                 <th className="p-2">
                   <input type="checkbox" aria-label={text.selectAll} checked={allSelected} onChange={toggleAll} className="h-5 w-5" data-testid="studio-select-all" />
                 </th>
