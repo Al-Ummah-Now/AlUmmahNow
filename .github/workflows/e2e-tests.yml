@@ -60,7 +60,8 @@ jobs:
     name: E2E - ${{ matrix.project }}
     # A PR labelled skip-qa-e2e (spec-only fixes while main's E2E is being made green) sends no
     # traffic to QA: those specs are proven by the verification run on main
-    if: ${{ github.event_name != 'pull_request' || !contains(github.event.pull_request.labels.*.name, 'skip-qa-e2e') }}
+    # A snapshot update (workflow_dispatch update_snapshots) runs only the update job below
+    if: ${{ (github.event_name != 'pull_request' || !contains(github.event.pull_request.labels.*.name, 'skip-qa-e2e')) && !inputs.update_snapshots }}
     runs-on: ubuntu-24.04
     # specs (100) + shared-state (up to 85 waiting + 40) + teardown (15); the
     # teardown steps must always get their turn
@@ -491,6 +492,7 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: write
+      pull-requests: write
       packages: read
 
     steps:
@@ -537,15 +539,38 @@ jobs:
           # auth.setup has a promoted QA admin give the channel-owning users the Creator tier
           TEST_PROMOTE_SECRET: ${{ secrets.TEST_PROMOTE_SECRET_QA }}
 
+      # The new baselines are always kept as an artifact as well
+      - name: Upload the snapshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-snapshots-${{ github.run_id }}
+          path: apps/web/e2e/visual/__screenshots__
+          retention-days: 14
+
+      # main's ruleset refuses direct pushes: from main the snapshots go to a new branch and a PR
+      # (labelled skip-qa-e2e, merged like any other); from any other branch they are committed to it
       - name: Commit snapshots
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add apps/web/e2e/visual/__screenshots__
           if git diff --cached --quiet; then
             echo "Snapshots unchanged"
+            exit 0
+          fi
+          git commit -m "test(e2e): update visual snapshots (Linux)"
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then
+            branch="visual-snapshots/${GITHUB_RUN_ID}"
+            git push origin "HEAD:refs/heads/${branch}"
+            gh pr create --head "${branch}" --base main --label skip-qa-e2e \
+              --title "test(e2e): update visual snapshots (Linux, run ${GITHUB_RUN_ID})" \
+              --body "Visual baselines retaken by e2e-tests.yml (update_snapshots) in run ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}. Review the images, then merge." \
+              || echo "::warning::Could not open the PR (repository setting 'Allow GitHub Actions to create pull requests'?); the branch ${branch} is pushed: open the PR by hand"
+            echo "### Visual snapshots: branch \`${branch}\`" >> "$GITHUB_STEP_SUMMARY"
           else
-            git commit -m "test(e2e): update visual snapshots (Linux)"
             git pull --rebase origin "${GITHUB_REF_NAME}"
             git push
           fi
@@ -554,7 +579,7 @@ jobs:
   # Non-blocking for now: assertions are warnings and the job may fail.
   lighthouse:
     name: Lighthouse (QA)
-    if: ${{ github.event_name != 'pull_request' }}
+    if: ${{ github.event_name != 'pull_request' && !inputs.update_snapshots }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     continue-on-error: true
