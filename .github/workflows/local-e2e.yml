@@ -117,7 +117,8 @@ jobs:
         working-directory: apps/web
         run: |
           echo "E2E_RUN_USERS_FILE=$RUNNER_TEMP/run-users.txt" >> "$GITHUB_ENV"
-          export E2E_RUN_USERS_FILE="$RUNNER_TEMP/run-users.txt"
+          echo "E2E_RUN_USER_IDS_FILE=$RUNNER_TEMP/run-user-ids.txt" >> "$GITHUB_ENV"
+          export E2E_RUN_USERS_FILE="$RUNNER_TEMP/run-users.txt" E2E_RUN_USER_IDS_FILE="$RUNNER_TEMP/run-user-ids.txt"
           # The PR's own code runs here: none of the "not deployed on QA yet" pull-request skips apply
           export GITHUB_EVENT_NAME=local-stack
           pnpm exec playwright test -c playwright.release.config.ts --project="${{ matrix.project }}" --shard="${{ matrix.shard }}"
