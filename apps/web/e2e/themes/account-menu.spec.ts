@@ -97,3 +97,18 @@ test.describe('THEME-NAV structure', () => {
     await expect(menu.locator('.aun-menu-sep').first()).toBeVisible();
   });
 });
+
+test.describe('THEME-NAV drawer', () => {
+  // Owner review rev 4: the drawer and rail heading over Library, History, Watch later and Liked
+  // videos reads "Yours" / «لك» (it was "You" / «أنت»)
+  for (const [lang, heading, old] of [['en', 'Yours', 'You'], ['ar', 'لك', 'أنت']] as const) {
+    test(`the personal section heading is "${heading}" (${lang})`, async ({ page, context, baseURL }) => {
+      await signIn(context, baseURL!);
+      await mockApi(page);
+      await page.goto(`/${lang}`);
+      const headings = page.getByTestId('side-nav').locator('.nv-heading');
+      await expect(headings.filter({ hasText: new RegExp(`^${heading}$`) })).toHaveCount(1);
+      await expect(headings.filter({ hasText: new RegExp(`^${old}$`) })).toHaveCount(0);
+    });
+  }
+});
