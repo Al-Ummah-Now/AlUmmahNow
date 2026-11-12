@@ -12,9 +12,9 @@ const DELAY_MS = 2000;
 
 /**
  * This file's own public, processed video with chapters (release/own-videos.ts: made in
- * beforeAll, deleted afterwards). Never a seed or a hard-coded id: the theme-demo video these
- * tests used to open (443418c1-…) vanished from QA, and every test then waited for comments on
- * a "Video not found" page.
+ * beforeAll, deleted afterwards). Never a seed or a hard-coded id: the demo video these tests
+ * used to open vanished from QA, and every test then waited for comments on a "Video not found"
+ * page.
  */
 const own = useOwnVideos(test as never);
 async function watchVideo(_request: APIRequestContext): Promise<string> {
