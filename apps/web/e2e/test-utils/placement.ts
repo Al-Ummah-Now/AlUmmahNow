@@ -47,6 +47,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/admin-web/e2e/15-recently-deleted-config.spec.ts': { placement: 'local', reason: 'Creator tier trash: delete, restore, purge queue dialogs' },
   'apps/admin-web/e2e/16-live-updates.spec.ts': { placement: 'local', reason: 'Admin pages over the local realtime worker: subscribe, live re-render, moderator topics, token route' },
   'apps/admin-web/e2e/16-operations.spec.ts': { placement: 'local', reason: 'Operations page vs admin-api /api/ops; empty COSTS_DB shows the no-data notice' },
+  'apps/admin-web/e2e/16-pending-user-deletion.spec.ts': { placement: 'local', reason: 'Pending "Delete videos data" blocks the user\'s writes (403 code), reads still work, admin restore lifts it at once (#701)' },
   'apps/admin-web/e2e/17-delivery-live-qoe.spec.ts': { placement: 'local', reason: 'Delivery live playback: beacon heartbeats through api-videos and the local realtime worker to the open page' },
   'apps/web/e2e/01-homepage.spec.ts': { placement: 'local', reason: 'anonymous home page layout and content' },
   'apps/web/e2e/02-video-player.spec.ts': { placement: 'local', reason: 'player loads a seed video; any playable HLS will do' },

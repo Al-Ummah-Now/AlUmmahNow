@@ -109,7 +109,7 @@ test.describe('pending deletion of a user\'s videos data', () => {
     const creator = await asUser('GET', '/api/me/creator');
     expect(creator.status).toBe(200);
     expect(creator.body.result).toMatchObject({ canUpload: false, canCreateChannel: false, pendingDeletion: true });
-    expect((await asUser('GET', '/api/channels?limit=1')).status, 'reads still work').toBe(200);
+    expect((await asUser('GET', '/api/channels?limit=5')).status, 'reads still work').toBe(200);
   });
 
   test('PD-02 an admin restore lifts the block at once', async () => {
