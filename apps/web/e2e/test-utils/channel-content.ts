@@ -103,10 +103,21 @@ export interface PublicChannel {
 
 /**
  * qa-creator's seeded Lectures channel (public videos, a playlist, posts).
- * /api/channels caps limit at 50 and every E2E sign-up adds a channel, so the seed
- * channel is not on the first page: follow the cursor.
+ * Found by name through search, then read whole (search results carry no userId). Paging
+ * /api/channels (50 a page, every E2E sign-up adds a channel) stopped at 5,000 channels while
+ * QA held ~19,000 (2026-11-12: "Seed channel … not found" on a11y and visual), so the cursor
+ * walk is only the fallback when search does not have it.
  */
 export async function findQaLecturesChannel(): Promise<PublicChannel> {
+  const found = await apiGet<{ results?: Array<{ channel?: { id?: string; name?: string } }> }>(
+    `/api/search?q=${encodeURIComponent(QA_LECTURES_CHANNEL_NAME)}&type=channel`
+  ).catch(() => null);
+  const hit = found?.results?.find((r) => r.channel?.name === QA_LECTURES_CHANNEL_NAME)?.channel;
+  if (hit?.id) {
+    const record = await apiGet<PublicChannel & { result?: PublicChannel }>(`/api/channels/${encodeURIComponent(hit.id)}`);
+    const channel = record.result ?? record;
+    if (channel?.id && channel.userId) return channel;
+  }
   let cursor: string | undefined;
   for (let page = 0; page < 100; page++) {
     const body = await apiGet<{ data?: PublicChannel[]; cursor?: string | null }>(
