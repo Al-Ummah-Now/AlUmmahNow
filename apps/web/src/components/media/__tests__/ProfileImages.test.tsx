@@ -56,8 +56,10 @@ describe('EditableCover', () => {
     const onRemove = jest.fn();
     render(<EditableCover url={COVER} alt="cover" onPick={onPick} onRemove={onRemove} labels={labels} testId="ec" imageTestId="ec-img" />);
     expect(screen.getByTestId('ec-img')).toHaveAttribute('src', COVER);
-    expect(screen.getByRole('button', { name: labels.pick })).toBe(screen.getByTestId('ec'));
-    expect(screen.getByText('Change cover')).toBeInTheDocument();
+    // The cover is a plain container: no button wraps the Change/Remove buttons (axe nested-interactive)
+    expect(screen.getByTestId('ec')).not.toHaveAttribute('role');
+    expect(screen.getByTestId('ec')).not.toHaveAttribute('tabindex');
+    expect(screen.getByRole('button', { name: 'Change cover' })).toBe(screen.getByTestId('ec-change'));
 
     // Remove clears the cover without also opening the picker
     fireEvent.click(screen.getByTestId('ec-remove'));
@@ -65,13 +67,15 @@ describe('EditableCover', () => {
     expect(onPick).not.toHaveBeenCalled();
   });
 
-  it('opens the picker by click and keyboard; no Remove without a cover', () => {
+  it('opens the picker from the cover area and the focusable Change button; no Remove without a cover', () => {
     const onPick = jest.fn();
     render(<EditableCover url="" alt="cover" onPick={onPick} onRemove={jest.fn()} labels={labels} testId="ec" imageTestId="ec-img" />);
     expect(screen.queryByTestId('ec-remove')).toBeNull();
     expect(screen.queryByTestId('ec-img')).toBeNull();
     fireEvent.click(screen.getByTestId('ec'));
-    fireEvent.keyDown(screen.getByTestId('ec'), { key: 'Enter' });
+    const change = screen.getByRole('button', { name: labels.pick });
+    expect(change).not.toHaveAttribute('tabindex');
+    fireEvent.click(change);
     expect(onPick).toHaveBeenCalledTimes(2);
   });
 });

@@ -204,8 +204,11 @@ export function CalendarEvent({
   const StatusIcon = statusInfo.icon;
 
   // Rich tooltip card content (shown on hover)
+  // aria-hidden: a visual preview of what the event's name already says; it is rendered inside the
+  // event, so without this it would also join the event's name while hovered
   const tooltipContent = useMemo(() => (
     <div
+      aria-hidden="true"
       className="fixed z-[9999] bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden pointer-events-none"
       style={{
         width: '280px',
@@ -309,8 +312,10 @@ export function CalendarEvent({
           handleClick();
         }
       }}
-      aria-label={`Video: ${title}. Scheduled ${scheduledTime}. Status: ${statusInfo.label}`}
     >
+      {/* Named by its content (WCAG 2.5.3): the visible title and countdown first, then the status and
+          date for screen readers. An aria-label ("Video: …") would replace the visible text and fail
+          axe label-content-name-mismatch. */}
       {/* Hover tooltip with video card */}
       {showTooltip && tooltipContent}
 
@@ -340,6 +345,12 @@ export function CalendarEvent({
             {countdown}
           </span>
         )}
+
+        <span className="sr-only">
+          {locale === 'ar'
+            ? `، ${statusInfo.labelAr}، ${scheduledTime}`
+            : `, ${statusInfo.label}, ${scheduledTime}`}
+        </span>
       </div>
     </div>
   );

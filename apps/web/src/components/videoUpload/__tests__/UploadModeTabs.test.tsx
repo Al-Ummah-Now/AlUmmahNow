@@ -20,8 +20,8 @@ function setup(mode: UploadMode = 'single', dir: 'ltr' | 'rtl' = 'ltr') {
   return {
     ...utils,
     onChange,
-    single: screen.getByRole('tab', { name: 'Single video' }),
-    batch: screen.getByRole('tab', { name: 'Batch upload' }),
+    single: screen.getByRole('tab', { name: /^Single video/ }),
+    batch: screen.getByRole('tab', { name: /^Batch upload/ }),
   };
 }
 
@@ -33,7 +33,10 @@ describe('UploadModeTabs', () => {
     expect(batch).toHaveAttribute('aria-selected', 'false');
     expect(single).toHaveAttribute('aria-controls', 'upload-mode-panel-single');
     expect(batch).not.toHaveAttribute('aria-controls');
-    expect(single).toHaveAccessibleDescription('One video with full details');
+    // Named by all its visible text, label first (WCAG 2.5.3 label in name; axe label-content-name-mismatch)
+    expect(single).toHaveAccessibleName(/^Single video\s*, One video with full details$/);
+    expect(batch).toHaveAccessibleName(/^Batch upload\s*, Up to 15 videos at once$/);
+    expect(single).not.toHaveAttribute('aria-labelledby');
     expect(single).not.toHaveAttribute('aria-pressed');
   });
 

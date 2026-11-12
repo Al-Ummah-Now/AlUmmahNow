@@ -197,7 +197,8 @@ test.describe('Profile - edit', () => {
     const avatar = page.getByTestId('profile-avatar-upload');
     const cover = page.getByTestId('profile-cover-upload');
     await expect(avatar).toHaveAccessibleName('Click to change avatar');
-    await expect(cover).toHaveAccessibleName('Click to change cover');
+    // The cover is not a button (it holds the Change/Remove buttons); its Change button is the keyboard path
+    await expect(page.getByTestId('profile-cover-upload-change')).toHaveAccessibleName(/^(Click to change cover|Change cover)$/);
     await expect(page.locator('#profilePhotoInput')).toHaveAttribute('accept', 'image/*');
     await expect(page.locator('#coverPhotoInput')).toHaveAttribute('accept', 'image/*');
 
