@@ -12,7 +12,7 @@ const PLAYER = /player\.spec\.ts$/;
  * every browser). Branded Chrome, not the bundled Chromium: they open the watch
  * page, and Chromium's missing H.264 decoder logs player errors of its own.
  */
-const ALL_BROWSERS = /(anonymous-console|realtime-toasts|admin-content|embed-sound|studio-[\w-]+)\.spec\.ts$/;
+const ALL_BROWSERS = /(anonymous-console|realtime-toasts|admin-content|embed-frame-sound|studio-[\w-]+)\.spec\.ts$/;
 /**
  * The control-bar layout and progress-track specs also run in Firefox and WebKit when asked, locally:
  * RELEASE_PLAYER_BROWSERS=firefox,webkit (layout only, so the browsers' own decoders suffice).
@@ -37,7 +37,7 @@ const SHARED_MODE = process.env.E2E_SHARED_STATE;
  * few slots (scripts/ci/qa-lock.ts --slots, #838): E2E_ENCODE=skip in the main
  * step, =only in that step. Unset (local runs): everything together.
  */
-const ENCODE_SPECS = '(bulk-rename-edit|upload-modes|studio-draft-path|display-name)\\.spec\\.ts|processing\\.player\\.spec\\.ts';
+const ENCODE_SPECS = '(bulk-rename-edit|upload-modes|studio-draft-path|display-name|embed-frame-sound)\\.spec\\.ts|processing\\.player\\.spec\\.ts';
 const ENCODE = new RegExp(`/(${ENCODE_SPECS})$`);
 const NOT_ENCODE = new RegExp(`^(?!.*/(${ENCODE_SPECS})$)`);
 const ENCODE_MODE = process.env.E2E_ENCODE;

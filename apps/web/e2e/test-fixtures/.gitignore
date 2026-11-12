@@ -34,3 +34,5 @@ E2E Temp *
 !hero-portrait-720x1280.png
 # 90s 160x90 H.264/AAC clip: watch history and resume need a video of at least 75 s (release builders.ts)
 !e2e-sample-90s.mp4
+# 4s 240x240 (1:1) H.264/AAC clip (~60KB): a square video (embed-frame-sound spec)
+!e2e-sample-square.mp4
