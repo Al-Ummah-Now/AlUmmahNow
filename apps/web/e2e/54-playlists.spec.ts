@@ -182,7 +182,8 @@ test.describe('Playlist page - visitor', () => {
     for (const [i, item] of items.entries()) {
       await expect(list.getByRole('listitem').nth(i).getByRole('heading', { level: 2 })).toHaveText(item.title);
     }
-    await expect(page.getByRole('link', { name: 'Play all' })).toHaveAttribute('href', `/en/video?vid=${items[0].id}`);
+    // Plays the playlist from its first video (watch page with the list queued)
+    await expect(page.getByRole('link', { name: 'Play all' })).toHaveAttribute('href', `/en/video/${items[0].id}?list=${playlist.id}&index=0`);
     await expectImageShown(page.locator('aside img').first());
     await expectImageShown(list.getByRole('listitem').first().locator('img'));
     // Visitors get no owner controls
@@ -210,7 +211,7 @@ test.describe('Playlist page - visitor', () => {
     await page.goto(`/ar/playlist/${playlist.id}`);
     await expectRtl(page);
     await expect(page.getByRole('heading', { level: 1, name: playlist.name })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'تشغيل الكل' })).toHaveAttribute('href', /^\/ar\/video\?vid=/);
+    await expect(page.getByRole('link', { name: 'تشغيل الكل' })).toHaveAttribute('href', new RegExp(`^/ar/video/[\\w-]+\\?list=${playlist.id}&index=0$`));
     await expect(page.getByText(`${shown} فيديو`)).toBeVisible();
     await expect(page.getByText('عامة', { exact: true })).toBeVisible();
   });
