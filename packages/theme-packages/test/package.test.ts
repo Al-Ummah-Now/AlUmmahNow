@@ -45,6 +45,19 @@ test('schema: names the missing field, the unknown field and the bad value', () 
   assert.ok(!messages(validatePackage(t)).some((e) => e.startsWith('x-notes')));
 });
 
+test('layered backgrounds: a colour layer is refused, a gradient is accepted (#937)', () => {
+  const { theme } = fawanees();
+  const t = clone(theme) as any;
+  t.components.card.style.background = 'linear-gradient(135deg,color-mix(in srgb,white 16%,transparent),transparent 46%),color-mix(in srgb,{color.surface} 84%,transparent)';
+  t.components.menu.style.background = '{color.surface}';
+  const errs = messages(validatePackage(t));
+  assert.ok(errs.some((e) => e.startsWith('components.card.style.background: has a colour layer (color-mix(')), errs.join('\n'));
+  assert.ok(errs.some((e) => e.startsWith('components.menu.style.background: has a colour layer')), errs.join('\n'));
+  t.components.card.style.background = 'linear-gradient(135deg,white,transparent 46%),linear-gradient(color-mix(in srgb,{color.surface} 84%,transparent),color-mix(in srgb,{color.surface} 84%,transparent))';
+  t.components.menu.style.background = 'linear-gradient({color.surface},{color.surface})';
+  assert.ok(!messages(validatePackage(t)).some((e) => e.includes('colour layer')));
+});
+
 test('schema: CSS values cannot break out of their declaration or load remote content', () => {
   const bad = ['red;}body{display:none', 'url(https://evil.example/x.png)', '</style><script>', 'var(--fanous-color-primary)', '@import x', 'expression(alert(1))', '{nope.thing}', 'a\\62 c'];
   for (const value of bad) assert.ok(checkSchema(value, SCHEMA.$defs.cssValue, SCHEMA).length > 0, value);
