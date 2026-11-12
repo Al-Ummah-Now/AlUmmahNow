@@ -295,3 +295,18 @@ describe('daily cost inputs', () => {
 		assert.equal(get('r2', 'class_b_ops'), undefined, 'no analytics token: left out');
 	});
 });
+
+describe('Bunny ready re-queues a failed R2 job', () => {
+	it('queues a new job for a failed one, and leaves running or ready ones alone', async () => {
+		const { requeueAfterBunnyReady } = await import('../src/lib/media/r2-delivery');
+		const base = { jobId: 'old', rev: 'abcdefgh12345678', access: 'pub' as const, attempts: 3, queuedAt: '2026-11-12T15:52:17.306Z' };
+		const failed = setup({ uploadStatus: 'ready', r2: { ...base, status: 'failed', error: 'container_stopped' } });
+		assert.equal((await requeueAfterBunnyReady(failed.env, ID)).queued, true);
+		assert.equal(failed.raw.TRANSCODE_QUEUE.messages.length, 1);
+		assert.notEqual(failed.videos.read(ID).r2.jobId, 'old');
+		const running = setup({ r2: { ...base, status: 'transcoding' } });
+		assert.equal((await requeueAfterBunnyReady(running.env, ID)).queued, false);
+		const none = setup();
+		assert.equal((await requeueAfterBunnyReady(none.env, ID)).why, 'no R2 job');
+	});
+});

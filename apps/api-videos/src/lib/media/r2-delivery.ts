@@ -635,3 +635,21 @@ export async function deliveryFor(env: MediaEnv, video: Pick<MediaVideo, 'id' | 
 	if (settings.mode === 'split' && settings.assign === 'view') return { source: 'draw', r2Percent: settings.r2Percent, r2 };
 	return { source: pickDeliverySource(settings, true, video.id), r2Percent: settings.r2Percent, r2 };
 }
+
+/**
+ * Bunny finished encoding (processing loop, terminal 'ready'): its MP4 fallbacks now exist,
+ * which is what the R2 transcode reads (Bunny's CDN never serves /original). A job that
+ * failed or never started for lack of a source is queued again now. Never throws.
+ */
+export async function requeueAfterBunnyReady(env: MediaEnv, videoId: string): Promise<{ queued: boolean; why?: string }> {
+	try {
+		const video = await repo(env).getObject(videoId);
+		const r2 = video?.r2;
+		if (!video || !r2 || video.isDeleted) return { queued: false, why: 'no R2 job' };
+		if (r2.status !== 'failed') return { queued: false, why: `R2 ${r2.status}` };
+		return await enqueueTranscode(env, videoId, 'retry', { force: true });
+	} catch (error) {
+		logger.warn('[Media] Re-queue after Bunny ready failed', { videoId, error: error instanceof Error ? error.message : String(error) });
+		return { queued: false, why: 'error' };
+	}
+}
