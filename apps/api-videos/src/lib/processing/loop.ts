@@ -23,7 +23,7 @@ import { getSecret, requireSecret } from '../env-helpers';
 import { isOwnershipComplete } from '../search/ownership';
 import { bunnyFileToken, tokenExpiry } from '../bunny-signing';
 import { announceAndRecordProcessingResult, pendingProcessingResult, ProcessingResult } from '../notification-events';
-import { classifyVideoFormat, type VideoFormatInput } from '@al-ummah/shared-types';
+import { classifyVideoFormat, publishAdminLive, type AdminLiveEnv, type VideoFormatInput } from '@al-ummah/shared-types';
 import {
 	applyPlan,
 	bunnyPhase,
@@ -51,7 +51,7 @@ interface SecretBinding {
 	get?(): Promise<string>;
 }
 
-export interface ProcessingEnv {
+export interface ProcessingEnv extends AdminLiveEnv {
 	videos: R2Bucket;
 	channels: R2Bucket;
 	global_settings?: R2Bucket;
@@ -276,6 +276,7 @@ export async function startProcessingLoop(
 	};
 	await queue.send(message, { delaySeconds: delay });
 	logger.debug('[ProcessingLoop] Loop started', { videoId, loopId, reason: opts.reason, delay });
+	await publishAdminLive(env, 'uploads', uploadLiveEvent(videoId, { uploadStatus: saved.uploadStatus, checking: true }));
 	return { started: true, loopId };
 }
 
@@ -364,7 +365,31 @@ export async function runProcessingCheck(env: ProcessingEnv, message: Processing
 		};
 		return true;
 	});
+	await publishAdminLive(env, 'uploads', uploadLiveEvent(message.videoId, {
+		uploadStatus: result.ours?.uploadStatus,
+		encodeProgress: bunny?.encodeProgress,
+		outcome: decision.kind === 'done' ? decision.outcome : outcome,
+		issue: (result.ours?.processingIssue as { kind?: string } | undefined)?.kind ?? (decision.kind === 'done' && decision.outcome === 'stalled' ? 'stalled' : undefined),
+		checking: decision.kind === 'again',
+	}));
 	return decision;
+}
+
+/** The admin:uploads live event of a processing step (docs/admin/LIVE_OPS.md): a hint, pages refetch. */
+export function uploadLiveEvent(
+	videoId: string,
+	s: { uploadStatus?: string; encodeProgress?: number; outcome?: string; issue?: string; checking?: boolean },
+) {
+	return {
+		kind: 'upload',
+		key: `upload:${videoId}`,
+		videoId,
+		...(s.uploadStatus ? { status: s.uploadStatus } : {}),
+		...(typeof s.encodeProgress === 'number' ? { encodeProgress: s.encodeProgress } : {}),
+		...(s.outcome ? { outcome: s.outcome } : {}),
+		...(s.issue ? { issue: s.issue } : {}),
+		...(s.checking !== undefined ? { checking: s.checking } : {}),
+	};
 }
 
 interface QueueMessageLike<T> {

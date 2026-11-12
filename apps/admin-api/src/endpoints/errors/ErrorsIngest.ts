@@ -16,6 +16,8 @@
  * Body: { events?: [...] (≤ 20), resolved?: [{ key }] }, at most 64 KB.
  * Without a queue binding (local dev) the batch is written inline.
  */
+import { publishAdminLive } from '@al-ummah/shared-types';
+import { errorLiveEvents } from '../../lib/admin-live';
 import type { Context } from 'hono';
 import { ACTION_KEY, ERROR_LIMITS, USER_ID, buildServerEvent, parseUserAgent, scrubEvent, type ErrorApp, type ErrorEventInput, type StackFrame } from '@al-ummah/shared-types';
 import type { AdminBindings } from '../../base/types';
@@ -105,6 +107,9 @@ export async function processIngestMessage(env: AdminBindings, msg: ErrorIngestM
   if (outcome.created.length || outcome.spiking.length) {
     await sendErrorAlerts(env.REPORTS_DB, env, outcome, now).catch((e) => logger.error('[Errors] Alerts failed', { error: String(e) }));
   }
+  // Open Errors pages refresh (never throws; a queue consumer has no waitUntil, so it is awaited, 3 s at most)
+  const live = errorLiveEvents(outcome, msg.resolved.length);
+  if (live.length) await publishAdminLive(env, 'errors', live);
   return outcome;
 }
 

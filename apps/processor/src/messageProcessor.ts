@@ -21,6 +21,7 @@ import {
 import { eraseUserModerationData } from './moderation/store';
 import { eraseUserContactData } from './contact/erase';
 import type { NotificationCreatePayload, NotificationFanoutPayload, PushDispatchPayload } from '@al-ummah/shared-types';
+import { publishAdminLive } from '@al-ummah/shared-types';
 import { dispatchPush, enqueuePush } from './push/dispatch';
 import { resolvePushProviders, type PushProviders } from './push/provider';
 
@@ -963,6 +964,8 @@ export class MessageProcessor {
         await applyModerationToSearchIndex({ entityType, entityId, action }, env, this.logger);
         break;
     }
+    // The admin Reports queue changed: live admin pages refetch it (docs/admin/LIVE_OPS.md). Never throws.
+    await publishAdminLive(env, 'moderation', { kind: 'changed', key: 'reports', queue: 'reports' });
   }
 
   private shouldRetry(error: unknown, retryCount: number): boolean {

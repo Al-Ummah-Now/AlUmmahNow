@@ -225,6 +225,37 @@ describe('processing-check loop', () => {
 		assert.ok(types.includes(MessageType.NotificationFanout), 'subscriber fan-out queued');
 	});
 
+	it('each step is published to admin:uploads for the live admin pages', async () => {
+		const env = Object.assign(makeEnv(), { WEBSOCKET_URL: 'https://realtime.test', INTERNAL_API_KEY: 'k' });
+		await env.videos.put(ID, JSON.stringify(stuck()));
+		bunnyResponses[ID] = { status: 200, body: { guid: ID, status: 3, encodeProgress: 50 } };
+		const events: any[] = [];
+		const bunnyFetch = globalThis.fetch;
+		globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+			if (String(input) === 'https://realtime.test/broadcast') {
+				for (const item of JSON.parse(String(init?.body)).items) if (item.channel === 'admin:uploads') events.push(...item.message.data.events);
+				return new Response('{}', { status: 200 });
+			}
+			return bunnyFetch(input, init);
+		}) as typeof fetch;
+		await startProcessingLoop(env, ID, { reason: 'upload-complete', now: NOW });
+		const deliver = async () => {
+			const msg = env.PROCESSING_CHECK_QUEUE.sent.shift();
+			await handleProcessingCheckBatch({ messages: [{ body: msg.body, attempts: 1, ack() {}, retry() {} }] }, env);
+		};
+		await deliver();
+		bunnyResponses[ID] = { status: 200, body: FINISHED };
+		await deliver();
+		assert.deepEqual(
+			events.map((e) => [e.key, e.status, e.encodeProgress, e.outcome, e.checking]),
+			[
+				[`upload:${ID}`, 'processing', undefined, undefined, true],
+				[`upload:${ID}`, 'processing', 50, 'pending', true],
+				[`upload:${ID}`, 'ready', 100, 'ready', false],
+			],
+		);
+	});
+
 	it('drops messages of a superseded loop', async () => {
 		const env = makeEnv();
 		await env.videos.put(ID, JSON.stringify(stuck()));
