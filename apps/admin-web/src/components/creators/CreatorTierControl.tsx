@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CREATOR_TIER_IDS, type CreatorTier, type CreatorTierOrigin } from '@al-ummah/shared-types';
+import { CREATOR_TIER_IDS, creatorTierOrigin, type CreatorTier, type CreatorTierAssignment, type CreatorTierOrigin } from '@al-ummah/shared-types';
 import { isUnexpectedFailure, ORIGIN_LABEL, tierActionMessage, tierChangeMessage } from '@/lib/creator-tiers';
 import type { ActionResult } from '@/lib/api/errors';
 import { useLanguage } from '@/i18n/I18nProvider';
@@ -54,13 +54,18 @@ type Status = { kind: 'idle' } | { kind: 'saving' } | { kind: 'saved' } | { kind
  * automatic Unlimited is locked, with the reason shown; "Change anyway"
  * unlocks it for a deliberate change (admin-api also refuses it otherwise).
  */
-export function CreatorTierControl({ userId, userName, current, tiers, canManage, needsTier = false, testId = 'creator-tier', setTier }: CreatorTierControlProps) {
+export function CreatorTierControl({ userId, userName, current: serverCurrent, tiers, canManage, needsTier = false, testId = 'creator-tier', setTier }: CreatorTierControlProps) {
   const router = useRouter();
   const { t, locale } = useLanguage();
   // undefined: no change pending; null: remove the tier; string: assign that tier
   const [pending, setPending] = useState<string | null | undefined>(undefined);
   const [unlocked, setUnlocked] = useState(false);
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
+  // The tier just saved, shown at once: the page's refresh (router.refresh) re-reads the whole list
+  // and can take seconds, and until it lands the row showed the old tier under "Saved". Dropped as
+  // soon as the server's value changes (the refresh arrived, or another change came in).
+  const [saved, setSaved] = useState<{ basis: string | null; tier: CurrentTier | null } | null>(null);
+  const current = saved && saved.basis === (serverCurrent?.tierId ?? null) ? saved.tier : serverCurrent;
   const superAdmin = current?.origin === 'super_admin';
   const locked = superAdmin && !unlocked;
   const tierOf = (id: string | null | undefined) => (id ? tiers.find((tier) => tier.id === id) ?? null : null);
@@ -82,6 +87,19 @@ export function CreatorTierControl({ userId, userName, current, tiers, canManage
       setStatus({ kind: 'failed', message: tierActionMessage(result) });
       return;
     }
+    const assignment = (result.data as { assignment?: CreatorTierAssignment | null } | undefined)?.assignment;
+    setSaved({
+      basis: serverCurrent?.tierId ?? null,
+      tier: tierId === null
+        ? null
+        : {
+            tierId,
+            origin: (assignment && creatorTierOrigin(assignment)) || 'admin',
+            assignedBy: assignment?.assignedBy ?? '',
+            assignedByName: null,
+            assignedAt: assignment?.assignedAt ?? new Date().toISOString(),
+          },
+    });
     setStatus({ kind: 'saved' });
     setUnlocked(false);
     router.refresh();
