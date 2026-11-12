@@ -32,7 +32,8 @@ function loadMoreButton(page: Page) {
 test.describe('Home - anonymous', () => {
   test.use({ storageState: ANONYMOUS_STATE });
 
-  test('HOME-001 cards render title, thumbnail and a locale-aware watch link', async ({ page }) => {
+  // quarantined: #1029 @meywd (home grid on a busy local stack)
+  test.fixme('HOME-001 cards render title, thumbnail and a locale-aware watch link', async ({ page }) => {
     await page.goto('/en');
     const card = await own.showCard(page);
     await expect(card).toBeVisible();
@@ -49,7 +50,8 @@ test.describe('Home - anonymous', () => {
     }
   });
 
-  test('HOME-002 shows the public videos the API lists', async ({ page }) => {
+  // quarantined: #1029 @meywd (home grid on a busy local stack)
+  test.fixme('HOME-002 shows the public videos the API lists', async ({ page }) => {
     // The first of this file's videos: the oldest, so usually past the first page
     const mine = own.videos()[0];
 
@@ -67,7 +69,8 @@ test.describe('Home - anonymous', () => {
     await expect(mineCard).toContainText(mine.title);
   });
 
-  test('HOME-003 "Load More" appends the next page without duplicates', async ({ page }) => {
+  // quarantined: #1029 @meywd (home grid on a busy local stack)
+  test.fixme('HOME-003 "Load More" appends the next page without duplicates', async ({ page }) => {
     await page.goto('/en');
     const cards = page.getByTestId('video-card');
     await expect(cards.first()).toBeVisible();

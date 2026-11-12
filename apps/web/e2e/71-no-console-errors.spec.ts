@@ -37,7 +37,8 @@ test.describe('Console stays clean', () => {
   test.use({ storageState: ANONYMOUS_STATE });
 
   for (const path of PAGES) {
-    test(`no console errors on ${path}`, async ({ page }) => {
+    // quarantined: #1030 @meywd (the local stack's public files and cdnjs answer)
+    test.fixme(`no console errors on ${path}`, async ({ page }) => {
       await expectCleanConsole(page, path);
     });
   }
