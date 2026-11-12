@@ -127,6 +127,11 @@ async function eraseLocalRows(users: LedgerUser[]): Promise<void> {
   await stackSql('al-ummah-now-reports', `DELETE FROM auth_moderation_requests WHERE subject_user_id IN (${quoteList(ids)}) OR requested_by_id IN (${quoteList(ids)})`);
   await stackSql('al-ummah-now-search', `DELETE FROM creator_tier_assignments WHERE user_id IN (${quoteList(ids)})`);
   await stackSql('al-ummah-now-d1', `DELETE FROM rbac_user_roles WHERE user_id IN (${quoteList(ids)})`);
+  // Auth's moderation records of requests this job's admin sent about its own accounts (12-auth-requests):
+  // an audit trail on deployments (user id only, no email), this run's test data here; events first
+  const requests = `SELECT id FROM moderation_requests WHERE subject_user_id IN (${quoteList(ids)}) OR requested_by_id IN (${quoteList(ids)})`;
+  await stackSql('al-ummah-now-d1', `DELETE FROM moderation_request_events WHERE request_id IN (${requests})`);
+  await stackSql('al-ummah-now-d1', `DELETE FROM moderation_requests WHERE id IN (${requests})`);
 }
 
 /**
