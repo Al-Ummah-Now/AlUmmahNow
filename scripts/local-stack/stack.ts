@@ -59,6 +59,15 @@ export const LOCAL_SECRETS: Record<string, string> = {
   image_storage_key: 'local-stack-fake-images',
 };
 
+/**
+ * Confidential OAuth clients of the local issuer and the local secret each one's caller uses: boot
+ * stores their hash (deployed environments set it with the Auth repo's rotate-client-secret.ts).
+ */
+export const LOCAL_CLIENT_SECRETS: Record<string, string> = {
+  // admin-api's machine client for requests to auth and invites (AUTH_MODERATION_CLIENT_ID)
+  'd7464de8-363d-4fc1-b1af-7c71653f0afc': LOCAL_SECRETS.AUTH_MODERATION_CLIENT_SECRET,
+};
+
 /** The secret value for a Secrets Store binding: by binding name, then by secret name. */
 export function localSecret(binding: string, secretName?: string): string {
   return LOCAL_SECRETS[binding] ?? (secretName ? LOCAL_SECRETS[secretName] : undefined) ?? `local-stack-${binding}`;
@@ -129,6 +138,8 @@ export const WORKERS: StackWorker[] = [
     vars: {
       ...COMMON_VARS,
       Issuer: url('auth'),
+      // A worker secret when deployed; its client's hash is set by boot (LOCAL_CLIENT_SECRETS)
+      AUTH_MODERATION_CLIENT_SECRET: LOCAL_SECRETS.AUTH_MODERATION_CLIENT_SECRET,
       WEBSOCKET_URL: url('websocket'),
       ADMIN_WEB_URL: url('admin-web'),
       VIDEOS_API_URL: url('api-videos'),

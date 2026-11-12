@@ -21,7 +21,7 @@ import { createRequire } from 'node:module';
 import { join, relative } from 'node:path';
 import { parseJsonc } from '../release/jsonc.ts';
 import { localConfig, localRedirectUris, type Json } from './configs.ts';
-import { appDir, AUTH_DIR, HOST, localSecret, PORTS, PROD_HOST_TO_LOCAL, ROOT, STATE_DIR, url, WORKERS, type StackWorker } from './stack.ts';
+import { appDir, AUTH_DIR, HOST, LOCAL_CLIENT_SECRETS, localSecret, PORTS, PROD_HOST_TO_LOCAL, ROOT, STATE_DIR, url, WORKERS, type StackWorker } from './stack.ts';
 import { outboundHandler } from './outbound.ts';
 import { registerFakes, setStackR2, setStackSql, startFakeCdn } from './fake-external.ts';
 import { startBrowserProxy } from './browser-proxy.ts';
@@ -297,6 +297,21 @@ async function localClients(mf: MiniflareInstance, prepared: Prepared[]): Promis
     await db.prepare('UPDATE oauth_clients SET redirect_uris = ? WHERE id = ?').bind(JSON.stringify(local), row.id).run();
   }
   log(`auth: ${results.length} OAuth clients point at localhost`);
+  for (const [id, secret] of Object.entries(LOCAL_CLIENT_SECRETS)) {
+    const res = (await db.prepare('UPDATE oauth_clients SET client_secret_hash = ? WHERE id = ?').bind(await hashClientSecret(secret), id).run()) as { meta?: { changes?: number } };
+    log(`auth: client ${id} ${res.meta?.changes ? 'has its local secret' : 'is not registered (skipped)'}`);
+  }
+}
+
+/**
+ * openauth's client secret hash ($pbkdf2-sha256$<iterations>$<salt>$<hash>, base64url), as the Auth
+ * repo's rotate-client-secret.ts writes it.
+ */
+export async function hashClientSecret(secret: string, salt = crypto.getRandomValues(new Uint8Array(16)), iterations = 100_000): Promise<string> {
+  const b64url = (bytes: Uint8Array) => Buffer.from(bytes).toString('base64url');
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), 'PBKDF2', false, ['deriveBits']);
+  const bits = new Uint8Array(await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations, hash: 'SHA-256' }, key, 256));
+  return `$pbkdf2-sha256$${iterations}$${b64url(salt)}$${b64url(bits)}`;
 }
 
 async function health(prepared: Prepared[]): Promise<Record<string, number>> {
