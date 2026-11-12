@@ -19,15 +19,21 @@ Both production libraries have CDN token authentication on. "Block Direct Url Fi
 
 Every Bunny call for an existing video goes through that library's API key, token key and host. This covers signing (`middleware/bunny-signing.ts`), thumbnails, the processing loop, deletes (owner, admin, purge, privacy erase, reaper), title and collection updates, TUS resume, R2 transcode sources and the video-format job. An orphan (no record) is looked up and deleted in every library, primary first.
 
-## Channel collections
+## Channel and user collections
 
-Each channel has one Bunny collection per library: `channel.bunnyCollections = { "<libraryId>": "<collectionId>" }` (`lib/channelCollection.ts`).
+Every video belongs to a collection in its own library (`lib/channelCollection.ts`):
 
-- **First upload:** the upload creates the collection in the library it goes to. Single, bulk and live-stream uploads all do this. An older single `bunnyCollectionId` is adopted by the library that actually holds it.
-- **Rename:** renaming the channel renames its collections, from the owner's channel edit and from the admin.
-- **Delete:** soft delete keeps the collections. The admin purge deletes them; videos are not deleted by removing a collection.
+- **Channel videos** go into the channel's collection: `channel.bunnyCollections = { "<libraryId>": "<collectionId>" }`. An older single `bunnyCollectionId` is adopted by the library that actually holds it.
+- **User-level uploads** (`channelId` is the owner) and uploads to a channel that no longer exists go into the owner's collection: `profile.bunnyCollections`. It is named after the display name, else `@handle`, else `User <id>`. The env prefix (stage: `[stage] `) is added as for every Bunny name.
 
-## Backfill: file existing videos into their channel's collection
+Lifecycle:
+
+- **Created:** lazily on the first upload to that library (single, bulk and live).
+- **Renamed:** with the channel (owner and admin edits) and with the profile's display name or handle (owner and admin edits).
+- **Soft delete:** keeps them.
+- **Purge:** removes them. For a channel that is the admin purge. For a user it is the profile delete, the privacy erase, the admin erase and the run-account erase. Videos are not deleted by removing a collection.
+
+## Backfill: file existing videos into their collections
 
 `lib/bunny/collectionBackfill.ts` runs as messages on the env's processing-check queue (`al-ummah-now-processing-check`, `…-qa`, `…-stage`). Start it by sending one message with the Queues REST API:
 
@@ -36,6 +42,13 @@ Each channel has one Bunny collection per library: `channel.bunnyCollections = {
 ```
 
 - **Dry run** reads R2 and Bunny (GET only) and counts what it would do. **Apply** (`"dryRun": false`, new `runId`) creates or adopts collections and sets each video's collection.
+- Placement per video, counted per library (`totals.byLibrary.<id>`):
+  - `channel`: the channel is real. Goes into the channel's collection.
+  - `user`: a user-level upload or no channel. Goes into the owner's collection.
+  - `deletedChannel`: the channel was deleted (soft or hard). Goes into the owner's collection. If the channel is restored, a later run moves the videos back.
+  - `ownerMissing`: the owner has no profile. Listed in `totals.ownerMissing`, never moved.
+  - Each placement counts videos, already placed, moved (or would move), missing in Bunny and errors.
+- After the video pages, each library's Bunny videos that no record or live stream references are listed in `unreferenced.<id>` (count, bytes, first 1000). **List only, never deleted.**
 - Page 0 also proves each library's host and token key: `libraries.<id>.thumbnailStatus` is 200 for a signed thumbnail of one of its videos.
-- Results are in `global-settings[-qa|-stage]` at `ops/bunny-collections/runs/<runId>.json` (and `latest.json`). They show totals per library: videos, already placed, moved (or would move), missing in Bunny and errors. They also list the collections created or adopted, and the skipped videos: user-level uploads (`noChannel`), deleted channels and unknown libraries.
+- Results are in `global-settings[-qa|-stage]` at `ops/bunny-collections/runs/<runId>.json` (and `latest.json`).
 - The job is idempotent and can be run again at any time.
