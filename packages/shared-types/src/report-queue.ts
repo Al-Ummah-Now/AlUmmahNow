@@ -26,7 +26,6 @@ import type { ModerationAction, ReportableEntityType, ReportReason, ReportStatus
 import type { ModerationDecision, ModerationReviewStatus } from './ai-moderation';
 
 export const REPORT_ENTITY_TYPES: readonly ReportableEntityType[] = ['video', 'comment', 'channel', 'livestream', 'playlist', 'post'];
-export const REPORT_REASONS: readonly ReportReason[] = ['inappropriate', 'spam', 'harassment', 'copyright', 'misinformation', 'other'];
 
 /**
  * Report outcomes. The first four are the values the report page has always

@@ -220,6 +220,10 @@ async function initialPage(c: C, kind: AdminSuggestKind, cursor: string, limit: 
     const { items, nextCursor } = await listInvites(c.env.REPORTS_DB, { limit, ...(cursor ? { cursor } : {}) });
     return { items: items.map(fromInvite), next: nextCursor };
   }
+  if (kind === 'report') {
+    // Reported items, open ones first then the newest: one page, the queue itself is where to browse further
+    return { items: (await suggestItems(c.env.REPORTS_DB, '', limit)).map(fromReportItem), next: null };
+  }
   if (kind === 'playlist' || kind === 'post') {
     const result = await callVideos<{ items: unknown[]; nextCursor: string | null }>(c.env, CONTENT_PATH[kind], {
       query: { pageSize: limit, ...(cursor ? { cursor } : {}) },
