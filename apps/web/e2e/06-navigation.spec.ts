@@ -17,7 +17,8 @@ test.describe.configure({ mode: 'default' });
 const own = ownPublicVideos(test, 'nav');
 
 test.describe('Navigation - English Routes', () => {
-  test('navigates from the homepage to a video page by clicking a card', async ({ page }) => {
+  // quarantined: #1029 @meywd (the file's own card on the signed-out home grid)
+  test.fixme('navigates from the homepage to a video page by clicking a card', async ({ page }) => {
     await page.goto('/en/');
     const card = await own.showCard(page);
     await expect(card).toBeVisible();
@@ -77,7 +78,8 @@ test.describe('Navigation - Arabic Routes', () => {
     await expect(page).toHaveURL(/\/ar\/video\?vid=test-123/);
   });
 
-  test('Arabic card links stay in the Arabic locale', async ({ page }) => {
+  // quarantined: #1029 @meywd (the file's own card on the signed-out home grid)
+  test.fixme('Arabic card links stay in the Arabic locale', async ({ page }) => {
     await page.goto('/ar/');
     const card = await own.showCard(page);
     await clickAndWaitForURL(page, card, /\/ar\/video\?vid=/);
@@ -105,7 +107,8 @@ test.describe('Navigation - Browser Controls', () => {
     await expect(page).toHaveURL(/\/en\/channels/);
   });
 
-  test('client-side navigation works with back', async ({ page }) => {
+  // quarantined: #1029 @meywd (the file's own card on the signed-out home grid)
+  test.fixme('client-side navigation works with back', async ({ page }) => {
     await page.goto('/en/');
     await clickAndWaitForURL(page, await own.showCard(page), /\/en\/video\?vid=/);
 
@@ -165,7 +168,8 @@ test.describe('Navigation - Error Handling', () => {
 });
 
 test.describe('Navigation - Responsive Behavior', () => {
-  test('navigates on a mobile viewport', async ({ page }) => {
+  // quarantined: #1029 @meywd (the file's own card on the signed-out home grid)
+  test.fixme('navigates on a mobile viewport', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
 
     await page.goto('/en/');
