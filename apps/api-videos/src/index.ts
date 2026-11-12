@@ -5,6 +5,7 @@ import { handleReaperBatch, isReaperMessage, sweepStaleUploads } from './lib/upl
 import { handleBunnyDeleteBatch, isBunnyDeleteMessage } from './lib/uploads/bunnyDelete';
 import { handlePurgeBatch, isPurgeMessage, startScheduledPurge } from './lib/uploads/testLibraryPurge';
 import { handleMediaMoveBatch, isMediaMoveMessage, sweepMediaJobs } from './lib/media/r2-delivery';
+import { collectDeliveryCosts } from './lib/media/costs';
 import { createMediaInternalRouter } from './endpoints/media/mediaInternal';
 import { sweepRunUsers } from './lib/e2e/runUserSweep';
 import { handlePlaylistAddBatch, isPlaylistAddMessage } from './lib/playlistUploadAdds';
@@ -527,6 +528,13 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 			} catch (error) {
 				logger.error('[Ownership] Reconcile failed', { error: error instanceof Error ? error.message : String(error) });
 				reportJobFailure(rawEnv, ctx, 'ownership-reconcile', error);
+			}
+			try {
+				// R2 vs Bunny cost inputs for yesterday (lib/media/costs.ts; never throws)
+				const costs = await collectDeliveryCosts(rawEnv as never);
+				logger.info('[MediaCosts] Daily run', costs);
+			} catch (error) {
+				logger.error('[MediaCosts] Daily run failed', { error: error instanceof Error ? error.message : String(error) });
 			}
 			try {
 				// Short vs video: classify videos added by imports, syncs and uploads (lib/video-format/job.ts)
