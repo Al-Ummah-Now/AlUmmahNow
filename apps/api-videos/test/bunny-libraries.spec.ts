@@ -49,7 +49,8 @@ beforeEach(() => {
 		const method = init?.method ?? 'GET';
 		const headers = new Headers(init?.headers);
 		calls.push({ url, method, key: headers.get('AccessKey') });
-		const api = /video\.bunnycdn\.com\/library\/(\d+)\/videos\/([^/?]+)/.exec(url);
+		const parsed = new URL(url);
+		const api = parsed.hostname === 'video.bunnycdn.com' ? /^\/library\/(\d+)\/videos\/([^/?]+)$/.exec(parsed.pathname) : null;
 		if (api) {
 			const body = bunnyVideos[`${api[1]}/${api[2]}`];
 			if (!body) return new Response('{}', { status: 404 });
@@ -106,9 +107,9 @@ describe('signing', () => {
 		);
 		const env = prodEnv();
 		const body = (await (await app.request('/api/videos', {}, env)).json()) as any[];
-		assert.match(body[0].playUrl, new RegExp(`^https://${OLD_HOST}/bcdn_token=`));
+		assert.ok(body[0].playUrl.startsWith(`https://${OLD_HOST}/bcdn_token=`));
 		assert.match(body[0].thumbnailUrl, /\?token=.+&expires=/);
-		assert.match(body[1].playUrl, new RegExp(`^https://${NEW_HOST}/bcdn_token=`));
+		assert.ok(body[1].playUrl.startsWith(`https://${NEW_HOST}/bcdn_token=`));
 
 		// The tokens differ by key: the same response signed with swapped keys differs
 		const swapped = { ...env, BUNNY_TOKEN_KEY: 'old-token-key', BUNNY_LEGACY_TOKEN_KEY: 'new-token-key' };
@@ -132,9 +133,9 @@ describe('existing (legacy) videos keep their library', () => {
 		const env = prodEnv(videos);
 		const result = await syncVideoFromBunny(env, OLD_ID);
 		assert.equal(result.error, undefined);
-		const api = calls.filter((c) => c.url.includes('video.bunnycdn.com'));
+		const api = calls.filter((c) => new URL(c.url).hostname === 'video.bunnycdn.com');
 		assert.ok(api.length > 0 && api.every((c) => c.url.includes('/library/400189/') && c.key === 'old-api-key'));
-		const thumb = calls.find((c) => c.url.includes('/thumbnail.jpg'));
+		const thumb = calls.find((c) => new URL(c.url).pathname.endsWith('/thumbnail.jpg'));
 		assert.ok(thumb?.url.startsWith(`https://${OLD_HOST}/`), 'thumbnail checked on the legacy host');
 		const saved = JSON.parse(videos.store.get(OLD_ID)!);
 		assert.equal(saved.playUrl, `https://${OLD_HOST}/${OLD_ID}/playlist.m3u8`);

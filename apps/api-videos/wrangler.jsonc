@@ -553,6 +553,17 @@
 					"binding": "MEDIA_ANALYTICS_TOKEN",
 					"store_id": "f8eddc9944d041919ed8dc7d08d32308",
 					"secret_name": "media-cdn-api-token"
+				},
+				{
+					// Production parity only: unused while BUNNY_LEGACY_LIBRARY_ID is empty (stage has no legacy library)
+					"binding": "BUNNY_LEGACY_STREAM_KEY",
+					"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+					"secret_name": "bunny-stream-key-qa"
+				},
+				{
+					"binding": "BUNNY_LEGACY_TOKEN_KEY",
+					"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+					"secret_name": "bunny-stream-token-key-qa"
 				}
 			],
 			"vars": {
@@ -572,6 +583,9 @@
 				"Issuer": "https://auth.stage.alummahnow.net",
 				"Audience": "https://videos.api.stage.alummahnow.net",
 				"bunny_hostname": "vz-cb79844a-c5d.b-cdn.net",
+				// No legacy library on stage (empty = none; lib/bunny/libraries.ts)
+				"BUNNY_LEGACY_LIBRARY_ID": "",
+				"BUNNY_LEGACY_HOSTNAME": "",
 				"BUNNY_SIGN_URLS": "true",
 				// Stage shares the QA Bunny library: tag what stage creates there for cleanup
 				"BUNNY_NAME_PREFIX": "[stage] ",
