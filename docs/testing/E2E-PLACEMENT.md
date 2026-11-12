@@ -42,13 +42,13 @@ Until a batch is moved, every spec still runs where it runs today; the local job
 
 | Suite | Config | Local | Deployed |
 |---|---|---:|---:|
-| web | `apps/web/playwright.config.ts` (e2e-tests.yml) | 60 | 1 |
+| web | `apps/web/playwright.config.ts` (e2e-tests.yml) | 61 | 1 |
 | release | `apps/web/playwright.release.config.ts` (release-e2e.yml, release.yml) | 57 | 7 |
 | admin | `apps/admin-web/playwright.config.ts` (admin-e2e.yml) | 22 | 0 |
 | themes | `apps/web/playwright.themes.config.ts` (theme-visibility.yml) | 5 | 0 |
 | player | `apps/web/playwright.player.config.ts` (player-e2e.yml) | 10 | 0 |
 | release-prod | `apps/web/playwright.release-prod.config.ts` (prod-signed-in.yml) | 0 | 1 |
-| **all** | | **154** | **9** |
+| **all** | | **155** | **9** |
 
 ## Deployed (QA and stage)
 
@@ -105,6 +105,7 @@ Until a batch is moved, every spec still runs where it runs today; the local job
 | `21-channel-handles-owner.spec.ts` | handle URLs, owner actions, delete flow on scratch channel |  |
 | `21-library.spec.ts` | watch later, likes, library pages via api-videos |  |
 | `21-search-v2.spec.ts` | search index results, filters, Arabic normalisation on seeded content |  |
+| `21-watch-later-per-user.spec.ts` | Watch later per user: library API across active channels, channel playlist listings, channel Playlists tab |  |
 | `22-explore.spec.ts` | explore page rendering and navigation |  |
 | `22-notifications.spec.ts` | bell/inbox UI; subscribe→processor notification uses local queues |  |
 | `22-video-comments.spec.ts` | replies, sort, live updates, held comments on disposable video |  |
