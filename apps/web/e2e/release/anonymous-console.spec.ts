@@ -71,6 +71,7 @@ function expectClean(name: string, v: Visit): void {
 
 test.describe('Release: signed-out visitors get a clean console', () => {
   test('home, watch, channel and search', async ({ browser }) => {
+    test.fixme(releaseEnv() === 'local', 'quarantined: #1021 @meywd: signed-out console on the local stack');
     test.setTimeout(240000);
     const web = target().web;
     // Seeded fixtures: never the newest item of a shared list (another spec's upload, still encoding)

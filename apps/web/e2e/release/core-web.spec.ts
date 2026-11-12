@@ -6,7 +6,7 @@
  * explore and search pages work at phone width in Arabic.
  */
 import { test, expect, type BrowserContext, type Page } from '@playwright/test';
-import { target } from './targets';
+import { target, releaseEnv } from './targets';
 import { NO_PLAYABLE_VIDEO, watchUrl } from './videos';
 import { apiFetch, createProfile, signUpOnWeb, startSignIn, type Locale } from './web-session';
 import { grantCreatorTier } from './creator-tier';
@@ -72,6 +72,7 @@ test.describe('Release: unknown channel page', () => {
 
 test.describe('Release: live comments', () => {
   test('a new comment reaches a signed-out viewer without a reload', async ({ page, browser, context }) => {
+    test.fixme(releaseEnv() === 'local', 'quarantined: #1021 @meywd: live comments need the ws:// CSP fix (#985)');
     const video = await own('landscape');
     test.skip(!video, NO_PLAYABLE_VIDEO);
 

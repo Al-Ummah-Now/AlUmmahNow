@@ -51,6 +51,7 @@ test.describe('Release: embeds', () => {
 
   for (const lang of ['en', 'ar'] as const) {
     test(`a public video plays in a cross-origin iframe (${lang})`, async ({ page }) => {
+      test.fixme(releaseEnv() === 'local', 'quarantined: #1022 @meywd: the embed frame on the local stack');
       const video = await own('landscape');
       test.skip(!video, NO_PLAYABLE_VIDEO);
 
@@ -71,6 +72,7 @@ test.describe('Release: embeds', () => {
   }
 
   test('an unknown video shows the unavailable frame', async ({ page }) => {
+    test.fixme(releaseEnv() === 'local', 'quarantined: #1022 @meywd: the embed frame on the local stack');
     await hostIframe(page, `${target().web}/embed/v/does-not-exist-${Date.now()}`);
     await expect(page.frameLocator('#aun').getByTestId('embed-unavailable')).toBeVisible();
   });
