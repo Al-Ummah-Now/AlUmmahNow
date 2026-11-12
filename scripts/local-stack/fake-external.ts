@@ -268,17 +268,8 @@ export function registerFakes(): void {
   FAKES.set('.storage.bunnycdn.com', images);
   FAKES.set(IMAGE_HOST, images);
   FAKES.set('api.resend.com', resend);
-  // Third-party static files the pages load (Font Awesome, Bunny's player script): served empty
-  // locally, so no page waits on the internet and no run depends on it
-  FAKES.set('cdnjs.cloudflare.com', (_request, url) => staticFile(url.pathname));
-  FAKES.set('assets.mediadelivery.net', (_request, url) => staticFile(url.pathname));
 }
 
-/** An empty file of the right type for a third-party static asset. */
-export function staticFile(pathname: string): Response {
-  const type = pathname.endsWith('.css') ? 'text/css' : pathname.endsWith('.js') ? 'text/javascript' : /\.(woff2?|ttf)$/.test(pathname) ? 'font/woff2' : 'application/octet-stream';
-  return new Response('', { status: 200, headers: { 'content-type': type, ...CORS, 'cache-control': 'public, max-age=3600' } });
-}
 
 /** SQL against a stack database by its database_name (boot.ts sets it once Miniflare is up). */
 export type StackSql = (database: string, sql: string) => Promise<unknown[]>;

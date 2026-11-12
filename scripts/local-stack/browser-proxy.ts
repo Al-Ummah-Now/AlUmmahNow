@@ -27,6 +27,9 @@ const LOCAL = new Set(['localhost', '127.0.0.1']);
  * production, nothing paid): tunnelled to the real host unchanged.
  */
 export const PUBLIC_STATIC_HOSTS = new Set([
+  // Real content: the pages load these with subresource integrity, which an empty fake fails
+  'cdnjs.cloudflare.com',
+  'assets.mediadelivery.net',
   'unpkg.com',
   'cdn.jsdelivr.net',
   'fonts.googleapis.com',

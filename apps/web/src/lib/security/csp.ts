@@ -27,6 +27,12 @@ export interface CspEnv {
 
 export interface CspOptions {
   isDevelopment: boolean;
+  /**
+   * The page itself is served over plain http (the local E2E stack on localhost). Deployed sites
+   * are https only. WebKit upgrades even localhost subresources to https under
+   * upgrade-insecure-requests, so the directive is left out for such a page.
+   */
+  insecureOrigin?: boolean;
   nonce?: string;
   env?: CspEnv;
   /**
@@ -66,7 +72,7 @@ export function generateNonce(): string {
 /** R2 media hosts (docs/media-delivery/RUNBOOK.md); fixed per env, so listed rather than read from config. */
 const MEDIA_HOSTS = ['https://media.alummahnow.net', 'https://media.stage.alummahnow.net', 'https://media.qa.alummahnow.net'];
 
-export function buildContentSecurityPolicy({ isDevelopment, nonce, env = {}, frameAncestors = "'none'" }: CspOptions): string {
+export function buildContentSecurityPolicy({ isDevelopment, insecureOrigin = false, nonce, env = {}, frameAncestors = "'none'" }: CspOptions): string {
   const apiOrigin = origin(env.apiUrl);
   const authOrigin = origin(env.authUrl);
   const bunny = env.bunnyPullZone ? `https://${env.bunnyPullZone.replace(/^https?:\/\//, '')}` : '';
@@ -110,7 +116,7 @@ export function buildContentSecurityPolicy({ isDevelopment, nonce, env = {}, fra
     `report-uri ${CSP_REPORT_PATH}`,
   ];
 
-  if (!isDevelopment) policy.push('upgrade-insecure-requests');
+  if (!isDevelopment && !insecureOrigin) policy.push('upgrade-insecure-requests');
   return policy.join('; ');
 }
 

@@ -41,10 +41,11 @@ import { presentSessionCookieNames, writeSessionValue } from '@/lib/auth/session
  * request; Next.js reads it from the request's Content-Security-Policy header
  * and applies it to every script it renders.
  */
-function createCsp(isDevelopment: boolean, embed = false): { csp: string; nonce?: string } {
+function createCsp(isDevelopment: boolean, embed = false, insecureOrigin = false): { csp: string; nonce?: string } {
   const nonce = isDevelopment ? undefined : generateNonce();
   const csp = buildContentSecurityPolicy({
     isDevelopment,
+    insecureOrigin,
     nonce,
     frameAncestors: embed ? '*' : "'none'",
     env: {
@@ -62,7 +63,7 @@ function createCsp(isDevelopment: boolean, embed = false): { csp: string; nonce?
  * and attach CSP + security headers to the response.
  */
 function nextWithSecurityHeaders(request: NextRequest, isDevelopment: boolean, locale?: string, rewriteTo?: URL, embed = false): NextResponse {
-  const { csp, nonce } = createCsp(isDevelopment, embed);
+  const { csp, nonce } = createCsp(isDevelopment, embed, request.nextUrl.protocol === 'http:');
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('Content-Security-Policy', csp);
   if (nonce) requestHeaders.set(NONCE_HEADER, nonce);
