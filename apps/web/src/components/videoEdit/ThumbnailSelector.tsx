@@ -5,6 +5,7 @@ import { FitImage } from '@/components/VideoThumbnail/FitImage';
 import React, { useState, useRef } from 'react';
 import { Upload, Check } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useFileDropZone } from '@/hooks/useFileDropZone';
 import { uploadVideoThumbnail, validateThumbnailFile } from '@/lib/api/video-thumbnail-client';
 import { ThumbnailCropper, loadImageFile } from '@/components/VideoThumbnail/ThumbnailCropper';
 import { shapesMatch, type Size } from '@/lib/utils/thumbnailCrop';
@@ -77,13 +78,9 @@ export default function ThumbnailSelector({
     setMissingFrames((prev) => new Set(prev).add(url));
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Allow re-selecting the same file after an error
-    e.target.value = '';
-
+  // The picker and a drop take the same path: validate, crop to the video's shape, upload
+  const handleFile = async (file: File) => {
+    if (isUploading) return;
     const validationError = validateThumbnailFile(file);
     if (validationError) {
       setUploadError(validationError === 'invalid_type' ? t.video.thumbnailInvalidType ?? null : t.video.thumbnailTooLarge ?? null);
@@ -108,6 +105,19 @@ export default function ThumbnailSelector({
     }
     await uploadFile(file);
   };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Allow re-selecting the same file after an error
+    e.target.value = '';
+    await handleFile(file);
+  };
+
+  const { isDragOver, dropZoneProps } = useFileDropZone({
+    disabled: isUploading,
+    onFile: (file) => void handleFile(file),
+  });
 
   const closeCrop = () => {
     if (crop) URL.revokeObjectURL(crop.url);
@@ -258,11 +268,17 @@ export default function ThumbnailSelector({
             disabled={isUploading}
             aria-busy={isUploading}
             data-testid="thumbnail-upload-button"
-            className="relative aspect-video rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-600 transition-colors flex flex-col items-center justify-center gap-2 text-gray-600 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 disabled:opacity-50 disabled:cursor-not-allowed"
+            data-drag-over={isDragOver ? 'true' : 'false'}
+            {...dropZoneProps}
+            className={`relative aspect-video rounded-lg border-2 border-dashed transition-colors flex flex-col items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+              isDragOver
+                ? 'border-blue-500 bg-blue-50 text-blue-600 dark:border-blue-400 dark:bg-blue-900/20 dark:text-blue-300'
+                : 'border-gray-300 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-600 text-gray-600 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400'
+            }`}
           >
-            <Upload size={32} />
+            <Upload size={32} aria-hidden="true" />
             <span className="text-sm font-medium">
-              {isUploading ? t.common.loading : t.video.uploadThumbnail}
+              {isUploading ? t.common.loading : isDragOver ? t.upload.thumbnailDropHere : t.video.uploadThumbnail}
             </span>
             <span className="text-xs px-2 text-center">
               {t.video.dragDropThumbnail}

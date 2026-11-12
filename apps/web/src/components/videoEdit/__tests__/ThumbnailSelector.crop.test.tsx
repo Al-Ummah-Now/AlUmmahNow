@@ -84,3 +84,53 @@ describe('studio editor custom thumbnail: cropped to the video shape', () => {
     expect(await screen.findByTestId('thumbnail-upload-error')).toHaveTextContent(EN_TRANSLATIONS.video.thumbnailWrongShape);
   });
 });
+
+describe('studio editor custom thumbnail: drag and drop', () => {
+  const dropOn = (file: File) => {
+    const zone = screen.getByTestId('thumbnail-upload-button');
+    fireEvent.dragEnter(zone, { dataTransfer: { types: ['Files'], files: [] } });
+    expect(zone).toHaveAttribute('data-drag-over', 'true');
+    expect(zone).toHaveTextContent(EN_TRANSLATIONS.upload.thumbnailDropHere);
+    fireEvent.dragOver(zone, { dataTransfer: { types: ['Files'], files: [] } });
+    fireEvent.drop(zone, { dataTransfer: { types: ['Files'], files: [file] } });
+    expect(zone).toHaveAttribute('data-drag-over', 'false');
+  };
+
+  it('a dropped image takes the picker path: crop, then upload', async () => {
+    loadImageFile.mockResolvedValue({ url: 'blob:art', size: { width: 1920, height: 1080 } });
+    uploadVideoThumbnail.mockResolvedValue({ success: true, thumbnailUrl: 'https://cdn/t.jpg' });
+    const onChange = jest.fn();
+    render(<ThumbnailSelector videoId="v1" currentThumbnailUrl="" channelId="c1" onThumbnailChange={onChange} {...vertical} />);
+    dropOn(new File(['x'], 'art.png', { type: 'image/png' }));
+    await screen.findByTestId('cropper');
+    fireEvent.click(screen.getByText('use'));
+    await waitFor(() => expect(uploadVideoThumbnail).toHaveBeenCalledWith('v1', cropped, 'c1'));
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith('https://cdn/t.jpg'));
+  });
+
+  it.each([
+    ['image/jpeg', 'a.jpg'],
+    ['image/webp', 'a.webp'],
+  ])('a dropped %s of the video shape uploads directly', async (type, name) => {
+    loadImageFile.mockResolvedValue({ url: 'blob:art', size: { width: 720, height: 1280 } });
+    uploadVideoThumbnail.mockResolvedValue({ success: true, thumbnailUrl: 'https://cdn/t.jpg' });
+    render(<ThumbnailSelector videoId="v1" currentThumbnailUrl="" channelId="c1" onThumbnailChange={() => {}} {...vertical} />);
+    const file = new File(['x'], name, { type });
+    dropOn(file);
+    await waitFor(() => expect(uploadVideoThumbnail).toHaveBeenCalledWith('v1', file, 'c1'));
+  });
+
+  it('a dropped file of another type shows the friendly type error and uploads nothing', async () => {
+    render(<ThumbnailSelector videoId="v1" currentThumbnailUrl="" channelId="c1" onThumbnailChange={() => {}} {...vertical} />);
+    dropOn(new File(['x'], 'anim.gif', { type: 'image/gif' }));
+    expect(await screen.findByTestId('thumbnail-upload-error')).toHaveTextContent(EN_TRANSLATIONS.video.thumbnailInvalidType);
+    expect(uploadVideoThumbnail).not.toHaveBeenCalled();
+  });
+
+  it('a dropped image over the size limit shows the size error', async () => {
+    render(<ThumbnailSelector videoId="v1" currentThumbnailUrl="" channelId="c1" onThumbnailChange={() => {}} {...vertical} />);
+    dropOn(new File([new Uint8Array(2 * 1024 * 1024 + 1)], 'big.jpg', { type: 'image/jpeg' }));
+    expect(await screen.findByTestId('thumbnail-upload-error')).toHaveTextContent(EN_TRANSLATIONS.video.thumbnailTooLarge);
+    expect(uploadVideoThumbnail).not.toHaveBeenCalled();
+  });
+});
