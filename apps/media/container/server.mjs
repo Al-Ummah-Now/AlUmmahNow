@@ -23,6 +23,12 @@ let sourceFile;
 
 /** @type {{ jobId: string, status: string, progress: number, error?: string, startedAt: number } | null} */
 let current = null;
+/** Where the current job is, for failure reports: fetch_source | probe | encode | stills | upload */
+let stage = { name: 'start', detail: undefined };
+let sourceBytesSoFar = 0;
+function setStage(name, detail) {
+	stage = { name, detail };
+}
 
 const log = (msg, extra = {}) => process.stdout.write(JSON.stringify({ at: new Date().toISOString(), msg, jobId: current?.jobId, ...extra }) + '\n');
 
@@ -76,6 +82,7 @@ async function download(dest) {
 			if (buf.length === 0) break;
 			if (!out.write(buf)) await new Promise((r) => out.once('drain', r));
 			offset += buf.length;
+			sourceBytesSoFar = offset;
 		}
 	} finally {
 		await new Promise((r) => out.end(r));
@@ -98,7 +105,11 @@ function run(cmd, args, onLine) {
 			tail = (tail + d.toString()).slice(-4000);
 		});
 		p.on('error', reject);
-		p.on('close', (code) => (code === 0 ? resolve(stdout) : reject(new Error(`${cmd} exited ${code}: ${tail.split('\n').slice(-6).join(' | ')}`))));
+		p.on('close', (code) =>
+			code === 0
+				? resolve(stdout)
+				: reject(Object.assign(new Error(`${cmd} exited ${code}`), { stderrTail: tail.split('\n').filter((l) => l.trim()).slice(-20), exitCode: code })),
+		);
 	});
 }
 
@@ -158,15 +169,20 @@ async function runJob(job) {
 	await mkdir(out, { recursive: true });
 
 	current.status = 'downloading';
+	setStage('fetch_source');
 	sourceFile = undefined;
+	sourceBytesSoFar = 0;
+	setStage('start');
 	const sourceBytes = await download(src);
 	const tDownload = Date.now();
+	setStage('probe');
 	const info = await probe(src);
 	const rungs = ladderFor(info);
 	log('probed', { info, rungs: rungs.map((r) => r.name) });
 	await event({ type: 'started', jobId: job.jobId, rungs: rungs.map((r) => r.name), source: info });
 
 	current.status = 'transcoding';
+	setStage('encode', rungs.map((r) => r.name).join(','));
 	for (const r of rungs) await mkdir(join(out, r.name), { recursive: true });
 	let lastReport = 0;
 	await run('ffmpeg', ffmpegArgs({ input: src, out, rungs, hasAudio: info.hasAudio, fps: info.fps }), (line) => {
@@ -178,6 +194,7 @@ async function runJob(job) {
 			event({ type: 'progress', jobId: job.jobId, progress: current.progress });
 		}
 	});
+	setStage('stills');
 	const stills = stillsArgs({ input: src, out, durationSeconds: info.durationSeconds });
 	await run('ffmpeg', stills.thumb);
 	await run('ffmpeg', stills.thumbSmall);
@@ -192,6 +209,7 @@ async function runJob(job) {
 	const tTranscode = Date.now();
 
 	current.status = 'uploading';
+	setStage('upload');
 	const files = await walk(out);
 	const isMaster = (f) => relative(out, f) === 'master.m3u8';
 	const isPlaylist = (f) => f.endsWith('.m3u8');
@@ -260,7 +278,20 @@ const server = createServer(async (req, res) => {
 				current.status = 'failed';
 				current.error = String(error?.message || error);
 				log('failed', { error: current.error });
-				await event({ type: 'failed', jobId: job.jobId, error: current.error, fatal: !!error?.fatal });
+				await event({
+					type: 'failed',
+					jobId: job.jobId,
+					error: current.error,
+					fatal: !!error?.fatal,
+					failure: {
+						stage: stage.name,
+						...(stage.detail ? { stageDetail: stage.detail } : {}),
+						elapsedMs: Date.now() - current.startedAt,
+						source: { ...(sourceFile ? { file: sourceFile } : {}), bytes: sourceBytesSoFar },
+						...(error?.exitCode !== undefined ? { exitCode: error.exitCode } : {}),
+						...(Array.isArray(error?.stderrTail) ? { stderrTail: error.stderrTail } : {}),
+					},
+				});
 			},
 		);
 		return;

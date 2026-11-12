@@ -2,7 +2,7 @@
  * Transcode job state and decisions (pure; tested in test/jobs.test.ts). The
  * Transcoder Durable Object (transcoder.ts) keeps one JobState per video.
  */
-import { mediaPrefix, type MediaAccess, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
+import { mediaPrefix, type MediaAccess, type TranscodeFailure, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
 
 export const MAX_ATTEMPTS = 3;
 /** No word from the container for this long while it runs → treat as dead. */
@@ -32,6 +32,8 @@ export interface JobState {
 	priorSeconds: number;
 	error?: string;
 	result?: TranscodeResult;
+	/** The latest failed attempt, as reported */
+	failure?: TranscodeFailure;
 	finishedAt?: number;
 }
 

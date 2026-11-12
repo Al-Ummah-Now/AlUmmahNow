@@ -6,7 +6,7 @@
  * start to this job's video, prefix and id.
  */
 import { Container, type OutboundHandlerContext } from '@cloudflare/containers';
-import { mediaCacheControl, mediaContentType, type TranscodeJobEvent, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
+import { mediaCacheControl, mediaContentType, sanitizeFailure, type TranscodeFailure, type TranscodeJobEvent, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
 import { bucketFor, errorText, log, type Env } from './env';
 import { containerSeconds, keyAllowed, newJob, onFailure, onMessage, watchdogVerdict, WATCHDOG_SECONDS, type JobState } from './jobs';
 import { reportEvent, sourceCandidates } from './videos-api';
@@ -18,7 +18,10 @@ type ContainerEvent =
 	| { type: 'started'; jobId: string }
 	| { type: 'progress'; jobId: string; progress: number }
 	| { type: 'ready'; jobId: string; result: TranscodeResult }
-	| { type: 'failed'; jobId: string; error: string; fatal?: boolean };
+	| { type: 'failed'; jobId: string; error: string; fatal?: boolean; failure?: Partial<TranscodeFailure> };
+
+/** What finishFailed adds to the container's own report (attempt, timing, instance). */
+type FailureParts = Partial<TranscodeFailure>;
 
 const PROGRESS_REPORT_MS = 60_000;
 
@@ -165,7 +168,7 @@ export class Transcoder extends Container<Env> {
 		}
 		if (ev.type === 'started') return this.save(job);
 		if (ev.type === 'ready') return this.finishReady(job, ev.result);
-		return this.finishFailed(job, ev.error, !!ev.fatal);
+		return this.finishFailed(job, ev.error, !!ev.fatal, ev.failure ?? {});
 	}
 
 	private async finishReady(job: JobState, result: TranscodeResult): Promise<void> {
@@ -180,8 +183,19 @@ export class Transcoder extends Container<Env> {
 		await this.stop().catch(() => undefined);
 	}
 
-	private async finishFailed(job: JobState, error: string, fatal: boolean): Promise<void> {
+	private async finishFailed(job: JobState, error: string, fatal: boolean, parts: FailureParts = {}): Promise<void> {
 		const now = Date.now();
+		const failure = sanitizeFailure({
+			stage: 'start',
+			...parts,
+			error,
+			attempt: job.attempt,
+			elapsedMs: now - job.attemptStartedAt,
+			at: new Date(now).toISOString(),
+			instanceId: this.ctx.id.toString(),
+		} as TranscodeFailure);
+		job.failure = failure;
+		log.warn('[Transcoder] Attempt failed', { videoId: job.videoId, jobId: job.jobId, ...failure, stderrTail: undefined });
 		job.priorSeconds = containerSeconds(job, now);
 		job.error = error;
 		// Before destroy(): its onStop must see our own teardown, not a crash. Without this the
@@ -195,7 +209,7 @@ export class Transcoder extends Container<Env> {
 		if (next.retry) {
 			job.status = 'waiting_retry';
 			await this.save(job);
-			await this.report(job, { type: 'failed', error, final: false });
+			await this.report(job, { type: 'failed', error, final: false, failure });
 			await this.schedule(next.delaySeconds, 'retry', job.jobId);
 			return;
 		}
@@ -203,7 +217,7 @@ export class Transcoder extends Container<Env> {
 		job.finishedAt = now;
 		await this.save(job);
 		log.error('[Transcoder] Job failed', { videoId: job.videoId, jobId: job.jobId, attempt: job.attempt, error });
-		await this.report(job, { type: 'failed', error, final: true });
+		await this.report(job, { type: 'failed', error, final: true, failure });
 	}
 
 	/** schedule() callback: next attempt of a failed job. */
@@ -219,7 +233,7 @@ export class Transcoder extends Container<Env> {
 		try {
 			await this.launch(job);
 		} catch (error) {
-			await this.finishFailed(job, `launch: ${errorText(error)}`, false);
+			await this.finishFailed(job, `launch: ${errorText(error)}`, false, { stage: 'start' });
 		}
 	}
 
@@ -242,15 +256,20 @@ export class Transcoder extends Container<Env> {
 		}
 		const verdict = watchdogVerdict(job, status, now);
 		if (verdict.kind === 'ready') return this.finishReady(job, verdict.result);
-		if (verdict.kind === 'failed') return this.finishFailed(job, verdict.error, verdict.fatal);
+		if (verdict.kind === 'failed') return this.finishFailed(job, verdict.error, verdict.fatal, { stage: 'container', stopReason: `watchdog: ${verdict.error}` });
 		await this.schedule(WATCHDOG_SECONDS, 'watchdog');
 	}
 
-	override async onStop(): Promise<void> {
+	override async onStop(params?: { exitCode?: number; reason?: string }): Promise<void> {
 		const job = await this.job();
 		// Our own stop after ready/failed is expected; a running job means the container died
 		if (job?.status === 'running' && Date.now() - job.attemptStartedAt > 10_000) {
-			await this.finishFailed(job, 'container_stopped', false);
+			// A real crash (our own teardown marks the job 'stopping' first): exit code and reason are all the container leaves
+			await this.finishFailed(job, 'container_stopped', false, {
+				stage: 'container',
+				...(params?.exitCode !== undefined ? { exitCode: params.exitCode } : {}),
+				...(params?.reason ? { stopReason: params.reason } : {}),
+			});
 		}
 	}
 
@@ -268,7 +287,7 @@ export class Transcoder extends Container<Env> {
 	// Reports to api-videos: kept until delivered (the watchdog resends)
 	// -----------------------------------------------------------------------
 
-	private async report(job: JobState, ev: Pick<TranscodeJobEvent, 'type' | 'progress' | 'result' | 'error' | 'final'>): Promise<void> {
+	private async report(job: JobState, ev: Pick<TranscodeJobEvent, 'type' | 'progress' | 'result' | 'error' | 'final' | 'failure'>): Promise<void> {
 		const event: TranscodeJobEvent = {
 			videoId: job.videoId,
 			jobId: job.jobId,

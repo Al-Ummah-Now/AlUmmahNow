@@ -310,3 +310,25 @@ describe('Bunny ready re-queues a failed R2 job', () => {
 		assert.equal((await requeueAfterBunnyReady(none.env, ID)).why, 'no R2 job');
 	});
 });
+
+describe('failure details', () => {
+	it('keeps the failure on the record and turns a final one into a readable Errors item', async () => {
+		const { failureDetails } = await import('../src/lib/media/r2-delivery');
+		const { env, raw, videos } = setup();
+		await enqueueTranscode(env, ID, 'upload');
+		const job = raw.TRANSCODE_QUEUE.messages[0] as TranscodeJobMessage;
+		const failure = { stage: 'encode' as const, stageDetail: '360p,480p,720p,1080p', error: 'ffmpeg exited 137', attempt: 3, elapsedMs: 95_000, at: '2026-11-12T16:00:00Z', source: { file: 'original', bytes: 734_003_200 }, exitCode: 137, instanceId: 'do-1', stderrTail: ['frame= 120 fps=30', 'Killed'] };
+		await applyJobEvent(env, undefined, ev(job, { type: 'failed', error: 'ffmpeg exited 137', final: true, attempt: 3, failure }));
+		const r2 = videos.read(ID).r2;
+		assert.equal(r2.status, 'failed');
+		assert.equal(r2.failure.stage, 'encode');
+		assert.equal(r2.failure.exitCode, 137);
+		const d = failureDetails({ videoId: ID, jobId: job.jobId, attempt: 3, error: 'ffmpeg exited 137' }, failure);
+		assert.equal(d.summary, 'Failed while encoding (360p,480p,720p,1080p): ffmpeg exited 137 (attempt 3, after 95 s)');
+		assert.match(d.error.stack!, /source: original \(700\.0 MB\)/);
+		assert.match(d.error.stack!, /exit code: 137/);
+		assert.match(d.error.stack!, /ffmpeg \(last lines\):\nframe= 120 fps=30\nKilled/);
+		assert.equal(d.extra.stage, 'encode');
+		assert.ok(Object.keys(d.extra).length <= 12, 'Errors page keeps at most 12 extra keys');
+	});
+});
