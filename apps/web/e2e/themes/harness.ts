@@ -109,12 +109,16 @@ async function measureOnce(page: Page, root: string): Promise<Contrast[]> {
       const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
       const top = document.elementFromPoint(cx, cy);
       if (!top || !(el === top || el.contains(top) || top.contains(el))) continue;
+      // Screen-reader-only text (.visually-hidden, sr-only): a 1px clipped box
+      const own = el.getBoundingClientRect();
+      if (own.width <= 1 || own.height <= 1) continue;
       let clipped = false;
       for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
         const o = getComputedStyle(a);
         if (o.overflow === 'visible' && o.overflowY === 'visible') continue;
         const ar = a.getBoundingClientRect();
-        if (r.top < ar.top - 1 || r.bottom > ar.bottom + 1) { clipped = true; break; }
+        // Scrolled out of view, or sideways out of a clipping box
+        if (r.top < ar.top - 1 || r.bottom > ar.bottom + 1 || r.left < ar.left - 1 || r.right > ar.right + 1) { clipped = true; break; }
       }
       if (clipped) continue;
       const tid = el.closest('[data-testid]')?.getAttribute('data-testid') ?? '';
