@@ -22,11 +22,11 @@ export async function signIn(context: BrowserContext, baseURL: string) {
     },
   };
   await context.addCookies([{ name: 'al_ummah_session', value: encodeURIComponent(JSON.stringify(session)), url: baseURL }, consentCookie(baseURL)]);
-  // The dev server's error badge is not part of the site
+  // The dev server's error badge and the dev-only cookie-size monitor are not part of the site
   await context.addInitScript(() => {
     document.addEventListener('DOMContentLoaded', () => {
       const s = document.createElement('style');
-      s.textContent = 'nextjs-portal{display:none!important}';
+      s.textContent = 'nextjs-portal,.fixed.bottom-4.right-4.z-50.max-w-sm{display:none!important}';
       document.head.append(s);
     });
   });
@@ -49,14 +49,10 @@ export const NOTIFICATIONS = Array.from({ length: 8 }, (_, i) => ({
 
 /** Answers every API call the browser makes; nothing leaves the machine. */
 export async function mockApi(page: Page) {
-  await page.route(/^https?:\/\/(127\.0\.0\.1:9|[^/]*alummahnow\.net)\//, async (route) => {
-    const url = new URL(route.request().url());
-    const json = (body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
-    if (url.pathname === '/api/notifications/unread-count') return json({ success: true, result: { unreadCount: 2 } });
-    if (url.pathname === '/api/notifications') return json({ success: true, result: { items: NOTIFICATIONS, nextCursor: null, unreadCount: 2 } });
-    if (url.pathname.startsWith('/api/notifications')) return json({ success: true, result: { updated: 0, unreadCount: 0 } });
-    return json({ success: true, result: [], data: [], items: [] });
-  });
+  // The local mock (mock-server.mjs) answers the API; nothing else may leave the machine
+  await page.route(/^https?:\/\/(?!localhost|127\.0\.0\.1)/, (route) => route.abort());
+  await page.route(/^https?:\/\/127\.0\.0\.1:\d+\/api\/notifications(\?.*)?$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, result: { items: NOTIFICATIONS, nextCursor: null, unreadCount: 2 } }) }));
   await page.route(/^wss?:/, (route) => route.abort());
 }
 

@@ -1,0 +1,42 @@
+// Local API for the theme sweep (playwright.themes.config.ts): canned answers for what the pages
+// read, so signed-in pages render their real layout. Never forwards anything.
+import { createServer } from 'node:http';
+
+const port = Number(process.env.MOCK_API_PORT || 3158);
+const base = `http://127.0.0.1:${port}`;
+const USER = 'theme-sweep-user';
+const now = Date.now();
+const iso = (h) => new Date(now - h * 3600_000).toISOString();
+
+const thumb = (i) => `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="hsl(${(i * 47) % 360} 60% ${i % 2 ? 80 : 25}%)"/><stop offset="1" stop-color="hsl(${(i * 47 + 90) % 360} 50% ${i % 2 ? 95 : 10}%)"/></linearGradient></defs><rect width="640" height="360" fill="url(#g)"/></svg>`;
+
+const video = (i) => ({
+  id: `v${i}`, title: i % 2 ? `درس في التفسير ${i}` : `Lecture on patience, part ${i}`, description: 'Sweep video',
+  thumbnailUrl: `${base}/thumb/${i}.svg`, videoUrl: '', userId: 'u2', channel: 'c1', channelId: 'c1',
+  channelAvatarUrl: `${base}/thumb/${i + 7}.svg`, channelName: i % 2 ? 'قناة الدروس' : 'Lectures Channel', channelIsVerified: i % 3 === 0,
+  dateCreated: iso(i * 20), dateModified: iso(i * 20), createdAt: iso(i * 20), duration: 125 + i * 600, views: 1000 * i + 7,
+  likesCount: 3, dislikesCount: 0, commentsCount: 2, isPublic: true, isLive: i === 3, width: 1920, height: 1080, status: 'ready',
+});
+const VIDEOS = Array.from({ length: 12 }, (_, i) => video(i + 1));
+const PROFILE = { id: USER, userId: USER, email: 'sweep@example.test', firstName: 'Theme', lastName: 'Sweep', displayName: 'Theme Sweep', dateCreated: iso(1000) };
+const NOTIFS = Array.from({ length: 8 }, (_, i) => ({ id: `n${i}`, category: 'uploads', notificationType: 'upload_ready', notificationKey: 'uploadReady', params: { videoTitle: `WH${i + 10}_1` }, actionUrl: null, entityId: null, isRead: i > 1, createdAt: iso(i * 24 + 1) }));
+
+function answer(path) {
+  if (path.startsWith('/thumb/')) return null;
+  if (path === '/api/profile' || path === '/api/profiles/me') return PROFILE;
+  if (path === '/api/notifications/unread-count') return { success: true, result: { unreadCount: 2 } };
+  if (path === '/api/notifications') return { success: true, result: { items: NOTIFS, nextCursor: null, unreadCount: 2 } };
+  if (/^\/api\/videos\/[^/]+$/.test(path)) return { ...VIDEOS[0], id: path.split('/').pop() };
+  if (/videos|search|history|feed|library|watch-later|liked|trending|explore|recommend/.test(path)) return { cursor: '', limit: 12, data: VIDEOS, items: VIDEOS, videos: VIDEOS, success: true, result: { items: VIDEOS, videos: VIDEOS, nextCursor: null } };
+  if (/channels/.test(path)) return { success: true, data: [], result: [], items: [], channels: [] };
+  return { success: true, data: [], result: [], items: [] };
+}
+
+createServer((req, res) => {
+  const path = new URL(req.url, base).pathname;
+  const cors = { 'access-control-allow-origin': req.headers.origin || '*', 'access-control-allow-credentials': 'true', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+  if (req.method === 'OPTIONS') { res.writeHead(204, cors); return res.end(); }
+  if (path.startsWith('/thumb/')) { res.writeHead(200, { ...cors, 'content-type': 'image/svg+xml' }); return res.end(thumb(parseInt(path.slice(7), 10) || 1)); }
+  res.writeHead(200, { ...cors, 'content-type': 'application/json' });
+  res.end(JSON.stringify(answer(path)));
+}).listen(port, '127.0.0.1', () => console.log(`mock api on ${base}`));
