@@ -11,6 +11,8 @@ export interface EmbedStrings {
   play: string;
   playVideo: string;
   watchOn: string;
+  /** The control shown while autoplay runs muted */
+  tapToUnmute: string;
   unavailableTitle: string;
   unavailableBody: string;
   goToSite: string;
@@ -48,6 +50,7 @@ const en: EmbedStrings = {
   play: 'Play',
   playVideo: 'Play video: {title}',
   watchOn: 'Watch on Al Ummah Now',
+  tapToUnmute: 'Tap to unmute',
   unavailableTitle: 'This video is unavailable',
   unavailableBody: 'It may be private, removed, or not published yet.',
   goToSite: 'Go to Al Ummah Now',
@@ -85,6 +88,7 @@ const ar: EmbedStrings = {
   play: 'تشغيل',
   playVideo: 'تشغيل الفيديو: {title}',
   watchOn: 'شاهد على الأمة الآن',
+  tapToUnmute: 'اضغط لتشغيل الصوت',
   unavailableTitle: 'هذا الفيديو غير متاح',
   unavailableBody: 'قد يكون خاصًا أو محذوفًا أو لم يُنشر بعد.',
   goToSite: 'الذهاب إلى الأمة الآن',

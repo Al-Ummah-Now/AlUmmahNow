@@ -6,7 +6,11 @@
  *
  * - Facade first: poster + play button. The player (and with it analytics)
  *   loads only when the viewer presses play, or at once with autoplay=1
- *   (muted, as browsers require).
+ *   (muted, as browsers require for third-party autoplay).
+ * - autoplay=1&gesture=1: the host started playback from the viewer's own click
+ *   (www's video facade). The parent's user activation lets an iframe with
+ *   allow="autoplay" play with sound, so it plays unmuted; only if the browser
+ *   refuses (NotAllowedError) does it mute and show "Tap to unmute".
  * - start / end / loop parameters, "Watch on Al Ummah Now" at the current time.
  * - Playlists: the same frame with a list drawer; moves on when a video ends.
  * - postMessage events and commands through useEmbedMessaging.
@@ -14,7 +18,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Player } from 'video.js';
-import { ExternalLink, ListVideo, Play, X } from 'lucide-react';
+import { ExternalLink, ListVideo, Play, VolumeX, X } from 'lucide-react';
 import { VideoPlayerWithChapters } from '@/components/VideoPagePlayer/VideoPlayerWithChapters';
 import { useDeliveryPlayback } from '@/components/VideoPagePlayer/useDeliveryPlayback';
 import { LocaleOverrideContext } from '@/hooks/useLanguage';
@@ -52,6 +56,10 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
   const [index, setIndex] = useState(() => Math.min(params.index, Math.max(0, videos.length - 1)));
   const [activated, setActivated] = useState(params.autoplay);
   const [listOpen, setListOpen] = useState(false);
+  /** Playing muted because of an autoplay rule: the "Tap to unmute" control shows */
+  const [needsUnmute, setNeedsUnmute] = useState(false);
+  /** The first video of a gesture start is started here, with sound (see handlePlayerReady) */
+  const startWithSoundRef = useRef(params.autoplay && params.gesture);
   const playerRef = useRef<ExtendedPlayer | null>(null);
   const pendingStartRef = useRef<number>(params.start);
   const lastTimeUpdateRef = useRef(0);
@@ -66,10 +74,10 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
     const player = playerRef.current;
     const base = { videoId: video.id, ...(playlist ? { playlistId: playlist.id } : {}) };
     if (!player || player.isDisposed?.()) {
-      return { ...base, currentTime: pendingStartRef.current, duration: video.duration ?? null, muted: params.autoplay };
+      return { ...base, currentTime: pendingStartRef.current, duration: video.duration ?? null, muted: params.autoplay && !params.gesture };
     }
     return { ...base, currentTime: player.currentTime() || 0, duration: player.duration() || null, muted: player.muted() };
-  }, [video, playlist, params.autoplay]);
+  }, [video, playlist, params.autoplay, params.gesture]);
 
   const handleCommand = useCallback((command: EmbedCommandMessage) => {
     const player = playerRef.current;
@@ -125,6 +133,36 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
       goToNext();
     });
     player.on('error', () => emit('error', { code: 'media', message: player.error()?.message }));
+    // Unmuted by any means (the control bar, a host command): the unmute control goes
+    player.on('volumechange', () => {
+      if (!player.muted() && (player.volume() ?? 1) > 0) setNeedsUnmute(false);
+    });
+
+    if (startWithSoundRef.current) {
+      // A gesture start (once per frame): play with sound; muted only if the browser refuses
+      startWithSoundRef.current = false;
+      player.muted(false);
+      const tryPlay = (retry: boolean): Promise<void> =>
+        Promise.resolve(player.play()).then(
+          () => undefined,
+          (err: unknown) => {
+            if ((err as { name?: string } | null)?.name === 'NotAllowedError') {
+              player.muted(true);
+              setNeedsUnmute(true);
+              return Promise.resolve(player.play()).then(() => undefined, () => undefined);
+            }
+            // e.g. AbortError while the source is still loading: once more when it can play
+            if (retry) player.one('canplay', () => void tryPlay(false));
+            return undefined;
+          },
+        );
+      void tryPlay(true);
+    } else {
+      // Plain autoplay (muted, as third-party autoplay must be): offer sound
+      player.one('playing', () => {
+        if (player.muted()) setNeedsUnmute(true);
+      });
+    }
     player.on('timeupdate', () => {
       const now = player.currentTime() || 0;
       if (end !== null && now >= end && !player.paused()) {
@@ -157,7 +195,16 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
 
   const title = titleOf(video, lang);
   const isFirst = index === Math.min(params.index, videos.length - 1);
-  const muted = params.autoplay && isFirst;
+  const muted = params.autoplay && isFirst && !params.gesture;
+  const gestureStart = params.autoplay && params.gesture && isFirst;
+
+  const unmute = () => {
+    const player = playerRef.current;
+    if (!player) return;
+    player.muted(false);
+    if (!player.volume()) player.volume(1);
+    setNeedsUnmute(false);
+  };
 
   return (
     <LocaleOverrideContext.Provider value={lang}>
@@ -176,7 +223,7 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
               sources={delivery.videoSources}
               poster={video.poster}
               controls
-              autoplay
+              autoplay={!gestureStart}
               muted={muted}
               startTime={pendingStartRef.current}
               enableAnalytics
@@ -232,6 +279,20 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
                   <p className="truncate text-xs text-gray-300">{removeUnwantedChars(video.channelName)}</p>
                 )}
               </div>
+            </div>
+          )}
+
+          {needsUnmute && (
+            <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+              <button
+                type="button"
+                onClick={unmute}
+                className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-black/80 px-4 py-2 text-sm font-semibold hover:bg-black/90 focus-visible:ring-2 focus-visible:ring-white"
+                data-testid="embed-unmute"
+              >
+                <VolumeX className="w-5 h-5" aria-hidden="true" />
+                <span>{s.tapToUnmute}</span>
+              </button>
             </div>
           )}
 

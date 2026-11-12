@@ -49,7 +49,7 @@ describe('parseTime', () => {
 describe('parseEmbedParams', () => {
   it('uses safe defaults', () => {
     expect(parseEmbedParams({})).toEqual({
-      lang: 'en', start: 0, end: null, autoplay: false, loop: false, showTitle: true, index: 0, origin: null,
+      lang: 'en', start: 0, end: null, autoplay: false, gesture: false, loop: false, showTitle: true, index: 0, origin: null,
     });
   });
 
@@ -58,8 +58,14 @@ describe('parseEmbedParams', () => {
       'lang=ar&start=1m&end=90&autoplay=1&loop=1&title=0&index=2&origin=https%3A%2F%2Fwww.alummahnow.net%2Fx',
     ));
     expect(params).toEqual({
-      lang: 'ar', start: 60, end: 90, autoplay: true, loop: true, showTitle: false, index: 2, origin: 'https://www.alummahnow.net',
+      lang: 'ar', start: 60, end: 90, autoplay: true, gesture: false, loop: true, showTitle: false, index: 2, origin: 'https://www.alummahnow.net',
     });
+  });
+
+  it('gesture=1 only counts with autoplay=1 (a host-page click started playback)', () => {
+    expect(parseEmbedParams({ autoplay: '1', gesture: '1' })).toMatchObject({ autoplay: true, gesture: true });
+    expect(parseEmbedParams({ gesture: '1' })).toMatchObject({ autoplay: false, gesture: false });
+    expect(parseEmbedParams({ autoplay: '1', gesture: 'yes' })).toMatchObject({ autoplay: true, gesture: false });
   });
 
   it('accepts t as an alias of start and ignores an end before the start', () => {
