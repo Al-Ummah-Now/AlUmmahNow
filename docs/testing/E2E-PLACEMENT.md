@@ -33,10 +33,10 @@ Until a batch is moved, every spec still runs where it runs today; the local job
 | web | `apps/web/playwright.config.ts` (e2e-tests.yml) | 60 | 1 |
 | release | `apps/web/playwright.release.config.ts` (release-e2e.yml, release.yml) | 57 | 7 |
 | admin | `apps/admin-web/playwright.config.ts` (admin-e2e.yml) | 19 | 0 |
-| themes | `apps/web/playwright.themes.config.ts` (theme-visibility.yml) | 4 | 0 |
+| themes | `apps/web/playwright.themes.config.ts` (theme-visibility.yml) | 5 | 0 |
 | player | `apps/web/playwright.player.config.ts` (player-e2e.yml) | 10 | 0 |
 | release-prod | `apps/web/playwright.release-prod.config.ts` (prod-signed-in.yml) | 0 | 1 |
-| **all** | | **150** | **9** |
+| **all** | | **151** | **9** |
 
 ## Deployed (QA and stage)
 
@@ -221,6 +221,7 @@ Until a batch is moved, every spec still runs where it runs today; the local job
 
 | Spec | Reason | @load |
 |---|---|:---:|
+| `themes/builder-preview.spec.ts` | already local: the builder preview document in page.setContent, no server |  |
 | `themes/notifications.spec.ts` | already local: next dev + mock-server.mjs + cookie signIn |  |
 | `themes/pages.spec.ts` | already local: next dev + mock-server.mjs |  |
 | `themes/phone-menu.spec.ts` | already local: mocked API and routed WebSocket |  |
