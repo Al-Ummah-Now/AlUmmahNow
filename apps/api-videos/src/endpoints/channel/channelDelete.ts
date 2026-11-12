@@ -10,6 +10,7 @@ import { pickNewMainChannel, removeChannelContent, OwnedChannelSummary } from ".
 import { loadOwnedChannels } from "../../lib/analytics";
 import { inBackground } from "../../lib/websocket-notify";
 import { logger } from "../../lib/logger";
+import { removeCollectionsFor } from "../../lib/channelCollection";
 
 export class ChannelDelete extends AuthenticatedRoute {
 	schema = {
@@ -133,6 +134,10 @@ export class ChannelDelete extends AuthenticatedRoute {
 		} catch (error) {
 			logger.warn('[ChannelDelete] Could not release handle/tabs', { channelId: id, error: error instanceof Error ? error.message : String(error) });
 		}
+
+		// Its Bunny collections: the record is gone, so nothing could find them later
+		// (the videos stay in the library). Awaited so the response means they are gone; never throws.
+		await removeCollectionsFor(c.env as never, id, channel);
 
 		// Drop the channel from the owner's profile
 		try {
