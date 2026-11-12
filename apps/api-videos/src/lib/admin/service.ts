@@ -7,6 +7,7 @@
  * goes through the env's wrapped buckets, so the search, ownership and
  * comment indexes follow (lib/search/sync.ts).
  */
+import { eraseUploadTraces } from '../privacy/upload-traces';
 import {
 	applySuspensionHold,
 	channelHold,
@@ -1419,6 +1420,8 @@ async function eraseUserStep(env: AdminServiceEnv & Record<string, unknown>, use
 			]).catch(() => undefined);
 		}
 	}
+	// Upload markers and TUS sessions that name the user (#1059)
+	await eraseUploadTraces(env as never, userId, summary.deletedVideoIds);
 	if (summary.complete) await send(env, MessageType.UserDataErased, { userId });
 	for (const videoId of summary.deletedVideoIds) await send(env, MessageType.VideoDelete, { videoId, userId, reason: 'admin-erasure' });
 	return summary;
