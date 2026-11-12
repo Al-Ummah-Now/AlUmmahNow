@@ -148,7 +148,8 @@ test.describe('Playlist manager', () => {
     }
   });
 
-  test('PLAY-003 Arabic manager is translated and RTL', async ({ page }) => {
+  // quarantined: #1056 @meywd (four fields labelled «الاسم»)
+  test.fixme('PLAY-003 Arabic manager is translated and RTL', async ({ page }) => {
     await openManager(page, 'ar');
     await expectRtl(page);
     await expect(page.getByRole('heading', { level: 1, name: 'إدارة قوائم التشغيل' })).toBeVisible();

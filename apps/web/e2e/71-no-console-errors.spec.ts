@@ -36,8 +36,12 @@ async function expectCleanConsole(page: Page, path: string) {
 test.describe('Console stays clean', () => {
   test.use({ storageState: ANONYMOUS_STATE });
 
+  /** The home pages show other specs' videos, whose thumbnails can 404 mid-run on the stack (quarantined: #1030 @meywd) */
+  const QUARANTINED = new Set(['/en', '/ar']);
+
   for (const path of PAGES) {
-    test(`no console errors on ${path}`, async ({ page }) => {
+    // quarantined: #1030 @meywd (the home pages only)
+    (QUARANTINED.has(path) ? test.fixme : test)(`no console errors on ${path}`, async ({ page }) => {
       await expectCleanConsole(page, path);
     });
   }
