@@ -2,7 +2,7 @@ import { test, expect } from './fixtures';
 import type { Page } from '@playwright/test';
 import { ANONYMOUS_STATE, AUTH_STATE } from './test-utils/auth-state';
 import { apiGet, channelsOf, expectRtl, clickUntil, fillStable, type PublicChannel } from './test-utils/channel-content';
-import { useOwnData as ownData } from './release/builders';
+import { ns, useOwnData as ownData } from './release/builders';
 
 /**
  * Channel directory (/[locale]/channels) and the "Create channel" dialog of
@@ -20,6 +20,18 @@ const LOCAL_STACK_SQL = `${process.env.LOCAL_STACK_CONTROL_URL || 'http://127.0.
 test.describe.configure({ mode: 'default' });
 
 const data = ownData(test as never);
+/** The creator whose Unlimited tier row this file writes; deleted again in afterAll (idempotent) */
+let tierUserId = '';
+
+async function stackSql(sql: string): Promise<void> {
+  const res = await fetch(LOCAL_STACK_SQL, { method: 'POST', body: sql });
+  expect(res.ok, `local stack SQL: ${await res.text()}`).toBe(true);
+}
+
+test.afterAll(async () => {
+  if (tierUserId) await stackSql(`DELETE FROM creator_tier_assignments WHERE user_id = '${tierUserId}'`);
+  tierUserId = '';
+});
 
 test.beforeAll(async ({ browser }) => {
   test.setTimeout(240_000);
@@ -28,16 +40,12 @@ test.beforeAll(async ({ browser }) => {
     const owner = await data.createUser(await context.newPage(), 'directory');
     if (process.env.E2E_ENV === 'local') {
       // The Unlimited tier (the Creator tier owns at most 3 channels), straight into the stack's database
-      const userId = owner.userId.replace(/[^A-Za-z0-9_:-]/g, '');
-      const res = await fetch(LOCAL_STACK_SQL, {
-        method: 'POST',
-        body: `INSERT OR REPLACE INTO creator_tier_assignments (user_id, tier_id, source, assigned_by, assigned_at) VALUES ('${userId}', 'unlimited', 'admin', 'e2e-directory', '${new Date().toISOString()}')`,
-      });
-      expect(res.ok, `unlimited tier: ${await res.text()}`).toBe(true);
+      tierUserId = owner.userId.replace(/[^A-Za-z0-9_:-]/g, '');
+      await stackSql(`INSERT OR REPLACE INTO creator_tier_assignments (user_id, tier_id, source, assigned_by, assigned_at) VALUES ('${tierUserId}', 'unlimited', 'admin', 'e2e-directory ${ns()}', '${new Date().toISOString()}')`);
     } else {
       await data.grantCreator(owner);
     }
-    for (let i = 0; i <= PAGE_SIZE; i++) await data.createChannel(owner, { name: `E2E directory ${Date.now().toString(36)} ${i}`, isMain: i === 0 });
+    for (let i = 0; i <= PAGE_SIZE; i++) await data.createChannel(owner, { name: `E2E directory ${ns()} ${i}`, isMain: i === 0 });
   } finally {
     await context.close();
   }

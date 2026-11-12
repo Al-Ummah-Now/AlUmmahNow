@@ -1,5 +1,5 @@
 import { expect, type Locator, type Page, type TestType } from '@playwright/test';
-import { useOwnData as ownData, type CreatedVideo, type DataScope } from '../release/builders';
+import { ns, useOwnData as ownData, type CreatedVideo, type DataScope } from '../release/builders';
 import { apiFetch, type WebUser } from '../release/web-session';
 import { target } from '../release/targets';
 
@@ -54,7 +54,8 @@ export function ownPublicVideos(test: AnyTest, label: string, specs: OwnVideoSpe
   const data = ownData(test as never);
   let owner: WebUser | null = null;
   let channelId = '';
-  const channelName = `E2E ${label} ${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+  // Tagged with ns() (run, spec file, worker) in beforeAll, so the job's leftover check can find it
+  let channelName = '';
   let playlistId = '';
   const postIds: string[] = [];
   const videos: OwnVideo[] = [];
@@ -64,11 +65,12 @@ export function ownPublicVideos(test: AnyTest, label: string, specs: OwnVideoSpe
     const context = await browser.newContext({ storageState: { cookies: [], origins: [] } });
     try {
       const page = await context.newPage();
+      channelName = `E2E ${label} ${ns()} ${Math.random().toString(36).slice(2, 6)}`;
       owner = await data.createUser(page, label);
       await data.grantCreator(owner);
       channelId = await data.createChannel(owner, { name: channelName });
       for (const spec of specs) {
-        const video: OwnVideo = await data.createVideo(owner, channelId, { clip: 'landscape40', isPublic: true, title: spec.title });
+        const video: OwnVideo = await data.createVideo(owner, channelId, { clip: 'landscape40', isPublic: true, title: spec.title && `${spec.title} ${ns()}` });
         const update: Record<string, unknown> = {};
         if (spec.category) update.category = spec.category;
         if (spec.titleAr) update.titleLocalized = video.titleLocalized = { en: video.title, ar: spec.titleAr };

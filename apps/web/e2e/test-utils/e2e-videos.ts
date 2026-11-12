@@ -3,6 +3,7 @@ import { test } from '@playwright/test';
 import * as path from 'path';
 import { ApiClient } from '../seed/seed-api';
 import { AUTH_STATE, type AuthUser } from './auth-state';
+import { runId } from './run-users';
 
 /**
  * Real QA videos for the E2E users.
@@ -360,7 +361,8 @@ export async function waitForReady(user: AuthUser, video: E2EVideo, timeoutMs = 
 
 /** Unique title for a video a single test owns */
 export function disposableTitle(label: string): string {
-  return `E2E Temp ${label} ${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  // The run id (CI) tags it for the job's leftover check
+  return `E2E Temp ${label} ${runId() ?? 'local'} ${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
 /**

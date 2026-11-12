@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { expect, type Locator, type Page } from '@playwright/test';
 import { readAccount, type AuthUser } from './auth-state';
+import { runId } from './run-users';
 
 /**
  * API helpers for the channel specs (50-55): set up and clean up channel
@@ -21,7 +22,8 @@ export const TEMP_PREFIX = 'E2E Temp';
 
 /** Unique, recognisable name for content a test creates */
 export function tempName(label: string): string {
-  return `${TEMP_PREFIX} ${label} ${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  // The run id (CI) tags it for the job's leftover check
+  return `${TEMP_PREFIX} ${label} ${runId() ?? 'local'} ${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
 export interface UserChannels {

@@ -1,4 +1,5 @@
 import { expect, type APIRequestContext, type Page, type TestInfo } from '@playwright/test';
+import { runId } from './run-users';
 
 /**
  * Helpers for the watch page / player / comments / history specs (30-35).
@@ -167,5 +168,6 @@ export async function apiCall(
 
 /** A unique, recognisable name for things a test creates */
 export function tempName(label: string): string {
-  return `E2E Temp ${label} ${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  // The run id (CI) tags it for the job's leftover check
+  return `E2E Temp ${label} ${runId() ?? 'local'} ${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }

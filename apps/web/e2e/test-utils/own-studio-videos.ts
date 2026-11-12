@@ -1,12 +1,14 @@
 import type { TestType } from '@playwright/test';
 import type { AuthUser } from './auth-state';
+import { ns } from '../release/builders';
 import { SEED_TITLES, deleteVideoQuietly, uploadVideo, userApi, type E2EVideo, type UserApi } from './e2e-videos';
 
 /**
  * The run user's Studio videos, made by the spec file that uses them (owner rule 2026-11-12:
  * specs seed their own data). It replaces the old shared per-user "seed videos": the same set
  * (single: a video, a private video and one scheduled 10 days ahead; multi: one per channel), all
- * private, but created in this file's beforeAll with a unique suffix and deleted in its afterAll,
+ * private, but created in this file's beforeAll with the run's ns() tag and deleted in its afterAll
+ * (idempotent: an already deleted video is fine),
  * so parallel files and runs never share or edit each other's rows.
  *
  * Keyed by the old base title (SEED_TITLES), so `videos()[SEED_TITLES.singleVideo]` still works;
@@ -47,11 +49,12 @@ type AnyTest = TestType<any, any>;
 
 export function ownStudioVideos(test: AnyTest, user: AuthUser): { videos: () => Record<string, E2EVideo> } {
   const made: Record<string, E2EVideo> = {};
-  const suffix = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
 
   test.beforeAll(async () => {
     test.setTimeout(180_000);
     const u = userApi(user);
+    // Tagged with ns() (run, spec file, worker), so the job's leftover check can find them
+    const suffix = `${ns()} ${Math.random().toString(36).slice(2, 6)}`;
     for (const spec of SPECS[user] ?? []) {
       const title = `${spec.base} ${suffix}`;
       // Bytes too: the stack's fake Bunny encodes them (thumbnails, durations), like the old seed
