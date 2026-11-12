@@ -22,6 +22,11 @@ describe('media-cdn', () => {
 		assert.equal(ruleDiffers({ ...want, id: 'x' }, want), false);
 		assert.equal(ruleDiffers({ ...want, expression: '(http.host eq "other")' }, want), true);
 		assert.equal(ruleDiffers(undefined, want), true);
+		// The API adds defaults of its own (e.g. edge_ttl.default, cache_key): still the same rule
+		const echoed = { ...want, id: 'x', action_parameters: { ...want.action_parameters, cache_key: { ignore_query_strings_order: false }, edge_ttl: { ...want.action_parameters.edge_ttl, default: 0 } } };
+		assert.equal(ruleDiffers(echoed, want), false);
+		const changedTtl = { ...want, action_parameters: { ...want.action_parameters, edge_ttl: { mode: 'override_origin' } } };
+		assert.equal(ruleDiffers(changedTtl as never, want), true);
 	});
 	it('plans CORS only when it differs', async () => {
 		const cf = { accountId: 'a', request: async () => ({ rules: [] }) } as unknown as CfClient;

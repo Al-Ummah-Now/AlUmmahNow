@@ -81,11 +81,21 @@ interface Rule {
 
 export type Change = { what: string; apply: () => Promise<unknown> };
 
+/** Every value we set is present in `live` (the API adds defaults and ids of its own). */
+function contains(live: unknown, want: unknown): boolean {
+	if (Array.isArray(want)) return Array.isArray(live) && want.length === live.length && want.every((w, i) => contains(live[i], w));
+	if (want && typeof want === 'object') {
+		if (!live || typeof live !== 'object') return false;
+		return Object.entries(want).every(([k, v]) => contains((live as Record<string, unknown>)[k], v));
+	}
+	return live === want;
+}
+
 /** Rule fields we own, for comparing the live rule with ours. */
 export function ruleDiffers(live: Rule | undefined, want: Rule): boolean {
 	if (!live) return true;
-	const pick = (r: Rule) => JSON.stringify({ e: r.expression, a: r.action, p: r.action_parameters, en: r.enabled !== false, d: r.description });
-	return pick(live) !== pick(want);
+	if (live.expression !== want.expression || live.action !== want.action || (live.enabled !== false) !== (want.enabled !== false) || live.description !== want.description) return true;
+	return !contains(live.action_parameters, want.action_parameters);
 }
 
 function zoneClient(token: string) {
