@@ -190,11 +190,16 @@ test.describe('Playlist page - visitor', () => {
   test('PLAY-011 Arabic playlist page is RTL with Arabic labels', async ({ page }) => {
     const lectures = await findQaLecturesChannel();
     const [playlist] = await listChannelPlaylists(lectures.id);
+    // The page counts the videos a visitor can watch (videoItems, as PLAY-010), not every
+    // id the record holds: deleted or private ones stay in `videos` but are not shown
+    const full = await apiGet<{ videoItems?: Array<{ id: string }> }>(`/api/playlists/${playlist.id}?includeVideos=true`);
+    const shown = (full.videoItems ?? []).length;
+    expect(shown).toBeGreaterThan(0);
     await page.goto(`/ar/playlist/${playlist.id}`);
     await expectRtl(page);
     await expect(page.getByRole('heading', { level: 1, name: playlist.name })).toBeVisible();
     await expect(page.getByRole('link', { name: 'تشغيل الكل' })).toHaveAttribute('href', /^\/ar\/video\?vid=/);
-    await expect(page.getByText(`${playlist.videos.length} فيديو`)).toBeVisible();
+    await expect(page.getByText(`${shown} فيديو`)).toBeVisible();
     await expect(page.getByText('عامة', { exact: true })).toBeVisible();
   });
 
