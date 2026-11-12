@@ -20,13 +20,26 @@ export async function setCreatorTier(user: WebUser, tierId: string | null): Prom
   // Already set (a reused account): nothing to change
   if ((await control.getAttribute('data-tier')) !== (tierId ?? '')) {
     const select = control.getByTestId('user-creator-tier-control-select');
-    await expect(select, 'the creator tier selector').toBeEnabled({ timeout: 30000 });
-    await select.selectOption(tierId ?? '');
-    // Every change is confirmed in a dialog that states its effect
-    const dialog = control.getByTestId('user-creator-tier-control-change-dialog');
-    await expect(dialog).toBeVisible();
-    await dialog.getByTestId('user-creator-tier-control-change-confirm').click();
-    await expect(control.getByTestId('user-creator-tier-control-status')).toHaveAttribute('data-state', 'saved', { timeout: 30000 });
+    const status = control.getByTestId('user-creator-tier-control-status');
+    // One retry when the save answers "failed": a 5xx while QA's database is briefly overloaded
+    // (seen 2026-11-12 09:00, global setup for run 43187478080) otherwise skipped the whole suite.
+    // A failure that persists still fails, with the control's message.
+    for (let attempt = 1; ; attempt++) {
+      await expect(select, 'the creator tier selector').toBeEnabled({ timeout: 30000 });
+      await select.selectOption(tierId ?? '');
+      // Every change is confirmed in a dialog that states its effect
+      const dialog = control.getByTestId('user-creator-tier-control-change-dialog');
+      await expect(dialog).toBeVisible();
+      await dialog.getByTestId('user-creator-tier-control-change-confirm').click();
+      await expect(status).toHaveAttribute('data-state', /^(saved|failed)$/, { timeout: 30000 });
+      if ((await status.getAttribute('data-state')) === 'saved') break;
+      const message = (await status.textContent())?.trim() || 'no message';
+      if (attempt >= 2) throw new Error(`Setting creator tier ${tierId} for ${user.userId} failed twice: ${message}`);
+      console.warn(`[creator-tier] saving tier ${tierId} for ${user.userId} failed (${message}); retrying once`);
+      await page.waitForTimeout(5000);
+      // The control is back on the old value: select the tier again
+      if ((await control.getAttribute('data-tier')) === (tierId ?? '')) break;
+    }
   }
   // In effect for the user's own token at once
   await expect
