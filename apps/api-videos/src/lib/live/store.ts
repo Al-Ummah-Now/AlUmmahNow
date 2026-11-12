@@ -73,6 +73,15 @@ export async function writeLiveRouting(
 	return { previous, current };
 }
 
+/** Back to the shipped defaults: the settings row is removed (admin "Reset to defaults"; specs clean up with it). */
+export async function resetLiveRouting(db: D1Database, now = Date.now()): Promise<{ previous: LiveRoutingSettings; current: LiveRoutingSettings }> {
+	forgetLiveRouting();
+	const previous = await readLiveRouting(db, now);
+	await db.prepare('DELETE FROM live_settings WHERE key = ?').bind(ROUTING_KEY).run();
+	forgetLiveRouting();
+	return { previous, current: DEFAULT_LIVE_ROUTING };
+}
+
 function mergeEach<T extends Record<LiveProviderId, object>>(base: T, patch: unknown): T {
 	const p = (patch && typeof patch === 'object' ? patch : {}) as Partial<Record<LiveProviderId, object>>;
 	const out = { ...base };

@@ -311,3 +311,18 @@ describe('current bitrate', () => {
 		assert.equal(await currentBitrateKbps(db, (await readSession(db, 'sh'))!, now), null);
 	});
 });
+
+describe('settings reset', () => {
+	it('removes the settings row and reads the defaults again', async () => {
+		const { resetLiveRouting } = await import('../src/lib/live/store');
+		const db = new SqliteD1() as unknown as D1Database;
+		forgetLiveRouting();
+		await writeLiveRouting(db, { mode: 'only_bunny' }, 'usr_admin');
+		const { previous, current } = await resetLiveRouting(db);
+		assert.equal(previous.mode, 'only_bunny');
+		assert.equal(current.mode, 'round_robin');
+		const row = await (db as unknown as SqliteD1).db.prepare('SELECT COUNT(*) AS n FROM live_settings').get() as { n: number };
+		assert.equal(row.n, 0);
+		assert.equal((await readLiveRouting(db)).updatedAt, null);
+	});
+});
