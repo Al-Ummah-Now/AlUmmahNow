@@ -145,6 +145,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/release/header-name.spec.ts': { placement: 'local', reason: 'header account menu names a names-only profile by first + last, en/ar' },
   'apps/web/e2e/release/home-hero.spec.ts': { placement: 'local', reason: 'hero layout; off-site images already route-intercepted' },
   'apps/web/e2e/release/load-hot-paths.spec.ts': { placement: 'deployed', reason: 'pipeline: DO view flush + queue/processor into D1 under real load', load: true },
+  'apps/web/e2e/release/media-delivery.spec.ts': { placement: 'deployed', reason: 'media: transcode queue to Containers to R2, signed /priv/ HLS from the media Worker' },
   'apps/web/e2e/release/multi-account.spec.ts': { placement: 'local', reason: 'web cookie split and account switcher; mock issuer must honour prompt=login' },
   'apps/web/e2e/release/network-error.player.spec.ts': { placement: 'local', reason: 'player retry UI with CDN aborted by route' },
   'apps/web/e2e/release/page-frame.spec.ts': { placement: 'local', reason: 'header/sidebar/tab bar layout, Upload states' },
