@@ -4,6 +4,7 @@
  */
 import type { D1Database, D1PreparedStatement } from './types';
 import type { ContactInput, ContactRateLimits, ContactStatus, ContactTopic } from './contact';
+import { containsPattern } from '@al-ummah/shared-types';
 
 export interface ContactMessageRow {
   id: string;
@@ -112,9 +113,9 @@ export interface ContactListFilters {
   offset: number;
 }
 
-/** LIKE pattern with the wildcard characters in the search escaped. */
+/** LIKE pattern with the wildcard characters in the search escaped, within D1's pattern limit. */
 export function likePattern(q: string): string {
-  return `%${q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
+  return containsPattern(q);
 }
 
 export async function listContactMessages(db: D1Database, f: ContactListFilters): Promise<{ messages: ContactMessageRow[]; total: number }> {

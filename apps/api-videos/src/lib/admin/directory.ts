@@ -9,6 +9,7 @@
  * (the same lease the cron and self-heal use) before querying, and reports
  * `indexComplete: false` if the pass is still not done.
  */
+import { containsPattern } from '@al-ummah/shared-types';
 import {
 	OWNERSHIP_ADMIN_COLS_VERSION,
 	OWNERSHIP_TABLE,
@@ -110,12 +111,12 @@ export function pageOf(page?: number, pageSize?: number): { page: number; pageSi
 	return { page: p, pageSize: size, offset: (p - 1) * size };
 }
 
-/** `%term%` with LIKE wildcards in the term escaped (use with ESCAPE '\'). */
 /** The COUNT row, or -1 when the caller skipped it (noTotal). */
 const totalOf = (row: { n: number } | null | undefined): number => (row === null ? -1 : Number(row?.n) || 0);
 
+/** `%term%`, lower-cased, within D1's 50-byte pattern limit, LIKE wildcards escaped (use with ESCAPE '\'). */
 export function likeTerm(q: string): string {
-	return `%${q.trim().toLowerCase().replace(/[\\%_]/g, (m) => `\\${m}`)}%`;
+	return containsPattern(q.trim().toLowerCase());
 }
 
 function dbOf(env: AdminEnv): SearchDb {
