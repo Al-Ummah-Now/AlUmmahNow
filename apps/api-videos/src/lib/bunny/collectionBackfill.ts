@@ -367,8 +367,18 @@ export async function runCollectionBackfillPage(
 		return target;
 	};
 
-	// 1. Sequential: each video's library, placement and target collection
-	const work: { video: BackfillVideo; library: BunnyLibrary; counts: PlacementCounts; target: string | undefined }[] = [];
+	// 1. Sequential: each video's library, placement and owner (no Bunny writes)
+	type Item = {
+		video: BackfillVideo;
+		library: BunnyLibrary;
+		counts: PlacementCounts;
+		kind: 'channel' | 'user';
+		ownerId: string;
+		owner: CollectionChannel;
+		current?: string;
+		target?: string;
+	};
+	const items: Item[] = [];
 	for (const video of records) {
 		if (!video?.id) continue;
 		counts.scanned++;
@@ -386,48 +396,78 @@ export async function runCollectionBackfillPage(
 				placement = channel && !channel.isDeleted ? 'channel' : 'deletedChannel';
 			}
 			const c = lc[placement];
-			c.videos++;
-			let target: string | undefined;
 			if (placement === 'channel') {
-				target = await resolveTarget('channel', video.channelId!, channel!, library);
-			} else {
-				const owner = video.userId ? await profileOf(video.userId) : null;
-				if (!owner) {
-					c.videos--;
-					lc.ownerMissing++;
-					counts.ownerMissing.push({ videoId: video.id, libraryId: library.libraryId, userId: video.userId, channelId: video.channelId });
-					continue;
-				}
-				target = await resolveTarget('user', video.userId!, owner, library);
+				c.videos++;
+				items.push({ video, library, counts: c, kind: 'channel', ownerId: video.channelId!, owner: channel! });
+				continue;
 			}
-			work.push({ video, library, counts: c, target });
+			const owner = video.userId ? await profileOf(video.userId) : null;
+			if (!owner) {
+				lc.ownerMissing++;
+				counts.ownerMissing.push({ videoId: video.id, libraryId: library.libraryId, userId: video.userId, channelId: video.channelId });
+				continue;
+			}
+			c.videos++;
+			items.push({ video, library, counts: c, kind: 'user', ownerId: video.userId!, owner });
 		} catch (error) {
 			lc[placement].errors++;
 			errors.push({ id: video.id, error: errorText(error) });
 		}
 	}
 
-	// 2. Parallel: Bunny's current collection of each video, moved when it differs
-	await eachLimited(work, CONCURRENCY, async ({ video, library, counts: c, target }) => {
+	// 2. Parallel: Bunny's current collection of each video (gone at Bunny: nothing to file)
+	const present = await eachLimited(items, CONCURRENCY, async (item) => {
 		try {
-			const client = clientOf(library);
-			const current = await bunnyCollectionOf(client, library.libraryId, video.id);
+			const current = await bunnyCollectionOf(clientOf(item.library), item.library.libraryId, item.video.id);
 			if (!current) {
-				c.missingInBunny++;
-				return;
+				item.counts.missingInBunny++;
+				return false;
 			}
-			if (target && current.collectionId === target) {
-				c.alreadyPlaced++;
-				return;
+			item.current = current.collectionId;
+			const stored = storedCollectionId(item.owner, item.library.libraryId);
+			if (stored && stored === item.current) {
+				item.counts.alreadyPlaced++;
+				return false;
 			}
-			c.moved++;
-			if (!message.dryRun) {
-				if (!target) throw new Error('no collection for the channel');
-				await client.updateVideo(library.libraryId, video.id, { collectionId: target });
-			}
+			return true;
 		} catch (error) {
+			item.counts.errors++;
+			errors.push({ id: item.video.id, error: errorText(error) });
+			return false;
+		}
+	});
+	const toFile = items.filter((_, i) => present[i]);
+
+	// 3. Sequential: the owner's collection, created or adopted only for a video that needs it
+	for (const item of toFile) {
+		try {
+			const owner = (item.kind === 'channel' ? channelCache.get(item.ownerId) : profileCache.get(item.ownerId)) ?? item.owner;
+			item.target = await resolveTarget(item.kind, item.ownerId, owner, item.library);
+		} catch (error) {
+			item.counts.errors++;
+			errors.push({ id: item.video.id, error: errorText(error) });
+			item.target = undefined;
+			item.current = '__error__';
+		}
+	}
+
+	// 4. Parallel: move the videos not yet in their collection
+	await eachLimited(toFile, CONCURRENCY, async (item) => {
+		if (item.current === '__error__') return;
+		const c = item.counts;
+		if (item.target && item.current === item.target) {
+			c.alreadyPlaced++;
+			return;
+		}
+		c.moved++;
+		if (message.dryRun) return;
+		try {
+			if (!item.target) throw new Error('no collection for the owner');
+			await clientOf(item.library).updateVideo(item.library.libraryId, item.video.id, { collectionId: item.target });
+		} catch (error) {
+			c.moved--;
 			c.errors++;
-			errors.push({ id: video.id, error: errorText(error) });
+			errors.push({ id: item.video.id, error: errorText(error) });
 		}
 	});
 	return { counts, nextCursor: listing.truncated ? listing.cursor ?? null : null, errors };

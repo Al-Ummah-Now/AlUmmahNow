@@ -376,4 +376,20 @@ describe('collection backfill', () => {
 			['odd-2', false],
 		]);
 	});
+
+	it('creates no collection for an owner whose videos are all gone at Bunny (QA: purged E2E uploads)', async () => {
+		const env = backfillEnv();
+		env.videos = new MemoryBucket({
+			[vid(30)]: { id: vid(30), userId: 'owner', channelId: 'gone-hard', playUrl: `https://${OLD_HOST}/${vid(30)}/playlist.m3u8` },
+			[vid(31)]: { id: vid(31), userId: 'owner', channelId: 'ch2', playUrl: `https://${OLD_HOST}/${vid(31)}/playlist.m3u8` },
+		});
+		await env.channels.put('ch2', JSON.stringify(channel({ id: 'ch2' })));
+		for (const dryRun of [true, false]) {
+			const { counts } = await runCollectionBackfillPage(env, { cursor: null, dryRun, limit: 50 });
+			assert.deepEqual(counts.collectionsCreated, []);
+			assert.equal(counts.byLibrary['400189'].deletedChannel.missingInBunny, 1);
+			assert.equal(counts.byLibrary['400189'].channel.missingInBunny, 1);
+		}
+		assert.deepEqual(writes, []);
+	});
 });
