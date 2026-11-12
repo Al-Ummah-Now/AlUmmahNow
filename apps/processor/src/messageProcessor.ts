@@ -427,7 +427,10 @@ export class MessageProcessor {
         this.logger.debug(`Video ${videoId} unliked by user ${actualUserId || 'unknown'}`);
         break;
       case MessageType.VideoDislike:
-        this.logger.debug(`Video ${videoId} disliked by user ${actualUserId || 'unknown'}`);
+        // Dislikes are turned off (owner decision 2026-11-11): the API no longer
+        // sends this; one still in the queue is acknowledged and not counted.
+        // Stored dislikes stay as they are.
+        this.logger.debug(`Video ${videoId} dislike ignored: dislikes are turned off`, { userId: actualUserId });
         break;
       case MessageType.VideoUndislike:
         this.logger.debug(`Video ${videoId} undisliked by user ${actualUserId || 'unknown'}`);

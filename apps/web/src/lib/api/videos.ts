@@ -540,64 +540,6 @@ export async function unlikeVideo(
 }
 
 /**
- * Dislike a video
- * POST /api/videos/{id}/dislikes
- */
-export async function dislikeVideo(
-  videoId: string,
-  headers: Required<Pick<ApiHeaders, 'channelId'>>
-): Promise<{ success: boolean } | null> {
-  try {
-    logger.debug('[dislikeVideo] Disliking video', { videoId });
-
-    return apiRequestServer<{ success: boolean }>(
-      {
-        method: 'POST',
-        url: buildApiUrl(`/api/videos/${videoId}/dislikes`),
-        functionName: 'dislikeVideo',
-      },
-      async () => ({
-        channelId: headers.channelId,
-        accessToken: (await getServerAuthContext())?.accessToken || '',
-      }),
-      true
-    );
-  } catch (error) {
-    logger.error('dislikeVideo error:', error);
-    return null;
-  }
-}
-
-/**
- * Remove dislike from a video
- * DELETE /api/videos/{id}/dislikes
- */
-export async function removeVideoDislike(
-  videoId: string,
-  headers: Required<Pick<ApiHeaders, 'channelId'>>
-): Promise<{ success: boolean } | null> {
-  try {
-    logger.debug('[removeVideoDislike] Removing dislike', { videoId });
-
-    return apiRequestServer<{ success: boolean }>(
-      {
-        method: 'DELETE',
-        url: buildApiUrl(`/api/videos/${videoId}/dislikes`),
-        functionName: 'removeVideoDislike',
-      },
-      async () => ({
-        channelId: headers.channelId,
-        accessToken: (await getServerAuthContext())?.accessToken || '',
-      }),
-      true
-    );
-  } catch (error) {
-    logger.error('removeVideoDislike error:', error);
-    return null;
-  }
-}
-
-/**
  * Like a comment
  * POST /api/videos/{id}/comments/{cid}/likes
  */
@@ -1109,12 +1051,10 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions | undef
             isShort: typeof video.isShort === 'boolean' ? video.isShort : isShort(video),
             availableResolutions: video.availableResolutions,
             likesCount: video.likesCount,
-            dislikesCount: video.dislikesCount,
             commentsCount: video.commentsCount,
             userId: video.userId,
             channelId: video.channelId,
             likes: (video.likes || []).map(({ userId, channelId }) => ({ userId, channelId })),
-            dislikes: (video.dislikes || []).map(({ userId, channelId }) => ({ userId, channelId })),
             uploadStatus: (video as { uploadStatus?: PlayerOptions['uploadStatus'] }).uploadStatus,
             processingIssueKind: (video as { processingIssueKind?: PlayerOptions['processingIssueKind'] }).processingIssueKind,
         };

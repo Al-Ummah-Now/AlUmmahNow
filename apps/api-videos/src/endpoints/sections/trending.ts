@@ -11,6 +11,7 @@ import { processTrendingVideos, processTimeWindowTrendingVideos, processCategory
 import { logger } from "../../lib/logger";
 import { emptyShelf } from "../../lib/shelf";
 import { sectionFromIndex, decodeOffset, encodeOffset } from "../../lib/sections/sectionIndex";
+import { PUBLIC_DISLIKES_COUNT } from "../../lib/reactions";
 
 const TrendingMetadataSchema = z.object({
   rank: z.number(),
@@ -321,7 +322,7 @@ function transformTrendingVideoForResponse(video: any) {
     dateCreated: video.dateCreated || new Date().toISOString(),
     views: video.views || 0,
     likesCount: video.likesCount || 0,
-    dislikesCount: video.dislikesCount || 0,
+    dislikesCount: PUBLIC_DISLIKES_COUNT,
     // Shared rule (search payloads carry it; older entries are computed)
     isShort: isShortOrFlag(video),
     commentsCount: video.commentsCount || 0,

@@ -12,6 +12,7 @@ import { inBackground } from "../../lib/websocket-notify";
 import { announceLiveStarted } from "../../lib/notification-events";
 import { CHANNEL_SUSPENDED_CODE } from "../../middleware/auth";
 import { hasSuspensionHolds, liveStreamIsFrozen } from "../../lib/admin/frozen";
+import { PUBLIC_DISLIKES_COUNT } from "../../lib/reactions";
 
 export class LiveStreamUpdate extends AuthenticatedRoute {
 	schema = addAuthToSchema({
@@ -185,7 +186,8 @@ export class LiveStreamUpdate extends AuthenticatedRoute {
 			const streamView = {
 				...updatedStream,
 				likesCount: updatedStream.likes?.length || 0,
-				dislikesCount: updatedStream.dislikes?.length || 0,
+				dislikes: [],
+				dislikesCount: PUBLIC_DISLIKES_COUNT,
 				commentsCount: updatedStream.comments?.length || 0,
 				duration: updatedStream.actualEndTime && updatedStream.actualStartTime 
 					? Math.floor((new Date(updatedStream.actualEndTime).getTime() - new Date(updatedStream.actualStartTime).getTime()) / 1000)

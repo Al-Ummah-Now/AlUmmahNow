@@ -6,7 +6,7 @@ import Queue, { MessageType } from "../../lib/queue";
 import { broadcastInBackground } from "../../lib/websocket-notify";
 import { removeLike } from "../../lib/library";
 import { AuthenticatedRoute, AppContext } from '../../base';
-import { ReactorHeaders, applyVideoReaction, reactorId } from "../../lib/reactions";
+import { PUBLIC_DISLIKES_COUNT, ReactorHeaders, applyVideoReaction, reactorId } from "../../lib/reactions";
 
 export class LikeDelete extends AuthenticatedRoute {
 	schema = {
@@ -78,7 +78,7 @@ export class LikeDelete extends AuthenticatedRoute {
 				videoId: id,
 				userId,
 				likesCount: result.video.likes.length,
-				dislikesCount: result.video.dislikes.length,
+				dislikesCount: PUBLIC_DISLIKES_COUNT,
 			});
 		}
 

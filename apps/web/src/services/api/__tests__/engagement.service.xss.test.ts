@@ -175,9 +175,7 @@ describe('VideoEngagementService - XSS Protection', () => {
         jest.mock('@/lib/api/videos', () => ({
           VideosAPI: {
             like: jest.fn().mockResolvedValue({ success: true }),
-            unlike: jest.fn().mockResolvedValue({ success: true }),
-            dislike: jest.fn().mockResolvedValue({ success: true }),
-            removeDislike: jest.fn().mockResolvedValue({ success: true })
+            unlike: jest.fn().mockResolvedValue({ success: true })
           }
         }));
       });

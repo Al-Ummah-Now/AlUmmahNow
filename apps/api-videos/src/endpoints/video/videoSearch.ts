@@ -12,6 +12,7 @@ import { isVideoRemoved } from "../../lib/visibility";
 import { channelsVideoIds, ownerContentIds, scheduleOwnershipHeal, waitUntilOf } from "../../lib/search/ownership";
 import { publicSearchCandidateIds } from "../../lib/feedIndex";
 import { FALLBACK_SCAN_OBJECTS } from "../../lib/scanBudget";
+import { PUBLIC_DISLIKES_COUNT } from "../../lib/reactions";
 
 /** Videos loaded for a channel or owner search (one R2 get each, below the subrequest limit). */
 const INDEXED_CANDIDATES = 500;
@@ -347,7 +348,7 @@ export class VideoSearch extends OptionalAuthRoute {
 				channelName: channel?.name || "",
 				channelAvatarUrl: channel?.avatarUrl,
 				likesCount: video.likes?.length || 0,
-				dislikesCount: video.dislikes?.length || 0,
+				dislikesCount: PUBLIC_DISLIKES_COUNT,
 				isShort: isShort(video),
 				commentsCount: video.comments?.length || 0,
 			};

@@ -20,6 +20,13 @@ export const ReactorHeaders = z.object({
 	}).optional().nullable(),
 });
 
+/**
+ * Public video payloads keep `dislikesCount` so older clients still decode
+ * them, but it is always 0: dislikes are hidden (owner decision 2026-11-11)
+ * and the ones stored before that are neither shown nor counted publicly.
+ */
+export const PUBLIC_DISLIKES_COUNT = 0;
+
 export function reactorId(channelId: string | null | undefined, userId: string): string {
 	return channelId || userId;
 }
@@ -45,6 +52,12 @@ type Reaction = NonNullable<VideoType["likes"]>[number];
  * removed, or `changed: null` when there was nothing to do (already
  * reacted / nothing to remove), so callers only queue events for real
  * changes. Resolves to null when the video does not exist.
+ *
+ * Dislikes are no longer accepted (owner decision 2026-11-11, see
+ * videoDislikeCreate.ts), so "dislikes" is only ever removed. Adding a like
+ * also removes the reactor's dislike from before that date in the same write
+ * (`clearedDislike`): the web no longer shows dislikes, and liking is how a
+ * member takes theirs back.
  */
 export async function applyVideoReaction(
 	repository: R2Repository<VideoType>,
@@ -52,19 +65,26 @@ export async function applyVideoReaction(
 	kind: "likes" | "dislikes",
 	action: "add" | "remove",
 	reactor: { userId: string; channelId: string },
-): Promise<{ video: VideoType; changed: Reaction | null } | null> {
+): Promise<{ video: VideoType; changed: Reaction | null; clearedDislike: Reaction | null } | null> {
 	const mine = (r: Reaction) => r.channelId === reactor.channelId && r.entityId === videoId;
 	let changed: Reaction | null = null;
+	let clearedDislike: Reaction | null = null;
 
 	// Conditional write: a concurrent reaction on this video is re-read, not overwritten.
 	// `changed` is reset on every attempt so it reflects the write that landed.
 	const video = await repository.updateObject(videoId, (fresh) => {
 		changed = null;
+		clearedDislike = null;
+		if (kind === "likes" && action === "add") {
+			const dislikes: Reaction[] = fresh.dislikes || [];
+			clearedDislike = dislikes.find(mine) ?? null;
+			if (clearedDislike) fresh.dislikes = dislikes.filter((r) => !mine(r));
+		}
 		const list: Reaction[] = fresh[kind] || [];
 		fresh[kind] = list;
 		const existing = list.find(mine);
 		if (action === "add") {
-			if (existing) return false;
+			if (existing) return !!clearedDislike;
 			changed = {
 				id: crypto.randomUUID(),
 				userId: reactor.userId,
@@ -84,5 +104,5 @@ export async function applyVideoReaction(
 	if (!video) return null;
 	video.likes = video.likes || [];
 	video.dislikes = video.dislikes || [];
-	return { video, changed };
+	return { video, changed, clearedDislike };
 }

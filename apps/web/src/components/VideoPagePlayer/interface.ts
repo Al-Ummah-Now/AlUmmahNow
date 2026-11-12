@@ -28,13 +28,11 @@ export interface PlayerOptions {
   availableResolutions?: string[];
   dateCreated: Date;
   likesCount?: number;
-  dislikesCount?: number;
   commentsCount?: number;
   userId?: string; // Owner of the video (may delete any comment)
   channelId?: string | null;
-  /** Who reacted (used to restore the viewer's like/dislike state) */
+  /** Who liked it (used to restore the viewer's like) */
   likes?: VideoReaction[];
-  dislikes?: VideoReaction[];
   /** Anything but "ready" (or unset, for older videos) shows the processing state instead of the player */
   uploadStatus?: 'initiated' | 'uploading' | 'processing' | 'ready' | 'failed';
   processingIssueKind?: 'encode_failed' | 'needs_reupload' | 'stalled';

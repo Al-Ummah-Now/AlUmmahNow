@@ -9,6 +9,7 @@ import { IndexManager } from "../../lib/indexManager";
 import { logger } from "../../lib/logger";
 import { emptyShelf } from "../../lib/shelf";
 import { isWatchHistoryPaused } from "../../lib/watch-history";
+import { PUBLIC_DISLIKES_COUNT } from "../../lib/reactions";
 
 const VideoResponseSchema = z.object({
   id: z.string(),
@@ -366,7 +367,7 @@ function transformVideoForResponse(video: VideoObject) {
     dateCreated: video.dateCreated || new Date().toISOString(),
     views: video.views || 0,
     likesCount: video.likesCount || 0,
-    dislikesCount: video.dislikesCount || 0,
+    dislikesCount: PUBLIC_DISLIKES_COUNT,
     // Shared rule (search payloads carry it; older entries are computed)
     isShort: isShortOrFlag(video),
     commentsCount: video.commentsCount || 0,

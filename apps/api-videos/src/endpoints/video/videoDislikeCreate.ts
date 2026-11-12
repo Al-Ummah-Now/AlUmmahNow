@@ -1,16 +1,29 @@
 import { Str } from "chanfana";
 import { z } from "zod";
-import { Video, ResponseError } from "../../lib/types";
-import R2Repository from "../../lib/r2Repo";
-import Queue, { MessageType } from "../../lib/queue";
+import { DISLIKES_DISABLED_CODE, DISLIKES_DISABLED_MESSAGE } from "@al-ummah/shared-types";
+import { ResponseError } from "../../lib/types";
 import { AuthenticatedRoute, AppContext } from '../../base';
-import { ReactorHeaders, applyVideoReaction, reactorId } from "../../lib/reactions";
+import { ReactorHeaders } from "../../lib/reactions";
 
+const DislikesDisabledError = ResponseError.extend({
+	code: z.literal(DISLIKES_DISABLED_CODE),
+	messages: z.object({ en: Str(), ar: Str() }).describe("The message in both site languages"),
+});
 
+/**
+ * Disabled by owner decision 2026-11-11: dislikes are hidden and not accepted.
+ * Like and remove-reaction still work. Re-enable only with an owner decision.
+ *
+ * The route stays registered so older clients get a clear 410 with a typed
+ * code instead of a 404. DELETE /:id/dislikes (videoDislikeDelete) still
+ * clears a dislike stored before this date, and liking clears it too.
+ */
 export class DislikeCreate extends AuthenticatedRoute {
 	schema = {
 		tags: ["Dislikes"],
-		summary: "Dislike a video",
+		summary: "Dislike a video (disabled: always 410 dislikes_disabled)",
+		description: "Dislikes were turned off on 2026-11-11. This always answers 410 Gone with code `dislikes_disabled` and stores nothing. Use DELETE /api/videos/{id}/dislikes to clear an old dislike.",
+		deprecated: true,
 		request: {
 			params: z.object({
 				id: Str({ description: "Video id" }),
@@ -18,29 +31,11 @@ export class DislikeCreate extends AuthenticatedRoute {
 			headers: ReactorHeaders,
 		},
 		responses: {
-			"200": {
-				description: "Returns success status",
+			"410": {
+				description: "Dislikes are turned off (code dislikes_disabled). `error` is in the language asked for with ?lang=ar, English otherwise.",
 				content: {
 					"application/json": {
-						schema: {
-							success: true,
-						},
-					},
-				},
-			},
-			"400": {
-				description: "Bad request - invalid input data",
-				content: {
-					"application/json": {
-						schema: ResponseError,
-					},
-				},
-			},
-			"500": {
-				description: "Internal server error",
-				content: {
-					"application/json": {
-						schema: ResponseError,
+						schema: DislikesDisabledError,
 					},
 				},
 			},
@@ -48,30 +43,12 @@ export class DislikeCreate extends AuthenticatedRoute {
 	};
 
 	async handle(c: AppContext) {
-		const request = await this.getValidatedData<typeof this.schema>();
-		const { id } = request.params;
-		const userId = this.getUserId(c);
-		const channelId = reactorId(request.headers.channelId, userId);
-
-		const repository = new R2Repository<z.infer<typeof Video>>(c.env.videos);
-		const result = await applyVideoReaction(repository, id, "dislikes", "add", { userId, channelId });
-		if (!result) {
-			return c.json({ success: false, error: "Object not found" }, 404);
-		}
-
-		// Disliking twice is a no-op: no second event
-		if (result.changed) {
-			await new Queue(c.env.queue).send(MessageType.VideoDislike, {
-				dislikeId: result.changed.id,
-				videoId: id,
-				userId,
-				channelId,
-				timestamp: result.changed.dateCreated,
-			});
-		}
-
-		const dislike = result.changed
-			?? result.video.dislikes.find((d) => d.channelId === channelId && d.entityId === id);
-		return { success: true, dislike };
+		const lang = c.req.query('lang') === 'ar' ? 'ar' : 'en';
+		return c.json({
+			success: false,
+			code: DISLIKES_DISABLED_CODE,
+			error: DISLIKES_DISABLED_MESSAGE[lang],
+			messages: DISLIKES_DISABLED_MESSAGE,
+		}, 410);
 	}
 }

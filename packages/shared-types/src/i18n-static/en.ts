@@ -7,6 +7,7 @@
  */
 
 import type { AppTranslations } from '../i18n';
+import { DISLIKES_DISABLED_MESSAGE } from '../video-reactions';
 import { LIBRARY_EN, NOTIFICATION_CENTER_EN } from '../i18n-library';
 import { BULK_EDIT_EN } from '../i18n-bulk-edit';
 import { STUDIO_EN } from '../i18n-studio';
@@ -1291,6 +1292,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     fileTooLarge: 'File is too large.',
     reportReasonRequired: 'Please select a reason for reporting this content.',
     loginRequired: 'You must be logged in to perform this action.',
+    dislikesDisabled: DISLIKES_DISABLED_MESSAGE.en,
   },
 
   success: {
@@ -2093,9 +2095,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     commentsCount: '{count} comments',
     likeVideo: 'Like this video',
     unlikeVideo: 'Remove like',
-    dislikeVideo: 'Dislike this video',
-    removeDislike: 'Remove dislike',
-    signInToReact: 'Sign in to like or dislike',
+    signInToReact: 'Sign in to like',
     moreVideoActions: 'More actions',
     watchingNow: '{count} watching now',
   },

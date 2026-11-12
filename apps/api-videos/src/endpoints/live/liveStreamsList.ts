@@ -6,6 +6,7 @@ import { LiveStreamView } from "../../lib/model/view";
 import R2Repository from "../../lib/r2Repo";
 import { logger } from '../../lib/logger';
 import { scanFill } from '../../lib/listFill';
+import { PUBLIC_DISLIKES_COUNT } from "../../lib/reactions";
 
 export class LiveStreamsList extends OptionalAuthRoute {
 	schema = {
@@ -102,7 +103,8 @@ export class LiveStreamsList extends OptionalAuthRoute {
 			const streamViews = streams.map(stream => ({
 				...stream,
 				likesCount: stream.likes?.length || 0,
-				dislikesCount: stream.dislikes?.length || 0,
+				dislikes: [],
+				dislikesCount: PUBLIC_DISLIKES_COUNT,
 				commentsCount: stream.comments?.length || 0,
 				// Calculate duration if stream has ended
 				duration: stream.actualEndTime && stream.actualStartTime 

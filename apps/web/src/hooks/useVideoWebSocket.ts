@@ -43,7 +43,6 @@ export interface VideoWebSocketOptions {
 export interface VideoLiveCounts {
   viewCount?: number;
   likesCount?: number;
-  dislikesCount?: number;
   commentsAdded?: number;
 }
 
@@ -142,14 +141,13 @@ export function useVideoWebSocket({
     } else if (data.type === 'viewer_count' && 'viewerCount' in data && typeof data.viewerCount === 'number') {
       setViewerCount(data.viewerCount);
     } else {
-      const counters = eventData as { type: string; viewCount?: unknown; likesCount?: unknown; dislikesCount?: unknown };
+      const counters = eventData as { type: string; viewCount?: unknown; likesCount?: unknown };
       if (counters.type === 'view_count_updated' && typeof counters.viewCount === 'number') {
         const viewCount = counters.viewCount;
         setLiveCounts(prev => ({ ...prev, viewCount }));
       } else if ((counters.type === 'video_liked' || counters.type === 'video_unliked') && typeof counters.likesCount === 'number') {
         const likesCount = counters.likesCount;
-        const dislikesCount = typeof counters.dislikesCount === 'number' ? counters.dislikesCount : undefined;
-        setLiveCounts(prev => ({ ...prev, likesCount, ...(dislikesCount !== undefined && { dislikesCount }) }));
+        setLiveCounts(prev => ({ ...prev, likesCount }));
       } else if (counters.type === 'comment_added') {
         setLiveCounts(prev => ({ ...prev, commentsAdded: (prev.commentsAdded || 0) + 1 }));
       }

@@ -297,17 +297,14 @@ html[dir=rtl] [data-testid=consent-banner]{right:auto!important;left:0!important
 .watch-sub-error{margin:0;max-width:240px;font-size:13px;line-height:18px;color:var(--fanous-color-error-text)}.watch-sub-error a{text-decoration:underline;color:inherit}
 @media(max-width:639px){.watch-sub,.watch-sub-wrap{margin-inline-start:auto}.watch-sub{padding-inline:var(--fanous-spacing-md)}}
 /* Action row: one pill style for every action (same height, radius, fill, border, icon size); one row, never wrapped.
-   A pill is any button or link in the row except the like/dislike buttons (their joined .wa-seg is the pill),
-   menu items and the row's popovers. data-fit (set by useActionRowFit) steps down as the row narrows:
+   A pill is any button or link in the row (the like button included; there is no dislike, 2026-11-11)
+   except menu items and the row's popovers. data-fit (set by useActionRowFit) steps down as the row narrows:
    full labels, then icon-only pills, then tight (no comment pill). Report lives in the "more" menu. */
 .watch-actions{--wa-h:36px;--wa-bg:color-mix(in srgb,var(--fanous-color-text-primary) 9%,transparent);--wa-bg-hover:color-mix(in srgb,var(--fanous-color-text-primary) 16%,transparent);display:flex;flex-wrap:nowrap;align-items:center;gap:8px;width:100%;min-width:0;margin-block-start:12px}
 .watch-actions>*,.watch-actions [data-testid=video-metrics]>*{flex:none}
 .watch-actions [data-testid=video-metrics]{display:inline-flex;align-items:center;gap:inherit;color:var(--fanous-color-text-primary)}
 .watch-actions [data-testid=video-metrics-views]{display:none}
-.watch-actions :is(button,a):not([role^=menuitem],[role=dialog] *,.wa-seg>*),.watch-actions .wa-seg{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:var(--wa-h);min-height:var(--wa-h);min-width:var(--wa-h);padding:0 14px;border:0!important;border-radius:var(--r-pill)!important;background:var(--wa-bg)!important;color:var(--fanous-color-text-primary)!important;font-size:14px;line-height:20px;font-weight:500;white-space:nowrap;box-shadow:none!important;transform:none!important;text-decoration:none}
-.watch-actions .wa-seg{padding:0;gap:0;overflow:hidden}
-.watch-actions .wa-seg>button:not(#_){display:inline-flex;align-items:center;gap:6px;height:100%;padding-block:0;padding-inline:14px 12px;border:0!important;border-radius:0!important;background:transparent!important;color:inherit!important;box-shadow:none!important;transform:none!important}
-.watch-actions .wa-seg>button+button:not(#_){padding-inline:12px 14px;border-inline-start:1px solid color-mix(in srgb,var(--fanous-color-text-primary) 22%,transparent)!important}
+.watch-actions :is(button,a):not([role^=menuitem],[role=dialog] *){display:inline-flex;align-items:center;justify-content:center;gap:6px;height:var(--wa-h);min-height:var(--wa-h);min-width:var(--wa-h);padding:0 14px;border:0!important;border-radius:var(--r-pill)!important;background:var(--wa-bg)!important;color:var(--fanous-color-text-primary)!important;font-size:14px;line-height:20px;font-weight:500;white-space:nowrap;box-shadow:none!important;transform:none!important;text-decoration:none}
 .watch-actions :is(button,a):not([role^=menuitem],[role=dialog] *) svg{width:18px!important;height:18px!important;flex:none}
 @media(hover:hover){.watch-actions :is(button,a):not([role^=menuitem],[role=dialog] *):not(:disabled):hover{background:var(--wa-bg-hover)!important}}
 .watch-actions :is(button,a):not([role^=menuitem],[role=dialog] *):focus-visible{outline:2px solid var(--fanous-color-primary);outline-offset:-2px}
@@ -317,7 +314,7 @@ html[dir=rtl] [data-testid=consent-banner]{right:auto!important;left:0!important
 .watch-actions:is([data-fit=icons],[data-fit=tight]) .wa-label{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 .watch-actions:is([data-fit=icons],[data-fit=tight]) :is(button,a):has(>.wa-label):not(#_){width:var(--wa-h);padding:0}
 .watch-actions[data-fit=tight]{gap:6px}.watch-actions[data-fit=tight] .wa-comments:not(#_){display:none}
-.watch-actions[data-fit=tight] .wa-seg>button:not(#_){padding-inline:10px}
+.watch-actions[data-fit=tight] [data-testid=video-like-button]:not(#_){padding-inline:10px}
 .watch-desc{width:100%;margin-block-start:12px;padding:10px 12px;border-radius:var(--r-lg);background:color-mix(in srgb,var(--fanous-color-text-primary) 7%,transparent);font-size:14px;line-height:20px;color:var(--fanous-color-text-primary)}
 .watch-desc summary{cursor:pointer;font-weight:600;display:flex;gap:10px}.watch-desc p{margin:8px 0 0;white-space:pre-line}
 [data-slot=button]{min-height:36px;gap:8px;font-size:14px;line-height:20px}[data-slot=button] svg{width:18px;height:18px}

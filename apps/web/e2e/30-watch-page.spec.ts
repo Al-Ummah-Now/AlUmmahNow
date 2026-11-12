@@ -84,12 +84,10 @@ test.describe('watch page - anonymous', () => {
     const video = await qaLecture(request, 1);
     await openWatch(page, video);
 
-    for (const id of ['video-like-button', 'video-dislike-button']) {
-      const button = page.getByTestId(id);
-      await expect(button).toBeDisabled();
-      await expect(button).toHaveAttribute('aria-pressed', 'false');
-      await expect(button).toHaveAccessibleDescription(/sign in/i);
-    }
+    const like = page.getByTestId('video-like-button');
+    await expect(like).toBeDisabled();
+    await expect(like).toHaveAttribute('aria-pressed', 'false');
+    await expect(like).toHaveAccessibleDescription(/sign in/i);
     await expect(page.getByRole('button', { name: /^Save$/ })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /^Report$/ })).toHaveCount(0);
     await expect(page.getByTestId('video-owner-edit-link')).toHaveCount(0);
@@ -150,7 +148,7 @@ test.describe('watch page - reactions (signed in)', () => {
 
   let video: QaVideo;
 
-  /** Removes any like/dislike this account left on the video (as its channels or itself) */
+  /** Removes any like (and any dislike from before 2026-11-11) this account left on the video (as its channels or itself) */
   async function clearReactions(request: Parameters<typeof qaLecture>[0]) {
     const account = readAccount('multi');
     const ids = [...account.channels.map((c) => c.id), account.userId];
@@ -205,23 +203,27 @@ test.describe('watch page - reactions (signed in)', () => {
     await expect(page.getByTestId('video-like-button')).toHaveAttribute('aria-pressed', 'true');
   });
 
-  test('WATCH-010 switching from like to dislike moves the reaction', async ({ page }) => {
-    await openWatch(page, video);
-    const like = page.getByTestId('video-like-button');
-    const dislike = page.getByTestId('video-dislike-button');
-    await like.click();
-    await expect(like).toHaveAttribute('aria-pressed', 'true');
-    await expect(like).toBeEnabled();
+  // Dislikes are turned off (owner decision 2026-11-11): no control, and the API refuses with 410
+  for (const locale of ['en', 'ar'] as const) {
+    test(`WATCH-010 there is no dislike control and the dislike API answers 410 (${locale})`, async ({ page, request }) => {
+      const account = readAccount('multi');
+      await openWatch(page, video, locale);
+      const like = page.getByTestId('video-like-button');
+      await expect(like).toBeEnabled();
+      await expect(like.locator('[data-icon=thumbs-up]')).toBeVisible();
+      const metrics = page.getByTestId('video-metrics');
+      await expect(page.getByTestId('video-dislike-button')).toHaveCount(0);
+      await expect(metrics.locator('[data-icon=thumbs-down], .lucide-thumbs-down')).toHaveCount(0);
+      await expect(metrics.getByRole('button', { name: /dislike|عدم الإعجاب|لم يعجبني/i })).toHaveCount(0);
 
-    await dislike.click();
-    await expect(dislike).toHaveAttribute('aria-pressed', 'true');
-    await expect(like).toHaveAttribute('aria-pressed', 'false');
-    await expect(dislike).toHaveAccessibleName(/^Remove dislike \d/);
-    await expect(dislike).toBeEnabled();
-
-    await dislike.click();
-    await expect(dislike).toHaveAttribute('aria-pressed', 'false');
-  });
+      const res = await apiCall(request, 'POST', `/api/videos/${video.id}/dislikes`, { token: account.accessToken, channelId: account.channels[0]?.id ?? account.userId });
+      expect(res.status()).toBe(410);
+      expect(await res.json()).toMatchObject({ success: false, code: 'dislikes_disabled' });
+      const stored = await fetchVideo(request, video.id);
+      expect(stored.dislikesCount ?? 0).toBe(0);
+      expect(stored.dislikes ?? []).toEqual([]);
+    });
+  }
 });
 
 test.describe('watch page - report (signed in, not the owner)', () => {

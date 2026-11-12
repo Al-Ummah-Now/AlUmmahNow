@@ -264,7 +264,8 @@ in parallel to the same stories, at parity with the core web experience plus mob
   Trending, Learning paths, Lamahat strip), category chips, pull-to-refresh, infinite rails with a
   finite home (see 21.6).
 - **12.3 Watch page:** player, title and description (localised), channel row with subscribe,
-  like/dislike, save to playlist, share, download, report; chapters; comments sheet; related videos;
+  like (no dislike: turned off 2026-11-11, `POST /videos/{id}/dislikes` answers 410
+  `dislikes_disabled`; see apps/api-videos/TECHNICAL_DOCUMENTATION.md), save to playlist, share, download, report; chapters; comments sheet; related videos;
   "Up next" with autoplay **off by default**.
 - **12.4 Lamahat (short reflections):** vertical player, a daily finite stack ("You're all caught up"),
   "Watch full lecture" deep-link at the exact timestamp.

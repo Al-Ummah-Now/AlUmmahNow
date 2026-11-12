@@ -1,5 +1,6 @@
 /**
- * Regressions for the watch page like/dislike buttons:
+ * Regressions for the watch page like button (dislikes are turned off,
+ * owner decision 2026-11-11: there is no dislike control):
  * - the viewer's existing reaction was never restored (always "not liked"
  *   after a reload, so a second click re-liked instead of unliking);
  * - reactions were sent with the user id as the channel id;
@@ -13,8 +14,6 @@ import * as VideosAPI from '@/lib/api/videos';
 jest.mock('@/lib/api/videos', () => ({
   likeVideo: jest.fn(),
   unlikeVideo: jest.fn(),
-  dislikeVideo: jest.fn(),
-  removeVideoDislike: jest.fn(),
   getVideoById: jest.fn(),
 }));
 jest.mock('@/lib/logger-client', () => ({
@@ -87,34 +86,10 @@ describe('VideoMetricsDisplay reactions', () => {
     expect(like).toHaveTextContent('5');
   });
 
-  it('switching from dislike to like removes the dislike first', async () => {
-    api.removeVideoDislike.mockResolvedValue({ success: true });
-    api.likeVideo.mockResolvedValue({ success: true });
-    render(
-      <VideoMetricsDisplay
-        videoId="v1"
-        initialLikesCount={0}
-        initialDislikesCount={1}
-        dislikes={[{ userId: 'usr_1', channelId: 'ch_main' }]}
-      />
-    );
-    const like = screen.getByTestId('video-like-button');
-    const dislike = screen.getByTestId('video-dislike-button');
-    await waitFor(() => expect(dislike).toHaveAttribute('aria-pressed', 'true'));
-
-    fireEvent.click(like);
-    await waitFor(() => expect(like).toHaveAttribute('aria-pressed', 'true'));
-    expect(dislike).toHaveAttribute('aria-pressed', 'false');
-    expect(api.removeVideoDislike).toHaveBeenCalledWith('v1', { channelId: 'ch_main' });
-    expect(api.likeVideo).toHaveBeenCalledWith('v1', { channelId: 'ch_main' });
-    expect(like).toHaveTextContent('1');
-    expect(dislike).toHaveTextContent('0');
-  });
-
   it('after an error response, shows the reaction the server actually stored', async () => {
     // e.g. the API stored the like but answered 500
     api.likeVideo.mockResolvedValue(null);
-    api.getVideoById.mockResolvedValue({ likes: [{ id: 'l1', userId: 'usr_1', videoId: 'v1', channelId: 'ch_main' }], dislikes: [] } as never);
+    api.getVideoById.mockResolvedValue({ likes: [{ id: 'l1', userId: 'usr_1', videoId: 'v1', channelId: 'ch_main' }] } as never);
     render(<VideoMetricsDisplay videoId="v1" initialLikesCount={0} />);
     const like = screen.getByTestId('video-like-button');
 
@@ -125,15 +100,15 @@ describe('VideoMetricsDisplay reactions', () => {
     expect(like).toHaveTextContent('1');
   });
 
-  it('pairs thumbs up with thumbs down in one group, and the comment count is a link to the comments', () => {
-    render(<VideoMetricsDisplay videoId="v1" initialLikesCount={1} initialCommentsCount={4} />);
-    const group = screen.getByTestId('video-reactions');
+  it('has no dislike control: one like pill (thumbs up), and the comment count is a link to the comments', () => {
+    const { container } = render(<VideoMetricsDisplay videoId="v1" initialLikesCount={1} initialCommentsCount={4} />);
     const like = screen.getByTestId('video-like-button');
-    const dislike = screen.getByTestId('video-dislike-button');
-    expect(group).toContainElement(like);
-    expect(group).toContainElement(dislike);
     expect(like.querySelector('svg')).toHaveClass('lucide-thumbs-up');
-    expect(dislike.querySelector('svg')).toHaveClass('lucide-thumbs-down');
+    expect(screen.queryByTestId('video-dislike-button')).toBeNull();
+    expect(screen.queryByTestId('video-reactions')).toBeNull();
+    expect(container.querySelector('.lucide-thumbs-down, [data-icon=thumbs-down]')).toBeNull();
+    expect(screen.queryByRole('button', { name: /dislike/i })).toBeNull();
+    expect(screen.getAllByRole('button')).toEqual([like]);
     const comments = screen.getByTestId('video-comments-count');
     expect(comments.tagName).toBe('A');
     expect(comments).toHaveAttribute('href', '#comments');

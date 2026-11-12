@@ -6,7 +6,6 @@ export interface VideoMetrics {
   videoId: string;
   viewCount: number;
   likesCount: number;
-  dislikesCount: number;
   commentsCount: number;
   liveViewers: number;
   lastUpdated: Date;
@@ -34,7 +33,6 @@ export function useRealTimeVideoMetrics(
     videoId,
     viewCount: 0,
     likesCount: 0,
-    dislikesCount: 0,
     commentsCount: 0,
     liveViewers: 0,
     lastUpdated: new Date(),
@@ -56,12 +54,11 @@ export function useRealTimeVideoMetrics(
       const next = { ...prev };
       if (liveCounts.viewCount !== undefined) next.viewCount = liveCounts.viewCount;
       if (liveCounts.likesCount !== undefined) next.likesCount = liveCounts.likesCount;
-      if (liveCounts.dislikesCount !== undefined) next.dislikesCount = liveCounts.dislikesCount;
       if (liveCounts.commentsAdded !== undefined) {
         next.commentsCount = commentsBaseRef.current + liveCounts.commentsAdded;
       }
       if (next.viewCount === prev.viewCount && next.likesCount === prev.likesCount &&
-        next.dislikesCount === prev.dislikesCount && next.commentsCount === prev.commentsCount) {
+        next.commentsCount === prev.commentsCount) {
         return prev;
       }
       return { ...next, lastUpdated: new Date() };

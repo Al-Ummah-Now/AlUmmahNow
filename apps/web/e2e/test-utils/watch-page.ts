@@ -19,7 +19,10 @@ export interface QaVideo {
   playUrl?: string;
   duration?: number;
   likes?: Array<{ userId?: string; channelId?: string }>;
+  /** Always empty in public payloads since dislikes were turned off (2026-11-11) */
   dislikes?: Array<{ userId?: string; channelId?: string }>;
+  /** Always 0 since 2026-11-11 */
+  dislikesCount?: number;
 }
 
 let cache: QaVideo[] | null = null;
