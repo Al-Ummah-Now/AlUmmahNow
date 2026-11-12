@@ -19,14 +19,16 @@ import { randomBytes } from 'node:crypto';
 import type { Page, TestInfo } from '@playwright/test';
 import { test, expect } from './support/fixtures';
 import { adminApi } from './support/api';
-import { OPENAUTH_URL, VIDEOS_API_URL } from './support/env';
+import { OPENAUTH_URL, RUN_ID, RUN_TAG, VIDEOS_API_URL, WEB_APP_URL, runAccountName, runPassword, runUserEmail } from './support/env';
+import { purgeChannel, recordRunAccount } from './support/cleanup';
 import { fillSecret } from './support/secret-fill';
 
 const SINK_SECRET = process.env.E2E_CODE_SINK_SECRET ?? '';
-const PASSWORD = `Inv-${randomBytes(12).toString('base64url')}-1!`;
+// Run mode: a recorded run address with the job's password, so the global teardown erases and deletes it
+const PASSWORD = RUN_ID ? runPassword() : `Inv-${randomBytes(12).toString('base64url')}-1!`;
 const stamp = `${Date.now()}-${randomBytes(3).toString('hex')}`;
-const EMAIL = `invite-${stamp}@e2e.alummahnow.net`;
-const CHANNEL = `e2e-admin-invite ${stamp}`;
+const EMAIL = RUN_ID ? runUserEmail(runAccountName(`invite-${randomBytes(3).toString('hex')}`)) : `invite-${stamp}@e2e.alummahnow.net`;
+const CHANNEL = `e2e-admin-invite ${RUN_TAG} ${stamp}`;
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -55,6 +57,16 @@ async function shot(page: Page, testInfo: TestInfo, name: string) {
 }
 
 test.describe('invite creators', () => {
+  // Pass or fail: the channel deleted and purged, the invite revoked and purged; the account itself
+  // is erased and deleted by the global teardown (recorded above)
+  test.afterAll(async () => {
+    if (state.channelId) await purgeChannel(state.channelId);
+    if (state.inviteId) {
+      await adminApi(`/api/invites/${state.inviteId}/revoke`, { method: 'POST', body: '{}' });
+      await adminApi(`/api/invites/${state.inviteId}/purge`, { method: 'POST', body: JSON.stringify({ confirm: EMAIL }) });
+    }
+  });
+
   test.beforeAll(async ({}, testInfo) => {
     test.skip(testInfo.project.name !== 'chromium', 'One project only: it makes an account');
     const probe = await adminApi('/api/invites?limit=1');
@@ -68,7 +80,7 @@ test.describe('invite creators', () => {
     test.setTimeout(150_000);
     await page.goto('/users/invites/new');
     await page.getByTestId('invite-email').fill(EMAIL);
-    await page.getByTestId('invite-name').fill('E2E Invited Creator');
+    await page.getByTestId('invite-name').fill(`E2E Invited Creator ${RUN_TAG}`);
     await page.getByTestId('invite-email').blur();
     await page.getByTestId('invite-add-channel').click();
     await page.getByTestId('invite-channel-name').fill(CHANNEL);
@@ -78,6 +90,7 @@ test.describe('invite creators', () => {
     await expect(created).toBeVisible({ timeout: 45_000 });
     state.userId = (await created.getAttribute('data-user-id'))!;
     state.inviteId = (await created.getAttribute('data-invite-id'))!;
+    if (RUN_ID) recordRunAccount(EMAIL, state.userId);
     expect(state.userId).toMatch(/^usr_[0-9a-f]{32}$/);
     await expect(page.getByTestId('invite-warnings')).toHaveCount(0);
     await shot(page, testInfo, '2-invited');
@@ -136,7 +149,7 @@ test.describe('invite creators', () => {
       await expect(page.locator('input[name="code"]')).toBeVisible({ timeout: 20_000 });
       await fillSecret(page.locator('input[name="code"]'), await sinkCode(EMAIL));
       await page.click('button[data-component="button"]');
-      await expect(page).toHaveURL(/videos\.[^/]*alummahnow\.net\/en/, { timeout: 30_000 });
+      await expect(page).toHaveURL(new RegExp(`^${escapeRe(WEB_APP_URL)}/en`), { timeout: 30_000 });
       // The home page fills in after the redirect: settle before the screenshot
       await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => undefined);
       await shot(page, testInfo, '7-signed-in');

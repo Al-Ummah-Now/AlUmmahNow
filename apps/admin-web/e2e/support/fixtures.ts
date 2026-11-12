@@ -1,5 +1,6 @@
 import { test as base } from '@playwright/test';
 import { createReport, dismissReport, getReport, type AdminReport, type CreateReportOptions } from './api';
+import { deleteLocalReports } from './cleanup';
 
 interface Fixtures {
   /** Create a report for this test; it is dismissed afterwards if still open. */
@@ -20,6 +21,8 @@ export const test = base.extend<Fixtures>({
         await dismissReport(id);
       }
     }
+    // The product never deletes a report; on the local stack the test's own rows go
+    await deleteLocalReports(created);
   },
 });
 

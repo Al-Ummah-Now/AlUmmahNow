@@ -17,7 +17,7 @@
 import crypto from 'node:crypto';
 import { test, expect } from './support/fixtures';
 import { adminApi, readTokens } from './support/api';
-import { LOCAL_STACK, SEED_VIEWER_EMAIL, accounts } from './support/env';
+import { LOCAL_STACK, RUN_TAG, SEED_VIEWER_EMAIL, accounts } from './support/env';
 import { stackR2 } from './support/local-stack';
 import { createVideosProfile } from './support/profiles';
 import { expectDirection, setPreferences } from './support/ui';
@@ -42,7 +42,7 @@ function cfToken(): string | undefined {
 const PROFILES = process.env.E2E_PROFILES_BUCKET || (LOCAL_STACK ? 'profiles' : 'profiles-qa');
 const BACKUPS = process.env.E2E_ADMIN_BACKUPS_BUCKET || (LOCAL_STACK ? 'admin-backups' : 'admin-backups-qa');
 const LEGACY_ID = crypto.randomBytes(16).toString('hex');
-const MARKER = `E2E legacy restore ${LEGACY_ID.slice(0, 8)}`;
+const MARKER = `E2E legacy restore ${RUN_TAG} ${LEGACY_ID.slice(0, 8)}`;
 // A language slot no seeded profile uses, so the restore has exactly one empty field to fill
 const FIELD = 'bioLocalized.fr';
 

@@ -5,7 +5,7 @@
  */
 import crypto from 'node:crypto';
 import type { Browser } from '@playwright/test';
-import { RUN_ID, VIDEOS_API_URL, runAccountName, runPassword, runUserEmail, type Account } from './env';
+import { RUN_ID, RUN_TAG, VIDEOS_API_URL, runAccountName, runPassword, runUserEmail, type Account } from './env';
 import { getAccessToken } from './oauth';
 import { registerSinkUser } from './run-accounts';
 
@@ -18,17 +18,18 @@ export interface VideosProfile {
 
 /** Creates the videos profile of the account `token` belongs to (POST /api/profiles, as the web app does). */
 export async function createVideosProfile(token: string, email: string, displayName: string): Promise<VideosProfile> {
-  const userName = `e2e_admin_${crypto.randomUUID().replace(/-/g, '').slice(0, 10)}`;
+  const userName = `e2e_${RUN_TAG.replace(/[^a-z0-9]/gi, '_')}_${crypto.randomUUID().replace(/-/g, '').slice(0, 6)}`.toLowerCase();
+  const name = displayName.includes(RUN_TAG) ? displayName : `${displayName} ${RUN_TAG}`;
   const res = await fetch(`${VIDEOS_API_URL}/api/profiles`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-    body: JSON.stringify({ email, userName, displayName, timezone: 'UTC' }),
+    body: JSON.stringify({ email, userName, displayName: name, timezone: 'UTC' }),
   });
   const text = await res.text();
   if (res.status >= 300) throw new Error(`create the videos profile of ${email} -> ${res.status} ${text.slice(0, 200)}`);
   const id = (JSON.parse(text) as { result?: { profile?: { id?: string } } }).result?.profile?.id;
   if (!id) throw new Error(`the videos profile of ${email} came back without an id`);
-  return { id, email, userName, displayName };
+  return { id, email, userName, displayName: name };
 }
 
 let counter = 0;

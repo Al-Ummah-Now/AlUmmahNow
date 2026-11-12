@@ -5,7 +5,8 @@
  * @e2e.alummahnow.net on QA and stage), read with E2E_CODE_SINK_SECRET.
  */
 import { expect, type Browser } from '@playwright/test';
-import { ADMIN_WEB_URL, OPENAUTH_URL } from './env';
+import { ADMIN_WEB_URL, OPENAUTH_URL, RUN_ID } from './env';
+import { recordRunAccount } from './cleanup';
 import { fillSecret } from './secret-fill';
 
 function sinkSecret(): string {
@@ -52,6 +53,8 @@ export async function registerSinkUser(browser: Browser, email: string, password
     const { accounts: signedIn } = (await res.json()) as { accounts: Array<{ userId: string; email: string }> };
     const me = signedIn.find((a) => a.email.toLowerCase() === email.toLowerCase());
     if (!me) throw new Error(`${email} has no auth session after registering`);
+    // The global teardown erases and deletes every account of the job
+    if (RUN_ID) recordRunAccount(email, me.userId);
     return { id: me.userId, email };
   } finally {
     await context.close();

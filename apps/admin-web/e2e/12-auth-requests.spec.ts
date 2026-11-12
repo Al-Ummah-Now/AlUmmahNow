@@ -9,7 +9,7 @@
 import crypto from 'node:crypto';
 import { request as playwrightRequest, type Browser, type Page } from '@playwright/test';
 import { test, expect } from './support/fixtures';
-import { ADMIN_API_URL, AUTH_ADMIN_URL, OPENAUTH_URL, RUN_ID, accounts, runAccountName, runUserEmail } from './support/env';
+import { ADMIN_API_URL, AUTH_ADMIN_URL, OPENAUTH_URL, RUN_ID, accounts, runAccountName, runPassword, runUserEmail } from './support/env';
 import { fillSecret } from './support/secret-fill';
 import { registerSinkUser } from './support/run-accounts';
 
@@ -40,7 +40,8 @@ async function registerTestUser(browser: Browser): Promise<{ id: string; email: 
   const email = RUN_ID
     ? runUserEmail(runAccountName(`modreq-${++modreqCount}`))
     : `modreq-${Date.now()}-${crypto.randomBytes(3).toString('hex')}@e2e.alummahnow.net`;
-  const password = `Mr-${crypto.randomBytes(12).toString('base64url')}-1!`;
+  // Run mode: the job's password, so the global teardown can erase it if the approved delete never ran
+  const password = RUN_ID ? runPassword() : `Mr-${crypto.randomBytes(12).toString('base64url')}-1!`;
   return registerSinkUser(browser, email, password);
 }
 

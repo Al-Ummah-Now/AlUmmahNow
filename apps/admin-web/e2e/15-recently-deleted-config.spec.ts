@@ -10,9 +10,9 @@
  */
 import { test, expect } from './support/fixtures';
 import { adminApi } from './support/api';
-import { storageStatePath } from './support/env';
+import { RUN_TAG, storageStatePath } from './support/env';
 
-const tierId = `e2e-trash-${Date.now().toString(36)}`;
+const tierId = `e2e-trash-${RUN_TAG}-${Date.now().toString(36)}`;
 const create = () =>
   adminApi('/api/content/creator-tiers', { method: 'POST', body: JSON.stringify({ id: tierId, name: `E2E trash ${tierId}`, perHour: 1, perDay: 2, maxConcurrent: 1, maxChannels: 1 }) });
 const remove = (reason: string) => adminApi(`/api/content/creator-tiers/${tierId}`, { method: 'DELETE', body: JSON.stringify({ reason }) });

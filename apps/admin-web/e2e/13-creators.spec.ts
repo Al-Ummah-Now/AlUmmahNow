@@ -13,7 +13,8 @@
  */
 import { test, expect } from './support/fixtures';
 import { adminApi, readTokens } from './support/api';
-import { RUN_ID, VIDEOS_API_URL, accounts } from './support/env';
+import { RUN_ID, accounts } from './support/env';
+import { createVideosProfile } from './support/profiles';
 import { expectDirection, expectNoAxeViolations, setPreferences } from './support/ui';
 
 interface Assignment { tierId: string; source: string; assignedBy: string }
@@ -32,15 +33,7 @@ const searchTerm = () => (RUN_ID ? state.userId! : accounts.nonadmin.email);
  * which a brand-new profile may not carry yet.
  */
 async function ensureRunViewerProfile(email: string): Promise<string> {
-  const res = await fetch(`${VIDEOS_API_URL}/api/profiles`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${readTokens().reporter}` },
-    body: JSON.stringify({ email, userName: `e2e_admin_${crypto.randomUUID().slice(0, 8)}`, displayName: 'Admin E2E viewer', timezone: 'UTC' }),
-  });
-  expect(res.status, 'create the run viewer\'s videos profile').toBeLessThan(300);
-  const created = (await res.json()) as { result?: { profile?: { id?: string } } };
-  const userId = created.result?.profile?.id;
-  expect(userId, 'the created profile\'s id').toBeTruthy();
+  const userId = (await createVideosProfile(readTokens().reporter, email, 'Admin E2E viewer')).id;
   await expect
     .poll(async () => {
       const { body } = await adminApi<CreatorsPage>(`/api/content/creators?q=${encodeURIComponent(userId!)}`);
