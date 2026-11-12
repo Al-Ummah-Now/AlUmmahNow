@@ -6,14 +6,15 @@
  *
  * Writes replace the current history entry without a reload or a server
  * round trip: the App Router syncs history.replaceState into useSearchParams
- * (router.replace would render the server page again for every filter).
+ * (router.replace would render the server page again for every filter) when
+ * the call carries no router state (see replaceListUrl).
  * So Back from an item returns to the list exactly as it was filtered, and a
  * copied URL opens the same list. Text (the search box) is written after a
  * short pause in typing.
  */
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { activeView, mergeListParams, parseListParams, selectView, serializeListParams, type ListChanges, type ListSpec, type ListValues, type SavedView } from '@/lib/list/params';
+import { activeView, mergeListParams, parseListParams, replaceListUrl, selectView, serializeListParams, type ListChanges, type ListSpec, type ListValues, type SavedView } from '@/lib/list/params';
 
 export const TEXT_DEBOUNCE_MS = 300;
 
@@ -31,7 +32,7 @@ export function useListParams(spec: ListSpec, views: readonly SavedView[] = []) 
       const query = serializeListParams(spec, next);
       const url = query ? `${pathname}?${query}` : pathname;
       if (typeof window === 'undefined' || `${window.location.pathname}${window.location.search}` === url) return;
-      window.history.replaceState(window.history.state, '', url);
+      replaceListUrl(window.history, url);
     },
     [pathname, spec],
   );

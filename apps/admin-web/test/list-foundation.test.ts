@@ -6,7 +6,7 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { activeView, checkValue, filtersOf, hasFilters, listHref, mergeListParams, parseListParams, selectView, serializeListParams, type ListSpec, type SavedView } from '../src/lib/list/params';
+import { activeView, checkValue, filtersOf, hasFilters, listHref, mergeListParams, parseListParams, replaceListUrl, selectView, serializeListParams, type ListSpec, type SavedView } from '../src/lib/list/params';
 import { isTypingTarget, listKeyAction, moveIndex } from '../src/lib/list/keyboard';
 import { addOverride, applyOverrides, confirmOverride, narrowOverride, pruneOverrides, rollbackOverride, type RowOverride } from '../src/lib/list/optimistic';
 import { MAX_TOASTS, UNDO_WINDOW_MS, UNDONE_LINGER_MS, latestUndoable, nextExpiry, undoReducer, type UndoToast } from '../src/lib/list/undo';
@@ -79,6 +79,38 @@ describe('list URL params', () => {
   });
 });
 
+describe('list URL writes', () => {
+  /** window.history as the App Router patches it: a call carrying its own state (`__NA`) is treated as the router's and not synced into useSearchParams. */
+  function routerHistory() {
+    const synced: string[] = [];
+    let state: unknown = { __NA: true, __PRIVATE_NEXTJS_INTERNALS_TREE: {} };
+    const history = {
+      get state() {
+        return state;
+      },
+      replaceState(data: unknown, _unused: string, url?: string | URL | null) {
+        const own = (data as { __NA?: boolean } | null)?.__NA;
+        if (!own && url) synced.push(String(url));
+        state = own ? data : { ...(data as object | null), __NA: true };
+      },
+    };
+    return { history, synced };
+  }
+
+  it('reaches the router, so a filter set in the page shows its chip (#1040)', () => {
+    const { history, synced } = routerHistory();
+    replaceListUrl(history, '/videos?q=v1&visibility=public');
+    assert.deepEqual(synced, ['/videos?q=v1&visibility=public']);
+    assert.equal((history.state as { __NA?: boolean }).__NA, true, 'the router keeps its own state on the entry');
+  });
+
+  it('would be ignored by the router when the current state is passed through', () => {
+    const { history, synced } = routerHistory();
+    history.replaceState(history.state, '', '/videos?visibility=public');
+    assert.deepEqual(synced, []);
+  });
+});
+
 describe('list keyboard model', () => {
   const body = { tagName: 'BODY' };
   it('maps j, k, x, Enter, / and u', () => {
@@ -143,6 +175,34 @@ describe('optimistic row updates', () => {
     let o = addOverride<Row>([], { token: 'do', ids: ['a'], patch: { isHidden: true } }, now);
     o = addOverride(o, { token: 'undo', ids: ['a'], patch: { isHidden: false } }, now);
     assert.equal(applyOverrides(rows, o, now)[0].isHidden, false);
+  });
+
+  it('undo after the change went through: the undone change never shows again, whatever the API says (#1040)', () => {
+    let o = confirmOverride(addOverride<Row>([], { token: 'do', ids: ['a'], patch: { isHidden: true } }, now), 'do', now);
+    o = pruneOverrides(o, rows, now + 1);
+    assert.equal(o.length, 1, 'the index has not seen the unpublish yet');
+    o = confirmOverride(addOverride(o, { token: 'undo', ids: ['a'], patch: { isHidden: false } }, now + 2), 'undo', now + 2);
+    // The rows still read as before the unpublish: the undo agrees with them, the unpublish must not come back
+    o = pruneOverrides(o, rows, now + 3);
+    assert.deepEqual(o.map((x) => x.token), ['undo']);
+    assert.equal(applyOverrides(rows, o, now + 3)[0].isHidden, false);
+    // A read that has seen the unpublish but not yet the undo still shows the undo
+    const sawUnpublish = rows.map((r) => (r.id === 'a' ? { ...r, isHidden: true } : r));
+    o = pruneOverrides(o, sawUnpublish, now + 4);
+    assert.equal(applyOverrides(sawUnpublish, o, now + 4)[0].isHidden, false);
+    // Pruning again changes nothing (the list does not re-render forever)
+    assert.equal(pruneOverrides(o, rows, now + 5)[0], o[0]);
+    assert.equal(pruneOverrides(o, rows, now + 2 + 60_001).length, 0, 'expires like any change');
+  });
+
+  it('a later change replaces an earlier one only on the rows and fields it sets', () => {
+    let o = confirmOverride(addOverride<Row>([], { token: 'bulk', ids: ['a', 'b'], patch: { isHidden: true, title: 'X' } }, now), 'bulk', now);
+    o = confirmOverride(addOverride(o, { token: 'one', ids: ['a'], patch: { isHidden: false } }, now), 'one', now);
+    o = pruneOverrides(o, rows, now + 1);
+    assert.deepEqual(o.map((x) => [x.token, x.ids, x.replaced ?? false]), [['bulk', ['a', 'b'], false], ['one', ['a'], true]], 'title is not set by the later change');
+    assert.deepEqual(applyOverrides(rows, o, now + 1).slice(0, 2).map((r) => [r.isHidden, r.title]), [[false, 'X'], [true, 'X']]);
+    o = confirmOverride(addOverride(o, { token: 'del', ids: ['a'], patch: 'remove' }, now), 'del', now);
+    assert.deepEqual(pruneOverrides(o, rows, now + 1).map((x) => [x.token, x.ids]), [['bulk', ['b']], ['del', ['a']]]);
   });
 
   it('a confirmed change stays until the API agrees, then is pruned; a pending one is never pruned', () => {

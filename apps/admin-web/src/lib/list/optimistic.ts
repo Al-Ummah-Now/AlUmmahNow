@@ -23,6 +23,12 @@ export interface RowOverride<T> {
   expiresAt: number;
   /** Set once the change succeeded; until then the API's rows never clear it. */
   confirmed: boolean;
+  /**
+   * Set when this change replaced an earlier one on the same rows and fields
+   * (an undo): the API agreeing with it may only mean the index has not seen
+   * either change yet, so it stays until it expires.
+   */
+  replaced?: boolean;
 }
 
 /** How long a confirmed change outranks the API's rows (the index normally catches up in seconds). */
@@ -56,16 +62,65 @@ function matches<T extends object>(row: T, patch: RowPatch<T>): boolean {
   return Object.entries(patch).every(([key, value]) => (row as Record<string, unknown>)[key] === value);
 }
 
+function keysOf<T>(patch: RowPatch<T> | 'remove'): string[] | null {
+  return patch === 'remove' ? null : Object.keys(patch);
+}
+
+/** True when `later` sets every field `earlier` sets (or removes the row), so `earlier` no longer shows. */
+function covers<T>(later: RowPatch<T> | 'remove', earlier: RowPatch<T> | 'remove'): boolean {
+  const l = keysOf(later);
+  const e = keysOf(earlier);
+  return l === null || (e !== null && e.every((key) => l.includes(key)));
+}
+
+/** True when the two changes show something in the same place. */
+function overlaps<T>(a: RowPatch<T> | 'remove', b: RowPatch<T> | 'remove'): boolean {
+  const ka = keysOf(a);
+  const kb = keysOf(b);
+  return ka === null || kb === null || ka.some((key) => kb.includes(key));
+}
+
 /**
- * Drops the overrides the API no longer needs: expired ones, and confirmed ones
- * whose rows now read the same (or, for a removal, are gone from the page).
- * Pending changes always stay.
+ * Between confirmed changes on the same rows (unpublish, then its undo): an
+ * earlier change loses the rows a later one fully replaced, and the later one
+ * is marked `replaced`, since the server now holds its value and the API
+ * agreeing with it may only mean the index has seen neither change yet.
+ */
+function dropSuperseded<T>(overrides: readonly RowOverride<T>[]): RowOverride<T>[] {
+  const replacing = new Set<number>();
+  const left = overrides.map((o, i) => {
+    if (!o.confirmed) return o.ids;
+    return o.ids.filter((id) => {
+      let covered = false;
+      overrides.forEach((p, k) => {
+        if (k <= i || !p.confirmed || !p.ids.includes(id) || !overlaps(p.patch, o.patch)) return;
+        replacing.add(k);
+        if (covers(p.patch, o.patch)) covered = true;
+      });
+      return !covered;
+    });
+  });
+  return overrides.flatMap((o, i) => {
+    const ids = left[i];
+    if (ids.length === 0 && o.ids.length > 0) return [];
+    const replaced = replacing.has(i) && !o.replaced;
+    if (ids.length === o.ids.length && !replaced) return [o];
+    return [{ ...o, ids, ...(replaced ? { replaced: true } : {}) }];
+  });
+}
+
+/**
+ * Drops the overrides the API no longer needs: confirmed ones a later
+ * confirmed change replaced, expired ones, and confirmed ones whose rows now
+ * read the same (or, for a removal, are gone from the page). Pending changes,
+ * and changes that replaced another, stay until they expire. Unchanged
+ * overrides keep their identity.
  */
 export function pruneOverrides<T extends { id: string }>(overrides: readonly RowOverride<T>[], rows: readonly T[], now: number): RowOverride<T>[] {
   const byId = new Map(rows.map((r) => [r.id, r]));
-  return overrides.filter((o) => {
+  return dropSuperseded(overrides).filter((o) => {
     if (o.expiresAt <= now) return false;
-    if (!o.confirmed) return true;
+    if (!o.confirmed || o.replaced) return true;
     if (o.patch === 'remove') return o.ids.some((id) => byId.has(id));
     const patch = o.patch;
     return o.ids.some((id) => {
