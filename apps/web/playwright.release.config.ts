@@ -32,13 +32,13 @@ const BAR_ROW = /player-(bar-row|track)\.player\.spec\.ts$/;
 const SHARED_STATE = /\/(errors|site-theme)\.spec\.ts$/;
 const SHARED_MODE = process.env.E2E_SHARED_STATE;
 /**
- * Specs that wait for Bunny to encode an upload (ready within ~9 min). They share
- * one encode queue with every other run on the QA/stage library, so CI
- * (release-e2e.yml) runs them in their own step under a cross-run lock with a
- * few slots (scripts/ci/qa-lock.ts --slots, #838): E2E_ENCODE=skip in the main
- * step, =only in that step. Unset (local runs): everything together.
+ * Specs that upload to Bunny and wait for it (encode ready within ~9 min, the R2 transcode, a
+ * resumed TUS upload). They share one encode queue with every other run on the QA/stage library,
+ * so CI (release-e2e.yml) runs them in the run's `encode` part, a job parallel to the main specs,
+ * under a cross-run lock with a few slots (scripts/ci/qa-lock.ts --slots, #838): E2E_ENCODE=skip
+ * in the main part, =only in the encode part. Unset (local runs): everything together.
  */
-const ENCODE_SPECS = '(bulk-rename-edit|upload-modes|studio-draft-path|embed-frame-sound|media-delivery)\\.spec\\.ts|processing\\.player\\.spec\\.ts';
+const ENCODE_SPECS = '(bulk-rename-edit|upload-modes|studio-draft-path|embed-frame-sound|uploads|upload-reuse|media-delivery)\\.spec\\.ts|processing\\.player\\.spec\\.ts';
 const ENCODE = new RegExp(`/(${ENCODE_SPECS})$`);
 const NOT_ENCODE = new RegExp(`^(?!.*/(${ENCODE_SPECS})$)`);
 const ENCODE_MODE = process.env.E2E_ENCODE;
