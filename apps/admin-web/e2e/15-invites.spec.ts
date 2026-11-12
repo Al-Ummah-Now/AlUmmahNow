@@ -164,7 +164,8 @@ test.describe('invite creators', () => {
       expect(view.name).toBe(CHANNEL);
       // Their channel's settings: only its owner may open them
       await page.goto(new URL(`/en/settings/channel/${state.channelId}`, page.url()).toString());
-      await expect(page.getByText(CHANNEL).first()).toBeVisible({ timeout: 30_000 });
+      // The name is also in a truncated, hidden copy (the account menu): the visible one
+      await expect(page.getByText(CHANNEL).filter({ visible: true }).first()).toBeVisible({ timeout: 30_000 });
       await shot(page, testInfo, '8-their-channel-settings');
     } finally {
       await context.close();
