@@ -1,0 +1,56 @@
+/**
+ * Fast paths into the local E2E stack (docs/testing/LOCAL-STACK.md) through its
+ * loopback control API: SQL on a stack database and objects in a stack R2
+ * bucket. Only for set-up a spec is not about (roles for this job's accounts,
+ * a legacy profile record); never on QA or stage.
+ *
+ * Swap for the shared fixture builders (apps/web/e2e/release/builders.ts) once
+ * they offer roles; this module stays the admin suite's one entry point.
+ */
+import { LOCAL_STACK, STACK_CONTROL_URL } from './env';
+
+/** The videos/auth database holding users and the rbac tables (seed-d1.ts). */
+const AUTH_D1 = 'al-ummah-now-d1';
+
+function control(): string {
+  if (!LOCAL_STACK || !STACK_CONTROL_URL) throw new Error('local stack fast paths need E2E_ENV=local');
+  const url = new URL(STACK_CONTROL_URL);
+  if (url.hostname !== '127.0.0.1' && url.hostname !== 'localhost') throw new Error('LOCAL_STACK_CONTROL_URL must be a loopback URL');
+  return STACK_CONTROL_URL;
+}
+
+const quote = (value: string, rule: RegExp, what: string) => {
+  if (!rule.test(value)) throw new Error(`unsafe ${what} for SQL: ${JSON.stringify(value)}`);
+  return `'${value}'`;
+};
+const SAFE_ID = /^[A-Za-z0-9_:.-]{1,128}$/;
+const SAFE_EMAIL = /^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,190}$/;
+
+export async function stackSql<T = Record<string, unknown>>(database: string, sql: string): Promise<T[]> {
+  const res = await fetch(`${control()}/__stack/d1/${encodeURIComponent(database)}`, { method: 'POST', headers: { 'content-type': 'text/plain' }, body: sql });
+  const body = (await res.json().catch(() => ({}))) as { results?: T[]; error?: string };
+  if (!res.ok) throw new Error(`stack SQL on ${database} -> ${res.status} ${body.error ?? ''}`);
+  return body.results ?? [];
+}
+
+/**
+ * Grants a registered account an RBAC role (role_moderator, role_super_admin,
+ * role_admin). Tokens carry the roles the account had at sign-in: grant first.
+ */
+export async function grantRole(email: string, roleId: 'role_admin' | 'role_moderator' | 'role_super_admin'): Promise<void> {
+  const users = await stackSql<{ id: string }>(AUTH_D1, `SELECT id FROM users WHERE email = ${quote(email.toLowerCase(), SAFE_EMAIL, 'email')} AND deleted_at IS NULL`);
+  if (!users[0]) throw new Error(`no local user ${email}`);
+  const user = quote(users[0].id, SAFE_ID, 'user id');
+  await stackSql(AUTH_D1, `INSERT OR IGNORE INTO rbac_user_roles (user_id, role_id, tenant_id, assigned_at, assigned_by) VALUES (${user}, ${quote(roleId, SAFE_ID, 'role id')}, 'default', unixepoch()*1000, 'e2e-admin')`);
+  const roles = await stackSql<{ role_id: string }>(AUTH_D1, `SELECT role_id FROM rbac_user_roles WHERE user_id = ${user} AND tenant_id = 'default'`);
+  if (!roles.some((r) => r.role_id === roleId)) throw new Error(`${roleId} was not granted to ${email}`);
+}
+
+/** An object in a stack R2 bucket (bucket_name of the app's top-level wrangler config). */
+export function stackR2(method: 'GET' | 'PUT' | 'DELETE', bucket: string, key: string, body?: unknown): Promise<Response> {
+  return fetch(`${control()}/__stack/r2/${encodeURIComponent(bucket)}/${encodeURIComponent(key)}`, {
+    method,
+    headers: body !== undefined ? { 'content-type': 'application/json' } : {},
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+}

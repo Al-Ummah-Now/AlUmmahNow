@@ -9,14 +9,13 @@
 import crypto from 'node:crypto';
 import { request as playwrightRequest, type Browser, type Page } from '@playwright/test';
 import { test, expect } from './support/fixtures';
-import { ADMIN_API_URL, OPENAUTH_URL, RUN_ID, accounts, runAccountName, runUserEmail } from './support/env';
+import { ADMIN_API_URL, AUTH_ADMIN_URL, OPENAUTH_URL, RUN_ID, accounts, runAccountName, runUserEmail } from './support/env';
 import { fillSecret } from './support/secret-fill';
 import { registerSinkUser } from './support/run-accounts';
 
 // Types passwords and test secrets: no traces for this file
 test.use({ trace: 'off' });
 
-const AUTH_ADMIN_URL = (process.env.AUTH_ADMIN_URL || 'https://admin.auth.qa.alummahnow.net').replace(/\/$/, '');
 const SINK_SECRET = process.env.E2E_CODE_SINK_SECRET || '';
 
 /** PR runs hit QA, which follows main: skip until admin-api has /api/auth-requests there. */

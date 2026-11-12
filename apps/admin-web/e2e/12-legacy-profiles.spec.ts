@@ -4,18 +4,22 @@
  * admin, check the profile, the backup, the audit row and the job result, check
  * a second dry run is empty, then remove everything it added.
  *
- * Seeding writes R2 objects directly (no API writes legacy keys), so it needs
- * Cloudflare credentials: CLOUDFLARE_API_TOKEN, or locally `wrangler login`.
- * Without them the spec skips. It runs only in the shared-state project (one
- * copy per CI run, under a cross-run lock): the restore job covers the whole
- * bucket, so two copies at once would see each other's seed. It pairs the seed
- * with the seeded QA viewer even in run mode, because the restore needs an
- * existing profile with that verified email.
+ * Seeding writes R2 objects directly (no API writes legacy keys). On the local
+ * stack (E2E_ENV=local) that is the stack's R2 through its control API, and the
+ * seed is paired with this job's own viewer, whose videos profile the spec
+ * creates. On QA it needs Cloudflare credentials (CLOUDFLARE_API_TOKEN, or
+ * locally `wrangler login`; without them the spec skips) and pairs the seed
+ * with the seeded QA viewer, because the restore needs an existing profile
+ * with that verified email. It runs only in the shared-state project (one copy
+ * per run): the restore job covers the whole bucket, so two copies at once
+ * would see each other's seed.
  */
 import crypto from 'node:crypto';
 import { test, expect } from './support/fixtures';
-import { adminApi } from './support/api';
-import { SEED_VIEWER_EMAIL } from './support/env';
+import { adminApi, readTokens } from './support/api';
+import { LOCAL_STACK, SEED_VIEWER_EMAIL, accounts } from './support/env';
+import { stackR2 } from './support/local-stack';
+import { createVideosProfile } from './support/profiles';
 import { expectDirection, setPreferences } from './support/ui';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -35,17 +39,18 @@ function cfToken(): string | undefined {
   return undefined;
 }
 
-const PROFILES = process.env.E2E_PROFILES_BUCKET || 'profiles-qa';
-const BACKUPS = process.env.E2E_ADMIN_BACKUPS_BUCKET || 'admin-backups-qa';
+const PROFILES = process.env.E2E_PROFILES_BUCKET || (LOCAL_STACK ? 'profiles' : 'profiles-qa');
+const BACKUPS = process.env.E2E_ADMIN_BACKUPS_BUCKET || (LOCAL_STACK ? 'admin-backups' : 'admin-backups-qa');
 const LEGACY_ID = crypto.randomBytes(16).toString('hex');
 const MARKER = `E2E legacy restore ${LEGACY_ID.slice(0, 8)}`;
 // A language slot no seeded profile uses, so the restore has exactly one empty field to fill
 const FIELD = 'bioLocalized.fr';
 
-const token = cfToken();
+const token = LOCAL_STACK ? 'local-stack' : cfToken();
 const objects = (bucket: string) => `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID || DEFAULT_ACCOUNT_ID}/r2/buckets/${bucket}/objects`;
 
 async function r2(method: 'GET' | 'PUT' | 'DELETE', bucket: string, key: string, body?: unknown): Promise<Response> {
+  if (LOCAL_STACK) return stackR2(method, bucket, key, body);
   return fetch(`${objects(bucket)}/${encodeURIComponent(key)}`, {
     method,
     headers: { Authorization: `Bearer ${token}`, ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
@@ -75,7 +80,13 @@ test.describe('restore legacy profile fields', () => {
 
   test.beforeAll(async () => {
     if (!token) return;
-    const seeded = await r2('PUT', PROFILES, LEGACY_ID, { id: LEGACY_ID, email: SEED_VIEWER_EMAIL, bioLocalized: { fr: MARKER } });
+    let email = SEED_VIEWER_EMAIL;
+    if (LOCAL_STACK) {
+      // This job's viewer, with a videos profile of its own for the restore to fill
+      email = accounts.nonadmin.email;
+      await createVideosProfile(readTokens().reporter, email, 'Admin E2E legacy viewer');
+    }
+    const seeded = await r2('PUT', PROFILES, LEGACY_ID, { id: LEGACY_ID, email, bioLocalized: { fr: MARKER } });
     expect(seeded.ok, 'seed the legacy profile').toBe(true);
   });
 

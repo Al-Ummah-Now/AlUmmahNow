@@ -15,6 +15,7 @@ import { chromium, type FullConfig } from '@playwright/test';
 import {
   ADMIN_WEB_URL,
   AUTH_DIR,
+  LOCAL_RUN_ROLES,
   RUN_ID,
   SHARED_STATE_PROJECT,
   TOKENS_PATH,
@@ -27,6 +28,7 @@ import {
   type Account,
 } from './support/env';
 import { promoteToAdmin, registerSinkUser } from './support/run-accounts';
+import { grantRole } from './support/local-stack';
 import { getAccessToken } from './support/oauth';
 import { closeOpenE2eReports, createReport } from './support/api';
 import { uiLogin } from './support/ui';
@@ -58,20 +60,27 @@ async function saveStorageState(account: Account) {
 /**
  * Registers this job's admin and viewer (recorded for the teardown first) and
  * promotes the admin, before anything signs in: tokens carry the roles the
- * account had at sign-in.
+ * account had at sign-in. On the local stack the moderator and the super admin
+ * are this job's too, their roles granted in the stack's database.
  */
 async function registerRunAccounts() {
   const browser = await chromium.launch();
   try {
+    const runAccounts: { role: string; account: Account; grant?: 'role_moderator' | 'role_super_admin' }[] = [
+      { role: 'admin', account: accounts.admin },
+      { role: 'viewer', account: accounts.nonadmin },
+    ];
+    if (LOCAL_RUN_ROLES) {
+      runAccounts.push({ role: 'moderator', account: accounts.moderator, grant: 'role_moderator' });
+      runAccounts.push({ role: 'superadmin', account: accounts.superadmin, grant: 'role_super_admin' });
+    }
     await Promise.all(
-      [
-        { role: 'admin', account: accounts.admin },
-        { role: 'viewer', account: accounts.nonadmin },
-      ].map(async ({ role, account }) => {
+      runAccounts.map(async ({ role, account, grant }) => {
         const email = runUserEmail(runAccountName(role));
-        if (email !== runAccountEmail(role)) throw new Error(`run account address mismatch for ${role}`);
+        if (email !== runAccountEmail(role) || email !== account.email) throw new Error(`run account address mismatch for ${role}`);
         await registerSinkUser(browser, email, account.password);
         if (role === 'admin') await promoteToAdmin(email);
+        if (grant) await grantRole(email, grant);
       }),
     );
   } finally {

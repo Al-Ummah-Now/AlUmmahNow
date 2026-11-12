@@ -11,11 +11,24 @@ import { RUN_USER_DOMAIN, runId, runUserEmail, runUserName } from '../../../web/
 
 export { runUserEmail };
 
-export const ADMIN_WEB_URL = (process.env.ADMIN_WEB_URL || 'https://admin.qa.alummahnow.net').replace(/\/$/, '');
-export const ADMIN_API_URL = (process.env.ADMIN_API_URL || 'https://admin.api.qa.alummahnow.net').replace(/\/$/, '');
-export const VIDEOS_API_URL = (process.env.VIDEOS_API_URL || 'https://videos.api.qa.alummahnow.net').replace(/\/$/, '');
-export const OPENAUTH_URL = (process.env.OPENAUTH_URL || 'https://auth.qa.alummahnow.net').replace(/\/$/, '');
-export const ADMIN_CLIENT_ID = process.env.ADMIN_OPENAUTH_CLIENT_ID || 'b24e39de-601d-463b-b50d-37a0a94e986b';
+/**
+ * E2E_ENV=local: the local E2E stack (docs/testing/LOCAL-STACK.md) the job booted for itself. Every
+ * app is on localhost with the production OAuth client ids (the boot rewrites their redirect URIs),
+ * and the job registers every account it signs in with, roles included (support/local-stack.ts).
+ */
+export const LOCAL_STACK = process.env.E2E_ENV === 'local';
+const target = (name: string, qa: string, local: string) => (process.env[name] || (LOCAL_STACK ? local : qa)).replace(/\/$/, '');
+
+export const ADMIN_WEB_URL = target('ADMIN_WEB_URL', 'https://admin.qa.alummahnow.net', 'http://localhost:3091');
+export const ADMIN_API_URL = target('ADMIN_API_URL', 'https://admin.api.qa.alummahnow.net', 'http://localhost:3090');
+export const VIDEOS_API_URL = target('VIDEOS_API_URL', 'https://videos.api.qa.alummahnow.net', 'http://localhost:3086');
+export const OPENAUTH_URL = target('OPENAUTH_URL', 'https://auth.qa.alummahnow.net', 'http://localhost:3301');
+export const AUTH_ADMIN_URL = target('AUTH_ADMIN_URL', 'https://admin.auth.qa.alummahnow.net', 'http://localhost:3303');
+export const WEB_APP_URL = target('WEB_APP_URL', 'https://videos.qa.alummahnow.net', 'http://localhost:3001');
+export const ADMIN_CLIENT_ID =
+  process.env.ADMIN_OPENAUTH_CLIENT_ID || (LOCAL_STACK ? 'a24e39de-601d-463b-b50d-37a0a94e986b' : 'b24e39de-601d-463b-b50d-37a0a94e986b');
+/** The stack's loopback control API (fake Bunny/Resend, local D1 and R2); local stack only. */
+export const STACK_CONTROL_URL = target('LOCAL_STACK_CONTROL_URL', '', 'http://127.0.0.1:3190');
 export const CALLBACK_URL = `${ADMIN_WEB_URL}/api/callback`;
 
 export interface Account {
@@ -38,6 +51,13 @@ function seedPassword(): string {
  * admin or a viewer. Unset (local runs): the seeded QA accounts, as before.
  */
 export const RUN_ID = runId();
+
+/**
+ * Local stack in run mode: the moderator and the super admin are this job's
+ * own accounts too, their roles granted in the stack's database
+ * (support/local-stack.ts). On QA they are the seeds (no test route grants them).
+ */
+export const LOCAL_RUN_ROLES = LOCAL_STACK && !!RUN_ID;
 
 export const SHARED_STATE_PROJECT = 'shared-state';
 
@@ -87,6 +107,7 @@ export const SEED_VIEWER_EMAIL = process.env.QA_NONADMIN_EMAIL || 'qa-viewer@del
 export const accounts = {
   /** Seeded QA super admin (seed-qa.ts): super-admin-only flows such as channel transfer. */
   get superadmin(): Account {
+    if (LOCAL_RUN_ROLES) return { role: 'superadmin', email: runAccountEmail('superadmin'), password: runPassword() };
     return { role: 'superadmin', email: process.env.QA_SUPERADMIN_EMAIL || 'qa-superadmin@delivered.resend.dev', password: seedPassword() };
   },
   get admin(): Account {
@@ -94,8 +115,10 @@ export const accounts = {
     return { role: 'admin', email: process.env.QA_ADMIN_EMAIL || 'qa-admin@delivered.resend.dev', password: seedPassword() };
   },
   get moderator(): Account {
-    // Always the seed: there is no moderator promote. It only acts on reports
-    // this run filed, so sharing it across runs is safe.
+    // QA: the seed, as there is no moderator promote there. It only acts on
+    // reports this run filed, so sharing it across runs is safe. The local
+    // stack grants the role to this job's own account.
+    if (LOCAL_RUN_ROLES) return { role: 'moderator', email: runAccountEmail('moderator'), password: runPassword() };
     return {
       role: 'moderator',
       email: process.env.QA_MODERATOR_EMAIL || 'qa-moderator@delivered.resend.dev',

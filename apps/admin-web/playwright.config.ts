@@ -1,5 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
-import { ADMIN_WEB_URL, SHARED_STATE_PROJECT, storageStatePath } from './e2e/support/env';
+import { ADMIN_WEB_URL, LOCAL_STACK, SHARED_STATE_PROJECT, storageStatePath } from './e2e/support/env';
+import { SPEC_PLACEMENT } from '../web/e2e/test-utils/placement';
 
 /**
  * Specs that change state shared by every run and every reader of QA (the
@@ -9,6 +10,21 @@ import { ADMIN_WEB_URL, SHARED_STATE_PROJECT, storageStatePath } from './e2e/sup
  * accounts and reports, so the device projects run concurrently with other runs.
  */
 const SHARED_STATE_SPECS = /(06-translations-save|11-site-theme|12-legacy-profiles)\.spec\.ts$/;
+
+/**
+ * E2E_ENV=local: the local E2E stack (docs/testing/LOCAL-STACK.md) the job booted. Only the specs
+ * placed `local` (apps/web/e2e/test-utils/placement.ts) run there, the rest stay on QA; the browser
+ * goes through the stack's proxy, which answers the faked third-party hosts and refuses every other
+ * non-local host, so a local run can never reach QA or production.
+ */
+const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const adminSpecs = (placement: 'local' | 'deployed') =>
+  Object.keys(SPEC_PLACEMENT)
+    .filter((p) => p.startsWith('apps/admin-web/e2e/') && SPEC_PLACEMENT[p].placement === placement)
+    .map((p) => escape(p.slice('apps/admin-web/e2e/'.length)));
+const DEPLOYED_SPECS = adminSpecs('deployed');
+const LOCAL_ONLY_IGNORE = LOCAL_STACK && DEPLOYED_SPECS.length > 0 ? [new RegExp(`/(${DEPLOYED_SPECS.join('|')})$`)] : [];
+const LOCAL_USE = LOCAL_STACK ? { proxy: { server: 'http://127.0.0.1:3191', bypass: 'localhost,127.0.0.1' }, ignoreHTTPSErrors: true } : {};
 
 /**
  * admin-web UI suite. Runs against a deployed environment (QA by default,
@@ -42,11 +58,12 @@ export default defineConfig({
     video: 'retain-on-failure',
     actionTimeout: 15_000,
     navigationTimeout: 45_000,
+    ...LOCAL_USE,
   },
   projects: [
-    { name: 'chromium', testIgnore: SHARED_STATE_SPECS, use: { ...devices['Desktop Chrome'] } },
-    { name: 'webkit', testIgnore: SHARED_STATE_SPECS, use: { ...devices['Desktop Safari'] } },
-    { name: 'mobile', testIgnore: SHARED_STATE_SPECS, use: { ...devices['Pixel 5'] } },
-    { name: SHARED_STATE_PROJECT, testMatch: SHARED_STATE_SPECS, use: { ...devices['Desktop Chrome'] } },
+    { name: 'chromium', testIgnore: [SHARED_STATE_SPECS, ...LOCAL_ONLY_IGNORE], use: { ...devices['Desktop Chrome'] } },
+    { name: 'webkit', testIgnore: [SHARED_STATE_SPECS, ...LOCAL_ONLY_IGNORE], use: { ...devices['Desktop Safari'] } },
+    { name: 'mobile', testIgnore: [SHARED_STATE_SPECS, ...LOCAL_ONLY_IGNORE], use: { ...devices['Pixel 5'] } },
+    { name: SHARED_STATE_PROJECT, testMatch: SHARED_STATE_SPECS, testIgnore: LOCAL_ONLY_IGNORE, use: { ...devices['Desktop Chrome'] } },
   ],
 });
