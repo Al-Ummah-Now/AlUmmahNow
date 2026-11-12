@@ -65,3 +65,27 @@ describe('upload page thumbnail: cropped to the video shape, size sent to the AP
     });
   });
 });
+
+describe('upload page thumbnail: drag and drop', () => {
+  beforeEach(() => loadImageFile.mockReset());
+
+  it('a dropped image takes the picker path and shows the drag-over state', async () => {
+    loadImageFile.mockResolvedValue({ url: 'blob:art', size: { width: 1080, height: 1920 } });
+    const onSelect = jest.fn();
+    render(<ThumbnailUploadSection videoFile={video} onThumbnailSelect={onSelect} />);
+    await screen.findByTestId('upload-thumbnail-frames');
+    const zone = screen.getByTestId('upload-thumbnail-dropzone');
+    fireEvent.dragEnter(zone, { dataTransfer: { types: ['Files'], files: [] } });
+    expect(zone).toHaveAttribute('data-drag-over', 'true');
+    fireEvent.drop(zone, { dataTransfer: { types: ['Files'], files: [new File(['x'], 'tall.png', { type: 'image/png' })] } });
+    expect(zone).toHaveAttribute('data-drag-over', 'false');
+    await waitFor(() => expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ type: 'custom', filename: 'tall.png' })));
+  });
+
+  it('a dropped non-image shows the drop error', async () => {
+    render(<ThumbnailUploadSection videoFile={video} onThumbnailSelect={() => {}} />);
+    await screen.findByTestId('upload-thumbnail-frames');
+    fireEvent.drop(screen.getByTestId('upload-thumbnail-dropzone'), { dataTransfer: { types: ['Files'], files: [new File(['x'], 'notes.txt', { type: 'text/plain' })] } });
+    expect(await screen.findByTestId('upload-thumbnail-error')).toBeInTheDocument();
+  });
+});

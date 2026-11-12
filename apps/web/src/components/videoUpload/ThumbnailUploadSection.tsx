@@ -8,6 +8,7 @@ import { ThumbnailCropper, loadImageFile } from '@/components/VideoThumbnail/Thu
 import { shapesMatch, type Size } from '@/lib/utils/thumbnailCrop';
 import { validateThumbnailFile, fileToBase64 } from '@/lib/utils/thumbnailValidator';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useFileDropZone } from '@/hooks/useFileDropZone';
 import { FitImage } from '@/components/VideoThumbnail/FitImage';
 
 export interface ThumbnailData {
@@ -39,7 +40,6 @@ export function ThumbnailUploadSection({
   const [selectedThumbnail, setSelectedThumbnail] = useState<ThumbnailData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isDragOver, setIsDragOver] = useState(false);
   // The video's size, and a picked image of another shape waiting to be cropped
   const [videoSize, setVideoSize] = useState<Size | null>(null);
   const [crop, setCrop] = useState<{ url: string; size: Size; name: string } | null>(null);
@@ -168,35 +168,14 @@ export function ThumbnailUploadSection({
     }
   };
 
-  // Handle drag and drop
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!disabled) {
-      setIsDragOver(true);
-    }
-  }, [disabled]);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragOver(false);
-  }, []);
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragOver(false);
-
-    if (disabled) return;
-
-    const files = Array.from(e.dataTransfer.files);
-    if (files.length > 0 && files[0].type.startsWith('image/')) {
-      handleCustomUpload(files[0]);
-    } else {
-      setError(t.upload.dropImageError);
-    }
-  }, [disabled, handleCustomUpload, t]);
+  // Drag and drop: the same path as the picker
+  const { isDragOver, dropZoneProps } = useFileDropZone({
+    disabled,
+    onFile: (file) => {
+      if (file.type.startsWith('image/')) void handleCustomUpload(file);
+      else setError(t.upload.dropImageError);
+    },
+  });
 
   // Clear selection
   const handleClearSelection = () => {
@@ -282,9 +261,9 @@ export function ThumbnailUploadSection({
               ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20'
               : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'
           } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
+          data-testid="upload-thumbnail-dropzone"
+          data-drag-over={isDragOver ? 'true' : 'false'}
+          {...dropZoneProps}
         >
           <input
             type="file"

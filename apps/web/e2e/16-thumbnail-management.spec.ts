@@ -1,5 +1,6 @@
 import { test, expect } from './fixtures';
 import type { Page } from '@playwright/test';
+import * as fs from 'fs';
 import * as path from 'path';
 import { AUTH_STATE } from './test-utils/auth-state';
 import {
@@ -115,6 +116,58 @@ test.describe('Thumbnail - saving', () => {
     await page.getByTestId('video-edit-save').click();
     await expect(page.getByTestId('video-edit-error')).toHaveCount(0);
     await expect.poll(async () => (await getVideo(userApi('single'), video!.id))?.thumbnailUrl, { timeout: 60000 }).toMatch(/^https:\/\//);
+  });
+});
+
+/** A real drag of a file onto the zone: dragenter, dragover, drop with a DataTransfer holding it */
+async function dropFile(page: Page, testId: string, file: string, type: string) {
+  const b64 = fs.readFileSync(file).toString('base64');
+  const name = path.basename(file);
+  const dataTransfer = await page.evaluateHandle(({ b64, name, type }) => {
+    const dt = new DataTransfer();
+    dt.items.add(new File([Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))], name, { type }));
+    return dt;
+  }, { b64, name, type });
+  const zone = page.getByTestId(testId);
+  await zone.dispatchEvent('dragenter', { dataTransfer });
+  await expect(zone).toHaveAttribute('data-drag-over', 'true');
+  await zone.dispatchEvent('dragover', { dataTransfer });
+  await zone.dispatchEvent('drop', { dataTransfer });
+  await expect(zone).toHaveAttribute('data-drag-over', 'false');
+}
+
+test.describe('Thumbnail Upload - drag and drop', () => {
+  let video: E2EVideo | null = null;
+
+  test.beforeEach(async () => {
+    video = await createDisposableVideo('single', 'thumbnail-drop');
+  });
+
+  test.afterEach(async () => {
+    await deleteVideoQuietly('single', video);
+  });
+
+  for (const locale of ['en', 'ar'] as const) {
+    test(`should upload a dropped image (${locale})`, async ({ page }) => {
+      await openEditor(page, video!, locale);
+
+      await dropFile(page, 'thumbnail-upload-button', THUMBNAIL_JPG, 'image/jpeg');
+
+      const custom = page.getByTestId('thumbnail-custom-option');
+      await expect(custom).toBeVisible();
+      await expect(page.getByTestId('thumbnail-upload-button')).toBeEnabled({ timeout: 60000 });
+      await expect(page.getByTestId('thumbnail-upload-error')).toHaveCount(0);
+      await expect(custom).toHaveAttribute('aria-pressed', 'true');
+      await expect(custom.locator('img')).toHaveAttribute('src', /^https:\/\//);
+      expect(page.url()).toContain(`/${locale}/`);
+    });
+  }
+
+  test('should refuse a dropped file of another type', async ({ page }) => {
+    await openEditor(page, video!);
+    await dropFile(page, 'thumbnail-upload-button', path.join(__dirname, 'test-fixtures', 'invalid.txt'), 'text/plain');
+    await expect(page.getByTestId('thumbnail-upload-error')).toBeVisible();
+    await expect(page.getByTestId('thumbnail-custom-option')).toHaveCount(0);
   });
 });
 
