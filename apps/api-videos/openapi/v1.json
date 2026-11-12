@@ -37100,6 +37100,68 @@
                               "type": "string"
                             }
                           }
+                        },
+                        "r2": {
+                          "type": "object",
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "queued",
+                                "transcoding",
+                                "ready",
+                                "failed"
+                              ]
+                            },
+                            "access": {
+                              "type": "string",
+                              "enum": [
+                                "pub",
+                                "priv"
+                              ]
+                            },
+                            "rev": {
+                              "type": "string"
+                            },
+                            "attempts": {
+                              "type": "number"
+                            },
+                            "queuedAt": {
+                              "type": "string"
+                            },
+                            "startedAt": {
+                              "type": "string"
+                            },
+                            "readyAt": {
+                              "type": "string"
+                            },
+                            "failedAt": {
+                              "type": "string"
+                            },
+                            "error": {
+                              "type": "string"
+                            },
+                            "renditions": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              },
+                              "description": "Rungs the transcode wrote (720p, 480p, ...)"
+                            },
+                            "playUrl": {
+                              "type": "string",
+                              "description": "R2 master playlist (signed when private); ready only"
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "access",
+                            "rev",
+                            "attempts",
+                            "queuedAt",
+                            "renditions"
+                          ],
+                          "description": "R2 delivery beside Bunny (epic #687): the transcode's state; absent where there is no dual write"
                         }
                       },
                       "required": [
