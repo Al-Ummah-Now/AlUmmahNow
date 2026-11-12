@@ -5,11 +5,11 @@ import {
   SEED_TITLES,
   createDisposableVideo,
   deleteVideoQuietly,
-  ensureSeedVideos,
   getVideo,
   userApi,
   type E2EVideo,
 } from './test-utils/e2e-videos';
+import { ownStudioVideos } from './test-utils/own-studio-videos';
 
 /**
  * The video editor, which lives in Studio: /[locale]/studio/video/{id}/edit
@@ -20,16 +20,22 @@ import {
  *
  * Saving goes through a server action to the real QA API, so tests that save
  * edit a disposable video they upload themselves; read-only tests open the
- * single-channel user's seed video and never save it.
+ * single-channel user's own video of this file and never save it.
  */
 
 test.use({ storageState: AUTH_STATE.single });
 
 let seed: Record<string, E2EVideo> = {};
 
+// One worker runs this file's tests in order, so its own data (beforeAll) is made once
+test.describe.configure({ mode: 'default' });
+
+/** This file's own Studio videos of the run users (made in beforeAll, deleted afterwards) */
+const studioSingle = ownStudioVideos(test, 'single');
+
 test.beforeAll(async () => {
   test.setTimeout(180000);
-  seed = await ensureSeedVideos('single');
+  seed = studioSingle.videos();
 });
 
 /** The Studio editor's own URL, once /studio/video/{id}/edit has resolved the video's channel */
@@ -68,7 +74,7 @@ test.describe('Video Edit - read only', () => {
     const video = seed[SEED_TITLES.singleVideo];
     await openEditor(page, video);
 
-    await expect(page.getByTestId('video-edit-title-en')).toHaveValue(SEED_TITLES.singleVideo);
+    await expect(page.getByTestId('video-edit-title-en')).toHaveValue(seed[SEED_TITLES.singleVideo].title);
     await expect(page.getByTestId('video-edit-privacy-private')).toBeChecked();
     await expect(page.getByTestId('video-edit-save')).toBeDisabled();
     await expect(page.getByTestId('video-edit-unsaved')).toHaveCount(0);
@@ -163,7 +169,7 @@ test.describe('Video Edit - read only', () => {
     await expect(page).toHaveURL(STUDIO_LIST);
 
     const stored = await getVideo(userApi('single'), video.id);
-    expect(stored?.title).toBe(SEED_TITLES.singleVideo);
+    expect(stored?.title).toBe(seed[SEED_TITLES.singleVideo].title);
   });
 
   test('should leave without a prompt when nothing changed', async ({ page }) => {

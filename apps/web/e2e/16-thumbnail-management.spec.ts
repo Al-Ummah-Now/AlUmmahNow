@@ -9,12 +9,12 @@ import {
   SEED_TITLES,
   createDisposableVideo,
   deleteVideoQuietly,
-  ensureSeedVideos,
   getVideo,
   userApi,
   waitForThumbnails,
   type E2EVideo,
 } from './test-utils/e2e-videos';
+import { ownStudioVideos } from './test-utils/own-studio-videos';
 
 /**
  * Thumbnail management on the video edit page.
@@ -32,9 +32,15 @@ const THUMBNAIL_JPG = path.join(__dirname, 'test-fixtures', 'e2e-thumbnail.jpg')
 
 let seed: Record<string, E2EVideo> = {};
 
+// One worker runs this file's tests in order, so its own data (beforeAll) is made once
+test.describe.configure({ mode: 'default' });
+
+/** This file's own Studio videos of the run users (made in beforeAll, deleted afterwards) */
+const studioSingle = ownStudioVideos(test, 'single');
+
 test.beforeAll(async () => {
   test.setTimeout(BUNNY_WAIT_MS + 60000);
-  seed = await ensureSeedVideos('single');
+  seed = studioSingle.videos();
   // Run accounts upload their seeds at the start of each run: wait once, capped (#929)
   await waitForThumbnails('single', seed[SEED_TITLES.singleVideo].id);
 });

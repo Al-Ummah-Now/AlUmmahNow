@@ -17,12 +17,12 @@ import {
   SEED_TITLES,
   createDisposableVideo,
   deleteVideoQuietly,
-  ensureSeedVideos,
   getVideo,
   userApi,
   type E2EVideo,
 } from './test-utils/e2e-videos';
 import { channelsOf } from './test-utils/channel-content';
+import { ownStudioVideos } from './test-utils/own-studio-videos';
 
 let singleSeed: Record<string, E2EVideo> = {};
 let multiSeed: Record<string, E2EVideo> = {};
@@ -33,13 +33,20 @@ const publicOf = () => {
   return publicVideo;
 };
 
+// One worker runs this file's tests in order, so its own data (beforeAll) is made once
+test.describe.configure({ mode: 'default' });
+
+/** This file's own Studio videos of the run users (made in beforeAll, deleted afterwards) */
+const studioSingle = ownStudioVideos(test, 'single');
+const studioMulti = ownStudioVideos(test, 'multi');
+
 test.beforeAll(async () => {
   test.setTimeout(180000);
   // Until Studio is deployed where this runs (PR checks run against QA, which follows main)
   const studio = await fetch(`${process.env.WEB_APP_URL ?? 'https://videos.qa.alummahnow.net'}/en/studio`, { redirect: 'manual' });
   test.skip(studio.status === 404, 'Studio is not deployed to this environment yet');
-  singleSeed = await ensureSeedVideos('single');
-  multiSeed = await ensureSeedVideos('multi');
+  singleSeed = studioSingle.videos();
+  multiSeed = studioMulti.videos();
   publicVideo = await createDisposableVideo('single', 'studio-ownership-public', { isPublic: true });
 });
 
