@@ -4,6 +4,8 @@ import { handleProcessingCheckBatch, sweepProcessingVideos } from './lib/process
 import { handleReaperBatch, isReaperMessage, sweepStaleUploads } from './lib/uploads/reaper';
 import { handleBunnyDeleteBatch, isBunnyDeleteMessage } from './lib/uploads/bunnyDelete';
 import { handlePurgeBatch, isPurgeMessage, startScheduledPurge } from './lib/uploads/testLibraryPurge';
+import { handleMediaMoveBatch, isMediaMoveMessage, sweepMediaJobs } from './lib/media/r2-delivery';
+import { createMediaInternalRouter } from './endpoints/media/mediaInternal';
 import { sweepRunUsers } from './lib/e2e/runUserSweep';
 import { handlePlaylistAddBatch, isPlaylistAddMessage } from './lib/playlistUploadAdds';
 import { createPlaylistAddsInternalRouter } from './endpoints/playlist/playlistAddsInternal';
@@ -230,6 +232,8 @@ app.route('/internal/video-format', createVideoFormatInternalRouter() as never);
 app.route('/internal/playlist-adds', createPlaylistAddsInternalRouter() as never);
 // Scholars (the CMS): their channels and their articles on the Community tab
 app.route('/internal/scholars', scholarsInternalRouter as never);
+// R2 delivery beside Bunny (epic #687): apps/media's callbacks, admin retry / jobs / settings
+app.route('/internal/media', createMediaInternalRouter() as never);
 
 // ==========================================
 // PROFILE/CHANNEL IMAGE UPLOADS
@@ -452,6 +456,13 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 				logger.error('[ProcessingSweep] Run failed', { error: error instanceof Error ? error.message : String(error) }),
 			),
 		);
+		// R2 transcodes stuck in queued/transcoding (lib/media/r2-delivery.ts)
+		ctx.waitUntil(
+			sweepMediaJobs(rawEnv as never).then(
+				() => undefined,
+				(error) => logger.error('[MediaSweep] Run failed', { error: error instanceof Error ? error.message : String(error) }),
+			),
+		);
 		// QA / stage only: erase the videos data (profile, channels, videos and their Bunny media) of
 		// E2E run accounts the auth server has deleted (lib/e2e/runUserSweep.ts)
 		ctx.waitUntil(sweepRunUsers(withSearchSync(rawEnv, ctx) as never).then(() => undefined));
@@ -613,13 +624,17 @@ async function queue(batch: MessageBatch<unknown>, env: AppBindings, ctx: Execut
 		// Owner deletes → Bunny (lib/uploads/bunnyDelete.ts); QA/stage purge (lib/uploads/testLibraryPurge.ts)
 		const bunnyDeletes = rest.filter((m) => isBunnyDeleteMessage(m.body));
 		const purges = rest.filter((m) => isPurgeMessage(m.body));
+		// R2 renditions moved between the public and private buckets (lib/media/r2-delivery.ts)
+		const mediaMoves = rest.filter((m) => isMediaMoveMessage(m.body));
 		const processing = rest.filter(
-			(m) => !isReaperMessage(m.body) && !isPlaylistAddMessage(m.body) && !isBunnyDeleteMessage(m.body) && !isPurgeMessage(m.body),
+			(m) =>
+				!isReaperMessage(m.body) && !isPlaylistAddMessage(m.body) && !isBunnyDeleteMessage(m.body) && !isPurgeMessage(m.body) && !isMediaMoveMessage(m.body),
 		);
 		if (processing.length) await handleProcessingCheckBatch({ messages: processing }, synced);
 		if (reaper.length) await handleReaperBatch({ messages: reaper }, synced);
 		if (bunnyDeletes.length) await handleBunnyDeleteBatch({ messages: bunnyDeletes }, synced);
 		if (purges.length) await handlePurgeBatch({ messages: purges }, synced);
+		if (mediaMoves.length) await handleMediaMoveBatch({ messages: mediaMoves as never }, synced);
 		if (playlistAdds.length) await handlePlaylistAddBatch({ messages: playlistAdds }, synced, ctx);
 	} catch (error) {
 		// The batch is retried by the queue; the failure is flagged on the admin Errors page

@@ -32,6 +32,13 @@ export interface AppBindings {
   SCHEDULED_VIDEOS: R2Bucket;
   'scheduled-videos': R2Bucket;
   global_settings: R2Bucket;
+  /** R2 delivery beside Bunny (epic #687): public / private renditions. Optional: no dual write without them. */
+  MEDIA?: R2Bucket;
+  MEDIA_PRIVATE?: R2Bucket;
+  /** R2 transcode jobs for apps/media */
+  TRANSCODE_QUEUE?: Queue;
+  MEDIA_SIGN_KEY?: { get(): Promise<string> } | string;
+  MEDIA_PUBLIC_HOST?: string;
   /** Processor-written view/watch-time rollups (al-ummah-now-messages bucket) */
   analytics_rollups?: R2Bucket;
 

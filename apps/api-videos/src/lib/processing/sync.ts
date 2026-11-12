@@ -39,6 +39,8 @@ export interface SyncableVideo {
 	/** Bunny's auto thumbnail does not exist yet: clients show the placeholder */
 	thumbnailPending?: boolean;
 	processingIssue?: { kind: 'encode_failed' | 'needs_reupload' | 'stalled'; reason?: string; at: string };
+	/** First time Bunny's playlist played (time to playable vs R2, epic #687) */
+	playableAt?: string;
 }
 
 /**
@@ -187,6 +189,7 @@ export function planSync(video: SyncableVideo, bunny: BunnyVideoState | null, op
 
 	const setStatus = (status: SyncableVideo['uploadStatus']) => {
 		if (video.uploadStatus !== status) patch.uploadStatus = status;
+		if (status === 'ready' && !video.playableAt) patch.playableAt = at;
 	};
 	const setIssue = (kind: NonNullable<SyncableVideo['processingIssue']>['kind'], reason: string) => {
 		if (video.processingIssue?.kind !== kind || video.processingIssue?.reason !== reason) {

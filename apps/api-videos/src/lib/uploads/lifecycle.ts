@@ -23,6 +23,7 @@ import { processingAttempt } from '../notification-events';
 import { bunnyTusRequestHeaders } from '../bunny/tus';
 import { startProcessingLoop, type ProcessingEnv } from '../processing/loop';
 import { refundUploadSession } from '../../middleware/upload-limits';
+import { enqueueTranscode, type MediaEnv } from '../media/r2-delivery';
 
 export interface VideoTusUpload {
   sessionId: string;
@@ -88,6 +89,8 @@ export async function markUploadComplete(
         return true;
       }
       video.uploadStatus = 'processing';
+      // Both sources' time to playable start here (epic #687)
+      (video as { uploadCompletedAt?: string }).uploadCompletedAt = new Date().toISOString();
       delete video.tusUpload;
       clearUploadFlags(video);
       changed = true;
@@ -102,6 +105,8 @@ export async function markUploadComplete(
       fileSize: upload.fileSize,
       timestamp: new Date().toISOString(),
     });
+    // Dual write: the same upload transcoded to R2 by apps/media (lib/media/r2-delivery.ts; never throws)
+    await enqueueTranscode(env as unknown as MediaEnv, upload.videoId, 'upload', { uploaderId: upload.userId });
     // Check Bunny until the encode finishes (lib/processing/loop.ts)
     await startProcessingLoop(env as unknown as ProcessingEnv, upload.videoId, { reason: 'upload-complete' }).catch((error) =>
       logger.error('[Uploads] Could not start the processing check loop', { videoId: upload.videoId, error: error instanceof Error ? error.message : String(error) }),
