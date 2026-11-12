@@ -75,7 +75,7 @@ export function NotificationBell({ dir = 'ltr' }: NotificationBellProps) {
         {unreadCount > 0 && (
           <span
             data-testid="notification-badge"
-            className="absolute top-0.5 end-0 min-w-[1.1rem] h-[1.1rem] rounded-full bg-[var(--fanous-c-badge-live-bg)] px-1 text-[0.65rem] font-bold leading-[1.1rem] text-[var(--fanous-c-badge-live-text)] text-center"
+            className="absolute top-0.5 end-0 min-w-[1.1rem] h-[1.1rem] rounded-full bg-[var(--fanous-c-button-destructive-bg)] px-1 text-[0.65rem] font-bold leading-[1.1rem] !text-[var(--fanous-c-button-destructive-text)] text-center"
             aria-hidden="true"
           >
             {badge}
