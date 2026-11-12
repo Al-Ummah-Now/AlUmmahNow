@@ -1,9 +1,12 @@
 import * as fs from 'fs';
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { test, expect } from './fixtures';
 import type { Page, TestInfo } from '@playwright/test';
 import { ANONYMOUS_STATE, AUTH_STATE } from './test-utils/auth-state';
-import { canDecodeHls, qaLecture, watchUrl } from './test-utils/watch-page';
-import { SEED_TITLES, ensureSeedVideos } from './test-utils/e2e-videos';
+import { canDecodeHls, watchUrl } from './test-utils/watch-page';
+import { createDisposableVideo, deleteVideoQuietly } from './test-utils/e2e-videos';
+import { useOwnVideos } from './release/own-videos';
 
 /**
  * Embeds & sharing (docs/embeds/README.md), against the deployed web app.
@@ -20,11 +23,40 @@ if (process.env.A11Y_CHROME_CHANNEL) {
 }
 
 /**
- * The host page lives on another origin. Locally (http://localhost target) set
- * EMBED_HOST_PAGE=http://127.0.0.1:<port>/__embed-host: Chrome's Private Network
- * Access blocks a public-looking origin from framing localhost.
+ * The host page lives on another origin: a fake origin served by page.route. On the local stack
+ * (E2E_ENV=local) the site is loopback (http://localhost) and Chrome's Local Network Access blocks a
+ * public page from framing it (a page.route answer counts as public whatever its URL), so there the
+ * host page comes from a real loopback server of this spec (127.0.0.1, still cross-origin to
+ * localhost), as in release/embed.player.spec.ts (#1052).
  */
 const HOST_PAGE = process.env.EMBED_HOST_PAGE || 'https://embed-host.e2e.test/page';
+const LOCAL = process.env.E2E_ENV === 'local';
+let loopbackHost: Server | undefined;
+/** Host page bodies by path, for the loopback server */
+const hostBodies = new Map<string, string>();
+
+async function loopbackHostOrigin(): Promise<string> {
+  if (!loopbackHost) {
+    const server = createServer((req, res) => {
+      const body = hostBodies.get(new URL(req.url ?? '/', 'http://127.0.0.1').pathname);
+      if (body === undefined) res.writeHead(404).end();
+      else res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(body);
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    loopbackHost = server;
+  }
+  return `http://127.0.0.1:${(loopbackHost.address() as AddressInfo).port}`;
+}
+
+test.afterAll(async () => {
+  const server = loopbackHost;
+  loopbackHost = undefined;
+  if (server) await new Promise<void>((resolve) => server.close(() => resolve()));
+});
+
+/** This file's own public videos (release/own-videos.ts: made in beforeAll, deleted afterwards) */
+const own = useOwnVideos(test as never);
+const ownLecture = async () => (await own('landscape')) as Awaited<ReturnType<typeof own>> & { titleLocalized?: { en?: string; ar?: string } };
 const NO_CODEC = 'bundled Chromium has no H.264 decoder for the HLS stream; run with webkit or A11Y_CHROME_CHANNEL=chrome';
 
 function baseOrigin(testInfo: TestInfo): string {
@@ -33,10 +65,7 @@ function baseOrigin(testInfo: TestInfo): string {
 
 /** Serve a page on another origin that frames `src` and records the player's messages. */
 async function openHostPage(page: Page, body: string) {
-  await page.route(HOST_PAGE, (route) => route.fulfill({
-    status: 200,
-    contentType: 'text/html; charset=utf-8',
-    body: `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Embed host</title></head><body>
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Embed host</title></head><body>
       ${body}
       <script>
         window.__aun = [];
@@ -45,8 +74,14 @@ async function openHostPage(page: Page, body: string) {
             window.__aun.push({ origin: e.origin, data: e.data });
           }
         });
-      </script></body></html>`,
-  }));
+      </script></body></html>`;
+  if (LOCAL) {
+    const path = `/host/${hostBodies.size + 1}`;
+    hostBodies.set(path, html);
+    await page.goto(`${await loopbackHostOrigin()}${path}`);
+    return;
+  }
+  await page.route(HOST_PAGE, (route) => route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: html }));
   await page.goto(HOST_PAGE);
 }
 
@@ -77,7 +112,7 @@ async function messages(page: Page) {
 
 test.describe('embed framing policy', () => {
   test('EMBED-001 the embed route is frameable by any origin; app pages are not', async ({ request }, testInfo) => {
-    const video = await qaLecture(request, 1);
+    const video = await ownLecture();
     const embed = await request.get(`${baseOrigin(testInfo)}/embed/v/${video.id}`);
     expect(embed.status()).toBe(200);
     expect(embed.headers()['content-security-policy']).toMatch(/frame-ancestors \*(;|$)/);
@@ -90,10 +125,10 @@ test.describe('embed framing policy', () => {
 });
 
 test.describe('embed player', () => {
-  test('EMBED-002 a public video embedded on another origin plays and reports events', async ({ page, request, browserName }, testInfo) => {
+  test('EMBED-002 a public video embedded on another origin plays and reports events', async ({ page, browserName }, testInfo) => {
     test.skip(!canDecodeHls(browserName, testInfo), NO_CODEC);
     const origin = baseOrigin(testInfo);
-    const video = await qaLecture(request, 1);
+    const video = await ownLecture();
     await openHostPage(page, playerFrame(origin, `${origin}/embed/v/${video.id}?start=5`));
 
     const frame = page.frameLocator('#aun');
@@ -117,19 +152,19 @@ test.describe('embed player', () => {
     await expect.poll(async () => media.evaluate((v: HTMLVideoElement) => v.paused)).toBe(true);
   });
 
-  test('EMBED-003 autoplay=1 starts muted without a click', async ({ page, request, browserName }, testInfo) => {
+  test('EMBED-003 autoplay=1 starts muted without a click', async ({ page, browserName }, testInfo) => {
     test.skip(!canDecodeHls(browserName, testInfo), NO_CODEC);
     const origin = baseOrigin(testInfo);
-    const video = await qaLecture(request, 1);
+    const video = await ownLecture();
     await openHostPage(page, playerFrame(origin, `${origin}/embed/v/${video.id}?autoplay=1`));
     const media = page.frameLocator('#aun').locator('.video-js video');
     await expect.poll(async () => media.evaluate((v: HTMLVideoElement) => v.currentTime), { timeout: 45000 }).toBeGreaterThan(0.5);
     expect(await media.evaluate((v: HTMLVideoElement) => v.muted)).toBe(true);
   });
 
-  test('EMBED-004 Arabic embed renders right to left', async ({ page, request }, testInfo) => {
+  test('EMBED-004 Arabic embed renders right to left', async ({ page }, testInfo) => {
     const origin = baseOrigin(testInfo);
-    const video = await qaLecture(request, 1);
+    const video = await ownLecture();
     await page.goto(`${origin}/embed/v/${video.id}?lang=ar`);
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
@@ -155,8 +190,9 @@ test.describe('unavailable videos', () => {
   test('EMBED-006 a private video shows the same unavailable frame', async ({ page, request }, testInfo) => {
     test.skip(!fs.existsSync(AUTH_STATE.single), 'needs the E2E users from global setup');
     test.setTimeout(240000);
-    const seed = await ensureSeedVideos('single');
-    const privateVideo = seed[SEED_TITLES.singlePrivate];
+    // The single user's own private upload (record only), deleted afterwards
+    const privateVideo = await createDisposableVideo('single', 'embed-private', { isPublic: false });
+    try {
     expect(privateVideo?.isPublic).toBe(false);
     const origin = baseOrigin(testInfo);
 
@@ -165,13 +201,16 @@ test.describe('unavailable videos', () => {
 
     const oembed = await request.get(`${origin}/oembed?url=${encodeURIComponent(`${origin}${watchUrl(privateVideo.id)}`)}`);
     expect(oembed.status()).toBe(404);
+    } finally {
+      await deleteVideoQuietly('single', privateVideo);
+    }
   });
 });
 
 test.describe('oEmbed and social previews', () => {
   test('EMBED-007 oEmbed returns a valid video response with CORS', async ({ request }, testInfo) => {
     const origin = baseOrigin(testInfo);
-    const video = await qaLecture(request, 1);
+    const video = await ownLecture();
     const res = await request.get(`${origin}/oembed?url=${encodeURIComponent(`${origin}${watchUrl(video.id)}`)}&maxwidth=480&format=json`);
     expect(res.status()).toBe(200);
     expect(res.headers()['content-type']).toContain('application/json');
@@ -196,7 +235,7 @@ test.describe('oEmbed and social previews', () => {
 
   test('EMBED-008 the watch page advertises oEmbed and a Twitter player card', async ({ request }, testInfo) => {
     const origin = baseOrigin(testInfo);
-    const video = await qaLecture(request, 1);
+    const video = await ownLecture();
     const html = await (await request.get(`${origin}${watchUrl(video.id)}`)).text();
     expect(html).toMatch(/<link[^>]+rel="alternate"[^>]+type="application\/json\+oembed"/);
     expect(html).toContain(`<meta property="og:video" content="${origin}/embed/v/${video.id}"`);
@@ -206,9 +245,9 @@ test.describe('oEmbed and social previews', () => {
 });
 
 test.describe('share dialog', () => {
-  test('EMBED-009 copies the link and the embed snippet', async ({ page, request }, testInfo) => {
+  test('EMBED-009 copies the link and the embed snippet', async ({ page }, testInfo) => {
     const origin = baseOrigin(testInfo);
-    const video = await qaLecture(request, 1);
+    const video = await ownLecture();
     await page.addInitScript(() => {
       const copied: string[] = [];
       (window as unknown as { __copied: string[] }).__copied = copied;
@@ -233,9 +272,9 @@ test.describe('share dialog', () => {
     );
   });
 
-  test('EMBED-010 ?t= starts the watch page at that time', async ({ page, request, browserName }, testInfo) => {
+  test('EMBED-010 ?t= starts the watch page at that time', async ({ page, browserName }, testInfo) => {
     test.skip(!canDecodeHls(browserName, testInfo), NO_CODEC);
-    const video = await qaLecture(request, 1);
+    const video = await ownLecture();
     await page.goto(`${watchUrl(video.id)}?t=20`);
     const media = page.locator('.video-js video');
     await expect.poll(async () => media.evaluate((v: HTMLVideoElement) => v.readyState), { timeout: 45000 }).toBeGreaterThan(0);
@@ -244,9 +283,9 @@ test.describe('share dialog', () => {
 });
 
 test.describe('embedded discussions (read-only)', () => {
-  test('EMBED-011 the widget renders the comments frame on another origin', async ({ page, request }, testInfo) => {
+  test('EMBED-011 the widget renders the comments frame on another origin', async ({ page }, testInfo) => {
     const origin = baseOrigin(testInfo);
-    const video = await qaLecture(request, 1);
+    const video = await ownLecture();
     await openHostPage(page, `<script src="${origin}/embed/widget.js"></script>
       <alummah-discussion video="${video.id}" lang="ar"></alummah-discussion>`);
     const frame = page.frameLocator('alummah-discussion iframe');

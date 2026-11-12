@@ -2,13 +2,12 @@ import { test, expect } from './fixtures';
 import type { APIRequestContext, Page, TestInfo } from '@playwright/test';
 import { AxeBuilder } from '@axe-core/playwright';
 import { ANONYMOUS_STATE } from './test-utils/auth-state';
+import { useOwnVideos } from './release/own-videos';
 import {
   API_URL,
   canDecodeHls,
   keepControlsVisible,
   mediaState,
-  qaLecture,
-  qaLectures,
   startThenPause,
   waitForPlayer,
   watchUrl,
@@ -48,17 +47,21 @@ async function openPlayable(page: Page, video: QaVideo, locale: 'en' | 'ar' = 'e
   await startThenPause(page);
 }
 
-/** A seed lecture that has no subtitle tracks / chapters right now (QA data changes) */
+/**
+ * This file's own videos (release/own-videos.ts, made in beforeAll and deleted afterwards):
+ * `landscape` has chapters and subtitles, `landscape2` has neither.
+ */
+const own = useOwnVideos(test as never);
+const ownLecture = async (): Promise<QaVideo> => own('landscape');
+
+/** The file's own video with no subtitle tracks / chapters (checked, so a builder change shows up here) */
 async function lectureWithout(request: APIRequestContext, what: 'subtitles' | 'chapters'): Promise<QaVideo> {
-  for (const video of await qaLectures(request)) {
-    const res = await request.get(`${API_URL}/api/videos/${video.id}/${what}`);
-    const body = (await res.json().catch(() => ({}))) as { data?: { tracks?: unknown[] }; success?: boolean; chapters?: { chapters?: unknown[] } };
-    const count = what === 'subtitles'
-      ? (body.data?.tracks ?? []).length
-      : (body.success ? body.chapters?.chapters?.length ?? 0 : 0);
-    if (res.ok() && count === 0) return video;
-  }
-  throw new Error(`every QA lecture has ${what}; cannot test the "none" state`);
+  const video = await own('landscape2');
+  const res = await request.get(`${API_URL}/api/videos/${video.id}/${what}`);
+  const body = (await res.json().catch(() => ({}))) as { data?: { tracks?: unknown[] }; success?: boolean; chapters?: { chapters?: unknown[] } };
+  const count = what === 'subtitles' ? (body.data?.tracks ?? []).length : (body.success ? body.chapters?.chapters?.length ?? 0 : 0);
+  expect(count, `the own video without ${what} has ${count}`).toBe(0);
+  return video;
 }
 
 function skipWithoutCodec(browserName: string, testInfo: TestInfo) {
@@ -70,8 +73,8 @@ test.describe('player error screen', () => {
     ['en', /error/i],
     ['ar', /خطأ/],
   ] as const) {
-    test(`PLAYER-001 an unplayable stream shows the localized error screen (${locale}, all browsers)`, async ({ page, request }) => {
-      const video = await qaLecture(request, 1);
+    test(`PLAYER-001 an unplayable stream shows the localized error screen (${locale}, all browsers)`, async ({ page }) => {
+      const video = await ownLecture();
       // Break the stream for this page only: the HLS playlist answers 404
       await page.route(/\.m3u8(\?.*)?$/, (route) => route.fulfill({ status: 404, body: 'gone' }));
       await page.goto(watchUrl(video.id, locale));
@@ -88,9 +91,9 @@ test.describe('player error screen', () => {
     });
   }
 
-  test('PLAYER-002 without an H.264 decoder the format-error screen is shown and accessible (bundled Chromium)', async ({ page, request, browserName }, testInfo) => {
+  test('PLAYER-002 without an H.264 decoder the format-error screen is shown and accessible (bundled Chromium)', async ({ page, browserName }, testInfo) => {
     test.skip(canDecodeHls(browserName, testInfo), 'this browser decodes the stream; the error path is covered by PLAYER-001');
-    const video = await qaLecture(request, 1);
+    const video = await ownLecture();
     await page.goto(watchUrl(video.id, 'en'));
     expect(await waitForPlayer(page)).toBe('error');
 
@@ -107,9 +110,9 @@ test.describe('player error screen', () => {
 });
 
 test.describe('player controls', () => {
-  test('PLAYER-010 play/pause button toggles playback and its label', async ({ page, request, browserName }, testInfo) => {
+  test('PLAYER-010 play/pause button toggles playback and its label', async ({ page, browserName }, testInfo) => {
     skipWithoutCodec(browserName, testInfo);
-    await openPlayable(page, await qaLecture(request, 1));
+    await openPlayable(page, await ownLecture());
 
     await page.evaluate(() => { (document.querySelector('.video-js video') as HTMLVideoElement).muted = true; });
     const play = page.locator('.video-js .vjs-play-control');
@@ -124,9 +127,9 @@ test.describe('player controls', () => {
     await expect(play).toHaveAccessibleName(/^play video$/i);
   });
 
-  test('PLAYER-011 mute button and volume keys change the audio state', async ({ page, request, browserName, isMobile }, testInfo) => {
+  test('PLAYER-011 mute button and volume keys change the audio state', async ({ page, browserName, isMobile }, testInfo) => {
     skipWithoutCodec(browserName, testInfo);
-    await openPlayable(page, await qaLecture(request, 1));
+    await openPlayable(page, await ownLecture());
 
     const mute = page.locator('.video-js .vjs-mute-control');
     const startMuted = (await mediaState(page)).muted;
@@ -146,9 +149,9 @@ test.describe('player controls', () => {
     await expect(page.locator('.video-js .vjs-volume-bar')).toHaveAttribute('aria-valuenow', /\d+/);
   });
 
-  test('PLAYER-012 progress bar and number keys seek within the video', async ({ page, request, browserName }, testInfo) => {
+  test('PLAYER-012 progress bar and number keys seek within the video', async ({ page, browserName }, testInfo) => {
     skipWithoutCodec(browserName, testInfo);
-    await openPlayable(page, await qaLecture(request, 1));
+    await openPlayable(page, await ownLecture());
 
     const progress = page.locator('.video-js .vjs-progress-holder');
     await expect(progress).toHaveAttribute('role', 'slider');
@@ -171,9 +174,9 @@ test.describe('player controls', () => {
     }).toBeLessThan(30);
   });
 
-  test('PLAYER-013 settings menu opens on click only, lists the renditions and selects one (no Quality row when the browser exposes none)', async ({ page, request, browserName }, testInfo) => {
+  test('PLAYER-013 settings menu opens on click only, lists the renditions and selects one (no Quality row when the browser exposes none)', async ({ page, browserName }, testInfo) => {
     skipWithoutCodec(browserName, testInfo);
-    await openPlayable(page, await qaLecture(request, 1));
+    await openPlayable(page, await ownLecture());
 
     const gear = page.locator('.video-js .vjs-fanous-settings');
     const menu = page.getByTestId('player-settings-menu');
@@ -305,10 +308,10 @@ test.describe('player controls', () => {
     ['en', 'Keyboard Shortcuts', 'Close'],
     ['ar', 'اختصارات لوحة المفاتيح', 'إغلاق'],
   ] as const) {
-    test(`PLAYER-015 keyboard help dialog opens from the settings menu and closes with Escape (${locale})`, async ({ page, request, browserName }, testInfo) => {
+    test(`PLAYER-015 keyboard help dialog opens from the settings menu and closes with Escape (${locale})`, async ({ page, browserName }, testInfo) => {
       skipWithoutCodec(browserName, testInfo);
       // openPlayable has started and paused playback, so the bar and its settings button show
-      await openPlayable(page, await qaLecture(request, 1), locale);
+      await openPlayable(page, await ownLecture(), locale);
 
       // The redesigned bar has no shortcuts button: the help is the last row of the settings menu
       await page.locator('.video-js .vjs-fanous-settings').click();
@@ -324,9 +327,9 @@ test.describe('player controls', () => {
     });
   }
 
-  test('PLAYER-016 fullscreen button is present, labelled and toggles fullscreen (desktop)', async ({ page, request, browserName, isMobile }, testInfo) => {
+  test('PLAYER-016 fullscreen button is present, labelled and toggles fullscreen (desktop)', async ({ page, browserName, isMobile }, testInfo) => {
     skipWithoutCodec(browserName, testInfo);
-    await openPlayable(page, await qaLecture(request, 1));
+    await openPlayable(page, await ownLecture());
 
     const fullscreen = page.locator('.video-js .vjs-fullscreen-control');
     await expect(fullscreen).toBeVisible();
@@ -340,9 +343,9 @@ test.describe('player controls', () => {
     await expect(page.locator('.video-js')).not.toHaveClass(/vjs-fullscreen/);
   });
 
-  test('PLAYER-017 Arabic player translates the control labels', async ({ page, request, browserName }, testInfo) => {
+  test('PLAYER-017 Arabic player translates the control labels', async ({ page, browserName }, testInfo) => {
     skipWithoutCodec(browserName, testInfo);
-    await openPlayable(page, await qaLecture(request, 1), 'ar');
+    await openPlayable(page, await ownLecture(), 'ar');
 
     await expect(page.locator('.video-js .vjs-play-control')).toHaveAccessibleName('تشغيل الفيديو');
     await expect(page.locator('.video-js .vjs-fullscreen-control')).toHaveAccessibleName(/ملء الشاشة/);
@@ -370,9 +373,9 @@ test.describe('player chapters', () => {
     ['en', 'Show Chapters', 'E2E Middle'],
     ['ar', 'إظهار الفصول', 'المنتصف'],
   ] as const) {
-    test(`PLAYER-020 chapter list and progress-bar markers seek to a chapter (${locale})`, async ({ page, request, browserName }, testInfo) => {
+    test(`PLAYER-020 chapter list and progress-bar markers seek to a chapter (${locale})`, async ({ page, browserName }, testInfo) => {
       skipWithoutCodec(browserName, testInfo);
-      const video = await qaLecture(request, 1);
+      const video = await ownLecture();
       await mockChapters(page, video);
       await openPlayable(page, video, locale);
 

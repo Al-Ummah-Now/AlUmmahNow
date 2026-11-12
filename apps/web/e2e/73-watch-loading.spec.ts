@@ -1,7 +1,7 @@
 import type { APIRequestContext, Page } from '@playwright/test';
 import { test, expect } from './fixtures';
 import { ANONYMOUS_STATE } from './test-utils/auth-state';
-import { qaLectures } from './test-utils/watch-page';
+import { useOwnVideos } from './release/own-videos';
 
 /**
  * The watch page loads the video through a server action after hydration.
@@ -11,14 +11,14 @@ import { qaLectures } from './test-utils/watch-page';
 const DELAY_MS = 2000;
 
 /**
- * A public, processed "QA Lecture …" seed video (the Seed QA workflow keeps them), or
- * E2E_PLAYBACK_VIDEO_ID when set. Not a hard-coded id: the theme-demo video these tests
- * used to open (443418c1-…) is gone from QA, and every test then waited for comments on
+ * This file's own public, processed video with chapters (release/own-videos.ts: made in
+ * beforeAll, deleted afterwards). Never a seed or a hard-coded id: the theme-demo video these
+ * tests used to open (443418c1-…) vanished from QA, and every test then waited for comments on
  * a "Video not found" page.
  */
-async function watchVideo(request: APIRequestContext): Promise<string> {
-  if (process.env.E2E_PLAYBACK_VIDEO_ID) return process.env.E2E_PLAYBACK_VIDEO_ID;
-  return (await qaLectures(request))[0].id;
+const own = useOwnVideos(test as never);
+async function watchVideo(_request: APIRequestContext): Promise<string> {
+  return (await own('landscape')).id;
 }
 
 /**
@@ -139,7 +139,7 @@ async function blocks(page: Page): Promise<Record<string, number[]>> {
       return [];
     };
     return {
-      // The player with the chapter bar under it (a video with chapters, as the seed lectures have)
+      // The player with the chapter bar under it (a video with chapters, as this file's own video has)
       player: pick('.wsk-player-frame', '#video-player > div:first-child'),
       title: pick('.wsk-title', '.wsk-title-b', 'h1'),
       channel: pick('.wsk-channel', '#video-player h1 + div'),
