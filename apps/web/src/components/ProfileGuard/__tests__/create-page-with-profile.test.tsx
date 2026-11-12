@@ -23,7 +23,7 @@ jest.mock('@/lib/api/profiles-client', () => ({
   checkProfileExists: (...args: unknown[]) => checkProfileExists(...args),
 }));
 jest.mock('@/lib/api/profiles', () => ({
-  getVideosBanStatus: async () => ({ banned: false, reason: null }),
+  getVideosAccountStatus: async () => ({ banned: false, reason: null, pendingDeletion: false }),
 }));
 jest.mock('@/hooks/useLanguage', () => ({
   useLanguage: () => ({

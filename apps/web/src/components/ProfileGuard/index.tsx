@@ -175,7 +175,7 @@ const ProfileGuard: React.FC<ProfileGuardProps> = ({ children }) => {
   // around an account switch, lets Next write the old URL back), and the page
   // then sat on "Redirecting..." for good.
   // The answer must be this user's: right after an account switch the state still holds the last one's
-  const sendHome = !shouldSkipCheck && hasChecked && user?.id === lastCheckedUserId && !ban && isProfileCreatePage && profileExists === true;
+  const sendHome = !shouldSkipCheck && hasChecked && user?.id === lastCheckedUserId && !ban && !pendingDeletion && isProfileCreatePage && profileExists === true;
   useEffect(() => {
     if (!sendHome) return;
     const homePath = `/${locale}/`;
