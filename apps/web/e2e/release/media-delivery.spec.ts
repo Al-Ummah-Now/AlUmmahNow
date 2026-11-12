@@ -183,9 +183,19 @@ test.describe('Release: R2 delivery', () => {
 
       // Signed private master playlist on the media host
       const playUrl = r2!.playUrl ?? '';
-      expect(playUrl, 'a signed /priv/ play URL on the media host').toMatch(
-        new RegExp(`^https://${mediaHost.replace(/\./g, '\\.')}/priv/\\d{10}\\.[A-Za-z0-9_-]{32}/${videoId}/${r2!.rev}/master\\.m3u8$`),
-      );
+      // Parsed, not a regex built from the host: scheme and host compared exactly, then the path's parts
+      const play = new URL(playUrl);
+      expect(`${play.protocol}//${play.host}`, 'the play URL is on the media host').toBe(`https://${mediaHost}`);
+      const [, priv, token, playVideoId, playRev, file, ...rest] = play.pathname.split('/');
+      expect(priv, 'a signed /priv/ play URL').toBe('priv');
+      expect(token, 'the path token (expiry.signature)').toMatch(/^\d{10}\.[A-Za-z0-9_-]{32}$/);
+      expect([playVideoId, playRev, file, rest.length], 'video id, revision and master playlist').toEqual([
+        videoId,
+        r2!.rev,
+        'master.m3u8',
+        0,
+      ]);
+      expect(play.search, 'no query on the signed play URL').toBe('');
       const master = await (await fetchMedia(playUrl, 'master playlist', HLS_TYPE)).text();
       expect(master.startsWith('#EXTM3U'), 'master playlist starts with #EXTM3U').toBe(true);
       expect(master, 'master playlist lists its renditions').toContain('#EXT-X-STREAM-INF');
