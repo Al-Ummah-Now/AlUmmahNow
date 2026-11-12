@@ -20,7 +20,7 @@ test.use({ trace: 'off' });
 
 const THEMES = ['lantern', 'zujaj', 'nahas', 'fawanees'] as const;
 type Theme = (typeof THEMES)[number];
-// admin-api caches /public/site-theme for 30s and the web app revalidates it every 30s
+// admin-api answers /public/site-theme with max-age=30; the web app reads it on every page
 const PROPAGATION_MS = 120000;
 
 async function publicTheme(): Promise<string | undefined> {
@@ -33,6 +33,24 @@ async function publicTheme(): Promise<string | undefined> {
 async function renderedTheme(): Promise<string | undefined> {
   const html = await (await fetchRetry(`${target().web}/en?theme-check=${Date.now()}`, { cache: 'no-store' })).text();
   return /<html[^>]*data-theme="([a-z][a-z0-9-]*)"/.exec(html)?.[1];
+}
+
+/**
+ * Opens the site until a visit's first HTML has the theme. Every visit can reach another isolate,
+ * and an isolate whose read of the setting is slow renders the theme it rendered last
+ * (apps/web/src/lib/theme/site-theme.ts): the poll above saw one answer, not every isolate's.
+ * Each try is a new navigation; the html element itself never changes after the first HTML.
+ */
+async function visitUntilTheme(site: Page, theme: string): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        await site.goto(`${target().web}/en`);
+        return site.locator('html').getAttribute('data-theme');
+      },
+      { message: `a visit never rendered ${theme}`, timeout: 60000, intervals: [2000, 5000] },
+    )
+    .toBe(theme);
 }
 
 /** Applies a theme on the admin page and waits until the page shows it as current. */
@@ -79,8 +97,7 @@ test.describe('Release: site theme from admin-web', () => {
       // A visitor's browser gets the new theme on the html element, and the frame follows it
       const visitor = await browser.newContext();
       const site = await visitor.newPage();
-      await site.goto(`${target().web}/en`);
-      await expect(site.locator('html')).toHaveAttribute('data-theme', next);
+      await visitUntilTheme(site, next);
       await expect(site.locator('header.ah')).toBeVisible();
       await visitor.close();
     } finally {
@@ -182,8 +199,7 @@ test.describe('Release: theme builder', () => {
       for (const colorScheme of ['dark', 'light'] as const) {
         const visitor = await browser.newContext({ colorScheme });
         const site = await visitor.newPage();
-        await site.goto(`${target().web}/en`);
-        await expect(site.locator('html')).toHaveAttribute('data-theme', id);
+        await visitUntilTheme(site, id);
         await expect(site.locator('style#theme-package')).toHaveCount(1);
         await expect.poll(() => cssVar(site, '--fanous-color-primary-sheen')).toBe(SHEEN);
         const image = await site.locator('body').evaluate((b) => getComputedStyle(b).backgroundImage);

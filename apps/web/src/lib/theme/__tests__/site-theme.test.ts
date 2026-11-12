@@ -1,7 +1,7 @@
 /** @jest-environment node */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { getSiteTheme } from '../site-theme';
+import { getSiteTheme, resetSiteThemeCache } from '../site-theme';
 
 describe('getSiteTheme', () => {
   const env = { ...process.env };
@@ -21,6 +21,7 @@ describe('getSiteTheme', () => {
   beforeEach(() => {
     delete process.env.NEXT_PUBLIC_ACTIVE_THEME;
     process.env.ADMIN_API_URL = 'https://admin.test';
+    resetSiteThemeCache();
     global.fetch = global.fetch ?? jest.fn();
   });
 
@@ -58,6 +59,42 @@ describe('getSiteTheme', () => {
     answers(pkg, `${css}</style><script>alert(1)</script>`);
     await expect(getSiteTheme()).resolves.toEqual(fawanees);
     answers({ theme: 'eid-lights' }, css);
+    await expect(getSiteTheme()).resolves.toEqual(fawanees);
+  });
+
+  it('keeps rendering the last theme when a read does not answer, not the default', async () => {
+    answers(pkg, css);
+    await expect(getSiteTheme()).resolves.toEqual({ id: 'eid-lights', css });
+    // The setting read times out or fails
+    jest.spyOn(global, 'fetch').mockRejectedValueOnce(new DOMException('timed out', 'TimeoutError'));
+    await expect(getSiteTheme()).resolves.toEqual({ id: 'eid-lights', css });
+    answer({}, false);
+    await expect(getSiteTheme()).resolves.toEqual({ id: 'eid-lights', css });
+    // A definite answer still wins
+    answer({ theme: 'nahas' });
+    await expect(getSiteTheme()).resolves.toEqual({ id: 'nahas', css: null });
+  });
+
+  it('reads a package version\'s CSS once', async () => {
+    answers(pkg, css);
+    await expect(getSiteTheme()).resolves.toEqual({ id: 'eid-lights', css });
+    const spy = answer(pkg);
+    spy.mockClear();
+    await expect(getSiteTheme()).resolves.toEqual({ id: 'eid-lights', css });
+    // The setting only
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders the last theme while the package CSS cannot be read, the default once it is old', async () => {
+    answer({ theme: 'zujaj' });
+    await expect(getSiteTheme()).resolves.toEqual({ id: 'zujaj', css: null });
+    jest.spyOn(global, 'fetch')
+      .mockResolvedValueOnce({ ok: true, json: async () => pkg } as Response)
+      .mockRejectedValueOnce(new DOMException('timed out', 'TimeoutError'));
+    await expect(getSiteTheme()).resolves.toEqual({ id: 'zujaj', css: null });
+    const now = Date.now();
+    jest.spyOn(Date, 'now').mockReturnValue(now + 11 * 60 * 1000);
+    jest.spyOn(global, 'fetch').mockRejectedValueOnce(new Error('down'));
     await expect(getSiteTheme()).resolves.toEqual(fawanees);
   });
 
