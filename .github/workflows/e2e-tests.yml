@@ -1,19 +1,12 @@
 name: E2E Tests
 
-# Legacy multi-browser suite against QA. Every run is real traffic on the QA
-# workers (and Workers Logs lines), and a full matrix run takes ~1h40m, so:
-#   - pull requests run the chromium project only (the release suite in
-#     release-e2e.yml also runs on every PR into main);
-#   - the full matrix (firefox, webkit, mobile, a11y, visual, Lighthouse) runs
-#     nightly, after a Release run, and on demand (workflow_dispatch).
+# Legacy multi-browser suite against QA, by hand only (workflow_dispatch).
+# Retired as a scheduled and per-PR run (2026-11-12): the web specs run on the
+# local stack (Local E2E, every PR, every push to main, nightly and inside every
+# release), and QA/stage run only the deployed specs (release-e2e.yml). Kept for
+# a one-off run against QA and for the visual snapshot update
+# (update_snapshots), which opens a PR with the new Linux baselines.
 on:
-  pull_request:
-    branches: [main, 'integrate/**']
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-  schedule:
-    - cron: '30 2 * * *'
   workflow_dispatch:
     inputs:
       update_snapshots:
