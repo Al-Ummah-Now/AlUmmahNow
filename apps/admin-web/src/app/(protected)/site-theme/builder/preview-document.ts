@@ -128,8 +128,11 @@ export function previewDocument({ themeId, css, page, mode, lang }: PreviewOptio
   const t = T[lang];
   const body = page === 'home' ? home(t) : page === 'watch' ? watch(t) : page === 'settings' ? settings(t) : components(t);
   // The compiled CSS is the package's own, validated: it cannot leave this <style>.
+  // `only <mode>` and darkreader-lock keep browser dark modes (Chrome's auto dark, Dark Reader) from
+  // repainting the preview: they lightened the light preview's text and darkened its fills, so it
+  // no longer showed the theme's colours.
   const safeCss = css.replace(/<\/style/gi, '<\\/style');
-  return `<!doctype html><html lang="${lang}" dir="${lang === 'ar' ? 'rtl' : 'ltr'}" data-theme="${esc(themeId)}" data-rail="closed" class="${mode === 'dark' ? 'dark' : ''}" style="color-scheme:${mode}">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/theme-kit/site.css"><style id="pv-base">${PREVIEW_CSS}</style><style id="pv-theme">${safeCss}</style></head>
+  return `<!doctype html><html lang="${lang}" dir="${lang === 'ar' ? 'rtl' : 'ltr'}" data-theme="${esc(themeId)}" data-rail="closed" class="${mode === 'dark' ? 'dark' : ''}" style="color-scheme:only ${mode}">
+<head><meta charset="utf-8"><meta name="color-scheme" content="only ${mode}"><meta name="darkreader-lock"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/theme-kit/site.css"><style id="pv-base">${PREVIEW_CSS}</style><style id="pv-theme">${safeCss}</style></head>
 <body>${body}</body></html>`;
 }

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { compilePackage, resolvedColors } from '../src/compile.ts';
+import { brandUsage, unlinkedBrandColors } from '../src/brand-links.ts';
 import { duplicatePackage, nextVersion } from '../src/edit.ts';
 import { checkSchema } from '../src/json-schema.ts';
 import { parseRefs, toCss } from '../src/refs.ts';
@@ -180,7 +181,10 @@ test('duplicate and versions', () => {
   assert.equal(copy.kind, 'custom');
   assert.equal(copy.basedOn, 'fawanees@1.1.0');
   assert.equal(copy.version, '1.0.0');
-  assert.deepEqual(copy.components, theme.components);
+  // Same CSS; colours equal to a brand colour now reference it
+  assert.equal(compilePackage(copy).css.replaceAll('fawanees-eid', 'fawanees').replace(/@1\.0\.0/, `@${theme.version}`), compilePackage(theme).css);
+  assert.equal(unlinkedBrandColors(copy), 0);
+  assert.ok(Object.values(brandUsage(copy)).reduce((a, b) => a + b, 0) > 0);
   assert.throws(() => duplicatePackage(theme, 'Bad Id', copy.name, 'x'));
   assert.equal(nextVersion([]), '1.0.0');
   assert.equal(nextVersion(['1.0.0', '1.2.0', '1.10.0']), '1.11.0');
