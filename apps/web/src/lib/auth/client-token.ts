@@ -31,23 +31,25 @@ let inflight: Promise<TokenInfo> | null = null;
 /** Bumped by clearClientAuthToken: a read started before the clear never fills the cache. */
 let epoch = 0;
 
+async function readToken(mine: number): Promise<TokenInfo> {
+  try {
+    const res = await fetch('/api/auth/token', { credentials: 'same-origin', cache: 'no-store' });
+    const info: TokenInfo = res.ok ? await res.json() : { accessToken: null, channelId: null };
+    if (mine === epoch) cached = { info, at: Date.now() };
+    return info;
+  } catch {
+    return { accessToken: null, channelId: null };
+  }
+}
+
 export async function fetchClientAuthInfo(force = false): Promise<TokenInfo> {
   if (typeof window === 'undefined') return { accessToken: null, channelId: null };
   if (!force && cached && isFresh(cached, Date.now())) return cached.info;
   if (inflight) return inflight;
   const mine = epoch;
-  const request: Promise<TokenInfo> = (async () => {
-    try {
-      const res = await fetch('/api/auth/token', { credentials: 'same-origin', cache: 'no-store' });
-      const info: TokenInfo = res.ok ? await res.json() : { accessToken: null, channelId: null };
-      if (mine === epoch) cached = { info, at: Date.now() };
-      return info;
-    } catch {
-      return { accessToken: null, channelId: null };
-    } finally {
-      if (inflight === request) inflight = null;
-    }
-  })();
+  const request: Promise<TokenInfo> = readToken(mine).finally(() => {
+    if (inflight === request) inflight = null;
+  });
   inflight = request;
   return request;
 }
