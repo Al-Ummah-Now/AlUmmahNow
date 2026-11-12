@@ -43,4 +43,17 @@ export const LOCAL_WEB_SPECS: readonly string[] = [
   '52-channel-sections.spec.ts',
   '54-playlists.spec.ts',
   '66-feed-subscriptions.spec.ts',
+  // Sub-batch 4: uploads (tus proxy, resume, logs, form, batch, templates) and Studio editing
+  '12-video-upload.spec.ts',
+  '13-video-upload-tus-resume.spec.ts',
+  '15-video-edit.spec.ts',
+  '16-thumbnail-management.spec.ts',
+  '17-tus-proxy-upload.spec.ts',
+  '18-tus-proxy-logs.spec.ts',
+  '19-studio-videos-ownership.spec.ts',
+  '40-upload-form.spec.ts',
+  '41-batch-upload.spec.ts',
+  '42-upload-templates.spec.ts',
+  '43-video-edit-schedule.spec.ts',
+  '44-video-chapters-subtitles.spec.ts',
 ];

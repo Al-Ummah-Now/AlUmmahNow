@@ -5,13 +5,13 @@ import {
   SEED_TITLES,
   createDisposableVideo,
   deleteVideoQuietly,
-  ensureSeedVideos,
   getVideo,
   userApi,
   type E2EVideo,
 } from './test-utils/e2e-videos';
 import { ARABIC, expectDarkSurface, getSchedule, scheduleVideoApi } from './test-utils/upload-studio';
 import { chooseThemedOption, themedTrigger } from './test-utils/themed-select';
+import { ownStudioVideos } from './test-utils/own-studio-videos';
 
 /**
  * Studio's video editor (/[locale]/video/[id]/edit 301s to it): the Schedule Publication
@@ -26,9 +26,15 @@ test.use({ storageState: AUTH_STATE.single });
 const DAY = 24 * 60 * 60 * 1000;
 let seed: Record<string, E2EVideo> = {};
 
+// One worker runs this file's tests in order, so its own data (beforeAll) is made once
+test.describe.configure({ mode: 'default' });
+
+/** This file's own Studio videos of the run users (made in beforeAll, deleted afterwards) */
+const studioSingle = ownStudioVideos(test, 'single');
+
 test.beforeAll(async () => {
   test.setTimeout(180000);
-  seed = await ensureSeedVideos('single');
+  seed = studioSingle.videos();
 });
 
 async function openEditor(page: Page, video: E2EVideo, locale: 'en' | 'ar' = 'en') {
