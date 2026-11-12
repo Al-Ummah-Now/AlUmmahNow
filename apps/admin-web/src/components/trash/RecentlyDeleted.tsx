@@ -21,10 +21,15 @@ export function RecentlyDeleted({ kind, items }: { kind: TrashKind; items: Trash
   const now = new Date();
 
   if (items.length === 0) {
+    // The outcome of the action that emptied the list (restoring or purging its last item) stays
+    // on screen: returning only the empty note dropped the confirmation (Admin E2E TRASH-01)
     return (
-      <p className="text-fg-muted" data-testid="trash-empty">
-        {t('trash.empty')}
-      </p>
+      <div>
+        <ActionFeedback error={error} message={message} />
+        <p className="text-fg-muted" data-testid="trash-empty">
+          {t('trash.empty')}
+        </p>
+      </div>
     );
   }
 
