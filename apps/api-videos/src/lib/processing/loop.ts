@@ -22,6 +22,7 @@ import R2Repository from '../r2Repo';
 import { bunnyApi, bunnyLibraries, bunnyLibraryForVideo, type BunnyLibrariesEnv, type BunnyLibrary, type LibraryHints } from '../bunny/libraries';
 import { isOwnershipComplete } from '../search/ownership';
 import { bunnyFileToken, tokenExpiry } from '../bunny-signing';
+import { placeVideoInCollection } from '../channelCollection';
 import { announceAndRecordProcessingResult, pendingProcessingResult, ProcessingResult } from '../notification-events';
 import { classifyVideoFormat, publishAdminLive, type AdminLiveEnv, type VideoFormatInput } from '@al-ummah/shared-types';
 import {
@@ -54,6 +55,8 @@ interface SecretBinding {
 export interface ProcessingEnv extends AdminLiveEnv {
 	videos: R2Bucket;
 	channels: R2Bucket;
+	/** User collections (lib/channelCollection.ts) */
+	profiles?: R2Bucket;
 	global_settings?: R2Bucket;
 	queue?: Queue;
 	PROCESSING_CHECK_QUEUE?: Queue;
@@ -371,6 +374,9 @@ export async function runProcessingCheck(env: ProcessingEnv, message: Processing
 	if (unannounced) await announceAndRecordProcessingResult(env as never, video, unannounced);
 
 	const bunny = await fetchBunnyVideo(env, message.videoId, video);
+	// A video Bunny still has at the library root goes into its channel's (or
+	// owner's) collection: the upload's collection step failed or was skipped
+	if (bunny && !bunny.collectionId && env.channels) await placeVideoInCollection(env as never, video, bunny.collectionId);
 	const result = await syncVideoFromBunny(env, message.videoId, { now, loopStartedAt: message.startedAt, bunny });
 	const outcome = result.plan?.outcome ?? 'pending';
 	if (outcome === 'ready') await flagUnclassifiable(repo, message.videoId, now);

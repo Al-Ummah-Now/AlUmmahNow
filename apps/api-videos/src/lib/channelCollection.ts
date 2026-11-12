@@ -20,7 +20,7 @@
  */
 import R2Repository from './r2Repo';
 import { logger } from './logger';
-import { bunnyClient, bunnyLibraries, type BunnyLibrariesEnv } from './bunny/libraries';
+import { bunnyClient, bunnyLibraries, bunnyLibraryForVideo, type BunnyLibrariesEnv, type LibraryHints } from './bunny/libraries';
 
 export interface CollectionClient {
 	createCollection(libraryId: number, data: { name?: string }): Promise<{ guid?: string | null }>;
@@ -235,31 +235,81 @@ export async function uploadCollection(
 	channelId: string,
 	ownerId: string,
 ): Promise<string | undefined> {
-	try {
-		if (channelId && channelId !== ownerId) {
-			const channels = new R2Repository<CollectionChannel & { isDeleted?: boolean }>(env.channels);
-			const channel = await channels.getObject(channelId);
-			if (channel && !channel.isDeleted) {
-				const existing = storedCollectionId(channel, libraryId);
-				if (existing) return existing;
-				const collectionId = await ensureChannelCollection(channels, bunny, libraryId, channelId, channel.name || `Channel ${channelId}`);
-				logger.debug('[ChannelCollection] Channel collection ready for upload', { channelId, libraryId, collectionId });
-				return collectionId;
-			}
-			logger.debug('[ChannelCollection] Channel not found; using the owner collection', { channelId, ownerId });
+	let lastError: unknown;
+	// One retry for a transient Bunny/R2 failure; after that the processing
+	// check files the video (placeVideoInCollection), so it never stays at the root
+	for (let attempt = 1; attempt <= 2; attempt++) {
+		try {
+			return await resolveUploadCollection(env, bunny, libraryId, channelId, ownerId);
+		} catch (error) {
+			lastError = error;
 		}
-		if (!env.profiles) return undefined;
-		const collectionId = await ensureUserCollection(env.profiles, bunny, libraryId, ownerId);
-		logger.debug('[ChannelCollection] User collection ready for upload', { ownerId, libraryId, collectionId });
-		return collectionId;
+	}
+	logger.warn('[ChannelCollection] Collection step failed; the processing check will file the video', {
+		channelId,
+		ownerId,
+		libraryId,
+		error: lastError instanceof Error ? lastError.message : String(lastError),
+	});
+	return undefined;
+}
+
+async function resolveUploadCollection(
+	env: { channels: R2Bucket; profiles?: R2Bucket },
+	bunny: CollectionClient,
+	libraryId: number,
+	channelId: string,
+	ownerId: string,
+): Promise<string | undefined> {
+	if (channelId && channelId !== ownerId) {
+		const channels = new R2Repository<CollectionChannel & { isDeleted?: boolean }>(env.channels);
+		const channel = await channels.getObject(channelId);
+		if (channel && !channel.isDeleted) {
+			const existing = storedCollectionId(channel, libraryId);
+			if (existing) return existing;
+			const collectionId = await ensureChannelCollection(channels, bunny, libraryId, channelId, channel.name || `Channel ${channelId}`);
+			logger.debug('[ChannelCollection] Channel collection ready for upload', { channelId, libraryId, collectionId });
+			return collectionId;
+		}
+		logger.debug('[ChannelCollection] Channel not found; using the owner collection', { channelId, ownerId });
+	}
+	if (!env.profiles) return undefined;
+	const collectionId = await ensureUserCollection(env.profiles, bunny, libraryId, ownerId);
+	logger.debug('[ChannelCollection] User collection ready for upload', { ownerId, libraryId, collectionId });
+	return collectionId;
+}
+
+export type PlacementOutcome = 'placed' | 'already' | 'no_collection' | 'failed';
+
+/**
+ * Safety net for uploads whose collection step failed or was skipped
+ * (2026-11-12: bulk uploads landed at the library root): the processing
+ * check calls this with Bunny's view of the video, and a video still at the
+ * root is moved into its channel's (or owner's) collection in its own
+ * library. Never throws; a failure is logged at warn and retried on the next
+ * check (and the backfill catches anything left).
+ */
+export async function placeVideoInCollection(
+	env: BunnyLibrariesEnv & { channels: R2Bucket; profiles?: R2Bucket },
+	video: LibraryHints & { id: string; channelId?: string; userId?: string },
+	currentCollectionId: string | null | undefined,
+): Promise<PlacementOutcome> {
+	if (currentCollectionId) return 'already';
+	if (!video.userId) return 'no_collection';
+	try {
+		const { client, libraryId } = bunnyClient(env, await bunnyLibraryForVideo(env, video));
+		const target = await resolveUploadCollection(env, client, libraryId, video.channelId || video.userId, video.userId);
+		if (!target) return 'no_collection';
+		await client.updateVideo(libraryId, video.id, { collectionId: target });
+		logger.info('[ChannelCollection] Video filed into its collection', { videoId: video.id, libraryId, collectionId: target });
+		return 'placed';
 	} catch (error) {
-		logger.error('[ChannelCollection] Failed to get or create the collection', {
-			channelId,
-			ownerId,
-			libraryId,
+		logger.warn('[ChannelCollection] Could not file the video into its collection; retried on the next check', {
+			videoId: video.id,
+			channelId: video.channelId,
 			error: error instanceof Error ? error.message : String(error),
 		});
-		return undefined;
+		return 'failed';
 	}
 }
 

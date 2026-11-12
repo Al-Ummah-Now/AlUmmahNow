@@ -14,7 +14,7 @@ const FP = { name: 'lecture.mp4', size: 4096, lastModified: 1762700000000, hash:
 
 /** Bunny Stream stub: create / get / delete videos, with an optional delay on create. */
 function bunnyStub() {
-	const s = { created: [] as string[], status: new Map<string, number>(), createDelayMs: 0, deleted: [] as string[] };
+	const s = { created: [] as string[], status: new Map<string, number>(), createDelayMs: 0, deleted: [] as string[], bodies: [] as any[] };
 	globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
 		const url = String(input);
 		const method = init?.method ?? 'GET';
@@ -23,6 +23,7 @@ function bunnyStub() {
 			if (s.createDelayMs) await new Promise((r) => setTimeout(r, s.createDelayMs));
 			const guid = crypto.randomUUID();
 			s.created.push(guid);
+			s.bodies.push(JSON.parse(String(init?.body)));
 			s.status.set(guid, 0);
 			return new Response(JSON.stringify({ guid, title: JSON.parse(String(init?.body)).title, status: 0 }), { status: 200 });
 		}
@@ -311,5 +312,25 @@ describe('POST /api/videos/upload/batch/initiate with fingerprints', () => {
 		assert.equal(a.body.result[0].videoId, a.body.result[1].videoId);
 		assert.equal(b.body.result[0].videoId, a.body.result[0].videoId);
 		assert.equal(bunny.created.length, 1);
+	});
+});
+
+describe('uploads go into the channel collection (2026-11-12: bulk uploads landed at the library root)', () => {
+	afterEach(() => {
+		globalThis.fetch = realFetch;
+	});
+
+	it('single and bulk initiates both create the Bunny video in the channel collection', async () => {
+		const stub = bunnyStub();
+		const h = harness();
+		await h.env.channels.put('ch1', JSON.stringify({ id: 'ch1', userId: 'alice', name: 'Lessons', bunnyCollections: { '123': 'col-1' } }));
+		const single = await h.initiate({});
+		assert.equal(single.status, 200);
+		const bulk = await h.batch([{ title: 'A' }, { title: 'B' }]);
+		assert.equal(bulk.status, 200);
+		assert.equal(stub.bodies.length, 3);
+		assert.ok(stub.bodies.every((b) => b.collectionId === 'col-1'), JSON.stringify(stub.bodies));
+		const record = JSON.parse(h.env.videos.store.get(single.body.result?.videoId ?? single.body.videoId)!);
+		assert.equal(record.bunnyLibraryId, 123);
 	});
 });

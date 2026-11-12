@@ -21,6 +21,8 @@ export interface BunnyVideoState {
 	width?: number;
 	height?: number;
 	thumbnailFileName?: string | null;
+	/** Bunny collection the video is in ('' or null: the library root) */
+	collectionId?: string | null;
 	transcodingMessages?: { message?: string; value?: string; level?: number }[] | null;
 }
 
