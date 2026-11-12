@@ -58,4 +58,16 @@ export const LOCAL_WEB_SPECS: readonly string[] = [
   '44-video-chapters-subtitles.spec.ts',
   // Sub-batch 5: the axe sweep of every page (a11y project)
   'a11y/axe-all-pages.spec.ts',
+  // Sub-batch 6: account, profile, settings, channel settings, community, playlist tools, media boxes
+  '21-channel-handles-owner.spec.ts',
+  '21-watch-later-per-user.spec.ts',
+  '53-channel-settings.spec.ts',
+  '55-community.spec.ts',
+  '56-playlist-tools.spec.ts',
+  '61-header-drawer.spec.ts',
+  '62-account-menu.spec.ts',
+  '63-profile.spec.ts',
+  '64-settings-privacy.spec.ts',
+  '74-no-empty-media.spec.ts',
+  '75-save-to-playlist-menu.spec.ts',
 ];
