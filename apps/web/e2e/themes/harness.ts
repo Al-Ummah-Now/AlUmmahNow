@@ -10,14 +10,16 @@ export type Mode = (typeof MODES)[number];
 const USER_ID = 'theme-sweep-user';
 
 /** A local signed-in session (SessionManager reads the cookie as is; nothing is verified or sent anywhere). */
-export async function signIn(context: BrowserContext, baseURL: string) {
+export async function signIn(context: BrowserContext, baseURL: string, opts: { channel?: boolean } = {}) {
+  // With `channel`, the account owns the mock API's channel c1 (Studio pages)
+  const channels = opts.channel ? [{ id: 'c1', name: 'Lectures Channel', handle: 'lectures', isMain: true, userId: USER_ID }] : [];
   const session = {
     activeUserId: USER_ID,
-    activeChannelId: null,
+    activeChannelId: channels[0]?.id ?? null,
     accounts: {
       [USER_ID]: {
         userId: USER_ID, email: 'sweep@example.test', displayName: 'Theme Sweep',
-        accessToken: 'local-sweep-token', refreshToken: '', channels: [], activeChannelId: null, lastActivity: Date.now(),
+        accessToken: 'local-sweep-token', refreshToken: '', channels, activeChannelId: channels[0]?.id ?? null, lastActivity: Date.now(),
       },
     },
   };
@@ -100,6 +102,8 @@ async function measureOnce(page: Page, root: string): Promise<Contrast[]> {
       seen.add(el);
       const cs = getComputedStyle(el);
       if (cs.visibility === 'hidden' || cs.display === 'none') continue;
+      // Rendering skipped (a closed <details> body, content-visibility: hidden): nothing is drawn
+      if (typeof el.checkVisibility === 'function' && !el.checkVisibility()) continue;
       // Screen-reader-only text is clipped to 1px; it is not seen
       const range = document.createRange();
       range.selectNodeContents(n);

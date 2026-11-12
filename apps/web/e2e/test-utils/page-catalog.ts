@@ -134,3 +134,42 @@ export async function openCatalogPage(page: Page, locale: 'en' | 'ar', entry: Ca
   await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => undefined);
   await expect(page.locator('.animate-pulse')).toHaveCount(0, { timeout: 15000 }).catch(() => undefined);
 }
+
+/**
+ * The site theme the visual baselines and the axe scan are taken in: production's (Lantern).
+ * QA's active theme is one admin setting shared by every concurrent run and may change at any
+ * time, so these suites never depend on it: every page ships the CSS of all built-in themes and
+ * `<html data-theme>` picks one, so the page is switched in place. The other themes are covered,
+ * without screenshots, by the Theme visibility contrast check (e2e/themes, all four themes,
+ * light and dark, on these same pages).
+ */
+export const REFERENCE_THEME = 'lantern';
+
+/**
+ * Pins the reference theme and the colour scheme on the open page, the way the server
+ * (data-theme) and next-themes (the dark/light class and color-scheme) set them, then waits
+ * for styles and fonts to settle.
+ */
+export async function pinReferenceTheme(page: Page, colorScheme: 'light' | 'dark') {
+  await page.evaluate(
+    async ([theme, mode]) => {
+      const html = document.documentElement;
+      html.dataset.theme = theme;
+      html.classList.toggle('dark', mode === 'dark');
+      html.classList.toggle('light', mode === 'light');
+      html.style.colorScheme = mode;
+      await document.fonts.ready;
+      // Two frames: the restyle is applied and painted
+      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+    },
+    [REFERENCE_THEME, colorScheme] as const,
+  );
+  await expect(page.locator('html')).toHaveAttribute('data-theme', REFERENCE_THEME);
+}
+
+/** Opens a catalog page (openCatalogPage) and pins the reference theme in the given colour scheme. */
+export async function openCatalogPageInReferenceTheme(page: Page, locale: 'en' | 'ar', entry: CatalogPage, colorScheme: 'light' | 'dark') {
+  await page.emulateMedia({ colorScheme });
+  await openCatalogPage(page, locale, entry);
+  await pinReferenceTheme(page, colorScheme);
+}

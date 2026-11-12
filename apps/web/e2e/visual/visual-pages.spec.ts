@@ -5,7 +5,7 @@ import {
   VISUAL_PAGE_IDS,
   catalog,
   loadCatalogData,
-  openCatalogPage,
+  openCatalogPageInReferenceTheme,
   type CatalogData,
   type CatalogRole,
 } from '../test-utils/page-catalog';
@@ -17,7 +17,10 @@ import {
  * Baselines are generated on Linux in CI (fonts/antialiasing differ per OS):
  * run the "Update visual snapshots" job of .github/workflows/e2e-tests.yml
  * (workflow_dispatch, update_snapshots=true), which commits
- * e2e/visual/__screenshots__/. Everything that changes between runs on QA
+ * e2e/visual/__screenshots__/. The pages are pinned to the reference theme
+ * (Lantern, REFERENCE_THEME in page-catalog.ts) so QA's active site theme never
+ * changes the snapshots; the other themes are covered by the Theme visibility
+ * contrast check (e2e/themes). Everything that changes between runs on QA
  * (thumbnails, avatars, titles of the newest uploads, counts, dates, the
  * player) is masked, so the snapshots pin layout, chrome and theming.
  */
@@ -82,11 +85,11 @@ for (const role of ['anon', 'single'] as const) {
           test(`VIS-${entry.id} ${locale} ${colorScheme}`, async ({ page }) => {
             await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
             const resolved = catalog(data).find((p) => p.id === entry.id && p.role === role)!;
-            await openCatalogPage(page, locale, resolved);
+            // The baselines are Lantern, whatever QA's active site theme is
+            await openCatalogPageInReferenceTheme(page, locale, resolved, colorScheme);
             await expect(page.locator('html')).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
             // Theme really applied before the snapshot (class-based dark mode)
             if (colorScheme === 'dark') await expect(page.locator('html')).toHaveClass(/dark/);
-            await page.evaluate(() => document.fonts.ready);
             // Data-sized containers get a fixed minimum height so their masks cover the
             // same area whatever the number of items (rows / related entries).
             await page.addStyleTag({

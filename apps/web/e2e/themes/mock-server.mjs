@@ -21,6 +21,25 @@ const video = (i) => ({
 });
 const VIDEOS = Array.from({ length: 12 }, (_, i) => video(i + 1));
 const PROFILE = { id: USER, userId: USER, email: 'sweep@example.test', firstName: 'Theme', lastName: 'Sweep', displayName: 'Theme Sweep', dateCreated: iso(1000) };
+// The sweep user's own channel: the channel page and the Studio pages (owner role) render it
+const CHANNEL = {
+  id: 'c1', userId: USER, name: 'Lectures Channel', nameLocalized: { ar: 'قناة الدروس' }, handle: 'lectures',
+  description: 'Weekly lectures on patience, gratitude and the Quran.', avatarUrl: `${base}/thumb/7.svg`, bannerUrl: `${base}/thumb/8.svg`,
+  isVerified: true, isMain: true, subscriberCount: 1250, subscribersCount: 1250, videoCount: 12, videosCount: 12,
+  dateCreated: iso(2000), dateModified: iso(20), createdAt: iso(2000),
+};
+const STUDIO_ROWS = VIDEOS.slice(0, 6).map((v, i) => ({
+  ...v, channelId: 'c1', userId: USER, isDraft: i === 4, isPublic: i !== 2,
+  studioStatus: ['published', 'published', 'published', 'scheduled', 'drafts', 'processing'][i], failureKind: null,
+}));
+const COMMENTS = [
+  { text: 'JazakAllahu khayran, a very clear lecture.', author: { displayName: 'Viewer One', avatarUrl: `${base}/thumb/9.svg` }, h: 3, edited: false },
+  { text: 'بارك الله فيكم، درس نافع', author: { displayName: 'مشاهد', avatarUrl: `${base}/thumb/10.svg` }, h: 30, edited: true },
+].map((c, i) => ({
+  id: `cm${i}`, userId: `u${i + 3}`, channelId: `ch${i + 3}`, videoId: 'v1', text: c.text, dateCreated: iso(c.h), dateModified: iso(c.h),
+  likesCount: 4 - i, dislikesCount: 0, repliesCount: 0, isEdited: c.edited, isDeleted: false, isPinned: false, parentCommentId: null,
+  author: { userId: `u${i + 3}`, channelId: `ch${i + 3}`, ...c.author },
+}));
 const NOTIFS = Array.from({ length: 8 }, (_, i) => ({ id: `n${i}`, category: 'uploads', notificationType: 'upload_ready', notificationKey: 'uploadReady', params: { videoTitle: `WH${i + 10}_1` }, actionUrl: null, entityId: null, isRead: i > 1, createdAt: iso(i * 24 + 1) }));
 
 function answer(path) {
@@ -34,6 +53,11 @@ function answer(path) {
     ...VIDEOS.slice(0, 4).map((v) => ({ text: v.title, type: 'video', id: v.id, subtitle: v.channelName, thumbnailUrl: v.thumbnailUrl })),
     { text: 'Tafsir', type: 'category', count: 12 },
   ] };
+  if (/^\/api\/channels\/c1(\/owner)?$/.test(path)) return CHANNEL;
+  // Studio Content > Videos: one row per status, and the tab counts
+  if (path === '/api/channels/c1/content') return { success: true, result: { items: STUDIO_ROWS, cursor: null } };
+  if (path === '/api/channels/c1/content/summary') return { success: true, result: { counts: { published: 9, scheduled: 1, drafts: 1, processing: 1, failed: 0 } } };
+  if (/^\/api\/videos\/[^/]+\/comments$/.test(path)) return { success: true, result: { comments: COMMENTS, nextCursor: null, total: COMMENTS.length, sort: 'newest', commentSettings: 'on' } };
   if (/^\/api\/videos\/[^/]+$/.test(path)) return { ...VIDEOS[0], id: path.split('/').pop() };
   if (/videos|search|history|feed|library|watch-later|liked|trending|explore|recommend/.test(path)) return { cursor: '', limit: 12, data: VIDEOS, items: VIDEOS, videos: VIDEOS, success: true, result: { items: VIDEOS, videos: VIDEOS, nextCursor: null } };
   if (/channels/.test(path)) return { success: true, data: [], result: [], items: [], channels: [] };
