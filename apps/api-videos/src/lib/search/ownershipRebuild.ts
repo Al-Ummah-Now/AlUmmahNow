@@ -14,7 +14,7 @@
 import { ALL_OWNERSHIP_KINDS, type AdminJob, type AdminJobTarget, type OwnershipKind } from '@al-ummah/shared-types';
 import { createJob, listJobs, type JobEnv, type JobOutcome } from '../admin/jobs';
 import { logger } from '../logger';
-import { resetOwnershipPass, runOwnershipPass, withOwnershipLease, type OwnershipEnv } from './ownership';
+import { activeOwnershipRebuild, ownershipRebuildKey, resetOwnershipPass, runOwnershipPass, withOwnershipLease, type OwnershipEnv } from './ownership';
 
 export const OWNERSHIP_REBUILD_JOB = 'search.rebuild-ownership' as const;
 /** Job target id (one target per kind: video, channel, user = profiles). */
@@ -55,11 +55,21 @@ export async function runOwnershipRebuildStep(env: OwnershipRebuildEnv, job: Adm
   const kind = job.params.kind;
   if (!isOwnershipKind(kind)) throw new Error(`Unknown index kind: ${String(kind)}`);
   const pagesBefore = Number(job.params.pages) || 0;
+  const db = env.SEARCH_DB!;
   const step = await withOwnershipLease(env, kind, async () => {
-    // A new rebuild walks the whole bucket from the first key, whatever pass was half done
-    if (job.params.fresh !== false) await resetOwnershipPass(env.SEARCH_DB!, kind);
-    return runOwnershipPass(env, kind, { maxPages: REBUILD_PAGES_PER_STEP });
-  });
+    // A new rebuild walks the whole bucket from the first key, whatever pass was half done. A retried
+    // first step (the queue redelivers it with fresh: true) continues the pass this job started.
+    if (job.params.fresh !== false && (await activeOwnershipRebuild(db, kind)) !== job.id) await resetOwnershipPass(db, kind);
+    // Heartbeat: reader heals and the cron stand down while it is fresh
+    await db.prepare(
+      `INSERT INTO search_meta (key, value, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+    ).bind(ownershipRebuildKey(kind), job.id, Date.now()).run();
+    const result = await runOwnershipPass(env, kind, { maxPages: REBUILD_PAGES_PER_STEP });
+    // A finished pass ends this job's claim: a retry after drift starts a new pass
+    if (result.done) await db.prepare('DELETE FROM search_meta WHERE key = ?').bind(ownershipRebuildKey(kind)).run();
+    return result;
+  }, Date.now(), { rebuild: true });
   // Another pass (cron or self-heal) holds the lease: retried with backoff
   if (!step) throw new Error(`Another ${kind} index pass is running; retrying`);
   const pages = pagesBefore + step.pages;
