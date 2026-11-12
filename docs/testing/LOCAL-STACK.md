@@ -66,7 +66,8 @@ listens on its own port:
   - `POST /__stack/d1/<database name>`, which runs the request body as SQL. The seed uses it for roles
     and creator tiers, and specs that are not about auth can use it as a fast path.
   - `GET|PUT|DELETE /__stack/r2/<bucket name>/<key>`: one object of a stack R2 bucket (fixtures a spec
-    seeds in R2, such as the admin suite's legacy profile record).
+    seeds in R2, such as the admin suite's legacy profile record); without a key,
+    `GET /__stack/r2/<bucket name>?prefix=<p>[&cursor=<c>]` lists keys (`{ keys, cursor }`, 1000 a page).
 - **The browser's proxy** (`scripts/local-stack/browser-proxy.ts`, `http://127.0.0.1:3191`): Playwright
   runs on the local stack with `proxy` set to it and with `ignoreHTTPSErrors`. HTTPS to a faked host is
   terminated there with a throwaway self-signed certificate and answered by the same fakes. Localhost

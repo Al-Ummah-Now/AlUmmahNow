@@ -65,6 +65,7 @@ interface MiniflareInstance {
   getSecretsStoreSecretAPI(binding: string, worker?: string): Promise<() => { create(value: string): Promise<string> }>;
 }
 interface R2 {
+  list(o?: { prefix?: string; cursor?: string; limit?: number }): Promise<{ objects: { key: string }[]; truncated: boolean; cursor?: string }>;
   get(key: string): Promise<{ text(): Promise<string> } | null>;
   put(key: string, value: string): Promise<unknown>;
   delete(key: string): Promise<void>;
@@ -385,6 +386,11 @@ async function main(): Promise<void> {
     const bucket = await mf.getR2Bucket(target.binding, target.worker);
     if (method === 'PUT') return (await bucket.put(key, body ?? '')), { status: 200 };
     if (method === 'DELETE') return (await bucket.delete(key)), { status: 200 };
+    if (method === 'LIST') {
+      const { prefix, cursor } = JSON.parse(body ?? '{}') as { prefix?: string; cursor?: string };
+      const page = await bucket.list({ prefix, cursor, limit: 1000 });
+      return { status: 200, body: JSON.stringify({ keys: page.objects.map((o) => o.key), cursor: page.truncated ? page.cursor : null }) };
+    }
     const object = await bucket.get(key);
     return object ? { status: 200, body: await object.text() } : { status: 404 };
   });
