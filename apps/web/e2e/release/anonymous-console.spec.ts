@@ -15,9 +15,12 @@
  * console error. No user, no data: safe on any target.
  */
 import { test, expect, type BrowserContext, type ConsoleMessage, type Page, type Response } from '@playwright/test';
-import { target } from './targets';
+import { target, releaseEnv } from './targets';
 import { watchUrl } from './videos';
 import { useOwnVideos } from './own-videos';
+
+// quarantined: #1020 @meywd: on the local stack WebKit never fires the load event (every navigation times out)
+test.fixme(({ browserName }) => browserName === 'webkit' && releaseEnv() === 'local', 'quarantined: #1020 @meywd: WebKit load event on the local stack');
 
 // This spec's own videos (created in beforeAll, deleted in afterAll): never the seed's or the newest public one
 const own = useOwnVideos(test);
