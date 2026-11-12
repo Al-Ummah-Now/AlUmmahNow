@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/AppLink';
 import { getOpsOverview, getOpsSeries, listOpsResources } from '@/lib/api/ops';
 import { AdminApiError } from '@/lib/api/errors';
 import { OPS_RANGES, type OpsEnv, type OpsKind, type OpsOverview, type OpsRange, type OpsResource } from '@/lib/api/ops-types';

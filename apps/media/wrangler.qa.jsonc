@@ -6,7 +6,8 @@
   "compatibility_date": "2025-10-01",
   "compatibility_flags": ["nodejs_compat", "enable_ctx_exports"],
   "workers_dev": false,
-  "observability": { "enabled": true, "head_sampling_rate": 1, "logs": { "enabled": true, "head_sampling_rate": 1 } },
+  // Logging policy (docs/operations/logging.md): every invocation kept, no invocation log, LOG_LEVEL warn
+  "observability": { "enabled": true, "head_sampling_rate": 1, "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": false } },
   // Only private renditions run this Worker; /pub/* is the R2 custom domain + Cache Rule
   "routes": [{ "pattern": "media.qa.alummahnow.net/priv/*", "zone_name": "alummahnow.net" }],
   "containers": [
@@ -46,5 +47,5 @@
     { "binding": "MEDIA_SIGN_KEY", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "media-sign-key-qa" },
     { "binding": "INTERNAL_API_KEY", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "internal-api-key-qa" }
   ],
-  "vars": { "TRANSCODER_INSTANCE": "standard-4", "LOG_LEVEL": "debug" }
+  "vars": { "TRANSCODER_INSTANCE": "standard-4", "LOG_LEVEL": "warn" }
 }
