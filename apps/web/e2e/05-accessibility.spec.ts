@@ -2,13 +2,13 @@ import { test, expect } from './fixtures';
 import type { Locator } from '@playwright/test';
 import { ANONYMOUS_STATE, AUTH_STATE } from './test-utils/auth-state';
 import { menuTrigger } from './test-utils/navigation';
-import { usePublicVideos } from './test-utils/own-public-video';
+import { ownPublicVideos } from './test-utils/own-public-video';
 
 // One worker runs this file's tests in order, so its own data (beforeAll) is made once
 test.describe.configure({ mode: 'default' });
 
 /** This file's own public video, so the home grid has a card of ours (no seed, no other run's uploads) */
-const own = usePublicVideos(test, 'a11y');
+const own = ownPublicVideos(test, 'a11y');
 
 
 /**

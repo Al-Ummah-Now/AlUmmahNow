@@ -2,14 +2,22 @@ import { test, expect } from './fixtures';
 import type { Page } from '@playwright/test';
 import { ANONYMOUS_STATE, AUTH_STATE } from './test-utils/auth-state';
 import { clickAndWaitForURL } from './test-utils/qa-content';
+import { ownPublicVideos } from './test-utils/own-public-video';
 
 /**
- * Home (/[locale]) and the all-videos browse page (/[locale]/videos), against
- * real QA content. Other runs add and remove short-lived "E2E Temp" videos
- * all the time, so assertions never depend on exact counts or ordering.
+ * Home (/[locale]) and the all-videos browse page (/[locale]/videos), against this file's own
+ * public videos: more than a page (15) of them, made in beforeAll and deleted afterwards, so
+ * "Load More" always has a next page. Other specs add and remove videos at the same time, so
+ * assertions never depend on exact counts or ordering.
  */
 
-const API_URL = process.env.API_URL || 'https://videos.api.qa.alummahnow.net';
+/** One more than the home grid's page (fetchVideosWithPagination: limit 15) */
+const OWN_VIDEOS = 16;
+
+// One worker runs this file's tests in order, so its own data (beforeAll) is made once
+test.describe.configure({ mode: 'default' });
+
+const own = ownPublicVideos(test, 'home-videos', Array.from({ length: OWN_VIDEOS }, () => ({})));
 
 async function expectNoHorizontalScroll(page: Page) {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
@@ -26,7 +34,7 @@ test.describe('Home - anonymous', () => {
 
   test('HOME-001 cards render title, thumbnail and a locale-aware watch link', async ({ page }) => {
     await page.goto('/en');
-    const card = page.getByTestId('video-card').first();
+    const card = own.card(page);
     await expect(card).toBeVisible();
     await expect(page.getByTestId('video-grid-loading')).toHaveCount(0);
 
@@ -41,25 +49,22 @@ test.describe('Home - anonymous', () => {
     }
   });
 
-  test('HOME-002 shows the public videos the API lists', async ({ page, request }) => {
-    const res = await request.get(`${API_URL}/api/videos?limit=50`);
-    expect(res.ok()).toBe(true);
-    const body = (await res.json()) as { data: Array<{ id: string; title: string }> };
-    const seed = body.data.find((v) => v.title.startsWith('QA '));
-    expect(seed, 'QA seed videos are listed by the API').toBeTruthy();
+  test('HOME-002 shows the public videos the API lists', async ({ page }) => {
+    // The first of this file's videos: the oldest, so usually past the first page
+    const mine = own.videos()[0];
 
     await page.goto('/en');
-    await expect(page.getByTestId('video-card').first()).toBeVisible();
-    // Loaded pages include the seed video (load more until found, bounded)
-    const seedCard = page.locator(`[data-testid="video-card"][data-video-id="${seed!.id}"]`);
-    for (let i = 0; i < 5 && (await seedCard.count()) === 0; i++) {
+    await expect(own.card(page)).toBeVisible();
+    // Loaded pages include it (load more until found, bounded)
+    const mineCard = page.locator(`[data-testid="video-card"][data-video-id="${mine.id}"]`);
+    for (let i = 0; i < 5 && (await mineCard.count()) === 0; i++) {
       const more = loadMoreButton(page);
       if (!(await more.isEnabled())) break;
       await more.click();
       await expect(more).toHaveText(/^(Load More|تحميل المزيد)$/, { timeout: 30000 });
     }
-    await expect(seedCard).toBeVisible();
-    await expect(seedCard).toContainText(seed!.title);
+    await expect(mineCard).toBeVisible();
+    await expect(mineCard).toContainText(mine.title);
   });
 
   test('HOME-003 "Load More" appends the next page without duplicates', async ({ page }) => {
@@ -70,7 +75,7 @@ test.describe('Home - anonymous', () => {
     await expect(more).toBeVisible();
 
     const before = await cards.count();
-    test.skip(!(await more.isEnabled()), 'QA has a single page of public videos right now');
+    await expect(more, 'this file made more public videos than a page holds').toBeEnabled();
     await more.click();
     // Either the next page is appended, or the API had no more public videos
     // for the cursor and the button is disabled (end of the list)
@@ -88,7 +93,7 @@ test.describe('Home - anonymous', () => {
 
   test('HOME-004 clicking a card opens the watch page', async ({ page }) => {
     await page.goto('/en');
-    const card = page.getByTestId('video-card').first();
+    const card = own.card(page);
     await expect(card).toBeVisible();
     await clickAndWaitForURL(page, card, /\/en\/video\?vid=[\w-]+$/);
   });
@@ -97,7 +102,7 @@ test.describe('Home - anonymous', () => {
     await page.goto('/ar');
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('المرئيات');
-    const card = page.getByTestId('video-card').first();
+    const card = own.card(page);
     await expect(card).toHaveAttribute('href', /^\/ar\/video\?vid=/);
     await expect(loadMoreButton(page)).toBeVisible();
     await expect(page.getByRole('main')).toHaveCSS('direction', 'rtl');
@@ -105,10 +110,10 @@ test.describe('Home - anonymous', () => {
 
   test('HOME-006 grid fits the viewport (no horizontal scroll)', async ({ page }) => {
     await page.goto('/en');
-    await expect(page.getByTestId('video-card').first()).toBeVisible();
+    await expect(own.card(page)).toBeVisible();
     await expectNoHorizontalScroll(page);
     await page.goto('/ar');
-    await expect(page.getByTestId('video-card').first()).toBeVisible();
+    await expect(own.card(page)).toBeVisible();
     await expectNoHorizontalScroll(page);
   });
 
@@ -118,12 +123,12 @@ test.describe('Home - anonymous', () => {
     // QA's first page holds depends on its catalogue (it can be a single one)
     // The home grid comes after the (signed-in only) continue-watching shelf
     const grid = page.getByTestId('video-grid').last();
-    await expect(grid.getByTestId('video-card').first()).toBeVisible();
+    await expect(own.card(page)).toBeVisible();
     const { columns, gridWidth } = await grid.evaluate((el) => ({
       columns: getComputedStyle(el).gridTemplateColumns.split(' ').filter(Boolean).length,
       gridWidth: el.getBoundingClientRect().width,
     }));
-    const card = (await grid.getByTestId('video-card').first().boundingBox())!;
+    const card = (await own.card(page).boundingBox())!;
     if (isMobile) {
       // One column: the card spans the grid
       expect(columns).toBe(1);
@@ -141,7 +146,7 @@ test.describe('Home - dark theme', () => {
   test('HOME-008 follows the system dark theme', async ({ page }) => {
     await page.goto('/en');
     await expect(page.locator('html')).toHaveClass(/\bdark\b/);
-    await expect(page.getByTestId('video-card').first()).toBeVisible();
+    await expect(own.card(page)).toBeVisible();
     const heading = page.getByRole('heading', { level: 1 });
     // Light text on the dark page: the dark theme's primary text colour
     const themeText = await page.evaluate(() => {
@@ -164,7 +169,7 @@ test.describe('Home - signed in', () => {
   test('HOME-009 renders the feed for a signed-in user', async ({ page }) => {
     await page.goto('/en');
     await expect(page.getByRole('heading', { level: 1, name: 'Videos' })).toBeVisible();
-    await expect(page.getByTestId('video-card').first()).toBeVisible();
+    await expect(own.card(page)).toBeVisible();
   });
 });
 
@@ -176,7 +181,7 @@ test.describe('All videos page', () => {
     await expect(page).toHaveTitle(/All videos \| Al Ummah Now/i);
     await expect(page.getByRole('heading', { level: 1, name: /^All videos$/i })).toBeVisible();
     await expect(page.getByText('Browse the latest videos from every channel')).toBeVisible();
-    const card = page.getByTestId('video-card').first();
+    const card = own.card(page);
     await expect(card).toBeVisible();
     await expect(card).toHaveAttribute('href', /^\/en\/video\?vid=/);
   });
@@ -186,7 +191,7 @@ test.describe('All videos page', () => {
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     await expect(page.getByRole('heading', { level: 1, name: 'جميع المرئيات' })).toBeVisible();
     await expect(page.getByRole('main')).toHaveAttribute('dir', 'rtl');
-    await expect(page.getByTestId('video-card').first()).toHaveAttribute('href', /^\/ar\/video\?vid=/);
+    await expect(own.card(page)).toHaveAttribute('href', /^\/ar\/video\?vid=/);
   });
 
   test('VIDS-003 load more appends unique videos', async ({ page }) => {
@@ -194,7 +199,7 @@ test.describe('All videos page', () => {
     const cards = page.getByTestId('video-card');
     await expect(cards.first()).toBeVisible();
     const more = page.getByRole('main').getByRole('button', { name: /^(Load More|View All)$/ });
-    test.skip((await more.count()) === 0, 'QA has a single page of public videos right now');
+    await expect(more, 'this file made more public videos than a page holds').toHaveCount(1);
     const before = await cards.count();
     await more.click();
     // Appended, or the end of the list was reached and the button removed

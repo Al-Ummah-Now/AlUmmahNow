@@ -2,13 +2,19 @@ import { test, expect } from './fixtures';
 import type { APIRequestContext, Page } from '@playwright/test';
 import { ANONYMOUS_STATE, AUTH_STATE } from './test-utils/auth-state';
 import { API_URL, userApi } from './test-utils/e2e-videos';
-import { findSeedVideo } from './test-utils/qa-content';
+import { ownPublicVideos } from './test-utils/own-public-video';
 
 /**
- * Library (Story 29.6) against QA: hub, Watch later (watch page + card menu),
- * liked videos from the per-user index. Every item a test saves or likes is
- * removed again in afterEach.
+ * Library (Story 29.6): hub, Watch later (watch page + card menu), liked videos
+ * from the per-user index, on this file's own public video (made in beforeAll,
+ * deleted afterwards). Every item a test saves or likes is removed again in afterEach.
  */
+
+// One worker runs this file's tests in order, so its own data (beforeAll) is made once
+test.describe.configure({ mode: 'default' });
+
+const own = ownPublicVideos(test, 'library');
+const ownVideo = async (_request: APIRequestContext) => own.videos()[0];
 
 function authHeaders(user: 'single' = 'single') {
   const u = userApi(user);
@@ -51,7 +57,7 @@ async function expectSeeAllMatchesContent(page: Page, id: (typeof HUB_SECTIONS)[
 
 /** Puts a seed video in Watch later and in the liked videos (desktop projects only). */
 async function seedHub(request: APIRequestContext, cleanup: string[], unlike: string[]) {
-  const video = await findSeedVideo(request);
+  const video = await ownVideo(request);
   const saved = await request.post(`${API_URL}/api/library/watch-later`, { headers: authHeaders(), data: { videoId: video.id } });
   expect(saved.ok()).toBe(true);
   cleanup.push(video.id);
@@ -109,7 +115,7 @@ test.describe('Library (signed in)', () => {
 
   test('saves a video to Watch later from the watch page and removes it from the list', async ({ page, request }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('Mobile'), SHARED_STATE_REASON);
-    const video = await findSeedVideo(request);
+    const video = await ownVideo(request);
     await removeFromWatchLater(request, video.id);
     cleanup.push(video.id);
 
@@ -132,7 +138,7 @@ test.describe('Library (signed in)', () => {
   test('saves from a video card overflow menu with the keyboard', async ({ page, request }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('Mobile'), SHARED_STATE_REASON);
     await page.goto('/en');
-    const card = page.getByTestId('video-card').first();
+    const card = own.card(page);
     await expect(card).toBeVisible();
     const videoId = (await card.getAttribute('data-video-id')) as string;
     await removeFromWatchLater(request, videoId);
@@ -150,7 +156,7 @@ test.describe('Library (signed in)', () => {
 
   test('liked videos page lists a liked video from the per-user index', async ({ page, request }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('Mobile'), SHARED_STATE_REASON);
-    const video = await findSeedVideo(request);
+    const video = await ownVideo(request);
     const liked = await request.post(`${API_URL}/api/videos/${video.id}/likes`, { headers: authHeaders() });
     expect(liked.ok()).toBe(true);
     unlike.push(video.id);
@@ -168,7 +174,7 @@ test.describe('Library (anonymous)', () => {
     await page.goto('/en/library');
     await expect(page.getByTestId('library-signed-out')).toBeVisible();
     await page.goto('/en');
-    await expect(page.getByTestId('video-card').first()).toBeVisible();
+    await expect(own.card(page)).toBeVisible();
     await expect(page.getByTestId('video-card-menu')).toHaveCount(0);
   });
 

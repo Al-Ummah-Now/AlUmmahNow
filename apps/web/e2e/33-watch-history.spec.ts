@@ -1,16 +1,23 @@
 import { test, expect } from './fixtures';
 import type { APIRequestContext } from '@playwright/test';
 import { ANONYMOUS_STATE, AUTH_STATE, readAccount } from './test-utils/auth-state';
-import { apiCall, qaLectures, type QaVideo } from './test-utils/watch-page';
+import { apiCall, type QaVideo } from './test-utils/watch-page';
+import { ownPublicVideos } from './test-utils/own-public-video';
 
 /**
  * Watch history page (/[locale]/history).
  *
  * Entries are recorded through POST /api/watch-history for the profile-only
  * ("none") E2E user, which no other spec uses for history, and removed again.
+ * The videos are this file's own (made in beforeAll, deleted afterwards).
  */
 
 const USER = 'none' as const;
+
+// One worker runs this file's tests in order, so its own data (beforeAll) is made once
+test.describe.configure({ mode: 'default' });
+
+const own = ownPublicVideos(test, 'history', [{}, {}]);
 
 async function record(request: APIRequestContext, video: QaVideo, progress: number) {
   const { accessToken } = readAccount(USER);
@@ -50,8 +57,8 @@ test.describe('watch history - signed in', () => {
 
   let videos: QaVideo[] = [];
 
-  test.beforeAll(async ({ request }) => {
-    videos = (await qaLectures(request)).slice(0, 2);
+  test.beforeAll(async () => {
+    videos = own.videos().slice(0, 2);
     expect(videos.length).toBeGreaterThan(0);
   });
   test.afterEach(async ({ request }) => {

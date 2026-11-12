@@ -1,9 +1,10 @@
 import { test, expect } from './fixtures';
 import type { Page } from '@playwright/test';
 import { ANONYMOUS_STATE, AUTH_STATE, readAccount } from './test-utils/auth-state';
-import { SEED_TITLES, ensureSeedVideos, type E2EVideo } from './test-utils/e2e-videos';
-import { apiCall, fetchVideo, qaLecture, qaVideoForProject, tempName, watchUrl, type QaVideo, type WatchRoute } from './test-utils/watch-page';
+import { createDisposableVideo, deleteVideoQuietly, waitForReady, type E2EVideo } from './test-utils/e2e-videos';
+import { apiCall, fetchVideo, tempName, watchUrl, type QaVideo, type WatchRoute } from './test-utils/watch-page';
 import { clickAndWaitForURL } from './test-utils/qa-content';
+import { ownPublicVideos, type OwnVideo } from './test-utils/own-public-video';
 
 /**
  * Watch page (/[locale]/video/[id] and the legacy /[locale]/video?vid=):
@@ -11,7 +12,22 @@ import { clickAndWaitForURL } from './test-utils/qa-content';
  * link, related videos, not-found state, RTL and dark theme.
  *
  * Player controls live in 31-video-player.spec.ts, comments in 32-comments.
+ *
+ * Its own data: a creator with three public videos in one channel (made in beforeAll, deleted
+ * afterwards), so related videos are this file's too; the owner tests use the single user's own
+ * upload.
  */
+
+// One worker runs this file's tests in order, so its own data (beforeAll) is made once
+test.describe.configure({ mode: 'default' });
+
+const own = ownPublicVideos(test, 'watch', [
+  { titleAr: 'محاضرة الاختبار الأولى' },
+  { titleAr: 'محاضرة الاختبار الثانية' },
+  { titleAr: 'محاضرة الاختبار الثالثة' },
+]);
+/** The file's n-th own public video (1-based). */
+const ownLecture = (n: number): OwnVideo => own.videos()[n - 1];
 
 const ROUTES: WatchRoute[] = ['id', 'legacy'];
 
@@ -24,8 +40,8 @@ test.describe('watch page - anonymous', () => {
   test.use({ storageState: ANONYMOUS_STATE });
 
   for (const route of ROUTES) {
-    test(`WATCH-001 shows title, channel, player and metrics (en, ${route} route)`, async ({ page, request }) => {
-      const video = await qaLecture(request, 1);
+    test(`WATCH-001 shows title, channel, player and metrics (en, ${route} route)`, async ({ page }) => {
+      const video = ownLecture(1);
       await openWatch(page, video, 'en', route);
 
       await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
@@ -39,8 +55,8 @@ test.describe('watch page - anonymous', () => {
       await expect(page.locator('#comments')).toHaveCount(1);
     });
 
-    test(`WATCH-002 renders the Arabic RTL watch page (ar, ${route} route)`, async ({ page, request }) => {
-      const video = await qaLecture(request, 1);
+    test(`WATCH-002 renders the Arabic RTL watch page (ar, ${route} route)`, async ({ page }) => {
+      const video = ownLecture(1);
       await openWatch(page, video, 'ar', route);
 
       await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
@@ -80,8 +96,8 @@ test.describe('watch page - anonymous', () => {
     });
   }
 
-  test('WATCH-005 anonymous viewers cannot react, save or report', async ({ page, request }) => {
-    const video = await qaLecture(request, 1);
+  test('WATCH-005 anonymous viewers cannot react, save or report', async ({ page }) => {
+    const video = ownLecture(1);
     await openWatch(page, video);
 
     const like = page.getByTestId('video-like-button');
@@ -93,8 +109,8 @@ test.describe('watch page - anonymous', () => {
     await expect(page.getByTestId('video-owner-edit-link')).toHaveCount(0);
   });
 
-  test('WATCH-006 related videos exclude the current video and open another watch page', async ({ page, request, isMobile }) => {
-    const video = await qaLecture(request, 1);
+  test('WATCH-006 related videos exclude the current video and open another watch page', async ({ page, isMobile }) => {
+    const video = ownLecture(1);
     await openWatch(page, video);
 
     // Desktop shows the sidebar list, mobile the list under the comments (the other copy is display:none)
@@ -113,9 +129,9 @@ test.describe('watch page - anonymous', () => {
       expect(box!.x, 'desktop: related list is a sidebar next to the player').toBeGreaterThan(player!.x + player!.width - 1);
     }
 
-    // Open a related QA seed video (other agents' temporary videos come and go):
-    // its watch page shows that video's title
-    const link = related.filter({ has: page.getByRole('heading', { level: 3, name: /^QA (Lecture|Nasheed) / }) }).first();
+    // Open one of this file's own videos (other specs' videos come and go): its watch page shows that video's title
+    const ownTitles = new RegExp(`^(${own.videos().map((v) => v.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})$`);
+    const link = related.filter({ has: page.getByRole('heading', { level: 3, name: ownTitles }) }).first();
     const title = (await link.getByRole('heading', { level: 3 }).innerText()).trim();
     const id = (await link.getAttribute('href'))!.split('vid=')[1];
     await clickAndWaitForURL(page, link, new RegExp(`/en/video\\?vid=${id}$`));
@@ -128,8 +144,8 @@ test.describe('watch page - dark theme', () => {
   test.use({ storageState: ANONYMOUS_STATE, colorScheme: 'dark' });
 
   for (const locale of ['en', 'ar'] as const) {
-    test(`WATCH-007 follows the dark colour scheme (${locale})`, async ({ page, request }) => {
-      const video = await qaLecture(request, 1);
+    test(`WATCH-007 follows the dark colour scheme (${locale})`, async ({ page }) => {
+      const video = ownLecture(1);
       await openWatch(page, video, locale);
       await expect(page.locator('html')).toHaveClass(/dark/);
       const heading = page.getByRole('heading', { level: 1 }).first();
@@ -149,7 +165,7 @@ test.describe('watch page - reactions (signed in)', () => {
   let video: QaVideo;
 
   /** Removes any like (and any dislike from before 2026-11-11) this account left on the video (as its channels or itself) */
-  async function clearReactions(request: Parameters<typeof qaLecture>[0]) {
+  async function clearReactions(request: Parameters<typeof apiCall>[0]) {
     const account = readAccount('multi');
     const ids = [...account.channels.map((c) => c.id), account.userId];
     for (const channelId of ids) {
@@ -158,9 +174,8 @@ test.describe('watch page - reactions (signed in)', () => {
     }
   }
 
-  test.beforeAll(async ({ request }, testInfo) => {
-    // One video per project: projects run in parallel with the same account
-    video = await qaVideoForProject(request, testInfo.project.name);
+  test.beforeAll(async () => {
+    video = ownLecture(1);
   });
   test.beforeEach(async ({ request }) => clearReactions(request));
   test.afterEach(async ({ request }) => clearReactions(request));
@@ -233,8 +248,8 @@ test.describe('watch page - report (signed in, not the owner)', () => {
     ['en', 'Report', 'Report Content', 'Close', 'Spam or Misleading'],
     ['ar', 'إبلاغ', 'الإبلاغ عن محتوى', 'إغلاق', 'بريد مزعج أو مضلل'],
   ] as const) {
-    test(`WATCH-011 report dialog opens, requires a reason and closes without reporting (${locale})`, async ({ page, request }) => {
-      const video = await qaLecture(request, 1);
+    test(`WATCH-011 report dialog opens, requires a reason and closes without reporting (${locale})`, async ({ page }) => {
+      const video = ownLecture(1);
       await openWatch(page, video, locale);
 
       // Report lives in the action row's "More actions" menu
@@ -271,15 +286,17 @@ test.describe('watch page - report (signed in, not the owner)', () => {
 test.describe('watch page - owner', () => {
   test.use({ storageState: AUTH_STATE.single });
 
-  let seed: Record<string, E2EVideo> = {};
+  // The single user's own upload (record and bytes, encoded by the stack's fake Bunny), deleted afterwards
+  let mine: E2EVideo | null = null;
   test.beforeAll(async () => {
     test.setTimeout(180000);
-    seed = await ensureSeedVideos('single');
+    mine = await waitForReady('single', await createDisposableVideo('single', 'watch-owner', { isPublic: true, encode: true }));
   });
+  test.afterAll(async () => deleteVideoQuietly('single', mine));
 
   for (const route of ROUTES) {
     test(`WATCH-012 owner sees the edit link and no report button (${route} route)`, async ({ page }) => {
-      const video = seed[SEED_TITLES.singleVideo];
+      const video = mine!;
       await openWatch(page, video, 'en', route);
 
       const edit = page.getByTestId('video-owner-edit-link');
@@ -295,7 +312,7 @@ test.describe('watch page - owner', () => {
   }
 
   test('WATCH-013 owner edit link is translated on the Arabic page', async ({ page }) => {
-    const video = seed[SEED_TITLES.singleVideo];
+    const video = mine!;
     await openWatch(page, video, 'ar');
     await expect(page.getByTestId('video-owner-edit-link')).toHaveText('تعديل الفيديو');
     await expect(page.getByTestId('video-owner-edit-link')).toHaveAttribute('href', `/ar/studio/video/${video.id}/edit`);
@@ -320,7 +337,7 @@ test.describe('watch page - save to playlist', () => {
     ['ar', 'حفظ', 'حفظ في قائمة تشغيل', 'إنشاء وإضافة', 'تمت الإضافة إلى'],
   ] as const) {
     test(`WATCH-014 creates a playlist with the video from the save dialog (${locale})`, async ({ page, request }) => {
-      const video = await qaLecture(request, 1);
+      const video = ownLecture(1);
       await openWatch(page, video, locale);
 
       const trigger = page.getByRole('button', { name: save, exact: true });
