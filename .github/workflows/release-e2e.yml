@@ -65,7 +65,7 @@ jobs:
   #           (one run at a time, <env>-global lock), then the @load report;
   #   encode: the specs that upload to Bunny and wait for it (ENCODE_SPECS in
   #           playwright.release.config.ts) under the 2-slot <env>-encode lock.
-  # Each part has its own run accounts (E2E_RUN_ID: the encode part's attempt carries a trailing 5),
+  # Each part has its own run accounts (E2E_RUN_ID: the encode part's attempt carries a leading 5),
   # teardown, leftover check, upload budget and artifacts. A release waits for the slower part.
   release-e2e:
     name: Release regressions (${{ inputs.env || 'qa' }})${{ matrix.part == 'encode' && ' - encode' || '' }}
@@ -89,9 +89,10 @@ jobs:
       # Run mode: every account the specs register is e2e+<run>-<attempt>-rel-…,
       # recorded before it exists and deleted by the teardown step below
       # (apps/web/e2e/test-utils/run-users.ts)
-      # The encode part's accounts are e2e+<run>-<attempt>5-…, so each part's teardown and leftover
-      # check (LIKE e2e+<E2E_RUN_ID>-%) only ever see that part's own accounts
-      E2E_RUN_ID: ${{ github.run_id }}-${{ matrix.part == 'encode' && format('{0}5', github.run_attempt) || github.run_attempt }}
+      # The encode part's accounts are e2e+<run>-5<attempt>-…, so each part's teardown and leftover
+      # check (accounts LIKE e2e+<E2E_RUN_ID>-%, Bunny titles holding E2E_RUN_ID) only ever see that
+      # part's own: neither marker is a prefix or a substring of the other (-1 vs -51)
+      E2E_RUN_ID: ${{ github.run_id }}-${{ matrix.part == 'encode' && format('5{0}', github.run_attempt) || github.run_attempt }}
       # In every throwaway user's email (targets.ts sinkEmail): the upload budget finds this part's users
       E2E_RUN_TAG: g${{ github.run_id }}a${{ github.run_attempt }}${{ matrix.part == 'encode' && 'e' || '' }}
       # --repeat-each for the nightly flake hunt; a repeat run has no retries, so every
@@ -198,7 +199,9 @@ jobs:
       - name: Run encode-waiting specs
         if: steps.encode-lock.outputs.holder != '' && !cancelled()
         working-directory: ${{ env.SUITE }}
-        timeout-minutes: 40
+        # Uploads (~5 min) + the shared clips' encode (up to 9 min, waited for once) + embeds and
+        # playback across chrome/webkit; was 40, which a slow QA encode queue overran
+        timeout-minutes: 55
         env:
           CI: 'true'
           E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET || (inputs.env == 'stage' && secrets.E2E_CODE_SINK_SECRET_STAGE) || secrets.E2E_CODE_SINK_SECRET_QA }}

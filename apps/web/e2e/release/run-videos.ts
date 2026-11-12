@@ -41,16 +41,29 @@ export function runVideos(): RunVideos | null {
   return JSON.parse(readFileSync(file, 'utf8')) as RunVideos;
 }
 
+let allReady: Promise<void> | null = null;
+
 /**
- * A shared run video, ready. The upload started in the global setup; the wait happens here, in the
- * test, so a slow Bunny encode skips with #929 (DataScope.waitReady) instead of failing the run.
+ * Waits until every shared clip is ready, in parallel and once per worker process (later calls
+ * reuse the wait). Call it from a beforeAll with a long timeout (test.setTimeout): a slow Bunny
+ * encode then skips with #929 (DataScope.waitReady), never times a test out.
  */
-export async function runVideo(clip: RunVideoClip): Promise<CreatedVideo> {
+export async function runVideosReady(): Promise<RunVideos> {
   const set = runVideos();
-  if (!set) throw new Error('runVideo: this run has no shared videos (E2E_SHARED_RUN_VIDEOS is not 1)');
-  const video = set.videos[clip];
-  await new DataScope().waitReady(video.id, video.title);
-  return video;
+  if (!set) throw new Error('runVideosReady: this run has no shared videos (E2E_SHARED_RUN_VIDEOS is not 1)');
+  allReady ??= Promise.all(RUN_VIDEO_CLIPS.map((clip) => new DataScope().waitReady(set.videos[clip].id, set.videos[clip].title))).then(() => undefined);
+  try {
+    await allReady;
+  } catch (error) {
+    allReady = null;
+    throw error;
+  }
+  return set;
+}
+
+/** A shared run video, ready (see runVideosReady). */
+export async function runVideo(clip: RunVideoClip): Promise<CreatedVideo> {
+  return (await runVideosReady()).videos[clip];
 }
 
 /** Records every video this page initiates on the upload page (the upload cap counts them). */
