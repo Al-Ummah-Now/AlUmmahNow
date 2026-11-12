@@ -1,0 +1,26 @@
+/*
+ * The embed page (app/embed, main[data-testid=embed-player]) is a player inside someone else's
+ * frame. The host sizes the frame (www uses the video's own aspect ratio), so here:
+ *  - a black backdrop in every theme and mode (the theme's page background and its
+ *    `main { background: transparent !important }` made it parchment), and
+ *  - the player fills the whole frame and contains the video once: no 16:9 box inside a square
+ *    or vertical frame (double bars), and no watch-page header allowance
+ *    (max-height: 100dvh - 148px), which squashed it to a strip in a small iframe.
+ */
+html:has(main[data-testid="embed-player"]),
+html body:has(main[data-testid="embed-player"]),
+main[data-testid="embed-player"] {
+  background: #000 !important;
+}
+main[data-testid="embed-player"] > div {
+  width: 100vw !important;
+  height: 100vh;
+}
+main[data-testid="embed-player"] .custom-video-player,
+main[data-testid="embed-player"] .custom-video-player.aspect-video:not([data-portrait]) {
+  width: 100% !important;
+  height: 100vh !important;
+  max-height: none !important;
+  aspect-ratio: auto !important;
+  margin: 0;
+}

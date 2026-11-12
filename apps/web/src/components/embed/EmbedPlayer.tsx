@@ -27,6 +27,8 @@ import type { EmbedVideo } from '@/lib/embed/content';
 import type { ExtendedPlayer } from '@/lib/video/videojs';
 import type { AnalyticsContext } from '@al-ummah/shared-types';
 import { useEmbedMessaging } from './useEmbedMessaging';
+// Black backdrop and a player that fills the host's frame, in every theme and mode
+import './embed-frame.css';
 
 export interface EmbedPlayerProps {
   videos: EmbedVideo[];
