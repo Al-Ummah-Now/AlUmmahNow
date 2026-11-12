@@ -454,9 +454,8 @@ export function initializeVolumeControls(
     logger.error('[VolumeControl] Failed to apply saved volume:', error);
   }
 
-  // Setup scroll wheel control
-  const cleanupScrollWheel = setupScrollWheelControl(player);
-  cleanupFunctions.push(cleanupScrollWheel);
+  // No scroll-wheel volume: scrolling the page over the player must scroll
+  // the page, never change the volume (owner, 2026-11-11).
 
   // Setup volume change listener
   const cleanupVolumeChange = setupVolumeChangeListener(player, lang);

@@ -218,10 +218,25 @@ test.describe('player controls', () => {
     await expect(page).toHaveURL(/src=bright/);
   });
 
+  test('the scroll wheel over the player scrolls the page and never changes the volume', async ({ page }) => {
+    const player = await openHarness(page);
+    await startPlayback(page, player);
+    const before = await mediaState(page);
+    const box = await layoutBox(player);
+    await page.mouse.move(box.cx, box.y + 40);
+    await page.mouse.wheel(0, 300);
+    await page.mouse.wheel(0, -300);
+    await page.mouse.wheel(0, 200);
+    const after = await mediaState(page);
+    expect(after.volume).toBe(before.volume);
+    expect(after.muted).toBe(before.muted);
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  });
+
   test('floats a mini player while playing off screen, and returns or closes it', async ({ page }) => {
     const player = await openHarness(page);
     await startPlayback(page, player);
-    // Scroll with the pointer on the page: over the video the wheel sets the volume
+    // Scroll with the pointer beside the player
     const aside = await layoutBox(page.getByTestId('harness-aside'));
     await page.mouse.move(aside.cx, aside.y + 20);
     await page.mouse.wheel(0, 1400);
