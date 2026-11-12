@@ -229,6 +229,8 @@ test.describe('end screen behaviour', () => {
     await expect(status).toHaveText('Next video in 3 seconds');
     const first = await seconds(end);
     await expect.poll(() => seconds(end), { timeout: 3_000 }).toBeLessThan(first);
+    // Hold the 3 s countdown (pointer on the card) so the screen is still there to read
+    await page.getByTestId('player-next-thumb').hover();
     await expect(status).toHaveText('Next video in 3 seconds');
   });
 
@@ -280,7 +282,8 @@ test.describe('end screen behaviour', () => {
   test('reduced motion: the seconds without a moving ring', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     const player = await openHarness(page, { src: 'dark' });
-    const end = await reachEnd(page, player);
+    // Read at once, without holding the countdown (held, the installed Firefox showed the ring)
+    const end = await reachEnd(page, player, { hold: false });
     await expect(count(end)).toHaveText(/^[1-3]$/);
     await expect(end.locator('.vjs-fanous-next-ring-fill')).toBeHidden();
   });
