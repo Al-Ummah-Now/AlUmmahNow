@@ -32,8 +32,9 @@ for (const lang of LANGS) {
         await page.waitForTimeout(300);
         await page.screenshot({ path: info.outputPath(`account-menu-${theme}-${mode}-${lang}.png`) });
 
-        const texts = await measureText(page, '[data-testid=nav-menu]');
-        expect(texts.length).toBeGreaterThan(3);
+        // The first test on a cold dev server can measure before the menu's text has painted: look again
+        let texts = await measureText(page, '[data-testid=nav-menu]');
+        await expect.poll(async () => (texts = await measureText(page, '[data-testid=nav-menu]')).length, { timeout: 20_000 }).toBeGreaterThan(3);
         const low = texts.filter((t) => t.ratio < 4.5);
         expect(low, `low contrast:\n${low.map((t) => `${t.ratio}:1 ${t.fg} on ${t.bg} "${t.text}" (${t.selector})`).join('\n')}`).toEqual([]);
 
