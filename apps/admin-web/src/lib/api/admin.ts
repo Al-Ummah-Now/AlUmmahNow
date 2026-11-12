@@ -38,6 +38,7 @@ import type {
   DeliverySettings,
   MediaJob,
   MediaLive,
+  QoeLiveData,
   MediaSummary,
 } from './types';
 import type { ErrorCounts, ErrorFacets, ErrorGroup, ErrorGroupDetail, ErrorGroupList, NeedsActionItem } from './error-groups-types';
@@ -310,6 +311,20 @@ export async function getMediaSummary(days: number): Promise<MediaSummary> {
  * The live transcoder figures alone (the Delivery page polls them every 30 s).
  * A result, not a throw: production builds redact server-action errors.
  */
+/**
+ * Live playback quality per provider: the last 60 minutes and the plays now
+ * (the Delivery page reads it when the live channel is down). A result, not a throw.
+ */
+export async function getMediaQoeLive(): Promise<ActionResult<QoeLiveData | null>> {
+  try {
+    const data = await fetchAdmin<QoeLiveData>('/api/media/qoe-live?minutes=60');
+    return { ok: true, data: data ?? null };
+  } catch (error) {
+    if (error instanceof AdminApiError) return { ok: false, status: error.status, error: error.message };
+    return { ok: false, status: 500, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
 export async function getMediaLive(): Promise<ActionResult<MediaLive | null>> {
   try {
     const data = await fetchAdmin<{ live?: MediaLive }>('/api/media/summary?only=live');

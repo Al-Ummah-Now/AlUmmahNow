@@ -156,6 +156,7 @@ These come later, in the order of cost spec Phases 1–3: CDN by host, container
 | --- | --- | --- | --- |
 | `admin:jobs` | admins | `job` {id, kind, status, progress?, targetType, targetId} for purges, transfers, erasures, rebuilds, repairs | api-videos admin-jobs consumer |
 | `admin:media` | admins | `job` {videoId, jobId, status, attempt, progress?, rungs? `[['720p','uploading',0.4], …]`, failure? {stage, error, attempt}}, `live` {transcoding, queued, maxTranscodes?, oldestQueuedAt?} | api-videos `/internal/media` (job status writes) |
+| `admin:media` (playback) | admins | `qoe` {minute, bunny, r2, now} every 5 s at most: the current minute's playback sums per provider and the plays going on now (§B.8) | realtime worker `qoe-live` object |
 | `admin:queues` | admins | `backlog` {queue, messages} | transcode backlog from `media_jobs` (live); others from the collector (hourly) |
 | `admin:uploads` | admins | `upload` {videoId, status, encodeProgress?} | api-videos processing / Bunny webhook path |
 | `admin:errors` | admins | `error` {groupId, isNew, kind, app}, `counts` {open, actionNeeded} | admin-api errors ingest |
@@ -224,3 +225,18 @@ Producers already hold both bindings (api-videos, processor, admin-api, media).
 4. admin-web live client + token route + polling replaced (**admin pages: held for owner OK**).
 5. Collector ops slice + admin-api `/api/ops/*` (backend).
 6. Operations page (**admin pages: held for owner OK**).
+
+### B.8 Live playback quality (Delivery page)
+
+- **Heartbeats.** The web player sends `kind: 'heartbeat'` beacons with `live` (deltas since its last report):
+  - every 30 s while the page is visible;
+  - at once at the first frame, on an R2 → Bunny fallback, and on the first error.
+
+  The final report carries the last deltas and ends the session. The daily rollup (`playback_qoe_daily`) still counts only the final report.
+- **No D1 per beacon.** api-videos forwards the deltas to the realtime worker's `qoe-live` object (VIEW_COUNTER binding, same class). That object:
+  - sums them per minute and per provider in memory;
+  - writes the touched minutes to its own storage at most every 5 s, keeping 48 h;
+  - counts the plays going on now per serving source: sessions whose last heartbeat, at most 75 s old, said they were playing.
+- **Push.** Each flush sends one `qoe` event on `admin:media`.
+- **Read.** The Delivery page reads `GET /api/media/qoe-live?minutes=60` (admin-api → `/internal/media/qoe-live`) when it loads, and every 30 s while the socket is down.
+

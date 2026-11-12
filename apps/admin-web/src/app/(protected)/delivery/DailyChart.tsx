@@ -9,7 +9,7 @@
 import { chartLocale, labelIndices, niceScale } from '@al-ummah/shared-types';
 import { deliveryFormats } from './format';
 
-export type ChartUnit = 'seconds' | 'ratio';
+export type ChartUnit = 'seconds' | 'ratio' | 'count' | 'kbps';
 
 export interface DailyChartProps {
   title: string;
@@ -17,6 +17,8 @@ export interface DailyChartProps {
   bunny: readonly (number | null)[];
   r2: readonly (number | null)[];
   unit: ChartUnit;
+  /** What the x keys are: days (default) or minutes (the live view, shown as UTC times) */
+  xKind?: 'day' | 'minute';
   locale: string;
   labels: { chart: string; table: string; day: string; bunny: string; r2: string; legendBunny: string; legendR2: string; empty: string; noValue: string };
   testId: string;
@@ -54,7 +56,7 @@ export function SeriesSwatch({ kind }: { kind: 'bunny' | 'r2' }) {
   );
 }
 
-export function DailyChart({ title, days, bunny, r2, unit, locale, labels, testId }: DailyChartProps) {
+export function DailyChart({ title, days, bunny, r2, unit, xKind = 'day', locale, labels, testId }: DailyChartProps) {
   const rtl = /^ar\b/.test(locale);
   const f = deliveryFormats(locale);
   // Ratios are drawn in percent so the ticks land on round percentages
@@ -62,8 +64,10 @@ export function DailyChart({ title, days, bunny, r2, unit, locale, labels, testI
   const present = [...bunny, ...r2].filter((v): v is number => v !== null && Number.isFinite(v));
   const scale = niceScale(present.map(toAxis), { target: 4 });
   const tickNumber = new Intl.NumberFormat(chartLocale(locale), { maximumFractionDigits: 2 });
-  const tickText = (v: number) => (unit === 'ratio' ? f.percent(v / 100) : f.seconds(v));
-  const valueText = (v: number | null) => (v === null ? labels.noValue : unit === 'ratio' ? f.percent(v) : f.seconds(v));
+  const plain = (v: number) => (unit === 'count' ? f.integer(v) : unit === 'kbps' ? f.kbps(v) : f.seconds(v));
+  const tickText = (v: number) => (unit === 'ratio' ? f.percent(v / 100) : plain(v));
+  const valueText = (v: number | null) => (v === null ? labels.noValue : unit === 'ratio' ? f.percent(v) : plain(v));
+  const xText = (key: string) => (xKind === 'minute' ? f.time(key) : f.day(key));
 
   const plotStart = rtl ? PAD : AXIS;
   const plotEnd = rtl ? W - AXIS : W - PAD;
@@ -135,7 +139,7 @@ export function DailyChart({ title, days, bunny, r2, unit, locale, labels, testI
               textAnchor={order === 0 ? (rtl ? 'end' : 'start') : order === ticksAt.length - 1 ? (rtl ? 'start' : 'end') : 'middle'}
               data-testid={`${testId}-x-tick`}
             >
-              {f.day(days[i])}
+              {xText(days[i])}
             </text>
           ))}
           {!empty &&
@@ -147,7 +151,7 @@ export function DailyChart({ title, days, bunny, r2, unit, locale, labels, testI
                   {runs(values).map((points, k) => (
                     <polyline key={k} points={points} fill="none" style={{ stroke: SERIES[kind].color }} strokeWidth="2" strokeDasharray={SERIES[kind].dash} strokeLinejoin="round" />
                   ))}
-                  {values.map((v, i) => (v === null ? null : <Marker key={days[i]} kind={kind} x={x(i)} y={y(v)} title={`${name} · ${f.day(days[i])}: ${valueText(v)}`} />))}
+                  {values.map((v, i) => (v === null ? null : <Marker key={days[i]} kind={kind} x={x(i)} y={y(v)} title={`${name} · ${xText(days[i])}: ${valueText(v)}`} />))}
                 </g>
               );
             })}
@@ -171,7 +175,7 @@ export function DailyChart({ title, days, bunny, r2, unit, locale, labels, testI
           <tbody>
             {days.map((day, i) => (
               <tr key={day} className="border-t border-border">
-                <th scope="row" className="p-1 text-start font-normal">{f.day(day)}</th>
+                <th scope="row" className="p-1 text-start font-normal">{xText(day)}</th>
                 <td className="p-1 text-end tabular-nums">{valueText(bunny[i] ?? null)}</td>
                 <td className="p-1 text-end tabular-nums">{valueText(r2[i] ?? null)}</td>
               </tr>

@@ -20,8 +20,9 @@ import { ClientMessageSchema, ServerMessage } from './messages';
 import { logger } from './lib/logger';
 import { ViewCounter, type CounterStorage, type VideoBucket } from './view-counter';
 import { PostViewCounter, type CounterDb, type PostCounterStorage } from './post-view-counter';
-import { AdminCoalescer, eventsOf } from './admin-coalescer';
-import { adminLevelOf, canSubscribeAdminLive, isAdminLiveChannel, type AdminLiveLevel } from '@al-ummah/shared-types';
+import { AdminCoalescer, coalescerName, eventsOf } from './admin-coalescer';
+import { QoeLive, type QoeStorage } from './qoe-live';
+import { adminLevelOf, adminLiveChannel, adminLiveItem, canSubscribeAdminLive, isAdminLiveChannel, type AdminLiveLevel } from '@al-ummah/shared-types';
 import { SHARD_HEADER, isSocketShardName, routeBroadcast, shardRequest, topicName, type BroadcastItem, type FanOutResult } from './shards';
 
 /** Tag on every accepted socket, so its state can be found again after hibernation. */
@@ -139,6 +140,14 @@ export class WebSocketDurableObject extends DurableObject {
 
     if (url.pathname === '/broadcast' && request.method === 'POST') {
       return await this.handleBroadcastRequest(request);
+    }
+
+    // Live playback quality role (the object named qoe-live, see qoe-live.ts); reached through api-videos' DO binding only
+    if (url.pathname === '/qoe/beats' && request.method === 'POST') {
+      return await this.handleQoeBeats(request);
+    }
+    if (url.pathname === '/qoe/recent' && request.method === 'GET') {
+      return Response.json(await this.getQoeLive().recent(Number(url.searchParams.get('minutes')) || 60));
     }
 
     // Admin topic coalescer role (objects named coalesce:admin:<topic>, see admin-coalescer.ts)
@@ -530,6 +539,7 @@ export class WebSocketDurableObject extends DurableObject {
   /** Only view-counter objects (video or post) ever set an alarm. */
   async alarm(): Promise<void> {
     if (await this.getCoalescer().alarm()) return;
+    if (await this.getQoeLive().alarm()) return;
     const posts = this.getPostViewCounter();
     if (await posts.active()) {
       await posts.alarm();
@@ -549,6 +559,40 @@ export class WebSocketDurableObject extends DurableObject {
       });
     }
     return this.coalescer;
+  }
+
+  private qoeLive?: QoeLive;
+
+  private getQoeLive(): QoeLive {
+    if (!this.qoeLive) {
+      this.qoeLive = new QoeLive(this.ctx.storage as unknown as QoeStorage, async (event) => {
+        // Through the admin:media coalescer, like any producer's update (at most one per second there; this sends every 5 s at most)
+        const env = this.env as SocketEnv;
+        if (!env.WEBSOCKET_DO) return;
+        const channel = adminLiveChannel('media');
+        try {
+          const res = await env.WEBSOCKET_DO.get(env.WEBSOCKET_DO.idFromName(coalescerName(channel))).fetch(
+            new Request('http://internal/coalesce', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(adminLiveItem('media', [event])) }),
+          );
+          if (!res.ok) logger.warn('QoE live update refused', { status: res.status });
+        } catch (error) {
+          logger.warn('QoE live update failed', { error: error instanceof Error ? error.message : String(error) });
+        }
+      });
+    }
+    return this.qoeLive;
+  }
+
+  private async handleQoeBeats(request: Request): Promise<Response> {
+    let beats: unknown;
+    try {
+      beats = ((await request.json()) as { beats?: unknown }).beats;
+    } catch {
+      return Response.json({ error: 'Invalid JSON' }, { status: 400 });
+    }
+    if (!Array.isArray(beats) || beats.length === 0 || beats.length > 500) return Response.json({ error: 'beats: 1 to 500 required' }, { status: 400 });
+    const accepted = await this.getQoeLive().addBeats(beats);
+    return Response.json({ success: true, accepted });
   }
 
   /** Coalescer side of an admin broadcast: `{ channel, events }` from the Worker. */

@@ -30,10 +30,20 @@ export class FakeStorage {
     return fn();
   }
   get<T>(key: string) { return this.op(() => this.data.get(key) as T | undefined); }
-  put(key: string, value: unknown) { return this.op(() => { this.data.set(key, structuredClone(value)); }); }
-  delete(key: string) { return this.op(() => this.data.delete(key)); }
-  list<T>({ prefix = '' }: { prefix?: string } = {}) {
-    return this.op(() => new Map([...this.data].filter(([k]) => k.startsWith(prefix)).sort(([a], [b]) => a.localeCompare(b))) as Map<string, T>);
+  alarmAt: number | null = null;
+  put(key: string | Record<string, unknown>, value?: unknown) {
+    return this.op(() => {
+      if (typeof key === 'string') this.data.set(key, structuredClone(value));
+      else for (const [k, v] of Object.entries(key)) this.data.set(k, structuredClone(v));
+    });
+  }
+  delete(key: string | string[]) {
+    return this.op(() => (Array.isArray(key) ? key.filter((k) => this.data.delete(k)).length : this.data.delete(key)));
+  }
+  getAlarm() { return this.op(() => this.alarmAt); }
+  setAlarm(at: number) { return this.op(() => { this.alarmAt = at; }); }
+  list<T>({ prefix = '', start, end, limit }: { prefix?: string; start?: string; end?: string; limit?: number } = {}) {
+    return this.op(() => new Map([...this.data].filter(([k]) => k.startsWith(prefix) && (!start || k >= start) && (!end || k < end)).sort(([a], [b]) => a.localeCompare(b)).slice(0, limit ?? Infinity)) as Map<string, T>);
   }
 }
 

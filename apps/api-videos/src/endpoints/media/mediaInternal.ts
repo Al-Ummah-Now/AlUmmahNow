@@ -10,6 +10,8 @@
  *   GET  /internal/media/summary?days=     time to playable and cost inputs per source, plus `live`
  *                                          (transcoding now, waiting, max concurrent, oldest wait);
  *                                          ?only=live returns just `live` (the Delivery page polls it)
+ *   GET  /internal/media/qoe-live?minutes= playback quality per provider per minute (default the last
+ *                                          60) and the plays now, from the realtime worker's live object
  *   GET  /internal/media/settings          delivery switch
  *   PUT  /internal/media/settings          { mode, r2Percent, assign, transcode, actorId }
  */
@@ -17,6 +19,7 @@ import { Hono } from 'hono';
 import { isMediaVideoId, type DeliverySettings, type TranscodeJobEvent } from '@al-ummah/shared-types';
 import R2Repository from '../../lib/r2Repo';
 import { pushMediaLive, type MediaVideo } from '../../lib/media/r2-delivery';
+import { readQoeLive } from '../../lib/media/qoe-live';
 import { applyJobEvent, enqueueTranscode, readDeliverySettings, sourceCandidates, writeDeliverySettings, type MediaEnv } from '../../lib/media/r2-delivery';
 
 const MAX_IDS = 50;
@@ -119,6 +122,13 @@ export function createMediaInternalRouter() {
 			: db.prepare('SELECT * FROM media_jobs ORDER BY updated_at DESC LIMIT ?').bind(limit);
 		const { results } = await stmt.all();
 		return c.json({ success: true, result: { items: results ?? [] } });
+	});
+
+	app.get('/qoe-live', async (c) => {
+		const minutes = parseInt(c.req.query('minutes') || '60', 10) || 60;
+		const live = await readQoeLive(c.env as never, minutes);
+		if (!live) return c.json({ success: false, error: 'Live playback quality is unavailable' }, 503);
+		return c.json({ success: true, result: live });
 	});
 
 	app.get('/summary', async (c) => {
