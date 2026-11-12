@@ -32,3 +32,5 @@ E2E Temp *
 # 1280x720 and 720x1280 PNGs (~12KB each): the home hero spec serves them as every thumbnail
 !hero-landscape-1280x720.png
 !hero-portrait-720x1280.png
+# 90s 160x90 H.264/AAC clip: watch history and resume need a video of at least 75 s (release builders.ts)
+!e2e-sample-90s.mp4

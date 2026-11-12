@@ -104,7 +104,8 @@ export function encode(video: FakeVideo): void {
   Object.assign(video, {
     status: 4,
     encodeProgress: 100,
-    length: probe.length || 10,
+    // What the CDN serves is the player's HLS fixture (landscape 90 s, vertical 12 s): report its length
+    length: (probe.height || 720) > (probe.width || 1280) ? 12 : 90,
     width: probe.width || 1280,
     height: probe.height || 720,
     availableResolutions: (probe.height || 720) > (probe.width || 1280) ? '240p,360p,480p,720p' : '240p,360p,720p',
