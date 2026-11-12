@@ -208,7 +208,8 @@ test.describe('Theme toggle', () => {
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(e.message));
     await page.goto('/en');
-    await expect(page.getByTestId('video-card').first()).toBeVisible();
+    // Rendered and hydrated: the page's heading (not a card: the grid holds other specs' videos)
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     expect(errors).toEqual([]);
   });
 });
@@ -249,7 +250,8 @@ test.describe('Skip links', () => {
   test('NAV-040 first Tab reveals "Skip to main content" which moves focus to main', async ({ page, browserName }) => {
     test.skip(browserName === 'webkit', 'Safari skips links on Tab by default');
     await page.goto('/en');
-    await expect(page.getByTestId('video-card').first()).toBeVisible();
+    // Rendered and hydrated: the page's heading (not a card: the grid holds other specs' videos)
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     await page.keyboard.press('Tab');
     const skip = page.getByRole('link', { name: 'Skip to main content' });
     await expect(skip).toBeFocused();
