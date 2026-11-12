@@ -91,7 +91,7 @@ async function main(): Promise<void> {
     ];
     process.stdout.write(lines.join('\n') + '\n');
     if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n') + '\n');
-    await api.request(`/api/videos/${videoId}`, { method: 'DELETE', token: session.accessToken, channelId: channel.id, allowStatus: [404] }).catch((e) => log.warn('Delete failed', { videoId, error: String(e) }));
+    await api.request(`/api/videos/${videoId}/permanent`, { method: 'DELETE', token: session.accessToken, channelId: channel.id, allowStatus: [404] }).catch((e) => log.warn('Delete failed', { videoId, error: String(e) }));
   }
   if (status !== 'ready') process.exitCode = 1;
 }

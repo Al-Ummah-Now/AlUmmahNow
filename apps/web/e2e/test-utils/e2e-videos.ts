@@ -402,6 +402,18 @@ export async function deleteVideoQuietly(user: AuthUser, video: E2EVideo | null 
     if (res.status >= 300 || (result && !result.success && result.error !== 'Video not found')) {
       console.warn(`[cleanup] could not delete video ${video.id} ("${video.title}"): ${res.status} ${result?.error ?? ''}`.trim());
     }
+    // A soft delete keeps the Bunny video (restorable for 30 days) and its encode
+    // in the shared test library's queue (#929): purge it now, which deletes the
+    // R2 record and the Bunny video (admin job video.purge).
+    const purge = await u.api.request(`/api/videos/${video.id}/permanent`, {
+      method: 'DELETE',
+      token: u.token,
+      channelId: video.channelId,
+      allowStatus: [400, 401, 403, 404, 409],
+    });
+    if (purge.status >= 300 && purge.status !== 404) {
+      console.warn(`[cleanup] could not purge video ${video.id} ("${video.title}"): ${purge.status}; the hourly test-library purge removes its Bunny video`);
+    }
   } catch (error) {
     // cleanup must never fail a test, but a leftover should be visible in the log
     console.warn(`[cleanup] could not delete video ${video.id} ("${video.title}")`, error);
