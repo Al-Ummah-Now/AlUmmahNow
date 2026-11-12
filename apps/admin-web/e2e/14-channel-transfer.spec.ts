@@ -13,7 +13,8 @@
  * deleted afterwards) to a creator this spec registers (run mode; outside it,
  * the seeded qa-creator). Chromium only: the tests change channel ownership.
  */
-import { test, expect, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { test, expect } from './support/fixtures';
 import { adminApi, readTokens } from './support/api';
 import { LOCAL_RUN_ROLES, RUN_ID, RUN_TAG, VIDEOS_API_URL, accounts, storageStatePath } from './support/env';
 import { createRunUser, createVideosProfile } from './support/profiles';
