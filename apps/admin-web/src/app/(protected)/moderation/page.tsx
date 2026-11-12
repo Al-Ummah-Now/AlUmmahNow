@@ -7,6 +7,7 @@ import { ErrorAlert, StatusChip, linkClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { FilterBar } from './FilterBar';
 import { PAGE_SIZE, moderationHref, parseModerationFilters } from './filters';
+import { LiveRefresh } from '@/components/LiveRefresh';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,6 +45,7 @@ export default async function ModerationPage({ searchParams }: PageProps) {
 
   return (
     <div>
+      <LiveRefresh topics={['moderation']} queues={['reports']} />
       <div className="flex flex-wrap justify-between items-end gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-bold text-fg">{t('moderation.title')}</h1>

@@ -10,6 +10,7 @@ import { logger } from '@/lib/logger';
 import { trashHref } from '@/lib/trash';
 import { ContactFilterBar } from './ContactFilterBar';
 import { CONTACT_PAGE_SIZE, contactHref, hasContactFilters, parseContactFilters } from './filters';
+import { LiveRefresh } from '@/components/LiveRefresh';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,6 +50,7 @@ export default async function ContactInboxPage({ searchParams }: PageProps) {
 
   return (
     <div>
+      <LiveRefresh topics={['moderation']} queues={['contact']} />
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-fg">{t('contact.title')}</h1>
         <p className="text-fg-muted mt-1">

@@ -6,6 +6,7 @@ import { retryAdminJob, startLegacyRestore } from '@/lib/api/admin';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { logger } from '@/lib/logger-client';
 import { primaryButtonClass, secondaryButtonClass } from './ui';
+import { useRefreshWhile } from './content/jobs';
 
 const smallButton =
   'px-2 py-1 rounded border border-border bg-surface-2 hover:bg-surface-hover text-fg text-xs font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-60';
@@ -47,19 +48,12 @@ export function JobRetry({ id }: { id: string }) {
   );
 }
 
-/** While a job is queued or running, re-reads the page every few seconds (for about three minutes). */
+/**
+ * While a job is queued or running, re-reads the page when a job changes
+ * (admin:jobs live updates); polls every few seconds only while the socket is down.
+ */
 export function RefreshWhileActive({ active }: { active: boolean }) {
-  const router = useRouter();
-  useEffect(() => {
-    if (!active) return;
-    let ticks = 0;
-    const timer = setInterval(() => {
-      ticks += 1;
-      if (ticks > 60) clearInterval(timer);
-      router.refresh();
-    }, 3000);
-    return () => clearInterval(timer);
-  }, [active, router]);
+  useRefreshWhile(active);
   return null;
 }
 

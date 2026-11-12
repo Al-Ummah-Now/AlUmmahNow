@@ -6,7 +6,7 @@
  * their status on the item ("running", "failed — Retry") and keep the page
  * fresh while a job is still in progress.
  */
-import { useEffect } from 'react';
+import { useAdminLive } from '@/lib/live/useAdminLive';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { retryJob } from '@/lib/api/content';
@@ -19,17 +19,17 @@ import { Chip, SectionCard, smallButtonClass } from './parts';
 import { canRetryJob, isActiveJob, jobTargetHref, jobTone } from './job-helpers';
 import { JOB_KIND_LABEL } from '@/lib/admin-jobs';
 
-/** How often a page with a running job re-reads it. */
+/** How often a page with a running job re-reads it while the live socket is down. */
 const REFRESH_MS = 3000;
 
-/** Re-renders the server page every few seconds while `active` (a job is in progress). */
+/**
+ * While `active` (a job is in progress), re-renders the server page when a job
+ * changes (admin:jobs live updates); polls every few seconds only while the
+ * socket is down.
+ */
 export function useRefreshWhile(active: boolean) {
   const router = useRouter();
-  useEffect(() => {
-    if (!active) return;
-    const timer = window.setInterval(() => router.refresh(), REFRESH_MS);
-    return () => window.clearInterval(timer);
-  }, [active, router]);
+  useAdminLive(['jobs'], () => router.refresh(), { poll: () => router.refresh(), pollMs: REFRESH_MS, enabled: active, catchUpOnFirstLive: true });
 }
 
 export function JobStatusChip({ job }: { job: Pick<AdminJob, 'status'> }) {

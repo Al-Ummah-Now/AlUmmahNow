@@ -21,8 +21,9 @@ import { SectionCard } from '@/components/content/parts';
 import { UserPicker } from '@/components/content/UserPicker';
 import { bidiIsolate, transferConfirmValues, userName } from '@/components/content/userPickerModel';
 import { logger } from '@/lib/logger-client';
+import { useAdminLive } from '@/lib/live/useAdminLive';
 
-/** How often the started transfer's job is re-read, and for how long at most. */
+/** How often the started transfer's job is re-read while the live socket is down, and how long it is followed at most. */
 const POLL_MS = 2000;
 const POLL_LIMIT_MS = 5 * 60 * 1000;
 
@@ -52,37 +53,39 @@ export function ChannelTransfer({ channel }: Props) {
     [channel.id, channel.ownerId],
   );
 
-  // Follow the started job until it finishes, then show the new owner
+  // Follow the started job until it finishes, then show the new owner: re-read
+  // it when admin:jobs says it changed (polled only while the live socket is down)
   const jobId = followed && !done(followed.job) ? followed.job.id : null;
+  const [gaveUp, setGaveUp] = useState<string | null>(null);
+  const readFollowed = useCallback(async () => {
+    if (!jobId) return;
+    const result = await readJob(jobId).catch(() => null);
+    if (!result?.ok) {
+      logger.warn('[ChannelTransfer] Job status read failed', { jobId, status: result?.status });
+      setFollowed((f) => (f && f.job.id === jobId ? { ...f, unknown: true } : f));
+      return;
+    }
+    setFollowed((f) => (f && f.job.id === jobId ? { ...f, job: result.data, unknown: false } : f));
+    if (done(result.data)) {
+      if (result.data.status === 'failed') logger.warn('[ChannelTransfer] Transfer job failed', { jobId, error: result.data.lastError });
+      router.refresh();
+    }
+  }, [jobId, router]);
+  useAdminLive(
+    ['jobs'],
+    (update) => {
+      if (update.resync || update.events.some((e) => e.id === jobId)) void readFollowed();
+    },
+    { poll: () => void readFollowed(), pollMs: POLL_MS, enabled: !!jobId && gaveUp !== jobId, catchUpOnFirstLive: true },
+  );
   useEffect(() => {
     if (!jobId) return;
-    const started = Date.now();
-    let stopped = false;
-    const timer = window.setInterval(async () => {
-      if (Date.now() - started > POLL_LIMIT_MS) {
-        window.clearInterval(timer);
-        setFollowed((f) => (f ? { ...f, unknown: true } : f));
-        return;
-      }
-      const result = await readJob(jobId).catch(() => null);
-      if (stopped) return;
-      if (!result?.ok) {
-        logger.warn('[ChannelTransfer] Job status read failed', { jobId, status: result?.status });
-        setFollowed((f) => (f ? { ...f, unknown: true } : f));
-        return;
-      }
-      setFollowed((f) => (f ? { ...f, job: result.data, unknown: false } : f));
-      if (done(result.data)) {
-        window.clearInterval(timer);
-        if (result.data.status === 'failed') logger.warn('[ChannelTransfer] Transfer job failed', { jobId, error: result.data.lastError });
-        router.refresh();
-      }
-    }, POLL_MS);
-    return () => {
-      stopped = true;
-      window.clearInterval(timer);
-    };
-  }, [jobId, router]);
+    const timer = window.setTimeout(() => {
+      setGaveUp(jobId);
+      setFollowed((f) => (f ? { ...f, unknown: true } : f));
+    }, POLL_LIMIT_MS);
+    return () => window.clearTimeout(timer);
+  }, [jobId]);
 
   async function confirm() {
     if (!target) {
