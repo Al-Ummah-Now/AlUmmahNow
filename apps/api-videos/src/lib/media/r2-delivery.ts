@@ -15,6 +15,8 @@ import {
 	mediaPlayUrl,
 	newMediaRev,
 	normaliseDeliverySettings,
+	publishAdminLive,
+	type AdminLiveEvent,
 	pickDeliverySource,
 	reportNeedsAction,
 	resolveNeedsAction,
@@ -374,6 +376,8 @@ export async function applyJobEvent(
 	});
 	if (!saved) return { applied: false, why: 'video not found' };
 	if (why) return { applied: false, why };
+	// Live admin view (admin:media, docs/admin/LIVE_OPS.md): this job, then the transcoder figures
+	pushMediaLive(env, ctx, saved);
 	if (ev.type !== 'progress') await recordJob(env, saved);
 
 	if (ev.type === 'ready') {
@@ -712,4 +716,73 @@ export async function requeueAfterBunnyReady(env: MediaEnv, videoId: string): Pr
 		logger.warn('[Media] Re-queue after Bunny ready failed', { videoId, error: error instanceof Error ? error.message : String(error) });
 		return { queued: false, why: 'error' };
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Live admin updates (topic 'media' on the admin WebSocket channel; docs/admin/LIVE_OPS.md).
+// Small events only (the channel cuts anything over 2 KB): full failure details stay behind the API.
+// ---------------------------------------------------------------------------
+
+export interface MediaLiveEnv extends MediaEnv {
+	WEBSOCKET_URL?: string;
+	INTERNAL_API_KEY?: { get(): Promise<string> } | string;
+	/** max_instances of the transcoder container */
+	MEDIA_MAX_TRANSCODES?: string;
+}
+
+/** The job as the admin pages show it. */
+export function mediaJobEvent(video: Pick<MediaVideo, 'id' | 'r2'>): AdminLiveEvent | null {
+	const r2 = video.r2;
+	if (!r2) return null;
+	const f = r2.failure;
+	return {
+		kind: 'job',
+		key: `job:${video.id}`,
+		videoId: video.id,
+		jobId: r2.jobId,
+		status: r2.status,
+		attempt: r2.attempts ?? 0,
+		...(r2.progress !== undefined ? { progress: r2.progress } : {}),
+		...(f && r2.status !== 'ready' ? { failure: { stage: f.stage, error: f.error.slice(0, 120), attempt: f.attempt } } : {}),
+		at: new Date().toISOString(),
+	};
+}
+
+const LIVE_EVERY_MS = 5_000;
+let lastLiveAt = 0;
+
+/** Transcoding now / queued / the oldest wait, from media_jobs (one query). */
+export async function mediaLiveEvent(env: MediaLiveEnv, now = Date.now()): Promise<AdminLiveEvent | null> {
+	if (!env.SEARCH_DB) return null;
+	const row = await env.SEARCH_DB.prepare(
+		`SELECT SUM(status = 'transcoding') AS transcoding, SUM(status = 'queued') AS queued, MIN(CASE WHEN status = 'queued' THEN queued_at END) AS oldest FROM media_jobs`,
+	).first<{ transcoding: number | null; queued: number | null; oldest: string | null }>();
+	const max = Number(env.MEDIA_MAX_TRANSCODES);
+	return {
+		kind: 'live',
+		key: 'live',
+		transcoding: row?.transcoding ?? 0,
+		queued: row?.queued ?? 0,
+		...(Number.isFinite(max) && max > 0 ? { maxTranscodes: max } : {}),
+		...(row?.oldest ? { oldestQueuedAt: row.oldest } : {}),
+		at: new Date(now).toISOString(),
+	};
+}
+
+/** Publish a job change (and, at most every 5 s per isolate, the live figures). Never throws, never blocks. */
+export function pushMediaLive(env: MediaLiveEnv, ctx: ExecutionContextLike | undefined, video: Pick<MediaVideo, 'id' | 'r2'> | null): void {
+	if (!env.WEBSOCKET_URL) return;
+	const work = (async () => {
+		const events: AdminLiveEvent[] = [];
+		const job = video ? mediaJobEvent(video) : null;
+		if (job) events.push(job);
+		const now = Date.now();
+		if (now - lastLiveAt >= LIVE_EVERY_MS) {
+			lastLiveAt = now;
+			const live = await mediaLiveEvent(env, now).catch(() => null);
+			if (live) events.push(live);
+		}
+		if (events.length) await publishAdminLive(env as never, 'media', events);
+	})().catch((error) => logger.warn('[Media] Live publish failed', { error: error instanceof Error ? error.message : String(error) }));
+	if (ctx?.waitUntil) ctx.waitUntil(work);
 }

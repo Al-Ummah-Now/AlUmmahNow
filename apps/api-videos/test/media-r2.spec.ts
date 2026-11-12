@@ -413,3 +413,54 @@ describe('failure details', () => {
 		assert.ok(Object.keys(d.extra).length <= 12, 'Errors page keeps at most 12 extra keys');
 	});
 });
+
+describe('live admin updates (admin:media)', () => {
+	it('sends small job events: failure reduced to stage, error and attempt', async () => {
+		const { mediaJobEvent } = await import('../src/lib/media/r2-delivery');
+		const failure = { stage: 'encode' as const, error: 'ffmpeg exited 137', attempt: 3, elapsedMs: 95_000, at: 'x', stderrTail: Array.from({ length: 20 }, (_, i) => `line ${i} `.repeat(20)) };
+		const ev = mediaJobEvent({ id: ID, r2: { status: 'failed', jobId: 'j', rev: 'r', access: 'pub', attempts: 3, queuedAt: 'q', failure } })!;
+		assert.equal(ev.kind, 'job');
+		assert.equal(ev.key, `job:${ID}`);
+		assert.deepEqual(ev.failure, { stage: 'encode', error: 'ffmpeg exited 137', attempt: 3 });
+		assert.ok(JSON.stringify(ev).length < 2048, 'under the channel limit');
+		assert.equal(mediaJobEvent({ id: ID }), null);
+	});
+
+	it('posts the job and the live figures to the realtime broadcast, once per 5 s for the figures', async () => {
+		const { pushMediaLive } = await import('../src/lib/media/r2-delivery');
+		const posted: { url: string; body: any }[] = [];
+		const realFetch = globalThis.fetch;
+		globalThis.fetch = (async (url: string, init: RequestInit) => {
+			posted.push({ url: String(url), body: JSON.parse(String(init.body)) });
+			return new Response('{}', { status: 200 });
+		}) as typeof fetch;
+		try {
+			const db = { prepare: () => ({ first: async () => ({ transcoding: 1, queued: 2, oldest: '2026-11-12T16:00:00Z' }) }) };
+			const env = { WEBSOCKET_URL: 'https://realtime.qa.alummahnow.net', INTERNAL_API_KEY: 'k', SEARCH_DB: db, MEDIA_MAX_TRANSCODES: '2', videos: {} } as never;
+			const waits: Promise<unknown>[] = [];
+			const ctx = { waitUntil: (p: Promise<unknown>) => waits.push(p) };
+			const video = { id: ID, r2: { status: 'transcoding' as const, jobId: 'j', rev: 'r', access: 'pub' as const, attempts: 1, queuedAt: 'q', progress: 0.5 } };
+			pushMediaLive(env, ctx, video);
+			pushMediaLive(env, ctx, video);
+			await Promise.all(waits);
+			assert.equal(posted.length, 2);
+			assert.match(posted[0]!.url, /^https:\/\/realtime\.qa\.alummahnow\.net\/broadcast$/);
+			const events = (b: any) => b.items[0].message.data.events.map((e: any) => e.kind);
+			// The two publishes run concurrently: compare without order
+			assert.deepEqual(posted.map((p) => events(p.body).join('+')).sort(), ['job', 'job+live'], 'live figures throttled to one');
+			const withLive = posted.find((p) => events(p.body).includes('live'))!;
+			const live = withLive.body.items[0].message.data.events[1];
+			assert.deepEqual([live.transcoding, live.queued, live.maxTranscodes], [1, 2, 2]);
+			assert.equal(withLive.body.items[0].channel, 'admin:media');
+		} finally {
+			globalThis.fetch = realFetch;
+		}
+	});
+
+	it('does nothing without a realtime URL', async () => {
+		const { pushMediaLive } = await import('../src/lib/media/r2-delivery');
+		let called = false;
+		pushMediaLive({ videos: {} } as never, { waitUntil: () => { called = true; } }, { id: ID });
+		assert.equal(called, false);
+	});
+});
