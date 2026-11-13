@@ -60,9 +60,6 @@ const PLACEHOLDER: CatalogData = {
   singleSeedVideoId: 'x',
 };
 
-/** Pages red on the local stack, quarantined: #1042 @meywd */
-const QUARANTINED_PAGES = new Set(['analytics-anon']);
-
 for (const role of ROLES) {
   test.describe(`axe - ${role}`, () => {
     test.use({ storageState: storageFor(role) });
@@ -70,8 +67,7 @@ for (const role of ROLES) {
     for (const entry of catalog(PLACEHOLDER).filter((p) => p.role === role)) {
       for (const colorScheme of ['light', 'dark'] as const) {
         for (const locale of ['en', 'ar'] as const) {
-          // quarantined: #1042 @meywd (the QUARANTINED_PAGES only)
-          (QUARANTINED_PAGES.has(entry.id) ? test.fixme : test)(`A11Y-ALL ${entry.id} (${locale}, ${colorScheme}) has no WCAG 2.1 AA violations`, async ({ page }) => {
+          test(`A11Y-ALL ${entry.id} (${locale}, ${colorScheme}) has no WCAG 2.1 AA violations`, async ({ page }) => {
             const resolved = catalog(data).find((p) => p.id === entry.id && p.role === role);
             expect(resolved, `catalog entry ${entry.id}`).toBeTruthy();
             // Contrast results follow the site theme: scan in the reference theme (Lantern), not
