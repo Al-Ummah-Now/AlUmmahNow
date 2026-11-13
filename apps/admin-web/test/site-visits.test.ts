@@ -12,6 +12,7 @@ import { LANDING_KINDS } from '@al-ummah/shared-types';
 import en from '../src/i18n/messages/en';
 import ar from '../src/i18n/messages/ar';
 import { createTranslator } from '../src/i18n/translate';
+import { isAllowedContentPath } from '../src/lib/api/content-proxy';
 import {
   SOURCE_GROUPS,
   dailyPoints,
@@ -137,6 +138,14 @@ describe('site visits model', () => {
     }
     // The Arabic word for video is «مرئي/مرئيات» (CLAUDE.md)
     assert.doesNotMatch(JSON.stringify(ar.siteVisits), /فيديو/);
+  });
+});
+
+describe('site visits pass-through', () => {
+  it('lets the browser read the report and nothing else under analytics', () => {
+    assert.equal(isAllowedContentPath('GET', ['analytics', 'visits']), true);
+    assert.equal(isAllowedContentPath('POST', ['analytics', 'visits']), false);
+    assert.equal(isAllowedContentPath('GET', ['analytics', 'other']), false);
   });
 });
 
