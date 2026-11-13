@@ -53,6 +53,7 @@ const ar: Messages = {
     creators: 'صنّاع المحتوى',
     liveStreaming: 'البث المباشر',
     deleted: 'المحذوفات مؤخرًا',
+    platformSettings: 'إعدادات المنصة',
     groupOverview: 'نظرة عامة',
     groupModeration: 'الإشراف',
     groupContent: 'المحتوى',
@@ -2716,6 +2717,29 @@ const ar: Messages = {
       previous: 'كان',
     },
   },
+  platformSettings: {
+    title: 'إعدادات المنصة',
+    subtitle: 'سلوك يسري على كل مستخدمي موقع المرئيات وتطبيقاته.',
+    notificationsTitle: 'الإشعارات',
+    menuOpenLegend: 'عند فتح قائمة الإشعارات',
+    menuOpenSeen: 'إخفاء العدّاد فقط',
+    menuOpenSeenHint: 'يتوقف الجرس عن عدّ ما رآه المستخدم. تبقى الإشعارات غير مقروءة حتى يضغط المستخدم «تعليم كمقروء» أو «تعليم الكل كمقروء»، أو يفتح الإشعار.',
+    menuOpenRead: 'تعليم الإشعارات المعروضة كمقروءة',
+    menuOpenReadHint: 'يخفي العدّاد ويعلّم كل إشعار تعرضه القائمة كمقروء.',
+    menuOpenDefault: 'الافتراضي',
+    save: 'حفظ',
+    saving: 'جارٍ الحفظ…',
+    saved: 'تم الحفظ. تلتقط الأجراس المفتوحة التغيير خلال دقيقة.',
+    saveFailed: 'تعذّر حفظ الإعداد. حاول مرة أخرى.',
+    loadFailed: 'تعذّر تحميل إعدادات الإشعارات.',
+    readOnly: 'يغيّر إعدادات المنصة المسؤولون فقط.',
+    lastChanged: 'آخر تغيير {date} بواسطة {actor}',
+    neverChanged: 'لم يُغيَّر قط: يسري الافتراضي.',
+    historyTitle: 'آخر التغييرات',
+    historyEmpty: 'لا تغييرات بعد.',
+    historyEntry: '{date}: {from} ← {to} بواسطة {actor}',
+  },
+
 };
 
 export default ar;

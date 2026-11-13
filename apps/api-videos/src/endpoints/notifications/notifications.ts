@@ -2,10 +2,16 @@
  * Notification center (Story 29.10). All routes require authentication and
  * only ever touch the caller's own rows.
  *
- * GET    /api/notifications                       list (keyset cursor) + unreadCount
- * GET    /api/notifications/unread-count          { unreadCount }
+ * GET    /api/notifications                       list (keyset cursor) + unreadCount, unseenCount, menuOpen
+ * GET    /api/notifications/unread-count          { unreadCount, unseenCount, menuOpen }
+ * POST   /api/notifications/seen                  { ids? } the menu was opened: clears the badge; in
+ *                                                 `read` mode (platform setting) also marks ids read
  * POST   /api/notifications/read                  { ids } mark read
+ * POST   /api/notifications/unread                { ids } mark unread
  * POST   /api/notifications/read-all              mark all read
+ *
+ * Every read-state change is pushed as `notifications_state` on `user:<userId>` so the
+ * user's other tabs and devices update their badge and list.
  * DELETE /api/notifications/:id                   delete one
  * GET    /api/notifications/settings              per-category settings
  * PUT    /api/notifications/settings              { settings?: { category: boolean }, email?: { account?, locale? } }
@@ -26,9 +32,15 @@ import {
 	NOTIFICATION_EMAIL_LOCALES,
 	OPTIONAL_NOTIFICATION_CATEGORIES,
 	type NotificationSettingsResult,
+	type NotificationStateEvent,
+	type NotificationSeenResult,
 } from "@al-ummah/shared-types";
+import { broadcastInBackground } from "../../lib/websocket-notify";
 import {
-	countUnread,
+	countState,
+	markSeen,
+	markUnread,
+	readNotificationPlatformSettings,
 	deleteNotification,
 	getBell,
 	getEmailSettings,
@@ -42,6 +54,11 @@ import {
 	updateSettings,
 } from "../../lib/notifications";
 import { Channel, ResponseError } from "../../lib/types";
+
+/** Tell the user's other tabs and devices (realtime, after the response). */
+function pushState(c: AppContext, userId: string, state: Omit<NotificationStateEvent, "type">): void {
+	broadcastInBackground(c, `user:${userId}`, "notifications_state", state as Record<string, unknown>);
+}
 
 const OptionalChannelHeader = z.object({ channelId: Str({ description: "Active channel ID" }).optional().nullable() });
 const unavailable = { "503": { description: "Notifications not configured", content: { "application/json": { schema: ResponseError } } } };
@@ -71,26 +88,59 @@ export class NotificationsList extends AuthenticatedRoute {
 		if (!db) return storeUnavailable(c);
 		const { query } = await this.getValidatedData<typeof this.schema>();
 		const userId = this.getUserId(c);
-		const [page, unreadCount] = await Promise.all([
+		const [page, counts, platform] = await Promise.all([
 			listNotifications(db, userId, { limit: query.limit, cursor: query.cursor, unreadOnly: query.unreadOnly === "true" }),
-			countUnread(db, userId),
+			countState(db, userId),
+			readNotificationPlatformSettings(c.env),
 		]);
-		return { success: true, result: { ...page, unreadCount } };
+		return { success: true, result: { ...page, ...counts, menuOpen: platform.menuOpen } };
 	}
 }
 
 export class NotificationsUnreadCount extends AuthenticatedRoute {
 	schema = {
 		tags: ["Notifications"],
-		summary: "Unread notification count",
+		summary: "Unread and unseen notification counts",
+		description: "unseenCount (the bell's badge) counts unread notifications newer than the last time the user opened the menu. menuOpen is the platform setting for what opening the menu does.",
 		request: { headers: OptionalChannelHeader },
-		responses: { "200": { description: "{ unreadCount }" }, ...unavailable },
+		responses: { "200": { description: "{ unreadCount, unseenCount, menuOpen }" }, ...unavailable },
 	};
 
 	async handle(c: AppContext) {
 		const db = c.env.NOTIFICATIONS_DB;
 		if (!db) return storeUnavailable(c);
-		return { success: true, result: { unreadCount: await countUnread(db, this.getUserId(c)) } };
+		const [counts, platform] = await Promise.all([countState(db, this.getUserId(c)), readNotificationPlatformSettings(c.env)]);
+		return { success: true, result: { ...counts, menuOpen: platform.menuOpen } };
+	}
+}
+
+export class NotificationsMarkSeen extends AuthenticatedRoute {
+	schema = {
+		tags: ["Notifications"],
+		summary: "The notification menu was opened",
+		description:
+			"Clears the bell's badge (stores when the user last looked; idempotent, one row per user). When the platform setting menuOpen is `read`, the given ids (the notifications the menu shows) are also marked read. Other tabs and devices get a realtime `notifications_state` event.",
+		request: {
+			body: { content: { "application/json": { schema: z.object({ ids: z.array(Str()).max(MARK_READ_MAX_IDS).optional() }) } } },
+			headers: OptionalChannelHeader,
+		},
+		responses: { "200": { description: "{ seenAt, menuOpen, readIds, unreadCount, unseenCount }" }, ...unavailable },
+	};
+
+	async handle(c: AppContext) {
+		const db = c.env.NOTIFICATIONS_DB;
+		if (!db) return storeUnavailable(c);
+		const { body } = await this.getValidatedData<typeof this.schema>();
+		const userId = this.getUserId(c);
+		const platform = await readNotificationPlatformSettings(c.env);
+		const seenAt = await markSeen(db, userId);
+		const ids = platform.menuOpen === "read" ? [...new Set(body?.ids ?? [])].slice(0, MARK_READ_MAX_IDS) : [];
+		if (ids.length > 0) await markRead(db, userId, ids);
+		const counts = await countState(db, userId);
+		const result: NotificationSeenResult = { ...counts, seenAt: new Date(seenAt).toISOString(), menuOpen: platform.menuOpen, readIds: ids };
+		pushState(c, userId, { ...counts, seenAt: result.seenAt, ...(ids.length ? { readIds: ids } : {}) });
+		logger.debug("[Notifications] Menu opened", { userId, menuOpen: platform.menuOpen, read: ids.length });
+		return { success: true, result };
 	}
 }
 
@@ -111,7 +161,33 @@ export class NotificationsMarkRead extends AuthenticatedRoute {
 		const { body } = await this.getValidatedData<typeof this.schema>();
 		const userId = this.getUserId(c);
 		const updated = await markRead(db, userId, body.ids);
-		return { success: true, result: { updated, unreadCount: await countUnread(db, userId) } };
+		const counts = await countState(db, userId);
+		pushState(c, userId, { ...counts, readIds: body.ids });
+		return { success: true, result: { updated, ...counts } };
+	}
+}
+
+export class NotificationsMarkUnread extends AuthenticatedRoute {
+	schema = {
+		tags: ["Notifications"],
+		summary: "Mark notifications unread",
+		description: "They show as unread in the list again; they do not come back on the bell's badge.",
+		request: {
+			body: { content: { "application/json": { schema: z.object({ ids: z.array(Str()).min(1).max(MARK_READ_MAX_IDS) }) } } },
+			headers: OptionalChannelHeader,
+		},
+		responses: { "200": { description: "Updated count and new counts" }, ...unavailable },
+	};
+
+	async handle(c: AppContext) {
+		const db = c.env.NOTIFICATIONS_DB;
+		if (!db) return storeUnavailable(c);
+		const { body } = await this.getValidatedData<typeof this.schema>();
+		const userId = this.getUserId(c);
+		const updated = await markUnread(db, userId, body.ids);
+		const counts = await countState(db, userId);
+		pushState(c, userId, { ...counts, unreadIds: body.ids });
+		return { success: true, result: { updated, ...counts } };
 	}
 }
 
@@ -126,8 +202,10 @@ export class NotificationsMarkAllRead extends AuthenticatedRoute {
 	async handle(c: AppContext) {
 		const db = c.env.NOTIFICATIONS_DB;
 		if (!db) return storeUnavailable(c);
-		const updated = await markAllRead(db, this.getUserId(c));
-		return { success: true, result: { updated, unreadCount: 0 } };
+		const userId = this.getUserId(c);
+		const updated = await markAllRead(db, userId);
+		pushState(c, userId, { unreadCount: 0, unseenCount: 0, allRead: true });
+		return { success: true, result: { updated, unreadCount: 0, unseenCount: 0 } };
 	}
 }
 
@@ -150,7 +228,9 @@ export class NotificationsDelete extends AuthenticatedRoute {
 		const userId = this.getUserId(c);
 		const deleted = await deleteNotification(db, userId, params.id);
 		if (!deleted) return c.json({ success: false, error: "Notification not found" }, 404);
-		return { success: true, result: { id: params.id, unreadCount: await countUnread(db, userId) } };
+		const counts = await countState(db, userId);
+		pushState(c, userId, { ...counts, deletedId: params.id });
+		return { success: true, result: { id: params.id, ...counts } };
 	}
 }
 

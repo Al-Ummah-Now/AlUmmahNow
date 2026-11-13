@@ -88,9 +88,12 @@ export interface NotificationCenterTranslations {
   title: string;
   bellLabel: string;
   bellLabelUnread: string;
+  /** Bell name when the badge shows notifications new since the menu was last opened. */
+  bellLabelNew: string;
   latest: string;
   markAllRead: string;
   markRead: string;
+  markUnread: string;
   delete: string;
   seeAll: string;
   settings: string;
@@ -251,9 +254,11 @@ export const NOTIFICATION_CENTER_EN: NotificationCenterTranslations = {
   title: 'Notifications',
   bellLabel: 'Notifications',
   bellLabelUnread: 'Notifications, {count} unread',
+  bellLabelNew: 'Notifications, {count} new',
   latest: 'Latest notifications',
   markAllRead: 'Mark all as read',
   markRead: 'Mark as read',
+  markUnread: 'Mark as unread',
   delete: 'Delete notification',
   seeAll: 'See all notifications',
   settings: 'Notification settings',
@@ -345,9 +350,11 @@ export const NOTIFICATION_CENTER_AR: NotificationCenterTranslations = {
   title: 'الإشعارات',
   bellLabel: 'الإشعارات',
   bellLabelUnread: 'الإشعارات، {count} غير مقروءة',
+  bellLabelNew: 'الإشعارات، {count} جديدة',
   latest: 'أحدث الإشعارات',
   markAllRead: 'تحديد الكل كمقروء',
   markRead: 'تحديد كمقروء',
+  markUnread: 'تحديد كغير مقروء',
   delete: 'حذف الإشعار',
   seeAll: 'عرض كل الإشعارات',
   settings: 'إعدادات الإشعارات',

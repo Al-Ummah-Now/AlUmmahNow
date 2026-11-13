@@ -29,6 +29,7 @@ that product/legal should confirm.
 | `playlists/{playlistId}` | Owner `userId` | Contract (b) | Until erasure |
 | `upload-defaults/{userId}/...` | Upload templates | Contract (b) | Until erasure |
 | `reports/report:{entityId}:{reportId}:{reporterId}` | Who reported what | Legitimate interest (f): platform safety and moderation history | Kept; reporter identity removed on erasure |
+| D1 notifications DB `notification_settings`, `notification_email_prefs`, `notification_seen` | Category switches, email preferences, when the user last opened the notification menu (the bell's badge) | Contract (b) | Until erasure; exported (`notificationState`) and erased with the account |
 | KV `RATE_LIMIT_KV` `rate_limit:{op}:{userId}` | Counters | Legitimate interest (f): abuse prevention | ~25 h TTL |
 | KV `TUS_SESSIONS` | Upload session to user mapping | Contract (b) | 1 h TTL |
 

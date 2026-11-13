@@ -15,6 +15,15 @@ for (const lang of LANGS) {
         await mockApi(page);
         await page.goto(`/${lang}`);
         await applyTheme(page, theme, mode);
+        // The new-notifications badge on the bell (in the night header) is readable too. Measured
+        // before the menu opens (opening it clears the badge) and at rest (the harness drops a text
+        // that changed while it was measured): it must be there
+        await expect(page.getByTestId('notification-badge')).toBeVisible();
+        const bell = await measureText(page, '[data-testid=notification-bell]');
+        expect(bell.some((t) => t.selector.startsWith('notification-badge')), 'the badge was measured').toBe(true);
+        const badge = bell.filter((t) => t.ratio < 4.5);
+        expect(badge, `badge: ${JSON.stringify(badge)}`).toEqual([]);
+
         await page.getByTestId('notification-bell').click();
         const panel = page.getByTestId('notification-dropdown');
         await expect(panel.getByTestId('notification-item')).toHaveCount(8);
@@ -26,13 +35,6 @@ for (const lang of LANGS) {
         expect(texts.length).toBeGreaterThan(8);
         const low = texts.filter((t) => t.ratio < 4.5);
         expect(low, `low contrast:\n${low.map((t) => `${t.ratio}:1 ${t.fg} on ${t.bg} "${t.text}" (${t.selector})`).join('\n')}`).toEqual([]);
-
-        // The unread badge on the bell (in the night header) is readable too
-        // Measured at rest (the harness drops a text that changed while it was measured): it must be there
-        const bell = await measureText(page, '[data-testid=notification-bell]');
-        expect(bell.some((t) => t.selector.startsWith('notification-badge')), 'the badge was measured').toBe(true);
-        const badge = bell.filter((t) => t.ratio < 4.5);
-        expect(badge, `badge: ${JSON.stringify(badge)}`).toEqual([]);
 
         // Read and unread rows differ by more than colour: the unread dot carries a name
         await expect(panel.locator('[data-read=false] [role=img]').first()).toHaveAccessibleName(/.+/);

@@ -99,8 +99,8 @@ function fixtureAnswer(path, token, method) {
 function answer(path) {
   if (path.startsWith('/thumb/')) return null;
   if (path === '/api/profile' || path === '/api/profiles/me') return PROFILE;
-  if (path === '/api/notifications/unread-count') return { success: true, result: { unreadCount: 2 } };
-  if (path === '/api/notifications') return { success: true, result: { items: NOTIFS, nextCursor: null, unreadCount: 2 } };
+  if (path === '/api/notifications/unread-count') return { success: true, result: { unreadCount: 2, unseenCount: 2, menuOpen: 'seen' } };
+  if (path === '/api/notifications') return { success: true, result: { items: NOTIFS, nextCursor: null, unreadCount: 2, unseenCount: 2, menuOpen: 'seen' } };
   if (path === '/api/search/suggestions') return { data: [
     { text: 'quran recitation', type: 'query' },
     { text: 'Lectures Channel', type: 'channel', id: 'c1', subtitle: '@lectures', verified: true, thumbnailUrl: `${base}/thumb/3.svg` },

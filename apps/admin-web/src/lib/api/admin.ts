@@ -535,3 +535,20 @@ export async function retryThumbnailRun(id: string): Promise<ActionResult<{ job:
 export async function startIndexRebuild(kind: 'video' | 'channel' | 'profile'): Promise<ActionResult<{ job: AdminJob; existing: boolean }>> {
   return mutate('/api/processing/index-rebuild', 'POST', { kind });
 }
+
+// Platform settings: what opening the notification menu does (admin-api /api/notification-settings;
+// reading for every admin role, changing needs settings:manage; audited)
+
+export async function getNotificationPlatformSettings(): Promise<import('@al-ummah/shared-types').NotificationPlatformSettings> {
+  return fetchAdmin('/api/notification-settings');
+}
+
+export async function getNotificationSettingsHistory(): Promise<{ entries: { id: string; oldValue: string | null; newValue: string; actorId: string; createdAt: string }[] }> {
+  return fetchAdmin('/api/notification-settings/history?limit=10');
+}
+
+export async function saveNotificationPlatformSettings(
+  menuOpen: import('@al-ummah/shared-types').NotificationMenuOpenMode,
+): Promise<ActionResult<import('@al-ummah/shared-types').NotificationPlatformSettings>> {
+  return mutate('/api/notification-settings', 'PUT', { menuOpen });
+}

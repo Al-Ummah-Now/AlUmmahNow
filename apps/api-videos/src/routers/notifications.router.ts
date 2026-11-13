@@ -24,6 +24,8 @@ import {
   NotificationsList,
   NotificationsMarkAllRead,
   NotificationsMarkRead,
+  NotificationsMarkSeen,
+  NotificationsMarkUnread,
   NotificationsUnreadCount,
 } from '../endpoints/notifications/notifications';
 
@@ -33,7 +35,9 @@ export const notificationsRouter = fromHono(app, { base: '/api/notifications' })
 
 notificationsRouter.get('/', NotificationsList);
 notificationsRouter.get('/unread-count', NotificationsUnreadCount);
+notificationsRouter.post('/seen', NotificationsMarkSeen);
 notificationsRouter.post('/read', NotificationsMarkRead);
+notificationsRouter.post('/unread', NotificationsMarkUnread);
 notificationsRouter.post('/read-all', NotificationsMarkAllRead);
 notificationsRouter.get('/settings', NotificationSettingsGet);
 notificationsRouter.put('/settings', NotificationSettingsUpdate);

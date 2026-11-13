@@ -11,6 +11,8 @@ import { NotificationsService } from '@/services/api/notifications';
 import { publishUnreadCount } from '@/lib/notifications/render';
 import { logger } from '@/lib/logger-client';
 import { NotificationRow } from './NotificationRow';
+import { useWebSocketSubscription } from '@/lib/websocket/WebSocketProvider';
+import type { NotificationCounts, NotificationStateEvent } from '@al-ummah/shared-types';
 
 const PAGE_SIZE = 20;
 
@@ -32,10 +34,25 @@ export function NotificationsPageView({ dir }: NotificationsPageProps) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(false);
 
-  const updateUnread = (count: number) => {
-    setUnreadCount(count);
-    publishUnreadCount(count);
+  const updateUnread = (counts: NotificationCounts) => {
+    setUnreadCount(counts.unreadCount);
+    publishUnreadCount(counts.unreadCount, counts.unseenCount);
   };
+
+  // Read state changed in another tab or device (or the menu marked them read)
+  const onRealtime = useCallback((data: unknown) => {
+    const event = data as NotificationStateEvent | null;
+    if (!event || event.type !== 'notifications_state') return;
+    const read = new Set(event.readIds ?? []);
+    const unread = new Set(event.unreadIds ?? []);
+    setItems((prev) =>
+      prev
+        .filter((n) => n.id !== event.deletedId)
+        .map((n) => (event.allRead || read.has(n.id) ? { ...n, isRead: true } : unread.has(n.id) ? { ...n, isRead: false } : n)),
+    );
+    if (typeof event.unreadCount === 'number') setUnreadCount(event.unreadCount);
+  }, []);
+  useWebSocketSubscription(user?.id ? `user:${user.id}` : '', onRealtime, [user?.id]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -45,7 +62,7 @@ export function NotificationsPageView({ dir }: NotificationsPageProps) {
       setItems(page.items);
       setCursor(page.nextCursor);
       setUnreadCount(page.unreadCount);
-      publishUnreadCount(page.unreadCount);
+      publishUnreadCount(page.unreadCount, page.unseenCount);
     } else {
       setError(true);
     }
@@ -73,13 +90,20 @@ export function NotificationsPageView({ dir }: NotificationsPageProps) {
     if (item.isRead) return;
     setItems((prev) => prev.map((n) => (n.id === item.id ? { ...n, isRead: true } : n)));
     const result = await NotificationsService.markRead([item.id]);
-    if (result) updateUnread(result.unreadCount);
+    if (result) updateUnread(result);
+  };
+
+  const markUnread = async (item: NotificationItem) => {
+    if (!item.isRead) return;
+    setItems((prev) => prev.map((n) => (n.id === item.id ? { ...n, isRead: false } : n)));
+    const result = await NotificationsService.markUnread([item.id]);
+    if (result) updateUnread(result);
   };
 
   const markAll = async () => {
     setItems((prev) => prev.map((n) => ({ ...n, isRead: true })));
     const result = await NotificationsService.markAllRead();
-    if (result) updateUnread(0);
+    if (result) updateUnread({ unreadCount: 0, unseenCount: 0 });
   };
 
   const remove = async (item: NotificationItem) => {
@@ -94,7 +118,7 @@ export function NotificationsPageView({ dir }: NotificationsPageProps) {
     setItems((prev) => prev.filter((n) => n.id !== item.id));
     const result = await NotificationsService.remove(item.id);
     if (result) {
-      updateUnread(result.unreadCount);
+      updateUnread(result);
     } else {
       logger.warn('[NotificationsPage] Delete failed', { id: item.id });
       setItems(previous);
@@ -172,7 +196,7 @@ export function NotificationsPageView({ dir }: NotificationsPageProps) {
         ) : (
           <ul className="divide-y divide-gray-100 dark:divide-gray-800" data-testid="notifications-list">
             {items.map((item) => (
-              <NotificationRow key={item.id} item={item} onOpen={(n) => void markRead(n)} onMarkRead={(n) => void markRead(n)} onDelete={(n) => void remove(n)} />
+              <NotificationRow key={item.id} item={item} onOpen={(n) => void markRead(n)} onMarkRead={(n) => void markRead(n)} onMarkUnread={(n) => void markUnread(n)} onDelete={(n) => void remove(n)} />
             ))}
           </ul>
         )}

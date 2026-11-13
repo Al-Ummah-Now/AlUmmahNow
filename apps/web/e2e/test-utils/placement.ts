@@ -172,6 +172,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/release/profile-images.spec.ts': { placement: 'local', reason: 'avatar/cover display in UI; image host must be faked' },
   'apps/web/e2e/release/profile-signin.spec.ts': { placement: 'local', reason: 'real issuer and profile app (Auth repo, local): sign-up and sign-in' },
   'apps/web/e2e/release/public-fields.spec.ts': { placement: 'local', reason: 'anonymous API responses field allow-list' },
+  'apps/web/e2e/release/notification-badge.spec.ts': { placement: 'local', reason: 'seeds the notifications D1 and flips the global menu mode' },
   'apps/web/e2e/release/realtime-toasts.spec.ts': { placement: 'local', reason: 'toast grouping; socket already replaced by routeWebSocket' },
   'apps/web/e2e/release/related.spec.ts': { placement: 'local', reason: 'related shelf from recommendations API; latency check is @load', load: true },
   'apps/web/e2e/release/settings-controls.spec.ts': { placement: 'local', reason: 'settings switches/breadcrumbs CSS per theme' },

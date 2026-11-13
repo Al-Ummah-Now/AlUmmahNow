@@ -5,8 +5,10 @@
  *
  * Endpoints (api-videos, all authenticated):
  * - GET    /api/notifications                      ?limit&cursor&unreadOnly
- * - GET    /api/notifications/unread-count
+ * - GET    /api/notifications/unread-count          { unreadCount, unseenCount, menuOpen }
+ * - POST   /api/notifications/seen                  { ids? } the menu was opened
  * - POST   /api/notifications/read                 { ids }
+ * - POST   /api/notifications/unread               { ids }
  * - POST   /api/notifications/read-all
  * - DELETE /api/notifications/:id
  * - GET    /api/notifications/settings
@@ -18,7 +20,15 @@
 import { logger } from '@/lib/logger-client';
 import { getApiUrl } from '@/lib/runtime-config';
 import { getClientAuthHeaders } from '@/lib/auth/client-token';
-import type { ChannelBellLevel, NotificationItem, NotificationSettingsResult, NotificationSettingsUpdateRequest } from '@al-ummah/shared-types';
+import type {
+  ChannelBellLevel,
+  NotificationCounts,
+  NotificationItem,
+  NotificationMenuOpenMode,
+  NotificationSeenResult,
+  NotificationSettingsResult,
+  NotificationSettingsUpdateRequest,
+} from '@al-ummah/shared-types';
 
 const apiBase = (): string => getApiUrl();
 
@@ -26,6 +36,10 @@ export interface NotificationPage {
   items: NotificationItem[];
   nextCursor: string | null;
   unreadCount: number;
+  /** The bell's badge: unread and newer than the last menu open */
+  unseenCount: number;
+  /** Platform setting: what opening the menu does */
+  menuOpen: NotificationMenuOpenMode;
 }
 
 async function request<T>(path: string, init: RequestInit = {}, label: string): Promise<T | null> {
@@ -53,25 +67,37 @@ export const NotificationsService = {
     return request<NotificationPage>(`/api/notifications?${q.toString()}`, {}, 'List');
   },
 
-  async unreadCount(): Promise<number | null> {
-    const result = await request<{ unreadCount: number }>('/api/notifications/unread-count', {}, 'Unread count');
-    return result ? result.unreadCount : null;
+  counts() {
+    return request<NotificationCounts & { menuOpen: NotificationMenuOpenMode }>('/api/notifications/unread-count', {}, 'Counts');
+  },
+
+  /** The menu was opened: clears the badge; in `read` mode the server also marks `ids` read. */
+  markSeen(ids: string[]) {
+    return request<NotificationSeenResult>('/api/notifications/seen', { method: 'POST', body: JSON.stringify({ ids: ids.slice(0, 100) }) }, 'Mark seen');
   },
 
   markRead(ids: string[]) {
-    return request<{ updated: number; unreadCount: number }>(
+    return request<{ updated: number } & NotificationCounts>(
       '/api/notifications/read',
       { method: 'POST', body: JSON.stringify({ ids }) },
       'Mark read',
     );
   },
 
+  markUnread(ids: string[]) {
+    return request<{ updated: number } & NotificationCounts>(
+      '/api/notifications/unread',
+      { method: 'POST', body: JSON.stringify({ ids }) },
+      'Mark unread',
+    );
+  },
+
   markAllRead() {
-    return request<{ updated: number; unreadCount: number }>('/api/notifications/read-all', { method: 'POST' }, 'Mark all read');
+    return request<{ updated: number } & NotificationCounts>('/api/notifications/read-all', { method: 'POST' }, 'Mark all read');
   },
 
   remove(id: string) {
-    return request<{ id: string; unreadCount: number }>(`/api/notifications/${encodeURIComponent(id)}`, { method: 'DELETE' }, 'Delete');
+    return request<{ id: string } & NotificationCounts>(`/api/notifications/${encodeURIComponent(id)}`, { method: 'DELETE' }, 'Delete');
   },
 
   /** Category switches and email preferences. */

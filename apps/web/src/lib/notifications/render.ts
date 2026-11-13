@@ -62,7 +62,8 @@ export function localizeActionUrl(url: string | null | undefined, lang: string):
 /** Same-tab signal so the header badge follows changes made on the notifications page. */
 export const UNREAD_EVENT = 'aun:notifications-unread';
 
-export function publishUnreadCount(count: number): void {
+/** `unseen` (the badge) is passed when the server returned it. */
+export function publishUnreadCount(count: number, unseen?: number): void {
   if (typeof window === 'undefined') return;
-  window.dispatchEvent(new CustomEvent(UNREAD_EVENT, { detail: { count } }));
+  window.dispatchEvent(new CustomEvent(UNREAD_EVENT, { detail: { count, unseen } }));
 }

@@ -292,11 +292,14 @@ export async function purgeExpiredNotifications(db: D1Database, now = Date.now()
   return (result as { meta?: { changes?: number } })?.meta?.changes ?? 0;
 }
 
-/** GDPR erasure: a user's notifications, settings, subscriber rows and push devices are personal data. */
+/** GDPR erasure: a user's notifications, settings, menu-seen time, subscriber rows and push devices are personal data. */
 export async function eraseUserNotifications(db: D1Database, userId: string): Promise<void> {
   await db.batch([
     db.prepare('DELETE FROM notifications WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM notification_settings WHERE user_id = ?').bind(userId),
+    db.prepare('DELETE FROM notification_email_prefs WHERE user_id = ?').bind(userId),
+    // When they last opened the notification menu (migration 0012)
+    db.prepare('DELETE FROM notification_seen WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM channel_subscribers WHERE user_id = ?').bind(userId),
     // Their subscriptions (api-videos, migration 0008), keeping the counts exact
     db

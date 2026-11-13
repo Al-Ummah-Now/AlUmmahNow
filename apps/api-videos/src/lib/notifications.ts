@@ -27,6 +27,10 @@ import {
 	type NotificationItem,
 	type NotificationKey,
 	type NotificationSettings,
+	type NotificationCounts,
+	type NotificationPlatformSettings,
+	DEFAULT_NOTIFICATION_PLATFORM_SETTINGS,
+	normaliseNotificationPlatformSettings,
 } from '@al-ummah/shared-types';
 import { logger } from './logger';
 
@@ -145,8 +149,45 @@ export async function countUnread(db: D1Database, userId: string): Promise<numbe
 	return Number(count || 0);
 }
 
+/**
+ * Unread and unseen counts in one indexed query (idx_notifications_user_unread_created):
+ * unseen = unread notifications created after the user last opened the menu (the bell's badge).
+ */
+export async function countState(db: D1Database, userId: string): Promise<NotificationCounts> {
+	const row = await db
+		.prepare(
+			`SELECT COUNT(*) AS unread,
+			        COALESCE(SUM(CASE WHEN created_at > COALESCE((SELECT seen_at FROM notification_seen WHERE user_id = ?1), 0) THEN 1 ELSE 0 END), 0) AS unseen
+			 FROM notifications WHERE user_id = ?1 AND is_read = 0`,
+		)
+		.bind(userId)
+		.first<{ unread: number; unseen: number }>();
+	return { unreadCount: Number(row?.unread || 0), unseenCount: Number(row?.unseen || 0) };
+}
+
+/** When the user last opened the notification menu (ms), or null. */
+export async function getSeenAt(db: D1Database, userId: string): Promise<number | null> {
+	const row = await db.prepare('SELECT seen_at FROM notification_seen WHERE user_id = ?').bind(userId).first<{ seen_at: number }>();
+	return row ? Number(row.seen_at) : null;
+}
+
+/**
+ * The user opened the menu: one upsert of their row. Idempotent, and never moves back in time
+ * (a slow request from another tab cannot bring back a badge already cleared).
+ */
+export async function markSeen(db: D1Database, userId: string, now = Date.now()): Promise<number> {
+	await db
+		.prepare(
+			`INSERT INTO notification_seen (user_id, seen_at) VALUES (?, ?)
+			 ON CONFLICT(user_id) DO UPDATE SET seen_at = MAX(seen_at, excluded.seen_at)`,
+		)
+		.bind(userId, now)
+		.run();
+	return now;
+}
+
 export async function markRead(db: D1Database, userId: string, ids: string[], now = Date.now()): Promise<number> {
-	const unique = [...new Set(ids.filter((id) => typeof id === 'string' && id.length > 0))].slice(0, MARK_READ_MAX_IDS);
+	const unique = cleanIds(ids);
 	if (unique.length === 0) return 0;
 	const result = await db
 		.prepare(
@@ -154,6 +195,24 @@ export async function markRead(db: D1Database, userId: string, ids: string[], no
 			 WHERE user_id = ? AND is_read = 0 AND id IN (${unique.map(() => '?').join(', ')})`,
 		)
 		.bind(now, userId, ...unique)
+		.run();
+	return Number(result.meta?.changes || 0);
+}
+
+function cleanIds(ids: string[]): string[] {
+	return [...new Set(ids.filter((id) => typeof id === 'string' && id.length > 0))].slice(0, MARK_READ_MAX_IDS);
+}
+
+/** Mark notifications unread again (the row's "Mark as unread"). They do not come back on the badge. */
+export async function markUnread(db: D1Database, userId: string, ids: string[]): Promise<number> {
+	const unique = cleanIds(ids);
+	if (unique.length === 0) return 0;
+	const result = await db
+		.prepare(
+			`UPDATE notifications SET is_read = 0, read_at = NULL
+			 WHERE user_id = ? AND is_read = 1 AND id IN (${unique.map(() => '?').join(', ')})`,
+		)
+		.bind(userId, ...unique)
 		.run();
 	return Number(result.meta?.changes || 0);
 }
@@ -329,4 +388,50 @@ export function accountNoticePayload(userId: string, notice: AccountNoticeReques
 
 export function categoryOf(key: NotificationKey): NotificationCategory {
 	return NOTIFICATION_KEY_CATEGORY[key];
+}
+
+// ---------------------------------------------------------------------------
+// Platform setting: what opening the notification menu does (videos admin,
+// audited in admin-api). global_settings/ops/notifications.json, cached per isolate.
+// ---------------------------------------------------------------------------
+
+export const NOTIFICATION_SETTINGS_KEY = 'ops/notifications.json';
+const PLATFORM_SETTINGS_TTL_MS = 30_000;
+
+interface SettingsBucket {
+	get(key: string): Promise<{ json<T>(): Promise<T> } | null>;
+	put(key: string, value: string, options?: unknown): Promise<unknown>;
+}
+
+let platformCache: { at: number; value: NotificationPlatformSettings } | null = null;
+
+export function clearNotificationPlatformSettingsCache(): void {
+	platformCache = null;
+}
+
+export async function readNotificationPlatformSettings(env: { global_settings?: unknown }, fresh = false): Promise<NotificationPlatformSettings> {
+	if (!fresh && platformCache && Date.now() - platformCache.at < PLATFORM_SETTINGS_TTL_MS) return platformCache.value;
+	let value = DEFAULT_NOTIFICATION_PLATFORM_SETTINGS;
+	try {
+		const obj = await (env.global_settings as SettingsBucket | undefined)?.get(NOTIFICATION_SETTINGS_KEY);
+		if (obj) value = normaliseNotificationPlatformSettings(await obj.json<unknown>());
+	} catch (error) {
+		logger.warn('[Notifications] Could not read the platform settings; using defaults', { error: error instanceof Error ? error.message : String(error) });
+	}
+	platformCache = { at: Date.now(), value };
+	return value;
+}
+
+export async function writeNotificationPlatformSettings(
+	env: { global_settings?: unknown },
+	input: Partial<NotificationPlatformSettings>,
+	actorId: string,
+): Promise<NotificationPlatformSettings> {
+	const bucket = env.global_settings as SettingsBucket | undefined;
+	if (!bucket) throw new Error('global_settings is not bound');
+	const current = await readNotificationPlatformSettings(env, true);
+	const value = normaliseNotificationPlatformSettings({ ...current, ...input, updatedAt: new Date().toISOString(), updatedBy: actorId });
+	await bucket.put(NOTIFICATION_SETTINGS_KEY, JSON.stringify(value), { httpMetadata: { contentType: 'application/json' } });
+	platformCache = { at: Date.now(), value };
+	return value;
 }

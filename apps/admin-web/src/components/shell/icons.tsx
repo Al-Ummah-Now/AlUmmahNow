@@ -38,6 +38,7 @@ const PATHS = {
   plus: 'M12 5v14M5 12h14',
   login: 'M15 4h4v16h-4M10 8l4 4-4 4M14 12H3',
   check: 'M5 12.5l4.5 4.5L19 7',
+  sliders: 'M4 6h16M4 12h16M4 18h16M14 4v4M8 10v4M16 16v4',
 } as const;
 
 export type IconName = keyof typeof PATHS;
