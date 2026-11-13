@@ -76,7 +76,15 @@ back onto the post (`www`, `article.url`) with a conditional write and no queue 
 The old `PUT /internal/scholars/:userId/articles/:externalId` (link-only mirrors) still works for
 posts not yet converted, and never overwrites a converted post.
 
-## 6. Conversion of existing CMS scholar posts
+## 6. End-to-end test
+
+`apps/web/e2e/78-scholar-refs.spec.ts` (local stack, en and ar): a creator with a scholar profile
+writes an article (Studio in English) and a text post (Studio in Arabic); the processor's outbox
+gives each a CMS reference; www shows each at its reference's address with "Join the discussion".
+The CMS and www come from their released local-stack bundles (docs/testing/LOCAL-STACK.md); the spec
+skips without them. Own data, deleted afterwards (posts, CMS rows, the profile).
+
+## 7. Conversion of existing CMS scholar posts
 
 Run from the CMS (`scripts/ops/convert-scholar-posts.ts`, see its docs/SCHOLARS.md): QA, then stage,
 then production only with the owner's go-ahead. The CMS keeps each original for 30 days.

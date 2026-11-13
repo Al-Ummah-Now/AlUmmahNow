@@ -20,6 +20,13 @@ export const STATE_DIR = process.env.LOCAL_STACK_DIR ? resolve(process.env.LOCAL
 
 /** The Auth repo (Al-Ummah-Now/AlUmmahNowAuth), checked out at its last released commit (resolve-refs.ts). */
 export const AUTH_DIR = process.env.LOCAL_STACK_AUTH_DIR ? resolve(process.env.LOCAL_STACK_AUTH_DIR) : join(STATE_DIR, 'repos', 'auth');
+/**
+ * The CMS and www (AlUmmahNowCMS, AlUmmahNowUI) as their released local-stack bundles
+ * (fetch-auth.ts --repo cms|www). Optional: without a bundle the stack runs without them and the
+ * specs that cross into them skip.
+ */
+export const CMS_DIR = process.env.LOCAL_STACK_CMS_DIR ? resolve(process.env.LOCAL_STACK_CMS_DIR) : join(STATE_DIR, 'repos', 'cms');
+export const WWW_DIR = process.env.LOCAL_STACK_WWW_DIR ? resolve(process.env.LOCAL_STACK_WWW_DIR) : join(STATE_DIR, 'repos', 'www');
 
 export const HOST = 'localhost';
 
@@ -38,6 +45,9 @@ export const PORTS = {
   auth: 3301,
   profile: 3302,
   'auth-admin': 3303,
+  /** www (AlUmmahNowUI apps/www) and the CMS (AlUmmahNowCMS), when their bundles are fetched */
+  www: 3401,
+  cms: 3402,
   /** Fake third-party CDN + control API (Bunny HLS/thumbnails, image host, SQL): fake-external.ts */
   'fake-cdn': 3190,
   /** The browser's proxy (Playwright `proxy`): faked HTTPS hosts answered locally, others refused: browser-proxy.ts */
@@ -50,6 +60,8 @@ export const url = (app: StackApp): string => `http://${HOST}:${PORTS[app]}`;
 /** Local test values for every Secrets Store binding and secret var. Never real values. */
 export const LOCAL_SECRETS: Record<string, string> = {
   INTERNAL_API_KEY: 'local-stack-internal-key',
+  // The CMS's binding for the same shared secret (internal-api-key): api-videos' /internal/* and its /internal/refs
+  VIDEOS_INTERNAL_API_KEY: 'local-stack-internal-key',
   E2E_CODE_SINK_SECRET: 'local-stack-sink-secret',
   TEST_PROMOTE_SECRET: 'local-stack-promote-secret',
   MEDIA_SIGN_KEY: 'local-stack-media-sign-key',
@@ -93,6 +105,8 @@ export const PROD_HOST_TO_LOCAL: Record<string, string> = {
   'auth.alummahnow.net': url('auth'),
   'profile.auth.alummahnow.net': url('profile'),
   'admin.auth.alummahnow.net': url('auth-admin'),
+  'www.alummahnow.net': url('www'),
+  'cms.alummahnow.net': url('cms'),
 };
 
 const COMMON_VARS = {
@@ -106,7 +120,7 @@ const BROWSER_ORIGINS = [url('web'), url('admin-web'), url('profile'), url('auth
 export interface StackWorker {
   app: StackApp;
   /** Repo the worker lives in. */
-  repo: 'videos' | 'auth';
+  repo: 'videos' | 'auth' | 'cms' | 'www';
   /** App directory, relative to the repo root. */
   dir: string;
   /** The wrangler file the local config is generated from (top level: complete bindings, prod client ids). */
@@ -178,8 +192,9 @@ export const WORKERS: StackWorker[] = [
     vars: {
       ...COMMON_VARS,
       WEBSOCKET_URL: url('websocket'),
-      // No CMS on the local stack: the scholar post reference outbox is off (handlers/scholar-refs.ts)
-      CMS_INTERNAL_URL: '',
+      // The scholar post reference outbox (handlers/scholar-refs.ts) calls the local CMS; boot.ts
+      // empties it when the CMS is not in the stack (no bundle), so nothing retries against nothing
+      CMS_INTERNAL_URL: url('cms'),
       // Never paid AI in tests: the Workers AI binding is dropped and the AI steps are off
       AI_MODERATION_ENABLED: 'false',
       AI_CATEGORIZE_ENABLED: 'false',
@@ -288,10 +303,46 @@ export const WORKERS: StackWorker[] = [
     // ADMIN_CLIENT_SECRET is a worker secret when deployed; its client's hash is set by boot (LOCAL_CLIENT_SECRETS)
     vars: { AUTH_SERVER_URL: url('auth'), APP_URL: url('auth-admin'), ADMIN_CLIENT_ID: AUTH_ADMIN_CLIENT_ID, ADMIN_CLIENT_SECRET: LOCAL_SECRETS.AUTH_ADMIN_CLIENT_SECRET },
   },
+  {
+    app: 'cms',
+    repo: 'cms',
+    dir: '.',
+    config: 'wrangler.jsonc',
+    // Only the public and internal APIs are used (www's reads, the scholar reference outbox): its
+    // staff screens' sign-in config (AUTH_CLIENT_ID, session keys) is not needed
+    vars: {
+      ENVIRONMENT: 'local',
+      PUBLIC_URL: url('cms'),
+      AUTH_ISSUER: url('auth'),
+      VIDEOS_API_URL: url('api-videos'),
+      VIDEOS_WEB_URL: url('web'),
+      ADMIN_API_URL: url('admin-api'),
+      ADMIN_WEB_URL: url('admin-web'),
+      WWW_URL: url('www'),
+      WWW_ORIGINS: url('www'),
+    },
+  },
+  {
+    app: 'www',
+    repo: 'www',
+    dir: 'apps/www',
+    config: 'wrangler.jsonc',
+    requires: 'dist',
+    vars: {
+      APP_ENV: 'development',
+      SITE_URL: url('www'),
+      AUTH_URL: url('auth'),
+      VIDEOS_WEB_URL: url('web'),
+      VIDEOS_API_URL: url('api-videos'),
+      PROFILE_URL: url('profile'),
+      CMS_PUBLIC_URL: url('cms'),
+      ADMIN_API_URL: url('admin-api'),
+    },
+  },
 ];
 
 export function repoDir(worker: StackWorker): string {
-  return worker.repo === 'auth' ? AUTH_DIR : ROOT;
+  return worker.repo === 'auth' ? AUTH_DIR : worker.repo === 'cms' ? CMS_DIR : worker.repo === 'www' ? WWW_DIR : ROOT;
 }
 
 export function appDir(worker: StackWorker): string {

@@ -116,6 +116,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/74-no-empty-media.spec.ts': { placement: 'local', reason: 'thumbnails never empty boxes on public pages' },
   'apps/web/e2e/76-channel-name-locale.spec.ts': { placement: 'local', reason: "channel names in the page's language on cards and the watch page" },
   'apps/web/e2e/77-menus-in-viewport.spec.ts': { placement: 'local', reason: 'header menus, notifications and search suggestions stay inside the viewport at phone widths and landscape, en and ar (2026-11-13 owner decision)' },
+  'apps/web/e2e/78-scholar-refs.spec.ts': { placement: 'local', reason: 'Studio post → processor outbox → CMS reference → www page, en and ar; CMS and www from their released local-stack bundles (skips without them)' },
   'apps/web/e2e/75-save-to-playlist-menu.spec.ts': { placement: 'local', reason: 'save menu stays in viewport; hard-coded video id' },
   'apps/web/e2e/75-site-theme.spec.ts': { placement: 'local', reason: 'served theme matches hydrated theme' },
   'apps/web/e2e/76-help-tour.spec.ts': { placement: 'local', reason: 'Help pages and the identity tour: own accounts, onboarding flag on the account, keyboard, RTL, axe' },

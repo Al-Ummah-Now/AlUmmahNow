@@ -1,8 +1,14 @@
 /**
- * Puts the Auth repo's last released build where the local stack expects it (AUTH_DIR), without
- * checking out or installing that repo:
+ * Puts a sibling repo's last released build where the local stack expects it, without checking out
+ * or installing that repo:
  *
  *   node --experimental-strip-types --no-warnings scripts/local-stack/fetch-auth.ts [--sha <sha>]
+ *   node --experimental-strip-types --no-warnings scripts/local-stack/fetch-auth.ts --repo cms|www --optional
+ *
+ * auth → AUTH_DIR (required by the stack). cms, www → CMS_DIR, WWW_DIR: optional (`--optional`: no
+ * bundle yet is a notice and exit 0, the stack then runs without them and the specs that cross into
+ * them skip). AlUmmahNowCMS and AlUmmahNowUI publish the same kind of bundle (their
+ * .github/workflows/local-stack-bundle.yml).
  *
  * The Auth repo publishes, for every released commit, the prerelease local-stack-<sha12> with
  * local-stack.tar.gz (prebuilt auth, profile and admin workers, their wrangler configs, every
@@ -17,10 +23,10 @@ import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { AUTH_DIR, STATE_DIR } from './stack.ts';
-import { releasedRefs } from './resolve-refs.ts';
+import { AUTH_DIR, CMS_DIR, STATE_DIR, WWW_DIR } from './stack.ts';
+import { releasedRefs, SIBLINGS, type Sibling } from './resolve-refs.ts';
 
-const REPO = 'Al-Ummah-Now/AlUmmahNowAuth';
+const TARGET_DIR: Record<Sibling, string> = { auth: AUTH_DIR, cms: CMS_DIR, www: WWW_DIR };
 
 export function bundleTag(sha: string): string {
   if (!/^[0-9a-f]{40}$/.test(sha)) throw new Error(`not a full commit sha: ${sha}`);
@@ -36,9 +42,14 @@ async function download(url: string, token: string | undefined): Promise<Buffer>
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const given = args[args.indexOf('--sha') + 1];
+  const name = (args.includes('--repo') ? args[args.indexOf('--repo') + 1] : 'auth') as Sibling;
+  if (!(name in SIBLINGS)) throw new Error(`--repo must be one of ${Object.keys(SIBLINGS).join(', ')}`);
+  const optional = args.includes('--optional');
+  const REPO = SIBLINGS[name].repo;
+  const TARGET = TARGET_DIR[name];
   const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
   // The newest released commit whose bundle is published (it follows its release by a few minutes)
-  const candidates = args.includes('--sha') && given ? [given] : (await releasedRefs('auth')).slice(0, 5).map((r) => r.sha);
+  const candidates = args.includes('--sha') && given ? [given] : (await releasedRefs(name)).slice(0, 5).map((r) => r.sha);
   let sha = '';
   let tag = '';
   let release: Response | null = null;
@@ -53,6 +64,10 @@ async function main(): Promise<void> {
     process.stderr.write(`[local-stack] ${REPO} ${candidate.slice(0, 7)}: no ${bundleTag(candidate)} yet (${res.status})\n`);
   }
   if (!release) {
+    if (optional) {
+      process.stderr.write(`[local-stack] ${REPO}: no local-stack bundle among its last released commits; the stack runs without ${name}\n`);
+      return;
+    }
     throw new Error(`${REPO}: none of its last released commits has a local-stack bundle; run its local-stack-bundle workflow by hand with sha=${candidates[0]}`);
   }
   const { assets } = (await release.json()) as { assets: { name: string; url: string }[] };
@@ -66,15 +81,15 @@ async function main(): Promise<void> {
   const actual = createHash('sha256').update(tarball).digest('hex');
   if (actual !== expected) throw new Error(`${tag}: sha256 ${actual} does not match the published ${expected}`);
 
-  rmSync(AUTH_DIR, { recursive: true, force: true });
-  mkdirSync(AUTH_DIR, { recursive: true });
-  const file = join(STATE_DIR, 'auth-local-stack.tar.gz');
+  rmSync(TARGET, { recursive: true, force: true });
+  mkdirSync(TARGET, { recursive: true });
+  const file = join(STATE_DIR, `${name}-local-stack.tar.gz`);
   mkdirSync(STATE_DIR, { recursive: true });
   writeFileSync(file, tarball);
-  execFileSync('tar', ['-xzf', file, '-C', AUTH_DIR]);
+  execFileSync('tar', ['-xzf', file, '-C', TARGET]);
   rmSync(file, { force: true });
-  process.stderr.write(`[local-stack] Auth ${sha.slice(0, 7)} (${tag}, sha256 ok) in ${AUTH_DIR}\n`);
-  process.stdout.write(`auth_sha=${sha}\n`);
+  process.stderr.write(`[local-stack] ${REPO} ${sha.slice(0, 7)} (${tag}, sha256 ok) in ${TARGET}\n`);
+  process.stdout.write(`${name}_sha=${sha}\n`);
 }
 
 if (import.meta.main) await main();

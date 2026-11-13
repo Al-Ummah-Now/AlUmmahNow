@@ -50,6 +50,15 @@ on its own port:
   `scripts/local-stack/fetch-auth.ts` downloads the newest one, verifies the sha256 and unpacks it.
   Nothing of that repo is checked out or installed. That is what lets the local suites run on pushes
   to `main` and in releases without CodeQL's cache-poisoning finding.
+- **The CMS and www, when their bundles exist.** AlUmmahNowCMS and AlUmmahNowUI publish the same
+  kind of bundle for every released commit (their `local-stack-bundle.yml`: the prebuilt CMS Worker
+  with its config and migrations; the prebuilt www Worker with its config and static assets).
+  `fetch-auth.ts --repo cms|www --optional` fetches them into `.local-stack/repos/cms|www`; boot then
+  runs the CMS on `http://localhost:3402` and www on `http://localhost:3401` (www reads the CMS
+  through its service binding, the CMS reads api-videos with the shared internal key), and the
+  processor's scholar reference outbox (`CMS_INTERNAL_URL`) points at the local CMS. Without a
+  bundle the stack runs without them, the outbox stays off and `78-scholar-refs` skips. A sibling's
+  `compatibility_date` newer than this repo's workerd is lowered to the newest it supports (logged).
 - **Nothing leaves the machine.** Every outbound fetch from a worker goes through
   `scripts/local-stack/outbound.ts`:
   - local hosts are passed through;

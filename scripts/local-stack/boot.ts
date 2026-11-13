@@ -21,7 +21,7 @@ import { createRequire } from 'node:module';
 import { join, relative } from 'node:path';
 import { parseJsonc } from '../release/jsonc.ts';
 import { localConfig, localRedirectUris, type Json } from './configs.ts';
-import { appDir, AUTH_DIR, HOST, LOCAL_CLIENT_SECRETS, localSecret, PORTS, PROD_HOST_TO_LOCAL, ROOT, STATE_DIR, url, WORKERS, type StackWorker } from './stack.ts';
+import { appDir, AUTH_DIR, CMS_DIR, WWW_DIR, HOST, LOCAL_CLIENT_SECRETS, localSecret, PORTS, PROD_HOST_TO_LOCAL, ROOT, STATE_DIR, url, WORKERS, type StackWorker } from './stack.ts';
 import { outboundHandler } from './outbound.ts';
 import { fakeStateContaining, registerFakes, setStackHooks, setStackR2, setStackSql, startFakeCdn } from './fake-external.ts';
 import { startBrowserProxy } from './browser-proxy.ts';
@@ -60,6 +60,8 @@ const miniflareModule = createRequire(WRANGLER_PKG)('miniflare') as {
   Miniflare: new (opts: Json) => MiniflareInstance;
   Log: new (level?: number) => { logWithLevel(level: number, message: string): void };
   LogLevel: { WARN: number; INFO: number };
+  /** The newest compatibility date the installed workerd supports. */
+  supportedCompatibilityDate?: string;
 };
 const { Miniflare } = miniflareModule;
 
@@ -137,7 +139,8 @@ function selectWorkers(): StackWorker[] {
   for (const worker of WORKERS) {
     if (only && !only.includes(worker.app)) continue;
     if (!existsSync(join(appDir(worker), worker.config))) {
-      log(`skip ${worker.app}: ${relative(ROOT, join(appDir(worker), worker.config))} not found${worker.repo === 'auth' ? ' (check out the Auth repo: resolve-refs.ts)' : ''}`);
+      const hint = worker.repo === 'auth' ? ' (fetch the Auth bundle: fetch-auth.ts)' : worker.repo !== 'videos' ? ` (optional: fetch-auth.ts --repo ${worker.repo})` : '';
+      log(`skip ${worker.app}: ${relative(ROOT, join(appDir(worker), worker.config))} not found${hint}`);
       continue;
     }
     if (worker.requires && !existsSync(join(appDir(worker), worker.requires))) {
@@ -145,6 +148,10 @@ function selectWorkers(): StackWorker[] {
       continue;
     }
     chosen.push(worker);
+  }
+  // Without the CMS the processor's scholar reference outbox stays off (nothing to call)
+  if (!chosen.some((w) => w.app === 'cms')) {
+    for (const w of chosen) if (w.app === 'processor') w.vars = { ...w.vars, CMS_INTERNAL_URL: '' };
   }
   return chosen;
 }
@@ -154,6 +161,14 @@ function prepare(workers: StackWorker[]): Prepared[] {
   const names = new Set(raws.map((r) => String(r.raw.name)));
   return raws.map(({ worker, raw }) => {
     const local = localConfig(raw, worker, names);
+    // A sibling repo (CMS, www) may set a compatibility date newer than this repo's workerd knows:
+    // run it on the newest the runtime supports instead of failing the whole stack
+    const newest = miniflareModule.supportedCompatibilityDate;
+    const date = local.config.compatibility_date;
+    if (newest && typeof date === 'string' && date > newest) {
+      local.config.compatibility_date = newest;
+      log(`${worker.app}: compatibility_date ${date} → ${newest} (the installed workerd's newest)`);
+    }
     const configPath = join(appDir(worker), LOCAL_CONFIG);
     writeFileSync(configPath, `${JSON.stringify(local.config, null, 2)}\n`);
     for (const d of local.dropped) log(`${worker.app}: dropped ${d}`);
@@ -166,8 +181,9 @@ function prepare(workers: StackWorker[]): Prepared[] {
  * prebuilt under bundles/<app>: those are used as they are, nothing of that repo is built here.
  */
 function prebuilt(p: Prepared): string | null {
-  if (p.worker.repo !== 'auth') return null;
-  const dir = join(AUTH_DIR, 'bundles', p.worker.app);
+  const root = p.worker.repo === 'auth' ? AUTH_DIR : p.worker.repo === 'cms' ? CMS_DIR : p.worker.repo === 'www' ? WWW_DIR : null;
+  if (!root) return null;
+  const dir = join(root, 'bundles', p.worker.app);
   return existsSync(join(dir, 'index.js')) ? dir : null;
 }
 
