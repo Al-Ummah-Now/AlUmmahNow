@@ -191,6 +191,8 @@ test.describe('Release: a click-started play has sound', () => {
   // landscape40 (40 s) in the Short's 216x384 frame: the 4 s vertical clip ended before a slow
   // runner's first look ("watch again", nothing to unmute).
   test('no user activation: muted, "Tap to unmute" (Arabic), which brings the sound back', async ({ page, browserName }) => {
+    // quarantined: #1090 @meywd: on the CI runner the embed plays unmuted without activation (QA runs 43328368421, 43331650634)
+    test.fixme(true, 'quarantined: #1090 @meywd: the embed plays unmuted without activation on the CI runner');
     if (browserName === 'chromium') {
       // Chrome on the CI runner allows sound without activation, even with
       // --autoplay-policy=user-gesture-required, so the embed rightly plays unmuted there. Refuse an
