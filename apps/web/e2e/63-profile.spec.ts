@@ -98,8 +98,7 @@ test.describe('Profile - anonymous', () => {
 test.describe('Profile - view', () => {
   test.use({ storageState: AUTH_STATE.single });
 
-  // quarantined: #1091 @meywd (red on the local stack)
-  test.fixme('PROF-010 shows the name, photos and channel section', async ({ page }) => {
+  test('PROF-010 shows the name, photos and channel section', async ({ page }) => {
     await page.goto('/en/profile');
     await expect(page.getByTestId('profile-heading')).not.toBeEmpty();
     await expect(page.locator('.cover-photo')).toBeVisible();
@@ -160,8 +159,7 @@ test.describe('Profile - edit', () => {
     await expect(email).toHaveAttribute('readonly', '');
   });
 
-  // quarantined: #1091 @meywd (red on the local stack)
-  test.fixme('PROF-031 saves display name and bio in both languages (then reverts)', async ({ page }) => {
+  test('PROF-031 saves display name and bio in both languages (then reverts)', async ({ page }) => {
     const suffix = Math.random().toString(36).slice(2, 8);
     await openEditForm(page, original);
     await page.locator('input[name="displayNameEn"]').fill(`E2E Temp Name ${suffix}`);

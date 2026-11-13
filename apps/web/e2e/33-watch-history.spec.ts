@@ -90,8 +90,7 @@ test.describe('watch history - signed in', () => {
     });
   }
 
-  // quarantined: #1091 @meywd (red on the local stack)
-  test.fixme('HIST-003 opening an entry goes to its watch page', async ({ page, request }) => {
+  test('HIST-003 opening an entry goes to its watch page', async ({ page, request }) => {
     const video = videos[0];
     await record(request, video, 0.97);
     await page.goto('/en/history');
