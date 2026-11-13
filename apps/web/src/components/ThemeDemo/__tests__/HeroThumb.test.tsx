@@ -78,6 +78,23 @@ describe('HeroThumb', () => {
     }
   });
 
+  it('shows the placeholder for an image that failed before hydration (no error event comes)', () => {
+    const proto = HTMLImageElement.prototype;
+    const saved = ['complete', 'naturalWidth'].map((k) => [k, Object.getOwnPropertyDescriptor(proto, k)] as const);
+    Object.defineProperty(proto, 'complete', { configurable: true, get: () => true });
+    Object.defineProperty(proto, 'naturalWidth', { configurable: true, get: () => 0 });
+    try {
+      render(<HeroThumb video={video({ width: 1920, height: 1080 })} href="/x" alt="Failed early" />);
+      expect(screen.queryByTestId('hero-thumb-image')).toBeNull();
+      expect(screen.getByTestId('hero-thumb-placeholder')).toHaveAccessibleName('Failed early');
+    } finally {
+      for (const [k, d] of saved) {
+        if (d) Object.defineProperty(proto, k, d);
+        else delete (proto as unknown as Record<string, unknown>)[k];
+      }
+    }
+  });
+
   it("switches to the loaded image's own shape", () => {
     render(<HeroThumb video={video({ width: 1920, height: 1080 })} href="/x" alt="Vertical thumb" />);
     const frame = screen.getByTestId('hero-thumb');
@@ -91,5 +108,22 @@ describe('HeroThumb', () => {
     render(<HeroThumb video={video({ thumbnailUrl: '' })} href="/x" label="Watch: Untitled" alt="Untitled"><span>play</span></HeroThumb>);
     expect(screen.queryByTestId('hero-thumb-image')).toBeNull();
     expect(screen.getByRole('link', { name: 'Watch: Untitled' })).toHaveTextContent('play');
+  });
+
+  it('shows a placeholder, not a broken image, when the thumbnail fails to load', () => {
+    render(<HomeHero video={video({ width: 1920, height: 1080, duration: 600 })} />);
+    fireEvent.error(screen.getByTestId('hero-thumb-image'));
+    expect(screen.queryByTestId('hero-thumb-image')).toBeNull();
+    const placeholder = screen.getByTestId('hero-thumb-placeholder');
+    expect(placeholder).toHaveAttribute('role', 'img');
+    expect(placeholder).toHaveAccessibleName('Tafsir of Al-Fatiha');
+  });
+
+  it('tries a new thumbnail again after one failed', () => {
+    const { rerender } = render(<HomeHero video={video({ width: 1920, height: 1080, duration: 600 })} />);
+    fireEvent.error(screen.getByTestId('hero-thumb-image'));
+    rerender(<HomeHero video={video({ id: 'v2', width: 1920, height: 1080, duration: 600, thumbnailUrl: 'https://images.example/v2.jpg' })} />);
+    expect(screen.getByTestId('hero-thumb-image')).toHaveAttribute('src', 'https://images.example/v2.jpg');
+    expect(screen.queryByTestId('hero-thumb-placeholder')).toBeNull();
   });
 });
