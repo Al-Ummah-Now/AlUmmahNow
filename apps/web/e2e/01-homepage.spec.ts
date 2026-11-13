@@ -51,8 +51,7 @@ test.describe('Homepage - English', () => {
     await expect(page.getByTestId('video-grid-loading')).toHaveCount(0);
   });
 
-  // quarantined: #1029 @meywd (the file's own card on the signed-out home grid)
-  test.fixme('should be responsive', async ({ page }) => {
+  test('should be responsive', async ({ page }) => {
     for (const viewport of [
       { width: 1920, height: 1080 },
       { width: 768, height: 1024 },
@@ -75,8 +74,7 @@ test.describe('Homepage - Arabic (RTL)', () => {
     await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
   });
 
-  // quarantined: #1029 @meywd (the file's own card on the signed-out home grid)
-  test.fixme('should have RTL layout', async ({ page }) => {
+  test('should have RTL layout', async ({ page }) => {
     await page.goto('/ar/');
 
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');

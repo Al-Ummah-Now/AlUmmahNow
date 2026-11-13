@@ -29,12 +29,10 @@ function loadMoreButton(page: Page) {
   return page.getByRole('main').getByRole('button', { name: /^(Load More|تحميل المزيد)$/ });
 }
 
-// quarantined: #1029 @meywd (home grid on a busy local stack)
-test.describe.fixme('Home - anonymous', () => {
+test.describe('Home - anonymous', () => {
   test.use({ storageState: ANONYMOUS_STATE });
 
-  // quarantined: #1029 @meywd (home grid on a busy local stack)
-  test.fixme('HOME-001 cards render title, thumbnail and a locale-aware watch link', async ({ page }) => {
+  test('HOME-001 cards render title, thumbnail and a locale-aware watch link', async ({ page }) => {
     await page.goto('/en');
     const card = await own.showCard(page);
     await expect(card).toBeVisible();
@@ -51,8 +49,7 @@ test.describe.fixme('Home - anonymous', () => {
     }
   });
 
-  // quarantined: #1029 @meywd (home grid on a busy local stack)
-  test.fixme('HOME-002 shows the public videos the API lists', async ({ page }) => {
+  test('HOME-002 shows the public videos the API lists', async ({ page }) => {
     // The first of this file's videos: the oldest, so usually past the first page
     const mine = own.videos()[0];
 
@@ -70,8 +67,7 @@ test.describe.fixme('Home - anonymous', () => {
     await expect(mineCard).toContainText(mine.title);
   });
 
-  // quarantined: #1029 @meywd (home grid on a busy local stack)
-  test.fixme('HOME-003 "Load More" appends the next page without duplicates', async ({ page }) => {
+  test('HOME-003 "Load More" appends the next page without duplicates', async ({ page }) => {
     await page.goto('/en');
     const cards = page.getByTestId('video-card');
     await expect(cards.first()).toBeVisible();
@@ -144,8 +140,7 @@ test.describe.fixme('Home - anonymous', () => {
   });
 });
 
-// quarantined: #1029 @meywd (home grid on a busy local stack)
-test.describe.fixme('Home - dark theme', () => {
+test.describe('Home - dark theme', () => {
   test.use({ storageState: ANONYMOUS_STATE, colorScheme: 'dark' });
 
   test('HOME-008 follows the system dark theme', async ({ page }) => {
@@ -168,8 +163,7 @@ test.describe.fixme('Home - dark theme', () => {
   });
 });
 
-// quarantined: #1029 @meywd (home grid on a busy local stack)
-test.describe.fixme('Home - signed in', () => {
+test.describe('Home - signed in', () => {
   test.use({ storageState: AUTH_STATE.single });
 
   test('HOME-009 renders the feed for a signed-in user', async ({ page }) => {
@@ -179,8 +173,7 @@ test.describe.fixme('Home - signed in', () => {
   });
 });
 
-// quarantined: #1029 @meywd (home grid on a busy local stack)
-test.describe.fixme('All videos page', () => {
+test.describe('All videos page', () => {
   test.use({ storageState: ANONYMOUS_STATE });
 
   test('VIDS-001 lists videos with a localized heading and metadata', async ({ page }) => {

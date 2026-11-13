@@ -29,8 +29,7 @@ test.describe('Video Player', () => {
     await expect(page.locator('video')).toHaveCount(0);
   });
 
-  // quarantined: #1029 @meywd (the file's own card on the signed-out home grid)
-  test.fixme('opens a video page from a home page card', async ({ page }) => {
+  test('opens a video page from a home page card', async ({ page }) => {
     await page.goto('/en');
     const card = await own.showCard(page);
     await expect(card).toBeVisible();

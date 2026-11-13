@@ -170,8 +170,7 @@ test.describe('Library (signed in)', () => {
 test.describe('Library (anonymous)', () => {
   test.use({ storageState: ANONYMOUS_STATE });
 
-  // quarantined: #1029 @meywd (home grid on a busy local stack)
-  test.fixme('asks visitors to sign in and hides card menus', async ({ page }) => {
+  test('asks visitors to sign in and hides card menus', async ({ page }) => {
     await page.goto('/en/library');
     await expect(page.getByTestId('library-signed-out')).toBeVisible();
     await page.goto('/en');
