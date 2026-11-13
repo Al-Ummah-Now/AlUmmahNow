@@ -670,13 +670,9 @@ test.describe('Each section type: add, render, remove', () => {
     await disposable.remove();
   });
 
-  /** Red on the local stack: pickers and channel sections (quarantined: #1028 @meywd) */
-  const QUARANTINED = new Set(['single_playlist', 'multiple_playlists', 'featured_channels', 'subscribed_channels']);
-
   for (const locale of ['en', 'ar'] as const) {
     for (const c of TYPE_CASES(getFx)) {
-      // quarantined: #1028 @meywd (the picker and channel section types only)
-      (QUARANTINED.has(c.card) ? test.fixme : test)(`SECT-030 ${c.card}: add, render for the owner and a visitor, remove (${locale})`, async ({ page, browser }) => {
+      test(`SECT-030 ${c.card}: add, render for the owner and a visitor, remove (${locale})`, async ({ page, browser }) => {
         test.setTimeout(LOCK_WAIT + 180_000);
         const f = getFx();
         const ui = UI[locale];
