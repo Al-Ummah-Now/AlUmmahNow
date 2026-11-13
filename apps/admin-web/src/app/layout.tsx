@@ -18,6 +18,8 @@ export async function generateMetadata(): Promise<Metadata> {
     // Staff icon (octagon seal), marked on QA and stage; read per request, one build serves both
     icons: appIcons(process.env.NEXTJS_ENV),
     manifest: '/site.webmanifest',
+    // Never for search engines (also X-Robots-Tag from next.config.ts)
+    robots: { index: false, follow: false },
   };
 }
 
