@@ -99,6 +99,8 @@ interface TusLog {
 type Injection = (req: { method: string; uploadId: string; n: { patch: number; head: number } }) =>
   | { fulfill: number }
   | { abort: true }
+  /** Never answered: the request stays pending until the page goes away (a reload) */
+  | { hold: true }
   | undefined;
 
 /**
@@ -123,6 +125,8 @@ async function interceptTus(page: Page, inject: Injection): Promise<TusLog> {
     if (method === 'HEAD') n.head++;
     const offset = Number(req.headers()['upload-offset'] ?? -1);
     const injected = method === 'PATCH' || method === 'HEAD' ? inject({ method, uploadId, n }) : undefined;
+    // Left pending: the page's reload cancels it (nothing to answer, nothing logged)
+    if (injected && 'hold' in injected) return;
     if (injected && 'abort' in injected) {
       if (method === 'PATCH') log.patches.push({ uploadId, offset, status: 0 });
       return route.abort('failed');
@@ -240,8 +244,12 @@ test.describe('Release: uploads resume', () => {
     page.on('dialog', (d) => void d.accept()); // "leave the page?" on reload
 
     // PATCH #2 -> 503, the next two HEADs -> 500 and 502 (production's failure),
-    // PATCH #4 -> connection dropped
-    const log = await interceptTus(page, ({ method, n }) => {
+    // PATCH #4 -> connection dropped. Once three chunks are at Bunny the next PATCH is held
+    // until the reload: on a fast stack the whole file otherwise finished before the reload,
+    // and the "same file again" then (rightly) started a new video (#1120).
+    let reloaded = false;
+    const log: TusLog = await interceptTus(page, ({ method, n }) => {
+      if (method === 'PATCH' && !reloaded && log.patches.filter((p) => p.status === 204).length >= 3) return { hold: true };
       if (method === 'PATCH' && n.patch === 2) return { fulfill: 503 };
       if (method === 'HEAD' && (n.head === 1 || n.head === 2)) return { fulfill: n.head === 1 ? 500 : 502 };
       if (method === 'PATCH' && n.patch === 4) return { abort: true };
@@ -268,6 +276,7 @@ test.describe('Release: uploads resume', () => {
       videoId = log.posts[0]?.videoId ?? '';
       expect(videoId, 'the TUS POST returned no upload URL with a video id').toBeTruthy();
       const patchesBeforeReload = log.patches.length;
+      reloaded = true;
       await page.reload();
 
       // The same file again (as after a crash): resumes the same video and upload
