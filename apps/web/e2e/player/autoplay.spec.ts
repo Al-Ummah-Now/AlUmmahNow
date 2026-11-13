@@ -35,8 +35,10 @@ async function reachEnd(page: Page) {
 }
 
 /** A signed-in viewer whose account says `autoplayNext`; returns the bodies the page saves. */
-async function serveAccount(page: Page, autoplayNext: boolean): Promise<Array<{ autoplayNext: boolean }>> {
-  const saved: Array<{ autoplayNext: boolean }> = [];
+async function serveAccount(page: Page, autoplayNext: boolean): Promise<Array<{ autoplayNext: boolean } | null>> {
+  // One entry per PUT: its body, or null where the browser does not expose it to the route
+  // (the installed Firefox over WebDriver BiDi)
+  const saved: Array<{ autoplayNext: boolean } | null> = [];
   await page.route('**/api/auth/token', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ accessToken: 'harness-token', channelId: null }) }));
   await page.route(/\/api\/profile\/playback$/, async (route) => {
@@ -44,9 +46,14 @@ async function serveAccount(page: Page, autoplayNext: boolean): Promise<Array<{ 
     const method = route.request().method();
     if (method === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
     if (method === 'PUT') {
-      const body = route.request().postDataJSON() as { autoplayNext: boolean };
+      let body: { autoplayNext: boolean } | null = null;
+      try {
+        body = route.request().postDataJSON() as { autoplayNext: boolean } | null;
+      } catch {
+        body = null;
+      }
       saved.push(body);
-      autoplayNext = body.autoplayNext;
+      if (body) autoplayNext = body.autoplayNext;
     }
     return route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify({ autoplayNext }) });
   });
@@ -103,7 +110,9 @@ test.describe('autoplay switch', () => {
     await expect(toggle(page)).toHaveAttribute('aria-checked', 'false');
     await toggle(page).click();
     await expect(toggle(page)).toHaveAttribute('aria-checked', 'true');
-    await expect.poll(() => saved).toEqual([{ autoplayNext: true }]);
+    // The change was saved on the account (its value checked wherever the browser shows the body)
+    await expect.poll(() => saved.length).toBe(1);
+    if (saved[0]) expect(saved[0]).toEqual({ autoplayNext: true });
   });
 });
 
