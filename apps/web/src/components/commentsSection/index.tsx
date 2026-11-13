@@ -308,7 +308,7 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
             />
             <div className="flex-1">
               {composerName && (
-                <p className="mb-1 text-xs text-gray-600 dark:text-gray-400" data-testid="comment-identity" data-as={activeChannel ? 'channel' : 'member'}>
+                <p className="mb-1 text-sm font-medium" data-testid="comment-identity" data-as={activeChannel ? 'channel' : 'member'}>
                   {t.comments.commentingAs.replace('{name}', composerName)}
                 </p>
               )}
