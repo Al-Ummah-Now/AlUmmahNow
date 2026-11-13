@@ -37,6 +37,18 @@ runs:
       env:
         GH_TOKEN: ${{ inputs.token }}
 
+    # Optional: the CMS's and www's released bundles (AlUmmahNowCMS / AlUmmahNowUI local-stack-bundle.yml).
+    # Without one the stack runs without it and the specs that cross into it skip (78-scholar-refs).
+    - name: The CMS's and www's last released bundles (optional)
+      shell: bash
+      run: |
+        echo "LOCAL_STACK_CMS_DIR=$GITHUB_WORKSPACE/.local-stack/repos/cms" >> "$GITHUB_ENV"
+        echo "LOCAL_STACK_WWW_DIR=$GITHUB_WORKSPACE/.local-stack/repos/www" >> "$GITHUB_ENV"
+        LOCAL_STACK_CMS_DIR="$GITHUB_WORKSPACE/.local-stack/repos/cms" node --experimental-strip-types --no-warnings scripts/local-stack/fetch-auth.ts --repo cms --optional
+        LOCAL_STACK_WWW_DIR="$GITHUB_WORKSPACE/.local-stack/repos/www" node --experimental-strip-types --no-warnings scripts/local-stack/fetch-auth.ts --repo www --optional
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+
     - name: Restore builds
       uses: actions/download-artifact@v4
       with:
@@ -47,6 +59,7 @@ runs:
       shell: bash
       run: |
         export LOCAL_STACK_AUTH_DIR="$GITHUB_WORKSPACE/.local-stack/repos/auth"
+        export LOCAL_STACK_CMS_DIR="$GITHUB_WORKSPACE/.local-stack/repos/cms" LOCAL_STACK_WWW_DIR="$GITHUB_WORKSPACE/.local-stack/repos/www"
         nohup node --experimental-strip-types --no-warnings scripts/local-stack/boot.ts > "$RUNNER_TEMP/stack.log" 2>&1 &
         echo "STACK_PID=$!" >> "$GITHUB_ENV"
         for _ in $(seq 1 180); do
