@@ -34,11 +34,22 @@ export function HeroThumb({ video, href, label, alt, children }: HeroThumbProps)
   const src = video.thumbnailUrl ? resolveUrl(video.thumbnailUrl) : '';
   // Keyed by src: a new image is measured again
   const [measured, setMeasured] = useState<{ src: string; aspect?: number } | null>(null);
+  // The src that failed to load (keyed by src, so a new image gets a fresh attempt): the frame then
+  // shows a placeholder, as video cards do, not a broken image. A listed video's thumbnail can be gone
+  // for a moment, e.g. a video deleted while the cached first page of the list still has it.
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const failed = Boolean(src) && failedSrc === src;
   // The hero image is server-rendered with a high fetch priority, so it often finishes loading
   // before React hydrates, and React never replays that load event: a vertical image in a
   // landscape-sized video then stayed 'cover' (cropped to a strip). Measure on mount too.
   const measure = (img: HTMLImageElement | null, loaded = false) => {
-    if (!img || !(loaded || img.complete) || img.naturalWidth <= 0 || img.naturalHeight <= 0) return;
+    if (!img) return;
+    // Failed before hydration: React never replays that error event either
+    if (!loaded && img.complete && img.naturalWidth === 0 && img.getAttribute('src')) {
+      setFailedSrc(src);
+      return;
+    }
+    if (!(loaded || img.complete) || img.naturalWidth <= 0 || img.naturalHeight <= 0) return;
     const aspect = aspectOf(img.naturalWidth, img.naturalHeight);
     setMeasured((m) => (m?.src === src && m.aspect === aspect ? m : { src, aspect }));
   };
@@ -48,11 +59,16 @@ export function HeroThumb({ video, href, label, alt, children }: HeroThumbProps)
 
   return (
     <Link href={href} className="home-hero-t" aria-label={label} data-fit={fit} data-testid="hero-thumb">
-      {src && fit === 'contain' && (
+      {src && !failed && fit === 'contain' && (
         // eslint-disable-next-line @next/next/no-img-element -- decorative backdrop, the smallest variant is enough under the blur
         <img className="home-hero-bd" src={video.thumbnailSizes?.mobile || src} alt="" aria-hidden="true" data-testid="hero-thumb-backdrop" />
       )}
-      {src && (
+      {failed && (
+        <span className="home-hero-ph" role="img" aria-label={alt} data-testid="hero-thumb-placeholder">
+          <Play aria-hidden="true" />
+        </span>
+      )}
+      {src && !failed && (
         // eslint-disable-next-line @next/next/no-img-element -- Bunny serves the variants; next/image would re-encode them
         <img
           className="home-hero-img"
@@ -68,6 +84,7 @@ export function HeroThumb({ video, href, label, alt, children }: HeroThumbProps)
           data-testid="hero-thumb-image"
           ref={measure}
           onLoad={(e) => measure(e.currentTarget, true)}
+          onError={() => setFailedSrc(src)}
         />
       )}
       {children}
