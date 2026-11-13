@@ -6,7 +6,7 @@
  */
 import type { AdminAuditEntry, SiteLimits, SiteLocale, SiteSettings, SiteStatus, SiteTier } from '@al-ummah/shared-types';
 import { AdminApiError, type ActionResult } from './errors';
-import { requestAdmin } from './request';
+import { requestAdmin, navigateForPasskey } from './request';
 
 export interface SiteChannel {
   id: string;
@@ -35,6 +35,7 @@ async function mutate<T>(endpoint: string, method: string, body?: unknown): Prom
     const res = await requestAdmin(endpoint, { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
     return { ok: true, data: res.result as T };
   } catch (error) {
+    await navigateForPasskey(error);
     if (error instanceof AdminApiError) return { ok: false, status: error.status, error: error.message, code: error.code };
     return { ok: false, status: 500, error: error instanceof Error ? error.message : 'Unknown error' };
   }

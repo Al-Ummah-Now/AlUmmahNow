@@ -4,10 +4,10 @@ import { getI18n } from '@/i18n/server';
 import { PublicShell } from '@/components/PublicShell';
 import { ErrorAlert, primaryButtonClass } from '@/components/ui';
 import type { MessageKey } from '@/i18n/translate';
-import { loginDecision, parsePrompt, startPath } from '@/lib/login-flow';
+import { loginDecision, parseMaxAge, parsePrompt, startPath } from '@/lib/login-flow';
 
 interface PageProps {
-  searchParams: Promise<{ error?: string; return?: string; prompt?: string }>;
+  searchParams: Promise<{ error?: string; return?: string; prompt?: string; max_age?: string }>;
 }
 
 const KNOWN_ERRORS = ['no_code', 'exchange_failed', 'verification_failed', 'auth_failed', 'unauthorized'] as const;
@@ -49,11 +49,13 @@ export default async function LoginPage({ searchParams }: PageProps) {
     authenticated: await isAuthenticated(),
     prompt: parsePrompt(params.prompt),
     returnTo: params.return,
+    // Step-up after admin-api's step_up_required: prompt=login&max_age=900
+    maxAge: parseMaxAge(params.max_age),
   });
   if (decision.kind === 'continue') {
     redirect(decision.to);
   }
 
   // /api/auth/start binds the OAuth state to this browser (a page cannot set cookies)
-  redirect(startPath(decision.prompt, decision.returnTo));
+  redirect(startPath(decision.prompt, decision.returnTo, decision.maxAge));
 }

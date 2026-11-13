@@ -23,6 +23,16 @@ export function parsePrompt(value: string | null | undefined): LoginPrompt | und
   return value === 'none' || value === 'login' ? value : undefined;
 }
 
+/**
+ * `max_age` for /authorize (seconds): a step-up (wiki AUTH-PASSKEYS) asks for
+ * prompt=login&max_age=900 after admin-api answered step_up_required. Whole
+ * seconds up to a day; anything else is ignored.
+ */
+export function parseMaxAge(value: string | number | null | undefined): number | undefined {
+  const n = typeof value === 'number' ? value : value != null && /^\d{1,6}$/.test(value) ? Number(value) : NaN;
+  return Number.isInteger(n) && n >= 0 && n <= 86_400 ? n : undefined;
+}
+
 const PARSE_BASE = 'https://admin.invalid';
 
 /** Backslashes and control characters anywhere: never in a return path. */
@@ -78,12 +88,13 @@ export function sameOriginRedirect(path: string, requestUrl: string): URL {
   return new URL('/', base.origin);
 }
 
-/** /login URL (path) carrying the return path and an optional prompt. */
-export function loginPath(returnTo?: string | null, prompt?: LoginPrompt): string {
+/** /login URL (path) carrying the return path, an optional prompt and max_age. */
+export function loginPath(returnTo?: string | null, prompt?: LoginPrompt, maxAge?: number): string {
   const params = new URLSearchParams();
   const safe = safeReturnPath(returnTo);
   if (safe && safe !== '/') params.set('return', safe);
   if (prompt) params.set('prompt', prompt);
+  if (parseMaxAge(maxAge) !== undefined) params.set('max_age', String(maxAge));
   const query = params.toString();
   return query ? `/login?${query}` : '/login';
 }
@@ -92,12 +103,13 @@ export function loginPath(returnTo?: string | null, prompt?: LoginPrompt): strin
  * What /login does: an admin who already has a session and did not ask for a
  * prompt goes straight on; anything else goes to the auth server.
  */
-export function loginDecision(input: { authenticated: boolean; prompt?: LoginPrompt; returnTo?: string | null }):
+export function loginDecision(input: { authenticated: boolean; prompt?: LoginPrompt; returnTo?: string | null; maxAge?: number }):
   | { kind: 'continue'; to: string }
-  | { kind: 'authorize'; prompt?: LoginPrompt; returnTo: string } {
+  | { kind: 'authorize'; prompt?: LoginPrompt; returnTo: string; maxAge?: number } {
   const returnTo = safeReturnPath(input.returnTo) ?? DEFAULT_RETURN_PATH;
-  if (input.authenticated && !input.prompt) return { kind: 'continue', to: returnTo === '/' ? DEFAULT_RETURN_PATH : returnTo };
-  return { kind: 'authorize', prompt: input.prompt, returnTo };
+  const maxAge = parseMaxAge(input.maxAge);
+  if (input.authenticated && !input.prompt && maxAge === undefined) return { kind: 'continue', to: returnTo === '/' ? DEFAULT_RETURN_PATH : returnTo };
+  return { kind: 'authorize', prompt: input.prompt, returnTo, ...(maxAge !== undefined ? { maxAge } : {}) };
 }
 
 /*
@@ -160,11 +172,12 @@ export function stateMatches(state: string | null | undefined, cookie: string | 
 }
 
 /** /api/auth/start URL (path): starts the authorize round trip with a fresh state. */
-export function startPath(prompt: LoginPrompt | undefined, returnTo: string): string {
+export function startPath(prompt: LoginPrompt | undefined, returnTo: string, maxAge?: number): string {
   const params = new URLSearchParams();
   const safe = safeReturnPath(returnTo);
   if (safe) params.set('return', safe);
   if (prompt) params.set('prompt', prompt);
+  if (parseMaxAge(maxAge) !== undefined) params.set('max_age', String(maxAge));
   const query = params.toString();
   return query ? `/api/auth/start?${query}` : '/api/auth/start';
 }
@@ -205,11 +218,13 @@ export function returnPathFromState(state: string | null | undefined): string {
  * (nonce + return path) set. Without a prompt the auth server signs the browser's
  * active account in silently, or shows its form.
  */
-export function withLoginParams(authorizeUrl: string, prompt: LoginPrompt | undefined, returnTo: string, nonce: string): string {
+export function withLoginParams(authorizeUrl: string, prompt: LoginPrompt | undefined, returnTo: string, nonce: string, maxAge?: number): string {
   const url = new URL(authorizeUrl);
   url.searchParams.set('state', encodeState(nonce, returnTo));
   if (prompt) url.searchParams.set('prompt', prompt);
   else url.searchParams.delete('prompt');
+  if (parseMaxAge(maxAge) !== undefined) url.searchParams.set('max_age', String(maxAge));
+  else url.searchParams.delete('max_age');
   return url.toString();
 }
 

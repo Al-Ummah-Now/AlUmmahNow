@@ -21,6 +21,7 @@ import {
   sessionCookieOptions,
 } from './session-cookie';
 import { PATH_HEADER, loginPath, safeReturnPath } from './login-flow';
+import { passkeyNeededPath, sessionPasskeyGate, type PasskeyGate } from './passkeys';
 
 export { SESSION_COOKIE_NAME };
 
@@ -35,6 +36,11 @@ export interface AdminSession {
   user: AdminUser;
   accessToken: string;
   refreshToken: string;
+}
+
+/** A session that passed requireAdminRole, with the staff passkey state of its token (lib/passkeys.ts). */
+export interface AdminPageSession extends AdminSession {
+  passkey: PasskeyGate;
 }
 
 type AuthClient = ReturnType<typeof createClient>;
@@ -177,8 +183,11 @@ export async function isAuthenticated(): Promise<boolean> {
  * Require a role that opens admin-web - redirect to login / access-denied if not authorized.
  * A content or senior reviewer (VR7) gets the review-only shell: the review queue and its
  * settings; the landing pages go to the queue and every other page is access-denied.
+ * Redirects to the "Passkey needed" page when the staff passkey deadline has passed
+ * without a passkey sign-in (wiki AUTH-PASSKEYS). During the grace period the
+ * session's `passkey` state carries the deadline for the banner.
  */
-export async function requireAdminRole(): Promise<AdminSession> {
+export async function requireAdminRole(): Promise<AdminPageSession> {
   const { session, expired } = await getAdminSessionState();
 
   if (!session) {
@@ -197,10 +206,15 @@ export async function requireAdminRole(): Promise<AdminSession> {
     redirect('/access-denied');
   }
 
+  const passkey = sessionPasskeyGate(session.accessToken);
+  if (passkey.state === 'blocked') {
+    redirect(passkeyNeededPath((await getHeaders()).get(PATH_HEADER)));
+  }
+
   if (isReviewOnly(session.user.role)) {
     const target = reviewOnlyRedirect((await getHeaders()).get(PATH_HEADER));
     if (target) redirect(target);
   }
 
-  return session;
+  return { ...session, passkey };
 }

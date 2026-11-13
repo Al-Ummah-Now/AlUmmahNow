@@ -14,6 +14,7 @@ This Next.js 16 application is deployed as a Cloudflare Worker via @opennextjs/c
 - Live streaming (`/live-streaming`): which provider new live streams go to (round-robin, weighted split or one provider), per-provider switches, caps and rates, channel overrides, sessions, and a side-by-side provider comparison
 - TanStack Query for server-state management and caching
 - OpenAuth authentication (JWT/OAuth2)
+- Staff passkeys: the "Passkey needed" page (`/passkey-needed`), the grace banner and step-up sign-in (`prompt=login&max_age=900`) ([docs/admin/STAFF_PASSKEYS.md](../../docs/admin/STAFF_PASSKEYS.md))
 - Deployed as a Cloudflare Worker via OpenNext
 
 ## Tech Stack

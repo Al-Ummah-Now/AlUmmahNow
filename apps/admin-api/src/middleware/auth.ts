@@ -5,6 +5,7 @@ import { logger } from '../lib/logger';
 import { normalizeRoles, hasAdminRole, hasModeratorRole } from '../lib/roles';
 import { isReviewer } from '@al-ummah/shared-types';
 import { decodeVerifiedClaims, isLegacyLongLivedToken, isTokenRevoked } from '../lib/token-revocation';
+import { decodeJwtPayload, passkeyClaimsFromPayload } from '@al-ummah/shared-types';
 
 interface AuthPayload {
   sub: string;
@@ -14,6 +15,21 @@ interface AuthPayload {
   exp: number;
   aud?: string;
   iss?: string;
+  /** How the user signed in ("pwd", "otp", "passkey", "fed"); absent on old tokens (wiki AUTH-PASSKEYS). */
+  amr?: string[];
+  /** Last real sign-in, epoch seconds (step-up, middleware/passkeys.ts). */
+  auth_time?: number;
+  /** properties.passkey_deadline: staff must sign in with a passkey from then on (middleware/passkeys.ts). */
+  passkey_deadline?: number;
+}
+
+/**
+ * The passkey claims of a verified token. Read from the raw payload: the
+ * OpenAuth client's verify drops what the subject schema does not list.
+ */
+function passkeyFields(token: string, payload?: unknown): Pick<AuthPayload, 'amr' | 'auth_time' | 'passkey_deadline'> {
+  const claims = passkeyClaimsFromPayload(payload ?? decodeJwtPayload(token));
+  return { amr: claims.amr as string[] | undefined, auth_time: claims.authTime, passkey_deadline: claims.passkeyDeadline };
 }
 
 /**
@@ -192,7 +208,7 @@ async function validateJWTBasic(token: string): Promise<AuthPayload | null> {
       return null;
     }
 
-    return payload;
+    return { ...payload, ...passkeyFields(token, payload) };
   } catch (error) {
     logger.error('JWT validation error:', error);
     return null;
@@ -243,6 +259,7 @@ async function validateJWTWithSignature(token: string, env?: any): Promise<AuthP
         iat: claims.iat ?? 0,
         aud: authConfig.JWT.AUDIENCE,
         iss: authConfig.JWT.ISSUER,
+        ...passkeyFields(token),
       };
 
       logger.debug('Extracted auth payload from token', {

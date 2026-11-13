@@ -6,7 +6,7 @@
  */
 import type { AdminAuditEntry, AdminCreatorFilter, AdminCreatorsPage, CreatorTierAssignment, CreatorTierBulkResult, CreatorTiersList } from '@al-ummah/shared-types';
 import { AdminApiError, type ActionResult } from './errors';
-import { requestAdmin } from './request';
+import { requestAdmin, navigateForPasskey } from './request';
 
 async function fetchAdmin<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const body = await requestAdmin(endpoint, options);
@@ -18,6 +18,7 @@ async function mutate<T>(endpoint: string, method: string, body?: unknown): Prom
     const data = await fetchAdmin<T>(endpoint, { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
     return { ok: true, data };
   } catch (error) {
+    await navigateForPasskey(error);
     if (error instanceof AdminApiError) return { ok: false, status: error.status, error: error.message, code: error.code };
     return { ok: false, status: 500, error: error instanceof Error ? error.message : 'Unknown error' };
   }
