@@ -42,7 +42,9 @@ const TARGETS: Record<StepKey, StepTarget> = {
   actingAs: { selector: '[data-testid="nav-channel-layer"]', menu: 'main' },
   switch: { selector: '[data-testid="nav-menu"]', menu: 'channels' },
   upload: { selector: '[data-testid="header-upload"]', shape: 'pill' },
-  help: { selector: '[data-testid="nav-menu-help"]', menu: 'main' },
+  // Help lives in the side menu (one place per destination, NAV-060); on phones the drawer is
+  // closed, so this step shows its card without a highlight
+  help: { selector: '[data-testid="side-nav"] a[href$="/help"]' },
 };
 const ALL_STEPS: StepKey[] = ['account', 'actingAs', 'switch', 'upload', 'help'];
 
@@ -158,6 +160,12 @@ export function IdentityTour() {
   useEffect(() => {
     if (phase.kind !== 'step' || !stepKey) return;
     const target = TARGETS[stepKey];
+    // "Show me" further down a page: bring the header (and its menu) back into view first
+    const el = visible(target.selector) ?? visible(TARGETS.account.selector);
+    if (el) {
+      const r = el.getBoundingClientRect();
+      if (r.bottom < 0 || r.top > window.innerHeight) el.scrollIntoView({ block: 'nearest' });
+    }
     requestAccountMenu(target.menu ? { open: true, view: target.menu } : { open: false });
     const step = tour.steps[stepKey];
     setAnnouncement(`${tour.stepOf.replace('{current}', String(phase.index + 1)).replace('{total}', String(phase.steps.length))}. ${step.title}`);
@@ -188,6 +196,12 @@ export function IdentityTour() {
         return;
       }
       const r = el.getBoundingClientRect();
+      if (r.bottom < 0 || r.top > window.innerHeight) {
+        // Off screen: no highlight, the card docks
+        setSpot(null);
+        setCard({ top: 0, left: 0, docked: true });
+        return;
+      }
       const pad = 4;
       setSpot({ top: r.top - pad, left: r.left - pad, width: r.width + pad * 2, height: r.height + pad * 2 });
       if (narrow) {
@@ -208,7 +222,7 @@ export function IdentityTour() {
         }
       }
       left = Math.max(16, Math.min(left, window.innerWidth - cardWidth - 16));
-      if (top + cardHeight > window.innerHeight - 16) {
+      if (top < 16 || top + cardHeight > window.innerHeight - 16) {
         setCard({ top: 0, left: 0, docked: true });
         return;
       }

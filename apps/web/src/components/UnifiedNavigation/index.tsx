@@ -35,7 +35,6 @@ import {
   ArrowLeft,
   PenLine,
   FileText,
-  CircleHelp,
 } from 'lucide-react';
 import { ACCOUNT_MENU_PATHS } from '@/lib/navigation/destinations';
 import { ACCOUNT_MENU_EVENT, type AccountMenuRequest } from '@/lib/navigation/account-menu-events';
@@ -272,8 +271,6 @@ export function UnifiedNavigation() {
       { label: t.navigation.myArticles, icon: FileText, href: cms.articles },
     ] : []),
     { label: t.header.settings, icon: Settings, href: `/${lang}${ACCOUNT_MENU_PATHS.settings}` },
-    // Help: the guide and the identity tour (docs/features/HELP-AND-TOUR.md)
-    { label: t.help.navLabel, icon: CircleHelp, href: `/${lang}/help`, testId: 'nav-menu-help' },
   ];
   // The other Al Ummah Now apps this account may open (docs/design/NAV.md), same order everywhere
   const otherApps = appLinks({
@@ -471,7 +468,7 @@ export function UnifiedNavigation() {
             {navItems.map((item) => {
               const Icon = item.icon;
               return (
-                <Link key={item.href} href={item.href} onClick={() => setIsOpen(false)} className="aun-menu-item" role="menuitem" data-testid={'testId' in item ? item.testId : undefined}>
+                <Link key={item.href} href={item.href} onClick={() => setIsOpen(false)} className="aun-menu-item" role="menuitem">
                   <Icon className="aun-menu-icon" aria-hidden="true" />
                   <span className="aun-menu-text">{item.label}</span>
                 </Link>

@@ -22,8 +22,7 @@ The videos site explains itself in two ways:
 
 ## Entry points
 
-- Account menu: **Help** (`nav-menu-help`), after Settings.
-- Side menu, "More" group: **Help**.
+- Side menu, "More" group: **Help** (the only place: a destination lives in one of header, side menu and account menu, NAV-060).
 - Empty states and channel messages: `HelpLink` (subscriptions empty and feed empty, the upload page's "Channel required", Studio without a channel).
 - www links to `/[locale]/help` from its footer (AlUmmahNowUI).
 
