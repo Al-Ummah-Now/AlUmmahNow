@@ -151,7 +151,7 @@ export const HELP_EN: HelpTranslations = {
           id: 'find-your-way',
           heading: 'Find your way',
           blocks: [
-            { type: 'p', text: 'The side menu has Home, Explore, Subscriptions, your Library, History, Watch later and Liked videos. On a phone, open it with the menu button at the start of the header; Home, Explore, Subscriptions and Library are also in the bar at the bottom of the screen.' },
+            { type: 'p', text: 'The side menu has Home, Explore and Subscriptions, then **You** (your own page) with History, Watch later and Liked videos. On a phone, open it with the menu button at the start of the header; Home, Explore, Subscriptions and You are also in the bar at the bottom of the screen.' },
           ],
         },
       ],
@@ -182,13 +182,13 @@ export const HELP_EN: HelpTranslations = {
           heading: 'Playlists and autoplay',
           blocks: [
             { type: 'p', text: 'Select **Save** under a video, or **Save to playlist** in a video card’s ⋮ menu, to add it to a playlist or start a new one. You don’t need a channel: without one, the playlists are your own.' },
-            { type: 'p', text: 'Your playlists are in the **Playlists** section of your **Library**. **See all** lists them with **New playlist**, and each one opens in an editor for its details, cover and order, where you can also remove videos or delete it.' },
+            { type: 'p', text: 'Your playlists are in the **Playlists** section of **You**. **See all** lists them with **New playlist**, and each one opens in an editor for its details, cover and order, where you can also remove videos or delete it.' },
             { type: 'list', items: [
               '**Public:** listed and searchable.',
               '**Unlisted:** anyone with the link can open and play it, but it never shows in lists, channels, search or feeds.',
               '**Private:** only you (for a channel’s playlist, the people who manage the channel’s playlists).',
             ] },
-            { type: 'figure', picture: 'watching-playlists', alt: 'Your playlists in the Library, with New playlist', markers: ['Your playlist', 'New playlist'] },
+            { type: 'figure', picture: 'watching-playlists', alt: 'Your playlists, with New playlist', markers: ['Your playlist', 'New playlist'] },
             { type: 'p', text: 'Play a playlist and the next video starts when one ends. Turn off **Autoplay next** in the settings menu to stop after each video. Your choice is kept on your account.' },
           ],
         },
@@ -203,9 +203,9 @@ export const HELP_EN: HelpTranslations = {
           id: 'watch-later',
           heading: 'Watch later and History',
           blocks: [
-            { type: 'p', text: 'Select **Watch later** on a video, or in a video card’s menu, to keep it for later. Both lists are in your **Library**.' },
+            { type: 'p', text: 'Select **Watch later** on a video, or in a video card’s menu, to keep it for later. Both are also on **You**, your own page.' },
             { type: 'p', text: 'They belong to your account, so they stay the same whichever channel you are acting as.' },
-            { type: 'figure', picture: 'watching-library', alt: 'Your Library with Watch later and History', markers: ['Watch later', 'History'] },
+            { type: 'figure', picture: 'watching-library', alt: 'Your page, You, with Watch later and History', markers: ['Watch later', 'History'] },
           ],
         },
       ],
@@ -408,7 +408,7 @@ export const HELP_EN: HelpTranslations = {
           id: 'light-dark',
           heading: 'Light and dark',
           blocks: [
-            { type: 'p', text: 'The site follows your device’s light or dark setting. The button next to the language switches between light and dark.' },
+            { type: 'p', text: 'Until you choose, the site follows your device’s light or dark setting. The button next to the language switches between light and dark, and the site remembers your choice.' },
           ],
         },
       ],
@@ -478,7 +478,7 @@ export const HELP_AR: HelpTranslations = {
           id: 'find-your-way',
           heading: 'التنقّل في الموقع',
           blocks: [
-            { type: 'p', text: 'في القائمة الجانبية: الرئيسية والاستكشاف والاشتراكات ومكتبتك والسجل والمشاهدة لاحقًا والمرئيات التي أعجبتك. وعلى الهاتف تفتحها بزر القائمة في بداية الشريط العلوي، وتجد الرئيسية والاستكشاف والاشتراكات والمكتبة أيضًا في الشريط أسفل الشاشة.' },
+            { type: 'p', text: 'في القائمة الجانبية: الرئيسية و«استكشف» والاشتراكات، ثم **أنت** (صفحتك) ومعها السجل والمشاهدة لاحقًا والمرئيات التي أعجبتك. وعلى الهاتف تفتحها بزر القائمة في بداية الشريط العلوي، وتجد الرئيسية و«استكشف» والاشتراكات و«أنت» أيضًا في الشريط أسفل الشاشة.' },
           ],
         },
       ],
@@ -509,13 +509,13 @@ export const HELP_AR: HelpTranslations = {
           heading: 'قوائم التشغيل والتشغيل التلقائي',
           blocks: [
             { type: 'p', text: 'اختر **حفظ** تحت المرئي، أو **حفظ في قائمة تشغيل** من قائمة ⋮ في بطاقة المرئي، لتضيفه إلى قائمة تشغيل أو تبدأ قائمة جديدة. ولا تحتاج إلى قناة: فبدونها تكون القوائم لك أنت.' },
-            { type: 'p', text: 'تجد قوائمك في قسم **قوائم التشغيل** في **المكتبة**. ويعرضها **عرض الكل** مع **قائمة تشغيل جديدة**، وتُفتح كل قائمة في محرّر لتفاصيلها وغلافها وترتيبها، ومنه تحذف منها المرئيات أو تحذفها كلها.' },
+            { type: 'p', text: 'تجد قوائمك في قسم **قوائم التشغيل** في صفحة **أنت**. ويعرضها **عرض الكل** مع **قائمة تشغيل جديدة**، وتُفتح كل قائمة في محرّر لتفاصيلها وغلافها وترتيبها، ومنه تحذف منها المرئيات أو تحذفها كلها.' },
             { type: 'list', items: [
               '**عامة:** تظهر في القوائم والبحث.',
               '**غير مُدرجة:** يفتحها ويشغّلها كل من لديه الرابط، لكنها لا تظهر في القوائم أو القنوات أو البحث أو الخلاصات.',
               '**خاصة:** لك وحدك (وفي قوائم القناة: لمن يديرون قوائم تشغيلها).',
             ] },
-            { type: 'figure', picture: 'watching-playlists', alt: 'قوائم تشغيلك في المكتبة، ومعها «قائمة تشغيل جديدة»', markers: ['قائمتك', 'قائمة تشغيل جديدة'] },
+            { type: 'figure', picture: 'watching-playlists', alt: 'قوائم تشغيلك، ومعها «قائمة تشغيل جديدة»', markers: ['قائمتك', 'قائمة تشغيل جديدة'] },
             { type: 'p', text: 'شغّل قائمة تشغيل، وحين ينتهي مرئي يبدأ الذي يليه. أوقف **التشغيل التلقائي للتالي** من قائمة الإعدادات إن أردت التوقف بعد كل مرئي، ويُحفظ اختيارك في حسابك.' },
           ],
         },
@@ -530,9 +530,9 @@ export const HELP_AR: HelpTranslations = {
           id: 'watch-later',
           heading: 'المشاهدة لاحقًا والسجل',
           blocks: [
-            { type: 'p', text: 'اختر **مشاهدة لاحقاً** في صفحة المرئي أو من قائمة بطاقته لتحفظه لوقت لاحق. وتجد القائمتين في **المكتبة**.' },
+            { type: 'p', text: 'اختر **مشاهدة لاحقاً** في صفحة المرئي أو من قائمة بطاقته لتحفظه لوقت لاحق. وتجد القائمتين أيضًا في صفحتك **أنت**.' },
             { type: 'p', text: 'وهما لحسابك، فتبقيان كما هما أيًّا كانت القناة التي تتصرّف باسمها.' },
-            { type: 'figure', picture: 'watching-library', alt: 'مكتبتك وفيها المشاهدة لاحقًا والسجل', markers: ['مشاهدة لاحقاً', 'السجل'] },
+            { type: 'figure', picture: 'watching-library', alt: 'صفحتك «أنت» وفيها المشاهدة لاحقًا والسجل', markers: ['مشاهدة لاحقاً', 'السجل'] },
           ],
         },
       ],
@@ -735,7 +735,7 @@ export const HELP_AR: HelpTranslations = {
           id: 'light-dark',
           heading: 'الفاتح والداكن',
           blocks: [
-            { type: 'p', text: 'يتبع الموقع إعداد جهازك للوضع الفاتح أو الداكن، والزر بجانب اللغة يبدّل بينهما.' },
+            { type: 'p', text: 'إلى أن تختار، يتبع الموقع إعداد جهازك للوضع الفاتح أو الداكن. والزر بجانب اللغة يبدّل بينهما، ويتذكّر الموقع اختيارك.' },
           ],
         },
       ],
