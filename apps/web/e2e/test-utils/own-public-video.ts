@@ -145,9 +145,10 @@ export function ownPublicVideos(test: AnyTest, label: string, specs: OwnVideoSpe
               nameLocalized?: Record<string, string>;
             };
             const ch = body.result ?? body;
-            return { description: ch.description ?? '', ar: ch.nameLocalized?.ar ?? '' };
+            // Only what this update set: a channel keeps its own default description otherwise
+            return { ...(channel.description ? { description: ch.description ?? '' } : {}), ar: ch.nameLocalized?.ar ?? '' };
           }, { message: 'the channel update did not stick (GET /api/channels/:id)', timeout: 30_000 })
-          .toEqual({ description: channel.description ?? '', ar: channel.nameAr ?? '' });
+          .toEqual({ ...(channel.description ? { description: channel.description } : {}), ar: channel.nameAr ?? '' });
       }
     } finally {
       await context.close();
