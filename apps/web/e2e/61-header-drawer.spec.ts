@@ -237,7 +237,11 @@ test.describe('Theme toggle', () => {
 test.describe('Light / Dark: first visit, no flash, no System', () => {
   test.use({ storageState: ANONYMOUS_STATE });
 
-  /** html.dark when <body> first exists: what the first paint shows. */
+  /**
+   * html.dark when the first content node (.theme-bg, the layout's first child of the theme
+   * provider) is parsed: next-themes' inline script sits just before it in <body>, so this is what
+   * the first paint of any content shows.
+   */
   async function recordDarkAtBody(page: Page, saved: string | null) {
     await page.addInitScript((value) => {
       try {
@@ -249,7 +253,7 @@ test.describe('Light / Dark: first visit, no flash, no System', () => {
         // storage blocked: nothing to seed
       }
       new MutationObserver((_, obs) => {
-        if (document.body) {
+        if (document.querySelector('.theme-bg')) {
           (window as unknown as { __darkAtBody: boolean }).__darkAtBody = document.documentElement.classList.contains('dark');
           obs.disconnect();
         }
