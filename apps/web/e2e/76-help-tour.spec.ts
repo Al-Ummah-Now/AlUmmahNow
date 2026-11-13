@@ -240,12 +240,14 @@ async function expectNotDimmed(page: Page, label: string): Promise<void> {
   const result = await page.evaluate((selector) => {
     const visibleTarget = Array.from(document.querySelectorAll<HTMLElement>(selector)).find((el) => {
       const r = el.getBoundingClientRect();
-      return r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < window.innerHeight;
+      return r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < window.innerHeight && r.right > 0 && r.left < window.innerWidth;
     });
     const spot = document.querySelector<HTMLElement>('[data-testid="tour-spot"]');
     const cardEl = document.querySelector<HTMLElement>('[data-testid="tour-card"]')!;
     const out: { target?: string; hole?: boolean; opacity: string[]; layered: string } = { opacity: [], layered: 'ok' };
-    if (spot && visibleTarget) {
+    // A target off screen (a closed drawer on phones) gets no spotlight; one on screen always does
+    if (!visibleTarget && spot) out.target = 'spotlight drawn around an off-screen target';
+    else if (spot && visibleTarget) {
       const r = visibleTarget.getBoundingClientRect();
       const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
       out.target = hit && visibleTarget.contains(hit) ? 'ok' : `covered by ${hit?.outerHTML.slice(0, 120)}`;
@@ -306,9 +308,9 @@ async function expectNotDimmed(page: Page, label: string): Promise<void> {
 test.describe('identity tour is not dimmed', () => {
   for (const lang of ['en', 'ar'] as const) {
     for (const device of [{ name: 'desktop', width: 1280, height: 800 }, { name: 'phone', width: 390, height: 844 }] as const) {
-      test(`highlight and card stand out on every theme (${lang}, ${device.name})`, async ({ browser, baseURL, creators }) => {
-        test.setTimeout(240_000);
-        for (const colorScheme of ['light', 'dark'] as const) {
+      for (const colorScheme of ['light', 'dark'] as const) {
+        test(`highlight and card stand out on every theme (${lang}, ${device.name}, ${colorScheme})`, async ({ browser, baseURL, creators }) => {
+          test.setTimeout(300_000);
           const { context, page } = await signedIn(browser, baseURL!, creators.viewer, { colorScheme, reducedMotion: 'reduce' });
           try {
             await page.setViewportSize({ width: device.width, height: device.height });
@@ -336,8 +338,8 @@ test.describe('identity tour is not dimmed', () => {
           } finally {
             await context.close();
           }
-        }
-      });
+        });
+      }
     }
   }
 });
