@@ -10489,6 +10489,13 @@
                         ],
                         "maxLength": 200
                       },
+                      "siteName": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "maxLength": 80
+                      },
                       "description": {
                         "type": [
                           "string",
@@ -10888,6 +10895,13 @@
                           "null"
                         ],
                         "maxLength": 200
+                      },
+                      "siteName": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "maxLength": 80
                       },
                       "description": {
                         "type": [
@@ -13241,6 +13255,175 @@
           },
           "404": {
             "description": "Poll not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/community/media/link-preview": {
+      "post": {
+        "tags": [
+          "Community"
+        ],
+        "summary": "Preview an outside page for a link post",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).",
+        "operationId": "post_CommunityLinkPreview",
+        "parameters": [
+          {
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "User's selected channel ID"
+            },
+            "required": false,
+            "name": "channelId",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "maxLength": 2048
+                  }
+                },
+                "required": [
+                  "url"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The preview",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "preview": {
+                      "type": "object",
+                      "properties": {
+                        "url": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "description": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "siteName": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "image": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "url": {
+                              "type": "string"
+                            },
+                            "alt": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "width": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "height": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "url",
+                            "alt",
+                            "width",
+                            "height"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "url",
+                        "title",
+                        "description",
+                        "siteName",
+                        "image"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "preview"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The page could not be previewed",
             "content": {
               "application/json": {
                 "schema": {

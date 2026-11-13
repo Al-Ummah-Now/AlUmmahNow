@@ -54,6 +54,7 @@ const updatePostSchema = z.object({
   link: z.object({
     url: z.string().max(2048),
     title: z.string().max(200).nullable().optional(),
+    siteName: z.string().max(80).nullable().optional(),
     description: z.string().max(300).nullable().optional(),
     image: mediaSchema.nullable().optional(),
   }).optional(),

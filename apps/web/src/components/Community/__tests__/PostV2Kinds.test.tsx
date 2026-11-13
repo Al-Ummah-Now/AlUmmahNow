@@ -51,6 +51,15 @@ describe('PostV2 kinds on the Community tab', () => {
     expect(a).toHaveAttribute('target', '_blank');
   });
 
+  it('shows the site name on the link card, else the host', () => {
+    const { unmount } = render(<LinkPost post={fx('link')} />);
+    expect(screen.getByTestId('community-link-site')).toHaveTextContent('Example');
+    unmount();
+    const post = fx('link');
+    render(<LinkPost post={{ ...post, link: { ...post.link!, siteName: null } }} />);
+    expect(screen.getByTestId('community-link-site')).toHaveTextContent('example.org');
+  });
+
   it('markdown: no HTML, no javascript: links, https images only', () => {
     const { container } = render(<PostMarkdown source={'<script>x</script> **b** [bad](javascript:alert(1)) [ok](https://a.test/)\n\n![i](http://a.test/x.jpg)\n\n- one\n- two'} />);
     expect(container.querySelector('script')).toBeNull();

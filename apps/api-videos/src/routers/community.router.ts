@@ -28,6 +28,7 @@ import { HeartPostComment, UnheartPostComment } from '../endpoints/community/pos
 
 // Community Posts - Media Upload
 import { UploadCommunityPostImages } from '../endpoints/community/upload-images';
+import { CommunityLinkPreview } from '../endpoints/community/link-preview';
 import { UploadCommunityPostGif } from '../endpoints/community/upload-gif';
 
 const app = new Hono();
@@ -77,6 +78,7 @@ communityRouter.delete('/channels/:channelId/posts/:postId/comments/:commentId/h
 // Media Upload (auth required)
 communityRouter.post('/media/upload/images', UploadCommunityPostImages);
 communityRouter.post('/media/upload/gif', UploadCommunityPostGif);
+communityRouter.post('/media/link-preview', CommunityLinkPreview);
 
 // Default export
 export default communityRouter;

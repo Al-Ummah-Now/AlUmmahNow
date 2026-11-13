@@ -190,7 +190,7 @@ export interface CreateCommunityPostRequest {
   /** cards: 1–40 cards, each with an uploaded image and its alt text */
   slides?: { id?: string; image: PostMedia; heading?: string | null; body?: string | null; position?: 'top' | 'middle' | 'bottom' }[];
   /** link */
-  link?: { url: string; title?: string | null; description?: string | null; image?: PostMedia | null };
+  link?: { url: string; title?: string | null; siteName?: string | null; description?: string | null; image?: PostMedia | null };
   videoId?: string;
   gif?: Omit<PostGif, 'url'>;
   poll?: {

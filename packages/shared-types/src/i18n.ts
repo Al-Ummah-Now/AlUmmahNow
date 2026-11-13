@@ -1565,6 +1565,11 @@ export interface AppTranslations {
     linkTitle: string;
     linkDescription: string;
     linkComment: string;
+    linkSiteName: string;
+    linkFetch: string;
+    linkFetching: string;
+    linkFetched: string;
+    linkFetchFailed: string;
     errorTitle: string;
     errorBody: string;
     errorCards: string;

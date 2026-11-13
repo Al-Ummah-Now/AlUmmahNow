@@ -251,6 +251,7 @@ app.get('/api/me/human-check', authMiddleware, humanCheckStatus);
 // SECURITY: Apply rate limiting to community media uploads
 app.use('/api/community/media/upload/images', rateLimitMiddleware('image_upload'));
 app.use('/api/community/media/upload/gif', rateLimitMiddleware('image_upload'));
+app.use('/api/community/media/link-preview', rateLimitMiddleware('image_upload'));
 app.use('/api/videos/:id/thumbnail', rateLimitMiddleware('image_upload'));
 // AI category suggestions: forms debounce typing; this caps a client that does not
 app.use('/api/videos/category-suggestions', rateLimitMiddleware('category_suggest', {
