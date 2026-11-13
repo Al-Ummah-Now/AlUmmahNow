@@ -153,6 +153,19 @@ export enum MessageType {
   // erased creator's titles and channel names in the queue-message archive, one page of archived
   // messages per delivery. Payload: ArchiveTitlesErasePayload (the archive subject key, never the id).
   ArchiveTitlesErase = 251,
+
+  // Captions (AUN-CAPTIONS). Explicit values in their own reserved range (260-269).
+  // Quran Foundation Content Sync of the Quran text and the matcher's index (processor quran/sync.ts),
+  // on the videos queue (retry with backoff, then the DLQ). Payload: QuranContentSyncPayload.
+  QuranContentSync = 260,
+}
+
+/** Payload of MessageType.QuranContentSync. */
+export interface QuranContentSyncPayload {
+  /** cron (daily), admin (Retry on the Errors page) or bootstrap (QF asked for a full resync) */
+  reason: 'cron' | 'admin' | 'bootstrap';
+  /** Refetch the snapshot even when QF reports no change */
+  rebuild?: boolean;
 }
 
 /** Payload of MessageType.ArchiveTitlesErase. */
