@@ -66,6 +66,8 @@ const DEMOS = [
 const MEDIA = mkdtempSync(join(tmpdir(), 'help-media-'));
 /** CDN guid → the demo it shows */
 const demoByGuid = new Map<string, (typeof DEMOS)[number]['key']>();
+/** Our demo videos' ids: listings show only these (the stack's seed videos have test titles) */
+const demoIds: string[] = [];
 
 /** A 20 s 640x360 HLS clip (one rendition, no audio) and a 960x540 thumbnail of one lantern crop */
 function makeDemoMedia(key: string, art: string): void {
@@ -135,8 +137,9 @@ test.beforeAll(async ({ browser }) => {
   const user = creator.user;
   const json = (body: unknown, channel?: string) => ({ method: 'PUT', headers: { 'Content-Type': 'application/json', ...(channel ? { channelId: channel } : {}) }, body: JSON.stringify(body) });
   expect((await apiFetch(user, '/api/profile', json({ displayName: NAMES.user.en, displayNameLocalized: NAMES.user, firstName: 'Amina', lastName: 'Yusuf' }))).status).toBeLessThan(300);
+  const about = { en: 'Short videos about our neighbourhood and the people in it.', ar: 'مرئيات قصيرة عن حيّنا وأهله.' };
   for (const [id, name] of [[creator.channelIds[0], NAMES.channel], [creator.channelIds[1], NAMES.second]] as const) {
-    expect((await apiFetch(user, `/api/channels/${id}`, json({ name: name.en, nameLocalized: name }, id))).status).toBeLessThan(300);
+    expect((await apiFetch(user, `/api/channels/${id}`, json({ name: name.en, nameLocalized: name, description: about.en, descriptionLocalized: about }, id))).status).toBeLessThan(300);
   }
   // The demo videos, oldest first so "Site tour" is the newest (the home page's featured video)
   for (const demo of [...DEMOS].reverse()) {
@@ -146,6 +149,7 @@ test.beforeAll(async ({ browser }) => {
     const guid = await cdnGuid(video.id);
     if (guid) demoByGuid.set(guid, demo.key);
     else problems.push(`no CDN guid for demo video ${demo.key}: it shows the test pattern`);
+    demoIds.push(video.id);
     if (demo.key === 'tour') videoId = video.id;
   }
   await data.createComment(user, videoId, channelId, NAMES.comment.en);
@@ -179,6 +183,15 @@ async function open(browser: Browser, lang: Lang, device: Device, mode: Mode, op
   // itself in an automated browser
   await context.addCookies([{ name: 'aun_consent', value: `v1.a0.e0.p0.${Date.now()}`, url: target().web, sameSite: 'Lax' }]);
   await context.route((url) => url.hostname.endsWith('b-cdn.net') || url.hostname.startsWith('media.'), serveDemo);
+  // Video cards and Up next show only the demo videos: the stack's seed videos carry test titles
+  await context.addInitScript((ids: string[]) => {
+    const idOf = (el: Element) => el.getAttribute('data-video-id') || decodeURIComponent((el.getAttribute('href') ?? el.querySelector('a[href*="/video/"]')?.getAttribute('href') ?? '').split('/video/')[1]?.split(/[?#/]/)[0] ?? '');
+    const hide = () => document.querySelectorAll<HTMLElement>('[data-testid="related-video"], [data-testid="video-card"]').forEach((el) => {
+      const id = idOf(el);
+      if (id && !ids.includes(id)) ((el.closest('li') as HTMLElement | null) ?? el).style.display = 'none';
+    });
+    new MutationObserver(hide).observe(document, { subtree: true, childList: true });
+  }, demoIds);
   const page = await context.newPage();
   return { context, page };
 }
@@ -204,7 +217,7 @@ async function openMenu(page: Page, view: 'main' | 'channels' = 'main'): Promise
 }
 
 /** Numbered markers at the inline-start top corner of each control (Arabic digits in Arabic) */
-async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: string) => void): Promise<void> {
+async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: string) => void, place: 'side' | 'above' = 'side'): Promise<void> {
   const boxes = [];
   for (const [i, t] of targets.entries()) {
     // A control this size or language hides (labels drop to icons, overflow menus) keeps its number
@@ -214,7 +227,7 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
     boxes.push(shown ? await t.boundingBox() : null);
   }
   if (!boxes.some(Boolean)) throw new Error('no marker target was shown');
-  await page.evaluate(({ boxes, rtl }) => {
+  await page.evaluate(({ boxes, rtl, above }) => {
     document.querySelectorAll('[data-help-marker]').forEach((n) => n.remove());
     boxes.forEach((box, i) => {
       if (!box) return;
@@ -222,10 +235,13 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       m.dataset.helpMarker = '';
       m.textContent = (i + 1).toLocaleString(rtl ? 'ar-EG' : 'en');
       // Outside the control at its inline start, so no label is covered; inside only at the screen edge
-      const outside = rtl ? box.x + box.width + 6 : box.x - 30;
+      // Side: outside the control at its inline start. Above: over its inline-start corner, for
+      // controls in a row, where the side would cover the neighbour's label
+      const outside = above ? (rtl ? box.x + box.width - 24 : box.x) : (rtl ? box.x + box.width + 6 : box.x - 30);
       const x = Math.min(window.innerWidth - 26, Math.max(2, outside));
+      const y = above ? box.y - 28 : box.y + box.height / 2 - 12;
       Object.assign(m.style, {
-        position: 'fixed', left: `${x}px`, top: `${Math.max(2, box.y + box.height / 2 - 12)}px`, zIndex: '2147483647',
+        position: 'fixed', left: `${x}px`, top: `${Math.max(2, y)}px`, zIndex: '2147483647',
         width: '24px', height: '24px', borderRadius: '50%', display: 'grid', placeItems: 'center',
         font: '700 13px/1 system-ui, sans-serif', background: 'var(--fanous-color-primary)', color: 'var(--fanous-color-on-primary)',
         boxShadow: '0 0 0 2px var(--fanous-color-surface), 0 2px 6px rgba(0,0,0,.35)', pointerEvents: 'none',
@@ -238,7 +254,7 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       });
       document.body.append(ring, m);
     });
-  }, { boxes, rtl: lang === 'ar' });
+  }, { boxes, rtl: lang === 'ar', above: place === 'above' });
 }
 
 /** A screenshot of the area around `region` (the whole viewport when empty), saved as WebP */
@@ -275,6 +291,8 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
 interface Scene {
   id: string;
   signedIn?: boolean;
+  /** Where the numbers go (see mark) */
+  markers?: 'side' | 'above';
   /** Puts the page in the state the picture shows; returns [markers, region] */
   run: (page: Page, lang: Lang, device: Device) => Promise<[Locator[], Locator[]]>;
 }
@@ -301,6 +319,7 @@ const SCENES: Scene[] = [
   },
   {
     id: 'watching-actions',
+    markers: 'above',
     run: async (page, lang) => {
       await settle(page, `/video/${videoId}`, lang);
       const like = page.getByTestId('video-like-button').first();
@@ -347,6 +366,7 @@ const SCENES: Scene[] = [
   },
   {
     id: 'identity-comment',
+    markers: 'above',
     run: async (page, lang) => {
       await settle(page, `/video/${videoId}`, lang);
       const line = page.getByTestId('comment-identity').first();
@@ -377,13 +397,14 @@ const SCENES: Scene[] = [
   },
   {
     id: 'community-tab',
+    markers: 'above',
     run: async (page, lang) => {
       await settle(page, `/channels/${channelId}?tab=community`, lang);
       const post = page.locator('article').filter({ hasText: NAMES.post.en }).first();
       await post.getByRole('button', { name: /comment|تعليق/i }).first().click();
-      const line = page.getByTestId('comment-identity').first();
+      const line = post.getByTestId('comment-identity').first();
       await line.scrollIntoViewIfNeeded();
-      return [[post, line], [post]];
+      return [[post.getByText(NAMES.post.en).first(), line], [post.getByText(NAMES.post.en).first(), line, post.getByTestId('comment-identity').locator('xpath=../..').first()]];
     },
   },
   {
@@ -418,7 +439,7 @@ for (const scene of SCENES) {
       const { context, page } = await open(browser, lang, device, mode, { signedIn: scene.signedIn });
       try {
         const [markers, region] = await scene.run(page, lang, device);
-        await mark(page, lang, markers, (msg) => notes.push(`${name}: ${msg}`));
+        await mark(page, lang, markers, (msg) => notes.push(`${name}: ${msg}`), scene.markers);
         await shoot(page, name, region);
       } catch (error) {
         problems.push(`${name}: ${(error as Error).message.split('\n').slice(0, 4).join(' ')}`);
