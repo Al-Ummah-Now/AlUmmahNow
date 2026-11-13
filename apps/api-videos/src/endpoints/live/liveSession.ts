@@ -32,9 +32,19 @@ const Err = (description: string) => ({ description, content: { 'application/jso
 const env = (c: AppContext) => c.env as unknown as StreamsEnv;
 const fail = (c: AppContext, status: number, code: string, error: string) => c.json({ success: false, code, error }, status as 400);
 
-/** An ended stream whose recording a person must decide, or rejected: owner only. */
-export function liveRecordingWithheld(s: { status?: string; review?: unknown }): boolean {
-	return s.status === 'ended' && isLiveVodWithheld(s.review as { status?: string } | undefined);
+/**
+ * The stream whose recording a person must decide (or rejected) reaches its owner only, tied to
+ * the recording's session, never to `status` (the owner can set that): only a new session (the
+ * stream really live again, VR9: live is never pre-reviewed) makes it public again.
+ */
+export function liveRecordingWithheld(s: { sessionId?: string | null; review?: unknown; reviewSessionId?: unknown }): boolean {
+	if (!isLiveVodWithheld(s.review as { status?: string } | undefined)) return false;
+	return !s.reviewSessionId || !s.sessionId || s.sessionId === s.reviewSessionId;
+}
+
+/** A held or rejected recording's URL never reaches anyone but the owner, whatever the stream does next. */
+export function recordingHidden(s: { review?: unknown }, isOwner: boolean): boolean {
+	return !isOwner && isLiveVodWithheld(s.review as { status?: string } | undefined);
 }
 
 /** Public fields of a stream; encoder settings never leave the owner endpoints. */
@@ -44,6 +54,7 @@ export function publicStream(s: LiveStreamRecord, isOwner: boolean) {
 		...rest,
 		// The recording's review is the owner's business (Studio shows it); the marker never leaves
 		...(isOwner && review ? { review } : {}),
+		...(recordingHidden(s, isOwner) ? { vodUrl: null } : {}),
 		likesCount: Array.isArray(likes) ? likes.length : 0,
 		dislikesCount: Array.isArray(dislikes) ? dislikes.length : 0,
 		commentsCount: Array.isArray(comments) ? comments.length : 0,
@@ -116,12 +127,13 @@ export class LiveStreamStateGet extends OptionalAuthRoute {
 		const stream = await visibleStream(c, params.id, this.getUserId(c));
 		if (stream instanceof Response) return stream;
 		const state = await streamState(env(c), stream);
+		const hideRecording = recordingHidden(stream, stream.userId === this.getUserId(c));
 		const settings = env(c).SEARCH_DB ? await readLiveRouting(env(c).SEARCH_DB!) : null;
 		c.header('cache-control', 'no-store');
 		return {
 			success: true,
 			// serverNow: the player's clock offset for glass-to-glass latency (QoE beacons)
-			result: { ...state, vodUrl: await signVod(c, state.vodUrl), provider: stream.provider ?? null, qoe: { sampleRate: settings?.qoeSampleRate ?? 0 }, serverNow: Date.now() },
+			result: { ...state, vodUrl: hideRecording ? null : await signVod(c, state.vodUrl), provider: stream.provider ?? null, qoe: { sampleRate: settings?.qoeSampleRate ?? 0 }, serverNow: Date.now() },
 		};
 	}
 }

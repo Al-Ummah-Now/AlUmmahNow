@@ -1,5 +1,5 @@
 import { OptionalAuthRoute, AppContext } from "../../base";
-import { liveRecordingWithheld } from './liveSession';
+import { liveRecordingWithheld, recordingHidden } from './liveSession';
 import { Num, Str } from "chanfana";
 import { z } from "zod";
 import { LiveStream as BusinessLiveStream, PaginationResponse, ResponseError } from "../../lib/types";
@@ -103,8 +103,11 @@ export class LiveStreamsList extends OptionalAuthRoute {
 			const streams = scan.items;
 
 			// Transform to view models
-			const streamViews = streams.map(stream => ({
+			const streamViews = streams.map(({ review, reviewShadow: _rs, reviewSessionId: _ri, ...stream }: LiveStreamType & { review?: unknown; reviewShadow?: unknown; reviewSessionId?: unknown }) => ({
 				...stream,
+				// The recording's review is the owner's (Studio); a held recording's URL is theirs only (VR9)
+				...(auth?.userId === stream.userId && review ? { review } : {}),
+				...(recordingHidden({ review }, auth?.userId === stream.userId) ? { vodUrl: null } : {}),
 				likesCount: stream.likes?.length || 0,
 				dislikes: [],
 				dislikesCount: PUBLIC_DISLIKES_COUNT,
