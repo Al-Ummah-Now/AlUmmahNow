@@ -126,15 +126,22 @@ base shape exactly (www, CMS, profile, videos admin, auth admin).
    or generic icon, a colour tile, a badge or a recolour (owner: "use icons we choose for favicons,
    not random ones"; "use the full favicons, cropped to a circle").
    - Source: the app's highest-resolution favicon asset, the 512px crop it serves as
-     `icon-512.png` (byte-identical to the pipeline's output), downscaled only (Lanczos) to 96px
-     and embedded as lossless WebP (every visible pixel equal to the PNG).
+     `icon-512.png` (byte-identical to the pipeline's output), downscaled only (Lanczos) to 96px,
+     lossless WebP (every visible pixel equal to the PNG).
    - Shape and size: the whole square scaled into a circle the size of the account avatars (2rem)
      in the menu, and 3rem on the profile app's "Your apps" cards (`.aun-app-icon--card`), so
      menus and cards show the same images, consistently for every app.
-   - `packages/app-icons` `src/nav-icons.ts` writes them into a marked block of `aun-nav.css`
-     (`pnpm --filter @al-ummah/app-icons nav-icons`); `check:nav-icons` regenerates the block from
-     the same crop and fails when it is stale. The vendoring repos' sync guards allow only inline
-     base64 WebP. The order and labels are fixed:
+   - Delivery: **separate static files, never inlined in the stylesheet** (inlined, they made the
+     render-blocking CSS 120 KB on every page). `packages/app-icons` `src/nav-icons.ts` writes
+     `packages/fanous-tokens/nav/icons/<id>.webp` (and the videos web and admin `public/`
+     copies); every app serves them same-origin at `/aun-nav/icons/<id>.webp` (www and the auth
+     admin from `public/`, the CMS and profile Workers from a generated module, all vendored by
+     their sync at the same ref, with hashes in the lock). Menus use
+     `<img class="aun-app-icon" src="/aun-nav/icons/<id>.webp" width="32" height="32" alt=""
+     loading="lazy" decoding="async">` (48 on the cards), so they load only when the menu opens.
+   - Checks: `check:nav-icons` regenerates the files from the same crop as `icon-512.png` and fails
+     on any difference; a token test rejects any `url()` or `data:` in `aun-nav.css` and keeps it
+     under 32 KB; the sync guards reject any `url()`. The order and labels are fixed:
 
    | Order | English | Arabic | Favicon | Who sees it |
    |---|---|---|---|---|
