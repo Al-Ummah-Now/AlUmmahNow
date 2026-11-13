@@ -38,7 +38,10 @@ Height 3.5rem (`--aun-header-height`), background `--fanous-c-nav-bg`, bottom bo
    tool apps a second line naming the app ("Content", "Admin", "Profile"). The logo is the
    owner's art as supplied, never a placeholder icon.
 3. The app's own primary links or search (www links, the videos/CMS search, the admin ⌘K search).
-4. App actions (videos: Upload, notifications; CMS: New).
+4. **Action cluster**, at the inline end with the account button, never beside the logo (owner
+   review, revision 5). App actions sit here in this order: Upload (videos: a "+ Upload" pill,
+   2.5rem tall like the account button, `--fanous-c-nav-*` colours; icon-only "+" at 44px on
+   phones, the name kept as its accessible name), notifications, then the account. CMS: New.
 5. Language switch (`.aun-lang`): the other language's name ("العربية" / "English").
 6. Theme switch (`.aun-icon-btn`): a menu with System / Light / Dark.
    Apps with a side rail (videos, videos admin, CMS, auth admin) put 5 and 6 at the foot of the
@@ -77,7 +80,7 @@ the **context slot**. Sections, top to bottom, with `.aun-menu-sep` separators b
 |---|---|---|---|---|
 | 1 | Who | base | yes | yes |
 | 2 | **Context slot** | slot | empty | the **channel layer** (below) |
-| 3 | Your accounts + Add another account | base | yes | yes ("Switch account ›" opens the list in place) |
+| 3 | More accounts + Add another account | base | yes | yes |
 | 4 | This app | base | the app's own entries (≤ 4) | Write article / My articles (scholars), Settings |
 | 5 | Al Ummah Now apps | base | yes | yes |
 | 6 | Sign out | base | yes | yes |
@@ -87,22 +90,33 @@ base shape exactly (www, CMS, profile, videos admin, auth admin).
 
 1. **Who** (`.aun-menu-who`): a large avatar, the name, and the email muted under it. An app may
    add one muted line here (the CMS role). Who never shows the channel; that is the slot's job.
+   Who **is** the current account: it is not listed again below (the Google account pattern,
+   owner choice in revision 5).
 2. **Context slot** (`<div class="aun-menu-context" role="group" aria-labelledby>` with a
    `.aun-menu-label`): one app-specific layer, see [Context slot](#context-slot-the-videos-channel-layer).
-3. **Your accounts** (`.aun-menu-label`), shown when the browser has 2 or more accounts. An app
-   whose menu also has a context layer (videos) may open this list in place behind a "Switch
-   account ›" row; the rows look the same. Each row is `.aun-acct-row`:
-   - the entry: avatar, name and email;
-   - the current account is `aria-current="true"`, with a `.aun-menu-check` mark and the muted
-     line "Current account";
-   - any other account is a button, "Switch to {name}";
-   - each row ends with a small `.aun-acct-signout` "Sign out" button, which confirms first.
+3. **More accounts** / «حسابات أخرى» (`.aun-menu-label`), shown when the browser has other
+   signed-in accounts. It lists only the **other** accounts, never the current one (that is Who).
+   Each row is `.aun-acct-row`:
+   - the entry is a button, "Switch to {name}": avatar, name and email muted under it. The
+     **whole row** takes the hover / focus fill, the sign-out button included, so it reads as one
+     target;
+   - each row ends with a `.aun-acct-signout` **icon button** (the sign-out arrow, `.aun-flip` in
+     Arabic, 44px target), accessible name "Sign out of {name}"; it confirms first in the in-app
+     dialog.
 
-   **Add another account** follows the accounts.
+   **Add another account** follows, with the sign-in icon (an arrow into a door, `.aun-flip` in
+   Arabic). It is shown even with one account. The CMS has no in-menu switch (its session is
+   per app): its "More accounts ›" row opens the accounts page (`/sso/accounts`) instead of
+   listing them.
 4. **This app** (no label): the app's own entries, at most four. Videos: Write article, My
    articles (scholars), Settings. Profile: Manage sessions.
 5. **Al Ummah Now apps** (label): links to the other apps the account may open, gated by role
-   like each app's own guard. The current app is left out. The order and labels are fixed:
+   like each app's own guard. The current app is left out. Each entry starts with that app's own
+   favicon (`.aun-app-icon[data-app]`, 1.25rem, the owner's art as supplied, cropped and resized
+   only). The icons are 40px lossless WebP data URIs generated from `packages/app-icons/assets/crops`
+   into a marked block of `aun-nav.css` (`pnpm --filter @al-ummah/app-icons nav-icons`;
+   `check:nav-icons` fails when the block is stale), so every vendoring repo gets them with the
+   stylesheet and no extra request. The order and labels are fixed:
 
    | Order | English | Arabic | Who sees it |
    |---|---|---|---|
@@ -135,7 +149,6 @@ in this order:
 | Current channel (`.aun-menu-context-current`) | avatar + name, crown on the main channel, a `.aun-badge` role chip when the account is not the owner ("Channel admin"); links to the channel | a channel is active |
 | "No active channel" (muted, not a link) | | no channel is active |
 | **Switch channel ›** | opens the switcher in place (below) | always (an account without channels can still choose "Use without a channel") |
-| **Upload** | the upload page for the active channel (`/upload?channel=<id>`) | a channel is active and the account may upload (creator tier) |
 | **Studio** | the creator home, on the active channel | the account has at least one channel |
 | **Create channel** | opens the switcher with the create form | the account has no channel yet and may create one |
 
@@ -149,8 +162,10 @@ in this order:
    limit (another tab used it up) reads the tier again, closes the form and shows the same note,
    never a generic error. Without a creator tier (by invitation) there is neither Create nor the note.
 
-The header's own Upload button (beside the logo) stays: same target, disabled with "Create a
-channel to upload" when no channel is active.
+Upload is **not** in the menu (owner review, revision 5, the YouTube pattern): the channel layer
+leads to Studio, and uploading starts from the header's "+ Upload" action (see [Header](#header)),
+which targets the active channel and is disabled with "Create a channel to upload" when no channel
+is active.
 
 Coverage: `apps/web/e2e/themes/channel-layer.spec.ts` (two accounts with several channels each, the
 limit, a refused create, a viewer, the switcher's contrast in every theme), local, mocked API
@@ -226,4 +241,7 @@ native apps).
 - Theme visibility: every theme × light/dark × en/ar, with the account menu open. Videos:
   `apps/web/e2e/themes`. www: `e2e/theme-sweep.spec.ts`. CMS/Auth: their sweep specs.
 - E2E: the account button shows the name, not the email, when a name exists. The menu sections
-  come in the order above. The current app is not in "Al Ummah Now apps".
+  come in the order above. The current account is shown only in Who; "More accounts" lists the
+  others, each with its sign-out icon button. The current app is not in "Al Ummah Now apps", and
+  every app entry shows its icon. The menu has no Upload; the header's Upload sits in the action
+  cluster.
