@@ -2,6 +2,7 @@ import type { LibraryTranslations, NotificationCenterTranslations } from './i18n
 import type { BulkEditTranslations } from './i18n-bulk-edit';
 import type { CommunityGuidelinesTranslations } from './i18n-community-guidelines';
 import type { ContactTranslations } from './i18n-contact';
+import type { HelpTranslations } from './i18n-help';
 import type { UploadStatusTranslations } from './i18n-upload-status';
 import type { ChannelRolesTranslations } from './i18n-channel-roles';
 import type { ChannelSectionsTranslations } from './i18n-channel-sections';
@@ -196,6 +197,8 @@ export interface AppTranslations {
   channelRoles: ChannelRolesTranslations;
   /** Contact us page (/[locale]/contact) */
   contact: ContactTranslations;
+  /** Help pages and the identity tour (/[locale]/help) */
+  help: HelpTranslations;
   /** After-upload processing status on the upload page (single and batch) */
   uploadStatus: UploadStatusTranslations;
   /** Channel Home sections: add/edit flow, manager, rendering (docs/specs/CHANNEL-SECTIONS.md) */

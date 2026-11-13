@@ -1,4 +1,5 @@
 'use client';
+import { HelpLink } from '@/components/help/HelpLink';
 import { logger } from '@/lib/logger-client';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
@@ -144,6 +145,7 @@ export const SubscriptionFeed: React.FC<SubscriptionFeedProps> = ({
           <p className="text-gray-600 dark:text-gray-400 mb-4">
             {t.subscriptions.subscribeToSeeVideos}
           </p>
+          <p className="mb-4 mt-2"><HelpLink topic="identity" section="what-you-can-do" /></p>
           <Button variant="outline" onClick={() => router.push(`/${lang}`)}>
             {t.subscriptions.discoverChannels}
           </Button>

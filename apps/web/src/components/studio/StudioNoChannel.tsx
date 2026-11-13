@@ -1,5 +1,6 @@
 'use client';
 
+import { HelpLink } from '@/components/help/HelpLink';
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -27,7 +28,8 @@ export function StudioNoChannel({ locale }: { locale: string }) {
   return (
     <main id="main-content" className="mx-auto max-w-md px-4 py-16">
       <h1 className="mb-3 text-2xl font-bold text-foreground">{t.studio.noChannel.title}</h1>
-      <p className="mb-6 text-muted-foreground">{t.studio.noChannel.body}</p>
+      <p className="mb-2 text-muted-foreground">{t.studio.noChannel.body}</p>
+      <p className="mb-6"><HelpLink topic="identity" section="create-a-channel" /></p>
       <form onSubmit={submit} className="space-y-3">
         <Label htmlFor="studio-channel-name">{t.studio.noChannel.nameLabel}</Label>
         <Input id="studio-channel-name" value={name} onChange={(event) => setName(event.target.value)} dir="auto" />

@@ -1,4 +1,5 @@
 'use client';
+import { HelpLink } from '@/components/help/HelpLink';
 import { logger } from '@/lib/logger-client';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/components/AuthProvider/authContext';
@@ -111,6 +112,7 @@ export const SubscriptionManagement: React.FC = () => {
           <p className="text-gray-500 dark:text-gray-400 mt-2">
             {s.noSubscriptionsHint}
           </p>
+          <p className="mb-4 mt-2"><HelpLink topic="identity" section="what-you-can-do" /></p>
         </div>
       ) : (
         <div className="space-y-4">

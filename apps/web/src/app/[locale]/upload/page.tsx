@@ -1,5 +1,6 @@
 'use client';
 
+import { HelpLink } from '@/components/help/HelpLink';
 import { logger } from '@/lib/logger-client';
 import React, { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { VideoObject } from "@/interfaces";
@@ -482,6 +483,7 @@ const UploadPage: React.FC = () => {
             <p className="text-lg text-gray-600 dark:text-gray-400 mb-8">
               {t.upload.channelRequiredMessage}
             </p>
+            <p className="mb-8 -mt-4"><HelpLink topic="identity" section="create-a-channel" /></p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link
                 href={`/${locale}/profile/create`}

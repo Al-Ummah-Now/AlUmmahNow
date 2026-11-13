@@ -1,0 +1,175 @@
+name: Help pictures
+
+# Makes Help's annotated pictures and clips from the real site (docs/features/HELP-AND-TOUR.md):
+# this commit's code on the local stack (docs/testing/LOCAL-STACK.md), every picture in English and
+# Arabic, desktop and phone, light and dark (apps/web/e2e/help-capture/capture.help.ts).
+#
+# - Pull requests that change Help's text, the capture script or this workflow: the pictures are
+#   uploaded as the `help-pictures` artifact, to commit with the PR (nothing is pushed).
+# - Every release tag, and by hand: the same, then a PR "chore(help): refresh Help pictures" when
+#   anything changed. A PR opened with the workflow's token starts no checks by itself: push an
+#   empty commit to it (or close and reopen it) before merging.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/web/e2e/help-capture/**'
+      - 'apps/web/playwright.help.config.ts'
+      - 'packages/shared-types/src/i18n-help.ts'
+      - '.github/workflows/help-pictures.yml'
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      open_pr:
+        description: 'Open a PR with the new pictures when anything changed'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: help-pictures-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build local stack
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
+          pnpm --filter @al-ummah/theme-packages build
+          pnpm --filter @al-ummah/web build
+          (cd apps/web && pnpm opennextjs-cloudflare build)
+          pnpm --filter @al-ummah/admin-web build
+          (cd apps/admin-web && pnpm opennextjs-cloudflare build)
+
+      - name: Upload builds
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-stack-build
+          path: |
+            packages/*/dist
+            apps/web/.open-next
+            apps/admin-web/.open-next
+          include-hidden-files: true
+          retention-days: 2
+          if-no-files-found: error
+
+  capture:
+    name: Capture
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      E2E_RUN_ID: help-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/local-stack-up
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Google Chrome: the mini-player clip plays H.264
+      - uses: ./.github/actions/playwright-install
+        with:
+          browsers: chrome
+          working-directory: apps/web
+
+      - uses: ./.github/actions/apt-install
+        with:
+          packages: ffmpeg fonts-noto-core
+
+      - name: Capture
+        working-directory: apps/web
+        run: |
+          export E2E_RUN_USERS_FILE="$RUNNER_TEMP/run-users.txt" E2E_RUN_USER_IDS_FILE="$RUNNER_TEMP/run-user-ids.txt"
+          export GITHUB_EVENT_NAME=local-stack
+          pnpm exec playwright test -c playwright.help.config.ts
+        env:
+          CI: 'true'
+          E2E_ENV: local
+          NODE_OPTIONS: --dns-result-order=ipv4first
+          E2E_CODE_SINK_SECRET: local-stack-sink-secret
+          TEST_PROMOTE_SECRET: local-stack-promote-secret
+
+      - name: Upload pictures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: help-pictures
+          path: apps/web/public/help
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Upload trace
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: help-capture-trace
+          path: |
+            apps/web/test-results/help-capture
+            ${{ runner.temp }}/stack.log
+          retention-days: 7
+
+  pull-request:
+    name: Open a PR with the new pictures
+    needs: capture
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.open_pr)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Download pictures
+        uses: actions/download-artifact@v4
+        with:
+          name: help-pictures
+          path: apps/web/public/help
+
+      - name: Open the PR when anything changed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE: ${{ github.ref_name }}
+        run: |
+          if [ -z "$(git status --porcelain apps/web/public/help)" ]; then
+            echo "Help pictures are current."
+            exit 0
+          fi
+          branch="chore/help-pictures-${GITHUB_RUN_ID}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add apps/web/public/help
+          git commit -m "chore(help): refresh Help pictures from ${SOURCE}"
+          git push origin "$branch"
+          gh pr create --base main --head "$branch" \
+            --title "chore(help): refresh Help pictures" \
+            --body "Help's pictures and clips made again from the real site by \`help-pictures.yml\` (run ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}, from \`${SOURCE}\`). Look at the changed pictures, then push an empty commit to start the checks (a PR opened by the workflow's token starts none) and merge when green."
