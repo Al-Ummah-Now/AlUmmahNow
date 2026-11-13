@@ -106,11 +106,20 @@ test.describe('Account menu - two accounts', () => {
     await showMenuView(menu, 'account');
     await menu.getByTestId('nav-account').filter({ hasText: single.email }).getByRole('menuitem').first().click();
 
-    menu = await openAccountMenu(page);
-    await showMenuView(menu, 'main');
+    // The switch reloads the session and re-renders the header, which closes a menu opened too
+    // early (#1260): wait until the header is on the new account (Upload follows its channel), then
+    // open the menu again until the active channel row is there
+    const upload = page.getByRole('banner').getByRole('link', { name: /Upload Video/ });
+    await expect(upload).toHaveAttribute('href', `/en/upload?channel=${encodeURIComponent(single.channels[0].id)}`, { timeout: 30_000 });
+    await expect(async () => {
+      if (await menu.getByTestId('nav-active-channel').isVisible()) return;
+      await page.keyboard.press('Escape');
+      menu = await openAccountMenu(page);
+      await showMenuView(menu, 'main');
+      await expect(menu.getByTestId('nav-active-channel')).toBeVisible({ timeout: 3_000 });
+    }).toPass({ timeout: 30_000 });
     await expect(menu.getByTestId('nav-active-channel')).toHaveAttribute('href', `/en/channels/${single.channels[0].id}`);
     await page.keyboard.press('Escape');
-    const upload = page.getByRole('banner').getByRole('link', { name: /Upload Video/ });
     // Upload opens on the active channel (3883fa94: the upload page's picker reads ?channel=)
     await expect(upload).toHaveAttribute('href', `/en/upload?channel=${encodeURIComponent(single.channels[0].id)}`);
     if (!isMobile) await expect(upload).toBeVisible();
