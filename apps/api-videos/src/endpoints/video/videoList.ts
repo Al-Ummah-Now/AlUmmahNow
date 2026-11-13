@@ -194,12 +194,15 @@ export class VideosList extends OptionalAuthRoute {
 		let nextCursor = cursor;
 		let source: "index" | "scan" = "scan";
 
-		// A channel filter is answered from the ownership index (D1): scanning the
-		// bucket and filtering afterwards returned empty pages for channels whose
-		// videos sat beyond the scanned window, sorted only within that window.
-		const indexed = filterChannelId
+		// Answered from the ownership index (D1), with or without a channel filter.
+		// The bucket scan reads keys (random UUIDs) in order and sorts only the page
+		// it found: a channel's videos beyond the scanned window came back as empty
+		// pages, and the unfiltered list (home grid, "All videos") showed whichever
+		// keys came first instead of the newest videos (#1029). The index has no
+		// category or title column, so those filters keep the scan.
+		const indexed = filterChannelId || (!category && !titleQuery)
 			? await channelVideosFromIndex<VideoType>(c.env as never, {
-				channelId: filterChannelId,
+				channelId: filterChannelId || null,
 				cursor,
 				limit,
 				query: {

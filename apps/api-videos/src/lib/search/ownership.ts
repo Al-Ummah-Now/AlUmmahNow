@@ -243,10 +243,14 @@ export function ownershipVideoTotals(env: OwnershipEnv): Promise<{ total: number
 
 export type ChannelVideoSort = 'latest' | 'popular' | 'oldest';
 
+// The bare column, not COALESCE(created_at, 0): SQLite sorts NULL lowest, so the
+// order is the same, and (kind, created_at) / (kind, channel_id, created_at) can
+// serve it and stop at LIMIT instead of reading and sorting every video row,
+// which the catalogue-wide list would do on every home page load.
 const CHANNEL_VIDEO_ORDER: Record<ChannelVideoSort, string> = {
-  latest: 'COALESCE(created_at, 0) DESC, id',
+  latest: 'created_at DESC, id',
   popular: 'views DESC, id',
-  oldest: 'COALESCE(created_at, 0) ASC, id',
+  oldest: 'created_at ASC, id',
 };
 
 export interface ChannelVideoQuery {
@@ -279,12 +283,13 @@ export interface ChannelVideoQuery {
 export const READY_SQL = "(upload_status IS NULL OR upload_status = 'ready')";
 
 /**
- * One page of a channel's videos from the index (never deleted or hidden).
+ * One page of a channel's videos from the index (never deleted or hidden), or
+ * of every channel's when `channelId` is null (the catalogue-wide list).
  * Fetches `limit + 1` ids so the caller knows if more exist.
  */
 export function channelVideoIds(
   env: OwnershipEnv,
-  channelId: string,
+  channelId: string | null,
   query: ChannelVideoQuery,
 ): Promise<{ ids: string[]; hasMore: boolean } | null> {
   if (!(query.limit >= 1) || !(query.offset >= 0)) {
@@ -292,8 +297,12 @@ export function channelVideoIds(
   }
   return whenComplete(env, 'video', async db => {
     const order = CHANNEL_VIDEO_ORDER[query.sort] ?? CHANNEL_VIDEO_ORDER.latest;
-    const where = [`kind = 'video'`, 'channel_id = ?', 'is_deleted = 0', 'is_hidden = 0'];
-    const params: unknown[] = [channelId];
+    const where = [`kind = 'video'`, 'is_deleted = 0', 'is_hidden = 0'];
+    const params: unknown[] = [];
+    if (channelId !== null) {
+      where.push('channel_id = ?');
+      params.push(channelId);
+    }
     if (query.longFormOnly) {
       where.push('is_live = 0', 'is_short = 0');
     }
