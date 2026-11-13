@@ -56,7 +56,29 @@ const wrangler = requireFromApi('wrangler') as {
   unstable_getMiniflareWorkerOptions: (configPath: string) => { workerOptions: Json };
   unstable_splitSqlQuery: (sql: string) => string[];
 };
-const { Miniflare } = createRequire(WRANGLER_PKG)('miniflare') as { Miniflare: new (opts: Json) => MiniflareInstance };
+const miniflareModule = createRequire(WRANGLER_PKG)('miniflare') as {
+  Miniflare: new (opts: Json) => MiniflareInstance;
+  Log: new (level?: number) => { logWithLevel(level: number, message: string): void };
+  LogLevel: { WARN: number; INFO: number };
+};
+const { Miniflare } = miniflareModule;
+
+/**
+ * Miniflare's own log, kept in the stack log: its warnings and errors (a queue batch whose dispatch
+ * threw, a message retried, dead-lettered or dropped) and one line per queue batch
+ * ("QUEUE <name> acked/total (ms)"). Request lines and the rest stay out (the browser proxy and the
+ * workers log those). Without it a queue message that never reached its consumer left no trace (#1128).
+ * Workers' own console output does not go through this (Miniflare pipes it straight to stdout).
+ */
+function stackMiniflareLog(): unknown {
+  const { Log, LogLevel } = miniflareModule;
+  class StackLog extends Log {
+    logWithLevel(level: number, message: string): void {
+      if (level <= LogLevel.WARN || /QUEUE|queue "/.test(message)) super.logWithLevel(level, message);
+    }
+  }
+  return new StackLog(LogLevel.INFO);
+}
 
 interface MiniflareInstance {
   ready: Promise<URL>;
@@ -447,7 +469,7 @@ async function main(): Promise<void> {
   const stopCdn = await timed('fake cdn', () => startFakeCdn());
   const stopProxy = await timed('browser proxy', () => startBrowserProxy());
   const mf = await timed('miniflare', async () => {
-    const instance = new Miniflare({ workers: options, defaultPersistRoot: persist, log: undefined });
+    const instance = new Miniflare({ workers: options, defaultPersistRoot: persist, log: stackMiniflareLog() as Json[string] });
     await instance.ready;
     return instance;
   });

@@ -210,11 +210,25 @@ export async function processContactMailJob(env: AdminBindings, msg: QueueMessag
  * emails (`kind: 'warning'`, lib/warning-mail.ts), which share the sender.
  */
 export async function contactMailConsumer(batch: { messages: readonly QueueMessageLike<ContactMailJob | WarningMailJob>[] }, env: AdminBindings): Promise<void> {
+  const startedAt = Date.now();
+  const outcomes: Record<string, number> = {};
   for (const msg of batch.messages) {
     const outcome = isWarningMailJob(msg.body)
       ? await processWarningMailJob(env, msg as QueueMessageLike<WarningMailJob>)
       : await processContactMailJob(env, msg as QueueMessageLike<ContactMailJob>);
+    const kind = (msg.body as { kind?: string } | undefined)?.kind ?? 'unknown';
+    outcomes[`${kind}:${outcome}`] = (outcomes[`${kind}:${outcome}`] ?? 0) + 1;
     if (outcome === 'retry') msg.retry({ delaySeconds: backoffSeconds(msg.attempts) });
     else msg.ack();
   }
+  // One summary line per batch (info at stage and below): shows the consumer ran and what each job
+  // ended as. Without it a delivery left "queued" could not tell a batch that never arrived from one
+  // that ended quietly (#1128, local stack)
+  logger.job({
+    job: 'contact-mail-batch',
+    outcome: Object.keys(outcomes).some((k) => k.endsWith(':retry') || k.endsWith(':failed')) ? 'retry' : 'ok',
+    messages: batch.messages.length,
+    outcomes,
+    durationMs: Date.now() - startedAt,
+  });
 }
