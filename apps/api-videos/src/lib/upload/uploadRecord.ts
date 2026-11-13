@@ -25,6 +25,8 @@ export interface UploadRecordInput {
 	uploadedBy?: string;
 	channelId: string;
 	isPublic?: boolean;
+	/** Open to anyone with the link, never listed (only with isPublic false) */
+	isUnlisted?: boolean;
 	/** Comma-separated, as the upload forms send them */
 	tags?: string;
 	titleLocalized?: Record<string, string>;
@@ -73,6 +75,7 @@ export function createUploadRecord(input: UploadRecordInput): VideoRecord {
 		likes: [],
 		dislikes: [],
 		isPublic: input.isPublic ?? true,
+		...(input.isPublic === false && input.isUnlisted ? { isUnlisted: true } : {}),
 		isLive: false,
 		tags: input.tags ? input.tags.split(',').map((tag) => tag.trim()).filter(Boolean) : [],
 		...(input.titleLocalized ? { titleLocalized: input.titleLocalized } : {}),

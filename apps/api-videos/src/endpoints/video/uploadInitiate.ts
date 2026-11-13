@@ -21,6 +21,8 @@ import { thumbnailProcessor, thumbnailStorage } from "../../lib/thumbnail";
 import { adoptOrRequestSuggestion } from '../../lib/categorySuggestions';
 import { logger } from '../../lib/logger';
 import { AuthenticatedRoute, AppContext } from '../../base';
+import { VIDEO_VISIBILITIES } from '@al-ummah/shared-types';
+import { uploadVisibility } from '../../lib/visibility';
 
 export class UploadInitiateEndpoint extends AuthenticatedRoute {
 	schema = {
@@ -37,6 +39,7 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 							fileSize: Num({ description: "File size in bytes", required: true }),
 							mimeType: Str({ description: "MIME type of the video file", required: true }),
 							isPublic: z.boolean().optional().default(true),
+							visibility: z.enum(VIDEO_VISIBILITIES).optional().describe("public | unlisted | private (wins over isPublic; a draft is always private)"),
 							isDraft: z.boolean().optional().describe("Save without publishing. A draft is always private"),
 							tags: z.string().optional().describe("Comma-separated tags"),
 							// The web uploader sends these; they were stripped by the schema, so the
@@ -131,7 +134,7 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 		// issues (chanfana), not a 500
 		const request = await this.getValidatedData<typeof this.schema>();
 		try {
-			const { title, description, fileSize, mimeType, isPublic, isDraft, tags, thumbnail, titleLocalized, descriptionLocalized, category, format, fingerprint, categorySuggestionKey } = request.body;
+			const { title, description, fileSize, mimeType, isPublic, visibility, isDraft, tags, thumbnail, titleLocalized, descriptionLocalized, category, format, fingerprint, categorySuggestionKey } = request.body;
 
 			// Validate required fields
 			if (!fileSize || fileSize <= 0) {
@@ -187,8 +190,8 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 			const metadata = {
 				title,
 				description: description || '',
-				// A draft is always private (docs/specs/CREATOR-STUDIO.md §4.4.1)
-				isPublic: isDraft ? false : isPublic ?? true,
+				// A draft is always private (docs/specs/CREATOR-STUDIO.md §4.4.1); unlisted is D-SEO-5
+				...uploadVisibility(isDraft, visibility, isPublic),
 				...(isDraft ? { isDraft: true } : {}),
 				tags: tags ? tags.split(',').map(tag => tag.trim()).filter(Boolean) : [],
 				...(titleLocalized && { titleLocalized }),
@@ -225,7 +228,7 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 						userId: ownerId,
 						uploadedBy,
 						channelId,
-						isPublic: isDraft ? false : isPublic ?? true,
+						...uploadVisibility(isDraft, visibility, isPublic),
 						tags,
 						titleLocalized,
 						descriptionLocalized,

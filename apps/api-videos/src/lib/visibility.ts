@@ -6,10 +6,14 @@
  * it is soft-deleted, hidden by moderation, or private.
  */
 
+import { visibilityFlags, type VideoVisibility } from '@al-ummah/shared-types';
+
 export interface VisibilityFields {
 	id?: string;
 	userId?: string;
 	isPublic?: boolean;
+	/** Not public, but open to anyone with the link (D-SEO-5) */
+	isUnlisted?: boolean;
 	isHidden?: boolean;
 	isDeleted?: boolean;
 	/** Absent on older videos (treated as ready) */
@@ -77,4 +81,48 @@ export function ownerSeesSuspendedChannel(
 	if (channel.hiddenBeforeSuspension === true) return false;
 	const holds = Array.isArray(channel.suspensionHolds) ? channel.suspensionHolds : [];
 	return holds.every((h) => h === `channel:${channel.id}`);
+}
+
+/**
+ * Only the owner (and channel members allowed to see private videos) may open it: private, and
+ * not unlisted. Single-video reads by id (fetch, playback, comments, views) use this; unlisted
+ * videos are open to anyone with the link. Every list keeps requiring isPublic, so unlisted
+ * videos are never listed (D-SEO-5).
+ */
+export function isRestrictedVideo(video: VisibilityFields | null | undefined): boolean {
+	return !!video && video.isPublic === false && video.isUnlisted !== true;
+}
+
+export interface VisibilityInput {
+	isPublic?: boolean;
+	isUnlisted?: boolean;
+	visibility?: VideoVisibility;
+}
+
+/**
+ * Applies a create or update's visibility fields to the stored video and keeps the two flags
+ * consistent: `visibility` wins; isUnlisted true makes it not public; a public video is never
+ * unlisted. Fields the input leaves out keep their current value.
+ */
+export function applyVisibilityInput<T extends { isPublic?: boolean; isUnlisted?: boolean }>(target: T, input: VisibilityInput): T {
+	if (input.visibility) {
+		Object.assign(target, visibilityFlags(input.visibility));
+	} else {
+		if (input.isPublic !== undefined) target.isPublic = input.isPublic;
+		if (input.isUnlisted === true) target.isPublic = false;
+		if (input.isUnlisted !== undefined) target.isUnlisted = input.isUnlisted;
+	}
+	if (target.isPublic !== false) delete target.isUnlisted;
+	else if (target.isUnlisted !== true) delete target.isUnlisted;
+	return target;
+}
+
+/**
+ * The stored flags for a new upload: a draft is always private; else `visibility` wins over
+ * isPublic, and isPublic defaults to true. isUnlisted is only present when true.
+ */
+export function uploadVisibility(isDraft: boolean | undefined, visibility: VideoVisibility | undefined, isPublic: boolean | undefined): { isPublic: boolean; isUnlisted?: true } {
+	if (isDraft) return { isPublic: false };
+	if (visibility) return visibility === 'unlisted' ? { isPublic: false, isUnlisted: true } : { isPublic: visibility === 'public' };
+	return { isPublic: isPublic ?? true };
 }

@@ -6,7 +6,7 @@ import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { broadcastInBackground } from "../../lib/websocket-notify";
-import { isVideoRemoved } from "../../lib/visibility";
+import { isVideoRemoved, isRestrictedVideo } from "../../lib/visibility";
 import { normalizeEmbedOrigin } from "../../lib/embed-origin";
 import { countView } from "../../lib/view-counter";
 import { logger } from "../../lib/logger";
@@ -121,7 +121,7 @@ export class VideoView extends OptionalAuthRoute {
 		}
 
 		// Check privacy permissions
-		if (video.isPublic === false && (!userId || video.userId !== userId)) {
+		if (isRestrictedVideo(video) && (!userId || video.userId !== userId)) {
 			return c.json({
 				success: false,
 				error: "Video not found", // Don't reveal that private video exists

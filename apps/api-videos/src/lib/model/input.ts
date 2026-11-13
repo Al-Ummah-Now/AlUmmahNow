@@ -1,7 +1,7 @@
 import { PLAYLIST_SORT_DIRECTIONS, PLAYLIST_SORT_FIELDS, PLAYLIST_SORT_MODES } from "@al-ummah/shared-types";
 import { Bool, DateTime, Str } from "chanfana";
 import { z } from "zod";
-import { VideoCategory } from "@al-ummah/shared-types";
+import { VideoCategory, VIDEO_VISIBILITIES } from "@al-ummah/shared-types";
 
 // Input validation schemas - only fields that users can submit
 
@@ -20,6 +20,8 @@ export const VideoInput = z.object({
     height: z.number().optional(),
     availableResolutions: z.array(z.string()).optional(),
     isPublic: z.boolean().optional(),
+    isUnlisted: z.boolean().optional().describe("Unlisted: not public, open to anyone with the link (never listed, noindex)"),
+    visibility: z.enum(VIDEO_VISIBILITIES).optional().describe("public | unlisted | private; wins over isPublic / isUnlisted"),
     isLive: z.boolean().optional(),
     category: z.nativeEnum(VideoCategory).optional().describe("Video category (e.g., 'quran_recitation', 'hadith_studies')"),
     tags: z.array(z.string()).optional().describe("Video tags for search and categorization"),
@@ -78,6 +80,8 @@ export const VideoUpdateInput = z.object({
     height: z.number().optional(),
     availableResolutions: z.array(z.string()).optional(),
     isPublic: z.boolean().optional(),
+    isUnlisted: z.boolean().optional().describe("Unlisted: not public, open to anyone with the link (never listed, noindex)"),
+    visibility: z.enum(VIDEO_VISIBILITIES).optional().describe("public | unlisted | private; wins over isPublic / isUnlisted"),
     isLive: z.boolean().optional(),
     category: z.nativeEnum(VideoCategory).nullable().optional().describe("Video category (e.g., 'quran_recitation', 'hadith_studies'); null clears it"),
     tags: z.array(z.string().trim().min(1).max(50)).max(30).optional().describe("Video tags for search and categorization (replaces existing tags)"),

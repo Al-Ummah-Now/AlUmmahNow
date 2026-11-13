@@ -1,7 +1,7 @@
 import { bunnyClientForVideo, type LibraryHints } from '../../lib/bunny/libraries';
 import { Bool, Str } from "chanfana";
 import { z } from "zod";
-import { can, VideoCategory, type ChannelRole } from "@al-ummah/shared-types";
+import { can, VideoCategory, type ChannelRole, VIDEO_VISIBILITIES } from "@al-ummah/shared-types";
 import { Video as BusinessVideo, Playlist as BusinessPlaylist, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
@@ -55,6 +55,7 @@ const languageText = <T extends z.ZodTypeAny>(value: T) => z.object({ en: value.
 
 const Changes = z.object({
 	isPublic: z.boolean().optional(),
+	visibility: z.enum(VIDEO_VISIBILITIES).optional().describe("public | unlisted | private (wins over isPublic)"),
 	category: z.nativeEnum(VideoCategory).nullable().optional(),
 	addTags: z.array(tag).max(MAX_TAGS).optional(),
 	removeTags: z.array(tag).max(MAX_TAGS).optional(),

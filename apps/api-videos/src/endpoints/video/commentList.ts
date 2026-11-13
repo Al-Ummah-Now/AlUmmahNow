@@ -5,7 +5,7 @@ import { Video, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import { OptionalAuthRoute, AppContext } from '../../base';
 import { logger } from "../../lib/logger";
-import { isVideoRemoved } from "../../lib/visibility";
+import { isVideoRemoved, isRestrictedVideo } from "../../lib/visibility";
 import {
 	CommentViewer,
 	DEFAULT_COMMENT_PAGE_SIZE,
@@ -104,7 +104,7 @@ export class CommentList extends OptionalAuthRoute {
 		const repository = new R2Repository<VideoType>(c.env.videos);
 		const video = await repository.getObject(id);
 
-		if (!video || isVideoRemoved(video) || (video.isPublic === false && (!userId || video.userId !== userId))) {
+		if (!video || isVideoRemoved(video) || (isRestrictedVideo(video) && (!userId || video.userId !== userId))) {
 			return c.json({ success: false, error: "Object not found" }, 404);
 		}
 

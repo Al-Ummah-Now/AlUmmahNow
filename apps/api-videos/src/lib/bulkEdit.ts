@@ -7,6 +7,8 @@
  * exactly those fields, and only while nobody changed them since.
  */
 import { applyTextEdit, charCount, VIDEO_DESCRIPTION_MAX, VIDEO_TITLE_MAX, type TextEdit, type TitleLanguage } from '@al-ummah/shared-types';
+import type { VideoVisibility } from '@al-ummah/shared-types';
+import { applyVisibilityInput } from './visibility';
 
 /** Same limits as the single-video update (VideoUpdateInput). */
 export const MAX_TAGS = 30;
@@ -21,6 +23,8 @@ export type CommentSetting = 'on' | 'held' | 'off';
 
 export interface BulkVideoChanges {
   isPublic?: boolean;
+  /** public | unlisted | private: wins over isPublic (D-SEO-5) */
+  visibility?: VideoVisibility;
   /** undefined keeps the category, null clears it */
   category?: string | null;
   addTags?: string[];
@@ -44,6 +48,7 @@ export interface PerVideoChanges {
 /** The fields a bulk edit may touch, and so the fields an undo restores. */
 export const EDITABLE_FIELDS = [
   'isPublic',
+  'isUnlisted',
   'category',
   'categorySource',
   'tags',
@@ -59,6 +64,7 @@ export type EditableField = (typeof EDITABLE_FIELDS)[number];
 
 interface Editable {
   isPublic?: boolean;
+  isUnlisted?: boolean;
   category?: string;
   categorySource?: 'uploader' | 'ai' | 'admin';
   tags?: string[];
@@ -80,6 +86,7 @@ export function isEmptyChange(changes: BulkVideoChanges, perVideo?: Record<strin
   const hasTitles = !!perVideo && Object.values(perVideo).some((v) => v.title && Object.keys(v.title).length > 0);
   const hasDescription = !!changes.description && Object.keys(changes.description).length > 0;
   return changes.isPublic === undefined
+    && changes.visibility === undefined
     && changes.category === undefined
     && !(changes.addTags?.length)
     && !(changes.removeTags?.length)
@@ -138,7 +145,7 @@ export function applyBulkChanges<T extends Editable>(
   now: string,
   perVideo: PerVideoChanges = {},
 ): { ok: true; video: T; changed: boolean; fields: EditableField[] } | { ok: false; error: BulkEditError } {
-  if (changes.isPublic !== undefined && video.scheduledPublishStatus === 'scheduled') {
+  if ((changes.isPublic !== undefined || changes.visibility !== undefined) && video.scheduledPublishStatus === 'scheduled') {
     return { ok: false, error: 'scheduled' };
   }
 
@@ -154,8 +161,9 @@ export function applyBulkChanges<T extends Editable>(
   if (tags.length > MAX_TAGS) return { ok: false, error: 'too_many_tags' };
 
   const next: T = { ...video };
-  if (changes.isPublic !== undefined) next.isPublic = changes.isPublic;
-  if (next.isDraft && next.isPublic !== false) next.isDraft = false;
+  if (changes.isPublic !== undefined || changes.visibility !== undefined) applyVisibilityInput(next, { isPublic: changes.isPublic, visibility: changes.visibility });
+  // Published (as public or unlisted): no longer a draft
+  if (next.isDraft && (next.isPublic !== false || next.isUnlisted === true)) next.isDraft = false;
   if (changes.category !== undefined) {
     // The owner chose it: no longer an AI suggestion (null clears both)
     next.category = changes.category ?? undefined;

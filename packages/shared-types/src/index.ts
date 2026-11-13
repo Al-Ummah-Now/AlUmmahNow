@@ -1,5 +1,6 @@
 // Export all shared types
 export * from './video';
+export * from './video-visibility';
 export * from './video-format';
 export * from './video-format-ops';
 export * from './channel';

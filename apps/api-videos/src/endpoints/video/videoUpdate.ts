@@ -18,6 +18,7 @@ import { AuthenticatedRoute, AppContext } from '../../base';
 import { scanInBackground, videoScanText } from '../../lib/moderation-scan';
 import { recordOwnerCategory, requestVideoSuggestion } from '../../lib/categorySuggestions';
 import { markPublished } from "../../lib/published";
+import { applyVisibilityInput } from '../../lib/visibility';
 
 export class VideoUpdate extends AuthenticatedRoute {
 	schema = {
@@ -158,7 +159,7 @@ export class VideoUpdate extends AuthenticatedRoute {
 
 		// Update the video with new values (applied to the fresh copy on every
 		// compare-and-swap attempt, SCALABILITY-AUDIT AV-3)
-		const { category, tags, format, ...restInput } = videoUpdateInput;
+		const { category, tags, format, visibility, ...restInput } = videoUpdateInput;
 		const applyUpdate = (base: VideoType): VideoType => {
 			const next: VideoType = {
 			...base,
@@ -176,6 +177,8 @@ export class VideoUpdate extends AuthenticatedRoute {
 			};
 			// "Upload as Short / as video" wins over detection; 'auto' clears the choice.
 			// A choice also resolves an open format issue (admin flag).
+			// public | unlisted | private, kept consistent (D-SEO-5)
+			applyVisibilityInput(next, { isPublic: videoUpdateInput.isPublic, isUnlisted: videoUpdateInput.isUnlisted, visibility });
 			if (format) applyFormatChoice(next, format, { by: 'owner', userId: effectiveUserId, at: next.dateModified });
 			if (thumbnailType) {
 				// A new thumbnail ends any shape flag on the old one
@@ -221,7 +224,8 @@ export class VideoUpdate extends AuthenticatedRoute {
 			}
 			Object.assign(fresh, next);
 			// A draft made public is no longer a draft
-			if (previous.isDraft && fresh.isPublic !== false) fresh.isDraft = false;
+			// A draft published (as public or unlisted) is no longer a draft
+			if (previous.isDraft && (fresh.isPublic !== false || fresh.isUnlisted === true)) fresh.isDraft = false;
 			// Made public (and ready): published now, once (lib/published.ts)
 			markPublished(previous, fresh, new Date().toISOString());
 			return true;

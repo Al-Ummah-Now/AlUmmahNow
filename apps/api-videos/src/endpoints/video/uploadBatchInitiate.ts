@@ -17,6 +17,8 @@ import { markUploadCreated } from "../../lib/uploads/reaper";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import { requestVideoSuggestion } from '../../lib/categorySuggestions';
 import { logger } from '../../lib/logger';
+import { VIDEO_VISIBILITIES } from '@al-ummah/shared-types';
+import { uploadVisibility } from '../../lib/visibility';
 
 const MAX_BATCH_SIZE = 15;
 
@@ -26,6 +28,7 @@ const BatchVideoSchema = z.object({
 	fileSize: Num({ description: "File size in bytes", required: true }),
 	mimeType: Str({ description: "MIME type of the video file", required: true }),
 	isPublic: z.boolean().optional(),
+	visibility: z.enum(VIDEO_VISIBILITIES).optional().describe("public | unlisted | private (wins over isPublic; a draft is always private)"),
 	tags: z.string().optional().describe("Comma-separated tags"),
 	titleLocalized: z.object({ en: z.string().max(1000).optional(), ar: z.string().max(1000).optional() }).optional().describe("Titles per language (set for all / per file on the upload page)"),
 	descriptionLocalized: z.object({ en: z.string().max(5000).optional(), ar: z.string().max(5000).optional() }).optional().describe("Descriptions per language"),
@@ -40,6 +43,7 @@ const SharedMetadataSchema = z.object({
 	channelId: z.string().optional().describe("Channel ID for all videos (defaults to the channelId header)"),
 	category: z.nativeEnum(VideoCategory).optional().describe("Category for all videos"),
 	isPublic: z.boolean().optional().describe("Visibility for all videos"),
+	visibility: z.enum(VIDEO_VISIBILITIES).optional().describe("public | unlisted | private for all videos (wins over isPublic; a draft is always private)"),
 });
 
 type BatchVideo = z.infer<typeof BatchVideoSchema>;
@@ -188,7 +192,7 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 				const metadata = {
 					title: videoData.title,
 					description: videoData.description || '',
-					isPublic: videoData.isPublic ?? sharedMetadata?.isPublic ?? true,
+					...uploadVisibility(false, videoData.visibility ?? sharedMetadata?.visibility, videoData.isPublic ?? sharedMetadata?.isPublic),
 					tags: videoData.tags ? videoData.tags.split(',').map(tag => tag.trim()).filter(Boolean) : [],
 					...(sharedMetadata?.category ? { category: sharedMetadata.category, categorySource: 'uploader' as const } : {}),
 					...(videoData.format && videoData.format !== 'auto' ? { format: videoData.format } : {}),
@@ -218,7 +222,7 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 							userId: ownerId,
 							uploadedBy,
 							channelId,
-							isPublic: videoData.isPublic ?? sharedMetadata?.isPublic ?? true,
+							...uploadVisibility(false, videoData.visibility ?? sharedMetadata?.visibility, videoData.isPublic ?? sharedMetadata?.isPublic),
 							tags: videoData.tags,
 							...(videoData.titleLocalized ? { titleLocalized: dropEmpty(videoData.titleLocalized) } : {}),
 							...(videoData.descriptionLocalized ? { descriptionLocalized: dropEmpty(videoData.descriptionLocalized) } : {}),

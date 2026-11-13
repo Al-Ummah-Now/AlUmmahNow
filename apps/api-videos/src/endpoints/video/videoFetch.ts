@@ -9,6 +9,7 @@ import R2Repository from "../../lib/r2Repo";
 import { logger } from '../../lib/logger';
 import { OptionalAuthRoute, AppContext } from '../../base';
 import { GONE_BODY, isPurged } from '../../lib/gone';
+import { isRestrictedVideo } from '../../lib/visibility';
 
 export class VideoFetch extends OptionalAuthRoute {
 	schema = {
@@ -123,7 +124,7 @@ export class VideoFetch extends OptionalAuthRoute {
 
 		// Check privacy permissions
 		// Private videos: the owner, or a channel member allowed to see them (lib/channelAccess.ts)
-		if (video.isPublic === false && !(await canOnVideo(c.env as never, video, userId, 'video.view_private'))) {
+		if (isRestrictedVideo(video) && !(await canOnVideo(c.env as never, video, userId, 'video.view_private'))) {
 			return c.json(
 				{
 					success: false,

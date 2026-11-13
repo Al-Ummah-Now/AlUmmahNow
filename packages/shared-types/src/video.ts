@@ -76,8 +76,10 @@ export interface VideoObject extends Timestamps, SoftDelete, Moderation {
   /** Per-video comment settings (Story 29.2): on | held (for review) | off */
   commentSettings?: VideoCommentSettings;
 
-  // Status and visibility
+  // Status and visibility (video-visibility.ts: public | unlisted | private)
   isPublic?: boolean;
+  /** Not public, but open to anyone with the link (never listed, noindex) */
+  isUnlisted?: boolean;
   isLive?: boolean;
   isFeatured?: boolean;
   processingStatus?: VideoProcessingStatus;

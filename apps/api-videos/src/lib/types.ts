@@ -162,6 +162,8 @@ export const Video = z.object({
     likes: z.array(Like).default([]),
     dislikes: z.array(Dislike).default([]),
     isPublic: z.boolean().default(true),
+    // Not public but open to anyone with the link: never listed, noindex (@al-ummah/shared-types video-visibility)
+    isUnlisted: z.boolean().optional(),
     isLive: z.boolean().default(false),
     // Per-video comment settings (Story 29.2): on | held (for review) | off
     commentSettings: z.enum(['on', 'held', 'off']).optional(),
