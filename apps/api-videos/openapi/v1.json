@@ -22467,6 +22467,133 @@
         }
       }
     },
+    "/api/v1/profile/onboarding": {
+      "get": {
+        "tags": [
+          "Profiles"
+        ],
+        "summary": "Get which first-run guides the current user has seen",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).",
+        "operationId": "get_OnboardingGet",
+        "responses": {
+          "200": {
+            "description": "Guides seen",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "identityTour": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1000,
+                      "description": "Highest version of the identity tour the viewer finished or skipped (0 = never)"
+                    }
+                  },
+                  "required": [
+                    "identityTour"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Profiles"
+        ],
+        "summary": "Record that the current user finished or skipped a first-run guide",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nThe stored version only grows: a lower version leaves it as it is.",
+        "operationId": "put_OnboardingUpdate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "identityTour": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000,
+                    "description": "Highest version of the identity tour the viewer finished or skipped (0 = never)"
+                  }
+                },
+                "required": [
+                  "identityTour"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Guides seen",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "identityTour": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1000,
+                      "description": "Highest version of the identity tour the viewer finished or skipped (0 = never)"
+                    }
+                  },
+                  "required": [
+                    "identityTour"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request data"
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/profile/playback": {
       "get": {
         "tags": [
