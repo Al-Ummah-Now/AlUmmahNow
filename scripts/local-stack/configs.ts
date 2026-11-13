@@ -34,6 +34,10 @@ function cleanBindings(list: unknown): Json[] | undefined {
   });
 }
 
+/** Bot-protection rate limits lifted on the local stack (see localConfig). */
+export const LIFTED_LIMITERS = new Set(['COMMENT_LIMITER', 'POST_LIMITER', 'REACTION_LIMITER', 'REPORT_LIMITER', 'UPLOAD_INITIATE_LIMITER', 'SEARCH_LIMITER']);
+export const LIFTED_LIMIT = 100000;
+
 export interface LocalConfigResult {
   config: Json;
   /** Secrets Store bindings to fill with local values after boot. */
@@ -92,6 +96,15 @@ export function localConfig(raw: Json, worker: StackWorker, stackWorkerNames: Se
     for (const s of config.secrets_store_secrets as Json[]) {
       secrets.push({ binding: String(s.binding), storeId: String(s.store_id), secretName: String(s.secret_name) });
     }
+  }
+
+  // The bot-protection limits (api-videos middleware/bot-protection.ts) are per account and per minute;
+  // E2E setup files many reports and comments as one account, so the stack lifts them (unit tests
+  // cover the limiter itself). Older limits keep their deployed values.
+  if (Array.isArray(config.ratelimits)) {
+    config.ratelimits = (config.ratelimits as Json[]).map((r) =>
+      LIFTED_LIMITERS.has(String(r.name)) ? { ...r, simple: { ...((r.simple as Json | undefined) ?? {}), limit: LIFTED_LIMIT } } : r,
+    );
   }
 
   config.vars = { ...((config.vars as Json | undefined) ?? {}), ...worker.vars };

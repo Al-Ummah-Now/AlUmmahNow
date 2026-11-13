@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseJsonc } from '../../release/jsonc.ts';
-import { localConfig, localRedirectUri, localRedirectUris, type Json } from '../configs.ts';
+import { LIFTED_LIMIT, LIFTED_LIMITERS, localConfig, localRedirectUri, localRedirectUris, type Json } from '../configs.ts';
 import { releasedRun } from '../resolve-refs.ts';
 import { bundleTag } from '../fetch-auth.ts';
 import { PROD_HOST_TO_LOCAL, ROOT, WORKERS, LOCAL_SECRETS } from '../stack.ts';
@@ -55,7 +55,26 @@ describe('local configs', () => {
     const worker = videosWorkers.find((w) => w.app === 'api-videos')!;
     const { secrets } = localConfig(raw(worker.dir, worker.config), worker, names);
     assert.ok(secrets.length > 0);
-    for (const value of Object.values(LOCAL_SECRETS)) assert.match(value, /^(local-stack-|\d+$)/, 'local values only');
+    // Local values, or Cloudflare's documented always-pass Turnstile test secret
+    for (const value of Object.values(LOCAL_SECRETS)) assert.match(value, /^(local-stack-|\d+$|1x0{31}AA$)/, 'local values only');
+  });
+
+  it('bot protection: Turnstile enforced with the test site key, bot-protection limits lifted, older limits kept', () => {
+    for (const app of ['api-videos', 'admin-api'] as const) {
+      const worker = videosWorkers.find((w) => w.app === app)!;
+      const vars = localConfig(raw(worker.dir, worker.config), worker, names).config.vars as Json;
+      assert.equal(vars.TURNSTILE_MODE, 'enforce');
+      assert.equal(vars.TURNSTILE_SITE_KEY, '1x00000000000000000000AA');
+    }
+    assert.equal(LOCAL_SECRETS.TURNSTILE_SECRET, '1x0000000000000000000000000000000AA');
+    const api = videosWorkers.find((w) => w.app === 'api-videos')!;
+    const limits = new Map(((localConfig(raw(api.dir, api.config), api, names).config.ratelimits as Json[]) ?? []).map((r) => [String(r.name), (r.simple as Json).limit]));
+    for (const name of LIFTED_LIMITERS) assert.equal(limits.get(name), LIFTED_LIMIT, name);
+    assert.equal(limits.get('WATCH_TIME_LIMITER'), 6);
+    // The deployed production config is untouched
+    const prod = raw(api.dir, api.config);
+    assert.equal((prod.vars as Json).TURNSTILE_MODE, 'off');
+    assert.equal(((prod.ratelimits as Json[]).find((r) => r.name === 'REPORT_LIMITER')!.simple as Json).limit, 10);
   });
 
   it('turns paid AI off in the processor', () => {
