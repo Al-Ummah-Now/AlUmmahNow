@@ -74,7 +74,16 @@ export const LOCAL_SECRETS: Record<string, string> = {
   bunny_stream_library_id: '424242',
   BUNNY_TOKEN_KEY: 'local-stack-fake-bunny-token',
   image_storage_key: 'local-stack-fake-images',
+  // Cloudflare's public always-pass Turnstile test secret: answered by our code, never sent to Cloudflare
+  TURNSTILE_SECRET: '1x0000000000000000000000000000000AA',
 };
+
+/**
+ * Bot protection on the stack (docs/features/bot-protection.md): Turnstile enforced with Cloudflare's
+ * always-pass test site key, so pages load the same-origin stub and E2E exercises the real check
+ * without calling Cloudflare. Production keeps its own keys and mode (wrangler env.production).
+ */
+const TURNSTILE_TEST_VARS = { TURNSTILE_MODE: 'enforce', TURNSTILE_SITE_KEY: '1x00000000000000000000AA' };
 
 /**
  * Confidential OAuth clients of the local issuer and the local secret each one's caller uses: boot
@@ -156,6 +165,7 @@ export const WORKERS: StackWorker[] = [
       // fakes, the browser through Playwright routes to PORTS['fake-cdn']
       bunny_hostname: 'vz-local-stack.b-cdn.net',
       BUNNY_TEST_LIBRARY: 'true',
+      ...TURNSTILE_TEST_VARS,
     },
   },
   {
@@ -174,6 +184,7 @@ export const WORKERS: StackWorker[] = [
       WEBSOCKET_URL: url('websocket'),
       ADMIN_WEB_URL: url('admin-web'),
       VIDEOS_API_URL: url('api-videos'),
+      ...TURNSTILE_TEST_VARS,
     },
   },
   {
@@ -284,6 +295,8 @@ export const WORKERS: StackWorker[] = [
       E2E_RUN_USERS: 'enabled',
       // Must resolve before a code goes to the sink; any real send goes to the Resend fake
       RESEND_API_KEY: LOCAL_SECRETS.RESEND_API_KEY,
+      // Auth's dev config carries the test secret as a plain var
+      ...TURNSTILE_TEST_VARS,
     },
   },
   {
