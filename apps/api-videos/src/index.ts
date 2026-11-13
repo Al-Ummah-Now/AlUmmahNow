@@ -6,6 +6,7 @@ import { handleBunnyDeleteBatch, isBunnyDeleteMessage } from './lib/uploads/bunn
 import { handleCollectionBackfillMessage, isCollectionBackfillMessage } from './lib/bunny/collectionBackfill';
 import { handlePurgeBatch, isPurgeMessage, startScheduledPurge } from './lib/uploads/testLibraryPurge';
 import { handleMediaMoveBatch, isMediaMoveMessage, sweepMediaJobs } from './lib/media/r2-delivery';
+import { flushIndexNow } from './lib/indexnow';
 import { collectDeliveryCosts } from './lib/media/costs';
 import { sweepOriginals } from './lib/media/originals';
 import { createMediaInternalRouter } from './endpoints/media/mediaInternal';
@@ -480,6 +481,13 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 			sweepMediaJobs(rawEnv as never).then(
 				() => undefined,
 				(error) => logger.error('[MediaSweep] Run failed', { error: error instanceof Error ? error.message : String(error) }),
+			),
+		);
+		// Watch pages whose public content changed go to IndexNow (lib/indexnow.ts; production only)
+		ctx.waitUntil(
+			flushIndexNow(rawEnv as never).then(
+				(r) => (r.sent ? logger.info('[IndexNow] Pinged', r) : undefined),
+				(error) => logger.error('[IndexNow] Flush failed', { error: error instanceof Error ? error.message : String(error) }),
 			),
 		);
 		// QA / stage only: erase the videos data (profile, channels, videos and their Bunny media) of
