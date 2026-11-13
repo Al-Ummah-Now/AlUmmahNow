@@ -24352,6 +24352,131 @@
         }
       }
     },
+    "/api/v1/quran/passage": {
+      "get": {
+        "tags": [
+          "Quran"
+        ],
+        "summary": "Official text of a Quran range",
+        "description": "🌐 Public. The Uthmani text of `range` (surah:ayah:word-surah:ayah:word, one surah) from the Quran Foundation copy. 503 while no fresh copy is available.",
+        "operationId": "get_QuranPassageGet",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 32,
+              "description": "e.g. 67:1:1-67:5:12"
+            },
+            "required": true,
+            "description": "e.g. 67:1:1-67:5:12",
+            "name": "range",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The passage",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "range": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string",
+                      "description": "\"67:1–5\""
+                    },
+                    "surah": {
+                      "type": "object",
+                      "properties": {
+                        "number": {
+                          "type": "number"
+                        },
+                        "nameArabic": {
+                          "type": "string"
+                        },
+                        "nameSimple": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "number",
+                        "nameArabic",
+                        "nameSimple"
+                      ]
+                    },
+                    "ayat": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "ayah": {
+                            "type": "number"
+                          },
+                          "text": {
+                            "type": "string",
+                            "description": "Uthmani text, verbatim from Quran Foundation"
+                          },
+                          "partial": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "ayah",
+                          "text",
+                          "partial"
+                        ]
+                      }
+                    },
+                    "quranComUrl": {
+                      "type": "string"
+                    },
+                    "attribution": {
+                      "type": "object",
+                      "properties": {
+                        "en": {
+                          "type": "string"
+                        },
+                        "ar": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "en",
+                        "ar"
+                      ]
+                    },
+                    "version": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "range",
+                    "label",
+                    "surah",
+                    "ayat",
+                    "quranComUrl",
+                    "attribution",
+                    "version"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed range"
+          },
+          "404": {
+            "description": "The range is not in the Quran"
+          },
+          "503": {
+            "description": "No fresh copy of the Quran text yet"
+          }
+        }
+      }
+    },
     "/api/v1/recommendations": {
       "get": {
         "tags": [
