@@ -7,6 +7,8 @@ import { originFromHost } from '@/lib/embed/request-origin';
 import { buildWatchMetadata } from '@/lib/embed/watch-metadata';
 import { ContentUnavailableError } from '@/lib/seo/availability';
 import { videoAvailability } from '@/lib/seo/availability-server';
+import { breadcrumbLd, videoObjectLd } from '@/lib/seo/structured-data';
+import { JsonLd } from '@/components/seo/JsonLd';
 
 interface WatchLayoutProps {
   children: React.ReactNode;
@@ -39,10 +41,32 @@ export async function generateMetadata({ params }: Pick<WatchLayoutProps, 'param
  * (not a 200 "Video not found"), and an API outage is a 503 (worker.ts), never a 404.
  */
 export default async function WatchLayout({ children, params }: WatchLayoutProps): Promise<React.JSX.Element> {
-  const { id } = await params;
+  const { locale, id } = await params;
   if (!isValidContentId(id)) notFound();
   const availability = await videoAvailability(id);
   if (availability === 'missing') notFound();
   if (availability === 'unavailable') throw new ContentUnavailableError('a video');
-  return <>{children}</>;
+  return (
+    <>
+      <WatchStructuredData id={id} locale={locale} />
+      {children}
+    </>
+  );
+}
+
+/** VideoObject + BreadcrumbList for a public video; nothing for unlisted or private ones (wiki AUN-SEO). */
+async function WatchStructuredData({ id, locale }: { id: string; locale: string }) {
+  const video = await loadPublicVideo(id);
+  const host = (await headers()).get('host');
+  if (!video || video.isUnlisted || !host) return null;
+  const origin = originFromHost(host);
+  const lang = locale === 'ar' ? 'ar' : 'en';
+  const ld = videoObjectLd(video, lang, origin);
+  const crumbs = video.channelName && (video.channelHandle || video.channelId)
+    ? [breadcrumbLd([
+        { name: video.channelName, url: video.channelHandle ? `${origin}/${lang}/@${video.channelHandle}` : `${origin}/${lang}/channels/${video.channelId}` },
+        { name: ld.name, url: ld.url },
+      ])]
+    : [];
+  return <JsonLd data={[ld, ...crumbs]} />;
 }

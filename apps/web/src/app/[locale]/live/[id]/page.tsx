@@ -9,7 +9,8 @@ interface Props {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { locale } = await params;
   const t = locale === 'ar' ? AR_TRANSLATIONS : EN_TRANSLATIONS;
-  return { title: `${t.liveWatch.live} | ${t.common.appName}` };
+  // Already names the site: not run through the locale layout's title template
+  return { title: { absolute: `${t.liveWatch.live} | ${t.common.appName}` } };
 }
 
 /** The live watch page: either provider's stream, then its recording (components/live/LiveWatch.tsx). */

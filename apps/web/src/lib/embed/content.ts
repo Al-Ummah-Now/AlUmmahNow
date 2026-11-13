@@ -43,6 +43,10 @@ export interface EmbedVideo {
   isShort?: boolean;
   /** Unlisted (D-SEO-5): playable by link, shared with a card, but never indexed */
   isUnlisted?: boolean;
+  /** When it was first public (publishedAt, else dateCreated): search engines' uploadDate */
+  uploadDate?: string;
+  views?: number;
+  isLive?: boolean;
   /** Inside a playlist: the item's place in the stored list (the watch URL's `index`) */
   listIndex?: number;
 }
@@ -72,6 +76,10 @@ interface ApiVideo {
   channelHandle?: string | null;
   isPublic?: boolean;
   isUnlisted?: boolean;
+  publishedAt?: string;
+  dateCreated?: string;
+  views?: number;
+  isLive?: boolean;
   isDeleted?: boolean;
   isHidden?: boolean;
   uploadStatus?: string;
@@ -132,6 +140,9 @@ export function toEmbedVideo(video: ApiVideo | null | undefined): EmbedVideo | n
     ...(positiveSize(video.width) && positiveSize(video.height) ? { width: Number(video.width), height: Number(video.height) } : {}),
     ...(video.isShort === true ? { isShort: true } : {}),
     ...(video.isPublic === false && video.isUnlisted === true ? { isUnlisted: true } : {}),
+    ...(video.publishedAt || video.dateCreated ? { uploadDate: video.publishedAt || video.dateCreated } : {}),
+    ...(typeof video.views === 'number' && video.views >= 0 ? { views: video.views } : {}),
+    ...(video.isLive === true ? { isLive: true } : {}),
     ...(video.delivery?.source === 'r2' || video.delivery?.source === 'bunny' ? { delivery: { source: video.delivery.source } } : {}),
   };
 }

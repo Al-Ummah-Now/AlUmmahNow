@@ -6,6 +6,7 @@
  */
 
 import { Metadata } from 'next';
+import { listPageMetadata } from '@/lib/seo/structured-data';
 import { getTranslations } from '@/lib/i18n/utils/getTranslations';
 import { VideosPageClient } from './VideosPageClient';
 
@@ -16,20 +17,8 @@ interface VideosPageProps {
 export async function generateMetadata({ params }: VideosPageProps): Promise<Metadata> {
   const { locale } = await params;
   const t = getTranslations(locale === 'ar' ? 'ar' : 'en');
-  const title = `${t.discovery.allVideos} | ${t.common.appName}`;
-
-  return {
-    title,
-    description: t.discovery.allVideosDescription,
-    openGraph: {
-      title,
-      description: t.discovery.allVideosDescription,
-      type: 'website',
-    },
-    alternates: {
-      languages: { en: '/en/videos', ar: '/ar/videos' },
-    },
-  };
+  // Each language its own canonical, x-default English (D-SEO-1; wiki AUN-SEO)
+  return listPageMetadata(locale, '/videos', t.discovery.allVideos, t.discovery.allVideosDescription);
 }
 
 export default function VideosPage() {

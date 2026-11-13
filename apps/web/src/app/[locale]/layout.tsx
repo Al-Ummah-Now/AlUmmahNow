@@ -32,7 +32,9 @@ interface LocaleLayoutProps {
 export async function generateMetadata({ params }: Pick<LocaleLayoutProps, 'params'>): Promise<Metadata> {
   const { locale } = await params;
   if (!isLocaleSupported(locale)) return {};
-  return { title: getTranslations(locale === 'ar' ? 'ar' : 'en').common.appName };
+  const appName = getTranslations(locale === 'ar' ? 'ar' : 'en').common.appName;
+  // "{page} | site" on every page that sets its own title; the site name alone otherwise (wiki AUN-SEO)
+  return { title: { default: appName, template: `%s | ${appName}` } };
 }
 
 /**
