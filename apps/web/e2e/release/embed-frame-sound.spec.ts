@@ -198,30 +198,34 @@ test.describe('Release: a click-started play has sound', () => {
 
   // landscape40 (40 s) in the Short's 216x384 frame: the 4 s vertical clip ended before a slow
   // runner's first look ("watch again", nothing to unmute).
+  //
+  // Nothing may evaluate in the page or the frame before the player starts: Playwright runs every
+  // Chromium evaluate (page/frame.evaluate, locator reads, expect.poll over them) as a user gesture
+  // (Runtime.callFunctionOn userGesture: true), and that transient activation lets the embed play
+  // with sound, as a real click would. On the CI runner the first media read landed before the
+  // player's play() and the clip played unmuted to the end (#1090: the frame's
+  // navigator.userActivation.isActive was false at load and true at play()). So the first start is
+  // read from the frame's console, and the frame is only inspected once the player has started.
   test('no user activation: muted, "Tap to unmute" (Arabic), which brings the sound back', async ({ page, browserName }) => {
-    // quarantined: #1090 @meywd: on the CI runner the embed plays unmuted without activation (QA runs 43328368421, 43331650634)
-    test.fixme(true, 'quarantined: #1090 @meywd: the embed plays unmuted without activation on the CI runner');
-    if (browserName === 'chromium') {
-      // Chrome on the CI runner allows sound without activation, even with
-      // --autoplay-policy=user-gesture-required, so the embed rightly plays unmuted there. Refuse an
-      // unmuted play() without activation in every frame, as Chrome's default policy does elsewhere,
-      // so the muted fallback is the path under test. A click in the frame (the pill) is activation.
-      await page.addInitScript(() => {
-        const play = HTMLMediaElement.prototype.play;
-        HTMLMediaElement.prototype.play = function (this: HTMLMediaElement) {
-          if (!this.muted && this.volume > 0 && !navigator.userActivation?.isActive) {
-            return Promise.reject(new DOMException('sound needs a user gesture', 'NotAllowedError'));
-          }
-          return play.call(this);
-        };
-      });
-    }
+    await page.addInitScript(() => {
+      if (!location.pathname.startsWith('/embed/v/')) return;
+      document.addEventListener('playing', (event) => {
+        const v = event.target as HTMLMediaElement;
+        console.log(`[embed-first-playing] ${JSON.stringify({ muted: v.muted || v.volume === 0 })}`);
+      }, { capture: true, once: true });
+    });
+    const first: { start: { muted: boolean } | null } = { start: null };
+    page.on('console', (message) => {
+      const found = /^\[embed-first-playing\] (.*)$/.exec(message.text());
+      if (found && !first.start) first.start = JSON.parse(found[1]!) as { muted: boolean };
+    });
     await host(page, `${target().web}/embed/v/${videos.landscape40.id}?lang=ar&autoplay=1&gesture=1`, { width: 216, height: 384 }, 'load');
+    await expect.poll(() => first.start, { message: 'the player did not start', timeout: 60000 }).not.toBeNull();
     const frame = await embedFrame(page);
     await skipIfPredates(frame);
     if (browserName === 'chromium') {
-      // sound refused: muted, still playing, with the Arabic control
-      await expect.poll(async () => (await media(frame))?.muted, { message: 'not muted without activation', timeout: 45000 }).toBe(true);
+      // sound refused without activation: muted, still playing, with the Arabic control
+      expect(first.start?.muted, 'not muted without activation').toBe(true);
       await expect.poll(async () => (await media(frame))?.time ?? 0, { message: 'the muted fallback did not play', timeout: 45000 }).toBeGreaterThan(1);
       await expect(frame.getByTestId('embed-unmute')).toHaveText('اضغط لتشغيل الصوت');
     }
