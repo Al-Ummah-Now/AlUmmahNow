@@ -220,6 +220,128 @@ test.describe('identity tour', () => {
   }
 });
 
+/** What each step highlights (IdentityTour.tsx TARGETS) */
+const STEP_TARGETS: Record<string, string> = {
+  account: '[data-testid="nav-menu-trigger"]',
+  actingAs: '[data-testid="nav-channel-layer"]',
+  switch: '[data-testid="nav-menu"]',
+  upload: '[data-testid="header-upload"]',
+  help: '[data-testid="side-nav"] a[href$="/help"]',
+};
+const SITE_THEMES = ['fawanees', 'lantern', 'zujaj', 'nahas'] as const;
+
+/**
+ * The highlighted control and the step card are never under the scrim (owner report 2026-11-13: "the
+ * tutorial is dimmed like the rest of the site": the site lifted `body>[role=dialog]` to the modal
+ * layer, under the scrim).
+ */
+async function expectNotDimmed(page: Page, label: string): Promise<void> {
+  const step = await card(page).getAttribute('data-step');
+  const result = await page.evaluate((selector) => {
+    const visibleTarget = Array.from(document.querySelectorAll<HTMLElement>(selector)).find((el) => {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < window.innerHeight;
+    });
+    const spot = document.querySelector<HTMLElement>('[data-testid="tour-spot"]');
+    const cardEl = document.querySelector<HTMLElement>('[data-testid="tour-card"]')!;
+    const out: { target?: string; hole?: boolean; opacity: string[]; layered: string } = { opacity: [], layered: 'ok' };
+    if (spot && visibleTarget) {
+      const r = visibleTarget.getBoundingClientRect();
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      out.target = hit && visibleTarget.contains(hit) ? 'ok' : `covered by ${hit?.outerHTML.slice(0, 120)}`;
+      const s = spot.getBoundingClientRect();
+      out.hole = s.left <= r.left + 1 && s.top <= r.top + 1 && s.right >= r.right - 1 && s.bottom >= r.bottom - 1;
+    }
+    for (let el: HTMLElement | null = cardEl; el; el = el.parentElement) {
+      const o = getComputedStyle(el).opacity;
+      if (o !== '1') out.opacity.push(`${el.tagName}.${el.className} ${o}`);
+    }
+    // Card and scrim share one parent that makes no stacking context, and the card is the higher layer
+    const root = cardEl.parentElement!;
+    const rs = getComputedStyle(root);
+    if (root.parentElement !== document.body) out.layered = 'tour root is not in <body>';
+    else if (rs.zIndex !== 'auto' || rs.transform !== 'none' || rs.filter !== 'none' || rs.opacity !== '1') out.layered = 'tour root makes a stacking context';
+    else if (spot) {
+      if (spot.parentElement !== root) out.layered = 'scrim and card have different parents';
+      else if (Number(getComputedStyle(cardEl).zIndex) <= Number(getComputedStyle(spot).zIndex)) out.layered = `card z ${getComputedStyle(cardEl).zIndex} <= scrim z ${getComputedStyle(spot).zIndex}`;
+    }
+    return out;
+  }, STEP_TARGETS[step ?? ''] ?? 'none');
+  const where = `${label}, step ${step}`;
+  if (result.target !== undefined) {
+    expect(result.target, `${where}: target under the scrim`).toBe('ok');
+    expect(result.hole, `${where}: spotlight hole covers the target`).toBe(true);
+  }
+  expect(result.opacity, `${where}: card opacity`).toEqual([]);
+  expect(result.layered, `${where}: card above the scrim`).toBe('ok');
+  // And what is painted: inside its rounded corners, the card looks the same with and without the
+  // scrim (a dimmed card differs by tens of levels per channel)
+  const box = (await card(page).boundingBox())!;
+  const inset = 22;
+  const clip = { x: box.x + inset, y: box.y + inset, width: box.width - inset * 2, height: box.height - inset * 2 };
+  const shown = await page.screenshot({ clip, animations: 'disabled', caret: 'hide' });
+  await page.getByTestId('tour-spot').evaluate((el: HTMLElement) => { el.style.visibility = 'hidden'; }).catch(() => undefined);
+  const bare = await page.screenshot({ clip, animations: 'disabled', caret: 'hide' });
+  await page.getByTestId('tour-spot').evaluate((el: HTMLElement) => { el.style.visibility = ''; }).catch(() => undefined);
+  const maxDiff = await page.evaluate(async ([a, b]) => {
+    const pixels = async (png: string) => {
+      const img = new Image();
+      img.src = `data:image/png;base64,${png}`;
+      await img.decode();
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0);
+      return ctx.getImageData(0, 0, img.width, img.height).data;
+    };
+    const [p, q] = await Promise.all([pixels(a), pixels(b)]);
+    let max = 0;
+    for (let i = 0; i < p.length; i++) max = Math.max(max, Math.abs(p[i] - q[i]));
+    return max;
+  }, [shown.toString('base64'), bare.toString('base64')] as const);
+  expect(maxDiff, `${where}: card is dimmed by the scrim`).toBeLessThanOrEqual(2);
+}
+
+test.describe('identity tour is not dimmed', () => {
+  for (const lang of ['en', 'ar'] as const) {
+    for (const device of [{ name: 'desktop', width: 1280, height: 800 }, { name: 'phone', width: 390, height: 844 }] as const) {
+      test(`highlight and card stand out on every theme (${lang}, ${device.name})`, async ({ browser, baseURL, creators }) => {
+        test.setTimeout(240_000);
+        for (const colorScheme of ['light', 'dark'] as const) {
+          const { context, page } = await signedIn(browser, baseURL!, creators.viewer, { colorScheme, reducedMotion: 'reduce' });
+          try {
+            await page.setViewportSize({ width: device.width, height: device.height });
+            await page.goto(`/${lang}/help`);
+            if (await card(page).isVisible({ timeout: 3000 }).catch(() => false)) await card(page).getByTestId('tour-later').click();
+            await expect(page.locator('html')).toHaveClass(colorScheme === 'dark' ? /\bdark\b/ : /^(?!.*\bdark\b)/);
+            for (const theme of SITE_THEMES) {
+              await page.evaluate((id) => { document.documentElement.dataset.theme = id; }, theme);
+              await page.getByTestId('help-take-tour').click();
+              await expect(card(page)).toHaveAttribute('data-step', 'account');
+              // A scrolled page: the tour brings the header back into view and follows it
+              await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+              for (let i = 0; i < 6; i++) {
+                const step = await card(page).getAttribute('data-step');
+                if (step && STEP_TARGETS[step]?.startsWith('[data-testid="nav-menu"]')) await expect(page.getByTestId('nav-menu')).toBeVisible();
+                await page.waitForTimeout(300); // the card settles (placement runs every 200 ms)
+                await expectNotDimmed(page, `${theme} ${colorScheme}`);
+                if (step === 'help') break;
+                await card(page).getByTestId('tour-next').click();
+              }
+              await card(page).getByTestId('tour-next').click();
+              await expect(card(page)).toHaveCount(0);
+              await page.evaluate(() => window.scrollTo(0, 0));
+            }
+          } finally {
+            await context.close();
+          }
+        }
+      });
+    }
+  }
+});
+
 test.describe('Help pages', () => {
   test('are linked from the side menu, and search finds a section', async ({ browser, baseURL, creators }) => {
     const { context, page } = await signedIn(browser, baseURL!, creators.viewer);

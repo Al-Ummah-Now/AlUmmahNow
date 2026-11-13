@@ -72,9 +72,13 @@ html.dark .hp-shot[data-mode=dark]{display:block}
 .hp-related a,.hp-linkish{color:var(--fanous-color-link);text-decoration:underline;text-underline-offset:2px;font:inherit;background:none;border:0;padding:0;cursor:pointer}
 
 /* The identity tour (components/help/IdentityTour.tsx) */
-.tour-spot{position:fixed;z-index:9998;border-radius:var(--r-lg,14px);box-shadow:0 0 0 3px var(--fanous-color-focus-ring),0 0 0 200vmax color-mix(in srgb,var(--fanous-color-background) 55%,transparent);pointer-events:none;transition:top .25s ease,left .25s ease,width .25s ease,height .25s ease}
+/* The tour sits over everything (header, menus, the consent banner, toasts). The scrim is the spot's
+   own box-shadow: its inside is a hole, so the highlighted control is never painted over, whatever
+   stacking context it lives in. The card is one layer higher, at full contrast. */
+html{--z-tour:9998}
+.tour-spot{position:fixed;z-index:var(--z-tour);border-radius:var(--r-lg,14px);box-shadow:0 0 0 3px var(--fanous-color-focus-ring),0 0 0 200vmax color-mix(in srgb,var(--fanous-color-background) 55%,transparent);pointer-events:none;transition:top .25s ease,left .25s ease,width .25s ease,height .25s ease}
 .tour-spot[data-shape=pill]{border-radius:var(--r-pill,999px)}
-.tour-card{position:fixed;z-index:9999;width:min(340px,calc(100vw - 32px));display:flex;flex-direction:column;gap:10px;padding:16px 18px;border-radius:var(--r-xl,20px);border:1px solid var(--fanous-color-divider);background:var(--fanous-color-surface-raised);color:var(--fanous-color-text-primary);box-shadow:0 16px 40px color-mix(in srgb,var(--fanous-color-background) 30%,transparent),var(--m-card-edge);transition:top .25s ease,left .25s ease}
+.tour-card{position:fixed;z-index:calc(var(--z-tour) + 1);opacity:1;width:min(340px,calc(100vw - 32px));display:flex;flex-direction:column;gap:10px;padding:16px 18px;border-radius:var(--r-xl,20px);border:1px solid var(--fanous-color-divider);background:var(--fanous-color-surface-raised);color:var(--fanous-color-text-primary);box-shadow:0 16px 40px color-mix(in srgb,var(--fanous-color-background) 30%,transparent),var(--m-card-edge);transition:top .25s ease,left .25s ease}
 .tour-card[data-docked]{bottom:max(16px,env(safe-area-inset-bottom,0px));inset-inline-end:16px}
 @media (max-width:639px){.tour-card[data-docked]{inset-inline:16px;width:auto}}
 .tour-card-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px}

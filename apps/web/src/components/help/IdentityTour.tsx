@@ -272,8 +272,12 @@ export function IdentityTour() {
   const total = phase.kind === 'step' ? phase.steps.length : 0;
   const position = card.docked ? undefined : { top: card.top, left: card.left };
 
+  // One wrapper in <body>, not the card itself: the site lifts every `body>[role=dialog]` to the
+  // modal layer (system.css, z-index 1100 !important), which put the card under the scrim. The
+  // wrapper has no position or z-index, so it makes no stacking context: the scrim and the card
+  // keep their own layers (--z-tour) above the header, menus and banners.
   return createPortal(
-    <>
+    <div className="tour-root" data-testid="tour-root">
       {spot && (
         <div
           className="tour-spot"
@@ -339,7 +343,7 @@ export function IdentityTour() {
         ) : null}
       </div>
       {live}
-    </>,
+    </div>,
     document.body,
   );
 }
