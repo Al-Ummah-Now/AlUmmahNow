@@ -52,7 +52,7 @@ export function hostsFor(s: SiteSettings, domains: SiteDomain[], env: ReturnType
 export async function reserveDomain(env: SitesEnv, channelId: string, rawHost: string, actor: string, now = new Date()): Promise<{ site: SiteSettings; domain: SiteDomain }> {
 	const current = await readSettings(env, channelId);
 	const s = liveSettings(current);
-	const checked = checkNewSiteDomain(rawHost, s);
+	const checked = checkNewSiteDomain(rawHost, s, siteEnvironment(env));
 	if ('problem' in checked) throw new SiteError(checked.problem === 'domain_limit' ? 403 : checked.problem === 'domain_exists' ? 409 : 400, checked.problem);
 	const host = checked.host;
 	await claimHost(env, { host, channelId, kind: 'custom', createdAt: now.toISOString() });

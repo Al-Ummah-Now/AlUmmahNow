@@ -434,10 +434,23 @@ export function nextDomainCheck(addedAt: string, now: number): number {
   return now + (Number.isFinite(age) && age < SITE_DOMAIN_FAST_WINDOW_MS ? SITE_DOMAIN_FAST_CHECK_MS : SITE_DOMAIN_SLOW_CHECK_MS);
 }
 
-export type SiteDomainProblem = 'domain_invalid' | 'domain_platform' | 'domain_limit' | 'domain_exists';
+export type SiteDomainProblem = 'domain_invalid' | 'domain_platform' | 'domain_limit' | 'domain_exists' | 'domain_test_only';
+
+/**
+ * Every environment's own domains are custom hostnames on the one alummahnow.org zone, so they
+ * share one namespace: a host added from QA could not be added from production any more. QA and
+ * stage therefore take only hosts under their test suffix (routed to their sites Worker; the
+ * alummahnow.com zone is ours), and production refuses them as platform hosts. Local has no Cloudflare.
+ */
+export const SITE_TEST_DOMAIN_SUFFIX: Readonly<Record<SiteEnvironment, string | null>> = {
+  production: null,
+  stage: 'stage-sites.alummahnow.com',
+  qa: 'qa-sites.alummahnow.com',
+  local: null,
+};
 
 /** Whether `host` may be added as an own domain of this site; the host index still refuses a host another site holds. */
-export function checkNewSiteDomain(rawHost: string, settings: Pick<SiteSettings, 'domains' | 'hosts' | 'limits'>): { host: string } | { problem: SiteDomainProblem } {
+export function checkNewSiteDomain(rawHost: string, settings: Pick<SiteSettings, 'domains' | 'hosts' | 'limits'>, env: SiteEnvironment = 'production'): { host: string } | { problem: SiteDomainProblem } {
   // People paste addresses: drop a scheme, a path and a trailing dot
   let typed = String(rawHost ?? '').trim().toLowerCase();
   const scheme = typed.indexOf('://');
@@ -446,7 +459,11 @@ export function checkNewSiteDomain(rawHost: string, settings: Pick<SiteSettings,
   if (slash !== -1) typed = typed.slice(0, slash);
   const host = normalizeSiteHost(typed);
   if (!host || !host.includes('.')) return { problem: 'domain_invalid' };
-  if (isPlatformHost(host) || host === 'alummahnow.org' || host.endsWith('.alummahnow.org')) return { problem: 'domain_platform' };
+  // Test domains sit under alummahnow.com, a platform domain, so they are allowed before that check
+  const testSuffix = SITE_TEST_DOMAIN_SUFFIX[env];
+  const isTestDomain = !!testSuffix && host.endsWith(`.${testSuffix}`);
+  if (testSuffix && !isTestDomain) return { problem: 'domain_test_only' };
+  if (!isTestDomain && (isPlatformHost(host) || host === 'alummahnow.org' || host.endsWith('.alummahnow.org'))) return { problem: 'domain_platform' };
   const domains = settings.domains ?? [];
   if (domains.some((d) => d.host === host) || settings.hosts.some((h) => h.host === host)) return { problem: 'domain_exists' };
   if (domains.length >= settings.limits.customDomainsMax) return { problem: 'domain_limit' };

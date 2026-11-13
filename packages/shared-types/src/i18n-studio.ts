@@ -129,6 +129,7 @@ export const STUDIO_EN = {
       errors: {
         domain_invalid: 'That doesn\'t look like a domain. Type it like www.example.com.',
         domain_platform: 'Al Ummah Now addresses can\'t be added as own domains.',
+        domain_test_only: 'This is a test environment: only test domains ending in {suffix} can be added here.',
         domain_limit: 'You have reached your plan\'s number of own domains.',
         domain_exists: 'This site already has that domain.',
         host_taken: 'That domain is already used by another site.',
@@ -648,6 +649,7 @@ export const STUDIO_AR: StudioTranslations = {
       errors: {
         domain_invalid: 'لا يبدو هذا نطاقًا. اكتبه مثل www.example.com.',
         domain_platform: 'لا يمكن إضافة عناوين الأمة الآن كنطاقات خاصة.',
+        domain_test_only: 'هذه بيئة اختبار: لا تُضاف هنا إلا نطاقات الاختبار المنتهية بـ {suffix}.',
         domain_limit: 'وصلت إلى عدد النطاقات الخاصة في خطتك.',
         domain_exists: 'هذا النطاق مضاف إلى هذا الموقع بالفعل.',
         host_taken: 'هذا النطاق مستخدم في موقع آخر.',

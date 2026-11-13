@@ -69,6 +69,16 @@ describe('SiteDomains', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('already used by another site');
   });
 
+  it('in a test environment, names the test-domain suffix', async () => {
+    fetchMock.mockImplementationOnce(() => ok(view([])));
+    render(<SiteDomains channelId="ch1" locale="en" />);
+    await screen.findByLabelText('Domain');
+    fetchMock.mockImplementationOnce(() => no('domain_test_only', 400));
+    fireEvent.change(screen.getByLabelText('Domain'), { target: { value: 'www.example.com' } });
+    fireEvent.click(screen.getByTestId('site-domain-add'));
+    expect(await screen.findByRole('alert')).toHaveTextContent('only test domains ending in qa-sites.alummahnow.com');
+  });
+
   it('a plan without own domains says so', async () => {
     fetchMock.mockImplementationOnce(() => ok(view([], 0)));
     render(<SiteDomains channelId="ch1" locale="en" />);

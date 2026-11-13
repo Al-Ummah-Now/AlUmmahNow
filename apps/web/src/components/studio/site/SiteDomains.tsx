@@ -8,7 +8,7 @@
  * available yet.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { SiteDnsRecord, SiteDomain, SiteHost, StudioTranslations } from '@al-ummah/shared-types';
+import { SITE_TEST_DOMAIN_SUFFIX, type SiteDnsRecord, type SiteDomain, type SiteHost, type StudioTranslations } from '@al-ummah/shared-types';
 
 type DomainStrings = StudioTranslations['site']['domains'];
 import { Button } from '@/components/ui/button';
@@ -41,6 +41,13 @@ async function call<T>(channelId: string, path: string, init: RequestInit = {}):
 
 const POLL_MS = 30_000;
 
+/** The test-domain suffix of the env this page runs in (videos.qa… / videos.stage…), for domain_test_only. */
+function testSuffixHere(): string {
+  const h = typeof window === 'undefined' ? '' : window.location.hostname;
+  if (h.includes('.stage.')) return SITE_TEST_DOMAIN_SUFFIX.stage ?? '';
+  return SITE_TEST_DOMAIN_SUFFIX.qa ?? '';
+}
+
 export function SiteDomains({ channelId, locale }: { channelId: string; locale: string }) {
   const { t } = useLanguage();
   const d = t.studio.site.domains;
@@ -54,7 +61,7 @@ export function SiteDomains({ channelId, locale }: { channelId: string; locale: 
   const pending = view?.domains.some((x) => x.status === 'waiting_dns' || x.status === 'issuing') ?? false;
   const mounted = useRef(true);
 
-  const errorText = (code: string) => (d.errors as Record<string, string>)[code] ?? d.errors.generic;
+  const errorText = (code: string) => ((d.errors as Record<string, string>)[code] ?? d.errors.generic).replace('{suffix}', testSuffixHere());
 
   const load = useCallback(async () => {
     const r = await call<DomainsView>(channelId, '');

@@ -39,6 +39,13 @@ describe('own domains', () => {
 		assert.deepEqual(checkNewSiteDomain('localhost', s), { problem: 'domain_invalid' });
 		assert.deepEqual(checkNewSiteDomain('www.alummahnow.net', s), { problem: 'domain_platform' });
 		assert.deepEqual(checkNewSiteDomain('x.alummahnow.org', s), { problem: 'domain_platform' });
+		// One custom-hostname namespace for every env: QA/stage take only their test suffix, production refuses it
+		assert.deepEqual(checkNewSiteDomain('www.example.com', s, 'qa'), { problem: 'domain_test_only' });
+		assert.deepEqual(checkNewSiteDomain('a.qa-sites.alummahnow.com', s, 'qa'), { host: 'a.qa-sites.alummahnow.com' });
+		assert.deepEqual(checkNewSiteDomain('a.qa-sites.alummahnow.com', s, 'stage'), { problem: 'domain_test_only' });
+		assert.deepEqual(checkNewSiteDomain('a.stage-sites.alummahnow.com', s, 'stage'), { host: 'a.stage-sites.alummahnow.com' });
+		assert.deepEqual(checkNewSiteDomain('a.qa-sites.alummahnow.com', s), { problem: 'domain_platform' });
+		assert.deepEqual(checkNewSiteDomain('www.example.com', s, 'local'), { host: 'www.example.com' });
 		assert.deepEqual(checkNewSiteDomain('a.example.com', { ...(s as object), domains: [{ host: 'b.example.com' }] } as never), { problem: 'domain_limit' });
 		const now = Date.parse('2026-11-13T00:00:00Z');
 		assert.equal(nextDomainCheck('2026-11-12T00:00:00Z', now), now + SITE_DOMAIN_FAST_CHECK_MS);
