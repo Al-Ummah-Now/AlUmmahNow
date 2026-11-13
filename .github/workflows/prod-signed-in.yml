@@ -43,7 +43,7 @@ jobs:
           SUITE="$RUNNER_TEMP/release-e2e"
           mkdir -p "$SUITE/e2e/test-utils"
           cp -R apps/web/e2e/release apps/web/e2e/test-fixtures "$SUITE/e2e/"
-          cp apps/web/e2e/test-utils/code-sink.ts "$SUITE/e2e/test-utils/"
+          cp apps/web/e2e/test-utils/code-sink.ts apps/web/e2e/test-utils/run-users.ts apps/web/e2e/test-utils/placement.ts "$SUITE/e2e/test-utils/"
           cp apps/web/playwright.release.config.ts "$SUITE/"
           cd "$SUITE"
           npm init -y > /dev/null
