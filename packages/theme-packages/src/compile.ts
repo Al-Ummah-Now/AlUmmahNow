@@ -129,12 +129,13 @@ ${modeBlock('light')}
 }
 
 /**
- * The street's tokens for one mode (only for a package with a street section, so other themes'
- * output is unchanged). The shared street module reads them: --fanous-street-on 1 switches it on.
+ * The street's tokens for one mode. The shared street module reads them: --fanous-street-on 1
+ * switches it on; a theme without a street sets 0.
  */
 function streetTokens(pkg: ThemePackage, mode: Mode, opts: CompileOptions): string[] {
   const street = pkg.street;
-  if (!street) return [];
+  // Off, explicitly: the default theme's blocks also match unthemed selectors (html:not(.dark), .dark)
+  if (!street) return ['  --fanous-street-on: 0;'];
   const lights = opts.inlineAsset?.(street.lights[mode]) ?? (opts.assetUrl ?? ((p: string) => p))(street.lights[mode]);
   return [
     `  --fanous-street-on: ${street.enabled ? 1 : 0};`,

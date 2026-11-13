@@ -226,7 +226,7 @@ test('lightStyle: a colour layer in a layered light background is refused like i
   assert.ok(messages(validatePackage(t)).some((e) => e.startsWith('components.card.lightStyle.background: has a colour layer')));
 });
 
-test('street: tokens per mode, the lights inlined when asked, otherwise by URL; other themes have none', () => {
+test('street: tokens per mode, the lights inlined when asked, otherwise by URL; other themes switch it off', () => {
   const { theme, assets } = fawanees();
   const inline = (p: string) => (assets[p] ? `data:image/svg+xml,${encodeURIComponent(new TextDecoder().decode(assets[p]))}` : undefined);
   const tokens = compilePackage(theme, { inlineAsset: inline }).tokens;
@@ -240,7 +240,8 @@ test('street: tokens per mode, the lights inlined when asked, otherwise by URL; 
   const off = clone(theme); off.street!.enabled = false;
   assert.match(compilePackage(off).tokens, /--fanous-street-on: 0;/);
   const none = clone(theme); delete none.street;
-  assert.doesNotMatch(compilePackage(none).tokens, /--fanous-street/);
+  assert.match(compilePackage(none).tokens, /--fanous-street-on: 0;/);
+  assert.doesNotMatch(compilePackage(none).tokens, /--fanous-street-line/);
 });
 
 test('street: its art must be in the package and its colours #rrggbbaa', () => {
