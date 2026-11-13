@@ -7,6 +7,7 @@
  * attempt the review routes as `check_failed` (held for a person), never approved.
  */
 import type { Logger } from '@al-ummah/logger';
+import { createReviewQuranMatcher } from '../quran/review-matcher';
 import {
   MessageType,
   publishAdminLive,
@@ -182,7 +183,9 @@ export async function handleVideoReviewScan(
     const usage: Usage[] = [];
     try {
       const provider = providerFor(env, p);
-      const result = await runReviewPipeline(p, { provider, media: env.REVIEW_MEDIA, fetchImpl: opts.fetchImpl, usage });
+      // Quran recitation is left out of violence and hate scoring (AUN-CAPTIONS matcher, #1271)
+      const quranMatcher = createReviewQuranMatcher(env.REVIEW_MEDIA, (error) => logger.warn('[Review] Quran index unavailable; no spans excluded', { videoId: p.videoId, error: error instanceof Error ? error.message : String(error) }));
+      const result = await runReviewPipeline(p, { provider, media: env.REVIEW_MEDIA, fetchImpl: opts.fetchImpl, usage }, quranMatcher);
       findings = result.findings;
       partial = result.partial;
       // A partial upload check never approves: frames and speech were not seen (fail safe)
