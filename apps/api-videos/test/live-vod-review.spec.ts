@@ -210,9 +210,35 @@ describe('who sees a held recording', () => {
 		}
 	});
 
-	it('a stream that is live again is not withheld by its last recording', () => {
-		assert.equal(liveRecordingWithheld({ status: 'live', review: { status: 'in_review' } }), false);
-		assert.equal(liveRecordingWithheld({ status: 'ended' }), false);
+	it('tied to the recording\'s session, not to `status`: only a new session is public again', () => {
+		const heldRec = { review: { status: 'in_review' }, reviewSessionId: 's1' };
+		assert.equal(liveRecordingWithheld({ ...heldRec, sessionId: 's2' }), false, 'really live again (new session)');
+		assert.equal(liveRecordingWithheld({ ...heldRec, sessionId: 's1' }), true, 'same recording, whatever status says');
+		assert.equal(liveRecordingWithheld({ sessionId: 's1' }), false, 'no review');
+	});
+
+	it('the owner setting the status (scheduled, live) never reopens a held stream or its recording', async () => {
+		for (const status of ['scheduled', 'live', 'cancelled']) {
+			const e = env({ ...held('rejected', { reasonCode: 'hate' }), status, sessionId: 'sess-1', reviewSessionId: 'sess-1', vodUrl: VOD });
+			assert.equal((await app(e, null)(`/api/live-streams/${SID}`)).status, 404, status);
+			const list = (await (await app(e, 'someone')('/api/live-streams')).json()) as any;
+			assert.equal(list.result.data.length, 0, status);
+		}
+	});
+
+	it('really live again: the stream shows, the held recording\'s URL and the review never do', async () => {
+		const e = env({ ...held('in_review'), status: 'live', sessionId: 'sess-2', reviewSessionId: 'sess-1', vodUrl: VOD, reviewShadow: { reviewId: 'x', queuedAt: 'y' } });
+		const page = (await (await app(e, null)(`/api/live-streams/${SID}`)).json()) as any;
+		assert.equal(page.result.stream.vodUrl, null);
+		assert.equal(page.result.stream.review, undefined);
+		const list = (await (await app(e, 'someone')('/api/live-streams')).json()) as any;
+		assert.equal(list.result.data.length, 1);
+		const item = list.result.data[0];
+		assert.equal(item.vodUrl, null);
+		for (const k of ['review', 'reviewShadow', 'reviewSessionId']) assert.equal(item[k], undefined, k);
+		const own = (await (await app(e, OWNER)('/api/live-streams')).json()) as any;
+		assert.equal(own.result.data[0].vodUrl, VOD);
+		assert.equal(own.result.data[0].review.status, 'in_review');
 	});
 
 	it('publicStream drops the shadow marker and the session for everyone', () => {
