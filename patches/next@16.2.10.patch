@@ -1,0 +1,68 @@
+diff --git a/dist/client/components/app-router-instance.js b/dist/client/components/app-router-instance.js
+index 07b932e..8469258 100644
+--- a/dist/client/components/app-router-instance.js
++++ b/dist/client/components/app-router-instance.js
+@@ -83,8 +83,15 @@ async function runAction({ actionQueue, action, setState }) {
+                 actionQueue.needsRefresh = true;
+             }
+             // Still need to run remaining actions even for discarded actions
+-            // to potentially trigger the refresh
+-            runRemainingActions(actionQueue, setState);
++            // to potentially trigger the refresh.
++            // Patched (Al Ummah Now): only when this action still owns the
++            // queue. The navigation that discarded it is now `pending`;
++            // advancing past it would start the next queued server action
++            // against the pre-navigation state, and that action's result
++            // then reverts the navigation (the page bounces back).
++            if (actionQueue.pending === action || actionQueue.pending === null) {
++                runRemainingActions(actionQueue, setState);
++            }
+             return;
+         }
+         actionQueue.state = nextState;
+@@ -94,7 +101,10 @@ async function runAction({ actionQueue, action, setState }) {
+     // if the action is a promise, set up a callback to resolve it
+     if ((0, _isthenable.isThenable)(actionResult)) {
+         actionResult.then(handleResult, (err)=>{
+-            runRemainingActions(actionQueue, setState);
++            // Patched (Al Ummah Now): see handleResult above.
++            if (!action.discarded || actionQueue.pending === action || actionQueue.pending === null) {
++                runRemainingActions(actionQueue, setState);
++            }
+             action.reject(err);
+         });
+     } else {
+diff --git a/dist/esm/client/components/app-router-instance.js b/dist/esm/client/components/app-router-instance.js
+index a35df19..45629a1 100644
+--- a/dist/esm/client/components/app-router-instance.js
++++ b/dist/esm/client/components/app-router-instance.js
+@@ -49,8 +49,15 @@ async function runAction({ actionQueue, action, setState }) {
+                 actionQueue.needsRefresh = true;
+             }
+             // Still need to run remaining actions even for discarded actions
+-            // to potentially trigger the refresh
+-            runRemainingActions(actionQueue, setState);
++            // to potentially trigger the refresh.
++            // Patched (Al Ummah Now): only when this action still owns the
++            // queue. The navigation that discarded it is now `pending`;
++            // advancing past it would start the next queued server action
++            // against the pre-navigation state, and that action's result
++            // then reverts the navigation (the page bounces back).
++            if (actionQueue.pending === action || actionQueue.pending === null) {
++                runRemainingActions(actionQueue, setState);
++            }
+             return;
+         }
+         actionQueue.state = nextState;
+@@ -60,7 +67,10 @@ async function runAction({ actionQueue, action, setState }) {
+     // if the action is a promise, set up a callback to resolve it
+     if (isThenable(actionResult)) {
+         actionResult.then(handleResult, (err)=>{
+-            runRemainingActions(actionQueue, setState);
++            // Patched (Al Ummah Now): see handleResult above.
++            if (!action.discarded || actionQueue.pending === action || actionQueue.pending === null) {
++                runRemainingActions(actionQueue, setState);
++            }
+             action.reject(err);
+         });
+     } else {
