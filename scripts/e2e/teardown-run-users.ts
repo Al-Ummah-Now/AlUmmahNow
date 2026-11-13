@@ -8,6 +8,12 @@
  *   node --experimental-strip-types scripts/e2e/teardown-run-users.ts --auth-url <url> --file <file> [--file <file>]
  *   # the sweeper: every run account older than 24 hours (crashed or killed runners)
  *   node --experimental-strip-types scripts/e2e/teardown-run-users.ts --auth-url <url> --stale-hours 24 --strict
+ *   # the minutes a workflow step needs to delete the accounts in the files (prints a number, deletes nothing)
+ *   node --experimental-strip-types scripts/e2e/teardown-run-users.ts --auth-url <url> --file <file> --step-minutes
+ *
+ * Deletes run CONCURRENCY at a time, each request bounded by REQUEST_TIMEOUT_MS. One delete
+ * takes 4-5 s on stage (the auth purge): one at a time, a release run's accounts outlasted the
+ * step's 5-minute timeout (v2026.11.12.7, #1073).
  *
  * Content the accounts owned is removed before this by the suite itself (web:
  * e2e/cleanup-test-content.ts --run-users) or, for leftovers, by the QA cleanup.
@@ -27,10 +33,12 @@ export interface Args {
 	files: string[];
 	staleHours: number | null;
 	strict: boolean;
+	/** Print the step timeout for the files' accounts (stepMinutes) and delete nothing */
+	stepMinutes: boolean;
 }
 
 export function parseArgs(argv: string[]): Args {
-	const args: Args = { authUrl: '', files: [], staleHours: null, strict: false };
+	const args: Args = { authUrl: '', files: [], staleHours: null, strict: false, stepMinutes: false };
 	for (let i = 0; i < argv.length; i++) {
 		const a = argv[i];
 		if (a === '--auth-url') args.authUrl = argv[++i] ?? '';
@@ -40,10 +48,12 @@ export function parseArgs(argv: string[]): Args {
 			if (!Number.isFinite(h) || h < 1) throw new Error('--stale-hours needs a number >= 1');
 			args.staleHours = h;
 		} else if (a === '--strict') args.strict = true;
+		else if (a === '--step-minutes') args.stepMinutes = true;
 		else throw new Error(`unknown argument ${a}`);
 	}
 	assertAuthUrl(args.authUrl);
 	if (!args.files.length && args.staleHours === null) throw new Error('pass --file <file> and/or --stale-hours <n>');
+	if (args.stepMinutes && !args.files.length) throw new Error('--step-minutes needs --file <file>');
 	return args;
 }
 
@@ -69,6 +79,34 @@ interface Deps {
 	fetch: typeof fetch;
 	sleep: (ms: number) => Promise<void>;
 	log: (line: string) => void;
+	/** Per-request timeout (default REQUEST_TIMEOUT_MS) */
+	requestTimeoutMs?: number;
+	/** Deletes at once (default CONCURRENCY) */
+	concurrency?: number;
+}
+
+/** Deletes at once: the auth route purges one account per request; a few in parallel stay under its rate limit. */
+export const CONCURRENCY = 4;
+/** One request at most; a hung request is retried like a dropped one. */
+export const REQUEST_TIMEOUT_MS = 30_000;
+/** Seconds one account may take in a lane (4-5 s measured on stage, room for a retry). */
+export const SECONDS_PER_ACCOUNT = 15;
+/** The shortest step timeout (the step's old fixed timeout). */
+export const MIN_STEP_MINUTES = 5;
+
+/** A workflow step's timeout for deleting `accounts` accounts CONCURRENCY at a time, plus 2 minutes for start-up and a slow tail. */
+export function stepMinutes(accounts: number, concurrency = CONCURRENCY): number {
+	const lanes = Math.max(1, concurrency);
+	return Math.max(MIN_STEP_MINUTES, 2 + Math.ceil((Math.ceil(accounts / lanes) * SECONDS_PER_ACCOUNT) / 60));
+}
+
+/** Runs `work` on every item, at most `limit` at a time, in order of the items. */
+export async function inPool<T>(items: T[], limit: number, work: (item: T) => Promise<void>): Promise<void> {
+	let next = 0;
+	const lane = async () => {
+		while (next < items.length) await work(items[next++]);
+	};
+	await Promise.all(Array.from({ length: Math.min(Math.max(1, limit), items.length) }, lane));
 }
 
 function headers(env: NodeJS.ProcessEnv): Record<string, string> {
@@ -86,7 +124,7 @@ export async function deleteRunUser(authUrl: string, email: string, env: NodeJS.
 		let status = 0;
 		let body: { found?: number; purged?: number; error?: string } = {};
 		try {
-			const res = await deps.fetch(url, { method: 'POST', headers: headers(env) });
+			const res = await deps.fetch(url, { method: 'POST', headers: headers(env), signal: AbortSignal.timeout(deps.requestTimeoutMs ?? REQUEST_TIMEOUT_MS) });
 			status = res.status;
 			body = (await res.json().catch(() => ({}))) as typeof body;
 			if (status === 429) {
@@ -124,15 +162,21 @@ export const STALE_PAGE = 200;
 /** Stale listings per run at most. */
 export const STALE_MAX_PASSES = 100;
 
-export async function run(args: Args, env: NodeJS.ProcessEnv, deps: Deps): Promise<Record<Outcome, number>> {
+/** The run accounts recorded in the files, once each. */
+export function recordedRunUsers(files: string[], log: (line: string) => void): Set<string> {
 	const emails = new Set<string>();
-	for (const file of args.files) {
+	for (const file of files) {
 		if (!existsSync(file)) {
-			deps.log(`[teardown] ${file} does not exist: this job registered no run accounts`);
+			log(`[teardown] ${file} does not exist: this job registered no run accounts`);
 			continue;
 		}
 		for (const e of parseRunUsers(readFileSync(file, 'utf8'))) emails.add(e);
 	}
+	return emails;
+}
+
+export async function run(args: Args, env: NodeJS.ProcessEnv, deps: Deps): Promise<Record<Outcome, number>> {
+	const emails = recordedRunUsers(args.files, deps.log);
 	let stale: string[] | null = null;
 	if (args.staleHours !== null) {
 		stale = await listStale(args.authUrl, args.staleHours, env, deps);
@@ -142,13 +186,13 @@ export async function run(args: Args, env: NodeJS.ProcessEnv, deps: Deps): Promi
 	const counts: Record<Outcome, number> = { deleted: 0, absent: 0, unavailable: 0, failed: 0 };
 	const done = new Set<string>();
 	const deleteAll = async (list: Iterable<string>) => {
-		for (const email of list) {
-			if (done.has(email)) continue;
-			done.add(email);
+		const todo = [...list].filter((email) => !done.has(email));
+		for (const email of todo) done.add(email);
+		await inPool(todo, deps.concurrency ?? CONCURRENCY, async (email) => {
 			const outcome = await deleteRunUser(args.authUrl, email, env, deps);
 			counts[outcome]++;
 			deps.log(`[teardown] ${email}: ${outcome}`);
-		}
+		});
 	};
 	await deleteAll(emails);
 	// A full listing means more are waiting: list again until one is not full or
@@ -176,6 +220,10 @@ if (isMain) {
 	};
 	(async () => {
 		const args = parseArgs(process.argv.slice(2));
+		if (args.stepMinutes) {
+			process.stdout.write(`${stepMinutes(recordedRunUsers(args.files, () => undefined).size)}\n`);
+			return;
+		}
 		const counts = await run(args, process.env, deps);
 		if (args.strict && (counts.failed || counts.unavailable)) process.exit(1);
 	})().catch((error) => {

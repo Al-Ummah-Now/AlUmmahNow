@@ -333,10 +333,22 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
+      # The step's timeout grows with the run's accounts (deleted 4 at a time, #1073). A base-branch
+      # script without --step-minutes, or none at all, gets 15 minutes.
+      - name: Size the account deletion
+        id: teardown-size
+        if: always()
+        continue-on-error: true
+        run: |
+          m=$(node --experimental-strip-types --no-warnings "$GITHUB_WORKSPACE/.ci-trusted/scripts/e2e/teardown-run-users.ts" --auth-url "$AUTH_URL" --file "$E2E_RUN_USERS_FILE" --step-minutes 2>/dev/null) || m=15
+          case "$m" in ''|*[!0-9]*) m=15 ;; esac
+          echo "Account deletion step timeout: $m minutes"
+          echo "minutes=$m" >> "$GITHUB_OUTPUT"
+
       - name: Delete the run accounts
         if: always()
         continue-on-error: true
-        timeout-minutes: 5
+        timeout-minutes: ${{ fromJSON(steps.teardown-size.outputs.minutes || '15') }}
         env:
           E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET || (inputs.env == 'stage' && secrets.E2E_CODE_SINK_SECRET_STAGE) || secrets.E2E_CODE_SINK_SECRET_QA }}
           TEST_PROMOTE_SECRET: ${{ secrets.TEST_PROMOTE_SECRET || (inputs.env == 'stage' && secrets.TEST_PROMOTE_SECRET_STAGE) || secrets.TEST_PROMOTE_SECRET_QA }}
