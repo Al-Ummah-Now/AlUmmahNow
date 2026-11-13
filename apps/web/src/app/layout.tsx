@@ -223,14 +223,8 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
       <head>
         {/* Light / Dark: an old saved "system" becomes the device's mode once (src/lib/theme/color-mode.ts) */}
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: MODE_MIGRATE_SCRIPT }} />
-        {/* Font Awesome - Consider self-hosting for better performance */}
-        <link
-          rel="stylesheet"
-          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.1/css/all.min.css"
-          integrity="sha512-MV7K8+y+gLIBoVD59lQIYicR65iaqukzvf/nwasF0nqhPay5w/9lJmVM2hMDcnK1OnMGCdVK+iQrJ7lzPJQd1w=="
-          crossOrigin="anonymous"
-          referrerPolicy="no-referrer"
-        />
+        {/* No third-party stylesheet or script in the critical path (wiki AUN-SEO, phase 4): icons are
+            inline SVG (lucide), fonts are self-hosted (theme/font-faces.css) */}
         <ThemePackageStyle css={themeCss} nonce={nonce} />
         <RuntimeConfigScript nonce={nonce} />
       </head>
@@ -290,8 +284,6 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
             </NuqsAdapter>
           </QueryProvider>
       </body>
-      <script async nonce={nonce} type="text/javascript" src="https://assets.mediadelivery.net/playerjs/player-0.1.0.min.js"></script>
-
     </html>
   );
 }

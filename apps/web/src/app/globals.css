@@ -473,8 +473,8 @@
 @media (prefers-reduced-motion: reduce) { .upload-action { transition: none; } }
 
 /*
-  Font Awesome's all.min.css (CDN link in app/layout.tsx) defines its own .sr-only,
-  outside any cascade layer. An unlayered rule beats every rule in Tailwind's
+  Font Awesome's all.min.css (a CDN link in app/layout.tsx until 2026-11-13, AUN-SEO phase 4)
+  defined its own .sr-only, outside any cascade layer. An unlayered rule beats every rule in Tailwind's
   @layer utilities, so `sr-only md:not-sr-only` stayed hidden on desktop: Studio's
   Videos table had no column headers and its "Select all on this page" checkbox
   was a 1px clipped box under the first row (release E2E bulk-rename-order,
