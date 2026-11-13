@@ -1,4 +1,5 @@
 import { uploadIdentity } from "../../lib/channelAccess";
+import { reportServerError } from "@al-ummah/shared-types";
 import { Str, Num } from "chanfana";
 import { createUploadRecord } from '../../lib/upload/uploadRecord';
 import { checkThumbnailShape, imageSize, videoSizeOf } from '../../lib/thumbnail/shape';
@@ -359,10 +360,27 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 			});
 
 			const errorMessage = error instanceof Error ? error.message : String(error);
+			// The Errors page gets the caught error (message and stack), not a bare "HTTP 500": with the
+			// X-Error-Ref set here the request wrapper (withErrorReporting) does not record it again.
+			// QA kept 138 "HTTP 500" events on this route with no cause (2026-11-10..13).
+			let ctx: { waitUntil(p: Promise<unknown>): void } | undefined;
+			try {
+				ctx = c.executionCtx;
+			} catch {
+				ctx = undefined;
+			}
+			const reference = reportServerError('api-videos', c.env as never, ctx, error, {
+				route: c.req.path,
+				method: c.req.method,
+				status: 500,
+				extra: { step: 'upload-initiate' },
+			});
+			c.header('X-Error-Ref', reference);
 			return c.json({
 				success: false,
 				error: "Failed to initiate upload",
 				details: errorMessage,
+				reference,
 			}, 500);
 		}
 	}
