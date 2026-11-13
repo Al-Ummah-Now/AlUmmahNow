@@ -8,7 +8,8 @@
  * already closed). The chosen user replaces the field with a card and a
  * "Choose someone else" button.
  */
-import { useEffect, useId, useReducer, useRef } from 'react';
+import { useEffect, useId, useLayoutEffect, useReducer, useRef } from 'react';
+import { fitToViewport } from '../../../../../packages/fanous-tokens/nav/menu-fit.js';
 import type { AdminUserSearchItem } from '@al-ummah/shared-types';
 import type { ActionResult } from '@/lib/api/errors';
 import { useLanguage } from '@/i18n/I18nProvider';
@@ -149,6 +150,11 @@ export function UserPicker({ label, hint, search, value, onChange, disabled, tes
 
   const status = statusText(state, t);
   const showList = state.open && state.status === 'done' && state.results.length > 0;
+  // Never past the screen's bottom (docs/design/NAV.md)
+  const listRef = useRef<HTMLUListElement>(null);
+  useLayoutEffect(() => {
+    if (showList) fitToViewport(listRef.current);
+  }, [showList]);
 
   if (value) {
     return (
@@ -217,6 +223,7 @@ export function UserPicker({ label, hint, search, value, onChange, disabled, tes
         </span>
       )}
       <ul
+        ref={listRef}
         id={listId}
         role="listbox"
         aria-label={label}

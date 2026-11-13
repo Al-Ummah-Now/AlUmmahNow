@@ -21,8 +21,9 @@
  * polite live region. Layout uses logical properties, so it is correct in RTL;
  * ids are always shown left-to-right.
  */
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
+import { fitToViewport } from '../../../../../packages/fanous-tokens/nav/menu-fit.js';
 import type { AdminSuggestion, AdminSuggestKind } from '@al-ummah/shared-types';
 import { useLanguage } from '@/i18n/I18nProvider';
 import type { MessageKey } from '@/i18n/translate';
@@ -275,6 +276,11 @@ export function Autocomplete({
 
   const showChip = mode === 'pick' && picked && !editing;
   const expanded = state.open && !showChip && (state.options.length > 0 || state.status !== 'idle');
+  // Never past the screen's edge (docs/design/NAV.md): the popup is min-w-72 from the box's start
+  const popupRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (expanded) fitToViewport(popupRef.current);
+  }, [expanded]);
   const activeId = expanded && state.active >= 0 ? optionId(state.active) : undefined;
 
   const suggestionCount = state.options.filter((o) => o.type === 'suggestion').length;
@@ -350,8 +356,9 @@ export function Autocomplete({
             data-testid={testId ? `${testId}-input` : undefined}
           />
           <div
+            ref={popupRef}
             hidden={!expanded}
-            className="absolute start-0 top-full z-30 mt-1 w-full min-w-72 overflow-hidden rounded border border-border bg-surface shadow-lg"
+            className="absolute start-0 top-full z-30 mt-1 w-full min-w-72 overflow-y-auto rounded border border-border bg-surface shadow-lg"
             data-testid={testId ? `${testId}-popup` : undefined}
             // A press on the list (its scrollbar too) must not blur the input and close it
             onMouseDown={(e) => e.preventDefault()}

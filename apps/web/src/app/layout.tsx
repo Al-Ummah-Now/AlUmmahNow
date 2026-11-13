@@ -36,6 +36,7 @@ import SkipLinks from "@/components/SkipLinks";
 import { FanousStreet } from "@/components/FanousStreet";
 import { EMBED_REQUEST_HEADER } from "@/lib/embed/routes";
 import { getSiteTheme } from "@/lib/theme/site-theme";
+import { MODE_MIGRATE_SCRIPT } from "@/lib/theme/color-mode";
 import { VersionSkewProvider } from "@/lib/version-skew/VersionSkewProvider";
 import { ErrorReportingProvider } from "@/lib/errors/ErrorReportingProvider";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
@@ -187,6 +188,8 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
   return (
     <html lang={locale} dir={getTextDirection(locale)} data-theme={theme} suppressHydrationWarning>
       <head>
+        {/* Light / Dark: an old saved "system" becomes the device's mode once (src/lib/theme/color-mode.ts) */}
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: MODE_MIGRATE_SCRIPT }} />
         {/* Font Awesome - Consider self-hosting for better performance */}
         <link
           rel="stylesheet"
@@ -213,6 +216,7 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
             <NuqsAdapter>
               <ThemeProvider
               attribute="class"
+              // First visit follows the device; no control offers "System" (src/lib/theme/color-mode.ts)
               defaultTheme="system"
               enableSystem
               nonce={nonce}

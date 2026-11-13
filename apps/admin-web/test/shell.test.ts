@@ -108,35 +108,54 @@ describe('command palette model', () => {
 });
 
 describe('colour mode', () => {
-  it('is dark for dark, and for system when the system prefers dark', () => {
+  it('is the saved choice, else the device (no "System" mode)', () => {
     assert.equal(isDark('dark', false), true);
     assert.equal(isDark('light', true), false);
-    assert.equal(isDark('system', true), true);
-    assert.equal(isDark('system', false), false);
+    assert.equal(isDark(null, true), true);
+    assert.equal(isDark(null, false), false);
   });
 
-  it('runs in the browser with the same rule', () => {
+  it('runs in the browser with the same rule, and resolves an old "system" cookie once', () => {
     const classes = new Set<string>();
     let listener: (() => void) | undefined;
-    const run = (mode: string, prefersDark: boolean) => {
+    const run = (mode: string | null, prefersDark: boolean, cookie = '') => {
       classes.clear();
+      const attrs: Record<string, string | null> = { 'data-color-mode': mode };
+      const written: string[] = [];
       const root = {
-        getAttribute: () => mode,
+        getAttribute: (k: string) => attrs[k] ?? null,
+        setAttribute: (k: string, v: string) => (attrs[k] = v),
         classList: { toggle: (c: string, on: boolean) => (on ? classes.add(c) : classes.delete(c)) },
       };
+      const doc = {
+        documentElement: root,
+        get cookie() {
+          return cookie;
+        },
+        set cookie(v: string) {
+          written.push(v);
+        },
+      };
       const g = {
-        document: { documentElement: root },
         window: { matchMedia: () => ({ matches: prefersDark, addEventListener: (_: string, fn: () => void) => { listener = fn; } }) },
         MutationObserver: class { observe() {} },
+        location: { protocol: 'https:' },
       };
-      new Function('document', 'window', 'MutationObserver', MODE_SCRIPT)(g.document, g.window, g.MutationObserver);
-      return classes.has('dark');
+      new Function('document', 'window', 'MutationObserver', 'location', MODE_SCRIPT)(doc, g.window, g.MutationObserver, g.location);
+      return { dark: classes.has('dark'), mode: attrs['data-color-mode'], written };
     };
-    assert.equal(run('dark', false), true);
-    assert.equal(run('light', true), false);
-    assert.equal(run('system', true), true);
-    assert.equal(run('system', false), false);
-    assert.ok(listener, 'follows the system setting live');
+    assert.equal(run('dark', false).dark, true);
+    assert.equal(run('light', true).dark, false);
+    assert.equal(run(null, true).dark, true);
+    assert.equal(run(null, false).dark, false);
+    assert.ok(listener, 'follows the device live while nothing is saved');
+    assert.deepEqual(run(null, false, 'admin_theme=en').written, []);
+    const migrated = run(null, true, 'admin_locale=en; admin_theme=system');
+    assert.equal(migrated.dark, true);
+    assert.equal(migrated.mode, 'dark');
+    assert.equal(migrated.written.length, 1);
+    assert.match(migrated.written[0]!, /^admin_theme=dark; Path=\/; Max-Age=31536000; SameSite=Lax; Secure$/);
+    assert.match(run(null, false, 'admin_theme=system').written[0]!, /^admin_theme=light;/);
   });
 });
 

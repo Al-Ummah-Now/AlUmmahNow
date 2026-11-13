@@ -235,6 +235,7 @@ it keeps the theme's menu colours (Lantern `#134a62`). The stylesheet switches w
 | Current / checked | the hover fill, weight 600, `.aun-menu-check` (`--fanous-color-link`) at the end |
 | Danger | `--fanous-color-error-text` |
 | Phone (≤ 30rem) | a sheet under the header: full width less 8px each side, scrolls inside |
+| Never off-screen | every menu and popup stays inside the viewport at any width (phones, landscape, tablets, en and ar): see below |
 | Selectors | never "a :is(b)" (a space before a pseudo-class function): the CMS minifier drops the space; a test rejects it |
 
 Contrast (computed from the tokens, every theme): light mode, text, muted, danger and the check on
@@ -287,3 +288,20 @@ native apps).
   others, each with its sign-out icon button. The current app is not in "Al Ummah Now apps", and
   every app entry shows its icon. The menu has no Upload; the header's Upload sits in the action
   cluster.
+
+## Menus never leave the screen
+
+Owner bug, 2026-11-13: on www on a phone the theme menu opened outside the screen. When a header wraps
+(landscape phones, tablets, Arabic) a menu anchored to its button's edge can start or end past the
+viewport, and at landscape heights run past the bottom. Rule: **no menu, popover, dropdown, list of
+suggestions or tooltip ever renders outside the viewport.**
+
+- Popups placed by a library with collision handling (Radix menus and selects in the videos web) and
+  popups with their own placement (the videos web's `MenuButton`, the player's settings menu) keep it.
+- Every hand-placed popup calls `fitToViewport` after it opens: it shifts the popup sideways (CSS
+  `translate`) to keep an 8px gutter, narrows it when wider than the screen, caps its height to the
+  room below its top (the popup scrolls inside) and re-fits on resize. Source:
+  `packages/fanous-tokens/nav/menu-fit.js` (videos web via `useFitToViewport`, videos admin);
+  www `src/scripts/menu-fit.ts` and CMS `src/admin/client/dom.ts` carry the same function.
+- Tests: each app has an E2E that opens its menus at 320, 375 and 414 px wide and a landscape phone
+  (844×390), in English and Arabic, and checks every popup's box lies inside the viewport.

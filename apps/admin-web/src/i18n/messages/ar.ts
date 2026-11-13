@@ -93,7 +93,6 @@ const ar: Messages = {
   preferences: {
     language: 'اللغة',
     theme: 'المظهر',
-    themeSystem: 'النظام',
     themeLight: 'فاتح',
     themeDark: 'داكن',
     english: 'English',

@@ -45,7 +45,7 @@ export default async function RootLayout({
   // data-theme: the site's theme (the admin follows it). data-color-mode: the admin's light/dark
   // preference; MODE_SCRIPT turns it into the .dark class before first paint (src/lib/color-mode.ts).
   return (
-    <html lang={locale} dir={dir} data-theme={siteTheme.id} data-color-mode={theme} suppressHydrationWarning>
+    <html lang={locale} dir={dir} data-theme={siteTheme.id} data-color-mode={theme ?? undefined} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: MODE_SCRIPT }} />
         {siteTheme.css && <style data-site-theme={siteTheme.id} dangerouslySetInnerHTML={{ __html: siteTheme.css }} />}
@@ -54,7 +54,7 @@ export default async function RootLayout({
         {/* A deploy while this page is open: notice + reload */}
         <VersionSkewProvider />
         {/* Browser errors → Errors page (src/lib/errors/reporter.ts) */}
-        <ErrorReportingProvider locale={locale} theme={theme} />
+        <ErrorReportingProvider locale={locale} theme={theme ?? 'device'} />
         <I18nProvider locale={locale} theme={theme}>
           <QueryProvider>{children}</QueryProvider>
         </I18nProvider>

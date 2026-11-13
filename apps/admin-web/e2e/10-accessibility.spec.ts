@@ -4,7 +4,7 @@ import { storageStatePath } from './support/env';
 import type { Locale, Theme } from '../src/i18n/config';
 import type { Page } from '@playwright/test';
 
-const VARIANTS: { locale: Locale; theme: Exclude<Theme, 'system'> }[] = [
+const VARIANTS: { locale: Locale; theme: Theme }[] = [
   { locale: 'en', theme: 'light' },
   { locale: 'en', theme: 'dark' },
   { locale: 'ar', theme: 'light' },

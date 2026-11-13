@@ -7,6 +7,7 @@ import { Channel } from "@al-ummah/shared-types";
 import { useActiveChannel } from "@/contexts/ActiveChannelContext";
 import { ChevronDown, Check } from "lucide-react";
 import { useLanguage } from "@/hooks/useLanguage";
+import { useFitToViewport } from '@/hooks/useFitToViewport';
 
 interface ChannelSwitcherProps {
   channels: Channel[];
@@ -14,6 +15,7 @@ interface ChannelSwitcherProps {
 
 const ChannelSwitcher: React.FC<ChannelSwitcherProps> = ({ channels }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const menuRef = useFitToViewport<HTMLDivElement>(isOpen);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { activeChannel, setActiveChannel } = useActiveChannel();
   const { t, lang } = useLanguage();
@@ -132,7 +134,8 @@ const ChannelSwitcher: React.FC<ChannelSwitcherProps> = ({ channels }) => {
       {/* Dropdown Menu */}
       {isOpen && (
         <div
-          className="absolute top-full right-0 mt-2 w-72 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50 max-h-96 overflow-y-auto"
+          ref={menuRef}
+          className="absolute top-full end-0 mt-2 w-72 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50 max-h-96 overflow-y-auto"
           role="menu"
           aria-orientation="vertical"
           aria-labelledby="channel-switcher-menu"

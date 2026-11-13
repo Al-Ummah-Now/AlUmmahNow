@@ -10,6 +10,7 @@
 import { logger } from '@/lib/logger-client';
 
 import { useState, useEffect } from 'react';
+import { useFitToViewport } from '@/hooks/useFitToViewport';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { MenuBackdrop } from './MenuBackdrop';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -165,6 +166,8 @@ export function UnifiedNavigation() {
     : null;
   const [isCreatingChannel, setIsCreatingChannel] = useState(false);
   const [newChannelName, setNewChannelName] = useState('');
+  // The menu never leaves the screen (docs/design/NAV.md); refit when the view changes
+  const menuRef = useFitToViewport<HTMLDivElement>(isOpen, view, isCreatingChannel);
   const [showLogoutAllConfirm, setShowLogoutAllConfirm] = useState(false);
   // A create refused for the channel limit re-reads the tier: the form closes and the limit shows
   useEffect(() => {
@@ -210,7 +213,7 @@ export function UnifiedNavigation() {
         {isOpen && (
           <>
             <MenuBackdrop onClose={() => setIsOpen(false)} />
-            <div className="aun-menu" role="menu" data-testid="nav-menu" aria-orientation="vertical">
+            <div ref={menuRef} className="aun-menu" role="menu" data-testid="nav-menu" aria-orientation="vertical">
               <form action={login.bind(null, lang)}>
                 <button type="submit" className="aun-menu-item" role="menuitem">
                   <User className="aun-menu-icon" aria-hidden="true" />
@@ -321,7 +324,7 @@ export function UnifiedNavigation() {
               setNewChannelName('');
             }}
           />
-          <div className="aun-menu" role="menu" data-testid="nav-menu" aria-orientation="vertical">
+          <div ref={menuRef} className="aun-menu" role="menu" data-testid="nav-menu" aria-orientation="vertical">
             {view === 'main' && <>
             {/* 1. Who: the account (to the profile) */}
             <div data-testid="nav-active-context">

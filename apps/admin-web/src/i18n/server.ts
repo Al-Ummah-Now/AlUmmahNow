@@ -5,7 +5,6 @@ import { cache } from 'react';
 import { cookies, headers } from 'next/headers';
 import {
   DEFAULT_LOCALE,
-  DEFAULT_THEME,
   LOCALE_COOKIE,
   THEME_COOKIE,
   getDirection,
@@ -25,10 +24,11 @@ export const getLocale = cache(async (): Promise<Locale> => {
   return localeFromAcceptLanguage(headerStore.get('accept-language')) ?? DEFAULT_LOCALE;
 });
 
-export const getTheme = cache(async (): Promise<Theme> => {
+/** The saved light/dark choice; null = none yet (the device decides, before paint). */
+export const getTheme = cache(async (): Promise<Theme | null> => {
   const cookieStore = await cookies();
   const fromCookie = cookieStore.get(THEME_COOKIE)?.value;
-  return isTheme(fromCookie) ? fromCookie : DEFAULT_THEME;
+  return isTheme(fromCookie) ? fromCookie : null;
 });
 
 export interface ServerI18n {

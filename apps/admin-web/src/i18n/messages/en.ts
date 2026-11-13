@@ -94,7 +94,6 @@ const en = {
   preferences: {
     language: 'Language',
     theme: 'Theme',
-    themeSystem: 'System',
     themeLight: 'Light',
     themeDark: 'Dark',
     english: 'English',
