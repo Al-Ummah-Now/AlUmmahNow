@@ -3,12 +3,13 @@
 import React from "react";
 import { useQueryState } from "nuqs";
 import { MAIN_CONTENT_ID } from "@/components/SkipLinks";
-import WatchPageContent from "@/components/video/WatchPageContent";
 import { useLanguage } from "@/hooks/useLanguage";
 
 /**
- * Legacy watch route (/[locale]/video?vid=<id>), still used by video cards.
- * Renders the same watch page as /[locale]/video/[id].
+ * Legacy watch route (/[locale]/video?vid=<id>), still used by video cards. The watch page itself
+ * is in the /[locale]/video layout (components/video/WatchShell.tsx), the same one /video/[id]
+ * uses, so moving between the two forms keeps the player; this page gives it the server's
+ * placeholder, or says no video was chosen.
  */
 export default function LegacyWatch({ skeleton }: { skeleton?: React.ReactNode }) {
   const { t, isRTL } = useLanguage();
@@ -27,5 +28,5 @@ export default function LegacyWatch({ skeleton }: { skeleton?: React.ReactNode }
     );
   }
 
-  return <WatchPageContent videoId={vid} skeleton={skeleton} />;
+  return <>{skeleton}</>;
 }

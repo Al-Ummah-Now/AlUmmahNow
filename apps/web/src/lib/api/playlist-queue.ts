@@ -38,6 +38,8 @@ export interface QueueItem {
   channelId?: string;
   channelName?: string;
   isShort: boolean;
+  /** The URL the API chose to play (R2 or Bunny); used to preload the next item's manifest */
+  playUrl?: string;
 }
 
 export interface QueuePage {

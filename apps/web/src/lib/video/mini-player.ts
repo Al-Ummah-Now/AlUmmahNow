@@ -30,3 +30,27 @@ export function nextMini({ mini, ratio, playing, dismissed, viewportWidth, touch
   if (mini) return ratio <= MINI_LEAVE_ABOVE;
   return ratio < MINI_ENTER_BELOW && playing && !dismissed;
 }
+
+/**
+ * Phones (owner, 2026-11-13: "when I scroll, the player disappears"): where the mini player never
+ * floats, the watch page keeps the player pinned to the top while the details, comments and
+ * related videos scroll beneath it, the way YouTube's mobile site does. Portrait phones only:
+ * in landscape the player fills the screen already, and fullscreen is left alone.
+ */
+export const PIN_MEDIA_QUERY = `(max-width: ${MINI_MIN_VIEWPORT - 1}px) and (orientation: portrait)`;
+
+export interface PinInput {
+  /** The frame's top edge, in viewport px */
+  frameTop: number;
+  /** The top bar's bottom edge (0 when the top bar scrolls away), in viewport px */
+  inset: number;
+  /** The viewport matches PIN_MEDIA_QUERY */
+  phone: boolean;
+  fullscreen: boolean;
+}
+
+/** Pinned once the frame's top reaches the top bar; unpinned as soon as it comes back down */
+export function nextPinned({ frameTop, inset, phone, fullscreen }: PinInput): boolean {
+  if (!phone || fullscreen) return false;
+  return frameTop < inset;
+}

@@ -155,6 +155,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/release/network-error.player.spec.ts': { placement: 'local', reason: 'player retry UI with CDN aborted by route' },
   'apps/web/e2e/release/page-frame.spec.ts': { placement: 'local', reason: 'header/sidebar/tab bar layout, Upload states' },
   'apps/web/e2e/release/playlist-playback.player.spec.ts': { placement: 'local', reason: 'playlist order, autoplay and pane over its own uploads; fake Bunny HLS plays locally' },
+  'apps/web/e2e/release/seamless-next.player.spec.ts': { placement: 'local', reason: 'same player element across Next, auto-advance and Back, and the phone pin, over its own uploads; fake Bunny HLS plays locally' },
   'apps/web/e2e/release/player-a11y.player.spec.ts': { placement: 'local', reason: 'player a11y, touch, analytics route' },
   'apps/web/e2e/release/player-bar-row.player.spec.ts': { placement: 'local', reason: 'control bar layout across widths' },
   'apps/web/e2e/release/player-controls.player.spec.ts': { placement: 'local', reason: 'player controls drive video element' },
