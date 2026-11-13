@@ -14,6 +14,7 @@ import {
 	DailyMetric,
 	DateRange,
 	MonthlyRollup,
+	attachSubscriberStats,
 	buildDailySeries,
 	engagementRate,
 	loadOwnedChannels,
@@ -180,6 +181,8 @@ export class AnalyticsGet extends AuthenticatedRoute {
 			rollups = await loadRollups(c.env, 'channel', channels.map(ch => ch.id), spanning);
 		}
 
+		// Subscribers (members and channels) from the subscription store, over both periods
+		channels = await attachSubscriberStats(c.env as never, channels, spanning);
 		const currentSeries = buildDailySeries(range, videos, channels, rollups);
 		const previousSeries = buildDailySeries(previous, videos, channels, rollups);
 		const current = sumSeries(currentSeries);

@@ -184,6 +184,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/release/studio-list-speed.spec.ts': { placement: 'local', reason: 'client-cache back navigation timing', load: true },
   'apps/web/e2e/release/studio-video-editor.spec.ts': { placement: 'local', reason: 'editor 404 for foreign video' },
   'apps/web/e2e/release/studio-videos.spec.ts': { placement: 'local', reason: 'Studio Videos statuses, filters, phone layout' },
+  'apps/web/e2e/release/subscribe-no-channel.spec.ts': { placement: 'local', reason: 'a viewer without a channel subscribes on the watch and channel pages (en/ar), sees it in Subscriptions, unsubscribes; own creator/video/viewer' },
   'apps/web/e2e/release/tab-style.spec.ts': { placement: 'local', reason: 'tab CSS on channel/search pages' },
   'apps/web/e2e/release/theatre.player.spec.ts': { placement: 'local', reason: 'theatre layout on landscape video' },
   'apps/web/e2e/release/up-next-series.player.spec.ts': { placement: 'local', reason: 'series order from the recommendations index over its own uploads; fake Bunny HLS plays locally' },

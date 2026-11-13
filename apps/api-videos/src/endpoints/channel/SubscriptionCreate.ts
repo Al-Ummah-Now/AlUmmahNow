@@ -20,13 +20,15 @@ const SubscriptionStatusResponse = z.object({
 export class SubscriptionCreate extends AuthenticatedRoute {
 	schema = {
 		tags: ["Subscriptions"],
-		summary: "Subscripe to a channel",
+		summary: "Subscribe to a channel",
+		description: "Subscribes the caller's current identity: the channel in the channelId header when one is active, otherwise the member themselves (no channel needed). Idempotent: 200 when already subscribed, 201 when created.",
 		request: {
 			params: z.object({
 				id: Str({ description: "Channel ID" }),
 			}),
 			headers: z.object({
-				channelId: Str({ description: "Channel ID" }),
+				// A missing header reaches the schema as null (#1139)
+				channelId: Str({ description: "The caller's active channel to subscribe as; omit to subscribe as yourself (no channel needed)" }).optional().nullable(),
 			}),
 		},
 		responses: {
@@ -77,7 +79,7 @@ export class SubscriptionCreate extends AuthenticatedRoute {
 		const data = await this.getValidatedData<typeof this.schema>();
 		const { id } = data.params;
 		const userId = this.getUserId(c);
-		const { channelId } = data.headers;
+		const channelId = data.headers.channelId || null;
 		type ChannelType = z.infer<typeof Channel>;
 
 		try {
@@ -92,12 +94,21 @@ export class SubscriptionCreate extends AuthenticatedRoute {
 				return c.json({ success: false, error: "Cannot subscribe to your own channel" }, 400);
 			}
 
-			// A member subscribes as one of their own channels, never as someone else's
-			const subscriberChannel = await repository.getObject(channelId);
-			if (!subscriberChannel || subscriberChannel.userId !== userId) {
-				return c.json({ success: false, error: "You can only subscribe as one of your own channels" }, 403);
+			// A member never subscribes to their own channel (as themselves or as another of their channels)
+			if (!channelId && channel.userId === userId) {
+				return c.json({ success: false, error: "Cannot subscribe to your own channel" }, 400);
 			}
 
+			// With a channel active, a member subscribes as that channel (one of their own, never
+			// someone else's); without one, as themselves, like an account-level subscription
+			if (channelId) {
+				const subscriberChannel = await repository.getObject(channelId);
+				if (!subscriberChannel || subscriberChannel.userId !== userId) {
+					return c.json({ success: false, error: "You can only subscribe as one of your own channels" }, 403);
+				}
+			}
+
+			logger.debug('[SubscriptionCreate] Subscribing', { targetChannelId: id, userId, as: channelId ? 'channel' : 'user', subscriberChannelId: channelId });
 			// Atomic in D1 (SCALABILITY-AUDIT AV-4): concurrent subscribers all count
 			const change = await changeSubscription(c.env, { ...channel, id }, { userId, channelId }, 'add');
 			if (!change) {
@@ -113,6 +124,7 @@ export class SubscriptionCreate extends AuthenticatedRoute {
 				subscriptionId: change.subscriptionId,
 				targetChannelId: id,
 				subscriberChannelId: channelId,
+				subscriberType: channelId ? 'channel' : 'user',
 				userId: userId,
 				timestamp: new Date().toISOString(),
 			});

@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
-import Link from '@/components/common/AppLink';
 import { usePathname } from 'next/navigation';
 import { Bell } from 'lucide-react';
 import { useChannelSubscription } from '@/hooks/useChannelSubscription';
@@ -85,12 +84,7 @@ export function WatchChannelMeta({ channelId, name, viewerId, authLoading, owner
         </button>
         {error && (
           <p className="watch-sub-error" role="alert" data-testid="watch-subscribe-error">
-            {error === 'channel' ? (
-              <>
-                {t.errors.channelRequired}{' '}
-                <Link href={`/${lang}/profile`}>{t.navigation.createChannel}</Link>
-              </>
-            ) : error === 'auth' ? t.errors.loginRequired : t.errors.failedToUpdate}
+            {error === 'auth' ? t.errors.loginRequired : t.errors.failedToUpdate}
           </p>
         )}
       </div>

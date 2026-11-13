@@ -33,6 +33,43 @@ export interface ChannelWithLegacySubscriptions {
 	subscriptions?: LegacySubscription[] | null;
 }
 
+/**
+ * Who subscribes: a member as one of their channels (`channelId`), or a
+ * member with no active channel as themselves (`channelId` null/absent),
+ * like an account-level subscription on other video sites.
+ */
+export interface Subscriber {
+	userId: string;
+	channelId?: string | null;
+}
+
+/**
+ * The `subscriber_channel_id` of a member's own (channel-less) subscription.
+ * Channel ids never contain a colon, so these keys cannot collide with a
+ * channel's, and the table's primary key (channel_id, subscriber_channel_id)
+ * still allows one subscription per identity. No schema change (0008 as is).
+ */
+export const USER_SUBSCRIBER_PREFIX = 'user:';
+
+export function userSubscriberKey(userId: string): string {
+	return `${USER_SUBSCRIBER_PREFIX}${userId}`;
+}
+
+/** True when a stored subscriber_channel_id is a member's own subscription, not a channel. */
+export function isUserSubscriberKey(key: string | null | undefined): boolean {
+	return typeof key === 'string' && key.startsWith(USER_SUBSCRIBER_PREFIX);
+}
+
+/** The stored subscriber key: the channel id, or `user:<userId>` without a channel. */
+export function subscriberKey(subscriber: Subscriber): string {
+	return subscriber.channelId ? subscriber.channelId : userSubscriberKey(subscriber.userId);
+}
+
+/** The subscriber channel for queue events and exports: null for a member's own subscription. */
+export function subscriberChannelOf(key: string | null | undefined): string | null {
+	return key && !isUserSubscriberKey(key) ? key : null;
+}
+
 export interface SubscriptionChange {
 	/** True when this call added/removed the subscription (false: already so). */
 	changed: boolean;
@@ -106,13 +143,13 @@ function countFrom(result: D1Result | undefined): number {
 }
 
 /**
- * Subscribes `subscriberChannelId` (owned by `userId`) to `channel`.
- * Idempotent: subscribing again changes nothing.
+ * Subscribes the subscriber (one of `userId`'s channels, or the member
+ * themselves without a channel) to `channel`. Idempotent.
  */
 export async function subscribe(
 	db: D1Database,
 	channel: ChannelWithLegacySubscriptions,
-	subscriber: { userId: string; channelId: string },
+	subscriber: Subscriber,
 	now = Date.now(),
 ): Promise<SubscriptionChange> {
 	const channelId = channel.id!;
@@ -121,7 +158,7 @@ export async function subscribe(
 	const results = await db.batch([
 		db
 			.prepare('INSERT OR IGNORE INTO channel_subscriptions (channel_id, subscriber_channel_id, user_id, id, created_at) VALUES (?1, ?2, ?3, ?4, ?5)')
-			.bind(channelId, subscriber.channelId, subscriber.userId, id, now),
+			.bind(channelId, subscriberKey(subscriber), subscriber.userId, id, now),
 		// changes() is the previous statement's: +1 only when the row was inserted
 		db
 			.prepare(
@@ -139,14 +176,14 @@ export async function subscribe(
 }
 
 /**
- * Removes the subscription of `subscriberChannelId` (owned by `userId`) from
- * `channel`. The bell row goes too once the user has no other subscribing
- * channel. Idempotent.
+ * Removes the subscriber's subscription (one of `userId`'s channels, or the
+ * member's own) from `channel`. The bell row goes too once the user has no
+ * other subscription to it (own or by a channel). Idempotent.
  */
 export async function unsubscribe(
 	db: D1Database,
 	channel: ChannelWithLegacySubscriptions,
-	subscriber: { userId: string; channelId: string },
+	subscriber: Subscriber,
 	now = Date.now(),
 ): Promise<SubscriptionChange> {
 	const channelId = channel.id!;
@@ -154,7 +191,7 @@ export async function unsubscribe(
 	const results = await db.batch([
 		db
 			.prepare('DELETE FROM channel_subscriptions WHERE channel_id = ?1 AND subscriber_channel_id = ?2 AND user_id = ?3 RETURNING id')
-			.bind(channelId, subscriber.channelId, subscriber.userId),
+			.bind(channelId, subscriberKey(subscriber), subscriber.userId),
 		// changes() is the previous statement's: -1 only when the row was deleted
 		db.prepare('UPDATE channel_subscriber_counts SET subscribers = MAX(subscribers - changes(), 0) WHERE channel_id = ?1').bind(channelId),
 		db
@@ -208,8 +245,10 @@ export async function subscriberCounts(
 }
 
 /**
- * Whether the viewer is subscribed to `channel`: as `viewer.channelId` when
- * given, otherwise as any of their channels (like the legacy isSubscribed).
+ * Whether the viewer's current identity is subscribed to `channel`: as
+ * `viewer.channelId` when a channel is active, otherwise as the member
+ * themselves (their own, channel-less subscription). Subscribe/unsubscribe
+ * act on the same identity, so the button always reflects what it changes.
  */
 export async function isSubscribedTo(
 	db: D1Database | undefined,
@@ -218,25 +257,48 @@ export async function isSubscribedTo(
 ): Promise<boolean> {
 	const channelId = channel.id;
 	if (!channelId) return false;
-	const legacy = () => {
-		const subs = channel.subscriptions || [];
-		return viewer.channelId ? subs.some((s) => s.channelId === viewer.channelId) : subs.some((s) => s.userId === viewer.userId);
-	};
+	const key = subscriberKey(viewer);
+	const legacy = () => (channel.subscriptions || []).some((s) => s.channelId === key);
 	if (!db) return legacy();
 	const row = await db
 		.prepare(
 			`SELECT EXISTS (SELECT 1 FROM channel_subscription_imports WHERE channel_id = ?1) AS imported,
-			        EXISTS (SELECT 1 FROM channel_subscriptions WHERE channel_id = ?1
-			                AND (CASE WHEN ?2 IS NOT NULL THEN subscriber_channel_id = ?2 ELSE user_id = ?3 END)) AS subscribed`,
+			        EXISTS (SELECT 1 FROM channel_subscriptions WHERE channel_id = ?1 AND subscriber_channel_id = ?2) AS subscribed`,
 		)
-		.bind(channelId, viewer.channelId ?? null, viewer.userId)
+		.bind(channelId, key)
 		.first<{ imported: number; subscribed: number }>();
 	if (!row?.imported) return legacy();
 	return row.subscribed === 1;
 }
 
 /**
- * Channels the user subscribes to (as any of their channels), oldest first:
+ * Whether the member subscribes to `channel` under any identity (themselves
+ * or any of their channels): the notification bell and the subscriptions
+ * page are the member's, whichever identity subscribed.
+ */
+export async function isMemberSubscribedTo(
+	db: D1Database | undefined,
+	channel: ChannelWithLegacySubscriptions,
+	userId: string,
+): Promise<boolean> {
+	const channelId = channel.id;
+	if (!channelId) return false;
+	const legacy = () => (channel.subscriptions || []).some((s) => s.userId === userId);
+	if (!db) return legacy();
+	const row = await db
+		.prepare(
+			`SELECT EXISTS (SELECT 1 FROM channel_subscription_imports WHERE channel_id = ?1) AS imported,
+			        EXISTS (SELECT 1 FROM channel_subscriptions WHERE channel_id = ?1 AND user_id = ?2) AS subscribed`,
+		)
+		.bind(channelId, userId)
+		.first<{ imported: number; subscribed: number }>();
+	if (!row?.imported) return legacy();
+	return row.subscribed === 1;
+}
+
+/**
+ * Channels the user subscribes to (as themselves or as any of their channels,
+ * each channel once), oldest first:
  * D1 rows, plus the legacy profile `subscribedTo[]` entries of channels that
  * are not imported yet (for those, R2 is still the truth).
  */
@@ -273,7 +335,7 @@ export async function subscribedChannelIds(
 export async function changeSubscription(
 	env: { NOTIFICATIONS_DB?: D1Database; channels: R2Bucket; profiles?: R2Bucket },
 	channel: ChannelWithLegacySubscriptions,
-	subscriber: { userId: string; channelId: string },
+	subscriber: Subscriber,
 	action: 'add' | 'remove',
 ): Promise<SubscriptionChange | null> {
 	if (env.NOTIFICATIONS_DB) {
@@ -285,11 +347,12 @@ export async function changeSubscription(
 	const stored = await new R2Repository<ChannelWithLegacySubscriptions>(env.channels).updateObject(channel.id!, (fresh) => {
 		subscriptionId = null;
 		const list = fresh.subscriptions || [];
-		const mine = list.find((s) => s.channelId === subscriber.channelId);
+		const key = subscriberKey(subscriber);
+		const mine = list.find((s) => s.channelId === key);
 		if (action === 'add') {
 			if (mine) return false;
 			subscriptionId = crypto.randomUUID();
-			fresh.subscriptions = [...list, { id: subscriptionId, userId: subscriber.userId, channelId: subscriber.channelId, dateCreated: new Date().toISOString() }];
+			fresh.subscriptions = [...list, { id: subscriptionId, userId: subscriber.userId, channelId: key, dateCreated: new Date().toISOString() }];
 			return true;
 		}
 		if (!mine || (mine.userId && mine.userId !== subscriber.userId)) return false;
@@ -298,7 +361,9 @@ export async function changeSubscription(
 		return true;
 	});
 	if (!stored) return null;
-	if (subscriptionId !== null && env.profiles) {
+	// The profile index lists each channel once: it stays while another identity of the user still subscribes
+	const stillSubscribed = action === 'remove' && (stored.subscriptions || []).some((s) => s.userId === subscriber.userId);
+	if (subscriptionId !== null && env.profiles && !stillSubscribed) {
 		await new R2Repository<{ subscribedTo?: string[] }>(env.profiles).updateObject(subscriber.userId, (profile) => {
 			const list = profile.subscribedTo || [];
 			if (action === 'add') {
@@ -326,7 +391,9 @@ export async function exportUserSubscriptions(db: D1Database, userId: string): P
 	return (results ?? []).map((row) => ({
 		id: row.id,
 		userId,
-		channelId: row.subscriber_channel_id,
+		// null: the member's own subscription (no channel was active)
+		channelId: subscriberChannelOf(row.subscriber_channel_id),
+		subscribedAs: isUserSubscriberKey(row.subscriber_channel_id) ? 'member' : 'channel',
 		subscribedToChannelId: row.channel_id,
 		dateCreated: new Date(row.created_at).toISOString(),
 		source: 'd1',
@@ -352,4 +419,75 @@ export async function eraseUserSubscriptions(db: D1Database, userId: string): Pr
 		db.prepare('SELECT changes() AS n'),
 	]);
 	return Number((removed.results?.[0] as { n?: number } | undefined)?.n ?? 0);
+}
+
+/**
+ * New subscriptions per UTC day (YYYY-MM-DD) for each channel, members and
+ * channels alike (one row per subscriber identity), between `fromMs` and
+ * `toMs` inclusive. Channels not imported yet count their legacy R2 array.
+ * Also returns each channel's current total (subscriberCounts).
+ */
+export async function subscriberDailyStats(
+	db: D1Database | undefined,
+	channels: ChannelWithLegacySubscriptions[],
+	fromMs: number,
+	toMs: number,
+): Promise<Map<string, { byDay: Record<string, number>; total: number }>> {
+	const stats = new Map<string, { byDay: Record<string, number>; total: number }>();
+	const ids = [...new Set(channels.map((c) => c?.id).filter((id): id is string => !!id))];
+	if (ids.length === 0) return stats;
+	const totals = await subscriberCounts(db, channels);
+	const imported = new Set<string>();
+	for (const id of ids) stats.set(id, { byDay: {}, total: totals.get(id) ?? 0 });
+	if (db) {
+		const [marks, days] = await db.batch([
+			db.prepare('SELECT j.value AS channel_id FROM json_each(?1) AS j JOIN channel_subscription_imports i ON i.channel_id = j.value').bind(JSON.stringify(ids)),
+			db
+				.prepare(
+					`SELECT s.channel_id AS channel_id, strftime('%Y-%m-%d', s.created_at / 1000, 'unixepoch') AS day, COUNT(*) AS n
+					 FROM json_each(?1) AS j JOIN channel_subscriptions s ON s.channel_id = j.value
+					 WHERE s.created_at BETWEEN ?2 AND ?3 GROUP BY s.channel_id, day`,
+				)
+				.bind(JSON.stringify(ids), fromMs, toMs),
+		]);
+		for (const row of (marks?.results || []) as { channel_id: string }[]) imported.add(row.channel_id);
+		for (const row of (days?.results || []) as { channel_id: string; day: string; n: number }[]) {
+			const entry = stats.get(row.channel_id);
+			if (entry && imported.has(row.channel_id)) entry.byDay[row.day] = Number(row.n) || 0;
+		}
+	}
+	for (const channel of channels) {
+		if (!channel?.id || imported.has(channel.id)) continue;
+		const entry = stats.get(channel.id)!;
+		for (const row of legacyRows(channel.subscriptions, 0)) {
+			if (row.t < fromMs || row.t > toMs) continue;
+			const day = new Date(row.t).toISOString().slice(0, 10);
+			entry.byDay[day] = (entry.byDay[day] || 0) + 1;
+		}
+	}
+	return stats;
+}
+
+/**
+ * Every identity under which the member subscribes to `channel` (themselves
+ * and/or their channels), as subscribers changeSubscription takes. Used to
+ * unsubscribe the member from the subscriptions page, which lists channels
+ * member-wide.
+ */
+export async function memberSubscribers(
+	db: D1Database | undefined,
+	channel: ChannelWithLegacySubscriptions,
+	userId: string,
+): Promise<Subscriber[]> {
+	const channelId = channel.id;
+	if (!channelId) return [];
+	const toSubscriber = (key: string): Subscriber => ({ userId, channelId: subscriberChannelOf(key) });
+	const legacy = () => (channel.subscriptions || []).filter((s) => s.userId === userId && s.channelId).map((s) => toSubscriber(s.channelId!));
+	if (!db) return legacy();
+	const [marker, rows] = await db.batch([
+		db.prepare('SELECT 1 AS imported FROM channel_subscription_imports WHERE channel_id = ?1').bind(channelId),
+		db.prepare('SELECT subscriber_channel_id FROM channel_subscriptions WHERE channel_id = ?1 AND user_id = ?2').bind(channelId, userId),
+	]);
+	if (!(marker?.results || []).length) return legacy();
+	return ((rows?.results || []) as { subscriber_channel_id: string }[]).map((r) => toSubscriber(r.subscriber_channel_id));
 }
