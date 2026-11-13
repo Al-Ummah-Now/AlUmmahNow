@@ -43,7 +43,21 @@ const REFERRER_KEY = /^(?:referrer|referer|documentReferrer)$/i;
 /** Keys holding a URL or path: query and fragment are dropped. */
 const URL_KEY = /^(?:url|href|page|pageUrl|path|location|actionUrl|src)$/i;
 
-const EMAIL_IN_TEXT = /[^\s@"'<>]+@[^\s@"'<>]+\.[a-z]{2,}/gi;
+/** An email-shaped token: something@something.tld (checked by index, no backtracking regex). */
+function looksLikeEmail(token: string): boolean {
+  const at = token.indexOf('@');
+  const dot = token.lastIndexOf('.');
+  return at > 0 && dot > at + 1 && dot < token.length - 2;
+}
+
+/** Replaces email-shaped words in free text (linear: split on whitespace, check each word). */
+function redactEmails(text: string): string {
+  if (!text.includes('@')) return text;
+  return text
+    .split(/(\s+)/)
+    .map((word) => (looksLikeEmail(word) ? '[email]' : word))
+    .join('');
+}
 
 function isPseudonymous(value: string): boolean {
   return PSEUDONYM_VALUE.test(value) || value === ARCHIVE_ERASED_MARKER || value === ARCHIVE_ANONYMOUS_MARKER;
@@ -104,7 +118,7 @@ export function scrubArchiveRecord<T>(record: T, options: ScrubOptions): T {
       if ((personKey && value) || USER_ID_VALUE.test(value)) return replaceId(value);
       if (key && REFERRER_KEY.test(key)) return hostOf(value);
       const text = key && URL_KEY.test(key) ? withoutQuery(value) : value;
-      return text.replace(EMAIL_IN_TEXT, '[email]');
+      return redactEmails(text);
     }
     if (Array.isArray(value)) return value.map((item) => visit(item, key, personKey));
     if (value && typeof value === 'object') {
@@ -128,7 +142,8 @@ export function archiveRecordNeedsScrub(record: unknown): boolean {
   return JSON.stringify(scrubArchiveRecord(record, { pseudonyms: probe })) !== JSON.stringify(record);
 }
 
-const encoder = new TextEncoder();
+/** Created on use: some test environments (jsdom) have no TextEncoder when modules load. */
+const encode = (text: string) => new TextEncoder().encode(text);
 
 function hex(bytes: ArrayBuffer): string {
   return [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -136,14 +151,14 @@ function hex(bytes: ArrayBuffer): string {
 
 /** `ps_` + the first 128 bits of HMAC-SHA-256(secret, userId), hex. */
 export async function archivePseudonym(secret: string, userId: string): Promise<string> {
-  const key = await crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  const mac = await crypto.subtle.sign('HMAC', key, encoder.encode(userId));
+  const key = await crypto.subtle.importKey('raw', encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const mac = await crypto.subtle.sign('HMAC', key, encode(userId));
   return `ps_${hex(mac).slice(0, 32)}`;
 }
 
 /** The secret store's key for a user: SHA-256 of the id, so the table holds no raw id. */
 export async function archiveSubjectKey(userId: string): Promise<string> {
-  return hex(await crypto.subtle.digest('SHA-256', encoder.encode(`archive-subject:${userId}`)));
+  return hex(await crypto.subtle.digest('SHA-256', encode(`archive-subject:${userId}`)));
 }
 
 /** A new random secret (256 bits, hex). */
