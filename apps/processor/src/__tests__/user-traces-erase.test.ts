@@ -1,8 +1,8 @@
 /**
  * #1059: account erasure removes what the processor's databases keep about the user beyond reports:
  * the admin's invite rows, the user's error-group membership, the user id and identifying details of
- * their error events (the errors themselves stay for grouping and trends), and AI category
- * suggestions keyed by them. Real SQL on the real schemas (admin-api and search migrations).
+ * their error events (the errors themselves stay for grouping and trends), AI category
+ * suggestions and the upload rate counters and slots keyed by them. Real SQL on the real schemas (admin-api and search migrations).
  */
 import { join } from 'path';
 import { createSqliteD1, REPORTS_MIGRATIONS_DIR } from './sqlite-d1';
@@ -38,6 +38,10 @@ function seed() {
       .prepare(`INSERT INTO category_suggestions (subject_id, subject_type, user_id, reason, status, created_at, updated_at) VALUES (?, 'video', ?, 'upload', 'done', 1, 1)`)
       .run(subject, userId);
   }
+  for (const userId of [USER, OTHER]) {
+    search.raw.prepare(`INSERT INTO upload_rate_windows (user_id, operation, period, window_start, count) VALUES (?, 'upload', 'day', 1, 3)`).run(userId);
+    search.raw.prepare(`INSERT INTO upload_rate_leases (user_id, operation, lease_id, expires_at) VALUES (?, 'upload', 'lease_1', 9999999999999)`).run(userId);
+  }
   return { reports, search };
 }
 
@@ -45,7 +49,7 @@ describe('eraseUserTraces (#1059)', () => {
   it('deletes invites, error-group membership and category suggestions; anonymises error events, keeping the errors', async () => {
     const { reports, search } = seed();
     const result = await eraseUserTraces(reports, search, USER, ERASED);
-    expect(result).toEqual({ invites: 1, errorUsers: 1, errorEvents: 2, categorySuggestions: 1 });
+    expect(result).toEqual({ invites: 1, errorUsers: 1, errorEvents: 2, categorySuggestions: 1, rateLimits: 2 });
 
     expect(reports.raw.prepare('SELECT id FROM creator_invites ORDER BY id').all()).toEqual([{ id: 'inv_2' }]);
     expect(reports.raw.prepare('SELECT user_key FROM error_group_users').all()).toEqual([{ user_key: OTHER }]);
@@ -58,12 +62,14 @@ describe('eraseUserTraces (#1059)', () => {
     // The group and its counts survive
     expect(reports.raw.prepare('SELECT users, occurrences FROM error_groups').all()).toEqual([{ users: 2, occurrences: 3 }]);
     expect(search.raw.prepare('SELECT subject_id FROM category_suggestions').all()).toEqual([{ subject_id: 'vid_2' }]);
+    expect(search.raw.prepare('SELECT user_id FROM upload_rate_windows').all()).toEqual([{ user_id: OTHER }]);
+    expect(search.raw.prepare('SELECT user_id FROM upload_rate_leases').all()).toEqual([{ user_id: OTHER }]);
   });
 
   it('is idempotent and works without the search database', async () => {
     const { reports, search } = seed();
     await eraseUserTraces(reports, search, USER, ERASED);
-    expect(await eraseUserTraces(reports, search, USER, ERASED)).toEqual({ invites: 0, errorUsers: 0, errorEvents: 0, categorySuggestions: 0 });
+    expect(await eraseUserTraces(reports, search, USER, ERASED)).toEqual({ invites: 0, errorUsers: 0, errorEvents: 0, categorySuggestions: 0, rateLimits: 0 });
     expect((await eraseUserTraces(reports, undefined, OTHER, ERASED)).categorySuggestions).toBe(0);
   });
 });

@@ -43,6 +43,7 @@ import { BunnyStreamClient } from '../bunny/stream';
 import { bunnyClientForVideo, type LibraryHints } from '../bunny/libraries';
 import { removeCollectionsFor, renameCollectionsForChannel, renameCollectionsForUser, userCollectionName } from '../channelCollection';
 import { purgeVideoMedia, type MediaEnv } from '../media/r2-delivery';
+import { deleteVideoSideRecords } from '../videoSideRecords';
 import { readAssignment } from '../creatorTiers';
 import { bansFor, deleteBan, readBan, writeBan } from './bans';
 import { createJob, type JobHandler, type JobOutcome, type JobQueue } from './jobs';
@@ -469,12 +470,17 @@ async function purgeVideo(
 	bunnyClient?: { client: BunnyStreamClient; libraryId: number } | null,
 	opts: { strict?: boolean } = { strict: true },
 ): Promise<void> {
-	// The Bunny library comes from the record (read it before it is gone)
-	let hints: LibraryHints | null = video;
-	if (bunnyClient === undefined && !video?.bunnyLibraryId && !video?.playUrl) {
-		hints = (await repo(env.videos).getObject(videoId).catch(() => null)) ?? video;
-	}
+	// The record names the Bunny library and the schedule entry: read it before it is gone
+	const stored = (await repo(env.videos).getObject(videoId).catch(() => null)) as Row | null;
+	const hints: LibraryHints | null = video?.bunnyLibraryId || video?.playUrl ? video : (stored ?? video);
 	await env.videos.delete(videoId);
+	// Subtitles, the upload marker and the scheduler entry name the uploader: they go with the video
+	try {
+		await deleteVideoSideRecords(env as never, videoId, stored ?? video);
+	} catch (error) {
+		logger.warn('[Admin] Video side records delete failed', { videoId, error: error instanceof Error ? error.message : String(error) });
+		if (opts.strict) throw error;
+	}
 	// R2 renditions (epic #687), both buckets; strict jobs retry when it fails
 	try {
 		await purgeVideoMedia(env as unknown as MediaEnv, videoId);
@@ -1394,6 +1400,8 @@ async function runRunUserErase(env: AdminServiceEnv, job: AdminJob): Promise<Job
 		},
 		Number(job.params.step) || 0,
 	);
+	// Upload markers and TUS sessions that name the user (#1059), as the full erasure does
+	await eraseUploadTraces(env as never, job.targetId, step.deletedVideoIds);
 	for (const videoId of step.deletedVideoIds) await send(env, MessageType.VideoDelete, { videoId, userId: job.targetId, reason: 'admin-erasure' });
 	const result = { deletedVideos: previous + step.deletedVideoIds.length };
 	if (!step.complete) return { done: false, params: { step: step.step }, result };

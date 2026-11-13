@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { eraseUploadTraces } from '../src/lib/privacy/upload-traces';
-import { createTusProxySession, getTusSessionKey, tusUserIndexPrefix } from '../src/lib/bunny/tus';
+import { createTusProxySession, getTusSessionKey, tusUploadIndexKey, tusUserIndexPrefix } from '../src/lib/bunny/tus';
 import { UPLOAD_MARKER_PREFIX } from '../src/lib/uploads/reaper';
 
 /** KV stand-in: put/get/delete/list(prefix, cursor), with the TTLs it was given. */
@@ -65,6 +65,16 @@ describe('account erasure: upload markers and TUS sessions (#1059)', () => {
 
 		// Idempotent
 		assert.deepEqual(await eraseUploadTraces({ TUS_SESSIONS: kv as never, global_settings: bucket }, 'usr_a', []), { markers: 0, sessions: 0 });
+	});
+
+	it("deletes the erased user's TUS proxy upload sessions (tus:upload:<key>) through their index", async () => {
+		const kv = fakeKv(2);
+		for (const [key, user] of [['k1', 'usr_a'], ['k2', 'usr_a'], ['k9', 'usr_b']] as const) {
+			await kv.put(`tus:upload:${key}`, JSON.stringify({ videoId: `v-${key}`, userId: user }));
+			await kv.put(tusUploadIndexKey(user, key), '1');
+		}
+		assert.deepEqual(await eraseUploadTraces({ TUS_SESSIONS: kv as never }, 'usr_a', []), { markers: 0, sessions: 2 });
+		assert.deepEqual([...kv.store.keys()].sort(), ['tus:upload:k9', tusUploadIndexKey('usr_b', 'k9')].sort());
 	});
 
 	it('works without the bindings (an env that has neither)', async () => {

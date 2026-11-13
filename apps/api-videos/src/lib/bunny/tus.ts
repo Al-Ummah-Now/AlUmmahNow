@@ -235,6 +235,17 @@ export function tusUserIndexPrefix(userId: string): string {
   return `tus:user:${userId}:`;
 }
 
+/** Index entries of TUS proxy uploads (`tus:upload:<uploadKey>`) carry this after the user prefix. */
+export const TUS_UPLOAD_INDEX_MARK = 'upload:';
+
+/**
+ * Per-user index of a TUS proxy upload session (`tus:upload:<uploadKey>`, which holds the user id),
+ * `tus:user:<userId>:upload:<uploadKey>`, written beside it with the same lifetime.
+ */
+export function tusUploadIndexKey(userId: string, uploadKey: string): string {
+  return `${tusUserIndexPrefix(userId)}${TUS_UPLOAD_INDEX_MARK}${uploadKey}`;
+}
+
 /**
  * How long an initiate/resume session stays usable. Written once, read once
  * (by the proxy's POST), so a long life is free. One hour lost the sessions of

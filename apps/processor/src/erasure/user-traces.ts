@@ -8,6 +8,9 @@
  * - REPORTS_DB error_events: kept for grouping and trends (message, stack, counts), with the user id
  *   replaced by the erased marker and identifying keys removed from extra_json (email, name, ip...).
  * - SEARCH_DB category_suggestions: AI category suggestions keyed by the user. Deleted.
+ * - SEARCH_DB upload_rate_windows / upload_rate_leases: the user's upload and channel-create rate
+ *   counters and in-flight slots (api-videos middleware/rate-limit.ts, lib/creatorTiers.ts), keyed by
+ *   the user id. Deleted: the account is gone, so nothing is left to limit.
  *
  * Idempotent: a second run changes nothing. Runs inside the UserDataErased step, so a failure retries
  * and finally dead-letters like the rest of the erasure.
@@ -22,6 +25,7 @@ export interface UserTracesResult {
   errorUsers: number;
   errorEvents: number;
   categorySuggestions: number;
+  rateLimits: number;
 }
 
 /** RETURNING rows count what changed (D1 and the test stand-in alike), as contact/erase.ts does. */
@@ -45,6 +49,18 @@ export async function eraseUserTraces(
       )
       .bind(erasedMarker, userId),
   ]);
-  const categorySuggestions = search ? count((await search.batch([search.prepare('DELETE FROM category_suggestions WHERE user_id = ? RETURNING subject_id').bind(userId)]))[0]) : 0;
-  return { invites: count(invites), errorUsers: count(errorUsers), errorEvents: count(errorEvents), categorySuggestions };
+  const [suggestions, windows, leases] = search
+    ? await search.batch([
+        search.prepare('DELETE FROM category_suggestions WHERE user_id = ? RETURNING subject_id').bind(userId),
+        search.prepare('DELETE FROM upload_rate_windows WHERE user_id = ? RETURNING operation').bind(userId),
+        search.prepare('DELETE FROM upload_rate_leases WHERE user_id = ? RETURNING operation').bind(userId),
+      ])
+    : [];
+  return {
+    invites: count(invites),
+    errorUsers: count(errorUsers),
+    errorEvents: count(errorEvents),
+    categorySuggestions: count(suggestions),
+    rateLimits: count(windows) + count(leases),
+  };
 }

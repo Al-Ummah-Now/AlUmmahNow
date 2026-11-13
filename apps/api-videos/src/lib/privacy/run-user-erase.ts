@@ -24,6 +24,7 @@
  * throws, so the job is retried with backoff rather than falling back to a scan.
  */
 import { defaultPointerPrefix } from '../uploadDefaultPointer';
+import { deleteVideoSideRecords } from '../videoSideRecords';
 import { sectionOrderKey } from '../channelSectionOrder';
 import { eraseUserSubscriptions } from '../subscription-store';
 import { isOwnershipComplete } from '../search/ownership';
@@ -126,6 +127,8 @@ export async function eraseRunUserData(
 				if (!stored) continue;
 				// The record names the Bunny library the media lives in
 				const record = await stored.json<Record<string, unknown>>().catch(() => undefined);
+				// The scheduler entry and upload marker name the user too (lib/videoSideRecords.ts)
+				await deleteVideoSideRecords({ global_settings: env.global_settings, SCHEDULED_VIDEOS: env.SCHEDULED_VIDEOS ?? env['scheduled-videos'] }, videoId, record);
 				if (hooks.onVideoDeleted) await hooks.onVideoDeleted(videoId, record as never);
 				await deleteKeys(bucket, [videoId], budget);
 				result.deletedVideoIds.push(videoId);
