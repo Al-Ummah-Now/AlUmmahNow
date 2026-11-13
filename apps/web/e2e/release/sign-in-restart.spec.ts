@@ -19,7 +19,7 @@ async function submitLogin(page: Page, email: string): Promise<void> {
   await page.fill('input[name="email"]', email);
   await fillSecret(page.locator('input[name="password"]'), TEST_PASSWORD);
   // The submit button is localized ("Continue" / "متابعة")
-  await page.click('form[data-component="form"] button[data-component="button"]');
+  await page.click('form[data-component="form"] button[data-component="button"]:not([type="button"])');
 }
 
 test('a direct /password/authorize sign-in shows "Start sign-in again" (en + ar), never the raw error', async ({ page, context }) => {

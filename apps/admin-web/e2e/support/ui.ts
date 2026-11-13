@@ -15,7 +15,7 @@ export async function uiLogin(page: Page, account: Account, expectedPath: RegExp
     await page.locator('input[name="email"]').fill(account.email);
     // Seed password: never through fill(), whose step title the HTML report keeps
     await fillSecret(page.locator('input[name="password"]'), account.password);
-    await page.locator('button[data-component="button"]').click();
+    await page.locator('button[data-component="button"]:not([type="button"])').click();
   }
   await page.waitForURL((url) => expectedPath.test(url.pathname), { timeout: 45_000 });
 }
