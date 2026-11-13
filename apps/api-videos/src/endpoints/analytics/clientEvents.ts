@@ -8,7 +8,8 @@ const MAX_BODY_BYTES = 64 * 1024;
 
 export const ClientAnalyticsBody = z.object({
   // visit: one per browser tab session, landing page + source (D-SEO-9, lib/site-visits in the processor)
-  kind: z.enum(["ab_test", "performance", "visit"]),
+  // short_link: one per short link click (alummahnow.link, the short-links Worker), type + source only
+  kind: z.enum(["ab_test", "performance", "visit", "short_link"]),
   events: z.array(z.record(z.unknown())).min(1).max(MAX_EVENTS),
   userAgent: z.string().max(512).optional(),
   referrer: z.string().max(2048).optional(),

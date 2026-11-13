@@ -1,7 +1,7 @@
 /** The site visits report (D-SEO-9): sums of the processor's site counters over N days. */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { siteVisitsReport } from '../src/lib/site-visits';
+import { shortLinkClicksReport, siteVisitsReport } from '../src/lib/site-visits';
 import { SqliteD1 } from './search-sqlite-d1';
 
 describe('siteVisitsReport', () => {
@@ -33,5 +33,25 @@ describe('siteVisitsReport', () => {
 		const r = await siteVisitsReport(undefined, 9999, Date.parse('2026-11-13T00:00:00.000Z'));
 		assert.equal(r.days, 365);
 		assert.equal(r.visits, 0);
+	});
+});
+
+describe('shortLinkClicksReport', () => {
+	it('sums short link clicks per day, type and source, apart from site visits', async () => {
+		const d1 = new SqliteD1();
+		d1.db.exec(`CREATE TABLE IF NOT EXISTS analytics_daily (entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, day TEXT NOT NULL, metric TEXT NOT NULL, dim TEXT NOT NULL DEFAULT '', value REAL NOT NULL DEFAULT 0, PRIMARY KEY (entity_type, entity_id, day, metric, dim))`);
+		const put = d1.db.prepare('INSERT INTO analytics_daily VALUES (?, ?, ?, ?, ?, ?)');
+		put.run('site', 'short-links', '2026-11-13', 'clicks', '', 4);
+		put.run('site', 'short-links', '2026-11-12', 'clicks', '', 1);
+		put.run('site', 'short-links', '2026-11-13', 'type', 'video', 3);
+		put.run('site', 'short-links', '2026-11-13', 'type', 'post', 2);
+		put.run('site', 'short-links', '2026-11-13', 'source', 'social:whatsapp', 5);
+		put.run('site', 'videos', '2026-11-13', 'visits', '', 7);
+		const r = await shortLinkClicksReport(d1 as never, 7, Date.parse('2026-11-13T12:00:00.000Z'));
+		assert.equal(r.clicks, 5);
+		assert.deepEqual(r.daily.slice(-2), [{ day: '2026-11-12', clicks: 1 }, { day: '2026-11-13', clicks: 4 }]);
+		assert.deepEqual(r.types, [{ type: 'video', clicks: 3 }, { type: 'post', clicks: 2 }]);
+		assert.deepEqual(r.sources, [{ source: 'social:whatsapp', clicks: 5 }]);
+		assert.equal((await siteVisitsReport(d1 as never, 7, Date.parse('2026-11-13T12:00:00.000Z'))).visits, 7);
 	});
 });

@@ -35,6 +35,7 @@ import type { ExtendedPlayer } from '@/lib/video/videojs';
 import type { AnalyticsContext } from '@al-ummah/shared-types';
 import { updatePlayerUi } from '@/lib/video/player-ui';
 import { watchHref as listWatchHref } from '@/lib/playlists/playback';
+import { shareLink } from '@/lib/share/short-link';
 import { useEmbedMessaging } from './useEmbedMessaging';
 // Black backdrop and a player that fills the host's frame, in every theme and mode
 import './embed-frame.css';
@@ -244,11 +245,16 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
   }, [emit, index, params.end, params.index, params.loop, playlist]);
 
   // Inside a playlist the watch page continues the list from this item
-  const watchHref = useCallback((seconds: number) => listWatchHref(lang, video.id, {
-    list: playlist?.id ?? null,
-    index: playlist ? (video.listIndex ?? index) : null,
-    t: seconds,
-  }), [lang, video.id, video.listIndex, playlist, index]);
+  // "Watch on": the short link (alummahnow.link/v/<id>, wiki AUN-SHORT-LINKS) where this environment
+  // has one, so clicks from embeds are counted; the watch page's own URL otherwise
+  const watchHref = useCallback((seconds: number) => {
+    const listIndex = playlist ? (video.listIndex ?? index) : null;
+    return shareLink(
+      { kind: 'video', id: video.id },
+      listWatchHref(lang, video.id, { list: playlist?.id ?? null, index: listIndex, t: seconds }),
+      { t: seconds, list: playlist?.id ? { id: playlist.id, index: listIndex } : null, locale: lang },
+    );
+  }, [lang, video.id, video.listIndex, playlist, index]);
 
   const onWatchClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
     const seconds = playerRef.current ? playerRef.current.currentTime() || 0 : pendingStartRef.current;

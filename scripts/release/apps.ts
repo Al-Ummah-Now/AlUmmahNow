@@ -257,6 +257,41 @@ export const APPS: AppRule[] = [
 		}),
 	},
 	{
+		// Short share links on alummahnow.link (wiki AUN-SHORT-LINKS): redirects to the real pages.
+		// Released with `wrangler deploy` after the promote, then smoked (short-links-smoke.ts).
+		app: 'short-links',
+		configPath: 'apps/short-links/wrangler.jsonc',
+		qaConfigPath: 'apps/short-links/wrangler.qa.jsonc',
+		dir: 'apps/short-links',
+		deployFlags: 'any',
+		production: {
+			env: null,
+			name: 'al-ummah-now-short-links',
+			requireRoutes: true,
+			vars: {
+				ENVIRONMENT: 'production',
+				SITE_ORIGIN: 'https://videos.alummahnow.net',
+				WWW_ORIGIN: 'https://www.alummahnow.net',
+				API_ORIGIN: 'https://videos.api.alummahnow.net',
+				ERRORS_INGEST_URL: 'https://admin.api.alummahnow.net/internal/errors',
+			},
+			requiredBindings: [INTERNAL_API_KEY],
+			...PROD_GUARDS,
+			// Its own zone: the short link host itself, never a QA/stage one
+			forbiddenValues: [...PROD_GUARDS.forbiddenValues!, /\b(qa|stage)\.alummahnow\.link/],
+			allowedHosts: ['alummahnow.link'],
+		},
+		stage: {
+			env: 'stage',
+			...STAGE_GUARDS,
+			allowedHosts: ['stage.alummahnow.link'],
+			name: 'al-ummah-now-short-links-stage',
+			requireRoutes: true,
+			vars: { ENVIRONMENT: 'stage', SITE_ORIGIN: 'https://videos.stage.alummahnow.net', API_ORIGIN: 'https://videos.api.stage.alummahnow.net' },
+			requiredBindings: [INTERNAL_API_KEY],
+		},
+	},
+	{
 		// Platform analytics collector for the videos admin (docs/admin/LIVE_OPS.md Part A).
 		// Crons only (no route); released with `wrangler deploy` after the promote.
 		app: 'cost-monitor',

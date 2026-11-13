@@ -1,4 +1,6 @@
 import { logger } from '@/lib/logger-client';
+import { copyText } from '@/lib/share/copy';
+import { shareLink } from '@/lib/share/short-link';
 
 import { CommunityPost } from '@al-ummah/shared-types';
 import { cn } from '@/lib/utils';
@@ -30,9 +32,14 @@ export default function PostEngagement({
   locale = 'en',
 }: PostEngagementProps) {
   const [showShareMenu, setShowShareMenu] = useState(false);
-  // Posts live on the channel's Community tab; there is no standalone post route
+  // The short link (alummahnow.link/p/<id>, wiki AUN-SHORT-LINKS) opens the post on its channel's
+  // Community tab; without a short link host, the tab itself (there is no standalone post route)
   const getShareUrl = () =>
-    `${window.location.origin}/${locale}/channels/${post.channelId}?tab=community`;
+    shareLink(
+      { kind: 'post', id: post.id },
+      `${window.location.origin}/${locale}/channels/${post.channelId}?tab=community&post=${encodeURIComponent(post.id)}#post-${encodeURIComponent(post.id)}`,
+      { locale },
+    );
 
   const formatCount = (count: number) => {
     if (count >= 1000000) {
@@ -66,8 +73,7 @@ export default function PostEngagement({
   };
 
   const copyLink = () => {
-    const shareUrl = getShareUrl();
-    navigator.clipboard.writeText(shareUrl);
+    void copyText(getShareUrl());
     setShowShareMenu(false);
   };
 
@@ -108,6 +114,7 @@ export default function PostEngagement({
         <div className="relative">
           <button
             onClick={handleShare}
+            data-testid="post-share-button"
             className={cn(
               'flex items-center gap-2 px-4 py-2 rounded-full transition-all group',
               'hover:bg-gray-100 dark:hover:bg-gray-700',
@@ -148,6 +155,7 @@ export default function PostEngagement({
               )}>
                 <button
                   onClick={copyLink}
+                  data-testid="post-share-copy-link"
                   className={cn(
                     'w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-3',
                     'text-start'

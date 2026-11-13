@@ -98,7 +98,7 @@ export default function PostCard({
   };
 
   return (
-    <article className="bg-white dark:bg-gray-800 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+    <article id={`post-${post.id}`} data-post-id={post.id} className="scroll-mt-24 bg-white dark:bg-gray-800 rounded-lg shadow-sm hover:shadow-md transition-shadow">
       {/* Post Header */}
       <div className={cn(
         'flex items-start gap-3 p-4 border-b border-gray-100 dark:border-gray-700',

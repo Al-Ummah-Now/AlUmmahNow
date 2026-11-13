@@ -31,6 +31,8 @@ export const PORTS = {
   processor: 3088,
   'admin-api': 3090,
   'admin-web': 3091,
+  /** Short share links (apps/short-links, alummahnow.link on the deployed tiers) */
+  'short-links': 3092,
   auth: 3301,
   profile: 3302,
   'auth-admin': 3303,
@@ -193,6 +195,21 @@ export const WORKERS: StackWorker[] = [
       ERRORS_INGEST_URL: `${url('admin-api')}/internal/errors`,
       AUTH_PROFILE_URL: url('profile'),
       INTERNAL_API_KEY: LOCAL_SECRETS.INTERNAL_API_KEY,
+      // Share buttons copy short links of the stack's short-links Worker (wiki AUN-SHORT-LINKS)
+      SHORT_LINK_URL: url('short-links'),
+    },
+  },
+  {
+    app: 'short-links',
+    repo: 'videos',
+    dir: 'apps/short-links',
+    config: 'wrangler.jsonc',
+    vars: {
+      ...COMMON_VARS,
+      SITE_ORIGIN: url('web'),
+      // www (AlUmmahNowUI) is booted only by the suites that need it, on this port (e2e targets.ts)
+      WWW_ORIGIN: 'http://localhost:3401',
+      API_ORIGIN: url('api-videos'),
     },
   },
   {

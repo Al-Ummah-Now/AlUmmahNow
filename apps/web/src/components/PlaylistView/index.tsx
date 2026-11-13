@@ -13,6 +13,7 @@ import { managePlaylistsHref } from '@/components/PlaylistManager';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowDown, ArrowUp, ListVideo, Lock, Play, Trash2 } from 'lucide-react';
 import { getLocalizedValue } from '@al-ummah/shared-types';
+import { ShareLinkButton } from '@/components/share/ShareLinkButton';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { useAuth } from '@/components/AuthProvider/authContext';
@@ -217,6 +218,16 @@ export default function PlaylistView({ playlistId }: PlaylistViewProps) {
                 >
                   {t.playlist.editPlaylist}
                 </Link>
+              )}
+              {/* Share: the short link (alummahnow.link/l/<id>), public or Unlisted (link-only); a private or system list has nothing to share */}
+              {(playlist.isPublic !== false || (playlist as { isUnlisted?: boolean }).isUnlisted === true) && !(playlist as { systemType?: unknown }).systemType && !playlist.id.startsWith('watch-later-') && (
+                <ShareLinkButton
+                  target={{ kind: 'playlist', id: playlist.id }}
+                  fallbackPath={`/${lang}/playlist/${encodeURIComponent(playlist.id)}`}
+                  title={playlistName(playlist, lang)}
+                  className="w-full justify-center"
+                  testId="playlist-share"
+                />
               )}
             </div>
           </div>

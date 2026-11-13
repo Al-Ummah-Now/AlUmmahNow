@@ -1,0 +1,52 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	// Short share links (wiki AUN-SHORT-LINKS): alummahnow.link/<prefix>/<id> → 301 to the real page.
+	// Production at the top level, stage under env.stage. QA: wrangler.qa.jsonc.
+	// Released by release.yml with `wrangler deploy` after the other apps' promote, then smoke-tested
+	// (scripts/release/short-links-smoke.ts) with auto-rollback. Each host is a Workers Custom Domain
+	// on the alummahnow.link zone: the deploy creates its DNS record and certificate.
+	"name": "al-ummah-now-short-links",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-10-01",
+	"compatibility_flags": ["nodejs_compat"],
+	"workers_dev": false,
+	"version_metadata": { "binding": "CF_VERSION_METADATA" },
+	// Logging policy (docs/operations/logging.md): warn/error only, every invocation sampled
+	"observability": { "enabled": true, "head_sampling_rate": 1, "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": false } },
+	"routes": [{ "pattern": "alummahnow.link", "custom_domain": true }],
+	"secrets_store_secrets": [
+		{ "binding": "INTERNAL_API_KEY", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "internal-api-key" }
+	],
+	"vars": {
+		"ENVIRONMENT": "production",
+		"LOG_LEVEL": "warn",
+		"SITE_ORIGIN": "https://videos.alummahnow.net",
+		"WWW_ORIGIN": "https://www.alummahnow.net",
+		"API_ORIGIN": "https://videos.api.alummahnow.net",
+		// 'shorts' sends Shorts straight to /shorts/<id> (D-SEO-10); 'video' lets the site redirect them
+		"SHORTS_PATH": "video",
+		"ERRORS_INGEST_URL": "https://admin.api.alummahnow.net/internal/errors"
+	},
+
+	"env": {
+		"stage": {
+			"name": "al-ummah-now-short-links-stage",
+			"workers_dev": false,
+			"version_metadata": { "binding": "CF_VERSION_METADATA" },
+			"observability": { "enabled": true, "head_sampling_rate": 1, "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": false } },
+			"routes": [{ "pattern": "stage.alummahnow.link", "custom_domain": true }],
+			"secrets_store_secrets": [
+				{ "binding": "INTERNAL_API_KEY", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "internal-api-key-stage" }
+			],
+			"vars": {
+				"ENVIRONMENT": "stage",
+				"LOG_LEVEL": "warn",
+				"SITE_ORIGIN": "https://videos.stage.alummahnow.net",
+				"WWW_ORIGIN": "https://www.stage.alummahnow.net",
+				"API_ORIGIN": "https://videos.api.stage.alummahnow.net",
+				"SHORTS_PATH": "video",
+				"ERRORS_INGEST_URL": "https://admin.api.stage.alummahnow.net/internal/errors"
+			}
+		}
+	}
+}

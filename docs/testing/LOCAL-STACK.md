@@ -24,6 +24,7 @@ on its own port:
 | processor | 3088 | `apps/processor` |
 | admin-api | 3090 | `apps/admin-api` |
 | admin-web (OpenNext build) | 3091 | `apps/admin-web` |
+| short-links | 3092 | `apps/short-links` (the web app's `SHORT_LINK_URL`) |
 | Auth issuer | 3301 | AlUmmahNowAuth `apps/auth`, at its last released commit |
 | Auth profile app | 3302 | AlUmmahNowAuth `apps/profile` |
 | Auth admin dashboard | 3303 | AlUmmahNowAuth `apps/admin` (React Router build) |

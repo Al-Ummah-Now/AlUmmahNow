@@ -27,7 +27,7 @@ import { ActiveChannelWrapper } from "@/components/ActiveChannelWrapper";
 import { QueryProvider } from "@/providers/QueryProvider";
 import { NONCE_HEADER } from "@/lib/security/nonce-header";
 import { serializeForInlineScript } from "@/lib/security/csp";
-import { authOrigin, deriveAuthProfileUrl } from "@/lib/runtime-config";
+import { authOrigin, deriveAuthProfileUrl, deriveShortLinkUrl } from "@/lib/runtime-config";
 import { deriveCmsUrl, deriveWwwUrl } from "@/lib/scholars/sites";
 import { SecurityBootstrap } from "@/components/security/SecurityBootstrap";
 import { RuntimeConfigBootstrap } from "@/components/RuntimeConfigBootstrap";
@@ -158,6 +158,7 @@ function serverRuntimeConfig() {
     AUTH_URL: authOrigin(process.env.OPENAUTH_ISSUER || process.env.Issuer),
     CMS_URL: deriveCmsUrl(process.env.OPENAUTH_ISSUER || process.env.Issuer, process.env.CMS_URL),
     WWW_URL: deriveWwwUrl(process.env.OPENAUTH_ISSUER || process.env.Issuer, process.env.WWW_URL),
+    SHORT_LINK_URL: deriveShortLinkUrl(process.env.API_URL || process.env.NEXT_PUBLIC_API_URL, process.env.SHORT_LINK_URL),
   };
 }
 

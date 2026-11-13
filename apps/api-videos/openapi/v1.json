@@ -725,7 +725,8 @@
                     "enum": [
                       "ab_test",
                       "performance",
-                      "visit"
+                      "visit",
+                      "short_link"
                     ]
                   },
                   "events": {
@@ -13078,6 +13079,72 @@
                       "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
                     }
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/community/posts/{postId}": {
+      "get": {
+        "tags": [
+          "Community"
+        ],
+        "summary": "Locate a community post by id",
+        "description": "🔓 Authentication optional. The channel of a published post, for short links. 404 for a draft, scheduled, hidden or deleted post. Does not count a view.",
+        "operationId": "get_LocateCommunityPost",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "description": "Post ID"
+            },
+            "required": true,
+            "description": "Post ID",
+            "name": "postId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The post and its channel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "channelId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "channelId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Post not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
                 }
               }
             }

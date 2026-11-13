@@ -37,6 +37,11 @@ export interface LibraryTranslations {
   watchLaterFull: string;
   actionFailed: string;
   moreActions: string;
+  /** Share buttons (card menu, playlist, channel): copy the short link (wiki AUN-SHORT-LINKS) */
+  copyLink: string;
+  linkCopied: string;
+  share: string;
+  copyFailed: string;
   moveUp: string;
   moveDown: string;
   remove: string;
@@ -185,6 +190,10 @@ export const LIBRARY_EN: LibraryTranslations = {
   watchLaterFull: 'Watch later is full. Remove some videos first.',
   actionFailed: 'Something went wrong. Please try again.',
   moreActions: 'More actions for {title}',
+  copyLink: 'Copy link',
+  linkCopied: 'Link copied',
+  share: 'Share',
+  copyFailed: 'Could not copy the link',
   moveUp: 'Move up',
   moveDown: 'Move down',
   remove: 'Remove',
@@ -224,6 +233,10 @@ export const LIBRARY_AR: LibraryTranslations = {
   watchLaterFull: 'قائمة المشاهدة لاحقًا ممتلئة. أزل بعض المرئيات أولًا.',
   actionFailed: 'حدث خطأ ما. يُرجى المحاولة مرة أخرى.',
   moreActions: 'مزيد من الإجراءات لـ {title}',
+  copyLink: 'نسخ الرابط',
+  linkCopied: 'تم نسخ الرابط',
+  share: 'مشاركة',
+  copyFailed: 'تعذّر نسخ الرابط',
   moveUp: 'نقل لأعلى',
   moveDown: 'نقل لأسفل',
   remove: 'إزالة',

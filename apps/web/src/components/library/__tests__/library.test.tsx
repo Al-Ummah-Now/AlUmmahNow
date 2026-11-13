@@ -148,9 +148,29 @@ describe('Watch later controls', () => {
     expect(screen.getByTestId('card-save-to-playlist')).toHaveAttribute('data-video-id', 'v9');
   });
 
-  it('is hidden for anonymous viewers', () => {
+  it('offers anonymous viewers Copy link only', () => {
     mockUser = null;
-    const { container } = render(<VideoCardMenu videoId="v9" title="Nine" />);
-    expect(container).toBeEmptyDOMElement();
+    render(<VideoCardMenu videoId="v9" title="Nine" />);
+    fireEvent.keyDown(screen.getByRole('button', { name: 'More actions for Nine' }), { key: 'Enter' });
+    expect(screen.getByRole('menuitem', { name: 'Copy link' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Save to Watch later' })).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: 'Save to playlist' })).toBeNull();
+  });
+
+  it('copies the short link from the card menu (wiki AUN-SHORT-LINKS)', async () => {
+    const writeText = jest.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    window.__RUNTIME_CONFIG__ = { API_URL: 'https://videos.api.alummahnow.net', SHORT_LINK_URL: 'https://alummahnow.link' };
+    try {
+      render(<VideoCardMenu videoId="v9" title="Nine" />);
+      fireEvent.keyDown(screen.getByRole('button', { name: 'More actions for Nine' }), { key: 'Enter' });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('menuitem', { name: 'Copy link' }));
+      });
+      expect(writeText).toHaveBeenCalledWith('https://alummahnow.link/v/v9');
+      expect(screen.getByTestId('video-card-menu-status')).toHaveTextContent('Link copied');
+    } finally {
+      delete window.__RUNTIME_CONFIG__;
+    }
   });
 });

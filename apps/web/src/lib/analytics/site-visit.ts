@@ -9,10 +9,7 @@
  * Moves inside the site (client-side navigations, links, reloads with this site as Referer) are not
  * new visits. Prefetches, framework data requests and known crawlers are never counted.
  */
-import { landingKindOf, normalizeReferrerHost, visitSourceOf, type SiteVisitEvent } from '@al-ummah/shared-types';
-
-/** Crawlers, link previewers and monitors (the user agent is only matched, never kept). */
-const BOT_UA = /bot|crawl|spider|slurp|preview|facebookexternalhit|embedly|quora link|whatsapp|telegram|discord|slack|curl|wget|python|go-http|headless|lighthouse|pagespeed|uptime|monitor/i;
+import { isCrawlerUserAgent, landingKindOf, normalizeReferrerHost, visitSourceOf, type SiteVisitEvent } from '@al-ummah/shared-types';
 
 /** The visit event for a landing path and a Referer, or a direct visit without one. */
 export function classifyVisit(path: string, referrer: string | null | undefined): SiteVisitEvent {
@@ -49,7 +46,8 @@ export function visitFromRequest(request: RequestLike): SiteVisitEvent | null {
   } else if (!(h.get('accept') ?? '').includes('text/html')) {
     return null;
   }
-  if (BOT_UA.test(h.get('user-agent') ?? '')) return null;
+  // Crawlers, link previewers and monitors (the user agent is only matched, never kept)
+  if (isCrawlerUserAgent(h.get('user-agent'))) return null;
   const referrer = h.get('referer');
   let referrerHost: string | null = null;
   try {

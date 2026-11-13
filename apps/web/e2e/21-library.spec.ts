@@ -170,12 +170,15 @@ test.describe('Library (signed in)', () => {
 test.describe('Library (anonymous)', () => {
   test.use({ storageState: ANONYMOUS_STATE });
 
-  test('asks visitors to sign in and hides card menus', async ({ page }) => {
+  test('asks visitors to sign in; card menus offer them Copy link only', async ({ page }) => {
     await page.goto('/en/library');
     await expect(page.getByTestId('library-signed-out')).toBeVisible();
     await page.goto('/en');
-    await own.showCard(page);
-    await expect(page.getByTestId('video-card-menu')).toHaveCount(0);
+    const card = await own.showCard(page);
+    // Short links (wiki AUN-SHORT-LINKS): everyone can copy a video's link; Watch later needs an account
+    await card.locator('xpath=..').getByTestId('video-card-menu').click();
+    await expect(page.getByTestId('video-card-copy-link').first()).toBeVisible();
+    await expect(page.getByTestId('video-card-save-watch-later')).toHaveCount(0);
   });
 
   test('library API requires authentication', async ({ request }) => {
