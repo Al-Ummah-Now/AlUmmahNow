@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { fitToViewport } from '../../../../packages/fanous-tokens/nav/menu-fit.js';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { Icon } from '@/components/shell/icons';
 import { useConfirm } from '@/components/content/actions';
@@ -43,6 +44,11 @@ export function AccountMenu({ issuer, currentEmail, currentName, roles }: Accoun
   const menuId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const signOutAllRef = useRef<HTMLFormElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  // Never past the screen's edge (docs/design/NAV.md); again when the accounts load (height changes)
+  useLayoutEffect(() => {
+    if (open) fitToViewport(menuRef.current);
+  }, [open, accounts]);
 
   const load = useCallback(async () => {
     setAccounts(await fetchAuthAccounts(issuer));
@@ -138,7 +144,7 @@ export function AccountMenu({ issuer, currentEmail, currentName, roles }: Accoun
         <Icon name="chevron" className="aun-caret rotate-90" />
       </button>
       {open && (
-        <div id={menuId} role="menu" data-testid="account-menu" aria-busy={busy} className="aun-menu">
+        <div ref={menuRef} id={menuId} role="menu" data-testid="account-menu" aria-busy={busy} className="aun-menu">
           {/* The current account, only here (the Google pattern); the others follow under "More accounts" */}
           <div className="aun-menu-who" data-testid="account-menu-account" data-active="true" data-email={active?.email ?? ''}>
             <span className="aun-avatar aun-avatar--lg" aria-hidden="true">{initial}</span>

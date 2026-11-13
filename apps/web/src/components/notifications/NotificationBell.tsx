@@ -9,6 +9,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { useNotificationBell } from '@/hooks/useNotificationBell';
 import { fillTemplate } from '@/lib/i18n/translations/library-notifications';
 import { NotificationRow } from './NotificationRow';
+import { useFitToViewport } from '@/hooks/useFitToViewport';
 
 interface NotificationBellProps {
   /** Text direction of the surrounding header; the dropdown opens toward the page. */
@@ -25,6 +26,8 @@ export function NotificationBell({ dir = 'ltr' }: NotificationBellProps) {
   const texts = t.notificationCenter;
   const { unreadCount, latest, isLoading, error, loadLatest, markRead, markAllRead } = useNotificationBell(user?.id);
   const [open, setOpen] = useState(false);
+  // Never past the screen's edge or bottom (docs/design/NAV.md)
+  const panelRef = useFitToViewport<HTMLDivElement>(open);
   const containerRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const panelId = useId();
@@ -85,6 +88,7 @@ export function NotificationBell({ dir = 'ltr' }: NotificationBellProps) {
 
       {open && (
         <div
+          ref={panelRef}
           id={panelId}
           role="dialog"
           aria-label={texts.latest}
@@ -92,7 +96,7 @@ export function NotificationBell({ dir = 'ltr' }: NotificationBellProps) {
           // Popover surface and text from the theme's dialog tokens. data-popover keeps the header's
           // nav colours (system.css .ah-end) out of it; an opaque surface, never the card glass.
           data-popover=""
-          className="absolute end-0 z-50 mt-2 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-lg border border-[var(--fanous-c-dialog-border)] bg-[var(--fanous-c-dialog-bg)] text-[var(--fanous-c-dialog-text)] shadow-lg [--nr-muted:var(--fanous-c-dialog-muted)] [--nr-secondary:var(--fanous-c-dialog-text)] [--nr-text:var(--fanous-c-dialog-text)]"
+          className="absolute end-0 z-50 mt-2 w-[min(24rem,calc(100vw-2rem))] overflow-y-auto overscroll-contain rounded-lg border border-[var(--fanous-c-dialog-border)] bg-[var(--fanous-c-dialog-bg)] text-[var(--fanous-c-dialog-text)] shadow-lg [--nr-muted:var(--fanous-c-dialog-muted)] [--nr-secondary:var(--fanous-c-dialog-text)] [--nr-text:var(--fanous-c-dialog-text)]"
         >
           <div className="flex items-center justify-between gap-2 border-b border-[var(--fanous-c-dialog-border)] px-3 py-2">
             <h2 className="text-sm font-semibold text-[var(--fanous-c-dialog-text)]">{texts.title}</h2>

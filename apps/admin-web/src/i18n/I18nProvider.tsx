@@ -6,7 +6,8 @@ import { createTranslator, type Translator } from './translate';
 
 interface I18nContextValue {
   locale: Locale;
-  theme: Theme;
+  /** The saved light/dark choice; null follows the device. */
+  theme: Theme | null;
   dir: 'ltr' | 'rtl';
   isRTL: boolean;
   t: Translator;
@@ -20,7 +21,7 @@ export function I18nProvider({
   children,
 }: {
   locale: Locale;
-  theme: Theme;
+  theme: Theme | null;
   children: React.ReactNode;
 }): React.ReactElement {
   const value = useMemo<I18nContextValue>(() => {

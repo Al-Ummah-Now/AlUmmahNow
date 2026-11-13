@@ -25,9 +25,32 @@ the site default is now Fawanees.
 | When a theme changes | At runtime, no deploy. An admin picks the site theme on the videos admin's **Site theme** page (`admin-web` `/site-theme`, #492). It is stored as the `site.theme` setting (admin-api, D1 `site_settings`, audited in `site_settings_log`) and the web apps read it from `GET /public/site-theme`, so a change reaches visitors within about 30 s. The value is a built-in id or a custom theme package `<id>@<version>` made in the admin theme builder (#575; files in R2 `theme-packages`, metadata in D1, see [`docs/themes/README.md`](../themes/README.md)). Unset or invalid falls back to **Fawanees** (`DEFAULT_SITE_THEME` in `@al-ummah/shared-types`). A build-time `NEXT_PUBLIC_ACTIVE_THEME` pins one theme and is used only by demo and test builds. |
 | User choice of theme | None. No picker, no per-user preference, no profile sync. |
 | Date-based switching | None. An admin switches an event theme on and off on the Site theme page. |
-| Light and dark | Every surface supports both, in every theme, unless listed under exceptions. Mode follows the system preference, and an existing toggle stays. |
+| Light and dark | Every surface supports both, in every theme, unless listed under exceptions. The control is **Light / Dark only, never "System"** (owner, 2026-11-13): a first visit follows the device (`prefers-color-scheme`) before paint; from the first click on, the visitor's last choice is remembered per device. A "system" saved by an older release is resolved once to the device's mode. See [Light / Dark](#light--dark) below. |
 | What ships | Every web app (`apps/web`, `apps/admin-web`) ships all four built-in themes (Lantern, Zujaj, Nahas, Fawanees) in one stylesheet, `apps/web/src/theme/site-themes.css`, generated from the built-in theme packages and scoped by `html[data-theme='<id>']`. The server renders the active id into `data-theme`; a custom package's compiled CSS is fetched and inlined. Native apps still build one theme from the fanous-tokens output (see below). |
 | Page code | Refers to semantic tokens and named slots, never to a theme's files. |
+
+## Light / Dark
+
+Owner decisions, 2026-11-13. Every app with a mode control:
+
+| Rule | How |
+|---|---|
+| No "System" option | The control is a Light / Dark toggle or two pressed-state buttons. |
+| First visit follows the device | Nothing saved: the page follows `prefers-color-scheme`, set before first paint (no flash). |
+| Remember the last choice | A click saves `light` or `dark` per device; the device setting no longer changes it. |
+| Old "system" values | Resolved once to the device's mode and saved as that (CMS: the old cookie is cleared, the device decides until the next click). |
+| Accessible | Named control (`aria-pressed`, or a link named for the mode it switches to), keyboard reachable, focus kept. |
+
+| App | Saved in | Before paint |
+|---|---|---|
+| Videos web | localStorage `theme` (next-themes; `defaultTheme="system"` is internal, no control offers it) | next-themes' script; `MODE_MIGRATE_SCRIPT` (`src/lib/theme/color-mode.ts`) resolves an old `system` first |
+| Videos admin | cookie `admin_theme` | `MODE_SCRIPT` (`src/lib/color-mode.ts`) |
+| www | localStorage `aun_mode` | `MODE_SCRIPT` (CSP hash, `src/lib/theme-mode.ts`) |
+| CMS | cookie `cms_mode` (server-rendered) | `MODE_SCRIPT` in `src/admin/ui/layout.tsx` |
+| Profile, auth, accounts admin | no control: profile and sign-in follow the device; the accounts admin is always dark | CSS only |
+
+Menus opened from any of these controls, and every other popup, stay inside the viewport
+(docs/design/NAV.md, "Menus never leave the screen").
 
 ## Theme model
 
@@ -169,8 +192,8 @@ release. The CI matrix overrides it with the `ACTIVE_THEME` environment variable
 
 | App | Repo | Stack | `ACTIVE_THEME` set in | Consumes tokens through | Light and dark today |
 |---|---|---|---|---|---|
-| Videos | AlUmmahNow `apps/web` | Next, OpenNext | `vars` in `wrangler.{qa,staging,production,preview}.jsonc` | prebuild output imported by `globals.css`, shadcn variables mapped to tokens | system default, toggle in the left navigation, `.dark` class |
-| Admin | AlUmmahNow `apps/admin-web` | Next, OpenNext | `vars` in `wrangler.{qa,production}.jsonc` | same as Videos | `admin_theme` cookie, `data-theme`, system fallback |
+| Videos | AlUmmahNow `apps/web` | Next, OpenNext | `vars` in `wrangler.{qa,staging,production,preview}.jsonc` | prebuild output imported by `globals.css`, shadcn variables mapped to tokens | device on first visit, then the drawer's Light / Dark toggle (next-themes localStorage `theme`), `.dark` class |
+| Admin | AlUmmahNow `apps/admin-web` | Next, OpenNext | `vars` in `wrangler.{qa,production}.jsonc` | same as Videos | device on first visit, then Light / Dark buttons in the nav (`admin_theme` cookie), `data-color-mode` + `.dark` |
 | Auth | AlUmmahNowAuth `apps/auth` | Worker, openauth | `vars` in `wrangler.{qa,}.json` | generated module passed to the openauth `theme`, and to `src/ui` and `email-templates.ts` | openauth light and dark. Custom pages have no mode handling. |
 | Profile | AlUmmahNowAuth `apps/profile` | Worker, HTML strings | `vars` in `wrangler.{qa,}.json` | generated CSS module | no mode handling found |
 | Auth admin | AlUmmahNowAuth `apps/admin` | React Router, Tailwind | `vars` in `wrangler.{qa,}.json`, read by the prebuild | prebuild CSS | no mode handling found |

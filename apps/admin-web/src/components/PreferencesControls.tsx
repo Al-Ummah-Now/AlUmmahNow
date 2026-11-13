@@ -1,16 +1,15 @@
 'use client';
 
-import { useId, useTransition } from 'react';
+import { useEffect, useId, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { applyColorMode } from '@/lib/color-mode';
+import { applyColorMode, currentColorMode } from '@/lib/color-mode';
 import {
   LOCALE_COOKIE,
   PREFERENCE_COOKIE_MAX_AGE,
   THEME_COOKIE,
   getDirection,
   isLocale,
-  isTheme,
   type Theme,
 } from '@/i18n/config';
 
@@ -24,8 +23,10 @@ export function applyTheme(theme: Theme) {
 }
 
 /**
- * Language and theme switchers. Preferences are persisted in cookies so the
+ * Language and light/dark switchers. Preferences are persisted in cookies so the
  * server renders the right `lang`/`dir`/`data-color-mode` on the next request.
+ * Light / Dark is two pressed-state buttons, no "System" (owner decision 2026-11-13): until the
+ * first click the device decides, and the button for the mode on screen shows pressed.
  */
 export function PreferencesControls({ className = '' }: { className?: string }) {
   const { t, locale, theme } = useLanguage();
@@ -33,6 +34,20 @@ export function PreferencesControls({ className = '' }: { className?: string }) 
   const [isPending, startTransition] = useTransition();
   const languageId = useId();
   const themeId = useId();
+  // The mode on screen: the saved choice, else the device's (only known in the browser)
+  const [shown, setShown] = useState<Theme | null>(theme);
+  useEffect(() => {
+    const sync = () => setShown(currentColorMode());
+    sync();
+    const q = window.matchMedia('(prefers-color-scheme: dark)');
+    const observer = new MutationObserver(sync);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    q.addEventListener('change', sync);
+    return () => {
+      observer.disconnect();
+      q.removeEventListener('change', sync);
+    };
+  }, []);
 
   const onLocaleChange = (value: string) => {
     if (!isLocale(value) || value === locale) return;
@@ -42,8 +57,8 @@ export function PreferencesControls({ className = '' }: { className?: string }) 
     startTransition(() => router.refresh());
   };
 
-  const onThemeChange = (value: string) => {
-    if (!isTheme(value) || value === theme) return;
+  const onThemeChange = (value: Theme) => {
+    if (value === theme && value === shown) return;
     writeCookie(THEME_COOKIE, value);
     applyTheme(value);
     startTransition(() => router.refresh());
@@ -73,21 +88,27 @@ export function PreferencesControls({ className = '' }: { className?: string }) 
           </option>
         </select>
       </div>
-      <div className="flex items-center gap-2">
-        <label htmlFor={themeId} className="text-fg-muted text-sm">
+      <div className="flex items-center gap-2" role="group" aria-labelledby={themeId}>
+        <span id={themeId} className="text-fg-muted text-sm">
           {t('preferences.theme')}
-        </label>
-        <select
-          id={themeId}
-          data-testid="theme-select"
-          value={theme}
-          onChange={(e) => onThemeChange(e.target.value)}
-          className={selectClass}
-        >
-          <option value="system">{t('preferences.themeSystem')}</option>
-          <option value="light">{t('preferences.themeLight')}</option>
-          <option value="dark">{t('preferences.themeDark')}</option>
-        </select>
+        </span>
+        <div className="inline-flex rounded border border-border bg-surface-2 p-0.5">
+          {(['light', 'dark'] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              data-testid={`theme-${mode}`}
+              aria-pressed={shown === mode}
+              onClick={() => onThemeChange(mode)}
+              suppressHydrationWarning
+              className={`rounded px-2 py-0.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-focus ${
+                shown === mode ? 'bg-accent text-on-accent font-semibold' : 'text-fg'
+              }`}
+            >
+              {t(mode === 'light' ? 'preferences.themeLight' : 'preferences.themeDark')}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );

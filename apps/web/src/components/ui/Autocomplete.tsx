@@ -29,7 +29,8 @@
  * button when it fails.
  */
 
-import React, { useCallback, useEffect, useId, useMemo, useRef, useState, type InputHTMLAttributes, type ReactNode } from 'react';
+import React, { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type InputHTMLAttributes, type ReactNode } from 'react';
+import { fitToViewport } from '../../../../../packages/fanous-tokens/nav/menu-fit.js';
 import { createPortal } from 'react-dom';
 import { Check } from 'lucide-react';
 import { rankSuggestions, splitHighlight } from '@al-ummah/shared-types';
@@ -332,6 +333,10 @@ export function Autocomplete(props: AutocompleteProps) {
   const showNoMatches = !!query && query.length >= minChars && settled && ordered.length === 0 && !hideNoMatches;
   const showEmptyChrome = !query && (!!emptyHeader || !!emptyFooter || (!!emptyText && ordered.length === 0 && !initialLoading && !initialFailed));
   const expanded = (inline || open) && (ordered.length > 0 || showNoMatches || showEmptyChrome || initialLoading || initialFailed);
+  // A dropdown never runs past the screen (docs/design/NAV.md): fit it when it opens
+  useLayoutEffect(() => {
+    if (expanded && !inline) fitToViewport(popupRef.current);
+  }, [expanded, inline]);
 
   // Keep the highlighted option valid as the list changes
   useEffect(() => {
@@ -544,7 +549,7 @@ export function Autocomplete(props: AutocompleteProps) {
       hidden={!expanded}
       className={inline
         ? `mt-2 overflow-hidden rounded-md border border-border ${popupClassName ?? ''}`
-        : `search-dd absolute inset-x-0 top-full z-[var(--z-popover,1000)] mt-1 overflow-hidden text-start ${popupClassName ?? ''}`}
+        : `search-dd absolute inset-x-0 top-full z-[var(--z-popover,1000)] mt-1 overflow-y-auto overscroll-contain text-start ${popupClassName ?? ''}`}
     >
       {!query && emptyHeader}
       {!query && ordered.length === 0 && emptyText && !initialLoading && !initialFailed && (

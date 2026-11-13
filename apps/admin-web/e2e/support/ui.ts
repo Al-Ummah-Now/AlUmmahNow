@@ -69,27 +69,26 @@ export async function accountControl(page: Page) {
 }
 
 /**
- * The light/dark preference on <html>: data-color-mode (with the .dark class) since the shell
- * follows the site theme; the deployed QA build may still use data-theme for it.
+ * The light/dark mode on <html>: data-color-mode is the saved choice (absent = none yet, the device
+ * decides) and the .dark class is what shows. No "System" option (owner decision 2026-11-13).
  */
-export async function expectColorMode(page: Page, mode: Theme) {
+export async function expectColorMode(page: Page, mode: Theme | null) {
   const html = page.locator('html');
-  if (await html.getAttribute('data-color-mode')) {
+  if (mode === null) await expect(html).not.toHaveAttribute('data-color-mode', /./);
+  else {
     await expect(html).toHaveAttribute('data-color-mode', mode);
     if (mode === 'dark') await expect(html).toHaveClass(/\bdark\b/);
-    if (mode === 'light') await expect(html).not.toHaveClass(/\bdark\b/);
-  } else if (mode === 'system') {
-    await expect(html).not.toHaveAttribute('data-theme', /^(light|dark)$/);
-  } else {
-    await expect(html).toHaveAttribute('data-theme', mode);
+    else await expect(html).not.toHaveClass(/\bdark\b/);
   }
 }
 
+/** Click Light or Dark in the main nav's preferences, and wait for the refresh. */
 export async function chooseTheme(page: Page, theme: Theme) {
   await openMainNav(page);
-  const select = page.getByTestId('theme-select');
-  await select.selectOption(theme);
-  await expect(page.locator('[aria-busy]').filter({ has: select })).toHaveAttribute('aria-busy', 'false', { timeout: 15_000 });
+  const button = page.getByTestId(`theme-${theme}`);
+  await button.click();
+  await expect(button).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('[aria-busy]').filter({ has: button })).toHaveAttribute('aria-busy', 'false', { timeout: 15_000 });
 }
 
 /** Persist UI preferences the same way the preference selects do. */

@@ -232,6 +232,67 @@ test.describe('Theme toggle', () => {
   });
 });
 
+// Owner decision 2026-11-13: Light / Dark only, no "System" option. The first visit follows the
+// device; from the first click on, the choice is saved for this browser (src/lib/theme/color-mode.ts).
+test.describe('Light / Dark: first visit, no flash, no System', () => {
+  test.use({ storageState: ANONYMOUS_STATE });
+
+  /** html.dark when <body> first exists: what the first paint shows. */
+  async function recordDarkAtBody(page: Page, saved: string | null) {
+    await page.addInitScript((value) => {
+      try {
+        if (value !== null && !sessionStorage.getItem('seeded')) {
+          localStorage.setItem('theme', value);
+          sessionStorage.setItem('seeded', '1');
+        }
+      } catch {
+        // storage blocked: nothing to seed
+      }
+      new MutationObserver((_, obs) => {
+        if (document.body) {
+          (window as unknown as { __darkAtBody: boolean }).__darkAtBody = document.documentElement.classList.contains('dark');
+          obs.disconnect();
+        }
+      }).observe(document, { childList: true, subtree: true });
+    }, saved);
+  }
+  const darkAtBody = (page: Page) => page.evaluate(() => (window as unknown as { __darkAtBody: boolean }).__darkAtBody);
+
+  for (const scheme of ['light', 'dark'] as const) {
+    test(`NAV-022 first visit follows a ${scheme} device before paint; the controls offer only Light and Dark`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: scheme });
+      await recordDarkAtBody(page, null);
+      await page.goto('/en');
+      expect(await darkAtBody(page)).toBe(scheme === 'dark');
+      const drawer = await openSideDrawer(page);
+      await expect(drawer.getByTestId('theme-toggle')).toHaveAccessibleName(scheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+      await expect(page.getByRole('button', { name: /^system$/i })).toHaveCount(0);
+      await expect(page.getByRole('option', { name: /^system$/i })).toHaveCount(0);
+    });
+  }
+
+  test('NAV-023 a saved choice is on <html> before paint and beats the device', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'light' });
+    await recordDarkAtBody(page, 'dark');
+    await page.goto('/ar');
+    expect(await darkAtBody(page)).toBe(true);
+    await page.reload();
+    expect(await darkAtBody(page)).toBe(true);
+  });
+
+  test('NAV-024 a "system" saved by an older release becomes the device mode, once', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await recordDarkAtBody(page, 'system');
+    await page.goto('/en');
+    expect(await darkAtBody(page)).toBe(true);
+    expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe('dark');
+    // now an explicit choice: the device turning light does not change it
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.reload();
+    await expect(page.locator('html')).toHaveClass(/\bdark\b/);
+  });
+});
+
 test.describe('Language toggle', () => {
   test.use({ storageState: ANONYMOUS_STATE });
 

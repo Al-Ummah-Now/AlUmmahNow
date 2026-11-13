@@ -10,6 +10,7 @@
  * reader (aria-describedby on a focusable chip, plus title for the mouse).
  */
 import { chartLocale, sanitizeRungs, sortByResolution, type AdminLiveEvent, type R2RungState } from '@al-ummah/shared-types';
+import { fitToViewport } from '../../../../../packages/fanous-tokens/nav/menu-fit.js';
 import type { AdminVideoR2 } from '@/lib/api/content-types';
 import type { Translator } from '@/i18n/translate';
 import { deliveryFormats } from '@/app/(protected)/delivery/format';
@@ -237,7 +238,12 @@ export function ResolutionChip({ chip, t, locale, idPrefix }: { chip: Resolution
     const id = `${idPrefix}-${chip.name.replace(/[^A-Za-z0-9_-]/g, '')}-reason`;
     const reason = chip.reason ? t('mediaDelivery.rungFailedReason', { reason: chip.reason }) : t('mediaDelivery.rungFailedUnknown');
     return (
-      <li className="relative group inline-flex">
+      <li
+        className="relative group inline-flex"
+        // The tooltip shows on hover/focus (CSS); keep it inside the screen (docs/design/NAV.md)
+        onMouseEnter={(e) => fitToViewport(e.currentTarget.querySelector<HTMLElement>('[role="tooltip"]'))}
+        onFocus={(e) => fitToViewport(e.currentTarget.querySelector<HTMLElement>('[role="tooltip"]'))}
+      >
         <button type="button" className={`${CHIP_BASE} ${CHIP_LOOK.failed} cursor-help focus:outline-none focus-visible:ring-2 focus-visible:ring-focus`} aria-describedby={id} title={reason} {...data}>
           {inner}
         </button>

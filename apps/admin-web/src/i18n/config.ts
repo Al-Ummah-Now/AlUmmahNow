@@ -6,9 +6,12 @@ export const LOCALES = ['en', 'ar'] as const;
 export type Locale = (typeof LOCALES)[number];
 export const DEFAULT_LOCALE: Locale = 'en';
 
-export const THEMES = ['system', 'light', 'dark'] as const;
+/**
+ * Light or dark (owner decision 2026-11-13: no "System" option). No cookie = no choice yet: the page
+ * follows the device (MODE_SCRIPT, src/lib/color-mode.ts) until the first click saves one.
+ */
+export const THEMES = ['light', 'dark'] as const;
 export type Theme = (typeof THEMES)[number];
-export const DEFAULT_THEME: Theme = 'system';
 
 /** Cookie names for the persisted UI preferences (readable by the client). */
 export const LOCALE_COOKIE = 'admin_locale';
