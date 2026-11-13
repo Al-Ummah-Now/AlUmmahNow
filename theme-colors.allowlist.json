@@ -130,7 +130,7 @@
   "apps/web/src/components/consent/ConsentBanner/ConsentBannerView.tsx": 30,
   "apps/web/src/components/consent/ConsentPreferences.tsx": 14,
   "apps/web/src/components/embed/CommentsFrame.tsx": 19,
-  "apps/web/src/components/embed/EmbedPlayer.tsx": 25,
+  "apps/web/src/components/embed/EmbedPlayer.tsx": 24,
   "apps/web/src/components/embed/UnavailableFrame.tsx": 7,
   "apps/web/src/components/explore/ExploreBody.tsx": 19,
   "apps/web/src/components/explore/ExploreSections.tsx": 37,
