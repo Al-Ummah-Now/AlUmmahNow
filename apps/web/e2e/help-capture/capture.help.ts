@@ -44,6 +44,7 @@ const NAMES = {
   video: { en: 'Planting a balcony garden', ar: 'زراعة حديقة في الشرفة' },
   comment: { en: 'Thank you, this was really clear.', ar: 'شكرًا، كان الشرح واضحًا جدًا.' },
   post: { en: 'New videos every Friday. What should we cover next?', ar: 'مرئيات جديدة كل جمعة. ما الموضوع الذي تقترحونه؟' },
+  playlist: { en: 'Weekend projects', ar: 'مشاريع نهاية الأسبوع' },
 };
 
 const data = useOwnData(test as never);
@@ -69,6 +70,11 @@ test.beforeAll(async ({ browser }) => {
   expect((await apiFetch(user, `/api/videos/${videoId}`, json({ titleLocalized: NAMES.video }, channelId))).status).toBeLessThan(300);
   await data.createComment(user, videoId, channelId, NAMES.comment.en);
   await data.createPost(user, channelId, { text: NAMES.post.en });
+  // A personal playlist (no channel header: the member's own, #1183)
+  const res = await apiFetch(user, '/api/playlists', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: NAMES.playlist.en, titleLocalized: NAMES.playlist, description: '', videos: [videoId], isPublic: false }) });
+  expect(res.status, `personal playlist: ${await res.clone().text()}`).toBeLessThan(300);
+  const playlistId = ((await res.json()) as { result?: { playlist?: { id?: string } } }).result?.playlist?.id;
+  if (playlistId) data.onCleanup(`playlist ${playlistId}`, () => apiFetch(user, `/api/playlists/${playlistId}`, { method: 'DELETE' }));
 });
 
 async function open(browser: Browser, lang: Lang, device: Device, mode: Mode, opts: { signedIn?: boolean; record?: string } = {}): Promise<{ context: BrowserContext; page: Page }> {
@@ -212,6 +218,15 @@ const SCENES: Scene[] = [
       const later = page.getByTestId('library-section-watch-later').getByRole('heading').first();
       const history = page.getByTestId('library-section-history').getByRole('heading').first();
       return [[later, history], []];
+    },
+  },
+  {
+    id: 'watching-playlists',
+    run: async (page, lang) => {
+      await settle(page, '/library/playlists', lang);
+      const item = page.getByTestId('playlist-manager-item').first();
+      const create = page.getByRole('link', { name: /^(New playlist|قائمة تشغيل جديدة)$/ }).or(page.getByRole('button', { name: /^(New playlist|قائمة تشغيل جديدة)$/ })).first();
+      return [[item, create], []];
     },
   },
   {
