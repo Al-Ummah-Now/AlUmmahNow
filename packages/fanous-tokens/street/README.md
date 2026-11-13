@@ -32,5 +32,7 @@ commit with their `sync-fanous` script, like the theme tokens.
 ## Each app keeps
 
 - Controls and text blocks opaque (the street must never show through one).
-- Room for garlands: gaps between rows and sections of about 60 px (desktop) and 48 px (phone) at
-  least, under `html.fanous-street`.
+- Room for garlands: gaps between rows and sections of at least about 76 px under `html.fanous-street`.
+  The module needs a free band of 60 px (desktop) or 48 px (phone) after padding every card by 6 px and
+  rounding to 4 px cells, so a 58 px gap leaves too little. Phones have no side margins, so a full list
+  needs such gaps too (the CMS opens one every fourth list item).
