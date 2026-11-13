@@ -22,6 +22,8 @@ export const CONTENT_PROXY_RULES: readonly Rule[] = [
   // Reads the lists use
   { method: 'GET', path: /^permissions$/ },
   { method: 'GET', path: /^(videos|channels|users|comments|playlists|posts)$/ },
+  // Site visits page (D-SEO-9): cookieless daily totals of the videos site
+  { method: 'GET', path: /^analytics\/visits$/ },
   // Videos list: inline and bulk actions (admin-api audits each one)
   { method: 'POST', path: new RegExp(`^videos/${ID}/(unpublish|republish)$`) },
   { method: 'DELETE', path: new RegExp(`^videos/${ID}$`) },

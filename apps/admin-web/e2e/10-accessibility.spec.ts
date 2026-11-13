@@ -15,7 +15,7 @@ const AUTH_PAGES: { name: string; path: string; ready: (page: Page) => Promise<v
   { name: 'dashboard', path: '/dashboard', ready: async (p) => expect(p.getByTestId('stat-total')).toBeVisible() },
   { name: 'moderation', path: '/moderation', ready: async (p) => expect(p.getByTestId('reports-total')).toBeVisible() },
   { name: 'translations', path: '/translations', ready: async (p) => expect(p.getByTestId('translation-row').first()).toBeVisible({ timeout: 30_000 }) },
-  { name: 'site-visits', path: '/site-visits', ready: async (p) => expect(p.getByTestId('site-visits-panel').or(p.getByTestId('site-visits-error'))).toBeVisible({ timeout: 30_000 }) },
+  { name: 'site-visits', path: '/site-visits', ready: async (p) => expect(p.getByTestId('site-visits-panel')).toBeVisible({ timeout: 30_000 }) },
   { name: 'indices', path: '/indices', ready: async (p) => expect(p.getByRole('heading', { level: 1 })).toBeVisible() },
   { name: 'not-found', path: '/no-such-page', ready: async (p) => expect(p.getByTestId('not-found')).toBeVisible() },
 ];
