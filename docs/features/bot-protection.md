@@ -75,7 +75,7 @@ Not bound anywhere in this repo today (QA/stage use the test keys); Auth binds i
 Every outcome is one Analytics Engine point (`ABUSE_EVENTS`; datasets `al_ummah_now_abuse`,
 `_stage`, `_qa`): blobs `[app, endpoint, kind, env]`, kinds `turnstile_pass`, `turnstile_fail`,
 `turnstile_missing`, `turnstile_error`, `rate_limited`, `bad_user_agent`, `bypass`. No IP, email,
-token or user id. Writers: Auth, api-videos, admin-api (Contact us), www and CMS.
+token or user id. Writers: Auth, api-videos, admin-api (Contact us) and the CMS (refused searches, CMS#120).
 
 The videos admin **Abuse** page (`/abuse`, Operations group, `ops:read`) shows totals and per-endpoint
 counts for 24 h or 7 days per environment. admin-api `GET /api/abuse/summary` reads the counters
@@ -84,7 +84,7 @@ and caches each answer 5 minutes. No D1 reads or writes.
 
 ## Rollout
 
-1. Merge with production `off` (Auth, api-videos, admin-api, www, CMS).
+1. Merge with production `off` (Auth, api-videos, admin-api).
 2. Production `monitor` in every Worker; watch the Abuse page for a few days.
 3. Production `enforce`. Undo: set `off` again.
 
