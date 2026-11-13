@@ -74,6 +74,8 @@ function dynamicRegions(page: Page) {
     page.getByTestId('video-card'),
     page.getByTestId('video-card-rtl'),
     page.getByTestId('channel-tile'),
+    // The channel directory: every channel on the stack, so its tile count (rows) changes between runs (#1169)
+    page.getByTestId('channel-tile-grid'),
     page.getByTestId('dashboard-video-card'),
     // The grid itself: its height (number of card rows) follows the user's video count
     page.getByTestId('dashboard-video-grid'),
@@ -122,7 +124,7 @@ for (const role of ['anon', 'single'] as const) {
             // same area whatever the number of items (rows / related entries).
             await page.addStyleTag({
               content:
-                '[data-testid="video-grid"],[data-testid="dashboard-video-grid"],[data-testid="related-videos-list"]{min-height:100vh}',
+                '[data-testid="video-grid"],[data-testid="dashboard-video-grid"],[data-testid="related-videos-list"],[data-testid="channel-tile-grid"]{min-height:100vh}',
             });
 
             await expect(page).toHaveScreenshot(`${entry.id}-${locale}-${colorScheme}${suffix}.png`, {
