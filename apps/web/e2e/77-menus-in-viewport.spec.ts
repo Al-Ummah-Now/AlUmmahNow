@@ -44,11 +44,13 @@ test.describe('Menus stay inside the viewport - signed out', () => {
         await page.keyboard.press('Escape');
         await expect(menu).toBeHidden();
 
+        // The search page's own box shows below 640px (sm:hidden); wider, the header's box is the one
         await page.goto(`/${locale}/search`);
-        const box = page.getByTestId('search-input');
+        const box = page.locator('[data-testid="search-input"]:visible, [data-testid="header-search-input"]:visible').first();
+        await expect(box).toBeVisible();
         await box.click();
         await box.fill(locale === 'ar' ? 'ص' : 'a');
-        const popup = page.getByTestId('search-dropdown');
+        const popup = page.locator('[data-testid="search-dropdown"]:visible').first();
         if (await popup.isVisible({ timeout: 5000 }).catch(() => false)) await expectInViewport(page, popup, 'search suggestions');
       });
     }
