@@ -123,8 +123,12 @@ export async function deleteRunUser(authUrl: string, email: string, env: NodeJS.
 	for (let attempt = 1; attempt <= 5; attempt++) {
 		let status = 0;
 		let body: { found?: number; purged?: number; error?: string } = {};
+		// A plain (ref'd) timer, not AbortSignal.timeout: Node unrefs that one, so a request that
+		// never answers left nothing keeping the process alive and the run ended mid-retry
+		const abort = new AbortController();
+		const timer = setTimeout(() => abort.abort(new Error(`no answer within ${deps.requestTimeoutMs ?? REQUEST_TIMEOUT_MS} ms`)), deps.requestTimeoutMs ?? REQUEST_TIMEOUT_MS);
 		try {
-			const res = await deps.fetch(url, { method: 'POST', headers: headers(env), signal: AbortSignal.timeout(deps.requestTimeoutMs ?? REQUEST_TIMEOUT_MS) });
+			const res = await deps.fetch(url, { method: 'POST', headers: headers(env), signal: abort.signal });
 			status = res.status;
 			body = (await res.json().catch(() => ({}))) as typeof body;
 			if (status === 429) {
@@ -135,6 +139,8 @@ export async function deleteRunUser(authUrl: string, email: string, env: NodeJS.
 			deps.log(`::warning::${email}: ${(error as Error).message} (attempt ${attempt})`);
 			await deps.sleep(2000 * attempt);
 			continue;
+		} finally {
+			clearTimeout(timer);
 		}
 		if (status === 200) return body.found ? 'deleted' : 'absent';
 		// The route is missing: the auth deployment predates it or run-account support is off
