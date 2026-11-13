@@ -317,9 +317,10 @@ jobs:
 
       # No surface serves an expired thumbnail or gives crawlers a signed one; /thumb works and
       # hides unknown ids (scripts/release/thumbnail-check.ts; 2026-11-12/13 incidents). Signed
-      # URLs that www/CMS store are warnings until those repos serve /thumb.
+      # URLs that www/CMS store fail too (--strict-stored): since www v2026.11.13.4 and CMS
+      # v2026.11.13.3 both serve /thumb, and the stored copies were repaired on 2026-11-13.
       - name: Thumbnail check (stage)
-        run: node --experimental-strip-types --no-warnings scripts/release/thumbnail-check.ts --env stage
+        run: node --experimental-strip-types --no-warnings scripts/release/thumbnail-check.ts --env stage --strict-stored
 
       - name: Stage result
         if: always()
@@ -621,9 +622,10 @@ jobs:
 
       # No surface serves an expired thumbnail or gives crawlers a signed one; /thumb works and
       # hides unknown ids (scripts/release/thumbnail-check.ts; 2026-11-12/13 incidents). Signed
-      # URLs that www/CMS store are warnings until those repos serve /thumb.
+      # URLs that www/CMS store fail too (--strict-stored): since www v2026.11.13.4 and CMS
+      # v2026.11.13.3 both serve /thumb, and the stored copies were repaired on 2026-11-13.
       - name: Thumbnail check (production)
-        run: node --experimental-strip-types --no-warnings scripts/release/thumbnail-check.ts --env production
+        run: node --experimental-strip-types --no-warnings scripts/release/thumbnail-check.ts --env production --strict-stored
 
       - name: Install Chromium
         uses: ./.github/actions/playwright-install
