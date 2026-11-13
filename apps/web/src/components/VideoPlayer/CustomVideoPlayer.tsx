@@ -214,6 +214,8 @@ export default function CustomVideoPlayer({
   // Starts playback the page asked for (set once the player is ready); the source swap of the next
   // video calls it again, since the player is not created anew
   const startAutoplayRef = useRef<(player: ExtendedPlayer) => void>(() => undefined);
+  // The video the player last loaded (the source swap of a seamless next compares against it)
+  const loadedVideoIdRef = useRef(videoId);
   const touchFeedbackCleanupRef = useRef<(() => void) | null>(null);
 
   // Phase 3: Advanced analytics state tracking
@@ -947,8 +949,11 @@ export default function CustomVideoPlayer({
     const currentSrc = (player as ExtendedPlayer & { currentSource?: () => { src?: string } | undefined }).currentSource?.()?.src || player.currentSrc();
     const newSrc = sources[0]?.src;
 
-    // Only update if the source actually changed
-    if (newSrc && (!currentSrc || !isSameMediaUrl(currentSrc, newSrc))) {
+    // Only when the page moved to another video (seamless next) or its source changed. Right after
+    // the player is created it reports no source yet: that is the first load, not a swap.
+    const movedOn = loadedVideoIdRef.current !== videoId;
+    loadedVideoIdRef.current = videoId;
+    if (newSrc && ((currentSrc && !isSameMediaUrl(currentSrc, newSrc)) || (movedOn && !(currentSrc && isSameMediaUrl(currentSrc, newSrc))))) {
       logger.debug(`[CustomVideoPlayer] Video ID changed, updating source to ${videoId}`);
 
       // Reset quartiles for new video
