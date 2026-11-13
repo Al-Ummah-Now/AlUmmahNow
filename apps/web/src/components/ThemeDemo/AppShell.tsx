@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import Link from '@/components/common/AppLink';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { ChevronLeft, ChevronRight, CircleUserRound, Clock, Compass, Heart, History, Home, Languages, Menu, Moon, ShieldCheck, Sun, Tv, BookOpen, Mail, Activity, X, type LucideIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CircleHelp, CircleUserRound, Clock, Compass, Heart, History, Home, Languages, Menu, Moon, ShieldCheck, Sun, Tv, BookOpen, Mail, Activity, X, type LucideIcon } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { saveLanguagePreference } from '@/lib/i18n/utils';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
@@ -15,6 +15,7 @@ import { UploadAction } from '@/components/Header/UploadAction';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { useRailMotion } from './rail-breakpoint';
 import { statusPageUrl } from '@/lib/navigation/destinations';
+import { IdentityTour } from '@/components/help/IdentityTour';
 
 const L = {
   en: { status: 'Status', browse: 'Browse', create: 'Create', more: 'More', history: 'History', watchLater: 'Watch later', liked: 'Liked videos', settings: 'Settings', search: 'Search videos', lightMode: 'Switch to light mode', darkMode: 'Switch to dark mode', other: 'العربية', otherLabel: 'التبديل إلى العربية', menu: 'Menu', close: 'Close menu' },
@@ -63,6 +64,7 @@ export function AppShell() {
       { label: c.liked, href: `${base}/library/liked`, icon: Heart },
     ] },
     { title: c.more, items: [
+      { label: t.help.navLabel, href: `${base}/help`, icon: CircleHelp },
       { label: t.navigation.privacyAndCookies, href: `${base}/settings/privacy`, icon: ShieldCheck },
       { label: t.communityGuidelines.navLabel, href: `${base}/community-guidelines`, icon: BookOpen },
       { label: t.contact.navLabel, href: `${base}/contact`, icon: Mail },
@@ -134,6 +136,9 @@ export function AppShell() {
           <button type="button" className="ic ic-sm nv-close" aria-label={c.close} onClick={() => setOpen(false)}><X aria-hidden="true" /></button>
         </div>
       </nav>
+
+      {/* The identity tour: offered once per account, re-opened from Help */}
+      <IdentityTour />
 
       <nav className="tabbar" aria-label={c.browse}>
         {tabs.map((it) => (
