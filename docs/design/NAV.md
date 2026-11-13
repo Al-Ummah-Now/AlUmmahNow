@@ -299,8 +299,11 @@ suggestions or tooltip ever renders outside the viewport.**
 - Popups placed by a library with collision handling (Radix menus and selects in the videos web) and
   popups with their own placement (the videos web's `MenuButton`, the player's settings menu) keep it.
 - Every hand-placed popup calls `fitToViewport` after it opens: it shifts the popup sideways (CSS
-  `translate`) to keep an 8px gutter, narrows it when wider than the screen, caps its height to the
-  room below its top (the popup scrolls inside) and re-fits on resize. Source:
+  `translate`) to keep an 8px gutter, narrows it when wider than the screen, and keeps it below its
+  anchor when it fits; otherwise, when there is more room above the anchor, it opens upwards. Its
+  height is capped to the room on that side (the popup scrolls inside), never with a minimum height,
+  measured against the visual viewport (an on-screen keyboard counts). It re-fits when its own size
+  changes (results arriving after it opened) and on resize. Source:
   `packages/fanous-tokens/nav/menu-fit.js` (videos web via `useFitToViewport`, videos admin);
   www `src/scripts/menu-fit.ts` and CMS `src/admin/client/dom.ts` carry the same function.
 - Tests: each app has an E2E that opens its menus at 320, 375 and 414 px wide and a landscape phone
