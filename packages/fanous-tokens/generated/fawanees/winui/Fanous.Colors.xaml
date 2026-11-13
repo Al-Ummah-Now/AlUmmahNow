@@ -138,7 +138,7 @@
             <SolidColorBrush x:Key="FanousLiveBrush" Color="{StaticResource FanousLiveColor}" />
             <Color x:Key="FanousOnLiveColor">#FF09151E</Color>
             <SolidColorBrush x:Key="FanousOnLiveBrush" Color="{StaticResource FanousOnLiveColor}" />
-            <Color x:Key="FanousAccentColor">#FF9A5200</Color>
+            <Color x:Key="FanousAccentColor">#FF8A4900</Color>
             <SolidColorBrush x:Key="FanousAccentBrush" Color="{StaticResource FanousAccentColor}" />
             <Color x:Key="FanousFocusRingColor">#FF8A5A12</Color>
             <SolidColorBrush x:Key="FanousFocusRingBrush" Color="{StaticResource FanousFocusRingColor}" />

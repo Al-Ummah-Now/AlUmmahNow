@@ -39,25 +39,3 @@ html[data-theme='fawanees'] div:has(> #video-player) > .watch-desc { width: calc
 html[data-theme='fawanees'] #comments { padding-block: 16px; }
 html[data-theme='fawanees'] .related-videos { padding-block: 12px; }
 
-/* Room for the street's garlands (only while the street is on) */
-html.fanous-street[data-theme='fawanees'] .home-hero { margin-bottom: 76px !important; }
-html.fanous-street[data-theme='fawanees'] .home-h + .grid { row-gap: 92px !important; }
-html.fanous-street[data-theme='fawanees'] div:has(> #video-player),
-html.fanous-street[data-theme='fawanees'] .watch-skeleton,
-html.fanous-street[data-theme='fawanees'] #comments,
-html.fanous-street[data-theme='fawanees'] .related-videos { margin-block-end: 84px !important; }
-@media (max-width: 639px) {
-  html.fanous-street[data-theme='fawanees'] .home-h + .grid { row-gap: 76px !important; }
-  html.fanous-street[data-theme='fawanees'] .home-hero { margin-bottom: 68px !important; }
-}
-/* On narrow screens the related videos stack under the comments: one card each, garlands between */
-@media (max-width: 1023px) {
-  html.fanous-street[data-theme='fawanees'] .related-videos { background: transparent !important; box-shadow: none !important; padding: 0 !important; }
-  html.fanous-street[data-theme='fawanees'] .related-videos .rv {
-    background: var(--fanous-color-surface) !important;
-    border-radius: var(--r-xl);
-    box-shadow: var(--m-card-edge);
-    overflow: hidden;
-    margin-block-end: 76px !important;
-  }
-}

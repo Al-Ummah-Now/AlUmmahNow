@@ -1469,7 +1469,7 @@ html[data-theme='nahas']:not(.dark) {
   --fanous-street-on: 0;
 }
 
-/* Theme package fawanees@1.2.0. Generated, do not edit. */
+/* Theme package fawanees@1.3.0. Generated, do not edit. */
 :root, html[data-theme='fawanees'] {
   --fanous-brand-night: #09151e;
   --fanous-brand-night-deep: #07425a;
@@ -1779,10 +1779,10 @@ html[data-theme='nahas']:not(.dark) {
   --fanous-c-empty-body: #d6dfe2;
   --fanous-c-empty-icon: #b0c0c8;
   --fanous-street-on: 1;
-  --fanous-street-line: #f5cf9242;
-  --fanous-street-window: #fbc661b8;
-  --fanous-street-glow: 0.6;
-  --fanous-street-lights: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22300%22%20height%3D%22260%22%20viewBox%3D%220%200%20300%20260%22%3E%3Cdefs%3E%3CradialGradient%20id%3D%22d%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23f4ae3a%22%2F%3E%3Cstop%20offset%3D%22.45%22%20stop-color%3D%22%23f4ae3a%22%20stop-opacity%3D%220.42%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23f4ae3a%22%20stop-opacity%3D%220.00%22%2F%3E%3C%2FradialGradient%3E%3C%2Fdefs%3E%3Ccircle%20cx%3D%2229.7%22%20cy%3D%2219.9%22%20r%3D%2213%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.20%22%2F%3E%3Ccircle%20cx%3D%2293.7%22%20cy%3D%2233.8%22%20r%3D%227%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.20%22%2F%3E%3Ccircle%20cx%3D%22205.5%22%20cy%3D%2222.2%22%20r%3D%225%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.40%22%2F%3E%3Ccircle%20cx%3D%22258.9%22%20cy%3D%2223.2%22%20r%3D%2211%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.40%22%2F%3E%3Ccircle%20cx%3D%2218.1%22%20cy%3D%2299.9%22%20r%3D%226%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.20%22%2F%3E%3Ccircle%20cx%3D%22115.9%22%20cy%3D%2293.8%22%20r%3D%226%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.20%22%2F%3E%3Ccircle%20cx%3D%22190.0%22%20cy%3D%2284.3%22%20r%3D%229%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.26%22%2F%3E%3Ccircle%20cx%3D%22264.3%22%20cy%3D%22100.1%22%20r%3D%2211%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.26%22%2F%3E%3Ccircle%20cx%3D%2220.0%22%20cy%3D%22165.1%22%20r%3D%226%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.32%22%2F%3E%3Ccircle%20cx%3D%2294.8%22%20cy%3D%22170.1%22%20r%3D%2211%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.20%22%2F%3E%3Ccircle%20cx%3D%22192.7%22%20cy%3D%22162.4%22%20r%3D%2211%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.40%22%2F%3E%3Ccircle%20cx%3D%22274.7%22%20cy%3D%22161.3%22%20r%3D%229%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.32%22%2F%3E%3Ccircle%20cx%3D%2228.7%22%20cy%3D%22238.1%22%20r%3D%2213%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.26%22%2F%3E%3Ccircle%20cx%3D%2294.1%22%20cy%3D%22220.3%22%20r%3D%229%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.32%22%2F%3E%3Ccircle%20cx%3D%22197.6%22%20cy%3D%22219.9%22%20r%3D%225%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.20%22%2F%3E%3Ccircle%20cx%3D%22263.0%22%20cy%3D%22215.4%22%20r%3D%227%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.26%22%2F%3E%3C%2Fsvg%3E");
+  --fanous-street-line: #f5cf921a;
+  --fanous-street-window: #fbc66124;
+  --fanous-street-glow: 0;
+  --fanous-street-lights: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22300%22%20height%3D%22260%22%20viewBox%3D%220%200%20300%20260%22%3E%3Cdefs%3E%3CradialGradient%20id%3D%22d%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23f4ae3a%22%2F%3E%3Cstop%20offset%3D%22.45%22%20stop-color%3D%22%23f4ae3a%22%20stop-opacity%3D%220.063%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23f4ae3a%22%20stop-opacity%3D%220.000%22%2F%3E%3C%2FradialGradient%3E%3C%2Fdefs%3E%3Ccircle%20cx%3D%2229.7%22%20cy%3D%2219.9%22%20r%3D%2213%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.030%22%2F%3E%3Ccircle%20cx%3D%2293.7%22%20cy%3D%2233.8%22%20r%3D%227%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.030%22%2F%3E%3Ccircle%20cx%3D%22205.5%22%20cy%3D%2222.2%22%20r%3D%225%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.060%22%2F%3E%3Ccircle%20cx%3D%22258.9%22%20cy%3D%2223.2%22%20r%3D%2211%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.060%22%2F%3E%3Ccircle%20cx%3D%2218.1%22%20cy%3D%2299.9%22%20r%3D%226%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.030%22%2F%3E%3Ccircle%20cx%3D%22115.9%22%20cy%3D%2293.8%22%20r%3D%226%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.030%22%2F%3E%3Ccircle%20cx%3D%22190.0%22%20cy%3D%2284.3%22%20r%3D%229%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.039%22%2F%3E%3Ccircle%20cx%3D%22264.3%22%20cy%3D%22100.1%22%20r%3D%2211%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.039%22%2F%3E%3Ccircle%20cx%3D%2220.0%22%20cy%3D%22165.1%22%20r%3D%226%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.048%22%2F%3E%3Ccircle%20cx%3D%2294.8%22%20cy%3D%22170.1%22%20r%3D%2211%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.030%22%2F%3E%3Ccircle%20cx%3D%22192.7%22%20cy%3D%22162.4%22%20r%3D%2211%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.060%22%2F%3E%3Ccircle%20cx%3D%22274.7%22%20cy%3D%22161.3%22%20r%3D%229%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.048%22%2F%3E%3Ccircle%20cx%3D%2228.7%22%20cy%3D%22238.1%22%20r%3D%2213%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.039%22%2F%3E%3Ccircle%20cx%3D%2294.1%22%20cy%3D%22220.3%22%20r%3D%229%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.048%22%2F%3E%3Ccircle%20cx%3D%22197.6%22%20cy%3D%22219.9%22%20r%3D%225%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.030%22%2F%3E%3Ccircle%20cx%3D%22263.0%22%20cy%3D%22215.4%22%20r%3D%227%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.039%22%2F%3E%3C%2Fsvg%3E");
 }
 
 html:not(.dark), html[data-theme='fawanees']:not(.dark) {
@@ -1816,7 +1816,7 @@ html:not(.dark), html[data-theme='fawanees']:not(.dark) {
   --fanous-color-on-error-fill: #ffffff;
   --fanous-color-live: #fbc661;
   --fanous-color-on-live: #09151e;
-  --fanous-color-accent: #9a5200;
+  --fanous-color-accent: #8a4900;
   --fanous-color-focus-ring: #8a5a12;
   --fanous-color-focus-glow: #a85600;
   --fanous-color-verified-icon: #0f5a2c;
@@ -1903,9 +1903,9 @@ html:not(.dark), html[data-theme='fawanees']:not(.dark) {
   --fanous-c-form-focus-ring: #8a5a12;
   --fanous-c-form-error: #b00020;
   --fanous-c-form-success: #0f5a2c;
-  --fanous-c-form-check-on: #9a5200;
+  --fanous-c-form-check-on: #8a4900;
   --fanous-c-form-check-mark: #fffdf9;
-  --fanous-c-form-switch-on: #9a5200;
+  --fanous-c-form-switch-on: #8a4900;
   --fanous-c-form-switch-off: #7a7468;
   --fanous-c-form-switch-thumb: #fffdf9;
   --fanous-c-card-video-bg: #fffdf9;
@@ -1918,7 +1918,7 @@ html:not(.dark), html[data-theme='fawanees']:not(.dark) {
   --fanous-c-tabs-bg: #fffdf9;
   --fanous-c-tabs-text: #35434b;
   --fanous-c-tabs-active-text: #7a4300;
-  --fanous-c-tabs-indicator: #9a5200;
+  --fanous-c-tabs-indicator: #8a4900;
   --fanous-c-tabs-border: #e4ded3;
   --fanous-c-segment-bg: #ffffff;
   --fanous-c-segment-text: #16232b;
@@ -1946,7 +1946,7 @@ html:not(.dark), html[data-theme='fawanees']:not(.dark) {
   --fanous-c-badge-status-text: #ffffff;
   --fanous-c-player-control: #16232b;
   --fanous-c-player-control-bg: #fffdf9;
-  --fanous-c-player-progress: #9a5200;
+  --fanous-c-player-progress: #8a4900;
   --fanous-c-player-buffered: #7a7468;
   --fanous-c-player-track: #ffffff;
   --fanous-c-footer-bg: #fffdf9;
@@ -1961,8 +1961,8 @@ html:not(.dark), html[data-theme='fawanees']:not(.dark) {
   --fanous-c-empty-body: #35434b;
   --fanous-c-empty-icon: #4b5860;
   --fanous-street-on: 1;
-  --fanous-street-line: #d8cebdff;
-  --fanous-street-window: #f4ae3a29;
-  --fanous-street-glow: 0.34;
+  --fanous-street-line: #dfd4c8ff;
+  --fanous-street-window: #f4ae3a4d;
+  --fanous-street-glow: 0.1;
   --fanous-street-lights: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22300%22%20height%3D%22260%22%20viewBox%3D%220%200%20300%20260%22%3E%3Cdefs%3E%3CradialGradient%20id%3D%22d%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23f4ae3a%22%2F%3E%3Cstop%20offset%3D%22.45%22%20stop-color%3D%22%23f4ae3a%22%20stop-opacity%3D%22.5%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23f4ae3a%22%20stop-opacity%3D%220%22%2F%3E%3C%2FradialGradient%3E%3C%2Fdefs%3E%3Ccircle%20cx%3D%2229.7%22%20cy%3D%2219.9%22%20r%3D%2213%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.1%22%2F%3E%3Ccircle%20cx%3D%2293.7%22%20cy%3D%2233.8%22%20r%3D%227%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.1%22%2F%3E%3Ccircle%20cx%3D%22205.5%22%20cy%3D%2222.2%22%20r%3D%225%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.2%22%2F%3E%3Ccircle%20cx%3D%22258.9%22%20cy%3D%2223.2%22%20r%3D%2211%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.2%22%2F%3E%3Ccircle%20cx%3D%2218.1%22%20cy%3D%2299.9%22%20r%3D%226%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.1%22%2F%3E%3Ccircle%20cx%3D%22115.9%22%20cy%3D%2293.8%22%20r%3D%226%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.1%22%2F%3E%3Ccircle%20cx%3D%22190.0%22%20cy%3D%2284.3%22%20r%3D%229%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.13%22%2F%3E%3Ccircle%20cx%3D%22264.3%22%20cy%3D%22100.1%22%20r%3D%2211%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.13%22%2F%3E%3Ccircle%20cx%3D%2220.0%22%20cy%3D%22165.1%22%20r%3D%226%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.16%22%2F%3E%3Ccircle%20cx%3D%2294.8%22%20cy%3D%22170.1%22%20r%3D%2211%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.1%22%2F%3E%3Ccircle%20cx%3D%22192.7%22%20cy%3D%22162.4%22%20r%3D%2211%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.2%22%2F%3E%3Ccircle%20cx%3D%22274.7%22%20cy%3D%22161.3%22%20r%3D%229%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.16%22%2F%3E%3Ccircle%20cx%3D%2228.7%22%20cy%3D%22238.1%22%20r%3D%2213%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.13%22%2F%3E%3Ccircle%20cx%3D%2294.1%22%20cy%3D%22220.3%22%20r%3D%229%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.16%22%2F%3E%3Ccircle%20cx%3D%22197.6%22%20cy%3D%22219.9%22%20r%3D%225%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.1%22%2F%3E%3Ccircle%20cx%3D%22263.0%22%20cy%3D%22215.4%22%20r%3D%227%22%20fill%3D%22url(%23d)%22%20opacity%3D%220.13%22%2F%3E%3C%2Fsvg%3E");
 }

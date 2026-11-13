@@ -3,205 +3,151 @@
 // vendor this file as is (with fanous-street.css).
 //
 // The theme decides: the active theme's tokens set --fanous-street-on to 1 (theme package
-// `street` section, Fawanees). This module then
-//   - marks <html class="fanous-street"> and adds a fixed layer of soft distant lights behind the
-//     page content that drifts at 0.2x the scroll (a passive scroll listener; still with reduced
-//     motion; no CSS animations, so nothing waits forever on document.getAnimations()), and
-//   - measures the page and hangs garlands of whole lanterns only in real free space: gaps
-//     between rows and sections that span most of the content width, and wide side margins.
-//     Lanterns are sized to fit their gap, so nothing ever sits in front of one (no cut lanterns).
-// It re-measures when the layout, the theme or the mode changes. Colours come from the theme
-// tokens (--fanous-street-line/-window/-glow), so light and dark need nothing here.
-//
-// Performance: the street never runs on a page that plays video (the app marks
-// <html data-fanous-street="off"> on its watch and Shorts pages), never measures while any video
-// plays, measures at most every 2 s and only when the browser is idle, and moves the distant
-// lights with a GPU transform (no repaint; none at all in Firefox or with reduced motion).
-//
-// Page hooks:
-//   <html data-fanous-street="off">  no street on this page (watch and Shorts pages)
-//   data-fanous-street-region   the element whose free space may hold lanterns (default:
-//                               #main-content, then main, then body)
-//   data-fanous-street="off"    no lanterns inside this element (Studio's work area)
-// An area whose ancestor paints an opaque background (an app's own frame) gets none either.
+// `street` section, Fawanees). This module then marks <html class="fanous-street"> and paints the
+// street as the page background, behind every element:
+//   - far: a fixed layer of soft distant lights that drifts at 0.2x the scroll, and
+//   - near: strings of whole lanterns, row after row down the whole page, moving with the page.
+//     Every row is drawn from its own seeded random numbers (swag lengths, sag, lantern spacing,
+//     drop lengths, sizes), so rows never repeat or line up, and the same page always draws the
+//     same street (reloads and screenshots match). Rows are laid out on a wide virtual strip, so
+//     resizing the window keeps them where they were.
+// Cards, menus and controls paint over it as they would over any background. The theme's street
+// colours are chosen so every text colour keeps 4.5:1 over the brightest or darkest street pixel.
+// Reduced motion: the far lights stand still (the near street simply scrolls with the page).
+// No CSS animations, so nothing waits forever on document.getAnimations().
 
 const NS = 'http://www.w3.org/2000/svg';
 const ID = 'fanous-street';
 const LIGHTS_ID = 'fanous-street-lights';
-const CELL = 4;
 // The lantern, drawn after the theme's lantern art: ring and finial, onion dome, collar,
 // hexagonal body with three arched windows (class fs-w, lit by --fanous-street-window), base, drop.
 const LANTERN = '<circle cx="0" cy="4" r="3"/><path d="M0 7V12"/><path d="M-14 34C-18 24-6 20 0 12C6 20 18 24 14 34Z"/><path d="M-17 34H17V38H-17Z"/><path d="M-15 38H15L18 44V74L15 80H-15L-18 74V44Z"/><path class="fs-w" d="M-5 74V55C-5 50-1 49 0 45C1 49 5 50 5 55V74Z"/><path class="fs-w" d="M-14 73V58C-14 55-12 54-11 51C-10 54-9 55-9 58V73Z"/><path class="fs-w" d="M14 73V58C14 55 12 54 11 51C10 54 9 55 9 58V73Z"/><path d="M-17 80H17L12 88H-12Z"/><path d="M-4 88L0 96L4 88"/>';
-
-const transparent = (bg) => bg === 'transparent' || /rgba\([^)]*,\s*0\)$/.test(bg) || /\/\s*0\)$/.test(bg);
+/** The virtual strip each row is laid out on (wider than any screen). */
+const STRIP = 4096;
 
 /** Whether the active theme and mode switch the street on. */
 export function streetEnabled(doc = globalThis.document) {
-  if (doc.documentElement.dataset.fanousStreet === 'off') return false;
   return doc.defaultView.getComputedStyle(doc.documentElement).getPropertyValue('--fanous-street-on').trim() === '1';
 }
 
-function regionOf(doc) {
-  return doc.querySelector('[data-fanous-street-region]') || doc.querySelector('#main-content') || doc.querySelector('main') || doc.body;
+/** A small seeded random number generator (mulberry32): the same seed, the same numbers. */
+function seeded(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
-/** Rectangles (viewport coordinates) of everything that must not have a lantern behind it. */
-function obstacles(region) {
-  const win = region.ownerDocument.defaultView;
-  const out = [];
-  for (const el of region.querySelectorAll('*')) {
-    if (el.id === ID || el.id === LIGHTS_ID || el.closest('#' + ID)) continue;
-    const r = el.getBoundingClientRect();
-    if (r.width < 1 || r.height < 1) continue;
-    if (el.closest('[data-fanous-street="off"]')) { out.push(r); continue; }
-    const s = win.getComputedStyle(el);
-    if (s.visibility === 'hidden' || s.opacity === '0' || s.display === 'contents') continue;
-    const media = /^(img|video|svg|canvas|iframe|input|select|textarea|button|picture)$/i.test(el.tagName)
-      || s.backgroundImage !== 'none' || s.boxShadow !== 'none' || parseFloat(s.borderTopWidth) > 0;
-    const text = Array.from(el.childNodes).some((n) => n.nodeType === 3 && n.textContent.trim());
-    // A ::before / ::after that paints (a rule beside a heading, a marker) is not in the DOM:
-    // the element's whole box stands for it
-    const pseudo = !media && !text && ['::before', '::after'].some((p) => {
-      const ps = win.getComputedStyle(el, p);
-      return ps.content !== 'none' && ps.content !== 'normal' && ps.display !== 'none'
-        && (!transparent(ps.backgroundColor) || ps.backgroundImage !== 'none' || parseFloat(ps.borderTopWidth) > 0 || parseFloat(ps.borderBottomWidth) > 0 || (ps.content !== '""' && ps.content !== "''"));
-    });
-    if (transparent(s.backgroundColor) && !media && !text && !pseudo) continue;
-    out.push(r);
-  }
-  return out;
+/** The row pitch: phones get closer rows (smaller screens). */
+export function rowHeight(width) {
+  return width < 640 ? 150 : 180;
 }
 
 /**
- * Measures the page and draws the garlands. Returns what it did (for tests): the lanterns placed,
- * the gaps used, or why it drew nothing.
+ * One row of the street, laid out on the virtual strip: its strings (swags between posts) and its
+ * lanterns. Depends only on the row number and the phone/desktop scale, never on the window width.
+ */
+export function streetRow(k, phone) {
+  const rnd = seeded(Math.imul(k + 1, 2654435761) ^ (phone ? 0x5bd1e995 : 0x1b873593));
+  const r = (lo, hi) => lo + (hi - lo) * rnd();
+  const maxH = phone ? 40 : 46;
+  const y0 = r(4, 22);
+  const swags = [];
+  const lanterns = [];
+  let x = -r(0, 260);
+  while (x < STRIP) {
+    const len = r(phone ? 200 : 240, phone ? 340 : 440);
+    const sag = r(8, 26);
+    const ya = y0 + r(-6, 6), yb = y0 + r(-6, 6);
+    swags.push({ xa: x, ya, xb: x + len, yb, sag });
+    // 1 to 3 lanterns along this swag, never closer than a lantern's width to each other
+    const n = 1 + Math.floor(rnd() * 3);
+    const ts = [];
+    for (let i = 0; i < n; i++) {
+      const t = r(0.12, 0.88);
+      if (ts.every((u) => Math.abs(u - t) * len > 44)) ts.push(t);
+    }
+    for (const t of ts) {
+      const lx = x + t * len;
+      const ly = ya + (yb - ya) * t + sag * 4 * t * (1 - t);
+      const h = r(maxH * 0.55, maxH);
+      const cord = r(6, phone ? 26 : 34);
+      lanterns.push({ x: lx, top: ly, y: ly + cord, h });
+    }
+    x += len;
+  }
+  return { swags, lanterns };
+}
+
+/** Draws the rows that cross the viewport at the current scroll (a fixed layer, page coordinates). */
+function drawRows(svg, win, cache) {
+  const w = win.innerWidth, h = win.innerHeight, phone = w < 640;
+  const pitch = rowHeight(w);
+  const sy = win.scrollY;
+  const first = Math.floor((sy - 140) / pitch), last = Math.ceil((sy + h) / pitch);
+  const key = `${w}|${first}|${last}`;
+  const g = svg.firstElementChild.nextElementSibling;
+  g.setAttribute('transform', `translate(0 ${-Math.round(sy)})`);
+  if (cache.key === key) return;
+  cache.key = key;
+  let out = '';
+  for (let k = Math.max(0, first); k <= last; k++) {
+    const { swags, lanterns } = streetRow(k, phone);
+    const top = k * pitch;
+    let strings = '', bulbs = '', lamps = '';
+    for (const s of swags) {
+      if (s.xb < -10 || s.xa > w + 10) continue;
+      const mx = (s.xa + s.xb) / 2, my = (s.ya + s.yb) / 2 + s.sag * 2;
+      strings += `<path d="M${s.xa.toFixed(1)} ${(top + s.ya).toFixed(1)}Q${mx.toFixed(1)} ${(top + my).toFixed(1)} ${s.xb.toFixed(1)} ${(top + s.yb).toFixed(1)}"/>`;
+      for (let x = s.xa + 12; x < s.xb - 8; x += phone ? 18 : 22) {
+        if (x < 2 || x > w - 2) continue;
+        const t = (x - s.xa) / (s.xb - s.xa);
+        bulbs += `<circle cx="${x.toFixed(1)}" cy="${(top + s.ya + (s.yb - s.ya) * t + s.sag * 4 * t * (1 - t) + 2.5).toFixed(1)}" r="1.6"/>`;
+      }
+    }
+    for (const l of lanterns) {
+      const sc = l.h / 100, half = 24 * sc;
+      // Whole lanterns only: none cut by the window's side
+      if (l.x - half < 2 || l.x + half > w - 2) continue;
+      lamps += `<g class="fs-l"><circle cx="${l.x.toFixed(1)}" cy="${(top + l.y + 62 * sc).toFixed(1)}" r="${(30 * sc).toFixed(1)}" fill="url(#fs-g)" class="fs-glow" stroke="none"/>`
+        + `<path d="M${l.x.toFixed(1)} ${(top + l.top).toFixed(1)}V${(top + l.y).toFixed(1)}"/>`
+        + `<use href="#fs-lantern" x="${(l.x - half).toFixed(1)}" y="${(top + l.y).toFixed(1)}" width="${(48 * sc).toFixed(1)}" height="${(100 * sc).toFixed(1)}"/></g>`;
+    }
+    out += `<g class="fs-row" data-row="${k}">${bulbs}${strings}${lamps}</g>`;
+  }
+  g.innerHTML = out;
+}
+
+/**
+ * Draws the street once for the current scroll (tests). Returns the rows and lanterns drawn, or
+ * why it drew nothing.
  */
 export function renderStreet(doc = globalThis.document) {
   const win = doc.defaultView;
-  const clear = () => { const old = doc.getElementById(ID); if (old) old.innerHTML = ''; };
   if (!streetEnabled(doc)) { doc.getElementById(ID)?.remove(); return { placed: 0, reason: 'off' }; }
-  const region = regionOf(doc);
-  if (!region) { clear(); return { placed: 0, reason: 'no region' }; }
-  // An app that paints its own opaque frame around the content covers the street: draw nothing there
-  for (let el = region; el && el !== doc.body && el !== doc.documentElement; el = el.parentElement) {
-    if (!transparent(win.getComputedStyle(el).backgroundColor) || el.matches('[data-fanous-street="off"]')) { clear(); return { placed: 0, reason: 'covered' }; }
-  }
-  const phone = win.innerWidth < 640;
-  const root = doc.documentElement;
-  const W = root.scrollWidth, H = root.scrollHeight;
-  const sx = win.scrollX, sy = win.scrollY;
-  const rr = region.getBoundingClientRect();
-  const RX0 = Math.max(0, rr.left + sx), RX1 = Math.min(W, rr.right + sx), RY1 = Math.min(H, rr.bottom + sy);
-  // Fixed and sticky chrome (header, rail, bottom bar) is not page space
-  const fixed = Array.from(doc.querySelectorAll('header, nav, aside, [data-fanous-street-chrome]'))
-    .filter((e) => { const p = win.getComputedStyle(e).position; return p === 'fixed' || p === 'sticky'; })
-    .map((e) => e.getBoundingClientRect()).filter((r) => r.width && r.height && r.right > 0 && r.left < win.innerWidth);
-  const topLimit = Math.max(rr.top + sy, ...fixed.filter((r) => r.top <= 1 && r.width > win.innerWidth * 0.6).map((r) => r.bottom + sy));
-  const cols = Math.ceil(W / CELL), rows = Math.ceil(H / CELL);
-  if (!cols || !rows || cols * rows > 6e6) { clear(); return { placed: 0, reason: 'size' }; }
-  const occ = new Uint8Array(cols * rows);
-  const mark = (l, t, r, b, pad) => {
-    const x0 = Math.max(0, Math.floor((l - pad) / CELL)), x1 = Math.min(cols, Math.ceil((r + pad) / CELL));
-    const y0 = Math.max(0, Math.floor((t - pad) / CELL)), y1 = Math.min(rows, Math.ceil((b + pad) / CELL));
-    for (let y = y0; y < y1; y++) occ.fill(1, y * cols + x0, y * cols + x1);
-  };
-  mark(0, 0, W, topLimit, 0); mark(0, 0, RX0, H, 0); mark(RX1, 0, W, H, 0); mark(0, RY1, W, H, 0);
-  for (const r of fixed) if (r.width < win.innerWidth * 0.6) mark(r.left + sx, 0, r.right + sx, H, 4);
-  for (const r of obstacles(region)) mark(r.left + sx, r.top + sy, r.right + sx, r.bottom + sy, 6);
-  const free = (l, t, r, b) => {
-    const x0 = Math.floor(l / CELL), x1 = Math.ceil(r / CELL), y0 = Math.floor(t / CELL), y1 = Math.ceil(b / CELL);
-    if (x0 < 0 || y0 < 0 || x1 > cols || y1 > rows) return false;
-    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (occ[y * cols + x]) return false;
-    return true;
-  };
-
-  // Free bands: a run of free cells that continues row after row. Wide ones are gaps between rows
-  // and sections; narrower tall ones (desktop only) are side margins.
-  const RW = RX1 - RX0;
-  const MIN_W = RW * 0.55, MIN_H = phone ? 48 : 60, SPACING = phone ? 92 : 156, MAX_H = phone ? 44 : 60;
-  const SIDE_MIN = phone ? Infinity : 150, GAP_Y = 230;
-  const c0 = Math.ceil(RX0 / CELL), c1 = Math.floor(RX1 / CELL);
-  const runsOf = (y) => {
-    const out = []; let start = -1;
-    for (let x = c0; x <= c1; x++) {
-      const isFree = x < c1 && !occ[y * cols + x];
-      if (isFree && start < 0) start = x;
-      if (!isFree && start >= 0) { if ((x - start) * CELL >= Math.min(MIN_W, SIDE_MIN)) out.push([start, x]); start = -1; }
-    }
-    return out;
-  };
-  const bands = [];
-  let open = [];
-  for (let y = Math.ceil(topLimit / CELL); y < Math.floor(RY1 / CELL); y++) {
-    const next = [];
-    for (const [a0, a1] of runsOf(y)) {
-      const cont = open.find((o) => Math.min(o.b, a1) - Math.max(o.a, a0) >= Math.min(o.b - o.a, a1 - a0) * 0.8);
-      if (cont) { cont.a = Math.max(cont.a, a0); cont.b = Math.min(cont.b, a1); cont.y1 = y + 1; next.push(cont); open = open.filter((o) => o !== cont); }
-      else next.push({ a: a0, b: a1, y0: y, y1: y + 1 });
-    }
-    bands.push(...open);
-    open = next;
-  }
-  bands.push(...open);
-  // A short band (a gap) gets one garland; a tall one (a side margin) gets one every GAP_Y
-  const segments = [];
-  for (const bd of bands) {
-    const h = (bd.y1 - bd.y0) * CELL, w = (bd.b - bd.a) * CELL;
-    if (w < MIN_W && w < SIDE_MIN) continue;
-    if (h <= MIN_H * 2.2) { segments.push(bd); continue; }
-    for (let y = bd.y0 * CELL + 30; y + MIN_H + 20 < bd.y1 * CELL; y += GAP_Y) segments.push({ a: bd.a, b: bd.b, y0: y / CELL, y1: (y + Math.min(110, MIN_H * 1.7)) / CELL });
-  }
-
-  let strings = '', bulbs = '', lanterns = '';
-  let placed = 0, used = 0;
-  for (const bd of segments) {
-    const yT = bd.y0 * CELL, yB = bd.y1 * CELL, xa = bd.a * CELL + 8, xb = bd.b * CELL - 8;
-    const bh = yB - yT;
-    if (bh < MIN_H || (xb - xa < MIN_W && xb - xa < SIDE_MIN - 16)) continue;
-    used++;
-    const sag = Math.min(phone ? 8 : 12, bh * 0.14), top0 = yT + 4;
-    const at = (x) => { const t = (x - xa) / (xb - xa); return top0 + sag * 4 * t * (1 - t); };
-    strings += `<path d="M${xa} ${top0}Q${(xa + xb) / 2} ${top0 + sag * 2} ${xb} ${top0}" stroke="url(#fs-fade)"/>`;
-    for (let x = xa + 14; x < xb - 14; x += phone ? 18 : 22) bulbs += `<circle cx="${x.toFixed(1)}" cy="${(at(x) + 2.5).toFixed(1)}" r="1.6"/>`;
-    const n = Math.max(1, Math.round((xb - xa) / SPACING));
-    const step = (xb - xa) / n;
-    for (let i = 0; i < n; i++) {
-      const x = xa + step * (i + 0.5);
-      const top = at(x);
-      const room = yB - 4 - top;
-      let h = Math.min(MAX_H, (room - 6) / 1.12);
-      if (i % 2) h *= 0.82;
-      if (h < 20) continue;
-      const cord = Math.max(6, Math.min(room - h - 2, (i % 3) * 6 + 6));
-      const w = h * 0.4, y = top + cord;
-      if (!free(x - w / 2 - 2, y, x + w / 2 + 2, y + h)) continue;
-      const sc = h / 100;
-      lanterns += `<g class="fs-l">`
-        + `<circle cx="${x}" cy="${y + 62 * sc}" r="${30 * sc}" fill="url(#fs-g)" class="fs-glow" stroke="none"/>`
-        + `<path d="M${x} ${top}V${y}"/><use href="#fs-lantern" x="${x - 24 * sc}" y="${y}" width="${48 * sc}" height="${100 * sc}"/></g>`;
-      placed++;
-    }
-  }
-  if (!placed && !used) { clear(); return { placed: 0, gaps: 0, reason: 'no gaps' }; }
   let svg = doc.getElementById(ID);
   if (!svg) {
     svg = doc.createElementNS(NS, 'svg');
     svg.id = ID;
     svg.setAttribute('aria-hidden', 'true');
     svg.setAttribute('focusable', 'false');
+    svg.innerHTML = '<defs><radialGradient id="fs-g"><stop offset="0" class="fs-g0"/><stop offset="1" class="fs-g1"/></radialGradient>'
+      + `<symbol id="fs-lantern" viewBox="-24 0 48 100" overflow="visible">${LANTERN}</symbol></defs>`
+      + '<g class="fs-lines"></g>';
     doc.body.prepend(svg);
+    svg.__cache = {};
   }
-  svg.setAttribute('width', String(W));
-  svg.setAttribute('height', String(H));
-  svg.innerHTML = '<defs><radialGradient id="fs-g"><stop offset="0" class="fs-g0"/><stop offset="1" class="fs-g1"/></radialGradient>'
-    + '<linearGradient id="fs-fade"><stop offset="0" class="fs-s0"/><stop offset=".1" class="fs-s1"/><stop offset=".9" class="fs-s1"/><stop offset="1" class="fs-s0"/></linearGradient>'
-    + `<symbol id="fs-lantern" viewBox="-24 0 48 100" overflow="visible">${LANTERN}</symbol></defs>`
-    + `<g class="fs-lines" stroke-width="${phone ? 1.3 : 1.5}">${bulbs}${strings}${lanterns}</g>`;
-  return { placed, gaps: used };
+  svg.querySelector('.fs-lines').setAttribute('stroke-width', win.innerWidth < 640 ? '1.3' : '1.5');
+  drawRows(svg, win, svg.__cache);
+  return { placed: svg.querySelectorAll('.fs-l').length, rows: svg.querySelectorAll('.fs-row').length };
 }
 
 /**
- * Starts the street on this page and keeps it in step with the layout, theme and mode.
+ * Starts the street on this page and keeps it in step with the scroll, size, theme and mode.
  * Safe to call more than once; returns a function that stops it and removes the drawing.
  */
 export function startStreet(doc = globalThis.document) {
@@ -210,29 +156,23 @@ export function startStreet(doc = globalThis.document) {
   const html = doc.documentElement;
   const reduce = win.matchMedia('(prefers-reduced-motion: reduce)');
   const dark = win.matchMedia('(prefers-color-scheme: dark)');
-  let timer = 0, lastSig = '', frame = 0, lastRun = 0;
-  // Firefox repaints large fixed layers expensively: there the distant lights stand still
-  const still = /firefox/i.test(win.navigator.userAgent);
-  // Far: the soft distant lights, a fixed layer that drifts at 0.2x the scroll. It moves by a
-  // transform within one tile (260px), so the compositor moves it and nothing repaints.
+  let frame = 0;
   const lights = () => doc.getElementById(LIGHTS_ID);
-  const drift = () => {
+  // One frame per scroll: the near street follows the page, the far lights drift at 0.2x
+  const step = () => {
     frame = 0;
+    if (!html.classList.contains('fanous-street')) return;
     const el = lights();
-    if (!el) return;
-    const y = reduce.matches || still ? 0 : -((0.2 * win.scrollY) % 260);
-    el.style.transform = y ? `translate3d(0, ${y.toFixed(1)}px, 0)` : '';
+    if (el) el.style.backgroundPosition = `0 ${reduce.matches ? 0 : Math.round(-0.2 * win.scrollY)}px`;
+    renderStreet(doc);
   };
-  const onScroll = () => { if (!frame && !still && !reduce.matches) frame = win.requestAnimationFrame(drift); };
-  const playing = () => Array.from(doc.getElementsByTagName('video')).some((v) => !v.paused && !v.ended);
-  const signature = () => `${html.scrollHeight}|${win.innerWidth}|${(regionOf(doc) || doc.body).getElementsByTagName('*').length}|${html.className}|${html.dataset.theme}|${html.dataset.mode}|${dark.matches}`;
-  const sync = (force = false) => {
+  const onScroll = () => { if (!frame) frame = win.requestAnimationFrame(step); };
+  const sync = () => {
     const on = streetEnabled(doc);
     html.classList.toggle('fanous-street', on);
     if (!on) {
       doc.getElementById(ID)?.remove();
       lights()?.remove();
-      lastSig = '';
       return;
     }
     if (!lights()) {
@@ -240,59 +180,24 @@ export function startStreet(doc = globalThis.document) {
       el.id = LIGHTS_ID;
       el.setAttribute('aria-hidden', 'true');
       doc.body.prepend(el);
-      drift();
     }
-    // Never measure while a video plays (the page must stay smooth); measure again when it stops
-    if (playing()) return;
-    const sig = signature();
-    if (!force && sig === lastSig) return;
-    lastSig = sig;
-    lastRun = Date.now();
-    renderStreet(doc);
+    step();
   };
-  // Measure when the browser is idle, never on every keystroke: only node additions/removals,
-  // size changes and theme/mode changes count, and an unchanged layout is skipped
-  const idle = win.requestIdleCallback ? (fn) => win.requestIdleCallback(fn, { timeout: 1000 }) : (fn) => win.setTimeout(fn, 0);
-  // At most one measurement every 2 s, after the page has been quiet for a second
-  const soon = (delay = 1000, force = false) => {
-    win.clearTimeout(timer);
-    const wait = Math.max(delay, lastRun + 2000 - Date.now());
-    timer = win.setTimeout(() => idle(() => sync(force)), wait);
-  };
-  const mo = new win.MutationObserver((records) => {
-    const ours = (n) => n.id === ID || n.id === LIGHTS_ID;
-    if (records.every((r) => r.target.id === ID || r.target.closest?.('#' + ID) || [...r.addedNodes, ...r.removedNodes].every(ours))) return;
-    soon();
-  });
-  mo.observe(doc.body, { childList: true, subtree: true });
-  // A theme or mode change: switching the street off is immediate (before the next frame), so a
-  // page that changes theme never shows the old theme's street; switching it on can wait for idle
-  const htmlObs = new win.MutationObserver(() => {
-    if (!streetEnabled(doc) && (html.classList.contains('fanous-street') || lights())) sync(true);
-    else soon(0, true);
-  });
-  htmlObs.observe(html, { attributes: true, attributeFilter: ['class', 'data-theme', 'data-mode', 'data-fanous-street'] });
-  const ro = new win.ResizeObserver(() => soon(1000));
-  ro.observe(doc.body);
-  const onScheme = () => soon(0, true);
-  dark.addEventListener?.('change', onScheme);
-  reduce.addEventListener?.('change', drift);
+  // A theme or mode change switches the street on or off at once
+  const htmlObs = new win.MutationObserver(sync);
+  htmlObs.observe(html, { attributes: true, attributeFilter: ['class', 'data-theme', 'data-mode'] });
+  dark.addEventListener?.('change', sync);
+  reduce.addEventListener?.('change', step);
   win.addEventListener('scroll', onScroll, { passive: true });
-  // A video stopping lets a skipped measurement run
-  const onStop = () => soon(1000);
-  doc.addEventListener('pause', onStop, true);
-  doc.addEventListener('ended', onStop, true);
-  doc.fonts?.ready?.then(() => soon(0, true));
-  sync(true);
+  win.addEventListener('resize', onScroll, { passive: true });
+  sync();
   const stop = () => {
-    mo.disconnect(); htmlObs.disconnect(); ro.disconnect();
-    dark.removeEventListener?.('change', onScheme);
-    reduce.removeEventListener?.('change', drift);
+    htmlObs.disconnect();
+    dark.removeEventListener?.('change', sync);
+    reduce.removeEventListener?.('change', step);
     win.removeEventListener('scroll', onScroll);
-    doc.removeEventListener('pause', onStop, true);
-    doc.removeEventListener('ended', onStop, true);
+    win.removeEventListener('resize', onScroll);
     if (frame) win.cancelAnimationFrame(frame);
-    win.clearTimeout(timer);
     doc.getElementById(ID)?.remove();
     lights()?.remove();
     html.classList.remove('fanous-street');
