@@ -315,6 +315,12 @@ jobs:
           pnpm release:content-columns --env stage
           pnpm release:content-columns --env stage --check
 
+      # No surface serves an expired thumbnail or gives crawlers a signed one; /thumb works and
+      # hides unknown ids (scripts/release/thumbnail-check.ts; 2026-11-12/13 incidents). Signed
+      # URLs that www/CMS store are warnings until those repos serve /thumb.
+      - name: Thumbnail check (stage)
+        run: node --experimental-strip-types --no-warnings scripts/release/thumbnail-check.ts --env stage
+
       - name: Stage result
         if: always()
         run: |
@@ -612,6 +618,12 @@ jobs:
         run: |
           pnpm release:content-columns --env production
           pnpm release:content-columns --env production --check
+
+      # No surface serves an expired thumbnail or gives crawlers a signed one; /thumb works and
+      # hides unknown ids (scripts/release/thumbnail-check.ts; 2026-11-12/13 incidents). Signed
+      # URLs that www/CMS store are warnings until those repos serve /thumb.
+      - name: Thumbnail check (production)
+        run: node --experimental-strip-types --no-warnings scripts/release/thumbnail-check.ts --env production
 
       - name: Install Chromium
         uses: ./.github/actions/playwright-install

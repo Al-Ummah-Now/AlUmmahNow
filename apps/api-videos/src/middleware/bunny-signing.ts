@@ -1,5 +1,6 @@
 import type { MiddlewareHandler } from 'hono';
 import { signBunnyUrlsInText } from '../lib/bunny-signing';
+import { absoluteImageUrlsInText } from '../lib/image-urls';
 import { bunnyLibraries, type BunnyLibrariesEnv } from '../lib/bunny/libraries';
 import { logger } from '../lib/logger';
 
@@ -20,16 +21,15 @@ export const bunnySigningMiddleware: MiddlewareHandler = async (c, next) => {
 	await next();
 
 	const env = c.env as BunnyLibrariesEnv;
-	if (env.BUNNY_SIGN_URLS !== 'true') return;
-
 	const response = c.res;
 	const contentType = response.headers.get('content-type') || '';
 	if (!response.ok || !contentType.includes('application/json')) return;
 
 	try {
-		const libraries = (await bunnyLibraries(env)).filter((l) => l.host);
 		const original = await response.clone().text();
-		let text = original;
+		// Legacy scheme-less image URLs become loadable https:// URLs (lib/image-urls.ts), with or without signing
+		let text = absoluteImageUrlsInText(original);
+		const libraries = env.BUNNY_SIGN_URLS === 'true' ? (await bunnyLibraries(env)).filter((l) => l.host) : [];
 		for (const library of libraries) {
 			if (!library.tokenKey) {
 				if (library.primary) logger.warn('[bunnySigning] BUNNY_SIGN_URLS is on but the token key is missing', { libraryId: library.libraryId });
