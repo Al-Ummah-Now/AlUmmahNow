@@ -12,11 +12,14 @@
  *   counters and in-flight slots (api-videos middleware/rate-limit.ts, lib/creatorTiers.ts), keyed by
  *   the user id. Deleted: the account is gone, so nothing is left to limit.
  * - SEARCH_DB creator_tier_assignments: the user's creator tier (who assigned it, when). Deleted.
+ * - SEARCH_DB admin_deletions / admin_jobs: kept as action records, the user scrubbed to
+ *   placeholders (#1253, admin-history.ts).
  *
  * Idempotent: a second run changes nothing. Runs inside the UserDataErased step, so a failure retries
  * and finally dead-letters like the rest of the erasure.
  */
 import type { D1Database } from '../types';
+import { eraseUserAdminHistory } from './admin-history';
 
 /** extra_json keys that identify a person; removed from an erased user's error events. */
 export const IDENTIFYING_EXTRA_KEYS = ['email', 'userEmail', 'name', 'userName', 'displayName', 'ip', 'ipAddress', 'userId', 'user_id'] as const;
@@ -28,6 +31,8 @@ export interface UserTracesResult {
   categorySuggestions: number;
   rateLimits: number;
   creatorTier: number;
+  adminDeletions: number;
+  adminJobs: number;
 }
 
 /** RETURNING rows count what changed (D1 and the test stand-in alike), as contact/erase.ts does. */
@@ -59,6 +64,7 @@ export async function eraseUserTraces(
         search.prepare('DELETE FROM creator_tier_assignments WHERE user_id = ? RETURNING tier_id').bind(userId),
       ])
     : [];
+  const history = search ? await eraseUserAdminHistory(search, userId, erasedMarker) : { deletions: 0, jobs: 0 };
   return {
     invites: count(invites),
     errorUsers: count(errorUsers),
@@ -66,5 +72,7 @@ export async function eraseUserTraces(
     categorySuggestions: count(suggestions),
     rateLimits: count(windows) + count(leases),
     creatorTier: count(tier),
+    adminDeletions: history.deletions,
+    adminJobs: history.jobs,
   };
 }

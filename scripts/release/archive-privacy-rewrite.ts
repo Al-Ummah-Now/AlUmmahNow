@@ -5,6 +5,12 @@
  *   node --experimental-strip-types scripts/release/archive-privacy-rewrite.ts start --env qa            # dry run
  *   node --experimental-strip-types scripts/release/archive-privacy-rewrite.ts start --env qa --apply    # writes
  *   node --experimental-strip-types scripts/release/archive-privacy-rewrite.ts status --env qa --run <runId>
+ *   node --experimental-strip-types scripts/release/archive-privacy-rewrite.ts start --env qa --titles [--apply]
+ *
+ * --titles (#1254): links the titles of entries written before the processor indexed them to their
+ * content's owners (NOTIFICATIONS_DB archive_title_refs, so an erasure replaces them later) and
+ * replaces the titles of content that no longer exists with placeholders. Counts: indexed (linked),
+ * rewritten (placeholders), clean (no titles), stamped (already indexed, skipped without a read).
  *
  * `start` sends the run's first message to the env's processing-check queue (Cloudflare Queues API);
  * api-videos lists the archive one prefix (one day, or one analytics prefix) at a time in a few
@@ -25,7 +31,7 @@ const ENVS = {
   production: { queue: 'al-ummah-now-processing-check', bucket: 'global-settings' },
 } as const;
 type EnvName = keyof typeof ENVS;
-const COUNTS = ['listed', 'stamped', 'clean', 'rewritten', 'deleted', 'unreadable'] as const;
+const COUNTS = ['listed', 'stamped', 'clean', 'rewritten', 'deleted', 'unreadable', 'indexed'] as const;
 
 function token(): string {
   if (process.env.CLOUDFLARE_API_TOKEN) return process.env.CLOUDFLARE_API_TOKEN;
@@ -74,18 +80,19 @@ async function main(): Promise<void> {
 
   if (command === 'start') {
     const apply = process.argv.includes('--apply');
-    const runId = `archive-privacy-${new Date().toISOString().slice(0, 10)}-${randomUUID().slice(0, 8)}`;
+    const titles = process.argv.includes('--titles');
+    const runId = `archive-${titles ? 'titles' : 'privacy'}-${new Date().toISOString().slice(0, 10)}-${randomUUID().slice(0, 8)}`;
     const message = {
       kind: 'archive-privacy-rewrite',
       runId,
       lane: 0,
       prefixIndex: 0,
       cursor: null,
-      start: { dryRun: !apply, lanes: Number(arg('lanes') ?? 4), limit: Number(arg('limit') ?? 100) },
+      start: { dryRun: !apply, lanes: Number(arg('lanes') ?? 4), limit: Number(arg('limit') ?? 100), ...(titles ? { mode: 'titles' } : {}) },
     };
     const res = await cf(`/queues/${await queueId(target.queue)}/messages`, { method: 'POST', body: JSON.stringify({ body: message, content_type: 'json' }) });
     if (!res.ok) throw new Error(`Queue send failed: ${res.status} ${await res.text()}`);
-    process.stdout.write(`${apply ? 'APPLY' : 'dry run'} started on ${env}: ${runId}\nstatus: node --experimental-strip-types scripts/release/archive-privacy-rewrite.ts status --env ${env} --run ${runId}\n`);
+    process.stdout.write(`${apply ? 'APPLY' : 'dry run'} started on ${env}${titles ? ' (titles)' : ''}: ${runId}\nstatus: node --experimental-strip-types scripts/release/archive-privacy-rewrite.ts status --env ${env} --run ${runId}\n`);
     return;
   }
 
@@ -116,7 +123,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  throw new Error('usage: archive-privacy-rewrite.ts start|status --env qa|stage|production [--apply] [--lanes n] [--run <id>] [--by-prefix]');
+  throw new Error('usage: archive-privacy-rewrite.ts start|status --env qa|stage|production [--apply] [--titles] [--lanes n] [--run <id>] [--by-prefix]');
 }
 
 main().catch((error: unknown) => {

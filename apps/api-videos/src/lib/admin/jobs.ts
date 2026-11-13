@@ -12,7 +12,7 @@
  *
  * Rows live in SEARCH_DB.admin_jobs (migration search/0006).
  */
-import { ADMIN_JOB_MAX_RETRIES, MessageType, publishAdminLive, type AdminLiveEnv, type AdminJob, type AdminJobKind, type AdminJobStatus, type AdminJobTarget } from '@al-ummah/shared-types';
+import { ADMIN_JOB_MAX_RETRIES, collectPersonIds, ERASED_USER_ID, MessageType, publishAdminLive, type AdminLiveEnv, type AdminJob, type AdminJobKind, type AdminJobStatus, type AdminJobTarget } from '@al-ummah/shared-types';
 import { logger } from '../logger';
 import type { SearchDb } from '@al-ummah/shared-types';
 
@@ -127,7 +127,7 @@ export function jobLiveEvent(job: JobRef, status: AdminJobStatus, attempts?: num
 	return { kind: 'job', key: `job:${job.id}`, id: job.id, jobKind: job.kind, status, targetType: job.targetKind, targetId: job.targetId, ...(attempts !== undefined ? { attempts } : {}) };
 }
 
-async function setStatus(env: JobEnv, job: JobRef, fields: Partial<{ status: AdminJobStatus; attempts: number; last_error: string | null; result: string | null; params: string; finished_at: string | null }>): Promise<void> {
+async function setStatus(env: JobEnv, job: JobRef, fields: Partial<{ status: AdminJobStatus; attempts: number; last_error: string | null; result: string | null; params: string; finished_at: string | null; target_id: string }>): Promise<void> {
 	const entries = Object.entries(fields);
 	await db(env)
 		.prepare(`UPDATE admin_jobs SET ${entries.map(([k]) => `${k} = ?`).join(', ')}, updated_at = ? WHERE id = ?`)
@@ -171,13 +171,29 @@ export async function createJob(env: JobEnv, input: { kind: AdminJobKind; target
 		updatedAt: at,
 		finishedAt: null,
 	};
-	await db(env)
+	const store = db(env);
+	await store
 		.prepare(`INSERT INTO admin_jobs (${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 		.bind(job.id, job.kind, job.targetKind, job.targetId, JSON.stringify(job.params), job.status, 0, null, null, job.actorId, at, at, null)
 		.run();
+	// Who the job names, so an account erasure finds its jobs without a scan (#1253)
+	const links = jobUserIds(job).map((userId) => store.prepare('INSERT OR IGNORE INTO admin_job_users (user_id, job_id) VALUES (?, ?)').bind(userId, job.id));
+	if (links.length) await store.batch(links);
 	await publishAdminLive(env, 'jobs', jobLiveEvent(job, 'queued'));
 	return enqueue(env, job);
 }
+
+/**
+ * The accounts a job names: its actor, its target when that is a user, and user ids in its params.
+ * Accounts only (usr_…): system actors ('cleanup', the daily checks) and fixed targets are no one.
+ */
+export function jobUserIds(job: Pick<AdminJob, 'actorId' | 'targetKind' | 'targetId' | 'params'>): string[] {
+	const ids = collectPersonIds({ actorId: job.actorId, ...(job.targetKind === 'user' ? { targetUserId: job.targetId } : {}), params: job.params });
+	return [...ids].filter((id) => id.startsWith('usr_'));
+}
+
+/** Erasure jobs: once one succeeds its row no longer names the erased account (#1253). */
+const ERASE_KINDS = new Set<string>(['user.delete-data', 'user.erase-run']);
 
 /** Queues a failed job again with a fresh retry budget. Only failed jobs can be retried. */
 export async function retryJob(env: JobEnv, id: string): Promise<AdminJob | null> {
@@ -235,7 +251,17 @@ export async function handleAdminJobBatch(batch: { messages: readonly JobMessage
 		try {
 			const outcome = await handler(env, { ...job, attempts: msg.attempts });
 			if (!('params' in outcome)) {
-				await setStatus(env, job, { status: 'succeeded', result: outcome.result ? JSON.stringify(outcome.result) : null, last_error: null, finished_at: now() });
+				await setStatus(env, job, {
+					status: 'succeeded',
+					result: outcome.result ? JSON.stringify(outcome.result) : null,
+					last_error: null,
+					finished_at: now(),
+					// The account is erased: the record keeps the action, not the id (#1253)
+					...(ERASE_KINDS.has(job.kind) && job.targetKind === 'user' ? { target_id: ERASED_USER_ID } : {}),
+				});
+				if (ERASE_KINDS.has(job.kind) && job.targetKind === 'user') {
+					await db(env).prepare('DELETE FROM admin_job_users WHERE user_id = ? AND job_id = ?').bind(job.targetId, job.id).run();
+				}
 				logger.info('[AdminJobs] Job succeeded', { jobId: job.id, kind: job.kind, target: job.targetId, attempts: msg.attempts });
 			} else {
 				// Resumable work: store the next step and queue it as a fresh delivery

@@ -149,6 +149,16 @@ export enum MessageType {
   // UserDataErased handler on its own queue so it retries and dead-letters on its own.
   // Payload: ContactDataErasePayload. Explicit value in its own reserved range (250-259).
   ContactDataErase = 250,
+  // Account erasure, archive titles step (#1254, processor erasure/archive-titles.ts): replaces the
+  // erased creator's titles and channel names in the queue-message archive, one page of archived
+  // messages per delivery. Payload: ArchiveTitlesErasePayload (the archive subject key, never the id).
+  ArchiveTitlesErase = 251,
+}
+
+/** Payload of MessageType.ArchiveTitlesErase. */
+export interface ArchiveTitlesErasePayload {
+  /** archiveSubjectKey(userId) of the erased account (SHA-256, no raw id). */
+  subject: string;
 }
 
 /** Payload of MessageType.ContactDataErase. */

@@ -1,10 +1,16 @@
 /**
+ * Privacy (#1255): user ids are stored hashed (uh_<sha256>, shared-types erasure-privacy), in the
+ * body and the failure reason, and rows expire after 30 days. A row whose ids were hashed is kept
+ * for diagnosis only and cannot be replayed. Erasure steps keep the raw id: a failed erasure must
+ * still be finished (replay, the admin Errors page's erasure failures).
+ *
  * Dead-letter visibility. Each environment's DLQ (al-ummah-now-dlq[-stage|-qa])
  * is consumed by the processor: every message is logged as a structured
  * `[DLQ] Message dead-lettered` error (the alert, searchable in Workers Logs)
  * and kept in the NOTIFICATIONS_DB `dead_letters` table so it can be queried
  * and replayed (POST /dlq/replay) instead of silently expiring in the queue.
  */
+import { hashPersonIds, hashUserIdsInText } from '@al-ummah/shared-types';
 import { MessageType, type AlUmmahMessage, type D1Database } from '../types';
 
 /** Bodies above this are stored truncated (and cannot be replayed). */
@@ -34,6 +40,24 @@ export interface DeadLetterRecord {
   body_truncated: number;
   received_at: number;
   replayed_at: number | null;
+  /** 1 when the user ids were hashed at write time (not replayable) */
+  ids_hashed?: number;
+}
+
+/** Erasure steps: their dead letters keep the raw id so the erasure can still be finished. */
+const RAW_ID_TYPES = new Set<number>([MessageType.UserDataErased, MessageType.ContactDataErase, MessageType.ArchiveTitlesErase]);
+
+/** `toDeadLetterRecord` with the user ids hashed (#1255), except for erasure steps. */
+export async function toPrivateDeadLetterRecord(input: DeadLetterInput, now: number): Promise<DeadLetterRecord> {
+  const type = asMessage(input.body).type;
+  if (typeof type === 'number' && RAW_ID_TYPES.has(type)) return { ...toDeadLetterRecord(input, now), ids_hashed: 0 };
+  const { record: body, changed } = await hashPersonIds(input.body);
+  const record = toDeadLetterRecord({ ...input, body }, now);
+  // Ids inside text too (failure reasons, messages), in the body and the reason column
+  const bodyJson = await hashUserIdsInText(record.body_json);
+  const reason = record.failure_reason === null ? null : await hashUserIdsInText(record.failure_reason);
+  const hashed = changed || bodyJson !== record.body_json || reason !== record.failure_reason;
+  return { ...record, body_json: bodyJson, failure_reason: reason, ids_hashed: hashed ? 1 : 0 };
 }
 
 function asMessage(body: unknown): Partial<AlUmmahMessage> {
@@ -71,8 +95,8 @@ export async function storeDeadLetter(db: D1Database, record: DeadLetterRecord):
   await db
     .prepare(
       `INSERT OR IGNORE INTO dead_letters
-         (id, message_id, message_type, type_name, source, dlq, attempts, failure_reason, body_json, body_truncated, received_at, replayed_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`
+         (id, message_id, message_type, type_name, source, dlq, attempts, failure_reason, body_json, body_truncated, received_at, replayed_at, ids_hashed)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`
     )
     .bind(
       record.id,
@@ -85,7 +109,8 @@ export async function storeDeadLetter(db: D1Database, record: DeadLetterRecord):
       record.failure_reason,
       record.body_json,
       record.body_truncated,
-      record.received_at
+      record.received_at,
+      record.ids_hashed ?? 0
     )
     .run();
 }
@@ -121,6 +146,7 @@ export async function replayDeadLetter(
   if (row.replayed_at !== null && row.replayed_at !== undefined) return { status: 'already_replayed' };
   if (row.source !== 'videos') return { status: 'not_replayable', reason: 'only videos-queue messages can be replayed' };
   if (row.body_truncated) return { status: 'not_replayable', reason: 'body was truncated' };
+  if (row.ids_hashed) return { status: 'not_replayable', reason: 'user ids are stored hashed (privacy)' };
   if (!queue) return { status: 'not_replayable', reason: 'MESSAGE_QUEUE not bound' };
 
   let body: AlUmmahMessage;
