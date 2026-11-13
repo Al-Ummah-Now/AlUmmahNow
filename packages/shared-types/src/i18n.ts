@@ -969,6 +969,10 @@ export interface AppTranslations {
     reupload: string;
     reuploadBanner: string;
     reuploadAlreadyDone: string;
+    /** Single uploader: the picked file was already uploaded (finished) from this browser */
+    alreadyUploadedHint: string;
+    uploadAgainAsNew: string;
+    chooseAnotherFile: string;
     authTokenMissing: string;
     completeFailed: string;
     processingFailed: string;
