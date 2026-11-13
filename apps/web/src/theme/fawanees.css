@@ -6,10 +6,10 @@
 /* Controls that were see-through ink (7–9% text colour): opaque, with a hairline */
 html[data-theme='fawanees']:not(.dark) .watch-actions { --wa-bg: var(--fanous-color-background); --wa-bg-hover: var(--fanous-color-hero-start); }
 html[data-theme='fawanees'].dark .watch-actions { --wa-bg: var(--fanous-color-surface-raised); --wa-bg-hover: var(--fanous-color-hero-start); }
-html[data-theme='fawanees'] .watch-actions :is(a, button) { box-shadow: 0 0 0 1px var(--fanous-color-divider), 0 1px 2px rgb(80 60 30 / .1); }
+html[data-theme='fawanees'] .watch-actions :is(a, button) { box-shadow: 0 0 0 1px var(--fanous-color-divider), 0 1px 2px color-mix(in srgb, var(--fanous-color-text-primary) 10%, transparent); }
 html[data-theme='fawanees']:not(.dark) .watch-desc { background: var(--fanous-color-hero-start); box-shadow: inset 0 0 0 1px var(--fanous-color-divider); }
 html[data-theme='fawanees'].dark .watch-desc { background: var(--fanous-color-surface-raised); }
-html[data-theme='fawanees']:not(.dark) .tsf-trigger { background: var(--fanous-color-background) !important; box-shadow: 0 0 0 1px var(--fanous-color-divider), 0 1px 2px rgb(80 60 30 / .1); }
+html[data-theme='fawanees']:not(.dark) .tsf-trigger { background: var(--fanous-color-background) !important; box-shadow: 0 0 0 1px var(--fanous-color-divider), 0 1px 2px color-mix(in srgb, var(--fanous-color-text-primary) 10%, transparent); }
 html[data-theme='fawanees'].dark .tsf-trigger { background: var(--fanous-color-surface-raised) !important; }
 html[data-theme='fawanees'] main:has(input[type=file]) button[aria-pressed=false] { background: var(--fanous-color-surface-raised) !important; }
 
@@ -25,7 +25,7 @@ html[data-theme='fawanees'] .related-videos {
 }
 html[data-theme='fawanees'].dark div:has(> #video-player),
 html[data-theme='fawanees'].dark #comments,
-html[data-theme='fawanees'].dark .related-videos { box-shadow: 0 0 0 1px rgb(245 207 146 / .12), 0 18px 40px -20px rgb(0 0 0 / .65); }
+html[data-theme='fawanees'].dark .related-videos { box-shadow: 0 0 0 1px color-mix(in srgb, var(--fanous-color-primary-sheen) 12%, transparent), 0 18px 40px -20px color-mix(in srgb, var(--fanous-brand-night) 85%, transparent); }
 html[data-theme='fawanees'] div:has(> #video-player) { padding-block-end: 14px; overflow: hidden; }
 html[data-theme='fawanees'] #video-player .watch-details { padding-inline: 14px; }
 html[data-theme='fawanees'] div:has(> #video-player) > .watch-actions { padding-inline: 14px; box-sizing: border-box; }

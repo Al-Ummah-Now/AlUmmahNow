@@ -172,7 +172,7 @@ export function renderStreet(doc = document) {
   svg.setAttribute('focusable', 'false');
   svg.setAttribute('width', String(W));
   svg.setAttribute('height', String(H));
-  svg.innerHTML = '<defs><radialGradient id="fs-g"><stop offset="0" stop-color="#f4ae3a"/><stop offset="1" stop-color="#f4ae3a" stop-opacity="0"/></radialGradient>'
+  svg.innerHTML = '<defs><radialGradient id="fs-g"><stop offset="0" class="fs-g0"/><stop offset="1" class="fs-g1"/></radialGradient>'
     + '<linearGradient id="fs-fade"><stop offset="0" class="fs-s0"/><stop offset=".1" class="fs-s1"/><stop offset=".9" class="fs-s1"/><stop offset="1" class="fs-s0"/></linearGradient>'
     + `<symbol id="fs-lantern" viewBox="-24 0 48 100" overflow="visible">${LANTERN}</symbol></defs>`
     + `<g class="fs-lines" stroke-width="${phone ? 1.3 : 1.5}">${bulbs}${strings}${lanterns}</g>`;
