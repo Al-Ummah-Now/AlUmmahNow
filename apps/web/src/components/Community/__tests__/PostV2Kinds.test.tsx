@@ -59,4 +59,9 @@ describe('PostV2 kinds on the Community tab', () => {
     expect(container.querySelector('img')).toBeNull();
     expect(container.querySelectorAll('li')).toHaveLength(2);
   });
+
+  it('markdown: ::video[ID] lines link to the watch page', () => {
+    const { container } = render(<PostMarkdown source={'Intro\n\n::video[abc-123]'} locale="ar" watchLabel="Watch" />);
+    expect(container.querySelector('a')).toHaveAttribute('href', '/ar/video/abc-123');
+  });
 });
