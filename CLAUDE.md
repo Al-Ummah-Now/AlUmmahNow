@@ -50,8 +50,9 @@ This file contains the mandatory 10-step development workflow that MUST be follo
 2. **QA follows `main`.** Every push to `main` deploys QA (`deploy.yml` → `deploy-qa`). Merging is not a production release.
 3. **A tag releases production.** Pushing a tag `vYYYY.MM.DD` (a second release that day: `vYYYY.MM.DD.2`, and so on) on a commit that is on `main` starts `.github/workflows/release.yml`. It builds once, deploys stage, runs smoke and the release E2E suite on stage, then promotes production (0% → smoke → 100%, auto-rollback). The release refuses a tag whose commit is not on `main`.
    ```bash
-   git fetch origin && git tag -a v2026.11.08 origin/main -m "Release v2026.11.08" && git push origin v2026.11.08
+   git fetch origin --tags && TAG=$(pnpm -s release:tag next) && git tag -a "$TAG" origin/main -m "Release $TAG" && git push origin "$TAG"
    ```
+   The date is the **US Eastern date (America/New_York)**, never UTC: at 20:58 ET on 12 Nov (01:58 UTC on 13 Nov) the next tag is `v2026.11.12.N`, not `v2026.11.13`. `pnpm release:tag next` prints the next free tag (`scripts/release/release-tag.ts`).
    Tag a commit only after its `deploy.yml` run on `main` and its QA deploy are green. Tags are never moved or deleted: to undo a release, run `.github/workflows/rollback.yml`, then fix forward on `main` and tag again. To retry a release that failed for a transient reason, re-run that tag's workflow run. Running `release.yml` by hand (Actions → Release → Run workflow on `main`) deploys **stage only** and never touches production. Releases queue one at a time, and GitHub keeps only the newest pending run, so if two tags are pushed while a release is running, only the later one is released.
 4. **No hand deploys to production.** Do not run `wrangler deploy`, `pnpm deploy:all`, `pnpm *:deploy` or `pnpm *:deploy:production` against production. The commands in [Deployment](#deployment) exist for CI and for an emergency only. An emergency deploy needs the owner's explicit go-ahead, comes from a clean checkout of a commit on `main`, and is followed by a tagged release of the same commit, so that CI is again the source of truth.
 5. **If CI is the blocker, fix CI.** A failing check, a missing secret or a broken workflow is fixed in a PR to `main`. It is never a reason to deploy by hand or to add `continue-on-error`.
@@ -1017,9 +1018,10 @@ Note: If modifying `packages/logger`, rebuild it too: `pnpm --filter @al-ummah/l
 Merge to `main` (QA deploys automatically), check QA, then tag the release. Never deploy production by hand (see [Deploy Rules](#deploy-rules)).
 
 ```bash
-git fetch origin
-git tag -a v2026.11.08 origin/main -m "Release v2026.11.08"   # second release that day: v2026.11.08.2
-git push origin v2026.11.08                                    # starts release.yml: stage → E2E → production
+git fetch origin --tags
+TAG=$(pnpm -s release:tag next)          # today in America/New_York, next free number: v2026.11.08, then v2026.11.08.2, ...
+git tag -a "$TAG" origin/main -m "Release $TAG"
+git push origin "$TAG"                   # starts release.yml: stage → E2E → production
 gh run watch "$(gh run list --workflow release.yml --limit 1 --json databaseId -q '.[0].databaseId')"
 ```
 

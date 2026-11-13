@@ -10,7 +10,8 @@ name: Release
 # Rollback: .github/workflows/rollback.yml or `pnpm release:rollback --env production`.
 #
 # When production moves is decided by a tag (CLAUDE.md "Deploy Rules"):
-#   - push a tag vYYYY.MM.DD (vYYYY.MM.DD.N, N >= 2, for a later release that day) on a
+#   - push a tag vYYYY.MM.DD (vYYYY.MM.DD.N, N >= 2, for a later release that day; the date is
+#     the US Eastern date, America/New_York: `pnpm release:tag next` prints the next tag) on a
 #     commit on main → stage → stage E2E → production. Merging to main deploys QA only.
 #   - workflow_dispatch on main → stage and stage E2E only; it never touches production.
 # A tag with a bad name, or on a commit that is not on main, is refused before anything

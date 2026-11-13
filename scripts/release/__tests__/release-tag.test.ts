@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { parseReleaseTag, previousTag } from '../release-tag.ts';
+import { parseReleaseTag, previousTag, nextReleaseTag, releaseDate } from '../release-tag.ts';
 
 describe('release tag names', () => {
 	it('accepts a dated tag and a later same-day tag', () => {
@@ -79,5 +79,20 @@ describe('release-tag check (CLI)', () => {
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
 		}
+	});
+});
+
+describe('release date (America/New_York)', () => {
+	it('is the Eastern date, not UTC: 01:52 UTC on Nov 13 is still Nov 12 in New York', () => {
+		assert.equal(releaseDate(new Date('2026-11-13T01:52:00Z')), '2026.11.12');
+		assert.equal(releaseDate(new Date('2026-11-13T05:00:00Z')), '2026.11.13');
+		// Daylight saving: 03:59 UTC on 1 July is 23:59 EDT on 30 June
+		assert.equal(releaseDate(new Date('2026-07-01T03:59:00Z')), '2026.06.30');
+	});
+	it('next tag: the day\'s first, then the next free number', () => {
+		const tags = ['v2026.11.12', 'v2026.11.12.2', 'v2026.11.12.9', 'v2026.11.11.6', 'not-a-tag'];
+		assert.equal(nextReleaseTag(tags, new Date('2026-11-13T01:52:00Z')), 'v2026.11.12.10');
+		assert.equal(nextReleaseTag(tags, new Date('2026-11-13T12:00:00Z')), 'v2026.11.13');
+		assert.equal(nextReleaseTag(['v2026.11.13'], new Date('2026-11-13T12:00:00Z')), 'v2026.11.13.2');
 	});
 });

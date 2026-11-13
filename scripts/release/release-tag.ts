@@ -1,8 +1,10 @@
 /**
  * Release tags decide when production is deployed (CLAUDE.md "Deploy Rules").
  * A production release is a tag `vYYYY.MM.DD` (or `vYYYY.MM.DD.N`, N >= 2, for a later
- * release the same day) on a commit that is on `main`.
+ * release the same day) on a commit that is on `main`. The date is the US Eastern date
+ * (America/New_York, owner rule 2026-11-12), not UTC: at 21:00 ET it is still the same day.
  *
+ *   pnpm release:tag next                # prints the next tag: today in America/New_York, next free number
  *   pnpm release:tag check <tag> <sha>   # exits non-zero unless <tag> is valid and <sha> is on origin/main
  */
 import { execFileSync } from 'node:child_process';
@@ -26,6 +28,27 @@ export function parseReleaseTag(tag: string): ReleaseTag | null {
 	if (date.getUTCFullYear() !== Number(y) || date.getUTCMonth() !== Number(mo) - 1 || date.getUTCDate() !== Number(d)) return null;
 	if (nRaw !== undefined && (Number(nRaw) < 2 || nRaw.startsWith('0'))) return null;
 	return { tag, date: `${y}-${mo}-${d}`, n: nRaw === undefined ? 1 : Number(nRaw) };
+}
+
+/** The time zone release dates are in. */
+export const RELEASE_TIME_ZONE = 'America/New_York';
+
+/** YYYY.MM.DD of `now` in America/New_York. */
+export function releaseDate(now: Date = new Date()): string {
+	const parts = new Intl.DateTimeFormat('en-CA', { timeZone: RELEASE_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
+	const part = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+	return `${part('year')}.${part('month')}.${part('day')}`;
+}
+
+/** The next release tag for `now`: vYYYY.MM.DD for the day's first release, then .2, .3, ... */
+export function nextReleaseTag(tags: readonly string[], now: Date = new Date()): string {
+	const date = releaseDate(now);
+	const taken = tags
+		.map(parseReleaseTag)
+		.filter((t): t is ReleaseTag => t !== null && t.date === date.replaceAll('.', '-'))
+		.map((t) => t.n);
+	const n = taken.length ? Math.max(...taken) + 1 : 1;
+	return n === 1 ? `v${date}` : `v${date}.${n}`;
 }
 
 export const tagError = (tag: string) =>
@@ -58,8 +81,12 @@ function isOnMain(sha: string): boolean {
 
 if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename)) {
 	const [cmd, tag, sha] = process.argv.slice(2);
+	if (cmd === 'next') {
+		console.log(nextReleaseTag(git('tag', '--list', 'v*').split('\n').filter(Boolean)));
+		process.exit(0);
+	}
 	if (cmd !== 'check' || !tag || !sha) {
-		console.error('usage: release-tag.ts check <tag> <sha>');
+		console.error('usage: release-tag.ts next | release-tag.ts check <tag> <sha>');
 		process.exit(2);
 	}
 	if (!parseReleaseTag(tag)) {
