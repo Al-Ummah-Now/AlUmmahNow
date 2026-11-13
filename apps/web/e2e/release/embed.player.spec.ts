@@ -93,7 +93,9 @@ test.describe('Release: embeds', () => {
           timeout: 45000,
         })
         .toBeGreaterThan(2);
-      await expect(frame.getByTestId('embed-watch-link')).toHaveAttribute('href', new RegExp(`/${lang}/video/${video!.id}`));
+      // "Watch on" is the short link (wiki AUN-SHORT-LINKS): /v/<id>, ?lang=ar from the Arabic embed
+      const short = `${target().shortLinks}/v/${video!.id}`.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      await expect(frame.getByTestId('embed-watch-link')).toHaveAttribute('href', new RegExp(`^${short}(\\?|$)${lang === 'ar' ? '.*lang=ar' : ''}`));
     });
   }
 
