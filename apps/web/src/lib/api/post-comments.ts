@@ -82,7 +82,7 @@ export async function createPostComment(
   channelId: string,
   postId: string,
   data: PostCommentCreateRequest,
-  headers: Required<Pick<ApiHeaders, 'channelId'>>
+  headers: Pick<ApiHeaders, 'channelId'>
 ): Promise<PostCommentCreateResponse | null> {
   return apiRequestServer<PostCommentCreateResponse>(
     {
@@ -109,7 +109,7 @@ export async function updatePostComment(
   postId: string,
   commentId: string,
   data: PostCommentUpdateRequest,
-  headers: Required<Pick<ApiHeaders, 'channelId'>>
+  headers: Pick<ApiHeaders, 'channelId'>
 ): Promise<PostCommentCreateResponse | null> {
   return apiRequestServer<PostCommentCreateResponse>(
     {
@@ -135,7 +135,7 @@ export async function deletePostComment(
   channelId: string,
   postId: string,
   commentId: string,
-  headers: Required<Pick<ApiHeaders, 'channelId'>>
+  headers: Pick<ApiHeaders, 'channelId'>
 ): Promise<{ success: boolean } | null> {
   return apiRequestServer<{ success: boolean }>(
     {
@@ -160,7 +160,7 @@ export async function likePostComment(
   channelId: string,
   postId: string,
   commentId: string,
-  headers: Required<Pick<ApiHeaders, 'channelId'>>
+  headers: Pick<ApiHeaders, 'channelId'>
 ): Promise<PostCommentLikeResponse | null> {
   return apiRequestServer<PostCommentLikeResponse>(
     {
@@ -185,7 +185,7 @@ export async function unlikePostComment(
   channelId: string,
   postId: string,
   commentId: string,
-  headers: Required<Pick<ApiHeaders, 'channelId'>>
+  headers: Pick<ApiHeaders, 'channelId'>
 ): Promise<PostCommentLikeResponse | null> {
   return apiRequestServer<PostCommentLikeResponse>(
     {

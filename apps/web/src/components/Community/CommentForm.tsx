@@ -5,6 +5,9 @@ import { cn } from '@/lib/utils';
 import Image from 'next/image';
 import { createPostComment } from '@/lib/api/post-comments';
 import { PostComment } from '@al-ummah/shared-types';
+import { useLanguage } from '@/hooks/useLanguage';
+import { useMultiAccount } from '@/hooks/useMultiAccount';
+import { requestAccountMenu } from '@/lib/navigation/account-menu-events';
 
 const MAX_COMMENT_LENGTH = 10000;
 const SHOW_COUNTER_THRESHOLD = 500;
@@ -35,6 +38,9 @@ export default function CommentForm({
   onCancel,
   autoFocus = false,
 }: CommentFormProps) {
+  const { t } = useLanguage();
+  const { user: account } = useMultiAccount();
+  const hasChannels = (account?.channels?.length ?? 0) > 0;
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -68,7 +74,8 @@ export default function CommentForm({
       return;
     }
 
-    if (!channelId || !userId) {
+    // No active channel: the member comments as themselves (the API reads no header as no channel)
+    if (!userId) {
       setError(isRTL ? 'يجب تسجيل الدخول للتعليق' : 'You must be logged in to comment');
       return;
     }
@@ -140,6 +147,25 @@ export default function CommentForm({
 
       {/* Input Area */}
       <div className="flex-1">
+        {userId && userDisplayName && (
+          <p className="mb-1 text-xs opacity-80" data-testid="comment-identity" data-as={channelId ? 'channel' : 'member'}>
+            {t.comments.commentingAs.replace('{name}', userDisplayName)}
+            {hasChannels && (
+              <>
+                {' · '}
+                <button
+                  type="button"
+                  className="font-medium underline underline-offset-2"
+                  aria-label={t.navigation.switchChannel}
+                  data-testid="comment-identity-switch"
+                  onClick={() => requestAccountMenu({ open: true, view: 'channels', focus: true })}
+                >
+                  {t.comments.switchIdentity}
+                </button>
+              </>
+            )}
+          </p>
+        )}
         <div className="relative">
           <textarea
             ref={textareaRef}

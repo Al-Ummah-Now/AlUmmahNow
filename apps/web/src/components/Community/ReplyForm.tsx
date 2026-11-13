@@ -69,7 +69,7 @@ export default function ReplyForm({
       return;
     }
 
-    if (!channelId || !userId) {
+    if (!userId) {
       setError(isRTL ? 'يجب تسجيل الدخول للرد' : 'You must be logged in to reply');
       return;
     }
@@ -226,7 +226,7 @@ export default function ReplyForm({
 
           <button
             type="submit"
-            disabled={loading || !content.trim() || remainingChars < 0 || !channelId || !userId}
+            disabled={loading || !content.trim() || remainingChars < 0 || !userId}
             className={cn(
               'px-3 py-1.5 rounded-full text-sm font-medium transition-colors',
               'bg-blue-600 text-white',

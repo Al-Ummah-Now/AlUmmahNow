@@ -38,7 +38,7 @@ export default function LikeButton({
   }, [initialLiked, initialLikes]);
 
   const handleLikeClick = async () => {
-    if (loading || !channelId || !userId) return;
+    if (loading || !userId) return;
 
     setLoading(true);
     const previousLiked = liked;
@@ -81,7 +81,7 @@ export default function LikeButton({
   return (
     <button
       onClick={handleLikeClick}
-      disabled={loading || !channelId || !userId}
+      disabled={loading || !userId}
       className={cn(
         'flex items-center gap-2 px-4 py-2 rounded-full transition-all group',
         'hover:bg-gray-100 dark:hover:bg-gray-700',
