@@ -29,7 +29,12 @@ export interface Lookup {
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
-const trim = (origin: string) => origin.replace(/\/+$/, '');
+/** The origin without trailing slashes (a loop, not a regex: no backtracking on long inputs). */
+export function trim(origin: string): string {
+  let end = origin.length;
+  while (end > 0 && origin.charCodeAt(end - 1) === 47) end -= 1;
+  return origin.slice(0, end);
+}
 
 async function apiJson(env: ResolveEnv, fetchImpl: FetchLike, path: string): Promise<Record<string, unknown> | null> {
   const res = await fetchImpl(`${trim(env.API_ORIGIN)}${path}`, { headers: { Accept: 'application/json' } });

@@ -62,7 +62,7 @@ export function shortLinkOriginFor(siteHostOrOrigin: string | null | undefined):
   } catch {
     return null;
   }
-  host = host.toLowerCase().replace(/:\d+$/, '');
+  host = host.toLowerCase().split(':')[0] ?? '';
   if (host.endsWith('.alummahnow.link') || host === 'alummahnow.link') {
     return `https://${host}`;
   }

@@ -21,7 +21,7 @@ import {
 } from '@al-ummah/shared-types';
 import { logger } from './logger';
 import { notFoundPage, robotsTxt } from './pages';
-import { lookupTarget, redirectUrl, type FetchLike, type Lookup, type ResolveEnv } from './resolve';
+import { lookupTarget, redirectUrl, trim, type FetchLike, type Lookup, type ResolveEnv } from './resolve';
 
 export interface Env extends ResolveEnv, ErrorReporterEnv {
   ENVIRONMENT?: string;
@@ -86,7 +86,7 @@ function countClick(request: Request, type: Lookup['type'], env: Env, ctx: Ctx, 
   const event: ShortLinkClickEvent = { type, source: visitSourceOf(host) };
   ctx.waitUntil(
     deps
-      .fetch(`${env.API_ORIGIN.replace(/\/+$/, '')}/api/analytics/events`, {
+      .fetch(`${trim(env.API_ORIGIN)}/api/analytics/events`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ kind: 'short_link', events: [event] }),
@@ -120,7 +120,7 @@ function fallbackPath(target: ShortLinkTarget): (Lookup & { path: string }) | nu
 }
 
 function notFound(url: URL, env: Env, method: string): Response {
-  return new Response(method === 'HEAD' ? null : notFoundPage(shortLinkLang(url.searchParams), env.WWW_ORIGIN.replace(/\/+$/, '')), {
+  return new Response(method === 'HEAD' ? null : notFoundPage(shortLinkLang(url.searchParams), trim(env.WWW_ORIGIN)), {
     status: 404,
     headers: { ...NOINDEX, 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': `public, max-age=${NOT_FOUND_TTL_S}` },
   });
@@ -135,7 +135,7 @@ export async function handle(request: Request, env: Env, ctx: Ctx, deps: Deps): 
     return new Response(robotsTxt(), { headers: { ...NOINDEX, 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=86400' } });
   }
   if (url.pathname === '/favicon.ico') {
-    return Response.redirect(`${env.SITE_ORIGIN.replace(/\/+$/, '')}/favicon.ico`, 301);
+    return Response.redirect(`${trim(env.SITE_ORIGIN)}/favicon.ico`, 301);
   }
   const target = parseShortLinkPath(url.pathname);
   if (!target) {
