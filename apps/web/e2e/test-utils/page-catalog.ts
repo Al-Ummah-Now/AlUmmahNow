@@ -72,7 +72,8 @@ export function catalog(d: CatalogData): CatalogPage[] {
     { id: 'feed-anon', path: '/subscriptions', role: 'anon' },
     { id: 'subscriptions-anon', path: '/subscriptions/manage', role: 'anon' },
     { id: 'history-anon', path: '/history', role: 'anon' },
-    { id: 'analytics-anon', path: '/studio/go/analytics', role: 'anon' },
+    // No signed-out /studio/go/analytics: it signs the visitor in at once (StudioSignIn), so the page
+    // a visitor sees is the issuer's sign-in page, whose accessibility the Auth repo checks (#1042)
     // Signed-in creator (profile + one channel)
     { id: 'upload', path: '/upload', role: 'single' },
     // Creator pages live in Studio (old paths 301 there)
