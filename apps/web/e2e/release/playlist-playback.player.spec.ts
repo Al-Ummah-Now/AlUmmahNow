@@ -24,12 +24,17 @@ const VIDEO = '.video-js video';
 const mediaTime = (page: Page) => page.evaluate((sel) => document.querySelector<HTMLVideoElement>(sel)?.currentTime ?? 0, VIDEO);
 
 /** Playing on its own: the media clock moves with no press on the player */
-async function expectPlaying(page: Page, what: string) {
+async function expectPlaying(page: Page, what: string, videoId?: string) {
+  // A seamless next keeps the last video playing until the next one's source is swapped in:
+  // measure the video asked for, not the one before it
+  if (videoId) await expect(page.locator('.custom-video-player').first(), `${what}: the player holds the video`).toHaveAttribute('data-video-id', videoId, { timeout: 30_000 });
   await expect.poll(() => mediaTime(page), { message: `${what} did not start playing on its own`, timeout: 45_000 }).toBeGreaterThan(0.5);
 }
 
 async function seekToEnd(page: Page) {
   await page.mouse.move(1, 1);
+  // The duration is known once the source has loaded
+  await expect.poll(() => page.evaluate((sel) => Number.isFinite(document.querySelector<HTMLVideoElement>(sel)?.duration ?? NaN), VIDEO), { timeout: 30_000 }).toBe(true);
   await page.evaluate((sel) => {
     const v = document.querySelector<HTMLVideoElement>(sel)!;
     v.currentTime = Math.max(0, v.duration - 0.6);
@@ -79,20 +84,20 @@ test.describe('Release: playlist playback', () => {
       await expect.poll(() => paneOrder(page), { message: 'the pane lists the saved order' }).toEqual(order);
       await expect(current(page)).toHaveAttribute('data-video-id', order[0]);
       await expect(page.getByTestId('playlist-pane-position')).toHaveText('1 / 3');
-      await expectPlaying(page, 'Play all');
+      await expectPlaying(page, 'Play all', order[0]);
 
       // The end plays the next item in the saved order, and the highlight moves
       await seekToEnd(page);
       await expect(page).toHaveURL(new RegExp(`/en/video/${order[1]}\\?list=${playlistId}&index=1`), { timeout: 20_000 });
       await expect(current(page)).toHaveAttribute('data-video-id', order[1]);
       await expect(page.getByTestId('playlist-pane-position')).toHaveText('2 / 3');
-      await expectPlaying(page, 'the next item');
+      await expectPlaying(page, 'the next item', order[1]);
 
       // The last item: loop off, the list stops there
       await page.locator(`[data-testid="playlist-pane-item"][data-video-id="${order[2]}"]`).click();
       await expect(page).toHaveURL(new RegExp(`/en/video/${order[2]}\\?list=${playlistId}&index=2`), { timeout: 20_000 });
       await expect(current(page)).toHaveAttribute('data-video-id', order[2]);
-      await expectPlaying(page, 'a clicked item');
+      await expectPlaying(page, 'a clicked item', order[2]);
       await seekToEnd(page);
       const end = page.getByTestId('player-end-screen');
       await expect(end.getByTestId('player-replay-playlist')).toBeVisible();
@@ -105,7 +110,7 @@ test.describe('Release: playlist playback', () => {
       await expect(page.getByTestId('playlist-pane-loop')).toHaveAttribute('aria-pressed', 'true');
       await expect(page).toHaveURL(new RegExp(`/en/video/${order[0]}\\?list=${playlistId}&index=0`), { timeout: 20_000 });
       await expect(current(page)).toHaveAttribute('data-video-id', order[0]);
-      await expectPlaying(page, 'the first item after looping');
+      await expectPlaying(page, 'the first item after looping', order[0]);
 
       // Arabic: the same order, right to left
       await page.goto(`${target().web}/ar/video/${order[1]}?list=${playlistId}&index=1`);

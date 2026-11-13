@@ -1248,6 +1248,8 @@ export default function CustomVideoPlayer({
       data-short={isShort || undefined}
       data-mini={mini || undefined}
       data-pinned={pinned || undefined}
+      // The video the player holds: a seamless next changes it when the new source is swapped in
+      data-video-id={videoId}
       data-ended={ended || undefined}
     >
       {/* Accessibility: Hidden live region for screen reader announcements */}

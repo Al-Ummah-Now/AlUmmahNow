@@ -23,9 +23,10 @@ test.use({ trace: 'off', video: 'off' });
 const VIDEO = '.video-js video';
 const mediaTime = (page: Page) => page.evaluate((sel) => document.querySelector<HTMLVideoElement>(sel)?.currentTime ?? 0, VIDEO);
 
-async function expectPlaying(page: Page, what: string) {
-  const from = await mediaTime(page);
-  await expect.poll(() => mediaTime(page), { message: `${what} did not start playing on its own`, timeout: 45_000 }).toBeGreaterThan(Math.min(from, 0.1) + 0.4);
+/** The player holds `videoId` (a seamless next swaps it in) and its clock moves on its own */
+async function expectPlaying(page: Page, what: string, videoId: string) {
+  await expect(page.locator('.custom-video-player').first(), `${what}: the player holds the video`).toHaveAttribute('data-video-id', videoId, { timeout: 30_000 });
+  await expect.poll(() => mediaTime(page), { message: `${what} did not start playing on its own`, timeout: 45_000 }).toBeGreaterThan(0.5);
 }
 
 /** Marks the player's nodes and watches them: removals and frames with no player box */
@@ -88,7 +89,7 @@ test.describe('Release: seamless next', () => {
     await page.goto(`${target().web}/en/video/${ids[0]}?list=${playlistId}&index=0`);
     await expect(current(page)).toHaveAttribute('data-video-id', ids[0], { timeout: 45_000 });
     await expect(heading(page)).toHaveText(videos[0].title, { timeout: 30_000 });
-    await expectPlaying(page, 'the first item');
+    await expectPlaying(page, 'the first item', ids[0]);
     await watchPlayer(page);
 
     // Next: same player, the next video's URL, title, heading and highlight; it plays on its own
@@ -97,7 +98,7 @@ test.describe('Release: seamless next', () => {
     await expect(heading(page)).toHaveText(videos[1].title, { timeout: 20_000 });
     await expect(page).toHaveTitle(new RegExp(videos[1].title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), { timeout: 20_000 });
     await expect(current(page)).toHaveAttribute('data-video-id', ids[1]);
-    await expectPlaying(page, 'the next item');
+    await expectPlaying(page, 'the next item', ids[1]);
     await expectSamePlayer(page, 'Next');
 
     // The end of the video advances (3 s countdown) on the same player
@@ -109,7 +110,7 @@ test.describe('Release: seamless next', () => {
     }, VIDEO);
     await expect(page).toHaveURL(new RegExp(`/en/video/${ids[2]}\\?list=${playlistId}&index=2`), { timeout: 30_000 });
     await expect(heading(page)).toHaveText(videos[2].title, { timeout: 20_000 });
-    await expectPlaying(page, 'the auto-advanced item');
+    await expectPlaying(page, 'the auto-advanced item', ids[2]);
     await expectSamePlayer(page, 'auto-advance');
 
     // Back: history has each video; the same player shows the previous one again
@@ -134,7 +135,7 @@ test.describe('Release: seamless next', () => {
       await page.setViewportSize({ width: 390, height: 844 });
       await page.goto(`${target().web}/ar/video/${first.id}?list=${playlistId}&index=0`);
       await expect(current(page)).toHaveAttribute('data-video-id', first.id, { timeout: 45_000 });
-      await expectPlaying(page, 'the first item');
+      await expectPlaying(page, 'the first item', first.id);
       const frame = page.locator('.custom-video-player').first();
       const pinnedOnScreen = async (what: string) => {
         await expect(frame, `${what}: pinned`).toHaveAttribute('data-pinned', 'true', { timeout: 10_000 });
@@ -152,7 +153,7 @@ test.describe('Release: seamless next', () => {
       await page.getByTestId('playlist-pane-next').dispatchEvent('click');
       await expect(page).toHaveURL(new RegExp(`/ar/video/${second.id}\\?list=${playlistId}&index=1`), { timeout: 20_000 });
       await expect(heading(page)).toHaveText(second.title, { timeout: 20_000 });
-      await expectPlaying(page, 'the next item');
+      await expectPlaying(page, 'the next item', second.id);
       await pinnedOnScreen('after Next');
       await expectSamePlayer(page, 'Next on a phone');
 
