@@ -148,14 +148,15 @@ test.describe('Playlist manager', () => {
     }
   });
 
-  // quarantined: #1056 @meywd (four fields labelled «الاسم»)
-  test.fixme('PLAY-003 Arabic manager is translated and RTL', async ({ page }) => {
+  test('PLAY-003 Arabic manager is translated and RTL', async ({ page }) => {
     await openManager(page, 'ar');
     await expectRtl(page);
     await expect(page.getByRole('heading', { level: 1, name: 'إدارة قوائم التشغيل' })).toBeVisible();
     await page.getByRole('link', { name: 'قائمة تشغيل جديدة' }).click();
     await expect(page.getByRole('heading', { level: 1, name: 'قائمة تشغيل جديدة' })).toBeVisible();
-    await expect(page.getByLabel('الاسم')).toBeVisible();
+    // A name per language (2026-11-11), each with its own label
+    await expect(page.getByRole('textbox', { name: 'الاسم (بالإنجليزية)', exact: true })).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'الاسم (بالعربية)', exact: true })).toBeVisible();
     await expect(page.getByRole('radio', { name: /^عامة/ })).toBeChecked();
     await expect(page.locator('div[dir="rtl"]').filter({ has: page.getByRole('heading', { level: 1 }) }).first()).toBeVisible();
   });
