@@ -47,6 +47,10 @@ const NAMES = {
   playlist: { en: 'Weekend projects', ar: 'مشاريع نهاية الأسبوع' },
 };
 
+/** Every scene runs whatever another one did; the last test lists all problems at once */
+const problems: string[] = [];
+const notes: string[] = [];
+
 const data = useOwnData(test as never);
 let creator: Creator;
 let channelId = '';
@@ -72,8 +76,9 @@ test.beforeAll(async ({ browser }) => {
   await data.createPost(user, channelId, { text: NAMES.post.en });
   // A personal playlist (no channel header: the member's own, #1183)
   const res = await apiFetch(user, '/api/playlists', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: NAMES.playlist.en, titleLocalized: NAMES.playlist, description: '', videos: [videoId], isPublic: false }) });
-  expect(res.status, `personal playlist: ${await res.clone().text()}`).toBeLessThan(300);
-  const playlistId = ((await res.json()) as { result?: { playlist?: { id?: string } } }).result?.playlist?.id;
+  // Before #1183 the API wants a channel: the playlists picture then fails alone (listed at the end)
+  const playlistId = res.ok ? ((await res.json()) as { result?: { playlist?: { id?: string } } }).result?.playlist?.id : undefined;
+  if (!res.ok) problems.push(`personal playlist not created (${res.status}): ${(await res.text()).slice(0, 200)}`);
   if (playlistId) data.onCleanup(`playlist ${playlistId}`, () => apiFetch(user, `/api/playlists/${playlistId}`, { method: 'DELETE' }));
 });
 
@@ -308,9 +313,6 @@ const SCENES: Scene[] = [
   },
 ];
 
-/** Every scene runs whatever another one did; the last test lists all problems at once */
-const problems: string[] = [];
-const notes: string[] = [];
 
 for (const scene of SCENES) {
   test(`picture ${scene.id}`, async ({ browser }) => {
