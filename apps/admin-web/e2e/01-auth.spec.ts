@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from './support/fixtures';
-import { ADMIN_WEB_URL, OPENAUTH_URL, RUN_ACCOUNTS_ONLY, RUN_ID, accounts, storageStatePath } from './support/env';
+import { ADMIN_WEB_URL, LOCAL_STACK, OPENAUTH_URL, RUN_ACCOUNTS_ONLY, RUN_ID, accounts, storageStatePath } from './support/env';
 import { uiLogin } from './support/ui';
 import { skipUntilSignInDeployed } from './support/deployed';
 
@@ -119,6 +119,8 @@ test.describe('access denied page', () => {
   test.use({ storageState: storageStatePath('nonadmin') });
 
   test('AUTH-14 a denied user gets no admin session and cannot reach admin pages', async ({ page, context }) => {
+    // quarantined: #1093 @meywd (WebKit on the local stack: the issuer's SSO cookie is not sent over http, so no silent SSO)
+    test.fixme(test.info().project.name === 'webkit' && LOCAL_STACK, 'quarantined: #1093 @meywd issuer SSO cookie dropped by WebKit on http://localhost');
     await page.goto('/access-denied');
     await expect(page.getByRole('heading', { name: 'Access Denied' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Log out' })).toBeVisible();
