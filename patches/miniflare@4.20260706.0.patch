@@ -1,0 +1,33 @@
+diff --git a/dist/src/workers/shared/index.worker.js b/dist/src/workers/shared/index.worker.js
+index c470c28..47fe2cb 100644
+--- a/dist/src/workers/shared/index.worker.js
++++ b/dist/src/workers/shared/index.worker.js
+@@ -498,14 +498,20 @@ var MiniflareDurableObject = class extends Router {
+     ), this.#blob = new BlobStore(maybeBlobsService, this.name, stickyBlobs), this.#blob;
+   }
+   async logWithLevel(level, message) {
+-    await this.env[SharedBindings.MAYBE_SERVICE_LOOPBACK]?.fetch(
+-      "http://localhost/core/log",
+-      {
+-        method: "POST",
+-        headers: { [SharedHeaders.LOG_LEVEL]: level.toString() },
+-        body: message
+-      }
+-    );
++    // Al Ummah Now patch (#1128): logging is best effort. A failed loopback request (an idle
++    // keep-alive socket closed by Node) used to reject the queue broker's #flush before it cleared
++    // #pendingFlush, freezing that queue for the rest of the process.
++    try {
++      await this.env[SharedBindings.MAYBE_SERVICE_LOOPBACK]?.fetch(
++        "http://localhost/core/log",
++        {
++          method: "POST",
++          headers: { [SharedHeaders.LOG_LEVEL]: level.toString() },
++          body: message
++        }
++      );
++    } catch {
++    }
+   }
+   async #handleControlOp({
+     name,
