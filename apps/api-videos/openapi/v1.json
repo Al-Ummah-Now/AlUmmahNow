@@ -26212,6 +26212,19 @@
                   "isPublic": {
                     "type": "boolean"
                   },
+                  "isUnlisted": {
+                    "type": "boolean",
+                    "description": "Unlisted: not public, open to anyone with the link (never listed, noindex)"
+                  },
+                  "visibility": {
+                    "type": "string",
+                    "enum": [
+                      "public",
+                      "unlisted",
+                      "private"
+                    ],
+                    "description": "public | unlisted | private; wins over isPublic / isUnlisted"
+                  },
                   "isLive": {
                     "type": "boolean"
                   },
@@ -26735,6 +26748,15 @@
                     "properties": {
                       "isPublic": {
                         "type": "boolean"
+                      },
+                      "visibility": {
+                        "type": "string",
+                        "enum": [
+                          "public",
+                          "unlisted",
+                          "private"
+                        ],
+                        "description": "public | unlisted | private (wins over isPublic)"
                       },
                       "category": {
                         "type": [
@@ -27699,6 +27721,15 @@
                     "properties": {
                       "isPublic": {
                         "type": "boolean"
+                      },
+                      "visibility": {
+                        "type": "string",
+                        "enum": [
+                          "public",
+                          "unlisted",
+                          "private"
+                        ],
+                        "description": "public | unlisted | private (wins over isPublic)"
                       },
                       "category": {
                         "type": [
@@ -31132,6 +31163,15 @@
                         "isPublic": {
                           "type": "boolean"
                         },
+                        "visibility": {
+                          "type": "string",
+                          "enum": [
+                            "public",
+                            "unlisted",
+                            "private"
+                          ],
+                          "description": "public | unlisted | private (wins over isPublic; a draft is always private)"
+                        },
                         "tags": {
                           "type": "string",
                           "description": "Comma-separated tags"
@@ -31268,6 +31308,15 @@
                       "isPublic": {
                         "type": "boolean",
                         "description": "Visibility for all videos"
+                      },
+                      "visibility": {
+                        "type": "string",
+                        "enum": [
+                          "public",
+                          "unlisted",
+                          "private"
+                        ],
+                        "description": "public | unlisted | private for all videos (wins over isPublic; a draft is always private)"
                       }
                     },
                     "description": "Shared metadata applied to all videos"
@@ -31880,6 +31929,15 @@
                   "isPublic": {
                     "type": "boolean",
                     "default": true
+                  },
+                  "visibility": {
+                    "type": "string",
+                    "enum": [
+                      "public",
+                      "unlisted",
+                      "private"
+                    ],
+                    "description": "public | unlisted | private (wins over isPublic; a draft is always private)"
                   },
                   "isDraft": {
                     "type": "boolean",
@@ -32985,6 +33043,19 @@
                   },
                   "isPublic": {
                     "type": "boolean"
+                  },
+                  "isUnlisted": {
+                    "type": "boolean",
+                    "description": "Unlisted: not public, open to anyone with the link (never listed, noindex)"
+                  },
+                  "visibility": {
+                    "type": "string",
+                    "enum": [
+                      "public",
+                      "unlisted",
+                      "private"
+                    ],
+                    "description": "public | unlisted | private; wins over isPublic / isUnlisted"
                   },
                   "isLive": {
                     "type": "boolean"
