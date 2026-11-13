@@ -73,6 +73,8 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/moderation/ai', label: 'nav.aiModeration', icon: 'spark', group: 'moderation' },
   // CSAM cases: takedown, evidence, NCMEC report (docs/specs/CSAM-RESPONSE.md); super admins only
   { href: '/moderation/csam', label: 'nav.csam', icon: 'flag', group: 'moderation', requires: (a) => a.superAdmin === true },
+  // Native Admin app alerts (wiki AUN-ADMIN-NATIVE): on-call rota, escalation, staff devices, timings
+  { href: '/review-alerts', label: 'nav.reviewAlerts', icon: 'clock', group: 'moderation' },
   { href: '/comments', label: 'nav.comments', icon: 'chat', group: 'moderation' },
   { href: '/community', label: 'nav.community', icon: 'people', group: 'moderation' },
   {

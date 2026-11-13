@@ -569,3 +569,63 @@ export async function saveNotificationPlatformSettings(
 ): Promise<ActionResult<import('@al-ummah/shared-types').NotificationPlatformSettings>> {
   return mutate('/api/notification-settings', 'PUT', { menuOpen });
 }
+
+// Review alerts for the native Admin app (admin-api /api/review-alerts): the on-call rota and
+// escalation times (every admin role reads, review_alerts:manage changes; audited), the daily
+// timings, and each staff member's push devices with "Sign out this device".
+
+export interface ReviewAlertsView {
+  settings: import('@al-ummah/shared-types').ReviewAlertSettings;
+  updatedBy: string | null;
+  updatedAt: string | null;
+  canManage: boolean;
+}
+
+export interface ReviewTimingDayView {
+  day: string;
+  held: number;
+  decided: number;
+  toAlert: { p50: number | null; p90: number | null };
+  toOpen: { p50: number | null; p90: number | null };
+  toClaim: { p50: number | null; p90: number | null };
+  toDecision: { p50: number | null; p90: number | null };
+}
+
+export interface StaffDeviceView {
+  installId: string;
+  app: 'viewer' | 'studio' | 'admin';
+  platform: string;
+  provider: string;
+  tokenHint: string;
+  locale: string | null;
+  appVersion: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export async function getReviewAlertSettings(): Promise<ReviewAlertsView> {
+  return fetchAdmin('/api/review-alerts/settings');
+}
+
+export async function saveReviewAlertSettings(
+  settings: import('@al-ummah/shared-types').ReviewAlertSettings,
+): Promise<ActionResult<{ settings: import('@al-ummah/shared-types').ReviewAlertSettings; previous: import('@al-ummah/shared-types').ReviewAlertSettings }>> {
+  return mutate('/api/review-alerts/settings', 'PUT', settings);
+}
+
+export async function getReviewAlertTimings(days = 14): Promise<{ days: ReviewTimingDayView[] }> {
+  return fetchAdmin(`/api/review-alerts/stats?days=${days}`);
+}
+
+export async function listStaffDevices(userId: string): Promise<ActionResult<{ devices: StaffDeviceView[] }>> {
+  try {
+    return { ok: true, data: await fetchAdmin(`/api/review-alerts/devices?userId=${encodeURIComponent(userId)}`) };
+  } catch (error) {
+    if (error instanceof AdminApiError) return { ok: false, status: error.status, error: error.message };
+    return { ok: false, status: 500, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
+export async function signOutStaffDevice(userId: string, installId: string): Promise<ActionResult<{ installId: string }>> {
+  return mutate(`/api/review-alerts/devices/${encodeURIComponent(installId)}?userId=${encodeURIComponent(userId)}`, 'DELETE', {});
+}
