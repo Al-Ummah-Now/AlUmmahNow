@@ -25,7 +25,8 @@ import type { D1Database, D1PreparedStatement } from '../types';
 export const ANALYTICS_TABLE = 'analytics_daily';
 export const OTHER_DIM = 'other';
 
-export type EntityType = 'video' | 'channel' | 'post';
+/** 'site': whole-site counters (visits, landing pages, sources; entity id = the site, e.g. 'videos') */
+export type EntityType = 'video' | 'channel' | 'post' | 'site';
 
 /** Conflict clause of every counter write: the database adds, never the caller. */
 export const ADD_ON_CONFLICT = 'ON CONFLICT (entity_type, entity_id, day, metric, dim) DO UPDATE SET value = value + excluded.value';

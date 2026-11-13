@@ -724,7 +724,8 @@
                     "type": "string",
                     "enum": [
                       "ab_test",
-                      "performance"
+                      "performance",
+                      "visit"
                     ]
                   },
                   "events": {
