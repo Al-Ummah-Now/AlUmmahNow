@@ -54,6 +54,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/admin-web/e2e/18-account-menu.spec.ts': { placement: 'local', reason: 'Header account menu: opaque surface and lines in light and dark, the admin named by the platform rule (2026-11-13 report)' },
   'apps/admin-web/e2e/19-menus-in-viewport.spec.ts': { placement: 'local', reason: 'menus and pickers stay inside the viewport at phone widths and landscape, en and ar (2026-11-13 owner decision)' },
   'apps/admin-web/e2e/20-status-page.spec.ts': { placement: 'local', reason: 'admin posts, resolves and deletes an incident; the local status Worker (shared D1) shows it in en and ar and its JSON' },
+  'apps/admin-web/e2e/21-site-visits.spec.ts': { placement: 'local', reason: 'Site visits panel vs admin-api /analytics/visits; own counter increments (unique referring host) via the stack SQL fast path, taken back afterwards' },
   'apps/web/e2e/01-homepage.spec.ts': { placement: 'local', reason: 'anonymous home page layout and content' },
   'apps/web/e2e/02-video-player.spec.ts': { placement: 'local', reason: 'player loads a seed video; any playable HLS will do' },
   'apps/web/e2e/03-profile.spec.ts': { placement: 'local', reason: 'profile page and profile guard with stored sessions' },

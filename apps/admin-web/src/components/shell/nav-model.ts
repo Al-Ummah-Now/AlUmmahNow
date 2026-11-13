@@ -59,6 +59,8 @@ export const NAV_GROUPS: { id: NavGroupId; label: MessageKey }[] = [
 
 export const NAV_ITEMS: NavItem[] = [
   { href: '/dashboard', label: 'nav.dashboard', icon: 'home', group: 'overview' },
+  // Site visits (D-SEO-9): cookieless daily totals of the videos site; every admin reads them
+  { href: '/site-visits', label: 'nav.siteVisits', icon: 'activity', group: 'overview' },
 
   { href: '/moderation', label: 'nav.moderation', icon: 'flag', group: 'moderation' },
   { href: '/moderation/ai', label: 'nav.aiModeration', icon: 'spark', group: 'moderation' },

@@ -29,6 +29,7 @@ const en = {
   nav: {
     label: 'Main navigation',
     dashboard: 'Dashboard',
+    siteVisits: 'Site visits',
     moderation: 'Moderation',
     aiModeration: 'AI moderation',
     categorySuggestions: 'Category suggestions',
@@ -2813,7 +2814,67 @@ const en = {
     historyEmpty: 'No changes yet.',
     historyEntry: '{date}: {from} → {to} by {actor}',
   },
-
+  siteVisits: {
+    title: 'Site visits',
+    subtitle: 'Visits to the videos site: how many, where they came from and which page they started on.',
+    privacy: 'Counted on our servers without cookies and kept as daily totals only: nothing here identifies a visitor. Days are UTC.',
+    periodLabel: 'Period',
+    periods: {
+      d7: 'Last 7 days',
+      d30: 'Last 30 days',
+      d90: 'Last 90 days',
+      other: 'Last {days} days',
+    },
+    range: '{from} to {to} (UTC)',
+    loading: 'Loading site visits',
+    none: 'None',
+    tiles: {
+      visits: 'Visits in the period',
+      average: 'Average per day',
+      busiest: 'Busiest day',
+    },
+    empty: {
+      title: 'No visits counted in this period',
+      body: 'A visit is counted when someone opens the videos site in a new tab. Try a longer period.',
+    },
+    chart: {
+      title: 'Visits per day · {period}',
+      table: 'Show the numbers',
+      day: 'Day',
+      empty: 'No visits in this period',
+    },
+    table: {
+      name: 'Name',
+      visits: 'Visits',
+      share: 'Share of visits',
+    },
+    sourcesTitle: 'Where visits came from',
+    sources: {
+      search: 'Search engines',
+      social: 'Social networks',
+      platform: 'Al Ummah Now sites',
+      site: 'Other websites',
+      direct: 'Direct (no referring website)',
+      ai: 'AI assistants',
+    },
+    landingTitle: 'Pages visits started on',
+    landing: {
+      home: 'Home',
+      watch: 'Watch page',
+      shorts: 'Shorts',
+      channel: 'Channel page',
+      playlist: 'Playlist',
+      search: 'Search results',
+      explore: 'Explore',
+      videos: 'Videos list',
+      channels: 'Channels directory',
+      live: 'Live',
+      library: 'Library (history, subscriptions)',
+      other: 'Other pages',
+    },
+    referrersTitle: 'Top referring websites',
+    referrersEmpty: 'No referring websites in this period.',
+  },
 };
 
 type DeepStringRecord<T> = { [K in keyof T]: T[K] extends string ? string : DeepStringRecord<T[K]> };
