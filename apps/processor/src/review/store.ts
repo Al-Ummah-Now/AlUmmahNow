@@ -25,14 +25,14 @@ export async function getReviewRow(db: D1Database, id: string): Promise<ReviewRo
 }
 
 /** The row exists from the moment the check starts (the queue shows "checking" items that stall). */
-export async function startReviewRow(db: D1Database, p: VideoReviewScanPayload, now: string): Promise<void> {
+export async function startReviewRow(db: D1Database, p: VideoReviewScanPayload, now: string, subjectType = 'video'): Promise<void> {
   await db
     .prepare(
       `INSERT INTO content_reviews (id, subject_type, subject_id, channel_id, owner_id, status, mode, timing, trigger, created_at, updated_at)
-       VALUES (?, 'video', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO NOTHING`,
     )
-    .bind(p.reviewId, p.videoId, p.channelId ?? null, p.ownerId ?? null, p.mode === 'shadow' ? 'shadow' : 'checking', p.mode, p.timing, p.trigger, now, now)
+    .bind(p.reviewId, subjectType, p.videoId, p.channelId ?? null, p.ownerId ?? null, p.mode === 'shadow' ? 'shadow' : 'checking', p.mode, p.timing, p.trigger, now, now)
     .run();
 }
 

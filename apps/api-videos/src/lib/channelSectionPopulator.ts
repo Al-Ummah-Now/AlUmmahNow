@@ -8,6 +8,7 @@
  * time, so nothing has to clean up stored section ids.
  */
 
+import { isPostHeldByReview } from '@al-ummah/shared-types';
 import { FALLBACK_SCAN_OBJECTS } from './scanBudget';
 import { subscribedChannelIds } from './subscription-store';
 import R2Repository from './r2Repo';
@@ -473,6 +474,8 @@ async function getCommunityPosts(channelId: string, limit: number, mode: 'latest
       !!p &&
       !p.isDeleted &&
       !p.isHidden &&
+      // Held by pre-publication review (VR16)
+      !isPostHeldByReview(p as never) &&
       p.status === PostStatus.PUBLISHED &&
       (p.visibility ?? PostVisibility.PUBLIC) === PostVisibility.PUBLIC &&
       (!p.scheduledAt || timeOf(p.scheduledAt) <= now) &&

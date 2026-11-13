@@ -12,6 +12,7 @@
  */
 
 import { isVideoPubliclyVisible, type VideoVisibilityFields } from '../video-visibility';
+import { isPostHeldByReview } from '../video-review';
 import { VIDEO_CATEGORIES } from '../upload-defaults';
 import { isShort, type VideoFormatInput } from '../video-format';
 import { buildIndexText, detectTextLanguage } from './normalize';
@@ -402,6 +403,8 @@ export function projectPost(raw: unknown): SearchRow<'post'> | null {
   if (!obj || !id || !channelId || isRemoved(obj)) return null;
   if (obj.status && obj.status !== 'published') return null;
   if (obj.visibility && obj.visibility !== 'public') return null;
+  // Held by pre-publication review (VR16): not searchable until it clears
+  if (isPostHeldByReview(obj as { review?: { status?: string } })) return null;
   const content = typeof obj.content === 'string' ? obj.content : '';
   const poll = asRecord(obj.poll);
   const pollQuestion = poll ? str(poll.question) : undefined;

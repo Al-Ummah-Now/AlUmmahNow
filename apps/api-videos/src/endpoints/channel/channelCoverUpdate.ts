@@ -1,3 +1,4 @@
+import { imageGate, newImagePatch, queueImageScan } from '../../lib/review/images';
 import { can, channelRoleOf } from "@al-ummah/shared-types";
 import { Hono } from "hono";
 import type { AppContext } from "../../base/types";
@@ -82,7 +83,13 @@ const handleCoverUpdate = async (c: AppContext) => {
 		});
 
         // Conditional write on the fresh channel (SCALABILITY-AUDIT AV-5)
-        const saved = await patchOwnedRecord(repository, id, { coverUrl }, { ownerId: channel.userId });
+        // Pre-publication review (VR16): the new image waits in pendingImages until it is clean
+        const gate = await imageGate(c.env as never);
+        const reviewed = newImagePatch(gate, 'banner', coverUrl, (channel as { pendingImages?: never }).pendingImages);
+        const saved = await patchOwnedRecord(repository, id, reviewed.patch as never, { ownerId: channel.userId });
+        if (reviewed.reviewId && saved.status !== 'missing' && saved.status !== 'forbidden') {
+            await queueImageScan(c.env as never, gate, { subject: 'banner', subjectId: id, reviewId: reviewed.reviewId, ownerId: channel.userId, channelId: id, images: [coverUrl] });
+        }
         if (saved.status === 'missing') {
             return c.json({ success: false, error: "Channel not found" }, 404);
         }

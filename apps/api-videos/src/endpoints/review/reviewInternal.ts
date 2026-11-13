@@ -8,7 +8,8 @@
  * api-videos is the only writer of a video's `review` field; these are the only ways in.
  */
 import { Hono } from 'hono';
-import type { ReviewDecisionRequest, ReviewOutcomeRequest } from '@al-ummah/shared-types';
+import type { ImageReviewResultRequest, ReviewDecisionRequest, ReviewOutcomeRequest } from '@al-ummah/shared-types';
+import { applyImageResult } from '../../lib/review/images';
 import { logger } from '../../lib/logger';
 import { applyReviewDecision, applyReviewOutcome, type ReviewApplyEnv } from '../../lib/review/apply';
 import { queueReviewScan } from '../../lib/review/scan';
@@ -17,6 +18,20 @@ const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v =
 
 export function createReviewInternalRouter() {
 	const app = new Hono<{ Bindings: ReviewApplyEnv }>();
+
+	// Images (VR16): posts, avatars, banners, profile pictures; outcome = processor, decision = admin-api
+	for (const kind of ['outcome', 'decision'] as const) {
+		app.post(`/images/${kind}`, async (c) => {
+			const body = (await c.req.json().catch(() => null)) as ImageReviewResultRequest | null;
+			const allowed = kind === 'outcome' ? ['approve', 'hold'] : ['approve', 'reject'];
+			if (!isObject(body) || typeof body.subjectId !== 'string' || typeof body.reviewId !== 'string' || !['post', 'avatar', 'banner', 'profile_picture', 'profile_banner'].includes(String(body.subject)) || !allowed.includes(String(body.result))) {
+				return c.json({ success: false, error: `subject, subjectId, reviewId and result (${allowed.join(' | ')}) are required` }, 400);
+			}
+			const result = await applyImageResult(c.env as never, body);
+			if ('why' in result) return c.json({ success: false, error: result.why }, result.status);
+			return c.json({ success: true, result: { applied: true } });
+		});
+	}
 
 	app.post('/:videoId/outcome', async (c) => {
 		const body = (await c.req.json().catch(() => null)) as ReviewOutcomeRequest | null;

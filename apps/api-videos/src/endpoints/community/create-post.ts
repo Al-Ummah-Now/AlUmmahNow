@@ -16,6 +16,7 @@ import { logger } from '../../lib/logger';
 import R2Repository, { rethrowBusy } from '../../lib/r2Repo';
 import { getChannelObject } from './post-comment-helpers';
 import { scanInBackground, communityPostScanText } from '../../lib/moderation-scan';
+import { imageGate, queueImageScan } from '../../lib/review/images';
 import { CHANNEL_SUSPENDED_CODE } from '../../middleware/auth';
 import { channelNameFields } from '../../lib/channelName';
 import { markScheduled } from '../../lib/scheduled-posts';
@@ -266,6 +267,12 @@ export class CreateCommunityPost extends AuthenticatedRoute {
         channelVerified: channel.isVerified || false
       };
 
+      // Pre-publication review of post images (VR16): the whole post waits for the check
+      const imageUrls = [...(body.images ?? []).map((img: { url?: string }) => img.url), ...((post as { poll?: { options?: Array<{ image?: { url?: string } | string }> } }).poll?.options ?? []).map((o) => (typeof o.image === 'string' ? o.image : o.image?.url))].filter((u): u is string => typeof u === 'string' && /^https:\/\//.test(u));
+      const gate = imageUrls.length ? await imageGate(c.env as never) : null;
+      const reviewId = crypto.randomUUID();
+      if (gate?.holds) (post as { review?: unknown }).review = { status: 'checking', reviewId, timing: 'pre', since: new Date().toISOString() };
+
       // Save to R2
       const postKey = `posts/${channelId}/${post.id}.json`;
       await c.env.community_posts.put(postKey, JSON.stringify(post));
@@ -278,8 +285,12 @@ export class CreateCommunityPost extends AuthenticatedRoute {
         await markScheduled(c.env.community_posts, channelId, post.id, post.scheduledAt);
       }
 
-      // Send to processor queue for notifications (if published)
-      if (post.status === PostStatus.PUBLISHED) {
+      if (gate?.scans) {
+        await queueImageScan(c.env as never, gate, { subject: 'post', subjectId: `${channelId}/${post.id}`, reviewId, ownerId: userId, channelId, images: imageUrls.slice(0, 10), text: communityPostScanText(post) });
+      }
+
+      // Send to processor queue for notifications (if published; a post held for review is announced when it clears)
+      if (post.status === PostStatus.PUBLISHED && !gate?.holds) {
         const queue = new Queue(c.env.queue);
         await queue.send(MessageType.CommunityPostCreated, {
           postId: post.id,

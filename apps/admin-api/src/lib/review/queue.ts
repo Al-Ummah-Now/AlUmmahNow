@@ -249,6 +249,19 @@ async function applyOnVideo(env: ReviewEnv, videoId: string, body: ReviewDecisio
   throw new ReviewError(res.status === 409 ? 409 : res.status === 400 ? 400 : 502, 'videos_refused', payload?.error ?? `api-videos answered ${res.status}`);
 }
 
+/** Images (VR16): a post is published or kept back; an avatar or banner is swapped in or dropped. */
+async function applyOnImage(env: ReviewEnv, row: ReviewRow, decision: 'approve' | 'reject', reviewerId: string, reasonCode?: string): Promise<void> {
+  if (!env.VIDEOS) throw new ReviewError(502, 'not_configured', 'The VIDEOS service binding is not configured');
+  const res = await env.VIDEOS.fetch('https://videos.internal/internal/review/images/decision', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'X-API-Key': await secret(env.INTERNAL_API_KEY) },
+    body: JSON.stringify({ subject: row.subject_type, subjectId: row.subject_id, reviewId: row.id, result: decision, reviewerId, ...(reasonCode ? { reasonCode } : {}) }),
+  });
+  if (res.ok) return;
+  const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+  throw new ReviewError(res.status === 409 ? 409 : res.status === 400 ? 400 : 502, 'videos_refused', payload?.error ?? `api-videos answered ${res.status}`);
+}
+
 export interface DecisionInput {
   decision: 'approve' | 'reject' | 'escalate' | 'undo';
   reasonCode?: string;
@@ -273,7 +286,8 @@ export async function decideReview(env: ReviewEnv, reviewer: Reviewer, id: strin
   if (input.decision === 'undo') {
     if (!row.decided_at || row.decided_by !== reviewer.id) throw new ReviewError(409, 'nothing_to_undo', 'Only your own decision can be undone');
     if (!row.undo_until || iso > row.undo_until) throw new ReviewError(409, 'undo_expired', `Decisions can be undone for ${REVIEW_UNDO_MINUTES} minutes`);
-    if (row.subject_type === 'video') await applyOnVideo(env, row.subject_id, { reviewId: id, decision: 'undo', reviewerId: reviewer.id, decidedAt: iso });
+    if (row.subject_type !== 'video') throw new ReviewError(409, 'undo_video_only', 'An image decision cannot be undone; decide it again from History');
+    await applyOnVideo(env, row.subject_id, { reviewId: id, decision: 'undo', reviewerId: reviewer.id, decidedAt: iso });
     const restored = row.appeal_of ? 'appealed' : 'in_review';
     await db.prepare('UPDATE content_reviews SET status = ?, decision = NULL, decided_at = NULL, decided_by = NULL, reason_code = NULL, note = NULL, undo_until = NULL, media_purge_after = NULL, updated_at = ? WHERE id = ?').bind(restored, iso, id).run();
     await audit(db, { reviewId: id, subjectId: row.subject_id, action: 'review_undo', actorId: reviewer.id }, iso);
@@ -289,6 +303,8 @@ export async function decideReview(env: ReviewEnv, reviewer: Reviewer, id: strin
   }
   if (row.subject_type === 'video') {
     await applyOnVideo(env, row.subject_id, { reviewId: id, decision: input.decision, reasonCode: input.reasonCode as VideoReviewReasonCode | undefined, note, reviewerId: reviewer.id, decidedAt: iso });
+  } else {
+    await applyOnImage(env, row, input.decision, reviewer.id, input.reasonCode);
   }
   const settings = await readVideoReviewSettings(env.global_settings as ReviewSettingsBucket | undefined);
   const purge = new Date(now.getTime() + settings.mediaRetentionDays * 86_400_000).toISOString();

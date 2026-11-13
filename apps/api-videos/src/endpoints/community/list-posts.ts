@@ -1,3 +1,4 @@
+import { isPostHeldByReview } from '@al-ummah/shared-types';
 import { isChannelDeleted } from '../../lib/community-posts';
 import { withPostViews } from '../../lib/post-views';
 import { z } from 'zod';
@@ -113,7 +114,8 @@ export class ListCommunityPosts extends OptionalAuthRoute {
           }
 
           // A scheduled post waits for its time; only its author sees it before then (#1218)
-          if (isUpcoming(post) && post.userId !== viewerId) {
+          // Held by pre-publication review too (VR16): only its author sees it until it clears
+          if ((isUpcoming(post) || isPostHeldByReview(post as never)) && post.userId !== viewerId) {
             continue;
           }
 

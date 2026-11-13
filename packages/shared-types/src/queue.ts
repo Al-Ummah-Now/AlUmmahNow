@@ -139,6 +139,8 @@ export enum MessageType {
   VideoReviewScan = 232,
   // The creator appealed a rejection (payload: VideoReviewAppealPayload); the processor opens the appeal row.
   VideoReviewAppeal = 233,
+  // Pre-publication review of images (VR16; payload: ImageReviewScanPayload): posts, avatars, banners, profile pictures.
+  ImageReviewScan = 234,
 
   // Admin content job (api-videos lib/admin/jobs.ts), on the admin-jobs queue. Payload: { jobId }.
   AdminJob = 240,

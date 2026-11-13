@@ -93,7 +93,9 @@ export function transformChannelToView(channel: z.infer<typeof BusinessChannel>)
     // and so does the channel team: it is read through GET /:id/members, which
     // checks members.view
     // Bunny collection ids are internal too (lib/channelCollection.ts)
-    const { suspension, suspensionHolds: _holds, hiddenBeforeSuspension: _before, members: _members, bunnyCollectionId: _collection, bunnyCollections: _collections, ...rest } = channel as typeof channel & {
+    // Images waiting for pre-publication review (VR16): never their URL, only that one is being checked
+    const { suspension, suspensionHolds: _holds, hiddenBeforeSuspension: _before, members: _members, bunnyCollectionId: _collection, bunnyCollections: _collections, pendingImages, ...rest } = channel as typeof channel & {
+        pendingImages?: Record<string, { status?: string }>;
         suspension?: { at?: string; reason?: string; by?: string };
         suspensionHolds?: unknown;
         hiddenBeforeSuspension?: unknown;
@@ -104,6 +106,7 @@ export function transformChannelToView(channel: z.infer<typeof BusinessChannel>)
     return {
         ...(rest as typeof channel),
         ...(suspension ? { suspension: { at: suspension.at, ...(suspension.reason ? { reason: suspension.reason } : {}) } } : {}),
+        ...(pendingImages && Object.keys(pendingImages).length ? { pendingImages: pendingImageStatus(pendingImages) } : {}),
         playlistsCount: channel.playlists?.length || 0,
         videosCount: channel.videos?.length || 0,
         subscribersCount: channel.subscribers?.length || 0,
@@ -130,6 +133,8 @@ export function transformProfileToView(profile: z.infer<typeof BusinessProfile>,
         bioLocalized: profile.bioLocalized,
         avatarUrl: profile.avatarUrl,
         coverUrl: profile.coverUrl,
+        // The owner's own view: a new picture or banner is being checked (VR16); never its URL
+        ...((profile as { pendingImages?: Record<string, { status?: string }> }).pendingImages ? { pendingImages: pendingImageStatus((profile as { pendingImages: Record<string, { status?: string }> }).pendingImages) } : {}),
         timezone: profile.timezone,
         dateCreated: profile.dateCreated,
         dateModified: profile.dateModified,
@@ -278,4 +283,9 @@ export function transformChannelSectionsToView(
     channel?: { userId?: string | null } | null,
 ): ChannelSectionView[] {
     return sections.map((section) => transformChannelSectionToView(section, channel));
+}
+
+/** pendingImages without the URLs: { avatarUrl: 'checking' | 'in_review' | 'rejected' }. */
+export function pendingImageStatus(pending: Record<string, { status?: string }>): Record<string, string> {
+    return Object.fromEntries(Object.entries(pending).map(([field, p]) => [field, String(p?.status ?? 'checking')]));
 }
