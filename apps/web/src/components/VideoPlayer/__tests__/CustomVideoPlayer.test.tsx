@@ -535,7 +535,7 @@ describe('CustomVideoPlayer (Phase 1.4/1.5)', () => {
       render(<CustomVideoPlayer {...defaultProps} lang="ar" />);
 
       await waitFor(() => {
-        expect(screen.getByText('تم تحميل مشغل الفيديو وهو جاهز')).toBeInTheDocument();
+        expect(screen.getByText('تم تحميل مشغّل المرئيات وهو جاهز')).toBeInTheDocument();
       });
     });
 
@@ -545,7 +545,7 @@ describe('CustomVideoPlayer (Phase 1.4/1.5)', () => {
 
       render(<CustomVideoPlayer {...defaultProps} lang="ar" />);
 
-      expect(screen.getByText('جاري تحميل مشغل الفيديو...')).toBeInTheDocument();
+      expect(screen.getByText('جاري تحميل مشغّل المرئيات...')).toBeInTheDocument();
     });
 
     it('should apply RTL direction for Arabic', () => {
@@ -566,7 +566,7 @@ describe('CustomVideoPlayer (Phase 1.4/1.5)', () => {
       render(<CustomVideoPlayer {...defaultProps} lang="ar" />);
 
       const video = document.querySelector('video');
-      expect(video).toHaveAttribute('aria-label', 'مشغل الفيديو');
+      expect(video).toHaveAttribute('aria-label', 'مشغّل المرئيات');
     });
 
     it('should use custom ariaLabel over translated default', () => {

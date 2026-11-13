@@ -27,8 +27,8 @@ describe('Video Player i18n', () => {
     it('should return Arabic translations for "ar"', () => {
       const translations = getTranslations('ar');
       expect(translations).toEqual(AR_TRANSLATIONS);
-      expect(translations.player.loading).toBe('جاري تحميل مشغل الفيديو...');
-      expect(translations.player.ready).toBe('تم تحميل مشغل الفيديو وهو جاهز');
+      expect(translations.player.loading).toBe('جاري تحميل مشغّل المرئيات...');
+      expect(translations.player.ready).toBe('تم تحميل مشغّل المرئيات وهو جاهز');
     });
 
     it('should have all required translation keys', () => {

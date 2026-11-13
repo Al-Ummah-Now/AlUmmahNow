@@ -149,11 +149,11 @@ describe('toast copy', () => {
   it('uses CLDR plural forms in Arabic with the locale\'s digits', () => {
     const table = ar.grouped.uploadReady;
     const n = (v: number) => new Intl.NumberFormat('ar').format(v);
-    expect(pluralText(table, 1, 'ar')).toBe('اكتملت معالجة فيديو واحد');
-    expect(pluralText(table, 2, 'ar')).toBe('اكتملت معالجة مقطعي فيديو');
-    expect(pluralText(table, 3, 'ar')).toBe(`اكتملت معالجة ${n(3)} مقاطع فيديو`);
-    expect(pluralText(table, 11, 'ar')).toBe(`اكتملت معالجة ${n(11)} مقطع فيديو`);
-    expect(pluralText(table, 100, 'ar')).toBe(`اكتملت معالجة ${n(100)} مقطع فيديو`);
+    expect(pluralText(table, 1, 'ar')).toBe('اكتملت معالجة مرئي واحد');
+    expect(pluralText(table, 2, 'ar')).toBe('اكتملت معالجة مرئيين');
+    expect(pluralText(table, 3, 'ar')).toBe(`اكتملت معالجة ${n(3)} مرئيات`);
+    expect(pluralText(table, 11, 'ar')).toBe(`اكتملت معالجة ${n(11)} مرئيًا`);
+    expect(pluralText(table, 100, 'ar')).toBe(`اكتملت معالجة ${n(100)} مرئي`);
     expect(pluralText(en.grouped.uploadReady, 1, 'en')).toBe('1 video finished processing');
     expect(pluralText(en.more, 4, 'en')).toBe('+4 more');
   });

@@ -74,7 +74,7 @@ export function CategorySelector({
       <label htmlFor={id} className={`block font-medium text-foreground ${compact ? 'text-xs' : 'text-sm'}`}>
         <span className="flex items-center gap-2">
           <Folder className={compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} aria-hidden="true" />
-          {label ?? (isRTL ? 'تصنيف الفيديو' : 'Video Category')}
+          {label ?? (isRTL ? 'تصنيف المرئي' : 'Video Category')}
           {required && <span className="text-red-500">*</span>}
         </span>
       </label>

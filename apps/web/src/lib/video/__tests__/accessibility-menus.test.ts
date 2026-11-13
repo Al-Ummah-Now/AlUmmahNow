@@ -21,8 +21,8 @@ describe('labelQualityButton', () => {
   it('falls back to the base label when no quality is shown yet', () => {
     document.body.innerHTML = '<button id="q"></button>';
     const button = document.getElementById('q')!;
-    labelQualityButton(button, 'جودة الفيديو');
-    expect(button).toHaveAttribute('aria-label', 'جودة الفيديو');
+    labelQualityButton(button, 'جودة المرئي');
+    expect(button).toHaveAttribute('aria-label', 'جودة المرئي');
   });
 });
 
@@ -45,7 +45,7 @@ describe('fixMenuTitle', () => {
 describe('getAriaLabels', () => {
   it('returns localized labels from the video player i18n system', () => {
     expect(getAriaLabels('en').playButton).toBe('Play video');
-    expect(getAriaLabels('ar').playButton).toBe('تشغيل الفيديو');
+    expect(getAriaLabels('ar').playButton).toBe('تشغيل المرئي');
     expect(getAriaLabels('ar').currentTime).toBe('الوقت الحالي');
   });
 });

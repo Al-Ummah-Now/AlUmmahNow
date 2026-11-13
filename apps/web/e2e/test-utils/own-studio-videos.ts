@@ -24,13 +24,13 @@ interface StudioSpec {
 
 const SPECS: Partial<Record<AuthUser, StudioSpec[]>> = {
   single: [
-    { base: SEED_TITLES.singleVideo, titleAr: 'فيديو اختبار', channelIndex: 0 },
-    { base: SEED_TITLES.singlePrivate, titleAr: 'فيديو اختبار خاص', channelIndex: 0 },
-    { base: SEED_TITLES.singleScheduled, titleAr: 'فيديو اختبار مجدول', channelIndex: 0, scheduleInDays: 10 },
+    { base: SEED_TITLES.singleVideo, titleAr: 'مرئي اختبار', channelIndex: 0 },
+    { base: SEED_TITLES.singlePrivate, titleAr: 'مرئي اختبار خاص', channelIndex: 0 },
+    { base: SEED_TITLES.singleScheduled, titleAr: 'مرئي اختبار مجدول', channelIndex: 0, scheduleInDays: 10 },
   ],
   multi: [
-    { base: SEED_TITLES.multiOne, titleAr: 'فيديو القناة الأولى', channelIndex: 0 },
-    { base: SEED_TITLES.multiTwo, titleAr: 'فيديو القناة الثانية', channelIndex: 1 },
+    { base: SEED_TITLES.multiOne, titleAr: 'مرئي القناة الأولى', channelIndex: 0 },
+    { base: SEED_TITLES.multiTwo, titleAr: 'مرئي القناة الثانية', channelIndex: 1 },
   ],
 };
 

@@ -179,7 +179,7 @@ export const SEED_CHANNELS: readonly SeedChannel[] = [
         title: 'QA Lecture 1 — Introduction to Tafsir',
         titleAr: 'محاضرة اختبار ١ — مقدمة في التفسير',
         description: 'Seeded QA video: an introduction to tafsir. Generated test pattern with tone.',
-        descriptionAr: 'فيديو اختبار: مقدمة في التفسير. نمط اختبار مولد مع نغمة.',
+        descriptionAr: 'مرئي اختبار: مقدمة في التفسير. نمط اختبار مولد مع نغمة.',
         category: 'quran_tafsir',
         tags: ['qa-seed', 'tafsir', 'lecture'],
         language: 'en',
@@ -193,7 +193,7 @@ export const SEED_CHANNELS: readonly SeedChannel[] = [
         title: 'QA Lecture 2 — Hadith Basics',
         titleAr: 'محاضرة اختبار ٢ — أساسيات الحديث',
         description: 'Seeded QA video about hadith studies.',
-        descriptionAr: 'فيديو اختبار عن علوم الحديث.',
+        descriptionAr: 'مرئي اختبار عن علوم الحديث.',
         category: 'hadith_studies',
         tags: ['qa-seed', 'hadith', 'lecture'],
         language: 'en',
@@ -206,7 +206,7 @@ export const SEED_CHANNELS: readonly SeedChannel[] = [
         title: 'QA Lecture 3 — Seerah Overview',
         titleAr: 'محاضرة اختبار ٣ — نظرة عامة على السيرة',
         description: 'Seeded QA video on Islamic history (seerah).',
-        descriptionAr: 'فيديو اختبار عن التاريخ الإسلامي (السيرة).',
+        descriptionAr: 'مرئي اختبار عن التاريخ الإسلامي (السيرة).',
         category: 'islamic_history',
         tags: ['qa-seed', 'seerah', 'history'],
         language: 'ar',
@@ -219,7 +219,7 @@ export const SEED_CHANNELS: readonly SeedChannel[] = [
         title: 'QA Lecture 4 — Fiqh of Prayer (Scheduled)',
         titleAr: 'محاضرة اختبار ٤ — فقه الصلاة (مجدولة)',
         description: 'Seeded QA video scheduled for publication about one day after seeding.',
-        descriptionAr: 'فيديو اختبار مجدول للنشر بعد يوم تقريباً من إنشائه.',
+        descriptionAr: 'مرئي اختبار مجدول للنشر بعد يوم تقريباً من إنشائه.',
         category: 'fiqh',
         tags: ['qa-seed', 'fiqh', 'scheduled'],
         language: 'en',
@@ -345,7 +345,7 @@ export const SAMPLE_WEBVTT_AR = `WEBVTT
 بسم الله. مرحباً بكم في هذه المحاضرة التجريبية.
 
 00:00:05.000 --> 00:00:15.000
-تم إنشاء هذا الفيديو بواسطة سير عمل بيانات الاختبار.
+تم إنشاء هذا المرئي بواسطة سير عمل بيانات الاختبار.
 
 00:00:15.000 --> 00:00:30.000
 الفصل الأول: ما هو التفسير؟

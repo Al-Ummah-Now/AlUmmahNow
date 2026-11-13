@@ -49,7 +49,7 @@ test.describe('Video Upload Flow', () => {
       titleEn: 'Test Islamic Lecture',
       titleAr: 'محاضرة إسلامية تجريبية',
       descriptionEn: 'A test video about Islamic teachings',
-      descriptionAr: 'فيديو تجريبي عن التعاليم الإسلامية',
+      descriptionAr: 'مرئي تجريبي عن التعاليم الإسلامية',
       isPublic: true,
     });
 
@@ -228,7 +228,7 @@ test.describe('Video Upload Flow', () => {
     await ui.langTabAr.click();
     await expect(ui.langTabAr).toHaveAttribute('aria-selected', 'true');
     await expect(ui.titleAr).toHaveAttribute('dir', 'rtl');
-    await ui.titleAr.fill('فيديو تجريبي');
+    await ui.titleAr.fill('مرئي تجريبي');
 
     // English title is required
     await ui.langTabEn.click();

@@ -98,6 +98,6 @@ describe('SkipLinks', () => {
     render(<SkipLinks />);
     expect(screen.getByRole('navigation', { name: 'روابط التخطي' })).toHaveAttribute('dir', 'rtl');
     expect(screen.getByRole('link', { name: 'انتقل إلى المحتوى الرئيسي' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'انتقل إلى مشغل الفيديو' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'انتقل إلى مشغّل المرئيات' })).toBeInTheDocument();
   });
 });

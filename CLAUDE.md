@@ -229,6 +229,8 @@ Users never see raw errors, and failures that need a person go to the videos adm
 
 **Rationale**: The platform supports bilingual content (English/Arabic) with RTL support. All text must be translatable.
 
+**Arabic word for "video"**: always «مرئي» (plural «مرئيات», definite «المرئي / المرئيات», dual «مرئيان / مرئيين»), never «فيديو / فيديوهات / مقاطع الفيديو». Counts: «مرئي واحد»، «مرئيان»، «٣ مرئيات»، «١١ مرئيًا»، «١٠٠ مرئي», or «{count} من المرئيات» when the string has no plural forms. «مقطع قصير / المقاطع القصيرة» stays for Shorts, and «مقطع» stays for live-stream segments. See the wiki page "Arabic glossary".
+
 #### Server-Side i18n (API Responses)
 
 Use i18n for API error messages and user-facing responses:
@@ -301,12 +303,12 @@ Organize translation keys by feature:
     "delete": "حذف"
   },
   "video": {
-    "title": "عنوان الفيديو",
+    "title": "عنوان المرئي",
     "description": "الوصف",
-    "upload": "رفع فيديو"
+    "upload": "رفع مرئي"
   },
   "errors": {
-    "video_not_found": "الفيديو غير موجود",
+    "video_not_found": "المرئي غير موجود",
     "unauthorized": "غير مصرح لك"
   }
 }
@@ -336,7 +338,7 @@ return c.json({ error: t('errors.video_not_found') });
 **Dynamic content with placeholders:**
 ```typescript
 // English: "Video {title} was created by {author}"
-// Arabic: "تم إنشاء الفيديو {title} بواسطة {author}"
+// Arabic: "تم إنشاء المرئي {title} بواسطة {author}"
 t('video.created_by', { title: video.title, author: video.author })
 ```
 

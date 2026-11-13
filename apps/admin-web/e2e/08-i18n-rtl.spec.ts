@@ -6,7 +6,7 @@ const AR_PAGES = [
   { path: '/dashboard', heading: 'لوحة تحكم الإدارة' },
   { path: '/moderation', heading: 'قائمة الإشراف' },
   { path: '/translations', heading: 'إدارة الترجمات' },
-  { path: '/indices', heading: 'فهارس الفيديو' },
+  { path: '/indices', heading: 'فهارس المرئيات' },
 ];
 
 const ENGLISH_UI_STRINGS = ['Dashboard', 'Moderation', 'Translations', 'Log out', 'Language', 'Theme'];

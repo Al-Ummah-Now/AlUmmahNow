@@ -64,7 +64,7 @@ test.describe('watch page - anonymous', () => {
       const arTitle = video.titleLocalized?.ar || video.title;
       await expect(page.getByRole('heading', { level: 1, name: arTitle })).toBeVisible();
       await expect(page.getByTestId('video-metrics-views')).toHaveText(/مشاهد/);
-      await expect(page.getByTestId('video-metrics')).toHaveAccessibleName('إحصائيات الفيديو');
+      await expect(page.getByTestId('video-metrics')).toHaveAccessibleName('إحصائيات المرئي');
       await expect(page.getByRole('heading', { name: /ذات الصلة/ }).first()).toBeAttached();
     });
   }
@@ -75,13 +75,13 @@ test.describe('watch page - anonymous', () => {
     await expect(page.locator('video')).toHaveCount(0);
 
     await page.goto('/ar/video');
-    await expect(page.getByRole('heading', { level: 1, name: 'لم يتم اختيار فيديو' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'لم يتم اختيار مرئي' })).toBeVisible();
     await expect(page.locator('main')).toHaveAttribute('dir', 'rtl');
   });
 
   for (const [locale, heading, description] of [
     ['en', 'Video not found', /does not exist/],
-    ['ar', 'الفيديو غير موجود', /غير موجود/],
+    ['ar', 'المرئي غير موجود', /غير موجود/],
   ] as const) {
     test(`WATCH-004 unknown video id shows a "video not found" state (${locale})`, async ({ page }) => {
       await page.goto(`/${locale}/video/00000000-0000-4000-8000-000000000000`);
@@ -314,7 +314,7 @@ test.describe('watch page - owner', () => {
   test('WATCH-013 owner edit link is translated on the Arabic page', async ({ page }) => {
     const video = mine!;
     await openWatch(page, video, 'ar');
-    await expect(page.getByTestId('video-owner-edit-link')).toHaveText('تعديل الفيديو');
+    await expect(page.getByTestId('video-owner-edit-link')).toHaveText('تعديل المرئي');
     await expect(page.getByTestId('video-owner-edit-link')).toHaveAttribute('href', `/ar/studio/video/${video.id}/edit`);
   });
 });

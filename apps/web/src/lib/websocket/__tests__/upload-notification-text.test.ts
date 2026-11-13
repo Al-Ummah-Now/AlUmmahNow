@@ -25,6 +25,6 @@ describe('upload result notification text', () => {
   });
 
   it('renders in Arabic', () => {
-    expect(resolveNotificationText(event('uploadReady'), AR_TRANSLATIONS).message).toBe('الفيديو «Tafsir 1» جاهز للمشاهدة');
+    expect(resolveNotificationText(event('uploadReady'), AR_TRANSLATIONS).message).toBe('المرئي «Tafsir 1» جاهز للمشاهدة');
   });
 });

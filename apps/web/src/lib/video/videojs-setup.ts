@@ -78,8 +78,8 @@ export const VIDEO_JS_OPTIONS: Partial<PlayerOptions> = {
     // routes; the app-specific wording below overrides it.
     ar: {
       ...(videojsArabic as Record<string, string>),
-      'Play': 'تشغيل الفيديو',
-      'Pause': 'إيقاف الفيديو',
+      'Play': 'تشغيل المرئي',
+      'Pause': 'إيقاف المرئي',
       'Mute': 'كتم الصوت',
       'Unmute': 'إلغاء كتم الصوت',
       'Fullscreen': 'ملء الشاشة',

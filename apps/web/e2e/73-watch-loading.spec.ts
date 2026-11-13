@@ -27,7 +27,7 @@ async function watchVideo(_request: APIRequestContext): Promise<string> {
  */
 async function expectComments(page: Page, video: string): Promise<void> {
   const comments = page.getByTestId('comments-section');
-  const notFound = page.getByRole('heading', { level: 1, name: /^(Video not found|الفيديو غير موجود)$/ });
+  const notFound = page.getByRole('heading', { level: 1, name: /^(Video not found|المرئي غير موجود)$/ });
   await expect(comments.or(notFound).first()).toBeVisible({ timeout: 30000 });
   expect(await notFound.count(), `the watch page says video ${video} was not found`).toBe(0);
   await expect(comments).toBeVisible();

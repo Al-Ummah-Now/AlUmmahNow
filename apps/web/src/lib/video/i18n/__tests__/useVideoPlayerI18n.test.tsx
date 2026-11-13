@@ -39,10 +39,10 @@ describe('useVideoPlayerI18n hook', () => {
     const { result: arResult } = renderHook(() => useVideoPlayerI18n('ar'));
 
     expect(enResult.current.t.player.loading).toBe('Loading video player...');
-    expect(arResult.current.t.player.loading).toBe('جاري تحميل مشغل الفيديو...');
+    expect(arResult.current.t.player.loading).toBe('جاري تحميل مشغّل المرئيات...');
 
     expect(enResult.current.t.player.ready).toBe('Video player loaded and ready');
-    expect(arResult.current.t.player.ready).toBe('تم تحميل مشغل الفيديو وهو جاهز');
+    expect(arResult.current.t.player.ready).toBe('تم تحميل مشغّل المرئيات وهو جاهز');
   });
 
   it('should return correct accessibility labels', () => {
@@ -50,10 +50,10 @@ describe('useVideoPlayerI18n hook', () => {
     const { result: arResult } = renderHook(() => useVideoPlayerI18n('ar'));
 
     expect(enResult.current.t.accessibility.videoPlayer).toBe('Video player');
-    expect(arResult.current.t.accessibility.videoPlayer).toBe('مشغل الفيديو');
+    expect(arResult.current.t.accessibility.videoPlayer).toBe('مشغّل المرئيات');
 
     expect(enResult.current.t.accessibility.playButton).toBe('Play video');
-    expect(arResult.current.t.accessibility.playButton).toBe('تشغيل الفيديو');
+    expect(arResult.current.t.accessibility.playButton).toBe('تشغيل المرئي');
   });
 
   it('should return correct error translations', () => {
@@ -94,7 +94,7 @@ describe('useVideoPlayerI18n hook', () => {
 
     expect(result.current.lang).toBe('ar');
     expect(result.current.isRTL).toBe(true);
-    expect(result.current.t.player.loading).toBe('جاري تحميل مشغل الفيديو...');
+    expect(result.current.t.player.loading).toBe('جاري تحميل مشغّل المرئيات...');
   });
 
   it('should have correct type structure', () => {

@@ -22,7 +22,7 @@ const CATEGORY_LABELS = {
   episode: { en: 'Episode & Series', ar: 'الحلقة والسلسلة' },
   quran: { en: 'Quran References', ar: 'مراجع القرآن' },
   channel: { en: 'Channel Info', ar: 'معلومات القناة' },
-  video: { en: 'Video Info', ar: 'معلومات الفيديو' },
+  video: { en: 'Video Info', ar: 'معلومات المرئي' },
 };
 
 export function VariableGuide({ onInsertVariable }: VariableGuideProps) {
@@ -220,7 +220,7 @@ export function VariableGuide({ onInsertVariable }: VariableGuideProps) {
           ">
             <p className="text-xs text-blue-800 dark:text-blue-300">
               {isRTL
-                ? 'استخدم هذه المتغيرات في العنوان أو الوصف. سيتم استبدالها تلقائيًا بالقيم الفعلية عند رفع الفيديو.'
+                ? 'استخدم هذه المتغيرات في العنوان أو الوصف. سيتم استبدالها تلقائيًا بالقيم الفعلية عند رفع المرئي.'
                 : 'Use these variables in your title or description. They will be automatically replaced with actual values when you upload a video.'}
             </p>
           </div>

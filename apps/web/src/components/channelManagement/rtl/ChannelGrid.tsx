@@ -52,7 +52,7 @@ export const ChannelGridRTL: React.FC<ChannelGridProps> = ({
           لا توجد قنوات بعد
         </h3>
         <p className="text-gray-600 dark:text-gray-400 text-center mb-6 max-w-md">
-          أنشئ قناتك الأولى لبدء مشاركة مقاطع الفيديو وبناء جمهورك.
+          أنشئ قناتك الأولى لبدء مشاركة المرئيات وبناء جمهورك.
         </p>
         {onCreate && (
         <button

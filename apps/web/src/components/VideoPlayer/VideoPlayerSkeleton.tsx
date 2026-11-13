@@ -12,7 +12,7 @@ export function VideoPlayerSkeleton({ className = '', rtl = false }: VideoPlayer
     <div 
       className={`relative aspect-video bg-muted rounded-lg overflow-hidden ${className}`}
       role="status"
-      aria-label={rtl ? 'جاري تحميل الفيديو...' : 'Loading video...'}
+      aria-label={rtl ? 'جاري تحميل المرئي...' : 'Loading video...'}
       dir={rtl ? 'rtl' : 'ltr'}
     >
       {/* Animated shimmer effect */}
@@ -51,7 +51,7 @@ export function VideoPlayerSkeleton({ className = '', rtl = false }: VideoPlayer
 
       {/* Screen reader text */}
       <span className="sr-only">
-        {rtl ? 'جاري تحميل مشغل الفيديو...' : 'Loading video player...'}
+        {rtl ? 'جاري تحميل مشغّل المرئيات...' : 'Loading video player...'}
       </span>
     </div>
   );

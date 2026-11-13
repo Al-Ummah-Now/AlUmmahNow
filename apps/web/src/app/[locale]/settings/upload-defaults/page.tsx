@@ -148,7 +148,7 @@ export default function UploadDefaultsPage() {
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
             {isRTL
-              ? 'أنشئ قوالب لتوفير الوقت عند رفع مقاطع الفيديو. يمكنك استخدام المتغيرات لتعبئة البيانات تلقائيًا.'
+              ? 'أنشئ قوالب لتوفير الوقت عند رفع المرئيات. يمكنك استخدام المتغيرات لتعبئة البيانات تلقائيًا.'
               : 'Create templates to save time when uploading videos. Use variables to auto-fill metadata.'}
           </p>
         </div>

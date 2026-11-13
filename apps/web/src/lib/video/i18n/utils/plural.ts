@@ -23,8 +23,8 @@ function selectTemplate(table: PluralForms, lang: SupportedLanguage, count: numb
  *
  * @example
  * plural('en', 'videos', 1);  // "1 video"
- * plural('ar', 'videos', 2);  // "مقطعا فيديو"
- * plural('ar', 'videos', 5);  // "٥ مقاطع فيديو"
+ * plural('ar', 'videos', 2);  // "مرئيان"
+ * plural('ar', 'videos', 5);  // "٥ مرئيات"
  */
 export function plural(lang: SupportedLanguage, key: PluralKey, count: number): string {
   const table = getTranslations(lang).pluralization[key];

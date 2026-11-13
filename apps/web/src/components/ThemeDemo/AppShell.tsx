@@ -17,7 +17,7 @@ import { useRailMotion } from './rail-breakpoint';
 
 const L = {
   en: { browse: 'Browse', you: 'Yours', create: 'Create', more: 'More', history: 'History', watchLater: 'Watch later', liked: 'Liked videos', settings: 'Settings', search: 'Search videos', lightMode: 'Switch to light mode', darkMode: 'Switch to dark mode', other: 'العربية', otherLabel: 'التبديل إلى العربية', menu: 'Menu', close: 'Close menu' },
-  ar: { browse: 'تصفّح', you: 'لك', create: 'إنشاء', more: 'المزيد', history: 'السجل', watchLater: 'المشاهدة لاحقًا', liked: 'مقاطع أعجبتك', settings: 'الإعدادات', search: 'ابحث عن مقاطع', lightMode: 'التبديل إلى الوضع الفاتح', darkMode: 'التبديل إلى الوضع الداكن', other: 'English', otherLabel: 'Switch to English', menu: 'القائمة', close: 'إغلاق القائمة' },
+  ar: { browse: 'تصفّح', you: 'لك', create: 'إنشاء', more: 'المزيد', history: 'السجل', watchLater: 'المشاهدة لاحقًا', liked: 'مرئيات أعجبتك', settings: 'الإعدادات', search: 'ابحث عن مقاطع', lightMode: 'التبديل إلى الوضع الفاتح', darkMode: 'التبديل إلى الوضع الداكن', other: 'English', otherLabel: 'Switch to English', menu: 'القائمة', close: 'إغلاق القائمة' },
 };
 
 interface Item { label: string; href: string; icon: LucideIcon; tab?: boolean }

@@ -116,7 +116,7 @@ describe('NotificationRow', () => {
         <NotificationRow item={item({ isRead: true })} />
       </ul>,
     );
-    expect(screen.getByText('فيديو جديد')).toBeInTheDocument();
+    expect(screen.getByText('مرئي جديد')).toBeInTheDocument();
     expect(screen.getByRole('link')).toHaveAttribute('href', '/ar/video/v1');
     expect(screen.queryByRole('button')).toBeNull();
   });

@@ -33,7 +33,7 @@ describe('VideoFormatChoice (Upload as Short / as video)', () => {
     mockLang = 'ar';
     render(<VideoFormatChoice value="short" onChange={jest.fn()} />);
     expect(screen.getByText('رفع كمقطع قصير')).toBeInTheDocument();
-    expect(screen.getByText('رفع كفيديو')).toBeInTheDocument();
+    expect(screen.getByText('رفع كمرئي')).toBeInTheDocument();
     expect(screen.getByTestId('video-format-short')).toBeChecked();
   });
 

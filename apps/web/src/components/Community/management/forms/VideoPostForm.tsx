@@ -27,19 +27,19 @@ export function VideoPostForm({
     <div className="space-y-4 md:space-y-6">
       <div>
         <Label htmlFor="video-id" className="text-sm md:text-base">
-          {isRTL ? 'معرف الفيديو' : 'Video ID'}
+          {isRTL ? 'معرف المرئي' : 'Video ID'}
         </Label>
         <Input
           id="video-id"
           value={videoId}
           onChange={(e) => onVideoIdChange(e.target.value)}
-          placeholder={isRTL ? 'أدخل معرف الفيديو...' : 'Enter video ID...'}
+          placeholder={isRTL ? 'أدخل معرف المرئي...' : 'Enter video ID...'}
           dir={isRTL ? 'rtl' : 'ltr'}
           className="mt-2 text-sm md:text-base"
         />
         <p className="text-xs md:text-sm text-muted-foreground mt-1">
           {isRTL
-            ? 'معرف الفيديو من قناتك أو قناة أخرى'
+            ? 'معرف المرئي من قناتك أو قناة أخرى'
             : 'Video ID from your channel or another channel'
           }
         </p>
@@ -54,7 +54,7 @@ export function VideoPostForm({
           value={content}
           onChange={(e) => onContentChange(e.target.value)}
           placeholder={isRTL
-            ? 'أضف تعليقاً على الفيديو...'
+            ? 'أضف تعليقاً على المرئي...'
             : 'Add a comment about the video...'
           }
           dir={isRTL ? 'rtl' : 'ltr'}

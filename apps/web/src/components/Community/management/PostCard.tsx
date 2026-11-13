@@ -49,7 +49,7 @@ const POST_TYPE_LABELS = {
   [PostType.IMAGE]: { en: 'Image', ar: 'صورة' },
   [PostType.POLL]: { en: 'Poll', ar: 'استطلاع' },
   [PostType.QUIZ]: { en: 'Quiz', ar: 'اختبار' },
-  [PostType.VIDEO]: { en: 'Video', ar: 'فيديو' },
+  [PostType.VIDEO]: { en: 'Video', ar: 'مرئي' },
   [PostType.GIF]: { en: 'GIF', ar: 'GIF' },
   [PostType.ARTICLE]: { en: 'Article', ar: 'مقال' }
 };
