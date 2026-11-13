@@ -63,6 +63,7 @@ reviewer (admin-web or native) → admin-api decide → api-videos POST /interna
 - **Retries:** 3 with backoff, then `checkFailed`. A partial check (no manifest) runs metadata and thumbnail only and holds as `check_failed` in `enforce` (NSFW must never pass unchecked frames).
 - **Calls** api-videos `/internal/review/:videoId/outcome` through a new `VIDEOS` service binding (X-API-Key = INTERNAL_API_KEY). Shadow records only.
 - **Alerts:** on a hold, a `review_needed` notification to every reviewer (in-app and push through the existing notifications pipeline) and a websocket broadcast on `admin:review`. Escalations go to senior reviewers only.
+- **Creator email on a rejection (#1279):** besides the in-app `reviewRejected` notice, admin-api queues a "video not approved" email on `CONTACT_MAIL_QUEUE` (lib/review/rejection-mail.ts), delayed past the 10-minute undo window. At send time it checks the review is still that rejection, so an undone or re-decided review sends nothing. One language: the creator's saved email language, else the language of the admin who rejected it (admin-web sends its UI language with the decision). It names the video, gives the reason in the words Studio uses, and links to the video in Studio to edit and resubmit or appeal. "Email me about my account" off means no email. A final failure is a needs-action item with Retry (`review-rejection-email`).
 - **Retention:** media under `review/` and finding text are purged by the admin-api cron when `media_purge_after` passes.
 
 ## 5. media transcoder (extracts review media)

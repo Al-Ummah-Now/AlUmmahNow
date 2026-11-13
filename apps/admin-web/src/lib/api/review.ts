@@ -99,8 +99,9 @@ export async function updateReviewSettings(patch: Partial<VideoReviewSettings>):
   return toResult(() => fetchAdmin<ReviewSettingsView>('/api/review/settings', { method: 'PUT', body: JSON.stringify(patch) }));
 }
 
-export async function decideReview(id: string, decision: 'approve' | 'reject' | 'escalate' | 'undo', reasonCode?: string, note?: string): Promise<ActionResult<unknown>> {
-  return toResult(() => fetchAdmin(`/api/review/${encodeURIComponent(id)}/decision`, { method: 'POST', body: JSON.stringify({ decision, ...(reasonCode ? { reasonCode } : {}), ...(note ? { note } : {}) }) }));
+/** `locale`: the admin's UI language, used for the creator's email when they never picked one (#1279). */
+export async function decideReview(id: string, decision: 'approve' | 'reject' | 'escalate' | 'undo', reasonCode?: string, note?: string, locale?: 'en' | 'ar'): Promise<ActionResult<unknown>> {
+  return toResult(() => fetchAdmin(`/api/review/${encodeURIComponent(id)}/decision`, { method: 'POST', body: JSON.stringify({ decision, ...(reasonCode ? { reasonCode } : {}), ...(note ? { note } : {}), ...(locale ? { locale } : {}) }) }));
 }
 
 export async function revealReviewItem(id: string, target: string): Promise<ActionResult<unknown>> {

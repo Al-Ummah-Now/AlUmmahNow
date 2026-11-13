@@ -146,10 +146,10 @@ app.post('/:id/claim', async (c) => {
 
 app.post('/:id/decision', async (c) => {
   const reviewer = reviewerOf(c);
-  const body = (await c.req.json().catch(() => null)) as { decision?: unknown; reasonCode?: unknown; note?: unknown } | null;
+  const body = (await c.req.json().catch(() => null)) as { decision?: unknown; reasonCode?: unknown; note?: unknown; locale?: unknown } | null;
   const decision = body?.decision;
   if (decision !== 'approve' && decision !== 'reject' && decision !== 'escalate' && decision !== 'undo') throw new ReviewError(400, 'invalid_request', 'decision must be approve, reject, escalate or undo');
-  const result = await decideReview(c.env, reviewer, c.req.param('id'), { decision, reasonCode: typeof body?.reasonCode === 'string' ? body.reasonCode : undefined, note: typeof body?.note === 'string' ? body.note : undefined });
+  const result = await decideReview(c.env, reviewer, c.req.param('id'), { decision, reasonCode: typeof body?.reasonCode === 'string' ? body.reasonCode : undefined, note: typeof body?.note === 'string' ? body.note : undefined, locale: body?.locale === 'ar' ? 'ar' : body?.locale === 'en' ? 'en' : undefined });
   logger.info('[Review] Decision', { reviewId: c.req.param('id'), decision, reviewerId: reviewer.id });
   return c.json({ success: true, result });
 });
