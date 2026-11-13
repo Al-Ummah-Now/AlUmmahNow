@@ -337,6 +337,9 @@ export default function PlaylistEditor({ channelId, playlistId, initialJobId }: 
   const saveOrder = async (next: PlaylistManageItem[], previous: PlaylistManageItem[]) => {
     setItems(next);
     setBusy(true);
+    // "Order saved" speaks for this save only: the last one's message must not stand while this
+    // one is still being saved (#1116: it read as saved while the rows were still locked)
+    setListStatus(null);
     try {
       const answer = await reorderPlaylistVideos(playlistId, next.map((item) => item.id), { channelId });
       if (answer.ok) {

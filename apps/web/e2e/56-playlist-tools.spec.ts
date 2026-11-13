@@ -249,15 +249,22 @@ test.describe('Playlist tools', () => {
     await page.getByTestId('playlist-item').last().getByTestId('playlist-item-up').click();
     await expect.poll(() => itemOrder(page)).toEqual([videos[1].id, videos[2].id, videos[0].id]);
     await expect(page.getByText('Order saved')).toBeVisible();
+    // Saved, and the rows unlocked again (the handles are disabled while a save runs, so a key
+    // pressed then reaches nothing: #1116)
+    await expect.poll(async () => (await stored(id)).videos).toEqual([videos[1].id, videos[2].id, videos[0].id]);
+    await expect(page.getByTestId('playlist-item-handle').first()).toBeEnabled();
 
     // Alt+Down / Alt+Up on a row (the bulk-rename shortcut), where the target has it
     // The visible hint (dnd-kit repeats it in a hidden describedby node)
     if (await page.locator('#playlist-reorder-hint').filter({ hasText: /press Alt with the Up or Down arrow/ }).isVisible()) {
       await page.getByTestId('playlist-item-handle').first().focus();
+      await expect(page.getByTestId('playlist-item-handle').first()).toBeFocused();
       await page.keyboard.press('Alt+ArrowDown');
       await expect.poll(() => itemOrder(page)).toEqual([videos[2].id, videos[1].id, videos[0].id]);
       await expect.poll(async () => (await stored(id)).videos).toEqual([videos[2].id, videos[1].id, videos[0].id]);
+      await expect(page.getByTestId('playlist-item-handle').nth(1)).toBeEnabled();
       await page.getByTestId('playlist-item-handle').nth(1).focus();
+      await expect(page.getByTestId('playlist-item-handle').nth(1)).toBeFocused();
       await page.keyboard.press('Alt+ArrowUp');
       await expect.poll(async () => (await stored(id)).videos).toEqual([videos[1].id, videos[2].id, videos[0].id]);
     }
