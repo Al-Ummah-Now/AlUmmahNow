@@ -70,6 +70,7 @@ import handleAvatarUpdate from "./endpoints/profile/profileAvatarUpdate";
 import handleCoverUpdate from "./endpoints/profile/profileCoverUpdate";
 import handleChannelAvatarUpdate from "./endpoints/channel/channelAvatarUpdate";
 import handleChannelCoverUpdate from "./endpoints/channel/channelCoverUpdate";
+import { robotsTxtResponse, withNoIndex } from './lib/crawlers';
 
 // ==========================================
 // APP SETUP
@@ -720,15 +721,22 @@ registerLiveStreamHooks();
 export default {
 	...loggedWorker,
 	async fetch(request: Request, env: AppBindings, ctx: ExecutionContext): Promise<Response> {
-		const liveEnv = env as unknown as LiveEnv;
-		if (isLiveHost(liveEnv, new URL(request.url).hostname)) {
-			try {
-				return await handleLiveEdge(request, liveEnv, ctx, { onLive: (e, session) => markStreamLive(e as unknown as StreamsEnv, session.stream_id) });
-			} catch (error) {
-				logger.error('[LiveEdge] Request failed', { method: request.method, error: error instanceof Error ? error.message : String(error) });
-				return new Response('Live edge error', { status: 500, headers: { 'access-control-allow-origin': '*' } });
-			}
-		}
-		return (loggedWorker.fetch as (r: Request, e: AppBindings, c: ExecutionContext) => Promise<Response>)(request, env, ctx);
+		// Nothing on the API or live hosts is for search engines (lib/crawlers.ts)
+		const robots = robotsTxtResponse(request);
+		if (robots) return robots;
+		return withNoIndex(await routeFetch(request, env, ctx));
 	},
 };
+
+async function routeFetch(request: Request, env: AppBindings, ctx: ExecutionContext): Promise<Response> {
+	const liveEnv = env as unknown as LiveEnv;
+	if (isLiveHost(liveEnv, new URL(request.url).hostname)) {
+		try {
+			return await handleLiveEdge(request, liveEnv, ctx, { onLive: (e, session) => markStreamLive(e as unknown as StreamsEnv, session.stream_id) });
+		} catch (error) {
+			logger.error('[LiveEdge] Request failed', { method: request.method, error: error instanceof Error ? error.message : String(error) });
+			return new Response('Live edge error', { status: 500, headers: { 'access-control-allow-origin': '*' } });
+		}
+	}
+	return (loggedWorker.fetch as (r: Request, e: AppBindings, c: ExecutionContext) => Promise<Response>)(request, env, ctx);
+}
