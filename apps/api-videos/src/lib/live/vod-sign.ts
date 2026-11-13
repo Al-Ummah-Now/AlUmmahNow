@@ -15,9 +15,15 @@ export interface VodSignEnv {
 export async function signLiveVodUrl(env: VodSignEnv, url: string | null): Promise<string | null> {
 	const host = env.BUNNY_SIGN_HOSTNAME || env.bunny_hostname;
 	if (!url || !host || env.BUNNY_SIGN_URLS !== 'true') return url;
-	const escaped = host.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-	const m = new RegExp(`^https://${escaped}/([0-9a-f-]{36})/playlist\\.m3u8$`).exec(url);
-	if (!m) return url;
+	// Parsed, not a regex built from the host (CodeQL): exactly https://<host>/<video id>/playlist.m3u8
+	let parsed: URL;
+	try {
+		parsed = new URL(url);
+	} catch {
+		return url;
+	}
+	const m = /^\/([0-9a-f-]{36})\/playlist\.m3u8$/.exec(parsed.pathname);
+	if (parsed.protocol !== 'https:' || parsed.host !== host || parsed.search || parsed.hash || !m || url !== `https://${host}${parsed.pathname}`) return url;
 	const key = await getSecret(env.BUNNY_TOKEN_KEY as never, 'BUNNY_TOKEN_KEY');
 	if (!key) return url;
 	const expires = tokenExpiry();
