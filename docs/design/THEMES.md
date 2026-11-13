@@ -12,6 +12,12 @@ the site default is now Fawanees.
 > theme switches at runtime from the admin. The fanous-tokens themes below remain the source for
 > the native platforms; a test keeps the two equal.
 
+> **Fawanees, 2026-11-13 (owner-approved):** light mode is a warm off-white page (#f3eee5) with ivory
+> cards, ink text and gold only as accents (primary actions, the active marker, focus, links, hints);
+> depth comes from hairlines and warm shadows, never gradient backgrounds. Both modes show the lantern
+> street on every site (theme package `street`, shared module `packages/fanous-tokens/street`). Design
+> record: [FAWANEES-STREET.md](FAWANEES-STREET.md).
+
 ## Decisions
 
 | Topic | Decision |

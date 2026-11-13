@@ -127,6 +127,9 @@ Each component section has some of:
 
 - `colors.light` / `colors.dark`: every colour part of that component (colour slots).
 - `style`: material fields (CSS values): gradients, borders, shadows, shapes.
+- `lightStyle` (optional): any of the same fields again, for light mode only. Dark keeps `style`.
+  Fawanees uses it to keep light flat (no gradient page, hero or card) while dark keeps its glow.
+  It compiles to a second materials block, `html[data-theme='<id>']:not(.dark)`, after the shared one.
 - `chrome` (player only): the player controls.
 
 Every listed part and field is required, so a package always describes the whole design.
@@ -237,6 +240,24 @@ Optional. They describe the sign-in and profile pages for the app that renders t
 `background.light|dark`, `graphic` (SVG), `graphicVars.light|dark` (custom properties the graphic
 reads), and `card` (`background`, `edge`, `radius`); `profile` has `cover`. The videos site does not
 render sign-in or profile pages and ignores both sections.
+
+### street
+
+Optional: the lantern street (Fawanees). Whole lanterns hang on strings in the page's free gaps,
+and soft distant lights drift behind the content at 0.2× the scroll. The package holds data and art
+only; every app draws it with the shared module in `packages/fanous-tokens/street` (see its README).
+
+| Field | Value |
+|---|---|
+| `enabled` | `true` switches it on in both modes. |
+| `lights.light` / `lights.dark` | A tiling SVG of soft lights (`assets/…svg`), drawn at 300×260. |
+| `line.light` / `line.dark` | Strings and lantern outlines, `#rrggbbaa`. Keep it quiet (about 1.3:1 on the page). |
+| `window.light` / `window.dark` | Lantern windows, `#rrggbbaa`: faint in light, lit gold in dark. |
+| `glow.light` / `glow.dark` | Opacity of the glow behind each lantern, 0–1. |
+
+It compiles to `--fanous-street-on` (1, or 0 for a theme without a street), `--fanous-street-line`,
+`-window`, `-glow` and `-lights` in each mode block. The built-in stylesheet inlines the lights as a
+data URL, because www and the CMS vendor it; a served package uses its asset URL.
 
 ### browser, email, banner
 
