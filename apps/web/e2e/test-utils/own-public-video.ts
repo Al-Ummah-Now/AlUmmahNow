@@ -84,6 +84,32 @@ export function ownPublicVideos(test: AnyTest, label: string, specs: OwnVideoSpe
       owner = await data.createUser(page, label);
       await data.grantCreator(owner);
       channelId = await data.createChannel(owner, { name: channelName });
+      if (channel.nameAr || channel.description || channel.descriptionAr) {
+        // Arabic name and descriptions (what the channel header specs check), read back until they hold.
+        // Before any upload, so no cached list page can show this channel's videos under the old name
+        const res = await apiFetch(owner, `/api/channels/${channelId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', channelId },
+          body: JSON.stringify({
+            ...(channel.description ? { description: channel.description } : {}),
+            nameLocalized: { en: channelName, ar: channel.nameAr ?? '' },
+            descriptionLocalized: { en: channel.description ?? '', ar: channel.descriptionAr ?? '' },
+          }),
+        });
+        expect(res.status, `channel update: ${await res.clone().text()}`).toBeLessThan(300);
+        await expect
+          .poll(async () => {
+            const body = (await (await fetch(`${target().api}/api/channels/${channelId}`, { cache: 'no-store' })).json().catch(() => ({}))) as {
+              result?: { description?: string; nameLocalized?: Record<string, string> };
+              description?: string;
+              nameLocalized?: Record<string, string>;
+            };
+            const ch = body.result ?? body;
+            // Only what this update set: a channel keeps its own default description otherwise
+            return { ...(channel.description ? { description: ch.description ?? '' } : {}), ar: ch.nameLocalized?.ar ?? '' };
+          }, { message: 'the channel update did not stick (GET /api/channels/:id)', timeout: 30_000 })
+          .toEqual({ ...(channel.description ? { description: channel.description } : {}), ar: channel.nameAr ?? '' });
+      }
       for (const spec of specs) {
         // Readiness is awaited below, for all of them: uploads go first so the stack encodes them together
         const video: OwnVideo = await data.createVideo(owner, channelId, { clip: 'landscape40', isPublic: true, title: spec.title && (channel.exactNames ? spec.title : `${spec.title} ${ns()}`), waitReady: false });
@@ -125,31 +151,6 @@ export function ownPublicVideos(test: AnyTest, label: string, specs: OwnVideoSpe
       }
       if (channel.playlist) playlistId = await data.createPlaylist(owner, channelId, { title: `E2E playlist ${channelName}`, videoIds: videos.map((v) => v.id) });
       for (let i = 0; i < (channel.posts ?? 0); i++) postIds.push(await data.createPost(owner, channelId, { text: `E2E post ${i + 1} of ${channelName}` }));
-      if (channel.nameAr || channel.description || channel.descriptionAr) {
-        // Arabic name and descriptions (what the channel header specs check), read back until they hold
-        const res = await apiFetch(owner, `/api/channels/${channelId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', channelId },
-          body: JSON.stringify({
-            ...(channel.description ? { description: channel.description } : {}),
-            nameLocalized: { en: channelName, ar: channel.nameAr ?? '' },
-            descriptionLocalized: { en: channel.description ?? '', ar: channel.descriptionAr ?? '' },
-          }),
-        });
-        expect(res.status, `channel update: ${await res.clone().text()}`).toBeLessThan(300);
-        await expect
-          .poll(async () => {
-            const body = (await (await fetch(`${target().api}/api/channels/${channelId}`, { cache: 'no-store' })).json().catch(() => ({}))) as {
-              result?: { description?: string; nameLocalized?: Record<string, string> };
-              description?: string;
-              nameLocalized?: Record<string, string>;
-            };
-            const ch = body.result ?? body;
-            // Only what this update set: a channel keeps its own default description otherwise
-            return { ...(channel.description ? { description: ch.description ?? '' } : {}), ar: ch.nameLocalized?.ar ?? '' };
-          }, { message: 'the channel update did not stick (GET /api/channels/:id)', timeout: 30_000 })
-          .toEqual({ ...(channel.description ? { description: channel.description } : {}), ar: channel.nameAr ?? '' });
-      }
     } finally {
       await context.close();
     }
