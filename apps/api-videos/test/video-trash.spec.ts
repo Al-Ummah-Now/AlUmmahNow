@@ -20,6 +20,7 @@ import { VideoBulkDelete } from '../src/endpoints/video/videoBulkDelete';
 import { VideoRestore } from '../src/endpoints/video/videoRestore';
 import { ChannelDeletedVideos, VideoBulkPurge, VideoBulkRestore } from '../src/endpoints/video/videoTrash';
 import { VideoPermanentDelete } from '../src/endpoints/video/videoPermanentDelete';
+import { VideoFetch } from '../src/endpoints/video/videoFetch';
 import { ChannelDeletedVideosList } from '../src/endpoints/channel/channelDeletedVideosList';
 import adminRouter from '../src/routers/admin.router';
 import { MemoryBucket, MemoryQueue, videoFixture } from './helpers';
@@ -70,6 +71,7 @@ function routes(r: any) {
 	r.post('/api/videos/:id/restore', VideoRestore);
 	r.delete('/api/videos/:id/permanent', VideoPermanentDelete);
 	r.get('/api/channels/:id/deleted-videos', ChannelDeletedVideosList);
+	r.get('/api/videos/:id', VideoFetch);
 }
 
 async function setup(videos?: Record<string, unknown>) {
@@ -447,5 +449,23 @@ describe('DELETE /api/videos/:id/permanent and the 30-day purge', () => {
 		assert.deepEqual(bunny.calls, ['DELETE /library/7/videos/v1']);
 		assert.ok(t.row('v1')?.purged_at, 'row marked purged');
 		assert.ok(t.raw.videos.read('v3'), 'a recent delete stays');
+	});
+
+	it('a purged video answers 410 Gone; one still in the restore window, or never there, answers 404 (D-SEO-4)', async () => {
+		const t = await setup();
+		await t.call(OWNER, 'DELETE', '/api/videos/v1');
+		await t.call(OWNER, 'DELETE', '/api/videos/v3');
+		assert.equal((await t.call(null, 'GET', '/api/videos/v1')).status, 404, 'restorable: 404');
+		t.backdate('v1', 31);
+		await runDeletionCleanup(t.env as never, (d) => purgeDeletion(t.env as never, d));
+		await t.raw.ADMIN_JOBS_QUEUE.drain(t.env);
+		await runDeletionCleanup(t.env as never, (d) => purgeDeletion(t.env as never, d));
+		const gone = await t.call(null, 'GET', '/api/videos/v1');
+		assert.equal(gone.status, 410);
+		assert.equal(gone.body.code, 'gone');
+		assert.equal((await t.call(OWNER, 'GET', '/api/videos/v1')).status, 410, 'the owner too');
+		assert.equal((await t.call(null, 'GET', '/api/videos/v3')).status, 404, 'still restorable');
+		assert.equal((await t.call(null, 'GET', '/api/videos/never-there')).status, 404);
+		assert.equal((await t.call(null, 'GET', '/api/videos/v2')).status, 200);
 	});
 });
