@@ -79,8 +79,8 @@ test.describe('notification badge clears when the menu opens', () => {
 
       // Two tabs of one session
       const other = await context.newPage();
-      await gotoSettled(page, `/${locale}`);
-      await gotoSettled(other, `/${locale}`);
+      await gotoSettled(page, `${target().web}/${locale}`);
+      await gotoSettled(other, `${target().web}/${locale}`);
       for (const p of [page, other]) await expect(badge(p)).toHaveText(/^[3٣]$/);
       await expect(page.getByTestId('notification-bell')).toHaveAttribute('aria-label', BELL_NEW[locale]);
 
@@ -102,7 +102,7 @@ test.describe('notification badge clears when the menu opens', () => {
       await expect.poll(() => counts(user)).toMatchObject({ unreadCount: 3, unseenCount: 0, menuOpen: 'seen' });
       await page.keyboard.press('Escape');
       // Still cleared after a reload: stored on the server
-      await gotoSettled(page, `/${locale}`);
+      await gotoSettled(page, `${target().web}/${locale}`);
       await expect(page.getByTestId('notification-bell')).toBeVisible();
       await expect(badge(page)).toHaveCount(0);
 
@@ -116,7 +116,7 @@ test.describe('notification badge clears when the menu opens', () => {
       // Mode read: new notifications bring the badge back; opening marks the shown ones read
       await setMenuOpen('read');
       await seed(user, second, Date.now() + 1000);
-      await gotoSettled(page, `/${locale}`);
+      await gotoSettled(page, `${target().web}/${locale}`);
       await expect(badge(page)).toHaveText(/^[2٢]$/);
       await page.getByTestId('notification-bell').click();
       await expect(badge(page)).toHaveCount(0);
