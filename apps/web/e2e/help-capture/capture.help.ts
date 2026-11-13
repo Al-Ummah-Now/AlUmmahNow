@@ -112,12 +112,16 @@ async function openMenu(page: Page, view: 'main' | 'channels' = 'main'): Promise
 }
 
 /** Numbered markers at the inline-start top corner of each control (Arabic digits in Arabic) */
-async function mark(page: Page, lang: Lang, targets: Locator[]): Promise<void> {
+async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: string) => void): Promise<void> {
   const boxes = [];
-  for (const t of targets) {
-    await expect(t).toBeVisible({ timeout: 20_000 });
-    boxes.push(await t.boundingBox());
+  for (const [i, t] of targets.entries()) {
+    // A control this size or language hides (labels drop to icons, overflow menus) keeps its number
+    // free rather than failing the whole picture; the run lists what was skipped
+    const shown = await t.waitFor({ state: 'visible', timeout: 10_000 }).then(() => true, () => false);
+    if (!shown) note(`marker ${i + 1} not shown: ${t}`);
+    boxes.push(shown ? await t.boundingBox() : null);
   }
+  if (!boxes.some(Boolean)) throw new Error('no marker target was shown');
   await page.evaluate(({ boxes, rtl }) => {
     document.querySelectorAll('[data-help-marker]').forEach((n) => n.remove());
     boxes.forEach((box, i) => {
@@ -195,9 +199,9 @@ const SCENES: Scene[] = [
       await settle(page, `/video/${videoId}`, lang);
       const like = page.getByTestId('video-like-button').first();
       const later = page.getByTestId('watch-later-button').first();
-      const save = page.getByRole('button', { name: /^(Save|حفظ)\b/ }).first();
+      const save = page.locator('.watch-actions button[aria-haspopup="dialog"]').first();
       await like.scrollIntoViewIfNeeded();
-      return [[like, later, save], [like, later, save, page.getByTestId('watch-channel').first()]];
+      return [[like, later, save], [page.locator('.watch-actions').first(), page.getByTestId('watch-channel').first()]];
     },
   },
   {
@@ -287,15 +291,23 @@ const SCENES: Scene[] = [
   },
 ];
 
+/** Every scene runs whatever another one did; the last test lists all problems at once */
+const problems: string[] = [];
+const notes: string[] = [];
+
 for (const scene of SCENES) {
   test(`picture ${scene.id}`, async ({ browser }) => {
-    test.setTimeout(6 * 60_000);
+    test.setTimeout(8 * 60_000);
     for (const lang of LANGS) for (const device of DEVICES) for (const mode of MODES) {
+      const name = `${scene.id}.${lang}.${device}.${mode}`;
       const { context, page } = await open(browser, lang, device, mode, { signedIn: scene.signedIn });
       try {
         const [markers, region] = await scene.run(page, lang, device);
-        await mark(page, lang, markers);
-        await shoot(page, `${scene.id}.${lang}.${device}.${mode}`, region);
+        await mark(page, lang, markers, (msg) => notes.push(`${name}: ${msg}`));
+        await shoot(page, name, region);
+      } catch (error) {
+        problems.push(`${name}: ${(error as Error).message.split('\n').slice(0, 4).join(' ')}`);
+        await page.screenshot({ path: test.info().outputPath(`${name}.failed.png`), fullPage: false }).catch(() => undefined);
       } finally {
         await context.close();
       }
@@ -305,6 +317,14 @@ for (const scene of SCENES) {
 
 /** Records `act` in a fresh desktop context; keeps from `act` on, trimmed to `seconds`, plus a still */
 async function clip(browser: Browser, id: string, lang: Lang, mode: Mode, prepare: (page: Page) => Promise<void>, act: (page: Page) => Promise<void>, seconds = 10): Promise<void> {
+  try {
+    await recordClip(browser, id, lang, mode, prepare, act, seconds);
+  } catch (error) {
+    problems.push(`clip ${id}.${lang}.${mode}: ${(error as Error).message.split('\n').slice(0, 4).join(' ')}`);
+  }
+}
+
+async function recordClip(browser: Browser, id: string, lang: Lang, mode: Mode, prepare: (page: Page) => Promise<void>, act: (page: Page) => Promise<void>, seconds: number): Promise<void> {
   const dir = mkdtempSync(join(tmpdir(), 'help-clip-'));
   try {
     const started = Date.now();
@@ -396,4 +416,9 @@ test('clip watching-mini-player', async ({ browser }) => {
       await page.waitForTimeout(3500);
     }, 9);
   }
+});
+
+test('every picture and clip was made', () => {
+  if (notes.length) console.log(`Skipped markers:\n${notes.join('\n')}`);
+  expect(problems, problems.join('\n')).toEqual([]);
 });
