@@ -36,11 +36,11 @@ export async function generateMetadata({ params }: Pick<WatchLayoutProps, 'param
  * The status code is decided here, before anything streams: a video nobody may see is a real 404
  * (not a 200 "Video not found"), and an API outage is a 503 (worker.ts), never a 404.
  */
-export default async function WatchLayout({ children, params }: WatchLayoutProps) {
+export default async function WatchLayout({ children, params }: WatchLayoutProps): Promise<React.JSX.Element> {
   const { id } = await params;
   if (!isValidContentId(id)) notFound();
   const availability = await videoAvailability(id);
   if (availability === 'missing') notFound();
   if (availability === 'unavailable') throw new ContentUnavailableError('a video');
-  return children;
+  return <>{children}</>;
 }

@@ -19,11 +19,11 @@ export async function generateMetadata({ params }: Pick<PlaylistLayoutProps, 'pa
 }
 
 /** Real status codes for the (client) playlist page: 404 when nobody here may see it, 503 when the API is down. */
-export default async function PlaylistLayout({ children, params }: PlaylistLayoutProps) {
+export default async function PlaylistLayout({ children, params }: PlaylistLayoutProps): Promise<React.JSX.Element> {
   const { id } = await params;
   if (!isValidContentId(id)) notFound();
   const availability = await playlistAvailability(id);
   if (availability === 'missing') notFound();
   if (availability === 'unavailable') throw new ContentUnavailableError('a playlist');
-  return children;
+  return <>{children}</>;
 }
