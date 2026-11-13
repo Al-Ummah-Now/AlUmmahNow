@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Channel } from '@al-ummah/shared-types';
+import { can, channelRoleOf, type Channel } from '@al-ummah/shared-types';
 import { AuthenticatedRoute, AppContext } from '../../base';
 import BunnyStorageClient from '../../lib/bunny/storage';
 import { requireSecret, requireEnvVar } from '../../lib/env-helpers';
@@ -77,8 +77,9 @@ export class UploadCommunityPostGif extends AuthenticatedRoute {
       }
 
       const channel = (await channelData.json()) as Channel;
-      if (channel.userId !== userId) {
-        return c.json({ error: 'User does not own this channel' }, 403);
+      // The owner, and channel admins and editors (logo, favicon, post images; #1213, SS2)
+      if (!can(channelRoleOf(channel as never, userId), 'post.manage') && !can(channelRoleOf(channel as never, userId), 'channel.edit')) {
+        return c.json({ error: 'You may not upload images for this channel' }, 403);
       }
 
       // Parse multipart form data

@@ -22,6 +22,17 @@
  *   GET  /api/sites/channel/:channelId          → { site, etag, themes }   (404 when the channel has no site)
  *   PUT  /api/sites/channel/:channelId          SiteSettingsUpdate, If-Match: <etag> → { site, etag }
  *   POST /api/sites/channel/:channelId/preview  SiteSettingsUpdate → { token, expiresAt, url }
+ *
+ * Site pages (§7.1 Pages; the owner, admins and editors: `post.manage` or `channel.edit`):
+ *   GET    /api/sites/channel/:channelId/pages                       → { pages, limit }
+ *   POST   /api/sites/channel/:channelId/pages                       { slug, title, description?, blocks? } → 201 { page, etag }
+ *   GET    /api/sites/channel/:channelId/pages/:pageId               → { page, etag }
+ *   PUT    /api/sites/channel/:channelId/pages/:pageId               SitePageUpdate, If-Match → { page, etag }
+ *   POST   /api/sites/channel/:channelId/pages/:pageId/restore       { index } → { page, etag }
+ *   DELETE /api/sites/channel/:channelId/pages/:pageId               → { pages }
+ * For the sites Worker:
+ *   GET /api/sites/by-host/:host/pages/:slug[?preview=]  → { page } | 404   (drafts only in a preview)
+ *   GET /api/sites/by-host/:host/home[?preview=]         → { page | null }
  */
 import { Hono, type Context } from 'hono';
 import { SITE_THEME_CHOICES, can, primarySiteHost, type SiteSettingsUpdate } from '@al-ummah/shared-types';
@@ -30,6 +41,7 @@ import { rethrowBusy } from '../lib/r2Repo';
 import { roleOnChannel } from '../lib/channelAccess';
 import { CHANNEL_ID, SiteError, readSettings, siteEnvironment, writePreview, type SitesEnv } from '../lib/sites/store';
 import { removeDomain, reserveDomain, setPrimaryHost, updateDomain } from '../lib/sites/domains';
+import { createPage, deletePage, listPages, publicPage, publicPageById, readPage, restorePageRevision, updatePage } from '../lib/sites/pages';
 import { adminUpdateSite, grantSite, pickUpdate, publicSiteForHost, restoreSite, revokeSite, slugAvailability, updateSiteSettings } from '../lib/sites/service';
 
 type Env = { Bindings: SitesEnv & { VIDEOS_WEB_URL?: string }; Variables: { userId?: string } };
@@ -192,6 +204,46 @@ sitesRouter.get('/by-host/:host', async (c) => {
 	}
 });
 
+/** The page for a host (published, or drafts in a valid preview); the same host rules as by-host. */
+async function pageForHost(c: Context<Env>, which: { slug?: string; home?: true }) {
+	const preview = c.req.query('preview') || null;
+	const found = await publicSiteForHost(c.env, c.req.param('host'), preview);
+	if (found.kind !== 'site') return { status: 404 as const, page: null };
+	const current = await readSettings(c.env, found.site.site.channelId);
+	if (!current) return { status: 404 as const, page: null };
+	const drafts = found.site.preview;
+	const page = which.home ? await publicPageById(c.env, current.settings, current.settings.home?.pageId, drafts) : await publicPage(c.env, current.settings, which.slug ?? '', drafts);
+	return { status: 200 as const, page, preview: drafts };
+}
+
+sitesRouter.get('/by-host/:host/pages/:slug', async (c) => {
+	try {
+		const r = await pageForHost(c, { slug: c.req.param('slug').toLowerCase() });
+		if (!r.page) {
+			c.header('Cache-Control', 'no-store');
+			return c.json({ error: 'page_not_found' }, 404);
+		}
+		c.header('Cache-Control', r.preview ? 'no-store' : 'public, max-age=60');
+		return c.json({ page: r.page });
+	} catch (error) {
+		return fail(c, error);
+	}
+});
+
+sitesRouter.get('/by-host/:host/home', async (c) => {
+	try {
+		const r = await pageForHost(c, { home: true });
+		if (r.status === 404 && !r.page) {
+			c.header('Cache-Control', 'no-store');
+			return c.json({ page: null });
+		}
+		c.header('Cache-Control', r.preview ? 'no-store' : 'public, max-age=60');
+		return c.json({ page: r.page });
+	} catch (error) {
+		return fail(c, error);
+	}
+});
+
 async function requireSiteEditor(c: Context<Env>, channelId: string): Promise<Response | null> {
 	const userId = c.get('userId');
 	if (!userId) return c.json({ error: 'unauthorized' }, 401);
@@ -248,6 +300,98 @@ sitesRouter.post('/channel/:channelId/preview', async (c) => {
 		const host = primarySiteHost(current.settings, siteEnvironment(c.env)).host;
 		const scheme = siteEnvironment(c.env) === 'local' ? 'http' : 'https';
 		return c.json({ token, expiresAt, url: `${scheme}://${host}/?preview=${token}` });
+	} catch (error) {
+		return fail(c, error);
+	}
+});
+
+/** Pages: the owner, admins and editors (editors write posts and pages, SS2). */
+async function requirePageWriter(c: Context<Env>, channelId: string): Promise<Response | null> {
+	const userId = c.get('userId');
+	if (!userId) return c.json({ error: 'unauthorized' }, 401);
+	if (!CHANNEL_ID.test(channelId)) return c.json({ error: 'site_not_found' }, 404);
+	const role = await roleOnChannel(c.env as never, channelId, userId);
+	if (!can(role, 'post.manage') && !can(role, 'channel.edit')) return c.json({ error: 'forbidden' }, 403);
+	return null;
+}
+
+const ifMatchOf = (c: Context<Env>) => c.req.header('If-Match')?.replace(/^W\//, '').replace(/"/g, '') || null;
+
+sitesRouter.get('/channel/:channelId/pages', async (c) => {
+	const channelId = c.req.param('channelId');
+	const denied = await requirePageWriter(c, channelId);
+	if (denied) return denied;
+	try {
+		const current = await readSettings(c.env, channelId);
+		if (!current || current.settings.status === 'revoked') return c.json({ error: 'site_not_found' }, 404);
+		c.header('Cache-Control', 'private, no-store');
+		return c.json({ pages: await listPages(c.env, channelId), limit: current.settings.limits.pagesMax });
+	} catch (error) {
+		return fail(c, error);
+	}
+});
+
+sitesRouter.post('/channel/:channelId/pages', async (c) => {
+	const channelId = c.req.param('channelId');
+	const denied = await requirePageWriter(c, channelId);
+	if (denied) return denied;
+	try {
+		const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+		if (!body) return c.json({ error: 'bad_request' }, 400);
+		return c.json(await createPage(c.env, channelId, body as never, c.get('userId') as string), 201);
+	} catch (error) {
+		return fail(c, error);
+	}
+});
+
+sitesRouter.get('/channel/:channelId/pages/:pageId', async (c) => {
+	const channelId = c.req.param('channelId');
+	const denied = await requirePageWriter(c, channelId);
+	if (denied) return denied;
+	try {
+		const found = await readPage(c.env, channelId, c.req.param('pageId'));
+		if (!found) return c.json({ error: 'page_not_found' }, 404);
+		c.header('Cache-Control', 'private, no-store');
+		return c.json(found);
+	} catch (error) {
+		return fail(c, error);
+	}
+});
+
+sitesRouter.put('/channel/:channelId/pages/:pageId', async (c) => {
+	const channelId = c.req.param('channelId');
+	const denied = await requirePageWriter(c, channelId);
+	if (denied) return denied;
+	try {
+		const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+		if (!body) return c.json({ error: 'bad_request' }, 400);
+		return c.json(await updatePage(c.env, channelId, c.req.param('pageId'), body as never, c.get('userId') as string, ifMatchOf(c)));
+	} catch (error) {
+		return fail(c, error);
+	}
+});
+
+sitesRouter.post('/channel/:channelId/pages/:pageId/restore', async (c) => {
+	const channelId = c.req.param('channelId');
+	const denied = await requirePageWriter(c, channelId);
+	if (denied) return denied;
+	try {
+		const body = (await c.req.json().catch(() => null)) as { index?: unknown } | null;
+		const index = Number(body?.index);
+		if (!Number.isInteger(index) || index < 0) return c.json({ error: 'bad_request' }, 400);
+		return c.json(await restorePageRevision(c.env, channelId, c.req.param('pageId'), index, c.get('userId') as string));
+	} catch (error) {
+		return fail(c, error);
+	}
+});
+
+sitesRouter.delete('/channel/:channelId/pages/:pageId', async (c) => {
+	const channelId = c.req.param('channelId');
+	const denied = await requirePageWriter(c, channelId);
+	if (denied) return denied;
+	try {
+		const settings = await deletePage(c.env, channelId, c.req.param('pageId'), c.get('userId') as string);
+		return c.json({ pages: settings.pages ?? [] });
 	} catch (error) {
 		return fail(c, error);
 	}

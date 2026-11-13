@@ -188,8 +188,8 @@ export function currentThemeRef(id: string): string | null {
 // ---------------------------------------------------------------------------------------------
 
 /** Built-in destinations for menu items; `page` links a site page, `url` an outside link. */
-export type SiteNavKind = 'home' | 'videos' | 'shorts' | 'posts' | 'about' | 'url';
-export const SITE_NAV_KINDS: readonly SiteNavKind[] = ['home', 'videos', 'shorts', 'posts', 'about', 'url'];
+export type SiteNavKind = 'home' | 'videos' | 'shorts' | 'posts' | 'about' | 'page' | 'url';
+export const SITE_NAV_KINDS: readonly SiteNavKind[] = ['home', 'videos', 'shorts', 'posts', 'about', 'page', 'url'];
 
 export interface SiteNavItem {
   id: string;
@@ -198,6 +198,8 @@ export interface SiteNavItem {
   label?: Partial<Record<SiteLocale, string>>;
   /** `url` only: https:// links. */
   url?: string;
+  /** `page` only: the site page's id (SitePageSummary.id). */
+  pageId?: string;
 }
 
 export interface SiteHost {
@@ -235,6 +237,13 @@ export interface SiteSettings {
   redirectHosts: SiteRedirectHost[];
   /** Own domains being set up or live (§4.2). A domain joins `hosts` (kind custom) once it is live. */
   domains?: SiteDomain[];
+  /** Site pages (§7.1 Pages): the list; each page's blocks are their own object (sitePageKey). */
+  pages?: SitePageSummary[];
+  /** Home (§7.4): a site page whose blocks show above the channel's Home sections. */
+  home?: SiteHome;
+  seo?: SiteSeo;
+  /** Path redirects on the site (old addresses), checked before anything else. */
+  redirects?: SiteRedirect[];
   /** Bumped on every save: part of the sites Worker's cache key. */
   configVersion: number;
   /** Set while `revoked`: when it happened (restore window SITE_RESTORE_DAYS). */
@@ -268,7 +277,7 @@ export const SITE_NAV_LABEL_MAX = 40;
 export const SITE_NAME_MAX = 80;
 export const SITE_ABOUT_MAX = 8000;
 
-/** What a site owner may change in Studio (§7.1, phase 2 MVP). */
+/** What a site owner may change in Studio (§7.1). Pages and domains have their own calls. */
 export interface SiteSettingsUpdate {
   themeRef?: string;
   name?: Partial<Record<SiteLocale, string>>;
@@ -277,6 +286,9 @@ export interface SiteSettingsUpdate {
   locales?: SiteLocale[];
   navigation?: SiteNavItem[];
   about?: Partial<Record<SiteLocale, string>>;
+  home?: SiteHome;
+  seo?: SiteSeo;
+  redirects?: SiteRedirect[];
 }
 
 export type SiteSettingsProblem =
@@ -286,7 +298,10 @@ export type SiteSettingsProblem =
   | 'navigation_invalid'
   | 'name_too_long'
   | 'about_too_long'
-  | 'image_url_invalid';
+  | 'image_url_invalid'
+  | 'home_invalid'
+  | 'seo_invalid'
+  | 'redirects_invalid';
 
 const IMAGE_URL = /^https:\/\/[^\s"'<>]+$/;
 
@@ -307,12 +322,19 @@ export function validateSiteSettingsUpdate(update: SiteSettingsUpdate, limits: S
       if (!(SITE_NAV_KINDS as string[]).includes(item.kind)) return 'navigation_invalid';
       if (item.kind === 'url' && (typeof item.url !== 'string' || !/^https:\/\/[^\s"'<>]{3,500}$/.test(item.url))) return 'navigation_invalid';
       if (item.kind === 'url' && !item.label?.en && !item.label?.ar) return 'navigation_invalid';
+      if (item.kind === 'page' && (typeof item.pageId !== 'string' || !SITE_PAGE_ID.test(item.pageId))) return 'navigation_invalid';
       for (const v of Object.values(item.label ?? {})) if (typeof v !== 'string' || v.length > SITE_NAV_LABEL_MAX) return 'navigation_invalid';
     }
   }
   for (const v of Object.values(update.name ?? {})) if (typeof v !== 'string' || v.length > SITE_NAME_MAX) return 'name_too_long';
   for (const v of Object.values(update.about ?? {})) if (typeof v !== 'string' || v.length > SITE_ABOUT_MAX) return 'about_too_long';
   for (const url of [update.logoUrl, update.faviconUrl]) if (url !== undefined && url !== null && (typeof url !== 'string' || url.length > 1000 || !IMAGE_URL.test(url))) return 'image_url_invalid';
+  if (update.home !== undefined) {
+    const h = update.home as SiteHome | null;
+    if (!h || typeof h !== 'object' || (h.pageId !== null && (typeof h.pageId !== 'string' || !SITE_PAGE_ID.test(h.pageId)))) return 'home_invalid';
+  }
+  if (update.seo !== undefined && !validSeo(update.seo)) return 'seo_invalid';
+  if (update.redirects !== undefined && !validRedirects(update.redirects)) return 'redirects_invalid';
   return null;
 }
 
@@ -349,6 +371,11 @@ export interface PublicSite {
     locales: SiteLocale[];
     navigation: SiteNavItem[];
     about: Partial<Record<SiteLocale, string>>;
+    /** Published pages only (for menus and routing); a page's blocks: GET …/by-host/:host/pages/:slug. */
+    pages?: SitePageSummary[];
+    home?: SiteHome;
+    seo?: SiteSeo;
+    redirects?: SiteRedirect[];
     platformMark: SitePlatformMark;
     primaryHost: string;
     /** `custom`: the primary host is the scholar's own domain (videos canonical on the site, SS7). */
@@ -428,3 +455,179 @@ export function checkNewSiteDomain(rawHost: string, settings: Pick<SiteSettings,
 
 /** The traffic record shown before Cloudflare answers (the CNAME every own domain needs). */
 export const siteTrafficRecord = (host: string): SiteDnsRecord => ({ type: 'CNAME', name: host, value: SITE_SAAS_TARGET, purpose: 'traffic' });
+
+// ---------------------------------------------------------------------------------------------
+// Pages, home, SEO and redirects (§7.1, SS16: Studio self-service from day one)
+// ---------------------------------------------------------------------------------------------
+
+export const SITE_PAGE_ID = /^pg_[a-z0-9]{8,24}$/;
+export const SITE_PAGE_SLUG = /^[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
+/** Page slugs the site's own routes use. */
+export const SITE_RESERVED_PAGE_SLUGS: ReadonlySet<string> = new Set(['en', 'ar', 'videos', 'shorts', 'posts', 'watch', 'about', 'auth', 'api', 'search', 'sitemap', 'robots', 'feed', 'assets', 'favicon']);
+export const SITE_PAGE_TITLE_MAX = 120;
+export const SITE_PAGE_DESCRIPTION_MAX = 300;
+export const SITE_BLOCKS_MAX = 60;
+export const SITE_MARKDOWN_MAX = 20000;
+export const SITE_PAGE_REVISIONS = 10;
+export const SITE_REDIRECTS_MAX = 50;
+
+export type SitePageStatus = 'draft' | 'published';
+
+export interface SitePageSummary {
+  id: string;
+  slug: string;
+  title: Partial<Record<SiteLocale, string>>;
+  status: SitePageStatus;
+  updatedAt: string;
+}
+
+/** The blocks a site page is made of (rendered by packages/render on the sites Worker). */
+export type SiteBlock =
+  | { id: string; type: 'markdown'; text: string }
+  | { id: string; type: 'image'; url: string; alt: string; caption?: string | null }
+  | { id: string; type: 'video'; videoId: string }
+  | { id: string; type: 'cta'; label: string; href: string }
+  | { id: string; type: 'quote'; text: string; cite?: string | null }
+  | { id: string; type: 'divider' }
+  | { id: string; type: 'posts'; count: number }
+  | { id: string; type: 'videos'; count: number; playlistId?: string | null };
+export type SiteBlockType = SiteBlock['type'];
+export const SITE_BLOCK_TYPES: readonly SiteBlockType[] = ['markdown', 'image', 'video', 'cta', 'quote', 'divider', 'posts', 'videos'];
+
+/** A site page: the summary plus its description and blocks per language. */
+export interface SitePage extends SitePageSummary {
+  description: Partial<Record<SiteLocale, string>>;
+  blocks: Partial<Record<SiteLocale, SiteBlock[]>>;
+  createdAt: string;
+  updatedBy: string;
+  /** The last SITE_PAGE_REVISIONS saved versions, newest first (restorable in Studio). */
+  revisions?: { savedAt: string; savedBy: string; title: SitePage['title']; description: SitePage['description']; blocks: SitePage['blocks'] }[];
+}
+
+export interface SitePageUpdate {
+  slug?: string;
+  title?: Partial<Record<SiteLocale, string>>;
+  description?: Partial<Record<SiteLocale, string>>;
+  blocks?: Partial<Record<SiteLocale, SiteBlock[]>>;
+  status?: SitePageStatus;
+}
+
+/** R2 key of a site page (bucket `channel_sections`, next to the settings). */
+export const sitePageKey = (channelId: string, pageId: string) => `site/${channelId}/pages/${pageId}.json`;
+
+export interface SiteHome {
+  /** A published site page shown above the Home sections; null = none. */
+  pageId: string | null;
+}
+
+export interface SiteSeo {
+  /** Page titles: `%s` is the page's own title (for example "%s · Mustafa Elbadry"). */
+  titleTemplate?: string | null;
+  description?: Partial<Record<SiteLocale, string>>;
+  /** Search console verification tokens (the content of their meta tags). */
+  googleVerification?: string | null;
+  bingVerification?: string | null;
+}
+
+export interface SiteRedirect {
+  /** A path on the site: /old-page */
+  from: string;
+  /** A path on the site or an https:// address. */
+  to: string;
+}
+
+export type SitePageProblem = 'slug_invalid' | 'slug_reserved' | 'title_invalid' | 'description_invalid' | 'blocks_invalid' | 'status_invalid';
+
+const SAFE_TEXT = (v: unknown, max: number) => typeof v === 'string' && v.length <= max;
+const HTTPS_URL = /^https:\/\/[^\s"'<>]{3,1000}$/;
+const SITE_PATH = /^\/[A-Za-z0-9\-._~/%]{0,300}$/;
+const VERIFICATION = /^[A-Za-z0-9_-]{8,100}$/;
+
+function validBlock(b: unknown): boolean {
+  const x = b as Record<string, unknown> | null;
+  if (!x || typeof x !== 'object' || typeof x.id !== 'string' || !/^[a-z0-9-]{1,40}$/.test(x.id)) return false;
+  switch (x.type) {
+    case 'markdown':
+      return SAFE_TEXT(x.text, SITE_MARKDOWN_MAX);
+    case 'image':
+      return typeof x.url === 'string' && IMAGE_URL.test(x.url) && x.url.length <= 1000 && SAFE_TEXT(x.alt, 300) && (x.caption == null || SAFE_TEXT(x.caption, 300));
+    case 'video':
+      return typeof x.videoId === 'string' && /^[A-Za-z0-9_-]{4,64}$/.test(x.videoId);
+    case 'cta':
+      return SAFE_TEXT(x.label, 80) && !!(x.label as string).trim() && typeof x.href === 'string' && (HTTPS_URL.test(x.href) || SITE_PATH.test(x.href));
+    case 'quote':
+      return SAFE_TEXT(x.text, 2000) && !!(x.text as string).trim() && (x.cite == null || SAFE_TEXT(x.cite, 200));
+    case 'divider':
+      return true;
+    case 'posts':
+      return Number.isInteger(x.count) && (x.count as number) >= 1 && (x.count as number) <= 12;
+    case 'videos':
+      return Number.isInteger(x.count) && (x.count as number) >= 1 && (x.count as number) <= 24 && (x.playlistId == null || (typeof x.playlistId === 'string' && /^[A-Za-z0-9_-]{4,64}$/.test(x.playlistId)));
+    default:
+      return false;
+  }
+}
+
+/** Validates a page save; returns the first problem or null. */
+export function validateSitePageUpdate(update: SitePageUpdate): SitePageProblem | null {
+  if (update.slug !== undefined) {
+    if (typeof update.slug !== 'string' || !SITE_PAGE_SLUG.test(update.slug) || update.slug.includes('--')) return 'slug_invalid';
+    if (SITE_RESERVED_PAGE_SLUGS.has(update.slug)) return 'slug_reserved';
+  }
+  if (update.title !== undefined) {
+    if (!update.title || typeof update.title !== 'object') return 'title_invalid';
+    for (const [k, v] of Object.entries(update.title)) if (!(SITE_LOCALES as string[]).includes(k) || !SAFE_TEXT(v, SITE_PAGE_TITLE_MAX)) return 'title_invalid';
+  }
+  if (update.description !== undefined) {
+    if (!update.description || typeof update.description !== 'object') return 'description_invalid';
+    for (const [k, v] of Object.entries(update.description)) if (!(SITE_LOCALES as string[]).includes(k) || !SAFE_TEXT(v, SITE_PAGE_DESCRIPTION_MAX)) return 'description_invalid';
+  }
+  if (update.blocks !== undefined) {
+    if (!update.blocks || typeof update.blocks !== 'object') return 'blocks_invalid';
+    for (const [k, list] of Object.entries(update.blocks)) {
+      if (!(SITE_LOCALES as string[]).includes(k) || !Array.isArray(list) || list.length > SITE_BLOCKS_MAX) return 'blocks_invalid';
+      const ids = new Set<string>();
+      for (const b of list) {
+        if (!validBlock(b) || ids.has((b as SiteBlock).id)) return 'blocks_invalid';
+        ids.add((b as SiteBlock).id);
+      }
+    }
+  }
+  if (update.status !== undefined && update.status !== 'draft' && update.status !== 'published') return 'status_invalid';
+  return null;
+}
+
+function validSeo(seo: unknown): boolean {
+  const x = seo as SiteSeo | null;
+  if (!x || typeof x !== 'object') return false;
+  if (x.titleTemplate != null && (!SAFE_TEXT(x.titleTemplate, 120) || !x.titleTemplate.includes('%s'))) return false;
+  for (const [k, v] of Object.entries(x.description ?? {})) if (!(SITE_LOCALES as string[]).includes(k) || !SAFE_TEXT(v, SITE_PAGE_DESCRIPTION_MAX)) return false;
+  for (const token of [x.googleVerification, x.bingVerification]) if (token != null && (typeof token !== 'string' || !VERIFICATION.test(token))) return false;
+  return true;
+}
+
+function validRedirects(list: unknown): boolean {
+  if (!Array.isArray(list) || list.length > SITE_REDIRECTS_MAX) return false;
+  const seen = new Set<string>();
+  for (const r of list) {
+    const x = r as SiteRedirect | null;
+    if (!x || typeof x.from !== 'string' || typeof x.to !== 'string') return false;
+    if (!SITE_PATH.test(x.from) || x.from === '/' || seen.has(x.from)) return false;
+    if (!(SITE_PATH.test(x.to) || HTTPS_URL.test(x.to)) || x.to === x.from) return false;
+    seen.add(x.from);
+  }
+  return true;
+}
+
+/** The page title for the browser tab: the site's template, else "page · site". */
+export function sitePageTitle(pageTitle: string, siteName: string, template?: string | null): string {
+  if (template && template.includes('%s')) return template.replace('%s', pageTitle);
+  return pageTitle && siteName && pageTitle !== siteName ? `${pageTitle} · ${siteName}` : pageTitle || siteName;
+}
+
+/** Where a path redirects, or null. Exact match on the path (no trailing slash difference). */
+export function siteRedirectFor(redirects: SiteRedirect[] | undefined, path: string): string | null {
+  const norm = (p: string) => (p.length > 1 ? p.replace(/\/+$/, '') : p);
+  const hit = (redirects ?? []).find((r) => norm(r.from) === norm(path));
+  return hit ? hit.to : null;
+}

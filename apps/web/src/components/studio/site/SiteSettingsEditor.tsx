@@ -9,6 +9,7 @@
 import { useMemo, useState } from 'react';
 import {
   SITE_NAV_KINDS,
+  SITE_REDIRECTS_MAX,
   validateSiteSettingsUpdate,
   type SiteLocale,
   type SiteNavItem,
@@ -32,7 +33,7 @@ interface Props {
   initial: StudioSite;
 }
 
-type Draft = Required<Pick<SiteSettingsUpdate, 'themeRef' | 'logoUrl' | 'faviconUrl' | 'locales' | 'navigation'>> & {
+type Draft = Required<Pick<SiteSettingsUpdate, 'themeRef' | 'logoUrl' | 'faviconUrl' | 'locales' | 'navigation' | 'home' | 'seo' | 'redirects'>> & {
   name: Partial<Record<SiteLocale, string>>;
   about: Partial<Record<SiteLocale, string>>;
 };
@@ -46,6 +47,9 @@ function draftOf(site: StudioSite['site']): Draft {
     locales: [...site.locales],
     navigation: site.navigation.map((n) => ({ ...n, label: { ...(n.label ?? {}) } })),
     about: { ...site.about },
+    home: { pageId: site.home?.pageId ?? null },
+    seo: { titleTemplate: site.seo?.titleTemplate ?? null, description: { ...(site.seo?.description ?? {}) }, googleVerification: site.seo?.googleVerification ?? null, bingVerification: site.seo?.bingVerification ?? null },
+    redirects: (site.redirects ?? []).map((r) => ({ ...r })),
   };
 }
 
@@ -68,6 +72,15 @@ export function SiteSettingsEditor({ locale, channelId, channelName, initial }: 
   const problem: SiteSettingsProblem | null = useMemo(() => validateSiteSettingsUpdate(draft, site.limits), [draft, site.limits]);
   const dirty = JSON.stringify(draft) !== JSON.stringify(draftOf(site));
   const lang = (l: string) => (l === 'ar' ? 'ar' : 'en');
+  const pages = site.pages ?? [];
+  const pageTitle = (p: { title: Partial<Record<SiteLocale, string>>; slug: string }) => p.title[lang(locale)] || p.title.en || p.title.ar || `/${p.slug}/`;
+  const checklist = [
+    { key: 'logo', done: !!site.logoUrl, text: s.overview.logo },
+    { key: 'about', done: !!(site.about.en || site.about.ar), text: s.overview.about },
+    { key: 'page', done: pages.length > 0, text: s.overview.page },
+    { key: 'home', done: !!site.home?.pageId, text: s.overview.home },
+    ...(site.limits.customDomainsMax > 0 ? [{ key: 'domain', done: site.hosts.some((h) => h.kind === 'custom'), text: s.overview.domain }] : []),
+  ];
 
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((d) => ({ ...d, [key]: value }));
   const setNav = (index: number, patch: Partial<SiteNavItem>) => set('navigation', draft.navigation.map((n, i) => (i === index ? { ...n, ...patch } : n)));
@@ -131,6 +144,19 @@ export function SiteSettingsEditor({ locale, channelId, channelName, initial }: 
           )}
         </p>
       </header>
+
+      <section aria-labelledby="site-overview-h" className="space-y-2" data-testid="studio-site-overview">
+        <h2 id="site-overview-h" className="text-lg font-medium">{s.overview.title}</h2>
+        <ul className="space-y-1">
+          {checklist.map((c) => (
+            <li key={c.key} className="flex items-center gap-2 text-sm" data-done={c.done}>
+              <span aria-hidden="true">{c.done ? '✓' : '○'}</span>
+              <span>{c.text}</span>
+              <span className="sr-only">({c.done ? s.overview.done : s.overview.todo})</span>
+            </li>
+          ))}
+        </ul>
+      </section>
 
       <section aria-labelledby="site-theme-h" className="space-y-3">
         <h2 id="site-theme-h" className="text-lg font-medium">{s.theme}</h2>
@@ -210,8 +236,8 @@ export function SiteSettingsEditor({ locale, channelId, channelName, initial }: 
           {draft.navigation.map((item, index) => (
             <li key={item.id} className="space-y-2 rounded-md border border-border p-3" data-testid="studio-site-nav-item">
               <div className="flex flex-wrap items-center gap-2">
-                <ThemedSelectField aria-label={s.navigation} value={item.kind} onChange={(e) => setNav(index, { kind: e.target.value as SiteNavKind, url: e.target.value === 'url' ? item.url ?? 'https://' : undefined })}>
-                  {SITE_NAV_KINDS.map((k) => (
+                <ThemedSelectField aria-label={s.navigation} value={item.kind} onChange={(e) => setNav(index, { kind: e.target.value as SiteNavKind, url: e.target.value === 'url' ? item.url ?? 'https://' : undefined, pageId: e.target.value === 'page' ? item.pageId ?? pages[0]?.id : undefined })}>
+                  {SITE_NAV_KINDS.filter((k) => k !== 'page' || pages.length > 0 || item.kind === 'page').map((k) => (
                     <option key={k} value={k}>{s.navKinds[k]}</option>
                   ))}
                 </ThemedSelectField>
@@ -224,6 +250,13 @@ export function SiteSettingsEditor({ locale, channelId, channelName, initial }: 
                 <Input aria-label={s.navLabelAr} dir="rtl" lang="ar" maxLength={40} placeholder={s.navLabelAr} value={item.label?.ar ?? ''} onChange={(e) => setNav(index, { label: { ...item.label, ar: e.target.value } })} />
                 {item.kind === 'url' && (
                   <Input aria-label={s.navUrl} dir="ltr" className="sm:col-span-2" type="url" placeholder={s.navUrl} value={item.url ?? ''} onChange={(e) => setNav(index, { url: e.target.value })} />
+                )}
+                {item.kind === 'page' && (
+                  <ThemedSelectField aria-label={s.navPage} className="sm:col-span-2" value={item.pageId ?? ''} onChange={(e) => setNav(index, { pageId: e.target.value })} data-testid="studio-site-nav-page">
+                    {pages.map((p) => (
+                      <option key={p.id} value={p.id}>{pageTitle(p)}</option>
+                    ))}
+                  </ThemedSelectField>
                 )}
               </div>
             </li>
@@ -245,6 +278,60 @@ export function SiteSettingsEditor({ locale, channelId, channelName, initial }: 
           <Label htmlFor="site-about-ar">{s.aboutAr}</Label>
           <Textarea id="site-about-ar" dir="rtl" lang="ar" rows={5} maxLength={8000} value={draft.about.ar ?? ''} onChange={(e) => set('about', { ...draft.about, ar: e.target.value })} data-testid="studio-site-about-ar" />
         </div>
+      </section>
+
+      <section aria-labelledby="site-home-h" className="space-y-2">
+        <h2 id="site-home-h" className="text-lg font-medium">{s.home.title}</h2>
+        <p className="text-muted-foreground text-sm">{s.home.hint}</p>
+        <Label htmlFor="site-home-page">{s.home.page}</Label>
+        <ThemedSelectField id="site-home-page" value={draft.home.pageId ?? ''} onChange={(e) => set('home', { pageId: e.target.value || null })} data-testid="studio-site-home-page">
+          <option value="">{s.home.none}</option>
+          {pages.map((p) => (
+            <option key={p.id} value={p.id}>{pageTitle(p)}</option>
+          ))}
+        </ThemedSelectField>
+      </section>
+
+      <section aria-labelledby="site-seo-h" className="space-y-3">
+        <h2 id="site-seo-h" className="text-lg font-medium">{s.seo.title}</h2>
+        <p className="text-muted-foreground text-sm">{s.seo.hint}</p>
+        <div className="space-y-1">
+          <Label htmlFor="site-seo-title">{s.seo.titleTemplate}</Label>
+          <Input id="site-seo-title" dir="auto" maxLength={120} placeholder="%s · …" value={draft.seo.titleTemplate ?? ''} onChange={(e) => set('seo', { ...draft.seo, titleTemplate: e.target.value || null })} aria-describedby="site-seo-title-hint" data-testid="studio-site-seo-title" />
+          <p id="site-seo-title-hint" className="text-muted-foreground text-xs">{s.seo.titleTemplateHint}</p>
+        </div>
+        {(['en', 'ar'] as const).map((l) => (
+          <div key={l} className="space-y-1">
+            <Label htmlFor={`site-seo-desc-${l}`}>{l === 'en' ? s.seo.descriptionEn : s.seo.descriptionAr}</Label>
+            <Textarea id={`site-seo-desc-${l}`} dir={l === 'ar' ? 'rtl' : 'ltr'} lang={l} rows={2} maxLength={300} value={draft.seo.description?.[l] ?? ''} onChange={(e) => set('seo', { ...draft.seo, description: { ...draft.seo.description, [l]: e.target.value } })} />
+          </div>
+        ))}
+        <div className="grid gap-3 sm:grid-cols-2">
+          {(['googleVerification', 'bingVerification'] as const).map((k) => (
+            <div key={k} className="space-y-1">
+              <Label htmlFor={`site-seo-${k}`}>{k === 'googleVerification' ? s.seo.google : s.seo.bing}</Label>
+              <Input id={`site-seo-${k}`} dir="ltr" maxLength={100} value={draft.seo[k] ?? ''} onChange={(e) => set('seo', { ...draft.seo, [k]: e.target.value.trim() || null })} aria-describedby="site-seo-verify-hint" />
+            </div>
+          ))}
+        </div>
+        <p id="site-seo-verify-hint" className="text-muted-foreground text-xs">{s.seo.verificationHint}</p>
+      </section>
+
+      <section aria-labelledby="site-redirects-h" className="space-y-3">
+        <h2 id="site-redirects-h" className="text-lg font-medium">{s.redirects.title}</h2>
+        <p className="text-muted-foreground text-sm">{s.redirects.hint.replace('{max}', String(SITE_REDIRECTS_MAX))}</p>
+        <ul className="space-y-2" data-testid="studio-site-redirects">
+          {draft.redirects.map((r, i) => (
+            <li key={i} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+              <Input aria-label={s.redirects.from} dir="ltr" placeholder="/old-page" value={r.from} onChange={(e) => set('redirects', draft.redirects.map((x, j) => (j === i ? { ...x, from: e.target.value } : x)))} />
+              <Input aria-label={s.redirects.to} dir="ltr" placeholder="/en/videos/" value={r.to} onChange={(e) => set('redirects', draft.redirects.map((x, j) => (j === i ? { ...x, to: e.target.value } : x)))} />
+              <Button type="button" variant="ghost" onClick={() => set('redirects', draft.redirects.filter((_, j) => j !== i))}>{s.redirects.remove}</Button>
+            </li>
+          ))}
+        </ul>
+        <Button type="button" variant="outline" disabled={draft.redirects.length >= SITE_REDIRECTS_MAX} onClick={() => set('redirects', [...draft.redirects, { from: '/', to: '/' }])} data-testid="studio-site-redirect-add">
+          {s.redirects.add}
+        </Button>
       </section>
 
       <div className="bg-background sticky bottom-0 flex flex-wrap items-center gap-3 border-t border-border py-3">
