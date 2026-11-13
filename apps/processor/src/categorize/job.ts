@@ -139,6 +139,12 @@ async function readCaptions(bucket: CasBucket | undefined, video: StoredVideo, l
   return parts.join(' ');
 }
 
+
+/** The suggestion row of a video deleted for good (it names the uploader): removed, never recorded. */
+async function forgetSuggestion(db: SearchDb, subjectId: string): Promise<void> {
+  await db.prepare('DELETE FROM category_suggestions WHERE subject_id = ?').bind(subjectId).run();
+}
+
 /**
  * Write the suggestion onto the video when `categoryPatchForVideo` allows it, as a
  * conditional write on the fresh object, then refresh its search row.
@@ -150,11 +156,11 @@ async function applyToVideo(
   mode: 'upload' | 'backfill',
   threshold: number,
   logger: Logger,
-): Promise<{ applied: boolean; previousCategory: string | null; previousSource: string | null; missing?: boolean }> {
+): Promise<{ applied: boolean; previousCategory: string | null; previousSource: string | null; missing?: boolean; gone?: boolean }> {
   const bucket = env.videos!;
   for (let attempt = 1; attempt <= CAS_ATTEMPTS; attempt++) {
     const current = await readVideo(bucket, videoId);
-    if (!current || current.video.isDeleted) return { applied: false, previousCategory: null, previousSource: null, missing: true };
+    if (!current || current.video.isDeleted) return { applied: false, previousCategory: null, previousSource: null, missing: true, gone: !current };
     const { video, etag } = current;
     const previousCategory = video.category ?? null;
     const previousSource = video.categorySource ?? null;
@@ -223,7 +229,12 @@ export async function handleCategorySuggest(
       return { status: 'done', result: 'unconfigured' };
     }
     const current = await readVideo(env.videos, subjectId);
-    if (!current || current.video.isDeleted) {
+    if (!current) {
+      // Deleted for good (purged or erased): its suggestion row would only keep the uploader's id
+      await forgetSuggestion(db, subjectId);
+      return { status: 'done', result: 'missing' };
+    }
+    if (current.video.isDeleted) {
       await recordCategorySuggestionResult(db, subjectId, { status: 'empty', error: 'video_missing', now });
       return { status: 'done', result: 'missing' };
     }
@@ -322,7 +333,8 @@ export async function handleCategorySuggest(
     try {
       const outcome = await applyToVideo(env, subjectId, scores, mode, config.threshold, logger);
       if (outcome.missing) {
-        await recordCategorySuggestionResult(db, subjectId, { status: 'empty', error: 'video_missing', now });
+        if (outcome.gone) await forgetSuggestion(db, subjectId);
+        else await recordCategorySuggestionResult(db, subjectId, { status: 'empty', error: 'video_missing', now });
         return { status: 'done', result: 'missing' };
       }
       ({ applied, previousCategory, previousSource } = outcome);

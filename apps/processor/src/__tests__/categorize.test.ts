@@ -207,6 +207,23 @@ describe('category suggestion job', () => {
     expect(budget.reserved).toBeGreaterThan(0);
   });
 
+  it('a video deleted for good leaves no suggestion row (it would keep the uploader\'s id)', async () => {
+    const { db, env } = setup({ videos: {} });
+    await markCategorySuggestionPending(db, { subjectId: 'v1', subjectType: 'video', reason: 'upload', userId: 'u1', now: NOW });
+    expect(await handleCategorySuggest(videoJob(), env, logger, { lastAttempt: false, now: NOW })).toMatchObject({ status: 'done', result: 'missing' });
+    expect(await getCategorySuggestion(db, 'v1')).toBeNull();
+    // Sent without a row (late message after the erase): none is left either
+    expect(await handleCategorySuggest(videoJob(), env, logger, { lastAttempt: false, now: NOW })).toMatchObject({ result: 'missing' });
+    expect(await getCategorySuggestion(db, 'v1')).toBeNull();
+  });
+
+  it('a soft-deleted video keeps its row as video_missing (it may be restored)', async () => {
+    const { db, env } = setup({ videos: { v1: { ...VIDEO, isDeleted: true } } });
+    await markCategorySuggestionPending(db, { subjectId: 'v1', subjectType: 'video', reason: 'upload', userId: 'u1', now: NOW });
+    await handleCategorySuggest(videoJob(), env, logger, { lastAttempt: false, now: NOW });
+    expect(await getCategorySuggestion(db, 'v1')).toMatchObject({ status: 'empty', last_error: 'video_missing' });
+  });
+
   it('includes Arabic/English captions in the text', async () => {
     const { db, env, subtitles, ai } = setup({ videos: { v1: { ...VIDEO, subtitles: [{ language: 'ar', isDefault: true, status: 'ready' }] } } });
     await subtitles.put('v1/ar.vtt', 'WEBVTT\n\n00:00:01.000 --> 00:00:03.000\nقال رسول الله صلى الله عليه وسلم');

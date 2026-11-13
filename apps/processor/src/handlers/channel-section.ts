@@ -25,8 +25,10 @@ export async function handleChannelSectionEvent(
   const payload = message.payload as unknown as ChannelSectionPayload;
   const { channelId, sectionId, userId, sectionType, position, title } = payload;
 
-  // Validate required fields
-  if (!channelId || !sectionId || !userId) {
+  // Validate required fields. A reorder moves the channel's sections as a whole: api-videos sends
+  // { channelId, userId, sectionCount } without a sectionId (every reorder dead-lettered before)
+  const isReorder = message.type === MessageType.ChannelSectionReorder;
+  if (!channelId || !userId || (!sectionId && !isReorder)) {
     throw new Error('Channel section message missing required fields: channelId, sectionId, userId');
   }
 
@@ -117,7 +119,7 @@ async function saveChannelSectionAnalytics(
         messageId: message.id,
         privacy: ARCHIVE_PRIVACY_VERSION,
         channelId: (message.payload as unknown as ChannelSectionPayload).channelId,
-        sectionId: (message.payload as unknown as ChannelSectionPayload).sectionId,
+        ...((message.payload as unknown as ChannelSectionPayload).sectionId ? { sectionId: (message.payload as unknown as ChannelSectionPayload).sectionId } : {}),
       },
     });
 
