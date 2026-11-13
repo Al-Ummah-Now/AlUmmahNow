@@ -11,7 +11,7 @@
 export const CURRENT_API_VERSION = '1';
 export const SUPPORTED_API_VERSIONS: readonly string[] = ['1'];
 /** Version of the v1 contract document (openapi/v1.json). Bump the minor for additive changes. */
-export const CONTRACT_VERSION = '1.2.0';
+export const CONTRACT_VERSION = '1.3.0';
 
 export const API_VERSION_HEADER = 'X-API-Version';
 

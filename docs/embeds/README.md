@@ -289,6 +289,67 @@ Store the **video id** (or the watch URL) in the CMS, not the iframe HTML, and b
 §2, so host or parameter changes need no content migration. Re-check availability with oEmbed when publishing:
 a video can become private after it was picked; the frame then shows "unavailable", it never breaks the page.
 
+### Play data for the www timeline (hover preview and Shorts viewer)
+
+Two anonymous endpoints give www what a plain `<video>` needs, so it can play videos without the embed frame
+(code: `apps/api-videos/src/lib/media/public-play.ts`, `src/endpoints/video/publicPlay.ts`; contract
+`openapi/v1.json`). The unversioned `/api/...` paths answer too.
+
+| Call | Use |
+|---|---|
+| `GET {api}/api/v1/videos/{id}/play` | One public video's play data. `404 {"success":false,"error":"Object not found"}` for anything not public and published. |
+| `GET {api}/api/v1/shorts?after={id}&limit={1..20}` | `{ items: [play data…], next }`: the next public Shorts after `after`, newest first (the order of `GET {api}/api/v1/search?type=video&format=short&sort=date`). `limit` defaults to 10 (400 outside 1..20). When `after` is missing, or is not a listed public Short (any more), the list starts from the newest. Pass `next` back as `after`; `next` is `null` at the end. `503 {"error":"shorts_unavailable"}` (with `Retry-After`) if the index is down. |
+
+Play data:
+
+```json
+{
+  "id": "912859ed-e618-4d04-8438-874a74a251dd",
+  "format": "short",
+  "title": "…",
+  "channelName": "Quran Daily",
+  "channelHandle": "qurandaily",
+  "width": 1080, "height": 1920, "durationSeconds": 42,
+  "poster": "https://vz-25839d05-80d.b-cdn.net/912859ed-…/thumbnail.jpg?token=…&expires=1794515200",
+  "mp4": { "url": "https://vz-25839d05-80d.b-cdn.net/bcdn_token=…&expires=1794515200&token_path=%2F912859ed-…%2F/912859ed-…/play_480p.mp4", "width": null, "height": null },
+  "hls": "https://media.alummahnow.net/pub/912859ed-…/<rev>/master.m3u8",
+  "expiresAt": "2026-11-12T17:00:00.000Z",
+  "watchUrl": "https://videos.alummahnow.net/en/video/912859ed-…"
+}
+```
+
+- **`format`**: the one Short rule (`packages/shared-types/src/video-format.ts`): the uploader's "Upload as Short / as
+  video" choice wins; otherwise a Short is at most 180 s long **and** vertical or square (height ≥ width). Unknown
+  size or length means `video`. The Shorts feed only lists `short`.
+- **`mp4`**: a progressive MP4 with audio for `<video muted playsinline src>`. It is always Bunny's MP4 fallback file of
+  the video's own library (the R2 transcode writes HLS only): 480p, else 360p, 720p, 240p, whichever Bunny encoded
+  (Bunny writes MP4 fallbacks up to 720p). A video whose record lists no resolutions (old imports) gets 360p, which
+  may not exist for a very small source: handle the `<video>` `error` event by keeping the poster. `mp4` is `null`
+  only when the video's library has no CDN host configured. `mp4.width`/`height` are `null` for now: use the
+  top-level `width`/`height` for the aspect ratio.
+- **`hls`**: the adaptive stream the delivery switch chose (R2 on `media.*`, or Bunny). Chrome needs hls.js for it.
+- **`poster`**: may be `null` (thumbnail not ready). Custom thumbnails come from `images.alummahnow.net` (img-src).
+- **Signatures**: URLs carry tokens that expire at `expiresAt` (6 to 7 hours out, rounded to the hour, so a response
+  is identical for up to an hour). Responses carry `Cache-Control: public, max-age=300` (never longer than the
+  signatures). Refetch play data rather than storing URLs.
+- **Never returned**: private or unlisted, draft, scheduled, still processing, hidden, deleted and live videos;
+  videos of a hidden, private, suspended or deleted channel; videos uploaded by E2E test accounts.
+- **CORS**: the www origins of §8's table (`https://www.alummahnow.net`, `https://www.stage.alummahnow.net`,
+  `https://www.qa.alummahnow.net`), plus the www dev servers `http://localhost:4321` and `http://localhost:4331`
+  on these two routes only, outside production (`apps/api-videos/src/lib/cors.ts`). No credentials.
+- **Rate limits**: none beyond Cloudflare's, like the other anonymous reads.
+
+Media hosts the URLs come from (for www's CSP `media-src`; HLS segments load from the same hosts, so add them to
+`connect-src` too when using hls.js):
+
+| Environment | Hosts |
+|---|---|
+| Production | `https://media.alummahnow.net`, `https://vz-25839d05-80d.b-cdn.net`, `https://vz-215a1ffd-a5a.b-cdn.net` (legacy library) |
+| Stage | `https://media.stage.alummahnow.net`, `https://vz-cb79844a-c5d.b-cdn.net` |
+| QA | `https://media.qa.alummahnow.net`, `https://vz-cb79844a-c5d.b-cdn.net` |
+
+Posters come from the same hosts plus `https://images.alummahnow.net` (img-src).
+
 ## 9. Versioning
 
 Additive changes (new params, new event fields, new oEmbed `aun_*` fields) keep `v1`. Removing or renaming anything

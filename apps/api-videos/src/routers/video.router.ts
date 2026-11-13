@@ -1,5 +1,6 @@
 import { VideoQoe } from "../endpoints/video/videoQoe";
 import { VideoPlayback } from "../endpoints/video/videoPlayback";
+import { VideoPublicPlay } from "../endpoints/video/publicPlay";
 import { Hono } from 'hono';
 import { fromHono } from 'chanfana';
 
@@ -254,6 +255,8 @@ videoRouter.post('/:id/watch-time', VideoWatchTime);
 videoRouter.post('/:id/qoe', VideoQoe);
 // The player's fallback when the source the API chose fails: Bunny's URL, reason logged
 videoRouter.get('/:id/playback', VideoPlayback);
+// Signed MP4/HLS of a public video for other sites' players (the www timeline; lib/media/public-play.ts)
+videoRouter.get('/:id/play', VideoPublicPlay);
 videoRouter.post('/:id/retention', VideoRetention);
 
 // Export as default and named export
