@@ -1,62 +1,35 @@
 /**
  * Video visibility helpers
  *
- * Centralizes the rules that decide whether a stored video may appear in
- * public listings (search, sections, feeds, indexes). A video is excluded when
- * it is soft-deleted, hidden by moderation, or private.
+ * The rule itself lives in @al-ummah/shared-types (video-visibility.ts), shared with the
+ * scheduler, the processor's search projection and the web app, so every surface decides the
+ * same way (#1241). This module re-exports it under the names api-videos already uses and adds
+ * the api-only helpers below.
  */
 
-import { visibilityFlags, type VideoVisibility } from '@al-ummah/shared-types';
+import {
+	isInternalVideoRecord,
+	isVideoMediaPublic,
+	isVideoOpenToAnyone,
+	isVideoPubliclyVisible,
+	isVideoReady,
+	isVideoReleased,
+	isVideoRemoved,
+	visibilityFlags,
+	type VideoVisibility,
+	type VideoVisibilityFields,
+} from '@al-ummah/shared-types';
 
-export interface VisibilityFields {
-	id?: string;
-	userId?: string;
-	isPublic?: boolean;
-	/** Not public, but open to anyone with the link (D-SEO-5) */
-	isUnlisted?: boolean;
-	isHidden?: boolean;
-	isDeleted?: boolean;
-	/** Absent on older videos (treated as ready) */
-	uploadStatus?: string;
-	scheduledPublishStatus?: string;
-}
+export { isVideoMediaPublic, isVideoOpenToAnyone, isVideoPubliclyVisible, isVideoReady, isVideoReleased, isVideoRemoved };
 
-/**
- * True when the video was removed from circulation (soft delete or moderation).
- * Applies to everyone, including the owner.
- */
+export type VisibilityFields = VideoVisibilityFields;
+
 /**
  * The videos bucket also stores internal records (section indexes such as
  * "index:recent-videos", live streams under "livestream:"). They are not
  * videos and must never appear in listings.
  */
-export function isInternalRecord(video: VisibilityFields | null | undefined): boolean {
-	const id = video?.id;
-	return typeof id === "string" && (id.startsWith("index:") || id.startsWith("livestream:"));
-}
-
-export function isVideoRemoved(video: VisibilityFields | null | undefined): boolean {
-	if (!video || isInternalRecord(video)) return true;
-	return video.isDeleted === true || video.isHidden === true;
-}
-
-/** Playable: no upload status (older videos) or ready (from the first encoded resolution). */
-export function isVideoReady(video: VisibilityFields | null | undefined): boolean {
-	return !!video && (!video.uploadStatus || video.uploadStatus === "ready");
-}
-
-/**
- * True when the video may be shown in public listings to any viewer (home
- * sections, latest, trending, channel lists, search, feeds, playlists): not
- * removed, public, ready and not waiting for a scheduled publish. One rule for
- * every list (2026-11-10: the home page listed a processing upload the channel
- * page hid; single and bulk uploads were listed differently).
- */
-export function isVideoPubliclyVisible(video: VisibilityFields | null | undefined): boolean {
-	if (!video || isVideoRemoved(video) || video.isPublic === false) return false;
-	if (!isVideoReady(video)) return false;
-	return video.scheduledPublishStatus !== "scheduled" && video.scheduledPublishStatus !== "publishing";
-}
+export const isInternalRecord = isInternalVideoRecord;
 
 /**
  * Listing rule with the viewer: everyone sees publicly visible videos; the

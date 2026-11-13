@@ -10,7 +10,7 @@
 
 import { cache } from 'react';
 import { logger } from '@/lib/logger-server';
-import { getLocalizedValue } from '@al-ummah/shared-types';
+import { getLocalizedValue, isVideoOpenToAnyone } from '@al-ummah/shared-types';
 import { shareImagePath } from './share-image';
 
 export interface EmbedVideo {
@@ -63,9 +63,6 @@ export interface EmbedPlaylist {
   videos: EmbedVideo[];
 }
 
-/** Upload states in which a public video has nothing to play yet. */
-const NOT_PLAYABLE_STATUSES = new Set(['initiated', 'uploading', 'processing', 'failed']);
-
 interface ApiVideo {
   id?: string;
   title?: string;
@@ -88,6 +85,8 @@ interface ApiVideo {
   isDeleted?: boolean;
   isHidden?: boolean;
   uploadStatus?: string;
+  isDraft?: boolean;
+  scheduledPublishStatus?: string;
   hasChapters?: boolean;
   delivery?: { source?: string };
   width?: number;
@@ -123,9 +122,9 @@ export { videoAspect } from './aspect';
 
 export function toEmbedVideo(video: ApiVideo | null | undefined): EmbedVideo | null {
   if (!video || !video.id || !video.playUrl) return null;
-  // Private videos never play here; unlisted ones do for anyone with the link (D-SEO-5)
-  if ((video.isPublic === false && video.isUnlisted !== true) || video.isDeleted === true || video.isHidden === true) return null;
-  if (video.uploadStatus && NOT_PLAYABLE_STATUSES.has(video.uploadStatus)) return null;
+  // The shared rule (shared-types video-visibility.ts, #1241): public or unlisted (D-SEO-5),
+  // released, ready and not removed. Private, draft, scheduled and processing videos never play here.
+  if (!isVideoOpenToAnyone(video)) return null;
   const duration = Number(video.duration);
   const thumbnailSource = posterFor(video.playUrl, video.thumbnailUrl);
   return {

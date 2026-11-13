@@ -12,6 +12,7 @@
  */
 import {
 	DEFAULT_DELIVERY_SETTINGS,
+	isVideoMediaPublic,
 	mediaPlayUrl,
 	newMediaRev,
 	normaliseDeliverySettings,
@@ -35,6 +36,7 @@ import {
 	type TranscodeJobEvent,
 	type TranscodeJobMessage,
 	type VideoR2State,
+	type VideoVisibilityFields,
 } from '@al-ummah/shared-types';
 import { getSecret } from '../env-helpers';
 import { fetchBunnyVideo } from '../processing/loop';
@@ -187,12 +189,11 @@ export async function writeDeliverySettings(env: Pick<MediaEnv, 'global_settings
 // ---------------------------------------------------------------------------
 // Access: public renditions are served with no Worker, so only a video anyone
 // may watch is public. Private, draft, hidden, deleted or not yet published → priv.
+// The rule is the shared one (shared-types isVideoMediaPublic, #1241).
 // ---------------------------------------------------------------------------
 
-export function desiredAccess(video: Pick<MediaVideo, 'isPublic' | 'isDraft' | 'isHidden' | 'isDeleted' | 'scheduledPublishStatus'>): MediaAccess {
-	if (video.isPublic === false || video.isDraft || video.isHidden || video.isDeleted) return 'priv';
-	if (video.scheduledPublishStatus === 'scheduled' || video.scheduledPublishStatus === 'publishing') return 'priv';
-	return 'pub';
+export function desiredAccess(video: VideoVisibilityFields): MediaAccess {
+	return isVideoMediaPublic(video) ? 'pub' : 'priv';
 }
 
 /** A ready rendition set sits under the wrong prefix and no move is running. */

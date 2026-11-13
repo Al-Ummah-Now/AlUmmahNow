@@ -8,19 +8,28 @@
  * The scheduler sets it when it releases a scheduled video (apps/scheduler publisher.ts).
  */
 
+import { isVideoPubliclyVisible } from '@al-ummah/shared-types';
+
 export interface PublishableState {
   isPublic?: boolean | null;
   isDraft?: boolean | null;
   uploadStatus?: string | null;
   isDeleted?: boolean | null;
   isHidden?: boolean | null;
+  scheduledPublishStatus?: string | null;
+  markedForDeletion?: boolean | null;
   publishedAt?: string | null;
 }
 
-/** Visible to everyone right now: public, not a draft, ready (legacy records without a status count), not removed. */
+/**
+ * Visible to everyone right now: the shared public listing rule (shared-types video-visibility.ts):
+ * public, released (not a draft, not waiting for a schedule), ready (legacy records without a
+ * status count) and not removed.
+ */
 export function isPublishedState(video: PublishableState): boolean {
-  const ready = video.uploadStatus === undefined || video.uploadStatus === null || video.uploadStatus === 'ready';
-  return video.isPublic !== false && video.isDraft !== true && ready && video.isDeleted !== true && video.isHidden !== true;
+  // Nulls (older records, partial patches) count as absent
+  const fields = Object.fromEntries(Object.entries(video).filter(([, value]) => value !== null));
+  return isVideoPubliclyVisible(fields);
 }
 
 /**

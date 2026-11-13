@@ -90,8 +90,7 @@ const HOUR_MS = 60 * 60 * 1000;
  */
 export function isDiscoverable(video: DiscoveryVideo | null | undefined): video is DiscoveryVideo {
   if (!video || typeof video !== 'object' || !video.id || typeof video.title !== 'string') return false;
-  if (video.markedForDeletion) return false;
-  // Public, ready, not removed, not scheduled: the shared listing rule
+  // Public, ready, released, not removed (markedForDeletion included): the shared listing rule
   return isVideoPubliclyVisible(video);
 }
 
