@@ -153,7 +153,7 @@ test.describe('Channel Switching - English', () => {
     const menu = await switchTo(page, null);
 
     await showMenuView(menu, 'main');
-    await expect(menu.getByTestId('nav-no-active-channel')).toHaveText(/No active channel/);
+    await expect(menu.getByTestId('nav-no-active-channel')).toHaveText(/Yourself \(no channel\)/);
     await showMenuView(menu, 'main');
     await expect(menu.getByTestId('nav-active-channel')).toHaveCount(0);
     for (const ch of [multiChannels().main, multiChannels().other]) {
@@ -178,7 +178,7 @@ test.describe('Channel Switching - Arabic', () => {
     const menu = await switchTo(page, null);
     await expect(menu).toHaveCSS('direction', 'rtl');
     await showMenuView(menu, 'main');
-    await expect(menu.getByTestId('nav-no-active-channel')).toHaveText(/لا توجد قناة نشطة/);
+    await expect(menu.getByTestId('nav-no-active-channel')).toHaveText(/اسمك الشخصي \(بدون قناة\)/);
   });
 
   test('switches channel and links to the Arabic channel page', async ({ page }) => {

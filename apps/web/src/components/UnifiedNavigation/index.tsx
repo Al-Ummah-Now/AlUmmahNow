@@ -37,6 +37,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { ACCOUNT_MENU_PATHS } from '@/lib/navigation/destinations';
+import { ACCOUNT_MENU_EVENT, type AccountMenuRequest } from '@/lib/navigation/account-menu-events';
 import { useOptionalAuth } from '@/components/AuthProvider/authContext';
 import { getAuthProfileUrl, getAuthUrl, getCmsUrl, getWwwUrl } from '@/lib/runtime-config';
 import { appLinks, type AppLinkId } from '@al-ummah/shared-types';
@@ -46,6 +47,8 @@ import type { ChannelRole } from '@al-ummah/shared-types';
 import { userDisplayName } from '@/lib/display-name';
 
 type MenuView = 'main' | 'channels';
+
+const MENU_FOCUSABLE = '[role="menuitem"], [role="menuitemradio"]';
 
 export function UnifiedNavigation() {
   // Get language context and translations
@@ -173,6 +176,24 @@ export function UnifiedNavigation() {
   useEffect(() => {
     if (!canCreateChannel) setIsCreatingChannel(false);
   }, [canCreateChannel]);
+
+  // Other parts of the page open the menu on a view: "Commenting as … · Switch" and the identity
+  // tour (lib/navigation/account-menu-events.ts)
+  useEffect(() => {
+    const onRequest = (event: Event) => {
+      const { open, view: wanted = 'main', focus } = (event as CustomEvent<AccountMenuRequest>).detail ?? { open: false };
+      setIsOpenState(open);
+      setView(open ? wanted : 'main');
+      setIsCreatingChannel(false);
+      if (open && focus) {
+        requestAnimationFrame(() => {
+          document.querySelector<HTMLElement>(`[data-testid="nav-menu"] ${MENU_FOCUSABLE}`)?.focus();
+        });
+      }
+    };
+    window.addEventListener(ACCOUNT_MENU_EVENT, onRequest);
+    return () => window.removeEventListener(ACCOUNT_MENU_EVENT, onRequest);
+  }, []);
 
   // Handle Escape key to close menu
   useEffect(() => {
@@ -366,8 +387,8 @@ export function UnifiedNavigation() {
                   {activeRole && activeRole !== 'owner' && roleBadge(activeRole)}
                 </Link>
               ) : (
-                <div data-testid="nav-no-active-channel" className="aun-menu-item aun-menu-context-current aun-menu-who-sub" aria-disabled="true">
-                  <Tv className="aun-menu-icon" aria-hidden="true" />
+                <div data-testid="nav-no-active-channel" className="aun-menu-item aun-menu-context-current" aria-disabled="true">
+                  {avatar(getUserAvatar(), initial)}
                   <span className="aun-menu-text">{t.navigation.noActiveChannel}</span>
                 </div>
               )}

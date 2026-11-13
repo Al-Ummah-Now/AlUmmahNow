@@ -94,7 +94,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
 
   navigation: {
     moreAccounts: 'حسابات أخرى',
-    channelSection: 'القناة',
+    channelSection: 'تتصرّف باسم',
     appsSection: 'تطبيقات الأمة الآن',
     appWww: 'الموقع',
     appVideos: 'المرئيات',
@@ -113,7 +113,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     profile: 'الملف الشخصي',
     analytics: 'التحليلات',
     noChannel: 'لا توجد قناة',
-    noActiveChannel: 'لا توجد قناة نشطة',
+    noActiveChannel: 'اسمك الشخصي (بدون قناة)',
     switchChannel: 'تبديل القناة',
     signOut: 'تسجيل الخروج',
     useWithoutChannel: 'الاستخدام بدون قناة',
@@ -1370,6 +1370,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     actionFailed: 'حدث خطأ ما. يرجى المحاولة مرة أخرى.',
     yourAvatar: 'صورتك الرمزية',
     commentingAs: 'تعلّق باسم {name}',
+    switchIdentity: 'تبديل',
     authorAvatar: 'الصورة الرمزية لـ {name}',
     sortBy: 'ترتيب التعليقات',
     sortTop: 'أبرز التعليقات',
