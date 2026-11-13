@@ -9,9 +9,11 @@
 --   apps/processor/migrations-notifications/0007_notification_pushed_at.sql
 --   apps/processor/migrations-notifications/0008_channel_subscriptions.sql
 --   apps/processor/migrations-notifications/0009_notification_email_prefs.sql
+--   apps/processor/migrations-notifications/0010_archive_subjects.sql
 
 CREATE TABLE analytics_daily (entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, day TEXT NOT NULL, metric TEXT NOT NULL, dim TEXT NOT NULL DEFAULT '', value REAL NOT NULL DEFAULT 0, PRIMARY KEY (entity_type, entity_id, day, metric, dim)) WITHOUT ROWID;
 CREATE TABLE analytics_rollup_imports (r2_key TEXT PRIMARY KEY, imported_at TEXT NOT NULL) WITHOUT ROWID;
+CREATE TABLE archive_subjects (subject TEXT PRIMARY KEY, secret TEXT, created_at INTEGER NOT NULL, erased_at INTEGER);
 CREATE TABLE channel_subscriber_counts (channel_id TEXT PRIMARY KEY, subscribers INTEGER NOT NULL DEFAULT 0) WITHOUT ROWID;
 CREATE TABLE channel_subscribers (channel_id TEXT NOT NULL, user_id TEXT NOT NULL, bell TEXT NOT NULL DEFAULT 'highlights' CHECK (bell IN ('all', 'highlights', 'none')), created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY (channel_id, user_id));
 CREATE TABLE channel_subscription_import_state (id INTEGER PRIMARY KEY CHECK (id = 1), cursor TEXT, passes INTEGER NOT NULL DEFAULT 0, completed_at INTEGER, updated_at INTEGER NOT NULL);

@@ -64,6 +64,7 @@ import { createFootprintsInternalRouter } from "./endpoints/privacy/footprintsIn
 import { handleFootprintBackfillMessage, isFootprintBackfillMessage, maintainFootprintPasses } from "./lib/privacy/footprints";
 import { handleVideoFormatMessage, startDailyVideoFormatRun } from "./lib/video-format/job";
 import { handlePublishedAtBackfillMessage, isPublishedAtBackfillMessage } from "./lib/publishedAtBackfill";
+import { handleArchivePrivacyMessage, isArchivePrivacyMessage } from "./lib/archivePrivacyRewrite";
 import { startDailyThumbnailCheck } from "./lib/thumbnail/repair";
 import { VIDEO_FORMAT_JOB_KIND } from "@al-ummah/shared-types";
 // Profile/Channel image upload handlers (not in routers yet)
@@ -674,9 +675,11 @@ async function queue(batch: MessageBatch<unknown>, env: AppBindings, ctx: Execut
 		for (const msg of batch.messages.filter(isCollectionBackfill)) await handleCollectionBackfillMessage(synced, msg);
 		// publishedAt backfill (lib/publishedAtBackfill.ts), one bucket page per message, dry run by default
 		for (const msg of batch.messages.filter((m) => isPublishedAtBackfillMessage(m.body))) await handlePublishedAtBackfillMessage(synced, msg);
+		// Queue-message archive pseudonymisation of older entries (lib/archivePrivacyRewrite.ts, #1177), dry run by default
+		for (const msg of batch.messages.filter((m) => isArchivePrivacyMessage(m.body))) await handleArchivePrivacyMessage(env as never, msg);
 		// Privacy footprint backfill (lib/privacy/footprints.ts), one bucket page per message
 		for (const msg of batch.messages.filter((m) => isFootprintBackfillMessage(m.body))) await handleFootprintBackfillMessage(env as never, msg.body as never);
-		const rest = batch.messages.filter((m) => !isFormat(m) && !isCollectionBackfill(m) && !isFootprintBackfillMessage(m.body) && !isPublishedAtBackfillMessage(m.body));
+		const rest = batch.messages.filter((m) => !isFormat(m) && !isCollectionBackfill(m) && !isFootprintBackfillMessage(m.body) && !isPublishedAtBackfillMessage(m.body) && !isArchivePrivacyMessage(m.body));
 		// New uploads → playlists (lib/playlistUploadAdds.ts)
 		const playlistAdds = rest.filter((m) => isPlaylistAddMessage(m.body));
 		const reaper = rest.filter((m) => isReaperMessage(m.body));

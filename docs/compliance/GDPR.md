@@ -10,7 +10,7 @@ that product/legal should confirm.
 |---|---|---|
 | AlUmmahNowAuth (separate service) | Sign-in account: email, password hash, sessions, multi-account links | Auth service. Not part of this repo. Managed at the account app (`profile.auth.<env>.alummahnow.net`) |
 | api-videos (R2) | Profiles, channels, videos, comments, reactions, subscriptions, watch history, community content, playlists, templates, reports | This repo |
-| processor (R2 + D1) | Raw event archive (`al-ummah-now-messages`), aggregated rollups, D1 moderation reports | This repo |
+| processor (R2 + D1) | Pseudonymised event archive (`al-ummah-now-messages`, §3), aggregated rollups, D1 moderation reports, archive pseudonym secrets (`archive_subjects`) | This repo |
 | websocket-server (Durable Object, memory only) | Presence: the open sockets of a signed-in user; gone when the socket closes | This repo |
 | Browser (web app) | Preferences, consent cookie, encrypted on-device watch progress | This repo |
 | Bunny.net | Video files, thumbnails, avatars, community images | Processor (sub-processor) |
@@ -45,7 +45,7 @@ used today.
 
 | Data | Personal data | Legal basis | Retention |
 |---|---|---|---|
-| Processor archive `al-ummah-now-messages/{YYYY-MM-DD}T...` (every queue message: views, likes, comments, reports, analytics beacons) | Pseudonymous user ids, comment text in comment events | Legitimate interest (f): abuse investigation, statistics, replay | **13 months** (enforced daily by the api-videos cron) |
+| Processor archive `al-ummah-now-messages/{YYYY-MM-DD}T...` (production: every queue message: views, likes, comments, reports, analytics beacons; QA/stage: client analytics only) | Pseudonyms only (`ps_…`, see below): no raw user id, no free text, no user agent, no email; referrers as host only | Legitimate interest (f): abuse investigation, statistics, replay | **13 months** (enforced daily by the api-videos cron); unlinkable from the person at once on erasure |
 | Aggregated rollups `analytics/rollups/...` | None (counts per video/channel/month) | n/a | Kept |
 | A/B experiment events, web vitals, player QoS (`/api/analytics/ab-test`, `/api/analytics/performance`) | Pseudonymous ids, user agent, page path | **Consent (a)** | Archive retention (13 months) |
 | Retention buckets and traffic sources (`analytics_daily` counters `retention_start`, `retention`, `traffic`, `external_host`) | None once rolled up: counts and hostnames. The queue message carries a random per-playback id, held only in the archive above | **Consent (a)**: sent only with analytics consent. Without it a view counts as `unknown` | Kept as aggregates; archive retention for the message |
@@ -54,10 +54,40 @@ used today.
 | Cloudflare Workers logs (observability) | User ids and paths in structured logs | Legitimate interest (f): operations, security | Cloudflare plan default (3-7 days). **Decision needed:** confirm the plan's log retention and add it to the privacy notice |
 | Security event logs (`/api/security/events`, `/api/security/csp-report`) | Path (no query), event type | Legitimate interest (f): security | Same as Workers logs |
 
-The archive has no per-user index, so it is not part of on-demand export or erasure. It is
-covered by the 13-month retention period instead. **Decision needed:** legal should confirm
-that a bounded-retention pseudonymous log is acceptable under Art. 17(3), or ask for a
-processor job that rewrites archived messages of erased users.
+**How the archive is pseudonymised (#1177).** The processor scrubs every message before it
+writes it (`@al-ummah/shared-types` `archive-privacy.ts`, processor `lib/archive-record.ts`).
+The same rules apply to the copies it keeps under `channel-sections/` and `channel-tabs/`.
+
+- **User ids become pseudonyms.** This covers person-id fields (`userId`, `viewerId`,
+  `reporterId`, `actor.userId`, `videoOwnerId`, …) and any `usr_…` value anywhere. The pseudonym
+  is `ps_` plus HMAC-SHA-256 of the id under a random 256-bit secret kept for that person. The
+  secrets live in processor D1 `archive_subjects` (notifications DB), keyed by SHA-256 of the id,
+  so that table holds no raw id either.
+- **Free text, contact and device details are dropped.** This covers report descriptions,
+  comment, post and message text, notes, search queries, names, emails, phone numbers, IP
+  addresses and user agents. An email inside any other string becomes `[email]`.
+- **Links are trimmed.** Referrers keep only their host; URLs and paths lose their query and
+  fragment.
+- **Each archived object is stamped** `privacy: pseudonymised-v1`, in its body and in its R2
+  custom metadata.
+
+**Erasure.** The `UserDataErased` step clears the person's secret and stamps `erased_at`. From
+then on their archived pseudonyms cannot be tied back to them by anyone, including us. Any later
+message about the account archives `deleted-user` instead of a new pseudonym. Erasure messages
+(`UserDataErased`, `ContactDataErase`) are archived with `deleted-user` in place of the id they
+erase. The archive needs no per-user index or rewrite at erasure time: what is left about the
+person is unlinkable. The 13-month retention period still removes the entries themselves.
+
+**Entries written before pseudonymisation** were rewritten once by api-videos
+`lib/archivePrivacyRewrite.ts` (`scripts/release/archive-privacy-rewrite.ts`: dry run, then
+apply; QA, then stage, then production).
+- Their ids became pseudonyms under a key that existed only for that run and was deleted when
+  the run finished. Those entries are consistent among themselves but lead to nobody.
+- Free text was dropped by the same rules.
+- The per-person tab metric copies (`analytics/tabs/user-behavior/<userId>/…`) were deleted.
+
+The local E2E leftover check stays strict on the archive. A run's ids found there would mean
+the pseudonymisation broke.
 
 ## 4. Browser storage
 
@@ -126,7 +156,7 @@ UI: `/{en|ar}/settings/privacy` (`apps/web/src/components/privacySettings`, LTR 
 | Right | How |
 |---|---|
 | Access / portability (Art. 15, 20) | **Download my data**. Calls `GET /api/privacy/export`, which returns JSON with profile, consent record, channels (+ sections, tabs), owned video metadata (other people's comments reduced to counts), the user's video comments and reactions, subscriptions, watch history (new and legacy), community posts/comments/likes/poll votes, playlists, upload templates and reports filed. Large accounts are exported in passes (`complete:false` + `resumeToken`, `?resume=`). The client merges the passes into one file. |
-| Erasure (Art. 17) | **Delete my data** (type the confirmation word). Calls `DELETE /api/privacy/data` with `{"confirm":"DELETE"}`. **Deleted:** profile, owned channels with their sections and tabs, owned videos with their subtitles and Bunny Stream media, posts of owned channels with their comment/like/vote trees, watch history, upload templates, playlists, the user's subscriptions on other channels, likes/dislikes, post likes, poll votes, comment likes. **Anonymised** (tombstone `deleted-user`, content emptied, thread kept): the user's comments in other people's threads, and reports they filed (R2, plus D1 via the `UserDataErased` queue message handled by the processor). The operation is idempotent and resumable (`resumeToken`). The client repeats it until `complete:true`, then clears this device's data. |
+| Erasure (Art. 17) | **Delete my data** (type the confirmation word). Calls `DELETE /api/privacy/data` with `{"confirm":"DELETE"}`. **Deleted:** profile, owned channels with their sections and tabs, owned videos with their subtitles and Bunny Stream media, posts of owned channels with their comment/like/vote trees, watch history, upload templates, playlists, the user's subscriptions on other channels, likes/dislikes, post likes, poll votes, comment likes. **Anonymised** (tombstone `deleted-user`, content emptied, thread kept): the user's comments in other people's threads, and reports they filed (R2, plus D1 via the `UserDataErased` queue message handled by the processor). **Made unlinkable:** the person's entries in the event archive (§3): the processor deletes their pseudonym secret. The operation is idempotent and resumable (`resumeToken`). The client repeats it until `complete:true`, then clears this device's data. |
 | Sign-in account | Linked from the same page (**Open account settings**, `AUTH_PROFILE_URL` or derived from the issuer). **Decision needed:** the auth service has no self-service account deletion yet (only admin `deleteUser`). Add it there, or define a support process with a 30-day SLA. |
 | Rectification (Art. 16) | Existing profile, channel and content edit screens. |
 | Restriction / objection (Art. 18, 21) | Consent withdrawal, watch-history clear/remove, comment and post deletion. |

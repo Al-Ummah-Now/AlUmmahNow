@@ -21,6 +21,9 @@ import {
 import { eraseUserModerationData } from './moderation/store';
 import { eraseUserContactData } from './contact/erase';
 import { eraseUserTraces } from './erasure/user-traces';
+import { eraseArchiveSubject } from './erasure/archive-subjects';
+import { archiveRecord } from './lib/archive-record';
+import { ARCHIVE_PRIVACY_VERSION } from '@al-ummah/shared-types';
 import type { NotificationCreatePayload, NotificationFanoutPayload, PushDispatchPayload } from '@al-ummah/shared-types';
 import { publishAdminLive } from '@al-ummah/shared-types';
 import { dispatchPush, enqueuePush } from './push/dispatch';
@@ -703,12 +706,12 @@ export class MessageProcessor {
 
       const key = `${year}-${month}-${day}T${hour}-${minute}-${second}.${message.id}`;
 
-      // Enhance message with human-readable type name for better queryability
-      const enhancedMessage = {
-        ...message,
-        typeName: MessageType[message.type], // Add human-readable type name (e.g., "VideoView")
-        timestampISO: new Date(message.timestamp).toISOString(), // Add ISO string for easier filtering
-      };
+      // Human-readable type name and ISO time for queryability; person ids pseudonymised and free
+      // text dropped (#1177, lib/archive-record.ts)
+      const enhancedMessage = await archiveRecord(message, env, {
+        typeName: MessageType[message.type], // e.g. "VideoView"
+        timestampISO: new Date(message.timestamp).toISOString(),
+      });
 
       // Convert enhanced message to JSON string
       const messageJson = JSON.stringify(enhancedMessage, null, 2);
@@ -721,6 +724,8 @@ export class MessageProcessor {
         customMetadata: {
           messageType: MessageType[message.type],
           messageId: message.id,
+          // Listed without a read by the one-off rewrite (#1177): already pseudonymised
+          privacy: ARCHIVE_PRIVACY_VERSION,
         },
       });
 
@@ -861,6 +866,9 @@ export class MessageProcessor {
     // Invites, error rows (anonymised, kept for trends) and category suggestions (#1059)
     const traces = await eraseUserTraces(env.REPORTS_DB, env.SEARCH_DB, userId, DELETED_USER_ID);
     this.logger.debug('Erased user traces after user data erasure', { userId, ...traces });
+    // The archive's pseudonym secret (#1177): the user's archived events no longer lead to them
+    const archiveSubject = await eraseArchiveSubject(env.NOTIFICATIONS_DB, userId);
+    this.logger.debug('Erased the archive pseudonym secret', { userId, changed: archiveSubject });
     if (env.NOTIFICATIONS_DB) {
       await eraseUserNotifications(env.NOTIFICATIONS_DB, userId);
       // Their community post likes and poll votes come off the counters (PR-2/3/4)
