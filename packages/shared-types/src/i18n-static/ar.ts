@@ -121,7 +121,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     channelName: 'اسم القناة',
     enterChannelName: 'أدخل اسم القناة',
     privacyAndCookies: 'الخصوصية وملفات تعريف الارتباط',
-    addAnotherAccount: 'إضافة حساب آخر',
+    addAnotherAccount: 'تسجيل الدخول بحساب آخر',
     signOutOf: 'تسجيل الخروج من',
     signOutOfAll: 'تسجيل الخروج من جميع الحسابات',
     signIn: 'تسجيل الدخول',

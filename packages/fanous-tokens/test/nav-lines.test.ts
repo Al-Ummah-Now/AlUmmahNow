@@ -10,7 +10,7 @@ import { contrastRatio } from '../src/contrast.ts';
  * Reads the real --aun-menu-line / --aun-menu-edge rules and the generated theme tokens.
  */
 const THEMES = ['lantern', 'fawanees', 'zujaj', 'nahas'];
-const SEPARATOR_FLOOR = 1.9;
+const SEPARATOR_FLOOR = 2.4;
 const EDGE_FLOOR = 3;
 
 const css = readFileSync(new URL('../nav/aun-nav.css', import.meta.url), 'utf8');

@@ -337,7 +337,7 @@ export function UnifiedNavigation() {
                 {avatar(getUserAvatar(), initial, 'aun-avatar--lg')}
                 <span className="aun-menu-who-text">
                   <span className="aun-menu-who-name" dir="auto" data-testid="nav-user-name">{displayName}</span>
-                  {displayName !== user.email && <span className="aun-menu-who-sub" dir="auto">{user.email}</span>}
+                  {displayName !== user.email && <EmailText email={user.email} className="aun-menu-who-sub" />}
                 </span>
               </Link>
               </div>
@@ -408,7 +408,7 @@ export function UnifiedNavigation() {
                         {avatar(accountAvatar, name[0]?.toUpperCase() ?? '?')}
                         <span className="aun-acct-text">
                           <span className="aun-acct-label" dir="auto">{name}</span>
-                          {name !== account.email && <span className="aun-acct-email" dir="auto">{account.email}</span>}
+                          {name !== account.email && <EmailText email={account.email} className="aun-acct-email" />}
                         </span>
                       </button>
                       <button
@@ -604,5 +604,20 @@ export function UnifiedNavigation() {
         }}
       />
     </div>
+  );
+}
+
+/**
+ * An email that keeps its domain when it does not fit (NAV.md): the local part shrinks with an
+ * ellipsis, "@domain" stays whole, and the full address is the tooltip.
+ */
+function EmailText({ email, className }: { email: string; className: string }) {
+  const at = email.lastIndexOf('@');
+  if (at <= 0) return <span className={className} dir="ltr" title={email}>{email}</span>;
+  return (
+    <span className={`${className} aun-email`} dir="ltr" title={email}>
+      <span className="aun-email-local">{email.slice(0, at)}</span>
+      <span className="aun-email-domain">{email.slice(at)}</span>
+    </span>
   );
 }

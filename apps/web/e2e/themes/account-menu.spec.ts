@@ -59,11 +59,11 @@ for (const lang of LANGS) {
         expect(axe.violations.flatMap((v) => v.nodes.map((n) => n.failureSummary))).toEqual([]);
 
         // The lines between sections must show (owner review rev 4: "in dark you can't see the lines
-        // between rows", then the same in the CMS): separators ≥ 1.9:1 in both modes (the shared
-        // --aun-menu-line, about 2:1 in every theme), and the outer border ≥ 3:1
+        // between rows", then the same in the CMS): separators ≥ 2.4:1 in both modes (the shared
+        // --aun-menu-line, 2.47–3.81:1 across the themes), and the outer border ≥ 3:1
         const lines = await menuLineContrast(page, '[data-testid=nav-menu]');
         expect(lines.count, 'separators rendered').toBeGreaterThan(2);
-        expect(lines.separators, `separator contrast ${theme} ${mode}`).toBeGreaterThanOrEqual(1.9);
+        expect(lines.separators, `separator contrast ${theme} ${mode}`).toBeGreaterThanOrEqual(2.4);
         expect(lines.edge, `menu border contrast ${theme} ${mode}`).toBeGreaterThanOrEqual(3);
       });
     }
