@@ -1564,6 +1564,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     notFoundDescription: 'This playlist does not exist or is private.',
     publicLabel: 'Public',
     privateLabel: 'Private',
+    unlistedLabel: 'Unlisted',
     updatedOn: 'Updated {date}',
     removeFromPlaylist: 'Remove from playlist',
     moveUp: 'Move up',
@@ -1584,6 +1585,9 @@ export const EN_TRANSLATIONS: AppTranslations = {
     visibilityLabel: 'Visibility',
     publicDescription: 'Anyone can view this playlist',
     privateDescription: 'Only you can view this playlist',
+    unlistedDescription: 'Anyone with the link can view it; it is not listed or searchable',
+    personalPlaylistsDescription: 'Your own playlists, no channel needed. Save videos to them from any video.',
+    personalAddVideosHint: 'To add videos, open a video and choose Save, or use Save to playlist in a video card\'s menu.',
     nameRequired: 'Please enter a playlist name',
     createFailed: 'Could not create the playlist. Please try again.',
     updateFailed: 'Could not update the playlist. Please try again.',
@@ -1597,7 +1601,6 @@ export const EN_TRANSLATIONS: AppTranslations = {
     removedFrom: 'Removed from {title}',
     saveFailed: 'Could not update the playlist. Please try again.',
     createAndAdd: 'Create and add',
-    channelRequired: 'Create or select a channel to save videos to playlists',
     // Upload page: pick or create playlists for new uploads (single and batch)
     upload: {
       label: 'Playlists',

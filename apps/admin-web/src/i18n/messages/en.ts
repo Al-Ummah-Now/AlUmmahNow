@@ -1678,6 +1678,8 @@ const en = {
     colChannel: 'Channel',
     colOwner: 'Owner',
     colVideos: 'Videos',
+    unlisted: 'Unlisted',
+    personal: 'Personal (no channel)',
     colVisibility: 'Visibility',
     colCreated: 'Created',
     tableCaption: 'Playlists',

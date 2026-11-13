@@ -16,13 +16,15 @@ import '@/theme/playlist-tools.css';
 import BulkAddNotice from './BulkAddNotice';
 import CreatePlaylistForm, { type CreatedPlaylist } from './CreatePlaylistForm';
 import { MUTED, TEXT } from './styles';
+import { managePlaylistsHref } from '@/components/PlaylistManager';
 
 export default function NewPlaylistPage({ channelId }: { channelId: string }) {
   const { t, lang, isRTL } = useLanguage();
   const p = t.playlistTools;
   const router = useRouter();
   const [stuck, setStuck] = useState<CreatedPlaylist | null>(null);
-  const base = `/${lang}/settings/channel/${channelId}/playlists`;
+  // A channel's Manage Playlists, or (channelId '') the user's personal ones under You
+  const base = managePlaylistsHref(lang, channelId);
 
   const created = (result: CreatedPlaylist) => {
     const href = `${base}/${encodeURIComponent(result.playlist.id)}`;

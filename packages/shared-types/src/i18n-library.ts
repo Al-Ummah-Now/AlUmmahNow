@@ -44,7 +44,8 @@ export interface LibraryTranslations {
   unsavePost: string;
   postSaved: string;
   likedOn: string;
-  createChannelForPlaylists: string;
+  /** Manage link of the personal playlists (no channel) */
+  managePlaylists: string;
 }
 
 /** CLDR plural forms (Intl.PluralRules): English uses one/other, Arabic all six. */
@@ -191,7 +192,7 @@ export const LIBRARY_EN: LibraryTranslations = {
   unsavePost: 'Remove from saved posts',
   postSaved: 'Saved',
   likedOn: 'Liked {date}',
-  createChannelForPlaylists: 'Create a channel to make playlists',
+  managePlaylists: 'Manage playlists',
 };
 
 export const LIBRARY_AR: LibraryTranslations = {
@@ -230,7 +231,7 @@ export const LIBRARY_AR: LibraryTranslations = {
   unsavePost: 'إزالة من المنشورات المحفوظة',
   postSaved: 'محفوظ',
   likedOn: 'أعجبك في {date}',
-  createChannelForPlaylists: 'أنشئ قناة لإنشاء قوائم التشغيل',
+  managePlaylists: 'إدارة قوائم التشغيل',
 };
 
 export const NOTIFICATION_CENTER_EN: NotificationCenterTranslations = {

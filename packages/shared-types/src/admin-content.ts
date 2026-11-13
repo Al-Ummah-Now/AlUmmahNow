@@ -326,9 +326,12 @@ export interface AdminPlaylistRow {
   title: string;
   /** Per-language names ('en', 'ar'); show with localizedPlaylistText (playlist-title.ts) */
   titleLocalized?: Record<string, string>;
+  /** null for a personal playlist (made without a channel, the owner's alone) */
   channelId: string | null;
   ownerId: string | null;
   isPublic: boolean;
+  /** Link-only: opens for anyone with the link, never listed */
+  isUnlisted?: boolean;
   videoCount: number;
   createdAt: string | null;
 }

@@ -20,7 +20,8 @@ export class PlaylistAddVideo extends AuthenticatedRoute {
                 id: Str({ description: "Playlist ID" }),
             }),
             headers: z.object({
-                channelId: Str({ description: "Channel ID" }),
+                // Absent reaches the schema as null (#1139): no channel = a personal playlist
+                channelId: Str({ description: "The caller's active channel; optional" }).optional().nullable(),
             }),
             body: {
                 content: {
@@ -79,7 +80,7 @@ export class PlaylistAddVideo extends AuthenticatedRoute {
 
         // Retrieve the validated parameters
         const { id } = request.params;
-        const { channelId } = request.headers;
+        const channelId = request.headers.channelId || null;
         const userId = this.getUserId(c);
         const { videoId } = request.body;
 
@@ -115,7 +116,8 @@ export class PlaylistAddVideo extends AuthenticatedRoute {
         // another channel's video the caller may watch (saved from its page);
         // never another channel's private, processing or removed video
         const addable = !!video && !isVideoRemoved(video)
-            && (video.channelId === playlist.channelId || isVideoListedFor(video, userId));
+            // (a personal playlist, channelId '', takes any video the caller may watch)
+            && ((!!playlist.channelId && video.channelId === playlist.channelId) || isVideoListedFor(video, userId));
         if (!video || !addable) {
             return c.json({
                 success: false,
@@ -154,7 +156,7 @@ export class PlaylistAddVideo extends AuthenticatedRoute {
             playlistId: id,
             videoId: videoId,
             userId: userId,
-            channelId: channelId,
+            ...(channelId ? { channelId } : {}),
             timestamp: new Date().toISOString(),
         });
 

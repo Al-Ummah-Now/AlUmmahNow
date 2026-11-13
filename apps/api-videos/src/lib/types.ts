@@ -188,11 +188,14 @@ export const Playlist = z.object({
     userId: Str(),
     /** The channel member who created it, when not the channel's owner (`userId`) */
     createdBy: Str().optional(),
+    /** '' for a personal playlist (made without a channel, like Watch later): the user's alone */
     channelId: Str(),
     dateCreated: DateTime(),
     dateModified: DateTime(),
     videos: z.array(Str()).default([]), // Array of video IDs, stored in the playlist's order
     isPublic: z.boolean().default(true),
+    /** Link-only (with isPublic false): opens for anyone with the link, never listed, searched or in sitemaps */
+    isUnlisted: z.boolean().optional(),
     // Order (shared-types playlist-bulk.ts): absent on older playlists = manual
     sortMode: z.enum(PLAYLIST_SORT_MODES).optional(),
     sortField: z.enum(PLAYLIST_SORT_FIELDS).optional(),

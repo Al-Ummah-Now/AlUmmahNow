@@ -9,6 +9,7 @@ import { pickLanguage } from '@/lib/format/pick-language';
 import { playlistDescription, playlistName } from '@/lib/playlists/playlist-names';
 import React, { useCallback, useEffect, useState } from 'react';
 import Link from '@/components/common/AppLink';
+import { managePlaylistsHref } from '@/components/PlaylistManager';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowDown, ArrowUp, ListVideo, Lock, Play, Trash2 } from 'lucide-react';
 import { getLocalizedValue } from '@al-ummah/shared-types';
@@ -183,7 +184,9 @@ export default function PlaylistView({ playlistId }: PlaylistViewProps) {
                 <span aria-hidden="true">•</span>
                 <span className="inline-flex items-center gap-1">
                   {playlist.isPublic === false && <Lock className="w-3.5 h-3.5" />}
-                  {playlist.isPublic === false ? t.playlist.privateLabel : t.playlist.publicLabel}
+                  {playlist.isPublic !== false
+                    ? t.playlist.publicLabel
+                    : (playlist as { isUnlisted?: boolean }).isUnlisted ? t.playlist.unlistedLabel : t.playlist.privateLabel}
                 </span>
               </div>
               {playlist.dateModified && (
@@ -203,6 +206,16 @@ export default function PlaylistView({ playlistId }: PlaylistViewProps) {
                   {/* Media icons never mirror in RTL: play points right in Arabic too */}
                   <Play className="w-4 h-4" aria-hidden="true" />
                   {t.playlist.playAll}
+                </Link>
+              )}
+              {isOwner && (
+                // The owner edits it: in the channel's Manage Playlists, or under You for a personal playlist
+                <Link
+                  href={managePlaylistsHref(lang, playlist.channelId || '', playlist.id)}
+                  data-testid="playlist-edit-link"
+                  className="b b-secondary w-full justify-center"
+                >
+                  {t.playlist.editPlaylist}
                 </Link>
               )}
             </div>

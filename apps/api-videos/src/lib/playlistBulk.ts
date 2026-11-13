@@ -55,9 +55,15 @@ export async function canManageChannelPlaylists(env: ChannelAccessEnv, channelId
 	}
 }
 
-/** A stored video that may go into a playlist of `channelId`. */
+/**
+ * A stored video that may go into a playlist of `channelId`: one of the
+ * channel's own videos, or, for a personal playlist (channelId ''), any
+ * publicly visible video (what Save to playlist offers on a watch page).
+ */
 export function isChannelVideo(video: VideoType | null | undefined, channelId: string): video is VideoType {
-	return !!video && !isInternalRecord(video) && video.channelId === channelId && video.isDeleted !== true && video.isHidden !== true;
+	if (!video || isInternalRecord(video) || video.isDeleted === true || video.isHidden === true) return false;
+	if (!channelId) return isVideoPubliclyVisible(video);
+	return video.channelId === channelId;
 }
 
 async function loadInBatches<T>(ids: readonly string[], load: (id: string) => Promise<T | null>): Promise<(T | null)[]> {
@@ -334,7 +340,7 @@ export async function playlistManageItems(env: Pick<PlaylistEnv, 'videos'>, play
 		// processing ones); another channel's video (saved from its watch page)
 		// only while it is public, so no private metadata leaks
 		const usable = !!video && !isInternalRecord(video) && video.isDeleted !== true && video.isHidden !== true
-			&& (video.channelId === playlist.channelId || isVideoPubliclyVisible(video));
+			&& ((!!playlist.channelId && video.channelId === playlist.channelId) || isVideoPubliclyVisible(video));
 		return {
 			id,
 			position: offset + i,

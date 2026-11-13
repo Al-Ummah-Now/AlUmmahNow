@@ -1,11 +1,24 @@
+import type { Metadata } from 'next';
 import PlaylistView from '@/components/PlaylistView';
 import PlaylistViewRTL from '@/components/PlaylistView/rtl';
+import { getPlaylistById } from '@/lib/api/playlists';
 
 interface PlaylistPageProps {
   params: Promise<{
     locale: string;
     id: string;
   }>;
+}
+
+/**
+ * Only public playlists are indexed: an unlisted one (link-only) or a private
+ * one (shown to its owner) is noindex. A failed read is noindex too.
+ */
+export async function generateMetadata({ params }: PlaylistPageProps): Promise<Metadata> {
+  const { id } = await params;
+  const playlist = await getPlaylistById(id).catch(() => null);
+  if (!playlist || playlist.isPublic === false) return { robots: { index: false, follow: false } };
+  return {};
 }
 
 /**

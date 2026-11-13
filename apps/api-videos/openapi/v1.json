@@ -7926,6 +7926,9 @@
                             "type": "boolean",
                             "default": true
                           },
+                          "isUnlisted": {
+                            "type": "boolean"
+                          },
                           "sortMode": {
                             "type": "string",
                             "enum": [
@@ -17604,6 +17607,20 @@
           },
           {
             "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "description": "true (signed in): the caller's personal playlists, made without a channel, private and unlisted ones included, newest first (cursor is ignored; up to `limit`). Channel playlists are listed with channelId"
+            },
+            "required": false,
+            "description": "true (signed in): the caller's personal playlists, made without a channel, private and unlisted ones included, newest first (cursor is ignored; up to `limit`). Channel playlists are listed with channelId",
+            "name": "mine",
+            "in": "query"
+          },
+          {
+            "schema": {
               "type": [
                 "string",
                 "null"
@@ -17686,6 +17703,9 @@
                           "isPublic": {
                             "type": "boolean",
                             "default": true
+                          },
+                          "isUnlisted": {
+                            "type": "boolean"
                           },
                           "sortMode": {
                             "type": "string",
@@ -17828,15 +17848,19 @@
           "Playlists"
         ],
         "summary": "Create a new Playlist",
+        "description": "With a channel active (channelId header) the playlist is the channel's; without one it is a personal playlist of the caller (channelId ''), no channel needed. `visibility` sets public, unlisted (link-only) or private.",
         "operationId": "post_PlaylistCreate",
         "parameters": [
           {
             "schema": {
-              "type": "string",
-              "description": "Channel ID"
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The channel to create it for; omit to make a personal playlist (yours, no channel needed)"
             },
-            "required": true,
-            "description": "Channel ID",
+            "required": false,
+            "description": "The channel to create it for; omit to make a personal playlist (yours, no channel needed)",
             "name": "channelId",
             "in": "header"
           }
@@ -17878,10 +17902,19 @@
                     "items": {
                       "type": "string"
                     },
-                    "description": "Videos of the channel to add, in order (validated; above 200 the rest is added by a background job)"
+                    "description": "Videos to add, in order: the channel's own for a channel playlist, any public video for a personal one (validated; above 200 the rest is added by a background job)"
                   },
                   "isPublic": {
                     "type": "boolean"
+                  },
+                  "visibility": {
+                    "type": "string",
+                    "enum": [
+                      "public",
+                      "unlisted",
+                      "private"
+                    ],
+                    "description": "public: listed everywhere; unlisted: anyone with the link, never listed, searched or in sitemaps; private: the owner (and the channel's playlist managers) only. Wins over isPublic"
                   },
                   "sortMode": {
                     "type": "string",
@@ -17960,7 +17993,8 @@
                               "type": "string"
                             },
                             "channelId": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "The channel it belongs to; '' for a personal playlist (made without a channel)"
                             },
                             "channelName": {
                               "type": "string"
@@ -17985,6 +18019,18 @@
                             },
                             "isPublic": {
                               "type": "boolean"
+                            },
+                            "isUnlisted": {
+                              "type": "boolean",
+                              "description": "Link-only: opens for anyone with the link, never listed"
+                            },
+                            "visibility": {
+                              "type": "string",
+                              "enum": [
+                                "public",
+                                "unlisted",
+                                "private"
+                              ]
                             },
                             "name": {
                               "type": "string"
@@ -18543,6 +18589,9 @@
                       "type": "boolean",
                       "default": true
                     },
+                    "isUnlisted": {
+                      "type": "boolean"
+                    },
                     "sortMode": {
                       "type": "string",
                       "enum": [
@@ -18715,11 +18764,14 @@
           },
           {
             "schema": {
-              "type": "string",
-              "description": "Channel ID"
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The caller's active channel; optional"
             },
-            "required": true,
-            "description": "Channel ID",
+            "required": false,
+            "description": "The caller's active channel; optional",
             "name": "channelId",
             "in": "header"
           }
@@ -18814,11 +18866,14 @@
           },
           {
             "schema": {
-              "type": "string",
-              "description": "Channel ID"
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The caller's active channel; optional (the owner, or a playlist manager of its channel, may edit)"
             },
-            "required": true,
-            "description": "Channel ID",
+            "required": false,
+            "description": "The caller's active channel; optional (the owner, or a playlist manager of its channel, may edit)",
             "name": "channelId",
             "in": "header"
           }
@@ -18857,6 +18912,15 @@
                   },
                   "isPublic": {
                     "type": "boolean"
+                  },
+                  "visibility": {
+                    "type": "string",
+                    "enum": [
+                      "public",
+                      "unlisted",
+                      "private"
+                    ],
+                    "description": "public: listed everywhere; unlisted: anyone with the link, never listed, searched or in sitemaps; private: the owner (and the channel's playlist managers) only. Wins over isPublic"
                   },
                   "videos": {
                     "type": "array",
@@ -18950,7 +19014,8 @@
                               "type": "string"
                             },
                             "channelId": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "The channel it belongs to; '' for a personal playlist (made without a channel)"
                             },
                             "channelName": {
                               "type": "string"
@@ -18975,6 +19040,18 @@
                             },
                             "isPublic": {
                               "type": "boolean"
+                            },
+                            "isUnlisted": {
+                              "type": "boolean",
+                              "description": "Link-only: opens for anyone with the link, never listed"
+                            },
+                            "visibility": {
+                              "type": "string",
+                              "enum": [
+                                "public",
+                                "unlisted",
+                                "private"
+                              ]
                             },
                             "name": {
                               "type": "string"
@@ -19238,6 +19315,17 @@
                             "isPublic": {
                               "type": "boolean"
                             },
+                            "isUnlisted": {
+                              "type": "boolean"
+                            },
+                            "visibility": {
+                              "type": "string",
+                              "enum": [
+                                "public",
+                                "unlisted",
+                                "private"
+                              ]
+                            },
                             "thumbnailUrl": {
                               "type": "string"
                             },
@@ -19245,7 +19333,8 @@
                               "type": "string"
                             },
                             "channelId": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "'' for a personal playlist"
                             },
                             "videosCount": {
                               "type": "number"
@@ -19881,11 +19970,14 @@
           },
           {
             "schema": {
-              "type": "string",
-              "description": "Channel ID"
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The caller's active channel; optional"
             },
-            "required": true,
-            "description": "Channel ID",
+            "required": false,
+            "description": "The caller's active channel; optional",
             "name": "channelId",
             "in": "header"
           }
@@ -19953,7 +20045,8 @@
                               "type": "string"
                             },
                             "channelId": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "The channel it belongs to; '' for a personal playlist (made without a channel)"
                             },
                             "channelName": {
                               "type": "string"
@@ -19978,6 +20071,18 @@
                             },
                             "isPublic": {
                               "type": "boolean"
+                            },
+                            "isUnlisted": {
+                              "type": "boolean",
+                              "description": "Link-only: opens for anyone with the link, never listed"
+                            },
+                            "visibility": {
+                              "type": "string",
+                              "enum": [
+                                "public",
+                                "unlisted",
+                                "private"
+                              ]
                             },
                             "name": {
                               "type": "string"
@@ -20681,11 +20786,14 @@
           },
           {
             "schema": {
-              "type": "string",
-              "description": "Channel ID"
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The caller's active channel; optional"
             },
-            "required": true,
-            "description": "Channel ID",
+            "required": false,
+            "description": "The caller's active channel; optional",
             "name": "channelId",
             "in": "header"
           }
@@ -20735,7 +20843,8 @@
                               "type": "string"
                             },
                             "channelId": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "The channel it belongs to; '' for a personal playlist (made without a channel)"
                             },
                             "channelName": {
                               "type": "string"
@@ -20760,6 +20869,18 @@
                             },
                             "isPublic": {
                               "type": "boolean"
+                            },
+                            "isUnlisted": {
+                              "type": "boolean",
+                              "description": "Link-only: opens for anyone with the link, never listed"
+                            },
+                            "visibility": {
+                              "type": "string",
+                              "enum": [
+                                "public",
+                                "unlisted",
+                                "private"
+                              ]
                             },
                             "name": {
                               "type": "string"

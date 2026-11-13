@@ -1562,6 +1562,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     notFoundDescription: 'قائمة التشغيل هذه غير موجودة أو خاصة.',
     publicLabel: 'عامة',
     privateLabel: 'خاصة',
+    unlistedLabel: 'غير مُدرجة',
     updatedOn: 'آخر تحديث {date}',
     removeFromPlaylist: 'إزالة من قائمة التشغيل',
     moveUp: 'نقل للأعلى',
@@ -1582,6 +1583,9 @@ export const AR_TRANSLATIONS: AppTranslations = {
     visibilityLabel: 'الظهور',
     publicDescription: 'يمكن لأي شخص مشاهدة قائمة التشغيل هذه',
     privateDescription: 'أنت فقط يمكنك مشاهدة قائمة التشغيل هذه',
+    unlistedDescription: 'يشاهدها كل من لديه الرابط، ولا تظهر في القوائم أو البحث',
+    personalPlaylistsDescription: 'قوائم التشغيل الخاصة بك، دون حاجة إلى قناة. احفظ فيها المرئيات من أي مرئي.',
+    personalAddVideosHint: 'لإضافة مرئيات، افتح مرئيًا واختر «حفظ»، أو استخدم «حفظ في قائمة تشغيل» من قائمة بطاقة المرئي.',
     nameRequired: 'يرجى إدخال اسم لقائمة التشغيل',
     createFailed: 'تعذر إنشاء قائمة التشغيل. يرجى المحاولة مرة أخرى.',
     updateFailed: 'تعذر تحديث قائمة التشغيل. يرجى المحاولة مرة أخرى.',
@@ -1595,7 +1599,6 @@ export const AR_TRANSLATIONS: AppTranslations = {
     removedFrom: 'تمت الإزالة من {title}',
     saveFailed: 'تعذر تحديث قائمة التشغيل. يرجى المحاولة مرة أخرى.',
     createAndAdd: 'إنشاء وإضافة',
-    channelRequired: 'أنشئ قناة أو اخترها لحفظ المرئيات في قوائم التشغيل',
     // صفحة الرفع: اختيار قوائم التشغيل أو إنشاؤها للمرئيات الجديدة (فردي ودفعة)
     upload: {
       label: 'قوائم التشغيل',

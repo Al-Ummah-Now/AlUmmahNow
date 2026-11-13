@@ -27,10 +27,10 @@ import type { PlaylistBulkAddResult } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { createManagedPlaylist, type PlaylistWithVideos } from '@/lib/api/playlists';
 import { reportError } from '@/lib/errors/reporter';
-import PlaylistDetailsFields, { EMPTY_PLAYLIST_DETAILS, type PlaylistDetailsValue } from './PlaylistDetailsFields';
+import PlaylistDetailsFields, { EMPTY_PLAYLIST_DETAILS, detailsVisibility, type PlaylistDetailsValue } from './PlaylistDetailsFields';
 import VideoPicker, { type PickedVideo } from './VideoPicker';
 import { counted, fill } from './text';
-import { LABEL, NOTICE, TEXT } from './styles';
+import { LABEL, MUTED, NOTICE, TEXT } from './styles';
 import SortableVideoList from './SortableVideoList';
 import { pairPayload } from '@/lib/playlists/playlist-names';
 
@@ -96,6 +96,7 @@ export default function CreatePlaylistForm({ channelId, initialVideos, fixedVide
         description: about.base || undefined,
         descriptionLocalized: about.localized,
         isPublic: details.isPublic,
+        visibility: detailsVisibility(details),
         sortMode: details.sortMode,
         sortField: details.sortField,
         sortDirection: details.sortDirection,
@@ -131,6 +132,9 @@ export default function CreatePlaylistForm({ channelId, initialVideos, fixedVide
             <h3 id={`${idPrefix}-videos-label`} className={LABEL}>{p.videosInOrder}</h3>
             <SortableVideoList videos={videos} onChange={setVideos} manual={manual} removable disabled={saving} labelledBy={`${idPrefix}-videos-label`} testId="create-order" />
           </>
+        ) : !channelId ? (
+          // A personal playlist: videos come from Save on any video, not a channel's picker
+          <p className={`text-sm ${MUTED}`} data-testid="playlist-personal-add-hint">{t.playlist.personalAddVideosHint}</p>
         ) : (
           <>
             <h3 id={`${idPrefix}-videos-label`} className={LABEL}>{p.addVideosOptional}</h3>

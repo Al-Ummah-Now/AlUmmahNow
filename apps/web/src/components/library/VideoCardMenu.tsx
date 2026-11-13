@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Clock, EllipsisVertical } from 'lucide-react';
+import { Clock, EllipsisVertical, ListPlus } from 'lucide-react';
+import SaveToPlaylist from '@/components/SaveToPlaylist';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { MenuButton } from '@/components/common/MenuButton';
@@ -15,14 +16,16 @@ interface VideoCardMenuProps {
 }
 
 /**
- * Overflow menu on video cards (Story 29.6) with "Save to Watch later".
- * Keyboard accessible (menu button pattern); signed-in users only.
+ * Overflow menu on video cards (Story 29.6): "Save to Watch later" and "Save
+ * to playlist" (the active channel's playlists, or the user's own without a
+ * channel). Keyboard accessible (menu button pattern); signed-in users only.
  */
 export function VideoCardMenu({ videoId, title, className = '' }: VideoCardMenuProps) {
   const { user } = useAuth();
   const { t } = useLanguage();
   const texts = t.library;
   const [status, setStatus] = useState<string | null>(null);
+  const [savingToPlaylist, setSavingToPlaylist] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => () => {
@@ -63,10 +66,20 @@ export function VideoCardMenu({ videoId, title, className = '' }: VideoCardMenuP
             testId: 'video-card-save-watch-later',
             onSelect: save,
           },
+          {
+            id: 'save-to-playlist',
+            label: t.playlist.saveToPlaylistTitle,
+            icon: <ListPlus className="h-4 w-4" />,
+            testId: 'video-card-save-to-playlist',
+            onSelect: () => setSavingToPlaylist(true),
+          },
         ]}
       >
         <EllipsisVertical className="h-5 w-5" aria-hidden="true" />
       </MenuButton>
+      {savingToPlaylist && (
+        <SaveToPlaylist videoId={videoId} open onOpenChange={setSavingToPlaylist} className="absolute bottom-full end-0 mb-1" />
+      )}
     </div>
   );
 }

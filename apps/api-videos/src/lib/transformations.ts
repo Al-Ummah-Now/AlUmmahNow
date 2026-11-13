@@ -154,6 +154,8 @@ export function transformPlaylistToView(
         dateModified: playlist.dateModified,
         videosCount: playlist.videos?.length || 0,
         isPublic: playlist.isPublic,
+        ...(playlist.isUnlisted ? { isUnlisted: true } : {}),
+        visibility: playlist.isPublic !== false ? 'public' : playlist.isUnlisted === true ? 'unlisted' : 'private',
         name: playlist.title,
         videos: playlist.videos || [],
     };

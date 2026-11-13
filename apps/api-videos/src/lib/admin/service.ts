@@ -1001,9 +1001,11 @@ export async function listPlaylists(env: AdminServiceEnv, query: { q?: string; c
 			id: (p.id as string) || key,
 			title: p.title ?? '',
 			...(localizedValues(p.titleLocalized).length ? { titleLocalized: p.titleLocalized as Record<string, string> } : {}),
-			channelId: p.channelId ?? null,
+			// '' is a personal playlist (made without a channel)
+			channelId: (p.channelId as string) || null,
 			ownerId: p.userId ?? null,
 			isPublic: p.isPublic !== false,
+			...(p.isPublic === false && p.isUnlisted === true ? { isUnlisted: true } : {}),
 			videoCount: Array.isArray(p.videos) ? p.videos.length : 0,
 			createdAt: p.dateCreated ?? null,
 		})),

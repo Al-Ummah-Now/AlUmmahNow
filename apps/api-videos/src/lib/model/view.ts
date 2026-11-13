@@ -122,13 +122,15 @@ export const PlaylistView = z.object({
     descriptionLocalized: z.record(z.string()).optional(),
     thumbnailUrl: Str().optional(),
     userId: Str(),
-    channelId: Str(),
+    channelId: Str({ description: "The channel it belongs to; '' for a personal playlist (made without a channel)" }),
     channelName: Str(), // Denormalized for client convenience
     channelNameLocalized: z.record(z.string()).optional().describe("The channel's name per language (e.g. { en, ar }); show the page language's name, else channelName"),
     dateCreated: DateTime(),
     dateModified: DateTime(),
     videosCount: z.number(),
     isPublic: z.boolean(),
+    isUnlisted: z.boolean().optional().describe("Link-only: opens for anyone with the link, never listed"),
+    visibility: z.enum(["public", "unlisted", "private"]).optional(),
     name: Str().optional(), // Alias of title (shared-types Playlist uses `name`)
     // Derived at read time when there is no custom thumbnailUrl (lib/playlistCovers.ts)
     cover: z.object({ videoId: Str(), thumbnailUrl: Str() }).optional(),
