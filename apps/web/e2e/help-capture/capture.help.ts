@@ -419,6 +419,7 @@ const SCENES: Scene[] = [
   },
   {
     id: 'appearance-rail',
+    markers: 'above',
     run: async (page, lang) => {
       await settle(page, `/channels/${channelId}`, lang);
       const panel = page.locator('nav.nv-panel');
