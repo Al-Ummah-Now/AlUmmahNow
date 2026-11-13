@@ -14,6 +14,7 @@ import { withPostCounts } from '../../lib/post-counters';
 import { logger } from '../../lib/logger';
 import Queue, { MessageType } from '../../lib/queue';
 import { scanInBackground, communityPostScanText } from '../../lib/moderation-scan';
+import { markScheduled } from '../../lib/scheduled-posts';
 import { parsePostFields, type PostV2Fields } from '@al-ummah/shared-types';
 import { platformMediaHost, postFieldsMessage } from '../../lib/post-v2';
 
@@ -216,6 +217,10 @@ export class UpdateCommunityPost extends AuthenticatedRoute {
         return c.json({ error: 'Post not found' }, 404);
       }
       Object.assign(post, saved);
+      // Rescheduled: a marker for the new time (the old one is dropped when it comes due; #1218)
+      if (body.scheduledAt !== undefined && saved.status === PostStatus.SCHEDULED && saved.scheduledAt) {
+        await markScheduled(c.env.community_posts, postChannelId, postId, saved.scheduledAt);
+      }
 
       // Send queue event
       const queue = new Queue(c.env.queue);

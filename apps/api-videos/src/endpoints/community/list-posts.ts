@@ -1,6 +1,7 @@
 import { isChannelDeleted } from '../../lib/community-posts';
 import { withPostViews } from '../../lib/post-views';
 import { z } from 'zod';
+import { isUpcoming } from '../../lib/scheduled-posts';
 import R2Repository from '../../lib/r2Repo';
 import {
   CommunityPost,
@@ -65,6 +66,7 @@ export class ListCommunityPosts extends OptionalAuthRoute {
     const { channelId: postChannelId } = c.req.param();
     const request = await this.getValidatedData<typeof this.schema>();
     const { page = 1, limit = 20, type, status = PostStatus.PUBLISHED } = request.query;
+    const viewerId = this.getUserId(c);
 
     try {
       // Get channel post index
@@ -110,6 +112,11 @@ export class ListCommunityPosts extends OptionalAuthRoute {
             continue;
           }
 
+          // A scheduled post waits for its time; only its author sees it before then (#1218)
+          if (isUpcoming(post) && post.userId !== viewerId) {
+            continue;
+          }
+
           // Filter by status
           if (post.status !== status && status !== PostStatus.PUBLISHED) {
             continue;
@@ -151,7 +158,7 @@ export class ListCommunityPosts extends OptionalAuthRoute {
       await withPostCounts(c.env.NOTIFICATIONS_DB, posts);
 
       // Attach per-viewer state (liked / poll vote) for authenticated requests
-      const viewerId = this.getUserId(c);
+      // viewerId: the signed-in viewer (above)
       if (viewerId) {
         await Promise.all(
           posts.map(async (post) => {

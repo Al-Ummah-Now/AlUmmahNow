@@ -18,6 +18,7 @@ import { getChannelObject } from './post-comment-helpers';
 import { scanInBackground, communityPostScanText } from '../../lib/moderation-scan';
 import { CHANNEL_SUSPENDED_CODE } from '../../middleware/auth';
 import { channelNameFields } from '../../lib/channelName';
+import { markScheduled } from '../../lib/scheduled-posts';
 import { parsePostFields } from '@al-ummah/shared-types';
 import { platformMediaHost, postFieldsMessage } from '../../lib/post-v2';
 
@@ -270,6 +271,11 @@ export class CreateCommunityPost extends AuthenticatedRoute {
 
       // Update channel index
       await this.updateChannelIndex(c, channelId, post.id);
+
+      // A scheduled post goes live from the every-minute cron (lib/scheduled-posts.ts, #1218)
+      if (post.status === PostStatus.SCHEDULED && post.scheduledAt) {
+        await markScheduled(c.env.community_posts, channelId, post.id, post.scheduledAt);
+      }
 
       // Send to processor queue for notifications (if published)
       if (post.status === PostStatus.PUBLISHED) {
