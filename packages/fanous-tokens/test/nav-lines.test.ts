@@ -73,3 +73,10 @@ for (const theme of THEMES) {
     });
   }
 }
+
+// A minifier in a vendoring app (the CMS) drops the space in "a :is(b)", turning a descendant
+// selector into a compound one (it then matches nothing): write the element selector out instead
+test('no descendant combinator directly before a pseudo-class function', () => {
+  const bad = css.split('\n').filter((line) => /[^,{;(\s]\s+:(is|where|has|not)\(/.test(line) && !line.trim().startsWith('/*') && !line.trim().startsWith('*'));
+  assert.deepEqual(bad, []);
+});
