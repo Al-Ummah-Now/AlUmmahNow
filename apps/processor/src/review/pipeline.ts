@@ -99,11 +99,62 @@ async function checkText(
 }
 
 /**
- * Quran spans in a transcript (AUN-CAPTIONS matcher: quran.com search + local verification). Spans
- * it returns are excluded from violence and hate scoring by routeReview. The matcher is built with
- * the captions feature (AlUmmahNow#1271); until it lands this returns no spans, so nothing is excluded
- * and a recitation that a model flags goes to a person instead of being approved (fail safe).
+ * Quran spans in a transcript (AUN-CAPTIONS matcher on the Quran Foundation Content Sync copy,
+ * quran/review-matcher.ts). Spans it returns are excluded from violence and hate scoring by
+ * routeReview. Without a matcher, or without a fresh copy, no spans are returned, so a recitation
+ * that a model flags goes to a person instead of being approved (fail safe).
  */
+/**
+ * Splits the transcript at the Quran spans, word by word (a segment's time spread over its words):
+ * a word whose midpoint is inside a span belongs to it. Consecutive non-Quran words go together, so
+ * commentary next to a recitation is never tagged as Quran.
+ */
+export function splitByQuran(transcript: TranscriptSegment[], spans: Array<{ startMs: number; endMs: number; ref: string }>): Array<{ segments: TranscriptSegment[]; ref?: string }> {
+  const pieces: Array<{ segments: TranscriptSegment[]; ref?: string }> = [];
+  let other: TranscriptSegment[] = [];
+  let open: { ref: string; seg: TranscriptSegment } | null = null;
+  const flushOther = () => {
+    if (other.length) pieces.push({ segments: other });
+    other = [];
+  };
+  for (const s of transcript) {
+    const parts = s.text.split(/\s+/).filter(Boolean);
+    const step = parts.length ? Math.max(0, s.endMs - s.startMs) / parts.length : 0;
+    let run: TranscriptSegment | null = null;
+    parts.forEach((text, i) => {
+      const startMs = Math.round(s.startMs + i * step);
+      const endMs = Math.round(s.startMs + (i + 1) * step);
+      const mid = (startMs + endMs) / 2;
+      const span = spans.find((q) => q.startMs <= mid && mid <= q.endMs);
+      if (span) {
+        if (run) other.push(run);
+        run = null;
+        if (open && open.ref === span.ref) {
+          open.seg.text += ` ${text}`;
+          open.seg.endMs = endMs;
+        } else {
+          if (open) pieces.push({ segments: [open.seg], ref: open.ref });
+          flushOther();
+          open = { ref: span.ref, seg: { startMs, endMs, text } };
+        }
+        return;
+      }
+      if (open) {
+        pieces.push({ segments: [open.seg], ref: open.ref });
+        open = null;
+      }
+      if (run) {
+        run.text += ` ${text}`;
+        run.endMs = endMs;
+      } else run = { startMs, endMs, text };
+    });
+    if (run) other.push(run);
+  }
+  if (open) pieces.push({ segments: [(open as { seg: TranscriptSegment }).seg], ref: (open as { ref: string }).ref });
+  flushOther();
+  return pieces;
+}
+
 export type QuranMatcher = (segments: TranscriptSegment[]) => Promise<Array<{ startMs: number; endMs: number; ref: string }>>;
 export const noQuranMatcher: QuranMatcher = async () => [];
 
@@ -199,10 +250,13 @@ export async function runReviewPipeline(
     transcript.push(...(await provider.transcribe({ base64: toBase64(await object.arrayBuffer()), startMs: chunk.startMs, durationMs: chunk.endMs - chunk.startMs }, undefined, usage)));
   }
   const quran = await quranMatcher(transcript);
-  for (const w of textWindows(transcript)) {
-    const span = quran.find((q) => q.startMs < w.endMs && q.endMs > w.startMs);
-    const found = await checkText(provider, w.text, usage, { source: 'transcript', atMs: w.startMs, endMs: w.endMs }, { guard: models.textGuard, policy: models.textPolicy });
-    findings.push(...found.map((f) => (span ? { ...f, quranRef: span.ref } : f)));
+  // Quran spans are checked on their own (tagged); everything else, never mixed with them, as before
+  const pieces = quran.length ? splitByQuran(transcript, quran) : [{ segments: transcript }];
+  for (const piece of pieces) {
+    for (const w of textWindows(piece.segments)) {
+      const found = await checkText(provider, w.text, usage, { source: 'transcript', atMs: w.startMs, endMs: w.endMs }, { guard: models.textGuard, policy: models.textPolicy });
+      findings.push(...found.map((f) => (piece.ref ? { ...f, quranRef: piece.ref } : f)));
+    }
   }
 
   return { findings, partial: false, transcript, usage, framesChecked };
