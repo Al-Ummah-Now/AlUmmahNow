@@ -127,7 +127,7 @@ export async function deleteCommunityPost(
 export async function likeCommunityPost(
   channelId: string,
   postId: string,
-  headers: Required<Pick<ApiHeaders, 'channelId'>>
+  headers: Pick<ApiHeaders, 'channelId'>
 ): Promise<LikePostResponse | null> {
   return apiRequestServer<LikePostResponse>({
     method: 'POST',
@@ -147,7 +147,7 @@ export async function likeCommunityPost(
 export async function unlikeCommunityPost(
   channelId: string,
   postId: string,
-  headers: Required<Pick<ApiHeaders, 'channelId'>>
+  headers: Pick<ApiHeaders, 'channelId'>
 ): Promise<LikePostResponse | null> {
   return apiRequestServer<LikePostResponse>({
     method: 'DELETE',
@@ -168,7 +168,7 @@ export async function voteOnPoll(
   channelId: string,
   postId: string,
   data: VoteOnPollRequest,
-  headers: Required<Pick<ApiHeaders, 'channelId'>>
+  headers: Pick<ApiHeaders, 'channelId'>
 ): Promise<VoteOnPollResponse | null> {
   return apiRequestServer<VoteOnPollResponse>({
     method: 'POST',

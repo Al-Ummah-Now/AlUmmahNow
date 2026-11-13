@@ -8,6 +8,8 @@ import { listCommunityPosts } from '@/lib/api/community-posts';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useActiveChannel } from '@/contexts/ActiveChannelContext';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useProfile } from '@/hooks/useProfile';
+import { userDisplayName } from '@/lib/display-name';
 import PostCard from './PostCard';
 import { cn } from '@/lib/utils';
 
@@ -20,8 +22,9 @@ interface CommunityPostsProps {
 const PAGE_SIZE = 20;
 
 export default function CommunityPosts({ channelId, isRTL = false, locale = 'en' }: CommunityPostsProps) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const { user } = useAuth();
+  const { profile } = useProfile(user ?? null);
   const { activeChannel } = useActiveChannel();
   const viewerUserId = user?.id;
   const viewerChannelId = activeChannel?.channelId;
@@ -155,8 +158,9 @@ export default function CommunityPosts({ channelId, isRTL = false, locale = 'en'
           locale={locale}
           channelId={viewerChannelId}
           userId={viewerUserId}
-          userAvatar={activeChannel?.avatarUrl}
-          userDisplayName={activeChannel?.name}
+          // With a channel active, comments are that channel's; without one, the member's own (#1151)
+          userAvatar={activeChannel ? activeChannel.avatarUrl : profile?.avatarUrl}
+          userDisplayName={activeChannel?.name?.trim() || userDisplayName(profile, lang, user?.email) || undefined}
         />
       ))}
 

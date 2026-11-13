@@ -34,7 +34,7 @@ export default function PollPost({ post, isRTL = false, locale = 'en', channelId
   const { question, multipleChoice, votingEndsAt } = post.poll;
 
   const isVotingEnded = Boolean(votingEndsAt && new Date(votingEndsAt) < new Date());
-  const canVote = Boolean(userId && channelId);
+  const canVote = Boolean(userId);
 
   const handleOptionClick = (optionId: string) => {
     if (hasVoted || isVotingEnded || voting || !canVote) return;
@@ -51,7 +51,7 @@ export default function PollPost({ post, isRTL = false, locale = 'en', channelId
   };
 
   const handleVote = async () => {
-    if (selectedOptions.length === 0 || voting || !channelId || !userId) return;
+    if (selectedOptions.length === 0 || voting || !userId) return;
 
     setVoting(true);
     setVoteError(false);
