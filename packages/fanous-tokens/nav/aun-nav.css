@@ -405,6 +405,13 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* A name in the other script (a Latin name in Arabic) keeps its own direction (dir="auto") but
+   lines up with the menu's start, like its email */
+.aun-acct-label,
+.aun-menu-who-name,
+.aun-menu-text {
+  text-align: match-parent;
+}
 .aun-acct-row [aria-current='true'] .aun-acct-label {
   font-weight: 600;
 }
