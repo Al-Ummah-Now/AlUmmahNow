@@ -19,6 +19,7 @@
 --   apps/admin-api/migrations/0018_user_warnings.sql
 --   apps/admin-api/migrations/0019_admin_queues.sql
 --   apps/admin-api/migrations/0020_reports_queue.sql
+--   apps/admin-api/migrations/0021_erase_lookup_indexes.sql
 
 CREATE TABLE admin_audit_log (id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, actor_email TEXT, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL, metadata TEXT, created_at TEXT NOT NULL);
 CREATE TABLE ai_budget_daily (day TEXT NOT NULL, feature TEXT NOT NULL, reserved REAL NOT NULL DEFAULT 0, PRIMARY KEY (day, feature));
@@ -76,7 +77,9 @@ CREATE INDEX idx_error_actions_status ON error_actions (status, updated_at DESC)
 CREATE INDEX idx_error_events_group ON error_events (group_id, occurred_at DESC);
 CREATE INDEX idx_error_events_received ON error_events (received_at);
 CREATE INDEX idx_error_events_request ON error_events (request_id);
+CREATE INDEX idx_error_events_user ON error_events (user_id);
 CREATE INDEX idx_error_group_activity_group ON error_group_activity (group_id, created_at);
+CREATE INDEX idx_error_group_users_user ON error_group_users (user_key);
 CREATE INDEX idx_error_groups_app ON error_groups (app, last_seen DESC);
 CREATE INDEX idx_error_groups_first_seen ON error_groups (first_seen);
 CREATE INDEX idx_error_groups_handled ON error_groups (handled_at DESC) WHERE handled_at IS NOT NULL;

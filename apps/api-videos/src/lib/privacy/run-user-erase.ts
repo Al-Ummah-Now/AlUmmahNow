@@ -77,13 +77,17 @@ export async function runUserOwnedIds(db: D1Database, userId: string): Promise<{
 		.bind(userId)
 		.all<{ id: string }>();
 	const channels = (ch ?? []).map((r) => r.id);
+	// Two index searches joined with UNION ALL (deduplicated below), not `owner_id = ? OR channel_id IN (...)`:
+	// SQLite does not use the (kind, owner_id) and (kind, channel_id) indexes for an OR under
+	// `kind = 'video'` (nor for a plain UNION, which merges in id order), so it read every video
+	// (~7.6k rows per erased account on QA, 31M rows on 2026-11-13).
 	const { results: v } = await db
 		.prepare(
-			`SELECT id FROM content_ownership WHERE kind = 'video' AND (owner_id = ?${channels.length ? ` OR channel_id IN (${channels.map(() => '?').join(', ')})` : ''})`,
+			`SELECT id FROM content_ownership WHERE kind = 'video' AND owner_id = ?${channels.length ? ` UNION ALL SELECT id FROM content_ownership WHERE kind = 'video' AND channel_id IN (${channels.map(() => '?').join(', ')})` : ''}`,
 		)
 		.bind(userId, ...channels)
 		.all<{ id: string }>();
-	return { channels, videos: (v ?? []).map((r) => r.id) };
+	return { channels, videos: [...new Set((v ?? []).map((r) => r.id))] };
 }
 
 export async function eraseRunUserData(
