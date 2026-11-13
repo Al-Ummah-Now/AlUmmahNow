@@ -27,6 +27,8 @@ export interface NavAccess {
   media: boolean;
   /** ops:read (Operations: platform analytics per environment) */
   ops: boolean;
+  /** A content or senior reviewer with no admin role (VR7): only the review queue is shown */
+  reviewOnly?: boolean;
 }
 
 /** Live counts shown on nav items; null hides the badge. */
@@ -42,6 +44,8 @@ export interface NavItem {
   group: NavGroupId;
   /** Absent: everyone with an admin role */
   requires?: (access: NavAccess) => boolean;
+  /** Shown in the review-only shell too (content and senior reviewers) */
+  reviewers?: boolean;
   badge?: keyof NavBadges;
   /** Testid of the badge, kept from the old top nav for the E2E suite */
   badgeTestId?: string;
@@ -63,7 +67,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/site-visits', label: 'nav.siteVisits', icon: 'activity', group: 'overview' },
 
   { href: '/moderation', label: 'nav.moderation', icon: 'flag', group: 'moderation' },
-  { href: '/moderation/review', label: 'nav.videoReview', icon: 'flag', group: 'moderation' },
+  { href: '/moderation/review', label: 'nav.videoReview', icon: 'flag', group: 'moderation', reviewers: true },
   { href: '/moderation/ai', label: 'nav.aiModeration', icon: 'spark', group: 'moderation' },
   { href: '/comments', label: 'nav.comments', icon: 'chat', group: 'moderation' },
   { href: '/community', label: 'nav.community', icon: 'people', group: 'moderation' },
@@ -109,6 +113,7 @@ export const NAV_ITEMS: NavItem[] = [
 ];
 
 export function visibleItems(access: NavAccess): NavItem[] {
+  if (access.reviewOnly) return NAV_ITEMS.filter((item) => item.reviewers);
   return NAV_ITEMS.filter((item) => !item.requires || item.requires(access));
 }
 

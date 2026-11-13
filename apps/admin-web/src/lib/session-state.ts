@@ -2,7 +2,7 @@
  * The verification step of getAdminSessionState (lib/auth.ts), without
  * cookies or the OpenAuth client so it can be tested on its own.
  */
-import { highestAdminRole, type SystemRole } from './roles';
+import { highestAdminRole, type PanelRole } from './roles';
 import { isLegacyLongLivedToken } from './token-refresh';
 
 export interface VerifyOutcome {
@@ -11,7 +11,7 @@ export interface VerifyOutcome {
 }
 
 export type SessionTokenVerdict =
-  | { kind: 'valid'; user: { id: string; email: string; role?: SystemRole } }
+  | { kind: 'valid'; user: { id: string; email: string; role?: PanelRole } }
   /** Not usable as is, but a refresh token is there to try (/api/auth/refresh). */
   | { kind: 'refresh'; reason: 'invalid' | 'legacy' }
   | { kind: 'signed-out' };

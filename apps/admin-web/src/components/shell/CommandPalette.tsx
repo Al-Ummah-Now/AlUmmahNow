@@ -56,7 +56,7 @@ export function CommandPalette({ open, onClose, items, access }: { open: boolean
 
   // Suggestions: one request per kind, debounced, the previous round cancelled
   useEffect(() => {
-    if (!open || !asksForEntities(query)) {
+    if (!open || !asksForEntities(query) || kinds.length === 0) {
       setResults({});
       setLoading(false);
       return;

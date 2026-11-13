@@ -11,7 +11,7 @@ import { logger } from '@/lib/logger-client';
 
 const THRESHOLDS: Array<keyof VideoReviewThresholds> = ['autoApproveRisk', 'nsfwClear', 'nsfwScreen', 'nsfwHit', 'escalate', 'textFlag'];
 
-export function ReviewSettingsForm({ initial }: { initial: VideoReviewSettings }) {
+export function ReviewSettingsForm({ initial, canEdit }: { initial: VideoReviewSettings; canEdit: boolean }) {
   const { t } = useLanguage();
   const router = useRouter();
   const [s, setS] = useState(initial);
@@ -20,6 +20,7 @@ export function ReviewSettingsForm({ initial }: { initial: VideoReviewSettings }
   const num = (v: string) => (v === '' ? NaN : Number(v));
 
   const save = async () => {
+    if (!canEdit) return;
     setBusy(true);
     setMessage(null);
     const r = await updateReviewSettings({ mode: s.mode, etaMinutes: s.etaMinutes, dailyBudgetUsd: s.dailyBudgetUsd, mediaRetentionDays: s.mediaRetentionDays, thresholds: s.thresholds });
@@ -37,6 +38,8 @@ export function ReviewSettingsForm({ initial }: { initial: VideoReviewSettings }
   return (
     <form className={`${cardClass} max-w-2xl space-y-5`} onSubmit={(e) => { e.preventDefault(); void save(); }} data-testid="review-settings">
       {message && (message.ok ? <p role="status" className="text-fg">{message.text}</p> : <ErrorAlert>{message.text}</ErrorAlert>)}
+      {/* Read-only for moderators and reviewers: a disabled fieldset disables every control in it */}
+      <fieldset disabled={!canEdit} className="min-w-0 space-y-5">
       <fieldset className="space-y-2">
         <legend className="font-semibold text-fg">{t('review.settings.mode')}</legend>
         {VIDEO_REVIEW_MODES.map((mode) => (
@@ -71,7 +74,8 @@ export function ReviewSettingsForm({ initial }: { initial: VideoReviewSettings }
           ))}
         </div>
       </fieldset>
-      <button type="submit" disabled={busy} className={primaryButtonClass} data-testid="review-settings-save">{t('review.settings.save')}</button>
+      </fieldset>
+      {canEdit && <button type="submit" disabled={busy} className={primaryButtonClass} data-testid="review-settings-save">{t('review.settings.save')}</button>}
     </form>
   );
 }

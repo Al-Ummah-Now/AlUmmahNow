@@ -38,14 +38,14 @@ export const MAX_ACCESS_TOKEN_LIFETIME_SECONDS = 15 * 60;
  */
 export const LEGACY_TOKEN_ISSUED_BEFORE_SECONDS = Date.UTC(2026, 10, 11) / 1000;
 
-function decodeJwtClaims(token: string): { iat?: unknown; exp?: unknown } | null {
+function decodeJwtClaims(token: string): { iat?: unknown; exp?: unknown; properties?: { roles?: unknown } } | null {
   const parts = token.split('.');
   if (parts.length !== 3) return null;
   try {
     const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
     const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
     const payload: unknown = JSON.parse(atob(padded));
-    return payload && typeof payload === 'object' ? (payload as { iat?: unknown; exp?: unknown }) : null;
+    return payload && typeof payload === 'object' ? (payload as { iat?: unknown; exp?: unknown; properties?: { roles?: unknown } }) : null;
   } catch {
     return null;
   }
@@ -126,4 +126,14 @@ export async function refreshTokens(
     return { kind: 'transient', reason: 'token response without access_token/refresh_token' };
   }
   return { kind: 'refreshed', tokens: { accessToken: body.access_token, refreshToken: body.refresh_token } };
+}
+
+/**
+ * The roles an access token carries, read WITHOUT verifying the signature. Only for routing in
+ * the middleware (which shell a page belongs to); trust comes from getAdminSession, which
+ * verifies the token, and from admin-api, which checks every call.
+ */
+export function unverifiedTokenRoles(accessToken: string): string[] {
+  const roles = decodeJwtClaims(accessToken)?.properties?.roles;
+  return Array.isArray(roles) ? roles.filter((r): r is string => typeof r === 'string') : [];
 }
