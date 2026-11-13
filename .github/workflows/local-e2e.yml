@@ -357,6 +357,29 @@ jobs:
           # The shard's own stack: see every failure, not the first five (QA runs keep the cap)
           E2E_MAX_FAILURES: '1000'
 
+      # What ran, pass or fail: a green shard still shows every skipped test and why (a skip is not a
+      # pass), and keeps its per-test results (names + status) as an artifact
+      - name: Test outcomes
+        if: always()
+        working-directory: apps/web
+        run: |
+          if [ ! -f test-results/test-results.json ]; then echo "no results file"; exit 0; fi
+          node --experimental-strip-types --no-warnings ../../scripts/ci/playwright-outcomes.ts test-results/test-results.json "Web shard ${{ matrix.shard }}" --list > "$RUNNER_TEMP/outcomes.txt"
+          grep -v $'\t' "$RUNNER_TEMP/outcomes.txt" >> "$GITHUB_STEP_SUMMARY"
+          grep $'\t' "$RUNNER_TEMP/outcomes.txt" > test-results/outcomes.tsv || true
+          echo "passed: $(grep -c $'^passed\t' test-results/outcomes.tsv || true)"; grep $'^skipped\t' test-results/outcomes.tsv || true
+
+      - name: Upload test outcomes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-web-outcomes-${{ strategy.job-index }}
+          path: |
+            apps/web/test-results/test-results.json
+            apps/web/test-results/outcomes.tsv
+          if-no-files-found: ignore
+          retention-days: 14
+
       # Teardown, pass or fail (owner rule: test sets clean up every resource they use): the run
       # accounts' content goes (videos with their media, then the GDPR erase of profile, channels,
       # playlists, history), then the accounts themselves on the local issuer
