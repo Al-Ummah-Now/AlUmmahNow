@@ -28,7 +28,11 @@ export interface RuntimeConfig {
  */
 export function deriveShortLinkUrl(apiUrl: string | undefined, explicit?: string): string {
   if (explicit === 'off') return '';
-  if (explicit) return explicit.replace(/\/+$/, '');
+  if (explicit) {
+    let end = explicit.length;
+    while (end > 0 && explicit[end - 1] === '/') end -= 1;
+    return explicit.slice(0, end);
+  }
   return shortLinkOriginFor(apiUrl) ?? '';
 }
 
