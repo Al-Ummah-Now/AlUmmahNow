@@ -591,6 +591,15 @@ export interface AppTranslations {
     videos: string;
     /** "Published {date}": the exact publish date and time on the watch page */
     publishedAt: string;
+    /** «نُشر قبل يوم واحد» / "Published 1 day ago": a date never sits bare beside the views */
+    dateLabel: {
+      published: string;
+      updated: string;
+      started: string;
+      ended: string;
+      scheduled: string;
+      liveNow: string;
+    };
     videoSingular: string;
     uploadVideo: string;
     editVideo: string;

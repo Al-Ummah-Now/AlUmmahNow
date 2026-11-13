@@ -984,6 +984,8 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions | undef
             channel: video.channel,
             channelName: video.channelName,
             channelNameLocalized: video.channelNameLocalized,
+            publishedAt: video.publishedAt,
+            isLive: video.isLive === true,
             channelAvatar: video.channelAvatarUrl,
             channelVerified: video.channelIsVerified === true,
             channelCover: video.channelCoverUrl,

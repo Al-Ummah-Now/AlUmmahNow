@@ -24,6 +24,8 @@ export interface VideoObject {
     /** The channel's name per language (lib/channel-name.ts) */
     channelNameLocalized?: Record<string, string>;
     dateCreated: string;
+    /** When the video was first published (public and ready); the "Published" label shows it, else dateCreated */
+    publishedAt?: string;
     dateModified: string;
     createdAt: string; // For compatibility with shared-types
     updatedAt?: string; // For compatibility with shared-types - made optional

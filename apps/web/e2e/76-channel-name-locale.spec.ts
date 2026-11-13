@@ -27,6 +27,9 @@ test.describe('Channel name in the page language', () => {
       const card = await own.showCard(page);
       await expect(card).toContainText(expected);
       await expect(card).not.toContainText(other);
+      // The date beside the views says what it is (owner, 2026-11-13)
+      const published = lang === 'ar' ? 'نُشر' : 'Published';
+      await expect(card).toContainText(published);
 
       await page.goto(`/${lang}/video/${own.videos()[0].id}`);
       const channelLink = page.locator(`a[href="/${lang}/channels/${own.channelId()}"]`).filter({ hasText: expected }).first();
@@ -36,6 +39,7 @@ test.describe('Channel name in the page language', () => {
       // and time on hover and in the expanded description (owner, 2026-11-13: «6 مشاهدات   أمس»)
       const summary = page.locator('.watch-desc summary');
       await expect(summary).toContainText('•');
+      await expect(summary).toContainText(published);
       const time = summary.locator('time.rel-date');
       await expect(time).toHaveAttribute('title', /\d{4}.*\d{2}:\d{2}/);
       await expect(time).not.toHaveText(lang === 'ar' ? 'أمس' : 'yesterday');

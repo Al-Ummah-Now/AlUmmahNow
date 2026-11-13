@@ -89,3 +89,11 @@ export function formatAbsoluteDateTime(value: Date | string | number | null | un
   const time = new Intl.DateTimeFormat(lang, { hour: '2-digit', minute: '2-digit', timeZone }).format(date);
   return `${day}${lang === 'ar' ? '، ' : ', '}${time}`;
 }
+
+/**
+ * The date a video was published: `publishedAt` once the API records it, else `dateCreated` (the
+ * upload). Every "Published …" label and the newest-first order read this one field.
+ */
+export function publishedDateOf(video: { publishedAt?: string | null; dateCreated?: string | Date | null } | null | undefined): string | Date | null {
+  return video?.publishedAt || video?.dateCreated || null;
+}

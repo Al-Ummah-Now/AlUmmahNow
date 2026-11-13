@@ -44,7 +44,8 @@ export function PlaylistCard(playlist: Playlist) {
             </p>
           )}
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-            <RelativeDate value={playlist.dateCreated} lang={lang} />
+            {/* Its last change (created counts as the first): «حُدّث قبل …» / "Updated …" */}
+            <RelativeDate value={(playlist as { dateModified?: string }).dateModified || playlist.dateCreated} lang={lang} label="updated" />
           </p>
         </div>
       </div>
