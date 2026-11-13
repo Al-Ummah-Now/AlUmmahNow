@@ -3,6 +3,7 @@ import { AxeBuilder } from '@axe-core/playwright';
 import type { Browser, Locator, Page } from '@playwright/test';
 import { ANONYMOUS_STATE, AUTH_STATE } from './test-utils/auth-state';
 import {
+  apiAs,
   channelsOf,
   clickUntil,
   createPlaylist,
@@ -12,6 +13,7 @@ import {
   deletePostsContaining,
   deleteSectionsOfType,
   deleteSectionsTitled,
+  ensureUnsubscribed,
   expectRtl,
   fillStable,
   listPublicChannelVideos,
@@ -590,7 +592,12 @@ const TYPE_CASES = (fx: () => Fixtures): TypeCase[] => [
     card: 'subscribed_channels',
     type: 'subscribed_channels',
     fill: async (dialog) => dialog.getByTestId('section-consent').check(),
-    expect: 'any',
+    // The owner subscribes to this file's other channel (beforeAll), so it is the one tile
+    expect: 'content',
+    content: async (section) => {
+      await expect(section.getByTestId('channel-tile')).toHaveCount(1);
+      await expect(section.getByTestId('channel-tile')).toBeVisible();
+    },
   },
   {
     card: 'community_posts',
@@ -648,6 +655,9 @@ test.describe('Each section type: add, render, remove', () => {
     // The owner's own like, so the liked-videos section has something of this file's to show
     const u = userApi(owner);
     await u.api.post(`/api/videos/${video.id}/likes`, {}, { token: u.token, channelId: channelId() });
+    // The owner's own subscription, so the subscribed-channels section has a channel to show
+    const sub = await apiAs(owner, 'POST', `/api/channels/${lectures.id}/subscriptions`, { channelId: channelId() });
+    expect([200, 201, 409], `subscribe to ${lectures.id}`).toContain(sub.status);
     fx = {
       ownVideoId: video.id,
       otherVideoId: other.id,
@@ -667,6 +677,7 @@ test.describe('Each section type: add, render, remove', () => {
       await deletePlaylistQuietly(owner, channelId(), fx.playlistId);
       await deletePostsContaining(owner, channelId(), fx.postMarker);
     }
+    await ensureUnsubscribed(owner, channelId(), ownOtherChannel().id).catch(() => undefined);
     await disposable.remove();
   });
 
