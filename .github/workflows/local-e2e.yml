@@ -136,6 +136,29 @@ jobs:
           E2E_CODE_SINK_SECRET: local-stack-sink-secret
           TEST_PROMOTE_SECRET: local-stack-promote-secret
 
+      # What ran, pass or fail (as the web suite, #1089): skipped tests and their reasons in the job
+      # summary, and every test's status as an artifact
+      - name: Test outcomes
+        if: always()
+        working-directory: apps/web
+        run: |
+          if [ ! -f test-results/test-results.json ]; then echo "no results file"; exit 0; fi
+          node --experimental-strip-types --no-warnings ../../scripts/ci/playwright-outcomes.ts test-results/test-results.json "Release suite ${{ matrix.name }}" --list > "$RUNNER_TEMP/outcomes.txt"
+          grep -v $'\t' "$RUNNER_TEMP/outcomes.txt" >> "$GITHUB_STEP_SUMMARY"
+          grep $'\t' "$RUNNER_TEMP/outcomes.txt" > test-results/outcomes.tsv || true
+          echo "passed: $(grep -c $'^passed\t' test-results/outcomes.tsv || true)"; grep $'^skipped\t' test-results/outcomes.tsv || true
+
+      - name: Upload test outcomes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-release-outcomes-${{ strategy.job-index }}
+          path: |
+            apps/web/test-results/test-results.json
+            apps/web/test-results/outcomes.tsv
+          if-no-files-found: ignore
+          retention-days: 14
+
       # The run's accounts, as on QA (auth soft delete + immediate purge through the test route)
       - name: Delete the run accounts
         if: always()

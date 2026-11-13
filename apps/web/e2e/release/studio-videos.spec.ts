@@ -1,11 +1,9 @@
 /** The Studio Videos tab (docs/specs/CREATOR-STUDIO.md §4.4.1). */
 import { expect, test } from '@playwright/test';
 import { skipUntilStudioDeployed, studioOwner } from './studio';
-import { target, releaseEnv } from './targets';
+import { target } from './targets';
 import { expectHydrated } from './web-session';
 
-// quarantined: #1020 @meywd: on the local stack WebKit never fires the load event (every navigation times out)
-test.fixme(({ browserName }) => browserName === 'webkit' && releaseEnv() === 'local', 'quarantined: #1020 @meywd: WebKit load event on the local stack');
 
 // Sign-in pages carry the test password: never record them
 test.use({ trace: 'off', video: 'off' });
