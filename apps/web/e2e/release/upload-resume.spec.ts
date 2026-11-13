@@ -423,7 +423,7 @@ test.describe('Release: a finished file picked again', () => {
       const u = await uploader(page, `rel-again-${locale}`);
       const file = paddedVideo(testInfo.outputPath(), `again-${locale}-${Date.now().toString(36)}.mp4`, 400000);
       const ui = locale === 'ar'
-        ? { heading: 'تم رفعه من قبل', view: 'مشاهدة الفيديو', again: 'ارفعه مرة أخرى كفيديو جديد', another: 'اختر ملفًا آخر' }
+        ? { heading: 'تم رفعه من قبل', view: 'مشاهدة المرئي', again: 'ارفعه مرة أخرى كمرئي جديد', another: 'اختر ملفًا آخر' }
         : { heading: 'Already uploaded', view: 'View video', again: 'Upload again as a new video', another: 'Choose another file' };
       // Every video this test creates (initiate answers), for the checks and the clean-up
       const created: string[] = [];

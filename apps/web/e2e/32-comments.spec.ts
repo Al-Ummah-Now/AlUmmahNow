@@ -16,7 +16,7 @@ import { watchSignInRedirect } from './test-utils/sign-in-redirect';
 // One worker runs this file's tests in order, so its own data (beforeAll) is made once
 test.describe.configure({ mode: 'default' });
 
-const own = ownPublicVideos(test, 'comments', [{ titleAr: 'فيديو التعليقات' }]);
+const own = ownPublicVideos(test, 'comments', [{ titleAr: 'مرئي التعليقات' }]);
 const ownLecture = (n: number): QaVideo => own.videos()[n - 1];
 
 interface ApiComment { id: string; text: string; channelId?: string }

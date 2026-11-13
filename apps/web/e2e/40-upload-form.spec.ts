@@ -71,7 +71,7 @@ test.describe('Upload form - metadata', () => {
     const single = page.getByTestId('upload-mode-single');
     const batch = page.getByTestId('upload-mode-batch');
     // Named by content: the visible label first, then the visible hint (WCAG 2.5.3)
-    await expect(single).toHaveAccessibleName(/^فيديو واحد\s*، \S/);
+    await expect(single).toHaveAccessibleName(/^مرئي واحد\s*، \S/);
     await expect(batch).toHaveAccessibleName(/^رفع جماعي\s*، \S/);
     const [singleBox, batchBox] = [await single.boundingBox(), await batch.boundingBox()];
     expect(singleBox!.x).toBeGreaterThan(batchBox!.x);

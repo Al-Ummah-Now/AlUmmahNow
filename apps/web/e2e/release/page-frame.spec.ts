@@ -17,7 +17,7 @@ test.use({ trace: 'off' });
 
 const DESKTOP = { width: 1366, height: 900 };
 const PHONE = { width: 390, height: 844 };
-const UPLOAD_LABEL: Record<Locale, string> = { en: 'Upload Video', ar: 'رفع فيديو' };
+const UPLOAD_LABEL: Record<Locale, string> = { en: 'Upload Video', ar: 'رفع مرئي' };
 
 /** Consent answered (everything off), so the banner covers nothing. */
 async function answerConsent(context: BrowserContext): Promise<void> {

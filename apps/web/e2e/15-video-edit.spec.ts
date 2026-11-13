@@ -213,7 +213,7 @@ test.describe('Video Edit - read only', () => {
     await openEditor(page, seed[SEED_TITLES.singleVideo], 'ar');
 
     await expect(page.locator('div[dir="rtl"]').first()).toBeVisible();
-    await expect(page.getByTestId('video-edit-title-ar')).toHaveValue('فيديو اختبار');
+    await expect(page.getByTestId('video-edit-title-ar')).toHaveValue('مرئي اختبار');
   });
 });
 

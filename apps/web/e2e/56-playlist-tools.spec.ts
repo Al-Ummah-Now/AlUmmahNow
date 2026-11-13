@@ -376,10 +376,10 @@ test.describe('Playlist tools', () => {
     const dialog = page.getByTestId('add-to-playlist-dialog');
     await skipUntilSearchDialog(dialog);
     await expect(dialog).toHaveAttribute('dir', 'rtl');
-    await expect(dialog.getByRole('heading', { name: 'إضافة فيديو واحد إلى قوائم التشغيل' })).toBeVisible();
+    await expect(dialog.getByRole('heading', { name: 'إضافة مرئي واحد إلى قوائم التشغيل' })).toBeVisible();
     await expect(dialog.getByRole('combobox', { name: 'ابحث في قوائم التشغيل' })).toBeVisible();
     await dialog.getByTestId('add-to-playlist-new').click();
-    await expect(dialog.getByRole('heading', { name: 'قائمة تشغيل جديدة بفيديو واحد' })).toBeVisible();
+    await expect(dialog.getByRole('heading', { name: 'قائمة تشغيل جديدة بمرئي واحد' })).toBeVisible();
     await expect(dialog.getByRole('textbox', { name: 'الاسم (بالعربية)' })).toHaveAttribute('dir', 'rtl');
     await expect(dialog.getByRole('textbox', { name: 'الاسم (بالإنجليزية)' })).toHaveAttribute('dir', 'ltr');
   });

@@ -126,7 +126,7 @@ describe('NotificationCenter toasts', () => {
     render(<NotificationCenter />);
     [1, 2].forEach((n) => push(ready(n)));
     const toast = screen.getByTestId('realtime-toast');
-    expect(toast).toHaveTextContent('اكتملت معالجة مقطعي فيديو');
+    expect(toast).toHaveTextContent('اكتملت معالجة مرئيين');
     expect(within(toast).getByTestId('realtime-toast-action')).toHaveAttribute('href', '/ar/studio/go/content/videos');
     expect(screen.getByRole('button', { name: 'إغلاق الإشعار' })).toBeInTheDocument();
   });

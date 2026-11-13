@@ -91,7 +91,7 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
         break;
 
       case PostType.VIDEO:
-        if (!videoId.trim()) return isRTL ? 'معرف الفيديو مطلوب' : 'Video ID is required';
+        if (!videoId.trim()) return isRTL ? 'معرف المرئي مطلوب' : 'Video ID is required';
         break;
 
       case PostType.GIF:

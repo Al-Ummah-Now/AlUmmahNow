@@ -153,7 +153,7 @@ describe('PlaylistAddNotices', () => {
   it('in Arabic', () => {
     mockLang = 'ar';
     render(<PlaylistAddNotices playlists={LIST} notices={[{ playlistId: 'p1', kind: 'retrying', count: 1 }]} />);
-    expect(screen.getByTestId('playlist-add-notice')).toHaveTextContent('تعذّرت إضافة الفيديو إلى «Tafsir Juz Amma» حتى الآن؛ سنعيد المحاولة.');
+    expect(screen.getByTestId('playlist-add-notice')).toHaveTextContent('تعذّرت إضافة المرئي إلى «Tafsir Juz Amma» حتى الآن؛ سنعيد المحاولة.');
   });
 
   it('renders nothing without notices', () => {

@@ -253,7 +253,7 @@ describe('UnavailableFrame', () => {
     render(<UnavailableFrame lang="ar" origin={null} contentId="private1" />);
     const frame = screen.getByTestId('embed-unavailable');
     expect(frame).toHaveAttribute('dir', 'rtl');
-    expect(frame).toHaveTextContent('هذا الفيديو غير متاح');
+    expect(frame).toHaveTextContent('هذا المرئي غير متاح');
     expect(postMessage).toHaveBeenCalledWith(
       expect.objectContaining({ event: 'error', videoId: 'private1', error: { code: 'unavailable' } }),
       'https://host.example',

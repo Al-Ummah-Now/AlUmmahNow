@@ -132,7 +132,7 @@ async function checkBurst(page: Page, locale: Locale, label: string): Promise<vo
   await expect(bulk).toHaveAttribute('data-count', String(BULK));
   const message = bulk.getByTestId('realtime-toast-message');
   if (locale === 'en') await expect(message).toHaveText(`${BULK} videos finished processing`);
-  else await expect(message).toHaveText(/^اكتملت معالجة \S+ مقاطع فيديو$/);
+  else await expect(message).toHaveText(/^اكتملت معالجة \S+ مرئيات$/);
   await expect(bulk.getByTestId('realtime-toast-action')).toHaveAttribute('href', `/${locale}/studio/go/content/videos`);
   // Three kinds arrived, two show, the third collapses
   await expect(page.getByTestId('realtime-toast-more')).toBeVisible();

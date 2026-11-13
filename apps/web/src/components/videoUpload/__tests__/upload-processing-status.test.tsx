@@ -81,9 +81,9 @@ describe('UploadProcessingCard (single upload)', () => {
   it('renders in Arabic with Arabic links', () => {
     mockLang = 'ar';
     card('ready');
-    expect(screen.getByRole('heading', { name: 'الفيديو جاهز' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'المرئي جاهز' })).toBeInTheDocument();
     expect(screen.getByTestId('upload-view-video')).toHaveAttribute('href', '/ar/video/vid-1');
-    expect(screen.getByTestId('upload-view-video')).toHaveTextContent('مشاهدة الفيديو');
+    expect(screen.getByTestId('upload-view-video')).toHaveTextContent('مشاهدة المرئي');
   });
 });
 

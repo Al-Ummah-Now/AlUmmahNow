@@ -47,8 +47,8 @@ describe('AlreadyUploadedPanel', () => {
     panel();
     expect(screen.getByRole('region', { name: 'تم رفعه من قبل' })).toBeInTheDocument();
     expect(screen.getByTestId('upload-already-uploaded-hint')).toHaveTextContent('سبق أن رفعت هذا الملف.');
-    expect(screen.getByRole('link', { name: 'مشاهدة الفيديو' })).toHaveAttribute('href', '/ar/video/vid-9');
-    expect(screen.getByRole('button', { name: 'ارفعه مرة أخرى كفيديو جديد' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'مشاهدة المرئي' })).toHaveAttribute('href', '/ar/video/vid-9');
+    expect(screen.getByRole('button', { name: 'ارفعه مرة أخرى كمرئي جديد' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'اختر ملفًا آخر' })).toBeInTheDocument();
   });
 });

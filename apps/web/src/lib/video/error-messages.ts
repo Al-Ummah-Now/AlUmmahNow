@@ -66,24 +66,24 @@ export const ERROR_MESSAGES_EN: Record<VideoErrorType, ErrorMessages> = {
 export const ERROR_MESSAGES_AR: Record<VideoErrorType, ErrorMessages> = {
   [VideoErrorType.NETWORK_ERROR]: {
     title: 'خطأ في الشبكة',
-    description: 'غير قادر على الاتصال بخادم الفيديو. يرجى التحقق من اتصالك بالإنترنت.',
+    description: 'غير قادر على الاتصال بخادم المرئيات. يرجى التحقق من اتصالك بالإنترنت.',
     retryButton: 'إعادة المحاولة',
     fallbackButton: 'جرب جودة بديلة',
     details: 'يحدث هذا الخطأ عادة بسبب مشاكل في الاتصال بالشبكة.',
   },
   [VideoErrorType.FORMAT_ERROR]: {
     title: 'التنسيق غير مدعوم',
-    description: 'متصفحك لا يدعم تنسيق الفيديو هذا.',
+    description: 'متصفحك لا يدعم تنسيق هذا المرئي.',
     retryButton: 'إعادة المحاولة',
     fallbackButton: 'جرب تنسيق بديل',
     details: 'يرجى محاولة استخدام متصفح مختلف أو تحديث متصفحك الحالي.',
   },
   [VideoErrorType.DECODE_ERROR]: {
     title: 'خطأ في التشغيل',
-    description: 'غير قادر على فك تشفير الفيديو. قد يكون الملف تالفاً.',
+    description: 'غير قادر على فك تشفير المرئي. قد يكون الملف تالفاً.',
     retryButton: 'إعادة المحاولة',
     fallbackButton: 'جرب جودة بديلة',
-    details: 'يشير هذا الخطأ إلى مشكلة في ترميز الفيديو.',
+    details: 'يشير هذا الخطأ إلى مشكلة في ترميز المرئي.',
   },
   [VideoErrorType.HLS_ERROR]: {
     title: 'خطأ في البث',
@@ -94,7 +94,7 @@ export const ERROR_MESSAGES_AR: Record<VideoErrorType, ErrorMessages> = {
   },
   [VideoErrorType.TIMEOUT_ERROR]: {
     title: 'انتهت مهلة التحميل',
-    description: 'استغرق تحميل الفيديو وقتاً طويلاً. يرجى المحاولة مرة أخرى.',
+    description: 'استغرق تحميل المرئي وقتاً طويلاً. يرجى المحاولة مرة أخرى.',
     retryButton: 'إعادة المحاولة',
     fallbackButton: 'جرب جودة أقل',
     details: 'قد يكون هذا بسبب بطء الاتصال بالشبكة أو مشاكل في الخادم.',

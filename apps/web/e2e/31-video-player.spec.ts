@@ -347,7 +347,7 @@ test.describe('player controls', () => {
     skipWithoutCodec(browserName, testInfo);
     await openPlayable(page, await ownLecture(), 'ar');
 
-    await expect(page.locator('.video-js .vjs-play-control')).toHaveAccessibleName('تشغيل الفيديو');
+    await expect(page.locator('.video-js .vjs-play-control')).toHaveAccessibleName('تشغيل المرئي');
     await expect(page.locator('.video-js .vjs-fullscreen-control')).toHaveAccessibleName(/ملء الشاشة/);
     await expect(page.locator('.video-js .vjs-mute-control')).toHaveAccessibleName(/كتم الصوت/);
     await expect(page.locator('.video-js .vjs-fanous-settings')).toHaveAccessibleName('الإعدادات');

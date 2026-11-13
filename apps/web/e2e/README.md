@@ -200,7 +200,7 @@ const videoPath = await helpers.createTestVideo('test.mp4', 1024); // 1MB
 await helpers.uploadTestVideo(page, {
   videoPath,
   titleEn: 'Test Video',
-  titleAr: 'فيديو تجريبي',
+  titleAr: 'مرئي تجريبي',
   isPublic: true
 });
 

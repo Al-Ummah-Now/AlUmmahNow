@@ -160,7 +160,7 @@ describe('BulkEditPanel (Studio "Edit selected")', () => {
   it('speaks Arabic', () => {
     mockLang = 'ar';
     render(<BulkEditPanel open onOpenChange={jest.fn()} videos={videos} />);
-    expect(screen.getByTestId('bulk-edit-panel-title')).toHaveTextContent(/تعديل (3|٣) من المقاطع/);
+    expect(screen.getByTestId('bulk-edit-panel-title')).toHaveTextContent(/تعديل (3|٣) من المرئيات/);
     expect(screen.getByTestId('bulk-edit-panel')).toHaveAttribute('dir', 'rtl');
   });
 

@@ -58,8 +58,8 @@ const POST_TYPES: PostTypeCard[] = [
   {
     type: PostType.VIDEO,
     icon: Video,
-    label: { en: 'Video', ar: 'فيديو' },
-    description: { en: 'Share a video from your channel', ar: 'شارك فيديو من قناتك' }
+    label: { en: 'Video', ar: 'مرئي' },
+    description: { en: 'Share a video from your channel', ar: 'شارك مرئيًا من قناتك' }
   },
   {
     type: PostType.GIF,

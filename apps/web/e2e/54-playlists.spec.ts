@@ -213,7 +213,7 @@ test.describe('Playlist page - visitor', () => {
     await expectRtl(page);
     await expect(page.getByRole('heading', { level: 1, name: playlist.name })).toBeVisible();
     await expect(page.getByRole('link', { name: 'تشغيل الكل' })).toHaveAttribute('href', new RegExp(`^/ar/video/[\\w-]+\\?list=${playlist.id}&index=0$`));
-    await expect(page.getByText(`${shown} فيديو`)).toBeVisible();
+    await expect(page.getByText(`${shown} من المرئيات`)).toBeVisible();
     await expect(page.getByText('عامة', { exact: true })).toBeVisible();
   });
 

@@ -379,7 +379,7 @@ export function TemplateEditorModal({
             {/* Video Metadata */}
             <div className="space-y-4">
               <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
-                {isRTL ? 'بيانات الفيديو' : 'Video Metadata'}
+                {isRTL ? 'بيانات المرئي' : 'Video Metadata'}
               </h3>
 
               {/* Title */}
