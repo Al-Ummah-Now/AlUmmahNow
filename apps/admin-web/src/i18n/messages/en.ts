@@ -114,9 +114,9 @@ const en = {
     menu: 'Accounts',
     title: 'Signed-in accounts',
     active: 'Active',
-    add: 'Add another account',
+    add: 'Sign in to another account',
     signOut: 'Sign out',
-    signOutOf: 'Sign out of {email}',
+    signOutOf: 'Sign out of {name}',
     signOutAll: 'Sign out of all accounts',
   },
   login: {

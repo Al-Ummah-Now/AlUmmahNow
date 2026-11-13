@@ -113,9 +113,9 @@ const ar: Messages = {
     menu: 'الحسابات',
     title: 'الحسابات المسجّل دخولها',
     active: 'نشط',
-    add: 'إضافة حساب آخر',
+    add: 'تسجيل الدخول بحساب آخر',
     signOut: 'تسجيل الخروج',
-    signOutOf: 'تسجيل الخروج من {email}',
+    signOutOf: 'تسجيل الخروج من {name}',
     signOutAll: 'تسجيل الخروج من جميع الحسابات',
   },
   login: {

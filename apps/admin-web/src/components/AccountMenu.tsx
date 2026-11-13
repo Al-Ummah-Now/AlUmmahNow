@@ -136,7 +136,7 @@ export function AccountMenu({ issuer, currentEmail, roles }: AccountMenuProps) {
             <span className="aun-avatar aun-avatar--lg" aria-hidden="true">{initial}</span>
             <span className="aun-menu-who-text">
               <span className="aun-menu-who-name" dir="auto">{name}</span>
-              {active?.email && active.email !== name && <span className="aun-menu-who-sub" dir="auto">{active.email}</span>}
+              {active?.email && active.email !== name && <EmailText email={active.email} className="aun-menu-who-sub" />}
             </span>
           </div>
           {sep}
@@ -166,7 +166,7 @@ export function AccountMenu({ issuer, currentEmail, roles }: AccountMenuProps) {
                         <span className="aun-avatar" aria-hidden="true">{(label[0] ?? '?').toUpperCase()}</span>
                         <span className="aun-acct-text">
                           <span className="aun-acct-label" dir="auto">{label}</span>
-                          {account.name && <span className="aun-acct-email" dir="auto">{account.email}</span>}
+                          {account.name && <EmailText email={account.email} className="aun-acct-email" />}
                         </span>
                       </button>
                       {account.userId && (
@@ -177,8 +177,8 @@ export function AccountMenu({ issuer, currentEmail, roles }: AccountMenuProps) {
                           disabled={busy}
                           onClick={() => onSignOut(account.userId)}
                           className="aun-acct-signout"
-                          aria-label={t('accounts.signOutOf', { email: label })}
-                          title={t('accounts.signOutOf', { email: label })}
+                          aria-label={t('accounts.signOutOf', { name: label })}
+                          title={t('accounts.signOutOf', { name: label })}
                         >
                           <Icon name="logout" className="aun-flip" />
                         </button>
@@ -242,5 +242,20 @@ export function AccountMenu({ issuer, currentEmail, roles }: AccountMenuProps) {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * An email that keeps its domain when it does not fit (AlUmmahNow docs/design/NAV.md): the local
+ * part shrinks with an ellipsis, "@domain" stays whole, and the full address is the tooltip.
+ */
+function EmailText({ email, className }: { email: string; className: string }) {
+  const at = email.lastIndexOf('@');
+  if (at <= 0) return <span className={className} dir="ltr" title={email}>{email}</span>;
+  return (
+    <span className={`${className} aun-email`} dir="ltr" title={email}>
+      <span className="aun-email-local">{email.slice(0, at)}</span>
+      <span className="aun-email-domain">{email.slice(at)}</span>
+    </span>
   );
 }

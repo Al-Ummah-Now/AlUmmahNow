@@ -168,7 +168,7 @@ test.describe('Unified Navigation - English (LTR)', () => {
     const menu = await openAccountMenu(page);
 
     await showMenuView(menu, 'main');
-    await expect(menu.getByTestId('nav-add-account')).toHaveText(/Add another account/);
+    await expect(menu.getByTestId('nav-add-account')).toHaveText(/Sign in to another account/);
     await showMenuView(menu, 'main');
     await expect(menu.getByTestId('nav-sign-out')).toHaveText(/Sign out/);
     // Single account: no "sign out of all"
@@ -229,7 +229,7 @@ test.describe('Unified Navigation - Arabic (RTL)', () => {
     const menu = await openAccountMenu(page);
 
     await expect(menu.getByTestId('nav-switch-channel')).toHaveText('تبديل القناة');
-    await expect(menu.getByTestId('nav-add-account')).toHaveText('إضافة حساب آخر');
+    await expect(menu.getByTestId('nav-add-account')).toHaveText('تسجيل الدخول بحساب آخر');
     await expect(menu.getByRole('menuitem', { name: 'الاستوديو' })).toHaveAttribute('href', '/ar/studio');
     await showMenuView(menu, 'main');
     await expect(menu.locator('a[role="menuitem"][href="/ar/settings"]')).toBeVisible();
@@ -239,7 +239,7 @@ test.describe('Unified Navigation - Arabic (RTL)', () => {
     const menu = await openAccountMenu(page);
 
     await showMenuView(menu, 'main');
-    await expect(menu.getByTestId('nav-add-account')).toHaveText(/إضافة حساب آخر/);
+    await expect(menu.getByTestId('nav-add-account')).toHaveText(/تسجيل الدخول بحساب آخر/);
     await showMenuView(menu, 'main');
     await expect(menu.getByTestId('nav-sign-out')).toHaveText(/تسجيل الخروج/);
   });

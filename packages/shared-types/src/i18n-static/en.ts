@@ -121,7 +121,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     channelName: 'Channel Name',
     enterChannelName: 'Enter channel name',
     privacyAndCookies: 'Privacy & cookies',
-    addAnotherAccount: 'Add another account',
+    addAnotherAccount: 'Sign in to another account',
     signOutOf: 'Sign out of',
     signOutOfAll: 'Sign out of all accounts',
     signIn: 'Sign In',
