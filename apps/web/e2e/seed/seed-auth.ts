@@ -64,7 +64,7 @@ export async function gotoSignIn(page: Page, cfg: AuthConfig): Promise<void> {
 async function submitForm(page: Page): Promise<void> {
   await Promise.all([
     page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 45000 }),
-    page.click('button[data-component="button"]'),
+    page.click('button[data-component="button"]:not([type="button"])'),
   ]);
 }
 

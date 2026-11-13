@@ -53,7 +53,7 @@ test.describe('Release: admin-web access', () => {
     await page.fill('input[name="email"]', email);
     await fillSecret(page.locator('input[name="password"]'), TEST_PASSWORD);
     // The click must not own the whole cross-site redirect chain: wait for where it ends instead
-    await page.click('button[data-component="button"]', { noWaitAfter: true });
+    await page.click('button[data-component="button"]:not([type="button"])', { noWaitAfter: true });
     await expect(page).toHaveURL(`${target().adminWeb}/access-denied`, { timeout: 30000 }).catch((error) => {
       throw new Error(`did not reach /access-denied (now ${page.url()}). Chain: ${hops.join(' -> ')}\n${String(error).split('\n')[0]}`);
     });

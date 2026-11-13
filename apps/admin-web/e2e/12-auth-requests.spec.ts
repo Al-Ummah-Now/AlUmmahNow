@@ -103,7 +103,7 @@ async function openInAuthAdmin(page: Page, authRequestId: string) {
     if (await email.isVisible({ timeout: 5_000 }).catch(() => false)) {
       await email.fill(accounts.admin.email);
       await fillSecret(page.locator('input[name="password"]'), accounts.admin.password);
-      await page.locator('button[data-component="button"]').click();
+      await page.locator('button[data-component="button"]:not([type="button"])').click();
     } else {
       await page.getByText(accounts.admin.email).first().click();
     }

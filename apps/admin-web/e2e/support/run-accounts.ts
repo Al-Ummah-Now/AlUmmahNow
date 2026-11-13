@@ -44,10 +44,10 @@ export async function registerSinkUser(browser: Browser, email: string, password
     await page.locator('input[name="email"]').fill(email);
     await fillSecret(page.locator('input[name="password"]'), password);
     await fillSecret(page.locator('input[name="repeat"]'), password);
-    await page.locator('button[data-component="button"]').click();
+    await page.locator('button[data-component="button"]:not([type="button"])').click();
     await expect(page.locator('input[name="code"]')).toBeVisible({ timeout: 20_000 });
     await fillSecret(page.locator('input[name="code"]'), await sinkCode(email));
-    await page.locator('button[data-component="button"]').click();
+    await page.locator('button[data-component="button"]:not([type="button"])').click();
     await page.waitForURL((url) => url.pathname === '/access-denied', { timeout: 45_000 });
     const res = await page.request.get(`${OPENAUTH_URL}/session/accounts`);
     const { accounts: signedIn } = (await res.json()) as { accounts: Array<{ userId: string; email: string }> };

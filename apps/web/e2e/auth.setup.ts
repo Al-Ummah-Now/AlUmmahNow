@@ -323,7 +323,7 @@ async function globalSetup(_config: FullConfig) {
         await page.fill('input[name="email"]', user.email);
         await fillSecret(page.locator('input[name="password"]'), user.password);
         await fillSecret(page.locator('input[name="repeat"]'), user.password); // Repeat password field
-        await page.click('button[data-component="button"]');
+        await page.click('button[data-component="button"]:not([type="button"])');
 
         // Wait for verification code page or direct redirect
         ciLogger.info(`[Setup] Waiting for next step for ${user.email}`);
@@ -345,7 +345,7 @@ async function globalSetup(_config: FullConfig) {
 
           // Enter verification code
           await codeInput.fill(code);
-          await page.click('button[data-component="button"]');
+          await page.click('button[data-component="button"]:not([type="button"])');
         }
 
         // Wait for successful authentication - callback URL or home page
