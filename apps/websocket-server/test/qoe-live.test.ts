@@ -61,6 +61,33 @@ test('beats sum into the minute per source; one write and one event per flush, n
   assert.ok(JSON.stringify(e).length < 2048, 'fits a live event');
 });
 
+test('a beat flushed after its minute turned is still published under its own minute (#1125)', async () => {
+  const { q, events, advance } = setup();
+  // 10:00:57: the beat lands in minute 10:00; the flush runs at 10:01:02
+  advance(47_000);
+  await q.addBeats([beat({ d: { attempt: 1, started: 1 } })]);
+  advance(FLUSH_MS);
+  await q.alarm();
+  assert.equal(events.length, 1);
+  assert.equal(events[0].minute, '2026-11-12T10:00', 'the minute that holds the play');
+  assert.equal(events[0].r2.plays, 1);
+  assert.deepEqual(events[0].now, { bunny: 0, r2: 1 });
+});
+
+test('beats in two minutes before one flush: one event per minute, oldest first', async () => {
+  const { q, events, advance } = setup();
+  advance(48_000); // 10:00:58
+  await q.addBeats([beat({ sessionId: 'session-a', d: { attempt: 1, started: 1 } })]);
+  advance(3_000); // 10:01:01
+  await q.addBeats([beat({ sessionId: 'session-b', d: { attempt: 1, started: 1 } })]);
+  advance(FLUSH_MS);
+  await q.alarm();
+  assert.deepEqual(events.map((e) => [e.minute, e.r2.plays]), [['2026-11-12T10:00', 1], ['2026-11-12T10:01', 1]]);
+  // Distinct keys: the admin coalescer keeps the latest event per key, so one shared key would drop 10:00
+  assert.deepEqual(events.map((e) => e.key), ['qoe:2026-11-12T10:00', 'qoe:2026-11-12T10:01']);
+  assert.deepEqual(events.at(-1).now, { bunny: 0, r2: 2 });
+});
+
 test('nothing new: no event; an expiring session changes "now" and sends one; then the alarm stops', async () => {
   const { q, storage, events, advance } = setup();
   await q.addBeats([beat({ d: { attempt: 1, started: 1 } })]);

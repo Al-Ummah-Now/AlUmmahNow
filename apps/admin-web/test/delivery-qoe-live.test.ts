@@ -10,7 +10,7 @@ import en from '../src/i18n/messages/en';
 import ar from '../src/i18n/messages/ar';
 
 const bucket = (over: Partial<ReturnType<typeof emptyQoeBucket>> = {}) => ({ ...emptyQoeBucket(), ...over });
-const event = (minute: string, r2 = bucket(), now = { bunny: 1, r2: 2 }) => ({ kind: 'qoe', key: 'qoe', minute, bunny: bucket(), r2, now, at: `${minute}:30.000Z` });
+const event = (minute: string, r2 = bucket(), now = { bunny: 1, r2: 2 }) => ({ kind: 'qoe', key: `qoe:${minute}`, minute, bunny: bucket(), r2, now, at: `${minute}:30.000Z` });
 
 describe('live playback view', () => {
   it('a qoe event fills its minute, keeps a 60-minute window ending at it, and sets now', () => {
@@ -30,6 +30,15 @@ describe('live playback view', () => {
     assert.equal(next.minutes[59].r2.plays, 1);
     assert.equal(next.minutes[0].minute, '2026-11-12T09:43');
     assert.deepEqual(next.now, { bunny: 0, r2: 4 });
+  });
+
+  it('a flush that spans two minutes (one event each, in any order) counts both in the hour (#1125)', () => {
+    const base = applyQoeEvent(null, event('2026-11-12T10:40', bucket({ plays: 2 })))!;
+    for (const order of [['10:41', '10:42'], ['10:42', '10:41']]) {
+      const view = order.reduce((d, m) => applyQoeEvent(d, event(`2026-11-12T${m}`, bucket({ plays: 1 })))!, base);
+      assert.equal(view.minutes[59].minute, '2026-11-12T10:42');
+      assert.equal(windowTotals(view.minutes).r2.plays, 4);
+    }
   });
 
   it('other or cut-down events leave the view as it is', () => {

@@ -197,10 +197,16 @@ export class QoeLive {
       await this.storage.put(entries);
     }
     if (this.dirty.size > 0 || changedNow) {
-      const minute = this.minutes.get(current) ?? { minute: current, bunny: emptyBucket(), r2: emptyBucket() };
+      // One event per touched minute, oldest first. A beat counted in the last seconds of a minute is
+      // flushed after the minute turned: sending only the current minute lost that play from every open
+      // page until its next poll (#1125). Only "now" changed: the current minute carries it. Keyed per minute: the coalescer keeps the latest event per key.
+      const touched = this.dirty.size > 0 ? [...this.dirty].sort() : [current];
       this.lastNow = nowCounts;
       this.dirty.clear();
-      await this.publish({ kind: 'qoe', key: 'qoe', minute: minute.minute, bunny: minute.bunny, r2: minute.r2, now: nowCounts, at: new Date(t).toISOString() });
+      for (const m of touched) {
+        const minute = this.minutes.get(m) ?? { minute: m, bunny: emptyBucket(), r2: emptyBucket() };
+        await this.publish({ kind: 'qoe', key: `qoe:${minute.minute}`, minute: minute.minute, bunny: minute.bunny, r2: minute.r2, now: nowCounts, at: new Date(t).toISOString() });
+      }
     }
     // Only the current and previous minute stay in memory
     for (const m of this.minutes.keys()) if (m < minuteOf(t - 60_000)) this.minutes.delete(m);

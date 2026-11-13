@@ -156,7 +156,7 @@ These come later, in the order of cost spec Phases 1–3: CDN by host, container
 | --- | --- | --- | --- |
 | `admin:jobs` | admins | `job` {id, kind, status, progress?, targetType, targetId} for purges, transfers, erasures, rebuilds, repairs | api-videos admin-jobs consumer |
 | `admin:media` | admins | `job` {videoId, jobId, status, attempt, progress?, rungs? `[['720p','uploading',0.4], …]`, failure? {stage, error, attempt}}, `live` {transcoding, queued, maxTranscodes?, oldestQueuedAt?} | api-videos `/internal/media` (job status writes) |
-| `admin:media` (playback) | admins | `qoe` {minute, bunny, r2, now} every 5 s at most: the current minute's playback sums per provider and the plays going on now (§B.8) | realtime worker `qoe-live` object |
+| `admin:media` (playback) | admins | `qoe` {minute, bunny, r2, now} every 5 s at most: each touched minute's playback sums per provider and the plays going on now (§B.8) | realtime worker `qoe-live` object |
 | `admin:queues` | admins | `backlog` {queue, messages} | transcode backlog from `media_jobs` (live); others from the collector (hourly) |
 | `admin:uploads` | admins | `upload` {videoId, status, encodeProgress?} | api-videos processing / Bunny webhook path |
 | `admin:errors` | admins | `error` {groupId, isNew, kind, app}, `counts` {open, actionNeeded} | admin-api errors ingest |
@@ -237,6 +237,6 @@ Producers already hold both bindings (api-videos, processor, admin-api, media).
   - sums them per minute and per provider in memory;
   - writes the touched minutes to its own storage at most every 5 s, keeping 48 h;
   - counts the plays going on now per serving source: sessions whose last heartbeat, at most 75 s old, said they were playing.
-- **Push.** Each flush sends one `qoe` event on `admin:media`.
+- **Push.** Each flush sends one `qoe` event per touched minute on `admin:media`, oldest first, keyed `qoe:<minute>` (a beat in a minute's last seconds is flushed after it turns and still reaches its own minute, #1125); when only "now" changed, one event for the current minute.
 - **Read.** The Delivery page reads `GET /api/media/qoe-live?minutes=60` (admin-api → `/internal/media/qoe-live`) when it loads, and every 30 s while the socket is down.
 
