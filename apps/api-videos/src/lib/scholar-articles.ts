@@ -9,7 +9,7 @@
  * - Only the channel's owner: the CMS says on whose behalf it calls, and the channel record must
  *   belong to that user and be neither suspended nor deleted.
  */
-import { PostStatus, PostType, PostVisibility, type Channel, type CommunityPost } from '@al-ummah/shared-types';
+import { PostStatus, PostType, PostVisibility, parsePostFields, type Channel, type CommunityPost, type PostV2Fields } from '@al-ummah/shared-types';
 import R2Repository from './r2Repo';
 import { logger } from './logger';
 import { channelNameFields } from './channelName';
@@ -118,12 +118,15 @@ export async function upsertArticle(env: ArticleEnv, userId: string, externalId:
 
   if (existing && existing.channelId === input.channelId) {
     const saved = await new R2Repository<CommunityPost>(env.community_posts).updateObject(postKey(existing.channelId, existing.postId), (p) => {
+      // Converted to a full post (PostV2): Studio owns it now; a late CMS mirror call changes nothing.
+      if (typeof p.article?.body === 'string' || p.type === PostType.CARDS) return false;
       p.article = article;
       p.content = input.excerpt ?? undefined;
       p.status = PostStatus.PUBLISHED;
       p.channelName = channel.name;
       p.channelAvatar = channel.avatarUrl;
       p.updatedAt = now;
+      return true;
     });
     if (saved) {
       await setInIndex(env, existing.channelId, existing.postId, true);
@@ -173,4 +176,121 @@ export async function hideArticle(env: ArticleEnv, userId: string, externalId: s
   await setStatus(env, m, PostStatus.DELETED);
   await setInIndex(env, m.channelId, m.postId, false);
   return m;
+}
+
+/* ── Conversion of CMS scholar posts into full community posts (wiki AUN-SCHOLAR-SITES §6.6) ──── */
+
+/** What the CMS's conversion script sends for one post (PUT /internal/scholars/:userId/posts/:externalId). */
+export interface ConvertInput {
+  channelId: string;
+  kind: 'article' | 'cards';
+  /** The PostV2 fields, checked by parsePostFields (article or title + slides; locale, slug, key). */
+  fields: PostV2Fields;
+  /** The post on www: it keeps its address (the CMS row becomes the reference). */
+  www: { url: string; slug: string; locale: 'en' | 'ar' };
+  status: 'published' | 'draft';
+  publishedAt: string | null;
+}
+
+/** Checks the conversion body. Pure; unit-tested. */
+export function parseConvert(body: unknown, mediaHost?: (host: string) => boolean): ConvertInput {
+  const b = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
+  const channelId = typeof b.channelId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(b.channelId) ? b.channelId : '';
+  const kind = b.kind === 'article' || b.kind === 'cards' ? b.kind : null;
+  const www = (b.www && typeof b.www === 'object' ? b.www : {}) as Record<string, unknown>;
+  if (!channelId || !kind || !https(www.url) || typeof www.slug !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(www.slug) || (www.locale !== 'en' && www.locale !== 'ar')) {
+    throw new ArticleError(400, 'bad_request');
+  }
+  const parsed = parsePostFields(kind, b, { mediaHost });
+  if ('error' in parsed) throw new ArticleError(400, `bad_${parsed.field}`);
+  const publishedAt = typeof b.publishedAt === 'string' && !Number.isNaN(Date.parse(b.publishedAt)) ? new Date(b.publishedAt).toISOString() : null;
+  return {
+    channelId,
+    kind,
+    fields: { ...parsed.value, locale: www.locale, slug: www.slug },
+    www: { url: www.url as string, slug: www.slug, locale: www.locale },
+    status: b.status === 'draft' ? 'draft' : 'published',
+    publishedAt,
+  };
+}
+
+function applyConvert(p: CommunityPost, externalId: string, input: ConvertInput, now: string): void {
+  p.type = input.kind === 'article' ? PostType.ARTICLE : PostType.CARDS;
+  Object.assign(p, input.fields);
+  if (p.article) {
+    p.article.url = input.www.url;
+    p.article.externalId = externalId;
+    p.content = p.article.excerpt ?? undefined;
+  } else {
+    delete p.article;
+    p.content = undefined;
+  }
+  if (input.kind === 'article') delete p.slides;
+  p.www = input.www;
+  p.status = input.status === 'draft' ? PostStatus.DRAFT : PostStatus.PUBLISHED;
+  p.updatedAt = now;
+}
+
+/**
+ * Turns a CMS scholar post into a full community post on the scholar's channel. An article that
+ * already has a link-only mirror is upgraded IN PLACE (same id, likes and comments); anything else
+ * becomes a new post. Idempotent on the CMS key, so the script can be re-run. Sends no queue
+ * message: subscribers were told when the post first went out, and the CMS turns its own row into
+ * the reference in the same step.
+ */
+export async function convertScholarPost(env: ArticleEnv, userId: string, externalId: string, input: ConvertInput): Promise<{ post: CommunityPost; created: boolean; upgraded: boolean }> {
+  if (!EXTERNAL_ID.test(externalId)) throw new ArticleError(400, 'bad_request');
+  const channel = await ownedChannel(env, userId, input.channelId);
+  const maps = new R2Repository<Mapping>(env.community_posts);
+  const existing = await maps.getObject(mappingKey(externalId));
+  if (existing && existing.userId !== userId) throw new ArticleError(403, 'not_owner');
+  const now = new Date().toISOString();
+  const shown = input.status === 'published';
+
+  if (existing && existing.channelId === input.channelId) {
+    const saved = await new R2Repository<CommunityPost>(env.community_posts).updateObject(postKey(existing.channelId, existing.postId), (p) => {
+      applyConvert(p, externalId, input, now);
+      p.channelName = channel.name;
+      p.channelAvatar = channel.avatarUrl;
+    });
+    if (saved) {
+      await setInIndex(env, existing.channelId, existing.postId, shown);
+      return { post: saved, created: false, upgraded: true };
+    }
+  } else if (existing) {
+    await setStatus(env, existing, PostStatus.DELETED);
+    await setInIndex(env, existing.channelId, existing.postId, false);
+  }
+
+  const post = {
+    id: crypto.randomUUID(),
+    channelId: input.channelId,
+    userId,
+    type: PostType.TEXT,
+    likes: 0,
+    comments: 0,
+    shares: 0,
+    views: 0,
+    createdAt: input.publishedAt ?? now,
+    updatedAt: now,
+    pinned: false,
+    status: PostStatus.PUBLISHED,
+    visibility: PostVisibility.PUBLIC,
+    commentsEnabled: true,
+    ...channelNameFields(channel),
+    channelAvatar: channel.avatarUrl,
+    channelVerified: channel.isVerified || false,
+  } as CommunityPost;
+  applyConvert(post, externalId, input, now);
+  await env.community_posts.put(postKey(input.channelId, post.id), JSON.stringify(post), { httpMetadata: { contentType: 'application/json' } });
+  if (shown) await setInIndex(env, input.channelId, post.id, true);
+  await maps.putObject(mappingKey(externalId), { userId, channelId: input.channelId, postId: post.id });
+  logger.debug('[ScholarArticles] converted', { externalId, channelId: input.channelId, postId: post.id });
+  return { post, created: true, upgraded: false };
+}
+
+/** Where a CMS post went (the conversion check and rollback use it). Null = never posted. */
+export async function scholarPostMapping(env: ArticleEnv, externalId: string): Promise<Mapping | null> {
+  if (!EXTERNAL_ID.test(externalId)) throw new ArticleError(400, 'bad_request');
+  return new R2Repository<Mapping>(env.community_posts).getObject(mappingKey(externalId));
 }

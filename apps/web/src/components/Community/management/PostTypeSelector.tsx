@@ -8,7 +8,10 @@ import {
   BarChart3,
   Brain,
   Video,
-  Film
+  Film,
+  Newspaper,
+  GalleryHorizontal,
+  Link2
 } from 'lucide-react';
 
 interface PostTypeSelectorProps {
@@ -66,6 +69,25 @@ const POST_TYPES: PostTypeCard[] = [
     icon: Film,
     label: { en: 'GIF', ar: 'صورة متحركة' },
     description: { en: 'Add an animated GIF', ar: 'أضف صورة متحركة' }
+  },
+  // PostV2 kinds (packages/shared-types/src/post-schema.ts)
+  {
+    type: PostType.ARTICLE,
+    icon: Newspaper,
+    label: { en: 'Article', ar: 'مقال' },
+    description: { en: 'Write an article with a cover', ar: 'اكتب مقالًا مع صورة غلاف' }
+  },
+  {
+    type: PostType.CARDS,
+    icon: GalleryHorizontal,
+    label: { en: 'Cards', ar: 'بطاقات' },
+    description: { en: 'Share up to 40 image cards', ar: 'شارك حتى ٤٠ بطاقة مصوّرة' }
+  },
+  {
+    type: PostType.LINK,
+    icon: Link2,
+    label: { en: 'Link', ar: 'رابط' },
+    description: { en: 'Share a page from another website', ar: 'شارك صفحة من موقع آخر' }
   }
 ];
 
@@ -80,7 +102,7 @@ export function PostTypeSelector({ selected, onSelect, locale }: PostTypeSelecto
       grid
       grid-cols-2          /* Mobile: 2 columns */
       sm:grid-cols-3       /* Tablet: 3 columns */
-      lg:grid-cols-6       /* Desktop: all 6 in a row */
+      lg:grid-cols-5       /* Desktop: 5 a row (9 kinds) */
       gap-3                /* Mobile: compact gaps */
       md:gap-4             /* Desktop: larger gaps */
     ">

@@ -10020,7 +10020,9 @@
                 "quiz",
                 "video",
                 "gif",
-                "article"
+                "article",
+                "cards",
+                "link"
               ]
             },
             "required": false,
@@ -10150,7 +10152,10 @@
                       "poll",
                       "quiz",
                       "video",
-                      "gif"
+                      "gif",
+                      "article",
+                      "cards",
+                      "link"
                     ]
                   },
                   "content": {
@@ -10162,6 +10167,10 @@
                     "items": {
                       "type": "object",
                       "properties": {
+                        "url": {
+                          "type": "string",
+                          "maxLength": 2048
+                        },
                         "width": {
                           "type": "number"
                         },
@@ -10319,6 +10328,212 @@
                   "scheduledAt": {
                     "type": "string",
                     "format": "date-time"
+                  },
+                  "locale": {
+                    "type": "string",
+                    "enum": [
+                      "en",
+                      "ar"
+                    ]
+                  },
+                  "translationKey": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "slug": {
+                    "type": "string",
+                    "maxLength": 120
+                  },
+                  "title": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "article": {
+                    "type": "object",
+                    "properties": {
+                      "title": {
+                        "type": "string",
+                        "maxLength": 200
+                      },
+                      "excerpt": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "maxLength": 300
+                      },
+                      "body": {
+                        "type": "string",
+                        "maxLength": 100000
+                      },
+                      "cover": {
+                        "type": [
+                          "object",
+                          "null"
+                        ],
+                        "properties": {
+                          "url": {
+                            "type": "string",
+                            "maxLength": 2048
+                          },
+                          "alt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "maxLength": 300
+                          },
+                          "width": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "height": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "url"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "title",
+                      "body"
+                    ]
+                  },
+                  "slides": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "maxLength": 40
+                        },
+                        "image": {
+                          "type": "object",
+                          "properties": {
+                            "url": {
+                              "type": "string",
+                              "maxLength": 2048
+                            },
+                            "alt": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "maxLength": 300
+                            },
+                            "width": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "height": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "url"
+                          ]
+                        },
+                        "heading": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "maxLength": 140
+                        },
+                        "body": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "maxLength": 400
+                        },
+                        "position": {
+                          "type": "string",
+                          "enum": [
+                            "top",
+                            "middle",
+                            "bottom"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "image"
+                      ]
+                    },
+                    "maxItems": 40
+                  },
+                  "link": {
+                    "type": "object",
+                    "properties": {
+                      "url": {
+                        "type": "string",
+                        "maxLength": 2048
+                      },
+                      "title": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "maxLength": 200
+                      },
+                      "description": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "maxLength": 300
+                      },
+                      "image": {
+                        "type": [
+                          "object",
+                          "null"
+                        ],
+                        "properties": {
+                          "url": {
+                            "type": "string",
+                            "maxLength": 2048
+                          },
+                          "alt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "maxLength": 300
+                          },
+                          "width": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "height": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "url"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "url"
+                    ]
                   }
                 },
                 "required": [
@@ -10513,6 +10728,212 @@
                   },
                   "pinned": {
                     "type": "boolean"
+                  },
+                  "locale": {
+                    "type": "string",
+                    "enum": [
+                      "en",
+                      "ar"
+                    ]
+                  },
+                  "translationKey": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "slug": {
+                    "type": "string",
+                    "maxLength": 120
+                  },
+                  "title": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "article": {
+                    "type": "object",
+                    "properties": {
+                      "title": {
+                        "type": "string",
+                        "maxLength": 200
+                      },
+                      "excerpt": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "maxLength": 300
+                      },
+                      "body": {
+                        "type": "string",
+                        "maxLength": 100000
+                      },
+                      "cover": {
+                        "type": [
+                          "object",
+                          "null"
+                        ],
+                        "properties": {
+                          "url": {
+                            "type": "string",
+                            "maxLength": 2048
+                          },
+                          "alt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "maxLength": 300
+                          },
+                          "width": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "height": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "url"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "title",
+                      "body"
+                    ]
+                  },
+                  "slides": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "maxLength": 40
+                        },
+                        "image": {
+                          "type": "object",
+                          "properties": {
+                            "url": {
+                              "type": "string",
+                              "maxLength": 2048
+                            },
+                            "alt": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "maxLength": 300
+                            },
+                            "width": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "height": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "url"
+                          ]
+                        },
+                        "heading": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "maxLength": 140
+                        },
+                        "body": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "maxLength": 400
+                        },
+                        "position": {
+                          "type": "string",
+                          "enum": [
+                            "top",
+                            "middle",
+                            "bottom"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "image"
+                      ]
+                    },
+                    "maxItems": 40
+                  },
+                  "link": {
+                    "type": "object",
+                    "properties": {
+                      "url": {
+                        "type": "string",
+                        "maxLength": 2048
+                      },
+                      "title": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "maxLength": 200
+                      },
+                      "description": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "maxLength": 300
+                      },
+                      "image": {
+                        "type": [
+                          "object",
+                          "null"
+                        ],
+                        "properties": {
+                          "url": {
+                            "type": "string",
+                            "maxLength": 2048
+                          },
+                          "alt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "maxLength": 300
+                          },
+                          "width": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "height": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "url"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "url"
+                    ]
                   }
                 }
               }

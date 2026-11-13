@@ -1,3 +1,4 @@
+import { syncScholarRef } from './handlers/scholar-refs';
 import { AlUmmahMessage, ProcessingResult, MessageType, QueueEnvironment } from './types';
 import { Logger } from '@al-ummah/logger';
 import { handleChannelSectionEvent } from './handlers/channel-section';
@@ -225,7 +226,7 @@ export class MessageProcessor {
       case MessageType.CommunityPostCreated:
       case MessageType.CommunityPostUpdated:
       case MessageType.CommunityPostDeleted:
-        await this.processCommunityPostMessage(message);
+        await this.processCommunityPostMessage(message, env);
         break;
 
       // Post like/unlike events - handled separately for like count calculation
@@ -785,7 +786,7 @@ export class MessageProcessor {
     }
   }
 
-  private async processCommunityPostMessage(message: AlUmmahMessage): Promise<void> {
+  private async processCommunityPostMessage(message: AlUmmahMessage, env?: QueueEnvironment): Promise<void> {
     this.logger.debug(`Processing community post message: ${MessageType[message.type]}`, message.payload);
 
     const { postId, channelId, actor } = message.payload as {
@@ -811,6 +812,12 @@ export class MessageProcessor {
         break;
       // CommunityPostLiked/Unliked are now handled by dedicated handlePostLikeEvent handler
       // PollVoted is now handled by dedicated handlePollVoteEvent handler
+    }
+
+    // The scholar post reference outbox (handlers/scholar-refs.ts): a retryable failure throws, so the
+    // queue retries the message; the CMS ignores channels that are not a scholar's primary channel.
+    if (env?.community_posts) {
+      await syncScholarRef(env, channelId, postId, this.logger);
     }
   }
 

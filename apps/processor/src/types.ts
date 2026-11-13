@@ -100,6 +100,8 @@ export interface QueueEnvironment {
   WEBSOCKET_URL?: string;
   /** Secrets Store binding (or plain string in local dev) for websocket-server /broadcast */
   INTERNAL_API_KEY?: string | { get: () => Promise<string> };
+  /** The CMS's base URL for the scholar post reference outbox (handlers/scholar-refs.ts); unset = no sync. */
+  CMS_INTERNAL_URL?: string;
   /** admin-api error ingest (Errors page): crashes and dead letters are reported there */
   ERRORS_INGEST_URL?: string;
   CF_VERSION_METADATA?: { id?: string; tag?: string };
