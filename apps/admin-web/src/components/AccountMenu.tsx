@@ -227,7 +227,22 @@ export function AccountMenu({ issuer, currentEmail, roles }: AccountMenuProps) {
               if (confirmed) signOutAllRef.current?.submit();
             }}
           >
-            {/* The one sign-out entry (single sign-out through the auth server; it was a separate header button) */}
+            {/* With several accounts, "Sign out" signs out this one (the next account takes over), as in
+                every app's menu (docs/design/NAV.md); "Sign out of all accounts" follows */}
+            {count > 1 && active?.userId && (
+              <button
+                type="button"
+                role="menuitem"
+                data-testid="account-sign-out-current"
+                disabled={busy}
+                onClick={() => void onSignOut(active.userId)}
+                className="aun-menu-item"
+              >
+                <Icon name="logout" className="aun-menu-icon aun-flip" />
+                <span className="aun-menu-text">{t('accounts.signOut')}</span>
+              </button>
+            )}
+            {/* Single sign-out through the auth server (it was a separate header button) */}
             <button
               type="submit"
               role="menuitem"
