@@ -10037,7 +10037,7 @@ snapshots:
       cookie: 1.0.2
       esbuild: 0.25.12
       express: 5.2.1
-      next: 16.2.10(@babel/core@7.28.5)(@playwright/test@1.56.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      next: 16.2.10(patch_hash=6cqqppn57ogay27cgdjsgyri74)(@babel/core@7.28.5)(@playwright/test@1.56.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       path-to-regexp: 6.3.0
       urlpattern-polyfill: 10.1.0
       yaml: 2.8.1
@@ -10060,7 +10060,7 @@ snapshots:
       cookie: 1.0.2
       esbuild: 0.25.12
       express: 5.2.1
-      next: 16.2.10(@playwright/test@1.56.1)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      next: 16.2.10(patch_hash=6cqqppn57ogay27cgdjsgyri74)(@playwright/test@1.56.1)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       path-to-regexp: 6.3.0
       urlpattern-polyfill: 10.1.0
       yaml: 2.8.1
@@ -10077,7 +10077,7 @@ snapshots:
       comment-json: 4.6.2
       enquirer: 2.4.1
       glob: 13.0.0
-      next: 16.2.10(@babel/core@7.28.5)(@playwright/test@1.56.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      next: 16.2.10(patch_hash=6cqqppn57ogay27cgdjsgyri74)(@babel/core@7.28.5)(@playwright/test@1.56.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       ts-tqdm: 0.8.6
       wrangler: 4.108.0(@cloudflare/workers-types@4.20251115.0)
       yargs: 18.0.0
@@ -10097,7 +10097,7 @@ snapshots:
       comment-json: 4.6.2
       enquirer: 2.4.1
       glob: 13.0.0
-      next: 16.2.10(@playwright/test@1.56.1)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      next: 16.2.10(patch_hash=6cqqppn57ogay27cgdjsgyri74)(@playwright/test@1.56.1)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       ts-tqdm: 0.8.6
       wrangler: 4.108.0(@cloudflare/workers-types@4.20251115.0)
       yargs: 18.0.0
@@ -14422,7 +14422,7 @@ snapshots:
       '@standard-schema/spec': 1.0.0
       react: 18.3.1
     optionalDependencies:
-      next: 16.2.10(@babel/core@7.28.5)(@playwright/test@1.56.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      next: 16.2.10(patch_hash=6cqqppn57ogay27cgdjsgyri74)(@babel/core@7.28.5)(@playwright/test@1.56.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
 
   nwsapi@2.2.22: {}
 
