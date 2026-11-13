@@ -53,43 +53,73 @@ async function errorReportingContext(): Promise<{ workerVersion?: string; enviro
   }
 }
 
-const metadata: Metadata = {
-  title: 'Al Ummah Now',
-  description: 'Excerpts from scholars\' clips about the state of the nation today',
-  keywords: 'Al Ummah Now, Islamic, Videos, Clips',
-  authors: [{ name: 'Al Ummah Now' }],
-  robots: 'index, follow',
-  openGraph: {
+/** Default title and description per language (pages override them). Tone: wiki Copy-Tone-Guide. */
+const SITE_COPY = {
+  en: {
     title: 'Al Ummah Now',
-    description: 'Excerpts from scholars\' clips about the state of the nation today',
-    // The share image is the app icon at full size; url and metadataBase are set per request.
-    images: [{ url: '/icon-512.png', width: 512, height: 512, alt: 'Al Ummah Now Videos' }],
-    type: 'website',
+    description: 'Watch and share videos, Shorts and live streams from the Al Ummah Now community, in Arabic and English.',
+    keywords: 'Al Ummah Now, Islamic, videos, Shorts, live, channels, community',
+    imageAlt: 'Al Ummah Now Videos',
   },
-  twitter: {
-    card: 'summary',
-    title: 'Al Ummah Now',
-    description: 'Excerpts from scholars\' clips about the state of the nation today',
-    images: ['/icon-512.png'],
-    site: '@alummahnow',
-    creator: '@alummahnow',
+  ar: {
+    title: 'الأمة الآن',
+    description: 'شاهد وشارك المرئيات والمقاطع القصيرة والبث المباشر من مجتمع الأمة الآن، بالعربية والإنجليزية.',
+    keywords: 'الأمة الآن، إسلامي، مرئيات، مقاطع قصيرة، بث مباشر، قنوات، مجتمع',
+    imageAlt: 'مرئيات الأمة الآن',
   },
-  manifest: '/site.webmanifest',
-  other: {
-    referrer: 'origin',
-  },
-};
+} as const;
+
+function siteMetadata(locale: string): Metadata {
+  const copy = locale === 'ar' ? SITE_COPY.ar : SITE_COPY.en;
+  return {
+    title: copy.title,
+    description: copy.description,
+    keywords: copy.keywords,
+    authors: [{ name: copy.title }],
+    robots: 'index, follow',
+    openGraph: {
+      title: copy.title,
+      description: copy.description,
+      // The share image is the app icon at full size; url and metadataBase are set per request.
+      images: [{ url: '/icon-512.png', width: 512, height: 512, alt: copy.imageAlt }],
+      type: 'website',
+    },
+    twitter: {
+      card: 'summary',
+      title: copy.title,
+      description: copy.description,
+      images: ['/icon-512.png'],
+      site: '@alummahnow',
+      creator: '@alummahnow',
+    },
+    manifest: '/site.webmanifest',
+    other: {
+      referrer: 'origin',
+    },
+  };
+}
 
 /** Per request: the tab icon marks QA and stage (same build as production, so read at runtime). */
 export async function generateMetadata(): Promise<Metadata> {
   const { environment } = await errorReportingContext();
   const origin = await requestOrigin();
+  const metadata = siteMetadata(await requestLocale());
   return {
     ...metadata,
     icons: appIcons(environment),
     // Without a base, Next resolves relative share images against localhost:3000.
     ...(origin ? { metadataBase: new URL(origin), openGraph: { ...metadata.openGraph, url: origin } } : {}),
   };
+}
+
+/** The language middleware resolved for this request (English when absent). */
+async function requestLocale(): Promise<string> {
+  try {
+    const requested = (await headers()).get(LOCALE_REQUEST_HEADER);
+    return requested && isLocaleSupported(requested) ? requested : DEFAULT_LOCALE;
+  } catch {
+    return DEFAULT_LOCALE;
+  }
 }
 
 /** This deployment's public origin, from the request (QA, stage and production share one build). */

@@ -725,7 +725,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     live: 'LIVE',
     searchInputLabel: 'Search',
     suggestionsLabel: 'Search suggestions',
-    startSearching: 'Search lectures, recitations, channels, playlists and posts in Arabic or English.',
+    startSearching: 'Search videos, Shorts, channels, playlists and posts in Arabic or English.',
     resultsLabel: 'Search results',
   },
 
@@ -791,7 +791,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     dropHere: 'Drop your video here',
     supports: 'Supports',
     max: 'Max',
-    shareDescription: 'Share your knowledge and inspiration with the Ummah',
+    shareDescription: 'Share your videos with the community',
     shareWithCommunity: 'Share your content with the Al Ummah Now community',
     videoUploadedMessage: 'Your video has been uploaded successfully!',
     viewVideo: 'View Video',
@@ -1461,11 +1461,11 @@ export const EN_TRANSLATIONS: AppTranslations = {
     subscriptionNotification: 'New Subscriber',
     uploadNotification: 'Upload Complete',
     systemNotification: 'System Update',
-    likeMessage: 'Someone liked your video "Amazing Islamic Lecture"',
-    commentMessage: 'New comment on your video: "Mashallah, very beneficial!"',
+    likeMessage: 'Someone liked your video "New upload"',
+    commentMessage: 'New comment on your video: "Mashallah, thank you for sharing!"',
     subscriptionMessage: 'You have a new subscriber!',
     uploadMessage: 'Your video "New Upload" has been successfully processed',
-    systemMessage: 'Welcome to Al Ummah Now! Start exploring Islamic content.',
+    systemMessage: 'Welcome to Al Ummah Now! Start exploring the community.',
     realtime: {
       newCommentTitle: 'New Comment',
       newCommentMessage: 'Someone commented on your video "{videoTitle}"',
@@ -1792,7 +1792,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     collapse: 'Collapse',
     expand: 'Expand',
     pageTitle: 'Explore Videos',
-    pageDescription: 'Discover Islamic content across different categories',
+    pageDescription: 'Browse videos by topic',
   },
 
   channelManage: {
@@ -1922,7 +1922,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     useVariablesArabic: 'استخدم المتغيرات مثل {{date}}',
     tags: 'Tags',
     tagsPlaceholder: 'Separate tags with commas',
-    tagsExample: 'e.g., Islamic, Lecture, Quran',
+    tagsExample: 'e.g., Quran, Ramadan, Q&A',
     visibility: 'Visibility',
     public: 'Public',
     private: 'Private',
@@ -2085,7 +2085,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
 
   live: {
     liveStreams: 'Live Streams',
-    liveStreamsDescription: 'Watch live Islamic lectures, discussions, and educational content',
+    liveStreamsDescription: 'Watch live streams from channels across the community',
     failedToLoadStreams: 'Failed to Load Streams',
     failedToLoadStreamsDescription: 'An error occurred while loading live streams. Please try again.',
     tryAgain: 'Try Again',
@@ -2132,7 +2132,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
 
   explore: {
     title: 'Explore',
-    subtitle: 'Discover trending lectures, recitations and new channels',
+    subtitle: "See what's trending and find new channels",
     trending: 'Trending',
     popularFallback: 'Popular this month',
     contentLanguage: 'Content language',

@@ -231,6 +231,8 @@ Users never see raw errors, and failures that need a person go to the videos adm
 
 **Arabic word for "video"**: always «مرئي» (plural «مرئيات», definite «المرئي / المرئيات», dual «مرئيان / مرئيين»), never «فيديو / فيديوهات / مقاطع الفيديو». Counts: «مرئي واحد»، «مرئيان»، «٣ مرئيات»، «١١ مرئيًا»، «١٠٠ مرئي», or «{count} من المرئيات» when the string has no plural forms. «مقطع قصير / المقاطع القصيرة» stays for Shorts, and «مقطع» stays for live-stream segments. See the wiki page "Arabic glossary".
 
+**UI copy tone (en + ar)**: Al Ummah Now is a content-sharing site, not a lectures library. Describe it the way YouTube's interface does: videos, Shorts, live streams, posts, playlists, channels, creators, viewers, the community; verbs watch, upload, share, subscribe (never "follow" a channel), save, explore, go live. Never describe the platform as lessons, lectures, courses, a library, "beneficial knowledge" or "keep learning" («دروس، محاضرات، مكتبة، العلم النافع، واصل التعلّم»), and no entertainment or hype words either. A creator's own titles and the content categories keep their words. Keep "Islamic" factual (SEO descriptions, Community Guidelines rules). Full rules with examples: wiki page "Copy Tone Guide".
+
 #### Server-Side i18n (API Responses)
 
 Use i18n for API error messages and user-facing responses:

@@ -209,7 +209,7 @@ export const TEMPLATE_VARIABLES: TemplateVariable[] = [
   { name: 'Juz', variable: '{{juz}}', description: 'Juz number', example: '1', category: 'quran', requiresInput: true },
 
   // Channel
-  { name: 'Channel Name', variable: '{{channel_name}}', description: 'Your channel name', example: 'Islamic Lectures', category: 'channel' },
+  { name: 'Channel Name', variable: '{{channel_name}}', description: 'Your channel name', example: 'My Channel', category: 'channel' },
   { name: 'Uploader Name', variable: '{{uploader_name}}', description: 'Your name', example: 'Sheikh Ahmad', category: 'channel' },
 
   // Video

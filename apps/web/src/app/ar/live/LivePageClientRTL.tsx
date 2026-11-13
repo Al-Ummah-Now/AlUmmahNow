@@ -120,7 +120,7 @@ function PageHeader({ t }: { t: ReturnType<typeof useLanguage>['t'] }) {
         {t.live?.liveStreams || 'البث المباشر'}
       </h1>
       <p className="text-gray-600 dark:text-gray-400 text-sm md:text-base text-right">
-        {t.live?.liveStreamsDescription || 'شاهد المحاضرات الإسلامية المباشرة والنقاشات والمحتوى التعليمي'}
+        {t.live?.liveStreamsDescription || 'شاهد البث المباشر من قنوات المجتمع'}
       </p>
     </div>
   );

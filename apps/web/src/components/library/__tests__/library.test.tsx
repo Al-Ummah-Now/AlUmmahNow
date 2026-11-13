@@ -96,7 +96,7 @@ describe('Watch later page', () => {
   it('asks anonymous visitors to sign in', () => {
     mockUser = null;
     render(<LibraryListPage kind="watch-later" dir="ltr" />);
-    expect(screen.getByText('Sign in to see your library')).toBeInTheDocument();
+    expect(screen.getByText('Sign in to see your history, playlists and saved videos')).toBeInTheDocument();
     expect(service.watchLater).not.toHaveBeenCalled();
   });
 });

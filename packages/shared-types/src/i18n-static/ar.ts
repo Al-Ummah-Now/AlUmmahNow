@@ -723,7 +723,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     live: 'مباشر',
     searchInputLabel: 'بحث',
     suggestionsLabel: 'اقتراحات البحث',
-    startSearching: 'ابحث في المحاضرات والتلاوات والقنوات وقوائم التشغيل والمنشورات بالعربية أو الإنجليزية.',
+    startSearching: 'ابحث في المرئيات والمقاطع القصيرة والقنوات وقوائم التشغيل والمنشورات بالعربية أو الإنجليزية.',
     resultsLabel: 'نتائج البحث',
   },
 
@@ -789,7 +789,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     dropHere: 'أفلت المرئي هنا',
     supports: 'يدعم',
     max: 'الحد الأقصى',
-    shareDescription: 'شارك معرفتك وإلهامك مع الأمة',
+    shareDescription: 'شارك مرئياتك مع المجتمع',
     shareWithCommunity: 'شارك محتواك مع مجتمع الأمة الآن',
     videoUploadedMessage: 'تم رفع المرئي بنجاح!',
     viewVideo: 'عرض المرئي',
@@ -1459,11 +1459,11 @@ export const AR_TRANSLATIONS: AppTranslations = {
     subscriptionNotification: 'مشترك جديد',
     uploadNotification: 'اكتمل الرفع',
     systemNotification: 'تحديث النظام',
-    likeMessage: 'شخص ما أعجب بمرئيك "محاضرة إسلامية رائعة"',
-    commentMessage: 'تعليق جديد على مرئيك: "ماشاء الله، مفيد جداً!"',
+    likeMessage: 'أُعجب أحدهم بمرئيك "مرئي جديد"',
+    commentMessage: 'تعليق جديد على مرئيك: "ما شاء الله، شكرًا على المشاركة!"',
     subscriptionMessage: 'لديك مشترك جديد!',
     uploadMessage: 'تمت معالجة المرئي "رفع جديد" بنجاح',
-    systemMessage: 'مرحباً بك في الأمة الآن! ابدأ في استكشاف المحتوى الإسلامي.',
+    systemMessage: 'مرحبًا بك في الأمة الآن! ابدأ في استكشاف المجتمع.',
     realtime: {
       newCommentTitle: 'تعليق جديد',
       newCommentMessage: 'علّق شخص ما على مرئيك "{videoTitle}"',
@@ -1790,7 +1790,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     collapse: 'طي',
     expand: 'توسيع',
     pageTitle: 'استكشف المرئيات',
-    pageDescription: 'اكتشف المحتوى الإسلامي في فئات مختلفة',
+    pageDescription: 'تصفّح المرئيات حسب الموضوع',
   },
 
   channelManage: {
@@ -1919,7 +1919,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     useVariablesArabic: 'استخدم {{date}}',
     tags: 'الوسوم',
     tagsPlaceholder: 'مفصولة بفواصل',
-    tagsExample: 'مثال: إسلامي، محاضرة',
+    tagsExample: 'مثال: قرآن، رمضان، أسئلة وأجوبة',
     visibility: 'الظهور',
     public: 'عام',
     private: 'خاص',
@@ -2078,7 +2078,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
 
   live: {
     liveStreams: 'البث المباشر',
-    liveStreamsDescription: 'شاهد المحاضرات الإسلامية المباشرة والنقاشات والمحتوى التعليمي',
+    liveStreamsDescription: 'شاهد البث المباشر من قنوات المجتمع',
     failedToLoadStreams: 'فشل تحميل البثوث المباشرة',
     failedToLoadStreamsDescription: 'حدث خطأ أثناء تحميل البثوث المباشرة. يرجى المحاولة مرة أخرى.',
     tryAgain: 'حاول مرة أخرى',
@@ -2125,7 +2125,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
 
   explore: {
     title: 'استكشف',
-    subtitle: 'اكتشف المحاضرات والتلاوات الرائجة والقنوات الجديدة',
+    subtitle: 'اكتشف الرائج وتعرّف على قنوات جديدة',
     trending: 'الرائج',
     popularFallback: 'الأكثر شعبية هذا الشهر',
     contentLanguage: 'لغة المحتوى',

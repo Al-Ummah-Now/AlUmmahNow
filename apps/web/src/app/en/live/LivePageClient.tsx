@@ -116,7 +116,7 @@ function PageHeader({ t }: { t: ReturnType<typeof useLanguage>['t'] }) {
         {t.live?.liveStreams || 'Live Streams'}
       </h1>
       <p className="text-gray-600 dark:text-gray-400 text-sm md:text-base">
-        {t.live?.liveStreamsDescription || 'Watch live Islamic lectures, discussions, and educational content'}
+        {t.live?.liveStreamsDescription || 'Watch live streams from channels across the community'}
       </p>
     </div>
   );

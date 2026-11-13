@@ -762,7 +762,7 @@ test.describe('Video sections page (/sections)', () => {
     await page.goto('/en/sections');
     await expect(page).toHaveTitle('Explore Videos | Al Ummah Now');
     await expect(page.getByRole('heading', { level: 1, name: 'Explore Videos' })).toBeVisible();
-    await expect(page.getByText('Discover Islamic content across different categories')).toBeVisible();
+    await expect(page.getByText('Browse videos by topic')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Recent Uploads' })).toBeVisible();
   });
 

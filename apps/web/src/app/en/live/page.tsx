@@ -16,11 +16,11 @@ import { LivePageClient } from './LivePageClient';
 
 export const metadata: Metadata = {
   title: 'Live Streams | Al Ummah Now',
-  description: 'Watch live Islamic lectures, discussions, and educational content. Join thousands of viewers learning from scholars around the world.',
-  keywords: ['live streams', 'Islamic lectures', 'scholars', 'live events', 'Al Ummah Now'],
+  description: "Watch live streams from channels in the Al Ummah Now community, and see what's coming up.",
+  keywords: ['live streams', 'live', 'Islamic', 'channels', 'Al Ummah Now'],
   openGraph: {
     title: 'Live Streams | Al Ummah Now',
-    description: 'Watch live Islamic lectures, discussions, and educational content.',
+    description: "Watch live streams from channels in the Al Ummah Now community, and see what's coming up.",
     type: 'website',
     url: 'https://alummahnow.com/en/live',
     images: [
@@ -35,7 +35,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'Live Streams | Al Ummah Now',
-    description: 'Watch live Islamic lectures, discussions, and educational content.',
+    description: "Watch live streams from channels in the Al Ummah Now community, and see what's coming up.",
     images: ['/favicon-32x32.png'],
   },
   robots: {
