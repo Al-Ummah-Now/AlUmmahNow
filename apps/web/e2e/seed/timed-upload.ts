@@ -64,6 +64,9 @@ async function main(): Promise<void> {
 
   let status = 'unknown';
   let progress: number | undefined;
+  // Playable = first 'ready' (the first rendition; "more resolutions are on the way"); encoded = progress 100
+  let playableAt: number | null = null;
+  let encodedAt: number | null = null;
   const timeline: string[] = [];
   try {
     while (Date.now() - uploaded < WAIT_MS) {
@@ -76,7 +79,12 @@ async function main(): Promise<void> {
       if (next !== status || nextProgress !== progress) timeline.push(`+${Math.round((Date.now() - uploaded) / 1000)}s ${next} ${nextProgress ?? ''}`.trim());
       status = next;
       progress = nextProgress;
-      if (status === 'ready' || status === 'failed' || status === 'error') break;
+      if (status === 'ready' && playableAt === null) playableAt = Date.now();
+      if (status === 'ready' && (progress ?? 100) >= 100) {
+        encodedAt = Date.now();
+        break;
+      }
+      if (status === 'failed' || status === 'error') break;
       await sleep(10_000);
     }
   } finally {
@@ -85,7 +93,9 @@ async function main(): Promise<void> {
       '### Timed QA upload',
       `- video: \`${videoId}\` (${CLIP_SECONDS} s clip, ${fileSize} bytes, channel ${channel.id})`,
       `- upload (initiate → complete): ${Math.round((uploaded - t0) / 1000)} s`,
-      `- result: **${status}** after **${encodeSeconds} s** from upload complete`,
+      `- playable (first rendition): ${playableAt ? `**${Math.round((playableAt - uploaded) / 1000)} s**` : 'not within the wait'} after upload complete`,
+      `- fully encoded (progress 100): ${encodedAt ? `**${Math.round((encodedAt - uploaded) / 1000)} s**` : 'not within the wait'} after upload complete`,
+      `- last status: ${status} ${progress ?? ''} after ${encodeSeconds} s`,
       '- timeline:',
       ...timeline.map((l) => `  - ${l}`),
     ];
@@ -93,7 +103,7 @@ async function main(): Promise<void> {
     if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n') + '\n');
     await api.request(`/api/videos/${videoId}/permanent`, { method: 'DELETE', token: session.accessToken, channelId: channel.id, allowStatus: [404] }).catch((e) => log.warn('Delete failed', { videoId, error: String(e) }));
   }
-  if (status !== 'ready') process.exitCode = 1;
+  if (!playableAt) process.exitCode = 1;
 }
 
 main().catch((error) => {
