@@ -74,8 +74,9 @@ for (const role of ROLES) {
           (QUARANTINED_PAGES.has(entry.id) ? test.fixme : test)(`A11Y-ALL ${entry.id} (${locale}, ${colorScheme}) has no WCAG 2.1 AA violations`, async ({ page }) => {
             const resolved = catalog(data).find((p) => p.id === entry.id && p.role === role);
             expect(resolved, `catalog entry ${entry.id}`).toBeTruthy();
-            // Contrast results follow the site theme: scan in the reference theme (Lantern), not
-            // whatever QA's active theme is; e2e/themes checks contrast in every theme
+            // Contrast results follow the site theme: scan in the reference theme (Lantern, a stable
+            // reference, not production's: production runs Fawanees), not whatever the stack's active
+            // theme is; e2e/themes checks contrast in every theme, Fawanees included
             await openCatalogPageInReferenceTheme(page, locale, resolved!, colorScheme);
             await expect(page.locator('html')).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
 
