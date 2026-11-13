@@ -27,7 +27,8 @@ const MAX_SIDE_THUMB = 180;
 /** The player column is at least this many times wider than the related column. */
 const PLAYER_DOMINANCE = 1.5;
 /** Avatar to chevron inside the account trigger. */
-const MAX_CHEVRON_GAP = 6;
+// The shared account button (docs/design/NAV.md) spaces avatar, name and chevron 8px apart
+const MAX_CHEVRON_GAP = 8.5;
 
 type Box = { x: number; y: number; width: number; height: number };
 
@@ -128,7 +129,8 @@ async function expectHeader(page: Page, locale: Locale, width: number): Promise<
   const ordered = locale === 'en' ? xs.every((x, i) => i === 0 || x > xs[i - 1]) : xs.every((x, i) => i === 0 || x < xs[i - 1]);
   expect(ordered, `${where}: items in reading order (${names.join(', ')})`).toBe(true);
 
-  // The account chevron belongs to the avatar: adjacent and on the same line
+  // The account chevron follows the button's last visible part (the name, or the avatar when the
+  // name is hidden): adjacent and on the same line
   const parts = await page.evaluate(() => {
     const trigger = document.querySelector('[data-testid="nav-menu-trigger"]');
     const avatar = trigger?.firstElementChild;
@@ -138,14 +140,20 @@ async function expectHeader(page: Page, locale: Locale, width: number): Promise<
       const r = el.getBoundingClientRect();
       return r.width > 0 && r.height > 0 ? { x: r.x, y: r.y, width: r.width, height: r.height } : null;
     };
-    return { avatar: box(avatar), chevron: box(chevron) };
+    // The visible child just before the chevron (visually hidden text has a 1px box: skipped)
+    const before = [...(trigger?.children ?? [])]
+      .filter((c) => c !== chevron && c.compareDocumentPosition(chevron as Node) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .map((c) => box(c))
+      .filter((b): b is NonNullable<typeof b> => !!b && b.width > 1 && b.height > 1)
+      .pop();
+    return { avatar: box(avatar), lead: before ?? box(avatar), chevron: box(chevron) };
   });
   expect(parts.avatar, `${where}: account avatar is shown`).not.toBeNull();
   if (!parts.chevron) return; // phones hide the chevron
-  const { avatar, chevron } = parts as { avatar: Box; chevron: Box };
-  const gap = locale === 'en' ? chevron.x - (avatar.x + avatar.width) : avatar.x - (chevron.x + chevron.width);
-  expect(gap, `${where}: chevron follows the avatar (gap ${Math.round(gap)}px)`).toBeGreaterThanOrEqual(-0.5);
-  expect(gap, `${where}: chevron sits next to the avatar (gap ${Math.round(gap)}px)`).toBeLessThanOrEqual(MAX_CHEVRON_GAP);
+  const { avatar, lead, chevron } = parts as { avatar: Box; lead: Box; chevron: Box };
+  const gap = locale === 'en' ? chevron.x - (lead.x + lead.width) : lead.x - (chevron.x + chevron.width);
+  expect(gap, `${where}: chevron follows the avatar and name (gap ${Math.round(gap)}px)`).toBeGreaterThanOrEqual(-0.5);
+  expect(gap, `${where}: chevron sits next to the avatar and name (gap ${Math.round(gap)}px)`).toBeLessThanOrEqual(MAX_CHEVRON_GAP);
   expect(
     Math.abs(chevron.y + chevron.height / 2 - (avatar.y + avatar.height / 2)),
     `${where}: chevron is vertically centred on the avatar`,
