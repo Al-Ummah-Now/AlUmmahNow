@@ -14,7 +14,7 @@
  */
 import { deliveryBucket, isPlaybackFallbackReason, type PlaybackFallbackReason, type PlaybackSource } from '@al-ummah/shared-types';
 import { logger } from '../logger';
-import { readDeliverySettings, r2Urls, type MediaEnv, type MediaVideo } from './r2-delivery';
+import { publicMp4Url, readDeliverySettings, r2Urls, type MediaEnv, type MediaVideo } from './r2-delivery';
 
 export type DecisionReason =
 	| 'mode_bunny'
@@ -95,6 +95,8 @@ export function logDecision(d: PlaybackDecision): void {
 /** Fields of a video view this rewrites. */
 interface PlayableView {
 	playUrl?: string;
+	/** Stable public MP4 for search engines (D-SEO-11); public R2 videos only */
+	contentUrl?: string;
 	thumbnailUrl?: string;
 	thumbnailType?: string;
 	delivery?: { source: PlaybackSource };
@@ -122,6 +124,9 @@ export async function withPlayback<T extends PlayableView>(
 	context?: string,
 ): Promise<T> {
 	if (!env.MEDIA_PUBLIC_HOST) return view;
+	// Whatever source plays, a public video with an R2 MP4 names it for search engines
+	const mp4 = publicMp4Url(env, video);
+	if (mp4) (view as PlayableView).contentUrl = mp4;
 	try {
 		const choice = await choosePlayback(env, video, { context });
 		logDecision(choice.decision);

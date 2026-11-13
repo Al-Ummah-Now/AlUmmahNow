@@ -12,7 +12,7 @@ import { spawn } from 'node:child_process';
 import { createWriteStream } from 'node:fs';
 import { mkdir, readdir, readFile, rm, stat } from 'node:fs/promises';
 import { join, relative } from 'node:path';
-import { bandwidthOf, displaySize, ffmpegArgs, ladderFor, progressSeconds, stillsArgs } from './ladder.mjs';
+import { bandwidthOf, displaySize, ffmpegArgs, ladderFor, MP4_FILE, mp4Args, mp4Rung, progressSeconds, stillsArgs } from './ladder.mjs';
 import { RungTracker, uploadByPlan, uploadPlan } from './rungs.mjs';
 
 const PORT = 8080;
@@ -198,6 +198,19 @@ async function runJob(job) {
 	} catch (error) {
 		log('preview skipped', { error: String(error.message) }); // optional: never fails the job
 	}
+	// One progressive MP4 (D-SEO-11): a remux of the 480p rung, never a second encode. Optional: a
+	// failure leaves the video without it and never fails the job
+	let mp4;
+	const mp4From = mp4Rung(rungs);
+	if (mp4From) {
+		try {
+			await run('ffmpeg', mp4Args({ out, rung: mp4From.name }));
+			mp4 = { file: MP4_FILE, rung: mp4From.name, width: mp4From.width, height: mp4From.height, bytes: (await stat(join(out, MP4_FILE))).size };
+		} catch (error) {
+			log('mp4 skipped', { error: String(error.message) });
+			await rm(join(out, MP4_FILE), { force: true });
+		}
+	}
 	await rm(src, { force: true });
 	const tTranscode = Date.now();
 
@@ -234,6 +247,7 @@ async function runJob(job) {
 		timings: { downloadMs: tDownload - t0, transcodeMs: tTranscode - tDownload, uploadMs: tUpload - tTranscode, totalMs: tUpload - t0 },
 		thumbnail: 'thumb.jpg',
 		...(preview ? { preview } : {}),
+		...(mp4 ? { mp4 } : {}),
 	};
 	result.bytes = bytes;
 	await rm(WORK, { recursive: true, force: true });

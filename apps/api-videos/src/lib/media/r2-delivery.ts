@@ -497,6 +497,20 @@ export async function r2Urls(env: MediaEnv, video: Pick<MediaVideo, 'id' | 'r2'>
 }
 
 /**
+ * The stable public MP4 of a public video (D-SEO-11): search engines' VideoObject contentUrl.
+ * Only for a ready R2 rendition under pub/ whose transcode made the MP4 (a remux of the 480p rung);
+ * never for private, unlisted or removed videos (their media is under priv/ or gone), never signed,
+ * and stable for the rendition's rev (cached immutable by the CDN). Bunny-only videos: null.
+ */
+export function publicMp4Url(env: Pick<MediaEnv, 'MEDIA_PUBLIC_HOST'>, video: Pick<MediaVideo, 'id' | 'r2'> & { isPublic?: boolean; isDeleted?: boolean; isHidden?: boolean }): string | null {
+	const r2 = video.r2;
+	if (!env.MEDIA_PUBLIC_HOST || !r2 || r2.status !== 'ready' || r2.access !== 'pub' || !r2.result?.mp4?.file) return null;
+	if (video.isPublic === false || video.isDeleted === true || video.isHidden === true) return null;
+	if (!/^[A-Za-z0-9._-]+$/.test(r2.result.mp4.file)) return null;
+	return `https://${env.MEDIA_PUBLIC_HOST}/pub/${video.id}/${r2.rev}/${r2.result.mp4.file}`;
+}
+
+/**
  * The owner's view of the R2 side (GET /api/videos/:id/upload-status), without
  * container timings or costs. The release gate (apps/web/e2e/release/media-delivery.spec.ts)
  * waits on `status` and fetches `playUrl`, which is there whatever the delivery switch says.
