@@ -6,6 +6,8 @@
 @media(min-width:1024px){.rt-toasts{inset-block-end:16px;inset-inline-start:auto;inset-inline-end:16px;width:360px}}
 /* Above the floating mini player (bottom-end, min(360px,70vw) wide, 16:9) */
 @media(min-width:640px){body:has(.custom-video-player[data-mini]) .rt-toasts{inset-block-end:calc(16px + min(360px,70vw) * 9 / 16 + 12px)}}
+/* A vertical video floats in a portrait box (player-skin.css) */
+@media(min-width:640px){body:has(.custom-video-player[data-mini][data-portrait]) .rt-toasts{inset-block-end:calc(16px + min(216px,42vw,(100vh - 160px) * 9 / 16) * 16 / 9 + 12px)}}
 .rt-toasts>*{pointer-events:auto}
 .rt-list{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
 .rt-toast.toast{align-items:flex-start;max-width:none;width:100%;margin:0;padding-block:12px;padding-inline:14px 8px;-webkit-backdrop-filter:var(--m-blur);backdrop-filter:var(--m-blur);animation:rt-in 180ms cubic-bezier(.2,0,0,1)}
@@ -24,3 +26,5 @@
 .rt-more{align-self:flex-end;display:inline-flex;align-items:center;min-height:32px;padding-inline:12px;border-radius:var(--r-pill);font-size:13px;font-weight:600;background:var(--m-raised);box-shadow:var(--m-raised-edge);color:var(--fanous-c-toast-text)!important;text-decoration:none}
 @keyframes rt-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 @media(prefers-reduced-motion:reduce){.rt-toast.toast{animation:none}}
+/* Below 1024px the mini player floats above the tab bar (player-skin.css), so the toasts go higher too */
+@media(min-width:640px) and (max-width:1023px){body:has(.custom-video-player[data-mini]) .rt-toasts{inset-block-end:calc(68px + env(safe-area-inset-bottom) + min(360px,70vw) * 9 / 16 + 12px)}body:has(.custom-video-player[data-mini][data-portrait]) .rt-toasts{inset-block-end:calc(68px + env(safe-area-inset-bottom) + min(216px,42vw,(100vh - 160px) * 9 / 16) * 16 / 9 + 12px)}}
