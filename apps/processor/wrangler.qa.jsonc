@@ -91,7 +91,8 @@
     "LOG_LEVEL": "warn",
     "WEBSOCKET_URL": "https://realtime.qa.alummahnow.net",
     "CMS_INTERNAL_URL": "https://cms.qa.alummahnow.net",
-    "AI_MODERATION_ENABLED": "true",
+    // Owner 2026-11-13 (VR13, #1242): AI moderation is production-only; never on QA
+    "AI_MODERATION_ENABLED": "false",
     "AI_MODERATION_DAILY_NEURON_CAP": "10000",
     "AI_CATEGORIZE_ENABLED": "true",
     "AI_CATEGORIZE_DAILY_NEURON_CAP": "20000",
