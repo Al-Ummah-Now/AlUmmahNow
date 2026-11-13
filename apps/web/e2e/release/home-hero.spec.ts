@@ -112,8 +112,8 @@ for (const [device, viewport] of Object.entries(VIEWPORTS)) {
             await page.unrouteAll({ behavior: 'ignoreErrors' });
             test.skip(true, 'this build predates the 16:9 hero frame');
           }
-          await expect(frame).toHaveAttribute('href', /vid=[\w-]+$/);
-          const shownId = (await frame.getAttribute('href'))!.split('vid=')[1];
+          await expect(frame).toHaveAttribute('href', /\/video\/[\w-]+$/);
+          const shownId = (await frame.getAttribute('href'))!.split('/video/')[1];
           const shown = await videoById(shownId);
           if (!shown && attempt < 3) continue;
           expect(shown, `the hero shows ${shownId}, which is gone`).not.toBeNull();

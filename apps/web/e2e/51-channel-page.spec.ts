@@ -243,7 +243,7 @@ test.describe('Channel tabs', () => {
     await expect(cards.first()).toBeVisible();
     await expect(cards).toHaveCount(videos.length);
     await expect(panel.getByRole('heading', { name: videos[0].title })).toBeVisible();
-    await expect(cards.first()).toHaveAttribute('href', /^\/en\/video\?vid=/);
+    await expect(cards.first()).toHaveAttribute('href', /^\/en\/video\/[\w-]+$/);
   });
 
   for (const locale of ['en', 'ar'] as const) {
