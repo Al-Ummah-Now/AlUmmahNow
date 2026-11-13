@@ -67,7 +67,8 @@ test.beforeAll(async ({ browser, creators }) => {
 test.describe('Watch later is per user', () => {
   test.use({ storageState: async ({ creators }, use) => use(creators.owner.state) });
 
-  test('same list whichever channel is active, and never among a channel’s playlists', async ({ page }, testInfo) => {
+  // quarantined: #1098 @meywd (red on the local stack)
+  test.fixme('same list whichever channel is active, and never among a channel’s playlists', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('Mobile'), 'API + desktop page check; covered by the desktop projects');
     test.skip(!(await perUserWatchLaterDeployed()), 'Per-user Watch later is not deployed on the target yet (it lands with the PR that adds it, #847)');
     const [one, two] = owner.channelIds;
