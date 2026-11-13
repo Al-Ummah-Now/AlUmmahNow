@@ -20,14 +20,14 @@ export function AlreadyUploadedPanel({ fileName, videoId, className = '', onUplo
   const { t, lang } = useLanguage();
   return (
     <section
-      className={`bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg ${className}`}
+      className={`bg-[var(--fanous-color-surface-raised)] rounded-lg p-6 shadow-lg ${className}`}
       data-testid="upload-already-uploaded"
       aria-labelledby="upload-already-uploaded-title"
     >
-      <h3 id="upload-already-uploaded-title" className="text-lg font-semibold text-gray-900 dark:text-white">
+      <h3 id="upload-already-uploaded-title" className="text-lg font-semibold text-[var(--fanous-color-text-primary)]">
         {t.batch.alreadyUploaded}
       </h3>
-      <p className="mt-1 text-sm text-gray-600 dark:text-gray-300" data-testid="upload-already-uploaded-hint">
+      <p className="mt-1 text-sm text-[var(--fanous-color-text-secondary)]" data-testid="upload-already-uploaded-hint">
         <span className="font-medium break-all" dir="auto">{fileName}</span> · {t.upload.alreadyUploadedHint}
       </p>
       <div className="mt-4 flex flex-wrap gap-3">
