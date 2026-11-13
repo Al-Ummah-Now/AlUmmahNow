@@ -1,7 +1,7 @@
 import { AlUmmahMessage, MessageType, QueueEnvironment } from '../types';
 import { Logger } from '@al-ummah/logger';
-import { archiveRecord } from '../lib/archive-record';
-import { ARCHIVE_PRIVACY_VERSION } from '@al-ummah/shared-types';
+import { writeArchiveEntry } from '../erasure/archive-titles';
+import { ARCHIVE_PRIVACY_VERSION, ARCHIVE_TITLES_VERSION } from '@al-ummah/shared-types';
 
 // Interface for channel section payloads
 interface ChannelSectionPayload {
@@ -100,28 +100,27 @@ async function saveChannelSectionAnalytics(
     const key = `channel-sections/${year}/${month}/${day}/${timestamp}-${message.id}.json`;
 
     // Analytics metadata; person ids pseudonymised like the main archive (#1177)
-    const enhancedMessage = await archiveRecord(message, env, {
-      typeName: MessageType[message.type],
-      timestampISO: messageDate.toISOString(),
-      analytics: {
-        category: 'channel_sections',
-        eventType: MessageType[message.type],
+    await writeArchiveEntry(
+      env,
+      key,
+      message,
+      {
+        typeName: MessageType[message.type],
+        timestampISO: messageDate.toISOString(),
+        analytics: {
+          category: 'channel_sections',
+          eventType: MessageType[message.type],
+        },
       },
-    });
-
-    // Save to R2
-    await env.MESSAGES_BUCKET.put(key, JSON.stringify(enhancedMessage, null, 2), {
-      httpMetadata: {
-        contentType: 'application/json',
-      },
-      customMetadata: {
+      {
         messageType: MessageType[message.type],
         messageId: message.id,
         privacy: ARCHIVE_PRIVACY_VERSION,
+        titles: ARCHIVE_TITLES_VERSION,
         channelId: (message.payload as unknown as ChannelSectionPayload).channelId,
         ...((message.payload as unknown as ChannelSectionPayload).sectionId ? { sectionId: (message.payload as unknown as ChannelSectionPayload).sectionId } : {}),
-      },
-    });
+      }
+    );
 
     logger.debug(`Channel section analytics saved to R2 with key: ${key}`);
   } catch (error) {

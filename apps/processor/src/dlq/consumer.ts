@@ -1,7 +1,7 @@
 import type { Logger } from '@al-ummah/logger';
 import { reportNeedsAction, type ErrorReporterEnv, type ExecutionContextLike } from '@al-ummah/shared-types';
 import type { QueueEnvironment } from '../types';
-import { storeDeadLetter, toDeadLetterRecord, type DeadLetterRecord } from './store';
+import { storeDeadLetter, toPrivateDeadLetterRecord, type DeadLetterRecord } from './store';
 
 export interface DeadLetterQueueMessage {
   /** Queue message id (Cloudflare Queues). */
@@ -57,7 +57,7 @@ export async function processDeadLetterBatch(
 ): Promise<void> {
   const dlq = batch.queue ?? 'unknown';
   for (const message of batch.messages) {
-    const record = toDeadLetterRecord(
+    const record = await toPrivateDeadLetterRecord(
       { queueMessageId: message.id ?? `${dlq}:${now}:${Math.random().toString(36).slice(2)}`, dlq, attempts: message.attempts ?? 1, body: message.body },
       now
     );

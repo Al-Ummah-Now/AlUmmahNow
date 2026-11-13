@@ -23,8 +23,9 @@ import { eraseUserModerationData } from './moderation/store';
 import { eraseUserContactData } from './contact/erase';
 import { eraseUserTraces } from './erasure/user-traces';
 import { eraseArchiveSubject } from './erasure/archive-subjects';
-import { archiveRecord } from './lib/archive-record';
-import { ARCHIVE_PRIVACY_VERSION } from '@al-ummah/shared-types';
+import { recordEraseTombstone } from './erasure/tombstones';
+import { archiveTitlesEraseMessage, eraseArchiveTitlesPage, writeArchiveEntry } from './erasure/archive-titles';
+import { ARCHIVE_PRIVACY_VERSION, ARCHIVE_TITLES_VERSION, archiveSubjectKey } from '@al-ummah/shared-types';
 import type { NotificationCreatePayload, NotificationFanoutPayload, PushDispatchPayload } from '@al-ummah/shared-types';
 import { publishAdminLive } from '@al-ummah/shared-types';
 import { dispatchPush, enqueuePush } from './push/dispatch';
@@ -302,6 +303,10 @@ export class MessageProcessor {
       // Account erasure, Contact us step (#616): queued by processUserDataErased
       case MessageType.ContactDataErase:
         await this.processContactDataErase(message, env);
+        break;
+      // Account erasure, archive titles step (#1254): one page of the archive per delivery
+      case MessageType.ArchiveTitlesErase:
+        await this.processArchiveTitlesErase(message, env);
         break;
 
       // Search index (Story 29.9): content written outside api-videos
@@ -719,27 +724,16 @@ export class MessageProcessor {
       const key = `${year}-${month}-${day}T${hour}-${minute}-${second}.${message.id}`;
 
       // Human-readable type name and ISO time for queryability; person ids pseudonymised and free
-      // text dropped (#1177, lib/archive-record.ts)
-      const enhancedMessage = await archiveRecord(message, env, {
-        typeName: MessageType[message.type], // e.g. "VideoView"
-        timestampISO: new Date(message.timestamp).toISOString(),
-      });
-
-      // Convert enhanced message to JSON string
-      const messageJson = JSON.stringify(enhancedMessage, null, 2);
-
-      // Save to R2 bucket with proper Content-Type metadata
-      await env.MESSAGES_BUCKET.put(key, messageJson, {
-        httpMetadata: {
-          contentType: 'application/json',
-        },
-        customMetadata: {
-          messageType: MessageType[message.type],
-          messageId: message.id,
-          // Listed without a read by the one-off rewrite (#1177): already pseudonymised
-          privacy: ARCHIVE_PRIVACY_VERSION,
-        },
-      });
+      // text dropped (#1177, lib/archive-record.ts); titles indexed under their owners so an
+      // erasure can replace them (#1254, erasure/archive-titles.ts)
+      await writeArchiveEntry(
+        env,
+        key,
+        message,
+        { typeName: MessageType[message.type], timestampISO: new Date(message.timestamp).toISOString() },
+        // privacy: listed without a read by the one-off rewrite (#1177): already pseudonymised
+        { messageType: MessageType[message.type], messageId: message.id, privacy: ARCHIVE_PRIVACY_VERSION, titles: ARCHIVE_TITLES_VERSION }
+      );
 
       this.logger.debug(`Message ${message.id} saved to R2 bucket with key: ${key}`);
     } catch (error) {
@@ -884,6 +878,11 @@ export class MessageProcessor {
     // Invites, error rows (anonymised, kept for trends) and category suggestions (#1059)
     const traces = await eraseUserTraces(env.REPORTS_DB, env.SEARCH_DB, userId, DELETED_USER_ID);
     this.logger.debug('Erased user traces after user data erasure', { userId, ...traces });
+    // Their titles and channel names in the archive become placeholders (#1254): its own queued
+    // step, paged, so a large channel never runs in this delivery
+    await this.queueArchiveTitlesErase(message, userId, env);
+    // Erase tombstone (#1255): error reports arriving later (pages still open) are anonymised
+    await recordEraseTombstone(env.REPORTS_DB, userId);
     // The archive's pseudonym secret (#1177): the user's archived events no longer lead to them
     const archiveSubject = await eraseArchiveSubject(env.NOTIFICATIONS_DB, userId);
     this.logger.debug('Erased the archive pseudonym secret', { userId, changed: archiveSubject });
@@ -911,6 +910,33 @@ export class MessageProcessor {
     }
     // No producer binding (local dev): do the step inline
     await this.processContactDataErase(step, env);
+  }
+
+  private async queueArchiveTitlesErase(message: AlUmmahMessage, userId: string, env: QueueEnvironment): Promise<void> {
+    if (!env.NOTIFICATIONS_DB) return;
+    const step = await archiveTitlesEraseMessage(message.id, await archiveSubjectKey(userId));
+    if (env.MESSAGE_QUEUE) {
+      await env.MESSAGE_QUEUE.send(step);
+      return;
+    }
+    // No producer binding (local dev): every page inline
+    await this.processArchiveTitlesErase(step, env);
+  }
+
+  /** One page of the erased creator's archived titles; a full page queues the next (idempotent). */
+  private async processArchiveTitlesErase(message: AlUmmahMessage, env: QueueEnvironment): Promise<void> {
+    const { subject } = message.payload as { subject?: string };
+    if (!subject) throw new Error('ArchiveTitlesErase message missing required field: subject');
+    if (!env.NOTIFICATIONS_DB) return;
+    for (;;) {
+      const page = await eraseArchiveTitlesPage(env.NOTIFICATIONS_DB, env.MESSAGES_BUCKET as never, subject);
+      this.logger.debug('Erased archived titles', { ...page });
+      if (!page.more) return;
+      if (env.MESSAGE_QUEUE) {
+        await env.MESSAGE_QUEUE.send({ ...message, timestamp: new Date().toISOString() });
+        return;
+      }
+    }
   }
 
   /** Deletes the erased account's Contact us messages and notes (idempotent; contact/erase.ts). */

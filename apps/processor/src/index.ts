@@ -2,7 +2,7 @@ import { AlUmmahMessage, MessageType, QueueEnvironment } from './types';
 import { erasureRetryDelaySeconds } from './contact/erase';
 
 /** Account erasure steps: retried with backoff, then dead-lettered (shown on the admin Errors page). */
-const ERASURE_TYPES: readonly number[] = [MessageType.UserDataErased, MessageType.ContactDataErase];
+const ERASURE_TYPES: readonly number[] = [MessageType.UserDataErased, MessageType.ContactDataErase, MessageType.ArchiveTitlesErase];
 import { MessageProcessor } from './messageProcessor';
 import type { createLogger } from '@al-ummah/logger';
 import { loggerFor } from './lib/logger';
@@ -10,6 +10,9 @@ import { purgeExpiredNotifications } from './lib/notifications-store';
 import { handleImageReviewScan, handleVideoReviewAppeal, handleVideoReviewScan, isImageReviewPayload, isReviewAppealPayload, isReviewScanPayload, type ReviewConsumerEnv } from './review/consumer';
 import { handleModerationScan, isScanPayload } from './moderation/consumer';
 import { purgeExpiredModerationData } from './moderation/store';
+import { purgeExpiredAdminHistory } from './erasure/admin-history';
+import { purgeExpiredTitleRefs } from './erasure/archive-titles';
+import { purgeExpiredTombstones } from './erasure/tombstones';
 import { isDeadLetterQueue, processDeadLetterBatch } from './dlq/consumer';
 import { listDeadLetters, purgeExpiredDeadLetters, replayDeadLetter } from './dlq/store';
 import { getApiKey } from './lib/websocket-notify';
@@ -250,6 +253,22 @@ export async function runScheduled(env: QueueEnvironment, now = Date.now()): Pro
   } catch (error) {
     logger.error('[Retention] Moderation retention failed', error);
   }
+  // Erase tombstones (#1255): 30 days
+  try {
+    const purged = await purgeExpiredTombstones(env.REPORTS_DB, now);
+    if (purged > 0) logger.info('[Retention] Expired erase tombstones deleted', { purged });
+  } catch (error) {
+    logger.error('[Retention] Erase tombstone retention failed', error);
+  }
+  // Admin history (#1253): 2 years
+  if (env.SEARCH_DB) {
+    try {
+      const purged = await purgeExpiredAdminHistory(env.SEARCH_DB as never, now);
+      if (purged.deletions || purged.jobs) logger.info('[Retention] Expired admin history deleted', purged);
+    } catch (error) {
+      logger.error('[Retention] Admin history retention failed', error);
+    }
+  }
   if (!env.NOTIFICATIONS_DB) {
     logger.warn('[Retention] NOTIFICATIONS_DB not bound; notification retention skipped');
     return 0;
@@ -259,6 +278,13 @@ export async function runScheduled(env: QueueEnvironment, now = Date.now()): Pro
     if (purged > 0) logger.info('[Retention] Expired dead letters deleted', { purged });
   } catch (error) {
     logger.error('[Retention] Dead-letter retention failed', error);
+  }
+  // Archive title refs (#1254): past the archive's retention
+  try {
+    const purged = await purgeExpiredTitleRefs(env.NOTIFICATIONS_DB, now);
+    if (purged > 0) logger.info('[Retention] Expired archive title refs deleted', { purged });
+  } catch (error) {
+    logger.error('[Retention] Archive title ref retention failed', error);
   }
   try {
     const deleted = await purgeExpiredNotifications(env.NOTIFICATIONS_DB, now);

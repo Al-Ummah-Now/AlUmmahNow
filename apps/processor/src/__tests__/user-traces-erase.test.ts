@@ -50,7 +50,7 @@ describe('eraseUserTraces (#1059)', () => {
   it('deletes invites, error-group membership and category suggestions; anonymises error events, keeping the errors', async () => {
     const { reports, search } = seed();
     const result = await eraseUserTraces(reports, search, USER, ERASED);
-    expect(result).toEqual({ invites: 1, errorUsers: 1, errorEvents: 2, categorySuggestions: 1, rateLimits: 2, creatorTier: 1 });
+    expect(result).toEqual({ invites: 1, errorUsers: 1, errorEvents: 2, categorySuggestions: 1, rateLimits: 2, creatorTier: 1, adminDeletions: 0, adminJobs: 0 });
 
     expect(reports.raw.prepare('SELECT id FROM creator_invites ORDER BY id').all()).toEqual([{ id: 'inv_2' }]);
     expect(reports.raw.prepare('SELECT user_key FROM error_group_users').all()).toEqual([{ user_key: OTHER }]);
@@ -71,7 +71,7 @@ describe('eraseUserTraces (#1059)', () => {
   it('is idempotent and works without the search database', async () => {
     const { reports, search } = seed();
     await eraseUserTraces(reports, search, USER, ERASED);
-    expect(await eraseUserTraces(reports, search, USER, ERASED)).toEqual({ invites: 0, errorUsers: 0, errorEvents: 0, categorySuggestions: 0, rateLimits: 0, creatorTier: 0 });
+    expect(await eraseUserTraces(reports, search, USER, ERASED)).toEqual({ invites: 0, errorUsers: 0, errorEvents: 0, categorySuggestions: 0, rateLimits: 0, creatorTier: 0, adminDeletions: 0, adminJobs: 0 });
     expect((await eraseUserTraces(reports, undefined, OTHER, ERASED)).categorySuggestions).toBe(0);
   });
 });

@@ -13,16 +13,19 @@
 --   apps/processor/migrations-notifications/0011_notifications_entity.sql
 --   apps/processor/migrations-notifications/0012_notification_seen.sql
 --   apps/processor/migrations-notifications/0013_push_devices_app.sql
+--   apps/processor/migrations-notifications/0014_archive_title_refs.sql
+--   apps/processor/migrations-notifications/0015_dead_letter_hashed_ids.sql
 
 CREATE TABLE analytics_daily (entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, day TEXT NOT NULL, metric TEXT NOT NULL, dim TEXT NOT NULL DEFAULT '', value REAL NOT NULL DEFAULT 0, PRIMARY KEY (entity_type, entity_id, day, metric, dim)) WITHOUT ROWID;
 CREATE TABLE analytics_rollup_imports (r2_key TEXT PRIMARY KEY, imported_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE archive_subjects (subject TEXT PRIMARY KEY, secret TEXT, created_at INTEGER NOT NULL, erased_at INTEGER);
+CREATE TABLE archive_title_refs (subject TEXT NOT NULL, archive_key TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (subject, archive_key)) WITHOUT ROWID;
 CREATE TABLE channel_subscriber_counts (channel_id TEXT PRIMARY KEY, subscribers INTEGER NOT NULL DEFAULT 0) WITHOUT ROWID;
 CREATE TABLE channel_subscribers (channel_id TEXT NOT NULL, user_id TEXT NOT NULL, bell TEXT NOT NULL DEFAULT 'highlights' CHECK (bell IN ('all', 'highlights', 'none')), created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY (channel_id, user_id));
 CREATE TABLE channel_subscription_import_state (id INTEGER PRIMARY KEY CHECK (id = 1), cursor TEXT, passes INTEGER NOT NULL DEFAULT 0, completed_at INTEGER, updated_at INTEGER NOT NULL);
 CREATE TABLE channel_subscription_imports (channel_id TEXT PRIMARY KEY, legacy_count INTEGER NOT NULL, imported_at INTEGER NOT NULL) WITHOUT ROWID;
 CREATE TABLE channel_subscriptions (channel_id TEXT NOT NULL, subscriber_channel_id TEXT NOT NULL, user_id TEXT NOT NULL, id TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (channel_id, subscriber_channel_id)) WITHOUT ROWID;
-CREATE TABLE dead_letters (id TEXT PRIMARY KEY, message_id TEXT, message_type INTEGER, type_name TEXT NOT NULL, source TEXT NOT NULL, dlq TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 1, failure_reason TEXT, body_json TEXT NOT NULL, body_truncated INTEGER NOT NULL DEFAULT 0, received_at INTEGER NOT NULL, replayed_at INTEGER);
+CREATE TABLE dead_letters (id TEXT PRIMARY KEY, message_id TEXT, message_type INTEGER, type_name TEXT NOT NULL, source TEXT NOT NULL, dlq TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 1, failure_reason TEXT, body_json TEXT NOT NULL, body_truncated INTEGER NOT NULL DEFAULT 0, received_at INTEGER NOT NULL, replayed_at INTEGER, ids_hashed INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE liked_videos (user_id TEXT NOT NULL, video_id TEXT NOT NULL, liked_at INTEGER NOT NULL, PRIMARY KEY (user_id, video_id));
 CREATE TABLE notification_email_prefs (user_id TEXT PRIMARY KEY, account_email INTEGER NOT NULL DEFAULT 1, email_locale TEXT CHECK (email_locale IN ('en', 'ar')), updated_at INTEGER NOT NULL);
 CREATE TABLE notification_seen (user_id TEXT PRIMARY KEY, seen_at INTEGER NOT NULL) WITHOUT ROWID;
@@ -33,6 +36,7 @@ CREATE TABLE post_counter_imports (post_id TEXT NOT NULL, kind TEXT NOT NULL, cu
 CREATE TABLE post_likes (post_id TEXT NOT NULL, user_id TEXT NOT NULL, liked INTEGER NOT NULL, day TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (post_id, user_id)) WITHOUT ROWID;
 CREATE TABLE push_devices (install_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, platform TEXT NOT NULL, provider TEXT NOT NULL CHECK (provider IN ('apns', 'fcm', 'wns', 'webpush')), token TEXT NOT NULL, locale TEXT, app_version TEXT, categories TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, app TEXT NOT NULL DEFAULT 'viewer' CHECK (app IN ('viewer', 'studio', 'admin')));
 CREATE TABLE saved_posts (user_id TEXT NOT NULL, post_id TEXT NOT NULL, channel_id TEXT, saved_at INTEGER NOT NULL, PRIMARY KEY (user_id, post_id));
+CREATE INDEX idx_archive_title_refs_created ON archive_title_refs (created_at);
 CREATE INDEX idx_channel_subscribers_user ON channel_subscribers(user_id);
 CREATE INDEX idx_channel_subscriptions_user ON channel_subscriptions(user_id, created_at);
 CREATE INDEX idx_dead_letters_received ON dead_letters(received_at DESC);

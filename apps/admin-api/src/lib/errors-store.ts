@@ -5,7 +5,7 @@
  * reference → group map, and reopens a resolved group when it recurs in a
  * newer release. The admin Errors page reads and updates groups here.
  */
-import { containsPattern } from '@al-ummah/shared-types';
+import { containsPattern, ERASED_USER_ID, eraseTombstoneKey } from '@al-ummah/shared-types';
 import {
   culprit as culpritOf,
   fingerprint as fingerprintOf,
@@ -186,13 +186,45 @@ async function isNewerRelease(db: D1Database, env: string, app: string, release:
   return !!resolvedAt && mine > resolvedAt;
 }
 
+/** extra keys that identify a person; dropped from an erased user's events (as the processor's erasure does). */
+const IDENTIFYING_EXTRA_KEYS = ['email', 'userEmail', 'name', 'userName', 'displayName', 'ip', 'ipAddress', 'userId', 'user_id'];
+
+/** The batch's user ids that have an erase tombstone (REPORTS_DB erased_users, primary-key lookups). */
+export async function erasedUserIds(db: D1Database, events: Pick<ErrorEventInput, 'userId'>[]): Promise<Set<string>> {
+  const ids = [...new Set(events.map((e) => e.userId).filter((id): id is string => !!id && id !== ERASED_USER_ID))];
+  const out = new Set<string>();
+  if (ids.length === 0) return out;
+  const keyOf = new Map<string, string>();
+  for (const id of ids) keyOf.set(await eraseTombstoneKey(id), id);
+  const keys = [...keyOf.keys()];
+  for (let i = 0; i < keys.length; i += 50) {
+    const part = keys.slice(i, i + 50);
+    const rows = await db
+      .prepare(`SELECT user_key FROM erased_users WHERE user_key IN (${part.map(() => '?').join(',')})`)
+      .bind(...part)
+      .all<{ user_key: string }>();
+    for (const row of rows.results ?? []) out.add(keyOf.get(row.user_key)!);
+  }
+  return out;
+}
+
+/** The event without its person: the erased marker as user, identifying extra keys removed. */
+function anonymisedEvent(e: ErrorEventInput): ErrorEventInput {
+  const extra = e.extra ? Object.fromEntries(Object.entries(e.extra).filter(([k]) => !IDENTIFYING_EXTRA_KEYS.includes(k))) : e.extra;
+  return { ...e, userId: ERASED_USER_ID, extra };
+}
+
 export async function ingestErrorEvents(db: D1Database, events: ErrorEventInput[], ctx: IngestContext): Promise<IngestOutcome> {
   const out: IngestOutcome = { accepted: 0, rateLimited: 0, created: [], spiking: [], reopened: [] };
   const now = ctx.now;
   const nowIso = now.toISOString();
   const random = ctx.random ?? Math.random;
 
-  for (const original of events) {
+  // Erase tombstones (#1255): a report about an account erased since (a page still open) is stored anonymised
+  const erased = await erasedUserIds(db, events);
+
+  for (const reported of events) {
+    const original = reported.userId && erased.has(reported.userId) ? anonymisedEvent(reported) : reported;
     // Browser batches are untrusted: admin-api's own environment, and their item keys live in a
     // separate "browser:" namespace so they can never update an item a Worker reported
     const e =
@@ -266,7 +298,7 @@ export async function ingestErrorEvents(db: D1Database, events: ErrorEventInput[
     await db.batch(writes);
 
     // Affected users: the account, else the anonymous client key
-    const userKey = e.userId ?? (ctx.clientKey ? `anon:${ctx.clientKey}` : null);
+    const userKey = e.userId === ERASED_USER_ID ? null : (e.userId ?? (ctx.clientKey ? `anon:${ctx.clientKey}` : null));
     if (userKey && group.users < ERROR_SAMPLE_LIMITS.maxUsers) {
       const added = await db.prepare('INSERT OR IGNORE INTO error_group_users (group_id, user_key) VALUES (?, ?)').bind(gid, userKey).run();
       if (((added.meta as { changes?: number } | undefined)?.changes ?? 0) > 0) {

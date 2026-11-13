@@ -19,6 +19,13 @@
  * page per message on the processing-check queue, in a few parallel lanes. State lives in
  * global_settings `ops/archive-privacy/runs/<runId>/` (meta.json, lane-<n>.json).
  * Started and read by scripts/release/archive-privacy-rewrite.ts.
+ *
+ * Titles mode (#1254, `start.mode: 'titles'`): entries written before the processor indexed titles
+ * (customMetadata.titles unset) are read; one holding a creator's titles or channel names is linked
+ * to the owners of the content it names (videos / channels records' userId) in NOTIFICATIONS_DB
+ * archive_title_refs, so a later erasure of the owner replaces them, and stamped. When none of that
+ * content exists any more (deleted, or its owner erased) the titles become placeholders at once.
+ * Entries without titles are left as they are.
  */
 import {
 	ARCHIVE_PRIVACY_VERSION,
@@ -29,6 +36,7 @@ import {
 	newArchiveSecret,
 	scrubArchiveRecord,
 } from '@al-ummah/shared-types';
+import { ARCHIVE_TITLES_VERSION, archiveSubjectKey, eraseArchiveTitles, hasArchiveTitles } from '@al-ummah/shared-types';
 import { logger } from './logger';
 
 export const ARCHIVE_PRIVACY_REWRITE_KIND = 'archive-privacy-rewrite';
@@ -49,7 +57,7 @@ export interface ArchivePrivacyMessage {
 	prefixIndex: number;
 	cursor: string | null;
 	/** Only on the run's first message (lane 0, prefix 0): creates the run, then starts the other lanes */
-	start?: { dryRun: boolean; lanes: number; limit?: number };
+	start?: { dryRun: boolean; lanes: number; limit?: number; mode?: ArchiveRewriteMode };
 }
 
 export interface PrefixCounts {
@@ -64,7 +72,11 @@ export interface PrefixCounts {
 	deleted: number;
 	/** Not JSON: left alone and counted */
 	unreadable: number;
+	/** Titles mode: titles linked to their owners (archive_title_refs) */
+	indexed?: number;
 }
+
+export type ArchiveRewriteMode = 'privacy' | 'titles';
 
 export interface ArchivePrivacyMeta {
 	runId: string;
@@ -75,6 +87,8 @@ export interface ArchivePrivacyMeta {
 	startedAt: string;
 	/** The run's pseudonym key; null in a dry run and once every lane is done */
 	key: string | null;
+	/** 'privacy' (the #1177 rewrite, the default) or 'titles' (#1254) */
+	mode?: ArchiveRewriteMode;
 }
 
 export interface ArchivePrivacyLane {
@@ -87,6 +101,10 @@ export interface ArchivePrivacyLane {
 
 interface Env {
 	analytics_rollups?: R2Bucket;
+	/** Titles mode: the content records (owner lookups) and archive_title_refs */
+	videos?: R2Bucket;
+	channels?: R2Bucket;
+	NOTIFICATIONS_DB?: D1Database;
 	global_settings?: R2Bucket;
 	PROCESSING_CHECK_QUEUE?: Queue;
 }
@@ -169,6 +187,112 @@ export async function runArchivePrivacyPage(
 	return { counts, nextCursor: listing.truncated ? (listing as { cursor?: string }).cursor ?? null : null };
 }
 
+/** Content ids an archived message names, by kind: the videos and channels its titles belong to. */
+export function archiveContentIds(record: unknown): { videos: Set<string>; channels: Set<string> } {
+	const videos = new Set<string>();
+	const channels = new Set<string>();
+	const visit = (value: unknown) => {
+		if (Array.isArray(value)) return value.forEach(visit);
+		if (!value || typeof value !== 'object') return;
+		for (const [key, inner] of Object.entries(value)) {
+			if (typeof inner === 'string' && inner) {
+				if (key === 'videoId' || key === 'entityId') videos.add(inner);
+				else if (/^(?:channelId|videoChannelId)$/.test(key)) channels.add(inner);
+			} else visit(inner);
+		}
+	};
+	visit(record);
+	return { videos, channels };
+}
+
+export interface TitlesEnv {
+	videos?: Pick<R2Bucket, 'get'>;
+	channels?: Pick<R2Bucket, 'get'>;
+	NOTIFICATIONS_DB?: D1Database;
+}
+
+/** The owners (user ids) of the content a record names; content that no longer exists adds nobody. */
+export async function archiveContentOwners(env: TitlesEnv, record: unknown, cache: Map<string, string | null>): Promise<Set<string>> {
+	const { videos, channels } = archiveContentIds(record);
+	const owners = new Set<string>();
+	const lookup = async (bucket: Pick<R2Bucket, 'get'> | undefined, kind: string, id: string) => {
+		const cacheKey = `${kind}:${id}`;
+		if (!cache.has(cacheKey)) {
+			const object = bucket ? await bucket.get(id) : null;
+			let owner: string | null = null;
+			if (object) {
+				try {
+					const value = (await object.json()) as { userId?: unknown; isDeleted?: unknown };
+					owner = typeof value.userId === 'string' && value.userId && value.isDeleted !== true ? value.userId : null;
+				} catch {
+					owner = null;
+				}
+			}
+			cache.set(cacheKey, owner);
+		}
+		const owner = cache.get(cacheKey);
+		if (owner) owners.add(owner);
+	};
+	for (const id of videos) await lookup(env.videos, 'video', id);
+	for (const id of channels) await lookup(env.channels, 'channel', id);
+	return owners;
+}
+
+/** Titles mode: one listing page of one prefix (see the module comment). */
+export async function runArchiveTitlesPage(
+	bucket: R2Bucket,
+	env: TitlesEnv,
+	meta: Pick<ArchivePrivacyMeta, 'dryRun' | 'limit'>,
+	prefix: string,
+	cursor: string | null,
+	now = Date.now()
+): Promise<{ counts: PrefixCounts; nextCursor: string | null }> {
+	if (!meta.dryRun && !env.NOTIFICATIONS_DB) throw new Error('NOTIFICATIONS_DB is not bound (archive_title_refs)');
+	const listing = await bucket.list({ prefix, limit: meta.limit, include: ['customMetadata'], ...(cursor ? { cursor } : {}) });
+	const counts: PrefixCounts = { ...EMPTY, indexed: 0 };
+	const cache = new Map<string, string | null>();
+	const work: R2Object[] = [];
+	for (const object of listing.objects) {
+		counts.listed++;
+		if (object.customMetadata?.titles === ARCHIVE_TITLES_VERSION) counts.stamped++;
+		else work.push(object);
+	}
+	for (let i = 0; i < work.length; i += PARALLEL_READS) {
+		await Promise.all(
+			work.slice(i, i + PARALLEL_READS).map(async (object) => {
+				const body = await bucket.get(object.key);
+				if (!body) return;
+				let record: unknown;
+				try {
+					record = JSON.parse(await body.text());
+				} catch {
+					counts.unreadable++;
+					return;
+				}
+				if (!hasArchiveTitles(record)) {
+					counts.clean++;
+					return;
+				}
+				const owners = await archiveContentOwners(env, record, cache);
+				const next = owners.size ? record : eraseArchiveTitles(record);
+				if (owners.size) counts.indexed!++;
+				else counts.rewritten++;
+				if (meta.dryRun) return;
+				if (owners.size) {
+					const db = env.NOTIFICATIONS_DB!;
+					const subjects = await Promise.all([...owners].map((id) => archiveSubjectKey(id)));
+					await db.batch(subjects.map((subject) => db.prepare('INSERT OR IGNORE INTO archive_title_refs (subject, archive_key, created_at) VALUES (?, ?, ?)').bind(subject, object.key, now)));
+				}
+				await bucket.put(object.key, JSON.stringify(next, null, 2), {
+					httpMetadata: body.httpMetadata ?? { contentType: 'application/json' },
+					customMetadata: { ...(body.customMetadata ?? {}), titles: ARCHIVE_TITLES_VERSION },
+				});
+			})
+		);
+	}
+	return { counts, nextCursor: listing.truncated ? (listing as { cursor?: string }).cursor ?? null : null };
+}
+
 const metaKey = (runId: string) => `${RUN_PREFIX}${runId}/meta.json`;
 const laneKey = (runId: string, lane: number) => `${RUN_PREFIX}${runId}/lane-${lane}.json`;
 
@@ -205,7 +329,9 @@ export async function handleArchivePrivacyMessage(env: Env, msg: QueueMessageLik
 				limit: Math.min(Math.max(Math.floor(body.start.limit ?? 100), 1), 200),
 				prefixes: archivePrefixes(now),
 				startedAt: now.toISOString(),
-				key: body.start.dryRun !== false ? null : newArchiveSecret(),
+				// Titles mode needs no pseudonym key
+				key: body.start.dryRun !== false || body.start.mode === 'titles' ? null : newArchiveSecret(),
+				mode: body.start.mode === 'titles' ? 'titles' : 'privacy',
 			};
 			await putJson(settings, metaKey(body.runId), meta);
 			// Lane 0 starts the run; the other lanes start once its meta (and key) exist
@@ -224,10 +350,13 @@ export async function handleArchivePrivacyMessage(env: Env, msg: QueueMessageLik
 			msg.ack();
 			return;
 		}
-		if (!meta.dryRun && !meta.key) throw new Error(`run ${body.runId} has no key left (finished?)`);
-		const result = await runArchivePrivacyPage(bucket, meta, prefix, body.cursor);
+		const titles = meta.mode === 'titles';
+		if (!titles && !meta.dryRun && !meta.key) throw new Error(`run ${body.runId} has no key left (finished?)`);
+		const result = titles
+			? await runArchiveTitlesPage(bucket, env, meta, prefix, body.cursor, now.getTime())
+			: await runArchivePrivacyPage(bucket, meta, prefix, body.cursor);
 		const soFar = lane.prefixes[prefix] ?? { ...EMPTY };
-		for (const k of Object.keys(soFar) as Array<keyof PrefixCounts>) soFar[k] += result.counts[k];
+		for (const k of Object.keys(result.counts) as Array<keyof PrefixCounts>) soFar[k] = (soFar[k] ?? 0) + (result.counts[k] ?? 0);
 		lane.prefixes[prefix] = soFar;
 		lane.updatedAt = now.toISOString();
 		const next: ArchivePrivacyMessage | null = result.nextCursor
