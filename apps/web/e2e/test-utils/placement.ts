@@ -51,6 +51,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/admin-web/e2e/16-videos-list.spec.ts': { placement: 'local', reason: 'Videos list on the client list foundation: filters survive reload and Back, Unpublish then Undo restores it (own throwaway channel and video)' },
   'apps/admin-web/e2e/17-delivery-live-qoe.spec.ts': { placement: 'local', reason: 'Delivery live playback: beacon heartbeats through api-videos and the local realtime worker to the open page' },
   'apps/admin-web/e2e/17-live-streaming.spec.ts': { placement: 'local', reason: 'Live streaming page: mode and undo, channel override via the picker, provider off/on through the in-app dialog; restores the settings (shared state)' },
+  'apps/admin-web/e2e/18-account-menu.spec.ts': { placement: 'local', reason: 'Header account menu: opaque surface and lines in light and dark, the admin named by the platform rule (2026-11-13 report)' },
   'apps/web/e2e/01-homepage.spec.ts': { placement: 'local', reason: 'anonymous home page layout and content' },
   'apps/web/e2e/02-video-player.spec.ts': { placement: 'local', reason: 'player loads a seed video; any playable HLS will do' },
   'apps/web/e2e/03-profile.spec.ts': { placement: 'local', reason: 'profile page and profile guard with stored sessions' },

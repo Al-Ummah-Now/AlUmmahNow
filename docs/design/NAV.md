@@ -39,9 +39,10 @@ Height 3.5rem (`--aun-header-height`), background `--fanous-c-nav-bg`, bottom bo
    owner's art as supplied, never a placeholder icon.
 3. The app's own primary links or search (www links, the videos/CMS search, the admin ⌘K search).
 4. **Action cluster**, at the inline end with the account button, never beside the logo (owner
-   review, revision 5). App actions sit here in this order: Upload (videos: a "+ Upload" pill,
-   2.5rem tall like the account button, `--fanous-c-nav-*` colours; icon-only "+" at 44px on
-   phones, the name kept as its accessible name), notifications, then the account. CMS: New.
+   review, revision 5). App actions sit here in this order: Upload (videos: an Upload pill with an
+   upload icon, a tray with an arrow up, never a "+" (owner decision 2026-11-13); 2.5rem tall like
+   the account button, `--fanous-c-nav-*` colours; the icon alone at 44px on phones, the name kept
+   as its accessible name), notifications, then the account. CMS: New.
 5. Language switch (`.aun-lang`): the other language's name ("العربية" / "English").
 6. Theme switch (`.aun-icon-btn`): a menu with System / Light / Dark.
    Apps with a side rail (videos, videos admin, CMS, auth admin) put 5 and 6 at the foot of the
@@ -192,7 +193,7 @@ in this order:
    never a generic error. Without a creator tier (by invitation) there is neither Create nor the note.
 
 Upload is **not** in the menu (owner review, revision 5, the YouTube pattern): the channel layer
-leads to Studio, and uploading starts from the header's "+ Upload" action (see [Header](#header)),
+leads to Studio, and uploading starts from the header's Upload action (see [Header](#header)),
 which targets the active channel and is disabled with "Create a channel to upload" when no channel
 is active.
 

@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { AdminShell } from '@/components/shell/AdminShell';
 import { NAV_COOKIE } from '@/components/shell/nav-model';
 import { getContactCounts, getErrorCounts } from '@/lib/api/admin';
+import { getUser } from '@/lib/api/content';
 import { canReadErrors, canUseContactInbox, canUseProcessing, canManageVideosUsers, canUseStaleUploads, canManageMedia, canReadOps } from '@/lib/roles';
 import { ErrorReportingIdentity } from '@/lib/errors/ErrorReportingProvider';
 import { errorsBadgeCount } from './errors/filters';
@@ -43,6 +44,15 @@ export default async function ProtectedLayout({
     }
   }
 
+  // The account menu names the admin by the platform rule (display name, else first + last; the
+  // email only without either): their videos profile through admin-api. Never holds up the page.
+  let userName: string | undefined;
+  try {
+    userName = (await getUser(session.user.id)).displayName || undefined;
+  } catch (e) {
+    logger.debug('[layout] Profile name unavailable', { error: e instanceof Error ? e.message : String(e) });
+  }
+
   const role = session.user.role;
   const navCookie = (await cookies()).get(NAV_COOKIE)?.value;
 
@@ -51,6 +61,7 @@ export default async function ProtectedLayout({
       <ErrorReportingIdentity userId={session.user.id} />
       <AdminShell
         userEmail={session.user.email}
+        userName={userName}
         userRoles={session.user.role ? [session.user.role] : []}
         authIssuer={process.env.Issuer}
         initialRail={navCookie === 'rail'}

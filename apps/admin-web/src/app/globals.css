@@ -68,6 +68,32 @@ html.dark {
   color-scheme: dark;
 }
 
+/*
+  The shared account menu's colours, set per mode with the admin's own html.dark class. The shared
+  stylesheet uses light-dark(), which this build (Tailwind v4, Lightning CSS) rewrites into a
+  two-variable fallback; on production the menu came out see-through (no background, no lines;
+  owner report 2026-11-13). These plain declarations come later and win, and nothing rewrites them;
+  the shared stylesheet paints --aun-menu-bg over an opaque Canvas, so the menu is never see-through.
+  The values are the shared contract's (docs/design/NAV.md): the page background in light mode,
+  the theme's menu colours in dark mode, lines the text mixed 45% into the menu.
+*/
+.aun-menu {
+  --aun-menu-bg: var(--fanous-color-background);
+  --aun-menu-text: var(--fanous-color-text-primary);
+  --aun-menu-muted: var(--fanous-color-text-secondary);
+  --aun-menu-hover: color-mix(in srgb, var(--fanous-c-menu-hover) 50%, var(--fanous-color-background));
+  --aun-menu-line: color-mix(in srgb, var(--fanous-color-text-primary) 45%, var(--fanous-color-background));
+  --aun-menu-edge: var(--fanous-color-outline);
+}
+html.dark .aun-menu {
+  --aun-menu-bg: var(--fanous-c-menu-bg);
+  --aun-menu-text: var(--fanous-c-menu-text);
+  --aun-menu-muted: var(--fanous-c-menu-muted);
+  --aun-menu-hover: var(--fanous-c-menu-hover);
+  --aun-menu-line: color-mix(in srgb, var(--fanous-c-menu-text) 45%, var(--fanous-c-menu-bg));
+  --aun-menu-edge: var(--fanous-c-menu-border);
+}
+
 @theme inline {
   --color-nav-bg: var(--fanous-c-nav-bg);
   --color-nav-border: var(--fanous-c-nav-border);

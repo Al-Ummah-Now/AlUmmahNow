@@ -45,6 +45,9 @@ const toHex = (c: number[]) => '#' + c.map((v) => Math.round(v).toString(16).pad
 
 /** Resolves var(--fanous-x) or color-mix(in srgb, var(--a) N%, var(--b)) against a token block. */
 function resolve(expr: string, t: Record<string, string>): string {
+  // the menu's own per-mode helpers (--aun-menu-line-light...) resolve through their rules
+  const own = expr.trim().match(/^var\(--(aun-[\w-]+)\)$/);
+  if (own) return resolve(rule(own[1]), t);
   const v = (s: string) => {
     const name = s.match(/var\(--fanous-([\w-]+)\)/)?.[1];
     assert.ok(name && t[name], `token for ${s}`);
@@ -86,4 +89,27 @@ test('no descendant combinator directly before a pseudo-class function', () => {
 test('the stylesheet inlines no images and fetches nothing', () => {
   assert.doesNotMatch(css, /url\(|@import|data:/);
   assert.ok(css.length < 32_000, `aun-nav.css is ${css.length} bytes`);
+});
+
+// Production 2026-11-13 (owner's browser, profile and videos admin): the lines vanished and the
+// admin menu was see-through, from values that failed to resolve. The menu must survive that:
+test('light-dark() only picks between plain values (no color-mix() nested inside it)', () => {
+  for (const m of css.matchAll(/:\s*light-dark\(([^;]*)\);/g)) {
+    assert.ok(!m[1].includes('color-mix('), `nested color-mix in light-dark(${m[1]})`);
+  }
+});
+
+test('the menu is opaque even when its colour fails: an --aun-menu-bg layer over Canvas', () => {
+  const menu = css.slice(css.indexOf('\n.aun-menu {'), css.indexOf('\n}', css.indexOf('\n.aun-menu {')));
+  assert.match(menu, /\n\s*background-color:\s*Canvas;/);
+  assert.match(menu, /\n\s*background-image:\s*linear-gradient\(var\(--aun-menu-bg\), var\(--aun-menu-bg\)\);/);
+  assert.doesNotMatch(css, /background(-color)?:\s*var\(--aun-menu-bg\)/, 'a var() background drops to transparent when it fails');
+});
+
+test('lines and borders use longhands, so a failing colour never erases them', () => {
+  assert.doesNotMatch(css, /border(-block-start)?:\s*1px solid var\(--aun-menu-(line|edge)\)/, 'a shorthand with a failing var() resets to no border');
+  const sep = css.slice(css.indexOf('\n.aun-menu-sep {'), css.indexOf('\n}', css.indexOf('\n.aun-menu-sep {')));
+  assert.match(sep, /border-block-start-width:\s*1px;/);
+  assert.match(sep, /border-block-start-style:\s*solid;/);
+  assert.match(sep, /border-block-start-color:\s*var\(--aun-menu-line\);/);
 });

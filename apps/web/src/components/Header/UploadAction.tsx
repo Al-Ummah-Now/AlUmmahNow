@@ -1,6 +1,7 @@
 'use client';
 // The one Upload action: the first item of the header's action cluster (before notifications and the
-// account), a header pill like the account button with a "+" and a short label, icon only on phones.
+// account), a header pill like the account button with an upload icon (a tray with an arrow up, the
+// menus' stroke icon set; owner decision 2026-11-13, replacing the "+") and a short label, icon only on phones.
 import Link from '@/components/common/AppLink';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/components/AuthProvider/authContext';
@@ -10,7 +11,7 @@ import { studioUploadHref } from '@/lib/studio/links';
 
 const Icon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M12 5v14" /><path d="M5 12h14" />
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="M17 8l-5-5-5 5" /><path d="M12 3v12" />
   </svg>
 );
 
