@@ -7,6 +7,7 @@ import { render, screen } from '@testing-library/react';
 import VideoCardLTR from '../index';
 import VideoCardRTL from '../rtl/index';
 import { HomeHero } from '@/components/ThemeDemo/HomeHero';
+import type { VideoObject } from '@al-ummah/shared-types';
 
 let mockLang: 'en' | 'ar' = 'en';
 jest.mock('@/hooks/useLanguage', () => ({
@@ -39,19 +40,19 @@ const video = {
   width: 1920,
   height: 1080,
   duration: 600,
-} as never;
+} as unknown as VideoObject;
 
 describe('channel name on cards and the hero', () => {
   it('Arabic page: the Arabic channel name', () => {
     mockLang = 'ar';
-    render(<VideoCardRTL {...(video as object)} />);
+    render(<VideoCardRTL {...video} />);
     expect(screen.getByText('الأمة الآن')).toBeInTheDocument();
     expect(screen.queryByText('Al Ummah Now')).toBeNull();
   });
 
   it('English page: the English channel name', () => {
     mockLang = 'en';
-    render(<VideoCardLTR {...(video as object)} />);
+    render(<VideoCardLTR {...video} />);
     expect(screen.getByText('Al Ummah Now')).toBeInTheDocument();
     expect(screen.queryByText('الأمة الآن')).toBeNull();
   });
