@@ -105,7 +105,7 @@ export class CreatePostComment extends AuthenticatedRoute {
 
     const { channelId: postChannelId, postId } = c.req.param();
     const data: any = await this.getValidatedData<z.infer<typeof createCommentRequestSchema>>();
-    const userChannelId = data.headers?.channelId;
+    const userChannelId = data.headers?.channelId ?? undefined;
 
     if (!data.body) {
       return c.json({ success: false, error: 'Request body is required' }, 400);
