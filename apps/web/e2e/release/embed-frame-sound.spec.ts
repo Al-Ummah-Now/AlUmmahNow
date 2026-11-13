@@ -183,8 +183,12 @@ test.describe('Release: the embed fills its frame on the night colour', () => {
         const frame = await embedFrame(page);
         await expect(frame.locator('.custom-video-player')).toBeVisible({ timeout: 45000 });
         if (ON_PR && !(await look(frame)).backdrop) skipOnPr('the embed frame fill (components/embed/embed-frame.css)');
-        // A target that still sizes the player to the picture predates the frame-wide controls
-        if (ON_PR && (await look(frame)).w < width - 2) skipOnPr('the frame-wide embed controls (components/embed/embed-frame.css)');
+        // A target without the frame-wide box (main > .embed-box, EmbedPlayer) predates the frame-wide
+        // controls. Its player can still be as wide as the frame (landscape, square), so the class is
+        // the marker, not the width
+        if (ON_PR && (await frame.locator('main[data-testid="embed-player"] > .embed-box').count()) === 0) {
+          skipOnPr('the frame-wide embed controls (components/embed/embed-frame.css)');
+        }
         // Wake the controls (they fade while playing)
         await page.locator('#aun').hover({ position: { x: width / 2, y: height / 2 } });
         await page.locator('#aun').hover({ position: { x: width / 2 + 5, y: height / 2 + 5 } });
