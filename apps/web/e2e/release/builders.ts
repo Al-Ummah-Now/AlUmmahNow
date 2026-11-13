@@ -182,27 +182,39 @@ const FIXTURE_TIMEOUT_MS = CLEANUP_BUDGET_MS + REQUEST_TIMEOUT_MS + 30_000;
  * and its sessions on the auth server (QA/stage/local test route, run accounts only). 404 = gone.
  * The erase stops after ERASE_BUDGET_MS; the account is deleted either way.
  */
-async function eraseUser(user: WebUser): Promise<Response | undefined> {
+/**
+ * What a cleanup step gets from the cleanup running it: a signal that fires when the cleanup's
+ * budget is spent (the step stops making requests) and a warn() that goes quiet once the cleanup
+ * has returned. Without them an abandoned step kept calling the API and logging after its fixture
+ * had ended, which Playwright reports as "Internal error: step id not found: fixture@…" (#1096's run).
+ */
+interface CleanupContext {
+  signal: AbortSignal;
+  warn: (message: string) => void;
+}
+
+async function eraseUser(user: WebUser, ctx: CleanupContext): Promise<Response | undefined> {
   let resumeToken: string | undefined;
   const deadline = Date.now() + ERASE_BUDGET_MS;
   for (let round = 0; round < 20; round++) {
+    if (ctx.signal.aborted) return undefined;
     const left = deadline - Date.now();
     if (left <= 0) {
-      console.warn(`[builders] privacy erase of ${user.email} still incomplete after ${ERASE_BUDGET_MS / 1000} s: left to the run teardown`);
+      ctx.warn(`[builders] privacy erase of ${user.email} still incomplete after ${ERASE_BUDGET_MS / 1000} s: left to the run teardown`);
       break;
     }
     const res = await apiFetch(user, '/api/privacy/data', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ confirm: 'DELETE', ...(resumeToken ? { resumeToken } : {}) }),
-      signal: AbortSignal.timeout(Math.min(left, REQUEST_TIMEOUT_MS)),
+      signal: AbortSignal.any([ctx.signal, AbortSignal.timeout(Math.min(left, REQUEST_TIMEOUT_MS))]),
     }).catch((error: Error) => {
-      console.warn(`[builders] privacy erase of ${user.email} failed: ${error.message} (left to the run teardown)`);
+      ctx.warn(`[builders] privacy erase of ${user.email} failed: ${error.message} (left to the run teardown)`);
       return undefined;
     });
     if (!res) break;
     if (res.status >= 300) {
-      if (res.status !== 404 && res.status !== 401) console.warn(`[builders] privacy erase of ${user.email} answered ${res.status}`);
+      if (res.status !== 404 && res.status !== 401) ctx.warn(`[builders] privacy erase of ${user.email} answered ${res.status}`);
       break;
     }
     const body = (await res.json().catch(() => ({}))) as { complete?: boolean; resumeToken?: string; result?: { complete?: boolean; resumeToken?: string } };
@@ -210,17 +222,18 @@ async function eraseUser(user: WebUser): Promise<Response | undefined> {
     if (result.complete !== false) break;
     resumeToken = result.resumeToken;
   }
-  return deleteAccount(user.email);
+  if (ctx.signal.aborted) return undefined;
+  return deleteAccount(user.email, ctx.signal);
 }
 
 /** The run account on the auth server (soft delete + immediate purge, sessions revoked). Run accounts only. */
-async function deleteAccount(email: string): Promise<Response | undefined> {
+async function deleteAccount(email: string, signal?: AbortSignal): Promise<Response | undefined> {
   const sink = process.env.E2E_CODE_SINK_SECRET;
   const promote = process.env.TEST_PROMOTE_SECRET;
   if (!isRunUserEmail(email) || !sink || !promote || releaseEnv() === 'production') return undefined;
   return fetch(`${target().auth}/test/run-users/delete/${encodeURIComponent(email)}`, {
     method: 'POST',
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)]) : AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     headers: { 'X-E2E-Secret': sink, 'X-Test-Secret': promote, 'User-Agent': 'al-ummah-e2e-builders' },
   });
 }
@@ -237,6 +250,15 @@ function recordResource(kind: 'video' | 'channel', id: string): void {
 /** Everything one spec (or worker) created, deleted again by cleanup(). */
 export class DataScope {
   private undo: { what: string; run: () => Promise<unknown> }[] = [];
+  /** Aborted when a cleanup ends: steps still running stop their requests (see CleanupContext). */
+  private stop = new AbortController();
+  private quiet = false;
+  private readonly ctx: CleanupContext = {
+    signal: this.stop.signal,
+    warn: (message) => {
+      if (!this.quiet) console.warn(message);
+    },
+  };
   /** Users this scope created or acts for, with their refresh tokens (cleanup refreshes first). */
   private sessions = new Map<WebUser, string | undefined>();
 
@@ -254,7 +276,7 @@ export class DataScope {
     // The id, for the end-of-job leftover check (rows keyed only by user id; the account is gone by then)
     if (process.env.E2E_RUN_USER_IDS_FILE) appendFileSync(process.env.E2E_RUN_USER_IDS_FILE, `${user.userId}\n`);
     // Runs last (cleanup is newest first): the user's data, then the account and its sessions
-    this.undo.push({ what: `user ${user.email}`, run: () => eraseUser(user) });
+    this.undo.push({ what: `user ${user.email}`, run: () => eraseUser(user, this.ctx) });
     await createProfile(user);
     return user;
   }
@@ -456,6 +478,21 @@ export class DataScope {
    * teardown, and so are the steps after it.
    */
   async cleanup(): Promise<void> {
+    this.quiet = false;
+    if (this.stop.signal.aborted) {
+      this.stop = new AbortController();
+      this.ctx.signal = this.stop.signal;
+    }
+    try {
+      await this.runCleanup();
+    } finally {
+      // Steps abandoned at the deadline stop here: no more requests, no more output
+      this.quiet = true;
+      this.stop.abort();
+    }
+  }
+
+  private async runCleanup(): Promise<void> {
     const deadline = Date.now() + CLEANUP_BUDGET_MS;
     for (const [user, refreshToken] of this.sessions) {
       if (Date.now() < deadline) this.sessions.set(user, await refreshUser(user, refreshToken));
