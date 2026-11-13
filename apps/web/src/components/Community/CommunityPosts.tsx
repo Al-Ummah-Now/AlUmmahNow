@@ -9,6 +9,7 @@ import { useAuth } from '@/components/AuthProvider/authContext';
 import { useActiveChannel } from '@/contexts/ActiveChannelContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useProfile } from '@/hooks/useProfile';
+import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { userDisplayName } from '@/lib/display-name';
 import PostCard from './PostCard';
 import { cn } from '@/lib/utils';
@@ -25,6 +26,9 @@ export default function CommunityPosts({ channelId, isRTL = false, locale = 'en'
   const { t, lang } = useLanguage();
   const { user } = useAuth();
   const { profile } = useProfile(user ?? null);
+  // The active channel's name in the page's language (the account menu's name for it)
+  const { user: account } = useMultiAccount();
+  const channelName = account?.channel?.nameLocalized?.[lang]?.trim() || activeChannel?.name?.trim();
   const { activeChannel } = useActiveChannel();
   const viewerUserId = user?.id;
   const viewerChannelId = activeChannel?.channelId;
@@ -160,7 +164,7 @@ export default function CommunityPosts({ channelId, isRTL = false, locale = 'en'
           userId={viewerUserId}
           // With a channel active, comments are that channel's; without one, the member's own (#1151)
           userAvatar={activeChannel ? activeChannel.avatarUrl : profile?.avatarUrl}
-          userDisplayName={activeChannel?.name?.trim() || userDisplayName(profile, lang, user?.email) || undefined}
+          userDisplayName={activeChannel ? channelName || undefined : userDisplayName(profile, lang, user?.email) || undefined}
         />
       ))}
 

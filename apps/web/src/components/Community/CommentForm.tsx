@@ -149,7 +149,7 @@ export default function CommentForm({
       <div className="flex-1">
         {userId && userDisplayName && (
           <p className="mb-1 text-xs opacity-80" data-testid="comment-identity" data-as={channelId ? 'channel' : 'member'}>
-            {t.comments.commentingAs.replace('{name}', userDisplayName)}
+            {t.comments.commentingAs.split('{name}')[0]}<bdi>{userDisplayName}</bdi>{t.comments.commentingAs.split('{name}')[1] ?? ''}
             {hasChannels && (
               <>
                 {' · '}

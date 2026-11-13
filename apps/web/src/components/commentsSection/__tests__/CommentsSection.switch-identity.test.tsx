@@ -54,6 +54,14 @@ describe('Commenting as … · Switch', () => {
     window.removeEventListener(ACCOUNT_MENU_EVENT, listener);
   });
 
+  it('names the channel in the page language, isolated so mixed scripts keep their order', () => {
+    account = { id: 'viewer', channel: { id: 'ch1', name: 'Community Corner', nameLocalized: { en: 'The Corner', ar: 'ركن المجتمع' } }, channels: [{ id: 'ch1', name: 'Community Corner' }] };
+    render(<CommentsSection videoId="v1" user={viewer} />);
+    const line = screen.getByTestId('comment-identity');
+    expect(line).toHaveTextContent('Commenting as The Corner');
+    expect(line.querySelector('bdi')).toHaveTextContent('The Corner');
+  });
+
   it('has no Switch for a member without channels', () => {
     account = { id: 'viewer', channel: null, channels: [] };
     render(<CommentsSection videoId="v1" user={viewer} />);
