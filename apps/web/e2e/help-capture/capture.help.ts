@@ -14,10 +14,10 @@
  * generic on purpose: no real person or channel.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { expect, test, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Browser, type BrowserContext, type Locator, type Page, type Route } from '@playwright/test';
 import { useOwnData, type Creator } from '../release/builders';
 import { apiFetch } from '../release/web-session';
 import { playFor } from '../release/videos';
@@ -41,12 +41,80 @@ const NAMES = {
   user: { en: 'Amina Yusuf', ar: 'أمينة يوسف' },
   channel: { en: 'Community Corner', ar: 'ركن المجتمع' },
   second: { en: 'Weekend Sessions', ar: 'لقاءات نهاية الأسبوع' },
-  video: { en: 'Planting a balcony garden', ar: 'زراعة حديقة في الشرفة' },
+  video: { en: 'Site tour', ar: 'جولة في الموقع' },
   comment: { en: 'Thank you, this was really clear.', ar: 'شكرًا، كان الشرح واضحًا جدًا.' },
   // One post shows in both languages' pictures: it says it in both
   post: { en: 'New videos every Friday · مرئيات جديدة كل جمعة', ar: 'New videos every Friday · مرئيات جديدة كل جمعة' },
   playlist: { en: 'Weekend projects', ar: 'مشاريع نهاية الأسبوع' },
 };
+
+/**
+ * Demo media for the pictures (owner, 2026-11-13): the local stack's fake CDN serves a colour-bar
+ * test pattern for every video, so this script answers the browser's CDN requests for its own
+ * videos itself, with short clips and thumbnails made from the owner's lantern art
+ * (packages/app-icons/assets/crops, used as is: a slow pan and zoom is only crop and resize over
+ * time; nothing drawn on it). Only here: the general test fixtures stay as they are.
+ */
+const ART = join(__dirname, '../../../../packages/app-icons/assets/crops');
+const DEMOS = [
+  { key: 'tour', art: 'videos.webp', title: NAMES.video },
+  // Full-bleed crops only (www.webp is round, with black corners)
+  { key: 'street', art: 'tools.webp', title: { en: 'Lantern street', ar: 'فوانيس رمضان' } },
+  { key: 'evening', art: 'auth.webp', title: { en: 'Evening lights', ar: 'أضواء المساء' } },
+  { key: 'writing', art: 'cms.webp', title: { en: 'Writing by lantern light', ar: 'الكتابة على ضوء الفانوس' } },
+] as const;
+const MEDIA = mkdtempSync(join(tmpdir(), 'help-media-'));
+/** CDN guid → the demo it shows */
+const demoByGuid = new Map<string, (typeof DEMOS)[number]['key']>();
+
+/** A 20 s 640x360 HLS clip (one rendition, no audio) and a 960x540 thumbnail of one lantern crop */
+function makeDemoMedia(key: string, art: string): void {
+  const dir = join(MEDIA, key);
+  mkdirSync(dir, { recursive: true });
+  const src = join(ART, art);
+  // The square crop seen through a 16:9 window that drifts down and zooms in slowly
+  // Cropped to 16:9 first, so the zoom never stretches the art
+  const pan = "scale=1280:1280,crop=1280:720:0:220,zoompan=z='1+0.0003*on':x='(iw-iw/zoom)*0.5':y='(ih-ih/zoom)*(0.2+on/1000)':d=1:s=640x360:fps=25,format=yuv420p";
+  execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-loop', '1', '-i', src, '-vf', pan, '-t', '20', '-c:v', 'libx264', '-profile:v', 'main', '-level', '3.0', '-g', '50',
+    '-hls_time', '4', '-hls_playlist_type', 'vod', '-hls_segment_filename', join(dir, '0_%03d.ts'), join(dir, '0.m3u8')]);
+  writeFileSync(join(dir, 'master.m3u8'), '#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-STREAM-INF:BANDWIDTH=400000,RESOLUTION=640x360,CODECS="avc1.4d401e"\n0.m3u8\n');
+  execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', src, '-vf', 'scale=960:960,crop=960:540:0:165', '-q:v', '3', join(dir, 'thumbnail.jpg')]);
+}
+
+/** Serves a demo's clip and thumbnail in place of the fake CDN's test pattern */
+async function serveDemo(route: Route): Promise<void> {
+  const url = new URL(route.request().url());
+  const parts = url.pathname.split('/').filter(Boolean);
+  const at = parts.findIndex((p) => demoByGuid.has(p));
+  // Another video on the stack (the seed's) gets a demo too, chosen by its guid: no test pattern anywhere
+  const other = parts.find((p) => /^[0-9a-f-]{36}$/i.test(p));
+  const key = at >= 0 ? demoByGuid.get(parts[at]) : other ? DEMOS[parseInt(other.slice(0, 2), 16) % DEMOS.length].key : undefined;
+  const file = parts[parts.length - 1] ?? '';
+  if (!key) return route.continue();
+  const dir = join(MEDIA, key);
+  const headers = { 'access-control-allow-origin': '*', 'cache-control': 'no-store' };
+  let path = '';
+  let type = '';
+  if (/^thumbnail(_\d+)?\.jpg$|^preview\.webp$/.test(file)) [path, type] = [join(dir, 'thumbnail.jpg'), 'image/jpeg'];
+  else if (file === 'playlist.m3u8' || file === 'master.m3u8') [path, type] = [join(dir, 'master.m3u8'), 'application/vnd.apple.mpegurl'];
+  else if (/^\d+\.m3u8$/.test(file)) [path, type] = [join(dir, '0.m3u8'), 'application/vnd.apple.mpegurl'];
+  else if (/^\d+_\d+\.ts$/.test(file)) [path, type] = [join(dir, file.replace(/^\d+_/, '0_')), 'video/mp2t'];
+  if (!path || !existsSync(path)) return route.continue();
+  return route.fulfill({ status: 200, headers: { ...headers, 'content-type': type }, body: readFileSync(path) });
+}
+
+/** The CDN guid of one of our videos, from its playback or thumbnail URL */
+async function cdnGuid(id: string): Promise<string | null> {
+  const body = (await (await fetch(`${target().api}/api/videos/${id}`, { cache: 'no-store' })).json().catch(() => ({}))) as Record<string, unknown> & { result?: Record<string, unknown> };
+  const video = (body.result ?? body) as Record<string, unknown>;
+  for (const field of ['playUrl', 'thumbnailUrl', 'hlsUrl', 'thumbnail']) {
+    const value = video[field];
+    if (typeof value !== 'string') continue;
+    const parts = new URL(value, target().web).pathname.split('/').filter((p) => p && !p.startsWith('bcdn_token='));
+    if (parts.length >= 2) return parts[parts.length - 2];
+  }
+  return null;
+}
 
 /** Every scene runs whatever another one did; the last test lists all problems at once */
 const problems: string[] = [];
@@ -70,9 +138,16 @@ test.beforeAll(async ({ browser }) => {
   for (const [id, name] of [[creator.channelIds[0], NAMES.channel], [creator.channelIds[1], NAMES.second]] as const) {
     expect((await apiFetch(user, `/api/channels/${id}`, json({ name: name.en, nameLocalized: name }, id))).status).toBeLessThan(300);
   }
-  const video = await data.createVideo(user, channelId, { clip: 'landscape40', isPublic: true, title: NAMES.video.en, waitReady: true });
-  videoId = video.id;
-  expect((await apiFetch(user, `/api/videos/${videoId}`, json({ titleLocalized: NAMES.video }, channelId))).status).toBeLessThan(300);
+  // The demo videos, oldest first so "Site tour" is the newest (the home page's featured video)
+  for (const demo of [...DEMOS].reverse()) {
+    makeDemoMedia(demo.key, demo.art);
+    const video = await data.createVideo(user, channelId, { clip: 'landscape40', isPublic: true, title: demo.title.en, waitReady: true });
+    expect((await apiFetch(user, `/api/videos/${video.id}`, json({ titleLocalized: demo.title }, channelId))).status).toBeLessThan(300);
+    const guid = await cdnGuid(video.id);
+    if (guid) demoByGuid.set(guid, demo.key);
+    else problems.push(`no CDN guid for demo video ${demo.key}: it shows the test pattern`);
+    if (demo.key === 'tour') videoId = video.id;
+  }
   await data.createComment(user, videoId, channelId, NAMES.comment.en);
   await data.createPost(user, channelId, { text: NAMES.post.en });
   // A personal playlist (no channel header: the member's own, #1183)
@@ -103,6 +178,7 @@ async function open(browser: Browser, lang: Lang, device: Device, mode: Mode, op
   // No consent banner over the pictures (optional tracking declined); the tour stays away by
   // itself in an automated browser
   await context.addCookies([{ name: 'aun_consent', value: `v1.a0.e0.p0.${Date.now()}`, url: target().web, sameSite: 'Lax' }]);
+  await context.route((url) => url.hostname.endsWith('b-cdn.net') || url.hostname.startsWith('media.'), serveDemo);
   const page = await context.newPage();
   return { context, page };
 }
@@ -256,7 +332,7 @@ const SCENES: Scene[] = [
   {
     id: 'identity-menu',
     run: async (page, lang) => {
-      await settle(page, '', lang);
+      await settle(page, `/channels/${channelId}`, lang);
       const menu = await openMenu(page);
       return [[menu.getByTestId('nav-profile-link'), menu.getByTestId('nav-active-channel'), menu.getByTestId('nav-switch-channel')], [header(page), menu]];
     },
@@ -264,7 +340,7 @@ const SCENES: Scene[] = [
   {
     id: 'identity-switch',
     run: async (page, lang) => {
-      await settle(page, '', lang);
+      await settle(page, `/channels/${channelId}`, lang);
       const menu = await openMenu(page, 'channels');
       return [[menu.getByTestId('nav-channel-group-owned').locator('p').first(), menu.getByTestId('nav-channel-option-none')], [header(page), menu]];
     },
@@ -323,7 +399,7 @@ const SCENES: Scene[] = [
   {
     id: 'appearance-rail',
     run: async (page, lang) => {
-      await settle(page, '', lang);
+      await settle(page, `/channels/${channelId}`, lang);
       const panel = page.locator('nav.nv-panel');
       if ((await panel.getAttribute('data-open')) !== 'true') await page.getByTestId('nav-drawer-toggle').click();
       const theme = panel.getByTestId('theme-toggle');
@@ -459,3 +535,5 @@ test('every picture and clip was made', () => {
   if (notes.length) console.log(`Skipped markers:\n${notes.join('\n')}`);
   expect(problems, problems.join('\n')).toEqual([]);
 });
+
+test.afterAll(() => rmSync(MEDIA, { recursive: true, force: true }));
