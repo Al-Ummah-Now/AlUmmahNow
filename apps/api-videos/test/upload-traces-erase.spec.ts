@@ -77,6 +77,13 @@ describe('account erasure: upload markers and TUS sessions (#1059)', () => {
 		assert.deepEqual([...kv.store.keys()].sort(), ['tus:upload:k9', tusUploadIndexKey('usr_b', 'k9')].sort());
 	});
 
+	it("deletes the erased user's bulk edit undo records (bulk-edit-undo:<userId>:…), nobody else's", async () => {
+		const kv = fakeKv(2);
+		for (const key of ['bulk-edit-undo:usr_a:op1:v1', 'bulk-edit-undo:usr_a:op1:v2', 'bulk-edit-undo:usr_a:op2:v3', 'bulk-edit-undo:usr_ab:op1:v1']) await kv.put(key, '{}');
+		await eraseUploadTraces({ TUS_SESSIONS: kv as never }, 'usr_a', []);
+		assert.deepEqual([...kv.store.keys()], ['bulk-edit-undo:usr_ab:op1:v1']);
+	});
+
 	it('works without the bindings (an env that has neither)', async () => {
 		assert.deepEqual(await eraseUploadTraces({}, 'usr_a', ['v1']), { markers: 0, sessions: 0 });
 	});

@@ -9,11 +9,14 @@
  *   writes beside each session; both are deleted. Sessions created before the index expire on their own.
  * - TUS_SESSIONS `tus:upload:<uploadKey>` (endpoints/video/tus/tusProxy.ts): the proxy's upload session
  *   `{ videoId, userId, bunnyUploadUrl, ... }`, alive for 7 days, indexed as `tus:user:<userId>:upload:<key>`.
+ * - TUS_SESSIONS `bulk-edit-undo:<userId>:…` (lib/bulkEditUndo.ts): bulk edit undo records (the
+ *   videos' fields before and after), alive for 24 hours. Deleted by prefix.
  *
  * Idempotent; called after every erasure pass by both callers (DELETE /api/privacy/data and the
  * admin erasure job).
  */
 import { UPLOAD_MARKER_PREFIX } from '../uploads/reaper';
+import { undoUserPrefix } from '../bulkEditUndo';
 import { getTusSessionKey, tusUserIndexPrefix, TUS_UPLOAD_INDEX_MARK } from '../bunny/tus';
 
 interface KvLike {
@@ -52,6 +55,18 @@ export async function eraseUploadTraces(env: UploadTracesEnv, userId: string, de
 			await env.TUS_SESSIONS.delete(name);
 			sessions++;
 		}
+	}
+	if (env.TUS_SESSIONS && userId) {
+		// Bulk edit undo records: same namespace, their own prefix (not counted as sessions)
+		const undoPrefix = undoUserPrefix(userId);
+		const undo: string[] = [];
+		let cursor: string | undefined;
+		do {
+			const page = await env.TUS_SESSIONS.list({ prefix: undoPrefix, cursor });
+			undo.push(...page.keys.map((k) => k.name));
+			cursor = page.list_complete ? undefined : page.cursor;
+		} while (cursor);
+		for (const name of undo) await env.TUS_SESSIONS.delete(name);
 	}
 	return { markers, sessions };
 }
