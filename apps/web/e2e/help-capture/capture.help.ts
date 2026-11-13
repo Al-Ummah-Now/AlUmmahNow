@@ -20,6 +20,7 @@ import { join } from 'node:path';
 import { expect, test, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test';
 import { useOwnData, type Creator } from '../release/builders';
 import { apiFetch } from '../release/web-session';
+import { playFor } from '../release/videos';
 import { target } from '../release/targets';
 
 type Lang = 'en' | 'ar';
@@ -252,7 +253,8 @@ const SCENES: Scene[] = [
     id: 'creating-studio',
     run: async (page, lang) => {
       await settle(page, `/studio/${channelId}/content/videos`, lang);
-      const row = page.getByRole('row').filter({ hasText: lang === 'ar' ? NAMES.video.ar : NAMES.video.en }).first();
+      // Studio lists the title as uploaded (English), in both languages
+      const row = page.getByRole('row').filter({ hasText: NAMES.video.en }).first();
       const edit = row.getByRole('link').or(row.getByRole('button')).first();
       return [[row, edit], []];
     },
@@ -404,14 +406,12 @@ test('clip watching-mini-player', async ({ browser }) => {
   for (const lang of LANGS) for (const mode of MODES) {
     await clip(browser, 'watching-mini-player', lang, mode, async (page) => {
       await settle(page, `/video/${videoId}`, lang);
-      const video = page.locator('video').first();
-      await expect(video).toBeVisible({ timeout: 30_000 });
-      await video.evaluate((v: HTMLVideoElement) => { v.muted = true; return v.play(); }).catch(() => undefined);
-      await expect.poll(() => video.evaluate((v: HTMLVideoElement) => v.currentTime), { timeout: 30_000 }).toBeGreaterThan(0.5);
+      await playFor(page, 0.5);
     }, async (page) => {
       await page.waitForTimeout(1500);
-      await page.locator('header.ah a.ah-brand').click();
-      await page.waitForURL(new RegExp(`/${lang}/?$`));
+      // Down to the comments: the player floats in the corner (lib/video/mini-player.ts)
+      await page.getByTestId('comment-input').first().scrollIntoViewIfNeeded();
+      await page.mouse.wheel(0, 400);
       await expect(page.getByTestId('player-mini-return').first()).toBeVisible({ timeout: 15_000 });
       await page.waitForTimeout(3500);
     }, 9);
