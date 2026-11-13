@@ -54,39 +54,39 @@ describe('own domains', () => {
 
 	it('reserves a domain once, refuses one another site holds, and keeps to the limit', async () => {
 		const e = await granted();
-		const { domain, site } = await reserveDomain(e, CH, 'www.example.com', 'usr_owner');
+		const { domain, site } = await reserveDomain(e, CH, 'www.example.qa-sites.alummahnow.com', 'usr_owner');
 		assert.equal(domain.status, 'waiting_dns');
-		assert.deepEqual(domain.records, [{ type: 'CNAME', name: 'www.example.com', value: 'sites.alummahnow.org', purpose: 'traffic' }]);
-		assert.ok(!site.hosts.some((h) => h.host === 'www.example.com'), 'not served before it is live');
-		await assert.rejects(reserveDomain(e, CH, 'www.example.com', 'usr_owner'), /domain_exists/);
-		await assert.rejects(reserveDomain(e, 'ch_other', 'www.example.com', 'usr_x'), /host_taken/);
+		assert.deepEqual(domain.records, [{ type: 'CNAME', name: 'www.example.qa-sites.alummahnow.com', value: 'sites.alummahnow.org', purpose: 'traffic' }]);
+		assert.ok(!site.hosts.some((h) => h.host === 'www.example.qa-sites.alummahnow.com'), 'not served before it is live');
+		await assert.rejects(reserveDomain(e, CH, 'www.example.qa-sites.alummahnow.com', 'usr_owner'), /domain_exists/);
+		await assert.rejects(reserveDomain(e, 'ch_other', 'www.example.qa-sites.alummahnow.com', 'usr_x'), /host_taken/);
 		// white-label-domain allows its seeded number of own domains; the next one is refused
 		const max = site.limits.customDomainsMax;
-		for (let i = 1; i < max; i++) await reserveDomain(e, CH, `d${i}.example.com`, 'usr_owner');
-		await assert.rejects(reserveDomain(e, CH, 'one-more.example.com', 'usr_owner'), /domain_limit/);
+		for (let i = 1; i < max; i++) await reserveDomain(e, CH, `d${i}.example.qa-sites.alummahnow.com`, 'usr_owner');
+		await assert.rejects(reserveDomain(e, CH, 'one-more.example.qa-sites.alummahnow.com', 'usr_owner'), /domain_limit/);
 		const basic = env();
 		await grantSite(basic, CH, { slug: 'scholar-site', tier: 'white-label', actor: 'adm' });
-		await assert.rejects(reserveDomain(basic, CH, 'www.example.org', 'usr_owner'), /domain_limit/);
+		await assert.rejects(reserveDomain(basic, CH, 'www.example-org.qa-sites.alummahnow.com', 'usr_owner'), /domain_limit/);
 	});
 
 	it('serves a domain once live, makes it primary, falls back when it is removed', async () => {
 		const e = await granted();
-		await reserveDomain(e, CH, 'www.example.com', 'usr_owner');
-		const txt = [{ type: 'TXT', name: '_cf-custom-hostname.www.example.com', value: 'abc', purpose: 'ownership' }];
-		const issuing = await updateDomain(e, CH, 'www.example.com', { cfId: 'cf1', status: 'issuing', records: txt as never }, 'admin-api');
+		await reserveDomain(e, CH, 'www.example.qa-sites.alummahnow.com', 'usr_owner');
+		const txt = [{ type: 'TXT', name: '_cf-custom-hostname.www.example.qa-sites.alummahnow.com', value: 'abc', purpose: 'ownership' }];
+		const issuing = await updateDomain(e, CH, 'www.example.qa-sites.alummahnow.com', { cfId: 'cf1', status: 'issuing', records: txt as never }, 'admin-api');
 		assert.equal(issuing.domain.cfId, 'cf1');
-		await assert.rejects(setPrimaryHost(e, CH, 'www.example.com', 'usr_owner'), /host_not_live/);
-		const live = await updateDomain(e, CH, 'www.example.com', { status: 'live' }, 'admin-api');
-		assert.ok(live.site.hosts.some((h) => h.host === 'www.example.com' && h.kind === 'custom' && !h.primary));
-		const primary = await setPrimaryHost(e, CH, 'www.example.com', 'usr_owner');
-		assert.equal(primary.hosts.find((h) => h.primary)?.host, 'www.example.com');
+		await assert.rejects(setPrimaryHost(e, CH, 'www.example.qa-sites.alummahnow.com', 'usr_owner'), /host_not_live/);
+		const live = await updateDomain(e, CH, 'www.example.qa-sites.alummahnow.com', { status: 'live' }, 'admin-api');
+		assert.ok(live.site.hosts.some((h) => h.host === 'www.example.qa-sites.alummahnow.com' && h.kind === 'custom' && !h.primary));
+		const primary = await setPrimaryHost(e, CH, 'www.example.qa-sites.alummahnow.com', 'usr_owner');
+		assert.equal(primary.hosts.find((h) => h.primary)?.host, 'www.example.qa-sites.alummahnow.com');
 		// the site must be live to serve: the subdomain now redirects to the own domain
 		await (await import('../src/lib/sites/service')).adminUpdateSite(e, CH, { status: 'live', actor: 'adm' });
-		assert.deepEqual(await publicSiteForHost(e, 'scholar-site.qa.alummahnow.org', null), { kind: 'redirect', location: 'https://www.example.com' });
-		const removed = await removeDomain(e, CH, 'www.example.com', 'usr_owner');
+		assert.deepEqual(await publicSiteForHost(e, 'scholar-site.qa.alummahnow.org', null), { kind: 'redirect', location: 'https://www.example.qa-sites.alummahnow.com' });
+		const removed = await removeDomain(e, CH, 'www.example.qa-sites.alummahnow.com', 'usr_owner');
 		assert.equal(removed.site.hosts.find((h) => h.primary)?.host, 'scholar-site.qa.alummahnow.org');
-		assert.deepEqual(await publicSiteForHost(e, 'www.example.com', null), { kind: 'not_found' });
-		await reserveDomain(e, 'ch_other', 'www.example.com', 'usr_x'); // freed for others
+		assert.deepEqual(await publicSiteForHost(e, 'www.example.qa-sites.alummahnow.com', null), { kind: 'not_found' });
+		await reserveDomain(e, 'ch_other', 'www.example.qa-sites.alummahnow.com', 'usr_x'); // freed for others
 	});
 
 	it('a live domain that stops verifying leaves the hosts and gives the primary back', async () => {
@@ -108,10 +108,10 @@ describe('own domains', () => {
 		assert.deepEqual(await (await call('GET', `/${CH}/editor?userId=usr_owner`)).json(), { canEdit: true });
 		assert.deepEqual(await (await call('GET', `/${CH}/editor?userId=usr_editor`)).json(), { canEdit: false });
 		assert.deepEqual(await (await call('GET', `/${CH}/editor?userId=usr_nobody`)).json(), { canEdit: false });
-		assert.equal((await call('POST', `/${CH}/domains`, { host: 'www.example.com' })).status, 201);
+		assert.equal((await call('POST', `/${CH}/domains`, { host: 'www.example.qa-sites.alummahnow.com' })).status, 201);
 		assert.equal((await call('POST', `/${CH}/domains`, { host: 'www.alummahnow.net' })).status, 400);
-		assert.equal((await call('PUT', `/${CH}/primary`, { host: 'www.example.com' })).status, 409);
-		assert.equal((await call('DELETE', `/${CH}/domains/www.example.com`)).status, 200);
-		assert.equal((await call('DELETE', `/${CH}/domains/www.example.com`)).status, 404);
+		assert.equal((await call('PUT', `/${CH}/primary`, { host: 'www.example.qa-sites.alummahnow.com' })).status, 409);
+		assert.equal((await call('DELETE', `/${CH}/domains/www.example.qa-sites.alummahnow.com`)).status, 200);
+		assert.equal((await call('DELETE', `/${CH}/domains/www.example.qa-sites.alummahnow.com`)).status, 404);
 	});
 });
