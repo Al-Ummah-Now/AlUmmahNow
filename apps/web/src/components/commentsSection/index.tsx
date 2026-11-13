@@ -18,6 +18,7 @@ import { User } from "@/interfaces";
 import { formatRelativeTime } from '@/lib/format/videoMeta';
 import { loginRoutePath } from '@/lib/auth/silent-sign-in';
 import { userDisplayName } from '@/lib/display-name';
+import { requestAccountMenu } from '@/lib/navigation/account-menu-events';
 
 export interface CommentsSectionProps {
   videoId: string;
@@ -55,6 +56,7 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
   const activeChannel = account?.channel || null;
   const channelId = activeChannel?.id || '';
   const canInteract = !!user;
+  const hasChannels = (account?.channels?.length ?? 0) > 0;
   const isVideoOwner = !!user && !!videoOwnerId && videoOwnerId === user.id;
 
   const {
@@ -310,6 +312,21 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
               {composerName && (
                 <p className="mb-1 text-sm font-medium" data-testid="comment-identity" data-as={activeChannel ? 'channel' : 'member'}>
                   {t.comments.commentingAs.replace('{name}', composerName)}
+                  {/* With channels to choose from, change who you comment as right here (the account menu's channel list) */}
+                  {hasChannels && (
+                    <>
+                      {' · '}
+                      <button
+                        type="button"
+                        className="font-medium underline underline-offset-2"
+                        aria-label={t.navigation.switchChannel}
+                        data-testid="comment-identity-switch"
+                        onClick={() => requestAccountMenu({ open: true, view: 'channels', focus: true })}
+                      >
+                        {t.comments.switchIdentity}
+                      </button>
+                    </>
+                  )}
                 </p>
               )}
               <label htmlFor={composerId} className="sr-only">{t.comments.addComment}</label>

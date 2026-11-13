@@ -1442,6 +1442,8 @@ export interface AppTranslations {
     yourAvatar: string;
     /** The identity a new comment is posted as: the active channel, or the member's own name */
     commentingAs: string;
+    /** Opens the account menu's channel list to change who you comment as */
+    switchIdentity: string;
     authorAvatar: string;
     sortBy: string;
     sortTop: string;

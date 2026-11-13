@@ -94,7 +94,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
 
   navigation: {
     moreAccounts: 'More accounts',
-    channelSection: 'Channel',
+    channelSection: 'Acting as',
     appsSection: 'Al Ummah Now apps',
     appWww: 'Website',
     appVideos: 'Videos',
@@ -113,7 +113,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     profile: 'Profile',
     analytics: 'Analytics',
     noChannel: 'No Channel',
-    noActiveChannel: 'No active channel',
+    noActiveChannel: 'Yourself (no channel)',
     switchChannel: 'Switch channel',
     signOut: 'Sign out',
     useWithoutChannel: 'Use without a channel',
@@ -1372,6 +1372,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     actionFailed: 'Something went wrong. Please try again.',
     yourAvatar: 'Your avatar',
     commentingAs: 'Commenting as {name}',
+    switchIdentity: 'Switch',
     authorAvatar: 'Avatar of {name}',
     sortBy: 'Sort comments',
     sortTop: 'Top comments',

@@ -86,7 +86,7 @@ test('two accounts with several channels: the channel layer sits in the shared s
 
   const layer = menu.getByTestId('nav-channel-layer');
   await expect(layer).toHaveAttribute('role', 'group');
-  await expect(layer).toHaveAccessibleName('Channel');
+  await expect(layer).toHaveAccessibleName('Acting as');
   // The active channel (avatar + name) links to it. No Upload in the menu (owner review rev 5, the
   // YouTube pattern): the header's Upload, first in the action cluster, goes to that channel's upload
   await expect(layer.getByTestId('nav-active-channel')).toContainText('Hadith Circle');
@@ -130,7 +130,7 @@ test('an account that may create channels gets Create in the switcher', async ({
   await mockApi(page);
   await page.goto('/ar');
   const menu = await openMenu(page);
-  await expect(menu.getByTestId('nav-channel-layer')).toHaveAccessibleName('القناة');
+  await expect(menu.getByTestId('nav-channel-layer')).toHaveAccessibleName('تتصرّف باسم');
   await expect(menu.getByTestId('nav-menu-upload')).toHaveCount(0);
   await expect(page.locator('.ah-end [data-testid="header-upload"]').first()).toHaveAttribute('href', '/ar/upload?channel=b2');
   await menu.getByTestId('nav-switch-channel').click();
