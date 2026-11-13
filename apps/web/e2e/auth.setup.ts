@@ -351,25 +351,26 @@ async function globalSetup(_config: FullConfig) {
         // Wait for successful authentication - callback URL or home page
         ciLogger.info(`[Setup] Waiting for authentication to complete for ${user.email}`);
 
-        // Wait for callback URL and then navigate to verify auth
-        try {
-          await page.waitForURL('**/api/callback**', { timeout: 20000 });
-
-          // Give time for cookies to be set
-          await page.waitForTimeout(1000);
-
-          // Navigate to home page to verify authentication worked
-          await page.goto(`${webAppUrl}/en`, { waitUntil: 'networkidle' });
-        } catch {
-          // Already on home page or elsewhere - continue
-          ciLogger.debug(`[Setup] Current URL after auth: ${page.url()}`);
-        }
+        // Wait for the web session itself, not a fixed window for the callback URL: on a busy QA the
+        // code submit, the issuer's redirect and the callback can take longer than 20 s, and a timed-out
+        // wait used to fall through to the cookie check and fail as "cookie not set" (#1225)
       }
 
-      // Fail fast if the web app did not establish a session (e.g. wrong client id)
-      const webCookies = await context.cookies(webAppUrl);
-      if (!webCookies.some((c) => c.name === "al_ummah_session" || c.name === "access_token")) {
-        throw new Error("Web session cookie not set after OAuth callback");
+      const hasWebSession = async () =>
+        (await context.cookies(webAppUrl)).some((c) => c.name === "al_ummah_session" || c.name === "access_token");
+      const sessionDeadline = Date.now() + 60_000;
+      while (!(await hasWebSession()) && Date.now() < sessionDeadline) {
+        await page.waitForLoadState('load').catch(() => {});
+        if (await hasWebSession()) break;
+        await page.waitForTimeout(500);
+      }
+      if (await hasWebSession()) {
+        // Land on the app so later steps start from a signed-in page
+        if (!page.url().startsWith(webAppUrl)) await page.goto(`${webAppUrl}/en`, { waitUntil: 'load' });
+      } else {
+        // Fail with where the flow stopped (wrong client id, an issuer error page, a code that was refused)
+        const visible = (await page.locator('body').innerText().catch(() => '')).replace(/\s+/g, ' ').slice(0, 200);
+        throw new Error(`Web session cookie not set after OAuth callback (60 s); page ${page.url().replace(/([?&](code|state)=)[^&]+/g, '$1…')}: ${visible}`);
       }
 
       // Ensure profile + channels exist and refresh the web session so the
