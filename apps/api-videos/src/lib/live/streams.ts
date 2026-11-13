@@ -7,7 +7,7 @@
  * encoder settings. `providerMove` (set by an admin) applies to the next
  * session; a session that is live is never moved.
  */
-import type { LiveProviderId } from '@al-ummah/shared-types';
+import { isReviewCleared, type LiveProviderId } from '@al-ummah/shared-types';
 import R2Repository from '../r2Repo';
 import { logger } from '../logger';
 import { announceLiveStarted } from '../notification-events';
@@ -134,6 +134,9 @@ export async function markStreamLive(env: StreamsEnv, streamId: string, now = Da
 	const updated = await repo(env).updateObject(streamKey(streamId), (fresh) => {
 		if (fresh.status === 'live') return false;
 		fresh.status = 'live';
+		// Live again after a held or rejected recording (VR9): the hold ends for this session only
+		const review = (fresh as { review?: { status?: string } }).review;
+		if (review && fresh.sessionId && !isReviewCleared(review)) (fresh as { liveAgainSessionId?: string }).liveAgainSessionId = fresh.sessionId;
 		fresh.actualStartTime ??= new Date(now).toISOString();
 		fresh.dateModified = new Date(now).toISOString();
 		became = true;

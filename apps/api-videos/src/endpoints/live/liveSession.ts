@@ -33,14 +33,15 @@ const env = (c: AppContext) => c.env as unknown as StreamsEnv;
 const fail = (c: AppContext, status: number, code: string, error: string) => c.json({ success: false, code, error }, status as 400);
 
 /**
- * The stream whose recording a person must decide (or rejected) reaches its owner only, tied to
- * the recording's session, never to `status` (the owner can set that): only a new session (the
- * stream really live again, VR9: live is never pre-reviewed) makes it public again.
+ * The stream whose recording a person must decide (or rejected) reaches its owner only. Never tied
+ * to `status` or a provisioned session (the owner controls both): only the current session really
+ * going live (markStreamLive: first segment, or Bunny publishing) makes it public again, since live
+ * is never pre-reviewed (VR9).
  */
 export function liveRecordingWithheld(stream: object): boolean {
-	const s = stream as { sessionId?: string | null; review?: { status?: string }; reviewSessionId?: unknown };
+	const s = stream as { sessionId?: string | null; review?: { status?: string }; liveAgainSessionId?: string };
 	if (!isLiveVodWithheld(s.review)) return false;
-	return !s.reviewSessionId || !s.sessionId || s.sessionId === s.reviewSessionId;
+	return !s.sessionId || s.liveAgainSessionId !== s.sessionId;
 }
 
 /** A held or rejected recording's URL never reaches anyone but the owner, whatever the stream does next. */
@@ -50,7 +51,7 @@ export function recordingHidden(s: object, isOwner: boolean): boolean {
 
 /** Public fields of a stream; encoder settings never leave the owner endpoints. */
 export function publicStream(s: LiveStreamRecord, isOwner: boolean) {
-	const { streamKey: _k, rtmpUrl: _r, providerMove, isTest: _t, likes, dislikes, comments, review, reviewShadow: _rs, reviewSessionId: _ri, ...rest } = s as LiveStreamRecord & { likes?: unknown[]; dislikes?: unknown[]; comments?: unknown[] };
+	const { streamKey: _k, rtmpUrl: _r, providerMove, isTest: _t, likes, dislikes, comments, review, reviewShadow: _rs, reviewSessionId: _ri, liveAgainSessionId: _la, ...rest } = s as LiveStreamRecord & { likes?: unknown[]; dislikes?: unknown[]; comments?: unknown[] };
 	return {
 		...rest,
 		// The recording's review is the owner's business (Studio shows it); the marker never leaves

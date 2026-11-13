@@ -103,7 +103,7 @@ export class LiveStreamsList extends OptionalAuthRoute {
 			const streams = scan.items;
 
 			// Transform to view models
-			const streamViews = streams.map(({ review, reviewShadow: _rs, reviewSessionId: _ri, ...stream }: LiveStreamType & { review?: unknown; reviewShadow?: unknown; reviewSessionId?: unknown }) => ({
+			const streamViews = streams.map(({ review, reviewShadow: _rs, reviewSessionId: _ri, liveAgainSessionId: _la, ...stream }: LiveStreamType & { review?: unknown; reviewShadow?: unknown; reviewSessionId?: unknown; liveAgainSessionId?: unknown }) => ({
 				...stream,
 				// The recording's review is the owner's (Studio); a held recording's URL is theirs only (VR9)
 				...(auth?.userId === stream.userId && review ? { review } : {}),

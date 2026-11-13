@@ -12,7 +12,7 @@ import { applyLiveReviewDecision, applyLiveReviewOutcome, startLiveVodReview } f
 import { createReviewInternalRouter } from '../src/endpoints/review/reviewInternal';
 import { LiveStreamGet, liveRecordingWithheld, publicStream } from '../src/endpoints/live/liveSession';
 import { LiveStreamsList } from '../src/endpoints/live/liveStreamsList';
-import { registerLiveStreamHooks } from '../src/lib/live/streams';
+import { markStreamLive, registerLiveStreamHooks } from '../src/lib/live/streams';
 import { vodReady, setOnVodReady } from '../src/lib/live/vod-ready';
 import { signLiveVodUrl } from '../src/lib/live/vod-sign';
 import { MemoryBucket, MemoryQueue, buildApp } from './helpers';
@@ -210,11 +210,22 @@ describe('who sees a held recording', () => {
 		}
 	});
 
-	it('tied to the recording\'s session, not to `status`: only a new session is public again', () => {
+	it('tied to a session really going live, never to `status` or a provisioned session', () => {
 		const heldRec = { review: { status: 'in_review' }, reviewSessionId: 's1' };
-		assert.equal(liveRecordingWithheld({ ...heldRec, sessionId: 's2' }), false, 'really live again (new session)');
+		assert.equal(liveRecordingWithheld({ ...heldRec, sessionId: 's2', liveAgainSessionId: 's2' }), false, 'the new session really went live');
+		assert.equal(liveRecordingWithheld({ ...heldRec, sessionId: 's2' }), true, 'a new session only provisioned (ingest) is not enough');
 		assert.equal(liveRecordingWithheld({ ...heldRec, sessionId: 's1' }), true, 'same recording, whatever status says');
 		assert.equal(liveRecordingWithheld({ sessionId: 's1' }), false, 'no review');
+	});
+
+	it('markStreamLive ends the hold for that session only', async () => {
+		const e = env({ ...held('rejected'), status: 'ended', sessionId: 'sess-2', reviewSessionId: 'sess-1' });
+		await markStreamLive(e as never, SID);
+		assert.equal(record(e).liveAgainSessionId, 'sess-2');
+		assert.equal(liveRecordingWithheld(record(e)), false);
+		const clean = env({ ...held('approved'), status: 'ended', sessionId: 'sess-2' });
+		await markStreamLive(clean as never, SID);
+		assert.equal(record(clean).liveAgainSessionId, undefined);
 	});
 
 	it('the owner setting the status (scheduled, live) never reopens a held stream or its recording', async () => {
@@ -227,7 +238,7 @@ describe('who sees a held recording', () => {
 	});
 
 	it('really live again: the stream shows, the held recording\'s URL and the review never do', async () => {
-		const e = env({ ...held('in_review'), status: 'live', sessionId: 'sess-2', reviewSessionId: 'sess-1', vodUrl: VOD, reviewShadow: { reviewId: 'x', queuedAt: 'y' } });
+		const e = env({ ...held('in_review'), status: 'live', sessionId: 'sess-2', reviewSessionId: 'sess-1', liveAgainSessionId: 'sess-2', vodUrl: VOD, reviewShadow: { reviewId: 'x', queuedAt: 'y' } });
 		const page = (await (await app(e, null)(`/api/live-streams/${SID}`)).json()) as any;
 		assert.equal(page.result.stream.vodUrl, null);
 		assert.equal(page.result.stream.review, undefined);
@@ -235,7 +246,7 @@ describe('who sees a held recording', () => {
 		assert.equal(list.result.data.length, 1);
 		const item = list.result.data[0];
 		assert.equal(item.vodUrl, null);
-		for (const k of ['review', 'reviewShadow', 'reviewSessionId']) assert.equal(item[k], undefined, k);
+		for (const k of ['review', 'reviewShadow', 'reviewSessionId', 'liveAgainSessionId']) assert.equal(item[k], undefined, k);
 		const own = (await (await app(e, OWNER)('/api/live-streams')).json()) as any;
 		assert.equal(own.result.data[0].vodUrl, VOD);
 		assert.equal(own.result.data[0].review.status, 'in_review');
