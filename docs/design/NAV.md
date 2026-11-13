@@ -69,6 +69,9 @@ There is one sign-out entry, inside the account menu. The header has no separate
   and open use `--fanous-c-nav-hover`. Focus is a 2px `--fanous-c-nav-active-text` ring.
 - Phone (≤ 30rem): the name is visually hidden but stays the accessible name. The button shows
   the avatar and the caret.
+- The name is at most 12rem, with an ellipsis, so a long name (or the email, when there is no name)
+  never pushes the header apart. The videos header also shows only the avatar and caret below
+  1024px, where Upload, the bell and the account would otherwise squeeze the search under the logo.
 
 ## Account menu
 
