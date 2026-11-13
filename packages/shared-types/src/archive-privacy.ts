@@ -37,6 +37,20 @@ const PERSON_ID_KEY =
 const DROPPED_KEY =
   /^(?:description|text|content|body|comment|commentText|message|messages|note|notes|query|searchQuery|q|term|searchTerm|userAgent|user_agent|ua|email|emails|userEmail|displayName|firstName|lastName|fullName|userName|username|phone|ip|ipAddress|ip_address|address)$/i;
 
+/**
+ * The same kinds of value under a qualified camelCase key: moderatorNotes, commentText, errorMessage,
+ * reviewerNote, reporterEmail, channelName, fileName... (ReportResolve carried the moderator's notes
+ * as moderatorNotes, #1177 follow-up). Our own typeName stays.
+ */
+const DROPPED_KEY_SUFFIX = /[a-z0-9](?:Description|Text|Content|Body|Comment|Comments|Message|Messages|Note|Notes|Query|Term|UserAgent|Email|Emails|Name|Names|Phone|Address)$/;
+const KEPT_KEYS = new Set(['typeName']);
+
+/** A key whose value is free text, a contact detail or a device detail. */
+export function isDroppedArchiveKey(key: string): boolean {
+  if (KEPT_KEYS.has(key)) return false;
+  return DROPPED_KEY.test(key) || DROPPED_KEY_SUFFIX.test(key);
+}
+
 /** Keys holding a referrer: only its host is kept. */
 const REFERRER_KEY = /^(?:referrer|referer|documentReferrer)$/i;
 
@@ -77,7 +91,7 @@ export function collectArchiveUserIds(record: unknown): Set<string> {
     }
     if (value && typeof value === 'object') {
       for (const [key, inner] of Object.entries(value)) {
-        if (DROPPED_KEY.test(key)) continue;
+        if (isDroppedArchiveKey(key)) continue;
         visit(inner, PERSON_ID_KEY.test(key));
       }
     }
@@ -124,7 +138,7 @@ export function scrubArchiveRecord<T>(record: T, options: ScrubOptions): T {
     if (value && typeof value === 'object') {
       const out: Record<string, unknown> = {};
       for (const [inner, innerValue] of Object.entries(value)) {
-        if (DROPPED_KEY.test(inner)) continue;
+        if (isDroppedArchiveKey(inner)) continue;
         out[inner] = visit(innerValue, inner, PERSON_ID_KEY.test(inner));
       }
       return out;

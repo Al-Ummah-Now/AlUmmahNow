@@ -72,6 +72,17 @@ describe('scrubArchiveRecord', () => {
     expect(out.payload.videoTitle).toBe('Lecture by [email]');
   });
 
+  it('drops qualified free-text keys (a ReportResolve keeps no moderator notes) and keeps typeName', () => {
+    const record = {
+      type: MessageType.ReportResolve,
+      typeName: 'ReportResolve',
+      payload: { reportId: 'r1', entityType: 'video', entityId: 'v1', moderatorId: ALICE, action: 'dismiss', status: 'dismissed', moderatorNotes: 'run-1234 checked by alice', reviewerNote: 'x', errorMessage: 'y', reporterEmail: 'a@b.co', channelName: 'Alice', timestamp: 't' },
+    };
+    const out = scrubArchiveRecord(record, { pseudonyms: new Map([[ALICE, 'ps_' + 'd'.repeat(32)]]) });
+    expect(out.typeName).toBe('ReportResolve');
+    expect(out.payload).toEqual({ reportId: 'r1', entityType: 'video', entityId: 'v1', moderatorId: 'ps_' + 'd'.repeat(32), action: 'dismiss', status: 'dismissed', timestamp: 't' });
+  });
+
   it('writes the erased marker for erasure messages and leaves pseudonyms alone', () => {
     expect(scrubArchiveRecord({ payload: { userId: ALICE } }, { pseudonyms: new Map(), erased: true })).toEqual({ payload: { userId: ARCHIVE_ERASED_MARKER } });
     const done = { payload: { userId: 'ps_' + 'c'.repeat(32) }, privacy: ARCHIVE_PRIVACY_VERSION };
