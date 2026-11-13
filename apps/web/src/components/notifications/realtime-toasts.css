@@ -24,7 +24,9 @@
 @media(hover:hover){.rt-toast .rt-close:hover{background:var(--m-hover)}.rt-toast .rt-action:hover{filter:brightness(1.08)}}
 .rt-toast :is(.rt-close,.rt-action):focus-visible,.rt-more:focus-visible{outline:2px solid var(--fanous-color-focus-ring);outline-offset:2px}
 .rt-more{align-self:flex-end;display:inline-flex;align-items:center;min-height:32px;padding-inline:12px;border-radius:var(--r-pill);font-size:13px;font-weight:600;background:var(--m-raised);box-shadow:var(--m-raised-edge);color:var(--fanous-c-toast-text)!important;text-decoration:none}
-@keyframes rt-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+/* Slides in without fading: a fading toast is semi-transparent text on a semi-transparent fill, which
+   fails contrast while it arrives (#1169, axe 1.09:1 on the action in Arabic dark mode) */
+@keyframes rt-in{from{transform:translateY(8px)}to{transform:none}}
 @media(prefers-reduced-motion:reduce){.rt-toast.toast{animation:none}}
 /* Below 1024px the mini player floats above the tab bar (player-skin.css), so the toasts go higher too */
 @media(min-width:640px) and (max-width:1023px){body:has(.custom-video-player[data-mini]) .rt-toasts{inset-block-end:calc(68px + env(safe-area-inset-bottom) + min(360px,70vw) * 9 / 16 + 12px)}body:has(.custom-video-player[data-mini][data-portrait]) .rt-toasts{inset-block-end:calc(68px + env(safe-area-inset-bottom) + min(216px,42vw,(100vh - 160px) * 9 / 16) * 16 / 9 + 12px)}}
