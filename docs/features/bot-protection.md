@@ -30,6 +30,42 @@ Scripted clients: with `TURNSTILE_MODE=enforce` in **production**, writes (`POST
 /api/*`) from curl, python-requests, Go-http-client, wget, Scrapy and similar answer 403
 `forbidden_client`. Requests without a User-Agent are allowed (Worker subrequests).
 
+## Native apps
+
+The native apps cannot run the Turnstile widget. Their Turnstile-equivalent is the token itself:
+an access token Auth signed for a **registered native OAuth client** (its `aud`). The apps sign
+up and sign in on Auth's web pages (system browser, Android Custom Tab, `ASWebAuthenticationSession`,
+the TV device code on a phone), and those pages carry Turnstile, so every native token belongs to
+an account that passed it. Rate limits still apply to native traffic.
+
+`NATIVE_CLIENT_IDS` (api-videos) must list every native client of the environment:
+
+| Client | Production / stage | QA |
+| --- | --- | --- |
+| Viewer (iOS / Android) | `567a2cbc-dab8-4d5c-9437-a9e61c7120f5` | `31389afb-d4f8-4c26-9492-4c77f4d07e65` |
+| Viewer (TV) | `111648c6-24e6-4c35-8bcf-f50ab5c0d96d` | `9c3a81c8-3f9c-4873-abb1-a51e4f1d9543` |
+| Viewer (desktop) | `f97abe68-ef61-41b6-bf08-d86650cc7cb3` | `ce7de8a4-59dd-4682-ab4d-105399105294` |
+| Studio (iOS / Android) | `6f8073c6-754b-4d63-bf80-0546214e0d62` | `45364a42-21f4-4359-a76c-0a1e6615fd7b` |
+| Studio (desktop) | `950e2b3b-6353-4472-affe-7c1f57f4e6a4` | `29b4792a-caad-4814-a83f-4337bc6a1aeb` |
+
+`test/native-clients.spec.ts` pins this list against the wrangler configs. A new native client
+(the native admin app, AUN-ADMIN-NATIVE) is registered in Auth, added here and to the test in the
+same PR.
+
+User-Agents: the scripted-client refusal (production, `enforce`) must never catch a native app.
+What they send today, all allowed (pinned by the same test, every write method, TUS included):
+AlUmmahNowCore `aun-core/<ver>` with the app's prefix (`AlUmmahNow-iOS/…`, `AlUmmahNow-Studio-Android/…`,
+`AlUmmahNowStudioWindows/…`, `AlUmmahNowStudioLinux/…`); Apple URLSession `<App>/<ver> CFNetwork/… Darwin/…`
+(Studio TUS background uploads); Android OkHttp `okhttp/<ver>` and tus-java-client over
+HttpURLConnection `Dalvik/2.1.0 (…)`; the Windows and Linux viewers `AlUmmahNowWindows/0.1`,
+`AlUmmahNowLinux/0.1`; no User-Agent at all (Core's telemetry sink). A native client must never
+use a library default that is on the list (curl, python-requests, Go-http-client, `Java/<ver>` from a
+desktop JVM). Auth's refusal covers only its `/password/*` form posts, which native apps never make
+(they use the browser).
+
+Stronger proof that a request comes from our app (App Attest / DeviceCheck on Apple, Play
+Integrity on Android) needs the owner's Apple and Google accounts; tracked in #1274.
+
 ## Responses the clients handle
 
 | Status / code | Web |
