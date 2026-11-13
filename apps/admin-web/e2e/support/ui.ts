@@ -121,8 +121,13 @@ export async function expectNoAxeViolations(page: Page, context: string) {
 }
 
 /** Computed background colour of <body>, as an [r, g, b] triple. */
+/** The page's background colour: the body's, or html's when the body is transparent (the Fawanees street paints the page on html). */
 export async function bodyBackground(page: Page): Promise<[number, number, number]> {
-  const color = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const color = await page.evaluate(() => {
+    const transparent = (c: string) => c === 'transparent' || /rgba\([^)]*,\s*0\)$/.test(c);
+    const body = getComputedStyle(document.body).backgroundColor;
+    return transparent(body) ? getComputedStyle(document.documentElement).backgroundColor : body;
+  });
   const match = color.match(/\d+(\.\d+)?/g)?.map(Number) ?? [0, 0, 0];
   return [match[0], match[1], match[2]];
 }
