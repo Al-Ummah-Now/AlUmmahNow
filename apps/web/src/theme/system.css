@@ -172,6 +172,8 @@ button[class*="rounded-full"][class*="border"][class*="h-9"][aria-pressed=true]{
 
 
 @media(max-width:1023px){.ah{gap:var(--fanous-spacing-sm)}.ah-search{min-width:200px}}
+/* Tablet: the action cluster (Upload, bell, account) leaves the search its room: the account button is the avatar and chevron, the name stays its accessible name (docs/design/NAV.md) */
+@media(max-width:1023px){.ah-end .aun-acct-btn .aun-acct-name{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}}
 @media(max-width:767px){.ah-search{min-width:0}}
 @media(max-width:639px){.ah{gap:4px;padding-inline:4px}.ah-search{display:none}.ah-search-phone{display:inline-flex}.ah-start,.ah-end{gap:0}.ah-brand{padding:2px;gap:6px}.ah-brand span{font-size:14px}.ah-brand .ah-logo{width:28px;height:28px}.ah-end svg[class*="chevron"],.ah-end [class*="lucide-chevron"]{display:none}}
 @media(max-width:375px){.ah-brand span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}}
