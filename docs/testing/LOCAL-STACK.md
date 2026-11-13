@@ -10,7 +10,11 @@ One Miniflare instance (`scripts/local-stack/boot.ts`) runs every worker, so que
 D1, R2, KV and the Secrets Store are shared exactly as in a deployed environment. Miniflare's own
 warnings and errors (a queue batch whose dispatch threw, a message retried, dead-lettered or dropped)
 and one `[mf:info] QUEUE <name> acked/total (ms)` line per queue batch go to the stack log with the
-workers' output (#1128). Each worker listens on its own port:
+workers' output (#1128). Miniflare is patched (`patches/miniflare@4.20260706.0.patch`) so that its
+Durable Objects' log requests to Node are best effort: one failed request used to freeze a queue's
+broker for the rest of the run (contact mail stuck "queued", #1128). Re-check the patch when
+wrangler bumps Miniflare (pnpm refuses an install whose patched version is gone). Each worker listens
+on its own port:
 
 | App | Port | Source |
 |---|---:|---|

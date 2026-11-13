@@ -15,7 +15,8 @@
       "@types/react-big-calendar>@types/react": "18.2.19"
     },
     "patchedDependencies": {
-      "next@16.2.10": "patches/next@16.2.10.patch"
+      "next@16.2.10": "patches/next@16.2.10.patch",
+      "miniflare@4.20260706.0": "patches/miniflare@4.20260706.0.patch"
     }
   },
   "scripts": {

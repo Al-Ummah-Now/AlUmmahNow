@@ -15,6 +15,9 @@ overrides:
   '@types/react-big-calendar>@types/react': 18.2.19
 
 patchedDependencies:
+  miniflare@4.20260706.0:
+    hash: 4rsnn7e6tml6ujv3dc44iagez4
+    path: patches/miniflare@4.20260706.0.patch
   next@16.2.10:
     hash: 6cqqppn57ogay27cgdjsgyri74
     path: patches/next@16.2.10.patch
@@ -14273,7 +14276,7 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  miniflare@4.20260706.0:
+  miniflare@4.20260706.0(patch_hash=4rsnn7e6tml6ujv3dc44iagez4):
     dependencies:
       '@cspotcode/source-map-support': 0.8.1
       sharp: 0.34.5
@@ -15799,7 +15802,7 @@ snapshots:
       '@cloudflare/unenv-preset': 2.16.1(unenv@2.0.0-rc.24)(workerd@1.20260706.1)
       blake3-wasm: 2.1.5
       esbuild: 0.25.12
-      miniflare: 4.20260706.0
+      miniflare: 4.20260706.0(patch_hash=4rsnn7e6tml6ujv3dc44iagez4)
       path-to-regexp: 6.3.0
       unenv: 2.0.0-rc.24
       workerd: 1.20260706.1
