@@ -78,6 +78,8 @@ interface VideoMetadata {
   descriptionAr?: string;
   tags?: string[];
   isPublic: boolean;
+  /** Unlisted when not public: anyone with the link can watch, never listed (D-SEO-5) */
+  isUnlisted?: boolean;
   /** Upload as Short / as video; 'auto' detects it from length and shape */
   format: VideoFormatChoiceValue;
 }
@@ -401,6 +403,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
             },
             // When scheduling is enabled, video must be private until scheduled publish date
             isPublic: scheduleData || saveAsDraft ? false : metadata.isPublic,
+            ...(!scheduleData && !saveAsDraft && !metadata.isPublic && metadata.isUnlisted ? { visibility: 'unlisted' } : {}),
             ...(saveAsDraft && !scheduleData ? { isDraft: true } : {}),
             tags: tagsString,
             category: categoryState.category,
@@ -627,6 +630,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
             dislikes: [],
             // When scheduled, video is private until scheduled publish date
             isPublic: scheduleData || saveAsDraft ? false : metadata.isPublic,
+            ...(!scheduleData && !saveAsDraft && !metadata.isPublic && metadata.isUnlisted ? { isUnlisted: true } : {}),
             isLive: false,
             // Include scheduling fields if video was scheduled
             ...(schedulingInfo.scheduledPublishDate && {
@@ -729,7 +733,8 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
       descriptionAr: processedMetadata.descriptionLocalized?.ar || prev.descriptionAr,
       description: processedMetadata.description || prev.description,
       tags: processedMetadata.tags || prev.tags,
-      isPublic: processedMetadata.visibility === 'public' ? true : processedMetadata.visibility === 'private' ? false : prev.isPublic,
+      isPublic: processedMetadata.visibility ? processedMetadata.visibility === 'public' : prev.isPublic,
+      isUnlisted: processedMetadata.visibility ? processedMetadata.visibility === 'unlisted' : prev.isUnlisted,
     }));
     // A template's category is the uploader's choice
     if (isKnownCategory(processedMetadata.category)) {
@@ -1013,6 +1018,22 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
                 {t.upload.makePublic}
               </label>
             </div>
+            {!scheduleData && !metadata.isPublic && (
+              <div className="flex items-center ms-6">
+                <input
+                  type="checkbox"
+                  id="isUnlisted"
+                  checked={!!metadata.isUnlisted}
+                  onChange={(e) => setMetadata(prev => ({ ...prev, isUnlisted: e.target.checked }))}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded disabled:opacity-50"
+                  disabled={uploadProgress?.state === 'uploading' || saveAsDraft}
+                  data-testid="upload-is-unlisted"
+                />
+                <label htmlFor="isUnlisted" className="ms-2 block text-sm text-gray-700 dark:text-gray-300">
+                  {t.upload.makeUnlisted}
+                </label>
+              </div>
+            )}
             {scheduleData && (
               <p className="text-xs text-blue-600 dark:text-blue-400 ms-6">
                 {t.upload.privateUntilScheduled}

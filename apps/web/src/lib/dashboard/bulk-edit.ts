@@ -2,7 +2,7 @@
  * Bulk edit form → POST /api/videos/bulk-update changes (Epic 5.3).
  */
 
-export type VisibilityChoice = '' | 'public' | 'private';
+export type VisibilityChoice = '' | 'public' | 'unlisted' | 'private';
 /** '' no change, '__clear__' remove the category, otherwise a VideoCategory value */
 export type CategoryChoice = string;
 export const CLEAR_CATEGORY = '__clear__';
@@ -16,6 +16,8 @@ export interface BulkEditForm {
 
 export interface BulkVideoChanges {
   isPublic?: boolean;
+  /** public | unlisted | private (D-SEO-5) */
+  visibility?: 'public' | 'unlisted' | 'private';
   category?: string | null;
   addTags?: string[];
   removeTags?: string[];
@@ -39,7 +41,10 @@ export function parseTags(input: string): string[] {
 /** The API changes for the form, or null when nothing would change. */
 export function buildBulkChanges(form: BulkEditForm): BulkVideoChanges | null {
   const changes: BulkVideoChanges = {};
-  if (form.visibility) changes.isPublic = form.visibility === 'public';
+  if (form.visibility) {
+    changes.isPublic = form.visibility === 'public';
+    changes.visibility = form.visibility;
+  }
   if (form.category) changes.category = form.category === CLEAR_CATEGORY ? null : form.category;
   const add = parseTags(form.addTags);
   const remove = parseTags(form.removeTags);
@@ -49,9 +54,10 @@ export function buildBulkChanges(form: BulkEditForm): BulkVideoChanges | null {
 }
 
 /** Applies successful changes to the dashboard's local copy of a video. */
-export function applyChangesLocally<T extends { isPublic?: boolean; category?: string; tags?: string[] }>(video: T, changes: BulkVideoChanges): T {
+export function applyChangesLocally<T extends { isPublic?: boolean; isUnlisted?: boolean; category?: string; tags?: string[] }>(video: T, changes: BulkVideoChanges): T {
   const next = { ...video };
   if (changes.isPublic !== undefined) next.isPublic = changes.isPublic;
+  if (changes.visibility !== undefined) next.isUnlisted = changes.visibility === 'unlisted';
   if (changes.category !== undefined) next.category = changes.category ?? undefined;
   if (changes.addTags || changes.removeTags) {
     const remove = new Set((changes.removeTags ?? []).map((t) => t.toLowerCase()));

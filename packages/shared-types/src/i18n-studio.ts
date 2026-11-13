@@ -132,7 +132,7 @@ export const STUDIO_EN = {
     selectVideo: 'Select {title}',
     selectAll: 'Select all on this page',
     rowActions: 'Actions for {title}',
-    badges: { private: 'Private', live: 'Live', short: 'Short' },
+    badges: { private: 'Private', unlisted: 'Unlisted', live: 'Live', short: 'Short' },
     actions: {
       edit: 'Edit details',
       view: 'View on site',
@@ -406,7 +406,7 @@ export const STUDIO_AR: StudioTranslations = {
     selectVideo: 'تحديد {title}',
     selectAll: 'تحديد الكل في هذه الصفحة',
     rowActions: 'إجراءات {title}',
-    badges: { private: 'خاص', live: 'مباشر', short: 'قصير' },
+    badges: { private: 'خاص', unlisted: 'غير مدرج', live: 'مباشر', short: 'قصير' },
     actions: {
       edit: 'تعديل التفاصيل',
       view: 'عرض على الموقع',

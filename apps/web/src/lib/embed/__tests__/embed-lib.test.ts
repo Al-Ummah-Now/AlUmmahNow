@@ -325,7 +325,7 @@ describe('buildWatchMetadata', () => {
     expect(meta.title).toBe('العنوان');
     expect((meta.description as string).length).toBeLessThanOrEqual(200);
     expect(meta.alternates?.canonical).toBe(`${HOST}/ar/video/v1`);
-    expect(meta.alternates?.languages).toEqual({ en: `${HOST}/en/video/v1`, ar: `${HOST}/ar/video/v1` });
+    expect(meta.alternates?.languages).toEqual({ en: `${HOST}/en/video/v1`, ar: `${HOST}/ar/video/v1`, "x-default": `${HOST}/en/video/v1` });
     expect(meta.alternates?.types).toEqual({
       'application/json+oembed': [{ url: oembedEndpointUrl(HOST, `${HOST}/ar/video/v1`), title: 'العنوان' }],
     });

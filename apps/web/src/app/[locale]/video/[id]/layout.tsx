@@ -29,7 +29,9 @@ export async function generateMetadata({ params }: Pick<WatchLayoutProps, 'param
   if (!video) return NOINDEX;
   const host = (await headers()).get('host');
   if (!host) return {};
-  return buildWatchMetadata(video, locale, originFromHost(host));
+  const meta = buildWatchMetadata(video, locale, originFromHost(host));
+  // Unlisted (D-SEO-5): the share card stays, search engines never index it
+  return video.isUnlisted ? { ...meta, robots: { index: false, follow: false } } : meta;
 }
 
 /**

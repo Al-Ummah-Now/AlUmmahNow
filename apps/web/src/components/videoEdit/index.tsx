@@ -46,6 +46,8 @@ type EditFormData = {
   category: VideoCategory | '';
   language: 'en' | 'ar' | 'both';
   isPublic: boolean;
+  /** Not public but open to anyone with the link (D-SEO-5); only with isPublic false */
+  isUnlisted: boolean;
   thumbnailUrl: string;
   commentSettings: CommentSettings;
   format: VideoFormatChoiceValue;
@@ -89,6 +91,7 @@ export default function VideoEdit({
     category: initialMetadata.category,
     language: 'both',
     isPublic: video.isPublic !== false,
+    isUnlisted: video.isPublic === false && video.isUnlisted === true,
     thumbnailUrl: video.thumbnailUrl,
     commentSettings: initialCommentSettings(video as { commentSettings?: unknown }),
     format: formatChoiceOf(video),
@@ -164,6 +167,7 @@ export default function VideoEdit({
       formData.descriptionAr !== (video.descriptionLocalized?.ar || '') ||
       formData.thumbnailUrl !== video.thumbnailUrl ||
       formData.isPublic !== (video.isPublic !== false) ||
+      formData.isUnlisted !== (video.isPublic === false && video.isUnlisted === true) ||
       formData.commentSettings !== initialCommentSettings(video as { commentSettings?: unknown }) ||
       formData.category !== original.category ||
       formData.format !== formatChoiceOf(video) ||
@@ -175,6 +179,13 @@ export default function VideoEdit({
 
   const handleInputChange = (field: keyof EditFormData, value: string | boolean) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+    setError(null);
+    setSuccess(null);
+  };
+
+  /** Public, unlisted (link only, never listed) or private (D-SEO-5) */
+  const setVisibility = (visibility: 'public' | 'unlisted' | 'private') => {
+    setFormData((prev) => ({ ...prev, isPublic: visibility === 'public', isUnlisted: visibility === 'unlisted' }));
     setError(null);
     setSuccess(null);
   };
@@ -223,6 +234,8 @@ export default function VideoEdit({
         },
         thumbnailUrl: formData.thumbnailUrl,
         isPublic: formData.isPublic,
+        isUnlisted: !formData.isPublic && formData.isUnlisted,
+        visibility: formData.isPublic ? 'public' : formData.isUnlisted ? 'unlisted' : 'private',
         tags: formData.tags,
         // null clears a previously set category
         category: formData.category || null,
@@ -427,15 +440,23 @@ export default function VideoEdit({
             <OptionCard
               name="privacy"
               checked={formData.isPublic}
-              onSelect={() => handleInputChange('isPublic', true)}
+              onSelect={() => setVisibility('public')}
               inputTestId="video-edit-privacy-public"
               title={t.video.public}
               help={t.video.publicVideo}
             />
             <OptionCard
               name="privacy"
-              checked={!formData.isPublic}
-              onSelect={() => handleInputChange('isPublic', false)}
+              checked={!formData.isPublic && formData.isUnlisted}
+              onSelect={() => setVisibility('unlisted')}
+              inputTestId="video-edit-privacy-unlisted"
+              title={t.video.unlisted ?? 'Unlisted'}
+              help={t.video.unlistedVideo}
+            />
+            <OptionCard
+              name="privacy"
+              checked={!formData.isPublic && !formData.isUnlisted}
+              onSelect={() => setVisibility('private')}
               inputTestId="video-edit-privacy-private"
               title={t.video.private}
               help={t.video.privateVideo}

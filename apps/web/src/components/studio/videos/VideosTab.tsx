@@ -474,7 +474,7 @@ export function VideosTab({ locale, channelId, role }: Props) {
                             <span dir="auto" className="block truncate font-medium text-foreground" data-testid="studio-video-title">{video.title}</span>
                           )}
                           <span className="mt-1 flex gap-1 text-xs text-muted-foreground">
-                            {video.isPublic === false && <span className="rounded bg-muted px-1">{text.badges.private}</span>}
+                            {video.isPublic === false && <span className="rounded bg-muted px-1" data-testid="studio-video-visibility">{video.isUnlisted ? text.badges.unlisted : text.badges.private}</span>}
                             {video.isLive && <span className="rounded bg-muted px-1">{text.badges.live}</span>}
                             {isShortOrFlag(video as never) && <span className="rounded bg-muted px-1">{text.badges.short}</span>}
                           </span>

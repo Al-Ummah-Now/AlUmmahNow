@@ -73,7 +73,7 @@ export interface BulkFormState {
   description: Record<TitleLanguage, DescriptionState>;
   category: string;
   language: ContentLanguage;
-  visibility: 'public' | 'private';
+  visibility: 'public' | 'unlisted' | 'private';
   playlistsAdd: string[];
   playlistsRemove: string[];
   /** Also put the selection, in the rename order, together in the playlists it is added to */
@@ -230,6 +230,8 @@ export function readyFields(form: BulkFormState, preview?: RenameRow[]): BulkFie
 
 export interface BulkEditChanges {
   isPublic?: boolean;
+  /** public | unlisted | private (D-SEO-5); the API's isPublic is kept for older API versions */
+  visibility?: 'public' | 'unlisted' | 'private';
   category?: string | null;
   addTags?: string[];
   removeTags?: string[];
@@ -270,7 +272,10 @@ export function buildBulkRequest(form: BulkFormState, subjects: readonly RenameS
   }
   if (ready.has('category')) changes.category = form.category;
   if (ready.has('language')) changes.language = form.language;
-  if (ready.has('visibility')) changes.isPublic = form.visibility === 'public';
+  if (ready.has('visibility')) {
+    changes.isPublic = form.visibility === 'public';
+    changes.visibility = form.visibility;
+  }
   if (ready.has('comments')) changes.commentSettings = form.comments;
   if (ready.has('playlists')) {
     if (form.playlistsAdd.length) changes.addPlaylists = [...form.playlistsAdd];

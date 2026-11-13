@@ -34,7 +34,7 @@ describe('BulkEditDialog (Epic 5.3)', () => {
     fireEvent.change(screen.getByTestId('bulk-edit-visibility'), { target: { value: 'public' } });
     fireEvent.change(screen.getByTestId('bulk-edit-add-tags'), { target: { value: 'Tafsir، Seerah' } });
     fireEvent.click(screen.getByTestId('bulk-edit-apply'));
-    await waitFor(() => expect(onApply).toHaveBeenCalledWith({ isPublic: true, addTags: ['Tafsir', 'Seerah'] }));
+    await waitFor(() => expect(onApply).toHaveBeenCalledWith({ isPublic: true, visibility: 'public', addTags: ['Tafsir', 'Seerah'] }));
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
   });
 

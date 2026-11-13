@@ -47,7 +47,8 @@ export function buildWatchMetadata(video: EmbedVideo | null, locale: string, ori
     description,
     alternates: {
       canonical: pageUrl,
-      languages: { en: watchPageUrl(origin, 'en', video.id), ar: watchPageUrl(origin, 'ar', video.id) },
+      // Each language is its own canonical; x-default is English (D-SEO-1)
+      languages: { en: watchPageUrl(origin, 'en', video.id), ar: watchPageUrl(origin, 'ar', video.id), 'x-default': watchPageUrl(origin, 'en', video.id) },
       types: { 'application/json+oembed': [{ url: oembedEndpointUrl(origin, pageUrl), title }] },
     },
     openGraph: {

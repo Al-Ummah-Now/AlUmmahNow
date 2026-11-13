@@ -32,6 +32,7 @@ describe('bulk form', () => {
     expect(buildBulkRequest(form, subjects).changes).toEqual({
       removeTags: ['a', 'b'],
       isPublic: true,
+      visibility: 'public',
       addPlaylists: ['p1'],
       description: { en: { mode: 'prepend', text: 'Intro' }, ar: { mode: 'replace', text: '' } },
     });
