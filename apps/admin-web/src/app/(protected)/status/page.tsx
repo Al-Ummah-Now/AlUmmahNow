@@ -38,6 +38,7 @@ export default async function StatusAdminPage() {
     logger.error('[status] Failed to load the overview', { error: error instanceof Error ? error.message : String(error) });
     loadError = error instanceof AdminApiError && error.status === 503 ? t('statusPage.notConfigured') : t('statusPage.loadFailed');
   }
+  const percent = (v: number) => new Intl.NumberFormat(locale, { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
   const name = (id: string) => STATUS_COMPONENTS.find((c) => c.id === id)?.[locale === 'ar' ? 'ar' : 'en'] ?? id;
 
   return (
@@ -62,28 +63,32 @@ export default async function StatusAdminPage() {
           <section className={`${cardClass} mb-6`} aria-labelledby="status-checks-title" data-testid="status-checks">
             <h2 id="status-checks-title" className="text-lg font-semibold text-fg mb-1">{t('statusPage.checks.title')}</h2>
             <p className="text-sm text-fg-muted mb-3">{t('statusPage.checks.note')}</p>
-            {overview.checks.length === 0 ? (
-              <p className="text-fg-muted">{t('statusPage.checks.empty')}</p>
-            ) : (
-              <div className="overflow-x-auto">
+            {overview.checks.length === 0 && <p className="text-fg-muted mb-3">{t('statusPage.checks.empty')}</p>}
+            {(['public', 'internal'] as const).map((group) => (
+              <div key={group} className="overflow-x-auto mb-4" data-testid={`status-checks-${group}`}>
+                <h3 className="font-semibold text-fg mt-2">{t(`statusPage.checks.${group}`)}</h3>
+                <p className="text-sm text-fg-muted mb-2">{t(`statusPage.checks.${group}Note`)}</p>
                 <table className="w-full text-sm">
-                  <caption className="sr-only">{t('statusPage.checks.title')}</caption>
+                  <caption className="sr-only">{t(`statusPage.checks.${group}`)}</caption>
                   <thead>
                     <tr className="text-fg-muted">
                       <th scope="col" className="p-2 text-start font-medium">{t('statusPage.checks.component')}</th>
                       <th scope="col" className="p-2 text-start font-medium">{t('statusPage.checks.state')}</th>
                       <th scope="col" className="p-2 text-start font-medium">{t('statusPage.checks.since')}</th>
+                      <th scope="col" className="p-2 text-end font-medium">{t('statusPage.checks.uptime')}</th>
                       <th scope="col" className="p-2 text-start font-medium">{t('statusPage.checks.detail')}</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {STATUS_COMPONENTS.map((c) => {
+                    {STATUS_COMPONENTS.filter((c) => c.public === (group === 'public')).map((c) => {
                       const row = overview!.checks.find((x) => x.component === c.id);
+                      const up = overview!.uptime90?.[c.id];
                       return (
-                        <tr key={c.id} className="border-t border-border" data-testid="status-check-row" data-component={c.id} data-state={row?.state ?? 'none'}>
+                        <tr key={c.id} className="border-t border-border" data-testid="status-check-row" data-component={c.id} data-public={c.public ? 'true' : 'false'} data-state={row?.state ?? 'none'}>
                           <th scope="row" className="p-2 text-start font-normal text-fg">{name(c.id)}</th>
                           <td className={`p-2 font-medium ${row ? STATE_CLASS[row.state] : 'text-fg-muted'}`}>{row ? t(`statusPage.states.${row.state}` as MessageKey) : '—'}</td>
                           <td className="p-2 whitespace-nowrap text-fg-muted">{row ? formatDate(row.since, locale, true) : '—'}</td>
+                          <td className="p-2 text-end tabular-nums text-fg-muted">{typeof up === 'number' ? percent(up) : '—'}</td>
                           <td className="p-2 text-fg-muted break-words" dir="ltr">{row?.detail ?? '—'}</td>
                         </tr>
                       );
@@ -91,7 +96,7 @@ export default async function StatusAdminPage() {
                   </tbody>
                 </table>
               </div>
-            )}
+            ))}
           </section>
 
           <section className="mb-6" aria-labelledby="status-recent-title" data-testid="status-recent">

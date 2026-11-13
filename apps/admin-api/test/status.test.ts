@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { readdirSync, readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { Hono } from 'hono';
-import statusRouter, { parseIncidentInput } from '../src/routers/status.router';
+import statusRouter, { parseIncidentInput, uptimeShare } from '../src/routers/status.router';
 import { hasPermission } from '../src/lib/roles';
 import { sqliteD1 } from './d1-sqlite';
 
@@ -146,5 +146,23 @@ describe('incident lifecycle', () => {
     assert.equal((await req(`/api/status/incidents/${inc.id}/purge`, { method: 'POST' })).status, 200);
     assert.equal(await env.STATUS_DB!.prepare('SELECT id FROM incidents WHERE id = ?').bind(inc.id).first(), null);
     assert.equal((await env.STATUS_DB!.prepare('SELECT COUNT(*) AS n FROM incident_updates').first<{ n: number }>())!.n, 0);
+  });
+});
+
+describe('status overview: the full internal view', () => {
+  it('returns every component, public and internal, with 90-day uptime', async () => {
+    const { req, env } = setup(['Admin']);
+    const day = new Date().toISOString().slice(0, 10);
+    await env.STATUS_DB!.prepare("INSERT INTO component_state VALUES ('cms', 'major', 'major', 2, ?, ?, 120, 'CMS deep health: HTTP 500', 1)").bind(day, day).run();
+    await env.STATUS_DB!.prepare("INSERT INTO daily (component, day, operational, partial, major) VALUES ('cms', ?, 90, 10, 0)").bind(day).run();
+    const o = ((await (await req('/api/status/overview')).json()) as { result: { checks: { component: string; detail: string }[]; uptime90: Record<string, number> } }).result;
+    assert.deepEqual(o.checks.map((c) => c.component), ['cms']);
+    assert.equal(o.checks[0].detail, 'CMS deep health: HTTP 500');
+    assert.equal(o.uptime90.cms, 0.97);
+  });
+  it('uptime: major down, partial 30%, rounds down, null without runs', () => {
+    assert.equal(uptimeShare({ operational: 9, degraded: 0, partial: 0, major: 1 }), 0.9);
+    assert.equal(uptimeShare({ operational: 99999, degraded: 0, partial: 0, major: 1 }), 0.9999);
+    assert.equal(uptimeShare({ operational: 0, degraded: 0, partial: 0, major: 0 }), null);
   });
 });

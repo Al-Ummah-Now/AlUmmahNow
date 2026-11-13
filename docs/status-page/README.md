@@ -13,21 +13,33 @@ stays up when the API, sign-in or the admin are down.
 A cron runs every 2 minutes in production (every 5 on QA and stage). Each check is an anonymous,
 read-only request; nothing is created anywhere.
 
-| Component | Checks |
-|---|---|
-| Website | `www/healthz` (`ok: true`) and `www/en/` (200) |
-| Videos site | `videos/en` (200) |
-| Videos API | `videos.api/health` (`healthy`) and `/api/videos?limit=1` (JSON) |
-| Sign-in | `auth/health` (`ok`) and the OAuth metadata (`issuer`) |
-| Profile | `profile.auth/login` redirects to the issuer's `/authorize` |
-| CMS | `cms/healthz?deep=1` (config + D1) |
-| Admin | `admin/login` redirects to sign-in, `admin.api/health` (`healthy`) |
-| Uploads | `POST videos.api/api/videos/tus` without a token answers 401 (the route is up; no video is created), and status.bunny.net |
-| Playback | from the newest public videos: the R2 master playlist on `media.<env>` and the Bunny playlist (their signed `playUrl`) start with `#EXTM3U`. Skipped (unknown) when the API is down |
-| Live streaming | `/api/live-streams?limit=1` and the live edge host answering |
-| Notifications & realtime | `realtime/health` and a WebSocket handshake to `/ws` (101, closed at once) |
-| Search | `/api/search?q=a&limit=1` (JSON) |
-| Email | Resend's status page (`resend-status.com`): none → operational, minor → degraded, major/critical → down |
+**Public and internal (owner, 2026-11-13: "You shouldn't show admin status unless this page is only
+for admins").** The public page, its JSON and feeds show only the user-facing services: website,
+videos site, sign-in, profile, uploads, playback, live streaming, notifications and realtime, and
+search. The internal components (videos API, CMS, videos admin, admin API, accounts admin, email)
+are checked and alerted on the same way but shown only on the videos admin's Status page, which
+lists every component with its last result and 90-day uptime. `public` in
+`packages/shared-types/src/status-page.ts` decides. An incident shows publicly only with its public
+components; one that affects only internal components stays in the admin (its page is a 404).
+The public page never shows check details or internal hostnames.
+
+| Component | Public | Checks |
+|---|---|---|
+| Website | yes | `www/healthz` (`ok: true`) and `www/en/` (200) |
+| Videos site | yes | `videos/en` (200) |
+| Videos API | no | `videos.api/health` (`healthy`) and `/api/videos?limit=1` (JSON) |
+| Sign-in | yes | `auth/health` (`ok`) and the OAuth metadata (`issuer`) |
+| Profile | yes | `profile.auth/login` redirects to the issuer's `/authorize` |
+| CMS | no | `cms/healthz?deep=1` (config + D1) |
+| Videos admin | no | `admin/login` redirects to sign-in |
+| Admin API | no | `admin.api/health` (`healthy`) |
+| Accounts admin | no | `admin.auth/` redirects to its `/login` |
+| Uploads | yes | `POST videos.api/api/videos/tus` without a token answers 401 (the route is up; no video is created), and status.bunny.net |
+| Playback | yes | from the newest public videos: the R2 master playlist on `media.<env>` and the Bunny playlist (their signed `playUrl`) start with `#EXTM3U`. Skipped (unknown) when the API is down |
+| Live streaming | yes | `/api/live-streams?limit=1` and the live edge host answering |
+| Notifications & realtime | yes | `realtime/health` and a WebSocket handshake to `/ws` (101, closed at once) |
+| Search | yes | `/api/search?q=a&limit=1` (JSON) |
+| Email | no | Resend's status page (`resend-status.com`): none → operational, minor → degraded, major/critical → down |
 
 **Result of one run** (`src/checks.ts classify`): every check passed → operational (degraded if one took
 over 4 s or a provider reports a minor problem); some failed → partial outage; all failed → major
@@ -72,8 +84,8 @@ When a component reaches a partial or major outage (after the debounce), the run
 needs-action item on the admin **Errors** page (`reportNeedsAction`, key `status:<component>`,
 source `status`), which admin-api emails in production like every other critical item. It is
 resolved automatically when the component is back. Nothing is sent during a maintenance window for
-that component. When the **admin** component itself is out (the Errors ingest may be down too), the
-production run also mails the alert directly through Resend to `ALERT_EMAIL_TO`.
+that component. When the **admin API** itself is out (it is the Errors ingest), the production run also mails the
+alert directly through Resend to `ALERT_EMAIL_TO`. Internal components alert like public ones.
 
 ## Public endpoints
 
@@ -81,7 +93,7 @@ production run also mails the alert directly through Resend to `ALERT_EMAIL_TO`.
 |---|---|
 | `/`, `/ar` | the page |
 | `/incidents/<id>`, `/ar/incidents/<id>` | one incident with its full timeline |
-| `/api/status.json` | overall state, components (state, 90-day uptime, daily bars), active / upcoming / recent incidents (both languages); CORS open |
+| `/api/status.json` | overall state, public components (state, 90-day uptime, daily bars), active / upcoming / recent incidents with their public components (both languages); CORS open |
 | `/feed.atom`, `/feed.rss` (`/ar/…`) | incidents and maintenance, newest update first |
 | `/healthz` | the Worker and its D1 (not cached) |
 

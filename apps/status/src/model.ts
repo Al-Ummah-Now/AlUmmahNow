@@ -2,9 +2,9 @@
  * The page's data, built from STATUS_DB only (never from the services it watches).
  * Also the body of GET /api/status.json.
  */
-import { STATUS_COMPONENTS, type ComponentState, type IncidentImpact, type StatusComponentId } from '@al-ummah/shared-types';
+import { STATUS_COMPONENTS, isPublicStatusComponent, type ComponentState, type IncidentImpact, type StatusComponentId } from '@al-ummah/shared-types';
 import { dayLevel, effectiveState, formatUptime, lastDays, overallState, uptime, type BarLevel, type CheckedState } from './state';
-import { isActive, isUpcoming, loadDaily, loadIncidents, loadStates, type Incident } from './store';
+import { isActive, isUpcoming, loadDaily, loadIncidents, loadStates, publicIncidents, type Incident } from './store';
 
 export const UPTIME_DAYS = 90;
 export const HISTORY_DAYS = 14;
@@ -40,12 +40,14 @@ export interface StatusSummary {
 
 export async function buildSummary(db: D1Database, now: Date, environment: string): Promise<StatusSummary> {
   const days = lastDays(now, UPTIME_DAYS);
-  const [states, daily, incidents] = await Promise.all([loadStates(db), loadDaily(db, days[0]), loadIncidents(db, now, HISTORY_DAYS)]);
+  const [states, daily, all] = await Promise.all([loadStates(db), loadDaily(db, days[0]), loadIncidents(db, now, HISTORY_DAYS)]);
+  // Public only: internal components and incidents that touch nothing else never reach the page
+  const incidents = publicIncidents(all);
   const active = incidents.filter((i) => isActive(i, now));
   const upcoming = incidents.filter((i) => isUpcoming(i, now)).sort((a, b) => (a.starts_at < b.starts_at ? -1 : 1));
   const history = incidents.filter((i) => !isActive(i, now) && !isUpcoming(i, now) && i.resolved_at);
 
-  const components: ComponentSummary[] = STATUS_COMPONENTS.map(({ id }) => {
+  const components: ComponentSummary[] = STATUS_COMPONENTS.filter((c) => isPublicStatusComponent(c.id)).map(({ id }) => {
     const row = states.get(id);
     const impacts: IncidentImpact[] = active.filter((i) => i.kind === 'incident' && i.components.includes(id)).map((i) => i.impact);
     const inMaintenance = active.some((i) => i.kind === 'maintenance' && i.components.includes(id));

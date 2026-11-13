@@ -6,7 +6,7 @@
  * (src/index.ts); every route needs `status:manage` (admins and super admins).
  * Every change is recorded in admin_audit_log (REPORTS_DB).
  *
- *   GET    /overview                      checks (component_state) + incidents (open, recent, deleted)
+ *   GET    /overview                      every component's check (public and internal), 90-day uptime, incidents (open, recent, deleted)
  *   POST   /incidents                     { kind, titleEn, titleAr, status, impact, components, startsAt?, endsAt?, bodyEn, bodyAr }
  *   GET    /incidents/:id                 one incident with its updates
  *   PATCH  /incidents/:id                 { titleEn?, titleAr?, impact?, components?, startsAt?, endsAt? }
@@ -113,6 +113,12 @@ export function parseIncidentInput(body: unknown, now = new Date()): IncidentInp
   return { kind, titleEn, titleAr, status, impact, components, startsAt, endsAt, bodyEn, bodyAr };
 }
 
+/** 90-day uptime like the public page (apps/status state.ts): major down, partial 30%, degraded up; null without runs. */
+export function uptimeShare(d: { operational: number; degraded: number; partial: number; major: number }): number | null {
+  const counted = d.operational + d.degraded + d.partial + d.major;
+  return counted ? Math.floor((1 - (d.major + 0.3 * d.partial) / counted) * 10_000) / 10_000 : null;
+}
+
 interface Row {
   id: string;
   kind: IncidentKind;
@@ -180,8 +186,11 @@ async function load(db: D1Database, id: string): Promise<Row | null> {
 app.get('/overview', async (c) => {
   const db = c.env.STATUS_DB!;
   const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
-  const [checks, open, recent, deleted] = await Promise.all([
+  const from = new Date(Date.now() - 89 * 86_400_000).toISOString().slice(0, 10);
+  const [checks, uptime, open, recent, deleted] = await Promise.all([
     db.prepare('SELECT component, state, raw, since, checked_at, latency_ms, detail, alert_open FROM component_state').all(),
+    // One row per component (daily is keyed by component, day): small and indexed
+    db.prepare('SELECT component, SUM(operational) AS operational, SUM(degraded) AS degraded, SUM(partial) AS partial, SUM(major) AS major FROM daily WHERE day >= ? GROUP BY component').bind(from).all<{ component: string; operational: number; degraded: number; partial: number; major: number }>(),
     db.prepare('SELECT * FROM incidents WHERE deleted_at IS NULL AND resolved_at IS NULL ORDER BY starts_at DESC LIMIT 100').all<Row>(),
     db.prepare('SELECT * FROM incidents WHERE deleted_at IS NULL AND resolved_at IS NOT NULL AND resolved_at >= ? ORDER BY resolved_at DESC LIMIT 50').bind(since).all<Row>(),
     db.prepare('SELECT * FROM incidents WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC LIMIT 50').all<Row>(),
@@ -190,6 +199,7 @@ app.get('/overview', async (c) => {
     success: true,
     result: {
       checks: checks.results ?? [],
+      uptime90: Object.fromEntries((uptime.results ?? []).map((u) => [u.component, uptimeShare(u)])),
       open: await withUpdates(db, open.results ?? []),
       recent: await withUpdates(db, recent.results ?? []),
       deleted: (deleted.results ?? []).map(toIncident),

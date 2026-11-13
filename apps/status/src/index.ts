@@ -19,7 +19,7 @@ import { logger } from './logger';
 import { buildSummary, toJson } from './model';
 import { renderIncidentPage, renderStatusPage } from './render';
 import { runOnce, statusEnvName, type StatusEnv } from './run';
-import { loadFeedIncidents, loadIncident, prune } from './store';
+import { loadFeedIncidents, loadIncident, prune, publicIncident, publicIncidents } from './store';
 
 const PRUNE_CRON = '40 3 * * *';
 /** Edge cache for pages and JSON: short, so a posted incident shows within a minute. */
@@ -95,11 +95,11 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
   } else if (path === '/api/status.json' && locale === 'en') {
     res = respond(JSON.stringify(toJson(await buildSummary(env.STATUS_DB, now, env.ENVIRONMENT))), 'application/json; charset=utf-8', 200, { 'access-control-allow-origin': '*' });
   } else if (path === '/feed.atom') {
-    res = respond(atomFeed(locale, base, await loadFeedIncidents(env.STATUS_DB), now), 'application/atom+xml; charset=utf-8');
+    res = respond(atomFeed(locale, base, publicIncidents(await loadFeedIncidents(env.STATUS_DB)), now), 'application/atom+xml; charset=utf-8');
   } else if (path === '/feed.rss') {
-    res = respond(rssFeed(locale, base, await loadFeedIncidents(env.STATUS_DB), now), 'application/rss+xml; charset=utf-8');
+    res = respond(rssFeed(locale, base, publicIncidents(await loadFeedIncidents(env.STATUS_DB)), now), 'application/rss+xml; charset=utf-8');
   } else if (/^\/incidents\/[\w-]{1,64}$/.test(path)) {
-    const incident = await loadIncident(env.STATUS_DB, path.split('/')[2]);
+    const incident = publicIncident(await loadIncident(env.STATUS_DB, path.split('/')[2]));
     res = respond(renderIncidentPage(incident, opts), 'text/html; charset=utf-8', incident ? 200 : 404);
   } else {
     return new Response('Not found', { status: 404, headers: { 'content-type': 'text/plain; charset=utf-8', ...SECURITY_HEADERS } });

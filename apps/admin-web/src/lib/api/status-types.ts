@@ -38,7 +38,10 @@ export interface StatusIncident {
 }
 
 export interface StatusOverview {
+  /** Every component, public and internal */
   checks: StatusCheck[];
+  /** 90-day uptime share (0..1) per component; absent without runs */
+  uptime90?: Record<string, number | null>;
   open: StatusIncident[];
   recent: StatusIncident[];
   deleted: StatusIncident[];

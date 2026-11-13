@@ -546,7 +546,7 @@ cd apps/processor && pnpm lint:fix
 - See: `apps/short-links/README.md`
 
 **apps/status** - Public status page (`status[.qa|.stage].alummahnow.net`)
-- Its own Worker and D1 (`al-ummah-now-status[-qa|-stage]`) so it stays up when the services it watches are down; a cron checks 13 components (2 min production, 5 min QA/stage), debounced over two runs; outages become Errors page needs-action items
+- Its own Worker and D1 (`al-ummah-now-status[-qa|-stage]`) so it stays up when the services it watches are down; a cron checks 15 components (2 min production, 5 min QA/stage; 9 user-facing ones are public, the rest admin-only), debounced over two runs; outages become Errors page needs-action items
 - Incidents and maintenance (en + ar) are posted from the videos admin **Status** page (admin-api `/api/status`, `STATUS_DB`)
 - Deployed to QA by `deploy-qa`; released by `release.yml` with `wrangler deploy` after the promote, smoke-tested (`scripts/release/status-smoke.ts`) with auto-rollback
 - See: `docs/status-page/README.md`

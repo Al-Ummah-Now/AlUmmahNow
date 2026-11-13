@@ -189,10 +189,9 @@ export function componentChecks(env: StatusEnvName): Record<StatusComponentId, (
     ),
     profile: all((d) => httpProbe(d, 'profile sign-in redirect', `${host(env, 'profile.auth')}/login`, { status: [302, 303, 307], location: /\/authorize\?/ })),
     cms: all((d) => httpProbe(d, 'CMS deep health', `${host(env, 'cms')}/healthz?deep=1`, { status: [200], body: (b) => (b as { status?: string })?.status === 'ok' })),
-    admin: all(
-      (d) => httpProbe(d, 'admin sign-in', `${host(env, 'admin')}/login`, { status: [200, 302, 303, 307], location: /auth|login/ }),
-      (d) => httpProbe(d, 'admin API health', `${host(env, 'admin.api')}/health`, { status: [200], body: healthy }),
-    ),
+    admin: all((d) => httpProbe(d, 'videos admin sign-in', `${host(env, 'admin')}/login`, { status: [200, 302, 303, 307], location: /auth|login/ })),
+    'admin-api': all((d) => httpProbe(d, 'admin API health', `${host(env, 'admin.api')}/health`, { status: [200], body: healthy })),
+    'auth-admin': all((d) => httpProbe(d, 'accounts admin sign-in', `${host(env, 'admin.auth')}/`, { status: [302, 303, 307], location: /\/login/ })),
     // No token: the TUS initiate route must refuse with 401, which proves it is up without creating a video
     uploads: all(
       (d) => httpProbe(d, 'TUS initiate (signed out → 401)', `${api}/api/videos/tus`, { status: [401] }, { method: 'POST', headers: { 'tus-resumable': '1.0.0', 'upload-length': '1' } }),

@@ -122,11 +122,13 @@ export function NewIncidentForm() {
         )}
         <fieldset>
           <legend className={labelClass}>{t('statusPage.new.components')}</legend>
+          <p className="text-sm text-fg-muted mb-2">{t('statusPage.new.componentsNote')}</p>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {STATUS_COMPONENTS.map((c) => (
               <label key={c.id} className="inline-flex items-center gap-2 text-fg">
                 <input type="checkbox" name="components" value={c.id} data-testid={`status-component-${c.id}`} />
                 {c[locale === 'ar' ? 'ar' : 'en']}
+                {!c.public && <span className="text-xs text-fg-muted">({t('statusPage.adminOnly')})</span>}
               </label>
             ))}
           </div>
