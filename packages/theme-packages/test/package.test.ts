@@ -100,9 +100,9 @@ test('assets: unsafe SVGs, fake extensions and unused files', () => {
 test('contrast: a text colour that fails WCAG AA names the pair and the ratio', () => {
   const { theme } = fawanees();
   const t = clone(theme);
-  t.tokens.color.light.textPrimary = '#fff1c4';
+  t.tokens.color.light.textPrimary = '#f3eee5';
   const errs = messages(validatePackage(t));
-  assert.ok(errs.some((e) => e.startsWith('tokens.color.light.textPrimary: #fff1c4 on background #fff1c4 is 1.00:1, needs 4.5:1')), errs.join('\n'));
+  assert.ok(errs.some((e) => e.startsWith('tokens.color.light.textPrimary: #f3eee5 on background #f3eee5 is 1.00:1, needs 4.5:1')), errs.join('\n'));
   const u = clone(theme);
   u.components.header.colors!.light.text = u.components.header.colors!.light.bg;
   assert.ok(messages(validatePackage(u)).some((e) => e.startsWith('components.header.colors.light.text: nav.text')));
@@ -179,7 +179,7 @@ test('duplicate and versions', () => {
   const { theme } = fawanees();
   const copy: ThemePackage = duplicatePackage(theme, 'fawanees-eid', { en: 'Eid', ar: 'عيد' }, 'admin@test');
   assert.equal(copy.kind, 'custom');
-  assert.equal(copy.basedOn, 'fawanees@1.1.0');
+  assert.equal(copy.basedOn, `fawanees@${theme.version}`);
   assert.equal(copy.version, '1.0.0');
   // Same CSS; colours equal to a brand colour now reference it
   assert.equal(compilePackage(copy).css.replaceAll('fawanees-eid', 'fawanees').replace(/@1\.0\.0/, `@${theme.version}`), compilePackage(theme).css);
@@ -201,4 +201,54 @@ test('player chrome: bar-pad-compact is optional, so packages made before it sti
   assert.ok(!css.includes('bar-pad-compact'), css);
   assert.ok(!css.includes('undefined'), css);
   assert.ok(css.includes('--fanous-player-bar-pad: 44px 12px 6px;'), css);
+});
+
+test('lightStyle: light-only styles compile to a :not(.dark) block after the shared one; dark keeps style', () => {
+  const { theme } = fawanees();
+  const css = compilePackage(theme).materials;
+  const [shared, light] = css.trim().split('\n');
+  assert.ok(shared.startsWith("html[data-theme='fawanees']{"));
+  assert.ok(light.startsWith("html[data-theme='fawanees']:not(.dark){"), light);
+  assert.ok(light.includes('--m-page:var(--fanous-color-background)'));
+  assert.ok(light.includes('--m-hero:linear-gradient(var(--fanous-color-surface),var(--fanous-color-surface))'));
+  // The shared block still carries the glow gradients dark mode uses
+  assert.match(shared, /--m-hero:radial-gradient\(/);
+  // A package without lightStyle emits no light block
+  const t = clone(theme);
+  for (const c of Object.values(t.components)) delete c.lightStyle;
+  assert.equal(compilePackage(t).materials.trim().split('\n').length, 1);
+});
+
+test('lightStyle: a colour layer in a layered light background is refused like in style', () => {
+  const { theme } = fawanees();
+  const t = clone(theme);
+  t.components.card.lightStyle!.background = '{color.surface}';
+  assert.ok(messages(validatePackage(t)).some((e) => e.startsWith('components.card.lightStyle.background: has a colour layer')));
+});
+
+test('street: tokens per mode, the lights inlined when asked, otherwise by URL; other themes have none', () => {
+  const { theme, assets } = fawanees();
+  const inline = (p: string) => (assets[p] ? `data:image/svg+xml,${encodeURIComponent(new TextDecoder().decode(assets[p]))}` : undefined);
+  const tokens = compilePackage(theme, { inlineAsset: inline }).tokens;
+  const light = tokens.slice(tokens.indexOf(":not(.dark) {"));
+  assert.match(light, /--fanous-street-on: 1;/);
+  assert.match(light, /--fanous-street-line: #d8cebdff;/);
+  assert.match(light, /--fanous-street-glow: 0\.34;/);
+  assert.match(light, /--fanous-street-lights: url\("data:image\/svg\+xml,%3Csvg/);
+  const byUrl = compilePackage(theme, { assetUrl: (p) => `/t/${p}` }).tokens;
+  assert.match(byUrl, /--fanous-street-lights: url\("\/t\/assets\/street-lights-dark\.svg"\);/);
+  const off = clone(theme); off.street!.enabled = false;
+  assert.match(compilePackage(off).tokens, /--fanous-street-on: 0;/);
+  const none = clone(theme); delete none.street;
+  assert.doesNotMatch(compilePackage(none).tokens, /--fanous-street/);
+});
+
+test('street: its art must be in the package and its colours #rrggbbaa', () => {
+  const { theme, assets } = fawanees();
+  const t = clone(theme);
+  t.street!.lights.dark = 'assets/missing.svg';
+  assert.ok(messages(validatePackage(t, { assets })).some((e) => e.startsWith('street.lights.dark: names assets/missing.svg')));
+  const u = clone(theme);
+  (u.street!.line as Record<string, string>).light = 'tan';
+  assert.equal(validatePackage(u).ok, false);
 });

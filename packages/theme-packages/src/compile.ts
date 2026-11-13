@@ -16,6 +16,12 @@ export interface CompileOptions {
    * generated file is unchanged. Packages served on their own leave it out.
    */
   rootFallback?: boolean;
+  /**
+   * Inline form of an asset (a data: URL) for values that must work wherever the stylesheet is
+   * copied (the street's lights in the built-in stylesheet, which www and the CMS vendor).
+   * Falls back to assetUrl.
+   */
+  inlineAsset?: (path: string) => string | undefined;
 }
 
 export interface CompiledTheme { tokens: string; materials: string; fonts: string; player: string; css: string }
@@ -85,6 +91,7 @@ function tokensCss(pkg: ThemePackage, opts: CompileOptions): string {
   const modeBlock = (mode: Mode) => [
     ...BASE.roles.map((r) => `  --fanous-color-${kebab(r.name)}: ${colors[mode].roles[r.name]};`),
     ...BASE.parts.map(({ part }) => `  --fanous-c-${part.split('.').map(kebab).join('-')}: ${colors[mode].parts[part]};`),
+    ...streetTokens(pkg, mode, opts),
   ].join('\n');
   return `/* Theme package ${pkg.id}@${pkg.version}. Generated, do not edit. */
 ${top} {
@@ -121,13 +128,41 @@ ${modeBlock('light')}
 `;
 }
 
+/**
+ * The street's tokens for one mode (only for a package with a street section, so other themes'
+ * output is unchanged). The shared street module reads them: --fanous-street-on 1 switches it on.
+ */
+function streetTokens(pkg: ThemePackage, mode: Mode, opts: CompileOptions): string[] {
+  const street = pkg.street;
+  if (!street) return [];
+  const lights = opts.inlineAsset?.(street.lights[mode]) ?? (opts.assetUrl ?? ((p: string) => p))(street.lights[mode]);
+  return [
+    `  --fanous-street-on: ${street.enabled ? 1 : 0};`,
+    `  --fanous-street-line: ${street.line[mode].toLowerCase()};`,
+    `  --fanous-street-window: ${street.window[mode].toLowerCase()};`,
+    `  --fanous-street-glow: ${street.glow[mode]};`,
+    `  --fanous-street-lights: url("${lights}");`,
+  ];
+}
+
+/** `components.<name>.lightStyle.<field>` for a `components.<name>.style.<field>` path. */
+export const lightPath = (path: string) => path.replace('.style.', '.lightStyle.');
+
 function materialsCss(pkg: ThemePackage, assetUrl: (p: string) => string): string {
   const decls = MATERIAL_VARS.map(([path, prop]) => `${prop}:${toCss(String(get(pkg, path)), assetUrl)}`);
   for (const [path, prop] of OPTIONAL_MATERIAL_VARS) {
     const value = get(pkg, path);
     if (value !== undefined && value !== '') decls.push(`${prop}:${toCss(String(value), assetUrl)}`);
   }
-  return `${scopeOf(pkg.id)}{${decls.join(';')}}\n`;
+  // Light-only styles: the same properties again for light mode (the videos app marks dark with html.dark)
+  const light: string[] = [];
+  for (const [path, prop] of [...MATERIAL_VARS, ...OPTIONAL_MATERIAL_VARS]) {
+    if (!path.startsWith('components.')) continue;
+    const value = get(pkg, lightPath(path));
+    if (value !== undefined && value !== '') light.push(`${prop}:${toCss(String(value), assetUrl)}`);
+  }
+  const scope = scopeOf(pkg.id);
+  return `${scope}{${decls.join(';')}}\n${light.length ? `${scope}:not(.dark){${light.join(';')}}\n` : ''}`;
 }
 
 const BODY_TARGETS = ['body', 'body button', 'body input', 'body textarea', 'body select', 'body .font-inter'];

@@ -27,7 +27,7 @@ for (const [file, content] of Object.entries(outputs)) {
   else writeFileSync(file, content);
 }
 
-const { loadPackageDir, BUILT_IN } = await import('./load.ts');
+const { loadPackageDir, BUILT_IN, inlineSvg } = await import('./load.ts');
 const { validatePackage } = await import('../src/validate.ts');
 const { compilePackage } = await import('../src/compile.ts');
 
@@ -38,7 +38,7 @@ const compiled = BUILT_IN.ids.map((id: string) => {
   const result = validatePackage(files.theme, { assets: files.assets, builtIn: true });
   for (const e of result.errors) errors.push(`${id}: ${e.path}: ${e.message}`);
   if (result.errors.length) return undefined;
-  return compilePackage(files.theme, { isDefault: id === BUILT_IN.default, rootFallback: true });
+  return compilePackage(files.theme, { isDefault: id === BUILT_IN.default, rootFallback: true, inlineAsset: inlineSvg(files) });
 });
 if (errors.length) {
   for (const e of errors) console.error(`THEME PACKAGE ${e}`);
