@@ -456,7 +456,9 @@ export function UnifiedNavigation() {
                 <span className="aun-menu-label" id="nav-apps-label">{t.navigation.appsSection}</span>
                 {otherApps.map((app) => (
                   <a key={app.id} href={app.href} className="aun-menu-item" role="menuitem" data-app={app.id}>
-                    <span className="aun-app-icon" data-app={app.id} aria-hidden="true" />
+                    {/* The app's own favicon, a separate static file (never inlined in the CSS), loaded when the menu shows it */}
+                    {/* eslint-disable-next-line @next/next/no-img-element -- a fixed 96px icon; next/image would add an optimiser round trip */}
+                    <img className="aun-app-icon" data-app={app.id} src={`/aun-nav/icons/${app.id}.webp`} width={32} height={32} alt="" loading="lazy" decoding="async" />
                     <span className="aun-menu-text">{appLabel[app.id]}</span>
                   </a>
                 ))}
