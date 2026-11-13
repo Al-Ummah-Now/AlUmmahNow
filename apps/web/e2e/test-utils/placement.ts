@@ -109,6 +109,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/72-real-sign-in.spec.ts': { placement: 'local', reason: 'real issuer form (Auth repo, local): callback, sign-out, sign-in again' },
   'apps/web/e2e/73-watch-loading.spec.ts': { placement: 'local', reason: 'watch skeleton/no layout shift with delayed server action' },
   'apps/web/e2e/74-no-empty-media.spec.ts': { placement: 'local', reason: 'thumbnails never empty boxes on public pages' },
+  'apps/web/e2e/76-channel-name-locale.spec.ts': { placement: 'local', reason: "channel names in the page's language on cards and the watch page" },
   'apps/web/e2e/75-save-to-playlist-menu.spec.ts': { placement: 'local', reason: 'save menu stays in viewport; hard-coded video id' },
   'apps/web/e2e/75-site-theme.spec.ts': { placement: 'local', reason: 'served theme matches hydrated theme' },
   'apps/web/e2e/a11y/axe-all-pages.spec.ts': { placement: 'local', reason: 'axe scan of route catalog; catalog fetched from API_URL' },
