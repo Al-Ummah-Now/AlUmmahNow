@@ -14,6 +14,7 @@ import openNext from './.open-next/worker.js';
 import { configureLogging, type LoggingEnv } from '@al-ummah/logger';
 import { withPublicHost } from './src/lib/version-skew/skew-host';
 import { logger } from './src/lib/logger-server';
+import { asServiceUnavailable } from './src/lib/seo/unavailable';
 
 interface Handler {
   fetch(request: Request, env: unknown, ctx: unknown): Promise<Response>;
@@ -32,7 +33,7 @@ const worker: Handler = {
     try {
       const response = await (openNext as Handler).fetch(withPublicHost(request), env, ctx);
       if (summarise) logger.request({ ...base, status: response.status, durationMs: Date.now() - startedAt });
-      return response;
+      return asServiceUnavailable(request, response);
     } catch (error) {
       logger.request({ ...base, status: 500, durationMs: Date.now() - startedAt, error });
       throw error;
