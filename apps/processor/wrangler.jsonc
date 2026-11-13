@@ -153,7 +153,16 @@
 			"binding": "QF_CLIENT_SECRET",
 			"store_id": "f8eddc9944d041919ed8dc7d08d32308",
 			"secret_name": "quran-foundation-prod-client-secret"
-		}
+		},
+		// Push senders (#414, src/push/senders): a placeholder value keeps that provider log-only
+		{ "binding": "APNS_KEY_P8", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "apns-key-p8" },
+		{ "binding": "APNS_KEY_ID", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "apns-key-id" },
+		{ "binding": "APPLE_TEAM_ID", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "apple-team-id" },
+		{ "binding": "APNS_BUNDLE_IDS", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "apns-bundle-ids" },
+		{ "binding": "FCM_SERVICE_ACCOUNT", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "fcm-service-account" },
+		{ "binding": "FCM_PROJECT_ID", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "fcm-project-id" },
+		{ "binding": "WNS_PACKAGE_SID", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "wns-package-sid" },
+		{ "binding": "WNS_CLIENT_SECRET", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "wns-client-secret" }
 	],
 
 	// Environment-specific configurations
@@ -279,7 +288,16 @@
 					"binding": "QF_CLIENT_SECRET",
 					"store_id": "f8eddc9944d041919ed8dc7d08d32308",
 					"secret_name": "quran-foundation-prod-client-secret"
-				}
+				},
+				// Push senders (#414, src/push/senders): a placeholder value keeps that provider log-only
+				{ "binding": "APNS_KEY_P8", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "apns-key-p8-stage" },
+				{ "binding": "APNS_KEY_ID", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "apns-key-id-stage" },
+				{ "binding": "APPLE_TEAM_ID", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "apple-team-id-stage" },
+				{ "binding": "APNS_BUNDLE_IDS", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "apns-bundle-ids-stage" },
+				{ "binding": "FCM_SERVICE_ACCOUNT", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "fcm-service-account-stage" },
+				{ "binding": "FCM_PROJECT_ID", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "fcm-project-id-stage" },
+				{ "binding": "WNS_PACKAGE_SID", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "wns-package-sid-stage" },
+				{ "binding": "WNS_CLIENT_SECRET", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "wns-client-secret-stage" }
 			]
 		},
 		// Development environment

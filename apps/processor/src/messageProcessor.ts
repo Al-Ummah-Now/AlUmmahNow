@@ -40,8 +40,9 @@ export const DELETED_USER_ID = 'deleted-user';
 export class MessageProcessor {
   private logger: Logger;
 
-  /** Push providers per service; injectable for tests. */
-  private readonly pushProviders: PushProviders;
+  /** Push providers per service; injectable for tests. Otherwise resolved from the env's secrets per batch. */
+  private readonly injectedPushProviders: PushProviders | undefined;
+  private envPushProviders: PushProviders | undefined;
 
   /**
    * Analytics increments of the messages processed by this instance. The queue
@@ -52,9 +53,9 @@ export class MessageProcessor {
   private readonly counters = new CounterBatch();
   private readonly batchCounters: boolean;
 
-  constructor(logger: Logger, pushProviders: PushProviders = resolvePushProviders(), opts: { batchCounters?: boolean } = {}) {
+  constructor(logger: Logger, pushProviders?: PushProviders, opts: { batchCounters?: boolean } = {}) {
     this.logger = logger;
-    this.pushProviders = pushProviders;
+    this.injectedPushProviders = pushProviders;
     this.batchCounters = opts.batchCounters ?? false;
   }
 
@@ -618,7 +619,8 @@ export class MessageProcessor {
       this.logger.warn('NOTIFICATIONS_DB not bound; push skipped', { key: payload.notificationKey });
       return;
     }
-    const summary = await dispatchPush(env.NOTIFICATIONS_DB, payload, this.pushProviders);
+    const providers = this.injectedPushProviders ?? (this.envPushProviders ??= resolvePushProviders(env));
+    const summary = await dispatchPush(env.NOTIFICATIONS_DB, payload, providers);
     this.logger.debug('Push dispatch finished', { key: payload.notificationKey, recipients: payload.recipients.length, ...summary });
   }
 

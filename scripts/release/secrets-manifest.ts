@@ -106,6 +106,16 @@ export const SECRETS_MANIFEST: WorkerSecrets[] = [
 			// Quran Foundation Content Sync (AUN-CAPTIONS, src/quran): the production QF client in every env (owner 2026-11-13)
 			{ name: 'QF_CLIENT_ID', purpose: 'Secrets Store quran-foundation-prod-client-id (all envs); QF OAuth client, scope content.sync.read' },
 			{ name: 'QF_CLIENT_SECRET', purpose: 'Secrets Store quran-foundation-prod-client-secret (all envs); QF OAuth client secret' },
+			// Push senders (#414, apps/processor/src/push/senders). Created with the value "placeholder"
+			// (log-only) until the owner supplies the real one; the binding must exist either way.
+			{ name: 'APNS_KEY_P8', purpose: 'Secrets Store apns-key-p8[-qa|-stage]; APNs token auth .p8 key (PKCS#8 PEM)' },
+			{ name: 'APNS_KEY_ID', purpose: 'Secrets Store apns-key-id[-qa|-stage]; the .p8 key id (JWT kid)' },
+			{ name: 'APPLE_TEAM_ID', purpose: 'Secrets Store apple-team-id[-qa|-stage]; Apple developer team id (JWT iss)' },
+			{ name: 'APNS_BUNDLE_IDS', purpose: 'Secrets Store apns-bundle-ids[-qa|-stage]; JSON app → bundle id (or platform → bundle id), the apns-topic' },
+			{ name: 'FCM_SERVICE_ACCOUNT', purpose: 'Secrets Store fcm-service-account[-qa|-stage]; Firebase service-account JSON (FCM HTTP v1 OAuth)' },
+			{ name: 'FCM_PROJECT_ID', purpose: 'Secrets Store fcm-project-id[-qa|-stage]; Firebase project id (placeholder = the JSON\'s project_id)' },
+			{ name: 'WNS_PACKAGE_SID', purpose: 'Secrets Store wns-package-sid[-qa|-stage]; Windows package SID (WNS OAuth client id)' },
+			{ name: 'WNS_CLIENT_SECRET', purpose: 'Secrets Store wns-client-secret[-qa|-stage]; WNS client secret' },
 		],
 	}),
 	...envs('scheduler', 'al-ummah-scheduler-qa', { required: [INTERNAL_API_KEY] }),

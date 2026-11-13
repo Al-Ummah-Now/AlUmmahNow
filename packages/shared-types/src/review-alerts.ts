@@ -273,10 +273,19 @@ export function minutesLeft(deadlineAt: number | null | undefined, now: number):
   return Math.max(0, Math.ceil((deadlineAt - now) / 60000));
 }
 
-/** "Video held for review · NSFW · 4 min left" (ar: «مرئي» wording). */
-export function reviewAlertText(reason: ReviewAlertReason, minutes: number | null, locale: string | null | undefined): { title: string; body: string } {
+/** "Video held for review · NSFW · 4 min left" (ar: «مرئي» wording), plus the Open / Claim action labels. */
+export function reviewAlertText(
+  reason: ReviewAlertReason,
+  minutes: number | null,
+  locale: string | null | undefined,
+): { title: string; body: string; openLabel: string; claimLabel: string } {
   const ar = (locale ?? '').toLowerCase().startsWith('ar');
   const parts = ar ? ['مرئي محجوز للمراجعة', REASON_TEXT.ar[reason]] : ['Video held for review', REASON_TEXT.en[reason]];
   if (minutes !== null) parts.push(ar ? `بقي ${minutes} د` : `${minutes} min left`);
-  return { title: ar ? 'طابور المراجعة' : 'Review queue', body: parts.join(' · ') };
+  return {
+    title: ar ? 'طابور المراجعة' : 'Review queue',
+    body: parts.join(' · '),
+    openLabel: ar ? 'فتح' : 'Open',
+    claimLabel: ar ? 'استلام' : 'Claim',
+  };
 }
