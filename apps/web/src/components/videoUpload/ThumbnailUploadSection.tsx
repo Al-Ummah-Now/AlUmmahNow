@@ -233,7 +233,8 @@ export function ThumbnailUploadSection({
                 <ThumbnailOption
                   key={idx}
                   src={thumb}
-                  selected={selectedThumbnail?.type === 'auto' && selectedThumbnail?.preview === thumb}
+                  // By position, not image data: two frames can be the same picture (a short or still clip)
+                  selected={selectedThumbnail?.type === 'auto' && selectedThumbnail?.position === [10, 25, 50, 75, 90][idx]}
                   onClick={() => handleAutoSelect(thumb, idx)}
                   disabled={disabled}
                   label={`${[10, 25, 50, 75, 90][idx]}%`}
