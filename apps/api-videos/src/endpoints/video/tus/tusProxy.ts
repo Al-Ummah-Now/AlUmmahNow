@@ -17,7 +17,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { getAuthContext } from '../../../middleware/auth';
-import { bunnyTusRequestHeaders } from '../../../lib/bunny/tus';
+import { bunnyTusRequestHeaders, tusUploadIndexKey } from '../../../lib/bunny/tus';
 import { markUploadComplete } from '../../../lib/uploads/lifecycle';
 import { teePatch } from '../../../lib/media/originals';
 import R2Repository, { rethrowBusy } from '../../../lib/r2Repo';
@@ -423,7 +423,12 @@ export class TusProxy {
       const [kvWrite, durableWrite] = await Promise.allSettled([
         kv.put(this.getSessionKey(uploadKey), JSON.stringify(session), {
           expirationTtl: TUS_UPLOAD_SESSION_TTL_SECONDS,
-        }),
+        }).then(() =>
+          // The per-user index an account erasure finds the session through (lib/privacy/upload-traces.ts)
+          userId
+            ? kv.put(tusUploadIndexKey(userId, uploadKey), '1', { expirationTtl: TUS_UPLOAD_SESSION_TTL_SECONDS })
+            : undefined,
+        ),
         new R2Repository<z.infer<typeof BusinessVideo> & { tusUpload?: VideoTusUpload }>(this.env.videos)
           .updateObject(videoId, (video) => {
             if (video.uploadStatus === 'ready' || video.uploadStatus === 'processing') return false;

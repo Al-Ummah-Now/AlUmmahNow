@@ -117,6 +117,11 @@ export async function filterKey(sql: string, binds: unknown[]): Promise<string> 
 	return [...new Uint8Array(digest).slice(0, 12)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+/** search_meta key of a cached list total: `admin-count:` and a hash of the filter, never the filter itself. */
+export async function adminCountKey(filter: string): Promise<string> {
+	return `admin-count:${await filterKey(filter, [])}`;
+}
+
 /** The COUNT row, or -1 when the caller skipped it (noTotal). */
 const totalOf = (row: { n: number } | null | undefined): number => (row === null ? -1 : Number(row?.n) || 0);
 
@@ -396,12 +401,14 @@ export async function hydrateVideos(env: AdminEnv, rows: Row[]): Promise<AdminVi
 export const ADMIN_COUNT_TTL_MS = 60_000;
 
 /**
- * A list's total, reused for ADMIN_COUNT_TTL_MS per filter (search_meta, key admin-count:<key>).
+ * A list's total, reused for ADMIN_COUNT_TTL_MS per filter (search_meta, key admin-count:<hash>).
  * Counting every profile on each users-list call read ~28.7k rows a time on QA, the search
  * database's largest reader (#891); a total a minute old is fine for the header and the pager.
+ * The stored key is a hash of the filter: the filter holds what the admin typed (often a user's
+ * email), which must not outlive the search in search_meta.
  */
 export async function cachedCount(db: SearchDb, key: string, count: () => Promise<number>, now = Date.now()): Promise<number> {
-	const metaKey = `admin-count:${key}`;
+	const metaKey = await adminCountKey(key);
 	const hit = await db.prepare('SELECT value, updated_at FROM search_meta WHERE key = ?').bind(metaKey).first<{ value: string; updated_at: number }>();
 	if (hit && Number(hit.updated_at) > now - ADMIN_COUNT_TTL_MS) return Number(hit.value) || 0;
 	const n = await count();

@@ -170,7 +170,8 @@ export async function upsertSearchRow(db: SearchDb, row: SearchRow, options: Sea
  *
  * Either way it is remembered in search_tombstones, so an older snapshot
  * arriving later cannot bring the item back. Channels keep a hidden row so
- * the content they own stays excluded from results.
+ * the content they own stays excluded from results; a deleted channel's row
+ * keeps only its id (no name, description or handle).
  */
 export async function removeSearchDocument(
   db: SearchDb,
@@ -194,7 +195,10 @@ export async function removeSearchDocument(
     statements.push(
       db.prepare(
         `INSERT INTO ${base} (id, channel_id, visible, payload, content_hash, indexed_at, source_version) VALUES (?, ?, 0, '{}', 'removed', ?, ?)
-         ON CONFLICT(id) DO UPDATE SET visible = 0, content_hash = 'removed', indexed_at = excluded.indexed_at, source_version = excluded.source_version
+         ON CONFLICT(id) DO UPDATE SET visible = 0, content_hash = 'removed', indexed_at = excluded.indexed_at, source_version = excluded.source_version${
+           // A deleted channel keeps only its id: its name, description and handle go with it
+           final ? `, payload = '{}', language = NULL, category = NULL, is_verified = 0, views = 0, created_at = NULL, popularity = 0` : ''
+         }
          ${final ? '' : `WHERE excluded.source_version >= ${base}.source_version`}`,
       ).bind(id, id, now, at),
     );

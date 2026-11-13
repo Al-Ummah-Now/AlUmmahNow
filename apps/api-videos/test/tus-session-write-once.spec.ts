@@ -88,7 +88,8 @@ describe('TUS sessions written once (AV-24)', () => {
 		const uploadId = created.headers.get('Location')!.split('/').pop()!;
 		const [uploadKey, videoInId] = uploadId.split('.');
 		assert.equal(videoInId, 'vid', 'the upload id carries the video id');
-		assert.deepEqual(h.kv.puts, [`tus:upload:${uploadKey}`]);
+		// The session and its per-user index entry (account erasure finds it through it), each once
+		assert.deepEqual(h.kv.puts, [`tus:upload:${uploadKey}`, `tus:user:alice:upload:${uploadKey}`]);
 		const stored = JSON.parse(h.kv.data.get(`tus:upload:${uploadKey}`)!);
 		assert.equal(stored.bunnyUploadUrl, 'https://video.bunnycdn.com/tusupload/b1', 'POST stores the whole session, upload URL included');
 		globalThis.fetch = ((orig) => (async (url: string | URL | Request, init?: RequestInit) =>
@@ -107,7 +108,7 @@ describe('TUS sessions written once (AV-24)', () => {
 				assert.equal(head.headers.get('Upload-Offset'), String(offset + CHUNK), 'the offset comes from Bunny');
 			}
 		}
-		assert.deepEqual(h.kv.puts, [`tus:upload:${uploadKey}`], 'no write per chunk or resume');
+		assert.deepEqual(h.kv.puts, [`tus:upload:${uploadKey}`, `tus:user:alice:upload:${uploadKey}`], 'no write per chunk or resume');
 		assert.equal(h.videos.read('vid').uploadStatus, 'processing');
 		assert.equal(h.queue.messages.filter((m: any) => m.type === MessageType.VideoUploadCompleted).length, 1);
 	});

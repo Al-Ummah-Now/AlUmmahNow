@@ -130,6 +130,21 @@ describe('search document projection', () => {
 		assert.ok(row.popularity > 0);
 	});
 
+	it('a deleted channel keeps only its id in the index: no name, description or handle', async () => {
+		const db = new SqliteD1();
+		const channel = { id: 'ch-gone', name: 'Seerah by Someone', description: 'Created by someone@example.com', handle: 'someone', dateCreated: new Date().toISOString() };
+		await syncSearchDocument(db as never, 'channel', 'ch-gone', channel, { version: 1 });
+		await syncSearchDocument(db as never, 'channel', 'ch-gone', { ...channel, isHidden: true }, { version: 2 });
+		const hidden = db.db.prepare("SELECT visible, payload FROM search_channels WHERE id = 'ch-gone'").get() as { visible: number; payload: string };
+		assert.equal(hidden.visible, 0);
+		assert.match(hidden.payload, /Seerah by Someone/, 'a hidden channel keeps its row as it was (restorable)');
+		await syncSearchDocument(db as never, 'channel', 'ch-gone', null, { version: 3 });
+		const row = db.db.prepare("SELECT * FROM search_channels WHERE id = 'ch-gone'").get() as Record<string, unknown>;
+		assert.equal(row.visible, 0, 'the hidden row stays, so the channel\'s content stays excluded');
+		assert.equal(row.payload, '{}');
+		assert.ok(!JSON.stringify(row).includes('Someone') && !JSON.stringify(row).includes('someone'), JSON.stringify(row));
+	});
+
 	it('keeps non-public channels as hidden rows', () => {
 		assert.equal(projectChannel({ id: 'c', name: 'C' })!.visible, true);
 		assert.equal(projectChannel({ id: 'c', name: 'C', isPrivate: true })!.visible, false);

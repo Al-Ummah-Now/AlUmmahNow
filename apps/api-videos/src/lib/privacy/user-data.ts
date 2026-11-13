@@ -34,6 +34,7 @@
 import { eraseUserSubscriptions, exportUserSubscriptions, subscriberChannelOf } from '../subscription-store';
 import { getEmailSettings, getSeenAt, getSettings } from '../notifications';
 import { defaultPointerPrefix } from '../uploadDefaultPointer';
+import { deleteVideoSideRecords } from '../videoSideRecords';
 import { sectionOrderKey } from '../channelSectionOrder';
 import { BucketLike, BudgetExhausted, OperationBudget, asBucket, deleteKeys, readJson, updateJson, writeJson } from './scan';
 import { isReportClaimOf, reportClaimKey } from '../report-claims';
@@ -63,6 +64,10 @@ export interface PrivacyBuckets {
 	'upload-defaults': unknown;
 	reports: unknown;
 	subtitles?: unknown;
+	/** Upload markers (ops/upload-reaper/created/<videoId>) and the scheduler's entries: lib/videoSideRecords.ts */
+	global_settings?: unknown;
+	SCHEDULED_VIDEOS?: unknown;
+	'scheduled-videos'?: unknown;
 	/** Channel subscriptions (lib/subscription-store.ts) */
 	NOTIFICATIONS_DB?: D1Database;
 	/** Ownership index and privacy footprints: the erase reads them instead of scanning (#1073) */
@@ -694,6 +699,8 @@ export async function eraseUserData(
 				const subtitles = asBucket(env.subtitles);
 				bump(summary.deleted, 'subtitles', await deleteKeys(subtitles, await allKeys(subtitles, `${videoId}/`, ctx.budget), ctx.budget));
 			}
+			// The scheduler entry and upload marker name the user too (lib/videoSideRecords.ts)
+			await deleteVideoSideRecords({ global_settings: env.global_settings, SCHEDULED_VIDEOS: env.SCHEDULED_VIDEOS ?? env['scheduled-videos'] }, videoId, video);
 			if (hooks.onVideoDeleted) await hooks.onVideoDeleted(videoId, video as never);
 			await deleteKeys(videos, [key], ctx.budget);
 			summary.deletedVideoIds.push(videoId);
