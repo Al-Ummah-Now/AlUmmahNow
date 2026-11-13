@@ -75,6 +75,7 @@ export const VideoView = z.object({
     userId: Str(),
     channelId: Str(),
     channelName: Str(), // Denormalized for client convenience
+    channelNameLocalized: z.record(z.string()).optional().describe("The channel's name per language (e.g. { en, ar }); show the page language's name, else channelName"),
     channelAvatarUrl: Str().optional(), // Denormalized for client convenience
     channelCoverUrl: Str().optional(), // Denormalized for client convenience
     channelIsVerified: z.boolean().optional(), // Scholar/institution badge (Epic 6.1)
@@ -122,6 +123,7 @@ export const PlaylistView = z.object({
     userId: Str(),
     channelId: Str(),
     channelName: Str(), // Denormalized for client convenience
+    channelNameLocalized: z.record(z.string()).optional().describe("The channel's name per language (e.g. { en, ar }); show the page language's name, else channelName"),
     dateCreated: DateTime(),
     dateModified: DateTime(),
     videosCount: z.number(),

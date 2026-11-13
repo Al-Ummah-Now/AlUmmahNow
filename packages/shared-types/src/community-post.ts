@@ -41,6 +41,8 @@ export interface CommunityPost extends SoftDelete, Moderation {
 
   // Channel info (denormalized for performance)
   channelName: string;
+  /** The channel's name per language ('en', 'ar'); pages show their own language's */
+  channelNameLocalized?: Record<string, string>;
   channelAvatar?: string;
   channelVerified: boolean;
 

@@ -51,6 +51,8 @@ export interface VideoObject extends Timestamps, SoftDelete, Moderation {
   channelId: string | null;
   channel: string;
   channelName: string;
+  /** The channel's name per language ('en', 'ar'); pages show their own language's (web lib/channel-name.ts) */
+  channelNameLocalized?: Record<string, string>;
   channelAvatarUrl: string;
   channelCoverUrl?: string; // Channel cover/banner image
 

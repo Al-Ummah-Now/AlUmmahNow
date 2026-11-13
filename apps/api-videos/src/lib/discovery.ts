@@ -15,6 +15,7 @@ import { logger } from './logger';
 import { isVideoPubliclyVisible } from './visibility';
 import { detectTextLanguage } from '@al-ummah/shared-types';
 import { PUBLIC_DISLIKES_COUNT } from "./reactions";
+import { channelNameFields } from './channelName';
 
 export interface DiscoveryVideo {
   id: string;
@@ -23,6 +24,8 @@ export interface DiscoveryVideo {
   userId?: string;
   channelId?: string;
   channelName?: string;
+  /** The channel's name per language (lib/channelName.ts) */
+  channelNameLocalized?: Record<string, string>;
   channelAvatarUrl?: string;
   thumbnailUrl?: string;
   videoUrl?: string;
@@ -443,7 +446,7 @@ export function toVideoResponse(video: DiscoveryVideo, channels: Map<string, Dis
     userId: video.userId,
     channelId: video.channelId || '',
     channel: channel?.name || video.channelName || '',
-    channelName: channel?.name || video.channelName || '',
+    ...channelNameFields(channel, video.channelName || ''),
     channelAvatarUrl: channel?.avatarUrl || video.channelAvatarUrl,
     dateCreated: video.dateCreated,
     dateModified: video.dateModified,

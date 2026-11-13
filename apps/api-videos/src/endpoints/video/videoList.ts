@@ -15,6 +15,7 @@ import { scanFill } from "../../lib/listFill";
 import { edgeCacheUrl, readEdgeCache, writeEdgeCache } from "../../lib/edge-cache";
 import { FIRST_PAGE_TTL_SECONDS, videoListGeneration } from "../../lib/videoListCache";
 import { PUBLIC_DISLIKES_COUNT } from "../../lib/reactions";
+import { channelNameFields } from '../../lib/channelName';
 
 /** Seconds the anonymous first page of the general feed is reused. */
 
@@ -272,7 +273,7 @@ export class VideosList extends OptionalAuthRoute {
 			return {
 				...publicVideoFields(video),
 				...uploaderProcessingIssue(video, channel, userId),
-				channelName: channel?.name || "",
+				...channelNameFields(channel),
 				channelAvatarUrl: channel?.avatarUrl,
 				likesCount: video.likes?.length || 0,
 				dislikesCount: PUBLIC_DISLIKES_COUNT,

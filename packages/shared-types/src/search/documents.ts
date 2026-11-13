@@ -46,6 +46,8 @@ export interface SearchVideoPayload {
   isShort?: boolean;
   channelId: string;
   channelName?: string;
+  /** The channel's name per language ('en', 'ar'), set on search responses */
+  channelNameLocalized?: Record<string, string>;
   channelAvatarUrl?: string;
   dateCreated?: string;
 }
@@ -89,6 +91,8 @@ export interface SearchPostPayload {
   id: string;
   channelId: string;
   channelName?: string;
+  /** The channel's name per language ('en', 'ar'), set on search responses */
+  channelNameLocalized?: Record<string, string>;
   channelAvatar?: string;
   channelVerified: boolean;
   postType?: string;

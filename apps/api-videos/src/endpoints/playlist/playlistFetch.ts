@@ -13,6 +13,7 @@ import { isSystemPlaylist } from "../../lib/library";
 import { orderedPlaylist, refreshStoredOrder } from "../../lib/playlistOrder";
 import { waitUntilOf } from "../../lib/search/ownership";
 import { playlistSortOf } from "@al-ummah/shared-types";
+import { channelNameFields } from "../../lib/channelName";
 
 // Upper bound on videos resolved for a single playlist page
 const MAX_EXPANDED_VIDEOS = 200;
@@ -89,6 +90,7 @@ export class PlaylistFetch extends OptionalAuthRoute {
 
         const response: ReturnType<typeof toPlaylistResponse> & {
             channelName?: string;
+            channelNameLocalized?: Record<string, string>;
             cover?: PlaylistCover;
             videoItems?: ReturnType<typeof transformVideoToView>[];
         } = toPlaylistResponse(playlist);
@@ -98,7 +100,8 @@ export class PlaylistFetch extends OptionalAuthRoute {
             try {
                 const channelRepo = new R2Repository<z.infer<typeof BusinessChannel>>(c.env.channels);
                 const channel = await channelRepo.getObject(playlist.channelId);
-                response.channelName = channel?.name || "";
+                // Every language's name (lib/channelName.ts)
+                Object.assign(response, channelNameFields(channel));
             } catch (error) {
                 logger.warn("[PlaylistFetch] Failed to load channel", {
                     playlistId: id,

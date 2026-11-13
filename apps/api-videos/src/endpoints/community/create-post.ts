@@ -17,6 +17,7 @@ import R2Repository, { rethrowBusy } from '../../lib/r2Repo';
 import { getChannelObject } from './post-comment-helpers';
 import { scanInBackground, communityPostScanText } from '../../lib/moderation-scan';
 import { CHANNEL_SUSPENDED_CODE } from '../../middleware/auth';
+import { channelNameFields } from '../../lib/channelName';
 
 // Sanitization configuration for community posts
 // Allows basic formatting while preventing XSS attacks
@@ -210,7 +211,7 @@ export class CreateCommunityPost extends AuthenticatedRoute {
         status: body.scheduledAt ? PostStatus.SCHEDULED : PostStatus.PUBLISHED,
         visibility: body.visibility || PostVisibility.PUBLIC,
         commentsEnabled: body.commentsEnabled !== false,
-        channelName: channel.name,
+        ...channelNameFields(channel),
         channelAvatar: channel.avatarUrl,
         channelVerified: channel.isVerified || false
       };

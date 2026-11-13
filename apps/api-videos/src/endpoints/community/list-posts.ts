@@ -12,6 +12,7 @@ import {
 import { OptionalAuthRoute, AppContext } from '../../base';
 import { withPostCounts } from '../../lib/post-counters';
 import { logger } from '../../lib/logger';
+import { withChannelNames } from '../../lib/channelNames';
 
 const querySchema = z.object({
   page: z.coerce.number().min(1).default(1).optional(),
@@ -168,7 +169,8 @@ export class ListCommunityPosts extends OptionalAuthRoute {
       }
 
       return c.json({
-        posts,
+        // The channel's name in every language (lib/channelNames.ts), posts stored before it included
+        posts: await withChannelNames(c.env.channels, posts),
         pagination: {
           page,
           limit,

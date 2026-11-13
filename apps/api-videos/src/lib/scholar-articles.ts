@@ -12,6 +12,7 @@
 import { PostStatus, PostType, PostVisibility, type Channel, type CommunityPost } from '@al-ummah/shared-types';
 import R2Repository from './r2Repo';
 import { logger } from './logger';
+import { channelNameFields } from './channelName';
 
 export interface ArticleInput {
   channelId: string;
@@ -152,7 +153,7 @@ export async function upsertArticle(env: ArticleEnv, userId: string, externalId:
     status: PostStatus.PUBLISHED,
     visibility: PostVisibility.PUBLIC,
     commentsEnabled: true,
-    channelName: channel.name,
+    ...channelNameFields(channel),
     channelAvatar: channel.avatarUrl,
     channelVerified: channel.isVerified || false,
   };

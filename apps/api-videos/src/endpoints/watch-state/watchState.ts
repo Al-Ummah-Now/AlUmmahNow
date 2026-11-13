@@ -261,6 +261,7 @@ export class ContinueWatchingList extends AuthenticatedRoute {
 					thumbnailUrl: video.thumbnailUrl || video.thumbnail || entry.videoThumbnail || null,
 					channelId: video.channelId || entry.channelId || '',
 					channelName: named[i].channelName,
+					...(named[i].channelNameLocalized ? { channelNameLocalized: named[i].channelNameLocalized } : {}),
 					duration: typeof video.duration === 'number' ? video.duration : entry.videoDuration || null,
 				},
 			})),

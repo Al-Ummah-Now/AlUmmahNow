@@ -31,6 +31,7 @@ import {
   scoreSuggestionMatch,
   tokenizeSearchText,
 } from '@al-ummah/shared-types';
+import { channelNameFields } from '../channelName';
 
 export const SEARCH_MAX_LIMIT = 50;
 export const SEARCH_MAX_OFFSET = 500;
@@ -163,9 +164,9 @@ export function buildTypeStatement(
 }
 
 function channelInfo(channelPayload: string | null): SearchChannelInfo | undefined {
-  const channel = parseJson<{ id?: string; name?: string; avatarUrl?: string; isVerified?: boolean }>(channelPayload);
+  const channel = parseJson<{ id?: string; name?: string; nameLocalized?: Record<string, string>; avatarUrl?: string; isVerified?: boolean }>(channelPayload);
   if (!channel?.id) return undefined;
-  return { id: channel.id, name: channel.name, avatarUrl: channel.avatarUrl, isVerified: channel.isVerified === true };
+  return { id: channel.id, name: channel.name, nameLocalized: channel.nameLocalized, avatarUrl: channel.avatarUrl, isVerified: channel.isVerified === true };
 }
 
 export function toResultItem(type: SearchEntityType, row: IndexRow): SearchResultItem | null {
@@ -176,7 +177,8 @@ export function toResultItem(type: SearchEntityType, row: IndexRow): SearchResul
       const video = parseJson<Extract<SearchResultItem, { type: 'video' }>['video']>(row.payload);
       if (!video) return null;
       if (channel) {
-        video.channelName = channel.name ?? video.channelName;
+        // Every language's name (lib/channelName.ts): pages show the name in their own language
+        Object.assign(video, channelNameFields(channel, video.channelName ?? ''));
         video.channelAvatarUrl = channel.avatarUrl ?? video.channelAvatarUrl;
       }
       return { type, id: row.id, score, video, channel };
@@ -193,7 +195,7 @@ export function toResultItem(type: SearchEntityType, row: IndexRow): SearchResul
       const post = parseJson<Extract<SearchResultItem, { type: 'post' }>['post']>(row.payload);
       if (!post) return null;
       if (channel) {
-        post.channelName = channel.name ?? post.channelName;
+        Object.assign(post, channelNameFields(channel, post.channelName ?? ''));
         post.channelAvatar = channel.avatarUrl ?? post.channelAvatar;
         post.channelVerified = channel.isVerified || post.channelVerified;
       }

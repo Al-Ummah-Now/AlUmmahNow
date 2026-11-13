@@ -17,6 +17,7 @@ import { canViewVideo, type VideoType } from './playlists';
 import { loadPlaylistVideos } from './playlistOrder';
 import { publicVideoFields } from './transformations';
 import { withPlayback } from './media/playback';
+import type { ChannelNameFields } from './channelName';
 
 /** Lists up to this length are loaded whole and filtered for the viewer. */
 export const FULL_SCAN_MAX = 300;
@@ -48,6 +49,7 @@ export interface QueueItem {
 	duration?: number | null;
 	channelId?: string;
 	channelName?: string;
+	channelNameLocalized?: Record<string, string>;
 	isShort: boolean;
 	/** Encoded size, so a player sizes its box to the video (the embed does) */
 	width?: number;
@@ -151,7 +153,7 @@ export async function queueItems(
 	window: QueueWindow,
 	userId: string | undefined,
 	known: Map<string, VideoType>,
-	channelNames: (channelIds: string[]) => Promise<Map<string, string>>,
+	channelNames: (channelIds: string[]) => Promise<Map<string, ChannelNameFields>>,
 ): Promise<QueueItem[]> {
 	const missing = window.entries.map((e) => e.id).filter((id) => !known.has(id));
 	for (const [id, video] of await loadPlaylistVideos(env, missing)) known.set(id, video);
@@ -173,7 +175,8 @@ export async function queueItems(
 			...(extra.thumbnailUrl ? { thumbnailUrl: extra.thumbnailUrl } : {}),
 			duration: extra.duration ?? null,
 			channelId: video.channelId,
-			channelName: names.get(video.channelId) ?? '',
+			// Every language's name (lib/channelName.ts)
+			...(names.get(video.channelId) ?? { channelName: '' }),
 			isShort: isShort(video as never),
 			...(typeof (video as { width?: unknown }).width === 'number' ? { width: (video as { width: number }).width } : {}),
 			...(typeof (video as { height?: unknown }).height === 'number' ? { height: (video as { height: number }).height } : {}),

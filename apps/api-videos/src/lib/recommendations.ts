@@ -16,6 +16,7 @@ import {
 import { DiscoveryVideo, isDiscoverable, loadDiscoverableVideos } from './discovery';
 import { logger } from './logger';
 import { findSeriesNext } from './series';
+import { channelNameFields } from './channelName';
 
 /** Rows read per source: the upper bound on what one request ranks. */
 export const CANDIDATE_LIMITS = { category: 100, channel: 40, text: 50, recent: 50, recentWithoutSeeds: 200 };
@@ -34,6 +35,17 @@ const LISTED = 'd.visible = 1 AND (c.id IS NULL OR c.visible = 1)';
 interface CandidateRow {
   id: string;
   payload: string;
+  /** The joined channel row's payload (its names per language) */
+  channel_payload?: string | null;
+}
+
+function channelOf(row: CandidateRow): { name?: string; nameLocalized?: Record<string, string> } | null {
+  if (!row.channel_payload) return null;
+  try {
+    return JSON.parse(row.channel_payload) as { name?: string; nameLocalized?: Record<string, string> };
+  } catch {
+    return null;
+  }
 }
 
 function fromRow(row: CandidateRow): DiscoveryVideo | null {
@@ -45,7 +57,7 @@ function fromRow(row: CandidateRow): DiscoveryVideo | null {
       title: payload.title,
       description: payload.description,
       channelId: payload.channelId,
-      channelName: payload.channelName,
+      ...channelNameFields(channelOf(row) ?? { name: payload.channelName }, payload.channelName ?? ''),
       thumbnailUrl: payload.thumbnailUrl,
       dateCreated: payload.dateCreated,
       views: payload.views,
@@ -74,7 +86,7 @@ export async function indexedSeeds(db: SearchDb, ids: string[]): Promise<Map<str
   if (ids.length === 0) return new Map();
   const placeholders = ids.map(() => '?').join(', ');
   const result = await db
-    .prepare(`SELECT d.id, d.payload FROM ${VIDEOS} d ${JOIN_CHANNEL} WHERE d.id IN (${placeholders}) AND ${LISTED}`)
+    .prepare(`SELECT d.id, d.payload, c.payload AS channel_payload FROM ${VIDEOS} d ${JOIN_CHANNEL} WHERE d.id IN (${placeholders}) AND ${LISTED}`)
     .bind(...ids)
     .all<CandidateRow>();
   return new Map(rowsOf(result).map(video => [video.id, video]));
@@ -82,7 +94,7 @@ export async function indexedSeeds(db: SearchDb, ids: string[]): Promise<Map<str
 
 /** Bounded candidates sharing a category, channel or words with the seeds, plus recent videos. */
 export async function indexedCandidates(db: SearchDb, seeds: DiscoveryVideo[]): Promise<DiscoveryVideo[]> {
-  const select = `SELECT d.id, d.payload FROM ${VIDEOS} d ${JOIN_CHANNEL} WHERE ${LISTED}`;
+  const select = `SELECT d.id, d.payload, c.payload AS channel_payload FROM ${VIDEOS} d ${JOIN_CHANNEL} WHERE ${LISTED}`;
   const statements: SearchStatement[] = [
     ...distinct(seeds.map(seed => seed.category)).map(category =>
       db.prepare(`${select} AND d.category = ? ORDER BY d.created_at DESC LIMIT ?`).bind(category, CANDIDATE_LIMITS.category)),
@@ -99,7 +111,7 @@ export async function indexedCandidates(db: SearchDb, seeds: DiscoveryVideo[]): 
   if (match) {
     statements.push(
       db.prepare(
-        `SELECT d.id, d.payload FROM ${VIDEOS_FTS} JOIN ${VIDEOS} d ON d.rowid = ${VIDEOS_FTS}.rowid ${JOIN_CHANNEL}
+        `SELECT d.id, d.payload, c.payload AS channel_payload FROM ${VIDEOS_FTS} JOIN ${VIDEOS} d ON d.rowid = ${VIDEOS_FTS}.rowid ${JOIN_CHANNEL}
          WHERE ${VIDEOS_FTS} MATCH ? AND ${LISTED} ORDER BY bm25(${VIDEOS_FTS}, 10.0, 2.0) LIMIT ?`,
       ).bind(match, CANDIDATE_LIMITS.text),
     );
@@ -269,7 +281,7 @@ export async function seriesNextFromIndex(db: SearchDb, bucket: R2Bucket, videoI
   }
   if (!channelId || titles.length === 0 || !titles.some((t) => /\d|[٠-٩۰-۹]/.test(t))) return null;
   const result = await db
-    .prepare(`SELECT d.id, d.payload FROM ${VIDEOS} d ${JOIN_CHANNEL} WHERE d.channel_id = ? AND ${LISTED} ORDER BY d.created_at ASC LIMIT ?`)
+    .prepare(`SELECT d.id, d.payload, c.payload AS channel_payload FROM ${VIDEOS} d ${JOIN_CHANNEL} WHERE d.channel_id = ? AND ${LISTED} ORDER BY d.created_at ASC LIMIT ?`)
     .bind(channelId, SERIES_CHANNEL_LIMIT)
     .all<CandidateRow>();
   const siblings = ((result as { results?: CandidateRow[] }).results ?? []).map((r) => ({ id: r.id, titles: seriesTitles(r.payload) }));

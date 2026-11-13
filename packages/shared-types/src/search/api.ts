@@ -51,6 +51,8 @@ export interface SearchQuery {
 export interface SearchChannelInfo {
   id: string;
   name?: string;
+  /** Names per language ('en', 'ar') */
+  nameLocalized?: Record<string, string>;
   avatarUrl?: string;
   isVerified: boolean;
 }
