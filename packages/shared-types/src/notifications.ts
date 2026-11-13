@@ -49,6 +49,12 @@ export const NOTIFICATION_KEYS = [
   'uploadFailed',
   /** A moderator warned the account (params: reason = ReportReason code, count = warnings so far). */
   'accountWarning',
+  /** Pre-publication review (wiki AUN-VIDEO-REVIEW): a person approved the creator's video (params: videoTitle) */
+  'reviewApproved',
+  /** A reviewer did not approve it (params: videoTitle, reason = REVIEW_REASON_CODES code); always on */
+  'reviewRejected',
+  /** To reviewers: a video waits in the review queue (params: videoTitle, escalated = 0 | 1) */
+  'reviewNeeded',
 ] as const;
 export type NotificationKey = (typeof NOTIFICATION_KEYS)[number];
 
@@ -62,6 +68,9 @@ export const NOTIFICATION_KEY_CATEGORY: Record<NotificationKey, NotificationCate
   uploadReady: 'uploads',
   uploadFailed: 'uploads',
   accountWarning: 'account',
+  reviewApproved: 'account',
+  reviewRejected: 'account',
+  reviewNeeded: 'account',
 };
 
 /** Legacy realtime notification type (drives the toast icon). */
@@ -76,6 +85,9 @@ export const NOTIFICATION_KEY_TYPE: Record<NotificationKey, RealtimeNotification
   uploadReady: 'upload',
   uploadFailed: 'upload',
   accountWarning: 'system',
+  reviewApproved: 'system',
+  reviewRejected: 'system',
+  reviewNeeded: 'system',
 };
 
 /** Per-channel bell: every upload & live, highlights (long-form uploads & live), or nothing. */

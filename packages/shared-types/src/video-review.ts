@@ -55,6 +55,18 @@ export interface VideoReviewState {
   decidedAt?: string;
   /** A rejection was appealed once already (VR10: one appeal) */
   appealUsed?: boolean;
+  /** When the scan for this review was queued (one scan per review) */
+  scanQueuedAt?: string;
+  /** The transcoder's review media manifest (resubmits reuse it until the media is purged) */
+  manifestKey?: string;
+  /** Before a person decided: the status to restore on undo */
+  previousStatus?: VideoReviewStatus;
+}
+
+/** A shadow-mode scan was queued for this video (shadow never writes `review`). */
+export interface VideoReviewShadowMarker {
+  reviewId: string;
+  queuedAt: string;
 }
 
 /**
@@ -409,6 +421,26 @@ export interface ReviewAppealRequest {
   message: string;
 }
 
+/** api-videos → processor (MODERATION_QUEUE, MessageType.VideoReviewAppeal): the processor opens the appeal row. */
+export interface VideoReviewAppealPayload {
+  videoId: string;
+  /** The rejected review */
+  reviewId: string;
+  /** The new review row for the appeal (video.review.reviewId after the appeal) */
+  appealReviewId: string;
+  ownerId?: string;
+  channelId?: string;
+  message: string;
+  at: string;
+}
+
+/** Transcode job options for review media (TranscodeJobMessage.review). */
+export interface ReviewExtractionOptions {
+  frameIntervalSeconds: number;
+  sceneThreshold: number;
+  maxFrames: number;
+}
+
 /** Minutes a reviewer may undo a decision (admin UX rule: undo over confirm). */
 export const REVIEW_UNDO_MINUTES = 10;
 
@@ -496,4 +528,24 @@ export function initialReviewState(
 /** Whether a scan should be queued at all for this mode (shadow and both enforce modes). */
 export function scansInMode(mode: VideoReviewMode): mode is Exclude<VideoReviewMode, 'off'> {
   return mode !== 'off';
+}
+
+/** What the creator (and every API view) may see of a review: never the hold cause or internals. */
+export interface CreatorReviewView {
+  status: VideoReviewStatus;
+  since: string;
+  etaAt?: string;
+  reasonCode?: VideoReviewReasonCode;
+  decidedAt?: string;
+  appealUsed?: boolean;
+}
+
+export function creatorReviewView(review: Partial<VideoReviewState> | null | undefined): CreatorReviewView | undefined {
+  if (!review || !review.status || !review.since) return undefined;
+  const out: CreatorReviewView = { status: review.status, since: review.since };
+  if (review.etaAt) out.etaAt = review.etaAt;
+  if (review.reasonCode && isReviewReasonCode(review.reasonCode)) out.reasonCode = review.reasonCode;
+  if (review.decidedAt) out.decidedAt = review.decidedAt;
+  if (review.appealUsed) out.appealUsed = true;
+  return out;
 }

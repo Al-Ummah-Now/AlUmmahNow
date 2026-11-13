@@ -19,6 +19,9 @@ export const NOTIFICATION_CENTER_KEYS: readonly RealtimeNotificationKey[] = [
   'uploadReady',
   'uploadFailed',
   'accountWarning',
+  'reviewApproved',
+  'reviewRejected',
+  'reviewNeeded',
 ];
 
 export function isCenterKey(key: unknown): key is RealtimeNotificationKey {

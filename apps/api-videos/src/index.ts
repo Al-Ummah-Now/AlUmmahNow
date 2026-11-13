@@ -11,6 +11,7 @@ import { flushIndexNow } from './lib/indexnow';
 import { collectDeliveryCosts } from './lib/media/costs';
 import { sweepOriginals } from './lib/media/originals';
 import { createMediaInternalRouter } from './endpoints/media/mediaInternal';
+import { createReviewInternalRouter } from './endpoints/review/reviewInternal';
 import { createNotificationsInternalRouter } from './endpoints/notifications/notificationsInternal';
 import { sweepRunUsers } from './lib/e2e/runUserSweep';
 import { handlePlaylistAddBatch, isPlaylistAddMessage } from './lib/playlistUploadAdds';
@@ -292,6 +293,8 @@ app.route('/api/sites', sitesRouter as never);
 app.route('/internal/media', createMediaInternalRouter() as never);
 // Platform notification settings (admin-api proxies with the admin role + audit)
 app.route('/internal/notifications', createNotificationsInternalRouter() as never);
+// Pre-publication review: the processor's outcomes and admin-api's decisions (docs/specs/VIDEO-REVIEW.md)
+app.route('/internal/review', createReviewInternalRouter() as never);
 
 // ==========================================
 // PROFILE/CHANNEL IMAGE UPLOADS

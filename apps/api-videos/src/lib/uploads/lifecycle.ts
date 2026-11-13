@@ -26,6 +26,7 @@ import { refundUploadSession } from '../../middleware/upload-limits';
 import { enqueueTranscode, type MediaEnv } from '../media/r2-delivery';
 import { completeOriginal } from '../media/originals';
 import { reviewGateFor, type ReviewGateEnv } from '../review/gate';
+import { queueReviewScan } from '../review/scan';
 
 export interface VideoTusUpload {
   sessionId: string;
@@ -118,7 +119,12 @@ export async function markUploadComplete(
     // Our own original (TUS PATCH copies, docs/media-delivery/ORIGINALS.md): when it covers the file, the
     // R2 transcode reads it now instead of waiting for Bunny's encode
     await completeOriginal(env as never, upload.videoId, upload.fileSize);
-    await enqueueTranscode(env as unknown as MediaEnv, upload.videoId, 'upload', { uploaderId: upload.userId });
+    const transcode = await enqueueTranscode(env as unknown as MediaEnv, upload.videoId, 'upload', { uploaderId: upload.userId });
+    // Not transcoded (R2 delivery off, an E2E account): the review cannot wait for frames, so a gated
+    // or shadow upload is checked now on its metadata and thumbnail (partial: held for a person)
+    if (!transcode.queued && (gate?.state || gate?.mode === 'shadow')) {
+      await queueReviewScan(env as never, upload.videoId, { trigger: 'upload' });
+    }
     // Check Bunny until the encode finishes (lib/processing/loop.ts)
     await startProcessingLoop(env as unknown as ProcessingEnv, upload.videoId, { reason: 'upload-complete' }).catch((error) =>
       logger.error('[Uploads] Could not start the processing check loop', { videoId: upload.videoId, error: error instanceof Error ? error.message : String(error) }),

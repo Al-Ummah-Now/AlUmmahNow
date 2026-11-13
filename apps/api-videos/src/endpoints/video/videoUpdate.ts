@@ -16,6 +16,7 @@ import { inBackground } from "../../lib/websocket-notify";
 import { announceNewVideo } from "../../lib/notification-events";
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { scanInBackground, videoScanText } from '../../lib/moderation-scan';
+import { queueReviewScan } from '../../lib/review/scan';
 import { recordOwnerCategory, requestVideoSuggestion } from '../../lib/categorySuggestions';
 import { markPublished } from "../../lib/published";
 import { applyVisibilityInput } from '../../lib/visibility';
@@ -255,6 +256,14 @@ export class VideoUpdate extends AuthenticatedRoute {
 		const textChanged = videoScanText(updatedVideo) !== videoScanText(previous);
 		if (textChanged) {
 			scanInBackground(c, { surface: 'video_metadata', event: 'edit', subjectId: id, authorId: effectiveUserId, channelId, text: videoScanText(updatedVideo) });
+			// Pre-publication review: a cleared video's new text is checked again (text only); an NSFW or
+			// escalation hit pulls it back (docs/specs/VIDEO-REVIEW.md §2). A rejected one is resubmitted instead.
+			const reviewStatus = (updatedVideo as { review?: { status?: string } }).review?.status;
+			if (reviewStatus === 'approved' || reviewStatus === 'post_review') {
+				inBackground(c, 'review-metadata-scan', async () => {
+					await queueReviewScan(c.env as never, id, { trigger: 'metadata_edit', force: true });
+				});
+			}
 		}
 
 		// AI category: record what the owner kept; re-suggest when the text changed and no

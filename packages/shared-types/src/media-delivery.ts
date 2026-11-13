@@ -191,6 +191,8 @@ export interface TranscodeJobMessage {
 	/** Upload complete (or retry) time, for time-to-playable */
 	queuedAt: string;
 	reason: 'upload' | 'retry' | 'sweep' | 'backfill';
+	/** Pre-publication review: also extract frames and audio to MEDIA_PRIVATE review/<videoId>/<rev>/ (video-review.ts) */
+	review?: import('./video-review').ReviewExtractionOptions;
 }
 
 /** Event the media worker posts back to api-videos (service binding). */
@@ -212,6 +214,10 @@ export interface TranscodeJobEvent {
 	final?: boolean;
 	/** failed only: where and why */
 	failure?: TranscodeFailure;
+	/** ready only: the review media manifest (MEDIA_PRIVATE), when the job extracted it */
+	reviewManifestKey?: string;
+	/** ready only: true when review extraction was asked for but failed (the review is partial) */
+	reviewExtractionFailed?: boolean;
 }
 
 /**

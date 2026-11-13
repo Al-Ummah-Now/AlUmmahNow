@@ -137,6 +137,8 @@ export enum MessageType {
   // Pre-publication video review (wiki AUN-VIDEO-REVIEW): api-videos → the moderation queue
   // (payload: VideoReviewScanPayload, video-review.ts). Consumed by the processor.
   VideoReviewScan = 232,
+  // The creator appealed a rejection (payload: VideoReviewAppealPayload); the processor opens the appeal row.
+  VideoReviewAppeal = 233,
 
   // Admin content job (api-videos lib/admin/jobs.ts), on the admin-jobs queue. Payload: { jobId }.
   AdminJob = 240,
