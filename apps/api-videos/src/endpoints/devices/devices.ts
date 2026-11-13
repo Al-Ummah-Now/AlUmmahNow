@@ -12,6 +12,7 @@ import { z } from "zod";
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { logger } from "../../lib/logger";
 import { ResponseError } from "../../lib/types";
+import { isStaff } from "@al-ummah/shared-types";
 import { DeviceRegistrationSchema, InstallIdSchema, listDevices, registerDevice, unregisterDevice } from "../../lib/push-devices";
 
 const unavailable = { "503": { description: "Notifications not configured", content: { "application/json": { schema: ResponseError } } } };
@@ -41,10 +42,11 @@ export class DeviceRegister extends AuthenticatedRoute {
 		tags: ["Devices"],
 		summary: "Register or refresh this install's push token",
 		description:
-			"Idempotent; call on every launch and whenever the OS rotates the token. APNs/FCM take `token`, WNS takes the channel URI as `token`, Web Push takes `subscription` (PushSubscription.toJSON()).",
+			"Idempotent; call on every launch and whenever the OS rotates the token. APNs/FCM take `token`, WNS takes the channel URI as `token`, Web Push takes `subscription` (PushSubscription.toJSON()). `app` names the app that owns the install (`viewer` when omitted, for older clients); `admin` installs need a staff role.",
 		request: { params: Params, body: { content: { "application/json": { schema: DeviceRegistrationSchema } } } },
 		responses: {
 			"200": { description: "{ device, created }" },
+			"403": { description: "Only staff may register an Admin app install", content: { "application/json": { schema: ResponseError } } },
 			"409": { description: "This install is registered to another account with a different token", content: { "application/json": { schema: ResponseError } } },
 			...unavailable,
 		},
@@ -55,6 +57,10 @@ export class DeviceRegister extends AuthenticatedRoute {
 		if (!db) return storeUnavailable(c);
 		const { params, body } = await this.getValidatedData<typeof this.schema>();
 		const userId = this.getUserId(c);
+		if (body.app === "admin" && !isStaff(this.getAuth(c).payload?.roles)) {
+			logger.debug("[Devices] Admin install refused: no staff role", { userId, installId: params.installId });
+			return c.json({ success: false, error: "staff_only" }, 403);
+		}
 		const result = await registerDevice(db, userId, params.installId, body);
 		if ("reason" in result) {
 			logger.warn("[Devices] Install owned by another user", { userId, installId: params.installId });

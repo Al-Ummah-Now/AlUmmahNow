@@ -12,6 +12,7 @@
 --   apps/processor/migrations-notifications/0010_archive_subjects.sql
 --   apps/processor/migrations-notifications/0011_notifications_entity.sql
 --   apps/processor/migrations-notifications/0012_notification_seen.sql
+--   apps/processor/migrations-notifications/0013_push_devices_app.sql
 
 CREATE TABLE analytics_daily (entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, day TEXT NOT NULL, metric TEXT NOT NULL, dim TEXT NOT NULL DEFAULT '', value REAL NOT NULL DEFAULT 0, PRIMARY KEY (entity_type, entity_id, day, metric, dim)) WITHOUT ROWID;
 CREATE TABLE analytics_rollup_imports (r2_key TEXT PRIMARY KEY, imported_at TEXT NOT NULL) WITHOUT ROWID;
@@ -30,7 +31,7 @@ CREATE TABLE notifications (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, category
 CREATE TABLE poll_votes (post_id TEXT NOT NULL, user_id TEXT NOT NULL, option_ids TEXT NOT NULL, day TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (post_id, user_id)) WITHOUT ROWID;
 CREATE TABLE post_counter_imports (post_id TEXT NOT NULL, kind TEXT NOT NULL, cursor TEXT, done INTEGER NOT NULL DEFAULT 0, lease_owner TEXT, lease_until INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL, PRIMARY KEY (post_id, kind)) WITHOUT ROWID;
 CREATE TABLE post_likes (post_id TEXT NOT NULL, user_id TEXT NOT NULL, liked INTEGER NOT NULL, day TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (post_id, user_id)) WITHOUT ROWID;
-CREATE TABLE push_devices (install_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, platform TEXT NOT NULL, provider TEXT NOT NULL CHECK (provider IN ('apns', 'fcm', 'wns', 'webpush')), token TEXT NOT NULL, locale TEXT, app_version TEXT, categories TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+CREATE TABLE push_devices (install_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, platform TEXT NOT NULL, provider TEXT NOT NULL CHECK (provider IN ('apns', 'fcm', 'wns', 'webpush')), token TEXT NOT NULL, locale TEXT, app_version TEXT, categories TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, app TEXT NOT NULL DEFAULT 'viewer' CHECK (app IN ('viewer', 'studio', 'admin')));
 CREATE TABLE saved_posts (user_id TEXT NOT NULL, post_id TEXT NOT NULL, channel_id TEXT, saved_at INTEGER NOT NULL, PRIMARY KEY (user_id, post_id));
 CREATE INDEX idx_channel_subscribers_user ON channel_subscribers(user_id);
 CREATE INDEX idx_channel_subscriptions_user ON channel_subscriptions(user_id, created_at);

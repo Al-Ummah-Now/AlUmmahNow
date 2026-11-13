@@ -14,10 +14,15 @@ import type { NotificationCategory, NotificationKey, NotificationParams } from '
 import { logger } from '../lib/logger';
 
 export type PushProviderName = 'apns' | 'fcm' | 'wns' | 'webpush';
+/** The app that registered the device (push_devices.app, #1264): picks the APNs topic. */
+export type PushApp = 'viewer' | 'studio' | 'admin';
+/** Ordinary notifications reach these apps; the staff Admin app only gets review alerts. */
+export const NOTIFICATION_APPS: readonly PushApp[] = ['viewer', 'studio'];
 
 export interface PushTarget {
   installId: string;
   userId: string;
+  app: PushApp;
   platform: string;
   provider: PushProviderName;
   /** Device token, WNS channel URI, or Web Push subscription JSON. */
