@@ -10,6 +10,15 @@
  * the list shows bumps it, so every cached variant (limit, sort, filter,
  * category) is dropped at once. The Cache API is per colo: the colo that served
  * the change sees it at once, the others within the entry's short TTL.
+ *
+ * The pages are keyed by the request's origin (environments share one zone),
+ * but the stamp is not: a change arrives on whatever host its caller used (the
+ * admin API's service binding calls https://videos.internal, the local stack's
+ * worker-to-worker calls 127.0.0.1) while visitors list on the public host. A
+ * stamp keyed by origin was bumped where nobody lists, so admin deletes never
+ * dropped the public page (#1131 follow-up). One stamp for every origin: a
+ * change in one environment also refreshes the others' first page in that
+ * colo, an extra miss at worst, never a stale list.
  */
 import type { MiddlewareHandler } from 'hono';
 import { edgeCacheUrl, readEdgeCache, writeEdgeCache } from './edge-cache';
@@ -21,20 +30,19 @@ export const FIRST_PAGE_TTL_SECONDS = 30;
 /** Outlives every first-page entry by far; an evicted stamp only means a fresh one */
 const GENERATION_TTL_SECONDS = 24 * 3600;
 
-function generationUrl(requestUrl: string): string {
-  return edgeCacheUrl(requestUrl, 'videos/v1/first-page-generation');
-}
+/** One stamp for every origin (see above): the zone's apex, never a request's host. */
+const GENERATION_URL = edgeCacheUrl('https://alummahnow.net', 'videos/v1/first-page-generation');
 
 /** The current generation stamp ('0' before any change was seen in this colo). */
-export async function videoListGeneration(requestUrl: string): Promise<string> {
-  const stamp = await readEdgeCache<{ generation?: string }>(generationUrl(requestUrl));
+export async function videoListGeneration(): Promise<string> {
+  const stamp = await readEdgeCache<{ generation?: string }>(GENERATION_URL);
   return stamp?.generation || '0';
 }
 
-/** Drops every cached first page (in this colo). Fails open. */
-export function bumpVideoListGeneration(requestUrl: string, waitUntil: WaitUntil): void {
+/** Drops every cached first page, whichever host the change came in on (in this colo). Fails open. */
+export function bumpVideoListGeneration(waitUntil: WaitUntil): void {
   const generation = `${Date.now().toString(36)}${crypto.randomUUID().slice(0, 8)}`;
-  writeEdgeCache(generationUrl(requestUrl), { generation }, GENERATION_TTL_SECONDS, waitUntil);
+  writeEdgeCache(GENERATION_URL, { generation }, GENERATION_TTL_SECONDS, waitUntil);
 }
 
 const VIDEO_ID = '[^/]+';
@@ -72,5 +80,5 @@ export const videoListInvalidation: MiddlewareHandler = async (c, next) => {
   } catch {
     // no execution context (tests)
   }
-  bumpVideoListGeneration(c.req.url, waitUntil);
+  bumpVideoListGeneration(waitUntil);
 };

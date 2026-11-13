@@ -76,6 +76,21 @@ describe('GET /api/videos first page: dropped from the cache when the list chang
 		assert.deepEqual(await listedIds(a, env), ['a1', 'a2']);
 	});
 
+	it('a change that arrives on another host still drops the public first page', async () => {
+		// Visitors list on the public host; the admin API (service binding) and the local stack's
+		// worker-to-worker calls reach the API on other hosts. The bump must not depend on the host.
+		const { videos, env } = setup();
+		const a = app(videos);
+		const publicList = async () => {
+			const res = await a.request('https://videos.api.example.test/api/videos?limit=10', {}, env as never);
+			return ((await res.json()) as { data: Array<{ id: string }> }).data.map((v) => v.id).sort();
+		};
+		assert.deepEqual(await publicList(), ['a1', 'a2']);
+		const del = await a.request('https://videos.internal/api/videos/a2', { method: 'DELETE' }, env as never);
+		assert.equal(del.status, 200);
+		assert.deepEqual(await publicList(), ['a1']);
+	});
+
 	it('a deleted video is gone from the next anonymous first page', async () => {
 		const { videos, env } = setup();
 		const a = app(videos);

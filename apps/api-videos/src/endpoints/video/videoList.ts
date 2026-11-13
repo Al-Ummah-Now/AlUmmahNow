@@ -115,7 +115,7 @@ export class VideosList extends OptionalAuthRoute {
 		// read per video, so it is reused briefly. Pages and channel views are not.
 		// Keyed by the list's generation: a delete, edit or hide drops every cached variant (lib/videoListCache.ts)
 		const firstPageCacheUrl = !userId && !filterChannelId && !cursor && !format && !titleQuery
-			? edgeCacheUrl(c.req.url, `videos/v1/first-page/${await videoListGeneration(c.req.url)}/${limit}/${sort}/${filter}/${category || "_"}`)
+			? edgeCacheUrl(c.req.url, `videos/v1/first-page/${await videoListGeneration()}/${limit}/${sort}/${filter}/${category || "_"}`)
 			: null;
 		if (firstPageCacheUrl) {
 			const cached = await readEdgeCache<PaginationResponse<Record<string, unknown>>>(firstPageCacheUrl);
