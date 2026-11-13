@@ -90,7 +90,7 @@ const VideosPage: React.FC = () => {
         >
 <ContinueWatchingShelf />
 {featured ? <HomeHero video={featured} /> : loading && videos.length === 0 && <HomeHeroPlaceholder />}
-<h1 className="home-h text-2xl font-bold text-black dark:text-white mb-4">{t.video.videos}</h1>
+<h1 className="home-h text-2xl font-bold text-[var(--fanous-color-text-primary)] mb-4">{t.video.videos}</h1>
           {loading && videos.length === 0 ? (
             // Card-sized placeholders reserve the grid's space so the cards
             // (and the button below) don't shift the layout when they load
@@ -102,12 +102,12 @@ const VideosPage: React.FC = () => {
             >
               <span className="sr-only">{t.common.loading}</span>
               {Array.from({ length: 6 }, (_, i) => (
-                <div key={i} aria-hidden="true" className="flex flex-col rounded-lg shadow-md overflow-hidden bg-white dark:bg-gray-900">
-                  <div className="w-full h-48 bg-gray-200 dark:bg-gray-800 animate-pulse" />
+                <div key={i} aria-hidden="true" className="flex flex-col rounded-lg shadow-md overflow-hidden bg-[var(--fanous-color-surface-raised)]">
+                  <div className="w-full h-48 bg-[var(--fanous-color-divider)] animate-pulse" />
                   <div className="p-4 space-y-2">
-                    <div className="h-5 w-3/4 rounded bg-gray-200 dark:bg-gray-800 animate-pulse" />
-                    <div className="h-4 w-1/2 rounded bg-gray-200 dark:bg-gray-800 animate-pulse" />
-                    <div className="h-4 w-1/3 rounded bg-gray-200 dark:bg-gray-800 animate-pulse" />
+                    <div className="h-5 w-3/4 rounded bg-[var(--fanous-color-divider)] animate-pulse" />
+                    <div className="h-4 w-1/2 rounded bg-[var(--fanous-color-divider)] animate-pulse" />
+                    <div className="h-4 w-1/3 rounded bg-[var(--fanous-color-divider)] animate-pulse" />
                   </div>
                 </div>
               ))}
@@ -127,7 +127,7 @@ const VideosPage: React.FC = () => {
               <button
                 onClick={handleNextPage}
                 disabled={!nextCursor || loading}
-                className="px-4 py-2 bg-gray-700 text-white rounded disabled:opacity-50"
+                className="px-4 py-2 bg-[var(--fanous-color-primary)] text-[var(--fanous-color-on-primary)] rounded disabled:opacity-50"
               >
                 {loading ? t.common.loading : t.common.loadMore}
               </button>
