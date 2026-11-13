@@ -17,6 +17,7 @@ import { deliveryStatus, recordDelivery, type MailKind } from './contact-store';
 import { CONTACT_MAIL_VERSION, enqueueContactMail, type ContactMailJob } from './contact-mail-queue';
 import { getWarning, recordWarningEmail } from './content/warnings';
 import { enqueueWarningMail } from './warning-mail';
+import { enqueueRejectionMail, rejectionMailJob } from './review/rejection-mail';
 import { logger } from './logger';
 
 export interface RetryOutcome {
@@ -55,6 +56,18 @@ export const BUILTIN_RETRIES: Record<string, (env: AdminBindings, args: Record<s
     return { ok: true, status: 'resolved', result: 'Queued again' };
   },
   /** Queues an account warning email that failed for good again; a new failure reopens the item. */
+  /** Sends a "video not approved" email again, if the review is still that rejection (else nothing to send). */
+  'review-rejection-email': async (env, args) => {
+    const { id, decidedAt } = args;
+    if (!id || !decidedAt) return { ok: false, status: 'open', result: 'Not a review email' };
+    const row = await env.REPORTS_DB.prepare('SELECT status, decided_at FROM content_reviews WHERE id = ?').bind(id).first<{ status: string; decided_at: string | null }>();
+    if (!row) return { ok: false, status: 'dismissed', result: 'Review no longer exists' };
+    if (row.status !== 'rejected' || row.decided_at !== decidedAt) return { ok: true, status: 'resolved', result: 'Nothing to send: the review was decided again' };
+    if (!(await enqueueRejectionMail(env, rejectionMailJob(id, decidedAt, args.locale === 'ar' ? 'ar' : 'en'), 0))) {
+      return { ok: false, status: 'open', result: 'Could not queue the email' };
+    }
+    return { ok: true, status: 'resolved', result: 'Queued again' };
+  },
   'warning-email': async (env, args) => {
     const id = args.id;
     if (!id) return { ok: false, status: 'open', result: 'Not a warning email' };

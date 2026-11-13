@@ -21,6 +21,7 @@ import { isSinkAddress } from './contact';
 import { getContactMessage, deliveryStatus, recordDelivery, type MailKind } from './contact-store';
 import { renderAcknowledgement, renderInboxNotification, renderReply, replyLocaleOf, sendContactEmail } from './contact-email';
 import { isWarningMailJob, processWarningMailJob, type WarningMailJob } from './warning-mail';
+import { isRejectionMailJob, processRejectionMailJob, type RejectionMailJob } from './review/rejection-mail';
 
 export const CONTACT_MAIL_VERSION = 1;
 /** Keep equal to max_retries + 1 of the contact-mail consumer in wrangler*.jsonc. */
@@ -206,16 +207,19 @@ export async function processContactMailJob(env: AdminBindings, msg: QueueMessag
 }
 
 /**
- * Queue consumer for CONTACT_MAIL_QUEUE: Contact us mail, and account warning
- * emails (`kind: 'warning'`, lib/warning-mail.ts), which share the sender.
+ * Queue consumer for CONTACT_MAIL_QUEUE: Contact us mail, account warning
+ * emails (`kind: 'warning'`, lib/warning-mail.ts) and "video not approved"
+ * emails (`kind: 'review_rejected'`, lib/review/rejection-mail.ts), which share the sender.
  */
-export async function contactMailConsumer(batch: { messages: readonly QueueMessageLike<ContactMailJob | WarningMailJob>[] }, env: AdminBindings): Promise<void> {
+export async function contactMailConsumer(batch: { messages: readonly QueueMessageLike<ContactMailJob | WarningMailJob | RejectionMailJob>[] }, env: AdminBindings): Promise<void> {
   const startedAt = Date.now();
   const outcomes: Record<string, number> = {};
   for (const msg of batch.messages) {
     const outcome = isWarningMailJob(msg.body)
       ? await processWarningMailJob(env, msg as QueueMessageLike<WarningMailJob>)
-      : await processContactMailJob(env, msg as QueueMessageLike<ContactMailJob>);
+      : isRejectionMailJob(msg.body)
+        ? await processRejectionMailJob(env, msg as QueueMessageLike<RejectionMailJob>)
+        : await processContactMailJob(env, msg as QueueMessageLike<ContactMailJob>);
     const kind = (msg.body as { kind?: string } | undefined)?.kind ?? 'unknown';
     outcomes[`${kind}:${outcome}`] = (outcomes[`${kind}:${outcome}`] ?? 0) + 1;
     if (outcome === 'retry') msg.retry({ delaySeconds: backoffSeconds(msg.attempts) });

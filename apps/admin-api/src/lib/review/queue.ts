@@ -18,6 +18,8 @@ import {
   type ReviewSettingsBucket,
   type VideoReviewReasonCode,
 } from '@al-ummah/shared-types';
+import type { AdminBindings } from '../../base/types';
+import { enqueueRejectionMail, flagRejectionMailFailure, rejectionMailJob } from './rejection-mail';
 
 export class ReviewError extends Error {
   constructor(readonly status: 400 | 403 | 404 | 409 | 502, readonly code: string, message: string) {
@@ -27,6 +29,8 @@ export class ReviewError extends Error {
 
 export interface ReviewEnv {
   REPORTS_DB: D1Database;
+  /** The creator's "video not approved" email (lib/review/rejection-mail.ts) */
+  CONTACT_MAIL_QUEUE?: Queue<unknown>;
   global_settings?: unknown;
   /** MEDIA_PRIVATE (review/ prefix): frames for the strip, purged after retention */
   REVIEW_MEDIA?: { get(key: string): Promise<{ body: ReadableStream; httpMetadata?: { contentType?: string }; text(): Promise<string> } | null>; list(o: { prefix: string; cursor?: string; limit?: number }): Promise<{ objects: Array<{ key: string }>; truncated: boolean; cursor?: string }>; delete(keys: string | string[]): Promise<void> };
@@ -266,6 +270,8 @@ export interface DecisionInput {
   decision: 'approve' | 'reject' | 'escalate' | 'undo';
   reasonCode?: string;
   note?: string;
+  /** The deciding admin's UI language: the rejection email's language when the creator never picked one */
+  locale?: 'en' | 'ar';
 }
 
 export async function decideReview(env: ReviewEnv, reviewer: Reviewer, id: string, input: DecisionInput, now = new Date()) {
@@ -315,6 +321,13 @@ export async function decideReview(env: ReviewEnv, reviewer: Reviewer, id: strin
     .bind(status, input.decision, input.decision === 'reject' ? input.reasonCode : null, note ?? null, iso, reviewer.id, undoUntil, purge, iso, id)
     .run();
   await audit(db, { reviewId: id, subjectId: row.subject_id, action: `review_${input.decision}`, actorId: reviewer.id, reason: input.reasonCode ?? null, details: { note: note ?? null } }, iso);
+  if (input.decision === 'reject' && row.subject_type === 'video' && row.owner_id) {
+    // The creator's email (#1279), sent once the undo window has passed; the decision stands either way
+    const job = rejectionMailJob(id, iso, input.locale === 'ar' ? 'ar' : 'en');
+    if (!(await enqueueRejectionMail(env, job))) {
+      await flagRejectionMailFailure(env as unknown as AdminBindings, job, 'could not queue the email');
+    }
+  }
   return { review: { ...row, status, decision: input.decision, decided_at: iso, decided_by: reviewer.id, undo_until: undoUntil } };
 }
 

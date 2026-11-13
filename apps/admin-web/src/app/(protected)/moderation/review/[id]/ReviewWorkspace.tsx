@@ -33,7 +33,7 @@ interface Props {
 }
 
 export function ReviewWorkspace({ detail, media }: Props) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const router = useRouter();
   const { review, findings, subject } = detail;
   const playerBox = useRef<HTMLDivElement>(null);
@@ -86,7 +86,7 @@ export function ReviewWorkspace({ detail, media }: Props) {
   const decide = async (decision: 'approve' | 'reject' | 'escalate' | 'undo') => {
     setBusy(true);
     setMessage(null);
-    const r = await decideReview(review.id, decision, decision === 'reject' ? reason : undefined, note.trim() || undefined);
+    const r = await decideReview(review.id, decision, decision === 'reject' ? reason : undefined, note.trim() || undefined, locale === 'ar' ? 'ar' : 'en');
     setBusy(false);
     if (!r.ok) {
       logger.warn('[review] Decision failed', { reviewId: review.id, decision, status: r.status });
