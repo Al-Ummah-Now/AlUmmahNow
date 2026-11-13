@@ -291,7 +291,7 @@ export function TemplateEditorModal({
                       focus:ring-primary
                       focus:border-transparent
                     "
-                    placeholder={isRTL ? 'مثال: قالب المحاضرات' : 'e.g., Lecture Template'}
+                    placeholder={isRTL ? 'مثال: الرفع الأسبوعي' : 'e.g., Weekly upload'}
                   />
                 </div>
 
@@ -321,7 +321,7 @@ export function TemplateEditorModal({
                       focus:ring-primary
                       focus:border-transparent
                     "
-                    placeholder="مثال: قالب المحاضرات"
+                    placeholder="مثال: الرفع الأسبوعي"
                     dir="rtl"
                   />
                 </div>
@@ -532,7 +532,7 @@ export function TemplateEditorModal({
                   inputClassName="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary focus:border-transparent"
                 />
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  {isRTL ? 'مثال: إسلام، محاضرة، قرآن' : 'e.g., Islamic, Lecture, Quran'}
+                  {isRTL ? 'مثال: قرآن، رمضان، أسئلة وأجوبة' : 'e.g., Quran, Ramadan, Q&A'}
                 </p>
               </div>
 

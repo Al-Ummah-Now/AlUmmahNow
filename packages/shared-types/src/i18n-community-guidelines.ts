@@ -30,7 +30,7 @@ export interface CommunityGuidelinesTranslations {
 export const COMMUNITY_GUIDELINES_EN: CommunityGuidelinesTranslations = {
   navLabel: 'Community guidelines',
   title: 'Community guidelines',
-  lead: 'Al Ummah Now is a place to learn, share beneficial knowledge and support each other. These guidelines apply to videos, live streams, shorts, comments, community posts, playlists, channel pages and profiles.',
+  lead: 'Al Ummah Now is a community for sharing videos, Shorts and posts and for supporting each other. These guidelines apply to videos, live streams, Shorts, comments, community posts, playlists, channel pages and profiles.',
   lastUpdated: 'Last updated: November 2026',
   sections: {
     respect: {
@@ -101,7 +101,7 @@ export const COMMUNITY_GUIDELINES_EN: CommunityGuidelinesTranslations = {
 export const COMMUNITY_GUIDELINES_AR: CommunityGuidelinesTranslations = {
   navLabel: 'إرشادات المجتمع',
   title: 'إرشادات المجتمع',
-  lead: 'الأمة الآن مكان للتعلّم ونشر العلم النافع والتعاون على الخير. تنطبق هذه الإرشادات على المرئيات والبث المباشر والمقاطع القصيرة والتعليقات ومنشورات المجتمع وقوائم التشغيل وصفحات القنوات والملفات الشخصية.',
+  lead: 'الأمة الآن مجتمع لمشاركة المرئيات والمقاطع القصيرة والمنشورات والتعاون على الخير. تنطبق هذه الإرشادات على المرئيات والبث المباشر والمقاطع القصيرة والتعليقات ومنشورات المجتمع وقوائم التشغيل وصفحات القنوات والملفات الشخصية.',
   lastUpdated: 'آخر تحديث: نوفمبر 2026',
   sections: {
     respect: {
