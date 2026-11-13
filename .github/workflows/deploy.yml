@@ -440,6 +440,12 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Build shared packages
+        # The worker bundle imports them from their dist/ (not in the web build artifact)
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
+
       - name: Download web build artifacts
         uses: actions/download-artifact@v6
         with:
