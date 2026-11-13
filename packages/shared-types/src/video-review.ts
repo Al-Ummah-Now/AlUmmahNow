@@ -688,6 +688,17 @@ export interface LiveReviewJobMessage {
 const LIVE_SAFE_ID = /^[A-Za-z0-9-]{8,64}$/;
 const LIVE_SAFE_REV = /^[a-z0-9]{8,32}$/;
 
+/** An https URL to an .m3u8 playlist, with no whitespace. Parsed, not regex-matched (CodeQL: no polynomial backtracking). */
+function isHttpsM3u8Url(value: string): boolean {
+  if (value.length > 2048 || /\s/.test(value)) return false;
+  try {
+    const u = new URL(value);
+    return u.protocol === 'https:' && !!u.hostname && u.pathname.length > '/.m3u8'.length && u.pathname.endsWith('.m3u8');
+  } catch {
+    return false;
+  }
+}
+
 export function isLiveReviewJobMessage(body: unknown): body is LiveReviewJobMessage {
   const b = body as Partial<LiveReviewJobMessage> | null;
   return (
@@ -699,7 +710,7 @@ export function isLiveReviewJobMessage(body: unknown): body is LiveReviewJobMess
     typeof b.rev === 'string' &&
     LIVE_SAFE_REV.test(b.rev) &&
     typeof b.vodUrl === 'string' &&
-    /^https:\/\/[^/\s]+\/\S+\.m3u8(\?\S*)?$/.test(b.vodUrl) &&
+    isHttpsM3u8Url(b.vodUrl) &&
     !!b.review &&
     typeof b.review === 'object'
   );
