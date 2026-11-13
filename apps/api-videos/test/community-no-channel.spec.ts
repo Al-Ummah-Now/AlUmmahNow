@@ -54,7 +54,12 @@ function env() {
 
 const as = (userId: string) => buildApp(routes, { userId });
 const JSON_ONLY = { 'Content-Type': 'application/json' };
-const noNull = (e: any) => assert.equal(JSON.stringify(e.queue.messages).includes(':null'), false, 'no null actor channel in the queued events');
+// The bug's mark is a channel field set to null (the header read as null); other fields may be null.
+const nullChannelKeys = (v: any, at = ''): string[] =>
+	v && typeof v === 'object'
+		? Object.entries(v).flatMap(([k, x]) => (x === null && /channel/i.test(k) ? [`${at}${k}`] : nullChannelKeys(x, `${at}${k}.`)))
+		: [];
+const noNull = (e: any) => assert.deepEqual(nullChannelKeys(e.queue.messages), [], 'no null channel in the queued events');
 
 describe('community actions without a channelId header (#1139)', () => {
 	it('likes and unlikes a post', async () => {
